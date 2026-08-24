@@ -22,6 +22,12 @@ export function remapQueue(items: Track[], trackMap: Map<string, Track>) {
     .filter((track): track is Track => Boolean(track));
 }
 
+export function resolveOutputVolume(savedVolume: number, usesSystemVolume: boolean) {
+  if (usesSystemVolume) return 1;
+  if (!Number.isFinite(savedVolume)) return 1;
+  return Math.max(0, Math.min(1, savedVolume));
+}
+
 export function restorePlayerState(tracks: Track[], state: PlaybackState): RestoredPlayerState {
   const trackMap = new Map(tracks.map(track => [track.id, track]));
   const orderById = new Map(tracks.map((track, index) => [track.id, index]));
