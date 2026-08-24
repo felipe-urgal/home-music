@@ -12,6 +12,12 @@ const EMPTY_STATE: PlaybackState = {
   updatedAt: new Date(0).toISOString()
 };
 
+function mutationFetch(url: string, init: RequestInit) {
+  const headers = new Headers(init.headers);
+  headers.set('X-Home-Music-Request', '1');
+  return fetch(url, { ...init, headers });
+}
+
 function shuffledAroundCurrent(tracks: Track[], currentId: string) {
   const others = tracks.filter(track => track.id !== currentId);
   for (let index = others.length - 1; index > 0; index -= 1) {
@@ -130,7 +136,7 @@ export function useAudioPlayer(tracks: Track[], progressVisible: boolean) {
       queueIds: queue.map(track => track.id)
     };
 
-    fetch('/api/player/state', {
+    mutationFetch('/api/player/state', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -363,7 +369,7 @@ export function useAudioPlayer(tracks: Track[], progressVisible: boolean) {
     setPlaying(true);
     if (current && historyTrackRef.current !== current.id) {
       historyTrackRef.current = current.id;
-      fetch(`/api/history/${current.id}`, { method: 'POST' }).catch(() => undefined);
+      mutationFetch(`/api/history/${current.id}`, { method: 'POST' }).catch(() => undefined);
     }
   }
 
