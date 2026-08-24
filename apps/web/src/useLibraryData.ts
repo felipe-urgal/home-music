@@ -23,6 +23,10 @@ async function jsonRequest<T>(url: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : 'Não foi possível concluir a operação.';
+}
+
 export function useLibraryData() {
   const [tracks, setTracks] = useState<Track[]>([]);
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
@@ -32,8 +36,17 @@ export function useLibraryData() {
   const [scanning, setScanning] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const favoriteSet = useMemo(() => new Set(favoriteIds), [favoriteIds]);
+  const reportError = useCallback((error: unknown) => setActionError(errorMessage(error)), []);
+  const clearActionError = useCallback(() => setActionError(null), []);
+
+  useEffect(() => {
+    if (!actionError) return;
+    const timeout = window.setTimeout(() => setActionError(null), 5000);
+    return () => window.clearTimeout(timeout);
+  }, [actionError]);
 
   const refreshLibrary = useCallback(async () => {
     const data = await jsonRequest<LibraryResponse>('/api/library');
@@ -64,7 +77,7 @@ export function useLibraryData() {
   useEffect(() => {
     Promise.all([refreshLibrary(), refreshFavorites(), refreshHistory(), refreshPlaylists()])
       .then(() => setError(null))
-      .catch(error => setError(error instanceof Error ? error.message : 'Não consegui carregar a biblioteca.'))
+      .catch(error => setError(errorMessage(error)))
       .finally(() => setLoading(false));
   }, [refreshFavorites, refreshHistory, refreshLibrary, refreshPlaylists]);
 
@@ -81,59 +94,95 @@ export function useLibraryData() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ favorite })
       });
+      setActionError(null);
     } catch (error) {
       await refreshFavorites().catch(() => undefined);
+      reportError(error);
       throw error;
     }
-  }, [favoriteSet, refreshFavorites]);
+  }, [favoriteSet, refreshFavorites, reportError]);
 
   const rescan = useCallback(async () => {
     setScanning(true);
     try {
       const result = await jsonRequest<ScanResponse>('/api/library/scan', { method: 'POST' });
       await Promise.all([refreshLibrary(), refreshFavorites(), refreshHistory(), refreshPlaylists()]);
+      setActionError(null);
       return result;
+    } catch (error) {
+      reportError(error);
+      throw error;
     } finally {
       setScanning(false);
     }
-  }, [refreshFavorites, refreshHistory, refreshLibrary, refreshPlaylists]);
+  }, [refreshFavorites, refreshHistory, refreshLibrary, refreshPlaylists, reportError]);
 
   const clearHistory = useCallback(async () => {
-    await jsonRequest('/api/history', { method: 'DELETE' });
-    setHistory([]);
-  }, []);
+    try {
+      await jsonRequest('/api/history', { method: 'DELETE' });
+      setHistory([]);
+      setActionError(null);
+    } catch (error) {
+      reportError(error);
+      throw error;
+    }
+  }, [reportError]);
 
   const createPlaylist = useCallback(async (name: string) => {
-    await jsonRequest('/api/playlists', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name })
-    });
-    await refreshPlaylists();
-  }, [refreshPlaylists]);
+    try {
+      await jsonRequest('/api/playlists', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name })
+      });
+      await refreshPlaylists();
+      setActionError(null);
+    } catch (error) {
+      reportError(error);
+      throw error;
+    }
+  }, [refreshPlaylists, reportError]);
 
   const renamePlaylist = useCallback(async (id: string, name: string) => {
-    await jsonRequest(`/api/playlists/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name })
-    });
-    await refreshPlaylists();
-  }, [refreshPlaylists]);
+    try {
+      await jsonRequest(`/api/playlists/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name })
+      });
+      await refreshPlaylists();
+      setActionError(null);
+    } catch (error) {
+      reportError(error);
+      throw error;
+    }
+  }, [refreshPlaylists, reportError]);
 
   const deletePlaylist = useCallback(async (id: string) => {
-    await jsonRequest(`/api/playlists/${id}`, { method: 'DELETE' });
-    await refreshPlaylists();
-  }, [refreshPlaylists]);
+    try {
+      await jsonRequest(`/api/playlists/${id}`, { method: 'DELETE' });
+      await refreshPlaylists();
+      setActionError(null);
+    } catch (error) {
+      reportError(error);
+      throw error;
+    }
+  }, [refreshPlaylists, reportError]);
 
   const setPlaylistTracks = useCallback(async (id: string, trackIds: string[]) => {
-    await jsonRequest(`/api/playlists/${id}/tracks`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ trackIds })
-    });
-    await refreshPlaylists();
-  }, [refreshPlaylists]);
+    try {
+      await jsonRequest(`/api/playlists/${id}/tracks`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trackIds })
+      });
+      await refreshPlaylists();
+      setActionError(null);
+    } catch (error) {
+      reportError(error);
+      throw error;
+    }
+  }, [refreshPlaylists, reportError]);
 
   const addTrackToPlaylist = useCallback(async (playlist: Playlist, trackId: string) => {
     const trackIds = playlist.trackIds.includes(trackId)
@@ -152,6 +201,9 @@ export function useLibraryData() {
     scanning,
     loading,
     error,
+    actionError,
+    reportError,
+    clearActionError,
     refreshHistory,
     toggleFavorite,
     rescan,
