@@ -37,8 +37,10 @@ jobs:
       - name: Tests
         run: npm test
 
-      - name: Validate systemd installer
-        run: bash -n scripts/install-systemd.sh
+      - name: Validate operational scripts
+        run: |
+          bash -n scripts/install-systemd.sh
+          bash -n scripts/configure-tailscale.sh
 
       - name: Build
         run: npm run build
