@@ -111,6 +111,11 @@ export default function App() {
     setCurrentTime(value);
   }
 
+  function openPlayer() {
+    if (audioRef.current) setCurrentTime(audioRef.current.currentTime);
+    setScreen('player');
+  }
+
   return (
     <main className="app-shell">
       <audio
@@ -159,7 +164,7 @@ export default function App() {
             current={current}
             playing={playing}
             hasNext={hasNext}
-            onOpenPlayer={() => setScreen('player')}
+            onOpenPlayer={openPlayer}
             onTogglePlay={togglePlay}
             onNext={next}
             onPlayTrack={playTrack}
