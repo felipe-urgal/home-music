@@ -1,12 +1,12 @@
-import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 
 export const SESSION_COOKIE_NAME = 'home_music_session';
 export const SESSION_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 function safeEqual(left: string, right: string) {
-  const a = Buffer.from(left);
-  const b = Buffer.from(right);
-  return a.length === b.length && timingSafeEqual(a, b);
+  const a = createHash('sha256').update(left).digest();
+  const b = createHash('sha256').update(right).digest();
+  return timingSafeEqual(a, b);
 }
 
 export function readCookie(header: string | undefined, name: string) {

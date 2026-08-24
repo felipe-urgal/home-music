@@ -72,11 +72,27 @@ export function useAuth() {
   }, []);
 
   const logout = useCallback(async () => {
-    await fetch('/api/auth/logout', {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: { 'X-Home-Music-Request': '1' }
-    }).catch(() => undefined);
+    setError(null);
+
+    let response: Response;
+    try {
+      response = await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'X-Home-Music-Request': '1' }
+      });
+    } catch {
+      const message = 'Não foi possível confirmar o logout. Verifique a conexão e tente novamente.';
+      setError(message);
+      throw new Error(message);
+    }
+
+    if (!response.ok && response.status !== 401) {
+      const message = await messageFromResponse(response);
+      setError(message);
+      throw new Error(message);
+    }
+
     setAuthenticated(false);
   }, []);
 
