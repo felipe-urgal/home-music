@@ -41,6 +41,12 @@ function pickCover(metadata: IAudioMetadata) {
   };
 }
 
+function folderName(musicDir: string, filePath: string) {
+  const relative = path.relative(musicDir, filePath);
+  const parts = relative.split(path.sep).filter(Boolean);
+  return parts.length > 1 ? parts[0] : 'Sem pasta';
+}
+
 async function walk(dir: string): Promise<string[]> {
   const entries = await readdir(dir, { withFileTypes: true });
   const files: string[] = [];
@@ -83,6 +89,7 @@ export async function scanLibrary(musicDir: string): Promise<IndexedTrack[]> {
       title: metadata?.common.title?.trim() || fallbackTitle,
       artist: metadata?.common.artist?.trim() || 'Artista desconhecido',
       album: metadata?.common.album?.trim() || 'Álbum desconhecido',
+      folder: folderName(musicDir, filePath),
       duration: metadata?.format.duration ?? null,
       format: ext.replace('.', '').toUpperCase(),
       hasCover: Boolean(metadata?.common.picture?.length),
