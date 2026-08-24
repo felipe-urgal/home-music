@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Track } from '@home-music/shared';
-import { buildQueueContext, groupTracks, matchesTrack, normalizeSearch } from './library-utils';
+import { buildQueueContext, groupTracks, matchesTrack, normalizeIdentity, normalizeSearch } from './library-utils';
 
 function track(overrides: Partial<Track> = {}): Track {
   return {
@@ -17,9 +17,13 @@ function track(overrides: Partial<Track> = {}): Track {
   };
 }
 
-describe('normalizeSearch', () => {
-  it('ignora acentos e caixa', () => {
+describe('normalização', () => {
+  it('busca ignora acentos e caixa', () => {
     expect(normalizeSearch('  AxÉ  ')).toBe('axe');
+  });
+
+  it('identidade preserva acentos', () => {
+    expect(normalizeIdentity('Axé')).not.toBe(normalizeIdentity('Axe'));
   });
 });
 
@@ -52,6 +56,15 @@ describe('groupTracks', () => {
 
     expect(groups).toHaveLength(1);
     expect(groups[0].tracks).toHaveLength(2);
+  });
+
+  it('não mistura pastas que diferem apenas por acento', () => {
+    const groups = groupTracks([
+      track({ id: '1', folder: 'Axé' }),
+      track({ id: '2', folder: 'Axe' })
+    ], 'folders');
+
+    expect(groups).toHaveLength(2);
   });
 });
 
