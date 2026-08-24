@@ -9,6 +9,7 @@ const EMPTY_STATE: PlaybackState = {
   volume: 1,
   shuffle: false,
   repeatMode: 'off',
+  wasPlaying: false,
   baseQueueIds: [],
   queueIds: [],
   updatedAt: new Date(0).toISOString()
@@ -48,6 +49,8 @@ export function useAudioPlayer(tracks: Track[], progressVisible: boolean, librar
   const [queue, setQueue] = useState<Track[]>([]);
   const [currentTrackId, setCurrentTrackId] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
+  const [resumeIntent, setResumeIntent] = useState(false);
+  const [autoplayBlocked, setAutoplayBlocked] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolumeState] = useState(1);
@@ -74,6 +77,7 @@ export function useAudioPlayer(tracks: Track[], progressVisible: boolean, librar
           ...state,
           baseQueueIds: Array.isArray(state.baseQueueIds) ? state.baseQueueIds : []
         });
+        const shouldResume = Boolean(state.wasPlaying && restored.currentTrackId);
 
         setOrderedQueue(restored.baseQueue);
         setQueue(restored.queue);
@@ -81,6 +85,8 @@ export function useAudioPlayer(tracks: Track[], progressVisible: boolean, librar
         setVolumeState(state.volume);
         setShuffle(state.shuffle);
         setRepeatMode(state.repeatMode);
+        setResumeIntent(shouldResume);
+        setAutoplayBlocked(false);
         restoredPositionRef.current = restored.position;
         positionRef.current = restored.position;
         setCurrentTime(restored.position);
@@ -89,6 +95,8 @@ export function useAudioPlayer(tracks: Track[], progressVisible: boolean, librar
         setOrderedQueue(tracks);
         setQueue(tracks);
         setCurrentTrackId(tracks[0]?.id ?? null);
+        setResumeIntent(false);
+        setAutoplayBlocked(false);
         restoredPositionRef.current = 0;
         positionRef.current = 0;
         setCurrentTime(0);
@@ -110,6 +118,8 @@ export function useAudioPlayer(tracks: Track[], progressVisible: boolean, librar
       setQueue([]);
       setCurrentTrackId(null);
       setPlaying(false);
+      setResumeIntent(false);
+      setAutoplayBlocked(false);
       setCurrentTime(0);
       setDuration(0);
       positionRef.current = 0;
@@ -129,6 +139,7 @@ export function useAudioPlayer(tracks: Track[], progressVisible: boolean, librar
 
     if (!currentTrackId || !trackMap.has(currentTrackId)) {
       setCurrentTrackId(tracks[0].id);
+      setResumeIntent(false);
       restoredPositionRef.current = 0;
       positionRef.current = 0;
       setCurrentTime(0);
@@ -146,10 +157,21 @@ export function useAudioPlayer(tracks: Track[], progressVisible: boolean, librar
     audio.src = `/api/tracks/${current.id}/stream`;
     audio.load();
 
-    if (playing) {
-      audio.play().catch(() => setPlaying(false));
+    if (resumeIntent) {
+      audio.play()
+        .then(() => {
+          setPlaying(true);
+          setAutoplayBlocked(false);
+        })
+        .catch(error => {
+          setPlaying(false);
+          setResumeIntent(false);
+          if (error instanceof DOMException && error.name === 'NotAllowedError') {
+            setAutoplayBlocked(true);
+          }
+        });
     }
-  }, [current?.id, hydrated]);
+  }, [current?.id, hydrated, resumeIntent]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -164,6 +186,7 @@ export function useAudioPlayer(tracks: Track[], progressVisible: boolean, librar
       volume,
       shuffle,
       repeatMode,
+      wasPlaying: resumeIntent,
       baseQueueIds: orderedQueue.map(track => track.id),
       queueIds: queue.map(track => track.id)
     };
@@ -174,7 +197,7 @@ export function useAudioPlayer(tracks: Track[], progressVisible: boolean, librar
       body: JSON.stringify(body),
       keepalive: true
     }).catch(() => undefined);
-  }, [current?.id, hydrated, orderedQueue, queue, repeatMode, shuffle, volume]);
+  }, [current?.id, hydrated, orderedQueue, queue, repeatMode, resumeIntent, shuffle, volume]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -201,19 +224,22 @@ export function useAudioPlayer(tracks: Track[], progressVisible: boolean, librar
   const play = useCallback(async () => {
     const audio = audioRef.current;
     if (!audio || !current) return;
+    setResumeIntent(true);
+    setAutoplayBlocked(false);
     try {
       await audio.play();
       setPlaying(true);
     } catch {
+      setResumeIntent(false);
       setPlaying(false);
     }
   }, [current]);
 
   const pause = useCallback(() => {
+    setResumeIntent(false);
     audioRef.current?.pause();
     setPlaying(false);
-    persistState();
-  }, [persistState]);
+  }, []);
 
   const togglePlay = useCallback(() => {
     if (audioRef.current?.paused) return play();
@@ -227,7 +253,12 @@ export function useAudioPlayer(tracks: Track[], progressVisible: boolean, librar
     audio.currentTime = 0;
     positionRef.current = 0;
     setCurrentTime(0);
-    audio.play().catch(() => setPlaying(false));
+    setResumeIntent(true);
+    setAutoplayBlocked(false);
+    audio.play().catch(() => {
+      setResumeIntent(false);
+      setPlaying(false);
+    });
   }, []);
 
   const next = useCallback((fromEnded = false) => {
@@ -241,6 +272,7 @@ export function useAudioPlayer(tracks: Track[], progressVisible: boolean, librar
       setCurrentTrackId(decision.id);
       return;
     }
+    setResumeIntent(false);
     setPlaying(false);
   }, [currentIndex, queue, repeatMode, restartCurrent]);
 
@@ -292,10 +324,14 @@ export function useAudioPlayer(tracks: Track[], progressVisible: boolean, librar
     setOrderedQueue(baseQueue);
     setQueue(playbackQueue);
     setCurrentTrackId(track.id);
-    setPlaying(true);
+    setResumeIntent(true);
+    setAutoplayBlocked(false);
 
     if (sameTrack) {
-      audioRef.current?.play().catch(() => setPlaying(false));
+      audioRef.current?.play().catch(() => {
+        setResumeIntent(false);
+        setPlaying(false);
+      });
     }
   }, [current?.id, shuffle]);
 
@@ -396,6 +432,8 @@ export function useAudioPlayer(tracks: Track[], progressVisible: boolean, librar
   }
 
   function handlePlay() {
+    setResumeIntent(true);
+    setAutoplayBlocked(false);
     setPlaying(true);
     if (current && historyTrackRef.current !== current.id) {
       historyTrackRef.current = current.id;
@@ -405,7 +443,6 @@ export function useAudioPlayer(tracks: Track[], progressVisible: boolean, librar
 
   function handlePause() {
     setPlaying(false);
-    persistState();
   }
 
   return {
@@ -414,6 +451,7 @@ export function useAudioPlayer(tracks: Track[], progressVisible: boolean, librar
     queue,
     currentIndex,
     playing,
+    autoplayBlocked,
     currentTime,
     duration,
     volume,
