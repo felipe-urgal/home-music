@@ -83,6 +83,32 @@ Ao fechar/recarregar o app enquanto uma faixa está tocando, o estado `wasPlayin
 
 Browsers podem bloquear autoplay com áudio ao abrir uma página sem interação prévia. Quando isso acontece, o Home Music não força nem contorna a política do navegador: preserva o estado, mostra um aviso e aguarda um toque em **Play**.
 
+### Volume mobile
+
+A preferência de volume salva no SQLite representa o controle do player em ambientes onde `HTMLMediaElement.volume` é controlável, como desktop.
+
+Em dispositivos touch-first e ambientes iOS/iPadOS, o frontend trata o volume como responsabilidade do sistema operacional:
+
+```text
+volume salvo do desktop
+        ↓ preservado no SQLite
+mobile detectado
+        ↓
+<audio>.volume = 1.0
+        ↓
+volume final controlado pelo sistema/aparelho
+```
+
+O slider não é exibido nesses dispositivos. Assim o celular não sobrescreve a preferência salva do desktop e não apresenta um controle sem efeito real.
+
+A detecção acompanha mudanças no media query de ponteiro para lidar melhor com dispositivos híbridos.
+
+### Retorno à biblioteca
+
+A biblioteca mantém o estado de navegação enquanto o player está aberto. A ação de retorno fica concentrada no controle superior do player, evitando duas ações idênticas na mesma tela.
+
+O rótulo acessível considera pasta, artista, álbum, playlist, favoritos e busca ativa, para que o retorno corresponda ao contexto que será restaurado.
+
 ## Streaming
 
 `GET /api/tracks/:id/stream` aceita o cabeçalho `Range`, permitindo seek sem baixar o arquivo inteiro.
