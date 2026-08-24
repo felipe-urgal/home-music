@@ -57,7 +57,7 @@ export function useAudioPlayer(tracks: Track[], progressVisible: boolean, librar
 
   const trackMap = useMemo(() => new Map(tracks.map(track => [track.id, track])), [tracks]);
   const currentIndex = currentTrackId ? queue.findIndex(track => track.id === currentTrackId) : -1;
-  const current = currentTrackId ? trackMap.get(currentTrackId) ?? queue[currentIndex] : undefined;
+  const current = currentTrackId ? trackMap.get(currentTrackId) : undefined;
   const hasNext = currentIndex >= 0 && (
     currentIndex < queue.length - 1 || repeatMode === 'all'
   );
