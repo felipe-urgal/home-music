@@ -6,23 +6,31 @@
 - [x] API de biblioteca
 - [x] Streaming com HTTP Range
 - [x] Player mobile
-- [x] Fila local
+- [x] Fila contextual
 - [x] Busca básica
 - [x] PWA básica
 
 ## Fase 2 — Biblioteca pessoal
 
-- [ ] SQLite
-- [ ] Favoritos persistentes
-- [ ] Recentes
-- [ ] Playlists
-- [ ] Ordenação e filtros
-- [ ] Re-scan automático da pasta
+- [x] SQLite
+- [x] Favoritos persistentes
+- [x] Histórico / recentes
+- [x] Playlists
+- [x] Navegação hierárquica por pastas e subpastas
+- [x] Re-scan incremental manual
+- [ ] Re-scan automático ao detectar mudanças na pasta
+- [ ] Ordenação e filtros avançados
 
 ## Fase 3 — Experiência mobile
 
-- [ ] Media Session API
-- [ ] Controles na tela bloqueada
+- [x] Shuffle
+- [x] Repeat `off / all / one`
+- [x] Fila reordenável
+- [x] Volume e estado do player persistentes
+- [x] Play automático entre faixas
+- [x] Retomada automática da sessão quando permitida pelo navegador
+- [x] Media Session API
+- [x] Controles compatíveis na tela bloqueada/notificações
 - [ ] Download offline
 - [ ] Cache seletivo
 - [ ] Melhor tratamento de capas ausentes
@@ -30,6 +38,8 @@
 ## Fase 4 — Fora de casa
 
 - [ ] Tailscale
+- [ ] HTTPS para a experiência instalada fora de `localhost`
+- [ ] ACLs/restrições de acesso remoto
 - [ ] FFmpeg
 - [ ] Transcoding adaptativo
 - [ ] Perfis de qualidade Wi‑Fi / 4G
