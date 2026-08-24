@@ -1,0 +1,27 @@
+services:
+  server:
+    image: node:22-alpine
+    working_dir: /app
+    command: sh -c "npm install && npm run dev -w @home-music/server"
+    ports:
+      - "8787:8787"
+    environment:
+      MUSIC_DIR: /music
+      PORT: 8787
+      HOST: 0.0.0.0
+    volumes:
+      - ./:/app
+      - ${MUSIC_DIR:-./music}:/music:ro
+
+  web:
+    image: node:22-alpine
+    working_dir: /app
+    command: sh -c "npm install && npm run dev -w @home-music/web"
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_URL: http://localhost:8787
+    volumes:
+      - ./:/app
+    depends_on:
+      - server
