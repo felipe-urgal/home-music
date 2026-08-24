@@ -47,6 +47,7 @@ O servidor usa políticas diferentes por tipo de recurso:
 - `/assets/*`: um ano + `immutable`, pois o Vite gera nomes com hash;
 - `manifest.webmanifest` e favicon: cache curto com revalidação;
 - `index.html` e fallback SPA: `no-store`;
+- arquivo estático ausente retorna `404` em vez de cair no shell React;
 - API e streaming continuam com suas próprias regras privadas.
 
 O servidor rejeita `..`, arquivos ocultos e symlinks ao resolver arquivos do build.
@@ -76,6 +77,32 @@ O serviço possui:
 - timeout de 30 segundos;
 - `NoNewPrivileges` e outras restrições básicas do systemd;
 - logs centralizados no journal.
+
+### Biblioteca em disco/volume montado
+
+Se `MUSIC_DIR` estiver em um disco montado dinamicamente, por exemplo sob `/run/media/...`, o systemd pode iniciar o Home Music antes desse volume estar disponível. O servidor continua subindo, mas a biblioteca pode aparecer vazia até o disco ser montado.
+
+Depois de montar o volume, use uma destas opções:
+
+```bash
+sudo systemctl restart home-music
+```
+
+ou abra o app e use **Atualizar biblioteca**.
+
+Para um servidor realmente sempre ligado, prefira um ponto de montagem estável configurado no sistema (por exemplo via `/etc/fstab`) e use esse caminho em `MUSIC_DIR`. Isso também evita que o caminho mude conforme a sessão gráfica/automount.
+
+### Node instalado por NVM ou gerenciador semelhante
+
+O instalador grava no unit do systemd o caminho absoluto do `node` encontrado no momento da instalação. Isso evita depender do shell/NVM durante o boot.
+
+Se você trocar/remover a versão do Node e esse caminho deixar de existir, reinstale o serviço:
+
+```bash
+npm run service:install
+```
+
+Isso atualiza o `ExecStart` para o novo binário e gera novamente o build.
 
 ## Atualizar depois de um novo merge
 
