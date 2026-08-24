@@ -1,175 +1,88 @@
-import { useEffect, useRef, useState } from 'react';
-import type { LibraryResponse, Track } from '@home-music/shared';
+import { useState } from 'react';
 import { LibraryScreen } from './components/LibraryScreen';
 import { PlayerScreen } from './components/PlayerScreen';
-import { buildQueueContext } from './library-utils';
+import { useAudioPlayer } from './useAudioPlayer';
+import { useLibraryData } from './useLibraryData';
 import { useLibraryNavigation } from './useLibraryNavigation';
 
 type Screen = 'player' | 'library';
 
 export default function App() {
-  const audioRef = useRef<HTMLAudioElement>(null);
-  const [tracks, setTracks] = useState<Track[]>([]);
-  const [queue, setQueue] = useState<Track[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [playing, setPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
   const [screen, setScreen] = useState<Screen>('player');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const libraryNavigation = useLibraryNavigation(tracks);
-
-  const current = queue[currentIndex];
-  const hasNext = currentIndex < queue.length - 1;
-
-  useEffect(() => {
-    fetch('/api/library')
-      .then(async response => {
-        if (!response.ok) throw new Error('Falha ao carregar biblioteca');
-        return response.json() as Promise<LibraryResponse>;
-      })
-      .then(data => {
-        setTracks(data.tracks);
-        setQueue(data.tracks);
-        setCurrentIndex(0);
-        setError(null);
-      })
-      .catch(() => setError('Não consegui acessar o servidor de músicas.'))
-      .finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio || !current) return;
-
-    setCurrentTime(0);
-    setDuration(current.duration ?? 0);
-    audio.src = `/api/tracks/${current.id}/stream`;
-    audio.load();
-
-    if (playing) {
-      audio.play().catch(() => setPlaying(false));
-    }
-  }, [current?.id]);
-
-  async function togglePlay() {
-    const audio = audioRef.current;
-    if (!audio || !current) return;
-
-    try {
-      if (audio.paused) {
-        await audio.play();
-        setPlaying(true);
-      } else {
-        audio.pause();
-        setPlaying(false);
-      }
-    } catch {
-      setPlaying(false);
-    }
-  }
-
-  function next() {
-    if (!queue.length) return;
-
-    if (!hasNext) {
-      setPlaying(false);
-      return;
-    }
-
-    setCurrentIndex(index => index + 1);
-  }
-
-  function previous() {
-    const audio = audioRef.current;
-    if (!audio || !queue.length) return;
-
-    if (audio.currentTime > 3 || currentIndex === 0) {
-      audio.currentTime = 0;
-      setCurrentTime(0);
-      return;
-    }
-
-    setCurrentIndex(index => Math.max(0, index - 1));
-  }
-
-  function playTrack(track: Track, contextTracks: Track[]) {
-    const context = buildQueueContext(track, contextTracks);
-    const sameTrack = current?.id === track.id;
-
-    setQueue(context.queue);
-    setCurrentIndex(context.index);
-    setPlaying(true);
-
-    if (sameTrack && audioRef.current?.paused) {
-      audioRef.current.play().catch(() => setPlaying(false));
-    }
-  }
-
-  function seek(value: number) {
-    if (audioRef.current) audioRef.current.currentTime = value;
-    setCurrentTime(value);
-  }
+  const library = useLibraryData();
+  const navigation = useLibraryNavigation(library.tracks, library.favoriteIds, library.playlists);
+  const player = useAudioPlayer(library.tracks, screen === 'player');
+  const current = player.current;
 
   function openPlayer() {
-    if (audioRef.current) setCurrentTime(audioRef.current.currentTime);
+    player.syncVisibleProgress();
     setScreen('player');
   }
 
   return (
     <main className="app-shell">
       <audio
-        ref={audioRef}
-        onPlay={() => setPlaying(true)}
-        onPause={() => setPlaying(false)}
-        onTimeUpdate={event => {
-          if (screen === 'player') setCurrentTime(event.currentTarget.currentTime);
-        }}
-        onLoadedMetadata={event => setDuration(event.currentTarget.duration || 0)}
-        onEnded={next}
+        ref={player.audioRef}
+        onPlay={player.audioHandlers.onPlay}
+        onPause={player.audioHandlers.onPause}
+        onTimeUpdate={event => player.audioHandlers.onTimeUpdate(event.currentTarget)}
+        onLoadedMetadata={event => player.audioHandlers.onLoadedMetadata(event.currentTarget)}
+        onEnded={player.audioHandlers.onEnded}
       />
 
       <section className={`phone-surface ${screen === 'library' ? 'phone-surface--library' : ''}`}>
-        {loading ? (
+        {library.loading ? (
           <div className="center-state">Carregando sua biblioteca…</div>
-        ) : error ? (
+        ) : library.error ? (
           <div className="center-state">
             <strong>Servidor indisponível</strong>
-            <span>{error}</span>
+            <span>{library.error}</span>
           </div>
+        ) : library.tracks.length > 0 && !player.hydrated ? (
+          <div className="center-state">Restaurando o player…</div>
         ) : !current ? (
           <div className="center-state">
             <strong>Nenhuma música encontrada</strong>
-            <span>Configure MUSIC_DIR no arquivo .env e reinicie o servidor.</span>
+            <span>Confira MUSIC_DIR e use o botão de re-scan da biblioteca.</span>
           </div>
         ) : screen === 'player' ? (
           <PlayerScreen
             current={current}
-            tracksCount={tracks.length}
-            queue={queue}
-            currentIndex={currentIndex}
-            playing={playing}
-            currentTime={currentTime}
-            duration={duration}
+            tracksCount={library.tracks.length}
+            queue={player.queue}
+            currentIndex={player.currentIndex}
+            playing={player.playing}
+            currentTime={player.currentTime}
+            duration={player.duration}
+            volume={player.volume}
+            shuffle={player.shuffle}
+            repeatMode={player.repeatMode}
+            isFavorite={library.favoriteSet.has(current.id)}
+            playlists={library.playlists}
             onOpenLibrary={() => setScreen('library')}
-            onTogglePlay={togglePlay}
-            onPrevious={previous}
-            onNext={next}
-            onSeek={seek}
-            onPlayTrack={playTrack}
+            onTogglePlay={() => void player.togglePlay()}
+            onPrevious={player.previous}
+            onNext={player.next}
+            onSeek={player.seek}
+            onVolume={player.setVolume}
+            onShuffle={player.toggleShuffle}
+            onRepeat={player.cycleRepeat}
+            onToggleFavorite={() => void library.toggleFavorite(current.id).catch(() => undefined)}
+            onPlayTrack={player.playTrack}
+            onReorderQueue={player.reorderQueue}
+            onAddToPlaylist={playlist => void library.addTrackToPlaylist(playlist, current.id).catch(() => undefined)}
           />
         ) : (
           <LibraryScreen
-            tracks={tracks}
+            data={library}
             current={current}
-            playing={playing}
-            hasNext={hasNext}
-            navigation={libraryNavigation}
+            playing={player.playing}
+            hasNext={player.hasNext}
+            navigation={navigation}
             onOpenPlayer={openPlayer}
-            onTogglePlay={togglePlay}
-            onNext={next}
-            onPlayTrack={playTrack}
+            onTogglePlay={() => void player.togglePlay()}
+            onNext={player.next}
+            onPlayTrack={player.playTrack}
           />
         )}
       </section>
