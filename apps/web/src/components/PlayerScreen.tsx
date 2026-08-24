@@ -4,7 +4,6 @@ import {
   ChevronUp,
   GripVertical,
   Heart,
-  ListMusic,
   MoreVertical,
   Pause,
   Play,
@@ -28,7 +27,6 @@ function formatTime(value: number) {
 type PlayerScreenProps = {
   current: Track;
   libraryReturnLabel: string;
-  libraryReturnCount: number;
   queue: Track[];
   currentIndex: number;
   playing: boolean;
@@ -36,6 +34,7 @@ type PlayerScreenProps = {
   currentTime: number;
   duration: number;
   volume: number;
+  usesSystemVolume: boolean;
   shuffle: boolean;
   repeatMode: RepeatMode;
   isFavorite: boolean;
@@ -57,7 +56,6 @@ type PlayerScreenProps = {
 export function PlayerScreen({
   current,
   libraryReturnLabel,
-  libraryReturnCount,
   queue,
   currentIndex,
   playing,
@@ -65,6 +63,7 @@ export function PlayerScreen({
   currentTime,
   duration,
   volume,
+  usesSystemVolume,
   shuffle,
   repeatMode,
   isFavorite,
@@ -84,9 +83,6 @@ export function PlayerScreen({
 }: PlayerScreenProps) {
   const [showOptions, setShowOptions] = useState(false);
   const [dragFrom, setDragFrom] = useState<number | null>(null);
-  const [usesSystemVolume] = useState(() =>
-    typeof window !== 'undefined' && window.matchMedia('(hover: none) and (pointer: coarse)').matches
-  );
   const progress = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
   const hasNext = currentIndex < queue.length - 1 || repeatMode === 'all';
   const visibleStart = Math.max(0, currentIndex);
@@ -101,7 +97,9 @@ export function PlayerScreen({
   return (
     <>
       <header className="topbar">
-        <button className="icon-button" aria-label={libraryReturnLabel} onClick={onOpenLibrary}><ChevronDown /></button>
+        <button className="icon-button" aria-label={libraryReturnLabel} title={libraryReturnLabel} onClick={onOpenLibrary}>
+          <ChevronDown />
+        </button>
         <span className="topbar__title">Tocando agora</span>
         <button className="icon-button" aria-label="Mais opções" onClick={() => setShowOptions(value => !value)}><MoreVertical /></button>
       </header>
@@ -170,7 +168,7 @@ export function PlayerScreen({
       </div>
 
       {!usesSystemVolume && (
-        <div className="volume-control" aria-label="Controle de volume do player">
+        <div className="volume-control">
           <Volume2 aria-hidden="true" />
           <input
             aria-label="Volume"
@@ -185,13 +183,7 @@ export function PlayerScreen({
         </div>
       )}
 
-      <button className="library-toggle" onClick={onOpenLibrary}>
-        <ListMusic />
-        <span>{libraryReturnLabel}</span>
-        <span className="library-toggle__count">{libraryReturnCount}</span>
-      </button>
-
-      <section className="queue-panel">
+      <section className="queue-panel queue-panel--player">
         <div className="queue-label">Fila · arraste ou use as setas</div>
         <div className="queue-list">
           {visibleQueue.map((track, visibleIndex) => {
