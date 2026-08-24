@@ -1,46 +1,116 @@
 # Arquitetura
 
-## Fluxo
+## Fluxos de execução
+
+### Desenvolvimento
+
+```text
+Celular / navegador
+     |
+     v
+React + Vite :5173
+     |
+     | /api (proxy)
+     v
+Fastify :8787 em 127.0.0.1
+```
+
+O Vite continua existindo somente para HMR e desenvolvimento local.
+
+### Produção
 
 ```text
 Celular / PWA
      |
-     | HTTP na LAN
-     v
-React + Vite
-     |
-     | /api (proxy same-origin)
+     | HTTP na LAN :8787
      v
 Fastify
      |
+     +--> React compilado (apps/web/dist)
      +--> login + sessão HttpOnly
-     +--> proteção de mutações
+     +--> /api
      +--> scanner incremental
      +--> music-metadata
      +--> SQLite
-     +--> endpoint de capa
+     +--> capas
      +--> streaming HTTP Range
      |
      v
 MUSIC_DIR no Ubuntu
 ```
 
-O frontend, manifest e favicon ficam públicos para o navegador conseguir montar a aplicação sem challenge nativo. O conteúdo pessoal continua protegido em `/api/*`.
+Produção usa **um processo, uma origem e uma porta**. O Vite não participa da execução cotidiana.
+
+## Frontend de produção
+
+`npm run build` gera o frontend em `apps/web/dist`. Quando `NODE_ENV=production`, o Fastify valida esse diretório antes de iniciar e falha com mensagem explícita se `index.html` não existir.
+
+O servidor estático é implementado sem dependência adicional e possui contenção própria:
+
+- rejeita `..`, paths codificados equivalentes, backslashes e arquivos ocultos;
+- rejeita symlinks;
+- resolve `realpath` e confirma que o arquivo permanece dentro do `dist`;
+- arquivos inexistentes caem no `index.html` para permitir fallback SPA;
+- `/api` inexistente continua retornando JSON/404, nunca o shell React.
+
+Política de cache:
+
+```text
+/assets/*              1 ano + immutable
+manifest / favicon     cache curto + revalidate
+index.html / SPA       no-store
+```
+
+Assets do Vite recebem hash no nome, portanto podem ser tratados como imutáveis.
+
+## Ciclo de vida do processo
+
+Em produção o host padrão é `PRODUCTION_HOST=0.0.0.0`, enquanto `HOST=127.0.0.1` continua reservado ao backend de desenvolvimento.
+
+`SIGTERM` e `SIGINT` iniciam shutdown controlado:
+
+```text
+systemd / Ctrl+C
+      ↓
+Fastify.close()
+      ↓
+onClose
+      ↓
+SQLite.close()
+      ↓
+processo termina
+```
+
+Há um timeout defensivo de 25 segundos para evitar processo preso durante shutdown.
+
+O endpoint `/health` informa modo, uptime, disponibilidade do frontend, quantidade de faixas e estado de scan/configuração.
+
+## systemd
+
+`scripts/install-systemd.sh` detecta:
+
+- usuário atual;
+- raiz real do repositório;
+- binário Node em uso.
+
+Antes de instalar o serviço ele executa `npm ci` e `npm run build`. O unit instalado em `/etc/systemd/system/home-music.service` inicia o `dist/index.js` diretamente, sem depender do shell interativo/NVM durante cada boot.
+
+O serviço usa `Restart=on-failure`, journal e hardening básico (`NoNewPrivileges`, `PrivateTmp`, `ProtectSystem`, restrições de kernel/control groups e `UMask=0077`).
 
 ## Autenticação
 
-O Home Music não usa mais HTTP Basic Auth no Vite. Em vez disso:
+O frontend, manifest e favicon são públicos para que o navegador consiga montar a aplicação. O conteúdo pessoal continua protegido em `/api/*`.
 
 ```text
 GET /
   ↓
-React carrega normalmente
+React
   ↓
 GET /api/auth/status
   ↓
 sem sessão
   ↓
-Tela de login do Home Music
+Tela de login
   ↓
 POST /api/auth/login
   ↓
@@ -53,163 +123,113 @@ Set-Cookie: HttpOnly; SameSite=Strict
 
 Características:
 
-- credenciais continuam vindo de `HOME_MUSIC_USER` e `HOME_MUSIC_PASSWORD`;
-- o frontend nunca recebe a senha configurada no servidor;
-- a sessão usa token aleatório e expira automaticamente;
-- o cookie recebe `Secure` quando a conexão é HTTPS;
-- sessões ficam apenas em memória e são invalidadas quando o backend reinicia;
+- credenciais vêm de `HOME_MUSIC_USER` e `HOME_MUSIC_PASSWORD`;
+- frontend nunca recebe a senha configurada;
+- sessão usa token aleatório, expira e fica apenas em memória;
 - logout revoga a sessão atual;
-- tentativas inválidas são limitadas por origem;
-- endpoints mutáveis continuam exigindo `X-Home-Music-Request: 1`, além da sessão;
-- uma resposta `401` das chamadas da aplicação dispara retorno à tela de login.
+- tentativas inválidas têm rate limit;
+- mutações exigem `X-Home-Music-Request: 1` além da sessão;
+- `401` da aplicação retorna o usuário ao login.
 
-Não há `WWW-Authenticate`, evitando o popup de login nativo e permitindo que `manifest.webmanifest` e assets sejam carregados sem `401`.
+Em produção direta na LAN, o servidor não confia em `X-Forwarded-Proto` enviado pelo cliente para decidir o atributo `Secure` do cookie. O suporte correto a proxy/HTTPS será tratado junto da camada Tailscale/HTTPS.
 
 ## Biblioteca
 
 A biblioteca possui duas camadas:
 
-1. `MUSIC_DIR` continua sendo a fonte física dos arquivos de áudio;
-2. SQLite mantém o índice e os dados pessoais do usuário.
+1. `MUSIC_DIR` é a fonte física dos arquivos;
+2. SQLite mantém índice e dados pessoais.
 
-No primeiro scan, o backend percorre a biblioteca e processa metadados. Depois disso, o startup pode carregar o índice diretamente do SQLite sem reprocessar todos os arquivos.
+No primeiro scan o backend processa metadados. Depois, o startup pode carregar o índice do SQLite sem reprocessar tudo.
 
-O re-scan compara `size + mtime` para reaproveitar arquivos inalterados. Arquivos novos ou modificados são processados novamente e arquivos removidos são excluídos do índice.
+O re-scan compara `size + mtime`: arquivos inalterados são reaproveitados, novos/modificados são processados e removidos saem do índice.
 
-A navegação de pastas usa apenas caminhos relativos à `MUSIC_DIR`. Caminhos físicos do computador não são expostos ao frontend.
+A navegação usa somente caminhos relativos a `MUSIC_DIR`; caminhos físicos não são expostos ao frontend.
 
-## Layout mobile
+## Layout mobile e capas
 
-A superfície principal usa largura limitada à viewport e não permite que conteúdos internos alterem sua largura.
-
-Decisões importantes:
+A superfície principal é limitada à viewport:
 
 - containers flex/grid críticos usam `min-width: 0`;
-- a página não possui scroll horizontal global;
-- as abas da biblioteca usam grid responsivo em vez de uma faixa que ultrapassa a viewport;
-- telas muito estreitas reduzem a quantidade de colunas;
-- breadcrumbs podem rolar internamente sem deslocar a página inteira;
-- títulos longos usam truncamento onde necessário.
+- sem scroll horizontal global;
+- abas usam grid responsivo;
+- breadcrumbs rolam somente dentro do próprio componente;
+- títulos longos são truncados.
 
-### Capas
-
-As capas são tratadas como conteúdo não confiável do ponto de vista de dimensão/proporção.
-
-Todo artwork é confinado a um slot conhecido:
+Capas são tratadas como conteúdo não confiável quanto a dimensão/proporção:
 
 ```text
-container com tamanho definido
-        ↓
+slot conhecido
+   ↓
 overflow: hidden
-        ↓
+   ↓
 <img width=100% height=100%>
-        ↓
+   ↓
 object-fit: cover
 ```
 
-A capa grande do player usa `aspect-ratio: 1 / 1` e `max-width: 100%`. Imagens verticais, panorâmicas ou com dimensões internas muito grandes não podem aumentar a largura da interface.
-
-Capas continuam sendo extraídas sob demanda. Há limites para:
-
-- tipos aceitos (`JPEG`, `PNG`, `WebP`);
-- tamanho máximo da capa;
-- quantidade de extrações simultâneas;
-- tamanho e número de entradas do cache LRU.
+A capa grande usa `aspect-ratio: 1 / 1` e `max-width: 100%`. Extração continua sob demanda com limites de formato, tamanho, concorrência e cache.
 
 ## SQLite
 
-O banco padrão fica em:
-
-```text
-data/home-music.db
-```
-
-Ele guarda:
+O banco padrão fica em `data/home-music.db` e guarda:
 
 - índice das faixas;
 - favoritos;
 - histórico;
 - playlists;
-- fila atual e ordem base da fila;
+- fila atual e ordem base;
 - última faixa e posição;
 - volume;
 - shuffle/repeat;
-- indicação de que a sessão anterior estava tocando, usada pela retomada automática.
+- estado usado pela retomada automática.
 
-O schema usa `PRAGMA user_version` e migrations incrementais. O banco usa WAL e foreign keys.
+O schema usa `PRAGMA user_version`, migrations incrementais, WAL e foreign keys.
 
 ## Player e play automático
 
-O frontend mantém uma intenção de reprodução separada do evento `pause` do elemento `<audio>`.
-
-Isso é importante porque `audio.load()` pode emitir `pause` durante uma troca de faixa. Esse evento técnico não deve cancelar a intenção de continuar tocando a fila.
-
-Fluxo simplificado:
+O frontend separa intenção de reprodução do evento `pause` do `<audio>`, porque `audio.load()` pode emitir pausas técnicas durante troca de faixa.
 
 ```text
 faixa termina
    ↓
-resolve próxima faixa / repeat
+resolve próxima / repeat
    ↓
-mantém intenção de reprodução
+mantém intenção
    ↓
 troca src
    ↓
 audio.play()
 ```
 
-Ao fechar/recarregar o app enquanto uma faixa está tocando, o estado `wasPlaying` é persistido. Na próxima abertura, o frontend tenta restaurar faixa, posição e reprodução.
-
-Browsers podem bloquear autoplay com áudio ao abrir uma página sem interação prévia. Quando isso acontece, o Home Music não força nem contorna a política do navegador: preserva o estado, mostra um aviso e aguarda um toque em **Play**.
+Ao recarregar, `wasPlaying` permite tentar restaurar a reprodução. Se o navegador bloquear autoplay, o estado é preservado e a UI aguarda um toque em **Play**.
 
 ### Volume mobile
 
-A preferência de volume salva no SQLite representa o controle do player em ambientes onde `HTMLMediaElement.volume` é controlável, como desktop.
-
-Em dispositivos touch-first e ambientes iOS/iPadOS, o frontend trata o volume como responsabilidade do sistema operacional:
-
-```text
-volume salvo do desktop
-        ↓ preservado no SQLite
-mobile detectado
-        ↓
-<audio>.volume = 1.0
-        ↓
-volume final controlado pelo sistema/aparelho
-```
-
-O slider não é exibido nesses dispositivos. Assim o celular não sobrescreve a preferência salva do desktop e não apresenta um controle sem efeito real.
-
-A detecção acompanha mudanças no media query de ponteiro para lidar melhor com dispositivos híbridos.
+Em ambientes touch-first/iOS, o sistema controla o volume final e o elemento usa `1.0`. A preferência salva para desktop continua preservada.
 
 ### Retorno à biblioteca
 
-A biblioteca mantém o estado de navegação enquanto o player está aberto. A ação de retorno fica concentrada no controle superior do player, evitando duas ações idênticas na mesma tela.
-
-O rótulo acessível considera pasta, artista, álbum, playlist, favoritos e busca ativa, para que o retorno corresponda ao contexto que será restaurado.
+A biblioteca preserva pasta, artista, álbum, playlist, favoritos e busca enquanto o player está aberto. A ação superior retorna ao contexto real.
 
 ## Streaming
 
-`GET /api/tracks/:id/stream` aceita o cabeçalho `Range`, permitindo seek sem baixar o arquivo inteiro.
-
-A rota recebe somente um ID indexado. Antes de abrir um arquivo, o backend valida novamente que o destino continua sendo um arquivo regular dentro da raiz da biblioteca.
+`GET /api/tracks/:id/stream` suporta `Range` para seek. A rota recebe somente ID indexado e revalida que o destino continua sendo arquivo regular dentro da raiz antes de abri-lo.
 
 ## Segurança
 
-Os endpoints pessoais usam sessão no backend. O frontend público contém somente os arquivos necessários para apresentar o app e a tela de login.
+- desenvolvimento: API em `127.0.0.1`;
+- produção: uma porta na LAN, protegida por sessão;
+- frontend público não contém dados pessoais;
+- symlinks/FIFOs/devices/escapes da biblioteca não são servidos;
+- arquivos estáticos de produção também têm contenção de path/symlink;
+- erros não expõem caminhos físicos;
+- produção aplica CSP, `nosniff`, frame denial, referrer policy, permissions policy e CORP same-origin;
+- dependências são reproduzíveis via lockfile + `npm ci`;
+- systemd adiciona hardening do processo.
 
-Outras decisões:
-
-- backend em `127.0.0.1` por padrão no desenvolvimento;
-- Docker não publica a porta `8787` no host;
-- biblioteca montada read-only no Compose;
-- symlinks, FIFOs, devices e escapes da raiz não são servidos;
-- erros enviados ao cliente não incluem caminhos físicos internos;
-- headers de segurança são aplicados no Vite e na API;
-- dependências reproduzíveis via lockfile e `npm ci`.
-
-HTTP puro na LAN não oferece confidencialidade. O Home Music não deve ser exposto diretamente na internet. Para acesso fora de casa, a direção planejada é Tailscale + ACLs e uma camada HTTPS adequada.
+HTTP puro na LAN não oferece confidencialidade. Não deve haver port-forwarding público. O próximo marco é Tailscale + HTTPS/ACL.
 
 ## Transcoding
 
-Arquivos ainda são entregues no formato original. FFmpeg/transcoding adaptativo fica para uma fase posterior, principalmente para FLAC/WAV via 4G/5G.
+Arquivos ainda são entregues no formato original. FFmpeg/transcoding adaptativo permanece para etapa posterior, principalmente para FLAC/WAV em redes móveis.
