@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -22,7 +22,7 @@ test('resolveRegularFileInside rejeita symlink mesmo quando aponta para arquivo'
   const root = path.join(temp, 'music');
   const outside = path.join(temp, 'outside.mp3');
 
-  await import('node:fs/promises').then(({ mkdir }) => mkdir(root));
+  await mkdir(root);
   await writeFile(outside, 'not really audio');
   await symlink(outside, path.join(root, 'linked.mp3'));
 
