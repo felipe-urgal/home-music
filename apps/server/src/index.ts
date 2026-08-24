@@ -18,11 +18,19 @@ import {
   resolveLibraryRoot,
   UnsafeLibraryPathError
 } from './security.js';
+import {
+  prepareWebApp,
+  requestPathname,
+  sendWebRequest,
+  type PreparedWebApp
+} from './static-web.js';
 
 const rootEnvPath = fileURLToPath(new URL('../../../.env', import.meta.url));
 const databasePath = fileURLToPath(new URL('../../../data/home-music.db', import.meta.url));
+const webDistPath = fileURLToPath(new URL('../../web/dist/', import.meta.url));
 config({ path: rootEnvPath });
 
+const isProduction = process.env.NODE_ENV === 'production';
 const app = Fastify({
   logger: true,
   bodyLimit: 256 * 1024
@@ -31,7 +39,9 @@ const app = Fastify({
 const database = new HomeMusicDatabase(databasePath);
 const musicDir = process.env.MUSIC_DIR || '';
 const port = Number(process.env.PORT || 8787);
-const host = process.env.HOST || '127.0.0.1';
+const host = isProduction
+  ? process.env.PRODUCTION_HOST || '0.0.0.0'
+  : process.env.HOST || '127.0.0.1';
 const authUser = process.env.HOME_MUSIC_USER || '';
 const authPassword = process.env.HOME_MUSIC_PASSWORD || '';
 const sessions = new SessionManager(authUser, authPassword);
@@ -39,12 +49,15 @@ const loginRateLimiter = new LoginRateLimiter();
 const authConfigured = sessions.configured;
 const mutatingMethods = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const publicAuthRoutes = new Set(['/api/auth/status', '/api/auth/login']);
+const productionCsp = "default-src 'self'; img-src 'self' data: blob:; media-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
 
 let tracks: IndexedTrack[] = [];
 let tracksById = new Map<string, IndexedTrack>();
 let libraryRoot = '';
 let scannedAt = new Date(0).toISOString();
 let scanPromise: Promise<ScanResponse> | null = null;
+let webApp: PreparedWebApp | null = null;
+let shuttingDown = false;
 
 const MAX_COVER_CACHE_BYTES = 16 * 1024 * 1024;
 const MAX_COVER_CACHE_ITEMS = 64;
@@ -220,10 +233,8 @@ function requestSessionToken(cookieHeader: string | undefined) {
   return readCookie(cookieHeader, SESSION_COOKIE_NAME);
 }
 
-function requestIsSecure(request: { protocol: string; headers: Record<string, unknown> }) {
-  const forwarded = request.headers['x-forwarded-proto'];
-  const forwardedProtocol = Array.isArray(forwarded) ? forwarded[0] : forwarded;
-  return request.protocol === 'https' || forwardedProtocol === 'https';
+function requestIsSecure(request: { protocol: string }) {
+  return request.protocol === 'https';
 }
 
 app.addHook('onRequest', async (request, reply) => {
@@ -260,6 +271,8 @@ app.addHook('onSend', async (_request, reply, payload) => {
   reply.header('Referrer-Policy', 'no-referrer');
   reply.header('X-Frame-Options', 'DENY');
   reply.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  reply.header('Cross-Origin-Resource-Policy', 'same-origin');
+  if (isProduction) reply.header('Content-Security-Policy', productionCsp);
   return payload;
 });
 
@@ -268,7 +281,7 @@ app.addHook('onClose', async () => {
 });
 
 app.setErrorHandler((error, request, reply) => {
-  app.log.error({ err: error, method: request.method, url: request.url }, 'Erro não tratado na API');
+  app.log.error({ err: error, method: request.method, url: request.url }, 'Erro não tratado no servidor');
   if (!reply.sent) reply.code(500).send({ error: 'Erro interno do servidor.' });
 });
 
@@ -276,6 +289,9 @@ app.get('/health', async (_request, reply) => {
   reply.header('Cache-Control', 'no-store');
   return {
     ok: true,
+    mode: isProduction ? 'production' : 'development',
+    uptimeSeconds: Math.floor(process.uptime()),
+    webReady: isProduction ? Boolean(webApp) : false,
     tracks: tracks.length,
     scannedAt,
     scanning: Boolean(scanPromise),
@@ -514,10 +530,52 @@ app.get<{ Params: { id: string } }>('/api/tracks/:id/stream', async (request, re
   }
 });
 
+if (isProduction) {
+  try {
+    webApp = await prepareWebApp(webDistPath);
+  } catch (error) {
+    app.log.error({ err: error, webDistPath }, 'Frontend de produção não encontrado. Execute npm run build antes de npm start.');
+    await app.close();
+    throw error;
+  }
+
+  app.get('/*', async (request, reply) => {
+    const pathname = requestPathname(request.url);
+    if (!pathname) return reply.code(400).send({ error: 'URL inválida.' });
+    if (pathname === '/api' || pathname.startsWith('/api/')) {
+      return reply.code(404).send({ error: 'Rota da API não encontrada.' });
+    }
+    return sendWebRequest(reply, webApp!, request.url);
+  });
+}
+
 try {
   await initializeLibrary();
 } catch (error) {
   app.log.warn({ err: error }, 'Biblioteca ainda não pôde ser carregada. Verifique MUSIC_DIR.');
 }
+
+async function shutdown(signal: 'SIGINT' | 'SIGTERM') {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  app.log.info({ signal }, 'Encerrando Home Music');
+
+  const timeout = setTimeout(() => {
+    app.log.error('Timeout no shutdown; encerrando o processo.');
+    process.exit(1);
+  }, 25_000);
+  timeout.unref();
+
+  try {
+    await app.close();
+    clearTimeout(timeout);
+  } catch (error) {
+    app.log.error({ err: error }, 'Falha ao encerrar o servidor corretamente');
+    process.exitCode = 1;
+  }
+}
+
+process.once('SIGINT', () => { void shutdown('SIGINT'); });
+process.once('SIGTERM', () => { void shutdown('SIGTERM'); });
 
 await app.listen({ port, host });
