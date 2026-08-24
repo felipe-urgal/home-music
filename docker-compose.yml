@@ -20,7 +20,7 @@ services:
     ports:
       - "5173:5173"
     environment:
-      VITE_API_URL: http://localhost:8787
+      VITE_PROXY_TARGET: http://server:8787
     volumes:
       - ./:/app
     depends_on:
