@@ -75,34 +75,50 @@ test('scanLibrary mantém ID para o mesmo caminho relativo em outra raiz', async
   }
 });
 
-test('scanLibrary ignora subpasta inacessível sem perder o restante da biblioteca', async t => {
+test('scanLibrary preserva faixas anteriores de subpasta temporariamente inacessível', async t => {
   if (process.platform === 'win32' || (typeof process.getuid === 'function' && process.getuid() === 0)) {
     t.skip('Permissões POSIX são necessárias para este cenário.');
     return;
   }
 
   const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-library-'));
-  const blocked = path.join(temp, 'music', 'Bloqueada');
+  const root = path.join(temp, 'music');
+  const allowed = path.join(root, 'Permitida');
+  const blocked = path.join(root, 'Bloqueada');
+  const blockedFile = path.join(blocked, 'Privada.mp3');
 
   try {
-    const root = path.join(temp, 'music');
-    const allowed = path.join(root, 'Permitida');
     await mkdir(allowed, { recursive: true });
     await mkdir(blocked, { recursive: true });
     await writeFile(path.join(allowed, 'Ok.mp3'), 'arquivo de teste');
-    await writeFile(path.join(blocked, 'Privada.mp3'), 'arquivo de teste');
+    await writeFile(blockedFile, 'arquivo de teste');
+
+    const libraryRoot = await resolveLibraryRoot(root);
+    const first = await scanLibrary(libraryRoot);
+    assert.equal(first.tracks.length, 2);
+    const blockedTrack = first.tracks.find(track => track.title === 'Privada');
+    assert.ok(blockedTrack);
+
     await chmod(blocked, 0o000);
 
     const warnings: string[] = [];
-    const result = await scanLibrary(
-      await resolveLibraryRoot(root),
-      [],
+    const second = await scanLibrary(
+      libraryRoot,
+      first.tracks,
       message => warnings.push(message)
     );
 
-    assert.equal(result.tracks.length, 1);
-    assert.equal(result.tracks[0].title, 'Ok');
+    assert.equal(second.tracks.length, 2);
+    assert.equal(second.stats.removed, 0);
+    assert.equal(second.stats.unchanged, 2);
+    assert.ok(second.tracks.some(track => track.id === blockedTrack.id));
     assert.ok(warnings.some(message => message.includes('Bloqueada')));
+
+    await chmod(blocked, 0o700);
+    await rm(blockedFile);
+    const third = await scanLibrary(libraryRoot, second.tracks);
+    assert.equal(third.tracks.length, 1);
+    assert.equal(third.stats.removed, 1);
   } finally {
     await chmod(blocked, 0o700).catch(() => undefined);
     await rm(temp, { recursive: true, force: true });

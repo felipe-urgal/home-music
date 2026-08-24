@@ -111,7 +111,9 @@ function AuthenticatedApp({ onLogout }: AuthenticatedAppProps) {
             onPlayTrack={player.playTrack}
             onReorderQueue={player.reorderQueue}
             onAddToPlaylist={playlist => run(library.addTrackToPlaylist(playlist, current.id))}
-            onLogout={() => void onLogout()}
+            onLogout={() => {
+              void onLogout().catch(library.reportError);
+            }}
           />
         )}
       </section>

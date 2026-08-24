@@ -4,7 +4,7 @@ import path from 'node:path';
 import type { Readable } from 'node:stream';
 import { parseFile, parseStream, type IAudioMetadata } from 'music-metadata';
 import type { Track } from '@home-music/shared';
-import { resolveRegularFileInside } from './security.js';
+import { isPathInside, resolveRegularFileInside } from './security.js';
 
 const SUPPORTED_EXTENSIONS = new Set([
   '.mp3', '.flac', '.wav', '.m4a', '.aac', '.ogg', '.opus'
@@ -74,6 +74,7 @@ function relativeFolder(libraryRoot: string, filePath: string) {
 async function walk(
   dir: string,
   libraryRoot: string,
+  unavailableDirectories: string[],
   onWarning?: ScanWarningHandler
 ): Promise<ScannableFile[]> {
   let entries;
@@ -81,6 +82,7 @@ async function walk(
     entries = await readdir(dir, { withFileTypes: true });
   } catch (error) {
     if (dir === libraryRoot) throw error;
+    unavailableDirectories.push(dir);
     onWarning?.(`Subpasta ignorada durante o scan: ${relativeFilePath(libraryRoot, dir)}`, error);
     return [];
   }
@@ -92,7 +94,7 @@ async function walk(
     const fullPath = path.join(dir, entry.name);
 
     if (entry.isDirectory()) {
-      files.push(...await walk(fullPath, libraryRoot, onWarning));
+      files.push(...await walk(fullPath, libraryRoot, unavailableDirectories, onWarning));
       continue;
     }
 
@@ -170,7 +172,8 @@ export async function scanLibrary(
   previousTracks: IndexedTrack[] = [],
   onWarning?: ScanWarningHandler
 ): Promise<LibraryScanResult> {
-  const files = await walk(libraryRoot, libraryRoot, onWarning);
+  const unavailableDirectories: string[] = [];
+  const files = await walk(libraryRoot, libraryRoot, unavailableDirectories, onWarning);
   const previousByPath = new Map(previousTracks.map(track => [track.filePath, track]));
   const seenPaths = new Set<string>();
   const tracks: IndexedTrack[] = [];
@@ -199,7 +202,16 @@ export async function scanLibrary(
   }
 
   for (const previous of previousTracks) {
-    if (!seenPaths.has(previous.filePath)) stats.removed += 1;
+    if (seenPaths.has(previous.filePath)) continue;
+
+    const unavailable = unavailableDirectories.some(directory => isPathInside(directory, previous.filePath));
+    if (unavailable) {
+      tracks.push(previous);
+      stats.unchanged += 1;
+      continue;
+    }
+
+    stats.removed += 1;
   }
 
   tracks.sort((a, b) =>
