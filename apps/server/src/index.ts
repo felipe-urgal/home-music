@@ -18,11 +18,20 @@ import {
   resolveLibraryRoot,
   UnsafeLibraryPathError
 } from './security.js';
+import {
+  prepareWebApp,
+  requestPathname,
+  sendWebRequest,
+  type PreparedWebApp
+} from './static-web.js';
 
 const rootEnvPath = fileURLToPath(new URL('../../../.env', import.meta.url));
-const databasePath = fileURLToPath(new URL('../../../data/home-music.db', import.meta.url));
+const defaultDatabasePath = fileURLToPath(new URL('../../../data/home-music.db', import.meta.url));
+const webDistPath = fileURLToPath(new URL('../../web/dist/', import.meta.url));
 config({ path: rootEnvPath });
 
+const databasePath = process.env.HOME_MUSIC_DATABASE_PATH || defaultDatabasePath;
+const isProduction = process.env.NODE_ENV === 'production';
 const app = Fastify({
   logger: true,
   bodyLimit: 256 * 1024
@@ -31,20 +40,27 @@ const app = Fastify({
 const database = new HomeMusicDatabase(databasePath);
 const musicDir = process.env.MUSIC_DIR || '';
 const port = Number(process.env.PORT || 8787);
-const host = process.env.HOST || '127.0.0.1';
+const host = isProduction
+  ? process.env.PRODUCTION_HOST || '0.0.0.0'
+  : process.env.HOST || '127.0.0.1';
 const authUser = process.env.HOME_MUSIC_USER || '';
 const authPassword = process.env.HOME_MUSIC_PASSWORD || '';
+const forceSecureCookie = process.env.HOME_MUSIC_COOKIE_SECURE === 'true';
 const sessions = new SessionManager(authUser, authPassword);
 const loginRateLimiter = new LoginRateLimiter();
 const authConfigured = sessions.configured;
 const mutatingMethods = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const publicAuthRoutes = new Set(['/api/auth/status', '/api/auth/login']);
+const productionCsp = "default-src 'self'; img-src 'self' data: blob:; media-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
 
 let tracks: IndexedTrack[] = [];
 let tracksById = new Map<string, IndexedTrack>();
 let libraryRoot = '';
+let libraryReady = false;
 let scannedAt = new Date(0).toISOString();
 let scanPromise: Promise<ScanResponse> | null = null;
+let webApp: PreparedWebApp | null = null;
+let shuttingDown = false;
 
 const MAX_COVER_CACHE_BYTES = 16 * 1024 * 1024;
 const MAX_COVER_CACHE_ITEMS = 64;
@@ -137,6 +153,7 @@ async function performRescan(): Promise<ScanResponse> {
   if (!musicDir) {
     setTracks([]);
     libraryRoot = '';
+    libraryReady = false;
     scannedAt = new Date().toISOString();
     return { tracks: 0, scannedAt, added: 0, updated: 0, removed: 0, unchanged: 0 };
   }
@@ -152,6 +169,7 @@ async function performRescan(): Promise<ScanResponse> {
   libraryRoot = resolvedRoot;
   scannedAt = nextScannedAt;
   setTracks(result.tracks);
+  libraryReady = true;
 
   return {
     tracks: tracks.length,
@@ -163,15 +181,21 @@ async function performRescan(): Promise<ScanResponse> {
 function rescan() {
   if (scanPromise) return scanPromise;
 
-  scanPromise = performRescan().finally(() => {
-    scanPromise = null;
-  });
+  scanPromise = performRescan()
+    .catch(error => {
+      libraryReady = false;
+      throw error;
+    })
+    .finally(() => {
+      scanPromise = null;
+    });
   return scanPromise;
 }
 
 async function initializeLibrary() {
   if (!musicDir) {
     setTracks([]);
+    libraryReady = false;
     return;
   }
 
@@ -183,6 +207,7 @@ async function initializeLibrary() {
     libraryRoot = resolvedRoot;
     scannedAt = storedScannedAt;
     setTracks(database.loadTracks());
+    libraryReady = true;
     return;
   }
 
@@ -220,10 +245,16 @@ function requestSessionToken(cookieHeader: string | undefined) {
   return readCookie(cookieHeader, SESSION_COOKIE_NAME);
 }
 
-function requestIsSecure(request: { protocol: string; headers: Record<string, unknown> }) {
-  const forwarded = request.headers['x-forwarded-proto'];
-  const forwardedProtocol = Array.isArray(forwarded) ? forwarded[0] : forwarded;
-  return request.protocol === 'https' || forwardedProtocol === 'https';
+function requestIsSecure(request: { protocol: string }) {
+  return forceSecureCookie || request.protocol === 'https';
+}
+
+function readinessState() {
+  const webReady = !isProduction || Boolean(webApp);
+  return {
+    ready: webReady && authConfigured && libraryReady,
+    webReady
+  };
 }
 
 app.addHook('onRequest', async (request, reply) => {
@@ -260,6 +291,8 @@ app.addHook('onSend', async (_request, reply, payload) => {
   reply.header('Referrer-Policy', 'no-referrer');
   reply.header('X-Frame-Options', 'DENY');
   reply.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  reply.header('Cross-Origin-Resource-Policy', 'same-origin');
+  if (isProduction) reply.header('Content-Security-Policy', productionCsp);
   return payload;
 });
 
@@ -268,19 +301,68 @@ app.addHook('onClose', async () => {
 });
 
 app.setErrorHandler((error, request, reply) => {
-  app.log.error({ err: error, method: request.method, url: request.url }, 'Erro não tratado na API');
+  app.log.error({ err: error, method: request.method, url: request.url }, 'Erro não tratado no servidor');
   if (!reply.sent) reply.code(500).send({ error: 'Erro interno do servidor.' });
 });
 
+async function shutdown(signal: 'SIGINT' | 'SIGTERM') {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  app.log.info({ signal }, 'Encerrando Home Music');
+
+  const timeout = setTimeout(() => {
+    app.log.error('Timeout no shutdown; encerrando o processo.');
+    process.exit(1);
+  }, 25_000);
+  timeout.unref();
+
+  try {
+    if (scanPromise) {
+      app.log.info('Aguardando scan em andamento antes de fechar o SQLite');
+      try {
+        await scanPromise;
+      } catch {
+        // O erro original do scan já será registrado/tratado pelo fluxo chamador.
+      }
+    }
+    await app.close();
+  } catch (error) {
+    app.log.error({ err: error }, 'Falha ao encerrar o servidor corretamente');
+    process.exitCode = 1;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+process.once('SIGINT', () => { void shutdown('SIGINT'); });
+process.once('SIGTERM', () => { void shutdown('SIGTERM'); });
+
 app.get('/health', async (_request, reply) => {
   reply.header('Cache-Control', 'no-store');
+  return { ok: true };
+});
+
+app.get('/ready', async (_request, reply) => {
+  reply.header('Cache-Control', 'no-store');
+  const { ready } = readinessState();
+  return reply.code(ready ? 200 : 503).send({ ready });
+});
+
+app.get('/api/health', async (_request, reply) => {
+  reply.header('Cache-Control', 'private, no-store');
+  const { ready, webReady } = readinessState();
   return {
-    ok: true,
+    ready,
+    mode: isProduction ? 'production' : 'development',
+    uptimeSeconds: Math.floor(process.uptime()),
+    webReady,
+    libraryReady,
     tracks: tracks.length,
     scannedAt,
     scanning: Boolean(scanPromise),
     musicDirConfigured: Boolean(musicDir),
-    authConfigured
+    authConfigured,
+    schemaVersion: database.getSchemaVersion()
   };
 });
 
@@ -514,10 +596,32 @@ app.get<{ Params: { id: string } }>('/api/tracks/:id/stream', async (request, re
   }
 });
 
+if (isProduction) {
+  try {
+    webApp = await prepareWebApp(webDistPath);
+  } catch (error) {
+    app.log.error({ err: error, webDistPath }, 'Frontend de produção não encontrado. Execute npm run build antes de npm start.');
+    await app.close();
+    throw error;
+  }
+
+  app.get('/*', async (request, reply) => {
+    const pathname = requestPathname(request.url);
+    if (!pathname) return reply.code(400).send({ error: 'URL inválida.' });
+    if (pathname === '/api' || pathname.startsWith('/api/')) {
+      return reply.code(404).send({ error: 'Rota da API não encontrada.' });
+    }
+    return sendWebRequest(reply, webApp!, request.url);
+  });
+}
+
 try {
   await initializeLibrary();
 } catch (error) {
+  libraryReady = false;
   app.log.warn({ err: error }, 'Biblioteca ainda não pôde ser carregada. Verifique MUSIC_DIR.');
 }
 
-await app.listen({ port, host });
+if (!shuttingDown) {
+  await app.listen({ port, host });
+}

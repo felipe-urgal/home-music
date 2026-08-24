@@ -2,7 +2,7 @@
 
 Streaming pessoal das músicas do seu computador para o celular.
 
-O Home Music roda no Ubuntu, lê uma pasta local de músicas e expõe uma interface mobile **Player First** na rede local. O frontend e o manifest ficam públicos para o navegador carregar normalmente; os dados e o streaming continuam protegidos pela API, que usa uma sessão autenticada por cookie `HttpOnly`.
+O Home Music roda no Ubuntu, lê uma pasta local de músicas e expõe uma interface mobile **Player First** na rede local. Em produção, o React compilado e a API são servidos pelo mesmo processo Fastify e pela mesma porta. Os dados e o streaming continuam protegidos por sessão autenticada em cookie `HttpOnly`.
 
 ## Recursos atuais
 
@@ -13,38 +13,38 @@ O Home Music roda no Ubuntu, lê uma pasta local de músicas e expõe uma interf
 - artistas, álbuns, músicas, favoritos, playlists e histórico;
 - busca por música, artista, álbum e pasta, ignorando acentos;
 - leitura de metadados e capas incorporadas;
-- capas confinadas aos slots da interface para não alterar a largura/proporção do layout mobile;
-- abas responsivas sem provocar overflow horizontal da página;
+- capas confinadas aos slots da interface para não alterar o layout mobile;
+- abas responsivas sem overflow horizontal;
 - re-scan incremental por `size + mtime` para arquivos novos, alterados e removidos;
-- scanner tolerante a subpastas inacessíveis sem derrubar o restante da biblioteca.
+- scanner tolerante a subpastas inacessíveis.
 
 ### Autenticação
 
-- tela de login própria do Home Music, responsiva para celular;
-- não usa mais o popup nativo de HTTP Basic Auth do navegador;
-- `POST /api/auth/login` cria uma sessão aleatória mantida pelo backend;
-- a sessão é enviada em cookie `HttpOnly`, `SameSite=Strict` e recebe `Secure` quando a conexão for HTTPS;
+- tela de login própria e responsiva;
+- sessão aleatória mantida pelo backend;
+- cookie `HttpOnly` + `SameSite=Strict`;
+- cookie `Secure` em HTTPS direto ou quando `HOME_MUSIC_COOKIE_SECURE=true` é configurado explicitamente atrás de um proxy HTTPS confiável;
 - sessão com expiração e logout explícito;
-- tentativas inválidas de login possuem limitação por origem;
-- `manifest.webmanifest`, favicon e assets do frontend não recebem challenge de autenticação;
-- quando a sessão expira, requisições da aplicação levam o usuário de volta para o login.
+- rate limit para credenciais inválidas;
+- manifest, favicon e assets públicos, com `/api/*` protegido;
+- sessão expirada devolve o usuário para a tela de login.
 
 ### Player
 
 - play/pause, anterior/próxima e seek;
-- reprodução automática da próxima faixa enquanto a fila estiver ativa;
-- retomada automática da sessão quando a página anterior foi encerrada tocando;
+- reprodução automática da próxima faixa;
+- retomada automática da sessão quando permitida pelo navegador;
 - restauração da última faixa, posição e volume;
-- shuffle com ordem original persistida separadamente;
+- shuffle com ordem original persistida;
 - repeat `off`, `all` e `one`;
 - fila contextual e reordenável;
-- retorno contextual pela ação superior do player: pasta, artista, álbum, playlist, favoritos ou busca permanecem preservados;
-- mini-player persistente enquanto navega pela biblioteca;
-- Media Session com controles compatíveis na tela bloqueada/notificações.
+- retorno contextual para pasta, artista, álbum, playlist, favoritos ou busca;
+- mini-player persistente;
+- Media Session para tela bloqueada/notificações.
 
-> Navegadores móveis podem bloquear a retomada automática ao abrir uma nova página sem interação do usuário. Nessa situação o Home Music preserva a faixa e a posição, mostra um aviso e basta tocar em **Play** uma vez. A continuidade automática da fila segue funcionando depois da interação.
+> Navegadores móveis podem bloquear autoplay ao abrir uma nova página sem interação. O Home Music preserva faixa/posição e aguarda um toque em **Play**.
 
-> Em dispositivos que usam o volume do sistema, o Home Music não exibe um slider que o navegador não consegue controlar. O elemento `<audio>` opera em volume `1.0` e o volume final fica nos botões físicos/controle do aparelho. A preferência de volume salva para uso no desktop continua preservada e não é sobrescrita pelo celular.
+> Em dispositivos que usam o volume do sistema, o `<audio>` opera em volume `1.0` e o controle final fica nos botões físicos/aparelho. O volume salvo do desktop não é sobrescrito.
 
 ### Persistência
 
@@ -58,26 +58,27 @@ O estado local usa SQLite em `data/home-music.db`:
 - volume;
 - shuffle/repeat;
 - fila efetiva e ordem base;
-- estado de reprodução usado pela retomada automática.
+- estado de reprodução.
 
 O schema usa `PRAGMA user_version` e migrations versionadas.
 
-> As sessões de login são mantidas em memória pelo backend e não são gravadas no SQLite. Reiniciar o processo invalida as sessões existentes e exige login novamente.
+> Sessões de login ficam em memória e são invalidadas quando o processo reinicia.
 
 ## Estrutura
 
 ```text
 home-music/
 ├── apps/
-│   ├── web/       # React + TypeScript + Vite
-│   └── server/    # Fastify + TypeScript + SQLite
+│   ├── web/       # React + TypeScript + Vite (build)
+│   └── server/    # Fastify + TypeScript + SQLite + frontend em produção
 ├── packages/
-│   └── shared/    # tipos compartilhados
-├── data/          # banco SQLite local, ignorado pelo Git
+│   └── shared/
+├── data/
+├── scripts/
 └── docs/
 ```
 
-## Rodando no Ubuntu
+## Configuração
 
 Requisitos: Node.js 22+ e npm.
 
@@ -85,75 +86,143 @@ Requisitos: Node.js 22+ e npm.
 cp .env.example .env
 ```
 
-Edite o `.env` e configure pelo menos:
+Configure pelo menos:
 
 ```env
 MUSIC_DIR="/caminho/para/suas/musicas"
 HOME_MUSIC_USER=home-music
 HOME_MUSIC_PASSWORD=uma-senha-exclusiva-com-12-ou-mais-caracteres
+HOME_MUSIC_COOKIE_SECURE=false
+PORT=8787
 HOST=127.0.0.1
+PRODUCTION_HOST=0.0.0.0
 ```
 
-Depois:
+`HOME_MUSIC_COOKIE_SECURE=true` deve ser usado somente quando o navegador acessa o Home Music por **HTTPS** e um proxy confiável encaminha a requisição ao Fastify. Em HTTP local deixe `false`.
+
+## Desenvolvimento
 
 ```bash
 npm ci
 npm run dev
 ```
 
-No computador:
+- Web/Vite: `http://localhost:5173`
+- API: `http://127.0.0.1:8787`
+- celular na mesma LAN: `http://IP_DO_PC:5173`
 
-- Web: `http://localhost:5173`
-- API: `http://127.0.0.1:8787` — somente local
+O Vite faz proxy de `/api` para o backend local.
 
-No celular, conectado ao mesmo Wi-Fi, abra:
+## Produção
 
-```text
-http://IP_DO_SEU_PC:5173
+```bash
+npm ci
+npm run build
+npm start
 ```
 
-A página do Home Music será carregada normalmente e exibirá a tela própria de login. Use os valores de `HOME_MUSIC_USER` e `HOME_MUSIC_PASSWORD`.
+Em produção existe apenas um servidor externo:
 
-Para descobrir o IP no Ubuntu:
+```text
+http://IP_DO_PC:8787
+```
+
+O Fastify serve o frontend compilado e `/api` na mesma origem. O Vite não fica rodando.
+
+Para descobrir o IP do Ubuntu:
 
 ```bash
 hostname -I
 ```
 
+A política de cache mantém `index.html` sem cache, usa cache imutável apenas para assets com nome hashado pelo Vite e devolve `404` para arquivos estáticos inexistentes.
+
+### Health checks
+
+- `GET /health` é um **liveness** público e mínimo: informa apenas se o processo HTTP está vivo;
+- `GET /ready` é um **readiness** público e mínimo: retorna `200` quando frontend, autenticação e biblioteca estão prontos, ou `503` quando não estão;
+- `GET /api/health` exige sessão e contém diagnóstico detalhado de modo, uptime, biblioteca, scan, SQLite e frontend.
+
+Detalhes em [`docs/production.md`](docs/production.md).
+
+## Iniciar automaticamente com o Ubuntu
+
+Depois de configurar `.env`:
+
+```bash
+npm run service:install
+```
+
+O instalador:
+
+- restringe `.env` para `0600`, `data/` para `0700` e arquivos SQLite para `0600`;
+- se já existir um processo ativo, para o serviço **antes** de alterar dependências/build;
+- executa `npm ci` e `npm run build`;
+- instala/regenera `home-music.service` com o usuário atual;
+- escapa caminhos usados pelo unit do systemd;
+- usa o binário Node atual diretamente;
+- habilita início automático;
+- faz `restart` explícito com o build novo;
+- configura `Restart=on-failure`;
+- envia logs para o journal.
+
+Comandos úteis:
+
+```bash
+sudo systemctl status home-music --no-pager
+sudo systemctl restart home-music
+journalctl -u home-music -f
+```
+
+Depois de novos merges, use o fluxo seguro:
+
+```bash
+git checkout main
+git pull --ff-only
+npm run service:update
+```
+
+`service:update` para o processo antes de `npm ci/build`, evitando servir `index.html` antigo junto com assets de uma versão nova.
+
+O servidor registra `SIGTERM`/`SIGINT` antes da inicialização potencialmente longa da biblioteca, aguarda scan em andamento e fecha Fastify + SQLite antes de encerrar.
+
 ## Re-scan da biblioteca
 
-O botão **Atualizar biblioteca** chama o endpoint autenticado `POST /api/library/scan`.
+O botão **Atualizar biblioteca** chama `POST /api/library/scan`.
 
-O re-scan é incremental: arquivos inalterados reaproveitam o índice existente, enquanto somente arquivos novos/alterados têm os metadados processados novamente. Arquivos removidos também são limpos do SQLite e dos relacionamentos dependentes.
+O re-scan é incremental: arquivos inalterados reutilizam o índice, somente arquivos novos/alterados têm metadados processados novamente e arquivos removidos são limpos do SQLite.
 
 ## Segurança
 
-- não publique as portas do Home Music diretamente na internet;
-- use uma senha exclusiva no `HOME_MUSIC_PASSWORD`;
-- o `.env` está ignorado pelo Git e não deve ser commitado;
-- em desenvolvimento, o backend escuta somente em `127.0.0.1`;
-- no Docker, a porta `8787` fica apenas na rede interna do Compose;
-- frontend/manifest públicos não significam biblioteca pública: `/api/*` continua protegido por sessão;
-- o cookie de sessão é `HttpOnly` e `SameSite=Strict`; em HTTPS também recebe `Secure`;
-- endpoints mutáveis exigem sessão e o header interno anti-CSRF do frontend;
-- login possui limitação de tentativas inválidas;
-- arquivos simbólicos, devices, FIFOs e arquivos que escapem de `MUSIC_DIR` não são servidos;
-- caminhos físicos da biblioteca não são enviados para o cliente;
-- capas possuem tipo, tamanho, concorrência e cache limitados;
-- dependências são reproduzidas por `package-lock.json` + `npm ci`;
-- o CI executa audit, typecheck, testes e build.
+- não publique a porta do Home Music diretamente na internet;
+- use uma senha exclusiva;
+- `.env` é ignorado pelo Git e o instalador do serviço força permissão `0600`;
+- `data/` e os arquivos SQLite são endurecidos pelo instalador;
+- em desenvolvimento a API fica em `127.0.0.1`;
+- em produção `PRODUCTION_HOST=0.0.0.0` permite acesso na LAN;
+- frontend público não significa biblioteca pública: `/api/*` exige sessão;
+- cookie de sessão é `HttpOnly` + `SameSite=Strict`;
+- `HOME_MUSIC_COOKIE_SECURE=true` permite marcar o cookie como `Secure` atrás de HTTPS sem confiar cegamente em `X-Forwarded-Proto`;
+- endpoints mutáveis exigem sessão + header anti-CSRF do frontend;
+- login tem rate limit;
+- symlinks/devices/FIFOs/escapes de `MUSIC_DIR` não são servidos;
+- caminhos físicos não são enviados ao frontend;
+- capas têm limites de tipo, tamanho, concorrência e cache;
+- arquivos estáticos de produção rejeitam traversal, ocultos, NUL e symlinks;
+- respostas de produção aplicam CSP e headers de hardening;
+- CI usa lockfile, audit, typecheck, testes, build e smoke real de produção.
 
-HTTP na rede local **não criptografa** usuário, senha nem áudio. Para acesso remoto ou redes que não sejam totalmente confiáveis, a direção planejada continua sendo Tailscale + HTTPS, sem port-forwarding público.
+HTTP na LAN **não criptografa** usuário, senha ou áudio. O próximo passo para acesso remoto é Tailscale + HTTPS/ACL, sem port-forwarding público.
 
 ## Docker
 
-O Compose atual é voltado a desenvolvimento e expõe somente o frontend em `5173`:
+O Compose atual continua voltado a desenvolvimento:
 
 ```bash
 docker compose up
 ```
 
-A biblioteca é montada como read-only, o SQLite fica persistido em `./data` e o backend não publica `8787` no host.
+Para uso cotidiano no Ubuntu, o caminho recomendado agora é `npm run build` + `npm start` ou o serviço systemd.
 
 ## Qualidade
 
@@ -161,6 +230,7 @@ A biblioteca é montada como read-only, o SQLite fica persistido em `./data` e o
 npm run typecheck
 npm test
 npm run build
+npm run smoke:production
 npm audit --audit-level=high
 ```
 

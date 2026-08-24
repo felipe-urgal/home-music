@@ -39,7 +39,24 @@
 - [ ] Cache seletivo
 - [ ] Melhor tratamento de capas ausentes
 
-## Fase 4 — Fora de casa
+## Fase 4 — Operação no Ubuntu
+
+- [x] Build React servido pelo Fastify
+- [x] Frontend + API em uma única porta/processo
+- [x] `npm start` de produção
+- [x] Cache seguro com `immutable` somente para assets hashados
+- [x] Liveness público mínimo + readiness separado
+- [x] Diagnóstico detalhado autenticado em `/api/health`
+- [x] Shutdown limpo Fastify + SQLite, inclusive durante scan
+- [x] Serviço systemd com restart automático e journal
+- [x] Update seguro sem versão híbrida de frontend
+- [x] Permissões endurecidas para `.env`, `data/` e SQLite
+- [x] Escaping de caminhos no unit systemd
+- [x] Cookie `Secure` configurável explicitamente para proxy HTTPS confiável
+- [x] Smoke test real de `npm start` no CI
+- [x] Hardening do processo systemd
+
+## Fase 5 — Fora de casa
 
 - [ ] Tailscale
 - [ ] HTTPS para a experiência instalada fora de `localhost`
@@ -48,7 +65,7 @@
 - [ ] Transcoding adaptativo
 - [ ] Perfis de qualidade Wi‑Fi / 4G
 
-## Fase 5 — Extras
+## Fase 6 — Extras
 
 - [ ] Letras
 - [ ] ReplayGain / normalização opcional

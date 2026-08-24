@@ -84,12 +84,35 @@
 .queue-item--reorder {
   border: 1px solid transparent;
   background: transparent;
+  transition: background .12s ease, border-color .12s ease, transform .12s ease;
 }
 .queue-item--reorder.is-current {
   background: rgba(17, 145, 255, .07);
   border-color: rgba(17, 145, 255, .12);
 }
-.queue-drag { width: 17px; height: 17px; color: #59636e; cursor: grab; flex: 0 0 auto; }
+.queue-item--reorder.is-dragging {
+  background: rgba(17, 145, 255, .12);
+  border-color: rgba(87, 181, 255, .24);
+  transform: scale(.995);
+}
+.queue-drag-handle {
+  width: 30px;
+  height: 42px;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #59636e;
+  display: grid;
+  place-items: center;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.queue-drag-handle:active:not(:disabled) { cursor: grabbing; background: rgba(255,255,255,.05); }
+.queue-drag-handle:disabled { opacity: .32; cursor: default; touch-action: auto; }
+.queue-drag { width: 17px; height: 17px; pointer-events: none; }
 .queue-item__main {
   min-width: 0;
   flex: 1;
@@ -115,6 +138,11 @@
 }
 .queue-reorder-buttons button:disabled { opacity: .25; }
 .queue-reorder-buttons svg { width: 15px; height: 15px; }
+.queue-load-more {
+  width: 100%;
+  height: 1px;
+  pointer-events: none;
+}
 
 .library-header {
   grid-template-columns: 44px minmax(0, 1fr) 44px 44px;
@@ -319,7 +347,7 @@
 @media (max-width: 390px) {
   .library-header { grid-template-columns: 38px minmax(0, 1fr) 38px 38px; }
   .library-header .icon-button { width: 38px; height: 38px; }
-  .queue-drag { display: none; }
+  .queue-drag-handle { width: 26px; }
 }
 
 @media (max-width: 340px) {

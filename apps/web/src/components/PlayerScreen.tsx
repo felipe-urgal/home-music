@@ -1,4 +1,11 @@
-import { useState, type CSSProperties, type DragEvent } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type DragEvent,
+  type PointerEvent as ReactPointerEvent
+} from 'react';
 import {
   ChevronDown,
   ChevronUp,
@@ -17,6 +24,10 @@ import {
 } from 'lucide-react';
 import type { Playlist, RepeatMode, Track } from '@home-music/shared';
 import { Artwork } from './Artwork';
+
+const QUEUE_PAGE_SIZE = 10;
+const TOUCH_DRAG_EDGE_PX = 80;
+const TOUCH_DRAG_SCROLL_STEP_PX = 18;
 
 function formatTime(value: number) {
   if (!Number.isFinite(value) || value < 0) return '0:00';
@@ -86,14 +97,88 @@ export function PlayerScreen({
 }: PlayerScreenProps) {
   const [showOptions, setShowOptions] = useState(false);
   const [dragFrom, setDragFrom] = useState<number | null>(null);
+  const [visibleQueueCount, setVisibleQueueCount] = useState(QUEUE_PAGE_SIZE);
+  const queueLoadMoreRef = useRef<HTMLDivElement | null>(null);
+  const touchDragIndexRef = useRef<number | null>(null);
+  const touchPointerIdRef = useRef<number | null>(null);
   const progress = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
   const hasNext = currentIndex < queue.length - 1 || repeatMode === 'all';
   const visibleStart = Math.max(0, currentIndex);
-  const visibleQueue = queue.slice(visibleStart, currentIndex + 10);
+  const visibleEnd = Math.min(queue.length, visibleStart + visibleQueueCount);
+  const visibleQueue = queue.slice(visibleStart, visibleEnd);
+  const hasMoreQueueItems = visibleEnd < queue.length;
+
+  useEffect(() => {
+    setVisibleQueueCount(QUEUE_PAGE_SIZE);
+  }, [current.id, queue.length]);
+
+  useEffect(() => {
+    const target = queueLoadMoreRef.current;
+    if (!target || !hasMoreQueueItems) return;
+
+    if (typeof IntersectionObserver === 'undefined') {
+      setVisibleQueueCount(Math.max(QUEUE_PAGE_SIZE, queue.length - visibleStart));
+      return;
+    }
+
+    const observer = new IntersectionObserver(entries => {
+      if (entries.some(entry => entry.isIntersecting)) {
+        setVisibleQueueCount(count => Math.min(queue.length - visibleStart, count + QUEUE_PAGE_SIZE));
+      }
+    }, {
+      root: null,
+      rootMargin: '320px 0px',
+      threshold: 0
+    });
+
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [hasMoreQueueItems, queue.length, visibleStart, visibleEnd]);
 
   function dropQueue(event: DragEvent, to: number) {
     event.preventDefault();
     if (dragFrom != null) onReorderQueue(dragFrom, to);
+    setDragFrom(null);
+  }
+
+  function beginTouchReorder(event: ReactPointerEvent<HTMLButtonElement>, queueIndex: number) {
+    if (event.pointerType === 'mouse') return;
+    event.preventDefault();
+    touchPointerIdRef.current = event.pointerId;
+    touchDragIndexRef.current = queueIndex;
+    setDragFrom(queueIndex);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function moveTouchReorder(event: ReactPointerEvent<HTMLButtonElement>) {
+    if (touchPointerIdRef.current !== event.pointerId || touchDragIndexRef.current == null) return;
+    event.preventDefault();
+
+    if (event.clientY < TOUCH_DRAG_EDGE_PX) {
+      window.scrollBy(0, -TOUCH_DRAG_SCROLL_STEP_PX);
+    } else if (event.clientY > window.innerHeight - TOUCH_DRAG_EDGE_PX) {
+      window.scrollBy(0, TOUCH_DRAG_SCROLL_STEP_PX);
+    }
+
+    const target = document.elementFromPoint(event.clientX, event.clientY)?.closest('[data-queue-index]') as HTMLElement | null;
+    if (!target) return;
+
+    const to = Number(target.dataset.queueIndex);
+    const from = touchDragIndexRef.current;
+    if (!Number.isInteger(to) || to < 0 || to >= queue.length || to === from) return;
+
+    onReorderQueue(from, to);
+    touchDragIndexRef.current = to;
+    setDragFrom(to);
+  }
+
+  function finishTouchReorder(event: ReactPointerEvent<HTMLButtonElement>) {
+    if (touchPointerIdRef.current !== event.pointerId) return;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    touchPointerIdRef.current = null;
+    touchDragIndexRef.current = null;
     setDragFrom(null);
   }
 
@@ -191,22 +276,35 @@ export function PlayerScreen({
       )}
 
       <section className="queue-panel queue-panel--player">
-        <div className="queue-label">Fila · arraste ou use as setas</div>
+        <div className="queue-label">Fila · {queue.length} músicas · arraste ou use as setas</div>
         <div className="queue-list">
           {visibleQueue.map((track, visibleIndex) => {
             const queueIndex = visibleStart + visibleIndex;
             const isCurrent = track.id === current.id;
+            const isDragging = dragFrom === queueIndex;
             return (
               <div
-                className={`queue-item queue-item--reorder ${isCurrent ? 'is-current' : ''}`}
+                className={`queue-item queue-item--reorder ${isCurrent ? 'is-current' : ''} ${isDragging ? 'is-dragging' : ''}`}
                 key={track.id}
+                data-queue-index={queueIndex}
                 draggable={!isCurrent}
                 onDragStart={() => setDragFrom(queueIndex)}
                 onDragOver={event => event.preventDefault()}
                 onDrop={event => dropQueue(event, queueIndex)}
                 onDragEnd={() => setDragFrom(null)}
               >
-                <GripVertical className="queue-drag" aria-hidden="true" />
+                <button
+                  type="button"
+                  className="queue-drag-handle"
+                  aria-label={isCurrent ? 'Faixa atual' : `Arrastar ${track.title}`}
+                  disabled={isCurrent}
+                  onPointerDown={event => beginTouchReorder(event, queueIndex)}
+                  onPointerMove={moveTouchReorder}
+                  onPointerUp={finishTouchReorder}
+                  onPointerCancel={finishTouchReorder}
+                >
+                  <GripVertical className="queue-drag" aria-hidden="true" />
+                </button>
                 <button className="queue-item__main" onClick={() => onPlayTrack(track, queue)}>
                   <Artwork track={track} />
                   <span className="queue-item__text"><strong>{track.title}</strong><small>{track.artist}</small></span>
@@ -219,6 +317,7 @@ export function PlayerScreen({
             );
           })}
         </div>
+        {hasMoreQueueItems && <div ref={queueLoadMoreRef} className="queue-load-more" aria-hidden="true" />}
       </section>
     </>
   );
