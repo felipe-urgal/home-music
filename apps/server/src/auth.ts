@@ -41,7 +41,8 @@ export class SessionManager {
   constructor(
     private readonly username: string,
     private readonly password: string,
-    private readonly ttlMs = SESSION_TTL_SECONDS * 1000
+    private readonly ttlMs = SESSION_TTL_SECONDS * 1000,
+    private readonly maxSessions = 128
   ) {}
 
   get configured() {
@@ -57,6 +58,12 @@ export class SessionManager {
 
   createSession(now = Date.now()) {
     this.clearExpired(now);
+    while (this.sessions.size >= this.maxSessions) {
+      const oldest = this.sessions.keys().next().value as string | undefined;
+      if (!oldest) break;
+      this.sessions.delete(oldest);
+    }
+
     const token = randomBytes(32).toString('base64url');
     this.sessions.set(token, now + this.ttlMs);
     return token;
@@ -89,7 +96,8 @@ export class LoginRateLimiter {
 
   constructor(
     private readonly maxFailures = 8,
-    private readonly windowMs = 5 * 60 * 1000
+    private readonly windowMs = 5 * 60 * 1000,
+    private readonly maxEntries = 512
   ) {}
 
   isBlocked(key: string, now = Date.now()) {
@@ -103,8 +111,13 @@ export class LoginRateLimiter {
   }
 
   recordFailure(key: string, now = Date.now()) {
+    this.clearExpired(now);
     const current = this.attempts.get(key);
     if (!current || current.resetAt <= now) {
+      if (this.attempts.size >= this.maxEntries) {
+        const oldest = this.attempts.keys().next().value as string | undefined;
+        if (oldest) this.attempts.delete(oldest);
+      }
       this.attempts.set(key, { failures: 1, resetAt: now + this.windowMs });
       return;
     }
@@ -113,5 +126,11 @@ export class LoginRateLimiter {
 
   clear(key: string) {
     this.attempts.delete(key);
+  }
+
+  private clearExpired(now: number) {
+    for (const [key, entry] of this.attempts) {
+      if (entry.resetAt <= now) this.attempts.delete(key);
+    }
   }
 }
