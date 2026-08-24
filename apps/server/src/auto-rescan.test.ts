@@ -8,9 +8,10 @@ import {
   startAutoRescanScheduler
 } from './auto-rescan.js';
 
-test('parseAutoRescanIntervalSeconds usa padrão, permite desligar e valida limites', () => {
-  assert.equal(parseAutoRescanIntervalSeconds(undefined), DEFAULT_AUTO_RESCAN_INTERVAL_SECONDS);
-  assert.equal(parseAutoRescanIntervalSeconds(''), DEFAULT_AUTO_RESCAN_INTERVAL_SECONDS);
+test('parseAutoRescanIntervalSeconds fica desativado por padrão e valida limites', () => {
+  assert.equal(DEFAULT_AUTO_RESCAN_INTERVAL_SECONDS, 0);
+  assert.equal(parseAutoRescanIntervalSeconds(undefined), 0);
+  assert.equal(parseAutoRescanIntervalSeconds(''), 0);
   assert.equal(parseAutoRescanIntervalSeconds('0'), 0);
   assert.equal(parseAutoRescanIntervalSeconds(String(MIN_AUTO_RESCAN_INTERVAL_SECONDS)), MIN_AUTO_RESCAN_INTERVAL_SECONDS);
   assert.equal(parseAutoRescanIntervalSeconds(String(MAX_AUTO_RESCAN_INTERVAL_SECONDS)), MAX_AUTO_RESCAN_INTERVAL_SECONDS);
