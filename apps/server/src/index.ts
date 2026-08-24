@@ -27,7 +27,10 @@ let scannedAt = new Date(0).toISOString();
 
 const MAX_COVER_CACHE_BYTES = 16 * 1024 * 1024;
 const MAX_COVER_CACHE_ITEMS = 64;
+const MAX_CONCURRENT_COVER_REQUESTS = 4;
 let coverCacheBytes = 0;
+let activeCoverRequests = 0;
+const coverWaiters: Array<() => void> = [];
 
 type CachedCover = {
   data: Buffer;
@@ -41,6 +44,20 @@ const coverCache = new Map<string, CachedCover>();
 function publicTrack(track: IndexedTrack) {
   const { filePath: _filePath, mimeType: _mimeType, ...safe } = track;
   return safe;
+}
+
+async function withCoverRequestSlot<T>(operation: () => Promise<T>) {
+  if (activeCoverRequests >= MAX_CONCURRENT_COVER_REQUESTS) {
+    await new Promise<void>(resolve => coverWaiters.push(resolve));
+  }
+
+  activeCoverRequests += 1;
+  try {
+    return await operation();
+  } finally {
+    activeCoverRequests -= 1;
+    coverWaiters.shift()?.();
+  }
 }
 
 function getCachedCover(trackId: string, size: number, mtimeMs: number) {
@@ -137,37 +154,39 @@ app.get<{ Params: { id: string } }>('/api/tracks/:id/cover', async (request, rep
   const track = tracks.find(item => item.id === request.params.id);
   if (!track?.hasCover || !libraryRoot) return reply.code(404).send();
 
-  try {
-    const opened = await openRegularFileInside(libraryRoot, track.filePath);
-    const cached = getCachedCover(track.id, opened.stat.size, opened.stat.mtimeMs);
+  return withCoverRequestSlot(async () => {
+    try {
+      const opened = await openRegularFileInside(libraryRoot, track.filePath);
+      const cached = getCachedCover(track.id, opened.stat.size, opened.stat.mtimeMs);
 
-    if (cached) {
-      await opened.handle.close();
-      reply.type(cached.format);
+      if (cached) {
+        await opened.handle.close();
+        reply.type(cached.format);
+        reply.header('Cache-Control', 'private, max-age=86400');
+        return cached.data;
+      }
+
+      const stream = opened.handle.createReadStream({ autoClose: true });
+      const cover = await readCover(stream, track.mimeType);
+      stream.destroy();
+      if (!cover) return reply.code(404).send();
+
+      const data = Buffer.from(cover.data);
+      cacheCover(track.id, {
+        data,
+        format: cover.format,
+        size: opened.stat.size,
+        mtimeMs: opened.stat.mtimeMs
+      });
+
+      reply.type(cover.format);
       reply.header('Cache-Control', 'private, max-age=86400');
-      return cached.data;
+      return data;
+    } catch (error) {
+      if (isNotFoundLike(error)) return reply.code(404).send();
+      throw error;
     }
-
-    const stream = opened.handle.createReadStream({ autoClose: true });
-    const cover = await readCover(stream, track.mimeType);
-    stream.destroy();
-    if (!cover) return reply.code(404).send();
-
-    const data = Buffer.from(cover.data);
-    cacheCover(track.id, {
-      data,
-      format: cover.format,
-      size: opened.stat.size,
-      mtimeMs: opened.stat.mtimeMs
-    });
-
-    reply.type(cover.format);
-    reply.header('Cache-Control', 'private, max-age=86400');
-    return data;
-  } catch (error) {
-    if (isNotFoundLike(error)) return reply.code(404).send();
-    throw error;
-  }
+  });
 });
 
 app.get<{ Params: { id: string } }>('/api/tracks/:id/stream', async (request, reply) => {
