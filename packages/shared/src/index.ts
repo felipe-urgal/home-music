@@ -3,6 +3,7 @@ export type Track = {
   title: string;
   artist: string;
   album: string;
+  folder: string;
   duration: number | null;
   format: string;
   hasCover: boolean;
