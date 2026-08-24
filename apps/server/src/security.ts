@@ -1,5 +1,6 @@
+import { constants } from 'node:fs';
 import path from 'node:path';
-import { lstat, realpath, stat } from 'node:fs/promises';
+import { lstat, open, realpath, stat } from 'node:fs/promises';
 
 export class UnsafeLibraryPathError extends Error {
   constructor(message = 'Caminho fora da biblioteca.') {
@@ -35,6 +36,26 @@ export async function resolveRegularFileInside(rootPath: string, candidatePath: 
   if (!info.isFile()) throw new UnsafeLibraryPathError('A entrada não é um arquivo regular.');
 
   return { path: resolved, stat: info };
+}
+
+export async function openRegularFileInside(rootPath: string, candidatePath: string) {
+  const safeFile = await resolveRegularFileInside(rootPath, candidatePath);
+  const handle = await open(safeFile.path, constants.O_RDONLY | constants.O_NOFOLLOW);
+
+  try {
+    const info = await handle.stat();
+    if (!info.isFile()) throw new UnsafeLibraryPathError('A entrada aberta não é um arquivo regular.');
+
+    // No alvo Ubuntu/Linux, /proc/self/fd aponta para o inode realmente aberto.
+    // Revalidar o descritor elimina a janela entre realpath() e open().
+    const openedPath = await realpath(`/proc/self/fd/${handle.fd}`);
+    if (!isPathInside(rootPath, openedPath)) throw new UnsafeLibraryPathError();
+
+    return { handle, path: openedPath, stat: info };
+  } catch (error) {
+    await handle.close();
+    throw error;
+  }
 }
 
 export type ByteRange = { start: number; end: number };
