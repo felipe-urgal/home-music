@@ -43,6 +43,8 @@ type ScannableFile = {
   mtimeMs: number;
 };
 
+export type ScanWarningHandler = (message: string, error?: unknown) => void;
+
 const mimeByExtension: Record<string, string> = {
   '.mp3': 'audio/mpeg',
   '.flac': 'audio/flac',
@@ -69,8 +71,20 @@ function relativeFolder(libraryRoot: string, filePath: string) {
   return { folder, folderPath: safeFolderPath };
 }
 
-async function walk(dir: string, libraryRoot: string): Promise<ScannableFile[]> {
-  const entries = await readdir(dir, { withFileTypes: true });
+async function walk(
+  dir: string,
+  libraryRoot: string,
+  onWarning?: ScanWarningHandler
+): Promise<ScannableFile[]> {
+  let entries;
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch (error) {
+    if (dir === libraryRoot) throw error;
+    onWarning?.(`Subpasta ignorada durante o scan: ${relativeFilePath(libraryRoot, dir)}`, error);
+    return [];
+  }
+
   const files: ScannableFile[] = [];
 
   for (const entry of entries) {
@@ -78,7 +92,7 @@ async function walk(dir: string, libraryRoot: string): Promise<ScannableFile[]> 
     const fullPath = path.join(dir, entry.name);
 
     if (entry.isDirectory()) {
-      files.push(...await walk(fullPath, libraryRoot));
+      files.push(...await walk(fullPath, libraryRoot, onWarning));
       continue;
     }
 
@@ -92,8 +106,8 @@ async function walk(dir: string, libraryRoot: string): Promise<ScannableFile[]> 
         size: safeFile.stat.size,
         mtimeMs: safeFile.stat.mtimeMs
       });
-    } catch {
-      // Symlinks, devices, FIFOs e qualquer escape da raiz são ignorados.
+    } catch (error) {
+      onWarning?.(`Arquivo ignorado durante o scan: ${relativeFilePath(libraryRoot, fullPath)}`, error);
     }
   }
 
@@ -153,9 +167,10 @@ function fromMetadata(
 
 export async function scanLibrary(
   libraryRoot: string,
-  previousTracks: IndexedTrack[] = []
+  previousTracks: IndexedTrack[] = [],
+  onWarning?: ScanWarningHandler
 ): Promise<LibraryScanResult> {
-  const files = await walk(libraryRoot, libraryRoot);
+  const files = await walk(libraryRoot, libraryRoot, onWarning);
   const previousByPath = new Map(previousTracks.map(track => [track.filePath, track]));
   const seenPaths = new Set<string>();
   const tracks: IndexedTrack[] = [];
@@ -174,8 +189,8 @@ export async function scanLibrary(
     let metadata: IAudioMetadata | null = null;
     try {
       metadata = await parseFile(file.path, { duration: true });
-    } catch {
-      // O arquivo continua disponível com metadados de fallback.
+    } catch (error) {
+      onWarning?.(`Metadados inválidos; usando fallback: ${relativeFilePath(libraryRoot, file.path)}`, error);
     }
 
     tracks.push(fromMetadata(libraryRoot, file, metadata));
