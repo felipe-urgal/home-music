@@ -3,6 +3,7 @@ export type Track = {
   title: string;
   artist: string;
   album: string;
+  albumArtist: string;
   folder: string;
   duration: number | null;
   format: string;
@@ -12,5 +13,4 @@ export type Track = {
 export type LibraryResponse = {
   tracks: Track[];
   scannedAt: string;
-  musicDir: string;
 };
