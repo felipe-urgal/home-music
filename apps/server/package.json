@@ -14,7 +14,7 @@
     "@home-music/shared": "0.1.0",
     "dotenv": "17.2.1",
     "fastify": "5.12.1",
-    "music-metadata": "11.9.0"
+    "music-metadata": "11.15.0"
   },
   "devDependencies": {
     "@types/node": "24.3.0",
