@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import Fastify from 'fastify';
 import {
   cacheControlForPath,
   contentTypeForPath,
@@ -55,4 +56,13 @@ test('resolveStaticFile rejeita symlink que aponta para fora do dist', async () 
 
   const web = await prepareWebApp(root);
   assert.equal(await resolveStaticFile(web.root, '/linked.js'), null);
+});
+
+test('wildcard do Fastify cobre a rota raiz usada pelo shell de produção', async () => {
+  const app = Fastify();
+  app.get('/*', async () => 'shell');
+  const response = await app.inject({ method: 'GET', url: '/' });
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.body, 'shell');
+  await app.close();
 });
