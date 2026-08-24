@@ -4,6 +4,7 @@ import {
   ChevronUp,
   GripVertical,
   Heart,
+  LogOut,
   MoreVertical,
   Pause,
   Play,
@@ -51,6 +52,7 @@ type PlayerScreenProps = {
   onPlayTrack: (track: Track, context: Track[]) => void;
   onReorderQueue: (from: number, to: number) => void;
   onAddToPlaylist: (playlist: Playlist) => void;
+  onLogout: () => void;
 };
 
 export function PlayerScreen({
@@ -79,7 +81,8 @@ export function PlayerScreen({
   onToggleFavorite,
   onPlayTrack,
   onReorderQueue,
-  onAddToPlaylist
+  onAddToPlaylist,
+  onLogout
 }: PlayerScreenProps) {
   const [showOptions, setShowOptions] = useState(false);
   const [dragFrom, setDragFrom] = useState<number | null>(null);
@@ -112,6 +115,10 @@ export function PlayerScreen({
               {playlist.name}
             </button>
           )) : <span>Nenhuma playlist criada ainda.</span>}
+          <div className="player-options__divider" />
+          <button className="player-options__logout" onClick={() => { setShowOptions(false); onLogout(); }}>
+            <LogOut /> Sair
+          </button>
         </div>
       )}
 
