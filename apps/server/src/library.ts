@@ -53,12 +53,16 @@ const mimeByExtension: Record<string, string> = {
   '.opus': 'audio/ogg'
 };
 
-function trackId(filePath: string) {
-  return createHash('sha256').update(filePath).digest('hex').slice(0, 24);
+function relativeFilePath(libraryRoot: string, filePath: string) {
+  return path.relative(libraryRoot, filePath).split(path.sep).join('/');
+}
+
+function trackId(libraryRoot: string, filePath: string) {
+  return createHash('sha256').update(relativeFilePath(libraryRoot, filePath)).digest('hex').slice(0, 24);
 }
 
 function relativeFolder(libraryRoot: string, filePath: string) {
-  const relativePath = path.relative(libraryRoot, filePath).split(path.sep).join('/');
+  const relativePath = relativeFilePath(libraryRoot, filePath);
   const folderPath = path.posix.dirname(relativePath);
   const safeFolderPath = folderPath === '.' ? '' : folderPath;
   const folder = safeFolderPath.split('/').filter(Boolean)[0] || 'Sem pasta';
@@ -130,7 +134,7 @@ function fromMetadata(
   const folder = relativeFolder(libraryRoot, file.path);
 
   return {
-    id: trackId(file.path),
+    id: trackId(libraryRoot, file.path),
     title: metadata?.common.title?.trim() || fallbackTitle,
     artist,
     album: metadata?.common.album?.trim() || 'Álbum desconhecido',
