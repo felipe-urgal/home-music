@@ -10,7 +10,11 @@ import type {
 } from '@home-music/shared';
 
 async function jsonRequest<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, init);
+  const method = (init?.method || 'GET').toUpperCase();
+  const headers = new Headers(init?.headers);
+  if (method !== 'GET' && method !== 'HEAD') headers.set('X-Home-Music-Request', '1');
+
+  const response = await fetch(url, { ...init, headers });
   if (!response.ok) {
     const message = await response.json().catch(() => null) as { error?: string } | null;
     throw new Error(message?.error || `Falha HTTP ${response.status}`);
