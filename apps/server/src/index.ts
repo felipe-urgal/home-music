@@ -153,7 +153,9 @@ async function performRescan(): Promise<ScanResponse> {
 
   const resolvedRoot = await resolveLibraryRoot(musicDir);
   const previous = libraryRoot === resolvedRoot ? tracks : [];
-  const result = await scanLibrary(resolvedRoot, previous);
+  const result = await scanLibrary(resolvedRoot, previous, (message, error) => {
+    app.log.warn({ err: error }, message);
+  });
   const nextScannedAt = new Date().toISOString();
 
   database.syncTracks(result.tracks, resolvedRoot, nextScannedAt);
@@ -355,6 +357,7 @@ app.put<{ Body: Partial<PlaybackState> }>('/api/player/state', async (request, r
     : null;
   const position = Number(body.position);
   const volume = Number(body.volume);
+  const baseQueueIds = cleanTrackIds(body.baseQueueIds);
   const queueIds = cleanTrackIds(body.queueIds);
 
   if (!Number.isFinite(position) || position < 0 || !Number.isFinite(volume)) {
@@ -362,6 +365,7 @@ app.put<{ Body: Partial<PlaybackState> }>('/api/player/state', async (request, r
   }
 
   if (currentTrackId && !queueIds.includes(currentTrackId)) queueIds.unshift(currentTrackId);
+  if (currentTrackId && !baseQueueIds.includes(currentTrackId)) baseQueueIds.unshift(currentTrackId);
 
   const state = database.savePlaybackState({
     currentTrackId,
@@ -369,6 +373,7 @@ app.put<{ Body: Partial<PlaybackState> }>('/api/player/state', async (request, r
     volume: Math.max(0, Math.min(1, volume)),
     shuffle: Boolean(body.shuffle),
     repeatMode: cleanRepeatMode(body.repeatMode),
+    baseQueueIds,
     queueIds
   });
 
