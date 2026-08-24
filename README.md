@@ -22,7 +22,8 @@ O Home Music roda no Ubuntu, lê uma pasta local de músicas e expõe uma interf
 
 - tela de login própria e responsiva;
 - sessão aleatória mantida pelo backend;
-- cookie `HttpOnly` + `SameSite=Strict` e `Secure` quando a conexão for HTTPS;
+- cookie `HttpOnly` + `SameSite=Strict`;
+- cookie `Secure` em HTTPS direto ou quando `HOME_MUSIC_COOKIE_SECURE=true` é configurado explicitamente atrás de um proxy HTTPS confiável;
 - sessão com expiração e logout explícito;
 - rate limit para credenciais inválidas;
 - manifest, favicon e assets públicos, com `/api/*` protegido;
@@ -91,10 +92,13 @@ Configure pelo menos:
 MUSIC_DIR="/caminho/para/suas/musicas"
 HOME_MUSIC_USER=home-music
 HOME_MUSIC_PASSWORD=uma-senha-exclusiva-com-12-ou-mais-caracteres
+HOME_MUSIC_COOKIE_SECURE=false
 PORT=8787
 HOST=127.0.0.1
 PRODUCTION_HOST=0.0.0.0
 ```
+
+`HOME_MUSIC_COOKIE_SECURE=true` deve ser usado somente quando o navegador acessa o Home Music por **HTTPS** e um proxy confiável encaminha a requisição ao Fastify. Em HTTP local deixe `false`.
 
 ## Desenvolvimento
 
@@ -131,7 +135,13 @@ Para descobrir o IP do Ubuntu:
 hostname -I
 ```
 
-A política de cache de produção mantém `index.html` sem cache e usa cache imutável apenas para `/assets/*` com hash do Vite.
+A política de cache mantém `index.html` sem cache, usa cache imutável apenas para assets com nome hashado pelo Vite e devolve `404` para arquivos estáticos inexistentes.
+
+### Health checks
+
+- `GET /health` é um **liveness** público e mínimo: informa apenas se o processo HTTP está vivo;
+- `GET /ready` é um **readiness** público e mínimo: retorna `200` quando frontend, autenticação e biblioteca estão prontos, ou `503` quando não estão;
+- `GET /api/health` exige sessão e contém diagnóstico detalhado de modo, uptime, biblioteca, scan, SQLite e frontend.
 
 Detalhes em [`docs/production.md`](docs/production.md).
 
@@ -145,10 +155,14 @@ npm run service:install
 
 O instalador:
 
+- restringe `.env` para `0600`, `data/` para `0700` e arquivos SQLite para `0600`;
+- se já existir um processo ativo, para o serviço **antes** de alterar dependências/build;
 - executa `npm ci` e `npm run build`;
-- instala `home-music.service` com o usuário atual;
+- instala/regenera `home-music.service` com o usuário atual;
+- escapa caminhos usados pelo unit do systemd;
 - usa o binário Node atual diretamente;
 - habilita início automático;
+- faz `restart` explícito com o build novo;
 - configura `Restart=on-failure`;
 - envia logs para o journal.
 
@@ -160,7 +174,17 @@ sudo systemctl restart home-music
 journalctl -u home-music -f
 ```
 
-O servidor trata `SIGTERM`/`SIGINT` e fecha Fastify + SQLite antes de encerrar.
+Depois de novos merges, use o fluxo seguro:
+
+```bash
+git checkout main
+git pull --ff-only
+npm run service:update
+```
+
+`service:update` para o processo antes de `npm ci/build`, evitando servir `index.html` antigo junto com assets de uma versão nova.
+
+O servidor registra `SIGTERM`/`SIGINT` antes da inicialização potencialmente longa da biblioteca, aguarda scan em andamento e fecha Fastify + SQLite antes de encerrar.
 
 ## Re-scan da biblioteca
 
@@ -172,19 +196,21 @@ O re-scan é incremental: arquivos inalterados reutilizam o índice, somente arq
 
 - não publique a porta do Home Music diretamente na internet;
 - use uma senha exclusiva;
-- `.env` é ignorado pelo Git;
+- `.env` é ignorado pelo Git e o instalador do serviço força permissão `0600`;
+- `data/` e os arquivos SQLite são endurecidos pelo instalador;
 - em desenvolvimento a API fica em `127.0.0.1`;
 - em produção `PRODUCTION_HOST=0.0.0.0` permite acesso na LAN;
 - frontend público não significa biblioteca pública: `/api/*` exige sessão;
 - cookie de sessão é `HttpOnly` + `SameSite=Strict`;
+- `HOME_MUSIC_COOKIE_SECURE=true` permite marcar o cookie como `Secure` atrás de HTTPS sem confiar cegamente em `X-Forwarded-Proto`;
 - endpoints mutáveis exigem sessão + header anti-CSRF do frontend;
 - login tem rate limit;
 - symlinks/devices/FIFOs/escapes de `MUSIC_DIR` não são servidos;
 - caminhos físicos não são enviados ao frontend;
 - capas têm limites de tipo, tamanho, concorrência e cache;
-- arquivos estáticos de produção rejeitam traversal, ocultos e symlinks;
+- arquivos estáticos de produção rejeitam traversal, ocultos, NUL e symlinks;
 - respostas de produção aplicam CSP e headers de hardening;
-- CI usa lockfile, audit, typecheck, testes e build.
+- CI usa lockfile, audit, typecheck, testes, build e smoke real de produção.
 
 HTTP na LAN **não criptografa** usuário, senha ou áudio. O próximo passo para acesso remoto é Tailscale + HTTPS/ACL, sem port-forwarding público.
 
@@ -204,6 +230,7 @@ Para uso cotidiano no Ubuntu, o caminho recomendado agora é `npm run build` + `
 npm run typecheck
 npm test
 npm run build
+npm run smoke:production
 npm audit --audit-level=high
 ```
 
