@@ -2,7 +2,7 @@
 
 Streaming pessoal das músicas do seu computador para o celular.
 
-O Home Music roda no Ubuntu, lê uma pasta local de músicas e expõe uma interface mobile **Player First** na rede local. Em produção, o React compilado e a API são servidos pelo mesmo processo Fastify e pela mesma porta. Os dados e o streaming continuam protegidos por sessão autenticada em cookie `HttpOnly`.
+O Home Music roda no Ubuntu, lê uma pasta local de músicas e expõe uma interface mobile **Player First**. Em produção, o React compilado e a API são servidos pelo mesmo processo Fastify. Para uso remoto, o caminho recomendado é **Tailscale Serve + HTTPS**, sem port-forwarding público.
 
 ## Recursos atuais
 
@@ -13,9 +13,7 @@ O Home Music roda no Ubuntu, lê uma pasta local de músicas e expõe uma interf
 - artistas, álbuns, músicas, favoritos, playlists e histórico;
 - busca por música, artista, álbum e pasta, ignorando acentos;
 - leitura de metadados e capas incorporadas;
-- capas confinadas aos slots da interface para não alterar o layout mobile;
-- abas responsivas sem overflow horizontal;
-- re-scan incremental por `size + mtime` para arquivos novos, alterados e removidos;
+- re-scan incremental por `size + mtime`;
 - scanner tolerante a subpastas inacessíveis.
 
 ### Autenticação
@@ -23,10 +21,10 @@ O Home Music roda no Ubuntu, lê uma pasta local de músicas e expõe uma interf
 - tela de login própria e responsiva;
 - sessão aleatória mantida pelo backend;
 - cookie `HttpOnly` + `SameSite=Strict`;
-- cookie `Secure` em HTTPS direto ou quando `HOME_MUSIC_COOKIE_SECURE=true` é configurado explicitamente atrás de um proxy HTTPS confiável;
+- cookie `Secure` quando o perfil Tailscale/HTTPS está habilitado;
 - sessão com expiração e logout explícito;
 - rate limit para credenciais inválidas;
-- manifest, favicon e assets públicos, com `/api/*` protegido;
+- `/api/*` protegido por sessão;
 - sessão expirada devolve o usuário para a tela de login.
 
 ### Player
@@ -35,16 +33,14 @@ O Home Music roda no Ubuntu, lê uma pasta local de músicas e expõe uma interf
 - reprodução automática da próxima faixa;
 - retomada automática da sessão quando permitida pelo navegador;
 - restauração da última faixa, posição e volume;
-- shuffle com ordem original persistida;
-- repeat `off`, `all` e `one`;
-- fila contextual e reordenável;
+- shuffle + repeat `off`, `all` e `one`;
+- fila contextual reordenável, inclusive por touch no mobile;
+- carregamento progressivo da fila para pastas grandes;
 - retorno contextual para pasta, artista, álbum, playlist, favoritos ou busca;
 - mini-player persistente;
 - Media Session para tela bloqueada/notificações.
 
 > Navegadores móveis podem bloquear autoplay ao abrir uma nova página sem interação. O Home Music preserva faixa/posição e aguarda um toque em **Play**.
-
-> Em dispositivos que usam o volume do sistema, o `<audio>` opera em volume `1.0` e o controle final fica nos botões físicos/aparelho. O volume salvo do desktop não é sobrescrito.
 
 ### Persistência
 
@@ -59,8 +55,6 @@ O estado local usa SQLite em `data/home-music.db`:
 - shuffle/repeat;
 - fila efetiva e ordem base;
 - estado de reprodução.
-
-O schema usa `PRAGMA user_version` e migrations versionadas.
 
 > Sessões de login ficam em memória e são invalidadas quando o processo reinicia.
 
@@ -98,7 +92,7 @@ HOST=127.0.0.1
 PRODUCTION_HOST=0.0.0.0
 ```
 
-`HOME_MUSIC_COOKIE_SECURE=true` deve ser usado somente quando o navegador acessa o Home Music por **HTTPS** e um proxy confiável encaminha a requisição ao Fastify. Em HTTP local deixe `false`.
+O perfil Tailscale altera automaticamente `PRODUCTION_HOST` para `127.0.0.1` e `HOME_MUSIC_COOKIE_SECURE` para `true` somente depois de validar o HTTPS real.
 
 ## Desenvolvimento
 
@@ -109,11 +103,10 @@ npm run dev
 
 - Web/Vite: `http://localhost:5173`
 - API: `http://127.0.0.1:8787`
-- celular na mesma LAN: `http://IP_DO_PC:5173`
 
 O Vite faz proxy de `/api` para o backend local.
 
-## Produção
+## Produção no Ubuntu
 
 ```bash
 npm ci
@@ -121,50 +114,11 @@ npm run build
 npm start
 ```
 
-Em produção existe apenas um servidor externo:
-
-```text
-http://IP_DO_PC:8787
-```
-
-O Fastify serve o frontend compilado e `/api` na mesma origem. O Vite não fica rodando.
-
-Para descobrir o IP do Ubuntu:
-
-```bash
-hostname -I
-```
-
-A política de cache mantém `index.html` sem cache, usa cache imutável apenas para assets com nome hashado pelo Vite e devolve `404` para arquivos estáticos inexistentes.
-
-### Health checks
-
-- `GET /health` é um **liveness** público e mínimo: informa apenas se o processo HTTP está vivo;
-- `GET /ready` é um **readiness** público e mínimo: retorna `200` quando frontend, autenticação e biblioteca estão prontos, ou `503` quando não estão;
-- `GET /api/health` exige sessão e contém diagnóstico detalhado de modo, uptime, biblioteca, scan, SQLite e frontend.
-
-Detalhes em [`docs/production.md`](docs/production.md).
-
-## Iniciar automaticamente com o Ubuntu
-
-Depois de configurar `.env`:
+Em produção existe um único processo Fastify servindo frontend + API. Para operação cotidiana, instale como serviço:
 
 ```bash
 npm run service:install
 ```
-
-O instalador:
-
-- restringe `.env` para `0600`, `data/` para `0700` e arquivos SQLite para `0600`;
-- se já existir um processo ativo, para o serviço **antes** de alterar dependências/build;
-- executa `npm ci` e `npm run build`;
-- instala/regenera `home-music.service` com o usuário atual;
-- escapa caminhos usados pelo unit do systemd;
-- usa o binário Node atual diretamente;
-- habilita início automático;
-- faz `restart` explícito com o build novo;
-- configura `Restart=on-failure`;
-- envia logs para o journal.
 
 Comandos úteis:
 
@@ -174,7 +128,7 @@ sudo systemctl restart home-music
 journalctl -u home-music -f
 ```
 
-Depois de novos merges, use o fluxo seguro:
+Depois de novos merges:
 
 ```bash
 git checkout main
@@ -182,9 +136,65 @@ git pull --ff-only
 npm run service:update
 ```
 
-`service:update` para o processo antes de `npm ci/build`, evitando servir `index.html` antigo junto com assets de uma versão nova.
+O update para o processo antes de alterar dependências/build, evitando servir HTML antigo com assets de outra versão.
 
-O servidor registra `SIGTERM`/`SIGINT` antes da inicialização potencialmente longa da biblioteca, aguarda scan em andamento e fecha Fastify + SQLite antes de encerrar.
+### Health checks
+
+- `GET /health`: liveness público mínimo;
+- `GET /ready`: readiness público mínimo (`200` ou `503`);
+- `GET /api/health`: diagnóstico detalhado autenticado.
+
+Detalhes em [`docs/production.md`](docs/production.md).
+
+## Acesso remoto seguro: Tailscale + HTTPS
+
+O modo recomendado para acessar o Home Music fora de casa usa **Tailscale Serve**. **Tailscale Funnel não é usado**, porque Funnel tornaria o serviço público na internet.
+
+Arquitetura:
+
+```text
+celular com Tailscale
+        |
+        | HTTPS :443 (*.ts.net)
+        v
+   Tailscale Serve
+        |
+        | HTTP loopback
+        v
+  127.0.0.1:8787
+      Fastify
+```
+
+Pré-requisitos:
+
+- Tailscale instalado e autenticado no Ubuntu e no celular;
+- MagicDNS habilitado;
+- HTTPS Certificates habilitado no tailnet;
+- `home-music.service` instalado.
+
+Ative com:
+
+```bash
+npm run tailscale:enable
+```
+
+O setup valida HTTPS **antes** de fechar a porta da LAN, recusa sobrescrever outro Serve em `443`, faz rollback do `.env` se algo falhar e deixa o backend somente em loopback.
+
+Status:
+
+```bash
+npm run tailscale:status
+```
+
+Rollback para HTTP/LAN:
+
+```bash
+npm run tailscale:disable
+```
+
+O Tailscale Serve é configurado com `--bg`, portanto persiste após reboot. `npm run service:update` atualiza o Home Music sem remover a URL HTTPS.
+
+Guia completo: [`docs/tailscale.md`](docs/tailscale.md).
 
 ## Re-scan da biblioteca
 
@@ -194,25 +204,23 @@ O re-scan é incremental: arquivos inalterados reutilizam o índice, somente arq
 
 ## Segurança
 
-- não publique a porta do Home Music diretamente na internet;
-- use uma senha exclusiva;
-- `.env` é ignorado pelo Git e o instalador do serviço força permissão `0600`;
-- `data/` e os arquivos SQLite são endurecidos pelo instalador;
-- em desenvolvimento a API fica em `127.0.0.1`;
-- em produção `PRODUCTION_HOST=0.0.0.0` permite acesso na LAN;
-- frontend público não significa biblioteca pública: `/api/*` exige sessão;
-- cookie de sessão é `HttpOnly` + `SameSite=Strict`;
-- `HOME_MUSIC_COOKIE_SECURE=true` permite marcar o cookie como `Secure` atrás de HTTPS sem confiar cegamente em `X-Forwarded-Proto`;
+- não publique a porta `8787` diretamente na internet;
+- não use Tailscale Funnel para este app;
+- use uma senha exclusiva para o Home Music;
+- `.env` é ignorado pelo Git e o instalador força permissão `0600`;
+- `data/` e SQLite recebem permissões restritas;
+- no perfil Tailscale o Fastify fica em `127.0.0.1` e só o Serve recebe conexões remotas;
+- o cookie de sessão é `Secure` + `HttpOnly` + `SameSite=Strict` no perfil HTTPS;
 - endpoints mutáveis exigem sessão + header anti-CSRF do frontend;
 - login tem rate limit;
 - symlinks/devices/FIFOs/escapes de `MUSIC_DIR` não são servidos;
 - caminhos físicos não são enviados ao frontend;
 - capas têm limites de tipo, tamanho, concorrência e cache;
-- arquivos estáticos de produção rejeitam traversal, ocultos, NUL e symlinks;
+- arquivos estáticos rejeitam traversal, ocultos, NUL e symlinks;
 - respostas de produção aplicam CSP e headers de hardening;
-- CI usa lockfile, audit, typecheck, testes, build e smoke real de produção.
+- CI usa lockfile, audit, typecheck, testes, build, smoke real e validação sintática dos scripts operacionais.
 
-HTTP na LAN **não criptografa** usuário, senha ou áudio. O próximo passo para acesso remoto é Tailscale + HTTPS/ACL, sem port-forwarding público.
+Para tailnets compartilhados, use **grants** least-privilege e permita apenas TCP/443 ao servidor Home Music para as identidades autorizadas. O login do app continua como segunda camada.
 
 ## Docker
 
@@ -222,7 +230,7 @@ O Compose atual continua voltado a desenvolvimento:
 docker compose up
 ```
 
-Para uso cotidiano no Ubuntu, o caminho recomendado agora é `npm run build` + `npm start` ou o serviço systemd.
+Para uso cotidiano no Ubuntu, o caminho recomendado é systemd + Tailscale Serve.
 
 ## Qualidade
 
@@ -232,6 +240,8 @@ npm test
 npm run build
 npm run smoke:production
 npm audit --audit-level=high
+bash -n scripts/install-systemd.sh
+bash -n scripts/configure-tailscale.sh
 ```
 
 ## Próximos passos
