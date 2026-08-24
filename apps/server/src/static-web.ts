@@ -54,6 +54,14 @@ export function cacheControlForPath(pathname: string) {
   return 'no-store';
 }
 
+export function shouldServeShell(rawUrl: string) {
+  const pathname = requestPathname(rawUrl);
+  if (!pathname) return false;
+  if (pathname === '/') return true;
+  if (pathname.startsWith('/assets/')) return false;
+  return path.posix.extname(pathname) === '';
+}
+
 export async function prepareWebApp(root: string): Promise<PreparedWebApp> {
   const resolvedRoot = await realpath(root);
   const indexPath = path.join(resolvedRoot, 'index.html');
@@ -96,6 +104,11 @@ export async function sendWebRequest(reply: FastifyReply, web: PreparedWebApp, r
     reply.header('Cache-Control', cacheControlForPath(staticFile.pathname));
     reply.header('Content-Length', staticFile.size);
     return reply.send(createReadStream(staticFile.filePath));
+  }
+
+  if (!shouldServeShell(rawUrl)) {
+    reply.header('Cache-Control', 'no-store');
+    return reply.code(404).send({ error: 'Arquivo não encontrado.' });
   }
 
   reply.type('text/html; charset=utf-8');
