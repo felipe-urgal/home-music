@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type DragEvent } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type DragEvent } from 'react';
 import {
   ChevronDown,
   ChevronUp,
@@ -17,6 +17,8 @@ import {
 } from 'lucide-react';
 import type { Playlist, RepeatMode, Track } from '@home-music/shared';
 import { Artwork } from './Artwork';
+
+const QUEUE_PAGE_SIZE = 10;
 
 function formatTime(value: number) {
   if (!Number.isFinite(value) || value < 0) return '0:00';
@@ -86,10 +88,36 @@ export function PlayerScreen({
 }: PlayerScreenProps) {
   const [showOptions, setShowOptions] = useState(false);
   const [dragFrom, setDragFrom] = useState<number | null>(null);
+  const [visibleQueueCount, setVisibleQueueCount] = useState(QUEUE_PAGE_SIZE);
+  const queueLoadMoreRef = useRef<HTMLDivElement | null>(null);
   const progress = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
   const hasNext = currentIndex < queue.length - 1 || repeatMode === 'all';
   const visibleStart = Math.max(0, currentIndex);
-  const visibleQueue = queue.slice(visibleStart, currentIndex + 10);
+  const visibleEnd = Math.min(queue.length, visibleStart + visibleQueueCount);
+  const visibleQueue = queue.slice(visibleStart, visibleEnd);
+  const hasMoreQueueItems = visibleEnd < queue.length;
+
+  useEffect(() => {
+    setVisibleQueueCount(QUEUE_PAGE_SIZE);
+  }, [currentIndex, queue.length]);
+
+  useEffect(() => {
+    const target = queueLoadMoreRef.current;
+    if (!target || !hasMoreQueueItems) return;
+
+    const observer = new IntersectionObserver(entries => {
+      if (entries.some(entry => entry.isIntersecting)) {
+        setVisibleQueueCount(count => Math.min(queue.length - visibleStart, count + QUEUE_PAGE_SIZE));
+      }
+    }, {
+      root: null,
+      rootMargin: '320px 0px',
+      threshold: 0
+    });
+
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [hasMoreQueueItems, queue.length, visibleStart, visibleEnd]);
 
   function dropQueue(event: DragEvent, to: number) {
     event.preventDefault();
@@ -191,7 +219,7 @@ export function PlayerScreen({
       )}
 
       <section className="queue-panel queue-panel--player">
-        <div className="queue-label">Fila · arraste ou use as setas</div>
+        <div className="queue-label">Fila · {queue.length} músicas · arraste ou use as setas</div>
         <div className="queue-list">
           {visibleQueue.map((track, visibleIndex) => {
             const queueIndex = visibleStart + visibleIndex;
@@ -219,6 +247,7 @@ export function PlayerScreen({
             );
           })}
         </div>
+        {hasMoreQueueItems && <div ref={queueLoadMoreRef} className="queue-load-more" aria-hidden="true" />}
       </section>
     </>
   );
