@@ -5,7 +5,6 @@ import { PlayerScreen } from './components/PlayerScreen';
 import { buildQueueContext } from './library-utils';
 import { useLibraryNavigation } from './useLibraryNavigation';
 
-const apiBase = import.meta.env.VITE_API_URL || '';
 type Screen = 'player' | 'library';
 
 export default function App() {
@@ -25,7 +24,7 @@ export default function App() {
   const hasNext = currentIndex < queue.length - 1;
 
   useEffect(() => {
-    fetch(`${apiBase}/api/library`)
+    fetch('/api/library')
       .then(async response => {
         if (!response.ok) throw new Error('Falha ao carregar biblioteca');
         return response.json() as Promise<LibraryResponse>;
@@ -46,7 +45,7 @@ export default function App() {
 
     setCurrentTime(0);
     setDuration(current.duration ?? 0);
-    audio.src = `${apiBase}/api/tracks/${current.id}/stream`;
+    audio.src = `/api/tracks/${current.id}/stream`;
     audio.load();
 
     if (playing) {
@@ -142,7 +141,7 @@ export default function App() {
         ) : !current ? (
           <div className="center-state">
             <strong>Nenhuma música encontrada</strong>
-            <span>Configure MUSIC_DIR no arquivo .env e faça um novo scan.</span>
+            <span>Configure MUSIC_DIR no arquivo .env e reinicie o servidor.</span>
           </div>
         ) : screen === 'player' ? (
           <PlayerScreen
