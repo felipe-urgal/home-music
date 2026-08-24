@@ -15,6 +15,7 @@ import {
   Users
 } from 'lucide-react';
 import type { Playlist, Track } from '@home-music/shared';
+import { uniqueTracksById } from '../player-state';
 import type { LibraryData } from '../useLibraryData';
 import { LIBRARY_PAGE_SIZE, type LibraryNavigation, type LibraryTab } from '../useLibraryNavigation';
 import { Artwork } from './Artwork';
@@ -22,7 +23,7 @@ import { MiniPlayer } from './MiniPlayer';
 
 type LibraryScreenProps = {
   data: LibraryData;
-  current: Track;
+  current?: Track;
   playing: boolean;
   hasNext: boolean;
   navigation: LibraryNavigation;
@@ -54,7 +55,7 @@ function TrackRows({
 }: {
   tracks: Track[];
   context: Track[];
-  current: Track;
+  current?: Track;
   playing: boolean;
   favorites: Set<string>;
   onPlayTrack: (track: Track, context: Track[]) => void;
@@ -65,15 +66,16 @@ function TrackRows({
     <div className="library-track-list">
       {tracks.map(track => {
         const favorite = favorites.has(track.id);
+        const isCurrent = track.id === current?.id;
         return (
-          <div className={`library-track ${track.id === current.id ? 'is-current' : ''}`} key={track.id}>
+          <div className={`library-track ${isCurrent ? 'is-current' : ''}`} key={track.id}>
             <button className="library-track__main" onClick={() => onPlayTrack(track, context)}>
               <Artwork track={track} />
               <span className="library-track__text">
                 <strong>{track.title}</strong>
                 <small>{track.artist} · {track.album}</small>
               </span>
-              {track.id === current.id && playing ? <span className="playing-indicator">▶</span> : <Play className="library-track__action" />}
+              {isCurrent && playing ? <span className="playing-indicator">▶</span> : <Play className="library-track__action" />}
             </button>
             <button
               className={`track-action ${favorite ? 'is-active' : ''}`}
@@ -147,11 +149,12 @@ export function LibraryScreen({
   } = navigation;
 
   const isDetail = Boolean(selectedGroup || selectedPlaylist || folderPath);
-  const historyTracks = history.map(item => item.track);
+  const historyTracks = uniqueTracksById(history.map(item => item.track));
+  const run = (operation: Promise<unknown>) => void operation.catch(() => undefined);
 
   function changeTab(tab: LibraryTab) {
     selectTab(tab);
-    if (tab === 'history') void refreshHistory();
+    if (tab === 'history') run(refreshHistory());
   }
 
   function goBack() {
@@ -194,8 +197,8 @@ export function LibraryScreen({
     try {
       const result = await rescan();
       window.alert(`Biblioteca atualizada: +${result.added} novas, ${result.updated} alteradas, ${result.removed} removidas.`);
-    } catch (error) {
-      window.alert(error instanceof Error ? error.message : 'Não foi possível atualizar a biblioteca.');
+    } catch {
+      // useLibraryData já exibe o erro globalmente.
     }
   }
 
@@ -278,7 +281,7 @@ export function LibraryScreen({
                   playing={playing}
                   favorites={favoriteSet}
                   onPlayTrack={onPlayTrack}
-                  onToggleFavorite={trackId => void toggleFavorite(trackId)}
+                  onToggleFavorite={trackId => run(toggleFavorite(trackId))}
                 />
               </>
             )}
@@ -293,7 +296,7 @@ export function LibraryScreen({
           <>
             <div className="section-heading">
               <span>Reproduzidas recentemente</span>
-              {history.length > 0 && <button className="text-action" onClick={() => void clearHistory()}>Limpar</button>}
+              {history.length > 0 && <button className="text-action" onClick={() => run(clearHistory())}>Limpar</button>}
             </div>
             {history.length ? (
               <div className="history-list">
@@ -311,7 +314,7 @@ export function LibraryScreen({
           </>
         ) : libraryTab === 'playlists' && !selectedPlaylist ? (
           <>
-            <div className="section-heading"><span>Playlists</span><button className="text-action" onClick={() => void makePlaylist()}><Plus />Nova</button></div>
+            <div className="section-heading"><span>Playlists</span><button className="text-action" onClick={() => run(makePlaylist())}><Plus />Nova</button></div>
             {playlists.length ? (
               <div className="group-list">
                 {playlists.map(playlist => (
@@ -329,8 +332,8 @@ export function LibraryScreen({
             {selectedPlaylist && (
               <div className="collection-actions">
                 {libraryTracks.length > 0 && <button className="play-all" onClick={() => onPlayTrack(libraryTracks[0], libraryTracks)}><Play />Tocar tudo</button>}
-                <button className="text-action" onClick={() => void editPlaylist(selectedPlaylist)}>Renomear</button>
-                <button className="text-action text-action--danger" onClick={() => void removePlaylist(selectedPlaylist)}>Excluir</button>
+                <button className="text-action" onClick={() => run(editPlaylist(selectedPlaylist))}>Renomear</button>
+                <button className="text-action text-action--danger" onClick={() => run(removePlaylist(selectedPlaylist))}>Excluir</button>
               </div>
             )}
             <div className="section-heading"><span>{libraryTab === 'favorites' ? 'Favoritos' : 'Músicas'}</span><small>{libraryTracks.length}</small></div>
@@ -342,8 +345,8 @@ export function LibraryScreen({
                 playing={playing}
                 favorites={favoriteSet}
                 onPlayTrack={onPlayTrack}
-                onToggleFavorite={trackId => void toggleFavorite(trackId)}
-                onRemove={selectedPlaylist ? trackId => void setPlaylistTracks(selectedPlaylist.id, selectedPlaylist.trackIds.filter(id => id !== trackId)) : undefined}
+                onToggleFavorite={trackId => run(toggleFavorite(trackId))}
+                onRemove={selectedPlaylist ? trackId => run(setPlaylistTracks(selectedPlaylist.id, selectedPlaylist.trackIds.filter(id => id !== trackId))) : undefined}
               />
             ) : <div className="empty-library">Nenhuma música encontrada.</div>}
             {visibleCount < libraryTracks.length && (
@@ -369,14 +372,16 @@ export function LibraryScreen({
 
       <div className="library-status">Última indexação: {scannedAt ? new Date(scannedAt).toLocaleString('pt-BR') : 'ainda não realizada'}</div>
 
-      <MiniPlayer
-        current={current}
-        playing={playing}
-        hasNext={hasNext}
-        onOpenPlayer={onOpenPlayer}
-        onTogglePlay={onTogglePlay}
-        onNext={onNext}
-      />
+      {current && (
+        <MiniPlayer
+          current={current}
+          playing={playing}
+          hasNext={hasNext}
+          onOpenPlayer={onOpenPlayer}
+          onTogglePlay={onTogglePlay}
+          onNext={onNext}
+        />
+      )}
     </>
   );
 }
