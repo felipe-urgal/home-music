@@ -125,15 +125,27 @@ home_music_port() {
   local port
   port="$(read_env_value PORT)"
   port="${port:-8787}"
-  [[ "${port}" =~ ^[0-9]+$ ]] || fail "PORT inválida no .env: ${port}"
-  (( port >= 1 && port <= 65535 )) || fail "PORT fora do intervalo válido: ${port}"
+
+  if [[ ! "${port}" =~ ^[0-9]+$ ]]; then
+    fail "PORT inválida no .env: ${port}"
+    return 1
+  fi
+  if (( port < 1 || port > 65535 )); then
+    fail "PORT fora do intervalo válido: ${port}"
+    return 1
+  fi
+
   printf '%s' "${port}"
 }
 
 serve_443_state() {
   local expected_proxy="$1"
   local serve_json
-  serve_json="$("${TAILSCALE_BIN}" serve status --json 2>/dev/null || printf '{}')"
+
+  if ! serve_json="$("${TAILSCALE_BIN}" serve status --json 2>/dev/null)"; then
+    printf '%s' "unknown"
+    return 0
+  fi
 
   printf '%s' "${serve_json}" | "${NODE_BIN}" -e '
     const fs = require("node:fs");
@@ -145,7 +157,14 @@ serve_443_state() {
 
     const web = data.Web && typeof data.Web === "object" ? data.Web : {};
     const tcp = data.TCP && typeof data.TCP === "object" ? data.TCP : {};
+    const allowFunnel = data.AllowFunnel && typeof data.AllowFunnel === "object" ? data.AllowFunnel : {};
     const handlers = [];
+
+    const funnelOn443 = Object.entries(allowFunnel).some(([host, enabled]) => enabled === true && host.endsWith(":443"));
+    if (funnelOn443) {
+      process.stdout.write("funnel");
+      process.exit(0);
+    }
 
     for (const [host, config] of Object.entries(web)) {
       if (!host.endsWith(":443")) continue;
@@ -212,24 +231,32 @@ enable_tailscale() {
   check_tailscale_version
   load_tailscale_identity
 
-  local port target local_url serve_state env_backup serve_created=0 rollback_needed=0
+  local port target local_url serve_state configured_state env_backup serve_created=0 rollback_needed=0
   port="$(home_music_port)"
   target="127.0.0.1:${port}"
   local_url="http://${target}"
   serve_state="$(serve_443_state "${target}")"
 
   if [[ "${serve_state}" == "unknown" ]]; then
-    fail "Não foi possível interpretar 'tailscale serve status --json'. Atualize o Tailscale antes de continuar."
+    fail "Não foi possível consultar/interpretar 'tailscale serve status --json'. Nenhuma alteração foi feita."
+    return 1
+  fi
+  if [[ "${serve_state}" == "funnel" ]]; then
+    echo "Tailscale Funnel está ativo em HTTPS/443 nesta máquina." >&2
+    echo "O Home Music não automatiza nem substitui exposição pública. Desative/revise o Funnel antes de continuar." >&2
+    "${TAILSCALE_BIN}" funnel status >&2 || true
+    return 1
   fi
   if [[ "${serve_state}" == "conflict" ]]; then
     echo "Já existe uma configuração Tailscale Serve em HTTPS/443 nesta máquina." >&2
     echo "Nenhuma alteração foi feita. Revise antes de substituir:" >&2
     "${TAILSCALE_BIN}" serve status >&2 || true
-    exit 1
+    return 1
   fi
 
   if ! "${CURL_BIN}" --fail --silent --show-error --max-time 8 "${local_url}/health" >/dev/null; then
     fail "Home Music não responde em ${local_url}/health. Confirme o serviço antes de habilitar o proxy."
+    return 1
   fi
 
   echo "Atenção: o certificado HTTPS usa ${TAILSCALE_DNS_NAME}."
@@ -245,7 +272,8 @@ enable_tailscale() {
   rollback_needed=1
 
   rollback() {
-    local rc=$?
+    local rc="${1:-1}"
+    trap - ERR INT TERM
     if [[ ${rollback_needed} -eq 1 ]]; then
       echo >&2
       echo "Falha durante a ativação; restaurando configuração anterior." >&2
@@ -253,13 +281,15 @@ enable_tailscale() {
       chmod 600 "${ENV_FILE}" || true
       sudo systemctl restart "${SERVICE_UNIT}" >/dev/null 2>&1 || true
       if [[ ${serve_created} -eq 1 ]]; then
-        "${TAILSCALE_BIN}" serve --https=443 off >/dev/null 2>&1 || true
+        "${TAILSCALE_BIN}" serve --yes --https=443 off >/dev/null 2>&1 || true
       fi
     fi
     rm -f "${env_backup}"
     exit "${rc}"
   }
-  trap rollback ERR INT TERM
+  trap 'rollback $?' ERR
+  trap 'rollback 130' INT
+  trap 'rollback 143' TERM
 
   if [[ "${serve_state}" == "empty" ]]; then
     echo "==> Configurando Tailscale Serve persistente em HTTPS/443"
@@ -274,8 +304,17 @@ enable_tailscale() {
     echo "==> Tailscale Serve já aponta HTTPS/443 para ${target}"
   fi
 
+  configured_state="$(serve_443_state "${target}")"
+  if [[ "${configured_state}" != "expected" ]]; then
+    fail "A configuração final de HTTPS/443 não corresponde ao proxy privado esperado (estado=${configured_state})."
+    return 1
+  fi
+
   echo "==> Validando TLS/proxy antes de fechar a porta da LAN"
-  wait_for_url "${TAILSCALE_URL}/health" 20 2 || fail "${TAILSCALE_URL}/health não ficou acessível via HTTPS."
+  if ! wait_for_url "${TAILSCALE_URL}/health" 20 2; then
+    fail "${TAILSCALE_URL}/health não ficou acessível via HTTPS."
+    return 1
+  fi
 
   echo "==> Restringindo Fastify ao loopback e habilitando cookie Secure"
   set_env_value PRODUCTION_HOST 127.0.0.1
@@ -283,10 +322,19 @@ enable_tailscale() {
 
   echo "==> Reiniciando Home Music"
   sudo systemctl restart "${SERVICE_UNIT}"
-  sudo systemctl is-active --quiet "${SERVICE_UNIT}" || fail "Home Music não ficou ativo após o restart."
+  if ! sudo systemctl is-active --quiet "${SERVICE_UNIT}"; then
+    fail "Home Music não ficou ativo após o restart."
+    return 1
+  fi
 
-  wait_for_url "${local_url}/health" 10 1 || fail "Backend local não respondeu após o restart."
-  wait_for_url "${TAILSCALE_URL}/ready" 15 2 || fail "Home Music não ficou pronto via Tailscale HTTPS."
+  if ! wait_for_url "${local_url}/health" 10 1; then
+    fail "Backend local não respondeu após o restart."
+    return 1
+  fi
+  if ! wait_for_url "${TAILSCALE_URL}/ready" 15 2; then
+    fail "Home Music não ficou pronto via Tailscale HTTPS."
+    return 1
+  fi
 
   rollback_needed=0
   trap - ERR INT TERM
@@ -309,8 +357,17 @@ disable_tailscale() {
   target="127.0.0.1:${port}"
   serve_state="$(serve_443_state "${target}")"
 
-  if [[ "${serve_state}" == "conflict" || "${serve_state}" == "unknown" ]]; then
+  if [[ "${serve_state}" == "unknown" ]]; then
+    fail "Não foi possível consultar/interpretar a configuração Serve; nenhuma alteração foi feita."
+    return 1
+  fi
+  if [[ "${serve_state}" == "funnel" ]]; then
+    fail "Funnel está ativo em HTTPS/443; o rollback automático não altera exposição pública. Revise o Funnel manualmente."
+    return 1
+  fi
+  if [[ "${serve_state}" == "conflict" ]]; then
     fail "A configuração Serve em 443 não corresponde ao Home Music; nenhuma alteração foi feita."
+    return 1
   fi
 
   env_backup="$(mktemp)"
@@ -319,7 +376,8 @@ disable_tailscale() {
   rollback_needed=1
 
   rollback() {
-    local rc=$?
+    local rc="${1:-1}"
+    trap - ERR INT TERM
     if [[ ${rollback_needed} -eq 1 ]]; then
       echo >&2
       echo "Falha durante o rollback; restaurando .env anterior." >&2
@@ -333,11 +391,13 @@ disable_tailscale() {
     rm -f "${env_backup}"
     exit "${rc}"
   }
-  trap rollback ERR INT TERM
+  trap 'rollback $?' ERR
+  trap 'rollback 130' INT
+  trap 'rollback 143' TERM
 
   if [[ "${serve_state}" == "expected" ]]; then
     echo "==> Desabilitando Tailscale Serve em HTTPS/443"
-    "${TAILSCALE_BIN}" serve --https=443 off
+    "${TAILSCALE_BIN}" serve --yes --https=443 off
     serve_removed=1
   fi
 
@@ -345,7 +405,10 @@ disable_tailscale() {
   set_env_value HOME_MUSIC_COOKIE_SECURE false
   set_env_value PRODUCTION_HOST 0.0.0.0
   sudo systemctl restart "${SERVICE_UNIT}"
-  sudo systemctl is-active --quiet "${SERVICE_UNIT}" || fail "Home Music não ficou ativo após o rollback."
+  if ! sudo systemctl is-active --quiet "${SERVICE_UNIT}"; then
+    fail "Home Music não ficou ativo após o rollback."
+    return 1
+  fi
 
   rollback_needed=0
   trap - ERR INT TERM
