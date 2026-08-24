@@ -31,6 +31,7 @@ type PlayerScreenProps = {
   queue: Track[];
   currentIndex: number;
   playing: boolean;
+  autoplayBlocked: boolean;
   currentTime: number;
   duration: number;
   volume: number;
@@ -58,6 +59,7 @@ export function PlayerScreen({
   queue,
   currentIndex,
   playing,
+  autoplayBlocked,
   currentTime,
   duration,
   volume,
@@ -125,6 +127,12 @@ export function PlayerScreen({
           <Heart fill={isFavorite ? 'currentColor' : 'none'} />
         </button>
       </div>
+
+      {autoplayBlocked && (
+        <div className="autoplay-notice" role="status">
+          O navegador bloqueou o play automático. Toque em Play uma vez para continuar.
+        </div>
+      )}
 
       <div className="progress-wrap">
         <input
