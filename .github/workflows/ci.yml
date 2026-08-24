@@ -41,6 +41,10 @@ jobs:
         run: |
           bash -n scripts/install-systemd.sh
           bash -n scripts/configure-tailscale.sh
+          bash -n scripts/configure-tailscale.test.sh
+
+      - name: Test Tailscale operations
+        run: bash scripts/configure-tailscale.test.sh
 
       - name: Build
         run: npm run build
