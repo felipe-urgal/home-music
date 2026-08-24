@@ -24,6 +24,7 @@ function state(overrides: Partial<PlaybackState> = {}): PlaybackState {
     volume: 0.7,
     shuffle: false,
     repeatMode: 'off',
+    wasPlaying: false,
     baseQueueIds: ['a', 'b', 'c'],
     queueIds: ['a', 'b', 'c'],
     updatedAt: '2026-08-24T12:00:00.000Z',
