@@ -1,18 +1,16 @@
-import { useDeferredValue, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Disc3, Folder, Music2, Play, Search, Users } from 'lucide-react';
 import type { Track } from '@home-music/shared';
-import { groupTracks, matchesTrack, normalizeSearch, type GroupTab } from '../library-utils';
+import type { GroupTab } from '../library-utils';
+import { LIBRARY_PAGE_SIZE, type LibraryNavigation } from '../useLibraryNavigation';
 import { Artwork } from './Artwork';
 import { MiniPlayer } from './MiniPlayer';
-
-const PAGE_SIZE = 100;
-type LibraryTab = GroupTab | 'tracks';
 
 type LibraryScreenProps = {
   tracks: Track[];
   current: Track;
   playing: boolean;
   hasNext: boolean;
+  navigation: LibraryNavigation;
   onOpenPlayer: () => void;
   onTogglePlay: () => void;
   onNext: () => void;
@@ -30,73 +28,28 @@ export function LibraryScreen({
   current,
   playing,
   hasNext,
+  navigation,
   onOpenPlayer,
   onTogglePlay,
   onNext,
   onPlayTrack
 }: LibraryScreenProps) {
-  const [libraryTab, setLibraryTab] = useState<LibraryTab>('folders');
-  const [selectedGroupKey, setSelectedGroupKey] = useState<string | null>(null);
-  const [query, setQuery] = useState('');
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
-  const deferredQuery = useDeferredValue(query);
-  const normalizedQuery = normalizeSearch(deferredQuery);
-
-  const groups = useMemo(() => {
-    if (libraryTab === 'tracks') return [];
-    return groupTracks(tracks, libraryTab);
-  }, [libraryTab, tracks]);
-
-  const selectedGroup = useMemo(
-    () => groups.find(group => group.key === selectedGroupKey) ?? null,
-    [groups, selectedGroupKey]
-  );
-
-  const visibleGroups = useMemo(() => {
-    if (!normalizedQuery) return groups;
-
-    return groups.filter(group =>
-      normalizeSearch(`${group.name} ${group.subtitle ?? ''}`).includes(normalizedQuery) ||
-      group.tracks.some(track => matchesTrack(track, normalizedQuery))
-    );
-  }, [groups, normalizedQuery]);
-
-  const libraryTracks = useMemo(() => {
-    const source = selectedGroup?.tracks ?? tracks;
-    return source.filter(track => matchesTrack(track, normalizedQuery));
-  }, [normalizedQuery, selectedGroup, tracks]);
-
-  const shouldShowTracks = libraryTab === 'tracks' || Boolean(selectedGroup);
-  const pagedTracks = libraryTracks.slice(0, visibleCount);
-  const pagedGroups = visibleGroups.slice(0, visibleCount);
-
-  function resetPage() {
-    setVisibleCount(PAGE_SIZE);
-  }
-
-  function selectTab(tab: LibraryTab) {
-    setLibraryTab(tab);
-    setSelectedGroupKey(null);
-    setQuery('');
-    resetPage();
-  }
-
-  function selectGroup(key: string) {
-    setSelectedGroupKey(key);
-    setQuery('');
-    resetPage();
-  }
-
-  function leaveGroup() {
-    setSelectedGroupKey(null);
-    setQuery('');
-    resetPage();
-  }
-
-  function changeQuery(value: string) {
-    setQuery(value);
-    resetPage();
-  }
+  const {
+    libraryTab,
+    selectedGroup,
+    query,
+    visibleCount,
+    visibleGroups,
+    libraryTracks,
+    shouldShowTracks,
+    pagedTracks,
+    pagedGroups,
+    selectTab,
+    selectGroup,
+    leaveGroup,
+    changeQuery,
+    showMore
+  } = navigation;
 
   return (
     <>
@@ -147,8 +100,8 @@ export function LibraryScreen({
               ))}
             </div>
             {visibleCount < libraryTracks.length && (
-              <button className="load-more" onClick={() => setVisibleCount(count => count + PAGE_SIZE)}>
-                Mostrar mais {Math.min(PAGE_SIZE, libraryTracks.length - visibleCount)} músicas
+              <button className="load-more" onClick={showMore}>
+                Mostrar mais {Math.min(LIBRARY_PAGE_SIZE, libraryTracks.length - visibleCount)} músicas
               </button>
             )}
           </>
@@ -171,8 +124,8 @@ export function LibraryScreen({
               ))}
             </div>
             {visibleCount < visibleGroups.length && (
-              <button className="load-more" onClick={() => setVisibleCount(count => count + PAGE_SIZE)}>
-                Mostrar mais {Math.min(PAGE_SIZE, visibleGroups.length - visibleCount)} itens
+              <button className="load-more" onClick={showMore}>
+                Mostrar mais {Math.min(LIBRARY_PAGE_SIZE, visibleGroups.length - visibleCount)} itens
               </button>
             )}
           </>
