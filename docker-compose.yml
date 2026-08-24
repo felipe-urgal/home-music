@@ -2,26 +2,37 @@ services:
   server:
     image: node:22-alpine
     working_dir: /app
-    command: sh -c "npm install && npm run dev -w @home-music/server"
-    ports:
-      - "8787:8787"
+    command: sh -c "npm ci && npm run dev -w @home-music/server"
+    expose:
+      - "8787"
     environment:
       MUSIC_DIR: /music
       PORT: 8787
+      # Necessário somente dentro da rede privada do Compose.
       HOST: 0.0.0.0
     volumes:
-      - ./:/app
+      - ./:/app:ro
+      - server_node_modules:/app/node_modules
       - ${MUSIC_DIR:-./music}:/music:ro
+    security_opt:
+      - no-new-privileges:true
 
   web:
     image: node:22-alpine
     working_dir: /app
-    command: sh -c "npm install && npm run dev -w @home-music/web"
+    command: sh -c "npm ci && npm run dev -w @home-music/web"
     ports:
       - "5173:5173"
     environment:
       VITE_PROXY_TARGET: http://server:8787
     volumes:
-      - ./:/app
+      - ./:/app:ro
+      - web_node_modules:/app/node_modules
     depends_on:
       - server
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  server_node_modules:
+  web_node_modules:
