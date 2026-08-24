@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { PlaybackState, RepeatMode, Track } from '@home-music/shared';
 import { buildQueueContext } from './library-utils';
+import { nextTrackDecision, remapQueue, restorePlayerState } from './player-state';
 
 const EMPTY_STATE: PlaybackState = {
   currentTrackId: null,
@@ -8,6 +9,7 @@ const EMPTY_STATE: PlaybackState = {
   volume: 1,
   shuffle: false,
   repeatMode: 'off',
+  baseQueueIds: [],
   queueIds: [],
   updatedAt: new Date(0).toISOString()
 };
@@ -36,7 +38,7 @@ function moveItem<T>(items: T[], from: number, to: number) {
   return next;
 }
 
-export function useAudioPlayer(tracks: Track[], progressVisible: boolean) {
+export function useAudioPlayer(tracks: Track[], progressVisible: boolean, libraryReady: boolean) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const positionRef = useRef(0);
   const restoredPositionRef = useRef(0);
@@ -61,48 +63,77 @@ export function useAudioPlayer(tracks: Track[], progressVisible: boolean) {
   );
 
   useEffect(() => {
-    if (!tracks.length || hydratedRef.current) return;
+    if (!libraryReady || hydratedRef.current) return;
     hydratedRef.current = true;
 
     fetch('/api/player/state')
       .then(response => response.ok ? response.json() as Promise<PlaybackState> : EMPTY_STATE)
       .then(state => {
-        const restoredQueue = state.queueIds
-          .map(id => trackMap.get(id))
-          .filter((track): track is Track => Boolean(track));
-        const initialQueue = restoredQueue.length ? restoredQueue : tracks;
-        const restoredCurrent = state.currentTrackId && trackMap.has(state.currentTrackId)
-          ? state.currentTrackId
-          : initialQueue[0]?.id ?? null;
+        const restored = restorePlayerState(tracks, {
+          ...EMPTY_STATE,
+          ...state,
+          baseQueueIds: Array.isArray(state.baseQueueIds) ? state.baseQueueIds : []
+        });
 
-        setOrderedQueue(initialQueue);
-        setQueue(initialQueue);
-        setCurrentTrackId(restoredCurrent);
+        setOrderedQueue(restored.baseQueue);
+        setQueue(restored.queue);
+        setCurrentTrackId(restored.currentTrackId);
         setVolumeState(state.volume);
         setShuffle(state.shuffle);
         setRepeatMode(state.repeatMode);
-        restoredPositionRef.current = state.position;
-        positionRef.current = state.position;
-        setCurrentTime(state.position);
+        restoredPositionRef.current = restored.position;
+        positionRef.current = restored.position;
+        setCurrentTime(restored.position);
       })
       .catch(() => {
         setOrderedQueue(tracks);
         setQueue(tracks);
         setCurrentTrackId(tracks[0]?.id ?? null);
+        restoredPositionRef.current = 0;
+        positionRef.current = 0;
+        setCurrentTime(0);
       })
       .finally(() => setHydrated(true));
-  }, [trackMap, tracks]);
+  }, [libraryReady, tracks]);
 
   useEffect(() => {
-    if (!hydrated || !tracks.length) return;
+    if (!hydrated) return;
+    const audio = audioRef.current;
 
-    const validIds = new Set(tracks.map(track => track.id));
-    setOrderedQueue(items => items.filter(track => validIds.has(track.id)));
-    setQueue(items => items.filter(track => validIds.has(track.id)));
-    if (currentTrackId && !validIds.has(currentTrackId)) {
-      setCurrentTrackId(tracks[0]?.id ?? null);
+    if (!tracks.length) {
+      audio?.pause();
+      if (audio) {
+        audio.removeAttribute('src');
+        audio.load();
+      }
+      setOrderedQueue([]);
+      setQueue([]);
+      setCurrentTrackId(null);
+      setPlaying(false);
+      setCurrentTime(0);
+      setDuration(0);
+      positionRef.current = 0;
+      restoredPositionRef.current = 0;
+      historyTrackRef.current = null;
+      return;
     }
-  }, [tracks, hydrated, currentTrackId]);
+
+    setOrderedQueue(items => {
+      const refreshed = remapQueue(items, trackMap);
+      return refreshed.length ? refreshed : tracks;
+    });
+    setQueue(items => {
+      const refreshed = remapQueue(items, trackMap);
+      return refreshed.length ? refreshed : tracks;
+    });
+
+    if (!currentTrackId || !trackMap.has(currentTrackId)) {
+      setCurrentTrackId(tracks[0].id);
+      restoredPositionRef.current = 0;
+      positionRef.current = 0;
+      setCurrentTime(0);
+    }
+  }, [tracks, trackMap, hydrated, currentTrackId]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -133,6 +164,7 @@ export function useAudioPlayer(tracks: Track[], progressVisible: boolean) {
       volume,
       shuffle,
       repeatMode,
+      baseQueueIds: orderedQueue.map(track => track.id),
       queueIds: queue.map(track => track.id)
     };
 
@@ -142,7 +174,7 @@ export function useAudioPlayer(tracks: Track[], progressVisible: boolean) {
       body: JSON.stringify(body),
       keepalive: true
     }).catch(() => undefined);
-  }, [current?.id, hydrated, queue, repeatMode, shuffle, volume]);
+  }, [current?.id, hydrated, orderedQueue, queue, repeatMode, shuffle, volume]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -189,30 +221,28 @@ export function useAudioPlayer(tracks: Track[], progressVisible: boolean) {
     return Promise.resolve();
   }, [pause, play]);
 
-  const next = useCallback((fromEnded = false) => {
+  const restartCurrent = useCallback(() => {
     const audio = audioRef.current;
-    if (!queue.length || currentIndex < 0) return;
+    if (!audio) return;
+    audio.currentTime = 0;
+    positionRef.current = 0;
+    setCurrentTime(0);
+    audio.play().catch(() => setPlaying(false));
+  }, []);
 
-    if (fromEnded && (repeatMode === 'one' || (repeatMode === 'all' && queue.length === 1)) && audio) {
-      audio.currentTime = 0;
-      positionRef.current = 0;
-      setCurrentTime(0);
-      audio.play().catch(() => setPlaying(false));
+  const next = useCallback((fromEnded = false) => {
+    const decision = nextTrackDecision(queue, currentIndex, repeatMode, fromEnded);
+
+    if (decision.type === 'restart') {
+      restartCurrent();
       return;
     }
-
-    if (currentIndex < queue.length - 1) {
-      setCurrentTrackId(queue[currentIndex + 1].id);
+    if (decision.type === 'track') {
+      setCurrentTrackId(decision.id);
       return;
     }
-
-    if (repeatMode === 'all' && queue.length > 1) {
-      setCurrentTrackId(queue[0].id);
-      return;
-    }
-
     setPlaying(false);
-  }, [currentIndex, queue, repeatMode]);
+  }, [currentIndex, queue, repeatMode, restartCurrent]);
 
   const previous = useCallback(() => {
     const audio = audioRef.current;
@@ -298,7 +328,7 @@ export function useAudioPlayer(tracks: Track[], progressVisible: boolean) {
   }, [current]);
 
   useEffect(() => {
-    if (!('mediaSession' in navigator) || !current) return;
+    if (!('mediaSession' in navigator) || !current || typeof MediaMetadata === 'undefined') return;
 
     const artwork = current.hasCover ? [{ src: `/api/tracks/${current.id}/cover` }] : undefined;
     navigator.mediaSession.metadata = new MediaMetadata({
