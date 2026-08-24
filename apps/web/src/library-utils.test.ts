@@ -7,7 +7,8 @@ import {
   groupTracks,
   matchesTrack,
   normalizeIdentity,
-  normalizeSearch
+  normalizeSearch,
+  type LibraryReturnContext
 } from './library-utils';
 
 function track(overrides: Partial<Track> = {}): Track {
@@ -58,7 +59,7 @@ describe('buildLibraryReturnLabel', () => {
     folderPath: '',
     folderName: 'Pastas',
     query: ''
-  };
+  } satisfies LibraryReturnContext;
 
   it('retorna para a pasta atual', () => {
     expect(buildLibraryReturnLabel({
