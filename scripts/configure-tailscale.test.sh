@@ -53,7 +53,11 @@ case "$1" in
     shift
     if [[ "${1:-}" == "status" ]]; then
       if [[ "${2:-}" == "--json" ]]; then
-        if [[ "${MOCK_SERVE_CONFLICT:-0}" == "1" ]]; then
+        if [[ "${MOCK_SERVE_STATUS_FAIL:-0}" == "1" ]]; then
+          exit 1
+        elif [[ "${MOCK_FUNNEL:-0}" == "1" ]]; then
+          echo '{"TCP":{"443":{"HTTPS":true}},"Web":{"home-music.example.ts.net:443":{"Handlers":{"/":{"Proxy":"http://127.0.0.1:8787"}}}},"AllowFunnel":{"home-music.example.ts.net:443":true}}'
+        elif [[ "${MOCK_SERVE_CONFLICT:-0}" == "1" ]]; then
           echo '{"TCP":{"443":{"HTTPS":true}},"Web":{"home-music.example.ts.net:443":{"Handlers":{"/":{"Proxy":"http://127.0.0.1:9999"}}}}}'
         elif [[ -f "${MOCK_STATE}" ]]; then
           echo '{"TCP":{"443":{"HTTPS":true}},"Web":{"home-music.example.ts.net:443":{"Handlers":{"/":{"Proxy":"http://127.0.0.1:8787"}}}}}'
@@ -70,6 +74,9 @@ case "$1" in
       touch "${MOCK_STATE}"
       echo 'enabled'
     fi
+    ;;
+  funnel)
+    echo 'mock funnel status'
     ;;
   *)
     exit 2
@@ -110,18 +117,19 @@ MOCK
   export MOCK_STATE="${STATE}"
   export PATH="${BIN}:${ORIGINAL_PATH}"
   export HOME_MUSIC_TAILSCALE_YES=1
-  unset MOCK_SERVE_CONFLICT MOCK_FAIL_ACTIVE MOCK_FAIL_RESTART MOCK_FAIL_CURL MOCK_TS_VERSION
+  unset MOCK_SERVE_CONFLICT MOCK_SERVE_STATUS_FAIL MOCK_FUNNEL MOCK_FAIL_ACTIVE MOCK_FAIL_RESTART MOCK_FAIL_CURL MOCK_TS_VERSION
 }
 
 cleanup_fixture() {
   rm -rf "${FIXTURE}"
   export PATH="${ORIGINAL_PATH}"
-  unset HOME_MUSIC_TAILSCALE_YES MOCK_STATE MOCK_SERVE_CONFLICT MOCK_FAIL_ACTIVE MOCK_FAIL_RESTART MOCK_FAIL_CURL MOCK_TS_VERSION
+  unset HOME_MUSIC_TAILSCALE_YES MOCK_STATE MOCK_SERVE_CONFLICT MOCK_SERVE_STATUS_FAIL MOCK_FUNNEL MOCK_FAIL_ACTIVE MOCK_FAIL_RESTART MOCK_FAIL_CURL MOCK_TS_VERSION
 }
 
 ORIGINAL_PATH="${PATH}"
 trap '[[ -n "${FIXTURE:-}" ]] && rm -rf "${FIXTURE}"' EXIT
 
+# Fluxo feliz + idempotência + disable.
 make_fixture
 "${REPO}/scripts/configure-tailscale.sh" enable >/dev/null
 assert_contains "${REPO}/.env" 'HOME_MUSIC_COOKIE_SECURE=true'
@@ -134,6 +142,33 @@ assert_contains "${REPO}/.env" 'PRODUCTION_HOST=0.0.0.0'
 assert_not_exists "${STATE}"
 cleanup_fixture
 
+# Não é permitido assumir configuração vazia quando status falha.
+make_fixture
+export MOCK_SERVE_STATUS_FAIL=1
+set +e
+"${REPO}/scripts/configure-tailscale.sh" enable >/dev/null 2>&1
+RC=$?
+set -e
+[[ ${RC} -ne 0 ]] || fail_test "falha ao consultar Serve deveria abortar"
+assert_contains "${REPO}/.env" 'HOME_MUSIC_COOKIE_SECURE=false'
+assert_contains "${REPO}/.env" 'PRODUCTION_HOST=0.0.0.0'
+assert_not_exists "${STATE}"
+cleanup_fixture
+
+# Funnel em 443 nunca é aceito como Serve privado, mesmo apontando para o backend correto.
+make_fixture
+export MOCK_FUNNEL=1
+set +e
+"${REPO}/scripts/configure-tailscale.sh" enable >/dev/null 2>&1
+RC=$?
+set -e
+[[ ${RC} -ne 0 ]] || fail_test "Funnel em 443 deveria ser rejeitado"
+assert_contains "${REPO}/.env" 'HOME_MUSIC_COOKIE_SECURE=false'
+assert_contains "${REPO}/.env" 'PRODUCTION_HOST=0.0.0.0'
+assert_not_exists "${STATE}"
+cleanup_fixture
+
+# Outro Serve em 443 não pode ser sobrescrito.
 make_fixture
 export MOCK_SERVE_CONFLICT=1
 set +e
@@ -146,8 +181,9 @@ assert_contains "${REPO}/.env" 'PRODUCTION_HOST=0.0.0.0'
 assert_not_exists "${STATE}"
 cleanup_fixture
 
+# Falha do próprio restart deve restaurar .env e remover Serve recém-criado.
 make_fixture
-export MOCK_FAIL_ACTIVE=1
+export MOCK_FAIL_RESTART=1
 set +e
 "${REPO}/scripts/configure-tailscale.sh" enable >/dev/null 2>&1
 RC=$?
@@ -158,6 +194,20 @@ assert_contains "${REPO}/.env" 'PRODUCTION_HOST=0.0.0.0'
 assert_not_exists "${STATE}"
 cleanup_fixture
 
+# Processo reiniciou, mas não ficou ativo: rollback também deve ocorrer.
+make_fixture
+export MOCK_FAIL_ACTIVE=1
+set +e
+"${REPO}/scripts/configure-tailscale.sh" enable >/dev/null 2>&1
+RC=$?
+set -e
+[[ ${RC} -ne 0 ]] || fail_test "serviço inativo deveria abortar enable"
+assert_contains "${REPO}/.env" 'HOME_MUSIC_COOKIE_SECURE=false'
+assert_contains "${REPO}/.env" 'PRODUCTION_HOST=0.0.0.0'
+assert_not_exists "${STATE}"
+cleanup_fixture
+
+# Se o rollback para LAN falhar depois de remover Serve, restaura .env e recria Serve.
 make_fixture
 "${REPO}/scripts/configure-tailscale.sh" enable >/dev/null
 touch "${STATE}"
@@ -172,6 +222,7 @@ assert_contains "${REPO}/.env" 'PRODUCTION_HOST=127.0.0.1'
 [[ -f "${STATE}" ]] || fail_test "Serve deveria ter sido restaurado"
 cleanup_fixture
 
+# Versões anteriores à mudança de CLI 1.52 são rejeitadas antes de mutação.
 make_fixture
 export MOCK_TS_VERSION=1.50.1
 set +e
