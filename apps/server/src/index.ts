@@ -1,8 +1,15 @@
-import { timingSafeEqual } from 'node:crypto';
 import { config } from 'dotenv';
 import { fileURLToPath } from 'node:url';
 import Fastify from 'fastify';
 import type { PlaybackState, RepeatMode, ScanResponse } from '@home-music/shared';
+import {
+  buildSessionCookie,
+  LoginRateLimiter,
+  readCookie,
+  SESSION_COOKIE_NAME,
+  SESSION_TTL_SECONDS,
+  SessionManager
+} from './auth.js';
 import { HomeMusicDatabase } from './database.js';
 import { readCover, scanLibrary, type IndexedTrack } from './library.js';
 import {
@@ -27,8 +34,11 @@ const port = Number(process.env.PORT || 8787);
 const host = process.env.HOST || '127.0.0.1';
 const authUser = process.env.HOME_MUSIC_USER || '';
 const authPassword = process.env.HOME_MUSIC_PASSWORD || '';
-const authConfigured = Boolean(authUser && authPassword.length >= 12);
+const sessions = new SessionManager(authUser, authPassword);
+const loginRateLimiter = new LoginRateLimiter();
+const authConfigured = sessions.configured;
 const mutatingMethods = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+const publicAuthRoutes = new Set(['/api/auth/status', '/api/auth/login']);
 
 let tracks: IndexedTrack[] = [];
 let tracksById = new Map<string, IndexedTrack>();
@@ -51,26 +61,6 @@ type CachedCover = {
 };
 
 const coverCache = new Map<string, CachedCover>();
-
-function safeEqual(left: string, right: string) {
-  const a = Buffer.from(left);
-  const b = Buffer.from(right);
-  return a.length === b.length && timingSafeEqual(a, b);
-}
-
-function isAuthorized(header: string | undefined) {
-  if (!header?.startsWith('Basic ')) return false;
-
-  try {
-    const decoded = Buffer.from(header.slice(6), 'base64').toString('utf8');
-    const separator = decoded.indexOf(':');
-    if (separator < 0) return false;
-    return safeEqual(decoded.slice(0, separator), authUser) &&
-      safeEqual(decoded.slice(separator + 1), authPassword);
-  } catch {
-    return false;
-  }
-}
 
 function setTracks(nextTracks: IndexedTrack[]) {
   tracks = nextTracks;
@@ -222,16 +212,42 @@ function cleanRepeatMode(value: unknown): RepeatMode {
   return value === 'one' || value === 'all' ? value : 'off';
 }
 
+function requestPath(url: string) {
+  return url.split('?', 1)[0];
+}
+
+function requestSessionToken(cookieHeader: string | undefined) {
+  return readCookie(cookieHeader, SESSION_COOKIE_NAME);
+}
+
+function requestIsSecure(request: { protocol: string; headers: Record<string, unknown> }) {
+  const forwarded = request.headers['x-forwarded-proto'];
+  const forwardedProtocol = Array.isArray(forwarded) ? forwarded[0] : forwarded;
+  return request.protocol === 'https' || forwardedProtocol === 'https';
+}
+
 app.addHook('onRequest', async (request, reply) => {
   if (!request.url.startsWith('/api/')) return;
 
-  if (!authConfigured) {
+  const path = requestPath(request.url);
+  const isPublicAuthRoute = publicAuthRoutes.has(path);
+
+  if (!authConfigured && path !== '/api/auth/status') {
     return reply.code(503).send({ error: 'Autenticação do Home Music não configurada.' });
   }
 
-  if (!isAuthorized(request.headers.authorization)) {
-    reply.header('WWW-Authenticate', 'Basic realm="Home Music", charset="UTF-8"');
-    return reply.code(401).send({ error: 'Autenticação necessária.' });
+  if (path === '/api/auth/login') {
+    if (request.headers['x-home-music-request'] !== '1') {
+      return reply.code(403).send({ error: 'Requisição de login não autorizada.' });
+    }
+    return;
+  }
+
+  if (!isPublicAuthRoute) {
+    const token = requestSessionToken(request.headers.cookie);
+    if (!sessions.validateSession(token)) {
+      return reply.code(401).send({ error: 'Sessão expirada ou autenticação necessária.' });
+    }
   }
 
   if (mutatingMethods.has(request.method) && request.headers['x-home-music-request'] !== '1') {
@@ -243,6 +259,7 @@ app.addHook('onSend', async (_request, reply, payload) => {
   reply.header('X-Content-Type-Options', 'nosniff');
   reply.header('Referrer-Policy', 'no-referrer');
   reply.header('X-Frame-Options', 'DENY');
+  reply.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   return payload;
 });
 
@@ -265,6 +282,46 @@ app.get('/health', async (_request, reply) => {
     musicDirConfigured: Boolean(musicDir),
     authConfigured
   };
+});
+
+app.get('/api/auth/status', async (request, reply) => {
+  reply.header('Cache-Control', 'no-store');
+  const token = requestSessionToken(request.headers.cookie);
+  return {
+    configured: authConfigured,
+    authenticated: authConfigured && sessions.validateSession(token)
+  };
+});
+
+app.post<{ Body: { username?: unknown; password?: unknown } }>('/api/auth/login', async (request, reply) => {
+  reply.header('Cache-Control', 'no-store');
+  const key = request.ip;
+
+  if (loginRateLimiter.isBlocked(key)) {
+    reply.header('Retry-After', '300');
+    return reply.code(429).send({ error: 'Muitas tentativas. Aguarde alguns minutos e tente novamente.' });
+  }
+
+  const username = typeof request.body?.username === 'string' ? request.body.username : '';
+  const password = typeof request.body?.password === 'string' ? request.body.password : '';
+
+  if (!sessions.validateCredentials(username, password)) {
+    loginRateLimiter.recordFailure(key);
+    return reply.code(401).send({ error: 'Usuário ou senha inválidos.' });
+  }
+
+  loginRateLimiter.clear(key);
+  const token = sessions.createSession();
+  reply.header('Set-Cookie', buildSessionCookie(token, SESSION_TTL_SECONDS, requestIsSecure(request)));
+  return { authenticated: true };
+});
+
+app.post('/api/auth/logout', async (request, reply) => {
+  const token = requestSessionToken(request.headers.cookie);
+  sessions.revokeSession(token);
+  reply.header('Set-Cookie', buildSessionCookie('', 0, requestIsSecure(request)));
+  reply.header('Cache-Control', 'no-store');
+  return reply.code(204).send();
 });
 
 app.get('/api/library', async (_request, reply) => {
