@@ -10,6 +10,19 @@ import type {
 } from '@home-music/shared';
 import { apiFetch } from './api-client';
 
+const LIBRARY_STATUS_POLL_MS = 15_000;
+
+type LibraryPayload = LibraryResponse & {
+  revision?: number;
+};
+
+type LibraryStatusPayload = {
+  tracks: number;
+  scannedAt: string;
+  scanning: boolean;
+  revision: number;
+};
+
 async function jsonRequest<T>(url: string, init?: RequestInit): Promise<T> {
   const method = (init?.method || 'GET').toUpperCase();
   const headers = new Headers(init?.headers);
@@ -34,6 +47,7 @@ export function useLibraryData() {
   const [history, setHistory] = useState<HistoryResponse['items']>([]);
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [scannedAt, setScannedAt] = useState('');
+  const [revision, setRevision] = useState(0);
   const [scanning, setScanning] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -50,10 +64,11 @@ export function useLibraryData() {
   }, [actionError]);
 
   const refreshLibrary = useCallback(async () => {
-    const data = await jsonRequest<LibraryResponse>('/api/library');
+    const data = await jsonRequest<LibraryPayload>('/api/library');
     setTracks(data.tracks);
     setScannedAt(data.scannedAt);
     setScanning(data.scanning);
+    setRevision(Number.isInteger(data.revision) ? Number(data.revision) : 0);
     return data;
   }, []);
 
@@ -75,12 +90,59 @@ export function useLibraryData() {
     return data;
   }, []);
 
+  const refreshAll = useCallback(async () => {
+    await Promise.all([refreshLibrary(), refreshFavorites(), refreshHistory(), refreshPlaylists()]);
+  }, [refreshFavorites, refreshHistory, refreshLibrary, refreshPlaylists]);
+
   useEffect(() => {
-    Promise.all([refreshLibrary(), refreshFavorites(), refreshHistory(), refreshPlaylists()])
+    refreshAll()
       .then(() => setError(null))
       .catch(error => setError(errorMessage(error)))
       .finally(() => setLoading(false));
-  }, [refreshFavorites, refreshHistory, refreshLibrary, refreshPlaylists]);
+  }, [refreshAll]);
+
+  useEffect(() => {
+    if (loading || error) return;
+
+    let disposed = false;
+    let refreshing = false;
+
+    const checkStatus = async () => {
+      if (disposed || refreshing || document.visibilityState === 'hidden') return;
+
+      try {
+        const status = await jsonRequest<LibraryStatusPayload>('/api/library/status');
+        if (disposed) return;
+
+        setScanning(status.scanning);
+        setScannedAt(status.scannedAt);
+
+        if (status.revision !== revision) {
+          refreshing = true;
+          try {
+            await refreshAll();
+          } finally {
+            refreshing = false;
+          }
+        }
+      } catch {
+        // Polling em background é best-effort. 401 já é tratado globalmente por apiFetch.
+      }
+    };
+
+    const interval = window.setInterval(() => { void checkStatus(); }, LIBRARY_STATUS_POLL_MS);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') void checkStatus();
+    };
+
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      disposed = true;
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [error, loading, refreshAll, revision]);
 
   const toggleFavorite = useCallback(async (trackId: string) => {
     const favorite = !favoriteSet.has(trackId);
@@ -107,7 +169,7 @@ export function useLibraryData() {
     setScanning(true);
     try {
       const result = await jsonRequest<ScanResponse>('/api/library/scan', { method: 'POST' });
-      await Promise.all([refreshLibrary(), refreshFavorites(), refreshHistory(), refreshPlaylists()]);
+      await refreshAll();
       setActionError(null);
       return result;
     } catch (error) {
@@ -116,7 +178,7 @@ export function useLibraryData() {
     } finally {
       setScanning(false);
     }
-  }, [refreshFavorites, refreshHistory, refreshLibrary, refreshPlaylists, reportError]);
+  }, [refreshAll, reportError]);
 
   const clearHistory = useCallback(async () => {
     try {
