@@ -25,10 +25,13 @@ O Home Music roda no Ubuntu, lê uma pasta local de músicas e expõe uma interf
 - shuffle com ordem original persistida separadamente;
 - repeat `off`, `all` e `one`;
 - fila contextual e reordenável;
+- retorno contextual para a biblioteca: pasta, artista, álbum, playlist, favoritos ou histórico permanecem preservados ao abrir o player;
 - mini-player persistente enquanto navega pela biblioteca;
 - Media Session com controles compatíveis na tela bloqueada/notificações.
 
 > Navegadores móveis podem bloquear a retomada automática ao abrir uma nova página sem interação do usuário. Nessa situação o Home Music preserva a faixa e a posição, mostra um aviso e basta tocar em **Play** uma vez. A continuidade automática da fila segue funcionando depois da interação.
+
+> O controle programático de volume do elemento de áudio não é confiável em navegadores móveis, especialmente em dispositivos que reservam o volume para o sistema operacional. Por isso o slider de volume é exibido apenas em dispositivos com interface de ponteiro convencional; no celular use os botões físicos/controle de volume do aparelho.
 
 ### Persistência
 
