@@ -47,30 +47,36 @@ Produção usa **um processo, uma origem e uma porta**. O Vite não participa da
 
 O servidor estático é implementado sem dependência adicional e possui contenção própria:
 
-- rejeita `..`, paths codificados equivalentes, backslashes e arquivos ocultos;
+- rejeita `..`, equivalentes codificados, NUL, backslashes e arquivos ocultos;
 - rejeita symlinks;
 - resolve `realpath` e confirma que o arquivo permanece dentro do `dist`;
-- arquivos inexistentes caem no `index.html` para permitir fallback SPA;
+- fallback SPA é usado somente para rotas válidas sem extensão;
+- arquivo estático inexistente retorna `404`;
 - `/api` inexistente continua retornando JSON/404, nunca o shell React.
 
 Política de cache:
 
 ```text
-/assets/*              1 ano + immutable
+/assets/* com hash     1 ano + immutable
+/assets/* sem hash     cache curto + revalidate
 manifest / favicon     cache curto + revalidate
 index.html / SPA       no-store
 ```
-
-Assets do Vite recebem hash no nome, portanto podem ser tratados como imutáveis.
 
 ## Ciclo de vida do processo
 
 Em produção o host padrão é `PRODUCTION_HOST=0.0.0.0`, enquanto `HOST=127.0.0.1` continua reservado ao backend de desenvolvimento.
 
-`SIGTERM` e `SIGINT` iniciam shutdown controlado:
+Os handlers de `SIGTERM` e `SIGINT` são registrados antes da inicialização potencialmente longa da biblioteca.
 
 ```text
 systemd / Ctrl+C
+      ↓
+marca shutdown
+      ↓
+scan em andamento?
+      ├─ sim → aguarda finalizar
+      └─ não
       ↓
 Fastify.close()
       ↓
@@ -81,21 +87,54 @@ SQLite.close()
 processo termina
 ```
 
-Há um timeout defensivo de 25 segundos para evitar processo preso durante shutdown.
+Há timeout defensivo de 25 segundos. Isso evita fechar o SQLite enquanto um scan ainda está persistindo o índice.
 
-O endpoint `/health` informa modo, uptime, disponibilidade do frontend, quantidade de faixas e estado de scan/configuração.
+## Liveness e readiness
 
-## systemd
+Os endpoints operacionais são separados por responsabilidade:
 
-`scripts/install-systemd.sh` detecta:
+- `/health`: público, retorna somente `{ ok: true }` e representa liveness;
+- `/ready`: público, retorna apenas `{ ready: boolean }` e usa HTTP `503` quando a aplicação ainda não está pronta;
+- `/api/health`: autenticado, contém diagnóstico detalhado.
 
-- usuário atual;
-- raiz real do repositório;
-- binário Node em uso.
+Readiness exige:
 
-Antes de instalar o serviço ele executa `npm ci` e `npm run build`. O unit instalado em `/etc/systemd/system/home-music.service` inicia o `dist/index.js` diretamente, sem depender do shell interativo/NVM durante cada boot.
+- frontend preparado em produção;
+- autenticação configurada;
+- `MUSIC_DIR` acessível e biblioteca carregada/indexada.
 
-O serviço usa `Restart=on-failure`, journal e hardening básico (`NoNewPrivileges`, `PrivateTmp`, `ProtectSystem`, restrições de kernel/control groups e `UMask=0077`).
+Contagem de faixas, estado de scan, uptime, versão do schema e demais detalhes não são expostos no health público.
+
+## systemd e atualizações
+
+`scripts/install-systemd.sh` detecta usuário, raiz real do repositório e binário Node em uso.
+
+Antes de build/install ele endurece:
+
+```text
+.env                  0600
+data/                  0700
+data/home-music.db*    0600
+```
+
+Se o serviço estiver ativo, ele é parado antes de `npm ci` e `npm run build`. O objetivo é impedir uma versão híbrida em que um processo antigo mantenha `index.html` em memória enquanto assets do `dist` já foram substituídos.
+
+O unit instalado em `/etc/systemd/system/home-music.service`:
+
+- usa caminhos absolutos escapados para sintaxe systemd;
+- inicia o `dist/index.js` diretamente;
+- usa `Restart=on-failure`;
+- envia logs ao journal;
+- aplica `NoNewPrivileges`, `PrivateTmp`, `ProtectSystem`, restrições de kernel/control groups e `UMask=0077`.
+
+Atualizações depois de um merge usam:
+
+```bash
+git pull --ff-only
+npm run service:update
+```
+
+O modo `update` exige que o serviço exista, para o processo antes do build, regenera o unit e executa `restart` explicitamente.
 
 ## Autenticação
 
@@ -131,7 +170,7 @@ Características:
 - mutações exigem `X-Home-Music-Request: 1` além da sessão;
 - `401` da aplicação retorna o usuário ao login.
 
-Em produção direta na LAN, o servidor não confia em `X-Forwarded-Proto` enviado pelo cliente para decidir o atributo `Secure` do cookie. O suporte correto a proxy/HTTPS será tratado junto da camada Tailscale/HTTPS.
+O backend não confia cegamente em `X-Forwarded-Proto`. Em HTTPS direto, `request.protocol` marca o cookie como `Secure`. Quando um proxy HTTPS confiável terminar TLS antes do Fastify, `HOME_MUSIC_COOKIE_SECURE=true` permite forçar `Secure` explicitamente.
 
 ## Biblioteca
 
@@ -145,6 +184,8 @@ No primeiro scan o backend processa metadados. Depois, o startup pode carregar o
 O re-scan compara `size + mtime`: arquivos inalterados são reaproveitados, novos/modificados são processados e removidos saem do índice.
 
 A navegação usa somente caminhos relativos a `MUSIC_DIR`; caminhos físicos não são expostos ao frontend.
+
+Se a raiz da biblioteca não puder ser resolvida, `libraryReady` permanece falso e `/ready` responde `503`.
 
 ## Layout mobile e capas
 
@@ -186,6 +227,8 @@ O banco padrão fica em `data/home-music.db` e guarda:
 
 O schema usa `PRAGMA user_version`, migrations incrementais, WAL e foreign keys.
 
+O smoke test pode definir `HOME_MUSIC_DATABASE_PATH` para usar um banco temporário e nunca tocar no SQLite real do usuário.
+
 ## Player e play automático
 
 O frontend separa intenção de reprodução do evento `pause` do `<audio>`, porque `audio.load()` pode emitir pausas técnicas durante troca de faixa.
@@ -216,17 +259,24 @@ A biblioteca preserva pasta, artista, álbum, playlist, favoritos e busca enquan
 
 `GET /api/tracks/:id/stream` suporta `Range` para seek. A rota recebe somente ID indexado e revalida que o destino continua sendo arquivo regular dentro da raiz antes de abri-lo.
 
+## Smoke de produção
+
+O CI não se limita a compilar. Depois do build, `npm run smoke:production` cria uma biblioteca e um SQLite temporários, sobe **`npm start`**, valida frontend/API/login/readiness/cache e encerra o processo com `SIGTERM`.
+
+Isso cobre a arquitetura de produção que unit tests isolados não exercitam.
+
 ## Segurança
 
 - desenvolvimento: API em `127.0.0.1`;
 - produção: uma porta na LAN, protegida por sessão;
 - frontend público não contém dados pessoais;
 - symlinks/FIFOs/devices/escapes da biblioteca não são servidos;
-- arquivos estáticos de produção também têm contenção de path/symlink;
+- arquivos estáticos de produção também têm contenção de path/symlink/NUL;
 - erros não expõem caminhos físicos;
+- health público é mínimo;
 - produção aplica CSP, `nosniff`, frame denial, referrer policy, permissions policy e CORP same-origin;
 - dependências são reproduzíveis via lockfile + `npm ci`;
-- systemd adiciona hardening do processo.
+- systemd adiciona hardening do processo e permissões dos arquivos locais.
 
 HTTP puro na LAN não oferece confidencialidade. Não deve haver port-forwarding público. O próximo marco é Tailscale + HTTPS/ACL.
 
