@@ -27,7 +27,8 @@ function formatTime(value: number) {
 
 type PlayerScreenProps = {
   current: Track;
-  tracksCount: number;
+  libraryReturnLabel: string;
+  libraryReturnCount: number;
   queue: Track[];
   currentIndex: number;
   playing: boolean;
@@ -55,7 +56,8 @@ type PlayerScreenProps = {
 
 export function PlayerScreen({
   current,
-  tracksCount,
+  libraryReturnLabel,
+  libraryReturnCount,
   queue,
   currentIndex,
   playing,
@@ -96,7 +98,7 @@ export function PlayerScreen({
   return (
     <>
       <header className="topbar">
-        <button className="icon-button" aria-label="Abrir biblioteca" onClick={onOpenLibrary}><ChevronDown /></button>
+        <button className="icon-button" aria-label={libraryReturnLabel} onClick={onOpenLibrary}><ChevronDown /></button>
         <span className="topbar__title">Tocando agora</span>
         <button className="icon-button" aria-label="Mais opções" onClick={() => setShowOptions(value => !value)}><MoreVertical /></button>
       </header>
@@ -164,7 +166,7 @@ export function PlayerScreen({
         </button>
       </div>
 
-      <div className="volume-control">
+      <div className="volume-control" aria-label="Controle de volume do player">
         <Volume2 aria-hidden="true" />
         <input
           aria-label="Volume"
@@ -180,8 +182,8 @@ export function PlayerScreen({
 
       <button className="library-toggle" onClick={onOpenLibrary}>
         <ListMusic />
-        <span>Abrir biblioteca</span>
-        <span className="library-toggle__count">{tracksCount}</span>
+        <span>{libraryReturnLabel}</span>
+        <span className="library-toggle__count">{libraryReturnCount}</span>
       </button>
 
       <section className="queue-panel">
