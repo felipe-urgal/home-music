@@ -1,9 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { LibraryScreen } from './components/LibraryScreen';
 import { PlayerScreen } from './components/PlayerScreen';
+import { buildLibraryReturnLabel } from './library-utils';
 import { useAudioPlayer } from './useAudioPlayer';
 import { useLibraryData } from './useLibraryData';
 import { useLibraryNavigation } from './useLibraryNavigation';
+import { useSystemVolumePreference } from './useSystemVolume';
 
 type Screen = 'player' | 'library';
 
@@ -12,42 +14,17 @@ export default function App() {
   const library = useLibraryData();
   const navigation = useLibraryNavigation(library.tracks, library.favoriteIds, library.playlists);
   const libraryReady = !library.loading && !library.error;
-  const player = useAudioPlayer(library.tracks, screen === 'player', libraryReady);
+  const usesSystemVolume = useSystemVolumePreference();
+  const player = useAudioPlayer(library.tracks, screen === 'player', libraryReady, usesSystemVolume);
   const current = player.current;
-
-  const libraryReturn = useMemo(() => {
-    if (navigation.selectedGroup) {
-      return { label: `Voltar para ${navigation.selectedGroup.name}`, count: navigation.selectedGroup.tracks.length };
-    }
-
-    if (navigation.selectedPlaylist) {
-      return { label: `Voltar para ${navigation.selectedPlaylist.name}`, count: navigation.selectedPlaylist.trackIds.length };
-    }
-
-    if (navigation.libraryTab === 'folders' && navigation.folderPath) {
-      return { label: `Voltar para ${navigation.folderView.name}`, count: navigation.folderView.allTracks.length };
-    }
-
-    if (navigation.libraryTab === 'favorites') {
-      return { label: 'Voltar para Favoritos', count: library.favoriteIds.length };
-    }
-
-    if (navigation.libraryTab === 'history') {
-      return { label: 'Voltar para Histórico', count: library.history.length };
-    }
-
-    return { label: 'Voltar à biblioteca', count: library.tracks.length };
-  }, [
-    library.favoriteIds.length,
-    library.history.length,
-    library.tracks.length,
-    navigation.folderPath,
-    navigation.folderView.allTracks.length,
-    navigation.folderView.name,
-    navigation.libraryTab,
-    navigation.selectedGroup,
-    navigation.selectedPlaylist
-  ]);
+  const libraryReturnLabel = buildLibraryReturnLabel({
+    selectedGroupName: navigation.selectedGroup?.name,
+    selectedPlaylistName: navigation.selectedPlaylist?.name,
+    libraryTab: navigation.libraryTab,
+    folderPath: navigation.folderPath,
+    folderName: navigation.folderView.name,
+    query: navigation.query
+  });
 
   function openPlayer() {
     player.syncVisibleProgress();
@@ -103,8 +80,7 @@ export default function App() {
         ) : (
           <PlayerScreen
             current={current}
-            libraryReturnLabel={libraryReturn.label}
-            libraryReturnCount={libraryReturn.count}
+            libraryReturnLabel={libraryReturnLabel}
             queue={player.queue}
             currentIndex={player.currentIndex}
             playing={player.playing}
@@ -112,6 +88,7 @@ export default function App() {
             currentTime={player.currentTime}
             duration={player.duration}
             volume={player.volume}
+            usesSystemVolume={usesSystemVolume}
             shuffle={player.shuffle}
             repeatMode={player.repeatMode}
             isFavorite={library.favoriteSet.has(current.id)}
