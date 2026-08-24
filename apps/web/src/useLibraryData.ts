@@ -17,7 +17,6 @@ type LibraryPayload = LibraryResponse & {
 };
 
 type LibraryStatusPayload = {
-  tracks: number;
   scannedAt: string;
   scanning: boolean;
   revision: number;
