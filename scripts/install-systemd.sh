@@ -16,6 +16,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RUN_USER="$(id -un)"
 NODE_BIN="$(command -v node || true)"
 NPM_BIN="$(command -v npm || true)"
+SYSTEMD_ANALYZE_BIN="$(command -v systemd-analyze || true)"
 SERVICE_NAME="home-music"
 SERVICE_UNIT="${SERVICE_NAME}.service"
 SERVICE_PATH="/etc/systemd/system/${SERVICE_UNIT}"
@@ -53,12 +54,24 @@ systemd_quote_value() {
   printf '%s' "${value}"
 }
 
+systemd_path_value() {
+  local value="$1"
+  value="${value//\\/\\x5c}"
+  value="${value// /\\x20}"
+  value="${value//$'\t'/\\x09}"
+  value="${value//\"/\\x22}"
+  value="${value//\'/\\x27}"
+  value="${value//%/%%}"
+  printf '%s' "${value}"
+}
+
 reject_multiline "ROOT_DIR" "${ROOT_DIR}"
 reject_multiline "NODE_BIN" "${NODE_BIN}"
 reject_multiline "HOME" "${HOME}"
 
-ROOT_ESCAPED="$(systemd_quote_value "${ROOT_DIR}")"
-NODE_ESCAPED="$(systemd_quote_value "${NODE_BIN}")"
+ROOT_PATH_ESCAPED="$(systemd_path_value "${ROOT_DIR}")"
+ROOT_ARG_ESCAPED="$(systemd_quote_value "${ROOT_DIR}")"
+NODE_ARG_ESCAPED="$(systemd_quote_value "${NODE_BIN}")"
 HOME_ESCAPED="$(systemd_quote_value "${HOME}")"
 
 harden_local_files() {
@@ -99,8 +112,9 @@ fi
 
 harden_local_files
 
-TMP_SERVICE="$(mktemp)"
-trap 'rm -f "${TMP_SERVICE}"' EXIT
+TMP_DIR="$(mktemp -d)"
+TMP_SERVICE="${TMP_DIR}/${SERVICE_UNIT}"
+trap 'rm -rf "${TMP_DIR}"' EXIT
 
 cat > "${TMP_SERVICE}" <<EOF
 [Unit]
@@ -111,10 +125,10 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=${RUN_USER}
-WorkingDirectory="${ROOT_ESCAPED}"
+WorkingDirectory=${ROOT_PATH_ESCAPED}
 Environment="NODE_ENV=production"
 Environment="HOME=${HOME_ESCAPED}"
-ExecStart="${NODE_ESCAPED}" "${ROOT_ESCAPED}/apps/server/dist/index.js"
+ExecStart="${NODE_ARG_ESCAPED}" "${ROOT_ARG_ESCAPED}/apps/server/dist/index.js"
 Restart=on-failure
 RestartSec=5s
 TimeoutStopSec=30s
@@ -136,6 +150,13 @@ SyslogIdentifier=home-music
 [Install]
 WantedBy=multi-user.target
 EOF
+
+if [[ -n "${SYSTEMD_ANALYZE_BIN}" ]]; then
+  echo "==> Validando unit do systemd"
+  "${SYSTEMD_ANALYZE_BIN}" verify "${TMP_SERVICE}"
+else
+  echo "Aviso: systemd-analyze não encontrado; pulando validação local do unit." >&2
+fi
 
 echo "==> Instalando ${SERVICE_PATH}"
 sudo install -m 0644 "${TMP_SERVICE}" "${SERVICE_PATH}"
