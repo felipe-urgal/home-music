@@ -17,10 +17,6 @@ const ALLOWED_COVER_TYPES = new Set([
 ]);
 
 const MAX_COVER_BYTES = 8 * 1024 * 1024;
-const MAX_CONCURRENT_COVER_READS = 4;
-
-let activeCoverReads = 0;
-const coverWaiters: Array<() => void> = [];
 
 export type IndexedTrack = Track & {
   filePath: string;
@@ -60,7 +56,6 @@ async function walk(dir: string, libraryRoot: string): Promise<string[]> {
       continue;
     }
 
-    // Symlinks, sockets, FIFOs e devices nunca entram no índice.
     if (!entry.isFile()) continue;
     if (!SUPPORTED_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) continue;
 
@@ -75,37 +70,21 @@ async function walk(dir: string, libraryRoot: string): Promise<string[]> {
   return files;
 }
 
-async function withCoverSlot<T>(operation: () => Promise<T>) {
-  if (activeCoverReads >= MAX_CONCURRENT_COVER_READS) {
-    await new Promise<void>(resolve => coverWaiters.push(resolve));
-  }
-
-  activeCoverReads += 1;
-  try {
-    return await operation();
-  } finally {
-    activeCoverReads -= 1;
-    coverWaiters.shift()?.();
-  }
-}
-
 export async function readCover(stream: Readable, mimeType: string) {
-  return withCoverSlot(async () => {
-    try {
-      const metadata = await parseStream(stream, { mimeType }, { duration: false });
-      const picture = metadata.common.picture?.[0];
-      if (!picture) return undefined;
-      if (!ALLOWED_COVER_TYPES.has(picture.format)) return undefined;
-      if (picture.data.byteLength > MAX_COVER_BYTES) return undefined;
+  try {
+    const metadata = await parseStream(stream, { mimeType }, { duration: false });
+    const picture = metadata.common.picture?.[0];
+    if (!picture) return undefined;
+    if (!ALLOWED_COVER_TYPES.has(picture.format)) return undefined;
+    if (picture.data.byteLength > MAX_COVER_BYTES) return undefined;
 
-      return {
-        data: picture.data,
-        format: picture.format
-      };
-    } catch {
-      return undefined;
-    }
-  });
+    return {
+      data: picture.data,
+      format: picture.format
+    };
+  } catch {
+    return undefined;
+  }
 }
 
 export async function scanLibrary(libraryRoot: string): Promise<IndexedTrack[]> {
