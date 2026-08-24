@@ -1,15 +1,21 @@
 import { useState } from 'react';
 import { LibraryScreen } from './components/LibraryScreen';
+import { LoginScreen } from './components/LoginScreen';
 import { PlayerScreen } from './components/PlayerScreen';
 import { buildLibraryReturnLabel } from './library-utils';
 import { useAudioPlayer } from './useAudioPlayer';
+import { useAuth } from './useAuth';
 import { useLibraryData } from './useLibraryData';
 import { useLibraryNavigation } from './useLibraryNavigation';
 import { useSystemVolumePreference } from './useSystemVolume';
 
 type Screen = 'player' | 'library';
 
-export default function App() {
+type AuthenticatedAppProps = {
+  onLogout: () => Promise<void>;
+};
+
+function AuthenticatedApp({ onLogout }: AuthenticatedAppProps) {
   const [screen, setScreen] = useState<Screen>('player');
   const library = useLibraryData();
   const navigation = useLibraryNavigation(library.tracks, library.favoriteIds, library.playlists);
@@ -105,6 +111,7 @@ export default function App() {
             onPlayTrack={player.playTrack}
             onReorderQueue={player.reorderQueue}
             onAddToPlaylist={playlist => run(library.addTrackToPlaylist(playlist, current.id))}
+            onLogout={() => void onLogout()}
           />
         )}
       </section>
@@ -116,4 +123,32 @@ export default function App() {
       )}
     </main>
   );
+}
+
+export default function App() {
+  const auth = useAuth();
+
+  if (auth.loading) {
+    return (
+      <main className="login-shell">
+        <section className="login-card login-card--status" aria-live="polite">
+          <strong>Home Music</strong>
+          <span>Verificando sua sessão…</span>
+        </section>
+      </main>
+    );
+  }
+
+  if (!auth.authenticated) {
+    return (
+      <LoginScreen
+        configured={auth.configured}
+        error={auth.error}
+        onLogin={auth.login}
+        onRetry={() => void auth.retry()}
+      />
+    );
+  }
+
+  return <AuthenticatedApp onLogout={auth.logout} />;
 }
