@@ -2,7 +2,7 @@
 
 Streaming pessoal das músicas do seu computador para o celular.
 
-O Home Music roda no Ubuntu, lê uma pasta local de músicas e expõe uma interface mobile **Player First** na rede local. O acesso pela LAN exige autenticação HTTP Basic e, em desenvolvimento, o backend fica restrito ao próprio PC enquanto o frontend faz proxy de `/api`.
+O Home Music roda no Ubuntu, lê uma pasta local de músicas e expõe uma interface mobile **Player First** na rede local. O frontend e o manifest ficam públicos para o navegador carregar normalmente; os dados e o streaming continuam protegidos pela API, que usa uma sessão autenticada por cookie `HttpOnly`.
 
 ## Recursos atuais
 
@@ -13,8 +13,21 @@ O Home Music roda no Ubuntu, lê uma pasta local de músicas e expõe uma interf
 - artistas, álbuns, músicas, favoritos, playlists e histórico;
 - busca por música, artista, álbum e pasta, ignorando acentos;
 - leitura de metadados e capas incorporadas;
+- capas confinadas aos slots da interface para não alterar a largura/proporção do layout mobile;
+- abas responsivas sem provocar overflow horizontal da página;
 - re-scan incremental por `size + mtime` para arquivos novos, alterados e removidos;
 - scanner tolerante a subpastas inacessíveis sem derrubar o restante da biblioteca.
+
+### Autenticação
+
+- tela de login própria do Home Music, responsiva para celular;
+- não usa mais o popup nativo de HTTP Basic Auth do navegador;
+- `POST /api/auth/login` cria uma sessão aleatória mantida pelo backend;
+- a sessão é enviada em cookie `HttpOnly`, `SameSite=Strict` e recebe `Secure` quando a conexão for HTTPS;
+- sessão com expiração e logout explícito;
+- tentativas inválidas de login possuem limitação por origem;
+- `manifest.webmanifest`, favicon e assets do frontend não recebem challenge de autenticação;
+- quando a sessão expira, requisições da aplicação levam o usuário de volta para o login.
 
 ### Player
 
@@ -48,6 +61,8 @@ O estado local usa SQLite em `data/home-music.db`:
 - estado de reprodução usado pela retomada automática.
 
 O schema usa `PRAGMA user_version` e migrations versionadas.
+
+> As sessões de login são mantidas em memória pelo backend e não são gravadas no SQLite. Reiniciar o processo invalida as sessões existentes e exige login novamente.
 
 ## Estrutura
 
@@ -88,7 +103,7 @@ npm run dev
 
 No computador:
 
-- Web autenticada: `http://localhost:5173`
+- Web: `http://localhost:5173`
 - API: `http://127.0.0.1:8787` — somente local
 
 No celular, conectado ao mesmo Wi-Fi, abra:
@@ -97,7 +112,7 @@ No celular, conectado ao mesmo Wi-Fi, abra:
 http://IP_DO_SEU_PC:5173
 ```
 
-O navegador solicitará usuário e senha antes de liberar a interface e o proxy `/api`.
+A página do Home Music será carregada normalmente e exibirá a tela própria de login. Use os valores de `HOME_MUSIC_USER` e `HOME_MUSIC_PASSWORD`.
 
 Para descobrir o IP no Ubuntu:
 
@@ -118,18 +133,21 @@ O re-scan é incremental: arquivos inalterados reaproveitam o índice existente,
 - o `.env` está ignorado pelo Git e não deve ser commitado;
 - em desenvolvimento, o backend escuta somente em `127.0.0.1`;
 - no Docker, a porta `8787` fica apenas na rede interna do Compose;
+- frontend/manifest públicos não significam biblioteca pública: `/api/*` continua protegido por sessão;
+- o cookie de sessão é `HttpOnly` e `SameSite=Strict`; em HTTPS também recebe `Secure`;
+- endpoints mutáveis exigem sessão e o header interno anti-CSRF do frontend;
+- login possui limitação de tentativas inválidas;
 - arquivos simbólicos, devices, FIFOs e arquivos que escapem de `MUSIC_DIR` não são servidos;
-- endpoints mutáveis exigem autenticação e o header interno anti-CSRF do frontend;
 - caminhos físicos da biblioteca não são enviados para o cliente;
 - capas possuem tipo, tamanho, concorrência e cache limitados;
 - dependências são reproduzidas por `package-lock.json` + `npm ci`;
 - o CI executa audit, typecheck, testes e build.
 
-Para acesso remoto futuro, prefira Tailscale com ACLs em vez de port-forwarding público.
+HTTP na rede local **não criptografa** usuário, senha nem áudio. Para acesso remoto ou redes que não sejam totalmente confiáveis, a direção planejada continua sendo Tailscale + HTTPS, sem port-forwarding público.
 
 ## Docker
 
-O Compose atual é voltado a desenvolvimento e expõe somente o frontend autenticado em `5173`:
+O Compose atual é voltado a desenvolvimento e expõe somente o frontend em `5173`:
 
 ```bash
 docker compose up
