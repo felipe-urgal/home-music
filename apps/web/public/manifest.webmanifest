@@ -1,0 +1,9 @@
+{
+  "name": "Home Music",
+  "short_name": "Home Music",
+  "description": "Seu streaming pessoal de música.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#05080c",
+  "theme_color": "#05080c"
+}
