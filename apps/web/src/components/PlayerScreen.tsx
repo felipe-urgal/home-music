@@ -84,6 +84,9 @@ export function PlayerScreen({
 }: PlayerScreenProps) {
   const [showOptions, setShowOptions] = useState(false);
   const [dragFrom, setDragFrom] = useState<number | null>(null);
+  const [usesSystemVolume] = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia('(hover: none) and (pointer: coarse)').matches
+  );
   const progress = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
   const hasNext = currentIndex < queue.length - 1 || repeatMode === 'all';
   const visibleStart = Math.max(0, currentIndex);
@@ -166,19 +169,21 @@ export function PlayerScreen({
         </button>
       </div>
 
-      <div className="volume-control" aria-label="Controle de volume do player">
-        <Volume2 aria-hidden="true" />
-        <input
-          aria-label="Volume"
-          type="range"
-          min="0"
-          max="1"
-          step="0.01"
-          value={volume}
-          onChange={event => onVolume(Number(event.target.value))}
-        />
-        <span>{Math.round(volume * 100)}%</span>
-      </div>
+      {!usesSystemVolume && (
+        <div className="volume-control" aria-label="Controle de volume do player">
+          <Volume2 aria-hidden="true" />
+          <input
+            aria-label="Volume"
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            value={volume}
+            onChange={event => onVolume(Number(event.target.value))}
+          />
+          <span>{Math.round(volume * 100)}%</span>
+        </div>
+      )}
 
       <button className="library-toggle" onClick={onOpenLibrary}>
         <ListMusic />
