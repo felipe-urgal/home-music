@@ -126,7 +126,6 @@ function automaticRescanStatus() {
 
 function libraryStatus() {
   return {
-    tracks: tracks.length,
     scannedAt,
     scanning: Boolean(scanPromise),
     revision: libraryRevision,
@@ -409,6 +408,7 @@ app.get('/api/health', async (_request, reply) => {
     uptimeSeconds: Math.floor(process.uptime()),
     webReady,
     libraryReady,
+    tracks: tracks.length,
     ...libraryStatus(),
     musicDirConfigured: Boolean(musicDir),
     authConfigured,
