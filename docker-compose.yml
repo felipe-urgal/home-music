@@ -10,9 +10,12 @@ services:
       PORT: 8787
       # Necessário somente dentro da rede privada do Compose.
       HOST: 0.0.0.0
+      HOME_MUSIC_USER: ${HOME_MUSIC_USER:?Configure HOME_MUSIC_USER no .env}
+      HOME_MUSIC_PASSWORD: ${HOME_MUSIC_PASSWORD:?Configure HOME_MUSIC_PASSWORD no .env}
     volumes:
       - ./:/app:ro
       - server_node_modules:/app/node_modules
+      - ./data:/app/data
       - ${MUSIC_DIR:-./music}:/music:ro
     security_opt:
       - no-new-privileges:true
