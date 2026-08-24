@@ -11,10 +11,6 @@ const SUPPORTED_EXTENSIONS = new Set([
 export type IndexedTrack = Track & {
   filePath: string;
   mimeType: string;
-  cover?: {
-    data: Uint8Array;
-    format: string;
-  };
 };
 
 const mimeByExtension: Record<string, string> = {
@@ -29,16 +25,6 @@ const mimeByExtension: Record<string, string> = {
 
 function trackId(filePath: string) {
   return createHash('sha1').update(filePath).digest('hex').slice(0, 16);
-}
-
-function pickCover(metadata: IAudioMetadata) {
-  const picture = metadata.common.picture?.[0];
-  if (!picture) return undefined;
-
-  return {
-    data: picture.data,
-    format: picture.format
-  };
 }
 
 function folderName(musicDir: string, filePath: string) {
@@ -68,6 +54,21 @@ async function walk(dir: string): Promise<string[]> {
   return files;
 }
 
+export async function readCover(filePath: string) {
+  try {
+    const metadata = await parseFile(filePath, { duration: false });
+    const picture = metadata.common.picture?.[0];
+    if (!picture) return undefined;
+
+    return {
+      data: picture.data,
+      format: picture.format
+    };
+  } catch {
+    return undefined;
+  }
+}
+
 export async function scanLibrary(musicDir: string): Promise<IndexedTrack[]> {
   const files = await walk(musicDir);
   const tracks: IndexedTrack[] = [];
@@ -83,19 +84,20 @@ export async function scanLibrary(musicDir: string): Promise<IndexedTrack[]> {
     }
 
     const fallbackTitle = path.basename(filePath, ext);
+    const artist = metadata?.common.artist?.trim() || 'Artista desconhecido';
 
     tracks.push({
       id: trackId(filePath),
       title: metadata?.common.title?.trim() || fallbackTitle,
-      artist: metadata?.common.artist?.trim() || 'Artista desconhecido',
+      artist,
       album: metadata?.common.album?.trim() || 'Álbum desconhecido',
+      albumArtist: metadata?.common.albumartist?.trim() || artist,
       folder: folderName(musicDir, filePath),
       duration: metadata?.format.duration ?? null,
       format: ext.replace('.', '').toUpperCase(),
       hasCover: Boolean(metadata?.common.picture?.length),
       filePath,
-      mimeType: mimeByExtension[ext] || 'application/octet-stream',
-      cover: metadata ? pickCover(metadata) : undefined
+      mimeType: mimeByExtension[ext] || 'application/octet-stream'
     });
   }
 
