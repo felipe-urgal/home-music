@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { PlaybackState, RepeatMode, Track } from '@home-music/shared';
 import { buildQueueContext } from './library-utils';
-import { nextTrackDecision, remapQueue, restorePlayerState } from './player-state';
+import { nextTrackDecision, remapQueue, resolveOutputVolume, restorePlayerState } from './player-state';
 
 const EMPTY_STATE: PlaybackState = {
   currentTrackId: null,
@@ -39,7 +39,12 @@ function moveItem<T>(items: T[], from: number, to: number) {
   return next;
 }
 
-export function useAudioPlayer(tracks: Track[], progressVisible: boolean, libraryReady: boolean) {
+export function useAudioPlayer(
+  tracks: Track[],
+  progressVisible: boolean,
+  libraryReady: boolean,
+  usesSystemVolume: boolean
+) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const positionRef = useRef(0);
   const restoredPositionRef = useRef(0);
@@ -181,8 +186,8 @@ export function useAudioPlayer(tracks: Track[], progressVisible: boolean, librar
 
   useEffect(() => {
     const audio = audioRef.current;
-    if (audio) audio.volume = volume;
-  }, [volume]);
+    if (audio) audio.volume = resolveOutputVolume(volume, usesSystemVolume);
+  }, [usesSystemVolume, volume]);
 
   const persistState = useCallback(() => {
     if (!hydrated) return;
