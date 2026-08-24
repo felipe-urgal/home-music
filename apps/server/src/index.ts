@@ -1,9 +1,13 @@
-import 'dotenv/config';
+import { config } from 'dotenv';
+import { fileURLToPath } from 'node:url';
 import { stat } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { scanLibrary, type IndexedTrack } from './library.js';
+
+const rootEnvPath = fileURLToPath(new URL('../../../.env', import.meta.url));
+config({ path: rootEnvPath });
 
 const app = Fastify({ logger: true });
 await app.register(cors, { origin: true });
