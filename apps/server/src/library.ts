@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
 import { readdir } from 'node:fs/promises';
 import path from 'node:path';
-import { parseFile, type IAudioMetadata } from 'music-metadata';
+import type { Readable } from 'node:stream';
+import { parseFile, parseStream, type IAudioMetadata } from 'music-metadata';
 import type { Track } from '@home-music/shared';
 import { resolveRegularFileInside } from './security.js';
 
@@ -88,10 +89,10 @@ async function withCoverSlot<T>(operation: () => Promise<T>) {
   }
 }
 
-export async function readCover(filePath: string) {
+export async function readCover(stream: Readable, mimeType: string) {
   return withCoverSlot(async () => {
     try {
-      const metadata = await parseFile(filePath, { duration: false });
+      const metadata = await parseStream(stream, { mimeType }, { duration: false });
       const picture = metadata.common.picture?.[0];
       if (!picture) return undefined;
       if (!ALLOWED_COVER_TYPES.has(picture.format)) return undefined;
