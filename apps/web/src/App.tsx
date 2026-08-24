@@ -73,6 +73,7 @@ export default function App() {
             queue={player.queue}
             currentIndex={player.currentIndex}
             playing={player.playing}
+            autoplayBlocked={player.autoplayBlocked}
             currentTime={player.currentTime}
             duration={player.duration}
             volume={player.volume}
