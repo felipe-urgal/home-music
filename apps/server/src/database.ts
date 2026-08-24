@@ -5,12 +5,15 @@ import { DatabaseSync } from 'node:sqlite';
 import type { PlaybackState, Playlist, RepeatMode, Track } from '@home-music/shared';
 import type { IndexedTrack } from './library.js';
 
+const CURRENT_SCHEMA_VERSION = 2;
+
 const DEFAULT_PLAYBACK_STATE: PlaybackState = {
   currentTrackId: null,
   position: 0,
   volume: 1,
   shuffle: false,
   repeatMode: 'off',
+  baseQueueIds: [],
   queueIds: [],
   updatedAt: new Date(0).toISOString()
 };
@@ -28,6 +31,15 @@ function stringValue(value: unknown, fallback = '') {
 
 function repeatModeValue(value: unknown): RepeatMode {
   return value === 'one' || value === 'all' ? value : 'off';
+}
+
+function stringArrayValue(value: unknown) {
+  try {
+    const parsed = JSON.parse(stringValue(value, '[]'));
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : [];
+  } catch {
+    return [];
+  }
 }
 
 function publicTrackFromRow(row: Row): Track {
@@ -57,73 +69,106 @@ export class HomeMusicDatabase {
     this.migrate();
   }
 
+  private schemaVersion() {
+    const row = this.db.prepare('PRAGMA user_version;').get() as Row | undefined;
+    return numberValue(row?.user_version);
+  }
+
+  private hasColumn(table: string, column: string) {
+    const rows = this.db.prepare(`PRAGMA table_info(${table});`).all() as Row[];
+    return rows.some(row => stringValue(row.name) === column);
+  }
+
   private migrate() {
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS metadata (
-        key TEXT PRIMARY KEY,
-        value TEXT NOT NULL
-      );
+    let version = this.schemaVersion();
 
-      CREATE TABLE IF NOT EXISTS tracks (
-        id TEXT PRIMARY KEY,
-        file_path TEXT NOT NULL UNIQUE,
-        title TEXT NOT NULL,
-        artist TEXT NOT NULL,
-        album TEXT NOT NULL,
-        album_artist TEXT NOT NULL,
-        folder TEXT NOT NULL,
-        folder_path TEXT NOT NULL DEFAULT '',
-        duration REAL,
-        format TEXT NOT NULL,
-        has_cover INTEGER NOT NULL,
-        mime_type TEXT NOT NULL,
-        file_size INTEGER NOT NULL,
-        mtime_ms REAL NOT NULL
-      );
+    if (version < 1) {
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS metadata (
+          key TEXT PRIMARY KEY,
+          value TEXT NOT NULL
+        );
 
-      CREATE INDEX IF NOT EXISTS idx_tracks_artist ON tracks(artist);
-      CREATE INDEX IF NOT EXISTS idx_tracks_album ON tracks(album_artist, album);
-      CREATE INDEX IF NOT EXISTS idx_tracks_folder ON tracks(folder_path);
+        CREATE TABLE IF NOT EXISTS tracks (
+          id TEXT PRIMARY KEY,
+          file_path TEXT NOT NULL UNIQUE,
+          title TEXT NOT NULL,
+          artist TEXT NOT NULL,
+          album TEXT NOT NULL,
+          album_artist TEXT NOT NULL,
+          folder TEXT NOT NULL,
+          folder_path TEXT NOT NULL DEFAULT '',
+          duration REAL,
+          format TEXT NOT NULL,
+          has_cover INTEGER NOT NULL,
+          mime_type TEXT NOT NULL,
+          file_size INTEGER NOT NULL,
+          mtime_ms REAL NOT NULL
+        );
 
-      CREATE TABLE IF NOT EXISTS favorites (
-        track_id TEXT PRIMARY KEY REFERENCES tracks(id) ON DELETE CASCADE,
-        created_at TEXT NOT NULL
-      );
+        CREATE INDEX IF NOT EXISTS idx_tracks_artist ON tracks(artist);
+        CREATE INDEX IF NOT EXISTS idx_tracks_album ON tracks(album_artist, album);
+        CREATE INDEX IF NOT EXISTS idx_tracks_folder ON tracks(folder_path);
 
-      CREATE TABLE IF NOT EXISTS history (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        track_id TEXT NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
-        played_at TEXT NOT NULL
-      );
+        CREATE TABLE IF NOT EXISTS favorites (
+          track_id TEXT PRIMARY KEY REFERENCES tracks(id) ON DELETE CASCADE,
+          created_at TEXT NOT NULL
+        );
 
-      CREATE INDEX IF NOT EXISTS idx_history_played_at ON history(played_at DESC);
+        CREATE TABLE IF NOT EXISTS history (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          track_id TEXT NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+          played_at TEXT NOT NULL
+        );
 
-      CREATE TABLE IF NOT EXISTS playlists (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      );
+        CREATE INDEX IF NOT EXISTS idx_history_played_at ON history(played_at DESC);
 
-      CREATE TABLE IF NOT EXISTS playlist_tracks (
-        playlist_id TEXT NOT NULL REFERENCES playlists(id) ON DELETE CASCADE,
-        track_id TEXT NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
-        position INTEGER NOT NULL,
-        PRIMARY KEY (playlist_id, position),
-        UNIQUE (playlist_id, track_id)
-      );
+        CREATE TABLE IF NOT EXISTS playlists (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
 
-      CREATE TABLE IF NOT EXISTS playback_state (
-        id INTEGER PRIMARY KEY CHECK (id = 1),
-        current_track_id TEXT,
-        position REAL NOT NULL DEFAULT 0,
-        volume REAL NOT NULL DEFAULT 1,
-        shuffle INTEGER NOT NULL DEFAULT 0,
-        repeat_mode TEXT NOT NULL DEFAULT 'off',
-        queue_json TEXT NOT NULL DEFAULT '[]',
-        updated_at TEXT NOT NULL
-      );
-    `);
+        CREATE TABLE IF NOT EXISTS playlist_tracks (
+          playlist_id TEXT NOT NULL REFERENCES playlists(id) ON DELETE CASCADE,
+          track_id TEXT NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+          position INTEGER NOT NULL,
+          PRIMARY KEY (playlist_id, position),
+          UNIQUE (playlist_id, track_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS playback_state (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          current_track_id TEXT,
+          position REAL NOT NULL DEFAULT 0,
+          volume REAL NOT NULL DEFAULT 1,
+          shuffle INTEGER NOT NULL DEFAULT 0,
+          repeat_mode TEXT NOT NULL DEFAULT 'off',
+          queue_json TEXT NOT NULL DEFAULT '[]',
+          updated_at TEXT NOT NULL
+        );
+
+        PRAGMA user_version = 1;
+      `);
+      version = 1;
+    }
+
+    if (version < 2) {
+      if (!this.hasColumn('playback_state', 'base_queue_json')) {
+        this.db.exec(`ALTER TABLE playback_state ADD COLUMN base_queue_json TEXT NOT NULL DEFAULT '[]';`);
+      }
+      this.db.exec('PRAGMA user_version = 2;');
+      version = 2;
+    }
+
+    if (version !== CURRENT_SCHEMA_VERSION) {
+      throw new Error(`Versão de schema SQLite não suportada: ${version}`);
+    }
+  }
+
+  getSchemaVersion() {
+    return this.schemaVersion();
   }
 
   close() {
@@ -331,19 +376,12 @@ export class HomeMusicDatabase {
 
   loadPlaybackState(): PlaybackState {
     const row = this.db.prepare(`
-      SELECT current_track_id, position, volume, shuffle, repeat_mode, queue_json, updated_at
+      SELECT current_track_id, position, volume, shuffle, repeat_mode,
+             base_queue_json, queue_json, updated_at
       FROM playback_state WHERE id = 1
     `).get() as Row | undefined;
 
     if (!row) return DEFAULT_PLAYBACK_STATE;
-
-    let queueIds: string[] = [];
-    try {
-      const parsed = JSON.parse(stringValue(row.queue_json, '[]'));
-      if (Array.isArray(parsed)) queueIds = parsed.filter(item => typeof item === 'string');
-    } catch {
-      queueIds = [];
-    }
 
     return {
       currentTrackId: typeof row.current_track_id === 'string' ? row.current_track_id : null,
@@ -351,7 +389,8 @@ export class HomeMusicDatabase {
       volume: Math.max(0, Math.min(1, numberValue(row.volume, 1))),
       shuffle: Boolean(row.shuffle),
       repeatMode: repeatModeValue(row.repeat_mode),
-      queueIds,
+      baseQueueIds: stringArrayValue(row.base_queue_json),
+      queueIds: stringArrayValue(row.queue_json),
       updatedAt: stringValue(row.updated_at, new Date(0).toISOString())
     };
   }
@@ -360,14 +399,16 @@ export class HomeMusicDatabase {
     const updatedAt = new Date().toISOString();
     this.db.prepare(`
       INSERT INTO playback_state(
-        id, current_track_id, position, volume, shuffle, repeat_mode, queue_json, updated_at
-      ) VALUES (1, ?, ?, ?, ?, ?, ?, ?)
+        id, current_track_id, position, volume, shuffle, repeat_mode,
+        base_queue_json, queue_json, updated_at
+      ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         current_track_id = excluded.current_track_id,
         position = excluded.position,
         volume = excluded.volume,
         shuffle = excluded.shuffle,
         repeat_mode = excluded.repeat_mode,
+        base_queue_json = excluded.base_queue_json,
         queue_json = excluded.queue_json,
         updated_at = excluded.updated_at
     `).run(
@@ -376,6 +417,7 @@ export class HomeMusicDatabase {
       Math.max(0, Math.min(1, state.volume)),
       state.shuffle ? 1 : 0,
       state.repeatMode,
+      JSON.stringify(state.baseQueueIds),
       JSON.stringify(state.queueIds),
       updatedAt
     );
