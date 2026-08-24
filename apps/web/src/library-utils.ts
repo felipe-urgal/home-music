@@ -18,6 +18,13 @@ export function normalizeSearch(value: string) {
     .toLocaleLowerCase('pt-BR');
 }
 
+export function normalizeIdentity(value: string) {
+  return value
+    .normalize('NFC')
+    .trim()
+    .toLocaleLowerCase('pt-BR');
+}
+
 export function matchesTrack(track: Track, normalizedQuery: string) {
   if (!normalizedQuery) return true;
 
@@ -29,18 +36,18 @@ export function matchesTrack(track: Track, normalizedQuery: string) {
 function groupIdentity(track: Track, tab: GroupTab) {
   if (tab === 'folders') {
     const name = track.folder || 'Sem pasta';
-    return { key: `folder:${normalizeSearch(name)}`, name };
+    return { key: `folder:${normalizeIdentity(name)}`, name };
   }
 
   if (tab === 'artists') {
     const name = track.artist || 'Artista desconhecido';
-    return { key: `artist:${normalizeSearch(name)}`, name };
+    return { key: `artist:${normalizeIdentity(name)}`, name };
   }
 
   const name = track.album || 'Álbum desconhecido';
   const subtitle = track.albumArtist || track.artist || 'Artista desconhecido';
   return {
-    key: `album:${normalizeSearch(subtitle)}\u001f${normalizeSearch(name)}`,
+    key: `album:${normalizeIdentity(subtitle)}\u001f${normalizeIdentity(name)}`,
     name,
     subtitle
   };
