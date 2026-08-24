@@ -38,6 +38,17 @@
 }
 .player-options button:active { background: rgba(255,255,255,.07); }
 
+.autoplay-notice {
+  margin: 0 4px 12px;
+  padding: 9px 11px;
+  border: 1px solid rgba(255, 190, 88, .18);
+  border-radius: 10px;
+  background: rgba(96, 62, 8, .16);
+  color: #e7c98f;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
 .volume-control {
   display: grid;
   grid-template-columns: 22px 1fr 42px;
