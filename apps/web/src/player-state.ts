@@ -24,25 +24,30 @@ export function remapQueue(items: Track[], trackMap: Map<string, Track>) {
 
 export function restorePlayerState(tracks: Track[], state: PlaybackState): RestoredPlayerState {
   const trackMap = new Map(tracks.map(track => [track.id, track]));
-  const queueFromIds = (ids: string[]) => ids
-    .map(id => trackMap.get(id))
-    .filter((track): track is Track => Boolean(track));
+  const orderById = new Map(tracks.map((track, index) => [track.id, index]));
+  const queueFromIds = (ids: string[]) => uniqueTracksById(
+    ids
+      .map(id => trackMap.get(id))
+      .filter((track): track is Track => Boolean(track))
+  );
 
-  const restoredQueue = queueFromIds(state.queueIds);
-  const restoredBaseQueue = queueFromIds(state.baseQueueIds);
-  const queue = restoredQueue.length ? restoredQueue : tracks;
-  const baseQueue = restoredBaseQueue.length
-    ? restoredBaseQueue
-    : state.shuffle
-      ? uniqueTracksById(queue).sort((a, b) =>
-        tracks.findIndex(track => track.id === a.id) - tracks.findIndex(track => track.id === b.id)
+  let queue = queueFromIds(state.queueIds);
+  let baseQueue = queueFromIds(state.baseQueueIds);
+  if (!queue.length) queue = tracks;
+  if (!baseQueue.length) {
+    baseQueue = state.shuffle
+      ? [...uniqueTracksById(queue)].sort((a, b) =>
+        (orderById.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (orderById.get(b.id) ?? Number.MAX_SAFE_INTEGER)
       )
       : queue;
+  }
 
-  const savedTrackIsValid = Boolean(state.currentTrackId && trackMap.has(state.currentTrackId));
-  const currentTrackId = savedTrackIsValid
-    ? state.currentTrackId
-    : queue[0]?.id ?? null;
+  const savedTrack = state.currentTrackId ? trackMap.get(state.currentTrackId) : undefined;
+  const savedTrackIsValid = Boolean(savedTrack);
+  if (savedTrack && !queue.some(track => track.id === savedTrack.id)) queue = [savedTrack, ...queue];
+  if (savedTrack && !baseQueue.some(track => track.id === savedTrack.id)) baseQueue = [savedTrack, ...baseQueue];
+
+  const currentTrackId = savedTrack?.id ?? queue[0]?.id ?? null;
 
   return {
     baseQueue,
