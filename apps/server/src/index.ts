@@ -28,6 +28,7 @@ const host = process.env.HOST || '127.0.0.1';
 const authUser = process.env.HOME_MUSIC_USER || '';
 const authPassword = process.env.HOME_MUSIC_PASSWORD || '';
 const authConfigured = Boolean(authUser && authPassword.length >= 12);
+const mutatingMethods = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 let tracks: IndexedTrack[] = [];
 let tracksById = new Map<string, IndexedTrack>();
@@ -230,6 +231,10 @@ app.addHook('onRequest', async (request, reply) => {
     reply.header('WWW-Authenticate', 'Basic realm="Home Music", charset="UTF-8"');
     return reply.code(401).send({ error: 'Autenticação necessária.' });
   }
+
+  if (mutatingMethods.has(request.method) && request.headers['x-home-music-request'] !== '1') {
+    return reply.code(403).send({ error: 'Requisição de alteração não autorizada.' });
+  }
 });
 
 app.addHook('onSend', async (_request, reply, payload) => {
@@ -287,9 +292,12 @@ app.put<{ Params: { id: string }; Body: { favorite?: boolean } }>('/api/favorite
   return { favorite: request.body.favorite };
 });
 
-app.get<{ Querystring: { limit?: string } }>('/api/history', async request => ({
-  items: database.getHistory(Number(request.query.limit || 200))
-}));
+app.get<{ Querystring: { limit?: string } }>('/api/history', async request => {
+  const requestedLimit = Number(request.query.limit || 200);
+  return {
+    items: database.getHistory(Number.isFinite(requestedLimit) ? requestedLimit : 200)
+  };
+});
 
 app.post<{ Params: { id: string } }>('/api/history/:id', async (request, reply) => {
   if (!tracksById.has(request.params.id)) return reply.code(404).send({ error: 'Música não encontrada.' });
@@ -352,6 +360,8 @@ app.put<{ Body: Partial<PlaybackState> }>('/api/player/state', async (request, r
   if (!Number.isFinite(position) || position < 0 || !Number.isFinite(volume)) {
     return reply.code(400).send({ error: 'Estado do player inválido.' });
   }
+
+  if (currentTrackId && !queueIds.includes(currentTrackId)) queueIds.unshift(currentTrackId);
 
   const state = database.savePlaybackState({
     currentTrackId,
