@@ -1,6 +1,7 @@
 import type { Track } from '@home-music/shared';
 
 export type GroupTab = 'folders' | 'artists' | 'albums';
+export type LibraryReturnTab = 'folders' | 'artists' | 'albums' | 'tracks' | 'favorites' | 'history' | 'playlists';
 
 export type LibraryGroup = {
   key: string;
@@ -30,7 +31,7 @@ export type FolderView = {
 export type LibraryReturnContext = {
   selectedGroupName?: string | null;
   selectedPlaylistName?: string | null;
-  libraryTab: string;
+  libraryTab: LibraryReturnTab;
   folderPath: string;
   folderName: string;
   query: string;
