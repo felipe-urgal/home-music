@@ -9,9 +9,10 @@
   "scripts": {
     "dev": "concurrently -n api,web -c auto \"npm run dev -w @home-music/server\" \"npm run dev -w @home-music/web\"",
     "build": "npm run build -w @home-music/shared && npm run build -w @home-music/server && npm run build -w @home-music/web",
-    "typecheck": "npm run typecheck -w @home-music/shared && npm run typecheck -w @home-music/server && npm run typecheck -w @home-music/web"
+    "typecheck": "npm run typecheck -w @home-music/shared && npm run typecheck -w @home-music/server && npm run typecheck -w @home-music/web",
+    "test": "npm run test -w @home-music/server && npm run test -w @home-music/web"
   },
   "devDependencies": {
-    "concurrently": "^9.2.1"
+    "concurrently": "9.2.4"
   }
 }
