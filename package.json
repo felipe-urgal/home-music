@@ -14,6 +14,9 @@
     "service:install": "bash scripts/install-systemd.sh install",
     "service:update": "bash scripts/install-systemd.sh update",
     "service:status": "systemctl status home-music --no-pager",
+    "tailscale:enable": "bash scripts/configure-tailscale.sh enable",
+    "tailscale:disable": "bash scripts/configure-tailscale.sh disable",
+    "tailscale:status": "bash scripts/configure-tailscale.sh status",
     "typecheck": "npm run typecheck -w @home-music/shared && npm run typecheck -w @home-music/server && npm run typecheck -w @home-music/web",
     "test": "npm run test -w @home-music/server && npm run test -w @home-music/web"
   },
