@@ -8,10 +8,12 @@ O MVP foi pensado para rodar no Ubuntu, ler uma pasta local de músicas e expor 
 
 - scanner recursivo de MP3, FLAC, WAV, M4A, AAC, OGG e OPUS;
 - leitura de metadados e capas incorporadas;
+- biblioteca por pastas, artistas, álbuns e músicas;
+- busca por música, artista, álbum e pasta, ignorando acentos;
+- mini-player persistente enquanto navega pela biblioteca;
 - API de biblioteca;
 - streaming com suporte a HTTP Range;
-- player mobile com play/pause, anterior/próxima, seek e fila;
-- busca por música, artista e álbum;
+- player mobile com play/pause, anterior/próxima, seek e fila contextual;
 - interface responsiva baseada no protótipo Player First;
 - PWA básica para instalar na tela inicial do celular.
 
@@ -56,6 +58,14 @@ hostname -I
 ```
 
 > O servidor ainda não possui login. Não abra as portas 5173/8787 diretamente para a internet. Para acesso remoto, a próxima etapa recomendada é Tailscale.
+
+## Qualidade
+
+```bash
+npm run typecheck
+npm test
+npm run build
+```
 
 ## Próximos passos
 
