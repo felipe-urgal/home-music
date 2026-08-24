@@ -373,6 +373,7 @@ app.put<{ Body: Partial<PlaybackState> }>('/api/player/state', async (request, r
     volume: Math.max(0, Math.min(1, volume)),
     shuffle: Boolean(body.shuffle),
     repeatMode: cleanRepeatMode(body.repeatMode),
+    wasPlaying: Boolean(body.wasPlaying),
     baseQueueIds,
     queueIds
   });
