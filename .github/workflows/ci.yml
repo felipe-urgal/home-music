@@ -37,5 +37,11 @@ jobs:
       - name: Tests
         run: npm test
 
+      - name: Validate systemd installer
+        run: bash -n scripts/install-systemd.sh
+
       - name: Build
         run: npm run build
+
+      - name: Production smoke test
+        run: npm run smoke:production
