@@ -31,6 +31,10 @@
 - [x] Retomada automática da sessão quando permitida pelo navegador
 - [x] Media Session API
 - [x] Controles compatíveis na tela bloqueada/notificações
+- [x] Login próprio responsivo sem popup de Basic Auth
+- [x] Sessão por cookie HttpOnly
+- [x] Layout sem overflow horizontal em telas estreitas
+- [x] Capas confinadas sem quebrar a viewport
 - [ ] Download offline
 - [ ] Cache seletivo
 - [ ] Melhor tratamento de capas ausentes

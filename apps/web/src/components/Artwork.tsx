@@ -6,7 +6,17 @@ export function Artwork({ track, large = false }: { track?: Track; large?: boole
 
   return (
     <div className={large ? 'artwork artwork--large' : 'artwork'}>
-      {url ? <img src={url} alt="" loading={large ? 'eager' : 'lazy'} /> : <Music2 aria-hidden="true" />}
+      {url ? (
+        <img
+          src={url}
+          alt=""
+          loading={large ? 'eager' : 'lazy'}
+          decoding="async"
+          draggable={false}
+        />
+      ) : (
+        <Music2 aria-hidden="true" />
+      )}
     </div>
   );
 }

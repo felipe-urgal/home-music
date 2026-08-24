@@ -13,7 +13,8 @@ React + Vite
      v
 Fastify
      |
-     +--> autenticação / proteção de mutações
+     +--> login + sessão HttpOnly
+     +--> proteção de mutações
      +--> scanner incremental
      +--> music-metadata
      +--> SQLite
@@ -23,6 +24,46 @@ Fastify
      v
 MUSIC_DIR no Ubuntu
 ```
+
+O frontend, manifest e favicon ficam públicos para o navegador conseguir montar a aplicação sem challenge nativo. O conteúdo pessoal continua protegido em `/api/*`.
+
+## Autenticação
+
+O Home Music não usa mais HTTP Basic Auth no Vite. Em vez disso:
+
+```text
+GET /
+  ↓
+React carrega normalmente
+  ↓
+GET /api/auth/status
+  ↓
+sem sessão
+  ↓
+Tela de login do Home Music
+  ↓
+POST /api/auth/login
+  ↓
+token aleatório no backend
+  ↓
+Set-Cookie: HttpOnly; SameSite=Strict
+  ↓
+/api/* autenticado
+```
+
+Características:
+
+- credenciais continuam vindo de `HOME_MUSIC_USER` e `HOME_MUSIC_PASSWORD`;
+- o frontend nunca recebe a senha configurada no servidor;
+- a sessão usa token aleatório e expira automaticamente;
+- o cookie recebe `Secure` quando a conexão é HTTPS;
+- sessões ficam apenas em memória e são invalidadas quando o backend reinicia;
+- logout revoga a sessão atual;
+- tentativas inválidas são limitadas por origem;
+- endpoints mutáveis continuam exigindo `X-Home-Music-Request: 1`, além da sessão;
+- uma resposta `401` das chamadas da aplicação dispara retorno à tela de login.
+
+Não há `WWW-Authenticate`, evitando o popup de login nativo e permitindo que `manifest.webmanifest` e assets sejam carregados sem `401`.
 
 ## Biblioteca
 
@@ -36,6 +77,44 @@ No primeiro scan, o backend percorre a biblioteca e processa metadados. Depois d
 O re-scan compara `size + mtime` para reaproveitar arquivos inalterados. Arquivos novos ou modificados são processados novamente e arquivos removidos são excluídos do índice.
 
 A navegação de pastas usa apenas caminhos relativos à `MUSIC_DIR`. Caminhos físicos do computador não são expostos ao frontend.
+
+## Layout mobile
+
+A superfície principal usa largura limitada à viewport e não permite que conteúdos internos alterem sua largura.
+
+Decisões importantes:
+
+- containers flex/grid críticos usam `min-width: 0`;
+- a página não possui scroll horizontal global;
+- as abas da biblioteca usam grid responsivo em vez de uma faixa que ultrapassa a viewport;
+- telas muito estreitas reduzem a quantidade de colunas;
+- breadcrumbs podem rolar internamente sem deslocar a página inteira;
+- títulos longos usam truncamento onde necessário.
+
+### Capas
+
+As capas são tratadas como conteúdo não confiável do ponto de vista de dimensão/proporção.
+
+Todo artwork é confinado a um slot conhecido:
+
+```text
+container com tamanho definido
+        ↓
+overflow: hidden
+        ↓
+<img width=100% height=100%>
+        ↓
+object-fit: cover
+```
+
+A capa grande do player usa `aspect-ratio: 1 / 1` e `max-width: 100%`. Imagens verticais, panorâmicas ou com dimensões internas muito grandes não podem aumentar a largura da interface.
+
+Capas continuam sendo extraídas sob demanda. Há limites para:
+
+- tipos aceitos (`JPEG`, `PNG`, `WebP`);
+- tamanho máximo da capa;
+- quantidade de extrações simultâneas;
+- tamanho e número de entradas do cache LRU.
 
 ## SQLite
 
@@ -115,22 +194,9 @@ O rótulo acessível considera pasta, artista, álbum, playlist, favoritos e bus
 
 A rota recebe somente um ID indexado. Antes de abrir um arquivo, o backend valida novamente que o destino continua sendo um arquivo regular dentro da raiz da biblioteca.
 
-## Capas
-
-Capas são extraídas sob demanda em vez de permanecerem todas em memória.
-
-Há limites para:
-
-- tipos aceitos (`JPEG`, `PNG`, `WebP`);
-- tamanho máximo da capa;
-- quantidade de extrações simultâneas;
-- tamanho e número de entradas do cache LRU.
-
 ## Segurança
 
-O acesso pela LAN usa HTTP Basic no frontend e validação também no backend.
-
-Os endpoints que alteram dados exigem, além da autenticação, o header interno usado pelo frontend para reduzir risco de requisições cross-site triviais.
+Os endpoints pessoais usam sessão no backend. O frontend público contém somente os arquivos necessários para apresentar o app e a tela de login.
 
 Outras decisões:
 
@@ -139,9 +205,10 @@ Outras decisões:
 - biblioteca montada read-only no Compose;
 - symlinks, FIFOs, devices e escapes da raiz não são servidos;
 - erros enviados ao cliente não incluem caminhos físicos internos;
+- headers de segurança são aplicados no Vite e na API;
 - dependências reproduzíveis via lockfile e `npm ci`.
 
-O Home Music não deve ser exposto diretamente na internet. Para acesso fora de casa, a direção planejada é Tailscale + ACLs e uma camada HTTPS adequada.
+HTTP puro na LAN não oferece confidencialidade. O Home Music não deve ser exposto diretamente na internet. Para acesso fora de casa, a direção planejada é Tailscale + ACLs e uma camada HTTPS adequada.
 
 ## Transcoding
 

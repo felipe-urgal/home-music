@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { PlaybackState, RepeatMode, Track } from '@home-music/shared';
+import { apiFetch } from './api-client';
 import { buildQueueContext } from './library-utils';
 import { nextTrackDecision, remapQueue, resolveOutputVolume, restorePlayerState } from './player-state';
 
@@ -18,7 +19,7 @@ const EMPTY_STATE: PlaybackState = {
 function mutationFetch(url: string, init: RequestInit) {
   const headers = new Headers(init.headers);
   headers.set('X-Home-Music-Request', '1');
-  return fetch(url, { ...init, headers });
+  return apiFetch(url, { ...init, headers });
 }
 
 function shuffledAroundCurrent(tracks: Track[], currentId: string) {
@@ -80,7 +81,7 @@ export function useAudioPlayer(
     if (!libraryReady || hydratedRef.current) return;
     hydratedRef.current = true;
 
-    fetch('/api/player/state')
+    apiFetch('/api/player/state')
       .then(response => response.ok ? response.json() as Promise<PlaybackState> : EMPTY_STATE)
       .then(state => {
         const restored = restorePlayerState(tracks, {
