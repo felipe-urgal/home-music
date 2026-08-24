@@ -4,7 +4,6 @@ import {
   ChevronUp,
   GripVertical,
   Heart,
-  ListMusic,
   MoreVertical,
   Pause,
   Play,
@@ -27,7 +26,7 @@ function formatTime(value: number) {
 
 type PlayerScreenProps = {
   current: Track;
-  tracksCount: number;
+  libraryReturnLabel: string;
   queue: Track[];
   currentIndex: number;
   playing: boolean;
@@ -35,6 +34,7 @@ type PlayerScreenProps = {
   currentTime: number;
   duration: number;
   volume: number;
+  usesSystemVolume: boolean;
   shuffle: boolean;
   repeatMode: RepeatMode;
   isFavorite: boolean;
@@ -55,7 +55,7 @@ type PlayerScreenProps = {
 
 export function PlayerScreen({
   current,
-  tracksCount,
+  libraryReturnLabel,
   queue,
   currentIndex,
   playing,
@@ -63,6 +63,7 @@ export function PlayerScreen({
   currentTime,
   duration,
   volume,
+  usesSystemVolume,
   shuffle,
   repeatMode,
   isFavorite,
@@ -96,7 +97,9 @@ export function PlayerScreen({
   return (
     <>
       <header className="topbar">
-        <button className="icon-button" aria-label="Abrir biblioteca" onClick={onOpenLibrary}><ChevronDown /></button>
+        <button className="icon-button" aria-label={libraryReturnLabel} title={libraryReturnLabel} onClick={onOpenLibrary}>
+          <ChevronDown />
+        </button>
         <span className="topbar__title">Tocando agora</span>
         <button className="icon-button" aria-label="Mais opções" onClick={() => setShowOptions(value => !value)}><MoreVertical /></button>
       </header>
@@ -164,27 +167,23 @@ export function PlayerScreen({
         </button>
       </div>
 
-      <div className="volume-control">
-        <Volume2 aria-hidden="true" />
-        <input
-          aria-label="Volume"
-          type="range"
-          min="0"
-          max="1"
-          step="0.01"
-          value={volume}
-          onChange={event => onVolume(Number(event.target.value))}
-        />
-        <span>{Math.round(volume * 100)}%</span>
-      </div>
+      {!usesSystemVolume && (
+        <div className="volume-control">
+          <Volume2 aria-hidden="true" />
+          <input
+            aria-label="Volume"
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            value={volume}
+            onChange={event => onVolume(Number(event.target.value))}
+          />
+          <span>{Math.round(volume * 100)}%</span>
+        </div>
+      )}
 
-      <button className="library-toggle" onClick={onOpenLibrary}>
-        <ListMusic />
-        <span>Abrir biblioteca</span>
-        <span className="library-toggle__count">{tracksCount}</span>
-      </button>
-
-      <section className="queue-panel">
+      <section className="queue-panel queue-panel--player">
         <div className="queue-label">Fila · arraste ou use as setas</div>
         <div className="queue-list">
           {visibleQueue.map((track, visibleIndex) => {

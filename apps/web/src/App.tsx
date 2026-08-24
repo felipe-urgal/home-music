@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { LibraryScreen } from './components/LibraryScreen';
 import { PlayerScreen } from './components/PlayerScreen';
+import { buildLibraryReturnLabel } from './library-utils';
 import { useAudioPlayer } from './useAudioPlayer';
 import { useLibraryData } from './useLibraryData';
 import { useLibraryNavigation } from './useLibraryNavigation';
+import { useSystemVolumePreference } from './useSystemVolume';
 
 type Screen = 'player' | 'library';
 
@@ -12,8 +14,17 @@ export default function App() {
   const library = useLibraryData();
   const navigation = useLibraryNavigation(library.tracks, library.favoriteIds, library.playlists);
   const libraryReady = !library.loading && !library.error;
-  const player = useAudioPlayer(library.tracks, screen === 'player', libraryReady);
+  const usesSystemVolume = useSystemVolumePreference();
+  const player = useAudioPlayer(library.tracks, screen === 'player', libraryReady, usesSystemVolume);
   const current = player.current;
+  const libraryReturnLabel = buildLibraryReturnLabel({
+    selectedGroupName: navigation.selectedGroup?.name,
+    selectedPlaylistName: navigation.selectedPlaylist?.name,
+    libraryTab: navigation.libraryTab,
+    folderPath: navigation.folderPath,
+    folderName: navigation.folderView.name,
+    query: navigation.query
+  });
 
   function openPlayer() {
     player.syncVisibleProgress();
@@ -69,7 +80,7 @@ export default function App() {
         ) : (
           <PlayerScreen
             current={current}
-            tracksCount={library.tracks.length}
+            libraryReturnLabel={libraryReturnLabel}
             queue={player.queue}
             currentIndex={player.currentIndex}
             playing={player.playing}
@@ -77,6 +88,7 @@ export default function App() {
             currentTime={player.currentTime}
             duration={player.duration}
             volume={player.volume}
+            usesSystemVolume={usesSystemVolume}
             shuffle={player.shuffle}
             repeatMode={player.repeatMode}
             isFavorite={library.favoriteSet.has(current.id)}

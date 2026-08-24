@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest';
 import type { Track } from '@home-music/shared';
 import {
   buildFolderView,
+  buildLibraryReturnLabel,
   buildQueueContext,
   groupTracks,
   matchesTrack,
   normalizeIdentity,
-  normalizeSearch
+  normalizeSearch,
+  type LibraryReturnContext
 } from './library-utils';
 
 function track(overrides: Partial<Track> = {}): Track {
@@ -46,6 +48,42 @@ describe('matchesTrack', () => {
 
   it('encontra por album artist', () => {
     expect(matchesTrack(track({ albumArtist: 'Banda Eva' }), normalizeSearch('banda eva'))).toBe(true);
+  });
+});
+
+describe('buildLibraryReturnLabel', () => {
+  const base = {
+    selectedGroupName: null,
+    selectedPlaylistName: null,
+    libraryTab: 'folders',
+    folderPath: '',
+    folderName: 'Pastas',
+    query: ''
+  } satisfies LibraryReturnContext;
+
+  it('retorna para a pasta atual', () => {
+    expect(buildLibraryReturnLabel({
+      ...base,
+      folderPath: 'Axé',
+      folderName: 'Axé'
+    })).toBe('Voltar para Axé');
+  });
+
+  it('preserva o contexto de busca dentro de uma coleção', () => {
+    expect(buildLibraryReturnLabel({
+      ...base,
+      selectedGroupName: 'Raul Seixas',
+      libraryTab: 'artists',
+      query: 'tente'
+    })).toBe('Voltar para busca em Raul Seixas');
+  });
+
+  it('identifica busca na raiz', () => {
+    expect(buildLibraryReturnLabel({ ...base, query: 'queen' })).toBe('Voltar para resultados da busca');
+  });
+
+  it('usa biblioteca na raiz sem busca', () => {
+    expect(buildLibraryReturnLabel(base)).toBe('Voltar à biblioteca');
   });
 });
 

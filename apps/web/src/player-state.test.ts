@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { PlaybackState, Track } from '@home-music/shared';
-import { nextTrackDecision, remapQueue, restorePlayerState, uniqueTracksById } from './player-state';
+import {
+  nextTrackDecision,
+  remapQueue,
+  resolveOutputVolume,
+  restorePlayerState,
+  uniqueTracksById
+} from './player-state';
 
 function track(id: string, title = id): Track {
   return {
@@ -64,6 +70,22 @@ describe('reconciliação de fila', () => {
 
   it('remove duplicatas preservando a primeira ocorrência', () => {
     expect(uniqueTracksById([track('a'), track('a'), track('b')]).map(item => item.id)).toEqual(['a', 'b']);
+  });
+});
+
+describe('resolveOutputVolume', () => {
+  it('usa volume máximo do elemento quando o dispositivo controla volume pelo sistema', () => {
+    expect(resolveOutputVolume(0.25, true)).toBe(1);
+  });
+
+  it('preserva o volume salvo no desktop', () => {
+    expect(resolveOutputVolume(0.25, false)).toBe(0.25);
+  });
+
+  it('limita valores inválidos', () => {
+    expect(resolveOutputVolume(2, false)).toBe(1);
+    expect(resolveOutputVolume(-1, false)).toBe(0);
+    expect(resolveOutputVolume(Number.NaN, false)).toBe(1);
   });
 });
 
