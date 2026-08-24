@@ -2,22 +2,49 @@
 
 Streaming pessoal das músicas do seu computador para o celular.
 
-O MVP foi pensado para rodar no Ubuntu, ler uma pasta local de músicas e expor uma interface mobile **Player First** na rede local. O acesso pela LAN exige autenticação HTTP Basic e o backend fica restrito ao próprio PC em desenvolvimento.
+O Home Music roda no Ubuntu, lê uma pasta local de músicas e expõe uma interface mobile **Player First** na rede local. O acesso pela LAN exige autenticação HTTP Basic e, em desenvolvimento, o backend fica restrito ao próprio PC enquanto o frontend faz proxy de `/api`.
 
-## MVP
+## Recursos atuais
+
+### Biblioteca
 
 - scanner recursivo de MP3, FLAC, WAV, M4A, AAC, OGG e OPUS;
-- leitura de metadados e capas incorporadas;
-- biblioteca por pastas, artistas, álbuns e músicas;
+- navegação hierárquica por pastas e subpastas;
+- artistas, álbuns, músicas, favoritos, playlists e histórico;
 - busca por música, artista, álbum e pasta, ignorando acentos;
+- leitura de metadados e capas incorporadas;
+- re-scan incremental por `size + mtime` para arquivos novos, alterados e removidos;
+- scanner tolerante a subpastas inacessíveis sem derrubar o restante da biblioteca.
+
+### Player
+
+- play/pause, anterior/próxima e seek;
+- reprodução automática da próxima faixa enquanto a fila estiver ativa;
+- retomada automática da sessão quando a página anterior foi encerrada tocando;
+- restauração da última faixa, posição e volume;
+- shuffle com ordem original persistida separadamente;
+- repeat `off`, `all` e `one`;
+- fila contextual e reordenável;
 - mini-player persistente enquanto navega pela biblioteca;
-- streaming com suporte a HTTP Range;
-- player mobile com play/pause, anterior/próxima, seek e fila contextual;
-- autenticação obrigatória no frontend acessível pela rede;
-- validação de paths para impedir leitura fora de `MUSIC_DIR`;
-- capas limitadas e cacheadas com limite de memória;
-- interface responsiva baseada no protótipo Player First;
-- PWA básica para instalar na tela inicial do celular.
+- Media Session com controles compatíveis na tela bloqueada/notificações.
+
+> Navegadores móveis podem bloquear a retomada automática ao abrir uma nova página sem interação do usuário. Nessa situação o Home Music preserva a faixa e a posição, mostra um aviso e basta tocar em **Play** uma vez. A continuidade automática da fila segue funcionando depois da interação.
+
+### Persistência
+
+O estado local usa SQLite em `data/home-music.db`:
+
+- índice da biblioteca;
+- favoritos;
+- histórico;
+- playlists;
+- última faixa e posição;
+- volume;
+- shuffle/repeat;
+- fila efetiva e ordem base;
+- estado de reprodução usado pela retomada automática.
+
+O schema usa `PRAGMA user_version` e migrations versionadas.
 
 ## Estrutura
 
@@ -25,9 +52,10 @@ O MVP foi pensado para rodar no Ubuntu, ler uma pasta local de músicas e expor 
 home-music/
 ├── apps/
 │   ├── web/       # React + TypeScript + Vite
-│   └── server/    # Fastify + TypeScript
+│   └── server/    # Fastify + TypeScript + SQLite
 ├── packages/
 │   └── shared/    # tipos compartilhados
+├── data/          # banco SQLite local, ignorado pelo Git
 └── docs/
 ```
 
@@ -74,6 +102,12 @@ Para descobrir o IP no Ubuntu:
 hostname -I
 ```
 
+## Re-scan da biblioteca
+
+O botão **Atualizar biblioteca** chama o endpoint autenticado `POST /api/library/scan`.
+
+O re-scan é incremental: arquivos inalterados reaproveitam o índice existente, enquanto somente arquivos novos/alterados têm os metadados processados novamente. Arquivos removidos também são limpos do SQLite e dos relacionamentos dependentes.
+
 ## Segurança
 
 - não publique as portas do Home Music diretamente na internet;
@@ -82,7 +116,9 @@ hostname -I
 - em desenvolvimento, o backend escuta somente em `127.0.0.1`;
 - no Docker, a porta `8787` fica apenas na rede interna do Compose;
 - arquivos simbólicos, devices, FIFOs e arquivos que escapem de `MUSIC_DIR` não são servidos;
-- o endpoint de rescan remoto foi removido;
+- endpoints mutáveis exigem autenticação e o header interno anti-CSRF do frontend;
+- caminhos físicos da biblioteca não são enviados para o cliente;
+- capas possuem tipo, tamanho, concorrência e cache limitados;
 - dependências são reproduzidas por `package-lock.json` + `npm ci`;
 - o CI executa audit, typecheck, testes e build.
 
@@ -96,7 +132,7 @@ O Compose atual é voltado a desenvolvimento e expõe somente o frontend autenti
 docker compose up
 ```
 
-A biblioteca é montada como read-only e o backend não publica `8787` no host.
+A biblioteca é montada como read-only, o SQLite fica persistido em `./data` e o backend não publica `8787` no host.
 
 ## Qualidade
 
