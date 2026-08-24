@@ -3,14 +3,12 @@ import { fileURLToPath } from 'node:url';
 import { stat } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 import Fastify from 'fastify';
-import cors from '@fastify/cors';
-import { scanLibrary, type IndexedTrack } from './library.js';
+import { readCover, scanLibrary, type IndexedTrack } from './library.js';
 
 const rootEnvPath = fileURLToPath(new URL('../../../.env', import.meta.url));
 config({ path: rootEnvPath });
 
 const app = Fastify({ logger: true });
-await app.register(cors, { origin: true });
 
 const musicDir = process.env.MUSIC_DIR || '';
 const port = Number(process.env.PORT || 8787);
@@ -20,7 +18,7 @@ let tracks: IndexedTrack[] = [];
 let scannedAt = new Date(0).toISOString();
 
 function publicTrack(track: IndexedTrack) {
-  const { filePath: _filePath, mimeType: _mimeType, cover: _cover, ...safe } = track;
+  const { filePath: _filePath, mimeType: _mimeType, ...safe } = track;
   return safe;
 }
 
@@ -44,8 +42,7 @@ app.get('/health', async () => ({
 
 app.get('/api/library', async () => ({
   tracks: tracks.map(publicTrack),
-  scannedAt,
-  musicDir
+  scannedAt
 }));
 
 app.post('/api/library/scan', async (_request, reply) => {
@@ -60,11 +57,14 @@ app.post('/api/library/scan', async (_request, reply) => {
 
 app.get<{ Params: { id: string } }>('/api/tracks/:id/cover', async (request, reply) => {
   const track = tracks.find(item => item.id === request.params.id);
-  if (!track?.cover) return reply.code(404).send();
+  if (!track?.hasCover) return reply.code(404).send();
 
-  reply.type(track.cover.format);
-  reply.header('Cache-Control', 'public, max-age=86400');
-  return Buffer.from(track.cover.data);
+  const cover = await readCover(track.filePath);
+  if (!cover) return reply.code(404).send();
+
+  reply.type(cover.format);
+  reply.header('Cache-Control', 'private, max-age=86400');
+  return Buffer.from(cover.data);
 });
 
 app.get<{ Params: { id: string } }>('/api/tracks/:id/stream', async (request, reply) => {
