@@ -41,18 +41,23 @@ function basicAuthPlugin(username: string, password: string): Plugin {
   };
 }
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ mode, command }) => {
   const projectRoot = fileURLToPath(new URL('../../', import.meta.url));
   const env = loadEnv(mode, projectRoot, '');
   const username = env.HOME_MUSIC_USER;
   const password = env.HOME_MUSIC_PASSWORD;
+  const isVitest = process.env.VITEST === 'true';
+  const requiresAuth = command === 'serve' && !isVitest;
 
-  if (!username || !password || password.length < 12) {
+  if (requiresAuth && (!username || !password || password.length < 12)) {
     throw new Error('Configure HOME_MUSIC_USER e HOME_MUSIC_PASSWORD (mínimo 12 caracteres) no .env da raiz.');
   }
 
   return {
-    plugins: [basicAuthPlugin(username, password), react()],
+    plugins: [
+      ...(requiresAuth ? [basicAuthPlugin(username!, password!)] : []),
+      react()
+    ],
     server: {
       host: true,
       headers: {
