@@ -18,6 +18,8 @@ const MIME_TYPES: Record<string, string> = {
   '.woff2': 'font/woff2'
 };
 
+const HASHED_ASSET_RE = /-[A-Za-z0-9_-]{6,}\.[A-Za-z0-9]+$/;
+
 export type PreparedWebApp = {
   root: string;
   indexHtml: Buffer;
@@ -49,8 +51,15 @@ export function contentTypeForPath(filePath: string) {
 }
 
 export function cacheControlForPath(pathname: string) {
-  if (pathname.startsWith('/assets/')) return 'public, max-age=31536000, immutable';
-  if (pathname === '/manifest.webmanifest' || pathname === '/favicon.svg') return 'public, max-age=3600, must-revalidate';
+  if (pathname.startsWith('/assets/')) {
+    const filename = path.posix.basename(pathname);
+    return HASHED_ASSET_RE.test(filename)
+      ? 'public, max-age=31536000, immutable'
+      : 'public, max-age=3600, must-revalidate';
+  }
+  if (pathname === '/manifest.webmanifest' || pathname === '/favicon.svg') {
+    return 'public, max-age=3600, must-revalidate';
+  }
   return 'no-store';
 }
 
@@ -58,6 +67,7 @@ export function shouldServeShell(rawUrl: string) {
   const pathname = requestPathname(rawUrl);
   if (!pathname) return false;
   if (pathname === '/') return true;
+  if (!safeRelativePath(pathname)) return false;
   if (pathname.startsWith('/assets/')) return false;
   return path.posix.extname(pathname) === '';
 }
