@@ -117,7 +117,9 @@ export default function App() {
         ref={audioRef}
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
-        onTimeUpdate={event => setCurrentTime(event.currentTarget.currentTime)}
+        onTimeUpdate={event => {
+          if (screen === 'player') setCurrentTime(event.currentTarget.currentTime);
+        }}
         onLoadedMetadata={event => setDuration(event.currentTarget.duration || 0)}
         onEnded={next}
       />
