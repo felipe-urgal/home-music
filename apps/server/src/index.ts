@@ -1,12 +1,11 @@
 import { config } from 'dotenv';
 import { fileURLToPath } from 'node:url';
-import { createReadStream } from 'node:fs';
 import Fastify from 'fastify';
 import { readCover, scanLibrary, type IndexedTrack } from './library.js';
 import {
+  openRegularFileInside,
   parseByteRange,
   resolveLibraryRoot,
-  resolveRegularFileInside,
   UnsafeLibraryPathError
 } from './security.js';
 
@@ -54,7 +53,6 @@ function getCachedCover(trackId: string, size: number, mtimeMs: number) {
     return undefined;
   }
 
-  // Atualiza a ordem para LRU.
   coverCache.delete(trackId);
   coverCache.set(trackId, cached);
   return cached;
@@ -140,24 +138,27 @@ app.get<{ Params: { id: string } }>('/api/tracks/:id/cover', async (request, rep
   if (!track?.hasCover || !libraryRoot) return reply.code(404).send();
 
   try {
-    const safeFile = await resolveRegularFileInside(libraryRoot, track.filePath);
-    const cached = getCachedCover(track.id, safeFile.stat.size, safeFile.stat.mtimeMs);
+    const opened = await openRegularFileInside(libraryRoot, track.filePath);
+    const cached = getCachedCover(track.id, opened.stat.size, opened.stat.mtimeMs);
 
     if (cached) {
+      await opened.handle.close();
       reply.type(cached.format);
       reply.header('Cache-Control', 'private, max-age=86400');
       return cached.data;
     }
 
-    const cover = await readCover(safeFile.path);
+    const stream = opened.handle.createReadStream({ autoClose: true });
+    const cover = await readCover(stream, track.mimeType);
+    stream.destroy();
     if (!cover) return reply.code(404).send();
 
     const data = Buffer.from(cover.data);
     cacheCover(track.id, {
       data,
       format: cover.format,
-      size: safeFile.stat.size,
-      mtimeMs: safeFile.stat.mtimeMs
+      size: opened.stat.size,
+      mtimeMs: opened.stat.mtimeMs
     });
 
     reply.type(cover.format);
@@ -174,27 +175,32 @@ app.get<{ Params: { id: string } }>('/api/tracks/:id/stream', async (request, re
   if (!track || !libraryRoot) return reply.code(404).send({ error: 'Música não encontrada.' });
 
   try {
-    const safeFile = await resolveRegularFileInside(libraryRoot, track.filePath);
-    const range = parseByteRange(request.headers.range, safeFile.stat.size);
+    const opened = await openRegularFileInside(libraryRoot, track.filePath);
+    const range = parseByteRange(request.headers.range, opened.stat.size);
 
     reply.header('Accept-Ranges', 'bytes');
     reply.header('Content-Type', track.mimeType);
     reply.header('Cache-Control', 'private, no-store');
 
     if (range === null) {
-      reply.header('Content-Range', `bytes */${safeFile.stat.size}`);
+      await opened.handle.close();
+      reply.header('Content-Range', `bytes */${opened.stat.size}`);
       return reply.code(416).send();
     }
 
     if (range === undefined) {
-      reply.header('Content-Length', safeFile.stat.size);
-      return reply.send(createReadStream(safeFile.path));
+      reply.header('Content-Length', opened.stat.size);
+      return reply.send(opened.handle.createReadStream({ autoClose: true }));
     }
 
     reply.code(206);
-    reply.header('Content-Range', `bytes ${range.start}-${range.end}/${safeFile.stat.size}`);
+    reply.header('Content-Range', `bytes ${range.start}-${range.end}/${opened.stat.size}`);
     reply.header('Content-Length', range.end - range.start + 1);
-    return reply.send(createReadStream(safeFile.path, { start: range.start, end: range.end }));
+    return reply.send(opened.handle.createReadStream({
+      start: range.start,
+      end: range.end,
+      autoClose: true
+    }));
   } catch (error) {
     if (isNotFoundLike(error)) return reply.code(404).send({ error: 'Música não encontrada.' });
     throw error;
