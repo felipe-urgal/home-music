@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { Track } from '@home-music/shared';
-import { buildQueueContext, groupTracks, matchesTrack, normalizeIdentity, normalizeSearch } from './library-utils';
+import {
+  buildFolderView,
+  buildQueueContext,
+  groupTracks,
+  matchesTrack,
+  normalizeIdentity,
+  normalizeSearch
+} from './library-utils';
 
 function track(overrides: Partial<Track> = {}): Track {
   return {
@@ -10,6 +17,7 @@ function track(overrides: Partial<Track> = {}): Track {
     album: 'Festa',
     albumArtist: 'Ivete Sangalo',
     folder: 'Axé',
+    folderPath: 'Axé',
     duration: 180,
     format: 'MP3',
     hasCover: true,
@@ -30,6 +38,10 @@ describe('normalização', () => {
 describe('matchesTrack', () => {
   it('encontra por pasta sem exigir acento', () => {
     expect(matchesTrack(track(), normalizeSearch('axe'))).toBe(true);
+  });
+
+  it('encontra por subpasta', () => {
+    expect(matchesTrack(track({ folderPath: 'Rock Internacional/Queen' }), normalizeSearch('queen'))).toBe(true);
   });
 
   it('encontra por album artist', () => {
@@ -60,11 +72,36 @@ describe('groupTracks', () => {
 
   it('não mistura pastas que diferem apenas por acento', () => {
     const groups = groupTracks([
-      track({ id: '1', folder: 'Axé' }),
-      track({ id: '2', folder: 'Axe' })
+      track({ id: '1', folder: 'Axé', folderPath: 'Axé' }),
+      track({ id: '2', folder: 'Axe', folderPath: 'Axe' })
     ], 'folders');
 
     expect(groups).toHaveLength(2);
+  });
+});
+
+describe('buildFolderView', () => {
+  const tracks = [
+    track({ id: '1', title: 'Back In Black', folder: 'Rock Internacional', folderPath: 'Rock Internacional/AC-DC' }),
+    track({ id: '2', title: 'Bohemian Rhapsody', folder: 'Rock Internacional', folderPath: 'Rock Internacional/Queen' }),
+    track({ id: '3', title: 'Outra', folder: 'Rock Internacional', folderPath: 'Rock Internacional/Queen/Ao Vivo' }),
+    track({ id: '4', title: 'Raiz', folder: 'Rock Internacional', folderPath: 'Rock Internacional' })
+  ];
+
+  it('monta filhos imediatos sem perder subpastas', () => {
+    const view = buildFolderView(tracks, 'Rock Internacional');
+    expect(view.folders.map(folder => folder.name)).toEqual(['AC-DC', 'Queen']);
+    expect(view.directTracks.map(item => item.id)).toEqual(['4']);
+    expect(view.allTracks).toHaveLength(4);
+  });
+
+  it('gera parent e breadcrumbs seguros', () => {
+    const view = buildFolderView(tracks, 'Rock Internacional/Queen');
+    expect(view.parentPath).toBe('Rock Internacional');
+    expect(view.breadcrumbs).toEqual([
+      { name: 'Rock Internacional', path: 'Rock Internacional' },
+      { name: 'Queen', path: 'Rock Internacional/Queen' }
+    ]);
   });
 });
 

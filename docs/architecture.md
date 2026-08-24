@@ -5,16 +5,18 @@
 ```text
 Celular / PWA
      |
-     | HTTP
+     | HTTP na LAN
      v
 React + Vite
      |
-     | /api
+     | /api (proxy same-origin)
      v
 Fastify
      |
-     +--> scanner de biblioteca
+     +--> autenticação / proteção de mutações
+     +--> scanner incremental
      +--> music-metadata
+     +--> SQLite
      +--> endpoint de capa
      +--> streaming HTTP Range
      |
@@ -22,20 +24,99 @@ Fastify
 MUSIC_DIR no Ubuntu
 ```
 
-## Decisões do MVP
+## Biblioteca
 
-### Biblioteca
+A biblioteca possui duas camadas:
 
-A biblioteca é reconstruída em memória ao iniciar o backend e pode ser atualizada por `POST /api/library/scan`. Persistência em SQLite entra na fase seguinte, quando favoritos, playlists e histórico forem implementados.
+1. `MUSIC_DIR` continua sendo a fonte física dos arquivos de áudio;
+2. SQLite mantém o índice e os dados pessoais do usuário.
 
-### Streaming
+No primeiro scan, o backend percorre a biblioteca e processa metadados. Depois disso, o startup pode carregar o índice diretamente do SQLite sem reprocessar todos os arquivos.
+
+O re-scan compara `size + mtime` para reaproveitar arquivos inalterados. Arquivos novos ou modificados são processados novamente e arquivos removidos são excluídos do índice.
+
+A navegação de pastas usa apenas caminhos relativos à `MUSIC_DIR`. Caminhos físicos do computador não são expostos ao frontend.
+
+## SQLite
+
+O banco padrão fica em:
+
+```text
+data/home-music.db
+```
+
+Ele guarda:
+
+- índice das faixas;
+- favoritos;
+- histórico;
+- playlists;
+- fila atual e ordem base da fila;
+- última faixa e posição;
+- volume;
+- shuffle/repeat;
+- indicação de que a sessão anterior estava tocando, usada pela retomada automática.
+
+O schema usa `PRAGMA user_version` e migrations incrementais. O banco usa WAL e foreign keys.
+
+## Player e play automático
+
+O frontend mantém uma intenção de reprodução separada do evento `pause` do elemento `<audio>`.
+
+Isso é importante porque `audio.load()` pode emitir `pause` durante uma troca de faixa. Esse evento técnico não deve cancelar a intenção de continuar tocando a fila.
+
+Fluxo simplificado:
+
+```text
+faixa termina
+   ↓
+resolve próxima faixa / repeat
+   ↓
+mantém intenção de reprodução
+   ↓
+troca src
+   ↓
+audio.play()
+```
+
+Ao fechar/recarregar o app enquanto uma faixa está tocando, o estado `wasPlaying` é persistido. Na próxima abertura, o frontend tenta restaurar faixa, posição e reprodução.
+
+Browsers podem bloquear autoplay com áudio ao abrir uma página sem interação prévia. Quando isso acontece, o Home Music não força nem contorna a política do navegador: preserva o estado, mostra um aviso e aguarda um toque em **Play**.
+
+## Streaming
 
 `GET /api/tracks/:id/stream` aceita o cabeçalho `Range`, permitindo seek sem baixar o arquivo inteiro.
 
-### Segurança
+A rota recebe somente um ID indexado. Antes de abrir um arquivo, o backend valida novamente que o destino continua sendo um arquivo regular dentro da raiz da biblioteca.
 
-O MVP pressupõe rede local ou Tailscale. Não há autenticação e o backend não deve ser publicado diretamente na internet.
+## Capas
 
-### Transcoding
+Capas são extraídas sob demanda em vez de permanecerem todas em memória.
 
-Arquivos são entregues no formato original. FFmpeg/transcoding adaptativo fica para uma fase posterior, principalmente para FLAC/WAV via 4G/5G.
+Há limites para:
+
+- tipos aceitos (`JPEG`, `PNG`, `WebP`);
+- tamanho máximo da capa;
+- quantidade de extrações simultâneas;
+- tamanho e número de entradas do cache LRU.
+
+## Segurança
+
+O acesso pela LAN usa HTTP Basic no frontend e validação também no backend.
+
+Os endpoints que alteram dados exigem, além da autenticação, o header interno usado pelo frontend para reduzir risco de requisições cross-site triviais.
+
+Outras decisões:
+
+- backend em `127.0.0.1` por padrão no desenvolvimento;
+- Docker não publica a porta `8787` no host;
+- biblioteca montada read-only no Compose;
+- symlinks, FIFOs, devices e escapes da raiz não são servidos;
+- erros enviados ao cliente não incluem caminhos físicos internos;
+- dependências reproduzíveis via lockfile e `npm ci`.
+
+O Home Music não deve ser exposto diretamente na internet. Para acesso fora de casa, a direção planejada é Tailscale + ACLs e uma camada HTTPS adequada.
+
+## Transcoding
+
+Arquivos ainda são entregues no formato original. FFmpeg/transcoding adaptativo fica para uma fase posterior, principalmente para FLAC/WAV via 4G/5G.

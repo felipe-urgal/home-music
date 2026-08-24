@@ -1,0 +1,219 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import type {
+  FavoritesResponse,
+  HistoryResponse,
+  LibraryResponse,
+  Playlist,
+  PlaylistsResponse,
+  ScanResponse,
+  Track
+} from '@home-music/shared';
+
+async function jsonRequest<T>(url: string, init?: RequestInit): Promise<T> {
+  const method = (init?.method || 'GET').toUpperCase();
+  const headers = new Headers(init?.headers);
+  if (method !== 'GET' && method !== 'HEAD') headers.set('X-Home-Music-Request', '1');
+
+  const response = await fetch(url, { ...init, headers });
+  if (!response.ok) {
+    const message = await response.json().catch(() => null) as { error?: string } | null;
+    throw new Error(message?.error || `Falha HTTP ${response.status}`);
+  }
+  if (response.status === 204) return undefined as T;
+  return response.json() as Promise<T>;
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : 'Não foi possível concluir a operação.';
+}
+
+export function useLibraryData() {
+  const [tracks, setTracks] = useState<Track[]>([]);
+  const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
+  const [history, setHistory] = useState<HistoryResponse['items']>([]);
+  const [playlists, setPlaylists] = useState<Playlist[]>([]);
+  const [scannedAt, setScannedAt] = useState('');
+  const [scanning, setScanning] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const favoriteSet = useMemo(() => new Set(favoriteIds), [favoriteIds]);
+  const reportError = useCallback((error: unknown) => setActionError(errorMessage(error)), []);
+  const clearActionError = useCallback(() => setActionError(null), []);
+
+  useEffect(() => {
+    if (!actionError) return;
+    const timeout = window.setTimeout(() => setActionError(null), 5000);
+    return () => window.clearTimeout(timeout);
+  }, [actionError]);
+
+  const refreshLibrary = useCallback(async () => {
+    const data = await jsonRequest<LibraryResponse>('/api/library');
+    setTracks(data.tracks);
+    setScannedAt(data.scannedAt);
+    setScanning(data.scanning);
+    return data;
+  }, []);
+
+  const refreshFavorites = useCallback(async () => {
+    const data = await jsonRequest<FavoritesResponse>('/api/favorites');
+    setFavoriteIds(data.trackIds);
+    return data;
+  }, []);
+
+  const refreshHistory = useCallback(async () => {
+    const data = await jsonRequest<HistoryResponse>('/api/history?limit=300');
+    setHistory(data.items);
+    return data;
+  }, []);
+
+  const refreshPlaylists = useCallback(async () => {
+    const data = await jsonRequest<PlaylistsResponse>('/api/playlists');
+    setPlaylists(data.playlists);
+    return data;
+  }, []);
+
+  useEffect(() => {
+    Promise.all([refreshLibrary(), refreshFavorites(), refreshHistory(), refreshPlaylists()])
+      .then(() => setError(null))
+      .catch(error => setError(errorMessage(error)))
+      .finally(() => setLoading(false));
+  }, [refreshFavorites, refreshHistory, refreshLibrary, refreshPlaylists]);
+
+  const toggleFavorite = useCallback(async (trackId: string) => {
+    const favorite = !favoriteSet.has(trackId);
+    setFavoriteIds(items => favorite
+      ? [trackId, ...items.filter(id => id !== trackId)]
+      : items.filter(id => id !== trackId)
+    );
+
+    try {
+      await jsonRequest(`/api/favorites/${trackId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ favorite })
+      });
+      setActionError(null);
+    } catch (error) {
+      await refreshFavorites().catch(() => undefined);
+      reportError(error);
+      throw error;
+    }
+  }, [favoriteSet, refreshFavorites, reportError]);
+
+  const rescan = useCallback(async () => {
+    setScanning(true);
+    try {
+      const result = await jsonRequest<ScanResponse>('/api/library/scan', { method: 'POST' });
+      await Promise.all([refreshLibrary(), refreshFavorites(), refreshHistory(), refreshPlaylists()]);
+      setActionError(null);
+      return result;
+    } catch (error) {
+      reportError(error);
+      throw error;
+    } finally {
+      setScanning(false);
+    }
+  }, [refreshFavorites, refreshHistory, refreshLibrary, refreshPlaylists, reportError]);
+
+  const clearHistory = useCallback(async () => {
+    try {
+      await jsonRequest('/api/history', { method: 'DELETE' });
+      setHistory([]);
+      setActionError(null);
+    } catch (error) {
+      reportError(error);
+      throw error;
+    }
+  }, [reportError]);
+
+  const createPlaylist = useCallback(async (name: string) => {
+    try {
+      await jsonRequest('/api/playlists', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name })
+      });
+      await refreshPlaylists();
+      setActionError(null);
+    } catch (error) {
+      reportError(error);
+      throw error;
+    }
+  }, [refreshPlaylists, reportError]);
+
+  const renamePlaylist = useCallback(async (id: string, name: string) => {
+    try {
+      await jsonRequest(`/api/playlists/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name })
+      });
+      await refreshPlaylists();
+      setActionError(null);
+    } catch (error) {
+      reportError(error);
+      throw error;
+    }
+  }, [refreshPlaylists, reportError]);
+
+  const deletePlaylist = useCallback(async (id: string) => {
+    try {
+      await jsonRequest(`/api/playlists/${id}`, { method: 'DELETE' });
+      await refreshPlaylists();
+      setActionError(null);
+    } catch (error) {
+      reportError(error);
+      throw error;
+    }
+  }, [refreshPlaylists, reportError]);
+
+  const setPlaylistTracks = useCallback(async (id: string, trackIds: string[]) => {
+    try {
+      await jsonRequest(`/api/playlists/${id}/tracks`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trackIds })
+      });
+      await refreshPlaylists();
+      setActionError(null);
+    } catch (error) {
+      reportError(error);
+      throw error;
+    }
+  }, [refreshPlaylists, reportError]);
+
+  const addTrackToPlaylist = useCallback(async (playlist: Playlist, trackId: string) => {
+    const trackIds = playlist.trackIds.includes(trackId)
+      ? playlist.trackIds
+      : [...playlist.trackIds, trackId];
+    await setPlaylistTracks(playlist.id, trackIds);
+  }, [setPlaylistTracks]);
+
+  return {
+    tracks,
+    favoriteIds,
+    favoriteSet,
+    history,
+    playlists,
+    scannedAt,
+    scanning,
+    loading,
+    error,
+    actionError,
+    reportError,
+    clearActionError,
+    refreshHistory,
+    toggleFavorite,
+    rescan,
+    clearHistory,
+    createPlaylist,
+    renamePlaylist,
+    deletePlaylist,
+    setPlaylistTracks,
+    addTrackToPlaylist
+  };
+}
+
+export type LibraryData = ReturnType<typeof useLibraryData>;
