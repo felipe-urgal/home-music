@@ -5,7 +5,7 @@ import { DatabaseSync } from 'node:sqlite';
 import type { PlaybackState, Playlist, RepeatMode, Track } from '@home-music/shared';
 import type { IndexedTrack } from './library.js';
 
-const CURRENT_SCHEMA_VERSION = 2;
+const CURRENT_SCHEMA_VERSION = 3;
 
 const DEFAULT_PLAYBACK_STATE: PlaybackState = {
   currentTrackId: null,
@@ -13,6 +13,7 @@ const DEFAULT_PLAYBACK_STATE: PlaybackState = {
   volume: 1,
   shuffle: false,
   repeatMode: 'off',
+  wasPlaying: false,
   baseQueueIds: [],
   queueIds: [],
   updatedAt: new Date(0).toISOString()
@@ -160,6 +161,14 @@ export class HomeMusicDatabase {
       }
       this.db.exec('PRAGMA user_version = 2;');
       version = 2;
+    }
+
+    if (version < 3) {
+      if (!this.hasColumn('playback_state', 'was_playing')) {
+        this.db.exec(`ALTER TABLE playback_state ADD COLUMN was_playing INTEGER NOT NULL DEFAULT 0;`);
+      }
+      this.db.exec('PRAGMA user_version = 3;');
+      version = 3;
     }
 
     if (version !== CURRENT_SCHEMA_VERSION) {
@@ -376,7 +385,7 @@ export class HomeMusicDatabase {
 
   loadPlaybackState(): PlaybackState {
     const row = this.db.prepare(`
-      SELECT current_track_id, position, volume, shuffle, repeat_mode,
+      SELECT current_track_id, position, volume, shuffle, repeat_mode, was_playing,
              base_queue_json, queue_json, updated_at
       FROM playback_state WHERE id = 1
     `).get() as Row | undefined;
@@ -389,6 +398,7 @@ export class HomeMusicDatabase {
       volume: Math.max(0, Math.min(1, numberValue(row.volume, 1))),
       shuffle: Boolean(row.shuffle),
       repeatMode: repeatModeValue(row.repeat_mode),
+      wasPlaying: Boolean(row.was_playing),
       baseQueueIds: stringArrayValue(row.base_queue_json),
       queueIds: stringArrayValue(row.queue_json),
       updatedAt: stringValue(row.updated_at, new Date(0).toISOString())
@@ -399,15 +409,16 @@ export class HomeMusicDatabase {
     const updatedAt = new Date().toISOString();
     this.db.prepare(`
       INSERT INTO playback_state(
-        id, current_track_id, position, volume, shuffle, repeat_mode,
+        id, current_track_id, position, volume, shuffle, repeat_mode, was_playing,
         base_queue_json, queue_json, updated_at
-      ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         current_track_id = excluded.current_track_id,
         position = excluded.position,
         volume = excluded.volume,
         shuffle = excluded.shuffle,
         repeat_mode = excluded.repeat_mode,
+        was_playing = excluded.was_playing,
         base_queue_json = excluded.base_queue_json,
         queue_json = excluded.queue_json,
         updated_at = excluded.updated_at
@@ -417,6 +428,7 @@ export class HomeMusicDatabase {
       Math.max(0, Math.min(1, state.volume)),
       state.shuffle ? 1 : 0,
       state.repeatMode,
+      state.wasPlaying ? 1 : 0,
       JSON.stringify(state.baseQueueIds),
       JSON.stringify(state.queueIds),
       updatedAt
