@@ -34,6 +34,7 @@ export type PlaybackState = {
   volume: number;
   shuffle: boolean;
   repeatMode: RepeatMode;
+  baseQueueIds: string[];
   queueIds: string[];
   updatedAt: string;
 };
