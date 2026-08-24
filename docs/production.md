@@ -1,18 +1,18 @@
 # Execução em produção
 
-O modo de produção elimina o Vite da execução diária. O build React e a API são servidos pelo mesmo processo Fastify e pela mesma porta.
+O modo de produção elimina o Vite da execução diária. O build React e a API são servidos pelo mesmo processo Fastify e pela mesma porta interna.
+
+Existem dois perfis operacionais:
 
 ```text
-Celular / navegador
-        |
-        | http://IP_DO_PC:8787
-        v
-      Fastify
-      /     \
- React dist  /api
-              |
-          SQLite + MUSIC_DIR
+LAN / fallback
+celular -> http://IP_DO_PC:8787 -> Fastify
+
+Tailscale / recomendado
+celular -> HTTPS :443 (*.ts.net) -> Tailscale Serve -> http://127.0.0.1:8787 -> Fastify
 ```
+
+No perfil Tailscale, a porta `8787` não fica exposta na LAN: o Fastify escuta somente em loopback e o único caminho remoto é HTTPS pelo tailnet.
 
 ## Execução manual
 
@@ -28,17 +28,25 @@ npm start
 
 - `apps/web/dist` é servido pelo Fastify;
 - `/api` continua no mesmo processo;
-- `PORT` continua definindo a porta, por padrão `8787`;
-- `PRODUCTION_HOST` define a interface de rede, por padrão `0.0.0.0`;
+- `PORT` define a porta, por padrão `8787`;
+- `PRODUCTION_HOST` define a interface de rede;
 - `HOST` continua reservado ao backend no modo de desenvolvimento.
 
-No celular conectado à mesma LAN:
+Para HTTP local/LAN:
 
-```text
-http://IP_DO_PC:8787
+```env
+PRODUCTION_HOST=0.0.0.0
+HOME_MUSIC_COOKIE_SECURE=false
 ```
 
-O Vite em `:5173` deixa de ser necessário para uso cotidiano.
+Para Tailscale Serve + HTTPS:
+
+```env
+PRODUCTION_HOST=127.0.0.1
+HOME_MUSIC_COOKIE_SECURE=true
+```
+
+Não altere manualmente entre esses perfis durante o uso normal; prefira `npm run tailscale:enable` e `npm run tailscale:disable`, que fazem validação e rollback.
 
 ## Health e readiness
 
@@ -155,7 +163,7 @@ Há alguns segundos de indisponibilidade, mas não existe versão híbrida entre
 
 Se a atualização falhar depois de o serviço ser parado, o script deixa uma mensagem explícita e mantém o serviço parado para não voltar com um build parcialmente substituído. Corrija o erro e execute `npm run service:update` novamente.
 
-O banco `data/home-music.db` e o `.env` não são removidos pelo build.
+O banco `data/home-music.db`, o `.env` e a configuração persistente do Tailscale Serve não são removidos pelo build/update.
 
 ## Shutdown durante scan
 
@@ -165,17 +173,15 @@ Se houver um scan em andamento quando o serviço receber `SIGTERM`, o servidor a
 
 ## Biblioteca em disco/volume montado
 
-Se `MUSIC_DIR` estiver em um disco montado dinamicamente, por exemplo sob `/run/media/...`, o systemd pode iniciar o Home Music antes desse volume estar disponível. O servidor continua subindo, mas `/ready` fica `503` e a biblioteca não é marcada como pronta.
+Para um servidor sempre ligado, prefira um ponto de montagem estável configurado no sistema, por exemplo via `/etc/fstab`, e use esse caminho em `MUSIC_DIR`.
 
-Depois de montar o volume, use uma destas opções:
+Se o volume não estiver disponível durante o boot, o servidor continua subindo, mas `/ready` fica `503` e a biblioteca não é marcada como pronta. Depois de montar o volume:
 
 ```bash
 sudo systemctl restart home-music
 ```
 
-ou abra o app e use **Atualizar biblioteca**.
-
-Para um servidor realmente sempre ligado, prefira um ponto de montagem estável configurado no sistema (por exemplo via `/etc/fstab`) e use esse caminho em `MUSIC_DIR`. Isso também evita que o caminho mude conforme a sessão gráfica/automount.
+ou use **Atualizar biblioteca** no app.
 
 ## Node instalado por NVM ou gerenciador semelhante
 
@@ -187,21 +193,63 @@ Se você trocar/remover a versão do Node e esse caminho deixar de existir, exec
 npm run service:update
 ```
 
-O unit é regenerado com o novo caminho e o build é atualizado.
+## Tailscale + HTTPS
 
-## HTTPS por proxy no futuro
+O perfil remoto recomendado usa **Tailscale Serve**, não Funnel.
 
-O backend não confia automaticamente em `X-Forwarded-Proto` enviado pelo cliente.
+Pré-requisitos:
 
-Quando houver um proxy HTTPS confiável na frente do Home Music, configure explicitamente:
+- Tailscale conectado no Ubuntu e no celular;
+- MagicDNS habilitado;
+- HTTPS Certificates habilitado no tailnet;
+- serviço `home-music.service` já instalado.
 
-```env
-HOME_MUSIC_COOKIE_SECURE=true
+Ative com:
+
+```bash
+npm run tailscale:enable
 ```
 
-Assim o cookie de sessão recebe `Secure` mesmo que a conexão interna proxy → Fastify seja HTTP.
+O script:
 
-Use essa opção **somente** quando o navegador realmente acessar o site por HTTPS. Em acesso direto por `http://IP_DO_PC:8787`, deixe `false`, ou o navegador não enviará o cookie Secure.
+- exige Tailscale 1.52+;
+- obtém o nome MagicDNS da própria máquina;
+- detecta conflito em HTTPS/443 e recusa sobrescrever outro Serve;
+- valida o backend local antes da mudança;
+- configura `tailscale serve --bg --yes --https=443 127.0.0.1:8787`;
+- valida a URL HTTPS real antes de remover a exposição LAN;
+- altera `PRODUCTION_HOST` para `127.0.0.1`;
+- altera `HOME_MUSIC_COOKIE_SECURE` para `true`;
+- reinicia o serviço;
+- valida `/health` local e `/ready` via HTTPS;
+- restaura `.env`/serviço/Serve se uma etapa da transição falhar.
+
+Status:
+
+```bash
+npm run tailscale:status
+tailscale serve status
+```
+
+Rollback para LAN:
+
+```bash
+npm run tailscale:disable
+```
+
+O rollback só remove a configuração de HTTPS/443 se ela corresponder exatamente ao proxy esperado do Home Music, evitando destruir um Serve não relacionado.
+
+Detalhes completos, instalação no celular, grants e troubleshooting em [`docs/tailscale.md`](tailscale.md).
+
+### Privacidade do certificado
+
+O serviço permanece privado ao tailnet, porém certificados TLS públicos registram o hostname `*.ts.net` em Certificate Transparency. Use um nome de máquina não sensível antes de habilitar HTTPS.
+
+### Controle de acesso
+
+O login do Home Music continua obrigatório, mas o Tailscale deve ser tratado como a primeira camada de autorização de rede. Para tailnets compartilhados, use grants least-privilege e permita somente TCP/443 para o dispositivo/`tag:home-music` a partir dos usuários autorizados.
+
+Não exponha `8787` por grant, ACL, port-forward ou Funnel.
 
 ## Smoke test de produção
 
@@ -226,9 +274,9 @@ O smoke cria `MUSIC_DIR` e SQLite temporários, executa **`npm start`** e valida
 - biblioteca autenticada;
 - encerramento limpo por `SIGTERM`.
 
-O CI executa esse smoke depois de `npm run build`.
+O CI executa esse smoke depois de `npm run build` e também valida sintaticamente os scripts de systemd e Tailscale.
 
-## Parar ou desabilitar
+## Parar ou desabilitar o Home Music
 
 Parar temporariamente:
 
@@ -249,8 +297,18 @@ sudo rm -f /etc/systemd/system/home-music.service
 sudo systemctl daemon-reload
 ```
 
+Isso não remove automaticamente a configuração Tailscale Serve. Se o objetivo for desativar o acesso remoto mantendo o app em LAN, execute antes `npm run tailscale:disable`.
+
 ## Segurança
 
-O modo de produção abre `8787` para a LAN por padrão (`PRODUCTION_HOST=0.0.0.0`) e mantém login/sessão na própria API. Isso não torna HTTP criptografado.
+No perfil LAN, HTTP não criptografa usuário, senha ou áudio. Nunca faça port-forwarding da porta `8787`.
 
-Não faça port-forwarding dessa porta para a internet. Para acesso fora da rede doméstica, a próxima etapa é Tailscale + HTTPS/ACL.
+No perfil recomendado:
+
+- acesso remoto somente pelo tailnet;
+- HTTPS terminado pelo Tailscale Serve;
+- Fastify somente em `127.0.0.1`;
+- cookie de sessão `Secure`, `HttpOnly` e `SameSite=Strict`;
+- autenticação do Home Music continua ativa;
+- Tailscale Serve em background persiste após reboot;
+- Funnel não é usado.

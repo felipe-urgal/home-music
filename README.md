@@ -2,7 +2,7 @@
 
 Streaming pessoal das músicas do seu computador para o celular.
 
-O Home Music roda no Ubuntu, lê uma pasta local de músicas e expõe uma interface mobile **Player First** na rede local. Em produção, o React compilado e a API são servidos pelo mesmo processo Fastify e pela mesma porta. Os dados e o streaming continuam protegidos por sessão autenticada em cookie `HttpOnly`.
+O Home Music roda no Ubuntu, lê uma pasta local de músicas e expõe uma interface mobile **Player First**. Em produção, o React compilado e a API são servidos pelo mesmo processo Fastify e pela mesma porta interna. Para uso remoto, o caminho recomendado é **Tailscale Serve + HTTPS**, sem port-forwarding público.
 
 ## Recursos atuais
 
@@ -37,7 +37,7 @@ O Home Music roda no Ubuntu, lê uma pasta local de músicas e expõe uma interf
 - restauração da última faixa, posição e volume;
 - shuffle com ordem original persistida;
 - repeat `off`, `all` e `one`;
-- fila contextual e reordenável;
+- fila contextual com carregamento progressivo e reordenação por mouse, setas ou touch no mobile;
 - retorno contextual para pasta, artista, álbum, playlist, favoritos ou busca;
 - mini-player persistente;
 - Media Session para tela bloqueada/notificações.
@@ -98,7 +98,7 @@ HOST=127.0.0.1
 PRODUCTION_HOST=0.0.0.0
 ```
 
-`HOME_MUSIC_COOKIE_SECURE=true` deve ser usado somente quando o navegador acessa o Home Music por **HTTPS** e um proxy confiável encaminha a requisição ao Fastify. Em HTTP local deixe `false`.
+`HOME_MUSIC_COOKIE_SECURE=true` deve ser usado somente quando o navegador acessa o Home Music por **HTTPS** e um proxy confiável encaminha a requisição ao Fastify. O comando `npm run tailscale:enable` aplica essa configuração automaticamente apenas depois de validar o HTTPS real.
 
 ## Desenvolvimento
 
@@ -121,7 +121,7 @@ npm run build
 npm start
 ```
 
-Em produção existe apenas um servidor externo:
+No perfil LAN existe apenas um servidor externo:
 
 ```text
 http://IP_DO_PC:8787
@@ -182,9 +182,58 @@ git pull --ff-only
 npm run service:update
 ```
 
-`service:update` para o processo antes de `npm ci/build`, evitando servir `index.html` antigo junto com assets de uma versão nova.
+`service:update` para o processo antes de `npm ci/build`, evitando servir `index.html` antigo junto com assets de uma versão nova. A configuração persistente do Tailscale Serve fica no `tailscaled` e não é removida pelo update.
 
 O servidor registra `SIGTERM`/`SIGINT` antes da inicialização potencialmente longa da biblioteca, aguarda scan em andamento e fecha Fastify + SQLite antes de encerrar.
+
+## Acesso remoto seguro: Tailscale + HTTPS
+
+O modo recomendado para acessar o Home Music fora de casa usa **Tailscale Serve**. **Tailscale Funnel não é usado**, porque Funnel torna o serviço acessível pela internet pública.
+
+```text
+celular com Tailscale
+        |
+        | HTTPS :443 (*.ts.net)
+        v
+   Tailscale Serve
+        |
+        | HTTP somente em loopback
+        v
+  Fastify 127.0.0.1:8787
+```
+
+Pré-requisitos:
+
+- Tailscale instalado e autenticado no Ubuntu e no celular;
+- MagicDNS e HTTPS Certificates habilitados no tailnet;
+- `home-music.service` instalado.
+
+Ative com:
+
+```bash
+npm run tailscale:enable
+```
+
+O setup valida o backend e o HTTPS **antes** de fechar o bind da LAN, recusa sobrescrever outro Serve em `443`, faz rollback do `.env`/serviço se algo falhar e, no perfil final, mantém `8787` somente em loopback com cookie `Secure`.
+
+Status:
+
+```bash
+npm run tailscale:status
+tailscale serve status
+```
+
+Rollback para HTTP/LAN:
+
+```bash
+npm run tailscale:disable
+```
+
+O Serve usa `--bg`, portanto persiste após reboot e após `tailscale down`/`tailscale up`.
+
+> Certificados `*.ts.net` são públicos: o hostname da máquina/tailnet aparece em Certificate Transparency. O conteúdo e o acesso ao Home Music continuam privados ao tailnet, mas use um nome de máquina que não revele informação sensível.
+
+Guia completo, grants e troubleshooting: [`docs/tailscale.md`](docs/tailscale.md).
 
 ## Re-scan da biblioteca
 
@@ -195,14 +244,16 @@ O re-scan é incremental: arquivos inalterados reutilizam o índice, somente arq
 ## Segurança
 
 - não publique a porta do Home Music diretamente na internet;
+- não use Tailscale Funnel para este app;
 - use uma senha exclusiva;
 - `.env` é ignorado pelo Git e o instalador do serviço força permissão `0600`;
 - `data/` e os arquivos SQLite são endurecidos pelo instalador;
 - em desenvolvimento a API fica em `127.0.0.1`;
-- em produção `PRODUCTION_HOST=0.0.0.0` permite acesso na LAN;
+- no perfil LAN, `PRODUCTION_HOST=0.0.0.0` permite acesso HTTP local;
+- no perfil Tailscale, `PRODUCTION_HOST=127.0.0.1` remove o acesso direto a `8787` e somente o Serve recebe conexões remotas;
 - frontend público não significa biblioteca pública: `/api/*` exige sessão;
-- cookie de sessão é `HttpOnly` + `SameSite=Strict`;
-- `HOME_MUSIC_COOKIE_SECURE=true` permite marcar o cookie como `Secure` atrás de HTTPS sem confiar cegamente em `X-Forwarded-Proto`;
+- cookie de sessão é `HttpOnly` + `SameSite=Strict` e recebe `Secure` no perfil HTTPS;
+- o backend não confia cegamente em `X-Forwarded-Proto`;
 - endpoints mutáveis exigem sessão + header anti-CSRF do frontend;
 - login tem rate limit;
 - symlinks/devices/FIFOs/escapes de `MUSIC_DIR` não são servidos;
@@ -210,9 +261,11 @@ O re-scan é incremental: arquivos inalterados reutilizam o índice, somente arq
 - capas têm limites de tipo, tamanho, concorrência e cache;
 - arquivos estáticos de produção rejeitam traversal, ocultos, NUL e symlinks;
 - respostas de produção aplicam CSP e headers de hardening;
-- CI usa lockfile, audit, typecheck, testes, build e smoke real de produção.
+- CI usa lockfile, audit, typecheck, testes, build, smoke real de produção e testes dos scripts operacionais.
 
-HTTP na LAN **não criptografa** usuário, senha ou áudio. O próximo passo para acesso remoto é Tailscale + HTTPS/ACL, sem port-forwarding público.
+Para tailnets compartilhados, prefira **grants** least-privilege e permita somente TCP/443 ao servidor Home Music para as identidades autorizadas. Não conceda acesso remoto à porta `8787`.
+
+HTTP na LAN **não criptografa** usuário, senha ou áudio. O perfil Tailscale + HTTPS elimina esse transporte HTTP no caminho do navegador sem tornar o serviço público.
 
 ## Docker
 
@@ -222,7 +275,7 @@ O Compose atual continua voltado a desenvolvimento:
 docker compose up
 ```
 
-Para uso cotidiano no Ubuntu, o caminho recomendado agora é `npm run build` + `npm start` ou o serviço systemd.
+Para uso cotidiano no Ubuntu, o caminho recomendado é o serviço systemd; para acesso remoto, adicione Tailscale Serve.
 
 ## Qualidade
 
@@ -232,6 +285,9 @@ npm test
 npm run build
 npm run smoke:production
 npm audit --audit-level=high
+bash -n scripts/install-systemd.sh
+bash -n scripts/configure-tailscale.sh
+bash scripts/configure-tailscale.test.sh
 ```
 
 ## Próximos passos

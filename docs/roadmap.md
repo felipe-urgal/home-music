@@ -58,9 +58,12 @@
 
 ## Fase 5 — Fora de casa
 
-- [ ] Tailscale
-- [ ] HTTPS para a experiência instalada fora de `localhost`
-- [ ] ACLs/restrições de acesso remoto
+- [x] Tailscale Serve privado ao tailnet
+- [x] HTTPS automático `*.ts.net`
+- [x] Backend restrito a loopback no perfil remoto
+- [x] Cookie `Secure` no perfil HTTPS
+- [x] Setup/rollback idempotente com proteção contra conflito em 443
+- [ ] Aplicar grants/restrições least-privilege no tailnet real
 - [ ] FFmpeg
 - [ ] Transcoding adaptativo
 - [ ] Perfis de qualidade Wi‑Fi / 4G
