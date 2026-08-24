@@ -10,7 +10,9 @@
     "dev": "concurrently -n api,web -c auto \"npm run dev -w @home-music/server\" \"npm run dev -w @home-music/web\"",
     "build": "npm run build -w @home-music/shared && npm run build -w @home-music/server && npm run build -w @home-music/web",
     "start": "NODE_ENV=production npm run start -w @home-music/server",
-    "service:install": "bash scripts/install-systemd.sh",
+    "smoke:production": "node scripts/smoke-production.mjs",
+    "service:install": "bash scripts/install-systemd.sh install",
+    "service:update": "bash scripts/install-systemd.sh update",
     "service:status": "systemctl status home-music --no-pager",
     "typecheck": "npm run typecheck -w @home-music/shared && npm run typecheck -w @home-music/server && npm run typecheck -w @home-music/web",
     "test": "npm run test -w @home-music/server && npm run test -w @home-music/web"
