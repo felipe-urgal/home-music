@@ -9,7 +9,8 @@ import {
   contentTypeForPath,
   prepareWebApp,
   requestPathname,
-  resolveStaticFile
+  resolveStaticFile,
+  shouldServeShell
 } from './static-web.js';
 
 test('requestPathname decodifica URL e rejeita encoding inválido', () => {
@@ -24,6 +25,14 @@ test('política de cache separa assets imutáveis do shell da aplicação', () =
   assert.equal(cacheControlForPath('/qualquer-rota'), 'no-store');
   assert.equal(contentTypeForPath('app.js'), 'text/javascript; charset=utf-8');
   assert.equal(contentTypeForPath('manifest.webmanifest'), 'application/manifest+json; charset=utf-8');
+});
+
+test('fallback SPA é usado somente para rotas da aplicação', () => {
+  assert.equal(shouldServeShell('/'), true);
+  assert.equal(shouldServeShell('/biblioteca/rock'), true);
+  assert.equal(shouldServeShell('/assets/app-antigo.js'), false);
+  assert.equal(shouldServeShell('/manifest.webmanifest'), false);
+  assert.equal(shouldServeShell('/favicon.svg'), false);
 });
 
 test('resolveStaticFile serve somente arquivo regular dentro do dist', async () => {
