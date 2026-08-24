@@ -3,6 +3,7 @@ import type { LibraryResponse, Track } from '@home-music/shared';
 import { LibraryScreen } from './components/LibraryScreen';
 import { PlayerScreen } from './components/PlayerScreen';
 import { buildQueueContext } from './library-utils';
+import { useLibraryNavigation } from './useLibraryNavigation';
 
 const apiBase = import.meta.env.VITE_API_URL || '';
 type Screen = 'player' | 'library';
@@ -18,6 +19,7 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>('player');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const libraryNavigation = useLibraryNavigation(tracks);
 
   const current = queue[currentIndex];
   const hasNext = currentIndex < queue.length - 1;
@@ -164,6 +166,7 @@ export default function App() {
             current={current}
             playing={playing}
             hasNext={hasNext}
+            navigation={libraryNavigation}
             onOpenPlayer={openPlayer}
             onTogglePlay={togglePlay}
             onNext={next}
