@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import assert from 'node:assert/strict';
+import test from 'node:test';
 import {
   buildSessionCookie,
   LoginRateLimiter,
@@ -7,48 +8,53 @@ import {
   SessionManager
 } from './auth.js';
 
-describe('SessionManager', () => {
-  it('valida credenciais em tempo constante e cria sessão revogável', () => {
-    const sessions = new SessionManager('home-music', 'senha-super-segura', 1000);
+test('SessionManager valida credenciais e cria sessão revogável', () => {
+  const sessions = new SessionManager('home-music', 'senha-super-segura', 1000);
 
-    expect(sessions.configured).toBe(true);
-    expect(sessions.validateCredentials('home-music', 'senha-super-segura')).toBe(true);
-    expect(sessions.validateCredentials('outro', 'senha-super-segura')).toBe(false);
+  assert.equal(sessions.configured, true);
+  assert.equal(sessions.validateCredentials('home-music', 'senha-super-segura'), true);
+  assert.equal(sessions.validateCredentials('outro', 'senha-super-segura'), false);
 
-    const token = sessions.createSession(100);
-    expect(sessions.validateSession(token, 500)).toBe(true);
-    sessions.revokeSession(token);
-    expect(sessions.validateSession(token, 500)).toBe(false);
-  });
-
-  it('expira sessões antigas', () => {
-    const sessions = new SessionManager('home-music', 'senha-super-segura', 1000);
-    const token = sessions.createSession(100);
-    expect(sessions.validateSession(token, 1101)).toBe(false);
-  });
+  const token = sessions.createSession(100);
+  assert.equal(sessions.validateSession(token, 500), true);
+  sessions.revokeSession(token);
+  assert.equal(sessions.validateSession(token, 500), false);
 });
 
-describe('cookies de sessão', () => {
-  it('lê apenas o cookie solicitado', () => {
-    expect(readCookie(`x=1; ${SESSION_COOKIE_NAME}=abc; y=2`, SESSION_COOKIE_NAME)).toBe('abc');
-  });
-
-  it('gera cookie HttpOnly e SameSite Strict', () => {
-    const cookie = buildSessionCookie('abc', 3600, true);
-    expect(cookie).toContain(`${SESSION_COOKIE_NAME}=abc`);
-    expect(cookie).toContain('HttpOnly');
-    expect(cookie).toContain('SameSite=Strict');
-    expect(cookie).toContain('Secure');
-  });
+test('SessionManager expira sessões antigas', () => {
+  const sessions = new SessionManager('home-music', 'senha-super-segura', 1000);
+  const token = sessions.createSession(100);
+  assert.equal(sessions.validateSession(token, 1101), false);
 });
 
-describe('LoginRateLimiter', () => {
-  it('bloqueia após o limite e libera após a janela', () => {
-    const limiter = new LoginRateLimiter(2, 1000);
-    limiter.recordFailure('ip', 100);
-    expect(limiter.isBlocked('ip', 500)).toBe(false);
-    limiter.recordFailure('ip', 500);
-    expect(limiter.isBlocked('ip', 600)).toBe(true);
-    expect(limiter.isBlocked('ip', 1200)).toBe(false);
-  });
+test('SessionManager limita a quantidade de sessões em memória', () => {
+  const sessions = new SessionManager('home-music', 'senha-super-segura', 10_000, 2);
+  const first = sessions.createSession(100);
+  const second = sessions.createSession(200);
+  const third = sessions.createSession(300);
+
+  assert.equal(sessions.validateSession(first, 400), false);
+  assert.equal(sessions.validateSession(second, 400), true);
+  assert.equal(sessions.validateSession(third, 400), true);
+});
+
+test('cookies de sessão leem apenas o cookie solicitado', () => {
+  assert.equal(readCookie(`x=1; ${SESSION_COOKIE_NAME}=abc; y=2`, SESSION_COOKIE_NAME), 'abc');
+});
+
+test('cookie de sessão usa HttpOnly e SameSite Strict', () => {
+  const cookie = buildSessionCookie('abc', 3600, true);
+  assert.match(cookie, new RegExp(`${SESSION_COOKIE_NAME}=abc`));
+  assert.match(cookie, /HttpOnly/);
+  assert.match(cookie, /SameSite=Strict/);
+  assert.match(cookie, /Secure/);
+});
+
+test('LoginRateLimiter bloqueia após o limite e libera após a janela', () => {
+  const limiter = new LoginRateLimiter(2, 1000);
+  limiter.recordFailure('ip', 100);
+  assert.equal(limiter.isBlocked('ip', 500), false);
+  limiter.recordFailure('ip', 500);
+  assert.equal(limiter.isBlocked('ip', 600), true);
+  assert.equal(limiter.isBlocked('ip', 1200), false);
 });
