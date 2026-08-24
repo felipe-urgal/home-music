@@ -3,6 +3,11 @@ import { fileURLToPath } from 'node:url';
 import Fastify from 'fastify';
 import type { PlaybackState, RepeatMode, ScanResponse } from '@home-music/shared';
 import {
+  DEFAULT_AUTO_RESCAN_INTERVAL_SECONDS,
+  parseAutoRescanIntervalSeconds,
+  startAutoRescanScheduler
+} from './auto-rescan.js';
+import {
   buildSessionCookie,
   LoginRateLimiter,
   readCookie,
@@ -37,6 +42,16 @@ const app = Fastify({
   bodyLimit: 256 * 1024
 });
 
+let autoRescanIntervalSeconds = DEFAULT_AUTO_RESCAN_INTERVAL_SECONDS;
+try {
+  autoRescanIntervalSeconds = parseAutoRescanIntervalSeconds(process.env.HOME_MUSIC_RESCAN_INTERVAL_SECONDS);
+} catch (error) {
+  app.log.warn(
+    { err: error, fallbackSeconds: DEFAULT_AUTO_RESCAN_INTERVAL_SECONDS },
+    'Intervalo de rescan automático inválido; usando o valor padrão.'
+  );
+}
+
 const database = new HomeMusicDatabase(databasePath);
 const musicDir = process.env.MUSIC_DIR || '';
 const port = Number(process.env.PORT || 8787);
@@ -57,8 +72,10 @@ let tracks: IndexedTrack[] = [];
 let tracksById = new Map<string, IndexedTrack>();
 let libraryRoot = '';
 let libraryReady = false;
+let libraryRevision = 0;
 let scannedAt = new Date(0).toISOString();
 let scanPromise: Promise<ScanResponse> | null = null;
+let stopAutoRescan: (() => void) | null = null;
 let webApp: PreparedWebApp | null = null;
 let shuttingDown = false;
 
@@ -97,6 +114,29 @@ function publicTrack(track: IndexedTrack) {
 function clearCoverCache() {
   coverCache.clear();
   coverCacheBytes = 0;
+}
+
+function automaticRescanStatus() {
+  const enabled = Boolean(musicDir) && autoRescanIntervalSeconds > 0;
+  return {
+    enabled,
+    intervalSeconds: enabled ? autoRescanIntervalSeconds : null
+  };
+}
+
+function libraryStatus() {
+  return {
+    tracks: tracks.length,
+    scannedAt,
+    scanning: Boolean(scanPromise),
+    revision: libraryRevision,
+    autoRescan: automaticRescanStatus()
+  };
+}
+
+function stopAutomaticRescan() {
+  stopAutoRescan?.();
+  stopAutoRescan = null;
 }
 
 async function withCoverRequestSlot<T>(operation: () => Promise<T>) {
@@ -148,28 +188,38 @@ function cacheCover(trackId: string, cover: CachedCover) {
 }
 
 async function performRescan(): Promise<ScanResponse> {
-  clearCoverCache();
-
   if (!musicDir) {
+    const hadTracks = tracks.length > 0;
     setTracks([]);
     libraryRoot = '';
     libraryReady = false;
     scannedAt = new Date().toISOString();
+    if (hadTracks) {
+      libraryRevision += 1;
+      clearCoverCache();
+    }
     return { tracks: 0, scannedAt, added: 0, updated: 0, removed: 0, unchanged: 0 };
   }
 
   const resolvedRoot = await resolveLibraryRoot(musicDir);
-  const previous = libraryRoot === resolvedRoot ? tracks : [];
+  const rootChanged = libraryRoot !== resolvedRoot;
+  const previous = rootChanged ? [] : tracks;
   const result = await scanLibrary(resolvedRoot, previous, (message, error) => {
     app.log.warn({ err: error }, message);
   });
   const nextScannedAt = new Date().toISOString();
+  const changed = rootChanged || result.stats.added > 0 || result.stats.updated > 0 || result.stats.removed > 0;
 
   database.syncTracks(result.tracks, resolvedRoot, nextScannedAt);
   libraryRoot = resolvedRoot;
   scannedAt = nextScannedAt;
   setTracks(result.tracks);
   libraryReady = true;
+
+  if (changed) {
+    libraryRevision += 1;
+    clearCoverCache();
+  }
 
   return {
     tracks: tracks.length,
@@ -297,6 +347,7 @@ app.addHook('onSend', async (_request, reply, payload) => {
 });
 
 app.addHook('onClose', async () => {
+  stopAutomaticRescan();
   database.close();
 });
 
@@ -308,6 +359,7 @@ app.setErrorHandler((error, request, reply) => {
 async function shutdown(signal: 'SIGINT' | 'SIGTERM') {
   if (shuttingDown) return;
   shuttingDown = true;
+  stopAutomaticRescan();
   app.log.info({ signal }, 'Encerrando Home Music');
 
   const timeout = setTimeout(() => {
@@ -357,9 +409,7 @@ app.get('/api/health', async (_request, reply) => {
     uptimeSeconds: Math.floor(process.uptime()),
     webReady,
     libraryReady,
-    tracks: tracks.length,
-    scannedAt,
-    scanning: Boolean(scanPromise),
+    ...libraryStatus(),
     musicDirConfigured: Boolean(musicDir),
     authConfigured,
     schemaVersion: database.getSchemaVersion()
@@ -410,9 +460,13 @@ app.get('/api/library', async (_request, reply) => {
   reply.header('Cache-Control', 'private, no-store');
   return {
     tracks: tracks.map(publicTrack),
-    scannedAt,
-    scanning: Boolean(scanPromise)
+    ...libraryStatus()
   };
+});
+
+app.get('/api/library/status', async (_request, reply) => {
+  reply.header('Cache-Control', 'private, no-store');
+  return libraryStatus();
 });
 
 app.post('/api/library/scan', async (_request, reply) => {
@@ -624,4 +678,33 @@ try {
 
 if (!shuttingDown) {
   await app.listen({ port, host });
+
+  if (musicDir && autoRescanIntervalSeconds > 0) {
+    const intervalMs = autoRescanIntervalSeconds * 1000;
+    stopAutoRescan = startAutoRescanScheduler({
+      intervalMs,
+      initialDelayMs: 15_000,
+      run: async () => {
+        const result = await rescan();
+        if (result.added > 0 || result.updated > 0 || result.removed > 0) {
+          app.log.info(
+            {
+              added: result.added,
+              updated: result.updated,
+              removed: result.removed,
+              tracks: result.tracks
+            },
+            'Biblioteca atualizada automaticamente.'
+          );
+        }
+      },
+      onError: error => {
+        app.log.warn({ err: error }, 'Rescan automático falhou; uma nova tentativa será feita no próximo intervalo.');
+      }
+    });
+    app.log.info(
+      { intervalSeconds: autoRescanIntervalSeconds, initialDelaySeconds: 15 },
+      'Rescan automático da biblioteca habilitado.'
+    );
+  }
 }
