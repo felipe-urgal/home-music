@@ -27,6 +27,15 @@ export type FolderView = {
   allTracks: Track[];
 };
 
+export type LibraryReturnContext = {
+  selectedGroupName?: string | null;
+  selectedPlaylistName?: string | null;
+  libraryTab: string;
+  folderPath: string;
+  folderName: string;
+  query: string;
+};
+
 export function normalizeSearch(value: string) {
   return value
     .normalize('NFD')
@@ -48,6 +57,22 @@ export function matchesTrack(track: Track, normalizedQuery: string) {
   return normalizeSearch(
     `${track.title} ${track.artist} ${track.album} ${track.albumArtist} ${track.folder} ${track.folderPath}`
   ).includes(normalizedQuery);
+}
+
+export function buildLibraryReturnLabel(context: LibraryReturnContext) {
+  let target = '';
+
+  if (context.selectedGroupName) target = context.selectedGroupName;
+  else if (context.selectedPlaylistName) target = context.selectedPlaylistName;
+  else if (context.libraryTab === 'folders' && context.folderPath) target = context.folderName;
+  else if (context.libraryTab === 'favorites') target = 'Favoritos';
+  else if (context.libraryTab === 'history') target = 'Histórico';
+
+  if (context.query.trim()) {
+    return target ? `Voltar para busca em ${target}` : 'Voltar para resultados da busca';
+  }
+
+  return target ? `Voltar para ${target}` : 'Voltar à biblioteca';
 }
 
 function groupIdentity(track: Track, tab: GroupTab) {
