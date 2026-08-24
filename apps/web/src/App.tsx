@@ -11,12 +11,17 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>('player');
   const library = useLibraryData();
   const navigation = useLibraryNavigation(library.tracks, library.favoriteIds, library.playlists);
-  const player = useAudioPlayer(library.tracks, screen === 'player');
+  const libraryReady = !library.loading && !library.error;
+  const player = useAudioPlayer(library.tracks, screen === 'player', libraryReady);
   const current = player.current;
 
   function openPlayer() {
     player.syncVisibleProgress();
     setScreen('player');
+  }
+
+  function run(operation: Promise<unknown>) {
+    void operation.catch(() => undefined);
   }
 
   return (
@@ -40,12 +45,28 @@ export default function App() {
           </div>
         ) : library.tracks.length > 0 && !player.hydrated ? (
           <div className="center-state">Restaurando o player…</div>
+        ) : screen === 'library' ? (
+          <LibraryScreen
+            data={library}
+            current={current}
+            playing={player.playing}
+            hasNext={player.hasNext}
+            navigation={navigation}
+            onOpenPlayer={openPlayer}
+            onTogglePlay={() => void player.togglePlay()}
+            onNext={player.next}
+            onPlayTrack={player.playTrack}
+          />
         ) : !current ? (
-          <div className="center-state">
+          <div className="center-state center-state--actions">
             <strong>Nenhuma música encontrada</strong>
-            <span>Confira MUSIC_DIR e use o botão de re-scan da biblioteca.</span>
+            <span>Confira MUSIC_DIR ou atualize a biblioteca para procurar músicas novas.</span>
+            <button className="primary-action" disabled={library.scanning} onClick={() => run(library.rescan())}>
+              {library.scanning ? 'Atualizando…' : 'Atualizar biblioteca'}
+            </button>
+            <button className="secondary-action" onClick={() => setScreen('library')}>Abrir biblioteca</button>
           </div>
-        ) : screen === 'player' ? (
+        ) : (
           <PlayerScreen
             current={current}
             tracksCount={library.tracks.length}
@@ -67,25 +88,19 @@ export default function App() {
             onVolume={player.setVolume}
             onShuffle={player.toggleShuffle}
             onRepeat={player.cycleRepeat}
-            onToggleFavorite={() => void library.toggleFavorite(current.id).catch(() => undefined)}
+            onToggleFavorite={() => run(library.toggleFavorite(current.id))}
             onPlayTrack={player.playTrack}
             onReorderQueue={player.reorderQueue}
-            onAddToPlaylist={playlist => void library.addTrackToPlaylist(playlist, current.id).catch(() => undefined)}
-          />
-        ) : (
-          <LibraryScreen
-            data={library}
-            current={current}
-            playing={player.playing}
-            hasNext={player.hasNext}
-            navigation={navigation}
-            onOpenPlayer={openPlayer}
-            onTogglePlay={() => void player.togglePlay()}
-            onNext={player.next}
-            onPlayTrack={player.playTrack}
+            onAddToPlaylist={playlist => run(library.addTrackToPlaylist(playlist, current.id))}
           />
         )}
       </section>
+
+      {library.actionError && (
+        <button className="app-toast" role="status" onClick={library.clearActionError}>
+          {library.actionError}
+        </button>
+      )}
     </main>
   );
 }
