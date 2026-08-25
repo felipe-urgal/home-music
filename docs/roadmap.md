@@ -83,7 +83,7 @@
 Objetivo: evoluir a interface para desktop sem regredir o fluxo mobile Player First e sem duplicar a aplicação React.
 
 - [x] Adicionar baseline Playwright E2E para login, biblioteca e player em viewport mobile e desktop
-- [ ] Criar Desktop Shell responsivo com sidebar, conteúdo principal e área contextual
+- [x] Criar Desktop Shell responsivo com sidebar, conteúdo principal e área contextual
 - [ ] Preservar a experiência mobile atual com composição específica por breakpoint
 - [ ] Criar player desktop persistente em barra inferior
 - [ ] Criar biblioteca desktop em tabela/lista densa com colunas úteis e ordenação
