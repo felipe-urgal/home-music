@@ -422,7 +422,7 @@ disable_public() {
       "${TAILSCALE_BIN}" funnel --yes --https=443 off >/dev/null 2>&1 || true
       set_env_value PRODUCTION_HOST 127.0.0.1 || true
       set_env_value HOME_MUSIC_COOKIE_SECURE true || true
-      set_env_value HOME_MUSIC_TRUST_TAILSCALE_PROXY true || true
+      set_env_value HOME_MUSIC_TRUST_TAILSCALE_PROXY false || true
       sudo systemctl restart "${SERVICE_UNIT}" >/dev/null 2>&1 || true
       echo "O Home Music pode ficar temporariamente inacessível remotamente; corrija o Serve antes de tentar novamente." >&2
     fi
@@ -442,7 +442,7 @@ disable_public() {
 
   set_env_value PRODUCTION_HOST 127.0.0.1
   set_env_value HOME_MUSIC_COOKIE_SECURE true
-  set_env_value HOME_MUSIC_TRUST_TAILSCALE_PROXY true
+  set_env_value HOME_MUSIC_TRUST_TAILSCALE_PROXY false
   restart_and_validate_local "${local_url}"
 
   if ! wait_for_url "${TAILSCALE_URL}/ready" 15 2; then
