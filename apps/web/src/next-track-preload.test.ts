@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Track } from '@home-music/shared';
-import { resolveNextTrackPreload } from './next-track-preload';
+import { resolveNextTrackPreload, warmTranscodedTrack } from './next-track-preload';
 
 function track(id: string, replayGainTrackDb: number | null = null): Track {
   return {
@@ -55,5 +55,34 @@ describe('next track preload', () => {
 
   it('não prepara nada quando a fila termina sem repetição', () => {
     expect(resolveNextTrackPreload(queue, 2, 'off', 'economy', 'off')).toBeNull();
+  });
+
+  it('aquece o servidor com apenas um byte de resposta', async () => {
+    let capturedInput: RequestInfo | URL | undefined;
+    let capturedInit: RequestInit | undefined;
+
+    const warmed = await warmTranscodedTrack(async (input, init) => {
+      capturedInput = input;
+      capturedInit = init;
+      return new Response(new Uint8Array([1]), { status: 206 });
+    }, '/api/tracks/b/transcode?quality=economy');
+
+    expect(warmed).toBe(true);
+    expect(capturedInput).toBe('/api/tracks/b/transcode?quality=economy');
+    expect(capturedInit?.cache).toBe('no-store');
+    expect(new Headers(capturedInit?.headers).get('Range')).toBe('bytes=0-0');
+  });
+
+  it('trata falha de aquecimento como best-effort sem consumir corpo', async () => {
+    let consumed = false;
+    const response = new Response('indisponível', { status: 503 });
+    const originalArrayBuffer = response.arrayBuffer.bind(response);
+    response.arrayBuffer = async () => {
+      consumed = true;
+      return originalArrayBuffer();
+    };
+
+    expect(await warmTranscodedTrack(async () => response, '/api/tracks/b/transcode?quality=economy')).toBe(false);
+    expect(consumed).toBe(false);
   });
 });
