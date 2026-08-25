@@ -39,6 +39,8 @@ test('transcodeCacheKey muda com fonte e perfil', () => {
   assert.notEqual(transcodeCacheKey({ ...base, sourceSize: 1235 }), key);
   assert.notEqual(transcodeCacheKey({ ...base, sourceMtimeMs: 5679 }), key);
   assert.notEqual(transcodeCacheKey({ ...base, quality: 'economy' }), key);
+  assert.notEqual(transcodeCacheKey({ ...base, normalizationGainDb: -7.5 }), key);
+  assert.equal(transcodeCacheKey({ ...base, normalizationGainDb: -7.5 }), transcodeCacheKey({ ...base, normalizationGainDb: -7.5 }));
 });
 
 test('seekableInputFd só aceita descritor válido', () => {
@@ -53,9 +55,10 @@ test('TranscodeManager deduplica trabalho concorrente e reutiliza cache', async 
   const cacheDir = await mkdtemp(path.join(os.tmpdir(), 'home-music-transcode-'));
   let runs = 0;
   let inputs = 0;
-  const runner: TranscodeRunner = async ({ outputPath, bitrate, input }) => {
+  const runner: TranscodeRunner = async ({ outputPath, bitrate, normalizationGainDb, input }) => {
     runs += 1;
     assert.equal(bitrate, '160k');
+    assert.equal(normalizationGainDb, -7.5);
     assert.equal(seekableInputFd(input), 17);
     await new Promise(resolve => setTimeout(resolve, 20));
     await writeFile(outputPath, Buffer.alloc(40, 1));
@@ -71,6 +74,7 @@ test('TranscodeManager deduplica trabalho concorrente e reutiliza cache', async 
     sourceSize: 100,
     sourceMtimeMs: 200,
     quality: 'balanced' as const,
+    normalizationGainDb: -7.5,
     createInput: () => {
       inputs += 1;
       return Object.assign(Readable.from(Buffer.from('source')), { fd: 17 });
