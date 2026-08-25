@@ -4,6 +4,7 @@ import path from 'node:path';
 import type { Readable } from 'node:stream';
 import { parseFile, parseStream, type IAudioMetadata } from 'music-metadata';
 import type { Track } from '@home-music/shared';
+import { replayGainDb } from './replay-gain.js';
 import { isPathInside, resolveRegularFileInside } from './security.js';
 
 const SUPPORTED_EXTENSIONS = new Set([
@@ -148,6 +149,7 @@ function fromMetadata(
     picture.data.byteLength <= MAX_COVER_BYTES
   );
   const folder = relativeFolder(libraryRoot, file.path);
+  const common = metadata?.common as (Record<string, unknown> | undefined);
 
   return {
     id: trackId(libraryRoot, file.path),
@@ -160,6 +162,8 @@ function fromMetadata(
     duration: metadata?.format.duration ?? null,
     format: ext.replace('.', '').toUpperCase(),
     hasCover: hasSafeCover,
+    replayGainTrackDb: replayGainDb(common?.replaygain_track_gain),
+    replayGainAlbumDb: replayGainDb(common?.replaygain_album_gain),
     filePath: file.path,
     mimeType: mimeByExtension[ext] || 'application/octet-stream',
     fileSize: file.size,

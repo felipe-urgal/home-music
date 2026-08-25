@@ -2,21 +2,27 @@ import { describe, expect, it } from 'vitest';
 import {
   detectNetwork,
   directAudioUrl,
+  effectiveNormalizationMode,
   NETWORK_PREFERENCE_STORAGE_KEY,
+  NORMALIZATION_MODE_STORAGE_KEY,
   onlineAudioUrl,
   parseNetworkPreference,
+  parseNormalizationMode,
   parseStreamingMode,
   parseStreamingSelection,
   readNetworkPreference,
+  readNormalizationMode,
   readStreamingMode,
   readStreamingSelection,
   resolveNetworkStreamingMode,
+  resolveReplayGain,
   shouldFallbackToOriginal,
   shouldRetryWithCompatibilityTranscode,
   STREAMING_MODE_STORAGE_KEY,
   STREAMING_SELECTION_STORAGE_KEY,
   transcodedAudioUrl,
   writeNetworkPreference,
+  writeNormalizationMode,
   writeStreamingMode,
   writeStreamingSelection
 } from './streaming-quality';
@@ -59,6 +65,23 @@ describe('streaming quality', () => {
     expect(onlineAudioUrl('abc', 'original')).toBe('/api/tracks/abc/stream');
     expect(onlineAudioUrl('abc', 'economy')).toBe('/api/tracks/abc/transcode?quality=economy');
     expect(onlineAudioUrl('abc', 'auto', true)).toBe('/api/tracks/abc/transcode?quality=balanced');
+    expect(onlineAudioUrl('abc', 'auto', false, 'track')).toBe('/api/tracks/abc/transcode?quality=high&normalization=track');
+    expect(onlineAudioUrl('abc', 'economy', false, 'album')).toBe('/api/tracks/abc/transcode?quality=economy&normalization=album');
+  });
+
+  it('resolve ReplayGain com fallback de álbum e desativa quando não há tag', () => {
+    const track = {
+      id: 'a', title: 'A', artist: 'B', album: 'C', albumArtist: 'B',
+      folder: 'F', folderPath: '', duration: 10, format: 'MP3', hasCover: false,
+      replayGainTrackDb: -7.2, replayGainAlbumDb: -5.8
+    };
+
+    expect(resolveReplayGain(track, 'track')).toBe(-7.2);
+    expect(resolveReplayGain(track, 'album')).toBe(-5.8);
+    expect(effectiveNormalizationMode(track, 'album')).toBe('album');
+    expect(resolveReplayGain({ ...track, replayGainAlbumDb: null }, 'album')).toBe(-7.2);
+    expect(effectiveNormalizationMode({ ...track, replayGainTrackDb: null, replayGainAlbumDb: null }, 'track')).toBe('off');
+    expect(parseNormalizationMode('inválido')).toBe('off');
   });
 
   it('só usa fallback adaptativo em erro de decode/formato', () => {
@@ -80,17 +103,21 @@ describe('streaming quality', () => {
     expect(readStreamingMode(storage)).toBe('auto');
     expect(readStreamingSelection(storage)).toBe('auto');
     expect(readNetworkPreference(storage)).toBe('auto');
+    expect(readNormalizationMode(storage)).toBe('off');
 
     writeStreamingMode(storage, 'economy');
     writeStreamingSelection(storage, 'network');
     writeNetworkPreference(storage, 'mobile');
+    writeNormalizationMode(storage, 'album');
 
     expect(values.get(STREAMING_MODE_STORAGE_KEY)).toBe('economy');
     expect(values.get(STREAMING_SELECTION_STORAGE_KEY)).toBe('network');
     expect(values.get(NETWORK_PREFERENCE_STORAGE_KEY)).toBe('mobile');
+    expect(values.get(NORMALIZATION_MODE_STORAGE_KEY)).toBe('album');
     expect(readStreamingMode(storage)).toBe('economy');
     expect(readStreamingSelection(storage)).toBe('network');
     expect(readNetworkPreference(storage)).toBe('mobile');
+    expect(readNormalizationMode(storage)).toBe('album');
     expect(parseNetworkPreference('wifi')).toBe('wifi');
     expect(parseNetworkPreference('qualquer')).toBe('auto');
 
@@ -104,5 +131,6 @@ describe('streaming quality', () => {
     expect(() => writeStreamingMode(broken, 'original')).not.toThrow();
     expect(() => writeStreamingSelection(broken, 'network')).not.toThrow();
     expect(() => writeNetworkPreference(broken, 'wifi')).not.toThrow();
+    expect(() => writeNormalizationMode(broken, 'track')).not.toThrow();
   });
 });

@@ -63,7 +63,8 @@
 - [x] Backend restrito a loopback no perfil remoto
 - [x] Cookie `Secure` no perfil HTTPS
 - [x] Setup/rollback idempotente com proteção contra conflito em 443
-- [ ] Aplicar grants/restrições least-privilege no tailnet real
+- [ ] Aplicar grants/restrições least-privilege no tailnet real (baixa prioridade em tailnet individual)
+- [ ] Acesso remoto HTTPS sem exigir cliente Tailscale no celular
 - [x] FFmpeg
 - [x] Transcoding adaptativo
 - [x] Perfis de qualidade Wi‑Fi / 4G
@@ -71,6 +72,6 @@
 ## Fase 6 — Extras
 
 - [x] Letras
-- [ ] ReplayGain / normalização opcional
+- [x] ReplayGain / normalização opcional
 - [ ] Estatísticas pessoais
 - [ ] Integração opcional com biblioteca DJ

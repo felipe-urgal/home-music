@@ -26,7 +26,7 @@ import {
   Volume2,
   Wifi
 } from 'lucide-react';
-import type { Playlist, RepeatMode, Track } from '@home-music/shared';
+import type { NormalizationMode, Playlist, RepeatMode, Track } from '@home-music/shared';
 import type {
   DetectedNetwork,
   NetworkPreference,
@@ -45,6 +45,12 @@ const STREAMING_CHOICES: Array<{ mode: StreamingSelection; label: string; detail
   { mode: 'auto', label: 'Automática', detail: 'Original + compatibilidade' },
   { mode: 'original', label: 'Original', detail: 'Sem conversão' },
   { mode: 'economy', label: 'Economia', detail: 'AAC · 96 kbps' }
+];
+
+const NORMALIZATION_CHOICES: Array<{ mode: NormalizationMode; label: string; detail: string }> = [
+  { mode: 'off', label: 'Desativada', detail: 'Reprodução sem ajuste de ganho' },
+  { mode: 'track', label: 'Por faixa', detail: 'Volume consistente entre músicas' },
+  { mode: 'album', label: 'Por álbum', detail: 'Preserva diferenças dentro do álbum' }
 ];
 
 const NETWORK_CHOICES: Array<{ preference: NetworkPreference; label: string; detail: string }> = [
@@ -94,6 +100,8 @@ type PlayerScreenProps = {
   effectiveStreamingMode?: StreamingMode;
   networkPreference?: NetworkPreference;
   detectedNetwork?: DetectedNetwork;
+  normalizationMode?: NormalizationMode;
+  effectiveNormalizationMode?: NormalizationMode;
   isFavorite: boolean;
   playlists: Playlist[];
   offlineMode?: boolean;
@@ -107,6 +115,7 @@ type PlayerScreenProps = {
   onVolume: (value: number) => void;
   onStreamingSelection?: (selection: StreamingSelection) => void;
   onNetworkPreference?: (preference: NetworkPreference) => void;
+  onNormalizationMode?: (mode: NormalizationMode) => void;
   onShuffle: () => void;
   onRepeat: () => void;
   onToggleFavorite: () => void;
@@ -136,6 +145,8 @@ export function PlayerScreen({
   effectiveStreamingMode = 'auto',
   networkPreference = 'auto',
   detectedNetwork = 'unknown',
+  normalizationMode = 'off',
+  effectiveNormalizationMode = 'off',
   isFavorite,
   playlists,
   offlineMode = false,
@@ -149,6 +160,7 @@ export function PlayerScreen({
   onVolume,
   onStreamingSelection,
   onNetworkPreference,
+  onNormalizationMode,
   onShuffle,
   onRepeat,
   onToggleFavorite,
@@ -323,6 +335,44 @@ export function PlayerScreen({
                   <div className="player-options__divider" />
                 </>
               )}
+
+              {onNormalizationMode && (
+                <>
+                  <strong>Normalização de volume</strong>
+                  <div className="player-options__choices" role="group" aria-label="Normalização de volume">
+                    {NORMALIZATION_CHOICES.map(choice => {
+                      const unavailable = choice.mode === 'track'
+                        ? current.replayGainTrackDb == null
+                        : choice.mode === 'album'
+                          ? current.replayGainAlbumDb == null && current.replayGainTrackDb == null
+                          : false;
+                      return (
+                        <button
+                          key={choice.mode}
+                          className={`player-options__choice ${normalizationMode === choice.mode ? 'is-selected' : ''}`}
+                          aria-pressed={normalizationMode === choice.mode}
+                          disabled={unavailable}
+                          onClick={() => onNormalizationMode(choice.mode)}
+                        >
+                          <div className="player-options__choice-copy">
+                            <b>{choice.label}</b>
+                            <small>{unavailable ? 'Esta faixa não possui tags ReplayGain' : choice.detail}</small>
+                          </div>
+                          {normalizationMode === choice.mode && <CheckCircle2 aria-hidden="true" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {normalizationMode !== 'off' && effectiveNormalizationMode === 'off' && (
+                    <span>A preferência continua salva, mas esta faixa será reproduzida sem normalização porque não possui tags ReplayGain.</span>
+                  )}
+                  {effectiveNormalizationMode !== 'off' && (
+                    <span>A normalização usa FFmpeg e o cache local, sem modificar o arquivo original.</span>
+                  )}
+                  <div className="player-options__divider" />
+                </>
+              )}
+
               <strong>Adicionar à playlist</strong>
               {playlists.length ? playlists.map(playlist => (
                 <button key={playlist.id} onClick={() => { onAddToPlaylist(playlist); setShowOptions(false); }}>

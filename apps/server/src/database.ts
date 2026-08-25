@@ -5,7 +5,7 @@ import { DatabaseSync } from 'node:sqlite';
 import type { PlaybackState, Playlist, RepeatMode, Track } from '@home-music/shared';
 import type { IndexedTrack } from './library.js';
 
-const CURRENT_SCHEMA_VERSION = 3;
+const CURRENT_SCHEMA_VERSION = 4;
 
 const DEFAULT_PLAYBACK_STATE: PlaybackState = {
   currentTrackId: null,
@@ -54,7 +54,9 @@ function publicTrackFromRow(row: Row): Track {
     folderPath: stringValue(row.folder_path),
     duration: row.duration == null ? null : numberValue(row.duration),
     format: stringValue(row.format),
-    hasCover: Boolean(row.has_cover)
+    hasCover: Boolean(row.has_cover),
+    replayGainTrackDb: row.replaygain_track_db == null ? null : numberValue(row.replaygain_track_db),
+    replayGainAlbumDb: row.replaygain_album_db == null ? null : numberValue(row.replaygain_album_db)
   };
 }
 
@@ -171,6 +173,23 @@ export class HomeMusicDatabase {
       version = 3;
     }
 
+    if (version < 4) {
+      if (this.hasColumn('tracks', 'id')) {
+        if (!this.hasColumn('tracks', 'replaygain_track_db')) {
+          this.db.exec('ALTER TABLE tracks ADD COLUMN replaygain_track_db REAL;');
+        }
+        if (!this.hasColumn('tracks', 'replaygain_album_db')) {
+          this.db.exec('ALTER TABLE tracks ADD COLUMN replaygain_album_db REAL;');
+        }
+      }
+      if (this.hasColumn('metadata', 'key')) {
+        // Força um único re-scan após o upgrade para preencher as tags novas.
+        this.db.prepare('DELETE FROM metadata WHERE key = ?').run('scannedAt');
+      }
+      this.db.exec('PRAGMA user_version = 4;');
+      version = 4;
+    }
+
     if (version !== CURRENT_SCHEMA_VERSION) {
       throw new Error(`Versão de schema SQLite não suportada: ${version}`);
     }
@@ -199,7 +218,8 @@ export class HomeMusicDatabase {
   loadTracks(): IndexedTrack[] {
     const rows = this.db.prepare(`
       SELECT id, file_path, title, artist, album, album_artist, folder, folder_path,
-             duration, format, has_cover, mime_type, file_size, mtime_ms
+             duration, format, has_cover, replaygain_track_db, replaygain_album_db,
+             mime_type, file_size, mtime_ms
       FROM tracks
       ORDER BY artist COLLATE NOCASE, title COLLATE NOCASE
     `).all() as Row[];
@@ -221,8 +241,9 @@ export class HomeMusicDatabase {
     const upsert = this.db.prepare(`
       INSERT INTO tracks(
         id, file_path, title, artist, album, album_artist, folder, folder_path,
-        duration, format, has_cover, mime_type, file_size, mtime_ms
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        duration, format, has_cover, replaygain_track_db, replaygain_album_db,
+        mime_type, file_size, mtime_ms
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         file_path = excluded.file_path,
         title = excluded.title,
@@ -234,6 +255,8 @@ export class HomeMusicDatabase {
         duration = excluded.duration,
         format = excluded.format,
         has_cover = excluded.has_cover,
+        replaygain_track_db = excluded.replaygain_track_db,
+        replaygain_album_db = excluded.replaygain_album_db,
         mime_type = excluded.mime_type,
         file_size = excluded.file_size,
         mtime_ms = excluded.mtime_ms
@@ -255,6 +278,8 @@ export class HomeMusicDatabase {
           track.duration,
           track.format,
           track.hasCover ? 1 : 0,
+          track.replayGainTrackDb ?? null,
+          track.replayGainAlbumDb ?? null,
           track.mimeType,
           track.fileSize,
           track.mtimeMs
@@ -303,7 +328,8 @@ export class HomeMusicDatabase {
     const rows = this.db.prepare(`
       SELECT h.id AS history_id, h.played_at,
              t.id, t.title, t.artist, t.album, t.album_artist, t.folder, t.folder_path,
-             t.duration, t.format, t.has_cover
+             t.duration, t.format, t.has_cover,
+             t.replaygain_track_db, t.replaygain_album_db
       FROM history h
       JOIN tracks t ON t.id = h.track_id
       ORDER BY h.id DESC

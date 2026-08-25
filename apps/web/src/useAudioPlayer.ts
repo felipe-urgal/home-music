@@ -1,15 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { PlaybackState, RepeatMode, Track } from '@home-music/shared';
+import type { NormalizationMode, PlaybackState, RepeatMode, Track } from '@home-music/shared';
 import { apiFetch } from './api-client';
 import { buildQueueContext } from './library-utils';
 import { offlineAudioUrl } from './offline-downloads';
 import { nextTrackDecision, remapQueue, resolveOutputVolume, restorePlayerState } from './player-state';
 import {
+  effectiveNormalizationMode as resolveEffectiveNormalizationMode,
   onlineAudioUrl,
+  readNormalizationMode,
   readStreamingMode,
   shouldFallbackToOriginal,
   shouldRetryWithCompatibilityTranscode,
   type StreamingMode,
+  writeNormalizationMode,
   writeStreamingMode
 } from './streaming-quality';
 
@@ -45,6 +48,22 @@ function initialStreamingMode(): StreamingMode {
     return readStreamingMode(window.localStorage);
   } catch {
     return 'auto';
+  }
+}
+
+function initialNormalizationMode(): NormalizationMode {
+  try {
+    return readNormalizationMode(window.localStorage);
+  } catch {
+    return 'off';
+  }
+}
+
+function persistNormalizationMode(mode: NormalizationMode) {
+  try {
+    writeNormalizationMode(window.localStorage, mode);
+  } catch {
+    // Preferência é local e best-effort.
   }
 }
 
@@ -117,7 +136,7 @@ export function useAudioPlayer(
   const restoredPositionRef = useRef(0);
   const historyTrackRef = useRef<string | null>(null);
   const sourceTrackRef = useRef<string | null>(null);
-  const sourceFallbackRef = useRef<'none' | 'compatibility' | 'original'>('none');
+  const sourceFallbackRef = useRef<'none' | 'compatibility' | 'original' | 'unnormalized'>('none');
   const hydratedRef = useRef(false);
   const resumeIntentRef = useRef(false);
   const [orderedQueue, setOrderedQueue] = useState<Track[]>([]);
@@ -133,11 +152,13 @@ export function useAudioPlayer(
   const [shuffle, setShuffle] = useState(false);
   const [repeatMode, setRepeatMode] = useState<RepeatMode>('off');
   const [streamingMode, setStreamingModeState] = useState<StreamingMode>(() => offlineMode ? 'original' : initialStreamingMode());
+  const [normalizationMode, setNormalizationModeState] = useState<NormalizationMode>(() => offlineMode ? 'off' : initialNormalizationMode());
   const [hydrated, setHydrated] = useState(false);
 
   const trackMap = useMemo(() => new Map(tracks.map(track => [track.id, track])), [tracks]);
   const currentIndex = currentTrackId ? queue.findIndex(track => track.id === currentTrackId) : -1;
   const current = currentTrackId ? trackMap.get(currentTrackId) : undefined;
+  const effectiveNormalizationMode = current ? resolveEffectiveNormalizationMode(current, normalizationMode) : 'off';
   const hasNext = currentIndex >= 0 && (
     currentIndex < queue.length - 1 || repeatMode === 'all'
   );
@@ -265,10 +286,12 @@ export function useAudioPlayer(
     setCurrentTime(0);
     setDuration(current.duration ?? 0);
     positionRef.current = 0;
-    audio.src = offlineMode ? offlineAudioUrl(current.id) : onlineAudioUrl(current.id, streamingMode);
+    audio.src = offlineMode
+      ? offlineAudioUrl(current.id)
+      : onlineAudioUrl(current.id, streamingMode, false, effectiveNormalizationMode);
     audio.load();
     resumeAudio(audio);
-  }, [current?.id, hydrated, offlineMode, resumeAudio, streamingMode]);
+  }, [current?.id, effectiveNormalizationMode, hydrated, offlineMode, resumeAudio, streamingMode]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -425,6 +448,13 @@ export function useAudioPlayer(
     setStreamingModeState(mode);
   }, [offlineMode, streamingMode]);
 
+  const setNormalizationMode = useCallback((mode: NormalizationMode) => {
+    if (offlineMode || mode === normalizationMode) return;
+    restoredPositionRef.current = positionRef.current;
+    persistNormalizationMode(mode);
+    setNormalizationModeState(mode);
+  }, [normalizationMode, offlineMode]);
+
   const playTrack = useCallback((track: Track, contextTracks: Track[]) => {
     const context = buildQueueContext(track, contextTracks);
     const baseQueue = context.queue;
@@ -561,7 +591,39 @@ export function useAudioPlayer(
   function handleError(audio: HTMLAudioElement) {
     const mediaErrorCode = audio.error?.code;
 
+    if (!offlineMode && current && sourceFallbackRef.current === 'unnormalized') {
+      if (shouldRetryWithCompatibilityTranscode(streamingMode, mediaErrorCode)) {
+        sourceFallbackRef.current = 'compatibility';
+        restoredPositionRef.current = positionRef.current;
+        setSourceError(null);
+        audio.src = onlineAudioUrl(current.id, streamingMode, true);
+        audio.load();
+        resumeAudio(audio);
+        return;
+      }
+
+      if (shouldFallbackToOriginal(streamingMode, mediaErrorCode)) {
+        sourceFallbackRef.current = 'original';
+        restoredPositionRef.current = positionRef.current;
+        setSourceError(null);
+        audio.src = onlineAudioUrl(current.id, 'original');
+        audio.load();
+        resumeAudio(audio);
+        return;
+      }
+    }
+
     if (!offlineMode && current && sourceFallbackRef.current === 'none') {
+      if (effectiveNormalizationMode !== 'off') {
+        sourceFallbackRef.current = 'unnormalized';
+        restoredPositionRef.current = positionRef.current;
+        setSourceError(null);
+        audio.src = onlineAudioUrl(current.id, streamingMode);
+        audio.load();
+        resumeAudio(audio);
+        return;
+      }
+
       if (shouldRetryWithCompatibilityTranscode(streamingMode, mediaErrorCode)) {
         sourceFallbackRef.current = 'compatibility';
         restoredPositionRef.current = positionRef.current;
@@ -605,6 +667,8 @@ export function useAudioPlayer(
     shuffle,
     repeatMode,
     streamingMode,
+    normalizationMode,
+    effectiveNormalizationMode,
     hasNext,
     hydrated,
     playTrack,
@@ -614,6 +678,7 @@ export function useAudioPlayer(
     seek,
     setVolume,
     setStreamingMode,
+    setNormalizationMode,
     toggleShuffle,
     cycleRepeat,
     reorderQueue,

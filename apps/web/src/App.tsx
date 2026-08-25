@@ -125,6 +125,8 @@ function AuthenticatedApp({ onLogout, offline }: AuthenticatedAppProps) {
             effectiveStreamingMode={qualityProfile.effectiveMode}
             networkPreference={qualityProfile.networkPreference}
             detectedNetwork={qualityProfile.detectedNetwork}
+            normalizationMode={player.normalizationMode}
+            effectiveNormalizationMode={player.effectiveNormalizationMode}
             isFavorite={library.favoriteSet.has(current.id)}
             playlists={library.playlists}
             isDownloaded={offline.downloadedIds.has(current.id)}
@@ -137,6 +139,7 @@ function AuthenticatedApp({ onLogout, offline }: AuthenticatedAppProps) {
             onVolume={player.setVolume}
             onStreamingSelection={qualityProfile.setSelection}
             onNetworkPreference={qualityProfile.setNetworkPreference}
+            onNormalizationMode={player.setNormalizationMode}
             onShuffle={player.toggleShuffle}
             onRepeat={player.cycleRepeat}
             onToggleFavorite={() => run(library.toggleFavorite(current.id))}

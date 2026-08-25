@@ -1,4 +1,5 @@
 export type RepeatMode = 'off' | 'all' | 'one';
+export type NormalizationMode = 'off' | 'track' | 'album';
 
 export type Track = {
   id: string;
@@ -11,6 +12,8 @@ export type Track = {
   duration: number | null;
   format: string;
   hasCover: boolean;
+  replayGainTrackDb?: number | null;
+  replayGainAlbumDb?: number | null;
 };
 
 export type LibraryResponse = {
