@@ -131,9 +131,9 @@ export function readStreamingSelection(storage: Pick<Storage, 'getItem'>): Strea
   }
 }
 
-export function writeStreamingSelection(storage: Pick<Storage, 'setItem'>, mode: StreamingSelection) {
+export function writeStreamingSelection(storage: Pick<Storage, 'setItem'>, selection: StreamingSelection) {
   try {
-    storage.setItem(STREAMING_SELECTION_STORAGE_KEY, mode);
+    storage.setItem(STREAMING_SELECTION_STORAGE_KEY, selection);
   } catch {
     // Preferência é best-effort; falha de storage não impede reprodução.
   }
