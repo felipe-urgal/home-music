@@ -1,12 +1,13 @@
 import { mkdtemp, mkdir, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
 import { parseLyrics, readTrackLyrics } from './lyrics.js';
 
 describe('lyrics', () => {
   it('parses synchronized LRC lines and ignores metadata', () => {
-    expect(parseLyrics('[ar:Artista]\n[00:12.50]Primeira\n[01:02]Segunda', 'lrc')).toEqual({
+    assert.deepEqual(parseLyrics('[ar:Artista]\n[00:12.50]Primeira\n[01:02]Segunda', 'lrc'), {
       source: 'lrc',
       synchronized: true,
       lines: [
@@ -22,7 +23,7 @@ describe('lyrics', () => {
     await writeFile(trackPath, 'audio');
     await writeFile(path.join(root, 'song.txt'), 'Linha 1\nLinha 2');
 
-    await expect(readTrackLyrics(root, trackPath)).resolves.toEqual({
+    assert.deepEqual(await readTrackLyrics(root, trackPath),{
       source: 'txt',
       synchronized: false,
       lines: [
@@ -42,6 +43,6 @@ describe('lyrics', () => {
     await writeFile(outsideLyrics, 'segredo');
     await symlink(outsideLyrics, path.join(root, 'album', 'song.txt'));
 
-    await expect(readTrackLyrics(root, trackPath)).resolves.toBeNull();
+    assert.equal(await readTrackLyrics(root, trackPath), null);
   });
 });
