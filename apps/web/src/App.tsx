@@ -48,6 +48,7 @@ function AuthenticatedApp({ onLogout, offline }: AuthenticatedAppProps) {
     playing: player.playing
   });
   const current = player.current;
+  const editablePlaylists = library.playlists.filter(playlist => playlist.source === 'manual');
   const libraryReturnLabel = buildLibraryReturnLabel({
     selectedGroupName: navigation.selectedGroup?.name,
     selectedPlaylistName: navigation.selectedPlaylist?.name,
@@ -157,7 +158,7 @@ function AuthenticatedApp({ onLogout, offline }: AuthenticatedAppProps) {
             normalizationMode={player.normalizationMode}
             effectiveNormalizationMode={player.effectiveNormalizationMode}
             isFavorite={library.favoriteSet.has(current.id)}
-            playlists={library.playlists}
+            playlists={editablePlaylists}
             isDownloaded={offline.downloadedIds.has(current.id)}
             downloading={offline.downloadingIds.has(current.id)}
             onOpenLibrary={() => setScreen('library')}
