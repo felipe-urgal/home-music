@@ -232,16 +232,17 @@ print_status() {
   check_tailscale_version
   load_tailscale_identity
 
-  local port target state production_host secure_cookie service_state profile
+  local port target state production_host secure_cookie trusted_proxy service_state profile
   port="$(home_music_port)"
   target="127.0.0.1:${port}"
   state="$(https_443_state "${target}")"
   production_host="$(read_env_value PRODUCTION_HOST)"
   secure_cookie="$(read_env_value HOME_MUSIC_COOKIE_SECURE)"
+  trusted_proxy="$(read_env_value HOME_MUSIC_TRUST_TAILSCALE_PROXY)"
   service_state="$(systemctl is-active "${SERVICE_UNIT}" 2>/dev/null || true)"
   profile="inconsistente"
 
-  if [[ "${state}" == "funnel" && "${production_host}" == "127.0.0.1" && "${secure_cookie}" == "true" ]]; then
+  if [[ "${state}" == "funnel" && "${production_host}" == "127.0.0.1" && "${secure_cookie}" == "true" && "${trusted_proxy}" == "true" ]]; then
     profile="publico-funnel"
   elif [[ "${state}" == "serve" && "${production_host}" == "127.0.0.1" && "${secure_cookie}" == "true" ]]; then
     profile="privado-serve"
@@ -256,6 +257,7 @@ print_status() {
   echo "  Backend esperado: ${target}"
   echo "  PRODUCTION_HOST:  ${production_host:-não definido}"
   echo "  Cookie Secure:    ${secure_cookie:-false}"
+  echo "  Proxy Tailscale:  ${trusted_proxy:-false}"
   echo "  Perfil:           ${profile}"
 }
 
@@ -292,7 +294,7 @@ enable_public() {
   fi
 
   if [[ "${state}" == "funnel" ]]; then
-    if [[ "$(read_env_value PRODUCTION_HOST)" == "127.0.0.1" && "$(read_env_value HOME_MUSIC_COOKIE_SECURE)" == "true" ]]; then
+    if [[ "$(read_env_value PRODUCTION_HOST)" == "127.0.0.1" && "$(read_env_value HOME_MUSIC_COOKIE_SECURE)" == "true" && "$(read_env_value HOME_MUSIC_TRUST_TAILSCALE_PROXY)" == "true" ]]; then
       echo "Tailscale Funnel já está ativo para o Home Music."
       echo "URL pública: ${TAILSCALE_URL}"
       return 0
