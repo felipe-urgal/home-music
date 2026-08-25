@@ -1,3 +1,5 @@
+import type { NormalizationMode, Track } from '@home-music/shared';
+
 export const MIN_REPLAY_GAIN_DB = -24;
 export const MAX_REPLAY_GAIN_DB = 12;
 
@@ -26,4 +28,16 @@ export function replayGainDb(value: unknown): number | null {
   const ratio = Number(record.ratio);
   if (!Number.isFinite(ratio) || ratio <= 0) return null;
   return clampReplayGainDb(20 * Math.log10(ratio));
+}
+
+export function replayGainForMode(
+  track: Pick<Track, 'replayGainTrackDb' | 'replayGainAlbumDb'>,
+  mode: NormalizationMode
+) {
+  const value = mode === 'track'
+    ? track.replayGainTrackDb
+    : mode === 'album'
+      ? track.replayGainAlbumDb ?? track.replayGainTrackDb
+      : null;
+  return typeof value === 'number' && Number.isFinite(value) ? clampReplayGainDb(value) : null;
 }
