@@ -591,6 +591,28 @@ export function useAudioPlayer(
   function handleError(audio: HTMLAudioElement) {
     const mediaErrorCode = audio.error?.code;
 
+    if (!offlineMode && current && sourceFallbackRef.current === 'unnormalized') {
+      if (shouldRetryWithCompatibilityTranscode(streamingMode, mediaErrorCode)) {
+        sourceFallbackRef.current = 'compatibility';
+        restoredPositionRef.current = positionRef.current;
+        setSourceError(null);
+        audio.src = onlineAudioUrl(current.id, streamingMode, true);
+        audio.load();
+        resumeAudio(audio);
+        return;
+      }
+
+      if (shouldFallbackToOriginal(streamingMode, mediaErrorCode)) {
+        sourceFallbackRef.current = 'original';
+        restoredPositionRef.current = positionRef.current;
+        setSourceError(null);
+        audio.src = onlineAudioUrl(current.id, 'original');
+        audio.load();
+        resumeAudio(audio);
+        return;
+      }
+    }
+
     if (!offlineMode && current && sourceFallbackRef.current === 'none') {
       if (effectiveNormalizationMode !== 'off') {
         sourceFallbackRef.current = 'unnormalized';
