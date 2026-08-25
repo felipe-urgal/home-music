@@ -608,6 +608,12 @@ app.post<{ Body: { name?: string } }>('/api/playlists', async (request, reply) =
 });
 
 app.patch<{ Params: { id: string }; Body: { name?: string } }>('/api/playlists/:id', async (request, reply) => {
+  const playlist = database.getPlaylists().find(item => item.id === request.params.id);
+  if (!playlist) return reply.code(404).send({ error: 'Playlist não encontrada.' });
+  if (playlist.source !== 'manual') {
+    return reply.code(409).send({ error: 'Playlist sincronizada pelo Rekordbox; reimporte o XML para alterá-la.' });
+  }
+
   const name = cleanName(request.body?.name);
   if (!name) return reply.code(400).send({ error: 'Nome da playlist obrigatório.' });
   if (!database.renamePlaylist(request.params.id, name)) return reply.code(404).send({ error: 'Playlist não encontrada.' });
@@ -620,6 +626,11 @@ app.delete<{ Params: { id: string } }>('/api/playlists/:id', async (request, rep
 });
 
 app.put<{ Params: { id: string }; Body: { trackIds?: unknown } }>('/api/playlists/:id/tracks', async (request, reply) => {
+  const playlist = database.getPlaylists().find(item => item.id === request.params.id);
+  if (!playlist) return reply.code(404).send({ error: 'Playlist não encontrada.' });
+  if (playlist.source !== 'manual') {
+    return reply.code(409).send({ error: 'Playlist sincronizada pelo Rekordbox; reimporte o XML para alterá-la.' });
+  }
   if (!Array.isArray(request.body?.trackIds)) return reply.code(400).send({ error: 'Lista de músicas inválida.' });
   const trackIds = cleanTrackIds(request.body.trackIds);
 
@@ -634,6 +645,10 @@ app.post<{ Body: { xml?: unknown } }>(
   '/api/integrations/rekordbox/preview',
   { bodyLimit: MAX_REKORDBOX_REQUEST_BYTES },
   async (request, reply) => {
+    if (!libraryReady) {
+      return reply.code(503).send({ error: 'Biblioteca ainda não está pronta para comparar o XML do Rekordbox.' });
+    }
+
     const xml = typeof request.body?.xml === 'string' ? request.body.xml : '';
     if (!xml) return reply.code(400).send({ error: 'Selecione um XML exportado pelo Rekordbox.' });
     if (Buffer.byteLength(xml, 'utf8') > MAX_REKORDBOX_XML_BYTES) {
@@ -655,6 +670,10 @@ app.post<{ Body: { xml?: unknown } }>(
   '/api/integrations/rekordbox/import',
   { bodyLimit: MAX_REKORDBOX_REQUEST_BYTES },
   async (request, reply) => {
+    if (!libraryReady) {
+      return reply.code(503).send({ error: 'Biblioteca ainda não está pronta para importar playlists do Rekordbox.' });
+    }
+
     const xml = typeof request.body?.xml === 'string' ? request.body.xml : '';
     if (!xml) return reply.code(400).send({ error: 'Selecione um XML exportado pelo Rekordbox.' });
     if (Buffer.byteLength(xml, 'utf8') > MAX_REKORDBOX_XML_BYTES) {
@@ -666,6 +685,12 @@ app.post<{ Body: { xml?: unknown } }>(
       if (plan.playlists === 0) {
         return reply.code(400).send({ error: 'O XML não contém playlists para importar.' });
       }
+      if (plan.playlistEntries > 0 && plan.matchedPlaylistEntries === 0) {
+        return reply.code(409).send({
+          error: 'Nenhuma música das playlists foi reconhecida. Atualize a biblioteca ou confira se este XML corresponde aos seus arquivos antes de sincronizar.'
+        });
+      }
+
       const changes = database.syncImportedPlaylists(
         'rekordbox',
         plan.playlistPlans.map(playlist => ({
