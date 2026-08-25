@@ -9,6 +9,7 @@ import { useAudioPlayer } from './useAudioPlayer';
 import { useAuth } from './useAuth';
 import { useLibraryData } from './useLibraryData';
 import { useLibraryNavigation } from './useLibraryNavigation';
+import { useNetworkQualityProfile } from './useNetworkQualityProfile';
 import { useSystemVolumePreference } from './useSystemVolume';
 
 type Screen = 'player' | 'library';
@@ -25,6 +26,7 @@ function AuthenticatedApp({ onLogout, offline }: AuthenticatedAppProps) {
   const libraryReady = !library.loading && !library.error;
   const usesSystemVolume = useSystemVolumePreference();
   const player = useAudioPlayer(library.tracks, screen === 'player', libraryReady, usesSystemVolume);
+  const qualityProfile = useNetworkQualityProfile(player.streamingMode, player.setStreamingMode);
   const current = player.current;
   const libraryReturnLabel = buildLibraryReturnLabel({
     selectedGroupName: navigation.selectedGroup?.name,
@@ -119,7 +121,10 @@ function AuthenticatedApp({ onLogout, offline }: AuthenticatedAppProps) {
             usesSystemVolume={usesSystemVolume}
             shuffle={player.shuffle}
             repeatMode={player.repeatMode}
-            streamingMode={player.streamingMode}
+            streamingSelection={qualityProfile.selection}
+            effectiveStreamingMode={qualityProfile.effectiveMode}
+            networkPreference={qualityProfile.networkPreference}
+            detectedNetwork={qualityProfile.detectedNetwork}
             isFavorite={library.favoriteSet.has(current.id)}
             playlists={library.playlists}
             isDownloaded={offline.downloadedIds.has(current.id)}
@@ -130,7 +135,8 @@ function AuthenticatedApp({ onLogout, offline }: AuthenticatedAppProps) {
             onNext={player.next}
             onSeek={player.seek}
             onVolume={player.setVolume}
-            onStreamingMode={player.setStreamingMode}
+            onStreamingSelection={qualityProfile.setSelection}
+            onNetworkPreference={qualityProfile.setNetworkPreference}
             onShuffle={player.toggleShuffle}
             onRepeat={player.cycleRepeat}
             onToggleFavorite={() => run(library.toggleFavorite(current.id))}
