@@ -97,7 +97,7 @@ export function DesktopShell({
     onOpenLibraryTab('tracks');
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
-        const search = document.querySelector<HTMLInputElement>('[data-library-search]');
+        const search = document.querySelector<HTMLInputElement>('.search-box--library input');
         search?.focus();
         search?.select();
       });
