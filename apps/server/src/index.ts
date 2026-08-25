@@ -19,6 +19,7 @@ import {
 import { HomeMusicDatabase } from './database.js';
 import { probeFfmpeg, resolveFfmpegCommand, type FfmpegStatus } from './ffmpeg.js';
 import { readCover, scanLibrary, type IndexedTrack } from './library.js';
+import { readTrackLyrics } from './lyrics.js';
 import {
   openRegularFileInside,
   parseByteRange,
@@ -625,6 +626,15 @@ app.put<{ Body: Partial<PlaybackState> }>('/api/player/state', async (request, r
   });
 
   return state;
+});
+
+app.get<{ Params: { id: string } }>('/api/tracks/:id/lyrics', async (request, reply) => {
+  const track = tracksById.get(request.params.id);
+  if (!track || !libraryRoot) return reply.code(404).send({ error: 'Música não encontrada.' });
+
+  const lyrics = await readTrackLyrics(libraryRoot, track.filePath);
+  reply.header('Cache-Control', 'no-store');
+  return reply.send(lyrics);
 });
 
 app.get<{ Params: { id: string } }>('/api/tracks/:id/cover', async (request, reply) => {
