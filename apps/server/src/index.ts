@@ -23,6 +23,13 @@ import { readCover, scanLibrary, type IndexedTrack } from './library.js';
 import { replayGainForMode } from './replay-gain.js';
 import { readTrackLyrics } from './lyrics.js';
 import {
+  buildRekordboxImportPlan,
+  MAX_REKORDBOX_REQUEST_BYTES,
+  MAX_REKORDBOX_XML_BYTES,
+  publicRekordboxPlan,
+  RekordboxXmlError
+} from './rekordbox.js';
+import {
   openRegularFileInside,
   parseByteRange,
   resolveLibraryRoot,
@@ -622,6 +629,59 @@ app.put<{ Params: { id: string }; Body: { trackIds?: unknown } }>('/api/playlist
 
   return { trackIds };
 });
+
+app.post<{ Body: { xml?: unknown } }>(
+  '/api/integrations/rekordbox/preview',
+  { bodyLimit: MAX_REKORDBOX_REQUEST_BYTES },
+  async (request, reply) => {
+    const xml = typeof request.body?.xml === 'string' ? request.body.xml : '';
+    if (!xml) return reply.code(400).send({ error: 'Selecione um XML exportado pelo Rekordbox.' });
+    if (Buffer.byteLength(xml, 'utf8') > MAX_REKORDBOX_XML_BYTES) {
+      return reply.code(413).send({ error: `O XML excede o limite de ${MAX_REKORDBOX_XML_BYTES / 1024 / 1024} MiB.` });
+    }
+
+    try {
+      const plan = buildRekordboxImportPlan(xml, tracks);
+      reply.header('Cache-Control', 'private, no-store');
+      return publicRekordboxPlan(plan);
+    } catch (error) {
+      if (error instanceof RekordboxXmlError) return reply.code(400).send({ error: error.message });
+      throw error;
+    }
+  }
+);
+
+app.post<{ Body: { xml?: unknown } }>(
+  '/api/integrations/rekordbox/import',
+  { bodyLimit: MAX_REKORDBOX_REQUEST_BYTES },
+  async (request, reply) => {
+    const xml = typeof request.body?.xml === 'string' ? request.body.xml : '';
+    if (!xml) return reply.code(400).send({ error: 'Selecione um XML exportado pelo Rekordbox.' });
+    if (Buffer.byteLength(xml, 'utf8') > MAX_REKORDBOX_XML_BYTES) {
+      return reply.code(413).send({ error: `O XML excede o limite de ${MAX_REKORDBOX_XML_BYTES / 1024 / 1024} MiB.` });
+    }
+
+    try {
+      const plan = buildRekordboxImportPlan(xml, tracks);
+      if (plan.playlists === 0) {
+        return reply.code(400).send({ error: 'O XML não contém playlists para importar.' });
+      }
+      const changes = database.syncImportedPlaylists(
+        'rekordbox',
+        plan.playlistPlans.map(playlist => ({
+          sourceKey: playlist.sourceKey,
+          name: playlist.name,
+          trackIds: playlist.trackIds
+        }))
+      );
+      reply.header('Cache-Control', 'private, no-store');
+      return { ...publicRekordboxPlan(plan), ...changes };
+    } catch (error) {
+      if (error instanceof RekordboxXmlError) return reply.code(400).send({ error: error.message });
+      throw error;
+    }
+  }
+);
 
 app.get('/api/player/state', async () => database.loadPlaybackState());
 
