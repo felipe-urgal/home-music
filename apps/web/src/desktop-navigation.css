@@ -43,11 +43,11 @@
     display: none;
   }
 
-  .app-shell:has(.phone-surface[data-desktop-section="player"]) .desktop-player-bar {
-    display: none;
+  .desktop-layout[data-desktop-active="player"] {
+    height: 100vh;
   }
 
-  .app-shell:has(.phone-surface[data-desktop-section="player"]) .desktop-layout {
-    height: 100vh;
+  .desktop-layout[data-desktop-active="player"] + .desktop-player-bar {
+    display: none;
   }
 }
