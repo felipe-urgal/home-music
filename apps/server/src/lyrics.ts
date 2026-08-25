@@ -1,5 +1,5 @@
 import path from 'node:path';
-import type { LyricsResponse } from '@home-music/shared';
+import type { LyricsLine, LyricsResponse } from '@home-music/shared';
 import { openRegularFileInside } from './security.js';
 
 const MAX_LYRICS_BYTES = 512 * 1024;
