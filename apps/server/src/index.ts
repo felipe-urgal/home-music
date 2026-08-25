@@ -2,7 +2,7 @@ import { config } from 'dotenv';
 import { open } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import Fastify from 'fastify';
-import type { PlaybackState, RepeatMode, ScanResponse } from '@home-music/shared';
+import type { NormalizationMode, PlaybackState, RepeatMode, ScanResponse } from '@home-music/shared';
 import {
   DEFAULT_AUTO_RESCAN_INTERVAL_SECONDS,
   parseAutoRescanIntervalSeconds,
@@ -321,6 +321,20 @@ function cleanTrackIds(value: unknown) {
     .filter((item): item is string => typeof item === 'string' && item.length <= 64)
     .filter(id => tracksById.has(id))
   )].slice(0, 5000);
+}
+
+function parseNormalizationMode(value: unknown): NormalizationMode | null {
+  if (value == null || value === '' || value === 'off') return 'off';
+  return value === 'track' || value === 'album' ? value : null;
+}
+
+function normalizationGain(track: IndexedTrack, mode: NormalizationMode) {
+  const value = mode === 'track'
+    ? track.replayGainTrackDb
+    : mode === 'album'
+      ? track.replayGainAlbumDb
+      : null;
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
 function cleanRepeatMode(value: unknown): RepeatMode {
@@ -713,12 +727,15 @@ app.get<{ Params: { id: string } }>('/api/tracks/:id/stream', async (request, re
   }
 });
 
-app.get<{ Params: { id: string }; Querystring: { quality?: string } }>('/api/tracks/:id/transcode', async (request, reply) => {
+app.get<{ Params: { id: string }; Querystring: { quality?: string; normalization?: string } }>('/api/tracks/:id/transcode', async (request, reply) => {
   const track = tracksById.get(request.params.id);
   if (!track || !libraryRoot) return reply.code(404).send({ error: 'Música não encontrada.' });
 
   const quality = parseTranscodeQuality(request.query.quality);
   if (!quality) return reply.code(400).send({ error: 'Qualidade de transcoding inválida.' });
+  const normalization = parseNormalizationMode(request.query.normalization);
+  if (!normalization) return reply.code(400).send({ error: 'Modo de normalização inválido.' });
+  const gainDb = normalizationGain(track, normalization);
   if (!ffmpegStatus.available) {
     return reply.code(503).send({ error: 'Transcoding indisponível porque FFmpeg não está disponível.' });
   }
@@ -732,6 +749,7 @@ app.get<{ Params: { id: string }; Querystring: { quality?: string } }>('/api/tra
         sourceSize: source.stat.size,
         sourceMtimeMs: source.stat.mtimeMs,
         quality,
+        normalizationGainDb: gainDb,
         createInput: () => source.handle.createReadStream({ autoClose: false })
       });
     } finally {
@@ -751,6 +769,7 @@ app.get<{ Params: { id: string }; Querystring: { quality?: string } }>('/api/tra
     reply.header('Cache-Control', 'private, no-store');
     reply.header('X-Home-Music-Transcode-Quality', quality);
     reply.header('X-Home-Music-Transcode-Cache', prepared.cacheHit ? 'hit' : 'miss');
+    reply.header('X-Home-Music-Normalization', normalization === 'off' ? 'off' : gainDb == null ? 'unavailable' : normalization);
 
     if (range === null) {
       await transcoded.close();
@@ -775,7 +794,7 @@ app.get<{ Params: { id: string }; Querystring: { quality?: string } }>('/api/tra
     if (isNotFoundLike(error)) return reply.code(404).send({ error: 'Música não encontrada.' });
     if (error instanceof TranscodeExecutionError) {
       app.log.warn(
-        { err: error, trackId: track.id, quality, reason: error.reason },
+        { err: error, trackId: track.id, quality, normalization, reason: error.reason },
         'Falha ao preparar áudio transcodificado.'
       );
       return reply.code(503).send({ error: 'Não foi possível preparar esta música na qualidade solicitada.' });
