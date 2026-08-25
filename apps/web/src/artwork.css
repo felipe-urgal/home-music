@@ -1,0 +1,105 @@
+.artwork--fallback {
+  position: relative;
+  isolation: isolate;
+  background: linear-gradient(145deg, #14212d, #090d12 72%);
+}
+
+.artwork--fallback::before {
+  content: '';
+  position: absolute;
+  inset: -20%;
+  z-index: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,255,255,.16), transparent 62%);
+  transform: translate(-28%, -30%);
+  pointer-events: none;
+}
+
+.artwork-fallback {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+.artwork-fallback__label {
+  max-width: 75%;
+  overflow: hidden;
+  color: rgba(245, 249, 252, .92);
+  font-size: 13px;
+  font-weight: 760;
+  letter-spacing: -.02em;
+  line-height: 1;
+  text-overflow: clip;
+  text-shadow: 0 2px 12px rgba(0,0,0,.32);
+  white-space: nowrap;
+}
+
+.artwork-fallback__disc {
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
+  width: 13px;
+  height: 13px;
+  border: 1px solid rgba(255,255,255,.38);
+  border-radius: 50%;
+  opacity: .62;
+}
+
+.artwork-fallback__disc::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.62);
+  transform: translate(-50%, -50%);
+}
+
+.artwork--large .artwork-fallback__label {
+  max-width: 78%;
+  font-size: clamp(42px, 16vw, 72px);
+  letter-spacing: -.045em;
+}
+
+.artwork--large .artwork-fallback__disc {
+  right: 18px;
+  bottom: 18px;
+  width: 38px;
+  height: 38px;
+  border-width: 2px;
+}
+
+.artwork--large .artwork-fallback__disc::after {
+  width: 8px;
+  height: 8px;
+}
+
+.artwork--tone-0 {
+  background: radial-gradient(circle at 24% 18%, rgba(62, 156, 255, .45), transparent 34%), linear-gradient(145deg, #18334a, #081018 74%);
+}
+
+.artwork--tone-1 {
+  background: radial-gradient(circle at 24% 18%, rgba(88, 196, 167, .42), transparent 34%), linear-gradient(145deg, #183a36, #081210 74%);
+}
+
+.artwork--tone-2 {
+  background: radial-gradient(circle at 24% 18%, rgba(171, 116, 255, .42), transparent 34%), linear-gradient(145deg, #2d2147, #0d0914 74%);
+}
+
+.artwork--tone-3 {
+  background: radial-gradient(circle at 24% 18%, rgba(255, 143, 90, .42), transparent 34%), linear-gradient(145deg, #45261c, #130b08 74%);
+}
+
+.artwork--tone-4 {
+  background: radial-gradient(circle at 24% 18%, rgba(236, 103, 160, .4), transparent 34%), linear-gradient(145deg, #402131, #12090e 74%);
+}
+
+.artwork--tone-5 {
+  background: radial-gradient(circle at 24% 18%, rgba(214, 190, 82, .4), transparent 34%), linear-gradient(145deg, #3f381d, #111006 74%);
+}
