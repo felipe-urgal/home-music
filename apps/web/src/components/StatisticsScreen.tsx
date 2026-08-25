@@ -51,6 +51,7 @@ export function StatisticsScreen({ onBack, onPlayTrack }: StatisticsScreenProps)
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
+    setData(null);
     setError(null);
 
     apiFetch(`/api/statistics?period=${period}`, { signal: controller.signal })

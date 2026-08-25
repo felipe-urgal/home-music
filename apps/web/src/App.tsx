@@ -191,7 +191,7 @@ function OfflineApp({ offline, onExit }: { offline: OfflineDownloads; onExit: ()
         onError={event => player.audioHandlers.onError(event.currentTarget)}
       />
 
-      <section className={`phone-surface ${screen !== 'player' ? 'phone-surface--library' : ''}`}>
+      <section className={`phone-surface ${screen === 'library' ? 'phone-surface--library' : ''}`}>
         {offline.loading || (offline.tracks.length > 0 && !player.hydrated) ? (
           <div className="center-state">Preparando seus downloads…</div>
         ) : screen === 'library' ? (
