@@ -1,17 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronUp, Music2 } from 'lucide-react';
-import type { LyricsResponse, Track } from '@home-music/shared';
+import type { Track } from '@home-music/shared';
+import { useDesktopLayout } from '../useDesktopLayout';
+import { useTrackLyrics } from '../useTrackLyrics';
 
 type LyricsPanelProps = {
   track: Track;
   currentTime: number;
   offlineMode: boolean;
-  lyrics: LyricsResponse | null;
 };
 
-export function LyricsPanel({ track, currentTime, offlineMode, lyrics }: LyricsPanelProps) {
+export function LyricsPanel({ track, currentTime, offlineMode }: LyricsPanelProps) {
   const [open, setOpen] = useState(false);
   const activeLineRef = useRef<HTMLParagraphElement | null>(null);
+  const desktopLayout = useDesktopLayout();
+  const lyrics = useTrackLyrics(track, offlineMode || desktopLayout);
 
   useEffect(() => {
     setOpen(false);
@@ -32,7 +35,7 @@ export function LyricsPanel({ track, currentTime, offlineMode, lyrics }: LyricsP
     if (open) activeLineRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, [activeLine, open]);
 
-  if (offlineMode || !lyrics) return null;
+  if (offlineMode || desktopLayout || !lyrics) return null;
 
   return (
     <section className="lyrics-panel">
