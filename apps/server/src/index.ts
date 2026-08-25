@@ -1,4 +1,5 @@
 import { config } from 'dotenv';
+import { open } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import Fastify from 'fastify';
 import type { PlaybackState, RepeatMode, ScanResponse } from '@home-music/shared';
@@ -16,7 +17,7 @@ import {
   SessionManager
 } from './auth.js';
 import { HomeMusicDatabase } from './database.js';
-import { probeFfmpeg, type FfmpegStatus } from './ffmpeg.js';
+import { probeFfmpeg, resolveFfmpegCommand, type FfmpegStatus } from './ffmpeg.js';
 import { readCover, scanLibrary, type IndexedTrack } from './library.js';
 import {
   openRegularFileInside,
@@ -30,9 +31,18 @@ import {
   sendWebRequest,
   type PreparedWebApp
 } from './static-web.js';
+import {
+  DEFAULT_TRANSCODE_CACHE_MEGABYTES,
+  parseTranscodeCacheMegabytes,
+  parseTranscodeQuality,
+  TRANSCODE_PROFILES,
+  TranscodeExecutionError,
+  TranscodeManager
+} from './transcoding.js';
 
 const rootEnvPath = fileURLToPath(new URL('../../../.env', import.meta.url));
 const defaultDatabasePath = fileURLToPath(new URL('../../../data/home-music.db', import.meta.url));
+const defaultTranscodeCachePath = fileURLToPath(new URL('../../../data/transcode-cache/', import.meta.url));
 const webDistPath = fileURLToPath(new URL('../../web/dist/', import.meta.url));
 config({ path: rootEnvPath });
 
@@ -53,6 +63,16 @@ try {
   );
 }
 
+let transcodeCacheMegabytes = DEFAULT_TRANSCODE_CACHE_MEGABYTES;
+try {
+  transcodeCacheMegabytes = parseTranscodeCacheMegabytes(process.env.HOME_MUSIC_TRANSCODE_CACHE_MB);
+} catch (error) {
+  app.log.warn(
+    { err: error, fallbackMegabytes: DEFAULT_TRANSCODE_CACHE_MEGABYTES },
+    'Limite do cache de transcoding inválido; usando o valor padrão.'
+  );
+}
+
 const database = new HomeMusicDatabase(databasePath);
 const musicDir = process.env.MUSIC_DIR || '';
 const port = Number(process.env.PORT || 8787);
@@ -63,12 +83,24 @@ const authUser = process.env.HOME_MUSIC_USER || '';
 const authPassword = process.env.HOME_MUSIC_PASSWORD || '';
 const forceSecureCookie = process.env.HOME_MUSIC_COOKIE_SECURE === 'true';
 const ffmpegPathConfig = process.env.HOME_MUSIC_FFMPEG_PATH;
+let ffmpegCommand = 'ffmpeg';
+try {
+  ffmpegCommand = resolveFfmpegCommand(ffmpegPathConfig);
+} catch {
+  // O probe abaixo transforma configuração inválida em status não disponível.
+}
 const sessions = new SessionManager(authUser, authPassword);
 const loginRateLimiter = new LoginRateLimiter();
 const authConfigured = sessions.configured;
 const mutatingMethods = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const publicAuthRoutes = new Set(['/api/auth/status', '/api/auth/login']);
 const productionCsp = "default-src 'self'; img-src 'self' data: blob:; media-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
+const transcodeManager = new TranscodeManager({
+  cacheDir: defaultTranscodeCachePath,
+  command: ffmpegCommand,
+  maxCacheBytes: transcodeCacheMegabytes * 1024 * 1024,
+  maxConcurrent: 1
+});
 
 let tracks: IndexedTrack[] = [];
 let tracksById = new Map<string, IndexedTrack>();
@@ -426,6 +458,13 @@ app.get('/api/health', async (_request, reply) => {
       customPath: ffmpegStatus.customCommand,
       issue: ffmpegStatus.issue
     },
+    transcoding: {
+      available: ffmpegStatus.available,
+      profiles: ffmpegStatus.available ? Object.keys(TRANSCODE_PROFILES) : [],
+      cacheLimitMegabytes: transcodeCacheMegabytes,
+      active: transcodeManager.activeCount,
+      pending: transcodeManager.pendingCount
+    },
     schemaVersion: database.getSchemaVersion()
   };
 });
@@ -664,6 +703,77 @@ app.get<{ Params: { id: string } }>('/api/tracks/:id/stream', async (request, re
   }
 });
 
+app.get<{ Params: { id: string }; Querystring: { quality?: string } }>('/api/tracks/:id/transcode', async (request, reply) => {
+  const track = tracksById.get(request.params.id);
+  if (!track || !libraryRoot) return reply.code(404).send({ error: 'Música não encontrada.' });
+
+  const quality = parseTranscodeQuality(request.query.quality);
+  if (!quality) return reply.code(400).send({ error: 'Qualidade de transcoding inválida.' });
+  if (!ffmpegStatus.available) {
+    return reply.code(503).send({ error: 'Transcoding indisponível porque FFmpeg não está disponível.' });
+  }
+
+  try {
+    const source = await openRegularFileInside(libraryRoot, track.filePath);
+    let prepared;
+    try {
+      prepared = await transcodeManager.prepare({
+        trackId: track.id,
+        sourceSize: source.stat.size,
+        sourceMtimeMs: source.stat.mtimeMs,
+        quality,
+        createInput: () => source.handle.createReadStream({ autoClose: false })
+      });
+    } finally {
+      await source.handle.close().catch(() => undefined);
+    }
+
+    const transcoded = await open(prepared.path, 'r');
+    const info = await transcoded.stat();
+    if (!info.isFile() || info.size <= 0) {
+      await transcoded.close();
+      return reply.code(503).send({ error: 'Áudio transcodificado não está disponível.' });
+    }
+
+    const range = parseByteRange(request.headers.range, info.size);
+    reply.header('Accept-Ranges', 'bytes');
+    reply.header('Content-Type', 'audio/mp4');
+    reply.header('Cache-Control', 'private, no-store');
+    reply.header('X-Home-Music-Transcode-Quality', quality);
+    reply.header('X-Home-Music-Transcode-Cache', prepared.cacheHit ? 'hit' : 'miss');
+
+    if (range === null) {
+      await transcoded.close();
+      reply.header('Content-Range', `bytes */${info.size}`);
+      return reply.code(416).send();
+    }
+
+    if (range === undefined) {
+      reply.header('Content-Length', info.size);
+      return reply.send(transcoded.createReadStream({ autoClose: true }));
+    }
+
+    reply.code(206);
+    reply.header('Content-Range', `bytes ${range.start}-${range.end}/${info.size}`);
+    reply.header('Content-Length', range.end - range.start + 1);
+    return reply.send(transcoded.createReadStream({
+      start: range.start,
+      end: range.end,
+      autoClose: true
+    }));
+  } catch (error) {
+    if (isNotFoundLike(error)) return reply.code(404).send({ error: 'Música não encontrada.' });
+    if (error instanceof TranscodeExecutionError) {
+      app.log.warn(
+        { err: error, trackId: track.id, quality, reason: error.reason },
+        'Falha ao preparar áudio transcodificado.'
+      );
+      return reply.code(503).send({ error: 'Não foi possível preparar esta música na qualidade solicitada.' });
+    }
+    throw error;
+  }
+});
+
 if (isProduction) {
   try {
     webApp = await prepareWebApp(webDistPath);
@@ -693,8 +803,12 @@ try {
 ffmpegStatus = await probeFfmpeg(ffmpegPathConfig);
 if (ffmpegStatus.available) {
   app.log.info(
-    { version: ffmpegStatus.version, customPath: ffmpegStatus.customCommand },
-    'FFmpeg disponível para os próximos recursos de transcoding.'
+    {
+      version: ffmpegStatus.version,
+      customPath: ffmpegStatus.customCommand,
+      transcodeCacheMegabytes
+    },
+    'FFmpeg disponível para transcoding adaptativo.'
   );
 } else {
   app.log.warn(

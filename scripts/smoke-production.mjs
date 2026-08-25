@@ -51,6 +51,7 @@ const child = spawn(npmCommand, ['start'], {
     HOME_MUSIC_PASSWORD: password,
     HOME_MUSIC_COOKIE_SECURE: 'false',
     HOME_MUSIC_FFMPEG_PATH: missingFfmpegPath,
+    HOME_MUSIC_TRANSCODE_CACHE_MB: '64',
     PORT: String(port),
     PRODUCTION_HOST: '127.0.0.1'
   },
@@ -211,6 +212,9 @@ try {
   const unauthenticatedHealth = await fetch(`${baseUrl}/api/health`);
   assert.equal(unauthenticatedHealth.status, 401);
 
+  const unauthenticatedTranscode = await fetch(`${baseUrl}/api/tracks/inexistente/transcode?quality=economy`);
+  assert.equal(unauthenticatedTranscode.status, 401);
+
   const login = await fetch(`${baseUrl}/api/auth/login`, {
     method: 'POST',
     headers: {
@@ -243,6 +247,13 @@ try {
     customPath: true,
     issue: 'not-found'
   });
+  assert.deepEqual(internalHealthBody.transcoding, {
+    available: false,
+    profiles: [],
+    cacheLimitMegabytes: 64,
+    active: 0,
+    pending: 0
+  });
   assert.equal(internalHealthBody.schemaVersion, 3);
 
   const library = await fetch(`${baseUrl}/api/library`, {
@@ -251,6 +262,11 @@ try {
   assert.equal(library.status, 200);
   const libraryBody = await library.json();
   assert.deepEqual(libraryBody.tracks, []);
+
+  const missingTrackTranscode = await fetch(`${baseUrl}/api/tracks/inexistente/transcode?quality=economy`, {
+    headers: { Cookie: cookie }
+  });
+  assert.equal(missingTrackTranscode.status, 404);
 
   await stopServer(true);
   smokePassed = true;

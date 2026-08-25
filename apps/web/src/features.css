@@ -29,6 +29,9 @@
   right: 18px;
   z-index: 8;
   width: min(260px, calc(100% - 36px));
+  max-height: calc(100dvh - 90px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   display: grid;
   gap: 4px;
   padding: 12px;
@@ -56,6 +59,23 @@
   color: #ff9c9c;
 }
 .player-options__logout svg { width: 17px; height: 17px; }
+.player-options__choices { display: grid; gap: 3px; }
+.player-options .player-options__choice {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: 8px;
+  padding: 7px;
+  color: #c4cdd6;
+}
+.player-options .player-options__choice.is-selected {
+  background: rgba(22, 149, 255, .1);
+  color: #8acbff;
+}
+.player-options__choice-copy { min-width: 0; display: grid; gap: 2px; }
+.player-options__choice-copy b { font-size: 12px; font-weight: 650; }
+.player-options__choice-copy small { color: #77838e; font-size: 10px; }
+.player-options__choice svg { width: 16px; height: 16px; }
 
 .autoplay-notice {
   margin: 0 4px 12px;

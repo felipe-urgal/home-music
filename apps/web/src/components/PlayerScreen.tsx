@@ -27,11 +27,18 @@ import {
   Wifi
 } from 'lucide-react';
 import type { Playlist, RepeatMode, Track } from '@home-music/shared';
+import type { StreamingMode } from '../streaming-quality';
 import { Artwork } from './Artwork';
 
 const QUEUE_PAGE_SIZE = 10;
 const TOUCH_DRAG_EDGE_PX = 80;
 const TOUCH_DRAG_SCROLL_STEP_PX = 18;
+
+const STREAMING_CHOICES: Array<{ mode: StreamingMode; label: string; detail: string }> = [
+  { mode: 'auto', label: 'Automática', detail: 'Original + compatibilidade' },
+  { mode: 'original', label: 'Original', detail: 'Sem conversão' },
+  { mode: 'economy', label: 'Economia', detail: 'AAC · 96 kbps' }
+];
 
 function formatTime(value: number) {
   if (!Number.isFinite(value) || value < 0) return '0:00';
@@ -58,6 +65,7 @@ type PlayerScreenProps = {
   usesSystemVolume: boolean;
   shuffle: boolean;
   repeatMode: RepeatMode;
+  streamingMode?: StreamingMode;
   isFavorite: boolean;
   playlists: Playlist[];
   offlineMode?: boolean;
@@ -69,6 +77,7 @@ type PlayerScreenProps = {
   onNext: () => void;
   onSeek: (value: number) => void;
   onVolume: (value: number) => void;
+  onStreamingMode?: (mode: StreamingMode) => void;
   onShuffle: () => void;
   onRepeat: () => void;
   onToggleFavorite: () => void;
@@ -94,6 +103,7 @@ export function PlayerScreen({
   usesSystemVolume,
   shuffle,
   repeatMode,
+  streamingMode = 'auto',
   isFavorite,
   playlists,
   offlineMode = false,
@@ -105,6 +115,7 @@ export function PlayerScreen({
   onNext,
   onSeek,
   onVolume,
+  onStreamingMode,
   onShuffle,
   onRepeat,
   onToggleFavorite,
@@ -225,6 +236,29 @@ export function PlayerScreen({
             </>
           ) : (
             <>
+              {onStreamingMode && (
+                <>
+                  <strong>Qualidade de transmissão</strong>
+                  <div className="player-options__choices" role="group" aria-label="Qualidade de transmissão">
+                    {STREAMING_CHOICES.map(choice => (
+                      <button
+                        key={choice.mode}
+                        className={`player-options__choice ${streamingMode === choice.mode ? 'is-selected' : ''}`}
+                        aria-pressed={streamingMode === choice.mode}
+                        onClick={() => onStreamingMode(choice.mode)}
+                      >
+                        <div className="player-options__choice-copy">
+                          <b>{choice.label}</b>
+                          <small>{choice.detail}</small>
+                        </div>
+                        {streamingMode === choice.mode && <CheckCircle2 aria-hidden="true" />}
+                      </button>
+                    ))}
+                  </div>
+                  <span>Automática mantém o original e usa AAC apenas se o navegador não conseguir reproduzir a faixa.</span>
+                  <div className="player-options__divider" />
+                </>
+              )}
               <strong>Adicionar à playlist</strong>
               {playlists.length ? playlists.map(playlist => (
                 <button key={playlist.id} onClick={() => { onAddToPlaylist(playlist); setShowOptions(false); }}>

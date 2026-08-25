@@ -65,7 +65,7 @@
 - [x] Setup/rollback idempotente com proteção contra conflito em 443
 - [ ] Aplicar grants/restrições least-privilege no tailnet real
 - [x] FFmpeg
-- [ ] Transcoding adaptativo
+- [x] Transcoding adaptativo
 - [ ] Perfis de qualidade Wi‑Fi / 4G
 
 ## Fase 6 — Extras
