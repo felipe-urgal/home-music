@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 export const DESKTOP_SEEK_STEP_SECONDS = 5;
 export const DESKTOP_VOLUME_STEP = 0.05;
@@ -56,7 +56,7 @@ const INTERACTIVE_TARGET_SELECTOR = [
 export function resolveDesktopShortcut(event: ShortcutKeyEvent): DesktopShortcutAction | null {
   if (event.altKey || event.ctrlKey || event.metaKey) return null;
 
-  if ((event.code === 'Space' || event.key === ' ' || event.key === 'Spacebar')) {
+  if (event.code === 'Space' || event.key === ' ' || event.key === 'Spacebar') {
     return event.repeat ? null : 'toggle-play';
   }
 
@@ -96,6 +96,36 @@ export function useDesktopKeyboardShortcuts({
   onVolume,
   onFocusSearch
 }: DesktopKeyboardShortcutsOptions) {
+  const stateRef = useRef({
+    hasCurrent,
+    hasNext,
+    currentTime,
+    duration,
+    volume,
+    usesSystemVolume,
+    onTogglePlay,
+    onPrevious,
+    onNext,
+    onSeek,
+    onVolume,
+    onFocusSearch
+  });
+
+  stateRef.current = {
+    hasCurrent,
+    hasNext,
+    currentTime,
+    duration,
+    volume,
+    usesSystemVolume,
+    onTogglePlay,
+    onPrevious,
+    onNext,
+    onSeek,
+    onVolume,
+    onFocusSearch
+  };
+
   useEffect(() => {
     if (!enabled) return;
 
@@ -104,67 +134,55 @@ export function useDesktopKeyboardShortcuts({
       const action = resolveDesktopShortcut(event);
       if (!action) return;
 
+      const state = stateRef.current;
+
       if (action === 'focus-search') {
-        if (!onFocusSearch) return;
+        if (!state.onFocusSearch) return;
         event.preventDefault();
-        onFocusSearch();
+        state.onFocusSearch();
         return;
       }
 
-      if (!hasCurrent) return;
+      if (!state.hasCurrent) return;
 
       if (action === 'toggle-play') {
-        if (!onTogglePlay) return;
+        if (!state.onTogglePlay) return;
         event.preventDefault();
-        onTogglePlay();
+        state.onTogglePlay();
         return;
       }
 
       if (action === 'previous') {
-        if (!onPrevious) return;
+        if (!state.onPrevious) return;
         event.preventDefault();
-        onPrevious();
+        state.onPrevious();
         return;
       }
 
       if (action === 'next') {
-        if (!onNext || !hasNext) return;
+        if (!state.onNext || !state.hasNext) return;
         event.preventDefault();
-        onNext();
+        state.onNext();
         return;
       }
 
       if (action === 'seek-backward' || action === 'seek-forward') {
-        if (!onSeek) return;
+        if (!state.onSeek) return;
         const delta = action === 'seek-forward' ? DESKTOP_SEEK_STEP_SECONDS : -DESKTOP_SEEK_STEP_SECONDS;
-        const maximum = Number.isFinite(duration) && duration > 0 ? duration : Number.POSITIVE_INFINITY;
-        const nextTime = Math.min(maximum, Math.max(0, currentTime + delta));
+        const maximum = Number.isFinite(state.duration) && state.duration > 0 ? state.duration : Number.POSITIVE_INFINITY;
+        const nextTime = Math.min(maximum, Math.max(0, state.currentTime + delta));
         event.preventDefault();
-        onSeek(nextTime);
+        state.onSeek(nextTime);
         return;
       }
 
-      if (usesSystemVolume || !onVolume) return;
+      if (state.usesSystemVolume || !state.onVolume) return;
       const delta = action === 'volume-up' ? DESKTOP_VOLUME_STEP : -DESKTOP_VOLUME_STEP;
       event.preventDefault();
-      onVolume(Math.min(1, Math.max(0, volume + delta)));
+      state.onVolume(Math.min(1, Math.max(0, state.volume + delta)));
     };
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [
-    currentTime,
-    duration,
-    enabled,
-    hasCurrent,
-    hasNext,
-    onFocusSearch,
-    onNext,
-    onPrevious,
-    onSeek,
-    onTogglePlay,
-    onVolume,
-    usesSystemVolume,
-    volume
-  ]);
+  }, [enabled]);
 }
