@@ -19,27 +19,30 @@
 @media (min-width: 1024px) {
   .app-shell {
     display: block;
+    height: 100vh;
+    min-height: 0;
     padding: 0;
-    overflow-x: clip;
+    overflow: hidden;
     background:
       radial-gradient(circle at 45% -10%, rgba(0, 137, 255, 0.12), transparent 44rem),
       #030507;
   }
 
   .desktop-layout {
-    min-height: 100vh;
+    height: 100vh;
+    min-height: 0;
     display: grid;
     grid-template-columns: 220px minmax(0, 1fr) 300px;
     place-items: stretch;
     align-items: stretch;
+    overflow: hidden;
   }
 
   .desktop-sidebar,
   .desktop-context {
     display: flex;
-    position: sticky;
-    top: 0;
     height: 100vh;
+    min-height: 0;
     min-width: 0;
     flex-direction: column;
     background: rgba(6, 10, 14, 0.96);
@@ -172,8 +175,12 @@
   .phone-surface {
     width: 100%;
     max-width: none;
-    min-height: 100vh;
-    padding: 28px 34px 116px;
+    height: 100vh;
+    min-height: 0;
+    padding: 18px 34px 28px;
+    overflow-x: clip;
+    overflow-y: auto;
+    overscroll-behavior: contain;
     border: 0;
     border-radius: 0;
     box-shadow: none;
@@ -190,26 +197,50 @@
   }
 
   .desktop-main-content--player {
-    max-width: 580px;
+    max-width: 720px;
   }
 
   .desktop-main-content--library,
   .desktop-main-content--statistics {
-    max-width: 860px;
+    max-width: 920px;
+  }
+
+  .desktop-main-content--player .topbar {
+    height: 40px;
+  }
+
+  .desktop-main-content--player .hero-art {
+    width: min(100%, 42vh, 420px);
+    margin: 0 auto;
+    padding: 6px 0 14px;
+  }
+
+  .desktop-main-content--player .controls {
+    height: 72px;
+  }
+
+  .desktop-main-content--player .play-button {
+    width: 56px;
+    height: 56px;
+  }
+
+  .desktop-main-content--player .queue-panel--player {
+    display: none;
   }
 
   .desktop-context {
-    padding: 25px 20px;
+    padding: 22px 18px 18px;
+    overflow: hidden;
     border-left: 1px solid rgba(255, 255, 255, 0.065);
   }
 
   .desktop-context__heading {
-    min-height: 36px;
+    min-height: 30px;
     display: flex;
     align-items: baseline;
     justify-content: space-between;
     gap: 12px;
-    margin-bottom: 11px;
+    margin-bottom: 10px;
   }
 
   .desktop-context__heading span {
@@ -287,14 +318,14 @@
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
-    margin-top: 16px;
+    margin-top: 12px;
   }
 
   .desktop-context__stats > div {
     min-width: 0;
     display: grid;
     gap: 3px;
-    padding: 11px;
+    padding: 10px;
     border-radius: 11px;
     background: rgba(255, 255, 255, 0.026);
     border: 1px solid rgba(255, 255, 255, 0.045);
@@ -311,10 +342,115 @@
     line-height: 1.35;
   }
 
+  .desktop-queue {
+    min-height: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.055);
+  }
+
+  .desktop-queue__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+
+  .desktop-queue__header strong {
+    font-size: 12px;
+  }
+
+  .desktop-queue__header span {
+    color: #6f7a86;
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .desktop-queue__list {
+    min-height: 0;
+    flex: 1;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    padding-right: 3px;
+  }
+
+  .desktop-queue__item {
+    width: 100%;
+    min-width: 0;
+    min-height: 52px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 5px 6px;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .desktop-queue__item:hover {
+    background: rgba(255, 255, 255, 0.035);
+  }
+
+  .desktop-queue__item.is-current {
+    background: rgba(26, 147, 247, 0.09);
+  }
+
+  .desktop-queue__item .artwork {
+    width: 38px;
+    height: 38px;
+    border-radius: 8px;
+  }
+
+  .desktop-queue__item > span {
+    min-width: 0;
+    flex: 1;
+    display: grid;
+    gap: 3px;
+  }
+
+  .desktop-queue__item strong,
+  .desktop-queue__item small {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .desktop-queue__item strong {
+    font-size: 11px;
+    font-weight: 620;
+  }
+
+  .desktop-queue__item small {
+    color: #75808c;
+    font-size: 10px;
+  }
+
+  .desktop-queue__empty {
+    padding: 18px 8px;
+    color: #707c88;
+    font-size: 11px;
+    text-align: center;
+  }
+
+  .desktop-queue__remaining {
+    padding-top: 7px;
+    color: #697581;
+    font-size: 10px;
+    text-align: center;
+  }
+
   .desktop-context__action {
     width: 100%;
-    min-height: 42px;
+    min-height: 40px;
     margin-top: 12px;
+    flex: 0 0 auto;
     border: 1px solid rgba(255, 255, 255, 0.065);
     border-radius: 10px;
     background: #0d141b;
@@ -335,7 +471,7 @@
   }
 
   .center-state {
-    min-height: calc(100vh - 144px);
+    min-height: calc(100vh - 96px);
   }
 }
 
