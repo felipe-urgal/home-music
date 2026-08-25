@@ -22,8 +22,10 @@ import type { Playlist, Track } from '@home-music/shared';
 import type { CoverFilter, FavoriteFilter, TrackSort } from '../library-utils';
 import { uniqueTracksById } from '../player-state';
 import type { LibraryData } from '../useLibraryData';
+import { useDesktopLayout } from '../useDesktopLayout';
 import { LIBRARY_PAGE_SIZE, type LibraryNavigation, type LibraryTab } from '../useLibraryNavigation';
 import { Artwork } from './Artwork';
+import { DesktopTrackTable } from './DesktopTrackTable';
 import { MiniPlayer } from './MiniPlayer';
 
 type LibraryScreenProps = {
@@ -57,6 +59,8 @@ function TrackRows({
   current,
   playing,
   favorites,
+  sort,
+  onSort,
   onPlayTrack,
   onToggleFavorite,
   onRemove
@@ -66,10 +70,31 @@ function TrackRows({
   current?: Track;
   playing: boolean;
   favorites: Set<string>;
+  sort: TrackSort;
+  onSort: (sort: TrackSort) => void;
   onPlayTrack: (track: Track, context: Track[]) => void;
   onToggleFavorite: (trackId: string) => void;
   onRemove?: (trackId: string) => void;
 }) {
+  const isDesktop = useDesktopLayout();
+
+  if (isDesktop) {
+    return (
+      <DesktopTrackTable
+        tracks={tracks}
+        context={context}
+        current={current}
+        playing={playing}
+        favorites={favorites}
+        sort={sort}
+        onSort={onSort}
+        onPlayTrack={onPlayTrack}
+        onToggleFavorite={onToggleFavorite}
+        onRemove={onRemove}
+      />
+    );
+  }
+
   return (
     <div className="library-track-list">
       {tracks.map(track => {
@@ -422,6 +447,8 @@ export function LibraryScreen({
                   current={current}
                   playing={playing}
                   favorites={favoriteSet}
+                  sort={sort}
+                  onSort={changeSort}
                   onPlayTrack={onPlayTrack}
                   onToggleFavorite={trackId => run(toggleFavorite(trackId))}
                 />
@@ -517,6 +544,8 @@ export function LibraryScreen({
                 current={current}
                 playing={playing}
                 favorites={favoriteSet}
+                sort={sort}
+                onSort={changeSort}
                 onPlayTrack={onPlayTrack}
                 onToggleFavorite={trackId => run(toggleFavorite(trackId))}
                 onRemove={selectedPlaylist?.source === 'manual' ? trackId => run(setPlaylistTracks(selectedPlaylist.id, selectedPlaylist.trackIds.filter(id => id !== trackId))) : undefined}

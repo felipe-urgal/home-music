@@ -106,7 +106,28 @@ test('login, biblioteca e player permanecem utilizáveis', async ({ page }) => {
 
   await page.getByRole('button', { name: 'Músicas', exact: true }).click();
   await expect(page.getByPlaceholder('Música, artista, álbum ou pasta')).toBeVisible();
-  await expect(page.locator('.library-track').filter({ hasText: 'E2E Track' })).toBeVisible();
+
+  if (isDesktop) {
+    const desktopLibraryTable = page.getByTestId('desktop-library-table');
+    await expect(desktopLibraryTable).toBeVisible();
+    await expect(desktopLibraryTable.getByRole('button', { name: 'Tocar E2E Track' })).toBeVisible();
+    await expect(page.locator('.library-track')).toHaveCount(0);
+
+    const titleHeader = desktopLibraryTable.getByRole('columnheader', { name: /ordenar por título/i });
+    await expect(titleHeader).toHaveAttribute('aria-sort', 'none');
+    await desktopLibraryTable.getByRole('button', { name: 'Ordenar por título' }).click();
+    await expect(titleHeader).toHaveAttribute('aria-sort', 'ascending');
+    await desktopLibraryTable.getByRole('button', { name: 'Ordenar por título' }).click();
+    await expect(titleHeader).toHaveAttribute('aria-sort', 'descending');
+    await expect(desktopLibraryTable.getByRole('columnheader', { name: /ordenar por artista/i })).toBeVisible();
+    await expect(desktopLibraryTable.getByRole('columnheader', { name: /ordenar por álbum/i })).toBeVisible();
+    await expect(desktopLibraryTable.getByRole('columnheader', { name: 'Pasta' })).toBeVisible();
+    await expect(desktopLibraryTable.getByRole('columnheader', { name: 'Formato' })).toBeVisible();
+    await expect(desktopLibraryTable.getByRole('columnheader', { name: 'Duração' })).toBeVisible();
+  } else {
+    await expect(page.locator('.library-track').filter({ hasText: 'E2E Track' })).toBeVisible();
+    await expect(page.getByTestId('desktop-library-table')).toHaveCount(0);
+  }
 
   if (viewport) {
     const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
