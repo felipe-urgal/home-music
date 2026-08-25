@@ -85,7 +85,10 @@ const host = isProduction
 const authUser = process.env.HOME_MUSIC_USER || '';
 const authPassword = process.env.HOME_MUSIC_PASSWORD || '';
 const forceSecureCookie = process.env.HOME_MUSIC_COOKIE_SECURE === 'true';
-const trustTailscaleForwardedFor = isProduction && host === '127.0.0.1' && forceSecureCookie;
+const trustTailscaleForwardedFor = process.env.HOME_MUSIC_TRUST_TAILSCALE_PROXY === 'true'
+  && isProduction
+  && host === '127.0.0.1'
+  && forceSecureCookie;
 const ffmpegPathConfig = process.env.HOME_MUSIC_FFMPEG_PATH;
 let ffmpegCommand = 'ffmpeg';
 try {
