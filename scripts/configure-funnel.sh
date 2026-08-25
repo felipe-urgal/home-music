@@ -265,7 +265,7 @@ enable_public() {
   load_tailscale_identity
   validate_public_credentials
 
-  local port target local_url state final_state env_backup previous_state rollback_needed=0 funnel_enabled=0
+  local port target local_url state final_state env_backup previous_state rollback_needed=0 funnel_attempted=0
   port="$(home_music_port)"
   target="127.0.0.1:${port}"
   local_url="http://${target}"
@@ -318,7 +318,7 @@ enable_public() {
     if [[ ${rollback_needed} -eq 1 ]]; then
       echo >&2
       echo "Falha durante a ativação pública; restaurando configuração anterior." >&2
-      if [[ ${funnel_enabled} -eq 1 ]]; then
+      if [[ ${funnel_attempted} -eq 1 && "${previous_state}" != "funnel" ]]; then
         "${TAILSCALE_BIN}" funnel --yes --https=443 off >/dev/null 2>&1 || true
       fi
       if [[ "${previous_state}" == "serve" ]]; then
@@ -341,14 +341,13 @@ enable_public() {
   restart_and_validate_local "${local_url}"
 
   echo "==> Habilitando Tailscale Funnel persistente em HTTPS/443"
+  funnel_attempted=1
   if ! "${TAILSCALE_BIN}" funnel --bg --yes --https=443 "${target}"; then
     echo >&2
     echo "O Tailscale Funnel não pôde ser habilitado." >&2
     echo "Confirme MagicDNS, HTTPS Certificates e a permissão Funnel no tailnet e tente novamente." >&2
     false
   fi
-  funnel_enabled=1
-
   final_state="$(https_443_state "${target}")"
   if [[ "${final_state}" != "funnel" ]]; then
     fail "A configuração final de HTTPS/443 não corresponde ao Funnel esperado (estado=${final_state})."
@@ -377,7 +376,7 @@ disable_public() {
   check_tailscale_version
   load_tailscale_identity
 
-  local port target local_url state env_backup rollback_needed=0 funnel_removed=0 serve_enabled=0
+  local port target local_url state env_backup rollback_needed=0 funnel_removed=0 serve_attempted=0
   port="$(home_music_port)"
   target="127.0.0.1:${port}"
   local_url="http://${target}"
@@ -415,7 +414,7 @@ disable_public() {
     if [[ ${rollback_needed} -eq 1 ]]; then
       echo >&2
       echo "Falha ao voltar para o acesso privado; restaurando Funnel." >&2
-      if [[ ${serve_enabled} -eq 1 ]]; then
+      if [[ ${serve_attempted} -eq 1 ]]; then
         "${TAILSCALE_BIN}" serve --yes --https=443 off >/dev/null 2>&1 || true
       fi
       if [[ ${funnel_removed} -eq 1 ]]; then
@@ -437,8 +436,8 @@ disable_public() {
   funnel_removed=1
 
   echo "==> Restaurando Tailscale Serve privado em HTTPS/443"
+  serve_attempted=1
   "${TAILSCALE_BIN}" serve --bg --yes --https=443 "${target}"
-  serve_enabled=1
 
   if [[ "$(https_443_state "${target}")" != "serve" ]]; then
     fail "A configuração privada do Serve não foi restaurada corretamente."
