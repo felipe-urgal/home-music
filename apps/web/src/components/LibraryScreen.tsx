@@ -244,6 +244,10 @@ export function LibraryScreen({
         window.alert('O XML foi reconhecido, mas não contém playlists para importar.');
         return;
       }
+      if (preview.playlistEntries > 0 && preview.matchedPlaylistEntries === 0) {
+        window.alert('Nenhuma música das playlists foi reconhecida. Atualize a biblioteca ou confirme se este XML corresponde aos seus arquivos.');
+        return;
+      }
 
       const source = preview.productVersion
         ? `Rekordbox ${preview.productVersion}`
@@ -262,8 +266,8 @@ export function LibraryScreen({
 
       const result = await importRekordbox(xml);
       window.alert(
-        `Rekordbox sincronizado: ${result.createdPlaylists} playlists novas, ` +
-        `${result.updatedPlaylists} atualizadas e ${result.removedPlaylists} removidas. ` +
+        `Rekordbox sincronizado: ${result.createdPlaylists} playlists novas e ` +
+        `${result.updatedPlaylists} atualizadas. ` +
         `${result.matchedPlaylistEntries}/${result.playlistEntries} entradas reconhecidas.`
       );
     } catch {
