@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   buildSessionCookie,
+  loginRateLimitKey,
   LoginRateLimiter,
   readCookie,
   SESSION_COOKIE_NAME,
@@ -57,4 +58,17 @@ test('LoginRateLimiter bloqueia após o limite e libera após a janela', () => {
   limiter.recordFailure('ip', 500);
   assert.equal(limiter.isBlocked('ip', 600), true);
   assert.equal(limiter.isBlocked('ip', 1200), false);
+});
+
+test('loginRateLimitKey usa IP encaminhado somente por proxy loopback confiável', () => {
+  assert.equal(loginRateLimitKey('127.0.0.1', '203.0.113.10', true), '203.0.113.10');
+  assert.equal(loginRateLimitKey('::ffff:127.0.0.1', '2001:db8::10', true), '2001:db8::10');
+  assert.equal(loginRateLimitKey('127.0.0.1', '203.0.113.10', false), '127.0.0.1');
+  assert.equal(loginRateLimitKey('192.0.2.10', '203.0.113.10', true), '192.0.2.10');
+});
+
+test('loginRateLimitKey rejeita X-Forwarded-For ambíguo ou inválido', () => {
+  assert.equal(loginRateLimitKey('127.0.0.1', '203.0.113.10, 198.51.100.5', true), '127.0.0.1');
+  assert.equal(loginRateLimitKey('127.0.0.1', 'não-é-ip', true), '127.0.0.1');
+  assert.equal(loginRateLimitKey('127.0.0.1', ['203.0.113.10'], true), '127.0.0.1');
 });
