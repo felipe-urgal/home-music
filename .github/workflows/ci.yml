@@ -64,7 +64,7 @@ jobs:
         run: npm run build
 
       - name: Install Playwright Chromium
-        run: cd e2e && npx playwright install --with-deps chromium
+        run: npm --prefix e2e run install:browsers
 
       - name: Browser E2E
         run: npm run e2e:ci
