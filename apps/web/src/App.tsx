@@ -13,7 +13,7 @@ import { useAuth } from './useAuth';
 import { useBackgroundPlaybackContinuity } from './useBackgroundPlaybackContinuity';
 import { useDesktopLayout } from './useDesktopLayout';
 import { useLibraryData } from './useLibraryData';
-import { useLibraryNavigation } from './useLibraryNavigation';
+import { type LibraryTab, useLibraryNavigation } from './useLibraryNavigation';
 import { useNetworkQualityProfile } from './useNetworkQualityProfile';
 import { useNextTrackPreload } from './useNextTrackPreload';
 import { useSystemVolumePreference } from './useSystemVolume';
@@ -67,6 +67,12 @@ function AuthenticatedApp({ onLogout, offline }: AuthenticatedAppProps) {
     setScreen('player');
   }
 
+  function openLibraryTab(tab: LibraryTab) {
+    navigation.selectTab(tab);
+    if (tab === 'history') run(library.refreshHistory());
+    setScreen('library');
+  }
+
   function run(operation: Promise<unknown>) {
     void operation.catch(() => undefined);
   }
@@ -102,6 +108,7 @@ function AuthenticatedApp({ onLogout, offline }: AuthenticatedAppProps) {
 
       <DesktopShell
         active={screen}
+        activeLibraryTab={navigation.libraryTab}
         current={current}
         playing={player.playing}
         libraryCount={library.tracks.length}
@@ -109,6 +116,7 @@ function AuthenticatedApp({ onLogout, offline }: AuthenticatedAppProps) {
         currentIndex={player.currentIndex}
         onOpenPlayer={openPlayer}
         onOpenLibrary={() => setScreen('library')}
+        onOpenLibraryTab={openLibraryTab}
         onOpenStatistics={() => setScreen('statistics')}
         onPlayTrack={player.playTrack}
         surfaceClassName={`phone-surface ${screen !== 'player' ? 'phone-surface--library' : ''}`}
