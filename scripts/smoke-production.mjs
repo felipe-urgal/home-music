@@ -11,6 +11,7 @@ const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const tempDir = await mkdtemp(path.join(os.tmpdir(), 'home-music-production-'));
 const musicDir = path.join(tempDir, 'music');
 const databasePath = path.join(tempDir, 'data', 'smoke.db');
+const missingFfmpegPath = path.join(tempDir, 'missing-ffmpeg');
 const username = 'smoke-user';
 const password = 'smoke-password-123';
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
@@ -49,6 +50,7 @@ const child = spawn(npmCommand, ['start'], {
     HOME_MUSIC_USER: username,
     HOME_MUSIC_PASSWORD: password,
     HOME_MUSIC_COOKIE_SECURE: 'false',
+    HOME_MUSIC_FFMPEG_PATH: missingFfmpegPath,
     PORT: String(port),
     PRODUCTION_HOST: '127.0.0.1'
   },
@@ -235,6 +237,12 @@ try {
   assert.equal(internalHealthBody.webReady, true);
   assert.equal(internalHealthBody.libraryReady, true);
   assert.equal(internalHealthBody.authConfigured, true);
+  assert.deepEqual(internalHealthBody.ffmpeg, {
+    available: false,
+    version: null,
+    customPath: true,
+    issue: 'not-found'
+  });
   assert.equal(internalHealthBody.schemaVersion, 3);
 
   const library = await fetch(`${baseUrl}/api/library`, {
