@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronUp, Music2 } from 'lucide-react';
 import type { Track } from '@home-music/shared';
+import { apiFetch } from '../api-client';
 
 type LyricsLine = {
   time: number | null;
@@ -23,12 +24,13 @@ export function LyricsPanel({ track, currentTime, offlineMode }: LyricsPanelProp
   const [open, setOpen] = useState(false);
   const [lyrics, setLyrics] = useState<LyricsResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [loadedTrackId, setLoadedTrackId] = useState<string | null>(null);
   const activeLineRef = useRef<HTMLParagraphElement | null>(null);
 
   useEffect(() => {
-    setOpen(false);
     setLyrics(null);
+    setError(null);
     setLoadedTrackId(null);
   }, [track.id]);
 
@@ -36,25 +38,34 @@ export function LyricsPanel({ track, currentTime, offlineMode }: LyricsPanelProp
     if (!open || offlineMode || loadedTrackId === track.id) return;
 
     const controller = new AbortController();
+    let disposed = false;
     setLoading(true);
+    setError(null);
 
-    fetch(`/api/tracks/${track.id}/lyrics`, { signal: controller.signal })
+    apiFetch(`/api/tracks/${track.id}/lyrics`, { signal: controller.signal, cache: 'no-store' })
       .then(async response => {
         if (!response.ok) throw new Error('Não foi possível carregar a letra.');
         return response.json() as Promise<LyricsResponse | null>;
       })
       .then(data => {
+        if (disposed) return;
         setLyrics(data);
         setLoadedTrackId(track.id);
       })
-      .catch(error => {
-        if (error instanceof DOMException && error.name === 'AbortError') return;
+      .catch(reason => {
+        if (disposed || (reason instanceof Error && reason.name === 'AbortError')) return;
         setLyrics(null);
+        setError(reason instanceof Error ? reason.message : 'Não foi possível carregar a letra.');
         setLoadedTrackId(track.id);
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!disposed) setLoading(false);
+      });
 
-    return () => controller.abort();
+    return () => {
+      disposed = true;
+      controller.abort();
+    };
   }, [loadedTrackId, offlineMode, open, track.id]);
 
   const activeLine = useMemo(() => {
@@ -90,6 +101,8 @@ export function LyricsPanel({ track, currentTime, offlineMode }: LyricsPanelProp
             <p className="lyrics-panel__empty">Letras ficam disponíveis quando o servidor está conectado.</p>
           ) : loading ? (
             <p className="lyrics-panel__empty">Carregando letra…</p>
+          ) : error ? (
+            <p className="lyrics-panel__empty lyrics-panel__empty--error">{error}</p>
           ) : lyrics ? (
             <div className={lyrics.synchronized ? 'lyrics-panel__lines is-synchronized' : 'lyrics-panel__lines'}>
               {lyrics.lines.map((line, index) => (
