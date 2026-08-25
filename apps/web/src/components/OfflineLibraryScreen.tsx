@@ -1,7 +1,8 @@
-import { Download, Music2, Pause, Play, SkipForward, Trash2, Wifi } from 'lucide-react';
+import { Download, Music2, Play, Trash2, Wifi } from 'lucide-react';
 import type { Track } from '@home-music/shared';
 import { formatOfflineBytes, type OfflineDownloadRecord } from '../offline-downloads';
 import { Artwork } from './Artwork';
+import { MiniPlayer } from './MiniPlayer';
 
 type OfflineLibraryScreenProps = {
   records: OfflineDownloadRecord[];
@@ -84,18 +85,18 @@ export function OfflineLibraryScreen({
       </section>
 
       {current && (
-        <div className="mini-player">
-          <button className="mini-player__main" onClick={onOpenPlayer}>
-            <Artwork track={fallbackTrack(current)} />
-            <span className="mini-player__text"><strong>{current.title}</strong><small>{current.artist}</small></span>
-          </button>
-          <button className="icon-button" aria-label={playing ? 'Pausar' : 'Tocar'} onClick={onTogglePlay}>{playing ? <Pause /> : <Play />}</button>
-          <button className="icon-button" aria-label="Próxima" onClick={onNext} disabled={!hasNext}><SkipForward /></button>
-        </div>
+        <MiniPlayer
+          current={fallbackTrack(current)}
+          playing={playing}
+          hasNext={hasNext}
+          onOpenPlayer={onOpenPlayer}
+          onTogglePlay={onTogglePlay}
+          onNext={onNext}
+        />
       )}
 
       {!records.length && (
-        <div className="center-state center-state--actions">
+        <div className="center-state center-state--actions" role="status">
           <Music2 />
           <strong>Nenhum download offline</strong>
           <span>Conecte ao Home Music e baixe uma música pelo player.</span>
