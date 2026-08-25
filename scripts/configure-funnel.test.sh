@@ -37,6 +37,7 @@ MUSIC_DIR="/mnt/musicas"
 HOME_MUSIC_USER=home-music
 HOME_MUSIC_PASSWORD=uma-senha-publica-exclusiva-com-mais-de-vinte
 HOME_MUSIC_COOKIE_SECURE=false
+HOME_MUSIC_TRUST_TAILSCALE_PROXY=false
 PORT=8787
 PRODUCTION_HOST=0.0.0.0
 ENV
@@ -46,6 +47,7 @@ MUSIC_DIR="/mnt/musicas"
 HOME_MUSIC_USER=home-music
 HOME_MUSIC_PASSWORD=uma-senha-publica-exclusiva-com-mais-de-vinte
 HOME_MUSIC_COOKIE_SECURE=true
+HOME_MUSIC_TRUST_TAILSCALE_PROXY=false
 PORT=8787
 PRODUCTION_HOST=127.0.0.1
 ENV
@@ -172,12 +174,14 @@ make_fixture serve
 "${REPO}/scripts/configure-funnel.sh" enable >/dev/null
 assert_state funnel
 assert_contains "${REPO}/.env" 'HOME_MUSIC_COOKIE_SECURE=true'
+assert_contains "${REPO}/.env" 'HOME_MUSIC_TRUST_TAILSCALE_PROXY=true'
 assert_contains "${REPO}/.env" 'PRODUCTION_HOST=127.0.0.1'
 "${REPO}/scripts/configure-funnel.sh" enable >/dev/null
 assert_state funnel
 "${REPO}/scripts/configure-funnel.sh" disable >/dev/null
 assert_state serve
 assert_contains "${REPO}/.env" 'HOME_MUSIC_COOKIE_SECURE=true'
+assert_contains "${REPO}/.env" 'HOME_MUSIC_TRUST_TAILSCALE_PROXY=true'
 assert_contains "${REPO}/.env" 'PRODUCTION_HOST=127.0.0.1'
 cleanup_fixture
 
@@ -186,6 +190,7 @@ make_fixture empty
 "${REPO}/scripts/configure-funnel.sh" enable >/dev/null
 assert_state funnel
 assert_contains "${REPO}/.env" 'HOME_MUSIC_COOKIE_SECURE=true'
+assert_contains "${REPO}/.env" 'HOME_MUSIC_TRUST_TAILSCALE_PROXY=true'
 assert_contains "${REPO}/.env" 'PRODUCTION_HOST=127.0.0.1'
 cleanup_fixture
 
@@ -198,6 +203,7 @@ RC=$?
 set -e
 [[ ${RC} -ne 0 ]] || fail_test "senha curta deveria ser rejeitada"
 assert_state serve
+assert_contains "${REPO}/.env" 'HOME_MUSIC_TRUST_TAILSCALE_PROXY=false'
 cleanup_fixture
 
 # Conflito em 443 nunca é sobrescrito.
@@ -220,6 +226,7 @@ set -e
 [[ ${RC} -ne 0 ]] || fail_test "falha de Funnel deveria abortar"
 assert_state serve
 assert_contains "${REPO}/.env" 'HOME_MUSIC_COOKIE_SECURE=true'
+assert_contains "${REPO}/.env" 'HOME_MUSIC_TRUST_TAILSCALE_PROXY=false'
 assert_contains "${REPO}/.env" 'PRODUCTION_HOST=127.0.0.1'
 cleanup_fixture
 
@@ -232,6 +239,7 @@ RC=$?
 set -e
 [[ ${RC} -ne 0 ]] || fail_test "falha parcial de Funnel deveria abortar"
 assert_state serve
+assert_contains "${REPO}/.env" 'HOME_MUSIC_TRUST_TAILSCALE_PROXY=false'
 cleanup_fixture
 
 # Se a validação HTTPS falhar depois da publicação, o Funnel é removido e o Serve volta.
@@ -243,6 +251,7 @@ RC=$?
 set -e
 [[ ${RC} -ne 0 ]] || fail_test "falha de validação pública deveria abortar"
 assert_state serve
+assert_contains "${REPO}/.env" 'HOME_MUSIC_TRUST_TAILSCALE_PROXY=false'
 cleanup_fixture
 
 # Se a restauração do Serve falhar, disable recompõe o Funnel público.
@@ -254,6 +263,7 @@ RC=$?
 set -e
 [[ ${RC} -ne 0 ]] || fail_test "falha ao restaurar Serve deveria abortar disable"
 assert_state funnel
+assert_contains "${REPO}/.env" 'HOME_MUSIC_TRUST_TAILSCALE_PROXY=false'
 cleanup_fixture
 
 # Falha ao interpretar status aborta antes de mutação.
