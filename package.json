@@ -17,6 +17,7 @@
     "tailscale:enable": "bash scripts/run-tailscale.sh enable",
     "tailscale:disable": "bash scripts/run-tailscale.sh disable",
     "tailscale:status": "bash scripts/run-tailscale.sh status",
+    "ffmpeg:status": "npm run ffmpeg:status -w @home-music/server",
     "typecheck": "npm run typecheck -w @home-music/shared && npm run typecheck -w @home-music/server && npm run typecheck -w @home-music/web",
     "test": "npm run test -w @home-music/server && npm run test -w @home-music/web"
   },

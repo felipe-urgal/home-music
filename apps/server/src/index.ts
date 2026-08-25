@@ -16,6 +16,7 @@ import {
   SessionManager
 } from './auth.js';
 import { HomeMusicDatabase } from './database.js';
+import { probeFfmpeg, type FfmpegStatus } from './ffmpeg.js';
 import { readCover, scanLibrary, type IndexedTrack } from './library.js';
 import {
   openRegularFileInside,
@@ -61,6 +62,7 @@ const host = isProduction
 const authUser = process.env.HOME_MUSIC_USER || '';
 const authPassword = process.env.HOME_MUSIC_PASSWORD || '';
 const forceSecureCookie = process.env.HOME_MUSIC_COOKIE_SECURE === 'true';
+const ffmpegPathConfig = process.env.HOME_MUSIC_FFMPEG_PATH;
 const sessions = new SessionManager(authUser, authPassword);
 const loginRateLimiter = new LoginRateLimiter();
 const authConfigured = sessions.configured;
@@ -78,6 +80,12 @@ let scanPromise: Promise<ScanResponse> | null = null;
 let stopAutoRescan: (() => void) | null = null;
 let webApp: PreparedWebApp | null = null;
 let shuttingDown = false;
+let ffmpegStatus: FfmpegStatus = {
+  available: false,
+  version: null,
+  issue: null,
+  customCommand: Boolean(ffmpegPathConfig?.trim())
+};
 
 const MAX_COVER_CACHE_BYTES = 16 * 1024 * 1024;
 const MAX_COVER_CACHE_ITEMS = 64;
@@ -412,6 +420,12 @@ app.get('/api/health', async (_request, reply) => {
     ...libraryStatus(),
     musicDirConfigured: Boolean(musicDir),
     authConfigured,
+    ffmpeg: {
+      available: ffmpegStatus.available,
+      version: ffmpegStatus.version,
+      customPath: ffmpegStatus.customCommand,
+      issue: ffmpegStatus.issue
+    },
     schemaVersion: database.getSchemaVersion()
   };
 });
@@ -674,6 +688,19 @@ try {
 } catch (error) {
   libraryReady = false;
   app.log.warn({ err: error }, 'Biblioteca ainda não pôde ser carregada. Verifique MUSIC_DIR.');
+}
+
+ffmpegStatus = await probeFfmpeg(ffmpegPathConfig);
+if (ffmpegStatus.available) {
+  app.log.info(
+    { version: ffmpegStatus.version, customPath: ffmpegStatus.customCommand },
+    'FFmpeg disponível para os próximos recursos de transcoding.'
+  );
+} else {
+  app.log.warn(
+    { issue: ffmpegStatus.issue, customPath: ffmpegStatus.customCommand },
+    'FFmpeg indisponível; o streaming direto continua funcionando normalmente.'
+  );
 }
 
 if (!shuttingDown) {

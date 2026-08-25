@@ -64,7 +64,7 @@
 - [x] Cookie `Secure` no perfil HTTPS
 - [x] Setup/rollback idempotente com proteção contra conflito em 443
 - [ ] Aplicar grants/restrições least-privilege no tailnet real
-- [ ] FFmpeg
+- [x] FFmpeg
 - [ ] Transcoding adaptativo
 - [ ] Perfis de qualidade Wi‑Fi / 4G
 
