@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import type { PlaybackState, Playlist, RepeatMode, StatisticsPeriod, Track } from '@home-music/shared';
+import type { PlaybackState, Playlist, PlaylistSource, RepeatMode, StatisticsPeriod, Track } from '@home-music/shared';
 import type { IndexedTrack } from './library.js';
 
 const CURRENT_SCHEMA_VERSION = 5;
@@ -39,6 +39,10 @@ function stringValue(value: unknown, fallback = '') {
 
 function repeatModeValue(value: unknown): RepeatMode {
   return value === 'one' || value === 'all' ? value : 'off';
+}
+
+function playlistSourceValue(value: unknown): PlaylistSource {
+  return value === 'rekordbox' ? 'rekordbox' : 'manual';
 }
 
 function stringArrayValue(value: unknown) {
@@ -465,8 +469,13 @@ export class HomeMusicDatabase {
       trackIds: (tracksStatement.all(stringValue(row.id)) as Row[]).map(item => stringValue(item.track_id)),
       createdAt: stringValue(row.created_at),
       updatedAt: stringValue(row.updated_at),
-      source: stringValue(row.source) === 'rekordbox' ? 'rekordbox' : 'manual'
+      source: playlistSourceValue(row.source)
     }));
+  }
+
+  getPlaylistSource(id: string): PlaylistSource | null {
+    const row = this.db.prepare('SELECT source FROM playlists WHERE id = ?').get(id) as Row | undefined;
+    return row ? playlistSourceValue(row.source) : null;
   }
 
   createPlaylist(name: string) {
@@ -541,11 +550,9 @@ export class HomeMusicDatabase {
     const updatePlaylist = this.db.prepare(`
       UPDATE playlists SET name = ?, updated_at = ? WHERE id = ?
     `);
-    const deletePlaylist = this.db.prepare('DELETE FROM playlists WHERE id = ?');
     const now = new Date().toISOString();
     let createdPlaylists = 0;
     let updatedPlaylists = 0;
-    let removedPlaylists = 0;
 
     this.db.exec('BEGIN IMMEDIATE;');
     try {
@@ -554,7 +561,6 @@ export class HomeMusicDatabase {
         if (id) {
           updatePlaylist.run(playlist.name, now, id);
           updatedPlaylists += 1;
-          existing.delete(playlist.sourceKey);
         } else {
           id = randomUUID();
           insertPlaylist.run(id, playlist.name, now, now, source, playlist.sourceKey);
@@ -565,13 +571,8 @@ export class HomeMusicDatabase {
         playlist.trackIds.forEach((trackId, index) => insertTrack.run(id, trackId, index));
       }
 
-      for (const staleId of existing.values()) {
-        deletePlaylist.run(staleId);
-        removedPlaylists += 1;
-      }
-
       this.db.exec('COMMIT;');
-      return { createdPlaylists, updatedPlaylists, removedPlaylists };
+      return { createdPlaylists, updatedPlaylists, removedPlaylists: 0 };
     } catch (error) {
       this.db.exec('ROLLBACK;');
       throw error;
