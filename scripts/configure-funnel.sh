@@ -379,7 +379,7 @@ disable_public() {
   check_tailscale_version
   load_tailscale_identity
 
-  local port target local_url state rollback_needed=0 serve_attempted=0
+  local port target local_url state rollback_needed=0
   port="$(home_music_port)"
   target="127.0.0.1:${port}"
   local_url="http://${target}"
@@ -406,6 +406,12 @@ disable_public() {
     funnel) ;;
   esac
 
+  echo "==> Desabilitando exposição pública em HTTPS/443"
+  if ! "${TAILSCALE_BIN}" funnel --yes --https=443 off; then
+    fail "O Tailscale não confirmou a desativação do Funnel. A URL PODE CONTINUAR PÚBLICA; confira 'tailscale funnel status' antes de assumir que o acesso foi fechado."
+    return 1
+  fi
+
   rollback_needed=1
   rollback() {
     local rc="${1:-1}"
@@ -426,11 +432,7 @@ disable_public() {
   trap 'rollback 130' INT
   trap 'rollback 143' TERM
 
-  echo "==> Desabilitando exposição pública em HTTPS/443"
-  "${TAILSCALE_BIN}" funnel --yes --https=443 off
-
   echo "==> Restaurando Tailscale Serve privado em HTTPS/443"
-  serve_attempted=1
   "${TAILSCALE_BIN}" serve --bg --yes --https=443 "${target}"
 
   if [[ "$(https_443_state "${target}")" != "serve" ]]; then
