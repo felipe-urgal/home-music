@@ -7,6 +7,7 @@ O objetivo é simples:
 - identificar o Ubuntu como `tag:home-music`;
 - permitir que somente esse servidor tenha a capacidade de usar Funnel;
 - no acesso privado do tailnet, permitir somente `tcp:443` para o Home Music;
+- preservar a conectividade normal entre dispositivos pessoais do mesmo usuário;
 - remover regras amplas do tipo allow-all que anulam o least privilege;
 - manter o Fastify em `127.0.0.1:8787`.
 
@@ -14,13 +15,13 @@ O objetivo é simples:
 
 ## Por que aplicar em duas fases
 
-Tags mudam a identidade Tailscale de um dispositivo. Além disso, grants e ACLs são aditivos: adicionar uma regra estreita não restringe uma regra ampla já existente.
+Tags mudam a identidade Tailscale de um dispositivo: um dispositivo tagueado deixa de pertencer a um usuário e, por isso, deixa de fazer parte de `autogroup:self`. Além disso, grants e ACLs são aditivos: adicionar uma regra estreita não restringe uma regra ampla já existente.
 
 Por isso, não remova o allow-all antes de o servidor estar tagueado e a regra nova existir. O fluxo abaixo evita lockout desnecessário.
 
 ## Policy de referência
 
-O arquivo [`tailscale-policy.example.hujson`](tailscale-policy.example.hujson) contém a policy mínima de referência:
+O arquivo [`tailscale-policy.example.hujson`](tailscale-policy.example.hujson) contém a policy final de referência:
 
 ```jsonc
 {
@@ -36,6 +37,11 @@ O arquivo [`tailscale-policy.example.hujson`](tailscale-policy.example.hujson) c
   "grants": [
     {
       "src": ["autogroup:member"],
+      "dst": ["autogroup:self"],
+      "ip": ["*"]
+    },
+    {
+      "src": ["autogroup:member"],
       "dst": ["tag:home-music"],
       "ip": ["tcp:443"]
     }
@@ -43,20 +49,22 @@ O arquivo [`tailscale-policy.example.hujson`](tailscale-policy.example.hujson) c
 }
 ```
 
-Em um tailnet individual, `autogroup:member` mantém o acesso do dono e dos seus dispositivos ao Home Music em HTTPS, mas não libera outras portas do servidor.
+O primeiro grant preserva a conectividade entre dispositivos pessoais do mesmo usuário. O segundo isola o servidor Home Music: depois da tag, ele deixa de ser `autogroup:self`, portanto nenhuma outra porta é reaberta por essa regra.
 
 Não substitua cegamente uma policy existente se você usa outras funcionalidades do Tailscale. Preserve regras realmente necessárias e remova somente regras amplas que não façam mais sentido.
 
 ## Fase 1 — preparar sem restringir ainda
 
-1. No Admin Console do Tailscale, abra **Access controls** e salve uma cópia da policy atual para rollback.
-2. Adicione `tagOwners` para `tag:home-music`.
-3. Adicione o `nodeAttrs` que concede `funnel` para `tag:home-music`.
-4. Adicione o grant `autogroup:member -> tag:home-music` em `tcp:443`.
-5. **Ainda não remova** o allow-all atual nem o `nodeAttrs` amplo de Funnel.
-6. Salve a policy e confirme que o painel não reporta erro de sintaxe.
+Na policy padrão que libera tudo, faça primeiro uma alteração **aditiva**:
 
-Se a policy já possui `tagOwners`, `nodeAttrs` ou `grants`, mescle as entradas dentro das seções existentes em vez de duplicar as chaves de topo.
+1. salve uma cópia da policy atual para rollback;
+2. adicione `tagOwners` para `tag:home-music`;
+3. adicione um segundo `nodeAttrs` que conceda `funnel` para `tag:home-music`, mantendo temporariamente o `nodeAttrs` atual de `autogroup:member`;
+4. mantenha temporariamente o grant allow-all atual;
+5. adicione o grant `autogroup:member -> tag:home-music` em `tcp:443`;
+6. salve e confirme que o painel não reporta erro de sintaxe.
+
+O grant `autogroup:member -> autogroup:self` só precisa substituir o allow-all na Fase 3. Antes da tag, o allow-all preserva todo o comportamento atual.
 
 ## Fase 2 — aplicar a tag ao Ubuntu
 
@@ -93,18 +101,25 @@ curl -fsS https://home-music.SEUTAILNET.ts.net/ready
 
 Use a URL exata impressa pelo comando de status.
 
+### Tailscale SSH
+
+A policy padrão permite Tailscale SSH somente para `autogroup:self`. Como um servidor tagueado deixa de ser `self`, **Tailscale SSH para o Ubuntu será bloqueado após a tag** se nenhuma regra específica for criada.
+
+Isso é intencional nesta policy: o Home Music fica acessível pelo tailnet somente em HTTPS/443. Se você administra esse Ubuntu via Tailscale SSH, não aplique a tag antes de criar uma regra explícita de administração para `tcp:22` e uma regra `ssh` correspondente.
+
 ## Fase 3 — remover permissões amplas
 
 Só depois da Fase 2:
 
 1. volte a **Access controls**;
 2. abra **Preview rules** e confirme que seu usuário alcança `tag:home-music` em `tcp:443`;
-3. remova o `nodeAttrs` amplo criado originalmente pelo Funnel, por exemplo `target: ["autogroup:member"]` com `attr: ["funnel"]`, deixando apenas o target `tag:home-music`;
-4. remova grants/ACLs allow-all que concedam acesso irrestrito a todos os dispositivos;
-5. preserve quaisquer regras específicas que você realmente use para outros serviços;
-6. salve e valide novamente o preview.
+3. remova o `nodeAttrs` amplo `target: ["autogroup:member"]` com `attr: ["funnel"]`, deixando apenas `tag:home-music`;
+4. substitua o grant allow-all por `autogroup:member -> autogroup:self` com `ip: ["*"]`;
+5. mantenha o grant `autogroup:member -> tag:home-music` somente em `tcp:443`;
+6. preserve quaisquer regras específicas que você realmente use para outros serviços;
+7. salve e valide novamente o preview.
 
-Exemplos de regras amplas que devem ser revisadas/removidas quando existirem:
+O ponto crítico é que uma regra estreita **não sobrescreve** o allow-all. Enquanto esta regra existir, o servidor continua alcançável em qualquer porta:
 
 ```jsonc
 {
@@ -113,18 +128,6 @@ Exemplos de regras amplas que devem ser revisadas/removidas quando existirem:
   "ip": ["*"]
 }
 ```
-
-ou, em ACL legado:
-
-```jsonc
-{
-  "action": "accept",
-  "src": ["*"],
-  "dst": ["*:*"]
-}
-```
-
-Uma regra estreita **não sobrescreve** essas regras; enquanto um allow-all permanecer, o acesso amplo continua existindo.
 
 ## Validação final
 
@@ -142,6 +145,7 @@ Critérios de aceite:
 - `tag:home-music` aplicada ao Ubuntu;
 - capacidade `funnel` direcionada somente a `tag:home-music` na policy;
 - nenhum allow-all genérico cobrindo o servidor;
+- dispositivos pessoais continuam podendo acessar seus próprios dispositivos pelo tailnet;
 - grant privado limitado a `tcp:443` para `tag:home-music`;
 - Funnel continua em HTTPS/443 para `127.0.0.1:8787`;
 - `/ready` continua retornando `{"ready":true}`;
