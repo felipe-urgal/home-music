@@ -1,10 +1,15 @@
 import { useDeferredValue, useMemo, useState } from 'react';
 import type { Playlist, Track } from '@home-music/shared';
 import {
+  applyTrackView,
   buildFolderView,
   groupTracks,
-  matchesTrack,
-  normalizeSearch
+  matchesTrackView,
+  normalizeSearch,
+  type CoverFilter,
+  type FavoriteFilter,
+  type TrackSort,
+  type TrackViewOptions
 } from './library-utils';
 
 export const LIBRARY_PAGE_SIZE = 100;
@@ -20,6 +25,10 @@ export function useLibraryNavigation(
   const [folderPath, setFolderPath] = useState('');
   const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<TrackSort>('current');
+  const [formatFilter, setFormatFilter] = useState('all');
+  const [favoriteFilter, setFavoriteFilter] = useState<FavoriteFilter>('all');
+  const [coverFilter, setCoverFilter] = useState<CoverFilter>('all');
   const [visibleCount, setVisibleCount] = useState(LIBRARY_PAGE_SIZE);
   const deferredQuery = useDeferredValue(query);
   const normalizedQuery = normalizeSearch(deferredQuery);
@@ -41,54 +50,92 @@ export function useLibraryNavigation(
     [playlists, selectedPlaylistId]
   );
 
-  const folderView = useMemo(() => buildFolderView(tracks, folderPath), [folderPath, tracks]);
-
-  const visibleGroups = useMemo(() => {
-    if (!normalizedQuery) return groups;
-    return groups.filter(group =>
-      normalizeSearch(`${group.name} ${group.subtitle ?? ''}`).includes(normalizedQuery) ||
-      group.tracks.some(track => matchesTrack(track, normalizedQuery))
-    );
-  }, [groups, normalizedQuery]);
-
-  const libraryTracks = useMemo(() => {
-    let source: Track[];
-
-    if (libraryTab === 'favorites') {
-      source = tracks.filter(track => favoriteSet.has(track.id));
-    } else if (libraryTab === 'playlists' && selectedPlaylist) {
-      source = selectedPlaylist.trackIds
+  const playlistTracks = useMemo(
+    () => selectedPlaylist
+      ? selectedPlaylist.trackIds
         .map(id => trackMap.get(id))
-        .filter((track): track is Track => Boolean(track));
-    } else if (selectedGroup) {
-      source = selectedGroup.tracks;
-    } else if (libraryTab === 'folders') {
-      source = normalizedQuery ? folderView.allTracks : folderView.directTracks;
-    } else {
-      source = tracks;
-    }
-
-    return source.filter(track => matchesTrack(track, normalizedQuery));
-  }, [favoriteSet, folderView, libraryTab, normalizedQuery, selectedGroup, selectedPlaylist, trackMap, tracks]);
-
-  const folderContextTracks = useMemo(
-    () => folderView.allTracks.filter(track => matchesTrack(track, normalizedQuery)),
-    [folderView.allTracks, normalizedQuery]
+        .filter((track): track is Track => Boolean(track))
+      : [],
+    [selectedPlaylist, trackMap]
   );
 
-  const visibleFolders = useMemo(() => {
-    if (!normalizedQuery) return folderView.folders;
-    return folderView.folders.filter(folder =>
-      normalizeSearch(folder.name).includes(normalizedQuery) ||
-      folder.tracks.some(track => matchesTrack(track, normalizedQuery))
-    );
-  }, [folderView.folders, normalizedQuery]);
+  const folderView = useMemo(() => buildFolderView(tracks, folderPath), [folderPath, tracks]);
+
+  const filterScopeTracks = useMemo(() => {
+    if (libraryTab === 'favorites') return tracks.filter(track => favoriteSet.has(track.id));
+    if (libraryTab === 'playlists' && selectedPlaylist) return playlistTracks;
+    if (selectedGroup) return selectedGroup.tracks;
+    if (libraryTab === 'folders') return folderView.allTracks;
+    return tracks;
+  }, [favoriteSet, folderView.allTracks, libraryTab, playlistTracks, selectedGroup, selectedPlaylist, tracks]);
+
+  const availableFormats = useMemo(
+    () => [...new Set(filterScopeTracks.map(track => track.format))].sort((a, b) => a.localeCompare(b, 'pt-BR')),
+    [filterScopeTracks]
+  );
+
+  const viewOptions = useMemo<TrackViewOptions>(() => ({
+    normalizedQuery,
+    format: formatFilter,
+    favorite: favoriteFilter,
+    cover: coverFilter,
+    sort,
+    favoriteIds: favoriteSet
+  }), [coverFilter, favoriteFilter, favoriteSet, formatFilter, normalizedQuery, sort]);
+
+  const visibleGroups = useMemo(() => groups.flatMap(group => {
+    const matchingTracks = group.tracks.filter(track => matchesTrackView(track, viewOptions));
+    if (!matchingTracks.length) return [];
+    return [{
+      ...group,
+      matchingTrackCount: matchingTracks.length,
+      artwork: matchingTracks.find(track => track.hasCover) ?? matchingTracks[0] ?? group.artwork
+    }];
+  }), [groups, viewOptions]);
+
+  const baseTracks = useMemo(() => {
+    if (libraryTab === 'favorites') {
+      return tracks.filter(track => favoriteSet.has(track.id));
+    }
+    if (libraryTab === 'playlists' && selectedPlaylist) return playlistTracks;
+    if (selectedGroup) return selectedGroup.tracks;
+    if (libraryTab === 'folders') return normalizedQuery ? folderView.allTracks : folderView.directTracks;
+    return tracks;
+  }, [favoriteSet, folderView, libraryTab, normalizedQuery, playlistTracks, selectedGroup, selectedPlaylist, tracks]);
+
+  const libraryTracks = useMemo(
+    () => applyTrackView(baseTracks, viewOptions),
+    [baseTracks, viewOptions]
+  );
+
+  const folderContextTracks = useMemo(
+    () => applyTrackView(folderView.allTracks, viewOptions),
+    [folderView.allTracks, viewOptions]
+  );
+
+  const visibleFolders = useMemo(() => folderView.folders.flatMap(folder => {
+    const matchingTracks = folder.tracks.filter(track => matchesTrackView(track, viewOptions));
+    if (!matchingTracks.length) return [];
+    return [{
+      ...folder,
+      matchingTrackCount: matchingTracks.length,
+      artwork: matchingTracks.find(track => track.hasCover) ?? matchingTracks[0] ?? folder.artwork
+    }];
+  }), [folderView.folders, viewOptions]);
 
   const shouldShowTracks = libraryTab === 'tracks' ||
     libraryTab === 'favorites' ||
     Boolean(selectedGroup) ||
     Boolean(selectedPlaylist) ||
     (libraryTab === 'folders' && Boolean(normalizedQuery));
+
+  const canSortTracks = shouldShowTracks || (libraryTab === 'folders' && Boolean(folderPath));
+  const activeViewOptionCount = [
+    sort !== 'current',
+    formatFilter !== 'all',
+    favoriteFilter !== 'all',
+    coverFilter !== 'all'
+  ].filter(Boolean).length;
 
   const pagedTracks = libraryTracks.slice(0, visibleCount);
   const pagedGroups = visibleGroups.slice(0, visibleCount);
@@ -98,53 +145,83 @@ export function useLibraryNavigation(
     setVisibleCount(LIBRARY_PAGE_SIZE);
   }
 
+  function resetViewOptions() {
+    setSort('current');
+    setFormatFilter('all');
+    setFavoriteFilter('all');
+    setCoverFilter('all');
+    resetPage();
+  }
+
+  function resetNavigationView() {
+    setQuery('');
+    setSort('current');
+    setFormatFilter('all');
+    setFavoriteFilter('all');
+    setCoverFilter('all');
+    resetPage();
+  }
+
   function selectTab(tab: LibraryTab) {
     setLibraryTab(tab);
     setSelectedGroupKey(null);
     setSelectedPlaylistId(null);
     setFolderPath('');
-    setQuery('');
-    resetPage();
+    resetNavigationView();
   }
 
   function selectGroup(key: string) {
     setSelectedGroupKey(key);
-    setQuery('');
-    resetPage();
+    resetNavigationView();
   }
 
   function leaveGroup() {
     setSelectedGroupKey(null);
-    setQuery('');
-    resetPage();
+    resetNavigationView();
   }
 
   function enterFolder(path: string) {
     setFolderPath(path);
-    setQuery('');
-    resetPage();
+    resetNavigationView();
   }
 
   function leaveFolder() {
     setFolderPath(folderView.parentPath ?? '');
-    setQuery('');
-    resetPage();
+    resetNavigationView();
   }
 
   function selectPlaylist(id: string) {
     setSelectedPlaylistId(id);
-    setQuery('');
-    resetPage();
+    resetNavigationView();
   }
 
   function leavePlaylist() {
     setSelectedPlaylistId(null);
-    setQuery('');
-    resetPage();
+    resetNavigationView();
   }
 
   function changeQuery(value: string) {
     setQuery(value);
+    resetPage();
+  }
+
+  function changeSort(value: TrackSort) {
+    setSort(value);
+    resetPage();
+  }
+
+  function changeFormatFilter(value: string) {
+    setFormatFilter(value);
+    resetPage();
+  }
+
+  function changeFavoriteFilter(value: FavoriteFilter) {
+    setFavoriteFilter(value);
+    resetPage();
+  }
+
+  function changeCoverFilter(value: CoverFilter) {
+    setCoverFilter(value);
     resetPage();
   }
 
@@ -161,6 +238,13 @@ export function useLibraryNavigation(
     folderContextTracks,
     query,
     normalizedQuery,
+    sort,
+    formatFilter,
+    favoriteFilter,
+    coverFilter,
+    availableFormats,
+    activeViewOptionCount,
+    canSortTracks,
     visibleCount,
     visibleGroups,
     visibleFolders,
@@ -177,6 +261,11 @@ export function useLibraryNavigation(
     selectPlaylist,
     leavePlaylist,
     changeQuery,
+    changeSort,
+    changeFormatFilter,
+    changeFavoriteFilter,
+    changeCoverFilter,
+    resetViewOptions,
     showMore
   };
 }

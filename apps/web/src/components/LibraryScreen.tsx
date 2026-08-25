@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
@@ -11,10 +12,12 @@ import {
   Plus,
   RefreshCw,
   Search,
+  SlidersHorizontal,
   Trash2,
   Users
 } from 'lucide-react';
 import type { Playlist, Track } from '@home-music/shared';
+import type { CoverFilter, FavoriteFilter, TrackSort } from '../library-utils';
 import { uniqueTracksById } from '../player-state';
 import type { LibraryData } from '../useLibraryData';
 import { LIBRARY_PAGE_SIZE, type LibraryNavigation, type LibraryTab } from '../useLibraryNavigation';
@@ -105,6 +108,7 @@ export function LibraryScreen({
   onNext,
   onPlayTrack
 }: LibraryScreenProps) {
+  const [viewControlsOpen, setViewControlsOpen] = useState(false);
   const {
     tracks,
     favoriteSet,
@@ -129,6 +133,13 @@ export function LibraryScreen({
     folderView,
     folderContextTracks,
     query,
+    sort,
+    formatFilter,
+    favoriteFilter,
+    coverFilter,
+    availableFormats,
+    activeViewOptionCount,
+    canSortTracks,
     visibleCount,
     visibleGroups,
     visibleFolders,
@@ -145,6 +156,11 @@ export function LibraryScreen({
     selectPlaylist,
     leavePlaylist,
     changeQuery,
+    changeSort,
+    changeFormatFilter,
+    changeFavoriteFilter,
+    changeCoverFilter,
+    resetViewOptions,
     showMore
   } = navigation;
 
@@ -153,11 +169,13 @@ export function LibraryScreen({
   const run = (operation: Promise<unknown>) => void operation.catch(() => undefined);
 
   function changeTab(tab: LibraryTab) {
+    setViewControlsOpen(false);
     selectTab(tab);
     if (tab === 'history') run(refreshHistory());
   }
 
   function goBack() {
+    setViewControlsOpen(false);
     if (selectedGroup) leaveGroup();
     else if (selectedPlaylist) leavePlaylist();
     else if (folderPath) leaveFolder();
@@ -172,7 +190,7 @@ export function LibraryScreen({
 
   function subtitle() {
     if (selectedGroup || selectedPlaylist) return `${libraryTracks.length} músicas`;
-    if (libraryTab === 'folders' && folderPath) return `${folderView.allTracks.length} músicas`;
+    if (libraryTab === 'folders' && folderPath) return `${folderContextTracks.length} músicas`;
     return `${tracks.length} músicas`;
   }
 
@@ -230,10 +248,75 @@ export function LibraryScreen({
       )}
 
       {showSearch && (
-        <div className="search-box search-box--library">
-          <Search />
-          <input value={query} onChange={event => changeQuery(event.target.value)} placeholder="Música, artista, álbum ou pasta" />
-        </div>
+        <>
+          <div className="library-tools">
+            <div className="search-box search-box--library">
+              <Search />
+              <input value={query} onChange={event => changeQuery(event.target.value)} placeholder="Música, artista, álbum ou pasta" />
+            </div>
+            <button
+              className={`library-filter-toggle ${activeViewOptionCount > 0 ? 'is-active' : ''}`}
+              type="button"
+              aria-label="Ordenar e filtrar biblioteca"
+              aria-expanded={viewControlsOpen}
+              onClick={() => setViewControlsOpen(open => !open)}
+            >
+              <SlidersHorizontal />
+              {activeViewOptionCount > 0 && <span>{activeViewOptionCount}</span>}
+            </button>
+          </div>
+
+          {viewControlsOpen && (
+            <div className="library-view-controls">
+              {canSortTracks && (
+                <label>
+                  <span>Ordenar</span>
+                  <select value={sort} onChange={event => changeSort(event.target.value as TrackSort)}>
+                    <option value="current">Ordem atual</option>
+                    <option value="title-asc">Título A–Z</option>
+                    <option value="title-desc">Título Z–A</option>
+                    <option value="artist-asc">Artista A–Z</option>
+                    <option value="artist-desc">Artista Z–A</option>
+                    <option value="album-asc">Álbum A–Z</option>
+                    <option value="album-desc">Álbum Z–A</option>
+                  </select>
+                </label>
+              )}
+
+              <label>
+                <span>Formato</span>
+                <select value={formatFilter} onChange={event => changeFormatFilter(event.target.value)}>
+                  <option value="all">Todos</option>
+                  {availableFormats.map(format => <option key={format} value={format}>{format}</option>)}
+                </select>
+              </label>
+
+              {libraryTab !== 'favorites' && (
+                <label>
+                  <span>Favoritos</span>
+                  <select value={favoriteFilter} onChange={event => changeFavoriteFilter(event.target.value as FavoriteFilter)}>
+                    <option value="all">Todos</option>
+                    <option value="favorites">Somente favoritos</option>
+                    <option value="not-favorites">Não favoritos</option>
+                  </select>
+                </label>
+              )}
+
+              <label>
+                <span>Capa</span>
+                <select value={coverFilter} onChange={event => changeCoverFilter(event.target.value as CoverFilter)}>
+                  <option value="all">Todas</option>
+                  <option value="with-cover">Com capa</option>
+                  <option value="without-cover">Sem capa</option>
+                </select>
+              </label>
+
+              {activeViewOptionCount > 0 && (
+                <button className="library-view-controls__reset" type="button" onClick={resetViewOptions}>Limpar filtros</button>
+              )}
+            </div>
+          )}
+        </>
       )}
 
       {!isDetail && (
@@ -252,8 +335,8 @@ export function LibraryScreen({
       <section className="library-content">
         {libraryTab === 'folders' ? (
           <>
-            {folderView.allTracks.length > 0 && folderPath && (
-              <button className="play-all" onClick={() => onPlayTrack(folderView.allTracks[0], folderView.allTracks)}><Play />Tocar tudo <span>{folderView.allTracks.length}</span></button>
+            {folderContextTracks.length > 0 && folderPath && (
+              <button className="play-all" onClick={() => onPlayTrack(folderContextTracks[0], folderContextTracks)}><Play />Tocar tudo <span>{folderContextTracks.length}</span></button>
             )}
 
             {pagedFolders.length > 0 && (
@@ -263,7 +346,7 @@ export function LibraryScreen({
                   {pagedFolders.map(folder => (
                     <button className="group-item" key={folder.path} onClick={() => enterFolder(folder.path)}>
                       <Artwork track={folder.artwork} />
-                      <span className="group-item__text"><strong>{folder.name}</strong><small>{folder.tracks.length} músicas</small></span>
+                      <span className="group-item__text"><strong>{folder.name}</strong><small>{folder.matchingTrackCount} músicas</small></span>
                       <ChevronRight />
                     </button>
                   ))}
@@ -276,7 +359,7 @@ export function LibraryScreen({
                 <div className="section-heading"><span>{query ? 'Resultados' : 'Músicas nesta pasta'}</span><small>{libraryTracks.length}</small></div>
                 <TrackRows
                   tracks={pagedTracks}
-                  context={query ? folderContextTracks : folderView.allTracks}
+                  context={folderContextTracks}
                   current={current}
                   playing={playing}
                   favorites={favoriteSet}
@@ -360,7 +443,7 @@ export function LibraryScreen({
               {pagedGroups.map(group => (
                 <button className="group-item" key={group.key} onClick={() => selectGroup(group.key)}>
                   <Artwork track={group.artwork} />
-                  <span className="group-item__text"><strong>{group.name}</strong><small>{group.subtitle ? `${group.subtitle} · ` : ''}{group.tracks.length} músicas</small></span>
+                  <span className="group-item__text"><strong>{group.name}</strong><small>{group.subtitle ? `${group.subtitle} · ` : ''}{group.matchingTrackCount} músicas</small></span>
                   <ChevronRight />
                 </button>
               ))}
