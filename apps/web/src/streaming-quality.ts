@@ -89,6 +89,16 @@ export function onlineAudioUrl(
   return directAudioUrl(trackId);
 }
 
+export function preloadAudioUrl(
+  trackId: string,
+  mode: StreamingMode,
+  normalization: NormalizationMode = 'off'
+) {
+  if (mode === 'economy') return transcodedAudioUrl(trackId, 'economy', normalization);
+  if (normalization !== 'off') return transcodedAudioUrl(trackId, 'high', normalization);
+  return null;
+}
+
 export function shouldRetryWithCompatibilityTranscode(mode: StreamingMode, mediaErrorCode: number | null | undefined) {
   return mode === 'auto' && (mediaErrorCode === 3 || mediaErrorCode === 4);
 }
@@ -121,9 +131,9 @@ export function readStreamingSelection(storage: Pick<Storage, 'getItem'>): Strea
   }
 }
 
-export function writeStreamingSelection(storage: Pick<Storage, 'setItem'>, selection: StreamingSelection) {
+export function writeStreamingSelection(storage: Pick<Storage, 'setItem'>, mode: StreamingSelection) {
   try {
-    storage.setItem(STREAMING_SELECTION_STORAGE_KEY, selection);
+    storage.setItem(STREAMING_SELECTION_STORAGE_KEY, mode);
   } catch {
     // Preferência é best-effort; falha de storage não impede reprodução.
   }
