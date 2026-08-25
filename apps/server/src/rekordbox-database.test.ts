@@ -27,7 +27,7 @@ function indexedTrack(id: string): IndexedTrack {
   };
 }
 
-test('sincronização Rekordbox é idempotente e não altera playlists manuais', async () => {
+test('reimportação Rekordbox é idempotente, não destrutiva e não altera playlists manuais', async () => {
   const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-rekordbox-db-'));
   const db = new HomeMusicDatabase(path.join(temp, 'home-music.db'));
 
@@ -51,7 +51,7 @@ test('sincronização Rekordbox é idempotente e não altera playlists manuais',
       { sourceKey: 'House\u001fWarmup', name: 'House / Warmup atualizado', trackIds: ['b', 'a', 'b'] },
       { sourceKey: 'House\u001fNew', name: 'House / New', trackIds: ['c'] }
     ]);
-    assert.deepEqual(second, { createdPlaylists: 1, updatedPlaylists: 1, removedPlaylists: 1 });
+    assert.deepEqual(second, { createdPlaylists: 1, updatedPlaylists: 1, removedPlaylists: 0 });
 
     const playlists = db.getPlaylists();
     const manual = playlists.find(playlist => playlist.id === manualId);
@@ -64,7 +64,11 @@ test('sincronização Rekordbox é idempotente e não altera playlists manuais',
     assert.equal(warmup.id, warmupId);
     assert.equal(warmup.source, 'rekordbox');
     assert.deepEqual(warmup.trackIds, ['b', 'a']);
-    assert.equal(playlists.some(playlist => playlist.name === 'House / Peak'), false);
+
+    const omittedFromPartialImport = playlists.find(playlist => playlist.name === 'House / Peak');
+    assert.ok(omittedFromPartialImport);
+    assert.equal(omittedFromPartialImport.source, 'rekordbox');
+    assert.deepEqual(omittedFromPartialImport.trackIds, ['b']);
   } finally {
     db.close();
     await rm(temp, { recursive: true, force: true });
