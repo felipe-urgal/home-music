@@ -19,13 +19,33 @@
     },
   ],
 
-  // Dentro do tailnet, membros só alcançam o Home Music em HTTPS/443.
-  // Em um tailnet individual isso equivale ao dono do tailnet e seus dispositivos.
   "grants": [
+    // Preserva a conectividade normal entre dispositivos pessoais do mesmo usuário.
+    // Dispositivos tagueados não pertencem a autogroup:self, então este grant NÃO
+    // reabre outras portas do servidor Home Music depois que a tag for aplicada.
+    {
+      "src": ["autogroup:member"],
+      "dst": ["autogroup:self"],
+      "ip": ["*"],
+    },
+
+    // O servidor Home Music recebe somente HTTPS dentro do tailnet.
     {
       "src": ["autogroup:member"],
       "dst": ["tag:home-music"],
       "ip": ["tcp:443"],
+    },
+  ],
+
+  // Mantém a regra padrão de Tailscale SSH apenas para dispositivos pessoais.
+  // Depois que o Ubuntu recebe tag:home-music, ele deixa de ser autogroup:self;
+  // portanto Tailscale SSH para o servidor fica deliberadamente bloqueado.
+  "ssh": [
+    {
+      "action": "check",
+      "src": ["autogroup:member"],
+      "dst": ["autogroup:self"],
+      "users": ["autogroup:nonroot", "root"],
     },
   ],
 }
