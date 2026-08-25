@@ -434,3 +434,5 @@
   line-height: 1.5;
   text-align: center;
 }
+
+.lyrics-panel__empty--error { color: #ff9c9c; }
