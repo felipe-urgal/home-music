@@ -254,7 +254,7 @@ try {
     active: 0,
     pending: 0
   });
-  assert.equal(internalHealthBody.schemaVersion, 4);
+  assert.equal(internalHealthBody.schemaVersion, 5);
 
   const library = await fetch(`${baseUrl}/api/library`, {
     headers: { Cookie: cookie }
