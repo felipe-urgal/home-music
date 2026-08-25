@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import type { Track } from '@home-music/shared';
 import {
   BarChart3,
@@ -12,6 +12,7 @@ import {
   Upload,
   Users
 } from 'lucide-react';
+import { useDesktopKeyboardShortcuts } from '../useDesktopKeyboardShortcuts';
 import { useDesktopLayout } from '../useDesktopLayout';
 import type { LibraryTab } from '../useLibraryNavigation';
 import { useTrackLyrics } from '../useTrackLyrics';
@@ -90,6 +91,23 @@ export function DesktopShell({
   const queueStart = Math.max(0, currentIndex);
   const queuePreview = queue.slice(queueStart, queueStart + DESKTOP_QUEUE_PREVIEW_SIZE);
   const remainingQueueCount = Math.max(0, queue.length - queueStart - queuePreview.length);
+
+  const focusLibrarySearch = useCallback(() => {
+    if (!onOpenLibraryTab) return;
+    onOpenLibraryTab('tracks');
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        const search = document.querySelector<HTMLInputElement>('[data-library-search]');
+        search?.focus();
+        search?.select();
+      });
+    });
+  }, [onOpenLibraryTab]);
+
+  useDesktopKeyboardShortcuts({
+    enabled: desktopLayout && !offlineMode && Boolean(onOpenLibraryTab),
+    onFocusSearch: focusLibrarySearch
+  });
 
   useEffect(() => {
     if (!lyrics && contextTab === 'lyrics') setContextTab('queue');
