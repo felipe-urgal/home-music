@@ -31,13 +31,15 @@ test('login, biblioteca e player permanecem utilizáveis', async ({ page }) => {
     await expect(sidebar).toBeVisible();
     await expect(context).toBeVisible();
     await expect(desktopQueue).toBeVisible();
-    await expect(desktopPlayerBar).toBeVisible();
+    await expect(desktopPlayerBar).toBeHidden();
     await expect(embeddedPlayerQueue).toBeHidden();
     await expect(sidebar.getByRole('button', { name: 'Tocando agora' })).toHaveAttribute('aria-current', 'page');
     await expect(context).toContainText('E2E Track');
     await expect(desktopQueue).toContainText('E2E Track');
-    await expect(desktopPlayerBar).toContainText('E2E Track');
-    await expect(desktopPlayerBar.getByRole('button', { name: 'Tocar na barra desktop' })).toBeVisible();
+
+    for (const label of ['Músicas', 'Artistas', 'Álbuns', 'Pastas', 'Favoritos', 'Playlists', 'Rekordbox', 'Histórico', 'Estatísticas']) {
+      await expect(sidebar.getByRole('button', { name: label, exact: true })).toBeVisible();
+    }
 
     const contextTabs = context.getByRole('tablist', { name: 'Painel contextual' });
     const queueTab = contextTabs.getByRole('tab', { name: 'Fila' });
@@ -55,10 +57,6 @@ test('login, biblioteca e player permanecem utilizáveis', async ({ page }) => {
     const surfaceBox = await surface.boundingBox();
     expect(surfaceBox).not.toBeNull();
     expect(surfaceBox!.width).toBeGreaterThan(480);
-
-    const barBox = await desktopPlayerBar.boundingBox();
-    expect(barBox).not.toBeNull();
-    expect(Math.abs(barBox!.y + barBox!.height - viewport.height)).toBeLessThanOrEqual(2);
 
     const documentHeight = await page.evaluate(() => document.documentElement.scrollHeight);
     expect(documentHeight).toBeLessThanOrEqual(viewport.height + 2);
@@ -93,7 +91,7 @@ test('login, biblioteca e player permanecem utilizáveis', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Pausar', exact: true })).toBeVisible();
 
   if (isDesktop) {
-    await expect(desktopPlayerBar.getByRole('button', { name: 'Pausar na barra desktop' })).toBeVisible();
+    await expect(desktopPlayerBar).toBeHidden();
   }
 
   await page.getByRole('button', { name: 'Voltar à biblioteca' }).click();
@@ -101,16 +99,12 @@ test('login, biblioteca e player permanecem utilizáveis', async ({ page }) => {
   await expect(page.locator('.library-header__title small')).toContainText('1 música');
 
   if (isDesktop) {
-    await expect(sidebar.getByRole('button', { name: 'Biblioteca' })).toHaveAttribute('aria-current', 'page');
+    await expect(sidebar.getByRole('button', { name: 'Pastas', exact: true })).toHaveAttribute('aria-current', 'page');
     await expect(desktopPlayerBar).toBeVisible();
     await expect(desktopPlayerBar).toContainText('E2E Track');
     await expect(page.getByRole('button', { name: 'Abrir estatísticas' })).toBeHidden();
     await expect(page.getByRole('button', { name: 'Voltar ao player' })).toBeHidden();
-
-    const libraryTabs = page.getByRole('navigation', { name: 'Navegação da biblioteca' });
-    const songsTabBox = await libraryTabs.getByRole('button', { name: 'Músicas', exact: true }).boundingBox();
-    expect(songsTabBox).not.toBeNull();
-    expect(songsTabBox!.height).toBeLessThanOrEqual(40);
+    await expect(page.getByRole('navigation', { name: 'Navegação da biblioteca' })).toBeHidden();
 
     const persistentProgress = desktopPlayerBar.getByLabel('Progresso da reprodução na barra desktop');
     await expect(persistentProgress).toBeEnabled();
@@ -122,12 +116,17 @@ test('login, biblioteca e player permanecem utilizáveis', async ({ page }) => {
     await expect(desktopPlayerBar.getByRole('button', { name: 'Tocar na barra desktop' })).toBeVisible();
     await desktopPlayerBar.getByRole('button', { name: 'Tocar na barra desktop' }).click();
     await expect(desktopPlayerBar.getByRole('button', { name: 'Pausar na barra desktop' })).toBeVisible();
+
+    await sidebar.getByRole('button', { name: 'Músicas', exact: true }).click();
+  } else {
+    await expect(page.getByRole('navigation', { name: 'Navegação da biblioteca' })).toBeVisible();
+    await page.getByRole('button', { name: 'Músicas', exact: true }).click();
   }
 
-  await page.getByRole('button', { name: 'Músicas', exact: true }).click();
   await expect(page.getByPlaceholder('Música, artista, álbum ou pasta')).toBeVisible();
 
   if (isDesktop) {
+    await expect(sidebar.getByRole('button', { name: 'Músicas', exact: true })).toHaveAttribute('aria-current', 'page');
     const desktopLibraryTable = page.getByTestId('desktop-library-table');
     await expect(desktopLibraryTable).toBeVisible();
     await expect(desktopLibraryTable.getByRole('button', { name: 'Tocar E2E Track' })).toBeVisible();
@@ -144,6 +143,11 @@ test('login, biblioteca e player permanecem utilizáveis', async ({ page }) => {
     await expect(desktopLibraryTable.getByRole('columnheader', { name: 'Pasta' })).toBeVisible();
     await expect(desktopLibraryTable.getByRole('columnheader', { name: 'Formato' })).toBeVisible();
     await expect(desktopLibraryTable.getByRole('columnheader', { name: 'Duração' })).toBeVisible();
+
+    await sidebar.getByRole('button', { name: 'Rekordbox', exact: true }).click();
+    const libraryMain = page.locator('.desktop-main-content--library');
+    await expect(libraryMain.getByText('Playlists', { exact: true })).toBeVisible();
+    await expect(libraryMain.getByRole('button', { name: 'Rekordbox', exact: true })).toBeVisible();
   } else {
     await expect(page.locator('.library-track').filter({ hasText: 'E2E Track' })).toBeVisible();
     await expect(page.getByTestId('desktop-library-table')).toHaveCount(0);
@@ -165,7 +169,7 @@ test('login, biblioteca e player permanecem utilizáveis', async ({ page }) => {
   if (isDesktop) {
     await expect(sidebar.getByRole('button', { name: 'Tocando agora' })).toHaveAttribute('aria-current', 'page');
     await expect(desktopQueue).toBeVisible();
-    await expect(desktopPlayerBar).toBeVisible();
+    await expect(desktopPlayerBar).toBeHidden();
     await expect(embeddedPlayerQueue).toBeHidden();
   }
 });
@@ -198,7 +202,7 @@ test('desktop só ativa a partir de 1024px', async ({ page }, testInfo) => {
 
   await expect(sidebar).toBeVisible();
   await expect(context).toBeVisible();
-  await expect(desktopPlayerBar).toBeVisible();
+  await expect(desktopPlayerBar).toBeHidden();
   await expect(embeddedPlayerQueue).toBeHidden();
   expect(await responsiveShell.evaluate(element => getComputedStyle(element).display)).toBe('grid');
 
