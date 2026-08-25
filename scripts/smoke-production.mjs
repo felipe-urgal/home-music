@@ -179,6 +179,21 @@ try {
   assert.equal(manifest.status, 200);
   assert.match(manifest.headers.get('content-type') || '', /manifest/);
 
+  const serviceWorker = await fetch(`${baseUrl}/sw.js`);
+  assert.equal(serviceWorker.status, 200);
+  assert.match(serviceWorker.headers.get('content-type') || '', /javascript/);
+  assert.equal(serviceWorker.headers.get('cache-control'), 'no-store');
+  const serviceWorkerSource = await serviceWorker.text();
+  assert.match(serviceWorkerSource, /home-music-static-/);
+  assert.ok(
+    serviceWorkerSource.includes("pathname === '/api' || pathname.startsWith('/api/')"),
+    'Service worker deve reconhecer toda a árvore /api como conteúdo privado.'
+  );
+  assert.ok(
+    serviceWorkerSource.includes('if (isApiPath(url.pathname)) return;'),
+    'Service worker não deve interceptar/cachear /api/*.'
+  );
+
   const missingAsset = await fetch(`${baseUrl}/assets/inexistente.js`);
   assert.equal(missingAsset.status, 404);
 

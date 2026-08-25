@@ -24,8 +24,10 @@ test('política de cache usa immutable apenas para assets com hash', () => {
   assert.equal(cacheControlForPath('/assets/app-abc12345.js'), 'public, max-age=31536000, immutable');
   assert.equal(cacheControlForPath('/assets/app.js'), 'public, max-age=3600, must-revalidate');
   assert.equal(cacheControlForPath('/manifest.webmanifest'), 'public, max-age=3600, must-revalidate');
+  assert.equal(cacheControlForPath('/sw.js'), 'no-store');
   assert.equal(cacheControlForPath('/qualquer-rota'), 'no-store');
   assert.equal(contentTypeForPath('app.js'), 'text/javascript; charset=utf-8');
+  assert.equal(contentTypeForPath('sw.js'), 'text/javascript; charset=utf-8');
   assert.equal(contentTypeForPath('manifest.webmanifest'), 'application/manifest+json; charset=utf-8');
 });
 
@@ -35,6 +37,7 @@ test('fallback SPA é usado somente para rotas válidas da aplicação', () => {
   assert.equal(shouldServeShell('/assets/app-antigo.js'), false);
   assert.equal(shouldServeShell('/manifest.webmanifest'), false);
   assert.equal(shouldServeShell('/favicon.svg'), false);
+  assert.equal(shouldServeShell('/sw.js'), false);
   assert.equal(shouldServeShell('/.env'), false);
   assert.equal(shouldServeShell('/%00'), false);
   assert.equal(shouldServeShell('/%2e%2e/secret'), false);
