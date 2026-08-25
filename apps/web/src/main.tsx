@@ -14,6 +14,7 @@ import './tablet-shell.css';
 import './desktop-player.css';
 import './desktop-library.css';
 import './desktop-context.css';
+import './desktop-navigation.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
