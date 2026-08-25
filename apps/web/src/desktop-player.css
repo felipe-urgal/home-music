@@ -1,0 +1,199 @@
+.desktop-player-bar {
+  display: none;
+}
+
+@media (min-width: 1024px) {
+  .desktop-layout {
+    height: calc(100vh - 88px);
+  }
+
+  .desktop-sidebar,
+  .desktop-context,
+  .phone-surface {
+    height: 100%;
+  }
+
+  .mini-player {
+    display: none;
+  }
+
+  .desktop-player-bar {
+    position: fixed;
+    z-index: 20;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 88px;
+    display: grid;
+    grid-template-columns: minmax(220px, 1fr) minmax(360px, 1.4fr) minmax(180px, 1fr);
+    align-items: center;
+    gap: 22px;
+    padding: 10px 22px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(6, 10, 14, 0.985);
+    box-shadow: 0 -18px 50px rgba(0, 0, 0, 0.28);
+    backdrop-filter: blur(20px);
+  }
+
+  .desktop-player-bar__track {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .desktop-player-bar__track:disabled {
+    cursor: default;
+  }
+
+  .desktop-player-bar__track .artwork,
+  .desktop-player-bar__artwork-placeholder {
+    width: 56px;
+    height: 56px;
+    flex: 0 0 auto;
+    border-radius: 10px;
+  }
+
+  .desktop-player-bar__artwork-placeholder {
+    background: linear-gradient(145deg, #101820, #0a0f14);
+    border: 1px solid rgba(255, 255, 255, 0.055);
+  }
+
+  .desktop-player-bar__track-text {
+    min-width: 0;
+    display: grid;
+    gap: 4px;
+  }
+
+  .desktop-player-bar__track-text strong,
+  .desktop-player-bar__track-text small {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .desktop-player-bar__track-text strong {
+    font-size: 13px;
+    font-weight: 650;
+  }
+
+  .desktop-player-bar__track-text small {
+    color: #7f8a96;
+    font-size: 11px;
+  }
+
+  .desktop-player-bar__transport {
+    min-width: 0;
+    display: grid;
+    gap: 7px;
+  }
+
+  .desktop-player-bar__buttons {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .desktop-player-bar__buttons button {
+    width: 34px;
+    height: 34px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: #d8dfe6;
+    cursor: pointer;
+  }
+
+  .desktop-player-bar__buttons button:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.055);
+  }
+
+  .desktop-player-bar__buttons button:disabled {
+    opacity: 0.35;
+  }
+
+  .desktop-player-bar__buttons button svg {
+    width: 18px;
+    height: 18px;
+    fill: currentColor;
+  }
+
+  .desktop-player-bar__buttons .desktop-player-bar__play {
+    width: 38px;
+    height: 38px;
+    background: #f4f7fa;
+    color: #05080b;
+  }
+
+  .desktop-player-bar__buttons .desktop-player-bar__play:hover:not(:disabled) {
+    background: #ffffff;
+  }
+
+  .desktop-player-bar__progress {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: 38px minmax(0, 1fr) 38px;
+    align-items: center;
+    gap: 8px;
+    color: #717d89;
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .desktop-player-bar__progress span:last-child {
+    text-align: right;
+  }
+
+  .desktop-player-bar input[type="range"] {
+    width: 100%;
+    min-width: 0;
+    accent-color: #1599ff;
+    cursor: pointer;
+  }
+
+  .desktop-player-bar input[type="range"]:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  .desktop-player-bar__volume {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    color: #84909c;
+  }
+
+  .desktop-player-bar__volume > svg {
+    width: 18px;
+    height: 18px;
+    flex: 0 0 auto;
+  }
+
+  .desktop-player-bar__volume input {
+    width: min(150px, 100%);
+  }
+
+  .desktop-player-bar__volume span {
+    font-size: 11px;
+    white-space: nowrap;
+  }
+}
+
+@media (min-width: 1024px) and (max-width: 1180px) {
+  .desktop-player-bar {
+    grid-template-columns: minmax(180px, 0.85fr) minmax(320px, 1.3fr) minmax(130px, 0.7fr);
+    gap: 14px;
+    padding-inline: 16px;
+  }
+}
