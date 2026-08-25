@@ -3,6 +3,8 @@ import type { Track } from '@home-music/shared';
 import { BarChart3, Library, Music2, Radio } from 'lucide-react';
 import { Artwork } from './Artwork';
 
+const DESKTOP_QUEUE_PREVIEW_SIZE = 32;
+
 export type DesktopSection = 'player' | 'library' | 'statistics';
 
 type DesktopShellProps = {
@@ -10,11 +12,13 @@ type DesktopShellProps = {
   current?: Track | null;
   playing: boolean;
   libraryCount: number;
-  queueCount: number;
+  queue: Track[];
+  currentIndex: number;
   offlineMode?: boolean;
   onOpenPlayer: () => void;
   onOpenLibrary: () => void;
   onOpenStatistics?: () => void;
+  onPlayTrack?: (track: Track, context: Track[]) => void;
   surfaceClassName: string;
   children: ReactNode;
 };
@@ -40,20 +44,29 @@ function NavigationButton({ active, label, icon, onClick }: NavigationButtonProp
   );
 }
 
+function artworkTrack(track: Track, offlineMode: boolean): Track {
+  return offlineMode && track.hasCover ? { ...track, hasCover: false } : track;
+}
+
 export function DesktopShell({
   active,
   current,
   playing,
   libraryCount,
-  queueCount,
+  queue,
+  currentIndex,
   offlineMode = false,
   onOpenPlayer,
   onOpenLibrary,
   onOpenStatistics,
+  onPlayTrack,
   surfaceClassName,
   children
 }: DesktopShellProps) {
-  const contextTrack = offlineMode && current?.hasCover ? { ...current, hasCover: false } : current;
+  const contextTrack = current ? artworkTrack(current, offlineMode) : null;
+  const queueStart = Math.max(0, currentIndex);
+  const queuePreview = queue.slice(queueStart, queueStart + DESKTOP_QUEUE_PREVIEW_SIZE);
+  const remainingQueueCount = Math.max(0, queue.length - queueStart - queuePreview.length);
 
   return (
     <div className="desktop-layout">
@@ -103,7 +116,7 @@ export function DesktopShell({
 
       <aside className="desktop-context" data-testid="desktop-context" aria-label="Contexto da reprodução">
         <div className="desktop-context__heading">
-          <span>Agora</span>
+          <span>Fila</span>
           <small>{playing ? 'Reproduzindo' : 'Pausado'}</small>
         </div>
 
@@ -121,14 +134,47 @@ export function DesktopShell({
 
         <div className="desktop-context__stats">
           <div>
-            <strong>{queueCount}</strong>
-            <span>{queueCount === 1 ? 'faixa na fila' : 'faixas na fila'}</span>
+            <strong>{queue.length}</strong>
+            <span>{queue.length === 1 ? 'faixa na fila' : 'faixas na fila'}</span>
           </div>
           <div>
             <strong>{libraryCount}</strong>
             <span>{offlineMode ? 'downloads' : 'na biblioteca'}</span>
           </div>
         </div>
+
+        <section className="desktop-queue" aria-label="Fila de reprodução" data-testid="desktop-queue">
+          <div className="desktop-queue__header">
+            <strong>Próximas</strong>
+            <span>{Math.max(0, queue.length - queueStart)}</span>
+          </div>
+          <div className="desktop-queue__list">
+            {queuePreview.length ? queuePreview.map((track, previewIndex) => {
+              const queueIndex = queueStart + previewIndex;
+              const isCurrent = queueIndex === currentIndex;
+              return (
+                <button
+                  key={`${track.id}-${queueIndex}`}
+                  className={`desktop-queue__item ${isCurrent ? 'is-current' : ''}`}
+                  type="button"
+                  aria-current={isCurrent ? 'true' : undefined}
+                  onClick={() => onPlayTrack?.(track, queue)}
+                >
+                  <Artwork track={artworkTrack(track, offlineMode)} />
+                  <span>
+                    <strong>{track.title}</strong>
+                    <small>{track.artist || 'Artista desconhecido'}</small>
+                  </span>
+                </button>
+              );
+            }) : (
+              <div className="desktop-queue__empty">A fila está vazia.</div>
+            )}
+          </div>
+          {remainingQueueCount > 0 && (
+            <small className="desktop-queue__remaining">+ {remainingQueueCount} faixas depois</small>
+          )}
+        </section>
 
         <button className="desktop-context__action" type="button" onClick={onOpenLibrary}>
           {offlineMode ? 'Abrir downloads' : 'Abrir biblioteca'}
