@@ -19,6 +19,8 @@ function indexedTrack(id: string, filePath: string): IndexedTrack {
     duration: 180,
     format: 'MP3',
     hasCover: false,
+    replayGainTrackDb: -7.2,
+    replayGainAlbumDb: -5.8,
     filePath,
     mimeType: 'audio/mpeg',
     fileSize: 123,
@@ -55,9 +57,11 @@ test('SQLite persiste biblioteca, favoritos, histórico, playlists e estado do p
     first.close();
 
     const second = new HomeMusicDatabase(dbPath);
-    assert.equal(second.getSchemaVersion(), 3);
+    assert.equal(second.getSchemaVersion(), 4);
     assert.equal(second.getMetadata('libraryRoot'), '/music');
     assert.equal(second.loadTracks().length, 2);
+    assert.equal(second.loadTracks()[0].replayGainTrackDb, -7.2);
+    assert.equal(second.loadTracks()[0].replayGainAlbumDb, -5.8);
     assert.deepEqual(second.getFavoriteIds(), ['a']);
     assert.equal(second.getHistory()[0].track.id, 'a');
     assert.deepEqual(second.getPlaylists()[0].trackIds, ['a', 'b']);
@@ -100,7 +104,7 @@ test('remoção de faixa limpa relacionamentos por foreign key', async () => {
   }
 });
 
-test('migra schema v1 para v3 sem perder estado existente', async () => {
+test('migra schema v1 para v4 sem perder estado existente', async () => {
   const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-db-'));
   const dbPath = path.join(temp, 'legacy.db');
 
@@ -125,7 +129,7 @@ test('migra schema v1 para v3 sem perder estado existente', async () => {
     legacy.close();
 
     const migrated = new HomeMusicDatabase(dbPath);
-    assert.equal(migrated.getSchemaVersion(), 3);
+    assert.equal(migrated.getSchemaVersion(), 4);
     const state = migrated.loadPlaybackState();
     assert.equal(state.currentTrackId, 'a');
     assert.equal(state.position, 15);
