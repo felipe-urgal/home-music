@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { DesktopPlayerBar } from './components/DesktopPlayerBar';
 import { DesktopShell } from './components/DesktopShell';
 import { LibraryScreen } from './components/LibraryScreen';
 import { LoginScreen } from './components/LoginScreen';
@@ -10,6 +11,7 @@ import { type OfflineDownloads, useOfflineDownloads } from './offline-downloads'
 import { useAudioPlayer } from './useAudioPlayer';
 import { useAuth } from './useAuth';
 import { useBackgroundPlaybackContinuity } from './useBackgroundPlaybackContinuity';
+import { useDesktopLayout } from './useDesktopLayout';
 import { useLibraryData } from './useLibraryData';
 import { useLibraryNavigation } from './useLibraryNavigation';
 import { useNetworkQualityProfile } from './useNetworkQualityProfile';
@@ -29,7 +31,8 @@ function AuthenticatedApp({ onLogout, offline }: AuthenticatedAppProps) {
   const navigation = useLibraryNavigation(library.tracks, library.favoriteIds, library.playlists);
   const libraryReady = !library.loading && !library.error;
   const usesSystemVolume = useSystemVolumePreference();
-  const player = useAudioPlayer(library.tracks, screen === 'player', libraryReady, usesSystemVolume);
+  const desktopLayout = useDesktopLayout();
+  const player = useAudioPlayer(library.tracks, screen === 'player' || desktopLayout, libraryReady, usesSystemVolume);
   const qualityProfile = useNetworkQualityProfile(player.streamingMode, player.setStreamingMode);
   useBackgroundPlaybackContinuity({
     audioRef: player.audioRef,
@@ -197,6 +200,22 @@ function AuthenticatedApp({ onLogout, offline }: AuthenticatedAppProps) {
         )}
       </DesktopShell>
 
+      <DesktopPlayerBar
+        current={current}
+        playing={player.playing}
+        currentTime={player.currentTime}
+        duration={player.duration}
+        volume={player.volume}
+        usesSystemVolume={usesSystemVolume}
+        hasNext={player.hasNext}
+        onOpenPlayer={openPlayer}
+        onTogglePlay={() => void player.togglePlay()}
+        onPrevious={player.previous}
+        onNext={player.next}
+        onSeek={player.seek}
+        onVolume={player.setVolume}
+      />
+
       {library.actionError && (
         <button className="app-toast" role="status" onClick={library.clearActionError}>
           {library.actionError}
@@ -209,7 +228,14 @@ function AuthenticatedApp({ onLogout, offline }: AuthenticatedAppProps) {
 function OfflineApp({ offline, onExit }: { offline: OfflineDownloads; onExit: () => void }) {
   const [screen, setScreen] = useState<Screen>('library');
   const usesSystemVolume = useSystemVolumePreference();
-  const player = useAudioPlayer(offline.tracks, screen === 'player', !offline.loading, usesSystemVolume, { offlineMode: true });
+  const desktopLayout = useDesktopLayout();
+  const player = useAudioPlayer(
+    offline.tracks,
+    screen === 'player' || desktopLayout,
+    !offline.loading,
+    usesSystemVolume,
+    { offlineMode: true }
+  );
   useBackgroundPlaybackContinuity({
     audioRef: player.audioRef,
     queue: player.queue,
@@ -305,6 +331,23 @@ function OfflineApp({ offline, onExit }: { offline: OfflineDownloads; onExit: ()
           </div>
         )}
       </DesktopShell>
+
+      <DesktopPlayerBar
+        current={current}
+        playing={player.playing}
+        currentTime={player.currentTime}
+        duration={player.duration}
+        volume={player.volume}
+        usesSystemVolume={usesSystemVolume}
+        hasNext={player.hasNext}
+        offlineMode
+        onOpenPlayer={() => setScreen('player')}
+        onTogglePlay={() => void player.togglePlay()}
+        onPrevious={player.previous}
+        onNext={player.next}
+        onSeek={player.seek}
+        onVolume={player.setVolume}
+      />
     </main>
   );
 }

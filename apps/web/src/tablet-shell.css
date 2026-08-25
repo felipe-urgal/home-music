@@ -1,0 +1,75 @@
+.desktop-main-content {
+  margin-inline: auto;
+}
+
+@media (min-width: 700px) and (max-width: 1023px) {
+  .app-shell {
+    padding: 0;
+    place-items: stretch;
+    background:
+      radial-gradient(circle at 50% -12%, rgba(0, 137, 255, 0.12), transparent 42rem),
+      #030507;
+  }
+
+  .desktop-layout {
+    width: 100%;
+    min-height: 100vh;
+    display: block;
+  }
+
+  .phone-surface {
+    width: 100%;
+    max-width: none;
+    min-height: 100vh;
+    padding: max(22px, env(safe-area-inset-top)) clamp(28px, 6vw, 64px) max(34px, env(safe-area-inset-bottom));
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    overflow-x: clip;
+    overflow-y: visible;
+    background: linear-gradient(180deg, #090e14 0%, #05090d 58%, #020406 100%);
+  }
+
+  .phone-surface--library {
+    padding-bottom: calc(112px + env(safe-area-inset-bottom));
+  }
+
+  .desktop-main-content {
+    width: 100%;
+    max-width: 860px;
+  }
+
+  .desktop-main-content--player {
+    max-width: 720px;
+  }
+
+  .desktop-main-content--player .topbar {
+    height: 44px;
+  }
+
+  .desktop-main-content--player .hero-art {
+    width: min(100%, 440px);
+    margin: 0 auto;
+    padding: 8px 0 18px;
+  }
+
+  .desktop-main-content--player .track-heading,
+  .desktop-main-content--player .progress-wrap,
+  .desktop-main-content--player .controls,
+  .desktop-main-content--player .library-toggle,
+  .desktop-main-content--player .queue-panel--player,
+  .desktop-main-content--player .lyrics-panel {
+    max-width: 680px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .desktop-main-content--player h1 {
+    font-size: clamp(28px, 4.4vw, 36px);
+  }
+
+  .mini-player {
+    width: min(calc(100% - 40px), 760px);
+    max-width: calc(100% - 40px);
+  }
+}
