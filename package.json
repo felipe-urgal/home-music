@@ -20,6 +20,7 @@
     "tailscale:public:enable": "bash scripts/configure-funnel.sh enable",
     "tailscale:public:disable": "bash scripts/configure-funnel.sh disable",
     "tailscale:public:status": "bash scripts/configure-funnel.sh status",
+    "tailscale:hardening:status": "bash scripts/check-tailscale-hardening.sh",
     "ffmpeg:status": "npm run ffmpeg:status -w @home-music/server",
     "typecheck": "npm run typecheck -w @home-music/shared && npm run typecheck -w @home-music/server && npm run typecheck -w @home-music/web",
     "test": "npm run test -w @home-music/server && npm run test -w @home-music/web"
