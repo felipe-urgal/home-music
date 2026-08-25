@@ -9,6 +9,7 @@ import './offline.css';
 import './library-controls.css';
 import './rekordbox.css';
 import './auth.css';
+import './desktop-shell.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
