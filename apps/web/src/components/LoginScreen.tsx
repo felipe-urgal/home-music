@@ -1,14 +1,16 @@
 import { useState, type FormEvent } from 'react';
-import { LockKeyhole, Music2 } from 'lucide-react';
+import { Download, LockKeyhole, Music2 } from 'lucide-react';
 
 type LoginScreenProps = {
   configured: boolean;
   error: string | null;
+  offlineCount?: number;
   onLogin: (username: string, password: string) => Promise<void>;
   onRetry: () => void;
+  onOpenOffline?: () => void;
 };
 
-export function LoginScreen({ configured, error, onLogin, onRetry }: LoginScreenProps) {
+export function LoginScreen({ configured, error, offlineCount = 0, onLogin, onRetry, onOpenOffline }: LoginScreenProps) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -93,6 +95,15 @@ export function LoginScreen({ configured, error, onLogin, onRetry }: LoginScreen
             {submitting ? 'Entrando…' : 'Entrar'}
           </button>
         </form>
+
+        {offlineCount > 0 && onOpenOffline && (
+          <>
+            <div className="login-offline-separator">Sem servidor</div>
+            <button className="login-offline-action" type="button" onClick={onOpenOffline}>
+              <Download /> Abrir {offlineCount} {offlineCount === 1 ? 'download offline' : 'downloads offline'}
+            </button>
+          </>
+        )}
 
         <p className="login-footnote"><LockKeyhole /> A sessão fica protegida por cookie HttpOnly neste navegador.</p>
       </section>

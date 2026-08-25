@@ -17,15 +17,19 @@ export function useAuth() {
   const [loading, setLoading] = useState(true);
   const [configured, setConfigured] = useState(true);
   const [authenticated, setAuthenticated] = useState(false);
+  const [unreachable, setUnreachable] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
+    let reachedServer = false;
     try {
       const response = await fetch('/api/auth/status', {
         cache: 'no-store',
         credentials: 'same-origin'
       });
+      reachedServer = true;
+      setUnreachable(false);
       if (!response.ok) throw new Error(await messageFromResponse(response));
       const status = await response.json() as AuthStatus;
       setConfigured(status.configured);
@@ -33,7 +37,12 @@ export function useAuth() {
       setError(null);
     } catch (error) {
       setAuthenticated(false);
-      setError(error instanceof Error ? error.message : 'Não foi possível verificar a sessão.');
+      const offline = !reachedServer;
+      setUnreachable(offline);
+      setError(offline
+        ? 'Home Music indisponível. Verifique sua conexão.'
+        : error instanceof Error ? error.message : 'Não foi possível verificar a sessão.'
+      );
     } finally {
       setLoading(false);
     }
@@ -44,23 +53,35 @@ export function useAuth() {
   }, [refresh]);
 
   useEffect(() => {
-    const expire = () => setAuthenticated(false);
+    const expire = () => {
+      setAuthenticated(false);
+      setUnreachable(false);
+    };
     window.addEventListener(AUTH_REQUIRED_EVENT, expire);
     return () => window.removeEventListener(AUTH_REQUIRED_EVENT, expire);
   }, []);
 
   const login = useCallback(async (username: string, password: string) => {
     setError(null);
-    const response = await fetch('/api/auth/login', {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Home-Music-Request': '1'
-      },
-      body: JSON.stringify({ username, password })
-    });
+    let response: Response;
+    try {
+      response = await fetch('/api/auth/login', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Home-Music-Request': '1'
+        },
+        body: JSON.stringify({ username, password })
+      });
+    } catch {
+      const message = 'Home Music indisponível. Verifique sua conexão e tente novamente.';
+      setUnreachable(true);
+      setError(message);
+      throw new Error(message);
+    }
 
+    setUnreachable(false);
     if (!response.ok) {
       const message = await messageFromResponse(response);
       setError(message);
@@ -94,12 +115,14 @@ export function useAuth() {
     }
 
     setAuthenticated(false);
+    setUnreachable(false);
   }, []);
 
   return {
     loading,
     configured,
     authenticated,
+    unreachable,
     error,
     login,
     logout,

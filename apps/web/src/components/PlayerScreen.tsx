@@ -7,10 +7,13 @@ import {
   type PointerEvent as ReactPointerEvent
 } from 'react';
 import {
+  CheckCircle2,
   ChevronDown,
   ChevronUp,
+  Download,
   GripVertical,
   Heart,
+  LoaderCircle,
   LogOut,
   MoreVertical,
   Pause,
@@ -20,7 +23,8 @@ import {
   Shuffle,
   SkipBack,
   SkipForward,
-  Volume2
+  Volume2,
+  Wifi
 } from 'lucide-react';
 import type { Playlist, RepeatMode, Track } from '@home-music/shared';
 import { Artwork } from './Artwork';
@@ -36,6 +40,10 @@ function formatTime(value: number) {
   return `${minutes}:${seconds}`;
 }
 
+function artworkTrack(track: Track, offlineMode: boolean): Track {
+  return offlineMode && track.hasCover ? { ...track, hasCover: false } : track;
+}
+
 type PlayerScreenProps = {
   current: Track;
   libraryReturnLabel: string;
@@ -43,6 +51,7 @@ type PlayerScreenProps = {
   currentIndex: number;
   playing: boolean;
   autoplayBlocked: boolean;
+  playbackError?: string | null;
   currentTime: number;
   duration: number;
   volume: number;
@@ -51,6 +60,9 @@ type PlayerScreenProps = {
   repeatMode: RepeatMode;
   isFavorite: boolean;
   playlists: Playlist[];
+  offlineMode?: boolean;
+  isDownloaded?: boolean;
+  downloading?: boolean;
   onOpenLibrary: () => void;
   onTogglePlay: () => void;
   onPrevious: () => void;
@@ -60,10 +72,12 @@ type PlayerScreenProps = {
   onShuffle: () => void;
   onRepeat: () => void;
   onToggleFavorite: () => void;
+  onToggleDownload?: () => void;
   onPlayTrack: (track: Track, context: Track[]) => void;
   onReorderQueue: (from: number, to: number) => void;
   onAddToPlaylist: (playlist: Playlist) => void;
   onLogout: () => void;
+  onExitOffline?: () => void;
 };
 
 export function PlayerScreen({
@@ -73,6 +87,7 @@ export function PlayerScreen({
   currentIndex,
   playing,
   autoplayBlocked,
+  playbackError,
   currentTime,
   duration,
   volume,
@@ -81,6 +96,9 @@ export function PlayerScreen({
   repeatMode,
   isFavorite,
   playlists,
+  offlineMode = false,
+  isDownloaded = false,
+  downloading = false,
   onOpenLibrary,
   onTogglePlay,
   onPrevious,
@@ -90,10 +108,12 @@ export function PlayerScreen({
   onShuffle,
   onRepeat,
   onToggleFavorite,
+  onToggleDownload,
   onPlayTrack,
   onReorderQueue,
   onAddToPlaylist,
-  onLogout
+  onLogout,
+  onExitOffline
 }: PlayerScreenProps) {
   const [showOptions, setShowOptions] = useState(false);
   const [dragFrom, setDragFrom] = useState<number | null>(null);
@@ -188,46 +208,77 @@ export function PlayerScreen({
         <button className="icon-button" aria-label={libraryReturnLabel} title={libraryReturnLabel} onClick={onOpenLibrary}>
           <ChevronDown />
         </button>
-        <span className="topbar__title">Tocando agora</span>
+        <span className="topbar__title">{offlineMode ? 'Tocando offline' : 'Tocando agora'}</span>
         <button className="icon-button" aria-label="Mais opções" onClick={() => setShowOptions(value => !value)}><MoreVertical /></button>
       </header>
 
       {showOptions && (
         <div className="player-options">
-          <strong>Adicionar à playlist</strong>
-          {playlists.length ? playlists.map(playlist => (
-            <button key={playlist.id} onClick={() => { onAddToPlaylist(playlist); setShowOptions(false); }}>
-              {playlist.name}
-            </button>
-          )) : <span>Nenhuma playlist criada ainda.</span>}
-          <div className="player-options__divider" />
-          <button className="player-options__logout" onClick={() => { setShowOptions(false); onLogout(); }}>
-            <LogOut /> Sair
-          </button>
+          {offlineMode ? (
+            <>
+              <strong>Modo offline</strong>
+              <span>Somente as músicas baixadas neste dispositivo entram na fila.</span>
+              <div className="player-options__divider" />
+              <button className="player-options__logout" onClick={() => { setShowOptions(false); onExitOffline?.(); }}>
+                <Wifi /> Tentar conectar
+              </button>
+            </>
+          ) : (
+            <>
+              <strong>Adicionar à playlist</strong>
+              {playlists.length ? playlists.map(playlist => (
+                <button key={playlist.id} onClick={() => { onAddToPlaylist(playlist); setShowOptions(false); }}>
+                  {playlist.name}
+                </button>
+              )) : <span>Nenhuma playlist criada ainda.</span>}
+              <div className="player-options__divider" />
+              <button className="player-options__logout" onClick={() => { setShowOptions(false); onLogout(); }}>
+                <LogOut /> Sair
+              </button>
+            </>
+          )}
         </div>
       )}
 
-      <div className="hero-art"><Artwork track={current} large /></div>
+      <div className="hero-art"><Artwork track={artworkTrack(current, offlineMode)} large /></div>
 
       <div className="track-heading">
         <div>
           <h1>{current.title}</h1>
           <p>{current.artist}</p>
         </div>
-        <button
-          className={`icon-button icon-button--large ${isFavorite ? 'is-active' : ''}`}
-          aria-label={isFavorite ? 'Remover dos favoritos' : 'Favoritar'}
-          onClick={onToggleFavorite}
-        >
-          <Heart fill={isFavorite ? 'currentColor' : 'none'} />
-        </button>
+        <div className="track-heading__actions">
+          {!offlineMode && onToggleDownload && (
+            <button
+              className={`icon-button icon-button--large ${isDownloaded ? 'is-downloaded' : ''}`}
+              aria-label={downloading ? 'Baixando para uso offline' : isDownloaded ? 'Remover download offline' : 'Baixar para uso offline'}
+              disabled={downloading}
+              onClick={onToggleDownload}
+            >
+              {downloading ? <LoaderCircle className="download-spinner" /> : isDownloaded ? <CheckCircle2 /> : <Download />}
+            </button>
+          )}
+          {!offlineMode && (
+            <button
+              className={`icon-button icon-button--large ${isFavorite ? 'is-active' : ''}`}
+              aria-label={isFavorite ? 'Remover dos favoritos' : 'Favoritar'}
+              onClick={onToggleFavorite}
+            >
+              <Heart fill={isFavorite ? 'currentColor' : 'none'} />
+            </button>
+          )}
+        </div>
       </div>
+
+      {offlineMode && <div className="player-offline-status"><Download /> Reproduzindo o arquivo salvo neste dispositivo.</div>}
 
       {autoplayBlocked && (
         <div className="autoplay-notice" role="status">
           O navegador bloqueou o play automático. Toque em Play uma vez para continuar.
         </div>
       )}
+
+      {playbackError && <div className="autoplay-notice" role="alert">{playbackError}</div>}
 
       <div className="progress-wrap">
         <input
@@ -306,7 +357,7 @@ export function PlayerScreen({
                   <GripVertical className="queue-drag" aria-hidden="true" />
                 </button>
                 <button className="queue-item__main" onClick={() => onPlayTrack(track, queue)}>
-                  <Artwork track={track} />
+                  <Artwork track={artworkTrack(track, offlineMode)} />
                   <span className="queue-item__text"><strong>{track.title}</strong><small>{track.artist}</small></span>
                 </button>
                 <div className="queue-reorder-buttons">

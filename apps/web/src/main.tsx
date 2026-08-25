@@ -5,6 +5,7 @@ import { registerServiceWorker } from './register-service-worker';
 import './styles.css';
 import './features.css';
 import './artwork.css';
+import './offline.css';
 import './library-controls.css';
 import './auth.css';
 
