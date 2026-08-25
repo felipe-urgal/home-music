@@ -1,7 +1,19 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import type { Track } from '@home-music/shared';
-import { BarChart3, Library, ListMusic, Music2, Radio } from 'lucide-react';
+import {
+  BarChart3,
+  Disc3,
+  Folder,
+  Heart,
+  History,
+  ListMusic,
+  Music2,
+  Radio,
+  Upload,
+  Users
+} from 'lucide-react';
 import { useDesktopLayout } from '../useDesktopLayout';
+import type { LibraryTab } from '../useLibraryNavigation';
 import { useTrackLyrics } from '../useTrackLyrics';
 import { Artwork } from './Artwork';
 
@@ -12,6 +24,7 @@ type DesktopContextTab = 'queue' | 'lyrics';
 
 type DesktopShellProps = {
   active: DesktopSection;
+  activeLibraryTab?: LibraryTab;
   current?: Track | null;
   playing: boolean;
   libraryCount: number;
@@ -20,6 +33,7 @@ type DesktopShellProps = {
   offlineMode?: boolean;
   onOpenPlayer: () => void;
   onOpenLibrary: () => void;
+  onOpenLibraryTab?: (tab: LibraryTab) => void;
   onOpenStatistics?: () => void;
   onPlayTrack?: (track: Track, context: Track[]) => void;
   surfaceClassName: string;
@@ -30,13 +44,14 @@ type NavigationButtonProps = {
   active: boolean;
   label: string;
   icon: ReactNode;
+  nested?: boolean;
   onClick: () => void;
 };
 
-function NavigationButton({ active, label, icon, onClick }: NavigationButtonProps) {
+function NavigationButton({ active, label, icon, nested = false, onClick }: NavigationButtonProps) {
   return (
     <button
-      className={`desktop-nav__item ${active ? 'is-active' : ''}`}
+      className={`desktop-nav__item ${nested ? 'desktop-nav__item--nested' : ''} ${active ? 'is-active' : ''}`}
       type="button"
       aria-current={active ? 'page' : undefined}
       onClick={onClick}
@@ -53,6 +68,7 @@ function artworkTrack(track: Track, offlineMode: boolean): Track {
 
 export function DesktopShell({
   active,
+  activeLibraryTab,
   current,
   playing,
   libraryCount,
@@ -61,6 +77,7 @@ export function DesktopShell({
   offlineMode = false,
   onOpenPlayer,
   onOpenLibrary,
+  onOpenLibraryTab,
   onOpenStatistics,
   onPlayTrack,
   surfaceClassName,
@@ -83,7 +100,7 @@ export function DesktopShell({
   }, [current?.id]);
 
   return (
-    <div className="desktop-layout">
+    <div className="desktop-layout" data-desktop-active={active}>
       <aside className="desktop-sidebar" data-testid="desktop-sidebar">
         <div className="desktop-brand">
           <span className="desktop-brand__icon"><Music2 /></span>
@@ -100,12 +117,28 @@ export function DesktopShell({
             icon={<Radio />}
             onClick={onOpenPlayer}
           />
-          <NavigationButton
-            active={active === 'library'}
-            label={offlineMode ? 'Downloads' : 'Biblioteca'}
-            icon={<Library />}
-            onClick={onOpenLibrary}
-          />
+
+          {offlineMode || !onOpenLibraryTab ? (
+            <NavigationButton
+              active={active === 'library'}
+              label={offlineMode ? 'Downloads' : 'Biblioteca'}
+              icon={<ListMusic />}
+              onClick={onOpenLibrary}
+            />
+          ) : (
+            <div className="desktop-nav__group" aria-label="Biblioteca">
+              <span className="desktop-nav__group-label">Biblioteca</span>
+              <NavigationButton nested active={active === 'library' && activeLibraryTab === 'tracks'} label="Músicas" icon={<Music2 />} onClick={() => onOpenLibraryTab('tracks')} />
+              <NavigationButton nested active={active === 'library' && activeLibraryTab === 'artists'} label="Artistas" icon={<Users />} onClick={() => onOpenLibraryTab('artists')} />
+              <NavigationButton nested active={active === 'library' && activeLibraryTab === 'albums'} label="Álbuns" icon={<Disc3 />} onClick={() => onOpenLibraryTab('albums')} />
+              <NavigationButton nested active={active === 'library' && activeLibraryTab === 'folders'} label="Pastas" icon={<Folder />} onClick={() => onOpenLibraryTab('folders')} />
+              <NavigationButton nested active={active === 'library' && activeLibraryTab === 'favorites'} label="Favoritos" icon={<Heart />} onClick={() => onOpenLibraryTab('favorites')} />
+              <NavigationButton nested active={active === 'library' && activeLibraryTab === 'playlists'} label="Playlists" icon={<ListMusic />} onClick={() => onOpenLibraryTab('playlists')} />
+              <NavigationButton nested active={false} label="Rekordbox" icon={<Upload />} onClick={() => onOpenLibraryTab('playlists')} />
+              <NavigationButton nested active={active === 'library' && activeLibraryTab === 'history'} label="Histórico" icon={<History />} onClick={() => onOpenLibraryTab('history')} />
+            </div>
+          )}
+
           {!offlineMode && onOpenStatistics && (
             <NavigationButton
               active={active === 'statistics'}
@@ -153,26 +186,12 @@ export function DesktopShell({
         </div>
 
         <div className="desktop-context__tabs" role="tablist" aria-label="Painel contextual">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={contextTab === 'queue'}
-            className={contextTab === 'queue' ? 'is-active' : ''}
-            onClick={() => setContextTab('queue')}
-          >
-            <ListMusic />
-            Fila
+          <button type="button" role="tab" aria-selected={contextTab === 'queue'} className={contextTab === 'queue' ? 'is-active' : ''} onClick={() => setContextTab('queue')}>
+            <ListMusic />Fila
           </button>
           {lyrics && (
-            <button
-              type="button"
-              role="tab"
-              aria-selected={contextTab === 'lyrics'}
-              className={contextTab === 'lyrics' ? 'is-active' : ''}
-              onClick={() => setContextTab('lyrics')}
-            >
-              <Music2 />
-              Letra
+            <button type="button" role="tab" aria-selected={contextTab === 'lyrics'} className={contextTab === 'lyrics' ? 'is-active' : ''} onClick={() => setContextTab('lyrics')}>
+              <Music2 />Letra
             </button>
           )}
         </div>
@@ -180,9 +199,7 @@ export function DesktopShell({
         {contextTab === 'lyrics' && lyrics ? (
           <section className="desktop-lyrics" aria-label="Letra da música" data-testid="desktop-lyrics">
             <div className={lyrics.synchronized ? 'desktop-lyrics__lines is-synchronized' : 'desktop-lyrics__lines'}>
-              {lyrics.lines.map((line, index) => (
-                <p key={`${line.time ?? 'plain'}-${index}`}>{line.text || '♪'}</p>
-              ))}
+              {lyrics.lines.map((line, index) => <p key={`${line.time ?? 'plain'}-${index}`}>{line.text || '♪'}</p>)}
             </div>
           </section>
         ) : (
@@ -204,19 +221,12 @@ export function DesktopShell({
                     onClick={() => onPlayTrack?.(track, queue)}
                   >
                     <Artwork track={artworkTrack(track, offlineMode)} />
-                    <span>
-                      <strong>{track.title}</strong>
-                      <small>{track.artist || 'Artista desconhecido'}</small>
-                    </span>
+                    <span><strong>{track.title}</strong><small>{track.artist || 'Artista desconhecido'}</small></span>
                   </button>
                 );
-              }) : (
-                <div className="desktop-queue__empty">A fila está vazia.</div>
-              )}
+              }) : <div className="desktop-queue__empty">A fila está vazia.</div>}
             </div>
-            {remainingQueueCount > 0 && (
-              <small className="desktop-queue__remaining">+ {remainingQueueCount} faixas depois</small>
-            )}
+            {remainingQueueCount > 0 && <small className="desktop-queue__remaining">+ {remainingQueueCount} faixas depois</small>}
           </section>
         )}
 
