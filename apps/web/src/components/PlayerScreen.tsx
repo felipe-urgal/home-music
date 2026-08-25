@@ -341,9 +341,11 @@ export function PlayerScreen({
                   <strong>Normalização de volume</strong>
                   <div className="player-options__choices" role="group" aria-label="Normalização de volume">
                     {NORMALIZATION_CHOICES.map(choice => {
-                      const unavailable = choice.mode !== 'off' &&
-                        current.replayGainTrackDb == null &&
-                        current.replayGainAlbumDb == null;
+                      const unavailable = choice.mode === 'track'
+                        ? current.replayGainTrackDb == null
+                        : choice.mode === 'album'
+                          ? current.replayGainAlbumDb == null && current.replayGainTrackDb == null
+                          : false;
                       return (
                         <button
                           key={choice.mode}
