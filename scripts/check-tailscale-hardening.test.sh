@@ -16,6 +16,10 @@ assert_contains() {
   grep -Fq "${expected}" "${file}" || fail_test "${file} não contém: ${expected}"
 }
 
+run_checker() {
+  bash "${SCRIPT_UNDER_TEST}" "$@"
+}
+
 make_fixture() {
   FIXTURE="$(mktemp -d)"
   mkdir -p "${FIXTURE}/bin"
@@ -44,7 +48,7 @@ trap '[[ -n "${FIXTURE}" ]] && rm -rf "${FIXTURE}"' EXIT
 
 make_fixture
 export MOCK_TAILSCALE_STATUS_JSON='{"BackendState":"Running","Self":{"DNSName":"home-music.example.ts.net.","Tags":["tag:home-music"]}}'
-"${SCRIPT_UNDER_TEST}" >"${FIXTURE}/out" 2>"${FIXTURE}/err"
+run_checker >"${FIXTURE}/out" 2>"${FIXTURE}/err"
 assert_contains "${FIXTURE}/out" 'BackendState:     Running'
 assert_contains "${FIXTURE}/out" 'DNS:              home-music.example.ts.net'
 assert_contains "${FIXTURE}/out" 'Tag aplicada:     sim'
@@ -53,7 +57,7 @@ cleanup_fixture
 make_fixture
 export MOCK_TAILSCALE_STATUS_JSON='{"BackendState":"Running","Self":{"DNSName":"home-music.example.ts.net.","Tags":[]}}'
 set +e
-"${SCRIPT_UNDER_TEST}" >"${FIXTURE}/out" 2>"${FIXTURE}/err"
+run_checker >"${FIXTURE}/out" 2>"${FIXTURE}/err"
 rc=$?
 set -e
 [[ ${rc} -eq 2 ]] || fail_test "sem tag deveria retornar 2; retornou ${rc}"
@@ -64,7 +68,7 @@ cleanup_fixture
 make_fixture
 export MOCK_TAILSCALE_STATUS_JSON='{"BackendState":"Stopped","Self":{"DNSName":"home-music.example.ts.net.","Tags":["tag:home-music"]}}'
 set +e
-"${SCRIPT_UNDER_TEST}" >"${FIXTURE}/out" 2>"${FIXTURE}/err"
+run_checker >"${FIXTURE}/out" 2>"${FIXTURE}/err"
 rc=$?
 set -e
 [[ ${rc} -eq 1 ]] || fail_test "Tailscale parado deveria retornar 1; retornou ${rc}"
@@ -74,7 +78,7 @@ cleanup_fixture
 make_fixture
 export HOME_MUSIC_TAILSCALE_TAG='tag:music-server'
 export MOCK_TAILSCALE_STATUS_JSON='{"BackendState":"Running","Self":{"DNSName":"home-music.example.ts.net.","Tags":["tag:music-server"]}}'
-"${SCRIPT_UNDER_TEST}" >"${FIXTURE}/out" 2>"${FIXTURE}/err"
+run_checker >"${FIXTURE}/out" 2>"${FIXTURE}/err"
 assert_contains "${FIXTURE}/out" 'Tag esperada:     tag:music-server'
 assert_contains "${FIXTURE}/out" 'Tag aplicada:     sim'
 cleanup_fixture
