@@ -608,9 +608,9 @@ app.post<{ Body: { name?: string } }>('/api/playlists', async (request, reply) =
 });
 
 app.patch<{ Params: { id: string }; Body: { name?: string } }>('/api/playlists/:id', async (request, reply) => {
-  const playlist = database.getPlaylists().find(item => item.id === request.params.id);
-  if (!playlist) return reply.code(404).send({ error: 'Playlist não encontrada.' });
-  if (playlist.source !== 'manual') {
+  const source = database.getPlaylistSource(request.params.id);
+  if (!source) return reply.code(404).send({ error: 'Playlist não encontrada.' });
+  if (source !== 'manual') {
     return reply.code(409).send({ error: 'Playlist sincronizada pelo Rekordbox; reimporte o XML para alterá-la.' });
   }
 
@@ -626,9 +626,9 @@ app.delete<{ Params: { id: string } }>('/api/playlists/:id', async (request, rep
 });
 
 app.put<{ Params: { id: string }; Body: { trackIds?: unknown } }>('/api/playlists/:id/tracks', async (request, reply) => {
-  const playlist = database.getPlaylists().find(item => item.id === request.params.id);
-  if (!playlist) return reply.code(404).send({ error: 'Playlist não encontrada.' });
-  if (playlist.source !== 'manual') {
+  const source = database.getPlaylistSource(request.params.id);
+  if (!source) return reply.code(404).send({ error: 'Playlist não encontrada.' });
+  if (source !== 'manual') {
     return reply.code(409).send({ error: 'Playlist sincronizada pelo Rekordbox; reimporte o XML para alterá-la.' });
   }
   if (!Array.isArray(request.body?.trackIds)) return reply.code(400).send({ error: 'Lista de músicas inválida.' });
