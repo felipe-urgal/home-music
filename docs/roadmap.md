@@ -82,6 +82,7 @@
 
 Objetivo: evoluir a interface para desktop sem regredir o fluxo mobile Player First e sem duplicar a aplicação React.
 
+- [ ] Adicionar baseline Playwright E2E para login, biblioteca e player em viewport mobile e desktop
 - [ ] Criar Desktop Shell responsivo com sidebar, conteúdo principal e área contextual
 - [ ] Preservar a experiência mobile atual com composição específica por breakpoint
 - [ ] Criar player desktop persistente em barra inferior
@@ -99,7 +100,7 @@ Objetivo: permitir administrar a coleção pelo próprio Home Music, com operaç
 
 - [ ] Criar área `Administração` separada da experiência de reprodução
 - [ ] Criar visão geral com quantidade de faixas, armazenamento, problemas e estado do scanner
-- [ ] Permitir adicionar músicas por upload de arquivo e múltiplos arquivos
+- [ ] Criar ponto de entrada `Importar mídia` integrado ao pipeline da Fase 9
 - [ ] Permitir desativar/reativar músicas sem remover o arquivo físico
 - [ ] Criar lixeira/quarentena com restauração antes da exclusão permanente
 - [ ] Permitir exclusão física somente após confirmação explícita
@@ -156,8 +157,7 @@ Objetivo: ajudar a manter uma coleção grande organizada e detectar problemas s
 
 Objetivo: sustentar a evolução do produto reduzindo acoplamento e aumentando a segurança contra regressões.
 
-- [ ] Adicionar Playwright E2E para fluxos críticos em viewport mobile e desktop
-- [ ] Cobrir login, biblioteca, player, fila, playlists, offline e administração nos cenários E2E prioritários
+- [ ] Expandir Playwright E2E para fila, playlists, offline e administração
 - [ ] Introduzir navegação com URLs reais/deep links para telas e entidades relevantes
 - [ ] Refatorar `LibraryScreen` em componentes/hooks menores orientados por responsabilidade
 - [ ] Refatorar `PlayerScreen` em componentes/hooks menores sem duplicar estado de reprodução
