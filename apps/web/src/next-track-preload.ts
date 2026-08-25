@@ -11,6 +11,11 @@ export type NextTrackPreload = {
   url: string;
 };
 
+export type PreloadFetcher = (
+  input: RequestInfo | URL,
+  init?: RequestInit
+) => Promise<Response>;
+
 export function resolveNextTrackPreload(
   queue: Track[],
   currentIndex: number,
@@ -27,4 +32,20 @@ export function resolveNextTrackPreload(
   const normalization = effectiveNormalizationMode(track, normalizationMode);
   const url = preloadAudioUrl(track.id, streamingMode, normalization);
   return url ? { trackId: track.id, url } : null;
+}
+
+export async function warmTranscodedTrack(
+  fetcher: PreloadFetcher,
+  url: string,
+  signal?: AbortSignal
+) {
+  const response = await fetcher(url, {
+    cache: 'no-store',
+    headers: { Range: 'bytes=0-0' },
+    signal
+  });
+
+  if (!response.ok) return false;
+  await response.arrayBuffer();
+  return true;
 }
