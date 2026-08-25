@@ -1,5 +1,7 @@
 import type { Track } from '@home-music/shared';
 import { Pause, Play, SkipBack, SkipForward, Volume2 } from 'lucide-react';
+import { useDesktopKeyboardShortcuts } from '../useDesktopKeyboardShortcuts';
+import { useDesktopLayout } from '../useDesktopLayout';
 import { Artwork } from './Artwork';
 
 type DesktopPlayerBarProps = {
@@ -46,8 +48,24 @@ export function DesktopPlayerBar({
   onSeek,
   onVolume
 }: DesktopPlayerBarProps) {
+  const desktopLayout = useDesktopLayout();
   const maxDuration = Math.max(duration, 1);
   const safeCurrentTime = duration > 0 ? Math.min(Math.max(currentTime, 0), duration) : 0;
+
+  useDesktopKeyboardShortcuts({
+    enabled: desktopLayout,
+    hasCurrent: Boolean(current),
+    hasNext,
+    currentTime,
+    duration,
+    volume,
+    usesSystemVolume,
+    onTogglePlay,
+    onPrevious,
+    onNext,
+    onSeek,
+    onVolume
+  });
 
   return (
     <footer className="desktop-player-bar" data-testid="desktop-player-bar" aria-label="Player persistente">

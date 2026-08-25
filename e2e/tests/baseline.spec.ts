@@ -215,3 +215,49 @@ test('desktop só ativa a partir de 1024px', async ({ page }, testInfo) => {
   const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
   expect(scrollWidth).toBeLessThanOrEqual(1025);
 });
+
+test('atalhos de teclado desktop controlam reprodução sem capturar a busca', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop-chromium');
+
+  await login(page);
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+
+  const playButton = page.getByRole('button', { name: 'Tocar', exact: true });
+  const pauseButton = page.getByRole('button', { name: 'Pausar', exact: true });
+  if (await pauseButton.isVisible()) {
+    await page.keyboard.press('Space');
+    await expect(playButton).toBeVisible();
+  }
+
+  await page.keyboard.press('Space');
+  await expect(pauseButton).toBeVisible();
+  await page.keyboard.press('Space');
+  await expect(playButton).toBeVisible();
+
+  const progress = page.getByLabel('Progresso da música');
+  await page.keyboard.press('Shift+ArrowLeft');
+  await expect.poll(async () => Number(await progress.inputValue())).toBeLessThan(0.5);
+  await page.keyboard.press('ArrowRight');
+  await expect.poll(async () => Number(await progress.inputValue())).toBeGreaterThanOrEqual(4.5);
+
+  const volume = page.getByRole('slider', { name: 'Volume', exact: true });
+  const initialVolume = Number(await volume.inputValue());
+  if (initialVolume >= 0.05) {
+    await page.keyboard.press('ArrowDown');
+    await expect.poll(async () => Number(await volume.inputValue())).toBeLessThanOrEqual(initialVolume - 0.04);
+  } else {
+    await page.keyboard.press('ArrowUp');
+    await expect.poll(async () => Number(await volume.inputValue())).toBeGreaterThanOrEqual(initialVolume + 0.04);
+  }
+
+  await page.keyboard.press('/');
+  const search = page.getByPlaceholder('Música, artista, álbum ou pasta');
+  await expect(search).toBeVisible();
+  await expect(search).toBeFocused();
+  await expect(page.getByTestId('desktop-sidebar').getByRole('button', { name: 'Músicas', exact: true })).toHaveAttribute('aria-current', 'page');
+
+  await search.fill('E2E');
+  await page.keyboard.press('Space');
+  await expect(search).toHaveValue('E2E ');
+  await expect(page.getByTestId('desktop-player-bar').getByRole('button', { name: 'Tocar na barra desktop' })).toBeVisible();
+});
