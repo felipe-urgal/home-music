@@ -5,7 +5,7 @@ import { DatabaseSync } from 'node:sqlite';
 import type { PlaybackState, Playlist, RepeatMode, StatisticsPeriod, Track } from '@home-music/shared';
 import type { IndexedTrack } from './library.js';
 
-const CURRENT_SCHEMA_VERSION = 4;
+const CURRENT_SCHEMA_VERSION = 5;
 const HISTORY_CAPACITY = 2_000;
 
 const DEFAULT_PLAYBACK_STATE: PlaybackState = {
@@ -21,6 +21,12 @@ const DEFAULT_PLAYBACK_STATE: PlaybackState = {
 };
 
 type Row = Record<string, unknown>;
+
+type ImportedPlaylist = {
+  sourceKey: string;
+  name: string;
+  trackIds: string[];
+};
 
 function numberValue(value: unknown, fallback = 0) {
   const parsed = Number(value);
@@ -189,6 +195,24 @@ export class HomeMusicDatabase {
       }
       this.db.exec('PRAGMA user_version = 4;');
       version = 4;
+    }
+
+    if (version < 5) {
+      if (this.hasColumn('playlists', 'id')) {
+        if (!this.hasColumn('playlists', 'source')) {
+          this.db.exec("ALTER TABLE playlists ADD COLUMN source TEXT NOT NULL DEFAULT 'manual';");
+        }
+        if (!this.hasColumn('playlists', 'source_key')) {
+          this.db.exec('ALTER TABLE playlists ADD COLUMN source_key TEXT;');
+        }
+        this.db.exec(`
+          CREATE UNIQUE INDEX IF NOT EXISTS idx_playlists_source_key
+          ON playlists(source, source_key)
+          WHERE source_key IS NOT NULL;
+        `);
+      }
+      this.db.exec('PRAGMA user_version = 5;');
+      version = 5;
     }
 
     if (version !== CURRENT_SCHEMA_VERSION) {
@@ -427,7 +451,7 @@ export class HomeMusicDatabase {
 
   getPlaylists(): Playlist[] {
     const playlists = this.db.prepare(`
-      SELECT id, name, created_at, updated_at
+      SELECT id, name, created_at, updated_at, source
       FROM playlists
       ORDER BY updated_at DESC, name COLLATE NOCASE
     `).all() as Row[];
@@ -440,15 +464,18 @@ export class HomeMusicDatabase {
       name: stringValue(row.name),
       trackIds: (tracksStatement.all(stringValue(row.id)) as Row[]).map(item => stringValue(item.track_id)),
       createdAt: stringValue(row.created_at),
-      updatedAt: stringValue(row.updated_at)
+      updatedAt: stringValue(row.updated_at),
+      source: stringValue(row.source) === 'rekordbox' ? 'rekordbox' : 'manual'
     }));
   }
 
   createPlaylist(name: string) {
     const id = randomUUID();
     const now = new Date().toISOString();
-    this.db.prepare('INSERT INTO playlists(id, name, created_at, updated_at) VALUES (?, ?, ?, ?)')
-      .run(id, name, now, now);
+    this.db.prepare(`
+      INSERT INTO playlists(id, name, created_at, updated_at, source, source_key)
+      VALUES (?, ?, ?, ?, 'manual', NULL)
+    `).run(id, name, now, now);
     return id;
   }
 
@@ -481,6 +508,70 @@ export class HomeMusicDatabase {
         .run(new Date().toISOString(), id);
       this.db.exec('COMMIT;');
       return true;
+    } catch (error) {
+      this.db.exec('ROLLBACK;');
+      throw error;
+    }
+  }
+
+  syncImportedPlaylists(source: 'rekordbox', playlists: ImportedPlaylist[]) {
+    const bySourceKey = new Map<string, ImportedPlaylist>();
+    for (const playlist of playlists) {
+      const sourceKey = playlist.sourceKey.trim();
+      if (!sourceKey) continue;
+      bySourceKey.set(sourceKey, {
+        sourceKey,
+        name: playlist.name.trim().slice(0, 120) || 'Playlist Rekordbox',
+        trackIds: [...new Set(playlist.trackIds)]
+      });
+    }
+
+    const existingRows = this.db.prepare(`
+      SELECT id, source_key FROM playlists WHERE source = ? AND source_key IS NOT NULL
+    `).all(source) as Row[];
+    const existing = new Map(existingRows.map(row => [stringValue(row.source_key), stringValue(row.id)]));
+    const removeTracks = this.db.prepare('DELETE FROM playlist_tracks WHERE playlist_id = ?');
+    const insertTrack = this.db.prepare(`
+      INSERT INTO playlist_tracks(playlist_id, track_id, position) VALUES (?, ?, ?)
+    `);
+    const insertPlaylist = this.db.prepare(`
+      INSERT INTO playlists(id, name, created_at, updated_at, source, source_key)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+    const updatePlaylist = this.db.prepare(`
+      UPDATE playlists SET name = ?, updated_at = ? WHERE id = ?
+    `);
+    const deletePlaylist = this.db.prepare('DELETE FROM playlists WHERE id = ?');
+    const now = new Date().toISOString();
+    let createdPlaylists = 0;
+    let updatedPlaylists = 0;
+    let removedPlaylists = 0;
+
+    this.db.exec('BEGIN IMMEDIATE;');
+    try {
+      for (const playlist of bySourceKey.values()) {
+        let id = existing.get(playlist.sourceKey);
+        if (id) {
+          updatePlaylist.run(playlist.name, now, id);
+          updatedPlaylists += 1;
+          existing.delete(playlist.sourceKey);
+        } else {
+          id = randomUUID();
+          insertPlaylist.run(id, playlist.name, now, now, source, playlist.sourceKey);
+          createdPlaylists += 1;
+        }
+
+        removeTracks.run(id);
+        playlist.trackIds.forEach((trackId, index) => insertTrack.run(id, trackId, index));
+      }
+
+      for (const staleId of existing.values()) {
+        deletePlaylist.run(staleId);
+        removedPlaylists += 1;
+      }
+
+      this.db.exec('COMMIT;');
+      return { createdPlaylists, updatedPlaylists, removedPlaylists };
     } catch (error) {
       this.db.exec('ROLLBACK;');
       throw error;
