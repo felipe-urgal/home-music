@@ -40,7 +40,8 @@ O Home Music roda no Ubuntu, lê uma pasta local de músicas e expõe uma interf
 - fila contextual com carregamento progressivo e reordenação por mouse, setas ou touch no mobile;
 - retorno contextual para pasta, artista, álbum, playlist, favoritos ou busca;
 - mini-player persistente;
-- Media Session para tela bloqueada/notificações.
+- Media Session para tela bloqueada/notificações;
+- letras locais em `.lrc` sincronizado ou `.txt`, carregadas sob demanda no player.
 
 > Navegadores móveis podem bloquear autoplay ao abrir uma nova página sem interação. O Home Music preserva faixa/posição e aguarda um toque em **Play**.
 
@@ -293,3 +294,15 @@ bash scripts/configure-tailscale.test.sh
 ## Próximos passos
 
 Veja [`docs/roadmap.md`](docs/roadmap.md).
+
+
+## Letras locais
+
+Para exibir a letra, coloque um arquivo ao lado da música usando o mesmo nome-base:
+
+```text
+Minha música.flac
+Minha música.lrc
+```
+
+Também são aceitos `Minha música.flac.lrc` e `Minha música.txt`. Arquivos LRC com timestamps acompanham a reprodução; TXT é exibido como texto simples. A leitura é local, limitada a 512 KiB e não envia músicas ou metadados para serviços externos.
