@@ -89,6 +89,16 @@ export function onlineAudioUrl(
   return directAudioUrl(trackId);
 }
 
+export function preloadAudioUrl(
+  trackId: string,
+  mode: StreamingMode,
+  normalization: NormalizationMode = 'off'
+) {
+  if (mode === 'economy') return transcodedAudioUrl(trackId, 'economy', normalization);
+  if (normalization !== 'off') return transcodedAudioUrl(trackId, 'high', normalization);
+  return null;
+}
+
 export function shouldRetryWithCompatibilityTranscode(mode: StreamingMode, mediaErrorCode: number | null | undefined) {
   return mode === 'auto' && (mediaErrorCode === 3 || mediaErrorCode === 4);
 }

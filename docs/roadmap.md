@@ -28,6 +28,8 @@
 - [x] Fila reordenável
 - [x] Volume e estado do player persistentes
 - [x] Play automático entre faixas
+- [x] Pré-aquecimento da próxima faixa quando o perfil exige transcoding
+- [x] Continuidade de reprodução no iPhone/iPad em background/tela bloqueada
 - [x] Retomada automática da sessão quando permitida pelo navegador
 - [x] Media Session API
 - [x] Controles compatíveis na tela bloqueada/notificações
@@ -71,7 +73,7 @@
 
 ## Fase 6 — Extras
 
-- [x] Letras
+- [x] Letras — exibir o controle somente quando houver letra local
 - [x] ReplayGain / normalização opcional
 - [x] Estatísticas pessoais
 - [ ] Integração opcional com biblioteca DJ
