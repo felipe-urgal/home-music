@@ -2,8 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { PlaybackState, RepeatMode, Track } from '@home-music/shared';
 import { apiFetch } from './api-client';
 import { buildQueueContext } from './library-utils';
+import { offlineAudioUrl } from './offline-downloads';
 import { nextTrackDecision, remapQueue, resolveOutputVolume, restorePlayerState } from './player-state';
 
+const OFFLINE_PLAYER_STATE_KEY = 'home-music:offline-player:v1';
 const EMPTY_STATE: PlaybackState = {
   currentTrackId: null,
   position: 0,
@@ -16,10 +18,48 @@ const EMPTY_STATE: PlaybackState = {
   updatedAt: new Date(0).toISOString()
 };
 
+type AudioPlayerOptions = {
+  offlineMode?: boolean;
+};
+
 function mutationFetch(url: string, init: RequestInit) {
   const headers = new Headers(init.headers);
   headers.set('X-Home-Music-Request', '1');
   return apiFetch(url, { ...init, headers });
+}
+
+function isRepeatMode(value: unknown): value is RepeatMode {
+  return value === 'off' || value === 'all' || value === 'one';
+}
+
+function readOfflinePlayerState(): PlaybackState {
+  try {
+    const value = JSON.parse(window.localStorage.getItem(OFFLINE_PLAYER_STATE_KEY) || '{}') as Partial<PlaybackState>;
+    return {
+      currentTrackId: typeof value.currentTrackId === 'string' ? value.currentTrackId : null,
+      position: typeof value.position === 'number' && Number.isFinite(value.position) && value.position >= 0 ? value.position : 0,
+      volume: typeof value.volume === 'number' && Number.isFinite(value.volume) ? Math.max(0, Math.min(1, value.volume)) : 1,
+      shuffle: Boolean(value.shuffle),
+      repeatMode: isRepeatMode(value.repeatMode) ? value.repeatMode : 'off',
+      wasPlaying: false,
+      baseQueueIds: Array.isArray(value.baseQueueIds) ? value.baseQueueIds.filter((id): id is string => typeof id === 'string') : [],
+      queueIds: Array.isArray(value.queueIds) ? value.queueIds.filter((id): id is string => typeof id === 'string') : [],
+      updatedAt: typeof value.updatedAt === 'string' ? value.updatedAt : new Date(0).toISOString()
+    };
+  } catch {
+    return EMPTY_STATE;
+  }
+}
+
+function writeOfflinePlayerState(state: Omit<PlaybackState, 'updatedAt'>) {
+  try {
+    window.localStorage.setItem(OFFLINE_PLAYER_STATE_KEY, JSON.stringify({
+      ...state,
+      updatedAt: new Date().toISOString()
+    }));
+  } catch {
+    // Persistência offline é best-effort; reprodução continua funcionando sem ela.
+  }
 }
 
 function shuffledAroundCurrent(tracks: Track[], currentId: string) {
@@ -44,8 +84,10 @@ export function useAudioPlayer(
   tracks: Track[],
   progressVisible: boolean,
   libraryReady: boolean,
-  usesSystemVolume: boolean
+  usesSystemVolume: boolean,
+  options: AudioPlayerOptions = {}
 ) {
+  const offlineMode = Boolean(options.offlineMode);
   const audioRef = useRef<HTMLAudioElement>(null);
   const positionRef = useRef(0);
   const restoredPositionRef = useRef(0);
@@ -58,6 +100,7 @@ export function useAudioPlayer(
   const [playing, setPlaying] = useState(false);
   const [resumeIntent, setResumeIntent] = useState(false);
   const [autoplayBlocked, setAutoplayBlocked] = useState(false);
+  const [sourceError, setSourceError] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolumeState] = useState(1);
@@ -81,15 +124,20 @@ export function useAudioPlayer(
     if (!libraryReady || hydratedRef.current) return;
     hydratedRef.current = true;
 
-    apiFetch('/api/player/state')
-      .then(response => response.ok ? response.json() as Promise<PlaybackState> : EMPTY_STATE)
+    const statePromise = offlineMode
+      ? Promise.resolve(readOfflinePlayerState())
+      : apiFetch('/api/player/state')
+          .then(response => response.ok ? response.json() as Promise<PlaybackState> : EMPTY_STATE)
+          .catch(() => EMPTY_STATE);
+
+    statePromise
       .then(state => {
         const restored = restorePlayerState(tracks, {
           ...EMPTY_STATE,
           ...state,
           baseQueueIds: Array.isArray(state.baseQueueIds) ? state.baseQueueIds : []
         });
-        const shouldResume = Boolean(state.wasPlaying && restored.currentTrackId);
+        const shouldResume = Boolean(!offlineMode && state.wasPlaying && restored.currentTrackId);
 
         setOrderedQueue(restored.baseQueue);
         setQueue(restored.queue);
@@ -114,7 +162,7 @@ export function useAudioPlayer(
         setCurrentTime(0);
       })
       .finally(() => setHydrated(true));
-  }, [libraryReady, setPlaybackIntent, tracks]);
+  }, [libraryReady, offlineMode, setPlaybackIntent, tracks]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -132,6 +180,7 @@ export function useAudioPlayer(
       setPlaying(false);
       setPlaybackIntent(false);
       setAutoplayBlocked(false);
+      setSourceError(null);
       setCurrentTime(0);
       setDuration(0);
       positionRef.current = 0;
@@ -163,10 +212,11 @@ export function useAudioPlayer(
     if (!audio || !current || !hydrated) return;
 
     historyTrackRef.current = null;
+    setSourceError(null);
     setCurrentTime(0);
     setDuration(current.duration ?? 0);
     positionRef.current = 0;
-    audio.src = `/api/tracks/${current.id}/stream`;
+    audio.src = offlineMode ? offlineAudioUrl(current.id) : `/api/tracks/${current.id}/stream`;
     audio.load();
 
     if (resumeIntentRef.current) {
@@ -183,7 +233,7 @@ export function useAudioPlayer(
           }
         });
     }
-  }, [current?.id, hydrated, setPlaybackIntent]);
+  }, [current?.id, hydrated, offlineMode, setPlaybackIntent]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -203,13 +253,18 @@ export function useAudioPlayer(
       queueIds: queue.map(track => track.id)
     };
 
+    if (offlineMode) {
+      writeOfflinePlayerState(body);
+      return;
+    }
+
     mutationFetch('/api/player/state', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
       keepalive: true
     }).catch(() => undefined);
-  }, [current?.id, hydrated, orderedQueue, queue, repeatMode, resumeIntent, shuffle, volume]);
+  }, [current?.id, hydrated, offlineMode, orderedQueue, queue, repeatMode, resumeIntent, shuffle, volume]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -238,6 +293,7 @@ export function useAudioPlayer(
     if (!audio || !current) return;
     setPlaybackIntent(true);
     setAutoplayBlocked(false);
+    setSourceError(null);
     try {
       await audio.play();
       setPlaying(true);
@@ -338,6 +394,7 @@ export function useAudioPlayer(
     setCurrentTrackId(track.id);
     setPlaybackIntent(true);
     setAutoplayBlocked(false);
+    setSourceError(null);
 
     if (sameTrack) {
       audioRef.current?.play().catch(() => {
@@ -378,7 +435,7 @@ export function useAudioPlayer(
   useEffect(() => {
     if (!('mediaSession' in navigator) || !current || typeof MediaMetadata === 'undefined') return;
 
-    const artwork = current.hasCover ? [{ src: `/api/tracks/${current.id}/cover` }] : undefined;
+    const artwork = !offlineMode && current.hasCover ? [{ src: `/api/tracks/${current.id}/cover` }] : undefined;
     navigator.mediaSession.metadata = new MediaMetadata({
       title: current.title,
       artist: current.artist,
@@ -407,7 +464,7 @@ export function useAudioPlayer(
         try { navigator.mediaSession.setActionHandler(action, null); } catch { /* noop */ }
       }
     };
-  }, [current, next, pause, play, previous, seek]);
+  }, [current, next, offlineMode, pause, play, previous, seek]);
 
   useEffect(() => {
     if ('mediaSession' in navigator) navigator.mediaSession.playbackState = playing ? 'playing' : 'paused';
@@ -416,6 +473,7 @@ export function useAudioPlayer(
   function handleLoadedMetadata(audio: HTMLAudioElement) {
     const loadedDuration = audio.duration || current?.duration || 0;
     setDuration(loadedDuration);
+    setSourceError(null);
     const restored = restoredPositionRef.current;
     restoredPositionRef.current = 0;
 
@@ -446,8 +504,9 @@ export function useAudioPlayer(
   function handlePlay() {
     setPlaybackIntent(true);
     setAutoplayBlocked(false);
+    setSourceError(null);
     setPlaying(true);
-    if (current && historyTrackRef.current !== current.id) {
+    if (!offlineMode && current && historyTrackRef.current !== current.id) {
       historyTrackRef.current = current.id;
       mutationFetch(`/api/history/${current.id}`, { method: 'POST' }).catch(() => undefined);
     }
@@ -457,6 +516,15 @@ export function useAudioPlayer(
     setPlaying(false);
   }
 
+  function handleError() {
+    setPlaying(false);
+    setPlaybackIntent(false);
+    setSourceError(offlineMode
+      ? 'Este download não está mais disponível no dispositivo. Remova-o e baixe novamente quando estiver online.'
+      : 'Não foi possível carregar esta música.'
+    );
+  }
+
   return {
     audioRef,
     current,
@@ -464,6 +532,7 @@ export function useAudioPlayer(
     currentIndex,
     playing,
     autoplayBlocked,
+    sourceError,
     currentTime,
     duration,
     volume,
@@ -486,7 +555,8 @@ export function useAudioPlayer(
       onPause: handlePause,
       onTimeUpdate: handleTimeUpdate,
       onLoadedMetadata: handleLoadedMetadata,
-      onEnded: () => next(true)
+      onEnded: () => next(true),
+      onError: handleError
     }
   };
 }

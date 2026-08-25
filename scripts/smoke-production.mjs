@@ -185,14 +185,20 @@ try {
   assert.equal(serviceWorker.headers.get('cache-control'), 'no-store');
   const serviceWorkerSource = await serviceWorker.text();
   assert.match(serviceWorkerSource, /home-music-static-/);
+  assert.match(serviceWorkerSource, /home-music-offline-audio-v1/);
+  assert.match(serviceWorkerSource, /HOME_MUSIC_GET_CAPABILITIES/);
+  assert.match(serviceWorkerSource, /\/offline-audio\//);
   assert.ok(
     serviceWorkerSource.includes("pathname === '/api' || pathname.startsWith('/api/')"),
     'Service worker deve reconhecer toda a árvore /api como conteúdo privado.'
   );
   assert.ok(
     serviceWorkerSource.includes('if (isApiPath(url.pathname)) return;'),
-    'Service worker não deve interceptar/cachear /api/*.'
+    'Service worker não deve interceptar/cachear /api/* automaticamente.'
   );
+
+  const virtualOfflineAudio = await fetch(`${baseUrl}/offline-audio/1234567890abcdef12345678`);
+  assert.equal(virtualOfflineAudio.status, 404, 'Fastify nunca deve servir a rota virtual de áudio offline.');
 
   const missingAsset = await fetch(`${baseUrl}/assets/inexistente.js`);
   assert.equal(missingAsset.status, 404);

@@ -1,0 +1,104 @@
+.offline-header {
+  min-height: 58px;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.offline-header__icon {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: rgba(39, 156, 255, .12);
+  color: #77c2ff;
+}
+.offline-header__icon svg { width: 20px; height: 20px; }
+
+.offline-header__title {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  text-align: center;
+}
+.offline-header__title strong { font-size: 17px; }
+.offline-header__title small { color: #7f8994; font-size: 12px; }
+
+.offline-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin: 4px 0 16px;
+  padding: 11px 12px;
+  border: 1px solid rgba(75, 166, 243, .15);
+  border-radius: 11px;
+  background: rgba(22, 110, 183, .08);
+  color: #91bddd;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.offline-banner svg { width: 16px; height: 16px; flex: 0 0 auto; margin-top: 1px; }
+
+.track-heading > .track-heading__actions {
+  min-width: auto;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.icon-button.is-downloaded { color: #65bcff; }
+.download-spinner { animation: offline-download-spin .8s linear infinite; }
+
+@keyframes offline-download-spin {
+  to { transform: rotate(360deg); }
+}
+
+.player-offline-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(39, 156, 255, .08);
+  color: #87bce5;
+  font-size: 12px;
+}
+.player-offline-status svg { width: 15px; height: 15px; }
+
+.login-offline-separator {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 18px 0 12px;
+  color: #596570;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+.login-offline-separator::before,
+.login-offline-separator::after {
+  content: '';
+  height: 1px;
+  flex: 1;
+  background: rgba(255,255,255,.07);
+}
+
+.login-offline-action {
+  width: 100%;
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid rgba(80, 171, 247, .22);
+  border-radius: 12px;
+  background: rgba(26, 118, 194, .1);
+  color: #a8d7fa;
+  cursor: pointer;
+  font-weight: 650;
+}
+.login-offline-action svg { width: 18px; height: 18px; }

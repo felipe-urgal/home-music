@@ -1,7 +1,12 @@
 const CACHE_PREFIX = 'home-music-static-';
-const CACHE_NAME = `${CACHE_PREFIX}v1`;
+const CACHE_NAME = `${CACHE_PREFIX}v2`;
+const OFFLINE_AUDIO_CACHE_NAME = 'home-music-offline-audio-v1';
+const OFFLINE_AUDIO_PREFIX = '/offline-audio/';
+const CAPABILITY_REQUEST = 'HOME_MUSIC_GET_CAPABILITIES';
+const CAPABILITY_RESPONSE = 'HOME_MUSIC_CAPABILITIES';
 const SHELL_URL = '/';
 const REVALIDATED_STATIC = new Set(['/manifest.webmanifest', '/favicon.svg']);
+const TRACK_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
 
 function isApiPath(pathname) {
   return pathname === '/api' || pathname.startsWith('/api/');
@@ -13,6 +18,84 @@ function isHashedAsset(pathname) {
 
 function isCacheableResponse(response) {
   return response.ok && (response.type === 'basic' || response.type === 'default');
+}
+
+function offlineTrackId(pathname) {
+  if (!pathname.startsWith(OFFLINE_AUDIO_PREFIX)) return null;
+  const encoded = pathname.slice(OFFLINE_AUDIO_PREFIX.length);
+  if (!encoded || encoded.includes('/')) return null;
+  try {
+    const id = decodeURIComponent(encoded);
+    return TRACK_ID_RE.test(id) ? id : null;
+  } catch {
+    return null;
+  }
+}
+
+function sourceAudioUrl(trackId) {
+  return `/api/tracks/${encodeURIComponent(trackId)}/stream`;
+}
+
+function parseOfflineRange(value, size) {
+  if (!value) return undefined;
+  if (!Number.isFinite(size) || size <= 0 || value.includes(',')) return null;
+
+  const match = /^bytes=(\d*)-(\d*)$/i.exec(value.trim());
+  if (!match || (!match[1] && !match[2])) return null;
+
+  if (!match[1]) {
+    const suffixLength = Number(match[2]);
+    if (!Number.isInteger(suffixLength) || suffixLength <= 0) return null;
+    const start = Math.max(0, size - suffixLength);
+    return { start, end: size - 1 };
+  }
+
+  const start = Number(match[1]);
+  const requestedEnd = match[2] ? Number(match[2]) : size - 1;
+  if (!Number.isInteger(start) || !Number.isInteger(requestedEnd) || start < 0 || start >= size || requestedEnd < start) return null;
+  return { start, end: Math.min(requestedEnd, size - 1) };
+}
+
+function offlineAudioHeaders(contentType, size) {
+  return {
+    'Accept-Ranges': 'bytes',
+    'Cache-Control': 'private, no-store',
+    'Content-Type': contentType,
+    'Content-Length': String(size)
+  };
+}
+
+async function serveOfflineAudio(request, trackId) {
+  const cache = await caches.open(OFFLINE_AUDIO_CACHE_NAME);
+  const cached = await cache.match(sourceAudioUrl(trackId));
+  if (!cached) {
+    return new Response('Download offline não encontrado.', {
+      status: 404,
+      headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' }
+    });
+  }
+
+  const blob = await cached.blob();
+  const contentType = cached.headers.get('content-type') || blob.type || 'application/octet-stream';
+  const headers = offlineAudioHeaders(contentType, blob.size);
+
+  if (request.method === 'HEAD') return new Response(null, { status: 200, headers });
+
+  const range = parseOfflineRange(request.headers.get('range'), blob.size);
+  if (range === null) {
+    const invalidHeaders = new Headers(headers);
+    invalidHeaders.set('Content-Range', `bytes */${blob.size}`);
+    invalidHeaders.set('Content-Length', '0');
+    return new Response(null, { status: 416, headers: invalidHeaders });
+  }
+
+  if (range === undefined) return new Response(blob, { status: 200, headers });
+
+  const partial = blob.slice(range.start, range.end + 1, contentType);
+  const partialHeaders = new Headers(headers);
+  partialHeaders.set('Content-Length', String(partial.size));
+  partialHeaders.set('Content-Range', `bytes ${range.start}-${range.end}/${blob.size}`);
+  return new Response(partial, { status: 206, headers: partialHeaders });
 }
 
 function assetUrlsFromHtml(html) {
@@ -121,15 +204,30 @@ self.addEventListener('activate', event => {
   })());
 });
 
+self.addEventListener('message', event => {
+  if (event.data?.type !== CAPABILITY_REQUEST) return;
+  event.ports?.[0]?.postMessage({
+    type: CAPABILITY_RESPONSE,
+    version: 2,
+    offlineAudio: true
+  });
+});
+
 self.addEventListener('fetch', event => {
   const request = event.request;
-  if (request.method !== 'GET') return;
-
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
 
-  // Conteúdo autenticado nunca entra no cache estático da PWA.
-  // Isso inclui login/sessão, biblioteca, capas privadas e streams de áudio.
+  const downloadedTrackId = offlineTrackId(url.pathname);
+  if (downloadedTrackId && (request.method === 'GET' || request.method === 'HEAD')) {
+    event.respondWith(serveOfflineAudio(request, downloadedTrackId));
+    return;
+  }
+
+  if (request.method !== 'GET') return;
+
+  // Conteúdo autenticado continua fora do cache estático da PWA.
+  // Downloads explícitos usam um cache separado e uma rota virtual /offline-audio/:id.
   if (isApiPath(url.pathname)) return;
 
   if (request.mode === 'navigate') {

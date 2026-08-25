@@ -35,6 +35,7 @@ test('fallback SPA é usado somente para rotas válidas da aplicação', () => {
   assert.equal(shouldServeShell('/'), true);
   assert.equal(shouldServeShell('/biblioteca/rock'), true);
   assert.equal(shouldServeShell('/assets/app-antigo.js'), false);
+  assert.equal(shouldServeShell('/offline-audio/1234567890abcdef12345678'), false);
   assert.equal(shouldServeShell('/manifest.webmanifest'), false);
   assert.equal(shouldServeShell('/favicon.svg'), false);
   assert.equal(shouldServeShell('/sw.js'), false);
@@ -47,9 +48,12 @@ test('resolveStaticFile serve somente arquivo regular dentro do dist', async () 
   const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-web-'));
   const root = path.join(temp, 'dist');
   const assets = path.join(root, 'assets');
+  const offlineAudio = path.join(root, 'offline-audio');
   await mkdir(assets, { recursive: true });
+  await mkdir(offlineAudio, { recursive: true });
   await writeFile(path.join(root, 'index.html'), '<html></html>');
   await writeFile(path.join(assets, 'app.js'), 'console.log(1)');
+  await writeFile(path.join(offlineAudio, '1234567890abcdef12345678'), 'não deve sair do servidor');
 
   const web = await prepareWebApp(root);
   const file = await resolveStaticFile(web.root, '/assets/app.js?x=1');
@@ -57,6 +61,7 @@ test('resolveStaticFile serve somente arquivo regular dentro do dist', async () 
   assert.equal(file.pathname, '/assets/app.js');
   assert.equal(file.filePath, path.join(assets, 'app.js'));
 
+  assert.equal(await resolveStaticFile(web.root, '/offline-audio/1234567890abcdef12345678'), null);
   assert.equal(await resolveStaticFile(web.root, '/../secret'), null);
   assert.equal(await resolveStaticFile(web.root, '/%2e%2e/secret'), null);
   assert.equal(await resolveStaticFile(web.root, '/.env'), null);

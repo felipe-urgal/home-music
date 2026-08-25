@@ -19,6 +19,7 @@ const MIME_TYPES: Record<string, string> = {
 };
 
 const HASHED_ASSET_RE = /-[A-Za-z0-9_-]{6,}\.[A-Za-z0-9]+$/;
+const RESERVED_OFFLINE_AUDIO_PREFIX = '/offline-audio/';
 
 export type PreparedWebApp = {
   root: string;
@@ -46,6 +47,10 @@ function safeRelativePath(pathname: string) {
   return parts.join(path.sep);
 }
 
+function isReservedOfflineAudioPath(pathname: string) {
+  return pathname.startsWith(RESERVED_OFFLINE_AUDIO_PREFIX);
+}
+
 export function contentTypeForPath(filePath: string) {
   return MIME_TYPES[path.extname(filePath).toLowerCase()] || 'application/octet-stream';
 }
@@ -67,6 +72,7 @@ export function shouldServeShell(rawUrl: string) {
   const pathname = requestPathname(rawUrl);
   if (!pathname) return false;
   if (pathname === '/') return true;
+  if (isReservedOfflineAudioPath(pathname)) return false;
   if (!safeRelativePath(pathname)) return false;
   if (pathname.startsWith('/assets/')) return false;
   return path.posix.extname(pathname) === '';
@@ -88,7 +94,7 @@ export async function prepareWebApp(root: string): Promise<PreparedWebApp> {
 
 export async function resolveStaticFile(root: string, rawUrl: string) {
   const pathname = requestPathname(rawUrl);
-  if (!pathname || pathname === '/') return null;
+  if (!pathname || pathname === '/' || isReservedOfflineAudioPath(pathname)) return null;
 
   const relative = safeRelativePath(pathname);
   if (!relative) return null;
