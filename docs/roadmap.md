@@ -70,7 +70,7 @@
 
 ## Fase 6 — Extras
 
-- [ ] Letras
+- [x] Letras
 - [ ] ReplayGain / normalização opcional
 - [ ] Estatísticas pessoais
 - [ ] Integração opcional com biblioteca DJ
