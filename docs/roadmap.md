@@ -37,7 +37,7 @@
 - [x] Capas confinadas sem quebrar a viewport
 - [ ] Download offline
 - [ ] Cache seletivo
-- [ ] Melhor tratamento de capas ausentes
+- [x] Melhor tratamento de capas ausentes
 
 ## Fase 4 — Operação no Ubuntu
 
