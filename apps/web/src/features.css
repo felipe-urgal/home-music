@@ -68,6 +68,7 @@
   padding: 7px;
   color: #c4cdd6;
 }
+.player-options .player-options__choice:disabled { opacity: .48; cursor: not-allowed; }
 .player-options .player-options__choice.is-selected {
   background: rgba(22, 149, 255, .1);
   color: #8acbff;
