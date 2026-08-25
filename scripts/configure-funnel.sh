@@ -151,52 +151,135 @@ validate_public_credentials() {
   fi
 }
 
-https_443_state() {
+https_443_inspection() {
   local expected_proxy="$1"
   local serve_json
 
   if ! serve_json="$("${TAILSCALE_BIN}" serve status --json 2>/dev/null)"; then
-    printf '%s' "unknown"
+    printf '%s' "unknown|"
     return 0
   fi
 
   printf '%s' "${serve_json}" | "${NODE_BIN}" -e '
     const fs = require("node:fs");
     const expected = process.argv[1];
+    const currentDns = process.argv[2];
     const input = fs.readFileSync(0, "utf8").trim() || "{}";
     let data;
-    try { data = JSON.parse(input); } catch { process.stdout.write("unknown"); process.exit(0); }
+    try { data = JSON.parse(input); } catch { process.stdout.write("unknown|"); process.exit(0); }
     if (!data || typeof data !== "object") data = {};
 
     const web = data.Web && typeof data.Web === "object" ? data.Web : {};
     const tcp = data.TCP && typeof data.TCP === "object" ? data.TCP : {};
     const allowFunnel = data.AllowFunnel && typeof data.AllowFunnel === "object" ? data.AllowFunnel : {};
-    const handlers = [];
+    const webEntries = Object.entries(web);
+    const tcpEntries = Object.entries(tcp);
+    const allowEntries = Object.entries(allowFunnel);
+    const handlers443 = [];
+    let totalHandlers = 0;
 
-    for (const [host, config] of Object.entries(web)) {
-      if (!host.endsWith(":443")) continue;
+    for (const [host, config] of webEntries) {
       const currentHandlers = config?.Handlers && typeof config.Handlers === "object" ? config.Handlers : {};
       for (const [path, handler] of Object.entries(currentHandlers)) {
-        handlers.push({ path, proxy: handler?.Proxy });
+        totalHandlers += 1;
+        if (host.endsWith(":443")) handlers443.push({ host, path, proxy: handler?.Proxy });
       }
     }
 
-    const funnelOn443 = Object.entries(allowFunnel).some(([host, enabled]) => enabled === true && host.endsWith(":443"));
-    const has443 = Boolean(tcp["443"]) || handlers.length > 0 || funnelOn443;
+    const funnel443 = allowEntries.filter(([host, enabled]) => enabled === true && host.endsWith(":443"));
+    const has443 = Object.prototype.hasOwnProperty.call(tcp, "443") || handlers443.length > 0 || funnel443.length > 0;
     if (!has443) {
-      process.stdout.write("empty");
+      process.stdout.write("empty|");
       process.exit(0);
     }
 
     const expectedValues = new Set([expected, `http://${expected}`]);
-    const expectedHandler = handlers.length === 1 && handlers[0].path === "/" && expectedValues.has(handlers[0].proxy);
+    const expectedHandler = handlers443.length === 1
+      && handlers443[0].path === "/"
+      && expectedValues.has(handlers443[0].proxy);
     if (!expectedHandler) {
-      process.stdout.write("conflict");
+      process.stdout.write("conflict|");
       process.exit(0);
     }
 
-    process.stdout.write(funnelOn443 ? "funnel" : "serve");
-  ' "${expected_proxy}"
+    const configuredHost = handlers443[0].host;
+    const funnelHostKeys = funnel443.map(([host]) => host);
+    const hostKeys = new Set([configuredHost, ...funnelHostKeys]);
+    if (hostKeys.size !== 1) {
+      process.stdout.write("conflict|");
+      process.exit(0);
+    }
+
+    const funnelOn443 = funnel443.length > 0;
+    const currentHost = `${currentDns}:443`;
+    if (configuredHost === currentHost) {
+      process.stdout.write(`${funnelOn443 ? "funnel" : "serve"}|`);
+      process.exit(0);
+    }
+
+    const enabledFunnelEntries = allowEntries.filter(([, enabled]) => enabled === true);
+    const exclusiveTcp = tcpEntries.length === 1 && tcpEntries[0][0] === "443";
+    const exclusiveWeb = webEntries.length === 1 && totalHandlers === 1;
+    const exclusiveFunnel = funnelOn443
+      ? allowEntries.length === 1 && enabledFunnelEntries.length === 1 && enabledFunnelEntries[0][0] === configuredHost
+      : allowEntries.length === 0;
+
+    // reset é global para a configuração Serve/Funnel do nó. Só automatizamos
+    // a migração se for comprovadamente uma configuração exclusiva do Home Music.
+    if (!exclusiveTcp || !exclusiveWeb || !exclusiveFunnel) {
+      process.stdout.write("conflict|");
+      process.exit(0);
+    }
+
+    const configuredDns = configuredHost.endsWith(":443") ? configuredHost.slice(0, -4) : configuredHost;
+    process.stdout.write(`${funnelOn443 ? "stale-funnel" : "stale-serve"}|${configuredDns}`);
+  ' "${expected_proxy}" "${TAILSCALE_DNS_NAME}"
+}
+
+inspection_state() {
+  local inspection="$1"
+  printf '%s' "${inspection%%|*}"
+}
+
+inspection_host() {
+  local inspection="$1"
+  printf '%s' "${inspection#*|}"
+}
+
+reset_stale_home_music_config() {
+  local state="$1"
+  local expected_proxy="$2"
+  local configured_host="$3"
+  local reset_label
+
+  case "${state}" in
+    stale-funnel) reset_label="Funnel" ;;
+    stale-serve) reset_label="Serve" ;;
+    *) fail "Estado inválido para migração de hostname: ${state}"; return 1 ;;
+  esac
+
+  echo "==> Detectado ${reset_label} do Home Music associado ao hostname anterior ${configured_host}"
+  echo "==> Limpando somente a configuração exclusiva do Home Music antes de usar ${TAILSCALE_DNS_NAME}"
+
+  if [[ "${state}" == "stale-funnel" ]]; then
+    if ! "${TAILSCALE_BIN}" funnel reset; then
+      fail "Não foi possível limpar o Funnel do hostname anterior. A URL antiga PODE CONTINUAR PÚBLICA; confira 'tailscale funnel status'."
+      return 1
+    fi
+  else
+    if ! "${TAILSCALE_BIN}" serve reset; then
+      fail "Não foi possível limpar o Serve do hostname anterior; nenhuma nova exposição foi criada. Confira 'tailscale serve status'."
+      return 1
+    fi
+  fi
+
+  local inspection final_state
+  inspection="$(https_443_inspection "${expected_proxy}")"
+  final_state="$(inspection_state "${inspection}")"
+  if [[ "${final_state}" != "empty" ]]; then
+    fail "O reset não deixou HTTPS/443 vazio (estado=${final_state}). Revise 'tailscale serve status' antes de continuar."
+    return 1
+  fi
 }
 
 wait_for_url() {
@@ -232,10 +315,13 @@ print_status() {
   check_tailscale_version
   load_tailscale_identity
 
-  local port target state production_host secure_cookie trusted_proxy service_state profile
+  local port target inspection state configured_host display_state production_host secure_cookie trusted_proxy service_state profile
   port="$(home_music_port)"
   target="127.0.0.1:${port}"
-  state="$(https_443_state "${target}")"
+  inspection="$(https_443_inspection "${target}")"
+  state="$(inspection_state "${inspection}")"
+  configured_host="$(inspection_host "${inspection}")"
+  display_state="${state}"
   production_host="$(read_env_value PRODUCTION_HOST)"
   secure_cookie="$(read_env_value HOME_MUSIC_COOKIE_SECURE)"
   trusted_proxy="$(read_env_value HOME_MUSIC_TRUST_TAILSCALE_PROXY)"
@@ -248,12 +334,18 @@ print_status() {
     profile="privado-serve"
   elif [[ "${state}" == "empty" && "${production_host}" == "0.0.0.0" && "${secure_cookie}" != "true" ]]; then
     profile="lan-http"
+  elif [[ "${state}" == "stale-funnel" || "${state}" == "stale-serve" ]]; then
+    profile="hostname-renomeado"
+    display_state="${state/stale-/}-hostname-anterior"
   fi
 
   echo "Home Music / acesso sem cliente Tailscale"
   echo "  Serviço:          ${service_state:-desconhecido}"
   echo "  URL HTTPS:        ${TAILSCALE_URL}"
-  echo "  HTTPS :443:       ${state}"
+  echo "  HTTPS :443:       ${display_state}"
+  if [[ -n "${configured_host}" ]]; then
+    echo "  Host configurado: ${configured_host}"
+  fi
   echo "  Backend esperado: ${target}"
   echo "  PRODUCTION_HOST:  ${production_host:-não definido}"
   echo "  Cookie Secure:    ${secure_cookie:-false}"
@@ -267,11 +359,13 @@ enable_public() {
   load_tailscale_identity
   validate_public_credentials
 
-  local port target local_url state final_state env_backup previous_state rollback_needed=0 funnel_attempted=0
+  local port target local_url inspection state stale_host final_state env_backup previous_state rollback_needed=0 funnel_attempted=0 migrated_stale=0
   port="$(home_music_port)"
   target="127.0.0.1:${port}"
   local_url="http://${target}"
-  state="$(https_443_state "${target}")"
+  inspection="$(https_443_inspection "${target}")"
+  state="$(inspection_state "${inspection}")"
+  stale_host="$(inspection_host "${inspection}")"
   previous_state="${state}"
 
   case "${state}" in
@@ -280,12 +374,12 @@ enable_public() {
       return 1
       ;;
     conflict)
-      echo "Já existe outra configuração Tailscale em HTTPS/443 nesta máquina." >&2
+      echo "Já existe outra configuração Tailscale em HTTPS/443 ou a configuração antiga não é exclusiva do Home Music." >&2
       echo "Nenhuma alteração foi feita. Revise antes de substituir:" >&2
       "${TAILSCALE_BIN}" serve status >&2 || true
       return 1
       ;;
-    funnel|serve|empty) ;;
+    funnel|serve|empty|stale-funnel|stale-serve) ;;
   esac
 
   if ! "${CURL_BIN}" --fail --silent --show-error --max-time 8 "${local_url}/health" >/dev/null; then
@@ -304,6 +398,10 @@ enable_public() {
   echo "ATENÇÃO: este modo publica a URL ${TAILSCALE_URL} na internet via Tailscale Funnel."
   echo "O conteúdo continua protegido pelo login do Home Music, mas qualquer pessoa na internet pode alcançar a tela de login."
   echo "O celular não precisa instalar nem conectar o Tailscale."
+  if [[ "${state}" == "stale-funnel" || "${state}" == "stale-serve" ]]; then
+    echo "Foi detectada uma configuração persistente vinculada ao hostname anterior ${stale_host}."
+    echo "Como ela é exclusiva do Home Music, o script pode migrá-la com segurança para ${TAILSCALE_DNS_NAME}."
+  fi
   if [[ "${HOME_MUSIC_FUNNEL_YES:-0}" != "1" ]]; then
     read -r -p "Continuar e tornar o Home Music público em HTTPS? [y/N] " answer
     [[ "${answer}" =~ ^[Yy]$ ]] || { echo "Cancelado sem alterações."; exit 0; }
@@ -319,15 +417,27 @@ enable_public() {
     trap - ERR INT TERM
     if [[ ${rollback_needed} -eq 1 ]]; then
       echo >&2
-      echo "Falha durante a ativação pública; restaurando configuração anterior." >&2
-      if [[ ${funnel_attempted} -eq 1 && "${previous_state}" != "funnel" ]]; then
-        "${TAILSCALE_BIN}" funnel --yes --https=443 off >/dev/null 2>&1 || true
-      fi
-      if [[ "${previous_state}" == "serve" ]]; then
+      if [[ ${migrated_stale} -eq 1 ]]; then
+        echo "Falha durante a migração/ativação pública; mantendo o hostname antigo fechado e restaurando Serve privado no hostname atual." >&2
+        "${TAILSCALE_BIN}" funnel reset >/dev/null 2>&1 || true
+        "${TAILSCALE_BIN}" serve reset >/dev/null 2>&1 || true
         "${TAILSCALE_BIN}" serve --bg --yes --https=443 "${target}" >/dev/null 2>&1 || true
+        cp "${env_backup}" "${ENV_FILE}" || true
+        chmod 600 "${ENV_FILE}" || true
+        set_env_value PRODUCTION_HOST 127.0.0.1 || true
+        set_env_value HOME_MUSIC_COOKIE_SECURE true || true
+        set_env_value HOME_MUSIC_TRUST_TAILSCALE_PROXY false || true
+      else
+        echo "Falha durante a ativação pública; restaurando configuração anterior." >&2
+        if [[ ${funnel_attempted} -eq 1 && "${previous_state}" != "funnel" ]]; then
+          "${TAILSCALE_BIN}" funnel --yes --https=443 off >/dev/null 2>&1 || true
+        fi
+        if [[ "${previous_state}" == "serve" ]]; then
+          "${TAILSCALE_BIN}" serve --bg --yes --https=443 "${target}" >/dev/null 2>&1 || true
+        fi
+        cp "${env_backup}" "${ENV_FILE}" || true
+        chmod 600 "${ENV_FILE}" || true
       fi
-      cp "${env_backup}" "${ENV_FILE}" || true
-      chmod 600 "${ENV_FILE}" || true
       sudo systemctl restart "${SERVICE_UNIT}" >/dev/null 2>&1 || true
     fi
     rm -f "${env_backup}"
@@ -336,6 +446,14 @@ enable_public() {
   trap 'rollback $?' ERR
   trap 'rollback 130' INT
   trap 'rollback 143' TERM
+
+  if [[ "${state}" == "stale-funnel" || "${state}" == "stale-serve" ]]; then
+    if ! reset_stale_home_music_config "${state}" "${target}" "${stale_host}"; then
+      false
+    fi
+    migrated_stale=1
+    previous_state="stale-reset"
+  fi
 
   echo "==> Restringindo o backend ao loopback antes da exposição pública"
   set_env_value PRODUCTION_HOST 127.0.0.1
@@ -351,7 +469,8 @@ enable_public() {
     echo "Confirme MagicDNS, HTTPS Certificates e a permissão Funnel no tailnet e tente novamente." >&2
     false
   fi
-  final_state="$(https_443_state "${target}")"
+  inspection="$(https_443_inspection "${target}")"
+  final_state="$(inspection_state "${inspection}")"
   if [[ "${final_state}" != "funnel" ]]; then
     fail "A configuração final de HTTPS/443 não corresponde ao Funnel esperado (estado=${final_state})."
     return 1
@@ -379,11 +498,13 @@ disable_public() {
   check_tailscale_version
   load_tailscale_identity
 
-  local port target local_url state rollback_needed=0
+  local port target local_url inspection state stale_host rollback_needed=0
   port="$(home_music_port)"
   target="127.0.0.1:${port}"
   local_url="http://${target}"
-  state="$(https_443_state "${target}")"
+  inspection="$(https_443_inspection "${target}")"
+  state="$(inspection_state "${inspection}")"
+  stale_host="$(inspection_host "${inspection}")"
 
   case "${state}" in
     unknown)
@@ -391,7 +512,7 @@ disable_public() {
       return 1
       ;;
     conflict)
-      fail "A configuração HTTPS/443 não corresponde ao Home Music; nenhuma alteração foi feita."
+      fail "A configuração HTTPS/443 não corresponde exclusivamente ao Home Music; nenhuma alteração foi feita."
       return 1
       ;;
     serve)
@@ -403,13 +524,19 @@ disable_public() {
       fail "Não há Funnel do Home Music ativo em HTTPS/443. Use npm run tailscale:enable se quiser o perfil privado."
       return 1
       ;;
-    funnel) ;;
+    funnel|stale-funnel|stale-serve) ;;
   esac
 
-  echo "==> Desabilitando exposição pública em HTTPS/443"
-  if ! "${TAILSCALE_BIN}" funnel --yes --https=443 off; then
-    fail "O Tailscale não confirmou a desativação do Funnel. A URL PODE CONTINUAR PÚBLICA; confira 'tailscale funnel status' antes de assumir que o acesso foi fechado."
-    return 1
+  if [[ "${state}" == "stale-funnel" || "${state}" == "stale-serve" ]]; then
+    if ! reset_stale_home_music_config "${state}" "${target}" "${stale_host}"; then
+      return 1
+    fi
+  else
+    echo "==> Desabilitando exposição pública em HTTPS/443"
+    if ! "${TAILSCALE_BIN}" funnel --yes --https=443 off; then
+      fail "O Tailscale não confirmou a desativação do Funnel. A URL PODE CONTINUAR PÚBLICA; confira 'tailscale funnel status' antes de assumir que o acesso foi fechado."
+      return 1
+    fi
   fi
 
   rollback_needed=1
@@ -435,7 +562,8 @@ disable_public() {
   echo "==> Restaurando Tailscale Serve privado em HTTPS/443"
   "${TAILSCALE_BIN}" serve --bg --yes --https=443 "${target}"
 
-  if [[ "$(https_443_state "${target}")" != "serve" ]]; then
+  inspection="$(https_443_inspection "${target}")"
+  if [[ "$(inspection_state "${inspection}")" != "serve" ]]; then
     fail "A configuração privada do Serve não foi restaurada corretamente."
     return 1
   fi
