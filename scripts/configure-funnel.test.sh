@@ -254,7 +254,7 @@ assert_state serve
 assert_contains "${REPO}/.env" 'HOME_MUSIC_TRUST_TAILSCALE_PROXY=false'
 cleanup_fixture
 
-# Se a restauração do Serve falhar, disable recompõe o Funnel público.
+# Se a restauração do Serve falhar, disable permanece fail-closed: Funnel não volta.
 make_fixture funnel
 export MOCK_FAIL_SERVE=1
 set +e
@@ -262,8 +262,10 @@ set +e
 RC=$?
 set -e
 [[ ${RC} -ne 0 ]] || fail_test "falha ao restaurar Serve deveria abortar disable"
-assert_state funnel
-assert_contains "${REPO}/.env" 'HOME_MUSIC_TRUST_TAILSCALE_PROXY=false'
+assert_state empty
+assert_contains "${REPO}/.env" 'HOME_MUSIC_COOKIE_SECURE=true'
+assert_contains "${REPO}/.env" 'HOME_MUSIC_TRUST_TAILSCALE_PROXY=true'
+assert_contains "${REPO}/.env" 'PRODUCTION_HOST=127.0.0.1'
 cleanup_fixture
 
 # Falha ao interpretar status aborta antes de mutação.
