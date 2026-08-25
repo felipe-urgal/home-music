@@ -338,6 +338,7 @@ enable_public() {
   echo "==> Restringindo o backend ao loopback antes da exposição pública"
   set_env_value PRODUCTION_HOST 127.0.0.1
   set_env_value HOME_MUSIC_COOKIE_SECURE true
+  set_env_value HOME_MUSIC_TRUST_TAILSCALE_PROXY true
   restart_and_validate_local "${local_url}"
 
   echo "==> Habilitando Tailscale Funnel persistente em HTTPS/443"
@@ -446,6 +447,7 @@ disable_public() {
 
   set_env_value PRODUCTION_HOST 127.0.0.1
   set_env_value HOME_MUSIC_COOKIE_SECURE true
+  set_env_value HOME_MUSIC_TRUST_TAILSCALE_PROXY true
   restart_and_validate_local "${local_url}"
 
   if ! wait_for_url "${TAILSCALE_URL}/ready" 15 2; then
