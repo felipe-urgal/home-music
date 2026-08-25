@@ -131,9 +131,11 @@ export function DesktopShell({
   }
 
   function dropQueue(event: DragEvent<HTMLDivElement>, queueIndex: number) {
-    if (!onReorderQueue || dragFrom == null) return;
+    if (!onReorderQueue) return;
     event.preventDefault();
-    if (dragFrom !== queueIndex) onReorderQueue(dragFrom, queueIndex);
+    const transferredIndex = Number.parseInt(event.dataTransfer.getData('text/plain'), 10);
+    const sourceIndex = dragFrom ?? (Number.isInteger(transferredIndex) ? transferredIndex : null);
+    if (sourceIndex != null && sourceIndex !== queueIndex) onReorderQueue(sourceIndex, queueIndex);
     setDragFrom(null);
     setDragOver(null);
   }
@@ -264,7 +266,7 @@ export function DesktopShell({
                     className={`desktop-queue__row ${isCurrent ? 'is-current' : ''} ${isDragging ? 'is-dragging' : ''} ${isDragOver ? 'is-drag-over' : ''}`.trim()}
                     data-queue-index={queueIndex}
                     onDragOver={event => {
-                      if (dragFrom == null) return;
+                      if (!onReorderQueue) return;
                       event.preventDefault();
                       event.dataTransfer.dropEffect = 'move';
                       setDragOver(queueIndex);
