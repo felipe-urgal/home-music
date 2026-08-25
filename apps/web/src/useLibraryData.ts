@@ -5,6 +5,8 @@ import type {
   LibraryResponse,
   Playlist,
   PlaylistsResponse,
+  RekordboxImportResponse,
+  RekordboxPreviewResponse,
   ScanResponse,
   Track
 } from '@home-music/shared';
@@ -253,6 +255,37 @@ export function useLibraryData() {
     await setPlaylistTracks(playlist.id, trackIds);
   }, [setPlaylistTracks]);
 
+  const previewRekordbox = useCallback(async (xml: string) => {
+    try {
+      const result = await jsonRequest<RekordboxPreviewResponse>('/api/integrations/rekordbox/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ xml })
+      });
+      setActionError(null);
+      return result;
+    } catch (error) {
+      reportError(error);
+      throw error;
+    }
+  }, [reportError]);
+
+  const importRekordbox = useCallback(async (xml: string) => {
+    try {
+      const result = await jsonRequest<RekordboxImportResponse>('/api/integrations/rekordbox/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ xml })
+      });
+      await refreshPlaylists();
+      setActionError(null);
+      return result;
+    } catch (error) {
+      reportError(error);
+      throw error;
+    }
+  }, [refreshPlaylists, reportError]);
+
   return {
     tracks,
     favoriteIds,
@@ -274,7 +307,9 @@ export function useLibraryData() {
     renamePlaylist,
     deletePlaylist,
     setPlaylistTracks,
-    addTrackToPlaylist
+    addTrackToPlaylist,
+    previewRekordbox,
+    importRekordbox
   };
 }
 

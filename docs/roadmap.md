@@ -76,4 +76,4 @@
 - [x] Letras — exibir o controle somente quando houver letra local
 - [x] ReplayGain / normalização opcional
 - [x] Estatísticas pessoais
-- [ ] Integração opcional com biblioteca DJ
+- [x] Integração opcional com biblioteca DJ — importação/sincronização de playlists via Rekordbox XML

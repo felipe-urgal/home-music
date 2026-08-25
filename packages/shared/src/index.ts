@@ -1,6 +1,7 @@
 export type RepeatMode = 'off' | 'all' | 'one';
 export type NormalizationMode = 'off' | 'track' | 'album';
 export type StatisticsPeriod = '7d' | '30d' | 'all';
+export type PlaylistSource = 'manual' | 'rekordbox';
 
 export type Track = {
   id: string;
@@ -64,10 +65,41 @@ export type Playlist = {
   trackIds: string[];
   createdAt: string;
   updatedAt: string;
+  source: PlaylistSource;
 };
 
 export type PlaylistsResponse = {
   playlists: Playlist[];
+};
+
+export type RekordboxPlaylistPreview = {
+  name: string;
+  totalEntries: number;
+  matchedEntries: number;
+};
+
+export type RekordboxUnmatchedTrack = {
+  title: string;
+  artist: string;
+};
+
+export type RekordboxPreviewResponse = {
+  productName: string | null;
+  productVersion: string | null;
+  collectionTracks: number;
+  matchedCollectionTracks: number;
+  unmatchedCollectionTracks: number;
+  playlists: number;
+  playlistEntries: number;
+  matchedPlaylistEntries: number;
+  unmatchedSample: RekordboxUnmatchedTrack[];
+  playlistPreview: RekordboxPlaylistPreview[];
+};
+
+export type RekordboxImportResponse = RekordboxPreviewResponse & {
+  createdPlaylists: number;
+  updatedPlaylists: number;
+  removedPlaylists: number;
 };
 
 export type LyricsLine = {
