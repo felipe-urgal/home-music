@@ -163,14 +163,14 @@ test('login, biblioteca e player permanecem utilizáveis', async ({ page }) => {
     await desktopLibraryTable.getByRole('checkbox', { name: 'Selecionar E2E Zeta' }).check();
     const bulkToolbar = page.getByTestId('desktop-bulk-toolbar');
     await expect(bulkToolbar).toContainText('2 selecionadas');
-    await expect(bulkToolbar.getByRole('button', { name: 'Tocar seleção' })).toBeVisible();
-    await bulkToolbar.getByRole('button', { name: 'Favoritar' }).click();
+    await expect(bulkToolbar.getByRole('button', { name: 'Tocar seleção', exact: true })).toBeVisible();
+    await bulkToolbar.getByRole('button', { name: 'Favoritar', exact: true }).click();
     await expect(desktopLibraryTable.getByRole('button', { name: 'Remover E2E Track dos favoritos' })).toBeVisible();
     await expect(desktopLibraryTable.getByRole('button', { name: 'Remover E2E Zeta dos favoritos' })).toBeVisible();
-    await bulkToolbar.getByRole('button', { name: 'Desfavoritar' }).click();
+    await bulkToolbar.getByRole('button', { name: 'Desfavoritar', exact: true }).click();
     await expect(desktopLibraryTable.getByRole('button', { name: 'Favoritar E2E Track' })).toBeVisible();
     await expect(desktopLibraryTable.getByRole('button', { name: 'Favoritar E2E Zeta' })).toBeVisible();
-    await bulkToolbar.getByRole('button', { name: 'Limpar seleção' }).click();
+    await bulkToolbar.getByRole('button', { name: 'Limpar seleção', exact: true }).click();
     await expect(bulkToolbar).toContainText('Selecionar faixas');
   } else {
     await expect(page.locator('.library-track').filter({ hasText: 'E2E Track' })).toBeVisible();
