@@ -1,0 +1,81 @@
+import path from 'node:path';
+import { openRegularFileInside } from './security.js';
+
+const MAX_LYRICS_BYTES = 512 * 1024;
+const TIMESTAMP_PATTERN = /\[(\d{1,3}):(\d{2}(?:\.\d{1,3})?)\]/g;
+const METADATA_PATTERN = /^\[(ar|al|ti|au|by|offset|re|ve):.*\]$/i;
+
+export type LyricsLine = {
+  time: number | null;
+  text: string;
+};
+
+export type LyricsDocument = {
+  source: 'lrc' | 'txt';
+  synchronized: boolean;
+  lines: LyricsLine[];
+};
+
+export function parseLyrics(content: string, source: LyricsDocument['source']): LyricsDocument {
+  const lines: LyricsLine[] = [];
+
+  for (const rawLine of content.replace(/^\uFEFF/, '').split(/\r?\n/)) {
+    const line = rawLine.trimEnd();
+    if (!line.trim() || METADATA_PATTERN.test(line.trim())) continue;
+
+    const timestamps = [...line.matchAll(TIMESTAMP_PATTERN)];
+    const text = line.replace(TIMESTAMP_PATTERN, '').trim();
+
+    if (timestamps.length) {
+      for (const match of timestamps) {
+        lines.push({
+          time: Number(match[1]) * 60 + Number(match[2]),
+          text
+        });
+      }
+    } else {
+      lines.push({ time: null, text: line.trim() });
+    }
+  }
+
+  lines.sort((left, right) => {
+    if (left.time == null || right.time == null) return 0;
+    return left.time - right.time;
+  });
+
+  return {
+    source,
+    synchronized: lines.some(line => line.time != null),
+    lines
+  };
+}
+
+export async function readTrackLyrics(libraryRoot: string, audioPath: string): Promise<LyricsDocument | null> {
+  const extension = path.extname(audioPath);
+  const stem = audioPath.slice(0, -extension.length);
+  const candidates: Array<{ path: string; source: LyricsDocument['source'] }> = [
+    { path: `${stem}.lrc`, source: 'lrc' },
+    { path: `${audioPath}.lrc`, source: 'lrc' },
+    { path: `${stem}.txt`, source: 'txt' }
+  ];
+
+  for (const candidate of candidates) {
+    let opened;
+    try {
+      opened = await openRegularFileInside(libraryRoot, candidate.path);
+    } catch {
+      continue;
+    }
+
+    try {
+      if (opened.stat.size > MAX_LYRICS_BYTES) continue;
+      const content = await opened.handle.readFile({ encoding: 'utf8' });
+      const lyrics = parseLyrics(content, candidate.source);
+      if (lyrics.lines.length) return lyrics;
+    } finally {
+      await opened.handle.close();
+    }
+  }
+
+  return null;
+}
