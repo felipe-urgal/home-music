@@ -1,14 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import type { Track } from '@home-music/shared';
 import {
+  applyTrackView,
   buildFolderView,
   buildLibraryReturnLabel,
   buildQueueContext,
   groupTracks,
   matchesTrack,
+  matchesTrackView,
   normalizeIdentity,
   normalizeSearch,
-  type LibraryReturnContext
+  sortTracks,
+  type LibraryReturnContext,
+  type TrackViewOptions
 } from './library-utils';
 
 function track(overrides: Partial<Track> = {}): Track {
@@ -23,6 +27,18 @@ function track(overrides: Partial<Track> = {}): Track {
     duration: 180,
     format: 'MP3',
     hasCover: true,
+    ...overrides
+  };
+}
+
+function viewOptions(overrides: Partial<TrackViewOptions> = {}): TrackViewOptions {
+  return {
+    normalizedQuery: '',
+    format: 'all',
+    favorite: 'all',
+    cover: 'all',
+    sort: 'current',
+    favoriteIds: new Set<string>(),
     ...overrides
   };
 }
@@ -48,6 +64,59 @@ describe('matchesTrack', () => {
 
   it('encontra por album artist', () => {
     expect(matchesTrack(track({ albumArtist: 'Banda Eva' }), normalizeSearch('banda eva'))).toBe(true);
+  });
+});
+
+describe('filtros e ordenação da biblioteca', () => {
+  it('combina busca, formato, favorito e capa', () => {
+    const item = track({ id: 'flac', title: 'Águas de Março', format: 'FLAC', hasCover: false });
+    const options = viewOptions({
+      normalizedQuery: normalizeSearch('aguas'),
+      format: 'FLAC',
+      favorite: 'favorites',
+      cover: 'without-cover',
+      favoriteIds: new Set(['flac'])
+    });
+
+    expect(matchesTrackView(item, options)).toBe(true);
+    expect(matchesTrackView(item, { ...options, format: 'MP3' })).toBe(false);
+    expect(matchesTrackView(item, { ...options, favorite: 'not-favorites' })).toBe(false);
+    expect(matchesTrackView(item, { ...options, cover: 'with-cover' })).toBe(false);
+  });
+
+  it('preserva a ordem atual sem mutar a origem', () => {
+    const source = [
+      track({ id: '3', title: 'Terceira' }),
+      track({ id: '1', title: 'Primeira' }),
+      track({ id: '2', title: 'Segunda' })
+    ];
+
+    const result = applyTrackView(source, viewOptions());
+    expect(result.map(item => item.id)).toEqual(['3', '1', '2']);
+    expect(result).not.toBe(source);
+  });
+
+  it('ordena título, artista e álbum de forma previsível', () => {
+    const source = [
+      track({ id: '1', title: 'Zebra', artist: 'B', album: 'Dois' }),
+      track({ id: '2', title: 'Água', artist: 'C', album: 'Um' }),
+      track({ id: '3', title: 'Casa', artist: 'A', album: 'Três' })
+    ];
+
+    expect(sortTracks(source, 'title-asc').map(item => item.id)).toEqual(['2', '3', '1']);
+    expect(sortTracks(source, 'title-desc').map(item => item.id)).toEqual(['1', '3', '2']);
+    expect(sortTracks(source, 'artist-asc').map(item => item.id)).toEqual(['3', '1', '2']);
+    expect(sortTracks(source, 'album-asc').map(item => item.id)).toEqual(['1', '3', '2']);
+  });
+
+  it('mantém somente não favoritos quando solicitado', () => {
+    const source = [track({ id: '1' }), track({ id: '2', title: 'Outra' })];
+    const result = applyTrackView(source, viewOptions({
+      favorite: 'not-favorites',
+      favoriteIds: new Set(['1'])
+    }));
+
+    expect(result.map(item => item.id)).toEqual(['2']);
   });
 });
 

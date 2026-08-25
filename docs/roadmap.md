@@ -18,8 +18,8 @@
 - [x] Playlists
 - [x] Navegação hierárquica por pastas e subpastas
 - [x] Re-scan incremental manual
-- [ ] Re-scan automático ao detectar mudanças na pasta
-- [ ] Ordenação e filtros avançados
+- [x] Re-scan automático periódico opcional
+- [x] Ordenação e filtros avançados
 
 ## Fase 3 — Experiência mobile
 

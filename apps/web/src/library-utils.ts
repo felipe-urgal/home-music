@@ -2,6 +2,25 @@ import type { Track } from '@home-music/shared';
 
 export type GroupTab = 'folders' | 'artists' | 'albums';
 export type LibraryReturnTab = 'folders' | 'artists' | 'albums' | 'tracks' | 'favorites' | 'history' | 'playlists';
+export type TrackSort =
+  | 'current'
+  | 'title-asc'
+  | 'title-desc'
+  | 'artist-asc'
+  | 'artist-desc'
+  | 'album-asc'
+  | 'album-desc';
+export type FavoriteFilter = 'all' | 'favorites' | 'not-favorites';
+export type CoverFilter = 'all' | 'with-cover' | 'without-cover';
+
+export type TrackViewOptions = {
+  normalizedQuery: string;
+  format: string;
+  favorite: FavoriteFilter;
+  cover: CoverFilter;
+  sort: TrackSort;
+  favoriteIds: ReadonlySet<string>;
+};
 
 export type LibraryGroup = {
   key: string;
@@ -37,6 +56,11 @@ export type LibraryReturnContext = {
   query: string;
 };
 
+const libraryCollator = new Intl.Collator('pt-BR', {
+  sensitivity: 'base',
+  numeric: true
+});
+
 export function normalizeSearch(value: string) {
   return value
     .normalize('NFD')
@@ -58,6 +82,54 @@ export function matchesTrack(track: Track, normalizedQuery: string) {
   return normalizeSearch(
     `${track.title} ${track.artist} ${track.album} ${track.albumArtist} ${track.folder} ${track.folderPath}`
   ).includes(normalizedQuery);
+}
+
+export function matchesTrackView(track: Track, options: Omit<TrackViewOptions, 'sort'>) {
+  if (!matchesTrack(track, options.normalizedQuery)) return false;
+  if (options.format !== 'all' && track.format !== options.format) return false;
+
+  const favorite = options.favoriteIds.has(track.id);
+  if (options.favorite === 'favorites' && !favorite) return false;
+  if (options.favorite === 'not-favorites' && favorite) return false;
+  if (options.cover === 'with-cover' && !track.hasCover) return false;
+  if (options.cover === 'without-cover' && track.hasCover) return false;
+
+  return true;
+}
+
+function compareTrackText(a: Track, b: Track, fields: Array<keyof Pick<Track, 'title' | 'artist' | 'album' | 'albumArtist'>>) {
+  for (const field of fields) {
+    const result = libraryCollator.compare(a[field], b[field]);
+    if (result !== 0) return result;
+  }
+  return libraryCollator.compare(a.id, b.id);
+}
+
+export function sortTracks(tracks: Track[], sort: TrackSort) {
+  const result = [...tracks];
+  if (sort === 'current') return result;
+
+  const descending = sort.endsWith('-desc');
+  const direction = descending ? -1 : 1;
+
+  result.sort((a, b) => {
+    let comparison = 0;
+    if (sort.startsWith('title-')) {
+      comparison = compareTrackText(a, b, ['title', 'artist', 'album']);
+    } else if (sort.startsWith('artist-')) {
+      comparison = compareTrackText(a, b, ['artist', 'album', 'title']);
+    } else {
+      comparison = compareTrackText(a, b, ['album', 'albumArtist', 'title']);
+    }
+    return comparison * direction;
+  });
+
+  return result;
+}
+
+export function applyTrackView(tracks: Track[], options: TrackViewOptions) {
+  const filtered = tracks.filter(track => matchesTrackView(track, options));
+  return sortTracks(filtered, options.sort);
 }
 
 export function buildLibraryReturnLabel(context: LibraryReturnContext) {
