@@ -17,9 +17,12 @@ export type LyricsDocument = {
 };
 
 export function parseLyrics(content: string, source: LyricsDocument['source']): LyricsDocument {
+  const rawLines = content.replace(/^\uFEFF/, '').split(/\r?\n/);
+  const offsetMatch = rawLines.map(line => line.trim()).find(line => /^\[offset:[+-]?\d+\]$/i.test(line));
+  const offsetSeconds = offsetMatch ? Number(offsetMatch.slice(8, -1)) / 1000 : 0;
   const lines: LyricsLine[] = [];
 
-  for (const rawLine of content.replace(/^\uFEFF/, '').split(/\r?\n/)) {
+  for (const rawLine of rawLines) {
     const line = rawLine.trimEnd();
     if (!line.trim() || METADATA_PATTERN.test(line.trim())) continue;
 
@@ -29,7 +32,7 @@ export function parseLyrics(content: string, source: LyricsDocument['source']): 
     if (timestamps.length) {
       for (const match of timestamps) {
         lines.push({
-          time: Number(match[1]) * 60 + Number(match[2]),
+          time: Math.max(0, Number(match[1]) * 60 + Number(match[2]) + offsetSeconds),
           text
         });
       }
@@ -38,10 +41,7 @@ export function parseLyrics(content: string, source: LyricsDocument['source']): 
     }
   }
 
-  lines.sort((left, right) => {
-    if (left.time == null || right.time == null) return 0;
-    return left.time - right.time;
-  });
+  lines.sort((left, right) => (left.time ?? Number.POSITIVE_INFINITY) - (right.time ?? Number.POSITIVE_INFINITY));
 
   return {
     source,
