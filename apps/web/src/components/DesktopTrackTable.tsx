@@ -84,7 +84,7 @@ export function DesktopTrackTable({
             <th className="desktop-library-table__folder" scope="col">Pasta</th>
             <th className="desktop-library-table__format" scope="col">Formato</th>
             <th className="desktop-library-table__duration" scope="col">Duração</th>
-            <th className="desktop-library-table__actions" scope="col"><span className="visually-hidden">Ações</span></th>
+            <th className="desktop-library-table__actions" scope="col">Ações</th>
           </tr>
         </thead>
         <tbody>
