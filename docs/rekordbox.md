@@ -51,12 +51,12 @@ A ordem das músicas reconhecidas é preservada. Referências repetidas para a m
 
 ## Reimportação
 
-A sincronização é idempotente:
+A sincronização é idempotente e **não destrutiva**:
 
 - a mesma playlist Rekordbox mantém o mesmo registro no Home Music;
 - playlists alteradas no XML são atualizadas;
 - novas playlists são criadas;
-- playlists Rekordbox que sumiram do XML são removidas;
+- playlists Rekordbox ausentes no XML atual são mantidas, porque o arquivo pode representar apenas uma exportação parcial;
 - playlists manuais do Home Music nunca são alteradas ou removidas pela sincronização.
 
 Playlists marcadas como **Rekordbox** são tratadas como somente leitura para nome e conteúdo. Para alterá-las, faça a mudança no Rekordbox e importe o XML novamente. É permitido excluir uma playlist Rekordbox manualmente do Home Music; uma próxima importação poderá recriá-la caso ela continue no XML.
