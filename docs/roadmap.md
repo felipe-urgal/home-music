@@ -65,7 +65,7 @@
 - [x] Backend restrito a loopback no perfil remoto
 - [x] Cookie `Secure` no perfil HTTPS
 - [x] Setup/rollback idempotente com proteção contra conflito em 443
-- [ ] Aplicar grants/restrições least-privilege no tailnet real — runbook/template prontos; falta aplicar e validar no Admin Console ([guia](tailscale-hardening.md))
+- [x] Aplicar grants/restrições least-privilege no tailnet real ([guia](tailscale-hardening.md))
 - [x] Acesso remoto HTTPS sem exigir cliente Tailscale no celular
 - [x] FFmpeg
 - [x] Transcoding adaptativo
