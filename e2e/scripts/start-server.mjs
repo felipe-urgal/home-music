@@ -9,6 +9,7 @@ const tempDir = await mkdtemp(path.join(tmpdir(), 'home-music-e2e-'));
 const libraryDir = path.join(tempDir, 'library');
 const databasePath = path.join(tempDir, 'home-music.db');
 const fixturePath = path.join(libraryDir, 'E2E Track.wav');
+const lyricsFixturePath = path.join(libraryDir, 'E2E Track.lrc');
 
 function wavFixture(durationSeconds = 10) {
   const sampleRate = 8_000;
@@ -43,6 +44,7 @@ function wavFixture(durationSeconds = 10) {
 
 await mkdir(libraryDir, { recursive: true });
 await writeFile(fixturePath, wavFixture());
+await writeFile(lyricsFixturePath, '[00:00.00]Linha E2E um\n[00:03.00]Linha E2E dois\n', 'utf8');
 
 const server = spawn(process.execPath, ['apps/server/dist/index.js'], {
   cwd: rootDir,
