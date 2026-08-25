@@ -1,5 +1,6 @@
 import { Pause, Play, SkipForward } from 'lucide-react';
 import type { Track } from '@home-music/shared';
+import { useDesktopLayout } from '../useDesktopLayout';
 import { Artwork } from './Artwork';
 
 type MiniPlayerProps = {
@@ -12,8 +13,11 @@ type MiniPlayerProps = {
 };
 
 export function MiniPlayer({ current, playing, hasNext, onOpenPlayer, onTogglePlay, onNext }: MiniPlayerProps) {
+  const desktopLayout = useDesktopLayout();
+  if (desktopLayout) return null;
+
   return (
-    <div className="mini-player">
+    <div className="mini-player" data-testid="mini-player">
       <button className="mini-player__main" onClick={onOpenPlayer}>
         <Artwork track={current} />
         <span className="mini-player__text"><strong>{current.title}</strong><small>{current.artist}</small></span>
