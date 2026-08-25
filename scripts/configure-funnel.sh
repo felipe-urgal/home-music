@@ -379,7 +379,7 @@ disable_public() {
   check_tailscale_version
   load_tailscale_identity
 
-  local port target local_url state env_backup rollback_needed=0 funnel_removed=0 serve_attempted=0
+  local port target local_url state rollback_needed=0 serve_attempted=0
   port="$(home_music_port)"
   target="127.0.0.1:${port}"
   local_url="http://${target}"
@@ -406,28 +406,20 @@ disable_public() {
     funnel) ;;
   esac
 
-  env_backup="$(mktemp)"
-  cp "${ENV_FILE}" "${env_backup}"
-  chmod 600 "${env_backup}"
   rollback_needed=1
-
   rollback() {
     local rc="${1:-1}"
     trap - ERR INT TERM
     if [[ ${rollback_needed} -eq 1 ]]; then
       echo >&2
-      echo "Falha ao voltar para o acesso privado; restaurando Funnel." >&2
-      if [[ ${serve_attempted} -eq 1 ]]; then
-        "${TAILSCALE_BIN}" serve --yes --https=443 off >/dev/null 2>&1 || true
-      fi
-      if [[ ${funnel_removed} -eq 1 ]]; then
-        "${TAILSCALE_BIN}" funnel --bg --yes --https=443 "${target}" >/dev/null 2>&1 || true
-      fi
-      cp "${env_backup}" "${ENV_FILE}" || true
-      chmod 600 "${ENV_FILE}" || true
+      echo "Falha ao voltar para o acesso privado. Mantendo a exposição pública DESATIVADA (fail-closed)." >&2
+      "${TAILSCALE_BIN}" funnel --yes --https=443 off >/dev/null 2>&1 || true
+      set_env_value PRODUCTION_HOST 127.0.0.1 || true
+      set_env_value HOME_MUSIC_COOKIE_SECURE true || true
+      set_env_value HOME_MUSIC_TRUST_TAILSCALE_PROXY true || true
       sudo systemctl restart "${SERVICE_UNIT}" >/dev/null 2>&1 || true
+      echo "O Home Music pode ficar temporariamente inacessível remotamente; corrija o Serve antes de tentar novamente." >&2
     fi
-    rm -f "${env_backup}"
     exit "${rc}"
   }
   trap 'rollback $?' ERR
@@ -436,7 +428,6 @@ disable_public() {
 
   echo "==> Desabilitando exposição pública em HTTPS/443"
   "${TAILSCALE_BIN}" funnel --yes --https=443 off
-  funnel_removed=1
 
   echo "==> Restaurando Tailscale Serve privado em HTTPS/443"
   serve_attempted=1
@@ -459,7 +450,6 @@ disable_public() {
 
   rollback_needed=0
   trap - ERR INT TERM
-  rm -f "${env_backup}"
 
   echo
   echo "Acesso público desabilitado."
