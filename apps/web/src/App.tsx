@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { DesktopShell } from './components/DesktopShell';
 import { LibraryScreen } from './components/LibraryScreen';
 import { LoginScreen } from './components/LoginScreen';
 import { OfflineLibraryScreen } from './components/OfflineLibraryScreen';
@@ -96,7 +97,17 @@ function AuthenticatedApp({ onLogout, offline }: AuthenticatedAppProps) {
         onError={event => player.audioHandlers.onError(event.currentTarget)}
       />
 
-      <section className={`phone-surface ${screen !== 'player' ? 'phone-surface--library' : ''}`}>
+      <DesktopShell
+        active={screen}
+        current={current}
+        playing={player.playing}
+        libraryCount={library.tracks.length}
+        queueCount={player.queue.length}
+        onOpenPlayer={openPlayer}
+        onOpenLibrary={() => setScreen('library')}
+        onOpenStatistics={() => setScreen('statistics')}
+        surfaceClassName={`phone-surface ${screen !== 'player' ? 'phone-surface--library' : ''}`}
+      >
         {library.loading ? (
           <div className="center-state">Carregando sua biblioteca…</div>
         ) : library.error ? (
@@ -182,7 +193,7 @@ function AuthenticatedApp({ onLogout, offline }: AuthenticatedAppProps) {
             }}
           />
         )}
-      </section>
+      </DesktopShell>
 
       {library.actionError && (
         <button className="app-toast" role="status" onClick={library.clearActionError}>
@@ -220,7 +231,17 @@ function OfflineApp({ offline, onExit }: { offline: OfflineDownloads; onExit: ()
         onError={event => player.audioHandlers.onError(event.currentTarget)}
       />
 
-      <section className={`phone-surface ${screen === 'library' ? 'phone-surface--library' : ''}`}>
+      <DesktopShell
+        active={screen}
+        current={current}
+        playing={player.playing}
+        libraryCount={offline.tracks.length}
+        queueCount={player.queue.length}
+        offlineMode
+        onOpenPlayer={() => setScreen('player')}
+        onOpenLibrary={() => setScreen('library')}
+        surfaceClassName={`phone-surface ${screen === 'library' ? 'phone-surface--library' : ''}`}
+      >
         {offline.loading || (offline.tracks.length > 0 && !player.hydrated) ? (
           <div className="center-state">Preparando seus downloads…</div>
         ) : screen === 'library' ? (
@@ -279,7 +300,7 @@ function OfflineApp({ offline, onExit }: { offline: OfflineDownloads; onExit: ()
             <button className="secondary-action" onClick={onExit}>Tentar conectar</button>
           </div>
         )}
-      </section>
+      </DesktopShell>
     </main>
   );
 }
