@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { DesktopPlayerBar } from './components/DesktopPlayerBar';
 import { DesktopShell } from './components/DesktopShell';
 import { LibraryScreen } from './components/LibraryScreen';
 import { LoginScreen } from './components/LoginScreen';
@@ -197,6 +198,22 @@ function AuthenticatedApp({ onLogout, offline }: AuthenticatedAppProps) {
         )}
       </DesktopShell>
 
+      <DesktopPlayerBar
+        current={current}
+        playing={player.playing}
+        currentTime={player.currentTime}
+        duration={player.duration}
+        volume={player.volume}
+        usesSystemVolume={usesSystemVolume}
+        hasNext={player.hasNext}
+        onOpenPlayer={openPlayer}
+        onTogglePlay={() => void player.togglePlay()}
+        onPrevious={player.previous}
+        onNext={player.next}
+        onSeek={player.seek}
+        onVolume={player.setVolume}
+      />
+
       {library.actionError && (
         <button className="app-toast" role="status" onClick={library.clearActionError}>
           {library.actionError}
@@ -305,6 +322,23 @@ function OfflineApp({ offline, onExit }: { offline: OfflineDownloads; onExit: ()
           </div>
         )}
       </DesktopShell>
+
+      <DesktopPlayerBar
+        current={current}
+        playing={player.playing}
+        currentTime={player.currentTime}
+        duration={player.duration}
+        volume={player.volume}
+        usesSystemVolume={usesSystemVolume}
+        hasNext={player.hasNext}
+        offlineMode
+        onOpenPlayer={() => setScreen('player')}
+        onTogglePlay={() => void player.togglePlay()}
+        onPrevious={player.previous}
+        onNext={player.next}
+        onSeek={player.seek}
+        onVolume={player.setVolume}
+      />
     </main>
   );
 }
