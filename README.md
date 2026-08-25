@@ -41,7 +41,8 @@ O Home Music roda no Ubuntu, lê uma pasta local de músicas e expõe uma interf
 - retorno contextual para pasta, artista, álbum, playlist, favoritos ou busca;
 - mini-player persistente;
 - Media Session para tela bloqueada/notificações;
-- letras locais em `.lrc` sincronizado ou `.txt`, carregadas sob demanda no player.
+- letras locais em `.lrc` sincronizado ou `.txt`, carregadas sob demanda no player;
+- normalização ReplayGain opcional por faixa ou álbum, sem alterar os arquivos originais.
 
 > Navegadores móveis podem bloquear autoplay ao abrir uma nova página sem interação. O Home Music preserva faixa/posição e aguarda um toque em **Play**.
 
@@ -305,3 +306,16 @@ Minha música.lrc
 ```
 
 Também são aceitos `Minha música.flac.lrc` e `Minha música.txt`. Arquivos LRC com timestamps acompanham a reprodução; TXT é exibido como texto simples. A leitura é local, limitada a 512 KiB e não envia músicas ou metadados para serviços externos.
+
+
+## Normalização ReplayGain
+
+No menu do player, **Normalização de volume** oferece:
+
+- **Desativada**: mantém o comportamento original;
+- **Por faixa**: reduz diferenças de volume entre músicas;
+- **Por álbum**: preserva as diferenças internas do álbum e usa o ganho da faixa como fallback.
+
+A preferência fica salva somente no dispositivo. Quando a faixa possui tags ReplayGain, o backend aplica o ganho durante o transcoding, limita valores extremos e usa um limiter contra clipping. O arquivo original nunca é modificado. Faixas sem tags continuam tocando normalmente, sem normalização.
+
+Após esta atualização, o primeiro startup faz um re-scan completo único para indexar as tags ReplayGain existentes.
