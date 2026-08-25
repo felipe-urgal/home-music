@@ -65,3 +65,14 @@ export type Playlist = {
 export type PlaylistsResponse = {
   playlists: Playlist[];
 };
+
+export type LyricsLine = {
+  time: number | null;
+  text: string;
+};
+
+export type LyricsResponse = {
+  source: 'lrc' | 'txt';
+  synchronized: boolean;
+  lines: LyricsLine[];
+};
