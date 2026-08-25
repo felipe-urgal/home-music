@@ -6,9 +6,9 @@
   "scripts": {
     "test": "playwright test",
     "test:headed": "playwright test --headed",
-    "install:browsers": "playwright install chromium"
+    "install:browsers": "playwright install --with-deps chromium"
   },
   "devDependencies": {
-    "@playwright/test": "1.57.0"
+    "@playwright/test": "1.62.1"
   }
 }

@@ -12,7 +12,9 @@ Na raiz do repositório:
 npm run e2e:install
 ```
 
-Isso instala as dependências isoladas de `e2e/` e o Chromium usado pelo Playwright.
+Isso instala as dependências isoladas de `e2e/`, o Chromium e as dependências de sistema exigidas pelo navegador.
+
+O projeto fixa uma versão do Playwright com suporte oficial ao Ubuntu 26.04. Quando a versão do Playwright mudar, execute `npm run e2e:install` novamente para baixar o binário de navegador correspondente.
 
 ## Executar
 
