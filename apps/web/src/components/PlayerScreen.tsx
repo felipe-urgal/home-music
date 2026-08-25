@@ -27,17 +27,29 @@ import {
   Wifi
 } from 'lucide-react';
 import type { Playlist, RepeatMode, Track } from '@home-music/shared';
-import type { StreamingMode } from '../streaming-quality';
+import type {
+  DetectedNetwork,
+  NetworkPreference,
+  StreamingMode,
+  StreamingSelection
+} from '../streaming-quality';
 import { Artwork } from './Artwork';
 
 const QUEUE_PAGE_SIZE = 10;
 const TOUCH_DRAG_EDGE_PX = 80;
 const TOUCH_DRAG_SCROLL_STEP_PX = 18;
 
-const STREAMING_CHOICES: Array<{ mode: StreamingMode; label: string; detail: string }> = [
+const STREAMING_CHOICES: Array<{ mode: StreamingSelection; label: string; detail: string }> = [
+  { mode: 'network', label: 'Por conexão', detail: 'Wi-Fi auto · móvel 96 kbps' },
   { mode: 'auto', label: 'Automática', detail: 'Original + compatibilidade' },
   { mode: 'original', label: 'Original', detail: 'Sem conversão' },
   { mode: 'economy', label: 'Economia', detail: 'AAC · 96 kbps' }
+];
+
+const NETWORK_CHOICES: Array<{ preference: NetworkPreference; label: string; detail: string }> = [
+  { preference: 'auto', label: 'Detectar', detail: 'Quando o navegador informar' },
+  { preference: 'wifi', label: 'Wi-Fi', detail: 'Original + compatibilidade' },
+  { preference: 'mobile', label: 'Dados móveis', detail: 'AAC · 96 kbps' }
 ];
 
 function formatTime(value: number) {
@@ -49,6 +61,18 @@ function formatTime(value: number) {
 
 function artworkTrack(track: Track, offlineMode: boolean): Track {
   return offlineMode && track.hasCover ? { ...track, hasCover: false } : track;
+}
+
+function detectedNetworkLabel(network: DetectedNetwork) {
+  if (network === 'wifi') return 'Wi-Fi/rede rápida';
+  if (network === 'mobile') return 'dados móveis/rede limitada';
+  return 'não identificada';
+}
+
+function streamingModeLabel(mode: StreamingMode) {
+  if (mode === 'economy') return 'Economia · AAC 96 kbps';
+  if (mode === 'original') return 'Original';
+  return 'Automática · original + compatibilidade';
 }
 
 type PlayerScreenProps = {
@@ -65,7 +89,10 @@ type PlayerScreenProps = {
   usesSystemVolume: boolean;
   shuffle: boolean;
   repeatMode: RepeatMode;
-  streamingMode?: StreamingMode;
+  streamingSelection?: StreamingSelection;
+  effectiveStreamingMode?: StreamingMode;
+  networkPreference?: NetworkPreference;
+  detectedNetwork?: DetectedNetwork;
   isFavorite: boolean;
   playlists: Playlist[];
   offlineMode?: boolean;
@@ -77,7 +104,8 @@ type PlayerScreenProps = {
   onNext: () => void;
   onSeek: (value: number) => void;
   onVolume: (value: number) => void;
-  onStreamingMode?: (mode: StreamingMode) => void;
+  onStreamingSelection?: (selection: StreamingSelection) => void;
+  onNetworkPreference?: (preference: NetworkPreference) => void;
   onShuffle: () => void;
   onRepeat: () => void;
   onToggleFavorite: () => void;
@@ -103,7 +131,10 @@ export function PlayerScreen({
   usesSystemVolume,
   shuffle,
   repeatMode,
-  streamingMode = 'auto',
+  streamingSelection = 'auto',
+  effectiveStreamingMode = 'auto',
+  networkPreference = 'auto',
+  detectedNetwork = 'unknown',
   isFavorite,
   playlists,
   offlineMode = false,
@@ -115,7 +146,8 @@ export function PlayerScreen({
   onNext,
   onSeek,
   onVolume,
-  onStreamingMode,
+  onStreamingSelection,
+  onNetworkPreference,
   onShuffle,
   onRepeat,
   onToggleFavorite,
@@ -236,26 +268,57 @@ export function PlayerScreen({
             </>
           ) : (
             <>
-              {onStreamingMode && (
+              {onStreamingSelection && (
                 <>
                   <strong>Qualidade de transmissão</strong>
                   <div className="player-options__choices" role="group" aria-label="Qualidade de transmissão">
                     {STREAMING_CHOICES.map(choice => (
                       <button
                         key={choice.mode}
-                        className={`player-options__choice ${streamingMode === choice.mode ? 'is-selected' : ''}`}
-                        aria-pressed={streamingMode === choice.mode}
-                        onClick={() => onStreamingMode(choice.mode)}
+                        className={`player-options__choice ${streamingSelection === choice.mode ? 'is-selected' : ''}`}
+                        aria-pressed={streamingSelection === choice.mode}
+                        onClick={() => onStreamingSelection(choice.mode)}
                       >
                         <div className="player-options__choice-copy">
                           <b>{choice.label}</b>
                           <small>{choice.detail}</small>
                         </div>
-                        {streamingMode === choice.mode && <CheckCircle2 aria-hidden="true" />}
+                        {streamingSelection === choice.mode && <CheckCircle2 aria-hidden="true" />}
                       </button>
                     ))}
                   </div>
-                  <span>Automática mantém o original e usa AAC apenas se o navegador não conseguir reproduzir a faixa.</span>
+
+                  {streamingSelection === 'network' && onNetworkPreference && (
+                    <>
+                      <strong>Conexão atual</strong>
+                      <div className="player-options__choices" role="group" aria-label="Perfil de conexão atual">
+                        {NETWORK_CHOICES.map(choice => (
+                          <button
+                            key={choice.preference}
+                            className={`player-options__choice ${networkPreference === choice.preference ? 'is-selected' : ''}`}
+                            aria-pressed={networkPreference === choice.preference}
+                            onClick={() => onNetworkPreference(choice.preference)}
+                          >
+                            <div className="player-options__choice-copy">
+                              <b>{choice.label}</b>
+                              <small>{choice.detail}</small>
+                            </div>
+                            {networkPreference === choice.preference && <CheckCircle2 aria-hidden="true" />}
+                          </button>
+                        ))}
+                      </div>
+                      <span>
+                        Rede detectada: {detectedNetworkLabel(detectedNetwork)}. Perfil efetivo: {streamingModeLabel(effectiveStreamingMode)}.
+                      </span>
+                      {networkPreference === 'auto' && detectedNetwork === 'unknown' && (
+                        <span>Este navegador não informa o tipo de rede com segurança. No iPhone/Safari, escolha Wi-Fi ou Dados móveis manualmente.</span>
+                      )}
+                    </>
+                  )}
+
+                  {streamingSelection === 'auto' && (
+                    <span>Automática mantém o original e usa AAC apenas se o navegador não conseguir reproduzir a faixa.</span>
+                  )}
                   <div className="player-options__divider" />
                 </>
               )}

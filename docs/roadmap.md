@@ -66,7 +66,7 @@
 - [ ] Aplicar grants/restrições least-privilege no tailnet real
 - [x] FFmpeg
 - [x] Transcoding adaptativo
-- [ ] Perfis de qualidade Wi‑Fi / 4G
+- [x] Perfis de qualidade Wi‑Fi / 4G
 
 ## Fase 6 — Extras
 

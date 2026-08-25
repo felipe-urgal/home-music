@@ -1,9 +1,48 @@
 export type StreamingMode = 'auto' | 'original' | 'economy';
+export type StreamingSelection = 'network' | StreamingMode;
+export type NetworkPreference = 'auto' | 'wifi' | 'mobile';
+export type DetectedNetwork = 'wifi' | 'mobile' | 'unknown';
+
+export type NetworkConnectionSnapshot = {
+  type?: string | null;
+  effectiveType?: string | null;
+  saveData?: boolean | null;
+};
 
 export const STREAMING_MODE_STORAGE_KEY = 'home-music:streaming-mode:v1';
+export const STREAMING_SELECTION_STORAGE_KEY = 'home-music:streaming-selection:v1';
+export const NETWORK_PREFERENCE_STORAGE_KEY = 'home-music:network-preference:v1';
 
 export function parseStreamingMode(raw: unknown): StreamingMode {
   return raw === 'original' || raw === 'economy' || raw === 'auto' ? raw : 'auto';
+}
+
+export function parseStreamingSelection(raw: unknown): StreamingSelection {
+  return raw === 'network' || raw === 'original' || raw === 'economy' || raw === 'auto' ? raw : 'auto';
+}
+
+export function parseNetworkPreference(raw: unknown): NetworkPreference {
+  return raw === 'wifi' || raw === 'mobile' || raw === 'auto' ? raw : 'auto';
+}
+
+export function detectNetwork(snapshot: NetworkConnectionSnapshot | null | undefined): DetectedNetwork {
+  if (!snapshot) return 'unknown';
+  const type = snapshot.type?.trim().toLowerCase();
+  const effectiveType = snapshot.effectiveType?.trim().toLowerCase();
+
+  if (type === 'wifi' || type === 'ethernet') return 'wifi';
+  if (type === 'cellular' || type === 'wimax') return 'mobile';
+  if (snapshot.saveData === true) return 'mobile';
+  if (effectiveType === 'slow-2g' || effectiveType === '2g' || effectiveType === '3g') return 'mobile';
+  return 'unknown';
+}
+
+export function resolveNetworkStreamingMode(
+  networkPreference: NetworkPreference,
+  detectedNetwork: DetectedNetwork
+): StreamingMode {
+  const network = networkPreference === 'auto' ? detectedNetwork : networkPreference;
+  return network === 'mobile' ? 'economy' : 'auto';
 }
 
 export function directAudioUrl(trackId: string) {
@@ -39,6 +78,38 @@ export function readStreamingMode(storage: Pick<Storage, 'getItem'>): StreamingM
 export function writeStreamingMode(storage: Pick<Storage, 'setItem'>, mode: StreamingMode) {
   try {
     storage.setItem(STREAMING_MODE_STORAGE_KEY, mode);
+  } catch {
+    // Preferência é best-effort; falha de storage não impede reprodução.
+  }
+}
+
+export function readStreamingSelection(storage: Pick<Storage, 'getItem'>): StreamingSelection {
+  try {
+    return parseStreamingSelection(storage.getItem(STREAMING_SELECTION_STORAGE_KEY));
+  } catch {
+    return 'auto';
+  }
+}
+
+export function writeStreamingSelection(storage: Pick<Storage, 'setItem'>, selection: StreamingSelection) {
+  try {
+    storage.setItem(STREAMING_SELECTION_STORAGE_KEY, selection);
+  } catch {
+    // Preferência é best-effort; falha de storage não impede reprodução.
+  }
+}
+
+export function readNetworkPreference(storage: Pick<Storage, 'getItem'>): NetworkPreference {
+  try {
+    return parseNetworkPreference(storage.getItem(NETWORK_PREFERENCE_STORAGE_KEY));
+  } catch {
+    return 'auto';
+  }
+}
+
+export function writeNetworkPreference(storage: Pick<Storage, 'setItem'>, preference: NetworkPreference) {
+  try {
+    storage.setItem(NETWORK_PREFERENCE_STORAGE_KEY, preference);
   } catch {
     // Preferência é best-effort; falha de storage não impede reprodução.
   }
