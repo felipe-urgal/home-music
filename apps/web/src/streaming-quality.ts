@@ -1,3 +1,5 @@
+import type { NormalizationMode, Track } from '@home-music/shared';
+
 export type StreamingMode = 'auto' | 'original' | 'economy';
 export type StreamingSelection = 'network' | StreamingMode;
 export type NetworkPreference = 'auto' | 'wifi' | 'mobile';
@@ -12,6 +14,23 @@ export type NetworkConnectionSnapshot = {
 export const STREAMING_MODE_STORAGE_KEY = 'home-music:streaming-mode:v1';
 export const STREAMING_SELECTION_STORAGE_KEY = 'home-music:streaming-selection:v1';
 export const NETWORK_PREFERENCE_STORAGE_KEY = 'home-music:network-preference:v1';
+export const NORMALIZATION_MODE_STORAGE_KEY = 'home-music:normalization-mode:v1';
+
+export function parseNormalizationMode(raw: unknown): NormalizationMode {
+  return raw === 'track' || raw === 'album' ? raw : 'off';
+}
+
+export function resolveReplayGain(track: Track, mode: NormalizationMode) {
+  if (mode === 'off') return null;
+  const value = mode === 'album'
+    ? track.replayGainAlbumDb ?? track.replayGainTrackDb
+    : track.replayGainTrackDb;
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+export function effectiveNormalizationMode(track: Track, mode: NormalizationMode): NormalizationMode {
+  return resolveReplayGain(track, mode) == null ? 'off' : mode;
+}
 
 export function parseStreamingMode(raw: unknown): StreamingMode {
   return raw === 'original' || raw === 'economy' || raw === 'auto' ? raw : 'auto';
@@ -49,13 +68,24 @@ export function directAudioUrl(trackId: string) {
   return `/api/tracks/${encodeURIComponent(trackId)}/stream`;
 }
 
-export function transcodedAudioUrl(trackId: string, quality: 'economy' | 'balanced' | 'high') {
-  return `/api/tracks/${encodeURIComponent(trackId)}/transcode?quality=${quality}`;
+export function transcodedAudioUrl(
+  trackId: string,
+  quality: 'economy' | 'balanced' | 'high',
+  normalization: NormalizationMode = 'off'
+) {
+  const suffix = normalization === 'off' ? '' : `&normalization=${normalization}`;
+  return `/api/tracks/${encodeURIComponent(trackId)}/transcode?quality=${quality}${suffix}`;
 }
 
-export function onlineAudioUrl(trackId: string, mode: StreamingMode, compatibilityFallback = false) {
-  if (compatibilityFallback) return transcodedAudioUrl(trackId, 'balanced');
-  if (mode === 'economy') return transcodedAudioUrl(trackId, 'economy');
+export function onlineAudioUrl(
+  trackId: string,
+  mode: StreamingMode,
+  compatibilityFallback = false,
+  normalization: NormalizationMode = 'off'
+) {
+  if (compatibilityFallback) return transcodedAudioUrl(trackId, 'balanced', normalization);
+  if (mode === 'economy') return transcodedAudioUrl(trackId, 'economy', normalization);
+  if (normalization !== 'off') return transcodedAudioUrl(trackId, 'high', normalization);
   return directAudioUrl(trackId);
 }
 
@@ -112,5 +142,21 @@ export function writeNetworkPreference(storage: Pick<Storage, 'setItem'>, prefer
     storage.setItem(NETWORK_PREFERENCE_STORAGE_KEY, preference);
   } catch {
     // Preferência é best-effort; falha de storage não impede reprodução.
+  }
+}
+
+export function readNormalizationMode(storage: Pick<Storage, 'getItem'>): NormalizationMode {
+  try {
+    return parseNormalizationMode(storage.getItem(NORMALIZATION_MODE_STORAGE_KEY));
+  } catch {
+    return 'off';
+  }
+}
+
+export function writeNormalizationMode(storage: Pick<Storage, 'setItem'>, mode: NormalizationMode) {
+  try {
+    storage.setItem(NORMALIZATION_MODE_STORAGE_KEY, mode);
+  } catch {
+    // Preferência é local e best-effort.
   }
 }
