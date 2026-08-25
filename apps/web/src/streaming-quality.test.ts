@@ -10,6 +10,7 @@ import {
   parseNormalizationMode,
   parseStreamingMode,
   parseStreamingSelection,
+  preloadAudioUrl,
   readNetworkPreference,
   readNormalizationMode,
   readStreamingMode,
@@ -67,6 +68,14 @@ describe('streaming quality', () => {
     expect(onlineAudioUrl('abc', 'auto', true)).toBe('/api/tracks/abc/transcode?quality=balanced');
     expect(onlineAudioUrl('abc', 'auto', false, 'track')).toBe('/api/tracks/abc/transcode?quality=high&normalization=track');
     expect(onlineAudioUrl('abc', 'economy', false, 'album')).toBe('/api/tracks/abc/transcode?quality=economy&normalization=album');
+  });
+
+  it('só antecipa fontes que exigem preparação de transcode', () => {
+    expect(preloadAudioUrl('abc', 'auto')).toBeNull();
+    expect(preloadAudioUrl('abc', 'original')).toBeNull();
+    expect(preloadAudioUrl('abc', 'economy')).toBe('/api/tracks/abc/transcode?quality=economy');
+    expect(preloadAudioUrl('abc', 'auto', 'track')).toBe('/api/tracks/abc/transcode?quality=high&normalization=track');
+    expect(preloadAudioUrl('abc', 'economy', 'album')).toBe('/api/tracks/abc/transcode?quality=economy&normalization=album');
   });
 
   it('resolve ReplayGain com fallback de álbum e desativa quando não há tag', () => {
