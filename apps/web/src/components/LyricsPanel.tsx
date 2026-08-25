@@ -1,18 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronUp, Music2 } from 'lucide-react';
-import type { Track } from '@home-music/shared';
+import type { LyricsResponse, Track } from '@home-music/shared';
 import { apiFetch } from '../api-client';
-
-type LyricsLine = {
-  time: number | null;
-  text: string;
-};
-
-type LyricsResponse = {
-  source: 'lrc' | 'txt';
-  synchronized: boolean;
-  lines: LyricsLine[];
-};
 
 type LyricsPanelProps = {
   track: Track;
