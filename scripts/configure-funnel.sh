@@ -419,8 +419,7 @@ enable_public() {
       echo >&2
       if [[ ${migrated_stale} -eq 1 ]]; then
         echo "Falha durante a migração/ativação pública; mantendo o hostname antigo fechado e restaurando Serve privado no hostname atual." >&2
-        "${TAILSCALE_BIN}" funnel reset >/dev/null 2>&1 || true
-        "${TAILSCALE_BIN}" serve reset >/dev/null 2>&1 || true
+        "${TAILSCALE_BIN}" funnel --yes --https=443 off >/dev/null 2>&1 || true
         "${TAILSCALE_BIN}" serve --bg --yes --https=443 "${target}" >/dev/null 2>&1 || true
         cp "${env_backup}" "${ENV_FILE}" || true
         chmod 600 "${ENV_FILE}" || true
