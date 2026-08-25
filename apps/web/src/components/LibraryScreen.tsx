@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   BarChart3,
   ChevronLeft,
@@ -15,6 +15,7 @@ import {
   Search,
   SlidersHorizontal,
   Trash2,
+  Upload,
   Users
 } from 'lucide-react';
 import type { Playlist, Track } from '@home-music/shared';
@@ -37,6 +38,8 @@ type LibraryScreenProps = {
   onNext: () => void;
   onPlayTrack: (track: Track, context: Track[]) => void;
 };
+
+const REKORDBOX_XML_MAX_BYTES = 20 * 1024 * 1024;
 
 const tabs: Array<{ id: LibraryTab; label: string; icon: typeof Folder }> = [
   { id: 'folders', label: 'Pastas', icon: Folder },
@@ -112,6 +115,8 @@ export function LibraryScreen({
   onPlayTrack
 }: LibraryScreenProps) {
   const [viewControlsOpen, setViewControlsOpen] = useState(false);
+  const [importingRekordbox, setImportingRekordbox] = useState(false);
+  const rekordboxInputRef = useRef<HTMLInputElement>(null);
   const {
     tracks,
     favoriteSet,
@@ -126,7 +131,9 @@ export function LibraryScreen({
     createPlaylist,
     renamePlaylist,
     deletePlaylist,
-    setPlaylistTracks
+    setPlaylistTracks,
+    previewRekordbox,
+    importRekordbox
   } = data;
   const {
     libraryTab,
@@ -220,6 +227,50 @@ export function LibraryScreen({
       window.alert(`Biblioteca atualizada: +${result.added} novas, ${result.updated} alteradas, ${result.removed} removidas.`);
     } catch {
       // useLibraryData já exibe o erro globalmente.
+    }
+  }
+
+  async function importRekordboxFile(file: File) {
+    if (file.size > REKORDBOX_XML_MAX_BYTES) {
+      window.alert('O XML do Rekordbox deve ter no máximo 20 MiB.');
+      return;
+    }
+
+    setImportingRekordbox(true);
+    try {
+      const xml = await file.text();
+      const preview = await previewRekordbox(xml);
+      if (preview.playlists === 0) {
+        window.alert('O XML foi reconhecido, mas não contém playlists para importar.');
+        return;
+      }
+
+      const source = preview.productVersion
+        ? `Rekordbox ${preview.productVersion}`
+        : preview.productName || 'Rekordbox';
+      const missingLine = preview.unmatchedCollectionTracks > 0
+        ? `\n${preview.unmatchedCollectionTracks} músicas da coleção não foram encontradas e serão ignoradas.`
+        : '';
+      const confirmed = window.confirm(
+        `${source}\n\n` +
+        `${preview.playlists} playlists encontradas.\n` +
+        `${preview.matchedCollectionTracks}/${preview.collectionTracks} músicas reconhecidas na biblioteca.\n` +
+        `${preview.matchedPlaylistEntries}/${preview.playlistEntries} entradas de playlist serão importadas.` +
+        `${missingLine}\n\nContinuar com a sincronização?`
+      );
+      if (!confirmed) return;
+
+      const result = await importRekordbox(xml);
+      window.alert(
+        `Rekordbox sincronizado: ${result.createdPlaylists} playlists novas, ` +
+        `${result.updatedPlaylists} atualizadas e ${result.removedPlaylists} removidas. ` +
+        `${result.matchedPlaylistEntries}/${result.playlistEntries} entradas reconhecidas.`
+      );
+    } catch {
+      // useLibraryData já exibe o erro globalmente.
+    } finally {
+      setImportingRekordbox(false);
+      if (rekordboxInputRef.current) rekordboxInputRef.current.value = '';
     }
   }
 
@@ -401,25 +452,56 @@ export function LibraryScreen({
           </>
         ) : libraryTab === 'playlists' && !selectedPlaylist ? (
           <>
-            <div className="section-heading"><span>Playlists</span><button className="text-action" onClick={() => run(makePlaylist())}><Plus />Nova</button></div>
+            <div className="section-heading">
+              <span>Playlists</span>
+              <div className="section-heading__actions">
+                <button
+                  className="text-action"
+                  type="button"
+                  disabled={importingRekordbox}
+                  onClick={() => rekordboxInputRef.current?.click()}
+                >
+                  <Upload />{importingRekordbox ? 'Lendo…' : 'Rekordbox'}
+                </button>
+                <button className="text-action" onClick={() => run(makePlaylist())}><Plus />Nova</button>
+              </div>
+              <input
+                ref={rekordboxInputRef}
+                className="visually-hidden-input"
+                type="file"
+                accept=".xml,application/xml,text/xml"
+                tabIndex={-1}
+                onChange={event => {
+                  const file = event.currentTarget.files?.[0];
+                  if (file) void importRekordboxFile(file);
+                }}
+              />
+            </div>
             {playlists.length ? (
               <div className="group-list">
                 {playlists.map(playlist => (
                   <button className="group-item" key={playlist.id} onClick={() => selectPlaylist(playlist.id)}>
                     <div className="playlist-icon"><ListMusic /></div>
-                    <span className="group-item__text"><strong>{playlist.name}</strong><small>{playlist.trackIds.length} músicas</small></span>
+                    <span className="group-item__text">
+                      <strong>{playlist.name}</strong>
+                      <small>{playlist.trackIds.length} músicas{playlist.source === 'rekordbox' ? ' · Rekordbox' : ''}</small>
+                    </span>
                     <ChevronRight />
                   </button>
                 ))}
               </div>
-            ) : <div className="empty-library">Crie sua primeira playlist para organizar músicas do seu jeito.</div>}
+            ) : <div className="empty-library">Crie uma playlist ou importe suas playlists do Rekordbox.</div>}
           </>
         ) : shouldShowTracks ? (
           <>
             {selectedPlaylist && (
               <div className="collection-actions">
                 {libraryTracks.length > 0 && <button className="play-all" onClick={() => onPlayTrack(libraryTracks[0], libraryTracks)}><Play />Tocar tudo</button>}
-                <button className="text-action" onClick={() => run(editPlaylist(selectedPlaylist))}>Renomear</button>
+                {selectedPlaylist.source === 'manual' ? (
+                  <button className="text-action" onClick={() => run(editPlaylist(selectedPlaylist))}>Renomear</button>
+                ) : (
+                  <span className="playlist-source-note">Rekordbox</span>
+                )}
                 <button className="text-action text-action--danger" onClick={() => run(removePlaylist(selectedPlaylist))}>Excluir</button>
               </div>
             )}
@@ -433,7 +515,7 @@ export function LibraryScreen({
                 favorites={favoriteSet}
                 onPlayTrack={onPlayTrack}
                 onToggleFavorite={trackId => run(toggleFavorite(trackId))}
-                onRemove={selectedPlaylist ? trackId => run(setPlaylistTracks(selectedPlaylist.id, selectedPlaylist.trackIds.filter(id => id !== trackId))) : undefined}
+                onRemove={selectedPlaylist?.source === 'manual' ? trackId => run(setPlaylistTracks(selectedPlaylist.id, selectedPlaylist.trackIds.filter(id => id !== trackId))) : undefined}
               />
             ) : <div className="empty-library">Nenhuma música encontrada.</div>}
             {visibleCount < libraryTracks.length && (
