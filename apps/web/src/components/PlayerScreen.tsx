@@ -34,6 +34,7 @@ import type {
   StreamingSelection
 } from '../streaming-quality';
 import { Artwork } from './Artwork';
+import { LyricsPanel } from './LyricsPanel';
 
 const QUEUE_PAGE_SIZE = 10;
 const TOUCH_DRAG_EDGE_PX = 80;
@@ -422,6 +423,8 @@ export function PlayerScreen({
           <span>{Math.round(volume * 100)}%</span>
         </div>
       )}
+
+      <LyricsPanel track={current} currentTime={currentTime} offlineMode={offlineMode} />
 
       <section className="queue-panel queue-panel--player">
         <div className="queue-label">Fila · {queue.length} músicas · arraste ou use as setas</div>
