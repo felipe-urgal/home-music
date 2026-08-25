@@ -311,7 +311,7 @@ O banco padrão fica em `data/home-music.db` e guarda:
 - shuffle/repeat;
 - estado usado pela retomada automática.
 
-O schema usa `PRAGMA user_version`, migrations incrementais, WAL e foreign keys.
+O schema usa `PRAGMA user_version`, migrations incrementais, WAL e foreign keys. A migration v4 adiciona os ganhos ReplayGain de faixa/álbum e invalida somente o timestamp do índice, forçando um re-scan completo único sem apagar favoritos, histórico, playlists ou estado do player.
 
 O smoke test pode definir `HOME_MUSIC_DATABASE_PATH` para usar um banco temporário e nunca tocar no SQLite real do usuário.
 
@@ -369,6 +369,12 @@ Além disso, o CI executa `bash -n` nos scripts de systemd e Tailscale. A integr
 - systemd adiciona hardening do processo e permissões dos arquivos locais;
 - Tailscale grants são a camada recomendada de least-privilege para tailnets compartilhados.
 
-## Transcoding
+## Transcoding e ReplayGain
 
-Arquivos ainda são entregues no formato original. FFmpeg/transcoding adaptativo permanece para etapa posterior, principalmente para FLAC/WAV em redes móveis.
+O streaming direto continua sendo o caminho padrão. Os modos Economia e os fallbacks de compatibilidade usam AAC/M4A gerado pelo FFmpeg, com cache local limitado e limpeza LRU.
+
+ReplayGain é desativado por padrão e possui modos por faixa e por álbum. As tags são indexadas pelo `music-metadata`; no modo álbum, o ganho da faixa é usado como fallback quando a tag de álbum não existe.
+
+Quando a normalização está efetivamente ativa, o player solicita transcoding mesmo em qualidade automática/original. O backend resolve o ganho a partir do índice — não aceita um valor de ganho arbitrário enviado pelo cliente —, limita o intervalo a `-24..+12 dB` e aplica `volume + alimiter` no FFmpeg. A chave do cache inclui arquivo, mtime, qualidade e ganho, impedindo colisão entre versões normalizadas e não normalizadas.
+
+Se FFmpeg ou a versão normalizada falhar, o player tenta a mesma faixa sem normalização. O arquivo original não é alterado. Downloads offline continuam usando o arquivo original e não aplicam ReplayGain.
