@@ -1,0 +1,31 @@
+{
+  // Home Music — policy mínima para um tailnet pessoal/dedicado.
+  //
+  // IMPORTANTE:
+  // - combine estas seções com qualquer regra que você realmente precise manter;
+  // - grants e ACLs são aditivos: um allow-all existente continua liberando acesso;
+  // - só remova regras amplas depois de aplicar tag:home-music ao Ubuntu e validar acesso.
+
+  "tagOwners": {
+    "tag:home-music": ["autogroup:admin"],
+  },
+
+  // Funnel deve ser permitido somente no servidor Home Music.
+  // Remova um nodeAttrs anterior que conceda "funnel" a autogroup:member/*.
+  "nodeAttrs": [
+    {
+      "target": ["tag:home-music"],
+      "attr": ["funnel"],
+    },
+  ],
+
+  // Dentro do tailnet, membros só alcançam o Home Music em HTTPS/443.
+  // Em um tailnet individual isso equivale ao dono do tailnet e seus dispositivos.
+  "grants": [
+    {
+      "src": ["autogroup:member"],
+      "dst": ["tag:home-music"],
+      "ip": ["tcp:443"],
+    },
+  ],
+}
