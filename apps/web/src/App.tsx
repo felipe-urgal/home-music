@@ -102,10 +102,12 @@ function AuthenticatedApp({ onLogout, offline }: AuthenticatedAppProps) {
         current={current}
         playing={player.playing}
         libraryCount={library.tracks.length}
-        queueCount={player.queue.length}
+        queue={player.queue}
+        currentIndex={player.currentIndex}
         onOpenPlayer={openPlayer}
         onOpenLibrary={() => setScreen('library')}
         onOpenStatistics={() => setScreen('statistics')}
+        onPlayTrack={player.playTrack}
         surfaceClassName={`phone-surface ${screen !== 'player' ? 'phone-surface--library' : ''}`}
       >
         {library.loading ? (
@@ -236,10 +238,12 @@ function OfflineApp({ offline, onExit }: { offline: OfflineDownloads; onExit: ()
         current={current}
         playing={player.playing}
         libraryCount={offline.tracks.length}
-        queueCount={player.queue.length}
+        queue={player.queue}
+        currentIndex={player.currentIndex}
         offlineMode
         onOpenPlayer={() => setScreen('player')}
         onOpenLibrary={() => setScreen('library')}
+        onPlayTrack={player.playTrack}
         surfaceClassName={`phone-surface ${screen === 'library' ? 'phone-surface--library' : ''}`}
       >
         {offline.loading || (offline.tracks.length > 0 && !player.hydrated) ? (
