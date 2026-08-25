@@ -267,6 +267,8 @@ O re-scan compara `size + mtime`: arquivos inalterados são reaproveitados, novo
 
 A navegação usa somente caminhos relativos a `MUSIC_DIR`; caminhos físicos não são expostos ao frontend.
 
+Letras são opcionais e lidas sob demanda de arquivos sidecar locais com o mesmo nome-base da faixa (`.lrc` ou `.txt`). A API retorna somente linhas e timestamps normalizados, limita cada arquivo a 512 KiB, rejeita symlinks/escapes com a mesma contenção usada pelo streaming e não consulta serviços externos.
+
 Se a raiz da biblioteca não puder ser resolvida, `libraryReady` permanece falso e `/ready` responde `503`.
 
 ## Layout mobile e fila
