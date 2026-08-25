@@ -8,6 +8,7 @@ import { buildLibraryReturnLabel } from './library-utils';
 import { type OfflineDownloads, useOfflineDownloads } from './offline-downloads';
 import { useAudioPlayer } from './useAudioPlayer';
 import { useAuth } from './useAuth';
+import { useBackgroundPlaybackContinuity } from './useBackgroundPlaybackContinuity';
 import { useLibraryData } from './useLibraryData';
 import { useLibraryNavigation } from './useLibraryNavigation';
 import { useNetworkQualityProfile } from './useNetworkQualityProfile';
@@ -29,6 +30,15 @@ function AuthenticatedApp({ onLogout, offline }: AuthenticatedAppProps) {
   const usesSystemVolume = useSystemVolumePreference();
   const player = useAudioPlayer(library.tracks, screen === 'player', libraryReady, usesSystemVolume);
   const qualityProfile = useNetworkQualityProfile(player.streamingMode, player.setStreamingMode);
+  useBackgroundPlaybackContinuity({
+    audioRef: player.audioRef,
+    queue: player.queue,
+    currentIndex: player.currentIndex,
+    currentTrackId: player.current?.id ?? null,
+    repeatMode: player.repeatMode,
+    playing: player.playing,
+    onNext: player.next
+  });
   useNextTrackPreload({
     queue: player.queue,
     currentIndex: player.currentIndex,
@@ -186,6 +196,15 @@ function OfflineApp({ offline, onExit }: { offline: OfflineDownloads; onExit: ()
   const [screen, setScreen] = useState<Screen>('library');
   const usesSystemVolume = useSystemVolumePreference();
   const player = useAudioPlayer(offline.tracks, screen === 'player', !offline.loading, usesSystemVolume, { offlineMode: true });
+  useBackgroundPlaybackContinuity({
+    audioRef: player.audioRef,
+    queue: player.queue,
+    currentIndex: player.currentIndex,
+    currentTrackId: player.current?.id ?? null,
+    repeatMode: player.repeatMode,
+    playing: player.playing,
+    onNext: player.next
+  });
   const current = player.current;
 
   return (
