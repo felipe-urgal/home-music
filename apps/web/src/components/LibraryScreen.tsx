@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import {
+  BarChart3,
   ChevronLeft,
   ChevronRight,
   Disc3,
@@ -31,6 +32,7 @@ type LibraryScreenProps = {
   hasNext: boolean;
   navigation: LibraryNavigation;
   onOpenPlayer: () => void;
+  onOpenStatistics: () => void;
   onTogglePlay: () => void;
   onNext: () => void;
   onPlayTrack: (track: Track, context: Track[]) => void;
@@ -104,6 +106,7 @@ export function LibraryScreen({
   hasNext,
   navigation,
   onOpenPlayer,
+  onOpenStatistics,
   onTogglePlay,
   onNext,
   onPlayTrack
@@ -235,6 +238,7 @@ export function LibraryScreen({
           <small>{subtitle()}</small>
         </div>
         <button className={`icon-button ${scanning ? 'is-loading' : ''}`} aria-label="Atualizar biblioteca" disabled={scanning} onClick={() => void scanNow()}><RefreshCw /></button>
+        <button className="icon-button" aria-label="Abrir estatísticas" onClick={onOpenStatistics}><BarChart3 /></button>
         <button className="icon-button" aria-label="Voltar ao player" onClick={onOpenPlayer}><Music2 /></button>
       </header>
 

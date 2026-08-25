@@ -2,10 +2,11 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import type { PlaybackState, Playlist, RepeatMode, Track } from '@home-music/shared';
+import type { PlaybackState, Playlist, RepeatMode, StatisticsPeriod, Track } from '@home-music/shared';
 import type { IndexedTrack } from './library.js';
 
 const CURRENT_SCHEMA_VERSION = 4;
+const HISTORY_CAPACITY = 2_000;
 
 const DEFAULT_PLAYBACK_STATE: PlaybackState = {
   currentTrackId: null,
@@ -314,12 +315,12 @@ export class HomeMusicDatabase {
     this.db.prepare('DELETE FROM favorites WHERE track_id = ?').run(trackId);
   }
 
-  recordHistory(trackId: string) {
+  recordHistory(trackId: string, playedAt = new Date().toISOString()) {
     this.db.prepare('INSERT INTO history(track_id, played_at) VALUES (?, ?)')
-      .run(trackId, new Date().toISOString());
+      .run(trackId, playedAt);
     this.db.exec(`
       DELETE FROM history
-      WHERE id NOT IN (SELECT id FROM history ORDER BY id DESC LIMIT 2000)
+      WHERE id NOT IN (SELECT id FROM history ORDER BY id DESC LIMIT ${HISTORY_CAPACITY})
     `);
   }
 
@@ -345,6 +346,83 @@ export class HomeMusicDatabase {
 
   clearHistory() {
     this.db.exec('DELETE FROM history;');
+  }
+
+  getStatistics(period: StatisticsPeriod, now = new Date()) {
+    const days = period === '7d' ? 7 : period === '30d' ? 30 : null;
+    const since = days == null
+      ? null
+      : new Date(now.getTime() - days * 24 * 60 * 60 * 1_000).toISOString();
+    const where = since ? 'WHERE h.played_at >= ?' : '';
+    const bindings = since ? [since] : [];
+
+    const summary = this.db.prepare(`
+      SELECT COUNT(*) AS total_plays,
+             COALESCE(SUM(COALESCE(t.duration, 0)), 0) AS total_seconds,
+             COUNT(DISTINCT h.track_id) AS unique_tracks,
+             COUNT(DISTINCT t.artist) AS unique_artists,
+             MIN(h.played_at) AS first_played_at
+      FROM history h
+      JOIN tracks t ON t.id = h.track_id
+      ${where}
+    `).get(...bindings) as Row;
+
+    const topTracks = (this.db.prepare(`
+      SELECT t.id, t.title, t.artist, t.album, t.album_artist, t.folder, t.folder_path,
+             t.duration, t.format, t.has_cover,
+             t.replaygain_track_db, t.replaygain_album_db,
+             COUNT(*) AS plays
+      FROM history h
+      JOIN tracks t ON t.id = h.track_id
+      ${where}
+      GROUP BY h.track_id
+      ORDER BY plays DESC, MAX(h.id) DESC
+      LIMIT 5
+    `).all(...bindings) as Row[]).map(row => ({
+      track: publicTrackFromRow(row),
+      plays: numberValue(row.plays)
+    }));
+
+    const topArtists = (this.db.prepare(`
+      SELECT t.artist, COUNT(*) AS plays
+      FROM history h
+      JOIN tracks t ON t.id = h.track_id
+      ${where}
+      GROUP BY t.artist
+      ORDER BY plays DESC, t.artist COLLATE NOCASE
+      LIMIT 5
+    `).all(...bindings) as Row[]).map(row => ({
+      artist: stringValue(row.artist, 'Artista desconhecido'),
+      plays: numberValue(row.plays)
+    }));
+
+    const topAlbums = (this.db.prepare(`
+      SELECT t.album, t.album_artist, COUNT(*) AS plays
+      FROM history h
+      JOIN tracks t ON t.id = h.track_id
+      ${where}
+      GROUP BY t.album_artist, t.album
+      ORDER BY plays DESC, t.album COLLATE NOCASE
+      LIMIT 5
+    `).all(...bindings) as Row[]).map(row => ({
+      album: stringValue(row.album, 'Álbum desconhecido'),
+      albumArtist: stringValue(row.album_artist, 'Artista desconhecido'),
+      plays: numberValue(row.plays)
+    }));
+
+    return {
+      period,
+      generatedAt: now.toISOString(),
+      firstPlayedAt: typeof summary.first_played_at === 'string' ? summary.first_played_at : null,
+      totalPlays: numberValue(summary.total_plays),
+      totalMinutes: Math.round(numberValue(summary.total_seconds) / 60),
+      uniqueTracks: numberValue(summary.unique_tracks),
+      uniqueArtists: numberValue(summary.unique_artists),
+      topTracks,
+      topArtists,
+      topAlbums,
+      historyCapacity: HISTORY_CAPACITY
+    };
   }
 
   getPlaylists(): Playlist[] {

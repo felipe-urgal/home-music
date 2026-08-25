@@ -141,3 +141,44 @@ test('migra schema v1 para v4 sem perder estado existente', async () => {
     await rm(temp, { recursive: true, force: true });
   }
 });
+
+
+test('estatísticas agregam o histórico por período sem duplicar dados', async () => {
+  const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-db-'));
+  const db = new HomeMusicDatabase(path.join(temp, 'home-music.db'));
+
+  try {
+    const trackA = indexedTrack('a', '/music/a.mp3');
+    const trackB = {
+      ...indexedTrack('b', '/music/b.mp3'),
+      artist: 'Outro artista',
+      album: 'Outro álbum',
+      albumArtist: 'Outro artista'
+    };
+    db.syncTracks([trackA, trackB], '/music', '2026-08-25T12:00:00.000Z');
+
+    db.recordHistory('a', '2026-08-24T12:00:00.000Z');
+    db.recordHistory('a', '2026-08-25T10:00:00.000Z');
+    db.recordHistory('b', '2026-08-25T11:00:00.000Z');
+    db.recordHistory('b', '2026-08-10T12:00:00.000Z');
+
+    const recent = db.getStatistics('7d', new Date('2026-08-25T12:00:00.000Z'));
+    assert.equal(recent.totalPlays, 3);
+    assert.equal(recent.totalMinutes, 9);
+    assert.equal(recent.uniqueTracks, 2);
+    assert.equal(recent.uniqueArtists, 2);
+    assert.equal(recent.topTracks[0].track.id, 'a');
+    assert.equal(recent.topTracks[0].plays, 2);
+    assert.equal(recent.topArtists[0].artist, 'Artista');
+    assert.equal(recent.topAlbums.length, 2);
+
+    const all = db.getStatistics('all', new Date('2026-08-25T12:00:00.000Z'));
+    assert.equal(all.totalPlays, 4);
+    assert.equal(all.totalMinutes, 12);
+    assert.equal(all.firstPlayedAt, '2026-08-10T12:00:00.000Z');
+    assert.equal(all.historyCapacity, 2_000);
+  } finally {
+    db.close();
+    await rm(temp, { recursive: true, force: true });
+  }
+});

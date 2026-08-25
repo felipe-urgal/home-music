@@ -73,5 +73,5 @@
 
 - [x] Letras
 - [x] ReplayGain / normalização opcional
-- [ ] Estatísticas pessoais
+- [x] Estatísticas pessoais
 - [ ] Integração opcional com biblioteca DJ

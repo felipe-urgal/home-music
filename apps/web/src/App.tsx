@@ -3,6 +3,7 @@ import { LibraryScreen } from './components/LibraryScreen';
 import { LoginScreen } from './components/LoginScreen';
 import { OfflineLibraryScreen } from './components/OfflineLibraryScreen';
 import { PlayerScreen } from './components/PlayerScreen';
+import { StatisticsScreen } from './components/StatisticsScreen';
 import { buildLibraryReturnLabel } from './library-utils';
 import { type OfflineDownloads, useOfflineDownloads } from './offline-downloads';
 import { useAudioPlayer } from './useAudioPlayer';
@@ -12,7 +13,7 @@ import { useLibraryNavigation } from './useLibraryNavigation';
 import { useNetworkQualityProfile } from './useNetworkQualityProfile';
 import { useSystemVolumePreference } from './useSystemVolume';
 
-type Screen = 'player' | 'library';
+type Screen = 'player' | 'library' | 'statistics';
 
 type AuthenticatedAppProps = {
   onLogout: () => Promise<void>;
@@ -75,7 +76,7 @@ function AuthenticatedApp({ onLogout, offline }: AuthenticatedAppProps) {
         onError={event => player.audioHandlers.onError(event.currentTarget)}
       />
 
-      <section className={`phone-surface ${screen === 'library' ? 'phone-surface--library' : ''}`}>
+      <section className={`phone-surface ${screen !== 'player' ? 'phone-surface--library' : ''}`}>
         {library.loading ? (
           <div className="center-state">Carregando sua biblioteca…</div>
         ) : library.error ? (
@@ -85,6 +86,14 @@ function AuthenticatedApp({ onLogout, offline }: AuthenticatedAppProps) {
           </div>
         ) : library.tracks.length > 0 && !player.hydrated ? (
           <div className="center-state">Restaurando o player…</div>
+        ) : screen === 'statistics' ? (
+          <StatisticsScreen
+            onBack={() => setScreen('library')}
+            onPlayTrack={track => {
+              player.playTrack(track, library.tracks);
+              setScreen('player');
+            }}
+          />
         ) : screen === 'library' ? (
           <LibraryScreen
             data={library}
@@ -93,6 +102,7 @@ function AuthenticatedApp({ onLogout, offline }: AuthenticatedAppProps) {
             hasNext={player.hasNext}
             navigation={navigation}
             onOpenPlayer={openPlayer}
+            onOpenStatistics={() => setScreen('statistics')}
             onTogglePlay={() => void player.togglePlay()}
             onNext={player.next}
             onPlayTrack={player.playTrack}
@@ -181,7 +191,7 @@ function OfflineApp({ offline, onExit }: { offline: OfflineDownloads; onExit: ()
         onError={event => player.audioHandlers.onError(event.currentTarget)}
       />
 
-      <section className={`phone-surface ${screen === 'library' ? 'phone-surface--library' : ''}`}>
+      <section className={`phone-surface ${screen !== 'player' ? 'phone-surface--library' : ''}`}>
         {offline.loading || (offline.tracks.length > 0 && !player.hydrated) ? (
           <div className="center-state">Preparando seus downloads…</div>
         ) : screen === 'library' ? (
