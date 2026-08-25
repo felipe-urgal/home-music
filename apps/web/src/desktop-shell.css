@@ -2,8 +2,7 @@
   width: 100%;
   min-width: 0;
   max-width: 100%;
-  display: grid;
-  place-items: start center;
+  display: block;
 }
 
 .desktop-sidebar,
@@ -12,6 +11,7 @@
 }
 
 .desktop-main-content {
+  width: 100%;
   min-width: 0;
   max-width: 100%;
 }
