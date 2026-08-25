@@ -10,6 +10,7 @@ import './library-controls.css';
 import './rekordbox.css';
 import './auth.css';
 import './desktop-shell.css';
+import './tablet-shell.css';
 import './desktop-player.css';
 
 createRoot(document.getElementById('root')!).render(
