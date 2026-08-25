@@ -24,6 +24,7 @@ test('login, biblioteca e player permanecem utilizáveis', async ({ page }) => {
   const desktopQueue = page.getByTestId('desktop-queue');
   const desktopPlayerBar = page.getByTestId('desktop-player-bar');
   const embeddedPlayerQueue = page.locator('.queue-panel--player');
+  const miniPlayer = page.getByTestId('mini-player');
   const isDesktop = Boolean(viewport && viewport.width >= 1024);
   const isTablet = Boolean(viewport && viewport.width >= 700 && viewport.width < 1024);
 
@@ -40,6 +41,13 @@ test('login, biblioteca e player permanecem utilizáveis', async ({ page }) => {
     for (const label of ['Músicas', 'Artistas', 'Álbuns', 'Pastas', 'Favoritos', 'Playlists', 'Rekordbox', 'Histórico', 'Estatísticas']) {
       await expect(sidebar.getByRole('button', { name: label, exact: true })).toBeVisible();
     }
+
+    const zuluHandle = desktopQueue.getByRole('button', { name: 'Arrastar E2E Zulu' });
+    const zetaRow = desktopQueue.locator('.desktop-queue__row').filter({ hasText: 'E2E Zeta' });
+    await expect(zuluHandle).toBeVisible();
+    await expect(zetaRow).toBeVisible();
+    await zuluHandle.dragTo(zetaRow);
+    await expect(desktopQueue.locator('.desktop-queue__row').nth(1)).toContainText('E2E Zulu');
 
     const contextTabs = context.getByRole('tablist', { name: 'Painel contextual' });
     const queueTab = contextTabs.getByRole('tab', { name: 'Fila' });
@@ -63,9 +71,10 @@ test('login, biblioteca e player permanecem utilizáveis', async ({ page }) => {
   } else if (viewport) {
     await expect(sidebar).toBeHidden();
     await expect(context).toBeHidden();
-    await expect(desktopPlayerBar).toBeHidden();
+    await expect(desktopPlayerBar).toHaveCount(0);
     await expect(embeddedPlayerQueue).toBeVisible();
     await expect(page.getByRole('button', { name: 'Letra' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Arrastar E2E Zeta' })).toBeVisible();
 
     expect(await responsiveShell.evaluate(element => getComputedStyle(element).display)).toBe('block');
     const surfaceBox = await surface.boundingBox();
@@ -98,12 +107,13 @@ test('login, biblioteca e player permanecem utilizáveis', async ({ page }) => {
 
   await page.getByRole('button', { name: 'Voltar à biblioteca' }).click();
   await expect(page.locator('.library-header__title strong')).toHaveText('Biblioteca');
-  await expect(page.locator('.library-header__title small')).toContainText('1 música');
+  await expect(page.locator('.library-header__title small')).toContainText('3 músicas');
 
   if (isDesktop) {
     await expect(sidebar.getByRole('button', { name: 'Pastas', exact: true })).toHaveAttribute('aria-current', 'page');
     await expect(desktopPlayerBar).toBeVisible();
     await expect(desktopPlayerBar).toContainText('E2E Track');
+    await expect(miniPlayer).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Abrir estatísticas' })).toBeHidden();
     await expect(page.getByRole('button', { name: 'Voltar ao player' })).toBeHidden();
     await expect(page.getByRole('navigation', { name: 'Navegação da biblioteca' })).toBeHidden();
@@ -122,10 +132,13 @@ test('login, biblioteca e player permanecem utilizáveis', async ({ page }) => {
     await sidebar.getByRole('button', { name: 'Músicas', exact: true }).click();
   } else {
     await expect(page.getByRole('navigation', { name: 'Navegação da biblioteca' })).toBeVisible();
+    await expect(miniPlayer).toBeVisible();
+    await expect(desktopPlayerBar).toHaveCount(0);
     await page.getByRole('button', { name: 'Músicas', exact: true }).click();
   }
 
-  await expect(page.getByPlaceholder('Música, artista, álbum ou pasta')).toBeVisible();
+  const search = page.getByPlaceholder('Música, artista, álbum ou pasta');
+  await expect(search).toBeVisible();
 
   if (isDesktop) {
     await expect(sidebar.getByRole('button', { name: 'Músicas', exact: true })).toHaveAttribute('aria-current', 'page');
@@ -146,13 +159,34 @@ test('login, biblioteca e player permanecem utilizáveis', async ({ page }) => {
     await expect(desktopLibraryTable.getByRole('columnheader', { name: 'Formato' })).toBeVisible();
     await expect(desktopLibraryTable.getByRole('columnheader', { name: 'Duração' })).toBeVisible();
 
+    await desktopLibraryTable.getByRole('checkbox', { name: 'Selecionar E2E Track' }).check();
+    await desktopLibraryTable.getByRole('checkbox', { name: 'Selecionar E2E Zeta' }).check();
+    const bulkToolbar = page.getByTestId('desktop-bulk-toolbar');
+    await expect(bulkToolbar).toContainText('2 selecionadas');
+    await expect(bulkToolbar.getByRole('button', { name: 'Tocar seleção', exact: true })).toBeVisible();
+    await bulkToolbar.getByRole('button', { name: 'Favoritar', exact: true }).click();
+    await expect(desktopLibraryTable.getByRole('button', { name: 'Remover E2E Track dos favoritos' })).toBeVisible();
+    await expect(desktopLibraryTable.getByRole('button', { name: 'Remover E2E Zeta dos favoritos' })).toBeVisible();
+    await bulkToolbar.getByRole('button', { name: 'Desfavoritar', exact: true }).click();
+    await expect(desktopLibraryTable.getByRole('button', { name: 'Favoritar E2E Track' })).toBeVisible();
+    await expect(desktopLibraryTable.getByRole('button', { name: 'Favoritar E2E Zeta' })).toBeVisible();
+    await bulkToolbar.getByRole('button', { name: 'Limpar seleção', exact: true }).click();
+    await expect(bulkToolbar).toContainText('Selecionar faixas');
+  } else {
+    await expect(page.locator('.library-track').filter({ hasText: 'E2E Track' })).toBeVisible();
+    await expect(page.getByTestId('desktop-library-table')).toHaveCount(0);
+    await expect(page.getByTestId('desktop-bulk-toolbar')).toHaveCount(0);
+  }
+
+  await search.fill('faixa-que-nao-existe-e2e');
+  await expect(page.locator('.empty-library')).toContainText('Nenhuma música encontrada');
+  await search.fill('');
+
+  if (isDesktop) {
     await sidebar.getByRole('button', { name: 'Rekordbox', exact: true }).click();
     const libraryMain = page.locator('.desktop-main-content--library');
     await expect(libraryMain.locator('.section-heading > span').filter({ hasText: /^Playlists$/ })).toBeVisible();
     await expect(libraryMain.getByRole('button', { name: 'Rekordbox', exact: true })).toBeVisible();
-  } else {
-    await expect(page.locator('.library-track').filter({ hasText: 'E2E Track' })).toBeVisible();
-    await expect(page.getByTestId('desktop-library-table')).toHaveCount(0);
   }
 
   if (viewport) {
@@ -191,7 +225,7 @@ test('desktop só ativa a partir de 1024px', async ({ page }, testInfo) => {
 
   await expect(sidebar).toBeHidden();
   await expect(context).toBeHidden();
-  await expect(desktopPlayerBar).toBeHidden();
+  await expect(desktopPlayerBar).toHaveCount(0);
   await expect(embeddedPlayerQueue).toBeVisible();
   expect(await responsiveShell.evaluate(element => getComputedStyle(element).display)).toBe('block');
 
@@ -260,4 +294,37 @@ test('atalhos de teclado desktop controlam reprodução sem capturar a busca', a
   await page.keyboard.press('Space');
   await expect(search).toHaveValue('E2E ');
   await expect(page.getByTestId('desktop-player-bar').getByRole('button', { name: 'Tocar na barra desktop' })).toBeVisible();
+});
+
+test('estados de loading e erro permitem retry no desktop', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop-chromium');
+
+  let libraryRequests = 0;
+  await page.route('**/api/library', async route => {
+    libraryRequests += 1;
+    if (libraryRequests === 1) {
+      await new Promise(resolve => setTimeout(resolve, 350));
+      await route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'Biblioteca E2E temporariamente indisponível' })
+      });
+      return;
+    }
+    await route.continue();
+  });
+
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Entrar' })).toBeVisible();
+  await page.getByLabel('Usuário').fill(username);
+  await page.getByLabel('Senha').fill(password);
+  await page.getByRole('button', { name: 'Entrar' }).click();
+
+  await expect(page.getByTestId('responsive-state-loading')).toBeVisible();
+  const errorState = page.getByTestId('responsive-state-error');
+  await expect(errorState).toBeVisible();
+  await expect(errorState).toContainText('Biblioteca E2E temporariamente indisponível');
+  await errorState.getByRole('button', { name: 'Tentar novamente' }).click();
+  await expect(page.getByRole('heading', { name: 'E2E Track' })).toBeVisible();
+  await expect(page.getByTestId('responsive-state-error')).toHaveCount(0);
 });

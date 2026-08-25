@@ -90,9 +90,9 @@ Objetivo: evoluir a interface para desktop sem regredir o fluxo mobile Player Fi
 - [x] Exibir fila e letras em painel lateral quando houver espaço
 - [x] Criar navegação desktop para músicas, artistas, álbuns, pastas, favoritos, playlists, Rekordbox e estatísticas
 - [x] Adicionar atalhos de teclado para play/pause, próxima/anterior, seek, busca e volume quando aplicável
-- [ ] Adicionar seleção múltipla de faixas e ações em lote
-- [ ] Melhorar drag-and-drop/reordenação da fila para mouse sem prejudicar touch
-- [ ] Garantir estados vazios, loading, erros e mini-player coerentes nos dois layouts
+- [x] Adicionar seleção múltipla de faixas e ações em lote
+- [x] Melhorar drag-and-drop/reordenação da fila para mouse sem prejudicar touch
+- [x] Garantir estados vazios, loading, erros e mini-player coerentes nos dois layouts
 
 ## Fase 8 — Administração da biblioteca
 

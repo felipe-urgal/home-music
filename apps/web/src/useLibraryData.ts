@@ -95,12 +95,22 @@ export function useLibraryData() {
     await Promise.all([refreshLibrary(), refreshFavorites(), refreshHistory(), refreshPlaylists()]);
   }, [refreshFavorites, refreshHistory, refreshLibrary, refreshPlaylists]);
 
-  useEffect(() => {
-    refreshAll()
-      .then(() => setError(null))
-      .catch(error => setError(errorMessage(error)))
-      .finally(() => setLoading(false));
+  const retry = useCallback(async () => {
+    setLoading(true);
+    try {
+      await refreshAll();
+      setError(null);
+    } catch (error) {
+      setError(errorMessage(error));
+      throw error;
+    } finally {
+      setLoading(false);
+    }
   }, [refreshAll]);
+
+  useEffect(() => {
+    void retry().catch(() => undefined);
+  }, [retry]);
 
   useEffect(() => {
     if (loading || error) return;
@@ -299,6 +309,7 @@ export function useLibraryData() {
     actionError,
     reportError,
     clearActionError,
+    retry,
     refreshHistory,
     toggleFavorite,
     rescan,

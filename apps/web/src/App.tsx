@@ -5,6 +5,7 @@ import { LibraryScreen } from './components/LibraryScreen';
 import { LoginScreen } from './components/LoginScreen';
 import { OfflineLibraryScreen } from './components/OfflineLibraryScreen';
 import { PlayerScreen } from './components/PlayerScreen';
+import { ResponsiveState } from './components/ResponsiveState';
 import { StatisticsScreen } from './components/StatisticsScreen';
 import { buildLibraryReturnLabel } from './library-utils';
 import { type OfflineDownloads, useOfflineDownloads } from './offline-downloads';
@@ -119,17 +120,25 @@ function AuthenticatedApp({ onLogout, offline }: AuthenticatedAppProps) {
         onOpenLibraryTab={openLibraryTab}
         onOpenStatistics={() => setScreen('statistics')}
         onPlayTrack={player.playTrack}
+        onReorderQueue={player.reorderQueue}
         surfaceClassName={`phone-surface ${screen !== 'player' ? 'phone-surface--library' : ''}`}
       >
         {library.loading ? (
-          <div className="center-state">Carregando sua biblioteca…</div>
+          <ResponsiveState
+            variant="loading"
+            title="Carregando sua biblioteca"
+            detail="Sincronizando músicas, favoritos, histórico e playlists."
+          />
         ) : library.error ? (
-          <div className="center-state">
-            <strong>Servidor indisponível</strong>
-            <span>{library.error}</span>
-          </div>
+          <ResponsiveState variant="error" title="Servidor indisponível" detail={library.error}>
+            <button className="primary-action" onClick={() => run(library.retry())}>Tentar novamente</button>
+          </ResponsiveState>
         ) : library.tracks.length > 0 && !player.hydrated ? (
-          <div className="center-state">Restaurando o player…</div>
+          <ResponsiveState
+            variant="loading"
+            title="Restaurando o player"
+            detail="Recuperando sua fila e a última faixa reproduzida."
+          />
         ) : screen === 'statistics' ? (
           <StatisticsScreen
             onBack={() => setScreen('library')}
@@ -152,14 +161,16 @@ function AuthenticatedApp({ onLogout, offline }: AuthenticatedAppProps) {
             onPlayTrack={player.playTrack}
           />
         ) : !current ? (
-          <div className="center-state center-state--actions">
-            <strong>Nenhuma música encontrada</strong>
-            <span>Confira MUSIC_DIR ou atualize a biblioteca para procurar músicas novas.</span>
+          <ResponsiveState
+            variant="empty"
+            title="Nenhuma música encontrada"
+            detail="Confira MUSIC_DIR ou atualize a biblioteca para procurar músicas novas."
+          >
             <button className="primary-action" disabled={library.scanning} onClick={() => run(library.rescan())}>
               {library.scanning ? 'Atualizando…' : 'Atualizar biblioteca'}
             </button>
             <button className="secondary-action" onClick={() => setScreen('library')}>Abrir biblioteca</button>
-          </div>
+          </ResponsiveState>
         ) : (
           <PlayerScreen
             current={current}
@@ -278,10 +289,15 @@ function OfflineApp({ offline, onExit }: { offline: OfflineDownloads; onExit: ()
         onOpenPlayer={() => setScreen('player')}
         onOpenLibrary={() => setScreen('library')}
         onPlayTrack={player.playTrack}
+        onReorderQueue={player.reorderQueue}
         surfaceClassName={`phone-surface ${screen === 'library' ? 'phone-surface--library' : ''}`}
       >
         {offline.loading || (offline.tracks.length > 0 && !player.hydrated) ? (
-          <div className="center-state">Preparando seus downloads…</div>
+          <ResponsiveState
+            variant="loading"
+            title="Preparando seus downloads"
+            detail="Carregando as músicas salvas neste dispositivo."
+          />
         ) : screen === 'library' ? (
           <OfflineLibraryScreen
             records={offline.records}
@@ -333,10 +349,13 @@ function OfflineApp({ offline, onExit }: { offline: OfflineDownloads; onExit: ()
             onExitOffline={onExit}
           />
         ) : (
-          <div className="center-state center-state--actions">
-            <strong>Nenhum download offline</strong>
+          <ResponsiveState
+            variant="empty"
+            title="Nenhum download offline"
+            detail="Conecte ao Home Music e baixe uma música pelo player."
+          >
             <button className="secondary-action" onClick={onExit}>Tentar conectar</button>
-          </div>
+          </ResponsiveState>
         )}
       </DesktopShell>
 

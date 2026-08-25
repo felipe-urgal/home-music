@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type DragEvent, type ReactNode } from 'react';
 import type { Track } from '@home-music/shared';
 import {
   BarChart3,
   Disc3,
   Folder,
+  GripVertical,
   Heart,
   History,
   ListMusic,
@@ -37,6 +38,7 @@ type DesktopShellProps = {
   onOpenLibraryTab?: (tab: LibraryTab) => void;
   onOpenStatistics?: () => void;
   onPlayTrack?: (track: Track, context: Track[]) => void;
+  onReorderQueue?: (from: number, to: number) => void;
   surfaceClassName: string;
   children: ReactNode;
 };
@@ -81,10 +83,13 @@ export function DesktopShell({
   onOpenLibraryTab,
   onOpenStatistics,
   onPlayTrack,
+  onReorderQueue,
   surfaceClassName,
   children
 }: DesktopShellProps) {
   const [contextTab, setContextTab] = useState<DesktopContextTab>('queue');
+  const [dragFrom, setDragFrom] = useState<number | null>(null);
+  const [dragOver, setDragOver] = useState<number | null>(null);
   const desktopLayout = useDesktopLayout();
   const lyrics = useTrackLyrics(current, offlineMode || !desktopLayout);
   const contextTrack = current ? artworkTrack(current, offlineMode) : null;
@@ -116,6 +121,29 @@ export function DesktopShell({
   useEffect(() => {
     setContextTab('queue');
   }, [current?.id]);
+
+  function beginQueueDrag(event: DragEvent<HTMLButtonElement>, queueIndex: number) {
+    if (!onReorderQueue) return;
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', String(queueIndex));
+    setDragFrom(queueIndex);
+    setDragOver(queueIndex);
+  }
+
+  function dropQueue(event: DragEvent<HTMLDivElement>, queueIndex: number) {
+    if (!onReorderQueue) return;
+    event.preventDefault();
+    const transferredIndex = Number.parseInt(event.dataTransfer.getData('text/plain'), 10);
+    const sourceIndex = dragFrom ?? (Number.isInteger(transferredIndex) ? transferredIndex : null);
+    if (sourceIndex != null && sourceIndex !== queueIndex) onReorderQueue(sourceIndex, queueIndex);
+    setDragFrom(null);
+    setDragOver(null);
+  }
+
+  function finishQueueDrag() {
+    setDragFrom(null);
+    setDragOver(null);
+  }
 
   return (
     <div className="desktop-layout" data-desktop-active={active}>
@@ -230,17 +258,42 @@ export function DesktopShell({
               {queuePreview.length ? queuePreview.map((track, previewIndex) => {
                 const queueIndex = queueStart + previewIndex;
                 const isCurrent = queueIndex === currentIndex;
+                const isDragging = queueIndex === dragFrom;
+                const isDragOver = queueIndex === dragOver && dragFrom !== queueIndex;
                 return (
-                  <button
+                  <div
                     key={`${track.id}-${queueIndex}`}
-                    className={`desktop-queue__item ${isCurrent ? 'is-current' : ''}`}
-                    type="button"
-                    aria-current={isCurrent ? 'true' : undefined}
-                    onClick={() => onPlayTrack?.(track, queue)}
+                    className={`desktop-queue__row ${isCurrent ? 'is-current' : ''} ${isDragging ? 'is-dragging' : ''} ${isDragOver ? 'is-drag-over' : ''}`.trim()}
+                    data-queue-index={queueIndex}
+                    onDragOver={event => {
+                      if (!onReorderQueue) return;
+                      event.preventDefault();
+                      event.dataTransfer.dropEffect = 'move';
+                      setDragOver(queueIndex);
+                    }}
+                    onDrop={event => dropQueue(event, queueIndex)}
                   >
-                    <Artwork track={artworkTrack(track, offlineMode)} />
-                    <span><strong>{track.title}</strong><small>{track.artist || 'Artista desconhecido'}</small></span>
-                  </button>
+                    <button
+                      className="desktop-queue__drag-handle"
+                      type="button"
+                      draggable={!isCurrent && Boolean(onReorderQueue)}
+                      disabled={isCurrent || !onReorderQueue}
+                      aria-label={isCurrent ? 'Faixa atual' : `Arrastar ${track.title}`}
+                      onDragStart={event => beginQueueDrag(event, queueIndex)}
+                      onDragEnd={finishQueueDrag}
+                    >
+                      <GripVertical aria-hidden="true" />
+                    </button>
+                    <button
+                      className="desktop-queue__item"
+                      type="button"
+                      aria-current={isCurrent ? 'true' : undefined}
+                      onClick={() => onPlayTrack?.(track, queue)}
+                    >
+                      <Artwork track={artworkTrack(track, offlineMode)} />
+                      <span><strong>{track.title}</strong><small>{track.artist || 'Artista desconhecido'}</small></span>
+                    </button>
+                  </div>
                 );
               }) : <div className="desktop-queue__empty">A fila está vazia.</div>}
             </div>
