@@ -69,7 +69,6 @@ describe('streaming quality', () => {
     expect(onlineAudioUrl('abc', 'economy', false, 'album')).toBe('/api/tracks/abc/transcode?quality=economy&normalization=album');
   });
 
-
   it('resolve ReplayGain com fallback de álbum e desativa quando não há tag', () => {
     const track = {
       id: 'a', title: 'A', artist: 'B', album: 'C', albumArtist: 'B',
