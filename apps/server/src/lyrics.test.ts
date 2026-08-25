@@ -7,12 +7,12 @@ import { parseLyrics, readTrackLyrics } from './lyrics.js';
 
 describe('lyrics', () => {
   it('parses synchronized LRC lines and ignores metadata', () => {
-    assert.deepEqual(parseLyrics('[ar:Artista]\n[00:12.50]Primeira\n[01:02]Segunda', 'lrc'), {
+    assert.deepEqual(parseLyrics('[ar:Artista]\n[offset:500]\n[01:02]Segunda\n[00:12.50]Primeira', 'lrc'), {
       source: 'lrc',
       synchronized: true,
       lines: [
-        { time: 12.5, text: 'Primeira' },
-        { time: 62, text: 'Segunda' }
+        { time: 13, text: 'Primeira' },
+        { time: 62.5, text: 'Segunda' }
       ]
     });
   });
@@ -23,7 +23,7 @@ describe('lyrics', () => {
     await writeFile(trackPath, 'audio');
     await writeFile(path.join(root, 'song.txt'), 'Linha 1\nLinha 2');
 
-    assert.deepEqual(await readTrackLyrics(root, trackPath),{
+    assert.deepEqual(await readTrackLyrics(root, trackPath), {
       source: 'txt',
       synchronized: false,
       lines: [
