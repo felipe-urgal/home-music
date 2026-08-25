@@ -16,16 +16,25 @@ test('login, biblioteca e player permanecem utilizáveis', async ({ page }) => {
   const viewport = page.viewportSize();
   const sidebar = page.getByTestId('desktop-sidebar');
   const context = page.getByTestId('desktop-context');
+  const desktopQueue = page.getByTestId('desktop-queue');
+  const embeddedPlayerQueue = page.locator('.queue-panel--player');
   const isDesktop = Boolean(viewport && viewport.width >= 1024);
 
-  if (isDesktop) {
+  if (isDesktop && viewport) {
     await expect(sidebar).toBeVisible();
     await expect(context).toBeVisible();
+    await expect(desktopQueue).toBeVisible();
+    await expect(embeddedPlayerQueue).toBeHidden();
     await expect(sidebar.getByRole('button', { name: 'Tocando agora' })).toHaveAttribute('aria-current', 'page');
     await expect(context).toContainText('E2E Track');
+    await expect(desktopQueue).toContainText('E2E Track');
+
+    const documentHeight = await page.evaluate(() => document.documentElement.scrollHeight);
+    expect(documentHeight).toBeLessThanOrEqual(viewport.height + 2);
   } else {
     await expect(sidebar).toBeHidden();
     await expect(context).toBeHidden();
+    await expect(embeddedPlayerQueue).toBeVisible();
   }
 
   const playButton = page.getByRole('button', { name: 'Tocar' });
@@ -55,5 +64,7 @@ test('login, biblioteca e player permanecem utilizáveis', async ({ page }) => {
 
   if (isDesktop) {
     await expect(sidebar.getByRole('button', { name: 'Tocando agora' })).toHaveAttribute('aria-current', 'page');
+    await expect(desktopQueue).toBeVisible();
+    await expect(embeddedPlayerQueue).toBeHidden();
   }
 });
