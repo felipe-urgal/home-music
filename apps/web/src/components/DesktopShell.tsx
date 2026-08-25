@@ -100,7 +100,7 @@ export function DesktopShell({
   }, [current?.id]);
 
   return (
-    <div className="desktop-layout">
+    <div className="desktop-layout" data-desktop-active={active}>
       <aside className="desktop-sidebar" data-testid="desktop-sidebar">
         <div className="desktop-brand">
           <span className="desktop-brand__icon"><Music2 /></span>
@@ -128,62 +128,14 @@ export function DesktopShell({
           ) : (
             <div className="desktop-nav__group" aria-label="Biblioteca">
               <span className="desktop-nav__group-label">Biblioteca</span>
-              <NavigationButton
-                nested
-                active={active === 'library' && activeLibraryTab === 'tracks'}
-                label="Músicas"
-                icon={<Music2 />}
-                onClick={() => onOpenLibraryTab('tracks')}
-              />
-              <NavigationButton
-                nested
-                active={active === 'library' && activeLibraryTab === 'artists'}
-                label="Artistas"
-                icon={<Users />}
-                onClick={() => onOpenLibraryTab('artists')}
-              />
-              <NavigationButton
-                nested
-                active={active === 'library' && activeLibraryTab === 'albums'}
-                label="Álbuns"
-                icon={<Disc3 />}
-                onClick={() => onOpenLibraryTab('albums')}
-              />
-              <NavigationButton
-                nested
-                active={active === 'library' && activeLibraryTab === 'folders'}
-                label="Pastas"
-                icon={<Folder />}
-                onClick={() => onOpenLibraryTab('folders')}
-              />
-              <NavigationButton
-                nested
-                active={active === 'library' && activeLibraryTab === 'favorites'}
-                label="Favoritos"
-                icon={<Heart />}
-                onClick={() => onOpenLibraryTab('favorites')}
-              />
-              <NavigationButton
-                nested
-                active={active === 'library' && activeLibraryTab === 'playlists'}
-                label="Playlists"
-                icon={<ListMusic />}
-                onClick={() => onOpenLibraryTab('playlists')}
-              />
-              <NavigationButton
-                nested
-                active={false}
-                label="Rekordbox"
-                icon={<Upload />}
-                onClick={() => onOpenLibraryTab('playlists')}
-              />
-              <NavigationButton
-                nested
-                active={active === 'library' && activeLibraryTab === 'history'}
-                label="Histórico"
-                icon={<History />}
-                onClick={() => onOpenLibraryTab('history')}
-              />
+              <NavigationButton nested active={active === 'library' && activeLibraryTab === 'tracks'} label="Músicas" icon={<Music2 />} onClick={() => onOpenLibraryTab('tracks')} />
+              <NavigationButton nested active={active === 'library' && activeLibraryTab === 'artists'} label="Artistas" icon={<Users />} onClick={() => onOpenLibraryTab('artists')} />
+              <NavigationButton nested active={active === 'library' && activeLibraryTab === 'albums'} label="Álbuns" icon={<Disc3 />} onClick={() => onOpenLibraryTab('albums')} />
+              <NavigationButton nested active={active === 'library' && activeLibraryTab === 'folders'} label="Pastas" icon={<Folder />} onClick={() => onOpenLibraryTab('folders')} />
+              <NavigationButton nested active={active === 'library' && activeLibraryTab === 'favorites'} label="Favoritos" icon={<Heart />} onClick={() => onOpenLibraryTab('favorites')} />
+              <NavigationButton nested active={active === 'library' && activeLibraryTab === 'playlists'} label="Playlists" icon={<ListMusic />} onClick={() => onOpenLibraryTab('playlists')} />
+              <NavigationButton nested active={false} label="Rekordbox" icon={<Upload />} onClick={() => onOpenLibraryTab('playlists')} />
+              <NavigationButton nested active={active === 'library' && activeLibraryTab === 'history'} label="Histórico" icon={<History />} onClick={() => onOpenLibraryTab('history')} />
             </div>
           )}
 
@@ -234,26 +186,12 @@ export function DesktopShell({
         </div>
 
         <div className="desktop-context__tabs" role="tablist" aria-label="Painel contextual">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={contextTab === 'queue'}
-            className={contextTab === 'queue' ? 'is-active' : ''}
-            onClick={() => setContextTab('queue')}
-          >
-            <ListMusic />
-            Fila
+          <button type="button" role="tab" aria-selected={contextTab === 'queue'} className={contextTab === 'queue' ? 'is-active' : ''} onClick={() => setContextTab('queue')}>
+            <ListMusic />Fila
           </button>
           {lyrics && (
-            <button
-              type="button"
-              role="tab"
-              aria-selected={contextTab === 'lyrics'}
-              className={contextTab === 'lyrics' ? 'is-active' : ''}
-              onClick={() => setContextTab('lyrics')}
-            >
-              <Music2 />
-              Letra
+            <button type="button" role="tab" aria-selected={contextTab === 'lyrics'} className={contextTab === 'lyrics' ? 'is-active' : ''} onClick={() => setContextTab('lyrics')}>
+              <Music2 />Letra
             </button>
           )}
         </div>
@@ -261,9 +199,7 @@ export function DesktopShell({
         {contextTab === 'lyrics' && lyrics ? (
           <section className="desktop-lyrics" aria-label="Letra da música" data-testid="desktop-lyrics">
             <div className={lyrics.synchronized ? 'desktop-lyrics__lines is-synchronized' : 'desktop-lyrics__lines'}>
-              {lyrics.lines.map((line, index) => (
-                <p key={`${line.time ?? 'plain'}-${index}`}>{line.text || '♪'}</p>
-              ))}
+              {lyrics.lines.map((line, index) => <p key={`${line.time ?? 'plain'}-${index}`}>{line.text || '♪'}</p>)}
             </div>
           </section>
         ) : (
@@ -285,19 +221,12 @@ export function DesktopShell({
                     onClick={() => onPlayTrack?.(track, queue)}
                   >
                     <Artwork track={artworkTrack(track, offlineMode)} />
-                    <span>
-                      <strong>{track.title}</strong>
-                      <small>{track.artist || 'Artista desconhecido'}</small>
-                    </span>
+                    <span><strong>{track.title}</strong><small>{track.artist || 'Artista desconhecido'}</small></span>
                   </button>
                 );
-              }) : (
-                <div className="desktop-queue__empty">A fila está vazia.</div>
-              )}
+              }) : <div className="desktop-queue__empty">A fila está vazia.</div>}
             </div>
-            {remainingQueueCount > 0 && (
-              <small className="desktop-queue__remaining">+ {remainingQueueCount} faixas depois</small>
-            )}
+            {remainingQueueCount > 0 && <small className="desktop-queue__remaining">+ {remainingQueueCount} faixas depois</small>}
           </section>
         )}
 
