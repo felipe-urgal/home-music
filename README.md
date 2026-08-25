@@ -295,7 +295,6 @@ bash scripts/configure-tailscale.test.sh
 
 Veja [`docs/roadmap.md`](docs/roadmap.md).
 
-
 ## Letras locais
 
 Para exibir a letra, coloque um arquivo ao lado da música usando o mesmo nome-base:
