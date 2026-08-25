@@ -113,14 +113,14 @@ test('login, biblioteca e player permanecem utilizáveis', async ({ page }) => {
     await expect(desktopLibraryTable.getByRole('button', { name: 'Tocar E2E Track' })).toBeVisible();
     await expect(page.locator('.library-track')).toHaveCount(0);
 
-    const titleHeader = desktopLibraryTable.getByRole('columnheader', { name: /Título/ });
+    const titleHeader = desktopLibraryTable.getByRole('columnheader', { name: /ordenar por título/i });
     await expect(titleHeader).toHaveAttribute('aria-sort', 'none');
     await desktopLibraryTable.getByRole('button', { name: 'Ordenar por título' }).click();
     await expect(titleHeader).toHaveAttribute('aria-sort', 'ascending');
     await desktopLibraryTable.getByRole('button', { name: 'Ordenar por título' }).click();
     await expect(titleHeader).toHaveAttribute('aria-sort', 'descending');
-    await expect(desktopLibraryTable.getByRole('columnheader', { name: /Artista/ })).toBeVisible();
-    await expect(desktopLibraryTable.getByRole('columnheader', { name: /Álbum/ })).toBeVisible();
+    await expect(desktopLibraryTable.getByRole('columnheader', { name: /ordenar por artista/i })).toBeVisible();
+    await expect(desktopLibraryTable.getByRole('columnheader', { name: /ordenar por álbum/i })).toBeVisible();
     await expect(desktopLibraryTable.getByRole('columnheader', { name: 'Pasta' })).toBeVisible();
     await expect(desktopLibraryTable.getByRole('columnheader', { name: 'Formato' })).toBeVisible();
     await expect(desktopLibraryTable.getByRole('columnheader', { name: 'Duração' })).toBeVisible();
