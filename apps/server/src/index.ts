@@ -2,7 +2,7 @@ import { config } from 'dotenv';
 import { open } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import Fastify from 'fastify';
-import type { NormalizationMode, PlaybackState, RepeatMode, ScanResponse } from '@home-music/shared';
+import type { NormalizationMode, PlaybackState, RepeatMode, ScanResponse, StatisticsPeriod } from '@home-music/shared';
 import {
   DEFAULT_AUTO_RESCAN_INTERVAL_SECONDS,
   parseAutoRescanIntervalSeconds,
@@ -329,6 +329,11 @@ function parseNormalizationMode(value: unknown): NormalizationMode | null {
   return value === 'track' || value === 'album' ? value : null;
 }
 
+function parseStatisticsPeriod(value: unknown): StatisticsPeriod | null {
+  if (value == null || value === '') return '30d';
+  return value === '7d' || value === '30d' || value === 'all' ? value : null;
+}
+
 function cleanRepeatMode(value: unknown): RepeatMode {
   return value === 'one' || value === 'all' ? value : 'off';
 }
@@ -563,6 +568,14 @@ app.post<{ Params: { id: string } }>('/api/history/:id', async (request, reply) 
 app.delete('/api/history', async (_request, reply) => {
   database.clearHistory();
   return reply.code(204).send();
+});
+
+app.get<{ Querystring: { period?: string } }>('/api/statistics', async (request, reply) => {
+  const period = parseStatisticsPeriod(request.query.period);
+  if (!period) return reply.code(400).send({ error: 'Período de estatísticas inválido.' });
+
+  reply.header('Cache-Control', 'private, no-store');
+  return database.getStatistics(period);
 });
 
 app.get('/api/playlists', async () => ({

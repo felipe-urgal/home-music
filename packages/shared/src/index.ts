@@ -1,5 +1,6 @@
 export type RepeatMode = 'off' | 'all' | 'one';
 export type NormalizationMode = 'off' | 'track' | 'album';
+export type StatisticsPeriod = '7d' | '30d' | 'all';
 
 export type Track = {
   id: string;
@@ -78,4 +79,34 @@ export type LyricsResponse = {
   source: 'lrc' | 'txt';
   synchronized: boolean;
   lines: LyricsLine[];
+};
+
+export type TrackStatisticsItem = {
+  track: Track;
+  plays: number;
+};
+
+export type ArtistStatisticsItem = {
+  artist: string;
+  plays: number;
+};
+
+export type AlbumStatisticsItem = {
+  album: string;
+  albumArtist: string;
+  plays: number;
+};
+
+export type ListeningStatisticsResponse = {
+  period: StatisticsPeriod;
+  generatedAt: string;
+  firstPlayedAt: string | null;
+  totalPlays: number;
+  totalMinutes: number;
+  uniqueTracks: number;
+  uniqueArtists: number;
+  topTracks: TrackStatisticsItem[];
+  topArtists: ArtistStatisticsItem[];
+  topAlbums: AlbumStatisticsItem[];
+  historyCapacity: number;
 };

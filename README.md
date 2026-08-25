@@ -42,7 +42,8 @@ O Home Music roda no Ubuntu, lê uma pasta local de músicas e expõe uma interf
 - mini-player persistente;
 - Media Session para tela bloqueada/notificações;
 - letras locais em `.lrc` sincronizado ou `.txt`, carregadas sob demanda no player;
-- normalização ReplayGain opcional por faixa ou álbum, sem alterar os arquivos originais.
+- normalização ReplayGain opcional por faixa ou álbum, sem alterar os arquivos originais;
+- estatísticas pessoais por 7 dias, 30 dias ou todo o histórico local.
 
 > Navegadores móveis podem bloquear autoplay ao abrir uma nova página sem interação. O Home Music preserva faixa/posição e aguarda um toque em **Play**.
 
@@ -318,3 +319,15 @@ No menu do player, **Normalização de volume** oferece:
 A preferência fica salva somente no dispositivo. Quando a faixa possui tags ReplayGain, o backend aplica o ganho durante o transcoding, limita valores extremos e usa um limiter contra clipping. O arquivo original nunca é modificado. Faixas sem tags continuam tocando normalmente, sem normalização.
 
 Após esta atualização, o primeiro startup faz um re-scan completo único para indexar as tags ReplayGain existentes.
+
+
+## Estatísticas pessoais
+
+Na Biblioteca, o botão de gráfico abre um resumo do histórico local com:
+
+- reproduções e tempo estimado;
+- quantidade de faixas e artistas diferentes;
+- músicas, artistas e álbuns mais ouvidos;
+- filtros de 7 dias, 30 dias e todo o histórico disponível.
+
+Os cálculos são feitos localmente no SQLite e a rota exige sessão autenticada. O tempo é uma estimativa baseada na duração das faixas iniciadas. Para manter o banco enxuto, o histórico e as estatísticas consideram no máximo as 2.000 reproduções mais recentes.
