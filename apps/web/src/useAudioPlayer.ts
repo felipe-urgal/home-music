@@ -4,6 +4,14 @@ import { apiFetch } from './api-client';
 import { buildQueueContext } from './library-utils';
 import { offlineAudioUrl } from './offline-downloads';
 import { nextTrackDecision, remapQueue, resolveOutputVolume, restorePlayerState } from './player-state';
+import {
+  onlineAudioUrl,
+  readStreamingMode,
+  shouldFallbackToOriginal,
+  shouldRetryWithCompatibilityTranscode,
+  type StreamingMode,
+  writeStreamingMode
+} from './streaming-quality';
 
 const OFFLINE_PLAYER_STATE_KEY = 'home-music:offline-player:v1';
 const EMPTY_STATE: PlaybackState = {
@@ -30,6 +38,22 @@ function mutationFetch(url: string, init: RequestInit) {
 
 function isRepeatMode(value: unknown): value is RepeatMode {
   return value === 'off' || value === 'all' || value === 'one';
+}
+
+function initialStreamingMode(): StreamingMode {
+  try {
+    return readStreamingMode(window.localStorage);
+  } catch {
+    return 'auto';
+  }
+}
+
+function persistStreamingMode(mode: StreamingMode) {
+  try {
+    writeStreamingMode(window.localStorage, mode);
+  } catch {
+    // Preferência é local e best-effort.
+  }
 }
 
 function readOfflinePlayerState(): PlaybackState {
@@ -92,6 +116,8 @@ export function useAudioPlayer(
   const positionRef = useRef(0);
   const restoredPositionRef = useRef(0);
   const historyTrackRef = useRef<string | null>(null);
+  const sourceTrackRef = useRef<string | null>(null);
+  const sourceFallbackRef = useRef<'none' | 'compatibility' | 'original'>('none');
   const hydratedRef = useRef(false);
   const resumeIntentRef = useRef(false);
   const [orderedQueue, setOrderedQueue] = useState<Track[]>([]);
@@ -106,6 +132,7 @@ export function useAudioPlayer(
   const [volume, setVolumeState] = useState(1);
   const [shuffle, setShuffle] = useState(false);
   const [repeatMode, setRepeatMode] = useState<RepeatMode>('off');
+  const [streamingMode, setStreamingModeState] = useState<StreamingMode>(() => offlineMode ? 'original' : initialStreamingMode());
   const [hydrated, setHydrated] = useState(false);
 
   const trackMap = useMemo(() => new Map(tracks.map(track => [track.id, track])), [tracks]);
@@ -119,6 +146,22 @@ export function useAudioPlayer(
     resumeIntentRef.current = value;
     setResumeIntent(value);
   }, []);
+
+  const resumeAudio = useCallback((audio: HTMLAudioElement) => {
+    if (!resumeIntentRef.current) return;
+    audio.play()
+      .then(() => {
+        setPlaying(true);
+        setAutoplayBlocked(false);
+      })
+      .catch(error => {
+        setPlaying(false);
+        setPlaybackIntent(false);
+        if (error instanceof DOMException && error.name === 'NotAllowedError') {
+          setAutoplayBlocked(true);
+        }
+      });
+  }, [setPlaybackIntent]);
 
   useEffect(() => {
     if (!libraryReady || hydratedRef.current) return;
@@ -186,6 +229,8 @@ export function useAudioPlayer(
       positionRef.current = 0;
       restoredPositionRef.current = 0;
       historyTrackRef.current = null;
+      sourceTrackRef.current = null;
+      sourceFallbackRef.current = 'none';
       return;
     }
 
@@ -211,29 +256,19 @@ export function useAudioPlayer(
     const audio = audioRef.current;
     if (!audio || !current || !hydrated) return;
 
-    historyTrackRef.current = null;
+    if (sourceTrackRef.current !== current.id) {
+      sourceTrackRef.current = current.id;
+      historyTrackRef.current = null;
+    }
+    sourceFallbackRef.current = 'none';
     setSourceError(null);
     setCurrentTime(0);
     setDuration(current.duration ?? 0);
     positionRef.current = 0;
-    audio.src = offlineMode ? offlineAudioUrl(current.id) : `/api/tracks/${current.id}/stream`;
+    audio.src = offlineMode ? offlineAudioUrl(current.id) : onlineAudioUrl(current.id, streamingMode);
     audio.load();
-
-    if (resumeIntentRef.current) {
-      audio.play()
-        .then(() => {
-          setPlaying(true);
-          setAutoplayBlocked(false);
-        })
-        .catch(error => {
-          setPlaying(false);
-          setPlaybackIntent(false);
-          if (error instanceof DOMException && error.name === 'NotAllowedError') {
-            setAutoplayBlocked(true);
-          }
-        });
-    }
-  }, [current?.id, hydrated, offlineMode, setPlaybackIntent]);
+    resumeAudio(audio);
+  }, [current?.id, hydrated, offlineMode, resumeAudio, streamingMode]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -383,6 +418,13 @@ export function useAudioPlayer(
     setVolumeState(Math.max(0, Math.min(1, value)));
   }, []);
 
+  const setStreamingMode = useCallback((mode: StreamingMode) => {
+    if (offlineMode || mode === streamingMode) return;
+    restoredPositionRef.current = positionRef.current;
+    persistStreamingMode(mode);
+    setStreamingModeState(mode);
+  }, [offlineMode, streamingMode]);
+
   const playTrack = useCallback((track: Track, contextTracks: Track[]) => {
     const context = buildQueueContext(track, contextTracks);
     const baseQueue = context.queue;
@@ -516,7 +558,31 @@ export function useAudioPlayer(
     setPlaying(false);
   }
 
-  function handleError() {
+  function handleError(audio: HTMLAudioElement) {
+    const mediaErrorCode = audio.error?.code;
+
+    if (!offlineMode && current && sourceFallbackRef.current === 'none') {
+      if (shouldRetryWithCompatibilityTranscode(streamingMode, mediaErrorCode)) {
+        sourceFallbackRef.current = 'compatibility';
+        restoredPositionRef.current = positionRef.current;
+        setSourceError(null);
+        audio.src = onlineAudioUrl(current.id, streamingMode, true);
+        audio.load();
+        resumeAudio(audio);
+        return;
+      }
+
+      if (shouldFallbackToOriginal(streamingMode, mediaErrorCode)) {
+        sourceFallbackRef.current = 'original';
+        restoredPositionRef.current = positionRef.current;
+        setSourceError(null);
+        audio.src = onlineAudioUrl(current.id, 'original');
+        audio.load();
+        resumeAudio(audio);
+        return;
+      }
+    }
+
     setPlaying(false);
     setPlaybackIntent(false);
     setSourceError(offlineMode
@@ -538,6 +604,7 @@ export function useAudioPlayer(
     volume,
     shuffle,
     repeatMode,
+    streamingMode,
     hasNext,
     hydrated,
     playTrack,
@@ -546,6 +613,7 @@ export function useAudioPlayer(
     previous,
     seek,
     setVolume,
+    setStreamingMode,
     toggleShuffle,
     cycleRepeat,
     reorderQueue,

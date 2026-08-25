@@ -8,4 +8,5 @@ dist/
 /apps/web/vite.config.d.ts
 data/*.db
 data/*.db-*
+data/transcode-cache/
 coverage/

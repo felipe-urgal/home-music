@@ -70,7 +70,7 @@ function AuthenticatedApp({ onLogout, offline }: AuthenticatedAppProps) {
         onTimeUpdate={event => player.audioHandlers.onTimeUpdate(event.currentTarget)}
         onLoadedMetadata={event => player.audioHandlers.onLoadedMetadata(event.currentTarget)}
         onEnded={player.audioHandlers.onEnded}
-        onError={player.audioHandlers.onError}
+        onError={event => player.audioHandlers.onError(event.currentTarget)}
       />
 
       <section className={`phone-surface ${screen === 'library' ? 'phone-surface--library' : ''}`}>
@@ -119,6 +119,7 @@ function AuthenticatedApp({ onLogout, offline }: AuthenticatedAppProps) {
             usesSystemVolume={usesSystemVolume}
             shuffle={player.shuffle}
             repeatMode={player.repeatMode}
+            streamingMode={player.streamingMode}
             isFavorite={library.favoriteSet.has(current.id)}
             playlists={library.playlists}
             isDownloaded={offline.downloadedIds.has(current.id)}
@@ -129,6 +130,7 @@ function AuthenticatedApp({ onLogout, offline }: AuthenticatedAppProps) {
             onNext={player.next}
             onSeek={player.seek}
             onVolume={player.setVolume}
+            onStreamingMode={player.setStreamingMode}
             onShuffle={player.toggleShuffle}
             onRepeat={player.cycleRepeat}
             onToggleFavorite={() => run(library.toggleFavorite(current.id))}
@@ -167,7 +169,7 @@ function OfflineApp({ offline, onExit }: { offline: OfflineDownloads; onExit: ()
         onTimeUpdate={event => player.audioHandlers.onTimeUpdate(event.currentTarget)}
         onLoadedMetadata={event => player.audioHandlers.onLoadedMetadata(event.currentTarget)}
         onEnded={player.audioHandlers.onEnded}
-        onError={player.audioHandlers.onError}
+        onError={event => player.audioHandlers.onError(event.currentTarget)}
       />
 
       <section className={`phone-surface ${screen === 'library' ? 'phone-surface--library' : ''}`}>
