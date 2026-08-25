@@ -92,6 +92,7 @@ Estados esperados:
 - `publico-funnel`: público via Funnel, backend em loopback e cookie Secure;
 - `privado-serve`: privado ao tailnet via Serve;
 - `lan-http`: sem proxy Tailscale em 443 e backend exposto apenas na LAN;
+- `hostname-renomeado`: o MagicDNS atual mudou, mas existe uma configuração persistente exclusiva do Home Music no hostname anterior;
 - `inconsistente`: configuração de rede e `.env` não combinam; revise antes de continuar.
 
 Também podem ajudar:
@@ -102,6 +103,31 @@ tailscale serve status
 sudo systemctl status home-music --no-pager
 journalctl -u home-music -f
 ```
+
+## Renomear a máquina Tailscale
+
+Ao executar algo como:
+
+```bash
+sudo tailscale set --hostname=home-music
+```
+
+o MagicDNS passa a usar o hostname novo, mas versões/configurações persistentes do Serve/Funnel podem continuar registradas no hostname anterior. Nesse caso, um `tailscale funnel --https=443 off` direcionado ao hostname atual pode responder `handler does not exist` mesmo com o Funnel antigo ainda ativo.
+
+Os comandos `tailscale:public:status`, `tailscale:public:enable` e `tailscale:public:disable` detectam esse caso comparando o hostname presente em `tailscale serve status --json` com o MagicDNS atual.
+
+A migração automática usa `tailscale funnel reset` ou `tailscale serve reset` **somente** quando o script prova que toda a configuração persistente do nó pertence exclusivamente ao Home Music: uma única porta `443`, um único handler `/` e o proxy esperado `127.0.0.1:PORT`. Se existir qualquer porta, rota ou handler adicional, a operação aborta sem reset para não apagar configuração de outro serviço.
+
+Depois de um rename, você pode executar normalmente:
+
+```bash
+npm run tailscale:public:status
+npm run tailscale:public:disable
+# ou, se quiser continuar público no hostname novo:
+npm run tailscale:public:enable
+```
+
+Se a limpeza da configuração antiga falhar, o script não assume que a exposição foi fechada. Para Funnel, ele avisa explicitamente que a URL antiga pode continuar pública e pede conferência com `tailscale funnel status`.
 
 ## Voltar ao modo privado
 
