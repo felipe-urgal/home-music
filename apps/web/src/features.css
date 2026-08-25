@@ -373,3 +373,66 @@
 @media (max-width: 340px) {
   .library-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
+
+.lyrics-panel {
+  margin: 20px 0 4px;
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 14px;
+  background: rgba(255,255,255,.025);
+  overflow: hidden;
+}
+.lyrics-panel__toggle {
+  width: 100%;
+  min-height: 50px;
+  padding: 0 15px;
+  border: 0;
+  background: transparent;
+  color: #dce6ef;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+}
+.lyrics-panel__toggle span {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-weight: 650;
+}
+.lyrics-panel__toggle svg { width: 18px; height: 18px; }
+.lyrics-panel__content {
+  max-height: min(48vh, 430px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px 18px 20px;
+  border-top: 1px solid rgba(255,255,255,.05);
+  scrollbar-width: thin;
+}
+.lyrics-panel__lines {
+  display: grid;
+  gap: 12px;
+  padding-top: 14px;
+}
+.lyrics-panel__lines p {
+  margin: 0;
+  color: #a8b2bc;
+  font-size: 15px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  transition: color .2s ease, transform .2s ease;
+}
+.lyrics-panel__lines.is-synchronized p { color: #68737e; }
+.lyrics-panel__lines.is-synchronized p.is-active {
+  color: #f3f7fb;
+  transform: translateX(4px);
+  font-weight: 650;
+}
+.lyrics-panel__empty {
+  margin: 16px 0 0;
+  color: #7e8994;
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.lyrics-panel__empty--error { color: #ff9c9c; }
