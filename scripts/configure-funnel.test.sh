@@ -184,7 +184,7 @@ assert_state funnel
 "${REPO}/scripts/configure-funnel.sh" disable >/dev/null
 assert_state serve
 assert_contains "${REPO}/.env" 'HOME_MUSIC_COOKIE_SECURE=true'
-assert_contains "${REPO}/.env" 'HOME_MUSIC_TRUST_TAILSCALE_PROXY=true'
+assert_contains "${REPO}/.env" 'HOME_MUSIC_TRUST_TAILSCALE_PROXY=false'
 assert_contains "${REPO}/.env" 'PRODUCTION_HOST=127.0.0.1'
 cleanup_fixture
 
@@ -280,7 +280,7 @@ set -e
 [[ ${RC} -ne 0 ]] || fail_test "falha ao restaurar Serve deveria abortar disable"
 assert_state empty
 assert_contains "${REPO}/.env" 'HOME_MUSIC_COOKIE_SECURE=true'
-assert_contains "${REPO}/.env" 'HOME_MUSIC_TRUST_TAILSCALE_PROXY=true'
+assert_contains "${REPO}/.env" 'HOME_MUSIC_TRUST_TAILSCALE_PROXY=false'
 assert_contains "${REPO}/.env" 'PRODUCTION_HOST=127.0.0.1'
 cleanup_fixture
 
