@@ -307,7 +307,6 @@ Minha música.lrc
 
 Também são aceitos `Minha música.flac.lrc` e `Minha música.txt`. Arquivos LRC com timestamps acompanham a reprodução; TXT é exibido como texto simples. A leitura é local, limitada a 512 KiB e não envia músicas ou metadados para serviços externos.
 
-
 ## Normalização ReplayGain
 
 No menu do player, **Normalização de volume** oferece:
