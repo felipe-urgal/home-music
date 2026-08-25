@@ -36,7 +36,7 @@
 - [x] Layout sem overflow horizontal em telas estreitas
 - [x] Capas confinadas sem quebrar a viewport
 - [ ] Download offline
-- [ ] Cache seletivo
+- [x] Cache seletivo
 - [x] Melhor tratamento de capas ausentes
 
 ## Fase 4 — Operação no Ubuntu
