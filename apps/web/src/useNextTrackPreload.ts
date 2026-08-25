@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import type { NormalizationMode, RepeatMode, Track } from '@home-music/shared';
 import { apiFetch } from './api-client';
-import { resolveNextTrackPreload } from './next-track-preload';
+import { resolveNextTrackPreload, warmTranscodedTrack } from './next-track-preload';
 import type { StreamingMode } from './streaming-quality';
 
 const PRELOAD_DELAY_MS = 1_000;
@@ -36,14 +36,7 @@ export function useNextTrackPreload({
 
     const controller = new AbortController();
     const timeout = window.setTimeout(() => {
-      void apiFetch(candidate.url, {
-        cache: 'no-store',
-        headers: { Range: 'bytes=0-0' },
-        signal: controller.signal
-      })
-        .then(async response => {
-          if (response.ok) await response.arrayBuffer();
-        })
+      void warmTranscodedTrack(apiFetch, candidate.url, controller.signal)
         .catch(() => undefined);
     }, PRELOAD_DELAY_MS);
 
