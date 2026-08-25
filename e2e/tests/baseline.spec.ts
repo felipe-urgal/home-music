@@ -39,6 +39,18 @@ test('login, biblioteca e player permanecem utilizáveis', async ({ page }) => {
     await expect(desktopPlayerBar).toContainText('E2E Track');
     await expect(desktopPlayerBar.getByRole('button', { name: 'Tocar na barra desktop' })).toBeVisible();
 
+    const contextTabs = context.getByRole('tablist', { name: 'Painel contextual' });
+    const queueTab = contextTabs.getByRole('tab', { name: 'Fila' });
+    const lyricsTab = contextTabs.getByRole('tab', { name: 'Letra' });
+    await expect(queueTab).toHaveAttribute('aria-selected', 'true');
+    await expect(lyricsTab).toBeVisible();
+    await lyricsTab.click();
+    await expect(page.getByTestId('desktop-lyrics')).toBeVisible();
+    await expect(page.getByTestId('desktop-lyrics')).toContainText('Linha E2E um');
+    await expect(page.getByTestId('desktop-queue')).toHaveCount(0);
+    await queueTab.click();
+    await expect(desktopQueue).toBeVisible();
+
     expect(await responsiveShell.evaluate(element => getComputedStyle(element).display)).toBe('grid');
     const surfaceBox = await surface.boundingBox();
     expect(surfaceBox).not.toBeNull();
@@ -55,6 +67,7 @@ test('login, biblioteca e player permanecem utilizáveis', async ({ page }) => {
     await expect(context).toBeHidden();
     await expect(desktopPlayerBar).toBeHidden();
     await expect(embeddedPlayerQueue).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Letra' })).toBeVisible();
 
     expect(await responsiveShell.evaluate(element => getComputedStyle(element).display)).toBe('block');
     const surfaceBox = await surface.boundingBox();
@@ -91,6 +104,13 @@ test('login, biblioteca e player permanecem utilizáveis', async ({ page }) => {
     await expect(sidebar.getByRole('button', { name: 'Biblioteca' })).toHaveAttribute('aria-current', 'page');
     await expect(desktopPlayerBar).toBeVisible();
     await expect(desktopPlayerBar).toContainText('E2E Track');
+    await expect(page.getByRole('button', { name: 'Abrir estatísticas' })).toBeHidden();
+    await expect(page.getByRole('button', { name: 'Voltar ao player' })).toBeHidden();
+
+    const libraryTabs = page.getByRole('navigation', { name: 'Navegação da biblioteca' });
+    const songsTabBox = await libraryTabs.getByRole('button', { name: 'Músicas', exact: true }).boundingBox();
+    expect(songsTabBox).not.toBeNull();
+    expect(songsTabBox!.height).toBeLessThanOrEqual(40);
 
     const persistentProgress = desktopPlayerBar.getByLabel('Progresso da reprodução na barra desktop');
     await expect(persistentProgress).toBeEnabled();
