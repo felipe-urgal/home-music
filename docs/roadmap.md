@@ -86,7 +86,7 @@ Objetivo: evoluir a interface para desktop sem regredir o fluxo mobile Player Fi
 - [x] Criar Desktop Shell responsivo com sidebar, conteúdo principal e área contextual
 - [x] Preservar a experiência mobile atual com composição específica por breakpoint
 - [x] Criar player desktop persistente em barra inferior
-- [ ] Criar biblioteca desktop em tabela/lista densa com colunas úteis e ordenação
+- [x] Criar biblioteca desktop em tabela/lista densa com colunas úteis e ordenação
 - [ ] Exibir fila e letras em painel lateral quando houver espaço
 - [ ] Criar navegação desktop para músicas, artistas, álbuns, pastas, favoritos, playlists, Rekordbox e estatísticas
 - [ ] Adicionar atalhos de teclado para play/pause, próxima/anterior, seek, busca e volume quando aplicável
