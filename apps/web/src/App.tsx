@@ -11,6 +11,7 @@ import { useAuth } from './useAuth';
 import { useLibraryData } from './useLibraryData';
 import { useLibraryNavigation } from './useLibraryNavigation';
 import { useNetworkQualityProfile } from './useNetworkQualityProfile';
+import { useNextTrackPreload } from './useNextTrackPreload';
 import { useSystemVolumePreference } from './useSystemVolume';
 
 type Screen = 'player' | 'library' | 'statistics';
@@ -28,6 +29,14 @@ function AuthenticatedApp({ onLogout, offline }: AuthenticatedAppProps) {
   const usesSystemVolume = useSystemVolumePreference();
   const player = useAudioPlayer(library.tracks, screen === 'player', libraryReady, usesSystemVolume);
   const qualityProfile = useNetworkQualityProfile(player.streamingMode, player.setStreamingMode);
+  useNextTrackPreload({
+    queue: player.queue,
+    currentIndex: player.currentIndex,
+    repeatMode: player.repeatMode,
+    streamingMode: player.streamingMode,
+    normalizationMode: player.normalizationMode,
+    playing: player.playing
+  });
   const current = player.current;
   const libraryReturnLabel = buildLibraryReturnLabel({
     selectedGroupName: navigation.selectedGroup?.name,
