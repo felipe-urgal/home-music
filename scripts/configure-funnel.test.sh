@@ -99,6 +99,9 @@ case "$1" in
     if [[ "${1:-}" == "status" ]]; then
       echo "mock funnel status (${state})"
     elif [[ "$*" == *"off"* ]]; then
+      if [[ "${MOCK_FAIL_FUNNEL_OFF:-0}" == "1" ]]; then
+        exit 1
+      fi
       printf '%s' empty > "${MOCK_STATE}"
     else
       if [[ "${MOCK_PARTIAL_FUNNEL_FAIL:-0}" == "1" ]]; then
@@ -157,13 +160,13 @@ MOCK
   export MOCK_STATE="${STATE}"
   export PATH="${BIN}:${ORIGINAL_PATH}"
   export HOME_MUSIC_FUNNEL_YES=1
-  unset MOCK_TS_VERSION MOCK_STATUS_FAIL MOCK_FAIL_SERVE MOCK_FAIL_FUNNEL MOCK_PARTIAL_FUNNEL_FAIL MOCK_FAIL_ACTIVE MOCK_FAIL_RESTART MOCK_FAIL_CURL MOCK_FAIL_PUBLIC_CURL
+  unset MOCK_TS_VERSION MOCK_STATUS_FAIL MOCK_FAIL_SERVE MOCK_FAIL_FUNNEL MOCK_FAIL_FUNNEL_OFF MOCK_PARTIAL_FUNNEL_FAIL MOCK_FAIL_ACTIVE MOCK_FAIL_RESTART MOCK_FAIL_CURL MOCK_FAIL_PUBLIC_CURL
 }
 
 cleanup_fixture() {
   rm -rf "${FIXTURE}"
   export PATH="${ORIGINAL_PATH}"
-  unset HOME_MUSIC_FUNNEL_YES MOCK_STATE MOCK_TS_VERSION MOCK_STATUS_FAIL MOCK_FAIL_SERVE MOCK_FAIL_FUNNEL MOCK_PARTIAL_FUNNEL_FAIL MOCK_FAIL_ACTIVE MOCK_FAIL_RESTART MOCK_FAIL_CURL MOCK_FAIL_PUBLIC_CURL
+  unset HOME_MUSIC_FUNNEL_YES MOCK_STATE MOCK_TS_VERSION MOCK_STATUS_FAIL MOCK_FAIL_SERVE MOCK_FAIL_FUNNEL MOCK_FAIL_FUNNEL_OFF MOCK_PARTIAL_FUNNEL_FAIL MOCK_FAIL_ACTIVE MOCK_FAIL_RESTART MOCK_FAIL_CURL MOCK_FAIL_PUBLIC_CURL
 }
 
 ORIGINAL_PATH="${PATH}"
@@ -254,7 +257,20 @@ assert_state serve
 assert_contains "${REPO}/.env" 'HOME_MUSIC_TRUST_TAILSCALE_PROXY=false'
 cleanup_fixture
 
-# Se a restauração do Serve falhar, disable permanece fail-closed: Funnel não volta.
+# Se o próprio comando de desligar Funnel falhar, o script não finge que fechou a exposição.
+make_fixture funnel
+export MOCK_FAIL_FUNNEL_OFF=1
+set +e
+OUTPUT="$("${REPO}/scripts/configure-funnel.sh" disable 2>&1)"
+RC=$?
+set -e
+[[ ${RC} -ne 0 ]] || fail_test "falha ao desligar Funnel deveria abortar disable"
+assert_state funnel
+grep -Fq 'PODE CONTINUAR PÚBLICA' <<<"${OUTPUT}" || fail_test "aviso de exposição potencial ausente"
+assert_contains "${REPO}/.env" 'HOME_MUSIC_TRUST_TAILSCALE_PROXY=false'
+cleanup_fixture
+
+# Se a restauração do Serve falhar depois de desligar o Funnel, permanece fail-closed.
 make_fixture funnel
 export MOCK_FAIL_SERVE=1
 set +e
