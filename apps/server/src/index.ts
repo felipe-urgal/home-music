@@ -19,6 +19,7 @@ import {
 import { HomeMusicDatabase } from './database.js';
 import { probeFfmpeg, resolveFfmpegCommand, type FfmpegStatus } from './ffmpeg.js';
 import { readCover, scanLibrary, type IndexedTrack } from './library.js';
+import { replayGainForMode } from './replay-gain.js';
 import { readTrackLyrics } from './lyrics.js';
 import {
   openRegularFileInside,
@@ -326,15 +327,6 @@ function cleanTrackIds(value: unknown) {
 function parseNormalizationMode(value: unknown): NormalizationMode | null {
   if (value == null || value === '' || value === 'off') return 'off';
   return value === 'track' || value === 'album' ? value : null;
-}
-
-function normalizationGain(track: IndexedTrack, mode: NormalizationMode) {
-  const value = mode === 'track'
-    ? track.replayGainTrackDb
-    : mode === 'album'
-      ? track.replayGainAlbumDb
-      : null;
-  return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
 function cleanRepeatMode(value: unknown): RepeatMode {
@@ -735,7 +727,7 @@ app.get<{ Params: { id: string }; Querystring: { quality?: string; normalization
   if (!quality) return reply.code(400).send({ error: 'Qualidade de transcoding inválida.' });
   const normalization = parseNormalizationMode(request.query.normalization);
   if (!normalization) return reply.code(400).send({ error: 'Modo de normalização inválido.' });
-  const gainDb = normalizationGain(track, normalization);
+  const gainDb = replayGainForMode(track, normalization);
   if (!ffmpegStatus.available) {
     return reply.code(503).send({ error: 'Transcoding indisponível porque FFmpeg não está disponível.' });
   }
