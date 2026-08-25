@@ -3,12 +3,13 @@ import { createHash, randomUUID } from 'node:crypto';
 import { chmod, mkdir, readdir, rename, rm, stat, utimes } from 'node:fs/promises';
 import path from 'node:path';
 import type { Readable } from 'node:stream';
+import { clampReplayGainDb } from './replay-gain.js';
 
 export const DEFAULT_TRANSCODE_CACHE_MEGABYTES = 512;
 export const MIN_TRANSCODE_CACHE_MEGABYTES = 64;
 export const MAX_TRANSCODE_CACHE_MEGABYTES = 8_192;
 export const DEFAULT_TRANSCODE_TIMEOUT_MS = 120_000;
-const TRANSCODE_CACHE_VERSION = 'aac-m4a-v1';
+const TRANSCODE_CACHE_VERSION = 'aac-m4a-v2-replaygain';
 const MAX_FFMPEG_STDERR_BYTES = 64 * 1024;
 
 type SeekableInput = Readable & { fd?: number | null };
@@ -26,6 +27,7 @@ export type TranscodeSource = {
   sourceSize: number;
   sourceMtimeMs: number;
   quality: TranscodeQuality;
+  normalizationGainDb?: number | null;
   createInput: () => SeekableInput;
 };
 
@@ -41,6 +43,7 @@ export type TranscodeRunnerOptions = {
   input: SeekableInput;
   outputPath: string;
   bitrate: string;
+  normalizationGainDb: number | null;
   timeoutMs: number;
 };
 
@@ -72,9 +75,10 @@ export function parseTranscodeCacheMegabytes(raw: string | undefined) {
   return value;
 }
 
-export function transcodeCacheKey(input: Pick<TranscodeSource, 'trackId' | 'sourceSize' | 'sourceMtimeMs' | 'quality'>) {
+export function transcodeCacheKey(input: Pick<TranscodeSource, 'trackId' | 'sourceSize' | 'sourceMtimeMs' | 'quality' | 'normalizationGainDb'>) {
+  const gain = input.normalizationGainDb == null ? 'off' : clampReplayGainDb(input.normalizationGainDb).toFixed(3);
   return createHash('sha256')
-    .update(`${TRANSCODE_CACHE_VERSION}\0${input.trackId}\0${input.sourceSize}\0${input.sourceMtimeMs}\0${input.quality}`)
+    .update(`${TRANSCODE_CACHE_VERSION}\0${input.trackId}\0${input.sourceSize}\0${input.sourceMtimeMs}\0${input.quality}\0${gain}`)
     .digest('hex');
 }
 
@@ -82,7 +86,7 @@ export function seekableInputFd(input: Pick<SeekableInput, 'fd'>) {
   return typeof input.fd === 'number' && Number.isInteger(input.fd) && input.fd >= 0 ? input.fd : null;
 }
 
-export const runFfmpegTranscode: TranscodeRunner = ({ command, input, outputPath, bitrate, timeoutMs }) => new Promise((resolve, reject) => {
+export const runFfmpegTranscode: TranscodeRunner = ({ command, input, outputPath, bitrate, normalizationGainDb, timeoutMs }) => new Promise((resolve, reject) => {
   const inputFd = seekableInputFd(input);
   if (inputFd === null) {
     input.destroy();
@@ -103,14 +107,22 @@ export const runFfmpegTranscode: TranscodeRunner = ({ command, input, outputPath
     '-sn',
     '-dn',
     '-map_metadata', '-1',
-    '-map_chapters', '-1',
+    '-map_chapters', '-1'
+  ];
+
+  if (normalizationGainDb != null) {
+    const safeGain = clampReplayGainDb(normalizationGainDb).toFixed(3);
+    args.push('-filter:a', `volume=${safeGain}dB,alimiter=limit=0.97`);
+  }
+
+  args.push(
     '-c:a', 'aac',
     '-b:a', bitrate,
     '-threads', '1',
     '-movflags', '+faststart',
     '-f', 'mp4',
     outputPath
-  ];
+  );
 
   const child = spawn(command, args, {
     stdio: ['ignore', 'ignore', 'pipe', inputFd],
@@ -222,6 +234,7 @@ export class TranscodeManager {
           input,
           outputPath: temporaryPath,
           bitrate: TRANSCODE_PROFILES[source.quality].bitrate,
+          normalizationGainDb: source.normalizationGainDb == null ? null : clampReplayGainDb(source.normalizationGainDb),
           timeoutMs: this.options.timeoutMs ?? DEFAULT_TRANSCODE_TIMEOUT_MS
         });
 
