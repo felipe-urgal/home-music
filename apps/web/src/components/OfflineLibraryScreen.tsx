@@ -1,8 +1,9 @@
-import { Download, Music2, Play, Trash2, Wifi } from 'lucide-react';
+import { Download, Play, Trash2, Wifi } from 'lucide-react';
 import type { Track } from '@home-music/shared';
 import { formatOfflineBytes, type OfflineDownloadRecord } from '../offline-downloads';
 import { Artwork } from './Artwork';
 import { MiniPlayer } from './MiniPlayer';
+import { ResponsiveState } from './ResponsiveState';
 
 type OfflineLibraryScreenProps = {
   records: OfflineDownloadRecord[];
@@ -53,36 +54,46 @@ export function OfflineLibraryScreen({
         <span>Modo offline. Somente músicas salvas neste dispositivo estão disponíveis.</span>
       </div>
 
-      <section className="library-content">
-        <div className="section-heading"><span>Músicas baixadas</span><small>{records.length}</small></div>
-        <div className="library-track-list">
-          {records.map(record => {
-            const track = record.track;
-            const isCurrent = track.id === current?.id;
-            return (
-              <div className={`library-track ${isCurrent ? 'is-current' : ''}`} key={track.id}>
-                <button className="library-track__main" onClick={() => onPlayTrack(track, tracks)}>
-                  <Artwork track={fallbackTrack(track)} />
-                  <span className="library-track__text">
-                    <strong>{track.title}</strong>
-                    <small>{track.artist} · {formatOfflineBytes(record.size)}</small>
-                  </span>
-                  {isCurrent && playing ? <span className="playing-indicator">▶</span> : <Play className="library-track__action" />}
-                </button>
-                <button
-                  className="track-action"
-                  aria-label={`Remover download de ${track.title}`}
-                  onClick={() => {
-                    if (window.confirm(`Remover “${track.title}” dos downloads offline?`)) onRemove(track.id);
-                  }}
-                >
-                  <Trash2 />
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      </section>
+      {records.length > 0 ? (
+        <section className="library-content">
+          <div className="section-heading"><span>Músicas baixadas</span><small>{records.length}</small></div>
+          <div className="library-track-list">
+            {records.map(record => {
+              const track = record.track;
+              const isCurrent = track.id === current?.id;
+              return (
+                <div className={`library-track ${isCurrent ? 'is-current' : ''}`} key={track.id}>
+                  <button className="library-track__main" onClick={() => onPlayTrack(track, tracks)}>
+                    <Artwork track={fallbackTrack(track)} />
+                    <span className="library-track__text">
+                      <strong>{track.title}</strong>
+                      <small>{track.artist} · {formatOfflineBytes(record.size)}</small>
+                    </span>
+                    {isCurrent && playing ? <span className="playing-indicator">▶</span> : <Play className="library-track__action" />}
+                  </button>
+                  <button
+                    className="track-action"
+                    aria-label={`Remover download de ${track.title}`}
+                    onClick={() => {
+                      if (window.confirm(`Remover “${track.title}” dos downloads offline?`)) onRemove(track.id);
+                    }}
+                  >
+                    <Trash2 />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ) : (
+        <ResponsiveState
+          variant="empty"
+          title="Nenhum download offline"
+          detail="Conecte ao Home Music e baixe uma música pelo player."
+        >
+          <button className="secondary-action" onClick={onExitOffline}>Tentar conectar</button>
+        </ResponsiveState>
+      )}
 
       {current && (
         <MiniPlayer
@@ -93,15 +104,6 @@ export function OfflineLibraryScreen({
           onTogglePlay={onTogglePlay}
           onNext={onNext}
         />
-      )}
-
-      {!records.length && (
-        <div className="center-state center-state--actions" role="status">
-          <Music2 />
-          <strong>Nenhum download offline</strong>
-          <span>Conecte ao Home Music e baixe uma música pelo player.</span>
-          <button className="secondary-action" onClick={onExitOffline}>Tentar conectar</button>
-        </div>
       )}
     </>
   );
