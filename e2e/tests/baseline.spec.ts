@@ -92,6 +92,12 @@ test('login, biblioteca e player permanecem utilizáveis', async ({ page }) => {
     await expect(desktopPlayerBar).toBeVisible();
     await expect(desktopPlayerBar).toContainText('E2E Track');
 
+    const persistentProgress = desktopPlayerBar.getByLabel('Progresso da reprodução na barra desktop');
+    await expect(persistentProgress).toBeEnabled();
+    const progressBefore = Number(await persistentProgress.inputValue());
+    await expect.poll(async () => Number(await persistentProgress.inputValue()), { timeout: 3_000 })
+      .toBeGreaterThan(progressBefore + 0.2);
+
     await desktopPlayerBar.getByRole('button', { name: 'Pausar na barra desktop' }).click();
     await expect(desktopPlayerBar.getByRole('button', { name: 'Tocar na barra desktop' })).toBeVisible();
     await desktopPlayerBar.getByRole('button', { name: 'Tocar na barra desktop' }).click();
