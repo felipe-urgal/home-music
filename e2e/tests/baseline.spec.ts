@@ -240,7 +240,7 @@ test('atalhos de teclado desktop controlam reprodução sem capturar a busca', a
   await page.keyboard.press('ArrowRight');
   await expect.poll(async () => Number(await progress.inputValue())).toBeGreaterThanOrEqual(4.5);
 
-  const volume = page.getByLabel('Volume');
+  const volume = page.getByRole('slider', { name: 'Volume', exact: true });
   const initialVolume = Number(await volume.inputValue());
   if (initialVolume >= 0.05) {
     await page.keyboard.press('ArrowDown');
