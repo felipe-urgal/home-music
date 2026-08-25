@@ -67,6 +67,8 @@ export function DesktopPlayerBar({
     onVolume
   });
 
+  if (!desktopLayout) return null;
+
   return (
     <footer className="desktop-player-bar" data-testid="desktop-player-bar" aria-label="Player persistente">
       <button
