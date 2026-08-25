@@ -1,4 +1,5 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import { isIP } from 'node:net';
 
 export const SESSION_COOKIE_NAME = 'home_music_session';
 export const SESSION_TTL_SECONDS = 7 * 24 * 60 * 60;
@@ -33,6 +34,21 @@ export function buildSessionCookie(token: string, maxAgeSeconds: number, secure 
   ];
   if (secure) parts.push('Secure');
   return parts.join('; ');
+}
+
+export function loginRateLimitKey(
+  socketIp: string,
+  forwardedFor: string | string[] | undefined,
+  trustLoopbackProxy: boolean
+) {
+  if (!trustLoopbackProxy) return socketIp;
+
+  const normalizedSocketIp = socketIp.startsWith('::ffff:') ? socketIp.slice(7) : socketIp;
+  if (normalizedSocketIp !== '127.0.0.1' && normalizedSocketIp !== '::1') return socketIp;
+  if (typeof forwardedFor !== 'string' || forwardedFor.includes(',')) return socketIp;
+
+  const candidate = forwardedFor.trim();
+  return isIP(candidate) ? candidate : socketIp;
 }
 
 export class SessionManager {

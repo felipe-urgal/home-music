@@ -2,7 +2,7 @@
 
 Streaming pessoal das músicas do seu computador para o celular.
 
-O Home Music roda no Ubuntu, lê uma pasta local de músicas e expõe uma interface mobile **Player First**. Em produção, o React compilado e a API são servidos pelo mesmo processo Fastify e pela mesma porta interna. Para uso remoto, o caminho recomendado é **Tailscale Serve + HTTPS**, sem port-forwarding público.
+O Home Music roda no Ubuntu, lê uma pasta local de músicas e expõe uma interface mobile **Player First**. Em produção, o React compilado e a API são servidos pelo mesmo processo Fastify e pela mesma porta interna. Para uso remoto, o perfil mais restrito usa **Tailscale Serve + HTTPS**; quando a prioridade é acessar sem instalar Tailscale no celular, existe um perfil público opcional via **Tailscale Funnel**.
 
 ## Recursos atuais
 
@@ -103,6 +103,8 @@ PRODUCTION_HOST=0.0.0.0
 
 `HOME_MUSIC_COOKIE_SECURE=true` deve ser usado somente quando o navegador acessa o Home Music por **HTTPS** e um proxy confiável encaminha a requisição ao Fastify. O comando `npm run tailscale:enable` aplica essa configuração automaticamente apenas depois de validar o HTTPS real.
 
+O perfil público via Funnel exige uma senha exclusiva com pelo menos **20 caracteres** antes de permitir a exposição na internet.
+
 ## Desenvolvimento
 
 ```bash
@@ -185,13 +187,15 @@ git pull --ff-only
 npm run service:update
 ```
 
-`service:update` para o processo antes de `npm ci/build`, evitando servir `index.html` antigo junto com assets de uma versão nova. A configuração persistente do Tailscale Serve fica no `tailscaled` e não é removida pelo update.
+`service:update` para o processo antes de `npm ci/build`, evitando servir `index.html` antigo junto com assets de uma versão nova. As configurações persistentes de Tailscale Serve/Funnel ficam no `tailscaled` e não são removidas pelo update.
 
 O servidor registra `SIGTERM`/`SIGINT` antes da inicialização potencialmente longa da biblioteca, aguarda scan em andamento e fecha Fastify + SQLite antes de encerrar.
 
 ## Acesso remoto seguro: Tailscale + HTTPS
 
-O modo recomendado para acessar o Home Music fora de casa usa **Tailscale Serve**. **Tailscale Funnel não é usado**, porque Funnel torna o serviço acessível pela internet pública.
+### Perfil privado — Tailscale Serve
+
+O modo mais restrito usa **Tailscale Serve** e exige Tailscale conectado também no celular.
 
 ```text
 celular com Tailscale
@@ -205,38 +209,60 @@ celular com Tailscale
   Fastify 127.0.0.1:8787
 ```
 
-Pré-requisitos:
-
-- Tailscale instalado e autenticado no Ubuntu e no celular;
-- MagicDNS e HTTPS Certificates habilitados no tailnet;
-- `home-music.service` instalado.
-
 Ative com:
 
 ```bash
 npm run tailscale:enable
 ```
 
-O setup valida o backend e o HTTPS **antes** de fechar o bind da LAN, recusa sobrescrever outro Serve em `443`, faz rollback do `.env`/serviço se algo falhar e, no perfil final, mantém `8787` somente em loopback com cookie `Secure`.
+O setup valida o backend e o HTTPS **antes** de fechar o bind da LAN, recusa sobrescrever outro serviço em `443`, faz rollback do `.env`/serviço se algo falhar e mantém `8787` somente em loopback com cookie `Secure`.
+
+Status e rollback para HTTP/LAN:
+
+```bash
+npm run tailscale:status
+npm run tailscale:disable
+```
+
+Guia completo do perfil privado, grants e troubleshooting: [`docs/tailscale.md`](docs/tailscale.md).
+
+### Perfil sem app no celular — Tailscale Funnel
+
+Quando você quer abrir o Home Music diretamente no Safari/Chrome em Wi-Fi, 4G ou 5G **sem instalar o Tailscale no telefone**, use o perfil público opcional:
+
+```bash
+npm run tailscale:public:enable
+```
+
+Esse fluxo usa Tailscale Funnel em HTTPS/443. O Ubuntu continua com Tailscale instalado, mas o celular não precisa participar do tailnet.
+
+Antes de publicar, o script:
+
+- exige `HOME_MUSIC_PASSWORD` exclusiva com pelo menos 20 caracteres;
+- fecha o Fastify em `127.0.0.1` e habilita cookie `Secure` antes de criar o Funnel;
+- recusa conflitos em `443`;
+- valida o estado final do proxy e `/ready` via HTTPS;
+- faz rollback transacional e restaura o Serve privado se a migração falhar.
 
 Status:
 
 ```bash
-npm run tailscale:status
-tailscale serve status
+npm run tailscale:public:status
 ```
 
-Rollback para HTTP/LAN:
+Para remover a exposição pública e voltar automaticamente ao **Serve privado**:
 
 ```bash
-npm run tailscale:disable
+npm run tailscale:public:disable
 ```
 
-O Serve usa `--bg`, portanto persiste após reboot e após `tailscale down`/`tailscale up`.
+> Funnel torna a URL `*.ts.net` alcançável pela internet pública. As APIs e a biblioteca continuam protegidas pelo login próprio do Home Music, mas qualquer pessoa pode alcançar a tela de login. Não use uma senha reutilizada.
 
-> Certificados `*.ts.net` são públicos: o hostname da máquina/tailnet aparece em Certificate Transparency. O conteúdo e o acesso ao Home Music continuam privados ao tailnet, mas use um nome de máquina que não revele informação sensível.
+> Tailscale Serve e Funnel não podem ocupar a mesma porta `443` simultaneamente; o script controla a transição entre os perfis.
 
-Guia completo, grants e troubleshooting: [`docs/tailscale.md`](docs/tailscale.md).
+Guia completo do modo sem cliente Tailscale no celular: [`docs/public-access.md`](docs/public-access.md).
+
+> Certificados `*.ts.net` são públicos: o hostname da máquina/tailnet pode aparecer em Certificate Transparency. Use um nome de máquina que não revele informação sensível.
 
 ## Re-scan da biblioteca
 
@@ -246,14 +272,15 @@ O re-scan é incremental: arquivos inalterados reutilizam o índice, somente arq
 
 ## Segurança
 
-- não publique a porta do Home Music diretamente na internet;
-- não use Tailscale Funnel para este app;
-- use uma senha exclusiva;
+- não publique a porta `8787` diretamente na internet e não faça port-forwarding;
+- prefira Tailscale Serve quando puder manter o celular no tailnet;
+- use Funnel somente quando aceitar conscientemente que a URL de login será pública;
+- use uma senha exclusiva; o perfil Funnel exige pelo menos 20 caracteres;
 - `.env` é ignorado pelo Git e o instalador do serviço força permissão `0600`;
 - `data/` e os arquivos SQLite são endurecidos pelo instalador;
 - em desenvolvimento a API fica em `127.0.0.1`;
 - no perfil LAN, `PRODUCTION_HOST=0.0.0.0` permite acesso HTTP local;
-- no perfil Tailscale, `PRODUCTION_HOST=127.0.0.1` remove o acesso direto a `8787` e somente o Serve recebe conexões remotas;
+- nos perfis HTTPS, `PRODUCTION_HOST=127.0.0.1` remove o acesso direto a `8787` e somente o proxy Tailscale recebe conexões remotas;
 - frontend público não significa biblioteca pública: `/api/*` exige sessão;
 - cookie de sessão é `HttpOnly` + `SameSite=Strict` e recebe `Secure` no perfil HTTPS;
 - o backend não confia cegamente em `X-Forwarded-Proto`;
@@ -266,9 +293,9 @@ O re-scan é incremental: arquivos inalterados reutilizam o índice, somente arq
 - respostas de produção aplicam CSP e headers de hardening;
 - CI usa lockfile, audit, typecheck, testes, build, smoke real de produção e testes dos scripts operacionais.
 
-Para tailnets compartilhados, prefira **grants** least-privilege e permita somente TCP/443 ao servidor Home Music para as identidades autorizadas. Não conceda acesso remoto à porta `8787`.
+Para tailnets compartilhados, prefira **grants** least-privilege e permita somente TCP/443 ao servidor Home Music para as identidades autorizadas no perfil Serve. Não conceda acesso remoto à porta `8787`.
 
-HTTP na LAN **não criptografa** usuário, senha ou áudio. O perfil Tailscale + HTTPS elimina esse transporte HTTP no caminho do navegador sem tornar o serviço público.
+HTTP na LAN **não criptografa** usuário, senha ou áudio. Os perfis Tailscale terminam HTTPS no `tailscaled`; a diferença é que Serve restringe a origem ao tailnet e Funnel aceita conexões da internet pública.
 
 ## Docker
 
@@ -278,7 +305,7 @@ O Compose atual continua voltado a desenvolvimento:
 docker compose up
 ```
 
-Para uso cotidiano no Ubuntu, o caminho recomendado é o serviço systemd; para acesso remoto, adicione Tailscale Serve.
+Para uso cotidiano no Ubuntu, o caminho recomendado é o serviço systemd; para acesso remoto, escolha Tailscale Serve ou, conscientemente, Funnel.
 
 ## Qualidade
 
@@ -291,6 +318,8 @@ npm audit --audit-level=high
 bash -n scripts/install-systemd.sh
 bash -n scripts/configure-tailscale.sh
 bash scripts/configure-tailscale.test.sh
+bash -n scripts/configure-funnel.sh
+bash scripts/configure-funnel.test.sh
 ```
 
 ## Próximos passos
@@ -317,17 +346,3 @@ No menu do player, **Normalização de volume** oferece:
 - **Por álbum**: preserva as diferenças internas do álbum e usa o ganho da faixa como fallback.
 
 A preferência fica salva somente no dispositivo. Quando a faixa possui tags ReplayGain, o backend aplica o ganho durante o transcoding, limita valores extremos e usa um limiter contra clipping. O arquivo original nunca é modificado. Faixas sem tags continuam tocando normalmente, sem normalização.
-
-Após esta atualização, o primeiro startup faz um re-scan completo único para indexar as tags ReplayGain existentes.
-
-
-## Estatísticas pessoais
-
-Na Biblioteca, o botão de gráfico abre um resumo do histórico local com:
-
-- reproduções e tempo estimado;
-- quantidade de faixas e artistas diferentes;
-- músicas, artistas e álbuns mais ouvidos;
-- filtros de 7 dias, 30 dias e todo o histórico disponível.
-
-Os cálculos são feitos localmente no SQLite e a rota exige sessão autenticada. O tempo é uma estimativa baseada na duração das faixas iniciadas. Para manter o banco enxuto, o histórico e as estatísticas consideram no máximo as 2.000 reproduções mais recentes.

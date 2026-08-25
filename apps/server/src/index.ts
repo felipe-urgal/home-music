@@ -10,6 +10,7 @@ import {
 } from './auto-rescan.js';
 import {
   buildSessionCookie,
+  loginRateLimitKey,
   LoginRateLimiter,
   readCookie,
   SESSION_COOKIE_NAME,
@@ -84,6 +85,10 @@ const host = isProduction
 const authUser = process.env.HOME_MUSIC_USER || '';
 const authPassword = process.env.HOME_MUSIC_PASSWORD || '';
 const forceSecureCookie = process.env.HOME_MUSIC_COOKIE_SECURE === 'true';
+const trustTailscaleForwardedFor = process.env.HOME_MUSIC_TRUST_TAILSCALE_PROXY === 'true'
+  && isProduction
+  && host === '127.0.0.1'
+  && forceSecureCookie;
 const ffmpegPathConfig = process.env.HOME_MUSIC_FFMPEG_PATH;
 let ffmpegCommand = 'ffmpeg';
 try {
@@ -492,7 +497,11 @@ app.get('/api/auth/status', async (request, reply) => {
 
 app.post<{ Body: { username?: unknown; password?: unknown } }>('/api/auth/login', async (request, reply) => {
   reply.header('Cache-Control', 'no-store');
-  const key = request.ip;
+  const key = loginRateLimitKey(
+    request.raw.socket.remoteAddress || request.ip,
+    request.headers['x-forwarded-for'],
+    trustTailscaleForwardedFor
+  );
 
   if (loginRateLimiter.isBlocked(key)) {
     reply.header('Retry-After', '300');
