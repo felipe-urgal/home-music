@@ -37,11 +37,7 @@ export function useBackgroundPlaybackContinuity({
   }, [currentTrackId]);
 
   useEffect(() => {
-    configurePlaybackAudioSession(navigator);
-  }, []);
-
-  useEffect(() => {
-    if (playing) configurePlaybackAudioSession(navigator);
+    if (playing && isAppleMobileWebKit(navigator)) configurePlaybackAudioSession(navigator);
   }, [playing]);
 
   useEffect(() => {
