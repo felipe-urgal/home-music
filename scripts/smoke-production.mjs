@@ -5,6 +5,7 @@ import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -34,6 +35,21 @@ async function freePort() {
       server.close(error => error ? reject(error) : resolve(port));
     });
   });
+}
+
+function updateSmokeUserRole(role) {
+  const raw = new DatabaseSync(databasePath);
+  raw.exec('PRAGMA busy_timeout = 5000;');
+  try {
+    const result = raw.prepare(`
+      UPDATE users
+      SET role = ?, updated_at = ?
+      WHERE username_normalized = ?;
+    `).run(role, new Date().toISOString(), username);
+    assert.equal(Number(result.changes), 1, `Smoke user deveria ser atualizado para role ${role}.`);
+  } finally {
+    raw.close();
+  }
 }
 
 const port = await freePort();
@@ -276,6 +292,47 @@ try {
     pending: 0
   });
   assert.equal(internalHealthBody.schemaVersion, 6);
+
+  updateSmokeUserRole('user');
+  try {
+    const userStatus = await fetch(`${baseUrl}/api/auth/status`, {
+      headers: { Cookie: cookie }
+    });
+    assert.equal(userStatus.status, 200);
+    assert.equal((await userStatus.json()).user?.role, 'user');
+
+    const userLibrary = await fetch(`${baseUrl}/api/library`, {
+      headers: { Cookie: cookie }
+    });
+    assert.equal(userLibrary.status, 200, 'User autenticado deve continuar acessando a biblioteca.');
+
+    const adminOperations = [
+      { method: 'GET', path: '/api/health' },
+      { method: 'POST', path: '/api/library/scan' },
+      { method: 'POST', path: '/api/integrations/rekordbox/preview' },
+      { method: 'POST', path: '/api/integrations/rekordbox/import' }
+    ];
+
+    for (const operation of adminOperations) {
+      const response = await fetch(`${baseUrl}${operation.path}`, {
+        method: operation.method,
+        headers: {
+          Cookie: cookie,
+          'X-Home-Music-Request': '1'
+        }
+      });
+      assert.equal(response.status, 403, `${operation.method} ${operation.path} deveria exigir admin.`);
+      assert.deepEqual(await response.json(), { error: 'Acesso administrativo necessário.' });
+    }
+  } finally {
+    updateSmokeUserRole('admin');
+  }
+
+  const restoredAdminStatus = await fetch(`${baseUrl}/api/auth/status`, {
+    headers: { Cookie: cookie }
+  });
+  assert.equal(restoredAdminStatus.status, 200);
+  assert.equal((await restoredAdminStatus.json()).user?.role, 'admin');
 
   const library = await fetch(`${baseUrl}/api/library`, {
     headers: { Cookie: cookie }
