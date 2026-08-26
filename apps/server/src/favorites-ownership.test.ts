@@ -57,6 +57,7 @@ function replaceFavoritesWithLegacyV6(databasePath: string, rows: Array<{ trackI
   try {
     db.exec(`
       DROP TABLE favorites;
+      DROP TABLE legacy_favorites_pending;
       CREATE TABLE favorites (
         track_id TEXT PRIMARY KEY REFERENCES tracks(id) ON DELETE CASCADE,
         created_at TEXT NOT NULL
@@ -106,6 +107,32 @@ test('favoritos são isolados por usuário e a mesma faixa pode pertencer a cont
   });
 });
 
+test('schema v7 exige dono em todo favorito persistido', async () => {
+  await withDatabase(async databasePath => {
+    const database = new HomeMusicDatabase(databasePath);
+    database.syncTracks([indexedTrack('a')], '/music', '2026-08-26T12:00:00.000Z');
+    database.close();
+
+    const raw = new DatabaseSync(databasePath);
+    raw.exec('PRAGMA foreign_keys = ON;');
+    try {
+      const columns = raw.prepare('PRAGMA table_info(favorites);').all() as Array<{
+        name?: string;
+        notnull?: number;
+      }>;
+      assert.equal(columns.find(column => column.name === 'user_id')?.notnull, 1);
+      assert.throws(() => {
+        raw.prepare(`
+          INSERT INTO favorites(user_id, track_id, created_at)
+          VALUES (NULL, 'a', '2026-08-26T12:00:00.000Z');
+        `).run();
+      });
+    } finally {
+      raw.close();
+    }
+  });
+});
+
 test('migration v6 atribui favoritos globais ao primeiro usuário criado sem alterar timestamps', async () => {
   await withDatabase(async databasePath => {
     const prepared = new HomeMusicDatabase(databasePath);
@@ -136,7 +163,7 @@ test('migration v6 atribui favoritos globais ao primeiro usuário criado sem alt
       assert.equal(row.track_id, 'a');
       assert.equal(row.created_at, '2026-08-20T09:30:00.000Z');
       assert.equal(
-        Number((raw.prepare('SELECT COUNT(*) AS count FROM favorites WHERE user_id IS NULL;').get() as Record<string, unknown>).count),
+        Number((raw.prepare('SELECT COUNT(*) AS count FROM legacy_favorites_pending;').get() as Record<string, unknown>).count),
         0
       );
     } finally {
@@ -145,7 +172,7 @@ test('migration v6 atribui favoritos globais ao primeiro usuário criado sem alt
   });
 });
 
-test('migration pré-bootstrap preserva favoritos pendentes e bootstrap os reivindica atomicamente', async () => {
+test('migration pré-bootstrap guarda favoritos fora da tabela ativa e bootstrap os reivindica atomicamente', async () => {
   await withDatabase(async databasePath => {
     const prepared = new HomeMusicDatabase(databasePath);
     prepared.syncTracks([indexedTrack('a')], '/music', '2026-08-26T12:00:00.000Z');
@@ -163,10 +190,16 @@ test('migration pré-bootstrap preserva favoritos pendentes e bootstrap os reivi
 
     const pending = new DatabaseSync(databasePath);
     try {
+      assert.equal(
+        Number((pending.prepare('SELECT COUNT(*) AS count FROM favorites;').get() as Record<string, unknown>).count),
+        0
+      );
       const row = pending.prepare(`
-        SELECT user_id, track_id, created_at FROM favorites WHERE track_id = 'a';
+        SELECT track_id, created_at
+        FROM legacy_favorites_pending
+        WHERE track_id = 'a';
       `).get() as Record<string, unknown>;
-      assert.equal(row.user_id, null);
+      assert.equal(row.track_id, 'a');
       assert.equal(row.created_at, '2026-08-20T09:30:00.000Z');
     } finally {
       pending.close();
@@ -193,11 +226,41 @@ test('migration pré-bootstrap preserva favoritos pendentes e bootstrap os reivi
       assert.equal(row.user_id, FIRST_USER_ID);
       assert.equal(row.created_at, '2026-08-20T09:30:00.000Z');
       assert.equal(
-        Number((raw.prepare('SELECT COUNT(*) AS count FROM favorites WHERE user_id IS NULL;').get() as Record<string, unknown>).count),
+        Number((raw.prepare('SELECT COUNT(*) AS count FROM legacy_favorites_pending;').get() as Record<string, unknown>).count),
         0
       );
     } finally {
       raw.close();
     }
+  });
+});
+
+test('bootstrap já inicializado recupera staging pendente para o primeiro usuário', async () => {
+  await withDatabase(async databasePath => {
+    const database = new HomeMusicDatabase(databasePath);
+    database.syncTracks([indexedTrack('a')], '/music', '2026-08-26T12:00:00.000Z');
+    database.close();
+    insertUser(databasePath, FIRST_USER_ID, '2026-08-26T10:00:00.000Z', 'admin');
+
+    const raw = new DatabaseSync(databasePath);
+    try {
+      raw.prepare(`
+        INSERT INTO legacy_favorites_pending(track_id, created_at)
+        VALUES ('a', '2026-08-20T09:30:00.000Z');
+      `).run();
+    } finally {
+      raw.close();
+    }
+
+    const result = await bootstrapInitialAdmin({
+      databasePath,
+      username: 'ignorado',
+      password: 'senha-ignorada-segura-123'
+    });
+    assert.deepEqual(result, { status: 'already-initialized' });
+
+    const recovered = new HomeMusicDatabase(databasePath);
+    assert.deepEqual(recovered.getFavoriteIds(FIRST_USER_ID), ['a']);
+    recovered.close();
   });
 });
