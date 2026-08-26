@@ -1,15 +1,16 @@
 const CACHE_PREFIX = 'home-music-static-';
 const CACHE_NAME = `${CACHE_PREFIX}v2`;
 const OFFLINE_AUDIO_CACHE_PREFIX = 'home-music-offline-audio-v2-';
+const OFFLINE_CLIENT_SCOPE_CACHE_NAME = 'home-music-offline-client-scope-v1';
 const LEGACY_OFFLINE_AUDIO_CACHE_NAME = 'home-music-offline-audio-v1';
 const OFFLINE_AUDIO_PREFIX = '/offline-audio/';
+const OFFLINE_CLIENT_SCOPE_PREFIX = '/__home-music-offline-client/';
 const CAPABILITY_REQUEST = 'HOME_MUSIC_GET_CAPABILITIES';
 const CAPABILITY_RESPONSE = 'HOME_MUSIC_CAPABILITIES';
 const SHELL_URL = '/';
 const REVALIDATED_STATIC = new Set(['/manifest.webmanifest', '/favicon.svg']);
 const USER_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
 const TRACK_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
-const offlineUserByClient = new Map();
 
 function isApiPath(pathname) {
   return pathname === '/api' || pathname.startsWith('/api/');
@@ -37,6 +38,35 @@ function offlineTrackId(pathname) {
 
 function offlineAudioCacheName(userId) {
   return `${OFFLINE_AUDIO_CACHE_PREFIX}${encodeURIComponent(userId)}`;
+}
+
+function offlineClientScopeRequest(clientId) {
+  return new Request(`${self.location.origin}${OFFLINE_CLIENT_SCOPE_PREFIX}${encodeURIComponent(clientId)}`);
+}
+
+async function setOfflineClientScope(clientId, userId) {
+  const cache = await caches.open(OFFLINE_CLIENT_SCOPE_CACHE_NAME);
+  const request = offlineClientScopeRequest(clientId);
+  if (!userId) {
+    await cache.delete(request);
+    return;
+  }
+
+  await cache.put(request, new Response(userId, {
+    headers: {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Cache-Control': 'no-store'
+    }
+  }));
+}
+
+async function offlineUserForClient(clientId) {
+  if (!clientId) return null;
+  const cache = await caches.open(OFFLINE_CLIENT_SCOPE_CACHE_NAME);
+  const response = await cache.match(offlineClientScopeRequest(clientId));
+  if (!response) return null;
+  const userId = await response.text();
+  return USER_ID_RE.test(userId) ? userId : null;
 }
 
 function sourceAudioUrl(trackId) {
@@ -105,6 +135,12 @@ async function serveOfflineAudio(request, userId, trackId) {
   partialHeaders.set('Content-Length', String(partial.size));
   partialHeaders.set('Content-Range', `bytes ${range.start}-${range.end}/${blob.size}`);
   return new Response(partial, { status: 206, headers: partialHeaders });
+}
+
+async function serveOfflineAudioForClient(request, clientId, trackId) {
+  const userId = await offlineUserForClient(clientId);
+  if (!userId) return offlineUnavailable();
+  return serveOfflineAudio(request, userId, trackId);
 }
 
 function assetUrlsFromHtml(html) {
@@ -224,16 +260,14 @@ self.addEventListener('message', event => {
     ? event.data.userId
     : null;
 
-  if (clientId) {
-    if (userId) offlineUserByClient.set(clientId, userId);
-    else offlineUserByClient.delete(clientId);
-  }
-
-  event.ports?.[0]?.postMessage({
-    type: CAPABILITY_RESPONSE,
-    version: 3,
-    offlineAudio: true
-  });
+  event.waitUntil((async () => {
+    if (clientId) await setOfflineClientScope(clientId, userId);
+    event.ports?.[0]?.postMessage({
+      type: CAPABILITY_RESPONSE,
+      version: 3,
+      offlineAudio: true
+    });
+  })());
 });
 
 self.addEventListener('fetch', event => {
@@ -243,11 +277,7 @@ self.addEventListener('fetch', event => {
 
   const downloadedTrackId = offlineTrackId(url.pathname);
   if (downloadedTrackId && (request.method === 'GET' || request.method === 'HEAD')) {
-    const userId = event.clientId ? offlineUserByClient.get(event.clientId) : null;
-    event.respondWith(userId
-      ? serveOfflineAudio(request, userId, downloadedTrackId)
-      : Promise.resolve(offlineUnavailable())
-    );
+    event.respondWith(serveOfflineAudioForClient(request, event.clientId, downloadedTrackId));
     return;
   }
 
@@ -255,7 +285,7 @@ self.addEventListener('fetch', event => {
 
   // Conteúdo autenticado continua fora do cache estático da PWA.
   // Downloads explícitos usam caches separados por usuário. A rota virtual contém
-  // somente a faixa; o cache é escolhido pelo escopo do client/tab que fez a requisição.
+  // somente a faixa; o cache é escolhido pelo escopo persistido do client/tab atual.
   if (isApiPath(url.pathname)) return;
 
   if (request.mode === 'navigate') {
