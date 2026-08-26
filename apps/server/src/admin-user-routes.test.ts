@@ -190,7 +190,7 @@ test('admin altera outro usuário e sessões são revogadas imediatamente', asyn
   }
 });
 
-test('operações administrativas na própria conta são bloqueadas provisoriamente', async () => {
+test('operações administrativas na própria conta são bloqueadas na API administrativa', async () => {
   const fixture = await buildApp();
   try {
     for (const request of [
