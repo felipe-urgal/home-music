@@ -293,7 +293,13 @@ try {
     active: 0,
     pending: 0
   });
-  assert.equal(internalHealthBody.schemaVersion, 6);
+  assert.equal(internalHealthBody.schemaVersion, 7);
+
+  const favorites = await fetch(`${baseUrl}/api/favorites`, {
+    headers: { Cookie: cookie }
+  });
+  assert.equal(favorites.status, 200);
+  assert.deepEqual(await favorites.json(), { trackIds: [] });
 
   updateSmokeUserRole('user');
   try {
@@ -307,6 +313,12 @@ try {
       headers: { Cookie: cookie }
     });
     assert.equal(userLibrary.status, 200, 'User autenticado deve continuar acessando a biblioteca.');
+
+    const userFavorites = await fetch(`${baseUrl}/api/favorites`, {
+      headers: { Cookie: cookie }
+    });
+    assert.equal(userFavorites.status, 200, 'User autenticado deve acessar somente os próprios favoritos.');
+    assert.deepEqual(await userFavorites.json(), { trackIds: [] });
 
     const adminOperations = [
       { method: 'GET', path: '/api/health' },
