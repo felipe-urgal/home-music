@@ -7,6 +7,8 @@ import {
   rememberOfflineUserId
 } from './offline-user';
 
+const OFFLINE_PLAYER_STATE_KEY = 'home-music:offline-player:v1';
+
 function memoryStorage(initial: Record<string, string> = {}) {
   const values = new Map(Object.entries(initial));
   return {
@@ -30,14 +32,30 @@ describe('offline user scope', () => {
     expect(isOfflineUserId('')).toBe(false);
   });
 
-  it('persiste e remove somente o usuário autorizado para o modo offline', () => {
-    const storage = memoryStorage();
+  it('mantém estado do player somente enquanto a identidade offline é a mesma', () => {
+    const storage = memoryStorage({ [OFFLINE_PLAYER_STATE_KEY]: '{"currentTrackId":"a"}' });
 
     expect(rememberOfflineUserId('user-a', storage)).toBe(true);
-    expect(readOfflineUserId(storage)).toBe('user-a');
+    expect(storage.getItem(OFFLINE_PLAYER_STATE_KEY)).toBeNull();
+
+    storage.setItem(OFFLINE_PLAYER_STATE_KEY, '{"currentTrackId":"b"}');
+    expect(rememberOfflineUserId('user-a', storage)).toBe(true);
+    expect(storage.getItem(OFFLINE_PLAYER_STATE_KEY)).toContain('currentTrackId');
+
+    expect(rememberOfflineUserId('user-b', storage)).toBe(true);
+    expect(readOfflineUserId(storage)).toBe('user-b');
+    expect(storage.getItem(OFFLINE_PLAYER_STATE_KEY)).toBeNull();
+  });
+
+  it('remove identidade e estado do player ao encerrar o escopo offline', () => {
+    const storage = memoryStorage({
+      [OFFLINE_USER_ID_KEY]: 'user-a',
+      [OFFLINE_PLAYER_STATE_KEY]: '{"currentTrackId":"a"}'
+    });
 
     forgetOfflineUserId(storage);
     expect(readOfflineUserId(storage)).toBeNull();
+    expect(storage.getItem(OFFLINE_PLAYER_STATE_KEY)).toBeNull();
   });
 
   it('ignora valor legado ou corrompido em vez de criar um escopo inseguro', () => {
