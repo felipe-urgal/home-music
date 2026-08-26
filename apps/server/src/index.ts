@@ -684,21 +684,33 @@ app.get<{ Querystring: { period?: string } }>('/api/statistics', async (request,
   return database.getStatistics(request.user.id, period);
 });
 
-app.get('/api/playlists', async () => ({
-  playlists: database.getPlaylists()
-}));
+app.get('/api/playlists', async (request, reply) => {
+  if (!request.user) {
+    return reply.code(409).send({ error: 'Playlists pessoais exigem uma identidade persistida.' });
+  }
+
+  return { playlists: database.getPlaylists(request.user.id) };
+});
 
 app.post<{ Body: { name?: string } }>('/api/playlists', async (request, reply) => {
+  if (!request.user) {
+    return reply.code(409).send({ error: 'Playlists pessoais exigem uma identidade persistida.' });
+  }
+
   const name = cleanName(request.body?.name);
   if (!name) return reply.code(400).send({ error: 'Nome da playlist obrigatório.' });
 
-  const id = database.createPlaylist(name);
-  const playlist = database.getPlaylists().find(item => item.id === id);
+  const id = database.createPlaylist(request.user.id, name);
+  const playlist = database.getPlaylists(request.user.id).find(item => item.id === id);
   return reply.code(201).send({ playlist });
 });
 
 app.patch<{ Params: { id: string }; Body: { name?: string } }>('/api/playlists/:id', async (request, reply) => {
-  const source = database.getPlaylistSource(request.params.id);
+  if (!request.user) {
+    return reply.code(409).send({ error: 'Playlists pessoais exigem uma identidade persistida.' });
+  }
+
+  const source = database.getPlaylistSource(request.user.id, request.params.id);
   if (!source) return reply.code(404).send({ error: 'Playlist não encontrada.' });
   if (source !== 'manual') {
     return reply.code(409).send({ error: 'Playlist sincronizada pelo Rekordbox; reimporte o XML para alterá-la.' });
@@ -706,17 +718,35 @@ app.patch<{ Params: { id: string }; Body: { name?: string } }>('/api/playlists/:
 
   const name = cleanName(request.body?.name);
   if (!name) return reply.code(400).send({ error: 'Nome da playlist obrigatório.' });
-  if (!database.renamePlaylist(request.params.id, name)) return reply.code(404).send({ error: 'Playlist não encontrada.' });
+  if (!database.renamePlaylist(request.user.id, request.params.id, name)) {
+    return reply.code(404).send({ error: 'Playlist não encontrada.' });
+  }
   return { ok: true };
 });
 
 app.delete<{ Params: { id: string } }>('/api/playlists/:id', async (request, reply) => {
-  if (!database.deletePlaylist(request.params.id)) return reply.code(404).send({ error: 'Playlist não encontrada.' });
+  if (!request.user) {
+    return reply.code(409).send({ error: 'Playlists pessoais exigem uma identidade persistida.' });
+  }
+
+  const source = database.getPlaylistSource(request.user.id, request.params.id);
+  if (!source) return reply.code(404).send({ error: 'Playlist não encontrada.' });
+  if (source !== 'manual') {
+    return reply.code(409).send({ error: 'Playlist sincronizada pelo Rekordbox; reimporte o XML para alterá-la.' });
+  }
+
+  if (!database.deletePlaylist(request.user.id, request.params.id)) {
+    return reply.code(404).send({ error: 'Playlist não encontrada.' });
+  }
   return reply.code(204).send();
 });
 
 app.put<{ Params: { id: string }; Body: { trackIds?: unknown } }>('/api/playlists/:id/tracks', async (request, reply) => {
-  const source = database.getPlaylistSource(request.params.id);
+  if (!request.user) {
+    return reply.code(409).send({ error: 'Playlists pessoais exigem uma identidade persistida.' });
+  }
+
+  const source = database.getPlaylistSource(request.user.id, request.params.id);
   if (!source) return reply.code(404).send({ error: 'Playlist não encontrada.' });
   if (source !== 'manual') {
     return reply.code(409).send({ error: 'Playlist sincronizada pelo Rekordbox; reimporte o XML para alterá-la.' });
@@ -724,7 +754,7 @@ app.put<{ Params: { id: string }; Body: { trackIds?: unknown } }>('/api/playlist
   if (!Array.isArray(request.body?.trackIds)) return reply.code(400).send({ error: 'Lista de músicas inválida.' });
   const trackIds = cleanTrackIds(request.body.trackIds);
 
-  if (!database.setPlaylistTracks(request.params.id, trackIds)) {
+  if (!database.setPlaylistTracks(request.user.id, request.params.id, trackIds)) {
     return reply.code(404).send({ error: 'Playlist não encontrada.' });
   }
 
