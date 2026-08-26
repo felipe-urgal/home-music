@@ -24,18 +24,20 @@ sessão válida + usuário ativo + role=admin
 
 ## Deny by default
 
-Dentro de `/api/*`, a ausência de configuração explícita significa `authenticated`.
+Dentro de `/api/*`, a ausência de configuração explícita significa `authenticated`, exceto quando a política central reconhece uma operação administrativa obrigatória.
 
 Portanto:
 
 - uma nova rota de API não nasce pública por acidente;
 - `public` precisa ser declarado explicitamente;
-- `admin` precisa ser declarado explicitamente quando a operação for administrativa;
-- valores inválidos de política são rejeitados pelo TypeScript.
+- operações sob `/api/admin` e `/api/admin/*` são sempre `admin`;
+- operações administrativas históricas classificadas centralmente também são sempre `admin`;
+- um config local mais permissivo não reduz essas duas proteções;
+- valores inválidos de política declarada são rejeitados pelo TypeScript.
 
-Nesta atividade somente `/api/auth/status` e `/api/auth/login` são marcadas como `public`.
+`/api/auth/status` e `/api/auth/login` são as rotas públicas de autenticação atuais.
 
-As rotas administrativas existentes serão reclassificadas para `admin` na atividade seguinte, mantendo mecanismo e matriz de negócio em PRs separados.
+A classificação das operações administrativas históricas está registrada em `phase-7.5-admin-routes.md`.
 
 ## Contexto `request.user`
 
@@ -124,3 +126,5 @@ A atividade inclui testes para validar:
 - sessão legada podendo acessar `authenticated`, mas nunca `admin`;
 - mutações continuando protegidas pelo header customizado;
 - instalação sem autenticação configurada expondo somente o status necessário para diagnóstico.
+
+A atividade seguinte acrescenta regressões específicas para as operações administrativas históricas e para o namespace `/api/admin/*`.
