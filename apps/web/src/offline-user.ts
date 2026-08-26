@@ -1,4 +1,5 @@
 export const OFFLINE_USER_ID_KEY = 'home-music:offline-user-id:v1';
+export const OFFLINE_USER_CHANGED_EVENT = 'home-music:offline-user-changed';
 const LEGACY_OFFLINE_PLAYER_STATE_KEY = 'home-music:offline-player:v1';
 
 const USER_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
@@ -12,6 +13,11 @@ function browserStorage(): StorageLike | null {
   } catch {
     return null;
   }
+}
+
+function notifyOfflineUserChanged() {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new Event(OFFLINE_USER_CHANGED_EVENT));
 }
 
 export function isOfflineUserId(value: unknown): value is string {
@@ -34,6 +40,7 @@ export function rememberOfflineUserId(userId: string, storage: StorageLike | nul
     const previousUserId = readOfflineUserId(storage);
     storage.setItem(OFFLINE_USER_ID_KEY, userId);
     if (previousUserId !== userId) storage.removeItem(LEGACY_OFFLINE_PLAYER_STATE_KEY);
+    if (storage === browserStorage()) notifyOfflineUserChanged();
     return true;
   } catch {
     return false;
@@ -45,6 +52,7 @@ export function forgetOfflineUserId(storage: StorageLike | null = browserStorage
   try {
     storage.removeItem(OFFLINE_USER_ID_KEY);
     storage.removeItem(LEGACY_OFFLINE_PLAYER_STATE_KEY);
+    if (storage === browserStorage()) notifyOfflineUserChanged();
   } catch {
     // O modo offline é best-effort; falhas de storage não alteram a sessão do servidor.
   }
