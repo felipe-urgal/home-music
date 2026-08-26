@@ -52,7 +52,8 @@ async function withPendingUser(
 
 test('política de senha de conta exige comprimento forte sem alterar semanticamente a senha', () => {
   assert.equal(ACCOUNT_PASSWORD_MIN_LENGTH, 12);
-  assert.equal(accountPasswordIsStrong('curta-demais'), false);
+  assert.equal(accountPasswordIsStrong('curta-demai'), false);
+  assert.equal(accountPasswordIsStrong('curta-demais'), true);
   assert.equal(accountPasswordIsStrong('senha-segura-2026'), true);
   assert.equal(accountPasswordIsStrong(' '.repeat(12)), false);
 });
