@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { config } from 'dotenv';
@@ -20,6 +21,15 @@ function argumentValue(name: string) {
   return value && !value.startsWith('--') ? value : null;
 }
 
+function homeMusicServiceIsActive() {
+  const result = spawnSync(
+    'systemctl',
+    ['is-active', '--quiet', 'home-music.service'],
+    { stdio: 'ignore' }
+  );
+  return !result.error && result.status === 0;
+}
+
 const username = argumentValue('--username');
 const confirmedStopped = process.argv.includes('--confirm-service-stopped');
 const databasePath = process.env.HOME_MUSIC_DATABASE_PATH || defaultDatabasePath;
@@ -30,6 +40,9 @@ if (!username || !confirmedStopped) {
     console.error('Pare o serviço Home Music antes da recuperação para invalidar todas as sessões em memória.');
   }
   process.exitCode = 2;
+} else if (homeMusicServiceIsActive()) {
+  console.error('home-music.service ainda está ativo. Execute sudo systemctl stop home-music antes da recuperação.');
+  process.exitCode = 1;
 } else if (!existsSync(databasePath)) {
   console.error(`Banco não encontrado em ${databasePath}. Nenhuma alteração foi feita.`);
   process.exitCode = 1;
