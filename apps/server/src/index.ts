@@ -7,6 +7,7 @@ import {
   ACCOUNT_PASSWORD_MIN_LENGTH,
   AccountPasswordService
 } from './account-password.js';
+import { registerAccountSessionRoutes } from './account-session-routes.js';
 import {
   DEFAULT_AUTO_RESCAN_INTERVAL_SECONDS,
   parseAutoRescanIntervalSeconds,
@@ -387,6 +388,7 @@ installApiAuthPolicy(app, {
   sessions,
   users: authUsers
 });
+registerAccountSessionRoutes(app, sessions);
 registerAdminUserRoutes(app, adminUsers);
 
 app.addHook('onSend', async (_request, reply, payload) => {
@@ -549,7 +551,7 @@ app.post<{ Body: { currentPassword?: unknown; newPassword?: unknown } }>(
   async (request, reply) => {
     reply.header('Cache-Control', 'no-store');
     if (!request.user) {
-      return reply.code(409).send({ error: 'Troca obrigatória de senha não está disponível para esta sessão.' });
+      return reply.code(409).send({ error: 'Troca de senha não está disponível para esta sessão.' });
     }
 
     const currentPassword = typeof request.body?.currentPassword === 'string'
@@ -558,7 +560,7 @@ app.post<{ Body: { currentPassword?: unknown; newPassword?: unknown } }>(
     const newPassword = typeof request.body?.newPassword === 'string'
       ? request.body.newPassword
       : '';
-    const result = await accountPasswords.changeRequiredPassword(
+    const result = await accountPasswords.changeAuthenticatedPassword(
       request.user.id,
       currentPassword,
       newPassword
@@ -567,15 +569,15 @@ app.post<{ Body: { currentPassword?: unknown; newPassword?: unknown } }>(
     if (!result.ok) {
       switch (result.error) {
         case 'invalid-current-password':
-          return reply.code(400).send({ error: 'Senha temporária inválida.' });
+          return reply.code(400).send({ error: 'Senha atual inválida.' });
         case 'weak-new-password':
           return reply.code(400).send({
             error: `A nova senha deve ter pelo menos ${ACCOUNT_PASSWORD_MIN_LENGTH} caracteres.`
           });
         case 'same-password':
-          return reply.code(400).send({ error: 'A nova senha precisa ser diferente da senha temporária.' });
+          return reply.code(400).send({ error: 'A nova senha precisa ser diferente da senha atual.' });
         case 'not-required':
-          return reply.code(409).send({ error: 'Esta conta não possui troca obrigatória de senha pendente.' });
+          return reply.code(409).send({ error: 'Troca de senha não está disponível para esta conta.' });
         case 'stale-account':
           return reply.code(409).send({ error: 'A credencial da conta mudou durante a operação. Faça login novamente.' });
       }
@@ -664,7 +666,7 @@ app.post<{ Body: { name?: string } }>('/api/playlists', async (request, reply) =
   return reply.code(201).send({ playlist });
 });
 
-app.patch<{ Params: { id: string }; Body: { name?: string } }>('/api/playlists/:id', async (request, reply) => {
+app.patch<{ Params: { id: string }; Body: { name?: unknown } }>('/api/playlists/:id', async (request, reply) => {
   const source = database.getPlaylistSource(request.params.id);
   if (!source) return reply.code(404).send({ error: 'Playlist não encontrada.' });
   if (source !== 'manual') {
