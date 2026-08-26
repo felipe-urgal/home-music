@@ -69,6 +69,11 @@ config({ path: rootEnvPath });
 
 const databasePath = process.env.HOME_MUSIC_DATABASE_PATH || defaultDatabasePath;
 const isProduction = process.env.NODE_ENV === 'production';
+
+if (!isProduction) {
+  await import('./bootstrap-preload.js');
+}
+
 const app = Fastify({
   logger: true,
   bodyLimit: 256 * 1024
@@ -615,15 +620,22 @@ app.post('/api/library/scan', async (_request, reply) => {
   return result;
 });
 
-app.get('/api/favorites', async () => ({
-  trackIds: database.getFavoriteIds()
-}));
+app.get('/api/favorites', async (request, reply) => {
+  if (!request.user) {
+    return reply.code(409).send({ error: 'Favoritos pessoais exigem uma identidade persistida.' });
+  }
+
+  return { trackIds: database.getFavoriteIds(request.user.id) };
+});
 
 app.put<{ Params: { id: string }; Body: { favorite?: boolean } }>('/api/favorites/:id', async (request, reply) => {
+  if (!request.user) {
+    return reply.code(409).send({ error: 'Favoritos pessoais exigem uma identidade persistida.' });
+  }
   if (!tracksById.has(request.params.id)) return reply.code(404).send({ error: 'Música não encontrada.' });
   if (typeof request.body?.favorite !== 'boolean') return reply.code(400).send({ error: 'Valor de favorito inválido.' });
 
-  database.setFavorite(request.params.id, request.body.favorite);
+  database.setFavorite(request.user.id, request.params.id, request.body.favorite);
   return { favorite: request.body.favorite };
 });
 
