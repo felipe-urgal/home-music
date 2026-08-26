@@ -99,6 +99,7 @@ Objetivo: evoluir a interface para desktop sem regredir o fluxo mobile Player Fi
 Objetivo: criar uma fronteira de identidade e autorização segura antes de introduzir operações administrativas. A biblioteca física continua compartilhada, enquanto dados pessoais e estado de reprodução passam a ser isolados por usuário. Não haverá cadastro público: somente administradores autenticados poderão criar e gerenciar contas.
 
 Decisões, invariantes de segurança e desenho detalhado: [multi-user-auth.md](multi-user-auth.md).
+Detalhe da migração do primeiro administrador: [phase-7.5-bootstrap.md](phase-7.5-bootstrap.md).
 
 Princípios:
 
@@ -116,7 +117,7 @@ Sequência de implementação:
 
 - [x] Criar schema de `users` com `id`, `username`, username normalizado único, `password_hash`, `role`, `enabled`, timestamps e flag de troca obrigatória de senha
 - [x] Implementar hashing/verificação de senha com `scrypt`, formato versionado e limites defensivos de entrada
-- [ ] Criar bootstrap/migration idempotente do usuário atual de `HOME_MUSIC_USER`/`HOME_MUSIC_PASSWORD` para o primeiro `admin`, sem perder acesso durante o upgrade
+- [x] Criar bootstrap/migration idempotente do usuário atual de `HOME_MUSIC_USER`/`HOME_MUSIC_PASSWORD` para o primeiro `admin`, sem perder acesso durante o upgrade
 - [ ] Evoluir `SessionManager` para associar sessão a `userId`, manter token aleatório opaco e permitir revogação de todas as sessões de um usuário
 - [ ] Fazer `/api/auth/status` retornar a identidade autenticada mínima (`id`, `username`, `role`) sem expor dados sensíveis
 - [ ] Criar contexto de identidade autenticada no Fastify e política central de acesso `public / authenticated / admin`
