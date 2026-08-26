@@ -115,6 +115,7 @@ Detalhe do ownership de histórico e estatísticas por usuário: [phase-7.5-hist
 Detalhe do ownership de playlists manuais: [phase-7.5-manual-playlist-ownership.md](phase-7.5-manual-playlist-ownership.md).
 Detalhe do ownership do estado do player: [phase-7.5-playback-state-ownership.md](phase-7.5-playback-state-ownership.md).
 Detalhe da auditoria de IDOR e queries por ownership: [phase-7.5-idor-ownership-audit.md](phase-7.5-idor-ownership-audit.md).
+Detalhe do isolamento dos downloads offline por usuário: [offline-downloads.md](offline-downloads.md).
 
 Princípios:
 
@@ -146,7 +147,7 @@ Sequência de implementação:
 - [x] Migrar playlists manuais para ownership por `user_id`; manter playlists Rekordbox compartilhadas e somente leitura fora da reimportação
 - [x] Migrar `playback_state` de linha global única para uma linha por usuário, preservando fila, posição, volume, shuffle e repeat atuais no primeiro admin
 - [x] Revisar todas as queries por ID para aplicar ownership no próprio SQL e evitar IDOR/acesso cruzado entre usuários
-- [ ] Separar downloads offline e manifesto/cache por `userId`, impedindo vazamento local entre contas no mesmo navegador
+- [x] Separar downloads offline e manifesto/cache por `userId`, impedindo vazamento local entre contas no mesmo navegador
 - [ ] Adaptar o frontend para manter `currentUser` e exibir superfícies conforme `role`, sem usar essa checagem como controle de segurança
 - [ ] Criar tela administrativa `Usuários`, visível somente para admin, com criação e gerenciamento simples sem cadastro público
 - [ ] Criar tela `Minha conta` para troca de senha e revogação de sessões próprias
