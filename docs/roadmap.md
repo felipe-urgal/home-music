@@ -158,7 +158,7 @@ Sequência de implementação:
 - [x] Criar tela `Minha conta` para troca de senha e revogação de sessões próprias
 - [x] Remover a dependência permanente de credenciais no `.env` após bootstrap bem-sucedido, mantendo fluxo operacional seguro de recuperação local de administrador
 - [x] Documentar bootstrap, criação de usuários, recuperação de acesso, mudança de senha, desativação e rollback de migration
-- [ ] Adicionar testes unitários de senha, sessão, role, último admin, normalização de username e revogação
+- [x] Adicionar testes unitários de senha, sessão, role, último admin, normalização de username e revogação
 - [ ] Adicionar testes de integração para `401 / 403 / 404`, ownership, usuário desativado, troca obrigatória de senha e rotas administrativas
 - [ ] Adicionar Playwright com contas `admin` e `user` em mobile/tablet/desktop, validando menu, login, isolamento de dados e troca de senha
 - [ ] Adicionar regressões de segurança para tentativa de chamar `/api/admin/*` como `user`, adulteração de payload/role no cliente e acesso a recursos de outro usuário
