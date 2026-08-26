@@ -20,12 +20,23 @@ export type AccountPasswordChangeResult =
   | { ok: true }
   | { ok: false; error: AccountPasswordChangeError };
 
+export type AccountAuthentication = {
+  userId: string;
+  passwordMustChange: boolean;
+};
+
 function validUserId(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0 && value.length <= MAX_USER_ID_LENGTH;
 }
 
 function storedPasswordHash(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+function passwordChangeFlag(value: unknown): boolean | null {
+  if (value === 0) return false;
+  if (value === 1) return true;
+  return null;
 }
 
 export function accountPasswordIsStrong(password: string) {
@@ -59,6 +70,48 @@ export class AccountPasswordService {
     return storedPasswordHash(row?.password_hash);
   }
 
+  async authenticate(username: string, password: string): Promise<AccountAuthentication | null> {
+    const identity = normalizeUsername(username);
+    const row = identity
+      ? this.db.prepare(`
+          SELECT id, password_hash, enabled, password_must_change
+          FROM users
+          WHERE username_normalized = ?
+          LIMIT 1;
+        `).get(identity.usernameNormalized) as Row | undefined
+      : undefined;
+
+    const realHash = storedPasswordHash(row?.password_hash);
+    const candidateHash = realHash ?? this.fallbackPasswordHash();
+    if (!candidateHash) return null;
+
+    const matches = await verifyPassword(password, candidateHash);
+    const passwordMustChange = passwordChangeFlag(row?.password_must_change);
+    if (
+      !matches
+      || !realHash
+      || row?.enabled !== 1
+      || passwordMustChange == null
+      || !validUserId(row.id)
+    ) {
+      return null;
+    }
+
+    const current = this.db.prepare(`
+      SELECT 1
+      FROM users
+      WHERE id = ?
+        AND enabled = 1
+        AND password_must_change = ?
+        AND password_hash = ?
+      LIMIT 1;
+    `).get(row.id, passwordMustChange ? 1 : 0, realHash);
+
+    return current
+      ? { userId: row.id, passwordMustChange }
+      : null;
+  }
+
   async verifyEnabledUserPassword(userId: string, password: string) {
     if (!validUserId(userId)) return false;
     const row = this.db.prepare(`
@@ -85,42 +138,8 @@ export class AccountPasswordService {
   }
 
   async authenticateRequiredPasswordChange(username: string, password: string) {
-    const identity = normalizeUsername(username);
-    const row = identity
-      ? this.db.prepare(`
-          SELECT id, password_hash, enabled, password_must_change
-          FROM users
-          WHERE username_normalized = ?
-          LIMIT 1;
-        `).get(identity.usernameNormalized) as Row | undefined
-      : undefined;
-
-    const realHash = storedPasswordHash(row?.password_hash);
-    const passwordHash = realHash ?? this.fallbackPasswordHash();
-    if (!passwordHash) return null;
-
-    const matches = await verifyPassword(password, passwordHash);
-    if (
-      !matches
-      || !realHash
-      || row?.enabled !== 1
-      || row?.password_must_change !== 1
-      || !validUserId(row.id)
-    ) {
-      return null;
-    }
-
-    const current = this.db.prepare(`
-      SELECT 1
-      FROM users
-      WHERE id = ?
-        AND enabled = 1
-        AND password_must_change = 1
-        AND password_hash = ?
-      LIMIT 1;
-    `).get(row.id, realHash);
-
-    return current ? row.id : null;
+    const authenticated = await this.authenticate(username, password);
+    return authenticated?.passwordMustChange ? authenticated.userId : null;
   }
 
   async changeAuthenticatedPassword(
