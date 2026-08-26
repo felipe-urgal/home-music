@@ -324,21 +324,23 @@ export class HomeMusicDatabase {
           LIMIT 1;
         `).get() as Row | undefined;
         const firstUserId = stringValue(firstUser?.id);
-        const hasLegacyHistory = this.hasColumn('history', 'track_id');
+        const hasHistory = this.hasColumn('history', 'track_id');
+        const historyAlreadyOwned = this.hasColumn('history', 'user_id');
+        const hasLegacyHistory = hasHistory && !historyAlreadyOwned;
 
         if (hasLegacyHistory) {
           this.db.exec('ALTER TABLE history RENAME TO history_legacy;');
         }
 
         this.db.exec(`
-          CREATE TABLE history (
+          CREATE TABLE IF NOT EXISTS history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
             track_id TEXT NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
             played_at TEXT NOT NULL
           );
 
-          CREATE INDEX idx_history_user_played_at
+          CREATE INDEX IF NOT EXISTS idx_history_user_played_at
           ON history(user_id, played_at DESC, id DESC);
 
           CREATE TABLE IF NOT EXISTS legacy_history_pending (
