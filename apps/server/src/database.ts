@@ -860,13 +860,22 @@ export class HomeMusicDatabase {
       ORDER BY updated_at DESC, name COLLATE NOCASE
     `).all(userId) as Row[];
     const tracksStatement = this.db.prepare(`
-      SELECT track_id FROM playlist_tracks WHERE playlist_id = ? ORDER BY position
+      SELECT pt.track_id
+      FROM playlist_tracks pt
+      JOIN playlists p ON p.id = pt.playlist_id
+      WHERE pt.playlist_id = ?
+        AND (
+          p.source = 'rekordbox'
+          OR (p.source = 'manual' AND p.owner_user_id = ?)
+        )
+      ORDER BY pt.position
     `);
 
     return playlists.map(row => ({
       id: stringValue(row.id),
       name: stringValue(row.name),
-      trackIds: (tracksStatement.all(stringValue(row.id)) as Row[]).map(item => stringValue(item.track_id)),
+      trackIds: (tracksStatement.all(stringValue(row.id), userId) as Row[])
+        .map(item => stringValue(item.track_id)),
       createdAt: stringValue(row.created_at),
       updatedAt: stringValue(row.updated_at),
       source: playlistSourceValue(row.source)
@@ -917,31 +926,55 @@ export class HomeMusicDatabase {
   setPlaylistTracks(userId: string, id: string, trackIds: string[]) {
     requireUserId(userId);
     const uniqueIds = [...new Set(trackIds)];
-    const exists = this.db.prepare(`
-      SELECT 1
-      FROM playlists
-      WHERE id = ? AND source = 'manual' AND owner_user_id = ?
-    `).get(id, userId);
-    if (!exists) return false;
-
-    const remove = this.db.prepare('DELETE FROM playlist_tracks WHERE playlist_id = ?');
+    const remove = this.db.prepare(`
+      DELETE FROM playlist_tracks
+      WHERE playlist_id = ?
+        AND EXISTS (
+          SELECT 1
+          FROM playlists p
+          WHERE p.id = playlist_tracks.playlist_id
+            AND p.source = 'manual'
+            AND p.owner_user_id = ?
+        )
+    `);
     const insert = this.db.prepare(`
-      INSERT INTO playlist_tracks(playlist_id, track_id, position) VALUES (?, ?, ?)
+      INSERT INTO playlist_tracks(playlist_id, track_id, position)
+      SELECT p.id, ?, ?
+      FROM playlists p
+      WHERE p.id = ?
+        AND p.source = 'manual'
+        AND p.owner_user_id = ?
+    `);
+    const touch = this.db.prepare(`
+      UPDATE playlists
+      SET updated_at = ?
+      WHERE id = ? AND source = 'manual' AND owner_user_id = ?
     `);
 
     this.db.exec('BEGIN IMMEDIATE;');
     try {
-      remove.run(id);
-      uniqueIds.forEach((trackId, index) => insert.run(id, trackId, index));
-      this.db.prepare(`
-        UPDATE playlists
-        SET updated_at = ?
-        WHERE id = ? AND source = 'manual' AND owner_user_id = ?
-      `).run(new Date().toISOString(), id, userId);
+      const touched = touch.run(new Date().toISOString(), id, userId);
+      if (Number(touched.changes) !== 1) {
+        this.db.exec('ROLLBACK;');
+        return false;
+      }
+
+      remove.run(id, userId);
+      for (const [index, trackId] of uniqueIds.entries()) {
+        const inserted = insert.run(trackId, index, id, userId);
+        if (Number(inserted.changes) !== 1) {
+          throw new Error('Playlist manual saiu do escopo de ownership durante a atualização.');
+        }
+      }
+
       this.db.exec('COMMIT;');
       return true;
     } catch (error) {
-      this.db.exec('ROLLBACK;');
+      try {
+        this.db.exec('ROLLBACK;');
+      } catch {
+        // Preserva o erro original se a transação já tiver sido encerrada.
+      }
       throw error;
     }
   }
@@ -959,19 +992,36 @@ export class HomeMusicDatabase {
     }
 
     const existingRows = this.db.prepare(`
-      SELECT id, source_key FROM playlists WHERE source = ? AND source_key IS NOT NULL
+      SELECT id, source_key
+      FROM playlists
+      WHERE source = ? AND owner_user_id IS NULL AND source_key IS NOT NULL
     `).all(source) as Row[];
     const existing = new Map(existingRows.map(row => [stringValue(row.source_key), stringValue(row.id)]));
-    const removeTracks = this.db.prepare('DELETE FROM playlist_tracks WHERE playlist_id = ?');
+    const removeTracks = this.db.prepare(`
+      DELETE FROM playlist_tracks
+      WHERE playlist_id = ?
+        AND EXISTS (
+          SELECT 1
+          FROM playlists p
+          WHERE p.id = playlist_tracks.playlist_id
+            AND p.source = ?
+            AND p.owner_user_id IS NULL
+        )
+    `);
     const insertTrack = this.db.prepare(`
-      INSERT INTO playlist_tracks(playlist_id, track_id, position) VALUES (?, ?, ?)
+      INSERT INTO playlist_tracks(playlist_id, track_id, position)
+      SELECT p.id, ?, ?
+      FROM playlists p
+      WHERE p.id = ? AND p.source = ? AND p.owner_user_id IS NULL
     `);
     const insertPlaylist = this.db.prepare(`
-      INSERT INTO playlists(id, name, created_at, updated_at, source, source_key)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO playlists(id, name, created_at, updated_at, source, source_key, owner_user_id)
+      VALUES (?, ?, ?, ?, ?, ?, NULL)
     `);
     const updatePlaylist = this.db.prepare(`
-      UPDATE playlists SET name = ?, updated_at = ? WHERE id = ?
+      UPDATE playlists
+      SET name = ?, updated_at = ?
+      WHERE id = ? AND source = ? AND owner_user_id IS NULL
     `);
     const now = new Date().toISOString();
     let createdPlaylists = 0;
@@ -982,7 +1032,10 @@ export class HomeMusicDatabase {
       for (const playlist of bySourceKey.values()) {
         let id = existing.get(playlist.sourceKey);
         if (id) {
-          updatePlaylist.run(playlist.name, now, id);
+          const updated = updatePlaylist.run(playlist.name, now, id, source);
+          if (Number(updated.changes) !== 1) {
+            throw new Error('Playlist Rekordbox saiu do escopo compartilhado durante a sincronização.');
+          }
           updatedPlaylists += 1;
         } else {
           id = randomUUID();
@@ -990,8 +1043,13 @@ export class HomeMusicDatabase {
           createdPlaylists += 1;
         }
 
-        removeTracks.run(id);
-        playlist.trackIds.forEach((trackId, index) => insertTrack.run(id, trackId, index));
+        removeTracks.run(id, source);
+        for (const [index, trackId] of playlist.trackIds.entries()) {
+          const inserted = insertTrack.run(trackId, index, id, source);
+          if (Number(inserted.changes) !== 1) {
+            throw new Error('Playlist Rekordbox saiu do escopo compartilhado durante a sincronização.');
+          }
+        }
       }
 
       this.db.exec('COMMIT;');
