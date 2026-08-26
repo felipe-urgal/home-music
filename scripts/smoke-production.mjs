@@ -206,6 +206,14 @@ try {
   const missingAsset = await fetch(`${baseUrl}/assets/inexistente.js`);
   assert.equal(missingAsset.status, 404);
 
+  const unauthenticatedStatus = await fetch(`${baseUrl}/api/auth/status`);
+  assert.equal(unauthenticatedStatus.status, 200);
+  assert.deepEqual(await unauthenticatedStatus.json(), {
+    configured: true,
+    authenticated: false,
+    user: null
+  });
+
   const unauthenticatedLibrary = await fetch(`${baseUrl}/api/library`);
   assert.equal(unauthenticatedLibrary.status, 401);
 
@@ -230,6 +238,19 @@ try {
   assert.ok(setCookie?.includes('SameSite=Strict'));
   assert.ok(!setCookie?.includes('Secure'), 'HTTP local não deve forçar cookie Secure.');
   const cookie = setCookie.split(';', 1)[0];
+
+  const authenticatedStatus = await fetch(`${baseUrl}/api/auth/status`, {
+    headers: { Cookie: cookie }
+  });
+  assert.equal(authenticatedStatus.status, 200);
+  const authenticatedStatusBody = await authenticatedStatus.json();
+  assert.equal(authenticatedStatusBody.configured, true);
+  assert.equal(authenticatedStatusBody.authenticated, true);
+  assert.equal(typeof authenticatedStatusBody.user?.id, 'string');
+  assert.ok(authenticatedStatusBody.user.id.length > 0);
+  assert.equal(authenticatedStatusBody.user.username, username);
+  assert.equal(authenticatedStatusBody.user.role, 'admin');
+  assert.deepEqual(Object.keys(authenticatedStatusBody.user).sort(), ['id', 'role', 'username']);
 
   const internalHealth = await fetch(`${baseUrl}/api/health`, {
     headers: { Cookie: cookie }
