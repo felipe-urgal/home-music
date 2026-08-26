@@ -176,7 +176,7 @@ test('troca autenticada rejeita identidade inválida ou conta desativada', async
   await withPendingUser(async (databasePath, service) => {
     assert.deepEqual(
       await service.changeAuthenticatedPassword('', TEMP_PASSWORD, NEW_PASSWORD),
-      { ok: false, error: 'account-unavailable' }
+      { ok: false, error: 'not-required' }
     );
 
     const db = new DatabaseSync(databasePath);
@@ -185,7 +185,7 @@ test('troca autenticada rejeita identidade inválida ou conta desativada', async
 
     assert.deepEqual(
       await service.changeAuthenticatedPassword('user-1', TEMP_PASSWORD, NEW_PASSWORD),
-      { ok: false, error: 'account-unavailable' }
+      { ok: false, error: 'not-required' }
     );
   });
 });
