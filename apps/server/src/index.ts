@@ -17,6 +17,7 @@ import {
   SESSION_TTL_SECONDS,
   SessionManager
 } from './auth.js';
+import { resolveAuthStatus } from './auth-status.js';
 import { HomeMusicDatabase } from './database.js';
 import { probeFfmpeg, resolveFfmpegCommand, type FfmpegStatus } from './ffmpeg.js';
 import { readCover, scanLibrary, type IndexedTrack } from './library.js';
@@ -49,6 +50,7 @@ import {
   TranscodeExecutionError,
   TranscodeManager
 } from './transcoding.js';
+import { UserAuthStore } from './user-auth-store.js';
 
 const rootEnvPath = fileURLToPath(new URL('../../../.env', import.meta.url));
 const defaultDatabasePath = fileURLToPath(new URL('../../../data/home-music.db', import.meta.url));
@@ -84,6 +86,7 @@ try {
 }
 
 const database = new HomeMusicDatabase(databasePath);
+const authUsers = new UserAuthStore(databasePath);
 const musicDir = process.env.MUSIC_DIR || '';
 const port = Number(process.env.PORT || 8787);
 const host = isProduction
@@ -411,6 +414,7 @@ app.addHook('onSend', async (_request, reply, payload) => {
 
 app.addHook('onClose', async () => {
   stopAutomaticRescan();
+  authUsers.close();
   database.close();
 });
 
@@ -496,10 +500,7 @@ app.get('/api/health', async (_request, reply) => {
 app.get('/api/auth/status', async (request, reply) => {
   reply.header('Cache-Control', 'no-store');
   const token = requestSessionToken(request.headers.cookie);
-  return {
-    configured: authConfigured,
-    authenticated: authConfigured && sessions.validateSession(token)
-  };
+  return resolveAuthStatus(authConfigured, token, sessions, authUsers);
 });
 
 app.post<{ Body: { username?: unknown; password?: unknown } }>('/api/auth/login', async (request, reply) => {
