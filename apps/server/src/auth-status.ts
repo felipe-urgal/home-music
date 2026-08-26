@@ -9,17 +9,28 @@ export function resolveAuthStatus(
   users: UserIdentityReader
 ): AuthStatusResponse {
   if (!configured) {
-    return { configured: false, authenticated: false, user: null };
+    return {
+      configured: false,
+      authenticated: false,
+      user: null,
+      passwordChangeRequired: false
+    };
   }
 
   const identity = resolveSessionIdentity(token, sessions, users);
   if (identity.kind === 'unauthenticated') {
-    return { configured: true, authenticated: false, user: null };
+    return {
+      configured: true,
+      authenticated: false,
+      user: null,
+      passwordChangeRequired: false
+    };
   }
 
   return {
     configured: true,
     authenticated: true,
-    user: identity.kind === 'user' ? identity.user : null
+    user: identity.kind === 'user' ? identity.user : null,
+    passwordChangeRequired: identity.kind === 'user' && identity.passwordMustChange
   };
 }
