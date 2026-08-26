@@ -2,6 +2,19 @@ export type RepeatMode = 'off' | 'all' | 'one';
 export type NormalizationMode = 'off' | 'track' | 'album';
 export type StatisticsPeriod = '7d' | '30d' | 'all';
 export type PlaylistSource = 'manual' | 'rekordbox';
+export type UserRole = 'admin' | 'user';
+
+export type AuthenticatedUser = {
+  id: string;
+  username: string;
+  role: UserRole;
+};
+
+export type AuthStatusResponse = {
+  configured: boolean;
+  authenticated: boolean;
+  user: AuthenticatedUser | null;
+};
 
 export type Track = {
   id: string;
