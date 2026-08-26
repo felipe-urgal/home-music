@@ -5,6 +5,7 @@ import { DesktopPlayerBar } from './components/DesktopPlayerBar';
 import { DesktopShell } from './components/DesktopShell';
 import { LibraryScreen } from './components/LibraryScreen';
 import { LoginScreen } from './components/LoginScreen';
+import { MyAccountScreen } from './components/MyAccountScreen';
 import { OfflineLibraryScreen } from './components/OfflineLibraryScreen';
 import { PlayerScreen } from './components/PlayerScreen';
 import { ResponsiveState } from './components/ResponsiveState';
@@ -22,15 +23,16 @@ import { useNetworkQualityProfile } from './useNetworkQualityProfile';
 import { useNextTrackPreload } from './useNextTrackPreload';
 import { useSystemVolumePreference } from './useSystemVolume';
 
-type Screen = 'player' | 'library' | 'statistics' | 'users';
+type Screen = 'player' | 'library' | 'statistics' | 'users' | 'account';
 
 type AuthenticatedAppProps = {
   currentUser: AuthenticatedUser;
   onLogout: () => Promise<void>;
+  onAuthRefresh: () => Promise<void>;
   offline: OfflineDownloads;
 };
 
-function AuthenticatedApp({ currentUser, onLogout, offline }: AuthenticatedAppProps) {
+function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline }: AuthenticatedAppProps) {
   const [screen, setScreen] = useState<Screen>('player');
   const library = useLibraryData();
   const navigation = useLibraryNavigation(library.tracks, library.favoriteIds, library.playlists);
@@ -100,10 +102,13 @@ function AuthenticatedApp({ currentUser, onLogout, offline }: AuthenticatedAppPr
     }));
   }
 
-  const desktopScreen = screen === 'users' ? 'library' : screen;
+  const desktopScreen = screen === 'users' || screen === 'account' ? 'library' : screen;
   const showAdminUsersEntry = canManageSharedLibrary
     && screen !== 'users'
+    && screen !== 'account'
     && (screen === 'library' || Boolean(library.error));
+  const showMyAccountEntry = screen !== 'account'
+    && (screen === 'library' || Boolean(library.error) || !current);
 
   return (
     <main className="app-shell">
@@ -133,13 +138,25 @@ function AuthenticatedApp({ currentUser, onLogout, offline }: AuthenticatedAppPr
         onReorderQueue={player.reorderQueue}
         surfaceClassName={`phone-surface ${screen !== 'player' ? 'phone-surface--library' : ''}`}
       >
+        {showMyAccountEntry && (
+          <button className="my-account-mobile-entry" type="button" onClick={() => setScreen('account')}>
+            Minha conta · {currentUser.username}
+          </button>
+        )}
+
         {showAdminUsersEntry && (
           <button className="admin-mobile-entry" type="button" onClick={() => setScreen('users')}>
             Administração · Usuários
           </button>
         )}
 
-        {screen === 'users' && canManageSharedLibrary ? (
+        {screen === 'account' ? (
+          <MyAccountScreen
+            currentUser={currentUser}
+            onBack={() => setScreen('library')}
+            onSessionEnded={onAuthRefresh}
+          />
+        ) : screen === 'users' && canManageSharedLibrary ? (
           <AdminUsersScreen currentUser={currentUser} onBack={() => setScreen('library')} />
         ) : library.loading ? (
           <ResponsiveState
@@ -302,7 +319,7 @@ function OfflineApp({ offline, onExit }: { offline: OfflineDownloads; onExit: ()
       />
 
       <DesktopShell
-        active={screen === 'users' ? 'library' : screen}
+        active={screen === 'users' || screen === 'account' ? 'library' : screen}
         current={current}
         playing={player.playing}
         libraryCount={offline.tracks.length}
@@ -448,5 +465,12 @@ export default function App() {
     );
   }
 
-  return <AuthenticatedApp currentUser={auth.currentUser} onLogout={auth.logout} offline={offline} />;
+  return (
+    <AuthenticatedApp
+      currentUser={auth.currentUser}
+      onLogout={auth.logout}
+      onAuthRefresh={auth.retry}
+      offline={offline}
+    />
+  );
 }
