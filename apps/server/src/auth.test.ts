@@ -14,6 +14,7 @@ test('SessionManager valida credenciais e cria sessão revogável no fallback le
 
   assert.equal(sessions.configured, true);
   assert.equal(sessions.validateCredentials('home-music', 'senha-super-segura'), true);
+  assert.equal(sessions.validateCredentials('home-music', 'senha-incorreta'), false);
   assert.equal(sessions.validateCredentials('outro', 'senha-super-segura'), false);
 
   const token = sessions.createSession(100);
@@ -27,14 +28,18 @@ test('SessionManager valida credenciais e cria sessão revogável no fallback le
   assert.equal(sessions.getSession(token, 500), null);
 });
 
-test('SessionManager associa sessão ao userId persistido', () => {
+test('SessionManager associado ao SQLite usa o env somente para reconhecer o username legado', () => {
   const sessions = new SessionManager(
     'home-music',
-    'senha-super-segura',
+    'senha-original-do-env',
     1000,
     128,
     { status: 'bound', userId: '11111111-1111-4111-8111-111111111111' }
   );
+
+  assert.equal(sessions.validateCredentials('home-music', 'senha-original-do-env'), true);
+  assert.equal(sessions.validateCredentials('home-music', 'senha-nova-no-sqlite'), true);
+  assert.equal(sessions.validateCredentials('outro', 'senha-original-do-env'), false);
 
   const token = sessions.createSession(100);
   assert.deepEqual(sessions.getSession(token, 500), {
