@@ -18,7 +18,8 @@ import {
   Upload,
   Users
 } from 'lucide-react';
-import type { Playlist, Track } from '@home-music/shared';
+import type { AuthenticatedUser, Playlist, Track } from '@home-music/shared';
+import { canUseAdminLibraryActions } from '../frontend-access';
 import type { CoverFilter, FavoriteFilter, TrackSort } from '../library-utils';
 import { uniqueTracksById } from '../player-state';
 import type { LibraryData } from '../useLibraryData';
@@ -29,6 +30,7 @@ import { DesktopTrackTable } from './DesktopTrackTable';
 import { MiniPlayer } from './MiniPlayer';
 
 type LibraryScreenProps = {
+  currentUser: AuthenticatedUser;
   data: LibraryData;
   current?: Track;
   playing: boolean;
@@ -128,6 +130,7 @@ function TrackRows({
 }
 
 export function LibraryScreen({
+  currentUser,
   data,
   current,
   playing,
@@ -142,6 +145,7 @@ export function LibraryScreen({
   const [viewControlsOpen, setViewControlsOpen] = useState(false);
   const [importingRekordbox, setImportingRekordbox] = useState(false);
   const rekordboxInputRef = useRef<HTMLInputElement>(null);
+  const canManageSharedLibrary = canUseAdminLibraryActions(currentUser);
   const {
     tracks,
     favoriteSet,
@@ -317,7 +321,9 @@ export function LibraryScreen({
           <strong>{title()}</strong>
           <small>{subtitle()}</small>
         </div>
-        <button className={`icon-button ${scanning ? 'is-loading' : ''}`} aria-label="Atualizar biblioteca" disabled={scanning} onClick={() => void scanNow()}><RefreshCw /></button>
+        {canManageSharedLibrary && (
+          <button className={`icon-button ${scanning ? 'is-loading' : ''}`} aria-label="Atualizar biblioteca" disabled={scanning} onClick={() => void scanNow()}><RefreshCw /></button>
+        )}
         <button className="icon-button" aria-label="Abrir estatísticas" onClick={onOpenStatistics}><BarChart3 /></button>
         <button className="icon-button" aria-label="Voltar ao player" onClick={onOpenPlayer}><Music2 /></button>
       </header>
@@ -486,27 +492,31 @@ export function LibraryScreen({
             <div className="section-heading">
               <span>Playlists</span>
               <div className="section-heading__actions">
-                <button
-                  className="text-action"
-                  type="button"
-                  disabled={importingRekordbox}
-                  onClick={() => rekordboxInputRef.current?.click()}
-                >
-                  <Upload />{importingRekordbox ? 'Lendo…' : 'Rekordbox'}
-                </button>
+                {canManageSharedLibrary && (
+                  <button
+                    className="text-action"
+                    type="button"
+                    disabled={importingRekordbox}
+                    onClick={() => rekordboxInputRef.current?.click()}
+                  >
+                    <Upload />{importingRekordbox ? 'Lendo…' : 'Rekordbox'}
+                  </button>
+                )}
                 <button className="text-action" onClick={() => run(makePlaylist())}><Plus />Nova</button>
               </div>
-              <input
-                ref={rekordboxInputRef}
-                className="visually-hidden-input"
-                type="file"
-                accept=".xml,application/xml,text/xml"
-                tabIndex={-1}
-                onChange={event => {
-                  const file = event.currentTarget.files?.[0];
-                  if (file) void importRekordboxFile(file);
-                }}
-              />
+              {canManageSharedLibrary && (
+                <input
+                  ref={rekordboxInputRef}
+                  className="visually-hidden-input"
+                  type="file"
+                  accept=".xml,application/xml,text/xml"
+                  tabIndex={-1}
+                  onChange={event => {
+                    const file = event.currentTarget.files?.[0];
+                    if (file) void importRekordboxFile(file);
+                  }}
+                />
+              )}
             </div>
             {playlists.length ? (
               <div className="group-list">
@@ -521,7 +531,7 @@ export function LibraryScreen({
                   </button>
                 ))}
               </div>
-            ) : <div className="empty-library">Crie uma playlist ou importe suas playlists do Rekordbox.</div>}
+            ) : <div className="empty-library">{canManageSharedLibrary ? 'Crie uma playlist ou importe suas playlists do Rekordbox.' : 'Crie uma playlist para organizar suas músicas.'}</div>}
           </>
         ) : shouldShowTracks ? (
           <>
@@ -529,11 +539,13 @@ export function LibraryScreen({
               <div className="collection-actions">
                 {libraryTracks.length > 0 && <button className="play-all" onClick={() => onPlayTrack(libraryTracks[0], libraryTracks)}><Play />Tocar tudo</button>}
                 {selectedPlaylist.source === 'manual' ? (
-                  <button className="text-action" onClick={() => run(editPlaylist(selectedPlaylist))}>Renomear</button>
+                  <>
+                    <button className="text-action" onClick={() => run(editPlaylist(selectedPlaylist))}>Renomear</button>
+                    <button className="text-action text-action--danger" onClick={() => run(removePlaylist(selectedPlaylist))}>Excluir</button>
+                  </>
                 ) : (
-                  <span className="playlist-source-note">Rekordbox</span>
+                  <span className="playlist-source-note">Rekordbox · somente leitura</span>
                 )}
-                <button className="text-action text-action--danger" onClick={() => run(removePlaylist(selectedPlaylist))}>Excluir</button>
               </div>
             )}
             <div className="section-heading"><span>{libraryTab === 'favorites' ? 'Favoritos' : 'Músicas'}</span><small>{libraryTracks.length}</small></div>
