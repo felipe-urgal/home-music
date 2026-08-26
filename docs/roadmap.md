@@ -94,11 +94,59 @@ Objetivo: evoluir a interface para desktop sem regredir o fluxo mobile Player Fi
 - [x] Melhorar drag-and-drop/reordenação da fila para mouse sem prejudicar touch
 - [x] Garantir estados vazios, loading, erros e mini-player coerentes nos dois layouts
 
+## Fase 7.5 — Identidade, multiusuário e autorização
+
+Objetivo: criar uma fronteira de identidade e autorização segura antes de introduzir operações administrativas. A biblioteca física continua compartilhada, enquanto dados pessoais e estado de reprodução passam a ser isolados por usuário. Não haverá cadastro público: somente administradores autenticados poderão criar e gerenciar contas.
+
+Princípios:
+
+- autorização é aplicada no backend e falha fechado; esconder menus no frontend é somente uma melhoria de UX;
+- toda rota exige a menor permissão necessária, com `deny by default` e proteção centralizada para evitar rotas administrativas esquecidas;
+- contas usam papéis `admin` e `user`, com ownership para recursos pessoais e `404` para recursos de outro usuário quando não for necessário revelar sua existência;
+- senhas nunca são persistidas em claro; usar `scrypt` do `node:crypto` com salt aleatório, parâmetros versionados e comparação em tempo constante;
+- sessão permanece opaca em cookie `HttpOnly`, `SameSite=Strict` e `Secure` em HTTPS, mas passa a resolver `token -> userId -> usuário/role/enabled` no servidor;
+- alteração de senha, papel ou estado da conta revoga sessões afetadas; usuário desativado perde acesso imediatamente;
+- nunca permitir zero administradores ativos;
+- operações administrativas destrutivas futuras deverão exigir autenticação recente quando aplicável;
+- migrations devem ser transacionais e preservar os dados existentes do usuário atual.
+
+Sequência de implementação:
+
+- [ ] Criar schema de `users` com `id`, `username`, username normalizado único, `password_hash`, `role`, `enabled`, timestamps e flag de troca obrigatória de senha
+- [ ] Implementar hashing/verificação de senha com `scrypt`, formato versionado e limites defensivos de entrada
+- [ ] Criar bootstrap/migration idempotente do usuário atual de `HOME_MUSIC_USER`/`HOME_MUSIC_PASSWORD` para o primeiro `admin`, sem perder acesso durante o upgrade
+- [ ] Evoluir `SessionManager` para associar sessão a `userId`, manter token aleatório opaco e permitir revogação de todas as sessões de um usuário
+- [ ] Fazer `/api/auth/status` retornar a identidade autenticada mínima (`id`, `username`, `role`) sem expor dados sensíveis
+- [ ] Criar contexto de identidade autenticada no Fastify e política central de acesso `public / authenticated / admin`
+- [ ] Restringir rotas administrativas existentes, incluindo scan manual, diagnóstico operacional detalhado e importação/sincronização Rekordbox quando aplicável
+- [ ] Criar APIs administrativas de usuários para listar, criar, alterar papel, ativar/desativar, redefinir senha e revogar sessões
+- [ ] Impedir desativação/rebaixamento do último administrador ativo e impedir auto-lockout administrativo
+- [ ] Exigir senha temporária forte ao criar/resetar conta e obrigar troca no primeiro login antes de liberar o uso normal
+- [ ] Permitir ao usuário autenticado trocar a própria senha e revogar as próprias outras sessões
+- [ ] Migrar favoritos para ownership por `user_id`, preservando os favoritos atuais no primeiro admin
+- [ ] Migrar histórico e estatísticas para escopo por `user_id`, preservando o histórico atual no primeiro admin
+- [ ] Migrar playlists manuais para ownership por `user_id`; manter playlists Rekordbox compartilhadas e somente leitura fora da reimportação
+- [ ] Migrar `playback_state` de linha global única para uma linha por usuário, preservando fila, posição, volume, shuffle e repeat atuais no primeiro admin
+- [ ] Revisar todas as queries por ID para aplicar ownership no próprio SQL e evitar IDOR/acesso cruzado entre usuários
+- [ ] Separar downloads offline e manifesto/cache por `userId`, impedindo vazamento local entre contas no mesmo navegador
+- [ ] Adaptar o frontend para manter `currentUser` e exibir superfícies conforme `role`, sem usar essa checagem como controle de segurança
+- [ ] Criar tela administrativa `Usuários`, visível somente para admin, com criação e gerenciamento simples sem cadastro público
+- [ ] Criar tela `Minha conta` para troca de senha e revogação de sessões próprias
+- [ ] Remover a dependência permanente de credenciais no `.env` após bootstrap bem-sucedido, mantendo fluxo operacional seguro de recuperação local de administrador
+- [ ] Documentar bootstrap, criação de usuários, recuperação de acesso, mudança de senha, desativação e rollback de migration
+- [ ] Adicionar testes unitários de senha, sessão, role, último admin, normalização de username e revogação
+- [ ] Adicionar testes de integração para `401 / 403 / 404`, ownership, usuário desativado, troca obrigatória de senha e rotas administrativas
+- [ ] Adicionar Playwright com contas `admin` e `user` em mobile/tablet/desktop, validando menu, login, isolamento de dados e troca de senha
+- [ ] Adicionar regressões de segurança para tentativa de chamar `/api/admin/*` como `user`, adulteração de payload/role no cliente e acesso a recursos de outro usuário
+- [ ] Atualizar smoke test de produção para validar migration/bootstrap, login admin e login de usuário normal sem usar o banco real
+
+Critério de conclusão: um `user` pode reproduzir e administrar somente seus dados pessoais, nunca consegue executar operações administrativas mesmo por chamada manual à API, e um `admin` pode gerenciar usuários sem risco de remover o último administrador ou perder os dados existentes no upgrade.
+
 ## Fase 8 — Administração da biblioteca
 
-Objetivo: permitir administrar a coleção pelo próprio Home Music, com operações seguras e reversíveis sempre que possível.
+Objetivo: permitir administrar a coleção pelo próprio Home Music, com operações seguras e reversíveis sempre que possível. Toda a área e suas APIs são exclusivas de `admin`, apoiadas na autorização da Fase 7.5.
 
-- [ ] Criar área `Administração` separada da experiência de reprodução
+- [ ] Criar área `Administração` separada da experiência de reprodução e protegida por role `admin`
 - [ ] Criar visão geral com quantidade de faixas, armazenamento, problemas e estado do scanner
 - [ ] Criar ponto de entrada `Importar mídia` integrado ao pipeline da Fase 9
 - [ ] Permitir desativar/reativar músicas sem remover o arquivo físico
