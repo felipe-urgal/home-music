@@ -1,6 +1,7 @@
 import type { AuthStatusResponse, AuthenticatedUser } from '@home-music/shared';
 import { useCallback, useEffect, useState } from 'react';
 import { AUTH_REQUIRED_EVENT, PASSWORD_CHANGE_REQUIRED_EVENT } from './api-client';
+import { forgetOfflineUserId, rememberOfflineUserId } from './offline-user';
 
 function messageFromResponse(response: Response) {
   return response.json()
@@ -32,17 +33,22 @@ export function useAuth() {
       setConfigured(status.configured);
 
       if (status.authenticated && status.passwordChangeRequired && status.user) {
+        forgetOfflineUserId();
         setAuthenticated(false);
         setCurrentUser(null);
         window.dispatchEvent(new CustomEvent(PASSWORD_CHANGE_REQUIRED_EVENT, {
           detail: { user: status.user }
         }));
       } else {
+        const user = status.authenticated ? status.user : null;
+        if (user) rememberOfflineUserId(user.id);
+        else forgetOfflineUserId();
         setAuthenticated(status.authenticated);
-        setCurrentUser(status.authenticated ? status.user : null);
+        setCurrentUser(user);
       }
       setError(null);
     } catch (error) {
+      if (reachedServer) forgetOfflineUserId();
       setAuthenticated(false);
       setCurrentUser(null);
       const offline = !reachedServer;
@@ -62,6 +68,7 @@ export function useAuth() {
 
   useEffect(() => {
     const expire = () => {
+      forgetOfflineUserId();
       setAuthenticated(false);
       setCurrentUser(null);
       setUnreachable(false);
@@ -123,6 +130,7 @@ export function useAuth() {
       throw new Error(message);
     }
 
+    forgetOfflineUserId();
     setAuthenticated(false);
     setCurrentUser(null);
     setUnreachable(false);
