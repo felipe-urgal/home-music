@@ -150,6 +150,12 @@
   height: 18px;
 }
 
+.my-account-card__icon--danger {
+  color: #ff9b9b;
+  background: rgba(180, 58, 58, 0.1);
+  border-color: rgba(255, 112, 112, 0.13);
+}
+
 .my-account-card__heading > div {
   min-width: 0;
   display: grid;
@@ -211,6 +217,15 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
+}
+
+.my-account-action--danger {
+  border-color: rgba(255, 112, 112, 0.16);
+  color: #ffaaaa;
+}
+
+.my-account-action--danger:hover:not(:disabled) {
+  background: rgba(180, 58, 58, 0.08);
 }
 
 .my-account-action svg,
