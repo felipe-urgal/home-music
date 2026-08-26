@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Track } from '@home-music/shared';
 import { apiFetch } from './api-client';
 import { offlineDownloadScheduler } from './offline-download-scheduler';
-import { readOfflineUserId } from './offline-user';
+import { OFFLINE_USER_CHANGED_EVENT, OFFLINE_USER_ID_KEY, readOfflineUserId } from './offline-user';
 
 export const OFFLINE_AUDIO_CACHE_PREFIX = 'home-music-offline-audio-v2-';
 export const OFFLINE_MANIFEST_PREFIX = 'home-music:offline-tracks:v2:';
@@ -190,7 +190,7 @@ function downloadError(error: unknown) {
 }
 
 export function useOfflineDownloads() {
-  const userId = readOfflineUserId();
+  const [userId, setUserId] = useState<string | null>(() => readOfflineUserId());
   const activeUserIdRef = useRef(userId);
   activeUserIdRef.current = userId;
 
@@ -220,6 +220,20 @@ export function useOfflineDownloads() {
     if (activeUserIdRef.current === ownerUserId) {
       setManifestState({ userId: ownerUserId, records: next });
     }
+  }, []);
+
+  useEffect(() => {
+    const syncUserId = () => setUserId(readOfflineUserId());
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === OFFLINE_USER_ID_KEY || event.key === null) syncUserId();
+    };
+
+    window.addEventListener(OFFLINE_USER_CHANGED_EVENT, syncUserId);
+    window.addEventListener('storage', onStorage);
+    return () => {
+      window.removeEventListener(OFFLINE_USER_CHANGED_EVENT, syncUserId);
+      window.removeEventListener('storage', onStorage);
+    };
   }, []);
 
   useEffect(() => {
