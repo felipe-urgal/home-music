@@ -1,0 +1,65 @@
+import { apiFetch } from './api-client';
+
+export const MIN_ACCOUNT_PASSWORD_CHARACTERS = 12;
+const MAX_ACCOUNT_PASSWORD_BYTES = 1024;
+
+type RevokeOtherSessionsResponse = {
+  revoked: number;
+};
+
+async function responseError(response: Response) {
+  try {
+    const body = await response.json() as { error?: string };
+    return body.error || `Falha HTTP ${response.status}`;
+  } catch {
+    return `Falha HTTP ${response.status}`;
+  }
+}
+
+function passwordByteLength(value: string) {
+  return new TextEncoder().encode(value).byteLength;
+}
+
+export function passwordChangeValidation(
+  currentPassword: string,
+  newPassword: string,
+  confirmation: string
+): string | null {
+  if (!currentPassword) return 'Informe sua senha atual.';
+  if (Array.from(newPassword).length < MIN_ACCOUNT_PASSWORD_CHARACTERS) {
+    return `A nova senha precisa ter pelo menos ${MIN_ACCOUNT_PASSWORD_CHARACTERS} caracteres.`;
+  }
+  if (!newPassword.trim()) return 'A nova senha não pode conter somente espaços.';
+  if (passwordByteLength(newPassword) > MAX_ACCOUNT_PASSWORD_BYTES) {
+    return 'A nova senha excede o limite técnico de 1024 bytes.';
+  }
+  if (newPassword === currentPassword) return 'A nova senha precisa ser diferente da atual.';
+  if (newPassword !== confirmation) return 'A confirmação precisa ser igual à nova senha.';
+  return null;
+}
+
+export async function changeOwnPassword(currentPassword: string, newPassword: string) {
+  const response = await apiFetch('/api/auth/password', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Home-Music-Request': '1'
+    },
+    body: JSON.stringify({ currentPassword, newPassword })
+  });
+  if (!response.ok) throw new Error(await responseError(response));
+}
+
+export async function revokeOtherSessions() {
+  const response = await apiFetch('/api/auth/sessions/revoke-others', {
+    method: 'POST',
+    headers: { 'X-Home-Music-Request': '1' }
+  });
+  if (!response.ok) throw new Error(await responseError(response));
+
+  const body = await response.json() as Partial<RevokeOtherSessionsResponse>;
+  if (!Number.isSafeInteger(body.revoked) || Number(body.revoked) < 0) {
+    throw new Error('Resposta inválida ao revogar outras sessões.');
+  }
+  return Number(body.revoked);
+}
