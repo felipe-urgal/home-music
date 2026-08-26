@@ -16,6 +16,32 @@ export type AuthStatusResponse = {
   user: AuthenticatedUser | null;
 };
 
+export type AdminUser = {
+  id: string;
+  username: string;
+  role: UserRole;
+  enabled: boolean;
+  passwordMustChange: boolean;
+  createdAt: string;
+  updatedAt: string;
+  passwordChangedAt: string | null;
+};
+
+export type AdminUsersResponse = {
+  users: AdminUser[];
+};
+
+export type AdminUserCreateResponse = {
+  user: AdminUser;
+  temporaryPassword: string;
+};
+
+export type AdminUserPasswordResetResponse = AdminUserCreateResponse;
+
+export type AdminUserSessionsRevokeResponse = {
+  revokedSessions: number;
+};
+
 export type Track = {
   id: string;
   title: string;

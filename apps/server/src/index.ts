@@ -8,6 +8,8 @@ import {
   parseAutoRescanIntervalSeconds,
   startAutoRescanScheduler
 } from './auto-rescan.js';
+import { registerAdminUserRoutes } from './admin-user-routes.js';
+import { AdminUsersService } from './admin-users.js';
 import {
   buildSessionCookie,
   loginRateLimitKey,
@@ -108,6 +110,7 @@ try {
   // O probe abaixo transforma configuração inválida em status não disponível.
 }
 const sessions = new SessionManager(authUser, authPassword);
+const adminUsers = new AdminUsersService(databasePath, sessions);
 const loginRateLimiter = new LoginRateLimiter();
 const authConfigured = sessions.configured;
 const productionCsp = "default-src 'self'; img-src 'self' data: blob:; media-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
@@ -377,6 +380,7 @@ installApiAuthPolicy(app, {
   sessions,
   users: authUsers
 });
+registerAdminUserRoutes(app, adminUsers);
 
 app.addHook('onSend', async (_request, reply, payload) => {
   reply.header('X-Content-Type-Options', 'nosniff');
@@ -390,6 +394,7 @@ app.addHook('onSend', async (_request, reply, payload) => {
 
 app.addHook('onClose', async () => {
   stopAutomaticRescan();
+  adminUsers.close();
   authUsers.close();
   database.close();
 });

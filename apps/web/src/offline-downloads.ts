@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Track } from '@home-music/shared';
 import { apiFetch } from './api-client';
+import { offlineDownloadScheduler } from './offline-download-scheduler';
 
 export const OFFLINE_AUDIO_CACHE_NAME = 'home-music-offline-audio-v1';
 const OFFLINE_MANIFEST_KEY = 'home-music:offline-tracks:v1';
@@ -147,13 +148,15 @@ export function useOfflineDownloads() {
   const [loading, setLoading] = useState(true);
   const [capabilityChecked, setCapabilityChecked] = useState(false);
   const [workerSupported, setWorkerSupported] = useState(false);
-  const [downloadingIds, setDownloadingIds] = useState<Set<string>>(() => new Set());
+  const [downloadingIds, setDownloadingIds] = useState<Set<string>>(() => offlineDownloadScheduler.pendingIds);
 
   const commitRecords = useCallback((next: OfflineDownloadRecord[]) => {
     writeManifest(next);
     recordsRef.current = next;
     setRecords(next);
   }, []);
+
+  useEffect(() => offlineDownloadScheduler.subscribe(setDownloadingIds), []);
 
   useEffect(() => {
     if (!browserHasOfflinePrimitives()) {
@@ -227,46 +230,42 @@ export function useOfflineDownloads() {
     if (!workerSupported || loading) throw new Error('Feche e abra novamente o Home Music para ativar o suporte a downloads offline.');
     if (recordsRef.current.some(record => record.track.id === track.id)) return;
 
-    setDownloadingIds(ids => new Set(ids).add(track.id));
-    const url = streamUrl(track.id);
-
-    try {
-      const response = await apiFetch(url, { cache: 'no-store' });
-      if (!response.ok) throw new Error(`Não foi possível baixar a música (HTTP ${response.status}).`);
-      if (response.status !== 200) throw new Error('O servidor não retornou o arquivo completo para download offline.');
-
-      const sizeHeader = Number(response.headers.get('content-length') || 0);
-      const size = Number.isFinite(sizeHeader) && sizeHeader > 0 ? sizeHeader : 0;
-      const mimeType = response.headers.get('content-type') || 'application/octet-stream';
-      await ensureStorageHeadroom(size);
-
-      const cache = await caches.open(OFFLINE_AUDIO_CACHE_NAME);
-      await cache.put(url, response);
-
-      const record: OfflineDownloadRecord = {
-        track,
-        size,
-        mimeType,
-        downloadedAt: new Date().toISOString()
-      };
+    await offlineDownloadScheduler.enqueue(track.id, async () => {
+      if (recordsRef.current.some(record => record.track.id === track.id)) return;
+      const url = streamUrl(track.id);
 
       try {
-        commitRecords([record, ...recordsRef.current.filter(item => item.track.id !== track.id)]);
-      } catch (error) {
-        try { await cache.delete(url); } catch { /* órfão será reconciliado depois */ }
-        throw error;
-      }
+        const response = await apiFetch(url, { cache: 'no-store' });
+        if (!response.ok) throw new Error(`Não foi possível baixar a música (HTTP ${response.status}).`);
+        if (response.status !== 200) throw new Error('O servidor não retornou o arquivo completo para download offline.');
 
-      try { await navigator.storage?.persist?.(); } catch { /* persistência é best-effort */ }
-    } catch (error) {
-      throw downloadError(error);
-    } finally {
-      setDownloadingIds(ids => {
-        const next = new Set(ids);
-        next.delete(track.id);
-        return next;
-      });
-    }
+        const sizeHeader = Number(response.headers.get('content-length') || 0);
+        const size = Number.isFinite(sizeHeader) && sizeHeader > 0 ? sizeHeader : 0;
+        const mimeType = response.headers.get('content-type') || 'application/octet-stream';
+        await ensureStorageHeadroom(size);
+
+        const cache = await caches.open(OFFLINE_AUDIO_CACHE_NAME);
+        await cache.put(url, response);
+
+        const record: OfflineDownloadRecord = {
+          track,
+          size,
+          mimeType,
+          downloadedAt: new Date().toISOString()
+        };
+
+        try {
+          commitRecords([record, ...recordsRef.current.filter(item => item.track.id !== track.id)]);
+        } catch (error) {
+          try { await cache.delete(url); } catch { /* órfão será reconciliado depois */ }
+          throw error;
+        }
+
+        try { await navigator.storage?.persist?.(); } catch { /* persistência é best-effort */ }
+      } catch (error) {
+        throw downloadError(error);
+      }
+    });
   }, [commitRecords, loading, workerSupported]);
 
   const remove = useCallback(async (trackId: string) => {
