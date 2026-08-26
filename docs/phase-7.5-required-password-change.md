@@ -37,7 +37,7 @@ O login multiusuário completo continua bloqueado até as migrations de ownershi
 
 Existe uma exceção deliberadamente estreita: uma conta ativa com `password_must_change = 1` pode validar sua senha temporária persistida no SQLite e receber uma sessão identificada restrita.
 
-Uma conta persistida com `password_must_change = 0` ainda não passa a ter login normal nesta atividade. Isso evita antecipar o multiusuário enquanto dados pessoais ainda são globais.
+Uma conta persistida com `password_must_change = 0` ainda não passa a ter login normal nesta atividade, com uma única exceção: o usuário legado já vinculado pelo bootstrap continua conseguindo entrar com sua senha atual persistida no SQLite. Isso preserva o acesso ao primeiro administrador sem liberar autenticação multiusuário geral antes do isolamento de dados pessoais.
 
 ## Fronteira no backend
 
@@ -103,7 +103,7 @@ Em sucesso o serviço:
 6. revoga todas as sessões do usuário, inclusive a sessão usada na troca;
 7. limpa o cookie da resposta.
 
-O usuário precisa autenticar novamente depois da troca. O login normal da segunda conta continuará aguardando as migrations de ownership descritas acima.
+O usuário precisa autenticar novamente depois da troca. Para o primeiro admin já vinculado pelo bootstrap, a nova senha funciona normalmente porque o hash atual do SQLite é a autoridade. O login normal das demais contas continuará aguardando as migrations de ownership descritas acima.
 
 ## Concorrência e estado stale
 
@@ -112,18 +112,24 @@ Operações com `scrypt` podem levar tempo suficiente para o estado da conta mud
 Por isso:
 
 - o login com senha temporária relê `enabled`, `password_must_change` e `password_hash` depois da verificação criptográfica;
-- o login legado do primeiro administrador também exige que a senha do `.env` ainda corresponda ao hash atual no SQLite;
+- o login normal do usuário legado vinculado relê `enabled`, `password_must_change` e `password_hash` depois da verificação criptográfica;
 - a troca usa um `UPDATE` condicional pelo hash antigo e retorna conflito se a credencial mudou enquanto o novo hash era calculado.
 
 Esse desenho impede que uma desativação ou reset concorrente seja ignorado por uma autorização calculada antes da KDF terminar.
 
 ## Credencial legada do `.env`
 
-Enquanto o bootstrap ainda depende de `HOME_MUSIC_USER`/`HOME_MUSIC_PASSWORD`, a comparação com o `.env` não é mais suficiente quando existe usuário persistido.
+Enquanto a tabela `users` ainda está vazia, `HOME_MUSIC_USER` e `HOME_MUSIC_PASSWORD` continuam sendo necessários para o bootstrap e para preservar o fallback legado de transição.
 
-Para uma credencial legada vinculada, o servidor também verifica a mesma senha contra o `password_hash` atual do usuário ativo no SQLite.
+Depois que o preload vincula esse username a um usuário persistido:
 
-Isso fecha o caso em que um reset administrativo revogaria sessões e alteraria o hash, mas a senha antiga do `.env` poderia otherwise continuar criando novas sessões.
+- o username do `.env` continua identificando qual é a conta legada;
+- a senha do `.env` deixa de ser a autoridade permanente;
+- a senha apresentada no login é validada contra o `password_hash` atual do SQLite;
+- `password_must_change = 1` impede o fluxo normal e força a sessão restrita;
+- reset/troca de senha não exige editar o `.env` para o primeiro admin continuar acessando o sistema.
+
+Isso fecha tanto o bypass pela senha antiga do `.env` quanto o lockout que ocorreria se a nova senha existisse apenas no SQLite sem ser aceita pelo login legado vinculado.
 
 ## Semântica de erro da troca
 
@@ -139,7 +145,9 @@ A implementação cobre:
 - política mínima da nova senha e rejeição de whitespace-only;
 - login transitório somente para conta ativa com troca pendente;
 - username normalizado no login temporário;
-- senha legada vinculada conferida também contra o hash atual do SQLite;
+- fallback legado ainda verificando a senha do `.env` antes do bootstrap;
+- username legado vinculado usando o hash atual do SQLite como autoridade de senha;
+- primeiro admin conseguindo autenticar com a nova senha após concluir a troca obrigatória;
 - bloqueio de rotas normais e administrativas pelo backend;
 - liberação somente de troca/logout durante a sessão restrita;
 - `passwordChangeRequired` no status sem ampliar o objeto de identidade;
