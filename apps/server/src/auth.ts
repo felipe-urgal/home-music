@@ -84,6 +84,12 @@ export class SessionManager {
   validateCredentials(username: string, password: string) {
     if (!this.configured) return false;
     const usernameMatches = safeEqual(username, this.username);
+    if (this.legacyBinding.status === 'bound') {
+      // Depois que o bootstrap vinculou o login legado a um usuário persistido,
+      // o .env continua identificando somente qual é a conta legada. A senha
+      // corrente passa a ser validada contra o hash do SQLite pelo caller.
+      return usernameMatches;
+    }
     const passwordMatches = safeEqual(password, this.password);
     return usernameMatches && passwordMatches;
   }
