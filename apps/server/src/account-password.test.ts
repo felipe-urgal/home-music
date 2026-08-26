@@ -54,7 +54,7 @@ test('política de senha de conta exige comprimento forte sem alterar semanticam
   assert.equal(ACCOUNT_PASSWORD_MIN_LENGTH, 12);
   assert.equal(accountPasswordIsStrong('curta-demais'), false);
   assert.equal(accountPasswordIsStrong('senha-segura-2026'), true);
-  assert.equal(accountPasswordIsStrong(' '.repeat(12)), true);
+  assert.equal(accountPasswordIsStrong(' '.repeat(12)), false);
 });
 
 test('login transitório aceita somente credencial correta de conta ativa com troca pendente', async () => {
