@@ -293,7 +293,7 @@ try {
     active: 0,
     pending: 0
   });
-  assert.equal(internalHealthBody.schemaVersion, 8);
+  assert.equal(internalHealthBody.schemaVersion, 9);
 
   const favorites = await fetch(`${baseUrl}/api/favorites`, {
     headers: { Cookie: cookie }
@@ -317,6 +317,12 @@ try {
   assert.equal(statisticsBody.uniqueTracks, 0);
   assert.equal(statisticsBody.uniqueArtists, 0);
   assert.deepEqual(statisticsBody.topTracks, []);
+
+  const playlists = await fetch(`${baseUrl}/api/playlists`, {
+    headers: { Cookie: cookie }
+  });
+  assert.equal(playlists.status, 200);
+  assert.deepEqual(await playlists.json(), { playlists: [] });
 
   updateSmokeUserRole('user');
   try {
@@ -348,6 +354,12 @@ try {
     });
     assert.equal(userStatistics.status, 200, 'User autenticado deve acessar somente as próprias estatísticas.');
     assert.equal((await userStatistics.json()).totalPlays, 0);
+
+    const userPlaylists = await fetch(`${baseUrl}/api/playlists`, {
+      headers: { Cookie: cookie }
+    });
+    assert.equal(userPlaylists.status, 200, 'User autenticado deve acessar playlists pessoais e Rekordbox compartilhadas.');
+    assert.deepEqual(await userPlaylists.json(), { playlists: [] });
 
     const adminOperations = [
       { method: 'GET', path: '/api/health' },
