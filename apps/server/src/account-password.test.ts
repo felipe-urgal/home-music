@@ -135,8 +135,56 @@ test('troca obrigatória valida senha atual, força senha forte, limpa flag e re
     assert.equal(await service.verifyEnabledUserPassword('user-1', NEW_PASSWORD), true);
     assert.equal(await service.verifyEnabledUserPassword('user-1', TEMP_PASSWORD), false);
     assert.equal(await service.authenticateRequiredPasswordChange('Maria Silva', NEW_PASSWORD), null);
+  });
+});
+
+test('usuário autenticado pode trocar a senha definitiva e todas as sessões são revogadas', async () => {
+  await withPendingUser(async (databasePath, service, revoked) => {
+    const db = new DatabaseSync(databasePath);
+    db.prepare('UPDATE users SET password_must_change = 0 WHERE id = ?;').run('user-1');
+    db.close();
+
     assert.deepEqual(
-      await service.changeRequiredPassword('user-1', NEW_PASSWORD, 'Outra-senha-segura-2026'),
+      await service.changeAuthenticatedPassword('user-1', 'senha-incorreta-2026', NEW_PASSWORD),
+      { ok: false, error: 'invalid-current-password' }
+    );
+    assert.deepEqual(
+      await service.changeAuthenticatedPassword('user-1', TEMP_PASSWORD, TEMP_PASSWORD),
+      { ok: false, error: 'same-password' }
+    );
+    assert.deepEqual(
+      await service.changeAuthenticatedPassword('user-1', TEMP_PASSWORD, NEW_PASSWORD),
+      { ok: true }
+    );
+    assert.deepEqual(revoked, ['user-1']);
+
+    const current = new DatabaseSync(databasePath);
+    const row = current.prepare(`
+      SELECT password_hash, password_must_change
+      FROM users
+      WHERE id = ?;
+    `).get('user-1') as Record<string, unknown>;
+    current.close();
+
+    assert.equal(row.password_must_change, 0);
+    assert.equal(await verifyPassword(NEW_PASSWORD, String(row.password_hash)), true);
+    assert.equal(await verifyPassword(TEMP_PASSWORD, String(row.password_hash)), false);
+  });
+});
+
+test('troca autenticada rejeita identidade inválida ou conta desativada', async () => {
+  await withPendingUser(async (databasePath, service) => {
+    assert.deepEqual(
+      await service.changeAuthenticatedPassword('', TEMP_PASSWORD, NEW_PASSWORD),
+      { ok: false, error: 'not-required' }
+    );
+
+    const db = new DatabaseSync(databasePath);
+    db.prepare('UPDATE users SET enabled = 0 WHERE id = ?;').run('user-1');
+    db.close();
+
+    assert.deepEqual(
+      await service.changeAuthenticatedPassword('user-1', TEMP_PASSWORD, NEW_PASSWORD),
       { ok: false, error: 'not-required' }
     );
   });
@@ -159,6 +207,29 @@ test('troca obrigatória aborta se o hash mudar enquanto a nova senha é derivad
   await withPendingUser(async (databasePath, service, revoked) => {
     const replacementHash = await hashPassword('Reset-concorrente-2026');
     const change = service.changeRequiredPassword('user-1', TEMP_PASSWORD, NEW_PASSWORD);
+    await new Promise<void>(resolve => setImmediate(resolve));
+
+    const db = new DatabaseSync(databasePath);
+    db.prepare(`
+      UPDATE users
+      SET password_hash = ?, password_must_change = 1
+      WHERE id = ?;
+    `).run(replacementHash, 'user-1');
+    db.close();
+
+    assert.deepEqual(await change, { ok: false, error: 'stale-account' });
+    assert.deepEqual(revoked, []);
+  });
+});
+
+test('troca voluntária aborta se a conta for resetada durante a derivação', async () => {
+  await withPendingUser(async (databasePath, service, revoked) => {
+    const prepare = new DatabaseSync(databasePath);
+    prepare.prepare('UPDATE users SET password_must_change = 0 WHERE id = ?;').run('user-1');
+    prepare.close();
+
+    const replacementHash = await hashPassword('Reset-concorrente-2026');
+    const change = service.changeAuthenticatedPassword('user-1', TEMP_PASSWORD, NEW_PASSWORD);
     await new Promise<void>(resolve => setImmediate(resolve));
 
     const db = new DatabaseSync(databasePath);
