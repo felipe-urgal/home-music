@@ -266,18 +266,19 @@ export class HomeMusicDatabase {
           ALTER TABLE favorites RENAME TO favorites_legacy;
 
           CREATE TABLE favorites (
-            user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
             track_id TEXT NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
             created_at TEXT NOT NULL,
-            UNIQUE(user_id, track_id)
+            PRIMARY KEY (user_id, track_id)
           );
-
-          CREATE UNIQUE INDEX idx_favorites_legacy_track
-          ON favorites(track_id)
-          WHERE user_id IS NULL;
 
           CREATE INDEX idx_favorites_user_created_at
           ON favorites(user_id, created_at DESC);
+
+          CREATE TABLE legacy_favorites_pending (
+            track_id TEXT PRIMARY KEY REFERENCES tracks(id) ON DELETE CASCADE,
+            created_at TEXT NOT NULL
+          );
         `);
 
         if (firstUserId) {
@@ -288,8 +289,8 @@ export class HomeMusicDatabase {
           `).run(firstUserId);
         } else {
           this.db.exec(`
-            INSERT INTO favorites(user_id, track_id, created_at)
-            SELECT NULL, track_id, created_at
+            INSERT INTO legacy_favorites_pending(track_id, created_at)
+            SELECT track_id, created_at
             FROM favorites_legacy;
           `);
         }
