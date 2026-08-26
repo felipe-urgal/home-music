@@ -21,6 +21,7 @@ SERVICE_UNIT="home-music.service"
 TAILSCALE_BIN="$(command -v tailscale || true)"
 NODE_BIN="$(command -v node || true)"
 CURL_BIN="$(command -v curl || true)"
+PUBLIC_AUTH_CHECK="${ROOT_DIR}/apps/server/dist/public-access-auth-cli.js"
 MIN_PUBLIC_PASSWORD_LENGTH=20
 
 fail() {
@@ -140,15 +141,34 @@ home_music_port() {
 }
 
 validate_public_credentials() {
-  local username password
-  username="$(read_env_value HOME_MUSIC_USER)"
-  password="$(read_env_value HOME_MUSIC_PASSWORD)"
+  [[ -f "${PUBLIC_AUTH_CHECK}" ]] || {
+    fail "Validador de credencial persistida não encontrado. Rode npm run build ou npm run service:update antes de habilitar o Funnel."
+    return 1
+  }
 
-  [[ -n "${username}" ]] || fail "HOME_MUSIC_USER precisa estar configurado antes de publicar o Home Music."
-  if (( ${#password} < MIN_PUBLIC_PASSWORD_LENGTH )); then
-    fail "HOME_MUSIC_PASSWORD precisa ter pelo menos ${MIN_PUBLIC_PASSWORD_LENGTH} caracteres exclusivos para o perfil público."
+  local username password
+  if [[ -t 0 ]]; then
+    read -r -p "Usuário administrador para confirmar a exposição pública: " username
+    read -r -s -p "Senha atual desse administrador: " password
+    echo
+  else
+    IFS= read -r username || username=""
+    IFS= read -r password || password=""
+  fi
+
+  if [[ -z "${username}" || -z "${password}" ]]; then
+    unset password
+    fail "Informe um administrador ativo e sua senha atual para habilitar o acesso público."
     return 1
   fi
+
+  if ! printf '%s\0%s\0' "${username}" "${password}" | "${NODE_BIN}" "${PUBLIC_AUTH_CHECK}" "${MIN_PUBLIC_PASSWORD_LENGTH}"; then
+    unset password
+    fail "Credencial inválida. Use um administrador ativo, sem troca de senha pendente, com senha atual de pelo menos ${MIN_PUBLIC_PASSWORD_LENGTH} caracteres."
+    return 1
+  fi
+
+  unset password
 }
 
 https_443_inspection() {
@@ -357,7 +377,6 @@ enable_public() {
   require_common_tools
   check_tailscale_version
   load_tailscale_identity
-  validate_public_credentials
 
   local port target local_url inspection state stale_host final_state env_backup previous_state rollback_needed=0 funnel_attempted=0 migrated_stale=0
   port="$(home_music_port)"
@@ -394,6 +413,8 @@ enable_public() {
       return 0
     fi
   fi
+
+  validate_public_credentials
 
   echo "ATENÇÃO: este modo publica a URL ${TAILSCALE_URL} na internet via Tailscale Funnel."
   echo "O conteúdo continua protegido pelo login do Home Music, mas qualquer pessoa na internet pode alcançar a tela de login."
