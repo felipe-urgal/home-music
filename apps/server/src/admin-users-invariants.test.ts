@@ -104,11 +104,10 @@ test('último admin ativo não consegue se rebaixar nem se desativar pela API ad
       error: 'self-management-not-allowed'
     });
 
-    assert.deepEqual(service.getUser('admin-1'), {
-      ...service.getUser('admin-1'),
-      role: 'admin',
-      enabled: true
-    });
+    const currentAdmin = service.getUser('admin-1');
+    assert.ok(currentAdmin);
+    assert.equal(currentAdmin.role, 'admin');
+    assert.equal(currentAdmin.enabled, true);
     assert.equal(activeAdminCount(databasePath), 1);
     assert.deepEqual(revoked, []);
   });
