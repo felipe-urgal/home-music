@@ -123,7 +123,7 @@ export class AccountPasswordService {
     return current ? row.id : null;
   }
 
-  async changeRequiredPassword(
+  async changeAuthenticatedPassword(
     userId: string,
     currentPassword: string,
     newPassword: string
@@ -138,7 +138,12 @@ export class AccountPasswordService {
     `).get(userId) as Row | undefined;
 
     const currentHash = storedPasswordHash(row?.password_hash);
-    if (!currentHash || row?.enabled !== 1 || row?.password_must_change !== 1) {
+    const passwordMustChange = row?.password_must_change;
+    if (
+      !currentHash
+      || row?.enabled !== 1
+      || (passwordMustChange !== 0 && passwordMustChange !== 1)
+    ) {
       return { ok: false, error: 'not-required' };
     }
 
@@ -163,9 +168,9 @@ export class AccountPasswordService {
             password_changed_at = ?, updated_at = ?
         WHERE id = ?
           AND enabled = 1
-          AND password_must_change = 1
+          AND password_must_change = ?
           AND password_hash = ?;
-      `).run(newHash, now, now, userId, currentHash);
+      `).run(newHash, now, now, userId, passwordMustChange, currentHash);
 
       if (Number(result.changes) !== 1) {
         this.db.exec('ROLLBACK;');
@@ -184,5 +189,15 @@ export class AccountPasswordService {
 
     this.sessions.revokeUserSessions(userId);
     return { ok: true };
+  }
+
+  // Mantém o contrato usado pela rota existente enquanto ela atende tanto
+  // a troca obrigatória quanto a troca voluntária de uma sessão identificada.
+  changeRequiredPassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string
+  ) {
+    return this.changeAuthenticatedPassword(userId, currentPassword, newPassword);
   }
 }
