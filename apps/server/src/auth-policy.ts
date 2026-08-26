@@ -1,5 +1,6 @@
 import type { AuthenticatedUser } from '@home-music/shared';
 import type { FastifyInstance } from 'fastify';
+import { registerAccountSessionRoutes } from './account-session-routes.js';
 import {
   readCookie,
   SESSION_COOKIE_NAME,
@@ -32,7 +33,10 @@ declare module 'fastify' {
 
 type InstallApiAuthPolicyOptions = {
   configured: boolean;
-  sessions: Pick<SessionManager, 'getSession' | 'revokeSession'>;
+  sessions: Pick<
+    SessionManager,
+    'getSession' | 'revokeSession' | 'revokeUserSessionsExcept'
+  >;
   users: UserIdentityReader;
 };
 
@@ -89,4 +93,6 @@ export function installApiAuthPolicy(
       return reply.code(403).send({ error: 'Requisição de alteração não autorizada.' });
     }
   });
+
+  registerAccountSessionRoutes(app, options.sessions);
 }
