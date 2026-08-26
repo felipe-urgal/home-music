@@ -104,6 +104,7 @@ Detalhe das sessões associadas à identidade: [phase-7.5-sessions.md](phase-7.5
 Detalhe do status de autenticação e identidade mínima: [phase-7.5-auth-status.md](phase-7.5-auth-status.md).
 Detalhe do contexto autenticado e política central de acesso: [phase-7.5-auth-policy.md](phase-7.5-auth-policy.md).
 Detalhe da proteção das rotas administrativas existentes: [phase-7.5-admin-routes.md](phase-7.5-admin-routes.md).
+Detalhe das APIs administrativas de usuários: [phase-7.5-admin-users-api.md](phase-7.5-admin-users-api.md).
 
 Princípios:
 
@@ -126,7 +127,7 @@ Sequência de implementação:
 - [x] Fazer `/api/auth/status` retornar a identidade autenticada mínima (`id`, `username`, `role`) sem expor dados sensíveis
 - [x] Criar contexto de identidade autenticada no Fastify e política central de acesso `public / authenticated / admin`
 - [x] Restringir rotas administrativas existentes, incluindo scan manual, diagnóstico operacional detalhado e importação/sincronização Rekordbox quando aplicável
-- [ ] Criar APIs administrativas de usuários para listar, criar, alterar papel, ativar/desativar, redefinir senha e revogar sessões
+- [x] Criar APIs administrativas de usuários para listar, criar, alterar papel, ativar/desativar, redefinir senha e revogar sessões
 - [ ] Impedir desativação/rebaixamento do último administrador ativo e impedir auto-lockout administrativo
 - [ ] Exigir senha temporária forte ao criar/resetar conta e obrigar troca no primeiro login antes de liberar o uso normal
 - [ ] Permitir ao usuário autenticado trocar a própria senha e revogar as próprias outras sessões
