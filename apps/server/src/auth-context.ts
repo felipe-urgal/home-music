@@ -1,9 +1,8 @@
 import type { AuthenticatedUser } from '@home-music/shared';
 import type { AuthSession, SessionManager } from './auth.js';
-import type { AuthenticatedUserState } from './user-auth-store.js';
 
 export type UserIdentityReader = {
-  getEnabledUserById(userId: string): AuthenticatedUserState | null;
+  getEnabledUserById(userId: string): (AuthenticatedUser & { passwordMustChange: boolean }) | null;
 };
 
 export type SessionIdentity =
