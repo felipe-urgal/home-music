@@ -27,7 +27,6 @@ type SeedUser = {
   id: string;
   username: string;
   role: 'admin' | 'user';
-  enabled?: boolean;
   passwordMustChange?: boolean;
 };
 
@@ -37,13 +36,12 @@ function insertUser(db: DatabaseSync, user: SeedUser) {
     INSERT INTO users (
       id, username, username_normalized, password_hash, role, enabled,
       password_must_change, created_at, updated_at, password_changed_at
-    ) VALUES (?, ?, ?, 'hash-for-integration-test', ?, ?, ?, ?, ?, ?);
+    ) VALUES (?, ?, ?, 'hash-for-integration-test', ?, 1, ?, ?, ?, ?);
   `).run(
     user.id,
     user.username,
     user.username.toLowerCase(),
     user.role,
-    user.enabled === false ? 0 : 1,
     user.passwordMustChange ? 1 : 0,
     now,
     now,
@@ -65,12 +63,6 @@ async function buildFixture() {
     username: 'Troca Pendente',
     role: 'admin',
     passwordMustChange: true
-  });
-  insertUser(seed, {
-    id: 'disabled-1',
-    username: 'Desativado',
-    role: 'user',
-    enabled: false
   });
   seed.close();
 
@@ -106,7 +98,6 @@ async function buildFixture() {
   const adminToken = sessions.createSessionForUser('admin-1');
   const userToken = sessions.createSessionForUser('user-1');
   const pendingToken = sessions.createSessionForUser('pending-1');
-  const disabledToken = sessions.createSessionForUser('disabled-1');
 
   return {
     app,
@@ -116,7 +107,6 @@ async function buildFixture() {
     adminToken,
     userToken,
     pendingToken,
-    disabledToken,
     async close() {
       await app.close();
       adminUsers.close();
@@ -159,25 +149,33 @@ test('integra 401, 403 e 404 nas rotas administrativas reais', async () => {
       headers: { cookie: cookie(fixture.adminToken) }
     });
     assert.equal(allowed.statusCode, 200);
-    assert.equal(allowed.json().users.length, 4);
+    assert.equal(allowed.json().users.length, 3);
   } finally {
     await fixture.close();
   }
 });
 
-test('usuário desativado perde acesso e a sessão é invalidada no primeiro request', async () => {
+test('desativação administrativa revoga a sessão ativa e o próximo request recebe 401', async () => {
   const fixture = await buildFixture();
   try {
-    assert.equal(fixture.sessions.validateSession(fixture.disabledToken), true);
+    assert.equal(fixture.sessions.validateSession(fixture.userToken), true);
+
+    const disabled = await fixture.app.inject({
+      method: 'PATCH',
+      url: '/api/admin/users/user-1/enabled',
+      headers: mutationHeaders(fixture.adminToken),
+      payload: { enabled: false }
+    });
+    assert.equal(disabled.statusCode, 200);
+    assert.equal(disabled.json().user.enabled, false);
+    assert.equal(fixture.sessions.validateSession(fixture.userToken), false);
 
     const response = await fixture.app.inject({
       method: 'GET',
       url: '/api/profile',
-      headers: { cookie: cookie(fixture.disabledToken) }
+      headers: { cookie: cookie(fixture.userToken) }
     });
-
     assert.equal(response.statusCode, 401);
-    assert.equal(fixture.sessions.validateSession(fixture.disabledToken), false);
   } finally {
     await fixture.close();
   }
