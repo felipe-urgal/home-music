@@ -9,6 +9,7 @@ const SHELL_URL = '/';
 const REVALIDATED_STATIC = new Set(['/manifest.webmanifest', '/favicon.svg']);
 const USER_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
 const TRACK_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
+const offlineUserByClient = new Map();
 
 function isApiPath(pathname) {
   return pathname === '/api' || pathname.startsWith('/api/');
@@ -22,17 +23,13 @@ function isCacheableResponse(response) {
   return response.ok && (response.type === 'basic' || response.type === 'default');
 }
 
-function offlineAudioScope(pathname) {
+function offlineTrackId(pathname) {
   if (!pathname.startsWith(OFFLINE_AUDIO_PREFIX)) return null;
   const encoded = pathname.slice(OFFLINE_AUDIO_PREFIX.length);
-  const parts = encoded.split('/');
-  if (parts.length !== 2 || !parts[0] || !parts[1]) return null;
-
+  if (!encoded || encoded.includes('/')) return null;
   try {
-    const userId = decodeURIComponent(parts[0]);
-    const trackId = decodeURIComponent(parts[1]);
-    if (!USER_ID_RE.test(userId) || !TRACK_ID_RE.test(trackId)) return null;
-    return { userId, trackId };
+    const trackId = decodeURIComponent(encoded);
+    return TRACK_ID_RE.test(trackId) ? trackId : null;
   } catch {
     return null;
   }
@@ -75,15 +72,17 @@ function offlineAudioHeaders(contentType, size) {
   };
 }
 
+function offlineUnavailable() {
+  return new Response('Download offline não encontrado neste usuário.', {
+    status: 404,
+    headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' }
+  });
+}
+
 async function serveOfflineAudio(request, userId, trackId) {
   const cache = await caches.open(offlineAudioCacheName(userId));
   const cached = await cache.match(sourceAudioUrl(trackId));
-  if (!cached) {
-    return new Response('Download offline não encontrado.', {
-      status: 404,
-      headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' }
-    });
-  }
+  if (!cached) return offlineUnavailable();
 
   const blob = await cached.blob();
   const contentType = cached.headers.get('content-type') || blob.type || 'application/octet-stream';
@@ -219,6 +218,17 @@ self.addEventListener('activate', event => {
 
 self.addEventListener('message', event => {
   if (event.data?.type !== CAPABILITY_REQUEST) return;
+
+  const clientId = typeof event.source?.id === 'string' ? event.source.id : null;
+  const userId = typeof event.data?.userId === 'string' && USER_ID_RE.test(event.data.userId)
+    ? event.data.userId
+    : null;
+
+  if (clientId) {
+    if (userId) offlineUserByClient.set(clientId, userId);
+    else offlineUserByClient.delete(clientId);
+  }
+
   event.ports?.[0]?.postMessage({
     type: CAPABILITY_RESPONSE,
     version: 3,
@@ -231,17 +241,21 @@ self.addEventListener('fetch', event => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
 
-  const offlineScope = offlineAudioScope(url.pathname);
-  if (offlineScope && (request.method === 'GET' || request.method === 'HEAD')) {
-    event.respondWith(serveOfflineAudio(request, offlineScope.userId, offlineScope.trackId));
+  const downloadedTrackId = offlineTrackId(url.pathname);
+  if (downloadedTrackId && (request.method === 'GET' || request.method === 'HEAD')) {
+    const userId = event.clientId ? offlineUserByClient.get(event.clientId) : null;
+    event.respondWith(userId
+      ? serveOfflineAudio(request, userId, downloadedTrackId)
+      : Promise.resolve(offlineUnavailable())
+    );
     return;
   }
 
   if (request.method !== 'GET') return;
 
   // Conteúdo autenticado continua fora do cache estático da PWA.
-  // Downloads explícitos usam caches separados por usuário e uma rota virtual
-  // /offline-audio/:userId/:trackId que nunca reaproveita blobs de outra conta.
+  // Downloads explícitos usam caches separados por usuário. A rota virtual contém
+  // somente a faixa; o cache é escolhido pelo escopo do client/tab que fez a requisição.
   if (isApiPath(url.pathname)) return;
 
   if (request.mode === 'navigate') {
