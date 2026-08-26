@@ -39,6 +39,7 @@ type DesktopShellProps = {
   onOpenStatistics?: () => void;
   onPlayTrack?: (track: Track, context: Track[]) => void;
   onReorderQueue?: (from: number, to: number) => void;
+  sidebarUtilities?: ReactNode;
   surfaceClassName: string;
   children: ReactNode;
 };
@@ -84,6 +85,7 @@ export function DesktopShell({
   onOpenStatistics,
   onPlayTrack,
   onReorderQueue,
+  sidebarUtilities,
   surfaceClassName,
   children
 }: DesktopShellProps) {
@@ -93,7 +95,7 @@ export function DesktopShell({
   const desktopLayout = useDesktopLayout();
   const lyrics = useTrackLyrics(current, offlineMode || !desktopLayout);
   const contextTrack = current ? artworkTrack(current, offlineMode) : null;
-  const queueStart = Math.max(0, currentIndex);
+  const queueStart = currentIndex >= 0 ? currentIndex + 1 : 0;
   const queuePreview = queue.slice(queueStart, queueStart + DESKTOP_QUEUE_PREVIEW_SIZE);
   const remainingQueueCount = Math.max(0, queue.length - queueStart - queuePreview.length);
 
@@ -147,7 +149,7 @@ export function DesktopShell({
 
   return (
     <div className="desktop-layout" data-desktop-active={active}>
-      <aside className="desktop-sidebar" data-testid="desktop-sidebar">
+      <aside className={`desktop-sidebar ${sidebarUtilities ? 'has-utilities' : ''}`} data-testid="desktop-sidebar">
         <div className="desktop-brand">
           <span className="desktop-brand__icon"><Music2 /></span>
           <div>
@@ -195,6 +197,8 @@ export function DesktopShell({
           )}
         </nav>
 
+        {sidebarUtilities && <div className="desktop-sidebar__utilities">{sidebarUtilities}</div>}
+
         <div className="desktop-sidebar__footer">
           <span>{libraryCount.toLocaleString('pt-BR')}</span>
           <small>{libraryCount === 1 ? 'faixa disponível' : 'faixas disponíveis'}</small>
@@ -210,7 +214,7 @@ export function DesktopShell({
       <aside className="desktop-context" data-testid="desktop-context" aria-label="Contexto da reprodução">
         <div className="desktop-context__heading">
           <span>Contexto</span>
-          <small>{playing ? 'Reproduzindo' : 'Pausado'}</small>
+          {active !== 'player' && <small>{playing ? 'Reproduzindo' : 'Pausado'}</small>}
         </div>
 
         {contextTrack ? (
@@ -227,20 +231,24 @@ export function DesktopShell({
 
         <div className="desktop-context__summary">
           <span>{queue.length} {queue.length === 1 ? 'faixa na fila' : 'faixas na fila'}</span>
-          <span>·</span>
-          <span>{libraryCount} {offlineMode ? 'downloads' : 'na biblioteca'}</span>
+          {active !== 'player' && (
+            <>
+              <span>·</span>
+              <span>{libraryCount} {offlineMode ? 'downloads' : 'na biblioteca'}</span>
+            </>
+          )}
         </div>
 
-        <div className="desktop-context__tabs" role="tablist" aria-label="Painel contextual">
-          <button type="button" role="tab" aria-selected={contextTab === 'queue'} className={contextTab === 'queue' ? 'is-active' : ''} onClick={() => setContextTab('queue')}>
-            <ListMusic />Fila
-          </button>
-          {lyrics && (
+        {lyrics && (
+          <div className="desktop-context__tabs" role="tablist" aria-label="Painel contextual">
+            <button type="button" role="tab" aria-selected={contextTab === 'queue'} className={contextTab === 'queue' ? 'is-active' : ''} onClick={() => setContextTab('queue')}>
+              <ListMusic />Fila
+            </button>
             <button type="button" role="tab" aria-selected={contextTab === 'lyrics'} className={contextTab === 'lyrics' ? 'is-active' : ''} onClick={() => setContextTab('lyrics')}>
               <Music2 />Letra
             </button>
-          )}
-        </div>
+          </div>
+        )}
 
         {contextTab === 'lyrics' && lyrics ? (
           <section className="desktop-lyrics" aria-label="Letra da música" data-testid="desktop-lyrics">
@@ -301,9 +309,11 @@ export function DesktopShell({
           </section>
         )}
 
-        <button className="desktop-context__action" type="button" onClick={onOpenLibrary}>
-          {offlineMode ? 'Abrir downloads' : 'Abrir biblioteca'}
-        </button>
+        {active !== 'player' && (
+          <button className="desktop-context__action" type="button" onClick={onOpenLibrary}>
+            {offlineMode ? 'Abrir downloads' : 'Abrir biblioteca'}
+          </button>
+        )}
       </aside>
     </div>
   );
