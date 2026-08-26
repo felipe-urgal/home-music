@@ -130,6 +130,48 @@ test('migra schema v1 para v9 sem perder estado existente', async () => {
   try {
     const legacy = new DatabaseSync(dbPath);
     legacy.exec(`
+      CREATE TABLE metadata (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+      CREATE TABLE tracks (
+        id TEXT PRIMARY KEY,
+        file_path TEXT NOT NULL UNIQUE,
+        title TEXT NOT NULL,
+        artist TEXT NOT NULL,
+        album TEXT NOT NULL,
+        album_artist TEXT NOT NULL,
+        folder TEXT NOT NULL,
+        folder_path TEXT NOT NULL DEFAULT '',
+        duration REAL,
+        format TEXT NOT NULL,
+        has_cover INTEGER NOT NULL,
+        mime_type TEXT NOT NULL,
+        file_size INTEGER NOT NULL,
+        mtime_ms REAL NOT NULL
+      );
+      CREATE TABLE favorites (
+        track_id TEXT PRIMARY KEY REFERENCES tracks(id) ON DELETE CASCADE,
+        created_at TEXT NOT NULL
+      );
+      CREATE TABLE history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        track_id TEXT NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+        played_at TEXT NOT NULL
+      );
+      CREATE TABLE playlists (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE TABLE playlist_tracks (
+        playlist_id TEXT NOT NULL REFERENCES playlists(id) ON DELETE CASCADE,
+        track_id TEXT NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+        position INTEGER NOT NULL,
+        PRIMARY KEY (playlist_id, position),
+        UNIQUE (playlist_id, track_id)
+      );
       CREATE TABLE playback_state (
         id INTEGER PRIMARY KEY CHECK (id = 1),
         current_track_id TEXT,
@@ -140,6 +182,10 @@ test('migra schema v1 para v9 sem perder estado existente', async () => {
         queue_json TEXT NOT NULL DEFAULT '[]',
         updated_at TEXT NOT NULL
       );
+      INSERT INTO tracks(
+        id, file_path, title, artist, album, album_artist, folder, folder_path,
+        duration, format, has_cover, mime_type, file_size, mtime_ms
+      ) VALUES ('a', '/music/a.mp3', 'A', 'Artista', 'Álbum', 'Artista', 'Rock', 'Rock', 180, 'MP3', 0, 'audio/mpeg', 123, 456);
       INSERT INTO playback_state(
         id, current_track_id, position, volume, shuffle, repeat_mode, queue_json, updated_at
       ) VALUES (1, 'a', 15, 0.5, 1, 'all', '["a"]', '2026-08-24T12:00:00.000Z');
