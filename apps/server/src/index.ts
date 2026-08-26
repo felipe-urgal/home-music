@@ -4,6 +4,10 @@ import { fileURLToPath } from 'node:url';
 import Fastify from 'fastify';
 import type { NormalizationMode, PlaybackState, RepeatMode, ScanResponse, StatisticsPeriod } from '@home-music/shared';
 import {
+  ACCOUNT_PASSWORD_MIN_LENGTH,
+  AccountPasswordService
+} from './account-password.js';
+import {
   DEFAULT_AUTO_RESCAN_INTERVAL_SECONDS,
   parseAutoRescanIntervalSeconds,
   startAutoRescanScheduler
@@ -23,6 +27,7 @@ import { resolveAuthStatus } from './auth-status.js';
 import { installApiAuthPolicy } from './auth-policy.js';
 import { HomeMusicDatabase } from './database.js';
 import { probeFfmpeg, resolveFfmpegCommand, type FfmpegStatus } from './ffmpeg.js';
+import { readLegacyAuthBindingFromEnvironment } from './legacy-auth-binding.js';
 import { readCover, scanLibrary, type IndexedTrack } from './library.js';
 import { replayGainForMode } from './replay-gain.js';
 import { readTrackLyrics } from './lyrics.js';
@@ -109,7 +114,9 @@ try {
 } catch {
   // O probe abaixo transforma configuração inválida em status não disponível.
 }
+const legacyBinding = readLegacyAuthBindingFromEnvironment();
 const sessions = new SessionManager(authUser, authPassword);
+const accountPasswords = new AccountPasswordService(databasePath, sessions);
 const adminUsers = new AdminUsersService(databasePath, sessions);
 const loginRateLimiter = new LoginRateLimiter();
 const authConfigured = sessions.configured;
@@ -394,6 +401,7 @@ app.addHook('onSend', async (_request, reply, payload) => {
 
 app.addHook('onClose', async () => {
   stopAutomaticRescan();
+  accountPasswords.close();
   adminUsers.close();
   authUsers.close();
   database.close();
@@ -503,15 +511,78 @@ app.post<{ Body: { username?: unknown; password?: unknown } }>(
     const username = typeof request.body?.username === 'string' ? request.body.username : '';
     const password = typeof request.body?.password === 'string' ? request.body.password : '';
 
-    if (!sessions.validateCredentials(username, password)) {
+    let legacyAuthenticated = false;
+    if (sessions.validateCredentials(username, password)) {
+      if (legacyBinding.status === 'bound') {
+        legacyAuthenticated = await accountPasswords.verifyEnabledUserPassword(
+          legacyBinding.userId,
+          password
+        );
+      } else {
+        legacyAuthenticated = legacyBinding.status === 'legacy-uninitialized';
+      }
+    }
+
+    const requiredPasswordUserId = legacyAuthenticated
+      ? null
+      : await accountPasswords.authenticateRequiredPasswordChange(username, password);
+
+    if (!legacyAuthenticated && !requiredPasswordUserId) {
       loginRateLimiter.recordFailure(key);
       return reply.code(401).send({ error: 'Usuário ou senha inválidos.' });
     }
 
     loginRateLimiter.clear(key);
-    const token = sessions.createSession();
+    const token = requiredPasswordUserId
+      ? sessions.createSessionForUser(requiredPasswordUserId)
+      : sessions.createSession();
     reply.header('Set-Cookie', buildSessionCookie(token, SESSION_TTL_SECONDS, requestIsSecure(request)));
-    return { authenticated: true };
+    return {
+      authenticated: true,
+      passwordChangeRequired: Boolean(requiredPasswordUserId)
+    };
+  }
+);
+
+app.post<{ Body: { currentPassword?: unknown; newPassword?: unknown } }>(
+  '/api/auth/password',
+  async (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    if (!request.user) {
+      return reply.code(409).send({ error: 'Troca obrigatória de senha não está disponível para esta sessão.' });
+    }
+
+    const currentPassword = typeof request.body?.currentPassword === 'string'
+      ? request.body.currentPassword
+      : '';
+    const newPassword = typeof request.body?.newPassword === 'string'
+      ? request.body.newPassword
+      : '';
+    const result = await accountPasswords.changeRequiredPassword(
+      request.user.id,
+      currentPassword,
+      newPassword
+    );
+
+    if (!result.ok) {
+      switch (result.error) {
+        case 'invalid-current-password':
+          return reply.code(400).send({ error: 'Senha temporária inválida.' });
+        case 'weak-new-password':
+          return reply.code(400).send({
+            error: `A nova senha deve ter pelo menos ${ACCOUNT_PASSWORD_MIN_LENGTH} caracteres.`
+          });
+        case 'same-password':
+          return reply.code(400).send({ error: 'A nova senha precisa ser diferente da senha temporária.' });
+        case 'not-required':
+          return reply.code(409).send({ error: 'Esta conta não possui troca obrigatória de senha pendente.' });
+        case 'stale-account':
+          return reply.code(409).send({ error: 'A credencial da conta mudou durante a operação. Faça login novamente.' });
+      }
+    }
+
+    reply.header('Set-Cookie', buildSessionCookie('', 0, requestIsSecure(request)));
+    return { passwordChanged: true };
   }
 );
 
