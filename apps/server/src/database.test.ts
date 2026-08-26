@@ -28,19 +28,35 @@ function indexedTrack(id: string, filePath: string): IndexedTrack {
   };
 }
 
+function insertUser(databasePath: string, id = 'user-1') {
+  const raw = new DatabaseSync(databasePath);
+  const now = '2026-08-26T10:00:00.000Z';
+  try {
+    raw.prepare(`
+      INSERT INTO users(
+        id, username, username_normalized, password_hash, role, enabled,
+        password_must_change, created_at, updated_at, password_changed_at
+      ) VALUES (?, ?, ?, ?, 'admin', 1, 0, ?, ?, ?)
+    `).run(id, id, id, `hash-${id}`, now, now, now);
+  } finally {
+    raw.close();
+  }
+}
+
 test('SQLite persiste biblioteca, favoritos, histórico, playlists e estado do player', async () => {
   const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-db-'));
   const dbPath = path.join(temp, 'home-music.db');
 
   try {
     const first = new HomeMusicDatabase(dbPath);
+    insertUser(dbPath);
     const tracks = [
       indexedTrack('a', '/music/Rock/Banda/a.mp3'),
       indexedTrack('b', '/music/Rock/Banda/b.mp3')
     ];
 
     first.syncTracks(tracks, '/music', '2026-08-24T12:00:00.000Z');
-    first.setFavorite('a', true);
+    first.setFavorite('user-1', 'a', true);
     first.recordHistory('a');
     const playlistId = first.createPlaylist('Minha playlist');
     assert.equal(first.setPlaylistTracks(playlistId, ['a', 'b']), true);
@@ -57,12 +73,12 @@ test('SQLite persiste biblioteca, favoritos, histórico, playlists e estado do p
     first.close();
 
     const second = new HomeMusicDatabase(dbPath);
-    assert.equal(second.getSchemaVersion(), 6);
+    assert.equal(second.getSchemaVersion(), 7);
     assert.equal(second.getMetadata('libraryRoot'), '/music');
     assert.equal(second.loadTracks().length, 2);
     assert.equal(second.loadTracks()[0].replayGainTrackDb, -7.2);
     assert.equal(second.loadTracks()[0].replayGainAlbumDb, -5.8);
-    assert.deepEqual(second.getFavoriteIds(), ['a']);
+    assert.deepEqual(second.getFavoriteIds('user-1'), ['a']);
     assert.equal(second.getHistory()[0].track.id, 'a');
     assert.deepEqual(second.getPlaylists()[0].trackIds, ['a', 'b']);
     assert.equal(second.getPlaylists()[0].source, 'manual');
@@ -84,19 +100,21 @@ test('SQLite persiste biblioteca, favoritos, histórico, playlists e estado do p
 
 test('remoção de faixa limpa relacionamentos por foreign key', async () => {
   const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-db-'));
-  const db = new HomeMusicDatabase(path.join(temp, 'home-music.db'));
+  const dbPath = path.join(temp, 'home-music.db');
+  const db = new HomeMusicDatabase(dbPath);
 
   try {
+    insertUser(dbPath);
     const track = indexedTrack('a', '/music/a.mp3');
     db.syncTracks([track], '/music', '2026-08-24T12:00:00.000Z');
-    db.setFavorite('a', true);
+    db.setFavorite('user-1', 'a', true);
     db.recordHistory('a');
     const playlistId = db.createPlaylist('Teste');
     db.setPlaylistTracks(playlistId, ['a']);
 
     db.syncTracks([], '/music', '2026-08-24T13:00:00.000Z');
 
-    assert.deepEqual(db.getFavoriteIds(), []);
+    assert.deepEqual(db.getFavoriteIds('user-1'), []);
     assert.deepEqual(db.getHistory(), []);
     assert.deepEqual(db.getPlaylists()[0].trackIds, []);
   } finally {
@@ -105,7 +123,7 @@ test('remoção de faixa limpa relacionamentos por foreign key', async () => {
   }
 });
 
-test('migra schema v1 para v6 sem perder estado existente', async () => {
+test('migra schema v1 para v7 sem perder estado existente', async () => {
   const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-db-'));
   const dbPath = path.join(temp, 'legacy.db');
 
@@ -130,7 +148,7 @@ test('migra schema v1 para v6 sem perder estado existente', async () => {
     legacy.close();
 
     const migrated = new HomeMusicDatabase(dbPath);
-    assert.equal(migrated.getSchemaVersion(), 6);
+    assert.equal(migrated.getSchemaVersion(), 7);
     const state = migrated.loadPlaybackState();
     assert.equal(state.currentTrackId, 'a');
     assert.equal(state.position, 15);
@@ -144,19 +162,21 @@ test('migra schema v1 para v6 sem perder estado existente', async () => {
       SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'users'
     `).get() as { name?: string } | undefined;
     assert.equal(usersTable?.name, 'users');
+    const favoriteColumns = raw.prepare('PRAGMA table_info(favorites);').all() as Array<{ name?: string }>;
+    assert.deepEqual(favoriteColumns.map(column => column.name), ['user_id', 'track_id', 'created_at']);
     raw.close();
   } finally {
     await rm(temp, { recursive: true, force: true });
   }
 });
 
-test('schema v6 de users aplica identidade única, papéis e flags válidos', async () => {
+test('schema v7 de users aplica identidade única, papéis e flags válidos', async () => {
   const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-db-'));
   const dbPath = path.join(temp, 'users.db');
 
   try {
     const db = new HomeMusicDatabase(dbPath);
-    assert.equal(db.getSchemaVersion(), 6);
+    assert.equal(db.getSchemaVersion(), 7);
     db.close();
 
     const raw = new DatabaseSync(dbPath);
