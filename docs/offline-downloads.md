@@ -42,11 +42,28 @@ Nenhum `AbortController` é associado à troca de tela.
 
 ## Limite de ciclo de vida
 
-A continuidade garantida é **dentro da mesma execução da aplicação/aba**.
+A continuidade garantida hoje é **dentro da mesma execução ativa da aplicação/aba**.
 
-Fechar a aba, encerrar o navegador, recarregar a página ou o sistema operacional suspender o processo pode interromper um download em andamento. Tornar jobs sobreviventes a reload exigiria outra estratégia apoiada por Service Worker/Background Fetch e tem suporte inconsistente, especialmente em Safari/iOS.
+O scheduler fica em memória no contexto da página e cada job executa o `fetch()` e o `cache.put()` a partir do frontend. Portanto, navegar dentro da SPA é diferente de colocar o aplicativo em background ou bloquear a tela.
+
+Fechar a aba, encerrar o navegador, recarregar a página ou o sistema operacional suspender o processo pode pausar ou interromper um download em andamento. Não devemos anunciar continuidade com tela bloqueada como garantia sem validação em dispositivo real.
+
+Navegadores baseados em Chromium podem oferecer mecanismos específicos para downloads longos em background, mas essa capacidade não é uniforme entre plataformas. Em especial, o comportamento de PWA em iPhone/iPad precisa ser tratado como uma matriz própria de compatibilidade, não inferido do Android.
 
 Os arquivos que já terminaram continuam persistidos normalmente no Cache Storage e no manifesto local.
+
+## Validação mobile de background/tela bloqueada
+
+Antes de considerar continuidade em background como funcionalidade concluída, executar em aparelhos reais pelo menos estes cenários:
+
+| Plataforma | Cenário | Aceite |
+| --- | --- | --- |
+| Android/Chrome ou PWA instalada | iniciar arquivo suficientemente grande, bloquear a tela durante o download e desbloquear depois | verificar se o arquivo terminou íntegro; se não, registrar se pausou, retomou ou falhou |
+| Android/Chrome ou PWA instalada | iniciar três downloads, enviar app para background e retornar | nenhum item pode ser anunciado como concluído sem existir integralmente no Cache Storage |
+| iPhone/iPad/Safari ou PWA instalada | iniciar arquivo suficientemente grande, bloquear a tela e desbloquear depois | medir o comportamento real sem assumir execução contínua do JavaScript |
+| iPhone/iPad/Safari ou PWA instalada | alternar para outro app por alguns minutos e retornar | manifesto e cache devem permanecer consistentes mesmo quando o sistema suspender a página |
+
+Se o download não sobreviver ao bloqueio em uma plataforma, a próxima solução deve priorizar integridade e retomada explícita em vez de fingir execução contínua. Qualquer estratégia de background precisa degradar com segurança onde a API necessária não existir.
 
 ## Armazenamento
 
