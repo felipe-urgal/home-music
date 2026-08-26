@@ -42,7 +42,9 @@ export class OfflineDownloadScheduler {
   subscribe(listener: (trackIds: Set<string>) => void) {
     this.listeners.add(listener);
     listener(this.pendingIds);
-    return () => this.listeners.delete(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
   }
 
   private drain() {
