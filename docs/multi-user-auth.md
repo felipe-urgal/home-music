@@ -149,7 +149,7 @@ username
 username_normalized
 password_hash
 role
- enabled
+enabled
 password_must_change
 created_at
 updated_at
@@ -201,37 +201,89 @@ formato versionado
 password_hash
 ```
 
-### 5.2 Algoritmo escolhido
+### 5.2 Algoritmo e parâmetros escolhidos
 
-A decisão para esta fase é usar `scrypt` de `node:crypto`.
+A decisão para esta fase é usar `scrypt` assíncrono de `node:crypto`.
 
 Motivos:
 
 - algoritmo memory-hard adequado para armazenamento de senhas;
 - disponível no próprio Node;
 - evita nova dependência nativa para o deploy Ubuntu;
-- reduz superfície de supply chain e problemas de compilação/instalação.
+- reduz superfície de supply chain e problemas de compilação/instalação;
+- a API assíncrona evita executar o custo da KDF diretamente no event loop.
 
-O formato persistido deverá ser versionado e conter todos os parâmetros necessários para validação e futuro upgrade de custo.
-
-Conceitualmente:
+Parâmetros correntes:
 
 ```text
-scrypt$v1$<params>$<salt>$<derived-key>
+N = 2^15 = 32768
+r = 8
+p = 3
+salt = 16 bytes aleatórios
+chave derivada = 32 bytes
 ```
 
-A representação final será definida na atividade de hashing e coberta por testes.
+Essa combinação está entre as configurações equivalentes recomendadas pelo OWASP para `scrypt`, reduzindo o pico de memória por derivação em relação a `N=2^17, p=1` sem reduzir o patamar mínimo recomendado de defesa.
 
-### 5.3 Regras defensivas
+O formato persistido definitivo da versão atual é:
 
-A implementação deverá:
+```text
+scrypt$v1$<N>$<r>$<p>$<salt-base64url>$<derived-key-base64url>
+```
 
-- usar salt aleatório por senha;
-- comparar material derivado em tempo constante;
-- limitar tamanho máximo de senha recebido para impedir abuso de CPU/memória;
+Exemplo estrutural, sem representar um hash real:
+
+```text
+scrypt$v1$32768$8$3$<salt>$<key>
+```
+
+O hash carrega seus próprios parâmetros para permitir validar credenciais criadas com custos anteriores. Quando os parâmetros correntes aumentarem, um login válido com hash antigo poderá ser identificado por `passwordHashNeedsRehash` e atualizado de forma controlada sem invalidar a senha existente.
+
+### 5.3 Regras defensivas implementadas
+
+O módulo de senha deve:
+
+- usar `randomBytes(16)` para gerar salt independente por senha;
+- comparar a chave derivada com `timingSafeEqual`;
+- limitar a entrada a no máximo 1024 bytes UTF-8 para impedir payloads arbitrariamente grandes antes da KDF;
+- recusar senha vazia no primitive de hashing;
+- nunca normalizar, fazer trim ou alterar semanticamente a senha antes do hash;
 - nunca logar senha nem hash completo;
-- permitir aumento futuro dos parâmetros sem invalidar hashes antigos;
-- atualizar `password_changed_at` quando a senha for trocada.
+- limitar tamanho do hash serializado antes de fazer parsing;
+- aceitar apenas formato/versão conhecidos;
+- validar base64url de salt e chave de forma estrita;
+- exigir salt de pelo menos 16 bytes e chave derivada com tamanho esperado;
+- validar `N`, `r` e `p` antes de executar `scrypt`;
+- limitar custo/memória permitidos para que um hash adulterado no banco não consiga solicitar trabalho arbitrário;
+- falhar fechado (`false`) ao verificar hash inválido ou entrada fora dos limites;
+- permitir parâmetros anteriores dentro da faixa segura para facilitar upgrade futuro;
+- atualizar `password_changed_at` quando a senha for efetivamente trocada pela futura camada de usuário.
+
+O `maxmem` do `node:crypto.scrypt` é definido explicitamente. Ele funciona como teto defensivo; os parâmetros armazenados também são validados antes da chamada da KDF.
+
+### 5.4 Política de força da senha
+
+O módulo criptográfico não é a camada responsável por decidir a política de senha mínima de uma conta. Ele precisa continuar capaz de verificar hashes válidos existentes durante migrations e upgrades.
+
+A política de criação/reset será aplicada na futura camada de serviço de usuários e deverá exigir senha temporária/definitiva forte. Portanto:
+
+```text
+password.ts
+    ↓
+proteção criptográfica + limites técnicos
+
+User/Auth service
+    ↓
+política de criação/reset + mensagens de validação
+```
+
+Isso evita misturar compatibilidade criptográfica com regra de produto.
+
+### 5.5 Proteção contra enumeração e exaustão no login
+
+Quando o login multiusuário passar a usar `verifyPassword`, a camada de autenticação deverá manter rate limiting e evitar que diferenças entre usuário inexistente e senha incorreta criem um caminho de enumeração por tempo de resposta. O módulo de senha não deve buscar usuários nem decidir identidade.
+
+Se o custo de autenticação concorrente se tornar relevante no servidor real, a camada de login deverá limitar concorrência/filas de KDF sem enfraquecer os parâmetros do hash.
 
 ## 6. Bootstrap do primeiro administrador
 
