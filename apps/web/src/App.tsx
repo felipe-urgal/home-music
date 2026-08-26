@@ -101,6 +101,9 @@ function AuthenticatedApp({ currentUser, onLogout, offline }: AuthenticatedAppPr
   }
 
   const desktopScreen = screen === 'users' ? 'library' : screen;
+  const showAdminUsersEntry = canManageSharedLibrary
+    && screen !== 'users'
+    && (screen === 'library' || Boolean(library.error));
 
   return (
     <main className="app-shell">
@@ -130,6 +133,12 @@ function AuthenticatedApp({ currentUser, onLogout, offline }: AuthenticatedAppPr
         onReorderQueue={player.reorderQueue}
         surfaceClassName={`phone-surface ${screen !== 'player' ? 'phone-surface--library' : ''}`}
       >
+        {showAdminUsersEntry && (
+          <button className="admin-mobile-entry" type="button" onClick={() => setScreen('users')}>
+            Administração · Usuários
+          </button>
+        )}
+
         {screen === 'users' && canManageSharedLibrary ? (
           <AdminUsersScreen currentUser={currentUser} onBack={() => setScreen('library')} />
         ) : library.loading ? (
@@ -157,26 +166,19 @@ function AuthenticatedApp({ currentUser, onLogout, offline }: AuthenticatedAppPr
             }}
           />
         ) : screen === 'library' ? (
-          <>
-            {canManageSharedLibrary && (
-              <button className="admin-mobile-entry" type="button" onClick={() => setScreen('users')}>
-                Administração · Usuários
-              </button>
-            )}
-            <LibraryScreen
-              currentUser={currentUser}
-              data={library}
-              current={current}
-              playing={player.playing}
-              hasNext={player.hasNext}
-              navigation={navigation}
-              onOpenPlayer={openPlayer}
-              onOpenStatistics={() => setScreen('statistics')}
-              onTogglePlay={() => void player.togglePlay()}
-              onNext={player.next}
-              onPlayTrack={player.playTrack}
-            />
-          </>
+          <LibraryScreen
+            currentUser={currentUser}
+            data={library}
+            current={current}
+            playing={player.playing}
+            hasNext={player.hasNext}
+            navigation={navigation}
+            onOpenPlayer={openPlayer}
+            onOpenStatistics={() => setScreen('statistics')}
+            onTogglePlay={() => void player.togglePlay()}
+            onNext={player.next}
+            onPlayTrack={player.playTrack}
+          />
         ) : !current ? (
           <ResponsiveState
             variant="empty"
