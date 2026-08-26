@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import Fastify from 'fastify';
+import { registerAccountSessionRoutes } from './account-session-routes.js';
 import { SESSION_COOKIE_NAME, SessionManager } from './auth.js';
 import { installApiAuthPolicy } from './auth-policy.js';
 import type { AuthenticatedUserState } from './user-auth-store.js';
@@ -21,6 +22,7 @@ function buildTestApp(configured = true) {
       getEnabledUserById: userId => users.get(userId) ?? null
     }
   });
+  registerAccountSessionRoutes(app, sessions);
 
   app.get('/outside-api', async request => ({ user: request.user }));
   app.get('/api/public', { config: { auth: 'public' } }, async request => ({ user: request.user }));
@@ -237,6 +239,7 @@ test('sessão legada não pode usar revogação de outras sessões por não poss
     sessions,
     users: { getEnabledUserById: () => null }
   });
+  registerAccountSessionRoutes(app, sessions);
   const token = sessions.createSession();
 
   try {
