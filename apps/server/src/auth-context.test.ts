@@ -12,7 +12,7 @@ function userReader(user: AuthenticatedUser | null) {
 
 test('resolveSessionIdentity retorna usuário ativo para sessão identificada', () => {
   const sessions = new SessionManager('admin', 'password-segura-2026');
-  const token = sessions.createSessionForUser('user-1', 1000);
+  const token = sessions.createSessionForUser('user-1');
   const user: AuthenticatedUser = { id: 'user-1', username: 'felipe', role: 'admin' };
 
   const identity = resolveSessionIdentity(token, sessions, userReader(user));
