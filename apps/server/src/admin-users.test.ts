@@ -154,3 +154,31 @@ test('ator que deixou de ser admin não conclui mutação administrativa', async
     }
   });
 });
+
+test('mudança cruzada de admins invalida autorização stale na outra conexão', async () => {
+  await withDatabase(async (databasePath, revoked) => {
+    const firstConnection = serviceFor(databasePath, revoked);
+    const secondConnection = serviceFor(databasePath, revoked);
+    try {
+      const secondAdmin = await firstConnection.createUser('admin-1', 'Segundo Admin', 'admin');
+      const member = await firstConnection.createUser('admin-1', 'Pessoa', 'user');
+      assert.equal(secondAdmin.ok, true);
+      assert.equal(member.ok, true);
+      if (!secondAdmin.ok || !member.ok) return;
+
+      const demoted = firstConnection.setRole('admin-1', secondAdmin.value.user.id, 'user');
+      assert.equal(demoted.ok, true);
+
+      assert.deepEqual(
+        secondConnection.setEnabled(secondAdmin.value.user.id, member.value.user.id, false),
+        { ok: false, error: 'actor-no-longer-admin' }
+      );
+
+      const target = firstConnection.getUser(member.value.user.id);
+      assert.equal(target?.enabled, true);
+    } finally {
+      secondConnection.close();
+      firstConnection.close();
+    }
+  });
+});
