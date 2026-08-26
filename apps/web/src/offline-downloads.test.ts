@@ -22,9 +22,9 @@ const track: Track = {
 };
 
 describe('offline downloads', () => {
-  it('gera uma URL virtual com usuário e faixa no próprio namespace', () => {
-    expect(offlineAudioUrl('abc 123', 'user-a')).toBe('/offline-audio/user-a/abc%20123');
-    expect(offlineAudioUrl('abc123', null)).toBe('/offline-audio/unavailable');
+  it('gera uma URL virtual que identifica somente a faixa', () => {
+    expect(offlineAudioUrl('abc 123')).toBe('/offline-audio/abc%20123');
+    expect(offlineAudioUrl('abc123')).not.toContain('user');
   });
 
   it('separa manifesto e cache de áudio entre usuários', () => {
