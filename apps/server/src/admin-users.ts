@@ -160,6 +160,9 @@ export class AdminUsersService {
 
     const role = roleInput == null ? 'user' : roleValue(roleInput);
     if (!role) return { ok: false, error: 'invalid-role' };
+    if (!this.actorIsActiveAdmin(actorUserId)) {
+      return { ok: false, error: 'actor-no-longer-admin' };
+    }
 
     const duplicate = this.db.prepare('SELECT id FROM users WHERE username_normalized = ? LIMIT 1;')
       .get(normalized.usernameNormalized);
@@ -272,6 +275,9 @@ export class AdminUsersService {
   }
 
   async resetPassword(actorUserId: string, targetUserId: string): Promise<AdminUserResult<AdminUserPasswordResetResponse>> {
+    if (!this.actorIsActiveAdmin(actorUserId)) {
+      return { ok: false, error: 'actor-no-longer-admin' };
+    }
     if (actorUserId === targetUserId) return { ok: false, error: 'self-management-not-allowed' };
     if (!this.getUser(targetUserId)) return { ok: false, error: 'not-found' };
 
