@@ -110,6 +110,7 @@ Detalhe da proteção das rotas administrativas existentes: [phase-7.5-admin-rou
 Detalhe das APIs administrativas de usuários: [phase-7.5-admin-users-api.md](phase-7.5-admin-users-api.md).
 Detalhe da troca obrigatória de senha: [phase-7.5-required-password-change.md](phase-7.5-required-password-change.md).
 Detalhe do autosserviço de senha e sessões: [phase-7.5-self-service-account.md](phase-7.5-self-service-account.md).
+Detalhe do ownership de favoritos por usuário: [phase-7.5-favorites-ownership.md](phase-7.5-favorites-ownership.md).
 
 Princípios:
 
@@ -136,7 +137,7 @@ Sequência de implementação:
 - [x] Impedir desativação/rebaixamento do último administrador ativo e impedir auto-lockout administrativo
 - [x] Exigir senha temporária forte ao criar/resetar conta e obrigar troca no primeiro login antes de liberar o uso normal
 - [x] Permitir ao usuário autenticado trocar a própria senha e revogar as próprias outras sessões
-- [ ] Migrar favoritos para ownership por `user_id`, preservando os favoritos atuais no primeiro admin
+- [x] Migrar favoritos para ownership por `user_id`, preservando os favoritos atuais no primeiro admin
 - [ ] Migrar histórico e estatísticas para escopo por `user_id`, preservando o histórico atual no primeiro admin
 - [ ] Migrar playlists manuais para ownership por `user_id`; manter playlists Rekordbox compartilhadas e somente leitura fora da reimportação
 - [ ] Migrar `playback_state` de linha global única para uma linha por usuário, preservando fila, posição, volume, shuffle e repeat atuais no primeiro admin
