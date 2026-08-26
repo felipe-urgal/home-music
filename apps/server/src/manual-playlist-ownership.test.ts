@@ -321,3 +321,40 @@ test('migration pré-bootstrap mantém manual fora da tabela ativa e bootstrap a
     }
   });
 });
+
+test('bootstrap já inicializado recupera staging de playlist manual para o primeiro usuário', async () => {
+  await withDatabase(async databasePath => {
+    const database = new HomeMusicDatabase(databasePath);
+    insertUser(databasePath, FIRST_USER_ID, '2026-08-26T10:00:00.000Z', 'admin');
+    database.syncTracks([indexedTrack('a')], '/music', '2026-08-26T12:00:00.000Z');
+    database.close();
+
+    const raw = new DatabaseSync(databasePath);
+    try {
+      raw.prepare(`
+        INSERT INTO legacy_manual_playlists_pending(id, name, created_at, updated_at)
+        VALUES ('manual-pending', 'Manual pendente', '2026-08-20T09:00:00.000Z', '2026-08-21T10:00:00.000Z');
+      `).run();
+      raw.prepare(`
+        INSERT INTO legacy_manual_playlist_tracks_pending(playlist_id, track_id, position)
+        VALUES ('manual-pending', 'a', 0);
+      `).run();
+    } finally {
+      raw.close();
+    }
+
+    const result = await bootstrapInitialAdmin({
+      databasePath,
+      username: 'ignorado',
+      password: 'senha-ignorada-segura-123'
+    });
+    assert.deepEqual(result, { status: 'already-initialized' });
+
+    const recovered = new HomeMusicDatabase(databasePath);
+    const playlist = recovered.getPlaylists(FIRST_USER_ID).find(item => item.id === 'manual-pending');
+    assert.ok(playlist);
+    assert.equal(playlist.name, 'Manual pendente');
+    assert.deepEqual(playlist.trackIds, ['a']);
+    recovered.close();
+  });
+});
