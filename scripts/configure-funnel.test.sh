@@ -2,6 +2,8 @@
 set -euo pipefail
 
 SCRIPT_UNDER_TEST="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/configure-funnel.sh"
+PUBLIC_USER="home-music"
+PUBLIC_PASSWORD="uma-senha-publica-exclusiva-com-mais-de-vinte"
 
 fail_test() {
   echo "FAIL: $*" >&2
@@ -12,6 +14,14 @@ assert_contains() {
   local file="$1"
   local expected="$2"
   grep -Fq "${expected}" "${file}" || fail_test "${file} não contém: ${expected}"
+}
+
+assert_not_contains() {
+  local file="$1"
+  local unexpected="$2"
+  if grep -Fq "${unexpected}" "${file}"; then
+    fail_test "${file} não deveria conter: ${unexpected}"
+  fi
 }
 
 assert_state() {
@@ -27,15 +37,13 @@ make_fixture() {
   REPO="${FIXTURE}/repo"
   BIN="${FIXTURE}/bin"
   STATE="${FIXTURE}/tailscale-state"
-  mkdir -p "${REPO}/scripts" "${BIN}"
+  mkdir -p "${REPO}/scripts" "${REPO}/apps/server/dist" "${BIN}"
   cp "${SCRIPT_UNDER_TEST}" "${REPO}/scripts/configure-funnel.sh"
   printf '%s' "${initial_state}" > "${STATE}"
 
   if [[ "${initial_state}" == "empty" ]]; then
     cat > "${REPO}/.env" <<'ENV'
 MUSIC_DIR="/mnt/musicas"
-HOME_MUSIC_USER=home-music
-HOME_MUSIC_PASSWORD=uma-senha-publica-exclusiva-com-mais-de-vinte
 HOME_MUSIC_COOKIE_SECURE=false
 HOME_MUSIC_TRUST_TAILSCALE_PROXY=false
 PORT=8787
@@ -44,8 +52,6 @@ ENV
   elif [[ "${initial_state}" == "funnel" || "${initial_state}" == "stale_funnel" || "${initial_state}" == "stale_funnel_extra" ]]; then
     cat > "${REPO}/.env" <<'ENV'
 MUSIC_DIR="/mnt/musicas"
-HOME_MUSIC_USER=home-music
-HOME_MUSIC_PASSWORD=uma-senha-publica-exclusiva-com-mais-de-vinte
 HOME_MUSIC_COOKIE_SECURE=true
 HOME_MUSIC_TRUST_TAILSCALE_PROXY=true
 PORT=8787
@@ -54,14 +60,22 @@ ENV
   else
     cat > "${REPO}/.env" <<'ENV'
 MUSIC_DIR="/mnt/musicas"
-HOME_MUSIC_USER=home-music
-HOME_MUSIC_PASSWORD=uma-senha-publica-exclusiva-com-mais-de-vinte
 HOME_MUSIC_COOKIE_SECURE=true
 HOME_MUSIC_TRUST_TAILSCALE_PROXY=false
 PORT=8787
 PRODUCTION_HOST=127.0.0.1
 ENV
   fi
+
+  cat > "${REPO}/apps/server/dist/public-access-auth-cli.js" <<'MOCK'
+import fs from 'node:fs';
+const [username = '', password = ''] = fs.readFileSync(0, 'utf8').split('\0');
+const minimum = Number(process.argv[2] || 20);
+const valid = username === 'home-music'
+  && password === 'uma-senha-publica-exclusiva-com-mais-de-vinte'
+  && Array.from(password).length >= minimum;
+process.exit(valid ? 0 : 1);
+MOCK
 
   cat > "${BIN}/tailscale" <<'MOCK'
 #!/usr/bin/env bash
@@ -204,16 +218,21 @@ cleanup_fixture() {
   unset HOME_MUSIC_FUNNEL_YES MOCK_STATE MOCK_DNS_NAME MOCK_TS_VERSION MOCK_STATUS_FAIL MOCK_FAIL_SERVE MOCK_FAIL_SERVE_RESET MOCK_FAIL_FUNNEL MOCK_FAIL_FUNNEL_OFF MOCK_FAIL_FUNNEL_RESET MOCK_PARTIAL_FUNNEL_FAIL MOCK_FAIL_ACTIVE MOCK_FAIL_RESTART MOCK_FAIL_CURL MOCK_FAIL_PUBLIC_CURL
 }
 
+enable_funnel() {
+  printf '%s\n%s\n' "${PUBLIC_USER}" "${PUBLIC_PASSWORD}" | "${REPO}/scripts/configure-funnel.sh" enable
+}
+
 ORIGINAL_PATH="${PATH}"
 trap '[[ -n "${FIXTURE:-}" ]] && rm -rf "${FIXTURE}"' EXIT
 
 # Serve privado -> Funnel público -> idempotência -> Serve privado.
 make_fixture serve
-"${REPO}/scripts/configure-funnel.sh" enable >/dev/null
+enable_funnel >/dev/null
 assert_state funnel
 assert_contains "${REPO}/.env" 'HOME_MUSIC_COOKIE_SECURE=true'
 assert_contains "${REPO}/.env" 'HOME_MUSIC_TRUST_TAILSCALE_PROXY=true'
 assert_contains "${REPO}/.env" 'PRODUCTION_HOST=127.0.0.1'
+assert_not_contains "${REPO}/.env" 'HOME_MUSIC_PASSWORD='
 "${REPO}/scripts/configure-funnel.sh" enable >/dev/null
 assert_state funnel
 "${REPO}/scripts/configure-funnel.sh" disable >/dev/null
@@ -225,7 +244,7 @@ cleanup_fixture
 
 # LAN -> Funnel fecha o backend em loopback antes da publicação.
 make_fixture empty
-"${REPO}/scripts/configure-funnel.sh" enable >/dev/null
+enable_funnel >/dev/null
 assert_state funnel
 assert_contains "${REPO}/.env" 'HOME_MUSIC_COOKIE_SECURE=true'
 assert_contains "${REPO}/.env" 'HOME_MUSIC_TRUST_TAILSCALE_PROXY=true'
@@ -249,14 +268,14 @@ cleanup_fixture
 
 # Enable após rename migra diretamente o Funnel para o hostname atual.
 make_fixture stale_funnel
-"${REPO}/scripts/configure-funnel.sh" enable >/dev/null
+enable_funnel >/dev/null
 assert_state funnel
 assert_contains "${REPO}/.env" 'HOME_MUSIC_TRUST_TAILSCALE_PROXY=true'
 cleanup_fixture
 
 # Serve privado persistente no hostname antigo também pode ser migrado com segurança.
 make_fixture stale_serve
-"${REPO}/scripts/configure-funnel.sh" enable >/dev/null
+enable_funnel >/dev/null
 assert_state funnel
 cleanup_fixture
 
@@ -283,19 +302,18 @@ grep -Fq 'PODE CONTINUAR PÚBLICA' <<<"${OUTPUT}" || fail_test "aviso de exposi�
 assert_contains "${REPO}/.env" 'HOME_MUSIC_TRUST_TAILSCALE_PROXY=true'
 cleanup_fixture
 
-# Senha curta bloqueia exposição pública antes de qualquer mutação.
+# Credencial inválida bloqueia exposição pública antes de qualquer mutação.
 make_fixture serve
-sed -i 's/^HOME_MUSIC_PASSWORD=.*/HOME_MUSIC_PASSWORD=curta/' "${REPO}/.env"
 set +e
-"${REPO}/scripts/configure-funnel.sh" enable >/dev/null 2>&1
+printf '%s\n%s\n' "${PUBLIC_USER}" 'curta' | "${REPO}/scripts/configure-funnel.sh" enable >/dev/null 2>&1
 RC=$?
 set -e
-[[ ${RC} -ne 0 ]] || fail_test "senha curta deveria ser rejeitada"
+[[ ${RC} -ne 0 ]] || fail_test "credencial pública inválida deveria ser rejeitada"
 assert_state serve
 assert_contains "${REPO}/.env" 'HOME_MUSIC_TRUST_TAILSCALE_PROXY=false'
 cleanup_fixture
 
-# Conflito em 443 nunca é sobrescrito.
+# Conflito em 443 nunca é sobrescrito e aborta antes de pedir credencial.
 make_fixture conflict
 set +e
 "${REPO}/scripts/configure-funnel.sh" enable >/dev/null 2>&1
@@ -309,7 +327,7 @@ cleanup_fixture
 make_fixture serve
 export MOCK_FAIL_FUNNEL=1
 set +e
-"${REPO}/scripts/configure-funnel.sh" enable >/dev/null 2>&1
+enable_funnel >/dev/null 2>&1
 RC=$?
 set -e
 [[ ${RC} -ne 0 ]] || fail_test "falha de Funnel deveria abortar"
@@ -323,7 +341,7 @@ cleanup_fixture
 make_fixture serve
 export MOCK_PARTIAL_FUNNEL_FAIL=1
 set +e
-"${REPO}/scripts/configure-funnel.sh" enable >/dev/null 2>&1
+enable_funnel >/dev/null 2>&1
 RC=$?
 set -e
 [[ ${RC} -ne 0 ]] || fail_test "falha parcial de Funnel deveria abortar"
@@ -335,7 +353,7 @@ cleanup_fixture
 make_fixture serve
 export MOCK_FAIL_PUBLIC_CURL=1
 set +e
-"${REPO}/scripts/configure-funnel.sh" enable >/dev/null 2>&1
+enable_funnel >/dev/null 2>&1
 RC=$?
 set -e
 [[ ${RC} -ne 0 ]] || fail_test "falha de validação pública deveria abortar"
@@ -347,7 +365,7 @@ cleanup_fixture
 make_fixture stale_funnel
 export MOCK_FAIL_FUNNEL=1
 set +e
-"${REPO}/scripts/configure-funnel.sh" enable >/dev/null 2>&1
+enable_funnel >/dev/null 2>&1
 RC=$?
 set -e
 [[ ${RC} -ne 0 ]] || fail_test "falha pós-migração deveria abortar"
