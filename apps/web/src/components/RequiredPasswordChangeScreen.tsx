@@ -19,10 +19,11 @@ export function RequiredPasswordChangeScreen({
   const [confirmation, setConfirmation] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const newPasswordCharacters = Array.from(newPassword).length;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!currentPassword || newPassword.length < 12) return;
+    if (!currentPassword || newPasswordCharacters < 12) return;
     if (newPassword !== confirmation) {
       setFormError('A confirmação precisa ser igual à nova senha.');
       return;
@@ -114,7 +115,7 @@ export function RequiredPasswordChangeScreen({
           <button
             className="login-submit"
             type="submit"
-            disabled={submitting || !currentPassword || newPassword.length < 12 || newPassword !== confirmation}
+            disabled={submitting || !currentPassword || newPasswordCharacters < 12 || newPassword !== confirmation}
           >
             {submitting ? 'Alterando…' : 'Alterar senha'}
           </button>
