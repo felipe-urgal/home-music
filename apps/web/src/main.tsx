@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
+import { RequiredPasswordGate } from './components/RequiredPasswordGate';
 import { registerServiceWorker } from './register-service-worker';
 import './styles.css';
 import './features.css';
@@ -19,7 +20,9 @@ import './phase7-interactions.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <RequiredPasswordGate>
+      <App />
+    </RequiredPasswordGate>
   </StrictMode>
 );
 
