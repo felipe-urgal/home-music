@@ -38,6 +38,7 @@
 - [x] Layout sem overflow horizontal em telas estreitas
 - [x] Capas confinadas sem quebrar a viewport
 - [x] Download offline
+- [x] Até 3 downloads offline simultâneos com continuidade entre telas ([detalhe](offline-downloads.md))
 - [x] Cache seletivo
 - [x] Melhor tratamento de capas ausentes
 
@@ -128,7 +129,7 @@ Sequência de implementação:
 - [x] Criar contexto de identidade autenticada no Fastify e política central de acesso `public / authenticated / admin`
 - [x] Restringir rotas administrativas existentes, incluindo scan manual, diagnóstico operacional detalhado e importação/sincronização Rekordbox quando aplicável
 - [x] Criar APIs administrativas de usuários para listar, criar, alterar papel, ativar/desativar, redefinir senha e revogar sessões
-- [ ] Impedir desativação/rebaixamento do último administrador ativo e impedir auto-lockout administrativo
+- [x] Impedir desativação/rebaixamento do último administrador ativo e impedir auto-lockout administrativo
 - [ ] Exigir senha temporária forte ao criar/resetar conta e obrigar troca no primeiro login antes de liberar o uso normal
 - [ ] Permitir ao usuário autenticado trocar a própria senha e revogar as próprias outras sessões
 - [ ] Migrar favoritos para ownership por `user_id`, preservando os favoritos atuais no primeiro admin
