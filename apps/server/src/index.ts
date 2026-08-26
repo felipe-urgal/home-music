@@ -77,7 +77,7 @@ try {
 
 let transcodeCacheMegabytes = DEFAULT_TRANSCODE_CACHE_MEGABYTES;
 try {
-  transcodeCacheMegabytes = parseTranscodeMegabytes(process.env.HOME_MUSIC_TRANSCODE_CACHE_MB);
+  transcodeCacheMegabytes = parseTranscodeCacheMegabytes(process.env.HOME_MUSIC_TRANSCODE_CACHE_MB);
 } catch (error) {
   app.log.warn(
     { err: error, fallbackMegabytes: DEFAULT_TRANSCODE_CACHE_MEGABYTES },
