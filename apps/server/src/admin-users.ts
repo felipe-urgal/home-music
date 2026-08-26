@@ -19,6 +19,7 @@ type Row = Record<string, unknown>;
 type AdminUserError =
   | 'invalid-username'
   | 'invalid-role'
+  | 'invalid-enabled'
   | 'duplicate-username'
   | 'not-found'
   | 'self-management-not-allowed';
@@ -173,7 +174,7 @@ export class AdminUsersService {
   }
 
   setEnabled(actorUserId: string, targetUserId: string, enabledInput: unknown): AdminUserResult<AdminUser> {
-    if (typeof enabledInput !== 'boolean') return { ok: false, error: 'invalid-role' };
+    if (typeof enabledInput !== 'boolean') return { ok: false, error: 'invalid-enabled' };
     if (actorUserId === targetUserId) return { ok: false, error: 'self-management-not-allowed' };
     if (!this.getUser(targetUserId)) return { ok: false, error: 'not-found' };
 
