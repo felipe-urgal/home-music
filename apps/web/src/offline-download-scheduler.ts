@@ -47,20 +47,38 @@ export class OfflineDownloadScheduler {
     };
   }
 
+  private finish(trackId: string) {
+    this.active -= 1;
+    this.jobs.delete(trackId);
+    this.emit();
+    this.drain();
+  }
+
   private drain() {
     while (this.active < this.maxConcurrent && this.queued.length > 0) {
       const job = this.queued.shift();
       if (!job) break;
       this.active += 1;
 
-      void job.task()
-        .then(job.resolve, job.reject)
-        .finally(() => {
-          this.active -= 1;
-          this.jobs.delete(job.trackId);
-          this.emit();
-          this.drain();
-        });
+      let taskPromise: Promise<void>;
+      try {
+        taskPromise = job.task();
+      } catch (error) {
+        this.finish(job.trackId);
+        job.reject(error);
+        continue;
+      }
+
+      void taskPromise.then(
+        () => {
+          this.finish(job.trackId);
+          job.resolve();
+        },
+        error => {
+          this.finish(job.trackId);
+          job.reject(error);
+        }
+      );
     }
   }
 
