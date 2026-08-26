@@ -20,11 +20,13 @@ O Home Music roda no Ubuntu, lê uma pasta local de músicas e expõe uma interf
 
 ### Autenticação
 
+- contas `admin` e `user` persistidas no SQLite;
 - tela de login própria e responsiva;
-- sessão aleatória mantida pelo backend;
+- sessão aleatória associada ao `userId` e mantida pelo backend;
 - cookie `HttpOnly` + `SameSite=Strict`;
 - cookie `Secure` em HTTPS direto ou quando `HOME_MUSIC_COOKIE_SECURE=true` é configurado explicitamente atrás de um proxy HTTPS confiável;
 - sessão com expiração e logout explícito;
+- troca obrigatória de senha temporária e tela `Minha conta`;
 - rate limit para credenciais inválidas;
 - manifest, favicon e assets públicos, com `/api/*` protegido;
 - sessão expirada devolve o usuário para a tela de login.
@@ -53,6 +55,7 @@ O Home Music roda no Ubuntu, lê uma pasta local de músicas e expõe uma interf
 
 O estado local usa SQLite em `data/home-music.db`:
 
+- usuários e hashes de senha;
 - índice da biblioteca;
 - favoritos;
 - histórico;
@@ -89,7 +92,7 @@ Requisitos: Node.js 22+ e npm.
 cp .env.example .env
 ```
 
-Configure pelo menos:
+No **primeiro bootstrap**, configure pelo menos:
 
 ```env
 MUSIC_DIR="/caminho/para/suas/musicas"
@@ -101,9 +104,11 @@ HOST=127.0.0.1
 PRODUCTION_HOST=0.0.0.0
 ```
 
+`HOME_MUSIC_USER` e `HOME_MUSIC_PASSWORD` são usadas somente para criar o primeiro administrador quando a tabela `users` ainda está vazia. Depois que o primeiro login estiver confirmado, remova **as duas linhas** do `.env`; logins normais passam a usar exclusivamente username + hash persistidos no SQLite.
+
 `HOME_MUSIC_COOKIE_SECURE=true` deve ser usado somente quando o navegador acessa o Home Music por **HTTPS** e um proxy confiável encaminha a requisição ao Fastify. O comando `npm run tailscale:enable` aplica essa configuração automaticamente apenas depois de validar o HTTPS real.
 
-O perfil público via Funnel exige uma senha exclusiva com pelo menos **20 caracteres** antes de permitir a exposição na internet.
+O perfil público via Funnel exige a senha atual de um administrador ativo com pelo menos **20 caracteres**. Essa credencial é solicitada no terminal e validada contra o SQLite; ela não precisa permanecer no `.env`.
 
 ## Desenvolvimento
 
@@ -191,6 +196,42 @@ npm run service:update
 
 O servidor registra `SIGTERM`/`SIGINT` antes da inicialização potencialmente longa da biblioteca, aguarda scan em andamento e fecha Fastify + SQLite antes de encerrar.
 
+### Remover as credenciais de bootstrap de uma instalação existente
+
+Ao atualizar uma instalação que ainda possui `HOME_MUSIC_USER` / `HOME_MUSIC_PASSWORD`, faça a transição nesta ordem:
+
+```bash
+git switch main
+git pull --ff-only origin main
+npm run service:update
+npm run service:status
+curl -i http://127.0.0.1:8787/ready
+```
+
+Confirme um login real. Só então remova as duas variáveis do `.env` e reinicie:
+
+```bash
+sudo systemctl restart home-music
+npm run service:status
+curl -i http://127.0.0.1:8787/ready
+```
+
+Confirme o login novamente. Não remova as credenciais antes de implantar a versão que autentica pelo SQLite.
+
+### Recuperação local de administrador
+
+Se todas as credenciais administrativas forem perdidas, a recuperação exige acesso local ao Ubuntu e uma conta **já existente**:
+
+```bash
+sudo systemctl stop home-music
+npm run admin:recover -- --username <usuario-existente> --confirm-service-stopped
+sudo systemctl start home-music
+```
+
+O comando recusa execução se `home-music.service` ainda estiver ativo, reativa/promove a conta para `admin`, gera uma senha temporária aleatória e obriga troca no próximo login. Ele não cria contas novas e não recebe a nova senha por argumento ou variável de ambiente. Parar o serviço também descarta todas as sessões mantidas em memória.
+
+Detalhes em [`docs/phase-7.5-remove-env-auth-recovery.md`](docs/phase-7.5-remove-env-auth-recovery.md).
+
 ## Acesso remoto seguro: Tailscale + HTTPS
 
 ### Perfil privado — Tailscale Serve
@@ -238,7 +279,8 @@ Esse fluxo usa Tailscale Funnel em HTTPS/443. O Ubuntu continua com Tailscale in
 
 Antes de publicar, o script:
 
-- exige `HOME_MUSIC_PASSWORD` exclusiva com pelo menos 20 caracteres;
+- pede um administrador ativo e valida, sem ecoar a senha, uma credencial persistida de pelo menos 20 caracteres;
+- não grava essa senha no `.env`, não a passa em argv e não a registra em log;
 - fecha o Fastify em `127.0.0.1` e habilita cookie `Secure` antes de criar o Funnel;
 - recusa conflitos em `443`;
 - valida o estado final do proxy e `/ready` via HTTPS;
@@ -275,7 +317,8 @@ O re-scan é incremental: arquivos inalterados reutilizam o índice, somente arq
 - não publique a porta `8787` diretamente na internet e não faça port-forwarding;
 - prefira Tailscale Serve quando puder manter o celular no tailnet;
 - use Funnel somente quando aceitar conscientemente que a URL de login será pública;
-- use uma senha exclusiva; o perfil Funnel exige pelo menos 20 caracteres;
+- use senhas exclusivas; o perfil Funnel exige confirmar um admin com senha atual de pelo menos 20 caracteres;
+- `HOME_MUSIC_USER` / `HOME_MUSIC_PASSWORD` são somente bootstrap e devem ser removidas do `.env` após a inicialização validada;
 - `.env` é ignorado pelo Git e o instalador do serviço força permissão `0600`;
 - `data/` e os arquivos SQLite são endurecidos pelo instalador;
 - em desenvolvimento a API fica em `127.0.0.1`;
