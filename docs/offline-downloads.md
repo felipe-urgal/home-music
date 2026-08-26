@@ -91,7 +91,7 @@ O estado atual usa:
 home-music:offline-user-id:v1
 home-music:offline-tracks:v2:<userId>
 home-music-offline-audio-v2-<userId>
-/offline-audio/<userId>/<trackId>
+/offline-audio/<trackId>
 ```
 
 A identidade offline ativa é atualizada somente depois que `/api/auth/status` confirma um usuário autenticado. Ela é removida quando:
@@ -103,7 +103,12 @@ A identidade offline ativa é atualizada somente depois que `/api/auth/status` c
 
 Quando o servidor está realmente inalcançável, o último `userId` autenticado pode continuar sendo usado para abrir **somente os downloads daquele namespace**. Isso preserva o modo offline sem permitir que uma troca A → B reutilize o manifesto/cache de A pela UI normal.
 
-A troca de usuário também é fail-closed durante a renderização: enquanto o hook ainda não reconciliou o novo namespace, a lista visível de downloads fica vazia em vez de reutilizar registros do usuário anterior.
+A troca de usuário é fail-closed em dois níveis:
+
+1. enquanto o hook ainda não carregou o novo manifesto, a lista visível fica vazia em vez de reutilizar registros do usuário anterior;
+2. enquanto o service worker ainda não confirmou o novo escopo do client/tab, reprodução offline permanece indisponível.
+
+O `userId` não é aceito como parte da URL de áudio offline e portanto não funciona como autorização por identificador. A rota virtual identifica somente a faixa; o service worker seleciona o cache usando o usuário associado ao `clientId` que originou a requisição.
 
 ### Cache e manifesto legados
 
@@ -130,9 +135,11 @@ O protocolo de capability do service worker foi elevado para a versão `3`.
 
 A nova versão:
 
-- só considera válidas URLs offline com `userId` e `trackId` bem formados;
-- abre o cache correspondente ao `userId` da URL virtual;
+- recebe do frontend o `userId` ativo junto da negociação de capability;
+- associa esse usuário ao `clientId`/tab que enviou a mensagem;
+- só serve `/offline-audio/<trackId>` quando a requisição vem de um client com escopo válido;
+- abre o cache do usuário associado ao client, nunca um cache escolhido por parâmetro da URL;
 - remove o cache global legado durante a ativação;
 - continua mantendo conteúdo autenticado de `/api/*` fora do cache estático da PWA.
 
-O frontend exige capability `>= 3`, portanto um service worker antigo não é tratado como compatível com o novo modelo multiusuário.
+O frontend considera o worker pronto para offline somente depois da resposta à negociação correspondente ao `userId` atual. Um service worker antigo (`version < 3`) degrada para offline indisponível até o upgrade, em vez de reutilizar o cache global anterior.
