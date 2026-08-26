@@ -101,6 +101,7 @@ Objetivo: criar uma fronteira de identidade e autorização segura antes de intr
 Decisões, invariantes de segurança e desenho detalhado: [multi-user-auth.md](multi-user-auth.md).
 Detalhe da migração do primeiro administrador: [phase-7.5-bootstrap.md](phase-7.5-bootstrap.md).
 Detalhe das sessões associadas à identidade: [phase-7.5-sessions.md](phase-7.5-sessions.md).
+Detalhe do status de autenticação e identidade mínima: [phase-7.5-auth-status.md](phase-7.5-auth-status.md).
 
 Princípios:
 
@@ -120,7 +121,7 @@ Sequência de implementação:
 - [x] Implementar hashing/verificação de senha com `scrypt`, formato versionado e limites defensivos de entrada
 - [x] Criar bootstrap/migration idempotente do usuário atual de `HOME_MUSIC_USER`/`HOME_MUSIC_PASSWORD` para o primeiro `admin`, sem perder acesso durante o upgrade
 - [x] Evoluir `SessionManager` para associar sessão a `userId`, manter token aleatório opaco e permitir revogação de todas as sessões de um usuário
-- [ ] Fazer `/api/auth/status` retornar a identidade autenticada mínima (`id`, `username`, `role`) sem expor dados sensíveis
+- [x] Fazer `/api/auth/status` retornar a identidade autenticada mínima (`id`, `username`, `role`) sem expor dados sensíveis
 - [ ] Criar contexto de identidade autenticada no Fastify e política central de acesso `public / authenticated / admin`
 - [ ] Restringir rotas administrativas existentes, incluindo scan manual, diagnóstico operacional detalhado e importação/sincronização Rekordbox quando aplicável
 - [ ] Criar APIs administrativas de usuários para listar, criar, alterar papel, ativar/desativar, redefinir senha e revogar sessões
