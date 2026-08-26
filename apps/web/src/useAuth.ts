@@ -14,6 +14,7 @@ export function useAuth() {
   const [configured, setConfigured] = useState(true);
   const [authenticated, setAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState<AuthenticatedUser | null>(null);
+  const [passwordChangeRequired, setPasswordChangeRequired] = useState(false);
   const [unreachable, setUnreachable] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,10 +33,12 @@ export function useAuth() {
       setConfigured(status.configured);
       setAuthenticated(status.authenticated);
       setCurrentUser(status.authenticated ? status.user : null);
+      setPasswordChangeRequired(Boolean(status.authenticated && status.passwordChangeRequired));
       setError(null);
     } catch (error) {
       setAuthenticated(false);
       setCurrentUser(null);
+      setPasswordChangeRequired(false);
       const offline = !reachedServer;
       setUnreachable(offline);
       setError(offline
@@ -55,6 +58,7 @@ export function useAuth() {
     const expire = () => {
       setAuthenticated(false);
       setCurrentUser(null);
+      setPasswordChangeRequired(false);
       setUnreachable(false);
     };
     window.addEventListener(AUTH_REQUIRED_EVENT, expire);
@@ -92,6 +96,39 @@ export function useAuth() {
     await refresh();
   }, [refresh]);
 
+  const changeRequiredPassword = useCallback(async (currentPassword: string, newPassword: string) => {
+    setError(null);
+    let response: Response;
+    try {
+      response = await fetch('/api/auth/password', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Home-Music-Request': '1'
+        },
+        body: JSON.stringify({ currentPassword, newPassword })
+      });
+    } catch {
+      const message = 'Não foi possível alterar a senha. Verifique sua conexão e tente novamente.';
+      setUnreachable(true);
+      setError(message);
+      throw new Error(message);
+    }
+
+    setUnreachable(false);
+    if (!response.ok) {
+      const message = await messageFromResponse(response);
+      setError(message);
+      throw new Error(message);
+    }
+
+    setAuthenticated(false);
+    setCurrentUser(null);
+    setPasswordChangeRequired(false);
+    setError(null);
+  }, []);
+
   const logout = useCallback(async () => {
     setError(null);
 
@@ -116,6 +153,7 @@ export function useAuth() {
 
     setAuthenticated(false);
     setCurrentUser(null);
+    setPasswordChangeRequired(false);
     setUnreachable(false);
   }, []);
 
@@ -124,9 +162,11 @@ export function useAuth() {
     configured,
     authenticated,
     currentUser,
+    passwordChangeRequired,
     unreachable,
     error,
     login,
+    changeRequiredPassword,
     logout,
     retry: refresh
   };
