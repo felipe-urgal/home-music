@@ -17,7 +17,7 @@
     "service:install": "bash scripts/install-systemd.sh install",
     "service:update": "bash scripts/install-systemd.sh update",
     "service:status": "systemctl status home-music --no-pager",
-    "admin:recover": "npm run admin:recover -w @home-music/server",
+    "admin:recover": "npm run admin:recover -w @home-music/server --",
     "tailscale:enable": "bash scripts/run-tailscale.sh enable",
     "tailscale:disable": "bash scripts/run-tailscale.sh disable",
     "tailscale:status": "bash scripts/run-tailscale.sh status",
