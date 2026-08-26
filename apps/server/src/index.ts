@@ -18,6 +18,7 @@ import {
   SessionManager
 } from './auth.js';
 import { resolveAuthStatus } from './auth-status.js';
+import { installApiAuthPolicy } from './auth-policy.js';
 import { HomeMusicDatabase } from './database.js';
 import { probeFfmpeg, resolveFfmpegCommand, type FfmpegStatus } from './ffmpeg.js';
 import { readCover, scanLibrary, type IndexedTrack } from './library.js';
@@ -109,8 +110,6 @@ try {
 const sessions = new SessionManager(authUser, authPassword);
 const loginRateLimiter = new LoginRateLimiter();
 const authConfigured = sessions.configured;
-const mutatingMethods = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
-const publicAuthRoutes = new Set(['/api/auth/status', '/api/auth/login']);
 const productionCsp = "default-src 'self'; img-src 'self' data: blob:; media-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
 const transcodeManager = new TranscodeManager({
   cacheDir: defaultTranscodeCachePath,
@@ -373,33 +372,10 @@ function readinessState() {
   };
 }
 
-app.addHook('onRequest', async (request, reply) => {
-  if (!request.url.startsWith('/api/')) return;
-
-  const path = requestPath(request.url);
-  const isPublicAuthRoute = publicAuthRoutes.has(path);
-
-  if (!authConfigured && path !== '/api/auth/status') {
-    return reply.code(503).send({ error: 'Autenticação do Home Music não configurada.' });
-  }
-
-  if (path === '/api/auth/login') {
-    if (request.headers['x-home-music-request'] !== '1') {
-      return reply.code(403).send({ error: 'Requisição de login não autorizada.' });
-    }
-    return;
-  }
-
-  if (!isPublicAuthRoute) {
-    const token = requestSessionToken(request.headers.cookie);
-    if (!sessions.validateSession(token)) {
-      return reply.code(401).send({ error: 'Sessão expirada ou autenticação necessária.' });
-    }
-  }
-
-  if (mutatingMethods.has(request.method) && request.headers['x-home-music-request'] !== '1') {
-    return reply.code(403).send({ error: 'Requisição de alteração não autorizada.' });
-  }
+installApiAuthPolicy(app, {
+  configured: authConfigured,
+  sessions,
+  users: authUsers
 });
 
 app.addHook('onSend', async (_request, reply, payload) => {
@@ -497,38 +473,42 @@ app.get('/api/health', async (_request, reply) => {
   };
 });
 
-app.get('/api/auth/status', async (request, reply) => {
+app.get('/api/auth/status', { config: { auth: 'public' } }, async (request, reply) => {
   reply.header('Cache-Control', 'no-store');
   const token = requestSessionToken(request.headers.cookie);
   return resolveAuthStatus(authConfigured, token, sessions, authUsers);
 });
 
-app.post<{ Body: { username?: unknown; password?: unknown } }>('/api/auth/login', async (request, reply) => {
-  reply.header('Cache-Control', 'no-store');
-  const key = loginRateLimitKey(
-    request.raw.socket.remoteAddress || request.ip,
-    request.headers['x-forwarded-for'],
-    trustTailscaleForwardedFor
-  );
+app.post<{ Body: { username?: unknown; password?: unknown } }>(
+  '/api/auth/login',
+  { config: { auth: 'public' } },
+  async (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    const key = loginRateLimitKey(
+      request.raw.socket.remoteAddress || request.ip,
+      request.headers['x-forwarded-for'],
+      trustTailscaleForwardedFor
+    );
 
-  if (loginRateLimiter.isBlocked(key)) {
-    reply.header('Retry-After', '300');
-    return reply.code(429).send({ error: 'Muitas tentativas. Aguarde alguns minutos e tente novamente.' });
+    if (loginRateLimiter.isBlocked(key)) {
+      reply.header('Retry-After', '300');
+      return reply.code(429).send({ error: 'Muitas tentativas. Aguarde alguns minutos e tente novamente.' });
+    }
+
+    const username = typeof request.body?.username === 'string' ? request.body.username : '';
+    const password = typeof request.body?.password === 'string' ? request.body.password : '';
+
+    if (!sessions.validateCredentials(username, password)) {
+      loginRateLimiter.recordFailure(key);
+      return reply.code(401).send({ error: 'Usuário ou senha inválidos.' });
+    }
+
+    loginRateLimiter.clear(key);
+    const token = sessions.createSession();
+    reply.header('Set-Cookie', buildSessionCookie(token, SESSION_TTL_SECONDS, requestIsSecure(request)));
+    return { authenticated: true };
   }
-
-  const username = typeof request.body?.username === 'string' ? request.body.username : '';
-  const password = typeof request.body?.password === 'string' ? request.body.password : '';
-
-  if (!sessions.validateCredentials(username, password)) {
-    loginRateLimiter.recordFailure(key);
-    return reply.code(401).send({ error: 'Usuário ou senha inválidos.' });
-  }
-
-  loginRateLimiter.clear(key);
-  const token = sessions.createSession();
-  reply.header('Set-Cookie', buildSessionCookie(token, SESSION_TTL_SECONDS, requestIsSecure(request)));
-  return { authenticated: true };
-});
+);
 
 app.post('/api/auth/logout', async (request, reply) => {
   const token = requestSessionToken(request.headers.cookie);

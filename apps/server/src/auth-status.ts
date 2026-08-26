@@ -1,9 +1,6 @@
-import type { AuthStatusResponse, AuthenticatedUser } from '@home-music/shared';
+import type { AuthStatusResponse } from '@home-music/shared';
 import type { SessionManager } from './auth.js';
-
-type UserIdentityReader = {
-  getEnabledUserById(userId: string): AuthenticatedUser | null;
-};
+import { resolveSessionIdentity, type UserIdentityReader } from './auth-context.js';
 
 export function resolveAuthStatus(
   configured: boolean,
@@ -15,23 +12,14 @@ export function resolveAuthStatus(
     return { configured: false, authenticated: false, user: null };
   }
 
-  const session = sessions.getSession(token);
-  if (!session) {
+  const identity = resolveSessionIdentity(token, sessions, users);
+  if (identity.kind === 'unauthenticated') {
     return { configured: true, authenticated: false, user: null };
   }
 
-  // Exceção transitória: enquanto o bootstrap ainda não conseguiu persistir o
-  // primeiro usuário, o fluxo legado pode continuar autenticado sem userId.
-  // Esse estado desaparece quando a migração para autenticação SQLite estiver completa.
-  if (!session.userId) {
-    return { configured: true, authenticated: true, user: null };
-  }
-
-  const user = users.getEnabledUserById(session.userId);
-  if (!user) {
-    sessions.revokeSession(token);
-    return { configured: true, authenticated: false, user: null };
-  }
-
-  return { configured: true, authenticated: true, user };
+  return {
+    configured: true,
+    authenticated: true,
+    user: identity.kind === 'user' ? identity.user : null
+  };
 }
