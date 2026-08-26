@@ -5,7 +5,10 @@ import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
 import { HomeMusicDatabase } from './database.js';
-import { resolveLegacyAuthBinding } from './legacy-auth-binding.js';
+import {
+  readLegacyAuthBindingFromEnvironment,
+  resolveLegacyAuthBinding
+} from './legacy-auth-binding.js';
 
 async function withDatabase(run: (databasePath: string) => Promise<void>) {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'home-music-auth-binding-'));
@@ -70,4 +73,36 @@ test('binding bloqueia credencial do env sem usuário ativo correspondente', asy
     assert.deepEqual(resolveLegacyAuthBinding(databasePath, 'Felipe'), { status: 'blocked' });
     assert.deepEqual(resolveLegacyAuthBinding(databasePath, 'Outro'), { status: 'blocked' });
   });
+});
+
+test('binding bloqueia userId persistido fora do limite defensivo', async () => {
+  await withDatabase(async databasePath => {
+    insertUser(databasePath, {
+      id: 'x'.repeat(129),
+      username: 'Felipe',
+      normalized: 'felipe'
+    });
+
+    assert.deepEqual(resolveLegacyAuthBinding(databasePath, 'Felipe'), { status: 'blocked' });
+  });
+});
+
+test('produção sem estado calculado pelo preload falha fechado', () => {
+  const previousNodeEnv = process.env.NODE_ENV;
+  const previousState = process.env.HOME_MUSIC_INTERNAL_LEGACY_BINDING_STATE;
+  const previousUserId = process.env.HOME_MUSIC_INTERNAL_LEGACY_BINDING_USER_ID;
+
+  try {
+    process.env.NODE_ENV = 'production';
+    delete process.env.HOME_MUSIC_INTERNAL_LEGACY_BINDING_STATE;
+    delete process.env.HOME_MUSIC_INTERNAL_LEGACY_BINDING_USER_ID;
+    assert.deepEqual(readLegacyAuthBindingFromEnvironment(), { status: 'blocked' });
+  } finally {
+    if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = previousNodeEnv;
+    if (previousState === undefined) delete process.env.HOME_MUSIC_INTERNAL_LEGACY_BINDING_STATE;
+    else process.env.HOME_MUSIC_INTERNAL_LEGACY_BINDING_STATE = previousState;
+    if (previousUserId === undefined) delete process.env.HOME_MUSIC_INTERNAL_LEGACY_BINDING_USER_ID;
+    else process.env.HOME_MUSIC_INTERNAL_LEGACY_BINDING_USER_ID = previousUserId;
+  }
 });
