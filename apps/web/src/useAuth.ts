@@ -1,6 +1,6 @@
 import type { AuthStatusResponse, AuthenticatedUser } from '@home-music/shared';
 import { useCallback, useEffect, useState } from 'react';
-import { AUTH_REQUIRED_EVENT } from './api-client';
+import { AUTH_REQUIRED_EVENT, PASSWORD_CHANGE_REQUIRED_EVENT } from './api-client';
 
 function messageFromResponse(response: Response) {
   return response.json()
@@ -14,7 +14,6 @@ export function useAuth() {
   const [configured, setConfigured] = useState(true);
   const [authenticated, setAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState<AuthenticatedUser | null>(null);
-  const [passwordChangeRequired, setPasswordChangeRequired] = useState(false);
   const [unreachable, setUnreachable] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,14 +30,21 @@ export function useAuth() {
       if (!response.ok) throw new Error(await messageFromResponse(response));
       const status = await response.json() as AuthStatusResponse;
       setConfigured(status.configured);
-      setAuthenticated(status.authenticated);
-      setCurrentUser(status.authenticated ? status.user : null);
-      setPasswordChangeRequired(Boolean(status.authenticated && status.passwordChangeRequired));
+
+      if (status.authenticated && status.passwordChangeRequired && status.user) {
+        setAuthenticated(false);
+        setCurrentUser(null);
+        window.dispatchEvent(new CustomEvent(PASSWORD_CHANGE_REQUIRED_EVENT, {
+          detail: { user: status.user }
+        }));
+      } else {
+        setAuthenticated(status.authenticated);
+        setCurrentUser(status.authenticated ? status.user : null);
+      }
       setError(null);
     } catch (error) {
       setAuthenticated(false);
       setCurrentUser(null);
-      setPasswordChangeRequired(false);
       const offline = !reachedServer;
       setUnreachable(offline);
       setError(offline
@@ -58,7 +64,6 @@ export function useAuth() {
     const expire = () => {
       setAuthenticated(false);
       setCurrentUser(null);
-      setPasswordChangeRequired(false);
       setUnreachable(false);
     };
     window.addEventListener(AUTH_REQUIRED_EVENT, expire);
@@ -96,39 +101,6 @@ export function useAuth() {
     await refresh();
   }, [refresh]);
 
-  const changeRequiredPassword = useCallback(async (currentPassword: string, newPassword: string) => {
-    setError(null);
-    let response: Response;
-    try {
-      response = await fetch('/api/auth/password', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Home-Music-Request': '1'
-        },
-        body: JSON.stringify({ currentPassword, newPassword })
-      });
-    } catch {
-      const message = 'Não foi possível alterar a senha. Verifique sua conexão e tente novamente.';
-      setUnreachable(true);
-      setError(message);
-      throw new Error(message);
-    }
-
-    setUnreachable(false);
-    if (!response.ok) {
-      const message = await messageFromResponse(response);
-      setError(message);
-      throw new Error(message);
-    }
-
-    setAuthenticated(false);
-    setCurrentUser(null);
-    setPasswordChangeRequired(false);
-    setError(null);
-  }, []);
-
   const logout = useCallback(async () => {
     setError(null);
 
@@ -153,7 +125,6 @@ export function useAuth() {
 
     setAuthenticated(false);
     setCurrentUser(null);
-    setPasswordChangeRequired(false);
     setUnreachable(false);
   }, []);
 
@@ -162,11 +133,9 @@ export function useAuth() {
     configured,
     authenticated,
     currentUser,
-    passwordChangeRequired,
     unreachable,
     error,
     login,
-    changeRequiredPassword,
     logout,
     retry: refresh
   };
