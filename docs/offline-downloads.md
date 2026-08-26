@@ -91,6 +91,7 @@ O estado atual usa:
 home-music:offline-user-id:v1
 home-music:offline-tracks:v2:<userId>
 home-music-offline-audio-v2-<userId>
+home-music-offline-client-scope-v1
 /offline-audio/<trackId>
 ```
 
@@ -102,6 +103,8 @@ A identidade offline ativa é atualizada somente depois que `/api/auth/status` c
 - a verificação de autenticação alcança o servidor, mas falha de forma que a identidade não possa ser confirmada.
 
 Quando o servidor está realmente inalcançável, o último `userId` autenticado pode continuar sendo usado para abrir **somente os downloads daquele namespace**. Isso preserva o modo offline sem permitir que uma troca A → B reutilize o manifesto/cache de A pela UI normal.
+
+Alterações do `userId` local são propagadas na aba atual e também por `storage` entre outras abas do mesmo origin. Isso faz cada client renegociar o próprio escopo com o service worker quando login/logout em outra aba altera a identidade local.
 
 A troca de usuário é fail-closed em dois níveis:
 
@@ -125,7 +128,7 @@ Adotar o cache antigo para o usuário atual seria uma atribuição de ownership 
 
 ### Limite da fronteira local
 
-O objetivo desta separação é impedir vazamento entre contas durante o uso normal da aplicação no mesmo perfil do navegador: troca de login, logout, sessão expirada, reload e modo offline.
+O objetivo desta separação é impedir vazamento entre contas durante o uso normal da aplicação no mesmo perfil do navegador: troca de login, logout, sessão expirada, reload, múltiplas abas e modo offline.
 
 Cache Storage e `localStorage` continuam pertencendo ao mesmo origin do navegador. Eles não são uma fronteira criptográfica contra alguém que já tenha controle irrestrito do perfil local, DevTools ou armazenamento do dispositivo. Uma ameaça local desse nível exigiria criptografia de conteúdo/chaves por usuário e um modelo de desbloqueio offline próprio, o que não faz parte desta etapa.
 
@@ -137,6 +140,9 @@ A nova versão:
 
 - recebe do frontend o `userId` ativo junto da negociação de capability;
 - associa esse usuário ao `clientId`/tab que enviou a mensagem;
+- persiste somente esse pequeno vínculo de escopo em `home-music-offline-client-scope-v1`, para sobreviver à suspensão/reinício do processo do service worker;
+- serializa atualizações de escopo para que uma troca rápida A → B preserve a ordem e a identidade mais recente vença;
+- só responde à capability depois que o novo escopo foi persistido;
 - só serve `/offline-audio/<trackId>` quando a requisição vem de um client com escopo válido;
 - abre o cache do usuário associado ao client, nunca um cache escolhido por parâmetro da URL;
 - remove o cache global legado durante a ativação;
