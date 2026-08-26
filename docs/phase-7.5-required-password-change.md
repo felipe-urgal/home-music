@@ -52,7 +52,17 @@ Quando a sessão resolve para um usuário com `password_must_change = 1`, a pol�
 
 A regra é aplicada antes da autorização por role. Portanto até um `admin` com troca pendente não consegue usar `/api/admin/*` antes de definir a nova senha.
 
-A UI futura pode direcionar o usuário para a tela adequada, mas não é a fronteira de segurança.
+## Fluxo visual de primeiro acesso
+
+O frontend possui um gate no topo da aplicação. Ao detectar `passwordChangeRequired=true` em `/api/auth/status`, o fluxo normal não monta biblioteca, player nem demais superfícies protegidas.
+
+Em vez disso, o usuário vê uma tela dedicada para:
+
+- informar novamente a senha temporária;
+- definir e confirmar a nova senha;
+- sair da conta se não quiser concluir naquele momento.
+
+A validação visual melhora a UX, mas não substitui o bloqueio do backend. Mesmo que o cliente seja adulterado, as demais rotas continuam retornando `403` enquanto `password_must_change = 1`.
 
 ## Status de autenticação
 
@@ -136,4 +146,5 @@ A implementação cobre:
 - troca correta do hash e limpeza de `password_must_change`;
 - revogação de todas as sessões após a troca;
 - login pendente falhando fechado se a conta for desativada durante `scrypt`;
-- troca abortando se o hash for resetado concorrentemente.
+- troca abortando se o hash for resetado concorrentemente;
+- gate visual impedindo a montagem do app normal enquanto a troca estiver pendente.
