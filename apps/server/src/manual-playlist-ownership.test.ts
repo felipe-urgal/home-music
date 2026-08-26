@@ -73,6 +73,31 @@ function createLegacyV8Database(databasePath: string, includeUsers: boolean) {
         id TEXT PRIMARY KEY
       );
 
+      CREATE TABLE favorites (
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        track_id TEXT NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (user_id, track_id)
+      );
+
+      CREATE TABLE legacy_favorites_pending (
+        track_id TEXT PRIMARY KEY REFERENCES tracks(id) ON DELETE CASCADE,
+        created_at TEXT NOT NULL
+      );
+
+      CREATE TABLE history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        track_id TEXT NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+        played_at TEXT NOT NULL
+      );
+
+      CREATE TABLE legacy_history_pending (
+        id INTEGER PRIMARY KEY,
+        track_id TEXT NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+        played_at TEXT NOT NULL
+      );
+
       CREATE TABLE playlists (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
