@@ -1,4 +1,5 @@
 export const AUTH_REQUIRED_EVENT = 'home-music:auth-required';
+export const PASSWORD_CHANGE_REQUIRED_EVENT = 'home-music:password-change-required';
 
 export async function apiFetch(input: RequestInfo | URL, init?: RequestInit) {
   const response = await fetch(input, {
