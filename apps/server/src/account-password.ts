@@ -9,16 +9,16 @@ export const ACCOUNT_PASSWORD_MIN_LENGTH = 12;
 type Row = Record<string, unknown>;
 type SessionRevoker = Pick<SessionManager, 'revokeUserSessions'>;
 
-export type RequiredPasswordChangeError =
+export type AccountPasswordChangeError =
   | 'invalid-current-password'
   | 'weak-new-password'
   | 'same-password'
   | 'not-required'
   | 'stale-account';
 
-export type RequiredPasswordChangeResult =
+export type AccountPasswordChangeResult =
   | { ok: true }
-  | { ok: false; error: RequiredPasswordChangeError };
+  | { ok: false; error: AccountPasswordChangeError };
 
 function validUserId(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0 && value.length <= MAX_USER_ID_LENGTH;
@@ -123,11 +123,11 @@ export class AccountPasswordService {
     return current ? row.id : null;
   }
 
-  async changeRequiredPassword(
+  async changeAuthenticatedPassword(
     userId: string,
     currentPassword: string,
     newPassword: string
-  ): Promise<RequiredPasswordChangeResult> {
+  ): Promise<AccountPasswordChangeResult> {
     if (!validUserId(userId)) return { ok: false, error: 'not-required' };
 
     const row = this.db.prepare(`
@@ -138,7 +138,12 @@ export class AccountPasswordService {
     `).get(userId) as Row | undefined;
 
     const currentHash = storedPasswordHash(row?.password_hash);
-    if (!currentHash || row?.enabled !== 1 || row?.password_must_change !== 1) {
+    const passwordMustChange = row?.password_must_change;
+    if (
+      !currentHash
+      || row?.enabled !== 1
+      || (passwordMustChange !== 0 && passwordMustChange !== 1)
+    ) {
       return { ok: false, error: 'not-required' };
     }
 
@@ -163,9 +168,9 @@ export class AccountPasswordService {
             password_changed_at = ?, updated_at = ?
         WHERE id = ?
           AND enabled = 1
-          AND password_must_change = 1
+          AND password_must_change = ?
           AND password_hash = ?;
-      `).run(newHash, now, now, userId, currentHash);
+      `).run(newHash, now, now, userId, passwordMustChange, currentHash);
 
       if (Number(result.changes) !== 1) {
         this.db.exec('ROLLBACK;');

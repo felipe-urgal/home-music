@@ -133,6 +133,21 @@ export class SessionManager {
     return revoked;
   }
 
+  revokeUserSessionsExcept(userId: string, currentToken: string | undefined, now = Date.now()) {
+    if (!userId || !currentToken) return null;
+    this.clearExpired(now);
+    const currentSession = this.sessions.get(currentToken);
+    if (!currentSession || currentSession.userId !== userId) return null;
+
+    let revoked = 0;
+    for (const [token, session] of this.sessions) {
+      if (token === currentToken || session.userId !== userId) continue;
+      this.sessions.delete(token);
+      revoked += 1;
+    }
+    return revoked;
+  }
+
   private createSessionRecord(userId: string | null, now: number) {
     this.clearExpired(now);
     while (this.sessions.size >= this.maxSessions) {
