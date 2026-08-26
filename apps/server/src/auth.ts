@@ -81,17 +81,13 @@ export class SessionManager {
     );
   }
 
+  validateUsername(username: string) {
+    return this.configured && safeEqual(username, this.username);
+  }
+
   validateCredentials(username: string, password: string) {
-    if (!this.configured) return false;
-    const usernameMatches = safeEqual(username, this.username);
-    if (this.legacyBinding.status === 'bound') {
-      // Depois que o bootstrap vinculou o login legado a um usuário persistido,
-      // o .env continua identificando somente qual é a conta legada. A senha
-      // corrente passa a ser validada contra o hash do SQLite pelo caller.
-      return usernameMatches;
-    }
-    const passwordMatches = safeEqual(password, this.password);
-    return usernameMatches && passwordMatches;
+    if (!this.validateUsername(username)) return false;
+    return safeEqual(password, this.password);
   }
 
   createSession(now = Date.now()) {
@@ -204,7 +200,7 @@ export class LoginRateLimiter {
     this.attempts.delete(key);
   }
 
-  private clearExpired(now: number) {
+  private clearExpired(now = Date.now()) {
     for (const [key, entry] of this.attempts) {
       if (entry.resetAt <= now) this.attempts.delete(key);
     }
