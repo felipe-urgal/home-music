@@ -9,6 +9,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "tsx --test src/*.test.ts",
     "ffmpeg:status": "tsx src/ffmpeg-cli.ts",
+    "admin:recover": "tsx src/admin-recovery-cli.ts",
     "start": "node --import ./dist/bootstrap-preload.js dist/index.js"
   },
   "dependencies": {
