@@ -107,6 +107,18 @@ test('SessionManager revoga somente outras sessões e preserva a sessão atual',
   assert.equal(sessions.getSession(current, 500)?.userId, 'user-a');
 });
 
+test('SessionManager ignora sessões já expiradas ao contar revogações de outros dispositivos', () => {
+  const sessions = new SessionManager('home-music', 'senha-super-segura', 1000);
+  const expired = sessions.createSessionForUser('user-a', 100);
+  const current = sessions.createSessionForUser('user-a', 1200);
+  const active = sessions.createSessionForUser('user-a', 1300);
+
+  assert.equal(sessions.revokeUserSessionsExcept('user-a', current, 1500), 1);
+  assert.equal(sessions.getSession(expired, 1500), null);
+  assert.equal(sessions.getSession(current, 1500)?.userId, 'user-a');
+  assert.equal(sessions.getSession(active, 1500), null);
+});
+
 test('SessionManager expira sessões antigas', () => {
   const sessions = new SessionManager('home-music', 'senha-super-segura', 1000);
   const token = sessions.createSession(100);
