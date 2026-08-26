@@ -153,12 +153,102 @@ test('password_must_change bloqueia uso normal no backend e libera somente troca
       user: { id: 'pending-1', username: 'maria', role: 'admin' }
     });
 
+    const revokeOthers = await app.inject({
+      method: 'POST',
+      url: '/api/auth/sessions/revoke-others',
+      headers
+    });
+    assert.equal(revokeOthers.statusCode, 403);
+    assert.equal(revokeOthers.json().code, 'PASSWORD_CHANGE_REQUIRED');
+
     const logout = await app.inject({
       method: 'POST',
       url: '/api/auth/logout',
       headers
     });
     assert.equal(logout.statusCode, 200);
+  } finally {
+    await app.close();
+  }
+});
+
+test('usuário autenticado revoga as próprias outras sessões sem encerrar a atual', async () => {
+  const { app, sessions, users } = buildTestApp();
+  users.set('user-1', {
+    id: 'user-1',
+    username: 'maria',
+    role: 'user',
+    passwordMustChange: false
+  });
+  users.set('user-2', {
+    id: 'user-2',
+    username: 'joao',
+    role: 'user',
+    passwordMustChange: false
+  });
+  const current = sessions.createSessionForUser('user-1');
+  const second = sessions.createSessionForUser('user-1');
+  const third = sessions.createSessionForUser('user-1');
+  const otherUser = sessions.createSessionForUser('user-2');
+
+  try {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/auth/sessions/revoke-others',
+      headers: {
+        cookie: cookie(current),
+        'x-home-music-request': '1'
+      }
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.deepEqual(response.json(), { revoked: 2 });
+    assert.equal(sessions.validateSession(current), true);
+    assert.equal(sessions.validateSession(second), false);
+    assert.equal(sessions.validateSession(third), false);
+    assert.equal(sessions.validateSession(otherUser), true);
+
+    const repeated = await app.inject({
+      method: 'POST',
+      url: '/api/auth/sessions/revoke-others',
+      headers: {
+        cookie: cookie(current),
+        'x-home-music-request': '1'
+      }
+    });
+    assert.equal(repeated.statusCode, 200);
+    assert.deepEqual(repeated.json(), { revoked: 0 });
+  } finally {
+    await app.close();
+  }
+});
+
+test('sessão legada não pode usar revogação de outras sessões por não possuir identidade', async () => {
+  const sessions = new SessionManager(
+    'admin',
+    'password-segura-2026',
+    undefined,
+    undefined,
+    { status: 'legacy-uninitialized' }
+  );
+  const app = Fastify();
+  installApiAuthPolicy(app, {
+    configured: true,
+    sessions,
+    users: { getEnabledUserById: () => null }
+  });
+  const token = sessions.createSession();
+
+  try {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/auth/sessions/revoke-others',
+      headers: {
+        cookie: cookie(token),
+        'x-home-music-request': '1'
+      }
+    });
+    assert.equal(response.statusCode, 409);
   } finally {
     await app.close();
   }
@@ -237,6 +327,13 @@ test('mutações continuam exigindo header customizado depois da autenticação'
       headers: { cookie: cookie(token) }
     });
     assert.equal(missingHeader.statusCode, 403);
+
+    const missingHeaderOnSessions = await app.inject({
+      method: 'POST',
+      url: '/api/auth/sessions/revoke-others',
+      headers: { cookie: cookie(token) }
+    });
+    assert.equal(missingHeaderOnSessions.statusCode, 403);
 
     const allowed = await app.inject({
       method: 'POST',
