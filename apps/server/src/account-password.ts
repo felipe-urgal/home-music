@@ -13,7 +13,7 @@ export type AccountPasswordChangeError =
   | 'invalid-current-password'
   | 'weak-new-password'
   | 'same-password'
-  | 'account-unavailable'
+  | 'not-required'
   | 'stale-account';
 
 export type AccountPasswordChangeResult =
@@ -128,7 +128,7 @@ export class AccountPasswordService {
     currentPassword: string,
     newPassword: string
   ): Promise<AccountPasswordChangeResult> {
-    if (!validUserId(userId)) return { ok: false, error: 'account-unavailable' };
+    if (!validUserId(userId)) return { ok: false, error: 'not-required' };
 
     const row = this.db.prepare(`
       SELECT password_hash, enabled, password_must_change
@@ -144,7 +144,7 @@ export class AccountPasswordService {
       || row?.enabled !== 1
       || (passwordMustChange !== 0 && passwordMustChange !== 1)
     ) {
-      return { ok: false, error: 'account-unavailable' };
+      return { ok: false, error: 'not-required' };
     }
 
     if (!await verifyPassword(currentPassword, currentHash)) {
