@@ -5,7 +5,7 @@ import { DatabaseSync } from 'node:sqlite';
 import type { PlaybackState, Playlist, PlaylistSource, RepeatMode, StatisticsPeriod, Track } from '@home-music/shared';
 import type { IndexedTrack } from './library.js';
 
-const CURRENT_SCHEMA_VERSION = 5;
+const CURRENT_SCHEMA_VERSION = 6;
 const HISTORY_CAPACITY = 2_000;
 
 const DEFAULT_PLAYBACK_STATE: PlaybackState = {
@@ -217,6 +217,34 @@ export class HomeMusicDatabase {
       }
       this.db.exec('PRAGMA user_version = 5;');
       version = 5;
+    }
+
+    if (version < 6) {
+      this.db.exec('BEGIN IMMEDIATE;');
+      try {
+        this.db.exec(`
+          CREATE TABLE IF NOT EXISTS users (
+            id TEXT PRIMARY KEY NOT NULL,
+            username TEXT NOT NULL CHECK(length(username) BETWEEN 1 AND 120),
+            username_normalized TEXT NOT NULL UNIQUE CHECK(length(username_normalized) BETWEEN 1 AND 120),
+            password_hash TEXT NOT NULL CHECK(length(password_hash) > 0),
+            role TEXT NOT NULL CHECK(role IN ('admin', 'user')),
+            enabled INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0, 1)),
+            password_must_change INTEGER NOT NULL DEFAULT 0 CHECK(password_must_change IN (0, 1)),
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            password_changed_at TEXT
+          );
+
+          CREATE INDEX IF NOT EXISTS idx_users_role_enabled ON users(role, enabled);
+          PRAGMA user_version = 6;
+        `);
+        this.db.exec('COMMIT;');
+        version = 6;
+      } catch (error) {
+        this.db.exec('ROLLBACK;');
+        throw error;
+      }
     }
 
     if (version !== CURRENT_SCHEMA_VERSION) {
