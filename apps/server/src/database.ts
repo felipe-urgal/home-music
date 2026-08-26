@@ -5,7 +5,7 @@ import { DatabaseSync } from 'node:sqlite';
 import type { PlaybackState, Playlist, PlaylistSource, RepeatMode, StatisticsPeriod, Track } from '@home-music/shared';
 import type { IndexedTrack } from './library.js';
 
-const CURRENT_SCHEMA_VERSION = 8;
+const CURRENT_SCHEMA_VERSION = 9;
 const HISTORY_CAPACITY = 2_000;
 
 const DEFAULT_PLAYBACK_STATE: PlaybackState = {
@@ -382,6 +382,135 @@ export class HomeMusicDatabase {
       }
     }
 
+    if (version < 9) {
+      this.db.exec('BEGIN IMMEDIATE;');
+      try {
+        const firstUser = this.db.prepare(`
+          SELECT id
+          FROM users
+          ORDER BY created_at ASC, id ASC
+          LIMIT 1;
+        `).get() as Row | undefined;
+        const firstUserId = stringValue(firstUser?.id);
+        const hasPlaylists = this.hasColumn('playlists', 'id');
+
+        if (!hasPlaylists) {
+          this.db.exec(`
+            CREATE TABLE playlists (
+              id TEXT PRIMARY KEY,
+              name TEXT NOT NULL,
+              created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL,
+              source TEXT NOT NULL DEFAULT 'manual',
+              source_key TEXT,
+              owner_user_id TEXT REFERENCES users(id) ON DELETE CASCADE
+            );
+          `);
+        } else if (!this.hasColumn('playlists', 'owner_user_id')) {
+          this.db.exec(`
+            ALTER TABLE playlists
+            ADD COLUMN owner_user_id TEXT REFERENCES users(id) ON DELETE CASCADE;
+          `);
+        }
+
+        this.db.exec(`
+          CREATE TABLE IF NOT EXISTS playlist_tracks (
+            playlist_id TEXT NOT NULL REFERENCES playlists(id) ON DELETE CASCADE,
+            track_id TEXT NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+            position INTEGER NOT NULL,
+            PRIMARY KEY (playlist_id, position),
+            UNIQUE (playlist_id, track_id)
+          );
+
+          CREATE TABLE IF NOT EXISTS legacy_manual_playlists_pending (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+          );
+
+          CREATE TABLE IF NOT EXISTS legacy_manual_playlist_tracks_pending (
+            playlist_id TEXT NOT NULL REFERENCES legacy_manual_playlists_pending(id) ON DELETE CASCADE,
+            track_id TEXT NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+            position INTEGER NOT NULL,
+            PRIMARY KEY (playlist_id, position),
+            UNIQUE (playlist_id, track_id)
+          );
+        `);
+
+        this.db.exec(`
+          UPDATE playlists
+          SET source = 'manual'
+          WHERE source NOT IN ('manual', 'rekordbox');
+
+          UPDATE playlists
+          SET owner_user_id = NULL
+          WHERE source = 'rekordbox';
+        `);
+
+        if (firstUserId) {
+          this.db.prepare(`
+            UPDATE playlists
+            SET owner_user_id = ?
+            WHERE source = 'manual' AND owner_user_id IS NULL;
+          `).run(firstUserId);
+        } else {
+          this.db.exec(`
+            INSERT INTO legacy_manual_playlists_pending(id, name, created_at, updated_at)
+            SELECT id, name, created_at, updated_at
+            FROM playlists
+            WHERE source = 'manual';
+
+            INSERT INTO legacy_manual_playlist_tracks_pending(playlist_id, track_id, position)
+            SELECT pt.playlist_id, pt.track_id, pt.position
+            FROM playlist_tracks pt
+            JOIN playlists p ON p.id = pt.playlist_id
+            WHERE p.source = 'manual';
+
+            DELETE FROM playlists WHERE source = 'manual';
+          `);
+        }
+
+        this.db.exec(`
+          CREATE UNIQUE INDEX IF NOT EXISTS idx_playlists_source_key
+          ON playlists(source, source_key)
+          WHERE source_key IS NOT NULL;
+
+          CREATE INDEX IF NOT EXISTS idx_playlists_owner_source_updated
+          ON playlists(owner_user_id, source, updated_at DESC);
+
+          CREATE TRIGGER IF NOT EXISTS trg_playlists_owner_insert
+          BEFORE INSERT ON playlists
+          WHEN NEW.source NOT IN ('manual', 'rekordbox')
+            OR (NEW.source = 'manual' AND NEW.owner_user_id IS NULL)
+            OR (NEW.source = 'rekordbox' AND NEW.owner_user_id IS NOT NULL)
+          BEGIN
+            SELECT RAISE(ABORT, 'ownership de playlist inválido');
+          END;
+
+          CREATE TRIGGER IF NOT EXISTS trg_playlists_owner_update
+          BEFORE UPDATE OF source, owner_user_id ON playlists
+          WHEN NEW.source NOT IN ('manual', 'rekordbox')
+            OR (NEW.source = 'manual' AND NEW.owner_user_id IS NULL)
+            OR (NEW.source = 'rekordbox' AND NEW.owner_user_id IS NOT NULL)
+          BEGIN
+            SELECT RAISE(ABORT, 'ownership de playlist inválido');
+          END;
+
+          PRAGMA user_version = 9;
+        `);
+        this.db.exec('COMMIT;');
+        version = 9;
+      } catch (error) {
+        try {
+          this.db.exec('ROLLBACK;');
+        } catch {
+          // Preserva o erro original se a transação já tiver sido encerrada.
+        }
+        throw error;
+      }
+    }
+
     if (version !== CURRENT_SCHEMA_VERSION) {
       throw new Error(`Versão de schema SQLite não suportada: ${version}`);
     }
@@ -635,12 +764,15 @@ export class HomeMusicDatabase {
     };
   }
 
-  getPlaylists(): Playlist[] {
+  getPlaylists(userId: string): Playlist[] {
+    requireUserId(userId);
     const playlists = this.db.prepare(`
       SELECT id, name, created_at, updated_at, source
       FROM playlists
+      WHERE source = 'rekordbox'
+         OR (source = 'manual' AND owner_user_id = ?)
       ORDER BY updated_at DESC, name COLLATE NOCASE
-    `).all() as Row[];
+    `).all(userId) as Row[];
     const tracksStatement = this.db.prepare(`
       SELECT track_id FROM playlist_tracks WHERE playlist_id = ? ORDER BY position
     `);
@@ -655,35 +787,55 @@ export class HomeMusicDatabase {
     }));
   }
 
-  getPlaylistSource(id: string): PlaylistSource | null {
-    const row = this.db.prepare('SELECT source FROM playlists WHERE id = ?').get(id) as Row | undefined;
+  getPlaylistSource(userId: string, id: string): PlaylistSource | null {
+    requireUserId(userId);
+    const row = this.db.prepare(`
+      SELECT source
+      FROM playlists
+      WHERE id = ?
+        AND (source = 'rekordbox' OR (source = 'manual' AND owner_user_id = ?))
+    `).get(id, userId) as Row | undefined;
     return row ? playlistSourceValue(row.source) : null;
   }
 
-  createPlaylist(name: string) {
+  createPlaylist(userId: string, name: string) {
+    requireUserId(userId);
     const id = randomUUID();
     const now = new Date().toISOString();
     this.db.prepare(`
-      INSERT INTO playlists(id, name, created_at, updated_at, source, source_key)
-      VALUES (?, ?, ?, ?, 'manual', NULL)
-    `).run(id, name, now, now);
+      INSERT INTO playlists(id, name, created_at, updated_at, source, source_key, owner_user_id)
+      VALUES (?, ?, ?, ?, 'manual', NULL, ?)
+    `).run(id, name, now, now, userId);
     return id;
   }
 
-  renamePlaylist(id: string, name: string) {
-    const result = this.db.prepare('UPDATE playlists SET name = ?, updated_at = ? WHERE id = ?')
-      .run(name, new Date().toISOString(), id);
+  renamePlaylist(userId: string, id: string, name: string) {
+    requireUserId(userId);
+    const result = this.db.prepare(`
+      UPDATE playlists
+      SET name = ?, updated_at = ?
+      WHERE id = ? AND source = 'manual' AND owner_user_id = ?
+    `).run(name, new Date().toISOString(), id, userId);
     return result.changes > 0;
   }
 
-  deletePlaylist(id: string) {
-    const result = this.db.prepare('DELETE FROM playlists WHERE id = ?').run(id);
+  deletePlaylist(userId: string, id: string) {
+    requireUserId(userId);
+    const result = this.db.prepare(`
+      DELETE FROM playlists
+      WHERE id = ? AND source = 'manual' AND owner_user_id = ?
+    `).run(id, userId);
     return result.changes > 0;
   }
 
-  setPlaylistTracks(id: string, trackIds: string[]) {
+  setPlaylistTracks(userId: string, id: string, trackIds: string[]) {
+    requireUserId(userId);
     const uniqueIds = [...new Set(trackIds)];
-    const exists = this.db.prepare('SELECT 1 FROM playlists WHERE id = ?').get(id);
+    const exists = this.db.prepare(`
+      SELECT 1
+      FROM playlists
+      WHERE id = ? AND source = 'manual' AND owner_user_id = ?
+    `).get(id, userId);
     if (!exists) return false;
 
     const remove = this.db.prepare('DELETE FROM playlist_tracks WHERE playlist_id = ?');
@@ -695,8 +847,11 @@ export class HomeMusicDatabase {
     try {
       remove.run(id);
       uniqueIds.forEach((trackId, index) => insert.run(id, trackId, index));
-      this.db.prepare('UPDATE playlists SET updated_at = ? WHERE id = ?')
-        .run(new Date().toISOString(), id);
+      this.db.prepare(`
+        UPDATE playlists
+        SET updated_at = ?
+        WHERE id = ? AND source = 'manual' AND owner_user_id = ?
+      `).run(new Date().toISOString(), id, userId);
       this.db.exec('COMMIT;');
       return true;
     } catch (error) {
