@@ -60,7 +60,7 @@ test('SQLite persiste biblioteca, favoritos, histórico, playlists e estado do p
     first.recordHistory('user-1', 'a');
     const playlistId = first.createPlaylist('user-1', 'Minha playlist');
     assert.equal(first.setPlaylistTracks('user-1', playlistId, ['a', 'b']), true);
-    first.savePlaybackState({
+    first.savePlaybackState('user-1', {
       currentTrackId: 'b',
       position: 42.5,
       volume: 0.65,
@@ -73,7 +73,7 @@ test('SQLite persiste biblioteca, favoritos, histórico, playlists e estado do p
     first.close();
 
     const second = new HomeMusicDatabase(dbPath);
-    assert.equal(second.getSchemaVersion(), 9);
+    assert.equal(second.getSchemaVersion(), 10);
     assert.equal(second.getMetadata('libraryRoot'), '/music');
     assert.equal(second.loadTracks().length, 2);
     assert.equal(second.loadTracks()[0].replayGainTrackDb, -7.2);
@@ -83,7 +83,7 @@ test('SQLite persiste biblioteca, favoritos, histórico, playlists e estado do p
     assert.deepEqual(second.getPlaylists('user-1')[0].trackIds, ['a', 'b']);
     assert.equal(second.getPlaylists('user-1')[0].source, 'manual');
 
-    const state = second.loadPlaybackState();
+    const state = second.loadPlaybackState('user-1');
     assert.equal(state.currentTrackId, 'b');
     assert.equal(state.position, 42.5);
     assert.equal(state.volume, 0.65);
@@ -123,7 +123,7 @@ test('remoção de faixa limpa relacionamentos por foreign key', async () => {
   }
 });
 
-test('migra schema v1 para v9 sem perder estado existente', async () => {
+test('migra schema v1 para v10 sem perder estado existente', async () => {
   const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-db-'));
   const dbPath = path.join(temp, 'legacy.db');
 
@@ -194,13 +194,12 @@ test('migra schema v1 para v9 sem perder estado existente', async () => {
     legacy.close();
 
     const migrated = new HomeMusicDatabase(dbPath);
-    assert.equal(migrated.getSchemaVersion(), 9);
-    const state = migrated.loadPlaybackState();
-    assert.equal(state.currentTrackId, 'a');
-    assert.equal(state.position, 15);
+    assert.equal(migrated.getSchemaVersion(), 10);
+    const state = migrated.loadPlaybackState('user-1');
+    assert.equal(state.currentTrackId, null);
+    assert.equal(state.position, 0);
     assert.equal(state.wasPlaying, false);
-    assert.deepEqual(state.queueIds, ['a']);
-    assert.deepEqual(state.baseQueueIds, []);
+    assert.deepEqual(state.queueIds, []);
     migrated.close();
 
     const raw = new DatabaseSync(dbPath);
@@ -217,19 +216,50 @@ test('migra schema v1 para v9 sem perder estado existente', async () => {
       playlistColumns.map(column => column.name),
       ['id', 'name', 'created_at', 'updated_at', 'source', 'source_key', 'owner_user_id']
     );
+    const playbackColumns = raw.prepare('PRAGMA table_info(playback_state);').all() as Array<{ name?: string }>;
+    assert.deepEqual(
+      playbackColumns.map(column => column.name),
+      [
+        'user_id',
+        'current_track_id',
+        'position',
+        'volume',
+        'shuffle',
+        'repeat_mode',
+        'was_playing',
+        'base_queue_json',
+        'queue_json',
+        'updated_at'
+      ]
+    );
+    const pendingState = raw.prepare(`
+      SELECT current_track_id, position, volume, shuffle, repeat_mode, was_playing,
+             base_queue_json, queue_json, updated_at
+      FROM legacy_playback_state_pending
+      WHERE id = 1;
+    `).get() as Record<string, unknown>;
+    assert.equal(pendingState.current_track_id, 'a');
+    assert.equal(pendingState.position, 15);
+    assert.equal(pendingState.volume, 0.5);
+    assert.equal(pendingState.shuffle, 1);
+    assert.equal(pendingState.repeat_mode, 'all');
+    assert.equal(pendingState.was_playing, 0);
+    assert.equal(pendingState.base_queue_json, '[]');
+    assert.equal(pendingState.queue_json, '["a"]');
+    assert.equal(pendingState.updated_at, '2026-08-24T12:00:00.000Z');
     raw.close();
   } finally {
     await rm(temp, { recursive: true, force: true });
   }
 });
 
-test('schema v9 preserva identidade única, papéis e flags válidos de users', async () => {
+test('schema v10 preserva identidade única, papéis e flags válidos de users', async () => {
   const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-db-'));
   const dbPath = path.join(temp, 'users.db');
 
   try {
     const db = new HomeMusicDatabase(dbPath);
-    assert.equal(db.getSchemaVersion(), 9);
+    assert.equal(db.getSchemaVersion(), 10);
     db.close();
 
     const raw = new DatabaseSync(dbPath);

@@ -5,7 +5,7 @@ import { DatabaseSync } from 'node:sqlite';
 import type { PlaybackState, Playlist, PlaylistSource, RepeatMode, StatisticsPeriod, Track } from '@home-music/shared';
 import type { IndexedTrack } from './library.js';
 
-const CURRENT_SCHEMA_VERSION = 9;
+const CURRENT_SCHEMA_VERSION = 10;
 const HISTORY_CAPACITY = 2_000;
 
 const DEFAULT_PLAYBACK_STATE: PlaybackState = {
@@ -511,6 +511,92 @@ export class HomeMusicDatabase {
       }
     }
 
+    if (version < 10) {
+      this.db.exec('BEGIN IMMEDIATE;');
+      try {
+        const firstUser = this.db.prepare(`
+          SELECT id
+          FROM users
+          ORDER BY created_at ASC, id ASC
+          LIMIT 1;
+        `).get() as Row | undefined;
+        const firstUserId = stringValue(firstUser?.id);
+        const hasPlaybackState = this.hasColumn('playback_state', 'updated_at');
+        const playbackStateAlreadyOwned = this.hasColumn('playback_state', 'user_id');
+        const hasLegacyPlaybackState = hasPlaybackState && !playbackStateAlreadyOwned;
+
+        if (hasLegacyPlaybackState) {
+          this.db.exec('ALTER TABLE playback_state RENAME TO playback_state_legacy;');
+        }
+
+        this.db.exec(`
+          CREATE TABLE IF NOT EXISTS playback_state (
+            user_id TEXT PRIMARY KEY NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            current_track_id TEXT,
+            position REAL NOT NULL DEFAULT 0,
+            volume REAL NOT NULL DEFAULT 1,
+            shuffle INTEGER NOT NULL DEFAULT 0,
+            repeat_mode TEXT NOT NULL DEFAULT 'off',
+            was_playing INTEGER NOT NULL DEFAULT 0,
+            base_queue_json TEXT NOT NULL DEFAULT '[]',
+            queue_json TEXT NOT NULL DEFAULT '[]',
+            updated_at TEXT NOT NULL
+          );
+
+          CREATE TABLE IF NOT EXISTS legacy_playback_state_pending (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            current_track_id TEXT,
+            position REAL NOT NULL DEFAULT 0,
+            volume REAL NOT NULL DEFAULT 1,
+            shuffle INTEGER NOT NULL DEFAULT 0,
+            repeat_mode TEXT NOT NULL DEFAULT 'off',
+            was_playing INTEGER NOT NULL DEFAULT 0,
+            base_queue_json TEXT NOT NULL DEFAULT '[]',
+            queue_json TEXT NOT NULL DEFAULT '[]',
+            updated_at TEXT NOT NULL
+          );
+        `);
+
+        if (hasLegacyPlaybackState && firstUserId) {
+          this.db.prepare(`
+            INSERT INTO playback_state(
+              user_id, current_track_id, position, volume, shuffle, repeat_mode,
+              was_playing, base_queue_json, queue_json, updated_at
+            )
+            SELECT ?, current_track_id, position, volume, shuffle, repeat_mode,
+                   was_playing, base_queue_json, queue_json, updated_at
+            FROM playback_state_legacy
+            WHERE id = 1;
+          `).run(firstUserId);
+        } else if (hasLegacyPlaybackState) {
+          this.db.exec(`
+            INSERT OR REPLACE INTO legacy_playback_state_pending(
+              id, current_track_id, position, volume, shuffle, repeat_mode,
+              was_playing, base_queue_json, queue_json, updated_at
+            )
+            SELECT id, current_track_id, position, volume, shuffle, repeat_mode,
+                   was_playing, base_queue_json, queue_json, updated_at
+            FROM playback_state_legacy
+            WHERE id = 1;
+          `);
+        }
+
+        this.db.exec(`
+          DROP TABLE IF EXISTS playback_state_legacy;
+          PRAGMA user_version = 10;
+        `);
+        this.db.exec('COMMIT;');
+        version = 10;
+      } catch (error) {
+        try {
+          this.db.exec('ROLLBACK;');
+        } catch {
+          // Preserva o erro original se a transação já tiver sido encerrada.
+        }
+        throw error;
+      }
+    }
+
     if (version !== CURRENT_SCHEMA_VERSION) {
       throw new Error(`Versão de schema SQLite não suportada: ${version}`);
     }
@@ -916,14 +1002,16 @@ export class HomeMusicDatabase {
     }
   }
 
-  loadPlaybackState(): PlaybackState {
+  loadPlaybackState(userId: string): PlaybackState {
+    requireUserId(userId);
     const row = this.db.prepare(`
       SELECT current_track_id, position, volume, shuffle, repeat_mode, was_playing,
              base_queue_json, queue_json, updated_at
-      FROM playback_state WHERE id = 1
-    `).get() as Row | undefined;
+      FROM playback_state
+      WHERE user_id = ?
+    `).get(userId) as Row | undefined;
 
-    if (!row) return DEFAULT_PLAYBACK_STATE;
+    if (!row) return { ...DEFAULT_PLAYBACK_STATE };
 
     return {
       currentTrackId: typeof row.current_track_id === 'string' ? row.current_track_id : null,
@@ -938,14 +1026,15 @@ export class HomeMusicDatabase {
     };
   }
 
-  savePlaybackState(state: Omit<PlaybackState, 'updatedAt'>) {
+  savePlaybackState(userId: string, state: Omit<PlaybackState, 'updatedAt'>) {
+    requireUserId(userId);
     const updatedAt = new Date().toISOString();
     this.db.prepare(`
       INSERT INTO playback_state(
-        id, current_track_id, position, volume, shuffle, repeat_mode, was_playing,
+        user_id, current_track_id, position, volume, shuffle, repeat_mode, was_playing,
         base_queue_json, queue_json, updated_at
-      ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(user_id) DO UPDATE SET
         current_track_id = excluded.current_track_id,
         position = excluded.position,
         volume = excluded.volume,
@@ -956,6 +1045,7 @@ export class HomeMusicDatabase {
         queue_json = excluded.queue_json,
         updated_at = excluded.updated_at
     `).run(
+      userId,
       state.currentTrackId,
       Math.max(0, state.position),
       Math.max(0, Math.min(1, state.volume)),

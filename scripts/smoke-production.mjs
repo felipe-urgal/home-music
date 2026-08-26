@@ -237,6 +237,9 @@ try {
   const unauthenticatedHealth = await fetch(`${baseUrl}/api/health`);
   assert.equal(unauthenticatedHealth.status, 401);
 
+  const unauthenticatedPlayerState = await fetch(`${baseUrl}/api/player/state`);
+  assert.equal(unauthenticatedPlayerState.status, 401);
+
   const unauthenticatedTranscode = await fetch(`${baseUrl}/api/tracks/inexistente/transcode?quality=economy`);
   assert.equal(unauthenticatedTranscode.status, 401);
 
@@ -293,7 +296,7 @@ try {
     active: 0,
     pending: 0
   });
-  assert.equal(internalHealthBody.schemaVersion, 9);
+  assert.equal(internalHealthBody.schemaVersion, 10);
 
   const favorites = await fetch(`${baseUrl}/api/favorites`, {
     headers: { Cookie: cookie }
@@ -323,6 +326,59 @@ try {
   });
   assert.equal(playlists.status, 200);
   assert.deepEqual(await playlists.json(), { playlists: [] });
+
+  const initialPlayerState = await fetch(`${baseUrl}/api/player/state`, {
+    headers: { Cookie: cookie }
+  });
+  assert.equal(initialPlayerState.status, 200);
+  assert.deepEqual(await initialPlayerState.json(), {
+    currentTrackId: null,
+    position: 0,
+    volume: 1,
+    shuffle: false,
+    repeatMode: 'off',
+    wasPlaying: false,
+    baseQueueIds: [],
+    queueIds: [],
+    updatedAt: '1970-01-01T00:00:00.000Z'
+  });
+
+  const savedPlayerState = await fetch(`${baseUrl}/api/player/state`, {
+    method: 'PUT',
+    headers: {
+      Cookie: cookie,
+      'Content-Type': 'application/json',
+      'X-Home-Music-Request': '1'
+    },
+    body: JSON.stringify({
+      currentTrackId: null,
+      position: 12,
+      volume: 0.6,
+      shuffle: true,
+      repeatMode: 'all',
+      wasPlaying: false,
+      baseQueueIds: [],
+      queueIds: []
+    })
+  });
+  assert.equal(savedPlayerState.status, 200);
+  const savedPlayerStateBody = await savedPlayerState.json();
+  assert.equal(savedPlayerStateBody.currentTrackId, null);
+  assert.equal(savedPlayerStateBody.position, 12);
+  assert.equal(savedPlayerStateBody.volume, 0.6);
+  assert.equal(savedPlayerStateBody.shuffle, true);
+  assert.equal(savedPlayerStateBody.repeatMode, 'all');
+  assert.equal(savedPlayerStateBody.wasPlaying, false);
+  assert.deepEqual(savedPlayerStateBody.baseQueueIds, []);
+  assert.deepEqual(savedPlayerStateBody.queueIds, []);
+  assert.equal(typeof savedPlayerStateBody.updatedAt, 'string');
+  assert.notEqual(savedPlayerStateBody.updatedAt, '1970-01-01T00:00:00.000Z');
+
+  const persistedPlayerState = await fetch(`${baseUrl}/api/player/state`, {
+    headers: { Cookie: cookie }
+  });
+  assert.equal(persistedPlayerState.status, 200);
+  assert.deepEqual(await persistedPlayerState.json(), savedPlayerStateBody);
 
   updateSmokeUserRole('user');
   try {
@@ -360,6 +416,12 @@ try {
     });
     assert.equal(userPlaylists.status, 200, 'User autenticado deve acessar playlists pessoais e Rekordbox compartilhadas.');
     assert.deepEqual(await userPlaylists.json(), { playlists: [] });
+
+    const userPlayerState = await fetch(`${baseUrl}/api/player/state`, {
+      headers: { Cookie: cookie }
+    });
+    assert.equal(userPlayerState.status, 200, 'User autenticado deve acessar somente o próprio estado do player.');
+    assert.deepEqual(await userPlayerState.json(), savedPlayerStateBody);
 
     const adminOperations = [
       { method: 'GET', path: '/api/health' },

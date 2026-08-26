@@ -113,6 +113,7 @@ Detalhe do autosserviço de senha e sessões: [phase-7.5-self-service-account.md
 Detalhe do ownership de favoritos por usuário: [phase-7.5-favorites-ownership.md](phase-7.5-favorites-ownership.md).
 Detalhe do ownership de histórico e estatísticas por usuário: [phase-7.5-history-ownership.md](phase-7.5-history-ownership.md).
 Detalhe do ownership de playlists manuais: [phase-7.5-manual-playlist-ownership.md](phase-7.5-manual-playlist-ownership.md).
+Detalhe do ownership do estado do player: [phase-7.5-playback-state-ownership.md](phase-7.5-playback-state-ownership.md).
 
 Princípios:
 
@@ -142,7 +143,7 @@ Sequência de implementação:
 - [x] Migrar favoritos para ownership por `user_id`, preservando os favoritos atuais no primeiro admin
 - [x] Migrar histórico e estatísticas para escopo por `user_id`, preservando o histórico atual no primeiro admin
 - [x] Migrar playlists manuais para ownership por `user_id`; manter playlists Rekordbox compartilhadas e somente leitura fora da reimportação
-- [ ] Migrar `playback_state` de linha global única para uma linha por usuário, preservando fila, posição, volume, shuffle e repeat atuais no primeiro admin
+- [x] Migrar `playback_state` de linha global única para uma linha por usuário, preservando fila, posição, volume, shuffle e repeat atuais no primeiro admin
 - [ ] Revisar todas as queries por ID para aplicar ownership no próprio SQL e evitar IDOR/acesso cruzado entre usuários
 - [ ] Separar downloads offline e manifesto/cache por `userId`, impedindo vazamento local entre contas no mesmo navegador
 - [ ] Adaptar o frontend para manter `currentUser` e exibir superfícies conforme `role`, sem usar essa checagem como controle de segurança

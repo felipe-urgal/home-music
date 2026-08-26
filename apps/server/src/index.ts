@@ -828,9 +828,20 @@ app.post<{ Body: { xml?: unknown } }>(
   }
 );
 
-app.get('/api/player/state', async () => database.loadPlaybackState());
+app.get('/api/player/state', async (request, reply) => {
+  if (!request.user) {
+    return reply.code(409).send({ error: 'Estado do player exige uma identidade persistida.' });
+  }
+
+  reply.header('Cache-Control', 'private, no-store');
+  return database.loadPlaybackState(request.user.id);
+});
 
 app.put<{ Body: Partial<PlaybackState> }>('/api/player/state', async (request, reply) => {
+  if (!request.user) {
+    return reply.code(409).send({ error: 'Estado do player exige uma identidade persistida.' });
+  }
+
   const body = request.body ?? {};
   const currentTrackId = typeof body.currentTrackId === 'string' && tracksById.has(body.currentTrackId)
     ? body.currentTrackId
@@ -847,7 +858,7 @@ app.put<{ Body: Partial<PlaybackState> }>('/api/player/state', async (request, r
   if (currentTrackId && !queueIds.includes(currentTrackId)) queueIds.unshift(currentTrackId);
   if (currentTrackId && !baseQueueIds.includes(currentTrackId)) baseQueueIds.unshift(currentTrackId);
 
-  const state = database.savePlaybackState({
+  const state = database.savePlaybackState(request.user.id, {
     currentTrackId,
     position,
     volume: Math.max(0, Math.min(1, volume)),
@@ -858,6 +869,7 @@ app.put<{ Body: Partial<PlaybackState> }>('/api/player/state', async (request, r
     queueIds
   });
 
+  reply.header('Cache-Control', 'private, no-store');
   return state;
 });
 

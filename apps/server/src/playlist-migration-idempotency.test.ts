@@ -65,7 +65,7 @@ test('migration v9 é idempotente quando user_version fica atrasado após o sche
     }
 
     const recovered = new HomeMusicDatabase(databasePath);
-    assert.equal(recovered.getSchemaVersion(), 9);
+    assert.equal(recovered.getSchemaVersion(), 10);
     const playlists = recovered.getPlaylists(USER_ID);
     assert.equal(playlists.filter(item => item.source === 'manual').length, 1);
     assert.equal(playlists.filter(item => item.source === 'rekordbox').length, 1);
