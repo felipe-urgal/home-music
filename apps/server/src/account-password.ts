@@ -30,7 +30,8 @@ function storedPasswordHash(value: unknown): string | null {
 
 export function accountPasswordIsStrong(password: string) {
   return (
-    password.length >= ACCOUNT_PASSWORD_MIN_LENGTH
+    Array.from(password).length >= ACCOUNT_PASSWORD_MIN_LENGTH
+    && password.trim().length > 0
     && Buffer.byteLength(password, 'utf8') <= PASSWORD_MAX_BYTES
   );
 }
