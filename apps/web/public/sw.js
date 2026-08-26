@@ -11,6 +11,7 @@ const SHELL_URL = '/';
 const REVALIDATED_STATIC = new Set(['/manifest.webmanifest', '/favicon.svg']);
 const USER_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
 const TRACK_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
+let offlineScopeUpdateQueue = Promise.resolve();
 
 function isApiPath(pathname) {
   return pathname === '/api' || pathname.startsWith('/api/');
@@ -260,14 +261,17 @@ self.addEventListener('message', event => {
     ? event.data.userId
     : null;
 
-  event.waitUntil((async () => {
-    if (clientId) await setOfflineClientScope(clientId, userId);
+  offlineScopeUpdateQueue = offlineScopeUpdateQueue
+    .catch(() => undefined)
+    .then(() => clientId ? setOfflineClientScope(clientId, userId) : undefined);
+
+  event.waitUntil(offlineScopeUpdateQueue.then(() => {
     event.ports?.[0]?.postMessage({
       type: CAPABILITY_RESPONSE,
       version: 3,
       offlineAudio: true
     });
-  })());
+  }));
 });
 
 self.addEventListener('fetch', event => {
