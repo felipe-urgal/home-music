@@ -1,4 +1,3 @@
-import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { config } from 'dotenv';
 import { verifyPublicAccessAdmin } from './public-access-auth.js';
@@ -10,8 +9,16 @@ config({ path: rootEnvPath });
 const minimumCharacters = Number(process.argv[2] || 20);
 const databasePath = process.env.HOME_MUSIC_DATABASE_PATH || defaultDatabasePath;
 
+async function readStdin() {
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks);
+}
+
 try {
-  const input = await readFile(0);
+  const input = await readStdin();
   const [usernameBuffer, passwordBuffer] = input.toString('utf8').split('\0');
   const username = usernameBuffer ?? '';
   const password = passwordBuffer ?? '';
