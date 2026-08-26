@@ -293,13 +293,30 @@ try {
     active: 0,
     pending: 0
   });
-  assert.equal(internalHealthBody.schemaVersion, 7);
+  assert.equal(internalHealthBody.schemaVersion, 8);
 
   const favorites = await fetch(`${baseUrl}/api/favorites`, {
     headers: { Cookie: cookie }
   });
   assert.equal(favorites.status, 200);
   assert.deepEqual(await favorites.json(), { trackIds: [] });
+
+  const history = await fetch(`${baseUrl}/api/history`, {
+    headers: { Cookie: cookie }
+  });
+  assert.equal(history.status, 200);
+  assert.deepEqual(await history.json(), { items: [] });
+
+  const statistics = await fetch(`${baseUrl}/api/statistics?period=all`, {
+    headers: { Cookie: cookie }
+  });
+  assert.equal(statistics.status, 200);
+  const statisticsBody = await statistics.json();
+  assert.equal(statisticsBody.period, 'all');
+  assert.equal(statisticsBody.totalPlays, 0);
+  assert.equal(statisticsBody.uniqueTracks, 0);
+  assert.equal(statisticsBody.uniqueArtists, 0);
+  assert.deepEqual(statisticsBody.topTracks, []);
 
   updateSmokeUserRole('user');
   try {
@@ -319,6 +336,18 @@ try {
     });
     assert.equal(userFavorites.status, 200, 'User autenticado deve acessar somente os próprios favoritos.');
     assert.deepEqual(await userFavorites.json(), { trackIds: [] });
+
+    const userHistory = await fetch(`${baseUrl}/api/history`, {
+      headers: { Cookie: cookie }
+    });
+    assert.equal(userHistory.status, 200, 'User autenticado deve acessar somente o próprio histórico.');
+    assert.deepEqual(await userHistory.json(), { items: [] });
+
+    const userStatistics = await fetch(`${baseUrl}/api/statistics?period=all`, {
+      headers: { Cookie: cookie }
+    });
+    assert.equal(userStatistics.status, 200, 'User autenticado deve acessar somente as próprias estatísticas.');
+    assert.equal((await userStatistics.json()).totalPlays, 0);
 
     const adminOperations = [
       { method: 'GET', path: '/api/health' },

@@ -35,9 +35,25 @@ function claimPendingLegacyFavorites(db: DatabaseSync, userId: string) {
   db.exec('DELETE FROM legacy_favorites_pending;');
 }
 
-function claimPendingFavoritesForExistingUser(db: DatabaseSync) {
-  const pending = db.prepare('SELECT 1 FROM legacy_favorites_pending LIMIT 1;').get();
-  if (!pending) return;
+function claimPendingLegacyHistory(db: DatabaseSync, userId: string) {
+  db.prepare(`
+    INSERT INTO history(user_id, track_id, played_at)
+    SELECT ?, track_id, played_at
+    FROM legacy_history_pending
+    ORDER BY id ASC;
+  `).run(userId);
+  db.exec('DELETE FROM legacy_history_pending;');
+}
+
+function claimPendingLegacyPersonalData(db: DatabaseSync, userId: string) {
+  claimPendingLegacyFavorites(db, userId);
+  claimPendingLegacyHistory(db, userId);
+}
+
+function claimPendingPersonalDataForExistingUser(db: DatabaseSync) {
+  const pendingFavorites = db.prepare('SELECT 1 FROM legacy_favorites_pending LIMIT 1;').get();
+  const pendingHistory = db.prepare('SELECT 1 FROM legacy_history_pending LIMIT 1;').get();
+  if (!pendingFavorites && !pendingHistory) return;
 
   db.exec('BEGIN IMMEDIATE;');
   try {
@@ -52,7 +68,7 @@ function claimPendingFavoritesForExistingUser(db: DatabaseSync) {
       return;
     }
 
-    claimPendingLegacyFavorites(db, firstUser.id);
+    claimPendingLegacyPersonalData(db, firstUser.id);
     db.exec('COMMIT;');
   } catch (error) {
     try {
@@ -76,7 +92,7 @@ export async function bootstrapInitialAdmin(
   try {
     const existing = db.prepare('SELECT 1 FROM users LIMIT 1;').get();
     if (existing) {
-      claimPendingFavoritesForExistingUser(db);
+      claimPendingPersonalDataForExistingUser(db);
       return { status: 'already-initialized' };
     }
 
@@ -97,7 +113,7 @@ export async function bootstrapInitialAdmin(
       const initializedWhileHashing = db.prepare('SELECT 1 FROM users LIMIT 1;').get() as { id?: unknown } | undefined;
       if (initializedWhileHashing) {
         db.exec('ROLLBACK;');
-        claimPendingFavoritesForExistingUser(db);
+        claimPendingPersonalDataForExistingUser(db);
         return { status: 'already-initialized' };
       }
 
@@ -124,7 +140,7 @@ export async function bootstrapInitialAdmin(
         timestamp
       );
 
-      claimPendingLegacyFavorites(db, userId);
+      claimPendingLegacyPersonalData(db, userId);
 
       db.exec('COMMIT;');
       return { status: 'created', userId };
