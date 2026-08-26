@@ -15,7 +15,7 @@ function sendOperationError(reply: FastifyReply, result: Extract<AdminUserResult
       return reply.code(404).send({ error: 'Usuário não encontrado.' });
     case 'self-management-not-allowed':
       return reply.code(409).send({
-        error: 'Esta operação não pode ser aplicada à própria conta pela administração nesta etapa.'
+        error: 'Esta operação não pode ser aplicada à própria conta pela API administrativa.'
       });
     case 'last-admin':
       return reply.code(409).send({ error: 'A operação deixaria o Home Music sem administrador ativo.' });
