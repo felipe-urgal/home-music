@@ -161,7 +161,7 @@ test('capacidade do histórico é aplicada por usuário sem remover dados de out
   });
 });
 
-test('schema v8 exige dono em todo item de histórico persistido', async () => {
+test('schema v9 exige dono em todo item de histórico persistido', async () => {
   await withDatabase(async databasePath => {
     const database = new HomeMusicDatabase(databasePath);
     database.syncTracks([indexedTrack('a')], '/music', '2026-08-26T12:00:00.000Z');
@@ -201,7 +201,7 @@ test('migration v7 atribui histórico global ao primeiro usuário e preserva ord
     ]);
 
     const migrated = new HomeMusicDatabase(databasePath);
-    assert.equal(migrated.getSchemaVersion(), 8);
+    assert.equal(migrated.getSchemaVersion(), 9);
     assert.deepEqual(migrated.getHistory(FIRST_USER_ID).map(item => item.track.id), ['b', 'a']);
     assert.deepEqual(migrated.getHistory(SECOND_USER_ID), []);
     migrated.close();
@@ -241,7 +241,7 @@ test('migration pré-bootstrap mantém histórico fora da tabela ativa e bootstr
     ]);
 
     const migrated = new HomeMusicDatabase(databasePath);
-    assert.equal(migrated.getSchemaVersion(), 8);
+    assert.equal(migrated.getSchemaVersion(), 9);
     assert.deepEqual(migrated.getHistory(FIRST_USER_ID), []);
     migrated.close();
 
