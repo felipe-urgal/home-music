@@ -512,15 +512,15 @@ app.post<{ Body: { username?: unknown; password?: unknown } }>(
     const password = typeof request.body?.password === 'string' ? request.body.password : '';
 
     let legacyAuthenticated = false;
-    if (sessions.validateCredentials(username, password)) {
-      if (legacyBinding.status === 'bound') {
+    if (legacyBinding.status === 'bound') {
+      if (sessions.validateUsername(username)) {
         legacyAuthenticated = await accountPasswords.verifyEnabledUserPassword(
           legacyBinding.userId,
           password
         );
-      } else {
-        legacyAuthenticated = legacyBinding.status === 'legacy-uninitialized';
       }
+    } else if (sessions.validateCredentials(username, password)) {
+      legacyAuthenticated = legacyBinding.status === 'legacy-uninitialized';
     }
 
     const requiredPasswordUserId = legacyAuthenticated
