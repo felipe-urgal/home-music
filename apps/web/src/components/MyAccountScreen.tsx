@@ -4,6 +4,7 @@ import {
   ChevronLeft,
   KeyRound,
   LoaderCircle,
+  LogOut,
   MonitorOff,
   ShieldCheck,
   UserRound
@@ -18,18 +19,20 @@ type MyAccountScreenProps = {
   currentUser: AuthenticatedUser;
   onBack: () => void;
   onSessionEnded: () => Promise<void>;
+  onLogout: () => Promise<void>;
 };
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : 'Não foi possível concluir a operação.';
 }
 
-export function MyAccountScreen({ currentUser, onBack, onSessionEnded }: MyAccountScreenProps) {
+export function MyAccountScreen({ currentUser, onBack, onSessionEnded, onLogout }: MyAccountScreenProps) {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
   const [changingPassword, setChangingPassword] = useState(false);
   const [revokingSessions, setRevokingSessions] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const validationError = passwordChangeValidation(currentPassword, newPassword, confirmation);
@@ -72,6 +75,18 @@ export function MyAccountScreen({ currentUser, onBack, onSessionEnded }: MyAccou
       setError(errorMessage(error));
     } finally {
       setRevokingSessions(false);
+    }
+  }
+
+  async function signOut() {
+    if (signingOut) return;
+    setSigningOut(true);
+    setError(null);
+    try {
+      await onLogout();
+    } catch (error) {
+      setError(errorMessage(error));
+      setSigningOut(false);
     }
   }
 
@@ -164,6 +179,21 @@ export function MyAccountScreen({ currentUser, onBack, onSessionEnded }: MyAccou
         <button className="secondary-action my-account-action" type="button" disabled={revokingSessions} onClick={() => void revokeOthers()}>
           {revokingSessions && <LoaderCircle className="my-account-spinner" />}
           {revokingSessions ? 'Encerrando…' : 'Sair dos outros dispositivos'}
+        </button>
+      </section>
+
+      <section className="my-account-card" aria-labelledby="my-account-current-session-title">
+        <div className="my-account-card__heading">
+          <span className="my-account-card__icon my-account-card__icon--danger"><LogOut /></span>
+          <div>
+            <strong id="my-account-current-session-title">Sessão atual</strong>
+            <small>Encerre sua sessão neste dispositivo.</small>
+          </div>
+        </div>
+
+        <button className="secondary-action my-account-action my-account-action--danger" type="button" disabled={signingOut} onClick={() => void signOut()}>
+          {signingOut && <LoaderCircle className="my-account-spinner" />}
+          {signingOut ? 'Saindo…' : 'Sair desta conta'}
         </button>
       </section>
     </section>
