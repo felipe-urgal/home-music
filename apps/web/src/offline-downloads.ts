@@ -2,9 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Track } from '@home-music/shared';
 import { apiFetch } from './api-client';
 import { offlineDownloadScheduler } from './offline-download-scheduler';
+import { readOfflineUserId } from './offline-user';
 
-export const OFFLINE_AUDIO_CACHE_NAME = 'home-music-offline-audio-v1';
-const OFFLINE_MANIFEST_KEY = 'home-music:offline-tracks:v1';
+export const OFFLINE_AUDIO_CACHE_PREFIX = 'home-music-offline-audio-v2-';
+export const OFFLINE_MANIFEST_PREFIX = 'home-music:offline-tracks:v2:';
+const LEGACY_OFFLINE_AUDIO_CACHE_NAME = 'home-music-offline-audio-v1';
+const LEGACY_OFFLINE_MANIFEST_KEY = 'home-music:offline-tracks:v1';
 const CAPABILITY_REQUEST = 'HOME_MUSIC_GET_CAPABILITIES';
 const CAPABILITY_RESPONSE = 'HOME_MUSIC_CAPABILITIES';
 
@@ -13,6 +16,16 @@ export type OfflineDownloadRecord = {
   size: number;
   mimeType: string;
   downloadedAt: string;
+};
+
+type ManifestState = {
+  userId: string | null;
+  records: OfflineDownloadRecord[];
+};
+
+type PendingState = {
+  userId: string | null;
+  trackIds: Set<string>;
 };
 
 function isTrack(value: unknown): value is Track {
@@ -61,12 +74,40 @@ export function parseOfflineManifest(raw: string | null): OfflineDownloadRecord[
   }
 }
 
-export function offlineAudioUrl(trackId: string) {
-  return `/offline-audio/${encodeURIComponent(trackId)}`;
+export function offlineManifestKey(userId: string) {
+  return `${OFFLINE_MANIFEST_PREFIX}${encodeURIComponent(userId)}`;
+}
+
+export function offlineAudioCacheName(userId: string) {
+  return `${OFFLINE_AUDIO_CACHE_PREFIX}${encodeURIComponent(userId)}`;
+}
+
+export function offlineAudioUrl(trackId: string, userId: string | null = readOfflineUserId()) {
+  if (!userId) return '/offline-audio/unavailable';
+  return `/offline-audio/${encodeURIComponent(userId)}/${encodeURIComponent(trackId)}`;
 }
 
 function streamUrl(trackId: string) {
   return `/api/tracks/${encodeURIComponent(trackId)}/stream`;
+}
+
+function downloadJobKey(userId: string, trackId: string) {
+  return `${encodeURIComponent(userId)}:${encodeURIComponent(trackId)}`;
+}
+
+function pendingTrackIdsForUser(jobIds: Set<string>, userId: string | null) {
+  const trackIds = new Set<string>();
+  if (!userId) return trackIds;
+  const prefix = `${encodeURIComponent(userId)}:`;
+  for (const jobId of jobIds) {
+    if (!jobId.startsWith(prefix)) continue;
+    try {
+      trackIds.add(decodeURIComponent(jobId.slice(prefix.length)));
+    } catch {
+      // Chave inválida não pertence ao escopo atual.
+    }
+  }
+  return trackIds;
 }
 
 export function formatOfflineBytes(bytes: number) {
@@ -97,7 +138,7 @@ async function activeWorkerSupportsOfflineAudio() {
     channel.port1.onmessage = event => {
       window.clearTimeout(timeout);
       const data = event.data as { type?: unknown; offlineAudio?: unknown; version?: unknown } | null;
-      resolve(Boolean(data?.type === CAPABILITY_RESPONSE && data.offlineAudio === true && Number(data.version) >= 2));
+      resolve(Boolean(data?.type === CAPABILITY_RESPONSE && data.offlineAudio === true && Number(data.version) >= 3));
     };
     try {
       controller.postMessage({ type: CAPABILITY_REQUEST }, [channel.port2]);
@@ -108,16 +149,17 @@ async function activeWorkerSupportsOfflineAudio() {
   });
 }
 
-function readManifest() {
+function readManifest(userId: string | null) {
+  if (!userId) return [];
   try {
-    return parseOfflineManifest(window.localStorage.getItem(OFFLINE_MANIFEST_KEY));
+    return parseOfflineManifest(window.localStorage.getItem(offlineManifestKey(userId)));
   } catch {
     return [];
   }
 }
 
-function writeManifest(records: OfflineDownloadRecord[]) {
-  window.localStorage.setItem(OFFLINE_MANIFEST_KEY, JSON.stringify(records));
+function writeManifest(userId: string, records: OfflineDownloadRecord[]) {
+  window.localStorage.setItem(offlineManifestKey(userId), JSON.stringify(records));
 }
 
 async function ensureStorageHeadroom(bytes: number) {
@@ -143,20 +185,51 @@ function downloadError(error: unknown) {
 }
 
 export function useOfflineDownloads() {
-  const [records, setRecords] = useState<OfflineDownloadRecord[]>(() => readManifest());
-  const recordsRef = useRef(records);
+  const userId = readOfflineUserId();
+  const activeUserIdRef = useRef(userId);
+  activeUserIdRef.current = userId;
+
+  const [manifestState, setManifestState] = useState<ManifestState>(() => ({
+    userId,
+    records: readManifest(userId)
+  }));
   const [loading, setLoading] = useState(true);
   const [capabilityChecked, setCapabilityChecked] = useState(false);
   const [workerSupported, setWorkerSupported] = useState(false);
-  const [downloadingIds, setDownloadingIds] = useState<Set<string>>(() => offlineDownloadScheduler.pendingIds);
+  const [pendingState, setPendingState] = useState<PendingState>(() => ({
+    userId,
+    trackIds: pendingTrackIdsForUser(offlineDownloadScheduler.pendingIds, userId)
+  }));
 
-  const commitRecords = useCallback((next: OfflineDownloadRecord[]) => {
-    writeManifest(next);
-    recordsRef.current = next;
-    setRecords(next);
+  const scopeReady = manifestState.userId === userId;
+  const records = scopeReady ? manifestState.records : [];
+  const downloadingIds = pendingState.userId === userId ? pendingState.trackIds : new Set<string>();
+
+  const replaceRecords = useCallback((ownerUserId: string, next: OfflineDownloadRecord[]) => {
+    writeManifest(ownerUserId, next);
+    if (activeUserIdRef.current === ownerUserId) {
+      setManifestState({ userId: ownerUserId, records: next });
+    }
   }, []);
 
-  useEffect(() => offlineDownloadScheduler.subscribe(setDownloadingIds), []);
+  useEffect(() => {
+    setManifestState({ userId, records: readManifest(userId) });
+  }, [userId]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.removeItem(LEGACY_OFFLINE_MANIFEST_KEY);
+    } catch {
+      // Manifesto legado sem ownership é descartado em modo best-effort.
+    }
+    if (browserHasOfflinePrimitives()) {
+      void caches.delete(LEGACY_OFFLINE_AUDIO_CACHE_NAME).catch(() => undefined);
+    }
+  }, []);
+
+  useEffect(() => offlineDownloadScheduler.subscribe(jobIds => {
+    setPendingState({ userId, trackIds: pendingTrackIdsForUser(jobIds, userId) });
+  }), [userId]);
 
   useEffect(() => {
     if (!browserHasOfflinePrimitives()) {
@@ -186,7 +259,7 @@ export function useOfflineDownloads() {
     let disposed = false;
     if (!capabilityChecked) return;
 
-    if (!workerSupported) {
+    if (!workerSupported || !userId) {
       setLoading(false);
       return;
     }
@@ -194,11 +267,12 @@ export function useOfflineDownloads() {
     setLoading(true);
     void (async () => {
       try {
-        const cache = await caches.open(OFFLINE_AUDIO_CACHE_NAME);
+        const scopedRecords = readManifest(userId);
+        const cache = await caches.open(offlineAudioCacheName(userId));
         const available: OfflineDownloadRecord[] = [];
-        const expectedUrls = new Set(recordsRef.current.map(record => new URL(streamUrl(record.track.id), window.location.origin).href));
+        const expectedUrls = new Set(scopedRecords.map(record => new URL(streamUrl(record.track.id), window.location.origin).href));
 
-        for (const record of recordsRef.current) {
+        for (const record of scopedRecords) {
           const cached = await cache.match(streamUrl(record.track.id));
           if (cached) available.push(record);
         }
@@ -209,29 +283,35 @@ export function useOfflineDownloads() {
           .map(request => cache.delete(request))
         );
 
-        if (!disposed && available.length !== recordsRef.current.length) commitRecords(available);
+        if (available.length !== scopedRecords.length) {
+          replaceRecords(userId, available);
+        } else if (!disposed && activeUserIdRef.current === userId) {
+          setManifestState({ userId, records: scopedRecords });
+        }
       } catch {
         // Reconciliação é best-effort. Se o armazenamento local estiver indisponível,
         // mantemos o manifesto em memória e tentamos novamente numa próxima inicialização.
       } finally {
-        if (!disposed) setLoading(false);
+        if (!disposed && activeUserIdRef.current === userId) setLoading(false);
       }
     })();
 
     return () => { disposed = true; };
-  }, [capabilityChecked, commitRecords, workerSupported]);
+  }, [capabilityChecked, replaceRecords, userId, workerSupported]);
 
   const downloadedIds = useMemo(() => new Set(records.map(record => record.track.id)), [records]);
   const tracks = useMemo(() => records.map(record => record.track), [records]);
   const totalBytes = useMemo(() => records.reduce((sum, record) => sum + record.size, 0), [records]);
-  const supported = workerSupported && !loading;
+  const supported = Boolean(userId) && scopeReady && workerSupported && !loading;
 
   const download = useCallback(async (track: Track) => {
+    const ownerUserId = userId;
+    if (!ownerUserId) throw new Error('Faça login novamente antes de salvar músicas offline.');
     if (!workerSupported || loading) throw new Error('Feche e abra novamente o Home Music para ativar o suporte a downloads offline.');
-    if (recordsRef.current.some(record => record.track.id === track.id)) return;
+    if (readManifest(ownerUserId).some(record => record.track.id === track.id)) return;
 
-    await offlineDownloadScheduler.enqueue(track.id, async () => {
-      if (recordsRef.current.some(record => record.track.id === track.id)) return;
+    await offlineDownloadScheduler.enqueue(downloadJobKey(ownerUserId, track.id), async () => {
+      if (readManifest(ownerUserId).some(record => record.track.id === track.id)) return;
       const url = streamUrl(track.id);
 
       try {
@@ -244,7 +324,7 @@ export function useOfflineDownloads() {
         const mimeType = response.headers.get('content-type') || 'application/octet-stream';
         await ensureStorageHeadroom(size);
 
-        const cache = await caches.open(OFFLINE_AUDIO_CACHE_NAME);
+        const cache = await caches.open(offlineAudioCacheName(ownerUserId));
         await cache.put(url, response);
 
         const record: OfflineDownloadRecord = {
@@ -255,7 +335,8 @@ export function useOfflineDownloads() {
         };
 
         try {
-          commitRecords([record, ...recordsRef.current.filter(item => item.track.id !== track.id)]);
+          const current = readManifest(ownerUserId);
+          replaceRecords(ownerUserId, [record, ...current.filter(item => item.track.id !== track.id)]);
         } catch (error) {
           try { await cache.delete(url); } catch { /* órfão será reconciliado depois */ }
           throw error;
@@ -266,14 +347,15 @@ export function useOfflineDownloads() {
         throw downloadError(error);
       }
     });
-  }, [commitRecords, loading, workerSupported]);
+  }, [loading, replaceRecords, userId, workerSupported]);
 
   const remove = useCallback(async (trackId: string) => {
-    if (!browserHasOfflinePrimitives()) return;
-    const next = recordsRef.current.filter(record => record.track.id !== trackId);
+    const ownerUserId = userId;
+    if (!ownerUserId || !browserHasOfflinePrimitives()) return;
+    const next = readManifest(ownerUserId).filter(record => record.track.id !== trackId);
 
     try {
-      commitRecords(next);
+      replaceRecords(ownerUserId, next);
     } catch {
       // Se o manifesto não puder ser persistido, não removemos o áudio para
       // evitar um estado em que a UI ainda anuncia um download que já sumiu.
@@ -281,13 +363,13 @@ export function useOfflineDownloads() {
     }
 
     try {
-      const cache = await caches.open(OFFLINE_AUDIO_CACHE_NAME);
+      const cache = await caches.open(offlineAudioCacheName(ownerUserId));
       await cache.delete(streamUrl(trackId));
     } catch {
       // O registro já foi removido do manifesto. Qualquer blob órfão será
       // eliminado pela reconciliação na próxima inicialização.
     }
-  }, [commitRecords]);
+  }, [replaceRecords, userId]);
 
   return {
     records,
