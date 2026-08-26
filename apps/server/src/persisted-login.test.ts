@@ -15,11 +15,13 @@ test('login usa SQLite para admin e user mesmo sem credenciais no env', async ()
   const databasePath = join(directory, 'home-music.db');
   try {
     const adminPassword = 'senha-admin-persistida';
-    await bootstrapInitialAdmin({
+    const bootstrap = await bootstrapInitialAdmin({
       databasePath,
       username: 'Admin',
       password: adminPassword
     });
+    assert.equal(bootstrap.status, 'created');
+    if (bootstrap.status !== 'created') return;
 
     const userPassword = 'senha-user-persistida';
     const userHash = await hashPassword(userPassword);
@@ -40,7 +42,7 @@ test('login usa SQLite para admin e user mesmo sem credenciais no env', async ()
       assert.equal(users.isConfigured(), true);
       assert.deepEqual(
         await passwords.authenticate(' admin ', adminPassword),
-        { userId: (await passwords.authenticate('Admin', adminPassword))?.userId, passwordMustChange: false }
+        { userId: bootstrap.userId, passwordMustChange: false }
       );
       assert.deepEqual(
         await passwords.authenticate('PESSOA', userPassword),
