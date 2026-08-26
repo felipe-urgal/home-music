@@ -666,7 +666,7 @@ app.post<{ Body: { name?: string } }>('/api/playlists', async (request, reply) =
   return reply.code(201).send({ playlist });
 });
 
-app.patch<{ Params: { id: string }; Body: { name?: unknown } }>('/api/playlists/:id', async (request, reply) => {
+app.patch<{ Params: { id: string }; Body: { name?: string } }>('/api/playlists/:id', async (request, reply) => {
   const source = database.getPlaylistSource(request.params.id);
   if (!source) return reply.code(404).send({ error: 'Playlist não encontrada.' });
   if (source !== 'manual') {
