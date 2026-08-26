@@ -17,6 +17,10 @@ function sendOperationError(reply: FastifyReply, result: Extract<AdminUserResult
       return reply.code(409).send({
         error: 'Esta operação não pode ser aplicada à própria conta pela administração nesta etapa.'
       });
+    case 'last-admin':
+      return reply.code(409).send({ error: 'A operação deixaria o Home Music sem administrador ativo.' });
+    case 'actor-no-longer-admin':
+      return reply.code(403).send({ error: 'Acesso administrativo não está mais disponível para esta conta.' });
   }
 }
 
@@ -37,7 +41,7 @@ export function registerAdminUserRoutes(app: FastifyInstance, users: AdminUsersS
     async (request, reply) => {
       reply.header('Cache-Control', 'private, no-store');
       const username = typeof request.body?.username === 'string' ? request.body.username : '';
-      const result = await users.createUser(username, request.body?.role);
+      const result = await users.createUser(actorId(request), username, request.body?.role);
       if (!result.ok) return sendOperationError(reply, result);
       return reply.code(201).send(result.value);
     }
