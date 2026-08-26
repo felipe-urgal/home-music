@@ -68,7 +68,7 @@ ENV
   fi
 
   cat > "${REPO}/apps/server/dist/public-access-auth-cli.js" <<'MOCK'
-import fs from 'node:fs';
+const fs = require('node:fs');
 const [username = '', password = ''] = fs.readFileSync(0, 'utf8').split('\0');
 const minimum = Number(process.argv[2] || 20);
 const valid = username === 'home-music'
