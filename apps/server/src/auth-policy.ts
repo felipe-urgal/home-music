@@ -6,8 +6,9 @@ import {
   type SessionManager
 } from './auth.js';
 import { resolveSessionIdentity, type UserIdentityReader } from './auth-context.js';
+import { resolveApiAccess, type AuthAccess } from './api-access.js';
 
-export type AuthAccess = 'public' | 'authenticated' | 'admin';
+export type { AuthAccess } from './api-access.js';
 
 const mutatingMethods = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
@@ -42,7 +43,11 @@ export function installApiAuthPolicy(
     if (!request.url.startsWith('/api/')) return;
 
     const path = requestPath(request.url);
-    const access = request.routeOptions.config.auth ?? 'authenticated';
+    const access = resolveApiAccess(
+      request.method,
+      request.url,
+      request.routeOptions.config.auth
+    );
 
     // Status precisa continuar disponível para informar configuração incompleta.
     if (!options.configured && path !== '/api/auth/status') {
