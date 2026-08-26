@@ -59,37 +59,28 @@ export class AccountPasswordService {
     return storedPasswordHash(row?.password_hash);
   }
 
-  async authenticateBoundUser(userId: string, username: string, password: string) {
+  async verifyEnabledUserPassword(userId: string, password: string) {
     if (!validUserId(userId)) return false;
-    const identity = normalizeUsername(username);
     const row = this.db.prepare(`
-      SELECT username_normalized, password_hash, enabled, password_must_change
+      SELECT password_hash
       FROM users
       WHERE id = ?
+        AND enabled = 1
+        AND password_must_change = 0
       LIMIT 1;
     `).get(userId) as Row | undefined;
     const passwordHash = storedPasswordHash(row?.password_hash);
     if (!passwordHash || !await verifyPassword(password, passwordHash)) return false;
 
-    if (
-      !identity
-      || row?.enabled !== 1
-      || row?.password_must_change !== 0
-      || row?.username_normalized !== identity.usernameNormalized
-    ) {
-      return false;
-    }
-
     const current = this.db.prepare(`
       SELECT 1
       FROM users
       WHERE id = ?
-        AND username_normalized = ?
         AND enabled = 1
         AND password_must_change = 0
         AND password_hash = ?
       LIMIT 1;
-    `).get(userId, identity.usernameNormalized, passwordHash);
+    `).get(userId, passwordHash);
     return Boolean(current);
   }
 
