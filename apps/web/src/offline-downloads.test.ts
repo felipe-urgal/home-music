@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { Track } from '@home-music/shared';
-import { formatOfflineBytes, offlineAudioUrl, parseOfflineManifest } from './offline-downloads';
+import {
+  formatOfflineBytes,
+  offlineAudioCacheName,
+  offlineAudioUrl,
+  offlineManifestKey,
+  parseOfflineManifest
+} from './offline-downloads';
 
 const track: Track = {
   id: 'abc123',
@@ -16,8 +22,16 @@ const track: Track = {
 };
 
 describe('offline downloads', () => {
-  it('gera uma URL virtual segura para o player offline', () => {
-    expect(offlineAudioUrl('abc 123')).toBe('/offline-audio/abc%20123');
+  it('gera uma URL virtual com usuário e faixa no próprio namespace', () => {
+    expect(offlineAudioUrl('abc 123', 'user-a')).toBe('/offline-audio/user-a/abc%20123');
+    expect(offlineAudioUrl('abc123', null)).toBe('/offline-audio/unavailable');
+  });
+
+  it('separa manifesto e cache de áudio entre usuários', () => {
+    expect(offlineManifestKey('user-a')).not.toBe(offlineManifestKey('user-b'));
+    expect(offlineAudioCacheName('user-a')).not.toBe(offlineAudioCacheName('user-b'));
+    expect(offlineManifestKey('user-a')).toContain('user-a');
+    expect(offlineAudioCacheName('user-b')).toContain('user-b');
   });
 
   it('lê somente registros válidos e elimina ids duplicados', () => {
