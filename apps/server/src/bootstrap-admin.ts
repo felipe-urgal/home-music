@@ -82,6 +82,8 @@ export async function bootstrapInitialAdmin(
         timestamp
       );
 
+      db.prepare('UPDATE favorites SET user_id = ? WHERE user_id IS NULL;').run(userId);
+
       db.exec('COMMIT;');
       return { status: 'created', userId };
     } catch (error) {
