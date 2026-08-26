@@ -1,10 +1,6 @@
+import type { AuthStatusResponse, AuthenticatedUser } from '@home-music/shared';
 import { useCallback, useEffect, useState } from 'react';
 import { AUTH_REQUIRED_EVENT } from './api-client';
-
-type AuthStatus = {
-  configured: boolean;
-  authenticated: boolean;
-};
 
 function messageFromResponse(response: Response) {
   return response.json()
@@ -17,6 +13,7 @@ export function useAuth() {
   const [loading, setLoading] = useState(true);
   const [configured, setConfigured] = useState(true);
   const [authenticated, setAuthenticated] = useState(false);
+  const [currentUser, setCurrentUser] = useState<AuthenticatedUser | null>(null);
   const [unreachable, setUnreachable] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,12 +28,14 @@ export function useAuth() {
       reachedServer = true;
       setUnreachable(false);
       if (!response.ok) throw new Error(await messageFromResponse(response));
-      const status = await response.json() as AuthStatus;
+      const status = await response.json() as AuthStatusResponse;
       setConfigured(status.configured);
       setAuthenticated(status.authenticated);
+      setCurrentUser(status.authenticated ? status.user : null);
       setError(null);
     } catch (error) {
       setAuthenticated(false);
+      setCurrentUser(null);
       const offline = !reachedServer;
       setUnreachable(offline);
       setError(offline
@@ -55,6 +54,7 @@ export function useAuth() {
   useEffect(() => {
     const expire = () => {
       setAuthenticated(false);
+      setCurrentUser(null);
       setUnreachable(false);
     };
     window.addEventListener(AUTH_REQUIRED_EVENT, expire);
@@ -88,9 +88,9 @@ export function useAuth() {
       throw new Error(message);
     }
 
-    setAuthenticated(true);
     setConfigured(true);
-  }, []);
+    await refresh();
+  }, [refresh]);
 
   const logout = useCallback(async () => {
     setError(null);
@@ -115,6 +115,7 @@ export function useAuth() {
     }
 
     setAuthenticated(false);
+    setCurrentUser(null);
     setUnreachable(false);
   }, []);
 
@@ -122,6 +123,7 @@ export function useAuth() {
     loading,
     configured,
     authenticated,
+    currentUser,
     unreachable,
     error,
     login,
