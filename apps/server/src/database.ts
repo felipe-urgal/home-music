@@ -261,10 +261,13 @@ export class HomeMusicDatabase {
           LIMIT 1;
         `).get() as Row | undefined;
         const firstUserId = stringValue(firstUser?.id);
+        const hasLegacyFavorites = this.hasColumn('favorites', 'track_id');
+
+        if (hasLegacyFavorites) {
+          this.db.exec('ALTER TABLE favorites RENAME TO favorites_legacy;');
+        }
 
         this.db.exec(`
-          ALTER TABLE favorites RENAME TO favorites_legacy;
-
           CREATE TABLE favorites (
             user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
             track_id TEXT NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
@@ -275,19 +278,19 @@ export class HomeMusicDatabase {
           CREATE INDEX idx_favorites_user_created_at
           ON favorites(user_id, created_at DESC);
 
-          CREATE TABLE legacy_favorites_pending (
+          CREATE TABLE IF NOT EXISTS legacy_favorites_pending (
             track_id TEXT PRIMARY KEY REFERENCES tracks(id) ON DELETE CASCADE,
             created_at TEXT NOT NULL
           );
         `);
 
-        if (firstUserId) {
+        if (hasLegacyFavorites && firstUserId) {
           this.db.prepare(`
             INSERT INTO favorites(user_id, track_id, created_at)
             SELECT ?, track_id, created_at
             FROM favorites_legacy;
           `).run(firstUserId);
-        } else {
+        } else if (hasLegacyFavorites) {
           this.db.exec(`
             INSERT INTO legacy_favorites_pending(track_id, created_at)
             SELECT track_id, created_at
@@ -296,7 +299,7 @@ export class HomeMusicDatabase {
         }
 
         this.db.exec(`
-          DROP TABLE favorites_legacy;
+          DROP TABLE IF EXISTS favorites_legacy;
           PRAGMA user_version = 7;
         `);
         this.db.exec('COMMIT;');
