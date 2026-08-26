@@ -39,6 +39,18 @@ export function RequiredPasswordChangeScreen({
     }
   }
 
+  async function logout() {
+    setSubmitting(true);
+    setFormError(null);
+    try {
+      await onLogout();
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : 'Não foi possível sair desta conta.');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   return (
     <main className="login-shell">
       <section className="login-card" aria-labelledby="password-change-title">
@@ -112,7 +124,7 @@ export function RequiredPasswordChangeScreen({
           className="login-offline-action"
           type="button"
           disabled={submitting}
-          onClick={() => { void onLogout(); }}
+          onClick={() => { void logout(); }}
         >
           Sair desta conta
         </button>
