@@ -79,6 +79,14 @@ test('política central aplica public, authenticated por padrão e admin com ide
     assert.deepEqual(allowedAdmin.json(), {
       user: { id: 'admin-1', username: 'felipe', role: 'admin' }
     });
+
+    users.set('admin-1', { id: 'admin-1', username: 'felipe', role: 'user' });
+    const demotedAdmin = await app.inject({
+      method: 'GET',
+      url: '/api/admin',
+      headers: { cookie: cookie(adminToken) }
+    });
+    assert.equal(demotedAdmin.statusCode, 403);
   } finally {
     await app.close();
   }
