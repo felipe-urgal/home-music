@@ -79,14 +79,20 @@ test('login transitório aceita somente credencial correta de conta ativa com tr
   });
 });
 
-test('credencial legada vinculada também precisa corresponder ao hash atual e usuário ativo', async () => {
+test('credencial vinculada só entra no fluxo normal após limpar a troca obrigatória', async () => {
   await withPendingUser(async (databasePath, service) => {
+    assert.equal(await service.verifyEnabledUserPassword('user-1', TEMP_PASSWORD), false);
+
+    const db = new DatabaseSync(databasePath);
+    db.prepare('UPDATE users SET password_must_change = 0 WHERE id = ?;').run('user-1');
+    db.close();
+
     assert.equal(await service.verifyEnabledUserPassword('user-1', TEMP_PASSWORD), true);
     assert.equal(await service.verifyEnabledUserPassword('user-1', 'senha-incorreta-2026'), false);
 
-    const db = new DatabaseSync(databasePath);
-    db.prepare('UPDATE users SET enabled = 0 WHERE id = ?;').run('user-1');
-    db.close();
+    const disabled = new DatabaseSync(databasePath);
+    disabled.prepare('UPDATE users SET enabled = 0 WHERE id = ?;').run('user-1');
+    disabled.close();
     assert.equal(await service.verifyEnabledUserPassword('user-1', TEMP_PASSWORD), false);
   });
 });
@@ -125,6 +131,8 @@ test('troca obrigatória valida senha atual, força senha forte, limpa flag e re
     assert.equal(row.password_changed_at, row.updated_at);
     assert.equal(await verifyPassword(NEW_PASSWORD, String(row.password_hash)), true);
     assert.equal(await verifyPassword(TEMP_PASSWORD, String(row.password_hash)), false);
+    assert.equal(await service.verifyEnabledUserPassword('user-1', NEW_PASSWORD), true);
+    assert.equal(await service.verifyEnabledUserPassword('user-1', TEMP_PASSWORD), false);
     assert.equal(await service.authenticateRequiredPasswordChange('Maria Silva', NEW_PASSWORD), null);
     assert.deepEqual(
       await service.changeRequiredPassword('user-1', NEW_PASSWORD, 'Outra-senha-segura-2026'),
