@@ -15,6 +15,16 @@ async function withDatabase(run: (databasePath: string, revoked: string[]) => Pr
   schema.close();
   const revoked: string[] = [];
 
+  const seed = new DatabaseSync(databasePath);
+  const now = new Date().toISOString();
+  seed.prepare(`
+    INSERT INTO users (
+      id, username, username_normalized, password_hash, role, enabled,
+      password_must_change, created_at, updated_at, password_changed_at
+    ) VALUES ('admin-1', 'Admin', 'admin', 'hash-for-test', 'admin', 1, 0, ?, ?, ?);
+  `).run(now, now, now);
+  seed.close();
+
   try {
     await run(databasePath, revoked);
   } finally {
@@ -35,7 +45,7 @@ test('cria usuário normalizado com senha temporária forte sem expor hash', asy
   await withDatabase(async (databasePath, revoked) => {
     const service = serviceFor(databasePath, revoked);
     try {
-      const result = await service.createUser('  Maria Silva  ', 'user');
+      const result = await service.createUser('admin-1', '  Maria Silva  ', 'user');
       assert.equal(result.ok, true);
       if (!result.ok) return;
 
@@ -69,9 +79,9 @@ test('recusa username duplicado após normalização', async () => {
   await withDatabase(async (databasePath, revoked) => {
     const service = serviceFor(databasePath, revoked);
     try {
-      const first = await service.createUser('Felipe', 'admin');
+      const first = await service.createUser('admin-1', 'Felipe', 'admin');
       assert.equal(first.ok, true);
-      const duplicate = await service.createUser('  FELIPE  ', 'user');
+      const duplicate = await service.createUser('admin-1', '  FELIPE  ', 'user');
       assert.deepEqual(duplicate, { ok: false, error: 'duplicate-username' });
     } finally {
       service.close();
@@ -79,46 +89,66 @@ test('recusa username duplicado após normalização', async () => {
   });
 });
 
-test('alterações sensíveis revogam sessões do alvo e bloqueiam auto-lockout provisoriamente', async () => {
+test('alterações sensíveis revogam sessões do alvo e bloqueiam auto-operação', async () => {
   await withDatabase(async (databasePath, revoked) => {
     const service = serviceFor(databasePath, revoked);
     try {
-      const actor = await service.createUser('Admin', 'admin');
-      const target = await service.createUser('Convidado', 'user');
-      assert.equal(actor.ok, true);
+      const target = await service.createUser('admin-1', 'Convidado', 'user');
       assert.equal(target.ok, true);
-      if (!actor.ok || !target.ok) return;
+      if (!target.ok) return;
 
-      const actorId = actor.value.user.id;
       const targetId = target.value.user.id;
 
-      assert.deepEqual(service.setRole(actorId, actorId, 'user'), {
+      assert.deepEqual(service.setRole('admin-1', 'admin-1', 'user'), {
         ok: false,
         error: 'self-management-not-allowed'
       });
-      assert.deepEqual(service.setEnabled(actorId, actorId, false), {
+      assert.deepEqual(service.setEnabled('admin-1', 'admin-1', false), {
         ok: false,
         error: 'self-management-not-allowed'
       });
 
-      const role = service.setRole(actorId, targetId, 'admin');
+      const role = service.setRole('admin-1', targetId, 'admin');
       assert.equal(role.ok, true);
       if (role.ok) assert.equal(role.value.role, 'admin');
 
-      const disabled = service.setEnabled(actorId, targetId, false);
+      const disabled = service.setEnabled('admin-1', targetId, false);
       assert.equal(disabled.ok, true);
       if (disabled.ok) assert.equal(disabled.value.enabled, false);
 
-      const reset = await service.resetPassword(actorId, targetId);
+      const reset = await service.resetPassword('admin-1', targetId);
       assert.equal(reset.ok, true);
       if (reset.ok) {
         assert.equal(reset.value.user.passwordMustChange, true);
         assert.equal(reset.value.temporaryPassword.length, 24);
       }
 
-      const sessions = service.revokeSessions(actorId, targetId);
+      const sessions = service.revokeSessions('admin-1', targetId);
       assert.deepEqual(sessions, { ok: true, value: { revokedSessions: 1 } });
       assert.deepEqual(revoked, [targetId, targetId, targetId, targetId]);
+    } finally {
+      service.close();
+    }
+  });
+});
+
+test('ator que deixou de ser admin não conclui mutação administrativa', async () => {
+  await withDatabase(async (databasePath, revoked) => {
+    const service = serviceFor(databasePath, revoked);
+    try {
+      const target = await service.createUser('admin-1', 'Pessoa', 'user');
+      assert.equal(target.ok, true);
+      if (!target.ok) return;
+
+      const db = new DatabaseSync(databasePath);
+      db.prepare("UPDATE users SET role = 'user' WHERE id = 'admin-1';").run();
+      db.close();
+
+      assert.deepEqual(service.setEnabled('admin-1', target.value.user.id, false), {
+        ok: false,
+        error: 'actor-no-longer-admin'
+      });
+      assert.deepEqual(revoked, []);
     } finally {
       service.close();
     }
