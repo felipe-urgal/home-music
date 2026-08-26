@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import type { AuthenticatedUser } from '@home-music/shared';
 import { DesktopPlayerBar } from './components/DesktopPlayerBar';
 import { DesktopShell } from './components/DesktopShell';
 import { LibraryScreen } from './components/LibraryScreen';
@@ -7,6 +8,7 @@ import { OfflineLibraryScreen } from './components/OfflineLibraryScreen';
 import { PlayerScreen } from './components/PlayerScreen';
 import { ResponsiveState } from './components/ResponsiveState';
 import { StatisticsScreen } from './components/StatisticsScreen';
+import { canUseAdminLibraryActions } from './frontend-access';
 import { buildLibraryReturnLabel } from './library-utils';
 import { type OfflineDownloads, useOfflineDownloads } from './offline-downloads';
 import { useAudioPlayer } from './useAudioPlayer';
@@ -22,11 +24,12 @@ import { useSystemVolumePreference } from './useSystemVolume';
 type Screen = 'player' | 'library' | 'statistics';
 
 type AuthenticatedAppProps = {
+  currentUser: AuthenticatedUser;
   onLogout: () => Promise<void>;
   offline: OfflineDownloads;
 };
 
-function AuthenticatedApp({ onLogout, offline }: AuthenticatedAppProps) {
+function AuthenticatedApp({ currentUser, onLogout, offline }: AuthenticatedAppProps) {
   const [screen, setScreen] = useState<Screen>('player');
   const library = useLibraryData();
   const navigation = useLibraryNavigation(library.tracks, library.favoriteIds, library.playlists);
@@ -35,6 +38,7 @@ function AuthenticatedApp({ onLogout, offline }: AuthenticatedAppProps) {
   const desktopLayout = useDesktopLayout();
   const player = useAudioPlayer(library.tracks, screen === 'player' || desktopLayout, libraryReady, usesSystemVolume);
   const qualityProfile = useNetworkQualityProfile(player.streamingMode, player.setStreamingMode);
+  const canManageSharedLibrary = canUseAdminLibraryActions(currentUser);
   useBackgroundPlaybackContinuity({
     audioRef: player.audioRef,
     queue: player.queue,
@@ -149,6 +153,7 @@ function AuthenticatedApp({ onLogout, offline }: AuthenticatedAppProps) {
           />
         ) : screen === 'library' ? (
           <LibraryScreen
+            currentUser={currentUser}
             data={library}
             current={current}
             playing={player.playing}
@@ -164,11 +169,15 @@ function AuthenticatedApp({ onLogout, offline }: AuthenticatedAppProps) {
           <ResponsiveState
             variant="empty"
             title="Nenhuma música encontrada"
-            detail="Confira MUSIC_DIR ou atualize a biblioteca para procurar músicas novas."
+            detail={canManageSharedLibrary
+              ? 'Confira MUSIC_DIR ou atualize a biblioteca para procurar músicas novas.'
+              : 'A biblioteca compartilhada ainda não possui músicas disponíveis.'}
           >
-            <button className="primary-action" disabled={library.scanning} onClick={() => run(library.rescan())}>
-              {library.scanning ? 'Atualizando…' : 'Atualizar biblioteca'}
-            </button>
+            {canManageSharedLibrary && (
+              <button className="primary-action" disabled={library.scanning} onClick={() => run(library.rescan())}>
+                {library.scanning ? 'Atualizando…' : 'Atualizar biblioteca'}
+              </button>
+            )}
             <button className="secondary-action" onClick={() => setScreen('library')}>Abrir biblioteca</button>
           </ResponsiveState>
         ) : (
@@ -411,7 +420,7 @@ export default function App() {
     );
   }
 
-  if (!auth.authenticated) {
+  if (!auth.authenticated || !auth.currentUser) {
     const offlineCount = auth.unreachable && offline.supported && !offline.loading ? offline.records.length : 0;
     return (
       <LoginScreen
@@ -425,5 +434,5 @@ export default function App() {
     );
   }
 
-  return <AuthenticatedApp onLogout={auth.logout} offline={offline} />;
+  return <AuthenticatedApp currentUser={auth.currentUser} onLogout={auth.logout} offline={offline} />;
 }
