@@ -5,7 +5,7 @@ import { DatabaseSync } from 'node:sqlite';
 import type { PlaybackState, Playlist, PlaylistSource, RepeatMode, StatisticsPeriod, Track } from '@home-music/shared';
 import type { IndexedTrack } from './library.js';
 
-const CURRENT_SCHEMA_VERSION = 6;
+const CURRENT_SCHEMA_VERSION = 7;
 const HISTORY_CAPACITY = 2_000;
 
 const DEFAULT_PLAYBACK_STATE: PlaybackState = {
@@ -35,6 +35,10 @@ function numberValue(value: unknown, fallback = 0) {
 
 function stringValue(value: unknown, fallback = '') {
   return typeof value === 'string' ? value : fallback;
+}
+
+function requireUserId(userId: string) {
+  if (!userId || userId.length > 128) throw new RangeError('userId de favoritos inválido.');
 }
 
 function repeatModeValue(value: unknown): RepeatMode {
@@ -247,6 +251,65 @@ export class HomeMusicDatabase {
       }
     }
 
+    if (version < 7) {
+      this.db.exec('BEGIN IMMEDIATE;');
+      try {
+        const firstUser = this.db.prepare(`
+          SELECT id
+          FROM users
+          ORDER BY created_at ASC, id ASC
+          LIMIT 1;
+        `).get() as Row | undefined;
+        const firstUserId = stringValue(firstUser?.id);
+
+        this.db.exec(`
+          ALTER TABLE favorites RENAME TO favorites_legacy;
+
+          CREATE TABLE favorites (
+            user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+            track_id TEXT NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+            created_at TEXT NOT NULL,
+            UNIQUE(user_id, track_id)
+          );
+
+          CREATE UNIQUE INDEX idx_favorites_legacy_track
+          ON favorites(track_id)
+          WHERE user_id IS NULL;
+
+          CREATE INDEX idx_favorites_user_created_at
+          ON favorites(user_id, created_at DESC);
+        `);
+
+        if (firstUserId) {
+          this.db.prepare(`
+            INSERT INTO favorites(user_id, track_id, created_at)
+            SELECT ?, track_id, created_at
+            FROM favorites_legacy;
+          `).run(firstUserId);
+        } else {
+          this.db.exec(`
+            INSERT INTO favorites(user_id, track_id, created_at)
+            SELECT NULL, track_id, created_at
+            FROM favorites_legacy;
+          `);
+        }
+
+        this.db.exec(`
+          DROP TABLE favorites_legacy;
+          PRAGMA user_version = 7;
+        `);
+        this.db.exec('COMMIT;');
+        version = 7;
+      } catch (error) {
+        try {
+          this.db.exec('ROLLBACK;');
+        } catch {
+          // Preserva o erro original se a transação já tiver sido encerrada.
+        }
+        throw error;
+      }
+    }
+
     if (version !== CURRENT_SCHEMA_VERSION) {
       throw new Error(`Versão de schema SQLite não suportada: ${version}`);
     }
@@ -354,21 +417,28 @@ export class HomeMusicDatabase {
     }
   }
 
-  getFavoriteIds() {
-    return (this.db.prepare('SELECT track_id FROM favorites ORDER BY created_at DESC').all() as Row[])
-      .map(row => stringValue(row.track_id));
+  getFavoriteIds(userId: string) {
+    requireUserId(userId);
+    return (this.db.prepare(`
+      SELECT track_id
+      FROM favorites
+      WHERE user_id = ?
+      ORDER BY created_at DESC
+    `).all(userId) as Row[]).map(row => stringValue(row.track_id));
   }
 
-  setFavorite(trackId: string, favorite: boolean) {
+  setFavorite(userId: string, trackId: string, favorite: boolean) {
+    requireUserId(userId);
     if (favorite) {
       this.db.prepare(`
-        INSERT INTO favorites(track_id, created_at) VALUES (?, ?)
-        ON CONFLICT(track_id) DO NOTHING
-      `).run(trackId, new Date().toISOString());
+        INSERT INTO favorites(user_id, track_id, created_at) VALUES (?, ?, ?)
+        ON CONFLICT(user_id, track_id) DO NOTHING
+      `).run(userId, trackId, new Date().toISOString());
       return;
     }
 
-    this.db.prepare('DELETE FROM favorites WHERE track_id = ?').run(trackId);
+    this.db.prepare('DELETE FROM favorites WHERE user_id = ? AND track_id = ?')
+      .run(userId, trackId);
   }
 
   recordHistory(trackId: string, playedAt = new Date().toISOString()) {
