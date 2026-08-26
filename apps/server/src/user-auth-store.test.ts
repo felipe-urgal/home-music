@@ -7,7 +7,7 @@ import test from 'node:test';
 import { HomeMusicDatabase } from './database.js';
 import { UserAuthStore } from './user-auth-store.js';
 
-test('UserAuthStore retorna somente identidade mínima de usuário ativo', async () => {
+test('UserAuthStore retorna identidade interna com estado de troca de senha somente para usuário ativo', async () => {
   const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-auth-user-'));
   const dbPath = path.join(temp, 'home-music.db');
 
@@ -27,17 +27,30 @@ test('UserAuthStore retorna somente identidade mínima de usuário ativo', async
       INSERT INTO users(
         id, username, username_normalized, password_hash, role, enabled,
         password_must_change, created_at, updated_at, password_changed_at
-      ) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
-    `).run('user-2', 'Maria', 'maria', 'hash-user', 'user', 0, now, now, now);
+      ) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
+    `).run('user-2', 'Maria', 'maria', 'hash-user', 'user', 1, now, now, now);
+    raw.prepare(`
+      INSERT INTO users(
+        id, username, username_normalized, password_hash, role, enabled,
+        password_must_change, created_at, updated_at, password_changed_at
+      ) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
+    `).run('user-3', 'Joana', 'joana', 'hash-disabled', 'user', 0, now, now, now);
     raw.close();
 
     const store = new UserAuthStore(dbPath);
     assert.deepEqual(store.getEnabledUserById('admin-1'), {
       id: 'admin-1',
       username: 'Felipe',
-      role: 'admin'
+      role: 'admin',
+      passwordMustChange: false
     });
-    assert.equal(store.getEnabledUserById('user-2'), null);
+    assert.deepEqual(store.getEnabledUserById('user-2'), {
+      id: 'user-2',
+      username: 'Maria',
+      role: 'user',
+      passwordMustChange: true
+    });
+    assert.equal(store.getEnabledUserById('user-3'), null);
     assert.equal(store.getEnabledUserById('missing'), null);
     assert.equal(store.getEnabledUserById('x'.repeat(129)), null);
     store.close();
