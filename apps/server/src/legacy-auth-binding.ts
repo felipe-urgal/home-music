@@ -3,6 +3,7 @@ import { normalizeUsername } from './user-identity.js';
 
 const INTERNAL_BINDING_STATE = 'HOME_MUSIC_INTERNAL_LEGACY_BINDING_STATE';
 const INTERNAL_BINDING_USER_ID = 'HOME_MUSIC_INTERNAL_LEGACY_BINDING_USER_ID';
+const MAX_SESSION_USER_ID_LENGTH = 128;
 
 export type LegacyAuthBinding =
   | { status: 'bound'; userId: string }
@@ -11,6 +12,10 @@ export type LegacyAuthBinding =
 
 type Row = Record<string, unknown>;
 
+function validSessionUserId(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0 && value.length <= MAX_SESSION_USER_ID_LENGTH;
+}
+
 export function resolveLegacyAuthBinding(databasePath: string, username: string): LegacyAuthBinding {
   const db = new DatabaseSync(databasePath);
   db.exec('PRAGMA busy_timeout = 5000;');
@@ -18,7 +23,8 @@ export function resolveLegacyAuthBinding(databasePath: string, username: string)
   try {
     const countRow = db.prepare('SELECT COUNT(*) AS count FROM users;').get() as Row | undefined;
     const count = Number(countRow?.count ?? 0);
-    if (!Number.isFinite(count) || count < 1) return { status: 'legacy-uninitialized' };
+    if (!Number.isFinite(count)) return { status: 'blocked' };
+    if (count < 1) return { status: 'legacy-uninitialized' };
 
     const identity = normalizeUsername(username);
     if (!identity) return { status: 'blocked' };
@@ -31,8 +37,9 @@ export function resolveLegacyAuthBinding(databasePath: string, username: string)
       LIMIT 1;
     `).get(identity.usernameNormalized) as Row | undefined;
 
-    const userId = typeof row?.id === 'string' ? row.id : '';
-    return userId ? { status: 'bound', userId } : { status: 'blocked' };
+    return validSessionUserId(row?.id)
+      ? { status: 'bound', userId: row.id }
+      : { status: 'blocked' };
   } finally {
     db.close();
   }
@@ -51,9 +58,13 @@ export function readLegacyAuthBindingFromEnvironment(): LegacyAuthBinding {
   if (status === 'blocked') return { status: 'blocked' };
   if (status === 'legacy-uninitialized') return { status: 'legacy-uninitialized' };
   if (status === 'bound') {
-    const userId = process.env[INTERNAL_BINDING_USER_ID] || '';
-    return userId ? { status: 'bound', userId } : { status: 'blocked' };
+    const userId = process.env[INTERNAL_BINDING_USER_ID];
+    return validSessionUserId(userId) ? { status: 'bound', userId } : { status: 'blocked' };
   }
+
+  // Produção deve sempre receber o estado calculado pelo preload. Ausência ou
+  // adulteração desse estado falha fechado em vez de reabrir o login legado.
+  if (process.env.NODE_ENV === 'production') return { status: 'blocked' };
 
   // Desenvolvimento e testes que não passam pelo preload continuam no fluxo legado
   // até a etapa em que o login for migrado integralmente para o SQLite.
