@@ -148,7 +148,7 @@ let ffmpegStatus: FfmpegStatus = {
   available: false,
   version: null,
   issue: null,
-  customPath: Boolean(ffmpegPathConfig?.trim())
+  customCommand: Boolean(ffmpegPathConfig?.trim())
 };
 
 const MAX_COVER_CACHE_BYTES = 16 * 1024 * 1024;
