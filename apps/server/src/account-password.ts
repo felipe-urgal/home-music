@@ -67,7 +67,15 @@ export class AccountPasswordService {
       LIMIT 1;
     `).get(userId) as Row | undefined;
     const passwordHash = storedPasswordHash(row?.password_hash);
-    return passwordHash ? verifyPassword(password, passwordHash) : false;
+    if (!passwordHash || !await verifyPassword(password, passwordHash)) return false;
+
+    const current = this.db.prepare(`
+      SELECT 1
+      FROM users
+      WHERE id = ? AND enabled = 1 AND password_hash = ?
+      LIMIT 1;
+    `).get(userId, passwordHash);
+    return Boolean(current);
   }
 
   async authenticateRequiredPasswordChange(username: string, password: string) {
@@ -96,7 +104,17 @@ export class AccountPasswordService {
       return null;
     }
 
-    return row.id;
+    const current = this.db.prepare(`
+      SELECT 1
+      FROM users
+      WHERE id = ?
+        AND enabled = 1
+        AND password_must_change = 1
+        AND password_hash = ?
+      LIMIT 1;
+    `).get(row.id, realHash);
+
+    return current ? row.id : null;
   }
 
   async changeRequiredPassword(
