@@ -4,9 +4,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
+import { bootstrapInitialAdmin } from './bootstrap-admin.js';
 import { HomeMusicDatabase } from './database.js';
 
-test('schema v4 migra playlists existentes para origem manual sem perder dados', async () => {
+const FIRST_USER_ID = '11111111-1111-4111-8111-111111111111';
+
+test('schema v4 preserva playlist manual antiga até o primeiro bootstrap', async () => {
   const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-rekordbox-migration-'));
   const dbPath = path.join(temp, 'legacy-v4.db');
 
@@ -73,14 +76,46 @@ test('schema v4 migra playlists existentes para origem manual sem perder dados',
     legacy.close();
 
     const migrated = new HomeMusicDatabase(dbPath);
-    assert.equal(migrated.getSchemaVersion(), 8);
-    const playlists = migrated.getPlaylists();
+    assert.equal(migrated.getSchemaVersion(), 9);
+    assert.deepEqual(migrated.getPlaylists(FIRST_USER_ID), []);
+    migrated.close();
+
+    const pending = new DatabaseSync(dbPath);
+    try {
+      const playlist = pending.prepare(`
+        SELECT id, name, created_at, updated_at
+        FROM legacy_manual_playlists_pending
+        WHERE id = 'legacy-playlist';
+      `).get() as Record<string, unknown>;
+      assert.equal(playlist.name, 'Playlist antiga');
+      const track = pending.prepare(`
+        SELECT track_id, position
+        FROM legacy_manual_playlist_tracks_pending
+        WHERE playlist_id = 'legacy-playlist';
+      `).get() as Record<string, unknown>;
+      assert.equal(track.track_id, 'a');
+      assert.equal(Number(track.position), 0);
+    } finally {
+      pending.close();
+    }
+
+    const bootstrap = await bootstrapInitialAdmin({
+      databasePath: dbPath,
+      username: 'admin',
+      password: 'senha-bootstrap-segura-123',
+      createId: () => FIRST_USER_ID,
+      now: () => new Date('2026-08-26T13:00:00.000Z')
+    });
+    assert.deepEqual(bootstrap, { status: 'created', userId: FIRST_USER_ID });
+
+    const claimed = new HomeMusicDatabase(dbPath);
+    const playlists = claimed.getPlaylists(FIRST_USER_ID);
     assert.equal(playlists.length, 1);
     assert.equal(playlists[0].id, 'legacy-playlist');
     assert.equal(playlists[0].name, 'Playlist antiga');
     assert.deepEqual(playlists[0].trackIds, ['a']);
     assert.equal(playlists[0].source, 'manual');
-    migrated.close();
+    claimed.close();
   } finally {
     await rm(temp, { recursive: true, force: true });
   }

@@ -45,15 +45,38 @@ function claimPendingLegacyHistory(db: DatabaseSync, userId: string) {
   db.exec('DELETE FROM legacy_history_pending;');
 }
 
+function claimPendingLegacyManualPlaylists(db: DatabaseSync, userId: string) {
+  db.prepare(`
+    INSERT INTO playlists(
+      id, name, created_at, updated_at, source, source_key, owner_user_id
+    )
+    SELECT id, name, created_at, updated_at, 'manual', NULL, ?
+    FROM legacy_manual_playlists_pending
+    ORDER BY created_at ASC, id ASC;
+  `).run(userId);
+
+  db.exec(`
+    INSERT INTO playlist_tracks(playlist_id, track_id, position)
+    SELECT playlist_id, track_id, position
+    FROM legacy_manual_playlist_tracks_pending
+    ORDER BY playlist_id ASC, position ASC;
+
+    DELETE FROM legacy_manual_playlist_tracks_pending;
+    DELETE FROM legacy_manual_playlists_pending;
+  `);
+}
+
 function claimPendingLegacyPersonalData(db: DatabaseSync, userId: string) {
   claimPendingLegacyFavorites(db, userId);
   claimPendingLegacyHistory(db, userId);
+  claimPendingLegacyManualPlaylists(db, userId);
 }
 
 function claimPendingPersonalDataForExistingUser(db: DatabaseSync) {
   const pendingFavorites = db.prepare('SELECT 1 FROM legacy_favorites_pending LIMIT 1;').get();
   const pendingHistory = db.prepare('SELECT 1 FROM legacy_history_pending LIMIT 1;').get();
-  if (!pendingFavorites && !pendingHistory) return;
+  const pendingManualPlaylists = db.prepare('SELECT 1 FROM legacy_manual_playlists_pending LIMIT 1;').get();
+  if (!pendingFavorites && !pendingHistory && !pendingManualPlaylists) return;
 
   db.exec('BEGIN IMMEDIATE;');
   try {
