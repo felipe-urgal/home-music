@@ -68,4 +68,23 @@ describe('OfflineDownloadScheduler', () => {
     await job;
     expect(scheduler.pendingIds.size).toBe(0);
   });
+
+  it('libera o slot e continua a fila quando uma tarefa falha sincronicamente', async () => {
+    const scheduler = new OfflineDownloadScheduler(1);
+    const started: string[] = [];
+
+    const failed = scheduler.enqueue('broken-track', () => {
+      started.push('broken-track');
+      throw new Error('falha síncrona');
+    });
+    const next = scheduler.enqueue('next-track', async () => {
+      started.push('next-track');
+    });
+
+    await expect(failed).rejects.toThrow('falha síncrona');
+    await next;
+
+    expect(started).toEqual(['broken-track', 'next-track']);
+    expect(scheduler.pendingIds.size).toBe(0);
+  });
 });
