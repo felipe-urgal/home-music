@@ -9,7 +9,7 @@ import {
   SessionManager
 } from './auth.js';
 
-test('SessionManager valida credenciais e cria sessão revogável', () => {
+test('SessionManager valida credenciais e cria sessão revogável no fallback legado', () => {
   const sessions = new SessionManager('home-music', 'senha-super-segura', 1000);
 
   assert.equal(sessions.configured, true);
@@ -17,9 +17,68 @@ test('SessionManager valida credenciais e cria sessão revogável', () => {
   assert.equal(sessions.validateCredentials('outro', 'senha-super-segura'), false);
 
   const token = sessions.createSession(100);
-  assert.equal(sessions.validateSession(token, 500), true);
+  assert.deepEqual(sessions.getSession(token, 500), {
+    userId: null,
+    createdAt: 100,
+    authenticatedAt: 100,
+    expiresAt: 1100
+  });
   sessions.revokeSession(token);
-  assert.equal(sessions.validateSession(token, 500), false);
+  assert.equal(sessions.getSession(token, 500), null);
+});
+
+test('SessionManager associa sessão ao userId persistido', () => {
+  const sessions = new SessionManager(
+    'home-music',
+    'senha-super-segura',
+    1000,
+    128,
+    { status: 'bound', userId: '11111111-1111-4111-8111-111111111111' }
+  );
+
+  const token = sessions.createSession(100);
+  assert.deepEqual(sessions.getSession(token, 500), {
+    userId: '11111111-1111-4111-8111-111111111111',
+    createdAt: 100,
+    authenticatedAt: 100,
+    expiresAt: 1100
+  });
+});
+
+test('SessionManager permite criar sessão explícita para usuário nas próximas etapas', () => {
+  const sessions = new SessionManager('home-music', 'senha-super-segura', 1000);
+  const token = sessions.createSessionForUser('user-2', 200);
+
+  assert.equal(sessions.getSession(token, 500)?.userId, 'user-2');
+  assert.throws(() => sessions.createSessionForUser(''), RangeError);
+});
+
+test('SessionManager bloqueia credencial legada sem vínculo válido quando users já existe', () => {
+  const sessions = new SessionManager(
+    'home-music',
+    'senha-super-segura',
+    1000,
+    128,
+    { status: 'blocked' }
+  );
+
+  assert.equal(sessions.configured, false);
+  assert.equal(sessions.validateCredentials('home-music', 'senha-super-segura'), false);
+  assert.throws(() => sessions.createSession(100), /não está vinculada/);
+});
+
+test('SessionManager revoga todas e somente as sessões do usuário solicitado', () => {
+  const sessions = new SessionManager('home-music', 'senha-super-segura', 10_000);
+  const first = sessions.createSessionForUser('user-a', 100);
+  const second = sessions.createSessionForUser('user-a', 200);
+  const other = sessions.createSessionForUser('user-b', 300);
+  const legacy = sessions.createSession(400);
+
+  assert.equal(sessions.revokeUserSessions('user-a'), 2);
+  assert.equal(sessions.getSession(first, 500), null);
+  assert.equal(sessions.getSession(second, 500), null);
+  assert.equal(sessions.getSession(other, 500)?.userId, 'user-b');
+  assert.equal(sessions.getSession(legacy, 500)?.userId, null);
 });
 
 test('SessionManager expira sessões antigas', () => {
@@ -30,9 +89,9 @@ test('SessionManager expira sessões antigas', () => {
 
 test('SessionManager limita a quantidade de sessões em memória', () => {
   const sessions = new SessionManager('home-music', 'senha-super-segura', 10_000, 2);
-  const first = sessions.createSession(100);
-  const second = sessions.createSession(200);
-  const third = sessions.createSession(300);
+  const first = sessions.createSessionForUser('user-a', 100);
+  const second = sessions.createSessionForUser('user-b', 200);
+  const third = sessions.createSessionForUser('user-c', 300);
 
   assert.equal(sessions.validateSession(first, 400), false);
   assert.equal(sessions.validateSession(second, 400), true);
