@@ -4,12 +4,12 @@ Este documento registra a atividade da Fase 7.5 que permite ao usuário autentic
 
 ## Objetivo
 
-Dar à identidade autenticada duas operações de segurança sem depender da futura tela `Minha conta`:
+Dar à identidade autenticada duas operações de segurança, hoje disponíveis pela tela `Minha conta`:
 
 - trocar a própria senha informando a senha atual;
 - sair dos outros dispositivos sem encerrar a sessão atual.
 
-A interface dedicada de `Minha conta` continua sendo uma atividade posterior. Nesta etapa, o contrato e a fronteira de segurança ficam prontos no backend.
+O contrato backend e a interface dedicada já estão concluídos. O procedimento operacional consolidado fica em `phase-7.5-operations.md`.
 
 ## Troca da própria senha
 
@@ -85,7 +85,7 @@ Uma sessão com `password_must_change = 1` continua restrita a:
 
 Portanto `POST /api/auth/sessions/revoke-others` permanece bloqueado com `PASSWORD_CHANGE_REQUIRED` até a troca obrigatória ser concluída.
 
-O fallback legado sem `userId` não pode executar autosserviço de sessões, pois não representa uma identidade persistida capaz de definir quais sessões pertencem à própria conta.
+Todas as sessões autenticadas normais agora possuem `userId` persistido; o antigo fallback de sessão sem identidade não participa mais do runtime normal depois da conclusão da transição multiusuário.
 
 ## Concorrência
 
@@ -99,11 +99,11 @@ A troca de senha mantém a proteção contra estado stale já usada no primeiro 
 
 A revogação de outras sessões é inteiramente em memória e valida novamente o token preservado antes de remover qualquer sessão.
 
-## Escopo transitório
+## Estado final
 
-O login normal de usuários secundários com `password_must_change = 0` continua deliberadamente adiado até as migrations de ownership de favoritos, histórico, playlists manuais e estado de reprodução.
+O login normal de usuários secundários está liberado porque as migrations de ownership de favoritos, histórico/estatísticas, playlists manuais e estado de reprodução já foram concluídas.
 
-Assim, esta atividade prepara o autosserviço para qualquer identidade autenticada sem antecipar a exposição de dados pessoais ainda globais.
+`admin` e `user` usam a mesma autenticação persistida por SQLite e podem usar `Minha conta`; as diferenças de autorização continuam definidas pela `role` e aplicadas pelo backend.
 
 ## Testes de regressão
 
@@ -119,5 +119,4 @@ A cobertura desta etapa inclui:
 - preservação da sessão atual e das sessões de outros usuários;
 - rejeição de token preservado que não pertence ao usuário alvo;
 - bloqueio de `revoke-others` enquanto `password_must_change = 1`;
-- exigência do header de proteção de mutação;
-- indisponibilidade da operação para sessão legada sem identidade persistida.
+- exigência do header de proteção de mutação.

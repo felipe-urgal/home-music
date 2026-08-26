@@ -94,15 +94,17 @@ A transação evita a corrida clássica em que dois administradores fazem altera
 
 Além disso, a árvore administrativa continua conservadora para auto-operações: alterar a própria role, desativar a própria conta, resetar a própria senha ou revogar as próprias sessões por `/api/admin/users/*` retorna `409`.
 
-A gestão da própria senha e das próprias sessões será feita pela futura tela `Minha conta`, com regras próprias. Essa separação evita transformar a API administrativa em um caminho acidental de auto-lockout.
+A gestão da própria senha e das próprias sessões é feita pela tela `Minha conta`, com regras próprias. Essa separação evita transformar a API administrativa em um caminho acidental de auto-lockout.
 
-## Login multiusuário ainda em transição
+## Estado atual do login multiusuário
 
-Criar uma conta nesta atividade persiste identidade e credencial corretamente, mas não antecipa a troca completa do endpoint de login para autenticação multiusuário.
+A transição foi concluída: o login normal de `admin` e `user` autentica diretamente o username normalizado e o hash persistido no SQLite.
 
-O login corrente continua preservando o caminho legado/bootstrap enquanto ownership de favoritos, histórico, playlists manuais e estado do player ainda é global. Permitir login de um segundo usuário antes dessas migrations criaria vazamento lógico de dados pessoais.
+As migrations de ownership de favoritos, histórico/estatísticas, playlists manuais e estado do player já estão concluídas. Contas secundárias podem entrar normalmente sem compartilhar dados pessoais com outro usuário.
 
-Portanto a conta criada fica preparada no SQLite para o login multiusuário, que será liberado de forma coordenada quando o isolamento necessário estiver implementado.
+`HOME_MUSIC_USER` e `HOME_MUSIC_PASSWORD` permanecem apenas como entrada opcional para o primeiro bootstrap quando `users` ainda está vazio; não participam do login normal depois que a identidade persistida existe.
+
+O procedimento operacional completo está em `phase-7.5-operations.md`.
 
 ## Semântica HTTP
 

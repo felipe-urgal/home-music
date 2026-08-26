@@ -102,6 +102,7 @@ Objetivo: evoluir a interface para desktop sem regredir o fluxo mobile Player Fi
 Objetivo: criar uma fronteira de identidade e autorização segura antes de introduzir operações administrativas. A biblioteca física continua compartilhada, enquanto dados pessoais e estado de reprodução passam a ser isolados por usuário. Não haverá cadastro público: somente administradores autenticados poderão criar e gerenciar contas.
 
 Decisões, invariantes de segurança e desenho detalhado: [multi-user-auth.md](multi-user-auth.md).
+Runbook operacional de identidade e usuários: [phase-7.5-operations.md](phase-7.5-operations.md).
 Detalhe da migração do primeiro administrador: [phase-7.5-bootstrap.md](phase-7.5-bootstrap.md).
 Detalhe das sessões associadas à identidade: [phase-7.5-sessions.md](phase-7.5-sessions.md).
 Detalhe do status de autenticação e identidade mínima: [phase-7.5-auth-status.md](phase-7.5-auth-status.md).
@@ -156,7 +157,7 @@ Sequência de implementação:
 - [x] Criar tela administrativa `Usuários`, visível somente para admin, com criação e gerenciamento simples sem cadastro público
 - [x] Criar tela `Minha conta` para troca de senha e revogação de sessões próprias
 - [x] Remover a dependência permanente de credenciais no `.env` após bootstrap bem-sucedido, mantendo fluxo operacional seguro de recuperação local de administrador
-- [ ] Documentar bootstrap, criação de usuários, recuperação de acesso, mudança de senha, desativação e rollback de migration
+- [x] Documentar bootstrap, criação de usuários, recuperação de acesso, mudança de senha, desativação e rollback de migration
 - [ ] Adicionar testes unitários de senha, sessão, role, último admin, normalização de username e revogação
 - [ ] Adicionar testes de integração para `401 / 403 / 404`, ownership, usuário desativado, troca obrigatória de senha e rotas administrativas
 - [ ] Adicionar Playwright com contas `admin` e `user` em mobile/tablet/desktop, validando menu, login, isolamento de dados e troca de senha
