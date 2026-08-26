@@ -14,6 +14,7 @@ export type AuthStatusResponse = {
   configured: boolean;
   authenticated: boolean;
   user: AuthenticatedUser | null;
+  passwordChangeRequired: boolean;
 };
 
 export type AdminUser = {

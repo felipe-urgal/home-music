@@ -81,11 +81,13 @@ export class SessionManager {
     );
   }
 
+  validateUsername(username: string) {
+    return this.configured && safeEqual(username, this.username);
+  }
+
   validateCredentials(username: string, password: string) {
-    if (!this.configured) return false;
-    const usernameMatches = safeEqual(username, this.username);
-    const passwordMatches = safeEqual(password, this.password);
-    return usernameMatches && passwordMatches;
+    if (!this.validateUsername(username)) return false;
+    return safeEqual(password, this.password);
   }
 
   createSession(now = Date.now()) {
@@ -198,7 +200,7 @@ export class LoginRateLimiter {
     this.attempts.delete(key);
   }
 
-  private clearExpired(now: number) {
+  private clearExpired(now = Date.now()) {
     for (const [key, entry] of this.attempts) {
       if (entry.resetAt <= now) this.attempts.delete(key);
     }

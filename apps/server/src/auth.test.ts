@@ -13,7 +13,9 @@ test('SessionManager valida credenciais e cria sessão revogável no fallback le
   const sessions = new SessionManager('home-music', 'senha-super-segura', 1000);
 
   assert.equal(sessions.configured, true);
+  assert.equal(sessions.validateUsername('home-music'), true);
   assert.equal(sessions.validateCredentials('home-music', 'senha-super-segura'), true);
+  assert.equal(sessions.validateCredentials('home-music', 'senha-incorreta'), false);
   assert.equal(sessions.validateCredentials('outro', 'senha-super-segura'), false);
 
   const token = sessions.createSession(100);
@@ -27,14 +29,20 @@ test('SessionManager valida credenciais e cria sessão revogável no fallback le
   assert.equal(sessions.getSession(token, 500), null);
 });
 
-test('SessionManager associa sessão ao userId persistido', () => {
+test('SessionManager associado ao SQLite mantém validateCredentials fiel ao env e expõe validação explícita do username', () => {
   const sessions = new SessionManager(
     'home-music',
-    'senha-super-segura',
+    'senha-original-do-env',
     1000,
     128,
     { status: 'bound', userId: '11111111-1111-4111-8111-111111111111' }
   );
+
+  assert.equal(sessions.validateUsername('home-music'), true);
+  assert.equal(sessions.validateUsername('outro'), false);
+  assert.equal(sessions.validateCredentials('home-music', 'senha-original-do-env'), true);
+  assert.equal(sessions.validateCredentials('home-music', 'senha-nova-no-sqlite'), false);
+  assert.equal(sessions.validateCredentials('outro', 'senha-original-do-env'), false);
 
   const token = sessions.createSession(100);
   assert.deepEqual(sessions.getSession(token, 500), {
@@ -63,6 +71,7 @@ test('SessionManager bloqueia credencial legada sem vínculo válido quando user
   );
 
   assert.equal(sessions.configured, false);
+  assert.equal(sessions.validateUsername('home-music'), false);
   assert.equal(sessions.validateCredentials('home-music', 'senha-super-segura'), false);
   assert.throws(() => sessions.createSession(100), /não está vinculada/);
 });

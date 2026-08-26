@@ -39,6 +39,7 @@
 - [x] Capas confinadas sem quebrar a viewport
 - [x] Download offline
 - [x] Até 3 downloads offline simultâneos com continuidade entre telas ([detalhe](offline-downloads.md))
+- [ ] Validar downloads offline com celular ocioso/em background e tela bloqueada em Android e iPhone/iPad antes de considerar continuidade garantida ([matriz de validação](offline-downloads.md))
 - [x] Cache seletivo
 - [x] Melhor tratamento de capas ausentes
 
@@ -92,6 +93,7 @@ Objetivo: evoluir a interface para desktop sem regredir o fluxo mobile Player Fi
 - [x] Criar navegação desktop para músicas, artistas, álbuns, pastas, favoritos, playlists, Rekordbox e estatísticas
 - [x] Adicionar atalhos de teclado para play/pause, próxima/anterior, seek, busca e volume quando aplicável
 - [x] Adicionar seleção múltipla de faixas e ações em lote
+- [ ] Adicionar download offline individual e múltiplo na tabela/seleção desktop, reutilizando o scheduler global atual de até 3 operações simultâneas
 - [x] Melhorar drag-and-drop/reordenação da fila para mouse sem prejudicar touch
 - [x] Garantir estados vazios, loading, erros e mini-player coerentes nos dois layouts
 
@@ -106,6 +108,7 @@ Detalhe do status de autenticação e identidade mínima: [phase-7.5-auth-status
 Detalhe do contexto autenticado e política central de acesso: [phase-7.5-auth-policy.md](phase-7.5-auth-policy.md).
 Detalhe da proteção das rotas administrativas existentes: [phase-7.5-admin-routes.md](phase-7.5-admin-routes.md).
 Detalhe das APIs administrativas de usuários: [phase-7.5-admin-users-api.md](phase-7.5-admin-users-api.md).
+Detalhe da troca obrigatória de senha: [phase-7.5-required-password-change.md](phase-7.5-required-password-change.md).
 
 Princípios:
 

@@ -1,6 +1,6 @@
 import type { AuthStatusResponse, AuthenticatedUser } from '@home-music/shared';
 import { useCallback, useEffect, useState } from 'react';
-import { AUTH_REQUIRED_EVENT } from './api-client';
+import { AUTH_REQUIRED_EVENT, PASSWORD_CHANGE_REQUIRED_EVENT } from './api-client';
 
 function messageFromResponse(response: Response) {
   return response.json()
@@ -30,8 +30,17 @@ export function useAuth() {
       if (!response.ok) throw new Error(await messageFromResponse(response));
       const status = await response.json() as AuthStatusResponse;
       setConfigured(status.configured);
-      setAuthenticated(status.authenticated);
-      setCurrentUser(status.authenticated ? status.user : null);
+
+      if (status.authenticated && status.passwordChangeRequired && status.user) {
+        setAuthenticated(false);
+        setCurrentUser(null);
+        window.dispatchEvent(new CustomEvent(PASSWORD_CHANGE_REQUIRED_EVENT, {
+          detail: { user: status.user }
+        }));
+      } else {
+        setAuthenticated(status.authenticated);
+        setCurrentUser(status.authenticated ? status.user : null);
+      }
       setError(null);
     } catch (error) {
       setAuthenticated(false);
