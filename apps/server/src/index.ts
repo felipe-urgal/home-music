@@ -639,30 +639,49 @@ app.put<{ Params: { id: string }; Body: { favorite?: boolean } }>('/api/favorite
   return { favorite: request.body.favorite };
 });
 
-app.get<{ Querystring: { limit?: string } }>('/api/history', async request => {
+app.get<{ Querystring: { limit?: string } }>('/api/history', async (request, reply) => {
+  if (!request.user) {
+    return reply.code(409).send({ error: 'Histórico pessoal exige uma identidade persistida.' });
+  }
+
   const requestedLimit = Number(request.query.limit || 200);
   return {
-    items: database.getHistory(Number.isFinite(requestedLimit) ? requestedLimit : 200)
+    items: database.getHistory(
+      request.user.id,
+      Number.isFinite(requestedLimit) ? requestedLimit : 200
+    )
   };
 });
 
 app.post<{ Params: { id: string } }>('/api/history/:id', async (request, reply) => {
+  if (!request.user) {
+    return reply.code(409).send({ error: 'Histórico pessoal exige uma identidade persistida.' });
+  }
   if (!tracksById.has(request.params.id)) return reply.code(404).send({ error: 'Música não encontrada.' });
-  database.recordHistory(request.params.id);
+
+  database.recordHistory(request.user.id, request.params.id);
   return reply.code(204).send();
 });
 
-app.delete('/api/history', async (_request, reply) => {
-  database.clearHistory();
+app.delete('/api/history', async (request, reply) => {
+  if (!request.user) {
+    return reply.code(409).send({ error: 'Histórico pessoal exige uma identidade persistida.' });
+  }
+
+  database.clearHistory(request.user.id);
   return reply.code(204).send();
 });
 
 app.get<{ Querystring: { period?: string } }>('/api/statistics', async (request, reply) => {
+  if (!request.user) {
+    return reply.code(409).send({ error: 'Estatísticas pessoais exigem uma identidade persistida.' });
+  }
+
   const period = parseStatisticsPeriod(request.query.period);
   if (!period) return reply.code(400).send({ error: 'Período de estatísticas inválido.' });
 
   reply.header('Cache-Control', 'private, no-store');
-  return database.getStatistics(period);
+  return database.getStatistics(request.user.id, period);
 });
 
 app.get('/api/playlists', async () => ({
