@@ -227,7 +227,8 @@ try {
   assert.deepEqual(await unauthenticatedStatus.json(), {
     configured: true,
     authenticated: false,
-    user: null
+    user: null,
+    passwordChangeRequired: false
   });
 
   const unauthenticatedLibrary = await fetch(`${baseUrl}/api/library`);
@@ -262,6 +263,7 @@ try {
   const authenticatedStatusBody = await authenticatedStatus.json();
   assert.equal(authenticatedStatusBody.configured, true);
   assert.equal(authenticatedStatusBody.authenticated, true);
+  assert.equal(authenticatedStatusBody.passwordChangeRequired, false);
   assert.equal(typeof authenticatedStatusBody.user?.id, 'string');
   assert.ok(authenticatedStatusBody.user.id.length > 0);
   assert.equal(authenticatedStatusBody.user.username, username);
