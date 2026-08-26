@@ -102,6 +102,7 @@ Decisões, invariantes de segurança e desenho detalhado: [multi-user-auth.md](m
 Detalhe da migração do primeiro administrador: [phase-7.5-bootstrap.md](phase-7.5-bootstrap.md).
 Detalhe das sessões associadas à identidade: [phase-7.5-sessions.md](phase-7.5-sessions.md).
 Detalhe do status de autenticação e identidade mínima: [phase-7.5-auth-status.md](phase-7.5-auth-status.md).
+Detalhe do contexto autenticado e política central de acesso: [phase-7.5-auth-policy.md](phase-7.5-auth-policy.md).
 
 Princípios:
 
@@ -122,7 +123,7 @@ Sequência de implementação:
 - [x] Criar bootstrap/migration idempotente do usuário atual de `HOME_MUSIC_USER`/`HOME_MUSIC_PASSWORD` para o primeiro `admin`, sem perder acesso durante o upgrade
 - [x] Evoluir `SessionManager` para associar sessão a `userId`, manter token aleatório opaco e permitir revogação de todas as sessões de um usuário
 - [x] Fazer `/api/auth/status` retornar a identidade autenticada mínima (`id`, `username`, `role`) sem expor dados sensíveis
-- [ ] Criar contexto de identidade autenticada no Fastify e política central de acesso `public / authenticated / admin`
+- [x] Criar contexto de identidade autenticada no Fastify e política central de acesso `public / authenticated / admin`
 - [ ] Restringir rotas administrativas existentes, incluindo scan manual, diagnóstico operacional detalhado e importação/sincronização Rekordbox quando aplicável
 - [ ] Criar APIs administrativas de usuários para listar, criar, alterar papel, ativar/desativar, redefinir senha e revogar sessões
 - [ ] Impedir desativação/rebaixamento do último administrador ativo e impedir auto-lockout administrativo
