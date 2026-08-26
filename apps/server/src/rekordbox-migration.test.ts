@@ -73,7 +73,7 @@ test('schema v4 migra playlists existentes para origem manual sem perder dados',
     legacy.close();
 
     const migrated = new HomeMusicDatabase(dbPath);
-    assert.equal(migrated.getSchemaVersion(), 6);
+    assert.equal(migrated.getSchemaVersion(), 7);
     const playlists = migrated.getPlaylists();
     assert.equal(playlists.length, 1);
     assert.equal(playlists[0].id, 'legacy-playlist');
