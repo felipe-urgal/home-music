@@ -1,10 +1,10 @@
 # Downloads offline
 
-Este documento registra o comportamento atual dos downloads offline do Home Music e o ajuste de concorrência/navegação incluído junto da evolução multiusuário.
+Este documento registra o comportamento atual dos downloads offline do Home Music, incluindo concorrência, limites de background e isolamento entre contas no mesmo navegador.
 
 ## Objetivo
 
-Permitir iniciar mais de um download sem obrigar o usuário a permanecer na música ou tela em que o download começou.
+Permitir iniciar mais de um download sem obrigar o usuário a permanecer na música ou tela em que o download começou, mantendo os dados locais associados ao usuário autenticado que criou o download.
 
 ## Scheduler global
 
@@ -22,7 +22,7 @@ download E ─ aguardando
 
 Assim evitamos abrir conexões ilimitadas contra o servidor e ainda permitimos paralelismo útil em Wi-Fi/rede local.
 
-O scheduler usa `trackId` como chave e deduplica pedidos concorrentes da mesma faixa. Clicar novamente ou reenviar a mesma operação enquanto o download está pendente/ativo reutiliza o mesmo job, em vez de baixar o arquivo duas vezes.
+A chave interna do scheduler inclui `userId + trackId`. Isso preserva a deduplicação da mesma faixa para a mesma conta sem fazer um download iniciado por A bloquear ou contaminar uma operação equivalente de B.
 
 ## Continuidade durante a navegação
 
@@ -36,7 +36,7 @@ Portanto, depois de iniciar um download, o usuário pode navegar entre:
 - playlists;
 - estatísticas.
 
-O job continua ativo e o conjunto `downloadingIds` permanece observável globalmente. Ao voltar para a faixa, a UI consegue continuar mostrando o estado de download.
+O job continua ativo e o conjunto `downloadingIds` permanece observável para o usuário atual. Ao voltar para a faixa, a UI consegue continuar mostrando o estado de download.
 
 Nenhum `AbortController` é associado à troca de tela.
 
@@ -50,7 +50,7 @@ Fechar a aba, encerrar o navegador, recarregar a página ou o sistema operaciona
 
 Navegadores baseados em Chromium podem oferecer mecanismos específicos para downloads longos em background, mas essa capacidade não é uniforme entre plataformas. Em especial, o comportamento de PWA em iPhone/iPad precisa ser tratado como uma matriz própria de compatibilidade, não inferido do Android.
 
-Os arquivos que já terminaram continuam persistidos normalmente no Cache Storage e no manifesto local.
+Os arquivos que já terminaram continuam persistidos normalmente no Cache Storage e no manifesto local do usuário correspondente.
 
 ## Validação mobile de background/tela bloqueada
 
@@ -67,19 +67,72 @@ Se o download não sobreviver ao bloqueio em uma plataforma, a próxima soluçã
 
 ## Armazenamento
 
-Cada job continua:
+Cada job:
 
-1. baixando o arquivo completo por `/api/tracks/:id/stream`;
-2. validando resposta HTTP `200`;
-3. verificando espaço disponível quando o navegador oferece `navigator.storage.estimate()`;
-4. gravando o áudio no Cache Storage;
-5. atualizando o manifesto local somente depois do cache concluir;
-6. tentando solicitar armazenamento persistente como operação best-effort.
+1. captura o `userId` que iniciou a operação;
+2. baixa o arquivo completo por `/api/tracks/:id/stream` usando a sessão atual;
+3. valida resposta HTTP `200`;
+4. verifica espaço disponível quando o navegador oferece `navigator.storage.estimate()`;
+5. grava o áudio no Cache Storage exclusivo daquele `userId`;
+6. atualiza somente o manifesto daquele `userId` depois que o cache conclui;
+7. tenta solicitar armazenamento persistente como operação best-effort.
 
 Falha de quota continua sendo reportada sem registrar download incompleto como concluído.
 
-## Multiusuário
+Uma troca de conta durante um download não move o resultado para a nova conta: o job mantém o `userId` capturado no início e qualquer conclusão tardia permanece no namespace original.
 
-O scheduler não altera o namespace atual do Cache Storage nem do manifesto.
+## Isolamento multiusuário
 
-A separação de downloads por `userId` continua como atividade própria da Fase 7.5, porque precisa ser coordenada com o login multiusuário e a limpeza de dados no mesmo navegador. Não antecipamos essa migration neste ajuste para evitar misturar identidades antes do restante do ownership estar pronto.
+O navegador possui um único origin para o Home Music, portanto o isolamento precisa ser explícito na aplicação.
+
+O estado atual usa:
+
+```text
+home-music:offline-user-id:v1
+home-music:offline-tracks:v2:<userId>
+home-music-offline-audio-v2-<userId>
+/offline-audio/<userId>/<trackId>
+```
+
+A identidade offline ativa é atualizada somente depois que `/api/auth/status` confirma um usuário autenticado. Ela é removida quando:
+
+- o servidor confirma que não há sessão autenticada;
+- a sessão expira e uma API devolve `401`;
+- o usuário conclui logout;
+- a verificação de autenticação alcança o servidor, mas falha de forma que a identidade não possa ser confirmada.
+
+Quando o servidor está realmente inalcançável, o último `userId` autenticado pode continuar sendo usado para abrir **somente os downloads daquele namespace**. Isso preserva o modo offline sem permitir que uma troca A → B reutilize o manifesto/cache de A pela UI normal.
+
+A troca de usuário também é fail-closed durante a renderização: enquanto o hook ainda não reconciliou o novo namespace, a lista visível de downloads fica vazia em vez de reutilizar registros do usuário anterior.
+
+### Cache e manifesto legados
+
+A versão anterior usava um manifesto e um cache globais:
+
+```text
+home-music:offline-tracks:v1
+home-music-offline-audio-v1
+```
+
+Esses dados não registram qual conta os criou. Por isso **não são migrados automaticamente** para o primeiro usuário que abrir a versão nova. A versão multiusuário remove manifesto e cache legados e exige baixar novamente as músicas desejadas.
+
+Adotar o cache antigo para o usuário atual seria uma atribuição de ownership sem evidência e poderia transformar a migration em vazamento entre contas.
+
+### Limite da fronteira local
+
+O objetivo desta separação é impedir vazamento entre contas durante o uso normal da aplicação no mesmo perfil do navegador: troca de login, logout, sessão expirada, reload e modo offline.
+
+Cache Storage e `localStorage` continuam pertencendo ao mesmo origin do navegador. Eles não são uma fronteira criptográfica contra alguém que já tenha controle irrestrito do perfil local, DevTools ou armazenamento do dispositivo. Uma ameaça local desse nível exigiria criptografia de conteúdo/chaves por usuário e um modelo de desbloqueio offline próprio, o que não faz parte desta etapa.
+
+## Service worker
+
+O protocolo de capability do service worker foi elevado para a versão `3`.
+
+A nova versão:
+
+- só considera válidas URLs offline com `userId` e `trackId` bem formados;
+- abre o cache correspondente ao `userId` da URL virtual;
+- remove o cache global legado durante a ativação;
+- continua mantendo conteúdo autenticado de `/api/*` fora do cache estático da PWA.
+
+O frontend exige capability `>= 3`, portanto um service worker antigo não é tratado como compatível com o novo modelo multiusuário.
