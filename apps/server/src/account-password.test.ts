@@ -101,20 +101,20 @@ test('credencial vinculada só entra no fluxo normal após limpar a troca obriga
 test('troca obrigatória valida senha atual, força senha forte, limpa flag e revoga sessões', async () => {
   await withPendingUser(async (databasePath, service, revoked) => {
     assert.deepEqual(
-      await service.changeRequiredPassword('user-1', 'senha-incorreta-2026', NEW_PASSWORD),
+      await service.changeAuthenticatedPassword('user-1', 'senha-incorreta-2026', NEW_PASSWORD),
       { ok: false, error: 'invalid-current-password' }
     );
     assert.deepEqual(
-      await service.changeRequiredPassword('user-1', TEMP_PASSWORD, 'curta'),
+      await service.changeAuthenticatedPassword('user-1', TEMP_PASSWORD, 'curta'),
       { ok: false, error: 'weak-new-password' }
     );
     assert.deepEqual(
-      await service.changeRequiredPassword('user-1', TEMP_PASSWORD, TEMP_PASSWORD),
+      await service.changeAuthenticatedPassword('user-1', TEMP_PASSWORD, TEMP_PASSWORD),
       { ok: false, error: 'same-password' }
     );
 
     assert.deepEqual(
-      await service.changeRequiredPassword('user-1', TEMP_PASSWORD, NEW_PASSWORD),
+      await service.changeAuthenticatedPassword('user-1', TEMP_PASSWORD, NEW_PASSWORD),
       { ok: true }
     );
     assert.deepEqual(revoked, ['user-1']);
@@ -176,7 +176,7 @@ test('troca autenticada rejeita identidade inválida ou conta desativada', async
   await withPendingUser(async (databasePath, service) => {
     assert.deepEqual(
       await service.changeAuthenticatedPassword('', TEMP_PASSWORD, NEW_PASSWORD),
-      { ok: false, error: 'not-required' }
+      { ok: false, error: 'account-unavailable' }
     );
 
     const db = new DatabaseSync(databasePath);
@@ -185,7 +185,7 @@ test('troca autenticada rejeita identidade inválida ou conta desativada', async
 
     assert.deepEqual(
       await service.changeAuthenticatedPassword('user-1', TEMP_PASSWORD, NEW_PASSWORD),
-      { ok: false, error: 'not-required' }
+      { ok: false, error: 'account-unavailable' }
     );
   });
 });
@@ -206,7 +206,7 @@ test('login pendente falha fechado se a conta for desativada enquanto scrypt est
 test('troca obrigatória aborta se o hash mudar enquanto a nova senha é derivada', async () => {
   await withPendingUser(async (databasePath, service, revoked) => {
     const replacementHash = await hashPassword('Reset-concorrente-2026');
-    const change = service.changeRequiredPassword('user-1', TEMP_PASSWORD, NEW_PASSWORD);
+    const change = service.changeAuthenticatedPassword('user-1', TEMP_PASSWORD, NEW_PASSWORD);
     await new Promise<void>(resolve => setImmediate(resolve));
 
     const db = new DatabaseSync(databasePath);
