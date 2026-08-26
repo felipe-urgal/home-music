@@ -112,7 +112,7 @@ Princípios:
 
 Sequência de implementação:
 
-- [ ] Criar schema de `users` com `id`, `username`, username normalizado único, `password_hash`, `role`, `enabled`, timestamps e flag de troca obrigatória de senha
+- [x] Criar schema de `users` com `id`, `username`, username normalizado único, `password_hash`, `role`, `enabled`, timestamps e flag de troca obrigatória de senha
 - [ ] Implementar hashing/verificação de senha com `scrypt`, formato versionado e limites defensivos de entrada
 - [ ] Criar bootstrap/migration idempotente do usuário atual de `HOME_MUSIC_USER`/`HOME_MUSIC_PASSWORD` para o primeiro `admin`, sem perder acesso durante o upgrade
 - [ ] Evoluir `SessionManager` para associar sessão a `userId`, manter token aleatório opaco e permitir revogação de todas as sessões de um usuário

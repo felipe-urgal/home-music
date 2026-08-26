@@ -57,7 +57,7 @@ test('SQLite persiste biblioteca, favoritos, histórico, playlists e estado do p
     first.close();
 
     const second = new HomeMusicDatabase(dbPath);
-    assert.equal(second.getSchemaVersion(), 5);
+    assert.equal(second.getSchemaVersion(), 6);
     assert.equal(second.getMetadata('libraryRoot'), '/music');
     assert.equal(second.loadTracks().length, 2);
     assert.equal(second.loadTracks()[0].replayGainTrackDb, -7.2);
@@ -105,7 +105,7 @@ test('remoção de faixa limpa relacionamentos por foreign key', async () => {
   }
 });
 
-test('migra schema v1 para v5 sem perder estado existente', async () => {
+test('migra schema v1 para v6 sem perder estado existente', async () => {
   const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-db-'));
   const dbPath = path.join(temp, 'legacy.db');
 
@@ -130,7 +130,7 @@ test('migra schema v1 para v5 sem perder estado existente', async () => {
     legacy.close();
 
     const migrated = new HomeMusicDatabase(dbPath);
-    assert.equal(migrated.getSchemaVersion(), 5);
+    assert.equal(migrated.getSchemaVersion(), 6);
     const state = migrated.loadPlaybackState();
     assert.equal(state.currentTrackId, 'a');
     assert.equal(state.position, 15);
@@ -138,11 +138,76 @@ test('migra schema v1 para v5 sem perder estado existente', async () => {
     assert.deepEqual(state.queueIds, ['a']);
     assert.deepEqual(state.baseQueueIds, []);
     migrated.close();
+
+    const raw = new DatabaseSync(dbPath);
+    const usersTable = raw.prepare(`
+      SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'users'
+    `).get() as { name?: string } | undefined;
+    assert.equal(usersTable?.name, 'users');
+    raw.close();
   } finally {
     await rm(temp, { recursive: true, force: true });
   }
 });
 
+test('schema v6 de users aplica identidade única, papéis e flags válidos', async () => {
+  const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-db-'));
+  const dbPath = path.join(temp, 'users.db');
+
+  try {
+    const db = new HomeMusicDatabase(dbPath);
+    assert.equal(db.getSchemaVersion(), 6);
+    db.close();
+
+    const raw = new DatabaseSync(dbPath);
+    const columns = raw.prepare('PRAGMA table_info(users);').all() as Array<{ name?: string; notnull?: number }>;
+    assert.deepEqual(
+      columns.map(column => column.name),
+      [
+        'id',
+        'username',
+        'username_normalized',
+        'password_hash',
+        'role',
+        'enabled',
+        'password_must_change',
+        'created_at',
+        'updated_at',
+        'password_changed_at'
+      ]
+    );
+    assert.equal(columns.find(column => column.name === 'id')?.notnull, 1);
+
+    const insert = raw.prepare(`
+      INSERT INTO users(
+        id, username, username_normalized, password_hash, role, enabled,
+        password_must_change, created_at, updated_at, password_changed_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    const now = '2026-08-26T10:00:00.000Z';
+    insert.run('user-1', 'Felipe', 'felipe', 'hash-1', 'admin', 1, 0, now, now, null);
+
+    assert.throws(() => {
+      insert.run('user-2', 'FELIPE', 'felipe', 'hash-2', 'user', 1, 1, now, now, null);
+    });
+    assert.throws(() => {
+      insert.run('user-3', 'Outro', 'outro', 'hash-3', 'owner', 1, 0, now, now, null);
+    });
+    assert.throws(() => {
+      insert.run('user-4', 'Outro', 'outro-2', 'hash-4', 'user', 2, 0, now, now, null);
+    });
+    assert.throws(() => {
+      insert.run('user-5', 'Outro', 'outro-3', '', 'user', 1, 0, now, now, null);
+    });
+
+    const indexes = raw.prepare("PRAGMA index_list('users');").all() as Array<{ name?: string; unique?: number }>;
+    assert.equal(indexes.some(index => index.name === 'idx_users_role_enabled'), true);
+    assert.equal(indexes.some(index => index.unique === 1), true);
+    raw.close();
+  } finally {
+    await rm(temp, { recursive: true, force: true });
+  }
+});
 
 test('estatísticas agregam o histórico por período sem duplicar dados', async () => {
   const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-db-'));
