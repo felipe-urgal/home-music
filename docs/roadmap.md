@@ -119,6 +119,7 @@ Detalhe do isolamento dos downloads offline por usuário: [offline-downloads.md]
 Detalhe do `currentUser` e superfícies por role no frontend: [phase-7.5-frontend-role-surfaces.md](phase-7.5-frontend-role-surfaces.md).
 Detalhe da tela administrativa de usuários: [phase-7.5-admin-users-screen.md](phase-7.5-admin-users-screen.md).
 Detalhe da tela de autosserviço da conta: [phase-7.5-my-account-screen.md](phase-7.5-my-account-screen.md).
+Detalhe da remoção das credenciais permanentes e recuperação local: [phase-7.5-remove-env-auth-recovery.md](phase-7.5-remove-env-auth-recovery.md).
 
 Princípios:
 
@@ -154,7 +155,7 @@ Sequência de implementação:
 - [x] Adaptar o frontend para manter `currentUser` e exibir superfícies conforme `role`, sem usar essa checagem como controle de segurança
 - [x] Criar tela administrativa `Usuários`, visível somente para admin, com criação e gerenciamento simples sem cadastro público
 - [x] Criar tela `Minha conta` para troca de senha e revogação de sessões próprias
-- [ ] Remover a dependência permanente de credenciais no `.env` após bootstrap bem-sucedido, mantendo fluxo operacional seguro de recuperação local de administrador
+- [x] Remover a dependência permanente de credenciais no `.env` após bootstrap bem-sucedido, mantendo fluxo operacional seguro de recuperação local de administrador
 - [ ] Documentar bootstrap, criação de usuários, recuperação de acesso, mudança de senha, desativação e rollback de migration
 - [ ] Adicionar testes unitários de senha, sessão, role, último admin, normalização de username e revogação
 - [ ] Adicionar testes de integração para `401 / 403 / 404`, ownership, usuário desativado, troca obrigatória de senha e rotas administrativas

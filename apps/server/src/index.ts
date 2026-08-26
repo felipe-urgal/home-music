@@ -28,7 +28,6 @@ import { resolveAuthStatus } from './auth-status.js';
 import { installApiAuthPolicy } from './auth-policy.js';
 import { HomeMusicDatabase } from './database.js';
 import { probeFfmpeg, resolveFfmpegCommand, type FfmpegStatus } from './ffmpeg.js';
-import { readLegacyAuthBindingFromEnvironment } from './legacy-auth-binding.js';
 import { readCover, scanLibrary, type IndexedTrack } from './library.js';
 import { replayGainForMode } from './replay-gain.js';
 import { readTrackLyrics } from './lyrics.js';
@@ -106,8 +105,6 @@ const port = Number(process.env.PORT || 8787);
 const host = isProduction
   ? process.env.PRODUCTION_HOST || '0.0.0.0'
   : process.env.HOST || '127.0.0.1';
-const authUser = process.env.HOME_MUSIC_USER || '';
-const authPassword = process.env.HOME_MUSIC_PASSWORD || '';
 const forceSecureCookie = process.env.HOME_MUSIC_COOKIE_SECURE === 'true';
 const trustTailscaleForwardedFor = process.env.HOME_MUSIC_TRUST_TAILSCALE_PROXY === 'true'
   && isProduction
@@ -120,12 +117,11 @@ try {
 } catch {
   // O probe abaixo transforma configuração inválida em status não disponível.
 }
-const legacyBinding = readLegacyAuthBindingFromEnvironment();
-const sessions = new SessionManager(authUser, authPassword);
+const sessions = new SessionManager('', '', SESSION_TTL_SECONDS * 1000, 128, { status: 'blocked' });
 const accountPasswords = new AccountPasswordService(databasePath, sessions);
 const adminUsers = new AdminUsersService(databasePath, sessions);
 const loginRateLimiter = new LoginRateLimiter();
-const authConfigured = sessions.configured;
+const authConfigured = authUsers.isConfigured();
 const productionCsp = "default-src 'self'; img-src 'self' data: blob:; media-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
 const transcodeManager = new TranscodeManager({
   cacheDir: defaultTranscodeCachePath,
@@ -517,36 +513,19 @@ app.post<{ Body: { username?: unknown; password?: unknown } }>(
 
     const username = typeof request.body?.username === 'string' ? request.body.username : '';
     const password = typeof request.body?.password === 'string' ? request.body.password : '';
+    const authenticated = await accountPasswords.authenticate(username, password);
 
-    let legacyAuthenticated = false;
-    if (legacyBinding.status === 'bound') {
-      if (sessions.validateUsername(username)) {
-        legacyAuthenticated = await accountPasswords.verifyEnabledUserPassword(
-          legacyBinding.userId,
-          password
-        );
-      }
-    } else if (sessions.validateCredentials(username, password)) {
-      legacyAuthenticated = legacyBinding.status === 'legacy-uninitialized';
-    }
-
-    const requiredPasswordUserId = legacyAuthenticated
-      ? null
-      : await accountPasswords.authenticateRequiredPasswordChange(username, password);
-
-    if (!legacyAuthenticated && !requiredPasswordUserId) {
+    if (!authenticated) {
       loginRateLimiter.recordFailure(key);
       return reply.code(401).send({ error: 'Usuário ou senha inválidos.' });
     }
 
     loginRateLimiter.clear(key);
-    const token = requiredPasswordUserId
-      ? sessions.createSessionForUser(requiredPasswordUserId)
-      : sessions.createSession();
+    const token = sessions.createSessionForUser(authenticated.userId);
     reply.header('Set-Cookie', buildSessionCookie(token, SESSION_TTL_SECONDS, requestIsSecure(request)));
     return {
       authenticated: true,
-      passwordChangeRequired: Boolean(requiredPasswordUserId)
+      passwordChangeRequired: authenticated.passwordMustChange
     };
   }
 );

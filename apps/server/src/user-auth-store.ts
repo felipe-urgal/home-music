@@ -35,6 +35,16 @@ export class UserAuthStore {
     this.db.close();
   }
 
+  isConfigured() {
+    return Boolean(this.db.prepare(`
+      SELECT 1
+      FROM users
+      WHERE enabled = 1
+        AND password_hash <> ''
+      LIMIT 1;
+    `).get());
+  }
+
   getEnabledUserById(userId: string): AuthenticatedUserState | null {
     if (!validIdentityField(userId, MAX_SESSION_USER_ID_LENGTH)) return null;
 
