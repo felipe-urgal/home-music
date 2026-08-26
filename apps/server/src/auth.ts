@@ -1,8 +1,19 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { isIP } from 'node:net';
+import {
+  readLegacyAuthBindingFromEnvironment,
+  type LegacyAuthBinding
+} from './legacy-auth-binding.js';
 
 export const SESSION_COOKIE_NAME = 'home_music_session';
 export const SESSION_TTL_SECONDS = 7 * 24 * 60 * 60;
+
+export type AuthSession = Readonly<{
+  userId: string | null;
+  createdAt: number;
+  authenticatedAt: number;
+  expiresAt: number;
+}>;
 
 function safeEqual(left: string, right: string) {
   const a = createHash('sha256').update(left).digest();
@@ -52,17 +63,22 @@ export function loginRateLimitKey(
 }
 
 export class SessionManager {
-  private readonly sessions = new Map<string, number>();
+  private readonly sessions = new Map<string, AuthSession>();
 
   constructor(
     private readonly username: string,
     private readonly password: string,
     private readonly ttlMs = SESSION_TTL_SECONDS * 1000,
-    private readonly maxSessions = 128
+    private readonly maxSessions = 128,
+    private readonly legacyBinding: LegacyAuthBinding = readLegacyAuthBindingFromEnvironment()
   ) {}
 
   get configured() {
-    return Boolean(this.username && this.password.length >= 12);
+    return Boolean(
+      this.username
+      && this.password.length >= 12
+      && this.legacyBinding.status !== 'blocked'
+    );
   }
 
   validateCredentials(username: string, password: string) {
@@ -73,6 +89,49 @@ export class SessionManager {
   }
 
   createSession(now = Date.now()) {
+    if (this.legacyBinding.status === 'blocked') {
+      throw new Error('Credencial legada não está vinculada a um usuário ativo.');
+    }
+    const userId = this.legacyBinding.status === 'bound' ? this.legacyBinding.userId : null;
+    return this.createSessionRecord(userId, now);
+  }
+
+  createSessionForUser(userId: string, now = Date.now()) {
+    if (!userId || userId.length > 128) throw new RangeError('userId de sessão inválido.');
+    return this.createSessionRecord(userId, now);
+  }
+
+  getSession(token: string | undefined, now = Date.now()): AuthSession | null {
+    if (!token) return null;
+    const session = this.sessions.get(token);
+    if (!session) return null;
+    if (session.expiresAt <= now) {
+      this.sessions.delete(token);
+      return null;
+    }
+    return session;
+  }
+
+  validateSession(token: string | undefined, now = Date.now()) {
+    return this.getSession(token, now) !== null;
+  }
+
+  revokeSession(token: string | undefined) {
+    if (token) this.sessions.delete(token);
+  }
+
+  revokeUserSessions(userId: string) {
+    if (!userId) return 0;
+    let revoked = 0;
+    for (const [token, session] of this.sessions) {
+      if (session.userId !== userId) continue;
+      this.sessions.delete(token);
+      revoked += 1;
+    }
+    return revoked;
+  }
+
+  private createSessionRecord(userId: string | null, now: number) {
     this.clearExpired(now);
     while (this.sessions.size >= this.maxSessions) {
       const oldest = this.sessions.keys().next().value as string | undefined;
@@ -80,29 +139,24 @@ export class SessionManager {
       this.sessions.delete(oldest);
     }
 
-    const token = randomBytes(32).toString('base64url');
-    this.sessions.set(token, now + this.ttlMs);
+    let token = '';
+    do {
+      token = randomBytes(32).toString('base64url');
+    } while (this.sessions.has(token));
+
+    const session = Object.freeze({
+      userId,
+      createdAt: now,
+      authenticatedAt: now,
+      expiresAt: now + this.ttlMs
+    });
+    this.sessions.set(token, session);
     return token;
   }
 
-  validateSession(token: string | undefined, now = Date.now()) {
-    if (!token) return false;
-    const expiresAt = this.sessions.get(token);
-    if (!expiresAt) return false;
-    if (expiresAt <= now) {
-      this.sessions.delete(token);
-      return false;
-    }
-    return true;
-  }
-
-  revokeSession(token: string | undefined) {
-    if (token) this.sessions.delete(token);
-  }
-
   private clearExpired(now: number) {
-    for (const [token, expiresAt] of this.sessions) {
-      if (expiresAt <= now) this.sessions.delete(token);
+    for (const [token, session] of this.sessions) {
+      if (session.expiresAt <= now) this.sessions.delete(token);
     }
   }
 }

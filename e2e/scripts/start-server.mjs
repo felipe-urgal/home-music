@@ -52,24 +52,30 @@ await Promise.all([
   writeFile(lyricsFixturePath, '[00:00.00]Linha E2E um\n[00:03.00]Linha E2E dois\n', 'utf8')
 ]);
 
-const server = spawn(process.execPath, ['apps/server/dist/index.js'], {
-  cwd: rootDir,
-  env: {
-    ...process.env,
-    NODE_ENV: 'production',
-    MUSIC_DIR: libraryDir,
-    HOME_MUSIC_DATABASE_PATH: databasePath,
-    HOME_MUSIC_USER: 'playwright',
-    HOME_MUSIC_PASSWORD: 'playwright-password-2026',
-    HOME_MUSIC_COOKIE_SECURE: 'false',
-    HOME_MUSIC_TRUST_TAILSCALE_PROXY: 'false',
-    HOME_MUSIC_RESCAN_INTERVAL_SECONDS: '0',
-    HOME_MUSIC_TRANSCODE_CACHE_MB: '64',
-    PORT: '8791',
-    PRODUCTION_HOST: '127.0.0.1'
-  },
-  stdio: 'inherit'
-});
+// O E2E deve atravessar o mesmo preload usado por `npm start`/systemd para
+// validar bootstrap e vínculo de identidade exatamente como em produção.
+const server = spawn(
+  process.execPath,
+  ['--import', './apps/server/dist/bootstrap-preload.js', 'apps/server/dist/index.js'],
+  {
+    cwd: rootDir,
+    env: {
+      ...process.env,
+      NODE_ENV: 'production',
+      MUSIC_DIR: libraryDir,
+      HOME_MUSIC_DATABASE_PATH: databasePath,
+      HOME_MUSIC_USER: 'playwright',
+      HOME_MUSIC_PASSWORD: 'playwright-password-2026',
+      HOME_MUSIC_COOKIE_SECURE: 'false',
+      HOME_MUSIC_TRUST_TAILSCALE_PROXY: 'false',
+      HOME_MUSIC_RESCAN_INTERVAL_SECONDS: '0',
+      HOME_MUSIC_TRANSCODE_CACHE_MB: '64',
+      PORT: '8791',
+      PRODUCTION_HOST: '127.0.0.1'
+    },
+    stdio: 'inherit'
+  }
+);
 
 let stopping = false;
 
