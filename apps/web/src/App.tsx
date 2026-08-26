@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { AuthenticatedUser } from '@home-music/shared';
+import { AdminUsersScreen } from './components/AdminUsersScreen';
 import { DesktopPlayerBar } from './components/DesktopPlayerBar';
 import { DesktopShell } from './components/DesktopShell';
 import { LibraryScreen } from './components/LibraryScreen';
@@ -21,7 +22,7 @@ import { useNetworkQualityProfile } from './useNetworkQualityProfile';
 import { useNextTrackPreload } from './useNextTrackPreload';
 import { useSystemVolumePreference } from './useSystemVolume';
 
-type Screen = 'player' | 'library' | 'statistics';
+type Screen = 'player' | 'library' | 'statistics' | 'users';
 
 type AuthenticatedAppProps = {
   currentUser: AuthenticatedUser;
@@ -99,6 +100,11 @@ function AuthenticatedApp({ currentUser, onLogout, offline }: AuthenticatedAppPr
     }));
   }
 
+  const desktopScreen = screen === 'users' ? 'library' : screen;
+  const showAdminUsersEntry = canManageSharedLibrary
+    && screen !== 'users'
+    && (screen === 'library' || Boolean(library.error));
+
   return (
     <main className="app-shell">
       <audio
@@ -112,7 +118,7 @@ function AuthenticatedApp({ currentUser, onLogout, offline }: AuthenticatedAppPr
       />
 
       <DesktopShell
-        active={screen}
+        active={desktopScreen}
         activeLibraryTab={navigation.libraryTab}
         current={current}
         playing={player.playing}
@@ -127,7 +133,15 @@ function AuthenticatedApp({ currentUser, onLogout, offline }: AuthenticatedAppPr
         onReorderQueue={player.reorderQueue}
         surfaceClassName={`phone-surface ${screen !== 'player' ? 'phone-surface--library' : ''}`}
       >
-        {library.loading ? (
+        {showAdminUsersEntry && (
+          <button className="admin-mobile-entry" type="button" onClick={() => setScreen('users')}>
+            Administração · Usuários
+          </button>
+        )}
+
+        {screen === 'users' && canManageSharedLibrary ? (
+          <AdminUsersScreen currentUser={currentUser} onBack={() => setScreen('library')} />
+        ) : library.loading ? (
           <ResponsiveState
             variant="loading"
             title="Carregando sua biblioteca"
@@ -288,7 +302,7 @@ function OfflineApp({ offline, onExit }: { offline: OfflineDownloads; onExit: ()
       />
 
       <DesktopShell
-        active={screen}
+        active={screen === 'users' ? 'library' : screen}
         current={current}
         playing={player.playing}
         libraryCount={offline.tracks.length}
