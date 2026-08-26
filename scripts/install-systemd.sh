@@ -105,7 +105,7 @@ echo "==> Instalando dependências reproduzíveis"
 echo "==> Gerando build de produção"
 "${NPM_BIN}" run build
 
-if [[ ! -f "${ROOT_DIR}/apps/web/dist/index.html" || ! -f "${ROOT_DIR}/apps/server/dist/index.js" ]]; then
+if [[ ! -f "${ROOT_DIR}/apps/web/dist/index.html" || ! -f "${ROOT_DIR}/apps/server/dist/index.js" || ! -f "${ROOT_DIR}/apps/server/dist/bootstrap-preload.js" ]]; then
   echo "Build de produção incompleto." >&2
   exit 1
 fi
@@ -128,7 +128,7 @@ User=${RUN_USER}
 WorkingDirectory=${ROOT_PATH_ESCAPED}
 Environment="NODE_ENV=production"
 Environment="HOME=${HOME_ESCAPED}"
-ExecStart="${NODE_ARG_ESCAPED}" "${ROOT_ARG_ESCAPED}/apps/server/dist/index.js"
+ExecStart="${NODE_ARG_ESCAPED}" --import "${ROOT_ARG_ESCAPED}/apps/server/dist/bootstrap-preload.js" "${ROOT_ARG_ESCAPED}/apps/server/dist/index.js"
 Restart=on-failure
 RestartSec=5s
 TimeoutStopSec=30s

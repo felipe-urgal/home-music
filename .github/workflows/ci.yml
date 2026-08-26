@@ -44,6 +44,7 @@ jobs:
       - name: Validate operational scripts
         run: |
           bash -n scripts/install-systemd.sh
+          bash -n scripts/install-systemd.test.sh
           bash -n scripts/configure-tailscale.sh
           bash -n scripts/configure-tailscale.test.sh
           bash -n scripts/configure-funnel.sh
@@ -52,6 +53,9 @@ jobs:
           bash -n scripts/run-tailscale.test.sh
           bash -n scripts/check-tailscale-hardening.sh
           bash -n scripts/check-tailscale-hardening.test.sh
+
+      - name: Test systemd startup
+        run: bash scripts/install-systemd.test.sh
 
       - name: Test Tailscale operations
         run: |
