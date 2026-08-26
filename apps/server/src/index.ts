@@ -69,6 +69,11 @@ config({ path: rootEnvPath });
 
 const databasePath = process.env.HOME_MUSIC_DATABASE_PATH || defaultDatabasePath;
 const isProduction = process.env.NODE_ENV === 'production';
+
+if (!isProduction) {
+  await import('./bootstrap-preload.js');
+}
+
 const app = Fastify({
   logger: true,
   bodyLimit: 256 * 1024
