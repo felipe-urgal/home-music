@@ -5,7 +5,7 @@ import { DatabaseSync } from 'node:sqlite';
 import type { PlaybackState, Playlist, PlaylistSource, RepeatMode, StatisticsPeriod, Track } from '@home-music/shared';
 import type { IndexedTrack } from './library.js';
 
-const CURRENT_SCHEMA_VERSION = 7;
+const CURRENT_SCHEMA_VERSION = 8;
 const HISTORY_CAPACITY = 2_000;
 
 const DEFAULT_PLAYBACK_STATE: PlaybackState = {
@@ -38,7 +38,7 @@ function stringValue(value: unknown, fallback = '') {
 }
 
 function requireUserId(userId: string) {
-  if (!userId || userId.length > 128) throw new RangeError('userId de favoritos inválido.');
+  if (!userId || userId.length > 128) throw new RangeError('userId pessoal inválido.');
 }
 
 function repeatModeValue(value: unknown): RepeatMode {
@@ -314,6 +314,72 @@ export class HomeMusicDatabase {
       }
     }
 
+    if (version < 8) {
+      this.db.exec('BEGIN IMMEDIATE;');
+      try {
+        const firstUser = this.db.prepare(`
+          SELECT id
+          FROM users
+          ORDER BY created_at ASC, id ASC
+          LIMIT 1;
+        `).get() as Row | undefined;
+        const firstUserId = stringValue(firstUser?.id);
+        const hasLegacyHistory = this.hasColumn('history', 'track_id');
+
+        if (hasLegacyHistory) {
+          this.db.exec('ALTER TABLE history RENAME TO history_legacy;');
+        }
+
+        this.db.exec(`
+          CREATE TABLE history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            track_id TEXT NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+            played_at TEXT NOT NULL
+          );
+
+          CREATE INDEX idx_history_user_played_at
+          ON history(user_id, played_at DESC, id DESC);
+
+          CREATE TABLE IF NOT EXISTS legacy_history_pending (
+            id INTEGER PRIMARY KEY,
+            track_id TEXT NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+            played_at TEXT NOT NULL
+          );
+        `);
+
+        if (hasLegacyHistory && firstUserId) {
+          this.db.prepare(`
+            INSERT INTO history(id, user_id, track_id, played_at)
+            SELECT id, ?, track_id, played_at
+            FROM history_legacy
+            ORDER BY id ASC;
+          `).run(firstUserId);
+        } else if (hasLegacyHistory) {
+          this.db.exec(`
+            INSERT INTO legacy_history_pending(id, track_id, played_at)
+            SELECT id, track_id, played_at
+            FROM history_legacy
+            ORDER BY id ASC;
+          `);
+        }
+
+        this.db.exec(`
+          DROP TABLE IF EXISTS history_legacy;
+          PRAGMA user_version = 8;
+        `);
+        this.db.exec('COMMIT;');
+        version = 8;
+      } catch (error) {
+        try {
+          this.db.exec('ROLLBACK;');
+        } catch {
+          // Preserva o erro original se a transação já tiver sido encerrada.
+        }
+        throw error;
+      }
+    }
+
     if (version !== CURRENT_SCHEMA_VERSION) {
       throw new Error(`Versão de schema SQLite não suportada: ${version}`);
     }
@@ -445,16 +511,25 @@ export class HomeMusicDatabase {
       .run(userId, trackId);
   }
 
-  recordHistory(trackId: string, playedAt = new Date().toISOString()) {
-    this.db.prepare('INSERT INTO history(track_id, played_at) VALUES (?, ?)')
-      .run(trackId, playedAt);
-    this.db.exec(`
+  recordHistory(userId: string, trackId: string, playedAt = new Date().toISOString()) {
+    requireUserId(userId);
+    this.db.prepare('INSERT INTO history(user_id, track_id, played_at) VALUES (?, ?, ?)')
+      .run(userId, trackId, playedAt);
+    this.db.prepare(`
       DELETE FROM history
-      WHERE id NOT IN (SELECT id FROM history ORDER BY id DESC LIMIT ${HISTORY_CAPACITY})
-    `);
+      WHERE user_id = ?
+        AND id NOT IN (
+          SELECT id
+          FROM history
+          WHERE user_id = ?
+          ORDER BY id DESC
+          LIMIT ${HISTORY_CAPACITY}
+        )
+    `).run(userId, userId);
   }
 
-  getHistory(limit = 200) {
+  getHistory(userId: string, limit = 200) {
+    requireUserId(userId);
     const safeLimit = Math.max(1, Math.min(500, Math.trunc(limit)));
     const rows = this.db.prepare(`
       SELECT h.id AS history_id, h.played_at,
@@ -463,9 +538,10 @@ export class HomeMusicDatabase {
              t.replaygain_track_db, t.replaygain_album_db
       FROM history h
       JOIN tracks t ON t.id = h.track_id
+      WHERE h.user_id = ?
       ORDER BY h.id DESC
       LIMIT ?
-    `).all(safeLimit) as Row[];
+    `).all(userId, safeLimit) as Row[];
 
     return rows.map(row => ({
       id: numberValue(row.history_id),
@@ -474,17 +550,19 @@ export class HomeMusicDatabase {
     }));
   }
 
-  clearHistory() {
-    this.db.exec('DELETE FROM history;');
+  clearHistory(userId: string) {
+    requireUserId(userId);
+    this.db.prepare('DELETE FROM history WHERE user_id = ?;').run(userId);
   }
 
-  getStatistics(period: StatisticsPeriod, now = new Date()) {
+  getStatistics(userId: string, period: StatisticsPeriod, now = new Date()) {
+    requireUserId(userId);
     const days = period === '7d' ? 7 : period === '30d' ? 30 : null;
     const since = days == null
       ? null
       : new Date(now.getTime() - days * 24 * 60 * 60 * 1_000).toISOString();
-    const where = since ? 'WHERE h.played_at >= ?' : '';
-    const bindings = since ? [since] : [];
+    const where = since ? 'WHERE h.user_id = ? AND h.played_at >= ?' : 'WHERE h.user_id = ?';
+    const bindings = since ? [userId, since] : [userId];
 
     const summary = this.db.prepare(`
       SELECT COUNT(*) AS total_plays,
