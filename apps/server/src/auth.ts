@@ -135,7 +135,8 @@ export class SessionManager {
 
   revokeUserSessionsExcept(userId: string, currentToken: string | undefined, now = Date.now()) {
     if (!userId || !currentToken) return null;
-    const currentSession = this.getSession(currentToken, now);
+    this.clearExpired(now);
+    const currentSession = this.sessions.get(currentToken);
     if (!currentSession || currentSession.userId !== userId) return null;
 
     let revoked = 0;
