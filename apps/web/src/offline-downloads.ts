@@ -28,6 +28,12 @@ type PendingState = {
   trackIds: Set<string>;
 };
 
+type WorkerState = {
+  userId: string | null;
+  checked: boolean;
+  supported: boolean;
+};
+
 function isTrack(value: unknown): value is Track {
   if (!value || typeof value !== 'object') return false;
   const track = value as Partial<Track>;
@@ -82,9 +88,8 @@ export function offlineAudioCacheName(userId: string) {
   return `${OFFLINE_AUDIO_CACHE_PREFIX}${encodeURIComponent(userId)}`;
 }
 
-export function offlineAudioUrl(trackId: string, userId: string | null = readOfflineUserId()) {
-  if (!userId) return '/offline-audio/unavailable';
-  return `/offline-audio/${encodeURIComponent(userId)}/${encodeURIComponent(trackId)}`;
+export function offlineAudioUrl(trackId: string) {
+  return `/offline-audio/${encodeURIComponent(trackId)}`;
 }
 
 function streamUrl(trackId: string) {
@@ -127,7 +132,7 @@ function browserHasOfflinePrimitives() {
   return typeof window !== 'undefined' && 'caches' in window && 'serviceWorker' in navigator;
 }
 
-async function activeWorkerSupportsOfflineAudio() {
+async function activeWorkerSupportsOfflineAudio(userId: string | null) {
   if (!browserHasOfflinePrimitives()) return false;
   const controller = navigator.serviceWorker.controller;
   if (!controller || typeof MessageChannel === 'undefined') return false;
@@ -141,7 +146,7 @@ async function activeWorkerSupportsOfflineAudio() {
       resolve(Boolean(data?.type === CAPABILITY_RESPONSE && data.offlineAudio === true && Number(data.version) >= 3));
     };
     try {
-      controller.postMessage({ type: CAPABILITY_REQUEST }, [channel.port2]);
+      controller.postMessage({ type: CAPABILITY_REQUEST, userId }, [channel.port2]);
     } catch {
       window.clearTimeout(timeout);
       resolve(false);
@@ -194,14 +199,19 @@ export function useOfflineDownloads() {
     records: readManifest(userId)
   }));
   const [loading, setLoading] = useState(true);
-  const [capabilityChecked, setCapabilityChecked] = useState(false);
-  const [workerSupported, setWorkerSupported] = useState(false);
+  const [workerState, setWorkerState] = useState<WorkerState>(() => ({
+    userId: null,
+    checked: false,
+    supported: false
+  }));
   const [pendingState, setPendingState] = useState<PendingState>(() => ({
     userId,
     trackIds: pendingTrackIdsForUser(offlineDownloadScheduler.pendingIds, userId)
   }));
 
   const scopeReady = manifestState.userId === userId;
+  const workerScopeReady = workerState.userId === userId && workerState.checked;
+  const workerSupported = workerScopeReady && workerState.supported;
   const records = scopeReady ? manifestState.records : [];
   const downloadingIds = pendingState.userId === userId ? pendingState.trackIds : new Set<string>();
 
@@ -233,17 +243,15 @@ export function useOfflineDownloads() {
 
   useEffect(() => {
     if (!browserHasOfflinePrimitives()) {
-      setCapabilityChecked(true);
-      setWorkerSupported(false);
+      setWorkerState({ userId, checked: true, supported: false });
       return;
     }
 
     let disposed = false;
     const probe = async () => {
-      const value = await activeWorkerSupportsOfflineAudio();
+      const value = await activeWorkerSupportsOfflineAudio(userId);
       if (disposed) return;
-      setWorkerSupported(value);
-      setCapabilityChecked(true);
+      setWorkerState({ userId, checked: true, supported: value });
     };
 
     const onControllerChange = () => { void probe(); };
@@ -253,11 +261,14 @@ export function useOfflineDownloads() {
       disposed = true;
       navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
     };
-  }, []);
+  }, [userId]);
 
   useEffect(() => {
     let disposed = false;
-    if (!capabilityChecked) return;
+    if (!workerScopeReady) {
+      setLoading(Boolean(userId));
+      return;
+    }
 
     if (!workerSupported || !userId) {
       setLoading(false);
@@ -297,7 +308,7 @@ export function useOfflineDownloads() {
     })();
 
     return () => { disposed = true; };
-  }, [capabilityChecked, replaceRecords, userId, workerSupported]);
+  }, [replaceRecords, userId, workerScopeReady, workerSupported]);
 
   const downloadedIds = useMemo(() => new Set(records.map(record => record.track.id)), [records]);
   const tracks = useMemo(() => records.map(record => record.track), [records]);
