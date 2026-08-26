@@ -11,6 +11,10 @@ import { resolveApiAccess, type AuthAccess } from './api-access.js';
 export type { AuthAccess } from './api-access.js';
 
 const mutatingMethods = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+const passwordChangeOnlyPaths = new Set([
+  '/api/auth/logout',
+  '/api/auth/password'
+]);
 
 function requestPath(url: string) {
   return url.split('?', 1)[0];
@@ -66,7 +70,15 @@ export function installApiAuthPolicy(
         return reply.code(401).send({ error: 'Sessão expirada ou autenticação necessária.' });
       }
 
-      if (identity.kind === 'user') request.user = identity.user;
+      if (identity.kind === 'user') {
+        request.user = identity.user;
+        if (identity.passwordMustChange && !passwordChangeOnlyPaths.has(path)) {
+          return reply.code(403).send({
+            error: 'Troca de senha obrigatória antes de continuar.',
+            code: 'PASSWORD_CHANGE_REQUIRED'
+          });
+        }
+      }
 
       if (access === 'admin' && request.user?.role !== 'admin') {
         return reply.code(403).send({ error: 'Acesso administrativo necessário.' });
