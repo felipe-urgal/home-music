@@ -57,7 +57,7 @@ test('SQLite persiste biblioteca, favoritos, histórico, playlists e estado do p
 
     first.syncTracks(tracks, '/music', '2026-08-24T12:00:00.000Z');
     first.setFavorite('user-1', 'a', true);
-    first.recordHistory('a');
+    first.recordHistory('user-1', 'a');
     const playlistId = first.createPlaylist('Minha playlist');
     assert.equal(first.setPlaylistTracks(playlistId, ['a', 'b']), true);
     first.savePlaybackState({
@@ -73,13 +73,13 @@ test('SQLite persiste biblioteca, favoritos, histórico, playlists e estado do p
     first.close();
 
     const second = new HomeMusicDatabase(dbPath);
-    assert.equal(second.getSchemaVersion(), 7);
+    assert.equal(second.getSchemaVersion(), 8);
     assert.equal(second.getMetadata('libraryRoot'), '/music');
     assert.equal(second.loadTracks().length, 2);
     assert.equal(second.loadTracks()[0].replayGainTrackDb, -7.2);
     assert.equal(second.loadTracks()[0].replayGainAlbumDb, -5.8);
     assert.deepEqual(second.getFavoriteIds('user-1'), ['a']);
-    assert.equal(second.getHistory()[0].track.id, 'a');
+    assert.equal(second.getHistory('user-1')[0].track.id, 'a');
     assert.deepEqual(second.getPlaylists()[0].trackIds, ['a', 'b']);
     assert.equal(second.getPlaylists()[0].source, 'manual');
 
@@ -108,14 +108,14 @@ test('remoção de faixa limpa relacionamentos por foreign key', async () => {
     const track = indexedTrack('a', '/music/a.mp3');
     db.syncTracks([track], '/music', '2026-08-24T12:00:00.000Z');
     db.setFavorite('user-1', 'a', true);
-    db.recordHistory('a');
+    db.recordHistory('user-1', 'a');
     const playlistId = db.createPlaylist('Teste');
     db.setPlaylistTracks(playlistId, ['a']);
 
     db.syncTracks([], '/music', '2026-08-24T13:00:00.000Z');
 
     assert.deepEqual(db.getFavoriteIds('user-1'), []);
-    assert.deepEqual(db.getHistory(), []);
+    assert.deepEqual(db.getHistory('user-1'), []);
     assert.deepEqual(db.getPlaylists()[0].trackIds, []);
   } finally {
     db.close();
@@ -123,7 +123,7 @@ test('remoção de faixa limpa relacionamentos por foreign key', async () => {
   }
 });
 
-test('migra schema v1 para v7 sem perder estado existente', async () => {
+test('migra schema v1 para v8 sem perder estado existente', async () => {
   const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-db-'));
   const dbPath = path.join(temp, 'legacy.db');
 
@@ -148,7 +148,7 @@ test('migra schema v1 para v7 sem perder estado existente', async () => {
     legacy.close();
 
     const migrated = new HomeMusicDatabase(dbPath);
-    assert.equal(migrated.getSchemaVersion(), 7);
+    assert.equal(migrated.getSchemaVersion(), 8);
     const state = migrated.loadPlaybackState();
     assert.equal(state.currentTrackId, 'a');
     assert.equal(state.position, 15);
@@ -164,19 +164,21 @@ test('migra schema v1 para v7 sem perder estado existente', async () => {
     assert.equal(usersTable?.name, 'users');
     const favoriteColumns = raw.prepare('PRAGMA table_info(favorites);').all() as Array<{ name?: string }>;
     assert.deepEqual(favoriteColumns.map(column => column.name), ['user_id', 'track_id', 'created_at']);
+    const historyColumns = raw.prepare('PRAGMA table_info(history);').all() as Array<{ name?: string }>;
+    assert.deepEqual(historyColumns.map(column => column.name), ['id', 'user_id', 'track_id', 'played_at']);
     raw.close();
   } finally {
     await rm(temp, { recursive: true, force: true });
   }
 });
 
-test('schema v7 de users aplica identidade única, papéis e flags válidos', async () => {
+test('schema v8 de users aplica identidade única, papéis e flags válidos', async () => {
   const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-db-'));
   const dbPath = path.join(temp, 'users.db');
 
   try {
     const db = new HomeMusicDatabase(dbPath);
-    assert.equal(db.getSchemaVersion(), 7);
+    assert.equal(db.getSchemaVersion(), 8);
     db.close();
 
     const raw = new DatabaseSync(dbPath);
@@ -229,11 +231,13 @@ test('schema v7 de users aplica identidade única, papéis e flags válidos', as
   }
 });
 
-test('estatísticas agregam o histórico por período sem duplicar dados', async () => {
+test('estatísticas agregam somente o histórico do usuário por período', async () => {
   const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-db-'));
-  const db = new HomeMusicDatabase(path.join(temp, 'home-music.db'));
+  const dbPath = path.join(temp, 'home-music.db');
+  const db = new HomeMusicDatabase(dbPath);
 
   try {
+    insertUser(dbPath);
     const trackA = indexedTrack('a', '/music/a.mp3');
     const trackB = {
       ...indexedTrack('b', '/music/b.mp3'),
@@ -243,12 +247,12 @@ test('estatísticas agregam o histórico por período sem duplicar dados', async
     };
     db.syncTracks([trackA, trackB], '/music', '2026-08-25T12:00:00.000Z');
 
-    db.recordHistory('a', '2026-08-24T12:00:00.000Z');
-    db.recordHistory('a', '2026-08-25T10:00:00.000Z');
-    db.recordHistory('b', '2026-08-25T11:00:00.000Z');
-    db.recordHistory('b', '2026-08-10T12:00:00.000Z');
+    db.recordHistory('user-1', 'a', '2026-08-24T12:00:00.000Z');
+    db.recordHistory('user-1', 'a', '2026-08-25T10:00:00.000Z');
+    db.recordHistory('user-1', 'b', '2026-08-25T11:00:00.000Z');
+    db.recordHistory('user-1', 'b', '2026-08-10T12:00:00.000Z');
 
-    const recent = db.getStatistics('7d', new Date('2026-08-25T12:00:00.000Z'));
+    const recent = db.getStatistics('user-1', '7d', new Date('2026-08-25T12:00:00.000Z'));
     assert.equal(recent.totalPlays, 3);
     assert.equal(recent.totalMinutes, 9);
     assert.equal(recent.uniqueTracks, 2);
@@ -258,7 +262,7 @@ test('estatísticas agregam o histórico por período sem duplicar dados', async
     assert.equal(recent.topArtists[0].artist, 'Artista');
     assert.equal(recent.topAlbums.length, 2);
 
-    const all = db.getStatistics('all', new Date('2026-08-25T12:00:00.000Z'));
+    const all = db.getStatistics('user-1', 'all', new Date('2026-08-25T12:00:00.000Z'));
     assert.equal(all.totalPlays, 4);
     assert.equal(all.totalMinutes, 12);
     assert.equal(all.firstPlayedAt, '2026-08-10T12:00:00.000Z');
