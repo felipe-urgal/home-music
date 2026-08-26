@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { AuthenticatedUser } from '@home-music/shared';
 import Fastify from 'fastify';
 import { SESSION_COOKIE_NAME, SessionManager } from './auth.js';
 import { installApiAuthPolicy } from './auth-policy.js';
+import type { AuthenticatedUserState } from './user-auth-store.js';
 
 function cookie(token: string) {
   return `${SESSION_COOKIE_NAME}=${token}`;
@@ -11,7 +11,7 @@ function cookie(token: string) {
 
 function buildTestApp(configured = true) {
   const sessions = new SessionManager('admin', 'password-segura-2026');
-  const users = new Map<string, AuthenticatedUser>();
+  const users = new Map<string, AuthenticatedUserState>();
   const app = Fastify();
 
   installApiAuthPolicy(app, {
@@ -29,14 +29,26 @@ function buildTestApp(configured = true) {
   app.post('/api/write', async () => ({ ok: true }));
   app.get('/api/auth/status', { config: { auth: 'public' } }, async () => ({ ok: true }));
   app.post('/api/auth/login', { config: { auth: 'public' } }, async () => ({ ok: true }));
+  app.post('/api/auth/password', async request => ({ user: request.user }));
+  app.post('/api/auth/logout', async request => ({ user: request.user }));
 
   return { app, sessions, users };
 }
 
 test('política central aplica public, authenticated por padrão e admin com identidade atual', async () => {
   const { app, sessions, users } = buildTestApp();
-  users.set('normal-1', { id: 'normal-1', username: 'maria', role: 'user' });
-  users.set('admin-1', { id: 'admin-1', username: 'felipe', role: 'admin' });
+  users.set('normal-1', {
+    id: 'normal-1',
+    username: 'maria',
+    role: 'user',
+    passwordMustChange: false
+  });
+  users.set('admin-1', {
+    id: 'admin-1',
+    username: 'felipe',
+    role: 'admin',
+    passwordMustChange: false
+  });
   const userToken = sessions.createSessionForUser('normal-1');
   const adminToken = sessions.createSessionForUser('admin-1');
 
@@ -80,13 +92,73 @@ test('política central aplica public, authenticated por padrão e admin com ide
       user: { id: 'admin-1', username: 'felipe', role: 'admin' }
     });
 
-    users.set('admin-1', { id: 'admin-1', username: 'felipe', role: 'user' });
+    users.set('admin-1', {
+      id: 'admin-1',
+      username: 'felipe',
+      role: 'user',
+      passwordMustChange: false
+    });
     const demotedAdmin = await app.inject({
       method: 'GET',
       url: '/api/admin',
       headers: { cookie: cookie(adminToken) }
     });
     assert.equal(demotedAdmin.statusCode, 403);
+  } finally {
+    await app.close();
+  }
+});
+
+test('password_must_change bloqueia uso normal no backend e libera somente troca/logout', async () => {
+  const { app, sessions, users } = buildTestApp();
+  users.set('pending-1', {
+    id: 'pending-1',
+    username: 'maria',
+    role: 'admin',
+    passwordMustChange: true
+  });
+  const token = sessions.createSessionForUser('pending-1');
+  const headers = {
+    cookie: cookie(token),
+    'x-home-music-request': '1'
+  };
+
+  try {
+    const normal = await app.inject({
+      method: 'GET',
+      url: '/api/default',
+      headers: { cookie: cookie(token) }
+    });
+    assert.equal(normal.statusCode, 403);
+    assert.deepEqual(normal.json(), {
+      error: 'Troca de senha obrigatória antes de continuar.',
+      code: 'PASSWORD_CHANGE_REQUIRED'
+    });
+
+    const admin = await app.inject({
+      method: 'GET',
+      url: '/api/admin',
+      headers: { cookie: cookie(token) }
+    });
+    assert.equal(admin.statusCode, 403);
+    assert.equal(admin.json().code, 'PASSWORD_CHANGE_REQUIRED');
+
+    const password = await app.inject({
+      method: 'POST',
+      url: '/api/auth/password',
+      headers
+    });
+    assert.equal(password.statusCode, 200);
+    assert.deepEqual(password.json(), {
+      user: { id: 'pending-1', username: 'maria', role: 'admin' }
+    });
+
+    const logout = await app.inject({
+      method: 'POST',
+      url: '/api/auth/logout',
+      headers
+    });
+    assert.equal(logout.statusCode, 200);
   } finally {
     await app.close();
   }
@@ -150,7 +222,12 @@ test('sessão legada transitória acessa authenticated mas nunca admin', async (
 
 test('mutações continuam exigindo header customizado depois da autenticação', async () => {
   const { app, sessions, users } = buildTestApp();
-  users.set('user-1', { id: 'user-1', username: 'maria', role: 'user' });
+  users.set('user-1', {
+    id: 'user-1',
+    username: 'maria',
+    role: 'user',
+    passwordMustChange: false
+  });
   const token = sessions.createSessionForUser('user-1');
 
   try {
