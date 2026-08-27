@@ -7,7 +7,7 @@ async function login(page: Page) {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Entrar' })).toBeVisible();
   await page.getByLabel('Usuário').fill(username);
-  await page.getByLabel('Senha').fill(password);
+  await page.getByLabel('Senha', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Entrar' }).click();
   await expect(page.getByRole('heading', { name: 'E2E Track' })).toBeVisible();
 }
@@ -334,7 +334,7 @@ test('estados de loading e erro permitem retry no desktop', async ({ page }, tes
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Entrar' })).toBeVisible();
   await page.getByLabel('Usuário').fill(username);
-  await page.getByLabel('Senha').fill(password);
+  await page.getByLabel('Senha', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Entrar' }).click();
 
   await expect(page.getByTestId('responsive-state-loading')).toBeVisible();
