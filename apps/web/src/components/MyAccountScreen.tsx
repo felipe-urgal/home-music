@@ -8,8 +8,8 @@ import {
   LoaderCircle,
   LogOut,
   MonitorOff,
-  Settings2,
   ShieldCheck,
+  SlidersHorizontal,
   UserRound,
   Users
 } from 'lucide-react';
@@ -214,7 +214,7 @@ export function MyAccountScreen({
               <span className="my-account-link-group__label" id="my-account-group-preferences">Preferências</span>
               <div className="my-account-links">
                 <button type="button" onClick={() => setView('playback')}>
-                  <span className="my-account-card__icon"><Settings2 /></span>
+                  <span className="my-account-card__icon"><SlidersHorizontal /></span>
                   <span><strong>Reprodução</strong><small>Qualidade, conexão e normalização.</small></span>
                   <ChevronRight />
                 </button>
