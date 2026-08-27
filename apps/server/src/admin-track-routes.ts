@@ -94,7 +94,7 @@ export function registerAdminTrackRoutes(
       const quarantined = await quarantine.quarantine(track.id, publicTrack, previousEnabled);
       return { track: quarantined };
     } catch (error) {
-      if (previousEnabled) service.setEnabled(track.id, true);
+      if (previousEnabled && !quarantine.hasHidden(track.id)) service.setEnabled(track.id, true);
       return sendQuarantineError(reply, error);
     }
   });
