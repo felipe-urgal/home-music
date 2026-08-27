@@ -40,8 +40,11 @@ test('login, biblioteca e player permanecem utilizáveis', async ({ page }) => {
     await expect(desktopQueue).toContainText('E2E Zeta');
     await expect(page.getByRole('button', { name: 'Mais opções' })).toHaveCount(0);
 
-    for (const label of ['Músicas', 'Artistas', 'Álbuns', 'Pastas', 'Favoritos', 'Playlists', 'Rekordbox', 'Histórico', 'Estatísticas']) {
+    for (const label of ['Pastas', 'Favoritos', 'Playlists']) {
       await expect(sidebar.getByRole('button', { name: label, exact: true })).toBeVisible();
+    }
+    for (const label of ['Músicas', 'Artistas', 'Álbuns', 'Rekordbox', 'Histórico', 'Estatísticas']) {
+      await expect(sidebar.getByRole('button', { name: label, exact: true })).toHaveCount(0);
     }
 
     const accountButton = sidebar.getByRole('button', { name: /Minha conta/ });
@@ -131,7 +134,7 @@ test('login, biblioteca e player permanecem utilizáveis', async ({ page }) => {
     await expect(desktopPlayerBar).toBeVisible();
     await expect(desktopPlayerBar).toContainText('E2E Track');
     await expect(miniPlayer).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Abrir estatísticas' })).toBeHidden();
+    await expect(page.getByRole('button', { name: 'Abrir estatísticas' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Voltar ao player' })).toBeHidden();
     await expect(page.getByRole('navigation', { name: 'Navegação da biblioteca' })).toBeHidden();
 
@@ -145,20 +148,24 @@ test('login, biblioteca e player permanecem utilizáveis', async ({ page }) => {
     await expect(desktopPlayerBar.getByRole('button', { name: 'Tocar na barra desktop' })).toBeVisible();
     await desktopPlayerBar.getByRole('button', { name: 'Tocar na barra desktop' }).click();
     await expect(desktopPlayerBar.getByRole('button', { name: 'Pausar na barra desktop' })).toBeVisible();
-
-    await sidebar.getByRole('button', { name: 'Músicas', exact: true }).click();
   } else {
     await expect(page.getByRole('navigation', { name: 'Navegação da biblioteca' })).toBeVisible();
     await expect(miniPlayer).toBeVisible();
     await expect(desktopPlayerBar).toHaveCount(0);
-    await page.getByRole('button', { name: 'Músicas', exact: true }).click();
+    for (const label of ['Pastas', 'Favoritos', 'Playlists']) {
+      await expect(page.getByRole('button', { name: label, exact: true })).toBeVisible();
+    }
+    for (const label of ['Músicas', 'Artistas', 'Álbuns', 'Histórico']) {
+      await expect(page.getByRole('button', { name: label, exact: true })).toHaveCount(0);
+    }
   }
 
   const search = page.getByPlaceholder('Música, artista, álbum ou pasta');
   await expect(search).toBeVisible();
+  await search.fill('E2E');
 
   if (isDesktop) {
-    await expect(sidebar.getByRole('button', { name: 'Músicas', exact: true })).toHaveAttribute('aria-current', 'page');
+    await expect(sidebar.getByRole('button', { name: 'Pastas', exact: true })).toHaveAttribute('aria-current', 'page');
     const desktopLibraryTable = page.getByTestId('desktop-library-table');
     await expect(desktopLibraryTable).toBeVisible();
     await expect(desktopLibraryTable.getByRole('button', { name: 'Tocar E2E Track' })).toBeVisible();
@@ -196,14 +203,14 @@ test('login, biblioteca e player permanecem utilizáveis', async ({ page }) => {
   }
 
   await search.fill('faixa-que-nao-existe-e2e');
-  await expect(page.locator('.empty-library')).toContainText('Nenhuma música encontrada');
+  await expect(page.locator('.empty-library')).toContainText('Nenhum item encontrado nesta pasta');
   await search.fill('');
 
   if (isDesktop) {
-    await sidebar.getByRole('button', { name: 'Rekordbox', exact: true }).click();
+    await sidebar.getByRole('button', { name: 'Playlists', exact: true }).click();
     const libraryMain = page.locator('.desktop-main-content--library');
     await expect(libraryMain.locator('.section-heading > span').filter({ hasText: /^Playlists$/ })).toBeVisible();
-    await expect(libraryMain.getByRole('button', { name: 'Rekordbox', exact: true })).toBeVisible();
+    await expect(libraryMain.getByRole('button', { name: 'Rekordbox', exact: true })).toHaveCount(0);
   }
 
   if (viewport) {
@@ -305,7 +312,7 @@ test('atalhos de teclado desktop controlam reprodução sem capturar a busca', a
   const search = page.getByPlaceholder('Música, artista, álbum ou pasta');
   await expect(search).toBeVisible();
   await expect(search).toBeFocused();
-  await expect(page.getByTestId('desktop-sidebar').getByRole('button', { name: 'Músicas', exact: true })).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByTestId('desktop-sidebar').getByRole('button', { name: 'Pastas', exact: true })).toHaveAttribute('aria-current', 'page');
 
   await search.fill('E2E');
   await page.keyboard.press('Space');
