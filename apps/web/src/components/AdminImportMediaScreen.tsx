@@ -37,8 +37,8 @@ const IMPORT_METHODS: readonly ImportMethod[] = [
   },
   {
     icon: Boxes,
-    title: 'Providers externos',
-    description: 'Integrações desacopladas para fontes adicionais.'
+    title: 'Fontes externas',
+    description: 'Integrações isoladas para serviços e sites compatíveis.'
   }
 ];
 
@@ -61,7 +61,7 @@ function statusIcon(status: ImportJobStatus) {
 }
 
 function sourceLabel(job: ImportJob) {
-  if (job.source.type === 'provider') return job.source.provider || 'Provider';
+  if (job.source.type === 'provider') return job.source.provider || 'Fonte externa';
   if (job.source.type === 'url') return 'URL';
   return 'Upload';
 }
@@ -113,8 +113,8 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
             <span className="my-account-link-group__label">Pipeline</span>
             <strong id="admin-import-intro-title">Uma fila, várias fontes</strong>
             <p>
-              O pipeline central já possui estados de execução e uma fila administrativa. As formas de entrada
-              serão habilitadas nas próximas etapas sem acoplar upload, URLs ou providers à interface.
+              Todas as importações passam pela mesma fila e seguem estados claros de execução. Upload, URL e
+              fontes externas serão habilitados nas próximas etapas.
             </p>
           </div>
         </section>
@@ -129,7 +129,7 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
                   <strong>{method.title}</strong>
                   <small>{method.description}</small>
                 </div>
-                <span className="admin-import-method__badge">Próxima etapa</span>
+                <span className="admin-import-method__badge">Em breve</span>
               </article>
             );
           })}
@@ -139,7 +139,7 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
           <div className="admin-import-queue__heading">
             <div>
               <span className="my-account-link-group__label" id="admin-import-queue-title">Fila de importação</span>
-              <small>Jobs mais recentes do pipeline</small>
+              <small>Importações mais recentes</small>
             </div>
             <button
               type="button"
@@ -167,7 +167,7 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
               <Clock3 />
               <div>
                 <strong>Nenhuma importação na fila</strong>
-                <small>Os próximos métodos de entrada usarão esta mesma fila.</small>
+                <small>As próximas formas de entrada usarão esta mesma fila.</small>
               </div>
             </div>
           ) : (
