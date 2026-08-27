@@ -104,6 +104,8 @@ export function AdminUsersScreen({ currentUser, onBack }: AdminUsersScreenProps)
     setRole('user');
     setEnabled(true);
     setCredential(null);
+    setCopied(false);
+    setBusy(false);
     setError(null);
     setNotice(null);
     setView('create');
@@ -116,6 +118,8 @@ export function AdminUsersScreen({ currentUser, onBack }: AdminUsersScreenProps)
     setRole(user.role);
     setEnabled(user.enabled);
     setCredential(null);
+    setCopied(false);
+    setBusy(false);
     setError(null);
     setNotice(null);
     setView('edit');
@@ -125,6 +129,8 @@ export function AdminUsersScreen({ currentUser, onBack }: AdminUsersScreenProps)
     setView('list');
     setSelectedId(null);
     setCredential(null);
+    setCopied(false);
+    setBusy(false);
     setError(null);
     setNotice(null);
   }
@@ -138,6 +144,7 @@ export function AdminUsersScreen({ currentUser, onBack }: AdminUsersScreenProps)
       const result = await createAdminUser(username.trim(), role);
       setUsers(items => [...items, result.user].sort((a, b) => a.username.localeCompare(b.username, 'pt-BR')));
       setCredential({ username: result.user.username, password: result.temporaryPassword, reason: 'created' });
+      setCopied(false);
     } catch (error) {
       setError(errorMessage(error));
     } finally {
@@ -170,6 +177,7 @@ export function AdminUsersScreen({ currentUser, onBack }: AdminUsersScreenProps)
       const result = await resetAdminUserPassword(selected.id);
       setUsers(items => replaceUser(items, result.user));
       setCredential({ username: result.user.username, password: result.temporaryPassword, reason: 'reset' });
+      setCopied(false);
     } catch (error) {
       setError(errorMessage(error));
     } finally {
