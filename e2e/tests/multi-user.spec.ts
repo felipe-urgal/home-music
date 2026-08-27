@@ -137,6 +137,20 @@ test('admin e user preservam role, troca de senha e isolamento em todos os layou
   await expect(page.locator('#administration-problems-title')).toHaveText('Qualidade da biblioteca');
   await expect(page.locator('#administration-scanner-title')).toHaveText('Scanner');
 
+  const importQueueResponse = await page.context().request.get('/api/admin/imports');
+  expect(importQueueResponse.ok()).toBeTruthy();
+  const importQueuePayload = await importQueueResponse.json() as { jobs: unknown[] };
+  expect(importQueuePayload.jobs).toEqual([]);
+
+  await page.getByRole('button', { name: /^Importar mídia/ }).click();
+  await expect(page.locator('#admin-import-title')).toHaveText('Importar mídia');
+  await expect(page.getByLabel('Formas de importação planejadas')).toContainText('Upload de arquivo');
+  await expect(page.getByLabel('Formas de importação planejadas')).toContainText('URL direta');
+  await expect(page.getByLabel('Formas de importação planejadas')).toContainText('Providers externos');
+  await expect(page.getByText('Nenhuma importação na fila', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Voltar', exact: true }).click();
+  await expect(page.locator('#administration-title')).toHaveText('Administração');
+
   await page.getByRole('button', { name: /^Usuários/ }).click();
   await expect(page.locator('#admin-users-title')).toHaveText('Usuários');
   await page.getByRole('button', { name: 'Novo usuário', exact: true }).click();
@@ -170,6 +184,9 @@ test('admin e user preservam role, troca de senha e isolamento em todos os layou
   await expect(page.getByLabel('Identidade atual')).toContainText('Usuário');
   await expect(page.locator('#my-account-group-admin')).toHaveCount(0);
   await expect(page.locator('.my-account-screen').getByRole('button', { name: /^Administração/ })).toHaveCount(0);
+
+  const forbiddenImportQueue = await page.context().request.get('/api/admin/imports');
+  expect(forbiddenImportQueue.status()).toBe(403);
 
   await resetBrowserSession(page);
   await login(page, adminUsername, adminPassword);
