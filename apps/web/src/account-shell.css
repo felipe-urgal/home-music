@@ -1,0 +1,69 @@
+@media (min-width: 1024px) {
+  .desktop-layout:has(.desktop-account-surface) {
+    height: 100vh;
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+
+  .desktop-layout:has(.desktop-account-surface) .desktop-context {
+    display: none;
+  }
+
+  .desktop-layout:has(.desktop-account-surface) .desktop-account-surface {
+    height: 100vh;
+    padding-bottom: 28px;
+    border-right: 0;
+  }
+
+  .desktop-layout:has(.desktop-account-surface) .desktop-main-content--library {
+    width: 100%;
+    max-width: 1040px;
+    margin: 0 auto;
+  }
+
+  .desktop-layout:has(.desktop-account-surface) + .desktop-player-bar {
+    display: none;
+  }
+
+  .desktop-player-sidebar-tools__account.is-active {
+    color: #f5f8fb;
+    background: rgba(26, 147, 247, 0.105);
+    border: 1px solid rgba(61, 169, 255, 0.13);
+  }
+
+  .desktop-player-sidebar-tools__account.is-active > svg {
+    color: #5eb6ff;
+  }
+
+  .desktop-player-sidebar-tools__logout {
+    width: 100%;
+    min-height: 38px;
+    display: grid;
+    grid-template-columns: 19px minmax(0, 1fr);
+    align-items: center;
+    gap: 9px;
+    padding: 0 11px;
+    margin-top: 4px;
+    border: 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    background: transparent;
+    color: #ff7474;
+    text-align: left;
+    cursor: pointer;
+    font-size: 11px;
+  }
+
+  .desktop-player-sidebar-tools__logout:hover {
+    background: rgba(180, 58, 58, 0.07);
+  }
+
+  .desktop-player-sidebar-tools__logout svg {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+@media (min-width: 1380px) {
+  .desktop-layout:has(.desktop-account-surface) {
+    grid-template-columns: 236px minmax(0, 1fr);
+  }
+}
