@@ -11,7 +11,6 @@ import { MyAccountScreen } from './components/MyAccountScreen';
 import { OfflineLibraryScreen } from './components/OfflineLibraryScreen';
 import { PlayerScreen } from './components/PlayerScreen';
 import { ResponsiveState } from './components/ResponsiveState';
-import { StatisticsScreen } from './components/StatisticsScreen';
 import { canUseAdminLibraryActions } from './frontend-access';
 import { buildLibraryReturnLabel } from './library-utils';
 import { type OfflineDownloads, useOfflineDownloads } from './offline-downloads';
@@ -25,7 +24,7 @@ import { useNetworkQualityProfile } from './useNetworkQualityProfile';
 import { useNextTrackPreload } from './useNextTrackPreload';
 import { useSystemVolumePreference } from './useSystemVolume';
 
-type Screen = 'player' | 'library' | 'statistics' | 'users' | 'account';
+type Screen = 'player' | 'library' | 'users' | 'account';
 
 type AuthenticatedAppProps = {
   currentUser: AuthenticatedUser;
@@ -64,7 +63,6 @@ function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline }: Aut
   const current = player.current;
   const editablePlaylists = library.playlists.filter(playlist => playlist.source === 'manual');
   const libraryReturnLabel = buildLibraryReturnLabel({
-    selectedGroupName: navigation.selectedGroup?.name,
     selectedPlaylistName: navigation.selectedPlaylist?.name,
     libraryTab: navigation.libraryTab,
     folderPath: navigation.folderPath,
@@ -79,7 +77,6 @@ function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline }: Aut
 
   function openLibraryTab(tab: LibraryTab) {
     navigation.selectTab(tab);
-    if (tab === 'history') run(library.refreshHistory());
     setScreen('library');
   }
 
@@ -138,7 +135,6 @@ function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline }: Aut
         onOpenPlayer={openPlayer}
         onOpenLibrary={() => setScreen('library')}
         onOpenLibraryTab={openLibraryTab}
-        onOpenStatistics={() => setScreen('statistics')}
         onPlayTrack={player.playTrack}
         onReorderQueue={player.reorderQueue}
         sidebarUtilities={desktopLayout ? (
@@ -187,7 +183,7 @@ function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline }: Aut
           <ResponsiveState
             variant="loading"
             title="Carregando sua biblioteca"
-            detail="Sincronizando músicas, favoritos, histórico e playlists."
+            detail="Sincronizando músicas, favoritos e playlists."
           />
         ) : library.error ? (
           <ResponsiveState variant="error" title="Servidor indisponível" detail={library.error}>
@@ -199,14 +195,6 @@ function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline }: Aut
             title="Restaurando o player"
             detail="Recuperando sua fila e a última faixa reproduzida."
           />
-        ) : screen === 'statistics' ? (
-          <StatisticsScreen
-            onBack={() => setScreen('library')}
-            onPlayTrack={track => {
-              player.playTrack(track, library.tracks);
-              setScreen('player');
-            }}
-          />
         ) : screen === 'library' ? (
           <LibraryScreen
             currentUser={currentUser}
@@ -216,7 +204,6 @@ function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline }: Aut
             hasNext={player.hasNext}
             navigation={navigation}
             onOpenPlayer={openPlayer}
-            onOpenStatistics={() => setScreen('statistics')}
             onTogglePlay={() => void player.togglePlay()}
             onNext={player.next}
             onPlayTrack={player.playTrack}
