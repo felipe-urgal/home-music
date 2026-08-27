@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type {
-  FavoritesResponse,
   LibraryResponse,
   Playlist,
   PlaylistsResponse,
@@ -41,7 +40,6 @@ function errorMessage(error: unknown) {
 
 export function useLibraryData() {
   const [tracks, setTracks] = useState<Track[]>([]);
-  const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [scannedAt, setScannedAt] = useState('');
   const [revision, setRevision] = useState(0);
@@ -50,7 +48,6 @@ export function useLibraryData() {
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const favoriteSet = useMemo(() => new Set(favoriteIds), [favoriteIds]);
   const reportError = useCallback((error: unknown) => setActionError(errorMessage(error)), []);
   const clearActionError = useCallback(() => setActionError(null), []);
 
@@ -69,12 +66,6 @@ export function useLibraryData() {
     return data;
   }, []);
 
-  const refreshFavorites = useCallback(async () => {
-    const data = await jsonRequest<FavoritesResponse>('/api/favorites');
-    setFavoriteIds(data.trackIds);
-    return data;
-  }, []);
-
   const refreshPlaylists = useCallback(async () => {
     const data = await jsonRequest<PlaylistsResponse>('/api/playlists');
     setPlaylists(data.playlists);
@@ -82,8 +73,8 @@ export function useLibraryData() {
   }, []);
 
   const refreshAll = useCallback(async () => {
-    await Promise.all([refreshLibrary(), refreshFavorites(), refreshPlaylists()]);
-  }, [refreshFavorites, refreshLibrary, refreshPlaylists]);
+    await Promise.all([refreshLibrary(), refreshPlaylists()]);
+  }, [refreshLibrary, refreshPlaylists]);
 
   const retry = useCallback(async () => {
     setLoading(true);
@@ -144,27 +135,6 @@ export function useLibraryData() {
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };
   }, [error, loading, refreshAll, revision]);
-
-  const toggleFavorite = useCallback(async (trackId: string) => {
-    const favorite = !favoriteSet.has(trackId);
-    setFavoriteIds(items => favorite
-      ? [trackId, ...items.filter(id => id !== trackId)]
-      : items.filter(id => id !== trackId)
-    );
-
-    try {
-      await jsonRequest(`/api/favorites/${trackId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ favorite })
-      });
-      setActionError(null);
-    } catch (error) {
-      await refreshFavorites().catch(() => undefined);
-      reportError(error);
-      throw error;
-    }
-  }, [favoriteSet, refreshFavorites, reportError]);
 
   const rescan = useCallback(async () => {
     setScanning(true);
@@ -246,8 +216,6 @@ export function useLibraryData() {
 
   return {
     tracks,
-    favoriteIds,
-    favoriteSet,
     playlists,
     scannedAt,
     scanning,
@@ -257,7 +225,6 @@ export function useLibraryData() {
     reportError,
     clearActionError,
     retry,
-    toggleFavorite,
     rescan,
     createPlaylist,
     renamePlaylist,
