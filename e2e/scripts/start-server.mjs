@@ -11,6 +11,7 @@ const databasePath = path.join(tempDir, 'home-music.db');
 const fixturePath = path.join(libraryDir, 'E2E Track.wav');
 const secondFixturePath = path.join(libraryDir, 'E2E Zeta.wav');
 const thirdFixturePath = path.join(libraryDir, 'E2E Zulu.wav');
+const quarantineFixturePath = path.join(libraryDir, 'E2E Quarantine.wav');
 const lyricsFixturePath = path.join(libraryDir, 'E2E Track.lrc');
 
 function wavFixture(durationSeconds = 10, frequency = 440) {
@@ -49,6 +50,7 @@ await Promise.all([
   writeFile(fixturePath, wavFixture(10, 440)),
   writeFile(secondFixturePath, wavFixture(10, 523)),
   writeFile(thirdFixturePath, wavFixture(10, 659)),
+  writeFile(quarantineFixturePath, wavFixture(10, 784)),
   writeFile(lyricsFixturePath, '[00:00.00]Linha E2E um\n[00:03.00]Linha E2E dois\n', 'utf8')
 ]);
 
