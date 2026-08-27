@@ -9,9 +9,11 @@ import {
 import {
   CheckCircle2,
   ChevronDown,
+  ChevronRight,
   ChevronUp,
   Download,
   GripVertical,
+  ListMusic,
   LoaderCircle,
   LogOut,
   MoreVertical,
@@ -167,6 +169,7 @@ export function PlayerScreen({
   onExitOffline
 }: PlayerScreenProps) {
   const [showOptions, setShowOptions] = useState(false);
+  const [showQueue, setShowQueue] = useState(false);
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   const [visibleQueueCount, setVisibleQueueCount] = useState(QUEUE_PAGE_SIZE);
   const queueLoadMoreRef = useRef<HTMLDivElement | null>(null);
@@ -178,9 +181,11 @@ export function PlayerScreen({
   const visibleEnd = Math.min(queue.length, visibleStart + visibleQueueCount);
   const visibleQueue = queue.slice(visibleStart, visibleEnd);
   const hasMoreQueueItems = visibleEnd < queue.length;
+  const remainingQueueCount = Math.max(0, queue.length - visibleStart - 1);
 
   useEffect(() => {
     setVisibleQueueCount(QUEUE_PAGE_SIZE);
+    setShowQueue(false);
   }, [current.id, queue.length]);
 
   useEffect(() => {
@@ -256,7 +261,7 @@ export function PlayerScreen({
   return (
     <>
       <header className="topbar">
-        <button className="icon-button" aria-label={libraryReturnLabel} title={libraryReturnLabel} onClick={onOpenLibrary}>
+        <button className="icon-button topbar__back-to-library" aria-label={libraryReturnLabel} title={libraryReturnLabel} onClick={onOpenLibrary}>
           <ChevronDown />
         </button>
         <span className="topbar__title">{offlineMode ? 'Tocando offline' : 'Tocando agora'}</span>
@@ -276,6 +281,22 @@ export function PlayerScreen({
             </>
           ) : (
             <>
+              {onToggleDownload && (
+                <>
+                  <strong>Offline</strong>
+                  <button
+                    disabled={downloading}
+                    onClick={() => {
+                      onToggleDownload();
+                      setShowOptions(false);
+                    }}
+                  >
+                    {downloading ? 'Baixando…' : isDownloaded ? 'Remover download offline' : 'Baixar para uso offline'}
+                  </button>
+                  <div className="player-options__divider" />
+                </>
+              )}
+
               {onStreamingSelection && (
                 <>
                   <strong>Qualidade de transmissão</strong>
@@ -463,48 +484,59 @@ export function PlayerScreen({
       <LyricsPanel track={current} currentTime={currentTime} offlineMode={offlineMode} />
 
       <section className="queue-panel queue-panel--player">
-        <div className="queue-label">Fila · {queue.length} músicas · arraste ou use as setas</div>
-        <div className="queue-list">
-          {visibleQueue.map((track, visibleIndex) => {
-            const queueIndex = visibleStart + visibleIndex;
-            const isCurrent = track.id === current.id;
-            const isDragging = dragFrom === queueIndex;
-            return (
-              <div
-                className={`queue-item queue-item--reorder ${isCurrent ? 'is-current' : ''} ${isDragging ? 'is-dragging' : ''}`}
-                key={track.id}
-                data-queue-index={queueIndex}
-                draggable={!isCurrent}
-                onDragStart={() => setDragFrom(queueIndex)}
-                onDragOver={event => event.preventDefault()}
-                onDrop={event => dropQueue(event, queueIndex)}
-                onDragEnd={() => setDragFrom(null)}
-              >
-                <button
-                  type="button"
-                  className="queue-drag-handle"
-                  aria-label={isCurrent ? 'Faixa atual' : `Arrastar ${track.title}`}
-                  disabled={isCurrent}
-                  onPointerDown={event => beginTouchReorder(event, queueIndex)}
-                  onPointerMove={moveTouchReorder}
-                  onPointerUp={finishTouchReorder}
-                  onPointerCancel={finishTouchReorder}
+        <button
+          type="button"
+          className="queue-panel__toggle"
+          aria-expanded={showQueue}
+          onClick={() => setShowQueue(value => !value)}
+        >
+          <span><ListMusic aria-hidden="true" /> A seguir <small>· {remainingQueueCount} músicas</small></span>
+          {showQueue ? <ChevronDown aria-hidden="true" /> : <ChevronRight aria-hidden="true" />}
+        </button>
+        <div className={`queue-panel__content ${showQueue ? 'is-open' : ''}`}>
+          <div className="queue-label">Fila · {queue.length} músicas · arraste ou use as setas</div>
+          <div className="queue-list">
+            {visibleQueue.map((track, visibleIndex) => {
+              const queueIndex = visibleStart + visibleIndex;
+              const isCurrent = track.id === current.id;
+              const isDragging = dragFrom === queueIndex;
+              return (
+                <div
+                  className={`queue-item queue-item--reorder ${isCurrent ? 'is-current' : ''} ${isDragging ? 'is-dragging' : ''}`}
+                  key={track.id}
+                  data-queue-index={queueIndex}
+                  draggable={!isCurrent}
+                  onDragStart={() => setDragFrom(queueIndex)}
+                  onDragOver={event => event.preventDefault()}
+                  onDrop={event => dropQueue(event, queueIndex)}
+                  onDragEnd={() => setDragFrom(null)}
                 >
-                  <GripVertical className="queue-drag" aria-hidden="true" />
-                </button>
-                <button className="queue-item__main" onClick={() => onPlayTrack(track, queue)}>
-                  <Artwork track={artworkTrack(track, offlineMode)} />
-                  <span className="queue-item__text"><strong>{track.title}</strong><small>{track.artist}</small></span>
-                </button>
-                <div className="queue-reorder-buttons">
-                  <button aria-label="Mover para cima" disabled={queueIndex === 0} onClick={() => onReorderQueue(queueIndex, queueIndex - 1)}><ChevronUp /></button>
-                  <button aria-label="Mover para baixo" disabled={queueIndex === queue.length - 1} onClick={() => onReorderQueue(queueIndex, queueIndex + 1)}><ChevronDown /></button>
+                  <button
+                    type="button"
+                    className="queue-drag-handle"
+                    aria-label={isCurrent ? 'Faixa atual' : `Arrastar ${track.title}`}
+                    disabled={isCurrent}
+                    onPointerDown={event => beginTouchReorder(event, queueIndex)}
+                    onPointerMove={moveTouchReorder}
+                    onPointerUp={finishTouchReorder}
+                    onPointerCancel={finishTouchReorder}
+                  >
+                    <GripVertical className="queue-drag" aria-hidden="true" />
+                  </button>
+                  <button className="queue-item__main" onClick={() => onPlayTrack(track, queue)}>
+                    <Artwork track={artworkTrack(track, offlineMode)} />
+                    <span className="queue-item__text"><strong>{track.title}</strong><small>{track.artist}</small></span>
+                  </button>
+                  <div className="queue-reorder-buttons">
+                    <button aria-label="Mover para cima" disabled={queueIndex === 0} onClick={() => onReorderQueue(queueIndex, queueIndex - 1)}><ChevronUp /></button>
+                    <button aria-label="Mover para baixo" disabled={queueIndex === queue.length - 1} onClick={() => onReorderQueue(queueIndex, queueIndex + 1)}><ChevronDown /></button>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
+          {hasMoreQueueItems && <div ref={queueLoadMoreRef} className="queue-load-more" aria-hidden="true" />}
         </div>
-        {hasMoreQueueItems && <div ref={queueLoadMoreRef} className="queue-load-more" aria-hidden="true" />}
       </section>
     </>
   );
