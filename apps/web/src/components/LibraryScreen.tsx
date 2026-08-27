@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
@@ -8,13 +7,11 @@ import {
   Play,
   Plus,
   RefreshCw,
-  Search,
-  SlidersHorizontal,
   Trash2
 } from 'lucide-react';
 import type { AuthenticatedUser, Playlist, Track } from '@home-music/shared';
 import { canUseAdminLibraryActions } from '../frontend-access';
-import type { CoverFilter, TrackSort } from '../library-utils';
+import type { TrackSort } from '../library-utils';
 import type { LibraryData } from '../useLibraryData';
 import { useDesktopLayout } from '../useDesktopLayout';
 import { LIBRARY_PAGE_SIZE, type LibraryNavigation, type LibraryTab } from '../useLibraryNavigation';
@@ -28,6 +25,8 @@ type LibraryScreenProps = {
   current?: Track;
   playing: boolean;
   hasNext: boolean;
+  currentTime: number;
+  duration: number;
   navigation: LibraryNavigation;
   onOpenPlayer: () => void;
   onTogglePlay: () => void;
@@ -106,13 +105,14 @@ export function LibraryScreen({
   current,
   playing,
   hasNext,
+  currentTime,
+  duration,
   navigation,
   onOpenPlayer,
   onTogglePlay,
   onNext,
   onPlayTrack
 }: LibraryScreenProps) {
-  const [viewControlsOpen, setViewControlsOpen] = useState(false);
   const canManageSharedLibrary = canUseAdminLibraryActions(currentUser);
   const {
     tracks,
@@ -131,13 +131,7 @@ export function LibraryScreen({
     folderPath,
     folderView,
     folderContextTracks,
-    query,
     sort,
-    formatFilter,
-    coverFilter,
-    availableFormats,
-    activeViewOptionCount,
-    canSortTracks,
     visibleCount,
     visibleFolders,
     libraryTracks,
@@ -149,24 +143,14 @@ export function LibraryScreen({
     leaveFolder,
     selectPlaylist,
     leavePlaylist,
-    changeQuery,
     changeSort,
-    changeFormatFilter,
-    changeCoverFilter,
-    resetViewOptions,
     showMore
   } = navigation;
 
   const isDetail = Boolean(selectedPlaylist || folderPath);
   const run = (operation: Promise<unknown>) => void operation.catch(() => undefined);
 
-  function changeTab(tab: LibraryTab) {
-    setViewControlsOpen(false);
-    selectTab(tab);
-  }
-
   function goBack() {
-    setViewControlsOpen(false);
     if (selectedPlaylist) leavePlaylist();
     else if (folderPath) leaveFolder();
   }
@@ -209,11 +193,9 @@ export function LibraryScreen({
     }
   }
 
-  const showSearch = !(libraryTab === 'playlists' && !selectedPlaylist);
-
   return (
     <>
-      <header className="library-header">
+      <header className={`library-header ${isDetail ? 'is-detail' : 'is-root'}`}>
         {isDetail ? (
           <button className="icon-button" aria-label="Voltar" onClick={goBack}><ChevronLeft /></button>
         ) : (
@@ -226,7 +208,7 @@ export function LibraryScreen({
         {canManageSharedLibrary && (
           <button className={`icon-button ${scanning ? 'is-loading' : ''}`} aria-label="Atualizar biblioteca" disabled={scanning} onClick={() => void scanNow()}><RefreshCw /></button>
         )}
-        <button className="icon-button" aria-label="Voltar ao player" onClick={onOpenPlayer}><Music2 /></button>
+        <button className="icon-button library-header__player-button" aria-label="Voltar ao player" onClick={onOpenPlayer}><Music2 /></button>
       </header>
 
       {libraryTab === 'folders' && folderView.breadcrumbs.length > 0 && (
@@ -238,73 +220,12 @@ export function LibraryScreen({
         </nav>
       )}
 
-      {showSearch && (
-        <>
-          <div className="library-tools">
-            <div className="search-box search-box--library">
-              <Search />
-              <input value={query} onChange={event => changeQuery(event.target.value)} placeholder="Música, artista, álbum ou pasta" />
-            </div>
-            <button
-              className={`library-filter-toggle ${activeViewOptionCount > 0 ? 'is-active' : ''}`}
-              type="button"
-              aria-label="Ordenar e filtrar biblioteca"
-              aria-expanded={viewControlsOpen}
-              onClick={() => setViewControlsOpen(open => !open)}
-            >
-              <SlidersHorizontal />
-              {activeViewOptionCount > 0 && <span>{activeViewOptionCount}</span>}
-            </button>
-          </div>
-
-          {viewControlsOpen && (
-            <div className="library-view-controls">
-              {canSortTracks && (
-                <label>
-                  <span>Ordenar</span>
-                  <select value={sort} onChange={event => changeSort(event.target.value as TrackSort)}>
-                    <option value="current">Ordem atual</option>
-                    <option value="title-asc">Título A–Z</option>
-                    <option value="title-desc">Título Z–A</option>
-                    <option value="artist-asc">Artista A–Z</option>
-                    <option value="artist-desc">Artista Z–A</option>
-                    <option value="album-asc">Álbum A–Z</option>
-                    <option value="album-desc">Álbum Z–A</option>
-                  </select>
-                </label>
-              )}
-
-              <label>
-                <span>Formato</span>
-                <select value={formatFilter} onChange={event => changeFormatFilter(event.target.value)}>
-                  <option value="all">Todos</option>
-                  {availableFormats.map(format => <option key={format} value={format}>{format}</option>)}
-                </select>
-              </label>
-
-              <label>
-                <span>Capa</span>
-                <select value={coverFilter} onChange={event => changeCoverFilter(event.target.value as CoverFilter)}>
-                  <option value="all">Todas</option>
-                  <option value="with-cover">Com capa</option>
-                  <option value="without-cover">Sem capa</option>
-                </select>
-              </label>
-
-              {activeViewOptionCount > 0 && (
-                <button className="library-view-controls__reset" type="button" onClick={resetViewOptions}>Limpar filtros</button>
-              )}
-            </div>
-          )}
-        </>
-      )}
-
       {!isDetail && (
         <nav className="library-tabs" aria-label="Navegação da biblioteca">
           {tabs.map(tab => {
             const Icon = tab.icon;
             return (
-              <button key={tab.id} className={libraryTab === tab.id ? 'is-active' : ''} onClick={() => changeTab(tab.id)}>
+              <button key={tab.id} className={libraryTab === tab.id ? 'is-active' : ''} onClick={() => selectTab(tab.id)}>
                 <Icon />{tab.label}
               </button>
             );
@@ -321,7 +242,7 @@ export function LibraryScreen({
 
             {pagedFolders.length > 0 && (
               <>
-                <div className="section-heading"><span>Pastas</span><small>{visibleFolders.length}</small></div>
+                <div className={`section-heading ${!folderPath ? 'section-heading--folders-root' : ''}`}><span>Pastas</span><small>{visibleFolders.length}</small></div>
                 <div className="group-list">
                   {pagedFolders.map(folder => (
                     <button className="group-item" key={folder.path} onClick={() => enterFolder(folder.path)}>
@@ -336,7 +257,7 @@ export function LibraryScreen({
 
             {pagedTracks.length > 0 && (
               <>
-                <div className="section-heading"><span>{query ? 'Resultados' : 'Músicas nesta pasta'}</span><small>{libraryTracks.length}</small></div>
+                <div className="section-heading"><span>Músicas nesta pasta</span><small>{libraryTracks.length}</small></div>
                 <TrackRows
                   tracks={pagedTracks}
                   context={folderContextTracks}
@@ -420,6 +341,8 @@ export function LibraryScreen({
           current={current}
           playing={playing}
           hasNext={hasNext}
+          currentTime={currentTime}
+          duration={duration}
           onOpenPlayer={onOpenPlayer}
           onTogglePlay={onTogglePlay}
           onNext={onNext}
