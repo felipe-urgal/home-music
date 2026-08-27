@@ -1,5 +1,12 @@
 import { useState, type FormEvent } from 'react';
-import { Download, LockKeyhole, Music2 } from 'lucide-react';
+import {
+  Download,
+  Eye,
+  EyeOff,
+  LockKeyhole,
+  Music2,
+  UserRound
+} from 'lucide-react';
 
 type LoginScreenProps = {
   configured: boolean;
@@ -13,6 +20,7 @@ type LoginScreenProps = {
 export function LoginScreen({ configured, error, offlineCount = 0, onLogin, onRetry, onOpenOffline }: LoginScreenProps) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -57,36 +65,52 @@ export function LoginScreen({ configured, error, offlineCount = 0, onLogin, onRe
 
         <div className="login-heading">
           <h1 id="login-title">Entrar</h1>
-          <p>Use as credenciais configuradas no seu Home Music.</p>
+          <p>Entre para acessar sua biblioteca.</p>
         </div>
 
         <form className="login-form" onSubmit={submit}>
-          <label>
+          <label className="login-field">
             <span>Usuário</span>
-            <input
-              name="username"
-              type="text"
-              autoComplete="username"
-              autoCapitalize="none"
-              spellCheck={false}
-              value={username}
-              onChange={event => setUsername(event.target.value)}
-              disabled={submitting}
-              required
-            />
+            <span className="login-input-shell">
+              <UserRound aria-hidden="true" />
+              <input
+                name="username"
+                type="text"
+                autoComplete="username"
+                autoCapitalize="none"
+                spellCheck={false}
+                value={username}
+                onChange={event => setUsername(event.target.value)}
+                disabled={submitting}
+                required
+              />
+            </span>
           </label>
 
-          <label>
+          <label className="login-field">
             <span>Senha</span>
-            <input
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={event => setPassword(event.target.value)}
-              disabled={submitting}
-              required
-            />
+            <span className="login-input-shell">
+              <LockKeyhole aria-hidden="true" />
+              <input
+                name="password"
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="current-password"
+                value={password}
+                onChange={event => setPassword(event.target.value)}
+                disabled={submitting}
+                required
+              />
+              <button
+                className="login-password-toggle"
+                type="button"
+                aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                aria-pressed={showPassword}
+                disabled={submitting}
+                onClick={() => setShowPassword(value => !value)}
+              >
+                {showPassword ? <EyeOff /> : <Eye />}
+              </button>
+            </span>
           </label>
 
           {(formError || error) && <div className="login-error" role="alert">{formError || error}</div>}
@@ -105,7 +129,7 @@ export function LoginScreen({ configured, error, offlineCount = 0, onLogin, onRe
           </>
         )}
 
-        <p className="login-footnote"><LockKeyhole /> A sessão fica protegida por cookie HttpOnly neste navegador.</p>
+        <p className="login-footnote"><LockKeyhole /> Sessão protegida neste navegador.</p>
       </section>
     </main>
   );
