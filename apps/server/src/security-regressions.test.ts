@@ -110,8 +110,6 @@ async function buildFixture() {
   return {
     app,
     database,
-    adminUsers,
-    authUsers,
     playlistId,
     adminToken,
     userToken,
