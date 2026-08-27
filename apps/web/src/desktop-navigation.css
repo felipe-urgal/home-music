@@ -39,8 +39,46 @@
     font-weight: 560;
   }
 
-  .desktop-main-content--library .library-tabs {
+  .desktop-main-content--library .library-tabs,
+  .desktop-main-content--library .library-tools,
+  .desktop-main-content--library .library-view-controls {
     display: none;
+  }
+
+  .desktop-main-content--library .library-header:has(.library-header__spacer) {
+    height: 0;
+    min-height: 0;
+    margin: 0;
+  }
+
+  .desktop-main-content--library .library-header:has(.library-header__spacer) .library-header__spacer,
+  .desktop-main-content--library .library-header:has(.library-header__spacer) .library-header__title,
+  .desktop-main-content--library .library-header > .icon-button[aria-label="Voltar ao player"] {
+    display: none;
+  }
+
+  .desktop-main-content--library .library-header > .icon-button[aria-label="Atualizar biblioteca"] {
+    position: fixed;
+    top: 136px;
+    left: 178px;
+    z-index: 30;
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
+    color: #66727e;
+    background: transparent;
+  }
+
+  .desktop-main-content--library .library-header > .icon-button[aria-label="Atualizar biblioteca"]:hover:not(:disabled),
+  .desktop-main-content--library .library-header > .icon-button[aria-label="Atualizar biblioteca"]:focus-visible {
+    color: #c8d4de;
+    background: rgba(255, 255, 255, 0.045);
+    outline: none;
+  }
+
+  .desktop-main-content--library .library-header > .icon-button[aria-label="Atualizar biblioteca"] svg {
+    width: 15px;
+    height: 15px;
   }
 
   .desktop-sidebar.has-utilities .desktop-sidebar__utilities {
@@ -53,5 +91,11 @@
 
   .desktop-layout[data-desktop-active="player"] + .desktop-player-bar {
     display: none;
+  }
+}
+
+@media (min-width: 1380px) {
+  .desktop-main-content--library .library-header > .icon-button[aria-label="Atualizar biblioteca"] {
+    left: 194px;
   }
 }

@@ -126,8 +126,15 @@ test('login, biblioteca e player permanecem utilizáveis', async ({ page }) => {
   } else {
     await page.getByRole('button', { name: 'Voltar à biblioteca' }).click();
   }
-  await expect(page.locator('.library-header__title strong')).toHaveText('Biblioteca');
-  await expect(page.locator('.library-header__title small')).toContainText('3 músicas');
+
+  if (isDesktop) {
+    await expect(page.locator('.library-header__title strong')).toBeHidden();
+    await expect(page.getByPlaceholder('Música, artista, álbum ou pasta')).toBeHidden();
+    await expect(page.getByRole('button', { name: 'Ordenar e filtrar biblioteca' })).toBeHidden();
+  } else {
+    await expect(page.locator('.library-header__title strong')).toHaveText('Biblioteca');
+    await expect(page.locator('.library-header__title small')).toContainText('3 músicas');
+  }
 
   if (isDesktop) {
     await expect(sidebar.getByRole('button', { name: 'Pastas', exact: true })).toHaveAttribute('aria-current', 'page');
@@ -137,6 +144,7 @@ test('login, biblioteca e player permanecem utilizáveis', async ({ page }) => {
     await expect(page.getByRole('button', { name: 'Abrir estatísticas' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Voltar ao player' })).toBeHidden();
     await expect(page.getByRole('navigation', { name: 'Navegação da biblioteca' })).toBeHidden();
+    await expect(page.getByRole('button', { name: 'Atualizar biblioteca' })).toBeVisible();
 
     const persistentProgress = desktopPlayerBar.getByLabel('Progresso da reprodução na barra desktop');
     await expect(persistentProgress).toBeEnabled();
@@ -160,12 +168,7 @@ test('login, biblioteca e player permanecem utilizáveis', async ({ page }) => {
     }
   }
 
-  const search = page.getByPlaceholder('Música, artista, álbum ou pasta');
-  await expect(search).toBeVisible();
-  await search.fill('E2E');
-
   if (isDesktop) {
-    await expect(sidebar.getByRole('button', { name: 'Pastas', exact: true })).toHaveAttribute('aria-current', 'page');
     const desktopLibraryTable = page.getByTestId('desktop-library-table');
     await expect(desktopLibraryTable).toBeVisible();
     await expect(desktopLibraryTable.getByRole('button', { name: 'Tocar E2E Track' })).toBeVisible();
@@ -197,14 +200,17 @@ test('login, biblioteca e player permanecem utilizáveis', async ({ page }) => {
     await bulkToolbar.getByRole('button', { name: 'Limpar seleção', exact: true }).click();
     await expect(bulkToolbar).toContainText('Selecionar faixas');
   } else {
+    const search = page.getByPlaceholder('Música, artista, álbum ou pasta');
+    await expect(search).toBeVisible();
+    await search.fill('E2E');
     await expect(page.locator('.library-track').filter({ hasText: 'E2E Track' })).toBeVisible();
     await expect(page.getByTestId('desktop-library-table')).toHaveCount(0);
     await expect(page.getByTestId('desktop-bulk-toolbar')).toHaveCount(0);
-  }
 
-  await search.fill('faixa-que-nao-existe-e2e');
-  await expect(page.locator('.empty-library')).toContainText('Nenhum item encontrado nesta pasta');
-  await search.fill('');
+    await search.fill('faixa-que-nao-existe-e2e');
+    await expect(page.locator('.empty-library')).toContainText('Nenhum item encontrado nesta pasta');
+    await search.fill('');
+  }
 
   if (isDesktop) {
     await sidebar.getByRole('button', { name: 'Playlists', exact: true }).click();
@@ -274,7 +280,7 @@ test('desktop só ativa a partir de 1024px', async ({ page }, testInfo) => {
   expect(scrollWidth).toBeLessThanOrEqual(1025);
 });
 
-test('atalhos de teclado desktop controlam reprodução sem capturar a busca', async ({ page }, testInfo) => {
+test('atalhos de teclado desktop controlam reprodução', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'desktop-chromium');
 
   await login(page);
@@ -309,15 +315,8 @@ test('atalhos de teclado desktop controlam reprodução sem capturar a busca', a
   }
 
   await page.keyboard.press('/');
-  const search = page.getByPlaceholder('Música, artista, álbum ou pasta');
-  await expect(search).toBeVisible();
-  await expect(search).toBeFocused();
-  await expect(page.getByTestId('desktop-sidebar').getByRole('button', { name: 'Pastas', exact: true })).toHaveAttribute('aria-current', 'page');
-
-  await search.fill('E2E');
-  await page.keyboard.press('Space');
-  await expect(search).toHaveValue('E2E ');
-  await expect(page.getByTestId('desktop-player-bar').getByRole('button', { name: 'Tocar na barra desktop' })).toBeVisible();
+  await expect(page.getByPlaceholder('Música, artista, álbum ou pasta')).toBeHidden();
+  await expect(page.getByRole('heading', { name: 'E2E Track' })).toBeVisible();
 });
 
 test('estados de loading e erro permitem retry no desktop', async ({ page }, testInfo) => {
