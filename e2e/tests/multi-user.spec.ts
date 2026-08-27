@@ -53,6 +53,22 @@ async function openPlaylists(page: Page) {
   await expect(page.locator('.section-heading > span').filter({ hasText: /^Playlists$/ })).toBeVisible();
 }
 
+async function expectAdminLibrarySurface(page: Page, visible: boolean) {
+  const width = viewportWidth(page);
+  const refresh = width >= 1024
+    ? page.getByTestId('desktop-sidebar').getByRole('button', { name: 'Atualizar biblioteca', exact: true })
+    : page.getByRole('button', { name: 'Atualizar biblioteca', exact: true });
+
+  if (visible) await expect(refresh).toBeVisible();
+  else await expect(refresh).toHaveCount(0);
+
+  if (width < 1024) {
+    const adminEntry = page.getByRole('button', { name: 'Administração · Usuários', exact: true });
+    if (visible) await expect(adminEntry).toBeVisible();
+    else await expect(adminEntry).toHaveCount(0);
+  }
+}
+
 async function createPlaylist(page: Page, name: string) {
   await openPlaylists(page);
   page.once('dialog', dialog => dialog.accept(name));
@@ -86,6 +102,7 @@ test('admin e user preservam role, troca de senha e isolamento em todos os layou
 
   await login(page, adminUsername, adminPassword);
   await createPlaylist(page, adminPlaylist);
+  await expectAdminLibrarySurface(page, true);
   await openAccountFromLibrary(page);
 
   await expect(page.getByLabel('Identidade atual')).toContainText(adminUsername);
@@ -116,8 +133,8 @@ test('admin e user preservam role, troca de senha e isolamento em todos os layou
   await login(page, userUsername, userPassword);
   await openPlaylists(page);
 
+  await expectAdminLibrarySurface(page, false);
   await expect(page.getByText(adminPlaylist, { exact: true })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Atualizar biblioteca', exact: true })).toHaveCount(0);
   await createPlaylist(page, userPlaylist);
   await openAccountFromLibrary(page);
 
@@ -130,6 +147,7 @@ test('admin e user preservam role, troca de senha e isolamento em todos os layou
   await login(page, adminUsername, adminPassword);
   await openPlaylists(page);
 
+  await expectAdminLibrarySurface(page, true);
   await expect(page.getByText(adminPlaylist, { exact: true })).toBeVisible();
   await expect(page.getByText(userPlaylist, { exact: true })).toHaveCount(0);
 });
