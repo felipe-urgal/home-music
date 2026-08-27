@@ -1,17 +1,12 @@
 import { useCallback, useEffect, useState, type DragEvent, type ReactNode } from 'react';
 import type { Track } from '@home-music/shared';
 import {
-  BarChart3,
-  Disc3,
   Folder,
   GripVertical,
   Heart,
-  History,
   ListMusic,
   Music2,
-  Radio,
-  Upload,
-  Users
+  Radio
 } from 'lucide-react';
 import { useDesktopKeyboardShortcuts } from '../useDesktopKeyboardShortcuts';
 import { useDesktopLayout } from '../useDesktopLayout';
@@ -21,7 +16,7 @@ import { Artwork } from './Artwork';
 
 const DESKTOP_QUEUE_PREVIEW_SIZE = 32;
 
-export type DesktopSection = 'player' | 'library' | 'statistics' | 'users' | 'account';
+export type DesktopSection = 'player' | 'library' | 'users' | 'account';
 type DesktopContextTab = 'queue' | 'lyrics';
 
 type DesktopShellProps = {
@@ -36,7 +31,6 @@ type DesktopShellProps = {
   onOpenPlayer: () => void;
   onOpenLibrary: () => void;
   onOpenLibraryTab?: (tab: LibraryTab) => void;
-  onOpenStatistics?: () => void;
   onPlayTrack?: (track: Track, context: Track[]) => void;
   onReorderQueue?: (from: number, to: number) => void;
   sidebarUtilities?: ReactNode;
@@ -82,7 +76,6 @@ export function DesktopShell({
   onOpenPlayer,
   onOpenLibrary,
   onOpenLibraryTab,
-  onOpenStatistics,
   onPlayTrack,
   onReorderQueue,
   sidebarUtilities,
@@ -101,7 +94,7 @@ export function DesktopShell({
 
   const focusLibrarySearch = useCallback(() => {
     if (!onOpenLibraryTab) return;
-    onOpenLibraryTab('tracks');
+    onOpenLibraryTab('folders');
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
         const search = document.querySelector<HTMLInputElement>('.search-box--library input');
@@ -166,28 +159,14 @@ export function DesktopShell({
           ) : (
             <div className="desktop-nav__group" aria-label="Biblioteca">
               <span className="desktop-nav__group-label">Biblioteca</span>
-              <NavigationButton nested active={active === 'library' && activeLibraryTab === 'tracks'} label="Músicas" icon={<Music2 />} onClick={() => onOpenLibraryTab('tracks')} />
-              <NavigationButton nested active={active === 'library' && activeLibraryTab === 'artists'} label="Artistas" icon={<Users />} onClick={() => onOpenLibraryTab('artists')} />
-              <NavigationButton nested active={active === 'library' && activeLibraryTab === 'albums'} label="Álbuns" icon={<Disc3 />} onClick={() => onOpenLibraryTab('albums')} />
               <NavigationButton nested active={active === 'library' && activeLibraryTab === 'folders'} label="Pastas" icon={<Folder />} onClick={() => onOpenLibraryTab('folders')} />
               <NavigationButton nested active={active === 'library' && activeLibraryTab === 'favorites'} label="Favoritos" icon={<Heart />} onClick={() => onOpenLibraryTab('favorites')} />
               <NavigationButton nested active={active === 'library' && activeLibraryTab === 'playlists'} label="Playlists" icon={<ListMusic />} onClick={() => onOpenLibraryTab('playlists')} />
-              <NavigationButton nested active={false} label="Rekordbox" icon={<Upload />} onClick={() => onOpenLibraryTab('playlists')} />
-              <NavigationButton nested active={active === 'library' && activeLibraryTab === 'history'} label="Histórico" icon={<History />} onClick={() => onOpenLibraryTab('history')} />
             </div>
-          )}
-
-          {!offlineMode && onOpenStatistics && (
-            <NavigationButton active={active === 'statistics'} label="Estatísticas" icon={<BarChart3 />} onClick={onOpenStatistics} />
           )}
         </nav>
 
         {sidebarUtilities && <div className="desktop-sidebar__utilities">{sidebarUtilities}</div>}
-
-        <div className="desktop-sidebar__footer">
-          <span>{libraryCount.toLocaleString('pt-BR')}</span>
-          <small>{libraryCount === 1 ? 'faixa disponível' : 'faixas disponíveis'}</small>
-        </div>
       </aside>
 
       <section className={surfaceClassName} data-desktop-section={active}>
