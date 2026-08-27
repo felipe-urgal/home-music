@@ -304,22 +304,23 @@ try {
   assert.equal(favorites.status, 200);
   assert.deepEqual(await favorites.json(), { trackIds: [] });
 
-  const history = await fetch(`${baseUrl}/api/history`, {
-    headers: { Cookie: cookie }
-  });
-  assert.equal(history.status, 200);
-  assert.deepEqual(await history.json(), { items: [] });
+  const removedRoutes = [
+    { method: 'GET', path: '/api/history' },
+    { method: 'GET', path: '/api/statistics?period=all' },
+    { method: 'POST', path: '/api/integrations/rekordbox/preview' },
+    { method: 'POST', path: '/api/integrations/rekordbox/import' }
+  ];
 
-  const statistics = await fetch(`${baseUrl}/api/statistics?period=all`, {
-    headers: { Cookie: cookie }
-  });
-  assert.equal(statistics.status, 200);
-  const statisticsBody = await statistics.json();
-  assert.equal(statisticsBody.period, 'all');
-  assert.equal(statisticsBody.totalPlays, 0);
-  assert.equal(statisticsBody.uniqueTracks, 0);
-  assert.equal(statisticsBody.uniqueArtists, 0);
-  assert.deepEqual(statisticsBody.topTracks, []);
+  for (const route of removedRoutes) {
+    const response = await fetch(`${baseUrl}${route.path}`, {
+      method: route.method,
+      headers: {
+        Cookie: cookie,
+        'X-Home-Music-Request': '1'
+      }
+    });
+    assert.equal(response.status, 404, `${route.method} ${route.path} deve permanecer removida.`);
+  }
 
   const playlists = await fetch(`${baseUrl}/api/playlists`, {
     headers: { Cookie: cookie }
@@ -399,22 +400,10 @@ try {
     assert.equal(userFavorites.status, 200, 'User autenticado deve acessar somente os próprios favoritos.');
     assert.deepEqual(await userFavorites.json(), { trackIds: [] });
 
-    const userHistory = await fetch(`${baseUrl}/api/history`, {
-      headers: { Cookie: cookie }
-    });
-    assert.equal(userHistory.status, 200, 'User autenticado deve acessar somente o próprio histórico.');
-    assert.deepEqual(await userHistory.json(), { items: [] });
-
-    const userStatistics = await fetch(`${baseUrl}/api/statistics?period=all`, {
-      headers: { Cookie: cookie }
-    });
-    assert.equal(userStatistics.status, 200, 'User autenticado deve acessar somente as próprias estatísticas.');
-    assert.equal((await userStatistics.json()).totalPlays, 0);
-
     const userPlaylists = await fetch(`${baseUrl}/api/playlists`, {
       headers: { Cookie: cookie }
     });
-    assert.equal(userPlaylists.status, 200, 'User autenticado deve acessar playlists pessoais e Rekordbox compartilhadas.');
+    assert.equal(userPlaylists.status, 200, 'User autenticado deve acessar playlists pessoais e importadas compartilhadas.');
     assert.deepEqual(await userPlaylists.json(), { playlists: [] });
 
     const userPlayerState = await fetch(`${baseUrl}/api/player/state`, {
@@ -425,9 +414,7 @@ try {
 
     const adminOperations = [
       { method: 'GET', path: '/api/health' },
-      { method: 'POST', path: '/api/library/scan' },
-      { method: 'POST', path: '/api/integrations/rekordbox/preview' },
-      { method: 'POST', path: '/api/integrations/rekordbox/import' }
+      { method: 'POST', path: '/api/library/scan' }
     ];
 
     for (const operation of adminOperations) {

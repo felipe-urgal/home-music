@@ -121,6 +121,37 @@
   background: rgba(255,255,255,.05);
 }
 
+.section-heading__actions {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.section-heading__actions .text-action {
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.playlist-source-note {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  color: #8a98a5;
+  font-size: 12px;
+}
+
+@media (max-width: 420px) {
+  .section-heading__actions {
+    gap: 4px;
+  }
+
+  .section-heading__actions .text-action {
+    padding-inline: 6px;
+  }
+}
+
 @media (max-width: 350px) {
   .library-view-controls {
     grid-template-columns: 1fr;

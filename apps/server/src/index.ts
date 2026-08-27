@@ -2,7 +2,7 @@ import { config } from 'dotenv';
 import { open } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import Fastify from 'fastify';
-import type { NormalizationMode, PlaybackState, RepeatMode, ScanResponse, StatisticsPeriod } from '@home-music/shared';
+import type { NormalizationMode, PlaybackState, RepeatMode, ScanResponse } from '@home-music/shared';
 import {
   ACCOUNT_PASSWORD_MIN_LENGTH,
   AccountPasswordService
@@ -31,13 +31,6 @@ import { probeFfmpeg, resolveFfmpegCommand, type FfmpegStatus } from './ffmpeg.j
 import { readCover, scanLibrary, type IndexedTrack } from './library.js';
 import { replayGainForMode } from './replay-gain.js';
 import { readTrackLyrics } from './lyrics.js';
-import {
-  buildRekordboxImportPlan,
-  MAX_REKORDBOX_REQUEST_BYTES,
-  MAX_REKORDBOX_XML_BYTES,
-  publicRekordboxPlan,
-  RekordboxXmlError
-} from './rekordbox.js';
 import {
   openRegularFileInside,
   parseByteRange,
@@ -355,11 +348,6 @@ function parseNormalizationMode(value: unknown): NormalizationMode | null {
   return value === 'track' || value === 'album' ? value : null;
 }
 
-function parseStatisticsPeriod(value: unknown): StatisticsPeriod | null {
-  if (value == null || value === '') return '30d';
-  return value === '7d' || value === '30d' || value === 'all' ? value : null;
-}
-
 function cleanRepeatMode(value: unknown): RepeatMode {
   return value === 'one' || value === 'all' ? value : 'off';
 }
@@ -618,51 +606,6 @@ app.put<{ Params: { id: string }; Body: { favorite?: boolean } }>('/api/favorite
   return { favorite: request.body.favorite };
 });
 
-app.get<{ Querystring: { limit?: string } }>('/api/history', async (request, reply) => {
-  if (!request.user) {
-    return reply.code(409).send({ error: 'Histórico pessoal exige uma identidade persistida.' });
-  }
-
-  const requestedLimit = Number(request.query.limit || 200);
-  return {
-    items: database.getHistory(
-      request.user.id,
-      Number.isFinite(requestedLimit) ? requestedLimit : 200
-    )
-  };
-});
-
-app.post<{ Params: { id: string } }>('/api/history/:id', async (request, reply) => {
-  if (!request.user) {
-    return reply.code(409).send({ error: 'Histórico pessoal exige uma identidade persistida.' });
-  }
-  if (!tracksById.has(request.params.id)) return reply.code(404).send({ error: 'Música não encontrada.' });
-
-  database.recordHistory(request.user.id, request.params.id);
-  return reply.code(204).send();
-});
-
-app.delete('/api/history', async (request, reply) => {
-  if (!request.user) {
-    return reply.code(409).send({ error: 'Histórico pessoal exige uma identidade persistida.' });
-  }
-
-  database.clearHistory(request.user.id);
-  return reply.code(204).send();
-});
-
-app.get<{ Querystring: { period?: string } }>('/api/statistics', async (request, reply) => {
-  if (!request.user) {
-    return reply.code(409).send({ error: 'Estatísticas pessoais exigem uma identidade persistida.' });
-  }
-
-  const period = parseStatisticsPeriod(request.query.period);
-  if (!period) return reply.code(400).send({ error: 'Período de estatísticas inválido.' });
-
-  reply.header('Cache-Control', 'private, no-store');
-  return database.getStatistics(request.user.id, period);
-});
-
 app.get('/api/playlists', async (request, reply) => {
   if (!request.user) {
     return reply.code(409).send({ error: 'Playlists pessoais exigem uma identidade persistida.' });
@@ -692,7 +635,7 @@ app.patch<{ Params: { id: string }; Body: { name?: string } }>('/api/playlists/:
   const source = database.getPlaylistSource(request.user.id, request.params.id);
   if (!source) return reply.code(404).send({ error: 'Playlist não encontrada.' });
   if (source !== 'manual') {
-    return reply.code(409).send({ error: 'Playlist sincronizada pelo Rekordbox; reimporte o XML para alterá-la.' });
+    return reply.code(409).send({ error: 'Playlist importada é somente leitura.' });
   }
 
   const name = cleanName(request.body?.name);
@@ -711,7 +654,7 @@ app.delete<{ Params: { id: string } }>('/api/playlists/:id', async (request, rep
   const source = database.getPlaylistSource(request.user.id, request.params.id);
   if (!source) return reply.code(404).send({ error: 'Playlist não encontrada.' });
   if (source !== 'manual') {
-    return reply.code(409).send({ error: 'Playlist sincronizada pelo Rekordbox; reimporte o XML para alterá-la.' });
+    return reply.code(409).send({ error: 'Playlist importada é somente leitura.' });
   }
 
   if (!database.deletePlaylist(request.user.id, request.params.id)) {
@@ -728,7 +671,7 @@ app.put<{ Params: { id: string }; Body: { trackIds?: unknown } }>('/api/playlist
   const source = database.getPlaylistSource(request.user.id, request.params.id);
   if (!source) return reply.code(404).send({ error: 'Playlist não encontrada.' });
   if (source !== 'manual') {
-    return reply.code(409).send({ error: 'Playlist sincronizada pelo Rekordbox; reimporte o XML para alterá-la.' });
+    return reply.code(409).send({ error: 'Playlist importada é somente leitura.' });
   }
   if (!Array.isArray(request.body?.trackIds)) return reply.code(400).send({ error: 'Lista de músicas inválida.' });
   const trackIds = cleanTrackIds(request.body.trackIds);
@@ -739,73 +682,6 @@ app.put<{ Params: { id: string }; Body: { trackIds?: unknown } }>('/api/playlist
 
   return { trackIds };
 });
-
-app.post<{ Body: { xml?: unknown } }>(
-  '/api/integrations/rekordbox/preview',
-  { bodyLimit: MAX_REKORDBOX_REQUEST_BYTES },
-  async (request, reply) => {
-    if (!libraryReady) {
-      return reply.code(503).send({ error: 'Biblioteca ainda não está pronta para comparar o XML do Rekordbox.' });
-    }
-
-    const xml = typeof request.body?.xml === 'string' ? request.body.xml : '';
-    if (!xml) return reply.code(400).send({ error: 'Selecione um XML exportado pelo Rekordbox.' });
-    if (Buffer.byteLength(xml, 'utf8') > MAX_REKORDBOX_XML_BYTES) {
-      return reply.code(413).send({ error: `O XML excede o limite de ${MAX_REKORDBOX_XML_BYTES / 1024 / 1024} MiB.` });
-    }
-
-    try {
-      const plan = buildRekordboxImportPlan(xml, tracks);
-      reply.header('Cache-Control', 'private, no-store');
-      return publicRekordboxPlan(plan);
-    } catch (error) {
-      if (error instanceof RekordboxXmlError) return reply.code(400).send({ error: error.message });
-      throw error;
-    }
-  }
-);
-
-app.post<{ Body: { xml?: unknown } }>(
-  '/api/integrations/rekordbox/import',
-  { bodyLimit: MAX_REKORDBOX_REQUEST_BYTES },
-  async (request, reply) => {
-    if (!libraryReady) {
-      return reply.code(503).send({ error: 'Biblioteca ainda não está pronta para importar playlists do Rekordbox.' });
-    }
-
-    const xml = typeof request.body?.xml === 'string' ? request.body.xml : '';
-    if (!xml) return reply.code(400).send({ error: 'Selecione um XML exportado pelo Rekordbox.' });
-    if (Buffer.byteLength(xml, 'utf8') > MAX_REKORDBOX_XML_BYTES) {
-      return reply.code(413).send({ error: `O XML excede o limite de ${MAX_REKORDBOX_XML_BYTES / 1024 / 1024} MiB.` });
-    }
-
-    try {
-      const plan = buildRekordboxImportPlan(xml, tracks);
-      if (plan.playlists === 0) {
-        return reply.code(400).send({ error: 'O XML não contém playlists para importar.' });
-      }
-      if (plan.playlistEntries > 0 && plan.matchedPlaylistEntries === 0) {
-        return reply.code(409).send({
-          error: 'Nenhuma música das playlists foi reconhecida. Atualize a biblioteca ou confira se este XML corresponde aos seus arquivos antes de sincronizar.'
-        });
-      }
-
-      const changes = database.syncImportedPlaylists(
-        'rekordbox',
-        plan.playlistPlans.map(playlist => ({
-          sourceKey: playlist.sourceKey,
-          name: playlist.name,
-          trackIds: playlist.trackIds
-        }))
-      );
-      reply.header('Cache-Control', 'private, no-store');
-      return { ...publicRekordboxPlan(plan), ...changes };
-    } catch (error) {
-      if (error instanceof RekordboxXmlError) return reply.code(400).send({ error: error.message });
-      throw error;
-    }
-  }
-);
 
 app.get('/api/player/state', async (request, reply) => {
   if (!request.user) {
