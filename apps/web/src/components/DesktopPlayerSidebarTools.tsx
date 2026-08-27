@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { NormalizationMode, Track } from '@home-music/shared';
-import { CheckCircle2, LogOut, Settings2, UserRound } from 'lucide-react';
+import { CheckCircle2, Settings2, UserRound } from 'lucide-react';
 import type {
   DetectedNetwork,
   NetworkPreference,
@@ -63,8 +63,7 @@ export function DesktopPlayerSidebarTools({
   onStreamingSelection,
   onNetworkPreference,
   onNormalizationMode,
-  onOpenAccount,
-  onLogout
+  onOpenAccount
 }: DesktopPlayerSidebarToolsProps) {
   const [open, setOpen] = useState(false);
 
@@ -127,13 +126,6 @@ export function DesktopPlayerSidebarTools({
         <UserRound />
         <span><strong>Minha conta</strong><small>{username}</small></span>
       </button>
-
-      {onLogout && (
-        <button className="desktop-player-sidebar-tools__logout" type="button" onClick={onLogout}>
-          <LogOut />
-          <span>Sair da conta</span>
-        </button>
-      )}
     </div>
   );
 }
