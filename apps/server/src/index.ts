@@ -8,6 +8,7 @@ import {
   AccountPasswordService
 } from './account-password.js';
 import { registerAccountSessionRoutes } from './account-session-routes.js';
+import { buildAdminLibraryOverview } from './admin-library-overview.js';
 import {
   DEFAULT_AUTO_RESCAN_INTERVAL_SECONDS,
   parseAutoRescanIntervalSeconds,
@@ -86,7 +87,7 @@ try {
   transcodeCacheMegabytes = parseTranscodeCacheMegabytes(process.env.HOME_MUSIC_TRANSCODE_CACHE_MB);
 } catch (error) {
   app.log.warn(
-    { err: error, fallbackMegabytes: DEFAULT_TRANSCODE_CACHE_MEGABYTES },
+    { err: error, fallbackSeconds: DEFAULT_TRANSCODE_CACHE_MEGABYTES },
     'Limite do cache de transcoding inválido; usando o valor padrão.'
   );
 }
@@ -475,6 +476,16 @@ app.get('/api/health', async (_request, reply) => {
     },
     schemaVersion: database.getSchemaVersion()
   };
+});
+
+app.get('/api/admin/library/overview', async (_request, reply) => {
+  reply.header('Cache-Control', 'private, no-store');
+  return buildAdminLibraryOverview(tracks, {
+    ready: libraryReady,
+    scanning: Boolean(scanPromise),
+    scannedAt,
+    autoRescan: automaticRescanStatus()
+  });
 });
 
 app.get('/api/auth/status', { config: { auth: 'public' } }, async (request, reply) => {
