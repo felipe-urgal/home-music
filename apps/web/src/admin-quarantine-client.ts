@@ -49,4 +49,12 @@ export async function deleteAdminQuarantinedTrack(trackId: string) {
     body: JSON.stringify({ confirmation: PERMANENT_DELETE_CONFIRMATION })
   });
   if (!response.ok) throw new Error(await responseError(response));
+
+  const scanResponse = await apiFetch('/api/library/scan', {
+    method: 'POST',
+    headers: mutationHeaders
+  }).catch(() => null);
+  if (!scanResponse?.ok) {
+    throw new Error('Arquivo excluído permanentemente, mas o cleanup da biblioteca não pôde ser concluído. Atualize a biblioteca.');
+  }
 }
