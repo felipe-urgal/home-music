@@ -24,6 +24,14 @@
     display: none;
   }
 
+  .desktop-sidebar.has-utilities .desktop-sidebar__utilities {
+    margin-top: auto;
+  }
+
+  .desktop-sidebar.has-utilities .desktop-player-sidebar-tools {
+    margin-top: 0;
+  }
+
   .desktop-player-sidebar-tools__account.is-active {
     color: #f5f8fb;
     background: rgba(26, 147, 247, 0.105);
