@@ -1,5 +1,12 @@
-import { useState, type FormEvent } from 'react';
-import { Download, LockKeyhole, Music2 } from 'lucide-react';
+import { useEffect, useState, type FormEvent } from 'react';
+import {
+  Download,
+  Eye,
+  EyeOff,
+  LockKeyhole,
+  Music2,
+  UserRound
+} from 'lucide-react';
 
 type LoginScreenProps = {
   configured: boolean;
@@ -13,8 +20,14 @@ type LoginScreenProps = {
 export function LoginScreen({ configured, error, offlineCount = 0, onLogin, onRetry, onOpenOffline }: LoginScreenProps) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const autoOpeningOffline = offlineCount > 0 && Boolean(onOpenOffline);
+
+  useEffect(() => {
+    if (autoOpeningOffline) onOpenOffline?.();
+  }, [autoOpeningOffline, onOpenOffline]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -29,6 +42,18 @@ export function LoginScreen({ configured, error, offlineCount = 0, onLogin, onRe
     } finally {
       setSubmitting(false);
     }
+  }
+
+  if (autoOpeningOffline) {
+    return (
+      <main className="login-shell">
+        <section className="login-card login-card--status" aria-live="polite">
+          <div className="login-brand__icon"><Download /></div>
+          <strong>Modo offline</strong>
+          <span>Abrindo suas músicas baixadas…</span>
+        </section>
+      </main>
+    );
   }
 
   if (!configured) {
@@ -57,37 +82,55 @@ export function LoginScreen({ configured, error, offlineCount = 0, onLogin, onRe
 
         <div className="login-heading">
           <h1 id="login-title">Entrar</h1>
-          <p>Use as credenciais configuradas no seu Home Music.</p>
+          <p>Entre para acessar sua biblioteca.</p>
         </div>
 
         <form className="login-form" onSubmit={submit}>
-          <label>
-            <span>Usuário</span>
-            <input
-              name="username"
-              type="text"
-              autoComplete="username"
-              autoCapitalize="none"
-              spellCheck={false}
-              value={username}
-              onChange={event => setUsername(event.target.value)}
-              disabled={submitting}
-              required
-            />
-          </label>
+          <div className="login-field">
+            <label htmlFor="login-username">Usuário</label>
+            <div className="login-input-shell">
+              <UserRound aria-hidden="true" />
+              <input
+                id="login-username"
+                name="username"
+                type="text"
+                autoComplete="username"
+                autoCapitalize="none"
+                spellCheck={false}
+                value={username}
+                onChange={event => setUsername(event.target.value)}
+                disabled={submitting}
+                required
+              />
+            </div>
+          </div>
 
-          <label>
-            <span>Senha</span>
-            <input
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={event => setPassword(event.target.value)}
-              disabled={submitting}
-              required
-            />
-          </label>
+          <div className="login-field">
+            <label htmlFor="login-password">Senha</label>
+            <div className="login-input-shell">
+              <LockKeyhole aria-hidden="true" />
+              <input
+                id="login-password"
+                name="password"
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="current-password"
+                value={password}
+                onChange={event => setPassword(event.target.value)}
+                disabled={submitting}
+                required
+              />
+              <button
+                className="login-password-toggle"
+                type="button"
+                aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                aria-pressed={showPassword}
+                disabled={submitting}
+                onClick={() => setShowPassword(value => !value)}
+              >
+                {showPassword ? <EyeOff /> : <Eye />}
+              </button>
+            </div>
+          </div>
 
           {(formError || error) && <div className="login-error" role="alert">{formError || error}</div>}
 
@@ -96,16 +139,7 @@ export function LoginScreen({ configured, error, offlineCount = 0, onLogin, onRe
           </button>
         </form>
 
-        {offlineCount > 0 && onOpenOffline && (
-          <>
-            <div className="login-offline-separator">Sem servidor</div>
-            <button className="login-offline-action" type="button" onClick={onOpenOffline}>
-              <Download /> Abrir {offlineCount} {offlineCount === 1 ? 'download offline' : 'downloads offline'}
-            </button>
-          </>
-        )}
-
-        <p className="login-footnote"><LockKeyhole /> A sessão fica protegida por cookie HttpOnly neste navegador.</p>
+        <p className="login-footnote"><LockKeyhole /> Sessão protegida neste navegador.</p>
       </section>
     </main>
   );
