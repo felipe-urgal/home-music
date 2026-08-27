@@ -96,6 +96,16 @@ async function openAccountFromLibrary(page: Page) {
   await expect(page.locator('#my-account-title')).toHaveText('Minha conta');
 }
 
+async function openAdministration(page: Page) {
+  if (viewportWidth(page) >= 1024) {
+    await page.getByTestId('desktop-sidebar').getByRole('button', { name: /^Administração/ }).click();
+  } else {
+    await page.locator('.my-account-screen').getByRole('button', { name: /^Administração/ }).click();
+  }
+
+  await expect(page.locator('#administration-title')).toHaveText('Administração');
+}
+
 test('admin e user preservam role, troca de senha e isolamento em todos os layouts', async ({ page }, testInfo) => {
   const projectSlug = testInfo.project.name.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
   const retrySuffix = `r${testInfo.retry}`;
@@ -113,8 +123,7 @@ test('admin e user preservam role, troca de senha e isolamento em todos os layou
   await expect(page.getByLabel('Identidade atual')).toContainText('Administrador');
   await expect(page.locator('#my-account-group-admin')).toHaveText('Sistema');
 
-  await page.locator('.my-account-screen').getByRole('button', { name: /^Administração/ }).click();
-  await expect(page.locator('#administration-title')).toHaveText('Administração');
+  await openAdministration(page);
   await expect(page.getByLabel('Acesso administrativo')).toContainText(adminUsername);
   await page.getByRole('button', { name: /^Usuários/ }).click();
   await expect(page.locator('#admin-users-title')).toHaveText('Usuários');
