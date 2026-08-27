@@ -10,8 +10,7 @@ export type DesktopShortcutAction =
   | 'seek-backward'
   | 'seek-forward'
   | 'volume-up'
-  | 'volume-down'
-  | 'focus-search';
+  | 'volume-down';
 
 type ShortcutKeyEvent = {
   key: string;
@@ -36,7 +35,6 @@ type DesktopKeyboardShortcutsOptions = {
   onNext?: () => void;
   onSeek?: (value: number) => void;
   onVolume?: (value: number) => void;
-  onFocusSearch?: () => void;
 };
 
 const INTERACTIVE_TARGET_SELECTOR = [
@@ -59,8 +57,6 @@ export function resolveDesktopShortcut(event: ShortcutKeyEvent): DesktopShortcut
   if (event.code === 'Space' || event.key === ' ' || event.key === 'Spacebar') {
     return event.repeat ? null : 'toggle-play';
   }
-
-  if (event.key === '/') return event.repeat ? null : 'focus-search';
 
   if (event.key === 'ArrowLeft') {
     if (event.shiftKey) return event.repeat ? null : 'previous';
@@ -93,8 +89,7 @@ export function useDesktopKeyboardShortcuts({
   onPrevious,
   onNext,
   onSeek,
-  onVolume,
-  onFocusSearch
+  onVolume
 }: DesktopKeyboardShortcutsOptions) {
   const stateRef = useRef({
     hasCurrent,
@@ -107,8 +102,7 @@ export function useDesktopKeyboardShortcuts({
     onPrevious,
     onNext,
     onSeek,
-    onVolume,
-    onFocusSearch
+    onVolume
   });
 
   stateRef.current = {
@@ -122,8 +116,7 @@ export function useDesktopKeyboardShortcuts({
     onPrevious,
     onNext,
     onSeek,
-    onVolume,
-    onFocusSearch
+    onVolume
   };
 
   useEffect(() => {
@@ -135,14 +128,6 @@ export function useDesktopKeyboardShortcuts({
       if (!action) return;
 
       const state = stateRef.current;
-
-      if (action === 'focus-search') {
-        if (!state.onFocusSearch) return;
-        event.preventDefault();
-        state.onFocusSearch();
-        return;
-      }
-
       if (!state.hasCurrent) return;
 
       if (action === 'toggle-play') {
