@@ -10,6 +10,7 @@ import {
 import { registerAccountSessionRoutes } from './account-session-routes.js';
 import { registerAdminImportRoutes } from './admin-import-routes.js';
 import { buildAdminLibraryOverview } from './admin-library-overview.js';
+import { registerAdminTrackRoutes } from './admin-track-routes.js';
 import {
   DEFAULT_AUTO_RESCAN_INTERVAL_SECONDS,
   parseAutoRescanIntervalSeconds,
@@ -46,6 +47,7 @@ import {
   sendWebRequest,
   type PreparedWebApp
 } from './static-web.js';
+import { TrackAvailabilityStore } from './track-availability-store.js';
 import {
   DEFAULT_TRANSCODE_CACHE_MEGABYTES,
   parseTranscodeCacheMegabytes,
@@ -95,6 +97,7 @@ try {
 }
 
 const database = new HomeMusicDatabase(databasePath);
+const trackAvailability = new TrackAvailabilityStore(databasePath);
 const authUsers = new UserAuthStore(databasePath);
 const musicDir = process.env.MUSIC_DIR || '';
 const port = Number(process.env.PORT || 8787);
@@ -162,7 +165,11 @@ const coverCache = new Map<string, CachedCover>();
 
 function setTracks(nextTracks: IndexedTrack[]) {
   tracks = nextTracks;
-  tracksById = new Map(nextTracks.map(track => [track.id, track]));
+  tracksById = new Map(
+    nextTracks
+      .filter(track => trackAvailability.isEnabled(track.id))
+      .map(track => [track.id, track])
+  );
 }
 
 function publicTrack(track: IndexedTrack) {
@@ -275,6 +282,7 @@ async function performRescan(): Promise<ScanResponse> {
   const changed = rootChanged || result.stats.added > 0 || result.stats.updated > 0 || result.stats.removed > 0;
 
   database.syncTracks(result.tracks, resolvedRoot, nextScannedAt);
+  trackAvailability.refresh();
   libraryRoot = resolvedRoot;
   scannedAt = nextScannedAt;
   setTracks(result.tracks);
@@ -286,7 +294,7 @@ async function performRescan(): Promise<ScanResponse> {
   }
 
   return {
-    tracks: tracks.length,
+    tracks: tracksById.size,
     scannedAt,
     ...result.stats
   };
@@ -384,6 +392,26 @@ installApiAuthPolicy(app, {
 registerAccountSessionRoutes(app, sessions);
 registerAdminUserRoutes(app, adminUsers);
 registerAdminImportRoutes(app, importJobs);
+registerAdminTrackRoutes(app, {
+  listTracks: () => tracks.map(track => ({
+    ...publicTrack(track),
+    enabled: trackAvailability.isEnabled(track.id)
+  })),
+  setEnabled: (trackId, enabled) => {
+    const track = tracks.find(item => item.id === trackId);
+    if (!track) return null;
+
+    const currentEnabled = trackAvailability.isEnabled(trackId);
+    if (currentEnabled !== enabled) {
+      trackAvailability.setEnabled(trackId, enabled);
+      setTracks(tracks);
+      libraryRevision += 1;
+      if (!enabled) clearCoverCache();
+    }
+
+    return { ...publicTrack(track), enabled };
+  }
+});
 
 app.addHook('onSend', async (_request, reply, payload) => {
   reply.header('X-Content-Type-Options', 'nosniff');
@@ -400,6 +428,7 @@ app.addHook('onClose', async () => {
   accountPasswords.close();
   adminUsers.close();
   authUsers.close();
+  trackAvailability.close();
   database.close();
 });
 
@@ -461,7 +490,7 @@ app.get('/api/health', async (_request, reply) => {
     uptimeSeconds: Math.floor(process.uptime()),
     webReady,
     libraryReady,
-    tracks: tracks.length,
+    tracks: tracksById.size,
     ...libraryStatus(),
     musicDirConfigured: Boolean(musicDir),
     authConfigured,
@@ -586,7 +615,7 @@ app.post('/api/auth/logout', async (request, reply) => {
 app.get('/api/library', async (_request, reply) => {
   reply.header('Cache-Control', 'private, no-store');
   return {
-    tracks: tracks.map(publicTrack),
+    tracks: [...tracksById.values()].map(publicTrack),
     ...libraryStatus()
   };
 });

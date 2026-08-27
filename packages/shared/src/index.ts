@@ -106,6 +106,16 @@ export type Track = {
   replayGainAlbumDb?: number | null;
 };
 
+export type AdminTrack = Track & {
+  enabled: boolean;
+};
+
+export type AdminTracksResponse = {
+  tracks: AdminTrack[];
+  active: number;
+  inactive: number;
+};
+
 export type LibraryResponse = {
   tracks: Track[];
   scannedAt: string;
