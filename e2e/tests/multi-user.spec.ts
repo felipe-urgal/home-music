@@ -146,7 +146,7 @@ test('admin e user preservam role, troca de senha e isolamento em todos os layou
   await expect(page.locator('#admin-import-title')).toHaveText('Importar mídia');
   await expect(page.getByLabel('Formas de importação planejadas')).toContainText('Upload de arquivo');
   await expect(page.getByLabel('Formas de importação planejadas')).toContainText('URL direta');
-  await expect(page.getByLabel('Formas de importação planejadas')).toContainText('Providers externos');
+  await expect(page.getByLabel('Formas de importação planejadas')).toContainText('Fontes externas');
   await expect(page.getByText('Nenhuma importação na fila', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Voltar', exact: true }).click();
   await expect(page.locator('#administration-title')).toHaveText('Administração');
