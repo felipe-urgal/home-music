@@ -12,13 +12,56 @@
     border-bottom: 1px solid rgba(255, 255, 255, 0.045);
   }
 
+  .desktop-nav__group-heading {
+    min-height: 25px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 0 6px 4px 12px;
+  }
+
   .desktop-nav__group-label {
-    padding: 0 12px 5px;
+    min-width: 0;
     color: #5f6b77;
     font-size: 9px;
     font-weight: 700;
     letter-spacing: 0.09em;
     text-transform: uppercase;
+  }
+
+  .desktop-nav__refresh {
+    width: 28px;
+    height: 28px;
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: #66727e;
+    cursor: pointer;
+  }
+
+  .desktop-nav__refresh:hover:not(:disabled),
+  .desktop-nav__refresh:focus-visible {
+    color: #c8d4de;
+    background: rgba(255, 255, 255, 0.045);
+    outline: none;
+  }
+
+  .desktop-nav__refresh:disabled {
+    opacity: 0.45;
+  }
+
+  .desktop-nav__refresh svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  .desktop-nav__refresh.is-loading svg {
+    animation: spin 0.9s linear infinite;
   }
 
   .desktop-nav__item--nested {
@@ -53,32 +96,9 @@
 
   .desktop-main-content--library .library-header:has(.library-header__spacer) .library-header__spacer,
   .desktop-main-content--library .library-header:has(.library-header__spacer) .library-header__title,
+  .desktop-main-content--library .library-header > .icon-button[aria-label="Atualizar biblioteca"],
   .desktop-main-content--library .library-header > .icon-button[aria-label="Voltar ao player"] {
     display: none;
-  }
-
-  .desktop-main-content--library .library-header > .icon-button[aria-label="Atualizar biblioteca"] {
-    position: fixed;
-    top: 136px;
-    left: 178px;
-    z-index: 30;
-    width: 28px;
-    height: 28px;
-    border-radius: 7px;
-    color: #66727e;
-    background: transparent;
-  }
-
-  .desktop-main-content--library .library-header > .icon-button[aria-label="Atualizar biblioteca"]:hover:not(:disabled),
-  .desktop-main-content--library .library-header > .icon-button[aria-label="Atualizar biblioteca"]:focus-visible {
-    color: #c8d4de;
-    background: rgba(255, 255, 255, 0.045);
-    outline: none;
-  }
-
-  .desktop-main-content--library .library-header > .icon-button[aria-label="Atualizar biblioteca"] svg {
-    width: 15px;
-    height: 15px;
   }
 
   .desktop-sidebar.has-utilities .desktop-sidebar__utilities {
@@ -91,11 +111,5 @@
 
   .desktop-layout[data-desktop-active="player"] + .desktop-player-bar {
     display: none;
-  }
-}
-
-@media (min-width: 1380px) {
-  .desktop-main-content--library .library-header > .icon-button[aria-label="Atualizar biblioteca"] {
-    left: 194px;
   }
 }

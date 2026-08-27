@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Track } from '@home-music/shared';
-import { ArrowDown, ArrowUp, ArrowUpDown, Heart, HeartOff, Pause, Play, Trash2, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, Pause, Play, Trash2, X } from 'lucide-react';
 import type { TrackSort } from '../library-utils';
 import { Artwork } from './Artwork';
 
@@ -11,11 +11,9 @@ type DesktopTrackTableProps = {
   context: Track[];
   current?: Track;
   playing: boolean;
-  favorites: Set<string>;
   sort: TrackSort;
   onSort: (sort: TrackSort) => void;
   onPlayTrack: (track: Track, context: Track[]) => void;
-  onToggleFavorite: (trackId: string) => void;
   onRemove?: (trackId: string) => void;
 };
 
@@ -85,11 +83,9 @@ export function DesktopTrackTable({
   context,
   current,
   playing,
-  favorites,
   sort,
   onSort,
   onPlayTrack,
-  onToggleFavorite,
   onRemove
 }: DesktopTrackTableProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
@@ -119,12 +115,6 @@ export function DesktopTrackTable({
     setSelectedIds(allSelected ? new Set() : new Set(tracks.map(track => track.id)));
   }
 
-  function setSelectedFavorite(favorite: boolean) {
-    for (const track of selectedTracks) {
-      if (favorites.has(track.id) !== favorite) onToggleFavorite(track.id);
-    }
-  }
-
   function playSelection() {
     const first = selectedTracks[0];
     if (first) onPlayTrack(first, selectedTracks);
@@ -140,8 +130,6 @@ export function DesktopTrackTable({
         {selectedTracks.length > 0 && (
           <div className="desktop-bulk-toolbar__actions">
             <button type="button" onClick={playSelection}><Play />Tocar seleção</button>
-            <button type="button" onClick={() => setSelectedFavorite(true)} disabled={selectedTracks.every(track => favorites.has(track.id))}><Heart />Favoritar</button>
-            <button type="button" onClick={() => setSelectedFavorite(false)} disabled={selectedTracks.every(track => !favorites.has(track.id))}><HeartOff />Desfavoritar</button>
             <button type="button" aria-label="Limpar seleção" onClick={() => setSelectedIds(new Set())}><X />Limpar</button>
           </div>
         )}
@@ -159,12 +147,11 @@ export function DesktopTrackTable({
             <th className="desktop-library-table__folder" scope="col">Pasta</th>
             <th className="desktop-library-table__format" scope="col">Formato</th>
             <th className="desktop-library-table__duration" scope="col">Duração</th>
-            <th className="desktop-library-table__actions" scope="col">Ações</th>
+            {onRemove && <th className="desktop-library-table__actions" scope="col">Ações</th>}
           </tr>
         </thead>
         <tbody>
           {tracks.map(track => {
-            const favorite = favorites.has(track.id);
             const isCurrent = track.id === current?.id;
             const selected = selectedIds.has(track.id);
             return (
@@ -199,17 +186,9 @@ export function DesktopTrackTable({
                 <td className="desktop-library-table__text-cell desktop-library-table__folder" title={track.folderPath || track.folder}>{track.folder || '—'}</td>
                 <td className="desktop-library-table__format">{track.format || '—'}</td>
                 <td className="desktop-library-table__duration">{formatDuration(track.duration)}</td>
-                <td className="desktop-library-table__actions">
-                  <div>
-                    <button
-                      className={`desktop-library-table__action ${favorite ? 'is-active' : ''}`}
-                      type="button"
-                      aria-label={favorite ? `Remover ${track.title} dos favoritos` : `Favoritar ${track.title}`}
-                      onClick={() => onToggleFavorite(track.id)}
-                    >
-                      <Heart fill={favorite ? 'currentColor' : 'none'} />
-                    </button>
-                    {onRemove && (
+                {onRemove && (
+                  <td className="desktop-library-table__actions">
+                    <div>
                       <button
                         className="desktop-library-table__action"
                         type="button"
@@ -218,9 +197,9 @@ export function DesktopTrackTable({
                       >
                         <Trash2 />
                       </button>
-                    )}
-                  </div>
-                </td>
+                    </div>
+                  </td>
+                )}
               </tr>
             );
           })}

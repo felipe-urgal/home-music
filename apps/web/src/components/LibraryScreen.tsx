@@ -3,7 +3,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Folder,
-  Heart,
   ListMusic,
   Music2,
   Play,
@@ -15,7 +14,7 @@ import {
 } from 'lucide-react';
 import type { AuthenticatedUser, Playlist, Track } from '@home-music/shared';
 import { canUseAdminLibraryActions } from '../frontend-access';
-import type { CoverFilter, FavoriteFilter, TrackSort } from '../library-utils';
+import type { CoverFilter, TrackSort } from '../library-utils';
 import type { LibraryData } from '../useLibraryData';
 import { useDesktopLayout } from '../useDesktopLayout';
 import { LIBRARY_PAGE_SIZE, type LibraryNavigation, type LibraryTab } from '../useLibraryNavigation';
@@ -38,7 +37,6 @@ type LibraryScreenProps = {
 
 const tabs: Array<{ id: LibraryTab; label: string; icon: typeof Folder }> = [
   { id: 'folders', label: 'Pastas', icon: Folder },
-  { id: 'favorites', label: 'Favoritos', icon: Heart },
   { id: 'playlists', label: 'Playlists', icon: ListMusic }
 ];
 
@@ -47,22 +45,18 @@ function TrackRows({
   context,
   current,
   playing,
-  favorites,
   sort,
   onSort,
   onPlayTrack,
-  onToggleFavorite,
   onRemove
 }: {
   tracks: Track[];
   context: Track[];
   current?: Track;
   playing: boolean;
-  favorites: Set<string>;
   sort: TrackSort;
   onSort: (sort: TrackSort) => void;
   onPlayTrack: (track: Track, context: Track[]) => void;
-  onToggleFavorite: (trackId: string) => void;
   onRemove?: (trackId: string) => void;
 }) {
   const isDesktop = useDesktopLayout();
@@ -74,11 +68,9 @@ function TrackRows({
         context={context}
         current={current}
         playing={playing}
-        favorites={favorites}
         sort={sort}
         onSort={onSort}
         onPlayTrack={onPlayTrack}
-        onToggleFavorite={onToggleFavorite}
         onRemove={onRemove}
       />
     );
@@ -87,7 +79,6 @@ function TrackRows({
   return (
     <div className="library-track-list">
       {tracks.map(track => {
-        const favorite = favorites.has(track.id);
         const isCurrent = track.id === current?.id;
         return (
           <div className={`library-track ${isCurrent ? 'is-current' : ''}`} key={track.id}>
@@ -98,13 +89,6 @@ function TrackRows({
                 <small>{track.artist} · {track.album}</small>
               </span>
               {isCurrent && playing ? <span className="playing-indicator">▶</span> : <Play className="library-track__action" />}
-            </button>
-            <button
-              className={`track-action ${favorite ? 'is-active' : ''}`}
-              aria-label={favorite ? 'Remover dos favoritos' : 'Favoritar'}
-              onClick={() => onToggleFavorite(track.id)}
-            >
-              <Heart fill={favorite ? 'currentColor' : 'none'} />
             </button>
             {onRemove && (
               <button className="track-action" aria-label="Remover da playlist" onClick={() => onRemove(track.id)}><Trash2 /></button>
@@ -132,11 +116,9 @@ export function LibraryScreen({
   const canManageSharedLibrary = canUseAdminLibraryActions(currentUser);
   const {
     tracks,
-    favoriteSet,
     playlists,
     scanning,
     scannedAt,
-    toggleFavorite,
     rescan,
     createPlaylist,
     renamePlaylist,
@@ -152,7 +134,6 @@ export function LibraryScreen({
     query,
     sort,
     formatFilter,
-    favoriteFilter,
     coverFilter,
     availableFormats,
     activeViewOptionCount,
@@ -171,7 +152,6 @@ export function LibraryScreen({
     changeQuery,
     changeSort,
     changeFormatFilter,
-    changeFavoriteFilter,
     changeCoverFilter,
     resetViewOptions,
     showMore
@@ -302,17 +282,6 @@ export function LibraryScreen({
                 </select>
               </label>
 
-              {libraryTab !== 'favorites' && (
-                <label>
-                  <span>Favoritos</span>
-                  <select value={favoriteFilter} onChange={event => changeFavoriteFilter(event.target.value as FavoriteFilter)}>
-                    <option value="all">Todos</option>
-                    <option value="favorites">Somente favoritos</option>
-                    <option value="not-favorites">Não favoritos</option>
-                  </select>
-                </label>
-              )}
-
               <label>
                 <span>Capa</span>
                 <select value={coverFilter} onChange={event => changeCoverFilter(event.target.value as CoverFilter)}>
@@ -373,11 +342,9 @@ export function LibraryScreen({
                   context={folderContextTracks}
                   current={current}
                   playing={playing}
-                  favorites={favoriteSet}
                   sort={sort}
                   onSort={changeSort}
                   onPlayTrack={onPlayTrack}
-                  onToggleFavorite={trackId => run(toggleFavorite(trackId))}
                 />
               </>
             )}
@@ -426,18 +393,16 @@ export function LibraryScreen({
                 )}
               </div>
             )}
-            <div className="section-heading"><span>{libraryTab === 'favorites' ? 'Favoritos' : 'Músicas'}</span><small>{libraryTracks.length}</small></div>
+            <div className="section-heading"><span>Músicas</span><small>{libraryTracks.length}</small></div>
             {pagedTracks.length ? (
               <TrackRows
                 tracks={pagedTracks}
                 context={libraryTracks}
                 current={current}
                 playing={playing}
-                favorites={favoriteSet}
                 sort={sort}
                 onSort={changeSort}
                 onPlayTrack={onPlayTrack}
-                onToggleFavorite={trackId => run(toggleFavorite(trackId))}
                 onRemove={selectedPlaylist?.source === 'manual' ? trackId => run(setPlaylistTracks(selectedPlaylist.id, selectedPlaylist.trackIds.filter(id => id !== trackId))) : undefined}
               />
             ) : <div className="empty-library">Nenhuma música encontrada.</div>}

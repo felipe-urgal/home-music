@@ -12,7 +12,6 @@ import {
   ChevronUp,
   Download,
   GripVertical,
-  Heart,
   LoaderCircle,
   LogOut,
   MoreVertical,
@@ -102,7 +101,6 @@ type PlayerScreenProps = {
   detectedNetwork?: DetectedNetwork;
   normalizationMode?: NormalizationMode;
   effectiveNormalizationMode?: NormalizationMode;
-  isFavorite: boolean;
   playlists: Playlist[];
   offlineMode?: boolean;
   isDownloaded?: boolean;
@@ -118,7 +116,6 @@ type PlayerScreenProps = {
   onNormalizationMode?: (mode: NormalizationMode) => void;
   onShuffle: () => void;
   onRepeat: () => void;
-  onToggleFavorite: () => void;
   onToggleDownload?: () => void;
   onPlayTrack: (track: Track, context: Track[]) => void;
   onReorderQueue: (from: number, to: number) => void;
@@ -147,7 +144,6 @@ export function PlayerScreen({
   detectedNetwork = 'unknown',
   normalizationMode = 'off',
   effectiveNormalizationMode = 'off',
-  isFavorite,
   playlists,
   offlineMode = false,
   isDownloaded = false,
@@ -163,7 +159,6 @@ export function PlayerScreen({
   onNormalizationMode,
   onShuffle,
   onRepeat,
-  onToggleFavorite,
   onToggleDownload,
   onPlayTrack,
   onReorderQueue,
@@ -404,15 +399,6 @@ export function PlayerScreen({
               onClick={onToggleDownload}
             >
               {downloading ? <LoaderCircle className="download-spinner" /> : isDownloaded ? <CheckCircle2 /> : <Download />}
-            </button>
-          )}
-          {!offlineMode && (
-            <button
-              className={`icon-button icon-button--large ${isFavorite ? 'is-active' : ''}`}
-              aria-label={isFavorite ? 'Remover dos favoritos' : 'Favoritar'}
-              onClick={onToggleFavorite}
-            >
-              <Heart fill={isFavorite ? 'currentColor' : 'none'} />
             </button>
           )}
         </div>

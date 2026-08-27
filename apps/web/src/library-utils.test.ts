@@ -33,10 +33,8 @@ function viewOptions(overrides: Partial<TrackViewOptions> = {}): TrackViewOption
   return {
     normalizedQuery: '',
     format: 'all',
-    favorite: 'all',
     cover: 'all',
     sort: 'current',
-    favoriteIds: new Set<string>(),
     ...overrides
   };
 }
@@ -62,19 +60,16 @@ describe('matchesTrack', () => {
 });
 
 describe('filtros e ordenação da biblioteca', () => {
-  it('combina busca, formato, favorito e capa', () => {
+  it('combina busca, formato e capa', () => {
     const item = track({ id: 'flac', title: 'Águas de Março', format: 'FLAC', hasCover: false });
     const options = viewOptions({
       normalizedQuery: normalizeSearch('aguas'),
       format: 'FLAC',
-      favorite: 'favorites',
-      cover: 'without-cover',
-      favoriteIds: new Set(['flac'])
+      cover: 'without-cover'
     });
 
     expect(matchesTrackView(item, options)).toBe(true);
     expect(matchesTrackView(item, { ...options, format: 'MP3' })).toBe(false);
-    expect(matchesTrackView(item, { ...options, favorite: 'not-favorites' })).toBe(false);
     expect(matchesTrackView(item, { ...options, cover: 'with-cover' })).toBe(false);
   });
 
@@ -101,16 +96,6 @@ describe('filtros e ordenação da biblioteca', () => {
     expect(sortTracks(source, 'title-desc').map(item => item.id)).toEqual(['1', '3', '2']);
     expect(sortTracks(source, 'artist-asc').map(item => item.id)).toEqual(['3', '1', '2']);
     expect(sortTracks(source, 'album-asc').map(item => item.id)).toEqual(['1', '3', '2']);
-  });
-
-  it('mantém somente não favoritos quando solicitado', () => {
-    const source = [track({ id: '1' }), track({ id: '2', title: 'Outra' })];
-    const result = applyTrackView(source, viewOptions({
-      favorite: 'not-favorites',
-      favoriteIds: new Set(['1'])
-    }));
-
-    expect(result.map(item => item.id)).toEqual(['2']);
   });
 });
 

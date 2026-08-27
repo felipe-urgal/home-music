@@ -36,7 +36,7 @@ type AuthenticatedAppProps = {
 function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline }: AuthenticatedAppProps) {
   const [screen, setScreen] = useState<Screen>('player');
   const library = useLibraryData();
-  const navigation = useLibraryNavigation(library.tracks, library.favoriteIds, library.playlists);
+  const navigation = useLibraryNavigation(library.tracks, library.playlists);
   const libraryReady = !library.loading && !library.error;
   const usesSystemVolume = useSystemVolumePreference();
   const desktopLayout = useDesktopLayout();
@@ -82,6 +82,15 @@ function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline }: Aut
 
   function run(operation: Promise<unknown>) {
     void operation.catch(() => undefined);
+  }
+
+  async function refreshLibrary() {
+    try {
+      const result = await library.rescan();
+      window.alert(`Biblioteca atualizada: +${result.added} novas, ${result.updated} alteradas, ${result.removed} removidas.`);
+    } catch {
+      // useLibraryData já exibe o erro globalmente.
+    }
   }
 
   function toggleDownload() {
@@ -132,6 +141,9 @@ function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline }: Aut
         libraryCount={library.tracks.length}
         queue={player.queue}
         currentIndex={player.currentIndex}
+        canRefreshLibrary={desktopLayout && canManageSharedLibrary}
+        libraryRefreshing={library.scanning}
+        onRefreshLibrary={() => { void refreshLibrary(); }}
         onOpenPlayer={openPlayer}
         onOpenLibrary={() => setScreen('library')}
         onOpenLibraryTab={openLibraryTab}
@@ -183,7 +195,7 @@ function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline }: Aut
           <ResponsiveState
             variant="loading"
             title="Carregando sua biblioteca"
-            detail="Sincronizando músicas, favoritos e playlists."
+            detail="Sincronizando músicas e playlists."
           />
         ) : library.error ? (
           <ResponsiveState variant="error" title="Servidor indisponível" detail={library.error}>
@@ -235,7 +247,6 @@ function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline }: Aut
             usesSystemVolume={usesSystemVolume}
             shuffle={player.shuffle}
             repeatMode={player.repeatMode}
-            isFavorite={library.favoriteSet.has(current.id)}
             playlists={editablePlaylists}
             isDownloaded={offline.downloadedIds.has(current.id)}
             downloading={offline.downloadingIds.has(current.id)}
@@ -246,7 +257,6 @@ function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline }: Aut
             onVolume={player.setVolume}
             onShuffle={player.toggleShuffle}
             onRepeat={player.cycleRepeat}
-            onToggleFavorite={() => run(library.toggleFavorite(current.id))}
             onToggleDownload={offline.supported ? toggleDownload : undefined}
             onAddToPlaylist={playlist => run(library.addTrackToPlaylist(playlist, current.id))}
           />
@@ -271,7 +281,6 @@ function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline }: Aut
             detectedNetwork={qualityProfile.detectedNetwork}
             normalizationMode={player.normalizationMode}
             effectiveNormalizationMode={player.effectiveNormalizationMode}
-            isFavorite={library.favoriteSet.has(current.id)}
             playlists={editablePlaylists}
             isDownloaded={offline.downloadedIds.has(current.id)}
             downloading={offline.downloadingIds.has(current.id)}
@@ -286,7 +295,6 @@ function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline }: Aut
             onNormalizationMode={player.setNormalizationMode}
             onShuffle={player.toggleShuffle}
             onRepeat={player.cycleRepeat}
-            onToggleFavorite={() => run(library.toggleFavorite(current.id))}
             onToggleDownload={offline.supported ? toggleDownload : undefined}
             onPlayTrack={player.playTrack}
             onReorderQueue={player.reorderQueue}
@@ -407,7 +415,6 @@ function OfflineApp({ offline, onExit }: { offline: OfflineDownloads; onExit: ()
             usesSystemVolume={usesSystemVolume}
             shuffle={player.shuffle}
             repeatMode={player.repeatMode}
-            isFavorite={false}
             playlists={[]}
             offlineMode
             onOpenLibrary={() => setScreen('library')}
@@ -418,7 +425,6 @@ function OfflineApp({ offline, onExit }: { offline: OfflineDownloads; onExit: ()
             onVolume={player.setVolume}
             onShuffle={player.toggleShuffle}
             onRepeat={player.cycleRepeat}
-            onToggleFavorite={() => undefined}
             onPlayTrack={player.playTrack}
             onReorderQueue={player.reorderQueue}
             onAddToPlaylist={() => undefined}
