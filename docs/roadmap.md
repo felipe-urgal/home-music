@@ -173,7 +173,7 @@ Objetivo: permitir administrar a coleção pelo próprio Home Music, com operaç
 - [x] Criar área `Administração` separada da experiência de reprodução e protegida por role `admin`
 - [x] Criar visão geral com quantidade de faixas, armazenamento, problemas e estado do scanner
 - [x] Criar ponto de entrada `Importar mídia` integrado ao pipeline da Fase 9
-- [ ] Permitir desativar/reativar músicas sem remover o arquivo físico
+- [x] Permitir desativar/reativar músicas sem remover o arquivo físico
 - [ ] Criar lixeira/quarentena com restauração antes da exclusão permanente
 - [ ] Permitir exclusão física somente após confirmação explícita
 - [ ] Adicionar ações em lote para ativar, desativar, mover, excluir, favoritar e adicionar a playlists
