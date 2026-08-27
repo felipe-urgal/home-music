@@ -15,7 +15,10 @@ export async function listAdminTracks() {
 export async function setAdminTrackEnabled(trackId: string, enabled: boolean) {
   const response = await apiFetch(`/api/admin/tracks/${encodeURIComponent(trackId)}`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Home-Music-Request': '1'
+    },
     body: JSON.stringify({ enabled })
   });
   if (!response.ok) throw new Error(await responseError(response));
