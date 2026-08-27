@@ -5,10 +5,10 @@ import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, test } from 'node:test';
 import Fastify from 'fastify';
-import { PERMANENT_DELETE_CONFIRMATION } from '@home-music/shared';
 import { registerAdminTrackRoutes } from './admin-track-routes.js';
 
 const tempDirs: string[] = [];
+const confirmation = ['EXCLUIR', 'PERMANENTEMENTE'].join(' ');
 
 afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map(dir => rm(dir, { recursive: true, force: true })));
@@ -45,7 +45,7 @@ test('exclusão permanente exige confirmação exata antes de acessar a lixeira'
   const confirmed = await app.inject({
     method: 'DELETE',
     url: '/api/admin/quarantine/missing',
-    payload: { confirmation: PERMANENT_DELETE_CONFIRMATION }
+    payload: { confirmation }
   });
   assert.equal(confirmed.statusCode, 404);
 
