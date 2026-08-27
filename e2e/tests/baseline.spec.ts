@@ -40,12 +40,13 @@ test('login, biblioteca e player permanecem utilizáveis', async ({ page }) => {
     await expect(desktopQueue).toContainText('E2E Zeta');
     await expect(page.getByRole('button', { name: 'Mais opções' })).toHaveCount(0);
 
-    for (const label of ['Pastas', 'Favoritos', 'Playlists']) {
+    for (const label of ['Pastas', 'Playlists']) {
       await expect(sidebar.getByRole('button', { name: label, exact: true })).toBeVisible();
     }
-    for (const label of ['Músicas', 'Artistas', 'Álbuns', 'Rekordbox', 'Histórico', 'Estatísticas']) {
+    for (const label of ['Músicas', 'Artistas', 'Álbuns', 'Favoritos', 'Rekordbox', 'Histórico', 'Estatísticas']) {
       await expect(sidebar.getByRole('button', { name: label, exact: true })).toHaveCount(0);
     }
+    await expect(sidebar.getByRole('button', { name: 'Atualizar biblioteca', exact: true })).toBeVisible();
 
     const accountButton = sidebar.getByRole('button', { name: /Minha conta/ });
     await expect(accountButton).toBeVisible();
@@ -144,7 +145,7 @@ test('login, biblioteca e player permanecem utilizáveis', async ({ page }) => {
     await expect(page.getByRole('button', { name: 'Abrir estatísticas' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Voltar ao player' })).toBeHidden();
     await expect(page.getByRole('navigation', { name: 'Navegação da biblioteca' })).toBeHidden();
-    await expect(page.getByRole('button', { name: 'Atualizar biblioteca' })).toBeVisible();
+    await expect(sidebar.getByRole('button', { name: 'Atualizar biblioteca', exact: true })).toBeVisible();
 
     const persistentProgress = desktopPlayerBar.getByLabel('Progresso da reprodução na barra desktop');
     await expect(persistentProgress).toBeEnabled();
@@ -160,10 +161,10 @@ test('login, biblioteca e player permanecem utilizáveis', async ({ page }) => {
     await expect(page.getByRole('navigation', { name: 'Navegação da biblioteca' })).toBeVisible();
     await expect(miniPlayer).toBeVisible();
     await expect(desktopPlayerBar).toHaveCount(0);
-    for (const label of ['Pastas', 'Favoritos', 'Playlists']) {
+    for (const label of ['Pastas', 'Playlists']) {
       await expect(page.getByRole('button', { name: label, exact: true })).toBeVisible();
     }
-    for (const label of ['Músicas', 'Artistas', 'Álbuns', 'Histórico']) {
+    for (const label of ['Músicas', 'Artistas', 'Álbuns', 'Favoritos', 'Histórico']) {
       await expect(page.getByRole('button', { name: label, exact: true })).toHaveCount(0);
     }
   }
@@ -191,12 +192,8 @@ test('login, biblioteca e player permanecem utilizáveis', async ({ page }) => {
     const bulkToolbar = page.getByTestId('desktop-bulk-toolbar');
     await expect(bulkToolbar).toContainText('2 selecionadas');
     await expect(bulkToolbar.getByRole('button', { name: 'Tocar seleção', exact: true })).toBeVisible();
-    await bulkToolbar.getByRole('button', { name: 'Favoritar', exact: true }).click();
-    await expect(desktopLibraryTable.getByRole('button', { name: 'Remover E2E Track dos favoritos' })).toBeVisible();
-    await expect(desktopLibraryTable.getByRole('button', { name: 'Remover E2E Zeta dos favoritos' })).toBeVisible();
-    await bulkToolbar.getByRole('button', { name: 'Desfavoritar', exact: true }).click();
-    await expect(desktopLibraryTable.getByRole('button', { name: 'Favoritar E2E Track' })).toBeVisible();
-    await expect(desktopLibraryTable.getByRole('button', { name: 'Favoritar E2E Zeta' })).toBeVisible();
+    await expect(bulkToolbar.getByRole('button', { name: 'Favoritar', exact: true })).toHaveCount(0);
+    await expect(bulkToolbar.getByRole('button', { name: 'Desfavoritar', exact: true })).toHaveCount(0);
     await bulkToolbar.getByRole('button', { name: 'Limpar seleção', exact: true }).click();
     await expect(bulkToolbar).toContainText('Selecionar faixas');
   } else {
