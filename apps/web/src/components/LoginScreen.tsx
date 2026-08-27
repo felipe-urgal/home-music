@@ -69,11 +69,12 @@ export function LoginScreen({ configured, error, offlineCount = 0, onLogin, onRe
         </div>
 
         <form className="login-form" onSubmit={submit}>
-          <label className="login-field">
-            <span>Usuário</span>
-            <span className="login-input-shell">
+          <div className="login-field">
+            <label htmlFor="login-username">Usuário</label>
+            <div className="login-input-shell">
               <UserRound aria-hidden="true" />
               <input
+                id="login-username"
                 name="username"
                 type="text"
                 autoComplete="username"
@@ -84,14 +85,15 @@ export function LoginScreen({ configured, error, offlineCount = 0, onLogin, onRe
                 disabled={submitting}
                 required
               />
-            </span>
-          </label>
+            </div>
+          </div>
 
-          <label className="login-field">
-            <span>Senha</span>
-            <span className="login-input-shell">
+          <div className="login-field">
+            <label htmlFor="login-password">Senha</label>
+            <div className="login-input-shell">
               <LockKeyhole aria-hidden="true" />
               <input
+                id="login-password"
                 name="password"
                 type={showPassword ? 'text' : 'password'}
                 autoComplete="current-password"
@@ -110,8 +112,8 @@ export function LoginScreen({ configured, error, offlineCount = 0, onLogin, onRe
               >
                 {showPassword ? <EyeOff /> : <Eye />}
               </button>
-            </span>
-          </label>
+            </div>
+          </div>
 
           {(formError || error) && <div className="login-error" role="alert">{formError || error}</div>}
 
