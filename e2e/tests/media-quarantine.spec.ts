@@ -44,7 +44,7 @@ test('admin move para lixeira, preserva relações após scan e restaura', async
   const libraryResponse = await request.get('/api/library');
   expect(libraryResponse.ok()).toBeTruthy();
   const library = await libraryResponse.json() as { tracks: Array<{ id: string; title: string }> };
-  const track = library.tracks.find(item => item.title === 'E2E Zulu');
+  const track = library.tracks.find(item => item.title === 'E2E Quarantine');
   expect(track).toBeTruthy();
   if (!track) return;
 
