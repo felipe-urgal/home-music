@@ -8,6 +8,7 @@ import {
   LoaderCircle,
   LogOut,
   MonitorOff,
+  Settings2,
   ShieldCheck,
   UserRound,
   Users
@@ -21,12 +22,17 @@ import {
   revokeOwnSession,
   type AccountSession
 } from '../account-client';
+import {
+  AccountPlaybackPreferences,
+  type AccountPlaybackPreferencesValue
+} from './AccountPlaybackPreferences';
 import { AdminUsersScreen } from './AdminUsersScreen';
 
-type AccountView = 'overview' | 'password' | 'sessions' | 'users';
+type AccountView = 'overview' | 'password' | 'sessions' | 'playback' | 'users';
 
 type MyAccountScreenProps = {
   currentUser: AuthenticatedUser;
+  playbackPreferences?: AccountPlaybackPreferencesValue;
   onBack: () => void;
   onSessionEnded: () => Promise<void>;
   onLogout: () => Promise<void>;
@@ -40,7 +46,13 @@ function formatSessionDate(value: number) {
   return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
 }
 
-export function MyAccountScreen({ currentUser, onBack, onSessionEnded, onLogout }: MyAccountScreenProps) {
+export function MyAccountScreen({
+  currentUser,
+  playbackPreferences,
+  onBack,
+  onSessionEnded,
+  onLogout
+}: MyAccountScreenProps) {
   const [view, setView] = useState<AccountView>('overview');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -141,8 +153,20 @@ export function MyAccountScreen({ currentUser, onBack, onSessionEnded, onLogout 
     return <AdminUsersScreen currentUser={currentUser} onBack={() => setView('overview')} />;
   }
 
-  const title = view === 'password' ? 'Alterar senha' : view === 'sessions' ? 'Outros dispositivos' : 'Minha conta';
-  const subtitle = view === 'password' ? 'Atualize sua senha de acesso' : view === 'sessions' ? 'Gerencie sessões em dispositivos' : 'Segurança e sessões';
+  const title = view === 'password'
+    ? 'Alterar senha'
+    : view === 'sessions'
+      ? 'Outros dispositivos'
+      : view === 'playback'
+        ? 'Reprodução'
+        : 'Minha conta';
+  const subtitle = view === 'password'
+    ? 'Atualize sua senha de acesso'
+    : view === 'sessions'
+      ? 'Gerencie sessões em dispositivos'
+      : view === 'playback'
+        ? 'Qualidade e normalização'
+        : 'Segurança e sessões';
 
   return (
     <section className={`my-account-screen my-account-screen--${view}`} aria-labelledby="my-account-title">
@@ -169,25 +193,47 @@ export function MyAccountScreen({ currentUser, onBack, onSessionEnded, onLogout 
             <span className="my-account-profile__badge"><ShieldCheck /> Sessão ativa</span>
           </section>
 
-          <div className="my-account-links">
-            <button type="button" onClick={() => setView('password')}>
-              <span className="my-account-card__icon"><KeyRound /></span>
-              <span><strong>Alterar senha</strong><small>Use sua senha atual para confirmar a mudança.</small></span>
-              <ChevronRight />
-            </button>
-            <button type="button" onClick={() => setView('sessions')}>
-              <span className="my-account-card__icon"><MonitorOff /></span>
-              <span><strong>Outros dispositivos</strong><small>Encerre acessos antigos sem sair deste dispositivo.</small></span>
-              <ChevronRight />
-            </button>
-            {currentUser.role === 'admin' && (
-              <button type="button" onClick={() => setView('users')}>
-                <span className="my-account-card__icon"><Users /></span>
-                <span><strong>Usuários</strong><small>Gerencie usuários, papéis e permissões.</small></span>
+          <section className="my-account-link-group" aria-labelledby="my-account-group-account">
+            <span className="my-account-link-group__label" id="my-account-group-account">Conta</span>
+            <div className="my-account-links">
+              <button type="button" onClick={() => setView('password')}>
+                <span className="my-account-card__icon"><KeyRound /></span>
+                <span><strong>Alterar senha</strong><small>Use sua senha atual para confirmar a mudança.</small></span>
                 <ChevronRight />
               </button>
-            )}
-          </div>
+              <button type="button" onClick={() => setView('sessions')}>
+                <span className="my-account-card__icon"><MonitorOff /></span>
+                <span><strong>Outros dispositivos</strong><small>Encerre acessos antigos sem sair deste dispositivo.</small></span>
+                <ChevronRight />
+              </button>
+            </div>
+          </section>
+
+          {playbackPreferences && (
+            <section className="my-account-link-group" aria-labelledby="my-account-group-preferences">
+              <span className="my-account-link-group__label" id="my-account-group-preferences">Preferências</span>
+              <div className="my-account-links">
+                <button type="button" onClick={() => setView('playback')}>
+                  <span className="my-account-card__icon"><Settings2 /></span>
+                  <span><strong>Reprodução</strong><small>Qualidade, conexão e normalização.</small></span>
+                  <ChevronRight />
+                </button>
+              </div>
+            </section>
+          )}
+
+          {currentUser.role === 'admin' && (
+            <section className="my-account-link-group" aria-labelledby="my-account-group-admin">
+              <span className="my-account-link-group__label" id="my-account-group-admin">Administração</span>
+              <div className="my-account-links">
+                <button type="button" onClick={() => setView('users')}>
+                  <span className="my-account-card__icon"><Users /></span>
+                  <span><strong>Usuários</strong><small>Gerencie usuários, papéis e permissões.</small></span>
+                  <ChevronRight />
+                </button>
+              </div>
+            </section>
+          )}
 
           <section className="my-account-danger" aria-labelledby="my-account-current-session-title">
             <div className="my-account-card__heading">
@@ -250,6 +296,10 @@ export function MyAccountScreen({ currentUser, onBack, onSessionEnded, onLogout 
           <button className="secondary-action my-account-action" type="button" disabled={revokingSessions || sessions.every(session => session.current)} onClick={() => void revokeOthers()}>{revokingSessions ? 'Encerrando…' : 'Encerrar todas as outras sessões'}</button>
           <p className="my-account-card__note">Se você não reconhecer uma sessão, encerre o acesso e altere sua senha.</p>
         </section>
+      )}
+
+      {view === 'playback' && playbackPreferences && (
+        <AccountPlaybackPreferences value={playbackPreferences} />
       )}
     </section>
   );
