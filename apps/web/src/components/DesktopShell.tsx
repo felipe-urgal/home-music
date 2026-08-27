@@ -3,10 +3,10 @@ import type { Track } from '@home-music/shared';
 import {
   Folder,
   GripVertical,
-  Heart,
   ListMusic,
   Music2,
-  Radio
+  Radio,
+  RefreshCw
 } from 'lucide-react';
 import { useDesktopLayout } from '../useDesktopLayout';
 import type { LibraryTab } from '../useLibraryNavigation';
@@ -27,6 +27,9 @@ type DesktopShellProps = {
   queue: Track[];
   currentIndex: number;
   offlineMode?: boolean;
+  canRefreshLibrary?: boolean;
+  libraryRefreshing?: boolean;
+  onRefreshLibrary?: () => void;
   onOpenPlayer: () => void;
   onOpenLibrary: () => void;
   onOpenLibraryTab?: (tab: LibraryTab) => void;
@@ -72,6 +75,9 @@ export function DesktopShell({
   queue,
   currentIndex,
   offlineMode = false,
+  canRefreshLibrary = false,
+  libraryRefreshing = false,
+  onRefreshLibrary,
   onOpenPlayer,
   onOpenLibrary,
   onOpenLibraryTab,
@@ -140,9 +146,22 @@ export function DesktopShell({
             <NavigationButton active={active === 'library'} label={offlineMode ? 'Downloads' : 'Biblioteca'} icon={<ListMusic />} onClick={onOpenLibrary} />
           ) : (
             <div className="desktop-nav__group" aria-label="Biblioteca">
-              <span className="desktop-nav__group-label">Biblioteca</span>
+              <div className="desktop-nav__group-heading">
+                <span className="desktop-nav__group-label">Biblioteca</span>
+                {canRefreshLibrary && onRefreshLibrary && (
+                  <button
+                    className={`desktop-nav__refresh ${libraryRefreshing ? 'is-loading' : ''}`}
+                    type="button"
+                    aria-label="Atualizar biblioteca"
+                    title="Atualizar biblioteca"
+                    disabled={libraryRefreshing}
+                    onClick={onRefreshLibrary}
+                  >
+                    <RefreshCw aria-hidden="true" />
+                  </button>
+                )}
+              </div>
               <NavigationButton nested active={active === 'library' && activeLibraryTab === 'folders'} label="Pastas" icon={<Folder />} onClick={() => onOpenLibraryTab('folders')} />
-              <NavigationButton nested active={active === 'library' && activeLibraryTab === 'favorites'} label="Favoritos" icon={<Heart />} onClick={() => onOpenLibraryTab('favorites')} />
               <NavigationButton nested active={active === 'library' && activeLibraryTab === 'playlists'} label="Playlists" icon={<ListMusic />} onClick={() => onOpenLibraryTab('playlists')} />
             </div>
           )}
