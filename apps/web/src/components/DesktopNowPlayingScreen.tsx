@@ -80,6 +80,11 @@ export function DesktopNowPlayingScreen({
 }: DesktopNowPlayingScreenProps) {
   const [playlistOpen, setPlaylistOpen] = useState(false);
   const progress = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
+  const repeatLabel = repeatMode === 'one'
+    ? 'Repetir uma'
+    : repeatMode === 'all'
+      ? 'Repetir fila'
+      : 'Repetição desligada';
 
   return (
     <section className="desktop-now-playing-screen" aria-labelledby="desktop-now-playing-title">
@@ -180,14 +185,14 @@ export function DesktopNowPlayingScreen({
           </div>
 
           <div className="desktop-now-playing-screen__controls" aria-label="Controles de reprodução">
-            <button className={shuffle ? 'is-active' : ''} type="button" aria-label="Aleatório" aria-pressed={shuffle} onClick={onShuffle}><Shuffle /></button>
+            <button className={shuffle ? 'is-active' : ''} type="button" aria-label="Aleatório" title="Aleatório" aria-pressed={shuffle} onClick={onShuffle}><Shuffle fill="none" /></button>
             <button type="button" aria-label="Anterior" onClick={onPrevious}><SkipBack /></button>
             <button className="desktop-now-playing-screen__play" type="button" aria-label={playing ? 'Pausar' : 'Tocar'} onClick={onTogglePlay}>
               {playing ? <Pause /> : <Play />}
             </button>
             <button type="button" aria-label="Próxima" onClick={onNext}><SkipForward /></button>
-            <button className={repeatMode !== 'off' ? 'is-active' : ''} type="button" aria-label={repeatMode === 'one' ? 'Repetir uma' : repeatMode === 'all' ? 'Repetir fila' : 'Repetição desligada'} onClick={onRepeat}>
-              {repeatMode === 'one' ? <Repeat1 /> : <Repeat2 />}
+            <button className={repeatMode !== 'off' ? 'is-active' : ''} type="button" aria-label={repeatLabel} title={repeatLabel} onClick={onRepeat}>
+              {repeatMode === 'one' ? <Repeat1 fill="none" /> : <Repeat2 fill="none" />}
             </button>
           </div>
 
