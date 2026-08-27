@@ -21,6 +21,7 @@ import './desktop-context.css';
 import './desktop-navigation.css';
 import './phase7-interactions.css';
 import './desktop-now-playing.css';
+import './account-shell.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
