@@ -10,7 +10,7 @@
     "dev": "concurrently -n api,web -c auto \"npm run dev -w @home-music/server\" \"npm run dev -w @home-music/web\"",
     "build": "npm run build -w @home-music/shared && npm run build -w @home-music/server && npm run build -w @home-music/web",
     "start": "NODE_ENV=production npm run start -w @home-music/server",
-    "smoke:production": "node scripts/smoke-production.mjs",
+    "smoke:production": "node scripts/smoke-production.mjs && node scripts/smoke-production-auth.mjs",
     "e2e:install": "npm ci --prefix e2e && npm --prefix e2e run install:browsers",
     "e2e:ci": "npm --prefix e2e test",
     "e2e": "npm run build && npm run e2e:ci",
