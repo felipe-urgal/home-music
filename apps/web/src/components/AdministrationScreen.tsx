@@ -7,6 +7,7 @@ import {
   Database,
   FileInput,
   HardDrive,
+  ListMusic,
   LoaderCircle,
   Music2,
   RefreshCw,
@@ -16,9 +17,10 @@ import {
 } from 'lucide-react';
 import { getAdminLibraryOverview } from '../admin-library-client';
 import { AdminImportMediaScreen } from './AdminImportMediaScreen';
+import { AdminTrackAvailabilityScreen } from './AdminTrackAvailabilityScreen';
 import { AdminUsersScreen } from './AdminUsersScreen';
 
-type AdministrationView = 'overview' | 'import' | 'users';
+type AdministrationView = 'overview' | 'tracks' | 'import' | 'users';
 
 type AdministrationScreenProps = {
   currentUser: AuthenticatedUser;
@@ -73,6 +75,10 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
   }, [currentUser.role, loadOverview]);
 
   if (currentUser.role !== 'admin') return null;
+
+  if (view === 'tracks') {
+    return <AdminTrackAvailabilityScreen onBack={() => setView('overview')} />;
+  }
 
   if (view === 'import') {
     return <AdminImportMediaScreen onBack={() => setView('overview')} />;
@@ -194,6 +200,11 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
         <section className="my-account-link-group" aria-labelledby="administration-group-library">
           <span className="my-account-link-group__label" id="administration-group-library">Biblioteca</span>
           <div className="my-account-links">
+            <button type="button" onClick={() => setView('tracks')}>
+              <span className="my-account-card__icon"><ListMusic /></span>
+              <span><strong>Gerenciar músicas</strong><small>Desative ou reative faixas sem remover os arquivos físicos.</small></span>
+              <ChevronRight />
+            </button>
             <button type="button" onClick={() => setView('import')}>
               <span className="my-account-card__icon"><FileInput /></span>
               <span><strong>Importar mídia</strong><small>Centralize uploads, URLs e fontes externas em um único pipeline.</small></span>
