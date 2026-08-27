@@ -44,12 +44,19 @@ test('login, biblioteca e player permanecem utilizáveis', async ({ page }) => {
       await expect(sidebar.getByRole('button', { name: label, exact: true })).toBeVisible();
     }
 
-    const reproduction = sidebar.getByRole('button', { name: 'Reprodução', exact: true });
+    const accountButton = sidebar.getByRole('button', { name: /Minha conta/ });
+    await expect(accountButton).toBeVisible();
+    await expect(sidebar.getByRole('button', { name: 'Reprodução', exact: true })).toHaveCount(0);
+    await expect(sidebar.getByRole('button', { name: 'Sair da conta', exact: true })).toHaveCount(0);
+    await accountButton.click();
+    await expect(page.locator('#my-account-title')).toHaveText('Minha conta');
+    const reproduction = page.getByRole('button', { name: /Reprodução/ });
     await expect(reproduction).toBeVisible();
-    await expect(sidebar.getByRole('button', { name: /Minha conta/ })).toBeVisible();
     await reproduction.click();
     await expect(page.getByLabel('Preferências de reprodução')).toBeVisible();
-    await reproduction.click();
+    await page.getByRole('button', { name: 'Voltar', exact: true }).click();
+    await sidebar.getByRole('button', { name: 'Tocando agora' }).click();
+    await expect(desktopQueue).toBeVisible();
 
     const zuluHandle = desktopQueue.getByRole('button', { name: 'Arrastar E2E Zulu' });
     const zetaRow = desktopQueue.locator('.desktop-queue__row').filter({ hasText: 'E2E Zeta' });
