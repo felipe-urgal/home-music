@@ -41,10 +41,17 @@ export class TrackAvailabilityStore {
   }
 
   setEnabled(trackId: string, enabled: boolean) {
+    const exists = Boolean(this.db.prepare('SELECT 1 FROM tracks WHERE id = ? LIMIT 1;').get(trackId));
+    if (!exists) {
+      this.db.prepare('DELETE FROM track_availability WHERE track_id = ?;').run(trackId);
+      this.disabledTrackIds.delete(trackId);
+      return false;
+    }
+
     if (enabled) {
       this.db.prepare('DELETE FROM track_availability WHERE track_id = ?;').run(trackId);
       this.disabledTrackIds.delete(trackId);
-      return;
+      return true;
     }
 
     this.db.prepare(`
@@ -53,5 +60,6 @@ export class TrackAvailabilityStore {
       ON CONFLICT(track_id) DO UPDATE SET enabled = 0;
     `).run(trackId);
     this.disabledTrackIds.add(trackId);
+    return true;
   }
 }
