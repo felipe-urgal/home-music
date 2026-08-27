@@ -144,19 +144,8 @@ function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline }: Aut
         sidebarUtilities={desktopLayout ? (
           <DesktopPlayerSidebarTools
             username={currentUser.username}
-            current={current}
             accountActive={accountArea}
-            streamingSelection={qualityProfile.selection}
-            effectiveStreamingMode={qualityProfile.effectiveMode}
-            networkPreference={qualityProfile.networkPreference}
-            detectedNetwork={qualityProfile.detectedNetwork}
-            normalizationMode={player.normalizationMode}
-            effectiveNormalizationMode={player.effectiveNormalizationMode}
-            onStreamingSelection={qualityProfile.setSelection}
-            onNetworkPreference={qualityProfile.setNetworkPreference}
-            onNormalizationMode={player.setNormalizationMode}
             onOpenAccount={() => setScreen('account')}
-            onLogout={() => { void onLogout().catch(library.reportError); }}
           />
         ) : undefined}
         surfaceClassName={`phone-surface ${screen !== 'player' ? 'phone-surface--library' : ''} ${desktopLayout && screen === 'player' ? 'desktop-now-playing-surface' : ''} ${desktopLayout && accountArea ? 'desktop-account-surface' : ''}`.trim()}
@@ -176,6 +165,18 @@ function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline }: Aut
         {screen === 'account' ? (
           <MyAccountScreen
             currentUser={currentUser}
+            playbackPreferences={desktopLayout ? {
+              current,
+              streamingSelection: qualityProfile.selection,
+              effectiveStreamingMode: qualityProfile.effectiveMode,
+              networkPreference: qualityProfile.networkPreference,
+              detectedNetwork: qualityProfile.detectedNetwork,
+              normalizationMode: player.normalizationMode,
+              effectiveNormalizationMode: player.effectiveNormalizationMode,
+              onStreamingSelection: qualityProfile.setSelection,
+              onNetworkPreference: qualityProfile.setNetworkPreference,
+              onNormalizationMode: player.setNormalizationMode
+            } : undefined}
             onBack={() => setScreen('library')}
             onSessionEnded={onAuthRefresh}
             onLogout={onLogout}
