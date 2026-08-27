@@ -1,5 +1,5 @@
 import type { NormalizationMode, Track } from '@home-music/shared';
-import { CheckCircle2, Settings2 } from 'lucide-react';
+import { CheckCircle2, SlidersHorizontal } from 'lucide-react';
 import type {
   DetectedNetwork,
   NetworkPreference,
@@ -66,7 +66,7 @@ export function AccountPlaybackPreferences({ value }: AccountPlaybackPreferences
   return (
     <section className="my-account-card my-account-playback-card" aria-label="Preferências de reprodução">
       <div className="my-account-card__heading">
-        <span className="my-account-card__icon"><Settings2 /></span>
+        <span className="my-account-card__icon"><SlidersHorizontal /></span>
         <div><strong>Reprodução</strong><small>Qualidade, conexão e normalização deste dispositivo.</small></div>
       </div>
 
