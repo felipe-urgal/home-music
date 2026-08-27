@@ -1,12 +1,9 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import {
-  BarChart3,
   ChevronLeft,
   ChevronRight,
-  Disc3,
   Folder,
   Heart,
-  History,
   ListMusic,
   Music2,
   Play,
@@ -14,14 +11,11 @@ import {
   RefreshCw,
   Search,
   SlidersHorizontal,
-  Trash2,
-  Upload,
-  Users
+  Trash2
 } from 'lucide-react';
 import type { AuthenticatedUser, Playlist, Track } from '@home-music/shared';
 import { canUseAdminLibraryActions } from '../frontend-access';
 import type { CoverFilter, FavoriteFilter, TrackSort } from '../library-utils';
-import { uniqueTracksById } from '../player-state';
 import type { LibraryData } from '../useLibraryData';
 import { useDesktopLayout } from '../useDesktopLayout';
 import { LIBRARY_PAGE_SIZE, type LibraryNavigation, type LibraryTab } from '../useLibraryNavigation';
@@ -37,22 +31,15 @@ type LibraryScreenProps = {
   hasNext: boolean;
   navigation: LibraryNavigation;
   onOpenPlayer: () => void;
-  onOpenStatistics: () => void;
   onTogglePlay: () => void;
   onNext: () => void;
   onPlayTrack: (track: Track, context: Track[]) => void;
 };
 
-const REKORDBOX_XML_MAX_BYTES = 20 * 1024 * 1024;
-
 const tabs: Array<{ id: LibraryTab; label: string; icon: typeof Folder }> = [
   { id: 'folders', label: 'Pastas', icon: Folder },
-  { id: 'artists', label: 'Artistas', icon: Users },
-  { id: 'albums', label: 'Álbuns', icon: Disc3 },
-  { id: 'tracks', label: 'Músicas', icon: Music2 },
   { id: 'favorites', label: 'Favoritos', icon: Heart },
-  { id: 'playlists', label: 'Playlists', icon: ListMusic },
-  { id: 'history', label: 'Histórico', icon: History }
+  { id: 'playlists', label: 'Playlists', icon: ListMusic }
 ];
 
 function TrackRows({
@@ -137,36 +124,27 @@ export function LibraryScreen({
   hasNext,
   navigation,
   onOpenPlayer,
-  onOpenStatistics,
   onTogglePlay,
   onNext,
   onPlayTrack
 }: LibraryScreenProps) {
   const [viewControlsOpen, setViewControlsOpen] = useState(false);
-  const [importingRekordbox, setImportingRekordbox] = useState(false);
-  const rekordboxInputRef = useRef<HTMLInputElement>(null);
   const canManageSharedLibrary = canUseAdminLibraryActions(currentUser);
   const {
     tracks,
     favoriteSet,
-    history,
     playlists,
     scanning,
     scannedAt,
-    refreshHistory,
     toggleFavorite,
     rescan,
-    clearHistory,
     createPlaylist,
     renamePlaylist,
     deletePlaylist,
-    setPlaylistTracks,
-    previewRekordbox,
-    importRekordbox
+    setPlaylistTracks
   } = data;
   const {
     libraryTab,
-    selectedGroup,
     selectedPlaylist,
     folderPath,
     folderView,
@@ -180,16 +158,12 @@ export function LibraryScreen({
     activeViewOptionCount,
     canSortTracks,
     visibleCount,
-    visibleGroups,
     visibleFolders,
     libraryTracks,
     shouldShowTracks,
     pagedTracks,
-    pagedGroups,
     pagedFolders,
     selectTab,
-    selectGroup,
-    leaveGroup,
     enterFolder,
     leaveFolder,
     selectPlaylist,
@@ -203,32 +177,28 @@ export function LibraryScreen({
     showMore
   } = navigation;
 
-  const isDetail = Boolean(selectedGroup || selectedPlaylist || folderPath);
-  const historyTracks = uniqueTracksById(history.map(item => item.track));
+  const isDetail = Boolean(selectedPlaylist || folderPath);
   const run = (operation: Promise<unknown>) => void operation.catch(() => undefined);
 
   function changeTab(tab: LibraryTab) {
     setViewControlsOpen(false);
     selectTab(tab);
-    if (tab === 'history') run(refreshHistory());
   }
 
   function goBack() {
     setViewControlsOpen(false);
-    if (selectedGroup) leaveGroup();
-    else if (selectedPlaylist) leavePlaylist();
+    if (selectedPlaylist) leavePlaylist();
     else if (folderPath) leaveFolder();
   }
 
   function title() {
-    if (selectedGroup) return selectedGroup.name;
     if (selectedPlaylist) return selectedPlaylist.name;
     if (libraryTab === 'folders' && folderPath) return folderView.name;
     return 'Biblioteca';
   }
 
   function subtitle() {
-    if (selectedGroup || selectedPlaylist) return `${libraryTracks.length} músicas`;
+    if (selectedPlaylist) return `${libraryTracks.length} músicas`;
     if (libraryTab === 'folders' && folderPath) return `${folderContextTracks.length} músicas`;
     return `${tracks.length} músicas`;
   }
@@ -259,55 +229,7 @@ export function LibraryScreen({
     }
   }
 
-  async function importRekordboxFile(file: File) {
-    if (file.size > REKORDBOX_XML_MAX_BYTES) {
-      window.alert('O XML do Rekordbox deve ter no máximo 20 MiB.');
-      return;
-    }
-
-    setImportingRekordbox(true);
-    try {
-      const xml = await file.text();
-      const preview = await previewRekordbox(xml);
-      if (preview.playlists === 0) {
-        window.alert('O XML foi reconhecido, mas não contém playlists para importar.');
-        return;
-      }
-      if (preview.playlistEntries > 0 && preview.matchedPlaylistEntries === 0) {
-        window.alert('Nenhuma música das playlists foi reconhecida. Atualize a biblioteca ou confirme se este XML corresponde aos seus arquivos.');
-        return;
-      }
-
-      const source = preview.productVersion
-        ? `Rekordbox ${preview.productVersion}`
-        : preview.productName || 'Rekordbox';
-      const missingLine = preview.unmatchedCollectionTracks > 0
-        ? `\n${preview.unmatchedCollectionTracks} músicas da coleção não foram encontradas e serão ignoradas.`
-        : '';
-      const confirmed = window.confirm(
-        `${source}\n\n` +
-        `${preview.playlists} playlists encontradas.\n` +
-        `${preview.matchedCollectionTracks}/${preview.collectionTracks} músicas reconhecidas na biblioteca.\n` +
-        `${preview.matchedPlaylistEntries}/${preview.playlistEntries} entradas de playlist serão importadas.` +
-        `${missingLine}\n\nContinuar com a sincronização?`
-      );
-      if (!confirmed) return;
-
-      const result = await importRekordbox(xml);
-      window.alert(
-        `Rekordbox sincronizado: ${result.createdPlaylists} playlists novas e ` +
-        `${result.updatedPlaylists} atualizadas. ` +
-        `${result.matchedPlaylistEntries}/${result.playlistEntries} entradas reconhecidas.`
-      );
-    } catch {
-      // useLibraryData já exibe o erro globalmente.
-    } finally {
-      setImportingRekordbox(false);
-      if (rekordboxInputRef.current) rekordboxInputRef.current.value = '';
-    }
-  }
-
-  const showSearch = libraryTab !== 'history' && !(libraryTab === 'playlists' && !selectedPlaylist);
+  const showSearch = !(libraryTab === 'playlists' && !selectedPlaylist);
 
   return (
     <>
@@ -324,7 +246,6 @@ export function LibraryScreen({
         {canManageSharedLibrary && (
           <button className={`icon-button ${scanning ? 'is-loading' : ''}`} aria-label="Atualizar biblioteca" disabled={scanning} onClick={() => void scanNow()}><RefreshCw /></button>
         )}
-        <button className="icon-button" aria-label="Abrir estatísticas" onClick={onOpenStatistics}><BarChart3 /></button>
         <button className="icon-button" aria-label="Voltar ao player" onClick={onOpenPlayer}><Music2 /></button>
       </header>
 
@@ -467,56 +388,13 @@ export function LibraryScreen({
               <button className="load-more" onClick={showMore}>Mostrar mais</button>
             )}
           </>
-        ) : libraryTab === 'history' ? (
-          <>
-            <div className="section-heading">
-              <span>Reproduzidas recentemente</span>
-              {history.length > 0 && <button className="text-action" onClick={() => run(clearHistory())}>Limpar</button>}
-            </div>
-            {history.length ? (
-              <div className="history-list">
-                {history.map(item => (
-                  <div className="history-row" key={item.id}>
-                    <button className="library-track__main" onClick={() => onPlayTrack(item.track, historyTracks)}>
-                      <Artwork track={item.track} />
-                      <span className="library-track__text"><strong>{item.track.title}</strong><small>{item.track.artist} · {new Date(item.playedAt).toLocaleString('pt-BR')}</small></span>
-                      <Play className="library-track__action" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            ) : <div className="empty-library">Seu histórico aparecerá aqui quando você começar a ouvir músicas.</div>}
-          </>
         ) : libraryTab === 'playlists' && !selectedPlaylist ? (
           <>
             <div className="section-heading">
               <span>Playlists</span>
               <div className="section-heading__actions">
-                {canManageSharedLibrary && (
-                  <button
-                    className="text-action"
-                    type="button"
-                    disabled={importingRekordbox}
-                    onClick={() => rekordboxInputRef.current?.click()}
-                  >
-                    <Upload />{importingRekordbox ? 'Lendo…' : 'Rekordbox'}
-                  </button>
-                )}
                 <button className="text-action" onClick={() => run(makePlaylist())}><Plus />Nova</button>
               </div>
-              {canManageSharedLibrary && (
-                <input
-                  ref={rekordboxInputRef}
-                  className="visually-hidden-input"
-                  type="file"
-                  accept=".xml,application/xml,text/xml"
-                  tabIndex={-1}
-                  onChange={event => {
-                    const file = event.currentTarget.files?.[0];
-                    if (file) void importRekordboxFile(file);
-                  }}
-                />
-              )}
             </div>
             {playlists.length ? (
               <div className="group-list">
@@ -525,13 +403,13 @@ export function LibraryScreen({
                     <div className="playlist-icon"><ListMusic /></div>
                     <span className="group-item__text">
                       <strong>{playlist.name}</strong>
-                      <small>{playlist.trackIds.length} músicas{playlist.source === 'rekordbox' ? ' · Rekordbox' : ''}</small>
+                      <small>{playlist.trackIds.length} músicas{playlist.source === 'rekordbox' ? ' · Importada' : ''}</small>
                     </span>
                     <ChevronRight />
                   </button>
                 ))}
               </div>
-            ) : <div className="empty-library">{canManageSharedLibrary ? 'Crie uma playlist ou importe suas playlists do Rekordbox.' : 'Crie uma playlist para organizar suas músicas.'}</div>}
+            ) : <div className="empty-library">Crie uma playlist para organizar suas músicas.</div>}
           </>
         ) : shouldShowTracks ? (
           <>
@@ -544,7 +422,7 @@ export function LibraryScreen({
                     <button className="text-action text-action--danger" onClick={() => run(removePlaylist(selectedPlaylist))}>Excluir</button>
                   </>
                 ) : (
-                  <span className="playlist-source-note">Rekordbox · somente leitura</span>
+                  <span className="playlist-source-note">Importada · somente leitura</span>
                 )}
               </div>
             )}
@@ -567,21 +445,7 @@ export function LibraryScreen({
               <button className="load-more" onClick={showMore}>Mostrar mais {Math.min(LIBRARY_PAGE_SIZE, libraryTracks.length - visibleCount)} músicas</button>
             )}
           </>
-        ) : (
-          <>
-            <div className="section-heading"><span>{libraryTab === 'artists' ? 'Artistas' : 'Álbuns'}</span><small>{visibleGroups.length}</small></div>
-            <div className="group-list">
-              {pagedGroups.map(group => (
-                <button className="group-item" key={group.key} onClick={() => selectGroup(group.key)}>
-                  <Artwork track={group.artwork} />
-                  <span className="group-item__text"><strong>{group.name}</strong><small>{group.subtitle ? `${group.subtitle} · ` : ''}{group.matchingTrackCount} músicas</small></span>
-                  <ChevronRight />
-                </button>
-              ))}
-            </div>
-            {visibleCount < visibleGroups.length && <button className="load-more" onClick={showMore}>Mostrar mais</button>}
-          </>
-        )}
+        ) : null}
       </section>
 
       <div className="library-status">Última indexação: {scannedAt ? new Date(scannedAt).toLocaleString('pt-BR') : 'ainda não realizada'}</div>
