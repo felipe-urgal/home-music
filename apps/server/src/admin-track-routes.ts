@@ -1,13 +1,14 @@
 import { fileURLToPath } from 'node:url';
 import type { FastifyInstance, FastifyReply } from 'fastify';
-import {
-  PERMANENT_DELETE_CONFIRMATION,
-  type AdminQuarantineResponse,
-  type AdminTrack,
-  type AdminTracksResponse
+import type {
+  AdminQuarantineResponse,
+  AdminTrack,
+  AdminTracksResponse
 } from '@home-music/shared';
 import { MediaQuarantineOperationError, MediaQuarantineStore } from './media-quarantine.js';
 import { UnsafeLibraryPathError } from './security.js';
+
+export const PERMANENT_DELETE_CONFIRMATION = 'EXCLUIR PERMANENTEMENTE' as const;
 
 const defaultDatabasePath = fileURLToPath(new URL('../../../data/home-music.db', import.meta.url));
 
