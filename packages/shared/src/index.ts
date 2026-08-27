@@ -3,6 +3,8 @@ export type NormalizationMode = 'off' | 'track' | 'album';
 export type StatisticsPeriod = '7d' | '30d' | 'all';
 export type PlaylistSource = 'manual' | 'rekordbox';
 export type UserRole = 'admin' | 'user';
+export type ImportJobStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
+export type ImportJobSourceType = 'upload' | 'url' | 'provider';
 
 export type AuthenticatedUser = {
   id: string;
@@ -66,6 +68,27 @@ export type AdminLibraryOverviewResponse = {
       intervalSeconds: number | null;
     };
   };
+};
+
+export type ImportJobSource = {
+  type: ImportJobSourceType;
+  provider: string | null;
+};
+
+export type ImportJob = {
+  id: string;
+  source: ImportJobSource;
+  label: string;
+  status: ImportJobStatus;
+  createdAt: string;
+  updatedAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  error: string | null;
+};
+
+export type AdminImportJobsResponse = {
+  jobs: ImportJob[];
 };
 
 export type Track = {
