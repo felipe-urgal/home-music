@@ -160,9 +160,9 @@ Sequência de implementação:
 - [x] Documentar bootstrap, criação de usuários, recuperação de acesso, mudança de senha, desativação e rollback de migration
 - [x] Adicionar testes unitários de senha, sessão, role, último admin, normalização de username e revogação
 - [x] Adicionar testes de integração para `401 / 403 / 404`, ownership, usuário desativado, troca obrigatória de senha e rotas administrativas
-- [ ] Adicionar Playwright com contas `admin` e `user` em mobile/tablet/desktop, validando menu, login, isolamento de dados e troca de senha
-- [ ] Adicionar regressões de segurança para tentativa de chamar `/api/admin/*` como `user`, adulteração de payload/role no cliente e acesso a recursos de outro usuário
-- [ ] Atualizar smoke test de produção para validar migration/bootstrap, login admin e login de usuário normal sem usar o banco real
+- [x] Adicionar Playwright com contas `admin` e `user` em mobile/tablet/desktop, validando menu, login, isolamento de dados e troca de senha
+- [x] Adicionar regressões de segurança para tentativa de chamar `/api/admin/*` como `user`, adulteração de payload/role no cliente e acesso a recursos de outro usuário
+- [x] Atualizar smoke test de produção para validar migration/bootstrap, login admin e login de usuário normal sem usar o banco real
 
 Critério de conclusão: um `user` pode reproduzir e administrar somente seus dados pessoais, nunca consegue executar operações administrativas mesmo por chamada manual à API, e um `admin` pode gerenciar usuários sem risco de remover o último administrador ou perder os dados existentes no upgrade.
 
