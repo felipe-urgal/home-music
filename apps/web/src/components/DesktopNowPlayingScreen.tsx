@@ -4,7 +4,6 @@ import {
   CheckCircle2,
   ChevronDown,
   Download,
-  Heart,
   LoaderCircle,
   Pause,
   Play,
@@ -36,7 +35,6 @@ type DesktopNowPlayingScreenProps = {
   usesSystemVolume: boolean;
   shuffle: boolean;
   repeatMode: RepeatMode;
-  isFavorite: boolean;
   playlists: Playlist[];
   isDownloaded?: boolean;
   downloading?: boolean;
@@ -47,7 +45,6 @@ type DesktopNowPlayingScreenProps = {
   onVolume: (value: number) => void;
   onShuffle: () => void;
   onRepeat: () => void;
-  onToggleFavorite: () => void;
   onToggleDownload?: () => void;
   onAddToPlaylist: (playlist: Playlist) => void;
 };
@@ -63,7 +60,6 @@ export function DesktopNowPlayingScreen({
   usesSystemVolume,
   shuffle,
   repeatMode,
-  isFavorite,
   playlists,
   isDownloaded = false,
   downloading = false,
@@ -74,7 +70,6 @@ export function DesktopNowPlayingScreen({
   onVolume,
   onShuffle,
   onRepeat,
-  onToggleFavorite,
   onToggleDownload,
   onAddToPlaylist
 }: DesktopNowPlayingScreenProps) {
@@ -104,16 +99,6 @@ export function DesktopNowPlayingScreen({
           </div>
 
           <div className="desktop-now-playing-screen__actions" aria-label="Ações da faixa">
-            <button
-              className={isFavorite ? 'is-active' : ''}
-              type="button"
-              aria-pressed={isFavorite}
-              onClick={onToggleFavorite}
-            >
-              <Heart fill={isFavorite ? 'currentColor' : 'none'} />
-              <span>Favoritar</span>
-            </button>
-
             {onToggleDownload && (
               <button
                 className={isDownloaded ? 'is-active' : ''}
