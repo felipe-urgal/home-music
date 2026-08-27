@@ -651,7 +651,7 @@ app.patch<{ Params: { id: string }; Body: { name?: string } }>('/api/playlists/:
 
   const name = cleanName(request.body?.name);
   if (!name) return reply.code(400).send({ error: 'Nome da playlist obrigatório.' });
-  if (!database.renamePlaylist(request.user.id, request.params.id)) {
+  if (!database.renamePlaylist(request.user.id, request.params.id, name)) {
     return reply.code(404).send({ error: 'Playlist não encontrada.' });
   }
   return { ok: true };
