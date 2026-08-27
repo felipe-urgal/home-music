@@ -21,7 +21,7 @@ import { Artwork } from './Artwork';
 
 const DESKTOP_QUEUE_PREVIEW_SIZE = 32;
 
-export type DesktopSection = 'player' | 'library' | 'statistics';
+export type DesktopSection = 'player' | 'library' | 'statistics' | 'users' | 'account';
 type DesktopContextTab = 'queue' | 'lyrics';
 
 type DesktopShellProps = {
@@ -159,20 +159,10 @@ export function DesktopShell({
         </div>
 
         <nav className="desktop-nav" aria-label="Navegação principal">
-          <NavigationButton
-            active={active === 'player'}
-            label="Tocando agora"
-            icon={<Radio />}
-            onClick={onOpenPlayer}
-          />
+          <NavigationButton active={active === 'player'} label="Tocando agora" icon={<Radio />} onClick={onOpenPlayer} />
 
           {offlineMode || !onOpenLibraryTab ? (
-            <NavigationButton
-              active={active === 'library'}
-              label={offlineMode ? 'Downloads' : 'Biblioteca'}
-              icon={<ListMusic />}
-              onClick={onOpenLibrary}
-            />
+            <NavigationButton active={active === 'library'} label={offlineMode ? 'Downloads' : 'Biblioteca'} icon={<ListMusic />} onClick={onOpenLibrary} />
           ) : (
             <div className="desktop-nav__group" aria-label="Biblioteca">
               <span className="desktop-nav__group-label">Biblioteca</span>
@@ -188,12 +178,7 @@ export function DesktopShell({
           )}
 
           {!offlineMode && onOpenStatistics && (
-            <NavigationButton
-              active={active === 'statistics'}
-              label="Estatísticas"
-              icon={<BarChart3 />}
-              onClick={onOpenStatistics}
-            />
+            <NavigationButton active={active === 'statistics'} label="Estatísticas" icon={<BarChart3 />} onClick={onOpenStatistics} />
           )}
         </nav>
 
@@ -206,9 +191,7 @@ export function DesktopShell({
       </aside>
 
       <section className={surfaceClassName} data-desktop-section={active}>
-        <div className={`desktop-main-content desktop-main-content--${active}`}>
-          {children}
-        </div>
+        <div className={`desktop-main-content desktop-main-content--${active}`}>{children}</div>
       </section>
 
       <aside className="desktop-context" data-testid="desktop-context" aria-label="Contexto da reprodução">
@@ -220,33 +203,19 @@ export function DesktopShell({
         {contextTrack ? (
           <button className="desktop-now-playing" type="button" onClick={onOpenPlayer}>
             <Artwork track={contextTrack} />
-            <span className="desktop-now-playing__text">
-              <strong>{contextTrack.title}</strong>
-              <small>{contextTrack.artist || 'Artista desconhecido'}</small>
-            </span>
+            <span className="desktop-now-playing__text"><strong>{contextTrack.title}</strong><small>{contextTrack.artist || 'Artista desconhecido'}</small></span>
           </button>
-        ) : (
-          <div className="desktop-context__empty">Nenhuma faixa selecionada.</div>
-        )}
+        ) : <div className="desktop-context__empty">Nenhuma faixa selecionada.</div>}
 
         <div className="desktop-context__summary">
           <span>{queue.length} {queue.length === 1 ? 'faixa na fila' : 'faixas na fila'}</span>
-          {active !== 'player' && (
-            <>
-              <span>·</span>
-              <span>{libraryCount} {offlineMode ? 'downloads' : 'na biblioteca'}</span>
-            </>
-          )}
+          {active !== 'player' && <><span>·</span><span>{libraryCount} {offlineMode ? 'downloads' : 'na biblioteca'}</span></>}
         </div>
 
         {lyrics && (
           <div className="desktop-context__tabs" role="tablist" aria-label="Painel contextual">
-            <button type="button" role="tab" aria-selected={contextTab === 'queue'} className={contextTab === 'queue' ? 'is-active' : ''} onClick={() => setContextTab('queue')}>
-              <ListMusic />Fila
-            </button>
-            <button type="button" role="tab" aria-selected={contextTab === 'lyrics'} className={contextTab === 'lyrics' ? 'is-active' : ''} onClick={() => setContextTab('lyrics')}>
-              <Music2 />Letra
-            </button>
+            <button type="button" role="tab" aria-selected={contextTab === 'queue'} className={contextTab === 'queue' ? 'is-active' : ''} onClick={() => setContextTab('queue')}><ListMusic />Fila</button>
+            <button type="button" role="tab" aria-selected={contextTab === 'lyrics'} className={contextTab === 'lyrics' ? 'is-active' : ''} onClick={() => setContextTab('lyrics')}><Music2 />Letra</button>
           </div>
         )}
 
@@ -258,10 +227,7 @@ export function DesktopShell({
           </section>
         ) : (
           <section className="desktop-queue" aria-label="Fila de reprodução" data-testid="desktop-queue">
-            <div className="desktop-queue__header">
-              <strong>Próximas</strong>
-              <span>{Math.max(0, queue.length - queueStart)}</span>
-            </div>
+            <div className="desktop-queue__header"><strong>Próximas</strong><span>{Math.max(0, queue.length - queueStart)}</span></div>
             <div className="desktop-queue__list">
               {queuePreview.length ? queuePreview.map((track, previewIndex) => {
                 const queueIndex = queueStart + previewIndex;
@@ -281,23 +247,8 @@ export function DesktopShell({
                     }}
                     onDrop={event => dropQueue(event, queueIndex)}
                   >
-                    <button
-                      className="desktop-queue__drag-handle"
-                      type="button"
-                      draggable={!isCurrent && Boolean(onReorderQueue)}
-                      disabled={isCurrent || !onReorderQueue}
-                      aria-label={isCurrent ? 'Faixa atual' : `Arrastar ${track.title}`}
-                      onDragStart={event => beginQueueDrag(event, queueIndex)}
-                      onDragEnd={finishQueueDrag}
-                    >
-                      <GripVertical aria-hidden="true" />
-                    </button>
-                    <button
-                      className="desktop-queue__item"
-                      type="button"
-                      aria-current={isCurrent ? 'true' : undefined}
-                      onClick={() => onPlayTrack?.(track, queue)}
-                    >
+                    <button className="desktop-queue__drag-handle" type="button" draggable={!isCurrent && Boolean(onReorderQueue)} disabled={isCurrent || !onReorderQueue} aria-label={isCurrent ? 'Faixa atual' : `Arrastar ${track.title}`} onDragStart={event => beginQueueDrag(event, queueIndex)} onDragEnd={finishQueueDrag}><GripVertical aria-hidden="true" /></button>
+                    <button className="desktop-queue__item" type="button" aria-current={isCurrent ? 'true' : undefined} onClick={() => onPlayTrack?.(track, queue)}>
                       <Artwork track={artworkTrack(track, offlineMode)} />
                       <span><strong>{track.title}</strong><small>{track.artist || 'Artista desconhecido'}</small></span>
                     </button>
@@ -310,9 +261,7 @@ export function DesktopShell({
         )}
 
         {active !== 'player' && (
-          <button className="desktop-context__action" type="button" onClick={onOpenLibrary}>
-            {offlineMode ? 'Abrir downloads' : 'Abrir biblioteca'}
-          </button>
+          <button className="desktop-context__action" type="button" onClick={onOpenLibrary}>{offlineMode ? 'Abrir downloads' : 'Abrir biblioteca'}</button>
         )}
       </aside>
     </div>
