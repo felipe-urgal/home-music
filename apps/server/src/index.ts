@@ -87,7 +87,7 @@ try {
   transcodeCacheMegabytes = parseTranscodeCacheMegabytes(process.env.HOME_MUSIC_TRANSCODE_CACHE_MB);
 } catch (error) {
   app.log.warn(
-    { err: error, fallbackSeconds: DEFAULT_TRANSCODE_CACHE_MEGABYTES },
+    { err: error, fallbackMegabytes: DEFAULT_TRANSCODE_CACHE_MEGABYTES },
     'Limite do cache de transcoding inválido; usando o valor padrão.'
   );
 }
@@ -651,7 +651,7 @@ app.patch<{ Params: { id: string }; Body: { name?: string } }>('/api/playlists/:
 
   const name = cleanName(request.body?.name);
   if (!name) return reply.code(400).send({ error: 'Nome da playlist obrigatório.' });
-  if (!database.renamePlaylist(request.user.id, request.params.id, name)) {
+  if (!database.renamePlaylist(request.user.id, request.params.id)) {
     return reply.code(404).send({ error: 'Playlist não encontrada.' });
   }
   return { ok: true };
