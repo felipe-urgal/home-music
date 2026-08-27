@@ -91,7 +91,7 @@ export class ImportJobQueue {
   }
 
   list() {
-    return this.jobs.toReversed().map(copyJob);
+    return [...this.jobs].reverse().map(copyJob);
   }
 
   private trimRetainedJobs() {
