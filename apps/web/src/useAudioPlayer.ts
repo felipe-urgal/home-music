@@ -134,7 +134,6 @@ export function useAudioPlayer(
   const audioRef = useRef<HTMLAudioElement>(null);
   const positionRef = useRef(0);
   const restoredPositionRef = useRef(0);
-  const historyTrackRef = useRef<string | null>(null);
   const sourceTrackRef = useRef<string | null>(null);
   const sourceFallbackRef = useRef<'none' | 'compatibility' | 'original' | 'unnormalized'>('none');
   const hydratedRef = useRef(false);
@@ -249,7 +248,6 @@ export function useAudioPlayer(
       setDuration(0);
       positionRef.current = 0;
       restoredPositionRef.current = 0;
-      historyTrackRef.current = null;
       sourceTrackRef.current = null;
       sourceFallbackRef.current = 'none';
       return;
@@ -279,7 +277,6 @@ export function useAudioPlayer(
 
     if (sourceTrackRef.current !== current.id) {
       sourceTrackRef.current = current.id;
-      historyTrackRef.current = null;
     }
     sourceFallbackRef.current = 'none';
     setSourceError(null);
@@ -578,10 +575,6 @@ export function useAudioPlayer(
     setAutoplayBlocked(false);
     setSourceError(null);
     setPlaying(true);
-    if (!offlineMode && current && historyTrackRef.current !== current.id) {
-      historyTrackRef.current = current.id;
-      mutationFetch(`/api/history/${current.id}`, { method: 'POST' }).catch(() => undefined);
-    }
   }
 
   function handlePause() {
