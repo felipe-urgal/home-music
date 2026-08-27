@@ -85,27 +85,30 @@ async function startServer(withBootstrapCredentials) {
 
   const deadline = Date.now() + 20_000;
   let lastError;
+  let ready = false;
   while (Date.now() < deadline) {
     if (exitResult) {
       throw new Error(`Servidor encerrou antes do smoke de autenticação: ${JSON.stringify(exitResult)}\n${logs}`);
     }
     try {
       const response = await fetch(`${baseUrl}/ready`);
-      if (response.status === 200) break;
+      if (response.status === 200) {
+        ready = true;
+        break;
+      }
     } catch (error) {
       lastError = error;
     }
     await delay(150);
   }
 
-  if (Date.now() >= deadline) {
+  if (!ready) {
     child.kill('SIGTERM');
     throw new Error(`Timeout aguardando servidor de autenticação: ${String(lastError)}\n${logs}`);
   }
 
   return {
     baseUrl,
-    logs: () => logs,
     async stop() {
       if (!exitResult) child.kill('SIGTERM');
       const result = await Promise.race([
