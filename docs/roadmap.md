@@ -172,7 +172,7 @@ Objetivo: permitir administrar a coleção pelo próprio Home Music, com operaç
 
 - [x] Criar área `Administração` separada da experiência de reprodução e protegida por role `admin`
 - [x] Criar visão geral com quantidade de faixas, armazenamento, problemas e estado do scanner
-- [ ] Criar ponto de entrada `Importar mídia` integrado ao pipeline da Fase 9
+- [x] Criar ponto de entrada `Importar mídia` integrado ao pipeline da Fase 9
 - [ ] Permitir desativar/reativar músicas sem remover o arquivo físico
 - [ ] Criar lixeira/quarentena com restauração antes da exclusão permanente
 - [ ] Permitir exclusão física somente após confirmação explícita
@@ -191,7 +191,7 @@ Objetivo: permitir administrar a coleção pelo próprio Home Music, com operaç
 
 Objetivo: centralizar entradas de mídia em um pipeline seguro, observável e extensível por providers.
 
-- [ ] Criar modelo de job/fila de importação com estados `pending / processing / completed / failed / cancelled`
+- [x] Criar modelo de job/fila de importação com estados `pending / processing / completed / failed / cancelled`
 - [ ] Criar staging temporário separado de `MUSIC_DIR` e promover o arquivo somente após validação
 - [ ] Adicionar importação por drag-and-drop/upload com progresso
 - [ ] Adicionar importação por URL direta de mídia suportada
