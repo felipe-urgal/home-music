@@ -10,8 +10,7 @@ import {
   MonitorOff,
   ShieldCheck,
   SlidersHorizontal,
-  UserRound,
-  Users
+  UserRound
 } from 'lucide-react';
 import {
   changeOwnPassword,
@@ -26,14 +25,14 @@ import {
   AccountPlaybackPreferences,
   type AccountPlaybackPreferencesValue
 } from './AccountPlaybackPreferences';
-import { AdminUsersScreen } from './AdminUsersScreen';
 
-type AccountView = 'overview' | 'password' | 'sessions' | 'playback' | 'users';
+type AccountView = 'overview' | 'password' | 'sessions' | 'playback';
 
 type MyAccountScreenProps = {
   currentUser: AuthenticatedUser;
   playbackPreferences?: AccountPlaybackPreferencesValue;
   onBack: () => void;
+  onOpenAdministration: () => void;
   onSessionEnded: () => Promise<void>;
   onLogout: () => Promise<void>;
 };
@@ -50,6 +49,7 @@ export function MyAccountScreen({
   currentUser,
   playbackPreferences,
   onBack,
+  onOpenAdministration,
   onSessionEnded,
   onLogout
 }: MyAccountScreenProps) {
@@ -149,10 +149,6 @@ export function MyAccountScreen({
     }
   }
 
-  if (view === 'users' && currentUser.role === 'admin') {
-    return <AdminUsersScreen currentUser={currentUser} onBack={() => setView('overview')} />;
-  }
-
   const title = view === 'password'
     ? 'Alterar senha'
     : view === 'sessions'
@@ -224,11 +220,11 @@ export function MyAccountScreen({
 
           {currentUser.role === 'admin' && (
             <section className="my-account-link-group" aria-labelledby="my-account-group-admin">
-              <span className="my-account-link-group__label" id="my-account-group-admin">Administração</span>
+              <span className="my-account-link-group__label" id="my-account-group-admin">Sistema</span>
               <div className="my-account-links">
-                <button type="button" onClick={() => setView('users')}>
-                  <span className="my-account-card__icon"><Users /></span>
-                  <span><strong>Usuários</strong><small>Gerencie usuários, papéis e permissões.</small></span>
+                <button type="button" onClick={onOpenAdministration}>
+                  <span className="my-account-card__icon"><ShieldCheck /></span>
+                  <span><strong>Administração</strong><small>Usuários e controles do Home Music.</small></span>
                   <ChevronRight />
                 </button>
               </div>

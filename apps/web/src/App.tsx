@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { AuthenticatedUser } from '@home-music/shared';
-import { AdminUsersScreen } from './components/AdminUsersScreen';
+import { AdministrationScreen } from './components/AdministrationScreen';
 import { DesktopNowPlayingScreen } from './components/DesktopNowPlayingScreen';
 import { DesktopPlayerBar } from './components/DesktopPlayerBar';
 import { DesktopPlayerSidebarTools } from './components/DesktopPlayerSidebarTools';
@@ -25,7 +25,8 @@ import { useNetworkQualityProfile } from './useNetworkQualityProfile';
 import { useNextTrackPreload } from './useNextTrackPreload';
 import { useSystemVolumePreference } from './useSystemVolume';
 
-type Screen = 'player' | 'library' | 'users' | 'account';
+type Screen = 'player' | 'library' | 'admin' | 'account';
+type AdministrationReturnScreen = 'library' | 'account';
 
 type AuthenticatedAppProps = {
   currentUser: AuthenticatedUser;
@@ -36,6 +37,7 @@ type AuthenticatedAppProps = {
 
 function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline }: AuthenticatedAppProps) {
   const [screen, setScreen] = useState<Screen>('player');
+  const [administrationReturnScreen, setAdministrationReturnScreen] = useState<AdministrationReturnScreen>('account');
   const library = useLibraryData();
   const navigation = useLibraryNavigation(library.tracks, library.playlists);
   const libraryReady = !library.loading && !library.error;
@@ -71,6 +73,10 @@ function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline }: Aut
     query: navigation.query
   });
 
+  useEffect(() => {
+    if (screen === 'admin' && !canManageSharedLibrary) setScreen('account');
+  }, [canManageSharedLibrary, screen]);
+
   function openPlayer() {
     player.syncVisibleProgress();
     setScreen('player');
@@ -79,6 +85,12 @@ function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline }: Aut
   function openLibraryTab(tab: LibraryTab) {
     navigation.selectTab(tab);
     setScreen('library');
+  }
+
+  function openAdministration(returnScreen: AdministrationReturnScreen) {
+    if (!canManageSharedLibrary) return;
+    setAdministrationReturnScreen(returnScreen);
+    setScreen('admin');
   }
 
   function run(operation: Promise<unknown>) {
@@ -111,16 +123,17 @@ function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline }: Aut
     }));
   }
 
-  const accountArea = screen === 'account' || screen === 'users';
-  const desktopScreen = accountArea ? 'library' : screen;
-  const mobileNavigationActive = accountArea ? 'account' : screen === 'library' ? 'library' : 'player';
-  const showAdminUsersEntry = !desktopLayout
+  const accountArea = screen === 'account';
+  const administrationArea = screen === 'admin';
+  const utilityArea = accountArea || administrationArea;
+  const desktopScreen = screen === 'player' ? 'player' : 'library';
+  const mobileNavigationActive = utilityArea ? 'account' : screen === 'library' ? 'library' : 'player';
+  const showAdminEntry = !desktopLayout
     && canManageSharedLibrary
-    && screen !== 'users'
-    && screen !== 'account'
+    && !utilityArea
     && (screen === 'library' || Boolean(library.error));
   const showMyAccountEntry = !desktopLayout
-    && screen !== 'account'
+    && !utilityArea
     && (screen === 'library' || Boolean(library.error) || !current);
 
   return (
@@ -137,7 +150,7 @@ function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline }: Aut
 
       <DesktopShell
         active={desktopScreen}
-        activeLibraryTab={accountArea ? undefined : navigation.libraryTab}
+        activeLibraryTab={screen === 'library' ? navigation.libraryTab : undefined}
         current={current}
         playing={player.playing}
         libraryCount={library.tracks.length}
@@ -155,10 +168,13 @@ function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline }: Aut
           <DesktopPlayerSidebarTools
             username={currentUser.username}
             accountActive={accountArea}
+            administrationAvailable={canManageSharedLibrary}
+            administrationActive={administrationArea}
+            onOpenAdministration={() => openAdministration('library')}
             onOpenAccount={() => setScreen('account')}
           />
         ) : undefined}
-        surfaceClassName={`phone-surface phone-surface--mobile-nav ${screen !== 'player' ? 'phone-surface--library' : ''} ${desktopLayout && screen === 'player' ? 'desktop-now-playing-surface' : ''} ${desktopLayout && accountArea ? 'desktop-account-surface' : ''}`.trim()}
+        surfaceClassName={`phone-surface phone-surface--mobile-nav ${screen !== 'player' ? 'phone-surface--library' : ''} ${desktopLayout && screen === 'player' ? 'desktop-now-playing-surface' : ''} ${desktopLayout && utilityArea ? 'desktop-account-surface' : ''}`.trim()}
       >
         {showMyAccountEntry && (
           <button className="my-account-mobile-entry" type="button" onClick={() => setScreen('account')}>
@@ -166,9 +182,9 @@ function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline }: Aut
           </button>
         )}
 
-        {showAdminUsersEntry && (
-          <button className="admin-mobile-entry" type="button" onClick={() => setScreen('users')}>
-            Administração · Usuários
+        {showAdminEntry && (
+          <button className="admin-mobile-entry" type="button" onClick={() => openAdministration('library')}>
+            Administração
           </button>
         )}
 
@@ -188,11 +204,15 @@ function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline }: Aut
               onNormalizationMode: player.setNormalizationMode
             } : undefined}
             onBack={() => setScreen('library')}
+            onOpenAdministration={() => openAdministration('account')}
             onSessionEnded={onAuthRefresh}
             onLogout={onLogout}
           />
-        ) : screen === 'users' && canManageSharedLibrary ? (
-          <AdminUsersScreen currentUser={currentUser} onBack={() => setScreen('library')} />
+        ) : screen === 'admin' && canManageSharedLibrary ? (
+          <AdministrationScreen
+            currentUser={currentUser}
+            onBack={() => setScreen(administrationReturnScreen)}
+          />
         ) : library.loading ? (
           <ResponsiveState
             variant="loading"
@@ -375,7 +395,7 @@ function OfflineApp({ offline, onExit }: { offline: OfflineDownloads; onExit: ()
       />
 
       <DesktopShell
-        active={screen === 'users' || screen === 'account' ? 'library' : screen}
+        active={screen === 'player' ? 'player' : 'library'}
         current={current}
         playing={player.playing}
         libraryCount={offline.tracks.length}

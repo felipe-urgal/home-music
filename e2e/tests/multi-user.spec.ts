@@ -62,8 +62,12 @@ async function expectAdminLibrarySurface(page: Page, visible: boolean) {
   if (visible) await expect(refresh).toBeVisible();
   else await expect(refresh).toHaveCount(0);
 
-  if (width >= 700 && width < 1024) {
-    const adminEntry = page.getByRole('button', { name: 'Administração · Usuários', exact: true });
+  if (width >= 1024) {
+    const adminEntry = page.getByTestId('desktop-sidebar').getByRole('button', { name: /^Administração/ });
+    if (visible) await expect(adminEntry).toBeVisible();
+    else await expect(adminEntry).toHaveCount(0);
+  } else if (width >= 700) {
+    const adminEntry = page.getByRole('button', { name: 'Administração', exact: true });
     if (visible) await expect(adminEntry).toBeVisible();
     else await expect(adminEntry).toHaveCount(0);
   }
@@ -92,6 +96,16 @@ async function openAccountFromLibrary(page: Page) {
   await expect(page.locator('#my-account-title')).toHaveText('Minha conta');
 }
 
+async function openAdministration(page: Page) {
+  if (viewportWidth(page) >= 1024) {
+    await page.getByTestId('desktop-sidebar').getByRole('button', { name: /^Administração/ }).click();
+  } else {
+    await page.locator('.my-account-screen').getByRole('button', { name: /^Administração/ }).click();
+  }
+
+  await expect(page.locator('#administration-title')).toHaveText('Administração');
+}
+
 test('admin e user preservam role, troca de senha e isolamento em todos os layouts', async ({ page }, testInfo) => {
   const projectSlug = testInfo.project.name.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
   const retrySuffix = `r${testInfo.retry}`;
@@ -107,8 +121,10 @@ test('admin e user preservam role, troca de senha e isolamento em todos os layou
 
   await expect(page.getByLabel('Identidade atual')).toContainText(adminUsername);
   await expect(page.getByLabel('Identidade atual')).toContainText('Administrador');
-  await expect(page.locator('#my-account-group-admin')).toHaveText('Administração');
+  await expect(page.locator('#my-account-group-admin')).toHaveText('Sistema');
 
+  await openAdministration(page);
+  await expect(page.getByLabel('Acesso administrativo')).toContainText(adminUsername);
   await page.getByRole('button', { name: /^Usuários/ }).click();
   await expect(page.locator('#admin-users-title')).toHaveText('Usuários');
   await page.getByRole('button', { name: 'Novo usuário', exact: true }).click();
@@ -141,7 +157,7 @@ test('admin e user preservam role, troca de senha e isolamento em todos os layou
   await expect(page.getByLabel('Identidade atual')).toContainText(userUsername);
   await expect(page.getByLabel('Identidade atual')).toContainText('Usuário');
   await expect(page.locator('#my-account-group-admin')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: /^Usuários/ })).toHaveCount(0);
+  await expect(page.locator('.my-account-screen').getByRole('button', { name: /^Administração/ })).toHaveCount(0);
 
   await resetBrowserSession(page);
   await login(page, adminUsername, adminPassword);
