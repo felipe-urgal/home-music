@@ -4,6 +4,7 @@ import path from 'node:path';
 import type { Readable } from 'node:stream';
 import { parseFile, parseStream, type IAudioMetadata } from 'music-metadata';
 import type { Track } from '@home-music/shared';
+import { isQuarantinedTrackFilePresent, withMediaQuarantineLock } from './media-quarantine.js';
 import { replayGainDb } from './replay-gain.js';
 import { isPathInside, resolveRegularFileInside } from './security.js';
 
@@ -176,51 +177,59 @@ export async function scanLibrary(
   previousTracks: IndexedTrack[] = [],
   onWarning?: ScanWarningHandler
 ): Promise<LibraryScanResult> {
-  const unavailableDirectories: string[] = [];
-  const files = await walk(libraryRoot, libraryRoot, unavailableDirectories, onWarning);
-  const previousByPath = new Map(previousTracks.map(track => [track.filePath, track]));
-  const seenPaths = new Set<string>();
-  const tracks: IndexedTrack[] = [];
-  const stats: LibraryScanStats = { added: 0, updated: 0, removed: 0, unchanged: 0 };
+  return withMediaQuarantineLock(async () => {
+    const unavailableDirectories: string[] = [];
+    const files = await walk(libraryRoot, libraryRoot, unavailableDirectories, onWarning);
+    const previousByPath = new Map(previousTracks.map(track => [track.filePath, track]));
+    const seenPaths = new Set<string>();
+    const tracks: IndexedTrack[] = [];
+    const stats: LibraryScanStats = { added: 0, updated: 0, removed: 0, unchanged: 0 };
 
-  for (const file of files) {
-    seenPaths.add(file.path);
-    const previous = previousByPath.get(file.path);
+    for (const file of files) {
+      seenPaths.add(file.path);
+      const previous = previousByPath.get(file.path);
 
-    if (previous && previous.fileSize === file.size && previous.mtimeMs === file.mtimeMs) {
-      tracks.push(previous);
-      stats.unchanged += 1;
-      continue;
+      if (previous && previous.fileSize === file.size && previous.mtimeMs === file.mtimeMs) {
+        tracks.push(previous);
+        stats.unchanged += 1;
+        continue;
+      }
+
+      let metadata: IAudioMetadata | null = null;
+      try {
+        metadata = await parseFile(file.path, { duration: true });
+      } catch (error) {
+        onWarning?.(`Metadados inválidos; usando fallback: ${relativeFilePath(libraryRoot, file.path)}`, error);
+      }
+
+      tracks.push(fromMetadata(libraryRoot, file, metadata));
+      if (previous) stats.updated += 1;
+      else stats.added += 1;
     }
 
-    let metadata: IAudioMetadata | null = null;
-    try {
-      metadata = await parseFile(file.path, { duration: true });
-    } catch (error) {
-      onWarning?.(`Metadados inválidos; usando fallback: ${relativeFilePath(libraryRoot, file.path)}`, error);
+    for (const previous of previousTracks) {
+      if (seenPaths.has(previous.filePath)) continue;
+
+      if (await isQuarantinedTrackFilePresent(libraryRoot, previous.id, previous.filePath)) {
+        tracks.push(previous);
+        stats.unchanged += 1;
+        continue;
+      }
+
+      const unavailable = unavailableDirectories.some(directory => isPathInside(directory, previous.filePath));
+      if (unavailable) {
+        tracks.push(previous);
+        stats.unchanged += 1;
+        continue;
+      }
+
+      stats.removed += 1;
     }
 
-    tracks.push(fromMetadata(libraryRoot, file, metadata));
-    if (previous) stats.updated += 1;
-    else stats.added += 1;
-  }
+    tracks.sort((a, b) =>
+      a.artist.localeCompare(b.artist, 'pt-BR') || a.title.localeCompare(b.title, 'pt-BR')
+    );
 
-  for (const previous of previousTracks) {
-    if (seenPaths.has(previous.filePath)) continue;
-
-    const unavailable = unavailableDirectories.some(directory => isPathInside(directory, previous.filePath));
-    if (unavailable) {
-      tracks.push(previous);
-      stats.unchanged += 1;
-      continue;
-    }
-
-    stats.removed += 1;
-  }
-
-  tracks.sort((a, b) =>
-    a.artist.localeCompare(b.artist, 'pt-BR') || a.title.localeCompare(b.title, 'pt-BR')
-  );
-
-  return { tracks, stats };
+    return { tracks, stats };
+  });
 }

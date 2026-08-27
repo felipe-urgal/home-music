@@ -6,6 +6,8 @@ export type UserRole = 'admin' | 'user';
 export type ImportJobStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
 export type ImportJobSourceType = 'upload' | 'url' | 'provider';
 
+export const PERMANENT_DELETE_CONFIRMATION = 'EXCLUIR PERMANENTEMENTE' as const;
+
 export type AuthenticatedUser = {
   id: string;
   username: string;
@@ -114,6 +116,16 @@ export type AdminTracksResponse = {
   tracks: AdminTrack[];
   active: number;
   inactive: number;
+};
+
+export type AdminQuarantinedTrack = Track & {
+  quarantinedAt: string;
+  originalPath: string;
+  lastError: string | null;
+};
+
+export type AdminQuarantineResponse = {
+  tracks: AdminQuarantinedTrack[];
 };
 
 export type LibraryResponse = {

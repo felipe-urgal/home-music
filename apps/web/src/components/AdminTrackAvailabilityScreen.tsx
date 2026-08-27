@@ -7,8 +7,10 @@ import {
   LoaderCircle,
   Music2,
   RefreshCw,
-  Search
+  Search,
+  Trash2
 } from 'lucide-react';
+import { quarantineAdminTrack } from '../admin-quarantine-client';
 import { listAdminTracks, setAdminTrackEnabled } from '../admin-tracks-client';
 
 type AdminTrackAvailabilityScreenProps = {
@@ -89,13 +91,29 @@ export function AdminTrackAvailabilityScreen({ onBack }: AdminTrackAvailabilityS
     }
   }
 
+  async function moveToTrash(track: AdminTrack) {
+    if (busyTrackId) return;
+    if (!window.confirm(`Mover “${track.title}” para a lixeira?\n\nO arquivo poderá ser restaurado depois.`)) return;
+
+    setBusyTrackId(track.id);
+    setError(null);
+    try {
+      await quarantineAdminTrack(track.id);
+      setTracks(items => items.filter(item => item.id !== track.id));
+    } catch (error) {
+      setError(errorMessage(error));
+    } finally {
+      setBusyTrackId(null);
+    }
+  }
+
   return (
     <section className="my-account-screen admin-tracks-screen" aria-labelledby="admin-tracks-title">
       <header className="my-account-header">
         <button className="icon-button" type="button" aria-label="Voltar" onClick={onBack}><ChevronLeft /></button>
         <div>
           <strong id="admin-tracks-title">Gerenciar músicas</strong>
-          <small>Disponibilidade sem remover arquivos</small>
+          <small>Disponibilidade e remoção reversível</small>
         </div>
         <span className="my-account-header__spacer" />
       </header>
@@ -163,15 +181,25 @@ export function AdminTrackAvailabilityScreen({ onBack }: AdminTrackAvailabilityS
                 <span className={`admin-track-row__status ${track.enabled ? 'is-active' : ''}`}>
                   {track.enabled ? 'Ativa' : 'Desativada'}
                 </span>
-                <button
-                  className={`admin-track-row__action ${track.enabled ? 'is-disable' : 'is-enable'}`}
-                  type="button"
-                  disabled={busyTrackId !== null}
-                  onClick={() => void toggleTrack(track)}
-                >
-                  {busyTrackId === track.id ? <LoaderCircle className="is-spinning" /> : null}
-                  {track.enabled ? 'Desativar' : 'Reativar'}
-                </button>
+                <div className="admin-track-row__actions">
+                  <button
+                    className={`admin-track-row__action ${track.enabled ? 'is-disable' : 'is-enable'}`}
+                    type="button"
+                    disabled={busyTrackId !== null}
+                    onClick={() => void toggleTrack(track)}
+                  >
+                    {busyTrackId === track.id ? <LoaderCircle className="is-spinning" /> : null}
+                    {track.enabled ? 'Desativar' : 'Reativar'}
+                  </button>
+                  <button
+                    className="admin-track-row__trash"
+                    type="button"
+                    disabled={busyTrackId !== null}
+                    onClick={() => void moveToTrash(track)}
+                  >
+                    <Trash2 /> Mover para lixeira
+                  </button>
+                </div>
               </article>
             ))}
             {pageCount > 1 && (
