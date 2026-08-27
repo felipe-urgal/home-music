@@ -69,7 +69,7 @@ async function withDatabase(run: (databasePath: string) => Promise<void>) {
   }
 }
 
-test('IDs conhecidos não atravessam ownership de dados pessoais', async () => {
+test('IDs conhecidos não atravessam ownership dos dados pessoais mantidos', async () => {
   await withDatabase(async databasePath => {
     const database = new HomeMusicDatabase(databasePath);
     insertUser(databasePath, USER_A, '2026-08-26T10:00:00.000Z');
@@ -80,13 +80,6 @@ test('IDs conhecidos não atravessam ownership de dados pessoais', async () => {
     database.setFavorite(USER_B, 'b', true);
     assert.deepEqual(database.getFavoriteIds(USER_A), ['a']);
     assert.deepEqual(database.getFavoriteIds(USER_B), ['b']);
-
-    database.recordHistory(USER_A, 'a', '2026-08-26T12:01:00.000Z');
-    database.recordHistory(USER_B, 'b', '2026-08-26T12:02:00.000Z');
-    assert.deepEqual(database.getHistory(USER_A).map(item => item.track.id), ['a']);
-    assert.deepEqual(database.getHistory(USER_B).map(item => item.track.id), ['b']);
-    assert.equal(database.getStatistics(USER_A, 'all').totalPlays, 1);
-    assert.equal(database.getStatistics(USER_B, 'all').totalPlays, 1);
 
     database.savePlaybackState(USER_A, playbackState('a'));
     database.savePlaybackState(USER_B, playbackState('b'));
@@ -120,7 +113,7 @@ test('IDs conhecidos não atravessam ownership de dados pessoais', async () => {
   });
 });
 
-test('playlists Rekordbox continuam compartilhadas sem abrir mutação manual por ID', async () => {
+test('playlists importadas legadas continuam compartilhadas e somente leitura', async () => {
   await withDatabase(async databasePath => {
     const database = new HomeMusicDatabase(databasePath);
     insertUser(databasePath, USER_A, '2026-08-26T10:00:00.000Z');
@@ -128,11 +121,11 @@ test('playlists Rekordbox continuam compartilhadas sem abrir mutação manual po
     database.syncTracks([indexedTrack('a'), indexedTrack('b')], '/music', '2026-08-26T12:00:00.000Z');
 
     database.syncImportedPlaylists('rekordbox', [
-      { sourceKey: 'DJ\u001fAudit', name: 'DJ Audit', trackIds: ['a', 'b'] }
+      { sourceKey: 'DJ\u001fLegacy', name: 'DJ importada', trackIds: ['a', 'b'] }
     ]);
 
-    const sharedA = database.getPlaylists(USER_A).find(item => item.source === 'rekordbox');
-    const sharedB = database.getPlaylists(USER_B).find(item => item.source === 'rekordbox');
+    const sharedA = database.getPlaylists(USER_A).find(item => item.source !== 'manual');
+    const sharedB = database.getPlaylists(USER_B).find(item => item.source !== 'manual');
     assert.ok(sharedA);
     assert.ok(sharedB);
     assert.equal(sharedA.id, sharedB.id);
@@ -142,13 +135,6 @@ test('playlists Rekordbox continuam compartilhadas sem abrir mutação manual po
     assert.equal(database.renamePlaylist(USER_A, sharedA.id, 'Não permitido'), false);
     assert.equal(database.setPlaylistTracks(USER_A, sharedA.id, ['b']), false);
     assert.equal(database.deletePlaylist(USER_A, sharedA.id), false);
-
-    database.syncImportedPlaylists('rekordbox', [
-      { sourceKey: 'DJ\u001fAudit', name: 'DJ Audit atualizada', trackIds: ['b'] }
-    ]);
-    const updated = database.getPlaylists(USER_B).find(item => item.id === sharedA.id);
-    assert.equal(updated?.name, 'DJ Audit atualizada');
-    assert.deepEqual(updated?.trackIds, ['b']);
 
     database.close();
   });
