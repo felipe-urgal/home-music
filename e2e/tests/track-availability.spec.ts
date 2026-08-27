@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 const adminUsername = 'playwright';
 const adminPassword = 'playwright-password-2026';
+const mutationHeaders = { 'X-Home-Music-Request': '1' };
 
 function viewportWidth(page: Page) {
   const width = page.viewportSize()?.width;
@@ -43,15 +44,22 @@ test('admin desativa e reativa faixa preservando relações e estado após resca
   const track = library.tracks[0];
   expect(track).toBeTruthy();
 
-  await page.context().request.put(`/api/favorites/${encodeURIComponent(track.id)}`, {
+  const favoriteResponse = await page.context().request.put(`/api/favorites/${encodeURIComponent(track.id)}`, {
+    headers: mutationHeaders,
     data: { favorite: true }
   });
+  expect(favoriteResponse.ok()).toBeTruthy();
+
   const playlistName = `Availability ${testInfo.project.name} r${testInfo.retry}`;
-  const playlistResponse = await page.context().request.post('/api/playlists', { data: { name: playlistName } });
+  const playlistResponse = await page.context().request.post('/api/playlists', {
+    headers: mutationHeaders,
+    data: { name: playlistName }
+  });
   expect(playlistResponse.ok()).toBeTruthy();
   const playlistPayload = await playlistResponse.json() as { playlist: { id: string } };
   const playlistId = playlistPayload.playlist.id;
   const setTracksResponse = await page.context().request.put(`/api/playlists/${playlistId}/tracks`, {
+    headers: mutationHeaders,
     data: { trackIds: [track.id] }
   });
   expect(setTracksResponse.ok()).toBeTruthy();
@@ -82,7 +90,7 @@ test('admin desativa e reativa faixa preservando relações e estado após resca
   const playlists = await playlistsResponse.json() as { playlists: Array<{ id: string; trackIds: string[] }> };
   expect(playlists.playlists.find(item => item.id === playlistId)?.trackIds).toContain(track.id);
 
-  const scanResponse = await page.context().request.post('/api/library/scan');
+  const scanResponse = await page.context().request.post('/api/library/scan', { headers: mutationHeaders });
   expect(scanResponse.ok()).toBeTruthy();
   const adminTracksAfterScan = await page.context().request.get('/api/admin/tracks');
   const adminPayload = await adminTracksAfterScan.json() as { tracks: Array<{ id: string; enabled: boolean }> };
@@ -97,8 +105,13 @@ test('admin desativa e reativa faixa preservando relações e estado após resca
   const restoredPayload = await restoredLibrary.json() as { tracks: Array<{ id: string }> };
   expect(restoredPayload.tracks.some(item => item.id === track.id)).toBeTruthy();
 
-  await page.context().request.put(`/api/favorites/${encodeURIComponent(track.id)}`, {
+  const clearFavoriteResponse = await page.context().request.put(`/api/favorites/${encodeURIComponent(track.id)}`, {
+    headers: mutationHeaders,
     data: { favorite: false }
   });
-  await page.context().request.delete(`/api/playlists/${playlistId}`);
+  expect(clearFavoriteResponse.ok()).toBeTruthy();
+  const deletePlaylistResponse = await page.context().request.delete(`/api/playlists/${playlistId}`, {
+    headers: mutationHeaders
+  });
+  expect(deletePlaylistResponse.ok()).toBeTruthy();
 });
