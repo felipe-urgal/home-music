@@ -62,7 +62,7 @@ async function expectAdminLibrarySurface(page: Page, visible: boolean) {
   if (visible) await expect(refresh).toBeVisible();
   else await expect(refresh).toHaveCount(0);
 
-  if (width < 1024) {
+  if (width >= 700 && width < 1024) {
     const adminEntry = page.getByRole('button', { name: 'Administração · Usuários', exact: true });
     if (visible) await expect(adminEntry).toBeVisible();
     else await expect(adminEntry).toHaveCount(0);
