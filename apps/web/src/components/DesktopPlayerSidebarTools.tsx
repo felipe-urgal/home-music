@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { NormalizationMode, Track } from '@home-music/shared';
-import { CheckCircle2, Settings2, UserRound } from 'lucide-react';
+import { CheckCircle2, LogOut, Settings2, UserRound } from 'lucide-react';
 import type {
   DetectedNetwork,
   NetworkPreference,
@@ -35,7 +35,8 @@ function streamingModeLabel(mode: StreamingMode) {
 
 type DesktopPlayerSidebarToolsProps = {
   username: string;
-  current: Track;
+  current?: Track | null;
+  accountActive?: boolean;
   streamingSelection: StreamingSelection;
   effectiveStreamingMode: StreamingMode;
   networkPreference: NetworkPreference;
@@ -46,11 +47,13 @@ type DesktopPlayerSidebarToolsProps = {
   onNetworkPreference: (preference: NetworkPreference) => void;
   onNormalizationMode: (mode: NormalizationMode) => void;
   onOpenAccount: () => void;
+  onLogout?: () => void;
 };
 
 export function DesktopPlayerSidebarTools({
   username,
   current,
+  accountActive = false,
   streamingSelection,
   effectiveStreamingMode,
   networkPreference,
@@ -60,7 +63,8 @@ export function DesktopPlayerSidebarTools({
   onStreamingSelection,
   onNetworkPreference,
   onNormalizationMode,
-  onOpenAccount
+  onOpenAccount,
+  onLogout
 }: DesktopPlayerSidebarToolsProps) {
   const [open, setOpen] = useState(false);
 
@@ -79,81 +83,57 @@ export function DesktopPlayerSidebarTools({
 
       {open && (
         <section className="desktop-playback-settings" aria-label="Preferências de reprodução">
-          <div className="desktop-playback-settings__heading">
-            <strong>Reprodução</strong>
-            <small>Preferências deste dispositivo</small>
-          </div>
-
+          <div className="desktop-playback-settings__heading"><strong>Reprodução</strong><small>Preferências deste dispositivo</small></div>
           <div className="desktop-playback-settings__section">
             <span className="desktop-playback-settings__label">Qualidade</span>
             <div className="desktop-playback-settings__choices">
               {STREAMING_CHOICES.map(choice => (
-                <button
-                  key={choice.mode}
-                  className={streamingSelection === choice.mode ? 'is-selected' : ''}
-                  type="button"
-                  aria-pressed={streamingSelection === choice.mode}
-                  onClick={() => onStreamingSelection(choice.mode)}
-                >
+                <button key={choice.mode} className={streamingSelection === choice.mode ? 'is-selected' : ''} type="button" aria-pressed={streamingSelection === choice.mode} onClick={() => onStreamingSelection(choice.mode)}>
                   <span><strong>{choice.label}</strong><small>{choice.detail}</small></span>
                   {streamingSelection === choice.mode && <CheckCircle2 aria-hidden="true" />}
                 </button>
               ))}
             </div>
-
             {streamingSelection === 'network' && (
               <div className="desktop-playback-settings__network">
-                <label>
-                  <span>Conexão atual</span>
-                  <select value={networkPreference} onChange={event => onNetworkPreference(event.target.value as NetworkPreference)}>
-                    <option value="auto">Detectar</option>
-                    <option value="wifi">Wi-Fi</option>
-                    <option value="mobile">Dados móveis</option>
-                  </select>
-                </label>
+                <label><span>Conexão atual</span><select value={networkPreference} onChange={event => onNetworkPreference(event.target.value as NetworkPreference)}><option value="auto">Detectar</option><option value="wifi">Wi-Fi</option><option value="mobile">Dados móveis</option></select></label>
                 <small>Rede detectada: {detectedNetworkLabel(detectedNetwork)} · {streamingModeLabel(effectiveStreamingMode)}</small>
               </div>
             )}
           </div>
-
           <div className="desktop-playback-settings__section">
             <span className="desktop-playback-settings__label">Normalização</span>
             <div className="desktop-playback-settings__choices">
               {NORMALIZATION_CHOICES.map(choice => {
-                const unavailable = choice.mode === 'track'
+                const unavailable = current ? (choice.mode === 'track'
                   ? current.replayGainTrackDb == null
                   : choice.mode === 'album'
                     ? current.replayGainAlbumDb == null && current.replayGainTrackDb == null
-                    : false;
+                    : false) : false;
                 return (
-                  <button
-                    key={choice.mode}
-                    className={normalizationMode === choice.mode ? 'is-selected' : ''}
-                    type="button"
-                    aria-pressed={normalizationMode === choice.mode}
-                    disabled={unavailable}
-                    onClick={() => onNormalizationMode(choice.mode)}
-                  >
-                    <span>
-                      <strong>{choice.label}</strong>
-                      <small>{unavailable ? 'Esta faixa não possui tags ReplayGain' : choice.detail}</small>
-                    </span>
+                  <button key={choice.mode} className={normalizationMode === choice.mode ? 'is-selected' : ''} type="button" aria-pressed={normalizationMode === choice.mode} disabled={unavailable} onClick={() => onNormalizationMode(choice.mode)}>
+                    <span><strong>{choice.label}</strong><small>{unavailable ? 'Esta faixa não possui tags ReplayGain' : choice.detail}</small></span>
                     {normalizationMode === choice.mode && <CheckCircle2 aria-hidden="true" />}
                   </button>
                 );
               })}
             </div>
-            {normalizationMode !== 'off' && effectiveNormalizationMode === 'off' && (
-              <small className="desktop-playback-settings__note">A preferência está salva, mas esta faixa será reproduzida sem normalização.</small>
-            )}
+            {normalizationMode !== 'off' && effectiveNormalizationMode === 'off' && <small className="desktop-playback-settings__note">A preferência está salva, mas esta faixa será reproduzida sem normalização.</small>}
           </div>
         </section>
       )}
 
-      <button className="desktop-player-sidebar-tools__account" type="button" onClick={onOpenAccount}>
+      <button className={`desktop-player-sidebar-tools__account ${accountActive ? 'is-active' : ''}`} type="button" aria-current={accountActive ? 'page' : undefined} onClick={onOpenAccount}>
         <UserRound />
         <span><strong>Minha conta</strong><small>{username}</small></span>
       </button>
+
+      {onLogout && (
+        <button className="desktop-player-sidebar-tools__logout" type="button" onClick={onLogout}>
+          <LogOut />
+          <span>Sair da conta</span>
+        </button>
+      )}
     </div>
   );
 }
