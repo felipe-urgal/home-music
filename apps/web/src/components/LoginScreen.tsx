@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import {
   Download,
   Eye,
@@ -23,6 +23,11 @@ export function LoginScreen({ configured, error, offlineCount = 0, onLogin, onRe
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const autoOpeningOffline = offlineCount > 0 && Boolean(onOpenOffline);
+
+  useEffect(() => {
+    if (autoOpeningOffline) onOpenOffline?.();
+  }, [autoOpeningOffline, onOpenOffline]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -37,6 +42,18 @@ export function LoginScreen({ configured, error, offlineCount = 0, onLogin, onRe
     } finally {
       setSubmitting(false);
     }
+  }
+
+  if (autoOpeningOffline) {
+    return (
+      <main className="login-shell">
+        <section className="login-card login-card--status" aria-live="polite">
+          <div className="login-brand__icon"><Download /></div>
+          <strong>Modo offline</strong>
+          <span>Abrindo suas músicas baixadas…</span>
+        </section>
+      </main>
+    );
   }
 
   if (!configured) {
@@ -121,15 +138,6 @@ export function LoginScreen({ configured, error, offlineCount = 0, onLogin, onRe
             {submitting ? 'Entrando…' : 'Entrar'}
           </button>
         </form>
-
-        {offlineCount > 0 && onOpenOffline && (
-          <>
-            <div className="login-offline-separator">Sem servidor</div>
-            <button className="login-offline-action" type="button" onClick={onOpenOffline}>
-              <Download /> Abrir {offlineCount} {offlineCount === 1 ? 'download offline' : 'downloads offline'}
-            </button>
-          </>
-        )}
 
         <p className="login-footnote"><LockKeyhole /> Sessão protegida neste navegador.</p>
       </section>
