@@ -1,0 +1,21 @@
+@media (min-width: 1024px) {
+  /*
+   * The desktop sidebar uses backdrop-filter, which creates its own stacking
+   * context. Keep sidebar popovers above the center surface instead of letting
+   * them render underneath the translucent player/library layer.
+   */
+  .desktop-sidebar.has-utilities {
+    position: relative;
+    z-index: 60;
+    overflow: visible;
+  }
+
+  .desktop-player-sidebar-tools {
+    z-index: 1;
+  }
+
+  .desktop-playback-settings {
+    z-index: 2;
+    isolation: isolate;
+  }
+}
