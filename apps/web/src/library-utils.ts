@@ -1,6 +1,6 @@
 import type { Track } from '@home-music/shared';
 
-export type LibraryReturnTab = 'folders' | 'favorites' | 'playlists';
+export type LibraryReturnTab = 'folders' | 'playlists';
 export type TrackSort =
   | 'current'
   | 'title-asc'
@@ -9,16 +9,13 @@ export type TrackSort =
   | 'artist-desc'
   | 'album-asc'
   | 'album-desc';
-export type FavoriteFilter = 'all' | 'favorites' | 'not-favorites';
 export type CoverFilter = 'all' | 'with-cover' | 'without-cover';
 
 export type TrackViewOptions = {
   normalizedQuery: string;
   format: string;
-  favorite: FavoriteFilter;
   cover: CoverFilter;
   sort: TrackSort;
-  favoriteIds: ReadonlySet<string>;
 };
 
 export type FolderGroup = {
@@ -70,10 +67,6 @@ export function matchesTrack(track: Track, normalizedQuery: string) {
 export function matchesTrackView(track: Track, options: Omit<TrackViewOptions, 'sort'>) {
   if (!matchesTrack(track, options.normalizedQuery)) return false;
   if (options.format !== 'all' && track.format !== options.format) return false;
-
-  const favorite = options.favoriteIds.has(track.id);
-  if (options.favorite === 'favorites' && !favorite) return false;
-  if (options.favorite === 'not-favorites' && favorite) return false;
   if (options.cover === 'with-cover' && !track.hasCover) return false;
   if (options.cover === 'without-cover' && track.hasCover) return false;
 
@@ -120,7 +113,6 @@ export function buildLibraryReturnLabel(context: LibraryReturnContext) {
 
   if (context.selectedPlaylistName) target = context.selectedPlaylistName;
   else if (context.libraryTab === 'folders' && context.folderPath) target = context.folderName;
-  else if (context.libraryTab === 'favorites') target = 'Favoritos';
 
   if (context.query.trim()) {
     return target ? `Voltar para busca em ${target}` : 'Voltar para resultados da busca';
