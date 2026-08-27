@@ -196,7 +196,7 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
           <div className="my-account-links">
             <button type="button" onClick={() => setView('import')}>
               <span className="my-account-card__icon"><FileInput /></span>
-              <span><strong>Importar mídia</strong><small>Centralize uploads, URLs e providers externos em um único pipeline.</small></span>
+              <span><strong>Importar mídia</strong><small>Centralize uploads, URLs e fontes externas em um único pipeline.</small></span>
               <ChevronRight />
             </button>
           </div>
