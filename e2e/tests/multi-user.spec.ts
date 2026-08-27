@@ -123,9 +123,14 @@ test('admin e user preservam role, troca de senha e isolamento em todos os layou
   await expect(page.getByLabel('Identidade atual')).toContainText('Administrador');
   await expect(page.locator('#my-account-group-admin')).toHaveText('Sistema');
 
+  const libraryResponse = await page.context().request.get('/api/library');
+  expect(libraryResponse.ok()).toBeTruthy();
+  const libraryPayload = await libraryResponse.json() as { tracks: unknown[] };
+  expect(Array.isArray(libraryPayload.tracks)).toBeTruthy();
+
   await openAdministration(page);
   await expect(page.getByLabel('Acesso administrativo')).toContainText(adminUsername);
-  await expect(page.getByLabel('Faixas indexadas')).toContainText('1');
+  await expect(page.getByLabel('Faixas indexadas').locator('strong')).toHaveText(String(libraryPayload.tracks.length));
   await expect(page.getByLabel('Armazenamento da biblioteca')).toBeVisible();
   await expect(page.getByLabel('Problemas da biblioteca')).toBeVisible();
   await expect(page.getByLabel('Estado do scanner')).toContainText('Pronto');
