@@ -3,7 +3,6 @@ import type { Playlist, Track } from '@home-music/shared';
 import {
   applyTrackView,
   buildFolderView,
-  groupTracks,
   matchesTrackView,
   normalizeSearch,
   type CoverFilter,
@@ -13,7 +12,7 @@ import {
 } from './library-utils';
 
 export const LIBRARY_PAGE_SIZE = 100;
-export type LibraryTab = 'folders' | 'artists' | 'albums' | 'tracks' | 'favorites' | 'history' | 'playlists';
+export type LibraryTab = 'folders' | 'favorites' | 'playlists';
 
 export function useLibraryNavigation(
   tracks: Track[],
@@ -21,7 +20,6 @@ export function useLibraryNavigation(
   playlists: Playlist[]
 ) {
   const [libraryTab, setLibraryTab] = useState<LibraryTab>('folders');
-  const [selectedGroupKey, setSelectedGroupKey] = useState<string | null>(null);
   const [folderPath, setFolderPath] = useState('');
   const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
@@ -34,16 +32,6 @@ export function useLibraryNavigation(
   const normalizedQuery = normalizeSearch(deferredQuery);
   const favoriteSet = useMemo(() => new Set(favoriteIds), [favoriteIds]);
   const trackMap = useMemo(() => new Map(tracks.map(track => [track.id, track])), [tracks]);
-
-  const groups = useMemo(() => {
-    if (libraryTab !== 'artists' && libraryTab !== 'albums') return [];
-    return groupTracks(tracks, libraryTab);
-  }, [libraryTab, tracks]);
-
-  const selectedGroup = useMemo(
-    () => groups.find(group => group.key === selectedGroupKey) ?? null,
-    [groups, selectedGroupKey]
-  );
 
   const selectedPlaylist = useMemo(
     () => playlists.find(playlist => playlist.id === selectedPlaylistId) ?? null,
@@ -64,10 +52,8 @@ export function useLibraryNavigation(
   const filterScopeTracks = useMemo(() => {
     if (libraryTab === 'favorites') return tracks.filter(track => favoriteSet.has(track.id));
     if (libraryTab === 'playlists' && selectedPlaylist) return playlistTracks;
-    if (selectedGroup) return selectedGroup.tracks;
-    if (libraryTab === 'folders') return folderView.allTracks;
-    return tracks;
-  }, [favoriteSet, folderView.allTracks, libraryTab, playlistTracks, selectedGroup, selectedPlaylist, tracks]);
+    return folderView.allTracks;
+  }, [favoriteSet, folderView.allTracks, libraryTab, playlistTracks, selectedPlaylist, tracks]);
 
   const availableFormats = useMemo(
     () => [...new Set(filterScopeTracks.map(track => track.format))].sort((a, b) => a.localeCompare(b, 'pt-BR')),
@@ -83,25 +69,11 @@ export function useLibraryNavigation(
     favoriteIds: favoriteSet
   }), [coverFilter, favoriteFilter, favoriteSet, formatFilter, normalizedQuery, sort]);
 
-  const visibleGroups = useMemo(() => groups.flatMap(group => {
-    const matchingTracks = group.tracks.filter(track => matchesTrackView(track, viewOptions));
-    if (!matchingTracks.length) return [];
-    return [{
-      ...group,
-      matchingTrackCount: matchingTracks.length,
-      artwork: matchingTracks.find(track => track.hasCover) ?? matchingTracks[0] ?? group.artwork
-    }];
-  }), [groups, viewOptions]);
-
   const baseTracks = useMemo(() => {
-    if (libraryTab === 'favorites') {
-      return tracks.filter(track => favoriteSet.has(track.id));
-    }
+    if (libraryTab === 'favorites') return tracks.filter(track => favoriteSet.has(track.id));
     if (libraryTab === 'playlists' && selectedPlaylist) return playlistTracks;
-    if (selectedGroup) return selectedGroup.tracks;
-    if (libraryTab === 'folders') return normalizedQuery ? folderView.allTracks : folderView.directTracks;
-    return tracks;
-  }, [favoriteSet, folderView, libraryTab, normalizedQuery, playlistTracks, selectedGroup, selectedPlaylist, tracks]);
+    return normalizedQuery ? folderView.allTracks : folderView.directTracks;
+  }, [favoriteSet, folderView, libraryTab, normalizedQuery, playlistTracks, selectedPlaylist, tracks]);
 
   const libraryTracks = useMemo(
     () => applyTrackView(baseTracks, viewOptions),
@@ -123,9 +95,7 @@ export function useLibraryNavigation(
     }];
   }), [folderView.folders, viewOptions]);
 
-  const shouldShowTracks = libraryTab === 'tracks' ||
-    libraryTab === 'favorites' ||
-    Boolean(selectedGroup) ||
+  const shouldShowTracks = libraryTab === 'favorites' ||
     Boolean(selectedPlaylist) ||
     (libraryTab === 'folders' && Boolean(normalizedQuery));
 
@@ -138,7 +108,6 @@ export function useLibraryNavigation(
   ].filter(Boolean).length;
 
   const pagedTracks = libraryTracks.slice(0, visibleCount);
-  const pagedGroups = visibleGroups.slice(0, visibleCount);
   const pagedFolders = visibleFolders.slice(0, visibleCount);
 
   function resetPage() {
@@ -164,19 +133,8 @@ export function useLibraryNavigation(
 
   function selectTab(tab: LibraryTab) {
     setLibraryTab(tab);
-    setSelectedGroupKey(null);
     setSelectedPlaylistId(null);
     setFolderPath('');
-    resetNavigationView();
-  }
-
-  function selectGroup(key: string) {
-    setSelectedGroupKey(key);
-    resetNavigationView();
-  }
-
-  function leaveGroup() {
-    setSelectedGroupKey(null);
     resetNavigationView();
   }
 
@@ -231,7 +189,6 @@ export function useLibraryNavigation(
 
   return {
     libraryTab,
-    selectedGroup,
     selectedPlaylist,
     folderPath,
     folderView,
@@ -246,16 +203,12 @@ export function useLibraryNavigation(
     activeViewOptionCount,
     canSortTracks,
     visibleCount,
-    visibleGroups,
     visibleFolders,
     libraryTracks,
     shouldShowTracks,
     pagedTracks,
-    pagedGroups,
     pagedFolders,
     selectTab,
-    selectGroup,
-    leaveGroup,
     enterFolder,
     leaveFolder,
     selectPlaylist,
