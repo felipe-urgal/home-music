@@ -188,6 +188,26 @@ try {
   assert.equal(adminStatusBody.user?.username, adminUsername);
   assert.equal(adminStatusBody.user?.role, 'admin');
 
+  const adminOverview = await fetch(`${firstServer.baseUrl}/api/admin/library/overview`, {
+    headers: { Cookie: adminLogin.cookie }
+  });
+  assert.equal(adminOverview.status, 200);
+  assert.match(adminOverview.headers.get('cache-control') || '', /no-store/);
+  const adminOverviewBody = await adminOverview.json();
+  assert.deepEqual(adminOverviewBody.tracks, { total: 0 });
+  assert.deepEqual(adminOverviewBody.storage, { libraryBytes: 0 });
+  assert.deepEqual(adminOverviewBody.problems, {
+    affectedTracks: 0,
+    missingCover: 0,
+    unknownArtist: 0,
+    unknownAlbum: 0,
+    missingDuration: 0
+  });
+  assert.equal(adminOverviewBody.scanner.ready, true);
+  assert.equal(adminOverviewBody.scanner.scanning, false);
+  assert.equal(typeof adminOverviewBody.scanner.scannedAt, 'string');
+  assert.equal(typeof adminOverviewBody.scanner.autoRescan.enabled, 'boolean');
+
   const createUser = await fetch(`${firstServer.baseUrl}/api/admin/users`, {
     method: 'POST',
     headers: {
@@ -263,6 +283,12 @@ try {
     headers: { Cookie: userLogin.cookie }
   });
   assert.equal(userLibrary.status, 200);
+
+  const forbiddenOverview = await fetch(`${firstServer.baseUrl}/api/admin/library/overview`, {
+    headers: { Cookie: userLogin.cookie }
+  });
+  assert.equal(forbiddenOverview.status, 403);
+  assert.deepEqual(await forbiddenOverview.json(), { error: 'Acesso administrativo necessário.' });
 
   const forbiddenAdmin = await fetch(`${firstServer.baseUrl}/api/admin/users`, {
     headers: { Cookie: userLogin.cookie }

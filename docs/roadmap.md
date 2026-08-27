@@ -171,7 +171,7 @@ Critério de conclusão: um `user` pode reproduzir e administrar somente seus da
 Objetivo: permitir administrar a coleção pelo próprio Home Music, com operações seguras e reversíveis sempre que possível. Toda a área e suas APIs são exclusivas de `admin`, apoiadas na autorização da Fase 7.5.
 
 - [x] Criar área `Administração` separada da experiência de reprodução e protegida por role `admin`
-- [ ] Criar visão geral com quantidade de faixas, armazenamento, problemas e estado do scanner
+- [x] Criar visão geral com quantidade de faixas, armazenamento, problemas e estado do scanner
 - [ ] Criar ponto de entrada `Importar mídia` integrado ao pipeline da Fase 9
 - [ ] Permitir desativar/reativar músicas sem remover o arquivo físico
 - [ ] Criar lixeira/quarentena com restauração antes da exclusão permanente

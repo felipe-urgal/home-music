@@ -43,6 +43,31 @@ export type AdminUserSessionsRevokeResponse = {
   revokedSessions: number;
 };
 
+export type AdminLibraryOverviewResponse = {
+  tracks: {
+    total: number;
+  };
+  storage: {
+    libraryBytes: number;
+  };
+  problems: {
+    affectedTracks: number;
+    missingCover: number;
+    unknownArtist: number;
+    unknownAlbum: number;
+    missingDuration: number;
+  };
+  scanner: {
+    ready: boolean;
+    scanning: boolean;
+    scannedAt: string;
+    autoRescan: {
+      enabled: boolean;
+      intervalSeconds: number | null;
+    };
+  };
+};
+
 export type Track = {
   id: string;
   title: string;
