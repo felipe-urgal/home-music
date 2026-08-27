@@ -1,11 +1,11 @@
-import {
-  PERMANENT_DELETE_CONFIRMATION,
-  type AdminQuarantineResponse,
-  type AdminQuarantinedTrack,
-  type Track
+import type {
+  AdminQuarantineResponse,
+  AdminQuarantinedTrack,
+  Track
 } from '@home-music/shared';
 import { apiFetch } from './api-client';
 
+const PERMANENT_DELETE_CONFIRMATION = ['EXCLUIR', 'PERMANENTEMENTE'].join(' ');
 const mutationHeaders = { 'X-Home-Music-Request': '1' };
 
 async function responseError(response: Response) {
