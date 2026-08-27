@@ -1,0 +1,224 @@
+.admin-tracks-screen {
+  width: 100%;
+  min-width: 0;
+  max-width: 900px;
+  margin: 0 auto;
+  padding-bottom: 36px;
+}
+
+.admin-tracks-overview { display: grid; gap: 12px; }
+
+.admin-tracks-summary {
+  display: grid;
+  grid-template-columns: repeat(2,minmax(0,1fr));
+  gap: 8px;
+}
+.admin-tracks-summary article {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 36px minmax(0,1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(255,255,255,.06);
+  border-radius: 11px;
+  background: #0d141b;
+}
+.admin-tracks-summary__icon {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  color: #8a98a4;
+  background: rgba(255,255,255,.04);
+}
+.admin-tracks-summary__icon.is-active { color: #82d5a2; background: rgba(65,164,102,.11); }
+.admin-tracks-summary__icon svg { width: 17px; height: 17px; }
+.admin-tracks-summary article div { min-width: 0; display: grid; gap: 2px; }
+.admin-tracks-summary small { color: #7b8995; font-size: 10px; }
+.admin-tracks-summary strong { font-size: 18px; }
+
+.admin-tracks-toolbar {
+  display: grid;
+  grid-template-columns: minmax(220px,1fr) auto 36px;
+  gap: 8px;
+  align-items: center;
+}
+.admin-tracks-search {
+  min-width: 0;
+  height: 38px;
+  display: grid;
+  grid-template-columns: 18px minmax(0,1fr);
+  align-items: center;
+  gap: 7px;
+  padding: 0 10px;
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 9px;
+  background: #0d141b;
+  color: #75838f;
+}
+.admin-tracks-search svg { width: 15px; height: 15px; }
+.admin-tracks-search input {
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #e8eef3;
+  font: inherit;
+  font-size: 11px;
+}
+.admin-tracks-filters {
+  height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 9px;
+  background: #0d141b;
+}
+.admin-tracks-filters button,
+.admin-tracks-refresh,
+.admin-track-row__action,
+.admin-tracks-pagination button { font: inherit; cursor: pointer; }
+.admin-tracks-filters button {
+  height: 30px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #7f8b96;
+  font-size: 10px;
+}
+.admin-tracks-filters button.is-active { background: rgba(29,143,239,.13); color: #9bd3ff; }
+.admin-tracks-refresh {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 9px;
+  background: #0d141b;
+  color: #8996a1;
+}
+.admin-tracks-refresh:disabled { opacity: .45; cursor: default; }
+.admin-tracks-refresh svg { width: 15px; height: 15px; }
+
+.admin-tracks-message,
+.admin-tracks-state,
+.admin-tracks-list {
+  border: 1px solid rgba(255,255,255,.06);
+  border-radius: 12px;
+  background: #0c1218;
+}
+.admin-tracks-message { padding: 11px 13px; color: #a9b4bd; font-size: 11px; }
+.admin-tracks-message.is-error { border-color: rgba(255,90,90,.22); color: #ffb1b1; background: rgba(140,41,41,.1); }
+.admin-tracks-state {
+  min-height: 110px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px;
+  color: #7d8a95;
+  font-size: 11px;
+  text-align: center;
+}
+.admin-tracks-state svg { width: 17px; height: 17px; }
+.admin-tracks-list { overflow: hidden; }
+.admin-tracks-list__count { padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,.055); color: #7d8994; font-size: 10px; }
+
+.admin-track-row {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 32px minmax(0,1fr) auto 90px;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 11px;
+  border-bottom: 1px solid rgba(255,255,255,.045);
+}
+.admin-track-row:last-of-type { border-bottom: 0; }
+.admin-track-row.is-disabled { background: rgba(255,255,255,.012); }
+.admin-track-row__icon {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  color: #84919c;
+  background: rgba(255,255,255,.035);
+}
+.admin-track-row__icon.is-active { color: #79c9ff; background: rgba(30,139,232,.09); }
+.admin-track-row__icon svg { width: 15px; height: 15px; }
+.admin-track-row__body { min-width: 0; display: grid; gap: 2px; }
+.admin-track-row__body strong,
+.admin-track-row__body small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.admin-track-row__body strong { color: #dfe7ed; font-size: 11px; }
+.admin-track-row__body small { color: #788590; font-size: 9px; }
+.admin-track-row__folder { color: #606d78 !important; }
+.admin-track-row__status {
+  display: inline-flex;
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.045);
+  color: #88949e;
+  font-size: 9px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.admin-track-row__status.is-active { background: rgba(65,164,102,.1); color: #87d7a5; }
+.admin-track-row__action {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 9px;
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 8px;
+  background: rgba(255,255,255,.025);
+  color: #a4afb8;
+  font-size: 9px;
+  font-weight: 650;
+}
+.admin-track-row__action.is-enable { border-color: rgba(65,164,102,.2); color: #8cd7a8; }
+.admin-track-row__action.is-disable { color: #a7b1ba; }
+.admin-track-row__action:disabled { opacity: .45; cursor: default; }
+.admin-track-row__action svg { width: 13px; height: 13px; }
+
+.admin-tracks-pagination {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 11px;
+  border-top: 1px solid rgba(255,255,255,.055);
+  color: #707d88;
+  font-size: 9px;
+}
+.admin-tracks-pagination > div { display: flex; gap: 5px; }
+.admin-tracks-pagination button {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255,255,255,.06);
+  border-radius: 7px;
+  background: #111820;
+  color: #8e9aa5;
+}
+.admin-tracks-pagination button:disabled { opacity: .3; cursor: default; }
+.admin-tracks-pagination button svg { width: 13px; height: 13px; }
+
+@media (max-width: 680px) {
+  .admin-tracks-toolbar { grid-template-columns: minmax(0,1fr) 36px; }
+  .admin-tracks-filters { grid-column: 1 / -1; grid-row: 2; }
+  .admin-tracks-filters button { flex: 1; }
+  .admin-track-row { grid-template-columns: 30px minmax(0,1fr) auto; gap: 8px; }
+  .admin-track-row__status { display: none; }
+  .admin-track-row__action { grid-column: 2 / -1; justify-self: start; min-height: 28px; }
+}
