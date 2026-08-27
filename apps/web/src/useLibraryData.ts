@@ -1,12 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type {
   FavoritesResponse,
-  HistoryResponse,
   LibraryResponse,
   Playlist,
   PlaylistsResponse,
-  RekordboxImportResponse,
-  RekordboxPreviewResponse,
   ScanResponse,
   Track
 } from '@home-music/shared';
@@ -45,7 +42,6 @@ function errorMessage(error: unknown) {
 export function useLibraryData() {
   const [tracks, setTracks] = useState<Track[]>([]);
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
-  const [history, setHistory] = useState<HistoryResponse['items']>([]);
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [scannedAt, setScannedAt] = useState('');
   const [revision, setRevision] = useState(0);
@@ -79,12 +75,6 @@ export function useLibraryData() {
     return data;
   }, []);
 
-  const refreshHistory = useCallback(async () => {
-    const data = await jsonRequest<HistoryResponse>('/api/history?limit=300');
-    setHistory(data.items);
-    return data;
-  }, []);
-
   const refreshPlaylists = useCallback(async () => {
     const data = await jsonRequest<PlaylistsResponse>('/api/playlists');
     setPlaylists(data.playlists);
@@ -92,8 +82,8 @@ export function useLibraryData() {
   }, []);
 
   const refreshAll = useCallback(async () => {
-    await Promise.all([refreshLibrary(), refreshFavorites(), refreshHistory(), refreshPlaylists()]);
-  }, [refreshFavorites, refreshHistory, refreshLibrary, refreshPlaylists]);
+    await Promise.all([refreshLibrary(), refreshFavorites(), refreshPlaylists()]);
+  }, [refreshFavorites, refreshLibrary, refreshPlaylists]);
 
   const retry = useCallback(async () => {
     setLoading(true);
@@ -191,17 +181,6 @@ export function useLibraryData() {
     }
   }, [refreshAll, reportError]);
 
-  const clearHistory = useCallback(async () => {
-    try {
-      await jsonRequest('/api/history', { method: 'DELETE' });
-      setHistory([]);
-      setActionError(null);
-    } catch (error) {
-      reportError(error);
-      throw error;
-    }
-  }, [reportError]);
-
   const createPlaylist = useCallback(async (name: string) => {
     try {
       await jsonRequest('/api/playlists', {
@@ -265,42 +244,10 @@ export function useLibraryData() {
     await setPlaylistTracks(playlist.id, trackIds);
   }, [setPlaylistTracks]);
 
-  const previewRekordbox = useCallback(async (xml: string) => {
-    try {
-      const result = await jsonRequest<RekordboxPreviewResponse>('/api/integrations/rekordbox/preview', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ xml })
-      });
-      setActionError(null);
-      return result;
-    } catch (error) {
-      reportError(error);
-      throw error;
-    }
-  }, [reportError]);
-
-  const importRekordbox = useCallback(async (xml: string) => {
-    try {
-      const result = await jsonRequest<RekordboxImportResponse>('/api/integrations/rekordbox/import', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ xml })
-      });
-      await refreshPlaylists();
-      setActionError(null);
-      return result;
-    } catch (error) {
-      reportError(error);
-      throw error;
-    }
-  }, [refreshPlaylists, reportError]);
-
   return {
     tracks,
     favoriteIds,
     favoriteSet,
-    history,
     playlists,
     scannedAt,
     scanning,
@@ -310,17 +257,13 @@ export function useLibraryData() {
     reportError,
     clearActionError,
     retry,
-    refreshHistory,
     toggleFavorite,
     rescan,
-    clearHistory,
     createPlaylist,
     renamePlaylist,
     deletePlaylist,
     setPlaylistTracks,
-    addTrackToPlaylist,
-    previewRekordbox,
-    importRekordbox
+    addTrackToPlaylist
   };
 }
 
