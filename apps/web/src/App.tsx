@@ -104,7 +104,8 @@ function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline }: Aut
     }));
   }
 
-  const desktopScreen = screen === 'users' || screen === 'account' ? 'library' : screen;
+  const accountArea = screen === 'account' || screen === 'users';
+  const desktopScreen = accountArea ? 'library' : screen;
   const showAdminUsersEntry = !desktopLayout
     && canManageSharedLibrary
     && screen !== 'users'
@@ -128,7 +129,7 @@ function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline }: Aut
 
       <DesktopShell
         active={desktopScreen}
-        activeLibraryTab={navigation.libraryTab}
+        activeLibraryTab={accountArea ? undefined : navigation.libraryTab}
         current={current}
         playing={player.playing}
         libraryCount={library.tracks.length}
@@ -140,10 +141,11 @@ function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline }: Aut
         onOpenStatistics={() => setScreen('statistics')}
         onPlayTrack={player.playTrack}
         onReorderQueue={player.reorderQueue}
-        sidebarUtilities={desktopLayout && screen === 'player' && current ? (
+        sidebarUtilities={desktopLayout ? (
           <DesktopPlayerSidebarTools
             username={currentUser.username}
             current={current}
+            accountActive={accountArea}
             streamingSelection={qualityProfile.selection}
             effectiveStreamingMode={qualityProfile.effectiveMode}
             networkPreference={qualityProfile.networkPreference}
@@ -154,9 +156,10 @@ function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline }: Aut
             onNetworkPreference={qualityProfile.setNetworkPreference}
             onNormalizationMode={player.setNormalizationMode}
             onOpenAccount={() => setScreen('account')}
+            onLogout={() => { void onLogout().catch(library.reportError); }}
           />
         ) : undefined}
-        surfaceClassName={`phone-surface ${screen !== 'player' ? 'phone-surface--library' : ''} ${desktopLayout && screen === 'player' ? 'desktop-now-playing-surface' : ''}`.trim()}
+        surfaceClassName={`phone-surface ${screen !== 'player' ? 'phone-surface--library' : ''} ${desktopLayout && screen === 'player' ? 'desktop-now-playing-surface' : ''} ${desktopLayout && accountArea ? 'desktop-account-surface' : ''}`.trim()}
       >
         {showMyAccountEntry && (
           <button className="my-account-mobile-entry" type="button" onClick={() => setScreen('account')}>
@@ -300,9 +303,7 @@ function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline }: Aut
             onPlayTrack={player.playTrack}
             onReorderQueue={player.reorderQueue}
             onAddToPlaylist={playlist => run(library.addTrackToPlaylist(playlist, current.id))}
-            onLogout={() => {
-              void onLogout().catch(library.reportError);
-            }}
+            onLogout={() => { void onLogout().catch(library.reportError); }}
           />
         )}
       </DesktopShell>
