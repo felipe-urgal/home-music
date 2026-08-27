@@ -8,6 +8,7 @@ import {
   AccountPasswordService
 } from './account-password.js';
 import { registerAccountSessionRoutes } from './account-session-routes.js';
+import { registerAdminImportRoutes } from './admin-import-routes.js';
 import { buildAdminLibraryOverview } from './admin-library-overview.js';
 import {
   DEFAULT_AUTO_RESCAN_INTERVAL_SECONDS,
@@ -29,6 +30,7 @@ import { resolveAuthStatus } from './auth-status.js';
 import { installApiAuthPolicy } from './auth-policy.js';
 import { HomeMusicDatabase } from './database.js';
 import { probeFfmpeg, resolveFfmpegCommand, type FfmpegStatus } from './ffmpeg.js';
+import { ImportJobQueue } from './import-job-queue.js';
 import { readCover, scanLibrary, type IndexedTrack } from './library.js';
 import { replayGainForMode } from './replay-gain.js';
 import { readTrackLyrics } from './lyrics.js';
@@ -114,6 +116,7 @@ try {
 const sessions = new SessionManager('', '', SESSION_TTL_SECONDS * 1000, 128, { status: 'blocked' });
 const accountPasswords = new AccountPasswordService(databasePath, sessions);
 const adminUsers = new AdminUsersService(databasePath, sessions);
+const importJobs = new ImportJobQueue();
 const loginRateLimiter = new LoginRateLimiter();
 const authConfigured = authUsers.isConfigured();
 const productionCsp = "default-src 'self'; img-src 'self' data: blob:; media-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
@@ -380,6 +383,7 @@ installApiAuthPolicy(app, {
 });
 registerAccountSessionRoutes(app, sessions);
 registerAdminUserRoutes(app, adminUsers);
+registerAdminImportRoutes(app, importJobs);
 
 app.addHook('onSend', async (_request, reply, payload) => {
   reply.header('X-Content-Type-Options', 'nosniff');

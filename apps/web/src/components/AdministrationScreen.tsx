@@ -5,6 +5,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Database,
+  FileInput,
   HardDrive,
   LoaderCircle,
   Music2,
@@ -14,9 +15,10 @@ import {
   Users
 } from 'lucide-react';
 import { getAdminLibraryOverview } from '../admin-library-client';
+import { AdminImportMediaScreen } from './AdminImportMediaScreen';
 import { AdminUsersScreen } from './AdminUsersScreen';
 
-type AdministrationView = 'overview' | 'users';
+type AdministrationView = 'overview' | 'import' | 'users';
 
 type AdministrationScreenProps = {
   currentUser: AuthenticatedUser;
@@ -71,6 +73,10 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
   }, [currentUser.role, loadOverview]);
 
   if (currentUser.role !== 'admin') return null;
+
+  if (view === 'import') {
+    return <AdminImportMediaScreen onBack={() => setView('overview')} />;
+  }
 
   if (view === 'users') {
     return <AdminUsersScreen currentUser={currentUser} onBack={() => setView('overview')} />;
@@ -183,6 +189,17 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
               </div>
             </>
           ) : null}
+        </section>
+
+        <section className="my-account-link-group" aria-labelledby="administration-group-library">
+          <span className="my-account-link-group__label" id="administration-group-library">Biblioteca</span>
+          <div className="my-account-links">
+            <button type="button" onClick={() => setView('import')}>
+              <span className="my-account-card__icon"><FileInput /></span>
+              <span><strong>Importar mídia</strong><small>Centralize uploads, URLs e fontes externas em um único pipeline.</small></span>
+              <ChevronRight />
+            </button>
+          </div>
         </section>
 
         <section className="my-account-link-group" aria-labelledby="administration-group-access">
