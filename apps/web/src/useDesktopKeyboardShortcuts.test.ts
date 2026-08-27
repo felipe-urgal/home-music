@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { resolveDesktopShortcut } from './useDesktopKeyboardShortcuts';
 
 describe('desktop keyboard shortcuts', () => {
-  it('mapeia transporte, seek, busca e volume', () => {
+  it('mapeia transporte, seek e volume', () => {
     expect(resolveDesktopShortcut({ key: ' ', code: 'Space' })).toBe('toggle-play');
     expect(resolveDesktopShortcut({ key: 'ArrowLeft' })).toBe('seek-backward');
     expect(resolveDesktopShortcut({ key: 'ArrowRight' })).toBe('seek-forward');
@@ -10,7 +10,7 @@ describe('desktop keyboard shortcuts', () => {
     expect(resolveDesktopShortcut({ key: 'ArrowRight', shiftKey: true })).toBe('next');
     expect(resolveDesktopShortcut({ key: 'ArrowUp' })).toBe('volume-up');
     expect(resolveDesktopShortcut({ key: 'ArrowDown' })).toBe('volume-down');
-    expect(resolveDesktopShortcut({ key: '/' })).toBe('focus-search');
+    expect(resolveDesktopShortcut({ key: '/' })).toBeNull();
   });
 
   it('não captura combinações reservadas do navegador ou sistema', () => {
@@ -23,7 +23,6 @@ describe('desktop keyboard shortcuts', () => {
     expect(resolveDesktopShortcut({ key: ' ', code: 'Space', repeat: true })).toBeNull();
     expect(resolveDesktopShortcut({ key: 'ArrowLeft', shiftKey: true, repeat: true })).toBeNull();
     expect(resolveDesktopShortcut({ key: 'ArrowRight', shiftKey: true, repeat: true })).toBeNull();
-    expect(resolveDesktopShortcut({ key: '/', repeat: true })).toBeNull();
   });
 
   it('permite repetição contínua para seek e volume', () => {
