@@ -85,6 +85,7 @@ export class AdminUsersService {
 
   constructor(databasePath: string, private readonly sessions: SessionRevoker) {
     this.db = new DatabaseSync(databasePath);
+    this.db.exec('PRAGMA foreign_keys = ON;');
     this.db.exec('PRAGMA busy_timeout = 5000;');
   }
 
@@ -211,6 +212,81 @@ export class AdminUsersService {
       if (isDuplicateUsernameError(error)) return { ok: false, error: 'duplicate-username' };
       throw error;
     }
+  }
+
+  updateUser(
+    actorUserId: string,
+    targetUserId: string,
+    usernameInput: string,
+    roleInput: unknown,
+    enabledInput: unknown
+  ): AdminUserResult<AdminUser> {
+    const normalized = normalizeUsername(usernameInput);
+    if (!normalized) return { ok: false, error: 'invalid-username' };
+    const role = roleValue(roleInput);
+    if (!role) return { ok: false, error: 'invalid-role' };
+    if (typeof enabledInput !== 'boolean') return { ok: false, error: 'invalid-enabled' };
+
+    try {
+      const result = this.withWriteTransaction(() => {
+        if (!this.actorIsActiveAdmin(actorUserId)) return { ok: false, error: 'actor-no-longer-admin' };
+        if (actorUserId === targetUserId) return { ok: false, error: 'self-management-not-allowed' };
+
+        const target = this.getUser(targetUserId);
+        if (!target) return { ok: false, error: 'not-found' };
+        if (target.enabled && target.role === 'admin' && (!enabledInput || role !== 'admin') && this.activeAdminCount() <= 1) {
+          return { ok: false, error: 'last-admin' };
+        }
+
+        const duplicate = this.db.prepare(`
+          SELECT id FROM users WHERE username_normalized = ? AND id <> ? LIMIT 1;
+        `).get(normalized.usernameNormalized, targetUserId);
+        if (duplicate) return { ok: false, error: 'duplicate-username' };
+
+        const now = new Date().toISOString();
+        this.db.prepare(`
+          UPDATE users
+          SET username = ?, username_normalized = ?, role = ?, enabled = ?, updated_at = ?
+          WHERE id = ?;
+        `).run(
+          normalized.username,
+          normalized.usernameNormalized,
+          role,
+          enabledInput ? 1 : 0,
+          now,
+          targetUserId
+        );
+
+        const user = this.getUser(targetUserId);
+        if (!user) throw new Error('Usuário alterado não pôde ser relido do SQLite.');
+        return { ok: true, value: user };
+      });
+
+      if (result.ok) this.sessions.revokeUserSessions(targetUserId);
+      return result;
+    } catch (error) {
+      if (isDuplicateUsernameError(error)) return { ok: false, error: 'duplicate-username' };
+      throw error;
+    }
+  }
+
+  deleteUser(actorUserId: string, targetUserId: string): AdminUserResult<{ deleted: true }> {
+    const result = this.withWriteTransaction(() => {
+      if (!this.actorIsActiveAdmin(actorUserId)) return { ok: false, error: 'actor-no-longer-admin' };
+      if (actorUserId === targetUserId) return { ok: false, error: 'self-management-not-allowed' };
+
+      const target = this.getUser(targetUserId);
+      if (!target) return { ok: false, error: 'not-found' };
+      if (target.enabled && target.role === 'admin' && this.activeAdminCount() <= 1) {
+        return { ok: false, error: 'last-admin' };
+      }
+
+      this.db.prepare('DELETE FROM users WHERE id = ?;').run(targetUserId);
+      return { ok: true, value: { deleted: true as const } };
+    });
+
+    if (result.ok) this.sessions.revokeUserSessions(targetUserId);
+    return result;
   }
 
   setRole(actorUserId: string, targetUserId: string, roleInput: unknown): AdminUserResult<AdminUser> {

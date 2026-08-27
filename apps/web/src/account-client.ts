@@ -3,6 +3,14 @@ import { apiFetch } from './api-client';
 export const MIN_ACCOUNT_PASSWORD_CHARACTERS = 12;
 const MAX_ACCOUNT_PASSWORD_BYTES = 1024;
 
+export type AccountSession = {
+  id: string;
+  current: boolean;
+  createdAt: number;
+  lastSeenAt: number;
+  expiresAt: number;
+};
+
 type RevokeOtherSessionsResponse = {
   revoked: number;
 };
@@ -18,6 +26,16 @@ async function responseError(response: Response) {
 
 function passwordByteLength(value: string) {
   return new TextEncoder().encode(value).byteLength;
+}
+
+function isAccountSession(value: unknown): value is AccountSession {
+  if (!value || typeof value !== 'object') return false;
+  const session = value as Partial<AccountSession>;
+  return typeof session.id === 'string'
+    && typeof session.current === 'boolean'
+    && Number.isFinite(session.createdAt)
+    && Number.isFinite(session.lastSeenAt)
+    && Number.isFinite(session.expiresAt);
 }
 
 export function passwordChangeValidation(
@@ -46,6 +64,24 @@ export async function changeOwnPassword(currentPassword: string, newPassword: st
       'X-Home-Music-Request': '1'
     },
     body: JSON.stringify({ currentPassword, newPassword })
+  });
+  if (!response.ok) throw new Error(await responseError(response));
+}
+
+export async function listOwnSessions() {
+  const response = await apiFetch('/api/auth/sessions', { cache: 'no-store' });
+  if (!response.ok) throw new Error(await responseError(response));
+  const body = await response.json() as { sessions?: unknown[] };
+  if (!Array.isArray(body.sessions) || !body.sessions.every(isAccountSession)) {
+    throw new Error('Resposta inválida ao carregar sessões da conta.');
+  }
+  return body.sessions;
+}
+
+export async function revokeOwnSession(id: string) {
+  const response = await apiFetch(`/api/auth/sessions/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: { 'X-Home-Music-Request': '1' }
   });
   if (!response.ok) throw new Error(await responseError(response));
 }

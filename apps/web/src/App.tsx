@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import type { AuthenticatedUser } from '@home-music/shared';
 import { AdminUsersScreen } from './components/AdminUsersScreen';
+import { DesktopNowPlayingScreen } from './components/DesktopNowPlayingScreen';
 import { DesktopPlayerBar } from './components/DesktopPlayerBar';
+import { DesktopPlayerSidebarTools } from './components/DesktopPlayerSidebarTools';
 import { DesktopShell } from './components/DesktopShell';
 import { LibraryScreen } from './components/LibraryScreen';
 import { LoginScreen } from './components/LoginScreen';
@@ -102,12 +104,15 @@ function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline }: Aut
     }));
   }
 
-  const desktopScreen = screen === 'users' || screen === 'account' ? 'library' : screen;
-  const showAdminUsersEntry = canManageSharedLibrary
+  const accountArea = screen === 'account' || screen === 'users';
+  const desktopScreen = accountArea ? 'library' : screen;
+  const showAdminUsersEntry = !desktopLayout
+    && canManageSharedLibrary
     && screen !== 'users'
     && screen !== 'account'
     && (screen === 'library' || Boolean(library.error));
-  const showMyAccountEntry = screen !== 'account'
+  const showMyAccountEntry = !desktopLayout
+    && screen !== 'account'
     && (screen === 'library' || Boolean(library.error) || !current);
 
   return (
@@ -124,7 +129,7 @@ function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline }: Aut
 
       <DesktopShell
         active={desktopScreen}
-        activeLibraryTab={navigation.libraryTab}
+        activeLibraryTab={accountArea ? undefined : navigation.libraryTab}
         current={current}
         playing={player.playing}
         libraryCount={library.tracks.length}
@@ -136,7 +141,14 @@ function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline }: Aut
         onOpenStatistics={() => setScreen('statistics')}
         onPlayTrack={player.playTrack}
         onReorderQueue={player.reorderQueue}
-        surfaceClassName={`phone-surface ${screen !== 'player' ? 'phone-surface--library' : ''}`}
+        sidebarUtilities={desktopLayout ? (
+          <DesktopPlayerSidebarTools
+            username={currentUser.username}
+            accountActive={accountArea}
+            onOpenAccount={() => setScreen('account')}
+          />
+        ) : undefined}
+        surfaceClassName={`phone-surface ${screen !== 'player' ? 'phone-surface--library' : ''} ${desktopLayout && screen === 'player' ? 'desktop-now-playing-surface' : ''} ${desktopLayout && accountArea ? 'desktop-account-surface' : ''}`.trim()}
       >
         {showMyAccountEntry && (
           <button className="my-account-mobile-entry" type="button" onClick={() => setScreen('account')}>
@@ -153,8 +165,21 @@ function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline }: Aut
         {screen === 'account' ? (
           <MyAccountScreen
             currentUser={currentUser}
+            playbackPreferences={desktopLayout ? {
+              current,
+              streamingSelection: qualityProfile.selection,
+              effectiveStreamingMode: qualityProfile.effectiveMode,
+              networkPreference: qualityProfile.networkPreference,
+              detectedNetwork: qualityProfile.detectedNetwork,
+              normalizationMode: player.normalizationMode,
+              effectiveNormalizationMode: player.effectiveNormalizationMode,
+              onStreamingSelection: qualityProfile.setSelection,
+              onNetworkPreference: qualityProfile.setNetworkPreference,
+              onNormalizationMode: player.setNormalizationMode
+            } : undefined}
             onBack={() => setScreen('library')}
             onSessionEnded={onAuthRefresh}
+            onLogout={onLogout}
           />
         ) : screen === 'users' && canManageSharedLibrary ? (
           <AdminUsersScreen currentUser={currentUser} onBack={() => setScreen('library')} />
@@ -211,6 +236,33 @@ function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline }: Aut
             )}
             <button className="secondary-action" onClick={() => setScreen('library')}>Abrir biblioteca</button>
           </ResponsiveState>
+        ) : desktopLayout ? (
+          <DesktopNowPlayingScreen
+            current={current}
+            playing={player.playing}
+            autoplayBlocked={player.autoplayBlocked}
+            playbackError={player.sourceError}
+            currentTime={player.currentTime}
+            duration={player.duration}
+            volume={player.volume}
+            usesSystemVolume={usesSystemVolume}
+            shuffle={player.shuffle}
+            repeatMode={player.repeatMode}
+            isFavorite={library.favoriteSet.has(current.id)}
+            playlists={editablePlaylists}
+            isDownloaded={offline.downloadedIds.has(current.id)}
+            downloading={offline.downloadingIds.has(current.id)}
+            onTogglePlay={() => void player.togglePlay()}
+            onPrevious={player.previous}
+            onNext={player.next}
+            onSeek={player.seek}
+            onVolume={player.setVolume}
+            onShuffle={player.toggleShuffle}
+            onRepeat={player.cycleRepeat}
+            onToggleFavorite={() => run(library.toggleFavorite(current.id))}
+            onToggleDownload={offline.supported ? toggleDownload : undefined}
+            onAddToPlaylist={playlist => run(library.addTrackToPlaylist(playlist, current.id))}
+          />
         ) : (
           <PlayerScreen
             current={current}
@@ -252,9 +304,7 @@ function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline }: Aut
             onPlayTrack={player.playTrack}
             onReorderQueue={player.reorderQueue}
             onAddToPlaylist={playlist => run(library.addTrackToPlaylist(playlist, current.id))}
-            onLogout={() => {
-              void onLogout().catch(library.reportError);
-            }}
+            onLogout={() => { void onLogout().catch(library.reportError); }}
           />
         )}
       </DesktopShell>

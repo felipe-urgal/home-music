@@ -36,18 +36,34 @@ test('login, biblioteca e player permanecem utilizáveis', async ({ page }) => {
     await expect(embeddedPlayerQueue).toBeHidden();
     await expect(sidebar.getByRole('button', { name: 'Tocando agora' })).toHaveAttribute('aria-current', 'page');
     await expect(context).toContainText('E2E Track');
-    await expect(desktopQueue).toContainText('E2E Track');
+    await expect(desktopQueue).not.toContainText('E2E Track');
+    await expect(desktopQueue).toContainText('E2E Zeta');
+    await expect(page.getByRole('button', { name: 'Mais opções' })).toHaveCount(0);
 
     for (const label of ['Músicas', 'Artistas', 'Álbuns', 'Pastas', 'Favoritos', 'Playlists', 'Rekordbox', 'Histórico', 'Estatísticas']) {
       await expect(sidebar.getByRole('button', { name: label, exact: true })).toBeVisible();
     }
+
+    const accountButton = sidebar.getByRole('button', { name: /Minha conta/ });
+    await expect(accountButton).toBeVisible();
+    await expect(sidebar.getByRole('button', { name: 'Reprodução', exact: true })).toHaveCount(0);
+    await expect(sidebar.getByRole('button', { name: 'Sair da conta', exact: true })).toHaveCount(0);
+    await accountButton.click();
+    await expect(page.locator('#my-account-title')).toHaveText('Minha conta');
+    const reproduction = page.getByRole('button', { name: /Reprodução/ });
+    await expect(reproduction).toBeVisible();
+    await reproduction.click();
+    await expect(page.getByLabel('Preferências de reprodução')).toBeVisible();
+    await page.getByRole('button', { name: 'Voltar', exact: true }).click();
+    await sidebar.getByRole('button', { name: 'Tocando agora' }).click();
+    await expect(desktopQueue).toBeVisible();
 
     const zuluHandle = desktopQueue.getByRole('button', { name: 'Arrastar E2E Zulu' });
     const zetaRow = desktopQueue.locator('.desktop-queue__row').filter({ hasText: 'E2E Zeta' });
     await expect(zuluHandle).toBeVisible();
     await expect(zetaRow).toBeVisible();
     await zuluHandle.dragTo(zetaRow);
-    await expect(desktopQueue.locator('.desktop-queue__row').nth(1)).toContainText('E2E Zulu');
+    await expect(desktopQueue.locator('.desktop-queue__row').nth(0)).toContainText('E2E Zulu');
 
     const contextTabs = context.getByRole('tablist', { name: 'Painel contextual' });
     const queueTab = contextTabs.getByRole('tab', { name: 'Fila' });
@@ -103,9 +119,10 @@ test('login, biblioteca e player permanecem utilizáveis', async ({ page }) => {
 
   if (isDesktop) {
     await expect(desktopPlayerBar).toBeHidden();
+    await sidebar.getByRole('button', { name: 'Pastas', exact: true }).click();
+  } else {
+    await page.getByRole('button', { name: 'Voltar à biblioteca' }).click();
   }
-
-  await page.getByRole('button', { name: 'Voltar à biblioteca' }).click();
   await expect(page.locator('.library-header__title strong')).toHaveText('Biblioteca');
   await expect(page.locator('.library-header__title small')).toContainText('3 músicas');
 

@@ -43,6 +43,10 @@
     display: none;
   }
 
+  .desktop-sidebar.has-utilities .desktop-sidebar__utilities {
+    margin-top: auto;
+  }
+
   .desktop-layout[data-desktop-active="player"] {
     height: 100vh;
   }

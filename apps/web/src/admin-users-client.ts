@@ -44,6 +44,18 @@ export function createAdminUser(username: string, role: UserRole) {
   });
 }
 
+export async function updateAdminUser(id: string, username: string, role: UserRole, enabled: boolean) {
+  const response = await adminRequest<{ user: AdminUser }>(`/api/admin/users/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    ...jsonBody({ username, role, enabled })
+  });
+  return response.user;
+}
+
+export function deleteAdminUser(id: string) {
+  return adminRequest<{ deleted: true }>(`/api/admin/users/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
 export async function setAdminUserRole(id: string, role: UserRole) {
   const response = await adminRequest<{ user: AdminUser }>(`/api/admin/users/${encodeURIComponent(id)}/role`, {
     method: 'PATCH',
@@ -61,13 +73,9 @@ export async function setAdminUserEnabled(id: string, enabled: boolean) {
 }
 
 export function resetAdminUserPassword(id: string) {
-  return adminRequest<AdminUserPasswordResetResponse>(`/api/admin/users/${encodeURIComponent(id)}/password-reset`, {
-    method: 'POST'
-  });
+  return adminRequest<AdminUserPasswordResetResponse>(`/api/admin/users/${encodeURIComponent(id)}/password-reset`, { method: 'POST' });
 }
 
 export function revokeAdminUserSessions(id: string) {
-  return adminRequest<AdminUserSessionsRevokeResponse>(`/api/admin/users/${encodeURIComponent(id)}/sessions/revoke`, {
-    method: 'POST'
-  });
+  return adminRequest<AdminUserSessionsRevokeResponse>(`/api/admin/users/${encodeURIComponent(id)}/sessions/revoke`, { method: 'POST' });
 }

@@ -15,10 +15,22 @@ export type AuthSession = Readonly<{
   expiresAt: number;
 }>;
 
+export type PublicAuthSession = Readonly<{
+  id: string;
+  current: boolean;
+  createdAt: number;
+  lastSeenAt: number;
+  expiresAt: number;
+}>;
+
 function safeEqual(left: string, right: string) {
   const a = createHash('sha256').update(left).digest();
   const b = createHash('sha256').update(right).digest();
   return timingSafeEqual(a, b);
+}
+
+function publicSessionId(token: string) {
+  return createHash('sha256').update(token).digest('hex').slice(0, 24);
 }
 
 export function readCookie(header: string | undefined, name: string) {
@@ -64,6 +76,7 @@ export function loginRateLimitKey(
 
 export class SessionManager {
   private readonly sessions = new Map<string, AuthSession>();
+  private readonly sessionActivity = new Map<string, number>();
 
   constructor(
     private readonly username: string,
@@ -108,9 +121,10 @@ export class SessionManager {
     const session = this.sessions.get(token);
     if (!session) return null;
     if (session.expiresAt <= now) {
-      this.sessions.delete(token);
+      this.deleteSession(token);
       return null;
     }
+    this.sessionActivity.set(token, now);
     return session;
   }
 
@@ -119,7 +133,7 @@ export class SessionManager {
   }
 
   revokeSession(token: string | undefined) {
-    if (token) this.sessions.delete(token);
+    if (token) this.deleteSession(token);
   }
 
   revokeUserSessions(userId: string) {
@@ -127,7 +141,7 @@ export class SessionManager {
     let revoked = 0;
     for (const [token, session] of this.sessions) {
       if (session.userId !== userId) continue;
-      this.sessions.delete(token);
+      this.deleteSession(token);
       revoked += 1;
     }
     return revoked;
@@ -142,10 +156,44 @@ export class SessionManager {
     let revoked = 0;
     for (const [token, session] of this.sessions) {
       if (token === currentToken || session.userId !== userId) continue;
-      this.sessions.delete(token);
+      this.deleteSession(token);
       revoked += 1;
     }
     return revoked;
+  }
+
+  listUserSessions(userId: string, currentToken: string | undefined, now = Date.now()): PublicAuthSession[] | null {
+    if (!userId || !currentToken) return null;
+    this.clearExpired(now);
+    const currentSession = this.sessions.get(currentToken);
+    if (!currentSession || currentSession.userId !== userId) return null;
+    this.sessionActivity.set(currentToken, now);
+
+    return [...this.sessions.entries()]
+      .filter(([, session]) => session.userId === userId)
+      .map(([token, session]) => ({
+        id: publicSessionId(token),
+        current: token === currentToken,
+        createdAt: session.createdAt,
+        lastSeenAt: this.sessionActivity.get(token) ?? session.authenticatedAt,
+        expiresAt: session.expiresAt
+      }))
+      .sort((left, right) => Number(right.current) - Number(left.current) || right.lastSeenAt - left.lastSeenAt);
+  }
+
+  revokeUserSession(userId: string, publicId: string, currentToken: string | undefined, now = Date.now()) {
+    if (!userId || !publicId || !currentToken) return null;
+    this.clearExpired(now);
+    const currentSession = this.sessions.get(currentToken);
+    if (!currentSession || currentSession.userId !== userId) return null;
+
+    for (const [token, session] of this.sessions) {
+      if (session.userId !== userId || publicSessionId(token) !== publicId) continue;
+      if (token === currentToken) return false;
+      this.deleteSession(token);
+      return true;
+    }
+    return false;
   }
 
   private createSessionRecord(userId: string | null, now: number) {
@@ -153,7 +201,7 @@ export class SessionManager {
     while (this.sessions.size >= this.maxSessions) {
       const oldest = this.sessions.keys().next().value as string | undefined;
       if (!oldest) break;
-      this.sessions.delete(oldest);
+      this.deleteSession(oldest);
     }
 
     let token = '';
@@ -168,12 +216,18 @@ export class SessionManager {
       expiresAt: now + this.ttlMs
     });
     this.sessions.set(token, session);
+    this.sessionActivity.set(token, now);
     return token;
+  }
+
+  private deleteSession(token: string) {
+    this.sessions.delete(token);
+    this.sessionActivity.delete(token);
   }
 
   private clearExpired(now: number) {
     for (const [token, session] of this.sessions) {
-      if (session.expiresAt <= now) this.sessions.delete(token);
+      if (session.expiresAt <= now) this.deleteSession(token);
     }
   }
 }
