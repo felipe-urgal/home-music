@@ -1,15 +1,53 @@
-import type { FastifyInstance } from 'fastify';
-import type { AdminTrack, AdminTracksResponse } from '@home-music/shared';
+import { fileURLToPath } from 'node:url';
+import type { FastifyInstance, FastifyReply } from 'fastify';
+import type {
+  AdminQuarantineResponse,
+  AdminTrack,
+  AdminTracksResponse
+} from '@home-music/shared';
+import { MediaQuarantineOperationError, MediaQuarantineStore } from './media-quarantine.js';
+import { UnsafeLibraryPathError } from './security.js';
+
+export const PERMANENT_DELETE_CONFIRMATION = 'EXCLUIR PERMANENTEMENTE' as const;
+
+const defaultDatabasePath = fileURLToPath(new URL('../../../data/home-music.db', import.meta.url));
 
 type AdminTrackService = {
   listTracks: () => AdminTrack[];
   setEnabled: (trackId: string, enabled: boolean) => AdminTrack | null;
 };
 
-export function registerAdminTrackRoutes(app: FastifyInstance, service: AdminTrackService) {
+type AdminTrackRouteOptions = {
+  databasePath?: string;
+  musicDir?: string;
+};
+
+function sendQuarantineError(reply: FastifyReply, error: unknown) {
+  if (error instanceof MediaQuarantineOperationError) {
+    return reply.code(error.statusCode).send({ error: error.message });
+  }
+  if (error instanceof UnsafeLibraryPathError) {
+    return reply.code(409).send({ error: 'A operação foi bloqueada por segurança de caminho.' });
+  }
+  throw error;
+}
+
+export function registerAdminTrackRoutes(
+  app: FastifyInstance,
+  service: AdminTrackService,
+  options: AdminTrackRouteOptions = {}
+) {
+  const quarantine = new MediaQuarantineStore(
+    options.databasePath || process.env.HOME_MUSIC_DATABASE_PATH || defaultDatabasePath,
+    options.musicDir ?? process.env.MUSIC_DIR ?? ''
+  );
+
+  app.addHook('onClose', async () => { quarantine.close(); });
+
   app.get('/api/admin/tracks', async (_request, reply) => {
     reply.header('Cache-Control', 'private, no-store');
-    const tracks = service.listTracks();
+    quarantine.pruneResolvedTombstones();
+    const tracks = service.listTracks().filter(track => !quarantine.hasHidden(track.id));
     const response: AdminTracksResponse = {
       tracks,
       active: tracks.filter(track => track.enabled).length,
@@ -25,10 +63,75 @@ export function registerAdminTrackRoutes(app: FastifyInstance, service: AdminTra
       if (typeof request.body?.enabled !== 'boolean') {
         return reply.code(400).send({ error: 'Estado da música inválido.' });
       }
+      if (quarantine.hasHidden(request.params.id)) {
+        return reply.code(409).send({ error: 'Música está na lixeira. Restaure antes de alterar a disponibilidade.' });
+      }
 
       const track = service.setEnabled(request.params.id, request.body.enabled);
       if (!track) return reply.code(404).send({ error: 'Música não encontrada.' });
       return { track };
+    }
+  );
+
+  app.get('/api/admin/quarantine', async (_request, reply) => {
+    reply.header('Cache-Control', 'private, no-store');
+    quarantine.pruneResolvedTombstones();
+    const response: AdminQuarantineResponse = { tracks: quarantine.listItems() };
+    return response;
+  });
+
+  app.post<{ Params: { id: string } }>('/api/admin/tracks/:id/quarantine', async (request, reply) => {
+    reply.header('Cache-Control', 'private, no-store');
+    if (quarantine.hasHidden(request.params.id)) {
+      return reply.code(409).send({ error: 'Música já está na lixeira.' });
+    }
+
+    const track = service.listTracks().find(item => item.id === request.params.id);
+    if (!track) return reply.code(404).send({ error: 'Música não encontrada.' });
+    const { enabled: previousEnabled, ...publicTrack } = track;
+
+    if (previousEnabled) service.setEnabled(track.id, false);
+    try {
+      const quarantined = await quarantine.quarantine(track.id, publicTrack, previousEnabled);
+      return { track: quarantined };
+    } catch (error) {
+      if (previousEnabled && !quarantine.hasHidden(track.id)) service.setEnabled(track.id, true);
+      return sendQuarantineError(reply, error);
+    }
+  });
+
+  app.post<{ Params: { id: string } }>('/api/admin/quarantine/:id/restore', async (request, reply) => {
+    reply.header('Cache-Control', 'private, no-store');
+    try {
+      const track = await quarantine.restore(
+        request.params.id,
+        enabled => {
+          const restored = service.setEnabled(request.params.id, enabled);
+          if (!restored) {
+            throw new MediaQuarantineOperationError(409, 'Registro da música não está mais disponível para restauração.');
+          }
+        },
+        () => { service.setEnabled(request.params.id, false); }
+      );
+      return { track };
+    } catch (error) {
+      return sendQuarantineError(reply, error);
+    }
+  });
+
+  app.delete<{ Params: { id: string }; Body: { confirmation?: unknown } }>(
+    '/api/admin/quarantine/:id',
+    async (request, reply) => {
+      reply.header('Cache-Control', 'private, no-store');
+      if (request.body?.confirmation !== PERMANENT_DELETE_CONFIRMATION) {
+        return reply.code(400).send({ error: 'Confirmação explícita de exclusão permanente obrigatória.' });
+      }
+      try {
+        await quarantine.deletePermanently(request.params.id);
+        return reply.code(204).send();
+      } catch (error) {
+        return sendQuarantineError(reply, error);
+      }
     }
   );
 }

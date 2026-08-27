@@ -12,6 +12,7 @@ import './auth.css';
 import './admin-users.css';
 import './admin-users-entry.css';
 import './admin-tracks.css';
+import './admin-quarantine.css';
 import './my-account.css';
 import './administration.css';
 import './desktop-shell.css';

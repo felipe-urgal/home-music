@@ -13,14 +13,16 @@ import {
   RefreshCw,
   ScanLine,
   ShieldCheck,
+  Trash2,
   Users
 } from 'lucide-react';
 import { getAdminLibraryOverview } from '../admin-library-client';
 import { AdminImportMediaScreen } from './AdminImportMediaScreen';
+import { AdminMediaQuarantineScreen } from './AdminMediaQuarantineScreen';
 import { AdminTrackAvailabilityScreen } from './AdminTrackAvailabilityScreen';
 import { AdminUsersScreen } from './AdminUsersScreen';
 
-type AdministrationView = 'overview' | 'tracks' | 'import' | 'users';
+type AdministrationView = 'overview' | 'tracks' | 'quarantine' | 'import' | 'users';
 
 type AdministrationScreenProps = {
   currentUser: AuthenticatedUser;
@@ -78,6 +80,10 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
 
   if (view === 'tracks') {
     return <AdminTrackAvailabilityScreen onBack={() => setView('overview')} />;
+  }
+
+  if (view === 'quarantine') {
+    return <AdminMediaQuarantineScreen onBack={() => setView('overview')} />;
   }
 
   if (view === 'import') {
@@ -202,7 +208,12 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
           <div className="my-account-links">
             <button type="button" onClick={() => setView('tracks')}>
               <span className="my-account-card__icon"><ListMusic /></span>
-              <span><strong>Gerenciar músicas</strong><small>Desative ou reative faixas sem remover os arquivos físicos.</small></span>
+              <span><strong>Gerenciar músicas</strong><small>Desative, reative ou mova faixas para a lixeira com segurança.</small></span>
+              <ChevronRight />
+            </button>
+            <button type="button" onClick={() => setView('quarantine')}>
+              <span className="my-account-card__icon"><Trash2 /></span>
+              <span><strong>Lixeira</strong><small>Restaure músicas ou confirme a exclusão física permanente.</small></span>
               <ChevronRight />
             </button>
             <button type="button" onClick={() => setView('import')}>
