@@ -44,9 +44,13 @@ test('admin move para lixeira, preserva relações após scan e restaura', async
   const libraryResponse = await request.get('/api/library');
   expect(libraryResponse.ok()).toBeTruthy();
   const library = await libraryResponse.json() as { tracks: Array<{ id: string; title: string }> };
-  const track = library.tracks.find(item => item.title === 'E2E Quarantine');
+  const track = library.tracks.find(item => item.title === 'E2E Zulu');
   expect(track).toBeTruthy();
   if (!track) return;
+
+  const originalPlayerStateResponse = await request.get('/api/player/state');
+  expect(originalPlayerStateResponse.ok()).toBeTruthy();
+  const originalPlayerState = await originalPlayerStateResponse.json();
 
   const originalFavoritesResponse = await request.get('/api/favorites');
   expect(originalFavoritesResponse.ok()).toBeTruthy();
@@ -140,6 +144,11 @@ test('admin move para lixeira, preserva relações após scan e restaura', async
         }).catch(() => undefined);
       }
     }
+
+    await request.put('/api/player/state', {
+      headers: mutationHeaders,
+      data: originalPlayerState
+    }).catch(() => undefined);
 
     if (addedFavorite) {
       await request.put(`/api/favorites/${encodeURIComponent(track.id)}`, {
