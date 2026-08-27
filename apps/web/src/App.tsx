@@ -7,6 +7,7 @@ import { DesktopPlayerSidebarTools } from './components/DesktopPlayerSidebarTool
 import { DesktopShell } from './components/DesktopShell';
 import { LibraryScreen } from './components/LibraryScreen';
 import { LoginScreen } from './components/LoginScreen';
+import { MobileBottomNav } from './components/MobileBottomNav';
 import { MyAccountScreen } from './components/MyAccountScreen';
 import { OfflineLibraryScreen } from './components/OfflineLibraryScreen';
 import { PlayerScreen } from './components/PlayerScreen';
@@ -112,6 +113,7 @@ function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline }: Aut
 
   const accountArea = screen === 'account' || screen === 'users';
   const desktopScreen = accountArea ? 'library' : screen;
+  const mobileNavigationActive = accountArea ? 'account' : screen === 'library' ? 'library' : 'player';
   const showAdminUsersEntry = !desktopLayout
     && canManageSharedLibrary
     && screen !== 'users'
@@ -156,7 +158,7 @@ function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline }: Aut
             onOpenAccount={() => setScreen('account')}
           />
         ) : undefined}
-        surfaceClassName={`phone-surface ${screen !== 'player' ? 'phone-surface--library' : ''} ${desktopLayout && screen === 'player' ? 'desktop-now-playing-surface' : ''} ${desktopLayout && accountArea ? 'desktop-account-surface' : ''}`.trim()}
+        surfaceClassName={`phone-surface phone-surface--mobile-nav ${screen !== 'player' ? 'phone-surface--library' : ''} ${desktopLayout && screen === 'player' ? 'desktop-now-playing-surface' : ''} ${desktopLayout && accountArea ? 'desktop-account-surface' : ''}`.trim()}
       >
         {showMyAccountEntry && (
           <button className="my-account-mobile-entry" type="button" onClick={() => setScreen('account')}>
@@ -214,6 +216,8 @@ function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline }: Aut
             current={current}
             playing={player.playing}
             hasNext={player.hasNext}
+            currentTime={player.currentTime}
+            duration={player.duration}
             navigation={navigation}
             onOpenPlayer={openPlayer}
             onTogglePlay={() => void player.togglePlay()}
@@ -303,6 +307,13 @@ function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline }: Aut
           />
         )}
       </DesktopShell>
+
+      <MobileBottomNav
+        active={mobileNavigationActive}
+        onOpenPlayer={openPlayer}
+        onOpenLibrary={() => setScreen('library')}
+        onOpenAccount={() => setScreen('account')}
+      />
 
       <DesktopPlayerBar
         current={current}

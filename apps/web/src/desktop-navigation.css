@@ -109,7 +109,7 @@
     height: 100vh;
   }
 
-  .desktop-layout[data-desktop-active="player"] + .desktop-player-bar {
+  .desktop-layout[data-desktop-active="player"] ~ .desktop-player-bar {
     display: none;
   }
 }

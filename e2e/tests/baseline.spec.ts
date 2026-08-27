@@ -25,8 +25,10 @@ test('login, biblioteca e player permanecem utilizáveis', async ({ page }) => {
   const desktopPlayerBar = page.getByTestId('desktop-player-bar');
   const embeddedPlayerQueue = page.locator('.queue-panel--player');
   const miniPlayer = page.getByTestId('mini-player');
+  const mobileNavigation = page.getByRole('navigation', { name: 'Navegação principal' });
   const isDesktop = Boolean(viewport && viewport.width >= 1024);
   const isTablet = Boolean(viewport && viewport.width >= 700 && viewport.width < 1024);
+  const isMobile = Boolean(viewport && viewport.width < 700);
 
   if (isDesktop && viewport) {
     await expect(sidebar).toBeVisible();
@@ -94,7 +96,20 @@ test('login, biblioteca e player permanecem utilizáveis', async ({ page }) => {
     await expect(desktopPlayerBar).toHaveCount(0);
     await expect(embeddedPlayerQueue).toBeVisible();
     await expect(page.getByRole('button', { name: 'Letra' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Arrastar E2E Zeta' })).toBeVisible();
+
+    if (isTablet) {
+      await expect(page.getByRole('button', { name: 'Arrastar E2E Zeta' })).toBeVisible();
+      await expect(mobileNavigation).toBeHidden();
+    } else {
+      await expect(mobileNavigation).toBeVisible();
+      await expect(mobileNavigation.getByRole('button', { name: 'Agora', exact: true })).toHaveAttribute('aria-current', 'page');
+      const queueToggle = page.getByRole('button', { name: /A seguir/ });
+      await expect(queueToggle).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Arrastar E2E Zeta' })).toBeHidden();
+      await queueToggle.click();
+      await expect(page.getByRole('button', { name: 'Arrastar E2E Zeta' })).toBeVisible();
+      await queueToggle.click();
+    }
 
     expect(await responsiveShell.evaluate(element => getComputedStyle(element).display)).toBe('block');
     const surfaceBox = await surface.boundingBox();
@@ -124,18 +139,25 @@ test('login, biblioteca e player permanecem utilizáveis', async ({ page }) => {
   if (isDesktop) {
     await expect(desktopPlayerBar).toBeHidden();
     await sidebar.getByRole('button', { name: 'Pastas', exact: true }).click();
-  } else {
+  } else if (isTablet) {
     await page.getByRole('button', { name: 'Voltar à biblioteca' }).click();
+  } else {
+    await mobileNavigation.getByRole('button', { name: 'Biblioteca', exact: true }).click();
   }
 
   if (isDesktop) {
     await expect(page.locator('.library-header__title strong')).toBeHidden();
-    await expect(page.getByPlaceholder('Música, artista, álbum ou pasta')).toBeHidden();
-    await expect(page.getByRole('button', { name: 'Ordenar e filtrar biblioteca' })).toBeHidden();
   } else {
     await expect(page.locator('.library-header__title strong')).toHaveText('Biblioteca');
-    await expect(page.locator('.library-header__title small')).toContainText('3 músicas');
+    if (isTablet) {
+      await expect(page.locator('.library-header__title small')).toContainText('3 músicas');
+    } else {
+      await expect(page.locator('.library-header__title small')).toBeHidden();
+      await expect(page.getByRole('button', { name: 'Atualizar biblioteca' })).toBeVisible();
+    }
   }
+  await expect(page.getByPlaceholder('Música, artista, álbum ou pasta')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Ordenar e filtrar biblioteca' })).toHaveCount(0);
 
   if (isDesktop) {
     await expect(sidebar.getByRole('button', { name: 'Pastas', exact: true })).toHaveAttribute('aria-current', 'page');
@@ -167,6 +189,10 @@ test('login, biblioteca e player permanecem utilizáveis', async ({ page }) => {
     for (const label of ['Músicas', 'Artistas', 'Álbuns', 'Favoritos', 'Histórico']) {
       await expect(page.getByRole('button', { name: label, exact: true })).toHaveCount(0);
     }
+    if (isMobile) {
+      await expect(mobileNavigation.getByRole('button', { name: 'Biblioteca', exact: true })).toHaveAttribute('aria-current', 'page');
+      await expect(page.getByRole('button', { name: 'Voltar ao player' })).toBeHidden();
+    }
   }
 
   if (isDesktop) {
@@ -197,16 +223,8 @@ test('login, biblioteca e player permanecem utilizáveis', async ({ page }) => {
     await bulkToolbar.getByRole('button', { name: 'Limpar seleção', exact: true }).click();
     await expect(bulkToolbar).toContainText('Selecionar faixas');
   } else {
-    const search = page.getByPlaceholder('Música, artista, álbum ou pasta');
-    await expect(search).toBeVisible();
-    await search.fill('E2E');
-    await expect(page.locator('.library-track').filter({ hasText: 'E2E Track' })).toBeVisible();
     await expect(page.getByTestId('desktop-library-table')).toHaveCount(0);
     await expect(page.getByTestId('desktop-bulk-toolbar')).toHaveCount(0);
-
-    await search.fill('faixa-que-nao-existe-e2e');
-    await expect(page.locator('.empty-library')).toContainText('Nenhum item encontrado nesta pasta');
-    await search.fill('');
   }
 
   if (isDesktop) {
@@ -223,8 +241,10 @@ test('login, biblioteca e player permanecem utilizáveis', async ({ page }) => {
 
   if (isDesktop) {
     await desktopPlayerBar.getByRole('button', { name: 'Abrir E2E Track no player' }).click();
-  } else {
+  } else if (isTablet) {
     await page.getByRole('button', { name: 'Voltar ao player' }).click();
+  } else {
+    await mobileNavigation.getByRole('button', { name: 'Agora', exact: true }).click();
   }
 
   await expect(page.getByRole('heading', { name: 'E2E Track' })).toBeVisible();
@@ -234,6 +254,8 @@ test('login, biblioteca e player permanecem utilizáveis', async ({ page }) => {
     await expect(desktopQueue).toBeVisible();
     await expect(desktopPlayerBar).toBeHidden();
     await expect(embeddedPlayerQueue).toBeHidden();
+  } else if (isMobile) {
+    await expect(mobileNavigation.getByRole('button', { name: 'Agora', exact: true })).toHaveAttribute('aria-current', 'page');
   }
 });
 
@@ -312,7 +334,7 @@ test('atalhos de teclado desktop controlam reprodução', async ({ page }, testI
   }
 
   await page.keyboard.press('/');
-  await expect(page.getByPlaceholder('Música, artista, álbum ou pasta')).toBeHidden();
+  await expect(page.getByPlaceholder('Música, artista, álbum ou pasta')).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'E2E Track' })).toBeVisible();
 });
 
