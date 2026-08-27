@@ -5,10 +5,8 @@ import {
   buildFolderView,
   buildLibraryReturnLabel,
   buildQueueContext,
-  groupTracks,
   matchesTrack,
   matchesTrackView,
-  normalizeIdentity,
   normalizeSearch,
   sortTracks,
   type LibraryReturnContext,
@@ -46,10 +44,6 @@ function viewOptions(overrides: Partial<TrackViewOptions> = {}): TrackViewOption
 describe('normalização', () => {
   it('busca ignora acentos e caixa', () => {
     expect(normalizeSearch('  AxÉ  ')).toBe('axe');
-  });
-
-  it('identidade preserva acentos', () => {
-    expect(normalizeIdentity('Axé')).not.toBe(normalizeIdentity('Axe'));
   });
 });
 
@@ -122,7 +116,6 @@ describe('filtros e ordenação da biblioteca', () => {
 
 describe('buildLibraryReturnLabel', () => {
   const base = {
-    selectedGroupName: null,
     selectedPlaylistName: null,
     libraryTab: 'folders',
     folderPath: '',
@@ -138,13 +131,13 @@ describe('buildLibraryReturnLabel', () => {
     })).toBe('Voltar para Axé');
   });
 
-  it('preserva o contexto de busca dentro de uma coleção', () => {
+  it('preserva o contexto de busca dentro de uma playlist', () => {
     expect(buildLibraryReturnLabel({
       ...base,
-      selectedGroupName: 'Raul Seixas',
-      libraryTab: 'artists',
+      selectedPlaylistName: 'Estrada',
+      libraryTab: 'playlists',
       query: 'tente'
-    })).toBe('Voltar para busca em Raul Seixas');
+    })).toBe('Voltar para busca em Estrada');
   });
 
   it('identifica busca na raiz', () => {
@@ -153,37 +146,6 @@ describe('buildLibraryReturnLabel', () => {
 
   it('usa biblioteca na raiz sem busca', () => {
     expect(buildLibraryReturnLabel(base)).toBe('Voltar à biblioteca');
-  });
-});
-
-describe('groupTracks', () => {
-  it('não mistura álbuns de artistas diferentes com o mesmo nome', () => {
-    const groups = groupTracks([
-      track({ id: '1', artist: 'Artista A', albumArtist: 'Artista A', album: 'Greatest Hits' }),
-      track({ id: '2', artist: 'Artista B', albumArtist: 'Artista B', album: 'Greatest Hits' })
-    ], 'albums');
-
-    expect(groups).toHaveLength(2);
-    expect(groups.map(group => group.subtitle)).toEqual(['Artista A', 'Artista B']);
-  });
-
-  it('mantém participações no mesmo álbum quando albumArtist é igual', () => {
-    const groups = groupTracks([
-      track({ id: '1', artist: 'Artista A', albumArtist: 'Artista A', album: 'Ao Vivo' }),
-      track({ id: '2', artist: 'Artista A, Convidado', albumArtist: 'Artista A', album: 'Ao Vivo' })
-    ], 'albums');
-
-    expect(groups).toHaveLength(1);
-    expect(groups[0].tracks).toHaveLength(2);
-  });
-
-  it('não mistura pastas que diferem apenas por acento', () => {
-    const groups = groupTracks([
-      track({ id: '1', folder: 'Axé', folderPath: 'Axé' }),
-      track({ id: '2', folder: 'Axe', folderPath: 'Axe' })
-    ], 'folders');
-
-    expect(groups).toHaveLength(2);
   });
 });
 
