@@ -125,6 +125,13 @@ test('admin e user preservam role, troca de senha e isolamento em todos os layou
 
   await openAdministration(page);
   await expect(page.getByLabel('Acesso administrativo')).toContainText(adminUsername);
+  await expect(page.getByLabel('Faixas indexadas')).toContainText('1');
+  await expect(page.getByLabel('Armazenamento da biblioteca')).toBeVisible();
+  await expect(page.getByLabel('Problemas da biblioteca')).toBeVisible();
+  await expect(page.getByLabel('Estado do scanner')).toContainText('Pronto');
+  await expect(page.locator('#administration-problems-title')).toHaveText('Qualidade da biblioteca');
+  await expect(page.locator('#administration-scanner-title')).toHaveText('Scanner');
+
   await page.getByRole('button', { name: /^Usuários/ }).click();
   await expect(page.locator('#admin-users-title')).toHaveText('Usuários');
   await page.getByRole('button', { name: 'Novo usuário', exact: true }).click();
