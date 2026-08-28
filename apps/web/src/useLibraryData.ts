@@ -7,7 +7,7 @@ import type {
   Track
 } from '@home-music/shared';
 import { apiFetch } from './api-client';
-import { PLAYLISTS_CHANGED_EVENT } from './library-events';
+import { LIBRARY_CHANGED_EVENT, PLAYLISTS_CHANGED_EVENT } from './library-events';
 
 const LIBRARY_STATUS_POLL_MS = 15_000;
 
@@ -80,6 +80,14 @@ export function useLibraryData() {
     window.addEventListener(PLAYLISTS_CHANGED_EVENT, onPlaylistsChanged);
     return () => window.removeEventListener(PLAYLISTS_CHANGED_EVENT, onPlaylistsChanged);
   }, [refreshPlaylists, reportError]);
+
+  useEffect(() => {
+    const onLibraryChanged = () => {
+      void refreshLibrary().catch(reportError);
+    };
+    window.addEventListener(LIBRARY_CHANGED_EVENT, onLibraryChanged);
+    return () => window.removeEventListener(LIBRARY_CHANGED_EVENT, onLibraryChanged);
+  }, [refreshLibrary, reportError]);
 
   const refreshAll = useCallback(async () => {
     await Promise.all([refreshLibrary(), refreshPlaylists()]);
