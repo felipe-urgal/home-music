@@ -410,6 +410,25 @@ registerAdminTrackRoutes(app, {
     }
 
     return { ...publicTrack(track), enabled };
+  },
+  setLocation: (trackId, location) => {
+    const index = tracks.findIndex(item => item.id === trackId);
+    if (index < 0) return null;
+
+    const updated: IndexedTrack = {
+      ...tracks[index],
+      filePath: location.absolutePath,
+      folder: location.folder,
+      folderPath: location.folderPath
+    };
+    const nextTracks = [...tracks];
+    nextTracks[index] = updated;
+    setTracks(nextTracks);
+    clearCoverCache();
+    return {
+      ...publicTrack(updated),
+      enabled: trackAvailability.isEnabled(trackId)
+    };
   }
 });
 
