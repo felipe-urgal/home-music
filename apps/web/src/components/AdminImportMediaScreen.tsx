@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type DragEvent } from 'react';
 import type { ImportJob, ImportJobStatus } from '@home-music/shared';
 import {
   Ban,
@@ -10,9 +10,17 @@ import {
   FileUp,
   Link2,
   LoaderCircle,
-  RefreshCw
+  RefreshCw,
+  UploadCloud,
+  X
 } from 'lucide-react';
-import { getAdminImportJobs } from '../admin-import-client';
+import {
+  cancelAdminImportUpload,
+  createAdminImportUpload,
+  getAdminImportJobs,
+  uploadAdminImportFile,
+  type AdminImportUploadConfig
+} from '../admin-import-client';
 
 type AdminImportMediaScreenProps = {
   onBack: () => void;
@@ -22,13 +30,26 @@ type ImportMethod = {
   icon: typeof FileUp;
   title: string;
   description: string;
+  available?: boolean;
+};
+
+type UploadStage = 'preparing' | 'uploading' | 'cancelling' | 'queued' | 'cancelled' | 'error';
+
+type ActiveUpload = {
+  jobId: string | null;
+  fileName: string;
+  size: number;
+  loaded: number;
+  stage: UploadStage;
+  error: string | null;
 };
 
 const IMPORT_METHODS: readonly ImportMethod[] = [
   {
     icon: FileUp,
     title: 'Upload de arquivo',
-    description: 'Entrada local com staging, validação e progresso.'
+    description: 'Entrada local com staging seguro, progresso e cancelamento.',
+    available: true
   },
   {
     icon: Link2,
@@ -48,6 +69,15 @@ const STATUS_LABELS: Record<ImportJobStatus, string> = {
   completed: 'Concluída',
   failed: 'Falhou',
   cancelled: 'Cancelada'
+};
+
+const UPLOAD_STAGE_LABELS: Record<UploadStage, string> = {
+  preparing: 'Preparando staging',
+  uploading: 'Enviando arquivo',
+  cancelling: 'Cancelando',
+  queued: 'Aguardando validação',
+  cancelled: 'Cancelado',
+  error: 'Falhou'
 };
 
 function statusIcon(status: ImportJobStatus) {
@@ -75,11 +105,31 @@ function formatDate(value: string) {
   }).format(date);
 }
 
+function formatBytes(bytes: number) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  const value = bytes / 1024 ** index;
+  return `${value >= 10 || index === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[index]}`;
+}
+
+function extensionOf(name: string) {
+  const index = name.lastIndexOf('.');
+  return index >= 0 ? name.slice(index).toLowerCase() : '';
+}
+
 export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) {
   const [jobs, setJobs] = useState<ImportJob[]>([]);
+  const [uploadConfig, setUploadConfig] = useState<AdminImportUploadConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [activeUpload, setActiveUpload] = useState<ActiveUpload | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const currentXhrRef = useRef<XMLHttpRequest | null>(null);
+  const cancelRequestedRef = useRef(false);
 
   const loadJobs = useCallback(async (background = false) => {
     if (background) setRefreshing(true); else setLoading(true);
@@ -87,6 +137,7 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
     try {
       const response = await getAdminImportJobs();
       setJobs(response.jobs);
+      setUploadConfig(response.upload);
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Não foi possível carregar a fila de importação.');
     } finally {
@@ -95,6 +146,105 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
   }, []);
 
   useEffect(() => { void loadJobs(); }, [loadJobs]);
+
+  const beginUpload = useCallback(async (file: File) => {
+    if (!uploadConfig) {
+      setUploadError('Configuração de upload ainda não carregada. Tente novamente.');
+      return;
+    }
+    if (activeUpload && ['preparing', 'uploading', 'cancelling'].includes(activeUpload.stage)) {
+      setUploadError('Aguarde o upload atual terminar ou cancele antes de enviar outro arquivo.');
+      return;
+    }
+    if (file.size <= 0) {
+      setUploadError('O arquivo selecionado está vazio.');
+      return;
+    }
+    if (file.size > uploadConfig.maxBytes) {
+      setUploadError(`O arquivo excede o limite de ${formatBytes(uploadConfig.maxBytes)}.`);
+      return;
+    }
+    if (!uploadConfig.acceptedExtensions.includes(extensionOf(file.name))) {
+      setUploadError(`Formato não suportado. Use ${uploadConfig.acceptedExtensions.join(', ')}.`);
+      return;
+    }
+
+    setUploadError(null);
+    cancelRequestedRef.current = false;
+    setActiveUpload({
+      jobId: null,
+      fileName: file.name,
+      size: file.size,
+      loaded: 0,
+      stage: 'preparing',
+      error: null
+    });
+
+    try {
+      const job = await createAdminImportUpload(file);
+      if (cancelRequestedRef.current) return;
+      setActiveUpload(current => current ? { ...current, jobId: job.id, stage: 'uploading' } : current);
+      const transfer = uploadAdminImportFile(job.id, file, loaded => {
+        setActiveUpload(current => current?.jobId === job.id ? { ...current, loaded } : current);
+      });
+      currentXhrRef.current = transfer.xhr;
+      await transfer.promise;
+      if (cancelRequestedRef.current) return;
+      setActiveUpload(current => current?.jobId === job.id
+        ? { ...current, loaded: file.size, stage: 'queued', error: null }
+        : current);
+      await loadJobs(true);
+    } catch (error) {
+      if (cancelRequestedRef.current) return;
+      const message = error instanceof Error ? error.message : 'Não foi possível enviar o arquivo.';
+      setActiveUpload(current => current ? { ...current, stage: 'error', error: message } : current);
+    } finally {
+      currentXhrRef.current = null;
+      if (inputRef.current) inputRef.current.value = '';
+    }
+  }, [activeUpload, loadJobs, uploadConfig]);
+
+  const handleFiles = useCallback((files: FileList | File[]) => {
+    const selected = Array.from(files);
+    if (selected.length !== 1) {
+      setUploadError('Envie um arquivo por vez para acompanhar o progresso com clareza.');
+      return;
+    }
+    void beginUpload(selected[0]);
+  }, [beginUpload]);
+
+  const cancelUpload = useCallback(async () => {
+    const jobId = activeUpload?.jobId;
+    if (!jobId || !['uploading', 'queued'].includes(activeUpload.stage)) return;
+    cancelRequestedRef.current = true;
+    setActiveUpload(current => current ? { ...current, stage: 'cancelling', error: null } : current);
+    try {
+      await cancelAdminImportUpload(jobId);
+      currentXhrRef.current?.abort();
+      setActiveUpload(current => current?.jobId === jobId
+        ? { ...current, stage: 'cancelled', error: null }
+        : current);
+      await loadJobs(true);
+    } catch (error) {
+      cancelRequestedRef.current = false;
+      const message = error instanceof Error ? error.message : 'Não foi possível cancelar o upload.';
+      setActiveUpload(current => current?.jobId === jobId
+        ? { ...current, stage: 'error', error: message }
+        : current);
+    }
+  }, [activeUpload, loadJobs]);
+
+  const onDrop = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setDragging(false);
+    handleFiles(event.dataTransfer.files);
+  };
+
+  const uploadPercent = activeUpload?.size
+    ? Math.min(100, Math.round((activeUpload.loaded / activeUpload.size) * 100))
+    : 0;
+  const uploadBusy = Boolean(activeUpload && ['preparing', 'uploading', 'cancelling'].includes(activeUpload.stage));
+  const accept = uploadConfig?.acceptedExtensions.join(',') || undefined;
 
   return (
     <section className="my-account-screen admin-import-screen" aria-labelledby="admin-import-title">
@@ -113,23 +263,95 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
             <span className="my-account-link-group__label">Pipeline</span>
             <strong id="admin-import-intro-title">Uma fila, várias fontes</strong>
             <p>
-              Todas as importações passam pela mesma fila e seguem estados claros de execução. Upload, URL e
-              fontes externas serão habilitados nas próximas etapas.
+              Upload local já usa staging seguro e a fila comum de importação. URL e fontes externas serão
+              habilitadas nas próximas etapas sem criar caminhos paralelos para a biblioteca.
             </p>
           </div>
         </section>
 
-        <section className="admin-import-methods" aria-label="Formas de importação planejadas">
+        <section className="admin-import-upload" aria-labelledby="admin-import-upload-title">
+          <div className="admin-import-upload__heading">
+            <div>
+              <span className="my-account-link-group__label">Upload local</span>
+              <strong id="admin-import-upload-title">Adicionar arquivo de áudio</strong>
+            </div>
+            {uploadConfig && <small>Até {formatBytes(uploadConfig.maxBytes)}</small>}
+          </div>
+
+          <div
+            className={`admin-import-dropzone${dragging ? ' is-dragging' : ''}${uploadBusy ? ' is-disabled' : ''}`}
+            onDragEnter={event => { event.preventDefault(); if (!uploadBusy) setDragging(true); }}
+            onDragOver={event => { event.preventDefault(); }}
+            onDragLeave={event => {
+              event.preventDefault();
+              if (event.currentTarget === event.target) setDragging(false);
+            }}
+            onDrop={onDrop}
+          >
+            <UploadCloud />
+            <div>
+              <strong>Arraste uma música para cá</strong>
+              <small>ou selecione um arquivo do dispositivo</small>
+            </div>
+            <button type="button" disabled={uploadBusy || !uploadConfig} onClick={() => inputRef.current?.click()}>
+              Selecionar arquivo
+            </button>
+            <input
+              ref={inputRef}
+              className="admin-import-file-input"
+              type="file"
+              accept={accept}
+              aria-label="Selecionar arquivo de áudio"
+              disabled={uploadBusy || !uploadConfig}
+              onChange={event => event.target.files && handleFiles(event.target.files)}
+            />
+            {uploadConfig && (
+              <small className="admin-import-dropzone__formats">
+                {uploadConfig.acceptedExtensions.map(item => item.slice(1).toUpperCase()).join(' · ')}
+              </small>
+            )}
+          </div>
+
+          {uploadError && <div className="my-account-message is-error admin-import-message" role="alert">{uploadError}</div>}
+
+          {activeUpload && (
+            <article className={`admin-import-upload-status is-${activeUpload.stage}`} aria-live="polite">
+              <div className="admin-import-upload-status__top">
+                <div>
+                  <strong>{activeUpload.fileName}</strong>
+                  <small>{formatBytes(activeUpload.size)} · {UPLOAD_STAGE_LABELS[activeUpload.stage]}</small>
+                </div>
+                {(activeUpload.stage === 'uploading' || activeUpload.stage === 'queued') && (
+                  <button type="button" onClick={() => void cancelUpload()} aria-label={`Cancelar ${activeUpload.fileName}`}>
+                    <X /> Cancelar
+                  </button>
+                )}
+              </div>
+              <div className="admin-import-progress-row">
+                <progress max={100} value={uploadPercent} aria-label={`Progresso do upload: ${uploadPercent}%`} />
+                <strong>{uploadPercent}%</strong>
+              </div>
+              {activeUpload.stage === 'queued' && (
+                <small className="admin-import-upload-status__hint">
+                  Arquivo recebido no staging. Ele permanece fora de MUSIC_DIR enquanto aguarda as próximas validações do pipeline.
+                </small>
+              )}
+              {activeUpload.error && <small className="admin-import-job__error">{activeUpload.error}</small>}
+            </article>
+          )}
+        </section>
+
+        <section className="admin-import-methods" aria-label="Formas de importação">
           {IMPORT_METHODS.map(method => {
             const Icon = method.icon;
             return (
-              <article className="admin-import-method" key={method.title}>
+              <article className={`admin-import-method${method.available ? ' is-available' : ''}`} key={method.title}>
                 <span className="admin-import-method__icon"><Icon /></span>
                 <div>
                   <strong>{method.title}</strong>
                   <small>{method.description}</small>
                 </div>
-                <span className="admin-import-method__badge">Em breve</span>
+                <span className="admin-import-method__badge">{method.available ? 'Disponível' : 'Em breve'}</span>
               </article>
             );
           })}
@@ -167,7 +389,7 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
               <Clock3 />
               <div>
                 <strong>Nenhuma importação na fila</strong>
-                <small>As próximas formas de entrada usarão esta mesma fila.</small>
+                <small>Envie um arquivo acima para iniciar o primeiro job.</small>
               </div>
             </div>
           ) : (
