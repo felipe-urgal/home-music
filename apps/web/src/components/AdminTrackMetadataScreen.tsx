@@ -30,6 +30,11 @@ type AdminTrackMetadataScreenProps = {
   onBack: () => void;
 };
 
+type EditorFeedback = {
+  message: string;
+  error: boolean;
+};
+
 const PAGE_SIZE = 50;
 
 function errorMessage(error: unknown) {
@@ -55,6 +60,7 @@ export function AdminTrackMetadataScreen({ onBack }: AdminTrackMetadataScreenPro
   const [metadata, setMetadata] = useState<AdminTrackMetadataResponse | null>(null);
   const [draft, setDraft] = useState<EditableTrackMetadata | null>(null);
   const [editorLoading, setEditorLoading] = useState(false);
+  const [editorFeedback, setEditorFeedback] = useState<EditorFeedback | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -80,6 +86,19 @@ export function AdminTrackMetadataScreen({ onBack }: AdminTrackMetadataScreenPro
     setPage(1);
   }, [query]);
 
+  useEffect(() => {
+    if (!editingTrackId) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || saving) return;
+      setEditingTrackId(null);
+      setMetadata(null);
+      setDraft(null);
+      setEditorFeedback(null);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [editingTrackId, saving]);
+
   async function loadTracks(background = false) {
     if (background) setRefreshing(true); else setLoading(true);
     setError(null);
@@ -102,6 +121,7 @@ export function AdminTrackMetadataScreen({ onBack }: AdminTrackMetadataScreenPro
     setEditingTrackId(track.id);
     setMetadata(null);
     setDraft(null);
+    setEditorFeedback(null);
     setEditorLoading(true);
     setError(null);
     setFeedback(null);
@@ -122,10 +142,12 @@ export function AdminTrackMetadataScreen({ onBack }: AdminTrackMetadataScreenPro
     setEditingTrackId(null);
     setMetadata(null);
     setDraft(null);
+    setEditorFeedback(null);
   }
 
   function setField(field: keyof EditableTrackMetadata, value: string) {
     setDraft(current => current ? { ...current, [field]: value } : current);
+    setEditorFeedback(null);
   }
 
   function commitMetadata(updated: AdminTrackMetadataResponse, message: string) {
@@ -133,20 +155,20 @@ export function AdminTrackMetadataScreen({ onBack }: AdminTrackMetadataScreenPro
     setDraft(updated.effective);
     setTracks(items => items.map(track => applyEffectiveMetadata(track, updated)));
     setFeedback(message);
+    setEditorFeedback({ message, error: false });
     notifyLibraryChanged();
   }
 
   async function saveMetadata() {
     if (!metadata || !draft || saving) return;
     setSaving(true);
-    setError(null);
-    setFeedback(null);
+    setEditorFeedback(null);
     try {
       const patch = buildTrackMetadataOverridePatch(metadata.physical, draft);
       const updated = await updateAdminTrackMetadata(metadata.trackId, patch);
       commitMetadata(updated, 'Metadados salvos como override. O arquivo original não foi alterado.');
     } catch (error) {
-      setError(errorMessage(error));
+      setEditorFeedback({ message: errorMessage(error), error: true });
     } finally {
       setSaving(false);
     }
@@ -156,13 +178,12 @@ export function AdminTrackMetadataScreen({ onBack }: AdminTrackMetadataScreenPro
     if (!metadata || saving || !hasOverride(metadata)) return;
     if (!window.confirm('Restaurar os metadados exibidos para os valores do arquivo original?\n\nO arquivo físico não será modificado.')) return;
     setSaving(true);
-    setError(null);
-    setFeedback(null);
+    setEditorFeedback(null);
     try {
       const updated = await resetAdminTrackMetadata(metadata.trackId);
       commitMetadata(updated, 'Overrides removidos. A biblioteca voltou a exibir os metadados do arquivo.');
     } catch (error) {
-      setError(errorMessage(error));
+      setEditorFeedback({ message: errorMessage(error), error: true });
     } finally {
       setSaving(false);
     }
@@ -276,10 +297,18 @@ export function AdminTrackMetadataScreen({ onBack }: AdminTrackMetadataScreenPro
               <div className="admin-metadata-dialog__loading" role="status"><LoaderCircle className="is-spinning" /> Carregando metadados…</div>
             ) : (
               <form onSubmit={event => { event.preventDefault(); void saveMetadata(); }}>
+                {editorFeedback && (
+                  <div
+                    className={`admin-metadata-dialog__message ${editorFeedback.error ? 'is-error' : 'is-success'}`}
+                    role={editorFeedback.error ? 'alert' : 'status'}
+                  >
+                    {editorFeedback.message}
+                  </div>
+                )}
                 <div className="admin-metadata-fields">
                   <label>
                     <span>Título</span>
-                    <input required maxLength={240} value={draft.title} disabled={saving} onChange={event => setField('title', event.target.value)} />
+                    <input autoFocus required maxLength={240} value={draft.title} disabled={saving} onChange={event => setField('title', event.target.value)} />
                     <small>Arquivo: {metadata.physical.title}</small>
                   </label>
                   <label>
