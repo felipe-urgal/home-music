@@ -88,7 +88,9 @@ test('admin executa ações em lote reversíveis e confirma exclusão permanente
 
     await selectTracks(page, titles);
     const bulkToolbar = page.getByTestId('admin-bulk-toolbar');
-    await bulkToolbar.getByLabel('Playlist para seleção').selectOption(playlistId);
+    const playlistSelect = bulkToolbar.getByLabel('Playlist para seleção');
+    await expect(playlistSelect).toBeEnabled();
+    await playlistSelect.selectOption(playlistId);
     await bulkToolbar.getByRole('button', { name: 'Adicionar 2', exact: true }).click();
     await expect(page.getByRole('checkbox', { name: 'Selecionar E2E Zeta' })).not.toBeChecked();
 
