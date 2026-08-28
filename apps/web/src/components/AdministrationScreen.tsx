@@ -143,8 +143,13 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
         setCacheFeedback({ message: 'O cache já estava vazio.', error: false });
       }
     } catch (error) {
-      setCacheError(error instanceof Error ? error.message : 'Não foi possível limpar o cache de transcoding.');
-      await loadCache();
+      const message = error instanceof Error ? error.message : 'Não foi possível limpar o cache de transcoding.';
+      try {
+        setCache(await getAdminTranscodeCache());
+      } catch {
+        // Mantém o último estado conhecido do cache quando o refresh também falhar.
+      }
+      setCacheError(message);
     } finally {
       setClearingCache(false);
     }
@@ -300,7 +305,7 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
                   </dl>
 
                   <div className="administration-cache-actions">
-                    <small>Limpar remove somente arquivos derivados em `data/transcode-cache`; suas músicas não são alteradas.</small>
+                    <small>Limpar remove somente arquivos derivados do cache; suas músicas não são alteradas.</small>
                     <button
                       type="button"
                       disabled={!cache || cache.bytes === 0 || cacheBusy || clearingCache}
