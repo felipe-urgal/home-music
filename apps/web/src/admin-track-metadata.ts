@@ -3,6 +3,13 @@ import type {
   TrackMetadataOverridePatch
 } from '@home-music/shared';
 
+const FIELD_LABELS: Record<keyof EditableTrackMetadata, string> = {
+  title: 'Título',
+  artist: 'Artista',
+  album: 'Álbum',
+  albumArtist: 'Artista do álbum'
+};
+
 export function buildTrackMetadataOverridePatch(
   physical: EditableTrackMetadata,
   draft: EditableTrackMetadata
@@ -14,8 +21,8 @@ export function buildTrackMetadataOverridePatch(
     albumArtist: draft.albumArtist.trim()
   };
 
-  for (const [field, value] of Object.entries(normalized)) {
-    if (!value) throw new Error(`${field} não pode ficar vazio.`);
+  for (const field of Object.keys(normalized) as Array<keyof EditableTrackMetadata>) {
+    if (!normalized[field]) throw new Error(`${FIELD_LABELS[field]} não pode ficar vazio.`);
   }
 
   return {
