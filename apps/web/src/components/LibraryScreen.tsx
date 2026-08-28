@@ -12,6 +12,7 @@ import {
 import type { AuthenticatedUser, Playlist, Track } from '@home-music/shared';
 import { canUseAdminLibraryActions } from '../frontend-access';
 import type { TrackSort } from '../library-utils';
+import type { OfflineDownloads } from '../offline-downloads';
 import type { LibraryData } from '../useLibraryData';
 import { useDesktopLayout } from '../useDesktopLayout';
 import { LIBRARY_PAGE_SIZE, type LibraryNavigation, type LibraryTab } from '../useLibraryNavigation';
@@ -19,9 +20,12 @@ import { Artwork } from './Artwork';
 import { DesktopTrackTable } from './DesktopTrackTable';
 import { MiniPlayer } from './MiniPlayer';
 
+type LibraryOfflineDownloads = Pick<OfflineDownloads, 'supported' | 'downloadedIds' | 'downloadingIds' | 'download' | 'remove'>;
+
 type LibraryScreenProps = {
   currentUser: AuthenticatedUser;
   data: LibraryData;
+  offline: LibraryOfflineDownloads;
   current?: Track;
   playing: boolean;
   hasNext: boolean;
@@ -47,7 +51,12 @@ function TrackRows({
   sort,
   onSort,
   onPlayTrack,
-  onRemove
+  onRemove,
+  offlineSupported,
+  downloadedIds,
+  downloadingIds,
+  onDownload,
+  onRemoveDownload
 }: {
   tracks: Track[];
   context: Track[];
@@ -57,6 +66,11 @@ function TrackRows({
   onSort: (sort: TrackSort) => void;
   onPlayTrack: (track: Track, context: Track[]) => void;
   onRemove?: (trackId: string) => void;
+  offlineSupported: boolean;
+  downloadedIds: ReadonlySet<string>;
+  downloadingIds: ReadonlySet<string>;
+  onDownload: (track: Track) => Promise<void>;
+  onRemoveDownload: (track: Track) => Promise<void>;
 }) {
   const isDesktop = useDesktopLayout();
 
@@ -71,6 +85,11 @@ function TrackRows({
         onSort={onSort}
         onPlayTrack={onPlayTrack}
         onRemove={onRemove}
+        offlineSupported={offlineSupported}
+        downloadedIds={downloadedIds}
+        downloadingIds={downloadingIds}
+        onDownload={onDownload}
+        onRemoveDownload={onRemoveDownload}
       />
     );
   }
@@ -102,6 +121,7 @@ function TrackRows({
 export function LibraryScreen({
   currentUser,
   data,
+  offline,
   current,
   playing,
   hasNext,
@@ -123,7 +143,8 @@ export function LibraryScreen({
     createPlaylist,
     renamePlaylist,
     deletePlaylist,
-    setPlaylistTracks
+    setPlaylistTracks,
+    reportError
   } = data;
   const {
     libraryTab,
@@ -192,6 +213,31 @@ export function LibraryScreen({
       // useLibraryData já exibe o erro globalmente.
     }
   }
+
+  async function downloadTrack(track: Track) {
+    try {
+      await offline.download(track);
+    } catch (error) {
+      reportError(error);
+    }
+  }
+
+  async function removeTrackDownload(track: Track) {
+    if (!window.confirm(`Remover “${track.title}” dos downloads offline?`)) return;
+    try {
+      await offline.remove(track.id);
+    } catch (error) {
+      reportError(error);
+    }
+  }
+
+  const offlineTrackProps = {
+    offlineSupported: offline.supported,
+    downloadedIds: offline.downloadedIds,
+    downloadingIds: offline.downloadingIds,
+    onDownload: downloadTrack,
+    onRemoveDownload: removeTrackDownload
+  };
 
   return (
     <>
@@ -266,6 +312,7 @@ export function LibraryScreen({
                   sort={sort}
                   onSort={changeSort}
                   onPlayTrack={onPlayTrack}
+                  {...offlineTrackProps}
                 />
               </>
             )}
@@ -325,6 +372,7 @@ export function LibraryScreen({
                 onSort={changeSort}
                 onPlayTrack={onPlayTrack}
                 onRemove={selectedPlaylist?.source === 'manual' ? trackId => run(setPlaylistTracks(selectedPlaylist.id, selectedPlaylist.trackIds.filter(id => id !== trackId))) : undefined}
+                {...offlineTrackProps}
               />
             ) : <div className="empty-library">Nenhuma música encontrada.</div>}
             {visibleCount < libraryTracks.length && (
