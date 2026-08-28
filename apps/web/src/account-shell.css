@@ -1,6 +1,6 @@
 @media (min-width: 1024px) {
   .desktop-layout:has(.desktop-account-surface) {
-    height: calc(100vh - var(--desktop-player-height, 88px));
+    height: 100vh;
     grid-template-columns: var(--desktop-sidebar-width, 220px) minmax(0, 1fr);
   }
 
@@ -9,7 +9,7 @@
   }
 
   .desktop-layout:has(.desktop-account-surface) .desktop-account-surface {
-    height: 100%;
+    height: calc(100% - var(--desktop-player-height, 88px));
     padding-bottom: 28px;
     border-right: 0;
   }
