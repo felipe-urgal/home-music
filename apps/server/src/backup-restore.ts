@@ -59,6 +59,7 @@ type CreateBackupOptions = {
 };
 
 type RestoreBackupOptions = {
+  beforeReplace?: (databasePath: string) => Promise<void> | void;
   afterReplace?: (databasePath: string) => Promise<void> | void;
 };
 
@@ -345,6 +346,7 @@ export async function restoreBackupArtifact(
       rollbackReady = true;
     }
 
+    await options.beforeReplace?.(databasePath);
     replacementStarted = true;
     await rm(`${databasePath}-wal`, { force: true });
     await rm(`${databasePath}-shm`, { force: true });
