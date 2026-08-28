@@ -16,6 +16,7 @@ const MAX_PATH_PART_BYTES = 255;
 const HIDDEN_TRASH_DIRECTORY = '.home-music-trash';
 
 type Row = Record<string, unknown>;
+type FileMove = { source: string; destination: string };
 
 export type AppliedTrackLocation = {
   absolutePath: string;
@@ -146,7 +147,7 @@ async function assertDestinationAbsent(destination: string) {
     if (isMissingError(error)) return;
     throw error;
   }
-  throw new MediaFileMoveOperationError(409, 'Já existe um arquivo no destino escolhido.');
+  throw new MediaFileMoveOperationError(409, `Já existe um arquivo no destino: ${path.basename(destination)}.`);
 }
 
 async function removeCreatedDirectories(created: string[]) {
@@ -176,6 +177,71 @@ function locationFrom(root: string, trackId: string, absolutePath: string): Admi
     folderPath,
     fileName: path.posix.basename(relative)
   };
+}
+
+function sidecarCandidates(sourceAudio: string, destinationAudio: string): FileMove[] {
+  const sourceExtension = path.extname(sourceAudio);
+  const destinationExtension = path.extname(destinationAudio);
+  const sourceStem = sourceAudio.slice(0, -sourceExtension.length);
+  const destinationStem = destinationAudio.slice(0, -destinationExtension.length);
+  return [
+    { source: `${sourceStem}.lrc`, destination: `${destinationStem}.lrc` },
+    { source: `${sourceAudio}.lrc`, destination: `${destinationAudio}.lrc` },
+    { source: `${sourceStem}.txt`, destination: `${destinationStem}.txt` }
+  ];
+}
+
+async function existingSidecarMoves(root: string, sourceAudio: string, destinationAudio: string) {
+  const moves: FileMove[] = [];
+  for (const candidate of sidecarCandidates(sourceAudio, destinationAudio)) {
+    try {
+      const entry = await lstat(candidate.source);
+      if (entry.isSymbolicLink() || !entry.isFile()) continue;
+      const safe = await resolveRegularFileInside(root, candidate.source);
+      moves.push({ source: safe.path, destination: candidate.destination });
+    } catch (error) {
+      if (isMissingError(error)) continue;
+      throw error;
+    }
+  }
+  return moves;
+}
+
+async function rollbackMoves(completed: FileMove[]) {
+  for (const move of [...completed].reverse()) {
+    await rename(move.destination, move.source);
+  }
+}
+
+async function performMoves(root: string, moves: FileMove[]) {
+  const completed: FileMove[] = [];
+  try {
+    for (const move of moves) {
+      await rename(move.source, move.destination);
+      completed.push(move);
+    }
+    for (const move of completed) {
+      const resolved = await realpath(move.destination);
+      if (!isPathInside(root, resolved)) {
+        throw new UnsafeLibraryPathError('O destino resolveu para fora de MUSIC_DIR.');
+      }
+      await resolveRegularFileInside(root, move.destination);
+    }
+    return completed;
+  } catch (error) {
+    try {
+      await rollbackMoves(completed);
+    } catch {
+      throw new MediaFileMoveOperationError(
+        500,
+        'A movimentação falhou e os arquivos já movidos não puderam ser restaurados. Verifique o filesystem.'
+      );
+    }
+    if (isCrossDeviceError(error)) {
+      throw new MediaFileMoveOperationError(409, 'O destino está em outro filesystem. Esta movimentação foi bloqueada para preservar atomicidade.');
+    }
+    throw error;
+  }
 }
 
 export class MediaFileMoveStore {
@@ -256,35 +322,24 @@ export class MediaFileMoveStore {
         return { track, location: currentLocation, moved: false };
       }
 
-      await assertDestinationAbsent(destination);
-
+      const sidecars = await existingSidecarMoves(root, source.path, destination);
+      const moves: FileMove[] = [{ source: source.path, destination }, ...sidecars];
       try {
-        await rename(source.path, destination);
+        for (const move of moves) await assertDestinationAbsent(move.destination);
       } catch (error) {
         await removeCreatedDirectories(destinationDirectory.created);
-        if (isCrossDeviceError(error)) {
-          throw new MediaFileMoveOperationError(409, 'O destino está em outro filesystem. Esta movimentação foi bloqueada para preservar atomicidade.');
-        }
         throw error;
       }
 
-      let movedPath = destination;
+      let completed: FileMove[] = [];
       try {
-        movedPath = await realpath(destination);
-        if (!isPathInside(root, movedPath)) {
-          throw new UnsafeLibraryPathError('O destino resolveu para fora de MUSIC_DIR.');
-        }
-        const moved = await resolveRegularFileInside(root, destination);
-        movedPath = moved.path;
+        completed = await performMoves(root, moves);
       } catch (error) {
-        try {
-          await rename(movedPath, source.path);
-        } finally {
-          await removeCreatedDirectories(destinationDirectory.created);
-        }
+        await removeCreatedDirectories(destinationDirectory.created);
         throw error;
       }
 
+      const movedPath = await realpath(destination);
       const update = this.db.prepare(`
         UPDATE tracks
         SET file_path = ?, folder = ?, folder_path = ?
@@ -301,7 +356,7 @@ export class MediaFileMoveStore {
       } catch (error) {
         try { this.db.exec('ROLLBACK;'); } catch { /* transação já encerrada */ }
         try {
-          await rename(movedPath, source.path);
+          await rollbackMoves(completed);
         } finally {
           await removeCreatedDirectories(destinationDirectory.created);
         }
@@ -339,7 +394,7 @@ export class MediaFileMoveStore {
           );
           if (Number(result.changes) !== 1) throw new Error('Registro SQLite não pôde ser restaurado.');
           this.db.exec('COMMIT;');
-          await rename(movedPath, source.path);
+          await rollbackMoves(completed);
           await removeCreatedDirectories(destinationDirectory.created);
         } catch (failedRollback) {
           rollbackError = failedRollback;
