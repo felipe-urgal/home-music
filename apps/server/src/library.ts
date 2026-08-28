@@ -138,7 +138,8 @@ export async function readCover(stream: Readable, mimeType: string) {
 function fromMetadata(
   libraryRoot: string,
   file: ScannableFile,
-  metadata: IAudioMetadata | null
+  metadata: IAudioMetadata | null,
+  existingTrackId?: string
 ): IndexedTrack {
   const ext = path.extname(file.path).toLowerCase();
   const fallbackTitle = path.basename(file.path, ext);
@@ -153,7 +154,7 @@ function fromMetadata(
   const common = metadata?.common as (Record<string, unknown> | undefined);
 
   return {
-    id: trackId(libraryRoot, file.path),
+    id: existingTrackId || trackId(libraryRoot, file.path),
     title: metadata?.common.title?.trim() || fallbackTitle,
     artist,
     album: metadata?.common.album?.trim() || 'Álbum desconhecido',
@@ -202,7 +203,7 @@ export async function scanLibrary(
         onWarning?.(`Metadados inválidos; usando fallback: ${relativeFilePath(libraryRoot, file.path)}`, error);
       }
 
-      tracks.push(fromMetadata(libraryRoot, file, metadata));
+      tracks.push(fromMetadata(libraryRoot, file, metadata, previous?.id));
       if (previous) stats.updated += 1;
       else stats.added += 1;
     }
