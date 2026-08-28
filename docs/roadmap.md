@@ -175,6 +175,7 @@ Detalhe das ações administrativas em lote e seus limites de segurança: [admin
 Detalhe dos overrides de metadados não destrutivos: [admin-metadata-overrides.md](admin-metadata-overrides.md).
 Detalhe dos overrides seguros de capa: [admin-cover-overrides.md](admin-cover-overrides.md).
 Detalhe da movimentação física segura: [admin-file-moves.md](admin-file-moves.md).
+Detalhe do armazenamento e manutenção do cache de transcoding: [admin-transcode-cache.md](admin-transcode-cache.md).
 
 - [x] Criar área `Administração` separada da experiência de reprodução e protegida por role `admin`
 - [x] Criar visão geral com quantidade de faixas, armazenamento, problemas e estado do scanner
@@ -187,8 +188,8 @@ Detalhe da movimentação física segura: [admin-file-moves.md](admin-file-moves
 - [ ] Avaliar escrita opcional de metadados de volta ao arquivo somente como operação explícita
 - [x] Permitir adicionar/substituir capa sem destruir o arquivo original por padrão ([detalhe](admin-cover-overrides.md))
 - [x] Permitir mover/organizar arquivos dentro de `MUSIC_DIR` com validação de caminhos e rollback quando possível ([detalhe](admin-file-moves.md))
-- [ ] Exibir armazenamento usado pela biblioteca e pelo cache de transcoding
-- [ ] Permitir limpar cache de transcoding pela administração
+- [x] Exibir armazenamento usado pela biblioteca e pelo cache de transcoding ([detalhe](admin-transcode-cache.md))
+- [x] Permitir limpar cache de transcoding pela administração ([detalhe](admin-transcode-cache.md))
 - [ ] Exibir histórico e resultado dos scans/importações com erros acionáveis
 - [ ] Criar backup consistente do SQLite e configuração operacional sem incluir segredos em claro
 - [ ] Criar fluxo documentado e testado de restore
