@@ -1,0 +1,60 @@
+@media (min-width: 1024px) {
+  .phone-surface,
+  .desktop-queue__list,
+  .desktop-lyrics {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(139, 151, 164, 0.46) transparent;
+  }
+
+  .phone-surface {
+    scrollbar-gutter: stable;
+  }
+
+  .desktop-queue__list,
+  .desktop-lyrics {
+    scrollbar-gutter: stable;
+    overscroll-behavior: contain;
+  }
+
+  .phone-surface::-webkit-scrollbar,
+  .desktop-queue__list::-webkit-scrollbar,
+  .desktop-lyrics::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .phone-surface::-webkit-scrollbar-track,
+  .desktop-queue__list::-webkit-scrollbar-track,
+  .desktop-lyrics::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .phone-surface::-webkit-scrollbar-thumb,
+  .desktop-queue__list::-webkit-scrollbar-thumb,
+  .desktop-lyrics::-webkit-scrollbar-thumb {
+    min-height: 36px;
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background: rgba(139, 151, 164, 0.5);
+    background-clip: content-box;
+  }
+
+  .phone-surface::-webkit-scrollbar-thumb:hover,
+  .desktop-queue__list::-webkit-scrollbar-thumb:hover,
+  .desktop-lyrics::-webkit-scrollbar-thumb:hover {
+    background: rgba(174, 187, 200, 0.78);
+    background-clip: content-box;
+  }
+
+  .phone-surface::-webkit-scrollbar-corner,
+  .desktop-queue__list::-webkit-scrollbar-corner,
+  .desktop-lyrics::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  .phone-surface:hover,
+  .desktop-queue__list:hover,
+  .desktop-lyrics:hover {
+    scrollbar-color: rgba(174, 187, 200, 0.72) transparent;
+  }
+}
