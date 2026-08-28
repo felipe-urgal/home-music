@@ -41,11 +41,11 @@ export function AdminBulkToolbar({
           aria-label="Selecionar todas as músicas visíveis"
           onChange={onToggleVisible}
         />
-        <span>{selectedCount} selecionada{selectedCount === 1 ? '' : 's'}</span>
+        <span>{selectedCount > 0 ? `${selectedCount} selecionada${selectedCount === 1 ? '' : 's'}` : 'Selecionar visíveis'}</span>
       </label>
 
       <div className="admin-bulk-toolbar__actions">
-        {children}
+        {selectedCount > 0 ? children : null}
       </div>
 
       <div className="admin-bulk-toolbar__status" aria-live="polite">
@@ -55,7 +55,7 @@ export function AdminBulkToolbar({
             {completed}/{total}
           </span>
         )}
-        <button type="button" disabled={busy} aria-label="Limpar seleção" onClick={onClear}><X /></button>
+        <button type="button" disabled={busy || selectedCount === 0} aria-label="Limpar seleção" onClick={onClear}><X /></button>
       </div>
     </section>
   );
