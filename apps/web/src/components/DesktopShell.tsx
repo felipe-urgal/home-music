@@ -235,7 +235,7 @@ export function DesktopShell({
               ref={queueListRef}
               className="desktop-queue__list"
               onScroll={event => {
-                if (remainingQueueCount <= 0) return;
+                if (remainingQueueCount <= 0 || typeof IntersectionObserver !== 'undefined') return;
                 const { scrollTop, clientHeight, scrollHeight } = event.currentTarget;
                 if (scrollHeight - scrollTop - clientHeight <= DESKTOP_QUEUE_LOAD_THRESHOLD_PX) {
                   setQueueVisibleCount(count => count + DESKTOP_QUEUE_PREVIEW_SIZE);
@@ -268,7 +268,9 @@ export function DesktopShell({
                   </div>
                 );
               }) : <div className="desktop-queue__empty">A fila está vazia.</div>}
-              {remainingQueueCount > 0 && <div ref={queueLoadMoreRef} className="desktop-queue__load-sentinel" aria-hidden="true" />}
+              {remainingQueueCount > 0 && (
+                <div ref={queueLoadMoreRef} className="desktop-queue__load-sentinel" style={{ minHeight: 1 }} aria-hidden="true" />
+              )}
             </div>
             {remainingQueueCount > 0 && <small className="desktop-queue__remaining">+ {remainingQueueCount} faixas · role para carregar</small>}
           </section>
