@@ -45,7 +45,7 @@ A manutenção usa allowlist de nomes gerados pelo próprio `TranscodeManager`:
 - final: `<sha256 de 64 caracteres>.m4a`;
 - temporário: `<sha256>.m4a.tmp-<uuid>`.
 
-Entradas com outro nome, diretórios e symlinks são ignorados. Isso reduz o blast radius mesmo se algum arquivo não relacionado aparecer acidentalmente no diretório de cache.
+Entradas com outro nome, diretórios e symlinks são ignorados. O próprio diretório configurado de cache também é validado com `lstat` e é rejeitado se for um symlink ou não for um diretório regular. Isso reduz o blast radius mesmo se o estado do filesystem tiver sido alterado fora do Home Music.
 
 ## Concorrência
 
@@ -93,6 +93,7 @@ Invariantes da entrega:
 
 - a manutenção não conhece nem recebe o caminho de `MUSIC_DIR`;
 - somente o diretório configurado de cache é percorrido;
+- o diretório de cache em si não pode ser um symlink;
 - somente nomes reconhecidos são candidatos a remoção;
 - symlinks e entradas não regulares não são removidos;
 - usuários comuns não podem consultar nem limpar o cache;
@@ -106,6 +107,7 @@ A cobertura inclui:
 - contabilização de bytes/entradas reconhecidos;
 - preservação de arquivos desconhecidos;
 - remoção de finais e temporários;
+- rejeição do diretório de cache quando ele aponta para um symlink, preservando o alvo;
 - bloqueio durante transcode protegido;
 - autorização `user` versus `admin`;
 - exigência do header de mutação;
