@@ -5,6 +5,7 @@ import type { AdminImportJobsResponse } from '@home-music/shared';
 import type { ImportJobQueue } from './import-job-queue.js';
 import { ImportStagingManager } from './import-staging.js';
 import {
+  DEFAULT_IMPORT_UPLOAD_MAX_MEGABYTES,
   ImportUploadError,
   ImportUploadManager,
   parseImportUploadMaxMegabytes
@@ -26,8 +27,17 @@ function sendUploadError(reply: FastifyReply, error: unknown) {
   throw error;
 }
 
-function createDefaultUploadManager(queue: ImportJobQueue) {
-  const maxMegabytes = parseImportUploadMaxMegabytes(process.env.HOME_MUSIC_IMPORT_UPLOAD_MAX_MB);
+function createDefaultUploadManager(app: FastifyInstance, queue: ImportJobQueue) {
+  let maxMegabytes = DEFAULT_IMPORT_UPLOAD_MAX_MEGABYTES;
+  try {
+    maxMegabytes = parseImportUploadMaxMegabytes(process.env.HOME_MUSIC_IMPORT_UPLOAD_MAX_MB);
+  } catch (error) {
+    app.log.warn(
+      { err: error, fallbackMegabytes: DEFAULT_IMPORT_UPLOAD_MAX_MEGABYTES },
+      'Limite de upload de importação inválido; usando o valor padrão.'
+    );
+  }
+
   return new ImportUploadManager({
     queue,
     staging: new ImportStagingManager({
@@ -43,7 +53,7 @@ export function registerAdminImportRoutes(
   queue: ImportJobQueue,
   options: RegisterAdminImportRoutesOptions = {}
 ) {
-  const uploads = options.uploads ?? createDefaultUploadManager(queue);
+  const uploads = options.uploads ?? createDefaultUploadManager(app, queue);
 
   if (!app.hasContentTypeParser('application/octet-stream')) {
     app.addContentTypeParser('application/octet-stream', (_request, payload, done) => {
