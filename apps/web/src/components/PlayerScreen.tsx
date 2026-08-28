@@ -13,10 +13,9 @@ import {
   ChevronUp,
   Download,
   GripVertical,
+  ListPlus,
   ListMusic,
   LoaderCircle,
-  LogOut,
-  MoreVertical,
   Pause,
   Play,
   Repeat1,
@@ -27,38 +26,13 @@ import {
   Volume2,
   Wifi
 } from 'lucide-react';
-import type { NormalizationMode, Playlist, RepeatMode, Track } from '@home-music/shared';
-import type {
-  DetectedNetwork,
-  NetworkPreference,
-  StreamingMode,
-  StreamingSelection
-} from '../streaming-quality';
+import type { Playlist, RepeatMode, Track } from '@home-music/shared';
 import { Artwork } from './Artwork';
 import { LyricsPanel } from './LyricsPanel';
 
 const QUEUE_PAGE_SIZE = 10;
 const TOUCH_DRAG_EDGE_PX = 80;
 const TOUCH_DRAG_SCROLL_STEP_PX = 18;
-
-const STREAMING_CHOICES: Array<{ mode: StreamingSelection; label: string; detail: string }> = [
-  { mode: 'network', label: 'Por conexão', detail: 'Wi-Fi auto · móvel 96 kbps' },
-  { mode: 'auto', label: 'Automática', detail: 'Original + compatibilidade' },
-  { mode: 'original', label: 'Original', detail: 'Sem conversão' },
-  { mode: 'economy', label: 'Economia', detail: 'AAC · 96 kbps' }
-];
-
-const NORMALIZATION_CHOICES: Array<{ mode: NormalizationMode; label: string; detail: string }> = [
-  { mode: 'off', label: 'Desativada', detail: 'Reprodução sem ajuste de ganho' },
-  { mode: 'track', label: 'Por faixa', detail: 'Volume consistente entre músicas' },
-  { mode: 'album', label: 'Por álbum', detail: 'Preserva diferenças dentro do álbum' }
-];
-
-const NETWORK_CHOICES: Array<{ preference: NetworkPreference; label: string; detail: string }> = [
-  { preference: 'auto', label: 'Detectar', detail: 'Quando o navegador informar' },
-  { preference: 'wifi', label: 'Wi-Fi', detail: 'Original + compatibilidade' },
-  { preference: 'mobile', label: 'Dados móveis', detail: 'AAC · 96 kbps' }
-];
 
 function formatTime(value: number) {
   if (!Number.isFinite(value) || value < 0) return '0:00';
@@ -69,18 +43,6 @@ function formatTime(value: number) {
 
 function artworkTrack(track: Track, offlineMode: boolean): Track {
   return offlineMode && track.hasCover ? { ...track, hasCover: false } : track;
-}
-
-function detectedNetworkLabel(network: DetectedNetwork) {
-  if (network === 'wifi') return 'Wi-Fi/rede rápida';
-  if (network === 'mobile') return 'dados móveis/rede limitada';
-  return 'não identificada';
-}
-
-function streamingModeLabel(mode: StreamingMode) {
-  if (mode === 'economy') return 'Economia · AAC 96 kbps';
-  if (mode === 'original') return 'Original';
-  return 'Automática · original + compatibilidade';
 }
 
 type PlayerScreenProps = {
@@ -97,12 +59,6 @@ type PlayerScreenProps = {
   usesSystemVolume: boolean;
   shuffle: boolean;
   repeatMode: RepeatMode;
-  streamingSelection?: StreamingSelection;
-  effectiveStreamingMode?: StreamingMode;
-  networkPreference?: NetworkPreference;
-  detectedNetwork?: DetectedNetwork;
-  normalizationMode?: NormalizationMode;
-  effectiveNormalizationMode?: NormalizationMode;
   playlists: Playlist[];
   offlineMode?: boolean;
   isDownloaded?: boolean;
@@ -113,16 +69,12 @@ type PlayerScreenProps = {
   onNext: () => void;
   onSeek: (value: number) => void;
   onVolume: (value: number) => void;
-  onStreamingSelection?: (selection: StreamingSelection) => void;
-  onNetworkPreference?: (preference: NetworkPreference) => void;
-  onNormalizationMode?: (mode: NormalizationMode) => void;
   onShuffle: () => void;
   onRepeat: () => void;
   onToggleDownload?: () => void;
   onPlayTrack: (track: Track, context: Track[]) => void;
   onReorderQueue: (from: number, to: number) => void;
   onAddToPlaylist: (playlist: Playlist) => void;
-  onLogout: () => void;
   onExitOffline?: () => void;
 };
 
@@ -140,12 +92,6 @@ export function PlayerScreen({
   usesSystemVolume,
   shuffle,
   repeatMode,
-  streamingSelection = 'auto',
-  effectiveStreamingMode = 'auto',
-  networkPreference = 'auto',
-  detectedNetwork = 'unknown',
-  normalizationMode = 'off',
-  effectiveNormalizationMode = 'off',
   playlists,
   offlineMode = false,
   isDownloaded = false,
@@ -156,19 +102,15 @@ export function PlayerScreen({
   onNext,
   onSeek,
   onVolume,
-  onStreamingSelection,
-  onNetworkPreference,
-  onNormalizationMode,
   onShuffle,
   onRepeat,
   onToggleDownload,
   onPlayTrack,
   onReorderQueue,
   onAddToPlaylist,
-  onLogout,
   onExitOffline
 }: PlayerScreenProps) {
-  const [showOptions, setShowOptions] = useState(false);
+  const [showPlaylistPicker, setShowPlaylistPicker] = useState(false);
   const [showQueue, setShowQueue] = useState(false);
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   const [visibleQueueCount, setVisibleQueueCount] = useState(QUEUE_PAGE_SIZE);
@@ -186,6 +128,7 @@ export function PlayerScreen({
   useEffect(() => {
     setVisibleQueueCount(QUEUE_PAGE_SIZE);
     setShowQueue(false);
+    setShowPlaylistPicker(false);
   }, [current.id, queue.length]);
 
   useEffect(() => {
@@ -265,144 +208,10 @@ export function PlayerScreen({
           <ChevronDown />
         </button>
         <span className="topbar__title">{offlineMode ? 'Tocando offline' : 'Tocando agora'}</span>
-        <button className="icon-button" aria-label="Mais opções" onClick={() => setShowOptions(value => !value)}><MoreVertical /></button>
+        {offlineMode && onExitOffline
+          ? <button className="icon-button" aria-label="Tentar conectar ao servidor" onClick={onExitOffline}><Wifi /></button>
+          : <span aria-hidden="true" />}
       </header>
-
-      {showOptions && (
-        <div className="player-options">
-          {offlineMode ? (
-            <>
-              <strong>Modo offline</strong>
-              <span>Somente as músicas baixadas neste dispositivo entram na fila.</span>
-              <div className="player-options__divider" />
-              <button className="player-options__logout" onClick={() => { setShowOptions(false); onExitOffline?.(); }}>
-                <Wifi /> Tentar conectar
-              </button>
-            </>
-          ) : (
-            <>
-              {onToggleDownload && (
-                <>
-                  <strong>Offline</strong>
-                  <button
-                    disabled={downloading}
-                    onClick={() => {
-                      onToggleDownload();
-                      setShowOptions(false);
-                    }}
-                  >
-                    {downloading ? 'Baixando…' : isDownloaded ? 'Remover download offline' : 'Baixar para uso offline'}
-                  </button>
-                  <div className="player-options__divider" />
-                </>
-              )}
-
-              {onStreamingSelection && (
-                <>
-                  <strong>Qualidade de transmissão</strong>
-                  <div className="player-options__choices" role="group" aria-label="Qualidade de transmissão">
-                    {STREAMING_CHOICES.map(choice => (
-                      <button
-                        key={choice.mode}
-                        className={`player-options__choice ${streamingSelection === choice.mode ? 'is-selected' : ''}`}
-                        aria-pressed={streamingSelection === choice.mode}
-                        onClick={() => onStreamingSelection(choice.mode)}
-                      >
-                        <div className="player-options__choice-copy">
-                          <b>{choice.label}</b>
-                          <small>{choice.detail}</small>
-                        </div>
-                        {streamingSelection === choice.mode && <CheckCircle2 aria-hidden="true" />}
-                      </button>
-                    ))}
-                  </div>
-
-                  {streamingSelection === 'network' && onNetworkPreference && (
-                    <>
-                      <strong>Conexão atual</strong>
-                      <div className="player-options__choices" role="group" aria-label="Perfil de conexão atual">
-                        {NETWORK_CHOICES.map(choice => (
-                          <button
-                            key={choice.preference}
-                            className={`player-options__choice ${networkPreference === choice.preference ? 'is-selected' : ''}`}
-                            aria-pressed={networkPreference === choice.preference}
-                            onClick={() => onNetworkPreference(choice.preference)}
-                          >
-                            <div className="player-options__choice-copy">
-                              <b>{choice.label}</b>
-                              <small>{choice.detail}</small>
-                            </div>
-                            {networkPreference === choice.preference && <CheckCircle2 aria-hidden="true" />}
-                          </button>
-                        ))}
-                      </div>
-                      <span>
-                        Rede detectada: {detectedNetworkLabel(detectedNetwork)}. Perfil efetivo: {streamingModeLabel(effectiveStreamingMode)}.
-                      </span>
-                      {networkPreference === 'auto' && detectedNetwork === 'unknown' && (
-                        <span>Este navegador não informa o tipo de rede com segurança. No iPhone/Safari, escolha Wi-Fi ou Dados móveis manualmente.</span>
-                      )}
-                    </>
-                  )}
-
-                  {streamingSelection === 'auto' && (
-                    <span>Automática mantém o original e usa AAC apenas se o navegador não conseguir reproduzir a faixa.</span>
-                  )}
-                  <div className="player-options__divider" />
-                </>
-              )}
-
-              {onNormalizationMode && (
-                <>
-                  <strong>Normalização de volume</strong>
-                  <div className="player-options__choices" role="group" aria-label="Normalização de volume">
-                    {NORMALIZATION_CHOICES.map(choice => {
-                      const unavailable = choice.mode === 'track'
-                        ? current.replayGainTrackDb == null
-                        : choice.mode === 'album'
-                          ? current.replayGainAlbumDb == null && current.replayGainTrackDb == null
-                          : false;
-                      return (
-                        <button
-                          key={choice.mode}
-                          className={`player-options__choice ${normalizationMode === choice.mode ? 'is-selected' : ''}`}
-                          aria-pressed={normalizationMode === choice.mode}
-                          disabled={unavailable}
-                          onClick={() => onNormalizationMode(choice.mode)}
-                        >
-                          <div className="player-options__choice-copy">
-                            <b>{choice.label}</b>
-                            <small>{unavailable ? 'Esta faixa não possui tags ReplayGain' : choice.detail}</small>
-                          </div>
-                          {normalizationMode === choice.mode && <CheckCircle2 aria-hidden="true" />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {normalizationMode !== 'off' && effectiveNormalizationMode === 'off' && (
-                    <span>A preferência continua salva, mas esta faixa será reproduzida sem normalização porque não possui tags ReplayGain.</span>
-                  )}
-                  {effectiveNormalizationMode !== 'off' && (
-                    <span>A normalização usa FFmpeg e o cache local, sem modificar o arquivo original.</span>
-                  )}
-                  <div className="player-options__divider" />
-                </>
-              )}
-
-              <strong>Adicionar à playlist</strong>
-              {playlists.length ? playlists.map(playlist => (
-                <button key={playlist.id} onClick={() => { onAddToPlaylist(playlist); setShowOptions(false); }}>
-                  {playlist.name}
-                </button>
-              )) : <span>Nenhuma playlist criada ainda.</span>}
-              <div className="player-options__divider" />
-              <button className="player-options__logout" onClick={() => { setShowOptions(false); onLogout(); }}>
-                <LogOut /> Sair
-              </button>
-            </>
-          )}
-        </div>
-      )}
 
       <div className="hero-art"><Artwork track={artworkTrack(current, offlineMode)} large /></div>
 
@@ -412,6 +221,17 @@ export function PlayerScreen({
           <p>{current.artist}</p>
         </div>
         <div className="track-heading__actions">
+          {!offlineMode && (
+            <button
+              className={`icon-button icon-button--large ${showPlaylistPicker ? 'is-active' : ''}`}
+              type="button"
+              aria-label="Adicionar à playlist"
+              aria-expanded={showPlaylistPicker}
+              onClick={() => setShowPlaylistPicker(value => !value)}
+            >
+              <ListPlus />
+            </button>
+          )}
           {!offlineMode && onToggleDownload && (
             <button
               className={`icon-button icon-button--large ${isDownloaded ? 'is-downloaded' : ''}`}
@@ -424,6 +244,26 @@ export function PlayerScreen({
           )}
         </div>
       </div>
+
+      {showPlaylistPicker && !offlineMode && (
+        <section className="player-playlist-picker" aria-label="Escolher playlist">
+          <strong>Adicionar à playlist</strong>
+          {playlists.length ? playlists.map(playlist => (
+            <button
+              type="button"
+              key={playlist.id}
+              onClick={() => {
+                onAddToPlaylist(playlist);
+                setShowPlaylistPicker(false);
+              }}
+            >
+              <ListMusic aria-hidden="true" />
+              <span>{playlist.name}</span>
+              <ChevronRight aria-hidden="true" />
+            </button>
+          )) : <small>Nenhuma playlist criada ainda.</small>}
+        </section>
+      )}
 
       {offlineMode && <div className="player-offline-status"><Download /> Reproduzindo o arquivo salvo neste dispositivo.</div>}
 

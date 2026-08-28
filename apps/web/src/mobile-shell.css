@@ -256,9 +256,9 @@
   }
 
   .track-heading {
-    justify-content: center;
+    justify-content: space-between;
     padding: 0 18px;
-    text-align: center;
+    text-align: left;
   }
 
   .track-heading > div:first-child {
@@ -275,7 +275,24 @@
   }
 
   .track-heading__actions {
-    display: none;
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .track-heading__actions .icon-button {
+    width: 40px;
+    height: 40px;
+  }
+
+  .track-heading__actions .icon-button svg {
+    width: 23px;
+    height: 23px;
+  }
+
+  .player-playlist-picker {
+    margin: 12px 18px 0;
   }
 
   .progress-wrap {

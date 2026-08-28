@@ -21,7 +21,9 @@ async function login(page: Page) {
 async function openAdministration(page: Page) {
   const width = viewportWidth(page);
   if (width >= 1024) {
-    await page.getByTestId('desktop-sidebar').getByRole('button', { name: /^Administração/ }).click();
+    const sidebar = page.getByTestId('desktop-sidebar');
+    await expect(sidebar.getByRole('button', { name: /^Administração/ })).toHaveCount(0);
+    await sidebar.getByRole('button', { name: /Minha conta/ }).click();
   } else {
     if (width < 700) {
       await page.getByRole('navigation', { name: 'Navegação principal' })
@@ -31,9 +33,9 @@ async function openAdministration(page: Page) {
       if (await backToLibrary.isVisible()) await backToLibrary.click();
       await page.getByRole('button', { name: /Minha conta ·/ }).click();
     }
-    await expect(page.locator('#my-account-title')).toHaveText('Minha conta');
-    await page.locator('.my-account-screen').getByRole('button', { name: /^Administração/ }).click();
   }
+  await expect(page.locator('#my-account-title')).toHaveText('Minha conta');
+  await page.locator('.my-account-screen').getByRole('button', { name: /^Administração/ }).click();
   await expect(page.locator('#administration-title')).toHaveText('Administração');
 }
 

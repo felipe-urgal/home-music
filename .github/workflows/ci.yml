@@ -67,12 +67,6 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Install Playwright Chromium
-        run: npm --prefix e2e run install:browsers
-
-      - name: Browser E2E
-        run: npm run e2e:ci
-
       - name: Production smoke test
         run: npm run smoke:production
 

@@ -87,6 +87,7 @@ Objetivo: evoluir a interface para desktop sem regredir o fluxo mobile Player Fi
 - [x] Adicionar baseline Playwright E2E para login, biblioteca e player em viewport mobile e desktop
 - [x] Criar Desktop Shell responsivo com sidebar, conteúdo principal e área contextual
 - [x] Preservar a experiência mobile atual com composição específica por breakpoint
+- [x] Remover atalhos redundantes no desktop e substituir o menu de opções do player mobile por ações diretas
 - [x] Criar player desktop persistente em barra inferior
 - [x] Criar biblioteca desktop em tabela/lista densa com colunas úteis e ordenação
 - [x] Exibir fila e letras em painel lateral quando houver espaço

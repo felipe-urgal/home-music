@@ -168,9 +168,6 @@ function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline }: Aut
           <DesktopPlayerSidebarTools
             username={currentUser.username}
             accountActive={accountArea}
-            administrationAvailable={canManageSharedLibrary}
-            administrationActive={administrationArea}
-            onOpenAdministration={() => openAdministration('library')}
             onOpenAccount={() => setScreen('account')}
           />
         ) : undefined}
@@ -191,7 +188,7 @@ function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline }: Aut
         {screen === 'account' ? (
           <MyAccountScreen
             currentUser={currentUser}
-            playbackPreferences={desktopLayout ? {
+            playbackPreferences={{
               current,
               streamingSelection: qualityProfile.selection,
               effectiveStreamingMode: qualityProfile.effectiveMode,
@@ -202,7 +199,7 @@ function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline }: Aut
               onStreamingSelection: qualityProfile.setSelection,
               onNetworkPreference: qualityProfile.setNetworkPreference,
               onNormalizationMode: player.setNormalizationMode
-            } : undefined}
+            }}
             onBack={() => setScreen('library')}
             onOpenAdministration={() => openAdministration('account')}
             onSessionEnded={onAuthRefresh}
@@ -299,12 +296,6 @@ function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline }: Aut
             usesSystemVolume={usesSystemVolume}
             shuffle={player.shuffle}
             repeatMode={player.repeatMode}
-            streamingSelection={qualityProfile.selection}
-            effectiveStreamingMode={qualityProfile.effectiveMode}
-            networkPreference={qualityProfile.networkPreference}
-            detectedNetwork={qualityProfile.detectedNetwork}
-            normalizationMode={player.normalizationMode}
-            effectiveNormalizationMode={player.effectiveNormalizationMode}
             playlists={editablePlaylists}
             isDownloaded={offline.downloadedIds.has(current.id)}
             downloading={offline.downloadingIds.has(current.id)}
@@ -314,16 +305,12 @@ function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline }: Aut
             onNext={player.next}
             onSeek={player.seek}
             onVolume={player.setVolume}
-            onStreamingSelection={qualityProfile.setSelection}
-            onNetworkPreference={qualityProfile.setNetworkPreference}
-            onNormalizationMode={player.setNormalizationMode}
             onShuffle={player.toggleShuffle}
             onRepeat={player.cycleRepeat}
             onToggleDownload={offline.supported ? toggleDownload : undefined}
             onPlayTrack={player.playTrack}
             onReorderQueue={player.reorderQueue}
             onAddToPlaylist={playlist => run(library.addTrackToPlaylist(playlist, current.id))}
-            onLogout={() => { void onLogout().catch(library.reportError); }}
           />
         )}
       </DesktopShell>
@@ -459,7 +446,6 @@ function OfflineApp({ offline, onExit }: { offline: OfflineDownloads; onExit: ()
             onPlayTrack={player.playTrack}
             onReorderQueue={player.reorderQueue}
             onAddToPlaylist={() => undefined}
-            onLogout={onExit}
             onExitOffline={onExit}
           />
         ) : (
