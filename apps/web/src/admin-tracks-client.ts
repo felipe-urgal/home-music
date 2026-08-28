@@ -1,4 +1,9 @@
-import type { AdminTrack, AdminTracksResponse } from '@home-music/shared';
+import type {
+  AdminTrack,
+  AdminTrackMetadataResponse,
+  AdminTracksResponse,
+  TrackMetadataOverridePatch
+} from '@home-music/shared';
 import { apiFetch } from './api-client';
 
 async function responseError(response: Response) {
@@ -24,4 +29,34 @@ export async function setAdminTrackEnabled(trackId: string, enabled: boolean) {
   if (!response.ok) throw new Error(await responseError(response));
   const payload = await response.json() as { track: AdminTrack };
   return payload.track;
+}
+
+export async function getAdminTrackMetadata(trackId: string) {
+  const response = await apiFetch(`/api/admin/tracks/${encodeURIComponent(trackId)}/metadata`, {
+    cache: 'no-store'
+  });
+  if (!response.ok) throw new Error(await responseError(response));
+  return response.json() as Promise<AdminTrackMetadataResponse>;
+}
+
+export async function updateAdminTrackMetadata(trackId: string, patch: TrackMetadataOverridePatch) {
+  const response = await apiFetch(`/api/admin/tracks/${encodeURIComponent(trackId)}/metadata`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Home-Music-Request': '1'
+    },
+    body: JSON.stringify(patch)
+  });
+  if (!response.ok) throw new Error(await responseError(response));
+  return response.json() as Promise<AdminTrackMetadataResponse>;
+}
+
+export async function resetAdminTrackMetadata(trackId: string) {
+  const response = await apiFetch(`/api/admin/tracks/${encodeURIComponent(trackId)}/metadata`, {
+    method: 'DELETE',
+    headers: { 'X-Home-Music-Request': '1' }
+  });
+  if (!response.ok) throw new Error(await responseError(response));
+  return response.json() as Promise<AdminTrackMetadataResponse>;
 }
