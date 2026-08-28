@@ -24,11 +24,12 @@ import {
 } from '../admin-library-client';
 import { AdminImportMediaScreen } from './AdminImportMediaScreen';
 import { AdminMediaQuarantineScreen } from './AdminMediaQuarantineScreen';
+import { AdminOperationHistoryScreen } from './AdminOperationHistoryScreen';
 import { AdminTrackAvailabilityScreen } from './AdminTrackAvailabilityScreen';
 import { AdminTrackMetadataScreen } from './AdminTrackMetadataScreen';
 import { AdminUsersScreen } from './AdminUsersScreen';
 
-type AdministrationView = 'overview' | 'tracks' | 'metadata' | 'quarantine' | 'import' | 'users';
+type AdministrationView = 'overview' | 'tracks' | 'metadata' | 'quarantine' | 'import' | 'operations' | 'users';
 
 type AdministrationScreenProps = {
   currentUser: AuthenticatedUser;
@@ -171,6 +172,10 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
 
   if (view === 'import') {
     return <AdminImportMediaScreen onBack={() => setView('overview')} />;
+  }
+
+  if (view === 'operations') {
+    return <AdminOperationHistoryScreen onBack={() => setView('overview')} />;
   }
 
   if (view === 'users') {
@@ -343,6 +348,11 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
             <button type="button" onClick={() => setView('import')}>
               <span className="my-account-card__icon"><FileInput /></span>
               <span><strong>Importar mídia</strong><small>Centralize uploads, URLs e fontes externas em um único pipeline.</small></span>
+              <ChevronRight />
+            </button>
+            <button type="button" onClick={() => setView('operations')}>
+              <span className="my-account-card__icon"><ScanLine /></span>
+              <span><strong>Histórico operacional</strong><small>Revise scans e importações com duração, resultado e falhas acionáveis.</small></span>
               <ChevronRight />
             </button>
           </div>
