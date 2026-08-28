@@ -374,6 +374,7 @@ export class ImportStagingManager {
     const { stagingRoot, musicRoot } = await this.initialize();
     let destinationPath: string | null = null;
     let destinationCreated = false;
+    let promotionCommitted = false;
 
     try {
       const destination = await resolveSafeDestination(musicRoot, relativeDestination);
@@ -419,8 +420,9 @@ export class ImportStagingManager {
       }
 
       await unlink(workspace.payloadPath);
-      await rm(workspace.directory, { recursive: true, force: true });
+      promotionCommitted = true;
       this.jobs.delete(workspace.jobId);
+      await rm(workspace.directory, { recursive: true, force: true }).catch(() => undefined);
       return {
         absolutePath: destination.destinationPath,
         relativePath: destination.relativePath,
@@ -428,10 +430,12 @@ export class ImportStagingManager {
         sha256: validated.sha256
       };
     } catch (error) {
-      if (destinationCreated && destinationPath) {
+      if (!promotionCommitted && destinationCreated && destinationPath) {
         await unlink(destinationPath).catch(() => undefined);
       }
-      await this.cleanupJob(workspace.jobId).catch(() => undefined);
+      if (!promotionCommitted) {
+        await this.cleanupJob(workspace.jobId).catch(() => undefined);
+      }
       throw error;
     }
   }
