@@ -27,6 +27,6 @@ describe('buildTrackMetadataOverridePatch', () => {
     expect(() => buildTrackMetadataOverridePatch(physical, {
       ...physical,
       title: '   '
-    })).toThrow('title não pode ficar vazio.');
+    })).toThrow('Título não pode ficar vazio.');
   });
 });
