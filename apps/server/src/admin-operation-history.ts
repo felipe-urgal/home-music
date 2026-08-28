@@ -106,7 +106,7 @@ function redactSensitiveText(value: string) {
     (_match, key: string) => `${key}=[redigido]`
   );
   text = text.replace(/\bBearer\s+[A-Za-z0-9._~+\/-]+=*/gi, 'Bearer [redigido]');
-  text = text.replace(/https?:\/\/[^\s)\]}>,;]+/gi, '[URL removida]');
+  text = text.replace(/https?:\/\/[^\s)}>,;]+/gi, '[URL removida]');
   text = text.replace(/\b[A-Za-z]:\\(?:[^\\\s]+\\)*[^\s)\]}>,;]*/g, '[caminho removido]');
   text = text.replace(/(^|[\s("'=])\/(?:[^/\s]+\/)*[^\s)\]}>,;]*/g, '$1[caminho removido]');
   text = text.replace(/~\/(?:[^/\s]+\/)*[^\s)\]}>,;]*/g, '[caminho removido]');
