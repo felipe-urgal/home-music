@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import type { ImportJob } from '@home-music/shared';
 import { ImportJobQueue } from './import-job-queue.js';
 
 function deterministicQueue() {
@@ -31,6 +32,34 @@ test('cria jobs pendentes e devolve snapshots defensivos', () => {
   created.source.type = 'url';
   assert.equal(queue.get('job-1')?.label, 'Album novo');
   assert.deepEqual(queue.get('job-1')?.source, { type: 'upload', provider: null });
+});
+
+test('publica snapshots defensivos a cada mudança de estado', () => {
+  const observed: ImportJob[] = [];
+  let time = 0;
+  const timestamps = [
+    '2026-08-27T12:00:00.000Z',
+    '2026-08-27T12:01:00.000Z',
+    '2026-08-27T12:02:00.000Z'
+  ];
+  const queue = new ImportJobQueue({
+    createId: () => 'job-observer',
+    now: () => new Date(timestamps[Math.min(time++, timestamps.length - 1)]),
+    onChange: job => observed.push(job)
+  });
+
+  const created = queue.enqueue({ type: 'upload', provider: null }, 'Arquivo novo');
+  queue.transition(created.id, 'processing');
+  queue.transition(created.id, 'completed');
+
+  assert.deepEqual(observed.map(job => job.status), ['pending', 'processing', 'completed']);
+  assert.equal(observed[1].startedAt, '2026-08-27T12:01:00.000Z');
+  assert.equal(observed[2].finishedAt, '2026-08-27T12:02:00.000Z');
+
+  observed[0].label = 'mutação externa';
+  observed[0].source.type = 'url';
+  assert.equal(queue.get(created.id)?.label, 'Arquivo novo');
+  assert.deepEqual(queue.get(created.id)?.source, { type: 'upload', provider: null });
 });
 
 test('aplica somente transições válidas até estado terminal', () => {
