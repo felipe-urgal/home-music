@@ -4,10 +4,12 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
+import { HomeMusicDatabase } from './database.js';
 import {
   BACKUP_DATABASE_FILE,
   BACKUP_MANIFEST_FILE,
   BackupValidationError,
+  MAX_SUPPORTED_SCHEMA_VERSION,
   createBackupArtifact,
   restoreBackupArtifact,
   verifyBackupArtifact
@@ -37,6 +39,18 @@ function readState(databasePath: string) {
     db.close();
   }
 }
+
+test('limite de schema do backup acompanha o schema atual do Home Music', async () => {
+  const dir = await tempDir();
+  const databasePath = path.join(dir, 'home-music.db');
+  try {
+    const db = new HomeMusicDatabase(databasePath);
+    assert.equal(db.getSchemaVersion(), MAX_SUPPORTED_SCHEMA_VERSION);
+    db.close();
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
 
 test('cria snapshot SQLite consistente e inclui somente configuração operacional allowlisted', async () => {
   const dir = await tempDir();
