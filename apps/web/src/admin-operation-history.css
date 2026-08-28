@@ -1,0 +1,230 @@
+.admin-operation-history {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-operation-history__toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 38px;
+  gap: 8px;
+  align-items: end;
+}
+
+.admin-operation-history__toolbar label {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.admin-operation-history__toolbar label > span {
+  color: #7f8c97;
+  font-size: 10px;
+}
+
+.admin-operation-history__toolbar select,
+.admin-operation-history__toolbar > button {
+  min-height: 38px;
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 9px;
+  background: #0d141b;
+  color: #dce6ed;
+}
+
+.admin-operation-history__toolbar select {
+  width: 100%;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 11px;
+}
+
+.admin-operation-history__toolbar > button {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  cursor: pointer;
+}
+
+.admin-operation-history__toolbar > button:disabled {
+  opacity: .5;
+  cursor: default;
+}
+
+.admin-operation-history__toolbar > button svg { width: 16px; height: 16px; }
+
+.admin-operation-history__message {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+}
+
+.admin-operation-history__message > button {
+  border: 0;
+  background: transparent;
+  color: #ffd0d0;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 650;
+}
+
+.admin-operation-history__empty {
+  min-height: 116px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 16px;
+  border: 1px dashed rgba(255,255,255,.08);
+  border-radius: 12px;
+  background: #0d141b;
+  color: #7e8b96;
+  font-size: 11px;
+}
+
+.admin-operation-history__empty > svg { width: 18px; height: 18px; flex: 0 0 auto; }
+.admin-operation-history__empty > div { display: grid; gap: 4px; }
+.admin-operation-history__empty strong { color: #cbd6de; font-size: 11px; }
+.admin-operation-history__empty small { color: #77848f; font-size: 10px; }
+
+.admin-operation-history__layout {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-operation-history__list {
+  display: grid;
+  gap: 6px;
+}
+
+.admin-operation-row {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 34px minmax(0,1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 12px;
+  border: 1px solid rgba(255,255,255,.06);
+  border-radius: 11px;
+  background: #0d141b;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.admin-operation-row:hover,
+.admin-operation-row.is-selected {
+  border-color: rgba(92,164,224,.22);
+  background: #101a23;
+}
+
+.admin-operation-row__icon {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  color: #8fa2b0;
+  background: rgba(255,255,255,.035);
+}
+
+.admin-operation-row__icon svg { width: 16px; height: 16px; }
+.admin-operation-row__body { min-width: 0; display: grid; gap: 4px; }
+.admin-operation-row__body strong { overflow: hidden; color: #dce6ed; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.admin-operation-row__body small { overflow: hidden; color: #77848f; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.admin-operation-row__status { display: inline-flex; align-items: center; gap: 5px; color: #8c9aa5; font-size: 9px; font-weight: 650; white-space: nowrap; }
+.admin-operation-row__status svg { width: 13px; height: 13px; }
+.admin-operation-row.is-completed .admin-operation-row__status { color: #7bc59b; }
+.admin-operation-row.is-failed .admin-operation-row__status { color: #e18b8b; }
+.admin-operation-row.is-running .admin-operation-row__status { color: #78c3ff; }
+.admin-operation-row.is-cancelled .admin-operation-row__status { color: #c09a6b; }
+
+.admin-operation-detail {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 12px;
+  background: #0d141b;
+}
+
+.admin-operation-detail__heading {
+  display: grid;
+  grid-template-columns: 34px minmax(0,1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.admin-operation-detail__heading > span {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  color: #78c3ff;
+  background: rgba(30,139,232,.1);
+}
+
+.admin-operation-detail__heading > span svg { width: 16px; height: 16px; }
+.admin-operation-detail__heading > div { min-width: 0; display: grid; gap: 3px; }
+.admin-operation-detail__heading strong { overflow: hidden; color: #edf3f8; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.admin-operation-detail__heading small { color: #7d8a95; font-size: 9px; }
+
+.admin-operation-detail__facts,
+.admin-operation-detail__counts {
+  display: grid;
+  gap: 0;
+  margin: 0;
+}
+
+.admin-operation-detail__facts > div,
+.admin-operation-detail__counts > div {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid rgba(255,255,255,.05);
+}
+
+.admin-operation-detail dt { color: #7f8c97; font-size: 10px; }
+.admin-operation-detail dd { margin: 0; color: #dce5ec; font-size: 10px; font-weight: 650; text-align: right; }
+
+.admin-operation-detail__error {
+  display: grid;
+  gap: 6px;
+  padding: 11px 12px;
+  border: 1px solid rgba(205,91,91,.18);
+  border-radius: 10px;
+  background: rgba(148,52,52,.08);
+}
+
+.admin-operation-detail__error strong { color: #efb1b1; font-size: 10px; line-height: 1.45; }
+.admin-operation-detail__error span { color: #a89494; font-size: 9px; line-height: 1.5; }
+
+@media (min-width: 760px) {
+  .admin-operation-history__layout:has(.admin-operation-detail) {
+    grid-template-columns: minmax(0, 1.15fr) minmax(280px, .85fr);
+    align-items: start;
+  }
+
+  .admin-operation-detail {
+    position: sticky;
+    top: 0;
+  }
+}
+
+@media (max-width: 520px) {
+  .admin-operation-history__toolbar { grid-template-columns: 1fr 1fr; }
+  .admin-operation-history__toolbar > button { grid-column: 1 / -1; justify-self: end; width: 38px; }
+  .admin-operation-row { grid-template-columns: 30px minmax(0,1fr); }
+  .admin-operation-row__icon { width: 30px; height: 30px; }
+  .admin-operation-row__status { grid-column: 2; justify-self: start; }
+  .admin-operation-history__message { align-items: flex-start; flex-direction: column; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-operation-row,
+  .admin-operation-history__toolbar > button { transition: none; }
+}
