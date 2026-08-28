@@ -1,4 +1,4 @@
-import { useEffect, useState, type DragEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import type { Track } from '@home-music/shared';
 import {
   Folder,
@@ -92,6 +92,8 @@ export function DesktopShell({
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   const [dragOver, setDragOver] = useState<number | null>(null);
   const [queueVisibleCount, setQueueVisibleCount] = useState(DESKTOP_QUEUE_PREVIEW_SIZE);
+  const queueListRef = useRef<HTMLDivElement>(null);
+  const queueLoadMoreRef = useRef<HTMLDivElement>(null);
   const desktopLayout = useDesktopLayout();
   const lyrics = useTrackLyrics(current, offlineMode || !desktopLayout);
   const contextTrack = current ? artworkTrack(current, offlineMode) : null;
@@ -107,6 +109,24 @@ export function DesktopShell({
     setContextTab('queue');
     setQueueVisibleCount(DESKTOP_QUEUE_PREVIEW_SIZE);
   }, [current?.id]);
+
+  useEffect(() => {
+    if (contextTab !== 'queue' || remainingQueueCount <= 0 || typeof IntersectionObserver === 'undefined') return;
+    const root = queueListRef.current;
+    const target = queueLoadMoreRef.current;
+    if (!root || !target) return;
+
+    const observer = new IntersectionObserver(entries => {
+      if (entries.some(entry => entry.isIntersecting)) {
+        setQueueVisibleCount(count => count + DESKTOP_QUEUE_PREVIEW_SIZE);
+      }
+    }, {
+      root,
+      rootMargin: `0px 0px ${DESKTOP_QUEUE_LOAD_THRESHOLD_PX}px 0px`
+    });
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [contextTab, remainingQueueCount]);
 
   function beginQueueDrag(event: DragEvent<HTMLButtonElement>, queueIndex: number) {
     if (!onReorderQueue) return;
@@ -212,6 +232,7 @@ export function DesktopShell({
           <section className="desktop-queue" aria-label="Fila de reprodução" data-testid="desktop-queue">
             <div className="desktop-queue__header"><strong>Próximas</strong><span>{Math.max(0, queue.length - queueStart)}</span></div>
             <div
+              ref={queueListRef}
               className="desktop-queue__list"
               onScroll={event => {
                 if (remainingQueueCount <= 0) return;
@@ -247,6 +268,7 @@ export function DesktopShell({
                   </div>
                 );
               }) : <div className="desktop-queue__empty">A fila está vazia.</div>}
+              {remainingQueueCount > 0 && <div ref={queueLoadMoreRef} className="desktop-queue__load-sentinel" aria-hidden="true" />}
             </div>
             {remainingQueueCount > 0 && <small className="desktop-queue__remaining">+ {remainingQueueCount} faixas · role para carregar</small>}
           </section>
