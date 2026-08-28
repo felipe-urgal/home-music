@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { createReadStream } from 'node:fs';
+import { constants as fsConstants, createReadStream } from 'node:fs';
 import {
   chmod,
   copyFile,
@@ -19,6 +19,7 @@ export const MAX_SUPPORTED_SCHEMA_VERSION = 10;
 export const BACKUP_DATABASE_FILE = 'home-music.db';
 export const BACKUP_MANIFEST_FILE = 'manifest.json';
 
+const MAX_MANIFEST_BYTES = 64 * 1024;
 const SAFE_CONFIG_KEYS = [
   'MUSIC_DIR',
   'HOME_MUSIC_RESCAN_INTERVAL_SECONDS',
@@ -217,7 +218,10 @@ export async function verifyBackupArtifact(artifactPath: string) {
 
   const manifestPath = path.join(artifactPath, BACKUP_MANIFEST_FILE);
   const databasePath = path.join(artifactPath, BACKUP_DATABASE_FILE);
-  await assertRegularFile(manifestPath, 'Manifesto do backup');
+  const manifestStat = await assertRegularFile(manifestPath, 'Manifesto do backup');
+  if (manifestStat.size > MAX_MANIFEST_BYTES) {
+    throw new BackupValidationError('Manifesto do backup excede o limite de tamanho permitido.');
+  }
   const databaseStat = await assertRegularFile(databasePath, 'SQLite do backup');
 
   let parsed: unknown;
@@ -245,7 +249,7 @@ export async function verifyBackupArtifact(artifactPath: string) {
 
 function artifactName(now: Date, id: string) {
   const timestamp = now.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
-  return `home-music-${timestamp}-${id.slice(0, 8)}.backup`;
+  return `home-music-${timestamp}-${id}.backup`;
 }
 
 function safeIdentifier(value: string) {
@@ -265,7 +269,6 @@ export async function createBackupArtifact(options: CreateBackupOptions) {
   const snapshotPath = path.join(partialPath, BACKUP_DATABASE_FILE);
   const manifestPath = path.join(partialPath, BACKUP_MANIFEST_FILE);
 
-  await rm(partialPath, { recursive: true, force: true });
   await mkdir(partialPath, { mode: 0o700 });
 
   try {
@@ -337,7 +340,7 @@ export async function restoreBackupArtifact(
   }
 
   try {
-    await copyFile(verified.databasePath, installPath, 0);
+    await copyFile(verified.databasePath, installPath, fsConstants.COPYFILE_EXCL);
     await chmod(installPath, 0o600);
     databaseInfo(installPath);
 
