@@ -3,10 +3,13 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import type {
   AdminQuarantineResponse,
   AdminTrack,
-  AdminTracksResponse
+  AdminTrackMetadataResponse,
+  AdminTracksResponse,
+  TrackMetadataOverridePatch
 } from '@home-music/shared';
 import { MediaQuarantineOperationError, MediaQuarantineStore } from './media-quarantine.js';
 import { UnsafeLibraryPathError } from './security.js';
+import { normalizeMetadataOverridePatch } from './track-metadata-overrides.js';
 
 export const PERMANENT_DELETE_CONFIRMATION = 'EXCLUIR PERMANENTEMENTE' as const;
 
@@ -15,6 +18,9 @@ const defaultDatabasePath = fileURLToPath(new URL('../../../data/home-music.db',
 type AdminTrackService = {
   listTracks: () => AdminTrack[];
   setEnabled: (trackId: string, enabled: boolean) => AdminTrack | null;
+  getMetadata: (trackId: string) => AdminTrackMetadataResponse | null;
+  patchMetadata: (trackId: string, patch: TrackMetadataOverridePatch) => AdminTrackMetadataResponse | null;
+  clearMetadata: (trackId: string) => AdminTrackMetadataResponse | null;
 };
 
 type AdminTrackRouteOptions = {
@@ -28,6 +34,13 @@ function sendQuarantineError(reply: FastifyReply, error: unknown) {
   }
   if (error instanceof UnsafeLibraryPathError) {
     return reply.code(409).send({ error: 'A operação foi bloqueada por segurança de caminho.' });
+  }
+  throw error;
+}
+
+function sendMetadataValidationError(reply: FastifyReply, error: unknown) {
+  if (error instanceof TypeError || error instanceof RangeError) {
+    return reply.code(400).send({ error: error.message });
   }
   throw error;
 }
@@ -72,6 +85,47 @@ export function registerAdminTrackRoutes(
       return { track };
     }
   );
+
+  app.get<{ Params: { id: string } }>('/api/admin/tracks/:id/metadata', async (request, reply) => {
+    reply.header('Cache-Control', 'private, no-store');
+    if (quarantine.hasHidden(request.params.id)) {
+      return reply.code(409).send({ error: 'Música está na lixeira. Restaure antes de editar os metadados.' });
+    }
+    const metadata = service.getMetadata(request.params.id);
+    if (!metadata) return reply.code(404).send({ error: 'Música não encontrada.' });
+    return metadata;
+  });
+
+  app.patch<{ Params: { id: string }; Body: unknown }>(
+    '/api/admin/tracks/:id/metadata',
+    async (request, reply) => {
+      reply.header('Cache-Control', 'private, no-store');
+      if (quarantine.hasHidden(request.params.id)) {
+        return reply.code(409).send({ error: 'Música está na lixeira. Restaure antes de editar os metadados.' });
+      }
+
+      let patch: TrackMetadataOverridePatch;
+      try {
+        patch = normalizeMetadataOverridePatch(request.body);
+      } catch (error) {
+        return sendMetadataValidationError(reply, error);
+      }
+
+      const metadata = service.patchMetadata(request.params.id, patch);
+      if (!metadata) return reply.code(404).send({ error: 'Música não encontrada.' });
+      return metadata;
+    }
+  );
+
+  app.delete<{ Params: { id: string } }>('/api/admin/tracks/:id/metadata', async (request, reply) => {
+    reply.header('Cache-Control', 'private, no-store');
+    if (quarantine.hasHidden(request.params.id)) {
+      return reply.code(409).send({ error: 'Música está na lixeira. Restaure antes de editar os metadados.' });
+    }
+    const metadata = service.clearMetadata(request.params.id);
+    if (!metadata) return reply.code(404).send({ error: 'Música não encontrada.' });
+    return metadata;
+  });
 
   app.get('/api/admin/quarantine', async (_request, reply) => {
     reply.header('Cache-Control', 'private, no-store');
