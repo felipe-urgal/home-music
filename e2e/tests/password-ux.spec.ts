@@ -76,7 +76,7 @@ test('Alterar senha permite mostrar e ocultar os três campos juntos', async ({ 
   await expect(page.locator('#my-account-title')).toHaveText('Alterar senha');
 
   const current = page.getByLabel('Senha atual');
-  const next = page.getByLabel('Nova senha');
+  const next = page.getByLabel('Nova senha', { exact: true });
   const confirmation = page.getByLabel('Confirmar nova senha');
   await expect(current).toHaveAttribute('type', 'password');
   await expect(next).toHaveAttribute('type', 'password');
