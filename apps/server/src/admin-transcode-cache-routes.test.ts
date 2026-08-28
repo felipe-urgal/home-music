@@ -14,8 +14,7 @@ function cookie(token: string) {
   return `${SESSION_COOKIE_NAME}=${token}`;
 }
 
-test('cache administrativo exige admin e header de mutação', async () => {
-  const cacheDir = await mkdtemp(path.join(os.tmpdir(), 'home-music-admin-cache-route-'));
+function adminApp(cacheDir: string, runtime: () => { active: number; pending: number }) {
   const sessions = new SessionManager('admin', 'password-segura-2026');
   const users = new Map<string, AuthenticatedUserState>([
     ['user-1', { id: 'user-1', username: 'maria', role: 'user', passwordMustChange: false }],
@@ -30,9 +29,15 @@ test('cache administrativo exige admin e header de mutação', async () => {
   const maintenance = new TranscodeCacheMaintenance({
     cacheDir,
     limitBytes: 512,
-    runtime: () => ({ active: 0, pending: 0 })
+    runtime
   });
   registerAdminTranscodeCacheRoutes(app, maintenance);
+  return { app, sessions };
+}
+
+test('cache administrativo exige admin e header de mutação', async () => {
+  const cacheDir = await mkdtemp(path.join(os.tmpdir(), 'home-music-admin-cache-route-'));
+  const { app, sessions } = adminApp(cacheDir, () => ({ active: 0, pending: 0 }));
   await writeFile(path.join(cacheDir, `${'d'.repeat(64)}.m4a`), Buffer.alloc(32));
 
   const userToken = sessions.createSessionForUser('user-1');
@@ -72,6 +77,39 @@ test('cache administrativo exige admin e header de mutação', async () => {
     assert.equal(cleared.statusCode, 200);
     assert.equal(cleared.json().freedBytes, 32);
     assert.equal(cleared.json().cache.bytes, 0);
+  } finally {
+    await app.close();
+    await rm(cacheDir, { recursive: true, force: true });
+  }
+});
+
+test('limpeza responde 409 e preserva cache quando há transcoding ativo', async () => {
+  const cacheDir = await mkdtemp(path.join(os.tmpdir(), 'home-music-admin-cache-busy-'));
+  const { app, sessions } = adminApp(cacheDir, () => ({ active: 1, pending: 0 }));
+  await writeFile(path.join(cacheDir, `${'e'.repeat(64)}.m4a`), Buffer.alloc(24));
+  const adminToken = sessions.createSessionForUser('admin-1');
+
+  try {
+    const response = await app.inject({
+      method: 'DELETE',
+      url: '/api/admin/transcoding/cache',
+      headers: {
+        cookie: cookie(adminToken),
+        'x-home-music-request': '1'
+      }
+    });
+    assert.equal(response.statusCode, 409);
+    assert.match(response.json().error, /transcoding em andamento/i);
+    assert.equal(response.json().cache.active, 1);
+    assert.equal(response.json().cache.bytes, 24);
+
+    const status = await app.inject({
+      method: 'GET',
+      url: '/api/admin/transcoding/cache',
+      headers: { cookie: cookie(adminToken) }
+    });
+    assert.equal(status.statusCode, 200);
+    assert.equal(status.json().bytes, 24);
   } finally {
     await app.close();
     await rm(cacheDir, { recursive: true, force: true });
