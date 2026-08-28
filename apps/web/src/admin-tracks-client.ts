@@ -1,7 +1,10 @@
 import type {
   AdminTrack,
   AdminTrackCoverResponse,
+  AdminTrackFileLocation,
   AdminTrackMetadataResponse,
+  AdminTrackMoveRequest,
+  AdminTrackMoveResponse,
   AdminTracksResponse,
   TrackMetadataOverridePatch
 } from '@home-music/shared';
@@ -30,6 +33,27 @@ export async function setAdminTrackEnabled(trackId: string, enabled: boolean) {
   if (!response.ok) throw new Error(await responseError(response));
   const payload = await response.json() as { track: AdminTrack };
   return payload.track;
+}
+
+export async function getAdminTrackLocation(trackId: string) {
+  const response = await apiFetch(`/api/admin/tracks/${encodeURIComponent(trackId)}/location`, {
+    cache: 'no-store'
+  });
+  if (!response.ok) throw new Error(await responseError(response));
+  return response.json() as Promise<AdminTrackFileLocation>;
+}
+
+export async function moveAdminTrack(trackId: string, move: AdminTrackMoveRequest) {
+  const response = await apiFetch(`/api/admin/tracks/${encodeURIComponent(trackId)}/move`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Home-Music-Request': '1'
+    },
+    body: JSON.stringify(move)
+  });
+  if (!response.ok) throw new Error(await responseError(response));
+  return response.json() as Promise<AdminTrackMoveResponse>;
 }
 
 export async function getAdminTrackMetadata(trackId: string) {

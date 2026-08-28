@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { AdminTrack, Playlist } from '@home-music/shared';
+import type { AdminTrack, AdminTrackMoveResponse, Playlist } from '@home-music/shared';
 import {
   ChevronLeft,
   ChevronRight,
   CircleOff,
+  Folder,
   Heart,
   ListPlus,
   LoaderCircle,
@@ -21,8 +22,10 @@ import {
 } from '../admin-personal-library-client';
 import { quarantineAdminTrack } from '../admin-quarantine-client';
 import { listAdminTracks, setAdminTrackEnabled } from '../admin-tracks-client';
+import { notifyLibraryChanged } from '../library-events';
 import { useAdminBulkSelection } from '../useAdminBulkSelection';
 import { AdminBulkToolbar } from './AdminBulkToolbar';
+import { AdminTrackMoveDialog } from './AdminTrackMoveDialog';
 
 type AdminTrackAvailabilityScreenProps = {
   onBack: () => void;
@@ -42,6 +45,7 @@ export function AdminTrackAvailabilityScreen({ onBack }: AdminTrackAvailabilityS
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [busyTrackId, setBusyTrackId] = useState<string | null>(null);
+  const [movingTrack, setMovingTrack] = useState<AdminTrack | null>(null);
   const [batchBusy, setBatchBusy] = useState(false);
   const [batchProgress, setBatchProgress] = useState({ completed: 0, total: 0 });
   const [batchFeedback, setBatchFeedback] = useState<BatchFeedback | null>(null);
@@ -99,7 +103,7 @@ export function AdminTrackAvailabilityScreen({ onBack }: AdminTrackAvailabilityS
       : [],
     [selectedActiveTracks, selectedPlaylist]
   );
-  const operationBusy = batchBusy || busyTrackId !== null;
+  const operationBusy = batchBusy || busyTrackId !== null || movingTrack !== null;
 
   useEffect(() => {
     if (page > pageCount) setPage(pageCount);
@@ -176,6 +180,26 @@ export function AdminTrackAvailabilityScreen({ onBack }: AdminTrackAvailabilityS
     } finally {
       setBusyTrackId(null);
     }
+  }
+
+  function organizeTrack(track: AdminTrack) {
+    if (operationBusy) return;
+    setError(null);
+    setBatchFeedback(null);
+    setMovingTrack(track);
+  }
+
+  function commitMove(response: AdminTrackMoveResponse) {
+    setTracks(items => items.map(item => item.id === response.track.id ? response.track : item));
+    setMovingTrack(null);
+    selection.clear();
+    setBatchFeedback({
+      message: response.moved
+        ? `Organização: arquivo movido para “${response.location.relativePath}”.`
+        : 'Organização: o arquivo já estava no destino informado.',
+      error: false
+    });
+    notifyLibraryChanged();
   }
 
   async function runTrackBatch(
@@ -288,7 +312,7 @@ export function AdminTrackAvailabilityScreen({ onBack }: AdminTrackAvailabilityS
         <button className="icon-button" type="button" aria-label="Voltar" onClick={onBack}><ChevronLeft /></button>
         <div>
           <strong id="admin-tracks-title">Gerenciar músicas</strong>
-          <small>Disponibilidade e remoção reversível</small>
+          <small>Disponibilidade, organização e remoção reversível</small>
         </div>
         <span className="my-account-header__spacer" />
       </header>
@@ -436,6 +460,14 @@ export function AdminTrackAvailabilityScreen({ onBack }: AdminTrackAvailabilityS
                 </span>
                 <div className="admin-track-row__actions">
                   <button
+                    className="admin-track-row__move"
+                    type="button"
+                    disabled={operationBusy}
+                    onClick={() => organizeTrack(track)}
+                  >
+                    <Folder /> Organizar
+                  </button>
+                  <button
                     className={`admin-track-row__action ${track.enabled ? 'is-disable' : 'is-enable'}`}
                     type="button"
                     disabled={operationBusy}
@@ -467,6 +499,14 @@ export function AdminTrackAvailabilityScreen({ onBack }: AdminTrackAvailabilityS
           </section>
         )}
       </div>
+
+      {movingTrack && (
+        <AdminTrackMoveDialog
+          track={movingTrack}
+          onClose={() => setMovingTrack(null)}
+          onMoved={commitMove}
+        />
+      )}
     </section>
   );
 }
