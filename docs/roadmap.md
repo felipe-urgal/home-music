@@ -174,8 +174,8 @@ Objetivo: permitir administrar a coleção pelo próprio Home Music, com operaç
 - [x] Criar visão geral com quantidade de faixas, armazenamento, problemas e estado do scanner
 - [x] Criar ponto de entrada `Importar mídia` integrado ao pipeline da Fase 9
 - [x] Permitir desativar/reativar músicas sem remover o arquivo físico
-- [ ] Criar lixeira/quarentena com restauração antes da exclusão permanente
-- [ ] Permitir exclusão física somente após confirmação explícita
+- [x] Criar lixeira/quarentena com restauração antes da exclusão permanente
+- [x] Permitir exclusão física somente após confirmação explícita
 - [ ] Adicionar ações em lote para ativar, desativar, mover, excluir, favoritar e adicionar a playlists
 - [ ] Permitir editar metadados por override não destrutivo no SQLite
 - [ ] Avaliar escrita opcional de metadados de volta ao arquivo somente como operação explícita
