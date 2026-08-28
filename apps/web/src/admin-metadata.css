@@ -78,8 +78,8 @@
 }
 
 .admin-metadata-dialog {
-  width: min(620px,100%);
-  max-height: min(760px,calc(100dvh - 40px));
+  width: min(680px,100%);
+  max-height: min(820px,calc(100dvh - 40px));
   overflow: auto;
   border: 1px solid rgba(255,255,255,.09);
   border-radius: 14px;
@@ -178,6 +178,111 @@
   font-size: 8px;
 }
 
+.admin-cover-editor {
+  display: grid;
+  grid-template-columns: 132px minmax(0,1fr);
+  gap: 14px;
+  margin: 0 16px 16px;
+  padding: 14px;
+  border: 1px solid rgba(255,255,255,.065);
+  border-radius: 12px;
+  background: rgba(255,255,255,.018);
+}
+.admin-cover-editor__preview {
+  width: 132px;
+  aspect-ratio: 1;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 10px;
+  background: #081017;
+}
+.admin-cover-editor__preview img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+.admin-cover-editor__preview.is-empty { color: #53616c; background: #0d151c; }
+.admin-cover-editor__preview.is-empty svg { width: 28px; height: 28px; }
+.admin-cover-editor__body { min-width: 0; display: grid; align-content: start; gap: 11px; }
+.admin-cover-editor__heading {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.admin-cover-editor__heading > div { min-width: 0; display: grid; gap: 3px; }
+.admin-cover-editor__heading strong { color: #dfe7ed; font-size: 11px; }
+.admin-cover-editor__heading small { color: #73818c; font-size: 9px; line-height: 1.45; }
+.admin-cover-editor__heading > span {
+  flex: 0 0 auto;
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: rgba(30,139,232,.1);
+  color: #8fceff;
+  font-size: 8px;
+  font-weight: 700;
+}
+.admin-cover-editor__file {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  padding: 8px 9px;
+  border-radius: 8px;
+  background: rgba(30,139,232,.055);
+}
+.admin-cover-editor__file strong,
+.admin-cover-editor__file small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.admin-cover-editor__file strong { color: #b8dfff; font-size: 9px; }
+.admin-cover-editor__file small { color: #68849a; font-size: 8px; }
+.admin-cover-editor__actions { display: flex; flex-wrap: wrap; gap: 7px; }
+.admin-cover-editor__actions button,
+.admin-cover-upload {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 9px;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 8.5px;
+  font-weight: 700;
+}
+.admin-cover-editor__actions button { cursor: pointer; }
+.admin-cover-editor__actions button:disabled,
+.admin-cover-upload.is-disabled { opacity: .4; cursor: default; }
+.admin-cover-editor__actions svg,
+.admin-cover-upload svg { width: 13px; height: 13px; }
+.admin-cover-upload {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,.08);
+  background: rgba(255,255,255,.03);
+  color: #a3afb8;
+  cursor: pointer;
+}
+.admin-cover-upload input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.admin-cover-save {
+  border: 1px solid rgba(58,155,230,.28);
+  background: rgba(30,139,232,.14);
+  color: #a9dbff;
+}
+.admin-cover-reset {
+  border: 1px solid rgba(255,255,255,.07);
+  background: transparent;
+  color: #85929c;
+}
+
 .admin-metadata-dialog__actions {
   display: flex;
   align-items: center;
@@ -219,8 +324,19 @@
   .admin-metadata-dialog-backdrop { padding: 10px; }
   .admin-metadata-dialog { max-height: calc(100dvh - 20px); }
   .admin-metadata-fields { grid-template-columns: 1fr; }
+  .admin-cover-editor { grid-template-columns: 92px minmax(0,1fr); gap: 10px; padding: 10px; }
+  .admin-cover-editor__preview { width: 92px; }
+  .admin-cover-editor__actions { grid-column: 1 / -1; }
   .admin-metadata-dialog__actions { align-items: stretch; flex-direction: column-reverse; }
   .admin-metadata-dialog__actions button { width: 100%; }
+}
+
+@media (max-width: 430px) {
+  .admin-cover-editor { grid-template-columns: 1fr; }
+  .admin-cover-editor__preview { width: min(180px,100%); justify-self: center; }
+  .admin-cover-editor__actions { display: grid; grid-template-columns: 1fr; }
+  .admin-cover-editor__actions button,
+  .admin-cover-upload { width: 100%; }
 }
 
 @media (prefers-reduced-motion: reduce) {

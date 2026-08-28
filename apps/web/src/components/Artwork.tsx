@@ -4,7 +4,8 @@ import type { Track } from '@home-music/shared';
 import { buildArtworkFallback } from '../artwork-utils';
 
 export function Artwork({ track, large = false }: { track?: Track; large?: boolean }) {
-  const url = track?.hasCover ? `/api/tracks/${track.id}/cover` : null;
+  const version = track?.coverVersion ? `?v=${encodeURIComponent(track.coverVersion)}` : '';
+  const url = track?.hasCover ? `/api/tracks/${encodeURIComponent(track.id)}/cover${version}` : null;
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
 
   useEffect(() => {

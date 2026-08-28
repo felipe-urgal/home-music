@@ -1,5 +1,6 @@
 import type {
   AdminTrack,
+  AdminTrackCoverResponse,
   AdminTrackMetadataResponse,
   AdminTracksResponse,
   TrackMetadataOverridePatch
@@ -59,4 +60,34 @@ export async function resetAdminTrackMetadata(trackId: string) {
   });
   if (!response.ok) throw new Error(await responseError(response));
   return response.json() as Promise<AdminTrackMetadataResponse>;
+}
+
+export async function getAdminTrackCover(trackId: string) {
+  const response = await apiFetch(`/api/admin/tracks/${encodeURIComponent(trackId)}/cover`, {
+    cache: 'no-store'
+  });
+  if (!response.ok) throw new Error(await responseError(response));
+  return response.json() as Promise<AdminTrackCoverResponse>;
+}
+
+export async function updateAdminTrackCover(trackId: string, file: File) {
+  const response = await apiFetch(`/api/admin/tracks/${encodeURIComponent(trackId)}/cover`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': file.type,
+      'X-Home-Music-Request': '1'
+    },
+    body: file
+  });
+  if (!response.ok) throw new Error(await responseError(response));
+  return response.json() as Promise<AdminTrackCoverResponse>;
+}
+
+export async function resetAdminTrackCover(trackId: string) {
+  const response = await apiFetch(`/api/admin/tracks/${encodeURIComponent(trackId)}/cover`, {
+    method: 'DELETE',
+    headers: { 'X-Home-Music-Request': '1' }
+  });
+  if (!response.ok) throw new Error(await responseError(response));
+  return response.json() as Promise<AdminTrackCoverResponse>;
 }

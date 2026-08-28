@@ -173,6 +173,7 @@ Objetivo: permitir administrar a coleção pelo próprio Home Music, com operaç
 
 Detalhe das ações administrativas em lote e seus limites de segurança: [admin-bulk-actions.md](admin-bulk-actions.md).
 Detalhe dos overrides de metadados não destrutivos: [admin-metadata-overrides.md](admin-metadata-overrides.md).
+Detalhe dos overrides seguros de capa: [admin-cover-overrides.md](admin-cover-overrides.md).
 
 - [x] Criar área `Administração` separada da experiência de reprodução e protegida por role `admin`
 - [x] Criar visão geral com quantidade de faixas, armazenamento, problemas e estado do scanner
@@ -183,7 +184,7 @@ Detalhe dos overrides de metadados não destrutivos: [admin-metadata-overrides.m
 - [x] Adicionar ações em lote para ativar/desativar, quarentena/restauração/exclusão, favoritar e adicionar a playlists; movimentação física segura permanece no item específico abaixo
 - [x] Permitir editar metadados por override não destrutivo no SQLite ([detalhe](admin-metadata-overrides.md))
 - [ ] Avaliar escrita opcional de metadados de volta ao arquivo somente como operação explícita
-- [ ] Permitir adicionar/substituir capa sem destruir o arquivo original por padrão
+- [x] Permitir adicionar/substituir capa sem destruir o arquivo original por padrão ([detalhe](admin-cover-overrides.md))
 - [ ] Permitir mover/organizar arquivos dentro de `MUSIC_DIR` com validação de caminhos e rollback quando possível
 - [ ] Exibir armazenamento usado pela biblioteca e pelo cache de transcoding
 - [ ] Permitir limpar cache de transcoding pela administração
