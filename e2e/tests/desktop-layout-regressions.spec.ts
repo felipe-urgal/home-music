@@ -25,6 +25,7 @@ test('player desktop respeita sidebar e não cobre telas utilitárias', async ({
   const playerBarBox = await playerBar.boundingBox();
   expect(sidebarBox).not.toBeNull();
   expect(playerBarBox).not.toBeNull();
+  expect(sidebarBox!.height).toBeGreaterThanOrEqual(viewport!.height - 1);
   expect(playerBarBox!.x).toBeGreaterThanOrEqual(sidebarBox!.x + sidebarBox!.width - 1);
   expect(playerBarBox!.x + playerBarBox!.width).toBeLessThanOrEqual(viewport!.width + 1);
 
