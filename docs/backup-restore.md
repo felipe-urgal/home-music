@@ -17,7 +17,7 @@ Por padrão, `npm run backup:create` cria um diretório em `backups/` com sufixo
 
 ```text
 backups/
-└── home-music-20260828T184000Z-12345678.backup/
+└── home-music-20260828T184000Z-12345678-aaaa-bbbb-cccc-dddddddddddd.backup/
     ├── home-music.db
     └── manifest.json
 ```
@@ -81,7 +81,7 @@ O comando só termina com sucesso depois de:
 5. verificar novamente o artefato completo;
 6. renomear o diretório `.partial` para o nome final `.backup`.
 
-Uma falha antes da etapa final remove o diretório parcial.
+Uma falha antes da etapa final remove somente o diretório parcial criado por aquela tentativa. Uma colisão de nome não apaga artefatos ou diretórios preexistentes.
 
 ## Verificar backup
 
@@ -95,6 +95,7 @@ A verificação exige:
 
 - diretório real, sem symlink;
 - `manifest.json` e `home-music.db` como arquivos regulares, sem symlink;
+- manifesto dentro do limite operacional de tamanho;
 - formato do manifesto suportado;
 - nenhuma configuração fora da allowlist;
 - tamanho exato do SQLite;
@@ -117,20 +118,23 @@ curl -i http://127.0.0.1:8787/ready
 
 O CLI verifica `home-music.service` e recusa a operação se o serviço ainda estiver ativo.
 
-Em desenvolvimento, pare também qualquer `npm run dev`/`npm start` que esteja usando o mesmo banco antes de fornecer `--confirm-service-stopped`.
+Em desenvolvimento, pare também qualquer `npm run dev`/`npm start` que esteja usando o mesmo banco antes de fornecer `--confirm-service-stopped`. No Linux, o CLI procura outro processo com `home-music.db`, `-wal` ou `-shm` aberto e recusa o restore se encontrar um consumidor ativo.
+
+A guarda de serviço/processos é executada novamente imediatamente antes da troca do SQLite, depois que a cópia de instalação foi validada e o snapshot de rollback já está pronto. Isso reduz a janela entre a confirmação inicial de estado offline e a etapa destrutiva.
 
 ## Ordem segura do restore
 
 O restore segue esta sequência:
 
 1. valida o artefato completo sem tocar no banco atual;
-2. copia o SQLite do backup para um arquivo temporário no diretório `data/`;
+2. copia o SQLite do backup de forma exclusiva para um arquivo temporário no diretório `data/`;
 3. valida novamente essa cópia;
 4. cria um snapshot SQLite consistente do banco atual para rollback;
-5. remove sidecars WAL/SHM antigos somente depois do rollback estar pronto;
-6. troca o banco pelo snapshot validado;
-7. valida o banco instalado;
-8. somente após sucesso remove o snapshot temporário de rollback.
+5. repete a guarda de serviço/processos;
+6. remove sidecars WAL/SHM antigos somente depois do rollback estar pronto;
+7. troca o banco pelo snapshot validado;
+8. valida o banco instalado;
+9. somente após sucesso remove o snapshot temporário de rollback.
 
 Se qualquer etapa falhar depois que a troca começou, o fluxo tenta restaurar automaticamente o snapshot do estado anterior e valida esse rollback antes de devolver o erro.
 
@@ -166,6 +170,7 @@ A suíte unitária também cobre:
 - corrupção/tampering detectados antes do restore;
 - restore bem-sucedido sem alterar o artefato;
 - artefato inválido sem tocar no banco atual;
+- guarda imediatamente anterior à troca sem tocar no estado válido quando ela bloqueia;
 - rollback automático quando ocorre falha simulada depois da troca.
 
 ## Compatibilidade
