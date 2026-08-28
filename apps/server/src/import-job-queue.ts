@@ -14,6 +14,7 @@ type ImportJobQueueOptions = {
   now?: () => Date;
   createId?: () => string;
   maxRetainedJobs?: number;
+  onChange?: (job: ImportJob) => void;
 };
 
 function copyJob(job: ImportJob): ImportJob {
@@ -37,11 +38,13 @@ export class ImportJobQueue {
   private readonly now: () => Date;
   private readonly createId: () => string;
   private readonly maxRetainedJobs: number;
+  private readonly onChange?: (job: ImportJob) => void;
 
   constructor(options: ImportJobQueueOptions = {}) {
     this.now = options.now ?? (() => new Date());
     this.createId = options.createId ?? randomUUID;
     this.maxRetainedJobs = Math.max(1, Math.floor(options.maxRetainedJobs ?? 200));
+    this.onChange = options.onChange;
   }
 
   enqueue(source: ImportJobSource, label: string) {
@@ -63,6 +66,7 @@ export class ImportJobQueue {
 
     this.jobs.push(job);
     this.trimRetainedJobs();
+    this.notify(job);
     return copyJob(job);
   }
 
@@ -82,6 +86,7 @@ export class ImportJobQueue {
     job.error = nextStatus === 'failed' ? error?.trim().slice(0, 500) || 'Falha na importação.' : null;
 
     this.trimRetainedJobs();
+    this.notify(job);
     return copyJob(job);
   }
 
@@ -92,6 +97,10 @@ export class ImportJobQueue {
 
   list() {
     return [...this.jobs].reverse().map(copyJob);
+  }
+
+  private notify(job: ImportJob) {
+    this.onChange?.(copyJob(job));
   }
 
   private trimRetainedJobs() {
