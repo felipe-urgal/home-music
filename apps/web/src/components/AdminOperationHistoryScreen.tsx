@@ -93,7 +93,12 @@ export function AdminOperationHistoryScreen({ onBack }: AdminOperationHistoryScr
 
   const loadHistory = useCallback(async (background = false) => {
     const requestId = ++requestSequence.current;
-    if (background) setRefreshing(true); else setLoading(true);
+    if (background) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+      setRefreshing(false);
+    }
     setError(null);
     try {
       const response = await getAdminOperationHistory({
