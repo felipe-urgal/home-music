@@ -68,7 +68,12 @@ test('Alterar senha permite mostrar e ocultar os três campos juntos', async ({ 
   await page.getByRole('button', { name: 'Entrar' }).click();
   await expect(page.getByRole('heading', { name: 'E2E Track' })).toBeVisible();
 
-  const accountEntry = page.getByRole('button', { name: /Minha conta/ }).first();
+  const viewport = page.viewportSize();
+  if (viewport && viewport.width >= 700 && viewport.width < 1024) {
+    await page.getByRole('button', { name: 'Voltar à biblioteca', exact: true }).click();
+  }
+
+  const accountEntry = page.getByRole('button', { name: /^(Minha conta|Conta)/ }).first();
   await expect(accountEntry).toBeVisible();
   await accountEntry.click();
   await expect(page.locator('#my-account-title')).toHaveText('Minha conta');
