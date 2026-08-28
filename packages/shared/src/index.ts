@@ -104,6 +104,7 @@ export type Track = {
   duration: number | null;
   format: string;
   hasCover: boolean;
+  coverVersion?: string;
   replayGainTrackDb?: number | null;
   replayGainAlbumDb?: number | null;
 };
@@ -135,6 +136,22 @@ export type AdminTrackMetadataResponse = {
   physical: EditableTrackMetadata;
   override: TrackMetadataOverride;
   effective: EditableTrackMetadata;
+};
+
+export type TrackCoverOverride = {
+  contentType: string;
+  width: number;
+  height: number;
+  sizeBytes: number;
+  updatedAt: string;
+  version: string;
+};
+
+export type AdminTrackCoverResponse = {
+  trackId: string;
+  physicalHasCover: boolean;
+  effectiveHasCover: boolean;
+  override: TrackCoverOverride | null;
 };
 
 export type AdminTrack = Track & {
