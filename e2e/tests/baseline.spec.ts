@@ -349,10 +349,15 @@ test('estados de loading e erro permitem retry no desktop', async ({ page }, tes
   test.skip(testInfo.project.name !== 'desktop-chromium');
 
   let libraryRequests = 0;
+  let releaseFirstLibraryResponse!: () => void;
+  const firstLibraryResponseReleased = new Promise<void>(resolve => {
+    releaseFirstLibraryResponse = resolve;
+  });
+
   await page.route('**/api/library', async route => {
     libraryRequests += 1;
     if (libraryRequests === 1) {
-      await new Promise(resolve => setTimeout(resolve, 350));
+      await firstLibraryResponseReleased;
       await route.fulfill({
         status: 503,
         contentType: 'application/json',
@@ -367,9 +372,15 @@ test('estados de loading e erro permitem retry no desktop', async ({ page }, tes
   await expect(page.getByRole('heading', { name: 'Entrar' })).toBeVisible();
   await page.getByLabel('Usuário').fill(username);
   await page.getByLabel('Senha', { exact: true }).fill(password);
+  const firstLibraryRequest = page.waitForRequest('**/api/library');
   await page.getByRole('button', { name: 'Entrar' }).click();
+  await firstLibraryRequest;
 
-  await expect(page.getByTestId('responsive-state-loading')).toBeVisible();
+  try {
+    await expect(page.getByTestId('responsive-state-loading')).toBeVisible();
+  } finally {
+    releaseFirstLibraryResponse();
+  }
   const errorState = page.getByTestId('responsive-state-error');
   await expect(errorState).toBeVisible();
   await expect(errorState).toContainText('Biblioteca E2E temporariamente indisponível');
