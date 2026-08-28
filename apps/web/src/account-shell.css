@@ -1,7 +1,7 @@
 @media (min-width: 1024px) {
   .desktop-layout:has(.desktop-account-surface) {
     height: 100vh;
-    grid-template-columns: 220px minmax(0, 1fr);
+    grid-template-columns: var(--desktop-sidebar-width, 220px) minmax(0, 1fr);
   }
 
   .desktop-layout:has(.desktop-account-surface) .desktop-context {
@@ -9,7 +9,7 @@
   }
 
   .desktop-layout:has(.desktop-account-surface) .desktop-account-surface {
-    height: 100vh;
+    height: calc(100% - var(--desktop-player-height, 88px));
     padding-bottom: 28px;
     border-right: 0;
   }
@@ -18,10 +18,6 @@
     width: 100%;
     max-width: 1040px;
     margin: 0 auto;
-  }
-
-  .desktop-layout:has(.desktop-account-surface) + .desktop-player-bar {
-    display: none;
   }
 
   .desktop-sidebar.has-utilities .desktop-sidebar__utilities {
@@ -194,6 +190,6 @@
 
 @media (min-width: 1380px) {
   .desktop-layout:has(.desktop-account-surface) {
-    grid-template-columns: 236px minmax(0, 1fr);
+    grid-template-columns: var(--desktop-sidebar-width, 236px) minmax(0, 1fr);
   }
 }

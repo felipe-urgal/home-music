@@ -4,12 +4,20 @@
 
 @media (min-width: 1024px) {
   .desktop-layout {
-    height: calc(100vh - 88px);
+    height: 100vh;
   }
 
-  .desktop-sidebar,
+  .desktop-sidebar {
+    height: 100%;
+  }
+
   .desktop-context,
   .phone-surface {
+    height: calc(100% - var(--desktop-player-height, 88px));
+  }
+
+  .desktop-layout[data-desktop-active="player"] .desktop-context,
+  .desktop-layout[data-desktop-active="player"] .phone-surface {
     height: 100%;
   }
 
@@ -20,10 +28,10 @@
   .desktop-player-bar {
     position: fixed;
     z-index: 20;
-    left: 0;
+    left: var(--desktop-sidebar-width, 220px);
     right: 0;
     bottom: 0;
-    height: 88px;
+    height: var(--desktop-player-height, 88px);
     display: grid;
     grid-template-columns: minmax(220px, 1fr) minmax(360px, 1.4fr) minmax(180px, 1fr);
     align-items: center;
