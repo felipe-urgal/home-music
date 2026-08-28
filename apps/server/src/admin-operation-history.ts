@@ -17,6 +17,8 @@ const DEFAULT_MAX_RETAINED_OPERATIONS = 500;
 const MAX_LABEL_LENGTH = 180;
 const MAX_ERROR_LENGTH = 320;
 const TERMINAL_STATUSES: readonly AdminOperationStatus[] = ['completed', 'failed', 'cancelled'];
+const INTERRUPTED_MESSAGE = 'A operação foi interrompida pelo reinício do serviço.';
+const INTERRUPTED_ACTION = 'Inicie a operação novamente se ela ainda for necessária.';
 
 type Row = Record<string, unknown>;
 
@@ -260,6 +262,9 @@ export class AdminOperationHistoryStore {
       CREATE INDEX IF NOT EXISTS idx_admin_operation_history_kind_status
       ON admin_operation_history(kind, status, created_at DESC);
     `);
+
+    this.recoverInterruptedOperations();
+    this.trimRetained();
   }
 
   close() {
@@ -364,6 +369,26 @@ export class AdminOperationHistoryStore {
       LIMIT ?
     `).all(...bindings, limit) as Row[];
     return rows.map(historyItem);
+  }
+
+  private recoverInterruptedOperations() {
+    const row = this.db.prepare(`
+      SELECT COUNT(*) AS count
+      FROM admin_operation_history
+      WHERE status IN ('pending', 'running')
+    `).get() as Row | undefined;
+    if ((numberValue(row?.count) ?? 0) <= 0) return;
+
+    const finishedAt = this.now().toISOString();
+    this.db.prepare(`
+      UPDATE admin_operation_history
+      SET status = 'cancelled',
+          finished_at = ?,
+          error_message = ?,
+          error_action = ?,
+          can_retry = 0
+      WHERE status IN ('pending', 'running')
+    `).run(finishedAt, INTERRUPTED_MESSAGE, INTERRUPTED_ACTION);
   }
 
   private trimRetained() {
