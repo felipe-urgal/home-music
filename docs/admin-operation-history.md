@@ -18,7 +18,9 @@ O histórico usa a tabela `admin_operation_history` no mesmo arquivo SQLite do H
 
 Ela é criada pelo store administrativo, seguindo o mesmo padrão de outras tabelas administrativas auxiliares. A tabela não altera o `PRAGMA user_version` do schema principal.
 
-Os registros terminais mais recentes são retidos até o limite padrão de 500 operações. Operações ainda `pending` ou `running` não são podadas pela retenção.
+Os registros terminais mais recentes são retidos até o limite padrão de 500 operações. Operações ainda `pending` ou `running` não são podadas pela retenção durante a execução normal.
+
+Ao iniciar o serviço, qualquer registro antigo que ainda esteja `pending` ou `running` é encerrado como `cancelled`, com horário de fim e mensagem informando que a operação foi interrompida pelo restart. Isso evita deixar operações eternamente “Em andamento” depois de crash/reinício e reflete que a fila em memória não é restaurada automaticamente.
 
 Como o histórico está no mesmo arquivo SQLite, ele também ficará dentro do escopo natural do backup consistente planejado na #91.
 
@@ -52,15 +54,15 @@ Os estados são normalizados para a UI administrativa:
 - `failed` → `failed`;
 - `cancelled` → `cancelled`.
 
-Isso faz o histórico sobreviver à retenção e ao ciclo de vida da fila em memória e também ao restart do processo.
+Isso faz o histórico sobreviver à retenção e ao ciclo de vida da fila em memória e também ao restart do processo. Se o serviço reiniciar antes de um job chegar a estado terminal, o snapshot persistido é encerrado como `cancelled` porque a fila em memória correspondente deixou de existir.
 
 Nesta etapa, os importadores reais de upload, URL e providers ainda não foram implementados. Por isso, contagens de itens processados para importação permanecem `null` até que as etapas da Fase 9 passem a publicar resultados concretos. A #90 não inventa esses números.
 
-## Retry
+## Nova tentativa
 
 O contrato já expõe `canRetry`, mas ele permanece `false` nesta entrega.
 
-A execução de retry só deve ser habilitada quando a operação correspondente tiver semântica de reexecução segura e explícita. Isso evita apresentar um botão que não consiga reconstruir de forma confiável a origem da operação.
+A execução de nova tentativa só deve ser habilitada quando a operação correspondente tiver semântica de reexecução segura e explícita. Isso evita apresentar um botão que não consiga reconstruir de forma confiável a origem da operação.
 
 ## Erros acionáveis e sanitização
 
@@ -109,20 +111,21 @@ Em **Administração → Histórico operacional**, o administrador pode:
 - selecionar uma operação;
 - ver início, fim e duração;
 - ver contagens de um scan;
-- ver a mensagem sanitizada de falha;
+- ver a mensagem sanitizada de falha/interrupção;
 - ver a orientação `O que fazer`.
 
-A tela mostra `Retry: Não disponível` enquanto `canRetry` for falso, deixando explícito que a funcionalidade ainda não está habilitada.
+A tela mostra `Nova tentativa: Não disponível` enquanto `canRetry` for falso, deixando explícito que a funcionalidade ainda não está habilitada.
 
 ## Invariantes
 
 - histórico não é fonte de verdade da operação principal;
 - falha de persistência do histórico não derruba scan/importação;
 - um scan real gera no máximo um registro, mesmo com chamadas concorrentes;
+- operações não terminais antigas são encerradas na inicialização em vez de permanecerem falsas como ativas;
 - nenhuma stack trace é persistida;
 - caminhos completos, URLs e segredos conhecidos são redigidos;
 - importações não exibem contagens inexistentes;
-- retry não é anunciado como disponível antes de existir uma implementação segura;
+- nova tentativa não é anunciada como disponível antes de existir uma implementação segura;
 - somente administradores consultam o histórico.
 
 ## Testes
@@ -130,11 +133,12 @@ A tela mostra `Retry: Não disponível` enquanto `canRetry` for falso, deixando 
 A cobertura inclui:
 
 - persistência após reabrir o store;
+- recuperação de operações interrompidas por restart;
 - duração e contagens de scan;
 - filtros por tipo/status;
 - upsert da fila de importação;
 - observer com snapshots defensivos;
-- retenção sem podar operações pendentes;
+- retenção sem podar operações pendentes durante runtime normal;
 - sanitização de caminho, URL, token e `Bearer`;
 - classificação de falha por permissão;
 - wrapper best-effort de scan;
