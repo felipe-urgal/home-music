@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import {
   TranscodeCacheBusyError,
-  TranscodeCacheMaintenance
+  TranscodeCacheMaintenance,
+  UnsafeTranscodeCacheDirectoryError
 } from './transcode-cache-maintenance.js';
 
 const CACHE_A = `${'a'.repeat(64)}.m4a`;
@@ -108,5 +109,35 @@ test('clear bloqueia enquanto operação de transcode está protegida e funciona
   } finally {
     release?.();
     await rm(cacheDir, { recursive: true, force: true });
+  }
+});
+
+test('diretório de cache apontado por symlink é rejeitado sem remover o alvo', async t => {
+  if (process.platform === 'win32') {
+    t.skip('Symlink de diretório exige permissões específicas no Windows.');
+    return;
+  }
+
+  const root = await mkdtemp(path.join(os.tmpdir(), 'home-music-cache-symlink-'));
+  const target = path.join(root, 'target');
+  const cacheDir = path.join(root, 'cache');
+  try {
+    await mkdir(target);
+    await writeFile(path.join(target, CACHE_A), Buffer.alloc(17));
+    await symlink(target, cacheDir, 'dir');
+
+    const maintenance = new TranscodeCacheMaintenance({
+      cacheDir,
+      limitBytes: 512,
+      runtime: () => ({ active: 0, pending: 0 })
+    });
+
+    await assert.rejects(
+      maintenance.clear(),
+      (error: unknown) => error instanceof UnsafeTranscodeCacheDirectoryError
+    );
+    assert.equal((await readFile(path.join(target, CACHE_A))).byteLength, 17);
+  } finally {
+    await rm(root, { recursive: true, force: true });
   }
 });
