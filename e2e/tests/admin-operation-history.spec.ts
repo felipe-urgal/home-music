@@ -101,7 +101,7 @@ test('admin filtra histórico e vê erro acionável sem dados sensíveis', async
   const detail = page.locator('.admin-operation-detail');
   await expect(detail).toContainText('A fonte não respondeu dentro do esperado.');
   await expect(detail).toContainText('O que fazer: Verifique a conectividade');
-  await expect(detail).toContainText('Retry');
+  await expect(detail).toContainText('Nova tentativa');
   await expect(detail).toContainText('Não disponível');
   await expect(detail).not.toContainText('token=');
   await expect(detail).not.toContainText('/srv/');
@@ -118,6 +118,7 @@ test('admin filtra histórico e vê erro acionável sem dados sensíveis', async
   await expect(page.locator('.admin-operation-detail')).toContainText('3,3 s');
 
   await page.getByLabel('Tipo').selectOption('');
+  await expect(list.getByRole('button')).toHaveCount(2);
   await page.getByLabel('Status').selectOption('failed');
   await expect(list.getByRole('button')).toHaveCount(1);
   await expect(list).toContainText('Importação por URL');
