@@ -10,6 +10,7 @@ import {
 import { registerAccountSessionRoutes } from './account-session-routes.js';
 import { registerAdminImportRoutes } from './admin-import-routes.js';
 import { buildAdminLibraryOverview } from './admin-library-overview.js';
+import { registerAdminTranscodeCacheRoutes } from './admin-transcode-cache-routes.js';
 import { registerAdminTrackRoutes } from './admin-track-routes.js';
 import {
   DEFAULT_AUTO_RESCAN_INTERVAL_SECONDS,
@@ -48,6 +49,7 @@ import {
   type PreparedWebApp
 } from './static-web.js';
 import { TrackAvailabilityStore } from './track-availability-store.js';
+import { TranscodeCacheMaintenance } from './transcode-cache-maintenance.js';
 import {
   DEFAULT_TRANSCODE_CACHE_MEGABYTES,
   parseTranscodeCacheMegabytes,
@@ -128,6 +130,14 @@ const transcodeManager = new TranscodeManager({
   command: ffmpegCommand,
   maxCacheBytes: transcodeCacheMegabytes * 1024 * 1024,
   maxConcurrent: 1
+});
+const transcodeCacheMaintenance = new TranscodeCacheMaintenance({
+  cacheDir: defaultTranscodeCachePath,
+  limitBytes: transcodeManager.maxCacheBytes,
+  runtime: () => ({
+    active: transcodeManager.activeCount,
+    pending: transcodeManager.pendingCount
+  })
 });
 
 let tracks: IndexedTrack[] = [];
@@ -392,6 +402,7 @@ installApiAuthPolicy(app, {
 registerAccountSessionRoutes(app, sessions);
 registerAdminUserRoutes(app, adminUsers);
 registerAdminImportRoutes(app, importJobs);
+registerAdminTranscodeCacheRoutes(app, transcodeCacheMaintenance);
 registerAdminTrackRoutes(app, {
   listTracks: () => tracks.map(track => ({
     ...publicTrack(track),
@@ -890,22 +901,27 @@ app.get<{ Params: { id: string }; Querystring: { quality?: string; normalization
   }
 
   try {
-    const source = await openRegularFileInside(libraryRoot, track.filePath);
-    let prepared;
-    try {
-      prepared = await transcodeManager.prepare({
-        trackId: track.id,
-        sourceSize: source.stat.size,
-        sourceMtimeMs: source.stat.mtimeMs,
-        quality,
-        normalizationGainDb: gainDb,
-        createInput: () => source.handle.createReadStream({ autoClose: false })
-      });
-    } finally {
-      await source.handle.close().catch(() => undefined);
-    }
+    const { prepared, transcoded } = await transcodeCacheMaintenance.withTranscode(async () => {
+      const source = await openRegularFileInside(libraryRoot, track.filePath);
+      let prepared;
+      try {
+        prepared = await transcodeManager.prepare({
+          trackId: track.id,
+          sourceSize: source.stat.size,
+          sourceMtimeMs: source.stat.mtimeMs,
+          quality,
+          normalizationGainDb: gainDb,
+          createInput: () => source.handle.createReadStream({ autoClose: false })
+        });
+      } finally {
+        await source.handle.close().catch(() => undefined);
+      }
+      return {
+        prepared,
+        transcoded: await open(prepared.path, 'r')
+      };
+    });
 
-    const transcoded = await open(prepared.path, 'r');
     const info = await transcoded.stat();
     if (!info.isFile() || info.size <= 0) {
       await transcoded.close();
