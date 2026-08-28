@@ -1,0 +1,127 @@
+.administration-storage-card {
+  min-width: 0;
+}
+
+.administration-storage-list {
+  display: grid;
+  gap: 0;
+  margin: 0;
+}
+
+.administration-storage-list > div {
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid rgba(255,255,255,.05);
+}
+
+.administration-storage-list dt {
+  color: #7f8c97;
+  font-size: 10px;
+}
+
+.administration-storage-list dd {
+  margin: 0;
+  color: #dce5ec;
+  font-size: 10px;
+  font-weight: 650;
+  text-align: right;
+}
+
+.administration-cache-message {
+  margin: 0 0 10px;
+  padding: 9px 10px;
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 8px;
+  color: #9ba8b2;
+  background: rgba(255,255,255,.025);
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.administration-cache-message.is-success {
+  border-color: rgba(65,164,102,.22);
+  color: #9fddb5;
+  background: rgba(39,116,67,.1);
+}
+
+.administration-cache-message.is-error {
+  border-color: rgba(230,83,83,.22);
+  color: #efaaaa;
+  background: rgba(153,42,42,.08);
+}
+
+.administration-cache-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255,255,255,.05);
+}
+
+.administration-cache-actions small {
+  max-width: 470px;
+  color: #6f7d88;
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.administration-cache-actions button {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  padding: 0 11px;
+  border: 1px solid rgba(230,83,83,.18);
+  border-radius: 8px;
+  background: rgba(153,42,42,.06);
+  color: #e5a0a0;
+  font: inherit;
+  font-size: 9px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.administration-cache-actions button:hover:not(:disabled) {
+  color: #f2b5b5;
+  background: rgba(153,42,42,.1);
+}
+
+.administration-cache-actions button:disabled {
+  opacity: .42;
+  cursor: default;
+}
+
+.administration-cache-actions button svg {
+  width: 14px;
+  height: 14px;
+}
+
+@media (min-width: 700px) {
+  .administration-storage-card {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 520px) {
+  .administration-cache-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .administration-cache-actions button {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .administration-cache-actions .is-spinning {
+    animation: none;
+  }
+}
