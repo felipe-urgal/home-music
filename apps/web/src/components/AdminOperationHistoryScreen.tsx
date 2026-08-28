@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   AdminOperationHistoryItem,
   AdminOperationKind,
@@ -89,8 +89,10 @@ export function AdminOperationHistoryScreen({ onBack }: AdminOperationHistoryScr
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const requestSequence = useRef(0);
 
   const loadHistory = useCallback(async (background = false) => {
+    const requestId = ++requestSequence.current;
     if (background) setRefreshing(true); else setLoading(true);
     setError(null);
     try {
@@ -98,11 +100,14 @@ export function AdminOperationHistoryScreen({ onBack }: AdminOperationHistoryScr
         kind: kind || undefined,
         status: status || undefined
       });
+      if (requestId !== requestSequence.current) return;
       setItems(response.items);
       setSelectedId(current => current && response.items.some(item => item.id === current) ? current : null);
     } catch (error) {
+      if (requestId !== requestSequence.current) return;
       setError(error instanceof Error ? error.message : 'Não foi possível carregar o histórico operacional.');
     } finally {
+      if (requestId !== requestSequence.current) return;
       if (background) setRefreshing(false); else setLoading(false);
     }
   }, [kind, status]);
@@ -113,6 +118,7 @@ export function AdminOperationHistoryScreen({ onBack }: AdminOperationHistoryScr
     () => items.find(item => item.id === selectedId) ?? null,
     [items, selectedId]
   );
+  const selectedCounts = selected ? scanCounts(selected) : null;
 
   return (
     <section className="my-account-screen admin-operation-history-screen" aria-labelledby="admin-operation-history-title">
@@ -214,12 +220,12 @@ export function AdminOperationHistoryScreen({ onBack }: AdminOperationHistoryScr
                   <div><dt>Início</dt><dd>{formatDate(selected.startedAt || selected.createdAt)}</dd></div>
                   <div><dt>Fim</dt><dd>{formatDate(selected.finishedAt)}</dd></div>
                   <div><dt>Duração</dt><dd>{formatDuration(selected.durationMs, selected.status)}</dd></div>
-                  <div><dt>Retry</dt><dd>{selected.canRetry ? 'Disponível' : 'Não disponível'}</dd></div>
+                  <div><dt>Nova tentativa</dt><dd>{selected.canRetry ? 'Disponível' : 'Não disponível'}</dd></div>
                 </dl>
 
-                {scanCounts(selected) && (
+                {selectedCounts && (
                   <dl className="admin-operation-detail__counts">
-                    {scanCounts(selected)!.map(([label, value]) => (
+                    {selectedCounts.map(([label, value]) => (
                       <div key={label}><dt>{label}</dt><dd>{value?.toLocaleString('pt-BR') ?? '—'}</dd></div>
                     ))}
                   </dl>
