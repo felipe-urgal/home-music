@@ -218,7 +218,7 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
             </button>
             <button type="button" onClick={() => setView('metadata')}>
               <span className="my-account-card__icon"><Database /></span>
-              <span><strong>Metadados</strong><small>Corrija título, artista e álbum sem modificar o arquivo original.</small></span>
+              <span><strong>Metadados</strong><small>Corrija texto e capa sem modificar o arquivo de áudio original.</small></span>
               <ChevronRight />
             </button>
             <button type="button" onClick={() => setView('quarantine')}>
