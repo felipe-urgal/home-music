@@ -1,10 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Track } from '@home-music/shared';
-import { ArrowDown, ArrowUp, ArrowUpDown, Pause, Play, Trash2, X } from 'lucide-react';
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  CheckCircle2,
+  Download,
+  LoaderCircle,
+  Pause,
+  Play,
+  Trash2,
+  X
+} from 'lucide-react';
 import type { TrackSort } from '../library-utils';
 import { Artwork } from './Artwork';
 
 type SortableColumn = 'title' | 'artist' | 'album';
+
+const EMPTY_TRACK_IDS: ReadonlySet<string> = new Set();
 
 type DesktopTrackTableProps = {
   tracks: Track[];
@@ -15,6 +28,11 @@ type DesktopTrackTableProps = {
   onSort: (sort: TrackSort) => void;
   onPlayTrack: (track: Track, context: Track[]) => void;
   onRemove?: (trackId: string) => void;
+  offlineSupported?: boolean;
+  downloadedIds?: ReadonlySet<string>;
+  downloadingIds?: ReadonlySet<string>;
+  onDownload?: (track: Track) => Promise<void>;
+  onRemoveDownload?: (track: Track) => Promise<void>;
 };
 
 function formatDuration(value: number | null) {
@@ -86,13 +104,26 @@ export function DesktopTrackTable({
   sort,
   onSort,
   onPlayTrack,
-  onRemove
+  onRemove,
+  offlineSupported = false,
+  downloadedIds = EMPTY_TRACK_IDS,
+  downloadingIds = EMPTY_TRACK_IDS,
+  onDownload,
+  onRemoveDownload
 }: DesktopTrackTableProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const visibleIds = useMemo(() => new Set(tracks.map(track => track.id)), [tracks]);
   const selectedTracks = useMemo(() => tracks.filter(track => selectedIds.has(track.id)), [selectedIds, tracks]);
+  const downloadableSelectedTracks = useMemo(() => selectedTracks.filter(track => (
+    !downloadedIds.has(track.id) && !downloadingIds.has(track.id)
+  )), [downloadedIds, downloadingIds, selectedTracks]);
+  const selectedDownloadingCount = useMemo(() => selectedTracks.reduce((count, track) => (
+    count + (downloadingIds.has(track.id) ? 1 : 0)
+  ), 0), [downloadingIds, selectedTracks]);
   const allSelected = tracks.length > 0 && selectedTracks.length === tracks.length;
   const mixedSelection = selectedTracks.length > 0 && !allSelected;
+  const offlineActionsAvailable = offlineSupported && Boolean(onDownload) && Boolean(onRemoveDownload);
+  const hasActions = Boolean(onRemove) || offlineActionsAvailable;
 
   useEffect(() => {
     setSelectedIds(currentSelection => {
@@ -120,6 +151,23 @@ export function DesktopTrackTable({
     if (first) onPlayTrack(first, selectedTracks);
   }
 
+  function downloadSelection() {
+    if (!onDownload || downloadableSelectedTracks.length === 0) return;
+    void Promise.allSettled(downloadableSelectedTracks.map(track => onDownload(track)));
+  }
+
+  function runOfflineAction(track: Track) {
+    if (!offlineActionsAvailable || !onDownload || !onRemoveDownload) return;
+    const operation = downloadedIds.has(track.id) ? onRemoveDownload(track) : onDownload(track);
+    void operation.catch(() => undefined);
+  }
+
+  function bulkDownloadLabel() {
+    if (downloadableSelectedTracks.length > 0) return `Baixar ${downloadableSelectedTracks.length}`;
+    if (selectedDownloadingCount > 0) return 'Baixando…';
+    return 'Disponível offline';
+  }
+
   return (
     <div className="desktop-library-table-shell" data-testid="desktop-library-table">
       <div className="desktop-bulk-toolbar" data-testid="desktop-bulk-toolbar" aria-live="polite">
@@ -130,6 +178,25 @@ export function DesktopTrackTable({
         {selectedTracks.length > 0 && (
           <div className="desktop-bulk-toolbar__actions">
             <button type="button" onClick={playSelection}><Play />Tocar seleção</button>
+            {offlineActionsAvailable && (
+              <button
+                type="button"
+                disabled={downloadableSelectedTracks.length === 0}
+                aria-label={downloadableSelectedTracks.length > 0
+                  ? `Baixar ${downloadableSelectedTracks.length} ${downloadableSelectedTracks.length === 1 ? 'faixa selecionada' : 'faixas selecionadas'} para uso offline`
+                  : selectedDownloadingCount > 0
+                    ? 'Downloads selecionados em andamento'
+                    : 'Todas as faixas selecionadas já estão disponíveis offline'}
+                onClick={downloadSelection}
+              >
+                {selectedDownloadingCount > 0 && downloadableSelectedTracks.length === 0
+                  ? <LoaderCircle className="desktop-offline-spinner" />
+                  : downloadableSelectedTracks.length === 0
+                    ? <CheckCircle2 />
+                    : <Download />}
+                {bulkDownloadLabel()}
+              </button>
+            )}
             <button type="button" aria-label="Limpar seleção" onClick={() => setSelectedIds(new Set())}><X />Limpar</button>
           </div>
         )}
@@ -147,13 +214,15 @@ export function DesktopTrackTable({
             <th className="desktop-library-table__folder" scope="col">Pasta</th>
             <th className="desktop-library-table__format" scope="col">Formato</th>
             <th className="desktop-library-table__duration" scope="col">Duração</th>
-            {onRemove && <th className="desktop-library-table__actions" scope="col">Ações</th>}
+            {hasActions && <th className="desktop-library-table__actions" scope="col">Ações</th>}
           </tr>
         </thead>
         <tbody>
           {tracks.map(track => {
             const isCurrent = track.id === current?.id;
             const selected = selectedIds.has(track.id);
+            const downloaded = downloadedIds.has(track.id);
+            const downloading = downloadingIds.has(track.id);
             return (
               <tr className={`${isCurrent ? 'is-current' : ''} ${selected ? 'is-selected' : ''}`.trim()} key={track.id}>
                 <td className="desktop-library-table__select">
@@ -186,17 +255,39 @@ export function DesktopTrackTable({
                 <td className="desktop-library-table__text-cell desktop-library-table__folder" title={track.folderPath || track.folder}>{track.folder || '—'}</td>
                 <td className="desktop-library-table__format">{track.format || '—'}</td>
                 <td className="desktop-library-table__duration">{formatDuration(track.duration)}</td>
-                {onRemove && (
+                {hasActions && (
                   <td className="desktop-library-table__actions">
                     <div>
-                      <button
-                        className="desktop-library-table__action"
-                        type="button"
-                        aria-label={`Remover ${track.title} da playlist`}
-                        onClick={() => onRemove(track.id)}
-                      >
-                        <Trash2 />
-                      </button>
+                      {offlineActionsAvailable && (
+                        <button
+                          className={`desktop-library-table__action desktop-library-table__action--offline ${downloaded ? 'is-downloaded' : ''} ${downloading ? 'is-loading' : ''}`.trim()}
+                          type="button"
+                          disabled={downloading}
+                          aria-label={downloading
+                            ? `Baixando ${track.title} para uso offline`
+                            : downloaded
+                              ? `Remover download offline de ${track.title}`
+                              : `Baixar ${track.title} para uso offline`}
+                          aria-pressed={downloaded}
+                          onClick={() => runOfflineAction(track)}
+                        >
+                          {downloading
+                            ? <LoaderCircle className="desktop-offline-spinner" />
+                            : downloaded
+                              ? <CheckCircle2 />
+                              : <Download />}
+                        </button>
+                      )}
+                      {onRemove && (
+                        <button
+                          className="desktop-library-table__action"
+                          type="button"
+                          aria-label={`Remover ${track.title} da playlist`}
+                          onClick={() => onRemove(track.id)}
+                        >
+                          <Trash2 />
+                        </button>
+                      )}
                     </div>
                   </td>
                 )}
