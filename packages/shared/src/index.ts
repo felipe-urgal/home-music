@@ -108,6 +108,35 @@ export type Track = {
   replayGainAlbumDb?: number | null;
 };
 
+export type EditableTrackMetadata = {
+  title: string;
+  artist: string;
+  album: string;
+  albumArtist: string;
+};
+
+export type TrackMetadataOverride = {
+  title: string | null;
+  artist: string | null;
+  album: string | null;
+  albumArtist: string | null;
+  updatedAt: string | null;
+};
+
+export type TrackMetadataOverridePatch = {
+  title?: string | null;
+  artist?: string | null;
+  album?: string | null;
+  albumArtist?: string | null;
+};
+
+export type AdminTrackMetadataResponse = {
+  trackId: string;
+  physical: EditableTrackMetadata;
+  override: TrackMetadataOverride;
+  effective: EditableTrackMetadata;
+};
+
 export type AdminTrack = Track & {
   enabled: boolean;
 };

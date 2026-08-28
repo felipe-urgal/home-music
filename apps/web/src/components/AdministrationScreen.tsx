@@ -20,9 +20,10 @@ import { getAdminLibraryOverview } from '../admin-library-client';
 import { AdminImportMediaScreen } from './AdminImportMediaScreen';
 import { AdminMediaQuarantineScreen } from './AdminMediaQuarantineScreen';
 import { AdminTrackAvailabilityScreen } from './AdminTrackAvailabilityScreen';
+import { AdminTrackMetadataScreen } from './AdminTrackMetadataScreen';
 import { AdminUsersScreen } from './AdminUsersScreen';
 
-type AdministrationView = 'overview' | 'tracks' | 'quarantine' | 'import' | 'users';
+type AdministrationView = 'overview' | 'tracks' | 'metadata' | 'quarantine' | 'import' | 'users';
 
 type AdministrationScreenProps = {
   currentUser: AuthenticatedUser;
@@ -80,6 +81,10 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
 
   if (view === 'tracks') {
     return <AdminTrackAvailabilityScreen onBack={() => setView('overview')} />;
+  }
+
+  if (view === 'metadata') {
+    return <AdminTrackMetadataScreen onBack={() => setView('overview')} />;
   }
 
   if (view === 'quarantine') {
@@ -209,6 +214,11 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
             <button type="button" onClick={() => setView('tracks')}>
               <span className="my-account-card__icon"><ListMusic /></span>
               <span><strong>Gerenciar músicas</strong><small>Desative, reative ou mova faixas para a lixeira com segurança.</small></span>
+              <ChevronRight />
+            </button>
+            <button type="button" onClick={() => setView('metadata')}>
+              <span className="my-account-card__icon"><Database /></span>
+              <span><strong>Metadados</strong><small>Corrija título, artista e álbum sem modificar o arquivo original.</small></span>
               <ChevronRight />
             </button>
             <button type="button" onClick={() => setView('quarantine')}>
