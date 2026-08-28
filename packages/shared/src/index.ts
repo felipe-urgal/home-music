@@ -164,6 +164,24 @@ export type AdminTracksResponse = {
   inactive: number;
 };
 
+export type AdminTrackFileLocation = {
+  trackId: string;
+  relativePath: string;
+  folderPath: string;
+  fileName: string;
+};
+
+export type AdminTrackMoveRequest = {
+  folderPath: string;
+  fileName: string;
+};
+
+export type AdminTrackMoveResponse = {
+  track: AdminTrack;
+  location: AdminTrackFileLocation;
+  moved: boolean;
+};
+
 export type AdminQuarantinedTrack = Track & {
   quarantinedAt: string;
   originalPath: string;
