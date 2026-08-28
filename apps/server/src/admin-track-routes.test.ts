@@ -243,7 +243,7 @@ test('rotas de capa validam bytes, expõem versão efetiva e restauram a fonte f
 
   const restoredLibrary = await app.inject({ method: 'GET', url: '/api/library' });
   assert.equal(restoredLibrary.json().tracks[0].hasCover, false);
-  assert.equal(restoredLibrary.json().coverVersion, undefined);
+  assert.equal(restoredLibrary.json().tracks[0].coverVersion, undefined);
   assert.equal(restoredLibrary.json().revision, 2);
 
   const missingCover = await app.inject({ method: 'GET', url: '/api/tracks/track-a/cover' });
