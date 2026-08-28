@@ -9,6 +9,7 @@ import './artwork.css';
 import './offline.css';
 import './library-controls.css';
 import './auth.css';
+import './account-password.css';
 import './admin-users.css';
 import './admin-users-entry.css';
 import './admin-tracks.css';
