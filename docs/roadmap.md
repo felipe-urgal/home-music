@@ -171,13 +171,15 @@ Critério de conclusão: um `user` pode reproduzir e administrar somente seus da
 
 Objetivo: permitir administrar a coleção pelo próprio Home Music, com operações seguras e reversíveis sempre que possível. Toda a área e suas APIs são exclusivas de `admin`, apoiadas na autorização da Fase 7.5.
 
+Detalhe das ações administrativas em lote e seus limites de segurança: [admin-bulk-actions.md](admin-bulk-actions.md).
+
 - [x] Criar área `Administração` separada da experiência de reprodução e protegida por role `admin`
 - [x] Criar visão geral com quantidade de faixas, armazenamento, problemas e estado do scanner
 - [x] Criar ponto de entrada `Importar mídia` integrado ao pipeline da Fase 9
 - [x] Permitir desativar/reativar músicas sem remover o arquivo físico
 - [x] Criar lixeira/quarentena com restauração antes da exclusão permanente
 - [x] Permitir exclusão física somente após confirmação explícita
-- [ ] Adicionar ações em lote para ativar, desativar, mover, excluir, favoritar e adicionar a playlists
+- [x] Adicionar ações em lote para ativar/desativar, quarentena/restauração/exclusão, favoritar e adicionar a playlists; movimentação física segura permanece no item específico abaixo
 - [ ] Permitir editar metadados por override não destrutivo no SQLite
 - [ ] Avaliar escrita opcional de metadados de volta ao arquivo somente como operação explícita
 - [ ] Permitir adicionar/substituir capa sem destruir o arquivo original por padrão

@@ -39,7 +39,20 @@ export async function restoreAdminQuarantinedTrack(trackId: string) {
   return payload.track;
 }
 
-export async function deleteAdminQuarantinedTrack(trackId: string) {
+export async function refreshLibraryAfterPermanentDelete() {
+  const scanResponse = await apiFetch('/api/library/scan', {
+    method: 'POST',
+    headers: mutationHeaders
+  }).catch(() => null);
+  if (!scanResponse?.ok) {
+    throw new Error('Arquivo excluído permanentemente, mas o cleanup da biblioteca não pôde ser concluído. Atualize a biblioteca.');
+  }
+}
+
+export async function deleteAdminQuarantinedTrack(
+  trackId: string,
+  options: { refreshLibrary?: boolean } = {}
+) {
   const response = await apiFetch(`/api/admin/quarantine/${encodeURIComponent(trackId)}`, {
     method: 'DELETE',
     headers: {
@@ -50,11 +63,7 @@ export async function deleteAdminQuarantinedTrack(trackId: string) {
   });
   if (!response.ok) throw new Error(await responseError(response));
 
-  const scanResponse = await apiFetch('/api/library/scan', {
-    method: 'POST',
-    headers: mutationHeaders
-  }).catch(() => null);
-  if (!scanResponse?.ok) {
-    throw new Error('Arquivo excluído permanentemente, mas o cleanup da biblioteca não pôde ser concluído. Atualize a biblioteca.');
+  if (options.refreshLibrary !== false) {
+    await refreshLibraryAfterPermanentDelete();
   }
 }

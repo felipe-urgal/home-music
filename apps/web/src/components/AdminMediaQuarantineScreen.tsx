@@ -8,15 +8,23 @@ import {
   Search,
   Trash2
 } from 'lucide-react';
+import { runAdminBatch, summarizeAdminBatch } from '../admin-batch';
 import {
   deleteAdminQuarantinedTrack,
   listAdminQuarantine,
+  refreshLibraryAfterPermanentDelete,
   restoreAdminQuarantinedTrack
 } from '../admin-quarantine-client';
+import { useAdminBulkSelection } from '../useAdminBulkSelection';
+import { AdminBulkToolbar } from './AdminBulkToolbar';
 
 type AdminMediaQuarantineScreenProps = {
   onBack: () => void;
 };
+
+type BatchFeedback = { message: string; error: boolean };
+
+const BULK_DELETE_CONFIRMATION = 'EXCLUIR PERMANENTEMENTE';
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : 'Não foi possível concluir a operação.';
@@ -36,6 +44,9 @@ export function AdminMediaQuarantineScreen({ onBack }: AdminMediaQuarantineScree
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [busyTrackId, setBusyTrackId] = useState<string | null>(null);
+  const [batchBusy, setBatchBusy] = useState(false);
+  const [batchProgress, setBatchProgress] = useState({ completed: 0, total: 0 });
+  const [batchFeedback, setBatchFeedback] = useState<BatchFeedback | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
 
@@ -45,6 +56,8 @@ export function AdminMediaQuarantineScreen({ onBack }: AdminMediaQuarantineScree
     return tracks.filter(track => [track.title, track.artist, track.album, track.originalPath]
       .some(value => value.toLocaleLowerCase('pt-BR').includes(normalized)));
   }, [query, tracks]);
+  const selection = useAdminBulkSelection(tracks, filteredTracks);
+  const operationBusy = batchBusy || busyTrackId !== null;
 
   async function loadTracks(background = false) {
     if (background) setRefreshing(true); else setLoading(true);
@@ -62,9 +75,10 @@ export function AdminMediaQuarantineScreen({ onBack }: AdminMediaQuarantineScree
   useEffect(() => { void loadTracks(); }, []);
 
   async function restoreTrack(track: AdminQuarantinedTrack) {
-    if (busyTrackId) return;
+    if (operationBusy) return;
     setBusyTrackId(track.id);
     setError(null);
+    setBatchFeedback(null);
     try {
       await restoreAdminQuarantinedTrack(track.id);
       setTracks(items => items.filter(item => item.id !== track.id));
@@ -77,7 +91,7 @@ export function AdminMediaQuarantineScreen({ onBack }: AdminMediaQuarantineScree
   }
 
   async function deleteTrack(track: AdminQuarantinedTrack) {
-    if (busyTrackId) return;
+    if (operationBusy) return;
     const confirmed = window.confirm(
       `Excluir “${track.title}” permanentemente?\n\nO arquivo físico será apagado e esta ação não poderá ser desfeita.`
     );
@@ -85,6 +99,7 @@ export function AdminMediaQuarantineScreen({ onBack }: AdminMediaQuarantineScree
 
     setBusyTrackId(track.id);
     setError(null);
+    setBatchFeedback(null);
     try {
       await deleteAdminQuarantinedTrack(track.id);
       setTracks(items => items.filter(item => item.id !== track.id));
@@ -93,6 +108,75 @@ export function AdminMediaQuarantineScreen({ onBack }: AdminMediaQuarantineScree
       void loadTracks(true);
     } finally {
       setBusyTrackId(null);
+    }
+  }
+
+  async function restoreSelected() {
+    if (operationBusy || selection.selectedItems.length === 0) return;
+    const selected = selection.selectedItems;
+    setBatchBusy(true);
+    setBatchProgress({ completed: 0, total: selected.length });
+    setBatchFeedback(null);
+    setError(null);
+    try {
+      const result = await runAdminBatch(selected, track => restoreAdminQuarantinedTrack(track.id), {
+        concurrency: 4,
+        onProgress: (completed, total) => setBatchProgress({ completed, total })
+      });
+      const succeededIds = new Set(result.succeeded.map(track => track.id));
+      setTracks(items => items.filter(item => !succeededIds.has(item.id)));
+      selection.retain(result.failed.map(failure => failure.item.id));
+      setBatchFeedback({
+        message: summarizeAdminBatch('Restauração', result),
+        error: result.failed.length > 0
+      });
+    } finally {
+      setBatchBusy(false);
+    }
+  }
+
+  async function deleteSelected() {
+    if (operationBusy || selection.selectedItems.length === 0) return;
+    const selected = selection.selectedItems;
+    const typed = window.prompt(
+      `Excluir permanentemente ${selected.length} ${selected.length === 1 ? 'música' : 'músicas'}?\n\nOs arquivos físicos serão apagados sem possibilidade de restauração.\n\nDigite ${BULK_DELETE_CONFIRMATION} para confirmar.`
+    );
+    if (typed?.trim() !== BULK_DELETE_CONFIRMATION) return;
+
+    setBatchBusy(true);
+    setBatchProgress({ completed: 0, total: selected.length });
+    setBatchFeedback(null);
+    setError(null);
+    try {
+      const result = await runAdminBatch(
+        selected,
+        track => deleteAdminQuarantinedTrack(track.id, { refreshLibrary: false }),
+        {
+          concurrency: 3,
+          onProgress: (completed, total) => setBatchProgress({ completed, total })
+        }
+      );
+
+      const succeededIds = new Set(result.succeeded.map(track => track.id));
+      setTracks(items => items.filter(item => !succeededIds.has(item.id)));
+      selection.retain(result.failed.map(failure => failure.item.id));
+
+      let refreshError: string | null = null;
+      if (result.succeeded.length > 0) {
+        try {
+          await refreshLibraryAfterPermanentDelete();
+        } catch (error) {
+          refreshError = errorMessage(error);
+        }
+      }
+
+      const summary = summarizeAdminBatch('Exclusão permanente', result);
+      setBatchFeedback({
+        message: refreshError ? `${summary} ${refreshError}` : summary,
+        error: result.failed.length > 0 || Boolean(refreshError)
+      });
+    } finally {
+      setBatchBusy(false);
     }
   }
 
@@ -131,7 +215,7 @@ export function AdminMediaQuarantineScreen({ onBack }: AdminMediaQuarantineScree
             className="admin-tracks-refresh"
             type="button"
             aria-label="Atualizar lixeira"
-            disabled={loading || refreshing}
+            disabled={loading || refreshing || operationBusy}
             onClick={() => void loadTracks(true)}
           >
             <RefreshCw className={refreshing ? 'is-spinning' : ''} />
@@ -139,6 +223,11 @@ export function AdminMediaQuarantineScreen({ onBack }: AdminMediaQuarantineScree
         </section>
 
         {error && <div className="admin-tracks-message is-error" role="alert">{error}</div>}
+        {batchFeedback && (
+          <div className={`admin-tracks-message ${batchFeedback.error ? 'is-error' : 'is-success'}`} role={batchFeedback.error ? 'alert' : 'status'}>
+            {batchFeedback.message}
+          </div>
+        )}
 
         {loading ? (
           <div className="admin-tracks-state" role="status"><LoaderCircle className="is-spinning" /> Carregando lixeira…</div>
@@ -146,11 +235,46 @@ export function AdminMediaQuarantineScreen({ onBack }: AdminMediaQuarantineScree
           <div className="admin-tracks-state"><Trash2 /> {tracks.length === 0 ? 'A lixeira está vazia.' : 'Nenhuma música encontrada.'}</div>
         ) : (
           <section className="admin-quarantine-list" aria-label="Músicas na lixeira">
+            <AdminBulkToolbar
+              selectedCount={selection.selectedItems.length}
+              allVisibleSelected={selection.allVisibleSelected}
+              mixedVisibleSelection={selection.mixedVisibleSelection}
+              busy={operationBusy}
+              completed={batchProgress.completed}
+              total={batchProgress.total}
+              onToggleVisible={selection.toggleVisible}
+              onClear={selection.clear}
+            >
+              <button
+                type="button"
+                disabled={operationBusy}
+                onClick={() => void restoreSelected()}
+              >
+                <RotateCcw /> Restaurar {selection.selectedItems.length}
+              </button>
+              <button
+                className="is-danger"
+                type="button"
+                disabled={operationBusy}
+                onClick={() => void deleteSelected()}
+              >
+                <Trash2 /> Excluir {selection.selectedItems.length}
+              </button>
+            </AdminBulkToolbar>
+
             <div className="admin-tracks-list__count">
               {filteredTracks.length.toLocaleString('pt-BR')} {filteredTracks.length === 1 ? 'música' : 'músicas'} na lixeira
             </div>
             {filteredTracks.map(track => (
-              <article className="admin-quarantine-row" key={track.id}>
+              <article className={`admin-quarantine-row ${selection.selectedIds.has(track.id) ? 'is-selected' : ''}`.trim()} key={track.id}>
+                <input
+                  className="admin-quarantine-row__select"
+                  type="checkbox"
+                  checked={selection.selectedIds.has(track.id)}
+                  disabled={operationBusy}
+                  aria-label={`Selecionar ${track.title}`}
+                  onChange={() => selection.toggle(track.id)}
+                />
                 <span className="admin-quarantine-row__icon"><Trash2 /></span>
                 <div className="admin-quarantine-row__body">
                   <strong>{track.title}</strong>
@@ -163,7 +287,7 @@ export function AdminMediaQuarantineScreen({ onBack }: AdminMediaQuarantineScree
                   <button
                     className="admin-quarantine-restore"
                     type="button"
-                    disabled={busyTrackId !== null}
+                    disabled={operationBusy}
                     onClick={() => void restoreTrack(track)}
                   >
                     {busyTrackId === track.id ? <LoaderCircle className="is-spinning" /> : <RotateCcw />}
@@ -172,7 +296,7 @@ export function AdminMediaQuarantineScreen({ onBack }: AdminMediaQuarantineScree
                   <button
                     className="admin-quarantine-delete"
                     type="button"
-                    disabled={busyTrackId !== null}
+                    disabled={operationBusy}
                     onClick={() => void deleteTrack(track)}
                   >
                     <Trash2 /> Excluir permanentemente

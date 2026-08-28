@@ -1,0 +1,236 @@
+.admin-tracks-message.is-success {
+  border-color: rgba(65,164,102,.22);
+  color: #9fddb5;
+  background: rgba(39,116,67,.1);
+}
+
+.admin-bulk-toolbar {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0,1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-bottom: 1px solid rgba(255,255,255,.055);
+  background: rgba(19,29,38,.72);
+}
+
+.admin-bulk-toolbar__selection,
+.admin-bulk-toolbar__status,
+.admin-bulk-toolbar__actions,
+.admin-bulk-toolbar__playlist {
+  display: flex;
+  align-items: center;
+}
+
+.admin-bulk-toolbar__selection {
+  gap: 7px;
+  min-width: 120px;
+  color: #9ba8b2;
+  font-size: 10px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.admin-bulk-toolbar input[type='checkbox'],
+.admin-track-row__select,
+.admin-quarantine-row__select {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: #78c0ff;
+  cursor: pointer;
+}
+
+.admin-bulk-toolbar input[type='checkbox']:disabled,
+.admin-track-row__select:disabled,
+.admin-quarantine-row__select:disabled {
+  cursor: default;
+}
+
+.admin-bulk-toolbar__actions {
+  min-width: 0;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.admin-bulk-toolbar__actions > button,
+.admin-bulk-toolbar__playlist button,
+.admin-bulk-toolbar__status button,
+.admin-bulk-toolbar__playlist select {
+  min-height: 30px;
+  border: 1px solid rgba(255,255,255,.075);
+  border-radius: 8px;
+  background: rgba(255,255,255,.03);
+  color: #aab5be;
+  font: inherit;
+  font-size: 9px;
+  font-weight: 650;
+}
+
+.admin-bulk-toolbar__actions > button,
+.admin-bulk-toolbar__playlist button,
+.admin-bulk-toolbar__status button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 9px;
+  cursor: pointer;
+}
+
+.admin-bulk-toolbar__actions button svg,
+.admin-bulk-toolbar__status button svg {
+  width: 13px;
+  height: 13px;
+}
+
+.admin-bulk-toolbar__actions button:hover:not(:disabled),
+.admin-bulk-toolbar__playlist button:hover:not(:disabled),
+.admin-bulk-toolbar__status button:hover:not(:disabled) {
+  color: #d8e0e7;
+  background: rgba(255,255,255,.055);
+}
+
+.admin-bulk-toolbar__actions button:focus-visible,
+.admin-bulk-toolbar__playlist button:focus-visible,
+.admin-bulk-toolbar__playlist select:focus-visible,
+.admin-bulk-toolbar__status button:focus-visible,
+.admin-track-row__select:focus-visible,
+.admin-quarantine-row__select:focus-visible {
+  outline: 2px solid rgba(120,192,255,.72);
+  outline-offset: 2px;
+}
+
+.admin-bulk-toolbar__actions button:disabled,
+.admin-bulk-toolbar__playlist button:disabled,
+.admin-bulk-toolbar__playlist select:disabled,
+.admin-bulk-toolbar__status button:disabled {
+  opacity: .38;
+  cursor: default;
+}
+
+.admin-bulk-toolbar__actions .is-danger {
+  border-color: rgba(230,83,83,.18);
+  color: #e5a0a0;
+  background: rgba(153,42,42,.06);
+}
+
+.admin-bulk-toolbar__playlist {
+  gap: 4px;
+}
+
+.admin-bulk-toolbar__playlist select {
+  max-width: 150px;
+  padding: 0 26px 0 8px;
+}
+
+.admin-bulk-toolbar__status {
+  justify-content: flex-end;
+  gap: 7px;
+  min-width: 54px;
+  color: #8996a1;
+  font-size: 9px;
+}
+
+.admin-bulk-toolbar__status > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.admin-bulk-toolbar__status > span svg {
+  width: 13px;
+  height: 13px;
+}
+
+.admin-bulk-toolbar__status button {
+  width: 30px;
+  padding: 0;
+}
+
+.admin-track-row {
+  grid-template-columns: 18px 32px minmax(0,1fr) auto auto;
+}
+
+.admin-track-row.is-selected,
+.admin-quarantine-row.is-selected {
+  background: rgba(43,119,180,.075);
+}
+
+.admin-quarantine-row {
+  grid-template-columns: 18px 34px minmax(0,1fr) auto;
+}
+
+@media (max-width: 760px) {
+  .admin-bulk-toolbar {
+    grid-template-columns: minmax(0,1fr) auto;
+  }
+
+  .admin-bulk-toolbar__selection {
+    min-width: 0;
+  }
+
+  .admin-bulk-toolbar__actions {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .admin-bulk-toolbar__status {
+    grid-column: 2;
+    grid-row: 1;
+  }
+}
+
+@media (max-width: 680px) {
+  .admin-track-row {
+    grid-template-columns: 18px 30px minmax(0,1fr);
+    align-items: start;
+  }
+
+  .admin-track-row__body {
+    grid-column: 3;
+  }
+
+  .admin-track-row__status {
+    display: none;
+  }
+
+  .admin-track-row__actions {
+    grid-column: 3;
+    justify-self: start;
+    flex-wrap: wrap;
+  }
+
+  .admin-quarantine-row {
+    grid-template-columns: 18px 30px minmax(0,1fr);
+    align-items: start;
+  }
+
+  .admin-quarantine-row__body {
+    grid-column: 3;
+  }
+
+  .admin-quarantine-row__actions {
+    grid-column: 3;
+    flex-wrap: wrap;
+    margin-top: 4px;
+  }
+
+  .admin-bulk-toolbar__actions > button,
+  .admin-bulk-toolbar__playlist {
+    flex: 1 1 auto;
+  }
+
+  .admin-bulk-toolbar__playlist select {
+    flex: 1 1 110px;
+    max-width: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-bulk-toolbar .is-spinning {
+    animation: none;
+  }
+}
