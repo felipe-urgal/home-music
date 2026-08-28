@@ -53,7 +53,7 @@ test('override de metadata não altera arquivo e sobrevive a rescan', async ({ p
     const editedTitle = `E2E Track Override ${testInfo.retry}`;
     await titleInput.fill(editedTitle);
     await dialog.getByRole('button', { name: 'Salvar override', exact: true }).click();
-    await expect(page.getByRole('status')).toContainText('arquivo original não foi alterado');
+    await expect(dialog.getByRole('status')).toContainText('arquivo original não foi alterado');
     await expect(titleInput).toHaveValue(editedTitle);
 
     const effectiveResponse = await request.get('/api/library');
@@ -81,7 +81,7 @@ test('override de metadata não altera arquivo e sobrevive a rescan', async ({ p
     page.once('dialog', confirmation => confirmation.accept());
     await dialog.getByRole('button', { name: 'Restaurar arquivo', exact: true }).click();
     await expect(titleInput).toHaveValue(track.title);
-    await expect(page.getByRole('status')).toContainText('voltou a exibir os metadados do arquivo');
+    await expect(dialog.getByRole('status')).toContainText('voltou a exibir os metadados do arquivo');
 
     const restoredResponse = await request.get('/api/library');
     const restored = await restoredResponse.json() as { tracks: Array<{ id: string; title: string }> };
