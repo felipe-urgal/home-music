@@ -16,7 +16,12 @@ import {
   Trash2,
   Users
 } from 'lucide-react';
-import { getAdminLibraryOverview } from '../admin-library-client';
+import {
+  clearAdminTranscodeCache,
+  getAdminLibraryOverview,
+  getAdminTranscodeCache,
+  type AdminTranscodeCacheStatus
+} from '../admin-library-client';
 import { AdminImportMediaScreen } from './AdminImportMediaScreen';
 import { AdminMediaQuarantineScreen } from './AdminMediaQuarantineScreen';
 import { AdminTrackAvailabilityScreen } from './AdminTrackAvailabilityScreen';
@@ -28,6 +33,11 @@ type AdministrationView = 'overview' | 'tracks' | 'metadata' | 'quarantine' | 'i
 type AdministrationScreenProps = {
   currentUser: AuthenticatedUser;
   onBack: () => void;
+};
+
+type CacheFeedback = {
+  message: string;
+  error: boolean;
 };
 
 function formatBytes(bytes: number) {
@@ -54,11 +64,24 @@ function formatAutoRescan(scanner: AdminLibraryOverviewResponse['scanner']) {
   return `Automático a cada ${new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 }).format(minutes)} min`;
 }
 
+function formatCacheActivity(cache: AdminTranscodeCacheStatus) {
+  if (cache.active === 0 && cache.pending === 0) return 'Ocioso';
+  const parts: string[] = [];
+  if (cache.active > 0) parts.push(`${cache.active} ${cache.active === 1 ? 'ativo' : 'ativos'}`);
+  if (cache.pending > 0) parts.push(`${cache.pending} ${cache.pending === 1 ? 'pendente' : 'pendentes'}`);
+  return parts.join(' · ');
+}
+
 export function AdministrationScreen({ currentUser, onBack }: AdministrationScreenProps) {
   const [view, setView] = useState<AdministrationView>('overview');
   const [overview, setOverview] = useState<AdminLibraryOverviewResponse | null>(null);
+  const [cache, setCache] = useState<AdminTranscodeCacheStatus | null>(null);
   const [loadingOverview, setLoadingOverview] = useState(true);
+  const [loadingCache, setLoadingCache] = useState(true);
+  const [clearingCache, setClearingCache] = useState(false);
   const [overviewError, setOverviewError] = useState<string | null>(null);
+  const [cacheError, setCacheError] = useState<string | null>(null);
+  const [cacheFeedback, setCacheFeedback] = useState<CacheFeedback | null>(null);
 
   const loadOverview = useCallback(async () => {
     setLoadingOverview(true);
@@ -72,10 +95,60 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
     }
   }, []);
 
+  const loadCache = useCallback(async () => {
+    setLoadingCache(true);
+    setCacheError(null);
+    try {
+      setCache(await getAdminTranscodeCache());
+    } catch (error) {
+      setCacheError(error instanceof Error ? error.message : 'Não foi possível carregar o cache de transcoding.');
+    } finally {
+      setLoadingCache(false);
+    }
+  }, []);
+
+  const refreshOverview = useCallback(async () => {
+    await Promise.all([loadOverview(), loadCache()]);
+  }, [loadCache, loadOverview]);
+
   useEffect(() => {
     if (currentUser.role !== 'admin') return;
-    void loadOverview();
-  }, [currentUser.role, loadOverview]);
+    void refreshOverview();
+  }, [currentUser.role, refreshOverview]);
+
+  async function clearTranscodeCache() {
+    if (clearingCache) return;
+    const confirmed = window.confirm(
+      'Limpar o cache de transcoding?\n\nSomente arquivos derivados serão removidos. As músicas originais não serão alteradas.'
+    );
+    if (!confirmed) return;
+
+    setClearingCache(true);
+    setCacheError(null);
+    setCacheFeedback(null);
+    try {
+      const result = await clearAdminTranscodeCache();
+      setCache(result.cache);
+      if (result.failedEntries > 0) {
+        setCacheFeedback({
+          message: `Cache limpo parcialmente: ${formatBytes(result.freedBytes)} liberados e ${result.failedEntries} ${result.failedEntries === 1 ? 'arquivo não pôde' : 'arquivos não puderam'} ser removido${result.failedEntries === 1 ? '' : 's'}.`,
+          error: true
+        });
+      } else if (result.freedBytes > 0) {
+        setCacheFeedback({
+          message: `Cache limpo: ${formatBytes(result.freedBytes)} liberados. Nenhuma música original foi alterada.`,
+          error: false
+        });
+      } else {
+        setCacheFeedback({ message: 'O cache já estava vazio.', error: false });
+      }
+    } catch (error) {
+      setCacheError(error instanceof Error ? error.message : 'Não foi possível limpar o cache de transcoding.');
+      await loadCache();
+    } finally {
+      setClearingCache(false);
+    }
+  }
 
   if (currentUser.role !== 'admin') return null;
 
@@ -105,6 +178,7 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
     : overview?.scanner.ready
       ? 'Pronto'
       : 'Atenção';
+  const cacheBusy = Boolean(cache && (cache.active > 0 || cache.pending > 0));
 
   return (
     <section className="my-account-screen administration-screen" aria-labelledby="administration-title">
@@ -136,10 +210,10 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
             <button
               type="button"
               aria-label="Atualizar visão geral"
-              disabled={loadingOverview}
-              onClick={() => void loadOverview()}
+              disabled={loadingOverview || loadingCache || clearingCache}
+              onClick={() => void refreshOverview()}
             >
-              <RefreshCw className={loadingOverview ? 'is-spinning' : ''} />
+              <RefreshCw className={loadingOverview || loadingCache ? 'is-spinning' : ''} />
             </button>
           </div>
 
@@ -162,9 +236,9 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
                   <div><small>Faixas</small><strong>{overview.tracks.total.toLocaleString('pt-BR')}</strong></div>
                 </article>
 
-                <article className="administration-metric" aria-label="Armazenamento da biblioteca">
+                <article className="administration-metric" aria-label="Armazenamento da biblioteca física">
                   <span className="administration-metric__icon"><HardDrive /></span>
-                  <div><small>Armazenamento</small><strong>{formatBytes(overview.storage.libraryBytes)}</strong></div>
+                  <div><small>Biblioteca física</small><strong>{formatBytes(overview.storage.libraryBytes)}</strong></div>
                 </article>
 
                 <article className={`administration-metric ${problemCount > 0 ? 'has-warning' : ''}`} aria-label="Problemas da biblioteca">
@@ -202,6 +276,41 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
                     <div><dt>Último scan</dt><dd>{formatScanDate(overview.scanner.scannedAt)}</dd></div>
                     <div><dt>Rescan</dt><dd>{formatAutoRescan(overview.scanner)}</dd></div>
                   </dl>
+                </article>
+
+                <article className="administration-detail-card administration-storage-card" aria-labelledby="administration-storage-title">
+                  <div className="administration-detail-card__heading">
+                    <HardDrive />
+                    <div><strong id="administration-storage-title">Armazenamento</strong><small>Biblioteca original e cache derivado de transcoding</small></div>
+                  </div>
+
+                  {cacheError && <div className="administration-cache-message is-error" role="alert">{cacheError}</div>}
+                  {cacheFeedback && (
+                    <div className={`administration-cache-message ${cacheFeedback.error ? 'is-error' : 'is-success'}`} role={cacheFeedback.error ? 'alert' : 'status'}>
+                      {cacheFeedback.message}
+                    </div>
+                  )}
+
+                  <dl className="administration-storage-list">
+                    <div><dt>Biblioteca física</dt><dd>{formatBytes(overview.storage.libraryBytes)}</dd></div>
+                    <div><dt>Cache atual</dt><dd>{cache ? formatBytes(cache.bytes) : loadingCache ? 'Carregando…' : 'Indisponível'}</dd></div>
+                    <div><dt>Limite configurado</dt><dd>{cache ? formatBytes(cache.limitBytes) : '—'}</dd></div>
+                    <div><dt>Arquivos em cache</dt><dd>{cache ? cache.entries.toLocaleString('pt-BR') : '—'}</dd></div>
+                    <div><dt>Transcoding</dt><dd>{cache ? formatCacheActivity(cache) : '—'}</dd></div>
+                  </dl>
+
+                  <div className="administration-cache-actions">
+                    <small>Limpar remove somente arquivos derivados em `data/transcode-cache`; suas músicas não são alteradas.</small>
+                    <button
+                      type="button"
+                      disabled={!cache || cache.bytes === 0 || cacheBusy || clearingCache}
+                      title={cacheBusy ? 'Aguarde o transcoding em andamento terminar.' : undefined}
+                      onClick={() => void clearTranscodeCache()}
+                    >
+                      {clearingCache ? <LoaderCircle className="is-spinning" /> : <Trash2 />}
+                      {clearingCache ? 'Limpando…' : 'Limpar cache'}
+                    </button>
+                  </div>
                 </article>
               </div>
             </>
