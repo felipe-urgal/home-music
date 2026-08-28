@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { AdminLibraryOverviewResponse, AuthenticatedUser, Playlist } from '@home-music/shared';
+import type { AdminLibraryOverviewResponse, AuthenticatedUser } from '@home-music/shared';
 import {
   AlertTriangle,
   ChevronLeft,
@@ -17,7 +17,6 @@ import {
   Users
 } from 'lucide-react';
 import { getAdminLibraryOverview } from '../admin-library-client';
-import { loadCurrentUserManualPlaylists, setCurrentUserPlaylistTracks } from '../admin-personal-library-client';
 import { AdminImportMediaScreen } from './AdminImportMediaScreen';
 import { AdminMediaQuarantineScreen } from './AdminMediaQuarantineScreen';
 import { AdminTrackAvailabilityScreen } from './AdminTrackAvailabilityScreen';
@@ -59,7 +58,6 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
   const [overview, setOverview] = useState<AdminLibraryOverviewResponse | null>(null);
   const [loadingOverview, setLoadingOverview] = useState(true);
   const [overviewError, setOverviewError] = useState<string | null>(null);
-  const [manualPlaylists, setManualPlaylists] = useState<Playlist[]>([]);
 
   const loadOverview = useCallback(async () => {
     setLoadingOverview(true);
@@ -73,41 +71,15 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
     }
   }, []);
 
-  const loadManualPlaylists = useCallback(async () => {
-    try {
-      setManualPlaylists(await loadCurrentUserManualPlaylists());
-    } catch {
-      setManualPlaylists([]);
-    }
-  }, []);
-
   useEffect(() => {
     if (currentUser.role !== 'admin') return;
     void loadOverview();
   }, [currentUser.role, loadOverview]);
 
-  useEffect(() => {
-    if (currentUser.role !== 'admin' || view !== 'tracks') return;
-    void loadManualPlaylists();
-  }, [currentUser.role, loadManualPlaylists, view]);
-
-  async function setPlaylistTracks(playlistId: string, trackIds: string[]) {
-    const playlist = manualPlaylists.find(item => item.id === playlistId);
-    if (!playlist) throw new Error('Playlist manual não encontrada.');
-    await setCurrentUserPlaylistTracks(playlist, trackIds);
-    setManualPlaylists(items => items.map(item => item.id === playlistId ? { ...item, trackIds } : item));
-  }
-
   if (currentUser.role !== 'admin') return null;
 
   if (view === 'tracks') {
-    return (
-      <AdminTrackAvailabilityScreen
-        playlists={manualPlaylists}
-        onSetPlaylistTracks={setPlaylistTracks}
-        onBack={() => setView('overview')}
-      />
-    );
+    return <AdminTrackAvailabilityScreen onBack={() => setView('overview')} />;
   }
 
   if (view === 'quarantine') {
