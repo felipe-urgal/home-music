@@ -5,6 +5,9 @@ export type PlaylistSource = 'manual' | 'rekordbox';
 export type UserRole = 'admin' | 'user';
 export type ImportJobStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
 export type ImportJobSourceType = 'upload' | 'url' | 'provider';
+export type AdminOperationKind = 'scan' | 'import';
+export type AdminOperationStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+export type AdminScanTrigger = 'manual' | 'automatic';
 
 export const PERMANENT_DELETE_CONFIRMATION = 'EXCLUIR PERMANENTEMENTE' as const;
 
@@ -91,6 +94,39 @@ export type ImportJob = {
 
 export type AdminImportJobsResponse = {
   jobs: ImportJob[];
+};
+
+export type AdminOperationCounts = {
+  tracks: number | null;
+  added: number | null;
+  updated: number | null;
+  removed: number | null;
+  unchanged: number | null;
+};
+
+export type AdminOperationError = {
+  message: string;
+  action: string;
+};
+
+export type AdminOperationHistoryItem = {
+  id: string;
+  kind: AdminOperationKind;
+  status: AdminOperationStatus;
+  label: string;
+  createdAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  durationMs: number | null;
+  scanTrigger: AdminScanTrigger | null;
+  importSource: ImportJobSource | null;
+  counts: AdminOperationCounts;
+  error: AdminOperationError | null;
+  canRetry: boolean;
+};
+
+export type AdminOperationHistoryResponse = {
+  items: AdminOperationHistoryItem[];
 };
 
 export type Track = {

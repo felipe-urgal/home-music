@@ -2,7 +2,7 @@ import { config } from 'dotenv';
 import { open } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import Fastify from 'fastify';
-import type { NormalizationMode, PlaybackState, RepeatMode, ScanResponse } from '@home-music/shared';
+import type { AdminScanTrigger, NormalizationMode, PlaybackState, RepeatMode, ScanResponse } from '@home-music/shared';
 import {
   ACCOUNT_PASSWORD_MIN_LENGTH,
   AccountPasswordService
@@ -10,6 +10,9 @@ import {
 import { registerAccountSessionRoutes } from './account-session-routes.js';
 import { registerAdminImportRoutes } from './admin-import-routes.js';
 import { buildAdminLibraryOverview } from './admin-library-overview.js';
+import { registerAdminOperationHistoryRoutes } from './admin-operation-history-routes.js';
+import { runScanWithHistory } from './admin-operation-history-scan.js';
+import { AdminOperationHistoryStore } from './admin-operation-history.js';
 import { registerAdminTranscodeCacheRoutes } from './admin-transcode-cache-routes.js';
 import { registerAdminTrackRoutes } from './admin-track-routes.js';
 import {
@@ -121,7 +124,16 @@ try {
 const sessions = new SessionManager('', '', SESSION_TTL_SECONDS * 1000, 128, { status: 'blocked' });
 const accountPasswords = new AccountPasswordService(databasePath, sessions);
 const adminUsers = new AdminUsersService(databasePath, sessions);
-const importJobs = new ImportJobQueue();
+const operationHistory = new AdminOperationHistoryStore(databasePath);
+const importJobs = new ImportJobQueue({
+  onChange: job => {
+    try {
+      operationHistory.recordImport(job);
+    } catch (error) {
+      app.log.warn({ err: error, importJobId: job.id }, 'Falha ao persistir histórico da importação.');
+    }
+  }
+});
 const loginRateLimiter = new LoginRateLimiter();
 const authConfigured = authUsers.isConfigured();
 const productionCsp = "default-src 'self'; img-src 'self' data: blob:; media-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
@@ -310,10 +322,19 @@ async function performRescan(): Promise<ScanResponse> {
   };
 }
 
-function rescan() {
+function rescan(trigger?: AdminScanTrigger) {
   if (scanPromise) return scanPromise;
 
-  scanPromise = performRescan()
+  const run = trigger
+    ? () => runScanWithHistory(
+        operationHistory,
+        trigger,
+        performRescan,
+        error => app.log.warn({ err: error, trigger }, 'Falha ao persistir histórico do scan.')
+      )
+    : performRescan;
+
+  scanPromise = run()
     .catch(error => {
       libraryReady = false;
       throw error;
@@ -402,6 +423,7 @@ installApiAuthPolicy(app, {
 registerAccountSessionRoutes(app, sessions);
 registerAdminUserRoutes(app, adminUsers);
 registerAdminImportRoutes(app, importJobs);
+registerAdminOperationHistoryRoutes(app, operationHistory);
 registerAdminTranscodeCacheRoutes(app, transcodeCacheMaintenance);
 registerAdminTrackRoutes(app, {
   listTracks: () => tracks.map(track => ({
@@ -457,6 +479,7 @@ app.addHook('onClose', async () => {
   stopAutomaticRescan();
   accountPasswords.close();
   adminUsers.close();
+  operationHistory.close();
   authUsers.close();
   trackAvailability.close();
   database.close();
@@ -656,7 +679,7 @@ app.get('/api/library/status', async (_request, reply) => {
 });
 
 app.post('/api/library/scan', async (_request, reply) => {
-  const result = await rescan();
+  const result = await rescan('manual');
   reply.header('Cache-Control', 'no-store');
   return result;
 });
@@ -1020,7 +1043,7 @@ if (!shuttingDown) {
       intervalMs,
       initialDelayMs: 15_000,
       run: async () => {
-        const result = await rescan();
+        const result = await rescan('automatic');
         if (result.added > 0 || result.updated > 0 || result.removed > 0) {
           app.log.info(
             {
