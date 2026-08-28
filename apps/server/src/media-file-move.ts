@@ -1,5 +1,5 @@
 import { mkdirSync } from 'node:fs';
-import { lstat, mkdir, realpath, rename, rmdir } from 'node:fs/promises';
+import { link, lstat, mkdir, realpath, rmdir, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import type { AdminTrackFileLocation, AdminTrackMoveRequest } from '@home-music/shared';
@@ -44,14 +44,13 @@ function stringValue(value: unknown) {
   return typeof value === 'string' ? value : '';
 }
 
-function isMissingError(error: unknown) {
-  if (!error || typeof error !== 'object') return false;
-  const code = 'code' in error ? String(error.code) : '';
-  return code === 'ENOENT' || code === 'ENOTDIR';
+function errorCode(error: unknown) {
+  return error && typeof error === 'object' && 'code' in error ? String(error.code) : '';
 }
 
-function isCrossDeviceError(error: unknown) {
-  return Boolean(error && typeof error === 'object' && 'code' in error && String(error.code) === 'EXDEV');
+function isMissingError(error: unknown) {
+  const code = errorCode(error);
+  return code === 'ENOENT' || code === 'ENOTDIR';
 }
 
 function relativePath(root: string, absolutePath: string) {
@@ -118,26 +117,29 @@ export function normalizeAdminTrackFileName(value: unknown, currentFileName: str
 async function ensureSafeDirectory(root: string, parts: string[]) {
   let current = root;
   const created: string[] = [];
-
-  for (const part of parts) {
-    const candidate = path.join(current, part);
-    try {
-      const entry = await lstat(candidate);
-      if (entry.isSymbolicLink() || !entry.isDirectory()) {
-        throw new UnsafeLibraryPathError('Diretório de destino inseguro.');
+  try {
+    for (const part of parts) {
+      const candidate = path.join(current, part);
+      try {
+        const entry = await lstat(candidate);
+        if (entry.isSymbolicLink() || !entry.isDirectory()) {
+          throw new UnsafeLibraryPathError('Diretório de destino inseguro.');
+        }
+      } catch (error) {
+        if (!isMissingError(error)) throw error;
+        await mkdir(candidate, { mode: 0o750 });
+        created.push(candidate);
       }
-    } catch (error) {
-      if (!isMissingError(error)) throw error;
-      await mkdir(candidate, { mode: 0o750 });
-      created.push(candidate);
+
+      const resolved = await realpath(candidate);
+      if (!isPathInside(root, resolved)) throw new UnsafeLibraryPathError();
+      current = resolved;
     }
-
-    const resolved = await realpath(candidate);
-    if (!isPathInside(root, resolved)) throw new UnsafeLibraryPathError();
-    current = resolved;
+    return { path: current, created };
+  } catch (error) {
+    await removeCreatedDirectories(created);
+    throw error;
   }
-
-  return { path: current, created };
 }
 
 async function assertDestinationAbsent(destination: string) {
@@ -207,9 +209,48 @@ async function existingSidecarMoves(root: string, sourceAudio: string, destinati
   return moves;
 }
 
+async function moveNoReplace(move: FileMove) {
+  try {
+    // link() falha com EEXIST em vez de sobrescrever o destino. Depois que o novo nome
+    // aponta para o mesmo inode, removemos o nome antigo. Um crash intermediário duplica
+    // temporariamente o hardlink, mas nunca perde nem substitui dados.
+    await link(move.source, move.destination);
+  } catch (error) {
+    const code = errorCode(error);
+    if (code === 'EEXIST') {
+      throw new MediaFileMoveOperationError(409, `Já existe um arquivo no destino: ${path.basename(move.destination)}.`);
+    }
+    if (code === 'EXDEV') {
+      throw new MediaFileMoveOperationError(409, 'O destino está em outro filesystem. Esta movimentação foi bloqueada para preservar atomicidade.');
+    }
+    throw error;
+  }
+
+  try {
+    await unlink(move.source);
+  } catch (error) {
+    try {
+      await unlink(move.destination);
+    } catch {
+      throw new MediaFileMoveOperationError(500, 'A movimentação falhou e o hardlink temporário não pôde ser removido. Verifique o filesystem.');
+    }
+    throw error;
+  }
+}
+
+async function rollbackMove(move: FileMove) {
+  await link(move.destination, move.source);
+  try {
+    await unlink(move.destination);
+  } catch (error) {
+    await unlink(move.source).catch(() => undefined);
+    throw error;
+  }
+}
+
 async function rollbackMoves(completed: FileMove[]) {
   for (const move of [...completed].reverse()) {
-    await rename(move.destination, move.source);
+    await rollbackMove(move);
   }
 }
 
@@ -217,7 +258,7 @@ async function performMoves(root: string, moves: FileMove[]) {
   const completed: FileMove[] = [];
   try {
     for (const move of moves) {
-      await rename(move.source, move.destination);
+      await moveNoReplace(move);
       completed.push(move);
     }
     for (const move of completed) {
@@ -236,9 +277,6 @@ async function performMoves(root: string, moves: FileMove[]) {
         500,
         'A movimentação falhou e os arquivos já movidos não puderam ser restaurados. Verifique o filesystem.'
       );
-    }
-    if (isCrossDeviceError(error)) {
-      throw new MediaFileMoveOperationError(409, 'O destino está em outro filesystem. Esta movimentação foi bloqueada para preservar atomicidade.');
     }
     throw error;
   }
