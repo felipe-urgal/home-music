@@ -15,11 +15,24 @@ const PNG_1X1 = Buffer.from(
   'base64'
 );
 
-function pngHeader(width: number, height: number) {
-  const data = Buffer.alloc(24);
-  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(data, 0);
-  data.writeUInt32BE(13, 8);
-  data.write('IHDR', 12, 'ascii');
+const JPEG_1X1 = Buffer.from([
+  0xff, 0xd8,
+  0xff, 0xc0, 0x00, 0x11, 0x08, 0x00, 0x01, 0x00, 0x01,
+  0x03, 0x01, 0x11, 0x00, 0x02, 0x11, 0x00, 0x03, 0x11, 0x00,
+  0xff, 0xd9
+]);
+
+const WEBP_1X1 = Buffer.from([
+  0x52, 0x49, 0x46, 0x46, 0x16, 0x00, 0x00, 0x00,
+  0x57, 0x45, 0x42, 0x50,
+  0x56, 0x50, 0x38, 0x58, 0x0a, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00
+]);
+
+function pngWithDimensions(width: number, height: number) {
+  const data = Buffer.from(PNG_1X1);
   data.writeUInt32BE(width, 16);
   data.writeUInt32BE(height, 20);
   return data;
@@ -41,13 +54,23 @@ function seedTrack(databasePath: string, hasCover = false) {
   }
 }
 
-test('inspeção usa bytes reais e valida formato e dimensões', () => {
-  const inspected = inspectCoverOverride(PNG_1X1, 'image/png');
-  assert.equal(inspected.contentType, 'image/png');
-  assert.equal(inspected.width, 1);
-  assert.equal(inspected.height, 1);
-  assert.equal(inspected.sizeBytes, PNG_1X1.byteLength);
-  assert.equal(inspected.version.length, 16);
+test('inspeção usa bytes reais e valida formatos, estrutura e dimensões', () => {
+  const png = inspectCoverOverride(PNG_1X1, 'image/png');
+  assert.equal(png.contentType, 'image/png');
+  assert.equal(png.width, 1);
+  assert.equal(png.height, 1);
+  assert.equal(png.sizeBytes, PNG_1X1.byteLength);
+  assert.equal(png.version.length, 16);
+
+  const jpeg = inspectCoverOverride(JPEG_1X1, 'image/jpeg');
+  assert.equal(jpeg.contentType, 'image/jpeg');
+  assert.equal(jpeg.width, 1);
+  assert.equal(jpeg.height, 1);
+
+  const webp = inspectCoverOverride(WEBP_1X1, 'image/webp');
+  assert.equal(webp.contentType, 'image/webp');
+  assert.equal(webp.width, 1);
+  assert.equal(webp.height, 1);
 
   assert.throws(
     () => inspectCoverOverride(PNG_1X1, 'image/jpeg'),
@@ -58,7 +81,11 @@ test('inspeção usa bytes reais e valida formato e dimensões', () => {
     (error: unknown) => error instanceof CoverOverrideValidationError && error.statusCode === 415
   );
   assert.throws(
-    () => inspectCoverOverride(pngHeader(5000, 1), 'image/png'),
+    () => inspectCoverOverride(PNG_1X1.subarray(0, PNG_1X1.length - 12), 'image/png'),
+    (error: unknown) => error instanceof CoverOverrideValidationError && error.statusCode === 415
+  );
+  assert.throws(
+    () => inspectCoverOverride(pngWithDimensions(5000, 1), 'image/png'),
     (error: unknown) => error instanceof CoverOverrideValidationError && error.statusCode === 413
   );
 });
