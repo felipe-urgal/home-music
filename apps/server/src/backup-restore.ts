@@ -94,6 +94,14 @@ async function assertRegularFile(filePath: string, label: string) {
   return info;
 }
 
+async function ensureRegularDirectory(directoryPath: string, label: string) {
+  await mkdir(directoryPath, { recursive: true, mode: 0o700 });
+  const info = await lstat(directoryPath);
+  if (!info.isDirectory() || info.isSymbolicLink()) {
+    throw new BackupValidationError(`${label} precisa ser um diretório real, sem symlink.`);
+  }
+}
+
 async function sha256File(filePath: string) {
   const hash = createHash('sha256');
   await new Promise<void>((resolve, reject) => {
@@ -239,13 +247,18 @@ function artifactName(now: Date, id: string) {
   return `home-music-${timestamp}-${id.slice(0, 8)}.backup`;
 }
 
+function safeIdentifier(value: string) {
+  const safe = value.replace(/[^A-Za-z0-9-]/g, '').slice(0, 64);
+  return safe || randomUUID();
+}
+
 export async function createBackupArtifact(options: CreateBackupOptions) {
   await assertRegularFile(options.databasePath, 'Banco principal');
-  await mkdir(options.outputRoot, { recursive: true, mode: 0o700 });
+  await ensureRegularDirectory(options.outputRoot, 'Diretório de backup');
 
   const createId = options.createId ?? randomUUID;
   const now = options.now ?? (() => new Date());
-  const id = createId();
+  const id = safeIdentifier(createId());
   const finalPath = path.join(options.outputRoot, artifactName(now(), id));
   const partialPath = path.join(options.outputRoot, `.home-music-${id}.partial`);
   const snapshotPath = path.join(partialPath, BACKUP_DATABASE_FILE);
@@ -309,7 +322,7 @@ export async function restoreBackupArtifact(
 ) {
   const verified = await verifyBackupArtifact(artifactPath);
   const databaseDir = path.dirname(databasePath);
-  await mkdir(databaseDir, { recursive: true, mode: 0o700 });
+  await ensureRegularDirectory(databaseDir, 'Diretório de dados');
 
   const id = randomUUID();
   const installPath = path.join(databaseDir, `.home-music-restore-${id}.db`);
