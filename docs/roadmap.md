@@ -94,7 +94,7 @@ Objetivo: evoluir a interface para desktop sem regredir o fluxo mobile Player Fi
 - [x] Criar navegação desktop para músicas, artistas, álbuns, pastas, favoritos, playlists, Rekordbox e estatísticas
 - [x] Adicionar atalhos de teclado para play/pause, próxima/anterior, seek, busca e volume quando aplicável
 - [x] Adicionar seleção múltipla de faixas e ações em lote
-- [ ] Adicionar download offline individual e múltiplo na tabela/seleção desktop, reutilizando o scheduler global atual de até 3 operações simultâneas
+- [x] Adicionar download offline individual e múltiplo na tabela/seleção desktop, reutilizando o scheduler global atual de até 3 operações simultâneas
 - [x] Melhorar drag-and-drop/reordenação da fila para mouse sem prejudicar touch
 - [x] Garantir estados vazios, loading, erros e mini-player coerentes nos dois layouts
 
