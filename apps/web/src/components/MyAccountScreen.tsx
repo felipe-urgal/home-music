@@ -4,6 +4,8 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  Eye,
+  EyeOff,
   KeyRound,
   LoaderCircle,
   LogOut,
@@ -57,6 +59,7 @@ export function MyAccountScreen({
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
+  const [showPasswords, setShowPasswords] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
   const [sessions, setSessions] = useState<AccountSession[]>([]);
   const [loadingSessions, setLoadingSessions] = useState(false);
@@ -82,6 +85,7 @@ export function MyAccountScreen({
   function goBack() {
     setError(null);
     setNotice(null);
+    setShowPasswords(false);
     if (view === 'overview') onBack();
     else setView('overview');
   }
@@ -98,6 +102,7 @@ export function MyAccountScreen({
       setCurrentPassword('');
       setNewPassword('');
       setConfirmation('');
+      setShowPasswords(false);
       await onSessionEnded();
     } catch (error) {
       setError(errorMessage(error));
@@ -254,9 +259,19 @@ export function MyAccountScreen({
             <div><strong>Alterar senha</strong><small>Use sua senha atual para confirmar a mudança.</small></div>
           </div>
           <form className="my-account-password-form" onSubmit={submitPassword}>
-            <label className="my-account-password-form__current"><span>Senha atual</span><input type="password" autoComplete="current-password" value={currentPassword} disabled={changingPassword} onChange={event => setCurrentPassword(event.target.value)} /></label>
-            <label><span>Nova senha</span><input type="password" autoComplete="new-password" value={newPassword} disabled={changingPassword} onChange={event => setNewPassword(event.target.value)} /></label>
-            <label><span>Confirmar nova senha</span><input type="password" autoComplete="new-password" value={confirmation} disabled={changingPassword} onChange={event => setConfirmation(event.target.value)} /></label>
+            <button
+              className="my-account-password-visibility"
+              type="button"
+              aria-pressed={showPasswords}
+              disabled={changingPassword}
+              onClick={() => setShowPasswords(value => !value)}
+            >
+              {showPasswords ? <EyeOff /> : <Eye />}
+              {showPasswords ? 'Ocultar senhas' : 'Mostrar senhas'}
+            </button>
+            <label className="my-account-password-form__current"><span>Senha atual</span><input type={showPasswords ? 'text' : 'password'} autoComplete="current-password" value={currentPassword} disabled={changingPassword} onChange={event => setCurrentPassword(event.target.value)} /></label>
+            <label><span>Nova senha</span><input type={showPasswords ? 'text' : 'password'} autoComplete="new-password" value={newPassword} disabled={changingPassword} onChange={event => setNewPassword(event.target.value)} /></label>
+            <label><span>Confirmar nova senha</span><input type={showPasswords ? 'text' : 'password'} autoComplete="new-password" value={confirmation} disabled={changingPassword} onChange={event => setConfirmation(event.target.value)} /></label>
             <div className="my-account-password-rules" aria-label="Requisitos da senha">
               <span className={Array.from(newPassword).length >= MIN_ACCOUNT_PASSWORD_CHARACTERS ? 'is-valid' : ''}><CheckCircle2 /> Pelo menos {MIN_ACCOUNT_PASSWORD_CHARACTERS} caracteres</span>
               <span className={Boolean(newPassword.trim()) ? 'is-valid' : ''}><CheckCircle2 /> Não conter somente espaços</span>
