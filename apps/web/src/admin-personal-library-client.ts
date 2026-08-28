@@ -1,4 +1,4 @@
-import type { FavoritesResponse, Playlist, PlaylistsResponse } from '@home-music/shared';
+import type { FavoritesResponse } from '@home-music/shared';
 import { apiFetch } from './api-client';
 
 const mutationHeaders = { 'X-Home-Music-Request': '1' };
@@ -15,16 +15,9 @@ async function jsonRequest<T>(url: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export async function loadAdminPersonalLibrary() {
-  const [favorites, playlists] = await Promise.all([
-    jsonRequest<FavoritesResponse>('/api/favorites', { cache: 'no-store' }),
-    jsonRequest<PlaylistsResponse>('/api/playlists', { cache: 'no-store' })
-  ]);
-
-  return {
-    favoriteIds: favorites.trackIds,
-    playlists: playlists.playlists.filter(playlist => playlist.source === 'manual')
-  };
+export async function loadCurrentUserFavoriteIds() {
+  const favorites = await jsonRequest<FavoritesResponse>('/api/favorites', { cache: 'no-store' });
+  return favorites.trackIds;
 }
 
 export async function favoriteCurrentUserTrack(trackId: string) {
@@ -35,16 +28,5 @@ export async function favoriteCurrentUserTrack(trackId: string) {
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({ favorite: true })
-  });
-}
-
-export async function setCurrentUserPlaylistTracks(playlist: Playlist, trackIds: string[]) {
-  await jsonRequest(`/api/playlists/${encodeURIComponent(playlist.id)}/tracks`, {
-    method: 'PUT',
-    headers: {
-      ...mutationHeaders,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ trackIds })
   });
 }
