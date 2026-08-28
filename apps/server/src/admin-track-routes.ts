@@ -3,9 +3,16 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import type {
   AdminQuarantineResponse,
   AdminTrack,
+  AdminTrackMoveRequest,
+  AdminTrackMoveResponse,
   AdminTracksResponse,
   Track
 } from '@home-music/shared';
+import {
+  type AppliedTrackLocation,
+  MediaFileMoveOperationError,
+  MediaFileMoveStore
+} from './media-file-move.js';
 import { MediaQuarantineOperationError, MediaQuarantineStore } from './media-quarantine.js';
 import { UnsafeLibraryPathError } from './security.js';
 import {
@@ -27,6 +34,7 @@ const COVER_UPLOAD_BODY_LIMIT = MAX_COVER_OVERRIDE_BYTES + 1024;
 type AdminTrackService = {
   listTracks: () => AdminTrack[];
   setEnabled: (trackId: string, enabled: boolean) => AdminTrack | null;
+  setLocation: (trackId: string, location: AppliedTrackLocation) => AdminTrack | null;
 };
 
 type AdminTrackRouteOptions = {
@@ -44,6 +52,16 @@ function sendQuarantineError(reply: FastifyReply, error: unknown) {
   }
   if (error instanceof UnsafeLibraryPathError) {
     return reply.code(409).send({ error: 'A operação foi bloqueada por segurança de caminho.' });
+  }
+  throw error;
+}
+
+function sendFileMoveError(reply: FastifyReply, error: unknown) {
+  if (error instanceof MediaFileMoveOperationError) {
+    return reply.code(error.statusCode).send({ error: error.message });
+  }
+  if (error instanceof UnsafeLibraryPathError) {
+    return reply.code(409).send({ error: 'A movimentação foi bloqueada por segurança de caminho.' });
   }
   throw error;
 }
@@ -102,14 +120,14 @@ export function registerAdminTrackRoutes(
   options: AdminTrackRouteOptions = {}
 ) {
   const databasePath = options.databasePath || process.env.HOME_MUSIC_DATABASE_PATH || defaultDatabasePath;
-  const quarantine = new MediaQuarantineStore(
-    databasePath,
-    options.musicDir ?? process.env.MUSIC_DIR ?? ''
-  );
+  const musicDir = options.musicDir ?? process.env.MUSIC_DIR ?? '';
+  const quarantine = new MediaQuarantineStore(databasePath, musicDir);
+  const fileMoves = new MediaFileMoveStore(databasePath, musicDir);
   const metadataOverrides = new TrackMetadataOverrideStore(databasePath);
   const coverOverrides = new TrackCoverOverrideStore(databasePath);
   let metadataRevision = 0;
   let coverRevision = 0;
+  let fileRevision = 0;
   let publicTrackIds = new Set<string>();
   let publicTrackIdsInitialized = false;
 
@@ -132,13 +150,12 @@ export function registerAdminTrackRoutes(
   }
 
   app.addHook('onClose', async () => {
+    fileMoves.close();
     coverOverrides.close();
     metadataOverrides.close();
     quarantine.close();
   });
 
-  // Rejeita o caso normal de upload excessivo antes de ler o corpo. O bodyLimit do
-  // parser continua protegendo transferências sem Content-Length.
   app.addHook('onRequest', async (request, reply) => {
     if (request.method !== 'PUT' || !adminCoverTrackId(request.url)) return;
     const contentLength = Number(request.headers['content-length']);
@@ -147,8 +164,6 @@ export function registerAdminTrackRoutes(
     }
   });
 
-  // Overrides de capa são servidos antes da capa embutida. O conjunto de IDs públicos
-  // evita varrer/alocar a biblioteca inteira em cada requisição de artwork.
   app.addHook('preHandler', async (request, reply) => {
     if (request.method !== 'GET') return;
     const trackId = publicCoverTrackId(request.url);
@@ -172,9 +187,8 @@ export function registerAdminTrackRoutes(
     return reply.send(override.data);
   });
 
-  // O scanner e `tracks` mantêm somente metadata/capa físicas. Esta borda resolve a visão
-  // efetiva sem promover overrides para o estado físico. A revisão composta permite
-  // que outras abas percebam mudanças administrativas via polling normal da biblioteca.
+  // Scanner mantém somente os valores físicos. Overrides e movimentações administrativas
+  // compõem a visão pública sem trocar a identidade estável da faixa.
   app.addHook('preSerialization', async (request, _reply, payload) => {
     const pathname = request.url.split('?', 1)[0];
     if (pathname !== '/api/library' && pathname !== '/api/library/status') return payload;
@@ -193,7 +207,7 @@ export function registerAdminTrackRoutes(
       };
     }
     if (isObjectPayload(nextPayload)) {
-      return withAdminRevision(nextPayload, metadataRevision + coverRevision);
+      return withAdminRevision(nextPayload, metadataRevision + coverRevision + fileRevision);
     }
     return nextPayload;
   });
@@ -234,6 +248,48 @@ export function registerAdminTrackRoutes(
       metadataOverrides.refresh();
       coverOverrides.refresh();
       return { track: coverOverrides.resolveTrack(metadataOverrides.resolveTrack(track)) };
+    }
+  );
+
+  app.get<{ Params: { id: string } }>('/api/admin/tracks/:id/location', async (request, reply) => {
+    reply.header('Cache-Control', 'private, no-store');
+    if (quarantine.hasHidden(request.params.id)) {
+      return reply.code(409).send({ error: 'Música está na lixeira. Restaure antes de mover o arquivo.' });
+    }
+    try {
+      const location = await fileMoves.getLocation(request.params.id);
+      if (!location) return reply.code(404).send({ error: 'Música não encontrada.' });
+      return location;
+    } catch (error) {
+      return sendFileMoveError(reply, error);
+    }
+  });
+
+  app.post<{ Params: { id: string }; Body: AdminTrackMoveRequest }>(
+    '/api/admin/tracks/:id/move',
+    async (request, reply) => {
+      reply.header('Cache-Control', 'private, no-store');
+      if (quarantine.hasHidden(request.params.id)) {
+        return reply.code(409).send({ error: 'Música está na lixeira. Restaure antes de mover o arquivo.' });
+      }
+
+      try {
+        const result = await fileMoves.move(
+          request.params.id,
+          request.body ?? ({} as AdminTrackMoveRequest),
+          location => service.setLocation(request.params.id, location)
+        );
+        if (result.moved) fileRevision += 1;
+        metadataOverrides.refresh();
+        coverOverrides.refresh();
+        const response: AdminTrackMoveResponse = {
+          ...result,
+          track: coverOverrides.resolveTrack(metadataOverrides.resolveTrack(result.track))
+        };
+        return response;
+      } catch (error) {
+        return sendFileMoveError(reply, error);
+      }
     }
   );
 
