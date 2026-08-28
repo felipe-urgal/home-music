@@ -13,15 +13,18 @@ import {
   Trash2
 } from 'lucide-react';
 import { runAdminBatch, summarizeAdminBatch } from '../admin-batch';
-import { favoriteCurrentUserTrack, loadCurrentUserFavoriteIds } from '../admin-personal-library-client';
+import {
+  favoriteCurrentUserTrack,
+  loadCurrentUserFavoriteIds,
+  loadCurrentUserManualPlaylists,
+  setCurrentUserPlaylistTracks
+} from '../admin-personal-library-client';
 import { quarantineAdminTrack } from '../admin-quarantine-client';
 import { listAdminTracks, setAdminTrackEnabled } from '../admin-tracks-client';
 import { useAdminBulkSelection } from '../useAdminBulkSelection';
 import { AdminBulkToolbar } from './AdminBulkToolbar';
 
 type AdminTrackAvailabilityScreenProps = {
-  playlists: Playlist[];
-  onSetPlaylistTracks: (playlistId: string, trackIds: string[]) => Promise<void>;
   onBack: () => void;
 };
 
@@ -34,11 +37,7 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : 'Não foi possível concluir a operação.';
 }
 
-export function AdminTrackAvailabilityScreen({
-  playlists,
-  onSetPlaylistTracks,
-  onBack
-}: AdminTrackAvailabilityScreenProps) {
+export function AdminTrackAvailabilityScreen({ onBack }: AdminTrackAvailabilityScreenProps) {
   const [tracks, setTracks] = useState<AdminTrack[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -47,6 +46,7 @@ export function AdminTrackAvailabilityScreen({
   const [batchProgress, setBatchProgress] = useState({ completed: 0, total: 0 });
   const [batchFeedback, setBatchFeedback] = useState<BatchFeedback | null>(null);
   const [favoriteIds, setFavoriteIds] = useState<Set<string> | null>(null);
+  const [manualPlaylists, setManualPlaylists] = useState<Playlist[] | null>(null);
   const [selectedPlaylistId, setSelectedPlaylistId] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
@@ -89,12 +89,8 @@ export function AdminTrackAvailabilityScreen({
       : selectedActiveTracks.filter(track => !favoriteIds.has(track.id)),
     [favoriteIds, selectedActiveTracks]
   );
-  const manualPlaylists = useMemo(
-    () => playlists.filter(playlist => playlist.source === 'manual'),
-    [playlists]
-  );
   const selectedPlaylist = useMemo(
-    () => manualPlaylists.find(playlist => playlist.id === selectedPlaylistId) ?? null,
+    () => manualPlaylists?.find(playlist => playlist.id === selectedPlaylistId) ?? null,
     [manualPlaylists, selectedPlaylistId]
   );
   const playlistAddableTracks = useMemo(
@@ -131,13 +127,23 @@ export function AdminTrackAvailabilityScreen({
       setFavoriteIds(new Set(await loadCurrentUserFavoriteIds()));
     } catch (error) {
       setFavoriteIds(null);
-      setError(errorMessage(error));
+      setError(`Favoritos: ${errorMessage(error)}`);
+    }
+  }
+
+  async function loadManualPlaylists() {
+    try {
+      setManualPlaylists(await loadCurrentUserManualPlaylists());
+    } catch (error) {
+      setManualPlaylists([]);
+      setError(`Playlists: ${errorMessage(error)}`);
     }
   }
 
   useEffect(() => {
     void loadTracks();
     void loadFavorites();
+    void loadManualPlaylists();
   }, []);
 
   async function toggleTrack(track: AdminTrack) {
@@ -241,7 +247,10 @@ export function AdminTrackAvailabilityScreen({
         ...selectedPlaylist.trackIds,
         ...playlistAddableTracks.map(track => track.id)
       ];
-      await onSetPlaylistTracks(selectedPlaylist.id, nextTrackIds);
+      await setCurrentUserPlaylistTracks(selectedPlaylist, nextTrackIds);
+      setManualPlaylists(items => (items ?? []).map(playlist => (
+        playlist.id === selectedPlaylist.id ? { ...playlist, trackIds: nextTrackIds } : playlist
+      )));
       setBatchProgress({ completed: 1, total: 1 });
       selection.clear();
       setBatchFeedback({
@@ -370,12 +379,18 @@ export function AdminTrackAvailabilityScreen({
               <div className="admin-bulk-toolbar__playlist">
                 <select
                   value={selectedPlaylistId}
-                  disabled={operationBusy || manualPlaylists.length === 0}
+                  disabled={operationBusy || manualPlaylists == null || manualPlaylists.length === 0}
                   aria-label="Playlist para seleção"
                   onChange={event => setSelectedPlaylistId(event.target.value)}
                 >
-                  <option value="">Playlist…</option>
-                  {manualPlaylists.map(playlist => <option key={playlist.id} value={playlist.id}>{playlist.name}</option>)}
+                  <option value="">
+                    {manualPlaylists == null
+                      ? 'Carregando playlists…'
+                      : manualPlaylists.length === 0
+                        ? 'Nenhuma playlist manual'
+                        : 'Playlist…'}
+                  </option>
+                  {(manualPlaylists ?? []).map(playlist => <option key={playlist.id} value={playlist.id}>{playlist.name}</option>)}
                 </select>
                 <button
                   type="button"
