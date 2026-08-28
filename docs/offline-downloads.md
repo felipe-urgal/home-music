@@ -1,6 +1,6 @@
 # Downloads offline
 
-Este documento registra o comportamento atual dos downloads offline do Home Music, incluindo concorrência, limites de background e isolamento entre contas no mesmo navegador.
+Este documento registra o comportamento atual dos downloads offline do Home Music, incluindo concorrência, superfícies mobile/desktop, limites de background e isolamento entre contas no mesmo navegador.
 
 ## Objetivo
 
@@ -39,6 +39,20 @@ Portanto, depois de iniciar um download, o usuário pode navegar entre:
 O job continua ativo e o conjunto `downloadingIds` permanece observável para o usuário atual. Ao voltar para a faixa, a UI consegue continuar mostrando o estado de download.
 
 Nenhum `AbortController` é associado à troca de tela.
+
+## Superfície desktop
+
+A biblioteca desktop reutiliza exatamente o mesmo estado e o mesmo scheduler usados pelo player. A tabela não instancia outro `useOfflineDownloads()` e não possui fila própria.
+
+Cada faixa expõe uma ação compacta com três estados:
+
+- **Baixar**: agenda a faixa para uso offline;
+- **Em andamento**: mantém a ação visível e desabilitada enquanto o job está ativo ou aguardando no scheduler;
+- **Disponível offline**: confirma conclusão e permite remover o download com confirmação explícita.
+
+A seleção múltipla adiciona uma ação **Baixar seleção**. Ela filtra itens já concluídos ou em andamento e dispara somente as faixas elegíveis. Mesmo que várias sejam solicitadas de uma vez, a concorrência real continua limitada a três operações pelo scheduler global.
+
+Falhas são isoladas por faixa e reutilizam o feedback global da aplicação. Um erro em um item não cancela os demais jobs já entregues ao scheduler.
 
 ## Limite de ciclo de vida
 
