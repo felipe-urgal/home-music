@@ -18,6 +18,8 @@
 
 @media (min-width: 1024px) {
   .app-shell {
+    --desktop-sidebar-width: 220px;
+    --desktop-player-height: 88px;
     display: block;
     height: 100vh;
     min-height: 0;
@@ -32,7 +34,7 @@
     height: 100vh;
     min-height: 0;
     display: grid;
-    grid-template-columns: 220px minmax(0, 1fr) 300px;
+    grid-template-columns: var(--desktop-sidebar-width) minmax(0, 1fr) 300px;
     place-items: stretch;
     align-items: stretch;
     overflow: hidden;
@@ -476,8 +478,12 @@
 }
 
 @media (min-width: 1380px) {
+  .app-shell {
+    --desktop-sidebar-width: 236px;
+  }
+
   .desktop-layout {
-    grid-template-columns: 236px minmax(0, 1fr) 320px;
+    grid-template-columns: var(--desktop-sidebar-width) minmax(0, 1fr) 320px;
   }
 
   .mini-player {
