@@ -191,7 +191,15 @@ export class TrackMetadataOverrideStore {
         return null;
       }
 
-      const current = this.overrides.get(trackId) ?? {
+      const currentRow = this.db.prepare(`
+        SELECT title AS override_title, artist AS override_artist,
+               album AS override_album, album_artist AS override_album_artist,
+               updated_at AS override_updated_at
+        FROM track_metadata_overrides
+        WHERE track_id = ?
+        LIMIT 1;
+      `).get(trackId) as Row | undefined;
+      const current = currentRow ? overrideFromRow(currentRow) : {
         title: null,
         artist: null,
         album: null,
