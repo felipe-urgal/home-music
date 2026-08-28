@@ -40,6 +40,7 @@ function row(databasePath: string) {
     db.close();
   }
 }
+
 test('normalização rejeita traversal, caminhos ocultos e troca de extensão', () => {
   assert.deepEqual(normalizeAdminTrackFolderPath('Artista/Álbum'), ['Artista', 'Álbum']);
   assert.deepEqual(normalizeAdminTrackFolderPath(''), []);
@@ -62,7 +63,7 @@ test('normalização rejeita traversal, caminhos ocultos e troca de extensão', 
   );
 });
 
-test('move arquivo, cria pasta segura, preserva id e atualiza SQLite', async () => {
+test('move áudio e sidecars, cria pasta segura, preserva id e atualiza SQLite', async () => {
   const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-file-move-'));
   const library = path.join(temp, 'music');
   const sourceDir = path.join(library, 'Origem');
@@ -72,6 +73,9 @@ test('move arquivo, cria pasta segura, preserva id e atualiza SQLite', async () 
   try {
     await mkdir(sourceDir, { recursive: true });
     await writeFile(source, 'audio-fixture');
+    await writeFile(path.join(sourceDir, 'faixa.lrc'), '[00:01] letra');
+    await writeFile(path.join(sourceDir, 'faixa.mp3.lrc'), '[00:02] alternativa');
+    await writeFile(path.join(sourceDir, 'faixa.txt'), 'letra simples');
     seed(databasePath, source);
     const store = new MediaFileMoveStore(databasePath, library);
 
@@ -81,17 +85,21 @@ test('move arquivo, cria pasta segura, preserva id e atualiza SQLite', async () 
       location => ({ id: 'track-a', ...location })
     );
 
+    const destinationDir = path.join(library, 'Artista', 'Álbum');
     assert.equal(result.moved, true);
     assert.equal(result.track.id, 'track-a');
     assert.equal(result.location.relativePath, 'Artista/Álbum/Nova faixa.mp3');
     assert.equal(result.location.folderPath, 'Artista/Álbum');
-    assert.equal(await readFile(path.join(library, 'Artista', 'Álbum', 'Nova faixa.mp3'), 'utf8'), 'audio-fixture');
+    assert.equal(await readFile(path.join(destinationDir, 'Nova faixa.mp3'), 'utf8'), 'audio-fixture');
+    assert.equal(await readFile(path.join(destinationDir, 'Nova faixa.lrc'), 'utf8'), '[00:01] letra');
+    assert.equal(await readFile(path.join(destinationDir, 'Nova faixa.mp3.lrc'), 'utf8'), '[00:02] alternativa');
+    assert.equal(await readFile(path.join(destinationDir, 'Nova faixa.txt'), 'utf8'), 'letra simples');
 
     const stored = row(databasePath);
     assert.equal(stored.id, 'track-a');
     assert.equal(stored.folder, 'Artista');
     assert.equal(stored.folder_path, 'Artista/Álbum');
-    assert.equal(stored.file_path, path.join(library, 'Artista', 'Álbum', 'Nova faixa.mp3'));
+    assert.equal(stored.file_path, path.join(destinationDir, 'Nova faixa.mp3'));
 
     const location = await store.getLocation('track-a');
     assert.equal(location?.relativePath, 'Artista/Álbum/Nova faixa.mp3');
@@ -101,7 +109,7 @@ test('move arquivo, cria pasta segura, preserva id e atualiza SQLite', async () 
   }
 });
 
-test('colisão não altera filesystem nem SQLite', async () => {
+test('colisão de áudio ou sidecar não altera filesystem nem SQLite', async () => {
   const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-file-move-'));
   const library = path.join(temp, 'music');
   const sourceDir = path.join(library, 'Origem');
@@ -114,6 +122,7 @@ test('colisão não altera filesystem nem SQLite', async () => {
     await mkdir(sourceDir, { recursive: true });
     await mkdir(destinationDir, { recursive: true });
     await writeFile(source, 'origem');
+    await writeFile(path.join(sourceDir, 'faixa.lrc'), 'letra origem');
     await writeFile(destination, 'destino');
     seed(databasePath, source);
     const store = new MediaFileMoveStore(databasePath, library);
@@ -123,6 +132,7 @@ test('colisão não altera filesystem nem SQLite', async () => {
       (error: unknown) => error instanceof MediaFileMoveOperationError && error.statusCode === 409
     );
     assert.equal(await readFile(source, 'utf8'), 'origem');
+    assert.equal(await readFile(path.join(sourceDir, 'faixa.lrc'), 'utf8'), 'letra origem');
     assert.equal(await readFile(destination, 'utf8'), 'destino');
     assert.equal(row(databasePath).file_path, source);
     store.close();
@@ -131,16 +141,18 @@ test('colisão não altera filesystem nem SQLite', async () => {
   }
 });
 
-test('callback de índice falhando aciona rollback de SQLite e filesystem', async () => {
+test('callback de índice falhando aciona rollback de SQLite, áudio e sidecar', async () => {
   const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-file-move-'));
   const library = path.join(temp, 'music');
   const sourceDir = path.join(library, 'Origem');
   const source = path.join(sourceDir, 'faixa.mp3');
+  const sourceLyrics = path.join(sourceDir, 'faixa.lrc');
   const databasePath = path.join(temp, 'home-music.db');
 
   try {
     await mkdir(sourceDir, { recursive: true });
     await writeFile(source, 'audio-fixture');
+    await writeFile(sourceLyrics, 'letra-fixture');
     seed(databasePath, source);
     const store = new MediaFileMoveStore(databasePath, library);
 
@@ -150,6 +162,7 @@ test('callback de índice falhando aciona rollback de SQLite e filesystem', asyn
     );
 
     assert.equal(await readFile(source, 'utf8'), 'audio-fixture');
+    assert.equal(await readFile(sourceLyrics, 'utf8'), 'letra-fixture');
     assert.equal(row(databasePath).file_path, source);
     store.close();
   } finally {
