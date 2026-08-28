@@ -96,6 +96,13 @@ test('login, biblioteca e player permanecem utilizáveis', async ({ page }) => {
     await expect(desktopPlayerBar).toHaveCount(0);
     await expect(embeddedPlayerQueue).toBeVisible();
     await expect(page.getByRole('button', { name: 'Letra' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Mais opções' })).toHaveCount(0);
+    const addToPlaylist = page.getByRole('button', { name: 'Adicionar à playlist' });
+    await expect(addToPlaylist).toBeVisible();
+    await addToPlaylist.click();
+    await expect(page.getByLabel('Escolher playlist')).toBeVisible();
+    await addToPlaylist.click();
+    await expect(page.getByLabel('Escolher playlist')).toHaveCount(0);
 
     if (isTablet) {
       await expect(page.getByRole('button', { name: 'Arrastar E2E Zeta' })).toBeVisible();
