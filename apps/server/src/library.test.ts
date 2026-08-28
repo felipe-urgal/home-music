@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, rename, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -29,6 +29,42 @@ test('scanLibrary preserva caminho relativo hierárquico e reaproveita arquivos 
     assert.equal(second.stats.added, 0);
     assert.equal(second.stats.updated, 0);
     assert.equal(second.tracks[0].id, first.tracks[0].id);
+  } finally {
+    await rm(temp, { recursive: true, force: true });
+  }
+});
+
+test('scanLibrary preserva id conhecido após movimentação e alteração posterior do arquivo', async () => {
+  const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-library-'));
+
+  try {
+    const root = path.join(temp, 'music');
+    const sourceDir = path.join(root, 'Origem');
+    const destinationDir = path.join(root, 'Destino');
+    const source = path.join(sourceDir, 'Faixa.mp3');
+    const destination = path.join(destinationDir, 'Renomeada.mp3');
+    await mkdir(sourceDir, { recursive: true });
+    await mkdir(destinationDir, { recursive: true });
+    await writeFile(source, 'primeira-versão');
+
+    const libraryRoot = await resolveLibraryRoot(root);
+    const first = await scanLibrary(libraryRoot);
+    const originalId = first.tracks[0].id;
+
+    await rename(source, destination);
+    const movedPrevious = {
+      ...first.tracks[0],
+      filePath: destination,
+      folder: 'Destino',
+      folderPath: 'Destino'
+    };
+    await writeFile(destination, 'segunda-versão-com-mtime-e-tamanho-novos');
+
+    const second = await scanLibrary(libraryRoot, [movedPrevious]);
+    assert.equal(second.stats.updated, 1);
+    assert.equal(second.tracks[0].id, originalId);
+    assert.equal(second.tracks[0].filePath, destination);
+    assert.equal(second.tracks[0].folderPath, 'Destino');
   } finally {
     await rm(temp, { recursive: true, force: true });
   }
