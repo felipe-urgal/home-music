@@ -131,7 +131,7 @@ test('admin envia por seletor e drag-and-drop, vê progresso e pode cancelar', a
   await expect(status).toContainText('selecao.flac');
   await expect(status).toContainText('Aguardando validação');
   await expect(status).toContainText('100%');
-  await expect(status).toContainText('permanece fora de MUSIC_DIR');
+  await expect(status).toContainText('ainda não entrou na biblioteca');
   expect(uploadedBodies).toContain('abcd');
 
   await status.getByRole('button', { name: 'Cancelar selecao.flac' }).click();
