@@ -254,14 +254,14 @@ export async function createBackupArtifact(options: CreateBackupOptions) {
   await rm(partialPath, { recursive: true, force: true });
   await mkdir(partialPath, { mode: 0o700 });
 
-  const sourceDb = new DatabaseSync(options.databasePath, { timeout: 5_000 });
   try {
-    await backup(sourceDb, snapshotPath, { rate: 100 });
-  } finally {
-    sourceDb.close();
-  }
+    const sourceDb = new DatabaseSync(options.databasePath, { timeout: 5_000 });
+    try {
+      await backup(sourceDb, snapshotPath, { rate: 100 });
+    } finally {
+      sourceDb.close();
+    }
 
-  try {
     await chmod(snapshotPath, 0o600);
     const info = databaseInfo(snapshotPath);
     if (info.schemaVersion > MAX_SUPPORTED_SCHEMA_VERSION) {
@@ -340,7 +340,10 @@ export async function restoreBackupArtifact(
     databaseInfo(databasePath);
     await options.afterReplace?.(databasePath);
 
-    if (rollbackReady) await rm(rollbackPath, { force: true });
+    if (rollbackReady) {
+      await rm(rollbackPath, { force: true }).catch(() => undefined);
+      rollbackReady = false;
+    }
     return {
       databasePath,
       manifest: verified.manifest
