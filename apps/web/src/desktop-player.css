@@ -4,12 +4,20 @@
 
 @media (min-width: 1024px) {
   .desktop-layout {
-    height: calc(100vh - var(--desktop-player-height, 88px));
+    height: 100vh;
   }
 
-  .desktop-sidebar,
+  .desktop-sidebar {
+    height: 100%;
+  }
+
   .desktop-context,
   .phone-surface {
+    height: calc(100% - var(--desktop-player-height, 88px));
+  }
+
+  .desktop-layout[data-desktop-active="player"] .desktop-context,
+  .desktop-layout[data-desktop-active="player"] .phone-surface {
     height: 100%;
   }
 
