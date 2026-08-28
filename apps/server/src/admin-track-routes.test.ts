@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, test } from 'node:test';
 import Fastify from 'fastify';
+import type { AdminTrack } from '@home-music/shared';
 import { registerAdminTrackRoutes } from './admin-track-routes.js';
 
 const tempDirs: string[] = [];
@@ -14,7 +15,7 @@ const PNG_1X1 = Buffer.from(
   'base64'
 );
 
-const physicalTrack = {
+const physicalTrack: AdminTrack = {
   id: 'track-a',
   title: 'Título físico',
   artist: 'Artista físico',
@@ -32,7 +33,7 @@ afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map(dir => rm(dir, { recursive: true, force: true })));
 });
 
-function createTrackTable(databasePath: string) {
+function createTrackTable(databasePath: string, filePath = '/library/track-a.mp3') {
   const db = new DatabaseSync(databasePath);
   db.exec(`
     PRAGMA foreign_keys = ON;
@@ -43,20 +44,26 @@ function createTrackTable(databasePath: string) {
       artist TEXT NOT NULL,
       album TEXT NOT NULL,
       album_artist TEXT NOT NULL,
+      folder TEXT NOT NULL,
+      folder_path TEXT NOT NULL,
       has_cover INTEGER NOT NULL DEFAULT 0
     );
   `);
   db.prepare(`
-    INSERT INTO tracks(id, file_path, title, artist, album, album_artist, has_cover)
-    VALUES ('track-a', '/library/track-a.mp3', 'Título físico', 'Artista físico', 'Álbum físico', 'Artista físico', 0);
-  `).run();
+    INSERT INTO tracks(
+      id, file_path, title, artist, album, album_artist, folder, folder_path, has_cover
+    ) VALUES (
+      'track-a', ?, 'Título físico', 'Artista físico', 'Álbum físico', 'Artista físico', 'Pasta', 'Pasta', 0
+    );
+  `).run(filePath);
   db.close();
 }
 
 function service(withTrack = false) {
   return {
     listTracks: () => withTrack ? [physicalTrack] : [],
-    setEnabled: () => null
+    setEnabled: () => null,
+    setLocation: () => null
   };
 }
 
@@ -248,6 +255,76 @@ test('rotas de capa validam bytes, expõem versão efetiva e restauram a fonte f
 
   const missingCover = await app.inject({ method: 'GET', url: '/api/tracks/track-a/cover' });
   assert.equal(missingCover.statusCode, 404);
+
+  await app.close();
+});
+
+test('rotas de localização movem arquivo, preservam id e incrementam revisão efetiva', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'home-music-admin-track-routes-'));
+  tempDirs.push(root);
+  const musicDir = path.join(root, 'library');
+  const sourceDir = path.join(musicDir, 'Pasta');
+  const source = path.join(sourceDir, 'track-a.mp3');
+  const databasePath = path.join(root, 'home-music.db');
+  await mkdir(sourceDir, { recursive: true });
+  await writeFile(source, 'fixture');
+  createTrackTable(databasePath, source);
+
+  let runtimeTrack: AdminTrack = { ...physicalTrack };
+  const app = Fastify();
+  registerAdminTrackRoutes(app, {
+    listTracks: () => [runtimeTrack],
+    setEnabled: () => null,
+    setLocation: (trackId, location) => {
+      if (trackId !== runtimeTrack.id) return null;
+      runtimeTrack = {
+        ...runtimeTrack,
+        folder: location.folder,
+        folderPath: location.folderPath
+      };
+      return runtimeTrack;
+    }
+  }, { databasePath, musicDir });
+  app.get('/api/library', async () => ({
+    tracks: [{ ...runtimeTrack, enabled: undefined }],
+    scannedAt: '2026-08-28T00:00:00.000Z',
+    scanning: false,
+    revision: 0
+  }));
+  app.get('/api/library/status', async () => ({
+    scannedAt: '2026-08-28T00:00:00.000Z',
+    scanning: false,
+    revision: 0
+  }));
+
+  const initial = await app.inject({ method: 'GET', url: '/api/admin/tracks/track-a/location' });
+  assert.equal(initial.statusCode, 200);
+  assert.equal(initial.json().relativePath, 'Pasta/track-a.mp3');
+
+  const moved = await app.inject({
+    method: 'POST',
+    url: '/api/admin/tracks/track-a/move',
+    payload: { folderPath: 'Artista/Álbum', fileName: 'Renomeada.mp3' }
+  });
+  assert.equal(moved.statusCode, 200);
+  assert.equal(moved.json().moved, true);
+  assert.equal(moved.json().track.id, 'track-a');
+  assert.equal(moved.json().track.folderPath, 'Artista/Álbum');
+  assert.equal(moved.json().location.relativePath, 'Artista/Álbum/Renomeada.mp3');
+  await access(path.join(musicDir, 'Artista', 'Álbum', 'Renomeada.mp3'));
+  await assert.rejects(access(source));
+
+  const library = await app.inject({ method: 'GET', url: '/api/library' });
+  assert.equal(library.json().tracks[0].id, 'track-a');
+  assert.equal(library.json().tracks[0].folderPath, 'Artista/Álbum');
+  assert.equal(library.json().revision, 1);
+
+  const invalid = await app.inject({
+    method: 'POST',
+    url: '/api/admin/tracks/track-a/move',
+    payload: { folderPath: '../fora', fileName: 'Renomeada.mp3' }
+  });
+  assert.equal(invalid.statusCode, 400);
 
   await app.close();
 });
