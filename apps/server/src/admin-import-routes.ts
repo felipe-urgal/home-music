@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import type { Readable } from 'node:stream';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { AdminImportJobsResponse } from '@home-music/shared';
 import type { ImportJobQueue } from './import-job-queue.js';
 import { ImportStagingManager } from './import-staging.js';
@@ -16,20 +16,19 @@ type RegisterAdminImportRoutesOptions = {
   uploads?: ImportUploadManager;
 };
 
-function sendUploadError(reply: { code: (status: number) => { send: (payload: unknown) => unknown } }, error: unknown) {
+function sendUploadError(reply: FastifyReply, error: unknown) {
   if (error instanceof ImportUploadError) {
     return reply.code(error.statusCode).send({ error: error.message });
+  }
+  if (error instanceof Error && error.name === 'ImportUploadCancelledError') {
+    return reply.code(409).send({ error: 'Upload cancelado.' });
   }
   throw error;
 }
 
-export function registerAdminImportRoutes(
-  app: FastifyInstance,
-  queue: ImportJobQueue,
-  options: RegisterAdminImportRoutesOptions = {}
-) {
+function createDefaultUploadManager(queue: ImportJobQueue) {
   const maxMegabytes = parseImportUploadMaxMegabytes(process.env.HOME_MUSIC_IMPORT_UPLOAD_MAX_MB);
-  const uploads = options.uploads ?? new ImportUploadManager({
+  return new ImportUploadManager({
     queue,
     staging: new ImportStagingManager({
       stagingRoot: process.env.HOME_MUSIC_IMPORT_STAGING_DIR || defaultImportStagingPath,
@@ -37,6 +36,14 @@ export function registerAdminImportRoutes(
     }),
     maxBytes: maxMegabytes * 1024 * 1024
   });
+}
+
+export function registerAdminImportRoutes(
+  app: FastifyInstance,
+  queue: ImportJobQueue,
+  options: RegisterAdminImportRoutesOptions = {}
+) {
+  const uploads = options.uploads ?? createDefaultUploadManager(queue);
 
   if (!app.hasContentTypeParser('application/octet-stream')) {
     app.addContentTypeParser('application/octet-stream', (_request, payload, done) => {
