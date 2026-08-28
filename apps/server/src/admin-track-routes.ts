@@ -77,15 +77,23 @@ function withAdminRevision<T extends Record<string, unknown>>(payload: T, adminR
   return { ...payload, revision: Number(revision) + adminRevision };
 }
 
-function publicCoverTrackId(url: string) {
+function routeTrackId(url: string, pattern: RegExp) {
   const pathname = url.split('?', 1)[0];
-  const match = /^\/api\/tracks\/([^/]+)\/cover$/.exec(pathname);
+  const match = pattern.exec(pathname);
   if (!match) return null;
   try {
     return decodeURIComponent(match[1]);
   } catch {
     return null;
   }
+}
+
+function publicCoverTrackId(url: string) {
+  return routeTrackId(url, /^\/api\/tracks\/([^/]+)\/cover$/);
+}
+
+function adminCoverTrackId(url: string) {
+  return routeTrackId(url, /^\/api\/admin\/tracks\/([^/]+)\/cover$/);
 }
 
 export function registerAdminTrackRoutes(
@@ -102,6 +110,17 @@ export function registerAdminTrackRoutes(
   const coverOverrides = new TrackCoverOverrideStore(databasePath);
   let metadataRevision = 0;
   let coverRevision = 0;
+  let publicTrackIds = new Set<string>();
+  let publicTrackIdsInitialized = false;
+
+  function syncPublicTrackIds(tracks: Array<Pick<AdminTrack, 'id' | 'enabled'>>) {
+    publicTrackIds = new Set(tracks.filter(track => track.enabled).map(track => track.id));
+    publicTrackIdsInitialized = true;
+  }
+
+  function ensurePublicTrackIds() {
+    if (!publicTrackIdsInitialized) syncPublicTrackIds(service.listTracks());
+  }
 
   for (const contentType of COVER_OVERRIDE_CONTENT_TYPES) {
     if (app.hasContentTypeParser(contentType)) continue;
@@ -118,14 +137,24 @@ export function registerAdminTrackRoutes(
     quarantine.close();
   });
 
-  // Overrides de capa são servidos antes da capa embutida. A faixa precisa continuar
-  // pública/ativa; caso contrário o handler normal preserva o 404 da disponibilidade.
+  // Rejeita o caso normal de upload excessivo antes de ler o corpo. O bodyLimit do
+  // parser continua protegendo transferências sem Content-Length.
+  app.addHook('onRequest', async (request, reply) => {
+    if (request.method !== 'PUT' || !adminCoverTrackId(request.url)) return;
+    const contentLength = Number(request.headers['content-length']);
+    if (Number.isFinite(contentLength) && contentLength > MAX_COVER_OVERRIDE_BYTES) {
+      return reply.code(413).send({ error: 'A capa deve ter no máximo 8 MiB.' });
+    }
+  });
+
+  // Overrides de capa são servidos antes da capa embutida. O conjunto de IDs públicos
+  // evita varrer/alocar a biblioteca inteira em cada requisição de artwork.
   app.addHook('preHandler', async (request, reply) => {
     if (request.method !== 'GET') return;
     const trackId = publicCoverTrackId(request.url);
     if (!trackId) return;
-    const track = service.listTracks().find(item => item.id === trackId);
-    if (!track?.enabled) return;
+    ensurePublicTrackIds();
+    if (!publicTrackIds.has(trackId)) return;
 
     const override = coverOverrides.read(trackId);
     if (!override) return;
@@ -154,6 +183,8 @@ export function registerAdminTrackRoutes(
     if (pathname === '/api/library' && isTrackArrayPayload(nextPayload)) {
       metadataOverrides.refresh();
       coverOverrides.refresh();
+      publicTrackIds = new Set(nextPayload.tracks.map(track => track.id));
+      publicTrackIdsInitialized = true;
       nextPayload = {
         ...nextPayload,
         tracks: nextPayload.tracks.map(track =>
@@ -172,7 +203,9 @@ export function registerAdminTrackRoutes(
     quarantine.pruneResolvedTombstones();
     metadataOverrides.refresh();
     coverOverrides.refresh();
-    const tracks = service.listTracks()
+    const physicalTracks = service.listTracks();
+    syncPublicTrackIds(physicalTracks);
+    const tracks = physicalTracks
       .filter(track => !quarantine.hasHidden(track.id))
       .map(track => coverOverrides.resolveTrack(metadataOverrides.resolveTrack(track)));
     const response: AdminTracksResponse = {
@@ -196,6 +229,8 @@ export function registerAdminTrackRoutes(
 
       const track = service.setEnabled(request.params.id, request.body.enabled);
       if (!track) return reply.code(404).send({ error: 'Música não encontrada.' });
+      publicTrackIdsInitialized = true;
+      if (track.enabled) publicTrackIds.add(track.id); else publicTrackIds.delete(track.id);
       metadataOverrides.refresh();
       coverOverrides.refresh();
       return { track: coverOverrides.resolveTrack(metadataOverrides.resolveTrack(track)) };
@@ -311,12 +346,19 @@ export function registerAdminTrackRoutes(
     const track = coverOverrides.resolveTrack(metadataOverrides.resolveTrack(physicalTrack));
     const { enabled: previousEnabled, ...publicTrack } = track;
 
-    if (previousEnabled) service.setEnabled(track.id, false);
+    if (previousEnabled) {
+      service.setEnabled(track.id, false);
+      publicTrackIds.delete(track.id);
+      publicTrackIdsInitialized = true;
+    }
     try {
       const quarantined = await quarantine.quarantine(track.id, publicTrack, previousEnabled);
       return { track: quarantined };
     } catch (error) {
-      if (previousEnabled && !quarantine.hasHidden(track.id)) service.setEnabled(track.id, true);
+      if (previousEnabled && !quarantine.hasHidden(track.id)) {
+        service.setEnabled(track.id, true);
+        publicTrackIds.add(track.id);
+      }
       return sendQuarantineError(reply, error);
     }
   });
@@ -331,8 +373,14 @@ export function registerAdminTrackRoutes(
           if (!restored) {
             throw new MediaQuarantineOperationError(409, 'Registro da música não está mais disponível para restauração.');
           }
+          publicTrackIdsInitialized = true;
+          if (restored.enabled) publicTrackIds.add(restored.id); else publicTrackIds.delete(restored.id);
         },
-        () => { service.setEnabled(request.params.id, false); }
+        () => {
+          service.setEnabled(request.params.id, false);
+          publicTrackIds.delete(request.params.id);
+          publicTrackIdsInitialized = true;
+        }
       );
       metadataOverrides.refresh();
       coverOverrides.refresh();
@@ -351,6 +399,7 @@ export function registerAdminTrackRoutes(
       }
       try {
         await quarantine.deletePermanently(request.params.id);
+        publicTrackIds.delete(request.params.id);
         return reply.code(204).send();
       } catch (error) {
         return sendQuarantineError(reply, error);
