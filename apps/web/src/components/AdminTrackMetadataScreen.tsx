@@ -42,6 +42,8 @@ type EditorFeedback = {
   error: boolean;
 };
 
+type SavingAction = 'text' | 'cover' | null;
+
 const PAGE_SIZE = 50;
 
 function errorMessage(error: unknown) {
@@ -88,9 +90,10 @@ export function AdminTrackMetadataScreen({ onBack }: AdminTrackMetadataScreenPro
   const [draft, setDraft] = useState<EditableTrackMetadata | null>(null);
   const [editorLoading, setEditorLoading] = useState(false);
   const [editorFeedback, setEditorFeedback] = useState<EditorFeedback | null>(null);
-  const [saving, setSaving] = useState(false);
+  const [savingAction, setSavingAction] = useState<SavingAction>(null);
   const [error, setError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const operationBusy = savingAction !== null;
 
   const filteredTracks = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase('pt-BR');
@@ -126,7 +129,7 @@ export function AdminTrackMetadataScreen({ onBack }: AdminTrackMetadataScreenPro
   useEffect(() => {
     if (!editingTrackId) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || saving) return;
+      if (event.key !== 'Escape' || operationBusy) return;
       setEditingTrackId(null);
       setMetadata(null);
       setCover(null);
@@ -136,7 +139,7 @@ export function AdminTrackMetadataScreen({ onBack }: AdminTrackMetadataScreenPro
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [editingTrackId, saving]);
+  }, [editingTrackId, operationBusy]);
 
   async function loadTracks(background = false) {
     if (background) setRefreshing(true); else setLoading(true);
@@ -156,7 +159,7 @@ export function AdminTrackMetadataScreen({ onBack }: AdminTrackMetadataScreenPro
   }, []);
 
   async function openEditor(track: AdminTrack) {
-    if (saving) return;
+    if (operationBusy) return;
     setEditingTrackId(track.id);
     setMetadata(null);
     setCover(null);
@@ -183,7 +186,7 @@ export function AdminTrackMetadataScreen({ onBack }: AdminTrackMetadataScreenPro
   }
 
   function closeEditor() {
-    if (saving) return;
+    if (operationBusy) return;
     setEditingTrackId(null);
     setMetadata(null);
     setCover(null);
@@ -198,7 +201,7 @@ export function AdminTrackMetadataScreen({ onBack }: AdminTrackMetadataScreenPro
   }
 
   function selectCoverFile(file: File | null) {
-    if (!file) return;
+    if (!file || operationBusy) return;
     try {
       validateAdminCoverFile(file);
       setCoverFile(file);
@@ -228,8 +231,8 @@ export function AdminTrackMetadataScreen({ onBack }: AdminTrackMetadataScreenPro
   }
 
   async function saveMetadata() {
-    if (!metadata || !draft || saving) return;
-    setSaving(true);
+    if (!metadata || !draft || operationBusy) return;
+    setSavingAction('text');
     setEditorFeedback(null);
     try {
       const patch = buildTrackMetadataOverridePatch(metadata.physical, draft);
@@ -238,14 +241,14 @@ export function AdminTrackMetadataScreen({ onBack }: AdminTrackMetadataScreenPro
     } catch (error) {
       setEditorFeedback({ message: errorMessage(error), error: true });
     } finally {
-      setSaving(false);
+      setSavingAction(null);
     }
   }
 
   async function resetMetadata() {
-    if (!metadata || saving || !hasOverride(metadata)) return;
+    if (!metadata || operationBusy || !hasOverride(metadata)) return;
     if (!window.confirm('Restaurar os metadados exibidos para os valores do arquivo original?\n\nO arquivo físico não será modificado.')) return;
-    setSaving(true);
+    setSavingAction('text');
     setEditorFeedback(null);
     try {
       const updated = await resetAdminTrackMetadata(metadata.trackId);
@@ -253,13 +256,13 @@ export function AdminTrackMetadataScreen({ onBack }: AdminTrackMetadataScreenPro
     } catch (error) {
       setEditorFeedback({ message: errorMessage(error), error: true });
     } finally {
-      setSaving(false);
+      setSavingAction(null);
     }
   }
 
   async function saveCover() {
-    if (!editingTrackId || !coverFile || saving) return;
-    setSaving(true);
+    if (!editingTrackId || !coverFile || operationBusy) return;
+    setSavingAction('cover');
     setEditorFeedback(null);
     try {
       validateAdminCoverFile(coverFile);
@@ -268,14 +271,14 @@ export function AdminTrackMetadataScreen({ onBack }: AdminTrackMetadataScreenPro
     } catch (error) {
       setEditorFeedback({ message: errorMessage(error), error: true });
     } finally {
-      setSaving(false);
+      setSavingAction(null);
     }
   }
 
   async function resetCover() {
-    if (!editingTrackId || !cover?.override || saving) return;
+    if (!editingTrackId || !cover?.override || operationBusy) return;
     if (!window.confirm('Remover o override de capa e voltar à capa do arquivo original?\n\nO arquivo de áudio não será modificado.')) return;
-    setSaving(true);
+    setSavingAction('cover');
     setEditorFeedback(null);
     try {
       const updated = await resetAdminTrackCover(editingTrackId);
@@ -288,7 +291,7 @@ export function AdminTrackMetadataScreen({ onBack }: AdminTrackMetadataScreenPro
     } catch (error) {
       setEditorFeedback({ message: errorMessage(error), error: true });
     } finally {
-      setSaving(false);
+      setSavingAction(null);
     }
   }
 
@@ -330,7 +333,7 @@ export function AdminTrackMetadataScreen({ onBack }: AdminTrackMetadataScreenPro
             className="admin-tracks-refresh"
             type="button"
             aria-label="Atualizar músicas"
-            disabled={loading || refreshing || saving}
+            disabled={loading || refreshing || operationBusy}
             onClick={() => void loadTracks(true)}
           >
             <RefreshCw className={refreshing ? 'is-spinning' : ''} />
@@ -360,7 +363,7 @@ export function AdminTrackMetadataScreen({ onBack }: AdminTrackMetadataScreenPro
                 <button
                   className="admin-metadata-row__edit"
                   type="button"
-                  disabled={saving || editorLoading}
+                  disabled={operationBusy || editorLoading}
                   onClick={() => void openEditor(track)}
                 >
                   <Pencil /> Editar
@@ -372,8 +375,8 @@ export function AdminTrackMetadataScreen({ onBack }: AdminTrackMetadataScreenPro
               <footer className="admin-tracks-pagination">
                 <span>Página {page} de {pageCount}</span>
                 <div>
-                  <button type="button" aria-label="Página anterior" disabled={page <= 1 || saving} onClick={() => setPage(value => value - 1)}><ChevronLeft /></button>
-                  <button type="button" aria-label="Próxima página" disabled={page >= pageCount || saving} onClick={() => setPage(value => value + 1)}><ChevronRight /></button>
+                  <button type="button" aria-label="Página anterior" disabled={page <= 1 || operationBusy} onClick={() => setPage(value => value - 1)}><ChevronLeft /></button>
+                  <button type="button" aria-label="Próxima página" disabled={page >= pageCount || operationBusy} onClick={() => setPage(value => value + 1)}><ChevronRight /></button>
                 </div>
               </footer>
             )}
@@ -396,7 +399,7 @@ export function AdminTrackMetadataScreen({ onBack }: AdminTrackMetadataScreenPro
                 <strong id="admin-metadata-dialog-title">Editar metadados</strong>
                 <small>Somente camadas reversíveis serão salvas.</small>
               </div>
-              <button type="button" aria-label="Fechar edição de metadados" disabled={saving} onClick={closeEditor}><X /></button>
+              <button type="button" aria-label="Fechar edição de metadados" disabled={operationBusy} onClick={closeEditor}><X /></button>
             </header>
 
             {editorLoading || !metadata || !draft || !cover ? (
@@ -414,22 +417,22 @@ export function AdminTrackMetadataScreen({ onBack }: AdminTrackMetadataScreenPro
                 <div className="admin-metadata-fields">
                   <label>
                     <span>Título</span>
-                    <input autoFocus required maxLength={240} value={draft.title} disabled={saving} onChange={event => setField('title', event.target.value)} />
+                    <input autoFocus required maxLength={240} value={draft.title} disabled={operationBusy} onChange={event => setField('title', event.target.value)} />
                     <small>Arquivo: {metadata.physical.title}</small>
                   </label>
                   <label>
                     <span>Artista</span>
-                    <input required maxLength={240} value={draft.artist} disabled={saving} onChange={event => setField('artist', event.target.value)} />
+                    <input required maxLength={240} value={draft.artist} disabled={operationBusy} onChange={event => setField('artist', event.target.value)} />
                     <small>Arquivo: {metadata.physical.artist}</small>
                   </label>
                   <label>
                     <span>Álbum</span>
-                    <input required maxLength={240} value={draft.album} disabled={saving} onChange={event => setField('album', event.target.value)} />
+                    <input required maxLength={240} value={draft.album} disabled={operationBusy} onChange={event => setField('album', event.target.value)} />
                     <small>Arquivo: {metadata.physical.album}</small>
                   </label>
                   <label>
                     <span>Artista do álbum</span>
-                    <input required maxLength={240} value={draft.albumArtist} disabled={saving} onChange={event => setField('albumArtist', event.target.value)} />
+                    <input required maxLength={240} value={draft.albumArtist} disabled={operationBusy} onChange={event => setField('albumArtist', event.target.value)} />
                     <small>Arquivo: {metadata.physical.albumArtist}</small>
                   </label>
                 </div>
@@ -467,12 +470,12 @@ export function AdminTrackMetadataScreen({ onBack }: AdminTrackMetadataScreenPro
                     )}
 
                     <div className="admin-cover-editor__actions">
-                      <label className={`admin-cover-upload ${saving ? 'is-disabled' : ''}`}>
+                      <label className={`admin-cover-upload ${operationBusy ? 'is-disabled' : ''}`}>
                         <Upload /> {coverFile ? 'Trocar seleção' : 'Selecionar imagem'}
                         <input
                           type="file"
                           accept="image/jpeg,image/png,image/webp"
-                          disabled={saving}
+                          disabled={operationBusy}
                           onChange={event => {
                             const file = event.currentTarget.files?.[0] ?? null;
                             event.currentTarget.value = '';
@@ -483,19 +486,20 @@ export function AdminTrackMetadataScreen({ onBack }: AdminTrackMetadataScreenPro
                       <button
                         className="admin-cover-save"
                         type="button"
-                        disabled={saving || !coverFile}
+                        disabled={operationBusy || !coverFile}
                         onClick={() => void saveCover()}
                       >
-                        {saving && coverFile ? <LoaderCircle className="is-spinning" /> : <Save />}
+                        {savingAction === 'cover' && coverFile ? <LoaderCircle className="is-spinning" /> : <Save />}
                         Salvar capa
                       </button>
                       <button
                         className="admin-cover-reset"
                         type="button"
-                        disabled={saving || !cover.override}
+                        disabled={operationBusy || !cover.override}
                         onClick={() => void resetCover()}
                       >
-                        <RotateCcw /> Restaurar capa do arquivo
+                        {savingAction === 'cover' && !coverFile ? <LoaderCircle className="is-spinning" /> : <RotateCcw />}
+                        Restaurar capa do arquivo
                       </button>
                     </div>
                   </div>
@@ -505,14 +509,15 @@ export function AdminTrackMetadataScreen({ onBack }: AdminTrackMetadataScreenPro
                   <button
                     className="admin-metadata-reset"
                     type="button"
-                    disabled={saving || !hasOverride(metadata)}
+                    disabled={operationBusy || !hasOverride(metadata)}
                     onClick={() => void resetMetadata()}
                   >
-                    <RotateCcw /> Restaurar texto do arquivo
+                    {savingAction === 'text' && !hasOverride(metadata) ? <LoaderCircle className="is-spinning" /> : <RotateCcw />}
+                    Restaurar arquivo
                   </button>
-                  <button className="admin-metadata-save" type="submit" disabled={saving}>
-                    {saving && !coverFile ? <LoaderCircle className="is-spinning" /> : <Save />}
-                    Salvar texto
+                  <button className="admin-metadata-save" type="submit" disabled={operationBusy}>
+                    {savingAction === 'text' ? <LoaderCircle className="is-spinning" /> : <Save />}
+                    Salvar override
                   </button>
                 </footer>
               </form>
