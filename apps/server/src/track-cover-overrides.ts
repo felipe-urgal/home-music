@@ -53,15 +53,31 @@ function readUInt24LE(data: Buffer, offset: number) {
 }
 
 function pngDimensions(data: Buffer) {
-  if (data.length < 24) return null;
+  if (data.length < 45) return null;
   const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
   if (!data.subarray(0, 8).equals(signature)) return null;
   if (data.readUInt32BE(8) !== 13 || data.toString('ascii', 12, 16) !== 'IHDR') return null;
-  return {
-    contentType: 'image/png' as const,
-    width: data.readUInt32BE(16),
-    height: data.readUInt32BE(20)
-  };
+
+  const width = data.readUInt32BE(16);
+  const height = data.readUInt32BE(20);
+  let offset = 8 + 12 + 13;
+  let hasImageData = false;
+
+  while (offset + 12 <= data.length) {
+    const length = data.readUInt32BE(offset);
+    const type = data.toString('ascii', offset + 4, offset + 8);
+    const nextOffset = offset + 12 + length;
+    if (nextOffset > data.length) return null;
+
+    if (type === 'IDAT' && length > 0) hasImageData = true;
+    if (type === 'IEND') {
+      if (length !== 0 || !hasImageData || nextOffset !== data.length) return null;
+      return { contentType: 'image/png' as const, width, height };
+    }
+    offset = nextOffset;
+  }
+
+  return null;
 }
 
 const JPEG_SOF_MARKERS = new Set([
@@ -72,10 +88,14 @@ const JPEG_SOF_MARKERS = new Set([
 ]);
 
 function jpegDimensions(data: Buffer) {
-  if (data.length < 4 || data[0] !== 0xff || data[1] !== 0xd8) return null;
-  let offset = 2;
+  if (
+    data.length < 4
+    || data[0] !== 0xff || data[1] !== 0xd8
+    || data[data.length - 2] !== 0xff || data[data.length - 1] !== 0xd9
+  ) return null;
 
-  while (offset < data.length) {
+  let offset = 2;
+  while (offset < data.length - 2) {
     while (offset < data.length && data[offset] !== 0xff) offset += 1;
     while (offset < data.length && data[offset] === 0xff) offset += 1;
     if (offset >= data.length) break;
@@ -106,11 +126,12 @@ function webpDimensions(data: Buffer) {
   if (data.length < 30) return null;
   if (data.toString('ascii', 0, 4) !== 'RIFF' || data.toString('ascii', 8, 12) !== 'WEBP') return null;
   const declaredSize = data.readUInt32LE(4) + 8;
-  if (declaredSize > data.length) return null;
+  if (declaredSize !== data.length) return null;
 
   const chunk = data.toString('ascii', 12, 16);
   const chunkSize = data.readUInt32LE(16);
-  if (20 + chunkSize > data.length) return null;
+  const paddedChunkSize = chunkSize + (chunkSize % 2);
+  if (20 + paddedChunkSize > data.length) return null;
 
   if (chunk === 'VP8X' && chunkSize >= 10) {
     return {
