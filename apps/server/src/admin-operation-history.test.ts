@@ -29,7 +29,7 @@ function importJob(overrides: Partial<ImportJob> = {}): ImportJob {
   };
 }
 
-test('persiste scans com contagens, duração e filtros após reabrir o store', async () => {
+test('persiste scans/importações concluídos com contagens, duração e filtros após reabrir o store', async () => {
   const dir = await tempDatabase();
   const databasePath = path.join(dir, 'home-music.db');
   const timestamps = [
@@ -51,7 +51,12 @@ test('persiste scans com contagens, duração e filtros após reabrir o store', 
       removed: 1,
       unchanged: 36
     });
-    store.recordImport(importJob());
+    store.recordImport(importJob({
+      status: 'completed',
+      startedAt: '2026-08-28T12:01:01.000Z',
+      finishedAt: '2026-08-28T12:01:04.000Z',
+      updatedAt: '2026-08-28T12:01:04.000Z'
+    }));
     store.close();
 
     const reopened = new AdminOperationHistoryStore(databasePath);
@@ -68,9 +73,10 @@ test('persiste scans com contagens, duração e filtros após reabrir o store', 
       unchanged: 36
     });
 
-    const imports = reopened.list({ kind: 'import', status: 'pending' });
+    const imports = reopened.list({ kind: 'import', status: 'completed' });
     assert.equal(imports.length, 1);
     assert.equal(imports[0].label, 'Importação por URL');
+    assert.equal(imports[0].durationMs, 3_000);
     assert.deepEqual(imports[0].counts, {
       tracks: null,
       added: null,
@@ -78,6 +84,35 @@ test('persiste scans com contagens, duração e filtros após reabrir o store', 
       removed: null,
       unchanged: null
     });
+    reopened.close();
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('restart encerra operações pendentes/em andamento como interrompidas', async () => {
+  const dir = await tempDatabase();
+  const databasePath = path.join(dir, 'home-music.db');
+  try {
+    const store = new AdminOperationHistoryStore(databasePath, {
+      createId: () => 'interrompido',
+      now: () => new Date('2026-08-28T12:00:00.000Z')
+    });
+    store.startScan('automatic');
+    store.recordImport(importJob({ id: 'interrompido' }));
+    store.close();
+
+    const reopened = new AdminOperationHistoryStore(databasePath, {
+      now: () => new Date('2026-08-28T12:10:00.000Z')
+    });
+    const interrupted = reopened.list({ status: 'cancelled' });
+    assert.equal(interrupted.length, 2);
+    for (const item of interrupted) {
+      assert.equal(item.finishedAt, '2026-08-28T12:10:00.000Z');
+      assert.match(item.error?.message ?? '', /interrompida pelo reinício/i);
+      assert.match(item.error?.action ?? '', /inicie a operação novamente/i);
+      assert.equal(item.canRetry, false);
+    }
     reopened.close();
   } finally {
     await rm(dir, { recursive: true, force: true });
