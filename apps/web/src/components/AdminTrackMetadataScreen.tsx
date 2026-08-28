@@ -42,7 +42,7 @@ type EditorFeedback = {
   error: boolean;
 };
 
-type SavingAction = 'text' | 'cover' | null;
+type SavingAction = 'text-save' | 'text-reset' | 'cover-save' | 'cover-reset' | null;
 
 const PAGE_SIZE = 50;
 
@@ -232,7 +232,7 @@ export function AdminTrackMetadataScreen({ onBack }: AdminTrackMetadataScreenPro
 
   async function saveMetadata() {
     if (!metadata || !draft || operationBusy) return;
-    setSavingAction('text');
+    setSavingAction('text-save');
     setEditorFeedback(null);
     try {
       const patch = buildTrackMetadataOverridePatch(metadata.physical, draft);
@@ -248,7 +248,7 @@ export function AdminTrackMetadataScreen({ onBack }: AdminTrackMetadataScreenPro
   async function resetMetadata() {
     if (!metadata || operationBusy || !hasOverride(metadata)) return;
     if (!window.confirm('Restaurar os metadados exibidos para os valores do arquivo original?\n\nO arquivo físico não será modificado.')) return;
-    setSavingAction('text');
+    setSavingAction('text-reset');
     setEditorFeedback(null);
     try {
       const updated = await resetAdminTrackMetadata(metadata.trackId);
@@ -262,7 +262,7 @@ export function AdminTrackMetadataScreen({ onBack }: AdminTrackMetadataScreenPro
 
   async function saveCover() {
     if (!editingTrackId || !coverFile || operationBusy) return;
-    setSavingAction('cover');
+    setSavingAction('cover-save');
     setEditorFeedback(null);
     try {
       validateAdminCoverFile(coverFile);
@@ -278,7 +278,7 @@ export function AdminTrackMetadataScreen({ onBack }: AdminTrackMetadataScreenPro
   async function resetCover() {
     if (!editingTrackId || !cover?.override || operationBusy) return;
     if (!window.confirm('Remover o override de capa e voltar à capa do arquivo original?\n\nO arquivo de áudio não será modificado.')) return;
-    setSavingAction('cover');
+    setSavingAction('cover-reset');
     setEditorFeedback(null);
     try {
       const updated = await resetAdminTrackCover(editingTrackId);
@@ -489,7 +489,7 @@ export function AdminTrackMetadataScreen({ onBack }: AdminTrackMetadataScreenPro
                         disabled={operationBusy || !coverFile}
                         onClick={() => void saveCover()}
                       >
-                        {savingAction === 'cover' && coverFile ? <LoaderCircle className="is-spinning" /> : <Save />}
+                        {savingAction === 'cover-save' ? <LoaderCircle className="is-spinning" /> : <Save />}
                         Salvar capa
                       </button>
                       <button
@@ -498,7 +498,7 @@ export function AdminTrackMetadataScreen({ onBack }: AdminTrackMetadataScreenPro
                         disabled={operationBusy || !cover.override}
                         onClick={() => void resetCover()}
                       >
-                        {savingAction === 'cover' && !coverFile ? <LoaderCircle className="is-spinning" /> : <RotateCcw />}
+                        {savingAction === 'cover-reset' ? <LoaderCircle className="is-spinning" /> : <RotateCcw />}
                         Restaurar capa do arquivo
                       </button>
                     </div>
@@ -512,11 +512,11 @@ export function AdminTrackMetadataScreen({ onBack }: AdminTrackMetadataScreenPro
                     disabled={operationBusy || !hasOverride(metadata)}
                     onClick={() => void resetMetadata()}
                   >
-                    {savingAction === 'text' && !hasOverride(metadata) ? <LoaderCircle className="is-spinning" /> : <RotateCcw />}
+                    {savingAction === 'text-reset' ? <LoaderCircle className="is-spinning" /> : <RotateCcw />}
                     Restaurar arquivo
                   </button>
                   <button className="admin-metadata-save" type="submit" disabled={operationBusy}>
-                    {savingAction === 'text' ? <LoaderCircle className="is-spinning" /> : <Save />}
+                    {savingAction === 'text-save' ? <LoaderCircle className="is-spinning" /> : <Save />}
                     Salvar override
                   </button>
                 </footer>
