@@ -313,6 +313,6 @@
 
 @media (prefers-reduced-motion: reduce) {
   .desktop-offline-spinner {
-    animation-duration: 1.6s;
+    animation: none;
   }
 }
