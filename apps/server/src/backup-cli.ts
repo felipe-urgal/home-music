@@ -1,8 +1,7 @@
 import { spawnSync } from 'node:child_process';
-import { readdir, readlink, realpath } from 'node:fs/promises';
-import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { config } from 'dotenv';
+import { databaseIsOpenByAnotherProcess } from './backup-process-guard.js';
 import {
   BackupValidationError,
   RestoreRollbackError,
@@ -37,29 +36,6 @@ function homeMusicServiceIsActive() {
     { stdio: 'ignore' }
   );
   return !result.error && result.status === 0;
-}
-
-async function databaseIsOpenByAnotherProcess(databasePath: string) {
-  const resolvedDatabasePath = await realpath(databasePath).catch(() => path.resolve(databasePath));
-  const procEntries = await readdir('/proc', { withFileTypes: true }).catch(() => []);
-  for (const entry of procEntries) {
-    if (!entry.isDirectory() || !/^\d+$/.test(entry.name) || Number(entry.name) === process.pid) continue;
-    const fdRoot = `/proc/${entry.name}/fd`;
-    const descriptors = await readdir(fdRoot).catch(() => []);
-    for (const descriptor of descriptors) {
-      const target = await readlink(path.join(fdRoot, descriptor)).catch(() => null);
-      if (!target) continue;
-      const normalized = target.replace(/ \(deleted\)$/, '');
-      if (
-        normalized === resolvedDatabasePath ||
-        normalized === `${resolvedDatabasePath}-wal` ||
-        normalized === `${resolvedDatabasePath}-shm`
-      ) {
-        return true;
-      }
-    }
-  }
-  return false;
 }
 
 function errorMessage(error: unknown) {
