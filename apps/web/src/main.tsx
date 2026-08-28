@@ -26,6 +26,7 @@ import './tablet-shell.css';
 import './desktop-player.css';
 import './desktop-library.css';
 import './desktop-context.css';
+import './desktop-scrollbars.css';
 import './desktop-navigation.css';
 import './phase7-interactions.css';
 import './desktop-now-playing.css';
