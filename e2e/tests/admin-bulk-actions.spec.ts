@@ -46,6 +46,14 @@ test('admin executa ações em lote reversíveis e confirma exclusão permanente
   const originalFavorites = await favoritesResponse.json() as { trackIds: string[] };
   const originallyFavorite = new Set(originalFavorites.trackIds);
 
+  for (const trackId of trackIds) {
+    const resetFavorite = await request.put(`/api/favorites/${encodeURIComponent(trackId)}`, {
+      headers: mutationHeaders,
+      data: { favorite: false }
+    });
+    expect(resetFavorite.ok()).toBeTruthy();
+  }
+
   const playlistResponse = await request.post('/api/playlists', {
     headers: mutationHeaders,
     data: { name: `Bulk actions ${testInfo.retry}` }
@@ -73,8 +81,7 @@ test('admin executa ações em lote reversíveis e confirma exclusão permanente
     }
 
     await selectTracks(page, titles);
-    const favoriteButton = page.getByTestId('admin-bulk-toolbar').getByRole('button', { name: /Favoritar/ });
-    if (await favoriteButton.isEnabled()) await favoriteButton.click();
+    await page.getByTestId('admin-bulk-toolbar').getByRole('button', { name: 'Favoritar 2', exact: true }).click();
     const favoritesAfter = await request.get('/api/favorites');
     const favoritesPayload = await favoritesAfter.json() as { trackIds: string[] };
     expect(trackIds.every(id => favoritesPayload.trackIds.includes(id))).toBeTruthy();
@@ -140,12 +147,10 @@ test('admin executa ações em lote reversíveis e confirma exclusão permanente
         data: { enabled: true }
       }).catch(() => undefined);
 
-      if (!originallyFavorite.has(trackId)) {
-        await request.put(`/api/favorites/${encodeURIComponent(trackId)}`, {
-          headers: mutationHeaders,
-          data: { favorite: false }
-        }).catch(() => undefined);
-      }
+      await request.put(`/api/favorites/${encodeURIComponent(trackId)}`, {
+        headers: mutationHeaders,
+        data: { favorite: originallyFavorite.has(trackId) }
+      }).catch(() => undefined);
     }
 
     await request.delete(`/api/playlists/${encodeURIComponent(playlistId)}`, {
