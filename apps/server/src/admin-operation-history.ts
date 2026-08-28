@@ -46,6 +46,7 @@ function nullableString(value: unknown) {
 }
 
 function numberValue(value: unknown) {
+  if (value == null) return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 }
@@ -98,7 +99,10 @@ function rawErrorMessage(error: unknown) {
 
 function redactSensitiveText(value: string) {
   let text = value.replace(/[\r\n\t]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
-  text = text.replace(/\b(?:authorization|cookie|password|passwd|token|secret|api[_-]?key)\s*[:=]\s*[^\s,;]+/gi, '$&'.replace(/=.*/, '') || '[redigido]');
+  text = text.replace(
+    /\b(authorization|cookie|password|passwd|token|secret|api[_-]?key)\s*[:=]\s*[^\s,;]+/gi,
+    (_match, key: string) => `${key}=[redigido]`
+  );
   text = text.replace(/\bBearer\s+[A-Za-z0-9._~+\/-]+=*/gi, 'Bearer [redigido]');
   text = text.replace(/https?:\/\/[^\s)\]}>,;]+/gi, '[URL removida]');
   text = text.replace(/\b[A-Za-z]:\\(?:[^\\\s]+\\)*[^\s)\]}>,;]*/g, '[caminho removido]');
@@ -230,7 +234,7 @@ export class AdminOperationHistoryStore {
     this.db.exec('PRAGMA journal_mode = WAL;');
     this.now = options.now ?? (() => new Date());
     this.createId = options.createId ?? randomUUID;
-    this.maxRetainedOperations = Math.max(20, Math.min(5_000, Math.trunc(options.maxRetainedOperations ?? DEFAULT_MAX_RETAINED_OPERATIONS)));
+    this.maxRetainedOperations = Math.max(1, Math.min(5_000, Math.trunc(options.maxRetainedOperations ?? DEFAULT_MAX_RETAINED_OPERATIONS)));
 
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS admin_operation_history (
