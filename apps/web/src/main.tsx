@@ -17,6 +17,7 @@ import './admin-metadata.css';
 import './admin-quarantine.css';
 import './admin-bulk.css';
 import './admin-transcode-cache.css';
+import './admin-operation-history.css';
 import './my-account.css';
 import './administration.css';
 import './desktop-shell.css';
