@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -71,6 +71,23 @@ test('cria snapshot SQLite consistente e inclui somente configuração operacion
     await verifyBackupArtifact(result.artifactPath);
   } finally {
     writer.close();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('falha na criação remove diretório parcial', async () => {
+  const dir = await tempDir();
+  const databasePath = path.join(dir, 'home-music.db');
+  const outputRoot = path.join(dir, 'backups');
+  try {
+    await writeFile(databasePath, 'não é sqlite');
+    await assert.rejects(() => createBackupArtifact({
+      databasePath,
+      outputRoot,
+      createId: () => 'partial-cleanup-id'
+    }));
+    assert.deepEqual(await readdir(outputRoot), []);
+  } finally {
     await rm(dir, { recursive: true, force: true });
   }
 });
