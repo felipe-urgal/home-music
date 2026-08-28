@@ -21,7 +21,7 @@ A Fase 9 usa um staging temporário separado de `MUSIC_DIR` para impedir que byt
 
 ## Configuração
 
-Por padrão, o staging futuro usa `data/import-staging`. O caminho pode ser preparado por configuração com:
+Por padrão, o staging usa `data/import-staging`. O caminho pode ser configurado com:
 
 ```env
 HOME_MUSIC_IMPORT_STAGING_DIR=/caminho/fora/de/MUSIC_DIR
@@ -29,7 +29,9 @@ HOME_MUSIC_IMPORT_STAGING_DIR=/caminho/fora/de/MUSIC_DIR
 
 Para permitir a promoção segura sem cópia intermediária dentro da biblioteca, mantenha o staging no mesmo filesystem de `MUSIC_DIR`.
 
-## Fluxo esperado para as próximas issues
+O upload local habilitado na #93 usa esta infraestrutura diretamente. O limite do upload é independente da localização do staging e está documentado em [`import-upload.md`](./import-upload.md).
+
+## Fluxo da Fase 9
 
 1. criar o job na fila;
 2. criar o workspace aleatório do job;
@@ -40,9 +42,11 @@ Para permitir a promoção segura sem cópia intermediária dentro da biblioteca
 7. `promote()` revalida hash/tamanho e torna o inode visível em `MUSIC_DIR` sem sobrescrever destino existente;
 8. falha/cancelamento remove o staging; cleanup de resíduos após restart será ampliado na issue específica da Fase 9.
 
-## Limites desta entrega
+## Estado atual
 
-Esta issue não implementa ainda upload HTTP, importação por URL, providers externos, criação automática de pastas, escolha de nomes finais, conversão FFmpeg ou retry. Ela fornece a fronteira de filesystem que essas etapas deverão reutilizar.
+A #93 implementa os passos 1–3 para upload local, com progresso e cancelamento. O job permanece `pending` depois que os bytes são recebidos integralmente, pois validação FFmpeg, preview, duplicatas, destino, promoção e atualização incremental continuam nas issues seguintes.
+
+Importação por URL e providers externos ainda não usam esta infraestrutura em runtime.
 
 ## Testes
 
@@ -56,4 +60,5 @@ A suíte cobre:
 - token de validação não forjável por um valor diferente;
 - alteração do payload após validação;
 - promoção bem-sucedida;
-- traversal, symlink no destino e colisão sem sobrescrita.
+- traversal, symlink no destino e colisão sem sobrescrita;
+- integração do upload local com staging sem escrita direta em `MUSIC_DIR`.
