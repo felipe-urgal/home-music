@@ -47,7 +47,8 @@ test('mudança de metadata incrementa revisão composta de library e status', as
     const app = Fastify();
     registerAdminTrackRoutes(app, {
       listTracks: () => [track],
-      setEnabled: () => track
+      setEnabled: () => track,
+      setLocation: () => track
     }, { databasePath, musicDir });
     app.get('/api/library', async () => ({ tracks: [track], scannedAt: '2026-08-28T00:00:00.000Z', scanning: false, revision: 7 }));
     app.get('/api/library/status', async () => ({ scannedAt: '2026-08-28T00:00:00.000Z', scanning: false, revision: 7 }));
