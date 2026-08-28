@@ -7,6 +7,7 @@ import {
   Music2,
   UserRound
 } from 'lucide-react';
+import { canStorePasswordCredential, storePasswordCredential } from '../password-credentials';
 
 type LoginScreenProps = {
   configured: boolean;
@@ -21,9 +22,11 @@ export function LoginScreen({ configured, error, offlineCount = 0, onLogin, onRe
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [savePassword, setSavePassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const autoOpeningOffline = offlineCount > 0 && Boolean(onOpenOffline);
+  const canSavePassword = canStorePasswordCredential();
 
   useEffect(() => {
     if (autoOpeningOffline) onOpenOffline?.();
@@ -33,10 +36,14 @@ export function LoginScreen({ configured, error, offlineCount = 0, onLogin, onRe
     event.preventDefault();
     if (!username.trim() || !password) return;
 
+    const normalizedUsername = username.trim();
     setSubmitting(true);
     setFormError(null);
     try {
-      await onLogin(username.trim(), password);
+      await onLogin(normalizedUsername, password);
+      if (savePassword && canSavePassword) {
+        await storePasswordCredential(normalizedUsername, password);
+      }
     } catch (error) {
       setFormError(error instanceof Error ? error.message : 'Não foi possível entrar.');
     } finally {
@@ -131,6 +138,21 @@ export function LoginScreen({ configured, error, offlineCount = 0, onLogin, onRe
               </button>
             </div>
           </div>
+
+          {canSavePassword && (
+            <label className="login-save-password">
+              <input
+                type="checkbox"
+                checked={savePassword}
+                disabled={submitting}
+                onChange={event => setSavePassword(event.target.checked)}
+              />
+              <span>
+                <strong>Salvar senha neste dispositivo</strong>
+                <small>Usa o gerenciador seguro de senhas do navegador.</small>
+              </span>
+            </label>
+          )}
 
           {(formError || error) && <div className="login-error" role="alert">{formError || error}</div>}
 
