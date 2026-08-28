@@ -40,6 +40,13 @@ export class TranscodeCacheBusyError extends Error {
   }
 }
 
+export class UnsafeTranscodeCacheDirectoryError extends Error {
+  constructor() {
+    super('O diretório do cache de transcoding é inseguro ou inválido.');
+    this.name = 'UnsafeTranscodeCacheDirectoryError';
+  }
+}
+
 function safeCount(value: number) {
   return Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
 }
@@ -129,9 +136,17 @@ export class TranscodeCacheMaintenance {
     waiters.forEach(resolve => resolve());
   }
 
-  private async scanFiles() {
+  private async ensureSafeCacheDirectory() {
     await mkdir(this.options.cacheDir, { recursive: true, mode: 0o700 });
+    const directory = await lstat(this.options.cacheDir);
+    if (directory.isSymbolicLink() || !directory.isDirectory()) {
+      throw new UnsafeTranscodeCacheDirectoryError();
+    }
     await chmod(this.options.cacheDir, 0o700);
+  }
+
+  private async scanFiles() {
+    await this.ensureSafeCacheDirectory();
     const entries = await readdir(this.options.cacheDir, { withFileTypes: true });
     const files: CacheFile[] = [];
 
@@ -143,7 +158,7 @@ export class TranscodeCacheMaintenance {
       const filePath = path.join(this.options.cacheDir, entry.name);
       try {
         const info = await lstat(filePath);
-        if (!info.isFile()) continue;
+        if (!info.isFile() || info.isSymbolicLink()) continue;
         files.push({ path: filePath, size: Math.max(0, info.size), temporary });
       } catch {
         // O arquivo pode ter desaparecido entre readdir e lstat.
