@@ -27,6 +27,10 @@ type AdminTrackRouteOptions = {
   musicDir?: string;
 };
 
+type RevisionPayload = {
+  revision?: unknown;
+};
+
 function sendQuarantineError(reply: FastifyReply, error: unknown) {
   if (error instanceof MediaQuarantineOperationError) {
     return reply.code(error.statusCode).send({ error: error.message });
@@ -44,10 +48,19 @@ function sendMetadataValidationError(reply: FastifyReply, error: unknown) {
   throw error;
 }
 
+function isObjectPayload(payload: unknown): payload is Record<string, unknown> {
+  return Boolean(payload) && typeof payload === 'object' && !Array.isArray(payload);
+}
+
 function isTrackArrayPayload(payload: unknown): payload is { tracks: Track[] } {
-  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return false;
-  const tracks = (payload as { tracks?: unknown }).tracks;
-  return Array.isArray(tracks);
+  if (!isObjectPayload(payload)) return false;
+  return Array.isArray(payload.tracks);
+}
+
+function withMetadataRevision<T extends Record<string, unknown>>(payload: T, metadataRevision: number): T {
+  const revision = (payload as RevisionPayload).revision;
+  if (!Number.isInteger(revision)) return payload;
+  return { ...payload, revision: Number(revision) + metadataRevision };
 }
 
 export function registerAdminTrackRoutes(
@@ -61,6 +74,7 @@ export function registerAdminTrackRoutes(
     options.musicDir ?? process.env.MUSIC_DIR ?? ''
   );
   const metadataOverrides = new TrackMetadataOverrideStore(databasePath);
+  let metadataRevision = 0;
 
   app.addHook('onClose', async () => {
     metadataOverrides.close();
@@ -68,15 +82,22 @@ export function registerAdminTrackRoutes(
   });
 
   // O scanner e `tracks` mantêm somente metadata física. Esta borda resolve a visão
-  // efetiva da biblioteca sem jamais escrever o override de volta no arquivo ou no scan.
+  // efetiva sem promover overrides para o estado físico. A revisão composta permite
+  // que outras abas percebam mudanças administrativas via polling normal da biblioteca.
   app.addHook('preSerialization', async (request, _reply, payload) => {
     const pathname = request.url.split('?', 1)[0];
-    if (pathname !== '/api/library' || !isTrackArrayPayload(payload)) return payload;
-    metadataOverrides.refresh();
-    return {
-      ...payload,
-      tracks: payload.tracks.map(track => metadataOverrides.resolveTrack(track))
-    };
+    if (pathname !== '/api/library' && pathname !== '/api/library/status') return payload;
+
+    let nextPayload = payload;
+    if (pathname === '/api/library' && isTrackArrayPayload(nextPayload)) {
+      metadataOverrides.refresh();
+      nextPayload = {
+        ...nextPayload,
+        tracks: nextPayload.tracks.map(track => metadataOverrides.resolveTrack(track))
+      };
+    }
+    if (isObjectPayload(nextPayload)) return withMetadataRevision(nextPayload, metadataRevision);
+    return nextPayload;
   });
 
   app.get('/api/admin/tracks', async (_request, reply) => {
@@ -134,6 +155,7 @@ export function registerAdminTrackRoutes(
         const patch = normalizeMetadataOverridePatch(request.body);
         const metadata = metadataOverrides.patch(request.params.id, patch);
         if (!metadata) return reply.code(404).send({ error: 'Música não encontrada.' });
+        metadataRevision += 1;
         return metadata;
       } catch (error) {
         return sendMetadataValidationError(reply, error);
@@ -148,6 +170,7 @@ export function registerAdminTrackRoutes(
     }
     const metadata = metadataOverrides.clear(request.params.id);
     if (!metadata) return reply.code(404).send({ error: 'Música não encontrada.' });
+    metadataRevision += 1;
     return metadata;
   });
 
