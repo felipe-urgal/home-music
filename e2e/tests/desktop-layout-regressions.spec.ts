@@ -43,6 +43,7 @@ test('player desktop respeita sidebar e não cobre telas utilitárias', async ({
   await expect(playerBar).toBeVisible();
 
   const usersEntry = page.getByRole('button', { name: /Usuários/ });
+  await usersEntry.scrollIntoViewIfNeeded();
   await expect(usersEntry).toBeVisible();
   const usersEntryBox = await usersEntry.boundingBox();
   const administrationPlayerBarBox = await playerBar.boundingBox();
