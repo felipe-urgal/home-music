@@ -180,8 +180,10 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
       error: null
     });
 
+    let createdJobId: string | null = null;
     try {
       const job = await createAdminImportUpload(file);
+      createdJobId = job.id;
       if (cancelRequestedRef.current) return;
       setActiveUpload(current => current ? { ...current, jobId: job.id, stage: 'uploading' } : current);
       const transfer = uploadAdminImportFile(job.id, file, loaded => {
@@ -196,6 +198,10 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
       await loadJobs(true);
     } catch (error) {
       if (cancelRequestedRef.current) return;
+      if (createdJobId) {
+        await cancelAdminImportUpload(createdJobId).catch(() => undefined);
+        await loadJobs(true);
+      }
       const message = error instanceof Error ? error.message : 'Não foi possível enviar o arquivo.';
       setActiveUpload(current => current ? { ...current, stage: 'error', error: message } : current);
     } finally {
@@ -237,6 +243,7 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
   const onDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     setDragging(false);
+    if (uploadBusy) return;
     handleFiles(event.dataTransfer.files);
   };
 
@@ -333,7 +340,7 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
               </div>
               {activeUpload.stage === 'queued' && (
                 <small className="admin-import-upload-status__hint">
-                  Arquivo recebido no staging. Ele permanece fora de MUSIC_DIR enquanto aguarda as próximas validações do pipeline.
+                  Arquivo recebido com segurança. Ele ainda não entrou na biblioteca e aguarda as próximas validações.
                 </small>
               )}
               {activeUpload.error && <small className="admin-import-job__error">{activeUpload.error}</small>}
