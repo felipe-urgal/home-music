@@ -230,6 +230,7 @@ function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline }: Aut
           <LibraryScreen
             currentUser={currentUser}
             data={library}
+            offline={offline}
             current={current}
             playing={player.playing}
             hasNext={player.hasNext}
