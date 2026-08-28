@@ -3,13 +3,15 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import type {
   AdminQuarantineResponse,
   AdminTrack,
-  AdminTrackMetadataResponse,
   AdminTracksResponse,
-  TrackMetadataOverridePatch
+  Track
 } from '@home-music/shared';
 import { MediaQuarantineOperationError, MediaQuarantineStore } from './media-quarantine.js';
 import { UnsafeLibraryPathError } from './security.js';
-import { normalizeMetadataOverridePatch } from './track-metadata-overrides.js';
+import {
+  normalizeMetadataOverridePatch,
+  TrackMetadataOverrideStore
+} from './track-metadata-overrides.js';
 
 export const PERMANENT_DELETE_CONFIRMATION = 'EXCLUIR PERMANENTEMENTE' as const;
 
@@ -18,9 +20,6 @@ const defaultDatabasePath = fileURLToPath(new URL('../../../data/home-music.db',
 type AdminTrackService = {
   listTracks: () => AdminTrack[];
   setEnabled: (trackId: string, enabled: boolean) => AdminTrack | null;
-  getMetadata: (trackId: string) => AdminTrackMetadataResponse | null;
-  patchMetadata: (trackId: string, patch: TrackMetadataOverridePatch) => AdminTrackMetadataResponse | null;
-  clearMetadata: (trackId: string) => AdminTrackMetadataResponse | null;
 };
 
 type AdminTrackRouteOptions = {
@@ -45,22 +44,48 @@ function sendMetadataValidationError(reply: FastifyReply, error: unknown) {
   throw error;
 }
 
+function isTrackArrayPayload(payload: unknown): payload is { tracks: Track[] } {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return false;
+  const tracks = (payload as { tracks?: unknown }).tracks;
+  return Array.isArray(tracks);
+}
+
 export function registerAdminTrackRoutes(
   app: FastifyInstance,
   service: AdminTrackService,
   options: AdminTrackRouteOptions = {}
 ) {
+  const databasePath = options.databasePath || process.env.HOME_MUSIC_DATABASE_PATH || defaultDatabasePath;
   const quarantine = new MediaQuarantineStore(
-    options.databasePath || process.env.HOME_MUSIC_DATABASE_PATH || defaultDatabasePath,
+    databasePath,
     options.musicDir ?? process.env.MUSIC_DIR ?? ''
   );
+  const metadataOverrides = new TrackMetadataOverrideStore(databasePath);
 
-  app.addHook('onClose', async () => { quarantine.close(); });
+  app.addHook('onClose', async () => {
+    metadataOverrides.close();
+    quarantine.close();
+  });
+
+  // O scanner e `tracks` mantêm somente metadata física. Esta borda resolve a visão
+  // efetiva da biblioteca sem jamais escrever o override de volta no arquivo ou no scan.
+  app.addHook('preSerialization', async (request, _reply, payload) => {
+    const pathname = request.url.split('?', 1)[0];
+    if (pathname !== '/api/library' || !isTrackArrayPayload(payload)) return payload;
+    metadataOverrides.refresh();
+    return {
+      ...payload,
+      tracks: payload.tracks.map(track => metadataOverrides.resolveTrack(track))
+    };
+  });
 
   app.get('/api/admin/tracks', async (_request, reply) => {
     reply.header('Cache-Control', 'private, no-store');
     quarantine.pruneResolvedTombstones();
-    const tracks = service.listTracks().filter(track => !quarantine.hasHidden(track.id));
+    metadataOverrides.refresh();
+    const tracks = service.listTracks()
+      .filter(track => !quarantine.hasHidden(track.id))
+      .map(track => metadataOverrides.resolveTrack(track));
     const response: AdminTracksResponse = {
       tracks,
       active: tracks.filter(track => track.enabled).length,
@@ -82,7 +107,8 @@ export function registerAdminTrackRoutes(
 
       const track = service.setEnabled(request.params.id, request.body.enabled);
       if (!track) return reply.code(404).send({ error: 'Música não encontrada.' });
-      return { track };
+      metadataOverrides.refresh();
+      return { track: metadataOverrides.resolveTrack(track) };
     }
   );
 
@@ -91,7 +117,7 @@ export function registerAdminTrackRoutes(
     if (quarantine.hasHidden(request.params.id)) {
       return reply.code(409).send({ error: 'Música está na lixeira. Restaure antes de editar os metadados.' });
     }
-    const metadata = service.getMetadata(request.params.id);
+    const metadata = metadataOverrides.get(request.params.id);
     if (!metadata) return reply.code(404).send({ error: 'Música não encontrada.' });
     return metadata;
   });
@@ -104,16 +130,14 @@ export function registerAdminTrackRoutes(
         return reply.code(409).send({ error: 'Música está na lixeira. Restaure antes de editar os metadados.' });
       }
 
-      let patch: TrackMetadataOverridePatch;
       try {
-        patch = normalizeMetadataOverridePatch(request.body);
+        const patch = normalizeMetadataOverridePatch(request.body);
+        const metadata = metadataOverrides.patch(request.params.id, patch);
+        if (!metadata) return reply.code(404).send({ error: 'Música não encontrada.' });
+        return metadata;
       } catch (error) {
         return sendMetadataValidationError(reply, error);
       }
-
-      const metadata = service.patchMetadata(request.params.id, patch);
-      if (!metadata) return reply.code(404).send({ error: 'Música não encontrada.' });
-      return metadata;
     }
   );
 
@@ -122,7 +146,7 @@ export function registerAdminTrackRoutes(
     if (quarantine.hasHidden(request.params.id)) {
       return reply.code(409).send({ error: 'Música está na lixeira. Restaure antes de editar os metadados.' });
     }
-    const metadata = service.clearMetadata(request.params.id);
+    const metadata = metadataOverrides.clear(request.params.id);
     if (!metadata) return reply.code(404).send({ error: 'Música não encontrada.' });
     return metadata;
   });
@@ -140,8 +164,10 @@ export function registerAdminTrackRoutes(
       return reply.code(409).send({ error: 'Música já está na lixeira.' });
     }
 
-    const track = service.listTracks().find(item => item.id === request.params.id);
-    if (!track) return reply.code(404).send({ error: 'Música não encontrada.' });
+    const physicalTrack = service.listTracks().find(item => item.id === request.params.id);
+    if (!physicalTrack) return reply.code(404).send({ error: 'Música não encontrada.' });
+    metadataOverrides.refresh();
+    const track = metadataOverrides.resolveTrack(physicalTrack);
     const { enabled: previousEnabled, ...publicTrack } = track;
 
     if (previousEnabled) service.setEnabled(track.id, false);
@@ -167,7 +193,8 @@ export function registerAdminTrackRoutes(
         },
         () => { service.setEnabled(request.params.id, false); }
       );
-      return { track };
+      metadataOverrides.refresh();
+      return { track: metadataOverrides.resolveTrack(track) };
     } catch (error) {
       return sendQuarantineError(reply, error);
     }
