@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ImportJob } from '@home-music/shared';
 import {
   CheckCircle2,
@@ -44,26 +44,35 @@ export function AdminImportDestinationPanel({
   const [loading, setLoading] = useState(false);
   const [promoting, setPromoting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const planRequestRef = useRef(0);
   const ready = duplicateReady(check);
 
   const loadPlan = async (nextFolderPath: string) => {
-    if (!ready || promoting) return;
+    if (!ready || promoting) return false;
+    const requestId = ++planRequestRef.current;
     setFolderPath(nextFolderPath);
     setPlan(null);
     setLoading(true);
     setError(null);
     try {
-      setPlan(await getAdminImportDestination(job.id, nextFolderPath));
+      const nextPlan = await getAdminImportDestination(job.id, nextFolderPath);
+      if (planRequestRef.current !== requestId) return false;
+      setPlan(nextPlan);
+      return true;
     } catch (caught) {
+      if (planRequestRef.current !== requestId) return false;
       setError(caught instanceof Error ? caught.message : 'Não foi possível calcular o destino.');
+      return false;
     } finally {
-      setLoading(false);
+      if (planRequestRef.current === requestId) setLoading(false);
     }
   };
 
   useEffect(() => {
+    const requestId = ++planRequestRef.current;
     if (!ready) {
       setPlan(null);
+      setLoading(false);
       return;
     }
     let active = true;
@@ -74,25 +83,27 @@ export function AdminImportDestinationPanel({
       getAdminImportDestinationFolders().catch(() => [] as AdminImportDestinationFolder[])
     ])
       .then(([destination, availableFolders]) => {
-        if (!active) return;
+        if (!active || planRequestRef.current !== requestId) return;
         setFolderPath('Importados');
         setPlan(destination);
         setFolders(availableFolders);
       })
       .catch(caught => {
-        if (!active) return;
+        if (!active || planRequestRef.current !== requestId) return;
         setPlan(null);
         setError(caught instanceof Error ? caught.message : 'Não foi possível calcular o destino.');
       })
-      .finally(() => { if (active) setLoading(false); });
+      .finally(() => {
+        if (active && planRequestRef.current === requestId) setLoading(false);
+      });
     return () => { active = false; };
   }, [job.id, job.metadataPreview?.generatedAt, ready]);
 
   const useNewFolder = async () => {
     const next = newFolderPath.trim();
     if (!next || loading || promoting) return;
-    await loadPlan(next);
-    setCreatingFolder(false);
+    const accepted = await loadPlan(next);
+    if (accepted) setCreatingFolder(false);
   };
 
   const promote = async () => {
