@@ -32,7 +32,8 @@ export type ImportRetryStarter = (
 export class ImportRetryStartError extends Error {
   constructor(
     message: string,
-    public readonly statusCode = 400
+    public readonly statusCode = 400,
+    public readonly job: ImportJob | null = null
   ) {
     super(message);
     this.name = 'ImportRetryStartError';
