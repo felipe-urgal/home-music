@@ -15,18 +15,18 @@ O snapshot antes da transformação é importante porque o processamento técnic
 
 ## Regra de confiança
 
-A metadata embutida no arquivo é a fonte primária do preview. Valores externos nunca substituem silenciosamente um valor local.
+A metadata embutida no arquivo é a fonte primária do preview. Valores externos nunca substituem silenciosamente um valor local e, quando são a única fonte para um campo, permanecem fora do valor efetivo até aceite explícito do administrador.
 
 Cada campo recebe um estado:
 
 - `trusted`: valor lido do arquivo, sem conflito externo;
-- `suggested`: o arquivo não trouxe o campo e um provider sugeriu um valor;
-- `conflict`: arquivo e provider divergem; o valor local continua efetivo;
+- `suggested`: o arquivo não trouxe o campo e um provider sugeriu um valor, mas ele ainda não é efetivo;
+- `conflict`: arquivo ou fallback local e provider divergem; o valor local continua efetivo;
 - `fallback`: valor derivado de forma previsível, como o nome do arquivo para título ou o artista para artista do álbum;
 - `missing`: nenhuma fonte confiável/sugerida trouxe o valor;
 - `edited`: o administrador ajustou o campo no preview.
 
-Sugestões e conflitos ficam visíveis na interface para revisão humana. A etapa não transforma uma sugestão externa em metadata confiável automaticamente.
+Sugestões e conflitos ficam visíveis na interface para revisão humana. O botão **Usar sugestão** apenas coloca o valor externo no formulário; ele só se torna `edited` e efetivo depois de **Salvar ajustes**. Assim, a etapa nunca transforma uma sugestão externa em metadata confiável automaticamente.
 
 ## Campos
 
