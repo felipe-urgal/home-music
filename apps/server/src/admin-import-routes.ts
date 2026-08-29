@@ -3,6 +3,10 @@ import type { Readable } from 'node:stream';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { AdminImportJobsResponse } from '@home-music/shared';
 import type { ImportJobQueue } from './import-job-queue.js';
+import {
+  ImportRetryStartError,
+  installImportRetryStarter
+} from './import-retry.js';
 import { ImportStagingManager } from './import-staging.js';
 import {
   DEFAULT_IMPORT_STAGING_TTL_HOURS,
@@ -218,6 +222,33 @@ export function registerAdminImportRoutes(
     : process.env.MUSIC_DIR?.trim()
       ? createDefaultStagingCleanupManager(app, staging())
       : null;
+
+  installImportRetryStarter(app, async (context, input) => {
+    const before = new Set(queue.list().map(job => job.id));
+    try {
+      if (context.source.type === 'upload') {
+        return await uploads.start(input.fileName, input.size, context.lineage);
+      }
+      if (context.source.type === 'url') {
+        return await urls.start(input.url);
+      }
+      throw new ImportRetryStartError('A fonte desta importação não suporta retry seguro.', 409);
+    } catch (error) {
+      if (error instanceof ImportRetryStartError) throw error;
+      const child = queue.list().find(job => !before.has(job.id)) ?? null;
+      if (error instanceof ImportUploadError || error instanceof ImportUrlError) {
+        throw new ImportRetryStartError(error.message, error.statusCode, child);
+      }
+      if (child) {
+        throw new ImportRetryStartError(
+          child.error || 'Não foi possível iniciar a nova tentativa de importação.',
+          500,
+          child
+        );
+      }
+      throw error;
+    }
+  });
 
   if (stagingCleanup) {
     app.addHook('onReady', async () => {
