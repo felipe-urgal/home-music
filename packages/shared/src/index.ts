@@ -5,6 +5,17 @@ export type PlaylistSource = 'manual' | 'rekordbox';
 export type UserRole = 'admin' | 'user';
 export type ImportJobStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
 export type ImportJobSourceType = 'upload' | 'url' | 'provider';
+export type ImportOutputProfile = 'original' | 'economy' | 'compatibility';
+export type ImportMediaAction = 'preserve' | 'transcode';
+export type ImportMediaDecisionReason =
+  | 'original-compatible'
+  | 'already-economical'
+  | 'already-compatible'
+  | 'economy-requested'
+  | 'compatibility-requested'
+  | 'unsupported-original'
+  | 'contains-video'
+  | 'multiple-audio-streams';
 export type AdminOperationKind = 'scan' | 'import';
 export type AdminOperationStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
 export type AdminScanTrigger = 'manual' | 'automatic';
@@ -80,6 +91,33 @@ export type ImportJobSource = {
   provider: string | null;
 };
 
+export type ImportMediaTechnicalInfo = {
+  container: string;
+  codec: string;
+  durationSeconds: number;
+  bitRate: number | null;
+  sampleRate: number | null;
+  channels: number | null;
+  audioStreams: number;
+  videoStreams: number;
+};
+
+export type ImportMediaOutputInfo = {
+  container: string;
+  codec: string;
+  extension: string;
+  bitRate: number | null;
+};
+
+export type ImportMediaDecision = {
+  profile: ImportOutputProfile;
+  action: ImportMediaAction;
+  reason: ImportMediaDecisionReason;
+  selectedAudioStream: number;
+  input: ImportMediaTechnicalInfo;
+  output: ImportMediaOutputInfo;
+};
+
 export type ImportJob = {
   id: string;
   source: ImportJobSource;
@@ -90,6 +128,7 @@ export type ImportJob = {
   startedAt: string | null;
   finishedAt: string | null;
   error: string | null;
+  mediaDecision: ImportMediaDecision | null;
 };
 
 export type AdminImportJobsResponse = {
