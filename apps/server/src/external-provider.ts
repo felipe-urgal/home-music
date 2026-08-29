@@ -356,6 +356,13 @@ export class ExternalProviderImportManager {
     if (job.status !== 'processing' && job.status !== 'pending') {
       throw new ExternalProviderError('provider_cancelled', 'Este job não pode mais ser cancelado.', 409);
     }
+    if (job.status === 'processing' && this.prepared.has(jobId)) {
+      throw new ExternalProviderError(
+        'provider_cancelled',
+        'A aquisição externa já terminou e a mídia está sendo processada; o staging não pode mais ser cancelado pelo provider.',
+        409
+      );
+    }
 
     const session = this.sessions.get(jobId);
     if (session) {
