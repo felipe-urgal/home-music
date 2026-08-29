@@ -1,0 +1,96 @@
+.admin-import-provider {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.24);
+}
+
+.admin-import-provider__unavailable {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border: 1px dashed rgba(148, 163, 184, 0.24);
+  border-radius: 12px;
+}
+
+.admin-import-provider__unavailable > svg,
+.admin-import-provider__policy > svg {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+}
+
+.admin-import-provider__unavailable > div {
+  display: grid;
+  gap: 3px;
+}
+
+.admin-import-provider__unavailable small,
+.admin-import-provider__policy {
+  color: rgba(226, 232, 240, 0.66);
+}
+
+.admin-import-provider__form,
+.admin-import-provider__fields {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-import-provider__fields {
+  grid-template-columns: minmax(130px, 0.45fr) minmax(220px, 1.55fr) auto;
+  align-items: end;
+}
+
+.admin-import-provider__fields label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  font-size: 0.78rem;
+  color: rgba(226, 232, 240, 0.72);
+}
+
+.admin-import-provider__fields select,
+.admin-import-provider__fields input {
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.56);
+  color: inherit;
+}
+
+.admin-import-provider__fields button {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+
+.admin-import-provider__fields button svg {
+  width: 16px;
+  height: 16px;
+}
+
+.admin-import-provider__policy {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+
+@media (max-width: 760px) {
+  .admin-import-provider__fields {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-import-provider__fields button {
+    width: 100%;
+  }
+}
