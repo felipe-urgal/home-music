@@ -6,7 +6,7 @@ export type UserRole = 'admin' | 'user';
 export type ImportJobStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
 export type ImportJobSourceType = 'upload' | 'url' | 'provider';
 export type ImportOutputProfile = 'original' | 'economy' | 'compatibility';
-export type ImportMediaAction = 'preserve' | 'transcode';
+export type ImportMediaAction = 'preserve' | 'remux' | 'transcode';
 export type ImportMediaDecisionReason =
   | 'original-compatible'
   | 'already-economical'
