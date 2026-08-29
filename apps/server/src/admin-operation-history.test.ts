@@ -251,6 +251,9 @@ test('persiste lineage entre tentativas e bloqueia retry repetido do mesmo pai',
       rootJobId: 'root',
       attempt: 3
     });
+    const claimedChild = store.list({ kind: 'import' }).find(item => item.id === 'import-child');
+    assert.equal(claimedChild?.canRetry, false);
+    assert.equal(store.releaseImportRetry(third), true);
     store.close();
 
     const reopened = new AdminOperationHistoryStore(databasePath);
