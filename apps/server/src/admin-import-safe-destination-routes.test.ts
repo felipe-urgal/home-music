@@ -105,7 +105,8 @@ async function fixture() {
     mediaValidation,
     metadataPreview,
     duplicateDetection,
-    safeDestination
+    safeDestination,
+    automaticFlow: null
   });
 
   return { app, root, musicDir, stagingRoot, queue, staging, sessions };
