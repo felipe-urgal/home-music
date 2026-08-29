@@ -87,10 +87,9 @@ function playlistUrl(value: string) {
   }
 
   const hostname = literalHost(url.hostname).toLowerCase();
-  const youtubeHost = hostname === 'youtube.com'
-    || hostname.endsWith('.youtube.com')
-    || hostname === 'youtu.be';
-  if (!youtubeHost || !url.searchParams.get('list')) return null;
+  const youtubeHost = hostname === 'youtube.com' || hostname.endsWith('.youtube.com');
+  const explicitPlaylist = url.pathname === '/playlist' && Boolean(url.searchParams.get('list'));
+  if (!youtubeHost || !explicitPlaylist) return null;
   if (
     hostname === 'localhost'
     || hostname.endsWith('.localhost')
