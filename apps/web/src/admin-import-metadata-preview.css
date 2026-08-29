@@ -193,19 +193,20 @@
   gap: 5px;
 }
 
-.admin-import-metadata-field > span {
+.admin-import-metadata-field > label {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  cursor: pointer;
 }
 
-.admin-import-metadata-field > span strong {
+.admin-import-metadata-field > label strong {
   color: #aebcc5;
   font-size: 9px;
 }
 
-.admin-import-metadata-field > span small {
+.admin-import-metadata-field > label small {
   padding: 3px 5px;
   border-radius: 999px;
   background: rgba(255,255,255,.04);
@@ -214,20 +215,20 @@
   font-weight: 700;
 }
 
-.admin-import-metadata-field.is-trusted > span small,
-.admin-import-metadata-field.is-edited > span small {
+.admin-import-metadata-field.is-trusted > label small,
+.admin-import-metadata-field.is-edited > label small {
   background: rgba(55,145,91,.08);
   color: #7eb994;
 }
 
-.admin-import-metadata-field.is-conflict > span small,
-.admin-import-metadata-field.is-suggested > span small,
-.admin-import-metadata-field.is-fallback > span small {
+.admin-import-metadata-field.is-conflict > label small,
+.admin-import-metadata-field.is-suggested > label small,
+.admin-import-metadata-field.is-fallback > label small {
   background: rgba(190,143,54,.08);
   color: #c0a065;
 }
 
-.admin-import-metadata-field.is-missing > span small {
+.admin-import-metadata-field.is-missing > label small {
   background: rgba(190,75,75,.07);
   color: #b78484;
 }
