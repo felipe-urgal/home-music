@@ -11,6 +11,7 @@ import { ImportJobQueue } from './import-job-queue.js';
 import { ImportStagingManager } from './import-staging.js';
 import { ImportUploadManager } from './import-upload.js';
 import { ImportUrlManager } from './import-url.js';
+import { ImportMediaValidationManager } from './import-media-validation.js';
 import { SESSION_COOKIE_NAME, SessionManager } from './auth.js';
 import { installApiAuthPolicy } from './auth-policy.js';
 import type { AuthenticatedUserState } from './user-auth-store.js';
@@ -33,6 +34,21 @@ function remoteAudioResponse() {
     }
   } as unknown as ReturnType<typeof http.request>;
   return { response, request };
+}
+
+function validMp3Probe() {
+  return JSON.stringify({
+    format: { format_name: 'mp3', duration: '120', bit_rate: '192000' },
+    streams: [{
+      index: 0,
+      codec_name: 'mp3',
+      codec_type: 'audio',
+      sample_rate: '44100',
+      channels: 2,
+      duration: '120',
+      bit_rate: '192000'
+    }]
+  });
 }
 
 async function waitForStatus(queue: ImportJobQueue, id: string, expected: string) {
@@ -62,6 +78,14 @@ async function buildApp() {
     requestUrl: async () => remoteAudioResponse(),
     validateAudio: async () => undefined
   });
+  const mediaValidation = new ImportMediaValidationManager({
+    queue,
+    staging,
+    ffmpegCommand: 'ffmpeg-test',
+    ffprobeCommand: 'ffprobe-test',
+    probeRunner: async () => validMp3Probe(),
+    transcodeRunner: async () => { throw new Error('transcode não esperado neste teste'); }
+  });
   const sessions = new SessionManager('admin', 'password-segura-2026');
   const users = new Map<string, AuthenticatedUserState>([
     ['user-1', { id: 'user-1', username: 'maria', role: 'user', passwordMustChange: false }],
@@ -73,7 +97,7 @@ async function buildApp() {
     sessions,
     users: { getEnabledUserById: userId => users.get(userId) ?? null }
   });
-  registerAdminImportRoutes(app, queue, { uploads, urls });
+  registerAdminImportRoutes(app, queue, { uploads, urls, mediaValidation });
   return { app, root, musicDir, stagingRoot, queue, sessions };
 }
 
@@ -105,6 +129,14 @@ test('importação administrativa exige admin e header de mutação', async () =
     });
     assert.equal(missingUrlHeader.statusCode, 403);
 
+    const missingValidationHeader = await item.app.inject({
+      method: 'POST',
+      url: '/api/admin/imports/job-inexistente/validate',
+      headers: { cookie: cookie(adminToken) },
+      payload: { profile: 'original' }
+    });
+    assert.equal(missingValidationHeader.statusCode, 403);
+
     const list = await item.app.inject({
       method: 'GET',
       url: '/api/admin/imports',
@@ -116,6 +148,10 @@ test('importação administrativa exige admin e header de mutação', async () =
     assert.equal(list.json().url.maxBytes, 32);
     assert.equal(list.json().url.maxRedirects, 1);
     assert.deepEqual(list.json().url.acceptedProtocols, ['http:', 'https:']);
+    assert.deepEqual(
+      list.json().mediaValidation.profiles.map((profile: { id: string }) => profile.id),
+      ['original', 'economy', 'compatibility']
+    );
   } finally {
     await item.app.close();
     await rm(item.root, { recursive: true, force: true });
@@ -152,8 +188,96 @@ test('rota recebe bytes no staging e nunca grava diretamente em MUSIC_DIR', asyn
     assert.equal(uploaded.statusCode, 200);
     assert.equal(uploaded.json().receivedBytes, 4);
     assert.equal(uploaded.json().job.status, 'pending');
+    assert.equal(uploaded.json().job.mediaDecision, null);
     assert.equal((await readdir(item.musicDir)).length, 0);
     assert.equal((await readdir(item.stagingRoot)).length, 1);
+  } finally {
+    await item.app.close();
+    await rm(item.root, { recursive: true, force: true });
+  }
+});
+
+test('rota valida mídia pendente, registra decisão no job e mantém MUSIC_DIR intacto', async () => {
+  const item = await buildApp();
+  const adminToken = item.sessions.createSessionForUser('admin-1');
+  const headers = {
+    cookie: cookie(adminToken),
+    'x-home-music-request': '1'
+  };
+  try {
+    const started = await item.app.inject({
+      method: 'POST',
+      url: '/api/admin/imports/uploads',
+      headers,
+      payload: { fileName: 'faixa.mp3', size: 4 }
+    });
+    const jobId = started.json().job.id as string;
+    const uploaded = await item.app.inject({
+      method: 'PUT',
+      url: `/api/admin/imports/uploads/${jobId}`,
+      headers: { ...headers, 'content-type': 'application/octet-stream' },
+      payload: Buffer.from('abcd')
+    });
+    assert.equal(uploaded.statusCode, 200);
+
+    const validated = await item.app.inject({
+      method: 'POST',
+      url: `/api/admin/imports/${jobId}/validate`,
+      headers,
+      payload: { profile: 'original' }
+    });
+    assert.equal(validated.statusCode, 200);
+    assert.equal(validated.json().job.status, 'pending');
+    assert.equal(validated.json().job.mediaDecision.profile, 'original');
+    assert.equal(validated.json().job.mediaDecision.action, 'preserve');
+    assert.equal(validated.json().job.mediaDecision.output.extension, '.mp3');
+    assert.equal(validated.json().validation.reason, 'original-compatible');
+    assert.equal((await readdir(item.musicDir)).length, 0);
+    assert.equal((await readdir(item.stagingRoot)).length, 1);
+
+    const list = await item.app.inject({
+      method: 'GET',
+      url: '/api/admin/imports',
+      headers: { cookie: cookie(adminToken) }
+    });
+    assert.equal(list.json().jobs[0].mediaDecision.profile, 'original');
+  } finally {
+    await item.app.close();
+    await rm(item.root, { recursive: true, force: true });
+  }
+});
+
+test('rota de validação rejeita perfil inválido sem alterar o job', async () => {
+  const item = await buildApp();
+  const adminToken = item.sessions.createSessionForUser('admin-1');
+  const headers = {
+    cookie: cookie(adminToken),
+    'x-home-music-request': '1'
+  };
+  try {
+    const started = await item.app.inject({
+      method: 'POST',
+      url: '/api/admin/imports/uploads',
+      headers,
+      payload: { fileName: 'faixa.mp3', size: 4 }
+    });
+    const jobId = started.json().job.id as string;
+    await item.app.inject({
+      method: 'PUT',
+      url: `/api/admin/imports/uploads/${jobId}`,
+      headers: { ...headers, 'content-type': 'application/octet-stream' },
+      payload: Buffer.from('abcd')
+    });
+
+    const invalid = await item.app.inject({
+      method: 'POST',
+      url: `/api/admin/imports/${jobId}/validate`,
+      headers,
+      payload: { profile: 'ultra' }
+    });
+    assert.equal(invalid.statusCode, 400);
+    assert.equal(item.queue.get(jobId)?.status, 'pending');
+    assert.equal(item.queue.get(jobId)?.mediaDecision, null);
   } finally {
     await item.app.close();
     await rm(item.root, { recursive: true, force: true });
