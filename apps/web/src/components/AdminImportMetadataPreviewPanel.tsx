@@ -314,7 +314,11 @@ export function AdminImportMetadataPreviewPanel({
   if (compact && ready.length === 0 && waiting.length === 0) return null;
 
   return (
-    <section className={`admin-import-metadata${compact ? ' is-compact' : ''}`} aria-labelledby="admin-import-metadata-title">
+    <section
+      className={`admin-import-metadata${compact ? ' is-compact' : ''}`}
+      aria-label={compact ? 'Prévia da importação' : undefined}
+      aria-labelledby={compact ? undefined : 'admin-import-metadata-title'}
+    >
       {!compact && (
         <div className="admin-import-metadata__heading">
           <div>
