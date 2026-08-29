@@ -8,7 +8,7 @@
 
 A recomendação é usar **yt-dlp como engine principal de aquisição de mídia externa**, executado como **processo externo isolado por uma interface de provider do Home Music**.
 
-Não devemos importar `yt_dlp` dentro do processo Node/Fastify nem acoplar o pipeline principal à API Python. O contrato do Home Music deve falar com um adapter próprio, que executa a CLI sem shell, consome saída estruturada, grava somente no staging e normaliza metadata/erros.
+Não devemos importar `yt_dlp` dentro do processo Node/Fastify nem acoplar o pipeline principal à API Python. O contrato do Home Music deve falar com um adapter próprio, que executa a CLI sem shell, consome saída estruturada, usa uma área temporária exclusiva do provider e entrega o arquivo selecionado ao staging gerenciado pelo core.
 
 A segunda opção é **YouTube.js (`youtubei.js`)** caso no futuro exista necessidade específica de uma integração Node nativa e exclusiva para YouTube. **Streamlink** é uma boa ferramenta, mas é orientada principalmente a live streams e tem suporte VOD deliberadamente limitado. **pytubefix** é ativo, porém restrito ao YouTube e com superfície menor. O `youtube-dl` original fica fora da shortlist operacional por não ter release desde 2021.
 
@@ -34,6 +34,8 @@ A engine precisa maximizar:
 | **Streamlink** | Muitos serviços, foco em streams/live | CLI + API Python | Alta; release `8.5.0` em 2026-08 | BSD-2-Clause / Simplified BSD | Boa engine de streaming; fraca como engine geral de VOD/importação |
 | **pytubefix** | YouTube | Biblioteca Python | Ativa; release `10.11.0` em 2026-07 | MIT | Simples, mas restrita a YouTube |
 | **youtube-dl** | Muitos sites | CLI + API Python | Baixa para nosso critério: última release `2021.12.17` | Unlicense | Não recomendado para nova integração |
+
+Wrappers Node que apenas chamam `yt-dlp` não mudam a decisão: eles podem reduzir boilerplate, mas não eliminam o binário externo, a superfície de segurança nem a necessidade de controlar argumentos, processo, rede e staging. O adapter deve permanecer código nosso e pequeno.
 
 ## 1. yt-dlp — recomendado
 
@@ -63,13 +65,16 @@ Admin UI
   -> Import API
      -> ExternalProvider interface
         -> YtDlpProvider adapter
-           -> processo yt-dlp isolado
-              -> staging do job
+           -> provider scratch isolado
+              -> processo yt-dlp isolado
+              -> arquivo candidato + metadata estruturada
+           -> core copia/streama o arquivo escolhido
+              -> ImportStagingManager
         -> metadata normalizada
      -> pipeline comum de validação/promoção
 ```
 
-O servidor Node controla o ciclo de vida; yt-dlp somente resolve/adquire a mídia dentro da fronteira de provider.
+O servidor Node controla o ciclo de vida. O subprocesso não recebe acesso a `MUSIC_DIR` e **não escreve diretamente no payload gerenciado pelo `ImportStagingManager`**. O resultado do provider passa de volta pelo core antes de entrar no staging validado.
 
 ## 2. YouTube.js — alternativa Node específica
 
@@ -155,11 +160,11 @@ type ExternalProviderRequest = {
 type ExternalProviderResult = {
   provider: string;
   extractor: string | null;
+  sourceId: string | null;
   title: string | null;
   artist: string | null;
   album: string | null;
   thumbnailUrl: string | null;
-  originalUrl: string;
   payload: {
     sizeBytes: number;
     contentType: string | null;
@@ -167,7 +172,7 @@ type ExternalProviderResult = {
 };
 ```
 
-Esse exemplo é apenas direção de contrato; a #96 deve definir os tipos definitivos e testes com provider fake.
+Esse exemplo é apenas direção de contrato; a #96 deve definir os tipos definitivos e testes com provider fake. A URL original pertence à requisição transitória e **não deve ser persistida automaticamente** em metadata/job/result, pois query strings podem conter tokens e assinaturas.
 
 ### Regras obrigatórias do adapter yt-dlp
 
@@ -175,17 +180,31 @@ Esse exemplo é apenas direção de contrato; a #96 deve definir os tipos defini
 2. Não aceitar flags arbitrárias da UI/API.
 3. Ignorar configurações globais/do usuário da engine; o comportamento deve vir somente do adapter.
 4. Não habilitar execução de comandos, plugins externos ou pós-processadores arbitrários.
-5. Trabalhar em diretório de staging exclusivo do job.
-6. Nunca receber caminho de destino em `MUSIC_DIR`.
-7. Aplicar timeout global e encerramento da árvore de processos em cancelamento.
-8. Aplicar limite de tamanho no resultado, além dos limites oferecidos pela própria engine.
-9. Consumir somente saída estruturada documentada; não interpretar texto humano da CLI.
-10. Limitar playlists por padrão; uma URL não deve disparar aquisição não limitada de vários itens.
-11. Normalizar erros para a fila (`failed/cancelled`) sem devolver stderr bruto ao navegador.
-12. Não passar cookies/credenciais por padrão. Qualquer suporte futuro a autenticação deve ter design e storage próprios.
-13. Não permitir auto-update disparado pela aplicação. A versão da engine deve ser detectável/observável, mas atualização é operação explícita de deploy/admin.
-14. Validar a URL inicial por provider e restringir capabilities. Não usar o generic extractor como um proxy universal de URLs arbitrárias.
-15. Tratar SSRF como fronteira própria do provider. O subprocesso pode realizar redirects, manifests e requests secundários que o `ImportUrlManager` da #94 não observa.
+5. Criar um **provider scratch** exclusivo e descartável por job, fora de `MUSIC_DIR`.
+6. O subprocesso escreve apenas no scratch. O core deve reabrir o resultado como arquivo regular seguro e copiá-lo/streamá-lo pelo `ImportStagingManager` antes da validação/promoção.
+7. Nunca fornecer `MUSIC_DIR` ou caminhos internos da biblioteca ao processo externo.
+8. Aplicar timeout global e encerramento da árvore de processos em cancelamento.
+9. Aplicar limite de tamanho no resultado, além dos limites oferecidos pela própria engine.
+10. Consumir somente saída estruturada documentada; não interpretar texto humano da CLI.
+11. Limitar playlists por padrão; uma URL não deve disparar aquisição não limitada de vários itens.
+12. Normalizar erros para a fila (`failed/cancelled`) sem devolver stderr bruto ao navegador.
+13. Não passar cookies/credenciais por padrão. Qualquer suporte futuro a autenticação deve ter design e storage próprios.
+14. Não permitir auto-update disparado pela aplicação. A versão da engine deve ser detectável/observável, mas atualização é operação explícita de deploy/admin.
+15. Validar a URL inicial por provider e restringir capabilities. Não usar o generic extractor como um proxy universal de URLs arbitrárias.
+16. Tratar SSRF como fronteira própria do provider. O subprocesso pode realizar redirects, manifests e requests secundários que o `ImportUrlManager` da #94 não observa.
+17. **Gate de segurança:** não habilitar provider real até existir controle de egress que impeça o processo e subprocessos auxiliares de alcançar loopback, redes privadas, link-local e endpoints de metadata. Validação apenas da URL inicial não satisfaz esse requisito.
+18. Se o desenho usar proxy de saída, garantir que ferramentas auxiliares acionadas pela engine também não consigam contornar a política. Se isso não puder ser provado, preferir isolamento de rede no nível do processo/OS.
+
+## Fronteira SSRF do provider
+
+O principal risco arquitetural não é a URL inicial: é a cadeia de requests que uma engine externa pode descobrir depois de analisar uma página, manifesto ou player.
+
+Por isso, a #96 deve separar duas camadas:
+
+- **policy de entrada:** provider reconhece somente URLs/fontes que declara suportar;
+- **policy de egress:** processo externo não consegue abrir conexões para destinos internos/proibidos, mesmo se um extractor ou conteúdo remoto tentar induzi-lo a isso.
+
+A #94 continua sendo a implementação correta para uma URL de arquivo direto controlada pelo Home Music. Providers externos são uma fronteira diferente e não devem chamar `ImportUrlManager` como se isso protegesse requests internos da engine.
 
 ## Estratégia de distribuição
 
@@ -211,7 +230,7 @@ FFmpeg pode ser usado quando tecnicamente necessário para merge/post-processame
 
 O adapter pode aproveitar metadata retornada pela engine como **metadata sugerida**, nunca como verdade confiável para paths ou comandos. Strings externas devem ser normalizadas e limitadas antes de persistência/uso na UI.
 
-Thumbnail/capa remota deve continuar sujeita aos limites de tipo/tamanho do pipeline do Home Music; URL de thumbnail não autoriza acesso irrestrito à rede local.
+URLs retornadas pela engine também são dados não confiáveis. Não persistir credenciais/query strings por conveniência e não reutilizar URL de thumbnail como autorização para acesso irrestrito à rede. Thumbnail/capa remota deve continuar sujeita aos limites de tipo/tamanho e à policy de egress do provider/pipeline.
 
 ## Segurança e conteúdo permitido
 
@@ -235,7 +254,7 @@ Sites suportados mudam independentemente do Home Music. Por isso:
 
 **Não escolher:** integração Python embutida, wrapper Node que apenas esconda a mesma CLI, Streamlink como engine geral, pytubefix/YouTube.js como engine universal ou youtube-dl original.
 
-A #96 deve construir primeiro o contrato `ExternalProvider` + runner isolado + provider fake. A integração concreta de yt-dlp deve vir somente depois que essa fronteira estiver testada.
+A #96 deve construir primeiro o contrato `ExternalProvider` + runner isolado + provider fake + fronteira de egress testável. A integração concreta de yt-dlp deve vir somente depois que essa fronteira estiver implementada e validada.
 
 ## Fontes consultadas
 
