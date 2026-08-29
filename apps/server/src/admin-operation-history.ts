@@ -428,8 +428,8 @@ export class AdminOperationHistoryStore {
     this.trimRetained();
   }
 
-  recordImport(job: ImportJobWithRetry | ImportJob) {
-    const retry = 'retry' in job ? job.retry : null;
+  recordImport(job: ImportJob & { retry?: ImportJobWithRetry['retry'] }) {
+    const retry = job.retry ?? null;
     const operationId = operationIdForJob(job.id);
     const status = importStatus(job.status);
     const failureDisposition = classifyImportFailure(job);
@@ -527,6 +527,19 @@ export class AdminOperationHistoryStore {
     }
     const rootOperationId = nullableString(row.import_root_id) || cleanId;
     const currentAttempt = Math.max(1, Math.trunc(numberValue(row.import_attempt) ?? 1));
+    const claim = this.db.prepare(`
+      UPDATE admin_operation_history
+      SET can_retry = 0
+      WHERE id = ?
+        AND kind = 'import'
+        AND status = 'failed'
+        AND can_retry = 1
+        AND import_failure_disposition = 'retryable'
+    `).run(cleanId);
+    if (Number(claim.changes) !== 1) {
+      throw new AdminOperationRetryError('Outra nova tentativa já foi iniciada para esta importação.');
+    }
+
     return {
       source: { type: sourceType, provider: null },
       lineage: {
@@ -535,6 +548,28 @@ export class AdminOperationHistoryStore {
         attempt: currentAttempt + 1
       }
     };
+  }
+
+  releaseImportRetry(context: ImportRetryContext) {
+    const parentOperationId = operationIdForJob(context.lineage.parentJobId);
+    const child = this.db.prepare(`
+      SELECT id
+      FROM admin_operation_history
+      WHERE import_retry_of_id = ?
+      LIMIT 1
+    `).get(parentOperationId) as Row | undefined;
+    if (child) return false;
+
+    const result = this.db.prepare(`
+      UPDATE admin_operation_history
+      SET can_retry = 1
+      WHERE id = ?
+        AND kind = 'import'
+        AND status = 'failed'
+        AND import_failure_disposition = 'retryable'
+        AND can_retry = 0
+    `).run(parentOperationId);
+    return Number(result.changes) > 0;
   }
 
   bindRetryAttempt(childJobId: string, context: ImportRetryContext) {
