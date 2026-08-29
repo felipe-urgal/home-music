@@ -241,6 +241,11 @@ export class ImportMetadataPreviewManager {
       throw new ImportMetadataPreviewError('job_not_ready', 'O job precisa estar pendente para ler metadata.', 409);
     }
 
+    const existing = this.snapshots.get(jobId);
+    if (existing) {
+      return { embedded: { ...existing.embedded }, durationSeconds: existing.durationSeconds };
+    }
+
     let read: ImportMetadataReadResult;
     try {
       read = await this.staging.inspectPayload(jobId, target => this.metadataReader(target));
