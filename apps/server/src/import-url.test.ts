@@ -81,7 +81,7 @@ test('classifica endereços locais, privados, metadata e documentação como ins
     '100.64.0.1',
     '169.254.169.254',
     '172.16.0.1',
-    '192.168.1.1',
+    '192.168.0.1',
     '198.18.0.1',
     '203.0.113.10',
     '::1',
@@ -245,7 +245,7 @@ test('propaga timeout acionável sem expor detalhes internos', async () => {
 });
 
 test('cancela download ativo, limpa staging e marca job como cancelled', async () => {
-  const response = new PassThrough() as IncomingMessage;
+  const response = new PassThrough() as unknown as IncomingMessage;
   response.statusCode = 200;
   response.headers = { 'content-type': 'audio/mpeg' };
   const item = await fixture({
