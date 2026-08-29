@@ -46,7 +46,7 @@ async function prepareWithMetadata(metadata: Record<string, unknown>) {
   }
 }
 
-test('vídeo comum infere artista e título sem promover uploader, channel ou creator', async () => {
+test('vídeo comum infere artista e título quando há contexto musical reconhecido', async () => {
   const result = await prepareWithMetadata({
     title: 'Nando.Reis- Por onde Andei- Luau MTV',
     creator: 'Wander Almeida',
@@ -58,7 +58,19 @@ test('vídeo comum infere artista e título sem promover uploader, channel ou cr
   assert.equal(result.metadata?.artist, 'Nando Reis');
 });
 
-test('vídeo genérico sem padrão Artista - Título não inventa artista a partir do canal', async () => {
+test('título de dois trechos permanece para revisão porque a ordem é ambígua', async () => {
+  const result = await prepareWithMetadata({
+    title: 'Fácil - Jota Quest',
+    creator: 'Canal de música',
+    uploader: 'Canal de música',
+    channel: 'Canal de música'
+  });
+
+  assert.equal(result.metadata?.title, 'Fácil - Jota Quest');
+  assert.equal(result.metadata?.artist, null);
+});
+
+test('vídeo genérico sem padrão seguro não inventa artista a partir do canal', async () => {
   const result = await prepareWithMetadata({
     title: 'Entrevista completa nos bastidores',
     creator: 'Canal Exemplo',
