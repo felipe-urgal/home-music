@@ -31,6 +31,7 @@ type ImportSafeDestinationManagerOptions = {
   staging: ImportStagingManager;
   validatedLookup: (jobId: string) => ValidatedImportPayload<unknown> | null;
   duplicateReady: (jobId: string) => boolean;
+  afterPromote?: (file: PromotedImportFile, jobId: string) => Promise<void>;
   musicDir?: string;
 };
 
@@ -237,6 +238,7 @@ export class ImportSafeDestinationManager {
   private readonly staging: ImportStagingManager;
   private readonly validatedLookup: (jobId: string) => ValidatedImportPayload<unknown> | null;
   private readonly duplicateReady: (jobId: string) => boolean;
+  private readonly afterPromote?: (file: PromotedImportFile, jobId: string) => Promise<void>;
   private readonly musicDir: string;
   private promotionLock: Promise<void> = Promise.resolve();
   private readonly promoted = new Map<string, PromotedImportFile>();
@@ -246,6 +248,7 @@ export class ImportSafeDestinationManager {
     this.staging = options.staging;
     this.validatedLookup = options.validatedLookup;
     this.duplicateReady = options.duplicateReady;
+    this.afterPromote = options.afterPromote;
     this.musicDir = options.musicDir ?? process.env.MUSIC_DIR ?? '';
   }
 
@@ -276,6 +279,7 @@ export class ImportSafeDestinationManager {
         promotionStarted = true;
         const promoted = await this.staging.promote(validated, destination.relativePath);
         this.promoted.set(jobId, promoted);
+        await this.afterPromote?.({ ...promoted }, jobId);
         const completed = this.queue.transition(jobId, 'completed')!;
         return { job: completed, destination };
       } catch (error) {
