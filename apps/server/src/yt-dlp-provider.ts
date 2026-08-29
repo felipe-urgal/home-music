@@ -103,12 +103,11 @@ async function findPreparedOutput(scratchDir: string) {
 function fixedArguments(request: ExternalProviderRequest, scratchDir: string) {
   return Object.freeze([
     '--ignore-config',
+    '--no-config-locations',
     '--no-playlist',
     '--no-simulate',
     '--no-progress',
     '--no-warnings',
-    '--no-call-home',
-    '--no-check-certificates',
     '--format', 'bestaudio/best',
     '--paths', `home:${scratchDir}`,
     '--output', `${OUTPUT_PREFIX}%(ext)s`,
@@ -189,7 +188,7 @@ export const runYtDlpProcess: YtDlpProcessRunner = request => new Promise((resol
   child.stderr?.on('data', chunk => {
     try { stderr = appendBounded(stderr, chunk, MAX_STDERR_BYTES); } catch (error) { fail(error); }
   });
-  child.once('error', error => settle(() => reject(new ExternalProviderError('provider_failed', 'Não foi possível iniciar o yt-dlp.', 502))));
+  child.once('error', () => settle(() => reject(new ExternalProviderError('provider_failed', 'Não foi possível iniciar o yt-dlp.', 502))));
   child.once('close', code => {
     if (settled) return;
     if (code !== 0) {
@@ -228,6 +227,9 @@ export class YtDlpProvider implements ExternalProvider {
     }
     if (url.hostname === 'localhost' || url.hostname.endsWith('.localhost')) {
       throw new ExternalProviderError('invalid_input', 'Hosts locais não são aceitos pelo provider externo.');
+    }
+    if (url.username || url.password) {
+      throw new ExternalProviderError('invalid_input', 'URLs com credenciais embutidas não são aceitas pelo provider externo.');
     }
   }
 
