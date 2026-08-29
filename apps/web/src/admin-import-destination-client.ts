@@ -16,7 +16,8 @@ export type AdminImportPromotionResult = {
 export async function getAdminImportDestination(jobId: string, folderPath?: string) {
   const query = new URLSearchParams();
   if (folderPath !== undefined) query.set('folderPath', folderPath);
-  const suffix = query.size ? `?${query.toString()}` : '';
+  const encodedQuery = query.toString();
+  const suffix = encodedQuery ? `?${encodedQuery}` : '';
   const response = await apiFetch(`/api/admin/imports/${encodeURIComponent(jobId)}/destination${suffix}`, {
     cache: 'no-store'
   });
