@@ -286,7 +286,13 @@ export class ImportDuplicateDetectionManager {
       throw new ImportDuplicateDetectionError('job_not_ready', 'O job precisa estar pendente para calcular o fingerprint.', 409);
     }
 
-    const fingerprint = await this.staging.inspectPayload(jobId, hashValidationTarget);
+    const fingerprint = await this.staging.inspectPayload(jobId, async target => {
+      try {
+        return await hashValidationTarget(target);
+      } catch {
+        return null;
+      }
+    });
     if (fingerprint) this.sourceFingerprints.set(jobId, fingerprint);
     return fingerprint ? { ...fingerprint } : null;
   }
@@ -349,7 +355,7 @@ export class ImportDuplicateDetectionManager {
     const check: ImportDuplicateCheck = {
       jobId,
       confidence,
-      disposition: dispositionFor(confidence),
+      disposition: hashIncomplete && confidence === 'none' ? 'notice' : dispositionFor(confidence),
       matches,
       hashCompared: fingerprints.length > 0 && !hashIncomplete,
       checkedAt: this.now().toISOString(),
