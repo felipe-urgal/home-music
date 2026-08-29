@@ -82,6 +82,10 @@ export type ExternalProviderErrorCode =
   | 'provider_timeout'
   | 'provider_cancelled'
   | 'provider_failed'
+  | 'provider_network_failed'
+  | 'provider_auth_required'
+  | 'provider_runtime_missing'
+  | 'provider_incompatible'
   | 'invalid_output'
   | 'output_too_large'
   | 'setup_failed';
@@ -192,6 +196,30 @@ function canonicalFailure(error: ExternalProviderError) {
       return new ExternalProviderError('provider_timeout', 'O provider externo excedeu o tempo limite.', 504);
     case 'provider_cancelled':
       return new ExternalProviderError('provider_cancelled', 'Importação do provider cancelada.', 409);
+    case 'provider_network_failed':
+      return new ExternalProviderError(
+        'provider_network_failed',
+        'O provider externo não conseguiu acessar a origem pela rede segura.',
+        502
+      );
+    case 'provider_auth_required':
+      return new ExternalProviderError(
+        'provider_auth_required',
+        'A origem exige autenticação e não pode ser importada sem credenciais.',
+        409
+      );
+    case 'provider_runtime_missing':
+      return new ExternalProviderError(
+        'provider_runtime_missing',
+        'O yt-dlp não encontrou o runtime JavaScript necessário para esta origem.',
+        503
+      );
+    case 'provider_incompatible':
+      return new ExternalProviderError(
+        'provider_incompatible',
+        'A versão instalada do yt-dlp não é compatível com o provider.',
+        503
+      );
     case 'output_too_large':
       return new ExternalProviderError('output_too_large', 'A mídia retornada pelo provider excede o limite configurado.', 413);
     case 'invalid_output':
