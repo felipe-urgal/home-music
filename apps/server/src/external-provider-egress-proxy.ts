@@ -1,6 +1,7 @@
 import { lookup } from 'node:dns/promises';
 import http, { type ClientRequest, type IncomingMessage, type ServerResponse } from 'node:http';
-import net, { type Socket } from 'node:net';
+import net from 'node:net';
+import type { Duplex } from 'node:stream';
 import { isUnsafeImportAddress } from './import-url.js';
 
 export type ProviderResolvedAddress = Readonly<{
@@ -105,7 +106,7 @@ function failResponse(response: ServerResponse, statusCode: number) {
 
 export class ExternalProviderEgressProxy {
   private readonly resolveHost: ResolveHost;
-  private readonly sockets = new Set<Socket>();
+  private readonly sockets = new Set<Duplex>();
   private readonly requests = new Set<ClientRequest>();
   private server: http.Server | null = null;
 
@@ -153,7 +154,7 @@ export class ExternalProviderEgressProxy {
     await new Promise<void>(resolve => server.close(() => resolve()));
   }
 
-  private async handleConnect(request: IncomingMessage, client: Socket, head: Buffer) {
+  private async handleConnect(request: IncomingMessage, client: Duplex, head: Buffer) {
     try {
       const target = parseAuthority(request.url ?? '');
       const resolved = await resolveSafeProviderTarget(target.hostname, this.resolveHost);
