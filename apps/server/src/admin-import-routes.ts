@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url';
 import type { Readable } from 'node:stream';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { AdminImportJobsResponse } from '@home-music/shared';
+import { createAdminExternalProviderBatchManager } from './admin-external-provider-batch-bootstrap.js';
+import { registerAdminExternalProviderBatchRoutes } from './admin-external-provider-batch-routes.js';
 import type { ImportJobQueue } from './import-job-queue.js';
 import {
   ExternalProviderError,
@@ -232,9 +234,9 @@ function resolveYtDlpCommand(app: FastifyInstance) {
 }
 
 function createDefaultExternalProviderManager(
-  app: FastifyInstance,
   queue: ImportJobQueue,
-  staging: ImportStagingManager
+  staging: ImportStagingManager,
+  ytDlpCommand: string
 ) {
   return new ExternalProviderImportManager({
     queue,
@@ -246,7 +248,7 @@ function createDefaultExternalProviderManager(
     providers: [new YtDlpProvider()],
     providerConfigs: {
       [YT_DLP_PROVIDER_ID]: {
-        [YT_DLP_COMMAND_CONFIG]: resolveYtDlpCommand(app)
+        [YT_DLP_COMMAND_CONFIG]: ytDlpCommand
       }
     }
   });
@@ -281,7 +283,8 @@ export function registerAdminImportRoutes(
   };
   const uploads = options.uploads ?? createDefaultUploadManager(app, queue, staging());
   const urls = options.urls ?? createDefaultUrlManager(app, queue, staging());
-  const externalProviders = options.externalProviders ?? createDefaultExternalProviderManager(app, queue, staging());
+  const ytDlpCommand = resolveYtDlpCommand(app);
+  const externalProviders = options.externalProviders ?? createDefaultExternalProviderManager(queue, staging(), ytDlpCommand);
   const mediaValidation = options.mediaValidation ?? createDefaultMediaValidationManager(queue, staging());
   const providerMetadata = options.providerMetadata ?? ((jobId: string) => {
     const metadata = externalProviders.getPrepared(jobId)?.metadata;
@@ -329,6 +332,28 @@ export function registerAdminImportRoutes(
     : process.env.MUSIC_DIR?.trim()
       ? createDefaultStagingCleanupManager(app, staging())
       : null;
+
+  const ytDlpAvailable = Boolean(
+    automaticFlow
+    && ytDlpCommand
+    && externalProviders.listProviders().some(provider => provider.id === YT_DLP_PROVIDER_ID && provider.configured)
+  );
+  const providerBatches = ytDlpAvailable && automaticFlow
+    ? createAdminExternalProviderBatchManager({
+        app,
+        queue,
+        externalProviders,
+        automaticFlow,
+        safeDestination,
+        metadataPreview,
+        duplicateDetection,
+        ytDlpCommand
+      })
+    : null;
+
+  if (providerBatches) {
+    registerAdminExternalProviderBatchRoutes(app, { batches: providerBatches });
+  }
 
   installImportRetryStarter(app, async (context, input) => {
     const before = new Set(queue.list().map(job => job.id));
