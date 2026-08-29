@@ -84,7 +84,7 @@ async function buildApp() {
     ffmpegCommand: 'ffmpeg-test',
     ffprobeCommand: 'ffprobe-test',
     probeRunner: async () => validMp3Probe(),
-    transcodeRunner: async () => { throw new Error('transcode não esperado neste teste'); }
+    transformRunner: async () => { throw new Error('FFmpeg não esperado neste teste'); }
   });
   const sessions = new SessionManager('admin', 'password-segura-2026');
   const users = new Map<string, AuthenticatedUserState>([
