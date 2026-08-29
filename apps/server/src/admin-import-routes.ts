@@ -372,6 +372,11 @@ export function registerAdminImportRoutes(
       stagingCleanup.stop();
     });
   }
+  if (automaticFlow) {
+    app.addHook('onClose', async () => {
+      automaticFlow.stop();
+    });
+  }
 
   if (!app.hasContentTypeParser('application/octet-stream')) {
     app.addContentTypeParser('application/octet-stream', (_request, payload, done) => {
@@ -438,8 +443,8 @@ export function registerAdminImportRoutes(
       reply.header('Cache-Control', 'no-store');
       try {
         automaticUploads.delete(request.params.id);
-        automaticFlow?.disable(request.params.id);
         const job = await uploads.cancel(request.params.id);
+        automaticFlow?.disable(request.params.id);
         metadataPreview.forget(request.params.id);
         duplicateDetection.forget(request.params.id);
         return { job };
@@ -470,8 +475,8 @@ export function registerAdminImportRoutes(
     async (request, reply) => {
       reply.header('Cache-Control', 'no-store');
       try {
-        automaticFlow?.disable(request.params.id);
         const job = await urls.cancel(request.params.id);
+        automaticFlow?.disable(request.params.id);
         metadataPreview.forget(request.params.id);
         duplicateDetection.forget(request.params.id);
         return { job };
@@ -504,8 +509,8 @@ export function registerAdminImportRoutes(
     async (request, reply) => {
       reply.header('Cache-Control', 'no-store');
       try {
-        automaticFlow?.disable(request.params.id);
         const job = await externalProviders.cancel(request.params.id);
+        automaticFlow?.disable(request.params.id);
         metadataPreview.forget(request.params.id);
         duplicateDetection.forget(request.params.id);
         return { job };
