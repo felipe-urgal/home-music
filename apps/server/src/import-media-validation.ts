@@ -306,7 +306,6 @@ function appendLimited(current: string, chunk: Buffer, maxBytes: number) {
 export const runFfprobe: MediaProbeRunner = (command, target, timeoutMs) => new Promise((resolve, reject) => {
   const args = [
     '-v', 'error',
-    '-nostdin',
     '-protocol_whitelist', SAFE_PROTOCOLS,
     '-format_whitelist', SAFE_DEMUXERS,
     '-show_entries', 'format=format_name,duration,bit_rate:stream=index,codec_name,codec_type,profile,sample_rate,channels,duration,bit_rate',
