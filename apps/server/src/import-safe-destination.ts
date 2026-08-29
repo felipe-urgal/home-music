@@ -92,7 +92,7 @@ function safeFileStem(job: ImportJob) {
   const artist = normalizePortableText(metadata?.artist ?? '');
   let stem = normalizePortableText(artist ? `${artist} - ${title}` : title) || 'Faixa importada';
   if (WINDOWS_RESERVED_NAMES.test(stem)) stem = `Faixa - ${stem}`;
-  stem = truncateUtf8(stem, MAX_FILE_STEM_BYTES);
+  stem = truncateUtf8(stem, MAX_FILE_STEM_BYTES).replace(/[.\s-]+$/g, '').trim();
   return stem || 'Faixa importada';
 }
 
@@ -115,6 +115,7 @@ function validateFolderPart(value: string) {
     || part === '.'
     || part === '..'
     || part.startsWith('.')
+    || part.endsWith('.')
     || /[\u0000-\u001f\u007f]/.test(part)
     || PROBLEMATIC_PORTABLE_CHARS.test(part)
     || part.includes('\\')
@@ -158,6 +159,32 @@ async function removeCreatedDirectories(created: string[]) {
       // Mantém diretórios que receberam conteúdo ou mudaram externamente.
     }
   }
+}
+
+async function validatePlannedDirectory(root: string, parts: string[]) {
+  let current = root;
+  for (let index = 0; index < parts.length; index += 1) {
+    const candidate = path.join(current, parts[index]);
+    try {
+      const entry = await lstat(candidate);
+      if (entry.isSymbolicLink() || !entry.isDirectory()) {
+        throw new ImportSafeDestinationError('invalid_destination', 'Diretório de destino inseguro.');
+      }
+      const resolved = await realpath(candidate);
+      if (!isPathInside(root, resolved)) {
+        throw new ImportSafeDestinationError('invalid_destination', 'Diretório de destino escapou de MUSIC_DIR.');
+      }
+      current = resolved;
+    } catch (error) {
+      if (!missing(error)) throw error;
+      const projected = path.join(current, ...parts.slice(index));
+      if (!isPathInside(root, projected)) {
+        throw new ImportSafeDestinationError('invalid_destination', 'Diretório de destino escapou de MUSIC_DIR.');
+      }
+      return projected;
+    }
+  }
+  return current;
 }
 
 async function ensureSafeDirectory(root: string, parts: string[]) {
@@ -231,12 +258,8 @@ export class ImportSafeDestinationManager {
     const job = this.requirePromotable(jobId);
     const parts = normalizeImportFolderPath(folderPath);
     const root = await this.libraryRoot();
-    const { directory, created } = await ensureSafeDirectory(root, parts);
-    try {
-      return await this.planInside(job, directory, parts);
-    } finally {
-      await removeCreatedDirectories(created);
-    }
+    const directory = await validatePlannedDirectory(root, parts);
+    return this.planInside(job, directory, parts);
   }
 
   async promote(jobId: string, folderPath?: unknown): Promise<ImportPromotionResult> {
