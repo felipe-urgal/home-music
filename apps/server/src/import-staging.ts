@@ -310,6 +310,38 @@ export class ImportStagingManager {
     }
   }
 
+  async inspectPayload<T>(
+    jobId: string,
+    inspector: (target: ImportValidationTarget) => Promise<T> | T
+  ): Promise<T> {
+    const workspace = this.requireJob(jobId);
+    if (workspace.state !== 'written') {
+      throw new ImportStagingError('O payload precisa estar gravado antes da inspeção.');
+    }
+
+    const { stagingRoot } = await this.initialize();
+    try {
+      const safeFile = await openRegularFileInside(stagingRoot, workspace.payloadPath);
+      try {
+        const before = await safeFile.handle.stat();
+        const result = await inspector({
+          path: `/proc/${process.pid}/fd/${safeFile.handle.fd}`,
+          size: before.size
+        });
+        const after = await safeFile.handle.stat();
+        if (before.size !== after.size || before.mtimeMs !== after.mtimeMs) {
+          throw new ImportStagingError('O payload mudou durante a inspeção.');
+        }
+        return result;
+      } finally {
+        await safeFile.handle.close();
+      }
+    } catch (error) {
+      await this.cleanupJob(workspace.jobId).catch(() => undefined);
+      throw error;
+    }
+  }
+
   async validatePayload<T>(
     jobId: string,
     validator: (target: ImportValidationTarget) => Promise<T> | T

@@ -62,6 +62,24 @@ test('publica snapshots defensivos a cada mudança de estado', () => {
   assert.deepEqual(queue.get(created.id)?.source, { type: 'upload', provider: null });
 });
 
+test('permite URL voltar de processing para pending quando o staging termina', () => {
+  const queue = deterministicQueue();
+  const job = queue.enqueue({ type: 'url', provider: null }, 'example.test · audio.flac');
+
+  const processing = queue.transition(job.id, 'processing');
+  assert.equal(processing?.status, 'processing');
+  assert.equal(processing?.startedAt, '2026-08-27T12:01:00.000Z');
+
+  const pending = queue.transition(job.id, 'pending');
+  assert.equal(pending?.status, 'pending');
+  assert.equal(pending?.startedAt, '2026-08-27T12:01:00.000Z');
+  assert.equal(pending?.finishedAt, null);
+
+  const resumed = queue.transition(job.id, 'processing');
+  assert.equal(resumed?.status, 'processing');
+  assert.equal(resumed?.startedAt, '2026-08-27T12:01:00.000Z');
+});
+
 test('aplica somente transições válidas até estado terminal', () => {
   const queue = deterministicQueue();
   const job = queue.enqueue({ type: 'url', provider: null }, 'https://example.test/audio.flac');

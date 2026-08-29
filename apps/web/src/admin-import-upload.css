@@ -1,4 +1,5 @@
-.admin-import-upload {
+.admin-import-upload,
+.admin-import-url {
   display: grid;
   gap: 12px;
   padding: 14px;
@@ -217,6 +218,138 @@
   text-align: right;
 }
 
+.admin-import-url__form {
+  display: grid;
+  gap: 7px;
+}
+
+.admin-import-url__form > label {
+  color: #9caab4;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.admin-import-url__input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.admin-import-url__input-row input {
+  min-width: 0;
+  min-height: 38px;
+  padding: 0 11px;
+  border: 1px solid rgba(255,255,255,.09);
+  border-radius: 9px;
+  outline: 0;
+  background: #0d151c;
+  color: #dfe8ee;
+  font: inherit;
+  font-size: 11px;
+}
+
+.admin-import-url__input-row input:focus {
+  border-color: rgba(101,190,255,.55);
+  box-shadow: 0 0 0 2px rgba(55,145,205,.08);
+}
+
+.admin-import-url__input-row input::placeholder {
+  color: #64737e;
+}
+
+.admin-import-url__input-row input:disabled {
+  opacity: .58;
+}
+
+.admin-import-url__input-row button,
+.admin-import-url-status > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid rgba(111,190,242,.28);
+  border-radius: 9px;
+  background: rgba(36,132,194,.12);
+  color: #b9e2fb;
+  cursor: pointer;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.admin-import-url__input-row button:hover:not(:disabled),
+.admin-import-url-status > button:hover:not(:disabled) {
+  background: rgba(36,132,194,.2);
+}
+
+.admin-import-url__input-row button:disabled,
+.admin-import-url-status > button:disabled {
+  cursor: default;
+  opacity: .5;
+}
+
+.admin-import-url__input-row button svg,
+.admin-import-url-status > button svg {
+  width: 14px;
+  height: 14px;
+}
+
+.admin-import-url__form > small {
+  color: #71808b;
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.admin-import-url-status {
+  display: grid;
+  grid-template-columns: 26px minmax(0,1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 12px;
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 11px;
+  background: #0d151c;
+}
+
+.admin-import-url-status.is-pending {
+  border-color: rgba(74,166,111,.22);
+  background: rgba(39,116,70,.07);
+}
+
+.admin-import-url-status.is-failed {
+  border-color: rgba(194,82,82,.22);
+}
+
+.admin-import-url-status > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.admin-import-url-status > div strong {
+  overflow: hidden;
+  color: #dbe6ed;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-import-url-status > div small {
+  color: #7e8c97;
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.admin-import-url-status > button {
+  min-height: 32px;
+  padding: 0 9px;
+  border-color: rgba(207,116,116,.16);
+  background: transparent;
+  color: #b9c2c9;
+}
+
 .admin-import-method.is-available {
   border-color: rgba(82,171,119,.16);
 }
@@ -231,6 +364,15 @@
   .admin-import-upload-status__top {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .admin-import-url__input-row,
+  .admin-import-url-status {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-import-url-status > .admin-import-job__status {
+    display: none;
   }
 }
 

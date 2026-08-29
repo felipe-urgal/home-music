@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type DragEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type DragEvent, type FormEvent } from 'react';
 import type { ImportJob, ImportJobStatus } from '@home-music/shared';
 import {
   Ban,
@@ -16,10 +16,13 @@ import {
 } from 'lucide-react';
 import {
   cancelAdminImportUpload,
+  cancelAdminImportUrl,
   createAdminImportUpload,
+  createAdminImportUrl,
   getAdminImportJobs,
   uploadAdminImportFile,
-  type AdminImportUploadConfig
+  type AdminImportUploadConfig,
+  type AdminImportUrlConfig
 } from '../admin-import-client';
 
 type AdminImportMediaScreenProps = {
@@ -54,7 +57,8 @@ const IMPORT_METHODS: readonly ImportMethod[] = [
   {
     icon: Link2,
     title: 'URL direta',
-    description: 'Importação de mídia remota suportada pelo pipeline.'
+    description: 'Download remoto com proteção contra SSRF, limites e validação.',
+    available: true
   },
   {
     icon: Boxes,
@@ -113,20 +117,44 @@ function formatBytes(bytes: number) {
   return `${value >= 10 || index === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[index]}`;
 }
 
+function formatSeconds(milliseconds: number) {
+  const seconds = Math.max(1, Math.round(milliseconds / 1000));
+  return `${seconds}s`;
+}
+
 function extensionOf(name: string) {
   const index = name.lastIndexOf('.');
   return index >= 0 ? name.slice(index).toLowerCase() : '';
 }
 
+function validateRemoteUrl(value: string, config: AdminImportUrlConfig | null) {
+  const trimmed = value.trim();
+  if (!trimmed) return 'Informe uma URL direta para o arquivo de áudio.';
+  try {
+    const parsed = new URL(trimmed);
+    const protocols = config?.acceptedProtocols ?? ['http:', 'https:'];
+    if (!protocols.includes(parsed.protocol)) return 'Use uma URL HTTP ou HTTPS.';
+  } catch {
+    return 'Informe uma URL válida.';
+  }
+  return null;
+}
+
 export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) {
   const [jobs, setJobs] = useState<ImportJob[]>([]);
   const [uploadConfig, setUploadConfig] = useState<AdminImportUploadConfig | null>(null);
+  const [urlConfig, setUrlConfig] = useState<AdminImportUrlConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [activeUpload, setActiveUpload] = useState<ActiveUpload | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [urlValue, setUrlValue] = useState('');
+  const [urlError, setUrlError] = useState<string | null>(null);
+  const [activeUrlJobId, setActiveUrlJobId] = useState<string | null>(null);
+  const [urlSubmitting, setUrlSubmitting] = useState(false);
+  const [urlCancelling, setUrlCancelling] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const currentXhrRef = useRef<XMLHttpRequest | null>(null);
   const cancelRequestedRef = useRef(false);
@@ -138,6 +166,7 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
       const response = await getAdminImportJobs();
       setJobs(response.jobs);
       setUploadConfig(response.upload);
+      setUrlConfig(response.url);
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Não foi possível carregar a fila de importação.');
     } finally {
@@ -146,6 +175,15 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
   }, []);
 
   useEffect(() => { void loadJobs(); }, [loadJobs]);
+
+  const activeUrlJob = activeUrlJobId ? jobs.find(job => job.id === activeUrlJobId) ?? null : null;
+  const urlBusy = urlSubmitting || urlCancelling || activeUrlJob?.status === 'processing';
+
+  useEffect(() => {
+    if (!activeUrlJobId || activeUrlJob?.status !== 'processing') return;
+    const timer = window.setInterval(() => { void loadJobs(true); }, 1000);
+    return () => window.clearInterval(timer);
+  }, [activeUrlJob?.status, activeUrlJobId, loadJobs]);
 
   const beginUpload = useCallback(async (file: File) => {
     if (!uploadConfig) {
@@ -240,6 +278,42 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
     }
   }, [activeUpload, loadJobs]);
 
+  const submitUrl = useCallback(async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const validationError = validateRemoteUrl(urlValue, urlConfig);
+    if (validationError) {
+      setUrlError(validationError);
+      return;
+    }
+
+    setUrlError(null);
+    setUrlSubmitting(true);
+    try {
+      const job = await createAdminImportUrl(urlValue.trim());
+      setActiveUrlJobId(job.id);
+      setJobs(current => [job, ...current.filter(item => item.id !== job.id)]);
+      setUrlValue('');
+    } catch (error) {
+      setUrlError(error instanceof Error ? error.message : 'Não foi possível iniciar a importação por URL.');
+    } finally {
+      setUrlSubmitting(false);
+    }
+  }, [urlConfig, urlValue]);
+
+  const cancelUrl = useCallback(async () => {
+    if (!activeUrlJobId || !activeUrlJob || !['processing', 'pending'].includes(activeUrlJob.status)) return;
+    setUrlError(null);
+    setUrlCancelling(true);
+    try {
+      const job = await cancelAdminImportUrl(activeUrlJobId);
+      setJobs(current => current.map(item => item.id === job.id ? job : item));
+    } catch (error) {
+      setUrlError(error instanceof Error ? error.message : 'Não foi possível cancelar a importação por URL.');
+    } finally {
+      setUrlCancelling(false);
+    }
+  }, [activeUrlJob, activeUrlJobId]);
+
   const onDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     setDragging(false);
@@ -270,8 +344,8 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
             <span className="my-account-link-group__label">Pipeline</span>
             <strong id="admin-import-intro-title">Uma fila, várias fontes</strong>
             <p>
-              Upload local já usa staging seguro e a fila comum de importação. URL e fontes externas serão
-              habilitadas nas próximas etapas sem criar caminhos paralelos para a biblioteca.
+              Upload local e URL direta entram no mesmo staging seguro. Nenhuma dessas entradas grava direto na
+              biblioteca; fontes externas serão adicionadas em uma etapa isolada.
             </p>
           </div>
         </section>
@@ -348,6 +422,67 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
           )}
         </section>
 
+        <section className="admin-import-url" aria-labelledby="admin-import-url-title">
+          <div className="admin-import-upload__heading">
+            <div>
+              <span className="my-account-link-group__label">URL direta</span>
+              <strong id="admin-import-url-title">Baixar arquivo remoto</strong>
+            </div>
+            {urlConfig && <small>Até {formatBytes(urlConfig.maxBytes)} · {formatSeconds(urlConfig.timeoutMs)}</small>}
+          </div>
+
+          <form className="admin-import-url__form" onSubmit={event => void submitUrl(event)}>
+            <label htmlFor="admin-import-url-input">Endereço do arquivo</label>
+            <div className="admin-import-url__input-row">
+              <input
+                id="admin-import-url-input"
+                type="url"
+                inputMode="url"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                placeholder="https://exemplo.com/musica.flac"
+                value={urlValue}
+                disabled={urlBusy || !urlConfig}
+                onChange={event => { setUrlValue(event.target.value); if (urlError) setUrlError(null); }}
+              />
+              <button type="submit" disabled={urlBusy || !urlConfig || !urlValue.trim()}>
+                {urlSubmitting ? <LoaderCircle className="is-spinning" /> : <Link2 />}
+                Importar URL
+              </button>
+            </div>
+            {urlConfig && (
+              <small>
+                HTTP/HTTPS · até {urlConfig.maxRedirects} redirecionamentos · redes locais e endpoints de metadata são bloqueados.
+              </small>
+            )}
+          </form>
+
+          {urlError && <div className="my-account-message is-error admin-import-message" role="alert">{urlError}</div>}
+
+          {activeUrlJob && (
+            <article className={`admin-import-url-status is-${activeUrlJob.status}`} aria-live="polite">
+              <span className="admin-import-job__status">{statusIcon(activeUrlJob.status)}</span>
+              <div>
+                <strong>{activeUrlJob.label}</strong>
+                <small>
+                  {activeUrlJob.status === 'processing'
+                    ? 'Baixando e validando no staging seguro.'
+                    : activeUrlJob.status === 'pending'
+                      ? 'Arquivo remoto recebido e validado. Aguardando próxima etapa do pipeline.'
+                      : activeUrlJob.error || STATUS_LABELS[activeUrlJob.status]}
+                </small>
+              </div>
+              {['processing', 'pending'].includes(activeUrlJob.status) && (
+                <button type="button" disabled={urlCancelling} onClick={() => void cancelUrl()}>
+                  {urlCancelling ? <LoaderCircle className="is-spinning" /> : <X />}
+                  Cancelar
+                </button>
+              )}
+            </article>
+          )}
+        </section>
+
         <section className="admin-import-methods" aria-label="Formas de importação">
           {IMPORT_METHODS.map(method => {
             const Icon = method.icon;
@@ -396,7 +531,7 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
               <Clock3 />
               <div>
                 <strong>Nenhuma importação na fila</strong>
-                <small>Envie um arquivo acima para iniciar o primeiro job.</small>
+                <small>Envie um arquivo ou informe uma URL acima para iniciar o primeiro job.</small>
               </div>
             </div>
           ) : (

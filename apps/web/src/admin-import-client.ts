@@ -6,8 +6,16 @@ export type AdminImportUploadConfig = {
   acceptedExtensions: string[];
 };
 
+export type AdminImportUrlConfig = {
+  maxBytes: number;
+  timeoutMs: number;
+  maxRedirects: number;
+  acceptedProtocols: string[];
+};
+
 export type AdminImportJobsWithUploadResponse = AdminImportJobsResponse & {
   upload: AdminImportUploadConfig;
+  url: AdminImportUrlConfig;
 };
 
 export type AdminImportUploadResult = {
@@ -75,6 +83,34 @@ export function uploadAdminImportFile(
 
 export async function cancelAdminImportUpload(jobId: string) {
   const response = await apiFetch(`/api/admin/imports/uploads/${encodeURIComponent(jobId)}`, {
+    method: 'DELETE',
+    headers: { 'X-Home-Music-Request': '1' }
+  });
+  const payload = await response.json().catch(() => null) as { job?: ImportJob; error?: string } | null;
+  if (!response.ok || !payload?.job) {
+    throw new Error(payload?.error || `Falha HTTP ${response.status}`);
+  }
+  return payload.job;
+}
+
+export async function createAdminImportUrl(url: string) {
+  const response = await apiFetch('/api/admin/imports/urls', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Home-Music-Request': '1'
+    },
+    body: JSON.stringify({ url })
+  });
+  const payload = await response.json().catch(() => null) as { job?: ImportJob; error?: string } | null;
+  if (!response.ok || !payload?.job) {
+    throw new Error(payload?.error || `Falha HTTP ${response.status}`);
+  }
+  return payload.job;
+}
+
+export async function cancelAdminImportUrl(jobId: string) {
+  const response = await apiFetch(`/api/admin/imports/urls/${encodeURIComponent(jobId)}`, {
     method: 'DELETE',
     headers: { 'X-Home-Music-Request': '1' }
   });
