@@ -6,7 +6,16 @@ import type {
   ImportMetadataPreview,
   ImportMetadataPreviewPatch
 } from '@home-music/shared';
-import { CheckCircle2, Image, LoaderCircle, Music2, Pencil, RotateCcw, ShieldCheck } from 'lucide-react';
+import {
+  CheckCircle2,
+  Image,
+  LoaderCircle,
+  Music2,
+  Pencil,
+  RotateCcw,
+  ShieldCheck,
+  X
+} from 'lucide-react';
 import {
   adminImportPreviewCoverUrl,
   extractAdminImportMetadata,
@@ -18,6 +27,7 @@ type AdminImportMetadataPreviewPanelProps = {
   jobs: ImportJob[];
   onJobUpdated: (job: ImportJob) => void;
   onRefresh: () => Promise<void>;
+  compact?: boolean;
 };
 
 type EditableDraft = Record<ImportMetadataFieldName, string>;
@@ -39,6 +49,7 @@ const FIELD_STATES: Record<ImportMetadataFieldState, string> = {
 };
 
 const FIELDS = Object.keys(FIELD_LABELS) as ImportMetadataFieldName[];
+const REVIEW_STATES = new Set<ImportMetadataFieldState>(['missing', 'suggested', 'conflict']);
 
 function formatDuration(seconds: number) {
   if (!Number.isFinite(seconds) || seconds <= 0) return 'Duração indisponível';
@@ -61,6 +72,11 @@ function uncertainFieldCount(preview: ImportMetadataPreview) {
   return FIELDS.filter(field => ['suggested', 'fallback', 'missing', 'conflict'].includes(preview.fieldStates[field])).length;
 }
 
+function essentialReviewNeeded(preview: ImportMetadataPreview) {
+  if (!preview.effective.title?.trim() || !preview.effective.artist?.trim()) return true;
+  return REVIEW_STATES.has(preview.fieldStates.title) || REVIEW_STATES.has(preview.fieldStates.artist);
+}
+
 export function AdminImportMetadataSummary({ job }: { job: ImportJob }) {
   const preview = job.metadataPreview;
   if (!preview) return null;
@@ -76,13 +92,17 @@ export function AdminImportMetadataSummary({ job }: { job: ImportJob }) {
 
 function MetadataPreviewCard({
   job,
-  onJobUpdated
+  onJobUpdated,
+  compact
 }: {
   job: ImportJob;
   onJobUpdated: (job: ImportJob) => void;
+  compact: boolean;
 }) {
   const preview = job.metadataPreview!;
+  const mustReview = essentialReviewNeeded(preview);
   const [draft, setDraft] = useState<EditableDraft>(() => previewDraft(preview));
+  const [editing, setEditing] = useState(() => compact && mustReview);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const uncertain = uncertainFieldCount(preview);
@@ -104,11 +124,15 @@ function MetadataPreviewCard({
         patch[field] = null;
         continue;
       }
-      setError(`${FIELD_LABELS[field]} lido da origem não é apagado no preview; informe um substituto.`);
-      return;
+      if (field === 'title' || field === 'artist') {
+        setError(`${FIELD_LABELS[field]} é necessário para concluir esta importação.`);
+        return;
+      }
     }
+
     if (Object.keys(patch).length === 0) {
       setError(null);
+      if (!mustReview) setEditing(false);
       return;
     }
 
@@ -118,6 +142,7 @@ function MetadataPreviewCard({
       const result = await updateAdminImportMetadata(job.id, patch);
       setDraft(previewDraft(result.preview));
       onJobUpdated(result.job);
+      if (!essentialReviewNeeded(result.preview)) setEditing(false);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Não foi possível salvar os ajustes.');
     } finally {
@@ -138,6 +163,7 @@ function MetadataPreviewCard({
       });
       setDraft(previewDraft(result.preview));
       onJobUpdated(result.job);
+      setEditing(essentialReviewNeeded(result.preview));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Não foi possível restaurar a leitura original.');
     } finally {
@@ -146,7 +172,7 @@ function MetadataPreviewCard({
   };
 
   return (
-    <article className="admin-import-metadata-card">
+    <article className={`admin-import-metadata-card${compact ? ' is-compact' : ''}`}>
       <div className="admin-import-metadata-card__summary">
         <div className="admin-import-metadata-cover">
           {preview.cover.available ? (
@@ -156,83 +182,104 @@ function MetadataPreviewCard({
           )}
         </div>
         <div className="admin-import-metadata-card__identity">
-          <small>{job.label}</small>
+          <small>{job.source.type === 'provider' ? 'Fonte externa' : job.source.type === 'url' ? 'URL direta' : 'Arquivo local'}</small>
           <strong>{preview.effective.title || 'Título não informado'}</strong>
           <span>{preview.effective.artist || 'Artista não informado'}</span>
           <div className="admin-import-metadata-card__facts">
             <span>{formatDuration(preview.durationSeconds)}</span>
-            <span>{preview.cover.available ? <><Image /> Capa embutida</> : 'Sem capa confiável'}</span>
-            <span className={uncertain ? 'is-review' : 'is-trusted'}>
-              {uncertain ? `${uncertain} para revisar` : 'Metadata confiável'}
-            </span>
+            {job.mediaDecision?.output.codec && <span>{job.mediaDecision.output.codec.toUpperCase()}</span>}
+            {job.mediaDecision?.output.bitRate && <span>{Math.round(job.mediaDecision.output.bitRate / 1000)} kbps</span>}
+            {!compact && <span>{preview.cover.available ? <><Image /> Capa embutida</> : 'Sem capa confiável'}</span>}
+            {mustReview && <span className="is-review">Revisão necessária</span>}
           </div>
         </div>
+        {compact && (
+          <button
+            className="admin-import-metadata-card__edit-toggle"
+            type="button"
+            disabled={saving}
+            onClick={() => {
+              setEditing(current => !current);
+              setError(null);
+            }}
+          >
+            {editing ? <X /> : <Pencil />}
+            {editing ? 'Fechar' : 'Alterar'}
+          </button>
+        )}
       </div>
 
-      {hasExternalHints && (
+      {(!compact || editing) && hasExternalHints && (
         <div className="admin-import-metadata-notice">
           <ShieldCheck />
-          <span>Metadata externa aparece apenas como sugestão e só entra no preview após aceite explícito.</span>
+          <span>Sugestões externas só entram após validação ou ajuste explícito.</span>
         </div>
       )}
 
-      <div className="admin-import-metadata-fields">
-        {FIELDS.map(field => {
-          const state = preview.fieldStates[field];
-          const providerValue = preview.provider?.[field] ?? null;
-          const showProvider = Boolean(providerValue && ['suggested', 'conflict'].includes(state));
-          const inputId = `admin-import-metadata-${job.id}-${field}`;
-          return (
-            <div className={`admin-import-metadata-field is-${state}`} key={field}>
-              <label htmlFor={inputId}>
-                <strong>{FIELD_LABELS[field]}</strong>
-                <small>{FIELD_STATES[state]}</small>
-              </label>
-              <input
-                id={inputId}
-                type="text"
-                maxLength={240}
-                value={draft[field]}
-                placeholder={`${FIELD_LABELS[field]} não informado`}
-                disabled={saving}
-                onChange={event => {
-                  setDraft(current => ({ ...current, [field]: event.target.value }));
-                  if (error) setError(null);
-                }}
-              />
-              {showProvider && providerValue && (
-                <div className="admin-import-metadata-field__hint">
-                  <small>Provider sugeriu: {providerValue}</small>
-                  <button
-                    type="button"
+      {(!compact || editing) && (
+        <>
+          <div className="admin-import-metadata-fields">
+            {FIELDS.map(field => {
+              const state = preview.fieldStates[field];
+              const providerValue = preview.provider?.[field] ?? null;
+              const showProvider = Boolean(providerValue && ['suggested', 'conflict'].includes(state));
+              const inputId = `admin-import-metadata-${job.id}-${field}`;
+              return (
+                <div className={`admin-import-metadata-field is-${state}`} key={field}>
+                  <label htmlFor={inputId}>
+                    <strong>{FIELD_LABELS[field]}</strong>
+                    <small>{FIELD_STATES[state]}</small>
+                  </label>
+                  <input
+                    id={inputId}
+                    type="text"
+                    maxLength={240}
+                    value={draft[field]}
+                    placeholder={`${FIELD_LABELS[field]} não informado`}
                     disabled={saving}
-                    onClick={() => {
-                      setDraft(current => ({ ...current, [field]: providerValue }));
+                    onChange={event => {
+                      setDraft(current => ({ ...current, [field]: event.target.value }));
                       if (error) setError(null);
                     }}
-                  >
-                    Usar sugestão
-                  </button>
+                  />
+                  {showProvider && providerValue && (
+                    <div className="admin-import-metadata-field__hint">
+                      <small>Provider sugeriu: {providerValue}</small>
+                      <button
+                        type="button"
+                        disabled={saving}
+                        onClick={() => {
+                          setDraft(current => ({ ...current, [field]: providerValue }));
+                          if (error) setError(null);
+                        }}
+                      >
+                        Usar sugestão
+                      </button>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+              );
+            })}
+          </div>
 
-      <div className="admin-import-metadata-card__actions">
-        <button type="button" disabled={saving || !hasOverrides} onClick={() => void restore()}>
-          <RotateCcw /> Restaurar leitura
-        </button>
-        <button className="is-primary" type="button" disabled={saving} onClick={() => void save()}>
-          {saving ? <LoaderCircle className="is-spinning" /> : <Pencil />}
-          {saving ? 'Salvando…' : 'Salvar ajustes'}
-        </button>
-      </div>
+          <div className="admin-import-metadata-card__actions">
+            <button type="button" disabled={saving || !hasOverrides} onClick={() => void restore()}>
+              <RotateCcw /> Restaurar leitura
+            </button>
+            <button className="is-primary" type="button" disabled={saving} onClick={() => void save()}>
+              {saving ? <LoaderCircle className="is-spinning" /> : <Pencil />}
+              {saving ? 'Salvando…' : 'Salvar ajustes'}
+            </button>
+          </div>
+        </>
+      )}
 
       <AdminImportDuplicateCheckPanel job={job} onJobUpdated={onJobUpdated} />
 
       {error && <div className="my-account-message is-error admin-import-message" role="alert">{error}</div>}
+      {!mustReview && compact && !editing && uncertain > 0 && (
+        <small className="admin-import-metadata-card__optional-hint">Campos opcionais podem ser ajustados em “Alterar”.</small>
+      )}
     </article>
   );
 }
@@ -240,7 +287,8 @@ function MetadataPreviewCard({
 export function AdminImportMetadataPreviewPanel({
   jobs,
   onJobUpdated,
-  onRefresh
+  onRefresh,
+  compact = false
 }: AdminImportMetadataPreviewPanelProps) {
   const [workingJobId, setWorkingJobId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -263,46 +311,52 @@ export function AdminImportMetadataPreviewPanel({
     }
   };
 
+  if (compact && ready.length === 0 && waiting.length === 0) return null;
+
   return (
-    <section className="admin-import-metadata" aria-labelledby="admin-import-metadata-title">
-      <div className="admin-import-metadata__heading">
-        <div>
-          <span className="my-account-link-group__label">Preview</span>
-          <strong id="admin-import-metadata-title">Revisar metadata antes de importar</strong>
-          <small>Leia o arquivo validado, compare sugestões externas e ajuste somente o preview. Depois, verifique possíveis duplicatas antes da promoção.</small>
+    <section className={`admin-import-metadata${compact ? ' is-compact' : ''}`} aria-labelledby="admin-import-metadata-title">
+      {!compact && (
+        <div className="admin-import-metadata__heading">
+          <div>
+            <span className="my-account-link-group__label">Preview</span>
+            <strong id="admin-import-metadata-title">Revisar metadata antes de importar</strong>
+            <small>Confira as informações e ajuste somente se necessário.</small>
+          </div>
+          <span className="admin-import-metadata__counter">
+            <CheckCircle2 /> {ready.length} pronta{ready.length === 1 ? '' : 's'}
+          </span>
         </div>
-        <span className="admin-import-metadata__counter">
-          <CheckCircle2 /> {ready.length} pronta{ready.length === 1 ? '' : 's'}
-        </span>
-      </div>
+      )}
 
       {waiting.length > 0 && (
         <div className="admin-import-metadata__waiting">
           <div className="admin-import-validation__queue-heading">
-            <strong>Aguardando preview</strong>
-            <small>{waiting.length} {waiting.length === 1 ? 'arquivo validado' : 'arquivos validados'}</small>
+            <strong>{compact ? 'Preparando prévia…' : 'Aguardando preview'}</strong>
+            <small>{compact ? 'Lendo metadata e capa automaticamente.' : `${waiting.length} arquivo validado`}</small>
           </div>
-          <div className="admin-import-validation__jobs">
-            {waiting.map(job => {
-              const working = workingJobId === job.id;
-              return (
-                <article className="admin-import-validation-job" key={job.id}>
-                  <div>
-                    <strong>{job.label}</strong>
-                    <small>Metadata local primeiro · provider apenas como sugestão</small>
-                  </div>
-                  <button type="button" disabled={Boolean(workingJobId)} onClick={() => void extract(job)}>
-                    {working ? <LoaderCircle className="is-spinning" /> : <Music2 />}
-                    {working ? 'Lendo…' : 'Gerar preview'}
-                  </button>
-                </article>
-              );
-            })}
-          </div>
+          {!compact && (
+            <div className="admin-import-validation__jobs">
+              {waiting.map(job => {
+                const working = workingJobId === job.id;
+                return (
+                  <article className="admin-import-validation-job" key={job.id}>
+                    <div>
+                      <strong>{job.label}</strong>
+                      <small>Metadata local primeiro · provider apenas como sugestão</small>
+                    </div>
+                    <button type="button" disabled={Boolean(workingJobId)} onClick={() => void extract(job)}>
+                      {working ? <LoaderCircle className="is-spinning" /> : <Music2 />}
+                      {working ? 'Lendo…' : 'Gerar preview'}
+                    </button>
+                  </article>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
-      {ready.length === 0 && waiting.length === 0 && (
+      {!compact && ready.length === 0 && waiting.length === 0 && (
         <div className="admin-import-validation__empty">
           <Music2 />
           <span>Valide uma mídia para liberar o preview de metadata.</span>
@@ -316,6 +370,7 @@ export function AdminImportMetadataPreviewPanel({
               key={`${job.id}:${job.metadataPreview!.generatedAt}`}
               job={job}
               onJobUpdated={onJobUpdated}
+              compact={compact}
             />
           ))}
         </div>
