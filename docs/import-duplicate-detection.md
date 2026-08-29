@@ -17,6 +17,8 @@ O servidor tenta preservar um fingerprint do payload **antes** de eventual remux
 
 Para arquivos da biblioteca, hashes são calculados sob demanda apenas quando o tamanho é compatível com um fingerprint da importação. O cache usa identidade da faixa, caminho, tamanho e `mtime` e nunca é persistido no job ou enviado para a interface.
 
+A captura antecipada é oportunista: uma falha isolada ao calcular esse fingerprint não interrompe nem limpa o staging. O SHA-256 final validado continua disponível e as heurísticas continuam funcionando.
+
 ## Classificação
 
 Cada correspondência recebe uma confiança:
@@ -34,8 +36,8 @@ A maior confiança encontrada define a disposição:
 
 - `blocked`: duplicata exata; bloqueada por padrão e sem botão de ignorar nesta etapa;
 - `review`: duplicata provável; exige revisão manual explícita;
-- `notice`: possível duplicata; aparece como aviso, mas não bloqueia;
-- `clear`: nenhuma duplicata relevante.
+- `notice`: possível duplicata ou verificação parcial; aparece como aviso, mas não bloqueia;
+- `clear`: nenhuma duplicata relevante e todas as comparações de hash aplicáveis foram concluídas.
 
 Uma revisão manual só pode ser registrada para `review`. Ela não altera nem exclui a faixa existente e não transforma uma duplicata exata em permitida.
 
@@ -49,7 +51,7 @@ Cancelamento do job remove tanto o check quanto o fingerprint temporário.
 
 A consulta padrão lê somente os campos necessários da tabela `tracks` em SQLite e abre arquivos da biblioteca com a mesma proteção de caminho usada pelo servidor. Caminhos absolutos e hashes não são devolvidos ao navegador.
 
-Falhas ao ler um hash individual não geram falso `clear`: o resultado sinaliza que nem todos os hashes comparáveis puderam ser confirmados e mantém as heurísticas visíveis.
+Falhas ao ler um hash individual não geram falso `clear`: se havia um arquivo de tamanho comparável e seu hash não pôde ser confirmado, o resultado permanece como `notice`/verificação parcial e mantém as heurísticas visíveis.
 
 ## API administrativa
 
@@ -70,4 +72,5 @@ A etapa atende ao gate quando:
 - falsos positivos conservadores não bloqueiam;
 - nenhum arquivo existente é excluído ou modificado automaticamente;
 - metadata editada invalida check antigo;
+- falha opcional de fingerprint não destrói o staging nem produz falso `clear`;
 - CI completo permanece verde.
