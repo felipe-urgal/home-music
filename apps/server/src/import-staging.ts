@@ -42,6 +42,15 @@ export type ImportStagingJob = {
   workspacePath: string;
 };
 
+export type ImportStagingCleanupSnapshot = Readonly<{
+  stagingRoot: string;
+  musicRoot: string;
+  activeWorkspaces: ReadonlyArray<Readonly<{
+    jobId: string;
+    directory: string;
+  }>>;
+}>;
+
 export type ImportValidationTarget = {
   path: string;
   size: number;
@@ -555,6 +564,18 @@ export class ImportStagingManager {
     }
     this.jobs.delete(normalizedJobId);
     return true;
+  }
+
+  async cleanupSnapshot(): Promise<ImportStagingCleanupSnapshot> {
+    const { stagingRoot, musicRoot } = await this.initialize();
+    return {
+      stagingRoot,
+      musicRoot,
+      activeWorkspaces: [...this.jobs.values()].map(workspace => ({
+        jobId: workspace.jobId,
+        directory: workspace.directory
+      }))
+    };
   }
 
   hasJob(jobId: string) {
