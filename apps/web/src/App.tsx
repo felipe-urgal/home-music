@@ -484,6 +484,31 @@ export default function App() {
   const auth = useAuth();
   const offline = useOfflineDownloads();
   const [offlineMode, setOfflineMode] = useState(false);
+  const [offlineAutoOpened, setOfflineAutoOpened] = useState(false);
+
+  useEffect(() => {
+    if (!auth.unreachable) {
+      if (offlineAutoOpened) setOfflineAutoOpened(false);
+      return;
+    }
+    if (
+      offlineAutoOpened
+      || auth.loading
+      || offline.loading
+      || !offline.supported
+      || offline.records.length === 0
+    ) return;
+
+    setOfflineAutoOpened(true);
+    setOfflineMode(true);
+  }, [
+    auth.loading,
+    auth.unreachable,
+    offline.loading,
+    offline.records.length,
+    offline.supported,
+    offlineAutoOpened
+  ]);
 
   useEffect(() => {
     if (offlineMode && !offline.loading && offline.tracks.length === 0) setOfflineMode(false);
