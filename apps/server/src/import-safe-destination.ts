@@ -273,17 +273,23 @@ export class ImportSafeDestinationManager {
       const root = await this.libraryRoot();
       const { directory, created } = await ensureSafeDirectory(root, parts);
       let promotionStarted = false;
+      let physicalPromotionCommitted = false;
       try {
         const destination = await this.planInside(job, directory, parts);
         this.queue.transition(jobId, 'processing');
         promotionStarted = true;
         const promoted = await this.staging.promote(validated, destination.relativePath);
+        physicalPromotionCommitted = true;
         this.promoted.set(jobId, promoted);
-        await this.afterPromote?.({ ...promoted }, jobId);
+        try {
+          await this.afterPromote?.({ ...promoted }, jobId);
+        } catch {
+          // O arquivo já está em MUSIC_DIR e não pode voltar a ser retryable sem risco de duplicação.
+        }
         const completed = this.queue.transition(jobId, 'completed')!;
         return { job: completed, destination };
       } catch (error) {
-        if (promotionStarted) {
+        if (promotionStarted && !physicalPromotionCommitted) {
           const current = this.queue.get(jobId);
           if (current?.status === 'processing') {
             this.queue.transition(jobId, 'failed', 'Não foi possível promover a mídia para a biblioteca.');
