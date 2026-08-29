@@ -1,3 +1,5 @@
+import { mkdtemp, rm } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import {
   ExternalProviderError,
@@ -181,8 +183,10 @@ export class YtDlpBatchInspector implements ExternalProviderBatchInspector {
     const target = playlistUrl(request.url);
     if (!target) return null;
 
-    const proxy = await this.createProxy();
+    const workspace = await mkdtemp(path.join(os.tmpdir(), 'home-music-ytdlp-inspect-'));
+    let proxy: ProviderProxy | null = null;
     try {
+      proxy = await this.createProxy();
       const result = await this.runner({
         commandPath: this.command,
         args: [
@@ -194,7 +198,7 @@ export class YtDlpBatchInspector implements ExternalProviderBatchInspector {
           '--playlist-end', String(this.maxItems + 1),
           '--', target
         ],
-        cwd: process.cwd(),
+        cwd: workspace,
         proxyUrl: proxy.url,
         signal
       });
@@ -211,7 +215,8 @@ export class YtDlpBatchInspector implements ExternalProviderBatchInspector {
         items
       };
     } finally {
-      await proxy.close().catch(() => undefined);
+      await proxy?.close().catch(() => undefined);
+      await rm(workspace, { recursive: true, force: true }).catch(() => undefined);
     }
   }
 }
