@@ -127,7 +127,13 @@ function normalizeProviderDefinition(provider: ExternalProvider) {
   const label = provider.label.trim().slice(0, MAX_PROVIDER_LABEL_LENGTH);
   if (!label) throw new Error(`Provider ${id} precisa de um label.`);
   const requiredConfigKeys = [...new Set((provider.requiredConfigKeys ?? []).map(key => key.trim()).filter(Boolean))];
-  return { provider, id, label, requiredConfigKeys };
+  const capabilities: ExternalProviderCapabilities = Object.freeze({
+    audio: Boolean(provider.capabilities.audio),
+    metadata: Boolean(provider.capabilities.metadata),
+    thumbnail: Boolean(provider.capabilities.thumbnail),
+    playlists: Boolean(provider.capabilities.playlists)
+  });
+  return { provider, id, label, requiredConfigKeys, capabilities };
 }
 
 function normalizeRequest(request: ExternalProviderRequest) {
@@ -150,7 +156,7 @@ function normalizeRequest(request: ExternalProviderRequest) {
     throw new ExternalProviderError('invalid_input', 'URLs com credenciais embutidas não são permitidas.');
   }
   url.hash = '';
-  return { url: url.toString() } satisfies ExternalProviderRequest;
+  return Object.freeze({ url: url.toString() }) satisfies ExternalProviderRequest;
 }
 
 function cleanMetadataValue(value: unknown) {
@@ -180,8 +186,25 @@ function configured(requiredKeys: readonly string[], config: ExternalProviderCon
   return requiredKeys.every(key => Boolean(config[key]?.trim()));
 }
 
+function canonicalFailure(error: ExternalProviderError) {
+  switch (error.code) {
+    case 'provider_timeout':
+      return new ExternalProviderError('provider_timeout', 'O provider externo excedeu o tempo limite.', 504);
+    case 'provider_cancelled':
+      return new ExternalProviderError('provider_cancelled', 'Importação do provider cancelada.', 409);
+    case 'output_too_large':
+      return new ExternalProviderError('output_too_large', 'A mídia retornada pelo provider excede o limite configurado.', 413);
+    case 'invalid_output':
+      return new ExternalProviderError('invalid_output', 'O provider retornou uma saída inválida.');
+    case 'setup_failed':
+      return new ExternalProviderError('setup_failed', 'Não foi possível preparar a importação externa.', 500);
+    default:
+      return new ExternalProviderError('provider_failed', 'Falha ao executar o provider externo.', 502);
+  }
+}
+
 function publicFailure(error: unknown) {
-  if (error instanceof ExternalProviderError) return error;
+  if (error instanceof ExternalProviderError) return canonicalFailure(error);
   if (error instanceof ExternalProviderScratchError) {
     return new ExternalProviderError('invalid_output', 'O provider retornou uma saída inválida.');
   }
@@ -266,7 +289,7 @@ export class ExternalProviderImportManager {
       return {
         id: definition.id,
         label: definition.label,
-        capabilities: { ...definition.provider.capabilities },
+        capabilities: { ...definition.capabilities },
         configured: configured(definition.requiredConfigKeys, config)
       };
     });
@@ -292,7 +315,7 @@ export class ExternalProviderImportManager {
     try {
       await definition.provider.validate(normalizedRequest);
     } catch (error) {
-      if (error instanceof ExternalProviderError) throw error;
+      if (error instanceof ExternalProviderError && error.code === 'invalid_input') throw error;
       throw new ExternalProviderError('invalid_input', `A URL não é suportada por ${definition.label}.`);
     }
 
@@ -305,7 +328,7 @@ export class ExternalProviderImportManager {
     try {
       await this.staging.createJob(job.id);
       scratchDir = (await this.scratch.createJob(job.id)).workspacePath;
-    } catch (error) {
+    } catch {
       await this.staging.cleanupJob(job.id).catch(() => undefined);
       await this.scratch.cleanupJob(job.id).catch(() => undefined);
       this.queue.transition(job.id, 'failed', 'Não foi possível preparar a importação externa.');
@@ -391,17 +414,24 @@ export class ExternalProviderImportManager {
       }
 
       const safeOutput = await this.scratch.openOutput(jobId, media.relativePath);
+      let writtenSize = 0;
       try {
-        if (safeOutput.stat.size <= 0) {
+        const before = await safeOutput.handle.stat();
+        if (before.size <= 0) {
           throw new ExternalProviderError('invalid_output', 'O provider retornou um arquivo vazio.');
         }
-        if (safeOutput.stat.size > this.maxOutputBytes) {
+        if (before.size > this.maxOutputBytes) {
           throw new ExternalProviderError('output_too_large', 'A mídia retornada pelo provider excede o limite configurado.', 413);
         }
-        await this.staging.writePayload(
+        const written = await this.staging.writePayload(
           jobId,
           readOutput(safeOutput.handle, this.maxOutputBytes, session.controller.signal)
         );
+        writtenSize = written.size;
+        const after = await safeOutput.handle.stat();
+        if (before.size !== after.size || before.mtimeMs !== after.mtimeMs) {
+          throw new ExternalProviderError('invalid_output', 'O arquivo do provider mudou durante a cópia.');
+        }
       } finally {
         await safeOutput.handle.close();
       }
@@ -412,7 +442,7 @@ export class ExternalProviderImportManager {
         provider: definition.id,
         metadata: sanitizeMetadata(media.metadata),
         payload: {
-          sizeBytes: safeOutput.stat.size,
+          sizeBytes: writtenSize,
           contentType: sanitizeContentType(media.contentType)
         }
       };
