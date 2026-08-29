@@ -34,6 +34,10 @@ import {
   ImportDuplicateDetectionError,
   ImportDuplicateDetectionManager
 } from './import-duplicate-detection.js';
+import {
+  ImportSafeDestinationError,
+  ImportSafeDestinationManager
+} from './import-safe-destination.js';
 
 const defaultImportStagingPath = fileURLToPath(new URL('../../../data/import-staging/', import.meta.url));
 
@@ -43,6 +47,7 @@ type RegisterAdminImportRoutesOptions = {
   mediaValidation?: ImportMediaValidationManager;
   metadataPreview?: ImportMetadataPreviewManager;
   duplicateDetection?: ImportDuplicateDetectionManager;
+  safeDestination?: ImportSafeDestinationManager;
   providerMetadata?: (jobId: string) => ImportProviderMetadataHint | null;
 };
 
@@ -53,6 +58,7 @@ function sendImportError(reply: FastifyReply, error: unknown) {
     || error instanceof ImportMediaValidationError
     || error instanceof ImportMetadataPreviewError
     || error instanceof ImportDuplicateDetectionError
+    || error instanceof ImportSafeDestinationError
   ) {
     return reply.code(error.statusCode).send({ error: error.message });
   }
@@ -174,6 +180,12 @@ export function registerAdminImportRoutes(
     queue,
     staging: staging(),
     validatedLookup: jobId => mediaValidation.getValidated(jobId)
+  });
+  const safeDestination = options.safeDestination ?? new ImportSafeDestinationManager({
+    queue,
+    staging: staging(),
+    validatedLookup: jobId => mediaValidation.getValidated(jobId),
+    duplicateReady: jobId => duplicateDetection.isReady(jobId)
   });
 
   if (!app.hasContentTypeParser('application/octet-stream')) {
@@ -353,6 +365,30 @@ export function registerAdminImportRoutes(
       reply.header('Cache-Control', 'no-store');
       try {
         return { check: duplicateDetection.review(request.params.id) };
+      } catch (error) {
+        return sendImportError(reply, error);
+      }
+    }
+  );
+
+  app.get<{ Params: { id: string }; Querystring: { folderPath?: string } }>(
+    '/api/admin/imports/:id/destination',
+    async (request, reply) => {
+      reply.header('Cache-Control', 'private, no-store');
+      try {
+        return { destination: await safeDestination.plan(request.params.id, request.query.folderPath) };
+      } catch (error) {
+        return sendImportError(reply, error);
+      }
+    }
+  );
+
+  app.post<{ Params: { id: string }; Body: { folderPath?: unknown } }>(
+    '/api/admin/imports/:id/promote',
+    async (request, reply) => {
+      reply.header('Cache-Control', 'no-store');
+      try {
+        return await safeDestination.promote(request.params.id, request.body?.folderPath);
       } catch (error) {
         return sendImportError(reply, error);
       }

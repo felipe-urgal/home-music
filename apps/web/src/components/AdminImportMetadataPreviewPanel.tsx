@@ -230,7 +230,7 @@ function MetadataPreviewCard({
         </button>
       </div>
 
-      <AdminImportDuplicateCheckPanel job={job} />
+      <AdminImportDuplicateCheckPanel job={job} onJobUpdated={onJobUpdated} />
 
       {error && <div className="my-account-message is-error admin-import-message" role="alert">{error}</div>}
     </article>

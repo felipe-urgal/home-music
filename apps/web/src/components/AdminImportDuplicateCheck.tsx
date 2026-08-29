@@ -15,6 +15,7 @@ import {
   type AdminImportDuplicateCheck,
   type AdminImportDuplicateReason
 } from '../admin-import-client';
+import { AdminImportDestinationPanel } from './AdminImportDestinationPanel';
 
 const REASON_LABELS: Record<AdminImportDuplicateReason, string> = {
   hash: 'Hash idêntico',
@@ -51,7 +52,13 @@ function resultDescription(check: AdminImportDuplicateCheck) {
   return 'Nenhuma correspondência relevante foi encontrada na biblioteca atual.';
 }
 
-export function AdminImportDuplicateCheckPanel({ job }: { job: ImportJob }) {
+export function AdminImportDuplicateCheckPanel({
+  job,
+  onJobUpdated
+}: {
+  job: ImportJob;
+  onJobUpdated: (job: ImportJob) => void;
+}) {
   const [check, setCheck] = useState<AdminImportDuplicateCheck | null>(null);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
@@ -173,6 +180,8 @@ export function AdminImportDuplicateCheckPanel({ job }: { job: ImportJob }) {
       )}
 
       {error && <small className="admin-import-duplicates__error" role="alert">{error}</small>}
+
+      <AdminImportDestinationPanel job={job} check={check} onJobUpdated={onJobUpdated} />
     </div>
   );
 }
