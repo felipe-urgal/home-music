@@ -91,6 +91,40 @@ test('gera nome previsível sanitizado e promove para Importados sem escapar de 
   }
 });
 
+test('aguarda atualização da biblioteca antes de marcar a importação como concluída', async () => {
+  const item = await fixture();
+  try {
+    let releaseHook!: () => void;
+    const hookGate = new Promise<void>(resolve => {
+      releaseHook = resolve;
+    });
+    let observedStatus: string | null = null;
+    const manager = new ImportSafeDestinationManager({
+      queue: item.queue,
+      staging: item.staging,
+      validatedLookup: id => id === item.job.id ? item.validated : null,
+      duplicateReady: () => true,
+      afterPromote: async promoted => {
+        observedStatus = item.queue.get(item.job.id)?.status ?? null;
+        assert.equal(await readFile(promoted.absolutePath, 'utf8'), 'audio-validado');
+        await hookGate;
+      },
+      musicDir: item.musicDir
+    });
+
+    const promotion = manager.promote(item.job.id);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(observedStatus, 'processing');
+    assert.equal(item.queue.get(item.job.id)?.status, 'processing');
+
+    releaseHook();
+    const result = await promotion;
+    assert.equal(result.job.status, 'completed');
+  } finally {
+    await rm(item.root, { recursive: true, force: true });
+  }
+});
+
 test('resolve colisão sem sobrescrever arquivo existente', async () => {
   const item = await fixture({ title: 'Faixa', artist: 'Artista' });
   try {
@@ -115,7 +149,7 @@ test('aceita subpasta relativa e bloqueia traversal, absoluto, caracteres proble
   const item = await fixture();
   try {
     assert.deepEqual(normalizeImportFolderPath('Rock/Anos 90'), ['Rock', 'Anos 90']);
-    for (const unsafe of ['../fora', '/absoluto', 'Rock/../fora', 'Rock\\fora', '.oculta', 'Rock/AUX', 'Rock/A:lha']) {
+    for (const unsafe of ['../fora', '/absoluto', 'Rock/../fora', 'Rock\\fora', '.oculta', 'Rock/AUX', 'Rock/A:lha', 'Rock/Pasta.']) {
       assert.throws(
         () => normalizeImportFolderPath(unsafe),
         (error: unknown) => error instanceof ImportSafeDestinationError && error.code === 'invalid_destination'
