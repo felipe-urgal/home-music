@@ -136,8 +136,13 @@ function resolveField(
     }
     return { value: local, state: 'trusted' as const };
   }
-  if (suggested) return { value: suggested, state: 'suggested' as const };
-  if (fallback) return { value: fallback, state: 'fallback' as const };
+  if (fallback) {
+    if (suggested && !sameMetadata(fallback, suggested)) {
+      return { value: fallback, state: 'conflict' as const };
+    }
+    return { value: fallback, state: 'fallback' as const };
+  }
+  if (suggested) return { value: null, state: 'suggested' as const };
   return { value: null, state: 'missing' as const };
 }
 
