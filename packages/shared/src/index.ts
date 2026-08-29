@@ -16,6 +16,8 @@ export type ImportMediaDecisionReason =
   | 'unsupported-original'
   | 'contains-video'
   | 'multiple-audio-streams';
+export type ImportMetadataFieldName = 'title' | 'artist' | 'album' | 'albumArtist';
+export type ImportMetadataFieldState = 'trusted' | 'suggested' | 'fallback' | 'missing' | 'conflict' | 'edited';
 export type AdminOperationKind = 'scan' | 'import';
 export type AdminOperationStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
 export type AdminScanTrigger = 'manual' | 'automatic';
@@ -118,6 +120,34 @@ export type ImportMediaDecision = {
   output: ImportMediaOutputInfo;
 };
 
+export type ImportMetadataValues = {
+  title: string | null;
+  artist: string | null;
+  album: string | null;
+  albumArtist: string | null;
+};
+
+export type ImportMetadataFieldStates = Record<ImportMetadataFieldName, ImportMetadataFieldState>;
+
+export type ImportMetadataCoverPreview = {
+  available: boolean;
+  contentType: string | null;
+  sizeBytes: number | null;
+};
+
+export type ImportMetadataPreview = {
+  embedded: ImportMetadataValues;
+  provider: ImportMetadataValues | null;
+  overrides: ImportMetadataValues;
+  effective: ImportMetadataValues;
+  fieldStates: ImportMetadataFieldStates;
+  durationSeconds: number;
+  cover: ImportMetadataCoverPreview;
+  generatedAt: string;
+};
+
+export type ImportMetadataPreviewPatch = Partial<ImportMetadataValues>;
+
 export type ImportJob = {
   id: string;
   source: ImportJobSource;
@@ -129,6 +159,7 @@ export type ImportJob = {
   finishedAt: string | null;
   error: string | null;
   mediaDecision: ImportMediaDecision | null;
+  metadataPreview: ImportMetadataPreview | null;
 };
 
 export type AdminImportJobsResponse = {

@@ -29,6 +29,10 @@ import {
   AdminImportMediaDecisionSummary,
   AdminImportMediaValidationPanel
 } from './AdminImportMediaValidationPanel';
+import {
+  AdminImportMetadataPreviewPanel,
+  AdminImportMetadataSummary
+} from './AdminImportMetadataPreviewPanel';
 
 type AdminImportMediaScreenProps = {
   onBack: () => void;
@@ -192,7 +196,7 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
     return () => window.clearInterval(timer);
   }, [activeUrlJob?.status, activeUrlJobId, loadJobs]);
 
-  const handleValidatedJob = useCallback((job: ImportJob) => {
+  const handleUpdatedJob = useCallback((job: ImportJob) => {
     setJobs(current => current.map(item => item.id === job.id ? job : item));
   }, []);
 
@@ -498,10 +502,16 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
           <AdminImportMediaValidationPanel
             jobs={jobs}
             config={mediaValidationConfig}
-            onJobUpdated={handleValidatedJob}
+            onJobUpdated={handleUpdatedJob}
             onRefresh={() => loadJobs(true)}
           />
         )}
+
+        <AdminImportMetadataPreviewPanel
+          jobs={jobs}
+          onJobUpdated={handleUpdatedJob}
+          onRefresh={() => loadJobs(true)}
+        />
 
         <section className="admin-import-methods" aria-label="Formas de importação">
           {IMPORT_METHODS.map(method => {
@@ -563,6 +573,7 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
                     <strong>{job.label}</strong>
                     <small>{sourceLabel(job)} · {formatDate(job.createdAt)}</small>
                     <AdminImportMediaDecisionSummary job={job} />
+                    <AdminImportMetadataSummary job={job} />
                     {job.error && <small className="admin-import-job__error">{job.error}</small>}
                   </div>
                   <span className="admin-import-job__badge">{STATUS_LABELS[job.status]}</span>

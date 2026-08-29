@@ -25,6 +25,11 @@ import {
   ImportMediaValidationManager,
   resolveFfprobeCommand
 } from './import-media-validation.js';
+import {
+  ImportMetadataPreviewError,
+  ImportMetadataPreviewManager,
+  type ImportProviderMetadataHint
+} from './import-metadata-preview.js';
 
 const defaultImportStagingPath = fileURLToPath(new URL('../../../data/import-staging/', import.meta.url));
 
@@ -32,6 +37,8 @@ type RegisterAdminImportRoutesOptions = {
   uploads?: ImportUploadManager;
   urls?: ImportUrlManager;
   mediaValidation?: ImportMediaValidationManager;
+  metadataPreview?: ImportMetadataPreviewManager;
+  providerMetadata?: (jobId: string) => ImportProviderMetadataHint | null;
 };
 
 function sendImportError(reply: FastifyReply, error: unknown) {
@@ -39,6 +46,7 @@ function sendImportError(reply: FastifyReply, error: unknown) {
     error instanceof ImportUploadError
     || error instanceof ImportUrlError
     || error instanceof ImportMediaValidationError
+    || error instanceof ImportMetadataPreviewError
   ) {
     return reply.code(error.statusCode).send({ error: error.message });
   }
@@ -150,6 +158,12 @@ export function registerAdminImportRoutes(
   const uploads = options.uploads ?? createDefaultUploadManager(app, queue, staging());
   const urls = options.urls ?? createDefaultUrlManager(app, queue, staging());
   const mediaValidation = options.mediaValidation ?? createDefaultMediaValidationManager(queue, staging());
+  const metadataPreview = options.metadataPreview ?? new ImportMetadataPreviewManager({
+    queue,
+    staging: staging(),
+    validatedLookup: jobId => mediaValidation.getValidated(jobId),
+    providerMetadata: options.providerMetadata
+  });
 
   if (!app.hasContentTypeParser('application/octet-stream')) {
     app.addContentTypeParser('application/octet-stream', (_request, payload, done) => {
@@ -206,7 +220,9 @@ export function registerAdminImportRoutes(
     async (request, reply) => {
       reply.header('Cache-Control', 'no-store');
       try {
-        return { job: await uploads.cancel(request.params.id) };
+        const job = await uploads.cancel(request.params.id);
+        metadataPreview.forget(request.params.id);
+        return { job };
       } catch (error) {
         return sendImportError(reply, error);
       }
@@ -231,7 +247,9 @@ export function registerAdminImportRoutes(
     async (request, reply) => {
       reply.header('Cache-Control', 'no-store');
       try {
-        return { job: await urls.cancel(request.params.id) };
+        const job = await urls.cancel(request.params.id);
+        metadataPreview.forget(request.params.id);
+        return { job };
       } catch (error) {
         return sendImportError(reply, error);
       }
@@ -243,10 +261,48 @@ export function registerAdminImportRoutes(
     async (request, reply) => {
       reply.header('Cache-Control', 'no-store');
       try {
+        await metadataPreview.captureSource(request.params.id).catch(error => {
+          app.log.warn({ err: error, importJobId: request.params.id }, 'Não foi possível antecipar metadata da importação.');
+        });
         return await mediaValidation.validate(request.params.id, request.body?.profile);
       } catch (error) {
         return sendImportError(reply, error);
       }
+    }
+  );
+
+  app.post<{ Params: { id: string } }>(
+    '/api/admin/imports/:id/metadata-preview',
+    async (request, reply) => {
+      reply.header('Cache-Control', 'no-store');
+      try {
+        return await metadataPreview.extract(request.params.id);
+      } catch (error) {
+        return sendImportError(reply, error);
+      }
+    }
+  );
+
+  app.patch<{ Params: { id: string }; Body: unknown }>(
+    '/api/admin/imports/:id/metadata-preview',
+    async (request, reply) => {
+      reply.header('Cache-Control', 'no-store');
+      try {
+        return metadataPreview.update(request.params.id, request.body);
+      } catch (error) {
+        return sendImportError(reply, error);
+      }
+    }
+  );
+
+  app.get<{ Params: { id: string } }>(
+    '/api/admin/imports/:id/cover',
+    async (request, reply) => {
+      reply.header('Cache-Control', 'private, no-store');
+      const cover = metadataPreview.getCover(request.params.id);
+      if (!cover) return reply.code(404).send({ error: 'Capa do preview não encontrada.' });
+      reply.type(cover.contentType);
+      return reply.send(cover.data);
     }
   );
 }

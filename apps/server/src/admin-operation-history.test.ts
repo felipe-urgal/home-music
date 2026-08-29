@@ -26,6 +26,7 @@ function importJob(overrides: Partial<ImportJob> = {}): ImportJob {
     finishedAt: null,
     error: null,
     mediaDecision: null,
+    metadataPreview: null,
     ...overrides
   };
 }

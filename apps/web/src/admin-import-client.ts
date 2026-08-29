@@ -2,6 +2,8 @@ import type {
   AdminImportJobsResponse,
   ImportJob,
   ImportMediaDecision,
+  ImportMetadataPreview,
+  ImportMetadataPreviewPatch,
   ImportOutputProfile
 } from '@home-music/shared';
 import { apiFetch, AUTH_REQUIRED_EVENT } from './api-client';
@@ -40,6 +42,11 @@ export type AdminImportUploadResult = {
 export type AdminImportMediaValidationResult = {
   job: ImportJob;
   validation: ImportMediaDecision;
+};
+
+export type AdminImportMetadataPreviewResult = {
+  job: ImportJob;
+  preview: ImportMetadataPreview;
 };
 
 export async function getAdminImportJobs() {
@@ -158,6 +165,43 @@ export async function validateAdminImportMedia(jobId: string, profile: ImportOut
     throw new Error(payload?.error || `Falha HTTP ${response.status}`);
   }
   return payload as AdminImportMediaValidationResult;
+}
+
+export async function extractAdminImportMetadata(jobId: string) {
+  const response = await apiFetch(`/api/admin/imports/${encodeURIComponent(jobId)}/metadata-preview`, {
+    method: 'POST',
+    headers: { 'X-Home-Music-Request': '1' }
+  });
+  return readMetadataPreviewResponse(response);
+}
+
+export async function updateAdminImportMetadata(jobId: string, patch: ImportMetadataPreviewPatch) {
+  const response = await apiFetch(`/api/admin/imports/${encodeURIComponent(jobId)}/metadata-preview`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Home-Music-Request': '1'
+    },
+    body: JSON.stringify(patch)
+  });
+  return readMetadataPreviewResponse(response);
+}
+
+export function adminImportPreviewCoverUrl(job: ImportJob) {
+  const version = job.metadataPreview?.generatedAt ?? job.updatedAt;
+  return `/api/admin/imports/${encodeURIComponent(job.id)}/cover?v=${encodeURIComponent(version)}`;
+}
+
+async function readMetadataPreviewResponse(response: Response) {
+  const payload = await response.json().catch(() => null) as {
+    job?: ImportJob;
+    preview?: ImportMetadataPreview;
+    error?: string;
+  } | null;
+  if (!response.ok || !payload?.job || !payload.preview) {
+    throw new Error(payload?.error || `Falha HTTP ${response.status}`);
+  }
+  return payload as AdminImportMetadataPreviewResult;
 }
 
 function parseXhrPayload(value: string) {
