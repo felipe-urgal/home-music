@@ -263,7 +263,8 @@ export function AdminExternalProviderPanel({
   const batchProgress = activeBatch?.summary.total
     ? Math.round((activeBatch.summary.processed / activeBatch.summary.total) * 100)
     : 0;
-  const formBusy = submitting || activeJobRunning || batchRunning || startingBatch;
+  const batchOpen = Boolean(activeBatch && !TERMINAL_BATCH_STATUSES.has(activeBatch.status));
+  const formBusy = submitting || activeJobRunning || batchOpen || startingBatch;
 
   return (
     <section className={`admin-import-provider${compact ? ' is-compact' : ''}`} aria-labelledby="admin-import-provider-title">
