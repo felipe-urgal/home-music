@@ -3,7 +3,7 @@ import { chmod, mkdir, mkdtemp, rename, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { scanLibrary } from './library.js';
+import { indexLibraryFile, mergeIndexedTrack, scanLibrary } from './library.js';
 import { resolveLibraryRoot } from './security.js';
 
 test('scanLibrary preserva caminho relativo hierárquico e reaproveita arquivos inalterados', async () => {
@@ -29,6 +29,60 @@ test('scanLibrary preserva caminho relativo hierárquico e reaproveita arquivos 
     assert.equal(second.stats.added, 0);
     assert.equal(second.stats.updated, 0);
     assert.equal(second.tracks[0].id, first.tracks[0].id);
+  } finally {
+    await rm(temp, { recursive: true, force: true });
+  }
+});
+
+test('indexLibraryFile indexa somente o arquivo promovido e merge evita duplicidade', async () => {
+  const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-library-incremental-'));
+
+  try {
+    const root = path.join(temp, 'music');
+    const importedDir = path.join(root, 'Importados');
+    await mkdir(importedDir, { recursive: true });
+    await writeFile(path.join(root, 'Existente.mp3'), 'arquivo existente');
+
+    const libraryRoot = await resolveLibraryRoot(root);
+    const initial = await scanLibrary(libraryRoot);
+    assert.equal(initial.tracks.length, 1);
+
+    const promotedPath = path.join(importedDir, 'Nova faixa.mp3');
+    await writeFile(promotedPath, 'arquivo promovido');
+    const indexed = await indexLibraryFile(libraryRoot, promotedPath);
+    const merged = mergeIndexedTrack(initial.tracks, indexed);
+
+    assert.equal(indexed.title, 'Nova faixa');
+    assert.equal(indexed.folder, 'Importados');
+    assert.equal(indexed.folderPath, 'Importados');
+    assert.equal(merged.length, 2);
+    assert.equal(merged.some(track => track.id === indexed.id), true);
+
+    await writeFile(promotedPath, 'arquivo promovido alterado');
+    const refreshed = await indexLibraryFile(libraryRoot, promotedPath, indexed.id);
+    const mergedAgain = mergeIndexedTrack(merged, refreshed);
+    assert.equal(refreshed.id, indexed.id);
+    assert.equal(mergedAgain.length, 2);
+    assert.equal(mergedAgain.filter(track => track.filePath === promotedPath).length, 1);
+  } finally {
+    await rm(temp, { recursive: true, force: true });
+  }
+});
+
+test('indexLibraryFile rejeita arquivo fora da raiz da biblioteca', async () => {
+  const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-library-incremental-'));
+
+  try {
+    const root = path.join(temp, 'music');
+    const outside = path.join(temp, 'fora.mp3');
+    await mkdir(root, { recursive: true });
+    await writeFile(outside, 'arquivo externo');
+    const libraryRoot = await resolveLibraryRoot(root);
+
+    await assert.rejects(
+      () => indexLibraryFile(libraryRoot, outside),
+      /biblioteca|raiz|caminho|arquivo/i
+    );
   } finally {
     await rm(temp, { recursive: true, force: true });
   }

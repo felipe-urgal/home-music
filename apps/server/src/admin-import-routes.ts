@@ -7,7 +7,7 @@ import {
   ImportRetryStartError,
   installImportRetryStarter
 } from './import-retry.js';
-import { ImportStagingManager } from './import-staging.js';
+import { ImportStagingManager, type PromotedImportFile } from './import-staging.js';
 import {
   DEFAULT_IMPORT_STAGING_TTL_HOURS,
   ImportStagingCleanupManager,
@@ -59,6 +59,7 @@ type RegisterAdminImportRoutesOptions = {
   safeDestination?: ImportSafeDestinationManager;
   stagingCleanup?: ImportStagingCleanupManager | null;
   providerMetadata?: (jobId: string) => ImportProviderMetadataHint | null;
+  onPromoted?: (file: PromotedImportFile, jobId: string) => Promise<void>;
 };
 
 function sendImportError(reply: FastifyReply, error: unknown) {
@@ -215,7 +216,8 @@ export function registerAdminImportRoutes(
     queue,
     staging: staging(),
     validatedLookup: jobId => mediaValidation.getValidated(jobId),
-    duplicateReady: jobId => duplicateDetection.isReady(jobId)
+    duplicateReady: jobId => duplicateDetection.isReady(jobId),
+    afterPromote: options.onPromoted
   });
   const stagingCleanup = options.stagingCleanup !== undefined
     ? options.stagingCleanup

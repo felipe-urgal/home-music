@@ -31,6 +31,7 @@ type ImportSafeDestinationManagerOptions = {
   staging: ImportStagingManager;
   validatedLookup: (jobId: string) => ValidatedImportPayload<unknown> | null;
   duplicateReady: (jobId: string) => boolean;
+  afterPromote?: (file: PromotedImportFile, jobId: string) => Promise<void>;
   musicDir?: string;
 };
 
@@ -237,6 +238,7 @@ export class ImportSafeDestinationManager {
   private readonly staging: ImportStagingManager;
   private readonly validatedLookup: (jobId: string) => ValidatedImportPayload<unknown> | null;
   private readonly duplicateReady: (jobId: string) => boolean;
+  private readonly afterPromote?: (file: PromotedImportFile, jobId: string) => Promise<void>;
   private readonly musicDir: string;
   private promotionLock: Promise<void> = Promise.resolve();
   private readonly promoted = new Map<string, PromotedImportFile>();
@@ -246,6 +248,7 @@ export class ImportSafeDestinationManager {
     this.staging = options.staging;
     this.validatedLookup = options.validatedLookup;
     this.duplicateReady = options.duplicateReady;
+    this.afterPromote = options.afterPromote;
     this.musicDir = options.musicDir ?? process.env.MUSIC_DIR ?? '';
   }
 
@@ -270,16 +273,23 @@ export class ImportSafeDestinationManager {
       const root = await this.libraryRoot();
       const { directory, created } = await ensureSafeDirectory(root, parts);
       let promotionStarted = false;
+      let physicalPromotionCommitted = false;
       try {
         const destination = await this.planInside(job, directory, parts);
         this.queue.transition(jobId, 'processing');
         promotionStarted = true;
         const promoted = await this.staging.promote(validated, destination.relativePath);
+        physicalPromotionCommitted = true;
         this.promoted.set(jobId, promoted);
+        try {
+          await this.afterPromote?.({ ...promoted }, jobId);
+        } catch {
+          // O arquivo já está em MUSIC_DIR e não pode voltar a ser retryable sem risco de duplicação.
+        }
         const completed = this.queue.transition(jobId, 'completed')!;
         return { job: completed, destination };
       } catch (error) {
-        if (promotionStarted) {
+        if (promotionStarted && !physicalPromotionCommitted) {
           const current = this.queue.get(jobId);
           if (current?.status === 'processing') {
             this.queue.transition(jobId, 'failed', 'Não foi possível promover a mídia para a biblioteca.');

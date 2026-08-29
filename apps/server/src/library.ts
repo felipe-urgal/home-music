@@ -73,6 +73,10 @@ function relativeFolder(libraryRoot: string, filePath: string) {
   return { folder, folderPath: safeFolderPath };
 }
 
+function compareTracks(a: IndexedTrack, b: IndexedTrack) {
+  return a.artist.localeCompare(b.artist, 'pt-BR') || a.title.localeCompare(b.title, 'pt-BR');
+}
+
 async function walk(
   dir: string,
   libraryRoot: string,
@@ -173,6 +177,50 @@ function fromMetadata(
   };
 }
 
+async function metadataForFile(
+  libraryRoot: string,
+  file: ScannableFile,
+  onWarning?: ScanWarningHandler
+) {
+  let metadata: IAudioMetadata | null = null;
+  try {
+    metadata = await parseFile(file.path, { duration: true });
+  } catch (error) {
+    onWarning?.(`Metadados inválidos; usando fallback: ${relativeFilePath(libraryRoot, file.path)}`, error);
+  }
+  return metadata;
+}
+
+export async function indexLibraryFile(
+  libraryRoot: string,
+  filePath: string,
+  existingTrackId?: string,
+  onWarning?: ScanWarningHandler
+): Promise<IndexedTrack> {
+  return withMediaQuarantineLock(async () => {
+    const extension = path.extname(filePath).toLowerCase();
+    if (!SUPPORTED_EXTENSIONS.has(extension)) {
+      throw new Error('Arquivo promovido possui extensão não suportada pela biblioteca.');
+    }
+
+    const safeFile = await resolveRegularFileInside(libraryRoot, filePath);
+    const file: ScannableFile = {
+      path: safeFile.path,
+      size: safeFile.stat.size,
+      mtimeMs: safeFile.stat.mtimeMs
+    };
+    const metadata = await metadataForFile(libraryRoot, file, onWarning);
+    return fromMetadata(libraryRoot, file, metadata, existingTrackId);
+  });
+}
+
+export function mergeIndexedTrack(tracks: IndexedTrack[], indexed: IndexedTrack) {
+  const next = tracks.filter(track => track.id !== indexed.id && track.filePath !== indexed.filePath);
+  next.push(indexed);
+  next.sort(compareTracks);
+  return next;
+}
+
 export async function scanLibrary(
   libraryRoot: string,
   previousTracks: IndexedTrack[] = [],
@@ -196,13 +244,7 @@ export async function scanLibrary(
         continue;
       }
 
-      let metadata: IAudioMetadata | null = null;
-      try {
-        metadata = await parseFile(file.path, { duration: true });
-      } catch (error) {
-        onWarning?.(`Metadados inválidos; usando fallback: ${relativeFilePath(libraryRoot, file.path)}`, error);
-      }
-
+      const metadata = await metadataForFile(libraryRoot, file, onWarning);
       tracks.push(fromMetadata(libraryRoot, file, metadata, previous?.id));
       if (previous) stats.updated += 1;
       else stats.added += 1;
@@ -227,10 +269,7 @@ export async function scanLibrary(
       stats.removed += 1;
     }
 
-    tracks.sort((a, b) =>
-      a.artist.localeCompare(b.artist, 'pt-BR') || a.title.localeCompare(b.title, 'pt-BR')
-    );
-
+    tracks.sort(compareTracks);
     return { tracks, stats };
   });
 }
