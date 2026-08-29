@@ -48,14 +48,13 @@ export function AdminImportDestinationPanel({
 
   const loadPlan = async (nextFolderPath: string) => {
     if (!ready || promoting) return;
+    setFolderPath(nextFolderPath);
+    setPlan(null);
     setLoading(true);
     setError(null);
     try {
-      const next = await getAdminImportDestination(job.id, nextFolderPath);
-      setFolderPath(nextFolderPath);
-      setPlan(next);
+      setPlan(await getAdminImportDestination(job.id, nextFolderPath));
     } catch (caught) {
-      setPlan(null);
       setError(caught instanceof Error ? caught.message : 'Não foi possível calcular o destino.');
     } finally {
       setLoading(false);
@@ -160,12 +159,8 @@ export function AdminImportDestinationPanel({
               void loadPlan(next);
             }}
           >
-            {!folders.some(folder => folder.path === 'Importados') && (
-              <option value="Importados">Importados</option>
-            )}
-            {folders.map(folder => (
-              <option value={folder.path} key={folder.path}>{folder.path}</option>
-            ))}
+            {!folders.some(folder => folder.path === 'Importados') && <option value="Importados">Importados</option>}
+            {folders.map(folder => <option value={folder.path} key={folder.path}>{folder.path}</option>)}
           </select>
           <ChevronDown aria-hidden="true" />
         </div>
@@ -219,9 +214,7 @@ export function AdminImportDestinationPanel({
               Usar pasta
             </button>
           </div>
-          <button className="admin-import-destination__cancel-new" type="button" onClick={() => setCreatingFolder(false)}>
-            Cancelar
-          </button>
+          <button className="admin-import-destination__cancel-new" type="button" onClick={() => setCreatingFolder(false)}>Cancelar</button>
         </div>
       )}
 
@@ -246,10 +239,7 @@ export function AdminImportDestinationPanel({
         {promoting ? 'Importando…' : 'Importar para biblioteca'}
       </button>
 
-      <small className="admin-import-destination__safety">
-        Nenhum arquivo existente será sobrescrito.
-      </small>
-
+      <small className="admin-import-destination__safety">Nenhum arquivo existente será sobrescrito.</small>
       {error && <small className="admin-import-destination__error" role="alert">{error}</small>}
     </div>
   );
