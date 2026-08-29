@@ -177,3 +177,33 @@ test('start executa varredura de startup e stop é idempotente', async () => {
     await item.cleanup();
   }
 });
+
+test('falha no sweep de startup não desarma a tentativa periódica seguinte', async () => {
+  const item = await fixture();
+  try {
+    await item.staging.cleanupSnapshot();
+    let attempts = 0;
+    const cleanup = new ImportStagingCleanupManager({
+      staging: {
+        cleanupSnapshot: async () => {
+          attempts += 1;
+          if (attempts === 1) throw new Error('filesystem temporariamente indisponível');
+          return {
+            stagingRoot: item.stagingRoot,
+            musicRoot: item.musicDir,
+            activeWorkspaces: []
+          };
+        }
+      },
+      ttlMs: 0,
+      intervalMs: 10
+    });
+
+    await assert.rejects(() => cleanup.start(), /temporariamente indisponível/);
+    await new Promise(resolve => setTimeout(resolve, 40));
+    cleanup.stop();
+    assert.ok(attempts >= 2);
+  } finally {
+    await item.cleanup();
+  }
+});
