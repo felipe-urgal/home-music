@@ -54,10 +54,16 @@ function sleep(ms: number) {
 }
 
 function providerSuggestionPatch(preview: ImportMetadataPreview) {
-  const patch: Record<string, string> = {};
   const provider = preview.provider;
-  if (!provider) return patch;
+  if (!provider) return {} as Record<string, string>;
 
+  const suggestedTitle = preview.fieldStates.title === 'suggested' ? provider.title?.trim() ?? '' : '';
+  const suggestedArtist = preview.fieldStates.artist === 'suggested' ? provider.artist?.trim() ?? '' : '';
+  const resolvedTitle = preview.effective.title?.trim() || suggestedTitle;
+  const resolvedArtist = preview.effective.artist?.trim() || suggestedArtist;
+  if (!resolvedTitle || !resolvedArtist) return {} as Record<string, string>;
+
+  const patch: Record<string, string> = {};
   for (const field of ['title', 'artist', 'album'] as const) {
     if (preview.fieldStates[field] !== 'suggested') continue;
     const value = provider[field]?.trim();
