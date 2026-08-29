@@ -551,6 +551,7 @@ export class ImportUrlManager {
       const current = this.queue.get(session.jobId);
       if (current?.status === 'processing') this.queue.transition(session.jobId, 'pending');
       session.completed = true;
+      this.sessions.delete(session.jobId);
     } catch (error) {
       await this.staging.cleanupJob(session.jobId).catch(() => undefined);
       const current = this.queue.get(session.jobId);
