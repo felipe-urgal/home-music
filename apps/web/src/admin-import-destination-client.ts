@@ -47,9 +47,15 @@ export async function getAdminImportDestinationFolders() {
 
   const counts = new Map<string, number>();
   for (const track of payload.tracks) {
-    const folderPath = track.folderPath?.trim();
-    if (!folderPath) continue;
-    counts.set(folderPath, (counts.get(folderPath) ?? 0) + 1);
+    const parts = track.folderPath
+      ?.split('/')
+      .map(part => part.trim())
+      .filter(Boolean) ?? [];
+
+    for (let depth = 1; depth <= parts.length; depth += 1) {
+      const folderPath = parts.slice(0, depth).join('/');
+      counts.set(folderPath, (counts.get(folderPath) ?? 0) + 1);
+    }
   }
 
   return [...counts.entries()]
