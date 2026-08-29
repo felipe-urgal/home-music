@@ -28,6 +28,7 @@ const SAFE_CONTENT_TYPES: Record<string, string> = {
   webm: 'audio/webm'
 };
 const LOSSLESS_CODECS = new Set(['alac', 'ape', 'flac', 'wavpack']);
+const YOUTUBE_PLAYLIST_PARAMS = ['list', 'index', 'start_radio', 'playnext'];
 
 export const YT_DLP_PROVIDER_ID = 'yt-dlp';
 export const YT_DLP_COMMAND_CONFIG = 'command';
@@ -154,6 +155,20 @@ function requireAbsoluteExecutable(value: string | undefined) {
 
 function literalHost(hostname: string) {
   return hostname.startsWith('[') && hostname.endsWith(']') ? hostname.slice(1, -1) : hostname;
+}
+
+export function normalizeYtDlpRequestUrl(value: string) {
+  const url = new URL(value);
+  const hostname = literalHost(url.hostname).toLowerCase();
+  const youtubeWatch = (hostname === 'youtube.com' || hostname.endsWith('.youtube.com'))
+    && url.pathname === '/watch'
+    && Boolean(url.searchParams.get('v'));
+
+  if (youtubeWatch) {
+    for (const parameter of YOUTUBE_PLAYLIST_PARAMS) url.searchParams.delete(parameter);
+  }
+  url.hash = '';
+  return url.toString();
 }
 
 export function ytDlpAudioCandidates(info: YtDlpMetadata): YtDlpAudioCandidate[] {
@@ -386,6 +401,7 @@ export class YtDlpProvider implements ExternalProvider {
 
   async prepare(request: ExternalProviderRequest, context: ExternalProviderContext): Promise<ExternalProviderPreparedMedia> {
     const commandPath = requireAbsoluteExecutable(context.config[YT_DLP_COMMAND_CONFIG]);
+    const requestUrl = normalizeYtDlpRequestUrl(request.url);
     const proxy = await this.createProxy();
     try {
       const common = commonArguments(proxy.url);
@@ -395,7 +411,7 @@ export class YtDlpProvider implements ExternalProvider {
           ...common,
           '--dump-single-json',
           '--skip-download',
-          '--', request.url
+          '--', requestUrl
         ],
         cwd: context.scratchDir,
         proxyUrl: proxy.url,
@@ -412,7 +428,7 @@ export class YtDlpProvider implements ExternalProvider {
           '--output', `${OUTPUT_PREFIX}%(ext)s`,
           '--no-progress',
           '--no-overwrites',
-          '--', request.url
+          '--', requestUrl
         ],
         cwd: context.scratchDir,
         proxyUrl: proxy.url,
