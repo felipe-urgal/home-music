@@ -44,6 +44,7 @@ type ImportMethod = {
   title: string;
   description: string;
   available?: boolean;
+  badge?: string;
 };
 
 type UploadStage = 'preparing' | 'uploading' | 'cancelling' | 'queued' | 'cancelled' | 'error';
@@ -74,7 +75,7 @@ const IMPORT_METHODS: readonly ImportMethod[] = [
     icon: Boxes,
     title: 'Fontes externas',
     description: 'Provider opcional com aquisição isolada e o mesmo pipeline seguro.',
-    available: true
+    badge: 'Opcional'
   }
 ];
 
@@ -536,7 +537,9 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
                   <strong>{method.title}</strong>
                   <small>{method.description}</small>
                 </div>
-                <span className="admin-import-method__badge">{method.available ? 'Disponível' : 'Em breve'}</span>
+                <span className="admin-import-method__badge">
+                  {method.badge ?? (method.available ? 'Disponível' : 'Em breve')}
+                </span>
               </article>
             );
           })}

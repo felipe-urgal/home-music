@@ -46,7 +46,7 @@ test('seleciona áudio original privilegiando audio-only e lossless', () => {
   assert.equal(selected.lossless, true);
 });
 
-test('YouTube Music usa proxy seguro, baixa um único format e preserva mídia original', async () => {
+test('YouTube Music usa proxy seguro, Node do serviço e preserva mídia original', async () => {
   const dir = await scratch();
   const calls: YtDlpProcessRequest[] = [];
   const runner: YtDlpProcessRunner = async request => {
@@ -88,6 +88,7 @@ test('YouTube Music usa proxy seguro, baixa um único format e preserva mídia o
       assert.ok(invocation.args.includes('--ignore-config'));
       assert.ok(invocation.args.includes('--no-plugin-dirs'));
       assert.ok(invocation.args.includes('--no-playlist'));
+      assert.equal(invocation.args[invocation.args.indexOf('--js-runtimes') + 1], `node:${process.execPath}`);
       assert.equal(invocation.args[invocation.args.indexOf('--proxy') + 1], 'http://127.0.0.1:45678');
       assert.equal(invocation.args.includes('--extract-audio'), false);
       assert.equal(invocation.args.includes('--audio-format'), false);

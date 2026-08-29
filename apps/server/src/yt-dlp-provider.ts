@@ -203,6 +203,7 @@ function commonArguments(proxyUrl: string) {
     '--playlist-end', '1',
     '--no-colors',
     '--no-warnings',
+    '--js-runtimes', `node:${process.execPath}`,
     '--proxy', proxyUrl
   ];
 }
