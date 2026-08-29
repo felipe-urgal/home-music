@@ -88,6 +88,10 @@ test('YouTube Music usa proxy seguro, Node do serviço e preserva mídia origina
       assert.ok(invocation.args.includes('--ignore-config'));
       assert.ok(invocation.args.includes('--no-plugin-dirs'));
       assert.ok(invocation.args.includes('--no-playlist'));
+      assert.equal(invocation.args[invocation.args.indexOf('--socket-timeout') + 1], '10');
+      assert.equal(invocation.args[invocation.args.indexOf('--retries') + 1], '2');
+      assert.equal(invocation.args[invocation.args.indexOf('--fragment-retries') + 1], '2');
+      assert.equal(invocation.args[invocation.args.indexOf('--extractor-retries') + 1], '2');
       assert.equal(invocation.args[invocation.args.indexOf('--js-runtimes') + 1], `node:${process.execPath}`);
       assert.equal(invocation.args[invocation.args.indexOf('--proxy') + 1], 'http://127.0.0.1:45678');
       assert.equal(invocation.args.includes('--extract-audio'), false);
