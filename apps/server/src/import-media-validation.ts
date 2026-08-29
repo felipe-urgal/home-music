@@ -26,6 +26,14 @@ const ECONOMY_PRESERVE_THRESHOLD = 112_000;
 const COMPATIBILITY_BITRATE = 160_000;
 const LOSSLESS_CODECS = new Set(['alac', 'ape', 'flac', 'wavpack']);
 
+type ImportMediaMuxer = 'flac' | 'mp3' | 'mp4' | 'ogg' | 'wav';
+
+type RemuxTarget = Readonly<{
+  container: string;
+  extension: string;
+  muxer: ImportMediaMuxer;
+}>;
+
 export const IMPORT_OUTPUT_PROFILES: ReadonlyArray<{
   id: ImportOutputProfile;
   label: string;
@@ -34,17 +42,17 @@ export const IMPORT_OUTPUT_PROFILES: ReadonlyArray<{
   {
     id: 'original',
     label: 'Original',
-    description: 'Preserva codec e qualidade quando o arquivo já é seguro e compatível.'
+    description: 'Preserva codec e qualidade; apenas limpa o container sem reencode quando necessário.'
   },
   {
     id: 'economy',
     label: 'Economizar espaço',
-    description: 'Usa AAC 96 kbps quando a origem ainda não é econômica.'
+    description: 'Preserva uma origem já econômica ou usa AAC 96 kbps quando precisa reduzir tamanho.'
   },
   {
     id: 'compatibility',
     label: 'Compatibilidade máxima',
-    description: 'Produz M4A/AAC 160 kbps quando a origem não está no perfil mais compatível.'
+    description: 'Produz M4A/AAC 160 kbps somente quando a origem ainda não pode ser reaproveitada.'
   }
 ] as const;
 
@@ -103,12 +111,14 @@ export type MediaProbeRunner = (
   timeoutMs: number
 ) => Promise<string>;
 
-export type ImportMediaTranscodeRunner = (options: {
+export type ImportMediaTransformRunner = (options: {
   command: string;
   inputFd: number;
   outputPath: string;
   streamIndex: number;
-  bitRate: number;
+  mode: 'copy' | 'aac';
+  muxer: ImportMediaMuxer;
+  bitRate: number | null;
   channels: number | null;
   sampleRate: number | null;
   timeoutMs: number;
@@ -155,7 +165,7 @@ type ImportMediaValidationManagerOptions = {
   ffprobeCommand?: string;
   timeoutMs?: number;
   probeRunner?: MediaProbeRunner;
-  transcodeRunner?: ImportMediaTranscodeRunner;
+  transformRunner?: ImportMediaTransformRunner;
 };
 
 function cleanCommand(raw: string | undefined, fallback: string, name: string) {
@@ -364,7 +374,7 @@ export const runFfprobe: MediaProbeRunner = (command, target, timeoutMs) => new 
   });
 });
 
-export const runImportMediaTranscode: ImportMediaTranscodeRunner = options => new Promise((resolve, reject) => {
+export const runImportMediaTransform: ImportMediaTransformRunner = options => new Promise((resolve, reject) => {
   const args = [
     '-hide_banner',
     '-loglevel', 'error',
@@ -378,16 +388,28 @@ export const runImportMediaTranscode: ImportMediaTranscodeRunner = options => ne
     '-sn',
     '-dn',
     '-map_metadata', '-1',
-    '-map_chapters', '-1',
-    '-c:a', 'aac',
-    '-profile:a', 'aac_low',
-    '-b:a', `${Math.round(options.bitRate / 1000)}k`,
-    '-threads', '1'
+    '-map_chapters', '-1'
   ];
 
-  if ((options.channels ?? 0) > 2) args.push('-ac', '2');
-  if ((options.sampleRate ?? 0) > 48_000) args.push('-ar', '48000');
-  args.push('-movflags', '+faststart', '-f', 'mp4', options.outputPath);
+  if (options.mode === 'copy') {
+    args.push('-c:a', 'copy');
+  } else {
+    if (!options.bitRate) {
+      reject(new MediaProcessError('failed', 'Bitrate de conversão ausente.'));
+      return;
+    }
+    args.push(
+      '-c:a', 'aac',
+      '-profile:a', 'aac_low',
+      '-b:a', `${Math.round(options.bitRate / 1000)}k`,
+      '-threads', '1'
+    );
+    if ((options.channels ?? 0) > 2) args.push('-ac', '2');
+    if ((options.sampleRate ?? 0) > 48_000) args.push('-ar', '48000');
+  }
+
+  if (options.muxer === 'mp4') args.push('-movflags', '+faststart');
+  args.push('-f', options.muxer, options.outputPath);
 
   const child = spawn(options.command, args, {
     stdio: ['ignore', 'ignore', 'pipe', options.inputFd],
@@ -457,16 +479,30 @@ function preserveExtension(probe: MediaProbeResult) {
   return null;
 }
 
+function remuxTargetForCodec(codec: string): RemuxTarget | null {
+  if (codec === 'mp3') return { container: 'mp3', extension: '.mp3', muxer: 'mp3' };
+  if (codec === 'flac') return { container: 'flac', extension: '.flac', muxer: 'flac' };
+  if (codec.startsWith('pcm_')) return { container: 'wav', extension: '.wav', muxer: 'wav' };
+  if (codec === 'aac' || codec === 'alac') return { container: 'mp4', extension: '.m4a', muxer: 'mp4' };
+  if (codec === 'vorbis') return { container: 'ogg', extension: '.ogg', muxer: 'ogg' };
+  if (codec === 'opus') return { container: 'ogg', extension: '.opus', muxer: 'ogg' };
+  return null;
+}
+
 function isSingleAudioOnly(probe: MediaProbeResult) {
   return probe.audioStreams.length === 1 && probe.videoStreams === 0;
+}
+
+function compatibilityAudioCanBeCopied(probe: MediaProbeResult) {
+  return probe.selectedAudioStream.codec === 'aac'
+    && (probe.selectedAudioStream.channels ?? 2) <= 2
+    && (probe.selectedAudioStream.sampleRate ?? 48_000) <= 48_000;
 }
 
 function isCompatibilityReady(probe: MediaProbeResult) {
   return isSingleAudioOnly(probe)
     && primaryContainer(probe) === 'mp4'
-    && probe.selectedAudioStream.codec === 'aac'
-    && (probe.selectedAudioStream.channels ?? 2) <= 2
-    && (probe.selectedAudioStream.sampleRate ?? 48_000) <= 48_000;
+    && compatibilityAudioCanBeCopied(probe);
 }
 
 function technicalInfo(probe: MediaProbeResult): ImportMediaTechnicalInfo {
@@ -483,7 +519,7 @@ function technicalInfo(probe: MediaProbeResult): ImportMediaTechnicalInfo {
   };
 }
 
-function transcodeReason(profile: ImportOutputProfile, probe: MediaProbeResult): ImportMediaDecisionReason {
+function transformReason(profile: ImportOutputProfile, probe: MediaProbeResult): ImportMediaDecisionReason {
   if (probe.videoStreams > 0) return 'contains-video';
   if (probe.audioStreams.length > 1) return 'multiple-audio-streams';
   if (profile === 'economy') return 'economy-requested';
@@ -491,45 +527,125 @@ function transcodeReason(profile: ImportOutputProfile, probe: MediaProbeResult):
   return 'unsupported-original';
 }
 
+function transcodeOutput(profile: ImportOutputProfile) {
+  return {
+    container: 'mp4',
+    codec: 'aac',
+    extension: '.m4a',
+    bitRate: profile === 'economy' ? ECONOMY_BITRATE : COMPATIBILITY_BITRATE
+  } as const;
+}
+
 export function decideImportMedia(profile: ImportOutputProfile, probe: MediaProbeResult): ImportMediaDecision {
   const extension = preserveExtension(probe);
+  const remuxTarget = remuxTargetForCodec(probe.selectedAudioStream.codec);
   const sourceBitRate = probe.selectedAudioStream.bitRate ?? probe.bitRate;
-  let preserve = false;
-  let reason: ImportMediaDecisionReason;
+  const singleAudioOnly = isSingleAudioOnly(probe);
+  const reason = transformReason(profile, probe);
 
   if (profile === 'original') {
-    preserve = Boolean(extension) && isSingleAudioOnly(probe);
-    reason = preserve ? 'original-compatible' : transcodeReason(profile, probe);
+    if (extension && singleAudioOnly) {
+      return {
+        profile,
+        action: 'preserve',
+        reason: 'original-compatible',
+        selectedAudioStream: probe.selectedAudioStream.index,
+        input: technicalInfo(probe),
+        output: {
+          container: primaryContainer(probe),
+          codec: probe.selectedAudioStream.codec,
+          extension,
+          bitRate: sourceBitRate
+        }
+      };
+    }
+    if (remuxTarget) {
+      return {
+        profile,
+        action: 'remux',
+        reason,
+        selectedAudioStream: probe.selectedAudioStream.index,
+        input: technicalInfo(probe),
+        output: {
+          container: remuxTarget.container,
+          codec: probe.selectedAudioStream.codec,
+          extension: remuxTarget.extension,
+          bitRate: sourceBitRate
+        }
+      };
+    }
   } else if (profile === 'economy') {
-    preserve = Boolean(extension)
-      && isSingleAudioOnly(probe)
-      && sourceBitRate != null
-      && sourceBitRate <= ECONOMY_PRESERVE_THRESHOLD;
-    reason = preserve ? 'already-economical' : transcodeReason(profile, probe);
+    const alreadyEconomical = sourceBitRate != null && sourceBitRate <= ECONOMY_PRESERVE_THRESHOLD;
+    if (alreadyEconomical && extension && singleAudioOnly) {
+      return {
+        profile,
+        action: 'preserve',
+        reason: 'already-economical',
+        selectedAudioStream: probe.selectedAudioStream.index,
+        input: technicalInfo(probe),
+        output: {
+          container: primaryContainer(probe),
+          codec: probe.selectedAudioStream.codec,
+          extension,
+          bitRate: sourceBitRate
+        }
+      };
+    }
+    if (alreadyEconomical && remuxTarget) {
+      return {
+        profile,
+        action: 'remux',
+        reason,
+        selectedAudioStream: probe.selectedAudioStream.index,
+        input: technicalInfo(probe),
+        output: {
+          container: remuxTarget.container,
+          codec: probe.selectedAudioStream.codec,
+          extension: remuxTarget.extension,
+          bitRate: sourceBitRate
+        }
+      };
+    }
   } else {
-    preserve = isCompatibilityReady(probe);
-    reason = preserve ? 'already-compatible' : transcodeReason(profile, probe);
+    if (isCompatibilityReady(probe)) {
+      return {
+        profile,
+        action: 'preserve',
+        reason: 'already-compatible',
+        selectedAudioStream: probe.selectedAudioStream.index,
+        input: technicalInfo(probe),
+        output: {
+          container: 'mp4',
+          codec: 'aac',
+          extension: '.m4a',
+          bitRate: sourceBitRate
+        }
+      };
+    }
+    if (compatibilityAudioCanBeCopied(probe)) {
+      return {
+        profile,
+        action: 'remux',
+        reason,
+        selectedAudioStream: probe.selectedAudioStream.index,
+        input: technicalInfo(probe),
+        output: {
+          container: 'mp4',
+          codec: 'aac',
+          extension: '.m4a',
+          bitRate: sourceBitRate
+        }
+      };
+    }
   }
 
   return {
     profile,
-    action: preserve ? 'preserve' : 'transcode',
+    action: 'transcode',
     reason,
     selectedAudioStream: probe.selectedAudioStream.index,
     input: technicalInfo(probe),
-    output: preserve
-      ? {
-          container: primaryContainer(probe),
-          codec: probe.selectedAudioStream.codec,
-          extension: extension!,
-          bitRate: sourceBitRate
-        }
-      : {
-          container: 'mp4',
-          codec: 'aac',
-          extension: '.m4a',
-          bitRate: profile === 'economy' ? ECONOMY_BITRATE : COMPATIBILITY_BITRATE
-        }
+    output: transcodeOutput(profile)
   };
 }
 
@@ -537,6 +653,11 @@ function parseProfile(raw: unknown): ImportOutputProfile {
   if (raw == null || raw === '') return 'original';
   if (raw === 'original' || raw === 'economy' || raw === 'compatibility') return raw;
   throw new ImportMediaValidationError('invalid_profile', 'Perfil de saída inválido.');
+}
+
+function durationMatches(initial: MediaProbeResult, final: MediaProbeResult) {
+  const toleranceSeconds = Math.max(2, initial.durationSeconds * 0.02);
+  return Math.abs(final.durationSeconds - initial.durationSeconds) <= toleranceSeconds;
 }
 
 function ensureFinalMatchesDecision(
@@ -548,14 +669,28 @@ function ensureFinalMatchesDecision(
     if (!isCompatibilityReady(final)) {
       throw new ImportMediaValidationError('invalid_media', 'A conversão não produziu um M4A/AAC compatível.', 422);
     }
-    const toleranceSeconds = Math.max(2, initial.durationSeconds * 0.02);
-    if (Math.abs(final.durationSeconds - initial.durationSeconds) > toleranceSeconds) {
+    if (!durationMatches(initial, final)) {
       throw new ImportMediaValidationError('invalid_media', 'A duração mudou além do esperado durante a conversão.', 422);
     }
-  } else {
-    if (final.selectedAudioStream.codec !== initial.selectedAudioStream.codec || primaryContainer(final) !== primaryContainer(initial)) {
-      throw new ImportMediaValidationError('invalid_media', 'O payload mudou durante a validação técnica.', 422);
+    return;
+  }
+
+  if (decision.action === 'remux') {
+    if (
+      !isSingleAudioOnly(final)
+      || final.selectedAudioStream.codec !== initial.selectedAudioStream.codec
+      || primaryContainer(final) !== decision.output.container
+    ) {
+      throw new ImportMediaValidationError('invalid_media', 'O remux não preservou a faixa de áudio esperada.', 422);
     }
+    if (!durationMatches(initial, final)) {
+      throw new ImportMediaValidationError('invalid_media', 'A duração mudou além do esperado durante o remux.', 422);
+    }
+    return;
+  }
+
+  if (final.selectedAudioStream.codec !== initial.selectedAudioStream.codec || primaryContainer(final) !== primaryContainer(initial)) {
+    throw new ImportMediaValidationError('invalid_media', 'O payload mudou durante a validação técnica.', 422);
   }
 }
 
@@ -588,17 +723,30 @@ function canonicalProbeError(error: unknown) {
   return new ImportMediaValidationError('invalid_media', 'Não foi possível validar tecnicamente a mídia importada.', 422);
 }
 
-function canonicalTranscodeError(error: unknown) {
+function canonicalTransformError(error: unknown) {
   if (error instanceof ImportMediaValidationError) return error;
   if (error instanceof MediaProcessError) {
     if (error.reason === 'spawn' && error.systemCode === 'ENOENT') {
-      return new ImportMediaValidationError('transcode_unavailable', 'FFmpeg não está disponível para converter a importação.', 503);
+      return new ImportMediaValidationError('transcode_unavailable', 'FFmpeg não está disponível para processar a importação.', 503);
     }
     if (error.reason === 'timeout') {
-      return new ImportMediaValidationError('transcode_timeout', 'FFmpeg excedeu o tempo limite de conversão.', 504);
+      return new ImportMediaValidationError('transcode_timeout', 'FFmpeg excedeu o tempo limite de processamento.', 504);
     }
   }
-  return new ImportMediaValidationError('transcode_failed', 'FFmpeg não conseguiu converter a mídia importada.', 422);
+  return new ImportMediaValidationError('transcode_failed', 'FFmpeg não conseguiu processar a mídia importada.', 422);
+}
+
+function transformMode(decision: ImportMediaDecision) {
+  return decision.action === 'remux' ? 'copy' as const : 'aac' as const;
+}
+
+function transformMuxer(decision: ImportMediaDecision): ImportMediaMuxer {
+  if (decision.action === 'transcode') return 'mp4';
+  const target = remuxTargetForCodec(decision.output.codec);
+  if (!target || target.container !== decision.output.container) {
+    throw new ImportMediaValidationError('invalid_media', 'Não há container seguro para preservar este codec.', 422);
+  }
+  return target.muxer;
 }
 
 export class ImportMediaValidationManager {
@@ -608,7 +756,7 @@ export class ImportMediaValidationManager {
   private readonly ffprobeCommand: string;
   private readonly timeoutMs: number;
   private readonly probeRunner: MediaProbeRunner;
-  private readonly transcodeRunner: ImportMediaTranscodeRunner;
+  private readonly transformRunner: ImportMediaTransformRunner;
   private readonly validated = new Map<string, ValidatedImportPayload<MediaProbeResult>>();
 
   constructor(options: ImportMediaValidationManagerOptions) {
@@ -621,7 +769,7 @@ export class ImportMediaValidationManager {
       throw new Error('Timeout de validação de mídia inválido.');
     }
     this.probeRunner = options.probeRunner ?? runFfprobe;
-    this.transcodeRunner = options.transcodeRunner ?? runImportMediaTranscode;
+    this.transformRunner = options.transformRunner ?? runImportMediaTransform;
   }
 
   get profiles() {
@@ -667,20 +815,22 @@ export class ImportMediaValidationManager {
       plannedDecision = decideImportMedia(profile, initialProbe);
       this.queue.setMediaDecision(jobId, plannedDecision);
 
-      if (plannedDecision.action === 'transcode') {
+      if (plannedDecision.action !== 'preserve') {
         try {
-          await this.staging.transformPayload(jobId, target => this.transcodeRunner({
+          await this.staging.transformPayload(jobId, target => this.transformRunner({
             command: this.ffmpegCommand,
             inputFd: target.input.fd,
             outputPath: target.outputPath,
             streamIndex: plannedDecision!.selectedAudioStream,
-            bitRate: plannedDecision!.output.bitRate ?? COMPATIBILITY_BITRATE,
+            mode: transformMode(plannedDecision!),
+            muxer: transformMuxer(plannedDecision!),
+            bitRate: plannedDecision!.action === 'transcode' ? plannedDecision!.output.bitRate : null,
             channels: initialProbe!.selectedAudioStream.channels,
             sampleRate: initialProbe!.selectedAudioStream.sampleRate,
             timeoutMs: this.timeoutMs
           }));
         } catch (error) {
-          throw canonicalTranscodeError(error);
+          throw canonicalTransformError(error);
         }
       }
 
