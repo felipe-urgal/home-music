@@ -9,19 +9,17 @@ import {
   type YtDlpProcessRunner
 } from './yt-dlp-provider.js';
 
-test('uploader e channel não são promovidos automaticamente para artista', async () => {
+async function prepareWithMetadata(metadata: Record<string, unknown>) {
   const scratchDir = await mkdtemp(path.join(os.tmpdir(), 'home-music-ytdlp-metadata-'));
   const runner: YtDlpProcessRunner = async request => {
     if (request.args.includes('--dump-single-json')) {
       return {
         stdout: JSON.stringify({
           id: 'video123',
-          title: 'Nando.Reis- Por onde Andei- Luau MTV',
-          uploader: 'Wander Almeida',
-          channel: 'Wander Almeida',
           formats: [
             { format_id: '251', acodec: 'opus', vcodec: 'none', ext: 'webm', abr: 128, asr: 48_000, audio_channels: 2 }
-          ]
+          ],
+          ...metadata
         }),
         stderr: ''
       };
@@ -35,7 +33,7 @@ test('uploader e channel não são promovidos automaticamente para artista', asy
       runner,
       createProxy: async () => ({ url: 'http://127.0.0.1:45678', close: async () => undefined })
     });
-    const result = await provider.prepare(
+    return await provider.prepare(
       { url: 'https://www.youtube.com/watch?v=video123' },
       {
         scratchDir,
@@ -43,10 +41,43 @@ test('uploader e channel não são promovidos automaticamente para artista', asy
         config: { [YT_DLP_COMMAND_CONFIG]: '/usr/local/bin/yt-dlp' }
       }
     );
-
-    assert.equal(result.metadata?.title, 'Nando.Reis- Por onde Andei- Luau MTV');
-    assert.equal(result.metadata?.artist, null);
   } finally {
     await rm(scratchDir, { recursive: true, force: true });
   }
+}
+
+test('vídeo comum infere artista e título sem promover uploader, channel ou creator', async () => {
+  const result = await prepareWithMetadata({
+    title: 'Nando.Reis- Por onde Andei- Luau MTV',
+    creator: 'Wander Almeida',
+    uploader: 'Wander Almeida',
+    channel: 'Wander Almeida'
+  });
+
+  assert.equal(result.metadata?.title, 'Por onde Andei');
+  assert.equal(result.metadata?.artist, 'Nando Reis');
+});
+
+test('vídeo genérico sem padrão Artista - Título não inventa artista a partir do canal', async () => {
+  const result = await prepareWithMetadata({
+    title: 'Entrevista completa nos bastidores',
+    creator: 'Canal Exemplo',
+    uploader: 'Canal Exemplo',
+    channel: 'Canal Exemplo'
+  });
+
+  assert.equal(result.metadata?.title, 'Entrevista completa nos bastidores');
+  assert.equal(result.metadata?.artist, null);
+});
+
+test('metadata musical estruturada continua preferindo track e artist do extractor', async () => {
+  const result = await prepareWithMetadata({
+    title: 'Título do vídeo',
+    track: 'Faixa oficial',
+    artist: 'Artista oficial',
+    creator: 'Canal que não deve prevalecer'
+  });
+
+  assert.equal(result.metadata?.title, 'Faixa oficial');
+  assert.equal(result.metadata?.artist, 'Artista oficial');
 });
