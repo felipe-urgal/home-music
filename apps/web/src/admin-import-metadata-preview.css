@@ -257,11 +257,41 @@
 }
 
 .admin-import-metadata-field__hint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.admin-import-metadata-field__hint small {
+  min-width: 0;
   overflow: hidden;
   color: #a69069;
   font-size: 8px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.admin-import-metadata-field__hint button {
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #bfa66f;
+  cursor: pointer;
+  font: inherit;
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.admin-import-metadata-field__hint button:hover:not(:disabled) {
+  color: #d2b87b;
+}
+
+.admin-import-metadata-field__hint button:disabled {
+  cursor: default;
+  opacity: .5;
 }
 
 .admin-import-metadata-card__actions {
