@@ -1,8 +1,15 @@
+import { accessSync, constants, statSync } from 'node:fs';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Readable } from 'node:stream';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { AdminImportJobsResponse } from '@home-music/shared';
 import type { ImportJobQueue } from './import-job-queue.js';
+import {
+  ExternalProviderError,
+  ExternalProviderImportManager
+} from './external-provider.js';
+import { ExternalProviderScratchManager } from './external-provider-scratch.js';
 import {
   ImportRetryStartError,
   installImportRetryStarter
@@ -47,12 +54,19 @@ import {
   ImportSafeDestinationError,
   ImportSafeDestinationManager
 } from './import-safe-destination.js';
+import {
+  YT_DLP_COMMAND_CONFIG,
+  YT_DLP_PROVIDER_ID,
+  YtDlpProvider
+} from './yt-dlp-provider.js';
 
 const defaultImportStagingPath = fileURLToPath(new URL('../../../data/import-staging/', import.meta.url));
+const defaultExternalProviderScratchPath = fileURLToPath(new URL('../../../data/provider-scratch/', import.meta.url));
 
 type RegisterAdminImportRoutesOptions = {
   uploads?: ImportUploadManager;
   urls?: ImportUrlManager;
+  externalProviders?: ExternalProviderImportManager;
   mediaValidation?: ImportMediaValidationManager;
   metadataPreview?: ImportMetadataPreviewManager;
   duplicateDetection?: ImportDuplicateDetectionManager;
@@ -66,6 +80,7 @@ function sendImportError(reply: FastifyReply, error: unknown) {
   if (
     error instanceof ImportUploadError
     || error instanceof ImportUrlError
+    || error instanceof ExternalProviderError
     || error instanceof ImportMediaValidationError
     || error instanceof ImportMetadataPreviewError
     || error instanceof ImportDuplicateDetectionError
@@ -171,6 +186,66 @@ function createDefaultUrlManager(
   });
 }
 
+function executablePath(candidate: string | undefined) {
+  const clean = candidate?.trim() ?? '';
+  if (!clean || !path.isAbsolute(clean) || clean.includes('\0')) return '';
+  try {
+    accessSync(clean, constants.X_OK);
+    if (!statSync(clean).isFile()) return '';
+    return path.normalize(clean);
+  } catch {
+    return '';
+  }
+}
+
+function resolveYtDlpCommand(app: FastifyInstance) {
+  const configured = process.env.HOME_MUSIC_YT_DLP_PATH?.trim()
+    || process.env.HOME_MUSIC_YTDLP_PATH?.trim()
+    || '';
+  if (configured) {
+    const resolved = executablePath(configured);
+    if (!resolved) {
+      app.log.warn(
+        { component: 'yt-dlp-provider' },
+        'HOME_MUSIC_YT_DLP_PATH não aponta para um executável absoluto acessível; provider externo ficará desativado.'
+      );
+    }
+    return resolved;
+  }
+
+  const candidates = [
+    '/usr/local/bin/yt-dlp',
+    '/usr/bin/yt-dlp',
+    process.env.HOME ? path.join(process.env.HOME, '.local/bin/yt-dlp') : ''
+  ];
+  for (const candidate of candidates) {
+    const resolved = executablePath(candidate);
+    if (resolved) return resolved;
+  }
+  return '';
+}
+
+function createDefaultExternalProviderManager(
+  app: FastifyInstance,
+  queue: ImportJobQueue,
+  staging: ImportStagingManager
+) {
+  return new ExternalProviderImportManager({
+    queue,
+    staging,
+    scratch: new ExternalProviderScratchManager({
+      scratchRoot: process.env.HOME_MUSIC_EXTERNAL_PROVIDER_SCRATCH_DIR || defaultExternalProviderScratchPath,
+      musicDir: process.env.MUSIC_DIR || ''
+    }),
+    providers: [new YtDlpProvider()],
+    providerConfigs: {
+      [YT_DLP_PROVIDER_ID]: {
+        [YT_DLP_COMMAND_CONFIG]: resolveYtDlpCommand(app)
+      }
+    }
+  });
+}
+
 function createDefaultMediaValidationManager(
   queue: ImportJobQueue,
   staging: ImportStagingManager
@@ -200,12 +275,22 @@ export function registerAdminImportRoutes(
   };
   const uploads = options.uploads ?? createDefaultUploadManager(app, queue, staging());
   const urls = options.urls ?? createDefaultUrlManager(app, queue, staging());
+  const externalProviders = options.externalProviders ?? createDefaultExternalProviderManager(app, queue, staging());
   const mediaValidation = options.mediaValidation ?? createDefaultMediaValidationManager(queue, staging());
+  const providerMetadata = options.providerMetadata ?? ((jobId: string) => {
+    const metadata = externalProviders.getPrepared(jobId)?.metadata;
+    if (!metadata) return null;
+    return {
+      title: metadata.title,
+      artist: metadata.artist,
+      album: metadata.album
+    };
+  });
   const metadataPreview = options.metadataPreview ?? new ImportMetadataPreviewManager({
     queue,
     staging: staging(),
     validatedLookup: jobId => mediaValidation.getValidated(jobId),
-    providerMetadata: options.providerMetadata
+    providerMetadata
   });
   const duplicateDetection = options.duplicateDetection ?? new ImportDuplicateDetectionManager({
     queue,
@@ -280,11 +365,13 @@ export function registerAdminImportRoutes(
       upload: ReturnType<typeof getUploadConfig>;
       url: ReturnType<typeof getUrlConfig>;
       mediaValidation: ReturnType<typeof getMediaValidationConfig>;
+      providers: ReturnType<ExternalProviderImportManager['listProviders']>;
     } = {
       jobs: queue.list(),
       upload: getUploadConfig(uploads),
       url: getUrlConfig(urls),
-      mediaValidation: getMediaValidationConfig(mediaValidation)
+      mediaValidation: getMediaValidationConfig(mediaValidation),
+      providers: externalProviders.listProviders()
     };
     return response;
   });
@@ -352,6 +439,36 @@ export function registerAdminImportRoutes(
       reply.header('Cache-Control', 'no-store');
       try {
         const job = await urls.cancel(request.params.id);
+        metadataPreview.forget(request.params.id);
+        duplicateDetection.forget(request.params.id);
+        return { job };
+      } catch (error) {
+        return sendImportError(reply, error);
+      }
+    }
+  );
+
+  app.post<{ Params: { providerId: string }; Body: { url?: unknown } }>(
+    '/api/admin/imports/providers/:providerId',
+    async (request, reply) => {
+      reply.header('Cache-Control', 'no-store');
+      try {
+        const result = await externalProviders.start(request.params.providerId, {
+          url: typeof request.body?.url === 'string' ? request.body.url : ''
+        });
+        return reply.code(202).send(result);
+      } catch (error) {
+        return sendImportError(reply, error);
+      }
+    }
+  );
+
+  app.delete<{ Params: { id: string } }>(
+    '/api/admin/imports/providers/jobs/:id',
+    async (request, reply) => {
+      reply.header('Cache-Control', 'no-store');
+      try {
+        const job = await externalProviders.cancel(request.params.id);
         metadataPreview.forget(request.params.id);
         duplicateDetection.forget(request.params.id);
         return { job };

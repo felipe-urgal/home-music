@@ -25,6 +25,7 @@ import {
   type AdminImportUploadConfig,
   type AdminImportUrlConfig
 } from '../admin-import-client';
+import { AdminExternalProviderPanel } from './AdminExternalProviderPanel';
 import {
   AdminImportMediaDecisionSummary,
   AdminImportMediaValidationPanel
@@ -72,7 +73,8 @@ const IMPORT_METHODS: readonly ImportMethod[] = [
   {
     icon: Boxes,
     title: 'Fontes externas',
-    description: 'Integrações isoladas para serviços e sites compatíveis.'
+    description: 'Provider opcional com aquisição isolada e o mesmo pipeline seguro.',
+    available: true
   }
 ];
 
@@ -197,7 +199,12 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
   }, [activeUrlJob?.status, activeUrlJobId, loadJobs]);
 
   const handleUpdatedJob = useCallback((job: ImportJob) => {
-    setJobs(current => current.map(item => item.id === job.id ? job : item));
+    setJobs(current => {
+      const exists = current.some(item => item.id === job.id);
+      return exists
+        ? current.map(item => item.id === job.id ? job : item)
+        : [job, ...current];
+    });
   }, []);
 
   const beginUpload = useCallback(async (file: File) => {
@@ -329,18 +336,18 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
     }
   }, [activeUrlJob, activeUrlJobId]);
 
+  const uploadPercent = activeUpload?.size
+    ? Math.min(100, Math.round((activeUpload.loaded / activeUpload.size) * 100))
+    : 0;
+  const uploadBusy = Boolean(activeUpload && ['preparing', 'uploading', 'cancelling'].includes(activeUpload.stage));
+  const accept = uploadConfig?.acceptedExtensions.join(',') || undefined;
+
   const onDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     setDragging(false);
     if (uploadBusy) return;
     handleFiles(event.dataTransfer.files);
   };
-
-  const uploadPercent = activeUpload?.size
-    ? Math.min(100, Math.round((activeUpload.loaded / activeUpload.size) * 100))
-    : 0;
-  const uploadBusy = Boolean(activeUpload && ['preparing', 'uploading', 'cancelling'].includes(activeUpload.stage));
-  const accept = uploadConfig?.acceptedExtensions.join(',') || undefined;
 
   return (
     <section className="my-account-screen admin-import-screen" aria-labelledby="admin-import-title">
@@ -359,8 +366,8 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
             <span className="my-account-link-group__label">Pipeline</span>
             <strong id="admin-import-intro-title">Uma fila, várias fontes</strong>
             <p>
-              Upload local e URL direta entram no mesmo staging seguro. Nenhuma dessas entradas grava direto na
-              biblioteca; fontes externas serão adicionadas em uma etapa isolada.
+              Upload local, URL direta e providers configurados entram no mesmo staging seguro. Nenhuma dessas entradas
+              grava direto na biblioteca; toda mídia passa por validação, duplicatas e promoção controlada.
             </p>
           </div>
         </section>
@@ -498,6 +505,12 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
           )}
         </section>
 
+        <AdminExternalProviderPanel
+          jobs={jobs}
+          onJobUpdated={handleUpdatedJob}
+          onRefresh={() => loadJobs(true)}
+        />
+
         {mediaValidationConfig && (
           <AdminImportMediaValidationPanel
             jobs={jobs}
@@ -561,7 +574,7 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
               <Clock3 />
               <div>
                 <strong>Nenhuma importação na fila</strong>
-                <small>Envie um arquivo ou informe uma URL acima para iniciar o primeiro job.</small>
+                <small>Envie um arquivo, informe uma URL ou use um provider configurado acima.</small>
               </div>
             </div>
           ) : (
