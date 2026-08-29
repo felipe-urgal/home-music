@@ -1,3 +1,5 @@
+import { accessSync, constants } from 'node:fs';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Readable } from 'node:stream';
 import type { FastifyInstance, FastifyReply } from 'fastify';
@@ -54,7 +56,6 @@ import {
 } from './import-safe-destination.js';
 import {
   YT_DLP_COMMAND_CONFIG,
-  YT_DLP_EGRESS_LAUNCHER_CONFIG,
   YT_DLP_PROVIDER_ID,
   YtDlpProvider
 } from './yt-dlp-provider.js';
@@ -185,7 +186,49 @@ function createDefaultUrlManager(
   });
 }
 
-function createDefaultExternalProviderManager(queue: ImportJobQueue, staging: ImportStagingManager) {
+function executablePath(candidate: string | undefined) {
+  const clean = candidate?.trim() ?? '';
+  if (!clean || !path.isAbsolute(clean) || clean.includes('\0')) return '';
+  try {
+    accessSync(clean, constants.X_OK);
+    return path.normalize(clean);
+  } catch {
+    return '';
+  }
+}
+
+function resolveYtDlpCommand(app: FastifyInstance) {
+  const configured = process.env.HOME_MUSIC_YT_DLP_PATH?.trim()
+    || process.env.HOME_MUSIC_YTDLP_PATH?.trim()
+    || '';
+  if (configured) {
+    const resolved = executablePath(configured);
+    if (!resolved) {
+      app.log.warn(
+        { component: 'yt-dlp-provider' },
+        'HOME_MUSIC_YT_DLP_PATH não aponta para um executável absoluto acessível; provider externo ficará desativado.'
+      );
+    }
+    return resolved;
+  }
+
+  const candidates = [
+    '/usr/local/bin/yt-dlp',
+    '/usr/bin/yt-dlp',
+    process.env.HOME ? path.join(process.env.HOME, '.local/bin/yt-dlp') : ''
+  ];
+  for (const candidate of candidates) {
+    const resolved = executablePath(candidate);
+    if (resolved) return resolved;
+  }
+  return '';
+}
+
+function createDefaultExternalProviderManager(
+  app: FastifyInstance,
+  queue: ImportJobQueue,
+  staging: ImportStagingManager
+) {
   return new ExternalProviderImportManager({
     queue,
     staging,
@@ -196,8 +239,7 @@ function createDefaultExternalProviderManager(queue: ImportJobQueue, staging: Im
     providers: [new YtDlpProvider()],
     providerConfigs: {
       [YT_DLP_PROVIDER_ID]: {
-        [YT_DLP_COMMAND_CONFIG]: process.env.HOME_MUSIC_YTDLP_PATH || '',
-        [YT_DLP_EGRESS_LAUNCHER_CONFIG]: process.env.HOME_MUSIC_YTDLP_EGRESS_LAUNCHER || ''
+        [YT_DLP_COMMAND_CONFIG]: resolveYtDlpCommand(app)
       }
     }
   });
@@ -232,7 +274,7 @@ export function registerAdminImportRoutes(
   };
   const uploads = options.uploads ?? createDefaultUploadManager(app, queue, staging());
   const urls = options.urls ?? createDefaultUrlManager(app, queue, staging());
-  const externalProviders = options.externalProviders ?? createDefaultExternalProviderManager(queue, staging());
+  const externalProviders = options.externalProviders ?? createDefaultExternalProviderManager(app, queue, staging());
   const mediaValidation = options.mediaValidation ?? createDefaultMediaValidationManager(queue, staging());
   const providerMetadata = options.providerMetadata ?? ((jobId: string) => {
     const metadata = externalProviders.getPrepared(jobId)?.metadata;
