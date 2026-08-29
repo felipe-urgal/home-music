@@ -10,6 +10,7 @@ const MAX_IMPORT_STAGING_TTL_HOURS = 24 * 30;
 const MAX_WORKSPACE_NAME_LENGTH = 128;
 
 type CleanupReason = 'startup' | 'interval' | 'manual';
+type ImportStagingCleanupSource = Pick<ImportStagingManager, 'cleanupSnapshot'>;
 
 type CleanupLogger = {
   info: (context: Record<string, unknown>, message: string) => void;
@@ -27,7 +28,7 @@ export type ImportStagingCleanupSummary = Readonly<{
 }>;
 
 type ImportStagingCleanupManagerOptions = {
-  staging: ImportStagingManager;
+  staging: ImportStagingCleanupSource;
   ttlMs?: number;
   intervalMs?: number;
   now?: () => number;
@@ -86,7 +87,7 @@ async function lastActivityMs(candidatePath: string, directory: boolean) {
 }
 
 export class ImportStagingCleanupManager {
-  private readonly staging: ImportStagingManager;
+  private readonly staging: ImportStagingCleanupSource;
   private readonly ttlMs: number;
   private readonly intervalMs: number;
   private readonly now: () => number;
@@ -105,19 +106,8 @@ export class ImportStagingCleanupManager {
   }
 
   async start() {
-    const summary = await this.sweep('startup');
-    if (!this.timer) {
-      this.timer = setInterval(() => {
-        void this.sweep('interval').catch(error => {
-          this.logger?.warn(
-            { err: error, component: 'import-staging-cleanup', reason: 'interval' },
-            'Falha inesperada na varredura periódica do staging.'
-          );
-        });
-      }, this.intervalMs);
-      this.timer.unref?.();
-    }
-    return summary;
+    this.ensureTimer();
+    return this.sweep('startup');
   }
 
   stop() {
@@ -132,6 +122,19 @@ export class ImportStagingCleanupManager {
       this.sweepPromise = null;
     });
     return this.sweepPromise;
+  }
+
+  private ensureTimer() {
+    if (this.timer) return;
+    this.timer = setInterval(() => {
+      void this.sweep('interval').catch(error => {
+        this.logger?.warn(
+          { err: error, component: 'import-staging-cleanup', reason: 'interval' },
+          'Falha inesperada na varredura periódica do staging.'
+        );
+      });
+    }, this.intervalMs);
+    this.timer.unref?.();
   }
 
   private async runSweep(reason: CleanupReason): Promise<ImportStagingCleanupSummary> {
