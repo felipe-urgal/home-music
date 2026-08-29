@@ -5,6 +5,11 @@ import type { AdminImportJobsResponse } from '@home-music/shared';
 import type { ImportJobQueue } from './import-job-queue.js';
 import { ImportStagingManager } from './import-staging.js';
 import {
+  DEFAULT_IMPORT_STAGING_TTL_HOURS,
+  ImportStagingCleanupManager,
+  parseImportStagingTtlHours
+} from './import-staging-cleanup.js';
+import {
   DEFAULT_IMPORT_UPLOAD_MAX_MEGABYTES,
   ImportUploadError,
   ImportUploadManager,
@@ -48,6 +53,7 @@ type RegisterAdminImportRoutesOptions = {
   metadataPreview?: ImportMetadataPreviewManager;
   duplicateDetection?: ImportDuplicateDetectionManager;
   safeDestination?: ImportSafeDestinationManager;
+  stagingCleanup?: ImportStagingCleanupManager | null;
   providerMetadata?: (jobId: string) => ImportProviderMetadataHint | null;
 };
 
@@ -72,6 +78,26 @@ function createDefaultStagingManager() {
   return new ImportStagingManager({
     stagingRoot: process.env.HOME_MUSIC_IMPORT_STAGING_DIR || defaultImportStagingPath,
     musicDir: process.env.MUSIC_DIR || ''
+  });
+}
+
+function createDefaultStagingCleanupManager(app: FastifyInstance, staging: ImportStagingManager) {
+  let ttlHours = DEFAULT_IMPORT_STAGING_TTL_HOURS;
+  try {
+    ttlHours = parseImportStagingTtlHours(process.env.HOME_MUSIC_IMPORT_STAGING_TTL_HOURS);
+  } catch (error) {
+    app.log.warn(
+      { err: error, fallbackHours: DEFAULT_IMPORT_STAGING_TTL_HOURS },
+      'TTL do staging de importação inválido; usando o valor padrão.'
+    );
+  }
+  return new ImportStagingCleanupManager({
+    staging,
+    ttlMs: ttlHours * 60 * 60 * 1000,
+    logger: {
+      info: (context, message) => app.log.info(context, message),
+      warn: (context, message) => app.log.warn(context, message)
+    }
   });
 }
 
@@ -187,6 +213,27 @@ export function registerAdminImportRoutes(
     validatedLookup: jobId => mediaValidation.getValidated(jobId),
     duplicateReady: jobId => duplicateDetection.isReady(jobId)
   });
+  const stagingCleanup = options.stagingCleanup !== undefined
+    ? options.stagingCleanup
+    : process.env.MUSIC_DIR?.trim()
+      ? createDefaultStagingCleanupManager(app, staging())
+      : null;
+
+  if (stagingCleanup) {
+    app.addHook('onReady', async () => {
+      try {
+        await stagingCleanup.start();
+      } catch (error) {
+        app.log.warn(
+          { err: error, component: 'import-staging-cleanup', reason: 'startup' },
+          'Falha na varredura inicial do staging de importações.'
+        );
+      }
+    });
+    app.addHook('onClose', async () => {
+      stagingCleanup.stop();
+    });
+  }
 
   if (!app.hasContentTypeParser('application/octet-stream')) {
     app.addContentTypeParser('application/octet-stream', (_request, payload, done) => {
