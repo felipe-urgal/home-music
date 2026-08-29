@@ -180,13 +180,15 @@ function MetadataPreviewCard({
           const state = preview.fieldStates[field];
           const providerValue = preview.provider?.[field] ?? null;
           const showProvider = Boolean(providerValue && ['suggested', 'conflict'].includes(state));
+          const inputId = `admin-import-metadata-${job.id}-${field}`;
           return (
-            <label className={`admin-import-metadata-field is-${state}`} key={field}>
-              <span>
+            <div className={`admin-import-metadata-field is-${state}`} key={field}>
+              <label htmlFor={inputId}>
                 <strong>{FIELD_LABELS[field]}</strong>
                 <small>{FIELD_STATES[state]}</small>
-              </span>
+              </label>
               <input
+                id={inputId}
                 type="text"
                 maxLength={240}
                 value={draft[field]}
@@ -203,8 +205,7 @@ function MetadataPreviewCard({
                   <button
                     type="button"
                     disabled={saving}
-                    onClick={event => {
-                      event.preventDefault();
+                    onClick={() => {
                       setDraft(current => ({ ...current, [field]: providerValue }));
                       if (error) setError(null);
                     }}
@@ -213,7 +214,7 @@ function MetadataPreviewCard({
                   </button>
                 </div>
               )}
-            </label>
+            </div>
           );
         })}
       </div>
