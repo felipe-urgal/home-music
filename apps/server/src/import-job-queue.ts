@@ -4,7 +4,7 @@ import type { ImportJob, ImportJobSource, ImportJobStatus } from '@home-music/sh
 const TERMINAL_STATUSES = new Set<ImportJobStatus>(['completed', 'failed', 'cancelled']);
 const ALLOWED_TRANSITIONS: Record<ImportJobStatus, readonly ImportJobStatus[]> = {
   pending: ['processing', 'failed', 'cancelled'],
-  processing: ['completed', 'failed', 'cancelled'],
+  processing: ['pending', 'completed', 'failed', 'cancelled'],
   completed: [],
   failed: [],
   cancelled: []
