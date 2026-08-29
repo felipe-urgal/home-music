@@ -318,7 +318,7 @@ test('timeout aborta o contexto, normaliza erro e limpa recursos', async () => {
   const item = await fixture({
     timeoutMs: 10,
     providers: [fakeProvider({
-      prepare: async (_request, context) => new Promise((_resolve, reject) => {
+      prepare: async (_request, context) => new Promise<ExternalProviderPreparedMedia>((_resolve, reject) => {
         context.signal.addEventListener('abort', () => {
           aborted = true;
           reject(context.signal.reason);
@@ -342,7 +342,7 @@ test('cancelamento aborta provider ativo e marca job como cancelled', async () =
   let aborted = false;
   const item = await fixture({
     providers: [fakeProvider({
-      prepare: async (_request, context) => new Promise((_resolve, reject) => {
+      prepare: async (_request, context) => new Promise<ExternalProviderPreparedMedia>((_resolve, reject) => {
         context.signal.addEventListener('abort', () => {
           aborted = true;
           reject(context.signal.reason);
@@ -378,11 +378,15 @@ test('cancelamento de job pending remove payload preparado', async () => {
   }
 });
 
-test('erros internos arbitrários do provider não vazam para a fila', async () => {
+test('erros do adapter são canonicalizados e não vazam detalhes para a fila', async () => {
   const item = await fixture({
     providers: [fakeProvider({
       prepare: async () => {
-        throw new Error('token-secreto stack interno /etc/passwd');
+        throw new ExternalProviderError(
+          'provider_failed',
+          'token-secreto stack interno /etc/passwd',
+          502
+        );
       }
     })]
   });
@@ -391,6 +395,7 @@ test('erros internos arbitrários do provider não vazam para a fila', async () 
     const failed = await waitForStatus(item.queue, job.id, 'failed');
     assert.equal(failed.error, 'Falha ao executar o provider externo.');
     assert.equal(failed.error?.includes('token-secreto'), false);
+    assert.equal(failed.error?.includes('/etc/passwd'), false);
   } finally {
     await rm(item.root, { recursive: true, force: true });
   }
