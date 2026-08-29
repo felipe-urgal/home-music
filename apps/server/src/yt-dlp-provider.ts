@@ -28,6 +28,7 @@ const SAFE_CONTENT_TYPES: Record<string, string> = {
   webm: 'audio/webm'
 };
 const LOSSLESS_CODECS = new Set(['alac', 'ape', 'flac', 'wavpack']);
+const YOUTUBE_PLAYLIST_PARAMS = ['list', 'index', 'start_radio', 'playnext'];
 
 export const YT_DLP_PROVIDER_ID = 'yt-dlp';
 export const YT_DLP_COMMAND_CONFIG = 'command';
@@ -154,6 +155,76 @@ function requireAbsoluteExecutable(value: string | undefined) {
 
 function literalHost(hostname: string) {
   return hostname.startsWith('[') && hostname.endsWith(']') ? hostname.slice(1, -1) : hostname;
+}
+
+export function normalizeYtDlpRequestUrl(value: string) {
+  const url = new URL(value);
+  const hostname = literalHost(url.hostname).toLowerCase();
+  const youtubeWatch = (hostname === 'youtube.com' || hostname.endsWith('.youtube.com'))
+    && url.pathname === '/watch'
+    && Boolean(url.searchParams.get('v'));
+
+  if (youtubeWatch) {
+    for (const parameter of YOUTUBE_PLAYLIST_PARAMS) url.searchParams.delete(parameter);
+  }
+  url.hash = '';
+  return url.toString();
+}
+
+export function classifyYtDlpFailure(stderr: string) {
+  const message = stderr.toLowerCase();
+  if (
+    (message.includes('no such option') || message.includes('unrecognized arguments') || message.includes('unknown option'))
+    && (message.includes('--js-runtimes') || message.includes('--no-plugin-dirs'))
+  ) {
+    return new ExternalProviderError(
+      'provider_incompatible',
+      'A versão instalada do yt-dlp não é compatível com o provider.',
+      503
+    );
+  }
+  if (
+    message.includes('no supported javascript runtime')
+    || message.includes('javascript runtime could be found')
+    || message.includes('js challenge providers') && message.includes('unavailable')
+  ) {
+    return new ExternalProviderError(
+      'provider_runtime_missing',
+      'O yt-dlp não encontrou o runtime JavaScript necessário para esta origem.',
+      503
+    );
+  }
+  if (
+    message.includes('sign in to confirm')
+    || message.includes('login required')
+    || message.includes('requires authentication')
+    || message.includes('use --cookies')
+    || message.includes('cookies-from-browser')
+  ) {
+    return new ExternalProviderError(
+      'provider_auth_required',
+      'A origem exige autenticação e não pode ser importada sem credenciais.',
+      409
+    );
+  }
+  if (
+    message.includes('proxy')
+    || message.includes('bad gateway')
+    || message.includes('unable to connect')
+    || message.includes('connection refused')
+    || message.includes('network is unreachable')
+    || message.includes('timed out')
+    || message.includes('timeout')
+    || message.includes('temporary failure in name resolution')
+    || message.includes('name or service not known')
+  ) {
+    return new ExternalProviderError(
+      'provider_network_failed',
+      'O provider externo não conseguiu acessar a origem pela rede segura.',
+      502
+    );
+  }
+  return new ExternalProviderError('provider_failed', 'O yt-dlp não conseguiu adquirir a mídia.', 502);
 }
 
 export function ytDlpAudioCandidates(info: YtDlpMetadata): YtDlpAudioCandidate[] {
@@ -305,7 +376,7 @@ export const runYtDlpProcess: YtDlpProcessRunner = request => new Promise((resol
   child.once('close', code => {
     if (settled) return;
     if (code !== 0) {
-      settle(() => reject(new ExternalProviderError('provider_failed', 'O yt-dlp não conseguiu adquirir a mídia.', 502)));
+      settle(() => reject(classifyYtDlpFailure(stderr)));
       return;
     }
     settle(() => resolve({ stdout: stdout.trim(), stderr }));
@@ -386,6 +457,7 @@ export class YtDlpProvider implements ExternalProvider {
 
   async prepare(request: ExternalProviderRequest, context: ExternalProviderContext): Promise<ExternalProviderPreparedMedia> {
     const commandPath = requireAbsoluteExecutable(context.config[YT_DLP_COMMAND_CONFIG]);
+    const requestUrl = normalizeYtDlpRequestUrl(request.url);
     const proxy = await this.createProxy();
     try {
       const common = commonArguments(proxy.url);
@@ -395,7 +467,7 @@ export class YtDlpProvider implements ExternalProvider {
           ...common,
           '--dump-single-json',
           '--skip-download',
-          '--', request.url
+          '--', requestUrl
         ],
         cwd: context.scratchDir,
         proxyUrl: proxy.url,
@@ -412,7 +484,7 @@ export class YtDlpProvider implements ExternalProvider {
           '--output', `${OUTPUT_PREFIX}%(ext)s`,
           '--no-progress',
           '--no-overwrites',
-          '--', request.url
+          '--', requestUrl
         ],
         cwd: context.scratchDir,
         proxyUrl: proxy.url,

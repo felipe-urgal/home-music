@@ -5,6 +5,7 @@ import type { Duplex } from 'node:stream';
 import { isUnsafeImportAddress } from './import-url.js';
 
 const PROVIDER_CONNECT_TIMEOUT_MS = 8_000;
+const PROVIDER_TARGET_TIMEOUT_MS = 2_500;
 
 export type ProviderResolvedAddress = Readonly<{
   address: string;
@@ -40,7 +41,7 @@ async function defaultResolveHost(hostname: string): Promise<ProviderResolvedAdd
   return result.map(item => ({ address: item.address, family: item.family === 6 ? 6 : 4 }));
 }
 
-export async function resolveSafeProviderTarget(hostname: string, resolver: ResolveHost = defaultResolveHost) {
+export async function resolveSafeProviderTargets(hostname: string, resolver: ResolveHost = defaultResolveHost) {
   const clean = unbracket(hostname).trim();
   if (!clean || blockedHostname(clean)) {
     throw new ExternalProviderEgressError('O provider tentou acessar uma rede não permitida.');
@@ -59,10 +60,21 @@ export async function resolveSafeProviderTarget(hostname: string, resolver: Reso
     throw new ExternalProviderEgressError('O provider tentou acessar uma rede não permitida.');
   }
 
-  // Em hosts dual-stack, preferimos IPv4 para evitar que uma rota IPv6
-  // parcialmente configurada prenda o CONNECT apesar de haver IPv4 válido.
-  // Todos os candidatos já foram validados acima, preservando o fail-closed SSRF.
-  return addresses.find(item => item.family === 4) ?? addresses[0];
+  const unique = new Map<string, ProviderResolvedAddress>();
+  for (const item of addresses) unique.set(`${item.family}:${item.address}`, item);
+  const candidates = [...unique.values()];
+
+  // IPv4 vem primeiro porque servidores domésticos frequentemente têm IPv6
+  // anunciado no DNS, mas sem rota funcional. Se o primeiro IPv4 falhar, o
+  // proxy tenta os demais candidatos públicos antes de desistir.
+  return [
+    ...candidates.filter(item => item.family === 4),
+    ...candidates.filter(item => item.family === 6)
+  ];
+}
+
+export async function resolveSafeProviderTarget(hostname: string, resolver: ResolveHost = defaultResolveHost) {
+  return (await resolveSafeProviderTargets(hostname, resolver))[0];
 }
 
 function parseAuthority(value: string) {
@@ -166,37 +178,68 @@ export class ExternalProviderEgressProxy {
     await new Promise<void>(resolve => server.close(() => resolve()));
   }
 
+  private connectTarget(target: ProviderResolvedAddress, port: number, timeoutMs: number) {
+    return new Promise<net.Socket>((resolve, reject) => {
+      const socket = net.connect({ host: target.address, port, family: target.family });
+      this.sockets.add(socket);
+      socket.once('close', () => this.sockets.delete(socket));
+
+      let settled = false;
+      const timer = setTimeout(() => {
+        if (!settled) socket.destroy(new Error('provider connect timeout'));
+      }, timeoutMs);
+      timer.unref?.();
+
+      socket.once('connect', () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(socket);
+      });
+      socket.once('error', error => {
+        clearTimeout(timer);
+        if (settled) return;
+        settled = true;
+        socket.destroy();
+        reject(error);
+      });
+    });
+  }
+
+  private async connectTargets(targets: readonly ProviderResolvedAddress[], port: number) {
+    const deadline = Date.now() + PROVIDER_CONNECT_TIMEOUT_MS;
+    let lastError: unknown = null;
+
+    for (const target of targets) {
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) break;
+      try {
+        return await this.connectTarget(target, port, Math.min(PROVIDER_TARGET_TIMEOUT_MS, remaining));
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    throw lastError instanceof Error ? lastError : new Error('provider connect failed');
+  }
+
   private async handleConnect(request: IncomingMessage, client: Duplex, head: Buffer) {
     try {
       const target = parseAuthority(request.url ?? '');
-      const resolved = await resolveSafeProviderTarget(target.hostname, this.resolveHost);
-      const upstream = net.connect({ host: resolved.address, port: target.port, family: resolved.family });
-      let connected = false;
-      const connectTimeout = setTimeout(() => {
-        if (!connected) upstream.destroy(new Error('provider connect timeout'));
-      }, PROVIDER_CONNECT_TIMEOUT_MS);
-      connectTimeout.unref?.();
+      const resolved = await resolveSafeProviderTargets(target.hostname, this.resolveHost);
+      const upstream = await this.connectTargets(resolved, target.port);
+      if (client.destroyed) {
+        upstream.destroy();
+        return;
+      }
 
-      this.sockets.add(upstream);
-      upstream.once('close', () => {
-        clearTimeout(connectTimeout);
-        this.sockets.delete(upstream);
-      });
-      upstream.once('error', () => {
-        clearTimeout(connectTimeout);
-        if (connected) client.destroy();
-        else failConnect(client, 502);
-      });
-      upstream.once('connect', () => {
-        connected = true;
-        clearTimeout(connectTimeout);
-        client.write('HTTP/1.1 200 Connection Established\r\n\r\n');
-        if (head.length > 0) upstream.write(head);
-        client.pipe(upstream);
-        upstream.pipe(client);
-      });
-    } catch {
-      failConnect(client, 403);
+      upstream.once('error', () => client.destroy());
+      client.write('HTTP/1.1 200 Connection Established\r\n\r\n');
+      if (head.length > 0) upstream.write(head);
+      client.pipe(upstream);
+      upstream.pipe(client);
+    } catch (error) {
+      failConnect(client, error instanceof ExternalProviderEgressError ? 403 : 502);
     }
   }
 
