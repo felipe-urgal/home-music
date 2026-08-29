@@ -118,7 +118,7 @@ function parsePlaylist(stdout: string) {
   return parsed as YtDlpPlaylistInfo;
 }
 
-function safeItem(entry: YtDlpPlaylistEntry, index: number): ExternalProviderBatchInspectionItem {
+function safeItem(entry: YtDlpPlaylistEntry, index: number, musicOrigin: boolean): ExternalProviderBatchInspectionItem {
   const sourceId = cleanText(entry.id, 128);
   const label = cleanText(entry.title, MAX_ITEM_LABEL_LENGTH) ?? `Item ${index + 1}`;
   if (!sourceId || !YOUTUBE_VIDEO_ID.test(sourceId)) {
@@ -130,11 +130,12 @@ function safeItem(entry: YtDlpPlaylistEntry, index: number): ExternalProviderBat
       unavailableReason: 'Item indisponível ou sem identificador seguro na playlist.'
     };
   }
+  const host = musicOrigin ? 'music.youtube.com' : 'www.youtube.com';
   return {
     sourceId,
     label,
     durationSeconds: durationSeconds(entry.duration),
-    request: { url: `https://www.youtube.com/watch?v=${encodeURIComponent(sourceId)}` },
+    request: { url: `https://${host}/watch?v=${encodeURIComponent(sourceId)}` },
     unavailableReason: null
   };
 }
@@ -207,7 +208,8 @@ export class YtDlpBatchInspector implements ExternalProviderBatchInspector {
         throw new ExternalProviderError('invalid_output', 'O yt-dlp não retornou itens válidos da playlist.');
       }
 
-      const items = (info.entries as YtDlpPlaylistEntry[]).map(safeItem);
+      const musicOrigin = new URL(target).hostname.toLowerCase() === 'music.youtube.com';
+      const items = (info.entries as YtDlpPlaylistEntry[]).map((entry, index) => safeItem(entry, index, musicOrigin));
       return {
         providerId: this.providerId,
         label: cleanText(info.title, MAX_PLAYLIST_LABEL_LENGTH) ?? 'Playlist do YouTube',
