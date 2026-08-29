@@ -79,6 +79,6 @@ export function registerAdminExternalProviderBatchRoutes(
   );
 
   app.addHook('onClose', async () => {
-    batches.stop();
+    await batches.stop();
   });
 }
