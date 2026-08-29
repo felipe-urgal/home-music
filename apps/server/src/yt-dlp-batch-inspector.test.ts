@@ -39,7 +39,7 @@ test('inspeciona playlist com proxy, runtime Node e limite maxItems + 1', async 
   assert.ok(result);
   assert.equal(result.label, 'Minha Playlist');
   assert.equal(result.items.length, 2);
-  assert.equal(result.items[0].request?.url, 'https://www.youtube.com/watch?v=abcDEF_1234');
+  assert.equal(result.items[0].request?.url, 'https://music.youtube.com/watch?v=abcDEF_1234');
   assert.equal(result.items[1].durationSeconds, 180);
   assert.equal(item.requests.length, 1);
   const args = item.requests[0].args;
