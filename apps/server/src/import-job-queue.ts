@@ -3,7 +3,8 @@ import type {
   ImportJob,
   ImportJobSource,
   ImportJobStatus,
-  ImportMediaDecision
+  ImportMediaDecision,
+  ImportMetadataPreview
 } from '@home-music/shared';
 
 const TERMINAL_STATUSES = new Set<ImportJobStatus>(['completed', 'failed', 'cancelled']);
@@ -31,11 +32,29 @@ function copyDecision(decision: ImportMediaDecision | null): ImportMediaDecision
   };
 }
 
+function copyMetadataValues(values: ImportMetadataPreview['embedded']) {
+  return { ...values };
+}
+
+function copyMetadataPreview(preview: ImportMetadataPreview | null): ImportMetadataPreview | null {
+  if (!preview) return null;
+  return {
+    ...preview,
+    embedded: copyMetadataValues(preview.embedded),
+    provider: preview.provider ? copyMetadataValues(preview.provider) : null,
+    overrides: copyMetadataValues(preview.overrides),
+    effective: copyMetadataValues(preview.effective),
+    fieldStates: { ...preview.fieldStates },
+    cover: { ...preview.cover }
+  };
+}
+
 function copyJob(job: ImportJob): ImportJob {
   return {
     ...job,
     source: { ...job.source },
-    mediaDecision: copyDecision(job.mediaDecision)
+    mediaDecision: copyDecision(job.mediaDecision),
+    metadataPreview: copyMetadataPreview(job.metadataPreview)
   };
 }
 
@@ -77,7 +96,8 @@ export class ImportJobQueue {
       startedAt: null,
       finishedAt: null,
       error: null,
-      mediaDecision: null
+      mediaDecision: null,
+      metadataPreview: null
     };
 
     this.jobs.push(job);
@@ -94,6 +114,19 @@ export class ImportJobQueue {
     }
 
     job.mediaDecision = copyDecision(decision);
+    job.updatedAt = this.now().toISOString();
+    this.notify(job);
+    return copyJob(job);
+  }
+
+  setMetadataPreview(id: string, preview: ImportMetadataPreview) {
+    const job = this.jobs.find(item => item.id === id);
+    if (!job) return null;
+    if (TERMINAL_STATUSES.has(job.status)) {
+      throw new Error('Job terminal não aceita preview de metadata.');
+    }
+
+    job.metadataPreview = copyMetadataPreview(preview);
     job.updatedAt = this.now().toISOString();
     this.notify(job);
     return copyJob(job);
