@@ -13,6 +13,18 @@ export type AdminExternalProviderDescriptor = {
   configured: boolean;
 };
 
+export async function getAdminExternalProviders() {
+  const response = await apiFetch('/api/admin/imports', { cache: 'no-store' });
+  const payload = await response.json().catch(() => null) as {
+    providers?: AdminExternalProviderDescriptor[];
+    error?: string;
+  } | null;
+  if (!response.ok || !Array.isArray(payload?.providers)) {
+    throw new Error(payload?.error || `Falha HTTP ${response.status}`);
+  }
+  return payload.providers;
+}
+
 export async function startAdminExternalProvider(providerId: string, url: string) {
   const response = await apiFetch(`/api/admin/imports/providers/${encodeURIComponent(providerId)}`, {
     method: 'POST',
