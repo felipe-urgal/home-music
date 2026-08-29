@@ -460,8 +460,8 @@ export class ImportUrlManager {
       session.cancelRequested = true;
       const error = new ImportUrlCancelledError();
       session.rejectAbort(error);
-      session.request?.destroy(error);
-      session.response?.destroy(error);
+      session.request?.destroy();
+      session.response?.destroy();
       await session.settled.catch(() => undefined);
     }
 
@@ -480,8 +480,8 @@ export class ImportUrlManager {
       session.timedOut = true;
       const error = timeoutError();
       session.rejectAbort(error);
-      session.request?.destroy(error);
-      session.response?.destroy(error);
+      session.request?.destroy();
+      session.response?.destroy();
     }, this.timeoutMs);
     timeout.unref?.();
 
@@ -593,7 +593,7 @@ export class ImportUrlManager {
       }
       yield bytes;
     }
-    if (receivedBytes === 0) throw new ImportUrlError('O servidor remoto retornou um arquivo vazio.');
     this.ensureActive(session);
+    if (receivedBytes === 0) throw new ImportUrlError('O servidor remoto retornou um arquivo vazio.');
   }
 }
