@@ -128,6 +128,10 @@ export class ImportAutomaticFlowManager {
     this.enabled.delete(jobId);
   }
 
+  stop() {
+    this.enabled.clear();
+  }
+
   private ensureRunning(jobId: string) {
     const existing = this.active.get(jobId);
     if (existing) return existing;
