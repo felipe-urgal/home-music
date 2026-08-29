@@ -1,4 +1,4 @@
-import { accessSync, constants } from 'node:fs';
+import { accessSync, constants, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Readable } from 'node:stream';
@@ -191,6 +191,7 @@ function executablePath(candidate: string | undefined) {
   if (!clean || !path.isAbsolute(clean) || clean.includes('\0')) return '';
   try {
     accessSync(clean, constants.X_OK);
+    if (!statSync(clean).isFile()) return '';
     return path.normalize(clean);
   } catch {
     return '';
