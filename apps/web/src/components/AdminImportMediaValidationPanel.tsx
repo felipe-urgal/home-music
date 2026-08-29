@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import type {
   ImportJob,
   ImportMediaDecisionReason,
@@ -45,14 +45,19 @@ function mediaFormat(codec: string, extension: string, bitRate: number | null) {
     .join(' · ');
 }
 
+function actionLabel(action: NonNullable<ImportJob['mediaDecision']>['action']) {
+  if (action === 'preserve') return 'Preservar';
+  if (action === 'remux') return 'Reempacotar sem reencode';
+  return 'Converter';
+}
+
 export function AdminImportMediaDecisionSummary({ job }: { job: ImportJob }) {
   const decision = job.mediaDecision;
   if (!decision) return null;
-  const action = decision.action === 'preserve' ? 'Preservar' : 'Converter';
   const prefix = job.status === 'failed' ? 'Plano técnico' : 'Decisão técnica';
   return (
     <small className={`admin-import-job__decision${job.status === 'failed' ? ' is-planned' : ''}`}>
-      {prefix}: {action} · {mediaFormat(decision.output.codec, decision.output.extension, decision.output.bitRate)} · {REASON_LABELS[decision.reason]}
+      {prefix}: {actionLabel(decision.action)} · {mediaFormat(decision.output.codec, decision.output.extension, decision.output.bitRate)} · {REASON_LABELS[decision.reason]}
     </small>
   );
 }
@@ -70,14 +75,8 @@ export function AdminImportMediaValidationPanel({
   const [validatingJobId, setValidatingJobId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const pendingJobs = useMemo(
-    () => jobs.filter(job => job.status === 'pending' && !job.mediaDecision),
-    [jobs]
-  );
-  const validatedCount = useMemo(
-    () => jobs.filter(job => job.mediaDecision && job.status !== 'failed').length,
-    [jobs]
-  );
+  const pendingJobs = jobs.filter(job => job.status === 'pending' && !job.mediaDecision);
+  const validatedCount = jobs.filter(job => job.mediaDecision && job.status !== 'failed').length;
 
   const validateJob = async (job: ImportJob) => {
     if (validatingJobId) return;
@@ -100,7 +99,7 @@ export function AdminImportMediaValidationPanel({
         <div>
           <span className="my-account-link-group__label">Validação técnica</span>
           <strong id="admin-import-validation-title">Formato de saída</strong>
-          <small>Original é o padrão. O servidor só converte quando o perfil ou a segurança técnica exigirem.</small>
+          <small>Original é o padrão. O servidor preserva o codec sempre que possível e só reencoda quando o perfil exigir.</small>
         </div>
         <span className="admin-import-validation__counter">
           <ShieldCheck /> {validatedCount} validada{validatedCount === 1 ? '' : 's'}
@@ -151,7 +150,7 @@ export function AdminImportMediaValidationPanel({
                 <article className="admin-import-validation-job" key={job.id}>
                   <div>
                     <strong>{job.label}</strong>
-                    <small>{PROFILE_FALLBACK_LABELS[selectedProfile]} · FFprobe antes e depois quando houver conversão</small>
+                    <small>{PROFILE_FALLBACK_LABELS[selectedProfile]} · FFprobe antes e depois quando o payload for processado</small>
                   </div>
                   <button
                     type="button"
