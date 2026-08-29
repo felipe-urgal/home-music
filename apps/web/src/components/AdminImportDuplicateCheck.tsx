@@ -26,6 +26,7 @@ const REASON_LABELS: Record<AdminImportDuplicateReason, string> = {
 };
 
 function resultLabel(check: AdminImportDuplicateCheck) {
+  if (!check.hashCompared && check.confidence === 'none') return 'Verificação parcial';
   if (check.disposition === 'blocked') return 'Duplicata exata';
   if (check.disposition === 'review') return check.reviewedAt ? 'Provável · revisada' : 'Duplicata provável';
   if (check.disposition === 'notice') return 'Possível duplicata';
@@ -33,6 +34,9 @@ function resultLabel(check: AdminImportDuplicateCheck) {
 }
 
 function resultDescription(check: AdminImportDuplicateCheck) {
+  if (!check.hashCompared && check.confidence === 'none') {
+    return 'Nenhuma semelhança heurística forte foi encontrada, mas ao menos um hash comparável não pôde ser confirmado.';
+  }
   if (check.disposition === 'blocked') {
     return 'O mesmo conteúdo já existe na biblioteca. Esta importação fica bloqueada por padrão.';
   }
@@ -132,7 +136,7 @@ export function AdminImportDuplicateCheckPanel({ job }: { job: ImportJob }) {
         <span>
           <strong>{resultLabel(check)}</strong>
           <small>{resultDescription(check)}</small>
-          {!check.hashCompared && (
+          {!check.hashCompared && check.confidence !== 'none' && (
             <small>Nem todos os hashes comparáveis puderam ser lidos; as heurísticas continuam visíveis.</small>
           )}
         </span>
