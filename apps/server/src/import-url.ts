@@ -528,9 +528,9 @@ export class ImportUrlManager {
       }
 
       const type = contentType(response.headers);
-      if (!type || !ALLOWED_CONTENT_TYPES.has(type)) {
+      if (type && !ALLOWED_CONTENT_TYPES.has(type)) {
         response.resume();
-        throw new ImportUrlError('O servidor remoto não retornou um Content-Type de áudio permitido.');
+        throw new ImportUrlError('O servidor remoto retornou um Content-Type incompatível com áudio.');
       }
 
       const declaredLength = contentLength(response.headers);
