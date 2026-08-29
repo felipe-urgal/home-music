@@ -76,7 +76,7 @@ test('gera nome previsível sanitizado e promove para Importados sem escapar de 
     assert.equal(plan.fileName, 'Artista Principal - Minha - Faixa Teste.flac');
     assert.equal(plan.relativePath, 'Importados/Artista Principal - Minha - Faixa Teste.flac');
     assert.equal(plan.collisionIndex, 1);
-    assert.rejects(() => stat(path.join(item.musicDir, 'Importados')), { code: 'ENOENT' });
+    await assert.rejects(() => stat(path.join(item.musicDir, 'Importados')), { code: 'ENOENT' });
 
     const result = await item.manager.promote(item.job.id);
     assert.equal(result.job.status, 'completed');
