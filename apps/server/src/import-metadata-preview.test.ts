@@ -8,12 +8,14 @@ import { ImportStagingManager } from './import-staging.js';
 import {
   ImportMetadataPreviewError,
   ImportMetadataPreviewManager,
+  type ImportMetadataReader,
   type ImportMetadataReadResult
 } from './import-metadata-preview.js';
 
 async function fixture(options: {
   metadata?: Partial<ImportMetadataReadResult>;
   provider?: { title?: string | null; artist?: string | null; album?: string | null; albumArtist?: string | null } | null;
+  metadataReader?: ImportMetadataReader;
 } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'home-music-metadata-preview-'));
   const musicDir = path.join(root, 'music');
@@ -55,7 +57,7 @@ async function fixture(options: {
     staging,
     validatedLookup: () => ({ token: 'validated' }),
     providerMetadata: () => options.provider ?? null,
-    metadataReader: async () => ({ ...baseMetadata, ...options.metadata }),
+    metadataReader: options.metadataReader ?? (async () => ({ ...baseMetadata, ...options.metadata })),
     now: () => new Date('2026-08-29T12:00:00.000Z')
   });
   return { root, queue, staging, job, manager };
@@ -81,6 +83,37 @@ test('metadata embutida validada vence sugestão conflitante do provider', async
     assert.equal(result.preview.fieldStates.album, 'conflict');
     assert.equal(result.preview.durationSeconds, 183.25);
     assert.equal(result.job.status, 'pending');
+  } finally {
+    await rm(item.root, { recursive: true, force: true });
+  }
+});
+
+test('primeiro snapshot local é preservado em revalidações técnicas', async () => {
+  let reads = 0;
+  const item = await fixture({
+    metadataReader: async () => {
+      reads += 1;
+      return {
+        title: reads === 1 ? 'Título antes do processamento' : 'Título depois do processamento',
+        artist: 'Artista local',
+        album: 'Álbum local',
+        albumArtist: 'Artista local',
+        durationSeconds: 183.2,
+        cover: null
+      };
+    }
+  });
+  try {
+    const first = await item.manager.captureSource(item.job.id);
+    const repeated = await item.manager.captureSource(item.job.id);
+    assert.equal(reads, 1);
+    assert.equal(first.embedded.title, 'Título antes do processamento');
+    assert.equal(repeated.embedded.title, 'Título antes do processamento');
+
+    const result = await item.manager.extract(item.job.id);
+    assert.equal(reads, 1);
+    assert.equal(result.preview.embedded.title, 'Título antes do processamento');
+    assert.equal(result.preview.effective.title, 'Título antes do processamento');
   } finally {
     await rm(item.root, { recursive: true, force: true });
   }
