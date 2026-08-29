@@ -7,6 +7,7 @@ import { ExternalProviderError } from './external-provider.js';
 import {
   YT_DLP_COMMAND_CONFIG,
   YtDlpProvider,
+  normalizeYtDlpRequestUrl,
   selectYtDlpAudioFormat,
   type YtDlpProcessRequest,
   type YtDlpProcessRunner
@@ -46,6 +47,17 @@ test('seleciona áudio original privilegiando audio-only e lossless', () => {
   assert.equal(selected.lossless, true);
 });
 
+test('normaliza parâmetros de mix do YouTube sem alterar a faixa escolhida', () => {
+  const normalized = new URL(normalizeYtDlpRequestUrl(
+    'https://www.youtube.com/watch?v=oDdtJfBTfVw&list=RD4cxSmgHV_eQ&index=13&start_radio=1'
+  ));
+  assert.equal(normalized.hostname, 'www.youtube.com');
+  assert.equal(normalized.searchParams.get('v'), 'oDdtJfBTfVw');
+  assert.equal(normalized.searchParams.has('list'), false);
+  assert.equal(normalized.searchParams.has('index'), false);
+  assert.equal(normalized.searchParams.has('start_radio'), false);
+});
+
 test('YouTube Music usa proxy seguro, Node do serviço e preserva mídia original', async () => {
   const dir = await scratch();
   const calls: YtDlpProcessRequest[] = [];
@@ -76,7 +88,7 @@ test('YouTube Music usa proxy seguro, Node do serviço e preserva mídia origina
   try {
     const provider = providerWith(runner);
     const result = await provider.prepare(
-      { url: 'https://music.youtube.com/watch?v=abc123&list=RDAMVMabc123' },
+      { url: 'https://music.youtube.com/watch?v=abc123&list=RDAMVMabc123&index=7' },
       context(dir)
     );
 
@@ -97,6 +109,10 @@ test('YouTube Music usa proxy seguro, Node do serviço e preserva mídia origina
       assert.equal(invocation.args.includes('--extract-audio'), false);
       assert.equal(invocation.args.includes('--audio-format'), false);
       assert.equal(invocation.args.includes('--no-check-certificates'), false);
+      const requestUrl = new URL(invocation.args.at(-1)!);
+      assert.equal(requestUrl.searchParams.get('v'), 'abc123');
+      assert.equal(requestUrl.searchParams.has('list'), false);
+      assert.equal(requestUrl.searchParams.has('index'), false);
     }
     assert.equal(result.relativePath, 'home-music-media.webm');
     assert.equal(result.contentType, 'audio/webm');
