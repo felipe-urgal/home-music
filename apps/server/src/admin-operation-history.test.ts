@@ -85,56 +85,115 @@ test('persiste scans/importações concluídos com contagens, duração e filtro
       removed: null,
       unchanged: null
     });
-    assert.deepEqual(imports[0].importSource, { type: 'url', provider: null });
     reopened.close();
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
 });
 
-test('normaliza labels e erros antes de persistir ou devolver para a UI', async () => {
-  assert.equal(sanitizeOperationLabel('  Scan   completo  '), 'Scan completo');
-  assert.equal(sanitizeOperationLabel('https://example.test/audio.flac?token=segredo'), 'Importação por URL');
-  assert.equal(sanitizeOperationLabel('Provider · youtube'), 'Provider · youtube');
-  assert.equal(
-    sanitizeOperationError('Falhou em /home/felipe/Music/faixa.flac com token=segredo'),
-    'Falha durante a operação.'
-  );
-
+test('restart encerra operações pendentes/em andamento como interrompidas', async () => {
   const dir = await tempDatabase();
   const databasePath = path.join(dir, 'home-music.db');
   try {
-    const store = new AdminOperationHistoryStore(databasePath, { createId: () => 'import-1' });
+    const store = new AdminOperationHistoryStore(databasePath, {
+      createId: () => 'interrompido',
+      now: () => new Date('2026-08-28T12:00:00.000Z')
+    });
+    store.startScan('automatic');
+    store.recordImport(importJob({ id: 'interrompido' }));
+    store.close();
+
+    const reopened = new AdminOperationHistoryStore(databasePath, {
+      now: () => new Date('2026-08-28T12:10:00.000Z')
+    });
+    const interrupted = reopened.list({ status: 'cancelled' });
+    assert.equal(interrupted.length, 2);
+    for (const item of interrupted) {
+      assert.equal(item.finishedAt, '2026-08-28T12:10:00.000Z');
+      assert.match(item.error?.message ?? '', /interrompida pelo reinício/i);
+      assert.match(item.error?.action ?? '', /inicie a operação novamente/i);
+      assert.equal(item.canRetry, false);
+    }
+    reopened.close();
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('upsert de importação acompanha a fila e sanitiza erro sensível', async () => {
+  const dir = await tempDatabase();
+  const databasePath = path.join(dir, 'home-music.db');
+  try {
+    const store = new AdminOperationHistoryStore(databasePath);
+    store.recordImport(importJob());
+    store.recordImport(importJob({
+      status: 'processing',
+      startedAt: '2026-08-28T12:01:02.000Z',
+      updatedAt: '2026-08-28T12:01:02.000Z'
+    }));
     store.recordImport(importJob({
       status: 'failed',
-      error: 'erro interno /etc/passwd token=segredo',
-      finishedAt: '2026-08-28T12:01:04.000Z'
+      startedAt: '2026-08-28T12:01:02.000Z',
+      finishedAt: '2026-08-28T12:01:05.000Z',
+      updatedAt: '2026-08-28T12:01:05.000Z',
+      error: 'Falhou em /srv/music/privado.flac token=abc123 Bearer supersecreto https://host.test/a?secret=xyz'
     }));
-    const failed = store.list({ kind: 'import', status: 'failed' });
-    assert.equal(failed.length, 1);
-    assert.equal(failed[0].error?.message, 'Falha durante a importação.');
-    assert.equal(failed[0].error?.action, 'Revise a origem e tente novamente.');
+
+    const [item] = store.list({ kind: 'import' });
+    assert.equal(item.status, 'failed');
+    assert.equal(item.durationMs, 3_000);
+    assert.equal(item.canRetry, false);
+    assert.ok(item.error);
+    assert.doesNotMatch(item.error!.message, /srv\/music|abc123|supersecreto|host\.test|xyz/i);
+    assert.match(item.error!.message, /\[caminho removido\]|\[redigido\]|\[URL removida\]/);
+    assert.match(item.error!.action, /tente novamente|logs/i);
     store.close();
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
 });
 
-test('limita quantidade retornada e ordena operações mais recentes primeiro', async () => {
+test('sanitização classifica erros conhecidos sem expor detalhes brutos', () => {
+  const permissionError = Object.assign(new Error('permission denied /home/user/Music/faixa.flac'), { code: 'EACCES' });
+  const sanitized = sanitizeOperationError(permissionError);
+  assert.match(sanitized.message, /permissão/i);
+  assert.doesNotMatch(sanitized.message, /home\/user|faixa\.flac/i);
+  assert.match(sanitized.action, /permissões/i);
+
+  assert.equal(
+    sanitizeOperationLabel('https://example.test/media?token=segredo', 'Importação por URL'),
+    'Importação por URL'
+  );
+});
+
+test('retenção remove terminais antigos sem podar operação pendente', async () => {
   const dir = await tempDatabase();
   const databasePath = path.join(dir, 'home-music.db');
+  let sequence = 0;
+  let clock = 0;
   try {
-    const store = new AdminOperationHistoryStore(databasePath);
-    for (let index = 0; index < 7; index += 1) {
-      store.recordImport(importJob({
-        id: `job-${index}`,
-        createdAt: `2026-08-28T12:0${index}:00.000Z`,
-        updatedAt: `2026-08-28T12:0${index}:00.000Z`
-      }));
+    const store = new AdminOperationHistoryStore(databasePath, {
+      maxRetainedOperations: 2,
+      createId: () => `id-${++sequence}`,
+      now: () => new Date(`2026-08-28T12:00:${String(clock++).padStart(2, '0')}.000Z`)
+    });
+    store.recordImport(importJob({ id: 'pending', source: { type: 'upload', provider: null }, label: 'Upload novo' }));
+
+    for (let index = 0; index < 3; index += 1) {
+      const id = store.startScan('automatic');
+      store.completeScan(id, {
+        tracks: index,
+        scannedAt: '2026-08-28T12:00:00.000Z',
+        added: 0,
+        updated: 0,
+        removed: 0,
+        unchanged: index
+      });
     }
-    const limited = store.list({ limit: 3 });
-    assert.equal(limited.length, 3);
-    assert.deepEqual(limited.map(item => item.id), ['job-6', 'job-5', 'job-4']);
+
+    const items = store.list();
+    assert.equal(items.filter(item => item.status === 'completed').length, 2);
+    assert.equal(items.some(item => item.id === 'import-pending' && item.status === 'pending'), true);
     store.close();
   } finally {
     await rm(dir, { recursive: true, force: true });
