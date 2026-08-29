@@ -115,6 +115,7 @@ function MetadataPreviewCard({
     setError(null);
     try {
       const result = await updateAdminImportMetadata(job.id, patch);
+      setDraft(previewDraft(result.preview));
       onJobUpdated(result.job);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Não foi possível salvar os ajustes.');
@@ -134,6 +135,7 @@ function MetadataPreviewCard({
         album: null,
         albumArtist: null
       });
+      setDraft(previewDraft(result.preview));
       onJobUpdated(result.job);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Não foi possível restaurar a leitura original.');
@@ -169,7 +171,7 @@ function MetadataPreviewCard({
       {hasExternalHints && (
         <div className="admin-import-metadata-notice">
           <ShieldCheck />
-          <span>Metadata externa aparece apenas como sugestão; valores embutidos continuam tendo prioridade.</span>
+          <span>Metadata externa aparece apenas como sugestão e só entra no preview após aceite explícito.</span>
         </div>
       )}
 
@@ -177,7 +179,7 @@ function MetadataPreviewCard({
         {FIELDS.map(field => {
           const state = preview.fieldStates[field];
           const providerValue = preview.provider?.[field] ?? null;
-          const showProvider = providerValue && ['suggested', 'conflict'].includes(state);
+          const showProvider = Boolean(providerValue && ['suggested', 'conflict'].includes(state));
           return (
             <label className={`admin-import-metadata-field is-${state}`} key={field}>
               <span>
@@ -195,8 +197,21 @@ function MetadataPreviewCard({
                   if (error) setError(null);
                 }}
               />
-              {showProvider && state === 'conflict' && (
-                <small className="admin-import-metadata-field__hint">Provider sugeriu: {providerValue}</small>
+              {showProvider && providerValue && (
+                <div className="admin-import-metadata-field__hint">
+                  <small>Provider sugeriu: {providerValue}</small>
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={event => {
+                      event.preventDefault();
+                      setDraft(current => ({ ...current, [field]: providerValue }));
+                      if (error) setError(null);
+                    }}
+                  >
+                    Usar sugestão
+                  </button>
+                </div>
               )}
             </label>
           );
