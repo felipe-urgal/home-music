@@ -4,7 +4,15 @@ import type {
   AdminOperationKind,
   AdminOperationStatus
 } from '@home-music/shared';
-import type { AdminOperationHistoryStore } from './admin-operation-history.js';
+import {
+  AdminOperationHistoryStore,
+  AdminOperationRetryError
+} from './admin-operation-history.js';
+import {
+  getImportRetryStarter,
+  ImportRetryStartError,
+  type ImportRetryInput
+} from './import-retry.js';
 
 const KINDS = new Set<AdminOperationKind>(['scan', 'import']);
 const STATUSES = new Set<AdminOperationStatus>(['pending', 'running', 'completed', 'failed', 'cancelled']);
@@ -56,6 +64,64 @@ export function registerAdminOperationHistoryRoutes(
         items: history.list({ kind, status, limit })
       };
       return response;
+    }
+  );
+
+  app.post<{ Params: { id: string }; Body: ImportRetryInput }>(
+    '/api/admin/operations/:id/retry',
+    async (request, reply) => {
+      reply.header('Cache-Control', 'no-store');
+      let context;
+      try {
+        context = history.prepareImportRetry(request.params.id);
+      } catch (error) {
+        if (error instanceof AdminOperationRetryError) {
+          return reply.code(error.statusCode).send({ error: error.message });
+        }
+        throw error;
+      }
+
+      const starter = getImportRetryStarter(app);
+      if (!starter) {
+        history.releaseImportRetry(context);
+        return reply.code(503).send({ error: 'Retry de importação indisponível neste processo.' });
+      }
+
+      let result;
+      try {
+        result = await starter(context, request.body ?? {});
+      } catch (error) {
+        if (error instanceof ImportRetryStartError) {
+          if (error.job) {
+            try {
+              history.bindRetryAttempt(error.job.id, context);
+            } catch (bindError) {
+              app.log.warn(
+                { err: bindError, importJobId: error.job.id },
+                'Falha ao vincular tentativa de retry que não iniciou corretamente.'
+              );
+            }
+          } else {
+            history.releaseImportRetry(context);
+          }
+          return reply.code(error.statusCode).send({ error: error.message });
+        }
+        history.releaseImportRetry(context);
+        if (error instanceof AdminOperationRetryError) {
+          return reply.code(error.statusCode).send({ error: error.message });
+        }
+        throw error;
+      }
+
+      try {
+        history.bindRetryAttempt(result.job.id, context);
+      } catch (error) {
+        if (error instanceof AdminOperationRetryError) {
+          return reply.code(error.statusCode).send({ error: error.message });
+        }
+        throw error;
+      }
+      return reply.code(context.source.type === 'url' ? 202 : 201).send(result);
     }
   );
 }

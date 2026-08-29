@@ -12,10 +12,12 @@ import type {
   ImportJobSource,
   ScanResponse
 } from '@home-music/shared';
+import type { ImportJobWithRetry, ImportRetryContext } from './import-retry.js';
 
 const DEFAULT_MAX_RETAINED_OPERATIONS = 500;
 const MAX_LABEL_LENGTH = 180;
 const MAX_ERROR_LENGTH = 320;
+const MAX_OPERATION_ID_LENGTH = 256;
 const TERMINAL_STATUSES: readonly AdminOperationStatus[] = ['completed', 'failed', 'cancelled'];
 const INTERRUPTED_MESSAGE = 'A operação foi interrompida pelo reinício do serviço.';
 const INTERRUPTED_ACTION = 'Inicie a operação novamente se ela ainda for necessária.';
@@ -38,6 +40,29 @@ type OperationHistoryOptions = {
   createId?: () => string;
   maxRetainedOperations?: number;
 };
+
+export type AdminImportFailureDisposition = 'none' | 'retryable' | 'definitive';
+
+export type AdminImportRetryInfo = Readonly<{
+  attempt: number;
+  parentOperationId: string | null;
+  rootOperationId: string;
+  failureDisposition: AdminImportFailureDisposition;
+}>;
+
+export type AdminOperationHistoryItemWithRetry = AdminOperationHistoryItem & {
+  importRetry: AdminImportRetryInfo | null;
+};
+
+export class AdminOperationRetryError extends Error {
+  constructor(
+    message: string,
+    public readonly statusCode = 409
+  ) {
+    super(message);
+    this.name = 'AdminOperationRetryError';
+  }
+}
 
 function stringValue(value: unknown, fallback = '') {
   return typeof value === 'string' ? value : fallback;
@@ -166,6 +191,46 @@ export function sanitizeOperationError(error: unknown): SanitizedOperationError 
   };
 }
 
+export function classifyImportFailure(job: Pick<ImportJob, 'status' | 'error' | 'source'>): AdminImportFailureDisposition {
+  if (job.status !== 'failed') return 'none';
+  if (job.source.type === 'provider') return 'definitive';
+
+  const lower = (job.error ?? '').toLocaleLowerCase('pt-BR');
+  const httpStatus = /\bhttp\s+(\d{3})\b/i.exec(lower);
+  if (httpStatus) {
+    const status = Number(httpStatus[1]);
+    if (status === 408 || status === 425 || status === 429 || status >= 500) return 'retryable';
+    return 'definitive';
+  }
+
+  const definitiveFragments = [
+    'não foi reconhecido como áudio suportado',
+    'não possui uma faixa de áudio válida',
+    'rejeitou ou não reconheceu a mídia',
+    'não conseguiu processar a mídia importada',
+    'não há container seguro',
+    'duração mudou além do esperado',
+    'payload mudou',
+    'content-type incompatível',
+    'excede o limite',
+    'tamanho recebido não corresponde',
+    'tamanho diferente do arquivo selecionado',
+    'arquivo vazio',
+    'formato não suportado',
+    'rede não permitida',
+    'rede local',
+    'credenciais embutidas',
+    'somente urls http',
+    'portas padrão http/https',
+    'url inválida',
+    'url obrigatória',
+    'limite de redirecionamentos'
+  ];
+  if (definitiveFragments.some(fragment => lower.includes(fragment))) return 'definitive';
+
+  return 'retryable';
+}
+
 function importStatus(status: ImportJob['status']): AdminOperationStatus {
   return status === 'processing' ? 'running' : status;
 }
@@ -192,7 +257,13 @@ function durationMs(startedAt: string | null, finishedAt: string | null, created
   return Math.max(0, finish - start);
 }
 
-function historyItem(row: Row): AdminOperationHistoryItem {
+function parseFailureDisposition(value: unknown): AdminImportFailureDisposition {
+  return value === 'retryable' || value === 'definitive' ? value : 'none';
+}
+
+function historyItem(row: Row): AdminOperationHistoryItemWithRetry {
+  const id = stringValue(row.id);
+  const kind = row.kind === 'import' ? 'import' : 'scan';
   const createdAt = stringValue(row.created_at);
   const startedAt = nullableString(row.started_at);
   const finishedAt = nullableString(row.finished_at);
@@ -205,10 +276,12 @@ function historyItem(row: Row): AdminOperationHistoryItem {
         provider: nullableString(row.import_provider)
       }
     : null;
+  const attempt = Math.max(1, Math.trunc(numberValue(row.import_attempt) ?? 1));
+  const rootOperationId = nullableString(row.import_root_id) || id;
 
   return {
-    id: stringValue(row.id),
-    kind: row.kind === 'import' ? 'import' : 'scan',
+    id,
+    kind,
     status: row.status as AdminOperationStatus,
     label: stringValue(row.label, 'Operação'),
     createdAt,
@@ -219,8 +292,33 @@ function historyItem(row: Row): AdminOperationHistoryItem {
     importSource,
     counts: parseCounts(row.counts_json),
     error: errorMessage && errorAction ? { message: errorMessage, action: errorAction } : null,
-    canRetry: Boolean(row.can_retry)
+    canRetry: Boolean(row.can_retry),
+    importRetry: kind === 'import'
+      ? {
+          attempt,
+          parentOperationId: nullableString(row.import_retry_of_id),
+          rootOperationId,
+          failureDisposition: parseFailureDisposition(row.import_failure_disposition)
+        }
+      : null
   };
+}
+
+function operationIdForJob(jobId: string) {
+  return `import-${jobId}`;
+}
+
+function jobIdFromOperationId(operationId: string) {
+  if (!operationId.startsWith('import-') || operationId.length <= 'import-'.length) {
+    throw new AdminOperationRetryError('Operação de importação inválida.', 404);
+  }
+  return operationId.slice('import-'.length);
+}
+
+function ensureHistoryColumn(db: DatabaseSync, column: string, definition: string) {
+  const columns = db.prepare('PRAGMA table_info(admin_operation_history)').all() as Row[];
+  if (columns.some(item => item.name === column)) return;
+  db.exec(`ALTER TABLE admin_operation_history ADD COLUMN ${column} ${definition};`);
 }
 
 export class AdminOperationHistoryStore {
@@ -253,7 +351,11 @@ export class AdminOperationHistoryStore {
         counts_json TEXT,
         error_message TEXT,
         error_action TEXT,
-        can_retry INTEGER NOT NULL DEFAULT 0 CHECK(can_retry IN (0, 1))
+        can_retry INTEGER NOT NULL DEFAULT 0 CHECK(can_retry IN (0, 1)),
+        import_retry_of_id TEXT,
+        import_root_id TEXT,
+        import_attempt INTEGER,
+        import_failure_disposition TEXT
       );
 
       CREATE INDEX IF NOT EXISTS idx_admin_operation_history_created
@@ -263,7 +365,24 @@ export class AdminOperationHistoryStore {
       ON admin_operation_history(kind, status, created_at DESC);
     `);
 
+    ensureHistoryColumn(this.db, 'import_retry_of_id', 'TEXT');
+    ensureHistoryColumn(this.db, 'import_root_id', 'TEXT');
+    ensureHistoryColumn(this.db, 'import_attempt', 'INTEGER');
+    ensureHistoryColumn(this.db, 'import_failure_disposition', "TEXT NOT NULL DEFAULT 'none'");
+    this.db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_admin_operation_history_retry_parent
+      ON admin_operation_history(import_retry_of_id);
+
+      UPDATE admin_operation_history
+      SET import_root_id = id,
+          import_attempt = 1,
+          import_failure_disposition = CASE WHEN status = 'failed' THEN 'definitive' ELSE 'none' END
+      WHERE kind = 'import'
+        AND (import_root_id IS NULL OR import_attempt IS NULL);
+    `);
+
     this.recoverInterruptedOperations();
+    this.recoverOrphanRetryClaims();
     this.trimRetained();
   }
 
@@ -310,17 +429,27 @@ export class AdminOperationHistoryStore {
     this.trimRetained();
   }
 
-  recordImport(job: ImportJob) {
+  recordImport(job: ImportJob & { retry?: ImportJobWithRetry['retry'] }) {
+    const retry = job.retry ?? null;
+    const operationId = operationIdForJob(job.id);
     const status = importStatus(job.status);
+    const failureDisposition = classifyImportFailure(job);
     const sanitizedError = status === 'failed' ? sanitizeOperationError(job.error) : null;
     const sourceProvider = safeProvider(job.source);
+    const canRetry = status === 'failed'
+      && failureDisposition === 'retryable'
+      && (job.source.type === 'upload' || job.source.type === 'url');
+    const parentOperationId = retry ? operationIdForJob(retry.parentJobId) : null;
+    const rootOperationId = retry ? operationIdForJob(retry.rootJobId) : operationId;
+    const attempt = retry?.attempt ?? 1;
 
     this.db.prepare(`
       INSERT INTO admin_operation_history(
         id, kind, status, label, created_at, started_at, finished_at,
         import_source_type, import_provider, counts_json,
-        error_message, error_action, can_retry
-      ) VALUES (?, 'import', ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, 0)
+        error_message, error_action, can_retry,
+        import_retry_of_id, import_root_id, import_attempt, import_failure_disposition
+      ) VALUES (?, 'import', ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         status = excluded.status,
         label = excluded.label,
@@ -330,9 +459,13 @@ export class AdminOperationHistoryStore {
         import_provider = excluded.import_provider,
         error_message = excluded.error_message,
         error_action = excluded.error_action,
-        can_retry = excluded.can_retry
+        can_retry = excluded.can_retry,
+        import_retry_of_id = COALESCE(admin_operation_history.import_retry_of_id, excluded.import_retry_of_id),
+        import_root_id = COALESCE(admin_operation_history.import_root_id, excluded.import_root_id),
+        import_attempt = COALESCE(admin_operation_history.import_attempt, excluded.import_attempt),
+        import_failure_disposition = excluded.import_failure_disposition
     `).run(
-      `import-${job.id}`,
+      operationId,
       status,
       safeImportLabel(job),
       job.createdAt,
@@ -341,9 +474,123 @@ export class AdminOperationHistoryStore {
       job.source.type,
       sourceProvider,
       sanitizedError?.message ?? null,
-      sanitizedError?.action ?? null
+      sanitizedError?.action ?? null,
+      canRetry ? 1 : 0,
+      parentOperationId,
+      rootOperationId,
+      attempt,
+      failureDisposition
     );
+
+    if (parentOperationId) {
+      this.db.prepare(`
+        UPDATE admin_operation_history
+        SET can_retry = 0
+        WHERE id = ? AND kind = 'import'
+      `).run(parentOperationId);
+    }
     this.trimRetained();
+  }
+
+  prepareImportRetry(operationId: string): ImportRetryContext {
+    const cleanId = operationId.trim();
+    if (!cleanId || cleanId.length > MAX_OPERATION_ID_LENGTH) {
+      throw new AdminOperationRetryError('Operação de importação inválida.', 404);
+    }
+    const row = this.db.prepare(`
+      SELECT id, kind, status, import_source_type, import_provider, can_retry,
+             import_root_id, import_attempt, import_failure_disposition
+      FROM admin_operation_history
+      WHERE id = ?
+      LIMIT 1
+    `).get(cleanId) as Row | undefined;
+    if (!row || row.kind !== 'import') {
+      throw new AdminOperationRetryError('Operação de importação não encontrada.', 404);
+    }
+    if (row.status !== 'failed' || !Boolean(row.can_retry) || row.import_failure_disposition !== 'retryable') {
+      throw new AdminOperationRetryError('Esta importação não possui uma nova tentativa segura disponível.');
+    }
+
+    const existingChild = this.db.prepare(`
+      SELECT id
+      FROM admin_operation_history
+      WHERE import_retry_of_id = ?
+      LIMIT 1
+    `).get(cleanId) as Row | undefined;
+    if (existingChild) {
+      this.db.prepare('UPDATE admin_operation_history SET can_retry = 0 WHERE id = ?').run(cleanId);
+      throw new AdminOperationRetryError('Esta tentativa já originou uma nova importação.');
+    }
+
+    const sourceType = nullableString(row.import_source_type);
+    if (sourceType !== 'upload' && sourceType !== 'url') {
+      throw new AdminOperationRetryError('A fonte desta importação não suporta retry seguro.');
+    }
+    const rootOperationId = nullableString(row.import_root_id) || cleanId;
+    const currentAttempt = Math.max(1, Math.trunc(numberValue(row.import_attempt) ?? 1));
+    const claim = this.db.prepare(`
+      UPDATE admin_operation_history
+      SET can_retry = 0
+      WHERE id = ?
+        AND kind = 'import'
+        AND status = 'failed'
+        AND can_retry = 1
+        AND import_failure_disposition = 'retryable'
+    `).run(cleanId);
+    if (Number(claim.changes) !== 1) {
+      throw new AdminOperationRetryError('Outra nova tentativa já foi iniciada para esta importação.');
+    }
+
+    return {
+      source: { type: sourceType, provider: null },
+      lineage: {
+        parentJobId: jobIdFromOperationId(cleanId),
+        rootJobId: jobIdFromOperationId(rootOperationId),
+        attempt: currentAttempt + 1
+      }
+    };
+  }
+
+  releaseImportRetry(context: ImportRetryContext) {
+    const parentOperationId = operationIdForJob(context.lineage.parentJobId);
+    const child = this.db.prepare(`
+      SELECT id
+      FROM admin_operation_history
+      WHERE import_retry_of_id = ?
+      LIMIT 1
+    `).get(parentOperationId) as Row | undefined;
+    if (child) return false;
+
+    const result = this.db.prepare(`
+      UPDATE admin_operation_history
+      SET can_retry = 1
+      WHERE id = ?
+        AND kind = 'import'
+        AND status = 'failed'
+        AND import_failure_disposition = 'retryable'
+        AND can_retry = 0
+    `).run(parentOperationId);
+    return Number(result.changes) > 0;
+  }
+
+  bindRetryAttempt(childJobId: string, context: ImportRetryContext) {
+    const childOperationId = operationIdForJob(childJobId);
+    const parentOperationId = operationIdForJob(context.lineage.parentJobId);
+    const rootOperationId = operationIdForJob(context.lineage.rootJobId);
+    const result = this.db.prepare(`
+      UPDATE admin_operation_history
+      SET import_retry_of_id = ?, import_root_id = ?, import_attempt = ?
+      WHERE id = ? AND kind = 'import'
+    `).run(parentOperationId, rootOperationId, context.lineage.attempt, childOperationId);
+    if (Number(result.changes) <= 0) {
+      throw new AdminOperationRetryError('A nova tentativa não foi registrada no histórico.', 500);
+    }
+    this.db.prepare(`
+      UPDATE admin_operation_history
+      SET can_retry = 0
+      WHERE id = ? AND kind = 'import'
+    `).run(parentOperationId);
+    return childOperationId;
   }
 
   list(filters: HistoryFilters = {}) {
@@ -362,7 +609,8 @@ export class AdminOperationHistoryStore {
     const rows = this.db.prepare(`
       SELECT id, kind, status, label, created_at, started_at, finished_at,
              scan_trigger, import_source_type, import_provider, counts_json,
-             error_message, error_action, can_retry
+             error_message, error_action, can_retry,
+             import_retry_of_id, import_root_id, import_attempt, import_failure_disposition
       FROM admin_operation_history
       ${where}
       ORDER BY created_at DESC, id DESC
@@ -386,9 +634,27 @@ export class AdminOperationHistoryStore {
           finished_at = ?,
           error_message = ?,
           error_action = ?,
-          can_retry = 0
+          can_retry = 0,
+          import_failure_disposition = CASE WHEN kind = 'import' THEN 'none' ELSE import_failure_disposition END
       WHERE status IN ('pending', 'running')
     `).run(finishedAt, INTERRUPTED_MESSAGE, INTERRUPTED_ACTION);
+  }
+
+  private recoverOrphanRetryClaims() {
+    this.db.prepare(`
+      UPDATE admin_operation_history
+      SET can_retry = 1
+      WHERE kind = 'import'
+        AND status = 'failed'
+        AND can_retry = 0
+        AND import_failure_disposition = 'retryable'
+        AND import_source_type IN ('upload', 'url')
+        AND NOT EXISTS (
+          SELECT 1
+          FROM admin_operation_history AS child
+          WHERE child.import_retry_of_id = admin_operation_history.id
+        )
+    `).run();
   }
 
   private trimRetained() {

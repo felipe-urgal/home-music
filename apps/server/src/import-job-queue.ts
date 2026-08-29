@@ -6,6 +6,7 @@ import type {
   ImportMediaDecision,
   ImportMetadataPreview
 } from '@home-music/shared';
+import type { ImportJobRetryLineage, ImportJobWithRetry } from './import-retry.js';
 
 const TERMINAL_STATUSES = new Set<ImportJobStatus>(['completed', 'failed', 'cancelled']);
 const ALLOWED_TRANSITIONS: Record<ImportJobStatus, readonly ImportJobStatus[]> = {
@@ -15,12 +16,14 @@ const ALLOWED_TRANSITIONS: Record<ImportJobStatus, readonly ImportJobStatus[]> =
   failed: [],
   cancelled: []
 };
+const MAX_RETRY_JOB_ID_LENGTH = 128;
+const MAX_RETRY_ATTEMPTS = 1_000;
 
 type ImportJobQueueOptions = {
   now?: () => Date;
   createId?: () => string;
   maxRetainedJobs?: number;
-  onChange?: (job: ImportJob) => void;
+  onChange?: (job: ImportJobWithRetry) => void;
 };
 
 function copyDecision(decision: ImportMediaDecision | null): ImportMediaDecision | null {
@@ -49,12 +52,17 @@ function copyMetadataPreview(preview: ImportMetadataPreview | null): ImportMetad
   };
 }
 
-function copyJob(job: ImportJob): ImportJob {
+function copyRetry(retry: ImportJobRetryLineage | null): ImportJobRetryLineage | null {
+  return retry ? { ...retry } : null;
+}
+
+function copyJob(job: ImportJobWithRetry): ImportJobWithRetry {
   return {
     ...job,
     source: { ...job.source },
     mediaDecision: copyDecision(job.mediaDecision),
-    metadataPreview: copyMetadataPreview(job.metadataPreview)
+    metadataPreview: copyMetadataPreview(job.metadataPreview),
+    retry: copyRetry(job.retry)
   };
 }
 
@@ -67,12 +75,30 @@ function normalizeSource(source: ImportJobSource): ImportJobSource {
   return { type: source.type, provider: null };
 }
 
+function normalizeRetry(retry: ImportJobRetryLineage | null | undefined): ImportJobRetryLineage | null {
+  if (!retry) return null;
+  const parentJobId = retry.parentJobId.trim();
+  const rootJobId = retry.rootJobId.trim();
+  if (
+    !parentJobId
+    || !rootJobId
+    || parentJobId.length > MAX_RETRY_JOB_ID_LENGTH
+    || rootJobId.length > MAX_RETRY_JOB_ID_LENGTH
+    || !Number.isSafeInteger(retry.attempt)
+    || retry.attempt < 2
+    || retry.attempt > MAX_RETRY_ATTEMPTS
+  ) {
+    throw new Error('Vínculo de retry de importação inválido.');
+  }
+  return { parentJobId, rootJobId, attempt: retry.attempt };
+}
+
 export class ImportJobQueue {
-  private readonly jobs: ImportJob[] = [];
+  private readonly jobs: ImportJobWithRetry[] = [];
   private readonly now: () => Date;
   private readonly createId: () => string;
   private readonly maxRetainedJobs: number;
-  private readonly onChange?: (job: ImportJob) => void;
+  private readonly onChange?: (job: ImportJobWithRetry) => void;
 
   constructor(options: ImportJobQueueOptions = {}) {
     this.now = options.now ?? (() => new Date());
@@ -81,12 +107,12 @@ export class ImportJobQueue {
     this.onChange = options.onChange;
   }
 
-  enqueue(source: ImportJobSource, label: string) {
+  enqueue(source: ImportJobSource, label: string, retry?: ImportJobRetryLineage | null) {
     const cleanLabel = label.trim().slice(0, 240);
     if (!cleanLabel) throw new Error('Descrição da importação obrigatória.');
 
     const timestamp = this.now().toISOString();
-    const job: ImportJob = {
+    const job: ImportJobWithRetry = {
       id: this.createId(),
       source: normalizeSource(source),
       label: cleanLabel,
@@ -97,7 +123,8 @@ export class ImportJobQueue {
       finishedAt: null,
       error: null,
       mediaDecision: null,
-      metadataPreview: null
+      metadataPreview: null,
+      retry: normalizeRetry(retry)
     };
 
     this.jobs.push(job);
@@ -161,7 +188,7 @@ export class ImportJobQueue {
     return [...this.jobs].reverse().map(copyJob);
   }
 
-  private notify(job: ImportJob) {
+  private notify(job: ImportJobWithRetry) {
     this.onChange?.(copyJob(job));
   }
 

@@ -2,6 +2,7 @@ import path from 'node:path';
 import type { Readable } from 'node:stream';
 import type { ImportJob } from '@home-music/shared';
 import type { ImportJobQueue } from './import-job-queue.js';
+import type { ImportJobRetryLineage } from './import-retry.js';
 import type { ImportStagingManager } from './import-staging.js';
 
 export const IMPORT_UPLOAD_EXTENSIONS = [
@@ -122,10 +123,14 @@ export class ImportUploadManager {
     };
   }
 
-  async start(fileNameInput: unknown, sizeInput: unknown): Promise<ImportUploadStart> {
+  async start(
+    fileNameInput: unknown,
+    sizeInput: unknown,
+    retry: ImportJobRetryLineage | null = null
+  ): Promise<ImportUploadStart> {
     const fileName = cleanFileName(fileNameInput);
     const declaredSize = cleanDeclaredSize(sizeInput, this.maxBytes);
-    const job = this.queue.enqueue({ type: 'upload', provider: null }, fileName);
+    const job = this.queue.enqueue({ type: 'upload', provider: null }, fileName, retry);
 
     try {
       await this.staging.createJob(job.id);
