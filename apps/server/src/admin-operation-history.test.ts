@@ -192,7 +192,7 @@ test('classifica falha definitiva de conteúdo e não oferece retry', async () =
   }
 });
 
-test('persiste lineage entre tentativas e bloqueia retry repetido do mesmo pai', async () => {
+test('persiste lineage, recupera claim órfão no restart e mantém pai com filho bloqueado', async () => {
   const dir = await tempDatabase();
   const databasePath = path.join(dir, 'home-music.db');
   try {
@@ -253,11 +253,13 @@ test('persiste lineage entre tentativas e bloqueia retry repetido do mesmo pai',
     });
     const claimedChild = store.list({ kind: 'import' }).find(item => item.id === 'import-child');
     assert.equal(claimedChild?.canRetry, false);
-    assert.equal(store.releaseImportRetry(third), true);
     store.close();
 
     const reopened = new AdminOperationHistoryStore(databasePath);
-    const reopenedChild = reopened.list({ kind: 'import' }).find(item => item.id === 'import-child');
+    const reopenedItems = reopened.list({ kind: 'import' });
+    const reopenedRoot = reopenedItems.find(item => item.id === 'import-root');
+    const reopenedChild = reopenedItems.find(item => item.id === 'import-child');
+    assert.equal(reopenedRoot?.canRetry, false);
     assert.equal(reopenedChild?.canRetry, true);
     assert.deepEqual(reopenedChild?.importRetry, {
       attempt: 2,
