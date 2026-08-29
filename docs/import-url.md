@@ -42,7 +42,7 @@ O servidor valida `Content-Length` quando disponível e mantém um contador inde
 
 ## Content-Type e arquivo final
 
-Antes de aceitar o corpo, o servidor exige um `Content-Type` de áudio conhecido ou `application/octet-stream`. Depois da gravação, o payload é inspecionado no próprio staging com `music-metadata`.
+Quando o servidor remoto informa `Content-Type`, o valor precisa ser um tipo de áudio conhecido ou `application/octet-stream`; tipos explicitamente incompatíveis, como `text/html`, são recusados antes da gravação. Se o header estiver ausente, o download pode prosseguir, mas o payload continua sujeito à inspeção obrigatória pelos bytes reais no staging com `music-metadata`.
 
 Essa inspeção é deliberadamente diferente da validação definitiva do pipeline: ela não gera nem consome o token de promoção do staging. A validação profunda/normalização e a promoção para a biblioteca continuam isoladas nas próximas tarefas da Fase 9.
 
