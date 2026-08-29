@@ -6,9 +6,11 @@ import test from 'node:test';
 import type { ImportJob } from '@home-music/shared';
 import {
   AdminOperationHistoryStore,
+  classifyImportFailure,
   sanitizeOperationError,
   sanitizeOperationLabel
 } from './admin-operation-history.js';
+import type { ImportJobWithRetry } from './import-retry.js';
 
 function tempDatabase() {
   return mkdtemp(path.join(os.tmpdir(), 'home-music-operation-history-'));
@@ -86,6 +88,12 @@ test('persiste scans/importações concluídos com contagens, duração e filtro
       removed: null,
       unchanged: null
     });
+    assert.deepEqual(imports[0].importRetry, {
+      attempt: 1,
+      parentOperationId: null,
+      rootOperationId: 'import-job-1',
+      failureDisposition: 'none'
+    });
     reopened.close();
   } finally {
     await rm(dir, { recursive: true, force: true });
@@ -115,13 +123,15 @@ test('restart encerra operações pendentes/em andamento como interrompidas', as
       assert.match(item.error?.action ?? '', /inicie a operação novamente/i);
       assert.equal(item.canRetry, false);
     }
+    const interruptedImport = interrupted.find(item => item.kind === 'import');
+    assert.equal(interruptedImport?.importRetry?.failureDisposition, 'none');
     reopened.close();
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
 });
 
-test('upsert de importação acompanha a fila e sanitiza erro sensível', async () => {
+test('upsert de importação acompanha a fila, classifica retry e sanitiza erro sensível', async () => {
   const dir = await tempDatabase();
   const databasePath = path.join(dir, 'home-music.db');
   try {
@@ -143,12 +153,116 @@ test('upsert de importação acompanha a fila e sanitiza erro sensível', async 
     const [item] = store.list({ kind: 'import' });
     assert.equal(item.status, 'failed');
     assert.equal(item.durationMs, 3_000);
-    assert.equal(item.canRetry, false);
+    assert.equal(item.canRetry, true);
+    assert.equal(item.importRetry?.failureDisposition, 'retryable');
     assert.ok(item.error);
     assert.doesNotMatch(item.error!.message, /srv\/music|abc123|supersecreto|host\.test|xyz/i);
     assert.match(item.error!.message, /\[caminho removido\]|\[redigido\]|\[URL removida\]/);
     assert.match(item.error!.action, /tente novamente|logs/i);
     store.close();
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('classifica falha definitiva de conteúdo e não oferece retry', async () => {
+  const dir = await tempDatabase();
+  const databasePath = path.join(dir, 'home-music.db');
+  try {
+    const failed = importJob({
+      source: { type: 'upload', provider: null },
+      status: 'failed',
+      error: 'O conteúdo recebido não foi reconhecido como áudio suportado.',
+      finishedAt: '2026-08-28T12:01:05.000Z'
+    });
+    assert.equal(classifyImportFailure(failed), 'definitive');
+
+    const store = new AdminOperationHistoryStore(databasePath);
+    store.recordImport(failed);
+    const [item] = store.list({ kind: 'import' });
+    assert.equal(item.canRetry, false);
+    assert.equal(item.importRetry?.failureDisposition, 'definitive');
+    assert.throws(
+      () => store.prepareImportRetry(item.id),
+      /não possui uma nova tentativa segura/i
+    );
+    store.close();
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('persiste lineage entre tentativas e bloqueia retry repetido do mesmo pai', async () => {
+  const dir = await tempDatabase();
+  const databasePath = path.join(dir, 'home-music.db');
+  try {
+    const store = new AdminOperationHistoryStore(databasePath);
+    store.recordImport(importJob({
+      id: 'root',
+      source: { type: 'upload', provider: null },
+      label: 'faixa.flac',
+      status: 'failed',
+      finishedAt: '2026-08-28T12:01:05.000Z',
+      error: 'Falha durante o recebimento do arquivo.'
+    }));
+
+    const context = store.prepareImportRetry('import-root');
+    assert.deepEqual(context.lineage, {
+      parentJobId: 'root',
+      rootJobId: 'root',
+      attempt: 2
+    });
+
+    const child: ImportJobWithRetry = {
+      ...importJob({
+        id: 'child',
+        source: { type: 'upload', provider: null },
+        label: 'faixa.flac'
+      }),
+      retry: context.lineage
+    };
+    store.recordImport(child);
+
+    assert.throws(
+      () => store.prepareImportRetry('import-root'),
+      /não possui uma nova tentativa segura|já originou/i
+    );
+    const items = store.list({ kind: 'import' });
+    const parentItem = items.find(item => item.id === 'import-root');
+    const childItem = items.find(item => item.id === 'import-child');
+    assert.equal(parentItem?.canRetry, false);
+    assert.deepEqual(childItem?.importRetry, {
+      attempt: 2,
+      parentOperationId: 'import-root',
+      rootOperationId: 'import-root',
+      failureDisposition: 'none'
+    });
+
+    store.recordImport({
+      ...child,
+      status: 'failed',
+      finishedAt: '2026-08-28T12:02:05.000Z',
+      updatedAt: '2026-08-28T12:02:05.000Z',
+      error: 'Tempo limite excedido ao baixar a URL.'
+    });
+    const third = store.prepareImportRetry('import-child');
+    assert.deepEqual(third.lineage, {
+      parentJobId: 'child',
+      rootJobId: 'root',
+      attempt: 3
+    });
+    store.close();
+
+    const reopened = new AdminOperationHistoryStore(databasePath);
+    const reopenedChild = reopened.list({ kind: 'import' }).find(item => item.id === 'import-child');
+    assert.equal(reopenedChild?.canRetry, true);
+    assert.deepEqual(reopenedChild?.importRetry, {
+      attempt: 2,
+      parentOperationId: 'import-root',
+      rootOperationId: 'import-root',
+      failureDisposition: 'retryable'
+    });
+    reopened.close();
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
