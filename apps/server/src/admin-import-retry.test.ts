@@ -119,6 +119,40 @@ test('retry de upload cria novo job/staging, vincula tentativa e bloqueia repeti
   }
 });
 
+test('entrada inválida libera o claim e permite corrigir a nova fonte', async () => {
+  const item = await fixture();
+  try {
+    const original = item.queue.enqueue({ type: 'upload', provider: null }, 'faixa.flac');
+    item.queue.transition(original.id, 'failed', 'Falha durante o recebimento do arquivo.');
+
+    const invalid = await item.app.inject({
+      method: 'POST',
+      url: `/api/admin/operations/import-${original.id}/retry`,
+      headers: { 'x-home-music-request': '1' },
+      payload: { fileName: 'arquivo.exe', size: 5 }
+    });
+    assert.equal(invalid.statusCode, 400);
+    const afterInvalid = item.history.list({ kind: 'import' }).find(operation => operation.id === `import-${original.id}`);
+    assert.equal(afterInvalid?.canRetry, true);
+    assert.equal(item.queue.list().length, 1);
+
+    const valid = await item.app.inject({
+      method: 'POST',
+      url: `/api/admin/operations/import-${original.id}/retry`,
+      headers: { 'x-home-music-request': '1' },
+      payload: { fileName: 'faixa.flac', size: 5 }
+    });
+    assert.equal(valid.statusCode, 201);
+    assert.equal(item.queue.list().length, 2);
+    const parent = item.history.list({ kind: 'import' }).find(operation => operation.id === `import-${original.id}`);
+    assert.equal(parent?.canRetry, false);
+  } finally {
+    await item.app.close();
+    item.history.close();
+    await rm(item.root, { recursive: true, force: true });
+  }
+});
+
 test('retry de URL exige nova URL, vincula a tentativa e não persiste a URL no histórico', async () => {
   const item = await fixture();
   try {
