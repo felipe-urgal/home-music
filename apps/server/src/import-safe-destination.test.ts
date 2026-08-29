@@ -98,6 +98,10 @@ test('aguarda atualização da biblioteca antes de marcar a importação como co
     const hookGate = new Promise<void>(resolve => {
       releaseHook = resolve;
     });
+    let signalHookStarted!: () => void;
+    const hookStarted = new Promise<void>(resolve => {
+      signalHookStarted = resolve;
+    });
     let observedStatus: string | null = null;
     const manager = new ImportSafeDestinationManager({
       queue: item.queue,
@@ -107,13 +111,14 @@ test('aguarda atualização da biblioteca antes de marcar a importação como co
       afterPromote: async promoted => {
         observedStatus = item.queue.get(item.job.id)?.status ?? null;
         assert.equal(await readFile(promoted.absolutePath, 'utf8'), 'audio-validado');
+        signalHookStarted();
         await hookGate;
       },
       musicDir: item.musicDir
     });
 
     const promotion = manager.promote(item.job.id);
-    await new Promise(resolve => setImmediate(resolve));
+    await hookStarted;
     assert.equal(observedStatus, 'processing');
     assert.equal(item.queue.get(item.job.id)?.status, 'processing');
 
