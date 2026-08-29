@@ -12,6 +12,7 @@ import {
   extractAdminImportMetadata,
   updateAdminImportMetadata
 } from '../admin-import-client';
+import { AdminImportDuplicateCheckPanel } from './AdminImportDuplicateCheck';
 
 type AdminImportMetadataPreviewPanelProps = {
   jobs: ImportJob[];
@@ -229,6 +230,8 @@ function MetadataPreviewCard({
         </button>
       </div>
 
+      <AdminImportDuplicateCheckPanel job={job} />
+
       {error && <div className="my-account-message is-error admin-import-message" role="alert">{error}</div>}
     </article>
   );
@@ -266,7 +269,7 @@ export function AdminImportMetadataPreviewPanel({
         <div>
           <span className="my-account-link-group__label">Preview</span>
           <strong id="admin-import-metadata-title">Revisar metadata antes de importar</strong>
-          <small>Leia o arquivo validado, compare sugestões externas e ajuste somente o preview. Nada é gravado na biblioteca nesta etapa.</small>
+          <small>Leia o arquivo validado, compare sugestões externas e ajuste somente o preview. Depois, verifique possíveis duplicatas antes da promoção.</small>
         </div>
         <span className="admin-import-metadata__counter">
           <CheckCircle2 /> {ready.length} pronta{ready.length === 1 ? '' : 's'}
