@@ -14,6 +14,8 @@ type AdminExternalProviderPanelProps = {
   onRefresh: () => Promise<unknown> | unknown;
 };
 
+const TERMINAL_STATUSES = new Set<ImportJob['status']>(['completed', 'failed', 'cancelled']);
+
 function validHttpUrl(value: string) {
   try {
     const parsed = new URL(value.trim());
@@ -21,6 +23,20 @@ function validHttpUrl(value: string) {
   } catch {
     return false;
   }
+}
+
+function activeJobMessage(job: ImportJob) {
+  if (job.status === 'completed') return 'Importação concluída e adicionada à biblioteca.';
+  if (job.status === 'failed' || job.status === 'cancelled') return job.error || 'Operação encerrada.';
+  if (job.status === 'processing') {
+    return job.mediaDecision
+      ? 'Validação e promoção automáticas em andamento.'
+      : 'Adquirindo a melhor fonte de áudio pelo proxy de egress isolado.';
+  }
+  if (job.metadataPreview) {
+    return 'Verificações automáticas em andamento ou aguardando uma revisão necessária.';
+  }
+  return 'Mídia recebida. A validação automática será iniciada pelo servidor.';
 }
 
 export function AdminExternalProviderPanel({
@@ -53,12 +69,14 @@ export function AdminExternalProviderPanel({
   }, [available, providerId]);
 
   const activeJob = activeJobId ? jobs.find(job => job.id === activeJobId) ?? null : null;
+  const activeJobRunning = Boolean(activeJob && !TERMINAL_STATUSES.has(activeJob.status));
+  const canCancelAcquisition = activeJob?.status === 'processing' && !activeJob.mediaDecision;
 
   useEffect(() => {
-    if (!activeJobId || activeJob?.status !== 'processing') return;
+    if (!activeJobId || !activeJobRunning) return;
     const timer = window.setInterval(() => { void onRefresh(); }, 1000);
     return () => window.clearInterval(timer);
-  }, [activeJob?.status, activeJobId, onRefresh]);
+  }, [activeJobId, activeJobRunning, onRefresh]);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -86,7 +104,7 @@ export function AdminExternalProviderPanel({
   };
 
   const cancel = async () => {
-    if (!activeJobId) return;
+    if (!activeJobId || !canCancelAcquisition) return;
     setCancelling(true);
     setError(null);
     try {
@@ -126,7 +144,7 @@ export function AdminExternalProviderPanel({
               <span>Provider</span>
               <select
                 value={providerId}
-                disabled={submitting || Boolean(activeJob?.status === 'processing')}
+                disabled={submitting || activeJobRunning}
                 onChange={event => setProviderId(event.target.value)}
               >
                 {available.map(provider => <option value={provider.id} key={provider.id}>{provider.label}</option>)}
@@ -142,17 +160,17 @@ export function AdminExternalProviderPanel({
                 spellCheck={false}
                 placeholder="https://music.youtube.com/watch?v=..."
                 value={url}
-                disabled={submitting || Boolean(activeJob?.status === 'processing')}
+                disabled={submitting || activeJobRunning}
                 onChange={event => { setUrl(event.target.value); if (error) setError(null); }}
               />
             </label>
-            <button type="submit" disabled={submitting || !providerId || !url.trim() || activeJob?.status === 'processing'}>
+            <button type="submit" disabled={submitting || !providerId || !url.trim() || activeJobRunning}>
               {submitting ? <LoaderCircle className="is-spinning" /> : <Boxes />}
               Importar
             </button>
           </div>
           <small className="admin-import-provider__policy">
-            <ShieldCheck /> Links do YouTube e YouTube Music devem ser colados aqui, não em “URL direta”. Use apenas conteúdo que você tenha direito de baixar.
+            <ShieldCheck /> Links do YouTube e YouTube Music devem ser colados aqui, não em “URL direta”. A importação normal continua automaticamente; o sistema só pede revisão quando necessário. Use apenas conteúdo que você tenha direito de baixar.
           </small>
         </form>
       ) : (
@@ -164,17 +182,13 @@ export function AdminExternalProviderPanel({
       {activeJob && (
         <article className={`admin-import-url-status is-${activeJob.status}`} aria-live="polite">
           <span className="admin-import-job__status">
-            {activeJob.status === 'processing' ? <LoaderCircle className="is-spinning" /> : <Boxes />}
+            {activeJobRunning ? <LoaderCircle className="is-spinning" /> : <Boxes />}
           </span>
           <div>
             <strong>{activeJob.label}</strong>
-            <small>{activeJob.status === 'processing'
-              ? 'Adquirindo a melhor fonte de áudio pelo proxy de egress isolado.'
-              : activeJob.status === 'pending'
-                ? 'Mídia recebida no staging. Aguardando validação técnica.'
-                : activeJob.error || 'Operação encerrada.'}</small>
+            <small>{activeJobMessage(activeJob)}</small>
           </div>
-          {['processing', 'pending'].includes(activeJob.status) && (
+          {canCancelAcquisition && (
             <button type="button" disabled={cancelling} onClick={() => void cancel()}>
               {cancelling ? <LoaderCircle className="is-spinning" /> : <X />}
               Cancelar
