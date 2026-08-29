@@ -1,8 +1,8 @@
 # FFmpeg e transcoding no Home Music
 
-O Home Music usa FFmpeg como dependência **opcional** para transcoding do player e como ferramenta de conversão quando uma importação precisa mudar de formato. O streaming original continua sendo o caminho padrão e permanece servido diretamente com HTTP Range.
+O Home Music usa FFmpeg como dependência **opcional** para transcoding do player e para processamento controlado de importações. O streaming original continua sendo o caminho padrão e permanece servido diretamente com HTTP Range.
 
-A validação técnica de uma importação usa **FFprobe** antes de qualquer promoção para a biblioteca. Se a mídia já atende ao perfil escolhido, o arquivo é preservado sem transcode.
+A validação técnica de uma importação usa **FFprobe** antes de qualquer promoção para a biblioteca. Se a mídia já atende ao perfil escolhido, o arquivo é preservado. Quando só é necessário remover vídeo, selecionar uma faixa de áudio ou trocar o container, o servidor prefere **remux/stream copy sem reencode**. Transcoding só acontece quando o perfil realmente exige alterar o áudio.
 
 ## Instalação no Ubuntu
 
@@ -39,7 +39,7 @@ HOME_MUSIC_FFPROBE_PATH=/usr/bin/ffprobe
 
 `HOME_MUSIC_FFPROBE_PATH` é opcional. Quando ele não está definido e `HOME_MUSIC_FFMPEG_PATH` contém um caminho completo, o servidor procura `ffprobe` no mesmo diretório do FFmpeg. Caso contrário, usa `ffprobe` do `PATH`.
 
-O probe de disponibilidade do FFmpeg usa `execFile`, sem shell, somente com o argumento fixo `-version`. O transcoding do player e a conversão de importações usam `spawn`, também sem shell e com argumentos definidos pelo servidor.
+O probe de disponibilidade do FFmpeg usa `execFile`, sem shell, somente com o argumento fixo `-version`. O transcoding do player e o processamento de importações usam `spawn`, também sem shell e com argumentos definidos pelo servidor.
 
 O cache de transcoding do player pode ser limitado com:
 
@@ -53,9 +53,11 @@ O padrão é 512 MB e os valores aceitos vão de 64 a 8192 MB. Os arquivos ficam
 
 A tela **Administração → Importar mídia** oferece três perfis de saída:
 
-- **Original**: padrão. Preserva o arquivo quando há uma única faixa de áudio, nenhum vídeo e o container/codec são reconhecidos. Não há transcode desnecessário;
-- **Economizar espaço**: preserva uma origem já econômica; caso contrário converte somente a melhor faixa de áudio para M4A/AAC a 96 kbps;
-- **Compatibilidade máxima**: preserva uma origem que já seja M4A/MP4 com AAC compatível; caso contrário converte para M4A/AAC a 160 kbps.
+- **Original**: padrão. Preserva o arquivo quando ele já contém uma única faixa de áudio segura. Se houver vídeo, múltiplas faixas ou um container inadequado, preserva o codec/qualidade via remux quando existe um container seguro para aquele codec; só reencoda como último recurso;
+- **Economizar espaço**: preserva uma origem já econômica. Se ela só precisar de limpeza de container/streams, usa remux sem reencode. Quando a origem ainda é maior do que o perfil econômico, converte a melhor faixa de áudio para M4A/AAC a 96 kbps;
+- **Compatibilidade máxima**: preserva M4A/MP4 com AAC compatível. AAC compatível em outro container é apenas reempacotado para M4A sem reencode; os demais casos são convertidos para M4A/AAC a 160 kbps.
+
+A decisão técnica registrada no job usa três ações explícitas: `preserve`, `remux` e `transcode`. Isso torna auditável se houve ou não perda geracional de qualidade.
 
 O fluxo técnico é deliberadamente separado da promoção para `MUSIC_DIR`:
 
@@ -63,10 +65,12 @@ O fluxo técnico é deliberadamente separado da promoção para `MUSIC_DIR`:
 2. o servidor abre o payload já validado pelo staging e entrega ao FFprobe somente um descritor de arquivo herdado;
 3. FFprobe valida container, codec, duração e streams com protocolos e demuxers limitados;
 4. o servidor escolhe deterministicamente a melhor faixa de áudio quando há mais de uma;
-5. a decisão `preserve` ou `transcode` é registrada no job;
-6. se houver conversão, FFmpeg grava uma saída temporária dentro do mesmo workspace, sem metadados, capítulos, vídeo, legendas ou streams de dados;
-7. a saída substitui o payload do staging e é examinada novamente pelo FFprobe;
-8. o servidor compara a duração antes/depois e só então produz o token final de validação do staging.
+5. a decisão `preserve`, `remux` ou `transcode` é registrada no job;
+6. em `remux`, FFmpeg usa `stream copy` para preservar os bytes codificados do áudio e somente limpar/trocar o container;
+7. em `transcode`, FFmpeg grava AAC no bitrate do perfil solicitado;
+8. qualquer saída processada é gravada temporariamente dentro do mesmo workspace, sem metadados, capítulos, vídeo, legendas ou streams de dados;
+9. a saída substitui o payload do staging e é examinada novamente pelo FFprobe;
+10. o servidor verifica codec/container e compara a duração antes/depois; só então produz o token final de validação do staging.
 
 Uma execução bem-sucedida **não promove a música para a biblioteca**. A promoção definitiva pertence às etapas seguintes do pipeline de importação.
 
@@ -127,7 +131,7 @@ FFmpeg **não participa do readiness**. Se o binário estiver ausente, demorar d
 - o streaming original continua funcionando normalmente;
 - o servidor registra um aviso e expõe o motivo no `/api/health` autenticado;
 - os perfis do player que precisam de transcoding ficam indisponíveis no backend;
-- uma importação que precise de conversão falha de forma segura e permanece fora da biblioteca.
+- uma importação que precise de remux ou transcode falha de forma segura e permanece fora da biblioteca.
 
 A ausência de FFprobe afeta somente a etapa de validação técnica das importações. Ela não altera o readiness nem o streaming já existente.
 
