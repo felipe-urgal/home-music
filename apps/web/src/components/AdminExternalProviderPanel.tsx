@@ -159,7 +159,7 @@ export function AdminExternalProviderPanel({
                 <span>Provider</span>
                 <select
                   value={providerId}
-                  disabled={submitting || acquisitionRunning}
+                  disabled={submitting || activeJobRunning}
                   onChange={event => setProviderId(event.target.value)}
                 >
                   {available.map(provider => <option value={provider.id} key={provider.id}>{provider.label}</option>)}
@@ -177,11 +177,11 @@ export function AdminExternalProviderPanel({
                 spellCheck={false}
                 placeholder="https://music.youtube.com/watch?v=..."
                 value={url}
-                disabled={submitting || acquisitionRunning}
+                disabled={submitting || activeJobRunning}
                 onChange={event => { setUrl(event.target.value); if (error) setError(null); }}
               />
             </label>
-            <button className={compact ? 'is-primary' : undefined} type="submit" disabled={submitting || !providerId || !url.trim() || acquisitionRunning}>
+            <button className={compact ? 'is-primary' : undefined} type="submit" disabled={submitting || !providerId || !url.trim() || activeJobRunning}>
               {submitting || pipelineRunning ? <LoaderCircle className="is-spinning" /> : compact ? <Link2 /> : <Boxes />}
               {compact ? 'Analisar link' : 'Importar'}
             </button>
