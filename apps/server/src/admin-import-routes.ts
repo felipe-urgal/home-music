@@ -30,6 +30,10 @@ import {
   ImportMetadataPreviewManager,
   type ImportProviderMetadataHint
 } from './import-metadata-preview.js';
+import {
+  ImportDuplicateDetectionError,
+  ImportDuplicateDetectionManager
+} from './import-duplicate-detection.js';
 
 const defaultImportStagingPath = fileURLToPath(new URL('../../../data/import-staging/', import.meta.url));
 
@@ -38,6 +42,7 @@ type RegisterAdminImportRoutesOptions = {
   urls?: ImportUrlManager;
   mediaValidation?: ImportMediaValidationManager;
   metadataPreview?: ImportMetadataPreviewManager;
+  duplicateDetection?: ImportDuplicateDetectionManager;
   providerMetadata?: (jobId: string) => ImportProviderMetadataHint | null;
 };
 
@@ -47,6 +52,7 @@ function sendImportError(reply: FastifyReply, error: unknown) {
     || error instanceof ImportUrlError
     || error instanceof ImportMediaValidationError
     || error instanceof ImportMetadataPreviewError
+    || error instanceof ImportDuplicateDetectionError
   ) {
     return reply.code(error.statusCode).send({ error: error.message });
   }
@@ -164,6 +170,11 @@ export function registerAdminImportRoutes(
     validatedLookup: jobId => mediaValidation.getValidated(jobId),
     providerMetadata: options.providerMetadata
   });
+  const duplicateDetection = options.duplicateDetection ?? new ImportDuplicateDetectionManager({
+    queue,
+    staging: staging(),
+    validatedLookup: jobId => mediaValidation.getValidated(jobId)
+  });
 
   if (!app.hasContentTypeParser('application/octet-stream')) {
     app.addContentTypeParser('application/octet-stream', (_request, payload, done) => {
@@ -222,6 +233,7 @@ export function registerAdminImportRoutes(
       try {
         const job = await uploads.cancel(request.params.id);
         metadataPreview.forget(request.params.id);
+        duplicateDetection.forget(request.params.id);
         return { job };
       } catch (error) {
         return sendImportError(reply, error);
@@ -249,6 +261,7 @@ export function registerAdminImportRoutes(
       try {
         const job = await urls.cancel(request.params.id);
         metadataPreview.forget(request.params.id);
+        duplicateDetection.forget(request.params.id);
         return { job };
       } catch (error) {
         return sendImportError(reply, error);
@@ -264,6 +277,10 @@ export function registerAdminImportRoutes(
         await metadataPreview.captureSource(request.params.id).catch(error => {
           app.log.warn({ err: error, importJobId: request.params.id }, 'Não foi possível antecipar metadata da importação.');
         });
+        await duplicateDetection.captureSource(request.params.id).catch(error => {
+          app.log.warn({ err: error, importJobId: request.params.id }, 'Não foi possível antecipar fingerprint da importação.');
+        });
+        duplicateDetection.forgetCheck(request.params.id);
         return await mediaValidation.validate(request.params.id, request.body?.profile);
       } catch (error) {
         return sendImportError(reply, error);
@@ -276,7 +293,9 @@ export function registerAdminImportRoutes(
     async (request, reply) => {
       reply.header('Cache-Control', 'no-store');
       try {
-        return await metadataPreview.extract(request.params.id);
+        const result = await metadataPreview.extract(request.params.id);
+        duplicateDetection.forgetCheck(request.params.id);
+        return result;
       } catch (error) {
         return sendImportError(reply, error);
       }
@@ -288,7 +307,9 @@ export function registerAdminImportRoutes(
     async (request, reply) => {
       reply.header('Cache-Control', 'no-store');
       try {
-        return metadataPreview.update(request.params.id, request.body);
+        const result = metadataPreview.update(request.params.id, request.body);
+        duplicateDetection.forgetCheck(request.params.id);
+        return result;
       } catch (error) {
         return sendImportError(reply, error);
       }
@@ -303,6 +324,38 @@ export function registerAdminImportRoutes(
       if (!cover) return reply.code(404).send({ error: 'Capa do preview não encontrada.' });
       reply.type(cover.contentType);
       return reply.send(cover.data);
+    }
+  );
+
+  app.get<{ Params: { id: string } }>(
+    '/api/admin/imports/:id/duplicates',
+    async (request, reply) => {
+      reply.header('Cache-Control', 'private, no-store');
+      return { check: duplicateDetection.get(request.params.id) };
+    }
+  );
+
+  app.post<{ Params: { id: string } }>(
+    '/api/admin/imports/:id/duplicates',
+    async (request, reply) => {
+      reply.header('Cache-Control', 'no-store');
+      try {
+        return { check: await duplicateDetection.detect(request.params.id) };
+      } catch (error) {
+        return sendImportError(reply, error);
+      }
+    }
+  );
+
+  app.post<{ Params: { id: string } }>(
+    '/api/admin/imports/:id/duplicates/review',
+    async (request, reply) => {
+      reply.header('Cache-Control', 'no-store');
+      try {
+        return { check: duplicateDetection.review(request.params.id) };
+      } catch (error) {
+        return sendImportError(reply, error);
+      }
     }
   );
 }

@@ -1,0 +1,210 @@
+.admin-import-duplicates {
+  display: grid;
+  gap: 9px;
+  padding: 10px;
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 10px;
+  background: rgba(10,17,23,.72);
+}
+
+.admin-import-duplicates.is-loading {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #75858f;
+  font-size: 9px;
+}
+
+.admin-import-duplicates.is-pending > div,
+.admin-import-duplicates__summary {
+  display: grid;
+  grid-template-columns: auto minmax(0,1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-import-duplicates.is-pending > div > svg,
+.admin-import-duplicates__summary > svg {
+  width: 17px;
+  height: 17px;
+  color: #7ca9c5;
+}
+
+.admin-import-duplicates.is-blocked {
+  border-color: rgba(200,82,82,.22);
+  background: rgba(137,42,42,.08);
+}
+
+.admin-import-duplicates.is-blocked .admin-import-duplicates__summary > svg {
+  color: #d07777;
+}
+
+.admin-import-duplicates.is-review,
+.admin-import-duplicates.is-notice {
+  border-color: rgba(190,143,54,.2);
+  background: rgba(190,143,54,.05);
+}
+
+.admin-import-duplicates.is-review .admin-import-duplicates__summary > svg,
+.admin-import-duplicates.is-notice .admin-import-duplicates__summary > svg {
+  color: #c5a15e;
+}
+
+.admin-import-duplicates.is-clear {
+  border-color: rgba(55,145,91,.16);
+  background: rgba(55,145,91,.05);
+}
+
+.admin-import-duplicates.is-clear .admin-import-duplicates__summary > svg {
+  color: #75b98f;
+}
+
+.admin-import-duplicates span {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.admin-import-duplicates strong {
+  color: #cdd9e0;
+  font-size: 9px;
+}
+
+.admin-import-duplicates small {
+  color: #75858f;
+  font-size: 8px;
+  line-height: 1.45;
+}
+
+.admin-import-duplicates button {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 9px;
+  border: 1px solid rgba(111,190,242,.22);
+  border-radius: 7px;
+  background: rgba(36,132,194,.1);
+  color: #afd8f1;
+  cursor: pointer;
+  font: inherit;
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.admin-import-duplicates button:hover:not(:disabled) {
+  background: rgba(36,132,194,.18);
+}
+
+.admin-import-duplicates button:disabled {
+  cursor: default;
+  opacity: .5;
+}
+
+.admin-import-duplicates button svg {
+  width: 12px;
+  height: 12px;
+}
+
+.admin-import-duplicates__summary > button {
+  width: 30px;
+  padding: 0;
+  border-color: rgba(255,255,255,.08);
+  background: rgba(255,255,255,.035);
+  color: #8696a0;
+}
+
+.admin-import-duplicates__matches {
+  display: grid;
+  gap: 6px;
+}
+
+.admin-import-duplicates__matches article {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 7px 8px;
+  border-radius: 8px;
+  background: rgba(0,0,0,.12);
+}
+
+.admin-import-duplicates__matches article > div:first-child {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.admin-import-duplicates__matches article strong,
+.admin-import-duplicates__matches article small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-import-duplicates__reasons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.admin-import-duplicates__reasons span {
+  display: inline-flex;
+  padding: 3px 5px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.045);
+  color: #8797a1;
+  font-size: 7px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.admin-import-duplicates__review {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 2px;
+}
+
+.admin-import-duplicates__review > span {
+  color: #9d8a67;
+  font-size: 8px;
+}
+
+.admin-import-duplicates__error {
+  color: #c98282 !important;
+}
+
+@media (max-width: 620px) {
+  .admin-import-duplicates.is-pending > div,
+  .admin-import-duplicates__summary,
+  .admin-import-duplicates__matches article {
+    grid-template-columns: minmax(0,1fr);
+  }
+
+  .admin-import-duplicates.is-pending > div > svg,
+  .admin-import-duplicates__summary > svg {
+    display: none;
+  }
+
+  .admin-import-duplicates__summary > button {
+    width: 100%;
+  }
+
+  .admin-import-duplicates__reasons {
+    justify-content: flex-start;
+  }
+
+  .admin-import-duplicates__review {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-import-duplicates__review button,
+  .admin-import-duplicates.is-pending > button {
+    width: 100%;
+  }
+}
