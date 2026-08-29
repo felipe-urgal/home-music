@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import type { ImportJob } from '@home-music/shared';
-import type {
-  ExternalProviderImportManager,
-  ExternalProviderRequest
+import {
+  ExternalProviderError,
+  type ExternalProviderImportManager,
+  type ExternalProviderRequest
 } from './external-provider.js';
 import type {
   ImportAutomaticFlowManager,
@@ -10,6 +11,7 @@ import type {
 } from './import-automatic-flow.js';
 import type { ImportJobQueue } from './import-job-queue.js';
 import {
+  ImportSafeDestinationError,
   normalizeImportFolderPath,
   type ImportSafeDestinationManager
 } from './import-safe-destination.js';
@@ -250,8 +252,13 @@ function safeDuration(value: unknown) {
 }
 
 function publicError(error: unknown) {
-  if (error instanceof ExternalProviderBatchError) return error.message;
-  if (error instanceof Error) return error.message.trim().slice(0, 500) || 'Falha no item do lote.';
+  if (
+    error instanceof ExternalProviderBatchError
+    || error instanceof ExternalProviderError
+    || error instanceof ImportSafeDestinationError
+  ) {
+    return error.message;
+  }
   return 'Falha no item do lote.';
 }
 
@@ -387,6 +394,7 @@ export class ExternalProviderBatchManager {
 
   get(batchId: string) {
     const batch = this.requireBatch(batchId);
+    if (batch.status === 'ready') this.assertFresh(batch);
     return snapshot(batch, this.limits);
   }
 
@@ -518,8 +526,12 @@ export class ExternalProviderBatchManager {
     return snapshot(batch, this.limits);
   }
 
-  stop() {
-    for (const [batchId] of this.sessions) void this.cancel(batchId);
+  async stop() {
+    const active = [...this.sessions.entries()];
+    await Promise.all(active.map(async ([batchId, session]) => {
+      await this.cancel(batchId).catch(() => undefined);
+      await session.settled.catch(() => undefined);
+    }));
   }
 
   private async run(batch: MutableBatch, session: BatchSession) {
