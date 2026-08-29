@@ -12,6 +12,7 @@ import { ImportStagingManager } from './import-staging.js';
 import { ImportUploadManager } from './import-upload.js';
 import { ImportUrlManager } from './import-url.js';
 import { ImportMediaValidationManager } from './import-media-validation.js';
+import { ImportMetadataPreviewManager } from './import-metadata-preview.js';
 import { SESSION_COOKIE_NAME, SessionManager } from './auth.js';
 import { installApiAuthPolicy } from './auth-policy.js';
 import type { AuthenticatedUserState } from './user-auth-store.js';
@@ -86,6 +87,19 @@ async function buildApp() {
     probeRunner: async () => validMp3Probe(),
     transformRunner: async () => { throw new Error('FFmpeg não esperado neste teste'); }
   });
+  const metadataPreview = new ImportMetadataPreviewManager({
+    queue,
+    staging,
+    validatedLookup: jobId => mediaValidation.getValidated(jobId),
+    metadataReader: async () => ({
+      title: 'Título capturado',
+      artist: 'Artista capturado',
+      album: 'Álbum capturado',
+      albumArtist: 'Artista capturado',
+      durationSeconds: 120,
+      cover: { data: Buffer.from('cover'), contentType: 'image/png' }
+    })
+  });
   const sessions = new SessionManager('admin', 'password-segura-2026');
   const users = new Map<string, AuthenticatedUserState>([
     ['user-1', { id: 'user-1', username: 'maria', role: 'user', passwordMustChange: false }],
@@ -97,7 +111,7 @@ async function buildApp() {
     sessions,
     users: { getEnabledUserById: userId => users.get(userId) ?? null }
   });
-  registerAdminImportRoutes(app, queue, { uploads, urls, mediaValidation });
+  registerAdminImportRoutes(app, queue, { uploads, urls, mediaValidation, metadataPreview });
   return { app, root, musicDir, stagingRoot, queue, sessions };
 }
 
@@ -136,6 +150,13 @@ test('importação administrativa exige admin e header de mutação', async () =
       payload: { profile: 'original' }
     });
     assert.equal(missingValidationHeader.statusCode, 403);
+
+    const missingPreviewHeader = await item.app.inject({
+      method: 'POST',
+      url: '/api/admin/imports/job-inexistente/metadata-preview',
+      headers: { cookie: cookie(adminToken) }
+    });
+    assert.equal(missingPreviewHeader.statusCode, 403);
 
     const list = await item.app.inject({
       method: 'GET',
@@ -189,6 +210,7 @@ test('rota recebe bytes no staging e nunca grava diretamente em MUSIC_DIR', asyn
     assert.equal(uploaded.json().receivedBytes, 4);
     assert.equal(uploaded.json().job.status, 'pending');
     assert.equal(uploaded.json().job.mediaDecision, null);
+    assert.equal(uploaded.json().job.metadataPreview, null);
     assert.equal((await readdir(item.musicDir)).length, 0);
     assert.equal((await readdir(item.stagingRoot)).length, 1);
   } finally {
@@ -241,6 +263,115 @@ test('rota valida mídia pendente, registra decisão no job e mantém MUSIC_DIR 
       headers: { cookie: cookie(adminToken) }
     });
     assert.equal(list.json().jobs[0].mediaDecision.profile, 'original');
+  } finally {
+    await item.app.close();
+    await rm(item.root, { recursive: true, force: true });
+  }
+});
+
+test('rota gera preview, permite ajuste reversível e serve somente capa embutida segura', async () => {
+  const item = await buildApp();
+  const adminToken = item.sessions.createSessionForUser('admin-1');
+  const headers = {
+    cookie: cookie(adminToken),
+    'x-home-music-request': '1'
+  };
+  try {
+    const started = await item.app.inject({
+      method: 'POST',
+      url: '/api/admin/imports/uploads',
+      headers,
+      payload: { fileName: 'faixa.mp3', size: 4 }
+    });
+    const jobId = started.json().job.id as string;
+    await item.app.inject({
+      method: 'PUT',
+      url: `/api/admin/imports/uploads/${jobId}`,
+      headers: { ...headers, 'content-type': 'application/octet-stream' },
+      payload: Buffer.from('abcd')
+    });
+    const validated = await item.app.inject({
+      method: 'POST',
+      url: `/api/admin/imports/${jobId}/validate`,
+      headers,
+      payload: { profile: 'original' }
+    });
+    assert.equal(validated.statusCode, 200);
+
+    const preview = await item.app.inject({
+      method: 'POST',
+      url: `/api/admin/imports/${jobId}/metadata-preview`,
+      headers
+    });
+    assert.equal(preview.statusCode, 200);
+    assert.equal(preview.json().preview.effective.title, 'Título capturado');
+    assert.equal(preview.json().preview.fieldStates.title, 'trusted');
+    assert.equal(preview.json().preview.cover.available, true);
+    assert.equal((await readdir(item.musicDir)).length, 0);
+
+    const patched = await item.app.inject({
+      method: 'PATCH',
+      url: `/api/admin/imports/${jobId}/metadata-preview`,
+      headers,
+      payload: { artist: 'Artista revisado' }
+    });
+    assert.equal(patched.statusCode, 200);
+    assert.equal(patched.json().preview.embedded.artist, 'Artista capturado');
+    assert.equal(patched.json().preview.effective.artist, 'Artista revisado');
+    assert.equal(patched.json().preview.fieldStates.artist, 'edited');
+
+    const cover = await item.app.inject({
+      method: 'GET',
+      url: `/api/admin/imports/${jobId}/cover`,
+      headers: { cookie: cookie(adminToken) }
+    });
+    assert.equal(cover.statusCode, 200);
+    assert.match(cover.headers['content-type'] ?? '', /^image\/png/);
+    assert.deepEqual(cover.rawPayload, Buffer.from('cover'));
+
+    const list = await item.app.inject({
+      method: 'GET',
+      url: '/api/admin/imports',
+      headers: { cookie: cookie(adminToken) }
+    });
+    assert.equal(list.json().jobs[0].metadataPreview.effective.artist, 'Artista revisado');
+    assert.equal((await readdir(item.musicDir)).length, 0);
+  } finally {
+    await item.app.close();
+    await rm(item.root, { recursive: true, force: true });
+  }
+});
+
+test('rota de preview exige validação técnica concluída', async () => {
+  const item = await buildApp();
+  const adminToken = item.sessions.createSessionForUser('admin-1');
+  const headers = {
+    cookie: cookie(adminToken),
+    'x-home-music-request': '1'
+  };
+  try {
+    const started = await item.app.inject({
+      method: 'POST',
+      url: '/api/admin/imports/uploads',
+      headers,
+      payload: { fileName: 'faixa.mp3', size: 4 }
+    });
+    const jobId = started.json().job.id as string;
+    await item.app.inject({
+      method: 'PUT',
+      url: `/api/admin/imports/uploads/${jobId}`,
+      headers: { ...headers, 'content-type': 'application/octet-stream' },
+      payload: Buffer.from('abcd')
+    });
+
+    const preview = await item.app.inject({
+      method: 'POST',
+      url: `/api/admin/imports/${jobId}/metadata-preview`,
+      headers
+    });
+    assert.equal(preview.statusCode, 409);
+    assert.match(preview.json().error, /valide tecnicamente/i);
+    assert.equal(item.queue.get(jobId)?.metadataPreview, null);
   } finally {
     await item.app.close();
     await rm(item.root, { recursive: true, force: true });
