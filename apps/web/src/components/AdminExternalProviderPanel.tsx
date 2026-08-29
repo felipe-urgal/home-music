@@ -3,12 +3,12 @@ import type { ImportJob } from '@home-music/shared';
 import { Boxes, CircleAlert, LoaderCircle, ShieldCheck, X } from 'lucide-react';
 import {
   cancelAdminExternalProvider,
+  getAdminExternalProviders,
   startAdminExternalProvider,
   type AdminExternalProviderDescriptor
 } from '../admin-external-provider-client';
 
 type AdminExternalProviderPanelProps = {
-  providers: AdminExternalProviderDescriptor[];
   jobs: ImportJob[];
   onJobUpdated: (job: ImportJob) => void;
   onRefresh: () => Promise<unknown> | unknown;
@@ -24,11 +24,12 @@ function validHttpUrl(value: string) {
 }
 
 export function AdminExternalProviderPanel({
-  providers,
   jobs,
   onJobUpdated,
   onRefresh
 }: AdminExternalProviderPanelProps) {
+  const [providers, setProviders] = useState<AdminExternalProviderDescriptor[]>([]);
+  const [providersLoaded, setProvidersLoaded] = useState(false);
   const available = providers.filter(provider => provider.configured && provider.capabilities.audio);
   const [providerId, setProviderId] = useState('');
   const [url, setUrl] = useState('');
@@ -36,6 +37,15 @@ export function AdminExternalProviderPanel({
   const [submitting, setSubmitting] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    void getAdminExternalProviders()
+      .then(items => { if (active) setProviders(items); })
+      .catch(error => { if (active) setError(error instanceof Error ? error.message : 'Não foi possível carregar os providers.'); })
+      .finally(() => { if (active) setProvidersLoaded(true); });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     if (providerId && available.some(provider => provider.id === providerId)) return;
@@ -96,10 +106,10 @@ export function AdminExternalProviderPanel({
           <span className="my-account-link-group__label">Fonte externa</span>
           <strong id="admin-import-provider-title">Adquirir mídia com provider isolado</strong>
         </div>
-        <small>{available.length > 0 ? `${available.length} disponível` : 'Não configurado'}</small>
+        <small>{!providersLoaded ? 'Verificando…' : available.length > 0 ? `${available.length} disponível` : 'Não configurado'}</small>
       </div>
 
-      {available.length === 0 ? (
+      {providersLoaded && available.length === 0 ? (
         <div className="admin-import-provider__unavailable">
           <CircleAlert />
           <div>
@@ -107,7 +117,7 @@ export function AdminExternalProviderPanel({
             <small>Configure o executável e o launcher de egress seguro no servidor para habilitar esta entrada.</small>
           </div>
         </div>
-      ) : (
+      ) : available.length > 0 ? (
         <form className="admin-import-provider__form" onSubmit={event => void submit(event)}>
           <div className="admin-import-provider__fields">
             <label>
@@ -143,6 +153,8 @@ export function AdminExternalProviderPanel({
             <ShieldCheck /> Use apenas conteúdo que você tenha direito de baixar. A aquisição roda fora da biblioteca, sob isolamento de egress.
           </small>
         </form>
+      ) : (
+        <div className="admin-import-empty"><LoaderCircle className="is-spinning" /> Verificando providers…</div>
       )}
 
       {error && <div className="my-account-message is-error admin-import-message" role="alert">{error}</div>}
