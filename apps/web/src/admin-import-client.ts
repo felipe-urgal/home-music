@@ -28,6 +28,31 @@ export type AdminImportMediaValidationConfig = {
   }>;
 };
 
+export type AdminImportDuplicateConfidence = 'none' | 'possible' | 'probable' | 'exact';
+export type AdminImportDuplicateDisposition = 'clear' | 'notice' | 'review' | 'blocked';
+export type AdminImportDuplicateReason = 'hash' | 'title' | 'artist' | 'album' | 'duration' | 'filename';
+
+export type AdminImportDuplicateMatch = {
+  trackId: string;
+  title: string;
+  artist: string;
+  album: string;
+  durationSeconds: number | null;
+  format: string;
+  confidence: Exclude<AdminImportDuplicateConfidence, 'none'>;
+  reasons: AdminImportDuplicateReason[];
+};
+
+export type AdminImportDuplicateCheck = {
+  jobId: string;
+  confidence: AdminImportDuplicateConfidence;
+  disposition: AdminImportDuplicateDisposition;
+  matches: AdminImportDuplicateMatch[];
+  hashCompared: boolean;
+  checkedAt: string;
+  reviewedAt: string | null;
+};
+
 export type AdminImportJobsWithUploadResponse = AdminImportJobsResponse & {
   upload: AdminImportUploadConfig;
   url: AdminImportUrlConfig;
@@ -192,6 +217,29 @@ export function adminImportPreviewCoverUrl(job: ImportJob) {
   return `/api/admin/imports/${encodeURIComponent(job.id)}/cover?v=${encodeURIComponent(version)}`;
 }
 
+export async function getAdminImportDuplicateCheck(jobId: string) {
+  const response = await apiFetch(`/api/admin/imports/${encodeURIComponent(jobId)}/duplicates`, {
+    cache: 'no-store'
+  });
+  return readDuplicateCheckResponse(response, true);
+}
+
+export async function detectAdminImportDuplicates(jobId: string) {
+  const response = await apiFetch(`/api/admin/imports/${encodeURIComponent(jobId)}/duplicates`, {
+    method: 'POST',
+    headers: { 'X-Home-Music-Request': '1' }
+  });
+  return readDuplicateCheckResponse(response, false) as Promise<AdminImportDuplicateCheck>;
+}
+
+export async function reviewAdminImportDuplicates(jobId: string) {
+  const response = await apiFetch(`/api/admin/imports/${encodeURIComponent(jobId)}/duplicates/review`, {
+    method: 'POST',
+    headers: { 'X-Home-Music-Request': '1' }
+  });
+  return readDuplicateCheckResponse(response, false) as Promise<AdminImportDuplicateCheck>;
+}
+
 async function readMetadataPreviewResponse(response: Response) {
   const payload = await response.json().catch(() => null) as {
     job?: ImportJob;
@@ -202,6 +250,17 @@ async function readMetadataPreviewResponse(response: Response) {
     throw new Error(payload?.error || `Falha HTTP ${response.status}`);
   }
   return payload as AdminImportMetadataPreviewResult;
+}
+
+async function readDuplicateCheckResponse(response: Response, nullable: boolean) {
+  const payload = await response.json().catch(() => null) as {
+    check?: AdminImportDuplicateCheck | null;
+    error?: string;
+  } | null;
+  if (!response.ok || !payload || !('check' in payload) || (!nullable && !payload.check)) {
+    throw new Error(payload?.error || `Falha HTTP ${response.status}`);
+  }
+  return payload.check ?? null;
 }
 
 function parseXhrPayload(value: string) {
