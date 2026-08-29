@@ -286,7 +286,7 @@ async function defaultResolveHost(hostname: string): Promise<ResolvedAddress[]> 
     return [{ address: normalizedHostname, family: literalFamily }];
   }
   const results = await lookup(normalizedHostname, { all: true, verbatim: true });
-  return results.map(item => ({ address: item.address, family: item.family }));
+  return results.map(item => ({ address: item.address, family: item.family === 6 ? 6 : 4 }));
 }
 
 async function resolveSafeAddress(
