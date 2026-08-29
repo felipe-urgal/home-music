@@ -1,5 +1,5 @@
 import { lookup } from 'node:dns/promises';
-import http, { type IncomingMessage, type ServerResponse } from 'node:http';
+import http, { type ClientRequest, type IncomingMessage, type ServerResponse } from 'node:http';
 import net, { type Socket } from 'node:net';
 import { isUnsafeImportAddress } from './import-url.js';
 
@@ -80,7 +80,12 @@ function copyHeaders(headers: IncomingMessage['headers']) {
   for (const [key, value] of Object.entries(headers)) {
     if (value == null) continue;
     const normalized = key.toLowerCase();
-    if (normalized === 'proxy-authorization' || normalized === 'proxy-connection') continue;
+    if (
+      normalized === 'connection'
+      || normalized === 'proxy-authorization'
+      || normalized === 'proxy-connection'
+      || normalized === 'upgrade'
+    ) continue;
     result[key] = value;
   }
   return result;
@@ -101,6 +106,7 @@ function failResponse(response: ServerResponse, statusCode: number) {
 export class ExternalProviderEgressProxy {
   private readonly resolveHost: ResolveHost;
   private readonly sockets = new Set<Socket>();
+  private readonly requests = new Set<ClientRequest>();
   private server: http.Server | null = null;
 
   constructor(options: { resolveHost?: ResolveHost } = {}) {
@@ -139,6 +145,8 @@ export class ExternalProviderEgressProxy {
   async close() {
     const server = this.server;
     this.server = null;
+    for (const request of this.requests) request.destroy();
+    this.requests.clear();
     for (const socket of this.sockets) socket.destroy();
     this.sockets.clear();
     if (!server) return;
@@ -191,6 +199,8 @@ export class ExternalProviderEgressProxy {
         response.writeHead(upstreamResponse.statusCode ?? 502, upstreamResponse.headers);
         upstreamResponse.pipe(response);
       });
+      this.requests.add(upstream);
+      upstream.once('close', () => this.requests.delete(upstream));
       upstream.once('error', () => failResponse(response, 502));
       request.pipe(upstream);
     } catch {
