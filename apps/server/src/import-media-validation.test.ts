@@ -12,7 +12,7 @@ import {
   parseMediaProbeJson,
   resolveFfprobeCommand,
   selectBestProviderAudioCandidate,
-  type ImportMediaTranscodeRunner,
+  type ImportMediaTransformRunner,
   type MediaProbeRunner
 } from './import-media-validation.js';
 
@@ -59,7 +59,7 @@ function probeJson(options: {
 
 async function fixture(options: {
   probes?: string[];
-  transcodeRunner?: ImportMediaTranscodeRunner;
+  transformRunner?: ImportMediaTransformRunner;
   payload?: string;
   timeoutMs?: number;
 } = {}) {
@@ -81,10 +81,10 @@ async function fixture(options: {
     if (next == null) throw new Error('probe fake sem resposta');
     return next;
   };
-  const transcodeCalls: Array<Parameters<ImportMediaTranscodeRunner>[0]> = [];
-  const transcodeRunner: ImportMediaTranscodeRunner = options.transcodeRunner ?? (async call => {
-    transcodeCalls.push(call);
-    await writeFile(call.outputPath, Buffer.from('converted-audio'));
+  const transformCalls: Array<Parameters<ImportMediaTransformRunner>[0]> = [];
+  const transformRunner: ImportMediaTransformRunner = options.transformRunner ?? (async call => {
+    transformCalls.push(call);
+    await writeFile(call.outputPath, Buffer.from('processed-audio'));
   });
   const manager = new ImportMediaValidationManager({
     queue,
@@ -93,10 +93,10 @@ async function fixture(options: {
     ffprobeCommand: '/opt/ffmpeg/bin/ffprobe',
     timeoutMs: options.timeoutMs ?? 1_234,
     probeRunner,
-    transcodeRunner
+    transformRunner
   });
 
-  return { root, musicDir, stagingRoot, queue, staging, job, manager, probeCalls, transcodeCalls };
+  return { root, musicDir, stagingRoot, queue, staging, job, manager, probeCalls, transformCalls };
 }
 
 test('parseia ffprobe, duração e escolhe a melhor faixa de áudio', () => {
@@ -144,7 +144,7 @@ test('resolve ffprobe explícito e deriva binário ao lado de ffmpeg customizado
   assert.throws(() => resolveFfprobeCommand(`bad\0probe`, 'ffmpeg'));
 });
 
-test('perfil original preserva MP3 compatível sem executar transcode', async () => {
+test('perfil original preserva MP3 compatível sem executar FFmpeg', async () => {
   const input = probeJson({ format: 'mp3', bitRate: 192_000 });
   const item = await fixture({ probes: [input, input] });
   try {
@@ -153,7 +153,7 @@ test('perfil original preserva MP3 compatível sem executar transcode', async ()
     assert.equal(result.validation.action, 'preserve');
     assert.equal(result.validation.reason, 'original-compatible');
     assert.equal(result.validation.output.extension, '.mp3');
-    assert.equal(item.transcodeCalls.length, 0);
+    assert.equal(item.transformCalls.length, 0);
     assert.equal(item.probeCalls.length, 2);
     assert.ok(item.probeCalls.every(call => call.fd >= 0));
     assert.ok(item.manager.getValidated(item.job.id));
@@ -173,7 +173,7 @@ test('economia preserva arquivo já econômico e evita reencode desnecessário',
     assert.equal(result.validation.action, 'preserve');
     assert.equal(result.validation.reason, 'already-economical');
     assert.equal(result.validation.output.extension, '.opus');
-    assert.equal(item.transcodeCalls.length, 0);
+    assert.equal(item.transformCalls.length, 0);
   } finally {
     await rm(item.root, { recursive: true, force: true });
   }
@@ -194,10 +194,12 @@ test('economia converte origem de bitrate alto para AAC 96k e reprobeia saída',
     assert.equal(result.validation.output.codec, 'aac');
     assert.equal(result.validation.output.extension, '.m4a');
     assert.equal(result.validation.output.bitRate, 96_000);
-    assert.equal(item.transcodeCalls.length, 1);
-    assert.equal(item.transcodeCalls[0].bitRate, 96_000);
-    assert.equal(item.transcodeCalls[0].streamIndex, 0);
-    assert.equal(item.transcodeCalls[0].timeoutMs, 1_234);
+    assert.equal(item.transformCalls.length, 1);
+    assert.equal(item.transformCalls[0].mode, 'aac');
+    assert.equal(item.transformCalls[0].muxer, 'mp4');
+    assert.equal(item.transformCalls[0].bitRate, 96_000);
+    assert.equal(item.transformCalls[0].streamIndex, 0);
+    assert.equal(item.transformCalls[0].timeoutMs, 1_234);
     assert.equal((await readdir(item.stagingRoot)).length, 1);
   } finally {
     await rm(item.root, { recursive: true, force: true });
@@ -213,48 +215,86 @@ test('compatibilidade preserva M4A/AAC estéreo já compatível', async () => {
     const result = await item.manager.validate(item.job.id, 'compatibility');
     assert.equal(result.validation.action, 'preserve');
     assert.equal(result.validation.reason, 'already-compatible');
-    assert.equal(item.transcodeCalls.length, 0);
+    assert.equal(item.transformCalls.length, 0);
   } finally {
     await rm(item.root, { recursive: true, force: true });
   }
 });
 
-test('original converte container incompatível e seleciona melhor áudio quando há múltiplas faixas', async () => {
+test('compatibilidade reempacota AAC compatível sem reencode quando só o container precisa mudar', async () => {
+  const source = probeJson({ format: 'matroska,webm', bitRate: 160_000, audio: [
+    { index: 3, codec: 'aac', bitRate: 160_000, sampleRate: 48_000, channels: 2, profile: 'LC' }
+  ] });
+  const output = probeJson({ format: 'mov,mp4,m4a,3gp,3g2,mj2', bitRate: 160_000, audio: [
+    { index: 0, codec: 'aac', bitRate: 160_000, sampleRate: 48_000, channels: 2, profile: 'LC' }
+  ] });
+  const item = await fixture({ probes: [source, output] });
+  try {
+    const result = await item.manager.validate(item.job.id, 'compatibility');
+    assert.equal(result.validation.action, 'remux');
+    assert.equal(result.validation.reason, 'compatibility-requested');
+    assert.equal(result.validation.output.extension, '.m4a');
+    assert.equal(item.transformCalls.length, 1);
+    assert.equal(item.transformCalls[0].mode, 'copy');
+    assert.equal(item.transformCalls[0].muxer, 'mp4');
+    assert.equal(item.transformCalls[0].bitRate, null);
+  } finally {
+    await rm(item.root, { recursive: true, force: true });
+  }
+});
+
+test('original reempacota a melhor faixa lossless sem reencode quando há múltiplos áudios', async () => {
   const source = probeJson({ format: 'matroska,webm', bitRate: 800_000, audio: [
     { index: 1, codec: 'aac', bitRate: 256_000, sampleRate: 48_000, channels: 2 },
     { index: 2, codec: 'flac', bitRate: 700_000, sampleRate: 96_000, channels: 2 }
   ] });
-  const output = probeJson({ format: 'mov,mp4,m4a,3gp,3g2,mj2', bitRate: 164_000, audio: [
-    { index: 0, codec: 'aac', bitRate: 160_000, sampleRate: 48_000, channels: 2 }
+  const output = probeJson({ format: 'flac', bitRate: 700_000, audio: [
+    { index: 0, codec: 'flac', bitRate: 700_000, sampleRate: 96_000, channels: 2 }
   ] });
   const item = await fixture({ probes: [source, output] });
   try {
     const result = await item.manager.validate(item.job.id, 'original');
-    assert.equal(result.validation.action, 'transcode');
+    assert.equal(result.validation.action, 'remux');
     assert.equal(result.validation.reason, 'multiple-audio-streams');
     assert.equal(result.validation.selectedAudioStream, 2);
-    assert.equal(item.transcodeCalls[0].streamIndex, 2);
-    assert.equal(item.transcodeCalls[0].bitRate, 160_000);
+    assert.equal(result.validation.output.codec, 'flac');
+    assert.equal(result.validation.output.extension, '.flac');
+    assert.equal(item.transformCalls[0].streamIndex, 2);
+    assert.equal(item.transformCalls[0].mode, 'copy');
+    assert.equal(item.transformCalls[0].muxer, 'flac');
+    assert.equal(item.transformCalls[0].bitRate, null);
   } finally {
     await rm(item.root, { recursive: true, force: true });
   }
 });
 
-test('arquivo com vídeo nunca é preservado pelo perfil original', () => {
+test('arquivo com vídeo remove o vídeo sem reencode quando o codec de áudio pode ser copiado', () => {
   const probe = parseMediaProbeJson(probeJson({ video: 1 }));
   const decision = decideImportMedia('original', probe);
-  assert.equal(decision.action, 'transcode');
+  assert.equal(decision.action, 'remux');
   assert.equal(decision.reason, 'contains-video');
-  assert.equal(decision.output.extension, '.m4a');
+  assert.equal(decision.output.codec, 'mp3');
+  assert.equal(decision.output.extension, '.mp3');
 });
 
-test('falha de transcode é canonicalizada, registrada no job e limpa staging', async () => {
+test('codec sem container seguro de cópia ainda usa transcode no perfil original', () => {
+  const probe = parseMediaProbeJson(probeJson({
+    format: 'matroska',
+    audio: [{ index: 0, codec: 'wavpack', bitRate: 700_000, sampleRate: 48_000, channels: 2 }]
+  }));
+  const decision = decideImportMedia('original', probe);
+  assert.equal(decision.action, 'transcode');
+  assert.equal(decision.reason, 'unsupported-original');
+  assert.equal(decision.output.codec, 'aac');
+});
+
+test('falha do FFmpeg é canonicalizada, registrada no job e limpa staging', async () => {
   const source = probeJson({ format: 'flac', bitRate: 900_000, audio: [
     { codec: 'flac', bitRate: 900_000, sampleRate: 96_000, channels: 2 }
   ] });
   const item = await fixture({
     probes: [source],
-    transcodeRunner: async () => { throw new Error('segredo interno ffmpeg /etc/passwd'); }
+    transformRunner: async () => { throw new Error('segredo interno ffmpeg /etc/passwd'); }
   });
   try {
     await assert.rejects(
@@ -263,7 +303,7 @@ test('falha de transcode é canonicalizada, registrada no job e limpa staging', 
     );
     const failed = item.queue.get(item.job.id)!;
     assert.equal(failed.status, 'failed');
-    assert.equal(failed.error, 'FFmpeg não conseguiu converter a mídia importada.');
+    assert.equal(failed.error, 'FFmpeg não conseguiu processar a mídia importada.');
     assert.equal(failed.error.includes('segredo'), false);
     assert.equal(failed.mediaDecision?.action, 'transcode');
     assert.equal((await readdir(item.stagingRoot)).length, 0);
@@ -272,7 +312,7 @@ test('falha de transcode é canonicalizada, registrada no job e limpa staging', 
   }
 });
 
-test('mídia corrompida falha antes de qualquer transcode', async () => {
+test('mídia corrompida falha antes de qualquer processamento no FFmpeg', async () => {
   const item = await fixture({ probes: ['{'] });
   try {
     await assert.rejects(
@@ -280,7 +320,7 @@ test('mídia corrompida falha antes de qualquer transcode', async () => {
       (error: unknown) => error instanceof ImportMediaValidationError && error.code === 'invalid_media'
     );
     assert.equal(item.queue.get(item.job.id)?.status, 'failed');
-    assert.equal(item.transcodeCalls.length, 0);
+    assert.equal(item.transformCalls.length, 0);
     assert.equal((await readdir(item.stagingRoot)).length, 0);
   } finally {
     await rm(item.root, { recursive: true, force: true });
