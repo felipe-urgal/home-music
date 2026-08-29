@@ -36,7 +36,15 @@ import { installApiAuthPolicy } from './auth-policy.js';
 import { HomeMusicDatabase } from './database.js';
 import { probeFfmpeg, resolveFfmpegCommand, type FfmpegStatus } from './ffmpeg.js';
 import { ImportJobQueue } from './import-job-queue.js';
-import { readCover, scanLibrary, type IndexedTrack } from './library.js';
+import type { PromotedImportFile } from './import-staging.js';
+import {
+  indexLibraryFile,
+  mergeIndexedTrack,
+  readCover,
+  scanLibrary,
+  type IndexedTrack
+} from './library.js';
+import { LibraryMutationLock } from './library-mutation-lock.js';
 import { replayGainForMode } from './replay-gain.js';
 import { readTrackLyrics } from './lyrics.js';
 import {
@@ -151,6 +159,7 @@ const transcodeCacheMaintenance = new TranscodeCacheMaintenance({
     pending: transcodeManager.pendingCount
   })
 });
+const libraryMutations = new LibraryMutationLock();
 
 let tracks: IndexedTrack[] = [];
 let tracksById = new Map<string, IndexedTrack>();
@@ -208,6 +217,30 @@ function publicTrack(track: IndexedTrack) {
 function clearCoverCache() {
   coverCache.clear();
   coverCacheBytes = 0;
+}
+
+function applyLibrarySnapshot(
+  nextTracks: IndexedTrack[],
+  resolvedRoot: string,
+  nextScannedAt: string,
+  changed: boolean
+) {
+  libraryRoot = resolvedRoot;
+  scannedAt = nextScannedAt;
+  setTracks(nextTracks);
+  libraryReady = true;
+
+  try {
+    trackAvailability.refresh();
+    setTracks(nextTracks);
+  } catch (error) {
+    app.log.warn({ err: error }, 'Não foi possível atualizar o cache de disponibilidade das faixas.');
+  }
+
+  if (changed) {
+    libraryRevision += 1;
+    clearCoverCache();
+  }
 }
 
 function automaticRescanStatus() {
@@ -280,7 +313,7 @@ function cacheCover(trackId: string, cover: CachedCover) {
   }
 }
 
-async function performRescan(): Promise<ScanResponse> {
+async function performRescanUnlocked(): Promise<ScanResponse> {
   if (!musicDir) {
     const hadTracks = tracks.length > 0;
     setTracks([]);
@@ -304,22 +337,75 @@ async function performRescan(): Promise<ScanResponse> {
   const changed = rootChanged || result.stats.added > 0 || result.stats.updated > 0 || result.stats.removed > 0;
 
   database.syncTracks(result.tracks, resolvedRoot, nextScannedAt);
-  trackAvailability.refresh();
-  libraryRoot = resolvedRoot;
-  scannedAt = nextScannedAt;
-  setTracks(result.tracks);
-  libraryReady = true;
-
-  if (changed) {
-    libraryRevision += 1;
-    clearCoverCache();
-  }
+  applyLibrarySnapshot(result.tracks, resolvedRoot, nextScannedAt, changed);
 
   return {
     tracks: tracksById.size,
     scannedAt,
     ...result.stats
   };
+}
+
+function performRescan() {
+  return libraryMutations.run(performRescanUnlocked);
+}
+
+async function updateLibraryForPromotedImport(promoted: PromotedImportFile, jobId: string) {
+  await libraryMutations.run(async () => {
+    try {
+      if (!musicDir) throw new Error('MUSIC_DIR não está configurado para indexação incremental.');
+      const resolvedRoot = await resolveLibraryRoot(musicDir);
+      if (!libraryReady || libraryRoot !== resolvedRoot) {
+        throw new Error('Snapshot atual da biblioteca não está pronto para atualização incremental.');
+      }
+
+      const existing = tracks.find(track => track.filePath === promoted.absolutePath);
+      const indexed = await indexLibraryFile(
+        resolvedRoot,
+        promoted.absolutePath,
+        existing?.id,
+        (message, error) => app.log.warn({ err: error, importJobId: jobId }, message)
+      );
+      const nextTracks = mergeIndexedTrack(tracks, indexed);
+      const nextScannedAt = new Date().toISOString();
+
+      database.syncTracks(nextTracks, resolvedRoot, nextScannedAt);
+      applyLibrarySnapshot(nextTracks, resolvedRoot, nextScannedAt, true);
+      app.log.info(
+        { importJobId: jobId, trackId: indexed.id, relativePath: promoted.relativePath },
+        'Importação adicionada à biblioteca incrementalmente.'
+      );
+    } catch (incrementalError) {
+      app.log.warn(
+        { err: incrementalError, importJobId: jobId, relativePath: promoted.relativePath },
+        'Indexação incremental da importação falhou; executando rescan completo.'
+      );
+      try {
+        const result = await performRescanUnlocked();
+        app.log.info(
+          {
+            importJobId: jobId,
+            added: result.added,
+            updated: result.updated,
+            removed: result.removed,
+            tracks: result.tracks
+          },
+          'Biblioteca reconciliada após fallback da importação.'
+        );
+      } catch (fallbackError) {
+        libraryReady = false;
+        app.log.error(
+          {
+            err: fallbackError,
+            incrementalError,
+            importJobId: jobId,
+            relativePath: promoted.relativePath
+          },
+          'Arquivo importado foi promovido, mas a biblioteca não pôde ser reconciliada; o próximo rescan tentará recuperá-lo.'
+        );
+      }
+    }
+  });
 }
 
 function rescan(trigger?: AdminScanTrigger) {
@@ -422,7 +508,7 @@ installApiAuthPolicy(app, {
 });
 registerAccountSessionRoutes(app, sessions);
 registerAdminUserRoutes(app, adminUsers);
-registerAdminImportRoutes(app, importJobs);
+registerAdminImportRoutes(app, importJobs, { onPromoted: updateLibraryForPromotedImport });
 registerAdminOperationHistoryRoutes(app, operationHistory);
 registerAdminTranscodeCacheRoutes(app, transcodeCacheMaintenance);
 registerAdminTrackRoutes(app, {
