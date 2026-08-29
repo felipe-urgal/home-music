@@ -1,0 +1,122 @@
+.admin-import-destination {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.875rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.875rem;
+  background: var(--surface-subtle);
+}
+
+.admin-import-destination.is-blocked,
+.admin-import-destination.is-waiting {
+  grid-template-columns: auto 1fr;
+  align-items: start;
+}
+
+.admin-import-destination > svg,
+.admin-import-destination__heading > svg,
+.admin-import-destination__plan > svg {
+  width: 1.1rem;
+  height: 1.1rem;
+  flex: 0 0 auto;
+}
+
+.admin-import-destination.is-blocked > span,
+.admin-import-destination.is-waiting > span,
+.admin-import-destination__heading > span,
+.admin-import-destination__plan > span {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.admin-import-destination.is-blocked small,
+.admin-import-destination.is-waiting small,
+.admin-import-destination__heading small,
+.admin-import-destination__plan small,
+.admin-import-destination__actions small {
+  color: var(--text-muted);
+}
+
+.admin-import-destination__heading,
+.admin-import-destination__plan {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+}
+
+.admin-import-destination__form {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.admin-import-destination__form > label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.admin-import-destination__folder-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem;
+}
+
+.admin-import-destination__folder-row input {
+  min-width: 0;
+}
+
+.admin-import-destination__folder-row button,
+.admin-import-destination__actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+}
+
+.admin-import-destination__folder-row button svg,
+.admin-import-destination__actions button svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.admin-import-destination__plan {
+  padding: 0.7rem;
+  border-radius: 0.7rem;
+  background: var(--surface-raised);
+}
+
+.admin-import-destination__plan strong {
+  overflow-wrap: anywhere;
+}
+
+.admin-import-destination__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.admin-import-destination__actions small {
+  max-width: 38rem;
+}
+
+.admin-import-destination__error {
+  color: var(--danger-text, #b42318);
+}
+
+@media (max-width: 720px) {
+  .admin-import-destination__folder-row,
+  .admin-import-destination__actions {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-import-destination__actions {
+    display: grid;
+  }
+
+  .admin-import-destination__folder-row button,
+  .admin-import-destination__actions button {
+    width: 100%;
+  }
+}
