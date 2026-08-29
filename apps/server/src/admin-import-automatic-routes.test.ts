@@ -36,10 +36,10 @@ function validMp3Probe() {
   });
 }
 
-async function waitForPrepared(queue: ImportJobQueue, jobId: string) {
+async function waitForPrepared(queue: ImportJobQueue, jobId: string, duplicateReady: () => boolean) {
   for (let attempt = 0; attempt < 200; attempt += 1) {
     const job = queue.get(jobId);
-    if (job?.status === 'pending' && job.mediaDecision && job.metadataPreview) return job;
+    if (job?.status === 'pending' && job.mediaDecision && job.metadataPreview && duplicateReady()) return job;
     if (job?.status === 'failed' || job?.status === 'cancelled') {
       assert.fail(`Job automático terminou como ${job.status}: ${job.error ?? 'sem diagnóstico'}`);
     }
@@ -145,7 +145,7 @@ test('upload prepara validação e metadata automaticamente e aguarda confirmaç
     });
     assert.equal(uploaded.statusCode, 200);
 
-    const prepared = await waitForPrepared(queue, jobId);
+    const prepared = await waitForPrepared(queue, jobId, () => duplicateDetection.isReady(jobId));
     assert.equal(prepared.mediaDecision?.profile, 'original');
     assert.equal(prepared.metadataPreview?.effective.title, 'Faixa automática');
     assert.equal(prepared.metadataPreview?.effective.artist, 'Artista automático');
