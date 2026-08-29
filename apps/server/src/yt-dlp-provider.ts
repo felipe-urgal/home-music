@@ -328,7 +328,7 @@ function providerMetadata(info: YtDlpMetadata) {
   return {
     sourceId: cleanString(info.id),
     title: cleanString(info.track) ?? cleanString(info.title),
-    artist: cleanString(info.artist) ?? cleanString(info.creator) ?? cleanString(info.uploader) ?? cleanString(info.channel),
+    artist: cleanString(info.artist) ?? cleanString(info.creator),
     album: cleanString(info.album),
     thumbnailUrl: cleanThumbnail(info)
   };
