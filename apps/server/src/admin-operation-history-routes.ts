@@ -83,13 +83,13 @@ export function registerAdminOperationHistoryRoutes(
 
       const starter = getImportRetryStarter(app);
       if (!starter) {
+        history.releaseImportRetry(context);
         return reply.code(503).send({ error: 'Retry de importação indisponível neste processo.' });
       }
 
+      let result;
       try {
-        const result = await starter(context, request.body ?? {});
-        history.bindRetryAttempt(result.job.id, context);
-        return reply.code(context.source.type === 'url' ? 202 : 201).send(result);
+        result = await starter(context, request.body ?? {});
       } catch (error) {
         if (error instanceof ImportRetryStartError) {
           if (error.job) {
@@ -101,14 +101,27 @@ export function registerAdminOperationHistoryRoutes(
                 'Falha ao vincular tentativa de retry que não iniciou corretamente.'
               );
             }
+          } else {
+            history.releaseImportRetry(context);
           }
           return reply.code(error.statusCode).send({ error: error.message });
         }
+        history.releaseImportRetry(context);
         if (error instanceof AdminOperationRetryError) {
           return reply.code(error.statusCode).send({ error: error.message });
         }
         throw error;
       }
+
+      try {
+        history.bindRetryAttempt(result.job.id, context);
+      } catch (error) {
+        if (error instanceof AdminOperationRetryError) {
+          return reply.code(error.statusCode).send({ error: error.message });
+        }
+        throw error;
+      }
+      return reply.code(context.source.type === 'url' ? 202 : 201).send(result);
     }
   );
 }
