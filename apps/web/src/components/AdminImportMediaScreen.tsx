@@ -21,9 +21,14 @@ import {
   createAdminImportUrl,
   getAdminImportJobs,
   uploadAdminImportFile,
+  type AdminImportMediaValidationConfig,
   type AdminImportUploadConfig,
   type AdminImportUrlConfig
 } from '../admin-import-client';
+import {
+  AdminImportMediaDecisionSummary,
+  AdminImportMediaValidationPanel
+} from './AdminImportMediaValidationPanel';
 
 type AdminImportMediaScreenProps = {
   onBack: () => void;
@@ -144,6 +149,7 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
   const [jobs, setJobs] = useState<ImportJob[]>([]);
   const [uploadConfig, setUploadConfig] = useState<AdminImportUploadConfig | null>(null);
   const [urlConfig, setUrlConfig] = useState<AdminImportUrlConfig | null>(null);
+  const [mediaValidationConfig, setMediaValidationConfig] = useState<AdminImportMediaValidationConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -167,6 +173,7 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
       setJobs(response.jobs);
       setUploadConfig(response.upload);
       setUrlConfig(response.url);
+      setMediaValidationConfig(response.mediaValidation);
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Não foi possível carregar a fila de importação.');
     } finally {
@@ -184,6 +191,10 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
     const timer = window.setInterval(() => { void loadJobs(true); }, 1000);
     return () => window.clearInterval(timer);
   }, [activeUrlJob?.status, activeUrlJobId, loadJobs]);
+
+  const handleValidatedJob = useCallback((job: ImportJob) => {
+    setJobs(current => current.map(item => item.id === job.id ? job : item));
+  }, []);
 
   const beginUpload = useCallback(async (file: File) => {
     if (!uploadConfig) {
@@ -414,7 +425,7 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
               </div>
               {activeUpload.stage === 'queued' && (
                 <small className="admin-import-upload-status__hint">
-                  Arquivo recebido com segurança. Ele ainda não entrou na biblioteca e aguarda as próximas validações.
+                  Arquivo recebido com segurança. Ele ainda não entrou na biblioteca e aguarda validação técnica.
                 </small>
               )}
               {activeUpload.error && <small className="admin-import-job__error">{activeUpload.error}</small>}
@@ -469,7 +480,7 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
                   {activeUrlJob.status === 'processing'
                     ? 'Baixando e validando no staging seguro.'
                     : activeUrlJob.status === 'pending'
-                      ? 'Arquivo remoto recebido e validado. Aguardando próxima etapa do pipeline.'
+                      ? 'Arquivo remoto recebido com segurança. Aguardando validação técnica.'
                       : activeUrlJob.error || STATUS_LABELS[activeUrlJob.status]}
                 </small>
               </div>
@@ -482,6 +493,15 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
             </article>
           )}
         </section>
+
+        {mediaValidationConfig && (
+          <AdminImportMediaValidationPanel
+            jobs={jobs}
+            config={mediaValidationConfig}
+            onJobUpdated={handleValidatedJob}
+            onRefresh={() => loadJobs(true)}
+          />
+        )}
 
         <section className="admin-import-methods" aria-label="Formas de importação">
           {IMPORT_METHODS.map(method => {
@@ -542,6 +562,7 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
                   <div className="admin-import-job__body">
                     <strong>{job.label}</strong>
                     <small>{sourceLabel(job)} · {formatDate(job.createdAt)}</small>
+                    <AdminImportMediaDecisionSummary job={job} />
                     {job.error && <small className="admin-import-job__error">{job.error}</small>}
                   </div>
                   <span className="admin-import-job__badge">{STATUS_LABELS[job.status]}</span>

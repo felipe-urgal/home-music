@@ -9,6 +9,7 @@ import {
   mkdtemp,
   open,
   realpath,
+  rename,
   rm,
   stat,
   unlink,
@@ -44,6 +45,12 @@ export type ImportStagingJob = {
 export type ImportValidationTarget = {
   path: string;
   size: number;
+  fd: number;
+};
+
+export type ImportTransformTarget = {
+  input: ImportValidationTarget;
+  outputPath: string;
 };
 
 export type ValidatedImportPayload<T = unknown> = {
@@ -201,6 +208,14 @@ async function resolveSafeDestination(musicRoot: string, relativeDestination: st
   };
 }
 
+function validationTarget(handle: FileHandle, size: number): ImportValidationTarget {
+  return {
+    path: `/proc/${process.pid}/fd/${handle.fd}`,
+    size,
+    fd: handle.fd
+  };
+}
+
 export class ImportStagingManager {
   private readonly stagingRootInput: string;
   private readonly musicDir: string;
@@ -324,10 +339,7 @@ export class ImportStagingManager {
       const safeFile = await openRegularFileInside(stagingRoot, workspace.payloadPath);
       try {
         const before = await safeFile.handle.stat();
-        const result = await inspector({
-          path: `/proc/${process.pid}/fd/${safeFile.handle.fd}`,
-          size: before.size
-        });
+        const result = await inspector(validationTarget(safeFile.handle, before.size));
         const after = await safeFile.handle.stat();
         if (before.size !== after.size || before.mtimeMs !== after.mtimeMs) {
           throw new ImportStagingError('O payload mudou durante a inspeção.');
@@ -339,6 +351,61 @@ export class ImportStagingManager {
     } catch (error) {
       await this.cleanupJob(workspace.jobId).catch(() => undefined);
       throw error;
+    }
+  }
+
+  async transformPayload(
+    jobId: string,
+    transformer: (target: ImportTransformTarget) => Promise<void> | void
+  ) {
+    const workspace = this.requireJob(jobId);
+    if (workspace.state !== 'written') {
+      throw new ImportStagingError('O payload precisa estar gravado antes da transformação.');
+    }
+
+    const { stagingRoot } = await this.initialize();
+    const outputPath = path.join(workspace.directory, `transform-${randomUUID()}.tmp`);
+    const safeInput = await openRegularFileInside(stagingRoot, workspace.payloadPath);
+    try {
+      const before = await safeInput.handle.stat();
+      await transformer({
+        input: validationTarget(safeInput.handle, before.size),
+        outputPath
+      });
+      const afterInput = await safeInput.handle.stat();
+      if (before.size !== afterInput.size || before.mtimeMs !== afterInput.mtimeMs) {
+        throw new ImportStagingError('O payload mudou durante a transformação.');
+      }
+
+      const outputEntry = await lstat(outputPath).catch(error => {
+        if (errorCode(error) === 'ENOENT') {
+          throw new ImportStagingError('A transformação não produziu um arquivo de saída.');
+        }
+        throw error;
+      });
+      if (!outputEntry.isFile() || outputEntry.isSymbolicLink() || outputEntry.size <= 0) {
+        throw new ImportStagingError('A transformação produziu uma saída inválida.');
+      }
+      const resolvedOutput = await realpath(outputPath);
+      if (!isPathInside(workspace.directory, resolvedOutput)) {
+        throw new ImportStagingError('A saída transformada escapou do staging.');
+      }
+
+      const outputHandle = await open(outputPath, constants.O_RDONLY | constants.O_NOFOLLOW);
+      try {
+        await outputHandle.sync().catch(() => undefined);
+      } finally {
+        await outputHandle.close();
+      }
+      await chmod(outputPath, STAGING_FILE_MODE);
+      await rename(outputPath, workspace.payloadPath);
+      workspace.validationToken = null;
+      workspace.validationSha256 = null;
+      workspace.validationSize = null;
+      return { size: outputEntry.size };
+    } finally {
+      await safeInput.handle.close();
+      await rm(outputPath, { force: true }).catch(() => undefined);
     }
   }
 
@@ -356,10 +423,7 @@ export class ImportStagingManager {
       const safeFile = await openRegularFileInside(stagingRoot, workspace.payloadPath);
       try {
         const before = await safeFile.handle.stat();
-        const validation = await validator({
-          path: `/proc/${process.pid}/fd/${safeFile.handle.fd}`,
-          size: before.size
-        });
+        const validation = await validator(validationTarget(safeFile.handle, before.size));
         const after = await safeFile.handle.stat();
         if (before.size !== after.size || before.mtimeMs !== after.mtimeMs) {
           throw new ImportStagingError('O payload mudou durante a validação.');

@@ -1,4 +1,9 @@
-import type { AdminImportJobsResponse, ImportJob } from '@home-music/shared';
+import type {
+  AdminImportJobsResponse,
+  ImportJob,
+  ImportMediaDecision,
+  ImportOutputProfile
+} from '@home-music/shared';
 import { apiFetch, AUTH_REQUIRED_EVENT } from './api-client';
 
 export type AdminImportUploadConfig = {
@@ -13,14 +18,28 @@ export type AdminImportUrlConfig = {
   acceptedProtocols: string[];
 };
 
+export type AdminImportMediaValidationConfig = {
+  profiles: Array<{
+    id: ImportOutputProfile;
+    label: string;
+    description: string;
+  }>;
+};
+
 export type AdminImportJobsWithUploadResponse = AdminImportJobsResponse & {
   upload: AdminImportUploadConfig;
   url: AdminImportUrlConfig;
+  mediaValidation: AdminImportMediaValidationConfig;
 };
 
 export type AdminImportUploadResult = {
   job: ImportJob;
   receivedBytes: number;
+};
+
+export type AdminImportMediaValidationResult = {
+  job: ImportJob;
+  validation: ImportMediaDecision;
 };
 
 export async function getAdminImportJobs() {
@@ -119,6 +138,26 @@ export async function cancelAdminImportUrl(jobId: string) {
     throw new Error(payload?.error || `Falha HTTP ${response.status}`);
   }
   return payload.job;
+}
+
+export async function validateAdminImportMedia(jobId: string, profile: ImportOutputProfile) {
+  const response = await apiFetch(`/api/admin/imports/${encodeURIComponent(jobId)}/validate`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Home-Music-Request': '1'
+    },
+    body: JSON.stringify({ profile })
+  });
+  const payload = await response.json().catch(() => null) as {
+    job?: ImportJob;
+    validation?: ImportMediaDecision;
+    error?: string;
+  } | null;
+  if (!response.ok || !payload?.job || !payload.validation) {
+    throw new Error(payload?.error || `Falha HTTP ${response.status}`);
+  }
+  return payload as AdminImportMediaValidationResult;
 }
 
 function parseXhrPayload(value: string) {

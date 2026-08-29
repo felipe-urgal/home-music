@@ -1,5 +1,10 @@
 import { randomUUID } from 'node:crypto';
-import type { ImportJob, ImportJobSource, ImportJobStatus } from '@home-music/shared';
+import type {
+  ImportJob,
+  ImportJobSource,
+  ImportJobStatus,
+  ImportMediaDecision
+} from '@home-music/shared';
 
 const TERMINAL_STATUSES = new Set<ImportJobStatus>(['completed', 'failed', 'cancelled']);
 const ALLOWED_TRANSITIONS: Record<ImportJobStatus, readonly ImportJobStatus[]> = {
@@ -17,10 +22,20 @@ type ImportJobQueueOptions = {
   onChange?: (job: ImportJob) => void;
 };
 
+function copyDecision(decision: ImportMediaDecision | null): ImportMediaDecision | null {
+  if (!decision) return null;
+  return {
+    ...decision,
+    input: { ...decision.input },
+    output: { ...decision.output }
+  };
+}
+
 function copyJob(job: ImportJob): ImportJob {
   return {
     ...job,
-    source: { ...job.source }
+    source: { ...job.source },
+    mediaDecision: copyDecision(job.mediaDecision)
   };
 }
 
@@ -61,11 +76,25 @@ export class ImportJobQueue {
       updatedAt: timestamp,
       startedAt: null,
       finishedAt: null,
-      error: null
+      error: null,
+      mediaDecision: null
     };
 
     this.jobs.push(job);
     this.trimRetainedJobs();
+    this.notify(job);
+    return copyJob(job);
+  }
+
+  setMediaDecision(id: string, decision: ImportMediaDecision) {
+    const job = this.jobs.find(item => item.id === id);
+    if (!job) return null;
+    if (TERMINAL_STATUSES.has(job.status)) {
+      throw new Error('Job terminal não aceita nova decisão de mídia.');
+    }
+
+    job.mediaDecision = copyDecision(decision);
+    job.updatedAt = this.now().toISOString();
     this.notify(job);
     return copyJob(job);
   }

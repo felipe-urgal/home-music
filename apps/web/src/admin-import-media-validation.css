@@ -1,0 +1,273 @@
+.admin-import-validation {
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 14px;
+  background: #101820;
+}
+
+.admin-import-validation__heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.admin-import-validation__heading > div {
+  display: grid;
+  gap: 4px;
+}
+
+.admin-import-validation__heading strong {
+  color: #e2ebf1;
+  font-size: 13px;
+}
+
+.admin-import-validation__heading small {
+  max-width: 620px;
+  color: #7e8c97;
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.admin-import-validation__counter {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+  padding: 6px 8px;
+  border-radius: 999px;
+  background: rgba(55,145,91,.1);
+  color: #83cda1;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.admin-import-validation__counter svg {
+  width: 13px;
+  height: 13px;
+}
+
+.admin-import-profile-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.admin-import-profile {
+  position: relative;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 28px minmax(0,1fr);
+  align-items: start;
+  gap: 9px;
+  padding: 11px;
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 11px;
+  background: #0d151c;
+  cursor: pointer;
+  transition: border-color .16s ease, background .16s ease;
+}
+
+.admin-import-profile:hover {
+  border-color: rgba(111,190,242,.25);
+}
+
+.admin-import-profile.is-selected {
+  border-color: rgba(101,190,255,.48);
+  background: rgba(43,119,170,.12);
+}
+
+.admin-import-profile input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.admin-import-profile:focus-within {
+  outline: 2px solid rgba(101,190,255,.45);
+  outline-offset: 2px;
+}
+
+.admin-import-profile__icon {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: rgba(111,190,242,.08);
+  color: #7fc7f6;
+}
+
+.admin-import-profile__icon svg {
+  width: 15px;
+  height: 15px;
+}
+
+.admin-import-profile > span:last-child {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.admin-import-profile strong {
+  color: #dbe6ed;
+  font-size: 10px;
+}
+
+.admin-import-profile small {
+  color: #71808b;
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.admin-import-validation__queue {
+  display: grid;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.admin-import-validation__queue-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.admin-import-validation__queue-heading strong {
+  color: #b8c5ce;
+  font-size: 10px;
+}
+
+.admin-import-validation__queue-heading small {
+  color: #71808b;
+  font-size: 9px;
+}
+
+.admin-import-validation__jobs {
+  display: grid;
+  gap: 7px;
+}
+
+.admin-import-validation-job {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 11px;
+  border: 1px solid rgba(255,255,255,.06);
+  border-radius: 10px;
+  background: rgba(9,16,22,.62);
+}
+
+.admin-import-validation-job > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.admin-import-validation-job strong {
+  overflow: hidden;
+  color: #dbe6ed;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-import-validation-job small {
+  color: #74838e;
+  font-size: 9px;
+}
+
+.admin-import-validation-job > button {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid rgba(111,190,242,.28);
+  border-radius: 8px;
+  background: rgba(36,132,194,.12);
+  color: #b9e2fb;
+  cursor: pointer;
+  font: inherit;
+  font-size: 9px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.admin-import-validation-job > button:hover:not(:disabled) {
+  background: rgba(36,132,194,.2);
+}
+
+.admin-import-validation-job > button:disabled {
+  cursor: default;
+  opacity: .55;
+}
+
+.admin-import-validation-job > button svg {
+  width: 13px;
+  height: 13px;
+}
+
+.admin-import-validation__empty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 9px 10px;
+  border: 1px solid rgba(82,171,119,.12);
+  border-radius: 9px;
+  background: rgba(55,145,91,.05);
+  color: #81968b;
+  font-size: 9px;
+}
+
+.admin-import-validation__empty svg {
+  width: 14px;
+  height: 14px;
+  color: #6ebc8c;
+}
+
+.admin-import-job__decision {
+  color: #7fb697 !important;
+  line-height: 1.45;
+}
+
+.admin-import-job__decision.is-planned {
+  color: #b69b77 !important;
+}
+
+@media (max-width: 720px) {
+  .admin-import-profile-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 520px) {
+  .admin-import-validation__heading,
+  .admin-import-validation__queue-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .admin-import-validation-job {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-import-validation-job > button {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-import-profile {
+    transition: none;
+  }
+}

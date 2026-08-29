@@ -20,16 +20,26 @@ import {
   parseImportUrlMaxRedirects,
   parseImportUrlTimeoutSeconds
 } from './import-url.js';
+import {
+  ImportMediaValidationError,
+  ImportMediaValidationManager,
+  resolveFfprobeCommand
+} from './import-media-validation.js';
 
 const defaultImportStagingPath = fileURLToPath(new URL('../../../data/import-staging/', import.meta.url));
 
 type RegisterAdminImportRoutesOptions = {
   uploads?: ImportUploadManager;
   urls?: ImportUrlManager;
+  mediaValidation?: ImportMediaValidationManager;
 };
 
 function sendImportError(reply: FastifyReply, error: unknown) {
-  if (error instanceof ImportUploadError || error instanceof ImportUrlError) {
+  if (
+    error instanceof ImportUploadError
+    || error instanceof ImportUrlError
+    || error instanceof ImportMediaValidationError
+  ) {
     return reply.code(error.statusCode).send({ error: error.message });
   }
   if (error instanceof Error && error.name === 'ImportUploadCancelledError') {
@@ -110,6 +120,23 @@ function createDefaultUrlManager(
   });
 }
 
+function createDefaultMediaValidationManager(
+  queue: ImportJobQueue,
+  staging: ImportStagingManager
+) {
+  const ffmpegCommand = process.env.HOME_MUSIC_FFMPEG_PATH?.trim() || 'ffmpeg';
+  const ffprobeCommand = resolveFfprobeCommand(
+    process.env.HOME_MUSIC_FFPROBE_PATH,
+    process.env.HOME_MUSIC_FFMPEG_PATH
+  );
+  return new ImportMediaValidationManager({
+    queue,
+    staging,
+    ffmpegCommand,
+    ffprobeCommand
+  });
+}
+
 export function registerAdminImportRoutes(
   app: FastifyInstance,
   queue: ImportJobQueue,
@@ -122,6 +149,7 @@ export function registerAdminImportRoutes(
   };
   const uploads = options.uploads ?? createDefaultUploadManager(app, queue, staging());
   const urls = options.urls ?? createDefaultUrlManager(app, queue, staging());
+  const mediaValidation = options.mediaValidation ?? createDefaultMediaValidationManager(queue, staging());
 
   if (!app.hasContentTypeParser('application/octet-stream')) {
     app.addContentTypeParser('application/octet-stream', (_request, payload, done) => {
@@ -134,10 +162,12 @@ export function registerAdminImportRoutes(
     const response: AdminImportJobsResponse & {
       upload: ReturnType<typeof getUploadConfig>;
       url: ReturnType<typeof getUrlConfig>;
+      mediaValidation: ReturnType<typeof getMediaValidationConfig>;
     } = {
       jobs: queue.list(),
       upload: getUploadConfig(uploads),
-      url: getUrlConfig(urls)
+      url: getUrlConfig(urls),
+      mediaValidation: getMediaValidationConfig(mediaValidation)
     };
     return response;
   });
@@ -207,6 +237,18 @@ export function registerAdminImportRoutes(
       }
     }
   );
+
+  app.post<{ Params: { id: string }; Body: { profile?: unknown } }>(
+    '/api/admin/imports/:id/validate',
+    async (request, reply) => {
+      reply.header('Cache-Control', 'no-store');
+      try {
+        return await mediaValidation.validate(request.params.id, request.body?.profile);
+      } catch (error) {
+        return sendImportError(reply, error);
+      }
+    }
+  );
 }
 
 function getUploadConfig(uploads: ImportUploadManager) {
@@ -215,4 +257,8 @@ function getUploadConfig(uploads: ImportUploadManager) {
 
 function getUrlConfig(urls: ImportUrlManager) {
   return urls.config;
+}
+
+function getMediaValidationConfig(mediaValidation: ImportMediaValidationManager) {
+  return { profiles: mediaValidation.profiles };
 }
