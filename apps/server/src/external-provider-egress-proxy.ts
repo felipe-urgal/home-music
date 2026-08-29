@@ -4,6 +4,8 @@ import net from 'node:net';
 import type { Duplex } from 'node:stream';
 import { isUnsafeImportAddress } from './import-url.js';
 
+const PROVIDER_CONNECT_TIMEOUT_MS = 8_000;
+
 export type ProviderResolvedAddress = Readonly<{
   address: string;
   family: 4 | 6;
@@ -56,7 +58,11 @@ export async function resolveSafeProviderTarget(hostname: string, resolver: Reso
   if (addresses.some(item => isUnsafeImportAddress(item.address))) {
     throw new ExternalProviderEgressError('O provider tentou acessar uma rede não permitida.');
   }
-  return addresses[0];
+
+  // Em hosts dual-stack, preferimos IPv4 para evitar que uma rota IPv6
+  // parcialmente configurada prenda o CONNECT apesar de haver IPv4 válido.
+  // Todos os candidatos já foram validados acima, preservando o fail-closed SSRF.
+  return addresses.find(item => item.family === 4) ?? addresses[0];
 }
 
 function parseAuthority(value: string) {
@@ -102,6 +108,12 @@ function failResponse(response: ServerResponse, statusCode: number) {
     Connection: 'close'
   });
   response.end('Destino remoto bloqueado.');
+}
+
+function failConnect(client: Duplex, statusCode: 403 | 502) {
+  if (client.destroyed) return;
+  const message = statusCode === 403 ? 'Forbidden' : 'Bad Gateway';
+  client.end(`HTTP/1.1 ${statusCode} ${message}\r\nConnection: close\r\n\r\n`);
 }
 
 export class ExternalProviderEgressProxy {
@@ -159,17 +171,32 @@ export class ExternalProviderEgressProxy {
       const target = parseAuthority(request.url ?? '');
       const resolved = await resolveSafeProviderTarget(target.hostname, this.resolveHost);
       const upstream = net.connect({ host: resolved.address, port: target.port, family: resolved.family });
+      let connected = false;
+      const connectTimeout = setTimeout(() => {
+        if (!connected) upstream.destroy(new Error('provider connect timeout'));
+      }, PROVIDER_CONNECT_TIMEOUT_MS);
+      connectTimeout.unref?.();
+
       this.sockets.add(upstream);
-      upstream.once('close', () => this.sockets.delete(upstream));
-      upstream.once('error', () => client.destroy());
+      upstream.once('close', () => {
+        clearTimeout(connectTimeout);
+        this.sockets.delete(upstream);
+      });
+      upstream.once('error', () => {
+        clearTimeout(connectTimeout);
+        if (connected) client.destroy();
+        else failConnect(client, 502);
+      });
       upstream.once('connect', () => {
+        connected = true;
+        clearTimeout(connectTimeout);
         client.write('HTTP/1.1 200 Connection Established\r\n\r\n');
         if (head.length > 0) upstream.write(head);
         client.pipe(upstream);
         upstream.pipe(client);
       });
     } catch {
-      client.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');
+      failConnect(client, 403);
     }
   }
 
