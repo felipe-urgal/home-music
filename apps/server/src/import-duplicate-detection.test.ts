@@ -240,40 +240,82 @@ test('não bloqueia falso positivo com mesmo título e duração mas artista dif
     assert.equal(check.disposition, 'notice');
     assert.equal(manager.isReady(item.job.id), true);
     assert.equal(check.matches[0].confidence, 'possible');
-    assert.deepEqual(check.matches[0].reasons.sort(), ['duration', 'title']);
+    assert.deepEqual([...check.matches[0].reasons].sort(), ['duration', 'title']);
   } finally {
     await rm(item.root, { recursive: true, force: true });
   }
 });
 
-test('editar o preview pode invalidar apenas o check sem perder fingerprint da origem', async () => {
+test('invalidar o check preserva fingerprint da origem no mesmo manager', async () => {
   const source = Buffer.from('fingerprint-preservado');
-  const item = await fixture({ sourceBytes: source });
+  const converted = Buffer.from('saida-transformada');
+  const item = await fixture({ sourceBytes: source, validatedBytes: converted });
+  const tracks: ImportDuplicateLibraryTrack[] = [];
   try {
-    await item.manager.captureSource(item.job.id);
-    await item.manager.detect(item.job.id);
-    assert.ok(item.manager.get(item.job.id));
-    item.manager.forgetCheck(item.job.id);
-    assert.equal(item.manager.get(item.job.id), null);
-
-    const existing = await libraryTrack(item.musicDir, 'igual.flac', source);
     const manager = new ImportDuplicateDetectionManager({
       queue: item.queue,
       staging: item.staging,
       validatedLookup: () => ({
         jobId: item.job.id,
         token: 'validated-token',
-        size: source.byteLength,
-        sha256: sha256(source),
+        size: converted.byteLength,
+        sha256: sha256(converted),
         validation: {}
       }),
-      libraryTracks: () => [existing],
+      libraryTracks: () => tracks,
       musicDir: item.musicDir
     });
+
     await manager.captureSource(item.job.id);
+    const first = await manager.detect(item.job.id);
+    assert.equal(first.confidence, 'none');
     manager.forgetCheck(item.job.id);
+    assert.equal(manager.get(item.job.id), null);
+
+    tracks.push(await libraryTrack(item.musicDir, 'igual.flac', source));
+    const second = await manager.detect(item.job.id);
+    assert.equal(second.confidence, 'exact');
+    assert.equal(second.disposition, 'blocked');
+  } finally {
+    await rm(item.root, { recursive: true, force: true });
+  }
+});
+
+test('hash comparável indisponível nunca é apresentado como verificação limpa', async () => {
+  const bytes = Buffer.from('mesmo-tamanho');
+  const item = await fixture({ sourceBytes: bytes });
+  try {
+    const candidate: ImportDuplicateLibraryTrack = {
+      id: 'track-indisponivel',
+      filePath: '/arquivo/indisponivel.flac',
+      title: 'Título totalmente diferente',
+      artist: 'Outro artista',
+      album: 'Outro álbum',
+      albumArtist: 'Outro artista',
+      duration: 999,
+      format: 'FLAC',
+      fileSize: bytes.byteLength,
+      mtimeMs: 1
+    };
+    const manager = new ImportDuplicateDetectionManager({
+      queue: item.queue,
+      staging: item.staging,
+      validatedLookup: () => ({
+        jobId: item.job.id,
+        token: 'validated-token',
+        size: bytes.byteLength,
+        sha256: sha256(bytes),
+        validation: {}
+      }),
+      libraryTracks: () => [candidate],
+      hashLibraryTrack: async () => null
+    });
+
     const check = await manager.detect(item.job.id);
-    assert.equal(check.confidence, 'exact');
+    assert.equal(check.confidence, 'none');
+    assert.equal(check.disposition, 'notice');
+    assert.equal(check.hashCompared, false);
+    assert.equal(check.matches.length, 0);
   } finally {
     await rm(item.root, { recursive: true, force: true });
   }
