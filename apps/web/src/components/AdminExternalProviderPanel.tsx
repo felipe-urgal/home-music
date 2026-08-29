@@ -103,18 +103,20 @@ export function AdminExternalProviderPanel({
     <section className="admin-import-provider" aria-labelledby="admin-import-provider-title">
       <div className="admin-import-upload__heading">
         <div>
-          <span className="my-account-link-group__label">Fonte externa</span>
-          <strong id="admin-import-provider-title">Adquirir mídia com provider isolado</strong>
+          <span className="my-account-link-group__label">Fontes externas</span>
+          <strong id="admin-import-provider-title">YouTube Music e sites compatíveis</strong>
         </div>
-        <small>{!providersLoaded ? 'Verificando…' : available.length > 0 ? `${available.length} disponível` : 'Não configurado'}</small>
+        <small>{!providersLoaded ? 'Verificando…' : available.length > 0 ? `${available.length} disponível` : 'yt-dlp não encontrado'}</small>
       </div>
 
       {providersLoaded && available.length === 0 ? (
         <div className="admin-import-provider__unavailable">
           <CircleAlert />
           <div>
-            <strong>Provider externo desativado</strong>
-            <small>Configure o executável e o launcher de egress seguro no servidor para habilitar esta entrada.</small>
+            <strong>yt-dlp não está disponível no servidor</strong>
+            <small>
+              Instale o yt-dlp em /usr/local/bin, /usr/bin ou ~/.local/bin; para outro caminho, configure HOME_MUSIC_YT_DLP_PATH.
+            </small>
           </div>
         </div>
       ) : available.length > 0 ? (
@@ -131,14 +133,14 @@ export function AdminExternalProviderPanel({
               </select>
             </label>
             <label className="admin-import-provider__url">
-              <span>URL do conteúdo</span>
+              <span>Link do conteúdo</span>
               <input
                 type="url"
                 inputMode="url"
                 autoCapitalize="none"
                 autoCorrect="off"
                 spellCheck={false}
-                placeholder="https://..."
+                placeholder="https://music.youtube.com/watch?v=..."
                 value={url}
                 disabled={submitting || Boolean(activeJob?.status === 'processing')}
                 onChange={event => { setUrl(event.target.value); if (error) setError(null); }}
@@ -150,7 +152,7 @@ export function AdminExternalProviderPanel({
             </button>
           </div>
           <small className="admin-import-provider__policy">
-            <ShieldCheck /> Use apenas conteúdo que você tenha direito de baixar. A aquisição roda fora da biblioteca, sob isolamento de egress.
+            <ShieldCheck /> Links do YouTube e YouTube Music devem ser colados aqui, não em “URL direta”. Use apenas conteúdo que você tenha direito de baixar.
           </small>
         </form>
       ) : (
@@ -167,7 +169,7 @@ export function AdminExternalProviderPanel({
           <div>
             <strong>{activeJob.label}</strong>
             <small>{activeJob.status === 'processing'
-              ? 'Provider adquirindo a melhor fonte de áudio no scratch isolado.'
+              ? 'Adquirindo a melhor fonte de áudio pelo proxy de egress isolado.'
               : activeJob.status === 'pending'
                 ? 'Mídia recebida no staging. Aguardando validação técnica.'
                 : activeJob.error || 'Operação encerrada.'}</small>
