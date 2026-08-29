@@ -28,6 +28,8 @@ Exemplo opcional:
 HOME_MUSIC_YT_DLP_PATH=/usr/local/bin/yt-dlp
 ```
 
+Para YouTube/YouTube Music, versões atuais do yt-dlp exigem um runtime JavaScript externo para suporte completo. O adapter fornece explicitamente o próprio executável Node que já está executando o Home Music através de `--js-runtimes node:<process.execPath>`, então o deploy não precisa instalar Deno apenas para esse provider.
+
 A instalação/atualização do `yt-dlp` é responsabilidade do deploy. O Home Music não executa auto-update da engine.
 
 ## Fluxo
