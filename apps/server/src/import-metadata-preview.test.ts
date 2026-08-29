@@ -86,7 +86,7 @@ test('metadata embutida validada vence sugestão conflitante do provider', async
   }
 });
 
-test('metadata parcial usa provider somente como sugestão e fallback local de filename', async () => {
+test('metadata parcial mantém provider como sugestão até aceite explícito', async () => {
   const item = await fixture({
     metadata: { title: null, artist: null, album: null, albumArtist: null },
     provider: { artist: 'Artista sugerido', album: 'Álbum sugerido' }
@@ -96,12 +96,20 @@ test('metadata parcial usa provider somente como sugestão e fallback local de f
     const result = await item.manager.extract(item.job.id);
     assert.equal(result.preview.effective.title, 'Faixa sem tag');
     assert.equal(result.preview.fieldStates.title, 'fallback');
-    assert.equal(result.preview.effective.artist, 'Artista sugerido');
+    assert.equal(result.preview.effective.artist, null);
+    assert.equal(result.preview.provider?.artist, 'Artista sugerido');
     assert.equal(result.preview.fieldStates.artist, 'suggested');
-    assert.equal(result.preview.effective.album, 'Álbum sugerido');
+    assert.equal(result.preview.effective.album, null);
+    assert.equal(result.preview.provider?.album, 'Álbum sugerido');
     assert.equal(result.preview.fieldStates.album, 'suggested');
-    assert.equal(result.preview.effective.albumArtist, 'Artista sugerido');
-    assert.equal(result.preview.fieldStates.albumArtist, 'fallback');
+    assert.equal(result.preview.effective.albumArtist, null);
+    assert.equal(result.preview.fieldStates.albumArtist, 'missing');
+
+    const accepted = item.manager.update(item.job.id, { artist: 'Artista sugerido' });
+    assert.equal(accepted.preview.effective.artist, 'Artista sugerido');
+    assert.equal(accepted.preview.fieldStates.artist, 'edited');
+    assert.equal(accepted.preview.effective.albumArtist, 'Artista sugerido');
+    assert.equal(accepted.preview.fieldStates.albumArtist, 'fallback');
   } finally {
     await rm(item.root, { recursive: true, force: true });
   }
