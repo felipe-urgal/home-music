@@ -88,10 +88,7 @@ test('rota externa anuncia capability e entrega aquisição ao staging comum', a
     assert.equal(settled?.source.type, 'provider');
     assert.equal(settled?.source.provider, 'fixture');
 
-    const inspected = await item.staging.inspectPayload(jobId, async handle => {
-      const info = await handle.stat();
-      return info.size;
-    });
+    const inspected = await item.staging.inspectPayload(jobId, async target => target.size);
     assert.equal(inspected, Buffer.byteLength('fixture-audio'));
     assert.deepEqual(item.externalProviders.getPrepared(jobId)?.metadata, {
       sourceId: null,
