@@ -416,7 +416,7 @@ function inferGenericVideoMetadata(value: unknown) {
     .split(/\s*[-–—]\s*/)
     .map(part => part.trim())
     .filter(Boolean);
-  if (parts.length < 2) return null;
+  if (parts.length < 3) return null;
 
   const extras = parts.slice(2);
   if (extras.some(part => !VIDEO_CONTEXT_SUFFIX.test(part))) return null;
