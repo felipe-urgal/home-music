@@ -64,7 +64,7 @@ test('não confia em URL retornada pelo provider e ignora item sem id seguro', a
     ]
   });
   const result = await item.inspector.inspect(
-    { url: 'https://www.youtube.com/watch?v=abc&list=PL123' },
+    { url: 'https://www.youtube.com/playlist?list=PL123' },
     new AbortController().signal
   );
   assert.ok(result);
@@ -84,10 +84,20 @@ test('link individual sem parâmetro list não é tratado como lote', async () =
   assert.equal(item.requests.length, 0);
 });
 
+test('link watch com contexto de Mix continua sendo uma faixa individual', async () => {
+  const item = inspectorWith({ _type: 'playlist', entries: [{ id: 'other123' }] });
+  const result = await item.inspector.inspect(
+    { url: 'https://www.youtube.com/watch?v=oDdtJfBTfVw&list=RD4cxSmgHV_eQ&index=13' },
+    new AbortController().signal
+  );
+  assert.equal(result, null);
+  assert.equal(item.requests.length, 0);
+});
+
 test('host fora do YouTube não é enviado ao inspector de playlist', async () => {
   const item = inspectorWith({ _type: 'playlist', entries: [] });
   const result = await item.inspector.inspect(
-    { url: 'https://example.com/list?list=PL123' },
+    { url: 'https://example.com/playlist?list=PL123' },
     new AbortController().signal
   );
   assert.equal(result, null);
@@ -97,7 +107,7 @@ test('host fora do YouTube não é enviado ao inspector de playlist', async () =
 test('resultado não-playlist permite fallback para importação individual', async () => {
   const item = inspectorWith({ _type: 'video', id: 'abcDEF_1234', title: 'Faixa' });
   const result = await item.inspector.inspect(
-    { url: 'https://www.youtube.com/watch?v=abcDEF_1234&list=PL123' },
+    { url: 'https://www.youtube.com/playlist?list=PL123' },
     new AbortController().signal
   );
   assert.equal(result, null);
