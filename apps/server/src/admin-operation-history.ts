@@ -382,6 +382,7 @@ export class AdminOperationHistoryStore {
     `);
 
     this.recoverInterruptedOperations();
+    this.recoverOrphanRetryClaims();
     this.trimRetained();
   }
 
@@ -637,6 +638,23 @@ export class AdminOperationHistoryStore {
           import_failure_disposition = CASE WHEN kind = 'import' THEN 'none' ELSE import_failure_disposition END
       WHERE status IN ('pending', 'running')
     `).run(finishedAt, INTERRUPTED_MESSAGE, INTERRUPTED_ACTION);
+  }
+
+  private recoverOrphanRetryClaims() {
+    this.db.prepare(`
+      UPDATE admin_operation_history
+      SET can_retry = 1
+      WHERE kind = 'import'
+        AND status = 'failed'
+        AND can_retry = 0
+        AND import_failure_disposition = 'retryable'
+        AND import_source_type IN ('upload', 'url')
+        AND NOT EXISTS (
+          SELECT 1
+          FROM admin_operation_history AS child
+          WHERE child.import_retry_of_id = admin_operation_history.id
+        )
+    `).run();
   }
 
   private trimRetained() {
