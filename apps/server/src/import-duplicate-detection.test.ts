@@ -240,7 +240,7 @@ test('não bloqueia falso positivo com mesmo título e duração mas artista dif
     assert.equal(check.disposition, 'notice');
     assert.equal(manager.isReady(item.job.id), true);
     assert.equal(check.matches[0].confidence, 'possible');
-    assert.deepEqual([...check.matches[0].reasons].sort(), ['duration', 'title']);
+    assert.deepEqual([...check.matches[0].reasons].sort(), ['duration', 'filename', 'title']);
   } finally {
     await rm(item.root, { recursive: true, force: true });
   }
