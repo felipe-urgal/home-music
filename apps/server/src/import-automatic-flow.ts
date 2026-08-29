@@ -26,6 +26,7 @@ type ImportAutomaticFlowOptions = {
     'captureSource' | 'forgetCheck' | 'detect' | 'get' | 'isReady'
   >;
   safeDestination: Pick<ImportSafeDestinationManager, 'promote'>;
+  promoteAutomatically?: boolean;
   waitTimeoutMs?: number;
   pollIntervalMs?: number;
   logger?: ImportAutomaticFlowLogger;
@@ -33,6 +34,7 @@ type ImportAutomaticFlowOptions = {
 
 export type ImportAutomaticFlowReason =
   | 'completed'
+  | 'destination_review'
   | 'metadata_review'
   | 'duplicate_review'
   | 'duplicate_blocked'
@@ -92,6 +94,7 @@ export class ImportAutomaticFlowManager {
   private readonly metadataPreview: ImportAutomaticFlowOptions['metadataPreview'];
   private readonly duplicateDetection: ImportAutomaticFlowOptions['duplicateDetection'];
   private readonly safeDestination: ImportAutomaticFlowOptions['safeDestination'];
+  private readonly promoteAutomatically: boolean;
   private readonly waitTimeoutMs: number;
   private readonly pollIntervalMs: number;
   private readonly logger?: ImportAutomaticFlowLogger;
@@ -104,6 +107,7 @@ export class ImportAutomaticFlowManager {
     this.metadataPreview = options.metadataPreview;
     this.duplicateDetection = options.duplicateDetection;
     this.safeDestination = options.safeDestination;
+    this.promoteAutomatically = options.promoteAutomatically ?? false;
     this.waitTimeoutMs = options.waitTimeoutMs ?? DEFAULT_WAIT_TIMEOUT_MS;
     this.pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
     this.logger = options.logger;
@@ -210,6 +214,14 @@ export class ImportAutomaticFlowManager {
       }
       if (!this.duplicateDetection.isReady(jobId)) {
         return { jobId, reason: 'duplicate_review' };
+      }
+
+      if (!this.promoteAutomatically) {
+        this.logger?.info?.(
+          { importJobId: jobId, stage: 'destination-review' },
+          'Fluxo automático preparado e aguardando confirmação do destino final.'
+        );
+        return { jobId, reason: 'destination_review' };
       }
 
       await this.safeDestination.promote(jobId, undefined);

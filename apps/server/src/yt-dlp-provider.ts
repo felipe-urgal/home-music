@@ -29,6 +29,8 @@ const SAFE_CONTENT_TYPES: Record<string, string> = {
 };
 const LOSSLESS_CODECS = new Set(['alac', 'ape', 'flac', 'wavpack']);
 const YOUTUBE_PLAYLIST_PARAMS = ['list', 'index', 'start_radio', 'playnext'];
+const VIDEO_CONTEXT_SUFFIX = /^(?:luau\s+mtv|mtv\s+unplugged|official(?:\s+music)?\s+video|official\s+audio|vídeo\s+oficial|video\s+oficial|clipe\s+oficial|áudio\s+oficial|audio\s+oficial|lyric\s+video|lyrics?|legendado|ao\s+vivo|live|visualizer|acústico|acustico)$/i;
+const TRAILING_VIDEO_CONTEXT = /\s*[\[(](?:official(?:\s+music)?\s+video|official\s+audio|vídeo\s+oficial|video\s+oficial|clipe\s+oficial|áudio\s+oficial|audio\s+oficial|lyric\s+video|lyrics?|legendado|ao\s+vivo|live|visualizer)[\])]\s*$/i;
 
 export const YT_DLP_PROVIDER_ID = 'yt-dlp';
 export const YT_DLP_COMMAND_CONFIG = 'command';
@@ -399,11 +401,42 @@ async function findPreparedOutput(scratchDir: string) {
   return candidate;
 }
 
+function cleanInferredLabel(value: string) {
+  return value
+    .replace(/([A-Za-zÀ-ÿ])[._](?=[A-Za-zÀ-ÿ])/g, '$1 ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function inferGenericVideoMetadata(value: unknown) {
+  const raw = cleanString(value);
+  if (!raw) return null;
+
+  const parts = raw
+    .split(/\s*[-–—]\s*/)
+    .map(part => part.trim())
+    .filter(Boolean);
+  if (parts.length < 3) return null;
+
+  const extras = parts.slice(2);
+  if (extras.some(part => !VIDEO_CONTEXT_SUFFIX.test(part))) return null;
+
+  const artist = cleanInferredLabel(parts[0]);
+  const title = cleanInferredLabel(parts[1]).replace(TRAILING_VIDEO_CONTEXT, '').trim();
+  if (!artist || !title || artist.length > 200 || title.length > 300) return null;
+  return { artist, title };
+}
+
 function providerMetadata(info: YtDlpMetadata) {
+  const track = cleanString(info.track);
+  const explicitArtist = cleanString(info.artist);
+  const structuredArtist = explicitArtist ?? (track ? cleanString(info.creator) : null);
+  const inferred = !track && !structuredArtist ? inferGenericVideoMetadata(info.title) : null;
+
   return {
     sourceId: cleanString(info.id),
-    title: cleanString(info.track) ?? cleanString(info.title),
-    artist: cleanString(info.artist) ?? cleanString(info.creator),
+    title: track ?? inferred?.title ?? cleanString(info.title),
+    artist: structuredArtist ?? inferred?.artist ?? null,
     album: cleanString(info.album),
     thumbnailUrl: cleanThumbnail(info)
   };

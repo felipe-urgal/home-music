@@ -36,19 +36,19 @@ function validMp3Probe() {
   });
 }
 
-async function waitForCompleted(queue: ImportJobQueue, jobId: string) {
+async function waitForPrepared(queue: ImportJobQueue, jobId: string, duplicateReady: () => boolean) {
   for (let attempt = 0; attempt < 200; attempt += 1) {
     const job = queue.get(jobId);
-    if (job?.status === 'completed') return job;
+    if (job?.status === 'pending' && job.mediaDecision && job.metadataPreview && duplicateReady()) return job;
     if (job?.status === 'failed' || job?.status === 'cancelled') {
       assert.fail(`Job automático terminou como ${job.status}: ${job.error ?? 'sem diagnóstico'}`);
     }
     await new Promise(resolve => setTimeout(resolve, 5));
   }
-  assert.fail(`Job automático não concluiu. Estado atual: ${queue.get(jobId)?.status}`);
+  assert.fail(`Job automático não ficou pronto para destino. Estado atual: ${queue.get(jobId)?.status}`);
 }
 
-test('upload usa fluxo automático por padrão e chega à biblioteca sem chamadas intermediárias', async () => {
+test('upload prepara validação e metadata automaticamente e aguarda confirmação do destino', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'home-music-import-auto-route-'));
   const musicDir = path.join(root, 'music');
   const stagingRoot = path.join(root, 'staging');
@@ -145,12 +145,23 @@ test('upload usa fluxo automático por padrão e chega à biblioteca sem chamada
     });
     assert.equal(uploaded.statusCode, 200);
 
-    const completed = await waitForCompleted(queue, jobId);
-    assert.equal(completed.mediaDecision?.profile, 'original');
-    assert.equal(completed.metadataPreview?.effective.title, 'Faixa automática');
-    assert.equal(completed.metadataPreview?.effective.artist, 'Artista automático');
+    const prepared = await waitForPrepared(queue, jobId, () => duplicateDetection.isReady(jobId));
+    assert.equal(prepared.mediaDecision?.profile, 'original');
+    assert.equal(prepared.metadataPreview?.effective.title, 'Faixa automática');
+    assert.equal(prepared.metadataPreview?.effective.artist, 'Artista automático');
+    assert.equal(staging.hasJob(jobId), true);
+
+    const promoted = await app.inject({
+      method: 'POST',
+      url: `/api/admin/imports/${jobId}/promote`,
+      headers: { ...headers, 'content-type': 'application/json' },
+      payload: { folderPath: 'Favoritas' }
+    });
+    assert.equal(promoted.statusCode, 200);
+    assert.equal(promoted.json().job.status, 'completed');
+    assert.equal(promoted.json().destination.folderPath, 'Favoritas');
     assert.equal(
-      await readFile(path.join(musicDir, 'Importados', 'Artista automático - Faixa automática.mp3'), 'utf8'),
+      await readFile(path.join(musicDir, 'Favoritas', 'Artista automático - Faixa automática.mp3'), 'utf8'),
       'abcd'
     );
     assert.equal(staging.hasJob(jobId), false);

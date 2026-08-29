@@ -38,6 +38,7 @@ import './desktop-now-playing.css';
 import './account-shell.css';
 import './desktop-overlays.css';
 import './mobile-shell.css';
+import './admin-import-redesign.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

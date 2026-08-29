@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import type { ImportJob } from '@home-music/shared';
-import { Boxes, CircleAlert, LoaderCircle, ShieldCheck, X } from 'lucide-react';
+import { Boxes, CircleAlert, Link2, LoaderCircle, ShieldCheck, X } from 'lucide-react';
 import {
   cancelAdminExternalProvider,
   getAdminExternalProviders,
@@ -12,6 +12,7 @@ type AdminExternalProviderPanelProps = {
   jobs: ImportJob[];
   onJobUpdated: (job: ImportJob) => void;
   onRefresh: () => Promise<unknown> | unknown;
+  compact?: boolean;
 };
 
 const TERMINAL_STATUSES = new Set<ImportJob['status']>(['completed', 'failed', 'cancelled']);
@@ -30,19 +31,21 @@ function activeJobMessage(job: ImportJob) {
   if (job.status === 'failed' || job.status === 'cancelled') return job.error || 'Operação encerrada.';
   if (job.status === 'processing') {
     return job.mediaDecision
-      ? 'Validação e promoção automáticas em andamento.'
-      : 'Adquirindo a melhor fonte de áudio pelo proxy de egress isolado.';
+      ? 'Validando a mídia automaticamente.'
+      : 'Baixando a melhor fonte de áudio…';
   }
   if (job.metadataPreview) {
-    return 'Verificações automáticas em andamento ou aguardando uma revisão necessária.';
+    return 'Prévia pronta. Confira as informações e escolha o destino.';
   }
-  return 'Mídia recebida. A validação automática será iniciada pelo servidor.';
+  if (job.mediaDecision) return 'Preparando metadata e verificação de duplicatas…';
+  return 'Mídia recebida. As verificações automáticas vão começar.';
 }
 
 export function AdminExternalProviderPanel({
   jobs,
   onJobUpdated,
-  onRefresh
+  onRefresh,
+  compact = false
 }: AdminExternalProviderPanelProps) {
   const [providers, setProviders] = useState<AdminExternalProviderDescriptor[]>([]);
   const [providersLoaded, setProvidersLoaded] = useState(false);
@@ -69,12 +72,14 @@ export function AdminExternalProviderPanel({
   }, [available, providerId]);
 
   const activeJob = activeJobId ? jobs.find(job => job.id === activeJobId) ?? null : null;
-  const activeJobRunning = Boolean(activeJob && !TERMINAL_STATUSES.has(activeJob.status));
-  const canCancelAcquisition = activeJob?.status === 'processing' && !activeJob.mediaDecision;
+  const acquisitionRunning = Boolean(activeJob?.status === 'processing' && !activeJob.mediaDecision);
+  const pipelineRunning = Boolean(activeJob?.status === 'processing');
+  const activeJobRunning = Boolean(activeJob && !TERMINAL_STATUSES.has(activeJob.status) && !activeJob.metadataPreview);
+  const canCancelAcquisition = acquisitionRunning;
 
   useEffect(() => {
     if (!activeJobId || !activeJobRunning) return;
-    const timer = window.setInterval(() => { void onRefresh(); }, 1000);
+    const timer = window.setInterval(() => { void onRefresh(); }, 900);
     return () => window.clearInterval(timer);
   }, [activeJobId, activeJobRunning, onRefresh]);
 
@@ -97,7 +102,7 @@ export function AdminExternalProviderPanel({
       onJobUpdated(job);
       setUrl('');
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'Não foi possível iniciar o provider externo.');
+      setError(error instanceof Error ? error.message : 'Não foi possível analisar esse link.');
     } finally {
       setSubmitting(false);
     }
@@ -118,41 +123,53 @@ export function AdminExternalProviderPanel({
   };
 
   return (
-    <section className="admin-import-provider" aria-labelledby="admin-import-provider-title">
-      <div className="admin-import-upload__heading">
-        <div>
-          <span className="my-account-link-group__label">Fontes externas</span>
-          <strong id="admin-import-provider-title">YouTube Music e sites compatíveis</strong>
+    <section className={`admin-import-provider${compact ? ' is-compact' : ''}`} aria-labelledby="admin-import-provider-title">
+      {!compact && (
+        <div className="admin-import-upload__heading">
+          <div>
+            <span className="my-account-link-group__label">Fontes externas</span>
+            <strong id="admin-import-provider-title">YouTube Music e sites compatíveis</strong>
+          </div>
+          <small>{!providersLoaded ? 'Verificando…' : available.length > 0 ? `${available.length} disponível` : 'yt-dlp não encontrado'}</small>
         </div>
-        <small>{!providersLoaded ? 'Verificando…' : available.length > 0 ? `${available.length} disponível` : 'yt-dlp não encontrado'}</small>
-      </div>
+      )}
 
       {providersLoaded && available.length === 0 ? (
         <div className="admin-import-provider__unavailable">
           <CircleAlert />
           <div>
             <strong>yt-dlp não está disponível no servidor</strong>
-            <small>
-              Instale o yt-dlp em /usr/local/bin, /usr/bin ou ~/.local/bin; para outro caminho, configure HOME_MUSIC_YT_DLP_PATH.
-            </small>
+            <small>Instale o yt-dlp em /usr/local/bin, /usr/bin ou ~/.local/bin.</small>
           </div>
         </div>
       ) : available.length > 0 ? (
         <form className="admin-import-provider__form" onSubmit={event => void submit(event)}>
+          {compact && (
+            <div className="admin-import-provider__compact-heading">
+              <div>
+                <strong id="admin-import-provider-title">Cole o link</strong>
+                <small>Suporta YouTube e YouTube Music</small>
+              </div>
+              <Link2 />
+            </div>
+          )}
           <div className="admin-import-provider__fields">
-            <label>
-              <span>Provider</span>
-              <select
-                value={providerId}
-                disabled={submitting || activeJobRunning}
-                onChange={event => setProviderId(event.target.value)}
-              >
-                {available.map(provider => <option value={provider.id} key={provider.id}>{provider.label}</option>)}
-              </select>
-            </label>
+            {!compact && (
+              <label>
+                <span>Provider</span>
+                <select
+                  value={providerId}
+                  disabled={submitting || activeJobRunning}
+                  onChange={event => setProviderId(event.target.value)}
+                >
+                  {available.map(provider => <option value={provider.id} key={provider.id}>{provider.label}</option>)}
+                </select>
+              </label>
+            )}
             <label className="admin-import-provider__url">
-              <span>Link do conteúdo</span>
+              {!compact && <span>Link do conteúdo</span>}
               <input
+                aria-label={compact ? 'Link do YouTube ou YouTube Music' : undefined}
                 type="url"
                 inputMode="url"
                 autoCapitalize="none"
@@ -164,14 +181,16 @@ export function AdminExternalProviderPanel({
                 onChange={event => { setUrl(event.target.value); if (error) setError(null); }}
               />
             </label>
-            <button type="submit" disabled={submitting || !providerId || !url.trim() || activeJobRunning}>
-              {submitting ? <LoaderCircle className="is-spinning" /> : <Boxes />}
-              Importar
+            <button className={compact ? 'is-primary' : undefined} type="submit" disabled={submitting || !providerId || !url.trim() || activeJobRunning}>
+              {submitting || pipelineRunning ? <LoaderCircle className="is-spinning" /> : compact ? <Link2 /> : <Boxes />}
+              {compact ? 'Analisar link' : 'Importar'}
             </button>
           </div>
-          <small className="admin-import-provider__policy">
-            <ShieldCheck /> Links do YouTube e YouTube Music devem ser colados aqui, não em “URL direta”. A importação normal continua automaticamente; o sistema só pede revisão quando necessário. Use apenas conteúdo que você tenha direito de baixar.
-          </small>
+          {!compact && (
+            <small className="admin-import-provider__policy">
+              <ShieldCheck /> Links do YouTube e YouTube Music devem ser colados aqui, não em “URL direta”. Use apenas conteúdo que você tenha direito de baixar.
+            </small>
+          )}
         </form>
       ) : (
         <div className="admin-import-empty"><LoaderCircle className="is-spinning" /> Verificando providers…</div>
@@ -180,12 +199,12 @@ export function AdminExternalProviderPanel({
       {error && <div className="my-account-message is-error admin-import-message" role="alert">{error}</div>}
 
       {activeJob && (
-        <article className={`admin-import-url-status is-${activeJob.status}`} aria-live="polite">
+        <article className={`admin-import-url-status is-${activeJob.status}${compact ? ' is-compact' : ''}`} aria-live="polite">
           <span className="admin-import-job__status">
             {activeJobRunning ? <LoaderCircle className="is-spinning" /> : <Boxes />}
           </span>
           <div>
-            <strong>{activeJob.label}</strong>
+            <strong>{activeJob.status === 'pending' && activeJob.metadataPreview ? 'Link analisado' : activeJob.label}</strong>
             <small>{activeJobMessage(activeJob)}</small>
           </div>
           {canCancelAcquisition && (

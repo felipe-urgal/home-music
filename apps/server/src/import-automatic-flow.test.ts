@@ -72,6 +72,7 @@ function duplicateCheck(disposition: ImportDuplicateCheck['disposition']): Impor
 function createFixture(options: {
   extractedPreview?: ImportMetadataPreview;
   check?: ImportDuplicateCheck;
+  promoteAutomatically?: boolean;
 } = {}) {
   const queue = new ImportJobQueue({ createId: () => 'job' });
   const job = queue.enqueue({ type: 'provider', provider: 'yt-dlp' }, 'yt-dlp');
@@ -173,17 +174,18 @@ function createFixture(options: {
     metadataPreview,
     duplicateDetection,
     safeDestination,
+    promoteAutomatically: options.promoteAutomatically,
     waitTimeoutMs: 500,
     pollIntervalMs: 5
   });
   return { queue, job, calls, manager };
 }
 
-test('happy path aceita sugestões confiáveis e promove sem cliques intermediários', async () => {
+test('happy path prepara tudo e pausa para confirmação do destino final', async () => {
   const item = createFixture();
   const outcome = await item.manager.startWhenReady(item.job.id);
-  assert.equal(outcome.reason, 'completed');
-  assert.equal(item.queue.get(item.job.id)?.status, 'completed');
+  assert.equal(outcome.reason, 'destination_review');
+  assert.equal(item.queue.get(item.job.id)?.status, 'pending');
   assert.deepEqual(item.calls, [
     'capture-metadata',
     'capture-fingerprint',
@@ -192,9 +194,16 @@ test('happy path aceita sugestões confiáveis e promove sem cliques intermediá
     'extract',
     'accept-suggestions',
     'forget-duplicates',
-    'detect-duplicates',
-    'promote'
+    'detect-duplicates'
   ]);
+});
+
+test('modo explícito ainda pode promover automaticamente', async () => {
+  const item = createFixture({ promoteAutomatically: true });
+  const outcome = await item.manager.startWhenReady(item.job.id);
+  assert.equal(outcome.reason, 'completed');
+  assert.equal(item.queue.get(item.job.id)?.status, 'completed');
+  assert.equal(item.calls.at(-1), 'promote');
 });
 
 test('aguarda aquisição assíncrona antes de iniciar validação', async () => {
@@ -202,7 +211,7 @@ test('aguarda aquisição assíncrona antes de iniciar validação', async () =>
   item.queue.transition(item.job.id, 'processing');
   setTimeout(() => item.queue.transition(item.job.id, 'pending'), 20);
   const outcome = await item.manager.startWhenReady(item.job.id);
-  assert.equal(outcome.reason, 'completed');
+  assert.equal(outcome.reason, 'destination_review');
   assert.equal(item.calls[0], 'capture-metadata');
 });
 

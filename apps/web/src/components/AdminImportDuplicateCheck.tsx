@@ -68,12 +68,22 @@ export function AdminImportDuplicateCheckPanel({
     let active = true;
     setLoading(true);
     setError(null);
+
     void getAdminImportDuplicateCheck(job.id)
-      .then(result => { if (active) setCheck(result); })
+      .then(async result => {
+        if (!active) return;
+        if (result) {
+          setCheck(result);
+          return;
+        }
+        const detected = await detectAdminImportDuplicates(job.id);
+        if (active) setCheck(detected);
+      })
       .catch(caught => {
-        if (active) setError(caught instanceof Error ? caught.message : 'Não foi possível consultar duplicatas.');
+        if (active) setError(caught instanceof Error ? caught.message : 'Não foi possível verificar duplicatas.');
       })
       .finally(() => { if (active) setLoading(false); });
+
     return () => { active = false; };
   }, [job.id, job.metadataPreview?.generatedAt]);
 
@@ -106,7 +116,7 @@ export function AdminImportDuplicateCheckPanel({
   if (loading) {
     return (
       <div className="admin-import-duplicates is-loading" role="status">
-        <LoaderCircle className="is-spinning" /> Consultando verificação de duplicatas…
+        <LoaderCircle className="is-spinning" /> Verificando duplicatas…
       </div>
     );
   }
@@ -117,13 +127,13 @@ export function AdminImportDuplicateCheckPanel({
         <div>
           <CopyCheck />
           <span>
-            <strong>Verificação de duplicatas</strong>
-            <small>Compare hash, duração, nome e metadata com a biblioteca atual.</small>
+            <strong>Não foi possível concluir a verificação automática</strong>
+            <small>Tente novamente antes de escolher o destino.</small>
           </span>
         </div>
         <button type="button" disabled={working} onClick={() => void detect()}>
-          {working ? <LoaderCircle className="is-spinning" /> : <CopyCheck />}
-          {working ? 'Verificando…' : 'Verificar duplicatas'}
+          {working ? <LoaderCircle className="is-spinning" /> : <RefreshCw />}
+          {working ? 'Verificando…' : 'Tentar novamente'}
         </button>
         {error && <small className="admin-import-duplicates__error" role="alert">{error}</small>}
       </div>
