@@ -24,6 +24,8 @@ const ALLOWED_CONTENT_TYPES = new Set([
   'audio/x-wav',
   'audio/wave',
   'audio/mp4',
+  'audio/x-m4a',
+  'audio/mp4a-latm',
   'audio/aac',
   'audio/ogg',
   'application/ogg',
@@ -49,9 +51,12 @@ type UrlSession = {
   request: ReturnType<typeof http.request> | null;
   response: IncomingMessage | null;
   cancelRequested: boolean;
+  timedOut: boolean;
   completed: boolean;
   settled: Promise<void>;
   resolveSettled: () => void;
+  abortPromise: Promise<never>;
+  rejectAbort: (error: Error) => void;
 };
 
 type ImportUrlManagerOptions = {
@@ -131,6 +136,10 @@ function parseIntegerConfig(
   return parsed;
 }
 
+function unbracketHostname(hostname: string) {
+  return hostname.startsWith('[') && hostname.endsWith(']') ? hostname.slice(1, -1) : hostname;
+}
+
 function parseUrl(value: unknown) {
   if (typeof value !== 'string' || !value.trim()) {
     throw new ImportUrlError('URL obrigatória.');
@@ -160,7 +169,7 @@ function parseUrl(value: unknown) {
     throw new ImportUrlError('Somente as portas padrão HTTP/HTTPS são permitidas.');
   }
 
-  const hostname = url.hostname.toLowerCase();
+  const hostname = unbracketHostname(url.hostname).toLowerCase();
   if (
     hostname === 'localhost'
     || hostname.endsWith('.localhost')
@@ -216,8 +225,8 @@ function isUnsafeIpv4(address: string) {
 
 function expandIpv6(address: string) {
   const normalized = normalizeIp(address);
-  const mapped = normalized.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-  if (mapped) return { mappedIpv4: mapped[1], groups: null };
+  const dottedMapped = normalized.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+  if (dottedMapped) return { mappedIpv4: dottedMapped[1], groups: null };
 
   const halves = normalized.split('::');
   if (halves.length > 2) return { mappedIpv4: null, groups: null };
@@ -234,6 +243,12 @@ function expandIpv6(address: string) {
   return { mappedIpv4: null, groups: parsed };
 }
 
+function ipv4FromIpv6Tail(groups: number[]) {
+  const high = groups[6];
+  const low = groups[7];
+  return `${high >>> 8}.${high & 0xff}.${low >>> 8}.${low & 0xff}`;
+}
+
 function isUnsafeIpv6(address: string) {
   const expanded = expandIpv6(address);
   if (expanded.mappedIpv4) return isUnsafeIpv4(expanded.mappedIpv4);
@@ -241,15 +256,23 @@ function isUnsafeIpv6(address: string) {
   if (!groups) return true;
   if (groups.every(group => group === 0)) return true;
   if (groups.slice(0, 7).every(group => group === 0) && groups[7] === 1) return true;
+
+  const mappedHex = groups.slice(0, 5).every(group => group === 0) && groups[5] === 0xffff;
+  if (mappedHex) return isUnsafeIpv4(ipv4FromIpv6Tail(groups));
+  const compatibleIpv4 = groups.slice(0, 6).every(group => group === 0);
+  if (compatibleIpv4) return isUnsafeIpv4(ipv4FromIpv6Tail(groups));
+
   if ((groups[0] & 0xfe00) === 0xfc00) return true;
   if ((groups[0] & 0xffc0) === 0xfe80) return true;
   if ((groups[0] & 0xff00) === 0xff00) return true;
   if (groups[0] === 0x2001 && groups[1] === 0x0db8) return true;
+  if (groups[0] === 0x0064 && groups[1] === 0xff9b && groups[2] === 0x0000) return true;
+  if (groups[0] === 0x0064 && groups[1] === 0xff9b && groups[2] === 0x0001) return true;
   return false;
 }
 
 export function isUnsafeImportAddress(address: string) {
-  const normalized = normalizeIp(address);
+  const normalized = normalizeIp(unbracketHostname(address));
   const family = net.isIP(normalized);
   if (family === 4) return isUnsafeIpv4(normalized);
   if (family === 6) return isUnsafeIpv6(normalized);
@@ -257,11 +280,12 @@ export function isUnsafeImportAddress(address: string) {
 }
 
 async function defaultResolveHost(hostname: string): Promise<ResolvedAddress[]> {
-  const literalFamily = net.isIP(hostname);
+  const normalizedHostname = unbracketHostname(hostname);
+  const literalFamily = net.isIP(normalizedHostname);
   if (literalFamily === 4 || literalFamily === 6) {
-    return [{ address: hostname, family: literalFamily }];
+    return [{ address: normalizedHostname, family: literalFamily }];
   }
-  const results = await lookup(hostname, { all: true, verbatim: true });
+  const results = await lookup(normalizedHostname, { all: true, verbatim: true });
   return results.map(item => ({ address: item.address, family: item.family }));
 }
 
@@ -271,7 +295,7 @@ async function resolveSafeAddress(
 ) {
   let addresses: ResolvedAddress[];
   try {
-    addresses = await resolver(hostname);
+    addresses = await resolver(unbracketHostname(hostname));
   } catch {
     throw new ImportUrlError('Não foi possível resolver o endereço remoto.', 502);
   }
@@ -289,23 +313,28 @@ function createPinnedRequest(
   resolved: ResolvedAddress,
   timeoutMs: number
 ): Promise<{ response: IncomingMessage; request: ReturnType<typeof http.request> }> {
-  const transport = url.protocol === 'https:' ? https : http;
   return new Promise((resolve, reject) => {
-    const request = transport.request({
-      protocol: url.protocol,
+    const commonOptions: http.RequestOptions = {
       host: resolved.address,
       family: resolved.family,
       port: url.protocol === 'https:' ? 443 : 80,
       method: 'GET',
       path: `${url.pathname}${url.search}`,
-      servername: url.protocol === 'https:' ? url.hostname : undefined,
       headers: {
         Host: url.host,
         Accept: 'audio/*, application/octet-stream;q=0.8',
         'User-Agent': 'Home-Music/0.1 URL Import'
       },
       timeout: timeoutMs
-    }, response => resolve({ response, request }));
+    };
+
+    const onResponse = (response: IncomingMessage) => resolve({ response, request });
+    const request = url.protocol === 'https:'
+      ? https.request({
+          ...commonOptions,
+          servername: net.isIP(unbracketHostname(url.hostname)) ? undefined : unbracketHostname(url.hostname)
+        }, onResponse)
+      : http.request(commonOptions, onResponse);
 
     request.once('timeout', () => request.destroy(new ImportUrlError('Tempo limite excedido ao baixar a URL.', 504)));
     request.once('error', reject);
@@ -334,18 +363,22 @@ function redirectLocation(headers: IncomingHttpHeaders) {
 
 function safeJobLabel(url: URL) {
   const base = path.posix.basename(url.pathname) || 'arquivo remoto';
-  return `${url.hostname} · ${base}`.slice(0, 240);
+  return `${unbracketHostname(url.hostname)} · ${base}`.slice(0, 240);
 }
 
 async function defaultValidateAudio(target: ImportValidationTarget) {
   try {
     const metadata = await parseFile(target.path, { duration: true, skipCovers: true });
-    if (!metadata.format.container && !metadata.format.codec) {
-      throw new Error('Formato não reconhecido.');
+    if (!metadata.format.container || !metadata.format.numberOfChannels) {
+      throw new Error('Formato de áudio não reconhecido.');
     }
   } catch {
     throw new ImportUrlError('O conteúdo recebido não foi reconhecido como áudio suportado.');
   }
+}
+
+function timeoutError() {
+  return new ImportUrlError('Tempo limite excedido ao baixar a URL.', 504);
 }
 
 export class ImportUrlManager {
@@ -392,14 +425,19 @@ export class ImportUrlManager {
 
     let resolveSettled!: () => void;
     const settled = new Promise<void>(resolve => { resolveSettled = resolve; });
+    let rejectAbort!: (error: Error) => void;
+    const abortPromise = new Promise<never>((_resolve, reject) => { rejectAbort = reject; });
     const session: UrlSession = {
       jobId: job.id,
       request: null,
       response: null,
       cancelRequested: false,
+      timedOut: false,
       completed: false,
       settled,
-      resolveSettled
+      resolveSettled,
+      abortPromise,
+      rejectAbort
     };
     this.sessions.set(job.id, session);
     this.queue.transition(job.id, 'processing');
@@ -418,11 +456,13 @@ export class ImportUrlManager {
     }
 
     const session = this.sessions.get(jobId);
-    if (session) {
+    if (session && !session.completed) {
       session.cancelRequested = true;
-      session.request?.destroy(new ImportUrlCancelledError());
-      session.response?.destroy(new ImportUrlCancelledError());
-      if (!session.completed) await session.settled.catch(() => undefined);
+      const error = new ImportUrlCancelledError();
+      session.rejectAbort(error);
+      session.request?.destroy(error);
+      session.response?.destroy(error);
+      await session.settled.catch(() => undefined);
     }
 
     await this.staging.cleanupJob(jobId).catch(() => undefined);
@@ -435,14 +475,32 @@ export class ImportUrlManager {
   }
 
   private async download(session: UrlSession, initialUrl: URL) {
+    const timeout = setTimeout(() => {
+      if (session.completed || session.cancelRequested) return;
+      session.timedOut = true;
+      const error = timeoutError();
+      session.rejectAbort(error);
+      session.request?.destroy(error);
+      session.response?.destroy(error);
+    }, this.timeoutMs);
+    timeout.unref?.();
+
     try {
       let currentUrl = initialUrl;
       let response: IncomingMessage | null = null;
 
       for (let redirects = 0; redirects <= this.maxRedirects; redirects += 1) {
-        if (session.cancelRequested) throw new ImportUrlCancelledError();
-        const resolved = await resolveSafeAddress(currentUrl.hostname, this.resolveHost);
-        const result = await this.requestUrl(currentUrl, resolved, this.timeoutMs);
+        this.ensureActive(session);
+        const resolved = await Promise.race([
+          resolveSafeAddress(currentUrl.hostname, this.resolveHost),
+          session.abortPromise
+        ]);
+        this.ensureActive(session);
+        const result = await Promise.race([
+          this.requestUrl(currentUrl, resolved, this.timeoutMs),
+          session.abortPromise
+        ]);
+        this.ensureActive(session);
         session.request = result.request;
         session.response = result.response;
         response = result.response;
@@ -461,6 +519,7 @@ export class ImportUrlManager {
         session.request = null;
       }
 
+      this.ensureActive(session);
       if (!response) throw new ImportUrlError('Servidor remoto não retornou conteúdo.', 502);
       const statusCode = response.statusCode ?? 0;
       if (statusCode < 200 || statusCode >= 300) {
@@ -481,7 +540,11 @@ export class ImportUrlManager {
       }
 
       await this.staging.writePayload(session.jobId, this.limitChunks(session, response));
-      if (session.cancelRequested) throw new ImportUrlCancelledError();
+      this.ensureActive(session);
+      clearTimeout(timeout);
+      session.request = null;
+      session.response = null;
+
       await this.staging.inspectPayload(session.jobId, this.validateAudio);
       if (session.cancelRequested) throw new ImportUrlCancelledError();
 
@@ -497,7 +560,9 @@ export class ImportUrlManager {
         } else {
           const message = error instanceof ImportUrlError
             ? error.message
-            : 'Falha ao baixar a mídia remota.';
+            : session.timedOut
+              ? timeoutError().message
+              : 'Falha ao baixar a mídia remota.';
           this.queue.transition(session.jobId, 'failed', message);
         }
       }
@@ -505,16 +570,22 @@ export class ImportUrlManager {
         this.sessions.delete(session.jobId);
       }
     } finally {
+      clearTimeout(timeout);
       session.request = null;
       session.response = null;
       session.resolveSettled();
     }
   }
 
+  private ensureActive(session: UrlSession) {
+    if (session.cancelRequested) throw new ImportUrlCancelledError();
+    if (session.timedOut) throw timeoutError();
+  }
+
   private async *limitChunks(session: UrlSession, response: IncomingMessage) {
     let receivedBytes = 0;
     for await (const chunk of response) {
-      if (session.cancelRequested) throw new ImportUrlCancelledError();
+      this.ensureActive(session);
       const bytes = chunk instanceof Uint8Array ? chunk : Buffer.from(chunk);
       receivedBytes += bytes.byteLength;
       if (receivedBytes > this.maxBytes) {
@@ -523,6 +594,6 @@ export class ImportUrlManager {
       yield bytes;
     }
     if (receivedBytes === 0) throw new ImportUrlError('O servidor remoto retornou um arquivo vazio.');
-    if (session.cancelRequested) throw new ImportUrlCancelledError();
+    this.ensureActive(session);
   }
 }
