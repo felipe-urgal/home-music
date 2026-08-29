@@ -111,7 +111,13 @@ async function buildApp() {
     sessions,
     users: { getEnabledUserById: userId => users.get(userId) ?? null }
   });
-  registerAdminImportRoutes(app, queue, { uploads, urls, mediaValidation, metadataPreview });
+  registerAdminImportRoutes(app, queue, {
+    uploads,
+    urls,
+    mediaValidation,
+    metadataPreview,
+    automaticFlow: null
+  });
   return { app, root, musicDir, stagingRoot, queue, sessions };
 }
 
