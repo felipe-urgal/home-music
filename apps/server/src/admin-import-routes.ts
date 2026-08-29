@@ -10,6 +10,7 @@ import {
   ExternalProviderImportManager
 } from './external-provider.js';
 import { ExternalProviderScratchManager } from './external-provider-scratch.js';
+import { ImportAutomaticFlowManager } from './import-automatic-flow.js';
 import {
   ImportRetryStartError,
   installImportRetryStarter
@@ -71,6 +72,7 @@ type RegisterAdminImportRoutesOptions = {
   metadataPreview?: ImportMetadataPreviewManager;
   duplicateDetection?: ImportDuplicateDetectionManager;
   safeDestination?: ImportSafeDestinationManager;
+  automaticFlow?: ImportAutomaticFlowManager | null;
   stagingCleanup?: ImportStagingCleanupManager | null;
   providerMetadata?: (jobId: string) => ImportProviderMetadataHint | null;
   onPromoted?: (file: PromotedImportFile, jobId: string) => Promise<void>;
@@ -92,6 +94,10 @@ function sendImportError(reply: FastifyReply, error: unknown) {
     return reply.code(409).send({ error: 'Upload cancelado.' });
   }
   throw error;
+}
+
+function automaticRequested(value: unknown) {
+  return value !== false;
 }
 
 function createDefaultStagingManager() {
@@ -304,6 +310,20 @@ export function registerAdminImportRoutes(
     duplicateReady: jobId => duplicateDetection.isReady(jobId),
     afterPromote: options.onPromoted
   });
+  const automaticFlow = options.automaticFlow === undefined
+    ? new ImportAutomaticFlowManager({
+        queue,
+        mediaValidation,
+        metadataPreview,
+        duplicateDetection,
+        safeDestination,
+        logger: {
+          info: (context, message) => app.log.info(context, message),
+          warn: (context, message) => app.log.warn(context, message)
+        }
+      })
+    : options.automaticFlow;
+  const automaticUploads = new Set<string>();
   const stagingCleanup = options.stagingCleanup !== undefined
     ? options.stagingCleanup
     : process.env.MUSIC_DIR?.trim()
@@ -376,12 +396,13 @@ export function registerAdminImportRoutes(
     return response;
   });
 
-  app.post<{ Body: { fileName?: unknown; size?: unknown } }>(
+  app.post<{ Body: { fileName?: unknown; size?: unknown; automatic?: unknown } }>(
     '/api/admin/imports/uploads',
     async (request, reply) => {
       reply.header('Cache-Control', 'no-store');
       try {
         const result = await uploads.start(request.body?.fileName, request.body?.size);
+        if (automaticFlow && automaticRequested(request.body?.automatic)) automaticUploads.add(result.job.id);
         return reply.code(201).send(result);
       } catch (error) {
         return sendImportError(reply, error);
@@ -398,8 +419,14 @@ export function registerAdminImportRoutes(
         ? Number(contentLengthValue)
         : undefined;
       try {
-        return await uploads.receive(request.params.id, request.body, contentLength);
+        const result = await uploads.receive(request.params.id, request.body, contentLength);
+        if (automaticFlow && automaticUploads.delete(request.params.id)) {
+          void automaticFlow.startWhenReady(request.params.id);
+        }
+        return result;
       } catch (error) {
+        automaticUploads.delete(request.params.id);
+        automaticFlow?.disable(request.params.id);
         return sendImportError(reply, error);
       }
     }
@@ -410,6 +437,8 @@ export function registerAdminImportRoutes(
     async (request, reply) => {
       reply.header('Cache-Control', 'no-store');
       try {
+        automaticUploads.delete(request.params.id);
+        automaticFlow?.disable(request.params.id);
         const job = await uploads.cancel(request.params.id);
         metadataPreview.forget(request.params.id);
         duplicateDetection.forget(request.params.id);
@@ -420,12 +449,15 @@ export function registerAdminImportRoutes(
     }
   );
 
-  app.post<{ Body: { url?: unknown } }>(
+  app.post<{ Body: { url?: unknown; automatic?: unknown } }>(
     '/api/admin/imports/urls',
     async (request, reply) => {
       reply.header('Cache-Control', 'no-store');
       try {
         const result = await urls.start(request.body?.url);
+        if (automaticFlow && automaticRequested(request.body?.automatic)) {
+          void automaticFlow.startWhenReady(result.job.id);
+        }
         return reply.code(202).send(result);
       } catch (error) {
         return sendImportError(reply, error);
@@ -438,6 +470,7 @@ export function registerAdminImportRoutes(
     async (request, reply) => {
       reply.header('Cache-Control', 'no-store');
       try {
+        automaticFlow?.disable(request.params.id);
         const job = await urls.cancel(request.params.id);
         metadataPreview.forget(request.params.id);
         duplicateDetection.forget(request.params.id);
@@ -448,7 +481,7 @@ export function registerAdminImportRoutes(
     }
   );
 
-  app.post<{ Params: { providerId: string }; Body: { url?: unknown } }>(
+  app.post<{ Params: { providerId: string }; Body: { url?: unknown; automatic?: unknown } }>(
     '/api/admin/imports/providers/:providerId',
     async (request, reply) => {
       reply.header('Cache-Control', 'no-store');
@@ -456,6 +489,9 @@ export function registerAdminImportRoutes(
         const result = await externalProviders.start(request.params.providerId, {
           url: typeof request.body?.url === 'string' ? request.body.url : ''
         });
+        if (automaticFlow && automaticRequested(request.body?.automatic)) {
+          void automaticFlow.startWhenReady(result.job.id);
+        }
         return reply.code(202).send(result);
       } catch (error) {
         return sendImportError(reply, error);
@@ -468,6 +504,7 @@ export function registerAdminImportRoutes(
     async (request, reply) => {
       reply.header('Cache-Control', 'no-store');
       try {
+        automaticFlow?.disable(request.params.id);
         const job = await externalProviders.cancel(request.params.id);
         metadataPreview.forget(request.params.id);
         duplicateDetection.forget(request.params.id);
@@ -518,6 +555,7 @@ export function registerAdminImportRoutes(
       try {
         const result = metadataPreview.update(request.params.id, request.body);
         duplicateDetection.forgetCheck(request.params.id);
+        if (automaticFlow?.isEnabled(request.params.id)) void automaticFlow.resume(request.params.id);
         return result;
       } catch (error) {
         return sendImportError(reply, error);
@@ -561,7 +599,9 @@ export function registerAdminImportRoutes(
     async (request, reply) => {
       reply.header('Cache-Control', 'no-store');
       try {
-        return { check: duplicateDetection.review(request.params.id) };
+        const check = duplicateDetection.review(request.params.id);
+        if (automaticFlow?.isEnabled(request.params.id)) void automaticFlow.resume(request.params.id);
+        return { check };
       } catch (error) {
         return sendImportError(reply, error);
       }
@@ -585,7 +625,9 @@ export function registerAdminImportRoutes(
     async (request, reply) => {
       reply.header('Cache-Control', 'no-store');
       try {
-        return await safeDestination.promote(request.params.id, request.body?.folderPath);
+        const result = await safeDestination.promote(request.params.id, request.body?.folderPath);
+        automaticFlow?.disable(request.params.id);
+        return result;
       } catch (error) {
         return sendImportError(reply, error);
       }
