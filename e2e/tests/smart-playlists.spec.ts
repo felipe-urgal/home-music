@@ -31,7 +31,8 @@ async function openPlaylists(page: Page) {
     .getByRole('button', { name: 'Playlists', exact: true }).click();
 }
 
-test('cria, pré-visualiza, abre e remove playlist inteligente', async ({ page }) => {
+test('cria, pré-visualiza, abre e remove playlist inteligente', async ({ page }, testInfo) => {
+  const playlistName = `E2E Inteligente ${testInfo.project.name}`;
   await login(page);
   await openPlaylists(page);
 
@@ -49,27 +50,27 @@ test('cria, pré-visualiza, abre e remove playlist inteligente', async ({ page }
     expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height + 1);
   }
 
-  await dialog.getByText('Nome', { exact: true }).locator('..').getByRole('textbox').fill('E2E Inteligente');
+  await dialog.getByLabel('Nome').fill(playlistName);
   await dialog.getByRole('button', { name: 'Gerar preview' }).click();
   await expect(dialog).toContainText('3 músicas encontradas');
   await expect(dialog.getByRole('button', { name: 'Criar playlist' })).toBeEnabled();
   await dialog.getByRole('button', { name: 'Criar playlist' }).click();
   await expect(dialog).toBeHidden();
 
-  const playlist = page.getByRole('button').filter({ hasText: 'E2E Inteligente' });
+  const playlist = page.getByRole('button').filter({ hasText: playlistName });
   await expect(playlist).toContainText('Inteligente');
   await expect(playlist).toContainText('3 músicas');
   await playlist.click();
 
-  await expect(page.locator('.library-header__title strong')).toContainText('E2E Inteligente');
+  await expect(page.locator('.library-header__title strong')).toContainText(playlistName);
   await expect(page.getByRole('button', { name: 'Editar regra' })).toBeVisible();
 
   page.once('dialog', dialog => dialog.accept());
   await page.getByRole('button', { name: 'Excluir', exact: true }).click();
 
   if ((viewport?.width ?? 390) >= 1024) {
-    await expect(page.getByText('E2E Inteligente', { exact: true })).toHaveCount(0);
+    await expect(page.getByText(playlistName, { exact: true })).toHaveCount(0);
   } else {
-    await expect(page.getByRole('button').filter({ hasText: 'E2E Inteligente' })).toHaveCount(0);
+    await expect(page.getByRole('button').filter({ hasText: playlistName })).toHaveCount(0);
   }
 });
