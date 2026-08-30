@@ -60,6 +60,7 @@ export function AdminLibraryIntegrityScreen({ onBack }: AdminLibraryIntegrityScr
   useEffect(() => { void loadOverview(); }, [loadOverview]);
 
   const integrity = overview?.integrity ?? null;
+  const hasVerification = Boolean(integrity?.checkedAt);
   const visibleIssues = useMemo(
     () => integrity?.issues.filter(issue => !filter || issue.kind === filter) ?? [],
     [filter, integrity]
@@ -149,11 +150,21 @@ export function AdminLibraryIntegrityScreen({ onBack }: AdminLibraryIntegrityScr
               <div className="admin-library-integrity__review-heading">
                 <div>
                   <strong id="admin-library-integrity-review-title">Revisão</strong>
-                  <small>{integrity.counts.total === 0 ? 'Nenhuma inconsistência registrada.' : 'Classificação e caminho relativo da última verificação.'}</small>
+                  <small>{
+                    !hasVerification
+                      ? 'Execute a primeira verificação para gerar o diagnóstico.'
+                      : integrity.counts.total === 0
+                        ? 'Nenhuma inconsistência registrada.'
+                        : 'Classificação e caminho relativo da última verificação.'
+                  }</small>
                 </div>
                 <label>
                   <span>Categoria</span>
-                  <select value={filter} onChange={event => setFilter(event.target.value as IntegrityFilter)}>
+                  <select
+                    value={filter}
+                    disabled={!hasVerification}
+                    onChange={event => setFilter(event.target.value as IntegrityFilter)}
+                  >
                     <option value="">Todas</option>
                     <option value="scanner-failed">Falha do scanner</option>
                     <option value="media-probe-failed">Falha no ffprobe</option>
@@ -163,7 +174,11 @@ export function AdminLibraryIntegrityScreen({ onBack }: AdminLibraryIntegrityScr
                 </label>
               </div>
 
-              {visibleIssues.length === 0 ? (
+              {!hasVerification ? (
+                <div className="admin-library-integrity__state">
+                  <ScanLine /> Clique em Verificar agora para analisar a biblioteca sem alterar arquivos ou registros.
+                </div>
+              ) : visibleIssues.length === 0 ? (
                 <div className="admin-library-integrity__state is-success">
                   <CheckCircle2 /> {filter ? 'Nenhum item nesta categoria.' : 'Nenhuma inconsistência detectada.'}
                 </div>
