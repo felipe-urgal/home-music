@@ -1,0 +1,61 @@
+/* Shared content widths for redesigned account/admin flows.
+   Compact screens stay focused; management screens get room for dense data. */
+:root {
+  --account-width-compact: 840px;
+  --account-width-comfortable: 920px;
+  --account-width-management: 1080px;
+  --account-width-manager: 1120px;
+}
+
+.my-account-screen--overview,
+.my-account-screen--profile,
+.my-account-screen--password {
+  max-width: var(--account-width-compact);
+}
+
+.my-account-screen--sessions,
+.my-account-screen--playback {
+  max-width: var(--account-width-comfortable);
+}
+
+.administration-cockpit {
+  max-width: var(--account-width-management);
+}
+
+.admin-tracks-screen {
+  max-width: var(--account-width-manager);
+}
+
+@media (max-width: 1160px) {
+  .administration-cockpit,
+  .admin-tracks-screen {
+    max-width: calc(100vw - 32px);
+  }
+}
+
+@media (max-width: 960px) {
+  .my-account-screen--sessions,
+  .my-account-screen--playback {
+    max-width: calc(100vw - 28px);
+  }
+}
+
+@media (max-width: 880px) {
+  .my-account-screen--overview,
+  .my-account-screen--profile,
+  .my-account-screen--password {
+    max-width: calc(100vw - 28px);
+  }
+}
+
+@media (max-width: 560px) {
+  .my-account-screen--overview,
+  .my-account-screen--profile,
+  .my-account-screen--password,
+  .my-account-screen--sessions,
+  .my-account-screen--playback,
+  .administration-cockpit,
+  .admin-tracks-screen {
+    max-width: 100%;
+  }
+}
