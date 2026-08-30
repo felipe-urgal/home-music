@@ -4,7 +4,7 @@ Issue: #87
 
 ## Objetivo
 
-Permitir adicionar ou substituir a capa exibida pelo Home Music sem escrever no arquivo de áudio por padrão. A operação precisa ser reversível, validada no backend e sobreviver a novos scans.
+Permitir adicionar ou substituir a capa exibida pelo Home Music sem escrever no arquivo de áudio por padrão. A operação é reversível, validada no backend e sobrevive a novos scans.
 
 ## Decisão de arquitetura
 
@@ -88,19 +88,19 @@ O SHA-256 gera uma versão curta exposta em `Track.coverVersion`. O frontend inc
 
 Mudanças de capa também incrementam a revisão administrativa composta de `/api/library` e `/api/library/status`, permitindo que outras abas recarreguem a biblioteca pelo polling já existente.
 
-## Administração
+## Administração atual
 
-A edição de capa fica no mesmo modal de `Administração → Metadados`, evitando uma nova tela apenas para essa operação.
+A edição de capa faz parte do workspace **Administração → Metadados**, junto da edição textual da mesma faixa. O redesign do PR #177 removeu o fluxo centrado em modal: no desktop a lista de músicas permanece à esquerda e o editor persistente fica à direita; em telas menores o editor assume a área principal.
 
 Fluxo:
 
-1. abrir a faixa;
+1. selecionar a faixa no workspace;
 2. selecionar JPEG/PNG/WebP;
 3. conferir o preview local antes de qualquer upload;
 4. salvar a capa como override;
 5. se necessário, usar `Restaurar capa do arquivo` para remover o override.
 
-A UI deixa explícito quando a imagem selecionada ainda é somente um preview local e quando existe um override ativo.
+A UI deixa explícito quando a imagem selecionada ainda é somente um preview local e quando existe um override ativo. Trocar de faixa, fechar o editor ou sair da tela respeita a proteção de alterações não salvas do workspace.
 
 ## Segurança e rollback
 
@@ -115,11 +115,11 @@ A UI deixa explícito quando a imagem selecionada ainda é somente um preview lo
 
 ## Escrita opcional de volta ao arquivo
 
-Não faz parte desta entrega. Se implementada no futuro, deverá ser uma ação explicitamente destrutiva/separada, com backup/rollback, validação do formato de áudio e confirmação própria. O comportamento padrão continuará não destrutivo.
+Não faz parte do comportamento atual. Se implementada no futuro, deverá ser uma ação explicitamente destrutiva/separada, com backup/rollback, validação do formato de áudio e confirmação própria. O comportamento padrão continuará não destrutivo.
 
 ## Testes
 
-A entrega cobre:
+A cobertura inclui:
 
 - inspeção de formato e dimensões;
 - rejeição de MIME incompatível e arquivo inválido;
