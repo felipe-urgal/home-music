@@ -9,6 +9,7 @@ import {
   ScanLine
 } from 'lucide-react';
 import {
+  checkAdminLibraryIntegrity,
   getAdminLibraryOverview,
   type AdminLibraryHealthOverview
 } from '../admin-library-client';
@@ -70,7 +71,7 @@ export function AdminLibraryIntegrityScreen({ onBack }: AdminLibraryIntegrityScr
     setError(null);
     setFeedback(null);
     try {
-      const nextOverview = await getAdminLibraryOverview();
+      const nextOverview = await checkAdminLibraryIntegrity();
       setOverview(nextOverview);
       const total = nextOverview.integrity.counts.total;
       setFeedback(
