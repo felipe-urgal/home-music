@@ -44,6 +44,7 @@ import './typography.css';
 import './layout-readability.css';
 import './password-screen.css';
 import './sessions-screen.css';
+import './playback-screen.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
