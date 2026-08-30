@@ -1,7 +1,9 @@
 export type RepeatMode = 'off' | 'all' | 'one';
 export type NormalizationMode = 'off' | 'track' | 'album';
 export type StatisticsPeriod = '7d' | '30d' | 'all';
-export type PlaylistSource = 'manual' | 'rekordbox';
+export type PlaylistSource = 'manual' | 'rekordbox' | 'smart';
+export type SmartPlaylistHistoryFilter = 'any' | 'played' | 'never';
+export type SmartPlaylistSort = 'most-played' | 'recently-played' | 'oldest-favorite' | 'title';
 export type UserRole = 'admin' | 'user';
 export type ImportJobStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
 export type ImportJobSourceType = 'upload' | 'url' | 'provider';
@@ -420,6 +422,17 @@ export type HistoryResponse = {
   items: HistoryItem[];
 };
 
+export type SmartPlaylistRule = {
+  artist: string | null;
+  album: string | null;
+  folderPath: string | null;
+  favorite: boolean | null;
+  history: SmartPlaylistHistoryFilter;
+  periodDays: number | null;
+  sort: SmartPlaylistSort;
+  limit: number;
+};
+
 export type Playlist = {
   id: string;
   name: string;
@@ -427,10 +440,19 @@ export type Playlist = {
   createdAt: string;
   updatedAt: string;
   source: PlaylistSource;
+  rule?: SmartPlaylistRule;
 };
 
 export type PlaylistsResponse = {
   playlists: Playlist[];
+};
+
+export type SmartPlaylistPreviewResponse = {
+  trackIds: string[];
+};
+
+export type SmartPlaylistResponse = {
+  playlist: Playlist;
 };
 
 export type RekordboxPlaylistPreview = {

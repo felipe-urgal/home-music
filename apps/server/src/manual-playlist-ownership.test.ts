@@ -249,7 +249,7 @@ test('migration v8 atribui apenas playlists manuais ao primeiro usuário e mant�
     createLegacyV8Database(databasePath, true);
 
     const migrated = new HomeMusicDatabase(databasePath);
-    assert.equal(migrated.getSchemaVersion(), 10);
+    assert.equal(migrated.getSchemaVersion(), 11);
 
     const first = migrated.getPlaylists(FIRST_USER_ID);
     const second = migrated.getPlaylists(SECOND_USER_ID);
@@ -283,7 +283,7 @@ test('migration pré-bootstrap mantém manual fora da tabela ativa e bootstrap a
     createLegacyV8Database(databasePath, false);
 
     const migrated = new HomeMusicDatabase(databasePath);
-    assert.equal(migrated.getSchemaVersion(), 10);
+    assert.equal(migrated.getSchemaVersion(), 11);
     assert.deepEqual(migrated.getPlaylists(FIRST_USER_ID).map(item => item.id), ['rekordbox-old']);
     migrated.close();
 

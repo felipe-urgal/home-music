@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
@@ -7,6 +8,7 @@ import {
   Play,
   Plus,
   RefreshCw,
+  Sparkles,
   Trash2
 } from 'lucide-react';
 import type { AuthenticatedUser, Playlist, Track } from '@home-music/shared';
@@ -19,6 +21,7 @@ import { LIBRARY_PAGE_SIZE, type LibraryNavigation, type LibraryTab } from '../u
 import { Artwork } from './Artwork';
 import { DesktopTrackTable } from './DesktopTrackTable';
 import { MiniPlayer } from './MiniPlayer';
+import { SmartPlaylistDialog } from './SmartPlaylistDialog';
 
 type LibraryOfflineDownloads = Pick<OfflineDownloads, 'supported' | 'downloadedIds' | 'downloadingIds' | 'download' | 'remove'>;
 
@@ -134,15 +137,21 @@ export function LibraryScreen({
   onPlayTrack
 }: LibraryScreenProps) {
   const canManageSharedLibrary = canUseAdminLibraryActions(currentUser);
+  const [smartPlaylistEditor, setSmartPlaylistEditor] = useState<{ playlist: Playlist | null } | null>(null);
   const {
     tracks,
     playlists,
     scanning,
     scannedAt,
+    refreshPlaylists,
     rescan,
     createPlaylist,
     renamePlaylist,
     deletePlaylist,
+    previewSmartPlaylist,
+    createSmartPlaylist,
+    updateSmartPlaylist,
+    deleteSmartPlaylist,
     setPlaylistTracks,
     reportError
   } = data;
@@ -170,6 +179,10 @@ export function LibraryScreen({
 
   const isDetail = Boolean(selectedPlaylist || folderPath);
   const run = (operation: Promise<unknown>) => void operation.catch(() => undefined);
+
+  useEffect(() => {
+    void refreshPlaylists().catch(reportError);
+  }, [refreshPlaylists, reportError]);
 
   function goBack() {
     if (selectedPlaylist) leavePlaylist();
@@ -199,10 +212,11 @@ export function LibraryScreen({
   }
 
   async function removePlaylist(playlist: Playlist) {
-    if (window.confirm(`Excluir a playlist “${playlist.name}”?`)) {
-      await deletePlaylist(playlist.id);
-      leavePlaylist();
-    }
+    if (!window.confirm(`Excluir a playlist “${playlist.name}”?`)) return;
+
+    if (playlist.source === 'smart') await deleteSmartPlaylist(playlist.id);
+    else await deletePlaylist(playlist.id);
+    leavePlaylist();
   }
 
   async function scanNow() {
@@ -329,22 +343,26 @@ export function LibraryScreen({
               <span>Playlists</span>
               <div className="section-heading__actions">
                 <button className="text-action" onClick={() => run(makePlaylist())}><Plus />Nova</button>
+                <button className="text-action" onClick={() => setSmartPlaylistEditor({ playlist: null })}><Sparkles />Inteligente</button>
               </div>
             </div>
             {playlists.length ? (
               <div className="group-list">
                 {playlists.map(playlist => (
                   <button className="group-item" key={playlist.id} onClick={() => selectPlaylist(playlist.id)}>
-                    <div className="playlist-icon"><ListMusic /></div>
+                    <div className="playlist-icon">{playlist.source === 'smart' ? <Sparkles /> : <ListMusic />}</div>
                     <span className="group-item__text">
                       <strong>{playlist.name}</strong>
-                      <small>{playlist.trackIds.length} músicas{playlist.source === 'rekordbox' ? ' · Importada' : ''}</small>
+                      <small>
+                        {playlist.trackIds.length} músicas
+                        {playlist.source === 'rekordbox' ? ' · Importada' : playlist.source === 'smart' ? ' · Inteligente' : ''}
+                      </small>
                     </span>
                     <ChevronRight />
                   </button>
                 ))}
               </div>
-            ) : <div className="empty-library">Crie uma playlist para organizar suas músicas.</div>}
+            ) : <div className="empty-library">Crie uma playlist manual ou inteligente para organizar suas músicas.</div>}
           </>
         ) : shouldShowTracks ? (
           <>
@@ -354,6 +372,11 @@ export function LibraryScreen({
                 {selectedPlaylist.source === 'manual' ? (
                   <>
                     <button className="text-action" onClick={() => run(editPlaylist(selectedPlaylist))}>Renomear</button>
+                    <button className="text-action text-action--danger" onClick={() => run(removePlaylist(selectedPlaylist))}>Excluir</button>
+                  </>
+                ) : selectedPlaylist.source === 'smart' ? (
+                  <>
+                    <button className="text-action" onClick={() => setSmartPlaylistEditor({ playlist: selectedPlaylist })}><Sparkles />Editar regra</button>
                     <button className="text-action text-action--danger" onClick={() => run(removePlaylist(selectedPlaylist))}>Excluir</button>
                   </>
                 ) : (
@@ -396,6 +419,19 @@ export function LibraryScreen({
           onNext={onNext}
         />
       )}
+
+      <SmartPlaylistDialog
+        open={Boolean(smartPlaylistEditor)}
+        playlist={smartPlaylistEditor?.playlist}
+        tracks={tracks}
+        onPreview={previewSmartPlaylist}
+        onSave={async (name, rule) => {
+          const existing = smartPlaylistEditor?.playlist;
+          if (existing) await updateSmartPlaylist(existing.id, { name, rule });
+          else await createSmartPlaylist(name, rule);
+        }}
+        onClose={() => setSmartPlaylistEditor(null)}
+      />
     </>
   );
 }
