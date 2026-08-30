@@ -34,6 +34,7 @@ const deterministicOptions = {
   databaseBytes: 4_096,
   resolveTrack: (item: IndexedTrack) => item,
   isTrackHidden: () => false,
+  hasTitleOverride: () => false,
   resolveTitleTagPresent: () => true
 };
 
@@ -133,6 +134,7 @@ test('considera overrides efetivos ao calcular qualidade sem reprovar título j�
   const overview = await buildAdminLibraryOverview([source], scanner, {
     databaseBytes: 1,
     isTrackHidden: () => false,
+    hasTitleOverride: () => true,
     resolveTitleTagPresent: () => {
       titleProbeCalls += 1;
       return false;
@@ -162,6 +164,24 @@ test('considera overrides efetivos ao calcular qualidade sem reprovar título j�
       missingDuration: []
     }
   });
+});
+
+test('override explícito de título igual ao fallback não é problema', async () => {
+  let titleProbeCalls = 0;
+  const overview = await buildAdminLibraryOverview([
+    track({ title: 'track' })
+  ], scanner, {
+    ...deterministicOptions,
+    hasTitleOverride: () => true,
+    resolveTitleTagPresent: () => {
+      titleProbeCalls += 1;
+      return false;
+    }
+  });
+
+  assert.equal(titleProbeCalls, 0);
+  assert.equal(overview.problems.missingTitle, 0);
+  assert.deepEqual(overview.problems.trackIds.missingTitle, []);
 });
 
 test('exclui faixas da lixeira das métricas e dos filtros', async () => {
