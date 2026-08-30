@@ -111,13 +111,31 @@ test('combina artista, pasta, favorito, histórico e período sem materializar p
       const raw = new DatabaseSync(databasePath);
       try {
         const before = Number((raw.prepare('SELECT COUNT(*) AS total FROM playlist_tracks').get() as { total: number }).total);
-        store.create('user-a', 'Mais tocadas', {
+        const id = store.create('user-a', 'Mais tocadas', {
           ...baseRule,
           history: 'played',
           sort: 'most-played'
         });
         const after = Number((raw.prepare('SELECT COUNT(*) AS total FROM playlist_tracks').get() as { total: number }).total);
         assert.equal(after, before);
+
+        const persisted = raw.prepare(`
+          SELECT source, owner_user_id, source_key
+          FROM playlists
+          WHERE id = ?
+        `).get(id) as { source?: string; owner_user_id?: string; source_key?: string } | undefined;
+        assert.equal(persisted?.source, 'smart');
+        assert.equal(persisted?.owner_user_id, 'user-a');
+        assert.match(persisted?.source_key ?? '', /^\{"version":1,"id":"/);
+
+        const parallelTable = raw.prepare(`
+          SELECT name
+          FROM sqlite_master
+          WHERE type = 'table' AND name = 'smart_playlists'
+        `).get();
+        assert.equal(parallelTable, undefined);
+        assert.equal(database.getSchemaVersion(), 10);
+        assert.deepEqual(database.getPlaylists('user-a'), []);
       } finally {
         raw.close();
       }
