@@ -267,7 +267,11 @@ export async function scanLibrary(
         const fileUnchanged = Boolean(previous && previous.fileSize === file.size && previous.mtimeMs === file.mtimeMs);
         const shouldRecheckFailure = fileUnchanged && hasLibraryIntegrityFileFailure(file.path);
 
-        if (fileUnchanged && !shouldRecheckFailure) {
+        if (fileUnchanged) {
+          if (shouldRecheckFailure) {
+            clearLibraryIntegrityFileFailures(file.path);
+            await metadataForFile(libraryRoot, file, onWarning, previous!.id);
+          }
           tracks.push(previous!);
           stats.unchanged += 1;
           continue;
