@@ -132,18 +132,17 @@ Playlists manuais continuam editáveis como antes e playlists Rekordbox continua
 
 ## Persistência
 
-A tabela `smart_playlists` armazena:
+Smart playlists reutilizam a tabela canônica `playlists` do SQLite principal:
 
-```text
-id
-owner_user_id
-name
-rule_json
-created_at
-updated_at
-```
+- `source = 'smart'` identifica a origem;
+- `owner_user_id` é obrigatório, assim como nas playlists manuais;
+- `source_key` armazena um envelope JSON versionado com o ID e a regra;
+- `created_at` e `updated_at` continuam nos campos canônicos da playlist;
+- `playlist_tracks` permanece vazio para smart playlists, porque o resultado é sempre derivado.
 
-Ela fica no mesmo SQLite principal e, portanto, é incluída no backup de estado existente. Não há cópia dos resultados em `playlist_tracks`.
+A migration **v11** atualiza os triggers de ownership da tabela `playlists` para aceitar `smart` somente com owner, preservando `manual` como pessoal e `rekordbox` como compartilhada/sem owner. O limite de schema do backup/restore acompanha a v11.
+
+Não existe tabela `smart_playlists` paralela. Dessa forma, a definição fica coberta pelo backup SQLite existente sem criar uma segunda fonte de verdade para playlists.
 
 ## Testes e invariantes
 
@@ -156,6 +155,7 @@ A cobertura da feature deve provar pelo menos:
 - ordenação por mais tocadas, recentes e favoritas antigas;
 - ausência de materialização em `playlist_tracks`;
 - isolamento de definições, favoritos e histórico por usuário;
+- migration v10 → v11 preservando os invariantes de ownership;
 - faixas desativadas fora do resultado;
 - playlists manuais e Rekordbox sem regressão;
 - preview antes de salvar na UI.
