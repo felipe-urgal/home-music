@@ -190,7 +190,12 @@ export function MyAccountScreen({
 
       {view === 'overview' && (
         <div className="my-account-overview">
-          <button className="my-account-profile my-account-profile--link" type="button" onClick={() => setView('profile')} aria-label="Abrir perfil">
+          <button
+            className="my-account-profile my-account-profile--link"
+            type="button"
+            onClick={() => setView('profile')}
+            aria-label={`Abrir perfil de ${currentUser.username}`}
+          >
             <span className="my-account-profile__icon"><UserRound /></span>
             <span>
               <strong>{currentUser.username}</strong>
@@ -293,9 +298,6 @@ export function MyAccountScreen({
               <strong id="my-account-profile-security-title">Sua conta está protegida</strong>
               <small>Use uma senha exclusiva e encerre sessões que você não reconhecer.</small>
             </div>
-            <button className="my-account-profile-security__action" type="button" onClick={() => setView('password')}>
-              <KeyRound /> Alterar senha
-            </button>
           </section>
         </div>
       )}
