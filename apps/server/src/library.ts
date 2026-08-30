@@ -88,6 +88,12 @@ function compareTracks(a: IndexedTrack, b: IndexedTrack) {
   return a.artist.localeCompare(b.artist, 'pt-BR') || a.title.localeCompare(b.title, 'pt-BR');
 }
 
+function scannerErrorMessage(error: unknown) {
+  return error instanceof Error && error.message.trim()
+    ? error.message
+    : 'O scanner não conseguiu ler os metadados do arquivo.';
+}
+
 async function walk(
   dir: string,
   libraryRoot: string,
@@ -204,6 +210,58 @@ function fromMetadata(
   };
 }
 
+async function recordScannerAndProbeFailure(
+  libraryRoot: string,
+  file: ScannableFile,
+  scannerError: unknown,
+  detectedTrackId?: string
+) {
+  recordLibraryIntegrityIssue({
+    kind: 'scanner-failed',
+    filePath: file.path,
+    trackId: detectedTrackId ?? null,
+    message: `Scanner não conseguiu ler os metadados: ${scannerErrorMessage(scannerError)}`
+  });
+  const probe = await probeMediaFile(file.path);
+  if (probe.status === 'failed') {
+    recordLibraryIntegrityIssue({
+      kind: 'media-probe-failed',
+      filePath: file.path,
+      trackId: detectedTrackId ?? null,
+      message: probe.message || 'ffprobe rejeitou o arquivo.'
+    });
+  }
+}
+
+async function verifyMediaIntegrity(
+  libraryRoot: string,
+  file: ScannableFile,
+  detectedTrackId: string,
+  onWarning?: ScanWarningHandler
+) {
+  try {
+    await parseFile(file.path, { duration: true });
+  } catch (error) {
+    onWarning?.(`Metadados inválidos durante verificação: ${relativeFilePath(libraryRoot, file.path)}`, error);
+    recordLibraryIntegrityIssue({
+      kind: 'scanner-failed',
+      filePath: file.path,
+      trackId: detectedTrackId,
+      message: `Scanner não conseguiu ler os metadados: ${scannerErrorMessage(error)}`
+    });
+  }
+
+  const probe = await probeMediaFile(file.path);
+  if (probe.status === 'failed') {
+    recordLibraryIntegrityIssue({
+      kind: 'media-probe-failed',
+      filePath: file.path,
+      trackId: detectedTrackId,
+      message: probe.message || 'ffprobe rejeitou o arquivo.'
+    });
+  }
+}
+
 async function metadataForFile(
   libraryRoot: string,
   file: ScannableFile,
@@ -215,20 +273,7 @@ async function metadataForFile(
     metadata = await parseFile(file.path, { duration: true });
   } catch (error) {
     onWarning?.(`Metadados inválidos; usando fallback: ${relativeFilePath(libraryRoot, file.path)}`, error);
-    const probe = await probeMediaFile(file.path);
-    const scannerMessage = error instanceof Error && error.message.trim()
-      ? error.message
-      : 'O scanner não conseguiu ler os metadados do arquivo.';
-    recordLibraryIntegrityIssue({
-      kind: probe.status === 'failed' ? 'media-probe-failed' : 'scanner-failed',
-      filePath: file.path,
-      trackId: detectedTrackId ?? null,
-      message: probe.status === 'failed'
-        ? `Scanner falhou e ffprobe rejeitou o arquivo: ${probe.message || scannerMessage}`
-        : probe.status === 'unavailable'
-          ? `Scanner falhou; ${probe.message || 'ffprobe indisponível.'}`
-          : `Scanner falhou na leitura de metadados, mas ffprobe aceitou o arquivo: ${scannerMessage}`
-    });
+    await recordScannerAndProbeFailure(libraryRoot, file, error, detectedTrackId);
   }
   return metadata;
 }
@@ -304,7 +349,7 @@ export async function auditLibraryIntegrity(
         mediaChecks,
         INTEGRITY_MEDIA_CHECK_CONCURRENCY,
         async ({ file, trackId: detectedTrackId }) => {
-          await metadataForFile(libraryRoot, file, onWarning, detectedTrackId);
+          await verifyMediaIntegrity(libraryRoot, file, detectedTrackId, onWarning);
         }
       );
 
