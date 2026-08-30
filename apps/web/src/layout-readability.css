@@ -1,0 +1,309 @@
+:root {
+  --hm-control-height: 2.5rem;
+  --hm-touch-target: 2.75rem;
+  --hm-compact-row: 3.375rem;
+  --hm-comfortable-row: 3.625rem;
+}
+
+/*
+ * Layout pass paired with the larger type scale.
+ * Keep information density compact, but give text and controls enough room
+ * so the typography increase does not create cramped or fragile layouts.
+ */
+
+/* Library and player */
+#root .library-tabs button {
+  min-height: var(--hm-control-height);
+}
+
+#root .queue-item,
+#root .library-track,
+#root .group-item {
+  min-height: var(--hm-compact-row);
+}
+
+#root .player-playlist-picker > button {
+  min-height: var(--hm-touch-target);
+}
+
+/* Desktop navigation, library and player */
+@media (min-width: 1024px) {
+  #root .desktop-nav__item--nested {
+    min-height: 2.5rem;
+  }
+
+  #root .desktop-library-table th {
+    height: 2.375rem;
+    padding-inline: 0.625rem;
+  }
+
+  #root .desktop-library-table tbody tr {
+    height: var(--hm-compact-row);
+  }
+
+  #root .desktop-library-table td {
+    padding: 0.375rem 0.625rem;
+  }
+
+  #root .desktop-library-table__track {
+    gap: 0.625rem;
+  }
+
+  #root .desktop-library-table__action {
+    width: 2rem;
+    height: 2rem;
+  }
+
+  #root .desktop-now-playing {
+    padding: 0.6875rem;
+  }
+
+  #root .desktop-queue__item {
+    min-height: var(--hm-compact-row);
+    padding-block: 0.4375rem;
+  }
+
+  #root .desktop-context__action {
+    min-height: var(--hm-control-height);
+  }
+}
+
+/* Administration overview and integrity */
+#root .administration-metric,
+#root .administration-detail-card,
+#root .admin-import-method {
+  padding: 0.9375rem;
+}
+
+#root .administration-problem-list > div,
+#root .administration-scanner-list > div,
+#root .administration-storage-list > div {
+  min-height: 2.625rem;
+}
+
+#root .admin-library-integrity__intro {
+  padding: 0.9375rem;
+}
+
+#root .admin-library-integrity__actions button {
+  min-height: 2.375rem;
+  padding-inline: 0.75rem;
+}
+
+#root .admin-library-integrity__metrics article {
+  min-height: 3.75rem;
+  padding: 0.75rem;
+}
+
+#root .admin-library-integrity__review {
+  padding: 0.875rem;
+}
+
+#root .admin-library-integrity__issues article {
+  padding: 0.6875rem 0.75rem;
+}
+
+/* Tracks, metadata and quarantine */
+#root .admin-tracks-search,
+#root .admin-tracks-filters {
+  height: var(--hm-control-height);
+}
+
+#root .admin-tracks-refresh {
+  width: var(--hm-control-height);
+  height: var(--hm-control-height);
+}
+
+#root .admin-track-row,
+#root .admin-metadata-row,
+#root .admin-quarantine-row {
+  min-height: var(--hm-comfortable-row);
+  padding: 0.6875rem 0.75rem;
+}
+
+#root .admin-track-row__action,
+#root .admin-track-row__trash,
+#root .admin-metadata-row__edit,
+#root .admin-quarantine-row__actions button {
+  min-height: 2.125rem;
+  padding-inline: 0.6875rem;
+}
+
+#root .admin-metadata-dialog__header {
+  min-height: 3.875rem;
+  padding: 0.75rem 1rem;
+}
+
+#root .admin-metadata-fields {
+  gap: 0.875rem;
+  padding: 1.125rem;
+}
+
+#root .admin-cover-editor {
+  padding: 1rem;
+}
+
+#root .admin-metadata-dialog__actions {
+  padding: 0.875rem 1.125rem 1.125rem;
+}
+
+#root .admin-metadata-dialog__actions button,
+#root .admin-cover-editor__actions button,
+#root .admin-cover-upload {
+  min-height: 2.25rem;
+}
+
+/* Bulk actions and cache */
+#root .admin-bulk-toolbar {
+  padding: 0.6875rem 0.75rem;
+}
+
+#root .admin-bulk-toolbar__actions > button,
+#root .admin-bulk-toolbar__playlist button,
+#root .admin-bulk-toolbar__status button,
+#root .admin-bulk-toolbar__playlist select {
+  min-height: 2.125rem;
+}
+
+#root .administration-cache-actions button {
+  min-height: 2.375rem;
+}
+
+/* Operation history */
+#root .admin-operation-history__toolbar select,
+#root .admin-operation-history__toolbar > button {
+  min-height: var(--hm-control-height);
+}
+
+#root .admin-operation-row {
+  min-height: var(--hm-comfortable-row);
+  padding: 0.75rem 0.8125rem;
+}
+
+#root .admin-operation-detail {
+  padding: 1rem;
+}
+
+#root .admin-operation-detail__facts > div,
+#root .admin-operation-detail__counts > div {
+  min-height: 2.5rem;
+}
+
+#root .admin-operation-detail__retry button {
+  min-height: 2.25rem;
+}
+
+/* Account */
+#root .my-account-links > button {
+  min-height: 4.5rem;
+  padding: 0.875rem 1rem;
+}
+
+#root .my-account-action {
+  min-height: var(--hm-touch-target);
+}
+
+#root .my-account-session-row {
+  min-height: 3.875rem;
+  padding-block: 0.625rem;
+}
+
+#root .my-account-session-row button {
+  min-height: 2.25rem;
+}
+
+/* User administration */
+#root .admin-users-toolbar {
+  padding: 0.875rem;
+}
+
+#root .admin-users-new,
+#root .admin-users-search,
+#root .admin-users-toolbar select {
+  min-height: var(--hm-control-height);
+  height: var(--hm-control-height);
+}
+
+#root .admin-users-table th {
+  height: 2.375rem;
+}
+
+#root .admin-users-table td {
+  height: var(--hm-comfortable-row);
+  padding-block: 0.5rem;
+}
+
+#root .admin-users-row-action {
+  width: 2.125rem;
+  height: 2.125rem;
+}
+
+#root .admin-users-pagination {
+  min-height: 3.25rem;
+}
+
+#root .admin-users-pagination button,
+#root .admin-users-pagination > div > span {
+  width: 2rem;
+  height: 2rem;
+}
+
+#root .admin-users-editor input,
+#root .admin-users-editor select {
+  min-height: var(--hm-control-height);
+  height: var(--hm-control-height);
+}
+
+#root .admin-users-editor__footer button {
+  min-height: var(--hm-control-height);
+}
+
+/* Focused import workflow */
+#root .admin-import-source-tabs > button {
+  min-height: 4rem;
+  padding: 0.75rem 0.875rem;
+}
+
+#root .admin-import-provider.is-compact .admin-import-provider__url input,
+#root .admin-import-local-sources .admin-import-url__input-row input,
+#root .admin-import-provider.is-compact .admin-import-provider__fields > button,
+#root .admin-import-local-sources .admin-import-url__input-row > button {
+  min-height: var(--hm-touch-target);
+}
+
+#root .admin-import-metadata-card.is-compact .admin-import-metadata-card__summary {
+  padding: 0.875rem;
+}
+
+#root .admin-import-destination__picker {
+  min-height: 3.25rem;
+  padding-block: 0.5rem;
+}
+
+@media (max-width: 699px) {
+  #root .mobile-bottom-nav button {
+    min-height: 3.5rem;
+  }
+
+  #root .library-tabs button {
+    min-height: var(--hm-touch-target);
+  }
+
+  #root .group-item {
+    min-height: 5rem;
+    padding-block: 0.625rem;
+  }
+
+  #root .lyrics-panel__toggle,
+  #root .queue-panel__toggle {
+    min-height: 3.5rem;
+  }
+}
+
+@media (max-width: 520px) {
+  #root .admin-library-integrity__actions button,
+  #root .administration-cache-actions button,
+  #root .admin-metadata-dialog__actions button {
+    min-height: var(--hm-touch-target);
+  }
+}
