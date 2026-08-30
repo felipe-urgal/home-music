@@ -2,15 +2,16 @@
 
 A importação por URL é uma entrada administrativa para baixar um arquivo de áudio remoto sem transformar o Home Music em um proxy HTTP genérico. O download termina no staging de importação e **não grava diretamente em `MUSIC_DIR`**.
 
-## Fluxo
+## Fluxo atual
 
 1. `POST /api/admin/imports/urls` recebe uma URL direta e cria um job com `source.type = "url"`.
 2. O job passa para `processing` enquanto o servidor resolve e baixa a origem remota.
-3. Cada hostname é resolvido antes da conexão. A conexão é feita diretamente no IP já validado, preservando `Host` e SNI para evitar DNS rebinding entre a validação e o socket.
-4. O corpo é gravado por streaming em `ImportStagingManager.writePayload(...)`, com limite de bytes aplicado mesmo quando `Content-Length` não existe ou é incorreto.
-5. O payload escrito é reaberto de forma segura no staging e inspecionado como áudio com `music-metadata`.
-6. Quando o download termina, o job volta para `pending`: o arquivo está no staging e ainda aguarda as próximas etapas de validação/promoção da Fase 9.
-7. `DELETE /api/admin/imports/urls/:id` cancela jobs `processing` ou `pending` e remove o workspace de staging.
+3. Cada hostname é resolvido antes da conexão. A conexão é feita diretamente no IP já validado, preservando `Host` e SNI para reduzir risco de DNS rebinding entre a validação e o socket.
+4. O corpo é gravado por streaming no staging, com limite de bytes aplicado mesmo quando `Content-Length` não existe ou é incorreto.
+5. O payload escrito é reaberto de forma segura e recebe uma inspeção inicial pelos bytes reais.
+6. Quando a aquisição termina, o job fica disponível para a etapa **Preparar** do workbench.
+7. A partir daí ele usa o pipeline comum: validação técnica → metadata → duplicatas → destino seguro → promoção → indexação incremental.
+8. Cancelamento de job ainda não promovido remove o workspace temporário correspondente.
 
 ## Proteções SSRF
 
@@ -42,22 +43,29 @@ O servidor valida `Content-Length` quando disponível e mantém um contador inde
 
 ## Content-Type e arquivo final
 
-Quando o servidor remoto informa `Content-Type`, o valor precisa ser um tipo de áudio conhecido ou `application/octet-stream`; tipos explicitamente incompatíveis, como `text/html`, são recusados antes da gravação. Se o header estiver ausente, o download pode prosseguir, mas o payload continua sujeito à inspeção obrigatória pelos bytes reais no staging com `music-metadata`.
+Quando o servidor remoto informa `Content-Type`, o valor precisa ser um tipo de áudio conhecido ou `application/octet-stream`; tipos explicitamente incompatíveis, como `text/html`, são recusados antes da gravação. Se o header estiver ausente, o download pode prosseguir, mas o payload continua sujeito à inspeção obrigatória pelos bytes reais no staging.
 
-Essa inspeção é deliberadamente diferente da validação definitiva do pipeline: ela não gera nem consome o token de promoção do staging. A validação profunda/normalização e a promoção para a biblioteca continuam isoladas nas próximas tarefas da Fase 9.
+Essa inspeção inicial não substitui a validação técnica do pipeline. O token usado pela promoção só é produzido depois que a etapa **Preparar** confirma a mídia e o resultado técnico esperado.
 
 ## Estados e mensagens
 
-- `processing`: download/inspeção em andamento;
-- `pending`: download concluído e payload mantido no staging;
+- `processing`: aquisição/inspeção em andamento;
+- `pending`: aquisição concluída e payload mantido no staging aguardando próxima ação do pipeline;
 - `failed`: falha de DNS, SSRF, HTTP remoto, MIME, tamanho, timeout ou arquivo inválido;
-- `cancelled`: cancelamento administrativo e limpeza do staging.
+- `cancelled`: cancelamento administrativo e limpeza do staging quando aplicável;
+- `completed`: somente depois de promoção e atualização da biblioteca concluídas.
 
 Mensagens retornadas ao administrador evitam incluir detalhes internos de rede e nunca repetem a URL completa com query string.
 
+## UX atual
+
+A URL direta fica na etapa **Origem** do workbench de importação. Ela deve ser usada quando a URL já aponta para um arquivo de mídia; YouTube/YouTube Music e outras fontes tratadas por engine externa pertencem ao provider correspondente.
+
+Depois da aquisição, o painel **Agora** mostra a próxima ação necessária sem exigir que o administrador abra detalhes técnicos para descobrir como continuar.
+
 ## Testes de abuso
 
-`apps/server/src/import-url.test.ts` cobre:
+`apps/server/src/import-url.test.ts` cobre, entre outros:
 
 - IPs privados, loopback, metadata e IPv6 local;
 - protocolos, credenciais, portas alternativas e hostname local;
@@ -67,6 +75,6 @@ Mensagens retornadas ao administrador evitam incluir detalhes internos de rede e
 - limite durante streaming sem depender de `Content-Length`;
 - timeout;
 - cancelamento com limpeza do staging;
-- sucesso mantendo `MUSIC_DIR` intacto.
+- sucesso mantendo `MUSIC_DIR` intacto até a promoção segura.
 
-As rotas administrativas também possuem cobertura para RBAC/header de mutação e para o contrato `202 -> processing -> pending`.
+As rotas administrativas também possuem cobertura para RBAC/header de mutação e para as transições esperadas do job.
