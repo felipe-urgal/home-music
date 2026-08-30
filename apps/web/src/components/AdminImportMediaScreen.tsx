@@ -166,7 +166,7 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
   const urlBusy = urlSubmitting || urlCancelling || activeUrlJob?.status === 'processing';
   const pipelineBusy = jobs.some(job =>
     job.status === 'processing'
-    || (job.status === 'pending' && (!job.mediaDecision || !job.metadataPreview))
+    || (job.status === 'pending' && Boolean(job.mediaDecision) && !job.metadataPreview)
   );
 
   useEffect(() => {
@@ -306,6 +306,7 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
     ? Math.min(100, Math.round((activeUpload.loaded / activeUpload.size) * 100))
     : 0;
   const uploadBusy = Boolean(activeUpload && ['preparing', 'uploading', 'cancelling'].includes(activeUpload.stage));
+  const uploadPipelineActive = Boolean(activeUpload && ['preparing', 'uploading', 'cancelling', 'queued'].includes(activeUpload.stage));
   const accept = uploadConfig?.acceptedExtensions.join(',') || undefined;
   const validationJobs = jobs.filter(job => job.status === 'pending' && !job.mediaDecision);
   const reviewJobs = jobs.filter(job => job.status === 'pending' && Boolean(job.mediaDecision));
@@ -314,7 +315,7 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
 
   const currentStep = reviewJobs.length > 0
     ? 3
-    : validationJobs.length > 0 || activeProcessingJob || uploadBusy || urlBusy
+    : validationJobs.length > 0 || activeProcessingJob || uploadPipelineActive || urlBusy
       ? 2
       : newestJob?.status === 'completed'
         ? 4
@@ -532,15 +533,25 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
                 onRefresh={() => loadJobs(true)}
               />
             </div>
-          ) : validationJobs.length > 0 && mediaValidationConfig ? (
-            <div className="admin-import-v3-stage is-validation">
-              <AdminImportMediaValidationPanel
-                jobs={validationJobs}
-                config={mediaValidationConfig}
-                onJobUpdated={handleUpdatedJob}
-                onRefresh={() => loadJobs(true)}
-              />
-            </div>
+          ) : validationJobs.length > 0 ? (
+            mediaValidationConfig ? (
+              <div className="admin-import-v3-stage is-validation">
+                <AdminImportMediaValidationPanel
+                  jobs={validationJobs}
+                  config={mediaValidationConfig}
+                  onJobUpdated={handleUpdatedJob}
+                  onRefresh={() => loadJobs(true)}
+                />
+              </div>
+            ) : (
+              <article className="admin-import-v3-live is-failed" role="alert">
+                <span><CircleAlert /></span>
+                <div>
+                  <strong>Validação indisponível</strong>
+                  <small>Não foi possível carregar os perfis de saída. Atualize a tela e tente novamente.</small>
+                </div>
+              </article>
+            )
           ) : activeProcessingJob ? (
             <article className="admin-import-v3-live is-processing" role="status">
               <span>{statusIcon(activeProcessingJob.status)}</span>
