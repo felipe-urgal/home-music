@@ -31,6 +31,7 @@ type AdminLibraryOverviewOptions = {
   databaseBytes?: number | null;
   resolveTrack?: (track: IndexedTrack) => Track;
   isTrackHidden?: (track: IndexedTrack) => boolean;
+  hasTitleOverride?: (track: IndexedTrack) => boolean;
   resolveTitleTagPresent?: (track: IndexedTrack) => boolean | null | Promise<boolean | null>;
 };
 
@@ -122,6 +123,9 @@ function defaultDatabaseState(databasePath: string) {
         hasCover: track.hasCover || coverOverrides.has(track.id)
       };
     },
+    hasTitleOverride(track: IndexedTrack) {
+      return metadataOverrides.get(track.id)?.title != null;
+    },
     isHidden(track: IndexedTrack) {
       return hiddenTrackIds.has(track.id);
     },
@@ -154,10 +158,13 @@ async function readTitleTagPresent(track: IndexedTrack) {
 
 async function missingTitleTrackIds(
   entries: Array<{ track: IndexedTrack; effectiveTrack: Track }>,
+  hasTitleOverride: (track: IndexedTrack) => boolean,
   resolveTitleTagPresent: (track: IndexedTrack) => boolean | null | Promise<boolean | null>
 ) {
   const candidates = entries.filter(({ track, effectiveTrack }) =>
-    effectiveTrack.title === track.title && track.title === scannerFallbackTitle(track)
+    !hasTitleOverride(track) &&
+    effectiveTrack.title === track.title &&
+    track.title === scannerFallbackTitle(track)
   );
   if (candidates.length === 0) return new Set<string>();
 
@@ -193,11 +200,12 @@ export async function buildAdminLibraryOverview(
   const databaseBytes = options.databaseBytes === undefined
     ? await databaseFootprintBytes(databasePath)
     : options.databaseBytes;
-  const databaseState = options.resolveTrack && options.isTrackHidden
+  const databaseState = options.resolveTrack && options.isTrackHidden && options.hasTitleOverride
     ? null
     : defaultDatabaseState(databasePath);
   const resolveTrack = options.resolveTrack ?? (track => databaseState!.resolve(track));
   const isTrackHidden = options.isTrackHidden ?? (track => databaseState!.isHidden(track));
+  const hasTitleOverride = options.hasTitleOverride ?? (track => databaseState!.hasTitleOverride(track));
   const resolveTitleTagPresent = options.resolveTitleTagPresent ?? readTitleTagPresent;
 
   try {
@@ -206,7 +214,7 @@ export async function buildAdminLibraryOverview(
     pruneTitleTagCache(visibleIds);
 
     const entries = visibleTracks.map(track => ({ track, effectiveTrack: resolveTrack(track) }));
-    const missingTitleIds = await missingTitleTrackIds(entries, resolveTitleTagPresent);
+    const missingTitleIds = await missingTitleTrackIds(entries, hasTitleOverride, resolveTitleTagPresent);
 
     let libraryBytes = 0;
     let affectedTracks = 0;
