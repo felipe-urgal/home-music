@@ -1,0 +1,307 @@
+:root {
+  --font-size-caption: 13px;
+  --font-size-secondary: 14px;
+  --font-size-control: 15px;
+  --font-size-body: 16px;
+  --font-size-section: 17px;
+  --font-size-title: 20px;
+}
+
+html {
+  font-size: 16px;
+}
+
+body {
+  font-size: var(--font-size-body);
+  line-height: 1.45;
+}
+
+/*
+ * Readability floor for shared semantic elements.
+ * This stylesheet is intentionally loaded last so legacy 8–12px rules
+ * cannot make common supporting text or form controls hard to read.
+ */
+#root small,
+#root dt,
+#root dd {
+  font-size: var(--font-size-caption);
+  line-height: 1.45;
+}
+
+#root label > span {
+  font-size: var(--font-size-caption);
+}
+
+#root button {
+  font-size: var(--font-size-secondary);
+}
+
+#root input,
+#root select,
+#root textarea {
+  font-size: var(--font-size-body);
+}
+
+#root th {
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+#root td {
+  font-size: var(--font-size-secondary);
+  line-height: 1.4;
+}
+
+#root code {
+  font-size: var(--font-size-caption);
+}
+
+/* Core player and library */
+#root .topbar__title {
+  font-size: var(--font-size-body);
+}
+
+#root .time-row,
+#root .queue-label,
+#root .section-heading,
+#root .playing-indicator,
+#root .load-more {
+  font-size: var(--font-size-secondary);
+}
+
+#root .library-toggle,
+#root .search-box input {
+  font-size: var(--font-size-control);
+}
+
+#root .library-tabs button {
+  font-size: var(--font-size-caption);
+}
+
+#root .queue-item__text strong,
+#root .group-item__text strong,
+#root .library-track__text strong {
+  font-size: var(--font-size-control);
+}
+
+#root .library-header__title strong {
+  font-size: var(--font-size-title);
+}
+
+#root .mini-player__text strong {
+  font-size: var(--font-size-secondary);
+}
+
+#root .center-state strong {
+  font-size: var(--font-size-title);
+}
+
+#root .center-state span {
+  font-size: var(--font-size-control);
+}
+
+/* Desktop shell and contextual queue */
+@media (min-width: 1024px) {
+  #root .desktop-brand strong {
+    font-size: var(--font-size-section);
+  }
+
+  #root .desktop-nav__item span,
+  #root .desktop-context__empty,
+  #root .desktop-context__action {
+    font-size: var(--font-size-secondary);
+  }
+
+  #root .desktop-sidebar__footer span,
+  #root .desktop-context__heading span {
+    font-size: var(--font-size-control);
+  }
+
+  #root .desktop-context__heading small,
+  #root .desktop-context__stats span,
+  #root .desktop-queue__header span,
+  #root .desktop-queue__remaining {
+    font-size: 12px;
+  }
+
+  #root .desktop-now-playing__text strong,
+  #root .desktop-queue__header strong,
+  #root .desktop-queue__item strong {
+    font-size: var(--font-size-secondary);
+  }
+
+  #root .desktop-queue__item small {
+    font-size: 12px;
+  }
+
+  #root .desktop-library-table__track-copy strong {
+    font-size: var(--font-size-secondary);
+  }
+
+  #root .desktop-library-table__track-copy small,
+  #root .desktop-library-table__format {
+    font-size: 12px;
+  }
+}
+
+/* Administration overview and imports */
+#root .administration-summary__loading,
+#root .admin-import-empty {
+  font-size: var(--font-size-secondary);
+}
+
+#root .administration-metric small,
+#root .administration-detail-card__heading small,
+#root .administration-problem-list dt,
+#root .administration-problem-list dd,
+#root .administration-scanner-list dt,
+#root .administration-scanner-list dd,
+#root .admin-import-queue__heading small {
+  font-size: var(--font-size-caption);
+}
+
+#root .administration-metric strong {
+  font-size: 22px;
+}
+
+#root .administration-detail-card__heading strong,
+#root .admin-import-method strong {
+  font-size: var(--font-size-control);
+}
+
+#root .admin-import-intro strong {
+  font-size: 18px;
+}
+
+#root .admin-import-intro p,
+#root .admin-import-method small {
+  font-size: var(--font-size-secondary);
+}
+
+#root .admin-import-method__badge,
+#root .admin-import-job__badge {
+  font-size: 12px;
+}
+
+#root .admin-import-empty strong,
+#root .admin-import-job__body strong {
+  font-size: var(--font-size-secondary);
+}
+
+#root .admin-import-job__body small {
+  font-size: 12px;
+}
+
+/* Library health and integrity */
+#root .admin-metadata-health-filter strong,
+#root .admin-library-integrity__intro strong,
+#root .admin-library-integrity__review-heading > div > strong {
+  font-size: var(--font-size-control);
+}
+
+#root .admin-metadata-health-filter small,
+#root .admin-library-integrity__intro small,
+#root .admin-library-integrity__review-heading small,
+#root .admin-library-integrity__issues article > small {
+  font-size: var(--font-size-caption);
+}
+
+#root .admin-metadata-health-filter > button {
+  font-size: var(--font-size-caption);
+}
+
+#root .admin-library-integrity__actions button,
+#root .admin-library-integrity__review-heading select,
+#root .admin-library-integrity__issues article > strong,
+#root .admin-library-integrity__state {
+  font-size: var(--font-size-secondary);
+}
+
+#root .admin-library-integrity__metrics small,
+#root .admin-library-integrity__review-heading label,
+#root .admin-library-integrity__issue-heading span,
+#root .admin-library-integrity__issue-heading code {
+  font-size: 12px;
+}
+
+#root .admin-library-integrity__metrics strong {
+  font-size: 18px;
+}
+
+/* Account */
+#root .my-account-header strong {
+  font-size: var(--font-size-title);
+}
+
+#root .my-account-profile strong,
+#root .my-account-links strong,
+#root .my-account-card__heading strong {
+  font-size: var(--font-size-control);
+}
+
+#root .my-account-profile__badge {
+  font-size: 12px;
+}
+
+#root .my-account-message,
+#root .my-account-password-rules,
+#root .my-account-session-row small {
+  font-size: var(--font-size-caption);
+}
+
+#root .my-account-session-row strong,
+#root .my-account-session-row button,
+#root .my-account-mobile-entry {
+  font-size: var(--font-size-secondary);
+}
+
+#root .my-account-session-current {
+  font-size: 11px;
+}
+
+/* User administration */
+#root .admin-users-header strong {
+  font-size: var(--font-size-title);
+}
+
+#root .admin-users-new,
+#root .admin-users-toolbar select,
+#root .admin-users-table td,
+#root .admin-users-user strong,
+#root .admin-users-credential button,
+#root .admin-users-editor__footer button,
+#root .admin-users-delete,
+#root .admin-mobile-entry {
+  font-size: var(--font-size-secondary);
+}
+
+#root .admin-users-table-count,
+#root .admin-users-pagination,
+#root .admin-users-credential span,
+#root .admin-users-editor label > span,
+#root .admin-users-editor label > small,
+#root .admin-users-temporary span,
+#root .admin-users-temporary small,
+#root .admin-users-editor__security button small {
+  font-size: var(--font-size-caption);
+}
+
+#root .admin-users-user strong,
+#root .admin-users-temporary > div > strong {
+  font-size: var(--font-size-secondary);
+}
+
+#root .admin-user-status,
+#root .admin-users-session-current {
+  font-size: 11px;
+}
+
+#root .admin-users-editor > section > strong {
+  font-size: var(--font-size-body);
+}
+
+@media (max-width: 420px) {
+  #root .administration-metric strong {
+    font-size: 20px;
+  }
+}
