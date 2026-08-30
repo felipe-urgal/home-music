@@ -1,31 +1,64 @@
-# Fase 7.5 — Tela administrativa de usuários
+# Administração — Usuários
+
+Este documento registra a superfície **atual** de gerenciamento de contas. Os contratos e invariantes do backend continuam documentados em `phase-7.5-admin-users-api.md`, `phase-7.5-auth-policy.md` e `multi-user-auth.md`.
 
 ## Objetivo
 
-Disponibilizar no frontend uma superfície simples para administradores gerenciarem contas usando exclusivamente as APIs administrativas já protegidas pelo backend.
+Permitir que administradores gerenciem contas sem transformar o frontend em fronteira de autorização.
 
-Não existe cadastro público. Usuários comuns não recebem ponto de entrada para esta tela e chamadas manuais continuam sujeitas à política `admin` do servidor.
+Não existe cadastro público. Usuários comuns não recebem acesso à superfície e chamadas manuais continuam sujeitas à política `admin` do servidor.
 
-## Acesso
+## Entrada
 
-A tela usa `currentUser` vindo de `/api/auth/status` e só recebe navegação quando `role === 'admin'`.
+O fluxo fica em:
 
-Essa regra é apenas UX. Ela não substitui autorização: todo `/api/admin/*` continua validado no backend.
+```text
+Minha conta
+  ↓
+Administração
+  ↓
+Usuários
+```
 
-O acesso fica disponível na biblioteca autenticada. A tela é independente do carregamento dos dados da biblioteca, então uma falha de scan/listagem de músicas não impede operações administrativas de contas.
+A interface usa `currentUser` vindo de `/api/auth/status` apenas para UX. Toda mutação continua autorizada no backend.
 
-## Operações
+## Listagem atual
 
-A tela permite:
+Após o redesign do PR #180, a listagem usa **tabela ampla + inspetor contextual**:
 
-- listar contas;
-- criar usuário com papel `user` ou `admin`;
-- alterar papel de outra conta;
-- ativar ou desativar outra conta;
-- gerar nova senha temporária para outra conta;
-- revogar sessões de outra conta.
+- busca por username;
+- filtro por papel;
+- papel e status visíveis na tabela;
+- data de criação;
+- usuário selecionado destacado;
+- painel lateral com identidade, papel, status, datas e estado da senha;
+- largura fluida dentro de Minha conta/Administração;
+- abaixo de 940 px, o inspetor se reorganiza em uma única coluna.
 
-A própria conta é apresentada como `você`, mas as ações administrativas sobre ela ficam indisponíveis. O backend continua aplicando a mesma restrição e também protege a invariável do último administrador ativo.
+A própria conta pode ser inspecionada, mas ações administrativas sobre ela não são oferecidas. Ajustes pessoais pertencem a **Minha conta**.
+
+## Criar usuário
+
+`Novo usuário` abre uma superfície focada, não um card pequeno dentro da tabela.
+
+O administrador informa:
+
+- nome de usuário;
+- papel `user` ou `admin`.
+
+A senha temporária é **sempre gerada automaticamente** pelo servidor. Não existe toggle configurável para essa regra.
+
+Depois da criação, a credencial temporária é mostrada somente no estado da interface e deve ser copiada antes de ser descartada.
+
+## Editar usuário
+
+O fluxo de edição separa três áreas:
+
+1. **Informações da conta** — username, papel e status;
+2. **Segurança** — redefinir senha e revogar sessões;
+3. **Zona de perigo** — remover usuário.
+
+Alterações de papel/status continuam sujeitas às invariantes do backend, inclusive proteção contra remover/rebaixar o último administrador ativo e contra auto-lockout.
 
 ## Senha temporária
 
@@ -33,50 +66,53 @@ Criação e reset retornam uma senha temporária somente naquela resposta.
 
 O frontend:
 
-- mantém a senha somente em estado React;
-- não grava a credencial em `localStorage`, `sessionStorage`, Cache Storage ou IndexedDB;
-- não inclui a senha em URL;
-- não registra a senha em logs;
-- substitui a credencial exibida quando outra criação/reset é concluída;
-- permite copiar explicitamente para o clipboard;
-- permite dispensar imediatamente a credencial da tela.
+- mantém a credencial somente em estado React;
+- não grava senha em `localStorage`, `sessionStorage`, Cache Storage ou IndexedDB;
+- não coloca a senha em URL/log;
+- permite cópia explícita para o clipboard;
+- exige confirmação antes de navegar/trocar de usuário quando uma credencial ainda está visível e poderia ser perdida;
+- permite dispensar a credencial conscientemente.
 
-Se a senha temporária for perdida, o fluxo correto é gerar outro reset.
+Se a senha for perdida, o fluxo correto é gerar outro reset.
 
-## Confirmações e sessões
+## Ações rápidas do inspetor
 
-Mudanças sensíveis exigem confirmação visual antes da chamada:
+Para outra conta administrável:
 
-- alteração de papel;
-- ativação/desativação;
-- reset de senha;
-- revogação de sessões.
+- editar usuário;
+- redefinir senha;
+- revogar sessões.
 
-O texto deixa explícito quando a operação revoga sessões. A revogação efetiva continua sendo responsabilidade do backend.
+A remoção permanente da conta permanece dentro da tela de edição, em uma zona de perigo separada das ações comuns.
 
-## Requests
+## Requests e segurança
 
-As mutações reutilizam `apiFetch` e enviam `X-Home-Music-Request: 1`.
+As mutações reutilizam `apiFetch` e enviam:
 
-IDs de usuário são codificados com `encodeURIComponent` antes de entrarem no path. Erros HTTP exibem somente a mensagem pública retornada pela API.
+```text
+X-Home-Music-Request: 1
+```
 
-## Layout
+IDs de usuário entram no path codificados com `encodeURIComponent`.
 
-A composição é responsiva:
+O frontend não recebe `userId` arbitrário como autoridade e não pode substituir as regras do servidor. A própria conta e o último administrador continuam protegidos mesmo se alguém construir a request manualmente.
 
-- formulário compacto de criação no topo;
-- lista em cards no mobile/tablet;
-- duas colunas em desktop quando houver espaço;
-- estado ativo/inativo e papel visíveis sem abrir detalhe;
-- ações da conta atual substituídas por uma indicação de que o autosserviço ficará em `Minha conta`.
+## Estados de erro e navegação
 
-## Escopo
+- erros HTTP exibem somente a mensagem pública da API;
+- ações ficam desabilitadas enquanto outra mutação da conta está em andamento;
+- fechar o inspetor realmente remove a seleção contextual;
+- refresh atualiza a lista sem inventar estado local;
+- credencial temporária pendente recebe proteção contra descarte silencioso.
 
-Esta atividade não altera:
+## Escopo não alterado pelo redesign
+
+O redesign não mudou:
 
 - schema SQLite;
 - hashing de senha;
-- regras de último admin;
 - política de autorização;
-- contrato das APIs administrativas;
-- fluxo de `Minha conta`, que permanece como próxima atividade separada.
+- contratos das APIs administrativas;
+- regra de último administrador;
+- ownership de dados pessoais;
+- fluxo de autosserviço de Minha conta.
