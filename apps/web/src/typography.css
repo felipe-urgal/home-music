@@ -228,6 +228,58 @@ body {
   font-size: 18px;
 }
 
+/* Track and metadata administration */
+#root .admin-tracks-search input,
+#root .admin-tracks-filters button,
+#root .admin-tracks-message,
+#root .admin-tracks-state,
+#root .admin-track-row__body strong,
+#root .admin-track-row__action,
+#root .admin-metadata-notice strong,
+#root .admin-metadata-row__edit,
+#root .admin-metadata-dialog__loading,
+#root .admin-metadata-dialog__message,
+#root .admin-cover-editor__heading strong,
+#root .admin-cover-editor__file strong,
+#root .admin-cover-editor__actions button,
+#root .admin-cover-upload,
+#root .admin-metadata-dialog__actions button {
+  font-size: var(--font-size-secondary);
+}
+
+#root .admin-tracks-list__count,
+#root .admin-tracks-pagination {
+  font-size: var(--font-size-caption);
+}
+
+#root .admin-track-row__status,
+#root .admin-cover-editor__heading > span {
+  font-size: 12px;
+}
+
+#root .admin-metadata-dialog__header strong {
+  font-size: var(--font-size-control);
+}
+
+/* Operation history */
+#root .admin-operation-history__toolbar select,
+#root .admin-operation-history__empty,
+#root .admin-operation-row__body strong,
+#root .admin-operation-detail__heading strong,
+#root .admin-operation-detail__error strong,
+#root .admin-operation-detail__retry strong,
+#root .admin-operation-detail__retry input[type="url"],
+#root .admin-operation-detail__retry button,
+#root .admin-operation-detail__retry-message {
+  font-size: var(--font-size-secondary);
+}
+
+#root .admin-operation-row__status,
+#root .admin-operation-detail__error span,
+#root .admin-operation-detail__retry-note {
+  font-size: var(--font-size-caption);
+}
+
 /* Account */
 #root .my-account-header strong {
   font-size: var(--font-size-title);
@@ -286,13 +338,11 @@ body {
   font-size: var(--font-size-caption);
 }
 
-#root .admin-users-user strong,
 #root .admin-users-temporary > div > strong {
   font-size: var(--font-size-secondary);
 }
 
-#root .admin-user-status,
-#root .admin-users-session-current {
+#root .admin-user-status {
   font-size: 11px;
 }
 
