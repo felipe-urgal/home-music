@@ -63,19 +63,29 @@ export type AdminUserSessionsRevokeResponse = {
   revokedSessions: number;
 };
 
+export type AdminLibraryProblemKey =
+  | 'missingTitle'
+  | 'missingCover'
+  | 'unknownArtist'
+  | 'unknownAlbum'
+  | 'missingDuration';
+
 export type AdminLibraryOverviewResponse = {
   tracks: {
     total: number;
   };
   storage: {
     libraryBytes: number;
+    databaseBytes: number | null;
   };
   problems: {
     affectedTracks: number;
+    missingTitle: number;
     missingCover: number;
     unknownArtist: number;
     unknownAlbum: number;
     missingDuration: number;
+    trackIds: Record<AdminLibraryProblemKey, string[]>;
   };
   scanner: {
     ready: boolean;
