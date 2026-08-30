@@ -64,7 +64,9 @@ body {
 #root .queue-label,
 #root .section-heading,
 #root .playing-indicator,
-#root .load-more {
+#root .load-more,
+#root .autoplay-notice,
+#root .library-status {
   font-size: var(--hm-type-secondary);
 }
 
@@ -78,7 +80,8 @@ body {
 
 #root .queue-item__text strong,
 #root .group-item__text strong,
-#root .library-track__text strong {
+#root .library-track__text strong,
+#root .player-playlist-picker > strong {
   font-size: var(--hm-type-control);
 }
 
@@ -90,6 +93,11 @@ body {
   font-size: var(--hm-type-secondary);
 }
 
+#root .volume-control span,
+#root .play-all span {
+  font-size: var(--hm-type-caption);
+}
+
 #root .center-state strong {
   font-size: var(--hm-type-title);
 }
@@ -98,19 +106,32 @@ body {
   font-size: var(--hm-type-control);
 }
 
-/* Desktop shell and contextual queue */
+/* Authentication */
+#root .login-field,
+#root .login-error,
+#root .login-footnote {
+  font-size: var(--hm-type-secondary);
+}
+
+#root .login-heading p {
+  font-size: var(--hm-type-control);
+}
+
+/* Desktop shell, navigation and player */
 @media (min-width: 1024px) {
   #root .desktop-brand strong {
     font-size: var(--hm-type-section);
   }
 
   #root .desktop-nav__item span,
+  #root .desktop-nav__item--nested span,
   #root .desktop-context__empty,
   #root .desktop-context__action,
   #root .desktop-now-playing__text strong,
   #root .desktop-queue__header strong,
   #root .desktop-queue__item strong,
-  #root .desktop-library-table__track-copy strong {
+  #root .desktop-library-table__track-copy strong,
+  #root .desktop-player-bar__track-text strong {
     font-size: var(--hm-type-secondary);
   }
 
@@ -119,9 +140,15 @@ body {
     font-size: var(--hm-type-control);
   }
 
+  #root .desktop-nav__group-label {
+    font-size: var(--hm-type-micro);
+  }
+
   #root .desktop-context__stats span,
   #root .desktop-queue__header span,
-  #root .desktop-queue__remaining {
+  #root .desktop-queue__remaining,
+  #root .desktop-player-bar__progress,
+  #root .desktop-player-bar__volume span {
     font-size: var(--hm-type-caption);
   }
 
@@ -192,7 +219,8 @@ body {
 #root .admin-metadata-dialog__loading,
 #root .admin-metadata-dialog__message,
 #root .admin-cover-editor__heading strong,
-#root .admin-cover-editor__file strong {
+#root .admin-cover-editor__file strong,
+#root .admin-cover-upload {
   font-size: var(--hm-type-secondary);
 }
 
