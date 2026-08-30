@@ -33,8 +33,14 @@ import {
 } from '../admin-tracks-client';
 import { notifyLibraryChanged } from '../library-events';
 
+type AdminMetadataHealthFilter = {
+  label: string;
+  trackIds: string[];
+};
+
 type AdminTrackMetadataScreenProps = {
   onBack: () => void;
+  initialHealthFilter?: AdminMetadataHealthFilter | null;
 };
 
 type EditorFeedback = {
@@ -76,11 +82,15 @@ function hasOverride(metadata: AdminTrackMetadataResponse | null) {
   return Boolean(metadata?.override.updatedAt);
 }
 
-export function AdminTrackMetadataScreen({ onBack }: AdminTrackMetadataScreenProps) {
+export function AdminTrackMetadataScreen({
+  onBack,
+  initialHealthFilter = null
+}: AdminTrackMetadataScreenProps) {
   const [tracks, setTracks] = useState<AdminTrack[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState('');
+  const [healthFilter, setHealthFilter] = useState<AdminMetadataHealthFilter | null>(initialHealthFilter);
   const [page, setPage] = useState(1);
   const [editingTrackId, setEditingTrackId] = useState<string | null>(null);
   const [metadata, setMetadata] = useState<AdminTrackMetadataResponse | null>(null);
@@ -95,12 +105,20 @@ export function AdminTrackMetadataScreen({ onBack }: AdminTrackMetadataScreenPro
   const [feedback, setFeedback] = useState<string | null>(null);
   const operationBusy = savingAction !== null;
 
+  const healthTrackIds = useMemo(
+    () => healthFilter ? new Set(healthFilter.trackIds) : null,
+    [healthFilter]
+  );
+
   const filteredTracks = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase('pt-BR');
-    if (!normalized) return tracks;
-    return tracks.filter(track => [track.title, track.artist, track.album, track.folder]
-      .some(value => value.toLocaleLowerCase('pt-BR').includes(normalized)));
-  }, [query, tracks]);
+    return tracks.filter(track => {
+      if (healthTrackIds && !healthTrackIds.has(track.id)) return false;
+      if (!normalized) return true;
+      return [track.title, track.artist, track.album, track.folder]
+        .some(value => value.toLocaleLowerCase('pt-BR').includes(normalized));
+    });
+  }, [healthTrackIds, query, tracks]);
 
   const pageCount = Math.max(1, Math.ceil(filteredTracks.length / PAGE_SIZE));
   const visibleTracks = useMemo(
@@ -114,7 +132,7 @@ export function AdminTrackMetadataScreen({ onBack }: AdminTrackMetadataScreenPro
 
   useEffect(() => {
     setPage(1);
-  }, [query]);
+  }, [healthFilter, query]);
 
   useEffect(() => {
     if (!coverFile) {
@@ -318,6 +336,18 @@ export function AdminTrackMetadataScreen({ onBack }: AdminTrackMetadataScreenPro
           </div>
         </div>
 
+        {healthFilter && (
+          <div className="admin-metadata-health-filter" role="status">
+            <div>
+              <strong>Filtro de saúde · {healthFilter.label}</strong>
+              <small>{healthFilter.trackIds.length.toLocaleString('pt-BR')} {healthFilter.trackIds.length === 1 ? 'faixa sinalizada' : 'faixas sinalizadas'} na última leitura.</small>
+            </div>
+            <button type="button" onClick={() => setHealthFilter(null)}>
+              <X /> Mostrar todas
+            </button>
+          </div>
+        )}
+
         <section className="admin-tracks-toolbar" aria-label="Buscar metadados de músicas">
           <label className="admin-tracks-search">
             <Search />
@@ -346,7 +376,7 @@ export function AdminTrackMetadataScreen({ onBack }: AdminTrackMetadataScreenPro
         {loading ? (
           <div className="admin-tracks-state" role="status"><LoaderCircle className="is-spinning" /> Carregando músicas…</div>
         ) : filteredTracks.length === 0 ? (
-          <div className="admin-tracks-state"><Music2 /> Nenhuma música encontrada.</div>
+          <div className="admin-tracks-state"><Music2 /> {healthFilter ? 'Nenhuma música neste filtro.' : 'Nenhuma música encontrada.'}</div>
         ) : (
           <section className="admin-metadata-list" aria-label="Músicas com metadados editáveis">
             <div className="admin-tracks-list__count">
