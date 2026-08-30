@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { getLibraryIntegrityStatus, resetLibraryIntegrityStatusForTests } from './library-integrity.js';
-import { scanLibrary } from './library.js';
+import { auditLibraryIntegrity, scanLibrary } from './library.js';
 import { resolveLibraryRoot } from './security.js';
 
 test('scan registra arquivo fora do índice e limpa a divergência no scan seguinte', async () => {
@@ -33,7 +33,7 @@ test('scan registra arquivo fora do índice e limpa a divergência no scan segui
   }
 });
 
-test('scan registra caminho ausente sem confundir a lixeira com órfão', async () => {
+test('scan registra caminho ausente para que a reconciliação existente fique auditável', async () => {
   resetLibraryIntegrityStatusForTests();
   const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-integrity-missing-'));
 
@@ -56,6 +56,39 @@ test('scan registra caminho ausente sem confundir a lixeira com órfão', async 
         issue.trackId === first.tracks[0].id &&
         issue.relativePath === 'Ausente.mp3'
       ),
+      true
+    );
+  } finally {
+    await rm(temp, { recursive: true, force: true });
+    resetLibraryIntegrityStatusForTests();
+  }
+});
+
+test('auditoria detecta divergências sem alterar o snapshot indexado', async () => {
+  resetLibraryIntegrityStatusForTests();
+  const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-integrity-audit-'));
+
+  try {
+    const root = path.join(temp, 'music');
+    await mkdir(root, { recursive: true });
+    const indexedFile = path.join(root, 'Indexada.mp3');
+    await writeFile(indexedFile, 'arquivo indexado');
+    const libraryRoot = await resolveLibraryRoot(root);
+    const initial = await scanLibrary(libraryRoot);
+    const indexedSnapshot = initial.tracks.map(track => ({ ...track }));
+
+    await rm(indexedFile);
+    await writeFile(path.join(root, 'Nova.mp3'), 'arquivo novo');
+    const status = await auditLibraryIntegrity(libraryRoot, indexedSnapshot);
+
+    assert.equal(indexedSnapshot.length, 1);
+    assert.equal(indexedSnapshot[0].filePath, indexedFile);
+    assert.equal(
+      status.issues.some(issue => issue.kind === 'missing-file' && issue.trackId === indexedSnapshot[0].id),
+      true
+    );
+    assert.equal(
+      status.issues.some(issue => issue.kind === 'unindexed-file' && issue.relativePath === 'Nova.mp3'),
       true
     );
   } finally {
