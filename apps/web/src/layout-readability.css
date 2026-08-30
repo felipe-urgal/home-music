@@ -11,13 +11,6 @@
  * so the typography increase does not create cramped or fragile layouts.
  */
 
-/* Shared form controls */
-#root input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']),
-#root select,
-#root textarea {
-  min-height: var(--hm-control-height);
-}
-
 /* Library and player */
 #root .library-tabs button {
   min-height: var(--hm-control-height);
