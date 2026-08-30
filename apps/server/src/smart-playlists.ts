@@ -160,12 +160,14 @@ function parseStoredRule(value: unknown): SmartPlaylistRule | null {
 
 export class SmartPlaylistStore {
   private readonly db: DatabaseSync;
+  private readonly hasTrackAvailability: boolean;
 
   constructor(databasePath: string) {
     this.db = new DatabaseSync(databasePath);
     this.db.exec('PRAGMA foreign_keys = ON;');
     this.db.exec('PRAGMA journal_mode = WAL;');
     this.db.exec('PRAGMA synchronous = NORMAL;');
+    this.db.exec('PRAGMA busy_timeout = 5000;');
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS smart_playlists (
         id TEXT PRIMARY KEY,
@@ -179,6 +181,12 @@ export class SmartPlaylistStore {
       CREATE INDEX IF NOT EXISTS idx_smart_playlists_owner_updated
       ON smart_playlists(owner_user_id, updated_at DESC, id ASC);
     `);
+    this.hasTrackAvailability = Boolean(this.db.prepare(`
+      SELECT 1
+      FROM sqlite_master
+      WHERE type = 'table' AND name = 'track_availability'
+      LIMIT 1
+    `).get());
   }
 
   close() {
@@ -192,13 +200,21 @@ export class SmartPlaylistStore {
     now = new Date()
   ) {
     requireUserId(userId);
-    const since = rule.periodDays == null
+    const normalizedRule = normalizeSmartPlaylistRule(rule);
+    if (!normalizedRule) throw new RangeError('Regra da playlist inteligente inválida.');
+    const since = normalizedRule.periodDays == null
       ? null
-      : new Date(now.getTime() - rule.periodDays * 24 * 60 * 60 * 1_000).toISOString();
+      : new Date(now.getTime() - normalizedRule.periodDays * 24 * 60 * 60 * 1_000).toISOString();
     const scopedWhere = since ? 'AND played_at >= ?' : '';
     const bindings: unknown[] = [userId];
     if (since) bindings.push(since);
     bindings.push(userId, userId);
+    const availabilityJoin = this.hasTrackAvailability
+      ? 'LEFT JOIN track_availability ta ON ta.track_id = t.id'
+      : '';
+    const availabilityWhere = this.hasTrackAvailability
+      ? 'WHERE COALESCE(ta.enabled, 1) = 1'
+      : '';
 
     const rows = this.db.prepare(`
       WITH scoped_history AS (
@@ -227,6 +243,8 @@ export class SmartPlaylistStore {
       LEFT JOIN scoped_history sh ON sh.track_id = t.id
       LEFT JOIN all_history ah ON ah.track_id = t.id
       LEFT JOIN user_favorites uf ON uf.track_id = t.id
+      ${availabilityJoin}
+      ${availabilityWhere}
     `).all(...bindings) as Row[];
 
     return rows
@@ -242,20 +260,20 @@ export class SmartPlaylistStore {
         favoriteCreatedAt: typeof row.favorite_created_at === 'string' ? row.favorite_created_at : null
       }))
       .filter(track => !eligibleTrackIds || eligibleTrackIds.has(track.id))
-      .filter(track => matchesText(track.artist, rule.artist))
-      .filter(track => matchesText(track.album, rule.album))
-      .filter(track => matchesFolder(track.folderPath, rule.folderPath))
+      .filter(track => matchesText(track.artist, normalizedRule.artist))
+      .filter(track => matchesText(track.album, normalizedRule.album))
+      .filter(track => matchesFolder(track.folderPath, normalizedRule.folderPath))
       .filter(track => {
-        if (rule.favorite == null) return true;
-        return rule.favorite === Boolean(track.favoriteCreatedAt);
+        if (normalizedRule.favorite == null) return true;
+        return normalizedRule.favorite === Boolean(track.favoriteCreatedAt);
       })
       .filter(track => {
-        if (rule.history === 'any') return true;
-        if (rule.history === 'never') return !track.hasPlayedEver;
+        if (normalizedRule.history === 'any') return true;
+        if (normalizedRule.history === 'never') return !track.hasPlayedEver;
         return track.plays > 0;
       })
-      .sort((left, right) => sortTracks(rule, left, right))
-      .slice(0, rule.limit)
+      .sort((left, right) => sortTracks(normalizedRule, left, right))
+      .slice(0, normalizedRule.limit)
       .map(track => track.id);
   }
 
@@ -311,12 +329,14 @@ export class SmartPlaylistStore {
     requireUserId(userId);
     const cleanName = name.trim();
     if (!cleanName || cleanName.length > 120) throw new RangeError('Nome da playlist inteligente inválido.');
+    const normalizedRule = normalizeSmartPlaylistRule(rule);
+    if (!normalizedRule) throw new RangeError('Regra da playlist inteligente inválida.');
     const id = randomUUID();
     const now = new Date().toISOString();
     this.db.prepare(`
       INSERT INTO smart_playlists(id, owner_user_id, name, rule_json, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).run(id, userId, cleanName, JSON.stringify(rule), now, now);
+    `).run(id, userId, cleanName, JSON.stringify(normalizedRule), now, now);
     return id;
   }
 
@@ -334,7 +354,8 @@ export class SmartPlaylistStore {
     if (!currentRule) return false;
     const name = patch.name == null ? stringValue(current.name) : patch.name.trim();
     if (!name || name.length > 120) throw new RangeError('Nome da playlist inteligente inválido.');
-    const rule = patch.rule ?? currentRule;
+    const rule = patch.rule == null ? currentRule : normalizeSmartPlaylistRule(patch.rule);
+    if (!rule) throw new RangeError('Regra da playlist inteligente inválida.');
     const result = this.db.prepare(`
       UPDATE smart_playlists
       SET name = ?, rule_json = ?, updated_at = ?
