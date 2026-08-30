@@ -240,6 +240,11 @@ export function AdminTrackMetadataScreen({
     clearEditor();
   }
 
+  function leaveScreen() {
+    if (operationBusy || !confirmEditorDiscard()) return;
+    onBack();
+  }
+
   function setField(field: keyof EditableTrackMetadata, value: string) {
     setDraft(current => current ? { ...current, [field]: value } : current);
     setEditorFeedback(null);
@@ -346,7 +351,7 @@ export function AdminTrackMetadataScreen({
   return (
     <section className="my-account-screen admin-metadata-screen admin-metadata-screen--v1" aria-labelledby="admin-metadata-title">
       <header className="my-account-header">
-        <button className="icon-button" type="button" aria-label="Voltar" onClick={onBack}><ChevronLeft /></button>
+        <button className="icon-button" type="button" aria-label="Voltar" disabled={operationBusy} onClick={leaveScreen}><ChevronLeft /></button>
         <div>
           <strong id="admin-metadata-title">Metadados</strong>
           <small>Correções reversíveis de texto e capa</small>
