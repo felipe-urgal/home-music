@@ -40,6 +40,7 @@ const EMPTY_COUNTS: AdminLibraryIntegrityStatus['counts'] = {
 };
 
 let activeCheck: ActiveIntegrityCheck | null = null;
+let lastLibraryRoot: string | null = null;
 let lastStatus: AdminLibraryIntegrityStatus = {
   checkedAt: null,
   counts: { ...EMPTY_COUNTS },
@@ -156,7 +157,9 @@ export async function probeMediaFile(
 export function beginLibraryIntegrityCheck(libraryRoot: string) {
   activeCheck = {
     libraryRoot,
-    issues: lastStatus.issues.filter(isPersistentFileFailure).map(issue => ({ ...issue }))
+    issues: lastLibraryRoot === libraryRoot
+      ? lastStatus.issues.filter(isPersistentFileFailure).map(issue => ({ ...issue }))
+      : []
   };
 }
 
@@ -208,6 +211,7 @@ export function finishLibraryIntegrityCheck(checkedAt = new Date().toISOString()
   const issues = [...deduplicated.values()].sort((left, right) =>
     left.relativePath.localeCompare(right.relativePath, 'pt-BR') || left.kind.localeCompare(right.kind)
   );
+  lastLibraryRoot = activeCheck.libraryRoot;
   lastStatus = {
     checkedAt,
     counts: countsFor(issues),
@@ -231,6 +235,7 @@ export function getLibraryIntegrityStatus(): AdminLibraryIntegrityStatus {
 
 export function resetLibraryIntegrityStatusForTests() {
   activeCheck = null;
+  lastLibraryRoot = null;
   lastStatus = {
     checkedAt: null,
     counts: { ...EMPTY_COUNTS },
