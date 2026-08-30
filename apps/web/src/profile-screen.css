@@ -1,14 +1,13 @@
 /* Profile detail follows the approved clean / single-card concept. */
 .my-account-profile-page {
   display: grid;
-  gap: 14px;
+  gap: 0;
 }
 
 .my-account-profile-hero,
 .my-account-profile-details,
 .my-account-profile-security {
   border: 1px solid rgba(255,255,255,.075);
-  border-radius: 14px;
   background: #0d141b;
 }
 
@@ -18,6 +17,8 @@
   align-items: center;
   gap: 16px;
   padding: 20px;
+  border-bottom: 0;
+  border-radius: 14px 14px 0 0;
 }
 
 .my-account-profile-hero__avatar {
@@ -77,6 +78,7 @@
 
 .my-account-profile-details {
   overflow: hidden;
+  border-radius: 0 0 14px 14px;
 }
 
 .my-account-profile-details__heading {
@@ -126,7 +128,9 @@
   grid-template-columns: 36px minmax(0,1fr) auto;
   align-items: center;
   gap: 12px;
+  margin-top: 14px;
   padding: 16px 18px;
+  border-radius: 14px;
 }
 
 .my-account-profile-security__icon {
@@ -179,6 +183,12 @@
   color: #d8eeff;
 }
 
+.my-account-profile-security__action:focus-visible,
+.my-account-profile--link:focus-visible {
+  outline: 2px solid rgba(120,198,255,.8);
+  outline-offset: 2px;
+}
+
 .my-account-profile-security__action svg {
   width: 15px;
   height: 15px;
@@ -193,18 +203,39 @@
   cursor: pointer;
 }
 
+.my-account-profile--link > span:nth-child(2) {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
 .my-account-profile--link:hover {
   border-color: rgba(78,168,240,.18);
   background: #101922;
 }
 
+.my-account-profile__end {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .my-account-profile__open {
   width: 17px;
   height: 17px;
+  flex: 0 0 auto;
   color: #7f8b96;
 }
 
 @media (max-width: 560px) {
+  .my-account-profile__end {
+    gap: 7px;
+  }
+
+  .my-account-profile__badge {
+    display: none;
+  }
+
   .my-account-profile-hero {
     grid-template-columns: 62px minmax(0,1fr);
     padding: 16px;
