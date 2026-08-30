@@ -3,28 +3,11 @@ import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
 import { parseFile } from 'music-metadata';
-import type { AdminLibraryOverviewResponse, Track } from '@home-music/shared';
+import type { AdminLibraryOverviewResponse, AdminLibraryProblemKey, Track } from '@home-music/shared';
 import type { IndexedTrack } from './library.js';
 
 type ScannerState = AdminLibraryOverviewResponse['scanner'];
 type Row = Record<string, unknown>;
-
-export type AdminLibraryProblemKey =
-  | 'missingTitle'
-  | 'missingCover'
-  | 'unknownArtist'
-  | 'unknownAlbum'
-  | 'missingDuration';
-
-export type AdminLibraryHealthOverviewResponse = Omit<AdminLibraryOverviewResponse, 'storage' | 'problems'> & {
-  storage: AdminLibraryOverviewResponse['storage'] & {
-    databaseBytes: number | null;
-  };
-  problems: AdminLibraryOverviewResponse['problems'] & {
-    missingTitle: number;
-    trackIds: Record<AdminLibraryProblemKey, string[]>;
-  };
-};
 
 type AdminLibraryOverviewOptions = {
   databasePath?: string;
@@ -195,7 +178,7 @@ export async function buildAdminLibraryOverview(
   tracks: readonly IndexedTrack[],
   scanner: ScannerState,
   options: AdminLibraryOverviewOptions = {}
-): Promise<AdminLibraryHealthOverviewResponse> {
+): Promise<AdminLibraryOverviewResponse> {
   const databasePath = options.databasePath || process.env.HOME_MUSIC_DATABASE_PATH || defaultDatabasePath;
   const databaseBytes = options.databaseBytes === undefined
     ? await databaseFootprintBytes(databasePath)
