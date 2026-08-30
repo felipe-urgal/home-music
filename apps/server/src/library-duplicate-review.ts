@@ -20,6 +20,8 @@ import { openRegularFileInside, resolveLibraryRoot } from './security.js';
 
 const HASH_BUFFER_BYTES = 64 * 1024;
 const MAX_HASH_CACHE_ITEMS = 2_048;
+const GENERIC_ARTISTS = new Set(['artista desconhecido', 'unknown artist']);
+const GENERIC_ALBUMS = new Set(['album desconhecido', 'unknown album']);
 
 type Row = Record<string, unknown>;
 
@@ -69,6 +71,17 @@ function nullableNumber(value: unknown) {
   if (value == null) return null;
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
+}
+
+function meaningfulNormalizedText(value: string, excluded: ReadonlySet<string>) {
+  const normalized = normalizeDuplicateText(value);
+  return normalized && !excluded.has(normalized) ? normalized : '';
+}
+
+function meaningfulTextMatches(left: string, right: string, excluded: ReadonlySet<string>) {
+  const normalizedLeft = meaningfulNormalizedText(left, excluded);
+  const normalizedRight = meaningfulNormalizedText(right, excluded);
+  return Boolean(normalizedLeft && normalizedLeft === normalizedRight);
 }
 
 function trackFromRow(row: Row): LibraryDuplicateTrack {
@@ -189,7 +202,6 @@ export class LibraryDuplicateReviewStore {
 
     const allTracks = await this.readTracks();
     const tracks = allTracks.filter(track => track.id && track.filePath && !this.isHidden(track.id));
-    const byId = new Map(tracks.map(track => [track.id, track]));
     const candidates = new Map<string, CandidateDraft>();
 
     const addHeuristicPair = (left: LibraryDuplicateTrack, right: LibraryDuplicateTrack) => {
@@ -202,8 +214,8 @@ export class LibraryDuplicateReviewStore {
       const rightFilename = filenameStem(right.filePath);
       const classified = classifyDuplicateSignals({
         title: duplicateTextMatches(left.title, right.title),
-        artist: duplicateTextMatches(left.artist, right.artist),
-        album: duplicateTextMatches(left.album, right.album),
+        artist: meaningfulTextMatches(left.artist, right.artist, GENERIC_ARTISTS),
+        album: meaningfulTextMatches(left.album, right.album, GENERIC_ALBUMS),
         duration: duplicateDurationMatches(left.duration, right.duration),
         filename:
           duplicateTextMatches(leftFilename, rightFilename)
@@ -245,8 +257,8 @@ export class LibraryDuplicateReviewStore {
       const title = normalizeDuplicateText(track.title);
       if (title) this.pushBucket(titleBuckets, title, track);
 
-      const artist = normalizeDuplicateText(track.artist);
-      const album = normalizeDuplicateText(track.album);
+      const artist = meaningfulNormalizedText(track.artist, GENERIC_ARTISTS);
+      const album = meaningfulNormalizedText(track.album, GENERIC_ALBUMS);
       if (artist && album) this.pushBucket(artistAlbumBuckets, `${artist}\u0000${album}`, track);
 
       const filename = normalizeDuplicateText(filenameStem(track.filePath));
