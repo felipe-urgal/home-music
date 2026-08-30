@@ -45,6 +45,7 @@ import './layout-readability.css';
 import './password-screen.css';
 import './sessions-screen.css';
 import './playback-screen.css';
+import './administration-cockpit.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
