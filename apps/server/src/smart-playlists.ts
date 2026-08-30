@@ -209,7 +209,7 @@ export class SmartPlaylistStore {
       ? null
       : new Date(now.getTime() - normalizedRule.periodDays * 24 * 60 * 60 * 1_000).toISOString();
     const scopedWhere = since ? 'AND played_at >= ?' : '';
-    const bindings: unknown[] = [userId];
+    const bindings: string[] = [userId];
     if (since) bindings.push(since);
     bindings.push(userId, userId);
     const availabilityJoin = this.hasTrackAvailability
