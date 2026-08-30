@@ -3,7 +3,13 @@ import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
 import { parseFile } from 'music-metadata';
-import type { AdminLibraryOverviewResponse, AdminLibraryProblemKey, Track } from '@home-music/shared';
+import type {
+  AdminLibraryIntegrityStatus,
+  AdminLibraryOverviewResponse,
+  AdminLibraryProblemKey,
+  Track
+} from '@home-music/shared';
+import { getLibraryIntegrityStatus } from './library-integrity.js';
 import type { IndexedTrack } from './library.js';
 
 type ScannerState = AdminLibraryOverviewResponse['scanner'];
@@ -12,6 +18,7 @@ type Row = Record<string, unknown>;
 type AdminLibraryOverviewOptions = {
   databasePath?: string;
   databaseBytes?: number | null;
+  integrity?: AdminLibraryIntegrityStatus;
   resolveTrack?: (track: IndexedTrack) => Track;
   isTrackHidden?: (track: IndexedTrack) => boolean;
   hasTitleOverride?: (track: IndexedTrack) => boolean;
@@ -65,8 +72,6 @@ async function databaseFootprintBytes(databasePath: string) {
 }
 
 function scannerFallbackTitle(track: IndexedTrack) {
-  // Espelha exatamente o fallback usado pelo scanner, inclusive para extensões
-  // com casing incomum. A igualdade sozinha não prova ausência da tag.
   const extension = path.extname(track.filePath).toLowerCase();
   return path.basename(track.filePath, extension);
 }
@@ -134,7 +139,6 @@ async function readTitleTagPresent(track: IndexedTrack) {
     });
     return present;
   } catch {
-    // Arquivo temporariamente indisponível não deve virar falso positivo de qualidade.
     return null;
   }
 }
@@ -261,6 +265,7 @@ export async function buildAdminLibraryOverview(
         missingDuration,
         trackIds
       },
+      integrity: options.integrity ?? getLibraryIntegrityStatus(),
       scanner
     };
   } finally {
