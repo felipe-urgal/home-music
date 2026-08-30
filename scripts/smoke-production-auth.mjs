@@ -213,10 +213,45 @@ try {
       missingDuration: []
     }
   });
+  assert.equal(typeof adminOverviewBody.integrity.checkedAt, 'string');
+  assert.deepEqual(adminOverviewBody.integrity.counts, {
+    total: 0,
+    scannerFailures: 0,
+    mediaProbeFailures: 0,
+    missingFiles: 0,
+    unindexedFiles: 0
+  });
+  assert.deepEqual(adminOverviewBody.integrity.issues, []);
   assert.equal(adminOverviewBody.scanner.ready, true);
   assert.equal(adminOverviewBody.scanner.scanning, false);
   assert.equal(typeof adminOverviewBody.scanner.scannedAt, 'string');
   assert.equal(typeof adminOverviewBody.scanner.autoRescan.enabled, 'boolean');
+
+  const integrityWithoutMutationHeader = await fetch(`${firstServer.baseUrl}/api/admin/library/integrity/check`, {
+    method: 'POST',
+    headers: { Cookie: adminLogin.cookie }
+  });
+  assert.equal(integrityWithoutMutationHeader.status, 403);
+  assert.deepEqual(await integrityWithoutMutationHeader.json(), { error: 'Requisição de alteração não autorizada.' });
+
+  const integrityCheck = await fetch(`${firstServer.baseUrl}/api/admin/library/integrity/check`, {
+    method: 'POST',
+    headers: {
+      Cookie: adminLogin.cookie,
+      'X-Home-Music-Request': '1'
+    }
+  });
+  assert.equal(integrityCheck.status, 200);
+  const integrityCheckBody = await integrityCheck.json();
+  assert.equal(typeof integrityCheckBody.integrity.checkedAt, 'string');
+  assert.deepEqual(integrityCheckBody.integrity.counts, {
+    total: 0,
+    scannerFailures: 0,
+    mediaProbeFailures: 0,
+    missingFiles: 0,
+    unindexedFiles: 0
+  });
+  assert.deepEqual(integrityCheckBody.integrity.issues, []);
 
   const createUser = await fetch(`${firstServer.baseUrl}/api/admin/users`, {
     method: 'POST',
@@ -299,6 +334,16 @@ try {
   });
   assert.equal(forbiddenOverview.status, 403);
   assert.deepEqual(await forbiddenOverview.json(), { error: 'Acesso administrativo necessário.' });
+
+  const forbiddenIntegrityCheck = await fetch(`${firstServer.baseUrl}/api/admin/library/integrity/check`, {
+    method: 'POST',
+    headers: {
+      Cookie: userLogin.cookie,
+      'X-Home-Music-Request': '1'
+    }
+  });
+  assert.equal(forbiddenIntegrityCheck.status, 403);
+  assert.deepEqual(await forbiddenIntegrityCheck.json(), { error: 'Acesso administrativo necessário.' });
 
   const forbiddenAdmin = await fetch(`${firstServer.baseUrl}/api/admin/users`, {
     headers: { Cookie: userLogin.cookie }
