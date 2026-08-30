@@ -78,7 +78,9 @@ function errorStderr(error: unknown) {
 }
 
 function isPersistentFileFailure(issue: AdminLibraryIntegrityIssue) {
-  return issue.kind === 'scanner-failed' || issue.kind === 'media-probe-failed';
+  return issue.kind === 'scanner-failed' ||
+    issue.kind === 'media-probe-failed' ||
+    issue.kind === 'missing-file';
 }
 
 function pathMatchesPrefix(relativePath: string, prefix: string) {
@@ -92,7 +94,7 @@ export function resolveFfprobeCommand(rawFfmpegCommand: string | undefined) {
 
   const basename = path.basename(configured);
   const match = /^ffmpeg(\.exe)?$/i.exec(basename);
-  if (!match) return 'ffprobe';
+  if (!match) return null;
   const ffprobeName = match[1] ? 'ffprobe.exe' : 'ffprobe';
   const directory = path.dirname(configured);
   return directory === '.' ? ffprobeName : path.join(directory, ffprobeName);
@@ -162,7 +164,9 @@ export function beginLibraryIntegrityCheck(libraryRoot: string) {
   activeCheck = {
     libraryRoot,
     issues: lastLibraryRoot === libraryRoot
-      ? lastStatus.issues.map(issue => ({ ...issue }))
+      ? lastStatus.issues
+        .filter(issue => issue.kind !== 'unindexed-file')
+        .map(issue => ({ ...issue }))
       : []
   };
 }
