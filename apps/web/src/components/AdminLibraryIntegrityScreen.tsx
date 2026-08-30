@@ -106,6 +106,12 @@ export function AdminLibraryIntegrityScreen({ onBack }: AdminLibraryIntegrityScr
         ? `${totalIssues.toLocaleString('pt-BR')} ${totalIssues === 1 ? 'inconsistência precisa' : 'inconsistências precisam'} de revisão.`
         : 'A última auditoria não encontrou divergências entre arquivos e índice.';
 
+  const reviewEyebrow = !hasVerification
+    ? 'Diagnóstico'
+    : hasIssues
+      ? 'Atenção necessária'
+      : 'Resultado';
+
   return (
     <section
       className="my-account-screen admin-library-integrity-screen admin-library-integrity-screen--v3"
@@ -146,7 +152,7 @@ export function AdminLibraryIntegrityScreen({ onBack }: AdminLibraryIntegrityScr
         </section>
 
         {error && <div className="my-account-message is-error" role="alert">{error}</div>}
-        {feedback && <div className="my-account-message is-success" role="status">{feedback}</div>}
+        {feedback && <div className={`my-account-message${hasIssues ? '' : ' is-success'}`} role="status">{feedback}</div>}
 
         {loading && !overview ? (
           <div className="admin-integrity-v3__loading" role="status">
@@ -180,7 +186,7 @@ export function AdminLibraryIntegrityScreen({ onBack }: AdminLibraryIntegrityScr
             <section className="admin-integrity-v3__attention" aria-labelledby="admin-integrity-v3-attention-title">
               <header>
                 <div>
-                  <span>Atenção necessária</span>
+                  <span>{reviewEyebrow}</span>
                   <strong id="admin-integrity-v3-attention-title">
                     {!hasVerification
                       ? 'Aguardando primeira verificação'
