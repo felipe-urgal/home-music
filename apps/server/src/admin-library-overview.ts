@@ -10,8 +10,7 @@ import type {
   Track
 } from '@home-music/shared';
 import { getLibraryIntegrityStatus } from './library-integrity.js';
-import { auditLibraryIntegrity, type IndexedTrack } from './library.js';
-import { resolveLibraryRoot } from './security.js';
+import type { IndexedTrack } from './library.js';
 
 type ScannerState = AdminLibraryOverviewResponse['scanner'];
 type Row = Record<string, unknown>;
@@ -179,33 +178,16 @@ function pruneTitleTagCache(trackIds: ReadonlySet<string>) {
   }
 }
 
-async function resolveIntegrity(
-  tracks: readonly IndexedTrack[],
-  override: AdminLibraryIntegrityStatus | undefined
-) {
-  if (override) return override;
-  const configuredRoot = process.env.MUSIC_DIR?.trim();
-  if (!configuredRoot) return getLibraryIntegrityStatus();
-  try {
-    const libraryRoot = await resolveLibraryRoot(configuredRoot);
-    return await auditLibraryIntegrity(libraryRoot, tracks);
-  } catch {
-    return getLibraryIntegrityStatus();
-  }
-}
-
 export async function buildAdminLibraryOverview(
   tracks: readonly IndexedTrack[],
   scanner: ScannerState,
   options: AdminLibraryOverviewOptions = {}
 ): Promise<AdminLibraryOverviewResponse> {
   const databasePath = options.databasePath || process.env.HOME_MUSIC_DATABASE_PATH || defaultDatabasePath;
-  const [databaseBytes, integrity] = await Promise.all([
-    options.databaseBytes === undefined
-      ? databaseFootprintBytes(databasePath)
-      : options.databaseBytes,
-    resolveIntegrity(tracks, options.integrity)
-  ]);
+  const databaseBytes = options.databaseBytes === undefined
+    ? await databaseFootprintBytes(databasePath)
+    : options.databaseBytes;
+  const integrity = options.integrity ?? getLibraryIntegrityStatus();
   const databaseState = options.resolveTrack && options.isTrackHidden && options.hasTitleOverride
     ? null
     : defaultDatabaseState(databasePath);
