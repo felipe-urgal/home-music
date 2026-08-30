@@ -193,6 +193,7 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
 
   const problemCount = overview?.problems.affectedTracks ?? 0;
   const integrityCount = overview?.integrity.counts.total ?? 0;
+  const integrityVerified = Boolean(overview?.integrity.checkedAt);
   const attentionCount = problemCount + integrityCount;
   const scannerLabel = overview?.scanner.scanning
     ? 'Atualizando'
@@ -200,23 +201,28 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
       ? 'Pronto'
       : 'Atenção';
   const cacheBusy = Boolean(cache && (cache.active > 0 || cache.pending > 0));
-  const statusTone = overview && overview.scanner.ready && attentionCount === 0 ? 'is-healthy' : 'has-warning';
+  const healthy = Boolean(overview && overview.scanner.ready && integrityVerified && attentionCount === 0);
+  const statusTone = !overview ? 'is-loading' : healthy ? 'is-healthy' : 'has-warning';
   const statusTitle = !overview
     ? 'Carregando estado da biblioteca'
     : overview.scanner.scanning
       ? 'Biblioteca sendo atualizada'
       : !overview.scanner.ready
         ? 'Biblioteca requer atenção'
-        : attentionCount > 0
-          ? 'Há itens para revisar'
-          : 'Biblioteca pronta';
+        : !integrityVerified
+          ? 'Integridade ainda não verificada'
+          : attentionCount > 0
+            ? 'Há itens para revisar'
+            : 'Biblioteca pronta';
   const statusDetail = !overview
     ? 'Consultando índice, scanner e integridade.'
     : !overview.scanner.ready
       ? 'O scanner ainda não marcou a biblioteca como pronta para uso.'
-      : attentionCount > 0
-        ? `${attentionCount.toLocaleString('pt-BR')} ${attentionCount === 1 ? 'item precisa' : 'itens precisam'} de revisão.`
-        : 'Scanner pronto e nenhum problema conhecido no último diagnóstico.';
+      : !integrityVerified
+        ? 'Execute Verificar agora em Integridade para concluir o diagnóstico.'
+        : attentionCount > 0
+          ? `${attentionCount.toLocaleString('pt-BR')} ${attentionCount === 1 ? 'item precisa' : 'itens precisam'} de revisão.`
+          : 'Scanner pronto e última verificação de integridade sem inconsistências conhecidas.';
 
   return (
     <section className="my-account-screen administration-screen administration-cockpit" aria-labelledby="administration-title">
@@ -248,7 +254,7 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
 
         <section className={`administration-cockpit-status ${statusTone}`} aria-labelledby="administration-status-title">
           <span className="administration-cockpit-status__icon">
-            {overview && overview.scanner.ready && attentionCount === 0 ? <CheckCircle2 /> : <AlertTriangle />}
+            {!overview ? <LoaderCircle className="is-spinning" /> : healthy ? <CheckCircle2 /> : <AlertTriangle />}
           </span>
           <div className="administration-cockpit-status__copy">
             <small>Status da biblioteca</small>
@@ -292,7 +298,7 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
                 <article><span><Music2 /></span><div><small>Faixas</small><strong>{overview.tracks.total.toLocaleString('pt-BR')}</strong></div></article>
                 <article><span><HardDrive /></span><div><small>Biblioteca física</small><strong>{formatBytes(overview.storage.libraryBytes)}</strong></div></article>
                 <article className={problemCount > 0 ? 'has-warning' : ''}><span><AlertTriangle /></span><div><small>Metadados</small><strong>{problemCount.toLocaleString('pt-BR')}</strong></div></article>
-                <article className={integrityCount > 0 ? 'has-warning' : ''}><span><ScanLine /></span><div><small>Integridade</small><strong>{integrityCount.toLocaleString('pt-BR')}</strong></div></article>
+                <article className={integrityCount > 0 ? 'has-warning' : ''}><span><ScanLine /></span><div><small>Integridade</small><strong>{integrityVerified ? integrityCount.toLocaleString('pt-BR') : '—'}</strong></div></article>
               </div>
             </section>
 
@@ -321,7 +327,7 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
                 <dl className="administration-cockpit-activity">
                   <div><dt>Último scan</dt><dd>{formatScanDate(overview.scanner.scannedAt)}</dd></div>
                   <div><dt>Rescan automático</dt><dd>{formatAutoRescan(overview.scanner)}</dd></div>
-                  <div><dt>Integridade</dt><dd>{overview.integrity.checkedAt ? formatScanDate(overview.integrity.checkedAt) : 'Ainda não verificada'}</dd></div>
+                  <div><dt>Integridade</dt><dd>{integrityVerified ? formatScanDate(overview.integrity.checkedAt) : 'Ainda não verificada'}</dd></div>
                   <div><dt>Scanner</dt><dd>{scannerLabel}</dd></div>
                 </dl>
               </section>
