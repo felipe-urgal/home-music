@@ -3,7 +3,17 @@ import { readdir } from 'node:fs/promises';
 import path from 'node:path';
 import type { Readable } from 'node:stream';
 import { parseFile, parseStream, type IAudioMetadata } from 'music-metadata';
-import type { Track } from '@home-music/shared';
+import type { AdminLibraryIntegrityStatus, Track } from '@home-music/shared';
+import {
+  abortLibraryIntegrityCheck,
+  beginLibraryIntegrityCheck,
+  clearLibraryIntegrityFileFailures,
+  finishLibraryIntegrityCheck,
+  getLibraryIntegrityStatus,
+  hasLibraryIntegrityFileFailure,
+  probeMediaFile,
+  recordLibraryIntegrityIssue
+} from './library-integrity.js';
 import { isQuarantinedTrackFilePresent, withMediaQuarantineLock } from './media-quarantine.js';
 import { replayGainDb } from './replay-gain.js';
 import { isPathInside, resolveRegularFileInside } from './security.js';
@@ -19,6 +29,7 @@ const ALLOWED_COVER_TYPES = new Set([
 ]);
 
 const MAX_COVER_BYTES = 8 * 1024 * 1024;
+const INTEGRITY_MEDIA_CHECK_CONCURRENCY = 4;
 
 export type IndexedTrack = Track & {
   filePath: string;
@@ -77,6 +88,12 @@ function compareTracks(a: IndexedTrack, b: IndexedTrack) {
   return a.artist.localeCompare(b.artist, 'pt-BR') || a.title.localeCompare(b.title, 'pt-BR');
 }
 
+function scannerErrorMessage(error: unknown) {
+  return error instanceof Error && error.message.trim()
+    ? error.message
+    : 'O scanner não conseguiu ler os metadados do arquivo.';
+}
+
 async function walk(
   dir: string,
   libraryRoot: string,
@@ -120,6 +137,22 @@ async function walk(
   }
 
   return files;
+}
+
+async function runWithConcurrency<T>(
+  items: readonly T[],
+  concurrency: number,
+  operation: (item: T) => Promise<void>
+) {
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor;
+      cursor += 1;
+      await operation(items[index]);
+    }
+  });
+  await Promise.all(workers);
 }
 
 export async function readCover(stream: Readable, mimeType: string) {
@@ -177,16 +210,70 @@ function fromMetadata(
   };
 }
 
+async function recordScannerAndProbeFailure(
+  libraryRoot: string,
+  file: ScannableFile,
+  scannerError: unknown,
+  detectedTrackId?: string
+) {
+  recordLibraryIntegrityIssue({
+    kind: 'scanner-failed',
+    filePath: file.path,
+    trackId: detectedTrackId ?? null,
+    message: `Scanner não conseguiu ler os metadados: ${scannerErrorMessage(scannerError)}`
+  });
+  const probe = await probeMediaFile(file.path);
+  if (probe.status === 'failed') {
+    recordLibraryIntegrityIssue({
+      kind: 'media-probe-failed',
+      filePath: file.path,
+      trackId: detectedTrackId ?? null,
+      message: probe.message || 'ffprobe rejeitou o arquivo.'
+    });
+  }
+}
+
+async function verifyMediaIntegrity(
+  libraryRoot: string,
+  file: ScannableFile,
+  detectedTrackId: string,
+  onWarning?: ScanWarningHandler
+) {
+  try {
+    await parseFile(file.path, { duration: true });
+  } catch (error) {
+    onWarning?.(`Metadados inválidos durante verificação: ${relativeFilePath(libraryRoot, file.path)}`, error);
+    recordLibraryIntegrityIssue({
+      kind: 'scanner-failed',
+      filePath: file.path,
+      trackId: detectedTrackId,
+      message: `Scanner não conseguiu ler os metadados: ${scannerErrorMessage(error)}`
+    });
+  }
+
+  const probe = await probeMediaFile(file.path);
+  if (probe.status === 'failed') {
+    recordLibraryIntegrityIssue({
+      kind: 'media-probe-failed',
+      filePath: file.path,
+      trackId: detectedTrackId,
+      message: probe.message || 'ffprobe rejeitou o arquivo.'
+    });
+  }
+}
+
 async function metadataForFile(
   libraryRoot: string,
   file: ScannableFile,
-  onWarning?: ScanWarningHandler
+  onWarning?: ScanWarningHandler,
+  detectedTrackId?: string
 ) {
   let metadata: IAudioMetadata | null = null;
   try {
     metadata = await parseFile(file.path, { duration: true });
   } catch (error) {
     onWarning?.(`Metadados inválidos; usando fallback: ${relativeFilePath(libraryRoot, file.path)}`, error);
+    await recordScannerAndProbeFailure(libraryRoot, file, error, detectedTrackId);
   }
   return metadata;
 }
@@ -209,7 +296,8 @@ export async function indexLibraryFile(
       size: safeFile.stat.size,
       mtimeMs: safeFile.stat.mtimeMs
     };
-    const metadata = await metadataForFile(libraryRoot, file, onWarning);
+    const detectedTrackId = existingTrackId || trackId(libraryRoot, file.path);
+    const metadata = await metadataForFile(libraryRoot, file, onWarning, detectedTrackId);
     return fromMetadata(libraryRoot, file, metadata, existingTrackId);
   });
 }
@@ -221,55 +309,150 @@ export function mergeIndexedTrack(tracks: IndexedTrack[], indexed: IndexedTrack)
   return next;
 }
 
+export async function auditLibraryIntegrity(
+  libraryRoot: string,
+  indexedTracks: readonly IndexedTrack[],
+  onWarning?: ScanWarningHandler
+): Promise<AdminLibraryIntegrityStatus> {
+  return withMediaQuarantineLock(async () => {
+    const firstVerification = getLibraryIntegrityStatus().checkedAt == null;
+    beginLibraryIntegrityCheck(libraryRoot);
+    try {
+      const unavailableDirectories: string[] = [];
+      const files = await walk(libraryRoot, libraryRoot, unavailableDirectories, onWarning);
+      const indexedByPath = new Map(indexedTracks.map(track => [track.filePath, track]));
+      const seenPaths = new Set<string>();
+      const mediaChecks: Array<{ file: ScannableFile; trackId: string }> = [];
+
+      for (const file of files) {
+        seenPaths.add(file.path);
+        const indexed = indexedByPath.get(file.path);
+        const changed = Boolean(indexed && (
+          indexed.fileSize !== file.size || indexed.mtimeMs !== file.mtimeMs
+        ));
+        const needsMediaCheck = firstVerification || !indexed || changed || hasLibraryIntegrityFileFailure(file.path);
+
+        clearLibraryIntegrityFileFailures(file.path);
+        const detectedTrackId = indexed?.id || trackId(libraryRoot, file.path);
+        if (!indexed) {
+          recordLibraryIntegrityIssue({
+            kind: 'unindexed-file',
+            filePath: file.path,
+            trackId: detectedTrackId,
+            message: 'Arquivo encontrado sem registro correspondente no índice atual.'
+          });
+        }
+        if (needsMediaCheck) mediaChecks.push({ file, trackId: detectedTrackId });
+      }
+
+      await runWithConcurrency(
+        mediaChecks,
+        INTEGRITY_MEDIA_CHECK_CONCURRENCY,
+        async ({ file, trackId: detectedTrackId }) => {
+          await verifyMediaIntegrity(libraryRoot, file, detectedTrackId, onWarning);
+        }
+      );
+
+      for (const indexed of indexedTracks) {
+        if (seenPaths.has(indexed.filePath)) continue;
+        if (await isQuarantinedTrackFilePresent(libraryRoot, indexed.id, indexed.filePath)) continue;
+        if (unavailableDirectories.some(directory => isPathInside(directory, indexed.filePath))) continue;
+
+        recordLibraryIntegrityIssue({
+          kind: 'missing-file',
+          filePath: indexed.filePath,
+          trackId: indexed.id,
+          message: 'Registro indexado não possui arquivo correspondente no caminho esperado.'
+        });
+      }
+
+      return finishLibraryIntegrityCheck();
+    } catch (error) {
+      abortLibraryIntegrityCheck();
+      throw error;
+    }
+  });
+}
+
 export async function scanLibrary(
   libraryRoot: string,
   previousTracks: IndexedTrack[] = [],
   onWarning?: ScanWarningHandler
 ): Promise<LibraryScanResult> {
   return withMediaQuarantineLock(async () => {
-    const unavailableDirectories: string[] = [];
-    const files = await walk(libraryRoot, libraryRoot, unavailableDirectories, onWarning);
-    const previousByPath = new Map(previousTracks.map(track => [track.filePath, track]));
-    const seenPaths = new Set<string>();
-    const tracks: IndexedTrack[] = [];
-    const stats: LibraryScanStats = { added: 0, updated: 0, removed: 0, unchanged: 0 };
+    beginLibraryIntegrityCheck(libraryRoot);
+    try {
+      const unavailableDirectories: string[] = [];
+      const files = await walk(libraryRoot, libraryRoot, unavailableDirectories, onWarning);
+      const previousByPath = new Map(previousTracks.map(track => [track.filePath, track]));
+      const seenPaths = new Set<string>();
+      const tracks: IndexedTrack[] = [];
+      const stats: LibraryScanStats = { added: 0, updated: 0, removed: 0, unchanged: 0 };
 
-    for (const file of files) {
-      seenPaths.add(file.path);
-      const previous = previousByPath.get(file.path);
+      for (const file of files) {
+        seenPaths.add(file.path);
+        const previous = previousByPath.get(file.path);
+        const fileUnchanged = Boolean(previous && previous.fileSize === file.size && previous.mtimeMs === file.mtimeMs);
+        const shouldRecheckFailure = fileUnchanged && hasLibraryIntegrityFileFailure(file.path);
 
-      if (previous && previous.fileSize === file.size && previous.mtimeMs === file.mtimeMs) {
-        tracks.push(previous);
-        stats.unchanged += 1;
-        continue;
+        if (fileUnchanged) {
+          if (shouldRecheckFailure) {
+            clearLibraryIntegrityFileFailures(file.path);
+            await metadataForFile(libraryRoot, file, onWarning, previous!.id);
+          }
+          tracks.push(previous!);
+          stats.unchanged += 1;
+          continue;
+        }
+
+        clearLibraryIntegrityFileFailures(file.path);
+        const detectedTrackId = previous?.id || trackId(libraryRoot, file.path);
+        if (!previous) {
+          recordLibraryIntegrityIssue({
+            kind: 'unindexed-file',
+            filePath: file.path,
+            trackId: detectedTrackId,
+            message: 'Arquivo encontrado sem registro anterior no índice; o scan atual o incluiu para revisão.'
+          });
+        }
+
+        const metadata = await metadataForFile(libraryRoot, file, onWarning, detectedTrackId);
+        tracks.push(fromMetadata(libraryRoot, file, metadata, previous?.id));
+        if (previous) stats.updated += 1;
+        else stats.added += 1;
       }
 
-      const metadata = await metadataForFile(libraryRoot, file, onWarning);
-      tracks.push(fromMetadata(libraryRoot, file, metadata, previous?.id));
-      if (previous) stats.updated += 1;
-      else stats.added += 1;
+      for (const previous of previousTracks) {
+        if (seenPaths.has(previous.filePath)) continue;
+
+        if (await isQuarantinedTrackFilePresent(libraryRoot, previous.id, previous.filePath)) {
+          tracks.push(previous);
+          stats.unchanged += 1;
+          continue;
+        }
+
+        const unavailable = unavailableDirectories.some(directory => isPathInside(directory, previous.filePath));
+        if (unavailable) {
+          tracks.push(previous);
+          stats.unchanged += 1;
+          continue;
+        }
+
+        recordLibraryIntegrityIssue({
+          kind: 'missing-file',
+          filePath: previous.filePath,
+          trackId: previous.id,
+          message: 'Registro indexado não possui mais arquivo correspondente no caminho esperado.'
+        });
+        stats.removed += 1;
+      }
+
+      tracks.sort(compareTracks);
+      finishLibraryIntegrityCheck();
+      return { tracks, stats };
+    } catch (error) {
+      abortLibraryIntegrityCheck();
+      throw error;
     }
-
-    for (const previous of previousTracks) {
-      if (seenPaths.has(previous.filePath)) continue;
-
-      if (await isQuarantinedTrackFilePresent(libraryRoot, previous.id, previous.filePath)) {
-        tracks.push(previous);
-        stats.unchanged += 1;
-        continue;
-      }
-
-      const unavailable = unavailableDirectories.some(directory => isPathInside(directory, previous.filePath));
-      if (unavailable) {
-        tracks.push(previous);
-        stats.unchanged += 1;
-        continue;
-      }
-
-      stats.removed += 1;
-    }
-
-    tracks.sort(compareTracks);
-    return { tracks, stats };
   });
 }

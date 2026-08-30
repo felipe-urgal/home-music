@@ -70,6 +70,31 @@ export type AdminLibraryProblemKey =
   | 'unknownAlbum'
   | 'missingDuration';
 
+export type AdminLibraryIntegrityIssueKind =
+  | 'scanner-failed'
+  | 'media-probe-failed'
+  | 'missing-file'
+  | 'unindexed-file';
+
+export type AdminLibraryIntegrityIssue = {
+  kind: AdminLibraryIntegrityIssueKind;
+  trackId: string | null;
+  relativePath: string;
+  message: string;
+};
+
+export type AdminLibraryIntegrityStatus = {
+  checkedAt: string | null;
+  counts: {
+    total: number;
+    scannerFailures: number;
+    mediaProbeFailures: number;
+    missingFiles: number;
+    unindexedFiles: number;
+  };
+  issues: AdminLibraryIntegrityIssue[];
+};
+
 export type AdminLibraryOverviewResponse = {
   tracks: {
     total: number;
@@ -87,6 +112,7 @@ export type AdminLibraryOverviewResponse = {
     missingDuration: number;
     trackIds: Record<AdminLibraryProblemKey, string[]>;
   };
+  integrity: AdminLibraryIntegrityStatus;
   scanner: {
     ready: boolean;
     scanning: boolean;
