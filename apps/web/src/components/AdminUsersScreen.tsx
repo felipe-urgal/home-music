@@ -121,6 +121,10 @@ export function AdminUsersScreen({ currentUser, onBack }: AdminUsersScreenProps)
 
   useEffect(() => { void refresh(); }, []);
 
+  function canDiscardCredential() {
+    return !credential || copied || window.confirm('A senha temporária ainda não foi copiada. Continuar fará com que ela deixe de ser exibida. Deseja continuar?');
+  }
+
   function resetTransientState() {
     setCredential(null);
     setCopied(false);
@@ -130,6 +134,7 @@ export function AdminUsersScreen({ currentUser, onBack }: AdminUsersScreenProps)
   }
 
   function openCreate() {
+    if (!canDiscardCredential()) return;
     setUsername('');
     setRole('user');
     setEnabled(true);
@@ -138,6 +143,8 @@ export function AdminUsersScreen({ currentUser, onBack }: AdminUsersScreenProps)
   }
 
   function inspectUser(user: AdminUser) {
+    if (user.id === selectedId) return;
+    if (!canDiscardCredential()) return;
     setInspectorDismissed(false);
     setSelectedId(user.id);
     setCredential(null);
@@ -147,6 +154,7 @@ export function AdminUsersScreen({ currentUser, onBack }: AdminUsersScreenProps)
   }
 
   function closeInspector() {
+    if (!canDiscardCredential()) return;
     setInspectorDismissed(true);
     setSelectedId(null);
     setCredential(null);
@@ -155,7 +163,7 @@ export function AdminUsersScreen({ currentUser, onBack }: AdminUsersScreenProps)
   }
 
   function openEdit(user: AdminUser) {
-    if (!canManageAdminTarget(currentUser.id, user.id)) return;
+    if (!canManageAdminTarget(currentUser.id, user.id) || !canDiscardCredential()) return;
     setSelectedId(user.id);
     setUsername(user.username);
     setRole(user.role);
@@ -165,7 +173,7 @@ export function AdminUsersScreen({ currentUser, onBack }: AdminUsersScreenProps)
   }
 
   function returnToList() {
-    if (credential && !copied && !window.confirm('A senha temporária não poderá ser recuperada depois. Sair sem copiá-la?')) return;
+    if (!canDiscardCredential()) return;
     setInspectorDismissed(false);
     setView('list');
     setCredential(null);
@@ -251,7 +259,12 @@ export function AdminUsersScreen({ currentUser, onBack }: AdminUsersScreenProps)
       await deleteAdminUser(selected.id);
       setUsers(items => items.filter(user => user.id !== selected.id));
       setSelectedId(null);
-      returnToList();
+      setInspectorDismissed(false);
+      setCredential(null);
+      setCopied(false);
+      setNotice(null);
+      setView('list');
+      setBusy(false);
     } catch (caught) {
       setError(errorMessage(caught));
       setBusy(false);
