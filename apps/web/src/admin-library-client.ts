@@ -36,6 +36,15 @@ export async function getAdminLibraryOverview() {
   return response.json() as Promise<AdminLibraryOverviewResponse>;
 }
 
+export async function checkAdminLibraryIntegrity() {
+  const response = await apiFetch('/api/admin/library/integrity/check', {
+    method: 'POST',
+    headers: { 'X-Home-Music-Request': '1' }
+  });
+  if (!response.ok) throw new Error(await responseError(response));
+  return response.json() as Promise<AdminLibraryOverviewResponse>;
+}
+
 export async function getAdminTranscodeCache() {
   const response = await apiFetch('/api/admin/transcoding/cache', { cache: 'no-store' });
   if (!response.ok) throw new Error(await responseError(response));
