@@ -19,15 +19,16 @@ body {
  * This stylesheet is intentionally loaded last so legacy 8–12px rules
  * cannot make common supporting text or form controls hard to read.
  */
-#root small,
-#root dt,
-#root dd {
-  font-size: var(--hm-type-caption);
+#root small {
+  font-size: var(--hm-type-secondary);
   line-height: 1.45;
 }
 
+#root dt,
+#root dd,
 #root label > span {
   font-size: var(--hm-type-caption);
+  line-height: 1.45;
 }
 
 #root button {
@@ -75,7 +76,7 @@ body {
 }
 
 #root .library-tabs button {
-  font-size: var(--hm-type-caption);
+  font-size: var(--hm-type-secondary);
 }
 
 #root .queue-item__text strong,
@@ -343,6 +344,16 @@ body {
 
 #root .admin-users-editor > section > strong {
   font-size: var(--hm-type-body);
+}
+
+@media (max-width: 699px) {
+  #root .library-header.is-root .library-header__title strong {
+    font-size: 1.8125rem;
+  }
+
+  #root .library-header.is-detail .library-header__title strong {
+    font-size: var(--hm-type-title);
+  }
 }
 
 @media (max-width: 420px) {
