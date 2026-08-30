@@ -6,7 +6,8 @@ import {
   ChevronLeft,
   Database,
   LoaderCircle,
-  ScanLine
+  ScanLine,
+  ShieldCheck
 } from 'lucide-react';
 import {
   checkAdminLibraryIntegrity,
@@ -61,6 +62,8 @@ export function AdminLibraryIntegrityScreen({ onBack }: AdminLibraryIntegrityScr
 
   const integrity = overview?.integrity ?? null;
   const hasVerification = Boolean(integrity?.checkedAt);
+  const totalIssues = integrity?.counts.total ?? 0;
+  const hasIssues = hasVerification && totalIssues > 0;
   const visibleIssues = useMemo(
     () => integrity?.issues.filter(issue => !filter || issue.kind === filter) ?? [],
     [filter, integrity]
@@ -87,106 +90,142 @@ export function AdminLibraryIntegrityScreen({ onBack }: AdminLibraryIntegrityScr
     }
   }
 
+  const statusTitle = checking
+    ? 'Verificando biblioteca…'
+    : !hasVerification
+      ? 'Integridade ainda não verificada'
+      : hasIssues
+        ? 'Atenção necessária'
+        : 'Biblioteca íntegra';
+
+  const statusDescription = checking
+    ? 'A auditoria está comparando arquivos e índice sem alterar nenhum dado.'
+    : !hasVerification
+      ? 'Execute a primeira auditoria para gerar um diagnóstico confiável.'
+      : hasIssues
+        ? `${totalIssues.toLocaleString('pt-BR')} ${totalIssues === 1 ? 'inconsistência precisa' : 'inconsistências precisam'} de revisão.`
+        : 'A última auditoria não encontrou divergências entre arquivos e índice.';
+
+  const reviewEyebrow = !hasVerification
+    ? 'Diagnóstico'
+    : hasIssues
+      ? 'Atenção necessária'
+      : 'Resultado';
+
   return (
-    <section className="my-account-screen admin-library-integrity-screen" aria-labelledby="admin-library-integrity-title">
+    <section
+      className="my-account-screen admin-library-integrity-screen admin-library-integrity-screen--v3"
+      aria-labelledby="admin-library-integrity-title"
+    >
       <header className="my-account-header">
         <button className="icon-button" type="button" aria-label="Voltar" onClick={onBack}><ChevronLeft /></button>
         <div>
           <strong id="admin-library-integrity-title">Integridade da biblioteca</strong>
-          <small>Arquivos quebrados e divergências do índice</small>
+          <small>Diagnóstico seguro de arquivos e índice</small>
         </div>
         <span className="my-account-header__spacer" />
       </header>
 
-      <div className="my-account-overview admin-library-integrity">
-        <section className="admin-library-integrity__intro">
-          <div>
-            <span className="my-account-link-group__label">Última verificação</span>
-            <strong>{formatDate(integrity?.checkedAt ?? null)}</strong>
-            <small>A verificação é somente leitura: não remove nem altera arquivos ou registros.</small>
+      <div className="admin-integrity-v3">
+        <section className={`admin-integrity-v3__hero${hasIssues ? ' is-warning' : hasVerification ? ' is-success' : ' is-neutral'}${checking ? ' is-checking' : ''}`}>
+          <div className="admin-integrity-v3__hero-icon" aria-hidden="true">
+            {checking ? <LoaderCircle className="is-spinning" /> : hasIssues ? <AlertTriangle /> : hasVerification ? <ShieldCheck /> : <ScanLine />}
           </div>
-          <div className="admin-library-integrity__actions">
-            <button
-              type="button"
-              className="admin-library-integrity__rescan"
-              disabled={loading || checking}
-              onClick={() => void runIntegrityCheck()}
-            >
-              {checking ? <LoaderCircle className="is-spinning" /> : <ScanLine />}
-              {checking ? 'Verificando…' : 'Verificar agora'}
-            </button>
+          <div className="admin-integrity-v3__hero-copy">
+            <span>Diagnóstico</span>
+            <strong>{statusTitle}</strong>
+            <small>{statusDescription}</small>
+            <div className="admin-integrity-v3__hero-meta">
+              <span>Última verificação: {formatDate(integrity?.checkedAt ?? null)}</span>
+              <span>Somente leitura</span>
+            </div>
           </div>
+          <button
+            type="button"
+            className="admin-integrity-v3__check"
+            disabled={loading || checking}
+            onClick={() => void runIntegrityCheck()}
+          >
+            {checking ? <LoaderCircle className="is-spinning" /> : <ScanLine />}
+            {checking ? 'Verificando…' : 'Verificar agora'}
+          </button>
         </section>
 
         {error && <div className="my-account-message is-error" role="alert">{error}</div>}
-        {feedback && <div className="my-account-message is-success" role="status">{feedback}</div>}
+        {feedback && <div className={`my-account-message${hasIssues ? '' : ' is-success'}`} role="status">{feedback}</div>}
 
         {loading && !overview ? (
-          <div className="admin-library-integrity__state" role="status">
+          <div className="admin-integrity-v3__loading" role="status">
             <LoaderCircle className="is-spinning" /> Carregando integridade…
           </div>
         ) : integrity ? (
           <>
-            <section className="admin-library-integrity__metrics" aria-label="Resumo das inconsistências">
-              <article>
+            <section className="admin-integrity-v3__metrics" aria-label="Filtrar inconsistências por categoria">
+              <button type="button" className={filter === '' ? 'is-active' : ''} aria-pressed={filter === ''} disabled={!hasVerification} onClick={() => setFilter('')}>
                 <AlertTriangle />
-                <div><small>Total</small><strong>{integrity.counts.total.toLocaleString('pt-BR')}</strong></div>
-              </article>
-              <article>
+                <span><small>Total</small><strong>{hasVerification ? integrity.counts.total.toLocaleString('pt-BR') : '—'}</strong></span>
+              </button>
+              <button type="button" className={filter === 'scanner-failed' ? 'is-active' : ''} aria-pressed={filter === 'scanner-failed'} disabled={!hasVerification} onClick={() => setFilter('scanner-failed')}>
                 <ScanLine />
-                <div><small>Scanner / ffprobe</small><strong>{(integrity.counts.scannerFailures + integrity.counts.mediaProbeFailures).toLocaleString('pt-BR')}</strong></div>
-              </article>
-              <article>
+                <span><small>Scanner</small><strong>{hasVerification ? integrity.counts.scannerFailures.toLocaleString('pt-BR') : '—'}</strong></span>
+              </button>
+              <button type="button" className={filter === 'media-probe-failed' ? 'is-active' : ''} aria-pressed={filter === 'media-probe-failed'} disabled={!hasVerification} onClick={() => setFilter('media-probe-failed')}>
+                <ScanLine />
+                <span><small>FFprobe</small><strong>{hasVerification ? integrity.counts.mediaProbeFailures.toLocaleString('pt-BR') : '—'}</strong></span>
+              </button>
+              <button type="button" className={filter === 'missing-file' ? 'is-active' : ''} aria-pressed={filter === 'missing-file'} disabled={!hasVerification} onClick={() => setFilter('missing-file')}>
                 <Database />
-                <div><small>Registro sem arquivo</small><strong>{integrity.counts.missingFiles.toLocaleString('pt-BR')}</strong></div>
-              </article>
-              <article>
+                <span><small>Sem arquivo</small><strong>{hasVerification ? integrity.counts.missingFiles.toLocaleString('pt-BR') : '—'}</strong></span>
+              </button>
+              <button type="button" className={filter === 'unindexed-file' ? 'is-active' : ''} aria-pressed={filter === 'unindexed-file'} disabled={!hasVerification} onClick={() => setFilter('unindexed-file')}>
                 <Database />
-                <div><small>Fora do índice</small><strong>{integrity.counts.unindexedFiles.toLocaleString('pt-BR')}</strong></div>
-              </article>
+                <span><small>Fora do índice</small><strong>{hasVerification ? integrity.counts.unindexedFiles.toLocaleString('pt-BR') : '—'}</strong></span>
+              </button>
             </section>
 
-            <section className="admin-library-integrity__review" aria-labelledby="admin-library-integrity-review-title">
-              <div className="admin-library-integrity__review-heading">
+            <section className="admin-integrity-v3__attention" aria-labelledby="admin-integrity-v3-attention-title">
+              <header>
                 <div>
-                  <strong id="admin-library-integrity-review-title">Revisão</strong>
-                  <small>{
-                    !hasVerification
-                      ? 'Execute a primeira verificação para gerar o diagnóstico.'
-                      : integrity.counts.total === 0
-                        ? 'Nenhuma inconsistência registrada.'
-                        : 'Classificação e caminho relativo da última verificação.'
-                  }</small>
+                  <span>{reviewEyebrow}</span>
+                  <strong id="admin-integrity-v3-attention-title">
+                    {!hasVerification
+                      ? 'Aguardando primeira verificação'
+                      : totalIssues === 0
+                        ? 'Nenhum problema encontrado'
+                        : filter
+                          ? ISSUE_LABELS[filter]
+                          : `${totalIssues.toLocaleString('pt-BR')} ${totalIssues === 1 ? 'inconsistência' : 'inconsistências'}`}
+                  </strong>
+                  <small>
+                    {!hasVerification
+                      ? 'A auditoria é somente leitura e pode ser executada com segurança.'
+                      : totalIssues === 0
+                        ? 'Arquivos e índice estavam consistentes na última auditoria.'
+                        : filter
+                          ? `${visibleIssues.length.toLocaleString('pt-BR')} ${visibleIssues.length === 1 ? 'item nesta categoria' : 'itens nesta categoria'}.`
+                          : 'Revise os itens abaixo. Nada é removido automaticamente por esta tela.'}
+                  </small>
                 </div>
-                <label>
-                  <span>Categoria</span>
-                  <select
-                    value={filter}
-                    disabled={!hasVerification}
-                    onChange={event => setFilter(event.target.value as IntegrityFilter)}
-                  >
-                    <option value="">Todas</option>
-                    <option value="scanner-failed">Falha do scanner</option>
-                    <option value="media-probe-failed">Falha no ffprobe</option>
-                    <option value="missing-file">Registro sem arquivo</option>
-                    <option value="unindexed-file">Arquivo fora do índice</option>
-                  </select>
-                </label>
-              </div>
+                {filter && (
+                  <button type="button" onClick={() => setFilter('')}>Mostrar todas</button>
+                )}
+              </header>
 
               {!hasVerification ? (
-                <div className="admin-library-integrity__state">
-                  <ScanLine /> Clique em Verificar agora para analisar a biblioteca sem alterar arquivos ou registros.
+                <div className="admin-integrity-v3__state">
+                  <ScanLine />
+                  <span>Clique em <strong>Verificar agora</strong> para analisar a biblioteca.</span>
                 </div>
               ) : visibleIssues.length === 0 ? (
-                <div className="admin-library-integrity__state is-success">
-                  <CheckCircle2 /> {filter ? 'Nenhum item nesta categoria.' : 'Nenhuma inconsistência detectada.'}
+                <div className="admin-integrity-v3__state is-success">
+                  <CheckCircle2 />
+                  <span>{filter ? 'Nenhum item nesta categoria.' : 'Nenhuma inconsistência detectada.'}</span>
                 </div>
               ) : (
-                <div className="admin-library-integrity__issues">
+                <div className="admin-integrity-v3__issues">
                   {visibleIssues.map(issue => (
                     <article key={`${issue.kind}-${issue.trackId || 'file'}-${issue.relativePath}`}>
-                      <div className="admin-library-integrity__issue-heading">
+                      <div className="admin-integrity-v3__issue-kind">
                         <span>{ISSUE_LABELS[issue.kind]}</span>
                         {issue.trackId && <code>{issue.trackId}</code>}
                       </div>

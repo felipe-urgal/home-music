@@ -1,52 +1,22 @@
-/* Shared content widths for redesigned account/admin flows.
-   Compact screens stay focused; management screens get room for dense data. */
-:root {
-  --account-width-compact: 840px;
-  --account-width-comfortable: 920px;
-  --account-width-management: 1080px;
-  --account-width-manager: 1120px;
+/* Fluid content layout for every account/admin screen.
+   Use the available content area while keeping a consistent edge gutter. */
+.my-account-screen {
+  width: calc(100% - 48px);
+  max-width: none;
+  margin-inline: auto;
 }
 
-.my-account-screen--overview,
-.my-account-screen--profile,
-.my-account-screen--password {
-  max-width: var(--account-width-compact);
-}
-
-.my-account-screen--sessions,
-.my-account-screen--playback {
-  max-width: var(--account-width-comfortable);
-}
-
-.administration-cockpit {
-  max-width: var(--account-width-management);
-}
-
-.admin-tracks-screen,
-.admin-metadata-screen--v1 {
-  max-width: var(--account-width-manager);
-}
-
-@media (max-width: 1160px) {
-  .administration-cockpit,
-  .admin-tracks-screen,
-  .admin-metadata-screen--v1 {
-    max-width: calc(100vw - 32px);
+@media (min-width: 1024px) {
+  .desktop-layout:has(.desktop-account-surface) .desktop-main-content--library {
+    width: 100%;
+    max-width: none;
+    margin-inline: 0;
   }
 }
 
-@media (max-width: 960px) {
-  .my-account-screen--sessions,
-  .my-account-screen--playback {
-    max-width: calc(100vw - 28px);
-  }
-}
-
-@media (max-width: 880px) {
-  .my-account-screen--overview,
-  .my-account-screen--profile,
-  .my-account-screen--password {
-    max-width: calc(100vw - 28px);
+@media (max-width: 900px) {
+  .my-account-screen {
+    width: calc(100% - 32px);
   }
 }
 
@@ -57,14 +27,7 @@
 }
 
 @media (max-width: 560px) {
-  .my-account-screen--overview,
-  .my-account-screen--profile,
-  .my-account-screen--password,
-  .my-account-screen--sessions,
-  .my-account-screen--playback,
-  .administration-cockpit,
-  .admin-tracks-screen,
-  .admin-metadata-screen--v1 {
-    max-width: 100%;
+  .my-account-screen {
+    width: calc(100% - 20px);
   }
 }
