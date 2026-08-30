@@ -76,6 +76,10 @@ function errorStderr(error: unknown) {
   return typeof error.stderr === 'string' ? error.stderr : '';
 }
 
+function isPersistentFileFailure(issue: AdminLibraryIntegrityIssue) {
+  return issue.kind === 'scanner-failed' || issue.kind === 'media-probe-failed';
+}
+
 export function resolveFfprobeCommand(rawFfmpegCommand: string | undefined) {
   const configured = rawFfmpegCommand?.trim();
   if (!configured) return 'ffprobe';
@@ -150,7 +154,24 @@ export async function probeMediaFile(
 }
 
 export function beginLibraryIntegrityCheck(libraryRoot: string) {
-  activeCheck = { libraryRoot, issues: [] };
+  activeCheck = {
+    libraryRoot,
+    issues: lastStatus.issues.filter(isPersistentFileFailure).map(issue => ({ ...issue }))
+  };
+}
+
+export function hasLibraryIntegrityFileFailure(filePath: string) {
+  if (!activeCheck) return false;
+  const relativePath = normalizedRelativePath(activeCheck.libraryRoot, filePath);
+  return activeCheck.issues.some(issue => isPersistentFileFailure(issue) && issue.relativePath === relativePath);
+}
+
+export function clearLibraryIntegrityFileFailures(filePath: string) {
+  if (!activeCheck) return;
+  const relativePath = normalizedRelativePath(activeCheck.libraryRoot, filePath);
+  activeCheck.issues = activeCheck.issues.filter(issue =>
+    !isPersistentFileFailure(issue) || issue.relativePath !== relativePath
+  );
 }
 
 export function recordLibraryIntegrityIssue(input: {
