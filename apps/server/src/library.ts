@@ -4,6 +4,15 @@ import path from 'node:path';
 import type { Readable } from 'node:stream';
 import { parseFile, parseStream, type IAudioMetadata } from 'music-metadata';
 import type { Track } from '@home-music/shared';
+import {
+  abortLibraryIntegrityCheck,
+  beginLibraryIntegrityCheck,
+  clearLibraryIntegrityFileFailures,
+  finishLibraryIntegrityCheck,
+  hasLibraryIntegrityFileFailure,
+  probeMediaFile,
+  recordLibraryIntegrityIssue
+} from './library-integrity.js';
 import { isQuarantinedTrackFilePresent, withMediaQuarantineLock } from './media-quarantine.js';
 import { replayGainDb } from './replay-gain.js';
 import { isPathInside, resolveRegularFileInside } from './security.js';
@@ -180,13 +189,28 @@ function fromMetadata(
 async function metadataForFile(
   libraryRoot: string,
   file: ScannableFile,
-  onWarning?: ScanWarningHandler
+  onWarning?: ScanWarningHandler,
+  detectedTrackId?: string
 ) {
   let metadata: IAudioMetadata | null = null;
   try {
     metadata = await parseFile(file.path, { duration: true });
   } catch (error) {
     onWarning?.(`Metadados inválidos; usando fallback: ${relativeFilePath(libraryRoot, file.path)}`, error);
+    const probe = await probeMediaFile(file.path);
+    const scannerMessage = error instanceof Error && error.message.trim()
+      ? error.message
+      : 'O scanner não conseguiu ler os metadados do arquivo.';
+    recordLibraryIntegrityIssue({
+      kind: probe.status === 'failed' ? 'media-probe-failed' : 'scanner-failed',
+      filePath: file.path,
+      trackId: detectedTrackId ?? null,
+      message: probe.status === 'failed'
+        ? `Scanner falhou e ffprobe rejeitou o arquivo: ${probe.message || scannerMessage}`
+        : probe.status === 'unavailable'
+          ? `Scanner falhou; ${probe.message || 'ffprobe indisponível.'}`
+          : `Scanner falhou na leitura de metadados, mas ffprobe aceitou o arquivo: ${scannerMessage}`
+    });
   }
   return metadata;
 }
@@ -209,7 +233,8 @@ export async function indexLibraryFile(
       size: safeFile.stat.size,
       mtimeMs: safeFile.stat.mtimeMs
     };
-    const metadata = await metadataForFile(libraryRoot, file, onWarning);
+    const detectedTrackId = existingTrackId || trackId(libraryRoot, file.path);
+    const metadata = await metadataForFile(libraryRoot, file, onWarning, detectedTrackId);
     return fromMetadata(libraryRoot, file, metadata, existingTrackId);
   });
 }
@@ -227,49 +252,75 @@ export async function scanLibrary(
   onWarning?: ScanWarningHandler
 ): Promise<LibraryScanResult> {
   return withMediaQuarantineLock(async () => {
-    const unavailableDirectories: string[] = [];
-    const files = await walk(libraryRoot, libraryRoot, unavailableDirectories, onWarning);
-    const previousByPath = new Map(previousTracks.map(track => [track.filePath, track]));
-    const seenPaths = new Set<string>();
-    const tracks: IndexedTrack[] = [];
-    const stats: LibraryScanStats = { added: 0, updated: 0, removed: 0, unchanged: 0 };
+    beginLibraryIntegrityCheck(libraryRoot);
+    try {
+      const unavailableDirectories: string[] = [];
+      const files = await walk(libraryRoot, libraryRoot, unavailableDirectories, onWarning);
+      const previousByPath = new Map(previousTracks.map(track => [track.filePath, track]));
+      const seenPaths = new Set<string>();
+      const tracks: IndexedTrack[] = [];
+      const stats: LibraryScanStats = { added: 0, updated: 0, removed: 0, unchanged: 0 };
 
-    for (const file of files) {
-      seenPaths.add(file.path);
-      const previous = previousByPath.get(file.path);
+      for (const file of files) {
+        seenPaths.add(file.path);
+        const previous = previousByPath.get(file.path);
+        const fileUnchanged = Boolean(previous && previous.fileSize === file.size && previous.mtimeMs === file.mtimeMs);
+        const shouldRecheckFailure = fileUnchanged && hasLibraryIntegrityFileFailure(file.path);
 
-      if (previous && previous.fileSize === file.size && previous.mtimeMs === file.mtimeMs) {
-        tracks.push(previous);
-        stats.unchanged += 1;
-        continue;
+        if (fileUnchanged && !shouldRecheckFailure) {
+          tracks.push(previous!);
+          stats.unchanged += 1;
+          continue;
+        }
+
+        clearLibraryIntegrityFileFailures(file.path);
+        const detectedTrackId = previous?.id || trackId(libraryRoot, file.path);
+        if (!previous) {
+          recordLibraryIntegrityIssue({
+            kind: 'unindexed-file',
+            filePath: file.path,
+            trackId: detectedTrackId,
+            message: 'Arquivo encontrado sem registro anterior no índice; o scan atual o incluiu para revisão.'
+          });
+        }
+
+        const metadata = await metadataForFile(libraryRoot, file, onWarning, detectedTrackId);
+        tracks.push(fromMetadata(libraryRoot, file, metadata, previous?.id));
+        if (previous) stats.updated += 1;
+        else stats.added += 1;
       }
 
-      const metadata = await metadataForFile(libraryRoot, file, onWarning);
-      tracks.push(fromMetadata(libraryRoot, file, metadata, previous?.id));
-      if (previous) stats.updated += 1;
-      else stats.added += 1;
+      for (const previous of previousTracks) {
+        if (seenPaths.has(previous.filePath)) continue;
+
+        if (await isQuarantinedTrackFilePresent(libraryRoot, previous.id, previous.filePath)) {
+          tracks.push(previous);
+          stats.unchanged += 1;
+          continue;
+        }
+
+        const unavailable = unavailableDirectories.some(directory => isPathInside(directory, previous.filePath));
+        if (unavailable) {
+          tracks.push(previous);
+          stats.unchanged += 1;
+          continue;
+        }
+
+        recordLibraryIntegrityIssue({
+          kind: 'missing-file',
+          filePath: previous.filePath,
+          trackId: previous.id,
+          message: 'Registro indexado não possui mais arquivo correspondente no caminho esperado.'
+        });
+        stats.removed += 1;
+      }
+
+      tracks.sort(compareTracks);
+      finishLibraryIntegrityCheck();
+      return { tracks, stats };
+    } catch (error) {
+      abortLibraryIntegrityCheck();
+      throw error;
     }
-
-    for (const previous of previousTracks) {
-      if (seenPaths.has(previous.filePath)) continue;
-
-      if (await isQuarantinedTrackFilePresent(libraryRoot, previous.id, previous.filePath)) {
-        tracks.push(previous);
-        stats.unchanged += 1;
-        continue;
-      }
-
-      const unavailable = unavailableDirectories.some(directory => isPathInside(directory, previous.filePath));
-      if (unavailable) {
-        tracks.push(previous);
-        stats.unchanged += 1;
-        continue;
-      }
-
-      stats.removed += 1;
-    }
-
-    tracks.sort(compareTracks);
-    return { tracks, stats };
   });
 }
