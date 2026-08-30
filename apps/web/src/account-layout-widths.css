@@ -48,6 +48,12 @@
   }
 }
 
+@media (max-width: 680px) {
+  .admin-tracks-screen--v3:has(.admin-tracks-floating-bulk) .admin-track-row__menu-popover {
+    bottom: calc(218px + env(safe-area-inset-bottom));
+  }
+}
+
 @media (max-width: 560px) {
   .my-account-screen--overview,
   .my-account-screen--profile,
