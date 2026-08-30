@@ -8,6 +8,7 @@ import {
   Heart,
   ListPlus,
   LoaderCircle,
+  MoreHorizontal,
   Music2,
   RefreshCw,
   Search,
@@ -38,6 +39,10 @@ const PAGE_SIZE = 50;
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : 'Não foi possível concluir a operação.';
+}
+
+function closeRowMenu(target: HTMLElement) {
+  target.closest('details')?.removeAttribute('open');
 }
 
 export function AdminTrackAvailabilityScreen({ onBack }: AdminTrackAvailabilityScreenProps) {
@@ -307,29 +312,41 @@ export function AdminTrackAvailabilityScreen({ onBack }: AdminTrackAvailabilityS
   }
 
   return (
-    <section className="my-account-screen admin-tracks-screen" aria-labelledby="admin-tracks-title">
-      <header className="my-account-header">
+    <section className="my-account-screen admin-tracks-screen admin-tracks-screen--v3" aria-labelledby="admin-tracks-title">
+      <header className="my-account-header admin-tracks-header">
         <button className="icon-button" type="button" aria-label="Voltar" onClick={onBack}><ChevronLeft /></button>
         <div>
           <strong id="admin-tracks-title">Gerenciar músicas</strong>
-          <small>Disponibilidade, organização e remoção reversível</small>
+          <small>Encontre e gerencie sua biblioteca com rapidez</small>
         </div>
-        <span className="my-account-header__spacer" />
+        <button
+          className="admin-tracks-refresh"
+          type="button"
+          aria-label="Atualizar músicas"
+          disabled={loading || refreshing || operationBusy}
+          onClick={() => void loadTracks(true)}
+        >
+          <RefreshCw className={refreshing ? 'is-spinning' : ''} />
+        </button>
       </header>
 
       <div className="admin-tracks-overview">
-        <section className="admin-tracks-summary" aria-label="Resumo de disponibilidade">
+        <section className="admin-tracks-summary admin-tracks-summary--v3" aria-label="Resumo da biblioteca">
+          <article>
+            <span className="admin-tracks-summary__icon"><Music2 /></span>
+            <div><small>Total</small><strong>{tracks.length.toLocaleString('pt-BR')}</strong></div>
+          </article>
           <article>
             <span className="admin-tracks-summary__icon is-active"><Music2 /></span>
             <div><small>Ativas</small><strong>{counts.active.toLocaleString('pt-BR')}</strong></div>
           </article>
-          <article>
+          <article className={counts.inactive > 0 ? 'has-warning' : ''}>
             <span className="admin-tracks-summary__icon"><CircleOff /></span>
             <div><small>Desativadas</small><strong>{counts.inactive.toLocaleString('pt-BR')}</strong></div>
           </article>
         </section>
 
-        <section className="admin-tracks-toolbar" aria-label="Filtros de músicas">
+        <section className="admin-tracks-toolbar admin-tracks-toolbar--v3" aria-label="Filtros de músicas">
           <label className="admin-tracks-search">
             <Search />
             <input
@@ -345,15 +362,6 @@ export function AdminTrackAvailabilityScreen({ onBack }: AdminTrackAvailabilityS
             <button type="button" className={filter === 'active' ? 'is-active' : ''} onClick={() => setFilter('active')}>Ativas</button>
             <button type="button" className={filter === 'inactive' ? 'is-active' : ''} onClick={() => setFilter('inactive')}>Desativadas</button>
           </div>
-          <button
-            className="admin-tracks-refresh"
-            type="button"
-            aria-label="Atualizar músicas"
-            disabled={loading || refreshing || operationBusy}
-            onClick={() => void loadTracks(true)}
-          >
-            <RefreshCw className={refreshing ? 'is-spinning' : ''} />
-          </button>
         </section>
 
         {error && <div className="admin-tracks-message is-error" role="alert">{error}</div>}
@@ -368,77 +376,24 @@ export function AdminTrackAvailabilityScreen({ onBack }: AdminTrackAvailabilityS
         ) : filteredTracks.length === 0 ? (
           <div className="admin-tracks-state"><Music2 /> Nenhuma música encontrada com estes filtros.</div>
         ) : (
-          <section className="admin-tracks-list" aria-label="Músicas administráveis">
-            <AdminBulkToolbar
-              selectedCount={selection.selectedItems.length}
-              allVisibleSelected={selection.allVisibleSelected}
-              mixedVisibleSelection={selection.mixedVisibleSelection}
-              busy={operationBusy}
-              completed={batchProgress.completed}
-              total={batchProgress.total}
-              onToggleVisible={selection.toggleVisible}
-              onClear={selection.clear}
-            >
-              <button
-                type="button"
-                disabled={operationBusy || selectedInactiveTracks.length === 0}
-                onClick={() => void setSelectedEnabled(true)}
-              >
-                <Music2 /> Reativar {selectedInactiveTracks.length}
-              </button>
-              <button
-                type="button"
-                disabled={operationBusy || selectedActiveTracks.length === 0}
-                onClick={() => void setSelectedEnabled(false)}
-              >
-                <CircleOff /> Desativar {selectedActiveTracks.length}
-              </button>
-              <button
-                type="button"
-                disabled={operationBusy || favoriteIds == null || favoritableTracks.length === 0}
-                onClick={() => void favoriteSelected()}
-              >
-                <Heart /> {favoritableTracks.length > 0 ? `Favoritar ${favoritableTracks.length}` : 'Favoritas'}
-              </button>
-              <div className="admin-bulk-toolbar__playlist">
-                <select
-                  value={selectedPlaylistId}
-                  disabled={operationBusy || manualPlaylists == null || manualPlaylists.length === 0}
-                  aria-label="Playlist para seleção"
-                  onChange={event => setSelectedPlaylistId(event.target.value)}
-                >
-                  <option value="">
-                    {manualPlaylists == null
-                      ? 'Carregando playlists…'
-                      : manualPlaylists.length === 0
-                        ? 'Nenhuma playlist manual'
-                        : 'Playlist…'}
-                  </option>
-                  {(manualPlaylists ?? []).map(playlist => <option key={playlist.id} value={playlist.id}>{playlist.name}</option>)}
-                </select>
-                <button
-                  type="button"
-                  disabled={operationBusy || !selectedPlaylist || playlistAddableTracks.length === 0}
-                  onClick={() => void addSelectedToPlaylist()}
-                >
-                  <ListPlus /> Adicionar {playlistAddableTracks.length || ''}
-                </button>
+          <section className="admin-tracks-list admin-tracks-list--v3" aria-label="Músicas administráveis">
+            <div className="admin-tracks-list__header">
+              <div>
+                <strong>{filteredTracks.length.toLocaleString('pt-BR')}</strong>
+                <span>{filteredTracks.length === 1 ? 'música encontrada' : 'músicas encontradas'}</span>
               </div>
               <button
-                className="is-danger"
+                className="admin-tracks-select-visible"
                 type="button"
                 disabled={operationBusy}
-                onClick={() => void quarantineSelected()}
+                onClick={selection.toggleVisible}
               >
-                <Trash2 /> Lixeira {selection.selectedItems.length}
+                {selection.allVisibleSelected ? 'Limpar seleção visível' : `Selecionar ${visibleTracks.length} visíveis`}
               </button>
-            </AdminBulkToolbar>
-
-            <div className="admin-tracks-list__count">
-              {filteredTracks.length.toLocaleString('pt-BR')} {filteredTracks.length === 1 ? 'música' : 'músicas'}
             </div>
+
             {visibleTracks.map(track => (
-              <article className={`admin-track-row ${track.enabled ? '' : 'is-disabled'} ${selection.selectedIds.has(track.id) ? 'is-selected' : ''}`.trim()} key={track.id}>
+              <article className={`admin-track-row admin-track-row--v3 ${track.enabled ? '' : 'is-disabled'} ${selection.selectedIds.has(track.id) ? 'is-selected' : ''}`.trim()} key={track.id}>
                 <input
                   className="admin-track-row__select"
                   type="checkbox"
@@ -458,37 +413,56 @@ export function AdminTrackAvailabilityScreen({ onBack }: AdminTrackAvailabilityS
                 <span className={`admin-track-row__status ${track.enabled ? 'is-active' : ''}`}>
                   {track.enabled ? 'Ativa' : 'Desativada'}
                 </span>
-                <div className="admin-track-row__actions">
-                  <button
-                    className="admin-track-row__move"
-                    type="button"
-                    disabled={operationBusy}
-                    onClick={() => organizeTrack(track)}
+                <details className="admin-track-row__menu">
+                  <summary
+                    aria-label={`Ações para ${track.title}`}
+                    aria-disabled={operationBusy}
+                    onClick={event => { if (operationBusy) event.preventDefault(); }}
                   >
-                    <Folder /> Organizar
-                  </button>
-                  <button
-                    className={`admin-track-row__action ${track.enabled ? 'is-disable' : 'is-enable'}`}
-                    type="button"
-                    disabled={operationBusy}
-                    onClick={() => void toggleTrack(track)}
-                  >
-                    {busyTrackId === track.id ? <LoaderCircle className="is-spinning" /> : null}
-                    {track.enabled ? 'Desativar' : 'Reativar'}
-                  </button>
-                  <button
-                    className="admin-track-row__trash"
-                    type="button"
-                    disabled={operationBusy}
-                    onClick={() => void moveToTrash(track)}
-                  >
-                    <Trash2 /> Mover para lixeira
-                  </button>
-                </div>
+                    <MoreHorizontal />
+                  </summary>
+                  <div className="admin-track-row__menu-popover">
+                    <button
+                      type="button"
+                      disabled={operationBusy}
+                      onClick={event => {
+                        closeRowMenu(event.currentTarget);
+                        organizeTrack(track);
+                      }}
+                    >
+                      <Folder />
+                      <span><strong>Organizar arquivo</strong><small>Mover para outra pasta</small></span>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={operationBusy}
+                      onClick={event => {
+                        closeRowMenu(event.currentTarget);
+                        void toggleTrack(track);
+                      }}
+                    >
+                      {busyTrackId === track.id ? <LoaderCircle className="is-spinning" /> : track.enabled ? <CircleOff /> : <Music2 />}
+                      <span><strong>{track.enabled ? 'Desativar' : 'Reativar'}</strong><small>{track.enabled ? 'Ocultar da biblioteca' : 'Disponibilizar novamente'}</small></span>
+                    </button>
+                    <button
+                      className="is-danger"
+                      type="button"
+                      disabled={operationBusy}
+                      onClick={event => {
+                        closeRowMenu(event.currentTarget);
+                        void moveToTrash(track);
+                      }}
+                    >
+                      <Trash2 />
+                      <span><strong>Mover para lixeira</strong><small>Remoção reversível</small></span>
+                    </button>
+                  </div>
+                </details>
               </article>
             ))}
+
             {pageCount > 1 && (
-              <footer className="admin-tracks-pagination">
+              <footer className="admin-tracks-pagination admin-tracks-pagination--v3">
                 <span>Página {page} de {pageCount}</span>
                 <div>
                   <button type="button" aria-label="Página anterior" disabled={page <= 1 || operationBusy} onClick={() => setPage(value => value - 1)}><ChevronLeft /></button>
@@ -499,6 +473,75 @@ export function AdminTrackAvailabilityScreen({ onBack }: AdminTrackAvailabilityS
           </section>
         )}
       </div>
+
+      {selection.selectedItems.length > 0 && (
+        <div className="admin-tracks-floating-bulk">
+          <AdminBulkToolbar
+            selectedCount={selection.selectedItems.length}
+            allVisibleSelected={selection.allVisibleSelected}
+            mixedVisibleSelection={selection.mixedVisibleSelection}
+            busy={operationBusy}
+            completed={batchProgress.completed}
+            total={batchProgress.total}
+            onToggleVisible={selection.toggleVisible}
+            onClear={selection.clear}
+          >
+            <button
+              type="button"
+              disabled={operationBusy || selectedInactiveTracks.length === 0}
+              onClick={() => void setSelectedEnabled(true)}
+            >
+              <Music2 /> Reativar {selectedInactiveTracks.length}
+            </button>
+            <button
+              type="button"
+              disabled={operationBusy || selectedActiveTracks.length === 0}
+              onClick={() => void setSelectedEnabled(false)}
+            >
+              <CircleOff /> Desativar {selectedActiveTracks.length}
+            </button>
+            <button
+              type="button"
+              disabled={operationBusy || favoriteIds == null || favoritableTracks.length === 0}
+              onClick={() => void favoriteSelected()}
+            >
+              <Heart /> {favoritableTracks.length > 0 ? `Favoritar ${favoritableTracks.length}` : 'Favoritas'}
+            </button>
+            <div className="admin-bulk-toolbar__playlist">
+              <select
+                value={selectedPlaylistId}
+                disabled={operationBusy || manualPlaylists == null || manualPlaylists.length === 0}
+                aria-label="Playlist para seleção"
+                onChange={event => setSelectedPlaylistId(event.target.value)}
+              >
+                <option value="">
+                  {manualPlaylists == null
+                    ? 'Carregando playlists…'
+                    : manualPlaylists.length === 0
+                      ? 'Nenhuma playlist manual'
+                      : 'Playlist…'}
+                </option>
+                {(manualPlaylists ?? []).map(playlist => <option key={playlist.id} value={playlist.id}>{playlist.name}</option>)}
+              </select>
+              <button
+                type="button"
+                disabled={operationBusy || !selectedPlaylist || playlistAddableTracks.length === 0}
+                onClick={() => void addSelectedToPlaylist()}
+              >
+                <ListPlus /> Adicionar {playlistAddableTracks.length || ''}
+              </button>
+            </div>
+            <button
+              className="is-danger"
+              type="button"
+              disabled={operationBusy}
+              onClick={() => void quarantineSelected()}
+            >
+              <Trash2 /> Lixeira {selection.selectedItems.length}
+            </button>
+          </AdminBulkToolbar>
+        </div>
+      )}
 
       {movingTrack && (
         <AdminTrackMoveDialog
