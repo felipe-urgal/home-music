@@ -4,6 +4,9 @@ import type {
   Playlist,
   PlaylistsResponse,
   ScanResponse,
+  SmartPlaylistPreviewResponse,
+  SmartPlaylistResponse,
+  SmartPlaylistRule,
   Track
 } from '@home-music/shared';
 import { apiFetch } from './api-client';
@@ -39,6 +42,14 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : 'Não foi possível concluir a operação.';
 }
 
+function sortPlaylists(playlists: Playlist[]) {
+  return [...playlists].sort((left, right) =>
+    right.updatedAt.localeCompare(left.updatedAt)
+    || left.name.localeCompare(right.name, 'pt-BR')
+    || left.id.localeCompare(right.id)
+  );
+}
+
 export function useLibraryData() {
   const [tracks, setTracks] = useState<Track[]>([]);
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
@@ -68,9 +79,13 @@ export function useLibraryData() {
   }, []);
 
   const refreshPlaylists = useCallback(async () => {
-    const data = await jsonRequest<PlaylistsResponse>('/api/playlists');
-    setPlaylists(data.playlists);
-    return data;
+    const [regular, smart] = await Promise.all([
+      jsonRequest<PlaylistsResponse>('/api/playlists'),
+      jsonRequest<PlaylistsResponse>('/api/smart-playlists')
+    ]);
+    const merged = sortPlaylists([...regular.playlists, ...smart.playlists]);
+    setPlaylists(merged);
+    return { playlists: merged } satisfies PlaylistsResponse;
   }, []);
 
   useEffect(() => {
@@ -209,6 +224,67 @@ export function useLibraryData() {
     }
   }, [refreshPlaylists, reportError]);
 
+  const previewSmartPlaylist = useCallback(async (rule: SmartPlaylistRule) => {
+    try {
+      const result = await jsonRequest<SmartPlaylistPreviewResponse>('/api/smart-playlists/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rule })
+      });
+      setActionError(null);
+      return result.trackIds;
+    } catch (error) {
+      reportError(error);
+      throw error;
+    }
+  }, [reportError]);
+
+  const createSmartPlaylist = useCallback(async (name: string, rule: SmartPlaylistRule) => {
+    try {
+      const result = await jsonRequest<SmartPlaylistResponse>('/api/smart-playlists', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, rule })
+      });
+      await refreshPlaylists();
+      setActionError(null);
+      return result.playlist;
+    } catch (error) {
+      reportError(error);
+      throw error;
+    }
+  }, [refreshPlaylists, reportError]);
+
+  const updateSmartPlaylist = useCallback(async (
+    id: string,
+    patch: { name?: string; rule?: SmartPlaylistRule }
+  ) => {
+    try {
+      const result = await jsonRequest<SmartPlaylistResponse>(`/api/smart-playlists/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch)
+      });
+      await refreshPlaylists();
+      setActionError(null);
+      return result.playlist;
+    } catch (error) {
+      reportError(error);
+      throw error;
+    }
+  }, [refreshPlaylists, reportError]);
+
+  const deleteSmartPlaylist = useCallback(async (id: string) => {
+    try {
+      await jsonRequest(`/api/smart-playlists/${id}`, { method: 'DELETE' });
+      await refreshPlaylists();
+      setActionError(null);
+    } catch (error) {
+      reportError(error);
+      throw error;
+    }
+  }, [refreshPlaylists, reportError]);
+
   const setPlaylistTracks = useCallback(async (id: string, trackIds: string[]) => {
     try {
       await jsonRequest(`/api/playlists/${id}/tracks`, {
@@ -246,6 +322,10 @@ export function useLibraryData() {
     createPlaylist,
     renamePlaylist,
     deletePlaylist,
+    previewSmartPlaylist,
+    createSmartPlaylist,
+    updateSmartPlaylist,
+    deleteSmartPlaylist,
     setPlaylistTracks,
     addTrackToPlaylist
   };
