@@ -195,13 +195,23 @@ try {
   assert.match(adminOverview.headers.get('cache-control') || '', /no-store/);
   const adminOverviewBody = await adminOverview.json();
   assert.deepEqual(adminOverviewBody.tracks, { total: 0 });
-  assert.deepEqual(adminOverviewBody.storage, { libraryBytes: 0 });
+  assert.equal(adminOverviewBody.storage.libraryBytes, 0);
+  assert.equal(typeof adminOverviewBody.storage.databaseBytes, 'number');
+  assert.ok(adminOverviewBody.storage.databaseBytes > 0);
   assert.deepEqual(adminOverviewBody.problems, {
     affectedTracks: 0,
+    missingTitle: 0,
     missingCover: 0,
     unknownArtist: 0,
     unknownAlbum: 0,
-    missingDuration: 0
+    missingDuration: 0,
+    trackIds: {
+      missingTitle: [],
+      missingCover: [],
+      unknownArtist: [],
+      unknownAlbum: [],
+      missingDuration: []
+    }
   });
   assert.equal(adminOverviewBody.scanner.ready, true);
   assert.equal(adminOverviewBody.scanner.scanning, false);
