@@ -1,22 +1,8 @@
 import type { AdminLibraryOverviewResponse } from '@home-music/shared';
 import { apiFetch } from './api-client';
 
-export type AdminLibraryProblemKey =
-  | 'missingTitle'
-  | 'missingCover'
-  | 'unknownArtist'
-  | 'unknownAlbum'
-  | 'missingDuration';
-
-export type AdminLibraryHealthOverview = Omit<AdminLibraryOverviewResponse, 'storage' | 'problems'> & {
-  storage: AdminLibraryOverviewResponse['storage'] & {
-    databaseBytes: number | null;
-  };
-  problems: AdminLibraryOverviewResponse['problems'] & {
-    missingTitle: number;
-    trackIds: Record<AdminLibraryProblemKey, string[]>;
-  };
-};
+export type { AdminLibraryProblemKey } from '@home-music/shared';
+export type AdminLibraryHealthOverview = AdminLibraryOverviewResponse;
 
 export type AdminTranscodeCacheStatus = {
   bytes: number;
@@ -42,7 +28,7 @@ async function responseError(response: Response) {
 export async function getAdminLibraryOverview() {
   const response = await apiFetch('/api/admin/library/overview', { cache: 'no-store' });
   if (!response.ok) throw new Error(await responseError(response));
-  return response.json() as Promise<AdminLibraryHealthOverview>;
+  return response.json() as Promise<AdminLibraryOverviewResponse>;
 }
 
 export async function getAdminTranscodeCache() {
