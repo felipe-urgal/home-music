@@ -46,7 +46,7 @@
   border-radius: 999px;
   background: #0a1218;
   color: #71818d;
-  font-size: .75rem;
+  font-size: .8125rem;
   font-weight: 750;
 }
 
@@ -58,7 +58,7 @@
 .admin-import-v3-progress strong {
   overflow: hidden;
   color: #8d9aa4;
-  font-size: .82rem;
+  font-size: .875rem;
   font-weight: 720;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -67,7 +67,7 @@
 .admin-import-v3-progress small {
   overflow: hidden;
   color: #596872;
-  font-size: .74rem;
+  font-size: .8125rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -132,7 +132,7 @@
 
 .admin-import-v3-section-heading > div > span {
   color: #62a8ff;
-  font-size: .72rem;
+  font-size: .8125rem;
   font-weight: 760;
   letter-spacing: .08em;
   text-transform: uppercase;
@@ -146,7 +146,7 @@
 
 .admin-import-v3-section-heading small {
   color: #7e8c97;
-  font-size: .79rem;
+  font-size: .8125rem;
   line-height: 1.4;
 }
 
@@ -192,11 +192,11 @@
 }
 
 .admin-import-screen--v3 .admin-import-source-tabs strong {
-  font-size: .8rem;
+  font-size: .8125rem;
 }
 
 .admin-import-screen--v3 .admin-import-source-tabs small {
-  font-size: .73rem;
+  font-size: .8125rem;
   line-height: 1.3;
 }
 
@@ -247,7 +247,7 @@
   display: block;
   padding: 0 14px 14px;
   color: #65737e;
-  font-size: .72rem;
+  font-size: .8125rem;
   line-height: 1.4;
 }
 
@@ -285,11 +285,11 @@
 }
 
 .admin-import-v3-stage.is-validation .admin-import-profile > span:last-child strong {
-  font-size: .82rem;
+  font-size: .875rem;
 }
 
 .admin-import-v3-stage.is-validation .admin-import-profile > span:last-child small {
-  font-size: .73rem;
+  font-size: .8125rem;
   line-height: 1.35;
 }
 
@@ -301,12 +301,12 @@
 
 .admin-import-v3-stage.is-validation .admin-import-validation__queue-heading strong,
 .admin-import-v3-stage.is-validation .admin-import-validation-job strong {
-  font-size: .82rem;
+  font-size: .875rem;
 }
 
 .admin-import-v3-stage.is-validation .admin-import-validation__queue-heading small,
 .admin-import-v3-stage.is-validation .admin-import-validation-job small {
-  font-size: .73rem;
+  font-size: .8125rem;
 }
 
 .admin-import-v3-stage.is-validation .admin-import-validation-job {
@@ -334,7 +334,7 @@
 .admin-import-v3-stage .admin-import-metadata-card__optional-hint,
 .admin-import-v3-stage .admin-import-duplicates small,
 .admin-import-v3-stage .admin-import-destination small {
-  font-size: .73rem;
+  font-size: .8125rem;
 }
 
 .admin-import-v3-stage .admin-import-metadata-card.is-compact .admin-import-metadata-card__identity > strong {
@@ -345,7 +345,7 @@
 .admin-import-v3-stage .admin-import-metadata-card__actions button,
 .admin-import-v3-stage .admin-import-duplicates button,
 .admin-import-v3-stage .admin-import-destination button {
-  font-size: .76rem;
+  font-size: .8125rem;
 }
 
 .admin-import-v3-live,
@@ -395,14 +395,14 @@
 .admin-import-v3-success strong,
 .admin-import-v3-empty strong {
   color: #e8f0f5;
-  font-size: .92rem;
+  font-size: .9375rem;
 }
 
 .admin-import-v3-live small,
 .admin-import-v3-success small,
 .admin-import-v3-empty small {
   color: #7e8d98;
-  font-size: .78rem;
+  font-size: .8125rem;
   line-height: 1.4;
 }
 
@@ -576,10 +576,10 @@
   }
 
   .admin-import-v3-progress strong {
-    font-size: .73rem;
+    font-size: .8125rem;
   }
 
   .admin-import-v3-section-heading small {
-    font-size: .75rem;
+    font-size: .8125rem;
   }
 }
