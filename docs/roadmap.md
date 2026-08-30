@@ -2,7 +2,7 @@
 
 Este documento é a visão técnica de alto nível do Home Music. A issue [#123](https://github.com/felipe-urgal/home-music/issues/123) é o índice executivo das pendências abertas.
 
-> Estado revisado em 2026-08-30. Itens marcados como concluídos refletem funcionalidades já incorporadas à `main`; itens futuros apontam para a issue que mantém escopo e gate atualizados.
+> Estado revisado em 2026-08-30. Itens marcados como concluídos refletem funcionalidades já entregues ou concluídas pelo próprio PR que atualiza este documento; itens futuros apontam para a issue que mantém escopo e gate atualizados.
 
 ## Fases 1–2 — Base do produto e biblioteca pessoal
 
@@ -20,7 +20,7 @@ Concluídas.
 
 ## Fase 3 — Experiência mobile e offline
 
-A experiência principal está concluída. Resta validação de ciclo de vida em dispositivos reais.
+A experiência principal está concluída. Restam validações/evoluções explícitas.
 
 - [x] shuffle e repeat `off / all / one`;
 - [x] fila reordenável;
@@ -129,7 +129,7 @@ Concluída para o pipeline planejado, com melhorias posteriores também incorpor
 - [x] importação de playlists/lotes por provider externo (#154);
 - [x] happy path automatizado com pausa somente para exceções (#156).
 
-O redesign atual da superfície de importação usa um workbench em quatro etapas — origem, preparação, revisão e biblioteca — sem alterar as invariantes do pipeline.
+A superfície atual de importação usa um workbench em quatro etapas — **Origem → Preparar → Revisar → Biblioteca** — sem alterar as invariantes do pipeline.
 
 ## Fase 10 — Saúde e inteligência da biblioteca
 
@@ -149,7 +149,7 @@ A auditoria de Integridade permanece **somente leitura**. `Verificar agora` não
 
 ## Redesign administrativo — 2026
 
-O ciclo atual reorganizou as superfícies sem alterar as regras de segurança/backend:
+Ciclo concluído para as superfícies planejadas, mantendo as regras de segurança/backend existentes:
 
 - [x] Administração em cockpit compacto (#172);
 - [x] Gerenciar músicas com lista limpa, menu contextual e lote sob demanda (#173);
@@ -157,7 +157,9 @@ O ciclo atual reorganizou as superfícies sem alterar as regras de segurança/ba
 - [x] Importação como workbench progressivo (#178);
 - [x] Integridade como cockpit diagnóstico e Minha conta com largura fluida (#179);
 - [x] Usuários com tabela + inspetor e fluxos focados de criar/editar (#180);
-- [ ] Lixeira com lista ampla + inspetor lateral — PR #181 em revisão neste ciclo.
+- [x] Lixeira com lista ampla + inspetor lateral, restauração priorizada e delete permanente isolado (#181).
+
+A composição atual está documentada em [administration-ui.md](administration-ui.md).
 
 ## Fase 11 — Engenharia, arquitetura e qualidade
 
@@ -183,24 +185,24 @@ Pendente. As issues abaixo são a fonte de escopo:
 
 ## Regra de execução
 
-Para cada trabalho relevante:
+O padrão obrigatório vive em [`../AGENTS.md`](../AGENTS.md). Em resumo:
 
 ```text
 issue/escopo
    ↓
 branch própria
    ↓
-implementação
+investigação + implementação
    ↓
-auto code review técnico + UX
+testes focados e amplos
    ↓
-testes / correções
+auto code review completo
    ↓
-PR documentado
+correções
    ↓
-CI verde no head final
+review + CI novamente no head final
    ↓
-merge
+APPROVE / MERGE
 ```
 
-Nenhuma mudança destrutiva deve ser considerada pronta sem revisão explícita das invariantes de segurança correspondentes.
+Nenhuma mudança destrutiva deve ser considerada pronta sem revisão explícita das invariantes de segurança correspondentes. `BLOCKER`, `HIGH` ou `MEDIUM` conhecidos bloqueiam merge até correção.
