@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
   AdminTrack,
   AdminTrackCoverResponse,
@@ -82,6 +82,16 @@ function hasOverride(metadata: AdminTrackMetadataResponse | null) {
   return Boolean(metadata?.override.updatedAt);
 }
 
+function metadataChanged(metadata: AdminTrackMetadataResponse | null, draft: EditableTrackMetadata | null) {
+  if (!metadata || !draft) return false;
+  return (
+    metadata.effective.title !== draft.title
+    || metadata.effective.artist !== draft.artist
+    || metadata.effective.album !== draft.album
+    || metadata.effective.albumArtist !== draft.albumArtist
+  );
+}
+
 export function AdminTrackMetadataScreen({
   onBack,
   initialHealthFilter = null
@@ -103,7 +113,9 @@ export function AdminTrackMetadataScreen({
   const [savingAction, setSavingAction] = useState<SavingAction>(null);
   const [error, setError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const editorRequestRef = useRef(0);
   const operationBusy = savingAction !== null;
+  const editorDirty = Boolean(coverFile) || metadataChanged(metadata, draft);
 
   const healthTrackIds = useMemo(
     () => healthFilter ? new Set(healthFilter.trackIds) : null,
@@ -124,6 +136,10 @@ export function AdminTrackMetadataScreen({
   const visibleTracks = useMemo(
     () => filteredTracks.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
     [filteredTracks, page]
+  );
+  const editingTrack = useMemo(
+    () => tracks.find(track => track.id === editingTrackId) ?? null,
+    [editingTrackId, tracks]
   );
 
   useEffect(() => {
@@ -148,16 +164,11 @@ export function AdminTrackMetadataScreen({
     if (!editingTrackId) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' || operationBusy) return;
-      setEditingTrackId(null);
-      setMetadata(null);
-      setCover(null);
-      setCoverFile(null);
-      setDraft(null);
-      setEditorFeedback(null);
+      closeEditor();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [editingTrackId, operationBusy]);
+  }, [editingTrackId, editorDirty, operationBusy]);
 
   async function loadTracks(background = false) {
     if (background) setRefreshing(true); else setLoading(true);
@@ -176,8 +187,27 @@ export function AdminTrackMetadataScreen({
     void loadTracks();
   }, []);
 
+  function confirmEditorDiscard() {
+    return !editorDirty || window.confirm('Descartar as alterações ainda não salvas desta música?');
+  }
+
+  function clearEditor() {
+    editorRequestRef.current += 1;
+    setEditingTrackId(null);
+    setMetadata(null);
+    setCover(null);
+    setCoverFile(null);
+    setDraft(null);
+    setEditorFeedback(null);
+    setEditorLoading(false);
+  }
+
   async function openEditor(track: AdminTrack) {
-    if (operationBusy) return;
+    if (operationBusy || editorLoading || editingTrackId === track.id) return;
+    if (editingTrackId && !confirmEditorDiscard()) return;
+
+    const requestId = editorRequestRef.current + 1;
+    editorRequestRef.current = requestId;
     setEditingTrackId(track.id);
     setMetadata(null);
     setCover(null);
@@ -192,25 +222,22 @@ export function AdminTrackMetadataScreen({
         getAdminTrackMetadata(track.id),
         getAdminTrackCover(track.id)
       ]);
+      if (editorRequestRef.current !== requestId) return;
       setMetadata(loadedMetadata);
       setCover(loadedCover);
       setDraft(loadedMetadata.effective);
     } catch (error) {
+      if (editorRequestRef.current !== requestId) return;
       setError(errorMessage(error));
-      setEditingTrackId(null);
+      clearEditor();
     } finally {
-      setEditorLoading(false);
+      if (editorRequestRef.current === requestId) setEditorLoading(false);
     }
   }
 
   function closeEditor() {
-    if (operationBusy) return;
-    setEditingTrackId(null);
-    setMetadata(null);
-    setCover(null);
-    setCoverFile(null);
-    setDraft(null);
-    setEditorFeedback(null);
+    if (operationBusy || !confirmEditorDiscard()) return;
+    clearEditor();
   }
 
   function setField(field: keyof EditableTrackMetadata, value: string) {
@@ -317,38 +344,33 @@ export function AdminTrackMetadataScreen({
   const displayedCoverUrl = coverPreviewUrl ?? persistedCoverUrl;
 
   return (
-    <section className="my-account-screen admin-metadata-screen" aria-labelledby="admin-metadata-title">
+    <section className="my-account-screen admin-metadata-screen admin-metadata-screen--v1" aria-labelledby="admin-metadata-title">
       <header className="my-account-header">
         <button className="icon-button" type="button" aria-label="Voltar" onClick={onBack}><ChevronLeft /></button>
         <div>
           <strong id="admin-metadata-title">Metadados</strong>
-          <small>Correções não destrutivas de texto e capa</small>
+          <small>Correções reversíveis de texto e capa</small>
         </div>
         <span className="my-account-header__spacer" />
       </header>
 
-      <div className="admin-metadata-overview">
-        <div className="admin-metadata-notice" role="note">
+      <div className="admin-metadata-overview admin-metadata-overview--v1">
+        <div className="admin-metadata-safety-note" role="note">
           <Database />
-          <div>
-            <strong>O arquivo original permanece intacto</strong>
-            <small>Texto e capa ficam como overrides no SQLite e continuam valendo depois de novos scans.</small>
-          </div>
+          <span><strong>Overrides no SQLite</strong><small>O arquivo de áudio original permanece intacto.</small></span>
         </div>
 
         {healthFilter && (
-          <div className="admin-metadata-health-filter" role="status">
+          <div className="admin-metadata-health-filter admin-metadata-health-filter--v1" role="status">
             <div>
-              <strong>Filtro de saúde · {healthFilter.label}</strong>
-              <small>{healthFilter.trackIds.length.toLocaleString('pt-BR')} {healthFilter.trackIds.length === 1 ? 'faixa sinalizada' : 'faixas sinalizadas'} na última leitura.</small>
+              <strong>{healthFilter.label}</strong>
+              <small>{healthFilter.trackIds.length.toLocaleString('pt-BR')} {healthFilter.trackIds.length === 1 ? 'faixa sinalizada' : 'faixas sinalizadas'}</small>
             </div>
-            <button type="button" onClick={() => setHealthFilter(null)}>
-              <X /> Mostrar todas
-            </button>
+            <button type="button" onClick={() => setHealthFilter(null)}><X /> Mostrar todas</button>
           </div>
         )}
 
-        <section className="admin-tracks-toolbar" aria-label="Buscar metadados de músicas">
+        <section className="admin-tracks-toolbar admin-metadata-toolbar--v1" aria-label="Buscar metadados de músicas">
           <label className="admin-tracks-search">
             <Search />
             <input
@@ -373,107 +395,117 @@ export function AdminTrackMetadataScreen({
         {error && <div className="admin-tracks-message is-error" role="alert">{error}</div>}
         {feedback && <div className="admin-tracks-message is-success" role="status">{feedback}</div>}
 
-        {loading ? (
-          <div className="admin-tracks-state" role="status"><LoaderCircle className="is-spinning" /> Carregando músicas…</div>
-        ) : filteredTracks.length === 0 ? (
-          <div className="admin-tracks-state"><Music2 /> {healthFilter ? 'Nenhuma música neste filtro.' : 'Nenhuma música encontrada.'}</div>
-        ) : (
-          <section className="admin-metadata-list" aria-label="Músicas com metadados editáveis">
-            <div className="admin-tracks-list__count">
-              {filteredTracks.length.toLocaleString('pt-BR')} {filteredTracks.length === 1 ? 'música' : 'músicas'}
-            </div>
-            {visibleTracks.map(track => (
-              <article className="admin-metadata-row" key={track.id}>
-                <span className="admin-track-row__icon is-active"><Music2 /></span>
-                <div className="admin-track-row__body">
-                  <strong>{track.title}</strong>
-                  <small>{track.artist} · {track.album}</small>
-                  <small className="admin-track-row__folder">{track.folder}</small>
-                </div>
-                <button
-                  className="admin-metadata-row__edit"
-                  type="button"
-                  disabled={operationBusy || editorLoading}
-                  onClick={() => void openEditor(track)}
-                >
-                  <Pencil /> Editar
-                </button>
-              </article>
-            ))}
+        <div className={`admin-metadata-workspace ${editingTrackId ? 'has-editor' : ''}`}>
+          <section className="admin-metadata-browser" aria-label="Músicas com metadados editáveis">
+            {loading ? (
+              <div className="admin-tracks-state" role="status"><LoaderCircle className="is-spinning" /> Carregando músicas…</div>
+            ) : filteredTracks.length === 0 ? (
+              <div className="admin-tracks-state"><Music2 /> {healthFilter ? 'Nenhuma música neste filtro.' : 'Nenhuma música encontrada.'}</div>
+            ) : (
+              <>
+                <header className="admin-metadata-browser__header">
+                  <div>
+                    <strong>Músicas</strong>
+                    <small>{filteredTracks.length.toLocaleString('pt-BR')} {filteredTracks.length === 1 ? 'resultado' : 'resultados'}</small>
+                  </div>
+                  {pageCount > 1 && <span>Página {page} de {pageCount}</span>}
+                </header>
 
-            {pageCount > 1 && (
-              <footer className="admin-tracks-pagination">
-                <span>Página {page} de {pageCount}</span>
-                <div>
-                  <button type="button" aria-label="Página anterior" disabled={page <= 1 || operationBusy} onClick={() => setPage(value => value - 1)}><ChevronLeft /></button>
-                  <button type="button" aria-label="Próxima página" disabled={page >= pageCount || operationBusy} onClick={() => setPage(value => value + 1)}><ChevronRight /></button>
+                <div className="admin-metadata-browser__rows">
+                  {visibleTracks.map(track => {
+                    const selected = editingTrackId === track.id;
+                    return (
+                      <button
+                        className={`admin-metadata-row admin-metadata-row--v1 ${selected ? 'is-selected' : ''}`}
+                        type="button"
+                        key={track.id}
+                        aria-pressed={selected}
+                        disabled={operationBusy || editorLoading}
+                        onClick={() => void openEditor(track)}
+                      >
+                        <span className="admin-track-row__icon is-active"><Music2 /></span>
+                        <span className="admin-track-row__body">
+                          <strong>{track.title}</strong>
+                          <small>{track.artist} · {track.album}</small>
+                          <small className="admin-track-row__folder">{track.folder}</small>
+                        </span>
+                        <span className="admin-metadata-row__open" aria-hidden="true"><Pencil /></span>
+                      </button>
+                    );
+                  })}
                 </div>
-              </footer>
+
+                {pageCount > 1 && (
+                  <footer className="admin-tracks-pagination admin-metadata-pagination--v1">
+                    <span>Página {page} de {pageCount}</span>
+                    <div>
+                      <button type="button" aria-label="Página anterior" disabled={page <= 1 || operationBusy} onClick={() => setPage(value => value - 1)}><ChevronLeft /></button>
+                      <button type="button" aria-label="Próxima página" disabled={page >= pageCount || operationBusy} onClick={() => setPage(value => value + 1)}><ChevronRight /></button>
+                    </div>
+                  </footer>
+                )}
+              </>
             )}
           </section>
-        )}
-      </div>
 
-      {editingTrackId && (
-        <div className="admin-metadata-dialog-backdrop" onMouseDown={event => {
-          if (event.target === event.currentTarget) closeEditor();
-        }}>
-          <section
-            className="admin-metadata-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="admin-metadata-dialog-title"
-          >
-            <header className="admin-metadata-dialog__header">
-              <div>
-                <strong id="admin-metadata-dialog-title">Editar metadados</strong>
-                <small>Somente camadas reversíveis serão salvas.</small>
+          <aside className={`admin-metadata-side-editor ${editingTrackId ? 'is-open' : ''}`} aria-labelledby="admin-metadata-editor-title">
+            {!editingTrackId ? (
+              <div className="admin-metadata-side-editor__empty">
+                <span><Pencil /></span>
+                <strong id="admin-metadata-editor-title">Selecione uma música</strong>
+                <small>Os campos e a capa aparecem aqui sem tirar você da lista.</small>
               </div>
-              <button type="button" aria-label="Fechar edição de metadados" disabled={operationBusy} onClick={closeEditor}><X /></button>
-            </header>
-
-            {editorLoading || !metadata || !draft || !cover ? (
-              <div className="admin-metadata-dialog__loading" role="status"><LoaderCircle className="is-spinning" /> Carregando metadados…</div>
+            ) : editorLoading || !metadata || !draft || !cover ? (
+              <div className="admin-metadata-side-editor__loading" role="status">
+                <LoaderCircle className="is-spinning" />
+                <span><strong id="admin-metadata-editor-title">Carregando metadados</strong><small>{editingTrack?.title ?? 'Música selecionada'}</small></span>
+              </div>
             ) : (
-              <form onSubmit={event => { event.preventDefault(); void saveMetadata(); }}>
+              <form className="admin-metadata-side-editor__form" onSubmit={event => { event.preventDefault(); void saveMetadata(); }}>
+                <header className="admin-metadata-side-editor__header">
+                  <div>
+                    <small>Editando</small>
+                    <strong id="admin-metadata-editor-title">{draft.title}</strong>
+                    <span>{draft.artist} · {draft.album}</span>
+                  </div>
+                  <button type="button" aria-label="Fechar edição de metadados" disabled={operationBusy} onClick={closeEditor}><X /></button>
+                </header>
+
                 {editorFeedback && (
                   <div
-                    className={`admin-metadata-dialog__message ${editorFeedback.error ? 'is-error' : 'is-success'}`}
+                    className={`admin-metadata-dialog__message admin-metadata-side-editor__message ${editorFeedback.error ? 'is-error' : 'is-success'}`}
                     role={editorFeedback.error ? 'alert' : 'status'}
                   >
                     {editorFeedback.message}
                   </div>
                 )}
-                <div className="admin-metadata-fields">
+
+                <div className="admin-metadata-fields admin-metadata-fields--side">
                   <label>
                     <span>Título</span>
                     <input autoFocus required maxLength={240} value={draft.title} disabled={operationBusy} onChange={event => setField('title', event.target.value)} />
-                    <small>Arquivo: {metadata.physical.title}</small>
+                    <small>Arquivo original: {metadata.physical.title}</small>
                   </label>
                   <label>
                     <span>Artista</span>
                     <input required maxLength={240} value={draft.artist} disabled={operationBusy} onChange={event => setField('artist', event.target.value)} />
-                    <small>Arquivo: {metadata.physical.artist}</small>
+                    <small>Arquivo original: {metadata.physical.artist}</small>
                   </label>
                   <label>
                     <span>Álbum</span>
                     <input required maxLength={240} value={draft.album} disabled={operationBusy} onChange={event => setField('album', event.target.value)} />
-                    <small>Arquivo: {metadata.physical.album}</small>
+                    <small>Arquivo original: {metadata.physical.album}</small>
                   </label>
                   <label>
                     <span>Artista do álbum</span>
                     <input required maxLength={240} value={draft.albumArtist} disabled={operationBusy} onChange={event => setField('albumArtist', event.target.value)} />
-                    <small>Arquivo: {metadata.physical.albumArtist}</small>
+                    <small>Arquivo original: {metadata.physical.albumArtist}</small>
                   </label>
                 </div>
 
-                <section className="admin-cover-editor" aria-labelledby="admin-cover-editor-title">
+                <section className="admin-cover-editor admin-cover-editor--side" aria-labelledby="admin-cover-editor-title">
                   <div className={`admin-cover-editor__preview ${displayedCoverUrl ? '' : 'is-empty'}`}>
-                    {displayedCoverUrl ? (
-                      <img src={displayedCoverUrl} alt={`Preview da capa de ${draft.title}`} />
-                    ) : (
-                      <ImagePlus aria-hidden="true" />
-                    )}
+                    {displayedCoverUrl ? <img src={displayedCoverUrl} alt={`Preview da capa de ${draft.title}`} /> : <ImagePlus aria-hidden="true" />}
                   </div>
                   <div className="admin-cover-editor__body">
                     <div className="admin-cover-editor__heading">
@@ -481,11 +513,11 @@ export function AdminTrackMetadataScreen({
                         <strong id="admin-cover-editor-title">Capa</strong>
                         <small>
                           {coverFile
-                            ? 'Preview local — a imagem ainda não foi enviada.'
+                            ? 'Preview local — ainda não enviado.'
                             : cover.override
                               ? `Override ativo · ${cover.override.width}×${cover.override.height} · ${formatBytes(cover.override.sizeBytes)}`
                               : cover.physicalHasCover
-                                ? 'Usando a capa embutida no arquivo de áudio.'
+                                ? 'Usando a capa embutida no arquivo.'
                                 : 'O arquivo original não possui capa.'}
                         </small>
                       </div>
@@ -501,7 +533,7 @@ export function AdminTrackMetadataScreen({
 
                     <div className="admin-cover-editor__actions">
                       <label className={`admin-cover-upload ${operationBusy ? 'is-disabled' : ''}`}>
-                        <Upload /> {coverFile ? 'Trocar seleção' : 'Selecionar imagem'}
+                        <Upload /> {coverFile ? 'Trocar imagem' : 'Selecionar imagem'}
                         <input
                           type="file"
                           accept="image/jpeg,image/png,image/webp"
@@ -513,48 +545,29 @@ export function AdminTrackMetadataScreen({
                           }}
                         />
                       </label>
-                      <button
-                        className="admin-cover-save"
-                        type="button"
-                        disabled={operationBusy || !coverFile}
-                        onClick={() => void saveCover()}
-                      >
-                        {savingAction === 'cover-save' ? <LoaderCircle className="is-spinning" /> : <Save />}
-                        Salvar capa
+                      <button className="admin-cover-save" type="button" disabled={operationBusy || !coverFile} onClick={() => void saveCover()}>
+                        {savingAction === 'cover-save' ? <LoaderCircle className="is-spinning" /> : <Save />} Salvar capa
                       </button>
-                      <button
-                        className="admin-cover-reset"
-                        type="button"
-                        disabled={operationBusy || !cover.override}
-                        onClick={() => void resetCover()}
-                      >
-                        {savingAction === 'cover-reset' ? <LoaderCircle className="is-spinning" /> : <RotateCcw />}
-                        Restaurar capa do arquivo
+                      <button className="admin-cover-reset" type="button" disabled={operationBusy || !cover.override} onClick={() => void resetCover()}>
+                        {savingAction === 'cover-reset' ? <LoaderCircle className="is-spinning" /> : <RotateCcw />} Restaurar capa
                       </button>
                     </div>
                   </div>
                 </section>
 
-                <footer className="admin-metadata-dialog__actions">
-                  <button
-                    className="admin-metadata-reset"
-                    type="button"
-                    disabled={operationBusy || !hasOverride(metadata)}
-                    onClick={() => void resetMetadata()}
-                  >
-                    {savingAction === 'text-reset' ? <LoaderCircle className="is-spinning" /> : <RotateCcw />}
-                    Restaurar arquivo
+                <footer className="admin-metadata-side-editor__actions">
+                  <button className="admin-metadata-reset" type="button" disabled={operationBusy || !hasOverride(metadata)} onClick={() => void resetMetadata()}>
+                    {savingAction === 'text-reset' ? <LoaderCircle className="is-spinning" /> : <RotateCcw />} Restaurar texto
                   </button>
-                  <button className="admin-metadata-save" type="submit" disabled={operationBusy}>
-                    {savingAction === 'text-save' ? <LoaderCircle className="is-spinning" /> : <Save />}
-                    Salvar override
+                  <button className="admin-metadata-save" type="submit" disabled={operationBusy || !metadataChanged(metadata, draft)}>
+                    {savingAction === 'text-save' ? <LoaderCircle className="is-spinning" /> : <Save />} Salvar texto
                   </button>
                 </footer>
               </form>
             )}
-          </section>
+          </aside>
         </div>
-      )}
+      </div>
     </section>
   );
 }
