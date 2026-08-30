@@ -47,9 +47,10 @@ import './sessions-screen.css';
 import './playback-screen.css';
 import './administration-cockpit.css';
 import './admin-tracks-redesign.css';
-import './account-layout-widths.css';
 import './admin-metadata-redesign.css';
 import './admin-import-v3.css';
+import './admin-integrity-v3.css';
+import './account-layout-widths.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
