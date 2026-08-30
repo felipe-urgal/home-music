@@ -201,28 +201,34 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
       ? 'Pronto'
       : 'Atenção';
   const cacheBusy = Boolean(cache && (cache.active > 0 || cache.pending > 0));
-  const healthy = Boolean(overview && overview.scanner.ready && integrityVerified && attentionCount === 0);
-  const statusTone = !overview ? 'is-loading' : healthy ? 'is-healthy' : 'has-warning';
-  const statusTitle = !overview
-    ? 'Carregando estado da biblioteca'
-    : overview.scanner.scanning
-      ? 'Biblioteca sendo atualizada'
+  const healthy = Boolean(overview && !overviewError && overview.scanner.ready && integrityVerified && attentionCount === 0);
+  const statusTone = overviewError ? 'has-warning' : !overview ? 'is-loading' : healthy ? 'is-healthy' : 'has-warning';
+  const statusTitle = overviewError
+    ? overview ? 'Visão geral desatualizada' : 'Estado da biblioteca indisponível'
+    : !overview
+      ? 'Carregando estado da biblioteca'
+      : overview.scanner.scanning
+        ? 'Biblioteca sendo atualizada'
+        : !overview.scanner.ready
+          ? 'Biblioteca requer atenção'
+          : !integrityVerified
+            ? 'Integridade ainda não verificada'
+            : attentionCount > 0
+              ? 'Há itens para revisar'
+              : 'Biblioteca pronta';
+  const statusDetail = overviewError
+    ? overview
+      ? 'Não foi possível confirmar o estado atual. Os dados abaixo são o último snapshot conhecido.'
+      : 'Tente atualizar novamente para carregar scanner, índice e integridade.'
+    : !overview
+      ? 'Consultando índice, scanner e integridade.'
       : !overview.scanner.ready
-        ? 'Biblioteca requer atenção'
+        ? 'O scanner ainda não marcou a biblioteca como pronta para uso.'
         : !integrityVerified
-          ? 'Integridade ainda não verificada'
+          ? 'Execute Verificar agora em Integridade para concluir o diagnóstico.'
           : attentionCount > 0
-            ? 'Há itens para revisar'
-            : 'Biblioteca pronta';
-  const statusDetail = !overview
-    ? 'Consultando índice, scanner e integridade.'
-    : !overview.scanner.ready
-      ? 'O scanner ainda não marcou a biblioteca como pronta para uso.'
-      : !integrityVerified
-        ? 'Execute Verificar agora em Integridade para concluir o diagnóstico.'
-        : attentionCount > 0
-          ? `${attentionCount.toLocaleString('pt-BR')} ${attentionCount === 1 ? 'item precisa' : 'itens precisam'} de revisão.`
-          : 'Scanner pronto e última verificação de integridade sem inconsistências conhecidas.';
+            ? `${attentionCount.toLocaleString('pt-BR')} ${attentionCount === 1 ? 'item precisa' : 'itens precisam'} de revisão.`
+            : 'Scanner pronto e última verificação de integridade sem inconsistências conhecidas.';
 
   return (
     <section className="my-account-screen administration-screen administration-cockpit" aria-labelledby="administration-title">
@@ -254,7 +260,7 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
 
         <section className={`administration-cockpit-status ${statusTone}`} aria-labelledby="administration-status-title">
           <span className="administration-cockpit-status__icon">
-            {!overview ? <LoaderCircle className="is-spinning" /> : healthy ? <CheckCircle2 /> : <AlertTriangle />}
+            {!overview && !overviewError ? <LoaderCircle className="is-spinning" /> : healthy ? <CheckCircle2 /> : <AlertTriangle />}
           </span>
           <div className="administration-cockpit-status__copy">
             <small>Status da biblioteca</small>
