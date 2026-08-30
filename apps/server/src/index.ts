@@ -38,6 +38,7 @@ import { probeFfmpeg, resolveFfmpegCommand, type FfmpegStatus } from './ffmpeg.j
 import { ImportJobQueue } from './import-job-queue.js';
 import type { PromotedImportFile } from './import-staging.js';
 import {
+  auditLibraryIntegrity,
   indexLibraryFile,
   mergeIndexedTrack,
   readCover,
@@ -658,6 +659,25 @@ app.get('/api/admin/library/overview', async (_request, reply) => {
     scannedAt,
     autoRescan: automaticRescanStatus()
   });
+});
+
+app.post('/api/admin/library/integrity/check', async (_request, reply) => {
+  reply.header('Cache-Control', 'private, no-store');
+  if (!musicDir || !libraryReady) {
+    return reply.code(409).send({ error: 'Biblioteca não está pronta para verificação de integridade.' });
+  }
+
+  const resolvedRoot = await resolveLibraryRoot(musicDir);
+  const integrity = await auditLibraryIntegrity(resolvedRoot, tracks, (message, error) => {
+    app.log.warn({ err: error }, message);
+  });
+
+  return buildAdminLibraryOverview(tracks, {
+    ready: libraryReady,
+    scanning: Boolean(scanPromise),
+    scannedAt,
+    autoRescan: automaticRescanStatus()
+  }, { integrity });
 });
 
 app.get('/api/auth/status', { config: { auth: 'public' } }, async (request, reply) => {
