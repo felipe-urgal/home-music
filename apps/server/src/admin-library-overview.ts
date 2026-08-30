@@ -10,7 +10,8 @@ import type {
   Track
 } from '@home-music/shared';
 import { getLibraryIntegrityStatus } from './library-integrity.js';
-import type { IndexedTrack } from './library.js';
+import { auditLibraryIntegrity, type IndexedTrack } from './library.js';
+import { resolveLibraryRoot } from './security.js';
 
 type ScannerState = AdminLibraryOverviewResponse['scanner'];
 type Row = Record<string, unknown>;
@@ -178,15 +179,33 @@ function pruneTitleTagCache(trackIds: ReadonlySet<string>) {
   }
 }
 
+async function resolveIntegrity(
+  tracks: readonly IndexedTrack[],
+  override: AdminLibraryIntegrityStatus | undefined
+) {
+  if (override) return override;
+  const configuredRoot = process.env.MUSIC_DIR?.trim();
+  if (!configuredRoot) return getLibraryIntegrityStatus();
+  try {
+    const libraryRoot = await resolveLibraryRoot(configuredRoot);
+    return await auditLibraryIntegrity(libraryRoot, tracks);
+  } catch {
+    return getLibraryIntegrityStatus();
+  }
+}
+
 export async function buildAdminLibraryOverview(
   tracks: readonly IndexedTrack[],
   scanner: ScannerState,
   options: AdminLibraryOverviewOptions = {}
 ): Promise<AdminLibraryOverviewResponse> {
   const databasePath = options.databasePath || process.env.HOME_MUSIC_DATABASE_PATH || defaultDatabasePath;
-  const databaseBytes = options.databaseBytes === undefined
-    ? await databaseFootprintBytes(databasePath)
-    : options.databaseBytes;
+  const [databaseBytes, integrity] = await Promise.all([
+    options.databaseBytes === undefined
+      ? databaseFootprintBytes(databasePath)
+      : options.databaseBytes,
+    resolveIntegrity(tracks, options.integrity)
+  ]);
   const databaseState = options.resolveTrack && options.isTrackHidden && options.hasTitleOverride
     ? null
     : defaultDatabaseState(databasePath);
@@ -265,7 +284,7 @@ export async function buildAdminLibraryOverview(
         missingDuration,
         trackIds
       },
-      integrity: options.integrity ?? getLibraryIntegrityStatus(),
+      integrity,
       scanner
     };
   } finally {
