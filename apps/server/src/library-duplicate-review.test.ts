@@ -97,6 +97,34 @@ test('mesmo título e duração com artista diferente continua apenas possível'
   }
 });
 
+test('placeholders de artista e álbum não criam candidatos em massa', async () => {
+  const items = [
+    track('a', {
+      title: 'Primeira faixa',
+      artist: 'Artista desconhecido',
+      album: 'Álbum desconhecido',
+      duration: 180,
+      fileSize: 1_000
+    }),
+    track('b', {
+      title: 'Segunda faixa',
+      artist: 'Artista desconhecido',
+      album: 'Álbum desconhecido',
+      duration: 181,
+      fileSize: 2_000
+    })
+  ];
+  const item = await fixture(items);
+  try {
+    const review = await item.store.check();
+    assert.equal(review.counts.reviewable, 0);
+    assert.equal(review.candidates.length, 0);
+  } finally {
+    item.store.close();
+    await rm(item.root, { recursive: true, force: true });
+  }
+});
+
 test('hash idêntico eleva o par para duplicata exata', async () => {
   const items = [
     track('a', { title: 'Primeira', artist: 'Artista A', fileSize: 2_048 }),
