@@ -43,6 +43,7 @@ import './admin-import-redesign.css';
 import './typography.css';
 import './layout-readability.css';
 import './password-screen.css';
+import './sessions-screen.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
