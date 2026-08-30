@@ -1,0 +1,363 @@
+:root {
+  --hm-type-micro: 0.75rem;
+  --hm-type-caption: 0.8125rem;
+  --hm-type-secondary: 0.875rem;
+  --hm-type-control: 0.9375rem;
+  --hm-type-body: 1rem;
+  --hm-type-section: 1.0625rem;
+  --hm-type-title: 1.25rem;
+  --hm-type-metric: 1.375rem;
+}
+
+body {
+  font-size: var(--hm-type-body);
+  line-height: 1.45;
+}
+
+/*
+ * Readability floor for shared semantic elements.
+ * This stylesheet is intentionally loaded last so legacy 8–12px rules
+ * cannot make common supporting text or form controls hard to read.
+ */
+#root small {
+  font-size: var(--hm-type-secondary);
+  line-height: 1.45;
+}
+
+#root dt,
+#root dd,
+#root label > span {
+  font-size: var(--hm-type-caption);
+  line-height: 1.45;
+}
+
+#root button {
+  font-size: var(--hm-type-secondary);
+}
+
+#root input,
+#root select,
+#root textarea {
+  font-size: var(--hm-type-body);
+}
+
+#root th,
+#root th button {
+  font-size: var(--hm-type-micro);
+  line-height: 1.35;
+}
+
+#root td {
+  font-size: var(--hm-type-secondary);
+  line-height: 1.4;
+}
+
+#root code {
+  font-size: var(--hm-type-caption);
+}
+
+/* Core player and library */
+#root .topbar__title {
+  font-size: var(--hm-type-body);
+}
+
+#root .time-row,
+#root .queue-label,
+#root .section-heading,
+#root .playing-indicator,
+#root .load-more,
+#root .autoplay-notice,
+#root .library-status {
+  font-size: var(--hm-type-secondary);
+}
+
+#root .library-toggle {
+  font-size: var(--hm-type-control);
+}
+
+#root .library-tabs button {
+  font-size: var(--hm-type-secondary);
+}
+
+#root .queue-item__text strong,
+#root .group-item__text strong,
+#root .library-track__text strong,
+#root .player-playlist-picker > strong {
+  font-size: var(--hm-type-control);
+}
+
+#root .library-header__title strong {
+  font-size: var(--hm-type-title);
+}
+
+#root .mini-player__text strong {
+  font-size: var(--hm-type-secondary);
+}
+
+#root .volume-control span,
+#root .play-all span {
+  font-size: var(--hm-type-caption);
+}
+
+#root .center-state strong {
+  font-size: var(--hm-type-title);
+}
+
+#root .center-state span {
+  font-size: var(--hm-type-control);
+}
+
+/* Authentication */
+#root .login-field,
+#root .login-error,
+#root .login-footnote {
+  font-size: var(--hm-type-secondary);
+}
+
+#root .login-heading p {
+  font-size: var(--hm-type-control);
+}
+
+/* Desktop shell, navigation and player */
+@media (min-width: 1024px) {
+  #root .desktop-brand strong {
+    font-size: var(--hm-type-section);
+  }
+
+  #root .desktop-nav__item span,
+  #root .desktop-nav__item--nested span,
+  #root .desktop-context__empty,
+  #root .desktop-context__action,
+  #root .desktop-now-playing__text strong,
+  #root .desktop-queue__header strong,
+  #root .desktop-queue__item strong,
+  #root .desktop-library-table__track-copy strong,
+  #root .desktop-player-bar__track-text strong {
+    font-size: var(--hm-type-secondary);
+  }
+
+  #root .desktop-sidebar__footer span,
+  #root .desktop-context__heading span {
+    font-size: var(--hm-type-control);
+  }
+
+  #root .desktop-nav__group-label {
+    font-size: var(--hm-type-micro);
+  }
+
+  #root .desktop-context__stats span,
+  #root .desktop-queue__header span,
+  #root .desktop-queue__remaining,
+  #root .desktop-player-bar__progress,
+  #root .desktop-player-bar__volume span {
+    font-size: var(--hm-type-caption);
+  }
+
+  #root .desktop-library-table__format {
+    font-size: var(--hm-type-micro);
+  }
+}
+
+/* Administration overview and imports */
+#root .administration-summary__loading,
+#root .admin-import-empty {
+  font-size: var(--hm-type-secondary);
+}
+
+#root .administration-metric strong {
+  font-size: var(--hm-type-metric);
+}
+
+#root .administration-detail-card__heading strong,
+#root .admin-import-method strong {
+  font-size: var(--hm-type-control);
+}
+
+#root .admin-import-intro strong {
+  font-size: 1.125rem;
+}
+
+#root .admin-import-intro p {
+  font-size: var(--hm-type-secondary);
+}
+
+#root .admin-import-method__badge,
+#root .admin-import-job__badge {
+  font-size: var(--hm-type-micro);
+}
+
+#root .admin-import-empty strong,
+#root .admin-import-job__body strong {
+  font-size: var(--hm-type-secondary);
+}
+
+/* Library health and integrity */
+#root .admin-metadata-health-filter strong,
+#root .admin-library-integrity__intro strong,
+#root .admin-library-integrity__review-heading > div > strong {
+  font-size: var(--hm-type-control);
+}
+
+#root .admin-metadata-health-filter > button,
+#root .admin-library-integrity__issues article > strong,
+#root .admin-library-integrity__state {
+  font-size: var(--hm-type-secondary);
+}
+
+#root .admin-library-integrity__issue-heading span {
+  font-size: var(--hm-type-caption);
+}
+
+#root .admin-library-integrity__metrics strong {
+  font-size: 1.125rem;
+}
+
+/* Track and metadata administration */
+#root .admin-tracks-message,
+#root .admin-tracks-state,
+#root .admin-track-row__body strong,
+#root .admin-metadata-notice strong,
+#root .admin-metadata-dialog__loading,
+#root .admin-metadata-dialog__message,
+#root .admin-cover-editor__heading strong,
+#root .admin-cover-editor__file strong,
+#root .admin-cover-upload {
+  font-size: var(--hm-type-secondary);
+}
+
+#root .admin-tracks-list__count,
+#root .admin-tracks-pagination {
+  font-size: var(--hm-type-caption);
+}
+
+#root .admin-track-row__status,
+#root .admin-cover-editor__heading > span {
+  font-size: var(--hm-type-micro);
+}
+
+#root .admin-metadata-dialog__header strong {
+  font-size: var(--hm-type-control);
+}
+
+/* Quarantine, bulk actions and cache */
+#root .admin-quarantine-notice strong,
+#root .admin-quarantine-row__body strong {
+  font-size: var(--hm-type-secondary);
+}
+
+#root .admin-bulk-toolbar__selection,
+#root .admin-bulk-toolbar__status,
+#root .administration-cache-message {
+  font-size: var(--hm-type-caption);
+}
+
+/* Operation history */
+#root .admin-operation-history__empty,
+#root .admin-operation-row__body strong,
+#root .admin-operation-detail__heading strong,
+#root .admin-operation-detail__error strong,
+#root .admin-operation-detail__retry strong,
+#root .admin-operation-detail__retry-message {
+  font-size: var(--hm-type-secondary);
+}
+
+#root .admin-operation-row__status,
+#root .admin-operation-detail__error span,
+#root .admin-operation-detail__retry-note {
+  font-size: var(--hm-type-caption);
+}
+
+/* Focused import workflow */
+#root .admin-import-source-tabs strong,
+#root .admin-import-provider__compact-heading strong,
+#root .admin-import-destination__heading strong {
+  font-size: var(--hm-type-control);
+}
+
+#root .admin-import-review-stage__heading strong,
+#root .admin-import-metadata-card.is-compact .admin-import-metadata-card__identity > strong {
+  font-size: var(--hm-type-body);
+}
+
+#root .admin-import-metadata-card.is-compact .admin-import-metadata-card__identity > span,
+#root .admin-import-metadata-card__edit-toggle {
+  font-size: var(--hm-type-secondary);
+}
+
+#root .admin-import-metadata-card__optional-hint,
+#root .admin-import-destination__new-folder > label {
+  font-size: var(--hm-type-caption);
+}
+
+/* Account */
+#root .my-account-header strong {
+  font-size: var(--hm-type-title);
+}
+
+#root .my-account-profile strong,
+#root .my-account-links strong,
+#root .my-account-card__heading strong {
+  font-size: var(--hm-type-control);
+}
+
+#root .my-account-profile__badge,
+#root .my-account-session-current {
+  font-size: var(--hm-type-micro);
+}
+
+#root .my-account-message,
+#root .my-account-password-rules {
+  font-size: var(--hm-type-caption);
+}
+
+#root .my-account-session-row strong,
+#root .my-account-session-row button,
+#root .my-account-mobile-entry {
+  font-size: var(--hm-type-secondary);
+}
+
+/* User administration */
+#root .admin-users-header strong {
+  font-size: var(--hm-type-title);
+}
+
+#root .admin-users-new,
+#root .admin-users-user strong,
+#root .admin-users-credential button,
+#root .admin-users-editor__footer button,
+#root .admin-users-delete,
+#root .admin-mobile-entry,
+#root .admin-users-temporary > div > strong {
+  font-size: var(--hm-type-secondary);
+}
+
+#root .admin-users-table-count,
+#root .admin-users-pagination,
+#root .admin-users-credential span,
+#root .admin-users-temporary span {
+  font-size: var(--hm-type-caption);
+}
+
+#root .admin-user-status {
+  font-size: var(--hm-type-micro);
+}
+
+#root .admin-users-editor > section > strong {
+  font-size: var(--hm-type-body);
+}
+
+@media (max-width: 699px) {
+  #root .library-header.is-root .library-header__title strong {
+    font-size: 1.8125rem;
+  }
+
+  #root .library-header.is-detail .library-header__title strong {
+    font-size: var(--hm-type-title);
+  }
+}
+
+@media (max-width: 420px) {
+  #root .administration-metric strong {
+    font-size: var(--hm-type-title);
+  }
+}

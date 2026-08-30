@@ -39,6 +39,7 @@ import './account-shell.css';
 import './desktop-overlays.css';
 import './mobile-shell.css';
 import './admin-import-redesign.css';
+import './typography.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
