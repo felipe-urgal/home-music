@@ -31,10 +31,14 @@ export function registerSmartPlaylistRoutes(
   const databasePath = options.databasePath
     || process.env.HOME_MUSIC_DATABASE_PATH
     || defaultDatabasePath;
-  const store = new SmartPlaylistStore(databasePath);
+  let store: SmartPlaylistStore | null = null;
+  const getStore = () => {
+    store ??= new SmartPlaylistStore(databasePath);
+    return store;
+  };
 
   app.addHook('onClose', async () => {
-    store.close();
+    store?.close();
   });
 
   app.get('/api/smart-playlists', async (request, reply) => {
@@ -43,7 +47,7 @@ export function registerSmartPlaylistRoutes(
     }
 
     reply.header('Cache-Control', 'private, no-store');
-    return { playlists: store.list(request.user.id) };
+    return { playlists: getStore().list(request.user.id) };
   });
 
   app.post<{ Body: SmartPlaylistBody }>('/api/smart-playlists/preview', async (request, reply) => {
@@ -55,7 +59,7 @@ export function registerSmartPlaylistRoutes(
     if (!rule) return reply.code(400).send({ error: 'Regra da playlist inteligente inválida.' });
 
     reply.header('Cache-Control', 'private, no-store');
-    return { trackIds: store.evaluate(request.user.id, rule) };
+    return { trackIds: getStore().evaluate(request.user.id, rule) };
   });
 
   app.post<{ Body: SmartPlaylistBody }>('/api/smart-playlists', async (request, reply) => {
@@ -68,8 +72,8 @@ export function registerSmartPlaylistRoutes(
     if (!name) return reply.code(400).send({ error: 'Nome da playlist inteligente obrigatório.' });
     if (!rule) return reply.code(400).send({ error: 'Regra da playlist inteligente inválida.' });
 
-    const id = store.create(request.user.id, name, rule);
-    const playlist = store.get(request.user.id, id);
+    const id = getStore().create(request.user.id, name, rule);
+    const playlist = getStore().get(request.user.id, id);
     return reply.code(201).send({ playlist });
   });
 
@@ -95,11 +99,11 @@ export function registerSmartPlaylistRoutes(
         return reply.code(400).send({ error: 'Nenhuma alteração informada.' });
       }
 
-      if (!store.update(request.user.id, request.params.id, patch)) {
+      if (!getStore().update(request.user.id, request.params.id, patch)) {
         return reply.code(404).send({ error: 'Playlist inteligente não encontrada.' });
       }
 
-      return { playlist: store.get(request.user.id, request.params.id) };
+      return { playlist: getStore().get(request.user.id, request.params.id) };
     }
   );
 
@@ -108,7 +112,7 @@ export function registerSmartPlaylistRoutes(
       return reply.code(409).send({ error: 'Playlists inteligentes exigem uma identidade persistida.' });
     }
 
-    if (!store.delete(request.user.id, request.params.id)) {
+    if (!getStore().delete(request.user.id, request.params.id)) {
       return reply.code(404).send({ error: 'Playlist inteligente não encontrada.' });
     }
     return reply.code(204).send();
