@@ -22,9 +22,10 @@ O projeto fixa uma versão do Playwright com suporte oficial ao Ubuntu 26.04. Qu
 npm run e2e
 ```
 
-O comando faz o build de produção antes de executar o baseline em duas configurações:
+O comando faz o build de produção antes de executar a suíte em três configurações:
 
 - `mobile-chromium`: viewport 390×844 com touch/mobile emulado;
+- `tablet-chromium`: viewport 834×1112 com touch;
 - `desktop-chromium`: viewport 1440×900.
 
 Para executar somente os testes quando o build já existe:
@@ -33,6 +34,8 @@ Para executar somente os testes quando o build já existe:
 npm run e2e:ci
 ```
 
-O CI também audita o lockfile de `e2e/`, instala o Chromium com as dependências do sistema e executa os testes antes do smoke de produção.
+O CI também audita o lockfile de `e2e/`, instala o Chromium com as dependências do sistema e executa a suíte antes do smoke de produção.
+
+A cobertura atual inclui baseline multiusuário e fluxos administrativos/fullstack específicos. A expansão sistemática dos fluxos críticos continua rastreada na issue #111; novos testes devem usar fixtures temporárias e não depender de internet ou dados reais do usuário.
 
 Artefatos locais de falha (`playwright-report/` e `test-results/`) são ignorados pelo Git.
