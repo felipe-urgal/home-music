@@ -1,6 +1,6 @@
 # Documentação do Home Music
 
-Este diretório mistura dois tipos de material. Esta página existe para deixar claro qual documento usar como fonte atual e quais arquivos preservam histórico de implementação.
+Este diretório mistura documentação **corrente** e registros históricos de implementação. Esta página define qual material deve ser usado como fonte de verdade.
 
 ## Desenvolvimento e agentes de IA
 
@@ -48,11 +48,12 @@ Pendências relacionadas: #81, #174 e #176.
 
 ## Importação
 
+Documentação corrente do pipeline:
+
 - [`import-staging.md`](import-staging.md)
 - [`import-staging-cleanup.md`](import-staging-cleanup.md)
 - [`import-upload.md`](import-upload.md)
 - [`import-url.md`](import-url.md)
-- [`external-provider-engine-decision.md`](external-provider-engine-decision.md)
 - [`external-providers.md`](external-providers.md)
 - [`external-provider-batches.md`](external-provider-batches.md)
 - [`yt-dlp-provider.md`](yt-dlp-provider.md)
@@ -62,11 +63,16 @@ Pendências relacionadas: #81, #174 e #176.
 - [`import-job-retry.md`](import-job-retry.md)
 - [`import-incremental-library-update.md`](import-incremental-library-update.md)
 
+Registro de decisão arquitetural:
+
+- [`external-provider-engine-decision.md`](external-provider-engine-decision.md) — avaliação datada que levou à escolha do yt-dlp; preserve como ADR/registro de decisão, não como status do backlog atual.
+
 ## Identidade e contas
 
-Documentos canônicos para comportamento atual:
+Fontes atuais:
 
 - [`multi-user-auth.md`](multi-user-auth.md)
+- [`password-ux.md`](password-ux.md)
 - [`phase-7.5-operations.md`](phase-7.5-operations.md)
 - [`phase-7.5-admin-users-screen.md`](phase-7.5-admin-users-screen.md)
 - [`phase-7.5-my-account-screen.md`](phase-7.5-my-account-screen.md)
@@ -74,10 +80,12 @@ Documentos canônicos para comportamento atual:
 
 ## Registros históricos `phase-7.5-*`
 
-Os demais arquivos `phase-7.5-*` preservam o desenho e os gates de slices específicos durante a migração multiusuário. Eles podem usar futuro/linguagem de implementação relativa àquele momento.
+Os demais arquivos `phase-7.5-*` preservam o desenho, decisões e gates dos slices usados durante a migração multiusuário. Eles podem usar linguagem relativa ao momento da implementação.
 
-Para saber **como o sistema funciona hoje**, prefira `README.md`, `architecture.md`, `multi-user-auth.md` e os documentos funcionais atuais. Não use um registro histórico isolado para inferir que uma funcionalidade ainda está pendente; o estado de entrega fica em `roadmap.md` e nas issues abertas.
+Para saber **como o sistema funciona hoje**, prefira `README.md`, `architecture.md`, `multi-user-auth.md`, os documentos funcionais atuais e os arquivos `phase-7.5-*` explicitamente listados acima como fonte corrente.
+
+Não use um registro histórico isolado para inferir que uma funcionalidade ainda está pendente. O estado de entrega fica em `roadmap.md` e nas issues abertas.
 
 ## E2E
 
-A suíte Playwright tem instruções próprias em [`../e2e/README.md`](../e2e/README.md). A expansão de cobertura continua rastreada na #111.
+A suíte Playwright tem instruções próprias em [`../e2e/README.md`](../e2e/README.md). A expansão sistemática de cobertura continua rastreada na #111.
