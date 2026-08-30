@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { AdminLibraryOverviewResponse, AuthenticatedUser } from '@home-music/shared';
+import type { AuthenticatedUser } from '@home-music/shared';
 import {
   AlertTriangle,
   ChevronLeft,
@@ -20,8 +20,11 @@ import {
   clearAdminTranscodeCache,
   getAdminLibraryOverview,
   getAdminTranscodeCache,
+  type AdminLibraryHealthOverview,
+  type AdminLibraryProblemKey,
   type AdminTranscodeCacheStatus
 } from '../admin-library-client';
+import '../administration-health.css';
 import { AdminImportMediaScreen } from './AdminImportMediaScreen';
 import { AdminMediaQuarantineScreen } from './AdminMediaQuarantineScreen';
 import { AdminOperationHistoryScreen } from './AdminOperationHistoryScreen';
@@ -39,6 +42,11 @@ type AdministrationScreenProps = {
 type CacheFeedback = {
   message: string;
   error: boolean;
+};
+
+type MetadataHealthFilter = {
+  label: string;
+  trackIds: string[];
 };
 
 function formatBytes(bytes: number) {
@@ -59,7 +67,7 @@ function formatScanDate(value: string) {
   }).format(date);
 }
 
-function formatAutoRescan(scanner: AdminLibraryOverviewResponse['scanner']) {
+function formatAutoRescan(scanner: AdminLibraryHealthOverview['scanner']) {
   if (!scanner.autoRescan.enabled || !scanner.autoRescan.intervalSeconds) return 'Automático desativado';
   const minutes = scanner.autoRescan.intervalSeconds / 60;
   return `Automático a cada ${new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 }).format(minutes)} min`;
@@ -75,7 +83,8 @@ function formatCacheActivity(cache: AdminTranscodeCacheStatus) {
 
 export function AdministrationScreen({ currentUser, onBack }: AdministrationScreenProps) {
   const [view, setView] = useState<AdministrationView>('overview');
-  const [overview, setOverview] = useState<AdminLibraryOverviewResponse | null>(null);
+  const [overview, setOverview] = useState<AdminLibraryHealthOverview | null>(null);
+  const [metadataHealthFilter, setMetadataHealthFilter] = useState<MetadataHealthFilter | null>(null);
   const [cache, setCache] = useState<AdminTranscodeCacheStatus | null>(null);
   const [loadingOverview, setLoadingOverview] = useState(true);
   const [loadingCache, setLoadingCache] = useState(true);
@@ -116,6 +125,18 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
     if (currentUser.role !== 'admin') return;
     void refreshOverview();
   }, [currentUser.role, refreshOverview]);
+
+  function openHealthProblem(problem: AdminLibraryProblemKey, label: string) {
+    const trackIds = overview?.problems.trackIds[problem] ?? [];
+    if (trackIds.length === 0) return;
+    setMetadataHealthFilter({ label, trackIds });
+    setView('metadata');
+  }
+
+  function openAllMetadata() {
+    setMetadataHealthFilter(null);
+    setView('metadata');
+  }
 
   async function clearTranscodeCache() {
     if (clearingCache) return;
@@ -163,7 +184,12 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
   }
 
   if (view === 'metadata') {
-    return <AdminTrackMetadataScreen onBack={() => setView('overview')} />;
+    return (
+      <AdminTrackMetadataScreen
+        initialHealthFilter={metadataHealthFilter}
+        onBack={() => setView('overview')}
+      />
+    );
   }
 
   if (view === 'quarantine') {
@@ -269,10 +295,26 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
                     <div><strong id="administration-problems-title">Qualidade da biblioteca</strong><small>{problemCount === 0 ? 'Nenhum problema detectado' : `${problemCount.toLocaleString('pt-BR')} faixas precisam de atenção`}</small></div>
                   </div>
                   <dl className="administration-problem-list">
-                    <div><dt>Sem capa</dt><dd>{overview.problems.missingCover.toLocaleString('pt-BR')}</dd></div>
-                    <div><dt>Artista desconhecido</dt><dd>{overview.problems.unknownArtist.toLocaleString('pt-BR')}</dd></div>
-                    <div><dt>Álbum desconhecido</dt><dd>{overview.problems.unknownAlbum.toLocaleString('pt-BR')}</dd></div>
-                    <div><dt>Duração indisponível</dt><dd>{overview.problems.missingDuration.toLocaleString('pt-BR')}</dd></div>
+                    <div>
+                      <dt><button className="administration-problem-list__button" type="button" disabled={overview.problems.missingTitle === 0} onClick={() => openHealthProblem('missingTitle', 'Sem título')}><span>Sem título</span>{overview.problems.missingTitle > 0 && <ChevronRight />}</button></dt>
+                      <dd>{overview.problems.missingTitle.toLocaleString('pt-BR')}</dd>
+                    </div>
+                    <div>
+                      <dt><button className="administration-problem-list__button" type="button" disabled={overview.problems.missingCover === 0} onClick={() => openHealthProblem('missingCover', 'Sem capa')}><span>Sem capa</span>{overview.problems.missingCover > 0 && <ChevronRight />}</button></dt>
+                      <dd>{overview.problems.missingCover.toLocaleString('pt-BR')}</dd>
+                    </div>
+                    <div>
+                      <dt><button className="administration-problem-list__button" type="button" disabled={overview.problems.unknownArtist === 0} onClick={() => openHealthProblem('unknownArtist', 'Artista desconhecido')}><span>Artista desconhecido</span>{overview.problems.unknownArtist > 0 && <ChevronRight />}</button></dt>
+                      <dd>{overview.problems.unknownArtist.toLocaleString('pt-BR')}</dd>
+                    </div>
+                    <div>
+                      <dt><button className="administration-problem-list__button" type="button" disabled={overview.problems.unknownAlbum === 0} onClick={() => openHealthProblem('unknownAlbum', 'Álbum desconhecido')}><span>Álbum desconhecido</span>{overview.problems.unknownAlbum > 0 && <ChevronRight />}</button></dt>
+                      <dd>{overview.problems.unknownAlbum.toLocaleString('pt-BR')}</dd>
+                    </div>
+                    <div>
+                      <dt><button className="administration-problem-list__button" type="button" disabled={overview.problems.missingDuration === 0} onClick={() => openHealthProblem('missingDuration', 'Duração indisponível')}><span>Duração indisponível</span>{overview.problems.missingDuration > 0 && <ChevronRight />}</button></dt>
+                      <dd>{overview.problems.missingDuration.toLocaleString('pt-BR')}</dd>
+                    </div>
                   </dl>
                 </article>
 
@@ -291,7 +333,7 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
                 <article className="administration-detail-card administration-storage-card" aria-labelledby="administration-storage-title">
                   <div className="administration-detail-card__heading">
                     <HardDrive />
-                    <div><strong id="administration-storage-title">Armazenamento</strong><small>Biblioteca original e cache derivado de transcoding</small></div>
+                    <div><strong id="administration-storage-title">Armazenamento</strong><small>Biblioteca, banco SQLite e cache derivado de transcoding</small></div>
                   </div>
 
                   {cacheError && <div className="administration-cache-message is-error" role="alert">{cacheError}</div>}
@@ -303,6 +345,7 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
 
                   <dl className="administration-storage-list">
                     <div><dt>Biblioteca física</dt><dd>{formatBytes(overview.storage.libraryBytes)}</dd></div>
+                    <div><dt>Banco SQLite</dt><dd>{overview.storage.databaseBytes == null ? 'Indisponível' : formatBytes(overview.storage.databaseBytes)}</dd></div>
                     <div><dt>Cache atual</dt><dd>{cache ? formatBytes(cache.bytes) : loadingCache ? 'Carregando…' : 'Indisponível'}</dd></div>
                     <div><dt>Limite configurado</dt><dd>{cache ? formatBytes(cache.limitBytes) : '—'}</dd></div>
                     <div><dt>Arquivos em cache</dt><dd>{cache ? cache.entries.toLocaleString('pt-BR') : '—'}</dd></div>
@@ -335,7 +378,7 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
               <span><strong>Gerenciar músicas</strong><small>Desative, reative ou mova faixas para a lixeira com segurança.</small></span>
               <ChevronRight />
             </button>
-            <button type="button" onClick={() => setView('metadata')}>
+            <button type="button" onClick={openAllMetadata}>
               <span className="my-account-card__icon"><Database /></span>
               <span><strong>Metadados</strong><small>Corrija texto e capa sem modificar o arquivo de áudio original.</small></span>
               <ChevronRight />
