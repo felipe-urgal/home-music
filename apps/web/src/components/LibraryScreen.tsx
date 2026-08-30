@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
@@ -143,6 +143,7 @@ export function LibraryScreen({
     playlists,
     scanning,
     scannedAt,
+    refreshPlaylists,
     rescan,
     createPlaylist,
     renamePlaylist,
@@ -178,6 +179,10 @@ export function LibraryScreen({
 
   const isDetail = Boolean(selectedPlaylist || folderPath);
   const run = (operation: Promise<unknown>) => void operation.catch(() => undefined);
+
+  useEffect(() => {
+    void refreshPlaylists().catch(reportError);
+  }, [refreshPlaylists, reportError]);
 
   function goBack() {
     if (selectedPlaylist) leavePlaylist();
