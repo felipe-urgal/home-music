@@ -40,6 +40,7 @@ import './desktop-overlays.css';
 import './mobile-shell.css';
 import './admin-import-redesign.css';
 import './typography.css';
+import './layout-readability.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
