@@ -3,12 +3,13 @@ import { readdir } from 'node:fs/promises';
 import path from 'node:path';
 import type { Readable } from 'node:stream';
 import { parseFile, parseStream, type IAudioMetadata } from 'music-metadata';
-import type { Track } from '@home-music/shared';
+import type { AdminLibraryIntegrityStatus, Track } from '@home-music/shared';
 import {
   abortLibraryIntegrityCheck,
   beginLibraryIntegrityCheck,
   clearLibraryIntegrityFileFailures,
   finishLibraryIntegrityCheck,
+  getLibraryIntegrityStatus,
   hasLibraryIntegrityFileFailure,
   probeMediaFile,
   recordLibraryIntegrityIssue
@@ -244,6 +245,64 @@ export function mergeIndexedTrack(tracks: IndexedTrack[], indexed: IndexedTrack)
   next.push(indexed);
   next.sort(compareTracks);
   return next;
+}
+
+export async function auditLibraryIntegrity(
+  libraryRoot: string,
+  indexedTracks: readonly IndexedTrack[],
+  onWarning?: ScanWarningHandler
+): Promise<AdminLibraryIntegrityStatus> {
+  return withMediaQuarantineLock(async () => {
+    const firstVerification = getLibraryIntegrityStatus().checkedAt == null;
+    beginLibraryIntegrityCheck(libraryRoot);
+    try {
+      const unavailableDirectories: string[] = [];
+      const files = await walk(libraryRoot, libraryRoot, unavailableDirectories, onWarning);
+      const indexedByPath = new Map(indexedTracks.map(track => [track.filePath, track]));
+      const seenPaths = new Set<string>();
+
+      for (const file of files) {
+        seenPaths.add(file.path);
+        const indexed = indexedByPath.get(file.path);
+        const changed = Boolean(indexed && (
+          indexed.fileSize !== file.size || indexed.mtimeMs !== file.mtimeMs
+        ));
+        const needsMediaCheck = firstVerification || !indexed || changed || hasLibraryIntegrityFileFailure(file.path);
+
+        clearLibraryIntegrityFileFailures(file.path);
+        const detectedTrackId = indexed?.id || trackId(libraryRoot, file.path);
+        if (!indexed) {
+          recordLibraryIntegrityIssue({
+            kind: 'unindexed-file',
+            filePath: file.path,
+            trackId: detectedTrackId,
+            message: 'Arquivo encontrado sem registro correspondente no índice atual.'
+          });
+        }
+        if (needsMediaCheck) {
+          await metadataForFile(libraryRoot, file, onWarning, detectedTrackId);
+        }
+      }
+
+      for (const indexed of indexedTracks) {
+        if (seenPaths.has(indexed.filePath)) continue;
+        if (await isQuarantinedTrackFilePresent(libraryRoot, indexed.id, indexed.filePath)) continue;
+        if (unavailableDirectories.some(directory => isPathInside(directory, indexed.filePath))) continue;
+
+        recordLibraryIntegrityIssue({
+          kind: 'missing-file',
+          filePath: indexed.filePath,
+          trackId: indexed.id,
+          message: 'Registro indexado não possui arquivo correspondente no caminho esperado.'
+        });
+      }
+
+      return finishLibraryIntegrityCheck();
+    } catch (error) {
+      abortLibraryIntegrityCheck();
+      throw error;
+    }
+  });
 }
 
 export async function scanLibrary(
