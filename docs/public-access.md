@@ -39,9 +39,12 @@ Tailscale Serve e Funnel não podem ocupar a mesma porta `443` ao mesmo tempo. O
 2. Tailscale instalado e autenticado **no Ubuntu**.
 3. MagicDNS e HTTPS Certificates habilitados no tailnet.
 4. Tailscale CLI 1.52 ou superior.
-5. `HOME_MUSIC_USER` configurado.
-6. `HOME_MUSIC_PASSWORD` exclusiva com pelo menos **20 caracteres** para o perfil público.
-7. Permissão para usar Funnel no tailnet.
+5. existir no SQLite uma conta `admin` ativa, sem troca obrigatória de senha pendente;
+6. a senha atual desse administrador ter pelo menos **20 caracteres** para habilitar o perfil público;
+7. build atual do Home Music disponível, pois o script usa o validador local de credenciais persistidas;
+8. permissão para usar Funnel no tailnet.
+
+`HOME_MUSIC_USER` e `HOME_MUSIC_PASSWORD` não são requisitos do Funnel. Essas variáveis servem somente ao bootstrap do primeiro administrador e podem/deveriam ter sido removidas depois que a conta persistida foi validada.
 
 O celular não precisa ter Tailscale instalado.
 
@@ -59,13 +62,15 @@ Na primeira ativação do Funnel, o Tailscale pode solicitar habilitação/ajust
 npm run tailscale:public:enable
 ```
 
+O comando solicita no terminal o **username e a senha atual de um administrador persistido**. A senha não é gravada no `.env`, no histórico operacional ou em argumentos de processo; ela é usada somente para validar localmente se a conta está ativa, é `admin`, não exige troca de senha e atende ao tamanho mínimo do perfil público.
+
 Antes de publicar, o script:
 
-1. valida serviço, Tailscale, MagicDNS, porta e credenciais;
-2. recusa senha com menos de 20 caracteres;
+1. valida serviço, Tailscale, MagicDNS, porta e build necessário ao validador local;
+2. valida a conta administrativa persistida e recusa senha com menos de 20 caracteres;
 3. recusa sobrescrever outro serviço já configurado em HTTPS/443;
 4. confirma que o Home Music responde localmente;
-5. altera `PRODUCTION_HOST=127.0.0.1` e `HOME_MUSIC_COOKIE_SECURE=true`;
+5. altera `PRODUCTION_HOST=127.0.0.1`, `HOME_MUSIC_COOKIE_SECURE=true` e a confiança restrita no proxy Tailscale necessária ao perfil;
 6. reinicia e valida o backend **antes** de criar o Funnel;
 7. cria Funnel persistente em HTTPS/443 apontando somente para `127.0.0.1:8787`;
 8. confirma que a configuração final é realmente Funnel para o backend esperado;
@@ -89,7 +94,7 @@ npm run tailscale:public:status
 
 Estados esperados:
 
-- `publico-funnel`: público via Funnel, backend em loopback e cookie Secure;
+- `publico-funnel`: público via Funnel, backend em loopback, cookie Secure e proxy Tailscale confiado pela configuração esperada;
 - `privado-serve`: privado ao tailnet via Serve;
 - `lan-http`: sem proxy Tailscale em 443 e backend exposto apenas na LAN;
 - `hostname-renomeado`: o MagicDNS atual mudou, mas existe uma configuração persistente exclusiva do Home Music no hostname anterior;
@@ -165,7 +170,7 @@ O modo público preserva as proteções existentes do Home Music:
 
 Ainda assim, há uma diferença fundamental: com Funnel, qualquer pessoa na internet pode alcançar a URL e tentar autenticar. Por isso:
 
-- use uma senha exclusiva e longa; o script exige no mínimo 20 caracteres;
+- use uma senha exclusiva e longa; o script exige no mínimo 20 caracteres no administrador usado para autorizar a exposição;
 - não reutilize a senha de e-mail, GitHub, Tailscale ou outros serviços;
 - mantenha Ubuntu, Node, dependências e Tailscale atualizados;
 - se não precisar do acesso público por um período, execute `npm run tailscale:public:disable`;
