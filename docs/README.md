@@ -2,6 +2,12 @@
 
 Este diretório mistura dois tipos de material. Esta página existe para deixar claro qual documento usar como fonte atual e quais arquivos preservam histórico de implementação.
 
+## Desenvolvimento e agentes de IA
+
+Antes de alterar o repositório, leia [`../AGENTS.md`](../AGENTS.md).
+
+Ele define o fluxo obrigatório de desenvolvimento, postura fullstack sênior, padrão de PR, gates de segurança/testes e a regra de **auto code review completo no head final** antes de aprovar qualquer merge.
+
 ## Fontes atuais
 
 Comece por:
@@ -53,7 +59,6 @@ Pendências relacionadas: #81, #174 e #176.
 - [`import-metadata-preview.md`](import-metadata-preview.md)
 - [`import-duplicate-detection.md`](import-duplicate-detection.md)
 - [`import-safe-destination.md`](import-safe-destination.md)
-- [`import-staging-cleanup.md`](import-staging-cleanup.md)
 - [`import-job-retry.md`](import-job-retry.md)
 - [`import-incremental-library-update.md`](import-incremental-library-update.md)
 
