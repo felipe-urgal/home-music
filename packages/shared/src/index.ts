@@ -124,6 +124,51 @@ export type AdminLibraryOverviewResponse = {
   };
 };
 
+export type AdminLibraryDuplicateConfidence = 'exact' | 'probable' | 'possible';
+export type AdminLibraryDuplicateReason = 'hash' | 'title' | 'artist' | 'album' | 'duration' | 'filename';
+
+export type AdminLibraryDuplicateTrack = {
+  id: string;
+  title: string;
+  artist: string;
+  album: string;
+  durationSeconds: number | null;
+  format: string;
+  sizeBytes: number;
+  relativePath: string;
+};
+
+export type AdminLibraryDuplicateCandidate = {
+  key: string;
+  confidence: AdminLibraryDuplicateConfidence;
+  reasons: AdminLibraryDuplicateReason[];
+  tracks: [AdminLibraryDuplicateTrack, AdminLibraryDuplicateTrack];
+  ignored: boolean;
+};
+
+export type AdminLibraryDuplicateReviewResponse = {
+  checkedAt: string;
+  hashComplete: boolean;
+  counts: {
+    reviewable: number;
+    exact: number;
+    probable: number;
+    possible: number;
+    ignored: number;
+  };
+  candidates: AdminLibraryDuplicateCandidate[];
+};
+
+export type AdminLibraryDuplicateIgnoreRequest = {
+  trackIds: [string, string];
+  ignored: boolean;
+};
+
+export type AdminLibraryDuplicateIgnoreResponse = {
+  key: string;
+  ignored: boolean;
+};
+
 export type ImportJobSource = {
   type: ImportJobSourceType;
   provider: string | null;
