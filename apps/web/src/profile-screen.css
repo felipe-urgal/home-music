@@ -125,7 +125,7 @@
 
 .my-account-profile-security {
   display: grid;
-  grid-template-columns: 36px minmax(0,1fr) auto;
+  grid-template-columns: 36px minmax(0,1fr);
   align-items: center;
   gap: 12px;
   margin-top: 14px;
@@ -163,37 +163,6 @@
   color: #7f8b96;
 }
 
-.my-account-profile-security__action {
-  min-height: 38px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 11px;
-  border: 1px solid rgba(92,169,230,.16);
-  border-radius: 9px;
-  background: rgba(30,139,232,.055);
-  color: #9fd5ff;
-  cursor: pointer;
-  font: inherit;
-  white-space: nowrap;
-}
-
-.my-account-profile-security__action:hover {
-  background: rgba(30,139,232,.1);
-  color: #d8eeff;
-}
-
-.my-account-profile-security__action:focus-visible,
-.my-account-profile--link:focus-visible {
-  outline: 2px solid rgba(120,198,255,.8);
-  outline-offset: 2px;
-}
-
-.my-account-profile-security__action svg {
-  width: 15px;
-  height: 15px;
-}
-
 .my-account-profile--link {
   width: 100%;
   border: 1px solid rgba(255,255,255,.07);
@@ -212,6 +181,11 @@
 .my-account-profile--link:hover {
   border-color: rgba(78,168,240,.18);
   background: #101922;
+}
+
+.my-account-profile--link:focus-visible {
+  outline: 2px solid rgba(120,198,255,.8);
+  outline-offset: 2px;
 }
 
 .my-account-profile__end {
@@ -258,14 +232,5 @@
 
   .my-account-profile-details dd {
     text-align: left;
-  }
-
-  .my-account-profile-security {
-    grid-template-columns: 36px minmax(0,1fr);
-  }
-
-  .my-account-profile-security__action {
-    grid-column: 2;
-    justify-self: start;
   }
 }
