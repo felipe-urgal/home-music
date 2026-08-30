@@ -224,7 +224,13 @@ export function AdminMediaQuarantineScreen({ onBack }: AdminMediaQuarantineScree
           <input
             type="search"
             value={query}
-            onChange={event => setQuery(event.target.value)}
+            disabled={operationBusy}
+            onChange={event => {
+              setQuery(event.target.value);
+              selection.clear();
+              setSelectedTrackId(null);
+              setBatchFeedback(null);
+            }}
             placeholder="Buscar título, artista, álbum ou caminho"
             aria-label="Buscar na lixeira"
           />
