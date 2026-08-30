@@ -5,7 +5,7 @@ import { DatabaseSync } from 'node:sqlite';
 import type { PlaybackState, Playlist, PlaylistSource, RepeatMode, StatisticsPeriod, Track } from '@home-music/shared';
 import type { IndexedTrack } from './library.js';
 
-const CURRENT_SCHEMA_VERSION = 10;
+const CURRENT_SCHEMA_VERSION = 11;
 const HISTORY_CAPACITY = 2_000;
 
 const DEFAULT_PLAYBACK_STATE: PlaybackState = {
@@ -587,6 +587,45 @@ export class HomeMusicDatabase {
         `);
         this.db.exec('COMMIT;');
         version = 10;
+      } catch (error) {
+        try {
+          this.db.exec('ROLLBACK;');
+        } catch {
+          // Preserva o erro original se a transação já tiver sido encerrada.
+        }
+        throw error;
+      }
+    }
+
+    if (version < 11) {
+      this.db.exec('BEGIN IMMEDIATE;');
+      try {
+        this.db.exec(`
+          DROP TRIGGER IF EXISTS trg_playlists_owner_insert;
+          DROP TRIGGER IF EXISTS trg_playlists_owner_update;
+
+          CREATE TRIGGER trg_playlists_owner_insert
+          BEFORE INSERT ON playlists
+          WHEN NEW.source NOT IN ('manual', 'smart', 'rekordbox')
+            OR (NEW.source IN ('manual', 'smart') AND NEW.owner_user_id IS NULL)
+            OR (NEW.source = 'rekordbox' AND NEW.owner_user_id IS NOT NULL)
+          BEGIN
+            SELECT RAISE(ABORT, 'ownership de playlist inválido');
+          END;
+
+          CREATE TRIGGER trg_playlists_owner_update
+          BEFORE UPDATE OF source, owner_user_id ON playlists
+          WHEN NEW.source NOT IN ('manual', 'smart', 'rekordbox')
+            OR (NEW.source IN ('manual', 'smart') AND NEW.owner_user_id IS NULL)
+            OR (NEW.source = 'rekordbox' AND NEW.owner_user_id IS NOT NULL)
+          BEGIN
+            SELECT RAISE(ABORT, 'ownership de playlist inválido');
+          END;
+
+          PRAGMA user_version = 11;
+        `);
+        this.db.exec('COMMIT;');
+        version = 11;
       } catch (error) {
         try {
           this.db.exec('ROLLBACK;');
