@@ -81,6 +81,10 @@ function isPersistentFileFailure(issue: AdminLibraryIntegrityIssue) {
   return issue.kind === 'scanner-failed' || issue.kind === 'media-probe-failed';
 }
 
+function pathMatchesPrefix(relativePath: string, prefix: string) {
+  return relativePath === prefix || relativePath.startsWith(`${prefix}/`);
+}
+
 export function resolveFfprobeCommand(rawFfmpegCommand: string | undefined) {
   const configured = rawFfmpegCommand?.trim();
   if (!configured) return 'ffprobe';
@@ -88,7 +92,7 @@ export function resolveFfprobeCommand(rawFfmpegCommand: string | undefined) {
 
   const basename = path.basename(configured);
   const match = /^ffmpeg(\.exe)?$/i.exec(basename);
-  if (!match) return null;
+  if (!match) return 'ffprobe';
   const ffprobeName = match[1] ? 'ffprobe.exe' : 'ffprobe';
   const directory = path.dirname(configured);
   return directory === '.' ? ffprobeName : path.join(directory, ffprobeName);
@@ -127,7 +131,7 @@ export async function probeMediaFile(
   if (!command) {
     return {
       status: 'unavailable',
-      message: 'ffprobe não pode ser derivado de HOME_MUSIC_FFMPEG_PATH.'
+      message: 'HOME_MUSIC_FFMPEG_PATH é inválido para derivar uma verificação de mídia.'
     };
   }
 
@@ -158,7 +162,7 @@ export function beginLibraryIntegrityCheck(libraryRoot: string) {
   activeCheck = {
     libraryRoot,
     issues: lastLibraryRoot === libraryRoot
-      ? lastStatus.issues.filter(isPersistentFileFailure).map(issue => ({ ...issue }))
+      ? lastStatus.issues.map(issue => ({ ...issue }))
       : []
   };
 }
@@ -177,6 +181,27 @@ export function clearLibraryIntegrityFileFailures(filePath: string) {
   );
 }
 
+export function clearLibraryIntegrityTransientFileIssues(filePath: string) {
+  if (!activeCheck) return;
+  const relativePath = normalizedRelativePath(activeCheck.libraryRoot, filePath);
+  activeCheck.issues = activeCheck.issues.filter(issue =>
+    issue.relativePath !== relativePath ||
+    (issue.kind !== 'missing-file' && issue.kind !== 'unindexed-file')
+  );
+}
+
+export function pruneLibraryIntegrityIssues(
+  seenRelativePaths: ReadonlySet<string>,
+  unavailableDirectoryPrefixes: readonly string[]
+) {
+  if (!activeCheck) return;
+  activeCheck.issues = activeCheck.issues.filter(issue => {
+    if (issue.kind === 'missing-file') return true;
+    if (seenRelativePaths.has(issue.relativePath)) return true;
+    return unavailableDirectoryPrefixes.some(prefix => pathMatchesPrefix(issue.relativePath, prefix));
+  });
+}
+
 export function recordLibraryIntegrityIssue(input: {
   kind: AdminLibraryIntegrityIssueKind;
   filePath: string;
@@ -186,9 +211,7 @@ export function recordLibraryIntegrityIssue(input: {
   if (!activeCheck) return;
   const relativePath = normalizedRelativePath(activeCheck.libraryRoot, input.filePath);
   if (input.kind === 'missing-file') {
-    activeCheck.issues = activeCheck.issues.filter(issue =>
-      !isPersistentFileFailure(issue) || issue.relativePath !== relativePath
-    );
+    activeCheck.issues = activeCheck.issues.filter(issue => issue.relativePath !== relativePath);
   }
   activeCheck.issues.push({
     kind: input.kind,
