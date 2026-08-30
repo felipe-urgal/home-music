@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import type { SmartPlaylistRule } from '@home-music/shared';
 import type { FastifyInstance } from 'fastify';
 import { normalizeSmartPlaylistRule, SmartPlaylistStore } from './smart-playlists.js';
@@ -8,8 +9,10 @@ type SmartPlaylistBody = {
 };
 
 type SmartPlaylistRouteOptions = {
-  eligibleTrackIds: () => ReadonlySet<string>;
+  databasePath?: string;
 };
+
+const defaultDatabasePath = fileURLToPath(new URL('../../../data/home-music.db', import.meta.url));
 
 function cleanName(value: unknown) {
   if (typeof value !== 'string') return null;
@@ -23,9 +26,26 @@ function cleanRule(value: unknown): SmartPlaylistRule | null {
 
 export function registerSmartPlaylistRoutes(
   app: FastifyInstance,
-  store: SmartPlaylistStore,
-  options: SmartPlaylistRouteOptions
+  options: SmartPlaylistRouteOptions = {}
 ) {
+  const databasePath = options.databasePath
+    || process.env.HOME_MUSIC_DATABASE_PATH
+    || defaultDatabasePath;
+  const store = new SmartPlaylistStore(databasePath);
+
+  app.addHook('onClose', async () => {
+    store.close();
+  });
+
+  app.get('/api/smart-playlists', async (request, reply) => {
+    if (!request.user) {
+      return reply.code(409).send({ error: 'Playlists inteligentes exigem uma identidade persistida.' });
+    }
+
+    reply.header('Cache-Control', 'private, no-store');
+    return { playlists: store.list(request.user.id) };
+  });
+
   app.post<{ Body: SmartPlaylistBody }>('/api/smart-playlists/preview', async (request, reply) => {
     if (!request.user) {
       return reply.code(409).send({ error: 'Playlists inteligentes exigem uma identidade persistida.' });
@@ -35,9 +55,7 @@ export function registerSmartPlaylistRoutes(
     if (!rule) return reply.code(400).send({ error: 'Regra da playlist inteligente inválida.' });
 
     reply.header('Cache-Control', 'private, no-store');
-    return {
-      trackIds: store.evaluate(request.user.id, rule, options.eligibleTrackIds())
-    };
+    return { trackIds: store.evaluate(request.user.id, rule) };
   });
 
   app.post<{ Body: SmartPlaylistBody }>('/api/smart-playlists', async (request, reply) => {
@@ -51,7 +69,7 @@ export function registerSmartPlaylistRoutes(
     if (!rule) return reply.code(400).send({ error: 'Regra da playlist inteligente inválida.' });
 
     const id = store.create(request.user.id, name, rule);
-    const playlist = store.get(request.user.id, id, options.eligibleTrackIds());
+    const playlist = store.get(request.user.id, id);
     return reply.code(201).send({ playlist });
   });
 
@@ -81,8 +99,7 @@ export function registerSmartPlaylistRoutes(
         return reply.code(404).send({ error: 'Playlist inteligente não encontrada.' });
       }
 
-      const playlist = store.get(request.user.id, request.params.id, options.eligibleTrackIds());
-      return { playlist };
+      return { playlist: store.get(request.user.id, request.params.id) };
     }
   );
 
