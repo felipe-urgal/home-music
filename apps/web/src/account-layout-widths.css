@@ -6,6 +6,14 @@
   margin-inline: auto;
 }
 
+@media (min-width: 1024px) {
+  .desktop-layout:has(.desktop-account-surface) .desktop-main-content--library {
+    width: 100%;
+    max-width: none;
+    margin-inline: 0;
+  }
+}
+
 @media (max-width: 900px) {
   .my-account-screen {
     width: calc(100% - 32px);
