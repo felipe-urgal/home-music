@@ -22,13 +22,15 @@
   max-width: var(--account-width-management);
 }
 
-.admin-tracks-screen {
+.admin-tracks-screen,
+.admin-metadata-screen--v1 {
   max-width: var(--account-width-manager);
 }
 
 @media (max-width: 1160px) {
   .administration-cockpit,
-  .admin-tracks-screen {
+  .admin-tracks-screen,
+  .admin-metadata-screen--v1 {
     max-width: calc(100vw - 32px);
   }
 }
@@ -61,7 +63,8 @@
   .my-account-screen--sessions,
   .my-account-screen--playback,
   .administration-cockpit,
-  .admin-tracks-screen {
+  .admin-tracks-screen,
+  .admin-metadata-screen--v1 {
     max-width: 100%;
   }
 }
