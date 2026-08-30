@@ -28,7 +28,7 @@ import {
   type AccountPlaybackPreferencesValue
 } from './AccountPlaybackPreferences';
 
-type AccountView = 'overview' | 'password' | 'sessions' | 'playback';
+type AccountView = 'overview' | 'profile' | 'password' | 'sessions' | 'playback';
 
 type MyAccountScreenProps = {
   currentUser: AuthenticatedUser;
@@ -69,6 +69,7 @@ export function MyAccountScreen({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const validationError = passwordChangeValidation(currentPassword, newPassword, confirmation);
+  const roleLabel = currentUser.role === 'admin' ? 'Administrador' : 'Usuário';
 
   useEffect(() => {
     if (view !== 'sessions') return;
@@ -154,20 +155,24 @@ export function MyAccountScreen({
     }
   }
 
-  const title = view === 'password'
-    ? 'Alterar senha'
-    : view === 'sessions'
-      ? 'Outros dispositivos'
-      : view === 'playback'
-        ? 'Reprodução'
-        : 'Minha conta';
-  const subtitle = view === 'password'
-    ? 'Atualize sua senha de acesso'
-    : view === 'sessions'
-      ? 'Gerencie sessões em dispositivos'
-      : view === 'playback'
-        ? 'Qualidade e normalização'
-        : 'Segurança e sessões';
+  const title = view === 'profile'
+    ? 'Perfil'
+    : view === 'password'
+      ? 'Alterar senha'
+      : view === 'sessions'
+        ? 'Outros dispositivos'
+        : view === 'playback'
+          ? 'Reprodução'
+          : 'Minha conta';
+  const subtitle = view === 'profile'
+    ? 'Informações da conta'
+    : view === 'password'
+      ? 'Atualize sua senha de acesso'
+      : view === 'sessions'
+        ? 'Gerencie sessões em dispositivos'
+        : view === 'playback'
+          ? 'Qualidade e normalização'
+          : 'Segurança e sessões';
 
   return (
     <section className={`my-account-screen my-account-screen--${view}`} aria-labelledby="my-account-title">
@@ -185,14 +190,17 @@ export function MyAccountScreen({
 
       {view === 'overview' && (
         <div className="my-account-overview">
-          <section className="my-account-profile" aria-label="Identidade atual">
+          <button className="my-account-profile my-account-profile--link" type="button" onClick={() => setView('profile')} aria-label="Abrir perfil">
             <span className="my-account-profile__icon"><UserRound /></span>
-            <div>
+            <span>
               <strong>{currentUser.username}</strong>
-              <small>{currentUser.role === 'admin' ? 'Administrador' : 'Usuário'}</small>
-            </div>
-            <span className="my-account-profile__badge"><ShieldCheck /> Sessão ativa</span>
-          </section>
+              <small>{roleLabel}</small>
+            </span>
+            <span className="my-account-profile__end">
+              <span className="my-account-profile__badge"><ShieldCheck /> Sessão ativa</span>
+              <ChevronRight className="my-account-profile__open" />
+            </span>
+          </button>
 
           <section className="my-account-link-group" aria-labelledby="my-account-group-account">
             <span className="my-account-link-group__label" id="my-account-group-account">Conta</span>
@@ -247,6 +255,46 @@ export function MyAccountScreen({
             <button className="my-account-action my-account-action--danger" type="button" disabled={signingOut} onClick={() => void signOut()}>
               {signingOut && <LoaderCircle className="my-account-spinner" />}
               {signingOut ? 'Saindo…' : 'Sair da conta'}
+            </button>
+          </section>
+        </div>
+      )}
+
+      {view === 'profile' && (
+        <div className="my-account-profile-page">
+          <section className="my-account-profile-hero" aria-labelledby="my-account-profile-name">
+            <span className="my-account-profile-hero__avatar"><UserRound /></span>
+            <div className="my-account-profile-hero__identity">
+              <strong id="my-account-profile-name">{currentUser.username}</strong>
+              <span>{roleLabel}</span>
+            </div>
+            <span className="my-account-profile-hero__status"><ShieldCheck /> Sessão ativa</span>
+          </section>
+
+          <section className="my-account-profile-details" aria-labelledby="my-account-profile-details-title">
+            <div className="my-account-profile-details__heading">
+              <strong id="my-account-profile-details-title">Informações da conta</strong>
+            </div>
+            <dl>
+              <div>
+                <dt>Nome de usuário</dt>
+                <dd>{currentUser.username}</dd>
+              </div>
+              <div>
+                <dt>Tipo de conta</dt>
+                <dd>{roleLabel}</dd>
+              </div>
+            </dl>
+          </section>
+
+          <section className="my-account-profile-security" aria-labelledby="my-account-profile-security-title">
+            <span className="my-account-profile-security__icon"><ShieldCheck /></span>
+            <div className="my-account-profile-security__copy">
+              <strong id="my-account-profile-security-title">Sua conta está protegida</strong>
+              <small>Use uma senha exclusiva e encerre sessões que você não reconhecer.</small>
+            </div>
+            <button className="my-account-profile-security__action" type="button" onClick={() => setView('password')}>
+              <KeyRound /> Alterar senha
             </button>
           </section>
         </div>
