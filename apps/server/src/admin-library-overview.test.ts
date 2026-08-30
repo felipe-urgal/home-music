@@ -32,7 +32,9 @@ const scanner = {
 
 const deterministicOptions = {
   databaseBytes: 4_096,
-  resolveTrack: (item: IndexedTrack) => item
+  resolveTrack: (item: IndexedTrack) => item,
+  isTrackHidden: () => false,
+  resolveTitleTagPresent: () => true
 };
 
 test('agrega total, armazenamento e scanner sem inventar problemas', async () => {
@@ -75,7 +77,10 @@ test('conta cada problema, expõe ids filtráveis e deduplica faixas afetadas', 
     }),
     track({ id: 'track-2', title: 'Second', filePath: '/music/second.mp3', hasCover: false }),
     track({ id: 'track-3', title: 'Third', filePath: '/music/third.mp3', album: 'Álbum desconhecido' })
-  ], scanner, deterministicOptions);
+  ], scanner, {
+    ...deterministicOptions,
+    resolveTitleTagPresent: item => item.id !== 'track-1'
+  });
 
   assert.deepEqual(overview.problems, {
     affectedTracks: 3,
@@ -94,7 +99,28 @@ test('conta cada problema, expõe ids filtráveis e deduplica faixas afetadas', 
   });
 });
 
-test('considera overrides efetivos ao calcular qualidade', async () => {
+test('não confunde título legítimo igual ao nome do arquivo com tag ausente', async () => {
+  const overview = await buildAdminLibraryOverview([
+    track({ title: 'track' })
+  ], scanner, deterministicOptions);
+
+  assert.equal(overview.problems.missingTitle, 0);
+  assert.deepEqual(overview.problems.trackIds.missingTitle, []);
+});
+
+test('detecta título ausente usando a tag real, inclusive com extensão em caixa alta', async () => {
+  const overview = await buildAdminLibraryOverview([
+    track({ title: 'track.MP3', filePath: '/music/track.MP3' })
+  ], scanner, {
+    ...deterministicOptions,
+    resolveTitleTagPresent: () => false
+  });
+
+  assert.equal(overview.problems.missingTitle, 1);
+  assert.deepEqual(overview.problems.trackIds.missingTitle, ['track-1']);
+});
+
+test('considera overrides efetivos ao calcular qualidade sem reprovar título já corrigido', async () => {
   const source = track({
     id: 'track-1',
     title: 'track',
@@ -102,9 +128,15 @@ test('considera overrides efetivos ao calcular qualidade', async () => {
     album: 'Álbum desconhecido',
     hasCover: false
   });
+  let titleProbeCalls = 0;
 
   const overview = await buildAdminLibraryOverview([source], scanner, {
     databaseBytes: 1,
+    isTrackHidden: () => false,
+    resolveTitleTagPresent: () => {
+      titleProbeCalls += 1;
+      return false;
+    },
     resolveTrack: item => ({
       ...item,
       title: 'Título corrigido',
@@ -114,6 +146,7 @@ test('considera overrides efetivos ao calcular qualidade', async () => {
     })
   });
 
+  assert.equal(titleProbeCalls, 0);
   assert.deepEqual(overview.problems, {
     affectedTracks: 0,
     missingTitle: 0,
@@ -129,6 +162,21 @@ test('considera overrides efetivos ao calcular qualidade', async () => {
       missingDuration: []
     }
   });
+});
+
+test('exclui faixas da lixeira das métricas e dos filtros', async () => {
+  const overview = await buildAdminLibraryOverview([
+    track({ id: 'visible', fileSize: 500, hasCover: false }),
+    track({ id: 'trash', title: 'Trash', filePath: '/music/trash.mp3', fileSize: 2_000, hasCover: false })
+  ], scanner, {
+    ...deterministicOptions,
+    isTrackHidden: item => item.id === 'trash'
+  });
+
+  assert.deepEqual(overview.tracks, { total: 1 });
+  assert.equal(overview.storage.libraryBytes, 500);
+  assert.equal(overview.problems.missingCover, 1);
+  assert.deepEqual(overview.problems.trackIds.missingCover, ['visible']);
 });
 
 test('não permite tamanho negativo contaminar o armazenamento', async () => {
