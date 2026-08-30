@@ -4,6 +4,7 @@ import {
   SESSION_COOKIE_NAME,
   type SessionManager
 } from './auth.js';
+import { registerPlaybackHistoryRoutes } from './playback-history-routes.js';
 import { registerSmartPlaylistRoutes } from './smart-playlist-routes.js';
 
 type SessionAccess = Pick<
@@ -57,4 +58,5 @@ export function registerAccountSessionRoutes(app: FastifyInstance, sessions: Ses
   });
 
   registerSmartPlaylistRoutes(app);
+  registerPlaybackHistoryRoutes(app);
 }

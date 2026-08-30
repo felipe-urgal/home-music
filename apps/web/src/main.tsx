@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 import { RequiredPasswordGate } from './components/RequiredPasswordGate';
+import { installPlaybackHistoryTracking } from './playback-history';
 import { registerServiceWorker } from './register-service-worker';
 import './styles.css';
 import './features.css';
@@ -53,6 +54,8 @@ import './admin-integrity-v3.css';
 import './account-layout-widths.css';
 import './admin-users-v1.css';
 import './admin-quarantine-v1.css';
+
+installPlaybackHistoryTracking();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

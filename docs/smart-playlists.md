@@ -46,6 +46,10 @@ Filtros de artista e álbum usam comparação textual normalizada. Pasta inclui 
 
 A regra `history: 'never'` significa **nunca tocada pelo usuário**, independentemente da janela de período. Uma faixa tocada fora do período não volta a ser considerada “nunca tocada”.
 
+Uma reprodução entra no histórico quando a faixa chega ao evento `ended` do player online. Essa semântica evita contar preload, simples abertura da faixa, pause/resume, reload da página ou seek como novas reproduções por si só. Em `repeat one`, cada conclusão da faixa gera uma nova entrada.
+
+Depois que o backend confirma o registro, o frontend invalida a listagem de playlists e consulta novamente as smart playlists. Assim, regras como “mais tocadas”, “recentes” e “nunca tocadas” refletem a reprodução concluída sem editar a definição.
+
 ### Favoritos
 
 `favorite` aceita:
@@ -72,6 +76,7 @@ POST   /api/smart-playlists/preview
 POST   /api/smart-playlists
 PATCH  /api/smart-playlists/:id
 DELETE /api/smart-playlists/:id
+POST   /api/history/:id
 ```
 
 Todas as mutações usam a proteção global:
@@ -79,6 +84,8 @@ Todas as mutações usam a proteção global:
 ```text
 X-Home-Music-Request: 1
 ```
+
+`POST /api/history/:id` registra uma reprodução concluída para o usuário autenticado. O endpoint rejeita IDs de faixa inexistentes e nunca recebe `userId` do cliente.
 
 ### Preview
 
@@ -153,6 +160,7 @@ A cobertura da feature deve provar pelo menos:
 - período de histórico;
 - “nunca tocada” considerando todo o histórico;
 - ordenação por mais tocadas, recentes e favoritas antigas;
+- reprodução concluída alimentando o histórico pessoal e a reavaliação da smart playlist;
 - ausência de materialização em `playlist_tracks`;
 - isolamento de definições, favoritos e histórico por usuário;
 - migration v10 → v11 preservando os invariantes de ownership;
