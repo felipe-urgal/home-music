@@ -1,6 +1,9 @@
 import type { AdminLibraryOverviewResponse } from '@home-music/shared';
 import { apiFetch } from './api-client';
 
+export type { AdminLibraryProblemKey } from '@home-music/shared';
+export type AdminLibraryHealthOverview = AdminLibraryOverviewResponse;
+
 export type AdminTranscodeCacheStatus = {
   bytes: number;
   limitBytes: number;
