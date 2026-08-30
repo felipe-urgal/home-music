@@ -68,6 +68,13 @@ const UPLOAD_STAGE_LABELS: Record<UploadStage, string> = {
   error: 'Falhou'
 };
 
+const PIPELINE_STEPS = [
+  { id: 1, label: 'Origem', description: 'Selecionar' },
+  { id: 2, label: 'Preparar', description: 'Validar mídia' },
+  { id: 3, label: 'Revisar', description: 'Conferir' },
+  { id: 4, label: 'Biblioteca', description: 'Importar' }
+] as const;
+
 function statusIcon(status: ImportJobStatus) {
   switch (status) {
     case 'processing': return <LoaderCircle className="is-spinning" />;
@@ -159,7 +166,7 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
   const urlBusy = urlSubmitting || urlCancelling || activeUrlJob?.status === 'processing';
   const pipelineBusy = jobs.some(job =>
     job.status === 'processing'
-    || (job.status === 'pending' && (!job.mediaDecision || !job.metadataPreview))
+    || (job.status === 'pending' && Boolean(job.mediaDecision) && !job.metadataPreview)
   );
 
   useEffect(() => {
@@ -299,9 +306,20 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
     ? Math.min(100, Math.round((activeUpload.loaded / activeUpload.size) * 100))
     : 0;
   const uploadBusy = Boolean(activeUpload && ['preparing', 'uploading', 'cancelling'].includes(activeUpload.stage));
+  const uploadPipelineActive = Boolean(activeUpload && ['preparing', 'uploading', 'cancelling', 'queued'].includes(activeUpload.stage));
   const accept = uploadConfig?.acceptedExtensions.join(',') || undefined;
-  const preparedJob = jobs.find(job => job.status === 'pending' && job.mediaDecision) ?? null;
+  const validationJobs = jobs.filter(job => job.status === 'pending' && !job.mediaDecision);
+  const reviewJobs = jobs.filter(job => job.status === 'pending' && Boolean(job.mediaDecision));
+  const activeProcessingJob = jobs.find(job => job.status === 'processing') ?? null;
   const newestJob = jobs[0] ?? null;
+
+  const currentStep = reviewJobs.length > 0
+    ? 3
+    : validationJobs.length > 0 || activeProcessingJob || uploadPipelineActive || urlBusy
+      ? 2
+      : newestJob?.status === 'completed'
+        ? 4
+        : 1;
 
   const onDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -311,7 +329,7 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
   };
 
   return (
-    <section className="my-account-screen admin-import-screen admin-import-screen--focused" aria-labelledby="admin-import-title">
+    <section className="my-account-screen admin-import-screen admin-import-screen--focused admin-import-screen--v3" aria-labelledby="admin-import-title">
       <header className="my-account-header admin-import-focused-header">
         <button className="icon-button" type="button" aria-label="Voltar" onClick={onBack}><ChevronLeft /></button>
         <div>
@@ -321,157 +339,254 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
         <span className="my-account-header__spacer" />
       </header>
 
-      <div className="admin-import-workbench">
-        <div className="admin-import-source-tabs" role="tablist" aria-label="Origem da música">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={sourceMode === 'provider'}
-            className={sourceMode === 'provider' ? 'is-active' : ''}
-            onClick={() => setSourceMode('provider')}
-          >
-            <Boxes />
-            <span><strong>Link do YouTube / YouTube Music</strong><small>Importe a partir de um link</small></span>
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={sourceMode === 'local'}
-            className={sourceMode === 'local' ? 'is-active' : ''}
-            onClick={() => setSourceMode('local')}
-          >
-            <FileAudio />
-            <span><strong>Arquivo local ou URL direta</strong><small>Importe outras fontes de áudio</small></span>
-          </button>
-        </div>
+      <nav className="admin-import-v3-progress" aria-label="Etapas da importação">
+        {PIPELINE_STEPS.map(step => {
+          const state = step.id < currentStep ? 'is-complete' : step.id === currentStep ? 'is-active' : '';
+          return (
+            <div className={state} key={step.id} aria-current={step.id === currentStep ? 'step' : undefined}>
+              <span>{step.id < currentStep ? <CheckCircle2 /> : step.id}</span>
+              <strong>{step.label}</strong>
+              <small>{step.description}</small>
+            </div>
+          );
+        })}
+      </nav>
 
-        <div className="admin-import-source-panel">
-          {sourceMode === 'provider' ? (
-            <AdminExternalProviderPanel
-              compact
-              jobs={jobs}
-              onJobUpdated={handleUpdatedJob}
-              onRefresh={() => loadJobs(true)}
-            />
-          ) : (
-            <div className="admin-import-local-sources">
-              <section className="admin-import-upload is-compact" aria-labelledby="admin-import-upload-title">
-                <div className="admin-import-upload__heading">
-                  <div><strong id="admin-import-upload-title">Arquivo local</strong><small>Arraste ou selecione uma música</small></div>
-                  {uploadConfig && <small>Até {formatBytes(uploadConfig.maxBytes)}</small>}
-                </div>
-                <div
-                  className={`admin-import-dropzone is-compact${dragging ? ' is-dragging' : ''}${uploadBusy ? ' is-disabled' : ''}`}
-                  onDragEnter={event => { event.preventDefault(); if (!uploadBusy) setDragging(true); }}
-                  onDragOver={event => event.preventDefault()}
-                  onDragLeave={event => { event.preventDefault(); if (event.currentTarget === event.target) setDragging(false); }}
-                  onDrop={onDrop}
-                >
-                  <UploadCloud />
-                  <div><strong>Arraste uma música para cá</strong><small>ou selecione um arquivo do dispositivo</small></div>
-                  <button type="button" disabled={uploadBusy || !uploadConfig} onClick={() => inputRef.current?.click()}>Selecionar arquivo</button>
-                  <input
-                    ref={inputRef}
-                    className="admin-import-file-input"
-                    type="file"
-                    accept={accept}
-                    aria-label="Selecionar arquivo de áudio"
-                    disabled={uploadBusy || !uploadConfig}
-                    onChange={event => event.target.files && handleFiles(event.target.files)}
-                  />
-                </div>
-                {uploadError && <div className="my-account-message is-error admin-import-message" role="alert">{uploadError}</div>}
-                {activeUpload && (
-                  <article className={`admin-import-upload-status is-${activeUpload.stage}`} aria-live="polite">
-                    <div className="admin-import-upload-status__top">
-                      <div><strong>{activeUpload.fileName}</strong><small>{UPLOAD_STAGE_LABELS[activeUpload.stage]}</small></div>
-                      {(activeUpload.stage === 'uploading' || activeUpload.stage === 'queued') && (
-                        <button type="button" onClick={() => void cancelUpload()}><X /> Cancelar</button>
-                      )}
-                    </div>
-                    {(activeUpload.stage === 'uploading' || activeUpload.stage === 'preparing') && (
-                      <div className="admin-import-progress-row"><progress max={100} value={uploadPercent} /><strong>{uploadPercent}%</strong></div>
-                    )}
-                    {activeUpload.error && <small className="admin-import-job__error">{activeUpload.error}</small>}
-                  </article>
-                )}
-              </section>
+      <div className="admin-import-v3-workspace">
+        <section className="admin-import-v3-source" aria-labelledby="admin-import-v3-source-title">
+          <header className="admin-import-v3-section-heading">
+            <div>
+              <span>Origem</span>
+              <strong id="admin-import-v3-source-title">De onde vem a música?</strong>
+              <small>Escolha uma fonte. Você pode iniciar outra importação sem sair desta tela.</small>
+            </div>
+          </header>
 
-              <section className="admin-import-url is-compact" aria-labelledby="admin-import-url-title">
-                <div className="admin-import-upload__heading">
-                  <div><strong id="admin-import-url-title">URL direta</strong><small>Link direto para um arquivo de áudio</small></div>
-                  <Link2 />
-                </div>
-                <form className="admin-import-url__form" onSubmit={event => void submitUrl(event)}>
-                  <div className="admin-import-url__input-row">
-                    <input
-                      type="url"
-                      inputMode="url"
-                      autoCapitalize="none"
-                      autoCorrect="off"
-                      spellCheck={false}
-                      aria-label="URL direta do arquivo"
-                      placeholder="https://exemplo.com/musica.flac"
-                      value={urlValue}
-                      disabled={urlBusy || !urlConfig}
-                      onChange={event => { setUrlValue(event.target.value); if (urlError) setUrlError(null); }}
-                    />
-                    <button type="submit" disabled={urlBusy || !urlConfig || !urlValue.trim()}>
-                      {urlSubmitting ? <LoaderCircle className="is-spinning" /> : <Link2 />} Analisar URL
-                    </button>
+          <div className="admin-import-source-tabs" role="tablist" aria-label="Origem da música">
+            <button
+              id="admin-import-provider-tab"
+              type="button"
+              role="tab"
+              aria-controls="admin-import-source-panel"
+              aria-selected={sourceMode === 'provider'}
+              className={sourceMode === 'provider' ? 'is-active' : ''}
+              onClick={() => setSourceMode('provider')}
+            >
+              <Boxes />
+              <span><strong>YouTube / YouTube Music</strong><small>Importe a partir de um link</small></span>
+            </button>
+            <button
+              id="admin-import-local-tab"
+              type="button"
+              role="tab"
+              aria-controls="admin-import-source-panel"
+              aria-selected={sourceMode === 'local'}
+              className={sourceMode === 'local' ? 'is-active' : ''}
+              onClick={() => setSourceMode('local')}
+            >
+              <FileAudio />
+              <span><strong>Arquivo ou URL direta</strong><small>Use mídia do dispositivo ou um link direto</small></span>
+            </button>
+          </div>
+
+          <div
+            id="admin-import-source-panel"
+            className="admin-import-source-panel"
+            role="tabpanel"
+            aria-labelledby={sourceMode === 'provider' ? 'admin-import-provider-tab' : 'admin-import-local-tab'}
+          >
+            {sourceMode === 'provider' ? (
+              <AdminExternalProviderPanel
+                compact
+                jobs={jobs}
+                onJobUpdated={handleUpdatedJob}
+                onRefresh={() => loadJobs(true)}
+              />
+            ) : (
+              <div className="admin-import-local-sources">
+                <section className="admin-import-upload is-compact" aria-labelledby="admin-import-upload-title">
+                  <div className="admin-import-upload__heading">
+                    <div><strong id="admin-import-upload-title">Arquivo local</strong><small>Arraste ou selecione uma música</small></div>
+                    {uploadConfig && <small>Até {formatBytes(uploadConfig.maxBytes)}</small>}
                   </div>
-                </form>
-                {urlError && <div className="my-account-message is-error admin-import-message" role="alert">{urlError}</div>}
-                {activeUrlJob && ['processing', 'failed', 'cancelled'].includes(activeUrlJob.status) && (
-                  <article className={`admin-import-url-status is-${activeUrlJob.status}`}>
-                    <span className="admin-import-job__status">{statusIcon(activeUrlJob.status)}</span>
-                    <div><strong>{activeUrlJob.label}</strong><small>{activeUrlJob.error || STATUS_LABELS[activeUrlJob.status]}</small></div>
-                    {activeUrlJob.status === 'processing' && <button type="button" disabled={urlCancelling} onClick={() => void cancelUrl()}><X /> Cancelar</button>}
-                  </article>
-                )}
-              </section>
+                  <div
+                    className={`admin-import-dropzone is-compact${dragging ? ' is-dragging' : ''}${uploadBusy ? ' is-disabled' : ''}`}
+                    onDragEnter={event => { event.preventDefault(); if (!uploadBusy) setDragging(true); }}
+                    onDragOver={event => event.preventDefault()}
+                    onDragLeave={event => { event.preventDefault(); if (event.currentTarget === event.target) setDragging(false); }}
+                    onDrop={onDrop}
+                  >
+                    <UploadCloud />
+                    <div><strong>Arraste uma música para cá</strong><small>ou selecione um arquivo do dispositivo</small></div>
+                    <button type="button" disabled={uploadBusy || !uploadConfig} onClick={() => inputRef.current?.click()}>Selecionar arquivo</button>
+                    <input
+                      ref={inputRef}
+                      className="admin-import-file-input"
+                      type="file"
+                      accept={accept}
+                      aria-label="Selecionar arquivo de áudio"
+                      disabled={uploadBusy || !uploadConfig}
+                      onChange={event => event.target.files && handleFiles(event.target.files)}
+                    />
+                  </div>
+                  {uploadError && <div className="my-account-message is-error admin-import-message" role="alert">{uploadError}</div>}
+                  {activeUpload && (
+                    <article className={`admin-import-upload-status is-${activeUpload.stage}`} aria-live="polite">
+                      <div className="admin-import-upload-status__top">
+                        <div><strong>{activeUpload.fileName}</strong><small>{UPLOAD_STAGE_LABELS[activeUpload.stage]}</small></div>
+                        {(activeUpload.stage === 'uploading' || activeUpload.stage === 'queued') && (
+                          <button type="button" onClick={() => void cancelUpload()}><X /> Cancelar</button>
+                        )}
+                      </div>
+                      {(activeUpload.stage === 'uploading' || activeUpload.stage === 'preparing') && (
+                        <div className="admin-import-progress-row"><progress max={100} value={uploadPercent} /><strong>{uploadPercent}%</strong></div>
+                      )}
+                      {activeUpload.error && <small className="admin-import-job__error">{activeUpload.error}</small>}
+                    </article>
+                  )}
+                </section>
+
+                <section className="admin-import-url is-compact" aria-labelledby="admin-import-url-title">
+                  <div className="admin-import-upload__heading">
+                    <div><strong id="admin-import-url-title">URL direta</strong><small>Link direto para um arquivo de áudio</small></div>
+                    <Link2 />
+                  </div>
+                  <form className="admin-import-url__form" onSubmit={event => void submitUrl(event)}>
+                    <div className="admin-import-url__input-row">
+                      <input
+                        type="url"
+                        inputMode="url"
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        spellCheck={false}
+                        aria-label="URL direta do arquivo"
+                        placeholder="https://exemplo.com/musica.flac"
+                        value={urlValue}
+                        disabled={urlBusy || !urlConfig}
+                        onChange={event => { setUrlValue(event.target.value); if (urlError) setUrlError(null); }}
+                      />
+                      <button type="submit" disabled={urlBusy || !urlConfig || !urlValue.trim()}>
+                        {urlSubmitting ? <LoaderCircle className="is-spinning" /> : <Link2 />} Analisar URL
+                      </button>
+                    </div>
+                  </form>
+                  {urlError && <div className="my-account-message is-error admin-import-message" role="alert">{urlError}</div>}
+                  {activeUrlJob && ['processing', 'failed', 'cancelled'].includes(activeUrlJob.status) && (
+                    <article className={`admin-import-url-status is-${activeUrlJob.status}`}>
+                      <span className="admin-import-job__status">{statusIcon(activeUrlJob.status)}</span>
+                      <div><strong>{activeUrlJob.label}</strong><small>{activeUrlJob.error || STATUS_LABELS[activeUrlJob.status]}</small></div>
+                      {activeUrlJob.status === 'processing' && <button type="button" disabled={urlCancelling} onClick={() => void cancelUrl()}><X /> Cancelar</button>}
+                    </article>
+                  )}
+                </section>
+              </div>
+            )}
+          </div>
+
+          <small className="admin-import-workbench__privacy">O conteúdo informado é usado apenas para esta importação.</small>
+        </section>
+
+        <section className="admin-import-v3-current" aria-labelledby="admin-import-v3-current-title">
+          <header className="admin-import-v3-section-heading is-current">
+            <div>
+              <span>Agora</span>
+              <strong id="admin-import-v3-current-title">
+                {reviewJobs.length > 0
+                  ? 'Revise e escolha o destino'
+                  : validationJobs.length > 0
+                    ? 'Prepare a mídia'
+                    : activeProcessingJob
+                      ? 'Preparando importação'
+                      : newestJob?.status === 'completed'
+                        ? 'Importação concluída'
+                        : newestJob && ['failed', 'cancelled'].includes(newestJob.status)
+                          ? 'Última tentativa'
+                          : 'Pronto para começar'}
+              </strong>
+              <small>
+                {reviewJobs.length > 0
+                  ? 'Confira somente o necessário antes de adicionar à biblioteca.'
+                  : validationJobs.length > 0
+                    ? 'Escolha o formato de saída e valide a mídia.'
+                    : activeProcessingJob
+                      ? 'O servidor está preparando a fonte selecionada.'
+                      : newestJob?.status === 'completed'
+                        ? 'A música já está disponível na biblioteca.'
+                        : 'Escolha uma origem ao lado para iniciar.'}
+              </small>
+            </div>
+            <button type="button" aria-label="Atualizar importações" disabled={loading || refreshing} onClick={() => void loadJobs(true)}>
+              <RefreshCw className={refreshing ? 'is-spinning' : ''} />
+            </button>
+          </header>
+
+          {error && <div className="my-account-message is-error admin-import-message" role="alert">{error}</div>}
+
+          {loading ? (
+            <div className="admin-import-v3-empty" role="status"><LoaderCircle className="is-spinning" /><span>Carregando importações…</span></div>
+          ) : reviewJobs.length > 0 ? (
+            <div className="admin-import-v3-stage">
+              <AdminImportMetadataPreviewPanel
+                compact
+                jobs={reviewJobs}
+                onJobUpdated={handleUpdatedJob}
+                onRefresh={() => loadJobs(true)}
+              />
+            </div>
+          ) : validationJobs.length > 0 ? (
+            mediaValidationConfig ? (
+              <div className="admin-import-v3-stage is-validation">
+                <AdminImportMediaValidationPanel
+                  jobs={validationJobs}
+                  config={mediaValidationConfig}
+                  onJobUpdated={handleUpdatedJob}
+                  onRefresh={() => loadJobs(true)}
+                />
+              </div>
+            ) : (
+              <article className="admin-import-v3-live is-failed" role="alert">
+                <span><CircleAlert /></span>
+                <div>
+                  <strong>Validação indisponível</strong>
+                  <small>Não foi possível carregar os perfis de saída. Atualize a tela e tente novamente.</small>
+                </div>
+              </article>
+            )
+          ) : activeProcessingJob ? (
+            <article className="admin-import-v3-live is-processing" role="status">
+              <span>{statusIcon(activeProcessingJob.status)}</span>
+              <div>
+                <strong>{activeProcessingJob.label}</strong>
+                <small>{sourceLabel(activeProcessingJob)} · preparando a mídia</small>
+              </div>
+            </article>
+          ) : newestJob?.status === 'completed' ? (
+            <div className="admin-import-v3-success" role="status">
+              <span><CheckCircle2 /></span>
+              <div>
+                <strong>Importação concluída</strong>
+                <small>{newestJob.metadataPreview?.effective.title || newestJob.label} foi adicionada à biblioteca.</small>
+              </div>
+            </div>
+          ) : newestJob && ['failed', 'cancelled'].includes(newestJob.status) ? (
+            <article className={`admin-import-v3-live is-${newestJob.status}`}>
+              <span>{statusIcon(newestJob.status)}</span>
+              <div>
+                <strong>{newestJob.label}</strong>
+                <small>{newestJob.error || STATUS_LABELS[newestJob.status]}</small>
+              </div>
+            </article>
+          ) : (
+            <div className="admin-import-v3-empty">
+              <span><FileAudio /></span>
+              <strong>Nenhuma importação em andamento</strong>
+              <small>Use YouTube, um arquivo local ou uma URL direta. O próximo passo aparece automaticamente aqui.</small>
             </div>
           )}
-        </div>
-
-        {preparedJob && (
-          <div className="admin-import-review-stage">
-            <div className="admin-import-review-stage__heading">
-              <div><strong>Encontramos esta música</strong><small>Confira apenas o que precisar antes de salvar.</small></div>
-              <CheckCircle2 />
-            </div>
-            <AdminImportMetadataPreviewPanel
-              compact
-              jobs={[preparedJob]}
-              onJobUpdated={handleUpdatedJob}
-              onRefresh={() => loadJobs(true)}
-            />
-          </div>
-        )}
-
-        {!preparedJob && newestJob?.status === 'completed' && (
-          <div className="admin-import-success" role="status">
-            <CheckCircle2 />
-            <div><strong>Importação concluída!</strong><small>A música foi adicionada à sua biblioteca.</small></div>
-          </div>
-        )}
-
-        <small className="admin-import-workbench__privacy">O conteúdo informado é usado apenas para esta importação.</small>
+        </section>
       </div>
 
-      <div className="admin-import-secondary">
-        {mediaValidationConfig && (
-          <details className="admin-import-details">
-            <summary>Detalhes técnicos</summary>
-            <AdminImportMediaValidationPanel
-              jobs={preparedJob ? [preparedJob] : jobs.filter(job => !['completed', 'cancelled'].includes(job.status)).slice(0, 3)}
-              config={mediaValidationConfig}
-              onJobUpdated={handleUpdatedJob}
-              onRefresh={() => loadJobs(true)}
-            />
-          </details>
-        )}
-
+      <div className="admin-import-secondary admin-import-secondary--v3">
         <details className="admin-import-details admin-import-history">
           <summary>
             <span>Histórico de importações</span>
