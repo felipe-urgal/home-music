@@ -107,7 +107,7 @@ test('favoritos são isolados por usuário e a mesma faixa pode pertencer a cont
   });
 });
 
-test('schema v10 exige dono em todo favorito persistido', async () => {
+test('schema v11 exige dono em todo favorito persistido', async () => {
   await withDatabase(async databasePath => {
     const database = new HomeMusicDatabase(databasePath);
     database.syncTracks([indexedTrack('a')], '/music', '2026-08-26T12:00:00.000Z');
@@ -147,7 +147,7 @@ test('migration v6 atribui favoritos globais ao primeiro usuário criado sem alt
     }]);
 
     const migrated = new HomeMusicDatabase(databasePath);
-    assert.equal(migrated.getSchemaVersion(), 10);
+    assert.equal(migrated.getSchemaVersion(), 11);
     assert.deepEqual(migrated.getFavoriteIds(FIRST_USER_ID), ['a']);
     assert.deepEqual(migrated.getFavoriteIds(SECOND_USER_ID), []);
     migrated.close();
@@ -184,7 +184,7 @@ test('migration pré-bootstrap guarda favoritos fora da tabela ativa e bootstrap
     }]);
 
     const migrated = new HomeMusicDatabase(databasePath);
-    assert.equal(migrated.getSchemaVersion(), 10);
+    assert.equal(migrated.getSchemaVersion(), 11);
     assert.deepEqual(migrated.getFavoriteIds(FIRST_USER_ID), []);
     migrated.close();
 
