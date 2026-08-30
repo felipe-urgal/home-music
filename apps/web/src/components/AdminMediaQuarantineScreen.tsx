@@ -1,12 +1,17 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AdminQuarantinedTrack } from '@home-music/shared';
 import {
+  AlertTriangle,
+  CalendarDays,
   ChevronLeft,
+  ChevronRight,
+  FolderOpen,
   LoaderCircle,
   RefreshCw,
   RotateCcw,
   Search,
-  Trash2
+  Trash2,
+  X
 } from 'lucide-react';
 import { runAdminBatch, summarizeAdminBatch } from '../admin-batch';
 import {
@@ -41,6 +46,7 @@ function formatDate(value: string) {
 
 export function AdminMediaQuarantineScreen({ onBack }: AdminMediaQuarantineScreenProps) {
   const [tracks, setTracks] = useState<AdminQuarantinedTrack[]>([]);
+  const [selectedTrackId, setSelectedTrackId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [busyTrackId, setBusyTrackId] = useState<string | null>(null);
@@ -49,6 +55,7 @@ export function AdminMediaQuarantineScreen({ onBack }: AdminMediaQuarantineScree
   const [batchFeedback, setBatchFeedback] = useState<BatchFeedback | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
+  const selectVisibleRef = useRef<HTMLInputElement>(null);
 
   const filteredTracks = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase('pt-BR');
@@ -56,8 +63,18 @@ export function AdminMediaQuarantineScreen({ onBack }: AdminMediaQuarantineScree
     return tracks.filter(track => [track.title, track.artist, track.album, track.originalPath]
       .some(value => value.toLocaleLowerCase('pt-BR').includes(normalized)));
   }, [query, tracks]);
+
+  const selectedTrack = tracks.find(track => track.id === selectedTrackId) ?? null;
   const selection = useAdminBulkSelection(tracks, filteredTracks);
   const operationBusy = batchBusy || busyTrackId !== null;
+
+  useEffect(() => {
+    if (selectVisibleRef.current) selectVisibleRef.current.indeterminate = selection.mixedVisibleSelection;
+  }, [selection.mixedVisibleSelection]);
+
+  useEffect(() => {
+    if (selectedTrackId && !tracks.some(track => track.id === selectedTrackId)) setSelectedTrackId(null);
+  }, [selectedTrackId, tracks]);
 
   async function loadTracks(background = false) {
     if (background) setRefreshing(true); else setLoading(true);
@@ -65,8 +82,8 @@ export function AdminMediaQuarantineScreen({ onBack }: AdminMediaQuarantineScree
     try {
       const response = await listAdminQuarantine();
       setTracks(response.tracks);
-    } catch (error) {
-      setError(errorMessage(error));
+    } catch (caught) {
+      setError(errorMessage(caught));
     } finally {
       if (background) setRefreshing(false); else setLoading(false);
     }
@@ -82,8 +99,9 @@ export function AdminMediaQuarantineScreen({ onBack }: AdminMediaQuarantineScree
     try {
       await restoreAdminQuarantinedTrack(track.id);
       setTracks(items => items.filter(item => item.id !== track.id));
-    } catch (error) {
-      setError(errorMessage(error));
+      if (selectedTrackId === track.id) setSelectedTrackId(null);
+    } catch (caught) {
+      setError(errorMessage(caught));
       void loadTracks(true);
     } finally {
       setBusyTrackId(null);
@@ -103,8 +121,9 @@ export function AdminMediaQuarantineScreen({ onBack }: AdminMediaQuarantineScree
     try {
       await deleteAdminQuarantinedTrack(track.id);
       setTracks(items => items.filter(item => item.id !== track.id));
-    } catch (error) {
-      setError(errorMessage(error));
+      if (selectedTrackId === track.id) setSelectedTrackId(null);
+    } catch (caught) {
+      setError(errorMessage(caught));
       void loadTracks(true);
     } finally {
       setBusyTrackId(null);
@@ -165,8 +184,8 @@ export function AdminMediaQuarantineScreen({ onBack }: AdminMediaQuarantineScree
       if (result.succeeded.length > 0) {
         try {
           await refreshLibraryAfterPermanentDelete();
-        } catch (error) {
-          refreshError = errorMessage(error);
+        } catch (caught) {
+          refreshError = errorMessage(caught);
         }
       }
 
@@ -181,8 +200,8 @@ export function AdminMediaQuarantineScreen({ onBack }: AdminMediaQuarantineScree
   }
 
   return (
-    <section className="my-account-screen admin-quarantine-screen" aria-labelledby="admin-quarantine-title">
-      <header className="my-account-header">
+    <section className="my-account-screen admin-quarantine-screen admin-quarantine-screen--v1" aria-labelledby="admin-quarantine-title">
+      <header className="my-account-header admin-quarantine-v1__header">
         <button className="icon-button" type="button" aria-label="Voltar" onClick={onBack}><ChevronLeft /></button>
         <div>
           <strong id="admin-quarantine-title">Lixeira</strong>
@@ -191,122 +210,199 @@ export function AdminMediaQuarantineScreen({ onBack }: AdminMediaQuarantineScree
         <span className="my-account-header__spacer" />
       </header>
 
-      <div className="admin-quarantine-overview">
-        <section className="admin-quarantine-notice" aria-label="Proteção da lixeira">
-          <Trash2 />
-          <div>
-            <strong>Arquivos na lixeira não são reproduzidos nem indexados.</strong>
-            <small>Restaurar é reversível. Excluir permanentemente apaga o arquivo físico.</small>
-          </div>
-        </section>
+      <section className="admin-quarantine-v1__notice" aria-label="Proteção da lixeira">
+        <span className="admin-quarantine-v1__notice-icon"><Trash2 /></span>
+        <div>
+          <strong>Arquivos na lixeira não são reproduzidos nem indexados.</strong>
+          <small>Restaurar é reversível. Excluir permanentemente apaga o arquivo físico.</small>
+        </div>
+      </section>
 
-        <section className="admin-quarantine-toolbar" aria-label="Buscar na lixeira">
-          <label className="admin-tracks-search">
-            <Search />
-            <input
-              type="search"
-              value={query}
-              onChange={event => setQuery(event.target.value)}
-              placeholder="Buscar título, artista, álbum ou caminho"
-              aria-label="Buscar na lixeira"
-            />
-          </label>
-          <button
-            className="admin-tracks-refresh"
-            type="button"
-            aria-label="Atualizar lixeira"
-            disabled={loading || refreshing || operationBusy}
-            onClick={() => void loadTracks(true)}
-          >
-            <RefreshCw className={refreshing ? 'is-spinning' : ''} />
-          </button>
-        </section>
+      <section className="admin-quarantine-v1__toolbar" aria-label="Buscar na lixeira">
+        <label className="admin-tracks-search admin-quarantine-v1__search">
+          <Search />
+          <input
+            type="search"
+            value={query}
+            disabled={operationBusy}
+            onChange={event => {
+              setQuery(event.target.value);
+              selection.clear();
+              setSelectedTrackId(null);
+              setBatchFeedback(null);
+            }}
+            placeholder="Buscar título, artista, álbum ou caminho"
+            aria-label="Buscar na lixeira"
+          />
+        </label>
+        <button
+          className="admin-tracks-refresh admin-quarantine-v1__refresh"
+          type="button"
+          aria-label="Atualizar lixeira"
+          disabled={loading || refreshing || operationBusy}
+          onClick={() => void loadTracks(true)}
+        >
+          <RefreshCw className={refreshing ? 'is-spinning' : ''} />
+        </button>
+      </section>
 
-        {error && <div className="admin-tracks-message is-error" role="alert">{error}</div>}
-        {batchFeedback && (
-          <div className={`admin-tracks-message ${batchFeedback.error ? 'is-error' : 'is-success'}`} role={batchFeedback.error ? 'alert' : 'status'}>
-            {batchFeedback.message}
-          </div>
-        )}
+      {error && <div className="admin-tracks-message is-error admin-quarantine-v1__message" role="alert">{error}</div>}
+      {batchFeedback && (
+        <div className={`admin-tracks-message admin-quarantine-v1__message ${batchFeedback.error ? 'is-error' : 'is-success'}`} role={batchFeedback.error ? 'alert' : 'status'}>
+          {batchFeedback.message}
+        </div>
+      )}
 
-        {loading ? (
-          <div className="admin-tracks-state" role="status"><LoaderCircle className="is-spinning" /> Carregando lixeira…</div>
-        ) : filteredTracks.length === 0 ? (
-          <div className="admin-tracks-state"><Trash2 /> {tracks.length === 0 ? 'A lixeira está vazia.' : 'Nenhuma música encontrada.'}</div>
-        ) : (
-          <section className="admin-quarantine-list" aria-label="Músicas na lixeira">
-            <AdminBulkToolbar
-              selectedCount={selection.selectedItems.length}
-              allVisibleSelected={selection.allVisibleSelected}
-              mixedVisibleSelection={selection.mixedVisibleSelection}
-              busy={operationBusy}
-              completed={batchProgress.completed}
-              total={batchProgress.total}
-              onToggleVisible={selection.toggleVisible}
-              onClear={selection.clear}
-            >
-              <button
-                type="button"
-                disabled={operationBusy}
-                onClick={() => void restoreSelected()}
-              >
-                <RotateCcw /> Restaurar {selection.selectedItems.length}
-              </button>
-              <button
-                className="is-danger"
-                type="button"
-                disabled={operationBusy}
-                onClick={() => void deleteSelected()}
-              >
-                <Trash2 /> Excluir {selection.selectedItems.length}
-              </button>
-            </AdminBulkToolbar>
-
-            <div className="admin-tracks-list__count">
-              {filteredTracks.length.toLocaleString('pt-BR')} {filteredTracks.length === 1 ? 'música' : 'músicas'} na lixeira
-            </div>
-            {filteredTracks.map(track => (
-              <article className={`admin-quarantine-row ${selection.selectedIds.has(track.id) ? 'is-selected' : ''}`.trim()} key={track.id}>
+      {loading ? (
+        <div className="admin-tracks-state admin-quarantine-v1__state" role="status"><LoaderCircle className="is-spinning" /> Carregando lixeira…</div>
+      ) : filteredTracks.length === 0 ? (
+        <div className="admin-tracks-state admin-quarantine-v1__state"><Trash2 /> {tracks.length === 0 ? 'A lixeira está vazia.' : 'Nenhuma música encontrada.'}</div>
+      ) : (
+        <div className={`admin-quarantine-v1__workspace${selectedTrack ? ' has-inspector' : ''}`}>
+          <section className="admin-quarantine-v1__list" aria-label="Músicas na lixeira">
+            <header className="admin-quarantine-v1__list-header">
+              <label className="admin-quarantine-v1__select-visible">
                 <input
-                  className="admin-quarantine-row__select"
+                  ref={selectVisibleRef}
                   type="checkbox"
-                  checked={selection.selectedIds.has(track.id)}
+                  checked={selection.allVisibleSelected}
                   disabled={operationBusy}
-                  aria-label={`Selecionar ${track.title}`}
-                  onChange={() => selection.toggle(track.id)}
+                  aria-label="Selecionar todas as músicas visíveis"
+                  onChange={selection.toggleVisible}
                 />
-                <span className="admin-quarantine-row__icon"><Trash2 /></span>
-                <div className="admin-quarantine-row__body">
-                  <strong>{track.title}</strong>
-                  <small>{track.artist} · {track.album}</small>
-                  <small className="admin-quarantine-row__path">{track.originalPath}</small>
-                  <small>Movida em {formatDate(track.quarantinedAt)}</small>
-                  {track.lastError && <small className="admin-quarantine-row__error">Última falha: {track.lastError}</small>}
-                </div>
-                <div className="admin-quarantine-row__actions">
-                  <button
-                    className="admin-quarantine-restore"
-                    type="button"
-                    disabled={operationBusy}
-                    onClick={() => void restoreTrack(track)}
-                  >
-                    {busyTrackId === track.id ? <LoaderCircle className="is-spinning" /> : <RotateCcw />}
-                    Restaurar
-                  </button>
-                  <button
-                    className="admin-quarantine-delete"
-                    type="button"
-                    disabled={operationBusy}
-                    onClick={() => void deleteTrack(track)}
-                  >
-                    <Trash2 /> Excluir permanentemente
-                  </button>
-                </div>
-              </article>
-            ))}
+                <span>{filteredTracks.length.toLocaleString('pt-BR')} {filteredTracks.length === 1 ? 'música' : 'músicas'} na lixeira</span>
+              </label>
+              <small>Selecione uma faixa para ações em lote ou abra os detalhes.</small>
+            </header>
+
+            {selection.selectedItems.length > 0 && (
+              <AdminBulkToolbar
+                selectedCount={selection.selectedItems.length}
+                allVisibleSelected={selection.allVisibleSelected}
+                mixedVisibleSelection={selection.mixedVisibleSelection}
+                busy={operationBusy}
+                completed={batchProgress.completed}
+                total={batchProgress.total}
+                onToggleVisible={selection.toggleVisible}
+                onClear={selection.clear}
+              >
+                <button type="button" disabled={operationBusy} onClick={() => void restoreSelected()}>
+                  <RotateCcw /> Restaurar {selection.selectedItems.length}
+                </button>
+                <button className="is-danger" type="button" disabled={operationBusy} onClick={() => void deleteSelected()}>
+                  <Trash2 /> Excluir {selection.selectedItems.length}
+                </button>
+              </AdminBulkToolbar>
+            )}
+
+            <div className="admin-quarantine-v1__rows">
+              {filteredTracks.map(track => {
+                const isSelected = selection.selectedIds.has(track.id);
+                const isInspected = selectedTrackId === track.id;
+                return (
+                  <article className={`admin-quarantine-v1__row${isSelected ? ' is-selected' : ''}${isInspected ? ' is-inspected' : ''}`} key={track.id}>
+                    <input
+                      className="admin-quarantine-v1__row-select"
+                      type="checkbox"
+                      checked={isSelected}
+                      disabled={operationBusy}
+                      aria-label={`Selecionar ${track.title}`}
+                      onChange={() => selection.toggle(track.id)}
+                    />
+                    <span className="admin-quarantine-v1__row-icon"><Trash2 /></span>
+                    <div className="admin-quarantine-v1__row-main">
+                      <strong>{track.title}</strong>
+                      <span>{track.artist} · {track.album}</span>
+                      <small>{track.originalPath}</small>
+                    </div>
+                    <div className="admin-quarantine-v1__row-date">
+                      <small>Movida em</small>
+                      <span>{formatDate(track.quarantinedAt)}</span>
+                    </div>
+                    <button
+                      className="admin-quarantine-v1__inspect"
+                      type="button"
+                      aria-label={`Ver detalhes de ${track.title}`}
+                      aria-pressed={isInspected}
+                      onClick={() => setSelectedTrackId(track.id)}
+                    >
+                      <ChevronRight />
+                    </button>
+                  </article>
+                );
+              })}
+            </div>
           </section>
-        )}
-      </div>
+
+          {selectedTrack && (
+            <aside className="admin-quarantine-v1__inspector" aria-label={`Detalhes de ${selectedTrack.title}`}>
+              <header className="admin-quarantine-v1__inspector-header">
+                <div>
+                  <strong>Detalhes do item</strong>
+                  <small>Arquivo na lixeira</small>
+                </div>
+                <button type="button" aria-label="Fechar detalhes" onClick={() => setSelectedTrackId(null)}><X /></button>
+              </header>
+
+              <section className="admin-quarantine-v1__identity">
+                <span className="admin-quarantine-v1__identity-icon"><Trash2 /></span>
+                <div>
+                  <strong>{selectedTrack.title}</strong>
+                  <span>{selectedTrack.artist}</span>
+                  <small>{selectedTrack.album}</small>
+                </div>
+              </section>
+
+              <dl className="admin-quarantine-v1__facts">
+                <div>
+                  <dt><FolderOpen /> Caminho original</dt>
+                  <dd>{selectedTrack.originalPath}</dd>
+                </div>
+                <div>
+                  <dt><CalendarDays /> Movida para a lixeira</dt>
+                  <dd>{formatDate(selectedTrack.quarantinedAt)}</dd>
+                </div>
+              </dl>
+
+              {selectedTrack.lastError && (
+                <div className="admin-quarantine-v1__last-error" role="status">
+                  <AlertTriangle />
+                  <div><strong>Última falha registrada</strong><span>{selectedTrack.lastError}</span></div>
+                </div>
+              )}
+
+              <section className="admin-quarantine-v1__restore-zone">
+                <div>
+                  <strong>Restaurar para a biblioteca</strong>
+                  <small>Recupere o arquivo antes de considerar a exclusão definitiva.</small>
+                </div>
+                <button
+                  type="button"
+                  disabled={operationBusy}
+                  onClick={() => void restoreTrack(selectedTrack)}
+                >
+                  {busyTrackId === selectedTrack.id ? <LoaderCircle className="is-spinning" /> : <RotateCcw />}
+                  Restaurar
+                </button>
+              </section>
+
+              <section className="admin-quarantine-v1__danger-zone">
+                <div>
+                  <strong>Excluir permanentemente</strong>
+                  <small>Apaga o arquivo físico e não pode ser desfeito.</small>
+                </div>
+                <button
+                  type="button"
+                  disabled={operationBusy}
+                  onClick={() => void deleteTrack(selectedTrack)}
+                >
+                  <Trash2 /> Excluir permanentemente
+                </button>
+              </section>
+            </aside>
+          )}
+        </div>
+      )}
     </section>
   );
 }

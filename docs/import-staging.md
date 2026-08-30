@@ -2,22 +2,24 @@
 
 A Fase 9 usa um staging temporário separado de `MUSIC_DIR` para impedir que bytes ainda não validados apareçam na biblioteca definitiva.
 
+O staging é compartilhado pelas origens atuais — upload local, URL direta e providers externos — e permanece a fronteira entre **aquisição** e **promoção**.
+
 ## Invariantes
 
 - a raiz de staging deve ser um diretório real, sem symlink;
 - staging e `MUSIC_DIR` precisam ser árvores disjuntas: nenhum pode conter o outro;
 - cada job recebe um diretório aleatório `job-*`, independente de nome, URL, provider ou filename fornecido pelo usuário;
 - diretórios de staging usam permissão `0700` e o payload `0600`;
-- o arquivo recebido usa nome interno fixo `payload.bin`; nomes externos nunca controlam caminhos de staging;
-- escrita interrompida e validação que falha removem o workspace daquele job;
+- o arquivo recebido usa nome interno controlado pelo servidor; nomes externos nunca controlam caminhos de staging;
+- escrita interrompida e validação que falha removem o workspace quando a operação ainda não foi commitada;
 - cancelamento pode remover explicitamente o workspace com `cleanupJob(jobId)`;
-- a validação recebe um caminho para o descritor já aberto em `/proc/<pid>/fd/<fd>`, reduzindo risco de validar um caminho diferente do inode aberto;
-- após a validação, SHA-256 e tamanho do payload ficam associados a um token único;
+- a validação opera sobre arquivo regular já aberto de forma segura e reduz o risco de validar um caminho diferente do inode esperado;
+- após a validação, SHA-256 e tamanho do payload ficam associados a um token não forjável;
 - antes da promoção, SHA-256 e tamanho são recalculados e precisam coincidir com o token de validação;
-- promoção só aceita pasta já existente dentro de `MUSIC_DIR`, rejeita traversal, componentes ocultos, symlinks e colisões;
-- o destino nunca é sobrescrito: a promoção usa hardlink exclusivo e valida a identidade do inode promovido;
-- nesta etapa, staging e destino precisam estar no mesmo filesystem. Em `EXDEV`, a operação falha sem copiar bytes para `MUSIC_DIR`;
-- em sucesso, o nome de staging é removido e o workspace é limpo.
+- promoção aceita apenas destino relativo seguro dentro de `MUSIC_DIR`, rejeitando traversal, symlink e colisões;
+- o destino nunca é sobrescrito;
+- staging e destino precisam permanecer no mesmo filesystem para a promoção atômica/no-clobber suportada; `EXDEV` falha fechado;
+- em sucesso, o payload é promovido e o workspace temporário é limpo.
 
 ## Configuração
 
@@ -29,36 +31,56 @@ HOME_MUSIC_IMPORT_STAGING_DIR=/caminho/fora/de/MUSIC_DIR
 
 Para permitir a promoção segura sem cópia intermediária dentro da biblioteca, mantenha o staging no mesmo filesystem de `MUSIC_DIR`.
 
-O upload local habilitado na #93 usa esta infraestrutura diretamente. O limite do upload é independente da localização do staging e está documentado em [`import-upload.md`](./import-upload.md).
+O upload local usa essa infraestrutura diretamente. URL direta baixa para o mesmo staging depois das validações de SSRF/rede. Providers externos escrevem primeiro em scratch próprio e o core copia a saída validada para o staging; o provider nunca recebe `MUSIC_DIR`.
 
-## Fluxo da Fase 9
+## Fluxo atual
 
-1. criar o job na fila;
-2. criar o workspace aleatório do job;
-3. upload, URL ou provider grava somente no payload de staging;
-4. FFmpeg/ffprobe e as demais validações operam sobre o arquivo de staging;
-5. `validatePayload()` emite um token somente após a validação completa;
-6. duplicatas, metadata, preview e destino são decididos antes da promoção;
-7. `promote()` revalida hash/tamanho e torna o inode visível em `MUSIC_DIR` sem sobrescrever destino existente;
-8. falha/cancelamento remove o staging; cleanup de resíduos após restart será ampliado na issue específica da Fase 9.
+```text
+origem
+  ↓
+staging / scratch controlado
+  ↓
+validação técnica FFprobe/FFmpeg
+  ↓
+preview e revisão de metadata
+  ↓
+detecção de duplicatas
+  ↓
+planejamento de destino
+  ↓
+promoção segura para MUSIC_DIR
+  ↓
+indexação incremental da biblioteca
+  ↓
+cleanup do workspace
+```
 
-## Estado atual
+A interface atual organiza esse pipeline como:
 
-A #93 implementa os passos 1–3 para upload local, com progresso e cancelamento. O job permanece `pending` depois que os bytes são recebidos integralmente, pois validação FFmpeg, preview, duplicatas, destino, promoção e atualização incremental continuam nas issues seguintes.
+```text
+Origem → Preparar → Revisar → Biblioteca
+```
 
-Importação por URL e providers externos ainda não usam esta infraestrutura em runtime.
+A aquisição concluída pode deixar o job em `pending` enquanto aguarda uma ação explícita da etapa seguinte; isso não significa que o arquivo já entrou na biblioteca.
+
+## Cleanup após falha/restart
+
+Além do cleanup normal em sucesso, falha e cancelamento, existe varredura defensiva de workspaces órfãos após restart e por intervalo, com TTL configurável. O cleanup não segue symlinks, ignora entradas fora do padrão esperado e preserva workspaces ativos do processo atual.
+
+Detalhes: [import-staging-cleanup.md](import-staging-cleanup.md).
 
 ## Testes
 
-A suíte cobre:
+A cobertura do staging/pipeline inclui:
 
 - staging dentro/contendo `MUSIC_DIR`;
-- raiz de staging por symlink;
+- raiz por symlink;
 - permissões de diretório e arquivo;
-- nome aleatório por job e payload com nome controlado pelo servidor;
-- limpeza em falha de stream, validação e cancelamento;
-- token de validação não forjável por um valor diferente;
+- nome aleatório por job e payload controlado pelo servidor;
+- limpeza em falha de stream, validação, cancelamento e restart;
+- token de validação não forjável;
 - alteração do payload após validação;
 - promoção bem-sucedida;
-- traversal, symlink no destino e colisão sem sobrescrita;
-- integração do upload local com staging sem escrita direta em `MUSIC_DIR`.
+- traversal, symlink e colisão sem sobrescrita;
+- upload, URL e provider sem escrita direta em `MUSIC_DIR`;
+- indexação incremental depois da promoção.

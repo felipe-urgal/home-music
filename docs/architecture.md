@@ -1,380 +1,337 @@
 # Arquitetura
 
-## Fluxos de execução
+Este documento descreve a arquitetura **atual** do Home Music. Documentos `phase-*` preservam decisões e etapas históricas; quando houver diferença, este arquivo e o `README.md` representam o estado operacional corrente.
 
-### Desenvolvimento
+## Visão geral
+
+O Home Music é um monorepo npm workspaces:
 
 ```text
-Celular / navegador
-     |
-     v
-React + Vite :5173
-     |
-     | /api (proxy)
-     v
+home-music/
+├── apps/web        React + TypeScript + Vite
+├── apps/server     Fastify + TypeScript + SQLite
+├── packages/shared contratos/tipos compartilhados
+├── data            SQLite e estado derivado local
+├── scripts         operação, CI/smoke, systemd e Tailscale
+└── docs             documentação técnica
+```
+
+Em produção existe **um processo Fastify**. Ele serve API, frontend compilado, streaming, capas e endpoints administrativos pela mesma porta interna.
+
+## Desenvolvimento
+
+```text
+Navegador
+   ↓
+Vite :5173
+   ↓ proxy /api
 Fastify :8787 em 127.0.0.1
 ```
 
-O Vite continua existindo somente para HMR e desenvolvimento local.
+O Vite existe apenas para HMR/desenvolvimento.
 
-### Produção — LAN/fallback
+## Produção
 
-```text
-Celular / PWA
-     |
-     | HTTP :8787
-     v
-Fastify em 0.0.0.0
-     |
-     +--> React compilado (apps/web/dist)
-     +--> login + sessão HttpOnly
-     +--> /api
-     +--> scanner incremental
-     +--> music-metadata
-     +--> SQLite
-     +--> capas
-     +--> streaming HTTP Range
-     |
-     v
-MUSIC_DIR no Ubuntu
-```
-
-Esse perfil é compatível com a rede local, mas HTTP não oferece confidencialidade e nunca deve ser encaminhado pela internet.
-
-### Produção — Tailscale/HTTPS
+### LAN
 
 ```text
-Celular / PWA com Tailscale
-     |
-     | HTTPS :443 (*.ts.net)
-     | tailnet privado
-     v
-Tailscale Serve / tailscaled
-     |
-     | HTTP somente em loopback
-     v
-Fastify :8787 em 127.0.0.1
-     |
-     +--> React compilado
-     +--> login + cookie Secure/HttpOnly
-     +--> /api + Range streaming
-     +--> SQLite + MUSIC_DIR
+Navegador/PWA
+   ↓ HTTP :8787
+Fastify 0.0.0.0:8787
+   ├── React compilado
+   ├── autenticação/sessões
+   ├── API
+   ├── scanner/importação/administração
+   ├── streaming/capas
+   └── SQLite + MUSIC_DIR
 ```
 
-Esse é o perfil recomendado para uso cotidiano fora de casa. **Serve** mantém o serviço privado ao tailnet; **Funnel não é usado**.
+HTTP LAN é fallback local e não deve ser exposto por port-forwarding.
 
-A aplicação continua com **um processo Fastify e uma porta interna**. O Tailscale é uma camada de rede/TLS externa ao deploy da aplicação.
+### Tailscale Serve — recomendado
 
-## Fronteira de confiança do Tailscale
+```text
+Cliente no tailnet
+   ↓ HTTPS :443 (*.ts.net)
+Tailscale Serve
+   ↓ HTTP loopback
+Fastify 127.0.0.1:8787
+```
 
-No perfil remoto:
+O backend fica inacessível diretamente pela LAN/tailnet nesse perfil. Cookie `Secure` é habilitado explicitamente depois da validação HTTPS.
 
-- `PRODUCTION_HOST=127.0.0.1` impede conexão direta à porta `8787` pela LAN ou pelo tailnet;
-- Tailscale Serve termina TLS em `443` e faz proxy para `127.0.0.1:8787`;
-- `HOME_MUSIC_COOKIE_SECURE=true` força o cookie de sessão a ser aceito/enviado somente em HTTPS;
-- o backend não precisa confiar em `X-Forwarded-Proto` do cliente;
-- o login próprio do Home Music permanece como segunda camada de autenticação;
-- grants do Tailscale podem restringir quais identidades alcançam o servidor em TCP/443.
+### Tailscale Funnel — opcional
 
-O setup operacional valida o HTTPS antes de trocar o bind do Fastify para loopback. Assim, um erro de certificado/Serve não deixa o usuário sem o caminho LAN anterior.
+Quando o administrador precisa acessar **sem cliente Tailscale** no dispositivo remoto, o projeto possui perfil Funnel opcional.
 
-O script também detecta uso prévio de HTTPS/443 pelo Tailscale Serve e não sobrescreve uma configuração desconhecida.
+Funnel publica a URL `*.ts.net` na internet, mas mantém o Fastify em loopback e preserva a autenticação própria do Home Music. É uma exposição consciente da tela de login, não o perfil recomendado por padrão.
+
+Veja `tailscale.md`, `public-access.md` e `tailscale-funnel-troubleshooting.md`.
 
 ## Frontend de produção
 
-`npm run build` gera o frontend em `apps/web/dist`. Quando `NODE_ENV=production`, o Fastify valida esse diretório antes de iniciar e falha com mensagem explícita se `index.html` não existir.
+`npm run build` gera `apps/web/dist`.
 
-O servidor estático é implementado sem dependência adicional e possui contenção própria:
+O servidor:
 
-- rejeita `..`, equivalentes codificados, NUL, backslashes e arquivos ocultos;
-- rejeita symlinks;
-- resolve `realpath` e confirma que o arquivo permanece dentro do `dist`;
-- fallback SPA é usado somente para rotas válidas sem extensão;
-- arquivo estático inexistente retorna `404`;
-- `/api` inexistente continua retornando JSON/404, nunca o shell React.
+- exige `index.html` válido antes de considerar produção pronta;
+- serve assets hashados com cache longo/imutável;
+- serve shell/HTML com `no-store`;
+- mantém `/api/*` como API, sem fallback SPA;
+- rejeita traversal, NUL, arquivos ocultos inseguros e symlink escape na camada estática.
 
-Política de cache:
+## Identidade e autorização
 
-```text
-/assets/* com hash     1 ano + immutable
-/assets/* sem hash     cache curto + revalidate
-manifest / favicon     cache curto + revalidate
-index.html / SPA       no-store
-```
+### Bootstrap
 
-## Ciclo de vida do processo
+`HOME_MUSIC_USER` e `HOME_MUSIC_PASSWORD` servem **somente para criar o primeiro administrador quando a tabela `users` está vazia**.
 
-`HOST=127.0.0.1` continua reservado ao backend de desenvolvimento. Em produção, `PRODUCTION_HOST` define o perfil de exposição:
+Depois que existe usuário persistido no SQLite, login normal usa as contas e hashes do banco. A recomendação operacional é remover as credenciais de bootstrap do `.env` depois de validar o primeiro administrador.
+
+### Usuários
+
+Papéis atuais:
 
 ```text
-0.0.0.0     LAN HTTP
-127.0.0.1   Tailscale Serve / proxy local
+admin
+user
 ```
 
-Os handlers de `SIGTERM` e `SIGINT` são registrados antes da inicialização potencialmente longa da biblioteca.
+A biblioteca física é compartilhada, mas dados pessoais são isolados por usuário, incluindo favoritos, histórico/estatísticas, playlists manuais, estado do player e namespace offline.
+
+### Sessões
+
+Sessões usam token aleatório opaco em cookie:
+
+- `HttpOnly`;
+- `SameSite=Strict`;
+- `Secure` quando HTTPS está ativo.
+
+O token resolve para `userId`; role/estado vigente são avaliados pelo servidor. Sessões ficam em memória e são revogadas em restart do processo.
+
+### Política
+
+Rotas são classificadas centralmente como `public`, `authenticated` ou `admin`. Esconder menus no frontend é somente UX.
+
+Mutações autenticadas usam também:
 
 ```text
-systemd / Ctrl+C
-      ↓
-marca shutdown
-      ↓
-scan em andamento?
-      ├─ sim → aguarda finalizar
-      └─ não
-      ↓
-Fastify.close()
-      ↓
-onClose
-      ↓
-SQLite.close()
-      ↓
-processo termina
+X-Home-Music-Request: 1
 ```
 
-Há timeout defensivo de 25 segundos. Isso evita fechar o SQLite enquanto um scan ainda está persistindo o índice.
-
-## Liveness e readiness
-
-Os endpoints operacionais são separados por responsabilidade:
-
-- `/health`: público, retorna somente `{ ok: true }` e representa liveness;
-- `/ready`: público, retorna apenas `{ ready: boolean }` e usa HTTP `503` quando a aplicação ainda não está pronta;
-- `/api/health`: autenticado, contém diagnóstico detalhado.
-
-Readiness exige:
-
-- frontend preparado em produção;
-- autenticação configurada;
-- `MUSIC_DIR` acessível e biblioteca carregada/indexada.
-
-Contagem de faixas, estado de scan, uptime, versão do schema e demais detalhes não são expostos no health público.
-
-No perfil Tailscale, `/health` e `/ready` continuam sendo os probes usados pelo script para validar a transição local -> HTTPS.
-
-## systemd e atualizações
-
-`scripts/install-systemd.sh` detecta usuário, raiz real do repositório e binário Node em uso.
-
-Antes de build/install ele endurece:
-
-```text
-.env                  0600
-data/                  0700
-data/home-music.db*    0600
-```
-
-Se o serviço estiver ativo, ele é parado antes de `npm ci` e `npm run build`. O objetivo é impedir uma versão híbrida em que um processo antigo mantenha `index.html` em memória enquanto assets do `dist` já foram substituídos.
-
-O unit instalado em `/etc/systemd/system/home-music.service`:
-
-- usa caminhos absolutos escapados para sintaxe systemd;
-- inicia o `dist/index.js` diretamente;
-- usa `Restart=on-failure`;
-- envia logs ao journal;
-- aplica `NoNewPrivileges`, `PrivateTmp`, `ProtectSystem`, restrições de kernel/control groups e `UMask=0077`.
-
-Atualizações depois de um merge usam:
-
-```bash
-git pull --ff-only
-npm run service:update
-```
-
-O modo `update` exige que o serviço exista, para o processo antes do build, regenera o unit e executa `restart` explicitamente.
-
-A configuração Tailscale Serve fica no `tailscaled` e não é recriada a cada deploy. Por isso `service:update` preserva a URL HTTPS e apenas reinicia o backend atrás dela.
-
-## Automação Tailscale
-
-`scripts/configure-tailscale.sh` possui três modos:
-
-```text
-enable   habilita HTTPS privado e fecha o bind LAN
-disable  remove somente o Serve esperado e volta para LAN
-status   mostra serviço, URL, target e perfil de .env
-```
-
-O `enable` é transacional:
-
-```text
-preflight
-   ↓
-backend local saudável
-   ↓
-Serve HTTPS/443
-   ↓
-HTTPS real saudável
-   ↓
-backup temporário do .env
-   ↓
-127.0.0.1 + cookie Secure
-   ↓
-restart systemd
-   ↓
-/health local + /ready HTTPS
-```
-
-Se uma etapa após o backup falhar, o `.env` anterior é restaurado. Se o próprio script tiver criado o Serve, ele também o remove. O `disable` possui rollback simétrico e recria o Serve caso a restauração do perfil LAN falhe depois de removê-lo.
-
-Não é usado `tailscale serve reset`, porque esse comando poderia apagar configurações Serve não relacionadas ao Home Music.
-
-## Autenticação
-
-O frontend, manifest e favicon são públicos para que o navegador consiga montar a aplicação. O conteúdo pessoal continua protegido em `/api/*`.
-
-```text
-GET /
-  ↓
-React
-  ↓
-GET /api/auth/status
-  ↓
-sem sessão
-  ↓
-Tela de login
-  ↓
-POST /api/auth/login
-  ↓
-token aleatório no backend
-  ↓
-Set-Cookie: HttpOnly; SameSite=Strict; Secure (HTTPS)
-  ↓
-/api/* autenticado
-```
-
-Características:
-
-- credenciais vêm de `HOME_MUSIC_USER` e `HOME_MUSIC_PASSWORD`;
-- frontend nunca recebe a senha configurada;
-- sessão usa token aleatório, expira e fica apenas em memória;
-- logout revoga a sessão atual;
-- tentativas inválidas têm rate limit;
-- mutações exigem `X-Home-Music-Request: 1` além da sessão;
-- `401` da aplicação retorna o usuário ao login.
-
-O backend não confia cegamente em `X-Forwarded-Proto`. No perfil Tailscale, `HOME_MUSIC_COOKIE_SECURE=true` é configurado explicitamente depois que a URL HTTPS foi validada.
-
-## Biblioteca
-
-A biblioteca possui duas camadas:
-
-1. `MUSIC_DIR` é a fonte física dos arquivos;
-2. SQLite mantém índice e dados pessoais.
-
-No primeiro scan o backend processa metadados. Depois, o startup pode carregar o índice do SQLite sem reprocessar tudo.
-
-O re-scan compara `size + mtime`: arquivos inalterados são reaproveitados, novos/modificados são processados e removidos saem do índice.
-
-A navegação usa somente caminhos relativos a `MUSIC_DIR`; caminhos físicos não são expostos ao frontend.
-
-Letras são opcionais e lidas sob demanda de arquivos sidecar locais com o mesmo nome-base da faixa (`.lrc` ou `.txt`). A API retorna somente linhas e timestamps normalizados, limita cada arquivo a 512 KiB, rejeita symlinks/escapes com a mesma contenção usada pelo streaming e não consulta serviços externos.
-
-Se a raiz da biblioteca não puder ser resolvida, `libraryReady` permanece falso e `/ready` responde `503`.
-
-## Layout mobile e fila
-
-A superfície principal é limitada à viewport:
-
-- containers flex/grid críticos usam `min-width: 0`;
-- sem scroll horizontal global;
-- abas usam grid responsivo;
-- breadcrumbs rolam somente dentro do próprio componente;
-- títulos longos são truncados.
-
-A fila do player é carregada progressivamente para não renderizar uma pasta inteira de uma vez. No mobile, reordenação usa interação touch/pointer no grip, mantendo o scroll normal quando o gesto começa fora da alça.
-
-Capas são tratadas como conteúdo não confiável quanto a dimensão/proporção:
-
-```text
-slot conhecido
-   ↓
-overflow: hidden
-   ↓
-<img width=100% height=100%>
-   ↓
-object-fit: cover
-```
-
-A capa grande usa `aspect-ratio: 1 / 1` e `max-width: 100%`. Extração continua sob demanda com limites de formato, tamanho, concorrência e cache.
+para a proteção anti-CSRF da aplicação.
 
 ## SQLite
 
-O banco padrão fica em `data/home-music.db` e guarda:
+O banco padrão é `data/home-music.db`.
 
-- índice das faixas;
-- favoritos;
-- histórico;
-- playlists;
-- fila atual e ordem base;
-- última faixa e posição;
-- volume;
-- shuffle/repeat;
-- estado usado pela retomada automática.
+Ele mantém, entre outros:
 
-O schema usa `PRAGMA user_version`, migrations incrementais, WAL e foreign keys. A migration v4 adiciona os ganhos ReplayGain de faixa/álbum e invalida somente o timestamp do índice, forçando um re-scan completo único sem apagar favoritos, histórico, playlists ou estado do player.
+- usuários e hashes de senha;
+- índice da biblioteca;
+- estado ativo/inativo administrativo de faixas;
+- favoritos por usuário;
+- histórico/estatísticas por usuário;
+- playlists manuais por usuário;
+- estado/fila do player por usuário;
+- overrides de metadata e capa;
+- estado necessário a operações administrativas/importações;
+- histórico operacional.
 
-O smoke test pode definir `HOME_MUSIC_DATABASE_PATH` para usar um banco temporário e nunca tocar no SQLite real do usuário.
+O schema usa migrations via `PRAGMA user_version`, WAL e foreign keys.
 
-## Player e play automático
+Tokens de sessão não são persistidos no SQLite.
 
-O frontend separa intenção de reprodução do evento `pause` do `<audio>`, porque `audio.load()` pode emitir pausas técnicas durante troca de faixa.
+## Biblioteca e scanner
+
+`MUSIC_DIR` é a fonte física.
+
+O scanner:
+
+1. resolve e valida a raiz;
+2. percorre arquivos suportados;
+3. reaproveita entradas inalteradas por `size + mtime`;
+4. processa arquivos novos/modificados;
+5. reconcilia o índice;
+6. publica o snapshot em memória.
+
+O scan normal é **mutável/reconciliador**. Se um arquivo indexado desapareceu fisicamente, o scan pode remover seu registro do índice.
+
+Streaming e operações de filesystem revalidam confinement para impedir path traversal/symlink escape.
+
+## Integridade da biblioteca
+
+A auditoria administrativa de Integridade é separada do scan normal.
 
 ```text
-faixa termina
+Verificar agora
    ↓
-resolve próxima / repeat
-   ↓
-mantém intenção
-   ↓
-troca src
-   ↓
-audio.play()
+auditoria read-only
+   ├── scanner-failed
+   ├── media-probe-failed
+   ├── missing-file
+   └── unindexed-file
 ```
 
-Ao recarregar, `wasPlaying` permite tentar restaurar a reprodução. Se o navegador bloquear autoplay, o estado é preservado e a UI aguarda um toque em **Play**.
+Ela não remove nem altera arquivo/registro. O snapshot da última verificação fica disponível para o cockpit administrativo.
 
-### Volume mobile
+Essa separação é deliberada: diagnóstico não deve executar reconciliação destrutiva implicitamente.
 
-Em ambientes touch-first/iOS, o sistema controla o volume final e o elemento usa `1.0`. A preferência salva para desktop continua preservada.
+## Administração
 
-### Retorno à biblioteca
+A área administrativa é exclusiva de `admin` e usa layout fluido no desktop.
 
-A biblioteca preserva pasta, artista, álbum, playlist, favoritos e busca enquanto o player está aberto. A ação superior retorna ao contexto real.
+Superfícies atuais:
 
-## Streaming
+- cockpit/visão geral;
+- Gerenciar músicas;
+- Importação;
+- Integridade;
+- Usuários;
+- Metadados;
+- Lixeira/quarentena;
+- histórico e manutenção operacional.
 
-`GET /api/tracks/:id/stream` suporta `Range` para seek. A rota recebe somente ID indexado e revalida que o destino continua sendo arquivo regular dentro da raiz antes de abri-lo.
+As telas redesenhadas preferem listas limpas, inspetores/workspaces contextuais e ações em lote sob demanda, sem mover autorização para o cliente.
 
-Tailscale Serve apenas transporta o HTTP local pelo túnel HTTPS; Range continua chegando ao Fastify e não requer uma rota separada para streaming.
+## Operações destrutivas
 
-## Smoke de produção
+Princípios:
 
-O CI não se limita a compilar. Depois do build, `npm run smoke:production` cria uma biblioteca e um SQLite temporários, sobe **`npm start`**, valida frontend/API/login/readiness/cache e encerra o processo com `SIGTERM`.
+- desativar faixa é reversível e não remove o arquivo;
+- remoção da biblioteca passa por lixeira/quarentena;
+- restauração é o caminho preferencial;
+- exclusão permanente exige confirmação explícita;
+- exclusão permanente em lote exige confirmação digitada;
+- movimentação de arquivo é confinada a `MUSIC_DIR`, sem overwrite silencioso;
+- diagnóstico de Integridade nunca executa remoção automática.
 
-Além disso, o CI executa `bash -n` nos scripts de systemd e Tailscale. A integração real com o tailnet é validada manualmente porque depende de certificado, identidade e policy externos ao repositório.
+## Overrides de metadata/capa
 
-## Segurança
+Correções administrativas são não destrutivas por padrão:
 
-- desenvolvimento: API em `127.0.0.1`;
-- produção LAN: `0.0.0.0:8787`, somente como fallback local;
-- produção remota: `127.0.0.1:8787` atrás de Tailscale Serve HTTPS/443;
-- Funnel e port-forwarding público não fazem parte da arquitetura;
-- frontend público não contém dados pessoais;
-- symlinks/FIFOs/devices/escapes da biblioteca não são servidos;
-- arquivos estáticos de produção também têm contenção de path/symlink/NUL;
-- erros não expõem caminhos físicos;
-- health público é mínimo;
-- produção aplica CSP, `nosniff`, frame denial, referrer policy, permissions policy e CORP same-origin;
-- dependências são reproduzíveis via lockfile + `npm ci`;
-- systemd adiciona hardening do processo e permissões dos arquivos locais;
-- Tailscale grants são a camada recomendada de least-privilege para tailnets compartilhados.
+```text
+metadata física
+   + override SQLite
+   = metadata efetiva
+```
+
+A mesma ideia vale para capa. Scanner/rescan não deve apagar overrides válidos.
+
+Escrita opcional de volta ao arquivo original não faz parte do comportamento padrão atual.
+
+## Importação
+
+Todas as origens convergem para o mesmo pipeline:
+
+```text
+upload / URL / provider
+        ↓
+staging ou scratch fora de MUSIC_DIR
+        ↓
+validação técnica (FFprobe/FFmpeg)
+        ↓
+preview/ajuste de metadata
+        ↓
+detecção de duplicatas
+        ↓
+destino seguro / no-clobber
+        ↓
+promoção para MUSIC_DIR
+        ↓
+indexação incremental
+```
+
+Providers externos são desacoplados do core. O provider `yt-dlp` é opcional e nunca escreve diretamente em `MUSIC_DIR`.
+
+O pipeline possui cleanup de staging, retry/diagnóstico e suporte a lotes/playlists por provider com isolamento por item.
 
 ## Transcoding e ReplayGain
 
-O streaming direto continua sendo o caminho padrão. Os modos Economia e os fallbacks de compatibilidade usam AAC/M4A gerado pelo FFmpeg, com cache local limitado e limpeza LRU.
+Streaming original é preferido.
 
-ReplayGain é desativado por padrão e possui modos por faixa e por álbum. As tags são indexadas pelo `music-metadata`; no modo álbum, o ganho da faixa é usado como fallback quando a tag de álbum não existe.
+FFmpeg entra para:
 
-Quando a normalização está efetivamente ativa, o player solicita transcoding mesmo em qualidade automática/original. O backend resolve o ganho a partir do índice — não aceita um valor de ganho arbitrário enviado pelo cliente —, limita o intervalo a `-24..+12 dB` e aplica `volume + alimiter` no FFmpeg. A chave do cache inclui arquivo, mtime, qualidade e ganho, impedindo colisão entre versões normalizadas e não normalizadas.
+- Economia/compatibilidade;
+- normalização ReplayGain;
+- decisões do pipeline de importação.
 
-Se FFmpeg ou a versão normalizada falhar, o player tenta a mesma faixa sem normalização. O arquivo original não é alterado. Downloads offline continuam usando o arquivo original e não aplicam ReplayGain.
+O cache de transcoding é derivado, limitado e recriável. A chave inclui propriedades relevantes do arquivo/perfil/ganho para evitar colisões.
+
+O backend resolve ReplayGain do índice; não aceita ganho arbitrário enviado pelo cliente. O arquivo original nunca é alterado.
+
+## PWA e offline
+
+O cache estático contém apenas shell/assets públicos. Conteúdo autenticado de `/api/*` não é cacheado como parte do app shell.
+
+Áudio offline usa namespace por usuário:
+
+```text
+home-music:offline-tracks:v2:<userId>
+home-music-offline-audio-v2-<userId>
+```
+
+O service worker usa capability v3 e associa cada client/aba ao usuário autenticado antes de servir `/offline-audio/<trackId>`.
+
+O scheduler global permite até 3 downloads simultâneos. Continuidade em background/tela bloqueada ainda depende de validação real por plataforma (#81).
+
+A evolução para playlists/pastas offline deduplicadas está planejada na #174 e deve reutilizar essa infraestrutura.
+
+## Backup e restore
+
+Backup usa snapshot consistente do SQLite e manifesto verificado. A biblioteca física em `MUSIC_DIR` **não** faz parte do artefato e precisa de backup próprio.
+
+Restore é offline, valida o artefato antes da troca, cria snapshot de rollback e tenta restaurar o estado anterior em falha pós-troca.
+
+Detalhes em `backup-restore.md`.
+
+## Liveness e readiness
+
+Endpoints:
+
+```text
+GET /health      público, liveness mínimo
+GET /ready       público, readiness mínimo
+GET /api/health  autenticado, diagnóstico detalhado
+```
+
+`/ready` exige frontend preparado em produção, autenticação configurada e biblioteca carregável/pronta.
+
+## Ciclo de vida e systemd
+
+O processo registra handlers de shutdown e fecha Fastify/SQLite de forma coordenada.
+
+`scripts/install-systemd.sh`:
+
+- restringe permissões de `.env`, `data/` e SQLite;
+- para o serviço antes de `npm ci`/build no modo update;
+- valida artefatos e unit;
+- executa `systemctl daemon-reload`;
+- habilita/reinicia a unidade;
+- confirma que o serviço terminou ativo;
+- aplica hardening systemd.
+
+Depois de merge:
+
+```bash
+git switch main
+git pull --ff-only origin main
+npm run service:update
+```
+
+## Segurança resumida
+
+- backend é a fronteira de autorização;
+- produção remota prefere loopback + Tailscale Serve;
+- Funnel é opcional e conscientemente público;
+- cookies `HttpOnly`/`SameSite=Strict` e `Secure` em HTTPS;
+- login com rate limit;
+- mutações protegidas por sessão + header da aplicação;
+- paths físicos não são aceitos como autoridade do cliente;
+- streaming/filesystem revalidam confinement e arquivos regulares;
+- importação URL aplica proteção SSRF;
+- providers externos usam isolamento/timeout;
+- operações destrutivas são explícitas;
+- Integrity é read-only;
+- dependências usam lockfile + `npm ci`;
+- CI executa typecheck, testes, validações operacionais, build e smoke real de produção.

@@ -1,0 +1,701 @@
+/* Prototype 1 — trash list + contextual inspector. */
+.admin-quarantine-screen.admin-quarantine-screen--v1 {
+  width: calc(100% - 48px);
+  max-width: none;
+  min-width: 0;
+  margin-inline: auto;
+  padding-bottom: 40px;
+}
+
+.admin-quarantine-v1__header {
+  margin-bottom: 16px;
+}
+
+.admin-quarantine-v1__header strong {
+  font-size: 1.2rem;
+}
+
+.admin-quarantine-v1__header small {
+  color: #83919d;
+  font-size: .8125rem;
+}
+
+.admin-quarantine-v1__notice {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 13px 15px;
+  margin-bottom: 12px;
+  border: 1px solid rgba(220, 164, 78, .18);
+  border-radius: 13px;
+  background: rgba(115, 77, 22, .075);
+}
+
+.admin-quarantine-v1__notice-icon {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: rgba(196, 139, 51, .09);
+  color: #cfaa6f;
+}
+
+.admin-quarantine-v1__notice-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.admin-quarantine-v1__notice > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.admin-quarantine-v1__notice strong {
+  color: #dec99f;
+  font-size: .875rem;
+}
+
+.admin-quarantine-v1__notice small {
+  color: #94856c;
+  font-size: .8125rem;
+  line-height: 1.4;
+}
+
+.admin-quarantine-v1__toolbar {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 12px;
+}
+
+.admin-quarantine-v1__search {
+  height: 44px;
+  border-radius: 10px;
+}
+
+.admin-quarantine-v1__search input {
+  font-size: .875rem;
+}
+
+.admin-quarantine-v1__refresh {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+}
+
+.admin-quarantine-v1__message {
+  margin-bottom: 12px;
+  font-size: .875rem;
+  line-height: 1.45;
+}
+
+.admin-quarantine-v1__state {
+  min-height: 132px;
+  border: 1px solid rgba(255, 255, 255, .065);
+  border-radius: 14px;
+  background: #0d151b;
+  font-size: .875rem;
+}
+
+.admin-quarantine-v1__workspace {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.admin-quarantine-v1__workspace.has-inspector {
+  grid-template-columns: minmax(0, 1fr) minmax(330px, 370px);
+}
+
+.admin-quarantine-v1__list,
+.admin-quarantine-v1__inspector {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, .07);
+  border-radius: 14px;
+  background: #0d151b;
+}
+
+.admin-quarantine-v1__list-header {
+  min-width: 0;
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 11px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, .055);
+  background: rgba(8, 14, 19, .25);
+}
+
+.admin-quarantine-v1__select-visible {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  color: #dfe8ed;
+  font-size: .875rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.admin-quarantine-v1__select-visible input,
+.admin-quarantine-v1__row-select,
+.admin-quarantine-screen--v1 .admin-bulk-toolbar input[type='checkbox'] {
+  width: 17px;
+  height: 17px;
+  margin: 0;
+  accent-color: #6bbcff;
+  cursor: pointer;
+}
+
+.admin-quarantine-v1__select-visible input:disabled,
+.admin-quarantine-v1__row-select:disabled {
+  cursor: default;
+}
+
+.admin-quarantine-v1__list-header > small {
+  color: #75848f;
+  font-size: .8125rem;
+  text-align: right;
+}
+
+.admin-quarantine-screen--v1 .admin-bulk-toolbar {
+  grid-template-columns: minmax(150px, auto) minmax(0, 1fr) auto;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, .06);
+  background: rgba(38, 111, 165, .055);
+}
+
+.admin-quarantine-screen--v1 .admin-bulk-toolbar__selection,
+.admin-quarantine-screen--v1 .admin-bulk-toolbar__status {
+  color: #9cadb8;
+  font-size: .8125rem;
+}
+
+.admin-quarantine-screen--v1 .admin-bulk-toolbar__actions {
+  gap: 7px;
+}
+
+.admin-quarantine-screen--v1 .admin-bulk-toolbar__actions > button,
+.admin-quarantine-screen--v1 .admin-bulk-toolbar__status button {
+  min-height: 36px;
+  padding-inline: 11px;
+  border-radius: 8px;
+  font-size: .8125rem;
+}
+
+.admin-quarantine-screen--v1 .admin-bulk-toolbar__actions button svg,
+.admin-quarantine-screen--v1 .admin-bulk-toolbar__status button svg,
+.admin-quarantine-screen--v1 .admin-bulk-toolbar__status > span svg {
+  width: 15px;
+  height: 15px;
+}
+
+.admin-quarantine-screen--v1 .admin-bulk-toolbar__status button {
+  width: 36px;
+  padding: 0;
+}
+
+.admin-quarantine-v1__rows {
+  min-width: 0;
+}
+
+.admin-quarantine-v1__row {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 18px 38px minmax(0, 1fr) minmax(130px, auto) 36px;
+  align-items: center;
+  gap: 11px;
+  min-height: 74px;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, .045);
+  transition: background-color .15s ease, box-shadow .15s ease;
+}
+
+.admin-quarantine-v1__row:last-child {
+  border-bottom: 0;
+}
+
+.admin-quarantine-v1__row.is-selected {
+  background: rgba(42, 119, 179, .055);
+}
+
+.admin-quarantine-v1__row.is-inspected {
+  background: rgba(50, 139, 211, .08);
+  box-shadow: inset 3px 0 0 rgba(89, 179, 246, .55);
+}
+
+.admin-quarantine-v1__row-icon {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: rgba(196, 139, 51, .075);
+  color: #bba06f;
+}
+
+.admin-quarantine-v1__row-icon svg {
+  width: 17px;
+  height: 17px;
+}
+
+.admin-quarantine-v1__row-main {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.admin-quarantine-v1__row-main strong,
+.admin-quarantine-v1__row-main span,
+.admin-quarantine-v1__row-main small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-quarantine-v1__row-main strong {
+  color: #edf3f6;
+  font-size: .9rem;
+}
+
+.admin-quarantine-v1__row-main span {
+  color: #9aa8b2;
+  font-size: .8125rem;
+}
+
+.admin-quarantine-v1__row-main small {
+  color: #64737e;
+  font-size: .8125rem;
+}
+
+.admin-quarantine-v1__row-date {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  text-align: right;
+}
+
+.admin-quarantine-v1__row-date small {
+  color: #667681;
+  font-size: .8125rem;
+}
+
+.admin-quarantine-v1__row-date span {
+  color: #9ba8b1;
+  font-size: .8125rem;
+  white-space: nowrap;
+}
+
+.admin-quarantine-v1__inspect {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: #7d8d98;
+  cursor: pointer;
+}
+
+.admin-quarantine-v1__inspect:hover,
+.admin-quarantine-v1__inspect[aria-pressed='true'] {
+  border-color: rgba(93, 177, 241, .16);
+  background: rgba(49, 132, 197, .08);
+  color: #a9d8fa;
+}
+
+.admin-quarantine-v1__inspect svg {
+  width: 18px;
+  height: 18px;
+}
+
+.admin-quarantine-v1__inspector {
+  position: sticky;
+  top: 0;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, .14);
+}
+
+.admin-quarantine-v1__inspector-header {
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, .055);
+  background: rgba(8, 14, 19, .28);
+}
+
+.admin-quarantine-v1__inspector-header > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.admin-quarantine-v1__inspector-header strong {
+  color: #edf3f6;
+  font-size: .9375rem;
+}
+
+.admin-quarantine-v1__inspector-header small {
+  color: #75858f;
+  font-size: .8125rem;
+}
+
+.admin-quarantine-v1__inspector-header > button {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #82919b;
+  cursor: pointer;
+}
+
+.admin-quarantine-v1__inspector-header > button:hover {
+  background: rgba(255, 255, 255, .045);
+  color: #edf3f6;
+}
+
+.admin-quarantine-v1__inspector-header svg {
+  width: 17px;
+  height: 17px;
+}
+
+.admin-quarantine-v1__identity {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 16px 14px;
+}
+
+.admin-quarantine-v1__identity-icon {
+  width: 54px;
+  height: 54px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  background: rgba(196, 139, 51, .08);
+  color: #c1a472;
+}
+
+.admin-quarantine-v1__identity-icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.admin-quarantine-v1__identity > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.admin-quarantine-v1__identity strong,
+.admin-quarantine-v1__identity span,
+.admin-quarantine-v1__identity small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-quarantine-v1__identity strong {
+  color: #eef4f7;
+  font-size: 1rem;
+}
+
+.admin-quarantine-v1__identity span {
+  color: #9aa8b2;
+  font-size: .875rem;
+}
+
+.admin-quarantine-v1__identity small {
+  color: #71808a;
+  font-size: .8125rem;
+}
+
+.admin-quarantine-v1__facts {
+  display: grid;
+  margin: 0;
+  padding: 0 14px 14px;
+}
+
+.admin-quarantine-v1__facts > div {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+  padding: 11px 0;
+  border-top: 1px solid rgba(255, 255, 255, .05);
+}
+
+.admin-quarantine-v1__facts dt {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #75858f;
+  font-size: .8125rem;
+}
+
+.admin-quarantine-v1__facts dt svg {
+  width: 16px;
+  height: 16px;
+}
+
+.admin-quarantine-v1__facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: #bcc8cf;
+  font-size: .8125rem;
+  line-height: 1.45;
+}
+
+.admin-quarantine-v1__last-error {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 9px;
+  margin: 0 14px 14px;
+  padding: 11px;
+  border: 1px solid rgba(221, 154, 70, .16);
+  border-radius: 10px;
+  background: rgba(123, 77, 20, .07);
+  color: #d5a867;
+}
+
+.admin-quarantine-v1__last-error > svg {
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+}
+
+.admin-quarantine-v1__last-error > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.admin-quarantine-v1__last-error strong {
+  font-size: .8125rem;
+}
+
+.admin-quarantine-v1__last-error span {
+  color: #a58a67;
+  font-size: .8125rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.admin-quarantine-v1__restore-zone,
+.admin-quarantine-v1__danger-zone {
+  display: grid;
+  gap: 11px;
+  padding: 14px;
+  border-top: 1px solid rgba(255, 255, 255, .055);
+}
+
+.admin-quarantine-v1__restore-zone > div,
+.admin-quarantine-v1__danger-zone > div {
+  display: grid;
+  gap: 3px;
+}
+
+.admin-quarantine-v1__restore-zone strong,
+.admin-quarantine-v1__danger-zone strong {
+  font-size: .875rem;
+}
+
+.admin-quarantine-v1__restore-zone strong {
+  color: #a9ddb9;
+}
+
+.admin-quarantine-v1__restore-zone small,
+.admin-quarantine-v1__danger-zone small {
+  color: #75858f;
+  font-size: .8125rem;
+  line-height: 1.4;
+}
+
+.admin-quarantine-v1__restore-zone > button,
+.admin-quarantine-v1__danger-zone > button {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border-radius: 9px;
+  cursor: pointer;
+  font: inherit;
+  font-size: .875rem;
+  font-weight: 700;
+}
+
+.admin-quarantine-v1__restore-zone > button {
+  border: 1px solid rgba(64, 167, 101, .28);
+  background: rgba(54, 154, 89, .1);
+  color: #9bddb1;
+}
+
+.admin-quarantine-v1__danger-zone {
+  background: rgba(111, 31, 35, .045);
+}
+
+.admin-quarantine-v1__danger-zone strong {
+  color: #ef9b9b;
+}
+
+.admin-quarantine-v1__danger-zone > button {
+  border: 1px solid rgba(230, 83, 83, .3);
+  background: transparent;
+  color: #ef8d8d;
+}
+
+.admin-quarantine-v1__restore-zone > button:disabled,
+.admin-quarantine-v1__danger-zone > button:disabled {
+  cursor: default;
+  opacity: .45;
+}
+
+.admin-quarantine-v1__restore-zone > button svg,
+.admin-quarantine-v1__danger-zone > button svg {
+  width: 17px;
+  height: 17px;
+}
+
+.admin-quarantine-screen--v1 button:focus-visible,
+.admin-quarantine-screen--v1 input:focus-visible {
+  outline: 2px solid rgba(95, 178, 245, .78);
+  outline-offset: 2px;
+}
+
+@media (max-width: 1180px) {
+  .admin-quarantine-v1__workspace.has-inspector {
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 340px);
+  }
+
+  .admin-quarantine-v1__row {
+    grid-template-columns: 18px 38px minmax(0, 1fr) 36px;
+  }
+
+  .admin-quarantine-v1__row-date {
+    display: none;
+  }
+}
+
+@media (max-width: 940px) {
+  .admin-quarantine-screen.admin-quarantine-screen--v1 {
+    width: calc(100% - 32px);
+  }
+
+  .admin-quarantine-v1__workspace.has-inspector {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-quarantine-v1__inspector {
+    position: static;
+    order: -1;
+  }
+}
+
+@media (max-width: 720px) {
+  .admin-quarantine-v1__list-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .admin-quarantine-v1__list-header > small {
+    text-align: left;
+  }
+
+  .admin-quarantine-screen--v1 .admin-bulk-toolbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .admin-quarantine-screen--v1 .admin-bulk-toolbar__actions {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .admin-quarantine-v1__row {
+    grid-template-columns: 18px 36px minmax(0, 1fr) 34px;
+    gap: 9px;
+  }
+
+  .admin-quarantine-v1__row-main small {
+    display: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .admin-quarantine-screen.admin-quarantine-screen--v1 {
+    width: calc(100% - 20px);
+  }
+
+  .admin-quarantine-v1__notice {
+    grid-template-columns: 36px minmax(0, 1fr);
+    padding: 11px;
+  }
+
+  .admin-quarantine-v1__notice-icon {
+    width: 34px;
+    height: 34px;
+  }
+
+  .admin-quarantine-v1__toolbar {
+    grid-template-columns: minmax(0, 1fr) 42px;
+  }
+
+  .admin-quarantine-v1__search,
+  .admin-quarantine-v1__refresh {
+    height: 42px;
+  }
+
+  .admin-quarantine-v1__refresh {
+    width: 42px;
+  }
+
+  .admin-quarantine-v1__row {
+    grid-template-columns: 17px 34px minmax(0, 1fr) 32px;
+    min-height: 68px;
+    padding: 9px;
+  }
+
+  .admin-quarantine-v1__row-icon {
+    width: 34px;
+    height: 34px;
+  }
+
+  .admin-quarantine-v1__inspect {
+    width: 32px;
+    height: 32px;
+  }
+
+  .admin-quarantine-v1__identity {
+    grid-template-columns: 46px minmax(0, 1fr);
+  }
+
+  .admin-quarantine-v1__identity-icon {
+    width: 46px;
+    height: 46px;
+  }
+
+  .admin-quarantine-screen--v1 .admin-bulk-toolbar__actions > button {
+    flex: 1 1 auto;
+  }
+}

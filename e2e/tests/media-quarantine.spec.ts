@@ -124,10 +124,16 @@ test('admin move para lixeira, preserva relações após scan e restaura', async
     await page.getByRole('button', { name: /^Lixeira/ }).click();
     await expect(page.locator('#admin-quarantine-title')).toHaveText('Lixeira');
 
-    const trashRow = page.locator('.admin-quarantine-row').filter({ hasText: track.title }).first();
+    const trashRow = page.locator('.admin-quarantine-v1__row').filter({ hasText: track.title }).first();
     await expect(trashRow).toBeVisible();
-    await trashRow.getByRole('button', { name: 'Restaurar', exact: true }).click();
+    await trashRow.getByRole('button', { name: `Ver detalhes de ${track.title}`, exact: true }).click();
+
+    const inspector = page.locator('.admin-quarantine-v1__inspector');
+    await expect(inspector).toBeVisible();
+    await expect(inspector).toContainText(track.title);
+    await inspector.getByRole('button', { name: 'Restaurar', exact: true }).click();
     await expect(trashRow).toHaveCount(0);
+    await expect(inspector).toHaveCount(0);
 
     const restoredLibrary = await request.get('/api/library');
     const restoredPayload = await restoredLibrary.json() as { tracks: Array<{ id: string }> };

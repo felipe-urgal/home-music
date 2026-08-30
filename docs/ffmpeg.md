@@ -1,8 +1,11 @@
-# FFmpeg e transcoding no Home Music
+# FFmpeg e FFprobe no Home Music
 
-O Home Music usa FFmpeg como dependência **opcional** para transcoding do player e para processamento controlado de importações. O streaming original continua sendo o caminho padrão e permanece servido diretamente com HTTP Range.
+O Home Music usa FFmpeg/FFprobe como dependências **opcionais do produto**, mas importantes para dois domínios diferentes:
 
-A validação técnica de uma importação usa **FFprobe** antes de qualquer promoção para a biblioteca. Se a mídia já atende ao perfil escolhido, o arquivo é preservado. Quando só é necessário remover vídeo, selecionar uma faixa de áudio ou trocar o container, o servidor prefere **remux/stream copy sem reencode**. Transcoding só acontece quando o perfil realmente exige alterar o áudio.
+1. transcoding/compatibilidade do player;
+2. validação e processamento técnico das importações.
+
+O streaming original continua sendo o caminho preferencial quando o navegador pode reproduzir o arquivo diretamente.
 
 ## Instalação no Ubuntu
 
@@ -11,7 +14,9 @@ sudo apt update
 sudo apt install ffmpeg
 ```
 
-O pacote instala `ffmpeg` e `ffprobe`. Valide a instalação:
+O pacote normalmente instala `ffmpeg` e `ffprobe`.
+
+Valide:
 
 ```bash
 ffmpeg -version
@@ -19,133 +24,160 @@ ffprobe -version
 npm run ffmpeg:status
 ```
 
-O último comando usa a mesma lógica de probe do servidor para FFmpeg e respeita `HOME_MUSIC_FFMPEG_PATH`.
-
 ## Configuração
 
-Sem configuração extra, o Home Music procura `ffmpeg` e `ffprobe` no `PATH` do processo:
+Sem configuração extra, o Home Music procura os executáveis no `PATH`:
 
 ```env
 HOME_MUSIC_FFMPEG_PATH=ffmpeg
 # HOME_MUSIC_FFPROBE_PATH=ffprobe
 ```
 
-Se o serviço precisar usar binários específicos, informe somente os caminhos dos executáveis, sem argumentos adicionais:
+Também é possível fixar caminhos absolutos:
 
 ```env
 HOME_MUSIC_FFMPEG_PATH=/usr/bin/ffmpeg
 HOME_MUSIC_FFPROBE_PATH=/usr/bin/ffprobe
 ```
 
-`HOME_MUSIC_FFPROBE_PATH` é opcional. Quando ele não está definido e `HOME_MUSIC_FFMPEG_PATH` contém um caminho completo, o servidor procura `ffprobe` no mesmo diretório do FFmpeg. Caso contrário, usa `ffprobe` do `PATH`.
+`HOME_MUSIC_FFPROBE_PATH` é opcional. Quando omitido e `HOME_MUSIC_FFMPEG_PATH` aponta diretamente para um executável `ffmpeg`/`ffmpeg.exe`, o servidor pode derivar o executável irmão `ffprobe` no mesmo diretório. Configurações que não representam diretamente o binário esperado não são transformadas permissivamente em comandos arbitrários.
 
-O probe de disponibilidade do FFmpeg usa `execFile`, sem shell, somente com o argumento fixo `-version`. O transcoding do player e o processamento de importações usam `spawn`, também sem shell e com argumentos definidos pelo servidor.
+O probe usa APIs sem shell. Processamento real também usa argumentos definidos pelo servidor, não strings de comando vindas do cliente.
 
-O cache de transcoding do player pode ser limitado com:
+## Importações: validação técnica
+
+A etapa **Preparar** do workbench de importação valida mídia com FFprobe antes de qualquer promoção para `MUSIC_DIR`.
+
+Perfis atuais:
+
+- **Original**: preserva o arquivo quando ele já contém uma única faixa de áudio segura; quando necessário, prefere remux/stream-copy sem reencode;
+- **Economizar espaço**: preserva uma origem já econômica quando possível; caso precise reduzir o áudio, usa M4A/AAC no perfil econômico;
+- **Compatibilidade máxima**: prioriza saída M4A/AAC compatível, preservando/remuxando AAC compatível quando possível e transcodificando somente quando necessário.
+
+A decisão técnica registrada no job diferencia:
+
+```text
+preserve
+remux
+transcode
+```
+
+Isso permite saber quando os bytes codificados do áudio foram preservados e quando houve reencode.
+
+### Fluxo técnico
+
+1. payload permanece no staging privado;
+2. o servidor abre o arquivo de forma segura;
+3. FFprobe valida container, codec, duração e streams;
+4. o servidor escolhe a faixa de áudio adequada quando há mais de uma;
+5. decide `preserve`, `remux` ou `transcode`;
+6. FFmpeg produz saída temporária somente quando necessário;
+7. saída processada é novamente validada;
+8. duração/formato esperado são conferidos;
+9. o staging emite o token final usado pelo gate de promoção.
+
+Uma validação bem-sucedida **não significa que a música já foi promovida**. O pipeline ainda passa por revisão de metadata, duplicatas e destino antes de escrever em `MUSIC_DIR`.
+
+## Segurança da importação
+
+- paths arbitrários do usuário não são concatenados em comandos;
+- FFmpeg/FFprobe recebem arquivo já aberto/validado pelo servidor;
+- protocolos/demuxers são restringidos conforme a política do pipeline;
+- saída temporária permanece no workspace controlado;
+- stderr bruto não é devolvido ao navegador;
+- timeout/falha deixa o job fora da biblioteca;
+- FFprobe ausente impede a validação técnica em vez de promover mídia sem inspeção.
+
+## Player: qualidade e compatibilidade
+
+As preferências de reprodução atuais incluem:
+
+- **Por conexão**;
+- **Automática**;
+- **Original**;
+- **Economia**.
+
+A seleção por conexão usa a preferência/detecção de rede para escolher entre o comportamento automático e economia. O modo automático tenta o arquivo original e pode recorrer ao perfil de compatibilidade quando o navegador sinaliza erro de decodificação/formato.
+
+O modo Economia usa transcoding AAC de menor bitrate. O perfil interno `balanced` é usado para fallback de compatibilidade. O perfil interno `high` também é usado quando uma versão processada é necessária para normalização ReplayGain sem forçar o perfil econômico.
+
+Esses perfis internos não precisam aparecer como escolhas manuais separadas na UI.
+
+## ReplayGain
+
+Quando a normalização está efetivamente ativa, o servidor resolve o ganho a partir do índice da própria faixa; o cliente não envia um valor arbitrário de dB.
+
+O cache diferencia combinação de:
+
+- faixa/arquivo;
+- `mtime`;
+- perfil de qualidade;
+- modo/ganho efetivo de normalização.
+
+Assim versões normalizadas e não normalizadas não colidem.
+
+Se a preparação normalizada falhar, o player pode recorrer ao caminho não normalizado compatível com a política atual. O arquivo original nunca é alterado.
+
+Downloads offline continuam usando o arquivo original e não aplicam ReplayGain ao artefato baixado.
+
+## Cache de transcoding do player
+
+O cache padrão fica em:
+
+```text
+data/transcode-cache/
+```
+
+Pode ser limitado por:
 
 ```env
 HOME_MUSIC_TRANSCODE_CACHE_MB=512
 ```
 
-O padrão é 512 MB e os valores aceitos vão de 64 a 8192 MB. Os arquivos ficam em `data/transcode-cache/`, com diretório `0700` e arquivos `0600`. O cache não é versionado pelo Git.
+O padrão é 512 MB, respeitando a faixa aceita pelo servidor.
 
-## Validação técnica das importações
+O Home Music prepara arquivos derivados antes de servi-los para manter suporte previsível a HTTP Range/seek. Requisições concorrentes da mesma combinação compartilham o trabalho quando aplicável.
 
-A tela **Administração → Importar mídia** oferece três perfis de saída:
+A Administração oferece visibilidade e limpeza segura desse cache sem percorrer `MUSIC_DIR`. Detalhes: [admin-transcode-cache.md](admin-transcode-cache.md).
 
-- **Original**: padrão. Preserva o arquivo quando ele já contém uma única faixa de áudio segura. Se houver vídeo, múltiplas faixas ou um container inadequado, preserva o codec/qualidade via remux quando existe um container seguro para aquele codec; só reencoda como último recurso;
-- **Economizar espaço**: preserva uma origem já econômica. Se ela só precisar de limpeza de container/streams, usa remux sem reencode. Quando a origem ainda é maior do que o perfil econômico, converte a melhor faixa de áudio para M4A/AAC a 96 kbps;
-- **Compatibilidade máxima**: preserva M4A/MP4 com AAC compatível. AAC compatível em outro container é apenas reempacotado para M4A sem reencode; os demais casos são convertidos para M4A/AAC a 160 kbps.
-
-A decisão técnica registrada no job usa três ações explícitas: `preserve`, `remux` e `transcode`. Isso torna auditável se houve ou não perda geracional de qualidade.
-
-O fluxo técnico é deliberadamente separado da promoção para `MUSIC_DIR`:
-
-1. a mídia permanece no staging privado;
-2. o servidor abre o payload já validado pelo staging e entrega ao FFprobe somente um descritor de arquivo herdado;
-3. FFprobe valida container, codec, duração e streams com protocolos e demuxers limitados;
-4. o servidor escolhe deterministicamente a melhor faixa de áudio quando há mais de uma;
-5. a decisão `preserve`, `remux` ou `transcode` é registrada no job;
-6. em `remux`, FFmpeg usa `stream copy` para preservar os bytes codificados do áudio e somente limpar/trocar o container;
-7. em `transcode`, FFmpeg grava AAC no bitrate do perfil solicitado;
-8. qualquer saída processada é gravada temporariamente dentro do mesmo workspace, sem metadados, capítulos, vídeo, legendas ou streams de dados;
-9. a saída substitui o payload do staging e é examinada novamente pelo FFprobe;
-10. o servidor verifica codec/container e compara a duração antes/depois; só então produz o token final de validação do staging.
-
-Uma execução bem-sucedida **não promove a música para a biblioteca**. A promoção definitiva pertence às etapas seguintes do pipeline de importação.
-
-### Limites de segurança
-
-A validação não passa uma URL ou caminho controlado pelo usuário para FFmpeg/FFprobe. A entrada é `/proc/self/fd/3`, associada ao descritor do arquivo regular já aberto pelo servidor dentro do staging. A execução restringe protocolos a `file,pipe` e usa uma allowlist de demuxers de áudio/mídia conhecida.
-
-Erros brutos de FFmpeg/FFprobe não são persistidos na fila. A API converte falhas em mensagens estáveis como mídia inválida, ferramenta indisponível ou timeout. Se FFprobe não estiver disponível, a validação responde `503` e o arquivo não é promovido.
-
-## Modos no player
-
-O menu do player oferece três escolhas:
-
-- **Automática**: usa o arquivo original. Se o navegador indicar erro de decodificação/formato, tenta AAC 160 kbps como fallback de compatibilidade;
-- **Original**: sempre usa `/api/tracks/:id/stream`, sem FFmpeg;
-- **Economia**: usa AAC 96 kbps para reduzir banda.
-
-A preferência fica somente no dispositivo e não altera o arquivo de origem nem o download offline. Downloads offline continuam usando o arquivo original autenticado.
-
-O backend também possui o perfil `high` de 256 kbps como fundação para os futuros perfis automáticos de Wi-Fi/4G. Ele ainda não aparece como escolha manual nesta etapa.
-
-## Como o transcoding do player preserva seek
-
-O Home Music não envia a saída do FFmpeg diretamente para o `<audio>`. Na primeira solicitação de uma combinação faixa/perfil, o servidor:
-
-1. abre a faixa com as mesmas validações de segurança do streaming original;
-2. converte o áudio para M4A/AAC em um arquivo temporário;
-3. valida o resultado e faz rename atômico para o cache;
-4. serve o arquivo pronto com `Accept-Ranges: bytes` e suporte a 200/206/416.
-
-Isso permite que seek, retomada e Media Session continuem usando comportamento HTTP previsível. Requisições simultâneas da mesma faixa/perfil compartilham o mesmo trabalho de conversão.
-
-O servidor executa no máximo **um transcode por vez** para o cache do player, evitando saturar a máquina. O cache remove arquivos menos recentes quando ultrapassa o limite configurado. A faixa que acabou de ser preparada é preservada para atender a requisição atual, então um único arquivo excepcionalmente grande pode ultrapassar temporariamente o limite até a próxima limpeza.
-
-## Rota autenticada do player
+## Rota de transcoding do player
 
 ```text
 GET /api/tracks/:id/transcode?quality=economy|balanced|high
 ```
 
-A rota exige a mesma sessão das demais APIs. A resposta é `audio/mp4`, com `Cache-Control: private, no-store`. O Cache Storage da PWA continua sem interceptar `/api/*`.
+A rota exige sessão autenticada e segue as políticas privadas do produto.
 
-Headers diagnósticos da resposta:
+Headers diagnósticos podem informar o perfil e se o resultado veio do cache.
 
-```text
-X-Home-Music-Transcode-Quality: economy
-X-Home-Music-Transcode-Cache: hit|miss
-```
+## Comportamento quando FFmpeg/FFprobe não existem
 
-Se FFmpeg não estiver disponível, a rota responde `503`; o streaming original não é afetado.
+FFmpeg **não participa do readiness principal** do Home Music.
 
-## Comportamento quando FFmpeg não existe
+Se FFmpeg estiver indisponível:
 
-FFmpeg **não participa do readiness**. Se o binário estiver ausente, demorar demais no probe, falhar ou produzir uma saída inesperada:
+- `/health` e `/ready` continuam seguindo os critérios normais da aplicação;
+- streaming original continua disponível quando o navegador suporta o arquivo;
+- transcoding/fallback que dependem de FFmpeg ficam indisponíveis;
+- o health autenticado expõe diagnóstico sanitizado.
 
-- `/health` continua funcionando;
-- `/ready` continua dependendo apenas de frontend, autenticação e biblioteca;
-- o streaming original continua funcionando normalmente;
-- o servidor registra um aviso e expõe o motivo no `/api/health` autenticado;
-- os perfis do player que precisam de transcoding ficam indisponíveis no backend;
-- uma importação que precise de remux ou transcode falha de forma segura e permanece fora da biblioteca.
+Se FFprobe estiver indisponível:
 
-A ausência de FFprobe afeta somente a etapa de validação técnica das importações. Ela não altera o readiness nem o streaming já existente.
-
-O smoke test de produção força deliberadamente um caminho de FFmpeg inexistente para garantir que o streaming original e o readiness permaneçam independentes.
+- a biblioteca existente continua operando;
+- a auditoria/validação que depende dele reporta a limitação;
+- uma importação não deve pular a inspeção técnica e promover o arquivo como se estivesse validado.
 
 ## Diagnóstico
 
-`GET /api/health` inclui os blocos `ffmpeg` e `transcoding`:
+`GET /api/health` inclui diagnóstico de FFmpeg/transcoding sem expor caminhos completos do filesystem.
+
+Exemplo conceitual:
 
 ```json
 {
   "ffmpeg": {
     "available": true,
-    "version": "8.0.1-3ubuntu2+esm1",
+    "version": "...",
     "customPath": false,
     "issue": null
   },
@@ -159,10 +191,33 @@ O smoke test de produção força deliberadamente um caminho de FFmpeg inexisten
 }
 ```
 
-Quando o executável FFmpeg não está disponível, `available` fica `false`, `version` fica `null` e `issue` informa uma categoria estável como `not-found`, `timeout`, `failed`, `invalid-command` ou `invalid-output`.
+Falhas de detecção são reduzidas a categorias estáveis em vez de expor stderr ou paths sensíveis.
 
-O health não expõe o caminho completo configurado para não transformar o endpoint em inventário de filesystem.
+## Relação com o pipeline atual
 
-## Próximo estágio
+FFmpeg/FFprobe são apenas a etapa técnica. O pipeline completo já entregue é:
 
-A importação agora possui validação técnica e decisão de formato antes da promoção. O estágio seguinte do roadmap extrai metadata confiável e apresenta um preview para revisão administrativa, sem promover automaticamente o arquivo validado.
+```text
+Origem
+  ↓
+staging/scratch
+  ↓
+FFprobe/FFmpeg
+  ↓
+metadata
+  ↓
+duplicatas
+  ↓
+destino seguro
+  ↓
+promoção
+  ↓
+indexação incremental
+```
+
+Detalhes relacionados:
+
+- [import-staging.md](import-staging.md)
+- [import-metadata-preview.md](import-metadata-preview.md)
+- [import-duplicate-detection.md](import-duplicate-detection.md)
+- [import-safe-destination.md](import-safe-destination.md)

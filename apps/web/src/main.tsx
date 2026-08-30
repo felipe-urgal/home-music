@@ -52,6 +52,7 @@ import './admin-import-v3.css';
 import './admin-integrity-v3.css';
 import './account-layout-widths.css';
 import './admin-users-v1.css';
+import './admin-quarantine-v1.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

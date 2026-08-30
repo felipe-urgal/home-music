@@ -1,26 +1,44 @@
-# Fase 7.5 — Tela Minha conta
+# Minha conta
 
-Este documento registra a interface de autosserviço da conta autenticada. Os contratos e invariantes do backend permanecem em `phase-7.5-self-service-account.md`.
+Este documento registra a superfície autenticada **atual** de autosserviço e preferências. Os contratos e invariantes do backend continuam em `phase-7.5-self-service-account.md` e nos documentos específicos de autenticação.
 
 ## Objetivo
 
-Dar a qualquer identidade autenticada um ponto simples para:
+`Minha conta` reúne em uma única navegação os fluxos pessoais do usuário autenticado:
 
-- visualizar a própria identidade e papel atual;
-- alterar a própria senha informando a senha atual;
-- encerrar as próprias outras sessões sem perder a sessão deste dispositivo.
+- Perfil;
+- Alterar senha;
+- Outros dispositivos / sessões;
+- Reprodução;
+- Administração, somente para `admin`.
 
-A tela não permite editar `username`, `role` ou `enabled`. Essas propriedades continuam sob as regras administrativas do servidor.
+A tela não permite que um usuário comum altere `role` ou `enabled`. Gerenciamento de outras contas pertence a **Administração → Usuários**.
 
-## Entrada e disponibilidade
+## Layout atual
 
-`Minha conta` é uma superfície autenticada para `admin` e `user`.
+Após o ciclo de redesign de 2026, as superfícies de Minha conta são **fluidas**: não usam mais uma coleção de `max-width` estreitos por tela.
 
-O acesso fica junto da experiência de biblioteca e também permanece disponível quando a biblioteca está vazia ou em erro. A tela é renderizada antes dos estados da biblioteca, portanto um problema no scanner ou nos dados musicais não impede operações de segurança da conta.
+Regra de composição:
 
-O modo offline não oferece a tela porque não existe sessão autenticada com o servidor nesse estado.
+- desktop: usa praticamente toda a área útil, com cerca de 24 px de respiro lateral;
+- telas médias: cerca de 16 px de respiro;
+- mobile: cerca de 10 px;
+- nenhum card deve encostar na borda da viewport;
+- conteúdo simples continua agrupado visualmente, mas sem limitar artificialmente a largura do container pai.
 
-## Alteração de senha
+A escala tipográfica do ciclo atual evita textos auxiliares excessivamente pequenos; novos fluxos administrativos adotam piso visual de aproximadamente 13 px para labels/auxiliares.
+
+## Perfil
+
+Mostra somente informações existentes no modelo atual, como:
+
+- nome de usuário;
+- papel (`Administrador` ou `Usuário`);
+- contexto da conta atual.
+
+Não inventa campos de e-mail, avatar remoto ou dados pessoais que o backend não possui.
+
+## Alterar senha
 
 A interface envia:
 
@@ -31,7 +49,7 @@ X-Home-Music-Request: 1
 
 com `currentPassword` e `newPassword`.
 
-A validação local replica apenas os requisitos úteis de UX:
+A validação de UX cobre:
 
 - senha atual obrigatória;
 - nova senha com pelo menos 12 caracteres Unicode;
@@ -40,38 +58,73 @@ A validação local replica apenas os requisitos úteis de UX:
 - nova senha diferente da atual;
 - confirmação idêntica.
 
-O backend continua sendo a autoridade final para verificação da senha atual, política, concorrência e estado da conta.
+O backend continua sendo a autoridade final.
 
-Antes de enviar, a interface deixa explícito que trocar a senha revoga todas as sessões, inclusive a atual. Depois de sucesso, o frontend relê `/api/auth/status`; como o servidor já limpou o cookie e revogou as sessões, a aplicação retorna para o login e exige a nova senha.
+Depois de uma troca bem-sucedida, as sessões da conta são revogadas conforme a regra do servidor e o usuário volta ao login para autenticar com a nova senha.
 
-As senhas existem apenas em estado React durante o preenchimento. Não são gravadas em `localStorage`, `sessionStorage`, Cache Storage, IndexedDB, URL ou logs.
+As senhas existem apenas em estado transitório do frontend e não são persistidas pela aplicação.
 
-## Sair dos outros dispositivos
+## Outros dispositivos
 
-A interface envia:
+A superfície de sessões permite revisar os acessos ativos da própria conta e encerrar sessões sem fornecer `userId` controlável pelo cliente.
+
+A operação de revogar as outras sessões usa:
 
 ```text
 POST /api/auth/sessions/revoke-others
 X-Home-Music-Request: 1
 ```
 
-Sem `userId` no body ou na URL. O alvo é derivado exclusivamente da sessão autenticada pelo backend.
+A sessão atual é preservada nesse fluxo específico.
 
-A resposta informa quantas outras sessões foram encerradas. A sessão atual permanece válida, conforme o contrato do servidor.
+Quando a interface oferece encerramento de sessão individual, o backend valida que o alvo pertence ao usuário autenticado.
 
-## Erros e fail-closed
+## Reprodução
 
-As chamadas passam pelo cliente autenticado comum. `401` continua acionando o evento global de sessão expirada.
+Preferências por dispositivo incluem qualidade de streaming e normalização ReplayGain.
 
-A interface mostra a mensagem retornada pelo servidor, sem tentar reinterpretar conflitos de credencial ou autorização. Nenhuma decisão de segurança depende de estado ou role controlados pelo frontend.
+Qualidade atual:
 
-## Review de segurança
+- Por conexão;
+- Automática;
+- Original;
+- Economia.
 
-A implementação preserva as seguintes fronteiras:
+Normalização:
+
+- Desativada;
+- Por faixa;
+- Por álbum.
+
+Essas preferências não concedem acesso administrativo e não alteram o arquivo original.
+
+## Administração
+
+Somente `admin` vê a entrada **Administração**.
+
+O cockpit administrativo atual dá acesso a:
+
+- Gerenciar músicas;
+- Importar mídia;
+- Integridade da biblioteca;
+- Usuários;
+- Metadados;
+- Lixeira;
+- Histórico operacional e manutenção relacionada.
+
+A autorização real continua no backend. Ocultar a entrada para `user` é apenas UX.
+
+## Disponibilidade
+
+Minha conta permanece acessível mesmo quando a biblioteca está vazia ou apresenta erro, porque segurança/identidade não devem depender do scanner musical.
+
+O modo offline não oferece operações autenticadas de conta, já que não existe sessão confirmada com o servidor nesse estado.
+
+## Segurança
 
 - nenhuma senha é persistida pelo cliente;
-- troca de senha não tenta preservar artificialmente a sessão atual;
-- revogação de outras sessões não recebe `userId` controlável pelo cliente;
-- `X-Home-Music-Request: 1` é enviado nas duas mutações;
-- a tela é disponível para `admin` e `user`, mas não no modo offline;
-- autorização, sessão e concorrência permanecem integralmente no backend.
+- mutações usam `X-Home-Music-Request: 1`;
+- `401` continua acionando o fluxo global de sessão expirada;
+- role exibida no frontend não é fonte de autorização;
+- APIs de autosserviço derivam o alvo da sessão autenticada;
+- erros exibidos não devem incluir segredos.

@@ -1,218 +1,199 @@
 # Arquitetura de providers externos
 
-Esta etapa implementa a fronteira genérica definida pela #96. Ela **não integra yt-dlp nem qualquer site específico**. A decisão da #95 permanece: primeiro estabilizar o contrato e o isolamento; somente depois adicionar um adapter concreto.
+A Fase 9 separa aquisição externa do pipeline principal de importação. O contrato genérico foi criado na #96 e hoje possui um provider concreto baseado em **yt-dlp** (#104), além do fluxo de lotes/playlists (#154).
 
-## Objetivos
+A decisão arquitetural original continua válida: o Home Music não acopla o domínio principal a um site específico e não permite que uma engine externa escreva diretamente em `MUSIC_DIR`.
 
-A arquitetura separa cinco responsabilidades:
+## Responsabilidades
+
+A arquitetura separa cinco fronteiras:
 
 1. **provider** reconhece a entrada e prepara uma mídia candidata;
-2. **scratch do provider** é a única área de filesystem entregue ao provider;
+2. **scratch do provider** é a única área de filesystem entregue à engine externa;
 3. **core do Home Music** reabre a saída como arquivo regular seguro;
 4. **ImportStagingManager** recebe os bytes copiados pelo core;
-5. validação técnica, perfil de saída e promoção continuam nas etapas posteriores do pipeline.
+5. validação técnica, metadata, duplicatas, destino, promoção e indexação continuam no pipeline comum.
 
-Nenhum provider recebe caminho de `MUSIC_DIR` e nenhum provider escreve diretamente no payload gerenciado pelo staging.
+Nenhum provider recebe caminho de `MUSIC_DIR` e nenhum provider escreve diretamente no payload final gerenciado pelo staging.
 
-## Fluxo
+## Fluxo atual
 
 ```text
 URL transitória
-   |
-   v
+   ↓
 ExternalProvider.validate()
-   |
-   v
-ImportJob: provider / processing
-   |
-   +--> staging seguro criado pelo core
-   |
-   +--> provider scratch 0700, fora de MUSIC_DIR
-          |
-          v
-      ExternalProvider.prepare()
-          |
-          +--> arquivo candidato
-          +--> metadata sugerida
-          |
-          v
-      core abre arquivo com O_NOFOLLOW + /proc/self/fd
-          |
-          v
-      stream controlado + limite de bytes
-          |
-          v
-      ImportStagingManager.writePayload()
-          |
-          v
-      scratch removido
-          |
-          v
+   ↓
+ImportJob: processing
+   ↓
+provider scratch privado
+   ↓
+engine externa / adapter
+   ↓
+arquivo candidato + metadata sugerida
+   ↓
+core reabre/valida arquivo regular
+   ↓
+stream controlado → ImportStagingManager
+   ↓
 ImportJob: pending
+   ↓
+FFprobe/FFmpeg
+   ↓
+metadata
+   ↓
+duplicatas
+   ↓
+destino seguro
+   ↓
+promoção
+   ↓
+indexação incremental
 ```
 
-`pending` significa apenas que a aquisição do provider terminou e o payload está sob controle do staging. A validação com FFmpeg/ffprobe, decisão de formato e promoção não pertencem à #96; são responsabilidade da #97 e das etapas seguintes.
+`pending` após a aquisição significa apenas que o payload passou para o staging controlado e aguarda a próxima ação do pipeline; não significa que a faixa já entrou na biblioteca.
 
 ## Contrato `ExternalProvider`
 
 Cada provider declara:
 
-- `id` estável e normalizado;
-- `label` para diagnóstico/UI;
+- `id` estável;
+- `label`;
 - `capabilities` (`audio`, `metadata`, `thumbnail`, `playlists`);
-- opcionalmente, nomes das configurações obrigatórias;
-- `validate(request)`, para reconhecer/rejeitar a entrada;
-- `prepare(request, context)`, para produzir um arquivo no scratch e metadata sugerida.
+- configurações obrigatórias quando houver;
+- `validate(request)` para reconhecer/rejeitar a entrada;
+- `prepare(request, context)` para produzir saída no scratch e metadata sugerida.
 
-O contexto contém somente:
-
-- `scratchDir` do job;
-- `AbortSignal` para timeout/cancelamento;
-- cópia congelada da configuração daquele provider.
-
-O provider não recebe fila, staging, banco, sessão HTTP nem `MUSIC_DIR`.
+O contexto entregue ao provider é restrito. Ele não recebe banco, sessão HTTP, fila como autoridade nem `MUSIC_DIR`.
 
 ### Regra para `validate`
 
-`validate()` deve ser uma validação local e barata da forma/host/capability da URL. Ela **não deve fazer requests de rede**. A policy de egress de um provider real é outra camada e precisa cobrir todas as conexões originadas pelo processo externo.
+A validação inicial deve ser local e barata. Ela não substitui a política de egress da engine real: um provider pode descobrir redirects, manifests, APIs e CDNs depois da URL inicial.
 
 ## Registro e capabilities
 
-`ExternalProviderImportManager` recebe os providers na composição da aplicação e rejeita IDs duplicados. A listagem pública devolve somente:
+`ExternalProviderImportManager` recebe providers na composição da aplicação e rejeita IDs duplicados. A listagem pública administrativa devolve apenas dados necessários à UI, como:
 
 - ID;
 - label;
 - capabilities;
-- booleano `configured`.
+- estado de configuração/disponibilidade.
 
-Valores de configuração nunca são retornados pela listagem.
+Segredos/valores de configuração nunca são retornados ao navegador.
 
-O core continua funcional com zero providers concretos registrados. Isso preserva a independência do pipeline em relação a qualquer site ou engine.
+O core continua funcional quando um provider opcional está indisponível. Upload e URL direta não dependem de yt-dlp.
 
 ## Entrada e privacidade
 
-Antes de criar um job, o manager exige:
+Antes de criar um job, o manager exige uma URL válida para a capability declarada e aplica limites defensivos.
 
-- URL `http:` ou `https:`;
-- tamanho limitado;
-- nenhuma credencial embutida;
-- validação específica do provider.
-
-A URL completa é transitória. O job usa um label fixo por provider e não persiste hostname, path, query string ou fragmento. Isso evita armazenar tokens de URLs assinadas por acidente.
+A URL completa é transitória. O histórico/job não deve persistir query string ou credenciais por conveniência. Erros públicos também não devem ecoar `stderr`, stack trace ou paths internos do provider.
 
 ## Scratch do provider
 
-`ExternalProviderScratchManager` cria um workspace privado por job com modo `0700`.
+O scratch é privado, separado de `MUSIC_DIR` e descartável por job.
 
 Regras:
 
-- raiz de scratch deve ser disjunta de `MUSIC_DIR` antes mesmo de ser criada;
-- raiz existente não pode ser symlink;
-- saída deve ser caminho relativo sem traversal;
-- o core só aceita arquivo regular cuja resolução final continue dentro do workspace;
-- abertura usa a infraestrutura de segurança existente (`O_NOFOLLOW` e revalidação via `/proc/self/fd`);
-- scratch é removido após transferência ou em falha/cancelamento.
-
-O subprocesso futuro deve escrever **somente** nesse scratch.
+- raiz real separada da biblioteca;
+- workspace com permissão restrita;
+- saída relativa sem traversal;
+- arquivo final precisa ser regular e continuar confinado ao workspace;
+- symlinks não são aceitos como atalho para fora do scratch;
+- o core reabre a saída com as proteções existentes antes de copiar;
+- scratch é limpo depois da transferência, falha ou cancelamento.
 
 ## Transferência para staging
 
-O arquivo retornado pelo provider nunca é promovido ou movido diretamente.
+O arquivo retornado pelo provider nunca é promovido diretamente.
 
 O core:
 
 1. abre a saída segura;
-2. verifica tamanho inicial;
-3. lê o descritor já validado;
+2. verifica tamanho/identidade;
+3. lê o descritor validado;
 4. aplica limite de bytes durante o stream;
-5. entrega chunks para `ImportStagingManager.writePayload()`;
-6. registra o tamanho efetivamente escrito;
-7. verifica se tamanho/mtime da origem mudaram durante a cópia;
-8. elimina o scratch.
+5. entrega chunks ao `ImportStagingManager`;
+6. confirma que a origem não mudou de forma inesperada durante a cópia;
+7. remove o scratch.
 
 Depois disso, apenas o payload do staging participa das etapas seguintes.
 
 ## Metadata
 
-Metadata de provider é somente uma sugestão não confiável. O manager normaliza e limita strings antes de mantê-las no resultado preparado:
+Metadata de provider é sugestão não confiável. Strings são normalizadas/limitadas antes de chegar ao preview.
 
-- `sourceId`;
-- `title`;
-- `artist`;
-- `album`;
-- `thumbnailUrl`;
-- `contentType`.
+Valores externos nunca são usados diretamente como:
 
-Esses valores nunca são usados como comandos ou paths. A #97 e etapas posteriores continuam responsáveis por validar a mídia real.
+- path de destino;
+- argumento arbitrário de processo;
+- autorização de rede;
+- metadata confiável que substitui silenciosamente o arquivo.
 
-## Configuração por provider
+O preview administrativo continua responsável pela revisão humana quando houver sugestão/conflito.
 
-Um provider pode declarar `requiredConfigKeys`. O manager informa apenas se a configuração está completa.
+## yt-dlp atual
 
-A configuração entregue ao provider é uma cópia congelada e não é incluída em:
+O primeiro adapter concreto usa yt-dlp como processo externo, sem shell e sem flags arbitrárias vindas da UI.
 
-- `ImportJob`;
-- descriptors;
-- erros públicos;
-- metadata preparada.
+O adapter atual:
 
-Suporte futuro a cookies, credenciais ou tokens exige desenho próprio de storage e não deve ser implementado como flags arbitrárias de CLI.
+- usa scratch isolado;
+- não entrega `MUSIC_DIR` ao processo;
+- ignora configurações/plugins do usuário quando necessário para manter comportamento controlado;
+- usa ambiente reduzido;
+- normaliza saída estruturada;
+- controla timeout/cancelamento e encerra a árvore/grupo de processos;
+- preserva a melhor fonte de áudio disponível sem reencode artificial quando possível;
+- usa isolamento de egress próprio para impedir acesso a destinos internos proibidos.
 
-## Estados da fila
+Detalhes específicos: [yt-dlp-provider.md](yt-dlp-provider.md).
 
-- `processing`: provider está validando/preparando/transferring a saída;
-- `pending`: payload foi transferido para staging e aguarda a próxima etapa;
-- `failed`: setup, timeout, saída insegura/inválida, limite ou falha do adapter;
-- `cancelled`: cancelamento solicitado e recursos temporários limpos.
+A avaliação que levou a essa escolha permanece registrada em [external-provider-engine-decision.md](external-provider-engine-decision.md).
 
-Erros internos são canonicalizados. `stderr`, stack trace, paths internos e mensagens arbitrárias do adapter não são copiados diretamente para a fila/UI.
+## Isolamento de egress / SSRF
 
-## Timeout e cancelamento
+Providers externos são uma fronteira diferente da URL direta. Validar apenas a URL inicial não é suficiente porque a engine pode realizar requests secundários.
 
-O runner cria um `AbortController` por execução e aplica timeout global, incluindo preparação e cópia.
+O adapter yt-dlp atual executa atrás de um proxy local controlado pelo Home Music, que valida DNS/IP antes de abrir conexões e bloqueia destinos internos/reservados relevantes. O processo recebe a configuração de proxy de forma explícita e não herda livremente o ambiente do servidor.
 
-Todo provider deve observar `context.signal`. Para providers baseados em subprocesso, observar o sinal significa **encerrar a árvore de processos**, não apenas rejeitar uma Promise no Node.
+Qualquer provider futuro precisa oferecer proteção equivalente ou mais forte. Não registrar uma nova engine real sem conseguir provar que processo e auxiliares não podem contornar a política de egress.
 
-Um adapter concreto deve garantir que não continue escrevendo/recriando scratch depois de timeout ou cancelamento. Essa garantia pertence ao adapter/runner de subprocesso futuro e precisa de testes próprios.
+## Playlists e lotes
 
-## Gate de rede para provider real
+O suporte a playlists/lotes de provider não cria um único job gigante. O agrupador coordena itens independentes, cada um com staging e pipeline próprios.
 
-A #95 identificou uma diferença fundamental entre URL direta (#94) e engines externas: uma engine como yt-dlp pode fazer requests secundários para redirects, manifests, APIs, players e CDNs.
+Isso preserva:
 
-Logo, validar somente a URL inicial não protege contra SSRF.
+- falha parcial por item;
+- duplicata sem cancelar todo o lote;
+- limites de quantidade/tamanho/duração;
+- destino seguro por item;
+- cancelamento sem corromper jobs já concluídos.
 
-Antes de habilitar um provider real, é obrigatório ter uma **policy de egress testável** que impeça o processo e auxiliares de alcançar:
+Detalhes: [external-provider-batches.md](external-provider-batches.md).
 
-- loopback;
-- redes privadas;
-- link-local;
-- endpoints de metadata;
-- demais faixas bloqueadas pela política do Home Music.
+## Estados
 
-Se um proxy de saída não cobrir toda a árvore de processos, o isolamento deve acontecer no nível de processo/OS/rede. A infraestrutura genérica desta issue não finge resolver esse problema e, por isso, não registra yt-dlp ainda.
+- `processing`: provider está preparando/transferindo a saída;
+- `pending`: payload já está sob controle do staging e aguarda próxima etapa;
+- `failed`: setup, timeout, egress, saída insegura/inválida, limite ou falha do adapter;
+- `cancelled`: cancelamento e cleanup dos temporários;
+- `completed`: somente depois do pipeline comum promover/indexar com sucesso.
 
 ## Testes
 
-`external-provider.test.ts` usa provider fake e não depende de internet. A suíte cobre:
+A cobertura usa providers fakes para o contrato genérico e testes dedicados para yt-dlp/egress sem depender de internet pública no CI.
 
-- registry e capabilities;
+Casos relevantes incluem:
+
+- registry/capabilities;
 - configuração obrigatória sem vazamento de segredo;
-- validação antes da criação do job;
-- ausência da URL original na fila;
+- ausência da URL original no estado persistido;
 - scratch separado de `MUSIC_DIR`;
-- transferência scratch → staging;
-- path traversal e symlink;
+- traversal/symlink;
 - limite de bytes;
-- timeout;
-- cancelamento ativo e de payload já pendente;
-- snapshots defensivos;
-- canonicalização de erros sensíveis.
-
-O CI do core não deve depender de sites externos. Testes reais de engine, quando existirem, devem ser isolados/opcionais.
-
-## Relação com as próximas etapas
-
-- **#95:** escolheu yt-dlp como engine recomendada e definiu os riscos/gates.
-- **#96:** cria o contrato genérico, scratch, runner e fake provider.
-- **#97:** valida tecnicamente a mídia e decide perfil/formato com FFmpeg/ffprobe.
-- provider yt-dlp concreto: somente após a fronteira de egress estar implementada e testada.
+- timeout/cancelamento;
+- canonicalização de erros;
+- bloqueio de destinos privados/reservados no egress;
+- seleção de formato/metadata do yt-dlp;
+- lotes com falha parcial.

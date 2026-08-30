@@ -14,7 +14,7 @@ npm run e2e:install
 
 Isso instala as dependências isoladas de `e2e/`, o Chromium e as dependências de sistema exigidas pelo navegador.
 
-O projeto fixa uma versão do Playwright com suporte oficial ao Ubuntu 26.04. Quando a versão do Playwright mudar, execute `npm run e2e:install` novamente para baixar o binário de navegador correspondente.
+O projeto fixa uma versão do Playwright com suporte ao ambiente alvo da suíte. Quando a versão do Playwright mudar, execute `npm run e2e:install` novamente para baixar o binário de navegador correspondente.
 
 ## Executar
 
@@ -22,9 +22,10 @@ O projeto fixa uma versão do Playwright com suporte oficial ao Ubuntu 26.04. Qu
 npm run e2e
 ```
 
-O comando faz o build de produção antes de executar o baseline em duas configurações:
+O comando faz o build de produção antes de executar a suíte em três configurações:
 
 - `mobile-chromium`: viewport 390×844 com touch/mobile emulado;
+- `tablet-chromium`: viewport 834×1112 com touch;
 - `desktop-chromium`: viewport 1440×900.
 
 Para executar somente os testes quando o build já existe:
@@ -33,6 +34,22 @@ Para executar somente os testes quando o build já existe:
 npm run e2e:ci
 ```
 
-O CI também audita o lockfile de `e2e/`, instala o Chromium com as dependências do sistema e executa os testes antes do smoke de produção.
+## Relação com o CI atual
+
+O workflow principal do GitHub Actions hoje:
+
+- executa `npm ci --prefix e2e` para validar o lockfile/dependências da suíte;
+- executa `npm audit --prefix e2e --audit-level=high`;
+- **não instala o browser nem executa Playwright automaticamente** no job principal.
+
+Portanto, um CI verde não deve ser descrito como evidência de que todos os E2E passaram. Quando uma mudança de fluxo/UX exigir esse gate, execute `npm run e2e`/`npm run e2e:ci` em ambiente com Chromium instalado ou adicione a execução ao workflow de forma explícita.
+
+A issue #111 rastreia a expansão/consolidação da cobertura e do gate E2E para os fluxos críticos.
+
+## Cobertura atual
+
+A suíte já possui baseline multiusuário e cenários administrativos/fullstack específicos, incluindo biblioteca, layout desktop, downloads offline e fluxos administrativos com fixtures controladas.
+
+Novos testes devem continuar independentes de internet pública, biblioteca real e SQLite real do usuário.
 
 Artefatos locais de falha (`playwright-report/` e `test-results/`) são ignorados pelo Git.

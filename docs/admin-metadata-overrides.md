@@ -68,17 +68,22 @@ Campos desconhecidos, strings vazias e valores fora do contrato retornam `400`.
 
 Remove todos os overrides da faixa e volta a expor imediatamente os valores físicos.
 
-## Administração Web
+## Administração Web atual
 
 A entrada **Administração → Metadados** é separada das ações de disponibilidade e lixeira para não misturar operações com semânticas diferentes.
 
-A edição mostra:
+Após o redesign do PR #177, a tela usa um workspace **lista + editor persistente**:
 
-- o valor efetivo em cada input;
-- o valor físico logo abaixo do campo;
-- aviso permanente de que o arquivo original não será modificado;
-- ação `Salvar override`;
-- ação `Restaurar arquivo`, disponível somente quando existe override persistido.
+- no desktop, a lista de músicas permanece visível à esquerda;
+- o editor da faixa selecionada fica à direita;
+- em telas menores, o editor assume a área principal;
+- valores efetivos aparecem nos inputs;
+- valores físicos ficam visíveis como referência;
+- o arquivo original continua explicitamente preservado;
+- `Salvar override` e `Restaurar arquivo` mantêm semânticas separadas;
+- capa e metadata textual são editadas no mesmo contexto da faixa.
+
+Trocar de música, fechar o editor, usar `Esc` ou sair da tela não pode descartar silenciosamente alterações ainda não salvas. Respostas assíncronas de uma faixa anterior também não podem sobrescrever o editor da faixa atualmente selecionada.
 
 Depois de salvar ou restaurar, a tela publica `home-music:library-changed` para que a instância canônica de `useLibraryData()` refaça `/api/library` imediatamente.
 
@@ -101,7 +106,7 @@ Validações de payload acontecem antes da persistência para evitar alteraçõe
 
 ## Escrita de tags no arquivo
 
-A escrita opcional de metadados de volta ao arquivo **não faz parte desta entrega**. Ela deve permanecer uma ação explícita e separada, porque exigiria requisitos adicionais de:
+A escrita opcional de metadados de volta ao arquivo **não faz parte do comportamento atual**. Ela deve permanecer uma ação explícita e separada, porque exigiria requisitos adicionais de:
 
 - suporte e limitações por formato;
 - arquivo temporário + substituição segura;
@@ -115,7 +120,7 @@ Até existir uma operação dedicada com esses invariantes, overrides SQLite sã
 
 ## Testes
 
-A entrega cobre:
+A cobertura inclui:
 
 - precedência de override sobre metadata física;
 - persistência após reinicialização;

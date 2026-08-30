@@ -1,251 +1,208 @@
 # Roadmap
 
-## Fase 1 — Caminho crítico
+Este documento é a visão técnica de alto nível do Home Music. A issue [#123](https://github.com/felipe-urgal/home-music/issues/123) é o índice executivo das pendências abertas.
 
-- [x] Scanner de músicas
-- [x] API de biblioteca
-- [x] Streaming com HTTP Range
-- [x] Player mobile
-- [x] Fila contextual
-- [x] Busca básica
-- [x] PWA básica
+> Estado revisado em 2026-08-30. Itens marcados como concluídos refletem funcionalidades já entregues ou concluídas pelo próprio PR que atualiza este documento; itens futuros apontam para a issue que mantém escopo e gate atualizados.
 
-## Fase 2 — Biblioteca pessoal
+## Fases 1–2 — Base do produto e biblioteca pessoal
 
-- [x] SQLite
-- [x] Favoritos persistentes
-- [x] Histórico / recentes
-- [x] Playlists
-- [x] Navegação hierárquica por pastas e subpastas
-- [x] Re-scan incremental manual
-- [x] Re-scan automático periódico opcional
-- [x] Ordenação e filtros avançados
+Concluídas.
 
-## Fase 3 — Experiência mobile
+- [x] scanner recursivo e incremental de músicas;
+- [x] API da biblioteca e streaming HTTP Range;
+- [x] player mobile, fila contextual e busca;
+- [x] PWA básica;
+- [x] SQLite;
+- [x] favoritos, histórico, estatísticas e playlists persistentes;
+- [x] navegação por pastas/subpastas;
+- [x] re-scan manual e automático opcional;
+- [x] ordenação e filtros avançados.
 
-- [x] Shuffle
-- [x] Repeat `off / all / one`
-- [x] Fila reordenável
-- [x] Volume e estado do player persistentes
-- [x] Play automático entre faixas
-- [x] Pré-aquecimento da próxima faixa quando o perfil exige transcoding
-- [x] Continuidade de reprodução no iPhone/iPad em background/tela bloqueada
-- [x] Retomada automática da sessão quando permitida pelo navegador
-- [x] Media Session API
-- [x] Controles compatíveis na tela bloqueada/notificações
-- [x] Login próprio responsivo sem popup de Basic Auth
-- [x] Sessão por cookie HttpOnly
-- [x] Layout sem overflow horizontal em telas estreitas
-- [x] Capas confinadas sem quebrar a viewport
-- [x] Download offline
-- [x] Até 3 downloads offline simultâneos com continuidade entre telas ([detalhe](offline-downloads.md))
-- [ ] Validar downloads offline com celular ocioso/em background e tela bloqueada em Android e iPhone/iPad antes de considerar continuidade garantida ([matriz de validação](offline-downloads.md))
-- [x] Cache seletivo
-- [x] Melhor tratamento de capas ausentes
+## Fase 3 — Experiência mobile e offline
 
-## Fase 4 — Operação no Ubuntu
+A experiência principal está concluída. Restam validações/evoluções explícitas.
 
-- [x] Build React servido pelo Fastify
-- [x] Frontend + API em uma única porta/processo
-- [x] `npm start` de produção
-- [x] Cache seguro com `immutable` somente para assets hashados
-- [x] Liveness público mínimo + readiness separado
-- [x] Diagnóstico detalhado autenticado em `/api/health`
-- [x] Shutdown limpo Fastify + SQLite, inclusive durante scan
-- [x] Serviço systemd com restart automático e journal
-- [x] Update seguro sem versão híbrida de frontend
-- [x] Permissões endurecidas para `.env`, `data/` e SQLite
-- [x] Escaping de caminhos no unit systemd
-- [x] Cookie `Secure` configurável explicitamente para proxy HTTPS confiável
-- [x] Smoke test real de `npm start` no CI
-- [x] Hardening do processo systemd
+- [x] shuffle e repeat `off / all / one`;
+- [x] fila reordenável;
+- [x] estado do player persistente e retomada quando permitida pelo navegador;
+- [x] Media Session e controles de sistema;
+- [x] continuidade da reprodução em background dentro dos limites do navegador;
+- [x] autenticação própria responsiva;
+- [x] layout sem overflow horizontal;
+- [x] download offline individual e em lote com scheduler global de até 3 operações;
+- [x] isolamento de cache/manifesto offline por usuário;
+- [ ] [#81](https://github.com/felipe-urgal/home-music/issues/81) — validar downloads em background/tela bloqueada em Android e iPhone/iPad;
+- [ ] [#174](https://github.com/felipe-urgal/home-music/issues/174) — disponibilizar playlists e pastas completas offline com deduplicação física por faixa.
 
-## Fase 5 — Fora de casa
+Detalhes: [offline-downloads.md](offline-downloads.md).
 
-- [x] Tailscale Serve privado ao tailnet
-- [x] HTTPS automático `*.ts.net`
-- [x] Backend restrito a loopback no perfil remoto
-- [x] Cookie `Secure` no perfil HTTPS
-- [x] Setup/rollback idempotente com proteção contra conflito em 443
-- [x] Aplicar grants/restrições least-privilege no tailnet real ([guia](tailscale-hardening.md))
-- [x] Acesso remoto HTTPS sem exigir cliente Tailscale no celular
-- [x] FFmpeg
-- [x] Transcoding adaptativo
-- [x] Perfis de qualidade Wi‑Fi / 4G
+## Fases 4–6 — Produção, acesso remoto e extras
 
-## Fase 6 — Extras
+Concluídas para o escopo atual.
 
-- [x] Letras — exibir o controle somente quando houver letra local
-- [x] ReplayGain / normalização opcional
-- [x] Estatísticas pessoais
-- [x] Integração opcional com biblioteca DJ — importação/sincronização de playlists via Rekordbox XML
+- [x] build React servido pelo Fastify em produção;
+- [x] serviço systemd endurecido e atualização segura;
+- [x] liveness/readiness e smoke real de produção;
+- [x] Tailscale Serve privado com HTTPS;
+- [x] Tailscale Funnel opcional para exposição pública consciente;
+- [x] FFmpeg/FFprobe, transcoding adaptativo e perfis de qualidade;
+- [x] letras locais;
+- [x] ReplayGain/normalização;
+- [x] estatísticas pessoais;
+- [x] integração Rekordbox XML.
 
 ## Fase 7 — Experiência desktop
 
-Objetivo: evoluir a interface para desktop sem regredir o fluxo mobile Player First e sem duplicar a aplicação React.
+Concluída para o escopo original.
 
-- [x] Adicionar baseline Playwright E2E para login, biblioteca e player em viewport mobile e desktop
-- [x] Criar Desktop Shell responsivo com sidebar, conteúdo principal e área contextual
-- [x] Preservar a experiência mobile atual com composição específica por breakpoint
-- [x] Remover atalhos redundantes no desktop e substituir o menu de opções do player mobile por ações diretas
-- [x] Criar player desktop persistente em barra inferior
-- [x] Criar biblioteca desktop em tabela/lista densa com colunas úteis e ordenação
-- [x] Exibir fila e letras em painel lateral quando houver espaço
-- [x] Criar navegação desktop para músicas, artistas, álbuns, pastas, favoritos, playlists, Rekordbox e estatísticas
-- [x] Adicionar atalhos de teclado para play/pause, próxima/anterior, seek, busca e volume quando aplicável
-- [x] Adicionar seleção múltipla de faixas e ações em lote
-- [x] Adicionar download offline individual e múltiplo na tabela/seleção desktop, reutilizando o scheduler global atual de até 3 operações simultâneas
-- [x] Melhorar drag-and-drop/reordenação da fila para mouse sem prejudicar touch
-- [x] Garantir estados vazios, loading, erros e mini-player coerentes nos dois layouts
+- [x] Desktop Shell responsivo;
+- [x] player persistente em barra inferior;
+- [x] biblioteca desktop em tabela/lista;
+- [x] fila e letras em painel contextual;
+- [x] navegação desktop completa;
+- [x] atalhos de teclado;
+- [x] seleção múltipla e ações em lote;
+- [x] downloads offline no desktop reutilizando o scheduler global;
+- [x] drag-and-drop/reordenação da fila;
+- [x] baseline Playwright mobile/tablet/desktop.
 
 ## Fase 7.5 — Identidade, multiusuário e autorização
 
-Objetivo: criar uma fronteira de identidade e autorização segura antes de introduzir operações administrativas. A biblioteca física continua compartilhada, enquanto dados pessoais e estado de reprodução passam a ser isolados por usuário. Não haverá cadastro público: somente administradores autenticados poderão criar e gerenciar contas.
+Concluída.
 
-Decisões, invariantes de segurança e desenho detalhado: [multi-user-auth.md](multi-user-auth.md).
-Runbook operacional de identidade e usuários: [phase-7.5-operations.md](phase-7.5-operations.md).
-Detalhe da migração do primeiro administrador: [phase-7.5-bootstrap.md](phase-7.5-bootstrap.md).
-Detalhe das sessões associadas à identidade: [phase-7.5-sessions.md](phase-7.5-sessions.md).
-Detalhe do status de autenticação e identidade mínima: [phase-7.5-auth-status.md](phase-7.5-auth-status.md).
-Detalhe do contexto autenticado e política central de acesso: [phase-7.5-auth-policy.md](phase-7.5-auth-policy.md).
-Detalhe da proteção das rotas administrativas existentes: [phase-7.5-admin-routes.md](phase-7.5-admin-routes.md).
-Detalhe das APIs administrativas de usuários: [phase-7.5-admin-users-api.md](phase-7.5-admin-users-api.md).
-Detalhe da troca obrigatória de senha: [phase-7.5-required-password-change.md](phase-7.5-required-password-change.md).
-Detalhe do autosserviço de senha e sessões: [phase-7.5-self-service-account.md](phase-7.5-self-service-account.md).
-Detalhe do ownership de favoritos por usuário: [phase-7.5-favorites-ownership.md](phase-7.5-favorites-ownership.md).
-Detalhe do ownership de histórico e estatísticas por usuário: [phase-7.5-history-ownership.md](phase-7.5-history-ownership.md).
-Detalhe do ownership de playlists manuais: [phase-7.5-manual-playlist-ownership.md](phase-7.5-manual-playlist-ownership.md).
-Detalhe do ownership do estado do player: [phase-7.5-playback-state-ownership.md](phase-7.5-playback-state-ownership.md).
-Detalhe da auditoria de IDOR e queries por ownership: [phase-7.5-idor-ownership-audit.md](phase-7.5-idor-ownership-audit.md).
-Detalhe do isolamento dos downloads offline por usuário: [offline-downloads.md](offline-downloads.md).
-Detalhe do `currentUser` e superfícies por role no frontend: [phase-7.5-frontend-role-surfaces.md](phase-7.5-frontend-role-surfaces.md).
-Detalhe da tela administrativa de usuários: [phase-7.5-admin-users-screen.md](phase-7.5-admin-users-screen.md).
-Detalhe da tela de autosserviço da conta: [phase-7.5-my-account-screen.md](phase-7.5-my-account-screen.md).
-Detalhe da remoção das credenciais permanentes e recuperação local: [phase-7.5-remove-env-auth-recovery.md](phase-7.5-remove-env-auth-recovery.md).
+O Home Music usa contas persistidas no SQLite com papéis `admin` e `user`, sessões opacas, autorização fail-closed no backend e ownership por usuário para dados pessoais.
 
-Princípios:
+- [x] schema e migrations de usuários;
+- [x] hashing `scrypt` e senhas temporárias;
+- [x] bootstrap do primeiro administrador;
+- [x] sessão associada a `userId`;
+- [x] política central `public / authenticated / admin`;
+- [x] APIs administrativas de usuários;
+- [x] proteção do último administrador e contra auto-lockout;
+- [x] troca obrigatória de senha temporária;
+- [x] autosserviço de senha e sessões;
+- [x] ownership de favoritos, histórico, estatísticas, playlists manuais e estado do player;
+- [x] downloads offline isolados por usuário;
+- [x] auditoria de IDOR/ownership;
+- [x] recuperação local de administrador sem depender permanentemente do `.env`;
+- [x] regressões de segurança e smoke de produção multiusuário.
 
-- autorização é aplicada no backend e falha fechado; esconder menus no frontend é somente uma melhoria de UX;
-- toda rota exige a menor permissão necessária, com `deny by default` e proteção centralizada para evitar rotas administrativas esquecidas;
-- contas usam papéis `admin` e `user`, com ownership para recursos pessoais e `404` para recursos de outro usuário quando não for necessário revelar sua existência;
-- senhas nunca são persistidas em claro; usar `scrypt` do `node:crypto` com salt aleatório, parâmetros versionados e comparação em tempo constante;
-- sessão permanece opaca em cookie `HttpOnly`, `SameSite=Strict` e `Secure` em HTTPS, mas passa a resolver `token -> userId -> usuário/role/enabled` no servidor;
-- alteração de senha, papel ou estado da conta revoga sessões afetadas; usuário desativado perde acesso imediatamente;
-- nunca permitir zero administradores ativos;
-- operações administrativas destrutivas futuras deverão exigir autenticação recente quando aplicável;
-- migrations devem ser transacionais e preservar os dados existentes do usuário atual.
-
-Sequência de implementação:
-
-- [x] Criar schema de `users` com `id`, `username`, username normalizado único, `password_hash`, `role`, `enabled`, timestamps e flag de troca obrigatória de senha
-- [x] Implementar hashing/verificação de senha com `scrypt`, formato versionado e limites defensivos de entrada
-- [x] Criar bootstrap/migration idempotente do usuário atual de `HOME_MUSIC_USER`/`HOME_MUSIC_PASSWORD` para o primeiro `admin`, sem perder acesso durante o upgrade
-- [x] Evoluir `SessionManager` para associar sessão a `userId`, manter token aleatório opaco e permitir revogação de todas as sessões de um usuário
-- [x] Fazer `/api/auth/status` retornar a identidade autenticada mínima (`id`, `username`, `role`) sem expor dados sensíveis
-- [x] Criar contexto de identidade autenticada no Fastify e política central de acesso `public / authenticated / admin`
-- [x] Restringir rotas administrativas existentes, incluindo scan manual, diagnóstico operacional detalhado e importação/sincronização Rekordbox quando aplicável
-- [x] Criar APIs administrativas de usuários para listar, criar, alterar papel, ativar/desativar, redefinir senha e revogar sessões
-- [x] Impedir desativação/rebaixamento do último administrador ativo e impedir auto-lockout administrativo
-- [x] Exigir senha temporária forte ao criar/resetar conta e obrigar troca no primeiro login antes de liberar o uso normal
-- [x] Permitir ao usuário autenticado trocar a própria senha e revogar as próprias outras sessões
-- [x] Migrar favoritos para ownership por `user_id`, preservando os favoritos atuais no primeiro admin
-- [x] Migrar histórico e estatísticas para escopo por `user_id`, preservando o histórico atual no primeiro admin
-- [x] Migrar playlists manuais para ownership por `user_id`; manter playlists Rekordbox compartilhadas e somente leitura fora da reimportação
-- [x] Migrar `playback_state` de linha global única para uma linha por usuário, preservando fila, posição, volume, shuffle e repeat atuais no primeiro admin
-- [x] Revisar todas as queries por ID para aplicar ownership no próprio SQL e evitar IDOR/acesso cruzado entre usuários
-- [x] Separar downloads offline e manifesto/cache por `userId`, impedindo vazamento local entre contas no mesmo navegador
-- [x] Adaptar o frontend para manter `currentUser` e exibir superfícies conforme `role`, sem usar essa checagem como controle de segurança
-- [x] Criar tela administrativa `Usuários`, visível somente para admin, com criação e gerenciamento simples sem cadastro público
-- [x] Criar tela `Minha conta` para troca de senha e revogação de sessões próprias
-- [x] Remover a dependência permanente de credenciais no `.env` após bootstrap bem-sucedido, mantendo fluxo operacional seguro de recuperação local de administrador
-- [x] Documentar bootstrap, criação de usuários, recuperação de acesso, mudança de senha, desativação e rollback de migration
-- [x] Adicionar testes unitários de senha, sessão, role, último admin, normalização de username e revogação
-- [x] Adicionar testes de integração para `401 / 403 / 404`, ownership, usuário desativado, troca obrigatória de senha e rotas administrativas
-- [x] Adicionar Playwright com contas `admin` e `user` em mobile/tablet/desktop, validando menu, login, isolamento de dados e troca de senha
-- [x] Adicionar regressões de segurança para tentativa de chamar `/api/admin/*` como `user`, adulteração de payload/role no cliente e acesso a recursos de outro usuário
-- [x] Atualizar smoke test de produção para validar migration/bootstrap, login admin e login de usuário normal sem usar o banco real
-
-Critério de conclusão: um `user` pode reproduzir e administrar somente seus dados pessoais, nunca consegue executar operações administrativas mesmo por chamada manual à API, e um `admin` pode gerenciar usuários sem risco de remover o último administrador ou perder os dados existentes no upgrade.
+Documentação principal: [multi-user-auth.md](multi-user-auth.md), [phase-7.5-operations.md](phase-7.5-operations.md) e [phase-7.5-my-account-screen.md](phase-7.5-my-account-screen.md).
 
 ## Fase 8 — Administração da biblioteca
 
-Objetivo: permitir administrar a coleção pelo próprio Home Music, com operações seguras e reversíveis sempre que possível. Toda a área e suas APIs são exclusivas de `admin`, apoiadas na autorização da Fase 7.5.
+Concluída para o escopo planejado.
 
-Detalhe das ações administrativas em lote e seus limites de segurança: [admin-bulk-actions.md](admin-bulk-actions.md).
-Detalhe dos overrides de metadados não destrutivos: [admin-metadata-overrides.md](admin-metadata-overrides.md).
-Detalhe dos overrides seguros de capa: [admin-cover-overrides.md](admin-cover-overrides.md).
-Detalhe da movimentação física segura: [admin-file-moves.md](admin-file-moves.md).
-Detalhe do armazenamento e manutenção do cache de transcoding: [admin-transcode-cache.md](admin-transcode-cache.md).
-Detalhe do histórico operacional de scans/importações: [admin-operation-history.md](admin-operation-history.md).
+- [x] Administração separada e exclusiva de `admin` (#75);
+- [x] visão geral operacional da biblioteca (#77);
+- [x] entrada de importação integrada ao pipeline (#79);
+- [x] desativar/reativar músicas (#83);
+- [x] lixeira/quarentena com restauração e exclusão permanente (#84);
+- [x] ações administrativas em lote (#85);
+- [x] overrides de metadados não destrutivos (#86);
+- [x] overrides de capa seguros (#87);
+- [x] movimentação/organização física confinada a `MUSIC_DIR` (#88);
+- [x] armazenamento e limpeza segura do cache de transcoding (#89);
+- [x] histórico operacional de scans/importações (#90);
+- [x] backup e restore consistentes, documentados e testados (#91).
 
-- [x] Criar área `Administração` separada da experiência de reprodução e protegida por role `admin`
-- [x] Criar visão geral com quantidade de faixas, armazenamento, problemas e estado do scanner
-- [x] Criar ponto de entrada `Importar mídia` integrado ao pipeline da Fase 9
-- [x] Permitir desativar/reativar músicas sem remover o arquivo físico
-- [x] Criar lixeira/quarentena com restauração antes da exclusão permanente
-- [x] Permitir exclusão física somente após confirmação explícita
-- [x] Adicionar ações em lote para ativar/desativar, quarentena/restauração/exclusão, favoritar e adicionar a playlists; movimentação física segura permanece no item específico abaixo
-- [x] Permitir editar metadados por override não destrutivo no SQLite ([detalhe](admin-metadata-overrides.md))
-- [ ] Avaliar escrita opcional de metadados de volta ao arquivo somente como operação explícita
-- [x] Permitir adicionar/substituir capa sem destruir o arquivo original por padrão ([detalhe](admin-cover-overrides.md))
-- [x] Permitir mover/organizar arquivos dentro de `MUSIC_DIR` com validação de caminhos e rollback quando possível ([detalhe](admin-file-moves.md))
-- [x] Exibir armazenamento usado pela biblioteca e pelo cache de transcoding ([detalhe](admin-transcode-cache.md))
-- [x] Permitir limpar cache de transcoding pela administração ([detalhe](admin-transcode-cache.md))
-- [x] Exibir histórico e resultado dos scans/importações com erros acionáveis ([detalhe](admin-operation-history.md))
-- [ ] Criar backup consistente do SQLite e configuração operacional sem incluir segredos em claro
-- [ ] Criar fluxo documentado e testado de restore
+A escrita opcional de metadata/capa de volta ao arquivo físico continua fora do comportamento padrão. Se for implementada futuramente, deverá ser operação explícita, reversível quando possível e tratada em issue própria.
 
 ## Fase 9 — Importação de mídia
 
-Objetivo: centralizar entradas de mídia em um pipeline seguro, observável e extensível por providers.
+Concluída para o pipeline planejado, com melhorias posteriores também incorporadas.
 
-- [x] Criar modelo de job/fila de importação com estados `pending / processing / completed / failed / cancelled`
-- [ ] Criar staging temporário separado de `MUSIC_DIR` e promover o arquivo somente após validação
-- [ ] Adicionar importação por drag-and-drop/upload com progresso
-- [ ] Adicionar importação por URL direta de mídia suportada
-- [ ] Criar arquitetura de providers desacoplados para fontes externas
-- [ ] Avaliar/implementar provider opcional para YouTube no uso pessoal, isolado do pipeline principal
-- [ ] Para provider YouTube, selecionar a melhor fonte de áudio disponível antes de qualquer conversão
-- [ ] Preservar o formato/qualidade original por padrão e converter somente quando necessário ou solicitado
-- [ ] Oferecer perfis de saída como `original`, `economizar espaço` e `compatibilidade máxima`
-- [ ] Usar FFmpeg/ffprobe para validar mídia, duração, codec e conversões necessárias
-- [ ] Extrair título, artista, álbum e capa quando a fonte fornecer metadata confiável
-- [ ] Exibir preview antes de confirmar a entrada definitiva na biblioteca
-- [ ] Detectar possíveis duplicatas por hash, duração, nome e metadata antes de importar
-- [ ] Definir nomes de arquivo e destino sem colisões e sem path traversal
-- [ ] Aplicar limites de tamanho, tempo, protocolos e destinos de URL para evitar abuso/SSRF
-- [ ] Limpar arquivos temporários em sucesso, falha, cancelamento e restart do serviço
-- [ ] Criar histórico de importações com retry e diagnóstico de falha
-- [ ] Disparar atualização incremental da biblioteca após importação concluída
+- [x] modelo de jobs/fila com estados persistíveis (#79);
+- [x] staging temporário fora de `MUSIC_DIR` (#92);
+- [x] upload/drag-and-drop com progresso (#93);
+- [x] importação por URL com proteção contra SSRF (#94);
+- [x] avaliação de engines externas (#95);
+- [x] arquitetura desacoplada de providers (#96);
+- [x] validação FFmpeg/ffprobe e perfis de saída (#97);
+- [x] preview de metadata antes da promoção (#98);
+- [x] detecção de possíveis duplicatas (#99);
+- [x] destino seguro, no-clobber e confinement em `MUSIC_DIR` (#100);
+- [x] cleanup de staging em sucesso/falha/cancelamento/restart (#101);
+- [x] retry e diagnóstico de jobs (#102);
+- [x] atualização incremental da biblioteca após promoção (#103);
+- [x] primeiro provider externo via `yt-dlp` (#104);
+- [x] importação de playlists/lotes por provider externo (#154);
+- [x] happy path automatizado com pausa somente para exceções (#156).
+
+A superfície atual de importação usa um workbench em quatro etapas — **Origem → Preparar → Revisar → Biblioteca** — sem alterar as invariantes do pipeline.
 
 ## Fase 10 — Saúde e inteligência da biblioteca
 
-Objetivo: ajudar a manter uma coleção grande organizada e detectar problemas sem depender de inspeção manual dos arquivos.
+Parcialmente concluída.
 
-- [ ] Criar painel de saúde da biblioteca
-- [ ] Identificar faixas sem artista, álbum, título, duração ou capa
-- [ ] Identificar arquivos que falham no scanner/ffprobe
-- [ ] Identificar possíveis duplicatas e permitir revisão antes de qualquer ação destrutiva
-- [ ] Identificar registros órfãos ou inconsistentes no SQLite
-- [ ] Criar smart playlists por regras como mais tocadas, recentes, nunca tocadas e favoritas antigas
-- [ ] Permitir combinar filtros de artista, álbum, pasta, favorito, histórico e período nas smart playlists
-- [ ] Permitir salvar filtros da biblioteca como views inteligentes
-- [ ] Melhorar tratamento de artistas/álbuns duplicados por variações de grafia sem alterar arquivos automaticamente
-- [ ] Exibir integridade e tamanho de cache, banco e biblioteca no painel administrativo
+- [x] painel de saúde com indicadores reais (#105);
+- [x] identificação de título/capa/artista/álbum/duração ausentes ou desconhecidos (#105);
+- [x] auditoria read-only de falhas de scanner/FFprobe, arquivos ausentes e arquivos fora do índice (#106);
+- [x] snapshot e data da última verificação de integridade (#106);
+- [x] armazenamento de biblioteca, SQLite e cache no painel administrativo (#105);
+- [ ] [#107](https://github.com/felipe-urgal/home-music/issues/107) — revisar possíveis músicas duplicadas na biblioteca existente;
+- [ ] [#108](https://github.com/felipe-urgal/home-music/issues/108) — smart playlists por regras;
+- [ ] [#109](https://github.com/felipe-urgal/home-music/issues/109) — views inteligentes salvas;
+- [ ] [#110](https://github.com/felipe-urgal/home-music/issues/110) — normalização lógica de variações de grafia.
+
+A auditoria de Integridade permanece **somente leitura**. `Verificar agora` não remove arquivos nem registros; reconciliação continua pertencendo ao scan normal.
+
+## Redesign administrativo — 2026
+
+Ciclo concluído para as superfícies planejadas, mantendo as regras de segurança/backend existentes:
+
+- [x] Administração em cockpit compacto (#172);
+- [x] Gerenciar músicas com lista limpa, menu contextual e lote sob demanda (#173);
+- [x] Metadados como workspace lista + editor persistente (#177);
+- [x] Importação como workbench progressivo (#178);
+- [x] Integridade como cockpit diagnóstico e Minha conta com largura fluida (#179);
+- [x] Usuários com tabela + inspetor e fluxos focados de criar/editar (#180);
+- [x] Lixeira com lista ampla + inspetor lateral, restauração priorizada e delete permanente isolado (#181).
+
+A composição atual está documentada em [administration-ui.md](administration-ui.md).
 
 ## Fase 11 — Engenharia, arquitetura e qualidade
 
-Objetivo: sustentar a evolução do produto reduzindo acoplamento e aumentando a segurança contra regressões.
+Pendente. As issues abaixo são a fonte de escopo:
 
-- [ ] Expandir Playwright E2E para fila, playlists, offline e administração
-- [ ] Introduzir navegação com URLs reais/deep links para telas e entidades relevantes
-- [ ] Refatorar `LibraryScreen` em componentes/hooks menores orientados por responsabilidade
-- [ ] Refatorar `PlayerScreen` em componentes/hooks menores sem duplicar estado de reprodução
-- [ ] Reduzir responsabilidade de `App.tsx` separando composição, navegação e orquestração
-- [ ] Separar rotas Fastify, serviços de domínio e infraestrutura atualmente concentrados no bootstrap do servidor
-- [ ] Criar serviços explícitos para operações destrutivas de arquivos, imports e backups com testes próprios
-- [ ] Adicionar testes de regressão de segurança para upload, importação por URL, path traversal e operações administrativas
-- [ ] Adicionar benchmark/teste de performance com biblioteca grande para scanner, busca e renderização
-- [ ] Revisar acessibilidade de teclado, foco, labels e contraste em mobile e desktop
-- [ ] Melhorar observabilidade de jobs longos com logs estruturados e identificador de operação
-- [ ] Automatizar revisão periódica de dependências sem fazer updates destrutivos automaticamente
+- [ ] [#111](https://github.com/felipe-urgal/home-music/issues/111) — expandir Playwright E2E para fluxos críticos;
+- [ ] [#112](https://github.com/felipe-urgal/home-music/issues/112) — URLs reais e deep links;
+- [ ] [#113](https://github.com/felipe-urgal/home-music/issues/113) — refatorar `LibraryScreen`;
+- [ ] [#114](https://github.com/felipe-urgal/home-music/issues/114) — refatorar `PlayerScreen` sem duplicar estado;
+- [ ] [#115](https://github.com/felipe-urgal/home-music/issues/115) — reduzir responsabilidade de `App.tsx`;
+- [ ] [#116](https://github.com/felipe-urgal/home-music/issues/116) — separar rotas Fastify, serviços e infraestrutura;
+- [ ] [#117](https://github.com/felipe-urgal/home-music/issues/117) — serviços explícitos para operações destrutivas/imports/backups;
+- [ ] [#118](https://github.com/felipe-urgal/home-music/issues/118) — regressões de segurança para importação/administração;
+- [ ] [#119](https://github.com/felipe-urgal/home-music/issues/119) — benchmark com biblioteca grande;
+- [ ] [#120](https://github.com/felipe-urgal/home-music/issues/120) — revisão sistemática de acessibilidade;
+- [ ] [#121](https://github.com/felipe-urgal/home-music/issues/121) — observabilidade de jobs longos;
+- [ ] [#122](https://github.com/felipe-urgal/home-music/issues/122) — revisão periódica de dependências.
+
+## Backlog visual e PWA
+
+- [ ] [#175](https://github.com/felipe-urgal/home-music/issues/175) — fallback visual consistente para músicas sem capa;
+- [ ] [#176](https://github.com/felipe-urgal/home-music/issues/176) — novo ícone/identidade visual da PWA.
+
+## Regra de execução
+
+O padrão obrigatório vive em [`../AGENTS.md`](../AGENTS.md). Em resumo:
+
+```text
+issue/escopo
+   ↓
+branch própria
+   ↓
+investigação + implementação
+   ↓
+testes focados e amplos
+   ↓
+auto code review completo
+   ↓
+correções
+   ↓
+review + CI novamente no head final
+   ↓
+APPROVE / MERGE
+```
+
+Nenhuma mudança destrutiva deve ser considerada pronta sem revisão explícita das invariantes de segurança correspondentes. `BLOCKER`, `HIGH` ou `MEDIUM` conhecidos bloqueiam merge até correção.
