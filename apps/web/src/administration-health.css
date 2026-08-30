@@ -1,0 +1,79 @@
+.administration-problem-list__button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #7f8c97;
+  font: inherit;
+  cursor: pointer;
+}
+
+.administration-problem-list__button svg {
+  width: 12px;
+  height: 12px;
+  opacity: .7;
+}
+
+.administration-problem-list__button:hover:not(:disabled) {
+  color: #dce5ec;
+}
+
+.administration-problem-list__button:disabled {
+  cursor: default;
+  opacity: .65;
+}
+
+.admin-metadata-health-filter {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 11px;
+  border: 1px solid rgba(224,162,70,.16);
+  border-radius: 10px;
+  background: rgba(180,119,32,.07);
+}
+
+.admin-metadata-health-filter > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.admin-metadata-health-filter strong {
+  color: #e8edf1;
+  font-size: 10px;
+}
+
+.admin-metadata-health-filter small {
+  color: #8c98a2;
+  font-size: 9px;
+}
+
+.admin-metadata-health-filter > button {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 8px;
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 8px;
+  background: rgba(255,255,255,.025);
+  color: #aab5be;
+  font: inherit;
+  font-size: 9px;
+  cursor: pointer;
+}
+
+.admin-metadata-health-filter > button:hover {
+  color: #eef4f8;
+  background: rgba(255,255,255,.045);
+}
+
+.admin-metadata-health-filter > button svg {
+  width: 12px;
+  height: 12px;
+}
