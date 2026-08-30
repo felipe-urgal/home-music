@@ -2,13 +2,15 @@
 
 Este documento registra o comportamento atual dos downloads offline do Home Music, incluindo concorrência, superfícies mobile/desktop, limites de background e isolamento entre contas no mesmo navegador.
 
-## Objetivo
+## Estado atual
 
-Permitir iniciar mais de um download sem obrigar o usuário a permanecer na música ou tela em que o download começou, mantendo os dados locais associados ao usuário autenticado que criou o download.
+O Home Music permite baixar faixas individualmente e em lote para reprodução offline. O scheduler é global à aplicação e limita a execução a **3 downloads simultâneos**.
+
+A mesma infraestrutura é compartilhada entre player e biblioteca desktop. Navegar entre telas não cria uma segunda fila nem cancela operações em andamento.
+
+A continuidade garantida hoje é **dentro da mesma execução ativa da aplicação/aba**. A validação de background/tela bloqueada em dispositivos reais continua aberta na issue [#81](https://github.com/felipe-urgal/home-music/issues/81).
 
 ## Scheduler global
-
-Os downloads usam um scheduler global do frontend com limite de **3 operações simultâneas**.
 
 Quando há mais de três pedidos:
 
@@ -20,84 +22,48 @@ download D ─ aguardando
 download E ─ aguardando
 ```
 
-Assim evitamos abrir conexões ilimitadas contra o servidor e ainda permitimos paralelismo útil em Wi-Fi/rede local.
+A chave do scheduler inclui `userId + trackId`. Isso evita duplicar o mesmo job para a mesma conta e impede que operações de identidades diferentes compartilhem estado por engano.
 
-A chave interna do scheduler inclui `userId + trackId`. Isso preserva a deduplicação da mesma faixa para a mesma conta sem fazer um download iniciado por A bloquear ou contaminar uma operação equivalente de B.
+Falha em uma faixa não cancela os demais downloads já entregues ao scheduler.
 
-## Continuidade durante a navegação
+## Continuidade durante navegação
 
-`useOfflineDownloads()` é instanciado no `App` raiz e o scheduler vive fora das telas individuais.
+O estado offline é instanciado no nível raiz da aplicação. Depois de iniciar um download, o usuário pode navegar por player, biblioteca, artistas, álbuns, pastas, playlists e estatísticas sem abortar o job por troca de tela.
 
-Portanto, depois de iniciar um download, o usuário pode navegar entre:
+O conjunto de IDs em andamento permanece observável e a UI volta a refletir o estado quando a faixa reaparece.
 
-- Player;
-- Biblioteca;
-- artistas/álbuns/pastas;
-- playlists;
-- estatísticas.
+## Superfícies
 
-O job continua ativo e o conjunto `downloadingIds` permanece observável para o usuário atual. Ao voltar para a faixa, a UI consegue continuar mostrando o estado de download.
+### Player
 
-Nenhum `AbortController` é associado à troca de tela.
+Uma faixa pode ser baixada/removida do offline a partir do contexto de reprodução.
 
-## Superfície desktop
+### Biblioteca desktop
 
-A biblioteca desktop reutiliza exatamente o mesmo estado e o mesmo scheduler usados pelo player. A tabela não instancia outro `useOfflineDownloads()` e não possui fila própria.
+Cada faixa expõe estado compatível com o mesmo scheduler:
 
-Cada faixa expõe uma ação compacta com três estados:
+- baixar;
+- aguardando/em andamento;
+- disponível offline;
+- remover download concluído.
 
-- **Baixar**: agenda a faixa para uso offline;
-- **Em andamento**: mantém a ação visível e desabilitada enquanto o job está ativo ou aguardando no scheduler;
-- **Disponível offline**: confirma conclusão e permite remover o download com confirmação explícita.
-
-A seleção múltipla adiciona uma ação **Baixar seleção**. Ela filtra itens já concluídos ou em andamento e dispara somente as faixas elegíveis. Mesmo que várias sejam solicitadas de uma vez, a concorrência real continua limitada a três operações pelo scheduler global.
-
-Falhas são isoladas por faixa e reutilizam o feedback global da aplicação. Um erro em um item não cancela os demais jobs já entregues ao scheduler.
-
-## Limite de ciclo de vida
-
-A continuidade garantida hoje é **dentro da mesma execução ativa da aplicação/aba**.
-
-O scheduler fica em memória no contexto da página e cada job executa o `fetch()` e o `cache.put()` a partir do frontend. Portanto, navegar dentro da SPA é diferente de colocar o aplicativo em background ou bloquear a tela.
-
-Fechar a aba, encerrar o navegador, recarregar a página ou o sistema operacional suspender o processo pode pausar ou interromper um download em andamento. Não devemos anunciar continuidade com tela bloqueada como garantia sem validação em dispositivo real.
-
-Navegadores baseados em Chromium podem oferecer mecanismos específicos para downloads longos em background, mas essa capacidade não é uniforme entre plataformas. Em especial, o comportamento de PWA em iPhone/iPad precisa ser tratado como uma matriz própria de compatibilidade, não inferido do Android.
-
-Os arquivos que já terminaram continuam persistidos normalmente no Cache Storage e no manifesto local do usuário correspondente.
-
-## Validação mobile de background/tela bloqueada
-
-Antes de considerar continuidade em background como funcionalidade concluída, executar em aparelhos reais pelo menos estes cenários:
-
-| Plataforma | Cenário | Aceite |
-| --- | --- | --- |
-| Android/Chrome ou PWA instalada | iniciar arquivo suficientemente grande, bloquear a tela durante o download e desbloquear depois | verificar se o arquivo terminou íntegro; se não, registrar se pausou, retomou ou falhou |
-| Android/Chrome ou PWA instalada | iniciar três downloads, enviar app para background e retornar | nenhum item pode ser anunciado como concluído sem existir integralmente no Cache Storage |
-| iPhone/iPad/Safari ou PWA instalada | iniciar arquivo suficientemente grande, bloquear a tela e desbloquear depois | medir o comportamento real sem assumir execução contínua do JavaScript |
-| iPhone/iPad/Safari ou PWA instalada | alternar para outro app por alguns minutos e retornar | manifesto e cache devem permanecer consistentes mesmo quando o sistema suspender a página |
-
-Se o download não sobreviver ao bloqueio em uma plataforma, a próxima solução deve priorizar integridade e retomada explícita em vez de fingir execução contínua. Qualquer estratégia de background precisa degradar com segurança onde a API necessária não existir.
+A seleção múltipla oferece download em lote, mas a concorrência real continua limitada a três jobs.
 
 ## Armazenamento
 
 Cada job:
 
 1. captura o `userId` que iniciou a operação;
-2. baixa o arquivo completo por `/api/tracks/:id/stream` usando a sessão atual;
-3. valida resposta HTTP `200`;
-4. verifica espaço disponível quando o navegador oferece `navigator.storage.estimate()`;
-5. grava o áudio no Cache Storage exclusivo daquele `userId`;
-6. atualiza somente o manifesto daquele `userId` depois que o cache conclui;
+2. baixa a faixa completa pela rota autenticada de streaming;
+3. exige resposta HTTP válida;
+4. consulta estimativa de quota quando o navegador oferece `navigator.storage.estimate()`;
+5. grava o áudio no Cache Storage exclusivo daquele usuário;
+6. atualiza o manifesto do mesmo usuário **somente após** o cache concluir;
 7. tenta solicitar armazenamento persistente como operação best-effort.
 
-Falha de quota continua sendo reportada sem registrar download incompleto como concluído.
+Falha de quota ou gravação nunca deve produzir um registro falso de “disponível offline”.
 
-Uma troca de conta durante um download não move o resultado para a nova conta: o job mantém o `userId` capturado no início e qualquer conclusão tardia permanece no namespace original.
-
-## Isolamento multiusuário
-
-O navegador possui um único origin para o Home Music, portanto o isolamento precisa ser explícito na aplicação.
+## Namespace multiusuário
 
 O estado atual usa:
 
@@ -109,57 +75,84 @@ home-music-offline-client-scope-v1
 /offline-audio/<trackId>
 ```
 
-A identidade offline ativa é atualizada somente depois que `/api/auth/status` confirma um usuário autenticado. Ela é removida quando:
+Uma troca de conta durante um download não move o resultado para a nova conta: o job mantém a identidade capturada no início.
 
-- o servidor confirma que não há sessão autenticada;
-- a sessão expira e uma API devolve `401`;
-- o usuário conclui logout;
-- a verificação de autenticação alcança o servidor, mas falha de forma que a identidade não possa ser confirmada.
+A identidade offline ativa é atualizada depois que `/api/auth/status` confirma o usuário e é removida quando logout/sessão expirada confirmam que a identidade não deve continuar ativa.
 
-Quando o servidor está realmente inalcançável, o último `userId` autenticado pode continuar sendo usado para abrir **somente os downloads daquele namespace**. Isso preserva o modo offline sem permitir que uma troca A → B reutilize o manifesto/cache de A pela UI normal.
+Quando o servidor está realmente inalcançável, o último namespace autenticado pode ser usado **somente** para abrir os downloads daquela conta.
 
-Alterações do `userId` local são propagadas na aba atual e também por `storage` entre outras abas do mesmo origin. Isso faz cada client renegociar o próprio escopo com o service worker quando login/logout em outra aba altera a identidade local.
+## Service worker e capability
 
-A troca de usuário é fail-closed em dois níveis:
+O protocolo atual do service worker é **versão 3**.
 
-1. enquanto o hook ainda não carregou o novo manifesto, a lista visível fica vazia em vez de reutilizar registros do usuário anterior;
-2. enquanto o service worker ainda não confirmou o novo escopo do client/tab, reprodução offline permanece indisponível.
+O worker:
 
-O `userId` não é aceito como parte da URL de áudio offline e portanto não funciona como autorização por identificador. A rota virtual identifica somente a faixa; o service worker seleciona o cache usando o usuário associado ao `clientId` que originou a requisição.
+- recebe o `userId` ativo na negociação de capability;
+- associa o usuário ao `clientId`/aba;
+- persiste o vínculo mínimo de escopo para sobreviver a suspensão/restart do worker;
+- serializa trocas de identidade;
+- só confirma capability depois de persistir o novo escopo;
+- só serve `/offline-audio/<trackId>` para client com escopo válido;
+- abre o cache da conta associada ao client, nunca um cache escolhido pela URL;
+- mantém `/api/*` fora do cache estático da PWA.
 
-### Cache e manifesto legados
+Um worker antigo/incompatível degrada para offline indisponível até atualização, em vez de reutilizar um cache global legado.
 
-A versão anterior usava um manifesto e um cache globais:
+## Cache legado
+
+Versões anteriores usavam:
 
 ```text
 home-music:offline-tracks:v1
 home-music-offline-audio-v1
 ```
 
-Esses dados não registram qual conta os criou. Por isso **não são migrados automaticamente** para o primeiro usuário que abrir a versão nova. A versão multiusuário remove manifesto e cache legados e exige baixar novamente as músicas desejadas.
+Como esses dados não registravam ownership, eles não são atribuídos automaticamente a uma conta na migração multiusuário. O comportamento seguro é exigir novo download.
 
-Adotar o cache antigo para o usuário atual seria uma atribuição de ownership sem evidência e poderia transformar a migration em vazamento entre contas.
+## Limite de ciclo de vida
 
-### Limite da fronteira local
+O scheduler executa `fetch()` e `cache.put()` no contexto ativo da aplicação. Por isso:
 
-O objetivo desta separação é impedir vazamento entre contas durante o uso normal da aplicação no mesmo perfil do navegador: troca de login, logout, sessão expirada, reload, múltiplas abas e modo offline.
+- trocar de tela dentro da SPA: **suportado**;
+- recarregar/fechar a aba: pode interromper job em andamento;
+- bloquear tela/background: depende de navegador e sistema operacional;
+- download já concluído: permanece no cache até remoção pelo usuário/navegador.
 
-Cache Storage e `localStorage` continuam pertencendo ao mesmo origin do navegador. Eles não são uma fronteira criptográfica contra alguém que já tenha controle irrestrito do perfil local, DevTools ou armazenamento do dispositivo. Uma ameaça local desse nível exigiria criptografia de conteúdo/chaves por usuário e um modelo de desbloqueio offline próprio, o que não faz parte desta etapa.
+Não anunciar continuidade de background como garantida até a validação da #81.
 
-## Service worker
+## Matriz mínima de validação mobile
 
-O protocolo de capability do service worker foi elevado para a versão `3`.
+| Plataforma | Cenário | Aceite |
+| --- | --- | --- |
+| Android/Chrome/PWA | iniciar arquivo grande e bloquear a tela | medir se terminou, pausou, retomou ou falhou sem corromper manifesto/cache |
+| Android/Chrome/PWA | iniciar três downloads e enviar app para background | nenhum item pode aparecer concluído sem arquivo íntegro |
+| iPhone/iPad/Safari/PWA | iniciar arquivo grande e bloquear a tela | medir comportamento real sem assumir execução contínua de JS |
+| iPhone/iPad/Safari/PWA | alternar para outro app e retornar | cache e manifesto devem permanecer consistentes após suspensão |
 
-A nova versão:
+Se uma plataforma não mantiver execução, a solução futura deve priorizar retomada/integridade, não simular continuidade.
 
-- recebe do frontend o `userId` ativo junto da negociação de capability;
-- associa esse usuário ao `clientId`/tab que enviou a mensagem;
-- persiste somente esse pequeno vínculo de escopo em `home-music-offline-client-scope-v1`, para sobreviver à suspensão/reinício do processo do service worker;
-- serializa atualizações de escopo para que uma troca rápida A → B preserve a ordem e a identidade mais recente vença;
-- só responde à capability depois que o novo escopo foi persistido;
-- só serve `/offline-audio/<trackId>` quando a requisição vem de um client com escopo válido;
-- abre o cache do usuário associado ao client, nunca um cache escolhido por parâmetro da URL;
-- remove o cache global legado durante a ativação;
-- continua mantendo conteúdo autenticado de `/api/*` fora do cache estático da PWA.
+## Fronteira local
 
-O frontend considera o worker pronto para offline somente depois da resposta à negociação correspondente ao `userId` atual. Um service worker antigo (`version < 3`) degrada para offline indisponível até o upgrade, em vez de reutilizar o cache global anterior.
+O isolamento multiusuário evita vazamento durante uso normal do mesmo origin: login/logout, troca de conta, reload, múltiplas abas e modo offline.
+
+Cache Storage e `localStorage` ainda pertencem ao perfil do navegador. Isso não é uma fronteira criptográfica contra alguém que controla DevTools ou o armazenamento local do dispositivo.
+
+## Próxima etapa: coleções offline
+
+A issue [#174](https://github.com/felipe-urgal/home-music/issues/174) registra a evolução para **playlist inteira e pasta inteira offline**.
+
+Invariante já decidido para esse trabalho:
+
+```text
+uma faixa física no cache
+        ↓
+0..N referências lógicas
+├── download individual
+├── playlist A
+├── playlist B
+└── pasta X
+```
+
+A mesma música não deverá ocupar espaço duas vezes só porque participa de várias coleções. Remover uma playlist/pasta offline só poderá remover o arquivo físico quando nenhuma outra referência depender dele.
+
+Essa funcionalidade ainda não está implementada e deve reutilizar o scheduler/cache atual.
