@@ -29,6 +29,7 @@ const ALLOWED_COVER_TYPES = new Set([
 ]);
 
 const MAX_COVER_BYTES = 8 * 1024 * 1024;
+const INTEGRITY_MEDIA_CHECK_CONCURRENCY = 4;
 
 export type IndexedTrack = Track & {
   filePath: string;
@@ -130,6 +131,22 @@ async function walk(
   }
 
   return files;
+}
+
+async function runWithConcurrency<T>(
+  items: readonly T[],
+  concurrency: number,
+  operation: (item: T) => Promise<void>
+) {
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor;
+      cursor += 1;
+      await operation(items[index]);
+    }
+  });
+  await Promise.all(workers);
 }
 
 export async function readCover(stream: Readable, mimeType: string) {
@@ -260,6 +277,7 @@ export async function auditLibraryIntegrity(
       const files = await walk(libraryRoot, libraryRoot, unavailableDirectories, onWarning);
       const indexedByPath = new Map(indexedTracks.map(track => [track.filePath, track]));
       const seenPaths = new Set<string>();
+      const mediaChecks: Array<{ file: ScannableFile; trackId: string }> = [];
 
       for (const file of files) {
         seenPaths.add(file.path);
@@ -279,10 +297,16 @@ export async function auditLibraryIntegrity(
             message: 'Arquivo encontrado sem registro correspondente no índice atual.'
           });
         }
-        if (needsMediaCheck) {
+        if (needsMediaCheck) mediaChecks.push({ file, trackId: detectedTrackId });
+      }
+
+      await runWithConcurrency(
+        mediaChecks,
+        INTEGRITY_MEDIA_CHECK_CONCURRENCY,
+        async ({ file, trackId: detectedTrackId }) => {
           await metadataForFile(libraryRoot, file, onWarning, detectedTrackId);
         }
-      }
+      );
 
       for (const indexed of indexedTracks) {
         if (seenPaths.has(indexed.filePath)) continue;
