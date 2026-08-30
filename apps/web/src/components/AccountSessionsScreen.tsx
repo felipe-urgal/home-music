@@ -25,32 +25,38 @@ export function AccountSessionsScreen({
   onRevokeOne,
   onRevokeOthers
 }: AccountSessionsScreenProps) {
-  const otherSessions = sessions.filter(session => !session.current);
+  const orderedSessions = [...sessions].sort((left, right) => {
+    if (left.current !== right.current) return left.current ? -1 : 1;
+    return right.lastSeenAt - left.lastSeenAt;
+  });
+  const otherSessions = orderedSessions.filter(session => !session.current);
+  const otherSessionPosition = new Map(otherSessions.map((session, index) => [session.id, index + 1]));
 
   return (
     <div className="account-sessions-screen">
       <section className="account-sessions-security" aria-labelledby="account-sessions-security-title">
         <span className="account-sessions-security__icon"><ShieldCheck /></span>
         <div>
-          <strong id="account-sessions-security-title">Sua conta está protegida</strong>
-          <small>Encerre sessões que você não reconhecer. Este dispositivo continuará conectado.</small>
+          <strong id="account-sessions-security-title">Mantenha sua conta protegida</strong>
+          <small>Revise as sessões ativas e encerre qualquer acesso que você não reconhecer.</small>
         </div>
       </section>
 
       <section className="account-sessions-list" aria-labelledby="account-sessions-list-title">
         <div className="account-sessions-list__heading">
-          <strong id="account-sessions-list-title">Dispositivos conectados</strong>
-          {!loading && <span>{sessions.length} {sessions.length === 1 ? 'sessão' : 'sessões'}</span>}
+          <strong id="account-sessions-list-title">Sessões conectadas</strong>
+          {!loading && <span>{orderedSessions.length} {orderedSessions.length === 1 ? 'sessão' : 'sessões'}</span>}
         </div>
 
         {loading ? (
           <div className="account-sessions-loading" role="status">Carregando sessões…</div>
-        ) : sessions.length === 0 ? (
+        ) : orderedSessions.length === 0 ? (
           <div className="account-sessions-empty">Nenhuma sessão ativa foi encontrada.</div>
         ) : (
           <div className="account-sessions-cards">
-            {sessions.map((session, index) => {
-              const title = session.current ? 'Este dispositivo' : `Outro dispositivo ${index + 1}`;
+            {orderedSessions.map(session => {
+              const sessionPosition = otherSessionPosition.get(session.id);
+              const title = session.current ? 'Este dispositivo' : `Outra sessão ${sessionPosition ?? ''}`.trim();
               const ending = busySessionId === session.id;
 
               return (
@@ -98,7 +104,7 @@ export function AccountSessionsScreen({
                         disabled={Boolean(busySessionId)}
                         onClick={() => onRevokeOne(session)}
                       >
-                        <LogOut /> {ending ? 'Encerrando…' : 'Encerrar sessão neste dispositivo'}
+                        <LogOut /> {ending ? 'Encerrando…' : 'Encerrar esta sessão'}
                       </button>
                     )}
                   </div>
