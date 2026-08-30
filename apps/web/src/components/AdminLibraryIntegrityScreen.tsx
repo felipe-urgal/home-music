@@ -6,12 +6,10 @@ import {
   ChevronLeft,
   Database,
   LoaderCircle,
-  RefreshCw,
   ScanLine
 } from 'lucide-react';
 import {
   getAdminLibraryOverview,
-  rescanLibrary,
   type AdminLibraryHealthOverview
 } from '../admin-library-client';
 
@@ -42,20 +40,19 @@ export function AdminLibraryIntegrityScreen({ onBack }: AdminLibraryIntegrityScr
   const [overview, setOverview] = useState<AdminLibraryHealthOverview | null>(null);
   const [filter, setFilter] = useState<IntegrityFilter>('');
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [rescanning, setRescanning] = useState(false);
+  const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
 
-  const loadOverview = useCallback(async (background = false) => {
-    if (background) setRefreshing(true); else setLoading(true);
+  const loadOverview = useCallback(async () => {
+    setLoading(true);
     setError(null);
     try {
       setOverview(await getAdminLibraryOverview());
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Não foi possível carregar a integridade da biblioteca.');
     } finally {
-      if (background) setRefreshing(false); else setLoading(false);
+      setLoading(false);
     }
   }, []);
 
@@ -67,24 +64,24 @@ export function AdminLibraryIntegrityScreen({ onBack }: AdminLibraryIntegrityScr
     [filter, integrity]
   );
 
-  async function runRescan() {
-    if (rescanning) return;
-    setRescanning(true);
+  async function runIntegrityCheck() {
+    if (checking) return;
+    setChecking(true);
     setError(null);
     setFeedback(null);
     try {
-      const result = await rescanLibrary();
-      await loadOverview(true);
+      const nextOverview = await getAdminLibraryOverview();
+      setOverview(nextOverview);
+      const total = nextOverview.integrity.counts.total;
       setFeedback(
-        `Re-scan concluído: ${result.tracks.toLocaleString('pt-BR')} faixas · ` +
-        `${result.added.toLocaleString('pt-BR')} adicionadas · ` +
-        `${result.updated.toLocaleString('pt-BR')} atualizadas · ` +
-        `${result.removed.toLocaleString('pt-BR')} removidas do índice.`
+        total === 0
+          ? 'Verificação concluída sem inconsistências.'
+          : `Verificação concluída: ${total.toLocaleString('pt-BR')} ${total === 1 ? 'inconsistência encontrada' : 'inconsistências encontradas'}.`
       );
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Não foi possível executar o re-scan.');
+      setError(caught instanceof Error ? caught.message : 'Não foi possível verificar a integridade da biblioteca.');
     } finally {
-      setRescanning(false);
+      setChecking(false);
     }
   }
 
@@ -104,25 +101,17 @@ export function AdminLibraryIntegrityScreen({ onBack }: AdminLibraryIntegrityScr
           <div>
             <span className="my-account-link-group__label">Última verificação</span>
             <strong>{formatDate(integrity?.checkedAt ?? null)}</strong>
-            <small>O diagnóstico não remove arquivos nem registros por conta própria.</small>
+            <small>A verificação é somente leitura: não remove nem altera arquivos ou registros.</small>
           </div>
           <div className="admin-library-integrity__actions">
             <button
               type="button"
-              className="admin-library-integrity__refresh"
-              disabled={loading || refreshing || rescanning}
-              onClick={() => void loadOverview(true)}
-            >
-              <RefreshCw className={refreshing ? 'is-spinning' : ''} /> Atualizar
-            </button>
-            <button
-              type="button"
               className="admin-library-integrity__rescan"
-              disabled={loading || refreshing || rescanning}
-              onClick={() => void runRescan()}
+              disabled={loading || checking}
+              onClick={() => void runIntegrityCheck()}
             >
-              {rescanning ? <LoaderCircle className="is-spinning" /> : <ScanLine />}
-              {rescanning ? 'Re-escaneando…' : 'Re-scan'}
+              {checking ? <LoaderCircle className="is-spinning" /> : <ScanLine />}
+              {checking ? 'Verificando…' : 'Verificar agora'}
             </button>
           </div>
         </section>
@@ -179,8 +168,8 @@ export function AdminLibraryIntegrityScreen({ onBack }: AdminLibraryIntegrityScr
                 </div>
               ) : (
                 <div className="admin-library-integrity__issues">
-                  {visibleIssues.map((issue, index) => (
-                    <article key={`${issue.kind}-${issue.trackId || 'file'}-${issue.relativePath}-${index}`}>
+                  {visibleIssues.map(issue => (
+                    <article key={`${issue.kind}-${issue.trackId || 'file'}-${issue.relativePath}`}>
                       <div className="admin-library-integrity__issue-heading">
                         <span>{ISSUE_LABELS[issue.kind]}</span>
                         {issue.trackId && <code>{issue.trackId}</code>}
