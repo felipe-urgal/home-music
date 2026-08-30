@@ -184,10 +184,16 @@ export function recordLibraryIntegrityIssue(input: {
   message: string;
 }) {
   if (!activeCheck) return;
+  const relativePath = normalizedRelativePath(activeCheck.libraryRoot, input.filePath);
+  if (input.kind === 'missing-file') {
+    activeCheck.issues = activeCheck.issues.filter(issue =>
+      !isPersistentFileFailure(issue) || issue.relativePath !== relativePath
+    );
+  }
   activeCheck.issues.push({
     kind: input.kind,
     trackId: input.trackId ?? null,
-    relativePath: normalizedRelativePath(activeCheck.libraryRoot, input.filePath),
+    relativePath,
     message: compactMessage(input.message, 'Inconsistência detectada na biblioteca.')
   });
 }
