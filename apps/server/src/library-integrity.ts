@@ -83,10 +83,6 @@ function isPersistentFileFailure(issue: AdminLibraryIntegrityIssue) {
     issue.kind === 'missing-file';
 }
 
-function pathMatchesPrefix(relativePath: string, prefix: string) {
-  return relativePath === prefix || relativePath.startsWith(`${prefix}/`);
-}
-
 export function resolveFfprobeCommand(rawFfmpegCommand: string | undefined) {
   const configured = rawFfmpegCommand?.trim();
   if (!configured) return 'ffprobe';
@@ -183,27 +179,6 @@ export function clearLibraryIntegrityFileFailures(filePath: string) {
   activeCheck.issues = activeCheck.issues.filter(issue =>
     !isPersistentFileFailure(issue) || issue.relativePath !== relativePath
   );
-}
-
-export function clearLibraryIntegrityTransientFileIssues(filePath: string) {
-  if (!activeCheck) return;
-  const relativePath = normalizedRelativePath(activeCheck.libraryRoot, filePath);
-  activeCheck.issues = activeCheck.issues.filter(issue =>
-    issue.relativePath !== relativePath ||
-    (issue.kind !== 'missing-file' && issue.kind !== 'unindexed-file')
-  );
-}
-
-export function pruneLibraryIntegrityIssues(
-  seenRelativePaths: ReadonlySet<string>,
-  unavailableDirectoryPrefixes: readonly string[]
-) {
-  if (!activeCheck) return;
-  activeCheck.issues = activeCheck.issues.filter(issue => {
-    if (issue.kind === 'missing-file') return true;
-    if (seenRelativePaths.has(issue.relativePath)) return true;
-    return unavailableDirectoryPrefixes.some(prefix => pathMatchesPrefix(issue.relativePath, prefix));
-  });
 }
 
 export function recordLibraryIntegrityIssue(input: {
