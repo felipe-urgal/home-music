@@ -2,8 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import type { AuthenticatedUser } from '@home-music/shared';
 import {
   AlertTriangle,
+  CheckCircle2,
   ChevronLeft,
-  ChevronRight,
   Database,
   FileInput,
   HardDrive,
@@ -59,7 +59,8 @@ function formatBytes(bytes: number) {
   return `${new Intl.NumberFormat('pt-BR', { maximumFractionDigits: digits }).format(value)} ${units[exponent]}`;
 }
 
-function formatScanDate(value: string) {
+function formatScanDate(value: string | null) {
+  if (!value) return 'Ainda não concluído';
   const date = new Date(value);
   if (!Number.isFinite(date.getTime()) || date.getTime() <= 0) return 'Ainda não concluído';
   return new Intl.DateTimeFormat('pt-BR', {
@@ -71,7 +72,7 @@ function formatScanDate(value: string) {
 function formatAutoRescan(scanner: AdminLibraryHealthOverview['scanner']) {
   if (!scanner.autoRescan.enabled || !scanner.autoRescan.intervalSeconds) return 'Automático desativado';
   const minutes = scanner.autoRescan.intervalSeconds / 60;
-  return `Automático a cada ${new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 }).format(minutes)} min`;
+  return `A cada ${new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 }).format(minutes)} min`;
 }
 
 function formatCacheActivity(cache: AdminTranscodeCacheStatus) {
@@ -180,262 +181,180 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
 
   if (currentUser.role !== 'admin') return null;
 
-  if (view === 'tracks') {
-    return <AdminTrackAvailabilityScreen onBack={() => setView('overview')} />;
-  }
-
+  if (view === 'tracks') return <AdminTrackAvailabilityScreen onBack={() => setView('overview')} />;
   if (view === 'metadata') {
-    return (
-      <AdminTrackMetadataScreen
-        initialHealthFilter={metadataHealthFilter}
-        onBack={() => setView('overview')}
-      />
-    );
+    return <AdminTrackMetadataScreen initialHealthFilter={metadataHealthFilter} onBack={() => setView('overview')} />;
   }
-
-  if (view === 'integrity') {
-    return <AdminLibraryIntegrityScreen onBack={() => setView('overview')} />;
-  }
-
-  if (view === 'quarantine') {
-    return <AdminMediaQuarantineScreen onBack={() => setView('overview')} />;
-  }
-
-  if (view === 'import') {
-    return <AdminImportMediaScreen onBack={() => setView('overview')} />;
-  }
-
-  if (view === 'operations') {
-    return <AdminOperationHistoryScreen onBack={() => setView('overview')} />;
-  }
-
-  if (view === 'users') {
-    return <AdminUsersScreen currentUser={currentUser} onBack={() => setView('overview')} />;
-  }
+  if (view === 'integrity') return <AdminLibraryIntegrityScreen onBack={() => setView('overview')} />;
+  if (view === 'quarantine') return <AdminMediaQuarantineScreen onBack={() => setView('overview')} />;
+  if (view === 'import') return <AdminImportMediaScreen onBack={() => setView('overview')} />;
+  if (view === 'operations') return <AdminOperationHistoryScreen onBack={() => setView('overview')} />;
+  if (view === 'users') return <AdminUsersScreen currentUser={currentUser} onBack={() => setView('overview')} />;
 
   const problemCount = overview?.problems.affectedTracks ?? 0;
+  const integrityCount = overview?.integrity.counts.total ?? 0;
+  const attentionCount = problemCount + integrityCount;
   const scannerLabel = overview?.scanner.scanning
     ? 'Atualizando'
     : overview?.scanner.ready
       ? 'Pronto'
       : 'Atenção';
   const cacheBusy = Boolean(cache && (cache.active > 0 || cache.pending > 0));
+  const statusTone = overview && overview.scanner.ready && attentionCount === 0 ? 'is-healthy' : 'has-warning';
+  const statusTitle = !overview
+    ? 'Carregando estado da biblioteca'
+    : overview.scanner.scanning
+      ? 'Biblioteca sendo atualizada'
+      : !overview.scanner.ready
+        ? 'Biblioteca requer atenção'
+        : attentionCount > 0
+          ? 'Há itens para revisar'
+          : 'Biblioteca pronta';
+  const statusDetail = !overview
+    ? 'Consultando índice, scanner e integridade.'
+    : !overview.scanner.ready
+      ? 'O scanner ainda não marcou a biblioteca como pronta para uso.'
+      : attentionCount > 0
+        ? `${attentionCount.toLocaleString('pt-BR')} ${attentionCount === 1 ? 'item precisa' : 'itens precisam'} de revisão.`
+        : 'Scanner pronto e nenhum problema conhecido no último diagnóstico.';
 
   return (
-    <section className="my-account-screen administration-screen" aria-labelledby="administration-title">
-      <header className="my-account-header">
+    <section className="my-account-screen administration-screen administration-cockpit" aria-labelledby="administration-title">
+      <header className="my-account-header administration-cockpit__header">
         <button className="icon-button" type="button" aria-label="Voltar" onClick={onBack}><ChevronLeft /></button>
         <div>
           <strong id="administration-title">Administração</strong>
-          <small>Controles do Home Music</small>
+          <small>Foque no que precisa ser feito</small>
         </div>
-        <span className="my-account-header__spacer" />
+        <button
+          className="administration-cockpit__refresh"
+          type="button"
+          aria-label="Atualizar visão geral"
+          disabled={loadingOverview || loadingCache || clearingCache}
+          onClick={() => void refreshOverview()}
+        >
+          <RefreshCw className={loadingOverview || loadingCache ? 'is-spinning' : ''} />
+          <span>Atualizar</span>
+        </button>
       </header>
 
-      <div className="my-account-overview administration-overview">
-        <section className="my-account-profile" aria-label="Acesso administrativo">
-          <span className="my-account-profile__icon"><ShieldCheck /></span>
-          <div>
-            <strong>{currentUser.username}</strong>
-            <small>Área restrita a administradores</small>
+      <div className="administration-cockpit__content">
+        {overviewError && (
+          <div className="my-account-message is-error administration-cockpit__message" role="alert">
+            <span>{overviewError}</span>
+            <button type="button" onClick={() => void loadOverview()}>Tentar novamente</button>
           </div>
-          <span className="my-account-profile__badge"><ShieldCheck /> Administrador</span>
-        </section>
+        )}
 
-        <section className="administration-summary" aria-labelledby="administration-summary-title">
-          <div className="administration-summary__heading">
-            <div>
-              <span className="my-account-link-group__label" id="administration-summary-title">Visão geral</span>
-              <small>Estado atual da biblioteca indexada</small>
-            </div>
-            <button
-              type="button"
-              aria-label="Atualizar visão geral"
-              disabled={loadingOverview || loadingCache || clearingCache}
-              onClick={() => void refreshOverview()}
-            >
-              <RefreshCw className={loadingOverview || loadingCache ? 'is-spinning' : ''} />
-            </button>
+        <section className={`administration-cockpit-status ${statusTone}`} aria-labelledby="administration-status-title">
+          <span className="administration-cockpit-status__icon">
+            {overview && overview.scanner.ready && attentionCount === 0 ? <CheckCircle2 /> : <AlertTriangle />}
+          </span>
+          <div className="administration-cockpit-status__copy">
+            <small>Status da biblioteca</small>
+            <strong id="administration-status-title">{statusTitle}</strong>
+            <span>{statusDetail}</span>
           </div>
-
-          {overviewError && (
-            <div className="my-account-message is-error administration-summary__message" role="alert">
-              <span>{overviewError}</span>
-              <button type="button" onClick={() => void loadOverview()}>Tentar novamente</button>
-            </div>
+          {overview && (
+            <dl className="administration-cockpit-status__meta">
+              <div><dt>Scanner</dt><dd>{scannerLabel}</dd></div>
+              <div><dt>Último scan</dt><dd>{formatScanDate(overview.scanner.scannedAt)}</dd></div>
+            </dl>
           )}
+        </section>
 
-          {loadingOverview && !overview ? (
-            <div className="administration-summary__loading" role="status">
-              <LoaderCircle className="is-spinning" /> Carregando visão geral…
+        <section className="administration-cockpit-section" aria-labelledby="administration-actions-title">
+          <div className="administration-cockpit-section__heading">
+            <div><strong id="administration-actions-title">Ações rápidas</strong><small>Acesse diretamente as ferramentas mais usadas.</small></div>
+          </div>
+          <div className="administration-cockpit-actions">
+            <button type="button" onClick={() => setView('tracks')}><ListMusic /><span>Gerenciar músicas</span></button>
+            <button type="button" onClick={() => setView('import')}><FileInput /><span>Importar mídia</span></button>
+            <button type="button" onClick={() => setView('integrity')}><ScanLine /><span>Integridade</span></button>
+            <button type="button" onClick={() => setView('users')}><Users /><span>Usuários</span></button>
+            <button type="button" onClick={openAllMetadata}><Database /><span>Metadados</span></button>
+            <button type="button" onClick={() => setView('quarantine')}><Trash2 /><span>Lixeira</span></button>
+            <button type="button" onClick={() => setView('operations')}><ShieldCheck /><span>Histórico</span></button>
+          </div>
+        </section>
+
+        {loadingOverview && !overview ? (
+          <div className="administration-cockpit-loading" role="status">
+            <LoaderCircle className="is-spinning" /> Carregando visão geral…
+          </div>
+        ) : overview ? (
+          <>
+            <section className="administration-cockpit-section" aria-labelledby="administration-library-title">
+              <div className="administration-cockpit-section__heading">
+                <div><strong id="administration-library-title">Biblioteca</strong><small>Os indicadores essenciais em um único lugar.</small></div>
+              </div>
+              <div className="administration-cockpit-metrics">
+                <article><span><Music2 /></span><div><small>Faixas</small><strong>{overview.tracks.total.toLocaleString('pt-BR')}</strong></div></article>
+                <article><span><HardDrive /></span><div><small>Biblioteca física</small><strong>{formatBytes(overview.storage.libraryBytes)}</strong></div></article>
+                <article className={problemCount > 0 ? 'has-warning' : ''}><span><AlertTriangle /></span><div><small>Metadados</small><strong>{problemCount.toLocaleString('pt-BR')}</strong></div></article>
+                <article className={integrityCount > 0 ? 'has-warning' : ''}><span><ScanLine /></span><div><small>Integridade</small><strong>{integrityCount.toLocaleString('pt-BR')}</strong></div></article>
+              </div>
+            </section>
+
+            {attentionCount > 0 && (
+              <section className="administration-cockpit-section administration-cockpit-attention" aria-labelledby="administration-attention-title">
+                <div className="administration-cockpit-section__heading">
+                  <div><strong id="administration-attention-title">Atenção necessária</strong><small>Mostramos apenas o que precisa de ação.</small></div>
+                </div>
+                <div className="administration-cockpit-attention__items">
+                  {overview.problems.missingTitle > 0 && <button type="button" onClick={() => openHealthProblem('missingTitle', 'Sem título')}><span>Sem título</span><strong>{overview.problems.missingTitle.toLocaleString('pt-BR')}</strong></button>}
+                  {overview.problems.missingCover > 0 && <button type="button" onClick={() => openHealthProblem('missingCover', 'Sem capa')}><span>Sem capa</span><strong>{overview.problems.missingCover.toLocaleString('pt-BR')}</strong></button>}
+                  {overview.problems.unknownArtist > 0 && <button type="button" onClick={() => openHealthProblem('unknownArtist', 'Artista desconhecido')}><span>Artista desconhecido</span><strong>{overview.problems.unknownArtist.toLocaleString('pt-BR')}</strong></button>}
+                  {overview.problems.unknownAlbum > 0 && <button type="button" onClick={() => openHealthProblem('unknownAlbum', 'Álbum desconhecido')}><span>Álbum desconhecido</span><strong>{overview.problems.unknownAlbum.toLocaleString('pt-BR')}</strong></button>}
+                  {overview.problems.missingDuration > 0 && <button type="button" onClick={() => openHealthProblem('missingDuration', 'Duração indisponível')}><span>Duração indisponível</span><strong>{overview.problems.missingDuration.toLocaleString('pt-BR')}</strong></button>}
+                  {integrityCount > 0 && <button type="button" onClick={() => setView('integrity')}><span>Inconsistências de integridade</span><strong>{integrityCount.toLocaleString('pt-BR')}</strong></button>}
+                </div>
+              </section>
+            )}
+
+            <div className="administration-cockpit-lower-grid">
+              <section className="administration-cockpit-section" aria-labelledby="administration-activity-title">
+                <div className="administration-cockpit-section__heading">
+                  <div><strong id="administration-activity-title">Atividade e diagnóstico</strong><small>Últimos estados conhecidos.</small></div>
+                  <button className="administration-cockpit-section__link" type="button" onClick={() => setView('operations')}>Ver histórico</button>
+                </div>
+                <dl className="administration-cockpit-activity">
+                  <div><dt>Último scan</dt><dd>{formatScanDate(overview.scanner.scannedAt)}</dd></div>
+                  <div><dt>Rescan automático</dt><dd>{formatAutoRescan(overview.scanner)}</dd></div>
+                  <div><dt>Integridade</dt><dd>{overview.integrity.checkedAt ? formatScanDate(overview.integrity.checkedAt) : 'Ainda não verificada'}</dd></div>
+                  <div><dt>Scanner</dt><dd>{scannerLabel}</dd></div>
+                </dl>
+              </section>
+
+              <section className="administration-cockpit-section" aria-labelledby="administration-storage-title">
+                <div className="administration-cockpit-section__heading">
+                  <div><strong id="administration-storage-title">Armazenamento e cache</strong><small>Dados persistidos e arquivos derivados.</small></div>
+                </div>
+
+                {cacheError && <div className="administration-cockpit-cache-message is-error" role="alert">{cacheError}</div>}
+                {cacheFeedback && <div className={`administration-cockpit-cache-message ${cacheFeedback.error ? 'is-error' : 'is-success'}`} role={cacheFeedback.error ? 'alert' : 'status'}>{cacheFeedback.message}</div>}
+
+                <dl className="administration-cockpit-storage">
+                  <div><dt>SQLite</dt><dd>{overview.storage.databaseBytes == null ? 'Indisponível' : formatBytes(overview.storage.databaseBytes)}</dd></div>
+                  <div><dt>Cache</dt><dd>{cache ? formatBytes(cache.bytes) : loadingCache ? 'Carregando…' : 'Indisponível'}</dd></div>
+                  <div><dt>Limite</dt><dd>{cache ? formatBytes(cache.limitBytes) : '—'}</dd></div>
+                  <div><dt>Transcoding</dt><dd>{cache ? formatCacheActivity(cache) : '—'}</dd></div>
+                </dl>
+
+                <button
+                  className="administration-cockpit-clear-cache"
+                  type="button"
+                  disabled={!cache || cache.bytes === 0 || cacheBusy || clearingCache}
+                  title={cacheBusy ? 'Aguarde o transcoding em andamento terminar.' : undefined}
+                  onClick={() => void clearTranscodeCache()}
+                >
+                  {clearingCache ? <LoaderCircle className="is-spinning" /> : <Trash2 />}
+                  {clearingCache ? 'Limpando…' : 'Limpar cache derivado'}
+                </button>
+              </section>
             </div>
-          ) : overview ? (
-            <>
-              <div className="administration-metrics">
-                <article className="administration-metric" aria-label="Faixas indexadas">
-                  <span className="administration-metric__icon"><Music2 /></span>
-                  <div><small>Faixas</small><strong>{overview.tracks.total.toLocaleString('pt-BR')}</strong></div>
-                </article>
-
-                <article className="administration-metric" aria-label="Armazenamento da biblioteca física">
-                  <span className="administration-metric__icon"><HardDrive /></span>
-                  <div><small>Biblioteca física</small><strong>{formatBytes(overview.storage.libraryBytes)}</strong></div>
-                </article>
-
-                <article className={`administration-metric ${problemCount > 0 ? 'has-warning' : ''}`} aria-label="Problemas da biblioteca">
-                  <span className="administration-metric__icon"><AlertTriangle /></span>
-                  <div><small>Problemas</small><strong>{problemCount.toLocaleString('pt-BR')}</strong></div>
-                </article>
-
-                <article className={`administration-metric ${overview.scanner.ready ? '' : 'has-warning'}`} aria-label="Estado do scanner">
-                  <span className="administration-metric__icon"><ScanLine /></span>
-                  <div><small>Scanner</small><strong>{scannerLabel}</strong></div>
-                </article>
-              </div>
-
-              <div className="administration-detail-grid">
-                <article className="administration-detail-card" aria-labelledby="administration-problems-title">
-                  <div className="administration-detail-card__heading">
-                    <AlertTriangle />
-                    <div><strong id="administration-problems-title">Qualidade da biblioteca</strong><small>{problemCount === 0 ? 'Nenhum problema detectado' : `${problemCount.toLocaleString('pt-BR')} faixas precisam de atenção`}</small></div>
-                  </div>
-                  <dl className="administration-problem-list">
-                    <div>
-                      <dt><button className="administration-problem-list__button" type="button" disabled={overview.problems.missingTitle === 0} onClick={() => openHealthProblem('missingTitle', 'Sem título')}><span>Sem título</span>{overview.problems.missingTitle > 0 && <ChevronRight />}</button></dt>
-                      <dd>{overview.problems.missingTitle.toLocaleString('pt-BR')}</dd>
-                    </div>
-                    <div>
-                      <dt><button className="administration-problem-list__button" type="button" disabled={overview.problems.missingCover === 0} onClick={() => openHealthProblem('missingCover', 'Sem capa')}><span>Sem capa</span>{overview.problems.missingCover > 0 && <ChevronRight />}</button></dt>
-                      <dd>{overview.problems.missingCover.toLocaleString('pt-BR')}</dd>
-                    </div>
-                    <div>
-                      <dt><button className="administration-problem-list__button" type="button" disabled={overview.problems.unknownArtist === 0} onClick={() => openHealthProblem('unknownArtist', 'Artista desconhecido')}><span>Artista desconhecido</span>{overview.problems.unknownArtist > 0 && <ChevronRight />}</button></dt>
-                      <dd>{overview.problems.unknownArtist.toLocaleString('pt-BR')}</dd>
-                    </div>
-                    <div>
-                      <dt><button className="administration-problem-list__button" type="button" disabled={overview.problems.unknownAlbum === 0} onClick={() => openHealthProblem('unknownAlbum', 'Álbum desconhecido')}><span>Álbum desconhecido</span>{overview.problems.unknownAlbum > 0 && <ChevronRight />}</button></dt>
-                      <dd>{overview.problems.unknownAlbum.toLocaleString('pt-BR')}</dd>
-                    </div>
-                    <div>
-                      <dt><button className="administration-problem-list__button" type="button" disabled={overview.problems.missingDuration === 0} onClick={() => openHealthProblem('missingDuration', 'Duração indisponível')}><span>Duração indisponível</span>{overview.problems.missingDuration > 0 && <ChevronRight />}</button></dt>
-                      <dd>{overview.problems.missingDuration.toLocaleString('pt-BR')}</dd>
-                    </div>
-                  </dl>
-                </article>
-
-                <article className="administration-detail-card" aria-labelledby="administration-integrity-title">
-                  <div className="administration-detail-card__heading">
-                    <AlertTriangle />
-                    <div>
-                      <strong id="administration-integrity-title">Integridade</strong>
-                      <small>{overview.integrity.checkedAt ? `Verificada em ${formatScanDate(overview.integrity.checkedAt)}` : 'Aguardando o primeiro scan com diagnóstico'}</small>
-                    </div>
-                  </div>
-                  <dl className="administration-scanner-list">
-                    <div><dt>Inconsistências</dt><dd>{overview.integrity.counts.total.toLocaleString('pt-BR')}</dd></div>
-                    <div><dt>Scanner / ffprobe</dt><dd>{(overview.integrity.counts.scannerFailures + overview.integrity.counts.mediaProbeFailures).toLocaleString('pt-BR')}</dd></div>
-                    <div><dt>Índice / arquivos</dt><dd>{(overview.integrity.counts.missingFiles + overview.integrity.counts.unindexedFiles).toLocaleString('pt-BR')}</dd></div>
-                  </dl>
-                </article>
-
-                <article className="administration-detail-card" aria-labelledby="administration-scanner-title">
-                  <div className="administration-detail-card__heading">
-                    <Database />
-                    <div><strong id="administration-scanner-title">Scanner</strong><small>{overview.scanner.ready ? 'Biblioteca pronta para uso' : 'Biblioteca ainda não está pronta'}</small></div>
-                  </div>
-                  <dl className="administration-scanner-list">
-                    <div><dt>Estado</dt><dd>{scannerLabel}</dd></div>
-                    <div><dt>Último scan</dt><dd>{formatScanDate(overview.scanner.scannedAt)}</dd></div>
-                    <div><dt>Rescan</dt><dd>{formatAutoRescan(overview.scanner)}</dd></div>
-                  </dl>
-                </article>
-
-                <article className="administration-detail-card administration-storage-card" aria-labelledby="administration-storage-title">
-                  <div className="administration-detail-card__heading">
-                    <HardDrive />
-                    <div><strong id="administration-storage-title">Armazenamento</strong><small>Biblioteca, banco SQLite e cache derivado de transcoding</small></div>
-                  </div>
-
-                  {cacheError && <div className="administration-cache-message is-error" role="alert">{cacheError}</div>}
-                  {cacheFeedback && (
-                    <div className={`administration-cache-message ${cacheFeedback.error ? 'is-error' : 'is-success'}`} role={cacheFeedback.error ? 'alert' : 'status'}>
-                      {cacheFeedback.message}
-                    </div>
-                  )}
-
-                  <dl className="administration-storage-list">
-                    <div><dt>Biblioteca física</dt><dd>{formatBytes(overview.storage.libraryBytes)}</dd></div>
-                    <div><dt>Banco SQLite</dt><dd>{overview.storage.databaseBytes == null ? 'Indisponível' : formatBytes(overview.storage.databaseBytes)}</dd></div>
-                    <div><dt>Cache atual</dt><dd>{cache ? formatBytes(cache.bytes) : loadingCache ? 'Carregando…' : 'Indisponível'}</dd></div>
-                    <div><dt>Limite configurado</dt><dd>{cache ? formatBytes(cache.limitBytes) : '—'}</dd></div>
-                    <div><dt>Arquivos em cache</dt><dd>{cache ? cache.entries.toLocaleString('pt-BR') : '—'}</dd></div>
-                    <div><dt>Transcoding</dt><dd>{cache ? formatCacheActivity(cache) : '—'}</dd></div>
-                  </dl>
-
-                  <div className="administration-cache-actions">
-                    <small>Limpar remove somente arquivos derivados do cache; suas músicas não são alteradas.</small>
-                    <button
-                      type="button"
-                      disabled={!cache || cache.bytes === 0 || cacheBusy || clearingCache}
-                      title={cacheBusy ? 'Aguarde o transcoding em andamento terminar.' : undefined}
-                      onClick={() => void clearTranscodeCache()}
-                    >
-                      {clearingCache ? <LoaderCircle className="is-spinning" /> : <Trash2 />}
-                      {clearingCache ? 'Limpando…' : 'Limpar cache'}
-                    </button>
-                  </div>
-                </article>
-              </div>
-            </>
-          ) : null}
-        </section>
-
-        <section className="my-account-link-group" aria-labelledby="administration-group-library">
-          <span className="my-account-link-group__label" id="administration-group-library">Biblioteca</span>
-          <div className="my-account-links">
-            <button type="button" onClick={() => setView('tracks')}>
-              <span className="my-account-card__icon"><ListMusic /></span>
-              <span><strong>Gerenciar músicas</strong><small>Desative, reative ou mova faixas para a lixeira com segurança.</small></span>
-              <ChevronRight />
-            </button>
-            <button type="button" onClick={openAllMetadata}>
-              <span className="my-account-card__icon"><Database /></span>
-              <span><strong>Metadados</strong><small>Corrija texto e capa sem modificar o arquivo de áudio original.</small></span>
-              <ChevronRight />
-            </button>
-            <button type="button" onClick={() => setView('integrity')}>
-              <span className="my-account-card__icon"><AlertTriangle /></span>
-              <span><strong>Integridade da biblioteca</strong><small>Revise arquivos quebrados, registros órfãos e divergências do último scan.</small></span>
-              <ChevronRight />
-            </button>
-            <button type="button" onClick={() => setView('quarantine')}>
-              <span className="my-account-card__icon"><Trash2 /></span>
-              <span><strong>Lixeira</strong><small>Restaure músicas ou confirme a exclusão física permanente.</small></span>
-              <ChevronRight />
-            </button>
-            <button type="button" onClick={() => setView('import')}>
-              <span className="my-account-card__icon"><FileInput /></span>
-              <span><strong>Importar mídia</strong><small>Centralize uploads, URLs e fontes externas em um único pipeline.</small></span>
-              <ChevronRight />
-            </button>
-            <button type="button" onClick={() => setView('operations')}>
-              <span className="my-account-card__icon"><ScanLine /></span>
-              <span><strong>Histórico operacional</strong><small>Revise scans e importações com duração, resultado e falhas acionáveis.</small></span>
-              <ChevronRight />
-            </button>
-          </div>
-        </section>
-
-        <section className="my-account-link-group" aria-labelledby="administration-group-access">
-          <span className="my-account-link-group__label" id="administration-group-access">Acesso</span>
-          <div className="my-account-links">
-            <button type="button" onClick={() => setView('users')}>
-              <span className="my-account-card__icon"><Users /></span>
-              <span><strong>Usuários</strong><small>Crie contas e gerencie papéis, acesso e sessões.</small></span>
-              <ChevronRight />
-            </button>
-          </div>
-        </section>
+          </>
+        ) : null}
       </div>
     </section>
   );
