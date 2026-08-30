@@ -30,15 +30,28 @@ const scanner = {
   autoRescan: { enabled: true, intervalSeconds: 300 }
 };
 
+const integrity = {
+  checkedAt: '2026-08-27T15:00:00.000Z',
+  counts: {
+    total: 0,
+    scannerFailures: 0,
+    mediaProbeFailures: 0,
+    missingFiles: 0,
+    unindexedFiles: 0
+  },
+  issues: []
+};
+
 const deterministicOptions = {
   databaseBytes: 4_096,
+  integrity,
   resolveTrack: (item: IndexedTrack) => item,
   isTrackHidden: () => false,
   hasTitleOverride: () => false,
   resolveTitleTagPresent: () => true
 };
 
-test('agrega total, armazenamento e scanner sem inventar problemas', async () => {
+test('agrega total, armazenamento, integridade e scanner sem inventar problemas', async () => {
   const overview = await buildAdminLibraryOverview([
     track(),
     track({ id: 'track-2', title: 'Outra faixa', filePath: '/music/outra-faixa.mp3', fileSize: 2_500 })
@@ -62,6 +75,7 @@ test('agrega total, armazenamento e scanner sem inventar problemas', async () =>
         missingDuration: []
       }
     },
+    integrity,
     scanner
   });
 });
@@ -133,6 +147,7 @@ test('considera overrides efetivos ao calcular qualidade sem reprovar tÃ­tulo jÃ
 
   const overview = await buildAdminLibraryOverview([source], scanner, {
     databaseBytes: 1,
+    integrity,
     isTrackHidden: () => false,
     hasTitleOverride: () => true,
     resolveTitleTagPresent: () => {
