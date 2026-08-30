@@ -317,6 +317,7 @@ export function useLibraryData() {
     actionError,
     reportError,
     clearActionError,
+    refreshPlaylists,
     retry,
     rescan,
     createPlaylist,
