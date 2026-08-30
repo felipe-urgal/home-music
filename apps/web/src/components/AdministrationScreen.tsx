@@ -26,13 +26,14 @@ import {
 } from '../admin-library-client';
 import '../administration-health.css';
 import { AdminImportMediaScreen } from './AdminImportMediaScreen';
+import { AdminLibraryIntegrityScreen } from './AdminLibraryIntegrityScreen';
 import { AdminMediaQuarantineScreen } from './AdminMediaQuarantineScreen';
 import { AdminOperationHistoryScreen } from './AdminOperationHistoryScreen';
 import { AdminTrackAvailabilityScreen } from './AdminTrackAvailabilityScreen';
 import { AdminTrackMetadataScreen } from './AdminTrackMetadataScreen';
 import { AdminUsersScreen } from './AdminUsersScreen';
 
-type AdministrationView = 'overview' | 'tracks' | 'metadata' | 'quarantine' | 'import' | 'operations' | 'users';
+type AdministrationView = 'overview' | 'tracks' | 'metadata' | 'integrity' | 'quarantine' | 'import' | 'operations' | 'users';
 
 type AdministrationScreenProps = {
   currentUser: AuthenticatedUser;
@@ -192,6 +193,10 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
     );
   }
 
+  if (view === 'integrity') {
+    return <AdminLibraryIntegrityScreen onBack={() => setView('overview')} />;
+  }
+
   if (view === 'quarantine') {
     return <AdminMediaQuarantineScreen onBack={() => setView('overview')} />;
   }
@@ -318,6 +323,21 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
                   </dl>
                 </article>
 
+                <article className="administration-detail-card" aria-labelledby="administration-integrity-title">
+                  <div className="administration-detail-card__heading">
+                    <AlertTriangle />
+                    <div>
+                      <strong id="administration-integrity-title">Integridade</strong>
+                      <small>{overview.integrity.checkedAt ? `Verificada em ${formatScanDate(overview.integrity.checkedAt)}` : 'Aguardando o primeiro scan com diagnóstico'}</small>
+                    </div>
+                  </div>
+                  <dl className="administration-scanner-list">
+                    <div><dt>Inconsistências</dt><dd>{overview.integrity.counts.total.toLocaleString('pt-BR')}</dd></div>
+                    <div><dt>Scanner / ffprobe</dt><dd>{(overview.integrity.counts.scannerFailures + overview.integrity.counts.mediaProbeFailures).toLocaleString('pt-BR')}</dd></div>
+                    <div><dt>Índice / arquivos</dt><dd>{(overview.integrity.counts.missingFiles + overview.integrity.counts.unindexedFiles).toLocaleString('pt-BR')}</dd></div>
+                  </dl>
+                </article>
+
                 <article className="administration-detail-card" aria-labelledby="administration-scanner-title">
                   <div className="administration-detail-card__heading">
                     <Database />
@@ -381,6 +401,11 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
             <button type="button" onClick={openAllMetadata}>
               <span className="my-account-card__icon"><Database /></span>
               <span><strong>Metadados</strong><small>Corrija texto e capa sem modificar o arquivo de áudio original.</small></span>
+              <ChevronRight />
+            </button>
+            <button type="button" onClick={() => setView('integrity')}>
+              <span className="my-account-card__icon"><AlertTriangle /></span>
+              <span><strong>Integridade da biblioteca</strong><small>Revise arquivos quebrados, registros órfãos e divergências do último scan.</small></span>
               <ChevronRight />
             </button>
             <button type="button" onClick={() => setView('quarantine')}>
