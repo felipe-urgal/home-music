@@ -124,7 +124,10 @@ function compareNullableDateAsc(left: string | null, right: string | null) {
 }
 
 function compareNullableDateDesc(left: string | null, right: string | null) {
-  return -compareNullableDateAsc(left, right);
+  if (left == null && right == null) return 0;
+  if (left == null) return 1;
+  if (right == null) return -1;
+  return right.localeCompare(left);
 }
 
 function sortTracks(rule: SmartPlaylistRule, left: EvaluatedTrack, right: EvaluatedTrack) {
