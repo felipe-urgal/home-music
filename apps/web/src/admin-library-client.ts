@@ -1,7 +1,16 @@
-import type { AdminLibraryOverviewResponse } from '@home-music/shared';
+import type {
+  AdminLibraryDuplicateIgnoreRequest,
+  AdminLibraryDuplicateIgnoreResponse,
+  AdminLibraryDuplicateReviewResponse,
+  AdminLibraryOverviewResponse
+} from '@home-music/shared';
 import { apiFetch } from './api-client';
 
 export type {
+  AdminLibraryDuplicateCandidate,
+  AdminLibraryDuplicateConfidence,
+  AdminLibraryDuplicateReason,
+  AdminLibraryDuplicateTrack,
   AdminLibraryIntegrityIssue,
   AdminLibraryIntegrityIssueKind,
   AdminLibraryIntegrityStatus,
@@ -43,6 +52,31 @@ export async function checkAdminLibraryIntegrity() {
   });
   if (!response.ok) throw new Error(await responseError(response));
   return response.json() as Promise<AdminLibraryOverviewResponse>;
+}
+
+export async function checkAdminLibraryDuplicates() {
+  const response = await apiFetch('/api/admin/library/duplicates/check', {
+    method: 'POST',
+    headers: { 'X-Home-Music-Request': '1' }
+  });
+  if (!response.ok) throw new Error(await responseError(response));
+  return response.json() as Promise<AdminLibraryDuplicateReviewResponse>;
+}
+
+export async function setAdminLibraryDuplicateIgnored(
+  trackIds: AdminLibraryDuplicateIgnoreRequest['trackIds'],
+  ignored: boolean
+) {
+  const response = await apiFetch('/api/admin/library/duplicates/ignore', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Home-Music-Request': '1'
+    },
+    body: JSON.stringify({ trackIds, ignored } satisfies AdminLibraryDuplicateIgnoreRequest)
+  });
+  if (!response.ok) throw new Error(await responseError(response));
+  return response.json() as Promise<AdminLibraryDuplicateIgnoreResponse>;
 }
 
 export async function getAdminTranscodeCache() {

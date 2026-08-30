@@ -4,7 +4,17 @@ import { open } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import type { ImportJob, ImportMetadataValues } from '@home-music/shared';
+import type {
+  AdminLibraryDuplicateReason,
+  ImportJob,
+  ImportMetadataValues
+} from '@home-music/shared';
+import {
+  classifyDuplicateSignals,
+  duplicateConfidenceRank,
+  duplicateDurationMatches,
+  duplicateTextMatches
+} from './duplicate-comparison.js';
 import type { ImportJobQueue } from './import-job-queue.js';
 import type { ImportStagingManager, ImportValidationTarget, ValidatedImportPayload } from './import-staging.js';
 import { openRegularFileInside, resolveLibraryRoot } from './security.js';
@@ -15,7 +25,7 @@ const MAX_HASH_CACHE_ITEMS = 2_048;
 
 export type ImportDuplicateConfidence = 'none' | 'possible' | 'probable' | 'exact';
 export type ImportDuplicateDisposition = 'clear' | 'notice' | 'review' | 'blocked';
-export type ImportDuplicateReason = 'hash' | 'title' | 'artist' | 'album' | 'duration' | 'filename';
+export type ImportDuplicateReason = AdminLibraryDuplicateReason;
 
 export type ImportDuplicateMatch = Readonly<{
   trackId: string;
@@ -102,45 +112,11 @@ function nullableNumber(value: unknown) {
   return Number.isFinite(number) ? number : null;
 }
 
-function normalizeText(value: string | null | undefined) {
-  if (!value) return '';
-  return value
-    .normalize('NFKD')
-    .replace(/\p{Diacritic}/gu, '')
-    .toLocaleLowerCase('pt-BR')
-    .replace(/[^\p{L}\p{N}]+/gu, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function sameText(left: string | null | undefined, right: string | null | undefined) {
-  const a = normalizeText(left);
-  const b = normalizeText(right);
-  return Boolean(a && b && a === b);
-}
-
-function durationMatches(left: number | null | undefined, right: number | null | undefined) {
-  if (left == null || right == null || !Number.isFinite(left) || !Number.isFinite(right) || left <= 0 || right <= 0) {
-    return false;
-  }
-  const tolerance = Math.max(2, Math.max(left, right) * 0.02);
-  return Math.abs(left - right) <= tolerance;
-}
-
 function uploadFileName(job: ImportJob) {
   if (job.source.type !== 'upload') return null;
   const base = path.basename(job.label.trim());
   const extension = path.extname(base);
   return extension ? base.slice(0, -extension.length) : base;
-}
-
-function confidenceRank(confidence: ImportDuplicateConfidence) {
-  switch (confidence) {
-    case 'exact': return 3;
-    case 'probable': return 2;
-    case 'possible': return 1;
-    case 'none': return 0;
-  }
 }
 
 function dispositionFor(confidence: ImportDuplicateConfidence): ImportDuplicateDisposition {
@@ -166,32 +142,13 @@ function classifyHeuristic(
   track: ImportDuplicateLibraryTrack
 ): { confidence: 'possible' | 'probable' | 'none'; reasons: ImportDuplicateReason[] } {
   const metadata = metadataFor(job);
-  const title = sameText(metadata.title, track.title);
-  const artist = sameText(metadata.artist, track.artist);
-  const album = sameText(metadata.album, track.album);
-  const duration = durationMatches(job.metadataPreview?.durationSeconds, track.duration);
-  const filename = sameText(uploadFileName(job), track.title);
-  const reasons: ImportDuplicateReason[] = [];
-
-  if (title) reasons.push('title');
-  if (artist) reasons.push('artist');
-  if (album) reasons.push('album');
-  if (duration) reasons.push('duration');
-  if (filename) reasons.push('filename');
-
-  const probable =
-    (title && artist && (duration || album))
-    || (filename && artist && duration);
-  if (probable) return { confidence: 'probable', reasons };
-
-  const possible =
-    (title && artist)
-    || (title && duration)
-    || (filename && duration)
-    || (artist && album && duration);
-  return possible
-    ? { confidence: 'possible', reasons }
-    : { confidence: 'none', reasons: [] };
+  return classifyDuplicateSignals({
+    title: duplicateTextMatches(metadata.title, track.title),
+    artist: duplicateTextMatches(metadata.artist, track.artist),
+    album: duplicateTextMatches(metadata.album, track.album),
+    duration: duplicateDurationMatches(job.metadataPreview?.durationSeconds, track.duration),
+    filename: duplicateTextMatches(uploadFileName(job), track.title)
+  });
 }
 
 async function hashHandle(handle: Awaited<ReturnType<typeof open>>) {
@@ -344,12 +301,14 @@ export class ImportDuplicateDetectionManager {
     }
 
     matches.sort((left, right) =>
-      confidenceRank(right.confidence) - confidenceRank(left.confidence)
+      duplicateConfidenceRank(right.confidence) - duplicateConfidenceRank(left.confidence)
       || left.artist.localeCompare(right.artist, 'pt-BR')
       || left.title.localeCompare(right.title, 'pt-BR')
     );
     const confidence = matches.reduce<ImportDuplicateConfidence>(
-      (current, match) => confidenceRank(match.confidence) > confidenceRank(current) ? match.confidence : current,
+      (current, match) => duplicateConfidenceRank(match.confidence) > duplicateConfidenceRank(current)
+        ? match.confidence
+        : current,
       'none'
     );
     const check: ImportDuplicateCheck = {

@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import type {
+  AdminLibraryDuplicateIgnoreRequest,
   AdminQuarantineResponse,
   AdminTrack,
   AdminTrackMoveRequest,
@@ -8,6 +9,7 @@ import type {
   AdminTracksResponse,
   Track
 } from '@home-music/shared';
+import { LibraryDuplicateReviewError, LibraryDuplicateReviewStore } from './library-duplicate-review.js';
 import {
   type AppliedTrackLocation,
   MediaFileMoveOperationError,
@@ -52,6 +54,13 @@ function sendQuarantineError(reply: FastifyReply, error: unknown) {
   }
   if (error instanceof UnsafeLibraryPathError) {
     return reply.code(409).send({ error: 'A operação foi bloqueada por segurança de caminho.' });
+  }
+  throw error;
+}
+
+function sendDuplicateReviewError(reply: FastifyReply, error: unknown) {
+  if (error instanceof LibraryDuplicateReviewError) {
+    return reply.code(error.statusCode).send({ error: error.message });
   }
   throw error;
 }
@@ -114,6 +123,13 @@ function adminCoverTrackId(url: string) {
   return routeTrackId(url, /^\/api\/admin\/tracks\/([^/]+)\/cover$/);
 }
 
+function duplicateTrackIds(value: unknown): [string, string] | null {
+  if (!Array.isArray(value) || value.length !== 2) return null;
+  const ids = value.map(item => typeof item === 'string' ? item.trim() : '');
+  if (ids.some(id => !id || id.length > 64) || ids[0] === ids[1]) return null;
+  return [ids[0], ids[1]];
+}
+
 export function registerAdminTrackRoutes(
   app: FastifyInstance,
   service: AdminTrackService,
@@ -122,6 +138,11 @@ export function registerAdminTrackRoutes(
   const databasePath = options.databasePath || process.env.HOME_MUSIC_DATABASE_PATH || defaultDatabasePath;
   const musicDir = options.musicDir ?? process.env.MUSIC_DIR ?? '';
   const quarantine = new MediaQuarantineStore(databasePath, musicDir);
+  const duplicateReview = new LibraryDuplicateReviewStore({
+    databasePath,
+    musicDir,
+    isHidden: trackId => quarantine.hasHidden(trackId)
+  });
   const fileMoves = new MediaFileMoveStore(databasePath, musicDir);
   const metadataOverrides = new TrackMetadataOverrideStore(databasePath);
   const coverOverrides = new TrackCoverOverrideStore(databasePath);
@@ -153,6 +174,7 @@ export function registerAdminTrackRoutes(
     fileMoves.close();
     coverOverrides.close();
     metadataOverrides.close();
+    duplicateReview.close();
     quarantine.close();
   });
 
@@ -229,6 +251,32 @@ export function registerAdminTrackRoutes(
     };
     return response;
   });
+
+  app.post('/api/admin/library/duplicates/check', async (_request, reply) => {
+    reply.header('Cache-Control', 'private, no-store');
+    quarantine.pruneResolvedTombstones();
+    try {
+      return await duplicateReview.check();
+    } catch (error) {
+      return sendDuplicateReviewError(reply, error);
+    }
+  });
+
+  app.post<{ Body: AdminLibraryDuplicateIgnoreRequest }>(
+    '/api/admin/library/duplicates/ignore',
+    async (request, reply) => {
+      reply.header('Cache-Control', 'private, no-store');
+      const trackIds = duplicateTrackIds(request.body?.trackIds);
+      if (!trackIds || typeof request.body?.ignored !== 'boolean') {
+        return reply.code(400).send({ error: 'Revisão de duplicata inválida.' });
+      }
+      try {
+        return duplicateReview.setIgnored(trackIds, request.body.ignored);
+      } catch (error) {
+        return sendDuplicateReviewError(reply, error);
+      }
+    }
+  );
 
   app.patch<{ Params: { id: string }; Body: { enabled?: unknown } }>(
     '/api/admin/tracks/:id',
