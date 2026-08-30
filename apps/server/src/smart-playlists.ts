@@ -6,6 +6,8 @@ const MAX_FILTER_LENGTH = 160;
 const MAX_FOLDER_LENGTH = 512;
 const MAX_RULE_LIMIT = 500;
 const MAX_PERIOD_DAYS = 3650;
+const SMART_PLAYLIST_SOURCE = 'smart';
+const SMART_RULE_VERSION = 1;
 
 type Row = Record<string, unknown>;
 
@@ -19,6 +21,12 @@ type EvaluatedTrack = {
   lastPlayedAt: string | null;
   hasPlayedEver: boolean;
   favoriteCreatedAt: string | null;
+};
+
+type StoredSmartRule = {
+  version: typeof SMART_RULE_VERSION;
+  id: string;
+  rule: SmartPlaylistRule;
 };
 
 function stringValue(value: unknown, fallback = '') {
@@ -152,10 +160,16 @@ function sortTracks(rule: SmartPlaylistRule, left: EvaluatedTrack, right: Evalua
   }
 }
 
-function parseStoredRule(value: unknown): SmartPlaylistRule | null {
+function encodeStoredRule(id: string, rule: SmartPlaylistRule) {
+  return JSON.stringify({ version: SMART_RULE_VERSION, id, rule } satisfies StoredSmartRule);
+}
+
+function parseStoredRule(value: unknown, expectedId: string): SmartPlaylistRule | null {
   if (typeof value !== 'string') return null;
   try {
-    return normalizeSmartPlaylistRule(JSON.parse(value));
+    const parsed = JSON.parse(value) as Partial<StoredSmartRule>;
+    if (parsed.version !== SMART_RULE_VERSION || parsed.id !== expectedId) return null;
+    return normalizeSmartPlaylistRule(parsed.rule);
   } catch {
     return null;
   }
@@ -171,19 +185,6 @@ export class SmartPlaylistStore {
     this.db.exec('PRAGMA journal_mode = WAL;');
     this.db.exec('PRAGMA synchronous = NORMAL;');
     this.db.exec('PRAGMA busy_timeout = 5000;');
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS smart_playlists (
-        id TEXT PRIMARY KEY,
-        owner_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        name TEXT NOT NULL CHECK(length(name) BETWEEN 1 AND 120),
-        rule_json TEXT NOT NULL,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_smart_playlists_owner_updated
-      ON smart_playlists(owner_user_id, updated_at DESC, id ASC);
-    `);
     this.hasTrackAvailability = Boolean(this.db.prepare(`
       SELECT 1
       FROM sqlite_master
@@ -283,18 +284,19 @@ export class SmartPlaylistStore {
   list(userId: string, eligibleTrackIds?: ReadonlySet<string>, now = new Date()): Playlist[] {
     requireUserId(userId);
     const rows = this.db.prepare(`
-      SELECT id, name, rule_json, created_at, updated_at
-      FROM smart_playlists
-      WHERE owner_user_id = ?
+      SELECT id, name, source_key, created_at, updated_at
+      FROM playlists
+      WHERE source = ? AND owner_user_id = ?
       ORDER BY updated_at DESC, name COLLATE NOCASE, id ASC
-    `).all(userId) as Row[];
+    `).all(SMART_PLAYLIST_SOURCE, userId) as Row[];
 
     const playlists: Playlist[] = [];
     for (const row of rows) {
-      const rule = parseStoredRule(row.rule_json);
+      const id = stringValue(row.id);
+      const rule = parseStoredRule(row.source_key, id);
       if (!rule) continue;
       playlists.push({
-        id: stringValue(row.id),
+        id,
         name: stringValue(row.name),
         trackIds: this.evaluate(userId, rule, eligibleTrackIds, now),
         createdAt: stringValue(row.created_at),
@@ -310,12 +312,12 @@ export class SmartPlaylistStore {
     requireUserId(userId);
     requirePlaylistId(id);
     const row = this.db.prepare(`
-      SELECT id, name, rule_json, created_at, updated_at
-      FROM smart_playlists
-      WHERE id = ? AND owner_user_id = ?
-    `).get(id, userId) as Row | undefined;
+      SELECT id, name, source_key, created_at, updated_at
+      FROM playlists
+      WHERE id = ? AND source = ? AND owner_user_id = ?
+    `).get(id, SMART_PLAYLIST_SOURCE, userId) as Row | undefined;
     if (!row) return null;
-    const rule = parseStoredRule(row.rule_json);
+    const rule = parseStoredRule(row.source_key, id);
     if (!rule) return null;
     return {
       id: stringValue(row.id),
@@ -337,9 +339,17 @@ export class SmartPlaylistStore {
     const id = randomUUID();
     const now = new Date().toISOString();
     this.db.prepare(`
-      INSERT INTO smart_playlists(id, owner_user_id, name, rule_json, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(id, userId, cleanName, JSON.stringify(normalizedRule), now, now);
+      INSERT INTO playlists(id, name, created_at, updated_at, source, source_key, owner_user_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id,
+      cleanName,
+      now,
+      now,
+      SMART_PLAYLIST_SOURCE,
+      encodeStoredRule(id, normalizedRule),
+      userId
+    );
     return id;
   }
 
@@ -347,23 +357,30 @@ export class SmartPlaylistStore {
     requireUserId(userId);
     requirePlaylistId(id);
     const current = this.db.prepare(`
-      SELECT name, rule_json
-      FROM smart_playlists
-      WHERE id = ? AND owner_user_id = ?
-    `).get(id, userId) as Row | undefined;
+      SELECT name, source_key
+      FROM playlists
+      WHERE id = ? AND source = ? AND owner_user_id = ?
+    `).get(id, SMART_PLAYLIST_SOURCE, userId) as Row | undefined;
     if (!current) return false;
 
-    const currentRule = parseStoredRule(current.rule_json);
+    const currentRule = parseStoredRule(current.source_key, id);
     if (!currentRule) return false;
     const name = patch.name == null ? stringValue(current.name) : patch.name.trim();
     if (!name || name.length > 120) throw new RangeError('Nome da playlist inteligente inválido.');
     const rule = patch.rule == null ? currentRule : normalizeSmartPlaylistRule(patch.rule);
     if (!rule) throw new RangeError('Regra da playlist inteligente inválida.');
     const result = this.db.prepare(`
-      UPDATE smart_playlists
-      SET name = ?, rule_json = ?, updated_at = ?
-      WHERE id = ? AND owner_user_id = ?
-    `).run(name, JSON.stringify(rule), new Date().toISOString(), id, userId);
+      UPDATE playlists
+      SET name = ?, source_key = ?, updated_at = ?
+      WHERE id = ? AND source = ? AND owner_user_id = ?
+    `).run(
+      name,
+      encodeStoredRule(id, rule),
+      new Date().toISOString(),
+      id,
+      SMART_PLAYLIST_SOURCE,
+      userId
+    );
     return Number(result.changes) === 1;
   }
 
@@ -371,9 +388,9 @@ export class SmartPlaylistStore {
     requireUserId(userId);
     requirePlaylistId(id);
     const result = this.db.prepare(`
-      DELETE FROM smart_playlists
-      WHERE id = ? AND owner_user_id = ?
-    `).run(id, userId);
+      DELETE FROM playlists
+      WHERE id = ? AND source = ? AND owner_user_id = ?
+    `).run(id, SMART_PLAYLIST_SOURCE, userId);
     return Number(result.changes) === 1;
   }
 }
