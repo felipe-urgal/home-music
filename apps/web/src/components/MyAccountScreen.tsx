@@ -27,6 +27,7 @@ import {
   AccountPlaybackPreferences,
   type AccountPlaybackPreferencesValue
 } from './AccountPlaybackPreferences';
+import { AccountSessionsScreen } from './AccountSessionsScreen';
 
 type AccountView = 'overview' | 'profile' | 'password' | 'sessions' | 'playback';
 
@@ -41,10 +42,6 @@ type MyAccountScreenProps = {
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : 'Não foi possível concluir a operação.';
-}
-
-function formatSessionDate(value: number) {
-  return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
 }
 
 export function MyAccountScreen({
@@ -335,28 +332,14 @@ export function MyAccountScreen({
       )}
 
       {view === 'sessions' && (
-        <section className="my-account-card my-account-sessions-card">
-          <div className="my-account-card__heading">
-            <span className="my-account-card__icon"><MonitorOff /></span>
-            <div><strong>Outros dispositivos</strong><small>Encerre acessos antigos sem sair deste dispositivo.</small></div>
-          </div>
-          <strong className="my-account-sessions-card__label">Dispositivos com sessão ativa</strong>
-          {loadingSessions ? (
-            <div className="my-account-sessions-loading"><LoaderCircle className="my-account-spinner" /> Carregando sessões…</div>
-          ) : (
-            <div className="my-account-session-list">
-              {sessions.map((session, index) => (
-                <div className="my-account-session-row" key={session.id}>
-                  <span className="my-account-session-row__icon">{session.current ? <UserRound /> : <MonitorOff />}</span>
-                  <div><strong>{session.current ? 'Este dispositivo' : `Outro dispositivo ${index}`}</strong><small>{session.current ? 'Sessão atual' : `Última atividade ${formatSessionDate(session.lastSeenAt)}`}</small></div>
-                  {session.current ? <span className="my-account-session-current">Atual</span> : <button type="button" disabled={busySessionId === session.id} onClick={() => void revokeOne(session)}>{busySessionId === session.id ? 'Encerrando…' : 'Encerrar'}</button>}
-                </div>
-              ))}
-            </div>
-          )}
-          <button className="secondary-action my-account-action" type="button" disabled={revokingSessions || sessions.every(session => session.current)} onClick={() => void revokeOthers()}>{revokingSessions ? 'Encerrando…' : 'Encerrar todas as outras sessões'}</button>
-          <p className="my-account-card__note">Se você não reconhecer uma sessão, encerre o acesso e altere sua senha.</p>
-        </section>
+        <AccountSessionsScreen
+          sessions={sessions}
+          loading={loadingSessions}
+          busySessionId={busySessionId}
+          revokingAll={revokingSessions}
+          onRevokeOne={session => void revokeOne(session)}
+          onRevokeOthers={() => void revokeOthers()}
+        />
       )}
 
       {view === 'playback' && playbackPreferences && (
