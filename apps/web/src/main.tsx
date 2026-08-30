@@ -42,6 +42,7 @@ import './mobile-shell.css';
 import './admin-import-redesign.css';
 import './typography.css';
 import './layout-readability.css';
+import './password-screen.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
