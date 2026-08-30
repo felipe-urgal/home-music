@@ -66,6 +66,7 @@ export function AdminUsersScreen({ currentUser, onBack }: AdminUsersScreenProps)
   const [view, setView] = useState<AdminView>('list');
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [inspectorDismissed, setInspectorDismissed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -98,9 +99,13 @@ export function AdminUsersScreen({ currentUser, onBack }: AdminUsersScreenProps)
   useEffect(() => { if (page > pageCount) setPage(pageCount); }, [page, pageCount]);
 
   useEffect(() => {
-    if (view !== 'list' || selectedId || users.length === 0) return;
+    if (selectedId && !users.some(user => user.id === selectedId)) setSelectedId(null);
+  }, [selectedId, users]);
+
+  useEffect(() => {
+    if (view !== 'list' || inspectorDismissed || selectedId || users.length === 0) return;
     setSelectedId(users.find(user => user.id === currentUser.id)?.id ?? users[0]?.id ?? null);
-  }, [currentUser.id, selectedId, users, view]);
+  }, [currentUser.id, inspectorDismissed, selectedId, users, view]);
 
   async function refresh(background = false) {
     if (background) setRefreshing(true); else setLoading(true);
@@ -133,10 +138,19 @@ export function AdminUsersScreen({ currentUser, onBack }: AdminUsersScreenProps)
   }
 
   function inspectUser(user: AdminUser) {
+    setInspectorDismissed(false);
     setSelectedId(user.id);
     setCredential(null);
     setCopied(false);
     setError(null);
+    setNotice(null);
+  }
+
+  function closeInspector() {
+    setInspectorDismissed(true);
+    setSelectedId(null);
+    setCredential(null);
+    setCopied(false);
     setNotice(null);
   }
 
@@ -151,6 +165,8 @@ export function AdminUsersScreen({ currentUser, onBack }: AdminUsersScreenProps)
   }
 
   function returnToList() {
+    if (credential && !copied && !window.confirm('A senha temporária não poderá ser recuperada depois. Sair sem copiá-la?')) return;
+    setInspectorDismissed(false);
     setView('list');
     setCredential(null);
     setCopied(false);
@@ -170,6 +186,7 @@ export function AdminUsersScreen({ currentUser, onBack }: AdminUsersScreenProps)
       setSelectedId(result.user.id);
       setCredential({ username: result.user.username, password: result.temporaryPassword, reason: 'created' });
       setCopied(false);
+      setUsername('');
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {
@@ -287,7 +304,7 @@ export function AdminUsersScreen({ currentUser, onBack }: AdminUsersScreenProps)
 
       {view !== 'list' && credentialCard}
       {error && <div className="admin-users-message is-error" role="alert">{error}</div>}
-      {notice && <div className="admin-users-message" role="status">{notice}</div>}
+      {view !== 'list' && notice && <div className="admin-users-message" role="status">{notice}</div>}
 
       {view === 'list' && (
         <div className={`admin-users-v1__workspace${selected ? ' has-inspector' : ''}`}>
@@ -327,7 +344,7 @@ export function AdminUsersScreen({ currentUser, onBack }: AdminUsersScreenProps)
             <aside className="admin-users-v1__inspector" aria-label={`Detalhes de ${selected.username}`}>
               <header className="admin-users-v1__inspector-header">
                 <div><strong>Detalhes do usuário</strong><small>Conta selecionada</small></div>
-                <button type="button" aria-label="Fechar detalhes" onClick={() => setSelectedId(null)}><X /></button>
+                <button type="button" aria-label="Fechar detalhes" onClick={closeInspector}><X /></button>
               </header>
 
               <div className="admin-users-v1__identity">
@@ -341,7 +358,7 @@ export function AdminUsersScreen({ currentUser, onBack }: AdminUsersScreenProps)
                 </div>
               </div>
 
-              {view === 'list' && credential && credential.username === selected.username && credentialCard}
+              {credential && credential.username === selected.username && credentialCard}
               {notice && <div className="admin-users-v1__inline-notice" role="status"><CheckCircle2 /> {notice}</div>}
 
               <dl className="admin-users-v1__facts">
