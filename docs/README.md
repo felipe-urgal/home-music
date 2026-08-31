@@ -18,6 +18,10 @@ Comece por:
 4. [`administration-ui.md`](administration-ui.md) — composição atual de Minha conta/Administração;
 5. documentos funcionais abaixo para invariantes específicas.
 
+## Navegação e URLs
+
+- [`deep-links.md`](deep-links.md) — rotas canônicas, integração com o histórico do browser, refresh direto, preservação do player e fallbacks de navegação.
+
 ## Operação
 
 - [`production.md`](production.md)
@@ -95,4 +99,4 @@ Não use um registro histórico isolado para inferir que uma funcionalidade aind
 
 ## E2E
 
-A suíte Playwright tem instruções próprias em [`../e2e/README.md`](../e2e/README.md). A expansão sistemática de cobertura continua rastreada na #111.
+A suíte Playwright tem instruções próprias em [`../e2e/README.md`](../e2e/README.md). O CI obrigatório executa o smoke crítico curto; a regressão E2E completa permanece disponível sob demanda conforme o risco da mudança.
