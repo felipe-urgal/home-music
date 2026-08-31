@@ -21,6 +21,7 @@ Comece por:
 ## Operação
 
 - [`production.md`](production.md)
+- [`production-contract.md`](production-contract.md) — interface operacional padronizada `prod:*` e manifesto para automação local.
 - [`backup-restore.md`](backup-restore.md)
 - [`ffmpeg.md`](ffmpeg.md)
 - [`tailscale.md`](tailscale.md)
