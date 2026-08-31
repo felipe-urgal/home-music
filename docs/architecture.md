@@ -135,10 +135,11 @@ Ele mantém, entre outros:
 - playlists manuais por usuário;
 - estado/fila do player por usuário;
 - overrides de metadata e capa;
+- aliases lógicos de artista/álbum;
 - estado necessário a operações administrativas/importações;
 - histórico operacional.
 
-O schema usa migrations via `PRAGMA user_version`, WAL e foreign keys.
+O schema usa migrations via `PRAGMA user_version`, WAL e foreign keys. Tabelas auxiliares de features não destrutivas, como `library_metadata_aliases`, são criadas de forma idempotente pelo respectivo store e permanecem cobertas pelo snapshot do SQLite.
 
 Tokens de sessão não são persistidos no SQLite.
 
@@ -187,6 +188,8 @@ Superfícies atuais:
 - Gerenciar músicas;
 - Importação;
 - Integridade;
+- Duplicatas;
+- Normalização lógica;
 - Usuários;
 - Metadados;
 - Lixeira/quarentena;
@@ -206,19 +209,35 @@ Princípios:
 - movimentação de arquivo é confinada a `MUSIC_DIR`, sem overwrite silencioso;
 - diagnóstico de Integridade nunca executa remoção automática.
 
-## Overrides de metadata/capa
+## Overrides e projeção canônica de metadata/capa
 
 Correções administrativas são não destrutivas por padrão:
 
 ```text
 metadata física
-   + override SQLite
+   + override SQLite por faixa
    = metadata efetiva
 ```
 
-A mesma ideia vale para capa. Scanner/rescan não deve apagar overrides válidos.
+Para artista/álbum, a visão consumida pela biblioteca pode receber mais uma camada lógica:
+
+```text
+metadata física
+   ↓
+override por faixa
+   ↓
+alias lógico global/reversível
+   ↓
+metadata canônica publicada
+```
+
+Aliases são aprovados manualmente em **Administração → Normalização**. Artistas são globais; álbuns são escopados pelo artista do álbum já canônico. A camada não altera `track.id`, não escreve em `MUSIC_DIR` e é reutilizada por `/api/library` e pela avaliação de smart playlists.
+
+A mesma ideia não destrutiva vale para capa. Scanner/rescan não deve apagar overrides ou aliases válidos.
 
 Escrita opcional de volta ao arquivo original não faz parte do comportamento padrão atual.
+
+Detalhes: `admin-metadata-overrides.md` e `library-metadata-normalization.md`.
 
 ## Importação
 
@@ -332,6 +351,7 @@ npm run service:update
 - importação URL aplica proteção SSRF;
 - providers externos usam isolamento/timeout;
 - operações destrutivas são explícitas;
+- normalização lógica não escreve em arquivos e exige admin;
 - Integrity é read-only;
 - dependências usam lockfile + `npm ci`;
 - CI executa typecheck, testes, validações operacionais, build e smoke real de produção.
