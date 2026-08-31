@@ -64,6 +64,12 @@ test('views persistem entre reaberturas e ficam isoladas por usuário', async ()
 
     assert.equal(reopened.update('user-a', id, { name: 'House FLAC' }), true);
     assert.equal(reopened.get('user-a', id)?.name, 'House FLAC');
+
+    const updatedDefinition = { ...definition, cover: 'without-cover' as const };
+    assert.equal(reopened.update('user-a', id, { definition: updatedDefinition }), true);
+    assert.equal(reopened.get('user-a', id)?.name, 'House FLAC');
+    assert.deepEqual(reopened.get('user-a', id)?.definition, updatedDefinition);
+
     assert.equal(reopened.delete('user-a', id), true);
     assert.equal(reopened.get('user-a', id), null);
     reopened.close();
