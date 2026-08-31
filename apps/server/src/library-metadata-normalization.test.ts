@@ -49,7 +49,7 @@ test('heurística conserva pontuação e normaliza apenas acento, caixa e espaç
   assert.notEqual(normalizationComparisonKey('The Beatles'), normalizationComparisonKey('Beatles'));
 });
 
-test('review encontra candidatos conservadores e mantém álbuns separados por artista', async () => {
+test('review encontra candidatos conservadores e prefere grafia sem espaços anômalos', async () => {
   const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-normalization-'));
   const databasePath = path.join(temp, 'home-music.db');
   try {
@@ -58,7 +58,11 @@ test('review encontra candidatos conservadores e mantém álbuns separados por a
     const review = store.review(new Date('2026-08-31T12:00:00.000Z'));
 
     const artist = review.candidates.find(candidate => candidate.kind === 'artist');
-    assert.deepEqual(artist?.variants.map(variant => variant.value), [' BEYONCÉ ', 'Beyonce', 'Beyoncé']);
+    assert.deepEqual(
+      new Set(artist?.variants.map(variant => variant.value)),
+      new Set([' BEYONCÉ ', 'Beyonce', 'Beyoncé'])
+    );
+    assert.equal(artist?.variants.at(-1)?.value, ' BEYONCÉ ');
     assert.equal(review.candidates.some(candidate => candidate.variants.some(variant => variant.value === 'AC/DC') && candidate.variants.some(variant => variant.value === 'ACDC')), false);
 
     const albumScopes = review.candidates
@@ -72,7 +76,7 @@ test('review encontra candidatos conservadores e mantém álbuns separados por a
   }
 });
 
-test('associação é lógica, reversível, persistente e não altera metadata física', async () => {
+test('associação é lógica, reversível, persistente e preserva valores fonte com espaços', async () => {
   const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-normalization-'));
   const databasePath = path.join(temp, 'home-music.db');
   try {
@@ -85,14 +89,20 @@ test('associação é lógica, reversível, persistente e não altera metadata f
     });
 
     const resolved = store.resolveTrack({ id: 'b', artist: 'Beyonce', album: 'Renaissance', albumArtist: 'Beyonce' });
+    const resolvedWhitespace = store.resolveTrack({ id: 'c', artist: ' BEYONCÉ ', album: 'Renaissance', albumArtist: ' BEYONCÉ ' });
     assert.equal(resolved.artist, 'Beyoncé');
     assert.equal(resolved.albumArtist, 'Beyoncé');
+    assert.equal(resolvedWhitespace.artist, 'Beyoncé');
+    assert.equal(resolvedWhitespace.albumArtist, 'Beyoncé');
     assert.equal(store.review().counts.artistCandidates, 0);
 
     const raw = new DatabaseSync(databasePath);
     const physical = raw.prepare('SELECT artist, album_artist FROM tracks WHERE id = ?').get('b') as Record<string, unknown>;
+    const physicalWhitespace = raw.prepare('SELECT artist, album_artist FROM tracks WHERE id = ?').get('c') as Record<string, unknown>;
     assert.equal(physical.artist, 'Beyonce');
     assert.equal(physical.album_artist, 'Beyonce');
+    assert.equal(physicalWhitespace.artist, ' BEYONCÉ ');
+    assert.equal(physicalWhitespace.album_artist, ' BEYONCÉ ');
     raw.close();
 
     const aliasId = store.listAliases()[0].id;
@@ -137,7 +147,7 @@ test('associação bloqueia falso positivo e cadeia de aliases', async () => {
   }
 });
 
-test('álbum usa artista do álbum canônico como escopo', async () => {
+test('álbum preserva o artista canônico exato como escopo', async () => {
   const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-normalization-'));
   const databasePath = path.join(temp, 'home-music.db');
   try {
@@ -145,21 +155,22 @@ test('álbum usa artista do álbum canônico como escopo', async () => {
     const store = new LibraryMetadataNormalizationStore(databasePath);
     store.associate({
       kind: 'artist',
-      canonicalValue: 'Beyoncé',
-      sourceValues: ['Beyonce', ' BEYONCÉ ']
+      canonicalValue: ' BEYONCÉ ',
+      sourceValues: ['Beyonce', 'Beyoncé']
     });
     store.associate({
       kind: 'album',
-      scope: 'Beyoncé',
+      scope: ' BEYONCÉ ',
       canonicalValue: 'Renaissance',
       sourceValues: [' renaissance ', 'RENAISSANCE']
     });
 
     const beyonce = store.resolveTrack({ id: 'b', artist: 'Beyonce', album: ' renaissance ', albumArtist: 'Beyonce' });
     const other = store.resolveTrack({ id: 'f', artist: 'Outro Artista', album: 'Renaissance', albumArtist: 'Outro Artista' });
-    assert.equal(beyonce.albumArtist, 'Beyoncé');
+    assert.equal(beyonce.albumArtist, ' BEYONCÉ ');
     assert.equal(beyonce.album, 'Renaissance');
     assert.equal(other.album, 'Renaissance');
+    assert.equal(store.listAliases().find(alias => alias.kind === 'album')?.scope, ' BEYONCÉ ');
     store.close();
   } finally {
     await rm(temp, { recursive: true, force: true });
