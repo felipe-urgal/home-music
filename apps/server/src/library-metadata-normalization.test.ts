@@ -193,3 +193,29 @@ test('álbum preserva o artista canônico exato como escopo', async () => {
     await rm(temp, { recursive: true, force: true });
   }
 });
+
+test('chaves de candidatos não colidem quando scope e comparação contêm dois-pontos', async () => {
+  const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-normalization-'));
+  const databasePath = path.join(temp, 'home-music.db');
+  try {
+    seedDatabase(databasePath);
+    const db = new DatabaseSync(databasePath);
+    const insert = db.prepare('INSERT INTO tracks(id, title, artist, album, album_artist) VALUES (?, ?, ?, ?, ?);');
+    insert.run('g', 'G', 'Artist:live', 'Album', 'Artist:live');
+    insert.run('h', 'H', 'Artist:live', 'ALBUM', 'Artist:live');
+    insert.run('i', 'I', 'Artist', 'live:Album', 'Artist');
+    insert.run('j', 'J', 'Artist', 'LIVE:ALBUM', 'Artist');
+    db.close();
+
+    const store = new LibraryMetadataNormalizationStore(databasePath);
+    const albumCandidates = store.review().candidates.filter(candidate => candidate.kind === 'album');
+    const collisionCandidates = albumCandidates.filter(candidate =>
+      candidate.scope === 'Artist:live' || candidate.scope === 'Artist'
+    );
+    assert.equal(collisionCandidates.length, 2);
+    assert.equal(new Set(collisionCandidates.map(candidate => candidate.key)).size, 2);
+    store.close();
+  } finally {
+    await rm(temp, { recursive: true, force: true });
+  }
+});
