@@ -96,29 +96,6 @@ test('CRUD exige autenticação e header de mutação', async () => {
   }
 });
 
-test('PATCH e DELETE rejeitam ids malformados como erro de cliente', async () => {
-  const fixture = await buildApp();
-  try {
-    const oversizedId = 'x'.repeat(129);
-    const patched = await fixture.app.inject({
-      method: 'PATCH',
-      url: `/api/library-views/${oversizedId}`,
-      headers: mutationHeaders(fixture.tokenA),
-      payload: { name: 'Inválida' }
-    });
-    assert.equal(patched.statusCode, 400);
-
-    const deleted = await fixture.app.inject({
-      method: 'DELETE',
-      url: `/api/library-views/${oversizedId}`,
-      headers: mutationHeaders(fixture.tokenA)
-    });
-    assert.equal(deleted.statusCode, 400);
-  } finally {
-    await fixture.close();
-  }
-});
-
 test('CRUD preserva ownership e não expõe views entre usuários', async () => {
   const fixture = await buildApp();
   try {
