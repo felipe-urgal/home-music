@@ -178,7 +178,14 @@ export function useLibraryNavigation(
   }
 
   function applyLibraryView(definition: LibraryViewDefinition) {
-    const compatible = compatibleLibraryViewDefinition(definition, availableFormats);
+    const targetCanSort = Boolean(definition.query.trim())
+      || Boolean(selectedPlaylist)
+      || (libraryTab === 'folders' && Boolean(folderPath));
+    const compatible = compatibleLibraryViewDefinition(
+      definition,
+      availableFormats,
+      targetCanSort
+    );
     setQuery(compatible.query);
     setSort(compatible.sort);
     setFormatFilter(compatible.format);
