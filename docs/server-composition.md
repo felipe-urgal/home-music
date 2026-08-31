@@ -1,6 +1,6 @@
 # Composição do servidor
 
-Este documento descreve as fronteiras correntes do processo Fastify depois da refatoração da Fase 11 (#116).
+Este documento descreve as fronteiras correntes do processo Fastify depois das refatorações da Fase 11 (#116 e #117).
 
 ## Objetivo
 
@@ -19,7 +19,7 @@ Ele não deve implementar regras de domínio, acesso direto à biblioteca, manip
 ```text
 index.ts
   ↓ wiring
-routes
+routes / route composition
   ↓ contratos explícitos
 services
   ↓
@@ -37,9 +37,11 @@ Handlers Fastify ficam agrupados por domínio:
 - `personal-routes.ts` — favoritos, playlists manuais, estado do player, views pessoais, smart playlists e histórico de playback;
 - `media-routes.ts` — lyrics, capa, streaming direto e transcoding;
 - `system-routes.ts` — liveness/readiness/diagnóstico e fallback do frontend de produção;
-- módulos administrativos existentes continuam separados por domínio (`admin-*-routes.ts`).
+- módulos administrativos continuam separados por domínio (`admin-*-routes.ts`).
 
-Rotas traduzem HTTP para chamadas de serviço/infraestrutura: validam identidade e detalhes específicos da API, escolhem status codes/headers e preservam mensagens de erro externas. Elas não acessam SQLite diretamente quando a regra pertence a um serviço extraído.
+Rotas traduzem HTTP para chamadas de serviço/infraestrutura: validam identidade e detalhes específicos da API, escolhem status codes/headers e preservam mensagens de erro externas. Elas não acessam SQLite diretamente quando a regra pertence a um serviço extraído e não executam diretamente primitivas destrutivas de filesystem.
+
+A composição da importação fica em `admin-import-service-routes.ts`. O entrypoint histórico `admin-import-routes.ts` permanece como façade para não alterar imports internos nem testes existentes.
 
 ### Services
 
@@ -61,9 +63,38 @@ Rotas traduzem HTTP para chamadas de serviço/infraestrutura: validam identidade
 - rejeição de mutações em playlists importadas somente leitura;
 - validação, normalização e persistência do estado/fila do player.
 
-Esses serviços não conhecem `FastifyInstance` nem registram endpoints. O `PersonalLibraryService` recebe o SQLite e o snapshot canônico da biblioteca por referência; `personal-routes.ts` recebe apenas o serviço.
+`admin-track-mutation-service.ts` é a fronteira explícita para operações físicas administrativas de maior risco:
 
-A #117 permanece responsável por consolidar serviços explícitos adicionais para operações destrutivas, imports e backups. A #116 não antecipa esse escopo.
+- movimentação/renomeação física de faixas;
+- envio para quarentena;
+- restauração da quarentena;
+- exclusão permanente com confirmação explícita;
+- compensação da disponibilidade pública quando uma operação falha;
+- normalização de erros operacionais para mensagens públicas sanitizadas.
+
+O serviço **não substitui** `MediaFileMoveStore` nem `MediaQuarantineStore`. Essas primitivas continuam donas de confinement, no-clobber, validação de symlink/arquivo regular, lock compartilhado e rollback de filesystem/SQLite.
+
+`admin-import-service.ts` é o orquestrador único do pipeline administrativo de importação:
+
+- upload, URL e provider externo;
+- retry;
+- validação técnica;
+- preview de metadata;
+- detecção/revisão de duplicatas;
+- planejamento de destino;
+- promoção segura;
+- coordenação do fluxo automático e limpeza do estado derivado em cancelamentos.
+
+Ele reutiliza os managers existentes. Não existe um segundo pipeline: staging, validação, metadata, duplicatas, destino seguro, promoção e indexação incremental continuam pertencendo às mesmas primitivas já testadas.
+
+`backup-service.ts` cria a fronteira operacional entre o CLI e `backup-restore.ts`:
+
+- criação e verificação usam as primitivas existentes;
+- restore exige guarda offline antes de avançar;
+- a guarda é repetida imediatamente antes da troca do SQLite por meio de `beforeReplace`;
+- validação do artefato, snapshot de rollback e compensação continuam em `backup-restore.ts`.
+
+Esses serviços não conhecem `FastifyInstance` nem registram endpoints. O objetivo é deixar regras de orquestração testáveis e impedir que handlers/CLI cresçam novamente como donos de invariantes críticas.
 
 ### Infrastructure
 
@@ -103,16 +134,18 @@ authenticated
 admin
 ```
 
-`/api/admin/*` e as operações administrativas legadas continuam classificadas centralmente, independentemente do arquivo em que o handler está registrado.
+`/api/admin/*` e as operações administrativas legadas continuam classificadas centralmente, independentemente do arquivo em que o handler está registrado. A extração da #117 não altera RBAC, anti-CSRF nem ownership.
 
 ## Estado compartilhado
 
-Não existe um segundo snapshot da biblioteca nem um segundo owner do transcoding:
+Não existe um segundo snapshot da biblioteca, um segundo owner do transcoding nem uma segunda fila/pipeline de importação:
 
 - `LibraryService` possui o snapshot canônico em memória;
 - `PersonalLibraryService` consulta esse mesmo snapshot para validar IDs de faixas;
 - `ServerInfrastructure` possui os stores/managers compartilhados;
 - `TrackMediaInfrastructure` recebe esses objetos por referência;
+- `AdminImportService` recebe a mesma fila e os mesmos managers já compostos para as rotas;
+- `AdminTrackMutationService` coordena os stores físicos existentes em vez de reimplementar suas garantias;
 - módulos de rota recebem apenas as dependências necessárias.
 
 Esse desenho evita sincronização entre stores paralelos e ciclos de dependência.
@@ -135,7 +168,7 @@ No shutdown:
 
 1. o scheduler automático é parado;
 2. um scan em andamento é aguardado antes de fechar SQLite;
-3. `app.close()` executa hooks dos módulos;
+3. `app.close()` executa hooks dos módulos, inclusive cleanup da importação e fechamento dos stores administrativos;
 4. a infraestrutura compartilhada é fechada.
 
 ## Invariantes
@@ -146,9 +179,11 @@ Mudanças futuras devem preservar:
 - auth permanece central e fail-closed;
 - `index.ts` não volta a implementar `/api/*` diretamente;
 - rotas pessoais não voltam a acessar SQLite diretamente para regras já extraídas;
-- filesystem e transcoding não vazam para handlers além das interfaces de infraestrutura;
+- handlers administrativos não voltam a executar diretamente movimentação, quarentena ou delete físico;
+- imports não ganham um segundo pipeline ou um segundo owner de jobs;
+- backup/restore mantém validação prévia, guarda offline imediatamente antes da troca e rollback protegido;
+- filesystem e transcoding não vazam para handlers além das interfaces de infraestrutura/serviço;
 - estado da biblioteca permanece em uma fonte única;
-- operações destrutivas/imports/backups só avançam de camada quando a respectiva issue definir serviço e invariantes;
 - shutdown nunca fecha SQLite enquanto um scan conhecido ainda está ativo.
 
-`server-composition.test.ts` protege essas fronteiras estruturais, enquanto a suíte unitária, o Playwright crítico e o production smoke protegem equivalência comportamental.
+`server-composition.test.ts` protege essas fronteiras estruturais, enquanto as suítes unitárias existentes dos stores/managers, os testes de rotas, o smoke de backup/restore, o Playwright crítico e o production smoke protegem equivalência comportamental.

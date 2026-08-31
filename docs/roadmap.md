@@ -177,12 +177,14 @@ Em andamento. As issues abaixo são a fonte de escopo:
 - [x] [#114](https://github.com/felipe-urgal/home-music/issues/114) — refatorar `PlayerScreen` sem duplicar estado;
 - [x] [#115](https://github.com/felipe-urgal/home-music/issues/115) — reduzir responsabilidade de `App.tsx`;
 - [x] [#116](https://github.com/felipe-urgal/home-music/issues/116) — separar rotas Fastify, serviços e infraestrutura;
-- [ ] [#117](https://github.com/felipe-urgal/home-music/issues/117) — serviços explícitos para operações destrutivas/imports/backups;
+- [x] [#117](https://github.com/felipe-urgal/home-music/issues/117) — serviços explícitos para operações destrutivas/imports/backups, mantendo stores/managers seguros existentes como primitivas e preservando contratos;
 - [ ] [#118](https://github.com/felipe-urgal/home-music/issues/118) — regressões de segurança para importação/administração;
 - [ ] [#119](https://github.com/felipe-urgal/home-music/issues/119) — benchmark com biblioteca grande;
 - [ ] [#120](https://github.com/felipe-urgal/home-music/issues/120) — revisão sistemática de acessibilidade;
 - [ ] [#121](https://github.com/felipe-urgal/home-music/issues/121) — observabilidade de jobs longos;
 - [ ] [#122](https://github.com/felipe-urgal/home-music/issues/122) — revisão periódica de dependências.
+
+A fronteira de serviços da #117 está detalhada em [server-composition.md](server-composition.md). Operações destrutivas continuam delegando confinement/lock/rollback aos stores físicos existentes; importações continuam usando o mesmo pipeline; backup/restore continua usando validação e rollback de `backup-restore.ts`.
 
 ## Backlog visual e PWA
 

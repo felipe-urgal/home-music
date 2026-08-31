@@ -88,3 +88,34 @@ test('HTTP handlers are grouped by domain while auth policy stays central', () =
     assert.doesNotMatch(routeSource, /installApiAuthPolicy\(/);
   }
 });
+
+test('high-risk orchestration stays behind explicit framework-agnostic services', () => {
+  const trackRoutes = source('admin-track-routes.ts');
+  const trackMutations = source('admin-track-mutation-service.ts');
+  const importEntry = source('admin-import-routes.ts');
+  const importRoutes = source('admin-import-service-routes.ts');
+  const importService = source('admin-import-service.ts');
+  const backupCli = source('backup-cli.ts');
+  const backupService = source('backup-service.ts');
+
+  assert.match(trackRoutes, /new AdminTrackMutationService\(/);
+  assert.doesNotMatch(trackRoutes, /new MediaQuarantineStore\(/);
+  assert.doesNotMatch(trackRoutes, /new MediaFileMoveStore\(/);
+  assert.match(trackMutations, /new MediaQuarantineStore\(/);
+  assert.match(trackMutations, /new MediaFileMoveStore\(/);
+  assert.doesNotMatch(trackMutations, /from ['"]fastify['"]/);
+
+  assert.match(importEntry, /admin-import-service-routes\.js/);
+  assert.match(importRoutes, /new AdminImportService\(/);
+  assert.match(importRoutes, /installImportRetryStarter\(app, \(context, input\) => imports\.startRetry/);
+  assert.doesNotMatch(importService, /from ['"]fastify['"]/);
+  assert.match(importService, /safeDestination\.promote/);
+  assert.match(importService, /automaticFlow\.startWhenReady/);
+
+  assert.match(backupCli, /new BackupService\(/);
+  assert.doesNotMatch(backupCli, /createBackupArtifact\(/);
+  assert.doesNotMatch(backupCli, /restoreBackupArtifact\(/);
+  assert.match(backupService, /restoreOfflineBlocker/);
+  assert.match(backupService, /beforeReplace/);
+  assert.doesNotMatch(backupService, /from ['"]fastify['"]/);
+});

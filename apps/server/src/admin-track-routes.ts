@@ -5,20 +5,18 @@ import type {
   AdminQuarantineResponse,
   AdminTrack,
   AdminTrackMoveRequest,
-  AdminTrackMoveResponse,
   AdminTracksResponse,
   Track
 } from '@home-music/shared';
 import { registerAdminLibraryNormalizationRoutes } from './admin-library-normalization-routes.js';
+import {
+  AdminTrackMutationError,
+  AdminTrackMutationService
+} from './admin-track-mutation-service.js';
+export { PERMANENT_DELETE_CONFIRMATION } from './admin-track-mutation-service.js';
 import { LibraryDuplicateReviewError, LibraryDuplicateReviewStore } from './library-duplicate-review.js';
 import { LibraryMetadataNormalizationStore } from './library-metadata-normalization.js';
-import {
-  type AppliedTrackLocation,
-  MediaFileMoveOperationError,
-  MediaFileMoveStore
-} from './media-file-move.js';
-import { MediaQuarantineOperationError, MediaQuarantineStore } from './media-quarantine.js';
-import { UnsafeLibraryPathError } from './security.js';
+import type { AppliedTrackLocation } from './media-file-move.js';
 import {
   COVER_OVERRIDE_CONTENT_TYPES,
   CoverOverrideValidationError,
@@ -29,8 +27,6 @@ import {
   normalizeMetadataOverridePatch,
   TrackMetadataOverrideStore
 } from './track-metadata-overrides.js';
-
-export const PERMANENT_DELETE_CONFIRMATION = 'EXCLUIR PERMANENTEMENTE' as const;
 
 const defaultDatabasePath = fileURLToPath(new URL('../../../data/home-music.db', import.meta.url));
 const COVER_UPLOAD_BODY_LIMIT = MAX_COVER_OVERRIDE_BYTES + 1024;
@@ -50,12 +46,9 @@ type RevisionPayload = {
   revision?: unknown;
 };
 
-function sendQuarantineError(reply: FastifyReply, error: unknown) {
-  if (error instanceof MediaQuarantineOperationError) {
+function sendTrackMutationError(reply: FastifyReply, error: unknown) {
+  if (error instanceof AdminTrackMutationError) {
     return reply.code(error.statusCode).send({ error: error.message });
-  }
-  if (error instanceof UnsafeLibraryPathError) {
-    return reply.code(409).send({ error: 'A operação foi bloqueada por segurança de caminho.' });
   }
   throw error;
 }
@@ -63,16 +56,6 @@ function sendQuarantineError(reply: FastifyReply, error: unknown) {
 function sendDuplicateReviewError(reply: FastifyReply, error: unknown) {
   if (error instanceof LibraryDuplicateReviewError) {
     return reply.code(error.statusCode).send({ error: error.message });
-  }
-  throw error;
-}
-
-function sendFileMoveError(reply: FastifyReply, error: unknown) {
-  if (error instanceof MediaFileMoveOperationError) {
-    return reply.code(error.statusCode).send({ error: error.message });
-  }
-  if (error instanceof UnsafeLibraryPathError) {
-    return reply.code(409).send({ error: 'A movimentação foi bloqueada por segurança de caminho.' });
   }
   throw error;
 }
@@ -139,13 +122,6 @@ export function registerAdminTrackRoutes(
 ) {
   const databasePath = options.databasePath || process.env.HOME_MUSIC_DATABASE_PATH || defaultDatabasePath;
   const musicDir = options.musicDir ?? process.env.MUSIC_DIR ?? '';
-  const quarantine = new MediaQuarantineStore(databasePath, musicDir);
-  const duplicateReview = new LibraryDuplicateReviewStore({
-    databasePath,
-    musicDir,
-    isHidden: trackId => quarantine.hasHidden(trackId)
-  });
-  const fileMoves = new MediaFileMoveStore(databasePath, musicDir);
   const metadataOverrides = new TrackMetadataOverrideStore(databasePath);
   const metadataNormalization = new LibraryMetadataNormalizationStore(databasePath);
   const coverOverrides = new TrackCoverOverrideStore(databasePath);
@@ -165,6 +141,29 @@ export function registerAdminTrackRoutes(
     if (!publicTrackIdsInitialized) syncPublicTrackIds(service.listTracks());
   }
 
+  function decorateTrack<T extends Track>(track: T): T {
+    metadataOverrides.refresh();
+    coverOverrides.refresh();
+    return coverOverrides.resolveTrack(metadataOverrides.resolveTrack(track));
+  }
+
+  const mutations = new AdminTrackMutationService({
+    databasePath,
+    musicDir,
+    tracks: service,
+    decorateTrack,
+    onVisibilityChanged: (trackId, enabled) => {
+      publicTrackIdsInitialized = true;
+      if (enabled) publicTrackIds.add(trackId); else publicTrackIds.delete(trackId);
+    },
+    onFileMoved: () => { fileRevision += 1; }
+  });
+  const duplicateReview = new LibraryDuplicateReviewStore({
+    databasePath,
+    musicDir,
+    isHidden: trackId => mutations.hasHidden(trackId)
+  });
+
   for (const contentType of COVER_OVERRIDE_CONTENT_TYPES) {
     if (app.hasContentTypeParser(contentType)) continue;
     app.addContentTypeParser(
@@ -175,12 +174,11 @@ export function registerAdminTrackRoutes(
   }
 
   app.addHook('onClose', async () => {
-    fileMoves.close();
     coverOverrides.close();
     metadataNormalization.close();
     metadataOverrides.close();
     duplicateReview.close();
-    quarantine.close();
+    mutations.close();
   });
 
   app.addHook('onRequest', async (request, reply) => {
@@ -214,8 +212,6 @@ export function registerAdminTrackRoutes(
     return reply.send(override.data);
   });
 
-  // Scanner mantém somente os valores físicos. Overrides por faixa e aliases globais
-  // compõem a visão pública sem trocar a identidade estável da faixa.
   app.addHook('preSerialization', async (request, _reply, payload) => {
     const pathname = request.url.split('?', 1)[0];
     if (pathname !== '/api/library' && pathname !== '/api/library/status') return payload;
@@ -251,13 +247,13 @@ export function registerAdminTrackRoutes(
 
   app.get('/api/admin/tracks', async (_request, reply) => {
     reply.header('Cache-Control', 'private, no-store');
-    quarantine.pruneResolvedTombstones();
+    mutations.pruneResolvedTombstones();
     metadataOverrides.refresh();
     coverOverrides.refresh();
     const physicalTracks = service.listTracks();
     syncPublicTrackIds(physicalTracks);
     const tracks = physicalTracks
-      .filter(track => !quarantine.hasHidden(track.id))
+      .filter(track => !mutations.hasHidden(track.id))
       .map(track => coverOverrides.resolveTrack(metadataOverrides.resolveTrack(track)));
     const response: AdminTracksResponse = {
       tracks,
@@ -269,7 +265,7 @@ export function registerAdminTrackRoutes(
 
   app.post('/api/admin/library/duplicates/check', async (_request, reply) => {
     reply.header('Cache-Control', 'private, no-store');
-    quarantine.pruneResolvedTombstones();
+    mutations.pruneResolvedTombstones();
     try {
       return await duplicateReview.check();
     } catch (error) {
@@ -300,7 +296,7 @@ export function registerAdminTrackRoutes(
       if (typeof request.body?.enabled !== 'boolean') {
         return reply.code(400).send({ error: 'Estado da música inválido.' });
       }
-      if (quarantine.hasHidden(request.params.id)) {
+      if (mutations.hasHidden(request.params.id)) {
         return reply.code(409).send({ error: 'Música está na lixeira. Restaure antes de alterar a disponibilidade.' });
       }
 
@@ -308,23 +304,21 @@ export function registerAdminTrackRoutes(
       if (!track) return reply.code(404).send({ error: 'Música não encontrada.' });
       publicTrackIdsInitialized = true;
       if (track.enabled) publicTrackIds.add(track.id); else publicTrackIds.delete(track.id);
-      metadataOverrides.refresh();
-      coverOverrides.refresh();
-      return { track: coverOverrides.resolveTrack(metadataOverrides.resolveTrack(track)) };
+      return { track: decorateTrack(track) };
     }
   );
 
   app.get<{ Params: { id: string } }>('/api/admin/tracks/:id/location', async (request, reply) => {
     reply.header('Cache-Control', 'private, no-store');
-    if (quarantine.hasHidden(request.params.id)) {
+    if (mutations.hasHidden(request.params.id)) {
       return reply.code(409).send({ error: 'Música está na lixeira. Restaure antes de mover o arquivo.' });
     }
     try {
-      const location = await fileMoves.getLocation(request.params.id);
+      const location = await mutations.getLocation(request.params.id);
       if (!location) return reply.code(404).send({ error: 'Música não encontrada.' });
       return location;
     } catch (error) {
-      return sendFileMoveError(reply, error);
+      return sendTrackMutationError(reply, error);
     }
   });
 
@@ -332,33 +326,23 @@ export function registerAdminTrackRoutes(
     '/api/admin/tracks/:id/move',
     async (request, reply) => {
       reply.header('Cache-Control', 'private, no-store');
-      if (quarantine.hasHidden(request.params.id)) {
+      if (mutations.hasHidden(request.params.id)) {
         return reply.code(409).send({ error: 'Música está na lixeira. Restaure antes de mover o arquivo.' });
       }
-
       try {
-        const result = await fileMoves.move(
+        return await mutations.move(
           request.params.id,
-          request.body ?? ({} as AdminTrackMoveRequest),
-          location => service.setLocation(request.params.id, location)
+          request.body ?? ({} as AdminTrackMoveRequest)
         );
-        if (result.moved) fileRevision += 1;
-        metadataOverrides.refresh();
-        coverOverrides.refresh();
-        const response: AdminTrackMoveResponse = {
-          ...result,
-          track: coverOverrides.resolveTrack(metadataOverrides.resolveTrack(result.track))
-        };
-        return response;
       } catch (error) {
-        return sendFileMoveError(reply, error);
+        return sendTrackMutationError(reply, error);
       }
     }
   );
 
   app.get<{ Params: { id: string } }>('/api/admin/tracks/:id/metadata', async (request, reply) => {
     reply.header('Cache-Control', 'private, no-store');
-    if (quarantine.hasHidden(request.params.id)) {
+    if (mutations.hasHidden(request.params.id)) {
       return reply.code(409).send({ error: 'Música está na lixeira. Restaure antes de editar os metadados.' });
     }
     const metadata = metadataOverrides.get(request.params.id);
@@ -370,7 +354,7 @@ export function registerAdminTrackRoutes(
     '/api/admin/tracks/:id/metadata',
     async (request, reply) => {
       reply.header('Cache-Control', 'private, no-store');
-      if (quarantine.hasHidden(request.params.id)) {
+      if (mutations.hasHidden(request.params.id)) {
         return reply.code(409).send({ error: 'Música está na lixeira. Restaure antes de editar os metadados.' });
       }
 
@@ -388,7 +372,7 @@ export function registerAdminTrackRoutes(
 
   app.delete<{ Params: { id: string } }>('/api/admin/tracks/:id/metadata', async (request, reply) => {
     reply.header('Cache-Control', 'private, no-store');
-    if (quarantine.hasHidden(request.params.id)) {
+    if (mutations.hasHidden(request.params.id)) {
       return reply.code(409).send({ error: 'Música está na lixeira. Restaure antes de editar os metadados.' });
     }
     const metadata = metadataOverrides.clear(request.params.id);
@@ -399,7 +383,7 @@ export function registerAdminTrackRoutes(
 
   app.get<{ Params: { id: string } }>('/api/admin/tracks/:id/cover', async (request, reply) => {
     reply.header('Cache-Control', 'private, no-store');
-    if (quarantine.hasHidden(request.params.id)) {
+    if (mutations.hasHidden(request.params.id)) {
       return reply.code(409).send({ error: 'Música está na lixeira. Restaure antes de editar a capa.' });
     }
     const cover = coverOverrides.getStatus(request.params.id);
@@ -412,7 +396,7 @@ export function registerAdminTrackRoutes(
     { bodyLimit: COVER_UPLOAD_BODY_LIMIT },
     async (request, reply) => {
       reply.header('Cache-Control', 'private, no-store');
-      if (quarantine.hasHidden(request.params.id)) {
+      if (mutations.hasHidden(request.params.id)) {
         return reply.code(409).send({ error: 'Música está na lixeira. Restaure antes de editar a capa.' });
       }
       const before = coverOverrides.getStatus(request.params.id);
@@ -434,7 +418,7 @@ export function registerAdminTrackRoutes(
 
   app.delete<{ Params: { id: string } }>('/api/admin/tracks/:id/cover', async (request, reply) => {
     reply.header('Cache-Control', 'private, no-store');
-    if (quarantine.hasHidden(request.params.id)) {
+    if (mutations.hasHidden(request.params.id)) {
       return reply.code(409).send({ error: 'Música está na lixeira. Restaure antes de editar a capa.' });
     }
     const before = coverOverrides.getStatus(request.params.id);
@@ -447,65 +431,26 @@ export function registerAdminTrackRoutes(
 
   app.get('/api/admin/quarantine', async (_request, reply) => {
     reply.header('Cache-Control', 'private, no-store');
-    quarantine.pruneResolvedTombstones();
-    const response: AdminQuarantineResponse = { tracks: quarantine.listItems() };
+    mutations.pruneResolvedTombstones();
+    const response: AdminQuarantineResponse = { tracks: mutations.listQuarantine() };
     return response;
   });
 
   app.post<{ Params: { id: string } }>('/api/admin/tracks/:id/quarantine', async (request, reply) => {
     reply.header('Cache-Control', 'private, no-store');
-    if (quarantine.hasHidden(request.params.id)) {
-      return reply.code(409).send({ error: 'Música já está na lixeira.' });
-    }
-
-    const physicalTrack = service.listTracks().find(item => item.id === request.params.id);
-    if (!physicalTrack) return reply.code(404).send({ error: 'Música não encontrada.' });
-    metadataOverrides.refresh();
-    coverOverrides.refresh();
-    const track = coverOverrides.resolveTrack(metadataOverrides.resolveTrack(physicalTrack));
-    const { enabled: previousEnabled, ...publicTrack } = track;
-
-    if (previousEnabled) {
-      service.setEnabled(track.id, false);
-      publicTrackIds.delete(track.id);
-      publicTrackIdsInitialized = true;
-    }
     try {
-      const quarantined = await quarantine.quarantine(track.id, publicTrack, previousEnabled);
-      return { track: quarantined };
+      return { track: await mutations.quarantineTrack(request.params.id) };
     } catch (error) {
-      if (previousEnabled && !quarantine.hasHidden(track.id)) {
-        service.setEnabled(track.id, true);
-        publicTrackIds.add(track.id);
-      }
-      return sendQuarantineError(reply, error);
+      return sendTrackMutationError(reply, error);
     }
   });
 
   app.post<{ Params: { id: string } }>('/api/admin/quarantine/:id/restore', async (request, reply) => {
     reply.header('Cache-Control', 'private, no-store');
     try {
-      const track = await quarantine.restore(
-        request.params.id,
-        enabled => {
-          const restored = service.setEnabled(request.params.id, enabled);
-          if (!restored) {
-            throw new MediaQuarantineOperationError(409, 'Registro da música não está mais disponível para restauração.');
-          }
-          publicTrackIdsInitialized = true;
-          if (restored.enabled) publicTrackIds.add(restored.id); else publicTrackIds.delete(restored.id);
-        },
-        () => {
-          service.setEnabled(request.params.id, false);
-          publicTrackIds.delete(request.params.id);
-          publicTrackIdsInitialized = true;
-        }
-      );
-      metadataOverrides.refresh();
-      coverOverrides.refresh();
-      return { track: coverOverrides.resolveTrack(metadataOverrides.resolveTrack(track)) };
+      return { track: await mutations.restore(request.params.id) };
     } catch (error) {
-      return sendQuarantineError(reply, error);
+      return sendTrackMutationError(reply, error);
     }
   });
 
@@ -513,15 +458,11 @@ export function registerAdminTrackRoutes(
     '/api/admin/quarantine/:id',
     async (request, reply) => {
       reply.header('Cache-Control', 'private, no-store');
-      if (request.body?.confirmation !== PERMANENT_DELETE_CONFIRMATION) {
-        return reply.code(400).send({ error: 'Confirmação explícita de exclusão permanente obrigatória.' });
-      }
       try {
-        await quarantine.deletePermanently(request.params.id);
-        publicTrackIds.delete(request.params.id);
+        await mutations.deletePermanently(request.params.id, request.body?.confirmation);
         return reply.code(204).send();
       } catch (error) {
-        return sendQuarantineError(reply, error);
+        return sendTrackMutationError(reply, error);
       }
     }
   );
