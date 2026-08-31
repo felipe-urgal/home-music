@@ -133,7 +133,7 @@ A superfície atual de importação usa um workbench em quatro etapas — **Orig
 
 ## Fase 10 — Saúde e inteligência da biblioteca
 
-Parcialmente concluída.
+Concluída para o backlog planejado atual.
 
 - [x] painel de saúde com indicadores reais (#105);
 - [x] identificação de título/capa/artista/álbum/duração ausentes ou desconhecidos (#105);
@@ -143,11 +143,13 @@ Parcialmente concluída.
 - [x] [#107](https://github.com/felipe-urgal/home-music/issues/107) — revisar possíveis músicas duplicadas na biblioteca existente;
 - [x] [#108](https://github.com/felipe-urgal/home-music/issues/108) — smart playlists por regras, calculadas dinamicamente com ownership por usuário e preview antes de salvar;
 - [x] [#109](https://github.com/felipe-urgal/home-music/issues/109) — views pessoais que persistem busca, formato, capa e ordenação e reaplicam somente filtros compatíveis;
-- [ ] [#110](https://github.com/felipe-urgal/home-music/issues/110) — normalização lógica de variações de grafia.
+- [x] [#110](https://github.com/felipe-urgal/home-music/issues/110) — normalização lógica, revisável e reversível de variações de grafia de artistas e álbuns.
 
 Smart playlists não materializam faixas em `playlist_tracks`; a definição persistida é avaliada contra biblioteca, favoritos e histórico do usuário. Detalhes: [smart-playlists.md](smart-playlists.md).
 
 Views inteligentes também não materializam faixas: cada usuário persiste apenas a definição da view, enquanto a filtragem continua centralizada no motor da biblioteca. Detalhes: [library-views.md](library-views.md).
+
+A normalização lógica preserva a metadata física e compõe a visão canônica depois dos overrides por faixa, com aliases de artista globais e aliases de álbum escopados pelo artista canônico. Detalhes: [library-metadata-normalization.md](library-metadata-normalization.md).
 
 A auditoria de Integridade permanece **somente leitura**. `Verificar agora` não remove arquivos nem registros; reconciliação continua pertencendo ao scan normal.
 
