@@ -274,36 +274,38 @@ export class LibraryMetadataNormalizationStore {
       throw new RangeError('A associação foi bloqueada porque as grafias não são equivalentes pela heurística conservadora.');
     }
 
-    this.refresh();
-    const currentTracks = this.loadEffectiveTracksBeforeAliases().map(track => this.resolveTrack(track));
-    const observed = new Set<string>();
-    for (const track of currentTracks) {
-      if (input.kind === 'artist') {
-        observed.add(track.artist);
-        observed.add(track.albumArtist);
-      } else if (track.albumArtist === scope) {
-        observed.add(track.album);
-      }
-    }
-    if (!observed.has(canonicalValue) || sourceValues.some(value => !observed.has(value))) {
-      throw new RangeError('A associação foi bloqueada porque uma das grafias não está mais presente na biblioteca atual.');
-    }
-
-    const existing = this.aliases.filter(alias => alias.kind === input.kind && (alias.scope ?? '') === scope);
-    const sourceSet = new Set(sourceValues);
-    if (existing.some(alias => sourceSet.has(alias.sourceValue))) {
-      throw new RangeError('Uma das grafias já possui uma associação. Desfaça a associação atual antes de alterar o destino.');
-    }
-    if (existing.some(alias => alias.sourceValue === canonicalValue)) {
-      throw new RangeError('O nome canônico já aponta para outra grafia. Desfaça essa associação antes de reutilizá-lo.');
-    }
-    if (existing.some(alias => sourceSet.has(alias.canonicalValue))) {
-      throw new RangeError('A associação criaria uma cadeia de aliases. Use diretamente a grafia canônica existente.');
-    }
-
-    const now = new Date().toISOString();
+    // O lock de escrita cobre a revalidação e o insert para que outro admin
+    // não possa alterar aliases/overrides entre a decisão e o commit.
     this.db.exec('BEGIN IMMEDIATE;');
     try {
+      this.refresh();
+      const currentTracks = this.loadEffectiveTracksBeforeAliases().map(track => this.resolveTrack(track));
+      const observed = new Set<string>();
+      for (const track of currentTracks) {
+        if (input.kind === 'artist') {
+          observed.add(track.artist);
+          observed.add(track.albumArtist);
+        } else if (track.albumArtist === scope) {
+          observed.add(track.album);
+        }
+      }
+      if (!observed.has(canonicalValue) || sourceValues.some(value => !observed.has(value))) {
+        throw new RangeError('A associação foi bloqueada porque uma das grafias não está mais presente na biblioteca atual.');
+      }
+
+      const existing = this.aliases.filter(alias => alias.kind === input.kind && (alias.scope ?? '') === scope);
+      const sourceSet = new Set(sourceValues);
+      if (existing.some(alias => sourceSet.has(alias.sourceValue))) {
+        throw new RangeError('Uma das grafias já possui uma associação. Desfaça a associação atual antes de alterar o destino.');
+      }
+      if (existing.some(alias => alias.sourceValue === canonicalValue)) {
+        throw new RangeError('O nome canônico já aponta para outra grafia. Desfaça essa associação antes de reutilizá-lo.');
+      }
+      if (existing.some(alias => sourceSet.has(alias.canonicalValue))) {
+        throw new RangeError('A associação criaria uma cadeia de aliases. Use diretamente a grafia canônica existente.');
+      }
+
+      const now = new Date().toISOString();
       const insert = this.db.prepare(`
         INSERT INTO library_metadata_aliases(
           id, kind, scope, source_value, canonical_value, created_at, updated_at
