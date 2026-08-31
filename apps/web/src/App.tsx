@@ -148,143 +148,229 @@ function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline }: Aut
       />
 
       <DesktopShell
-        screen={desktopScreen}
-        libraryTab={navigation.libraryTab}
-        currentTrack={current}
+        active={desktopScreen}
+        activeLibraryTab={screen === 'library' ? navigation.libraryTab : undefined}
+        current={current}
         playing={player.playing}
+        libraryCount={library.tracks.length}
+        queue={player.queue}
+        currentIndex={player.currentIndex}
+        canRefreshLibrary={desktopLayout && canManageSharedLibrary}
+        libraryRefreshing={library.scanning}
+        onRefreshLibrary={() => { void refreshLibrary(); }}
         onOpenPlayer={openPlayer}
+        onOpenLibrary={() => setScreen('library')}
         onOpenLibraryTab={openLibraryTab}
-        onOpenAccount={() => setScreen('account')}
+        onPlayTrack={player.playTrack}
+        onReorderQueue={player.reorderQueue}
+        sidebarUtilities={desktopLayout ? (
+          <DesktopPlayerSidebarTools
+            username={currentUser.username}
+            accountActive={accountArea}
+            onOpenAccount={() => setScreen('account')}
+          />
+        ) : undefined}
+        surfaceClassName={`phone-surface phone-surface--mobile-nav ${screen !== 'player' ? 'phone-surface--library' : ''} ${desktopLayout && screen === 'player' ? 'desktop-now-playing-surface' : ''} ${desktopLayout && utilityArea ? 'desktop-account-surface' : ''}`.trim()}
       >
-        {screen === 'player' ? (
-          <DesktopNowPlayingScreen
-            current={current}
-            playing={player.playing}
-            currentTime={player.currentTime}
-            duration={player.duration}
-            volume={player.volume}
-            muted={player.muted}
-            normalizationMode={player.normalizationMode}
-            repeatMode={player.repeatMode}
-            shuffled={player.shuffled}
-            onTogglePlay={player.togglePlay}
-            onPrevious={player.previous}
-            onNext={player.next}
-            onSeek={player.seek}
-            onVolumeChange={player.setVolume}
-            onToggleMute={player.toggleMute}
-            onNormalizationModeChange={player.setNormalizationMode}
-            onCycleRepeat={player.cycleRepeat}
-            onToggleShuffle={player.toggleShuffle}
-            onOpenLibrary={() => openLibraryTab('folders')}
+        {showMyAccountEntry && (
+          <button className="my-account-mobile-entry" type="button" onClick={() => setScreen('account')}>
+            Minha conta · {currentUser.username}
+          </button>
+        )}
+
+        {showAdminEntry && (
+          <button className="admin-mobile-entry" type="button" onClick={() => openAdministration('library')}>
+            Administração
+          </button>
+        )}
+
+        {screen === 'account' ? (
+          <MyAccountScreen
+            currentUser={currentUser}
+            playbackPreferences={{
+              current,
+              streamingSelection: qualityProfile.selection,
+              effectiveStreamingMode: qualityProfile.effectiveMode,
+              networkPreference: qualityProfile.networkPreference,
+              detectedNetwork: qualityProfile.detectedNetwork,
+              normalizationMode: player.normalizationMode,
+              effectiveNormalizationMode: player.effectiveNormalizationMode,
+              onStreamingSelection: qualityProfile.setSelection,
+              onNetworkPreference: qualityProfile.setNetworkPreference,
+              onNormalizationMode: player.setNormalizationMode
+            }}
+            onBack={() => setScreen('library')}
+            onOpenAdministration={() => openAdministration('account')}
+            onSessionEnded={onAuthRefresh}
+            onLogout={onLogout}
+          />
+        ) : screen === 'admin' && canManageSharedLibrary ? (
+          <AdministrationScreen
+            currentUser={currentUser}
+            onBack={() => setScreen(administrationReturnScreen)}
+          />
+        ) : library.loading ? (
+          <ResponsiveState
+            variant="loading"
+            title="Carregando sua biblioteca"
+            detail="Sincronizando músicas e playlists."
+          />
+        ) : library.error ? (
+          <ResponsiveState variant="error" title="Servidor indisponível" detail={library.error}>
+            <button className="primary-action" onClick={() => run(library.retry())}>Tentar novamente</button>
+          </ResponsiveState>
+        ) : library.tracks.length > 0 && !player.hydrated ? (
+          <ResponsiveState
+            variant="loading"
+            title="Restaurando o player"
+            detail="Recuperando sua fila e a última faixa reproduzida."
           />
         ) : screen === 'library' ? (
           <LibraryScreen
-            library={library}
-            navigation={navigation}
-            player={player}
+            currentUser={currentUser}
+            data={library}
             offline={offline}
-            canManageSharedLibrary={canManageSharedLibrary}
-            onOpenAdministration={() => openAdministration('library')}
-            onOpenAccount={() => setScreen('account')}
-            onRefreshLibrary={refreshLibrary}
-          />
-        ) : null}
-
-        {!utilityArea ? (
-          <DesktopPlayerSidebarTools
             current={current}
+            playing={player.playing}
+            hasNext={player.hasNext}
+            currentTime={player.currentTime}
+            duration={player.duration}
+            navigation={navigation}
+            onOpenPlayer={openPlayer}
+            onTogglePlay={() => void player.togglePlay()}
+            onNext={player.next}
+            onPlayTrack={player.playTrack}
+          />
+        ) : !current ? (
+          <ResponsiveState
+            variant="empty"
+            title="Nenhuma música encontrada"
+            detail={canManageSharedLibrary
+              ? 'Confira MUSIC_DIR ou atualize a biblioteca para procurar músicas novas.'
+              : 'A biblioteca compartilhada ainda não possui músicas disponíveis.'}
+          >
+            {canManageSharedLibrary && (
+              <button className="primary-action" disabled={library.scanning} onClick={() => run(library.rescan())}>
+                {library.scanning ? 'Atualizando…' : 'Atualizar biblioteca'}
+              </button>
+            )}
+            <button className="secondary-action" onClick={() => setScreen('library')}>Abrir biblioteca</button>
+          </ResponsiveState>
+        ) : desktopLayout ? (
+          <DesktopNowPlayingScreen
+            current={current}
+            playing={player.playing}
+            autoplayBlocked={player.autoplayBlocked}
+            playbackError={player.sourceError}
+            currentTime={player.currentTime}
+            duration={player.duration}
+            volume={player.volume}
+            usesSystemVolume={usesSystemVolume}
+            shuffle={player.shuffle}
+            repeatMode={player.repeatMode}
+            playlists={editablePlaylists}
+            isDownloaded={offline.downloadedIds.has(current.id)}
+            downloading={offline.downloadingIds.has(current.id)}
+            onTogglePlay={() => void player.togglePlay()}
+            onPrevious={player.previous}
+            onNext={player.next}
+            onSeek={player.seek}
+            onVolume={player.setVolume}
+            onShuffle={player.toggleShuffle}
+            onRepeat={player.cycleRepeat}
+            onToggleDownload={offline.supported ? toggleDownload : undefined}
+            onAddToPlaylist={playlist => run(library.addTrackToPlaylist(playlist, current.id))}
+          />
+        ) : (
+          <PlayerScreen
+            current={current}
+            libraryReturnLabel={libraryReturnLabel}
             queue={player.queue}
             currentIndex={player.currentIndex}
+            playing={player.playing}
+            autoplayBlocked={player.autoplayBlocked}
+            playbackError={player.sourceError}
+            currentTime={player.currentTime}
+            duration={player.duration}
+            volume={player.volume}
+            usesSystemVolume={usesSystemVolume}
+            shuffle={player.shuffle}
+            repeatMode={player.repeatMode}
+            playlists={editablePlaylists}
+            isDownloaded={offline.downloadedIds.has(current.id)}
+            downloading={offline.downloadingIds.has(current.id)}
+            onOpenLibrary={() => setScreen('library')}
+            onTogglePlay={() => void player.togglePlay()}
+            onPrevious={player.previous}
+            onNext={player.next}
+            onSeek={player.seek}
+            onVolume={player.setVolume}
+            onShuffle={player.toggleShuffle}
+            onRepeat={player.cycleRepeat}
+            onToggleDownload={offline.supported ? toggleDownload : undefined}
             onPlayTrack={player.playTrack}
-            onRemoveQueueTrack={player.removeQueueTrack}
             onReorderQueue={player.reorderQueue}
+            onAddToPlaylist={playlist => run(library.addTrackToPlaylist(playlist, current.id))}
           />
-        ) : null}
+        )}
       </DesktopShell>
 
-      {!desktopLayout && !utilityArea ? (
-        <>
-          {screen === 'player' ? (
-            <PlayerScreen
-              current={current}
-              playing={player.playing}
-              currentTime={player.currentTime}
-              duration={player.duration}
-              volume={player.volume}
-              muted={player.muted}
-              normalizationMode={player.normalizationMode}
-              repeatMode={player.repeatMode}
-              shuffled={player.shuffled}
-              onTogglePlay={player.togglePlay}
-              onPrevious={player.previous}
-              onNext={player.next}
-              onSeek={player.seek}
-              onVolumeChange={player.setVolume}
-              onToggleMute={player.toggleMute}
-              onNormalizationModeChange={player.setNormalizationMode}
-              onCycleRepeat={player.cycleRepeat}
-              onToggleShuffle={player.toggleShuffle}
-              onOpenLibrary={() => openLibraryTab('folders')}
-              onToggleDownload={toggleDownload}
-              downloaded={current ? offline.downloadedIds.has(current.id) : false}
-              downloading={current ? offline.downloadingIds.has(current.id) : false}
-            />
-          ) : (
-            <LibraryScreen
-              library={library}
-              navigation={navigation}
-              player={player}
-              offline={offline}
-              canManageSharedLibrary={canManageSharedLibrary}
-              onOpenAdministration={() => openAdministration('library')}
-              onOpenAccount={() => setScreen('account')}
-              onRefreshLibrary={refreshLibrary}
-            />
-          )}
+      <MobileBottomNav
+        active={mobileNavigationActive}
+        onOpenPlayer={openPlayer}
+        onOpenLibrary={() => setScreen('library')}
+        onOpenAccount={() => setScreen('account')}
+      />
 
-          <MobileBottomNav
-            active={mobileNavigationActive}
-            onOpenPlayer={openPlayer}
-            onOpenLibrary={() => openLibraryTab('folders')}
-            onOpenAccount={() => setScreen('account')}
-          />
-        </>
-      ) : null}
+      <DesktopPlayerBar
+        current={current}
+        playing={player.playing}
+        currentTime={player.currentTime}
+        duration={player.duration}
+        volume={player.volume}
+        usesSystemVolume={usesSystemVolume}
+        hasNext={player.hasNext}
+        onOpenPlayer={openPlayer}
+        onTogglePlay={() => void player.togglePlay()}
+        onPrevious={player.previous}
+        onNext={player.next}
+        onSeek={player.seek}
+        onVolume={player.setVolume}
+      />
 
-      {accountArea ? (
-        <MyAccountScreen
-          currentUser={currentUser}
-          onBack={() => setScreen('player')}
-          onOpenAdministration={() => openAdministration('account')}
-          onLogout={onLogout}
-          onAuthRefresh={onAuthRefresh}
-        />
-      ) : null}
-
-      {administrationArea && canManageSharedLibrary ? (
-        <AdministrationScreen
-          currentUser={currentUser}
-          onBack={() => setScreen(administrationReturnScreen)}
-          onLibraryChanged={library.refreshAll}
-        />
-      ) : null}
-
-      {library.error ? <ResponsiveState message={library.error} onRetry={library.retry} /> : null}
-      {library.actionError ? <div className="toast-error" role="alert">{library.actionError}</div> : null}
+      {library.actionError && (
+        <button className="app-toast" role="status" onClick={library.clearActionError}>
+          {library.actionError}
+        </button>
+      )}
     </main>
   );
 }
 
-function OfflineApp({ offline }: { offline: OfflineDownloads }) {
-  const [screen, setScreen] = useState<'player' | 'library'>('library');
+function OfflineApp({ offline, onExit }: { offline: OfflineDownloads; onExit: () => void }) {
+  const [screen, setScreen] = useState<Screen>('library');
   const usesSystemVolume = useSystemVolumePreference();
-  const player = useAudioPlayer(offline.tracks, true, true, usesSystemVolume);
   const desktopLayout = useDesktopLayout();
+  const player = useAudioPlayer(
+    offline.tracks,
+    screen === 'player' || desktopLayout,
+    !offline.loading,
+    usesSystemVolume,
+    { offlineMode: true }
+  );
+  useBackgroundPlaybackContinuity({
+    audioRef: player.audioRef,
+    queue: player.queue,
+    currentIndex: player.currentIndex,
+    currentTrackId: player.current?.id ?? null,
+    repeatMode: player.repeatMode,
+    playing: player.playing,
+    onNext: player.next
+  });
   const current = player.current;
 
   return (
-    <main className="app-shell offline-app-shell">
+    <main className="app-shell">
       <audio
         ref={player.audioRef}
         onPlay={player.audioHandlers.onPlay}
@@ -295,83 +381,180 @@ function OfflineApp({ offline }: { offline: OfflineDownloads }) {
         onError={event => player.audioHandlers.onError(event.currentTarget)}
       />
 
-      {screen === 'player' && current ? (
-        <PlayerScreen
-          current={current}
-          playing={player.playing}
-          currentTime={player.currentTime}
-          duration={player.duration}
-          volume={player.volume}
-          muted={player.muted}
-          normalizationMode={player.normalizationMode}
-          repeatMode={player.repeatMode}
-          shuffled={player.shuffled}
-          onTogglePlay={player.togglePlay}
-          onPrevious={player.previous}
-          onNext={player.next}
-          onSeek={player.seek}
-          onVolumeChange={player.setVolume}
-          onToggleMute={player.toggleMute}
-          onNormalizationModeChange={player.setNormalizationMode}
-          onCycleRepeat={player.cycleRepeat}
-          onToggleShuffle={player.toggleShuffle}
-          onOpenLibrary={() => setScreen('library')}
-          onToggleDownload={() => undefined}
-          downloaded
-          downloading={false}
-        />
-      ) : (
-        <OfflineLibraryScreen
-          tracks={offline.tracks}
-          onPlay={track => {
-            player.playTrack(track);
-            setScreen('player');
-          }}
-        />
-      )}
+      <DesktopShell
+        active={screen === 'player' ? 'player' : 'library'}
+        current={current}
+        playing={player.playing}
+        libraryCount={offline.tracks.length}
+        queue={player.queue}
+        currentIndex={player.currentIndex}
+        offlineMode
+        onOpenPlayer={() => setScreen('player')}
+        onOpenLibrary={() => setScreen('library')}
+        onPlayTrack={player.playTrack}
+        onReorderQueue={player.reorderQueue}
+        surfaceClassName={`phone-surface ${screen === 'library' ? 'phone-surface--library' : ''}`}
+      >
+        {offline.loading || (offline.tracks.length > 0 && !player.hydrated) ? (
+          <ResponsiveState
+            variant="loading"
+            title="Preparando seus downloads"
+            detail="Carregando as músicas salvas neste dispositivo."
+          />
+        ) : screen === 'library' ? (
+          <OfflineLibraryScreen
+            records={offline.records}
+            current={current}
+            playing={player.playing}
+            hasNext={player.hasNext}
+            totalBytes={offline.totalBytes}
+            onOpenPlayer={() => setScreen('player')}
+            onTogglePlay={() => void player.togglePlay()}
+            onNext={player.next}
+            onPlayTrack={(track, context) => {
+              player.playTrack(track, context);
+              setScreen('player');
+            }}
+            onRemove={trackId => { void offline.remove(trackId); }}
+            onExitOffline={onExit}
+          />
+        ) : current ? (
+          <PlayerScreen
+            current={current}
+            libraryReturnLabel="Voltar aos downloads"
+            queue={player.queue}
+            currentIndex={player.currentIndex}
+            playing={player.playing}
+            autoplayBlocked={player.autoplayBlocked}
+            playbackError={player.sourceError}
+            currentTime={player.currentTime}
+            duration={player.duration}
+            volume={player.volume}
+            usesSystemVolume={usesSystemVolume}
+            shuffle={player.shuffle}
+            repeatMode={player.repeatMode}
+            playlists={[]}
+            offlineMode
+            onOpenLibrary={() => setScreen('library')}
+            onTogglePlay={() => void player.togglePlay()}
+            onPrevious={player.previous}
+            onNext={player.next}
+            onSeek={player.seek}
+            onVolume={player.setVolume}
+            onShuffle={player.toggleShuffle}
+            onRepeat={player.cycleRepeat}
+            onPlayTrack={player.playTrack}
+            onReorderQueue={player.reorderQueue}
+            onAddToPlaylist={() => undefined}
+            onExitOffline={onExit}
+          />
+        ) : (
+          <ResponsiveState
+            variant="empty"
+            title="Nenhum download offline"
+            detail="Conecte ao Home Music e baixe uma música pelo player."
+          >
+            <button className="secondary-action" onClick={onExit}>Tentar conectar</button>
+          </ResponsiveState>
+        )}
+      </DesktopShell>
 
-      {!desktopLayout ? (
-        <MobileBottomNav
-          active={screen}
-          onOpenPlayer={() => setScreen('player')}
-          onOpenLibrary={() => setScreen('library')}
-          onOpenAccount={() => undefined}
-          accountDisabled
-        />
-      ) : null}
+      <DesktopPlayerBar
+        current={current}
+        playing={player.playing}
+        currentTime={player.currentTime}
+        duration={player.duration}
+        volume={player.volume}
+        usesSystemVolume={usesSystemVolume}
+        hasNext={player.hasNext}
+        offlineMode
+        onOpenPlayer={() => setScreen('player')}
+        onTogglePlay={() => void player.togglePlay()}
+        onPrevious={player.previous}
+        onNext={player.next}
+        onSeek={player.seek}
+        onVolume={player.setVolume}
+      />
     </main>
   );
 }
 
-export function App() {
+export default function App() {
   const auth = useAuth();
-  const offline = useOfflineDownloads(auth.currentUser?.id ?? null);
+  const offline = useOfflineDownloads();
+  const [offlineMode, setOfflineMode] = useState(false);
+  const [offlineAutoOpened, setOfflineAutoOpened] = useState(false);
 
   useEffect(() => {
-    if (auth.authenticated) return;
-    if (window.location.pathname !== '/') window.history.replaceState(null, '', '/');
-  }, [auth.authenticated]);
+    if (!auth.unreachable) {
+      if (offlineAutoOpened) setOfflineAutoOpened(false);
+      return;
+    }
+    if (
+      offlineAutoOpened
+      || auth.loading
+      || offline.loading
+      || !offline.supported
+      || offline.records.length === 0
+    ) return;
 
-  if (auth.loading) return <ResponsiveState message="Carregando…" />;
+    setOfflineAutoOpened(true);
+    setOfflineMode(true);
+  }, [
+    auth.loading,
+    auth.unreachable,
+    offline.loading,
+    offline.records.length,
+    offline.supported,
+    offlineAutoOpened
+  ]);
 
-  if (!auth.authenticated) {
-    if (offline.available && !navigator.onLine) return <OfflineApp offline={offline} />;
+  useEffect(() => {
+    if (offlineMode && !offline.loading && offline.tracks.length === 0) setOfflineMode(false);
+  }, [offline.loading, offline.tracks.length, offlineMode]);
+
+  if (offlineMode) {
+    return (
+      <OfflineApp
+        offline={offline}
+        onExit={() => {
+          setOfflineMode(false);
+          void auth.retry();
+        }}
+      />
+    );
+  }
+
+  if (auth.loading) {
+    return (
+      <main className="login-shell">
+        <section className="login-card login-card--status" aria-live="polite">
+          <strong>Home Music</strong>
+          <span>Verificando sua sessão…</span>
+        </section>
+      </main>
+    );
+  }
+
+  if (!auth.authenticated || !auth.currentUser) {
+    const offlineCount = auth.unreachable && offline.supported && !offline.loading ? offline.records.length : 0;
     return (
       <LoginScreen
+        configured={auth.configured}
         error={auth.error}
-        requiresPasswordChange={auth.requiresPasswordChange}
-        temporaryUsername={auth.temporaryUsername}
+        offlineCount={offlineCount}
         onLogin={auth.login}
-        onChangePassword={auth.changeRequiredPassword}
+        onRetry={() => void auth.retry()}
+        onOpenOffline={offlineCount > 0 ? () => setOfflineMode(true) : undefined}
       />
     );
   }
 
   return (
     <AuthenticatedApp
-      currentUser={auth.currentUser!}
+      currentUser={auth.currentUser}
       onLogout={auth.logout}
-      onAuthRefresh={auth.refresh}
+      onAuthRefresh={auth.retry}
       offline={offline}
     />
   );
