@@ -18,20 +18,28 @@ O projeto fixa uma versão do Playwright com suporte ao ambiente alvo da suíte.
 
 ## Executar
 
+Para executar a regressão E2E completa, incluindo build de produção:
+
 ```bash
 npm run e2e
 ```
 
-O comando faz o build de produção antes de executar a suíte em três configurações:
+A suíte completa roda nas três configurações:
 
 - `mobile-chromium`: viewport 390×844 com touch/mobile emulado;
 - `tablet-chromium`: viewport 834×1112 com touch;
 - `desktop-chromium`: viewport 1440×900.
 
-Para executar somente os testes quando o build já existe:
+Quando o build já existe, execute a regressão completa diretamente:
 
 ```bash
 npm run e2e:ci
+```
+
+Para reproduzir localmente somente o gate obrigatório do CI:
+
+```bash
+npm --prefix e2e run test:critical
 ```
 
 ## Gate obrigatório no CI
@@ -39,16 +47,20 @@ npm run e2e:ci
 O workflow principal do GitHub Actions usa o mesmo job `validate` para manter um único status obrigatório. Depois dos gates mais baratos e do build, ele:
 
 1. instala somente o Chromium compatível com a versão fixada de `@playwright/test`, usando `playwright install --with-deps chromium`;
-2. executa `npm run e2e:ci` com um worker e retry controlado pelo `playwright.config.ts`;
+2. executa `npm --prefix e2e run test:critical`;
 3. só então executa o smoke de produção.
 
-Uma falha Playwright portanto falha o mesmo job que governa o merge. O job possui timeout explícito de 30 minutos.
+O gate Playwright obrigatório é intencionalmente pequeno e previsível. O `critical-smoke.spec.ts` valida, em mobile, tablet e desktop, o caminho básico real de login, shell autenticado, biblioteca, Minha conta e entrada em Administração.
+
+Esse smoke não substitui a regressão completa. Fluxos mais caros e específicos — fila persistente, multiusuário, downloads offline, smart playlists, disponibilidade de faixas, importação e operações administrativas — continuam na suíte completa e devem ser executados de forma focada durante o desenvolvimento ou integralmente quando o risco da mudança exigir.
+
+Uma falha no smoke crítico falha o mesmo job que governa o merge. O job possui timeout explícito de 30 minutos para o conjunto inteiro de validações, não para o Playwright isoladamente.
 
 O cache npm do Actions considera `package-lock.json` e `e2e/package-lock.json`. O binário do navegador não possui cache manual próprio: reinstalar o Chromium correspondente ao lockfile evita reutilizar browser/dependências de sistema incompatíveis. Se o custo desse passo se tornar relevante, qualquer cache futuro deve ser versionado por sistema operacional e pelo lock/versão do Playwright, sem pular a instalação das dependências de sistema necessárias.
 
 A partir da #111, um PR só pode declarar o gate E2E verde quando o step **Critical Playwright E2E** tiver realmente executado no HEAD final.
 
-## Cobertura crítica
+## Cobertura da suíte completa
 
 A suíte combina fluxo real contra o Fastify temporário e fixtures de navegador apenas quando a dependência externa tornaria o teste não determinístico.
 
