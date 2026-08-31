@@ -201,24 +201,40 @@ export class LibraryViewStore {
   ) {
     requireUserId(userId);
     requireViewId(id);
-    const current = this.get(userId, id);
-    if (!current) return false;
 
-    const name = patch.name === undefined
-      ? current.name
-      : normalizeLibraryViewName(patch.name);
+    const name = patch.name === undefined ? undefined : normalizeLibraryViewName(patch.name);
     const definition = patch.definition === undefined
-      ? current.definition
+      ? undefined
       : normalizeLibraryViewDefinition(patch.definition);
-    if (!name) throw new RangeError('Nome da view inteligente inválido.');
-    if (!definition) throw new RangeError('Filtros da view inteligente inválidos.');
+    if (patch.name !== undefined && !name) throw new RangeError('Nome da view inteligente inválido.');
+    if (patch.definition !== undefined && !definition) {
+      throw new RangeError('Filtros da view inteligente inválidos.');
+    }
+    if (name === undefined && definition === undefined) return false;
 
-    const result = this.db.prepare(`
-      UPDATE library_views
-      SET name = ?, definition_json = ?, updated_at = ?
-      WHERE id = ? AND owner_user_id = ?;
-    `).run(name, JSON.stringify(definition), new Date().toISOString(), id, userId);
-    return Number(result.changes) === 1;
+    const now = new Date().toISOString();
+    let changes = 0;
+    if (name !== undefined && definition !== undefined) {
+      changes = Number(this.db.prepare(`
+        UPDATE library_views
+        SET name = ?, definition_json = ?, updated_at = ?
+        WHERE id = ? AND owner_user_id = ?;
+      `).run(name, JSON.stringify(definition), now, id, userId).changes);
+    } else if (name !== undefined) {
+      changes = Number(this.db.prepare(`
+        UPDATE library_views
+        SET name = ?, updated_at = ?
+        WHERE id = ? AND owner_user_id = ?;
+      `).run(name, now, id, userId).changes);
+    } else if (definition !== undefined) {
+      changes = Number(this.db.prepare(`
+        UPDATE library_views
+        SET definition_json = ?, updated_at = ?
+        WHERE id = ? AND owner_user_id = ?;
+      `).run(JSON.stringify(definition), now, id, userId).changes);
+    }
+
+    return changes === 1;
   }
 
   delete(userId: string, id: string) {
