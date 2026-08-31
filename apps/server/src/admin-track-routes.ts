@@ -141,7 +141,7 @@ export function registerAdminTrackRoutes(
     if (!publicTrackIdsInitialized) syncPublicTrackIds(service.listTracks());
   }
 
-  function decorateTrack(track: AdminTrack) {
+  function decorateTrack<T extends Track>(track: T): T {
     metadataOverrides.refresh();
     coverOverrides.refresh();
     return coverOverrides.resolveTrack(metadataOverrides.resolveTrack(track));
