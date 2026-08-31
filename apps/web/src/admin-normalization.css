@@ -1,0 +1,380 @@
+.admin-normalization-screen {
+  width: 100%;
+  max-width: none;
+}
+
+.admin-normalization-screen .my-account-header {
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+}
+
+.admin-normalization__refresh,
+.admin-normalization__associate,
+.admin-normalization__aliases button {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.035);
+  color: #dce5ec;
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.admin-normalization__refresh {
+  padding: 0 12px;
+}
+
+.admin-normalization__refresh svg,
+.admin-normalization__associate svg,
+.admin-normalization__aliases button svg {
+  width: 16px;
+  height: 16px;
+}
+
+.admin-normalization__refresh:hover:not(:disabled),
+.admin-normalization__associate:hover:not(:disabled),
+.admin-normalization__aliases button:hover:not(:disabled) {
+  border-color: rgba(124, 191, 255, 0.3);
+  background: rgba(124, 191, 255, 0.08);
+}
+
+.admin-normalization__refresh:disabled,
+.admin-normalization__associate:disabled,
+.admin-normalization__aliases button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.admin-normalization__refresh:focus-visible,
+.admin-normalization__associate:focus-visible,
+.admin-normalization__aliases button:focus-visible,
+.admin-normalization__candidate input:focus-visible + span {
+  outline: 2px solid #7cbfff;
+  outline-offset: 3px;
+}
+
+.admin-normalization {
+  display: grid;
+  gap: 18px;
+}
+
+.admin-normalization__hero {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+  padding: 20px 22px;
+  border: 1px solid rgba(70, 195, 119, 0.18);
+  border-radius: 16px;
+  background: linear-gradient(115deg, rgba(19, 65, 42, 0.42), #0d151b 56%);
+}
+
+.admin-normalization__hero-icon {
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(70, 195, 119, 0.1);
+  color: #71d998;
+}
+
+.admin-normalization__hero-icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.admin-normalization__hero > div {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.admin-normalization__hero small,
+.admin-normalization__heading small,
+.admin-normalization__candidate-copy small,
+.admin-normalization__aliases small,
+.admin-normalization__empty span {
+  color: #82919d;
+}
+
+.admin-normalization__hero > div > small {
+  font-size: 0.72rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.admin-normalization__hero strong {
+  color: #f2f6f8;
+  font-size: 1.04rem;
+}
+
+.admin-normalization__hero p {
+  max-width: 760px;
+  margin: 0;
+  color: #aebac3;
+  line-height: 1.55;
+}
+
+.admin-normalization__hero dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(80px, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.admin-normalization__hero dl div {
+  display: grid;
+  gap: 2px;
+  min-width: 90px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.14);
+}
+
+.admin-normalization__hero dt {
+  color: #82919d;
+  font-size: 0.72rem;
+}
+
+.admin-normalization__hero dd {
+  margin: 0;
+  color: #f2f6f8;
+  font-weight: 750;
+}
+
+.admin-normalization__section {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-normalization__heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-normalization__heading > div {
+  display: grid;
+  gap: 3px;
+}
+
+.admin-normalization__heading strong {
+  color: #eef3f6;
+  font-size: 0.96rem;
+}
+
+.admin-normalization__heading small {
+  line-height: 1.45;
+}
+
+.admin-normalization__candidates {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 330px), 1fr));
+  gap: 12px;
+}
+
+.admin-normalization__candidate,
+.admin-normalization__aliases article,
+.admin-normalization__empty,
+.admin-normalization__state {
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 14px;
+  background: #0d151b;
+}
+
+.admin-normalization__candidate {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  padding: 16px;
+}
+
+.admin-normalization__candidate-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.admin-normalization__candidate-copy > span,
+.admin-normalization__aliases article > div > span {
+  width: fit-content;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: rgba(124, 191, 255, 0.09);
+  color: #9dcfff;
+  font-size: 0.7rem;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.admin-normalization__candidate-copy strong,
+.admin-normalization__aliases strong {
+  color: #edf3f7;
+  line-height: 1.4;
+}
+
+.admin-normalization__candidate fieldset {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.admin-normalization__candidate legend {
+  margin-bottom: 7px;
+  color: #8e9ba5;
+  font-size: 0.76rem;
+  font-weight: 650;
+}
+
+.admin-normalization__candidate label {
+  min-height: 42px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.065);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.02);
+  cursor: pointer;
+}
+
+.admin-normalization__candidate label:has(input:checked) {
+  border-color: rgba(124, 191, 255, 0.28);
+  background: rgba(124, 191, 255, 0.07);
+}
+
+.admin-normalization__candidate input {
+  width: 17px;
+  height: 17px;
+  accent-color: #7cbfff;
+}
+
+.admin-normalization__candidate label > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: #e5ebef;
+}
+
+.admin-normalization__candidate label > small {
+  color: #788691;
+  white-space: nowrap;
+}
+
+.admin-normalization__associate {
+  width: 100%;
+}
+
+.admin-normalization__aliases {
+  display: grid;
+  gap: 8px;
+}
+
+.admin-normalization__aliases article {
+  min-height: 68px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 14px;
+}
+
+.admin-normalization__aliases article > div {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.admin-normalization__aliases strong {
+  overflow-wrap: anywhere;
+}
+
+.admin-normalization__aliases button {
+  flex: 0 0 auto;
+  padding: 0 11px;
+}
+
+.admin-normalization__empty,
+.admin-normalization__state {
+  min-height: 150px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 7px;
+  padding: 24px;
+  text-align: center;
+}
+
+.admin-normalization__empty.is-compact {
+  min-height: 112px;
+}
+
+.admin-normalization__empty svg,
+.admin-normalization__state svg {
+  width: 26px;
+  height: 26px;
+  color: #7cbfff;
+}
+
+.admin-normalization__empty strong {
+  color: #eaf0f4;
+}
+
+.admin-normalization__state {
+  color: #aebac3;
+}
+
+@media (max-width: 720px) {
+  .admin-normalization-screen .my-account-header {
+    grid-template-columns: 40px minmax(0, 1fr) auto;
+  }
+
+  .admin-normalization__refresh {
+    width: 40px;
+    padding: 0;
+  }
+
+  .admin-normalization__refresh span {
+    display: none;
+  }
+
+  .admin-normalization__hero {
+    grid-template-columns: 44px minmax(0, 1fr);
+    padding: 16px;
+  }
+
+  .admin-normalization__hero-icon {
+    width: 42px;
+    height: 42px;
+  }
+
+  .admin-normalization__hero dl {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .admin-normalization__candidates {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-normalization__aliases article {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-normalization__aliases button {
+    width: 100%;
+  }
+}

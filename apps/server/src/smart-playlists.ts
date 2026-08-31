@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import type { Playlist, SmartPlaylistRule } from '@home-music/shared';
+import { LibraryMetadataNormalizationStore } from './library-metadata-normalization.js';
 
 const MAX_FILTER_LENGTH = 160;
 const MAX_FOLDER_LENGTH = 512;
@@ -177,6 +178,7 @@ function parseStoredRule(value: unknown, expectedId: string): SmartPlaylistRule 
 
 export class SmartPlaylistStore {
   private readonly db: DatabaseSync;
+  private readonly normalization: LibraryMetadataNormalizationStore;
   private readonly hasTrackAvailability: boolean;
 
   constructor(databasePath: string) {
@@ -185,6 +187,7 @@ export class SmartPlaylistStore {
     this.db.exec('PRAGMA journal_mode = WAL;');
     this.db.exec('PRAGMA synchronous = NORMAL;');
     this.db.exec('PRAGMA busy_timeout = 5000;');
+    this.normalization = new LibraryMetadataNormalizationStore(databasePath);
     this.hasTrackAvailability = Boolean(this.db.prepare(`
       SELECT 1
       FROM sqlite_master
@@ -194,6 +197,7 @@ export class SmartPlaylistStore {
   }
 
   close() {
+    this.normalization.close();
     this.db.close();
   }
 
@@ -206,6 +210,7 @@ export class SmartPlaylistStore {
     requireUserId(userId);
     const normalizedRule = normalizeSmartPlaylistRule(rule);
     if (!normalizedRule) throw new RangeError('Regra da playlist inteligente inválida.');
+    const canonicalMetadata = this.normalization.canonicalMetadataByTrackId();
     const since = normalizedRule.periodDays == null
       ? null
       : new Date(now.getTime() - normalizedRule.periodDays * 24 * 60 * 60 * 1_000).toISOString();
@@ -252,17 +257,21 @@ export class SmartPlaylistStore {
     `).all(...bindings) as Row[];
 
     return rows
-      .map(row => ({
-        id: stringValue(row.id),
-        title: stringValue(row.title),
-        artist: stringValue(row.artist),
-        album: stringValue(row.album),
-        folderPath: stringValue(row.folder_path),
-        plays: numberValue(row.plays),
-        lastPlayedAt: typeof row.last_played_at === 'string' ? row.last_played_at : null,
-        hasPlayedEver: Boolean(row.has_played_ever),
-        favoriteCreatedAt: typeof row.favorite_created_at === 'string' ? row.favorite_created_at : null
-      }))
+      .map(row => {
+        const id = stringValue(row.id);
+        const metadata = canonicalMetadata.get(id);
+        return {
+          id,
+          title: metadata?.title ?? stringValue(row.title),
+          artist: metadata?.artist ?? stringValue(row.artist),
+          album: metadata?.album ?? stringValue(row.album),
+          folderPath: stringValue(row.folder_path),
+          plays: numberValue(row.plays),
+          lastPlayedAt: typeof row.last_played_at === 'string' ? row.last_played_at : null,
+          hasPlayedEver: Boolean(row.has_played_ever),
+          favoriteCreatedAt: typeof row.favorite_created_at === 'string' ? row.favorite_created_at : null
+        };
+      })
       .filter(track => !eligibleTrackIds || eligibleTrackIds.has(track.id))
       .filter(track => matchesText(track.artist, normalizedRule.artist))
       .filter(track => matchesText(track.album, normalizedRule.album))

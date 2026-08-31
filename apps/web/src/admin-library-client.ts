@@ -2,6 +2,8 @@ import type {
   AdminLibraryDuplicateIgnoreRequest,
   AdminLibraryDuplicateIgnoreResponse,
   AdminLibraryDuplicateReviewResponse,
+  AdminLibraryNormalizationAssociateRequest,
+  AdminLibraryNormalizationReviewResponse,
   AdminLibraryOverviewResponse
 } from '@home-music/shared';
 import { apiFetch } from './api-client';
@@ -14,7 +16,11 @@ export type {
   AdminLibraryIntegrityIssue,
   AdminLibraryIntegrityIssueKind,
   AdminLibraryIntegrityStatus,
-  AdminLibraryProblemKey
+  AdminLibraryProblemKey,
+  LibraryMetadataAlias,
+  LibraryMetadataAliasKind,
+  LibraryMetadataNormalizationCandidate,
+  LibraryMetadataNormalizationVariant
 } from '@home-music/shared';
 export type AdminLibraryHealthOverview = AdminLibraryOverviewResponse;
 
@@ -77,6 +83,33 @@ export async function setAdminLibraryDuplicateIgnored(
   });
   if (!response.ok) throw new Error(await responseError(response));
   return response.json() as Promise<AdminLibraryDuplicateIgnoreResponse>;
+}
+
+export async function getAdminLibraryNormalization() {
+  const response = await apiFetch('/api/admin/library/normalization', { cache: 'no-store' });
+  if (!response.ok) throw new Error(await responseError(response));
+  return response.json() as Promise<AdminLibraryNormalizationReviewResponse>;
+}
+
+export async function associateAdminLibraryNormalization(input: AdminLibraryNormalizationAssociateRequest) {
+  const response = await apiFetch('/api/admin/library/normalization/aliases', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Home-Music-Request': '1'
+    },
+    body: JSON.stringify(input)
+  });
+  if (!response.ok) throw new Error(await responseError(response));
+  return response.json() as Promise<AdminLibraryNormalizationReviewResponse>;
+}
+
+export async function removeAdminLibraryNormalizationAlias(id: string) {
+  const response = await apiFetch(`/api/admin/library/normalization/aliases/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: { 'X-Home-Music-Request': '1' }
+  });
+  if (!response.ok) throw new Error(await responseError(response));
 }
 
 export async function getAdminTranscodeCache() {

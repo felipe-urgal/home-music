@@ -8,6 +8,7 @@ import {
   Database,
   FileInput,
   HardDrive,
+  Link2,
   ListMusic,
   LoaderCircle,
   Music2,
@@ -29,13 +30,14 @@ import '../administration-health.css';
 import { AdminImportMediaScreen } from './AdminImportMediaScreen';
 import { AdminLibraryDuplicateReviewScreen } from './AdminLibraryDuplicateReviewScreen';
 import { AdminLibraryIntegrityScreen } from './AdminLibraryIntegrityScreen';
+import { AdminLibraryNormalizationScreen } from './AdminLibraryNormalizationScreen';
 import { AdminMediaQuarantineScreen } from './AdminMediaQuarantineScreen';
 import { AdminOperationHistoryScreen } from './AdminOperationHistoryScreen';
 import { AdminTrackAvailabilityScreen } from './AdminTrackAvailabilityScreen';
 import { AdminTrackMetadataScreen } from './AdminTrackMetadataScreen';
 import { AdminUsersScreen } from './AdminUsersScreen';
 
-type AdministrationView = 'overview' | 'tracks' | 'metadata' | 'integrity' | 'duplicates' | 'quarantine' | 'import' | 'operations' | 'users';
+type AdministrationView = 'overview' | 'tracks' | 'metadata' | 'normalization' | 'integrity' | 'duplicates' | 'quarantine' | 'import' | 'operations' | 'users';
 
 type AdministrationScreenProps = {
   currentUser: AuthenticatedUser;
@@ -187,6 +189,7 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
   if (view === 'metadata') {
     return <AdminTrackMetadataScreen initialHealthFilter={metadataHealthFilter} onBack={() => setView('overview')} />;
   }
+  if (view === 'normalization') return <AdminLibraryNormalizationScreen onBack={() => setView('overview')} />;
   if (view === 'integrity') return <AdminLibraryIntegrityScreen onBack={() => setView('overview')} />;
   if (view === 'duplicates') return <AdminLibraryDuplicateReviewScreen onBack={() => setView('overview')} />;
   if (view === 'quarantine') return <AdminMediaQuarantineScreen onBack={() => setView('overview')} />;
@@ -287,6 +290,7 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
             <button type="button" onClick={() => setView('import')}><FileInput /><span>Importar mídia</span></button>
             <button type="button" onClick={() => setView('integrity')}><ScanLine /><span>Integridade</span></button>
             <button type="button" onClick={() => setView('duplicates')}><Copy /><span>Duplicatas</span></button>
+            <button type="button" onClick={() => setView('normalization')}><Link2 /><span>Normalização</span></button>
             <button type="button" onClick={() => setView('users')}><Users /><span>Usuários</span></button>
             <button type="button" onClick={openAllMetadata}><Database /><span>Metadados</span></button>
             <button type="button" onClick={() => setView('quarantine')}><Trash2 /><span>Lixeira</span></button>
