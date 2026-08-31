@@ -304,6 +304,28 @@ try {
   assert.equal(favorites.status, 200);
   assert.deepEqual(await favorites.json(), { trackIds: [] });
 
+  const smartPlaylists = await fetch(`${baseUrl}/api/smart-playlists`, {
+    headers: { Cookie: cookie }
+  });
+  assert.equal(smartPlaylists.status, 200, 'Smart playlists devem estar registradas no runtime principal.');
+  assert.deepEqual(await smartPlaylists.json(), { playlists: [] });
+
+  const libraryViews = await fetch(`${baseUrl}/api/library-views`, {
+    headers: { Cookie: cookie }
+  });
+  assert.equal(libraryViews.status, 200, 'Views salvas devem estar registradas no runtime principal.');
+  assert.deepEqual(await libraryViews.json(), { views: [] });
+
+  const missingHistoryTrack = await fetch(`${baseUrl}/api/history/inexistente`, {
+    method: 'POST',
+    headers: {
+      Cookie: cookie,
+      'X-Home-Music-Request': '1'
+    }
+  });
+  assert.equal(missingHistoryTrack.status, 404, 'Histórico de reprodução deve estar registrado no runtime principal.');
+  assert.deepEqual(await missingHistoryTrack.json(), { error: 'Música não encontrada.' });
+
   const removedRoutes = [
     { method: 'GET', path: '/api/history' },
     { method: 'GET', path: '/api/statistics?period=all' },
