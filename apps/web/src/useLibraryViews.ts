@@ -33,26 +33,27 @@ export function useLibraryViews(reportError: (error: unknown) => void) {
   const [views, setViews] = useState<SavedLibraryView[]>([]);
   const [loading, setLoading] = useState(true);
   const refreshSequence = useRef(0);
+  const mounted = useRef(true);
 
   const refresh = useCallback(async () => {
     const sequence = ++refreshSequence.current;
     const result = await jsonRequest<LibraryViewsResponse>('/api/library-views');
-    if (sequence !== refreshSequence.current) return result;
+    if (!mounted.current || sequence !== refreshSequence.current) return result;
     setViews(sortViews(result.views));
     return result;
   }, []);
 
   useEffect(() => {
-    let disposed = false;
+    mounted.current = true;
     void refresh()
       .catch(error => {
-        if (!disposed) reportError(error);
+        if (mounted.current) reportError(error);
       })
       .finally(() => {
-        if (!disposed) setLoading(false);
+        if (mounted.current) setLoading(false);
       });
     return () => {
-      disposed = true;
+      mounted.current = false;
       refreshSequence.current += 1;
     };
   }, [refresh, reportError]);
