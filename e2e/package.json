@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "test": "playwright test",
+    "test:critical": "playwright test tests/critical-smoke.spec.ts",
     "test:headed": "playwright test --headed",
     "install:browsers": "playwright install --with-deps chromium"
   },

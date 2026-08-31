@@ -78,7 +78,7 @@ jobs:
         run: npm --prefix e2e run install:browsers
 
       - name: Critical Playwright E2E
-        run: npm run e2e:ci
+        run: npm --prefix e2e run test:critical
 
       - name: Production smoke test
         run: npm run smoke:production
