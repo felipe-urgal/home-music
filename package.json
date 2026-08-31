@@ -22,7 +22,7 @@
     "prod:check": "npm run typecheck && npm test && npm run build && npm run smoke:production",
     "prod:backup": "npm run backup:create --",
     "prod:deploy": "npm run service:update",
-    "prod:verify": "curl --fail --silent --show-error http://127.0.0.1:8787/ready",
+    "prod:verify": "node scripts/verify-production.mjs",
     "prod:logs": "journalctl -u home-music -f",
     "admin:recover": "npm run admin:recover -w @home-music/server --",
     "backup:create": "npm run backup:create -w @home-music/server --",
@@ -37,7 +37,7 @@
     "tailscale:hardening:status": "bash scripts/check-tailscale-hardening.sh",
     "ffmpeg:status": "npm run ffmpeg:status -w @home-music/server",
     "typecheck": "npm run typecheck -w @home-music/shared && npm run typecheck -w @home-music/server && npm run typecheck -w @home-music/web",
-    "test": "npm run test -w @home-music/server && npm run test -w @home-music/web",
+    "test": "npm run test -w @home-music/server && npm run test -w @home-music/web && node --test scripts/verify-production.test.mjs",
     "test:security": "npm run test:security -w @home-music/server"
   },
   "devDependencies": {
