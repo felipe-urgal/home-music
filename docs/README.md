@@ -18,6 +18,10 @@ Comece por:
 4. [`administration-ui.md`](administration-ui.md) — composição atual de Minha conta/Administração;
 5. documentos funcionais abaixo para invariantes específicas.
 
+## Composição do frontend
+
+- [`app-composition.md`](app-composition.md) — limites entre raiz de sessão/conectividade, aplicação autenticada e aplicação offline.
+
 ## Navegação e URLs
 
 - [`deep-links.md`](deep-links.md) — rotas canônicas, integração com o histórico do browser, refresh direto, preservação do player e fallbacks de navegação.

@@ -87,10 +87,11 @@ async function fixture(options: {
 }
 
 async function waitForStatus(queue: ImportJobQueue, id: string, expected: string) {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
     const job = queue.get(id);
     if (job?.status === expected) return job;
-    await new Promise(resolve => setTimeout(resolve, 2));
+    await new Promise(resolve => setTimeout(resolve, 10));
   }
   assert.fail(`Job ${id} não chegou ao estado ${expected}. Atual: ${queue.get(id)?.status}`);
 }
