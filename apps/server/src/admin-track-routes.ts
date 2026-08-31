@@ -9,7 +9,9 @@ import type {
   AdminTracksResponse,
   Track
 } from '@home-music/shared';
+import { registerAdminLibraryNormalizationRoutes } from './admin-library-normalization-routes.js';
 import { LibraryDuplicateReviewError, LibraryDuplicateReviewStore } from './library-duplicate-review.js';
+import { LibraryMetadataNormalizationStore } from './library-metadata-normalization.js';
 import {
   type AppliedTrackLocation,
   MediaFileMoveOperationError,
@@ -145,8 +147,10 @@ export function registerAdminTrackRoutes(
   });
   const fileMoves = new MediaFileMoveStore(databasePath, musicDir);
   const metadataOverrides = new TrackMetadataOverrideStore(databasePath);
+  const metadataNormalization = new LibraryMetadataNormalizationStore(databasePath);
   const coverOverrides = new TrackCoverOverrideStore(databasePath);
   let metadataRevision = 0;
+  let normalizationRevision = 0;
   let coverRevision = 0;
   let fileRevision = 0;
   let publicTrackIds = new Set<string>();
@@ -173,6 +177,7 @@ export function registerAdminTrackRoutes(
   app.addHook('onClose', async () => {
     fileMoves.close();
     coverOverrides.close();
+    metadataNormalization.close();
     metadataOverrides.close();
     duplicateReview.close();
     quarantine.close();
@@ -209,7 +214,7 @@ export function registerAdminTrackRoutes(
     return reply.send(override.data);
   });
 
-  // Scanner mantém somente os valores físicos. Overrides e movimentações administrativas
+  // Scanner mantém somente os valores físicos. Overrides por faixa e aliases globais
   // compõem a visão pública sem trocar a identidade estável da faixa.
   app.addHook('preSerialization', async (request, _reply, payload) => {
     const pathname = request.url.split('?', 1)[0];
@@ -218,20 +223,30 @@ export function registerAdminTrackRoutes(
     let nextPayload = payload;
     if (pathname === '/api/library' && isTrackArrayPayload(nextPayload)) {
       metadataOverrides.refresh();
+      metadataNormalization.refresh();
       coverOverrides.refresh();
       publicTrackIds = new Set(nextPayload.tracks.map(track => track.id));
       publicTrackIdsInitialized = true;
       nextPayload = {
         ...nextPayload,
         tracks: nextPayload.tracks.map(track =>
-          coverOverrides.resolveTrack(metadataOverrides.resolveTrack(track))
+          coverOverrides.resolveTrack(
+            metadataNormalization.resolveTrack(metadataOverrides.resolveTrack(track))
+          )
         )
       };
     }
     if (isObjectPayload(nextPayload)) {
-      return withAdminRevision(nextPayload, metadataRevision + coverRevision + fileRevision);
+      return withAdminRevision(
+        nextPayload,
+        metadataRevision + normalizationRevision + coverRevision + fileRevision
+      );
     }
     return nextPayload;
+  });
+
+  registerAdminLibraryNormalizationRoutes(app, metadataNormalization, {
+    onChanged: () => { normalizationRevision += 1; }
   });
 
   app.get('/api/admin/tracks', async (_request, reply) => {
