@@ -1,4 +1,4 @@
-import type { AdminTrack, AdminTrackMoveRequest } from '@home-music/shared';
+import type { AdminTrack, AdminTrackMoveRequest, Track } from '@home-music/shared';
 import {
   type AppliedTrackLocation,
   MediaFileMoveOperationError,
@@ -19,7 +19,7 @@ type AdminTrackMutationServiceOptions = {
   databasePath: string;
   musicDir: string;
   tracks: AdminTrackMutationStore;
-  decorateTrack: (track: AdminTrack) => AdminTrack;
+  decorateTrack: <T extends Track>(track: T) => T;
   onVisibilityChanged: (trackId: string, enabled: boolean) => void;
   onFileMoved: () => void;
 };
@@ -150,7 +150,7 @@ export class AdminTrackMutationService {
           this.options.onVisibilityChanged(trackId, false);
         }
       );
-      return this.options.decorateTrack(track as AdminTrack);
+      return this.options.decorateTrack(track);
     } catch (error) {
       return normalizeQuarantineError(error);
     }
