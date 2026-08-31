@@ -150,7 +150,7 @@ export class AdminTrackMutationService {
           this.options.onVisibilityChanged(trackId, false);
         }
       );
-      return this.options.decorateTrack(track);
+      return this.options.decorateTrack(track as AdminTrack);
     } catch (error) {
       return normalizeQuarantineError(error);
     }
