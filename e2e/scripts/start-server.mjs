@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const rootDir = fileURLToPath(new URL('../../', import.meta.url));
 const tempDir = await mkdtemp(path.join(tmpdir(), 'home-music-e2e-'));
@@ -51,6 +51,21 @@ await Promise.all([
   writeFile(thirdFixturePath, wavFixture(10, 659)),
   writeFile(lyricsFixturePath, '[00:00.00]Linha E2E um\n[00:03.00]Linha E2E dois\n', 'utf8')
 ]);
+
+// O build já existe quando o webServer do Playwright é iniciado. Criamos o schema
+// temporário e uma playlist Rekordbox compartilhada sem depender de XML ou dados reais.
+const databaseModuleUrl = pathToFileURL(path.join(rootDir, 'apps/server/dist/database.js')).href;
+const { HomeMusicDatabase } = await import(databaseModuleUrl);
+const fixtureDatabase = new HomeMusicDatabase(databasePath);
+try {
+  fixtureDatabase.syncImportedPlaylists('rekordbox', [{
+    sourceKey: 'e2e-rekordbox',
+    name: 'E2E Rekordbox',
+    trackIds: []
+  }]);
+} finally {
+  fixtureDatabase.close();
+}
 
 // O E2E deve atravessar o mesmo preload usado por `npm start`/systemd para
 // validar bootstrap e vínculo de identidade exatamente como em produção.
