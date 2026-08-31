@@ -14,7 +14,7 @@ import type {
 const MAX_METADATA_LENGTH = 240;
 
 type Row = Record<string, unknown>;
-type MetadataTrack = Pick<Track, 'id' | 'artist' | 'album' | 'albumArtist'>;
+type MetadataTrack = Pick<Track, 'id' | 'title' | 'artist' | 'album' | 'albumArtist'>;
 
 type AliasMaps = {
   artist: Map<string, string>;
@@ -190,14 +190,17 @@ export class LibraryMetadataNormalizationStore {
   }
 
   private loadEffectiveTracksBeforeAliases(): MetadataTrack[] {
-    const overrideJoin = this.hasMetadataOverrides()
+    const hasOverrides = this.hasMetadataOverrides();
+    const overrideJoin = hasOverrides
       ? 'LEFT JOIN track_metadata_overrides o ON o.track_id = t.id'
       : '';
-    const titleArtist = this.hasMetadataOverrides() ? 'COALESCE(o.artist, t.artist)' : 't.artist';
-    const titleAlbum = this.hasMetadataOverrides() ? 'COALESCE(o.album, t.album)' : 't.album';
-    const titleAlbumArtist = this.hasMetadataOverrides() ? 'COALESCE(o.album_artist, t.album_artist)' : 't.album_artist';
+    const titleTitle = hasOverrides ? 'COALESCE(o.title, t.title)' : 't.title';
+    const titleArtist = hasOverrides ? 'COALESCE(o.artist, t.artist)' : 't.artist';
+    const titleAlbum = hasOverrides ? 'COALESCE(o.album, t.album)' : 't.album';
+    const titleAlbumArtist = hasOverrides ? 'COALESCE(o.album_artist, t.album_artist)' : 't.album_artist';
     const rows = this.db.prepare(`
       SELECT t.id,
+             ${titleTitle} AS title,
              ${titleArtist} AS artist,
              ${titleAlbum} AS album,
              ${titleAlbumArtist} AS album_artist
@@ -206,10 +209,21 @@ export class LibraryMetadataNormalizationStore {
     `).all() as Row[];
     return rows.map(row => ({
       id: stringValue(row.id),
+      title: stringValue(row.title),
       artist: stringValue(row.artist),
       album: stringValue(row.album),
       albumArtist: stringValue(row.album_artist)
     }));
+  }
+
+  canonicalMetadataByTrackId() {
+    this.refresh();
+    return new Map(
+      this.loadEffectiveTracksBeforeAliases().map(track => {
+        const canonical = this.resolveTrack(track);
+        return [canonical.id, canonical] as const;
+      })
+    );
   }
 
   review(now = new Date()): AdminLibraryNormalizationReviewResponse {
