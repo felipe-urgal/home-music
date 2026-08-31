@@ -31,14 +31,13 @@ function nullableScope(value: unknown) {
   return scope || null;
 }
 
-function cleanMetadataValue(value: unknown, label: string) {
+function validatedMetadataValue(value: unknown, label: string) {
   if (typeof value !== 'string') throw new TypeError(`${label} inválido.`);
-  const clean = value.trim().replace(/\s+/g, ' ');
-  if (!clean) throw new RangeError(`${label} não pode ficar vazio.`);
-  if (clean.length > MAX_METADATA_LENGTH) {
+  if (!value.trim()) throw new RangeError(`${label} não pode ficar vazio.`);
+  if (value.length > MAX_METADATA_LENGTH) {
     throw new RangeError(`${label} deve ter no máximo ${MAX_METADATA_LENGTH} caracteres.`);
   }
-  return clean;
+  return value;
 }
 
 export function normalizationComparisonKey(value: string) {
@@ -248,14 +247,17 @@ export class LibraryMetadataNormalizationStore {
     if (!input || (input.kind !== 'artist' && input.kind !== 'album')) {
       throw new TypeError('Tipo de normalização inválido.');
     }
-    const canonicalValue = cleanMetadataValue(input.canonicalValue, input.kind === 'artist' ? 'Artista canônico' : 'Álbum canônico');
+    const canonicalValue = validatedMetadataValue(
+      input.canonicalValue,
+      input.kind === 'artist' ? 'Artista canônico' : 'Álbum canônico'
+    );
     const scope = input.kind === 'album'
-      ? cleanMetadataValue(input.scope, 'Artista do álbum')
+      ? validatedMetadataValue(input.scope, 'Artista do álbum')
       : '';
     if (!Array.isArray(input.sourceValues) || input.sourceValues.length === 0 || input.sourceValues.length > 50) {
       throw new TypeError('Informe de 1 a 50 variações para associar.');
     }
-    const sourceValues = [...new Set(input.sourceValues.map(value => cleanMetadataValue(value, 'Variação')))]
+    const sourceValues = [...new Set(input.sourceValues.map(value => validatedMetadataValue(value, 'Variação')))]
       .filter(value => value !== canonicalValue);
     if (sourceValues.length === 0) throw new RangeError('A associação precisa ter ao menos uma variação diferente do nome canônico.');
 
