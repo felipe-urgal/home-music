@@ -142,10 +142,12 @@ Parcialmente concluída.
 - [x] armazenamento de biblioteca, SQLite e cache no painel administrativo (#105);
 - [x] [#107](https://github.com/felipe-urgal/home-music/issues/107) — revisar possíveis músicas duplicadas na biblioteca existente;
 - [x] [#108](https://github.com/felipe-urgal/home-music/issues/108) — smart playlists por regras, calculadas dinamicamente com ownership por usuário e preview antes de salvar;
-- [ ] [#109](https://github.com/felipe-urgal/home-music/issues/109) — views inteligentes salvas;
+- [x] [#109](https://github.com/felipe-urgal/home-music/issues/109) — views pessoais que persistem busca, formato, capa e ordenação e reaplicam somente filtros compatíveis;
 - [ ] [#110](https://github.com/felipe-urgal/home-music/issues/110) — normalização lógica de variações de grafia.
 
 Smart playlists não materializam faixas em `playlist_tracks`; a definição persistida é avaliada contra biblioteca, favoritos e histórico do usuário. Detalhes: [smart-playlists.md](smart-playlists.md).
+
+Views inteligentes também não materializam faixas: cada usuário persiste apenas a definição da view, enquanto a filtragem continua centralizada no motor da biblioteca. Detalhes: [library-views.md](library-views.md).
 
 A auditoria de Integridade permanece **somente leitura**. `Verificar agora` não remove arquivos nem registros; reconciliação continua pertencendo ao scan normal.
 
