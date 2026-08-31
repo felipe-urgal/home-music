@@ -2,7 +2,7 @@
 
 Este documento é a visão técnica de alto nível do Home Music. A issue [#123](https://github.com/felipe-urgal/home-music/issues/123) é o índice executivo das pendências abertas.
 
-> Estado revisado em 2026-08-30. Itens marcados como concluídos refletem funcionalidades já entregues ou concluídas pelo próprio PR que atualiza este documento; itens futuros apontam para a issue que mantém escopo e gate atualizados.
+> Estado revisado em 2026-08-31. Itens marcados como concluídos refletem funcionalidades já entregues ou concluídas pelo próprio PR que atualiza este documento; itens futuros apontam para a issue que mantém escopo e gate atualizados.
 
 ## Fases 1–2 — Base do produto e biblioteca pessoal
 
@@ -140,7 +140,7 @@ Parcialmente concluída.
 - [x] auditoria read-only de falhas de scanner/FFprobe, arquivos ausentes e arquivos fora do índice (#106);
 - [x] snapshot e data da última verificação de integridade (#106);
 - [x] armazenamento de biblioteca, SQLite e cache no painel administrativo (#105);
-- [ ] [#107](https://github.com/felipe-urgal/home-music/issues/107) — revisar possíveis músicas duplicadas na biblioteca existente;
+- [x] [#107](https://github.com/felipe-urgal/home-music/issues/107) — revisar possíveis músicas duplicadas na biblioteca existente;
 - [x] [#108](https://github.com/felipe-urgal/home-music/issues/108) — smart playlists por regras, calculadas dinamicamente com ownership por usuário e preview antes de salvar;
 - [ ] [#109](https://github.com/felipe-urgal/home-music/issues/109) — views inteligentes salvas;
 - [ ] [#110](https://github.com/felipe-urgal/home-music/issues/110) — normalização lógica de variações de grafia.
