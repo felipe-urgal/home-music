@@ -21,6 +21,7 @@ Comece por:
 ## Operação
 
 - [`production.md`](production.md)
+- [`production-contract.md`](production-contract.md) — interface operacional padronizada `prod:*` e manifesto para automação local.
 - [`backup-restore.md`](backup-restore.md)
 - [`ffmpeg.md`](ffmpeg.md)
 - [`tailscale.md`](tailscale.md)
@@ -39,6 +40,7 @@ Pendências relacionadas: #81, #174 e #176.
 
 - [`smart-playlists.md`](smart-playlists.md) — regras, ownership, preview, persistência e invariantes das playlists inteligentes.
 - [`library-views.md`](library-views.md) — busca/filtros/ordenação salvos como views pessoais reutilizáveis.
+- [`library-metadata-normalization.md`](library-metadata-normalization.md) — aliases lógicos, revisão administrativa e projeção canônica de artistas/álbuns.
 
 ## Administração
 
