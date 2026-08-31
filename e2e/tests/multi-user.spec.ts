@@ -97,6 +97,11 @@ async function openAccountFromLibrary(page: Page) {
 }
 
 async function expectCurrentSessionScreen(page: Page) {
+  const revokeOthers = await page.context().request.post('/api/auth/sessions/revoke-others', {
+    headers: mutationHeaders
+  });
+  expect(revokeOthers.ok()).toBeTruthy();
+
   await page.getByRole('button', { name: /Outros dispositivos/ }).click();
   await expect(page.locator('#my-account-title')).toHaveText('Outros dispositivos');
   await expect(page.getByText('Este dispositivo', { exact: true })).toBeVisible();
