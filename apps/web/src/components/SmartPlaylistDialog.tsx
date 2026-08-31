@@ -71,6 +71,21 @@ export function SmartPlaylistDialog({
     if (!open && dialog.open) dialog.close();
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+    const root = document.documentElement;
+    const body = document.body;
+    const previousRootOverflow = root.style.overflow;
+    const previousBodyOverflow = body.style.overflow;
+    root.style.overflow = 'hidden';
+    body.style.overflow = 'hidden';
+
+    return () => {
+      root.style.overflow = previousRootOverflow;
+      body.style.overflow = previousBodyOverflow;
+    };
+  }, [open]);
+
   const trackMap = useMemo(() => new Map(tracks.map(track => [track.id, track])), [tracks]);
   const previewTracks = useMemo(
     () => (previewIds ?? []).map(id => trackMap.get(id)).filter((track): track is Track => Boolean(track)),
