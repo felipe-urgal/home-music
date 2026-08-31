@@ -1,31 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
-
-export type LibraryViewSort =
-  | 'current'
-  | 'title-asc'
-  | 'title-desc'
-  | 'artist-asc'
-  | 'artist-desc'
-  | 'album-asc'
-  | 'album-desc';
-
-export type LibraryViewCoverFilter = 'all' | 'with-cover' | 'without-cover';
-
-export type LibraryViewDefinition = {
-  query: string;
-  format: string;
-  cover: LibraryViewCoverFilter;
-  sort: LibraryViewSort;
-};
-
-export type SavedLibraryView = {
-  id: string;
-  name: string;
-  definition: LibraryViewDefinition;
-  createdAt: string;
-  updatedAt: string;
-};
+import type {
+  LibraryViewCoverFilter,
+  LibraryViewDefinition,
+  LibraryViewSort,
+  SavedLibraryView
+} from '@home-music/shared';
 
 type Row = Record<string, unknown>;
 
