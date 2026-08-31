@@ -413,6 +413,11 @@ export function LibraryScreen({
 
               {savedViews.loading ? (
                 <div className="library-saved-view-status">Carregando views…</div>
+              ) : savedViews.error ? (
+                <div className="library-saved-view-status is-error" role="alert">
+                  <span>{savedViews.error}</span>
+                  <button type="button" onClick={() => void savedViews.refresh().catch(reportError)}>Tentar novamente</button>
+                </div>
               ) : savedViews.views.length > 0 ? (
                 <div className="library-saved-view-manager">
                   <span className="library-saved-view-manager__title">Views salvas</span>
