@@ -39,7 +39,7 @@ Handlers Fastify ficam agrupados por domínio:
 - `system-routes.ts` — liveness/readiness/diagnóstico e fallback do frontend de produção;
 - módulos administrativos existentes continuam separados por domínio (`admin-*-routes.ts`).
 
-Rotas traduzem HTTP para chamadas de serviço/infraestrutura: validam payloads específicos da API, escolhem status codes/headers e preservam mensagens de erro externas.
+Rotas traduzem HTTP para chamadas de serviço/infraestrutura: validam identidade e detalhes específicos da API, escolhem status codes/headers e preservam mensagens de erro externas. Elas não acessam SQLite diretamente quando a regra pertence a um serviço extraído.
 
 ### Services
 
@@ -54,7 +54,14 @@ Rotas traduzem HTTP para chamadas de serviço/infraestrutura: validam payloads e
 - reconciliação incremental após promoção de importação;
 - fallback para rescan completo quando a indexação incremental falha.
 
-O serviço não conhece `FastifyInstance` nem registra endpoints.
+`personal-library-service.ts` concentra regras de dados pessoais que antes estavam nos handlers:
+
+- favoritos e validação da faixa disponível;
+- criação, renomeação, remoção e conteúdo de playlists manuais;
+- rejeição de mutações em playlists importadas somente leitura;
+- validação, normalização e persistência do estado/fila do player.
+
+Esses serviços não conhecem `FastifyInstance` nem registram endpoints. O `PersonalLibraryService` recebe o SQLite e o snapshot canônico da biblioteca por referência; `personal-routes.ts` recebe apenas o serviço.
 
 A #117 permanece responsável por consolidar serviços explícitos adicionais para operações destrutivas, imports e backups. A #116 não antecipa esse escopo.
 
@@ -103,6 +110,7 @@ admin
 Não existe um segundo snapshot da biblioteca nem um segundo owner do transcoding:
 
 - `LibraryService` possui o snapshot canônico em memória;
+- `PersonalLibraryService` consulta esse mesmo snapshot para validar IDs de faixas;
 - `ServerInfrastructure` possui os stores/managers compartilhados;
 - `TrackMediaInfrastructure` recebe esses objetos por referência;
 - módulos de rota recebem apenas as dependências necessárias.
@@ -137,6 +145,7 @@ Mudanças futuras devem preservar:
 - nenhum contrato HTTP muda apenas porque um handler mudou de arquivo;
 - auth permanece central e fail-closed;
 - `index.ts` não volta a implementar `/api/*` diretamente;
+- rotas pessoais não voltam a acessar SQLite diretamente para regras já extraídas;
 - filesystem e transcoding não vazam para handlers além das interfaces de infraestrutura;
 - estado da biblioteca permanece em uma fonte única;
 - operações destrutivas/imports/backups só avançam de camada quando a respectiva issue definir serviço e invariantes;
