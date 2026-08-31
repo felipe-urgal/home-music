@@ -1,5 +1,4 @@
 import { open } from 'node:fs/promises';
-import type { FastifyBaseLogger } from 'fastify';
 import type { NormalizationMode } from '@home-music/shared';
 import type { FfmpegStatus } from './ffmpeg.js';
 import type { LibraryService } from './library-service.js';
@@ -29,7 +28,6 @@ type TrackMediaInfrastructureOptions = {
   transcodeManager: TranscodeManager;
   transcodeCacheMaintenance: TranscodeCacheMaintenance;
   getFfmpegStatus: () => FfmpegStatus;
-  logger: FastifyBaseLogger;
 };
 
 export class TrackMediaInfrastructure {
@@ -142,10 +140,6 @@ export class TrackMediaInfrastructure {
       return { track, prepared, transcoded, gainDb };
     } catch (error) {
       if (isNotFoundLike(error)) return null;
-      this.options.logger.warn(
-        { err: error, trackId: track.id, quality, normalization },
-        'Falha ao preparar mídia da faixa.'
-      );
       throw error;
     }
   }
