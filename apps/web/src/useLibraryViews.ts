@@ -29,25 +29,36 @@ function sortViews(views: SavedLibraryView[]) {
   );
 }
 
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : 'Não foi possível carregar as views inteligentes.';
+}
+
 export function useLibraryViews(reportError: (error: unknown) => void) {
   const [views, setViews] = useState<SavedLibraryView[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const refreshSequence = useRef(0);
   const mounted = useRef(true);
 
   const refresh = useCallback(async () => {
     const sequence = ++refreshSequence.current;
-    const result = await jsonRequest<LibraryViewsResponse>('/api/library-views');
-    if (!mounted.current || sequence !== refreshSequence.current) return result;
-    setViews(sortViews(result.views));
-    return result;
+    try {
+      const result = await jsonRequest<LibraryViewsResponse>('/api/library-views');
+      if (!mounted.current || sequence !== refreshSequence.current) return result;
+      setViews(sortViews(result.views));
+      setError(null);
+      return result;
+    } catch (caught) {
+      if (mounted.current && sequence === refreshSequence.current) setError(errorMessage(caught));
+      throw caught;
+    }
   }, []);
 
   useEffect(() => {
     mounted.current = true;
     void refresh()
-      .catch(error => {
-        if (mounted.current) reportError(error);
+      .catch(caught => {
+        if (mounted.current) reportError(caught);
       })
       .finally(() => {
         if (mounted.current) setLoading(false);
@@ -58,49 +69,79 @@ export function useLibraryViews(reportError: (error: unknown) => void) {
     };
   }, [refresh, reportError]);
 
-  const createView = useCallback(async (name: string, definition: LibraryViewDefinition) => {
+  const reconcile = useCallback(async () => {
+    if (!mounted.current) return;
     try {
-      const result = await jsonRequest<LibraryViewResponse>('/api/library-views', {
+      await refresh();
+    } catch (caught) {
+      if (mounted.current) reportError(caught);
+    }
+  }, [refresh, reportError]);
+
+  const createView = useCallback(async (name: string, definition: LibraryViewDefinition) => {
+    let result: LibraryViewResponse;
+    try {
+      result = await jsonRequest<LibraryViewResponse>('/api/library-views', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, definition })
       });
-      await refresh();
-      return result.view;
-    } catch (error) {
-      reportError(error);
-      throw error;
+    } catch (caught) {
+      reportError(caught);
+      throw caught;
     }
-  }, [refresh, reportError]);
+
+    if (mounted.current) {
+      setViews(current => sortViews([
+        result.view,
+        ...current.filter(view => view.id !== result.view.id)
+      ]));
+      setError(null);
+    }
+    await reconcile();
+    return result.view;
+  }, [reconcile, reportError]);
 
   const renameView = useCallback(async (id: string, name: string) => {
+    let result: LibraryViewResponse;
     try {
-      const result = await jsonRequest<LibraryViewResponse>(`/api/library-views/${id}`, {
+      result = await jsonRequest<LibraryViewResponse>(`/api/library-views/${encodeURIComponent(id)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name })
       });
-      await refresh();
-      return result.view;
-    } catch (error) {
-      reportError(error);
-      throw error;
+    } catch (caught) {
+      reportError(caught);
+      throw caught;
     }
-  }, [refresh, reportError]);
+
+    if (mounted.current) {
+      setViews(current => sortViews(current.map(view => view.id === id ? result.view : view)));
+      setError(null);
+    }
+    await reconcile();
+    return result.view;
+  }, [reconcile, reportError]);
 
   const deleteView = useCallback(async (id: string) => {
     try {
-      await jsonRequest(`/api/library-views/${id}`, { method: 'DELETE' });
-      await refresh();
-    } catch (error) {
-      reportError(error);
-      throw error;
+      await jsonRequest(`/api/library-views/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    } catch (caught) {
+      reportError(caught);
+      throw caught;
     }
-  }, [refresh, reportError]);
+
+    if (mounted.current) {
+      setViews(current => current.filter(view => view.id !== id));
+      setError(null);
+    }
+    await reconcile();
+  }, [reconcile, reportError]);
 
   return {
     views,
     loading,
+    error,
     refresh,
     createView,
     renameView,
