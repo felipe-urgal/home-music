@@ -7,6 +7,8 @@ INSTALLER="${ROOT_DIR}/scripts/install-systemd.sh"
 EXPECTED_EXEC_START='ExecStart="${NODE_ARG_ESCAPED}" --import "${ROOT_ARG_ESCAPED}/apps/server/dist/bootstrap-preload.js" "${ROOT_ARG_ESCAPED}/apps/server/dist/index.js"'
 EXPECTED_BUILD_GUARD='if [[ ! -f "${ROOT_DIR}/apps/web/dist/index.html" || ! -f "${ROOT_DIR}/apps/server/dist/index.js" || ! -f "${ROOT_DIR}/apps/server/dist/bootstrap-preload.js" ]]; then'
 EXPECTED_HELPER_PATH='CONTROL_HELPER_PATH="/usr/local/sbin/home-music-service-control"'
+EXPECTED_HELPER_METADATA="HELPER_METADATA=\"\$(stat -Lc '%U:%G:%a' \"\${CONTROL_HELPER_PATH}\" 2>/dev/null || true)\""
+EXPECTED_HELPER_OWNERSHIP='if [[ "${HELPER_METADATA}" != "root:root:755" ]]; then'
 EXPECTED_PREFLIGHT='if ! sudo -n "${CONTROL_HELPER_PATH}" check >/dev/null 2>&1; then'
 EXPECTED_STOP='run_privileged_update_action stop'
 EXPECTED_RESTART='run_privileged_update_action restart'
@@ -35,6 +37,8 @@ assert_contains() {
 assert_exact_line "${EXPECTED_EXEC_START}" "o unit systemd precisa iniciar bootstrap-preload.js antes de dist/index.js."
 assert_exact_line "${EXPECTED_BUILD_GUARD}" "o installer precisa validar a presença do bootstrap-preload.js no build."
 assert_exact_line "${EXPECTED_HELPER_PATH}" "o helper privilegiado precisa usar caminho absoluto fixo e root-owned."
+assert_exact_line "${EXPECTED_HELPER_METADATA}" "service:update precisa inspecionar ownership e modo do helper antes de confiar no NOPASSWD."
+assert_exact_line "${EXPECTED_HELPER_OWNERSHIP}" "service:update precisa recusar helper que não seja root:root 0755."
 assert_contains "${EXPECTED_PREFLIGHT}" "service:update precisa validar NOPASSWD antes de parar o serviço."
 assert_contains "${EXPECTED_STOP}" "service:update precisa parar o serviço somente pelo helper limitado."
 assert_contains "${EXPECTED_RESTART}" "service:update precisa reiniciar o serviço somente pelo helper limitado."
