@@ -129,16 +129,6 @@ trap on_error ERR
 cd "${ROOT_DIR}"
 harden_local_files
 
-if systemctl is-active --quiet "${SERVICE_UNIT}"; then
-  echo "==> Parando Home Music antes de alterar dependências/build"
-  if [[ "${MODE}" == "update" ]]; then
-    run_privileged_update_action stop
-  else
-    sudo systemctl stop "${SERVICE_UNIT}"
-  fi
-  SERVICE_STOPPED=1
-fi
-
 echo "==> Instalando dependências reproduzíveis"
 "${NPM_BIN}" ci
 
@@ -153,6 +143,12 @@ fi
 harden_local_files
 
 if [[ "${MODE}" == "update" ]]; then
+  if systemctl is-active --quiet "${SERVICE_UNIT}"; then
+    echo "==> Parando ${SERVICE_UNIT} somente para a troca final"
+    run_privileged_update_action stop
+    SERVICE_STOPPED=1
+  fi
+
   echo "==> Reiniciando ${SERVICE_UNIT} pelo helper privilegiado"
   run_privileged_update_action restart
   SERVICE_STOPPED=0
@@ -253,6 +249,12 @@ EOF_SUDOERS
 
   echo "==> Validando regra sudoers limitada"
   "${VISUDO_BIN}" -cf "${TMP_SUDOERS}" >/dev/null
+
+  if systemctl is-active --quiet "${SERVICE_UNIT}"; then
+    echo "==> Parando ${SERVICE_UNIT} somente para instalar o bootstrap validado"
+    sudo systemctl stop "${SERVICE_UNIT}"
+    SERVICE_STOPPED=1
+  fi
 
   echo "==> Instalando ${SERVICE_PATH}"
   sudo install -o root -g root -m 0644 "${TMP_SERVICE}" "${SERVICE_PATH}"
