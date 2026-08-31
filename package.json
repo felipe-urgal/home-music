@@ -37,7 +37,8 @@
     "tailscale:hardening:status": "bash scripts/check-tailscale-hardening.sh",
     "ffmpeg:status": "npm run ffmpeg:status -w @home-music/server",
     "typecheck": "npm run typecheck -w @home-music/shared && npm run typecheck -w @home-music/server && npm run typecheck -w @home-music/web",
-    "test": "npm run test -w @home-music/server && npm run test -w @home-music/web"
+    "test": "npm run test -w @home-music/server && npm run test -w @home-music/web",
+    "test:security": "npm run test:security -w @home-music/server"
   },
   "devDependencies": {
     "concurrently": "9.2.4"
