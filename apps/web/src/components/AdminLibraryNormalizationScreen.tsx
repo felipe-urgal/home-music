@@ -38,6 +38,7 @@ export function AdminLibraryNormalizationScreen({ onBack }: AdminLibraryNormaliz
   const [error, setError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const requestSequence = useRef(0);
+  const mounted = useRef(true);
 
   const loadReview = useCallback(async () => {
     const sequence = ++requestSequence.current;
@@ -45,7 +46,7 @@ export function AdminLibraryNormalizationScreen({ onBack }: AdminLibraryNormaliz
     setError(null);
     try {
       const next = await getAdminLibraryNormalization();
-      if (sequence !== requestSequence.current) return;
+      if (!mounted.current || sequence !== requestSequence.current) return;
       setReview(next);
       setSelectedCanonical(current => {
         const nextSelections: Record<string, string> = {};
@@ -58,16 +59,20 @@ export function AdminLibraryNormalizationScreen({ onBack }: AdminLibraryNormaliz
         return nextSelections;
       });
     } catch (caught) {
-      if (sequence !== requestSequence.current) return;
+      if (!mounted.current || sequence !== requestSequence.current) return;
       setError(caught instanceof Error ? caught.message : 'Não foi possível carregar a normalização lógica.');
     } finally {
-      if (sequence === requestSequence.current) setLoading(false);
+      if (mounted.current && sequence === requestSequence.current) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
+    mounted.current = true;
     void loadReview();
-    return () => { requestSequence.current += 1; };
+    return () => {
+      mounted.current = false;
+      requestSequence.current += 1;
+    };
   }, [loadReview]);
 
   function publishCanonicalChange() {
@@ -94,6 +99,7 @@ export function AdminLibraryNormalizationScreen({ onBack }: AdminLibraryNormaliz
         canonicalValue,
         sourceValues
       });
+      if (!mounted.current) return;
       setReview(next);
       publishCanonicalChange();
       setFeedback(
@@ -102,9 +108,10 @@ export function AdminLibraryNormalizationScreen({ onBack }: AdminLibraryNormaliz
           : `Variações do álbum associadas a “${canonicalValue}”. Os arquivos físicos não foram alterados.`
       );
     } catch (caught) {
+      if (!mounted.current) return;
       setError(caught instanceof Error ? caught.message : 'Não foi possível criar a associação lógica.');
     } finally {
-      setMutatingKey(null);
+      if (mounted.current) setMutatingKey(null);
     }
   }
 
@@ -116,13 +123,15 @@ export function AdminLibraryNormalizationScreen({ onBack }: AdminLibraryNormaliz
     try {
       await removeAdminLibraryNormalizationAlias(id);
       const next = await getAdminLibraryNormalization();
+      if (!mounted.current) return;
       setReview(next);
       publishCanonicalChange();
       setFeedback(`Associação “${label}” desfeita. A metadata física continua intacta.`);
     } catch (caught) {
+      if (!mounted.current) return;
       setError(caught instanceof Error ? caught.message : 'Não foi possível desfazer a associação.');
     } finally {
-      setMutatingKey(null);
+      if (mounted.current) setMutatingKey(null);
     }
   }
 
