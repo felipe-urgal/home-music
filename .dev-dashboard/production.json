@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "production": {
+    "enabled": true,
+    "strategy": "command",
+    "provider": "systemd",
+    "branch": "main",
+    "commands": {
+      "status": "prod:status",
+      "check": "prod:check",
+      "backup": "prod:backup",
+      "deploy": "prod:deploy",
+      "verify": "prod:verify",
+      "logs": "prod:logs"
+    },
+    "health": {
+      "type": "http",
+      "url": "http://127.0.0.1:8787/ready"
+    },
+    "policies": {
+      "backup": "required-before-migration",
+      "migrations": "startup",
+      "rollback": "restore-backup-when-schema-changed"
+    }
+  }
+}
