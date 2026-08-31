@@ -49,7 +49,7 @@ test('heurística conserva pontuação e normaliza apenas acento, caixa e espaç
   assert.notEqual(normalizationComparisonKey('The Beatles'), normalizationComparisonKey('Beatles'));
 });
 
-test('review encontra candidatos conservadores e prefere grafia sem espaços anômalos', async () => {
+test('review encontra artistas conservadores e só cruza álbuns após o artista canônico existir', async () => {
   const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-normalization-'));
   const databasePath = path.join(temp, 'home-music.db');
   try {
@@ -64,12 +64,29 @@ test('review encontra candidatos conservadores e prefere grafia sem espaços an�
     );
     assert.equal(artist?.variants.at(-1)?.value, ' BEYONCÉ ');
     assert.equal(review.candidates.some(candidate => candidate.variants.some(variant => variant.value === 'AC/DC') && candidate.variants.some(variant => variant.value === 'ACDC')), false);
+    assert.equal(
+      review.counts.albumCandidates,
+      0,
+      'álbuns de grafias de artista ainda não aprovadas não devem ser cruzados entre escopos'
+    );
 
-    const albumScopes = review.candidates
-      .filter(candidate => candidate.kind === 'album')
-      .map(candidate => candidate.scope);
-    assert.ok(albumScopes.includes('Beyoncé') || albumScopes.includes('Beyonce') || albumScopes.includes(' BEYONCÉ '));
-    assert.equal(albumScopes.includes('Outro Artista'), false, 'um único álbum do outro artista não deve formar candidato sozinho');
+    store.associate({
+      kind: 'artist',
+      canonicalValue: 'Beyoncé',
+      sourceValues: ['Beyonce', ' BEYONCÉ ']
+    });
+    const afterArtist = store.review();
+    const album = afterArtist.candidates.find(candidate => candidate.kind === 'album');
+    assert.equal(album?.scope, 'Beyoncé');
+    assert.deepEqual(
+      new Set(album?.variants.map(variant => variant.value)),
+      new Set(['Renaissance', ' renaissance ', 'RENAISSANCE'])
+    );
+    assert.equal(
+      afterArtist.candidates.some(candidate => candidate.kind === 'album' && candidate.scope === 'Outro Artista'),
+      false,
+      'um único álbum do outro artista não deve formar candidato sozinho'
+    );
     store.close();
   } finally {
     await rm(temp, { recursive: true, force: true });
