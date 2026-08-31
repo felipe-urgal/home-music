@@ -94,9 +94,18 @@ O instalador usa o usuário atual, detecta o caminho real do projeto e o binári
 npm run service:install
 ```
 
-O script pede `sudo` apenas para gerenciar o unit do systemd. Não execute o script inteiro como root.
+Esse comando é também o **bootstrap administrativo** da automação de deploy. Execute-o no terminal como seu usuário normal; ele pede `sudo` somente nas etapas root necessárias. Não execute o script inteiro como root.
 
-Antes de iniciar o serviço ele aplica:
+Além do unit, o bootstrap instala:
+
+```text
+/usr/local/sbin/home-music-service-control
+/etc/sudoers.d/home-music-<usuario>
+```
+
+O helper é `root:root`, possui catálogo fechado de `check`, `stop` e `restart` para `home-music.service` e usa `/usr/bin/systemctl` fixo. A regra sudoers é validada por `visudo` e concede `NOPASSWD` **somente** para essas três invocações do helper. Ela não libera `systemctl` genérico, shell ou execução root de scripts do repositório.
+
+Antes de iniciar o serviço o instalador aplica:
 
 ```text
 .env                  0600
@@ -110,15 +119,19 @@ Depois do build, o instalador:
 
 - regenera o unit com os caminhos atuais;
 - escapa caminhos com espaços/caracteres especiais usados pelo systemd;
+- valida o unit quando `systemd-analyze` está disponível;
+- gera e valida a regra sudoers limitada com `visudo`;
+- instala unit, helper e sudoers como arquivos root-owned;
 - executa `daemon-reload`;
 - habilita o serviço;
 - executa `restart` explicitamente;
-- confirma que o unit ficou ativo.
+- confirma que o unit ficou ativo;
+- confirma que `sudo -n /usr/local/sbin/home-music-service-control check` funciona para o usuário da instalação.
 
 Depois:
 
 ```bash
-sudo systemctl status home-music --no-pager
+systemctl status home-music --no-pager
 journalctl -u home-music -f
 ```
 
@@ -141,29 +154,42 @@ git pull --ff-only
 npm run service:update
 ```
 
-`service:update` usa o mesmo instalador em modo de atualização e exige que o unit já exista. O fluxo é:
+`service:update` exige que o bootstrap acima já esteja instalado. Antes de tocar no serviço, ele confirma que o unit existe, que o helper root-owned está presente e que `sudo -n ... check` está autorizado. Se isso não estiver pronto, o update falha **antes de parar o Home Music** e orienta executar `npm run service:install` no terminal.
+
+O fluxo normal de update é:
 
 ```text
-parar serviço
+preflight helper/NOPASSWD
     ↓
-npm ci
+helper stop
     ↓
-npm run build
+npm ci como usuário normal
+    ↓
+npm run build como usuário normal
     ↓
 validar artefatos
     ↓
-regenerar unit
-    ↓
-daemon-reload
-    ↓
-restart
+helper restart
 ```
+
+O update comum não reescreve o unit, o helper ou o sudoers. Isso mantém o artefato privilegiado fora do repositório durante uma execução automatizada e impede que código recém-baixado seja promovido a root por conveniência.
 
 Há alguns segundos de indisponibilidade, mas não existe versão híbrida entre HTML antigo e assets novos.
 
 Se a atualização falhar depois de o serviço ser parado, o script deixa uma mensagem explícita e mantém o serviço parado para não voltar com um build parcialmente substituído. Corrija o erro e execute `npm run service:update` novamente.
 
 O banco `data/home-music.db`, o `.env` e a configuração persistente do Tailscale Serve não são removidos pelo build/update.
+
+### Quando repetir `service:install`
+
+Rode novamente o bootstrap interativo quando houver mudança no próprio contrato privilegiado, por exemplo:
+
+- alteração do unit systemd ou de seu hardening;
+- alteração do helper root-owned ou da regra sudoers;
+- mudança do caminho absoluto do Node usado em `ExecStart`;
+- helper/sudoers ausentes ou com permissões incorretas.
+
+Depois desse bootstrap, deploys disparados por um control plane local podem usar `prod:deploy` sem compartilhar senha e sem depender de ticket sudo reutilizável entre árvores de processo.
 
 ## Shutdown durante scan
 
@@ -178,7 +204,7 @@ Para um servidor sempre ligado, prefira um ponto de montagem estável configurad
 Se o volume não estiver disponível durante o boot, o servidor continua subindo, mas `/ready` fica `503` e a biblioteca não é marcada como pronta. Depois de montar o volume:
 
 ```bash
-sudo systemctl restart home-music
+sudo /usr/local/sbin/home-music-service-control restart
 ```
 
 ou use **Atualizar biblioteca** no app.
@@ -187,10 +213,10 @@ ou use **Atualizar biblioteca** no app.
 
 O instalador grava no unit do systemd o caminho absoluto do `node` encontrado no momento da instalação. Isso evita depender do shell/NVM durante o boot.
 
-Se você trocar/remover a versão do Node e esse caminho deixar de existir, execute:
+Se você trocar/remover a versão do Node e esse caminho deixar de existir, atualize o bootstrap root-owned explicitamente:
 
 ```bash
-npm run service:update
+npm run service:install
 ```
 
 ## Tailscale + HTTPS
@@ -281,7 +307,7 @@ O CI executa esse smoke depois de `npm run build` e também valida sintaticament
 Parar temporariamente:
 
 ```bash
-sudo systemctl stop home-music
+sudo /usr/local/sbin/home-music-service-control stop
 ```
 
 Impedir início automático:
@@ -290,10 +316,12 @@ Impedir início automático:
 sudo systemctl disable --now home-music
 ```
 
-Para remover o unit:
+Para remover completamente o unit e o bootstrap privilegiado, use o usuário correto no nome do arquivo sudoers:
 
 ```bash
 sudo rm -f /etc/systemd/system/home-music.service
+sudo rm -f /usr/local/sbin/home-music-service-control
+sudo rm -f /etc/sudoers.d/home-music-$(id -un)
 sudo systemctl daemon-reload
 ```
 
@@ -302,6 +330,8 @@ Isso não remove automaticamente a configuração Tailscale Serve. Se o objetivo
 ## Segurança
 
 No perfil LAN, HTTP não criptografa usuário, senha ou áudio. Nunca faça port-forwarding da porta `8787`.
+
+O helper de deploy é deliberadamente mínimo: ele é root-owned, não lê código do repositório, não recebe caminho/comando arbitrário e aceita somente `check`, `stop` ou `restart` sobre `home-music.service`. A regra `NOPASSWD` referencia apenas essas invocações exatas. `npm ci`, build e toda lógica da aplicação continuam executando como usuário normal.
 
 No perfil recomendado:
 
