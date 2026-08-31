@@ -2,7 +2,7 @@
 
 Baseline de navegador do Home Music com Playwright.
 
-Os testes usam o build real de produção, mas não usam o `.env`, a biblioteca nem o SQLite reais. O runner cria uma biblioteca e um banco temporários em `/tmp`, gera uma faixa WAV de teste e sobe o Fastify somente em `127.0.0.1:8791` durante a execução.
+Os testes usam o build real de produção, mas não usam o `.env`, a biblioteca nem o SQLite reais. O runner cria uma biblioteca e um banco temporários em `/tmp`, gera faixas WAV de teste, prepara uma playlist Rekordbox controlada e sobe o Fastify somente em `127.0.0.1:8791` durante a execução.
 
 ## Primeira instalação local
 
@@ -34,22 +34,43 @@ Para executar somente os testes quando o build já existe:
 npm run e2e:ci
 ```
 
-## Relação com o CI atual
+## Gate obrigatório no CI
 
-O workflow principal do GitHub Actions hoje:
+O workflow principal do GitHub Actions usa o mesmo job `validate` para manter um único status obrigatório. Depois dos gates mais baratos e do build, ele:
 
-- executa `npm ci --prefix e2e` para validar o lockfile/dependências da suíte;
-- executa `npm audit --prefix e2e --audit-level=high`;
-- **não instala o browser nem executa Playwright automaticamente** no job principal.
+1. instala somente o Chromium compatível com a versão fixada de `@playwright/test`, usando `playwright install --with-deps chromium`;
+2. executa `npm run e2e:ci` com um worker e retry controlado pelo `playwright.config.ts`;
+3. só então executa o smoke de produção.
 
-Portanto, um CI verde não deve ser descrito como evidência de que todos os E2E passaram. Quando uma mudança de fluxo/UX exigir esse gate, execute `npm run e2e`/`npm run e2e:ci` em ambiente com Chromium instalado ou adicione a execução ao workflow de forma explícita.
+Uma falha Playwright portanto falha o mesmo job que governa o merge. O job possui timeout explícito de 30 minutos.
 
-A issue #111 rastreia a expansão/consolidação da cobertura e do gate E2E para os fluxos críticos.
+O cache npm do Actions considera `package-lock.json` e `e2e/package-lock.json`. O binário do navegador não possui cache manual próprio: reinstalar o Chromium correspondente ao lockfile evita reutilizar browser/dependências de sistema incompatíveis. Se o custo desse passo se tornar relevante, qualquer cache futuro deve ser versionado por sistema operacional e pelo lock/versão do Playwright, sem pular a instalação das dependências de sistema necessárias.
 
-## Cobertura atual
+A partir da #111, um PR só pode declarar o gate E2E verde quando o step **Critical Playwright E2E** tiver realmente executado no HEAD final.
 
-A suíte já possui baseline multiusuário e cenários administrativos/fullstack específicos, incluindo biblioteca, layout desktop, downloads offline e fluxos administrativos com fixtures controladas.
+## Cobertura crítica
 
-Novos testes devem continuar independentes de internet pública, biblioteca real e SQLite real do usuário.
+A suíte combina fluxo real contra o Fastify temporário e fixtures de navegador apenas quando a dependência externa tornaria o teste não determinístico.
+
+Cobertura principal:
+
+- biblioteca/player nos layouts mobile, tablet e desktop;
+- fila desktop com reordenação e persistência real do estado após reload;
+- playlists manuais pessoais e playlist Rekordbox compartilhada/read-only;
+- downloads offline individuais/em lote e isolamento do CacheStorage na troca de conta;
+- Minha conta, sessões, troca obrigatória de senha e isolamento multiusuário;
+- Administração: cockpit, músicas, metadata, integridade, usuários, lixeira, cache, histórico e normalização lógica;
+- importação por upload, URL direta e provider, além do workbench validação → metadata → duplicatas → destino/promoção com fixtures controladas.
+
+As rotas de URL/provider são interceptadas somente nos testes de orquestração de UI para não depender de internet pública. SSRF, staging, processos externos, validação de mídia e promoção física permanecem cobertos pelos testes de servidor responsáveis por essas invariantes.
+
+## Isolamento e determinismo
+
+- nenhum teste deve depender da biblioteca, SQLite ou internet do usuário;
+- o servidor E2E usa um diretório temporário descartável e loopback;
+- a playlist Rekordbox da fixture é criada pela própria API de persistência `HomeMusicDatabase.syncImportedPlaylists`, sem SQL duplicado nem XML real;
+- o servidor temporário é compartilhado durante uma execução completa da suíte, portanto specs que dependam de estado persistente devem estabelecer explicitamente o próprio estado inicial ou usar identificadores únicos;
+- seletores novos devem preferir roles, labels e `data-testid`; CSS estrutural só deve ser usado quando não houver contrato acessível equivalente;
+- não use sleeps arbitrários para sincronizar persistência assíncrona; prefira sinais da UI, respostas HTTP ou `expect.poll` sobre o estado canônico.
 
 Artefatos locais de falha (`playwright-report/` e `test-results/`) são ignorados pelo Git.
