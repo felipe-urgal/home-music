@@ -214,6 +214,10 @@ export class LibraryService {
     return this.scanPromise;
   }
 
+  waitForCurrentScan() {
+    return this.scanPromise ?? Promise.resolve();
+  }
+
   async updateForPromotedImport(promoted: PromotedImportFile, jobId: string) {
     await this.mutations.run(async () => {
       try {
