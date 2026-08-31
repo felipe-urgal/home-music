@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   libraryPathForState,
   libraryRouteFromPath,
-  parseAppPath
+  parseAppPath,
+  routeForAccess
 } from './browser-navigation';
 
 describe('browser navigation routes', () => {
@@ -56,5 +57,15 @@ describe('browser navigation routes', () => {
     expect(parseAppPath('/qualquer-coisa')).toEqual({ screen: 'player', path: '/', valid: false });
     expect(parseAppPath('/library/playlists/a/b')).toEqual({ screen: 'player', path: '/', valid: false });
     expect(parseAppPath('/library/folders/%E0%A4%A')).toEqual({ screen: 'player', path: '/', valid: false });
+  });
+
+  it('redireciona rota administrativa sem permissão para Minha conta', () => {
+    const adminRoute = parseAppPath('/admin');
+    expect(routeForAccess(adminRoute, true)).toEqual(adminRoute);
+    expect(routeForAccess(adminRoute, false)).toEqual({
+      screen: 'account',
+      path: '/account',
+      valid: true
+    });
   });
 });

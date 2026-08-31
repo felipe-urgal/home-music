@@ -72,4 +72,8 @@ test('smoke crítico: deep link, histórico, player, conta e administração', a
   await page.reload();
   await expect(page).toHaveURL(/\/admin$/);
   await expect(page.locator('#administration-title')).toHaveText('Administração');
+
+  await page.goto('/rota-invalida');
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.locator('main.app-shell')).toBeVisible();
 });

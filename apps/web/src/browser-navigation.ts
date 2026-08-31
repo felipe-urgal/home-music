@@ -93,6 +93,13 @@ export function parseAppPath(pathname: string): AppRoute {
   return invalidRoute();
 }
 
+export function routeForAccess(route: AppRoute, canAccessAdmin: boolean): AppRoute {
+  if (route.valid && route.screen === 'admin' && !canAccessAdmin) {
+    return { screen: 'account', path: '/account', valid: true };
+  }
+  return route;
+}
+
 export function libraryPathForState(state: LibraryRouteState) {
   if (state.libraryTab === 'playlists') {
     return state.selectedPlaylistId
@@ -137,15 +144,12 @@ export function useRoutedScreen(options: {
 
   const resolveCurrentScreen = useCallback(() => {
     if (typeof window === 'undefined') return 'player' as RoutedScreen;
-    const route = parseAppPath(window.location.pathname);
-    if (!route.valid) {
+    const parsed = parseAppPath(window.location.pathname);
+    if (!parsed.valid) {
       window.history.replaceState(null, '', '/');
       return 'player' as RoutedScreen;
     }
-    if (route.screen === 'admin' && !canAccessAdmin) {
-      window.history.replaceState(null, '', '/account');
-      return 'account' as RoutedScreen;
-    }
+    const route = routeForAccess(parsed, canAccessAdmin);
     if (route.path !== window.location.pathname) {
       window.history.replaceState(null, '', route.path);
     }
