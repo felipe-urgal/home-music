@@ -27,8 +27,8 @@ function stringValue(value: unknown) {
 }
 
 function nullableScope(value: unknown) {
-  const scope = stringValue(value).trim();
-  return scope || null;
+  const scope = stringValue(value);
+  return scope.trim() ? scope : null;
 }
 
 function validatedMetadataValue(value: unknown, label: string) {
@@ -85,6 +85,10 @@ function resolveWithMaps<T extends AliasableMetadataTrack>(track: T, maps: Alias
   return { ...track, artist, albumArtist, album };
 }
 
+function spacingPenalty(value: string) {
+  return value === value.trim().replace(/\s+/g, ' ') ? 0 : 1;
+}
+
 function candidateGroups(kind: LibraryMetadataAliasKind, tracks: AliasableMetadataTrack[]) {
   const groups = new Map<string, Map<string, Set<string>>>();
 
@@ -120,7 +124,11 @@ function candidateGroups(kind: LibraryMetadataAliasKind, tracks: AliasableMetada
       scope: kind === 'album' ? scope : null,
       variants: [...variants.entries()]
         .map(([value, ids]) => ({ value, trackCount: ids.size }))
-        .sort((left, right) => right.trackCount - left.trackCount || left.value.localeCompare(right.value, 'pt-BR'))
+        .sort((left, right) =>
+          right.trackCount - left.trackCount
+          || spacingPenalty(left.value) - spacingPenalty(right.value)
+          || left.value.localeCompare(right.value, 'pt-BR')
+        )
     });
   }
 
