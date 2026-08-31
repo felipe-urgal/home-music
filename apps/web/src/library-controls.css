@@ -197,6 +197,27 @@
   line-height: 1.5;
 }
 
+.library-saved-view-status.is-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: #e6b0b0;
+}
+
+.library-saved-view-status.is-error button {
+  min-height: 34px;
+  flex: 0 0 auto;
+  padding: 0 10px;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 8px;
+  background: #121a23;
+  color: #dbe7f1;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+}
+
 .library-saved-view-manager {
   display: grid;
   gap: 7px;
@@ -252,7 +273,8 @@
 .library-filter-toggle:focus-visible,
 .library-saved-view-strip button:focus-visible,
 .library-view-controls__actions button:focus-visible,
-.library-saved-view-row > button:focus-visible {
+.library-saved-view-row > button:focus-visible,
+.library-saved-view-status.is-error button:focus-visible {
   outline: 2px solid rgba(87, 181, 255, .65);
   outline-offset: 2px;
 }
@@ -289,6 +311,11 @@
 
   .library-view-controls__actions button {
     flex: 1 1 120px;
+  }
+
+  .library-saved-view-status.is-error {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 
