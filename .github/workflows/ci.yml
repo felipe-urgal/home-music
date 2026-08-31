@@ -42,6 +42,9 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Security regressions
+        run: npm run test:security
+
       - name: Tests
         run: npm test
 
