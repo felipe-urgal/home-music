@@ -7,9 +7,12 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_INTERVAL_MS = 1_000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 5_000;
 
-function positiveInteger(value, fallback) {
-  const parsed = Number.parseInt(String(value ?? ''), 10);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+export function positiveInteger(value, fallback) {
+  const normalized = String(value ?? '').trim();
+  if (!/^[1-9]\d*$/.test(normalized)) return fallback;
+
+  const parsed = Number(normalized);
+  return Number.isSafeInteger(parsed) ? parsed : fallback;
 }
 
 function sleep(ms) {
@@ -18,6 +21,19 @@ function sleep(ms) {
 
 export function formatReadinessSuccess({ attempts, elapsedMs }) {
   return `Readiness de produção confirmado em ${attempts} tentativa(s) após ${elapsedMs} ms.`;
+}
+
+export function readinessErrorDiagnostic(error) {
+  if (error instanceof DOMException && error.name === 'TimeoutError') {
+    return 'timeout da requisição de readiness';
+  }
+
+  const cause = error && typeof error === 'object' ? error.cause : null;
+  const code = cause && typeof cause === 'object' && typeof cause.code === 'string'
+    ? cause.code
+    : null;
+
+  return code ? `falha de conexão (${code})` : 'falha ao consultar readiness';
 }
 
 export async function verifyProductionReadiness({
@@ -62,7 +78,7 @@ export async function verifyProductionReadiness({
 
       lastIssue = `HTTP ${response.status}`;
     } catch (error) {
-      lastIssue = error instanceof Error ? error.message : String(error);
+      lastIssue = readinessErrorDiagnostic(error);
     }
 
     onAttempt({ attempts, lastIssue });
