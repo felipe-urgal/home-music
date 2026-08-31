@@ -11,6 +11,7 @@ const SMART_PLAYLIST_SOURCE = 'smart';
 const SMART_RULE_VERSION = 1;
 
 type Row = Record<string, unknown>;
+type CanonicalMetadataByTrackId = ReturnType<LibraryMetadataNormalizationStore['canonicalMetadataByTrackId']>;
 
 type EvaluatedTrack = {
   id: string;
@@ -201,16 +202,16 @@ export class SmartPlaylistStore {
     this.db.close();
   }
 
-  evaluate(
+  private evaluateWithCanonicalMetadata(
     userId: string,
     rule: SmartPlaylistRule,
+    canonicalMetadata: CanonicalMetadataByTrackId,
     eligibleTrackIds?: ReadonlySet<string>,
     now = new Date()
   ) {
     requireUserId(userId);
     const normalizedRule = normalizeSmartPlaylistRule(rule);
     if (!normalizedRule) throw new RangeError('Regra da playlist inteligente inválida.');
-    const canonicalMetadata = this.normalization.canonicalMetadataByTrackId();
     const since = normalizedRule.periodDays == null
       ? null
       : new Date(now.getTime() - normalizedRule.periodDays * 24 * 60 * 60 * 1_000).toISOString();
@@ -290,6 +291,21 @@ export class SmartPlaylistStore {
       .map(track => track.id);
   }
 
+  evaluate(
+    userId: string,
+    rule: SmartPlaylistRule,
+    eligibleTrackIds?: ReadonlySet<string>,
+    now = new Date()
+  ) {
+    return this.evaluateWithCanonicalMetadata(
+      userId,
+      rule,
+      this.normalization.canonicalMetadataByTrackId(),
+      eligibleTrackIds,
+      now
+    );
+  }
+
   list(userId: string, eligibleTrackIds?: ReadonlySet<string>, now = new Date()): Playlist[] {
     requireUserId(userId);
     const rows = this.db.prepare(`
@@ -298,6 +314,7 @@ export class SmartPlaylistStore {
       WHERE source = ? AND owner_user_id = ?
       ORDER BY updated_at DESC, name COLLATE NOCASE, id ASC
     `).all(SMART_PLAYLIST_SOURCE, userId) as Row[];
+    const canonicalMetadata = this.normalization.canonicalMetadataByTrackId();
 
     const playlists: Playlist[] = [];
     for (const row of rows) {
@@ -307,7 +324,7 @@ export class SmartPlaylistStore {
       playlists.push({
         id,
         name: stringValue(row.name),
-        trackIds: this.evaluate(userId, rule, eligibleTrackIds, now),
+        trackIds: this.evaluateWithCanonicalMetadata(userId, rule, canonicalMetadata, eligibleTrackIds, now),
         createdAt: stringValue(row.created_at),
         updatedAt: stringValue(row.updated_at),
         source: 'smart',
