@@ -17,7 +17,7 @@ A view **não** persiste `trackIds`. Quando é aberta, a definição é aplicada
 
 O frontend continua usando `useLibraryNavigation` + `library-utils` como fonte única para busca, filtros e ordenação. O backend valida e persiste a definição, mas não mantém uma segunda implementação do motor de filtro.
 
-Ao abrir uma view, filtros compatíveis são reaplicados. Se o formato salvo não existir no contexto atual, o frontend volta somente esse filtro para `all`; busca, capa e ordenação continuam preservadas.
+Ao abrir uma view, os filtros compatíveis são reaplicados. Se o formato salvo não existir no contexto atual, somente esse filtro volta para `all`. Se o contexto resultante não permitir ordenar faixas, a ordenação volta para `current`. Busca e filtro de capa permanecem preservados.
 
 ## Persistência e ownership
 
@@ -58,4 +58,6 @@ A entrega mantém regressões para:
 - autenticação obrigatória;
 - header de mutação obrigatório;
 - payload inválido;
-- tentativas de renomear/excluir uma view de outro usuário.
+- compatibilidade de formato e ordenação ao abrir uma view;
+- tentativas de renomear/excluir uma view de outro usuário;
+- updates parciais sem sobrescrever campos não alterados.
