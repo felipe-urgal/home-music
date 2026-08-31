@@ -2,6 +2,16 @@ import { expect, test, type Page } from '@playwright/test';
 
 const adminUsername = 'playwright';
 const adminPassword = 'playwright-password-2026';
+const mutationHeaders = { 'X-Home-Music-Request': '1' };
+
+type PlaylistPayload = {
+  playlists: Array<{
+    id: string;
+    name: string;
+    trackIds: string[];
+    source: 'manual' | 'smart' | 'rekordbox';
+  }>;
+};
 
 function viewportWidth(page: Page) {
   const width = page.viewportSize()?.width;
@@ -53,23 +63,14 @@ async function openPlaylists(page: Page) {
   await expect(page.locator('.section-heading > span').filter({ hasText: /^Playlists$/ })).toBeVisible();
 }
 
-async function expectAdminLibrarySurface(page: Page, visible: boolean) {
-  const width = viewportWidth(page);
-  const refresh = width >= 1024
-    ? page.getByTestId('desktop-sidebar').getByRole('button', { name: 'Atualizar biblioteca', exact: true })
-    : page.getByRole('button', { name: 'Atualizar biblioteca', exact: true });
-
-  if (visible) await expect(refresh).toBeVisible();
-  else await expect(refresh).toHaveCount(0);
-
-  if (width >= 1024) {
-    const adminEntry = page.getByTestId('desktop-sidebar').getByRole('button', { name: /^Administração/ });
-    await expect(adminEntry).toHaveCount(0);
-  } else if (width >= 700) {
-    const adminEntry = page.getByRole('button', { name: 'Administração', exact: true });
-    if (visible) await expect(adminEntry).toBeVisible();
-    else await expect(adminEntry).toHaveCount(0);
-  }
+async function expectSharedRekordboxPlaylist(page: Page) {
+  await expect(page.getByText('E2E Rekordbox', { exact: true })).toBeVisible();
+  const response = await page.context().request.get('/api/playlists');
+  expect(response.ok()).toBeTruthy();
+  const payload = await response.json() as PlaylistPayload;
+  const rekordbox = payload.playlists.find(playlist => playlist.name === 'E2E Rekordbox');
+  expect(rekordbox?.source).toBe('rekordbox');
+  return rekordbox!;
 }
 
 async function createPlaylist(page: Page, name: string) {
@@ -95,12 +96,22 @@ async function openAccountFromLibrary(page: Page) {
   await expect(page.locator('#my-account-title')).toHaveText('Minha conta');
 }
 
+async function expectCurrentSessionScreen(page: Page) {
+  await page.getByRole('button', { name: /Outros dispositivos/ }).click();
+  await expect(page.locator('#my-account-title')).toHaveText('Outros dispositivos');
+  await expect(page.getByText('Este dispositivo', { exact: true })).toBeVisible();
+  await expect(page.getByText('Sessão usada neste navegador', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Encerrar todas as outras sessões', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: 'Voltar', exact: true }).click();
+  await expect(page.locator('#my-account-title')).toHaveText('Minha conta');
+}
+
 async function openAdministration(page: Page) {
   await page.locator('.my-account-screen').getByRole('button', { name: /^Administração/ }).click();
   await expect(page.locator('#administration-title')).toHaveText('Administração');
 }
 
-test('admin e user preservam role, troca de senha e isolamento em todos os layouts', async ({ page }, testInfo) => {
+test('admin e user preservam role, sessões, playlists e isolamento em todos os layouts', async ({ page }, testInfo) => {
   const projectSlug = testInfo.project.name.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
   const retrySuffix = `r${testInfo.retry}`;
   const userUsername = `e2e-user-${projectSlug}-${retrySuffix}`;
@@ -110,6 +121,38 @@ test('admin e user preservam role, troca de senha e isolamento em todos os layou
 
   await login(page, adminUsername, adminPassword);
   await createPlaylist(page, adminPlaylist);
+  const rekordboxPlaylist = await expectSharedRekordboxPlaylist(page);
+  const adminPlaylistsResponse = await page.context().request.get('/api/playlists');
+  const adminPlaylists = await adminPlaylistsResponse.json() as PlaylistPayload;
+  const adminManualPlaylist = adminPlaylists.playlists.find(playlist => playlist.name === adminPlaylist);
+  expect(adminManualPlaylist?.source).toBe('manual');
+
+  const libraryResponse = await page.context().request.get('/api/library');
+  expect(libraryResponse.ok()).toBeTruthy();
+  const libraryPayload = await libraryResponse.json() as { tracks: Array<{ id: string }> };
+  expect(Array.isArray(libraryPayload.tracks)).toBeTruthy();
+  const firstTrackId = libraryPayload.tracks[0]?.id;
+  expect(firstTrackId).toBeTruthy();
+
+  const setManualTracks = await page.context().request.put(`/api/playlists/${adminManualPlaylist!.id}/tracks`, {
+    headers: mutationHeaders,
+    data: { trackIds: [firstTrackId] }
+  });
+  expect(setManualTracks.ok()).toBeTruthy();
+  const persistedManual = await page.context().request.get('/api/playlists');
+  const persistedManualPayload = await persistedManual.json() as PlaylistPayload;
+  expect(persistedManualPayload.playlists.find(playlist => playlist.id === adminManualPlaylist!.id)?.trackIds).toEqual([firstTrackId]);
+
+  const renameRekordbox = await page.context().request.patch(`/api/playlists/${rekordboxPlaylist.id}`, {
+    headers: mutationHeaders,
+    data: { name: 'Não deve renomear' }
+  });
+  expect(renameRekordbox.status()).toBe(409);
+  const deleteRekordbox = await page.context().request.delete(`/api/playlists/${rekordboxPlaylist.id}`, {
+    headers: mutationHeaders
+  });
+  expect(deleteRekordbox.status()).toBe(409);
+
   await expectAdminLibrarySurface(page, true);
   await openAccountFromLibrary(page);
 
@@ -117,11 +160,7 @@ test('admin e user preservam role, troca de senha e isolamento em todos os layou
   await expect(page.getByLabel('Identidade atual')).toContainText('Administrador');
   await expect(page.getByRole('button', { name: /^Reprodução/ })).toBeVisible();
   await expect(page.locator('#my-account-group-admin')).toHaveText('Sistema');
-
-  const libraryResponse = await page.context().request.get('/api/library');
-  expect(libraryResponse.ok()).toBeTruthy();
-  const libraryPayload = await libraryResponse.json() as { tracks: unknown[] };
-  expect(Array.isArray(libraryPayload.tracks)).toBeTruthy();
+  await expectCurrentSessionScreen(page);
 
   await openAdministration(page);
   await expect(page.getByLabel('Acesso administrativo')).toContainText(adminUsername);
@@ -172,6 +211,14 @@ test('admin e user preservam role, troca de senha e isolamento em todos os layou
 
   await expectAdminLibrarySurface(page, false);
   await expect(page.getByText(adminPlaylist, { exact: true })).toHaveCount(0);
+  const userRekordboxPlaylist = await expectSharedRekordboxPlaylist(page);
+  expect(userRekordboxPlaylist.id).toBe(rekordboxPlaylist.id);
+  const userRenameRekordbox = await page.context().request.patch(`/api/playlists/${rekordboxPlaylist.id}`, {
+    headers: mutationHeaders,
+    data: { name: 'Ainda somente leitura' }
+  });
+  expect(userRenameRekordbox.status()).toBe(409);
+
   await createPlaylist(page, userPlaylist);
   await openAccountFromLibrary(page);
 
@@ -179,6 +226,7 @@ test('admin e user preservam role, troca de senha e isolamento em todos os layou
   await expect(page.getByLabel('Identidade atual')).toContainText('Usuário');
   await expect(page.locator('#my-account-group-admin')).toHaveCount(0);
   await expect(page.locator('.my-account-screen').getByRole('button', { name: /^Administração/ })).toHaveCount(0);
+  await expectCurrentSessionScreen(page);
 
   const forbiddenImportQueue = await page.context().request.get('/api/admin/imports');
   expect(forbiddenImportQueue.status()).toBe(403);
@@ -190,4 +238,24 @@ test('admin e user preservam role, troca de senha e isolamento em todos os layou
   await expectAdminLibrarySurface(page, true);
   await expect(page.getByText(adminPlaylist, { exact: true })).toBeVisible();
   await expect(page.getByText(userPlaylist, { exact: true })).toHaveCount(0);
+  await expectSharedRekordboxPlaylist(page);
 });
+
+async function expectAdminLibrarySurface(page: Page, visible: boolean) {
+  const width = viewportWidth(page);
+  const refresh = width >= 1024
+    ? page.getByTestId('desktop-sidebar').getByRole('button', { name: 'Atualizar biblioteca', exact: true })
+    : page.getByRole('button', { name: 'Atualizar biblioteca', exact: true });
+
+  if (visible) await expect(refresh).toBeVisible();
+  else await expect(refresh).toHaveCount(0);
+
+  if (width >= 1024) {
+    const adminEntry = page.getByTestId('desktop-sidebar').getByRole('button', { name: /^Administração/ });
+    await expect(adminEntry).toHaveCount(0);
+  } else if (width >= 700) {
+    const adminEntry = page.getByRole('button', { name: 'Administração', exact: true });
+    if (visible) await expect(adminEntry).toBeVisible();
+    else await expect(adminEntry).toHaveCount(0);
+  }
+}
