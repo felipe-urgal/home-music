@@ -5,6 +5,7 @@
     "strategy": "command",
     "provider": "systemd",
     "branch": "main",
+    "documentation": "docs/production-contract.md",
     "commands": {
       "status": "prod:status",
       "check": "prod:check",
