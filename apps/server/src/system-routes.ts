@@ -1,7 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { FfmpegStatus } from './ffmpeg.js';
 import type { LibraryService } from './library-service.js';
-import type { ServerInfrastructure } from './server-infrastructure.js';
 import {
   requestPathname,
   sendWebRequest,
@@ -12,10 +11,12 @@ import { TRANSCODE_PROFILES } from './transcoding.js';
 type SystemRouteDependencies = {
   isProduction: boolean;
   musicDirConfigured: boolean;
+  authConfigured: boolean;
   transcodeCacheMegabytes: number;
-  infrastructure: ServerInfrastructure;
   library: LibraryService;
   getFfmpegStatus: () => FfmpegStatus;
+  getSchemaVersion: () => number;
+  getTranscodingRuntime: () => { active: number; pending: number };
   isWebReady: () => boolean;
 };
 
@@ -26,17 +27,19 @@ export function registerSystemRoutes(
   const {
     isProduction,
     musicDirConfigured,
+    authConfigured,
     transcodeCacheMegabytes,
-    infrastructure,
     library,
     getFfmpegStatus,
+    getSchemaVersion,
+    getTranscodingRuntime,
     isWebReady
   } = dependencies;
 
   const readinessState = () => {
     const webReady = !isProduction || isWebReady();
     return {
-      ready: webReady && infrastructure.authConfigured && library.ready,
+      ready: webReady && authConfigured && library.ready,
       webReady
     };
   };
@@ -56,6 +59,7 @@ export function registerSystemRoutes(
     reply.header('Cache-Control', 'private, no-store');
     const { ready, webReady } = readinessState();
     const ffmpegStatus = getFfmpegStatus();
+    const transcoding = getTranscodingRuntime();
     return {
       ready,
       mode: isProduction ? 'production' : 'development',
@@ -65,7 +69,7 @@ export function registerSystemRoutes(
       tracks: library.enabledTrackCount,
       ...library.status(),
       musicDirConfigured,
-      authConfigured: infrastructure.authConfigured,
+      authConfigured,
       ffmpeg: {
         available: ffmpegStatus.available,
         version: ffmpegStatus.version,
@@ -76,10 +80,10 @@ export function registerSystemRoutes(
         available: ffmpegStatus.available,
         profiles: ffmpegStatus.available ? Object.keys(TRANSCODE_PROFILES) : [],
         cacheLimitMegabytes: transcodeCacheMegabytes,
-        active: infrastructure.transcodeManager.activeCount,
-        pending: infrastructure.transcodeManager.pendingCount
+        active: transcoding.active,
+        pending: transcoding.pending
       },
-      schemaVersion: infrastructure.database.getSchemaVersion()
+      schemaVersion: getSchemaVersion()
     };
   });
 }
