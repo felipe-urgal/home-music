@@ -17,9 +17,12 @@ RUN_USER="$(id -un)"
 NODE_BIN="$(command -v node || true)"
 NPM_BIN="$(command -v npm || true)"
 SYSTEMD_ANALYZE_BIN="$(command -v systemd-analyze || true)"
+VISUDO_BIN="$(command -v visudo || true)"
 SERVICE_NAME="home-music"
 SERVICE_UNIT="${SERVICE_NAME}.service"
 SERVICE_PATH="/etc/systemd/system/${SERVICE_UNIT}"
+CONTROL_HELPER_PATH="/usr/local/sbin/home-music-service-control"
+SUDOERS_PATH="/etc/sudoers.d/home-music-${RUN_USER}"
 SERVICE_STOPPED=0
 
 if [[ -z "${NODE_BIN}" || -z "${NPM_BIN}" ]]; then
@@ -32,9 +35,29 @@ if [[ ! -f "${ROOT_DIR}/.env" ]]; then
   exit 1
 fi
 
-if [[ "${MODE}" == "update" ]] && ! systemctl cat "${SERVICE_UNIT}" >/dev/null 2>&1; then
-  echo "O serviço ainda não está instalado. Use npm run service:install primeiro." >&2
+if [[ ! "${RUN_USER}" =~ ^[a-z_][a-z0-9_-]*[$]?$ ]]; then
+  echo "O usuário atual não possui um nome compatível com a regra sudoers gerenciada." >&2
   exit 1
+fi
+
+if [[ "${MODE}" == "install" && -z "${VISUDO_BIN}" ]]; then
+  echo "visudo não foi encontrado. Ele é obrigatório para validar a regra sudoers do helper de produção." >&2
+  exit 1
+fi
+
+if [[ "${MODE}" == "update" ]]; then
+  if ! systemctl cat "${SERVICE_UNIT}" >/dev/null 2>&1; then
+    echo "O serviço ainda não está instalado. Use npm run service:install primeiro." >&2
+    exit 1
+  fi
+  if [[ ! -x "${CONTROL_HELPER_PATH}" ]]; then
+    echo "O helper privilegiado ${CONTROL_HELPER_PATH} não está instalado. Execute npm run service:install no terminal para configurar o bootstrap seguro." >&2
+    exit 1
+  fi
+  if ! sudo -n "${CONTROL_HELPER_PATH}" check >/dev/null 2>&1; then
+    echo "O helper privilegiado do Home Music ainda não está autorizado sem senha. Execute npm run service:install no terminal para instalar/atualizar a regra NOPASSWD limitada." >&2
+    exit 1
+  fi
 fi
 
 reject_multiline() {
@@ -81,6 +104,14 @@ harden_local_files() {
   find "${ROOT_DIR}/data" -maxdepth 1 -type f -name 'home-music.db*' -exec chmod 600 {} +
 }
 
+run_privileged_update_action() {
+  local action="$1"
+  if ! sudo -n "${CONTROL_HELPER_PATH}" "${action}"; then
+    echo "Falha ao executar a ação privilegiada '${action}' pelo helper do Home Music. Rode npm run service:install no terminal para reparar o bootstrap seguro." >&2
+    exit 1
+  fi
+}
+
 on_error() {
   if [[ ${SERVICE_STOPPED} -eq 1 ]]; then
     echo >&2
@@ -95,7 +126,11 @@ harden_local_files
 
 if systemctl is-active --quiet "${SERVICE_UNIT}"; then
   echo "==> Parando Home Music antes de alterar dependências/build"
-  sudo systemctl stop "${SERVICE_UNIT}"
+  if [[ "${MODE}" == "update" ]]; then
+    run_privileged_update_action stop
+  else
+    sudo systemctl stop "${SERVICE_UNIT}"
+  fi
   SERVICE_STOPPED=1
 fi
 
@@ -112,11 +147,18 @@ fi
 
 harden_local_files
 
-TMP_DIR="$(mktemp -d)"
-TMP_SERVICE="${TMP_DIR}/${SERVICE_UNIT}"
-trap 'rm -rf "${TMP_DIR}"' EXIT
+if [[ "${MODE}" == "update" ]]; then
+  echo "==> Reiniciando ${SERVICE_UNIT} pelo helper privilegiado"
+  run_privileged_update_action restart
+  SERVICE_STOPPED=0
+else
+  TMP_DIR="$(mktemp -d)"
+  TMP_SERVICE="${TMP_DIR}/${SERVICE_UNIT}"
+  TMP_HELPER="${TMP_DIR}/home-music-service-control"
+  TMP_SUDOERS="${TMP_DIR}/home-music-sudoers"
+  trap 'rm -rf "${TMP_DIR}"' EXIT
 
-cat > "${TMP_SERVICE}" <<EOF
+  cat > "${TMP_SERVICE}" <<EOF_SERVICE
 [Unit]
 Description=Home Music personal streaming server
 After=network-online.target local-fs.target
@@ -149,25 +191,87 @@ SyslogIdentifier=home-music
 
 [Install]
 WantedBy=multi-user.target
-EOF
+EOF_SERVICE
 
-if [[ -n "${SYSTEMD_ANALYZE_BIN}" ]]; then
-  echo "==> Validando unit do systemd"
-  "${SYSTEMD_ANALYZE_BIN}" verify "${TMP_SERVICE}"
-else
-  echo "Aviso: systemd-analyze não encontrado; pulando validação local do unit." >&2
+  cat > "${TMP_HELPER}" <<'EOF_HELPER'
+#!/bin/bash
+set -euo pipefail
+
+SYSTEMCTL_BIN="/usr/bin/systemctl"
+SERVICE_UNIT="home-music.service"
+
+if [[ ${EUID} -ne 0 ]]; then
+  echo "Este helper precisa ser executado via sudo." >&2
+  exit 1
 fi
 
-echo "==> Instalando ${SERVICE_PATH}"
-sudo install -m 0644 "${TMP_SERVICE}" "${SERVICE_PATH}"
-sudo systemctl daemon-reload
-sudo systemctl enable "${SERVICE_UNIT}" >/dev/null
-sudo systemctl restart "${SERVICE_UNIT}"
-SERVICE_STOPPED=0
+if [[ $# -ne 1 ]]; then
+  echo "Uso: home-music-service-control <check|stop|restart>" >&2
+  exit 2
+fi
 
-if ! sudo systemctl is-active --quiet "${SERVICE_UNIT}"; then
+if [[ ! -x "${SYSTEMCTL_BIN}" ]]; then
+  echo "systemctl não está disponível em ${SYSTEMCTL_BIN}." >&2
+  exit 1
+fi
+
+case "$1" in
+  check)
+    "${SYSTEMCTL_BIN}" cat "${SERVICE_UNIT}" >/dev/null
+    ;;
+  stop)
+    "${SYSTEMCTL_BIN}" stop "${SERVICE_UNIT}"
+    ;;
+  restart)
+    "${SYSTEMCTL_BIN}" restart "${SERVICE_UNIT}"
+    ;;
+  *)
+    echo "Ação não permitida. Use check, stop ou restart." >&2
+    exit 2
+    ;;
+esac
+EOF_HELPER
+
+  cat > "${TMP_SUDOERS}" <<EOF_SUDOERS
+${RUN_USER} ALL=(root) NOPASSWD: ${CONTROL_HELPER_PATH} check, ${CONTROL_HELPER_PATH} stop, ${CONTROL_HELPER_PATH} restart
+EOF_SUDOERS
+
+  chmod 0755 "${TMP_HELPER}"
+  chmod 0440 "${TMP_SUDOERS}"
+
+  if [[ -n "${SYSTEMD_ANALYZE_BIN}" ]]; then
+    echo "==> Validando unit do systemd"
+    "${SYSTEMD_ANALYZE_BIN}" verify "${TMP_SERVICE}"
+  else
+    echo "Aviso: systemd-analyze não encontrado; pulando validação local do unit." >&2
+  fi
+
+  echo "==> Validando regra sudoers limitada"
+  "${VISUDO_BIN}" -cf "${TMP_SUDOERS}" >/dev/null
+
+  echo "==> Instalando ${SERVICE_PATH}"
+  sudo install -o root -g root -m 0644 "${TMP_SERVICE}" "${SERVICE_PATH}"
+
+  echo "==> Instalando helper privilegiado ${CONTROL_HELPER_PATH}"
+  sudo install -o root -g root -m 0755 "${TMP_HELPER}" "${CONTROL_HELPER_PATH}"
+
+  echo "==> Instalando regra sudoers limitada ${SUDOERS_PATH}"
+  sudo install -o root -g root -m 0440 "${TMP_SUDOERS}" "${SUDOERS_PATH}"
+
+  sudo systemctl daemon-reload
+  sudo systemctl enable "${SERVICE_UNIT}" >/dev/null
+  sudo systemctl restart "${SERVICE_UNIT}"
+  SERVICE_STOPPED=0
+
+  if ! sudo -n "${CONTROL_HELPER_PATH}" check >/dev/null 2>&1; then
+    echo "O helper foi instalado, mas a regra NOPASSWD não ficou utilizável para ${RUN_USER}." >&2
+    exit 1
+  fi
+fi
+
+if ! systemctl is-active --quiet "${SERVICE_UNIT}"; then
   echo "O serviço não ficou ativo após o restart." >&2
-  sudo systemctl status "${SERVICE_UNIT}" --no-pager || true
+  systemctl status "${SERVICE_UNIT}" --no-pager || true
   exit 1
 fi
 
@@ -176,7 +280,8 @@ if [[ "${MODE}" == "update" ]]; then
   echo "Home Music atualizado e reiniciado com segurança."
 else
   echo "Home Music instalado e iniciado."
+  echo "Deploys futuros podem usar service:update/prod:deploy sem senha por meio do helper NOPASSWD limitado."
 fi
-echo "Status:   sudo systemctl status ${SERVICE_NAME} --no-pager"
+echo "Status:   systemctl status ${SERVICE_NAME} --no-pager"
 echo "Logs:     journalctl -u ${SERVICE_NAME} -f"
-echo "Reinício: sudo systemctl restart ${SERVICE_NAME}"
+echo "Reinício: sudo ${CONTROL_HELPER_PATH} restart"
