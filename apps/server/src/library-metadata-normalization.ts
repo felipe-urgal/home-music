@@ -14,7 +14,8 @@ import type {
 const MAX_METADATA_LENGTH = 240;
 
 type Row = Record<string, unknown>;
-type MetadataTrack = Pick<Track, 'id' | 'title' | 'artist' | 'album' | 'albumArtist'>;
+type AliasableMetadataTrack = Pick<Track, 'id' | 'artist' | 'album' | 'albumArtist'>;
+type EffectiveMetadataTrack = AliasableMetadataTrack & Pick<Track, 'title'>;
 
 type AliasMaps = {
   artist: Map<string, string>;
@@ -77,7 +78,7 @@ function buildAliasMaps(aliases: LibraryMetadataAlias[]): AliasMaps {
   return { artist, album };
 }
 
-function resolveWithMaps<T extends MetadataTrack>(track: T, maps: AliasMaps): T {
+function resolveWithMaps<T extends AliasableMetadataTrack>(track: T, maps: AliasMaps): T {
   const artist = maps.artist.get(track.artist) ?? track.artist;
   const albumArtist = maps.artist.get(track.albumArtist) ?? track.albumArtist;
   const album = maps.album.get(albumArtist)?.get(track.album) ?? track.album;
@@ -85,7 +86,7 @@ function resolveWithMaps<T extends MetadataTrack>(track: T, maps: AliasMaps): T 
   return { ...track, artist, albumArtist, album };
 }
 
-function candidateGroups(kind: LibraryMetadataAliasKind, tracks: MetadataTrack[]) {
+function candidateGroups(kind: LibraryMetadataAliasKind, tracks: AliasableMetadataTrack[]) {
   const groups = new Map<string, Map<string, Set<string>>>();
 
   function add(scope: string, value: string, trackId: string) {
@@ -177,7 +178,7 @@ export class LibraryMetadataNormalizationStore {
     return this.aliases.map(alias => ({ ...alias }));
   }
 
-  resolveTrack<T extends MetadataTrack>(track: T): T {
+  resolveTrack<T extends AliasableMetadataTrack>(track: T): T {
     return resolveWithMaps(track, this.maps);
   }
 
@@ -189,7 +190,7 @@ export class LibraryMetadataNormalizationStore {
     `).get());
   }
 
-  private loadEffectiveTracksBeforeAliases(): MetadataTrack[] {
+  private loadEffectiveTracksBeforeAliases(): EffectiveMetadataTrack[] {
     const hasOverrides = this.hasMetadataOverrides();
     const overrideJoin = hasOverrides
       ? 'LEFT JOIN track_metadata_overrides o ON o.track_id = t.id'
