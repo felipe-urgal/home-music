@@ -1,6 +1,9 @@
 import { useDeferredValue, useMemo, useState } from 'react';
 import type { Playlist, Track } from '@home-music/shared';
-import type { LibraryViewDefinition } from './library-view-types';
+import {
+  compatibleLibraryViewDefinition,
+  type LibraryViewDefinition
+} from './library-view-types';
 import {
   applyTrackView,
   buildFolderView,
@@ -175,13 +178,11 @@ export function useLibraryNavigation(
   }
 
   function applyLibraryView(definition: LibraryViewDefinition) {
-    const compatibleFormat = definition.format === 'all' || availableFormats.includes(definition.format)
-      ? definition.format
-      : 'all';
-    setQuery(definition.query);
-    setSort(definition.sort);
-    setFormatFilter(compatibleFormat);
-    setCoverFilter(definition.cover);
+    const compatible = compatibleLibraryViewDefinition(definition, availableFormats);
+    setQuery(compatible.query);
+    setSort(compatible.sort);
+    setFormatFilter(compatible.format);
+    setCoverFilter(compatible.cover);
     resetPage();
   }
 
