@@ -1,5 +1,10 @@
-import { useDeferredValue, useMemo, useState } from 'react';
+import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import type { Playlist, Track } from '@home-music/shared';
+import {
+  libraryPathForState,
+  libraryRouteFromPath,
+  navigateAppPath
+} from './browser-navigation';
 import {
   compatibleLibraryViewDefinition,
   type LibraryViewDefinition
@@ -17,13 +22,23 @@ import {
 export const LIBRARY_PAGE_SIZE = 100;
 export type LibraryTab = 'folders' | 'playlists';
 
+function initialLibraryRoute() {
+  if (typeof window === 'undefined') {
+    return { libraryTab: 'folders' as LibraryTab, folderPath: '', selectedPlaylistId: null as string | null };
+  }
+  return libraryRouteFromPath(window.location.pathname)
+    ?? { libraryTab: 'folders' as LibraryTab, folderPath: '', selectedPlaylistId: null as string | null };
+}
+
 export function useLibraryNavigation(
   tracks: Track[],
-  playlists: Playlist[]
+  playlists: Playlist[],
+  libraryReady: boolean
 ) {
-  const [libraryTab, setLibraryTab] = useState<LibraryTab>('folders');
-  const [folderPath, setFolderPath] = useState('');
-  const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(null);
+  const initialRoute = useMemo(initialLibraryRoute, []);
+  const [libraryTab, setLibraryTab] = useState<LibraryTab>(initialRoute.libraryTab);
+  const [folderPath, setFolderPath] = useState(initialRoute.folderPath);
+  const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(initialRoute.selectedPlaylistId);
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<TrackSort>('current');
   const [formatFilter, setFormatFilter] = useState('all');
@@ -36,6 +51,11 @@ export function useLibraryNavigation(
   const selectedPlaylist = useMemo(
     () => playlists.find(playlist => playlist.id === selectedPlaylistId) ?? null,
     [playlists, selectedPlaylistId]
+  );
+
+  const routePath = useMemo(
+    () => libraryPathForState({ libraryTab, folderPath, selectedPlaylistId }),
+    [folderPath, libraryTab, selectedPlaylistId]
   );
 
   const playlistTracks = useMemo(
@@ -111,6 +131,43 @@ export function useLibraryNavigation(
   const pagedTracks = libraryTracks.slice(0, visibleCount);
   const pagedFolders = visibleFolders.slice(0, visibleCount);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const syncFromHistory = () => {
+      const route = libraryRouteFromPath(window.location.pathname);
+      if (!route) return;
+      setLibraryTab(route.libraryTab);
+      setFolderPath(route.folderPath);
+      setSelectedPlaylistId(route.selectedPlaylistId);
+      setQuery('');
+      setSort('current');
+      setFormatFilter('all');
+      setCoverFilter('all');
+      setVisibleCount(LIBRARY_PAGE_SIZE);
+    };
+
+    window.addEventListener('popstate', syncFromHistory);
+    return () => window.removeEventListener('popstate', syncFromHistory);
+  }, []);
+
+  useEffect(() => {
+    if (
+      !libraryReady
+      || libraryTab !== 'playlists'
+      || !selectedPlaylistId
+      || selectedPlaylist
+    ) return;
+
+    setSelectedPlaylistId(null);
+    setQuery('');
+    setSort('current');
+    setFormatFilter('all');
+    setCoverFilter('all');
+    setVisibleCount(LIBRARY_PAGE_SIZE);
+    navigateAppPath('/library/playlists', { replace: true });
+  }, [libraryReady, libraryTab, selectedPlaylist, selectedPlaylistId]);
+
   function resetPage() {
     setVisibleCount(LIBRARY_PAGE_SIZE);
   }
@@ -135,26 +192,36 @@ export function useLibraryNavigation(
     setSelectedPlaylistId(null);
     setFolderPath('');
     resetNavigationView();
+    navigateAppPath(libraryPathForState({ libraryTab: tab, folderPath: '', selectedPlaylistId: null }));
   }
 
   function enterFolder(path: string) {
+    setLibraryTab('folders');
+    setSelectedPlaylistId(null);
     setFolderPath(path);
     resetNavigationView();
+    navigateAppPath(libraryPathForState({ libraryTab: 'folders', folderPath: path, selectedPlaylistId: null }));
   }
 
   function leaveFolder() {
-    setFolderPath(folderView.parentPath ?? '');
+    const parentPath = folderView.parentPath ?? '';
+    setFolderPath(parentPath);
     resetNavigationView();
+    navigateAppPath(libraryPathForState({ libraryTab: 'folders', folderPath: parentPath, selectedPlaylistId: null }));
   }
 
   function selectPlaylist(id: string) {
+    setLibraryTab('playlists');
+    setFolderPath('');
     setSelectedPlaylistId(id);
     resetNavigationView();
+    navigateAppPath(libraryPathForState({ libraryTab: 'playlists', folderPath: '', selectedPlaylistId: id }));
   }
 
   function leavePlaylist() {
     setSelectedPlaylistId(null);
     resetNavigationView();
+    navigateAppPath(libraryPathForState({ libraryTab: 'playlists', folderPath: '', selectedPlaylistId: null }));
   }
 
   function changeQuery(value: string) {
@@ -199,10 +266,12 @@ export function useLibraryNavigation(
 
   return {
     libraryTab,
+    selectedPlaylistId,
     selectedPlaylist,
     folderPath,
     folderView,
     folderContextTracks,
+    routePath,
     query,
     normalizedQuery,
     sort,

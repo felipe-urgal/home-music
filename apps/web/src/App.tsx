@@ -12,6 +12,7 @@ import { MyAccountScreen } from './components/MyAccountScreen';
 import { OfflineLibraryScreen } from './components/OfflineLibraryScreen';
 import { PlayerScreen } from './components/PlayerScreen';
 import { ResponsiveState } from './components/ResponsiveState';
+import { useRoutedScreen } from './browser-navigation';
 import { canUseAdminLibraryActions } from './frontend-access';
 import { buildLibraryReturnLabel } from './library-utils';
 import { type OfflineDownloads, useOfflineDownloads } from './offline-downloads';
@@ -36,16 +37,19 @@ type AuthenticatedAppProps = {
 };
 
 function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline }: AuthenticatedAppProps) {
-  const [screen, setScreen] = useState<Screen>('player');
   const [administrationReturnScreen, setAdministrationReturnScreen] = useState<AdministrationReturnScreen>('account');
   const library = useLibraryData();
-  const navigation = useLibraryNavigation(library.tracks, library.playlists);
   const libraryReady = !library.loading && !library.error;
+  const navigation = useLibraryNavigation(library.tracks, library.playlists, libraryReady);
+  const canManageSharedLibrary = canUseAdminLibraryActions(currentUser);
+  const [screen, setScreen] = useRoutedScreen({
+    libraryPath: navigation.routePath,
+    canAccessAdmin: canManageSharedLibrary
+  });
   const usesSystemVolume = useSystemVolumePreference();
   const desktopLayout = useDesktopLayout();
   const player = useAudioPlayer(library.tracks, screen === 'player' || desktopLayout, libraryReady, usesSystemVolume);
   const qualityProfile = useNetworkQualityProfile(player.streamingMode, player.setStreamingMode);
-  const canManageSharedLibrary = canUseAdminLibraryActions(currentUser);
   useBackgroundPlaybackContinuity({
     audioRef: player.audioRef,
     queue: player.queue,
@@ -73,10 +77,6 @@ function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline }: Aut
     query: navigation.query
   });
 
-  useEffect(() => {
-    if (screen === 'admin' && !canManageSharedLibrary) setScreen('account');
-  }, [canManageSharedLibrary, screen]);
-
   function openPlayer() {
     player.syncVisibleProgress();
     setScreen('player');
@@ -84,7 +84,6 @@ function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline }: Aut
 
   function openLibraryTab(tab: LibraryTab) {
     navigation.selectTab(tab);
-    setScreen('library');
   }
 
   function openAdministration(returnScreen: AdministrationReturnScreen) {

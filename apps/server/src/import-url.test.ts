@@ -22,6 +22,57 @@ type FakeResponseOptions = {
   chunks?: Uint8Array[];
 };
 
+type QueueJob = NonNullable<ReturnType<ImportJobQueue['get']>>;
+type QueueStatus = QueueJob['status'];
+type FixtureOptions = Omit<Partial<ConstructorParameters<typeof ImportUrlManager>[0]>, 'queue'>;
+type StatusWaiter = {
+  expected: QueueStatus;
+  resolve: (job: QueueJob) => void;
+  reject: (error: Error) => void;
+  timeout: ReturnType<typeof setTimeout>;
+};
+
+function createObservedQueue() {
+  const waiters = new Map<string, Set<StatusWaiter>>();
+  const queue = new ImportJobQueue({
+    onChange(job) {
+      const listeners = waiters.get(job.id);
+      if (!listeners) return;
+      for (const listener of [...listeners]) {
+        if (job.status !== listener.expected) continue;
+        clearTimeout(listener.timeout);
+        listeners.delete(listener);
+        listener.resolve(job);
+      }
+      if (listeners.size === 0) waiters.delete(job.id);
+    }
+  });
+
+  function waitForStatus(id: string, expected: QueueStatus) {
+    const current = queue.get(id);
+    if (current?.status === expected) return Promise.resolve(current);
+
+    return new Promise<QueueJob>((resolve, reject) => {
+      const listener: StatusWaiter = {
+        expected,
+        resolve,
+        reject,
+        timeout: setTimeout(() => {
+          const listeners = waiters.get(id);
+          listeners?.delete(listener);
+          if (listeners?.size === 0) waiters.delete(id);
+          reject(new Error(`Job ${id} não chegou ao estado ${expected}. Estado atual: ${queue.get(id)?.status}`));
+        }, 2_000)
+      };
+      const listeners = waiters.get(id) ?? new Set<StatusWaiter>();
+      listeners.add(listener);
+      waiters.set(id, listeners);
+    });
+  }
+
+  return { queue, waitForStatus };
+}
+
 function fakeResponse(options: FakeResponseOptions = {}) {
   const response = Readable.from(options.chunks ?? [Buffer.from('audio')]) as IncomingMessage;
   response.statusCode = options.statusCode ?? 200;
@@ -41,21 +92,13 @@ function fakeRequestFor(response: IncomingMessage) {
   } as unknown as ReturnType<typeof http.request>;
 }
 
-async function waitForStatus(queue: ImportJobQueue, id: string, expected: string) {
-  for (let attempt = 0; attempt < 50; attempt += 1) {
-    const job = queue.get(id);
-    if (job?.status === expected) return job;
-    await new Promise(resolve => setTimeout(resolve, 2));
-  }
-  assert.fail(`Job ${id} não chegou ao estado ${expected}. Estado atual: ${queue.get(id)?.status}`);
-}
-
-async function fixture(options: Partial<ConstructorParameters<typeof ImportUrlManager>[0]> = {}) {
+async function fixture(options: FixtureOptions = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'home-music-import-url-'));
   const musicDir = path.join(root, 'music');
   const stagingRoot = path.join(root, 'staging');
   await mkdir(musicDir);
-  const queue = options.queue ?? new ImportJobQueue();
+  const observed = createObservedQueue();
+  const queue = observed.queue;
   const staging = options.staging ?? new ImportStagingManager({ stagingRoot, musicDir });
   const manager = new ImportUrlManager({
     queue,
@@ -71,7 +114,7 @@ async function fixture(options: Partial<ConstructorParameters<typeof ImportUrlMa
     validateAudio: async () => undefined,
     ...options
   });
-  return { root, musicDir, stagingRoot, queue, staging, manager };
+  return { root, musicDir, stagingRoot, queue, staging, manager, waitForStatus: observed.waitForStatus };
 }
 
 test('classifica endereços locais, privados, metadata e documentação como inseguros', () => {
@@ -136,7 +179,7 @@ test('falha quando DNS resolve para IP privado ou mistura IP público e privado'
     const item = await fixture({ resolveHost: async () => addresses });
     try {
       const { job } = await item.manager.start('https://example.com/audio.mp3');
-      const failed = await waitForStatus(item.queue, job.id, 'failed');
+      const failed = await item.waitForStatus(job.id, 'failed');
       assert.match(failed.error ?? '', /rede não permitida/);
       assert.equal((await readdir(item.musicDir)).length, 0);
     } finally {
@@ -163,7 +206,7 @@ test('revalida cada redirect e bloqueia salto para rede privada', async () => {
 
   try {
     const { job } = await item.manager.start('https://example.com/audio.mp3');
-    const failed = await waitForStatus(item.queue, job.id, 'failed');
+    const failed = await item.waitForStatus(job.id, 'failed');
     assert.match(failed.error ?? '', /rede não permitida/);
     assert.deepEqual(resolvedHosts, ['example.com', 'evil.example']);
   } finally {
@@ -181,7 +224,7 @@ test('grava somente no staging, inspeciona o arquivo e volta para pending', asyn
     assert.equal(job.status, 'processing');
     assert.equal(job.label.includes('token='), false);
 
-    const pending = await waitForStatus(item.queue, job.id, 'pending');
+    const pending = await item.waitForStatus(job.id, 'pending');
     assert.equal(pending.source.type, 'url');
     assert.equal(inspectedSize, 5);
     assert.equal((await readdir(item.musicDir)).length, 0);
@@ -200,7 +243,7 @@ test('recusa Content-Type incompatível e limpa o staging', async () => {
   });
   try {
     const { job } = await item.manager.start('https://example.com/audio.mp3');
-    const failed = await waitForStatus(item.queue, job.id, 'failed');
+    const failed = await item.waitForStatus(job.id, 'failed');
     assert.match(failed.error ?? '', /Content-Type/);
     assert.equal((await readdir(item.stagingRoot)).length, 0);
   } finally {
@@ -221,7 +264,7 @@ test('aplica limite durante streaming mesmo sem Content-Length confiável', asyn
   });
   try {
     const { job } = await item.manager.start('https://example.com/audio.mp3');
-    const failed = await waitForStatus(item.queue, job.id, 'failed');
+    const failed = await item.waitForStatus(job.id, 'failed');
     assert.match(failed.error ?? '', /excede o limite/);
     assert.equal((await readdir(item.stagingRoot)).length, 0);
   } finally {
@@ -237,7 +280,7 @@ test('propaga timeout acionável sem expor detalhes internos', async () => {
   });
   try {
     const { job } = await item.manager.start('https://example.com/audio.mp3');
-    const failed = await waitForStatus(item.queue, job.id, 'failed');
+    const failed = await item.waitForStatus(job.id, 'failed');
     assert.equal(failed.error, 'Tempo limite excedido ao baixar a URL.');
   } finally {
     await rm(item.root, { recursive: true, force: true });

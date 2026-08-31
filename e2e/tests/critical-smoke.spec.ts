@@ -3,8 +3,8 @@ import { expect, test, type Page } from '@playwright/test';
 const username = 'playwright';
 const password = 'playwright-password-2026';
 
-async function login(page: Page) {
-  await page.goto('/');
+async function login(page: Page, path = '/') {
+  await page.goto(path);
   await expect(page.getByRole('heading', { name: 'Entrar' })).toBeVisible();
   await page.getByLabel('Usuário', { exact: true }).fill(username);
   await page.getByLabel('Senha', { exact: true }).fill(password);
@@ -22,21 +22,7 @@ async function login(page: Page) {
   await expect(page.locator('main.app-shell')).toBeVisible();
 }
 
-async function openLibrary(page: Page) {
-  const width = page.viewportSize()?.width ?? 390;
-
-  if (width >= 1024) {
-    const sidebar = page.getByTestId('desktop-sidebar');
-    await expect(sidebar).toBeVisible();
-    await sidebar.getByRole('button', { name: 'Pastas', exact: true }).click();
-  } else if (width >= 700) {
-    await page.getByRole('button', { name: 'Voltar à biblioteca', exact: true }).click();
-  } else {
-    const navigation = page.getByRole('navigation', { name: 'Navegação principal' });
-    await expect(navigation).toBeVisible();
-    await navigation.getByRole('button', { name: 'Biblioteca', exact: true }).click();
-  }
-
+async function expectLibrary(page: Page) {
   await expect(page.getByPlaceholder('Música, artista, álbum ou pasta')).toBeVisible();
 }
 
@@ -56,11 +42,42 @@ async function openAccount(page: Page) {
   await expect(page.locator('#my-account-title')).toHaveText('Minha conta');
 }
 
-test('smoke crítico: login, biblioteca, conta e administração', async ({ page }) => {
-  await login(page);
-  await openLibrary(page);
+test('smoke crítico: deep link, histórico, player, conta e administração', async ({ page }) => {
+  await login(page, '/library');
+  await expect(page).toHaveURL(/\/library$/);
+  await expectLibrary(page);
+
+  const audio = page.locator('audio');
+  await expect(audio).toHaveCount(1);
+  await audio.evaluate(element => element.setAttribute('data-e2e-route-audio', 'preserved'));
+
   await openAccount(page);
+  await expect(page).toHaveURL(/\/account$/);
+  await expect(audio).toHaveAttribute('data-e2e-route-audio', 'preserved');
+
+  await page.goBack();
+  await expect(page).toHaveURL(/\/library$/);
+  await expectLibrary(page);
+  await expect(audio).toHaveAttribute('data-e2e-route-audio', 'preserved');
+
+  await page.goForward();
+  await expect(page).toHaveURL(/\/account$/);
+  await expect(page.locator('#my-account-title')).toHaveText('Minha conta');
 
   await page.locator('.my-account-screen').getByRole('button', { name: /^Administração/ }).click();
+  await expect(page).toHaveURL(/\/admin$/);
   await expect(page.locator('#administration-title')).toHaveText('Administração');
+  await expect(audio).toHaveAttribute('data-e2e-route-audio', 'preserved');
+
+  await page.reload();
+  await expect(page).toHaveURL(/\/admin$/);
+  await expect(page.locator('#administration-title')).toHaveText('Administração');
+
+  await page.goto('/library/playlists/playlist-inexistente');
+  await expect(page).toHaveURL(/\/library\/playlists$/);
+  await expect(page.locator('.library-content .section-heading').getByText('Playlists', { exact: true })).toBeVisible();
+
+  await page.goto('/rota-invalida');
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.locator('main.app-shell')).toBeVisible();
 });
