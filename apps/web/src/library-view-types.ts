@@ -31,3 +31,17 @@ export type LibraryViewsResponse = {
 export type LibraryViewResponse = {
   view: SavedLibraryView;
 };
+
+export function compatibleLibraryViewDefinition(
+  definition: LibraryViewDefinition,
+  availableFormats: readonly string[]
+): LibraryViewDefinition {
+  if (definition.format === 'all' || availableFormats.includes(definition.format)) {
+    return definition;
+  }
+
+  return {
+    ...definition,
+    format: 'all'
+  };
+}
