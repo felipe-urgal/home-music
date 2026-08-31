@@ -107,7 +107,7 @@ export function libraryPathForState(state: LibraryRouteState) {
       : '/library/playlists';
   }
 
-  const folderPath = state.folderPath.trim().replace(/^\/+|\/+$/g, '');
+  const folderPath = state.folderPath.replace(/^\/+|\/+$/g, '');
   if (!folderPath) return '/library';
   return `/library/folders/${folderPath.split('/').map(encodeURIComponent).join('/')}`;
 }
