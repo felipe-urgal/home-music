@@ -2,12 +2,19 @@ import type { FastifyInstance } from 'fastify';
 import type { PlaybackState, RepeatMode } from '@home-music/shared';
 import type { HomeMusicDatabase } from './database.js';
 import type { LibraryService } from './library-service.js';
+import { registerLibraryViewRoutes } from './library-view-routes.js';
+import { registerPlaybackHistoryRoutes } from './playback-history-routes.js';
+import { registerSmartPlaylistRoutes } from './smart-playlist-routes.js';
 
 export function registerPersonalRoutes(
   app: FastifyInstance,
   database: HomeMusicDatabase,
   library: LibraryService
 ) {
+  registerLibraryViewRoutes(app);
+  registerSmartPlaylistRoutes(app);
+  registerPlaybackHistoryRoutes(app);
+
   app.get('/api/favorites', async (request, reply) => {
     if (!request.user) {
       return reply.code(409).send({
