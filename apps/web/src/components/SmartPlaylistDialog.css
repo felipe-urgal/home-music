@@ -1,6 +1,7 @@
 .smart-playlist-dialog {
   width: min(760px, calc(100vw - 28px));
   max-height: min(860px, calc(100vh - 28px));
+  max-height: min(860px, calc(100dvh - 28px));
   margin: auto;
   padding: 0;
   overflow: hidden;
@@ -11,6 +12,11 @@
   box-shadow: 0 28px 100px rgba(0, 0, 0, .6);
 }
 
+.smart-playlist-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+
 .smart-playlist-dialog::backdrop {
   background: rgba(0, 0, 0, .72);
   backdrop-filter: blur(8px);
@@ -18,6 +24,7 @@
 
 .smart-playlist-dialog__header,
 .smart-playlist-dialog__footer {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 16px;
@@ -85,8 +92,13 @@
 }
 
 .smart-playlist-dialog__body {
-  max-height: calc(min(860px, 100vh - 28px) - 160px);
-  overflow: auto;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
   padding: 20px;
 }
 
@@ -247,6 +259,7 @@
   .smart-playlist-dialog {
     width: calc(100vw - 16px);
     max-height: calc(100vh - 16px);
+    max-height: calc(100dvh - 16px);
     border-radius: 15px;
   }
 
@@ -255,10 +268,6 @@
   .smart-playlist-dialog__footer {
     padding-left: 14px;
     padding-right: 14px;
-  }
-
-  .smart-playlist-dialog__body {
-    max-height: calc(100vh - 176px);
   }
 
   .smart-playlist-grid {

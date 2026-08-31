@@ -82,9 +82,7 @@
     font-weight: 560;
   }
 
-  .desktop-main-content--library .library-tabs,
-  .desktop-main-content--library .library-tools,
-  .desktop-main-content--library .library-view-controls {
+  .desktop-main-content--library .library-tabs {
     display: none;
   }
 

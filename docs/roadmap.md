@@ -169,9 +169,9 @@ A composição atual está documentada em [administration-ui.md](administration-
 
 ## Fase 11 — Engenharia, arquitetura e qualidade
 
-Pendente. As issues abaixo são a fonte de escopo:
+Em andamento. As issues abaixo são a fonte de escopo:
 
-- [ ] [#111](https://github.com/felipe-urgal/home-music/issues/111) — expandir Playwright E2E para fluxos críticos;
+- [x] [#111](https://github.com/felipe-urgal/home-music/issues/111) — Playwright E2E consolidado como gate obrigatório para fluxos críticos, com fixtures isoladas de dados reais e internet pública;
 - [ ] [#112](https://github.com/felipe-urgal/home-music/issues/112) — URLs reais e deep links;
 - [ ] [#113](https://github.com/felipe-urgal/home-music/issues/113) — refatorar `LibraryScreen`;
 - [ ] [#114](https://github.com/felipe-urgal/home-music/issues/114) — refatorar `PlayerScreen` sem duplicar estado;

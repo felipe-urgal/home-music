@@ -163,8 +163,16 @@ test('login, biblioteca e player permanecem utilizáveis', async ({ page }) => {
       await expect(page.getByRole('button', { name: 'Atualizar biblioteca' })).toBeVisible();
     }
   }
-  await expect(page.getByPlaceholder('Música, artista, álbum ou pasta')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Ordenar e filtrar biblioteca' })).toHaveCount(0);
+
+  const librarySearch = page.getByPlaceholder('Música, artista, álbum ou pasta');
+  const libraryViewToggle = page.getByRole('button', { name: 'Ordenar, filtrar e gerenciar views' });
+  await expect(librarySearch).toBeVisible();
+  await expect(libraryViewToggle).toBeVisible();
+  if (isDesktop) {
+    await libraryViewToggle.click();
+    await expect(page.getByRole('button', { name: 'Salvar view', exact: true })).toBeVisible();
+    await libraryViewToggle.click();
+  }
 
   if (isDesktop) {
     await expect(sidebar.getByRole('button', { name: 'Pastas', exact: true })).toHaveAttribute('aria-current', 'page');

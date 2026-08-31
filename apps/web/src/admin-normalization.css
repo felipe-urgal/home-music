@@ -9,7 +9,8 @@
 
 .admin-normalization__refresh,
 .admin-normalization__associate,
-.admin-normalization__aliases button {
+.admin-normalization__aliases button,
+.admin-normalization__retry {
   min-height: 40px;
   display: inline-flex;
   align-items: center;
@@ -29,6 +30,11 @@
   padding: 0 12px;
 }
 
+.admin-normalization__retry {
+  margin-top: 4px;
+  padding: 0 14px;
+}
+
 .admin-normalization__refresh svg,
 .admin-normalization__associate svg,
 .admin-normalization__aliases button svg {
@@ -38,14 +44,16 @@
 
 .admin-normalization__refresh:hover:not(:disabled),
 .admin-normalization__associate:hover:not(:disabled),
-.admin-normalization__aliases button:hover:not(:disabled) {
+.admin-normalization__aliases button:hover:not(:disabled),
+.admin-normalization__retry:hover:not(:disabled) {
   border-color: rgba(124, 191, 255, 0.3);
   background: rgba(124, 191, 255, 0.08);
 }
 
 .admin-normalization__refresh:disabled,
 .admin-normalization__associate:disabled,
-.admin-normalization__aliases button:disabled {
+.admin-normalization__aliases button:disabled,
+.admin-normalization__retry:disabled {
   opacity: 0.5;
   cursor: default;
 }
@@ -53,6 +61,7 @@
 .admin-normalization__refresh:focus-visible,
 .admin-normalization__associate:focus-visible,
 .admin-normalization__aliases button:focus-visible,
+.admin-normalization__retry:focus-visible,
 .admin-normalization__candidate input:focus-visible + span {
   outline: 2px solid #7cbfff;
   outline-offset: 3px;
@@ -99,7 +108,8 @@
 .admin-normalization__heading small,
 .admin-normalization__candidate-copy small,
 .admin-normalization__aliases small,
-.admin-normalization__empty span {
+.admin-normalization__empty span,
+.admin-normalization__state span {
   color: #82919d;
 }
 
@@ -328,7 +338,8 @@
   color: #7cbfff;
 }
 
-.admin-normalization__empty strong {
+.admin-normalization__empty strong,
+.admin-normalization__state strong {
   color: #eaf0f4;
 }
 

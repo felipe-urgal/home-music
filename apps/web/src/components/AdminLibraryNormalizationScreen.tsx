@@ -120,16 +120,37 @@ export function AdminLibraryNormalizationScreen({ onBack }: AdminLibraryNormaliz
     setMutatingKey(id);
     setError(null);
     setFeedback(null);
+
     try {
       await removeAdminLibraryNormalizationAlias(id);
-      const next = await getAdminLibraryNormalization();
-      if (!mounted.current) return;
-      setReview(next);
-      publishCanonicalChange();
-      setFeedback(`Associação “${label}” desfeita. A metadata física continua intacta.`);
     } catch (caught) {
-      if (!mounted.current) return;
-      setError(caught instanceof Error ? caught.message : 'Não foi possível desfazer a associação.');
+      if (mounted.current) {
+        setError(caught instanceof Error ? caught.message : 'Não foi possível desfazer a associação.');
+        setMutatingKey(null);
+      }
+      return;
+    }
+
+    publishCanonicalChange();
+    if (!mounted.current) return;
+
+    setReview(current => current ? {
+      ...current,
+      aliases: current.aliases.filter(alias => alias.id !== id),
+      counts: {
+        ...current.counts,
+        aliases: Math.max(0, current.counts.aliases - 1)
+      }
+    } : current);
+    setFeedback(`Associação “${label}” desfeita. A metadata física continua intacta.`);
+
+    try {
+      const next = await getAdminLibraryNormalization();
+      if (mounted.current) setReview(next);
+    } catch {
+      if (mounted.current) {
+        setError('A associação foi desfeita, mas não foi possível atualizar a revisão agora. Use Atualizar para reconciliar a tela.');
+      }
     } finally {
       if (mounted.current) setMutatingKey(null);
     }
@@ -149,6 +170,7 @@ export function AdminLibraryNormalizationScreen({ onBack }: AdminLibraryNormaliz
         <button
           className="admin-normalization__refresh"
           type="button"
+          aria-label="Atualizar normalização lógica"
           disabled={loading || Boolean(mutatingKey)}
           onClick={() => void loadReview()}
         >
@@ -178,6 +200,13 @@ export function AdminLibraryNormalizationScreen({ onBack }: AdminLibraryNormaliz
 
         {loading && !review ? (
           <div className="admin-normalization__state" role="status"><LoaderCircle className="is-spinning" /> Analisando grafias da biblioteca…</div>
+        ) : !review ? (
+          <div className="admin-normalization__state">
+            <RefreshCw aria-hidden="true" />
+            <strong>Revisão ainda não verificada</strong>
+            <span>Não vamos afirmar que a biblioteca está consistente sem uma resposta válida do servidor.</span>
+            <button className="admin-normalization__retry" type="button" onClick={() => void loadReview()}>Tentar novamente</button>
+          </div>
         ) : (
           <>
             <section className="admin-normalization__section" aria-labelledby="admin-normalization-candidates-title">

@@ -1,10 +1,10 @@
 import { fileURLToPath } from 'node:url';
 import type { FastifyInstance } from 'fastify';
+import type { LibraryViewDefinition } from '@home-music/shared';
 import {
   LibraryViewStore,
   normalizeLibraryViewDefinition,
-  normalizeLibraryViewName,
-  type LibraryViewDefinition
+  normalizeLibraryViewName
 } from './library-views.js';
 
 type LibraryViewBody = {
