@@ -39,17 +39,17 @@ test('business state and infrastructure stay behind explicit modules', () => {
   assert.match(library, /new LibraryMutationLock\(/);
   assert.match(library, /scanLibrary\(/);
   assert.match(library, /auditLibraryIntegrity\(/);
-  assert.doesNotMatch(library, /FastifyInstance/);
+  assert.doesNotMatch(library, /from ['"]fastify['"]/);
 
   assert.match(personal, /HomeMusicDatabase/);
   assert.match(personal, /savePlaybackState\(/);
   assert.match(personal, /setPlaylistTracks\(/);
-  assert.doesNotMatch(personal, /FastifyInstance/);
+  assert.doesNotMatch(personal, /from ['"]fastify['"]/);
 
   assert.match(media, /openRegularFileInside\(/);
   assert.match(media, /readTrackLyrics\(/);
   assert.match(media, /readCover\(/);
-  assert.doesNotMatch(media, /FastifyInstance/);
+  assert.doesNotMatch(media, /from ['"]fastify['"]/);
 
   assert.match(infrastructure, /new HomeMusicDatabase\(/);
   assert.match(infrastructure, /new SessionManager\(/);
