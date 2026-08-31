@@ -20,16 +20,35 @@ type ImportServiceLogger = {
   warn: (context: Record<string, unknown>, message: string) => void;
 };
 
-type AdminImportServiceOptions = {
-  queue: ImportJobQueue;
-  uploads: ImportUploadManager;
-  urls: ImportUrlManager;
-  externalProviders: ExternalProviderImportManager;
-  mediaValidation: ImportMediaValidationManager;
-  metadataPreview: ImportMetadataPreviewManager;
-  duplicateDetection: ImportDuplicateDetectionManager;
-  safeDestination: ImportSafeDestinationManager;
-  automaticFlow: ImportAutomaticFlowManager | null;
+type ImportQueuePort = Pick<ImportJobQueue, 'list'>;
+type ImportUploadPort = Pick<ImportUploadManager, 'config' | 'start' | 'receive' | 'cancel'>;
+type ImportUrlPort = Pick<ImportUrlManager, 'config' | 'start' | 'cancel'>;
+type ExternalProviderPort = Pick<ExternalProviderImportManager, 'listProviders' | 'start' | 'cancel'>;
+type MediaValidationPort = Pick<ImportMediaValidationManager, 'profiles' | 'validate'>;
+type MetadataPreviewPort = Pick<
+  ImportMetadataPreviewManager,
+  'captureSource' | 'extract' | 'update' | 'getCover' | 'forget'
+>;
+type DuplicateDetectionPort = Pick<
+  ImportDuplicateDetectionManager,
+  'captureSource' | 'forgetCheck' | 'forget' | 'get' | 'detect' | 'review'
+>;
+type SafeDestinationPort = Pick<ImportSafeDestinationManager, 'plan' | 'promote'>;
+type AutomaticFlowPort = Pick<
+  ImportAutomaticFlowManager,
+  'startWhenReady' | 'disable' | 'isEnabled' | 'resume'
+>;
+
+export type AdminImportServiceOptions = {
+  queue: ImportQueuePort;
+  uploads: ImportUploadPort;
+  urls: ImportUrlPort;
+  externalProviders: ExternalProviderPort;
+  mediaValidation: MediaValidationPort;
+  metadataPreview: MetadataPreviewPort;
+  duplicateDetection: DuplicateDetectionPort;
+  safeDestination: SafeDestinationPort;
+  automaticFlow: AutomaticFlowPort | null;
   logger: ImportServiceLogger;
 };
 
