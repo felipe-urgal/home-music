@@ -39,6 +39,33 @@ describe('browser navigation routes', () => {
     });
   });
 
+  it('preserva pontos e espaços significativos nos nomes de pasta', () => {
+    const folderPath = ' AC.DC /Music.v1 ';
+    const path = libraryPathForState({
+      libraryTab: 'folders',
+      folderPath,
+      selectedPlaylistId: null
+    });
+
+    expect(path).toBe('/library/folders/%20AC.DC%20/Music.v1%20');
+    expect(libraryRouteFromPath(path)).toEqual({
+      libraryTab: 'folders',
+      folderPath,
+      selectedPlaylistId: null
+    });
+  });
+
+  it('remove apenas barras sintéticas nas extremidades do caminho de pasta', () => {
+    const path = libraryPathForState({
+      libraryTab: 'folders',
+      folderPath: '/ AC.DC /',
+      selectedPlaylistId: null
+    });
+
+    expect(path).toBe('/library/folders/%20AC.DC%20');
+    expect(libraryRouteFromPath(path)?.folderPath).toBe(' AC.DC ');
+  });
+
   it('preserva playlist selecionada em URL compartilhável', () => {
     const path = libraryPathForState({
       libraryTab: 'playlists',
