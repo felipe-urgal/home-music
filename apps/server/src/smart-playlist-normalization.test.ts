@@ -113,12 +113,10 @@ test('playlist inteligente usa override e aliases canônicos sem alterar metadat
     try {
       const row = physical.prepare('SELECT title, artist, album, album_artist FROM tracks WHERE id = ?')
         .get('a') as { title: string; artist: string; album: string; album_artist: string };
-      assert.deepEqual(row, {
-        title: 'Zulu',
-        artist: 'Beyonce',
-        album: 'Lemonade',
-        album_artist: 'Beyonce'
-      });
+      assert.equal(row.title, 'Zulu');
+      assert.equal(row.artist, 'Beyonce');
+      assert.equal(row.album, 'Lemonade');
+      assert.equal(row.album_artist, 'Beyonce');
     } finally {
       physical.close();
     }
