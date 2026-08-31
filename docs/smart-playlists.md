@@ -40,6 +40,23 @@ Limites atuais:
 
 Filtros de artista e álbum usam comparação textual normalizada. Pasta inclui a pasta informada e suas subpastas.
 
+### Metadata efetiva e normalização lógica
+
+A avaliação não consulta mais `tracks.artist`/`tracks.album` como fonte final. Antes de aplicar a regra, o backend usa a mesma projeção canônica publicada pela biblioteca:
+
+```text
+metadata física
+  → override administrativo por faixa
+  → alias lógico de artista/álbum
+  → regra da smart playlist
+```
+
+Assim, uma regra para `Beyoncé` inclui uma faixa cuja metadata física seja `Beyonce` quando o administrador tiver aprovado esse alias. Overrides individuais de título/artista/álbum também são respeitados antes da normalização lógica.
+
+Aliases de álbum continuam escopados pelo artista do álbum canônico. Desfazer um alias reverte a avaliação na próxima consulta, sem materializar ou editar `playlist_tracks`.
+
+Detalhes: [library-metadata-normalization.md](library-metadata-normalization.md).
+
 ### Histórico e período
 
 `periodDays` limita a janela usada para contagem e ordenação do histórico.
@@ -161,6 +178,8 @@ A cobertura da feature deve provar pelo menos:
 - “nunca tocada” considerando todo o histórico;
 - ordenação por mais tocadas, recentes e favoritas antigas;
 - reprodução concluída alimentando o histórico pessoal e a reavaliação da smart playlist;
+- metadata efetiva e aliases lógicos aplicados antes dos filtros;
+- undo de alias refletido na próxima avaliação;
 - ausência de materialização em `playlist_tracks`;
 - isolamento de definições, favoritos e histórico por usuário;
 - migration v10 → v11 preservando os invariantes de ownership;
