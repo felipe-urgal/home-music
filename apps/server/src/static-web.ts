@@ -51,6 +51,16 @@ function isReservedOfflineAudioPath(pathname: string) {
   return pathname.startsWith(RESERVED_OFFLINE_AUDIO_PREFIX);
 }
 
+function isAppRoutePath(pathname: string) {
+  return pathname === '/account'
+    || pathname === '/admin'
+    || pathname === '/library'
+    || pathname === '/library/folders'
+    || pathname.startsWith('/library/folders/')
+    || pathname === '/library/playlists'
+    || pathname.startsWith('/library/playlists/');
+}
+
 export function contentTypeForPath(filePath: string) {
   return MIME_TYPES[path.extname(filePath).toLowerCase()] || 'application/octet-stream';
 }
@@ -75,6 +85,7 @@ export function shouldServeShell(rawUrl: string) {
   if (isReservedOfflineAudioPath(pathname)) return false;
   if (!safeRelativePath(pathname)) return false;
   if (pathname.startsWith('/assets/')) return false;
+  if (isAppRoutePath(pathname)) return true;
   return path.posix.extname(pathname) === '';
 }
 
