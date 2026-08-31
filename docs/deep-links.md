@@ -14,7 +14,7 @@ O Home Music usa URLs reais para as superfícies navegáveis atuais sem adiciona
 | `/account` | Minha conta |
 | `/admin` | Administração para usuários `admin` |
 
-Caminhos de pasta são codificados por segmento com `encodeURIComponent`. IDs de playlist também são codificados antes de entrar na URL.
+Caminhos de pasta são codificados por segmento com `encodeURIComponent`, preservando pontos e espaços que façam parte do nome real. Apenas barras sintéticas nas extremidades do caminho são removidas. IDs de playlist também são codificados antes de entrar na URL.
 
 ## Navegação no browser
 
@@ -27,13 +27,16 @@ A integração vive em `apps/web/src/browser-navigation.ts` e usa `history.pushS
 
 ## Refresh direto
 
-O Fastify já possui fallback de SPA para caminhos de navegação sem extensão. O handler mantém `/api` e `/api/*` fora desse fallback, portanto uma rota de API inexistente continua sendo erro de API em vez de receber `index.html`.
+O Fastify reconhece explicitamente as rotas canônicas da aplicação antes de usar a extensão do último segmento para decidir o fallback do shell. Isso permite refresh direto de pastas como `AC.DC` ou `Music.v1` sem confundi-las com arquivos estáticos.
 
-O service worker já trata requisições de navegação com estratégia network-first e usa o shell cacheado como fallback quando a rede está indisponível. Assim, as rotas acima não exigem uma segunda implementação de routing no servidor ou no service worker.
+O handler mantém assets reservados e caminhos inseguros fora desse fallback. As APIs continuam registradas e protegidas separadamente, portanto uma rota de API inexistente continua sendo erro de API em vez de receber `index.html`.
+
+O service worker já trata requisições de navegação com estratégia network-first e usa o shell cacheado como fallback quando a rede está indisponível. Assim, as rotas acima não exigem uma segunda implementação de routing no service worker.
 
 ## Fallbacks
 
 - rota de frontend não reconhecida: o cliente canonicaliza para `/` e abre o Player;
+- playlist informada na URL que não existe ou não pertence ao usuário: depois que a lista canônica de playlists termina de carregar, a URL é substituída por `/library/playlists`;
 - `/admin` para usuário sem permissão administrativa: o cliente canonicaliza para `/account`;
 - autorização real continua no backend: o fallback visual não substitui a política que protege `/api/admin/*`.
 
@@ -43,7 +46,7 @@ A issue #112 originalmente mencionava uma rota de Estatísticas. Na revisão de 
 
 ## Testes
 
-`apps/web/src/browser-navigation.test.ts` cobre parse, canonicalização, encoding e fallback de acesso.
+`apps/web/src/browser-navigation.test.ts` cobre parse, canonicalização, encoding, nomes de pasta com pontos/espaços e fallback de acesso. `apps/server/src/static-web.test.ts` cobre o fallback de produção para rotas canônicas com segmentos que parecem extensões de arquivo.
 
 O smoke Playwright obrigatório cobre, em mobile, tablet e desktop:
 
@@ -52,4 +55,5 @@ O smoke Playwright obrigatório cobre, em mobile, tablet e desktop:
 - Back/Forward do browser;
 - preservação do mesmo elemento `<audio>` durante navegação interna;
 - entrada e refresh direto em `/admin`;
+- canonicalização de playlist inexistente para `/library/playlists`;
 - fallback de uma rota de frontend inválida.
