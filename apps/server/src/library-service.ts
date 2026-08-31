@@ -1,4 +1,3 @@
-import type { FastifyBaseLogger } from 'fastify';
 import type { AdminScanTrigger, ScanResponse } from '@home-music/shared';
 import { buildAdminLibraryOverview } from './admin-library-overview.js';
 import { runScanWithHistory } from './admin-operation-history-scan.js';
@@ -16,13 +15,19 @@ import { LibraryMutationLock } from './library-mutation-lock.js';
 import { resolveLibraryRoot } from './security.js';
 import type { TrackAvailabilityStore } from './track-availability-store.js';
 
+type ServiceLogger = {
+  warn: (bindings: object, message: string) => void;
+  info: (bindings: object, message: string) => void;
+  error: (bindings: object, message: string) => void;
+};
+
 type LibraryServiceOptions = {
   musicDir: string;
   autoRescanIntervalSeconds: number;
   database: HomeMusicDatabase;
   trackAvailability: TrackAvailabilityStore;
   operationHistory: AdminOperationHistoryStore;
-  logger: FastifyBaseLogger;
+  logger: ServiceLogger;
 };
 
 export class LibraryService {
