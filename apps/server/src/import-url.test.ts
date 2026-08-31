@@ -24,6 +24,7 @@ type FakeResponseOptions = {
 
 type QueueJob = NonNullable<ReturnType<ImportJobQueue['get']>>;
 type QueueStatus = QueueJob['status'];
+type FixtureOptions = Omit<Partial<ConstructorParameters<typeof ImportUrlManager>[0]>, 'queue'>;
 type StatusWaiter = {
   expected: QueueStatus;
   resolve: (job: QueueJob) => void;
@@ -91,13 +92,13 @@ function fakeRequestFor(response: IncomingMessage) {
   } as unknown as ReturnType<typeof http.request>;
 }
 
-async function fixture(options: Partial<ConstructorParameters<typeof ImportUrlManager>[0]> = {}) {
+async function fixture(options: FixtureOptions = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'home-music-import-url-'));
   const musicDir = path.join(root, 'music');
   const stagingRoot = path.join(root, 'staging');
   await mkdir(musicDir);
   const observed = createObservedQueue();
-  const queue = options.queue ?? observed.queue;
+  const queue = observed.queue;
   const staging = options.staging ?? new ImportStagingManager({ stagingRoot, musicDir });
   const manager = new ImportUrlManager({
     queue,
@@ -113,7 +114,6 @@ async function fixture(options: Partial<ConstructorParameters<typeof ImportUrlMa
     validateAudio: async () => undefined,
     ...options
   });
-  assert.equal(options.queue, undefined, 'fixture de importação por URL não aceita queue customizada');
   return { root, musicDir, stagingRoot, queue, staging, manager, waitForStatus: observed.waitForStatus };
 }
 
