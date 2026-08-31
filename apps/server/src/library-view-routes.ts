@@ -1,10 +1,10 @@
 import { fileURLToPath } from 'node:url';
 import type { FastifyInstance } from 'fastify';
+import type { LibraryViewDefinition } from '@home-music/shared';
 import {
   LibraryViewStore,
   normalizeLibraryViewDefinition,
-  normalizeLibraryViewName,
-  type LibraryViewDefinition
+  normalizeLibraryViewName
 } from './library-views.js';
 
 type LibraryViewBody = {
@@ -16,7 +16,12 @@ type LibraryViewRouteOptions = {
   databasePath?: string;
 };
 
+const MAX_VIEW_ID_LENGTH = 128;
 const defaultDatabasePath = fileURLToPath(new URL('../../../data/home-music.db', import.meta.url));
+
+function validViewId(value: string) {
+  return value.length > 0 && value.length <= MAX_VIEW_ID_LENGTH;
+}
 
 export function registerLibraryViewRoutes(
   app: FastifyInstance,
@@ -64,6 +69,8 @@ export function registerLibraryViewRoutes(
       if (!request.user) {
         return reply.code(409).send({ error: 'Views inteligentes exigem uma identidade persistida.' });
       }
+      const id = request.params.id;
+      if (!validViewId(id)) return reply.code(400).send({ error: 'View inteligente inválida.' });
 
       const patch: { name?: string; definition?: LibraryViewDefinition } = {};
       if (request.body?.name !== undefined) {
@@ -80,11 +87,11 @@ export function registerLibraryViewRoutes(
         return reply.code(400).send({ error: 'Nenhuma alteração informada.' });
       }
 
-      if (!getStore().update(request.user.id, request.params.id, patch)) {
+      if (!getStore().update(request.user.id, id, patch)) {
         return reply.code(404).send({ error: 'View inteligente não encontrada.' });
       }
 
-      return { view: getStore().get(request.user.id, request.params.id) };
+      return { view: getStore().get(request.user.id, id) };
     }
   );
 
@@ -92,8 +99,10 @@ export function registerLibraryViewRoutes(
     if (!request.user) {
       return reply.code(409).send({ error: 'Views inteligentes exigem uma identidade persistida.' });
     }
+    const id = request.params.id;
+    if (!validViewId(id)) return reply.code(400).send({ error: 'View inteligente inválida.' });
 
-    if (!getStore().delete(request.user.id, request.params.id)) {
+    if (!getStore().delete(request.user.id, id)) {
       return reply.code(404).send({ error: 'View inteligente não encontrada.' });
     }
     return reply.code(204).send();
