@@ -73,6 +73,10 @@ test('smoke crítico: deep link, histórico, player, conta e administração', a
   await expect(page).toHaveURL(/\/admin$/);
   await expect(page.locator('#administration-title')).toHaveText('Administração');
 
+  await page.goto('/library/playlists/playlist-inexistente');
+  await expect(page).toHaveURL(/\/library\/playlists$/);
+  await expectLibrary(page);
+
   await page.goto('/rota-invalida');
   await expect(page).toHaveURL(/\/$/);
   await expect(page.locator('main.app-shell')).toBeVisible();
