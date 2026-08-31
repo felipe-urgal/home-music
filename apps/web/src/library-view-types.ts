@@ -34,14 +34,19 @@ export type LibraryViewResponse = {
 
 export function compatibleLibraryViewDefinition(
   definition: LibraryViewDefinition,
-  availableFormats: readonly string[]
+  availableFormats: readonly string[],
+  canSortTracks: boolean
 ): LibraryViewDefinition {
-  if (definition.format === 'all' || availableFormats.includes(definition.format)) {
-    return definition;
-  }
+  const format = definition.format === 'all' || availableFormats.includes(definition.format)
+    ? definition.format
+    : 'all';
+  const sort = canSortTracks ? definition.sort : 'current';
+
+  if (format === definition.format && sort === definition.sort) return definition;
 
   return {
     ...definition,
-    format: 'all'
+    format,
+    sort
   };
 }
