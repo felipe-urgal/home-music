@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 const username = 'playwright';
 const password = 'playwright-password-2026';
+const mutationHeaders = { 'X-Home-Music-Request': '1' };
 
 type LibraryPayload = {
   tracks: Array<{ id: string; title: string }>;
@@ -17,6 +18,41 @@ async function login(page: Page) {
   await page.getByLabel('Usuário', { exact: true }).fill(username);
   await page.getByLabel('Senha', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'E2E Track' })).toBeVisible();
+}
+
+async function libraryTrackIds(page: Page) {
+  const response = await page.context().request.get('/api/library');
+  expect(response.ok()).toBeTruthy();
+  const library = await response.json() as LibraryPayload;
+  return new Map(library.tracks.map(track => [track.title, track.id]));
+}
+
+async function resetQueueState(page: Page) {
+  const ids = await libraryTrackIds(page);
+  const trackId = ids.get('E2E Track');
+  const zetaId = ids.get('E2E Zeta');
+  const zuluId = ids.get('E2E Zulu');
+  expect(trackId).toBeTruthy();
+  expect(zetaId).toBeTruthy();
+  expect(zuluId).toBeTruthy();
+  const orderedIds = [trackId!, zetaId!, zuluId!];
+
+  const response = await page.context().request.put('/api/player/state', {
+    headers: mutationHeaders,
+    data: {
+      currentTrackId: trackId,
+      position: 0,
+      volume: 1,
+      shuffle: false,
+      repeatMode: 'off',
+      wasPlaying: false,
+      baseQueueIds: orderedIds,
+      queueIds: orderedIds
+    }
+  });
+  expect(response.ok()).toBeTruthy();
+  await page.reload();
   await expect(page.getByRole('heading', { name: 'E2E Track' })).toBeVisible();
 }
 
@@ -38,13 +74,14 @@ test('reordenação da fila persiste no SQLite e sobrevive a reload', async ({ p
   test.skip(testInfo.project.name !== 'desktop-chromium');
 
   await login(page);
+  await resetQueueState(page);
 
   const queue = page.getByTestId('desktop-queue');
+  await expect(queue.locator('.desktop-queue__row').nth(0)).toContainText('E2E Zeta');
+  await expect(queue.locator('.desktop-queue__row').nth(1)).toContainText('E2E Zulu');
+
   const zuluHandle = queue.getByRole('button', { name: 'Arrastar E2E Zulu' });
   const zetaRow = queue.locator('.desktop-queue__row').filter({ hasText: 'E2E Zeta' });
-  await expect(zuluHandle).toBeVisible();
-  await expect(zetaRow).toBeVisible();
-
   await zuluHandle.dragTo(zetaRow);
   await expect(queue.locator('.desktop-queue__row').nth(0)).toContainText('E2E Zulu');
 
