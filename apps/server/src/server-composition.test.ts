@@ -74,7 +74,7 @@ test('HTTP handlers are grouped by domain while auth policy stays central', () =
   assert.match(library, /\/api\/library/);
   assert.match(personal, /PersonalLibraryService/);
   assert.doesNotMatch(personal, /HomeMusicDatabase/);
-  assert.doesNotMatch(personal, /LibraryService/);
+  assert.doesNotMatch(personal, /from ['"]\.\/library-service\.js['"]/);
   assert.match(personal, /\/api\/favorites/);
   assert.match(personal, /\/api\/player\/state/);
   assert.match(personal, /registerLibraryViewRoutes\(/);
