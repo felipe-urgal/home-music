@@ -77,13 +77,13 @@ test('reordenação da fila persiste no SQLite e sobrevive a reload', async ({ p
   await resetQueueState(page);
 
   const queue = page.getByTestId('desktop-queue');
-  await expect(queue.locator('.desktop-queue__row').nth(0)).toContainText('E2E Zeta');
-  await expect(queue.locator('.desktop-queue__row').nth(1)).toContainText('E2E Zulu');
+  const handles = queue.getByRole('button', { name: /^Arrastar E2E / });
+  await expect(handles.nth(0)).toHaveAccessibleName('Arrastar E2E Zeta');
+  await expect(handles.nth(1)).toHaveAccessibleName('Arrastar E2E Zulu');
 
   const zuluHandle = queue.getByRole('button', { name: 'Arrastar E2E Zulu' });
-  const zetaRow = queue.locator('.desktop-queue__row').filter({ hasText: 'E2E Zeta' });
-  await zuluHandle.dragTo(zetaRow);
-  await expect(queue.locator('.desktop-queue__row').nth(0)).toContainText('E2E Zulu');
+  await zuluHandle.dragTo(queue.getByText('E2E Zeta', { exact: true }));
+  await expect(handles.nth(0)).toHaveAccessibleName('Arrastar E2E Zulu');
 
   await expect.poll(() => persistedQueueTitles(page), { timeout: 5_000 }).toEqual([
     'E2E Track',
@@ -93,7 +93,7 @@ test('reordenação da fila persiste no SQLite e sobrevive a reload', async ({ p
 
   await page.reload();
   await expect(page.getByRole('heading', { name: 'E2E Track' })).toBeVisible();
-  const restoredQueue = page.getByTestId('desktop-queue');
-  await expect(restoredQueue.locator('.desktop-queue__row').nth(0)).toContainText('E2E Zulu');
-  await expect(restoredQueue.locator('.desktop-queue__row').nth(1)).toContainText('E2E Zeta');
+  const restoredHandles = page.getByTestId('desktop-queue').getByRole('button', { name: /^Arrastar E2E / });
+  await expect(restoredHandles.nth(0)).toHaveAccessibleName('Arrastar E2E Zulu');
+  await expect(restoredHandles.nth(1)).toHaveAccessibleName('Arrastar E2E Zeta');
 });
