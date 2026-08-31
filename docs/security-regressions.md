@@ -22,7 +22,7 @@ A regressão dedicada cobre, no mínimo:
 - mutações autenticadas continuam exigindo `X-Home-Music-Request: 1`;
 - upload rejeita nomes malformados, formatos/tamanhos inválidos e bytes além do declarado/configurado;
 - URL direta continua fail-closed para SSRF, inclusive revalidando DNS/IP em redirects;
-- paths administrativos continuam bloqueando traversal, symlink escape e overwrite silencioso;
+- destinos e paths de importação/administração continuam bloqueando traversal, symlink escape e overwrite silencioso;
 - lixeira/quarentena preserva reversibilidade e delete permanente exige confirmação forte;
 - saída, stderr e paths de providers são tratados como não confiáveis;
 - timeout/cancelamento de provider limpa recursos temporários;
