@@ -54,6 +54,11 @@ if [[ "${MODE}" == "update" ]]; then
     echo "O helper privilegiado ${CONTROL_HELPER_PATH} não está instalado. Execute npm run service:install no terminal para configurar o bootstrap seguro." >&2
     exit 1
   fi
+  HELPER_METADATA="$(stat -Lc '%U:%G:%a' "${CONTROL_HELPER_PATH}" 2>/dev/null || true)"
+  if [[ "${HELPER_METADATA}" != "root:root:755" ]]; then
+    echo "O helper privilegiado precisa ser root:root com modo 0755. Execute npm run service:install no terminal para reparar o bootstrap seguro." >&2
+    exit 1
+  fi
   if ! sudo -n "${CONTROL_HELPER_PATH}" check >/dev/null 2>&1; then
     echo "O helper privilegiado do Home Music ainda não está autorizado sem senha. Execute npm run service:install no terminal para instalar/atualizar a regra NOPASSWD limitada." >&2
     exit 1
