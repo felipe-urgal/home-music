@@ -15,6 +15,22 @@ export function positiveInteger(value, fallback) {
   return Number.isSafeInteger(parsed) ? parsed : fallback;
 }
 
+export function readinessUrl(value) {
+  let parsed;
+
+  try {
+    parsed = new URL(String(value));
+  } catch {
+    throw new Error('URL de readiness inválida.');
+  }
+
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error('URL de readiness deve usar http: ou https:.');
+  }
+
+  return parsed;
+}
+
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -50,6 +66,7 @@ export async function verifyProductionReadiness({
     throw new Error('fetch não está disponível neste runtime Node.js.');
   }
 
+  const targetUrl = readinessUrl(url);
   const startedAt = now();
   const deadline = startedAt + timeoutMs;
   let attempts = 0;
@@ -61,9 +78,10 @@ export async function verifyProductionReadiness({
     const currentRequestTimeoutMs = Math.min(requestTimeoutMs, remainingMs);
 
     try {
-      const response = await fetchImpl(url, {
+      const response = await fetchImpl(targetUrl, {
         method: 'GET',
         headers: { accept: 'application/json' },
+        redirect: 'manual',
         signal: AbortSignal.timeout(currentRequestTimeoutMs)
       });
 
@@ -86,6 +104,7 @@ export async function verifyProductionReadiness({
     const afterAttempt = now();
     if (afterAttempt >= deadline) break;
     await sleepImpl(Math.min(intervalMs, Math.max(1, deadline - afterAttempt)));
+    if (now() >= deadline) break;
   }
 
   return {
