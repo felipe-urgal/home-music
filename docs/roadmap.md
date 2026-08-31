@@ -176,7 +176,7 @@ Em andamento. As issues abaixo são a fonte de escopo:
 - [x] [#113](https://github.com/felipe-urgal/home-music/issues/113) — refatorar `LibraryScreen`;
 - [x] [#114](https://github.com/felipe-urgal/home-music/issues/114) — refatorar `PlayerScreen` sem duplicar estado;
 - [x] [#115](https://github.com/felipe-urgal/home-music/issues/115) — reduzir responsabilidade de `App.tsx`;
-- [ ] [#116](https://github.com/felipe-urgal/home-music/issues/116) — separar rotas Fastify, serviços e infraestrutura;
+- [x] [#116](https://github.com/felipe-urgal/home-music/issues/116) — separar rotas Fastify, serviços e infraestrutura;
 - [ ] [#117](https://github.com/felipe-urgal/home-music/issues/117) — serviços explícitos para operações destrutivas/imports/backups;
 - [ ] [#118](https://github.com/felipe-urgal/home-music/issues/118) — regressões de segurança para importação/administração;
 - [ ] [#119](https://github.com/felipe-urgal/home-music/issues/119) — benchmark com biblioteca grande;
