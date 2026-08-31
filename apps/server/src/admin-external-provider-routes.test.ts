@@ -13,13 +13,43 @@ import { ExternalProviderScratchManager } from './external-provider-scratch.js';
 import { ImportJobQueue } from './import-job-queue.js';
 import { ImportStagingManager } from './import-staging.js';
 
-async function waitForPending(queue: ImportJobQueue, jobId: string) {
-  for (let attempt = 0; attempt < 40; attempt += 1) {
-    const job = queue.get(jobId);
-    if (job?.status !== 'processing') return job;
-    await new Promise(resolve => setTimeout(resolve, 5));
+type QueueJob = NonNullable<ReturnType<ImportJobQueue['get']>>;
+
+function createObservedQueue() {
+  const pendingWaiters = new Map<string, Set<(job: QueueJob) => void>>();
+  const queue = new ImportJobQueue({
+    createId: () => 'provider-job-1',
+    onChange(job) {
+      if (job.status !== 'pending' || !job.startedAt) return;
+      const listeners = pendingWaiters.get(job.id);
+      if (!listeners) return;
+      pendingWaiters.delete(job.id);
+      for (const resolve of listeners) resolve(job);
+    }
+  });
+
+  function waitForPending(jobId: string) {
+    const current = queue.get(jobId);
+    if (current?.status === 'pending' && current.startedAt) return Promise.resolve(current);
+
+    return new Promise<QueueJob>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        const listeners = pendingWaiters.get(jobId);
+        listeners?.delete(resolve);
+        if (listeners?.size === 0) pendingWaiters.delete(jobId);
+        reject(new Error(`Job ${jobId} não voltou para pending. Estado atual: ${queue.get(jobId)?.status}`));
+      }, 2_000);
+      const wrappedResolve = (job: QueueJob) => {
+        clearTimeout(timeout);
+        resolve(job);
+      };
+      const listeners = pendingWaiters.get(jobId) ?? new Set<(job: QueueJob) => void>();
+      listeners.add(wrappedResolve);
+      pendingWaiters.set(jobId, listeners);
+    });
   }
-  return queue.get(jobId);
+
+  return { queue, waitForPending };
 }
 
 async function fixture(configured = true) {
@@ -28,7 +58,8 @@ async function fixture(configured = true) {
   const stagingRoot = path.join(root, 'staging');
   const scratchRoot = path.join(root, 'scratch');
   await mkdir(musicDir);
-  const queue = new ImportJobQueue({ createId: () => 'provider-job-1' });
+  const observed = createObservedQueue();
+  const queue = observed.queue;
   const staging = new ImportStagingManager({ musicDir, stagingRoot });
   const scratch = new ExternalProviderScratchManager({ musicDir, scratchRoot });
   const provider: ExternalProvider = {
@@ -59,7 +90,7 @@ async function fixture(configured = true) {
   });
   const app = Fastify();
   registerAdminImportRoutes(app, queue, { externalProviders, stagingCleanup: null });
-  return { root, app, queue, staging, externalProviders };
+  return { root, app, queue, staging, externalProviders, waitForPending: observed.waitForPending };
 }
 
 test('rota externa anuncia capability e entrega aquisição ao staging comum', async () => {
@@ -83,10 +114,10 @@ test('rota externa anuncia capability e entrega aquisição ao staging comum', a
     });
     assert.equal(started.statusCode, 202);
     const jobId = started.json().job.id as string;
-    const settled = await waitForPending(item.queue, jobId);
-    assert.equal(settled?.status, 'pending');
-    assert.equal(settled?.source.type, 'provider');
-    assert.equal(settled?.source.provider, 'fixture');
+    const settled = await item.waitForPending(jobId);
+    assert.equal(settled.status, 'pending');
+    assert.equal(settled.source.type, 'provider');
+    assert.equal(settled.source.provider, 'fixture');
 
     const inspected = await item.staging.inspectPayload(jobId, async target => target.size);
     assert.equal(inspected, Buffer.byteLength('fixture-audio'));
