@@ -1,49 +1,8 @@
-import {
-  useEffect,
-  useRef,
-  useState,
-  type CSSProperties,
-  type DragEvent,
-  type PointerEvent as ReactPointerEvent
-} from 'react';
-import {
-  CheckCircle2,
-  ChevronDown,
-  ChevronRight,
-  ChevronUp,
-  Download,
-  GripVertical,
-  ListPlus,
-  ListMusic,
-  LoaderCircle,
-  Pause,
-  Play,
-  Repeat1,
-  Repeat2,
-  Shuffle,
-  SkipBack,
-  SkipForward,
-  Volume2,
-  Wifi
-} from 'lucide-react';
 import type { Playlist, RepeatMode, Track } from '@home-music/shared';
-import { Artwork } from './Artwork';
 import { LyricsPanel } from './LyricsPanel';
-
-const QUEUE_PAGE_SIZE = 10;
-const TOUCH_DRAG_EDGE_PX = 80;
-const TOUCH_DRAG_SCROLL_STEP_PX = 18;
-
-function formatTime(value: number) {
-  if (!Number.isFinite(value) || value < 0) return '0:00';
-  const minutes = Math.floor(value / 60);
-  const seconds = Math.floor(value % 60).toString().padStart(2, '0');
-  return `${minutes}:${seconds}`;
-}
-
-function artworkTrack(track: Track, offlineMode: boolean): Track {
-  return offlineMode && track.hasCover ? { ...track, hasCover: false } : track;
-}
+import { PlayerPlaybackControls } from './PlayerPlaybackControls';
+import { PlayerQueuePanel } from './PlayerQueuePanel';
+import { PlayerTrackPresentation } from './PlayerTrackPresentation';
 
 type PlayerScreenProps = {
   current: Track;
@@ -110,274 +69,53 @@ export function PlayerScreen({
   onAddToPlaylist,
   onExitOffline
 }: PlayerScreenProps) {
-  const [showPlaylistPicker, setShowPlaylistPicker] = useState(false);
-  const [showQueue, setShowQueue] = useState(false);
-  const [dragFrom, setDragFrom] = useState<number | null>(null);
-  const [visibleQueueCount, setVisibleQueueCount] = useState(QUEUE_PAGE_SIZE);
-  const queueLoadMoreRef = useRef<HTMLDivElement | null>(null);
-  const touchDragIndexRef = useRef<number | null>(null);
-  const touchPointerIdRef = useRef<number | null>(null);
-  const progress = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
-  const hasNext = currentIndex < queue.length - 1 || repeatMode === 'all';
-  const visibleStart = Math.max(0, currentIndex);
-  const visibleEnd = Math.min(queue.length, visibleStart + visibleQueueCount);
-  const visibleQueue = queue.slice(visibleStart, visibleEnd);
-  const hasMoreQueueItems = visibleEnd < queue.length;
-  const remainingQueueCount = Math.max(0, queue.length - visibleStart - 1);
-
-  useEffect(() => {
-    setVisibleQueueCount(QUEUE_PAGE_SIZE);
-    setShowQueue(false);
-    setShowPlaylistPicker(false);
-  }, [current.id, queue.length]);
-
-  useEffect(() => {
-    const target = queueLoadMoreRef.current;
-    if (!target || !hasMoreQueueItems) return;
-
-    if (typeof IntersectionObserver === 'undefined') {
-      setVisibleQueueCount(Math.max(QUEUE_PAGE_SIZE, queue.length - visibleStart));
-      return;
-    }
-
-    const observer = new IntersectionObserver(entries => {
-      if (entries.some(entry => entry.isIntersecting)) {
-        setVisibleQueueCount(count => Math.min(queue.length - visibleStart, count + QUEUE_PAGE_SIZE));
-      }
-    }, {
-      root: null,
-      rootMargin: '320px 0px',
-      threshold: 0
-    });
-
-    observer.observe(target);
-    return () => observer.disconnect();
-  }, [hasMoreQueueItems, queue.length, visibleStart, visibleEnd]);
-
-  function dropQueue(event: DragEvent, to: number) {
-    event.preventDefault();
-    if (dragFrom != null) onReorderQueue(dragFrom, to);
-    setDragFrom(null);
-  }
-
-  function beginTouchReorder(event: ReactPointerEvent<HTMLButtonElement>, queueIndex: number) {
-    if (event.pointerType === 'mouse') return;
-    event.preventDefault();
-    touchPointerIdRef.current = event.pointerId;
-    touchDragIndexRef.current = queueIndex;
-    setDragFrom(queueIndex);
-    event.currentTarget.setPointerCapture(event.pointerId);
-  }
-
-  function moveTouchReorder(event: ReactPointerEvent<HTMLButtonElement>) {
-    if (touchPointerIdRef.current !== event.pointerId || touchDragIndexRef.current == null) return;
-    event.preventDefault();
-
-    if (event.clientY < TOUCH_DRAG_EDGE_PX) {
-      window.scrollBy(0, -TOUCH_DRAG_SCROLL_STEP_PX);
-    } else if (event.clientY > window.innerHeight - TOUCH_DRAG_EDGE_PX) {
-      window.scrollBy(0, TOUCH_DRAG_SCROLL_STEP_PX);
-    }
-
-    const target = document.elementFromPoint(event.clientX, event.clientY)?.closest('[data-queue-index]') as HTMLElement | null;
-    if (!target) return;
-
-    const to = Number(target.dataset.queueIndex);
-    const from = touchDragIndexRef.current;
-    if (!Number.isInteger(to) || to < 0 || to >= queue.length || to === from) return;
-
-    onReorderQueue(from, to);
-    touchDragIndexRef.current = to;
-    setDragFrom(to);
-  }
-
-  function finishTouchReorder(event: ReactPointerEvent<HTMLButtonElement>) {
-    if (touchPointerIdRef.current !== event.pointerId) return;
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-    touchPointerIdRef.current = null;
-    touchDragIndexRef.current = null;
-    setDragFrom(null);
-  }
-
   return (
     <>
-      <header className="topbar">
-        <button className="icon-button topbar__back-to-library" aria-label={libraryReturnLabel} title={libraryReturnLabel} onClick={onOpenLibrary}>
-          <ChevronDown />
-        </button>
-        <span className="topbar__title">{offlineMode ? 'Tocando offline' : 'Tocando agora'}</span>
-        {offlineMode && onExitOffline
-          ? <button className="icon-button" aria-label="Tentar conectar ao servidor" onClick={onExitOffline}><Wifi /></button>
-          : <span aria-hidden="true" />}
-      </header>
+      <PlayerTrackPresentation
+        current={current}
+        queueLength={queue.length}
+        libraryReturnLabel={libraryReturnLabel}
+        playlists={playlists}
+        offlineMode={offlineMode}
+        isDownloaded={isDownloaded}
+        downloading={downloading}
+        onOpenLibrary={onOpenLibrary}
+        onToggleDownload={onToggleDownload}
+        onAddToPlaylist={onAddToPlaylist}
+        onExitOffline={onExitOffline}
+      />
 
-      <div className="hero-art"><Artwork track={artworkTrack(current, offlineMode)} large /></div>
-
-      <div className="track-heading">
-        <div>
-          <h1>{current.title}</h1>
-          <p>{current.artist}</p>
-        </div>
-        <div className="track-heading__actions">
-          {!offlineMode && (
-            <button
-              className={`icon-button icon-button--large ${showPlaylistPicker ? 'is-active' : ''}`}
-              type="button"
-              aria-label="Adicionar à playlist"
-              aria-expanded={showPlaylistPicker}
-              onClick={() => setShowPlaylistPicker(value => !value)}
-            >
-              <ListPlus />
-            </button>
-          )}
-          {!offlineMode && onToggleDownload && (
-            <button
-              className={`icon-button icon-button--large ${isDownloaded ? 'is-downloaded' : ''}`}
-              aria-label={downloading ? 'Baixando para uso offline' : isDownloaded ? 'Remover download offline' : 'Baixar para uso offline'}
-              disabled={downloading}
-              onClick={onToggleDownload}
-            >
-              {downloading ? <LoaderCircle className="download-spinner" /> : isDownloaded ? <CheckCircle2 /> : <Download />}
-            </button>
-          )}
-        </div>
-      </div>
-
-      {showPlaylistPicker && !offlineMode && (
-        <section className="player-playlist-picker" aria-label="Escolher playlist">
-          <strong>Adicionar à playlist</strong>
-          {playlists.length ? playlists.map(playlist => (
-            <button
-              type="button"
-              key={playlist.id}
-              onClick={() => {
-                onAddToPlaylist(playlist);
-                setShowPlaylistPicker(false);
-              }}
-            >
-              <ListMusic aria-hidden="true" />
-              <span>{playlist.name}</span>
-              <ChevronRight aria-hidden="true" />
-            </button>
-          )) : <small>Nenhuma playlist criada ainda.</small>}
-        </section>
-      )}
-
-      {offlineMode && <div className="player-offline-status"><Download /> Reproduzindo o arquivo salvo neste dispositivo.</div>}
-
-      {autoplayBlocked && (
-        <div className="autoplay-notice" role="status">
-          O navegador bloqueou o play automático. Toque em Play uma vez para continuar.
-        </div>
-      )}
-
-      {playbackError && <div className="autoplay-notice" role="alert">{playbackError}</div>}
-
-      <div className="progress-wrap">
-        <input
-          aria-label="Progresso da música"
-          type="range"
-          min="0"
-          max={duration || 0}
-          step="0.1"
-          value={Math.min(currentTime, duration || 0)}
-          style={{ '--progress': `${progress}%` } as CSSProperties}
-          onChange={event => onSeek(Number(event.target.value))}
-        />
-        <div className="time-row"><span>{formatTime(currentTime)}</span><span>{formatTime(duration)}</span></div>
-      </div>
-
-      <div className="controls">
-        <button className={`icon-button ${shuffle ? 'is-active' : ''}`} aria-label="Aleatório" aria-pressed={shuffle} onClick={onShuffle}><Shuffle /></button>
-        <button className="icon-button icon-button--control" aria-label="Anterior" onClick={onPrevious}><SkipBack /></button>
-        <button className="play-button" aria-label={playing ? 'Pausar' : 'Tocar'} onClick={onTogglePlay}>
-          {playing ? <Pause /> : <Play />}
-        </button>
-        <button className="icon-button icon-button--control" aria-label="Próxima" onClick={onNext} disabled={!hasNext}><SkipForward /></button>
-        <button
-          className={`icon-button ${repeatMode !== 'off' ? 'is-active' : ''}`}
-          aria-label={repeatMode === 'one' ? 'Repetir uma' : repeatMode === 'all' ? 'Repetir fila' : 'Repetição desligada'}
-          onClick={onRepeat}
-        >
-          {repeatMode === 'one' ? <Repeat1 /> : <Repeat2 />}
-        </button>
-      </div>
-
-      {!usesSystemVolume && (
-        <div className="volume-control">
-          <Volume2 aria-hidden="true" />
-          <input
-            aria-label="Volume"
-            type="range"
-            min="0"
-            max="1"
-            step="0.01"
-            value={volume}
-            onChange={event => onVolume(Number(event.target.value))}
-          />
-          <span>{Math.round(volume * 100)}%</span>
-        </div>
-      )}
+      <PlayerPlaybackControls
+        queueLength={queue.length}
+        currentIndex={currentIndex}
+        playing={playing}
+        autoplayBlocked={autoplayBlocked}
+        playbackError={playbackError}
+        currentTime={currentTime}
+        duration={duration}
+        volume={volume}
+        usesSystemVolume={usesSystemVolume}
+        shuffle={shuffle}
+        repeatMode={repeatMode}
+        onTogglePlay={onTogglePlay}
+        onPrevious={onPrevious}
+        onNext={onNext}
+        onSeek={onSeek}
+        onVolume={onVolume}
+        onShuffle={onShuffle}
+        onRepeat={onRepeat}
+      />
 
       <LyricsPanel track={current} currentTime={currentTime} offlineMode={offlineMode} />
 
-      <section className="queue-panel queue-panel--player">
-        <button
-          type="button"
-          className="queue-panel__toggle"
-          aria-expanded={showQueue}
-          onClick={() => setShowQueue(value => !value)}
-        >
-          <span><ListMusic aria-hidden="true" /> A seguir <small>· {remainingQueueCount} músicas</small></span>
-          {showQueue ? <ChevronDown aria-hidden="true" /> : <ChevronRight aria-hidden="true" />}
-        </button>
-        <div className={`queue-panel__content ${showQueue ? 'is-open' : ''}`}>
-          <div className="queue-label">Fila · {queue.length} músicas · arraste ou use as setas</div>
-          <div className="queue-list">
-            {visibleQueue.map((track, visibleIndex) => {
-              const queueIndex = visibleStart + visibleIndex;
-              const isCurrent = track.id === current.id;
-              const isDragging = dragFrom === queueIndex;
-              return (
-                <div
-                  className={`queue-item queue-item--reorder ${isCurrent ? 'is-current' : ''} ${isDragging ? 'is-dragging' : ''}`}
-                  key={track.id}
-                  data-queue-index={queueIndex}
-                  draggable={!isCurrent}
-                  onDragStart={() => setDragFrom(queueIndex)}
-                  onDragOver={event => event.preventDefault()}
-                  onDrop={event => dropQueue(event, queueIndex)}
-                  onDragEnd={() => setDragFrom(null)}
-                >
-                  <button
-                    type="button"
-                    className="queue-drag-handle"
-                    aria-label={isCurrent ? 'Faixa atual' : `Arrastar ${track.title}`}
-                    disabled={isCurrent}
-                    onPointerDown={event => beginTouchReorder(event, queueIndex)}
-                    onPointerMove={moveTouchReorder}
-                    onPointerUp={finishTouchReorder}
-                    onPointerCancel={finishTouchReorder}
-                  >
-                    <GripVertical className="queue-drag" aria-hidden="true" />
-                  </button>
-                  <button className="queue-item__main" onClick={() => onPlayTrack(track, queue)}>
-                    <Artwork track={artworkTrack(track, offlineMode)} />
-                    <span className="queue-item__text"><strong>{track.title}</strong><small>{track.artist}</small></span>
-                  </button>
-                  <div className="queue-reorder-buttons">
-                    <button aria-label="Mover para cima" disabled={queueIndex === 0} onClick={() => onReorderQueue(queueIndex, queueIndex - 1)}><ChevronUp /></button>
-                    <button aria-label="Mover para baixo" disabled={queueIndex === queue.length - 1} onClick={() => onReorderQueue(queueIndex, queueIndex + 1)}><ChevronDown /></button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          {hasMoreQueueItems && <div ref={queueLoadMoreRef} className="queue-load-more" aria-hidden="true" />}
-        </div>
-      </section>
+      <PlayerQueuePanel
+        current={current}
+        queue={queue}
+        currentIndex={currentIndex}
+        offlineMode={offlineMode}
+        onPlayTrack={onPlayTrack}
+        onReorderQueue={onReorderQueue}
+      />
     </>
   );
 }
