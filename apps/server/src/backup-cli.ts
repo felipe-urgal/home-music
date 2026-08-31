@@ -88,7 +88,7 @@ try {
           console.log(`Artefato validado antes do restore: ${verified.manifest.database.sha256}`);
         }
       });
-      if (result.blocked) {
+      if (result.blocked !== null) {
         console.error(result.blocked);
         process.exitCode = 1;
       } else {
