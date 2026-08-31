@@ -33,16 +33,17 @@ function createObservedQueue() {
     if (current?.status === 'pending' && current.startedAt) return Promise.resolve(current);
 
     return new Promise<QueueJob>((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        const listeners = pendingWaiters.get(jobId);
-        listeners?.delete(resolve);
-        if (listeners?.size === 0) pendingWaiters.delete(jobId);
-        reject(new Error(`Job ${jobId} não voltou para pending. Estado atual: ${queue.get(jobId)?.status}`));
-      }, 2_000);
+      let timeout: ReturnType<typeof setTimeout>;
       const wrappedResolve = (job: QueueJob) => {
         clearTimeout(timeout);
         resolve(job);
       };
+      timeout = setTimeout(() => {
+        const listeners = pendingWaiters.get(jobId);
+        listeners?.delete(wrappedResolve);
+        if (listeners?.size === 0) pendingWaiters.delete(jobId);
+        reject(new Error(`Job ${jobId} não voltou para pending. Estado atual: ${queue.get(jobId)?.status}`));
+      }, 2_000);
       const listeners = pendingWaiters.get(jobId) ?? new Set<(job: QueueJob) => void>();
       listeners.add(wrappedResolve);
       pendingWaiters.set(jobId, listeners);
