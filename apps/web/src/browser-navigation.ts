@@ -142,24 +142,24 @@ export function useRoutedScreen(options: {
 }) {
   const { libraryPath, canAccessAdmin } = options;
 
-  const resolveCurrentScreen = useCallback(() => {
-    if (typeof window === 'undefined') return 'player' as RoutedScreen;
+  const currentRoute = useCallback((): AppRoute => {
+    if (typeof window === 'undefined') return { screen: 'player', path: '/', valid: true };
     const parsed = parseAppPath(window.location.pathname);
-    if (!parsed.valid) {
-      window.history.replaceState(null, '', '/');
-      return 'player' as RoutedScreen;
-    }
-    const route = routeForAccess(parsed, canAccessAdmin);
-    if (route.path !== window.location.pathname) {
-      window.history.replaceState(null, '', route.path);
-    }
-    return route.screen;
+    if (!parsed.valid) return { screen: 'player', path: '/', valid: true };
+    return routeForAccess(parsed, canAccessAdmin);
   }, [canAccessAdmin]);
 
-  const [screen, setScreenState] = useState<RoutedScreen>(resolveCurrentScreen);
+  const [screen, setScreenState] = useState<RoutedScreen>(() => currentRoute().screen);
 
   useEffect(() => {
-    const sync = () => setScreenState(resolveCurrentScreen());
+    const sync = () => {
+      const route = currentRoute();
+      if (route.path !== window.location.pathname) {
+        window.history.replaceState(null, '', route.path);
+      }
+      setScreenState(route.screen);
+    };
+
     window.addEventListener('popstate', sync);
     window.addEventListener(NAVIGATION_EVENT, sync);
     sync();
@@ -167,7 +167,7 @@ export function useRoutedScreen(options: {
       window.removeEventListener('popstate', sync);
       window.removeEventListener(NAVIGATION_EVENT, sync);
     };
-  }, [resolveCurrentScreen]);
+  }, [currentRoute]);
 
   const navigate = useCallback((requested: RoutedScreen) => {
     const target = requested === 'admin' && !canAccessAdmin ? 'account' : requested;
