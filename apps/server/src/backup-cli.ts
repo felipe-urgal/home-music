@@ -83,11 +83,19 @@ try {
       }
       process.exitCode = 2;
     } else {
-      const { verified, restored } = await backups.restore(artifact);
-      console.log(`Artefato validado antes do restore: ${verified.manifest.database.sha256}`);
-      console.log(`Restore concluído com rollback protegido: ${restored.databasePath}`);
-      console.log('O .env não foi sobrescrito automaticamente. Revise manifest.json para reaplicar apenas configurações operacionais necessárias.');
-      console.log('Inicie o serviço e valide /ready + login antes de remover ou arquivar o backup.');
+      const result = await backups.restore(artifact, {
+        onVerified: verified => {
+          console.log(`Artefato validado antes do restore: ${verified.manifest.database.sha256}`);
+        }
+      });
+      if (result.blocked) {
+        console.error(result.blocked);
+        process.exitCode = 1;
+      } else {
+        console.log(`Restore concluído com rollback protegido: ${result.restored.databasePath}`);
+        console.log('O .env não foi sobrescrito automaticamente. Revise manifest.json para reaplicar apenas configurações operacionais necessárias.');
+        console.log('Inicie o serviço e valide /ready + login antes de remover ou arquivar o backup.');
+      }
     }
   } else {
     usage();
