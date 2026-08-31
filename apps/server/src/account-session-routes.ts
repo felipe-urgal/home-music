@@ -4,9 +4,6 @@ import {
   SESSION_COOKIE_NAME,
   type SessionManager
 } from './auth.js';
-import { registerLibraryViewRoutes } from './library-view-routes.js';
-import { registerPlaybackHistoryRoutes } from './playback-history-routes.js';
-import { registerSmartPlaylistRoutes } from './smart-playlist-routes.js';
 
 type SessionAccess = Pick<
   SessionManager,
@@ -57,8 +54,4 @@ export function registerAccountSessionRoutes(app: FastifyInstance, sessions: Ses
 
     return { revoked };
   });
-
-  registerLibraryViewRoutes(app);
-  registerSmartPlaylistRoutes(app);
-  registerPlaybackHistoryRoutes(app);
 }
