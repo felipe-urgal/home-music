@@ -38,6 +38,7 @@ Pendências relacionadas: #81, #174 e #176.
 ## Biblioteca e inteligência
 
 - [`smart-playlists.md`](smart-playlists.md) — regras, ownership, preview, persistência e invariantes das playlists inteligentes.
+- [`library-views.md`](library-views.md) — busca/filtros/ordenação salvos como views pessoais reutilizáveis.
 
 ## Administração
 

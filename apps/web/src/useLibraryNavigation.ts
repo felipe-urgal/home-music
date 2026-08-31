@@ -1,6 +1,10 @@
 import { useDeferredValue, useMemo, useState } from 'react';
 import type { Playlist, Track } from '@home-music/shared';
 import {
+  compatibleLibraryViewDefinition,
+  type LibraryViewDefinition
+} from './library-view-types';
+import {
   applyTrackView,
   buildFolderView,
   matchesTrackView,
@@ -61,6 +65,13 @@ export function useLibraryNavigation(
     cover: coverFilter,
     sort
   }), [coverFilter, formatFilter, normalizedQuery, sort]);
+
+  const currentViewDefinition = useMemo<LibraryViewDefinition>(() => ({
+    query: query.trim(),
+    format: formatFilter,
+    cover: coverFilter,
+    sort
+  }), [coverFilter, formatFilter, query, sort]);
 
   const baseTracks = useMemo(() => {
     if (libraryTab === 'playlists' && selectedPlaylist) return playlistTracks;
@@ -166,6 +177,22 @@ export function useLibraryNavigation(
     resetPage();
   }
 
+  function applyLibraryView(definition: LibraryViewDefinition) {
+    const targetCanSort = Boolean(definition.query.trim())
+      || Boolean(selectedPlaylist)
+      || (libraryTab === 'folders' && Boolean(folderPath));
+    const compatible = compatibleLibraryViewDefinition(
+      definition,
+      availableFormats,
+      targetCanSort
+    );
+    setQuery(compatible.query);
+    setSort(compatible.sort);
+    setFormatFilter(compatible.format);
+    setCoverFilter(compatible.cover);
+    resetPage();
+  }
+
   function showMore() {
     setVisibleCount(count => count + LIBRARY_PAGE_SIZE);
   }
@@ -184,6 +211,7 @@ export function useLibraryNavigation(
     availableFormats,
     activeViewOptionCount,
     canSortTracks,
+    currentViewDefinition,
     visibleCount,
     visibleFolders,
     libraryTracks,
@@ -199,6 +227,7 @@ export function useLibraryNavigation(
     changeSort,
     changeFormatFilter,
     changeCoverFilter,
+    applyLibraryView,
     resetViewOptions,
     showMore
   };
