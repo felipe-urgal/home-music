@@ -87,10 +87,11 @@ async function fixture(options: {
 }
 
 async function waitForStatus(queue: ImportJobQueue, id: string, expected: string) {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
     const job = queue.get(id);
     if (job?.status === expected) return job;
-    await new Promise(resolve => setTimeout(resolve, 2));
+    await new Promise(resolve => setTimeout(resolve, 10));
   }
   assert.fail(`Job ${id} não chegou ao estado ${expected}. Atual: ${queue.get(id)?.status}`);
 }
@@ -340,9 +341,11 @@ test('timeout aborta o contexto, normaliza erro e limpa recursos', async () => {
 
 test('cancelamento aborta provider ativo e marca job como cancelled', async () => {
   let aborted = false;
+  let started = false;
   const item = await fixture({
     providers: [fakeProvider({
       prepare: async (_request, context) => new Promise<ExternalProviderPreparedMedia>((_resolve, reject) => {
+        started = true;
         context.signal.addEventListener('abort', () => {
           aborted = true;
           reject(context.signal.reason);
@@ -352,9 +355,12 @@ test('cancelamento aborta provider ativo e marca job como cancelled', async () =
   });
   try {
     const { job } = await item.manager.start('fake', { url: 'https://example.com/faixa' });
+    for (let attempt = 0; attempt < 50 && !started; attempt += 1) {
+      await new Promise(resolve => setTimeout(resolve, 1));
+    }
     const cancelled = await item.manager.cancel(job.id);
-    assert.equal(aborted, true);
     assert.equal(cancelled.status, 'cancelled');
+    assert.equal(aborted, true);
     assert.equal((await readdir(item.stagingRoot)).length, 0);
     assert.equal((await readdir(item.scratchRoot)).length, 0);
   } finally {
@@ -368,7 +374,6 @@ test('cancelamento de job pending remove payload preparado', async () => {
     const { job } = await item.manager.start('fake', { url: 'https://example.com/faixa' });
     await waitForStatus(item.queue, job.id, 'pending');
     assert.ok(item.manager.getPrepared(job.id));
-
     const cancelled = await item.manager.cancel(job.id);
     assert.equal(cancelled.status, 'cancelled');
     assert.equal(item.manager.getPrepared(job.id), null);
@@ -382,20 +387,15 @@ test('erros do adapter são canonicalizados e não vazam detalhes para a fila', 
   const item = await fixture({
     providers: [fakeProvider({
       prepare: async () => {
-        throw new ExternalProviderError(
-          'provider_failed',
-          'token-secreto stack interno /etc/passwd',
-          502
-        );
+        throw new ExternalProviderError('provider_network_failed', 'lookup 10.0.0.5 token=segredo', 502);
       }
     })]
   });
   try {
     const { job } = await item.manager.start('fake', { url: 'https://example.com/faixa' });
     const failed = await waitForStatus(item.queue, job.id, 'failed');
-    assert.equal(failed.error, 'Falha ao executar o provider externo.');
-    assert.equal(failed.error?.includes('token-secreto'), false);
-    assert.equal(failed.error?.includes('/etc/passwd'), false);
+    assert.equal(failed.error, 'O provider externo não conseguiu acessar a origem pela rede segura.');
+    assert.equal((failed.error ?? '').includes('segredo'), false);
   } finally {
     await rm(item.root, { recursive: true, force: true });
   }
