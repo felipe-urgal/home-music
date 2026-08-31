@@ -15,6 +15,12 @@ type BackupServiceOptions = {
   restoreOfflineBlocker: (databasePath: string) => Promise<string | null>;
 };
 
+type VerifiedBackupArtifact = Awaited<ReturnType<typeof verifyBackupArtifact>>;
+
+type BackupRestoreHooks = {
+  onVerified?: (verified: VerifiedBackupArtifact) => Promise<void> | void;
+};
+
 export class BackupService {
   constructor(private readonly options: BackupServiceOptions) {}
 
@@ -30,11 +36,18 @@ export class BackupService {
     return verifyBackupArtifact(artifactPath);
   }
 
-  async restore(artifactPath: string) {
+  async restore(artifactPath: string, hooks: BackupRestoreHooks = {}) {
     const initialBlocker = await this.options.restoreOfflineBlocker(this.options.databasePath);
-    if (initialBlocker) throw new BackupValidationError(initialBlocker);
+    if (initialBlocker) {
+      return {
+        blocked: initialBlocker,
+        verified: null,
+        restored: null
+      } as const;
+    }
 
     const verified = await verifyBackupArtifact(artifactPath);
+    await hooks.onVerified?.(verified);
     const restored = await restoreBackupArtifact(
       artifactPath,
       this.options.databasePath,
@@ -46,7 +59,11 @@ export class BackupService {
       }
     );
 
-    return { verified, restored };
+    return {
+      blocked: null,
+      verified,
+      restored
+    } as const;
   }
 }
 
