@@ -11,6 +11,7 @@ test('index remains a composition root instead of implementing domains', () => {
 
   assert.match(index, /createServerInfrastructure\(/);
   assert.match(index, /new LibraryService\(/);
+  assert.match(index, /new PersonalLibraryService\(/);
   assert.match(index, /new TrackMediaInfrastructure\(/);
   assert.match(index, /installApiAuthPolicy\(/);
   assert.match(index, /registerAuthRoutes\(/);
@@ -31,6 +32,7 @@ test('index remains a composition root instead of implementing domains', () => {
 
 test('business state and infrastructure stay behind explicit modules', () => {
   const library = source('library-service.ts');
+  const personal = source('personal-library-service.ts');
   const media = source('track-media-infrastructure.ts');
   const infrastructure = source('server-infrastructure.ts');
 
@@ -38,6 +40,11 @@ test('business state and infrastructure stay behind explicit modules', () => {
   assert.match(library, /scanLibrary\(/);
   assert.match(library, /auditLibraryIntegrity\(/);
   assert.doesNotMatch(library, /FastifyInstance/);
+
+  assert.match(personal, /HomeMusicDatabase/);
+  assert.match(personal, /savePlaybackState\(/);
+  assert.match(personal, /setPlaylistTracks\(/);
+  assert.doesNotMatch(personal, /FastifyInstance/);
 
   assert.match(media, /openRegularFileInside\(/);
   assert.match(media, /readTrackLyrics\(/);
@@ -65,6 +72,9 @@ test('HTTP handlers are grouped by domain while auth policy stays central', () =
   assert.doesNotMatch(sessions, /registerPlaybackHistoryRoutes/);
 
   assert.match(library, /\/api\/library/);
+  assert.match(personal, /PersonalLibraryService/);
+  assert.doesNotMatch(personal, /HomeMusicDatabase/);
+  assert.doesNotMatch(personal, /LibraryService/);
   assert.match(personal, /\/api\/favorites/);
   assert.match(personal, /\/api\/player\/state/);
   assert.match(personal, /registerLibraryViewRoutes\(/);
@@ -72,6 +82,7 @@ test('HTTP handlers are grouped by domain while auth policy stays central', () =
   assert.match(personal, /registerPlaybackHistoryRoutes\(/);
   assert.match(media, /\/api\/tracks\/:id\/stream/);
   assert.match(system, /\/api\/health/);
+  assert.doesNotMatch(system, /ServerInfrastructure/);
 
   for (const routeSource of [auth, sessions, library, personal, media, system]) {
     assert.doesNotMatch(routeSource, /installApiAuthPolicy\(/);
