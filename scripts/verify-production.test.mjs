@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { formatReadinessSuccess, verifyProductionReadiness } from './verify-production.mjs';
+import {
+  formatReadinessSuccess,
+  positiveInteger,
+  readinessErrorDiagnostic,
+  verifyProductionReadiness
+} from './verify-production.mjs';
 
 function okResponse(status = 200) {
   return { ok: status >= 200 && status < 300, status };
@@ -35,6 +40,34 @@ test('mensagem de sucesso não inclui a URL consultada', () => {
   assert.doesNotMatch(message, /https?:\/\//);
 });
 
+test('diagnóstico de erro não repassa URL ou credencial do fetch', () => {
+  const secretUrl = 'https://user:secret@example.com/ready?token=abc';
+  const diagnostic = readinessErrorDiagnostic(
+    new TypeError(`Failed to parse URL from ${secretUrl}`)
+  );
+
+  assert.equal(diagnostic, 'falha ao consultar readiness');
+  assert.equal(diagnostic.includes(secretUrl), false);
+  assert.equal(diagnostic.includes('secret'), false);
+});
+
+test('diagnóstico preserva apenas código seguro da causa de conexão', () => {
+  const diagnostic = readinessErrorDiagnostic(
+    new TypeError('fetch failed', { cause: { code: 'ECONNREFUSED' } })
+  );
+
+  assert.equal(diagnostic, 'falha de conexão (ECONNREFUSED)');
+});
+
+test('override numérico precisa ser inteiro decimal positivo completo', () => {
+  assert.equal(positiveInteger('30000', 10), 30000);
+  assert.equal(positiveInteger(' 30000 ', 10), 30000);
+  assert.equal(positiveInteger('30s', 30000), 30000);
+  assert.equal(positiveInteger('30_000', 30000), 30000);
+  assert.equal(positiveInteger('0', 30000), 30000);
+  assert.equal(positiveInteger('-1', 30000), 30000);
+});
+
 test('falha de forma bounded quando readiness não fica disponível', async () => {
   let calls = 0;
   let clock = 0;
@@ -58,7 +91,7 @@ test('falha de forma bounded quando readiness não fica disponível', async () =
   assert.equal(result.elapsedMs, 250);
 });
 
-test('retry também cobre erro de conexão sem transformar falha permanente em sucesso', async () => {
+test('retry cobre erro de conexão sem transformar falha permanente em sucesso', async () => {
   let clock = 0;
 
   const result = await verifyProductionReadiness({
@@ -68,11 +101,11 @@ test('retry também cobre erro de conexão sem transformar falha permanente em s
     now: () => clock,
     sleepImpl: async ms => { clock += ms; },
     fetchImpl: async () => {
-      throw new Error('ECONNREFUSED');
+      throw new TypeError('fetch failed', { cause: { code: 'ECONNREFUSED' } });
     }
   });
 
   assert.equal(result.ok, false);
   assert.equal(result.attempts, 3);
-  assert.equal(result.lastIssue, 'ECONNREFUSED');
+  assert.equal(result.lastIssue, 'falha de conexão (ECONNREFUSED)');
 });
