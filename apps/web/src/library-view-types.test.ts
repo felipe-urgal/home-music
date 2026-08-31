@@ -12,19 +12,26 @@ const definition: LibraryViewDefinition = {
 };
 
 describe('compatibleLibraryViewDefinition', () => {
-  it('preserva todos os filtros quando o formato existe no contexto', () => {
-    expect(compatibleLibraryViewDefinition(definition, ['MP3', 'FLAC'])).toEqual(definition);
+  it('preserva todos os filtros quando o contexto é compatível', () => {
+    expect(compatibleLibraryViewDefinition(definition, ['MP3', 'FLAC'], true)).toEqual(definition);
   });
 
   it('remove apenas o formato incompatível e preserva os demais filtros', () => {
-    expect(compatibleLibraryViewDefinition(definition, ['MP3'])).toEqual({
+    expect(compatibleLibraryViewDefinition(definition, ['MP3'], true)).toEqual({
       ...definition,
       format: 'all'
     });
   });
 
+  it('volta apenas a ordenação para current quando o contexto não ordena faixas', () => {
+    expect(compatibleLibraryViewDefinition(definition, ['FLAC'], false)).toEqual({
+      ...definition,
+      sort: 'current'
+    });
+  });
+
   it('preserva o filtro all mesmo em contexto sem formatos', () => {
     const allFormats = { ...definition, format: 'all' };
-    expect(compatibleLibraryViewDefinition(allFormats, [])).toEqual(allFormats);
+    expect(compatibleLibraryViewDefinition(allFormats, [], true)).toEqual(allFormats);
   });
 });
