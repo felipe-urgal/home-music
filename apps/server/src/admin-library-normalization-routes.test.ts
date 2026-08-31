@@ -52,7 +52,7 @@ async function buildApp(databasePath: string) {
   return { app, sessions, users };
 }
 
-test('normalização administrativa exige admin e header de mutação', async () => {
+test('normalização administrativa exige sessão, admin e header de mutação', async () => {
   const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-normalization-routes-'));
   const databasePath = path.join(temp, 'home-music.db');
   seedTracks(databasePath);
@@ -74,6 +74,13 @@ test('normalização administrativa exige admin e header de mutação', async ()
   const adminToken = sessions.createSessionForUser('admin-a');
 
   try {
+    const unauthenticated = await app.inject({
+      method: 'GET',
+      url: '/api/admin/library/normalization'
+    });
+    assert.equal(unauthenticated.statusCode, 401);
+    assert.deepEqual(unauthenticated.json(), { error: 'Sessão expirada ou autenticação necessária.' });
+
     const forbidden = await app.inject({
       method: 'GET',
       url: '/api/admin/library/normalization',
