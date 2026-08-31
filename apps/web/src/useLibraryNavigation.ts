@@ -32,7 +32,8 @@ function initialLibraryRoute() {
 
 export function useLibraryNavigation(
   tracks: Track[],
-  playlists: Playlist[]
+  playlists: Playlist[],
+  libraryReady: boolean
 ) {
   const initialRoute = useMemo(initialLibraryRoute, []);
   const [libraryTab, setLibraryTab] = useState<LibraryTab>(initialRoute.libraryTab);
@@ -149,6 +150,23 @@ export function useLibraryNavigation(
     window.addEventListener('popstate', syncFromHistory);
     return () => window.removeEventListener('popstate', syncFromHistory);
   }, []);
+
+  useEffect(() => {
+    if (
+      !libraryReady
+      || libraryTab !== 'playlists'
+      || !selectedPlaylistId
+      || selectedPlaylist
+    ) return;
+
+    setSelectedPlaylistId(null);
+    setQuery('');
+    setSort('current');
+    setFormatFilter('all');
+    setCoverFilter('all');
+    setVisibleCount(LIBRARY_PAGE_SIZE);
+    navigateAppPath('/library/playlists', { replace: true });
+  }, [libraryReady, libraryTab, selectedPlaylist, selectedPlaylistId]);
 
   function resetPage() {
     setVisibleCount(LIBRARY_PAGE_SIZE);
