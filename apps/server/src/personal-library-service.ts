@@ -4,6 +4,7 @@ import type { LibraryService } from './library-service.js';
 
 type PlaylistMutationStatus = 'ok' | 'not-found' | 'read-only' | 'invalid-name';
 type PlaylistTracksStatus = 'ok' | 'not-found' | 'read-only' | 'invalid-tracks';
+type FavoriteMutationStatus = 'ok' | 'not-found' | 'invalid-favorite';
 
 export class PersonalLibraryService {
   constructor(
@@ -15,10 +16,11 @@ export class PersonalLibraryService {
     return this.database.getFavoriteIds(userId);
   }
 
-  setFavorite(userId: string, trackId: string, favorite: boolean) {
-    if (!this.library.getTrack(trackId)) return false;
+  setFavorite(userId: string, trackId: string, favorite: unknown): { status: FavoriteMutationStatus } {
+    if (!this.library.getTrack(trackId)) return { status: 'not-found' };
+    if (typeof favorite !== 'boolean') return { status: 'invalid-favorite' };
     this.database.setFavorite(userId, trackId, favorite);
-    return true;
+    return { status: 'ok' };
   }
 
   getPlaylists(userId: string) {
