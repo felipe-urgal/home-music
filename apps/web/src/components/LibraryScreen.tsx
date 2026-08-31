@@ -1,23 +1,28 @@
 import { useEffect, useState } from 'react';
 import {
+  BookmarkPlus,
   ChevronLeft,
   ChevronRight,
   Folder,
   ListMusic,
   Music2,
+  Pencil,
   Play,
   Plus,
   RefreshCw,
+  Search,
+  SlidersHorizontal,
   Sparkles,
   Trash2
 } from 'lucide-react';
 import type { AuthenticatedUser, Playlist, Track } from '@home-music/shared';
 import { canUseAdminLibraryActions } from '../frontend-access';
-import type { TrackSort } from '../library-utils';
+import type { CoverFilter, TrackSort } from '../library-utils';
 import type { OfflineDownloads } from '../offline-downloads';
 import type { LibraryData } from '../useLibraryData';
 import { useDesktopLayout } from '../useDesktopLayout';
 import { LIBRARY_PAGE_SIZE, type LibraryNavigation, type LibraryTab } from '../useLibraryNavigation';
+import { useLibraryViews } from '../useLibraryViews';
 import { Artwork } from './Artwork';
 import { DesktopTrackTable } from './DesktopTrackTable';
 import { MiniPlayer } from './MiniPlayer';
@@ -138,6 +143,7 @@ export function LibraryScreen({
 }: LibraryScreenProps) {
   const canManageSharedLibrary = canUseAdminLibraryActions(currentUser);
   const [smartPlaylistEditor, setSmartPlaylistEditor] = useState<{ playlist: Playlist | null } | null>(null);
+  const [viewControlsOpen, setViewControlsOpen] = useState(false);
   const {
     tracks,
     playlists,
@@ -155,13 +161,21 @@ export function LibraryScreen({
     setPlaylistTracks,
     reportError
   } = data;
+  const savedViews = useLibraryViews(reportError);
   const {
     libraryTab,
     selectedPlaylist,
     folderPath,
     folderView,
     folderContextTracks,
+    query,
     sort,
+    formatFilter,
+    coverFilter,
+    availableFormats,
+    activeViewOptionCount,
+    canSortTracks,
+    currentViewDefinition,
     visibleCount,
     visibleFolders,
     libraryTracks,
@@ -173,11 +187,17 @@ export function LibraryScreen({
     leaveFolder,
     selectPlaylist,
     leavePlaylist,
+    changeQuery,
     changeSort,
+    changeFormatFilter,
+    changeCoverFilter,
+    applyLibraryView,
+    resetViewOptions,
     showMore
   } = navigation;
 
   const isDetail = Boolean(selectedPlaylist || folderPath);
+  const showViewTools = !(libraryTab === 'playlists' && !selectedPlaylist);
   const run = (operation: Promise<unknown>) => void operation.catch(() => undefined);
 
   useEffect(() => {
@@ -185,8 +205,14 @@ export function LibraryScreen({
   }, [refreshPlaylists, reportError]);
 
   function goBack() {
+    setViewControlsOpen(false);
     if (selectedPlaylist) leavePlaylist();
     else if (folderPath) leaveFolder();
+  }
+
+  function changeTab(tab: LibraryTab) {
+    setViewControlsOpen(false);
+    selectTab(tab);
   }
 
   function title() {
@@ -217,6 +243,22 @@ export function LibraryScreen({
     if (playlist.source === 'smart') await deleteSmartPlaylist(playlist.id);
     else await deletePlaylist(playlist.id);
     leavePlaylist();
+  }
+
+  async function saveCurrentView() {
+    const name = window.prompt('Nome da nova view inteligente:')?.trim();
+    if (!name) return;
+    await savedViews.createView(name, currentViewDefinition);
+  }
+
+  async function renameSavedView(id: string, currentName: string) {
+    const name = window.prompt('Novo nome da view:', currentName)?.trim();
+    if (name && name !== currentName) await savedViews.renameView(id, name);
+  }
+
+  async function removeSavedView(id: string, name: string) {
+    if (!window.confirm(`Excluir a view “${name}”?`)) return;
+    await savedViews.deleteView(id);
   }
 
   async function scanNow() {
@@ -285,12 +327,112 @@ export function LibraryScreen({
           {tabs.map(tab => {
             const Icon = tab.icon;
             return (
-              <button key={tab.id} className={libraryTab === tab.id ? 'is-active' : ''} onClick={() => selectTab(tab.id)}>
+              <button key={tab.id} className={libraryTab === tab.id ? 'is-active' : ''} onClick={() => changeTab(tab.id)}>
                 <Icon />{tab.label}
               </button>
             );
           })}
         </nav>
+      )}
+
+      {showViewTools && (
+        <section className="library-smart-view-tools" aria-label="Busca, filtros e views inteligentes">
+          <div className="library-tools">
+            <label className="search-box search-box--library">
+              <Search aria-hidden="true" />
+              <span className="sr-only">Buscar na biblioteca</span>
+              <input
+                value={query}
+                onChange={event => changeQuery(event.target.value)}
+                placeholder="Música, artista, álbum ou pasta"
+              />
+            </label>
+            <button
+              className={`library-filter-toggle ${activeViewOptionCount > 0 ? 'is-active' : ''}`}
+              type="button"
+              aria-label="Ordenar, filtrar e gerenciar views"
+              aria-expanded={viewControlsOpen}
+              onClick={() => setViewControlsOpen(open => !open)}
+            >
+              <SlidersHorizontal aria-hidden="true" />
+              {activeViewOptionCount > 0 && <span>{activeViewOptionCount}</span>}
+            </button>
+          </div>
+
+          {savedViews.views.length > 0 && (
+            <div className="library-saved-view-strip" aria-label="Views salvas">
+              {savedViews.views.map(view => (
+                <button key={view.id} type="button" onClick={() => applyLibraryView(view.definition)}>
+                  <Sparkles aria-hidden="true" />
+                  <span>{view.name}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {viewControlsOpen && (
+            <div className="library-view-controls">
+              {canSortTracks && (
+                <label>
+                  <span>Ordenar</span>
+                  <select value={sort} onChange={event => changeSort(event.target.value as TrackSort)}>
+                    <option value="current">Ordem atual</option>
+                    <option value="title-asc">Título A–Z</option>
+                    <option value="title-desc">Título Z–A</option>
+                    <option value="artist-asc">Artista A–Z</option>
+                    <option value="artist-desc">Artista Z–A</option>
+                    <option value="album-asc">Álbum A–Z</option>
+                    <option value="album-desc">Álbum Z–A</option>
+                  </select>
+                </label>
+              )}
+
+              <label>
+                <span>Formato</span>
+                <select value={formatFilter} onChange={event => changeFormatFilter(event.target.value)}>
+                  <option value="all">Todos</option>
+                  {availableFormats.map(format => <option key={format} value={format}>{format}</option>)}
+                </select>
+              </label>
+
+              <label>
+                <span>Capa</span>
+                <select value={coverFilter} onChange={event => changeCoverFilter(event.target.value as CoverFilter)}>
+                  <option value="all">Todas</option>
+                  <option value="with-cover">Com capa</option>
+                  <option value="without-cover">Sem capa</option>
+                </select>
+              </label>
+
+              <div className="library-view-controls__actions">
+                <button type="button" onClick={() => run(saveCurrentView())}><BookmarkPlus />Salvar view</button>
+                {(query || activeViewOptionCount > 0) && (
+                  <button type="button" onClick={() => { changeQuery(''); resetViewOptions(); }}>Limpar</button>
+                )}
+              </div>
+
+              {savedViews.loading ? (
+                <div className="library-saved-view-status">Carregando views…</div>
+              ) : savedViews.views.length > 0 ? (
+                <div className="library-saved-view-manager">
+                  <span className="library-saved-view-manager__title">Views salvas</span>
+                  {savedViews.views.map(view => (
+                    <div className="library-saved-view-row" key={view.id}>
+                      <button className="library-saved-view-row__open" type="button" onClick={() => applyLibraryView(view.definition)}>
+                        <Sparkles aria-hidden="true" />
+                        <span>{view.name}</span>
+                      </button>
+                      <button type="button" aria-label={`Renomear view ${view.name}`} onClick={() => run(renameSavedView(view.id, view.name))}><Pencil /></button>
+                      <button className="is-danger" type="button" aria-label={`Excluir view ${view.name}`} onClick={() => run(removeSavedView(view.id, view.name))}><Trash2 /></button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="library-saved-view-status">Salve a busca e os filtros atuais para reutilizar depois.</div>
+              )}
+            </div>
+          )}
+        </section>
       )}
 
       <section className="library-content">
@@ -317,7 +459,7 @@ export function LibraryScreen({
 
             {pagedTracks.length > 0 && (
               <>
-                <div className="section-heading"><span>Músicas nesta pasta</span><small>{libraryTracks.length}</small></div>
+                <div className="section-heading"><span>{query ? 'Resultados' : 'Músicas nesta pasta'}</span><small>{libraryTracks.length}</small></div>
                 <TrackRows
                   tracks={pagedTracks}
                   context={folderContextTracks}
