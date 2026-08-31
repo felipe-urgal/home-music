@@ -52,19 +52,28 @@ test('business state and infrastructure stay behind explicit modules', () => {
 
 test('HTTP handlers are grouped by domain while auth policy stays central', () => {
   const auth = source('auth-routes.ts');
+  const sessions = source('account-session-routes.ts');
   const library = source('library-routes.ts');
   const personal = source('personal-routes.ts');
   const media = source('media-routes.ts');
   const system = source('system-routes.ts');
 
   assert.match(auth, /\/api\/auth\/login/);
+  assert.match(sessions, /\/api\/auth\/sessions/);
+  assert.doesNotMatch(sessions, /registerLibraryViewRoutes/);
+  assert.doesNotMatch(sessions, /registerSmartPlaylistRoutes/);
+  assert.doesNotMatch(sessions, /registerPlaybackHistoryRoutes/);
+
   assert.match(library, /\/api\/library/);
   assert.match(personal, /\/api\/favorites/);
   assert.match(personal, /\/api\/player\/state/);
+  assert.match(personal, /registerLibraryViewRoutes\(/);
+  assert.match(personal, /registerSmartPlaylistRoutes\(/);
+  assert.match(personal, /registerPlaybackHistoryRoutes\(/);
   assert.match(media, /\/api\/tracks\/:id\/stream/);
   assert.match(system, /\/api\/health/);
 
-  for (const routeSource of [auth, library, personal, media, system]) {
+  for (const routeSource of [auth, sessions, library, personal, media, system]) {
     assert.doesNotMatch(routeSource, /installApiAuthPolicy\(/);
   }
 });
