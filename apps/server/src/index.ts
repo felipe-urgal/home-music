@@ -114,8 +114,7 @@ const media = new TrackMediaInfrastructure({
   library,
   transcodeManager: infrastructure.transcodeManager,
   transcodeCacheMaintenance: infrastructure.transcodeCacheMaintenance,
-  getFfmpegStatus: () => ffmpegStatus,
-  logger: app.log
+  getFfmpegStatus: () => ffmpegStatus
 });
 library.setMediaCacheInvalidator(() => media.clearCoverCache());
 
