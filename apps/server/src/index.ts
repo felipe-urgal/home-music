@@ -46,6 +46,7 @@ import {
   type IndexedTrack
 } from './library.js';
 import { LibraryMutationLock } from './library-mutation-lock.js';
+import { registerPhase10Routes } from './phase-10-routes.js';
 import { replayGainForMode } from './replay-gain.js';
 import { readTrackLyrics } from './lyrics.js';
 import {
@@ -508,6 +509,7 @@ installApiAuthPolicy(app, {
   users: authUsers
 });
 registerAccountSessionRoutes(app, sessions);
+registerPhase10Routes(app, databasePath);
 registerAdminUserRoutes(app, adminUsers);
 registerAdminImportRoutes(app, importJobs, { onPromoted: updateLibraryForPromotedImport });
 registerAdminOperationHistoryRoutes(app, operationHistory);
