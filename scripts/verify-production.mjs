@@ -16,6 +16,10 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+export function formatReadinessSuccess({ attempts, elapsedMs }) {
+  return `Readiness de produção confirmado em ${attempts} tentativa(s) após ${elapsedMs} ms.`;
+}
+
 export async function verifyProductionReadiness({
   url = DEFAULT_URL,
   timeoutMs = DEFAULT_TIMEOUT_MS,
@@ -103,9 +107,7 @@ async function main() {
     return;
   }
 
-  console.log(
-    `Readiness de produção confirmado em ${result.attempts} tentativa(s) após ${result.elapsedMs} ms: ${url}`
-  );
+  console.log(formatReadinessSuccess(result));
 }
 
 const entrypoint = process.argv[1] ? pathToFileURL(process.argv[1]).href : null;
