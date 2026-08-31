@@ -17,6 +17,7 @@ import { probeFfmpeg, resolveFfmpegCommand, type FfmpegStatus } from './ffmpeg.j
 import { registerLibraryRoutes } from './library-routes.js';
 import { LibraryService } from './library-service.js';
 import { registerMediaRoutes } from './media-routes.js';
+import { PersonalLibraryService } from './personal-library-service.js';
 import { registerPersonalRoutes } from './personal-routes.js';
 import { createServerInfrastructure } from './server-infrastructure.js';
 import { prepareWebApp, type PreparedWebApp } from './static-web.js';
@@ -104,6 +105,7 @@ const library = new LibraryService({
   operationHistory: infrastructure.operationHistory,
   logger: app.log
 });
+const personal = new PersonalLibraryService(infrastructure.database, library);
 let ffmpegStatus: FfmpegStatus = {
   available: false,
   version: null,
@@ -167,15 +169,20 @@ registerAdminTrackRoutes(app, {
   musicDir
 });
 registerLibraryRoutes(app, library);
-registerPersonalRoutes(app, infrastructure.database, library);
+registerPersonalRoutes(app, personal);
 registerMediaRoutes(app, library, media);
 registerSystemRoutes(app, {
   isProduction,
   musicDirConfigured: Boolean(musicDir),
+  authConfigured: infrastructure.authConfigured,
   transcodeCacheMegabytes,
-  infrastructure,
   library,
   getFfmpegStatus: () => ffmpegStatus,
+  getSchemaVersion: () => infrastructure.database.getSchemaVersion(),
+  getTranscodingRuntime: () => ({
+    active: infrastructure.transcodeManager.activeCount,
+    pending: infrastructure.transcodeManager.pendingCount
+  }),
   isWebReady: () => Boolean(webApp)
 });
 
