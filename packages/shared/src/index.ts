@@ -171,6 +171,48 @@ export type AdminLibraryDuplicateIgnoreResponse = {
   ignored: boolean;
 };
 
+export type LibraryMetadataAliasKind = 'artist' | 'album';
+
+export type LibraryMetadataAlias = {
+  id: string;
+  kind: LibraryMetadataAliasKind;
+  scope: string | null;
+  sourceValue: string;
+  canonicalValue: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type LibraryMetadataNormalizationVariant = {
+  value: string;
+  trackCount: number;
+};
+
+export type LibraryMetadataNormalizationCandidate = {
+  key: string;
+  kind: LibraryMetadataAliasKind;
+  scope: string | null;
+  variants: LibraryMetadataNormalizationVariant[];
+};
+
+export type AdminLibraryNormalizationReviewResponse = {
+  checkedAt: string;
+  counts: {
+    artistCandidates: number;
+    albumCandidates: number;
+    aliases: number;
+  };
+  aliases: LibraryMetadataAlias[];
+  candidates: LibraryMetadataNormalizationCandidate[];
+};
+
+export type AdminLibraryNormalizationAssociateRequest = {
+  kind: LibraryMetadataAliasKind;
+  scope?: string | null;
+  sourceValues: string[];
+  canonicalValue: string;
+};
+
 export type ImportJobSource = {
   type: ImportJobSourceType;
   provider: string | null;
