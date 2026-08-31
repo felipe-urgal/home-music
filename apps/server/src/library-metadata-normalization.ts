@@ -119,7 +119,7 @@ function candidateGroups(kind: LibraryMetadataAliasKind, tracks: AliasableMetada
     const scope = rawKey.slice(0, separator);
     const comparison = rawKey.slice(separator + 1);
     candidates.push({
-      key: `${kind}:${scope}:${comparison}`,
+      key: JSON.stringify([kind, scope, comparison]),
       kind,
       scope: kind === 'album' ? scope : null,
       variants: [...variants.entries()]
