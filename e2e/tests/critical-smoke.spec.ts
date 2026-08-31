@@ -75,7 +75,7 @@ test('smoke crítico: deep link, histórico, player, conta e administração', a
 
   await page.goto('/library/playlists/playlist-inexistente');
   await expect(page).toHaveURL(/\/library\/playlists$/);
-  await expectLibrary(page);
+  await expect(page.locator('.library-content .section-heading').getByText('Playlists', { exact: true })).toBeVisible();
 
   await page.goto('/rota-invalida');
   await expect(page).toHaveURL(/\/$/);
