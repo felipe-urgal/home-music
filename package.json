@@ -22,7 +22,7 @@
     "prod:check": "npm run typecheck && npm test && npm run build && npm run smoke:production",
     "prod:backup": "npm run backup:create --",
     "prod:deploy": "npm run service:update",
-    "prod:verify": "node scripts/verify-production-ready.mjs",
+    "prod:verify": "curl --fail --silent --show-error http://127.0.0.1:8787/ready",
     "prod:logs": "journalctl -u home-music -f",
     "admin:recover": "npm run admin:recover -w @home-music/server --",
     "backup:create": "npm run backup:create -w @home-music/server --",
