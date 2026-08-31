@@ -34,7 +34,7 @@ Handlers Fastify ficam agrupados por domínio:
 
 - `auth-routes.ts` — status/login/logout/troca de senha e composição das rotas pessoais de sessão;
 - `library-routes.ts` — snapshot/status/rescan, overview e integridade da biblioteca;
-- `personal-routes.ts` — favoritos, playlists manuais e estado do player;
+- `personal-routes.ts` — favoritos, playlists manuais, estado do player, views pessoais, smart playlists e histórico de playback;
 - `media-routes.ts` — lyrics, capa, streaming direto e transcoding;
 - `system-routes.ts` — liveness/readiness/diagnóstico e fallback do frontend de produção;
 - módulos administrativos existentes continuam separados por domínio (`admin-*-routes.ts`).
