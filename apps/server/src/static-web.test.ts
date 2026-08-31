@@ -31,9 +31,13 @@ test('política de cache usa immutable apenas para assets com hash', () => {
   assert.equal(contentTypeForPath('manifest.webmanifest'), 'application/manifest+json; charset=utf-8');
 });
 
-test('fallback SPA é usado somente para rotas válidas da aplicação', () => {
+test('fallback SPA cobre rotas canônicas mesmo com pontos em segmentos dinâmicos', () => {
   assert.equal(shouldServeShell('/'), true);
   assert.equal(shouldServeShell('/biblioteca/rock'), true);
+  assert.equal(shouldServeShell('/library/folders/AC.DC'), true);
+  assert.equal(shouldServeShell('/library/folders/Music.v1/Live.flac'), true);
+  assert.equal(shouldServeShell('/library/playlists/id.with.dot'), true);
+  assert.equal(shouldServeShell('/library/folders/%20AC.DC%20'), true);
   assert.equal(shouldServeShell('/assets/app-antigo.js'), false);
   assert.equal(shouldServeShell('/offline-audio/1234567890abcdef12345678'), false);
   assert.equal(shouldServeShell('/manifest.webmanifest'), false);
