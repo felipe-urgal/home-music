@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { verifyProductionReadiness } from './verify-production.mjs';
+import { formatReadinessSuccess, verifyProductionReadiness } from './verify-production.mjs';
 
 function okResponse(status = 200) {
   return { ok: status >= 200 && status < 300, status };
@@ -26,6 +26,13 @@ test('confirma readiness quando a aplicação fica pronta após algumas tentativ
   assert.equal(result.attempts, 3);
   assert.equal(calls, 3);
   assert.equal(result.lastIssue, null);
+});
+
+test('mensagem de sucesso não inclui a URL consultada', () => {
+  const message = formatReadinessSuccess({ attempts: 2, elapsedMs: 1500 });
+
+  assert.equal(message, 'Readiness de produção confirmado em 2 tentativa(s) após 1500 ms.');
+  assert.doesNotMatch(message, /https?:\/\//);
 });
 
 test('falha de forma bounded quando readiness não fica disponível', async () => {
