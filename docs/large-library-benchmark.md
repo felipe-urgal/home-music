@@ -88,6 +88,34 @@ A renderização usa `LIBRARY_PAGE_SIZE`, atualmente 100 itens, preservando o co
 
 Assim como no servidor, os limites são intencionalmente muito superiores ao tempo esperado. O objetivo do gate é estabilidade entre ambientes de CI, não competição de microsegundos.
 
+## Baseline inicial — GitHub Actions
+
+A baseline de aceitação foi estabelecida em **2026-09-01** no PR #204, usando GitHub Actions `ubuntu-latest` e Node.js 22.
+
+Referência validada:
+
+- workflow run: [33496461620](https://github.com/felipe-urgal/home-music/actions/runs/33496461620);
+- commit validado: `68aa0ea2f74e2bb880c69ab9c60a601981a6f010`;
+- etapa `Large library performance guard`: **PASS**;
+- typecheck, regressões de segurança, testes funcionais, backup/restore smoke, build, Playwright crítico e smoke de produção no mesmo commit: **PASS**.
+
+| Guardrail | Dataset de referência | Resultado no run 33496461620 |
+| --- | --- | --- |
+| scan inicial | 2.000 WAV sintéticos | PASS (`<= 30.000 ms`) |
+| incremental sem mudanças | 2.000 WAV sintéticos | PASS (`<= 5.000 ms`) |
+| incremental com uma mudança | 2.000 WAV sintéticos | PASS (`<= 6.000 ms`) |
+| payload público | 2.000 faixas | PASS (`<= 2.000 ms`) |
+| memória do servidor | mesmo processo do benchmark | PASS (`heap <= 512 MiB`, `RSS <= 1.024 MiB`) |
+| decode do frontend | 10.000 faixas | PASS (`<= 1.500 ms`) |
+| projeção de pastas | 10.000 faixas | PASS (`<= 1.500 ms`) |
+| busca/filtro/ordenação | 10.000 faixas | PASS (`<= 1.500 ms`) |
+| SSR da primeira página | 100 de 10.000 faixas | PASS (`<= 1.500 ms`) |
+| memória do frontend | mesmo processo do runner | PASS (`heap <= 768 MiB`, `RSS <= 1.536 MiB`) |
+
+A baseline versionada é o conjunto **dataset + código exercitado + guardrails + run verde de referência**. Os runners continuam imprimindo as medições exatas em JSON nos logs de cada execução; esses números devem ser usados para diagnóstico e comparação entre runners equivalentes, mas não são SLA de produto nem devem ser copiados como um limite mais apertado sem amostragem suficiente.
+
+Como a documentação de baseline altera o head do PR, o merge continua condicionado a um novo CI completo no commit final. Um run verde anterior nunca substitui o gate do head final.
+
 ## Leitura dos resultados
 
 Os dois runners escrevem JSON no log com:
