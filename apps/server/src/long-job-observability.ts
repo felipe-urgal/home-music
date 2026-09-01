@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
 import type { ImportJob } from '@home-music/shared';
 import { sanitizeOperationError } from './admin-operation-history.js';
@@ -19,6 +20,7 @@ type LongJobReference = {
   jobId: string;
   operationId: string | null;
   resourceId: string | null;
+  requestId: string | null;
 };
 
 export type LongJobRun = LongJobReference & {
@@ -58,13 +60,15 @@ function logBindings(reference: LongJobReference) {
     jobType: reference.jobType,
     jobId: reference.jobId,
     ...(reference.operationId ? { operationId: reference.operationId } : {}),
-    ...(reference.resourceId ? { resourceId: reference.resourceId } : {})
+    ...(reference.resourceId ? { resourceId: reference.resourceId } : {}),
+    ...(reference.requestId ? { requestId: reference.requestId } : {})
   };
 }
 
 export class LongJobObservability {
   private readonly now: () => Date;
   private readonly createId: () => string;
+  private readonly requestContext = new AsyncLocalStorage<string>();
 
   constructor(
     private readonly logger: LongJobLogger,
@@ -72,6 +76,12 @@ export class LongJobObservability {
   ) {
     this.now = options.now ?? (() => new Date());
     this.createId = options.createId ?? randomUUID;
+  }
+
+  withRequest<T>(requestId: string, operation: () => T): T {
+    const cleanRequestId = safeIdentifier(requestId);
+    if (!cleanRequestId) return operation();
+    return this.requestContext.run(cleanRequestId, operation);
   }
 
   start(input: StartLongJobInput): LongJobRun {
@@ -158,7 +168,8 @@ export class LongJobObservability {
       jobType: input.jobType,
       jobId: safeIdentifier(input.jobId) ?? safeIdentifier(generatedId) ?? 'long-job',
       operationId: safeIdentifier(input.operationId),
-      resourceId: safeIdentifier(input.resourceId)
+      resourceId: safeIdentifier(input.resourceId),
+      requestId: safeIdentifier(this.requestContext.getStore())
     };
   }
 
