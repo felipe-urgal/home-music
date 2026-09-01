@@ -203,7 +203,17 @@ export class LibraryService {
           ),
           this.options.longJobObservability
         )
-      : () => this.performRescan();
+      : async () => {
+          const observedRun = this.options.longJobObservability?.start({ jobType: 'library.scan' });
+          try {
+            const result = await this.performRescan();
+            if (observedRun) this.options.longJobObservability?.complete(observedRun);
+            return result;
+          } catch (error) {
+            if (observedRun) this.options.longJobObservability?.fail(observedRun, error);
+            throw error;
+          }
+        };
 
     this.scanPromise = run()
       .catch(error => {
