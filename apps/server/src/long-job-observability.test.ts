@@ -197,7 +197,7 @@ test('correlaciona lifecycle da importação sem duplicar início ao retomar pro
   ]);
   assert.equal(logs[0].bindings.jobId, 'job-42');
   assert.equal(logs[0].bindings.operationId, 'import-job-42');
-  assert.equal(logs[1].durationMs, 330_000);
+  assert.equal(logs[1].bindings.durationMs, 330_000);
 });
 
 test('job terminal libera deduplicação para evitar retenção indefinida de ids', () => {
