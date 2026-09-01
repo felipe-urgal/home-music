@@ -133,6 +133,7 @@ Fontes atuais:
 - [`phase-7.5-operations.md`](phase-7.5-operations.md)
 - [`phase-7.5-admin-users-screen.md`](phase-7.5-admin-users-screen.md)
 - [`phase-7.5-my-account-screen.md`](phase-7.5-my-account-screen.md)
+- [`phase-7.5-remove-env-auth-recovery.md`](phase-7.5-remove-env-auth-recovery.md)
 
 ## Registros históricos `phase-7.5-*`
 
