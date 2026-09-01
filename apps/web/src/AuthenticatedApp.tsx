@@ -64,8 +64,9 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline
     playing: player.playing
   });
   const current = player.current;
-  const currentHasIndividualDownload = Boolean(current && offline.individualDownloadedIds.has(current.id));
-  const currentAvailableViaCollection = Boolean(current && offline.collectionDownloadedIds.has(current.id));
+  const currentHasPhysicalDownload = Boolean(current && offline.downloadedIds.has(current.id));
+  const currentHasIndividualDownload = Boolean(currentHasPhysicalDownload && current && offline.individualDownloadedIds.has(current.id));
+  const currentAvailableViaCollection = Boolean(currentHasPhysicalDownload && current && offline.collectionDownloadedIds.has(current.id));
   const editablePlaylists = library.playlists.filter(playlist => playlist.source === 'manual');
   const libraryReturnLabel = buildLibraryReturnLabel({
     selectedPlaylistName: navigation.selectedPlaylist?.name,
