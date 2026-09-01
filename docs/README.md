@@ -2,7 +2,7 @@
 
 Este diretório mistura documentação **corrente** e registros históricos de implementação. Esta página define qual material deve ser usado como fonte de verdade.
 
-> Inventário e backlog revisados em 2026-09-01. Os PRs #204, #205, #206 e #207 concluíram #119–#122 e o backlog planejado da Fase 11. A atividade de implementação atual é a #174 no PR #218; a #81 permanece como validação separada em dispositivos móveis reais.
+> Inventário e backlog revisados em 2026-09-01. Os PRs #204, #205, #206 e #207 concluíram #119–#122 e o backlog planejado da Fase 11. A implementação da #174 está tecnicamente concluída no PR #218 e aguarda review/merge; a #81 permanece como validação separada em dispositivos móveis reais.
 
 ## Desenvolvimento e agentes de IA
 
@@ -27,7 +27,7 @@ As pendências executivas abertas em 2026-09-01 são:
 
 | Issue | Estado corrente |
 | --- | --- |
-| [#174](https://github.com/felipe-urgal/home-music/issues/174) | atividade de implementação atual: playlists/pastas offline deduplicadas no PR #218 |
+| [#174](https://github.com/felipe-urgal/home-music/issues/174) | implementação concluída no PR #218; aguarda review/merge e permanece aberta até o merge |
 | [#81](https://github.com/felipe-urgal/home-music/issues/81) | validação separada em Android e iPhone/iPad reais de background/tela bloqueada; não é fechada por CI/emulação |
 | [#175](https://github.com/felipe-urgal/home-music/issues/175) | backlog visual: fallback consistente para músicas sem capa |
 | [#176](https://github.com/felipe-urgal/home-music/issues/176) | backlog visual/PWA: ícone, favicon e identidade de instalação |
@@ -146,7 +146,7 @@ Não use um registro histórico isolado para inferir que uma funcionalidade aind
 
 ## E2E
 
-A suíte Playwright tem instruções próprias em [`../e2e/README.md`](../e2e/README.md). O CI obrigatório executa o smoke crítico curto; a #174 adiciona a regressão crítica de coleções offline sem transformar a suíte completa em gate indiscriminado.
+A suíte Playwright tem instruções próprias em [`../e2e/README.md`](../e2e/README.md). O gate crítico inclui smoke geral, coleções offline deduplicadas, fluxo desktop individual/lote e isolamento offline entre contas; a regressão completa continua disponível conforme o risco da mudança.
 
 ## Regra para manutenção da documentação
 
