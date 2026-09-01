@@ -28,25 +28,48 @@ async function expectLibrary(page: Page) {
 
 async function expectAccessibilityBaseline(page: Page) {
   const libraryTabs = page.locator('.library-tabs');
-  await expect(libraryTabs).toBeVisible();
+  await expect(libraryTabs, 'as abas da Biblioteca devem estar visíveis em /library').toBeVisible();
 
   const search = page.getByLabel('Buscar na biblioteca');
-  await search.focus();
-  await expect(search).toBeFocused();
 
-  const focusStyle = await search.evaluate(element => {
+  // Anchor on the search field, move away and return using real keyboard input.
+  // The final focus therefore exercises :focus-visible instead of relying only
+  // on programmatic element.focus(), whose modality differs between browsers.
+  await search.focus();
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Shift+Tab');
+  await expect(search, 'a busca deve ser alcançável novamente pelo teclado').toBeFocused();
+
+  const focusState = await search.evaluate(element => {
     const style = window.getComputedStyle(element);
     return {
+      focusVisible: element.matches(':focus-visible'),
       style: style.outlineStyle,
       width: Number.parseFloat(style.outlineWidth)
     };
   });
-  expect(focusStyle.style).not.toBe('none');
-  expect(focusStyle.width).toBeGreaterThanOrEqual(2);
+  expect(
+    focusState.focusVisible,
+    'a busca focada por teclado deve corresponder a :focus-visible'
+  ).toBe(true);
+  expect(
+    focusState.style,
+    'o indicador de foco por teclado deve usar um outline visível'
+  ).not.toBe('none');
+  expect(
+    focusState.width,
+    'o indicador de foco por teclado deve ter ao menos 2px'
+  ).toBeGreaterThanOrEqual(2);
 
   const foldersTab = libraryTabs.getByRole('button', { name: 'Pastas', exact: true });
-  await expect(foldersTab).toBeVisible();
-  await expect(foldersTab).toHaveAttribute('aria-current', 'page');
+  await expect(
+    foldersTab,
+    'a aba Pastas deve estar visível na rota raiz da Biblioteca'
+  ).toBeVisible();
+  await expect(
+    foldersTab,
+    'a rota /library deve expor Pastas como página corrente'
+  ).toHaveAttribute('aria-current', 'page');
 }
 
 async function openAccount(page: Page) {
