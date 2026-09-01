@@ -16,6 +16,8 @@ A resolução efetiva segue esta precedência:
 2. capa física embutida no arquivo;
 3. fallback visual do frontend quando nenhuma das duas existe.
 
+O fallback do item 3 é uma política visual central do frontend, não um terceiro tipo de capa persistida. A implementação e as regras de reutilização estão em [artwork-fallback.md](artwork-fallback.md).
+
 O scanner não lê nem escreve `track_cover_overrides`. Um re-scan pode atualizar a informação física em `tracks.has_cover`, mas não promove, sobrescreve ou apaga um override enquanto a faixa continuar existindo.
 
 ## Persistência
@@ -102,6 +104,8 @@ Fluxo:
 
 A UI deixa explícito quando a imagem selecionada ainda é somente um preview local e quando existe um override ativo. Trocar de faixa, fechar o editor ou sair da tela respeita a proteção de alterações não salvas do workspace.
 
+Quando a faixa não possui override nem capa física, o quadrado de preview reutiliza `ArtworkFallback`, a mesma representação visual usada pela biblioteca e pelo player. Um arquivo selecionado localmente continua substituindo temporariamente esse fallback pelo preview real antes do upload.
+
 ## Segurança e rollback
 
 - nenhuma rota desta entrega escreve tags ou imagem no arquivo de áudio;
@@ -132,4 +136,5 @@ A cobertura inclui:
 - entrega binária pelo endpoint público;
 - cache-busting por versão;
 - validação antecipada no frontend;
+- regressão do componente central de artwork/fallback no Vitest;
 - Playwright desktop com preview → salvar → API efetiva → rescan → restauração.
