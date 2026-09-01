@@ -8,6 +8,8 @@ import { DesktopTrackTable } from './DesktopTrackTable';
 export type LibraryTrackOfflineProps = {
   offlineSupported: boolean;
   downloadedIds: ReadonlySet<string>;
+  individualDownloadedIds: ReadonlySet<string>;
+  collectionDownloadedIds: ReadonlySet<string>;
   downloadingIds: ReadonlySet<string>;
   onDownload: (track: Track) => Promise<void>;
   onRemoveDownload: (track: Track) => Promise<void>;
@@ -35,6 +37,8 @@ export function LibraryTrackRows({
   onRemove,
   offlineSupported,
   downloadedIds,
+  individualDownloadedIds,
+  collectionDownloadedIds,
   downloadingIds,
   onDownload,
   onRemoveDownload
@@ -54,6 +58,8 @@ export function LibraryTrackRows({
         onRemove={onRemove}
         offlineSupported={offlineSupported}
         downloadedIds={downloadedIds}
+        individualDownloadedIds={individualDownloadedIds}
+        collectionDownloadedIds={collectionDownloadedIds}
         downloadingIds={downloadingIds}
         onDownload={onDownload}
         onRemoveDownload={onRemoveDownload}
