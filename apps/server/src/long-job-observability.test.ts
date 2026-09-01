@@ -162,7 +162,7 @@ test('sanitiza erro antes de escrever evento de falha', () => {
   assert.equal('err' in (failed ?? {}), false);
 });
 
-test('correlaciona lifecycle da importação sem duplicar início ao retomar processing', () => {
+test('correlaciona lifecycle da importação sem duplicar início ao retomar processing no mesmo timestamp', () => {
   const { logger, logs } = captureLogger();
   const observer = new LongJobObservability(logger, {
     now: () => new Date('2026-09-01T12:10:00.000Z')
@@ -175,9 +175,14 @@ test('correlaciona lifecycle da importação sem duplicar início ao retomar pro
     updatedAt: '2026-09-01T12:01:00.000Z'
   }), 'import-job-42');
   observer.observeImportJob(importJob({
+    status: 'pending',
+    startedAt: '2026-09-01T12:01:00.000Z',
+    updatedAt: '2026-09-01T12:01:00.000Z'
+  }), 'import-job-42');
+  observer.observeImportJob(importJob({
     status: 'processing',
     startedAt: '2026-09-01T12:01:00.000Z',
-    updatedAt: '2026-09-01T12:05:00.000Z'
+    updatedAt: '2026-09-01T12:01:00.000Z'
   }), 'import-job-42');
   observer.observeImportJob(importJob({
     status: 'completed',
@@ -192,7 +197,32 @@ test('correlaciona lifecycle da importação sem duplicar início ao retomar pro
   ]);
   assert.equal(logs[0].bindings.jobId, 'job-42');
   assert.equal(logs[0].bindings.operationId, 'import-job-42');
-  assert.equal(logs[1].bindings.durationMs, 330_000);
+  assert.equal(logs[1].durationMs, 330_000);
+});
+
+test('job terminal libera deduplicação para evitar retenção indefinida de ids', () => {
+  const { logger, logs } = captureLogger();
+  const observer = new LongJobObservability(logger);
+
+  const processing = importJob({
+    status: 'processing',
+    startedAt: '2026-09-01T12:01:00.000Z',
+    updatedAt: '2026-09-01T12:01:00.000Z'
+  });
+  observer.observeImportJob(processing, 'import-job-42');
+  observer.observeImportJob(importJob({
+    status: 'cancelled',
+    startedAt: processing.startedAt,
+    finishedAt: '2026-09-01T12:02:00.000Z',
+    updatedAt: '2026-09-01T12:02:00.000Z'
+  }), 'import-job-42');
+  observer.observeImportJob(processing, 'import-job-42');
+
+  assert.deepEqual(logs.map(item => item.bindings.event), [
+    'long_job.started',
+    'long_job.cancelled',
+    'long_job.started'
+  ]);
 });
 
 test('falha do sink de log não interfere na operação chamadora', () => {
