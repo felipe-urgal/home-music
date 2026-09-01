@@ -34,9 +34,30 @@ Campos de correlação possíveis:
 - `jobType` — `library.scan`, `import` ou `transcode`;
 - `jobId` — identificador interno do job observado;
 - `operationId` — identificador do Histórico operacional quando existe uma correlação persistida;
-- `resourceId` — identificador interno seguro de um recurso quando necessário para diagnóstico; atualmente usado por transcode para a faixa.
+- `resourceId` — identificador interno seguro de um recurso quando necessário para diagnóstico; atualmente usado por transcode para a faixa;
+- `requestId` — ID interno que o Fastify atribuiu à requisição HTTP que originou a transição, quando existe uma requisição ativa.
 
 Os IDs aceitos pela camada de observabilidade são restritos a caracteres de identificador. Strings parecidas com URL/path não são reutilizadas como ID de log.
+
+## Correlação HTTP
+
+`LongJobObservability` usa `AsyncLocalStorage` somente para carregar o `requestId` interno do Fastify através da cadeia assíncrona da requisição. O contexto é iniciado em `preValidation`, depois do parsing do request e antes do handler.
+
+Isso permite a cadeia de diagnóstico:
+
+```text
+requestId do Fastify
+  ↓
+jobId do serviço/fila
+  ↓
+operationId do Histórico, quando existe
+```
+
+Scans manuais, importações iniciadas/continuadas por API e transcodes podem carregar `requestId`. Scheduler, bootstrap e trabalhos que realmente nascem fora de uma requisição não recebem um request artificial.
+
+O contexto não armazena usuário, sessão, cookie, token, URL ou payload. Jobs que continuam em uma cadeia assíncrona criada pela requisição podem preservar aquele `requestId`; uma transição posterior causada por outra requisição pode naturalmente aparecer com o novo `requestId`. O `jobId` continua sendo o elo estável entre as transições.
+
+A regressão automatizada usa Fastify real com `inject()` e requests concorrentes para provar que o contexto chega ao handler sem cruzar IDs entre requisições.
 
 ## Scans
 
@@ -45,12 +66,12 @@ Os IDs aceitos pela camada de observabilidade são restritos a caracteres de ide
 Scans iniciados com trigger administrativo já criam um registro no Histórico. O mesmo ID é usado como:
 
 ```text
-jobId      = scan-...
+jobId       = scan-...
 operationId = scan-...
-jobType    = library.scan
+jobType     = library.scan
 ```
 
-Assim, o operador pode abrir uma operação na UI e procurar o mesmo `operationId` no journal.
+Assim, o operador pode abrir uma operação na UI e procurar o mesmo `operationId` no journal. Quando o scan foi iniciado pela API, o lifecycle também carrega o `requestId` do Fastify.
 
 A falha de persistência do Histórico continua best-effort: o scan principal não falha por isso. Se o registro persistido não puder ser criado, o log recebe um `jobId` gerado apenas para runtime e omite `operationId`.
 
@@ -65,7 +86,7 @@ jobType = library.scan
 jobId   = library-scan-...
 ```
 
-Não há `operationId`, porque não existe uma operação administrativa persistida para correlacionar.
+Não há `operationId`, porque não existe uma operação administrativa persistida para correlacionar. Como o bootstrap nasce fora de request, também não há `requestId`.
 
 Chamadas concorrentes que reutilizam a mesma `scanPromise` não criam jobs de scan adicionais.
 
@@ -89,6 +110,8 @@ Estados terminais emitem:
 - `failed` → `long_job.failed`;
 - `cancelled` → `long_job.cancelled`.
 
+Transições disparadas dentro de uma requisição também carregam `requestId`. O ID não é persistido dentro do `ImportJob`: ele é apenas contexto de logging e não altera o contrato compartilhado ou a máquina de estados.
+
 Se a persistência do Histórico falhar, o evento de runtime ainda pode usar `jobId`, mas omite `operationId`; isso evita afirmar correlação com um registro inexistente.
 
 ## Transcoding
@@ -107,6 +130,7 @@ Quando há geração real:
 jobType    = transcode
 jobId      = transcode-<uuid>
 resourceId = <trackId interno>
+requestId  = <id Fastify da chamada /transcode>, quando originado por HTTP
 ```
 
 Nenhum path do arquivo de origem/cache e nenhum stderr bruto do FFmpeg entra nos novos bindings de observabilidade.
@@ -127,6 +151,8 @@ Os novos eventos não registram deliberadamente:
 - stack trace;
 - objeto `err` bruto;
 - stderr bruto do FFmpeg.
+
+`requestId`, `jobId`, `operationId` e `resourceId` são identificadores internos limitados e não carregam esses payloads sensíveis.
 
 A sanitização conhecida substitui URLs e paths e limita o tamanho do diagnóstico. Logs antigos fora desta camada continuam sujeitos às regras próprias do fluxo correspondente; novas instrumentações de job longo devem usar esta camada em vez de adicionar `err` bruto ao evento de lifecycle.
 
@@ -178,6 +204,14 @@ journalctl -u home-music --since today -o cat | grep '"operationId":"import-SEU_
 journalctl -u home-music --since today -o cat | grep '"jobId":"SEU_JOB_ID"'
 ```
 
+### Correlacionar com uma requisição Fastify
+
+Quando um log de request do Fastify fornece o `reqId`, procure o mesmo valor nos jobs:
+
+```bash
+journalctl -u home-music --since today -o cat | grep '"requestId":"req-SEU_ID"'
+```
+
 Para transcodes, comece pelos eventos `jobType="transcode"` e use `jobId`/`resourceId` internos. Não procure por path físico da faixa: ele não é necessário nem deve fazer parte do evento estruturado.
 
 ### Interpretar duração
@@ -200,6 +234,8 @@ O estado agregado de transcoding (`active`/`pending`) continua exposto pelo diag
 Cobertura automatizada fixa:
 
 - início/conclusão e duração;
+- propagação/isolamento de `requestId` em contexto assíncrono;
+- integração do contexto com `preValidation` real do Fastify via `inject()` concorrente;
 - redaction de erro antes do log;
 - ausência de `err` bruto no evento de falha;
 - logging best-effort que não derruba o job;
@@ -214,7 +250,8 @@ Ao instrumentar um novo pipeline:
 1. identifique primeiro a fonte de verdade já existente;
 2. reutilize o `jobId`/`operationId` canônico quando houver;
 3. use `LongJobObservability` para lifecycle de runtime;
-4. não passe payload livre, URL, path ou erro bruto como binding;
-5. prefira eventos de transição a heartbeats frequentes;
-6. teste sucesso, falha/redaction e best-effort;
-7. só adicione persistência/UI se existir requisito de produto que o Histórico atual não cubra.
+4. preserve `requestId` somente como contexto de correlação, nunca como estado de domínio;
+5. não passe payload livre, URL, path ou erro bruto como binding;
+6. prefira eventos de transição a heartbeats frequentes;
+7. teste sucesso, falha/redaction, request-context quando aplicável e best-effort;
+8. só adicione persistência/UI se existir requisito de produto que o Histórico atual não cubra.
