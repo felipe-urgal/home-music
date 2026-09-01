@@ -38,7 +38,7 @@ Não transformar `div`/`span` em controle por `onClick` quando um elemento nativ
 
 `apps/web/src/accessibility.css` é a fonte global do indicador de foco por teclado.
 
-Controles focáveis recebem `outline` visível via `:focus-visible`, inclusive campos que usam shells visuais e ranges do player. O token atual `#67b9ff` mantém contraste superior a 8:1 contra as superfícies escuras principais verificadas (`#030507` até `#121820`). Em `forced-colors`, o indicador usa a cor de sistema `Highlight`.
+Controles focáveis recebem `outline` visível via `:focus-visible`, inclusive campos que usam shells visuais e ranges do player. O token atual `#67b9ff` mantém aproximadamente 8:1 ou mais de contraste contra as superfícies escuras principais verificadas (`#030507` até `#121820`). Em `forced-colors`, o indicador usa a cor de sistema `Highlight`.
 
 Não remover `outline` sem fornecer um substituto global ou local de contraste equivalente.
 
