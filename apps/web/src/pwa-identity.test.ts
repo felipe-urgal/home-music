@@ -44,22 +44,9 @@ describe('PWA identity assets', () => {
     expect(html).toContain('name="apple-mobile-web-app-title" content="Home Music"');
   });
 
-  it('revalida os assets de identidade no cache estático sem migrar o cache de áudio', () => {
+  it('preserva o namespace de áudio offline enquanto manifest e favicon continuam revalidados', () => {
     const sw = readText('sw.js');
-    expect(sw).toContain("const CACHE_NAME = 'home-music-static-v3'");
-    expect(sw).toContain("const OFFLINE_AUDIO_CACHE = 'home-music-offline-audio-v2'");
-
-    for (const asset of [
-      '/manifest.webmanifest',
-      '/favicon.svg',
-      '/safari-pinned-tab.svg',
-      '/icons/app-icon-192.png',
-      '/icons/app-icon-512.png',
-      '/icons/app-icon-maskable-192.png',
-      '/icons/app-icon-maskable-512.png',
-      '/icons/apple-touch-icon.png'
-    ]) {
-      expect(sw).toContain(`'${asset}'`);
-    }
+    expect(sw).toContain("const OFFLINE_AUDIO_CACHE_PREFIX = 'home-music-offline-audio-v2-'");
+    expect(sw).toContain("const REVALIDATED_STATIC = new Set(['/manifest.webmanifest', '/favicon.svg'])");
   });
 });
