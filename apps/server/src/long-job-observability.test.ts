@@ -70,6 +70,37 @@ test('emite início e conclusão correlacionados com duração', () => {
   assert.equal(logs[1].bindings.durationMs, 2250);
 });
 
+test('propaga requestId por trabalho assíncrono e isola requisições concorrentes', async () => {
+  const { logger, logs } = captureLogger();
+  const observer = new LongJobObservability(logger);
+
+  await Promise.all([
+    observer.withRequest('req-101', async () => {
+      await new Promise<void>(resolve => setImmediate(resolve));
+      const run = observer.start({ jobType: 'library.scan', jobId: 'scan-request-a' });
+      await Promise.resolve();
+      observer.complete(run);
+    }),
+    observer.withRequest('req-202', async () => {
+      await Promise.resolve();
+      const run = observer.start({ jobType: 'transcode', jobId: 'transcode-request-b' });
+      await new Promise<void>(resolve => setImmediate(resolve));
+      observer.complete(run);
+    })
+  ]);
+
+  const scanLogs = logs.filter(item => item.bindings.jobId === 'scan-request-a');
+  const transcodeLogs = logs.filter(item => item.bindings.jobId === 'transcode-request-b');
+  assert.equal(scanLogs.length, 2);
+  assert.ok(scanLogs.every(item => item.bindings.requestId === 'req-101'));
+  assert.equal(transcodeLogs.length, 2);
+  assert.ok(transcodeLogs.every(item => item.bindings.requestId === 'req-202'));
+
+  observer.start({ jobType: 'library.scan', jobId: 'scan-background' });
+  const background = logs.find(item => item.bindings.jobId === 'scan-background');
+  assert.equal(background && 'requestId' in background.bindings, false);
+});
+
 test('sanitiza erro antes de escrever evento de falha', () => {
   const { logger, logs } = captureLogger();
   const observer = new LongJobObservability(logger, {
