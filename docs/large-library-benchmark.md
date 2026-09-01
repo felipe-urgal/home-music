@@ -45,7 +45,7 @@ O diretório é removido ao final, inclusive em caso de falha.
 1. **Scan inicial** — percorre filesystem, valida caminhos, lê metadata e cria o índice completo.
 2. **Scan incremental sem mudanças** — percorre a mesma árvore reutilizando o snapshot anterior; metadata não deve ser relida para arquivos com `size + mtime` idênticos.
 3. **Scan incremental com uma mudança** — altera apenas o `mtime` de uma faixa e exige exatamente uma atualização.
-4. **Payload público** — materializa e serializa a resposta equivalente da biblioteca sem os campos privados de filesystem.
+4. **Payload público** — usa a mesma projeção pública do `LibraryService`, materializa e serializa a resposta equivalente da biblioteca sem os campos privados de filesystem.
 5. **Memória** — registra heap e RSS observados durante os cenários.
 
 ### Limites de regressão grave do servidor
@@ -92,14 +92,14 @@ Assim como no servidor, os limites são intencionalmente muito superiores ao tem
 
 A baseline de aceitação foi estabelecida em **2026-09-01** no PR #204, usando GitHub Actions `ubuntu-latest` e Node.js 22.
 
-Referência validada:
+Referência validada do código do benchmark:
 
-- workflow run: [33496461620](https://github.com/felipe-urgal/home-music/actions/runs/33496461620);
-- commit validado: `68aa0ea2f74e2bb880c69ab9c60a601981a6f010`;
+- workflow run: [33497407869](https://github.com/felipe-urgal/home-music/actions/runs/33497407869);
+- commit validado: `f357a2dc8776e1fa0d305fec0893191cfba4af7b`;
 - etapa `Large library performance guard`: **PASS**;
 - typecheck, regressões de segurança, testes funcionais, backup/restore smoke, build, Playwright crítico e smoke de produção no mesmo commit: **PASS**.
 
-| Guardrail | Dataset de referência | Resultado no run 33496461620 |
+| Guardrail | Dataset de referência | Resultado no run 33497407869 |
 | --- | --- | --- |
 | scan inicial | 2.000 WAV sintéticos | PASS (`<= 30.000 ms`) |
 | incremental sem mudanças | 2.000 WAV sintéticos | PASS (`<= 5.000 ms`) |
@@ -114,7 +114,7 @@ Referência validada:
 
 A baseline versionada é o conjunto **dataset + código exercitado + guardrails + run verde de referência**. Os runners continuam imprimindo as medições exatas em JSON nos logs de cada execução; esses números devem ser usados para diagnóstico e comparação entre runners equivalentes, mas não são SLA de produto nem devem ser copiados como um limite mais apertado sem amostragem suficiente.
 
-Como a documentação de baseline altera o head do PR, o merge continua condicionado a um novo CI completo no commit final. Um run verde anterior nunca substitui o gate do head final.
+O run acima valida o código do benchmark. Como este próprio registro de baseline altera apenas documentação, o merge continua condicionado a um CI completo também no head final do PR, conforme `AGENTS.md`.
 
 ## Leitura dos resultados
 
