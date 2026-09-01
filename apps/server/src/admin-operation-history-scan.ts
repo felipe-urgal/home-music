@@ -36,7 +36,15 @@ export async function runScanWithHistory(
         onHistoryFailure(error);
       }
     }
-    if (observedRun) observability?.complete(observedRun);
+    if (observedRun) {
+      observability?.complete(observedRun, {
+        tracks: result.tracks,
+        added: result.added,
+        updated: result.updated,
+        removed: result.removed,
+        unchanged: result.unchanged
+      });
+    }
     return result;
   } catch (error) {
     if (operationId) {
