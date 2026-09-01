@@ -21,6 +21,7 @@ type PlayerScreenProps = {
   playlists: Playlist[];
   offlineMode?: boolean;
   isDownloaded?: boolean;
+  availableViaCollection?: boolean;
   downloading?: boolean;
   onOpenLibrary: () => void;
   onTogglePlay: () => void;
@@ -54,6 +55,7 @@ export function PlayerScreen({
   playlists,
   offlineMode = false,
   isDownloaded = false,
+  availableViaCollection = false,
   downloading = false,
   onOpenLibrary,
   onTogglePlay,
@@ -78,6 +80,7 @@ export function PlayerScreen({
         playlists={playlists}
         offlineMode={offlineMode}
         isDownloaded={isDownloaded}
+        availableViaCollection={availableViaCollection}
         downloading={downloading}
         onOpenLibrary={onOpenLibrary}
         onToggleDownload={onToggleDownload}
