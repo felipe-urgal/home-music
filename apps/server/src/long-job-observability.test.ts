@@ -1,0 +1,135 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import type { ImportJob } from '@home-music/shared';
+import { LongJobObservability } from './long-job-observability.js';
+
+type CapturedLog = {
+  level: 'info' | 'warn';
+  bindings: Record<string, unknown>;
+  message: string;
+};
+
+function captureLogger() {
+  const logs: CapturedLog[] = [];
+  return {
+    logs,
+    logger: {
+      info(bindings: object, message: string) {
+        logs.push({ level: 'info', bindings: bindings as Record<string, unknown>, message });
+      },
+      warn(bindings: object, message: string) {
+        logs.push({ level: 'warn', bindings: bindings as Record<string, unknown>, message });
+      }
+    }
+  };
+}
+
+function importJob(overrides: Partial<ImportJob> = {}): ImportJob {
+  return {
+    id: 'job-42',
+    source: { type: 'url', provider: null },
+    label: 'Importação',
+    status: 'pending',
+    createdAt: '2026-09-01T12:00:00.000Z',
+    updatedAt: '2026-09-01T12:00:00.000Z',
+    startedAt: null,
+    finishedAt: null,
+    error: null,
+    mediaDecision: null,
+    metadataPreview: null,
+    ...overrides
+  };
+}
+
+test('emite início e conclusão correlacionados com duração', () => {
+  const { logger, logs } = captureLogger();
+  const times = [
+    new Date('2026-09-01T12:00:00.000Z'),
+    new Date('2026-09-01T12:00:02.250Z')
+  ];
+  let cursor = 0;
+  const observer = new LongJobObservability(logger, {
+    now: () => times[Math.min(cursor++, times.length - 1)],
+    createId: () => 'generated-1'
+  });
+
+  const run = observer.start({
+    jobType: 'library.scan',
+    jobId: 'scan-123',
+    operationId: 'scan-123'
+  });
+  observer.complete(run);
+
+  assert.deepEqual(logs.map(item => item.bindings.event), [
+    'long_job.started',
+    'long_job.completed'
+  ]);
+  assert.equal(logs[0].bindings.jobType, 'library.scan');
+  assert.equal(logs[0].bindings.jobId, 'scan-123');
+  assert.equal(logs[0].bindings.operationId, 'scan-123');
+  assert.equal(logs[1].bindings.durationMs, 2250);
+});
+
+test('sanitiza erro antes de escrever evento de falha', () => {
+  const { logger, logs } = captureLogger();
+  const observer = new LongJobObservability(logger, {
+    now: () => new Date('2026-09-01T12:00:00.000Z'),
+    createId: () => 'generated-2'
+  });
+  const run = observer.start({ jobType: 'transcode', resourceId: 'track-7' });
+
+  observer.fail(
+    run,
+    new Error('token=supersecreto https://private.example/media /srv/music/album/faixa.flac')
+  );
+
+  const failed = logs.at(-1)?.bindings;
+  assert.equal(failed?.event, 'long_job.failed');
+  assert.equal(failed?.resourceId, 'track-7');
+  assert.doesNotMatch(String(failed?.errorMessage), /supersecreto|private\.example|srv\/music|faixa\.flac/);
+  assert.match(String(failed?.errorMessage), /\[redigido\]|\[URL removida\]|\[caminho removido\]/);
+  assert.equal('err' in (failed ?? {}), false);
+});
+
+test('correlaciona lifecycle da importação sem duplicar início ao retomar processing', () => {
+  const { logger, logs } = captureLogger();
+  const observer = new LongJobObservability(logger, {
+    now: () => new Date('2026-09-01T12:10:00.000Z')
+  });
+
+  observer.observeImportJob(importJob(), 'import-job-42');
+  observer.observeImportJob(importJob({
+    status: 'processing',
+    startedAt: '2026-09-01T12:01:00.000Z',
+    updatedAt: '2026-09-01T12:01:00.000Z'
+  }), 'import-job-42');
+  observer.observeImportJob(importJob({
+    status: 'processing',
+    startedAt: '2026-09-01T12:01:00.000Z',
+    updatedAt: '2026-09-01T12:05:00.000Z'
+  }), 'import-job-42');
+  observer.observeImportJob(importJob({
+    status: 'completed',
+    startedAt: '2026-09-01T12:01:00.000Z',
+    updatedAt: '2026-09-01T12:06:30.000Z',
+    finishedAt: '2026-09-01T12:06:30.000Z'
+  }), 'import-job-42');
+
+  assert.deepEqual(logs.map(item => item.bindings.event), [
+    'long_job.started',
+    'long_job.completed'
+  ]);
+  assert.equal(logs[0].bindings.jobId, 'job-42');
+  assert.equal(logs[0].bindings.operationId, 'import-job-42');
+  assert.equal(logs[1].bindings.durationMs, 330_000);
+});
+
+test('falha do sink de log não interfere na operação chamadora', () => {
+  const observer = new LongJobObservability({
+    info() { throw new Error('logger indisponível'); },
+    warn() { throw new Error('logger indisponível'); }
+  }, { createId: () => 'fallback' });
+
+  const run = observer.start({ jobType: 'library.scan' });
+  assert.doesNotThrow(() => observer.fail(run, new Error('scan falhou')));
+});
