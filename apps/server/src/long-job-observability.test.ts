@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import Fastify from 'fastify';
 import type { ImportJob } from '@home-music/shared';
 import { LongJobObservability } from './long-job-observability.js';
 
@@ -99,6 +100,45 @@ test('propaga requestId por trabalho assíncrono e isola requisições concorren
   observer.start({ jobType: 'library.scan', jobId: 'scan-background' });
   const background = logs.find(item => item.bindings.jobId === 'scan-background');
   assert.equal(background && 'requestId' in background.bindings, false);
+});
+
+test('preValidation do Fastify mantém requestId até o handler e isola requests simultâneas', async () => {
+  const { logger, logs } = captureLogger();
+  const observer = new LongJobObservability(logger);
+  const app = Fastify();
+
+  app.addHook('preValidation', (request, _reply, done) => {
+    observer.withRequest(String(request.id), () => done());
+  });
+  app.get<{ Params: { jobId: string } }>('/observe/:jobId', async request => {
+    await new Promise<void>(resolve => setImmediate(resolve));
+    const run = observer.start({ jobType: 'library.scan', jobId: request.params.jobId });
+    await Promise.resolve();
+    observer.complete(run);
+    return { requestId: String(request.id) };
+  });
+
+  try {
+    const [first, second] = await Promise.all([
+      app.inject({ method: 'GET', url: '/observe/job-fastify-a' }),
+      app.inject({ method: 'GET', url: '/observe/job-fastify-b' })
+    ]);
+    assert.equal(first.statusCode, 200);
+    assert.equal(second.statusCode, 200);
+
+    const firstRequestId = (first.json() as { requestId: string }).requestId;
+    const secondRequestId = (second.json() as { requestId: string }).requestId;
+    assert.notEqual(firstRequestId, secondRequestId);
+
+    const firstLogs = logs.filter(item => item.bindings.jobId === 'job-fastify-a');
+    const secondLogs = logs.filter(item => item.bindings.jobId === 'job-fastify-b');
+    assert.equal(firstLogs.length, 2);
+    assert.ok(firstLogs.every(item => item.bindings.requestId === firstRequestId));
+    assert.equal(secondLogs.length, 2);
+    assert.ok(secondLogs.every(item => item.bindings.requestId === secondRequestId));
+  } finally {
+    await app.close();
+  }
 });
 
 test('sanitiza erro antes de escrever evento de falha', () => {
