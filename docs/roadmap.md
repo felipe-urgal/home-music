@@ -2,7 +2,7 @@
 
 Este documento é a visão técnica de alto nível do Home Music. A issue [#123](https://github.com/felipe-urgal/home-music/issues/123) é o índice executivo das pendências abertas.
 
-> Estado revisado em 2026-09-01. Os PRs #204/#119 e #205/#120 foram mergeados; a #121 é a atividade técnica atual da Fase 11 e está em implementação na branch `feature/long-job-observability`. Itens marcados como concluídos refletem funcionalidades já entregues; itens futuros apontam para a issue que mantém escopo e gate atualizados.
+> Estado revisado em 2026-09-01. Os PRs #204/#119, #205/#120 e #206/#121 foram mergeados; a #122 é a atividade técnica atual da Fase 11 e está em implementação na branch `feature/dependency-review`, PR #207. Itens marcados como concluídos refletem funcionalidades já entregues; itens futuros apontam para a issue que mantém escopo e gate atualizados.
 
 ## Fases 1–2 — Base do produto e biblioteca pessoal
 
@@ -181,8 +181,8 @@ Em andamento. As issues abaixo são a fonte de escopo:
 - [x] [#118](https://github.com/felipe-urgal/home-music/issues/118) — suíte dedicada de regressões negativas para importação/administração, com gate explícito no CI;
 - [x] [#119](https://github.com/felipe-urgal/home-music/issues/119) — benchmark com biblioteca grande, concluído e mergeado pelo PR #204 com dataset sintético, baseline versionada e gate próprio de CI;
 - [x] [#120](https://github.com/felipe-urgal/home-music/issues/120) — revisão sistemática de acessibilidade, concluída e mergeada pelo PR #205;
-- [ ] [#121](https://github.com/felipe-urgal/home-music/issues/121) — observabilidade correlacionada de jobs longos em implementação no draft PR #206;
-- [ ] [#122](https://github.com/felipe-urgal/home-music/issues/122) — revisão periódica de dependências.
+- [x] [#121](https://github.com/felipe-urgal/home-music/issues/121) — observabilidade correlacionada de jobs longos, concluída e mergeada pelo PR #206;
+- [ ] [#122](https://github.com/felipe-urgal/home-music/issues/122) — revisão periódica e segura de dependências em implementação no PR #207.
 
 A fronteira de serviços da #117 está detalhada em [server-composition.md](server-composition.md). Operações destrutivas continuam delegando confinement/lock/rollback aos stores físicos existentes; importações continuam usando o mesmo pipeline; backup/restore continua usando validação e rollback de `backup-restore.ts`.
 
@@ -192,9 +192,11 @@ A #119 adiciona `npm run benchmark:large-library` como gate de regressão grave 
 
 A #120 trata acessibilidade como contrato funcional e foi mergeada pelo PR #205 após auto-review e CI completo verde no head final. A baseline cobre foco, teclado, nomes/estados acessíveis, movimento reduzido/forced colors e regressões Vitest/Playwright. Detalhes e limites: [accessibility.md](accessibility.md).
 
-A #121 mantém o Histórico operacional como fonte persistente para scans/importações e acrescenta lifecycle estruturado best-effort no logger do servidor. Scans usam o `operationId` persistido quando existe, imports usam `jobId` + correlação ao Histórico, e transcodes recebem observabilidade runtime-only sem logar path/URL/stderr bruto. Detalhes: [long-job-observability.md](long-job-observability.md).
+A #121 mantém o Histórico operacional como fonte persistente para scans/importações e acrescenta lifecycle estruturado best-effort no logger do servidor. Scans usam o `operationId` persistido quando existe, imports usam `jobId` + correlação ao Histórico, e transcodes recebem observabilidade runtime-only sem logar path/URL/stderr bruto. O PR #206 foi mergeado em 2026-09-01 após auto-review sem `BLOCKER`/`HIGH`/`MEDIUM` e CI completo verde no head final. Detalhes: [long-job-observability.md](long-job-observability.md).
 
-**Ordem técnica atual:** a #121 é a atividade em execução. Após seu merge, a próxima atividade da Fase 11 é a #122, salvo repriorização explícita registrada em #123 e neste roadmap.
+A #122 configura Dependabot para npm do monorepo, npm do E2E e GitHub Actions, com revisão semanal, patch/minor agrupados, majors isolados e ausência explícita de auto-merge. `npm audit`, lockfiles reproduzíveis e todos os gates de CI permanecem obrigatórios. A política de majors, vulnerabilidades, dependências abandonadas e supply chain está em [dependency-management.md](dependency-management.md).
+
+**Ordem técnica atual:** a #122 é a atividade em execução. Após seu merge, o backlog técnico planejado atual da Fase 11 fica concluído, salvo nova priorização explícita registrada em #123 e neste roadmap.
 
 ## Backlog visual e PWA
 
@@ -205,7 +207,7 @@ Esses itens são backlog independente da sequência técnica da Fase 11 e podem 
 
 ## Backlog aberto
 
-As pendências executivas abertas são #81, #121–#123 e #174–#176. A #123 é somente o índice executivo; as implementações/validações reais são #81, #121–#122 e #174–#176.
+As pendências executivas abertas são #81, #122–#123 e #174–#176. A #123 é somente o índice executivo; as implementações/validações reais são #81, #122 e #174–#176.
 
 ## Regra de execução
 
