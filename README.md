@@ -1106,8 +1106,10 @@ HTTP local não criptografa credenciais nem áudio. Use apenas em rede confiáve
 | `npm run build` | build compartilhado + servidor + frontend |
 | `npm start` | servidor de produção |
 | `npm run typecheck` | TypeScript de todos os workspaces |
+| `npm run test:security` | regressões negativas dedicadas de segurança |
 | `npm test` | testes server + web |
-| `npm run e2e` | build + suíte E2E |
+| `npm run benchmark:large-library` | guard de regressão grave com biblioteca sintética grande |
+| `npm run e2e` | build + suíte E2E completa |
 | `npm run smoke:production` | smoke real de produção e autenticação |
 | `npm run smoke:backup-restore` | valida fluxo de backup/restore |
 | `npm run service:install` | instalar/gerar serviço systemd |
@@ -1132,7 +1134,9 @@ Validação local recomendada antes de merge/deploy:
 
 ```bash
 npm run typecheck
+npm run test:security
 npm test
+npm run benchmark:large-library
 npm run build
 npm run smoke:production
 ```
@@ -1141,24 +1145,29 @@ Outras validações relevantes:
 
 ```bash
 npm run smoke:backup-restore
+npm run e2e
 npm audit --audit-level=high
 ```
 
-O CI executa uma combinação de:
+O CI obrigatório executa, no mesmo job de validação:
 
 - `npm ci`;
 - audit de dependências;
 - typecheck;
-- testes server/web;
+- regressões negativas dedicadas de segurança;
+- testes funcionais server/web;
+- guard de performance com biblioteca sintética grande;
 - smoke de backup/restore;
 - validação dos scripts operacionais;
 - teste de startup systemd;
 - testes operacionais de Tailscale;
 - build;
-- smoke real de produção;
-- smoke de autenticação de produção.
+- Playwright crítico em mobile/tablet/desktop;
+- smoke real de produção e autenticação.
 
-O smoke de produção usa diretórios temporários e não deve tocar na biblioteca/SQLite reais do usuário.
+O smoke de produção, a suíte de segurança e o benchmark usam fixtures/diretórios controlados e não devem tocar na biblioteca/SQLite reais do usuário. O benchmark possui limites deliberadamente largos para regressões graves; não é SLA de produto.
+
+Detalhes dos gates: [`docs/security-regressions.md`](docs/security-regressions.md), [`docs/large-library-benchmark.md`](docs/large-library-benchmark.md) e [`e2e/README.md`](e2e/README.md).
 
 ## Troubleshooting
 
@@ -1307,16 +1316,19 @@ Inclui automação de:
 
 ## Documentação complementar
 
-O README é a porta de entrada operacional. Para implementação e decisões específicas, consulte `docs/`.
+O README é a porta de entrada operacional. Para implementação e decisões específicas, consulte primeiro [`docs/README.md`](docs/README.md), que diferencia fontes correntes de registros históricos e mantém o inventário do backlog aberto.
 
-### Operação e arquitetura
+### Operação, arquitetura e qualidade
 
 - [`docs/architecture.md`](docs/architecture.md)
 - [`docs/production.md`](docs/production.md)
+- [`docs/production-verification.md`](docs/production-verification.md)
 - [`docs/backup-restore.md`](docs/backup-restore.md)
 - [`docs/ffmpeg.md`](docs/ffmpeg.md)
 - [`docs/pwa.md`](docs/pwa.md)
 - [`docs/offline-downloads.md`](docs/offline-downloads.md)
+- [`docs/security-regressions.md`](docs/security-regressions.md)
+- [`docs/large-library-benchmark.md`](docs/large-library-benchmark.md)
 
 ### Tailscale
 
@@ -1351,7 +1363,7 @@ O README é a porta de entrada operacional. Para implementação e decisões esp
 
 ### Autenticação e contas
 
-A pasta `docs/` também contém o histórico técnico detalhado da evolução multiusuário (`phase-7.5-*` e `multi-user-auth.md`). Alguns desses documentos registram etapas intermediárias da implementação; para operação da versão atual, prefira primeiro este README e `.env.example`.
+A pasta `docs/` também contém o histórico técnico detalhado da evolução multiusuário (`phase-7.5-*` e `multi-user-auth.md`). Alguns desses documentos registram etapas intermediárias da implementação; para operação da versão atual, prefira primeiro este README, `docs/README.md` e `.env.example`.
 
 ## Roadmap
 

@@ -338,6 +338,22 @@ git pull --ff-only origin main
 npm run service:update
 ```
 
+## Qualidade e gates de CI
+
+O workflow obrigatório mantém um único job de validação e executa, em ordem compatível com custo/risco:
+
+- instalação reproduzível e auditoria de dependências;
+- typecheck;
+- `npm run test:security` para regressões negativas transversais de Administração/Importação;
+- suíte funcional `npm test`;
+- `npm run benchmark:large-library` para regressões graves de performance com dataset sintético;
+- smokes de backup/restore e validações operacionais de scripts, systemd e Tailscale;
+- build de produção;
+- Playwright crítico em mobile/tablet/desktop;
+- smoke real de produção.
+
+A regressão Playwright completa continua disponível sob demanda conforme risco. O benchmark não substitui testes funcionais e seus limites não são SLA de produto. Mudanças no head depois de um run verde invalidam esse run como gate final, conforme `AGENTS.md`.
+
 ## Segurança resumida
 
 - backend é a fronteira de autorização;
@@ -354,4 +370,4 @@ npm run service:update
 - normalização lógica não escreve em arquivos e exige admin;
 - Integrity é read-only;
 - dependências usam lockfile + `npm ci`;
-- CI executa typecheck, testes, validações operacionais, build e smoke real de produção.
+- CI mantém gates explícitos de segurança, funcionalidade, performance, build, E2E crítico e produção.
