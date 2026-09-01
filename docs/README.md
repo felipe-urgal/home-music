@@ -2,6 +2,8 @@
 
 Este diretório mistura documentação **corrente** e registros históricos de implementação. Esta página define qual material deve ser usado como fonte de verdade.
 
+> Inventário e backlog revisados em 2026-09-01 no PR #204. Documentos históricos são preservados como registro; o estado de entrega deve ser lido neste índice, em `roadmap.md`, na issue executiva #123 e nas issues abertas.
+
 ## Desenvolvimento e agentes de IA
 
 Antes de alterar o repositório, leia [`../AGENTS.md`](../AGENTS.md).
@@ -14,9 +16,28 @@ Comece por:
 
 1. [`../README.md`](../README.md) — instalação, operação e visão geral do produto;
 2. [`architecture.md`](architecture.md) — arquitetura corrente;
-3. [`roadmap.md`](roadmap.md) — estado das fases e pendências reais;
-4. [`administration-ui.md`](administration-ui.md) — composição atual de Minha conta/Administração;
-5. documentos funcionais abaixo para invariantes específicas.
+3. [`roadmap.md`](roadmap.md) — estado técnico das fases e pendências reais;
+4. [issue #123](https://github.com/felipe-urgal/home-music/issues/123) — índice executivo do backlog aberto;
+5. [`administration-ui.md`](administration-ui.md) — composição atual de Minha conta/Administração;
+6. documentos funcionais abaixo para invariantes específicas.
+
+## Backlog aberto e ordem atual
+
+As issues abertas em 2026-09-01 são:
+
+| Issue | Estado corrente |
+| --- | --- |
+| [#119](https://github.com/felipe-urgal/home-music/issues/119) | benchmark implementado e validado no PR #204; a issue permanece aberta até o merge e o gate do head final |
+| [#120](https://github.com/felipe-urgal/home-music/issues/120) | próxima atividade técnica da Fase 11 após o PR #204: revisão sistemática de acessibilidade |
+| [#121](https://github.com/felipe-urgal/home-music/issues/121) | backlog da Fase 11: observabilidade de jobs longos, integrada ao histórico operacional existente |
+| [#122](https://github.com/felipe-urgal/home-music/issues/122) | backlog da Fase 11: revisão periódica e segura de dependências |
+| [#81](https://github.com/felipe-urgal/home-music/issues/81) | validação em dispositivos reais de downloads em background/tela bloqueada |
+| [#174](https://github.com/felipe-urgal/home-music/issues/174) | evolução offline para playlists/pastas com deduplicação física por faixa |
+| [#175](https://github.com/felipe-urgal/home-music/issues/175) | backlog visual: fallback consistente para músicas sem capa |
+| [#176](https://github.com/felipe-urgal/home-music/issues/176) | backlog visual/PWA: ícone, favicon e identidade de instalação |
+| [#123](https://github.com/felipe-urgal/home-music/issues/123) | índice executivo; não é uma implementação separada |
+
+A ordem acima não transforma backlog visual/offline em dependência da Fase 11. Quando houver repriorização explícita, atualize `roadmap.md`, #123 e as issues afetadas no mesmo trabalho.
 
 ## Composição do frontend
 
@@ -42,6 +63,7 @@ Comece por:
 
 - [`production.md`](production.md)
 - [`production-contract.md`](production-contract.md) — interface operacional padronizada `prod:*` e manifesto para automação local.
+- [`production-verification.md`](production-verification.md) — contrato read-only de readiness e retry usado por `prod:verify`.
 - [`backup-restore.md`](backup-restore.md)
 - [`ffmpeg.md`](ffmpeg.md)
 - [`tailscale.md`](tailscale.md)
@@ -74,6 +96,8 @@ Pendências relacionadas: #81, #174 e #176.
 - [`admin-file-moves.md`](admin-file-moves.md)
 - [`admin-transcode-cache.md`](admin-transcode-cache.md)
 - [`admin-operation-history.md`](admin-operation-history.md)
+
+A evolução visual #175 deve reutilizar uma única política/componente de fallback de artwork e respeitar a precedência documentada de capa; não deve criar comportamento paralelo por tela.
 
 ## Importação
 
@@ -113,8 +137,19 @@ Os demais arquivos `phase-7.5-*` preservam o desenho, decisões e gates dos slic
 
 Para saber **como o sistema funciona hoje**, prefira `README.md`, `architecture.md`, `multi-user-auth.md`, os documentos funcionais atuais e os arquivos `phase-7.5-*` explicitamente listados acima como fonte corrente.
 
-Não use um registro histórico isolado para inferir que uma funcionalidade ainda está pendente. O estado de entrega fica em `roadmap.md` e nas issues abertas.
+Não use um registro histórico isolado para inferir que uma funcionalidade ainda está pendente. O estado de entrega fica em `roadmap.md`, #123 e nas issues abertas.
 
 ## E2E
 
 A suíte Playwright tem instruções próprias em [`../e2e/README.md`](../e2e/README.md). O CI obrigatório executa o smoke crítico curto; a regressão E2E completa permanece disponível sob demanda conforme o risco da mudança.
+
+## Regra para manutenção da documentação
+
+Ao alterar comportamento ou backlog:
+
+- atualize a documentação funcional canônica afetada;
+- atualize `roadmap.md` quando a fase ou pendência mudar;
+- atualize #123 quando o backlog executivo mudar;
+- mantenha a issue de implementação com estado/gate reais;
+- preserve ADRs e registros históricos em vez de reescrevê-los como se tivessem sido produzidos hoje;
+- não crie datas/status artificiais em arquivos sem mudança semântica apenas para aparentar revisão.
