@@ -42,6 +42,6 @@
     "benchmark:large-library": "npm run benchmark:large-library -w @home-music/server && npm run benchmark:large-library -w @home-music/web"
   },
   "devDependencies": {
-    "concurrently": "9.2.4"
+    "concurrently": "10.0.5"
   }
 }
