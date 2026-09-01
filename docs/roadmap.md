@@ -179,7 +179,7 @@ Em andamento. As issues abaixo são a fonte de escopo:
 - [x] [#116](https://github.com/felipe-urgal/home-music/issues/116) — separar rotas Fastify, serviços e infraestrutura;
 - [x] [#117](https://github.com/felipe-urgal/home-music/issues/117) — serviços explícitos para operações destrutivas/imports/backups, mantendo stores/managers seguros existentes como primitivas e preservando contratos;
 - [x] [#118](https://github.com/felipe-urgal/home-music/issues/118) — suíte dedicada de regressões negativas para importação/administração, com gate explícito no CI;
-- [x] [#119](https://github.com/felipe-urgal/home-music/issues/119) — benchmark com biblioteca grande, concluído neste PR com dataset sintético, baseline versionada e gate próprio de CI;
+- [x] [#119](https://github.com/felipe-urgal/home-music/issues/119) — benchmark com biblioteca grande, concluído pelo PR #204 com dataset sintético, baseline versionada e gate próprio de CI;
 - [ ] [#120](https://github.com/felipe-urgal/home-music/issues/120) — revisão sistemática de acessibilidade;
 - [ ] [#121](https://github.com/felipe-urgal/home-music/issues/121) — observabilidade de jobs longos;
 - [ ] [#122](https://github.com/felipe-urgal/home-music/issues/122) — revisão periódica de dependências.
@@ -188,12 +188,20 @@ A fronteira de serviços da #117 está detalhada em [server-composition.md](serv
 
 A #118 adiciona `npm run test:security` como gate explícito do CI. A suíte transversal fixa regressões de RBAC/anti-CSRF, upload, SSRF/redirects, confinement/symlink/no-clobber, lixeira/delete permanente, providers/processos filhos e Integridade read-only usando fixtures isoladas e sem rede pública. Detalhes: [security-regressions.md](security-regressions.md).
 
-A #119 adiciona `npm run benchmark:large-library` como gate de regressão grave separado da suíte funcional. O servidor mede scanner inicial/incremental, payload e memória com 2.000 WAV sintéticos; o frontend mede decode, projeção de pastas, busca/filtros/ordenação, SSR da primeira página e memória com 10.000 faixas sintéticas. A baseline inicial do código foi aceita no GitHub Actions run `33497407869`, commit `f357a2dc8776e1fa0d305fec0893191cfba4af7b`, em Node.js 22/`ubuntu-latest`; o merge permanece condicionado ao CI completo do head final após a atualização documental da baseline. Detalhes: [large-library-benchmark.md](large-library-benchmark.md).
+A #119 adiciona `npm run benchmark:large-library` como gate de regressão grave separado da suíte funcional. O servidor mede scanner inicial/incremental, payload e memória com 2.000 WAV sintéticos; o frontend mede decode, projeção de pastas, busca/filtros/ordenação, SSR da primeira página e memória com 10.000 faixas sintéticas. A baseline inicial do código foi aceita no GitHub Actions run `33497407869`, commit `f357a2dc8776e1fa0d305fec0893191cfba4af7b`, em Node.js 22/`ubuntu-latest`. O PR #204 foi ampliado, por decisão explícita, para consolidar documentação e backlog; por isso o merge continua condicionado a auto-review e CI completo no head final após essa consolidação. Detalhes: [large-library-benchmark.md](large-library-benchmark.md).
+
+**Ordem técnica atual:** após o merge do PR #204/#119, a próxima atividade da Fase 11 é a #120. #121 e #122 permanecem na sequência, salvo repriorização explícita registrada em #123 e neste roadmap.
 
 ## Backlog visual e PWA
 
 - [ ] [#175](https://github.com/felipe-urgal/home-music/issues/175) — fallback visual consistente para músicas sem capa;
 - [ ] [#176](https://github.com/felipe-urgal/home-music/issues/176) — novo ícone/identidade visual da PWA.
+
+Esses itens são backlog independente da sequência técnica da Fase 11 e podem ser repriorizados sem reabrir o redesign administrativo já concluído.
+
+## Backlog aberto após este PR
+
+Enquanto #119 só fecha no merge do PR #204, as pendências executivas abertas são #81, #119–#123 e #174–#176. A #123 é somente o índice executivo; as implementações/validações reais são #81, #119–#122 e #174–#176.
 
 ## Regra de execução
 
