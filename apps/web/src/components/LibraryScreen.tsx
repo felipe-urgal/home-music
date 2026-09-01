@@ -15,6 +15,8 @@ import { SmartPlaylistDialog } from './SmartPlaylistDialog';
 type LibraryOfflineDownloads = Pick<OfflineDownloads,
   | 'supported'
   | 'downloadedIds'
+  | 'individualDownloadedIds'
+  | 'collectionDownloadedIds'
   | 'downloadingIds'
   | 'download'
   | 'remove'
@@ -202,7 +204,11 @@ export function LibraryScreen({
   }
 
   async function removeTrackDownload(track: Track) {
-    if (!window.confirm(`Remover “${track.title}” dos downloads offline?`)) return;
+    const sharedByCollection = offline.collectionDownloadedIds.has(track.id);
+    const message = sharedByCollection
+      ? `Remover o download individual de “${track.title}”? A música continuará disponível porque uma coleção offline também depende dela.`
+      : `Remover “${track.title}” dos downloads offline?`;
+    if (!window.confirm(message)) return;
     try {
       await offline.remove(track.id);
     } catch (error) {
@@ -213,6 +219,8 @@ export function LibraryScreen({
   const offlineTrackProps = {
     offlineSupported: offline.supported,
     downloadedIds: offline.downloadedIds,
+    individualDownloadedIds: offline.individualDownloadedIds,
+    collectionDownloadedIds: offline.collectionDownloadedIds,
     downloadingIds: offline.downloadingIds,
     onDownload: downloadTrack,
     onRemoveDownload: removeTrackDownload
