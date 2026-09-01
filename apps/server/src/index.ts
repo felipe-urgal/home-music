@@ -103,7 +103,8 @@ const library = new LibraryService({
   database: infrastructure.database,
   trackAvailability: infrastructure.trackAvailability,
   operationHistory: infrastructure.operationHistory,
-  logger: app.log
+  logger: app.log,
+  longJobObservability: infrastructure.longJobObservability
 });
 const personal = new PersonalLibraryService(infrastructure.database, library);
 let ffmpegStatus: FfmpegStatus = {
