@@ -20,14 +20,12 @@ export function RequiredPasswordChangeScreen({
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const newPasswordCharacters = Array.from(newPassword).length;
+  const displayedError = formError || error;
+  const confirmationMismatch = Boolean(confirmation && newPassword !== confirmation);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!currentPassword || newPasswordCharacters < 12) return;
-    if (newPassword !== confirmation) {
-      setFormError('A confirmação precisa ser igual à nova senha.');
-      return;
-    }
+    if (!currentPassword || newPasswordCharacters < 12 || confirmationMismatch) return;
 
     setSubmitting(true);
     setFormError(null);
@@ -56,7 +54,7 @@ export function RequiredPasswordChangeScreen({
     <main className="login-shell">
       <section className="login-card" aria-labelledby="password-change-title">
         <div className="login-brand">
-          <div className="login-brand__icon"><KeyRound /></div>
+          <div className="login-brand__icon"><KeyRound aria-hidden="true" /></div>
           <div>
             <span>Home Music</span>
             <small>{username}</small>
@@ -90,6 +88,7 @@ export function RequiredPasswordChangeScreen({
               autoComplete="new-password"
               minLength={12}
               value={newPassword}
+              aria-describedby="password-change-requirements"
               onChange={event => setNewPassword(event.target.value)}
               disabled={submitting}
               required
@@ -104,13 +103,23 @@ export function RequiredPasswordChangeScreen({
               autoComplete="new-password"
               minLength={12}
               value={confirmation}
+              aria-invalid={confirmationMismatch}
+              aria-describedby={confirmationMismatch
+                ? 'password-change-confirmation-error password-change-requirements'
+                : 'password-change-requirements'}
               onChange={event => setConfirmation(event.target.value)}
               disabled={submitting}
               required
             />
           </label>
 
-          {(formError || error) && <div className="login-error" role="alert">{formError || error}</div>}
+          {confirmationMismatch && (
+            <small id="password-change-confirmation-error">
+              A confirmação precisa ser igual à nova senha.
+            </small>
+          )}
+
+          {displayedError && <div id="password-change-error" className="login-error" role="alert">{displayedError}</div>}
 
           <button
             className="login-submit"
@@ -130,8 +139,8 @@ export function RequiredPasswordChangeScreen({
           Sair desta conta
         </button>
 
-        <p className="login-footnote">
-          <LockKeyhole /> A nova senha deve ter pelo menos 12 caracteres e não é enviada para nenhum serviço externo.
+        <p className="login-footnote" id="password-change-requirements">
+          <LockKeyhole aria-hidden="true" /> A nova senha deve ter pelo menos 12 caracteres e não é enviada para nenhum serviço externo.
         </p>
       </section>
     </main>

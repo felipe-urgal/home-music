@@ -2,7 +2,7 @@
 
 Este diretório mistura documentação **corrente** e registros históricos de implementação. Esta página define qual material deve ser usado como fonte de verdade.
 
-> Inventário e backlog revisados em 2026-09-01 no PR #204. Documentos históricos são preservados como registro; o estado de entrega deve ser lido neste índice, em `roadmap.md`, na issue executiva #123 e nas issues abertas.
+> Inventário e backlog revisados em 2026-09-01. O PR #204 concluiu a #119; a revisão sistemática de acessibilidade da #120 está no PR #205. Documentos históricos são preservados como registro; o estado de entrega deve ser lido neste índice, em `roadmap.md`, na issue executiva #123 e nas issues abertas.
 
 ## Desenvolvimento e agentes de IA
 
@@ -23,13 +23,12 @@ Comece por:
 
 ## Backlog aberto e ordem atual
 
-As issues abertas em 2026-09-01 são:
+As pendências executivas abertas em 2026-09-01 são:
 
 | Issue | Estado corrente |
 | --- | --- |
-| [#119](https://github.com/felipe-urgal/home-music/issues/119) | benchmark implementado e validado no PR #204; a issue permanece aberta até o merge e o gate do head final |
-| [#120](https://github.com/felipe-urgal/home-music/issues/120) | próxima atividade técnica da Fase 11 após o PR #204: revisão sistemática de acessibilidade |
-| [#121](https://github.com/felipe-urgal/home-music/issues/121) | backlog da Fase 11: observabilidade de jobs longos, integrada ao histórico operacional existente |
+| [#120](https://github.com/felipe-urgal/home-music/issues/120) | atividade técnica atual da Fase 11: revisão sistemática de acessibilidade no PR #205 |
+| [#121](https://github.com/felipe-urgal/home-music/issues/121) | próxima atividade da Fase 11 após a #120: observabilidade de jobs longos, integrada ao histórico operacional existente |
 | [#122](https://github.com/felipe-urgal/home-music/issues/122) | backlog da Fase 11: revisão periódica e segura de dependências |
 | [#81](https://github.com/felipe-urgal/home-music/issues/81) | validação em dispositivos reais de downloads em background/tela bloqueada |
 | [#174](https://github.com/felipe-urgal/home-music/issues/174) | evolução offline para playlists/pastas com deduplicação física por faixa |
@@ -54,6 +53,10 @@ A ordem acima não transforma backlog visual/offline em dependência da Fase 11.
 ## Performance
 
 - [`large-library-benchmark.md`](large-library-benchmark.md) — dataset sintético, cenários, baseline operacional e limites do gate de regressão grave para bibliotecas grandes.
+
+## Acessibilidade
+
+- [`accessibility.md`](accessibility.md) — baseline de teclado/foco, nomes e estados acessíveis, movimento reduzido, fila do player, regressões automatizadas e limites conhecidos da revisão da #120.
 
 ## Navegação e URLs
 

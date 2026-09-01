@@ -27,6 +27,7 @@ export function LoginScreen({ configured, error, offlineCount = 0, onLogin, onRe
   const [formError, setFormError] = useState<string | null>(null);
   const autoOpeningOffline = offlineCount > 0 && Boolean(onOpenOffline);
   const canSavePassword = canStorePasswordCredential();
+  const displayedError = formError || error;
 
   useEffect(() => {
     if (autoOpeningOffline) onOpenOffline?.();
@@ -105,6 +106,8 @@ export function LoginScreen({ configured, error, offlineCount = 0, onLogin, onRe
                 autoCapitalize="none"
                 spellCheck={false}
                 value={username}
+                aria-invalid={Boolean(formError)}
+                aria-describedby={formError ? 'login-error' : undefined}
                 onChange={event => setUsername(event.target.value)}
                 disabled={submitting}
                 required
@@ -122,6 +125,8 @@ export function LoginScreen({ configured, error, offlineCount = 0, onLogin, onRe
                 type={showPassword ? 'text' : 'password'}
                 autoComplete="current-password"
                 value={password}
+                aria-invalid={Boolean(formError)}
+                aria-describedby={formError ? 'login-error' : undefined}
                 onChange={event => setPassword(event.target.value)}
                 disabled={submitting}
                 required
@@ -134,7 +139,7 @@ export function LoginScreen({ configured, error, offlineCount = 0, onLogin, onRe
                 disabled={submitting}
                 onClick={() => setShowPassword(value => !value)}
               >
-                {showPassword ? <EyeOff /> : <Eye />}
+                {showPassword ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}
               </button>
             </div>
           </div>
@@ -154,14 +159,14 @@ export function LoginScreen({ configured, error, offlineCount = 0, onLogin, onRe
             </label>
           )}
 
-          {(formError || error) && <div className="login-error" role="alert">{formError || error}</div>}
+          {displayedError && <div id="login-error" className="login-error" role="alert">{displayedError}</div>}
 
           <button className="login-submit" type="submit" disabled={submitting || !username.trim() || !password}>
             {submitting ? 'Entrando…' : 'Entrar'}
           </button>
         </form>
 
-        <p className="login-footnote"><LockKeyhole /> Sessão protegida neste navegador.</p>
+        <p className="login-footnote"><LockKeyhole aria-hidden="true" /> Sessão protegida neste navegador.</p>
       </section>
     </main>
   );

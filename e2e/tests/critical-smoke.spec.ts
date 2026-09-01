@@ -26,6 +26,69 @@ async function expectLibrary(page: Page) {
   await expect(page.getByPlaceholder('Música, artista, álbum ou pasta')).toBeVisible();
 }
 
+async function expectAccessibilityBaseline(page: Page) {
+  const search = page.getByLabel('Buscar na biblioteca');
+
+  // Anchor on the search field, move away and return using real keyboard input.
+  // The final focus therefore exercises :focus-visible instead of relying only
+  // on programmatic element.focus(), whose modality differs between browsers.
+  await search.focus();
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Shift+Tab');
+  await expect(search, 'a busca deve ser alcançável novamente pelo teclado').toBeFocused();
+
+  const focusState = await search.evaluate(element => {
+    const style = window.getComputedStyle(element);
+    return {
+      focusVisible: element.matches(':focus-visible'),
+      style: style.outlineStyle,
+      width: Number.parseFloat(style.outlineWidth)
+    };
+  });
+  expect(
+    focusState.focusVisible,
+    'a busca focada por teclado deve corresponder a :focus-visible'
+  ).toBe(true);
+  expect(
+    focusState.style,
+    'o indicador de foco por teclado deve usar um outline visível'
+  ).not.toBe('none');
+  expect(
+    focusState.width,
+    'o indicador de foco por teclado deve ter ao menos 2px'
+  ).toBeGreaterThanOrEqual(2);
+
+  const width = page.viewportSize()?.width ?? 390;
+  if (width >= 1024) {
+    const desktopNavigation = page.getByTestId('desktop-sidebar').getByRole('navigation', { name: 'Navegação principal' });
+    const foldersTab = desktopNavigation.getByRole('button', { name: 'Pastas', exact: true });
+    await expect(
+      foldersTab,
+      'a navegação desktop deve expor Pastas na rota raiz da Biblioteca'
+    ).toBeVisible();
+    await expect(
+      foldersTab,
+      'a rota /library deve expor Pastas como página corrente no desktop'
+    ).toHaveAttribute('aria-current', 'page');
+    return;
+  }
+
+  const libraryTabs = page.locator('.library-tabs');
+  await expect(
+    libraryTabs,
+    'as abas da Biblioteca devem estar visíveis em mobile/tablet'
+  ).toBeVisible();
+  const foldersTab = libraryTabs.getByRole('button', { name: 'Pastas', exact: true });
+  await expect(
+    foldersTab,
+    'a aba Pastas deve estar visível na rota raiz da Biblioteca'
+  ).toBeVisible();
+  await expect(
+    foldersTab,
+    'a rota /library deve expor Pastas como página corrente'
+  ).toHaveAttribute('aria-current', 'page');
+}
+
 async function openAccount(page: Page) {
   const width = page.viewportSize()?.width ?? 390;
 
@@ -42,10 +105,11 @@ async function openAccount(page: Page) {
   await expect(page.locator('#my-account-title')).toHaveText('Minha conta');
 }
 
-test('smoke crítico: deep link, histórico, player, conta e administração', async ({ page }) => {
+test('smoke crítico: deep link, acessibilidade, histórico, player, conta e administração', async ({ page }) => {
   await login(page, '/library');
   await expect(page).toHaveURL(/\/library$/);
   await expectLibrary(page);
+  await expectAccessibilityBaseline(page);
 
   const audio = page.locator('audio');
   await expect(audio).toHaveCount(1);

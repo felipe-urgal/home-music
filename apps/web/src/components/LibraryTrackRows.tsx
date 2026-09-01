@@ -65,18 +65,27 @@ export function LibraryTrackRows({
     <div className="library-track-list">
       {tracks.map(track => {
         const isCurrent = track.id === current?.id;
+        const accessibleTrackLabel = `Tocar ${track.title}, ${track.artist || 'Artista desconhecido'}, ${track.album || 'Álbum desconhecido'}${isCurrent && playing ? ' — reproduzindo agora' : ''}`;
         return (
           <div className={`library-track ${isCurrent ? 'is-current' : ''}`} key={track.id}>
-            <button className="library-track__main" onClick={() => onPlayTrack(track, context)}>
+            <button
+              className="library-track__main"
+              type="button"
+              aria-current={isCurrent ? 'true' : undefined}
+              aria-label={accessibleTrackLabel}
+              onClick={() => onPlayTrack(track, context)}
+            >
               <Artwork track={track} />
               <span className="library-track__text">
                 <strong>{track.title}</strong>
                 <small>{track.artist} · {track.album}</small>
               </span>
-              {isCurrent && playing ? <span className="playing-indicator">▶</span> : <Play className="library-track__action" />}
+              {isCurrent && playing
+                ? <span className="playing-indicator" aria-hidden="true">▶</span>
+                : <Play className="library-track__action" aria-hidden="true" />}
             </button>
             {onRemove && (
-              <button className="track-action" aria-label="Remover da playlist" onClick={() => onRemove(track.id)}><Trash2 /></button>
+              <button className="track-action" type="button" aria-label={`Remover ${track.title} da playlist`} onClick={() => onRemove(track.id)}><Trash2 aria-hidden="true" /></button>
             )}
           </div>
         );
