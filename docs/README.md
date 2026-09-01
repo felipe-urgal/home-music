@@ -2,7 +2,7 @@
 
 Este diretório mistura documentação **corrente** e registros históricos de implementação. Esta página define qual material deve ser usado como fonte de verdade.
 
-> Inventário e backlog revisados em 2026-09-01. O PR #204 concluiu a #119; a revisão sistemática de acessibilidade da #120 está no PR #205. Documentos históricos são preservados como registro; o estado de entrega deve ser lido neste índice, em `roadmap.md`, na issue executiva #123 e nas issues abertas.
+> Inventário e backlog revisados em 2026-09-01. Os PRs #204 e #205 concluíram #119 e #120; a observabilidade de jobs longos da #121 está no draft PR #206. Documentos históricos são preservados como registro; o estado de entrega deve ser lido neste índice, em `roadmap.md`, na issue executiva #123 e nas issues abertas.
 
 ## Desenvolvimento e agentes de IA
 
@@ -27,9 +27,8 @@ As pendências executivas abertas em 2026-09-01 são:
 
 | Issue | Estado corrente |
 | --- | --- |
-| [#120](https://github.com/felipe-urgal/home-music/issues/120) | atividade técnica atual da Fase 11: revisão sistemática de acessibilidade no PR #205 |
-| [#121](https://github.com/felipe-urgal/home-music/issues/121) | próxima atividade da Fase 11 após a #120: observabilidade de jobs longos, integrada ao histórico operacional existente |
-| [#122](https://github.com/felipe-urgal/home-music/issues/122) | backlog da Fase 11: revisão periódica e segura de dependências |
+| [#121](https://github.com/felipe-urgal/home-music/issues/121) | atividade técnica atual da Fase 11: observabilidade correlacionada de jobs longos no draft PR #206 |
+| [#122](https://github.com/felipe-urgal/home-music/issues/122) | próxima atividade da Fase 11 após a #121: revisão periódica e segura de dependências |
 | [#81](https://github.com/felipe-urgal/home-music/issues/81) | validação em dispositivos reais de downloads em background/tela bloqueada |
 | [#174](https://github.com/felipe-urgal/home-music/issues/174) | evolução offline para playlists/pastas com deduplicação física por faixa |
 | [#175](https://github.com/felipe-urgal/home-music/issues/175) | backlog visual: fallback consistente para músicas sem capa |
@@ -67,6 +66,7 @@ A ordem acima não transforma backlog visual/offline em dependência da Fase 11.
 - [`production.md`](production.md)
 - [`production-contract.md`](production-contract.md) — interface operacional padronizada `prod:*` e manifesto para automação local.
 - [`production-verification.md`](production-verification.md) — contrato read-only de readiness e retry usado por `prod:verify`.
+- [`long-job-observability.md`](long-job-observability.md) — lifecycle estruturado, correlação com Histórico operacional, redaction, retenção e investigação de scans/imports/transcodes no journal.
 - [`backup-restore.md`](backup-restore.md)
 - [`ffmpeg.md`](ffmpeg.md)
 - [`tailscale.md`](tailscale.md)
