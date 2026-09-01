@@ -50,11 +50,18 @@ O workflow principal do GitHub Actions usa o mesmo job `validate` para manter um
 2. executa `npm --prefix e2e run test:critical`;
 3. só então executa o smoke de produção.
 
-O gate Playwright obrigatório é intencionalmente pequeno e previsível. O `critical-smoke.spec.ts` valida, em mobile, tablet e desktop, o caminho básico real de login, shell autenticado, biblioteca, Minha conta e entrada em Administração.
+O gate continua deliberadamente focado, mas inclui as regressões cuja quebra teria impacto direto nos fluxos críticos atuais:
 
-Esse smoke não substitui a regressão completa. Fluxos mais caros e específicos — fila persistente, multiusuário, downloads offline, smart playlists, disponibilidade de faixas, importação e operações administrativas — continuam na suíte completa e devem ser executados de forma focada durante o desenvolvimento ou integralmente quando o risco da mudança exigir.
+- `critical-smoke.spec.ts` — login, shell autenticado, biblioteca, Minha conta e Administração em mobile/tablet/desktop;
+- `offline-collections-critical.spec.ts` — playlist offline deduplicada, promoção para referência individual sem novo blob, snapshot desatualizado, atualização, garbage-collection por referência e controle mobile;
+- `desktop-offline-downloads.spec.ts` — download individual e seleção em lote no desktop;
+- `offline-account-isolation.spec.ts` — isolamento de CacheStorage e do manifesto lógico de referências entre contas no mesmo navegador.
 
-Uma falha no smoke crítico falha o mesmo job que governa o merge. O job possui timeout explícito de 30 minutos para o conjunto inteiro de validações, não para o Playwright isoladamente.
+A ampliação do gate offline acompanha a #174 porque essa entrega altera o modelo de ownership local dos artefatos. Ela não transforma toda a regressão E2E em gate obrigatório.
+
+A suíte completa continua necessária quando o risco exigir. Fluxos mais caros e específicos — fila persistente, smart playlists, disponibilidade de faixas, importação e operações administrativas — permanecem disponíveis fora do conjunto crítico.
+
+Uma falha no conjunto crítico falha o mesmo job que governa o merge. O job possui timeout explícito de 30 minutos para o conjunto inteiro de validações, não para o Playwright isoladamente.
 
 O cache npm do Actions considera `package-lock.json` e `e2e/package-lock.json`. O binário do navegador não possui cache manual próprio: reinstalar o Chromium correspondente ao lockfile evita reutilizar browser/dependências de sistema incompatíveis. Se o custo desse passo se tornar relevante, qualquer cache futuro deve ser versionado por sistema operacional e pelo lock/versão do Playwright, sem pular a instalação das dependências de sistema necessárias.
 
@@ -69,7 +76,7 @@ Cobertura principal:
 - biblioteca/player nos layouts mobile, tablet e desktop;
 - fila desktop com reordenação e persistência real do estado após reload;
 - playlists manuais pessoais e playlist Rekordbox compartilhada/read-only;
-- downloads offline individuais/em lote e isolamento do CacheStorage na troca de conta;
+- downloads offline individuais/em lote, coleções offline deduplicadas e isolamento de cache/referências na troca de conta;
 - Minha conta, sessões, troca obrigatória de senha e isolamento multiusuário;
 - Administração: cockpit, músicas, metadata, integridade, usuários, lixeira, cache, histórico e normalização lógica;
 - importação por upload, URL direta e provider, além do workbench validação → metadata → duplicatas → destino/promoção com fixtures controladas.
