@@ -27,7 +27,7 @@ long_job.failed
 long_job.cancelled
 ```
 
-Eventos terminais incluem `durationMs`.
+Eventos terminais incluem `durationMs`. Quando a operação já produz contagens numéricas seguras e úteis, o evento terminal pode repetir essas métricas como snapshot de diagnóstico. Hoje scans persistidos expõem `tracks`, `added`, `updated`, `removed` e `unchanged`; a camada não aceita um mapa arbitrário de payload para esse fim.
 
 Campos de correlação possíveis:
 
@@ -72,6 +72,8 @@ jobType     = library.scan
 ```
 
 Assim, o operador pode abrir uma operação na UI e procurar o mesmo `operationId` no journal. Quando o scan foi iniciado pela API, o lifecycle também carrega o `requestId` do Fastify.
+
+Em conclusão bem-sucedida, o evento `long_job.completed` também inclui as mesmas contagens numéricas do `ScanResponse`: `tracks`, `added`, `updated`, `removed` e `unchanged`. Elas são convenientes para diagnóstico no journal, mas o Histórico/resultado do scan continua sendo a fonte persistente do estado.
 
 A falha de persistência do Histórico continua best-effort: o scan principal não falha por isso. Se o registro persistido não puder ser criado, o log recebe um `jobId` gerado apenas para runtime e omite `operationId`.
 
@@ -152,7 +154,7 @@ Os novos eventos não registram deliberadamente:
 - objeto `err` bruto;
 - stderr bruto do FFmpeg.
 
-`requestId`, `jobId`, `operationId` e `resourceId` são identificadores internos limitados e não carregam esses payloads sensíveis.
+`requestId`, `jobId`, `operationId` e `resourceId` são identificadores internos limitados; métricas de scan são somente números não negativos. Nenhum desses campos carrega payload sensível.
 
 A sanitização conhecida substitui URLs e paths e limita o tamanho do diagnóstico. Logs antigos fora desta camada continuam sujeitos às regras próprias do fluxo correspondente; novas instrumentações de job longo devem usar esta camada em vez de adicionar `err` bruto ao evento de lifecycle.
 
@@ -233,7 +235,7 @@ O estado agregado de transcoding (`active`/`pending`) continua exposto pelo diag
 
 Cobertura automatizada fixa:
 
-- início/conclusão e duração;
+- início/conclusão, duração e métricas tipadas de scan;
 - propagação/isolamento de `requestId` em contexto assíncrono;
 - integração do contexto com `preValidation` real do Fastify via `inject()` concorrente;
 - redaction de erro antes do log;
@@ -252,6 +254,7 @@ Ao instrumentar um novo pipeline:
 3. use `LongJobObservability` para lifecycle de runtime;
 4. preserve `requestId` somente como contexto de correlação, nunca como estado de domínio;
 5. não passe payload livre, URL, path ou erro bruto como binding;
-6. prefira eventos de transição a heartbeats frequentes;
-7. teste sucesso, falha/redaction, request-context quando aplicável e best-effort;
-8. só adicione persistência/UI se existir requisito de produto que o Histórico atual não cubra.
+6. prefira métricas numéricas explicitamente tipadas a payloads livres;
+7. prefira eventos de transição a heartbeats frequentes;
+8. teste sucesso, falha/redaction, request-context quando aplicável e best-effort;
+9. só adicione persistência/UI se existir requisito de produto que o Histórico atual não cubra.
