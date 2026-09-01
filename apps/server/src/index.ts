@@ -130,6 +130,10 @@ function stopAutomaticRescan() {
   stopAutoRescan = null;
 }
 
+app.addHook('preValidation', (request, _reply, done) => {
+  infrastructure.longJobObservability.withRequest(String(request.id), () => done());
+});
+
 app.addHook('onSend', async (_request, reply, payload) => {
   reply.header('X-Content-Type-Options', 'nosniff');
   reply.header('Referrer-Policy', 'no-referrer');
