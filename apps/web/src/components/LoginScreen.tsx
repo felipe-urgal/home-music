@@ -106,8 +106,8 @@ export function LoginScreen({ configured, error, offlineCount = 0, onLogin, onRe
                 autoCapitalize="none"
                 spellCheck={false}
                 value={username}
-                aria-invalid={Boolean(displayedError)}
-                aria-describedby={displayedError ? 'login-error' : undefined}
+                aria-invalid={Boolean(formError)}
+                aria-describedby={formError ? 'login-error' : undefined}
                 onChange={event => setUsername(event.target.value)}
                 disabled={submitting}
                 required
@@ -125,8 +125,8 @@ export function LoginScreen({ configured, error, offlineCount = 0, onLogin, onRe
                 type={showPassword ? 'text' : 'password'}
                 autoComplete="current-password"
                 value={password}
-                aria-invalid={Boolean(displayedError)}
-                aria-describedby={displayedError ? 'login-error' : undefined}
+                aria-invalid={Boolean(formError)}
+                aria-describedby={formError ? 'login-error' : undefined}
                 onChange={event => setPassword(event.target.value)}
                 disabled={submitting}
                 required
