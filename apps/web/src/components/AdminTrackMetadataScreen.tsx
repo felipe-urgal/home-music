@@ -9,7 +9,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Database,
-  ImagePlus,
   LoaderCircle,
   Music2,
   Pencil,
@@ -32,6 +31,7 @@ import {
   updateAdminTrackMetadata
 } from '../admin-tracks-client';
 import { notifyLibraryChanged } from '../library-events';
+import { ArtworkFallback } from './Artwork';
 
 type AdminMetadataHealthFilter = {
   label: string;
@@ -509,8 +509,10 @@ export function AdminTrackMetadataScreen({
                 </div>
 
                 <section className="admin-cover-editor admin-cover-editor--side" aria-labelledby="admin-cover-editor-title">
-                  <div className={`admin-cover-editor__preview ${displayedCoverUrl ? '' : 'is-empty'}`}>
-                    {displayedCoverUrl ? <img src={displayedCoverUrl} alt={`Preview da capa de ${draft.title}`} /> : <ImagePlus aria-hidden="true" />}
+                  <div className={`admin-cover-editor__preview ${displayedCoverUrl ? '' : 'is-fallback'}`}>
+                    {displayedCoverUrl
+                      ? <img src={displayedCoverUrl} alt={`Preview da capa de ${draft.title}`} />
+                      : <ArtworkFallback track={editingTrack ?? undefined} />}
                   </div>
                   <div className="admin-cover-editor__body">
                     <div className="admin-cover-editor__heading">
