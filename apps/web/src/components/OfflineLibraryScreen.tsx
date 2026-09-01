@@ -58,6 +58,7 @@ export function OfflineLibraryScreen({
 }: OfflineLibraryScreenProps) {
   const recordsById = new Map(records.map(record => [record.track.id, record]));
   const individualRecords = records.filter(record => individualTrackIds.has(record.track.id));
+  const individualTracks = individualRecords.map(record => record.track);
 
   return (
     <>
@@ -128,7 +129,6 @@ export function OfflineLibraryScreen({
             {individualRecords.map(record => {
               const track = record.track;
               const isCurrent = track.id === current?.id;
-              const individualTracks = individualRecords.map(item => item.track);
               return (
                 <div className={`library-track ${isCurrent ? 'is-current' : ''}`} key={track.id}>
                   <button
