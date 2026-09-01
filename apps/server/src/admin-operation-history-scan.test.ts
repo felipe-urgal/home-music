@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { ScanResponse } from '@home-music/shared';
 import { runScanWithHistory } from './admin-operation-history-scan.js';
+import { LongJobObservability } from './long-job-observability.js';
 
 const RESULT: ScanResponse = {
   tracks: 10,
@@ -52,4 +53,29 @@ test('falha no histórico não impede a operação principal', async () => {
   const result = await runScanWithHistory(history, 'manual', async () => RESULT, error => failures.push(error));
   assert.equal(result, RESULT);
   assert.equal(failures.length, 1);
+});
+
+test('correlaciona eventos estruturados do scan com o operation id persistido', async () => {
+  const logs: Array<Record<string, unknown>> = [];
+  const times = [
+    new Date('2026-09-01T12:00:00.000Z'),
+    new Date('2026-09-01T12:00:03.000Z')
+  ];
+  let cursor = 0;
+  const observability = new LongJobObservability({
+    info(bindings) { logs.push(bindings as Record<string, unknown>); },
+    warn(bindings) { logs.push(bindings as Record<string, unknown>); }
+  }, { now: () => times[Math.min(cursor++, times.length - 1)] });
+  const history = {
+    startScan: () => 'scan-correlated',
+    completeScan: () => undefined,
+    failScan: () => undefined
+  };
+
+  await runScanWithHistory(history, 'automatic', async () => RESULT, undefined, observability);
+
+  assert.deepEqual(logs.map(item => item.event), ['long_job.started', 'long_job.completed']);
+  assert.equal(logs[0].jobId, 'scan-correlated');
+  assert.equal(logs[0].operationId, 'scan-correlated');
+  assert.equal(logs[1].durationMs, 3000);
 });
