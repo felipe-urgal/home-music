@@ -30,6 +30,10 @@ Comece por:
 
 - [`security-regressions.md`](security-regressions.md) — gate dedicado de regressões negativas para Administração/Importação, invariantes cobertas e regras de isolamento das fixtures.
 
+## Performance
+
+- [`large-library-benchmark.md`](large-library-benchmark.md) — dataset sintético, cenários, baseline operacional e limites do gate de regressão grave para bibliotecas grandes.
+
 ## Navegação e URLs
 
 - [`deep-links.md`](deep-links.md) — rotas canônicas, integração com o histórico do browser, refresh direto, preservação do player e fallbacks de navegação.
