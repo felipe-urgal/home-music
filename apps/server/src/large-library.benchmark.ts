@@ -4,7 +4,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { resetLibraryIntegrityStatusForTests } from './library-integrity.js';
-import { scanLibrary, type IndexedTrack } from './library.js';
+import { toPublicTrack } from './library-public-track.js';
+import { scanLibrary } from './library.js';
 
 const DEFAULT_TRACK_COUNT = 2_000;
 const TRACK_COUNT = positiveInteger(process.env.HOME_MUSIC_BENCHMARK_TRACKS, DEFAULT_TRACK_COUNT);
@@ -115,24 +116,6 @@ async function createSyntheticLibrary(root: string) {
   }
 }
 
-function publicTrack(track: IndexedTrack) {
-  return {
-    id: track.id,
-    title: track.title,
-    artist: track.artist,
-    album: track.album,
-    albumArtist: track.albumArtist,
-    folder: track.folder,
-    folderPath: track.folderPath,
-    duration: track.duration,
-    format: track.format,
-    hasCover: track.hasCover,
-    coverVersion: track.coverVersion,
-    replayGainTrackDb: track.replayGainTrackDb,
-    replayGainAlbumDb: track.replayGainAlbumDb
-  };
-}
-
 async function main() {
   const root = await mkdtemp(path.join(os.tmpdir(), 'home-music-large-library-'));
   resetLibraryIntegrityStatusForTests();
@@ -170,7 +153,7 @@ async function main() {
     });
 
     const publicPayload = await measure(() => JSON.stringify({
-      tracks: changedIncremental.value.tracks.map(publicTrack),
+      tracks: changedIncremental.value.tracks.map(toPublicTrack),
       scannedAt: '2026-01-01T00:00:00.000Z',
       scanning: false,
       revision: 1
