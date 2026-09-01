@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import test from 'node:test';
+import { LongJobObservability } from './long-job-observability.js';
 import {
   DEFAULT_TRANSCODE_CACHE_MEGABYTES,
   parseTranscodeCacheMegabytes,
@@ -94,6 +95,46 @@ test('TranscodeManager deduplica trabalho concorrente e reutiliza cache', async 
     assert.equal(third.cacheHit, true);
     assert.equal(runs, 1);
     assert.equal(inputs, 1);
+  } finally {
+    await rm(cacheDir, { recursive: true, force: true });
+  }
+});
+
+test('TranscodeManager observa somente a geração real e não cache hits', async () => {
+  const cacheDir = await mkdtemp(path.join(os.tmpdir(), 'home-music-transcode-observe-'));
+  const logs: Array<Record<string, unknown>> = [];
+  const observability = new LongJobObservability({
+    info(bindings) { logs.push(bindings as Record<string, unknown>); },
+    warn(bindings) { logs.push(bindings as Record<string, unknown>); }
+  }, { createId: () => 'transcode-job-1' });
+  const runner: TranscodeRunner = async ({ outputPath }) => {
+    await writeFile(outputPath, Buffer.alloc(40, 3));
+  };
+  const manager = new TranscodeManager({
+    cacheDir,
+    command: 'ffmpeg-test',
+    maxCacheBytes: 1_000,
+    runner,
+    observability
+  });
+  const source = {
+    trackId: 'track-observed',
+    sourceSize: 100,
+    sourceMtimeMs: 200,
+    quality: 'balanced' as const,
+    createInput: () => Object.assign(Readable.from(Buffer.from('source')), { fd: 23 })
+  };
+
+  try {
+    const first = await manager.prepare(source);
+    const second = await manager.prepare(source);
+
+    assert.equal(first.cacheHit, false);
+    assert.equal(second.cacheHit, true);
+    assert.deepEqual(logs.map(item => item.event), ['long_job.started', 'long_job.completed']);
+    assert.equal(logs[0].jobType, 'transcode');
+    assert.equal(logs[0].jobId, 'transcode-transcode-job-1');
+    assert.equal(logs[0].resourceId, 'track-observed');
   } finally {
     await rm(cacheDir, { recursive: true, force: true });
   }
