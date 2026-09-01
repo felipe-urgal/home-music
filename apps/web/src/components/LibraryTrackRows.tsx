@@ -65,13 +65,14 @@ export function LibraryTrackRows({
     <div className="library-track-list">
       {tracks.map(track => {
         const isCurrent = track.id === current?.id;
+        const accessibleTrackLabel = `Tocar ${track.title}, ${track.artist || 'Artista desconhecido'}, ${track.album || 'Álbum desconhecido'}${isCurrent && playing ? ' — reproduzindo agora' : ''}`;
         return (
           <div className={`library-track ${isCurrent ? 'is-current' : ''}`} key={track.id}>
             <button
               className="library-track__main"
               type="button"
               aria-current={isCurrent ? 'true' : undefined}
-              aria-label={isCurrent && playing ? `Reproduzindo ${track.title}` : `Tocar ${track.title}`}
+              aria-label={accessibleTrackLabel}
               onClick={() => onPlayTrack(track, context)}
             >
               <Artwork track={track} />
