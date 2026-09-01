@@ -27,9 +27,6 @@ async function expectLibrary(page: Page) {
 }
 
 async function expectAccessibilityBaseline(page: Page) {
-  const libraryTabs = page.locator('.library-tabs');
-  await expect(libraryTabs, 'as abas da Biblioteca devem estar visíveis em /library').toBeVisible();
-
   const search = page.getByLabel('Buscar na biblioteca');
 
   // Anchor on the search field, move away and return using real keyboard input.
@@ -61,6 +58,26 @@ async function expectAccessibilityBaseline(page: Page) {
     'o indicador de foco por teclado deve ter ao menos 2px'
   ).toBeGreaterThanOrEqual(2);
 
+  const width = page.viewportSize()?.width ?? 390;
+  if (width >= 1024) {
+    const desktopNavigation = page.getByTestId('desktop-sidebar').getByRole('navigation', { name: 'Navegação principal' });
+    const foldersTab = desktopNavigation.getByRole('button', { name: 'Pastas', exact: true });
+    await expect(
+      foldersTab,
+      'a navegação desktop deve expor Pastas na rota raiz da Biblioteca'
+    ).toBeVisible();
+    await expect(
+      foldersTab,
+      'a rota /library deve expor Pastas como página corrente no desktop'
+    ).toHaveAttribute('aria-current', 'page');
+    return;
+  }
+
+  const libraryTabs = page.locator('.library-tabs');
+  await expect(
+    libraryTabs,
+    'as abas da Biblioteca devem estar visíveis em mobile/tablet'
+  ).toBeVisible();
   const foldersTab = libraryTabs.getByRole('button', { name: 'Pastas', exact: true });
   await expect(
     foldersTab,
