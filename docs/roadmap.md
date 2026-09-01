@@ -2,7 +2,7 @@
 
 Este documento é a visão técnica de alto nível do Home Music. A issue [#123](https://github.com/felipe-urgal/home-music/issues/123) é o índice executivo das pendências abertas.
 
-> Estado revisado em 2026-09-01. Os PRs #204/#119, #205/#120, #206/#121 e #207/#122 foram mergeados; o backlog planejado da Fase 11 está concluído. A atividade de implementação atual é a #174 na branch `feature/offline-collections`, PR #218. A #81 permanece separada porque exige validação em Android e iPhone/iPad reais.
+> Estado revisado em 2026-09-01. Os PRs #204/#119, #205/#120, #206/#121 e #207/#122 foram mergeados; o backlog planejado da Fase 11 está concluído. A implementação da #174 está tecnicamente concluída na branch `feature/offline-collections`, PR #218, e aguarda review/merge. A #81 permanece separada porque exige validação em Android e iPhone/iPad reais.
 
 ## Fases 1–2 — Base do produto e biblioteca pessoal
 
@@ -32,7 +32,7 @@ A experiência principal está concluída. Restam validações/evoluções expl�
 - [x] download offline individual e em lote com scheduler global de até 3 operações;
 - [x] isolamento de cache/manifesto offline por usuário;
 - [ ] [#81](https://github.com/felipe-urgal/home-music/issues/81) — validar downloads em background/tela bloqueada em Android e iPhone/iPad reais; não pode ser encerrada por emulação/CI;
-- [ ] [#174](https://github.com/felipe-urgal/home-music/issues/174) — playlists e pastas completas offline com um único artefato físico por faixa e múltiplas referências lógicas, em implementação no PR #218.
+- [ ] [#174](https://github.com/felipe-urgal/home-music/issues/174) — playlists e pastas completas offline com um único artefato físico por faixa e múltiplas referências lógicas; implementação concluída no PR #218, aguardando merge.
 
 A #174 reutiliza o scheduler/cache atual, adiciona manifesto versionado de referências por usuário, migração conservadora dos downloads antigos como intenção individual, sincronização explícita de snapshots e garbage-collection somente quando nenhuma referência depende da faixa. Detalhes: [offline-downloads.md](offline-downloads.md) e [pwa.md](pwa.md).
 
