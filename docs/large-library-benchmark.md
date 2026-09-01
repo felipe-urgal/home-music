@@ -114,7 +114,7 @@ Referência validada do código do benchmark:
 
 A baseline versionada é o conjunto **dataset + código exercitado + guardrails + run verde de referência**. Os runners continuam imprimindo as medições exatas em JSON nos logs de cada execução; esses números devem ser usados para diagnóstico e comparação entre runners equivalentes, mas não são SLA de produto nem devem ser copiados como um limite mais apertado sem amostragem suficiente.
 
-O run acima valida o código do benchmark. Como este próprio registro de baseline altera apenas documentação, o merge continua condicionado a um CI completo também no head final do PR, conforme `AGENTS.md`.
+O run acima valida o código do benchmark. O PR #204 foi posteriormente ampliado para consolidar o inventário documental e o backlog executivo; essa ampliação não altera a baseline técnica, mas invalida qualquer CI anterior como **gate final de merge**. O head definitivo precisa repetir o CI completo e o auto-review conforme `AGENTS.md`.
 
 ## Leitura dos resultados
 
