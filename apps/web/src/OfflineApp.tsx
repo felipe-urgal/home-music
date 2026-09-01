@@ -88,7 +88,7 @@ export function OfflineApp({ offline, onExit }: OfflineAppProps) {
               setScreen('player');
             }}
             onRemove={trackId => { void offline.remove(trackId).catch(() => undefined); }}
-            onRemoveCollection={(kind, sourceId) => { void offline.removeCollection(kind, sourceId); }}
+            onRemoveCollection={(kind, sourceId) => { void offline.removeCollection(kind, sourceId).catch(() => undefined); }}
             onExitOffline={onExit}
           />
         ) : current ? (
