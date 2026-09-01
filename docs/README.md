@@ -2,7 +2,7 @@
 
 Este diretório mistura documentação **corrente** e registros históricos de implementação. Esta página define qual material deve ser usado como fonte de verdade.
 
-> Inventário e backlog revisados em 2026-09-01. Os PRs #204 e #205 concluíram #119 e #120; a observabilidade de jobs longos da #121 está no draft PR #206. Documentos históricos são preservados como registro; o estado de entrega deve ser lido neste índice, em `roadmap.md`, na issue executiva #123 e nas issues abertas.
+> Inventário e backlog revisados em 2026-09-01. Os PRs #204, #205 e #206 concluíram #119, #120 e #121; a revisão periódica de dependências da #122 está no draft PR #207. Documentos históricos são preservados como registro; o estado de entrega deve ser lido neste índice, em `roadmap.md`, na issue executiva #123 e nas issues abertas.
 
 ## Desenvolvimento e agentes de IA
 
@@ -27,8 +27,7 @@ As pendências executivas abertas em 2026-09-01 são:
 
 | Issue | Estado corrente |
 | --- | --- |
-| [#121](https://github.com/felipe-urgal/home-music/issues/121) | atividade técnica atual da Fase 11: observabilidade correlacionada de jobs longos no draft PR #206 |
-| [#122](https://github.com/felipe-urgal/home-music/issues/122) | próxima atividade da Fase 11 após a #121: revisão periódica e segura de dependências |
+| [#122](https://github.com/felipe-urgal/home-music/issues/122) | atividade técnica atual da Fase 11: revisão periódica e segura de dependências no draft PR #207 |
 | [#81](https://github.com/felipe-urgal/home-music/issues/81) | validação em dispositivos reais de downloads em background/tela bloqueada |
 | [#174](https://github.com/felipe-urgal/home-music/issues/174) | evolução offline para playlists/pastas com deduplicação física por faixa |
 | [#175](https://github.com/felipe-urgal/home-music/issues/175) | backlog visual: fallback consistente para músicas sem capa |
@@ -48,6 +47,10 @@ A ordem acima não transforma backlog visual/offline em dependência da Fase 11.
 ## Segurança e regressões
 
 - [`security-regressions.md`](security-regressions.md) — gate dedicado de regressões negativas para Administração/Importação, invariantes cobertas e regras de isolamento das fixtures.
+
+## Dependências e CI
+
+- [`dependency-management.md`](dependency-management.md) — Dependabot, cadência, agrupamento patch/minor, tratamento de majors e vulnerabilidades, GitHub Actions/supply chain, lockfiles e regra de ausência de auto-merge.
 
 ## Performance
 
