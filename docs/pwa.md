@@ -8,6 +8,16 @@ O service worker é registrado no build de produção quando o navegador oferece
 
 `/sw.js` é servido com `Cache-Control: no-store`, permitindo que o navegador verifique atualizações da política do worker. Caches estáticos antigos com prefixo conhecido são removidos durante a ativação quando deixam de ser compatíveis.
 
+## Identidade de instalação
+
+A #176 substituiu o placeholder genérico por uma identidade **Casa + vinil**, sem texto dentro do ícone e alinhada ao fundo escuro + azul atual.
+
+O manifest usa PNGs `192x192` e `512x512` em variantes `any` e `maskable`. O shell HTML também expõe `apple-touch-icon` `180x180`, favicon SVG e pinned tab monocromático do Safari.
+
+Os PNGs são gerados deterministicamente por `apps/web/scripts/generate-pwa-icons.mjs` antes de desenvolvimento, build e testes. A fonte visual, safe zone e matriz de assets estão documentadas em [pwa-icon-identity.md](pwa-icon-identity.md).
+
+Essa evolução não altera o service worker, o protocolo de capability nem o namespace de áudio offline.
+
 ## Cache estático
 
 O cache estático é deliberadamente limitado a recursos públicos necessários para montar a aplicação:
@@ -122,11 +132,10 @@ Logout não apaga automaticamente downloads concluídos. A troca de identidade e
 
 O scheduler vive na execução da página. Navegar na SPA preserva jobs; fechar/recarregar a aba ou suspensão de JavaScript pelo sistema pode interrompê-los.
 
-A garantia de continuidade com tela bloqueada/background ainda exige validação real em Android e iPhone/iPad. A issue [#81](https://github.com/felipe-urgal/home-music/issues/81) continua sendo o gate específico de hardware e não é fechada pela #174.
+A garantia de continuidade com tela bloqueada/background ainda exige validação real em Android e iPhone/iPad. A issue [#81](https://github.com/felipe-urgal/home-music/issues/81) continua sendo o gate específico de hardware e não é fechada pela #174 nem pela #176.
 
 ## Evoluções abertas
 
-- [#81](https://github.com/felipe-urgal/home-music/issues/81): validar comportamento real em background/tela bloqueada;
-- [#176](https://github.com/felipe-urgal/home-music/issues/176): revisar ícone, favicon e identidade visual da PWA em tamanhos reais de launcher.
+- [#81](https://github.com/felipe-urgal/home-music/issues/81): validar comportamento real em background/tela bloqueada.
 
-A implementação de playlists/pastas offline deduplicadas pertence à [#174](https://github.com/felipe-urgal/home-music/issues/174) e reutiliza o scheduler/cache existente, sem segundo pipeline físico.
+A implementação de playlists/pastas offline deduplicadas pertence à [#174](https://github.com/felipe-urgal/home-music/issues/174) e reutiliza o scheduler/cache existente, sem segundo pipeline físico. A identidade de instalação da #176 está documentada em [pwa-icon-identity.md](pwa-icon-identity.md).
