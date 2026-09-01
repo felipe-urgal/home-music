@@ -364,7 +364,9 @@ Escolha testes proporcionais ao risco, mas o gate final deve cobrir o sistema in
 ```bash
 npm ci
 npm run typecheck
+npm run test:security
 npm test
+npm run benchmark:large-library
 npm run build
 npm run smoke:production
 ```
@@ -375,6 +377,8 @@ O root possui também:
 npm run smoke:backup-restore
 npm run e2e
 ```
+
+`npm run test:security` é o gate transversal de regressões negativas de Administração/Importação. `npm run benchmark:large-library` é o guard de regressão grave com dataset sintético; ele não substitui testes funcionais e seus limites não são SLA de produto.
 
 Use E2E sempre que a mudança afetar fluxo de usuário, navegação, comportamento responsivo ou integração fullstack que a suíte possa cobrir.
 
@@ -527,7 +531,9 @@ Riscos residuais:
 
 Validação:
 - typecheck: pass
+- security regressions: pass
 - tests: pass
+- large-library benchmark: pass
 - build: pass
 - smoke: pass
 - E2E/CI: pass ou justificativa
@@ -640,9 +646,12 @@ Antes do merge, confirmar:
 - branch atualizada o suficiente para detectar conflito relevante;
 - auto code review final concluído;
 - zero BLOCKER/HIGH/MEDIUM pendente;
-- typecheck/test/build relevantes verdes;
+- typecheck e regressões de segurança verdes;
+- testes funcionais verdes;
+- benchmark de biblioteca grande verde quando o gate existir no workflow;
+- build e validações operacionais relevantes verdes;
 - smoke de produção verde quando aplicável;
-- E2E verde para mudança de fluxo/UI quando aplicável;
+- E2E/Playwright verde para mudança de fluxo/UI quando aplicável;
 - documentação/issues coerentes;
 - PR descreve o head final.
 
