@@ -81,18 +81,20 @@ export function PlayerPlaybackControls({
       </div>
 
       <div className="controls">
-        <button className={`icon-button ${shuffle ? 'is-active' : ''}`} aria-label="Aleatório" aria-pressed={shuffle} onClick={onShuffle}><Shuffle /></button>
-        <button className="icon-button icon-button--control" aria-label="Anterior" onClick={onPrevious}><SkipBack /></button>
-        <button className="play-button" aria-label={playing ? 'Pausar' : 'Tocar'} onClick={onTogglePlay}>
-          {playing ? <Pause /> : <Play />}
+        <button className={`icon-button ${shuffle ? 'is-active' : ''}`} type="button" aria-label="Aleatório" aria-pressed={shuffle} onClick={onShuffle}><Shuffle aria-hidden="true" /></button>
+        <button className="icon-button icon-button--control" type="button" aria-label="Anterior" onClick={onPrevious}><SkipBack aria-hidden="true" /></button>
+        <button className="play-button" type="button" aria-label={playing ? 'Pausar' : 'Tocar'} onClick={onTogglePlay}>
+          {playing ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
         </button>
-        <button className="icon-button icon-button--control" aria-label="Próxima" onClick={onNext} disabled={!hasNext}><SkipForward /></button>
+        <button className="icon-button icon-button--control" type="button" aria-label="Próxima" onClick={onNext} disabled={!hasNext}><SkipForward aria-hidden="true" /></button>
         <button
           className={`icon-button ${repeatMode !== 'off' ? 'is-active' : ''}`}
+          type="button"
           aria-label={repeatMode === 'one' ? 'Repetir uma' : repeatMode === 'all' ? 'Repetir fila' : 'Repetição desligada'}
+          aria-pressed={repeatMode !== 'off'}
           onClick={onRepeat}
         >
-          {repeatMode === 'one' ? <Repeat1 /> : <Repeat2 />}
+          {repeatMode === 'one' ? <Repeat1 aria-hidden="true" /> : <Repeat2 aria-hidden="true" />}
         </button>
       </div>
 
