@@ -188,7 +188,7 @@ A fronteira de serviços da #117 está detalhada em [server-composition.md](serv
 
 A #118 adiciona `npm run test:security` como gate explícito do CI. A suíte transversal fixa regressões de RBAC/anti-CSRF, upload, SSRF/redirects, confinement/symlink/no-clobber, lixeira/delete permanente, providers/processos filhos e Integridade read-only usando fixtures isoladas e sem rede pública. Detalhes: [security-regressions.md](security-regressions.md).
 
-A #119 adiciona `npm run benchmark:large-library` como gate de regressão grave separado da suíte funcional. O servidor mede scanner inicial/incremental, payload e memória com 2.000 WAV sintéticos; o frontend mede decode, projeção de pastas, busca/filtros/ordenação, SSR da primeira página e memória com 10.000 faixas sintéticas. A baseline inicial foi aceita no GitHub Actions run `33496461620` em Node.js 22/`ubuntu-latest`; como qualquer alteração posterior muda o head, o merge permanece condicionado ao CI completo do commit final. Detalhes: [large-library-benchmark.md](large-library-benchmark.md).
+A #119 adiciona `npm run benchmark:large-library` como gate de regressão grave separado da suíte funcional. O servidor mede scanner inicial/incremental, payload e memória com 2.000 WAV sintéticos; o frontend mede decode, projeção de pastas, busca/filtros/ordenação, SSR da primeira página e memória com 10.000 faixas sintéticas. A baseline inicial do código foi aceita no GitHub Actions run `33497407869`, commit `f357a2dc8776e1fa0d305fec0893191cfba4af7b`, em Node.js 22/`ubuntu-latest`; o merge permanece condicionado ao CI completo do head final após a atualização documental da baseline. Detalhes: [large-library-benchmark.md](large-library-benchmark.md).
 
 ## Backlog visual e PWA
 
