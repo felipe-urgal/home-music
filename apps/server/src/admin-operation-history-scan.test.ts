@@ -78,4 +78,9 @@ test('correlaciona eventos estruturados do scan com o operation id persistido', 
   assert.equal(logs[0].jobId, 'scan-correlated');
   assert.equal(logs[0].operationId, 'scan-correlated');
   assert.equal(logs[1].durationMs, 3000);
+  assert.equal(logs[1].tracks, 10);
+  assert.equal(logs[1].added, 1);
+  assert.equal(logs[1].updated, 2);
+  assert.equal(logs[1].removed, 0);
+  assert.equal(logs[1].unchanged, 7);
 });
