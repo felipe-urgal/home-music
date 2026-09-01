@@ -69,11 +69,13 @@ export function OfflineApp({ offline, onExit }: OfflineAppProps) {
           <ResponsiveState
             variant="loading"
             title="Preparando seus downloads"
-            detail="Carregando as músicas salvas neste dispositivo."
+            detail="Carregando as músicas e coleções salvas neste dispositivo."
           />
         ) : screen === 'library' ? (
           <OfflineLibraryScreen
             records={offline.records}
+            collections={offline.collections}
+            individualTrackIds={offline.individualDownloadedIds}
             current={current}
             playing={player.playing}
             hasNext={player.hasNext}
@@ -85,7 +87,8 @@ export function OfflineApp({ offline, onExit }: OfflineAppProps) {
               player.playTrack(track, context);
               setScreen('player');
             }}
-            onRemove={trackId => { void offline.remove(trackId); }}
+            onRemove={trackId => { void offline.remove(trackId).catch(() => undefined); }}
+            onRemoveCollection={(kind, sourceId) => { void offline.removeCollection(kind, sourceId); }}
             onExitOffline={onExit}
           />
         ) : current ? (
@@ -122,9 +125,9 @@ export function OfflineApp({ offline, onExit }: OfflineAppProps) {
           <ResponsiveState
             variant="empty"
             title="Nenhum download offline"
-            detail="Conecte ao Home Music e baixe uma música pelo player."
+            detail="Conecte ao Home Music e disponibilize músicas, playlists ou pastas para uso offline."
           >
-            <button className="secondary-action" onClick={onExit}>Tentar conectar</button>
+            <button className="secondary-action" type="button" onClick={onExit}>Tentar conectar</button>
           </ResponsiveState>
         )}
       </DesktopShell>
