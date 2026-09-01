@@ -26,6 +26,26 @@ async function expectLibrary(page: Page) {
   await expect(page.getByPlaceholder('Música, artista, álbum ou pasta')).toBeVisible();
 }
 
+async function expectAccessibilityBaseline(page: Page) {
+  const search = page.getByLabel('Buscar na biblioteca');
+  await search.focus();
+  await expect(search).toBeFocused();
+
+  const focusStyle = await search.evaluate(element => {
+    const style = window.getComputedStyle(element);
+    return {
+      style: style.outlineStyle,
+      width: Number.parseFloat(style.outlineWidth)
+    };
+  });
+  expect(focusStyle.style).not.toBe('none');
+  expect(focusStyle.width).toBeGreaterThanOrEqual(2);
+
+  await expect(
+    page.locator('.library-tabs').getByRole('button', { name: 'Pastas', exact: true })
+  ).toHaveAttribute('aria-current', 'page');
+}
+
 async function openAccount(page: Page) {
   const width = page.viewportSize()?.width ?? 390;
 
@@ -42,10 +62,11 @@ async function openAccount(page: Page) {
   await expect(page.locator('#my-account-title')).toHaveText('Minha conta');
 }
 
-test('smoke crítico: deep link, histórico, player, conta e administração', async ({ page }) => {
+test('smoke crítico: deep link, acessibilidade, histórico, player, conta e administração', async ({ page }) => {
   await login(page, '/library');
   await expect(page).toHaveURL(/\/library$/);
   await expectLibrary(page);
+  await expectAccessibilityBaseline(page);
 
   const audio = page.locator('audio');
   await expect(audio).toHaveCount(1);
