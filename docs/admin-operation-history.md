@@ -57,6 +57,18 @@ O pipeline atual já cobre upload, URL direta e provider externo, incluindo vali
 
 O histórico não precisa armazenar bytes do upload nem URL original sensível para ser útil.
 
+## Correlação com logs de runtime
+
+A Fase 11/#121 adiciona eventos estruturados best-effort para investigação no servidor sem transformar logs em outra fonte de verdade.
+
+Para scans persistidos, o mesmo identificador é usado em runtime como `jobId` e `operationId`. Para importações, o `jobId` da fila é preservado e o registro correspondente no Histórico usa `operationId=import-<jobId>`.
+
+Se a persistência do Histórico falhar, o log de runtime pode continuar existindo com `jobId`, mas deve omitir `operationId` para não afirmar uma correlação persistida inexistente.
+
+O scan de bootstrap continua fora deste Histórico, porém pode receber um `jobId` somente de runtime. Transcodes também são runtime-only e não devem ser inseridos artificialmente na tabela administrativa apenas para satisfazer logging.
+
+Detalhes de eventos, redaction, volume e comandos de investigação: [long-job-observability.md](long-job-observability.md).
+
 ## Retry atual
 
 A Fase 9 implementou retry seguro para origens reproduzíveis.
@@ -97,6 +109,8 @@ Falhas conhecidas recebem orientação curta, por exemplo:
 - FFmpeg/codec/formato;
 - regra de segurança/entrada inválida.
 
+A observabilidade de runtime reutiliza esta sanitização para eventos `long_job.failed` e não inclui o objeto `err` bruto nesses eventos.
+
 ## API
 
 ### `GET /api/admin/operations`
@@ -133,7 +147,9 @@ Retry de upload pede novo arquivo; retry de URL pede a URL novamente. O históri
 ## Invariantes
 
 - histórico não é fonte de verdade da operação principal;
+- logs de runtime também não são fonte de verdade da operação principal;
 - falha de persistência do histórico não deve derrubar scan/importação;
+- falha do sink de logging não deve derrubar o job observado;
 - scans concorrentes reutilizados não geram duplicatas;
 - operações abandonadas por restart não permanecem falsamente ativas;
 - stack traces/segredos/URLs/caminhos sensíveis não são expostos;
@@ -143,4 +159,4 @@ Retry de upload pede novo arquivo; retry de URL pede a URL novamente. O históri
 
 ## Testes relevantes
 
-A cobertura existente inclui persistência/reabertura, operações interrompidas, filtros, snapshots de importação, retenção, sanitização, autorização e retry/lineage. A expansão E2E mais ampla permanece no backlog da #111.
+A cobertura existente inclui persistência/reabertura, operações interrompidas, filtros, snapshots de importação, retenção, sanitização, autorização e retry/lineage. A #121 acrescenta regressões para lifecycle estruturado, correlação, redaction, best-effort e deduplicação de transcode/cache hit.
