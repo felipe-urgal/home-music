@@ -10,18 +10,19 @@ describe('accessibility contracts', () => {
     const css = source('accessibility.css');
 
     expect(css).toMatch(/:focus-visible/);
+    expect(css).toMatch(/outline: 3px solid #67b9ff !important/);
     expect(css).toMatch(/\.sr-only/);
     expect(css).toMatch(/prefers-reduced-motion:\s*reduce/);
     expect(css).toMatch(/forced-colors:\s*active/);
   });
 
-  it('associa erros de autenticação aos campos correspondentes', () => {
+  it('associa somente erros de credencial aos campos de login', () => {
     const login = source('components/LoginScreen.tsx');
     const requiredPassword = source('components/RequiredPasswordChangeScreen.tsx');
 
     expect(login).toMatch(/id="login-error"/);
-    expect(login).toMatch(/aria-describedby=\{displayedError \? 'login-error'/);
-    expect(login).toMatch(/aria-invalid=\{Boolean\(displayedError\)\}/);
+    expect(login).toMatch(/aria-describedby=\{formError \? 'login-error'/);
+    expect(login).toMatch(/aria-invalid=\{Boolean\(formError\)\}/);
 
     expect(requiredPassword).toMatch(/id="password-change-requirements"/);
     expect(requiredPassword).toMatch(/id="password-change-confirmation-error"/);
@@ -35,6 +36,7 @@ describe('accessibility contracts', () => {
 
     expect(navigation).toMatch(/aria-current=\{active \? 'page'/);
     expect(tracks).toMatch(/aria-current=\{isCurrent \? 'true'/);
+    expect(tracks).toMatch(/reproduzindo agora/);
     expect(playback).toMatch(/aria-pressed=\{repeatMode !== 'off'\}/);
   });
 
