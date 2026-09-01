@@ -1,12 +1,11 @@
 {
   "name": "Home Music",
   "short_name": "Home Music",
-  "description": "Servidor pessoal de musica com biblioteca e player web.",
+  "description": "Seu streaming pessoal de música.",
   "start_url": "/",
-  "scope": "/",
   "display": "standalone",
   "background_color": "#05080c",
-  "theme_color": "#0b1016",
+  "theme_color": "#05080c",
   "icons": [
     {
       "src": "/icons/app-icon-192.png",
