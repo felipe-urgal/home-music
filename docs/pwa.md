@@ -1,6 +1,6 @@
 # PWA, cache seletivo e downloads offline
 
-Este documento descreve o comportamento **atual** da PWA do Home Music. Para scheduler, isolamento entre contas e matriz de validação mobile, veja também [offline-downloads.md](offline-downloads.md).
+Este documento descreve o comportamento **atual** da PWA do Home Music. Para scheduler, referências lógicas, deduplicação, sincronização e matriz de validação mobile, veja também [offline-downloads.md](offline-downloads.md).
 
 ## Registro e atualização
 
@@ -21,29 +21,50 @@ Navegações usam estratégia **network-first**. Assets hashados podem usar **ca
 
 Conteúdo autenticado de `/api/*` não é colocado no cache estático da PWA. Login, sessão, biblioteca, favoritos, histórico, playlists, capas privadas e streaming continuam protegidos pelo backend.
 
-## Downloads offline atuais
+## Downloads offline
 
-Downloads de áudio são explícitos e usam um cache separado do shell da PWA.
+Áudio offline é explícito e usa armazenamento separado do app shell.
 
-O frontend possui um scheduler global com até **3 operações simultâneas**. Ele é compartilhado entre as superfícies do player e da biblioteca, portanto navegar dentro da SPA não cria uma segunda fila nem cancela jobs em andamento.
+O frontend possui um scheduler global com até **3 operações simultâneas**. Ele é compartilhado por download individual, lote desktop, playlists e pastas. Navegar na SPA não cria uma segunda fila.
 
-O namespace atual é por usuário:
+O namespace por usuário é:
 
 ```text
 home-music:offline-user-id:v1
 home-music:offline-tracks:v2:<userId>
+home-music:offline-references:v1:<userId>
 home-music-offline-audio-v2-<userId>
 home-music-offline-client-scope-v1
 /offline-audio/<trackId>
 ```
 
-A chave interna do scheduler também inclui `userId + trackId`. Assim, a mesma faixa não é baixada duas vezes simultaneamente para a mesma conta e uma troca de usuário não mistura estado entre identidades.
+A chave do scheduler continua sendo `userId + trackId`, então a mesma faixa física é reutilizada quando pertence a várias coleções.
 
-Uma faixa só é marcada como disponível depois que o arquivo completo foi gravado com sucesso no Cache Storage e o manifesto correspondente foi atualizado.
+## Referências de playlist/pasta
+
+O manifesto `offline-references:v1` separa intenção lógica dos bytes físicos:
+
+```text
+trackId físico único
+       ↑
+       ├── individual
+       ├── playlist
+       └── pasta
+```
+
+Playlists persistem snapshot ordenado dos `trackIds`. Pastas persistem o conjunto completo de `folderView.allTracks`, incluindo subpastas e sem aplicar busca/filtro temporário.
+
+Quando o conteúdo conectado muda, o snapshot aparece como desatualizado e o usuário aplica `Atualizar offline` explicitamente.
+
+Remover uma coleção só apaga bytes que não tenham mais nenhuma referência.
+
+Downloads físicos existentes anteriores ao manifesto de referências são migrados conservadoramente como intenções individuais.
+
+Detalhes de concorrência, pause/remove e garbage-collection: [offline-downloads.md](offline-downloads.md).
 
 ## Rota virtual de áudio
 
-O service worker atende a rota local:
+O service worker atende:
 
 ```text
 /offline-audio/<trackId>
@@ -51,56 +72,61 @@ O service worker atende a rota local:
 
 Ela:
 
-- não é uma rota pública do Fastify;
-- lê somente conteúdo já armazenado no cache offline da conta associada ao `clientId`/aba;
-- suporta `GET`, `HEAD` e byte ranges necessários ao seek;
+- não é rota pública do Fastify;
+- lê somente o cache offline da conta associada ao `clientId`/aba;
+- suporta `GET`, `HEAD` e byte ranges para seek;
 - responde `206` para range válido e `416` para range inválido;
 - não escolhe usuário por parâmetro de URL.
 
-Sem service worker compatível, a aplicação degrada para offline indisponível em vez de abrir um cache de outra versão/conta.
+A #174 não altera esse protocolo: coleções são referências frontend sobre o mesmo artefato físico.
 
 ## Capability e isolamento por client
 
-O protocolo atual do service worker é **versão 3**.
+O protocolo do service worker permanece **versão 3**.
 
-O frontend negocia a capability informando o `userId` autenticado. O worker associa esse usuário ao `clientId` que originou a mensagem e persiste apenas o vínculo mínimo em `home-music-offline-client-scope-v1` para sobreviver à suspensão/reinício do próprio worker.
+O frontend negocia a capability informando o `userId` autenticado. O worker associa esse usuário ao `clientId` e persiste somente o vínculo mínimo em `home-music-offline-client-scope-v1` para sobreviver à suspensão/restart do worker.
 
-O worker só considera o client pronto para offline depois que o escopo foi persistido e confirmado. Trocas rápidas de conta são serializadas para que o escopo mais recente vença.
+O worker só considera o client pronto depois de persistir e confirmar o escopo. Trocas rápidas de conta são serializadas para que a identidade mais recente vença.
 
-Essa camada evita que duas contas usando o mesmo origin reutilizem downloads uma da outra durante o uso normal da aplicação.
+Essa camada evita que contas diferentes no mesmo origin reutilizem downloads umas das outras no uso normal.
 
-> Cache Storage e `localStorage` pertencem ao perfil do navegador. O isolamento por usuário do Home Music é uma fronteira lógica de produto, não criptografia contra alguém que já controla DevTools/armazenamento local do dispositivo.
+> Cache Storage e `localStorage` pertencem ao perfil do navegador. O isolamento por usuário é fronteira lógica de produto, não criptografia contra alguém que controla DevTools/armazenamento local.
 
 ## Entrada no modo offline
 
 O Home Music diferencia:
 
-1. **servidor acessível, sessão inválida:** segue para autenticação normal; offline não é bypass de login;
-2. **servidor realmente inalcançável:** quando existe um namespace offline conhecido e válido, a interface pode oferecer acesso somente às músicas baixadas daquela conta.
+1. **servidor acessível, sessão inválida:** autenticação normal; offline não é bypass de login;
+2. **servidor realmente inalcançável:** com namespace conhecido/válido, a interface pode abrir apenas conteúdo já salvo daquela conta.
 
-No modo offline não são simulados dados que dependem do servidor, como Administração, rescan, favoritos remotos, histórico ou edição de playlists.
+No modo offline não são simulados dados dependentes do servidor como Administração, rescan, favoritos remotos ou edição de playlists.
 
-O estado mínimo do player offline usa armazenamento local separado do estado persistido no servidor.
+A biblioteca local organiza:
+
+- coleções offline (playlists/pastas);
+- downloads individuais.
+
+Coleções parciais reproduzem somente as faixas realmente presentes no cache. O total de armazenamento conta bytes físicos únicos, não soma referências duplicadas.
 
 ## Armazenamento e quota
 
-Antes de concluir um download, o frontend usa `navigator.storage.estimate()` quando disponível e solicita armazenamento persistente como operação best-effort.
+Antes de concluir novo artefato, o frontend usa `navigator.storage.estimate()` quando disponível e solicita persistência como best-effort.
 
-O navegador ainda pode remover dados sob pressão severa de espaço. O Home Music nunca deve anunciar um item como concluído quando o arquivo não está integralmente no cache.
+O navegador ainda pode remover dados sob pressão severa. O Home Music nunca marca uma faixa física como concluída sem `cache.put()` + atualização do manifesto físico.
 
-Logout não apaga automaticamente downloads concluídos. A troca de identidade esconde o namespace anterior e negocia um novo escopo com o worker.
+Na inicialização, o manifesto físico é reconciliado com Cache Storage; referências lógicas permanecem para permitir recuperação explícita de coleções que ficaram parciais.
+
+Logout não apaga automaticamente downloads concluídos. A troca de identidade esconde o namespace anterior e negocia novo escopo com o worker.
 
 ## Limite de background
 
-O scheduler vive na execução da página. Navegar dentro da SPA preserva os jobs, mas fechar/recarregar a aba ou o sistema operacional suspender JavaScript pode interromper downloads ainda em andamento.
+O scheduler vive na execução da página. Navegar na SPA preserva jobs; fechar/recarregar a aba ou suspensão de JavaScript pelo sistema pode interrompê-los.
 
-A garantia real de continuidade com tela bloqueada/background depende da plataforma e ainda precisa de validação em dispositivos reais. A issue [#81](https://github.com/felipe-urgal/home-music/issues/81) mantém esse gate.
+A garantia de continuidade com tela bloqueada/background ainda exige validação real em Android e iPhone/iPad. A issue [#81](https://github.com/felipe-urgal/home-music/issues/81) continua sendo o gate específico de hardware e não é fechada pela #174.
 
-## Próximas evoluções
+## Evoluções abertas
 
-Ainda **não implementado**:
-
-- [#174](https://github.com/felipe-urgal/home-music/issues/174): disponibilizar playlists e pastas completas offline com um único artefato físico por faixa e múltiplas referências lógicas;
+- [#81](https://github.com/felipe-urgal/home-music/issues/81): validar comportamento real em background/tela bloqueada;
 - [#176](https://github.com/felipe-urgal/home-music/issues/176): revisar ícone, favicon e identidade visual da PWA em tamanhos reais de launcher.
 
-A #174 deve reutilizar o scheduler/cache atual; não deve criar um segundo pipeline paralelo nem duplicar o arquivo físico quando a mesma faixa pertence a várias coleções offline.
+A implementação de playlists/pastas offline deduplicadas pertence à [#174](https://github.com/felipe-urgal/home-music/issues/174) e reutiliza o scheduler/cache existente, sem segundo pipeline físico.
