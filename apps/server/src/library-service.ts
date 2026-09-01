@@ -12,6 +12,7 @@ import {
   type IndexedTrack
 } from './library.js';
 import { LibraryMutationLock } from './library-mutation-lock.js';
+import { toPublicTrack } from './library-public-track.js';
 import { resolveLibraryRoot } from './security.js';
 import type { TrackAvailabilityStore } from './track-availability-store.js';
 
@@ -72,14 +73,7 @@ export class LibraryService {
   }
 
   publicTrack(track: IndexedTrack) {
-    const {
-      filePath: _filePath,
-      mimeType: _mimeType,
-      fileSize: _fileSize,
-      mtimeMs: _mtimeMs,
-      ...safe
-    } = track;
-    return safe;
+    return toPublicTrack(track);
   }
 
   listPublicTracks() {
