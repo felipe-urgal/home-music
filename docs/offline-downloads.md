@@ -129,7 +129,7 @@ Ao remover a intenção individual:
 - se nenhuma coleção depende da faixa, manifesto físico e cache são removidos;
 - se uma coleção ainda depende dela, apenas a referência individual some e os bytes permanecem.
 
-A UI desktop diferencia uma faixa que existe somente por coleção e não oferece sua remoção como se fosse um download individual.
+Quando uma faixa já existe fisicamente **somente por uma coleção**, a UI não oferece uma remoção individual inexistente. Em vez disso, tabela e player permitem **manter também como download individual**; essa promoção adiciona apenas a referência lógica e reutiliza o blob já presente. Depois disso, remover a intenção individual continua preservando os bytes enquanto a coleção depender da faixa.
 
 ## Playlist offline
 
@@ -173,9 +173,9 @@ Para faixas novas, o scheduler global garante os downloads que ainda faltam.
 
 `Pausar` interrompe a inclusão de novas faixas na sincronização daquela coleção.
 
-Um `fetch()` já iniciado pode terminar; isso é intencional porque o scheduler é compartilhado e o mesmo job pode servir outra referência.
+Um `fetch()` já iniciado pode terminar; isso é intencional porque o scheduler é compartilhado e o mesmo job pode servir outra referência. Enquanto esses jobs já iniciados drenam, a ação de retomada permanece desabilitada como `Pausando…`, evitando iniciar uma segunda execução concorrente para a mesma coleção.
 
-A coleção permanece persistida como desejada e pode ser retomada com `Atualizar offline`.
+Quando não há mais job pendente daquela execução, a coleção permanece persistida como desejada e a UI oferece `Retomar`. A retomada reutiliza o scheduler/cache existentes e usa o snapshot corrente da coleção conectada.
 
 ### Remover coleção
 
@@ -299,6 +299,7 @@ A #174 adiciona cobertura para:
 - deduplicação de IDs e referências sobrepostas;
 - remoção por referência;
 - preservação de download individual compartilhado;
+- promoção de faixa já física por coleção para intenção individual sem novo blob;
 - detecção de snapshot alterado;
 - manifesto corrompido/incompatível;
 - fluxo Playwright real de playlist sobreposta + atualização + garbage-collection;
