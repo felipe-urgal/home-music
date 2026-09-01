@@ -2,7 +2,7 @@
 
 Este documento é a visão técnica de alto nível do Home Music. A issue [#123](https://github.com/felipe-urgal/home-music/issues/123) é o índice executivo das pendências abertas.
 
-> Estado revisado em 2026-08-31. Itens marcados como concluídos refletem funcionalidades já entregues ou concluídas pelo próprio PR que atualiza este documento; itens futuros apontam para a issue que mantém escopo e gate atualizados.
+> Estado revisado em 2026-09-01. Itens marcados como concluídos refletem funcionalidades já entregues ou concluídas pelo próprio PR que atualiza este documento; itens futuros apontam para a issue que mantém escopo e gate atualizados.
 
 ## Fases 1–2 — Base do produto e biblioteca pessoal
 
@@ -179,7 +179,7 @@ Em andamento. As issues abaixo são a fonte de escopo:
 - [x] [#116](https://github.com/felipe-urgal/home-music/issues/116) — separar rotas Fastify, serviços e infraestrutura;
 - [x] [#117](https://github.com/felipe-urgal/home-music/issues/117) — serviços explícitos para operações destrutivas/imports/backups, mantendo stores/managers seguros existentes como primitivas e preservando contratos;
 - [x] [#118](https://github.com/felipe-urgal/home-music/issues/118) — suíte dedicada de regressões negativas para importação/administração, com gate explícito no CI;
-- [ ] [#119](https://github.com/felipe-urgal/home-music/issues/119) — benchmark com biblioteca grande;
+- [ ] [#119](https://github.com/felipe-urgal/home-music/issues/119) — benchmark com biblioteca grande, em validação na branch `feature/large-library-benchmark` com dataset sintético e gate próprio de CI;
 - [ ] [#120](https://github.com/felipe-urgal/home-music/issues/120) — revisão sistemática de acessibilidade;
 - [ ] [#121](https://github.com/felipe-urgal/home-music/issues/121) — observabilidade de jobs longos;
 - [ ] [#122](https://github.com/felipe-urgal/home-music/issues/122) — revisão periódica de dependências.
@@ -187,6 +187,8 @@ Em andamento. As issues abaixo são a fonte de escopo:
 A fronteira de serviços da #117 está detalhada em [server-composition.md](server-composition.md). Operações destrutivas continuam delegando confinement/lock/rollback aos stores físicos existentes; importações continuam usando o mesmo pipeline; backup/restore continua usando validação e rollback de `backup-restore.ts`.
 
 A #118 adiciona `npm run test:security` como gate explícito do CI. A suíte transversal fixa regressões de RBAC/anti-CSRF, upload, SSRF/redirects, confinement/symlink/no-clobber, lixeira/delete permanente, providers/processos filhos e Integridade read-only usando fixtures isoladas e sem rede pública. Detalhes: [security-regressions.md](security-regressions.md).
+
+A #119 adiciona `npm run benchmark:large-library` como gate de regressão grave separado da suíte funcional. O servidor mede scanner inicial/incremental, payload e memória com 2.000 WAV sintéticos; o frontend mede decode, projeção de pastas, busca/filtros/ordenação, SSR da primeira página e memória com 10.000 faixas sintéticas. Detalhes: [large-library-benchmark.md](large-library-benchmark.md).
 
 ## Backlog visual e PWA
 
