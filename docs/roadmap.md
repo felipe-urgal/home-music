@@ -2,7 +2,7 @@
 
 Este documento é a visão técnica de alto nível do Home Music. A issue [#123](https://github.com/felipe-urgal/home-music/issues/123) é o índice executivo das pendências abertas.
 
-> Estado revisado em 2026-09-01. Os PRs #204/#119, #205/#120 e #206/#121 foram mergeados; a #122 é a atividade técnica atual da Fase 11 e está em implementação na branch `feature/dependency-review`, PR #207. Itens marcados como concluídos refletem funcionalidades já entregues; itens futuros apontam para a issue que mantém escopo e gate atualizados.
+> Estado revisado em 2026-09-01. Os PRs #204/#119, #205/#120, #206/#121 e #207/#122 foram mergeados; o backlog planejado da Fase 11 está concluído. A implementação da #174 está tecnicamente concluída na branch `feature/offline-collections`, PR #218, e aguarda review/merge. A #81 permanece separada porque exige validação em Android e iPhone/iPad reais.
 
 ## Fases 1–2 — Base do produto e biblioteca pessoal
 
@@ -31,10 +31,10 @@ A experiência principal está concluída. Restam validações/evoluções expl�
 - [x] layout sem overflow horizontal;
 - [x] download offline individual e em lote com scheduler global de até 3 operações;
 - [x] isolamento de cache/manifesto offline por usuário;
-- [ ] [#81](https://github.com/felipe-urgal/home-music/issues/81) — validar downloads em background/tela bloqueada em Android e iPhone/iPad;
-- [ ] [#174](https://github.com/felipe-urgal/home-music/issues/174) — disponibilizar playlists e pastas completas offline com deduplicação física por faixa.
+- [ ] [#81](https://github.com/felipe-urgal/home-music/issues/81) — validar downloads em background/tela bloqueada em Android e iPhone/iPad reais; não pode ser encerrada por emulação/CI;
+- [ ] [#174](https://github.com/felipe-urgal/home-music/issues/174) — playlists e pastas completas offline com um único artefato físico por faixa e múltiplas referências lógicas; implementação concluída no PR #218, aguardando merge.
 
-Detalhes: [offline-downloads.md](offline-downloads.md).
+A #174 reutiliza o scheduler/cache atual, adiciona manifesto versionado de referências por usuário, migração conservadora dos downloads antigos como intenção individual, sincronização explícita de snapshots e garbage-collection somente quando nenhuma referência depende da faixa. Detalhes: [offline-downloads.md](offline-downloads.md) e [pwa.md](pwa.md).
 
 ## Fases 4–6 — Produção, acesso remoto e extras
 
@@ -169,45 +169,35 @@ A composição atual está documentada em [administration-ui.md](administration-
 
 ## Fase 11 — Engenharia, arquitetura e qualidade
 
-Em andamento. As issues abaixo são a fonte de escopo:
+**Concluída para o backlog planejado #111–#122.**
 
-- [x] [#111](https://github.com/felipe-urgal/home-music/issues/111) — Playwright E2E consolidado como gate obrigatório para fluxos críticos, com fixtures isoladas de dados reais e internet pública;
+- [x] [#111](https://github.com/felipe-urgal/home-music/issues/111) — Playwright E2E consolidado como gate obrigatório para fluxos críticos;
 - [x] [#112](https://github.com/felipe-urgal/home-music/issues/112) — URLs reais e deep links;
-- [x] [#113](https://github.com/felipe-urgal/home-music/issues/113) — refatorar `LibraryScreen`;
-- [x] [#114](https://github.com/felipe-urgal/home-music/issues/114) — refatorar `PlayerScreen` sem duplicar estado;
-- [x] [#115](https://github.com/felipe-urgal/home-music/issues/115) — reduzir responsabilidade de `App.tsx`;
-- [x] [#116](https://github.com/felipe-urgal/home-music/issues/116) — separar rotas Fastify, serviços e infraestrutura;
-- [x] [#117](https://github.com/felipe-urgal/home-music/issues/117) — serviços explícitos para operações destrutivas/imports/backups, mantendo stores/managers seguros existentes como primitivas e preservando contratos;
-- [x] [#118](https://github.com/felipe-urgal/home-music/issues/118) — suíte dedicada de regressões negativas para importação/administração, com gate explícito no CI;
-- [x] [#119](https://github.com/felipe-urgal/home-music/issues/119) — benchmark com biblioteca grande, concluído e mergeado pelo PR #204 com dataset sintético, baseline versionada e gate próprio de CI;
-- [x] [#120](https://github.com/felipe-urgal/home-music/issues/120) — revisão sistemática de acessibilidade, concluída e mergeada pelo PR #205;
-- [x] [#121](https://github.com/felipe-urgal/home-music/issues/121) — observabilidade correlacionada de jobs longos, concluída e mergeada pelo PR #206;
-- [ ] [#122](https://github.com/felipe-urgal/home-music/issues/122) — revisão periódica e segura de dependências em implementação no PR #207.
+- [x] [#113](https://github.com/felipe-urgal/home-music/issues/113) — refatoração de `LibraryScreen`;
+- [x] [#114](https://github.com/felipe-urgal/home-music/issues/114) — refatoração de `PlayerScreen` sem duplicar estado;
+- [x] [#115](https://github.com/felipe-urgal/home-music/issues/115) — redução de responsabilidade de `App.tsx`;
+- [x] [#116](https://github.com/felipe-urgal/home-music/issues/116) — separação de rotas Fastify, serviços e infraestrutura;
+- [x] [#117](https://github.com/felipe-urgal/home-music/issues/117) — serviços explícitos para operações destrutivas/imports/backups — PR #198;
+- [x] [#118](https://github.com/felipe-urgal/home-music/issues/118) — regressões negativas dedicadas de segurança — PR #199;
+- [x] [#119](https://github.com/felipe-urgal/home-music/issues/119) — benchmark com biblioteca grande — PR #204;
+- [x] [#120](https://github.com/felipe-urgal/home-music/issues/120) — revisão sistemática de acessibilidade — PR #205;
+- [x] [#121](https://github.com/felipe-urgal/home-music/issues/121) — observabilidade correlacionada de jobs longos — PR #206;
+- [x] [#122](https://github.com/felipe-urgal/home-music/issues/122) — revisão periódica e segura de dependências — PR #207.
 
-A fronteira de serviços da #117 está detalhada em [server-composition.md](server-composition.md). Operações destrutivas continuam delegando confinement/lock/rollback aos stores físicos existentes; importações continuam usando o mesmo pipeline; backup/restore continua usando validação e rollback de `backup-restore.ts`.
+A #118 mantém `npm run test:security` como gate explícito. A #119 mantém `npm run benchmark:large-library`. A #120 documenta a baseline em [accessibility.md](accessibility.md). A #121 documenta o lifecycle em [long-job-observability.md](long-job-observability.md). A #122 documenta Dependabot/majors/supply chain em [dependency-management.md](dependency-management.md).
 
-A #118 adiciona `npm run test:security` como gate explícito do CI. A suíte transversal fixa regressões de RBAC/anti-CSRF, upload, SSRF/redirects, confinement/symlink/no-clobber, lixeira/delete permanente, providers/processos filhos e Integridade read-only usando fixtures isoladas e sem rede pública. Detalhes: [security-regressions.md](security-regressions.md).
-
-A #119 adiciona `npm run benchmark:large-library` como gate de regressão grave separado da suíte funcional. O servidor mede scanner inicial/incremental, payload e memória com 2.000 WAV sintéticos; o frontend mede decode, projeção de pastas, busca/filtros/ordenação, SSR da primeira página e memória com 10.000 faixas sintéticas. O PR #204 foi mergeado em 2026-09-01 após auto-review sem `BLOCKER`/`HIGH`/`MEDIUM` e CI completo verde no head final. Detalhes: [large-library-benchmark.md](large-library-benchmark.md).
-
-A #120 trata acessibilidade como contrato funcional e foi mergeada pelo PR #205 após auto-review e CI completo verde no head final. A baseline cobre foco, teclado, nomes/estados acessíveis, movimento reduzido/forced colors e regressões Vitest/Playwright. Detalhes e limites: [accessibility.md](accessibility.md).
-
-A #121 mantém o Histórico operacional como fonte persistente para scans/importações e acrescenta lifecycle estruturado best-effort no logger do servidor. Scans usam o `operationId` persistido quando existe, imports usam `jobId` + correlação ao Histórico, e transcodes recebem observabilidade runtime-only sem logar path/URL/stderr bruto. O PR #206 foi mergeado em 2026-09-01 após auto-review sem `BLOCKER`/`HIGH`/`MEDIUM` e CI completo verde no head final. Detalhes: [long-job-observability.md](long-job-observability.md).
-
-A #122 configura Dependabot para npm do monorepo, npm do E2E e GitHub Actions, com revisão semanal, patch/minor agrupados, majors isolados e ausência explícita de auto-merge. `npm audit`, lockfiles reproduzíveis e todos os gates de CI permanecem obrigatórios. A política de majors, vulnerabilidades, dependências abandonadas e supply chain está em [dependency-management.md](dependency-management.md).
-
-**Ordem técnica atual:** a #122 é a atividade em execução. Após seu merge, o backlog técnico planejado atual da Fase 11 fica concluído, salvo nova priorização explícita registrada em #123 e neste roadmap.
+O PR #207 foi mergeado em 2026-09-01 com CI completo verde e encerrou o backlog técnico planejado dessa fase. Novas atividades de engenharia devem ser abertas/repriorizadas explicitamente em #123; não manter a #122 artificialmente como “atividade atual”.
 
 ## Backlog visual e PWA
 
 - [ ] [#175](https://github.com/felipe-urgal/home-music/issues/175) — fallback visual consistente para músicas sem capa;
 - [ ] [#176](https://github.com/felipe-urgal/home-music/issues/176) — novo ícone/identidade visual da PWA.
 
-Esses itens são backlog independente da sequência técnica da Fase 11 e podem ser repriorizados sem reabrir o redesign administrativo já concluído.
+Esses itens são independentes da #174 e da validação física #81. Podem ser repriorizados sem reabrir o redesign administrativo ou a Fase 11 concluída.
 
 ## Backlog aberto
 
-As pendências executivas abertas são #81, #122–#123 e #174–#176. A #123 é somente o índice executivo; as implementações/validações reais são #81, #122 e #174–#176.
+As pendências executivas abertas são #81, #123 e #174–#176. A #123 é somente o índice executivo; as implementações/validações reais são #81 e #174–#176.
 
 ## Regra de execução
 

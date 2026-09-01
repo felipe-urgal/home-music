@@ -64,6 +64,9 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline
     playing: player.playing
   });
   const current = player.current;
+  const currentHasPhysicalDownload = Boolean(current && offline.downloadedIds.has(current.id));
+  const currentHasIndividualDownload = Boolean(currentHasPhysicalDownload && current && offline.individualDownloadedIds.has(current.id));
+  const currentAvailableViaCollection = Boolean(currentHasPhysicalDownload && current && offline.collectionDownloadedIds.has(current.id));
   const editablePlaylists = library.playlists.filter(playlist => playlist.source === 'manual');
   const libraryReturnLabel = buildLibraryReturnLabel({
     selectedPlaylistName: navigation.selectedPlaylist?.name,
@@ -103,8 +106,11 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline
 
   function toggleDownload() {
     if (!current) return;
-    if (offline.downloadedIds.has(current.id)) {
-      if (!window.confirm(`Remover “${current.title}” dos downloads offline?`)) return;
+    if (currentHasIndividualDownload) {
+      const message = currentAvailableViaCollection
+        ? `Remover o download individual de “${current.title}”? A música continuará disponível porque uma coleção offline também depende dela.`
+        : `Remover “${current.title}” dos downloads offline?`;
+      if (!window.confirm(message)) return;
       run(offline.remove(current.id).catch(error => {
         library.reportError(error);
         throw error;
@@ -265,7 +271,8 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline
             shuffle={player.shuffle}
             repeatMode={player.repeatMode}
             playlists={editablePlaylists}
-            isDownloaded={offline.downloadedIds.has(current.id)}
+            isDownloaded={currentHasIndividualDownload}
+            availableViaCollection={currentAvailableViaCollection}
             downloading={offline.downloadingIds.has(current.id)}
             onTogglePlay={() => void player.togglePlay()}
             onPrevious={player.previous}
@@ -293,7 +300,8 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline
             shuffle={player.shuffle}
             repeatMode={player.repeatMode}
             playlists={editablePlaylists}
-            isDownloaded={offline.downloadedIds.has(current.id)}
+            isDownloaded={currentHasIndividualDownload}
+            availableViaCollection={currentAvailableViaCollection}
             downloading={offline.downloadingIds.has(current.id)}
             onOpenLibrary={() => setScreen('library')}
             onTogglePlay={() => void player.togglePlay()}

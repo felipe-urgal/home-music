@@ -37,6 +37,7 @@ type DesktopNowPlayingScreenProps = {
   repeatMode: RepeatMode;
   playlists: Playlist[];
   isDownloaded?: boolean;
+  availableViaCollection?: boolean;
   downloading?: boolean;
   onTogglePlay: () => void;
   onPrevious: () => void;
@@ -62,6 +63,7 @@ export function DesktopNowPlayingScreen({
   repeatMode,
   playlists,
   isDownloaded = false,
+  availableViaCollection = false,
   downloading = false,
   onTogglePlay,
   onPrevious,
@@ -80,6 +82,15 @@ export function DesktopNowPlayingScreen({
     : repeatMode === 'all'
       ? 'Repetir fila'
       : 'Repetição desligada';
+  const offlineActionLabel = downloading
+    ? 'Baixando para uso offline'
+    : isDownloaded
+      ? availableViaCollection
+        ? 'Remover download individual; a coleção manterá a música offline'
+        : 'Remover download offline'
+      : availableViaCollection
+        ? 'Manter também como download individual'
+        : 'Baixar para uso offline';
 
   return (
     <section className="desktop-now-playing-screen" aria-labelledby="desktop-now-playing-title">
@@ -101,14 +112,20 @@ export function DesktopNowPlayingScreen({
           <div className="desktop-now-playing-screen__actions" aria-label="Ações da faixa">
             {onToggleDownload && (
               <button
-                className={isDownloaded ? 'is-active' : ''}
+                className={isDownloaded || availableViaCollection ? 'is-active' : ''}
                 type="button"
                 disabled={downloading}
-                aria-label={downloading ? 'Baixando para uso offline' : isDownloaded ? 'Remover download offline' : 'Baixar para uso offline'}
+                aria-label={offlineActionLabel}
+                aria-pressed={isDownloaded}
+                title={availableViaCollection && !isDownloaded ? 'Esta música já está offline por uma coleção.' : undefined}
                 onClick={onToggleDownload}
               >
-                {downloading ? <LoaderCircle className="desktop-now-playing-screen__spinner" /> : isDownloaded ? <CheckCircle2 /> : <Download />}
-                <span>Download</span>
+                {downloading
+                  ? <LoaderCircle className="desktop-now-playing-screen__spinner" aria-hidden="true" />
+                  : isDownloaded
+                    ? <CheckCircle2 aria-hidden="true" />
+                    : <Download aria-hidden="true" />}
+                <span>{isDownloaded ? 'Download' : availableViaCollection ? 'Manter' : 'Download'}</span>
               </button>
             )}
 

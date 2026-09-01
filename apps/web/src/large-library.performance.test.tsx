@@ -112,6 +112,8 @@ describe('large library performance guard', () => {
         onPlayTrack={() => undefined}
         offlineSupported={false}
         downloadedIds={new Set<string>()}
+        individualDownloadedIds={new Set<string>()}
+        collectionDownloadedIds={new Set<string>()}
         downloadingIds={new Set<string>()}
         onDownload={async () => undefined}
         onRemoveDownload={async () => undefined}

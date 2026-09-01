@@ -283,18 +283,34 @@ O backend resolve ReplayGain do índice; não aceita ganho arbitrário enviado p
 
 O cache estático contém apenas shell/assets públicos. Conteúdo autenticado de `/api/*` não é cacheado como parte do app shell.
 
-Áudio offline usa namespace por usuário:
+Áudio offline usa namespace por usuário e separa artefato físico de intenção lógica:
 
 ```text
-home-music:offline-tracks:v2:<userId>
-home-music-offline-audio-v2-<userId>
+home-music:offline-tracks:v2:<userId>      # manifesto físico
+home-music:offline-references:v1:<userId>  # referências lógicas
+home-music-offline-audio-v2-<userId>       # bytes no Cache Storage
 ```
 
 O service worker usa capability v3 e associa cada client/aba ao usuário autenticado antes de servir `/offline-audio/<trackId>`.
 
-O scheduler global permite até 3 downloads simultâneos. Continuidade em background/tela bloqueada ainda depende de validação real por plataforma (#81).
+O scheduler global continua limitado a 3 downloads simultâneos e usa `userId + trackId` como chave. Download individual, lote desktop, playlist e pasta reutilizam esse mesmo pipeline; uma faixa compartilhada por várias referências possui **um único artefato físico**.
 
-A evolução para playlists/pastas offline deduplicadas está planejada na #174 e deve reutilizar essa infraestrutura.
+```text
+artefato físico trackId
+        ↑
+        ├── referência individual
+        ├── playlist A
+        ├── playlist B
+        └── pasta X
+```
+
+Playlists e pastas persistem snapshots lógicos. Mudanças posteriores ficam visíveis como conteúdo desatualizado até atualização explícita. Remover uma coleção ou referência individual só coleta os bytes quando nenhuma outra referência do mesmo usuário ainda depende da faixa.
+
+Downloads `tracks:v2` existentes antes da camada de referências são migrados conservadoramente como intenção individual para impedir cleanup destrutivo. Jobs em voo revalidam a existência de referências antes de publicar o manifesto físico, fechando a corrida com remoção concorrente.
+
+Continuidade em background/tela bloqueada continua dependendo de validação real por plataforma (#81); a deduplicação de coleções não transforma execução em background em garantia.
+
+Detalhes: `offline-downloads.md` e `pwa.md`.
 
 ## Backup e restore
 

@@ -30,6 +30,8 @@ type DesktopTrackTableProps = {
   onRemove?: (trackId: string) => void;
   offlineSupported?: boolean;
   downloadedIds?: ReadonlySet<string>;
+  individualDownloadedIds?: ReadonlySet<string>;
+  collectionDownloadedIds?: ReadonlySet<string>;
   downloadingIds?: ReadonlySet<string>;
   onDownload?: (track: Track) => Promise<void>;
   onRemoveDownload?: (track: Track) => Promise<void>;
@@ -107,6 +109,8 @@ export function DesktopTrackTable({
   onRemove,
   offlineSupported = false,
   downloadedIds = EMPTY_TRACK_IDS,
+  individualDownloadedIds = EMPTY_TRACK_IDS,
+  collectionDownloadedIds = EMPTY_TRACK_IDS,
   downloadingIds = EMPTY_TRACK_IDS,
   onDownload,
   onRemoveDownload
@@ -115,8 +119,9 @@ export function DesktopTrackTable({
   const visibleIds = useMemo(() => new Set(tracks.map(track => track.id)), [tracks]);
   const selectedTracks = useMemo(() => tracks.filter(track => selectedIds.has(track.id)), [selectedIds, tracks]);
   const downloadableSelectedTracks = useMemo(() => selectedTracks.filter(track => (
-    !downloadedIds.has(track.id) && !downloadingIds.has(track.id)
-  )), [downloadedIds, downloadingIds, selectedTracks]);
+    !(downloadedIds.has(track.id) && individualDownloadedIds.has(track.id))
+    && !downloadingIds.has(track.id)
+  )), [downloadedIds, downloadingIds, individualDownloadedIds, selectedTracks]);
   const selectedDownloadingCount = useMemo(() => selectedTracks.reduce((count, track) => (
     count + (downloadingIds.has(track.id) ? 1 : 0)
   ), 0), [downloadingIds, selectedTracks]);
@@ -158,14 +163,16 @@ export function DesktopTrackTable({
 
   function runOfflineAction(track: Track) {
     if (!offlineActionsAvailable || !onDownload || !onRemoveDownload) return;
-    const operation = downloadedIds.has(track.id) ? onRemoveDownload(track) : onDownload(track);
+    const downloaded = downloadedIds.has(track.id);
+    const hasIndividual = individualDownloadedIds.has(track.id);
+    const operation = downloaded && hasIndividual ? onRemoveDownload(track) : onDownload(track);
     void operation.catch(() => undefined);
   }
 
   function bulkDownloadLabel() {
-    if (downloadableSelectedTracks.length > 0) return `Baixar ${downloadableSelectedTracks.length}`;
+    if (downloadableSelectedTracks.length > 0) return `Salvar ${downloadableSelectedTracks.length} offline`;
     if (selectedDownloadingCount > 0) return 'Baixando…';
-    return 'Disponível offline';
+    return 'Downloads individuais mantidos';
   }
 
   return (
@@ -183,10 +190,10 @@ export function DesktopTrackTable({
                 type="button"
                 disabled={downloadableSelectedTracks.length === 0}
                 aria-label={downloadableSelectedTracks.length > 0
-                  ? `Baixar ${downloadableSelectedTracks.length} ${downloadableSelectedTracks.length === 1 ? 'faixa selecionada' : 'faixas selecionadas'} para uso offline`
+                  ? `Salvar ${downloadableSelectedTracks.length} ${downloadableSelectedTracks.length === 1 ? 'faixa selecionada' : 'faixas selecionadas'} como downloads individuais`
                   : selectedDownloadingCount > 0
                     ? 'Downloads selecionados em andamento'
-                    : 'Todas as faixas selecionadas já estão disponíveis offline'}
+                    : 'Todas as faixas selecionadas já possuem download individual disponível'}
                 onClick={downloadSelection}
               >
                 {selectedDownloadingCount > 0 && downloadableSelectedTracks.length === 0
@@ -223,9 +230,23 @@ export function DesktopTrackTable({
             const selected = selectedIds.has(track.id);
             const downloaded = downloadedIds.has(track.id);
             const downloading = downloadingIds.has(track.id);
+            const hasIndividual = individualDownloadedIds.has(track.id);
+            const viaCollection = collectionDownloadedIds.has(track.id);
+            const individualAvailable = downloaded && hasIndividual;
+            const collectionAvailable = downloaded && viaCollection;
             const trackArtist = track.albumArtist || track.artist || 'Artista desconhecido';
             const trackAlbum = track.album || 'Álbum desconhecido';
             const accessibleTrackLabel = `Tocar ${track.title}, ${trackArtist}, ${trackAlbum}${isCurrent && playing ? ' — reproduzindo agora' : ''}`;
+            const offlineLabel = downloading
+              ? `Baixando ${track.title} para uso offline`
+              : individualAvailable
+                ? collectionAvailable
+                  ? `Remover download individual de ${track.title}; a coleção manterá a música offline`
+                  : `Remover download offline de ${track.title}`
+                : collectionAvailable
+                  ? `Manter ${track.title} também como download individual`
+                  : `Baixar ${track.title} para uso offline`;
+
             return (
               <tr className={`${isCurrent ? 'is-current' : ''} ${selected ? 'is-selected' : ''}`.trim()} key={track.id}>
                 <td className="desktop-library-table__select">
@@ -267,17 +288,14 @@ export function DesktopTrackTable({
                           className={`desktop-library-table__action desktop-library-table__action--offline ${downloaded ? 'is-downloaded' : ''} ${downloading ? 'is-loading' : ''}`.trim()}
                           type="button"
                           disabled={downloading}
-                          aria-label={downloading
-                            ? `Baixando ${track.title} para uso offline`
-                            : downloaded
-                              ? `Remover download offline de ${track.title}`
-                              : `Baixar ${track.title} para uso offline`}
-                          aria-pressed={downloaded}
+                          aria-label={offlineLabel}
+                          aria-pressed={individualAvailable}
+                          title={collectionAvailable && !individualAvailable ? 'A música já está offline pela coleção; use esta ação para mantê-la também individualmente.' : undefined}
                           onClick={() => runOfflineAction(track)}
                         >
                           {downloading
                             ? <LoaderCircle className="desktop-offline-spinner" />
-                            : downloaded
+                            : individualAvailable
                               ? <CheckCircle2 />
                               : <Download />}
                         </button>

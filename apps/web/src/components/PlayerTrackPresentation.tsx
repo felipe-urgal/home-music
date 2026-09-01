@@ -20,6 +20,7 @@ type PlayerTrackPresentationProps = {
   playlists: Playlist[];
   offlineMode: boolean;
   isDownloaded: boolean;
+  availableViaCollection: boolean;
   downloading: boolean;
   onOpenLibrary: () => void;
   onToggleDownload?: () => void;
@@ -34,6 +35,7 @@ export function PlayerTrackPresentation({
   playlists,
   offlineMode,
   isDownloaded,
+  availableViaCollection,
   downloading,
   onOpenLibrary,
   onToggleDownload,
@@ -41,6 +43,15 @@ export function PlayerTrackPresentation({
   onExitOffline
 }: PlayerTrackPresentationProps) {
   const [showPlaylistPicker, setShowPlaylistPicker] = useState(false);
+  const offlineActionLabel = downloading
+    ? 'Baixando para uso offline'
+    : isDownloaded
+      ? availableViaCollection
+        ? 'Remover download individual; a coleção manterá a música offline'
+        : 'Remover download offline'
+      : availableViaCollection
+        ? 'Manter também como download individual'
+        : 'Baixar para uso offline';
 
   useEffect(() => {
     setShowPlaylistPicker(false);
@@ -49,12 +60,12 @@ export function PlayerTrackPresentation({
   return (
     <>
       <header className="topbar">
-        <button className="icon-button topbar__back-to-library" aria-label={libraryReturnLabel} title={libraryReturnLabel} onClick={onOpenLibrary}>
-          <ChevronDown />
+        <button className="icon-button topbar__back-to-library" type="button" aria-label={libraryReturnLabel} title={libraryReturnLabel} onClick={onOpenLibrary}>
+          <ChevronDown aria-hidden="true" />
         </button>
         <span className="topbar__title">{offlineMode ? 'Tocando offline' : 'Tocando agora'}</span>
         {offlineMode && onExitOffline
-          ? <button className="icon-button" aria-label="Tentar conectar ao servidor" onClick={onExitOffline}><Wifi /></button>
+          ? <button className="icon-button" type="button" aria-label="Tentar conectar ao servidor" onClick={onExitOffline}><Wifi aria-hidden="true" /></button>
           : <span aria-hidden="true" />}
       </header>
 
@@ -74,17 +85,24 @@ export function PlayerTrackPresentation({
               aria-expanded={showPlaylistPicker}
               onClick={() => setShowPlaylistPicker(value => !value)}
             >
-              <ListPlus />
+              <ListPlus aria-hidden="true" />
             </button>
           )}
           {!offlineMode && onToggleDownload && (
             <button
-              className={`icon-button icon-button--large ${isDownloaded ? 'is-downloaded' : ''}`}
-              aria-label={downloading ? 'Baixando para uso offline' : isDownloaded ? 'Remover download offline' : 'Baixar para uso offline'}
+              className={`icon-button icon-button--large ${isDownloaded || availableViaCollection ? 'is-downloaded' : ''}`}
+              type="button"
+              aria-label={offlineActionLabel}
+              aria-pressed={isDownloaded}
+              title={availableViaCollection && !isDownloaded ? 'Esta música já está offline por uma coleção.' : undefined}
               disabled={downloading}
               onClick={onToggleDownload}
             >
-              {downloading ? <LoaderCircle className="download-spinner" /> : isDownloaded ? <CheckCircle2 /> : <Download />}
+              {downloading
+                ? <LoaderCircle className="download-spinner" aria-hidden="true" />
+                : isDownloaded
+                  ? <CheckCircle2 aria-hidden="true" />
+                  : <Download aria-hidden="true" />}
             </button>
           )}
         </div>
@@ -110,7 +128,7 @@ export function PlayerTrackPresentation({
         </section>
       )}
 
-      {offlineMode && <div className="player-offline-status"><Download /> Reproduzindo o arquivo salvo neste dispositivo.</div>}
+      {offlineMode && <div className="player-offline-status"><Download aria-hidden="true" /> Reproduzindo o arquivo salvo neste dispositivo.</div>}
     </>
   );
 }
