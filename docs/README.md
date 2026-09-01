@@ -2,7 +2,7 @@
 
 Este diretório mistura documentação **corrente** e registros históricos de implementação. Esta página define qual material deve ser usado como fonte de verdade.
 
-> Inventário e backlog revisados em 2026-09-01. Os PRs #204, #205, #206 e #207 concluíram #119–#122 e o backlog planejado da Fase 11. A #174 foi entregue pelo PR #218 e a #175 pelo PR #221; a #81 permanece como validação separada em dispositivos móveis reais.
+> Inventário e backlog revisados em 2026-09-01. Os PRs #204, #205, #206 e #207 concluíram #119–#122 e o backlog planejado da Fase 11. A #174 foi entregue pelo PR #218, a #175 pelo PR #221 e a #176 pelo PR #222; a #81 permanece como validação separada em dispositivos móveis reais.
 
 ## Desenvolvimento e agentes de IA
 
@@ -23,15 +23,14 @@ Comece por:
 
 ## Backlog aberto e ordem atual
 
-As pendências executivas abertas após a entrega da #175 são:
+As pendências executivas abertas após a entrega da #176 são:
 
 | Issue | Estado corrente |
 | --- | --- |
 | [#81](https://github.com/felipe-urgal/home-music/issues/81) | validação separada em Android e iPhone/iPad reais de background/tela bloqueada; não é fechada por CI/emulação |
-| [#176](https://github.com/felipe-urgal/home-music/issues/176) | próximo backlog visual/PWA: ícone, favicon e identidade de instalação |
 | [#123](https://github.com/felipe-urgal/home-music/issues/123) | índice executivo; não é uma implementação separada |
 
-A Fase 11 planejada (#111–#122), a #174 e a #175 estão concluídas. Nova priorização deve ser refletida em `roadmap.md`, #123 e nas issues afetadas no mesmo trabalho.
+A Fase 11 planejada (#111–#122), a #174, a #175 e a #176 estão concluídas. Nova priorização deve ser refletida em `roadmap.md`, #123 e nas issues afetadas no mesmo trabalho.
 
 ## Composição do frontend
 
@@ -78,9 +77,10 @@ A Fase 11 planejada (#111–#122), a #174 e a #175 estão concluídas. Nova prio
 ## PWA e offline
 
 - [`pwa.md`](pwa.md) — shell, service worker, namespace e integração das coleções offline;
+- [`pwa-icon-identity.md`](pwa-icon-identity.md) — identidade Casa + vinil, matriz `any`/`maskable`, iOS/Safari e geração determinística dos ícones;
 - [`offline-downloads.md`](offline-downloads.md) — scheduler global, bytes físicos, referências lógicas, playlist/pasta, deduplicação, sincronização, quota e limites da #81.
 
-Pendências relacionadas: #81 e #176.
+Pendência relacionada: #81.
 
 ## Biblioteca e inteligência
 

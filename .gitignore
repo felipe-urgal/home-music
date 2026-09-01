@@ -6,6 +6,7 @@ dist/
 *.tsbuildinfo
 /apps/web/vite.config.js
 /apps/web/vite.config.d.ts
+/apps/web/public/icons/*.png
 data/*.db
 data/*.db-*
 data/transcode-cache/

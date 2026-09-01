@@ -2,7 +2,7 @@
 
 Este documento é a visão técnica de alto nível do Home Music. A issue [#123](https://github.com/felipe-urgal/home-music/issues/123) é o índice executivo das pendências abertas.
 
-> Estado revisado em 2026-09-01. Os PRs #204/#119, #205/#120, #206/#121 e #207/#122 foram mergeados; o backlog planejado da Fase 11 está concluído. A #174 foi entregue pelo PR #218 e a #175 pelo PR #221. A #81 permanece separada porque exige validação em Android e iPhone/iPad reais.
+> Estado revisado em 2026-09-01. Os PRs #204/#119, #205/#120, #206/#121 e #207/#122 foram mergeados; o backlog planejado da Fase 11 está concluído. A #174 foi entregue pelo PR #218, a #175 pelo PR #221 e a #176 pelo PR #222. A #81 permanece separada porque exige validação em Android e iPhone/iPad reais.
 
 ## Fases 1–2 — Base do produto e biblioteca pessoal
 
@@ -20,7 +20,7 @@ Concluídas.
 
 ## Fase 3 — Experiência mobile e offline
 
-A experiência principal está concluída. Restam validações/evoluções explícitas.
+A experiência principal está concluída. Resta a validação explícita em hardware real.
 
 - [x] shuffle e repeat `off / all / one`;
 - [x] fila reordenável;
@@ -191,13 +191,13 @@ O PR #207 foi mergeado em 2026-09-01 com CI completo verde e encerrou o backlog 
 ## Backlog visual e PWA
 
 - [x] [#175](https://github.com/felipe-urgal/home-music/issues/175) — fallback visual consistente e centralizado para músicas sem capa — entregue pelo PR #221; política em [artwork-fallback.md](artwork-fallback.md);
-- [ ] [#176](https://github.com/felipe-urgal/home-music/issues/176) — próximo item: novo ícone/identidade visual da PWA.
+- [x] [#176](https://github.com/felipe-urgal/home-music/issues/176) — identidade Casa + vinil para favicon/PWA, variantes `any`/`maskable` e integração iOS/Safari — entregue pelo PR #222; política em [pwa-icon-identity.md](pwa-icon-identity.md).
 
-Esses itens são independentes da #174 concluída e da validação física #81. Podem ser repriorizados sem reabrir o redesign administrativo ou a Fase 11 concluída.
+Esses itens são independentes da #174 concluída e da validação física #81.
 
 ## Backlog aberto
 
-As pendências executivas abertas após o merge do PR #221 são #81, #123 e #176. A #123 é somente o índice executivo; as implementações/validações reais são #81 e #176.
+As pendências executivas abertas após o merge do PR #222 são #81 e #123. A #123 é somente o índice executivo; a única validação real já registrada no backlog é a #81, que depende de hardware móvel real. Não há outra atividade implementável priorizada neste roadmap neste momento.
 
 ## Regra de execução
 

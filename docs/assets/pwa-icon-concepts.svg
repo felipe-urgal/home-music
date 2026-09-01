@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 620" role="img" aria-labelledby="title desc">
+  <title id="title">Conceitos de ícone do Home Music</title>
+  <desc id="desc">Três opções avaliadas para a issue 176: casa com vinil, vinil com play e casa com equalizador.</desc>
+  <rect width="1600" height="620" fill="#eef2f5"/>
+
+  <g transform="translate(20 20)">
+    <rect width="480" height="480" rx="112" fill="#0b1824"/>
+    <path d="M112 228 240 112 368 228" fill="none" stroke="#1e8be8" stroke-width="38" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M137 218v132M343 218v132" fill="none" stroke="#1e8be8" stroke-width="26" stroke-linecap="round"/>
+    <circle cx="240" cy="286" r="91" fill="#f0f7fc"/>
+    <circle cx="240" cy="286" r="64" fill="none" stroke="#9bb9cd" stroke-width="5"/>
+    <circle cx="240" cy="286" r="40" fill="none" stroke="#9bb9cd" stroke-width="5"/>
+    <circle cx="240" cy="286" r="26" fill="#1e8be8"/>
+    <circle cx="240" cy="286" r="8" fill="#071019"/>
+    <path d="M160 370h160" stroke="#2877ad" stroke-width="14"/>
+    <text x="240" y="540" text-anchor="middle" font-family="system-ui,sans-serif" font-size="30" font-weight="700" fill="#14212d">A · Casa + vinil</text>
+  </g>
+
+  <g transform="translate(560 20)">
+    <rect width="480" height="480" rx="112" fill="#0b1824"/>
+    <circle cx="240" cy="240" r="137" fill="#f0f7fc"/>
+    <circle cx="240" cy="240" r="96" fill="none" stroke="#6da3c8" stroke-width="8"/>
+    <circle cx="240" cy="240" r="66" fill="none" stroke="#6da3c8" stroke-width="8"/>
+    <circle cx="240" cy="240" r="54" fill="#1e8be8"/>
+    <path d="M224 208v64l54-32z" fill="#071019"/>
+    <text x="240" y="540" text-anchor="middle" font-family="system-ui,sans-serif" font-size="30" font-weight="700" fill="#14212d">B · Vinil + play</text>
+  </g>
+
+  <g transform="translate(1100 20)">
+    <rect width="480" height="480" rx="112" fill="#0b1824"/>
+    <path d="M112 228 240 112 368 228" fill="none" stroke="#1e8be8" stroke-width="38" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M172 276v70M240 237v127M308 294v50" fill="none" stroke="#f0f7fc" stroke-width="34"/>
+    <text x="240" y="540" text-anchor="middle" font-family="system-ui,sans-serif" font-size="30" font-weight="700" fill="#14212d">C · Casa + equalizador</text>
+  </g>
+</svg>
