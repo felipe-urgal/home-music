@@ -3,6 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { chmod, mkdir, readdir, rename, rm, stat, utimes } from 'node:fs/promises';
 import path from 'node:path';
 import type { Readable } from 'node:stream';
+import type { LongJobObservability } from './long-job-observability.js';
 import { clampReplayGainDb } from './replay-gain.js';
 
 export const DEFAULT_TRANSCODE_CACHE_MEGABYTES = 512;
@@ -189,6 +190,7 @@ export class TranscodeManager {
     maxConcurrent?: number;
     timeoutMs?: number;
     runner?: TranscodeRunner;
+    observability?: LongJobObservability;
   }) {}
 
   get activeCount() {
@@ -226,8 +228,13 @@ export class TranscodeManager {
       if (await this.cachedFile(finalPath)) return;
 
       const temporaryPath = `${finalPath}.tmp-${randomUUID()}`;
-      const input = source.createInput();
+      const observedRun = this.options.observability?.start({
+        jobType: 'transcode',
+        resourceId: source.trackId
+      });
+      let input: SeekableInput | null = null;
       try {
+        input = source.createInput();
         const runner = this.options.runner ?? runFfmpegTranscode;
         await runner({
           command: this.options.command,
@@ -246,8 +253,12 @@ export class TranscodeManager {
         await chmod(temporaryPath, 0o600);
         await rename(temporaryPath, finalPath);
         await this.enforceLimit(finalPath);
+        if (observedRun) this.options.observability?.complete(observedRun);
+      } catch (error) {
+        if (observedRun) this.options.observability?.fail(observedRun, error);
+        throw error;
       } finally {
-        input.destroy();
+        input?.destroy();
         await rm(temporaryPath, { force: true }).catch(() => undefined);
       }
     });
