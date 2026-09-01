@@ -2,7 +2,7 @@
 
 Este diretório mistura documentação **corrente** e registros históricos de implementação. Esta página define qual material deve ser usado como fonte de verdade.
 
-> Inventário e backlog revisados em 2026-09-01. O PR #204 concluiu a #119; a revisão sistemática de acessibilidade da #120 está no draft PR #205. Documentos históricos são preservados como registro; o estado de entrega deve ser lido neste índice, em `roadmap.md`, na issue executiva #123 e nas issues abertas.
+> Inventário e backlog revisados em 2026-09-01. O PR #204 concluiu a #119; a revisão sistemática de acessibilidade da #120 está no PR #205. Documentos históricos são preservados como registro; o estado de entrega deve ser lido neste índice, em `roadmap.md`, na issue executiva #123 e nas issues abertas.
 
 ## Desenvolvimento e agentes de IA
 
@@ -27,7 +27,7 @@ As pendências executivas abertas em 2026-09-01 são:
 
 | Issue | Estado corrente |
 | --- | --- |
-| [#120](https://github.com/felipe-urgal/home-music/issues/120) | atividade técnica atual da Fase 11: revisão sistemática de acessibilidade no draft PR #205 |
+| [#120](https://github.com/felipe-urgal/home-music/issues/120) | atividade técnica atual da Fase 11: revisão sistemática de acessibilidade no PR #205 |
 | [#121](https://github.com/felipe-urgal/home-music/issues/121) | próxima atividade da Fase 11 após a #120: observabilidade de jobs longos, integrada ao histórico operacional existente |
 | [#122](https://github.com/felipe-urgal/home-music/issues/122) | backlog da Fase 11: revisão periódica e segura de dependências |
 | [#81](https://github.com/felipe-urgal/home-music/issues/81) | validação em dispositivos reais de downloads em background/tela bloqueada |
