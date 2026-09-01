@@ -2,7 +2,7 @@
 
 Este documento é a visão técnica de alto nível do Home Music. A issue [#123](https://github.com/felipe-urgal/home-music/issues/123) é o índice executivo das pendências abertas.
 
-> Estado revisado em 2026-09-01. Os PRs #204/#119, #205/#120 e #206/#121 foram mergeados; a #122 é a atividade técnica atual da Fase 11 e está em implementação na branch `feature/dependency-review`, draft PR #207. Itens marcados como concluídos refletem funcionalidades já entregues; itens futuros apontam para a issue que mantém escopo e gate atualizados.
+> Estado revisado em 2026-09-01. Os PRs #204/#119, #205/#120 e #206/#121 foram mergeados; a #122 é a atividade técnica atual da Fase 11 e está em implementação na branch `feature/dependency-review`, PR #207. Itens marcados como concluídos refletem funcionalidades já entregues; itens futuros apontam para a issue que mantém escopo e gate atualizados.
 
 ## Fases 1–2 — Base do produto e biblioteca pessoal
 
@@ -182,7 +182,7 @@ Em andamento. As issues abaixo são a fonte de escopo:
 - [x] [#119](https://github.com/felipe-urgal/home-music/issues/119) — benchmark com biblioteca grande, concluído e mergeado pelo PR #204 com dataset sintético, baseline versionada e gate próprio de CI;
 - [x] [#120](https://github.com/felipe-urgal/home-music/issues/120) — revisão sistemática de acessibilidade, concluída e mergeada pelo PR #205;
 - [x] [#121](https://github.com/felipe-urgal/home-music/issues/121) — observabilidade correlacionada de jobs longos, concluída e mergeada pelo PR #206;
-- [ ] [#122](https://github.com/felipe-urgal/home-music/issues/122) — revisão periódica e segura de dependências em implementação no draft PR #207.
+- [ ] [#122](https://github.com/felipe-urgal/home-music/issues/122) — revisão periódica e segura de dependências em implementação no PR #207.
 
 A fronteira de serviços da #117 está detalhada em [server-composition.md](server-composition.md). Operações destrutivas continuam delegando confinement/lock/rollback aos stores físicos existentes; importações continuam usando o mesmo pipeline; backup/restore continua usando validação e rollback de `backup-restore.ts`.
 
