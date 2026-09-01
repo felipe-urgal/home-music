@@ -223,6 +223,9 @@ export function DesktopTrackTable({
             const selected = selectedIds.has(track.id);
             const downloaded = downloadedIds.has(track.id);
             const downloading = downloadingIds.has(track.id);
+            const trackArtist = track.albumArtist || track.artist || 'Artista desconhecido';
+            const trackAlbum = track.album || 'Álbum desconhecido';
+            const accessibleTrackLabel = `Tocar ${track.title}, ${trackArtist}, ${trackAlbum}${isCurrent && playing ? ' — reproduzindo agora' : ''}`;
             return (
               <tr className={`${isCurrent ? 'is-current' : ''} ${selected ? 'is-selected' : ''}`.trim()} key={track.id}>
                 <td className="desktop-library-table__select">
@@ -238,12 +241,13 @@ export function DesktopTrackTable({
                     className="desktop-library-table__track"
                     type="button"
                     onClick={() => onPlayTrack(track, context)}
-                    aria-label={`Tocar ${track.title}`}
+                    aria-current={isCurrent ? 'true' : undefined}
+                    aria-label={accessibleTrackLabel}
                   >
                     <Artwork track={track} />
                     <span className="desktop-library-table__track-copy">
                       <strong>{track.title}</strong>
-                      <small>{track.albumArtist || track.artist || 'Artista desconhecido'}</small>
+                      <small>{trackArtist}</small>
                     </span>
                     <span className="desktop-library-table__play-state" aria-hidden="true">
                       {isCurrent && playing ? <Pause /> : <Play />}
@@ -251,7 +255,7 @@ export function DesktopTrackTable({
                   </button>
                 </td>
                 <td className="desktop-library-table__text-cell">{track.artist || 'Artista desconhecido'}</td>
-                <td className="desktop-library-table__text-cell desktop-library-table__album">{track.album || 'Álbum desconhecido'}</td>
+                <td className="desktop-library-table__text-cell desktop-library-table__album">{trackAlbum}</td>
                 <td className="desktop-library-table__text-cell desktop-library-table__folder" title={track.folderPath || track.folder}>{track.folder || '—'}</td>
                 <td className="desktop-library-table__format">{track.format || '—'}</td>
                 <td className="desktop-library-table__duration">{formatDuration(track.duration)}</td>
