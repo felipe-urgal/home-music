@@ -78,7 +78,7 @@ async function offlineStorageSnapshot(page: Page) {
   });
 }
 
-test('playlist offline deduplica bytes, sinaliza snapshot alterado e preserva referência individual', async ({ page }, testInfo) => {
+test('playlist offline deduplica bytes, promove referência individual e coleta somente faixas sem dono', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'desktop-chromium');
 
   await login(page);
@@ -96,10 +96,21 @@ test('playlist offline deduplica bytes, sinaliza snapshot alterado e preserva re
   await page.getByRole('button', { name: 'Disponibilizar offline', exact: true }).click();
   await expect(page.getByText('2/2 · disponível offline', { exact: true })).toBeVisible();
 
+  const playlistTable = page.getByTestId('desktop-library-table');
+  const promoteZeta = playlistTable.getByRole('button', { name: 'Manter E2E Zeta também como download individual' });
+  await expect(promoteZeta).toBeEnabled();
+  await promoteZeta.click();
+  await expect(playlistTable.getByRole('button', { name: 'Remover download individual de E2E Zeta; a coleção manterá a música offline' })).toBeVisible();
+
   await expect.poll(async () => {
     const snapshot = await offlineStorageSnapshot(page);
-    return [snapshot.physicalTrackIds.length, snapshot.cacheEntries, snapshot.collections.length];
-  }).toEqual([2, 2, 1]);
+    return {
+      physical: snapshot.physicalTrackIds.length,
+      cache: snapshot.cacheEntries,
+      individual: snapshot.individualTrackIds.length,
+      collections: snapshot.collections.length
+    };
+  }).toEqual({ physical: 2, cache: 2, individual: 2, collections: 1 });
 
   const expandedTrackIds = tracks.map(track => track.id);
   const updateResponse = await page.context().request.put(`/api/playlists/${playlist.id}/tracks`, {
@@ -128,9 +139,9 @@ test('playlist offline deduplica bytes, sinaliza snapshot alterado e preserva re
       collectionCount: snapshot.collections.length
     };
   }).toEqual({
-    physicalTrackIds: [tracks[0]!.id],
-    cacheEntries: 1,
-    individualTrackIds: [tracks[0]!.id],
+    physicalTrackIds: [tracks[0]!.id, tracks[1]!.id].sort(),
+    cacheEntries: 2,
+    individualTrackIds: [tracks[0]!.id, tracks[1]!.id].sort(),
     collectionCount: 0
   });
 });
