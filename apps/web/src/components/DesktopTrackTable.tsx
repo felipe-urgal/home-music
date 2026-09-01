@@ -119,8 +119,9 @@ export function DesktopTrackTable({
   const visibleIds = useMemo(() => new Set(tracks.map(track => track.id)), [tracks]);
   const selectedTracks = useMemo(() => tracks.filter(track => selectedIds.has(track.id)), [selectedIds, tracks]);
   const downloadableSelectedTracks = useMemo(() => selectedTracks.filter(track => (
-    !individualDownloadedIds.has(track.id) && !downloadingIds.has(track.id)
-  )), [downloadingIds, individualDownloadedIds, selectedTracks]);
+    !(downloadedIds.has(track.id) && individualDownloadedIds.has(track.id))
+    && !downloadingIds.has(track.id)
+  )), [downloadedIds, downloadingIds, individualDownloadedIds, selectedTracks]);
   const selectedDownloadingCount = useMemo(() => selectedTracks.reduce((count, track) => (
     count + (downloadingIds.has(track.id) ? 1 : 0)
   ), 0), [downloadingIds, selectedTracks]);
@@ -192,7 +193,7 @@ export function DesktopTrackTable({
                   ? `Salvar ${downloadableSelectedTracks.length} ${downloadableSelectedTracks.length === 1 ? 'faixa selecionada' : 'faixas selecionadas'} como downloads individuais`
                   : selectedDownloadingCount > 0
                     ? 'Downloads selecionados em andamento'
-                    : 'Todas as faixas selecionadas já possuem referência individual offline'}
+                    : 'Todas as faixas selecionadas já possuem download individual disponível'}
                 onClick={downloadSelection}
               >
                 {selectedDownloadingCount > 0 && downloadableSelectedTracks.length === 0
@@ -231,16 +232,18 @@ export function DesktopTrackTable({
             const downloading = downloadingIds.has(track.id);
             const hasIndividual = individualDownloadedIds.has(track.id);
             const viaCollection = collectionDownloadedIds.has(track.id);
+            const individualAvailable = downloaded && hasIndividual;
+            const collectionAvailable = downloaded && viaCollection;
             const trackArtist = track.albumArtist || track.artist || 'Artista desconhecido';
             const trackAlbum = track.album || 'Álbum desconhecido';
             const accessibleTrackLabel = `Tocar ${track.title}, ${trackArtist}, ${trackAlbum}${isCurrent && playing ? ' — reproduzindo agora' : ''}`;
             const offlineLabel = downloading
               ? `Baixando ${track.title} para uso offline`
-              : downloaded && hasIndividual
-                ? viaCollection
+              : individualAvailable
+                ? collectionAvailable
                   ? `Remover download individual de ${track.title}; a coleção manterá a música offline`
                   : `Remover download offline de ${track.title}`
-                : downloaded && viaCollection
+                : collectionAvailable
                   ? `Manter ${track.title} também como download individual`
                   : `Baixar ${track.title} para uso offline`;
 
@@ -286,13 +289,13 @@ export function DesktopTrackTable({
                           type="button"
                           disabled={downloading}
                           aria-label={offlineLabel}
-                          aria-pressed={hasIndividual}
-                          title={downloaded && viaCollection && !hasIndividual ? 'A música já está offline pela coleção; use esta ação para mantê-la também individualmente.' : undefined}
+                          aria-pressed={individualAvailable}
+                          title={collectionAvailable && !individualAvailable ? 'A música já está offline pela coleção; use esta ação para mantê-la também individualmente.' : undefined}
                           onClick={() => runOfflineAction(track)}
                         >
                           {downloading
                             ? <LoaderCircle className="desktop-offline-spinner" />
-                            : downloaded && hasIndividual
+                            : individualAvailable
                               ? <CheckCircle2 />
                               : <Download />}
                         </button>
