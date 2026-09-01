@@ -31,12 +31,15 @@ describe('accessibility contracts', () => {
 
   it('mantém navegação e estado de reprodução identificáveis sem depender apenas de cor', () => {
     const navigation = source('components/LibraryNavigationChrome.tsx');
-    const tracks = source('components/LibraryTrackRows.tsx');
+    const mobileTracks = source('components/LibraryTrackRows.tsx');
+    const desktopTracks = source('components/DesktopTrackTable.tsx');
     const playback = source('components/PlayerPlaybackControls.tsx');
 
     expect(navigation).toMatch(/aria-current=\{active \? 'page'/);
-    expect(tracks).toMatch(/aria-current=\{isCurrent \? 'true'/);
-    expect(tracks).toMatch(/reproduzindo agora/);
+    expect(mobileTracks).toMatch(/aria-current=\{isCurrent \? 'true'/);
+    expect(mobileTracks).toMatch(/reproduzindo agora/);
+    expect(desktopTracks).toMatch(/aria-current=\{isCurrent \? 'true'/);
+    expect(desktopTracks).toMatch(/reproduzindo agora/);
     expect(playback).toMatch(/aria-pressed=\{repeatMode !== 'off'\}/);
   });
 
