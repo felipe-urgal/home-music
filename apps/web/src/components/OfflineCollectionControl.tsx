@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, Download, LoaderCircle, Pause, RefreshCw, Trash2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Download, LoaderCircle, Pause, Play, RefreshCw, Trash2 } from 'lucide-react';
 import type { Track } from '@home-music/shared';
 import type {
   OfflineCollectionDownloadInput,
@@ -28,6 +28,7 @@ function statusText(state: OfflineCollectionTargetState) {
 function MainIcon({ state }: { state: OfflineCollectionTargetState }) {
   if (state.status === 'downloading') return <LoaderCircle className="download-spinner" aria-hidden="true" />;
   if (state.status === 'available' && !state.outdated) return <CheckCircle2 aria-hidden="true" />;
+  if (state.status === 'paused') return <Play aria-hidden="true" />;
   if (state.status === 'error') return <AlertTriangle aria-hidden="true" />;
   if (state.reference) return <RefreshCw aria-hidden="true" />;
   return <Download aria-hidden="true" />;
@@ -46,6 +47,7 @@ export function OfflineCollectionControl({
   };
   const canSync = target.tracks.length > 0;
   const complete = state.status === 'available' && !state.outdated;
+  const pausing = state.status === 'paused' && state.downloadingCount > 0;
 
   return (
     <section className="offline-collection-control" aria-label={`Offline: ${target.name}`}>
@@ -65,11 +67,19 @@ export function OfflineCollectionControl({
           <button
             className={complete ? 'secondary-action' : 'primary-action'}
             type="button"
-            disabled={!canSync || complete}
+            disabled={!canSync || complete || pausing}
             onClick={() => run(onSync(target))}
           >
-            <MainIcon state={state} />
-            {complete ? 'Disponível' : state.reference ? 'Atualizar offline' : 'Disponibilizar offline'}
+            {pausing ? <LoaderCircle className="download-spinner" aria-hidden="true" /> : <MainIcon state={state} />}
+            {complete
+              ? 'Disponível'
+              : pausing
+                ? 'Pausando…'
+                : state.status === 'paused'
+                  ? 'Retomar'
+                  : state.reference
+                    ? 'Atualizar offline'
+                    : 'Disponibilizar offline'}
           </button>
         )}
 
