@@ -27,6 +27,9 @@ async function expectLibrary(page: Page) {
 }
 
 async function expectAccessibilityBaseline(page: Page) {
+  const libraryTabs = page.locator('.library-tabs');
+  await expect(libraryTabs).toBeVisible();
+
   const search = page.getByLabel('Buscar na biblioteca');
   await search.focus();
   await expect(search).toBeFocused();
@@ -41,9 +44,9 @@ async function expectAccessibilityBaseline(page: Page) {
   expect(focusStyle.style).not.toBe('none');
   expect(focusStyle.width).toBeGreaterThanOrEqual(2);
 
-  await expect(
-    page.locator('.library-tabs').getByRole('button', { name: 'Pastas', exact: true })
-  ).toHaveAttribute('aria-current', 'page');
+  const foldersTab = libraryTabs.getByRole('button', { name: 'Pastas', exact: true });
+  await expect(foldersTab).toBeVisible();
+  await expect(foldersTab).toHaveAttribute('aria-current', 'page');
 }
 
 async function openAccount(page: Page) {
