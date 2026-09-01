@@ -9,6 +9,7 @@ import {
 } from './auth.js';
 import { HomeMusicDatabase } from './database.js';
 import { ImportJobQueue } from './import-job-queue.js';
+import { LongJobObservability } from './long-job-observability.js';
 import { TrackAvailabilityStore } from './track-availability-store.js';
 import { TranscodeCacheMaintenance } from './transcode-cache-maintenance.js';
 import { TranscodeManager } from './transcoding.js';
@@ -30,16 +31,20 @@ export function createServerInfrastructure(options: ServerInfrastructureOptions)
   const accountPasswords = new AccountPasswordService(options.databasePath, sessions);
   const adminUsers = new AdminUsersService(options.databasePath, sessions);
   const operationHistory = new AdminOperationHistoryStore(options.databasePath);
+  const longJobObservability = new LongJobObservability(options.logger);
   const importJobs = new ImportJobQueue({
     onChange: job => {
+      let operationId: string | null = null;
       try {
         operationHistory.recordImport(job);
+        operationId = `import-${job.id}`;
       } catch (error) {
         options.logger.warn(
           { err: error, importJobId: job.id },
           'Falha ao persistir histórico da importação.'
         );
       }
+      longJobObservability.observeImportJob(job, operationId);
     }
   });
   const loginRateLimiter = new LoginRateLimiter();
@@ -47,7 +52,8 @@ export function createServerInfrastructure(options: ServerInfrastructureOptions)
     cacheDir: options.transcodeCachePath,
     command: options.ffmpegCommand,
     maxCacheBytes: options.transcodeCacheMegabytes * 1024 * 1024,
-    maxConcurrent: 1
+    maxConcurrent: 1,
+    observability: longJobObservability
   });
   const transcodeCacheMaintenance = new TranscodeCacheMaintenance({
     cacheDir: options.transcodeCachePath,
@@ -66,6 +72,7 @@ export function createServerInfrastructure(options: ServerInfrastructureOptions)
     accountPasswords,
     adminUsers,
     operationHistory,
+    longJobObservability,
     importJobs,
     loginRateLimiter,
     transcodeManager,
