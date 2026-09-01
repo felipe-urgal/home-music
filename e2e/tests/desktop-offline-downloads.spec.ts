@@ -50,13 +50,13 @@ test('downloads offline individual e em lote usam o fluxo desktop', async ({ pag
 
   const bulkToolbar = page.getByTestId('desktop-bulk-toolbar');
   await expect(bulkToolbar).toContainText('2 selecionadas');
-  const bulkDownload = bulkToolbar.getByRole('button', { name: 'Baixar 2 faixas selecionadas para uso offline' });
+  const bulkDownload = bulkToolbar.getByRole('button', { name: 'Salvar 2 faixas selecionadas como downloads individuais' });
   await expect(bulkDownload).toBeEnabled();
   await bulkDownload.click();
 
   await expect(table.getByRole('button', { name: 'Remover download offline de E2E Zeta' })).toBeVisible();
   await expect(table.getByRole('button', { name: 'Remover download offline de E2E Zulu' })).toBeVisible();
-  await expect(bulkToolbar.getByRole('button', { name: 'Todas as faixas selecionadas já estão disponíveis offline' })).toBeDisabled();
+  await expect(bulkToolbar.getByRole('button', { name: 'Todas as faixas selecionadas já possuem referência individual offline' })).toBeDisabled();
 
   page.once('dialog', async dialog => {
     expect(dialog.message()).toContain('E2E Track');
