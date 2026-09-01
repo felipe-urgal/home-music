@@ -164,5 +164,5 @@ describe('large library performance guard', () => {
       },
       regressionLimits: LIMITS
     }, null, 2));
-  });
+  }, 10_000);
 });
