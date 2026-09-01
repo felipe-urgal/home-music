@@ -48,6 +48,9 @@ jobs:
       - name: Tests
         run: npm test
 
+      - name: Large library performance guard
+        run: npm run benchmark:large-library
+
       - name: Backup/restore smoke test
         run: npm run smoke:backup-restore
 
