@@ -74,8 +74,6 @@ export function RequiredPasswordChangeScreen({
               type="password"
               autoComplete="current-password"
               value={currentPassword}
-              aria-invalid={Boolean(displayedError)}
-              aria-describedby={displayedError ? 'password-change-error' : undefined}
               onChange={event => setCurrentPassword(event.target.value)}
               disabled={submitting}
               required
@@ -116,7 +114,7 @@ export function RequiredPasswordChangeScreen({
           </label>
 
           {confirmationMismatch && (
-            <small id="password-change-confirmation-error" role="alert">
+            <small id="password-change-confirmation-error">
               A confirmação precisa ser igual à nova senha.
             </small>
           )}
