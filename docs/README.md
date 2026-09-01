@@ -2,7 +2,7 @@
 
 Este diretório mistura documentação **corrente** e registros históricos de implementação. Esta página define qual material deve ser usado como fonte de verdade.
 
-> Inventário e backlog revisados em 2026-09-01. Os PRs #204, #205, #206 e #207 concluíram #119–#122 e o backlog planejado da Fase 11. A implementação da #174 está tecnicamente concluída no PR #218 e aguarda review/merge; a #81 permanece como validação separada em dispositivos móveis reais.
+> Inventário e backlog revisados em 2026-09-01. Os PRs #204, #205, #206 e #207 concluíram #119–#122 e o backlog planejado da Fase 11. A #174 foi entregue pelo PR #218, merge commit `09e87e584f08795a41e2e25941ff70989424ab59`; a #81 permanece como validação separada em dispositivos móveis reais.
 
 ## Desenvolvimento e agentes de IA
 
@@ -27,13 +27,12 @@ As pendências executivas abertas em 2026-09-01 são:
 
 | Issue | Estado corrente |
 | --- | --- |
-| [#174](https://github.com/felipe-urgal/home-music/issues/174) | implementação concluída no PR #218; aguarda review/merge e permanece aberta até o merge |
 | [#81](https://github.com/felipe-urgal/home-music/issues/81) | validação separada em Android e iPhone/iPad reais de background/tela bloqueada; não é fechada por CI/emulação |
 | [#175](https://github.com/felipe-urgal/home-music/issues/175) | backlog visual: fallback consistente para músicas sem capa |
 | [#176](https://github.com/felipe-urgal/home-music/issues/176) | backlog visual/PWA: ícone, favicon e identidade de instalação |
 | [#123](https://github.com/felipe-urgal/home-music/issues/123) | índice executivo; não é uma implementação separada |
 
-A Fase 11 planejada (#111–#122) está concluída. Nova priorização deve ser refletida em `roadmap.md`, #123 e nas issues afetadas no mesmo trabalho.
+A Fase 11 planejada (#111–#122) e a #174 estão concluídas. Nova priorização deve ser refletida em `roadmap.md`, #123 e nas issues afetadas no mesmo trabalho.
 
 ## Composição do frontend
 
@@ -81,7 +80,7 @@ A Fase 11 planejada (#111–#122) está concluída. Nova priorização deve ser 
 - [`pwa.md`](pwa.md) — shell, service worker, namespace e integração das coleções offline;
 - [`offline-downloads.md`](offline-downloads.md) — scheduler global, bytes físicos, referências lógicas, playlist/pasta, deduplicação, sincronização, quota e limites da #81.
 
-Pendências relacionadas: #81, #174 e #176.
+Pendências relacionadas: #81 e #176.
 
 ## Biblioteca e inteligência
 
