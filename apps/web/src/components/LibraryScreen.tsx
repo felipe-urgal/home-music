@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { AuthenticatedUser, Playlist, Track } from '@home-music/shared';
 import { canUseAdminLibraryActions } from '../frontend-access';
-import type { OfflineDownloads } from '../offline-downloads';
+import type { OfflineCollectionDownloadInput, OfflineDownloads } from '../offline-downloads';
 import type { LibraryData } from '../useLibraryData';
 import type { LibraryNavigation, LibraryTab } from '../useLibraryNavigation';
 import { useLibraryViews } from '../useLibraryViews';
@@ -9,9 +9,20 @@ import { LibraryContent } from './LibraryContent';
 import { LibraryNavigationChrome } from './LibraryNavigationChrome';
 import { LibraryViewTools } from './LibraryViewTools';
 import { MiniPlayer } from './MiniPlayer';
+import { OfflineCollectionControl, offlineCollectionTracksByIds } from './OfflineCollectionControl';
 import { SmartPlaylistDialog } from './SmartPlaylistDialog';
 
-type LibraryOfflineDownloads = Pick<OfflineDownloads, 'supported' | 'downloadedIds' | 'downloadingIds' | 'download' | 'remove'>;
+type LibraryOfflineDownloads = Pick<OfflineDownloads,
+  | 'supported'
+  | 'downloadedIds'
+  | 'downloadingIds'
+  | 'download'
+  | 'remove'
+  | 'syncCollection'
+  | 'pauseCollection'
+  | 'removeCollection'
+  | 'getCollectionState'
+>;
 
 type LibraryScreenProps = {
   currentUser: AuthenticatedUser;
@@ -80,6 +91,37 @@ export function LibraryScreen({
 
   const isDetail = Boolean(selectedPlaylist || folderPath);
   const showViewTools = !(libraryTab === 'playlists' && !selectedPlaylist);
+
+  const offlineCollectionTarget = useMemo<OfflineCollectionDownloadInput | null>(() => {
+    if (selectedPlaylist) {
+      return {
+        kind: 'playlist',
+        sourceId: selectedPlaylist.id,
+        name: selectedPlaylist.name,
+        // Offline representa a coleção completa, nunca o filtro/busca atual.
+        tracks: offlineCollectionTracksByIds(selectedPlaylist.trackIds, tracks)
+      };
+    }
+    if (libraryTab === 'folders' && folderPath) {
+      return {
+        kind: 'folder',
+        sourceId: folderPath,
+        name: folderView.name,
+        // allTracks é o snapshot completo da pasta e subpastas, sem o filtro da view.
+        tracks: folderView.allTracks
+      };
+    }
+    return null;
+  }, [folderPath, folderView.allTracks, folderView.name, libraryTab, selectedPlaylist, tracks]);
+
+  const offlineCollectionState = offlineCollectionTarget
+    ? offline.getCollectionState({
+        kind: offlineCollectionTarget.kind,
+        sourceId: offlineCollectionTarget.sourceId,
+        name: offlineCollectionTarget.name,
+        trackIds: offlineCollectionTarget.tracks.map(track => track.id)
+      })
+    : null;
 
   useEffect(() => {
     void refreshPlaylists().catch(reportError);
@@ -190,6 +232,17 @@ export function LibraryScreen({
         onScan={() => void scanNow()}
         onOpenPlayer={onOpenPlayer}
       />
+
+      {offline.supported && offlineCollectionTarget && offlineCollectionState && (
+        <OfflineCollectionControl
+          target={offlineCollectionTarget}
+          state={offlineCollectionState}
+          onSync={offline.syncCollection}
+          onPause={() => offline.pauseCollection(offlineCollectionTarget.kind, offlineCollectionTarget.sourceId)}
+          onRemove={() => offline.removeCollection(offlineCollectionTarget.kind, offlineCollectionTarget.sourceId)}
+          onError={reportError}
+        />
+      )}
 
       {showViewTools && (
         <LibraryViewTools
