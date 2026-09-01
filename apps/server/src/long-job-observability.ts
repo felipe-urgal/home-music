@@ -85,6 +85,7 @@ export class LongJobObservability {
   private readonly now: () => Date;
   private readonly createId: () => string;
   private readonly requestContext = new AsyncLocalStorage<string>();
+  private readonly startedImportJobs = new Set<string>();
 
   constructor(
     private readonly logger: LongJobLogger,
@@ -141,15 +142,19 @@ export class LongJobObservability {
     });
     const startedAtMs = timeValue(job.startedAt ?? job.createdAt, nowMs);
 
-    if (job.status === 'processing' && job.startedAt && job.startedAt === job.updatedAt) {
-      this.info({
-        event: 'long_job.started',
-        ...logBindings(reference)
-      }, 'Job longo iniciado.');
+    if (job.status === 'processing' && job.startedAt) {
+      if (!this.startedImportJobs.has(job.id)) {
+        this.startedImportJobs.add(job.id);
+        this.info({
+          event: 'long_job.started',
+          ...logBindings(reference)
+        }, 'Job longo iniciado.');
+      }
       return;
     }
 
     if (job.status === 'completed') {
+      this.startedImportJobs.delete(job.id);
       this.info({
         event: 'long_job.completed',
         ...logBindings(reference),
@@ -159,6 +164,7 @@ export class LongJobObservability {
     }
 
     if (job.status === 'cancelled') {
+      this.startedImportJobs.delete(job.id);
       this.info({
         event: 'long_job.cancelled',
         ...logBindings(reference),
@@ -168,6 +174,7 @@ export class LongJobObservability {
     }
 
     if (job.status === 'failed') {
+      this.startedImportJobs.delete(job.id);
       const sanitized = sanitizeOperationError(job.error);
       this.warn({
         event: 'long_job.failed',
@@ -180,10 +187,13 @@ export class LongJobObservability {
   }
 
   private reference(input: StartLongJobInput): LongJobReference {
-    const generatedId = `${input.jobType.replace('.', '-')}-${this.createId()}`;
+    const providedJobId = safeIdentifier(input.jobId);
+    const generatedJobId = providedJobId
+      ? null
+      : safeIdentifier(`${input.jobType.replace('.', '-')}-${this.createId()}`);
     return {
       jobType: input.jobType,
-      jobId: safeIdentifier(input.jobId) ?? safeIdentifier(generatedId) ?? 'long-job',
+      jobId: providedJobId ?? generatedJobId ?? 'long-job',
       operationId: safeIdentifier(input.operationId),
       resourceId: safeIdentifier(input.resourceId),
       requestId: safeIdentifier(this.requestContext.getStore())
