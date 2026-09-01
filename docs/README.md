@@ -2,7 +2,7 @@
 
 Este diretório mistura documentação **corrente** e registros históricos de implementação. Esta página define qual material deve ser usado como fonte de verdade.
 
-> Inventário e backlog revisados em 2026-09-01. Os PRs #204, #205 e #206 concluíram #119, #120 e #121; a revisão periódica de dependências da #122 está no PR #207. Documentos históricos são preservados como registro; o estado de entrega deve ser lido neste índice, em `roadmap.md`, na issue executiva #123 e nas issues abertas.
+> Inventário e backlog revisados em 2026-09-01. Os PRs #204, #205, #206 e #207 concluíram #119–#122 e o backlog planejado da Fase 11. A atividade de implementação atual é a #174 no PR #218; a #81 permanece como validação separada em dispositivos móveis reais.
 
 ## Desenvolvimento e agentes de IA
 
@@ -27,14 +27,13 @@ As pendências executivas abertas em 2026-09-01 são:
 
 | Issue | Estado corrente |
 | --- | --- |
-| [#122](https://github.com/felipe-urgal/home-music/issues/122) | atividade técnica atual da Fase 11: revisão periódica e segura de dependências no PR #207 |
-| [#81](https://github.com/felipe-urgal/home-music/issues/81) | validação em dispositivos reais de downloads em background/tela bloqueada |
-| [#174](https://github.com/felipe-urgal/home-music/issues/174) | evolução offline para playlists/pastas com deduplicação física por faixa |
+| [#174](https://github.com/felipe-urgal/home-music/issues/174) | atividade de implementação atual: playlists/pastas offline deduplicadas no PR #218 |
+| [#81](https://github.com/felipe-urgal/home-music/issues/81) | validação separada em Android e iPhone/iPad reais de background/tela bloqueada; não é fechada por CI/emulação |
 | [#175](https://github.com/felipe-urgal/home-music/issues/175) | backlog visual: fallback consistente para músicas sem capa |
 | [#176](https://github.com/felipe-urgal/home-music/issues/176) | backlog visual/PWA: ícone, favicon e identidade de instalação |
 | [#123](https://github.com/felipe-urgal/home-music/issues/123) | índice executivo; não é uma implementação separada |
 
-A ordem acima não transforma backlog visual/offline em dependência da Fase 11. Quando houver repriorização explícita, atualize `roadmap.md`, #123 e as issues afetadas no mesmo trabalho.
+A Fase 11 planejada (#111–#122) está concluída. Nova priorização deve ser refletida em `roadmap.md`, #123 e nas issues afetadas no mesmo trabalho.
 
 ## Composição do frontend
 
@@ -79,8 +78,8 @@ A ordem acima não transforma backlog visual/offline em dependência da Fase 11.
 
 ## PWA e offline
 
-- [`pwa.md`](pwa.md)
-- [`offline-downloads.md`](offline-downloads.md)
+- [`pwa.md`](pwa.md) — shell, service worker, namespace e integração das coleções offline;
+- [`offline-downloads.md`](offline-downloads.md) — scheduler global, bytes físicos, referências lógicas, playlist/pasta, deduplicação, sincronização, quota e limites da #81.
 
 Pendências relacionadas: #81, #174 e #176.
 
@@ -147,7 +146,7 @@ Não use um registro histórico isolado para inferir que uma funcionalidade aind
 
 ## E2E
 
-A suíte Playwright tem instruções próprias em [`../e2e/README.md`](../e2e/README.md). O CI obrigatório executa o smoke crítico curto; a regressão E2E completa permanece disponível sob demanda conforme o risco da mudança.
+A suíte Playwright tem instruções próprias em [`../e2e/README.md`](../e2e/README.md). O CI obrigatório executa o smoke crítico curto; a #174 adiciona a regressão crítica de coleções offline sem transformar a suíte completa em gate indiscriminado.
 
 ## Regra para manutenção da documentação
 
