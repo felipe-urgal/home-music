@@ -13,6 +13,7 @@ import {
 } from './library.js';
 import { LibraryMutationLock } from './library-mutation-lock.js';
 import { toPublicTrack } from './library-public-track.js';
+import type { LongJobObservability } from './long-job-observability.js';
 import { resolveLibraryRoot } from './security.js';
 import type { TrackAvailabilityStore } from './track-availability-store.js';
 
@@ -29,6 +30,7 @@ type LibraryServiceOptions = {
   trackAvailability: TrackAvailabilityStore;
   operationHistory: AdminOperationHistoryStore;
   logger: ServiceLogger;
+  longJobObservability?: LongJobObservability;
 };
 
 export class LibraryService {
@@ -198,7 +200,8 @@ export class LibraryService {
           error => this.options.logger.warn(
             { err: error, trigger },
             'Falha ao persistir histórico do scan.'
-          )
+          ),
+          this.options.longJobObservability
         )
       : () => this.performRescan();
 
