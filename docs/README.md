@@ -2,7 +2,7 @@
 
 Este diretório mistura documentação **corrente** e registros históricos de implementação. Esta página define qual material deve ser usado como fonte de verdade.
 
-> Inventário e backlog revisados em 2026-09-01. Os PRs #204, #205, #206 e #207 concluíram #119–#122 e o backlog planejado da Fase 11. A #174 foi entregue pelo PR #218 e a #175 pelo PR #220; a #81 permanece como validação separada em dispositivos móveis reais.
+> Inventário e backlog revisados em 2026-09-01. Os PRs #204, #205, #206 e #207 concluíram #119–#122 e o backlog planejado da Fase 11. A #174 foi entregue pelo PR #218 e a #175 pelo PR #221; a #81 permanece como validação separada em dispositivos móveis reais.
 
 ## Desenvolvimento e agentes de IA
 
