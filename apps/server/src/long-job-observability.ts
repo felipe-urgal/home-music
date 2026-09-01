@@ -27,6 +27,14 @@ export type LongJobRun = LongJobReference & {
   startedAtMs: number;
 };
 
+export type LongJobCompletionMetrics = {
+  tracks?: number;
+  added?: number;
+  updated?: number;
+  removed?: number;
+  unchanged?: number;
+};
+
 type StartLongJobInput = {
   jobType: LongJobType;
   jobId?: string | null;
@@ -65,6 +73,14 @@ function logBindings(reference: LongJobReference) {
   };
 }
 
+function metricBindings(metrics: LongJobCompletionMetrics) {
+  return Object.fromEntries(
+    Object.entries(metrics)
+      .filter((entry): entry is [string, number] => typeof entry[1] === 'number' && Number.isFinite(entry[1]))
+      .map(([key, value]) => [key, Math.max(0, Math.round(value))])
+  );
+}
+
 export class LongJobObservability {
   private readonly now: () => Date;
   private readonly createId: () => string;
@@ -94,12 +110,13 @@ export class LongJobObservability {
     return { ...reference, startedAtMs };
   }
 
-  complete(run: LongJobRun) {
+  complete(run: LongJobRun, metrics: LongJobCompletionMetrics = {}) {
     const finishedAtMs = this.now().getTime();
     this.info({
       event: 'long_job.completed',
       ...logBindings(run),
-      durationMs: durationMs(run.startedAtMs, finishedAtMs)
+      durationMs: durationMs(run.startedAtMs, finishedAtMs),
+      ...metricBindings(metrics)
     }, 'Job longo concluído.');
   }
 
