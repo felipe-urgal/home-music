@@ -2,7 +2,7 @@
 
 Este documento é a visão técnica de alto nível do Home Music. A issue [#123](https://github.com/felipe-urgal/home-music/issues/123) é o índice executivo das pendências abertas.
 
-> Estado revisado em 2026-09-01. Os PRs #204/#119, #205/#120, #206/#121 e #207/#122 foram mergeados; o backlog planejado da Fase 11 está concluído. A implementação da #174 está tecnicamente concluída na branch `feature/offline-collections`, PR #218, e aguarda review/merge. A #81 permanece separada porque exige validação em Android e iPhone/iPad reais.
+> Estado revisado em 2026-09-01. Os PRs #204/#119, #205/#120, #206/#121 e #207/#122 foram mergeados; o backlog planejado da Fase 11 está concluído. A #174 foi entregue pelo PR #218, merge commit `09e87e584f08795a41e2e25941ff70989424ab59`. A #81 permanece separada porque exige validação em Android e iPhone/iPad reais.
 
 ## Fases 1–2 — Base do produto e biblioteca pessoal
 
@@ -32,7 +32,7 @@ A experiência principal está concluída. Restam validações/evoluções expl�
 - [x] download offline individual e em lote com scheduler global de até 3 operações;
 - [x] isolamento de cache/manifesto offline por usuário;
 - [ ] [#81](https://github.com/felipe-urgal/home-music/issues/81) — validar downloads em background/tela bloqueada em Android e iPhone/iPad reais; não pode ser encerrada por emulação/CI;
-- [ ] [#174](https://github.com/felipe-urgal/home-music/issues/174) — playlists e pastas completas offline com um único artefato físico por faixa e múltiplas referências lógicas; implementação concluída no PR #218, aguardando merge.
+- [x] [#174](https://github.com/felipe-urgal/home-music/issues/174) — playlists e pastas completas offline com um único artefato físico por faixa e múltiplas referências lógicas — entregue pelo PR #218.
 
 A #174 reutiliza o scheduler/cache atual, adiciona manifesto versionado de referências por usuário, migração conservadora dos downloads antigos como intenção individual, sincronização explícita de snapshots e garbage-collection somente quando nenhuma referência depende da faixa. Detalhes: [offline-downloads.md](offline-downloads.md) e [pwa.md](pwa.md).
 
@@ -193,11 +193,11 @@ O PR #207 foi mergeado em 2026-09-01 com CI completo verde e encerrou o backlog 
 - [ ] [#175](https://github.com/felipe-urgal/home-music/issues/175) — fallback visual consistente para músicas sem capa;
 - [ ] [#176](https://github.com/felipe-urgal/home-music/issues/176) — novo ícone/identidade visual da PWA.
 
-Esses itens são independentes da #174 e da validação física #81. Podem ser repriorizados sem reabrir o redesign administrativo ou a Fase 11 concluída.
+Esses itens são independentes da #174 concluída e da validação física #81. Podem ser repriorizados sem reabrir o redesign administrativo ou a Fase 11 concluída.
 
 ## Backlog aberto
 
-As pendências executivas abertas são #81, #123 e #174–#176. A #123 é somente o índice executivo; as implementações/validações reais são #81 e #174–#176.
+As pendências executivas abertas são #81, #123, #175 e #176. A #123 é somente o índice executivo; as implementações/validações reais são #81, #175 e #176.
 
 ## Regra de execução
 
