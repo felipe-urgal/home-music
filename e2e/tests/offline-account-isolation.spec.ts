@@ -40,7 +40,25 @@ async function libraryTable(page: Page) {
   return table;
 }
 
-test('CacheStorage offline não vaza downloads entre contas no mesmo navegador', async ({ page }, testInfo) => {
+async function offlineReferenceSnapshot(page: Page) {
+  return page.evaluate(() => {
+    const userId = window.localStorage.getItem('home-music:offline-user-id:v1');
+    if (!userId) throw new Error('Usuário offline não foi associado ao navegador.');
+    const key = `home-music:offline-references:v1:${encodeURIComponent(userId)}`;
+    const manifest = JSON.parse(window.localStorage.getItem(key) ?? 'null') as {
+      individualTrackIds?: string[];
+      collections?: unknown[];
+    } | null;
+    return {
+      userId,
+      key,
+      individualTrackIds: manifest?.individualTrackIds ?? [],
+      collectionCount: manifest?.collections?.length ?? 0
+    };
+  });
+}
+
+test('CacheStorage e referências offline não vazam entre contas no mesmo navegador', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'desktop-chromium');
 
   await login(page, adminUsername, adminPassword);
@@ -48,6 +66,8 @@ test('CacheStorage offline não vaza downloads entre contas no mesmo navegador',
   const adminTable = await libraryTable(page);
   await adminTable.getByRole('button', { name: 'Baixar E2E Track para uso offline' }).click();
   await expect(adminTable.getByRole('button', { name: 'Remover download offline de E2E Track' })).toBeVisible();
+  const adminReferences = await offlineReferenceSnapshot(page);
+  expect(adminReferences.individualTrackIds).toHaveLength(1);
 
   const userName = `offline-r${testInfo.retry}`;
   const createResponse = await page.context().request.post('/api/admin/users', {
@@ -72,10 +92,17 @@ test('CacheStorage offline não vaza downloads entre contas no mesmo navegador',
   const userTable = await libraryTable(page);
   await expect(userTable.getByRole('button', { name: 'Baixar E2E Track para uso offline' })).toBeVisible();
   await expect(userTable.getByRole('button', { name: 'Remover download offline de E2E Track' })).toHaveCount(0);
+  const userReferences = await offlineReferenceSnapshot(page);
+  expect(userReferences.userId).not.toBe(adminReferences.userId);
+  expect(userReferences.key).not.toBe(adminReferences.key);
+  expect(userReferences.individualTrackIds).toEqual([]);
+  expect(userReferences.collectionCount).toBe(0);
 
   await resetSession(page);
   await login(page, adminUsername, adminPassword);
   await ensureServiceWorker(page);
   const restoredAdminTable = await libraryTable(page);
   await expect(restoredAdminTable.getByRole('button', { name: 'Remover download offline de E2E Track' })).toBeVisible();
+  const restoredAdminReferences = await offlineReferenceSnapshot(page);
+  expect(restoredAdminReferences).toEqual(adminReferences);
 });
