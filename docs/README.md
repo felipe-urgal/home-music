@@ -2,7 +2,7 @@
 
 Este diretório mistura documentação **corrente** e registros históricos de implementação. Esta página define qual material deve ser usado como fonte de verdade.
 
-> Inventário e backlog revisados em 2026-09-01. Os PRs #204, #205, #206 e #207 concluíram #119–#122 e o backlog planejado da Fase 11. A #174 foi entregue pelo PR #218, merge commit `09e87e584f08795a41e2e25941ff70989424ab59`; a #81 permanece como validação separada em dispositivos móveis reais.
+> Inventário e backlog revisados em 2026-09-01. Os PRs #204, #205, #206 e #207 concluíram #119–#122 e o backlog planejado da Fase 11. A #174 foi entregue pelo PR #218 e a #175 pelo PR #221; a #81 permanece como validação separada em dispositivos móveis reais.
 
 ## Desenvolvimento e agentes de IA
 
@@ -23,20 +23,20 @@ Comece por:
 
 ## Backlog aberto e ordem atual
 
-As pendências executivas abertas em 2026-09-01 são:
+As pendências executivas abertas após a entrega da #175 são:
 
 | Issue | Estado corrente |
 | --- | --- |
 | [#81](https://github.com/felipe-urgal/home-music/issues/81) | validação separada em Android e iPhone/iPad reais de background/tela bloqueada; não é fechada por CI/emulação |
-| [#175](https://github.com/felipe-urgal/home-music/issues/175) | backlog visual: fallback consistente para músicas sem capa |
-| [#176](https://github.com/felipe-urgal/home-music/issues/176) | backlog visual/PWA: ícone, favicon e identidade de instalação |
+| [#176](https://github.com/felipe-urgal/home-music/issues/176) | próximo backlog visual/PWA: ícone, favicon e identidade de instalação |
 | [#123](https://github.com/felipe-urgal/home-music/issues/123) | índice executivo; não é uma implementação separada |
 
-A Fase 11 planejada (#111–#122) e a #174 estão concluídas. Nova priorização deve ser refletida em `roadmap.md`, #123 e nas issues afetadas no mesmo trabalho.
+A Fase 11 planejada (#111–#122), a #174 e a #175 estão concluídas. Nova priorização deve ser refletida em `roadmap.md`, #123 e nas issues afetadas no mesmo trabalho.
 
 ## Composição do frontend
 
 - [`app-composition.md`](app-composition.md) — limites entre raiz de sessão/conectividade, aplicação autenticada e aplicação offline.
+- [`artwork-fallback.md`](artwork-fallback.md) — política canônica de capa efetiva e fallback visual reutilizável entre biblioteca, player e administração.
 
 ## Composição do backend
 
@@ -101,7 +101,7 @@ Pendências relacionadas: #81 e #176.
 - [`admin-transcode-cache.md`](admin-transcode-cache.md)
 - [`admin-operation-history.md`](admin-operation-history.md)
 
-A evolução visual #175 deve reutilizar uma única política/componente de fallback de artwork e respeitar a precedência documentada de capa; não deve criar comportamento paralelo por tela.
+O fallback visual de artwork entregue pela #175 reutiliza uma única política/componente entre as superfícies e respeita a precedência documentada de capa. Consulte [`artwork-fallback.md`](artwork-fallback.md); não crie comportamento paralelo por tela.
 
 ## Importação
 

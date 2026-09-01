@@ -103,3 +103,10 @@
 .artwork--tone-5 {
   background: radial-gradient(circle at 24% 18%, rgba(214, 190, 82, .4), transparent 34%), linear-gradient(145deg, #3f381d, #111006 74%);
 }
+
+.admin-cover-editor__preview.is-fallback > .artwork {
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+  box-shadow: none;
+}
