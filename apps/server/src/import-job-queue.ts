@@ -6,6 +6,11 @@ import type {
   ImportMediaDecision,
   ImportMetadataPreview
 } from '@home-music/shared';
+import {
+  currentHeavyWorkRequestContext,
+  HeavyWorkQueueSaturatedError,
+  type HeavyWorkQueueRuntime
+} from './heavy-work-queue.js';
 import type { ImportJobRetryLineage, ImportJobWithRetry } from './import-retry.js';
 
 const TERMINAL_STATUSES = new Set<ImportJobStatus>(['completed', 'failed', 'cancelled']);
@@ -23,6 +28,9 @@ type ImportJobQueueOptions = {
   now?: () => Date;
   createId?: () => string;
   maxRetainedJobs?: number;
+  maxNonTerminalJobs?: number;
+  maxNonTerminalJobsPerOwner?: number;
+  retryAfterSeconds?: number;
   onChange?: (job: ImportJobWithRetry) => void;
 };
 
@@ -95,21 +103,65 @@ function normalizeRetry(retry: ImportJobRetryLineage | null | undefined): Import
 
 export class ImportJobQueue {
   private readonly jobs: ImportJobWithRetry[] = [];
+  private readonly owners = new Map<string, string>();
   private readonly now: () => Date;
   private readonly createId: () => string;
   private readonly maxRetainedJobs: number;
+  private readonly maxNonTerminalJobs: number;
+  private readonly maxNonTerminalJobsPerOwner: number;
+  private readonly retryAfterSeconds: number;
   private readonly onChange?: (job: ImportJobWithRetry) => void;
+  private rejected = 0;
+  private lastQueueWaitMs = 0;
 
   constructor(options: ImportJobQueueOptions = {}) {
     this.now = options.now ?? (() => new Date());
     this.createId = options.createId ?? randomUUID;
     this.maxRetainedJobs = Math.max(1, Math.floor(options.maxRetainedJobs ?? 200));
+    this.maxNonTerminalJobs = Math.max(1, Math.floor(options.maxNonTerminalJobs ?? 16));
+    this.maxNonTerminalJobsPerOwner = Math.min(
+      this.maxNonTerminalJobs,
+      Math.max(1, Math.floor(options.maxNonTerminalJobsPerOwner ?? 8))
+    );
+    this.retryAfterSeconds = Math.max(1, Math.floor(options.retryAfterSeconds ?? 2));
     this.onChange = options.onChange;
+  }
+
+  get runtime(): HeavyWorkQueueRuntime {
+    const now = this.now().getTime();
+    let oldestPendingMs = 0;
+    let active = 0;
+    let pending = 0;
+    for (const job of this.jobs) {
+      if (job.status === 'processing') active += 1;
+      if (job.status === 'pending') {
+        pending += 1;
+        oldestPendingMs = Math.max(oldestPendingMs, Math.max(0, now - Date.parse(job.createdAt)));
+      }
+    }
+    return {
+      active,
+      pending,
+      rejected: this.rejected,
+      oldestPendingMs,
+      lastQueueWaitMs: this.lastQueueWaitMs
+    };
   }
 
   enqueue(source: ImportJobSource, label: string, retry?: ImportJobRetryLineage | null) {
     const cleanLabel = label.trim().slice(0, 240);
     if (!cleanLabel) throw new Error('Descrição da importação obrigatória.');
+
+    const ownerId = currentHeavyWorkRequestContext().ownerId;
+    const nonTerminalJobs = this.jobs.filter(job => !TERMINAL_STATUSES.has(job.status));
+    const ownerJobs = nonTerminalJobs.filter(job => this.owners.get(job.id) === ownerId);
+    if (
+      nonTerminalJobs.length >= this.maxNonTerminalJobs
+      || ownerJobs.length >= this.maxNonTerminalJobsPerOwner
+    ) {
+      this.rejected += 1;
+      throw new HeavyWorkQueueSaturatedError('imports', this.retryAfterSeconds);
+    }
 
     const timestamp = this.now().toISOString();
     const job: ImportJobWithRetry = {
@@ -128,6 +180,7 @@ export class ImportJobQueue {
     };
 
     this.jobs.push(job);
+    this.owners.set(job.id, ownerId);
     this.trimRetainedJobs();
     this.notify(job);
     return copyJob(job);
@@ -170,8 +223,14 @@ export class ImportJobQueue {
     const timestamp = this.now().toISOString();
     job.status = nextStatus;
     job.updatedAt = timestamp;
-    if (nextStatus === 'processing' && !job.startedAt) job.startedAt = timestamp;
-    if (TERMINAL_STATUSES.has(nextStatus)) job.finishedAt = timestamp;
+    if (nextStatus === 'processing' && !job.startedAt) {
+      job.startedAt = timestamp;
+      this.lastQueueWaitMs = Math.max(0, Date.parse(timestamp) - Date.parse(job.createdAt));
+    }
+    if (TERMINAL_STATUSES.has(nextStatus)) {
+      job.finishedAt = timestamp;
+      this.owners.delete(job.id);
+    }
     job.error = nextStatus === 'failed' ? error?.trim().slice(0, 500) || 'Falha na importação.' : null;
 
     this.trimRetainedJobs();
@@ -196,7 +255,8 @@ export class ImportJobQueue {
     while (this.jobs.length > this.maxRetainedJobs) {
       const removableIndex = this.jobs.findIndex(job => TERMINAL_STATUSES.has(job.status));
       if (removableIndex < 0) return;
-      this.jobs.splice(removableIndex, 1);
+      const [removed] = this.jobs.splice(removableIndex, 1);
+      if (removed) this.owners.delete(removed.id);
     }
   }
 }

@@ -8,6 +8,10 @@ import {
   SessionManager
 } from './auth.js';
 import { HomeMusicDatabase } from './database.js';
+import {
+  DEFAULT_HEAVY_WORK_LIMITS,
+  type HeavyWorkLimits
+} from './heavy-work-queue.js';
 import { ImportJobQueue } from './import-job-queue.js';
 import {
   DEFAULT_LOGIN_ABUSE_PROTECTION_CONFIG,
@@ -27,6 +31,7 @@ type ServerInfrastructureOptions = {
   ffmpegCommand: string;
   transcodeCacheMegabytes: number;
   loginAbuseProtectionConfig?: LoginAbuseProtectionConfig;
+  heavyWorkLimits?: HeavyWorkLimits;
   logger: FastifyBaseLogger;
 };
 
@@ -44,6 +49,7 @@ function resolveLoginAbuseProtectionConfig(options: ServerInfrastructureOptions)
 }
 
 export function createServerInfrastructure(options: ServerInfrastructureOptions) {
+  const heavyWorkLimits = options.heavyWorkLimits ?? DEFAULT_HEAVY_WORK_LIMITS;
   const database = new HomeMusicDatabase(options.databasePath);
   const trackAvailability = new TrackAvailabilityStore(options.databasePath);
   const authUsers = new UserAuthStore(options.databasePath);
@@ -59,6 +65,9 @@ export function createServerInfrastructure(options: ServerInfrastructureOptions)
   const operationHistory = new AdminOperationHistoryStore(options.databasePath);
   const longJobObservability = new LongJobObservability(options.logger);
   const importJobs = new ImportJobQueue({
+    maxNonTerminalJobs: heavyWorkLimits.imports.maxNonTerminal,
+    maxNonTerminalJobsPerOwner: heavyWorkLimits.imports.maxNonTerminalPerOwner,
+    retryAfterSeconds: heavyWorkLimits.retryAfterSeconds,
     onChange: job => {
       let operationId: string | null = null;
       try {
@@ -78,12 +87,16 @@ export function createServerInfrastructure(options: ServerInfrastructureOptions)
     cacheDir: options.transcodeCachePath,
     command: options.ffmpegCommand,
     maxCacheBytes: options.transcodeCacheMegabytes * 1024 * 1024,
-    maxConcurrent: 1,
+    maxConcurrent: heavyWorkLimits.transcode.maxConcurrent,
+    maxPending: heavyWorkLimits.transcode.maxPending,
+    maxPendingPerOwner: heavyWorkLimits.transcode.maxPendingPerOwner,
+    retryAfterSeconds: heavyWorkLimits.retryAfterSeconds,
     observability: longJobObservability
   });
   const transcodeCacheMaintenance = new TranscodeCacheMaintenance({
     cacheDir: options.transcodeCachePath,
     limitBytes: transcodeManager.maxCacheBytes,
+    retryAfterSeconds: heavyWorkLimits.retryAfterSeconds,
     runtime: () => ({
       active: transcodeManager.activeCount,
       pending: transcodeManager.pendingCount
@@ -103,6 +116,7 @@ export function createServerInfrastructure(options: ServerInfrastructureOptions)
     loginAbuseProtection,
     transcodeManager,
     transcodeCacheMaintenance,
+    heavyWorkLimits,
     authConfigured: authUsers.isConfigured(),
     close() {
       accountPasswords.close();

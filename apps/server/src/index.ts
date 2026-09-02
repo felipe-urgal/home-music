@@ -14,6 +14,14 @@ import {
 import { installApiAuthPolicy } from './auth-policy.js';
 import { registerAuthRoutes } from './auth-routes.js';
 import { probeFfmpeg, resolveFfmpegCommand, type FfmpegStatus } from './ffmpeg.js';
+import {
+  DEFAULT_HEAVY_WORK_LIMITS,
+  HeavyWorkQueue,
+  HeavyWorkQueueAbortedError,
+  HeavyWorkQueueSaturatedError,
+  parseHeavyWorkLimits,
+  withHeavyWorkRequestContext
+} from './heavy-work-queue.js';
 import { registerLibraryRoutes } from './library-routes.js';
 import { LibraryService } from './library-service.js';
 import { registerMediaRoutes } from './media-routes.js';
@@ -72,6 +80,16 @@ try {
   );
 }
 
+let heavyWorkLimits = DEFAULT_HEAVY_WORK_LIMITS;
+try {
+  heavyWorkLimits = parseHeavyWorkLimits(process.env);
+} catch (error) {
+  app.log.warn(
+    { err: error, fallback: DEFAULT_HEAVY_WORK_LIMITS },
+    'Limites das filas de trabalho pesado inválidos; usando valores seguros padrão.'
+  );
+}
+
 const musicDir = process.env.MUSIC_DIR || '';
 const port = Number(process.env.PORT || 8787);
 const host = isProduction
@@ -95,6 +113,7 @@ const infrastructure = createServerInfrastructure({
   transcodeCachePath: defaultTranscodeCachePath,
   ffmpegCommand,
   transcodeCacheMegabytes,
+  heavyWorkLimits,
   logger: app.log
 });
 const library = new LibraryService({
@@ -117,7 +136,16 @@ const media = new TrackMediaInfrastructure({
   library,
   transcodeManager: infrastructure.transcodeManager,
   transcodeCacheMaintenance: infrastructure.transcodeCacheMaintenance,
-  getFfmpegStatus: () => ffmpegStatus
+  getFfmpegStatus: () => ffmpegStatus,
+  coverQueue: {
+    ...heavyWorkLimits.cover,
+    retryAfterSeconds: heavyWorkLimits.retryAfterSeconds
+  }
+});
+const integrityQueue = new HeavyWorkQueue({
+  name: 'integrity',
+  ...heavyWorkLimits.integrity,
+  retryAfterSeconds: heavyWorkLimits.retryAfterSeconds
 });
 library.setMediaCacheInvalidator(() => media.clearCoverCache());
 
@@ -130,8 +158,19 @@ function stopAutomaticRescan() {
   stopAutoRescan = null;
 }
 
-app.addHook('preValidation', (request, _reply, done) => {
-  infrastructure.longJobObservability.withRequest(String(request.id), () => done());
+app.addHook('preValidation', (request, reply, done) => {
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  if (request.raw.aborted) abort();
+  else request.raw.once('aborted', abort);
+  reply.raw.once('close', () => {
+    if (!reply.raw.writableEnded) abort();
+  });
+
+  withHeavyWorkRequestContext(
+    { ownerId: request.user?.id, signal: controller.signal },
+    () => infrastructure.longJobObservability.withRequest(String(request.id), () => done())
+  );
 });
 
 app.addHook('onSend', async (_request, reply, payload) => {
@@ -173,7 +212,7 @@ registerAdminTrackRoutes(app, {
   databasePath,
   musicDir
 });
-registerLibraryRoutes(app, library);
+registerLibraryRoutes(app, library, integrityQueue);
 registerPersonalRoutes(app, personal);
 registerMediaRoutes(app, library, media);
 registerSystemRoutes(app, {
@@ -188,6 +227,12 @@ registerSystemRoutes(app, {
     active: infrastructure.transcodeManager.activeCount,
     pending: infrastructure.transcodeManager.pendingCount
   }),
+  getHeavyWorkRuntime: () => ({
+    transcode: infrastructure.transcodeManager.queueRuntime,
+    cover: media.coverQueueRuntime,
+    imports: infrastructure.importJobs.runtime,
+    integrity: integrityQueue.runtime
+  }),
   isWebReady: () => Boolean(webApp)
 });
 
@@ -197,6 +242,26 @@ app.addHook('onClose', async () => {
 });
 
 app.setErrorHandler((error, request, reply) => {
+  if (error instanceof HeavyWorkQueueSaturatedError) {
+    app.log.warn(
+      { queue: error.queueName, method: request.method, url: request.url },
+      'Fila de trabalho pesado saturada; requisição rejeitada com backpressure.'
+    );
+    reply.header('Retry-After', String(error.retryAfterSeconds));
+    return reply.code(error.statusCode).send({
+      error: 'Servidor temporariamente ocupado. Tente novamente em instantes.',
+      code: 'HEAVY_WORK_QUEUE_SATURATED',
+      queue: error.queueName
+    });
+  }
+  if (error instanceof HeavyWorkQueueAbortedError) {
+    if (request.raw.aborted || reply.raw.destroyed) return;
+    return reply.code(503).send({
+      error: 'O trabalho foi cancelado antes de iniciar.',
+      code: 'HEAVY_WORK_ABORTED'
+    });
+  }
+
   app.log.error({ err: error, method: request.method, url: request.url }, 'Erro não tratado no servidor');
   if (!reply.sent) reply.code(500).send({ error: 'Erro interno do servidor.' });
 });

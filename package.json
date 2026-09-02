@@ -39,7 +39,8 @@
     "typecheck": "npm run typecheck -w @home-music/shared && npm run typecheck -w @home-music/server && npm run typecheck -w @home-music/web",
     "test": "npm run test -w @home-music/server && npm run test -w @home-music/web && node --test scripts/verify-production.test.mjs scripts/dependabot-policy.test.mjs",
     "test:security": "npm run test:security -w @home-music/server",
-    "benchmark:large-library": "npm run benchmark:large-library -w @home-music/server && npm run benchmark:large-library -w @home-music/web"
+    "benchmark:large-library": "npm run benchmark:large-library -w @home-music/server && npm run benchmark:large-library -w @home-music/web",
+    "benchmark:backpressure": "npm run benchmark:backpressure -w @home-music/server"
   },
   "devDependencies": {
     "concurrently": "9.2.4"

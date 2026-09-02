@@ -48,6 +48,9 @@ jobs:
       - name: Tests
         run: npm test
 
+      - name: Heavy work backpressure memory guard
+        run: npm run benchmark:backpressure
+
       - name: Large library performance guard
         run: npm run benchmark:large-library
 
