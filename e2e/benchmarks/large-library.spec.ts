@@ -198,8 +198,9 @@ test('keeps a large real-browser library within grave-regression budgets', async
 
   const viewToggle = page.getByRole('button', { name: 'Ordenar, filtrar e gerenciar views' });
   await viewToggle.click();
-  const formatSelect = page.getByLabel('Formato');
-  const sortSelect = page.getByLabel('Ordenar');
+  const viewControls = page.locator('.library-view-controls');
+  const formatSelect = viewControls.getByLabel('Formato');
+  const sortSelect = viewControls.locator('select:has(option[value="title-desc"])');
   await expect(formatSelect).toBeVisible();
   await expect(sortSelect).toBeVisible();
 
