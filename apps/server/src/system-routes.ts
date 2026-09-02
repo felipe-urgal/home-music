@@ -92,12 +92,7 @@ export function registerSystemRoutes(
         profiles: ffmpegStatus.available ? Object.keys(TRANSCODE_PROFILES) : [],
         cacheLimitMegabytes: transcodeCacheMegabytes,
         active: transcoding.active,
-        pending: transcoding.pending,
-        ...(workQueues ? {
-          rejected: workQueues.transcode.rejected,
-          oldestPendingMs: workQueues.transcode.oldestPendingMs,
-          lastQueueWaitMs: workQueues.transcode.lastQueueWaitMs
-        } : {})
+        pending: transcoding.pending
       },
       ...(workQueues ? { workQueues } : {}),
       schemaVersion: getSchemaVersion()
