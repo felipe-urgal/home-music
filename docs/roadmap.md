@@ -2,7 +2,7 @@
 
 Este documento é a visão técnica de alto nível do Home Music. A issue [#123](https://github.com/felipe-urgal/home-music/issues/123) preserva o índice executivo do ciclo de backlog concluído em 2026-09-02. O ciclo técnico atual está centralizado na [#239](https://github.com/felipe-urgal/home-music/issues/239).
 
-> Estado revisado em 2026-09-02. O backlog planejado da Fase 11 e o ciclo funcional anterior estão concluídos. A Fase 12 abriu um novo ciclo técnico de Segurança e Performance; a primeira atividade priorizada é a #228, em implementação no PR #241.
+> Estado revisado em 2026-09-02. O backlog planejado da Fase 11 e o ciclo funcional anterior estão concluídos. A Fase 12 está em andamento; a #228 foi entregue pelo PR #241 e a atividade atual é a #229, em revisão no PR #242.
 
 ## Fases 1–2 — Base do produto e biblioteca pessoal
 
@@ -196,8 +196,8 @@ O PR #207 foi mergeado em 2026-09-01 com CI completo verde e encerrou o backlog 
 
 ### P0
 
-- [ ] [#228](https://github.com/felipe-urgal/home-music/issues/228) — isolamento de sessões entre usuários — implementação em revisão no PR #241;
-- [ ] [#229](https://github.com/felipe-urgal/home-music/issues/229) — proteção adicional contra brute force e abuso de CPU no login;
+- [x] [#228](https://github.com/felipe-urgal/home-music/issues/228) — isolamento de sessões entre usuários — entregue pelo PR #241;
+- [ ] [#229](https://github.com/felipe-urgal/home-music/issues/229) — proteção adicional contra brute force e abuso de CPU no login — em revisão no PR #242;
 - [ ] [#230](https://github.com/felipe-urgal/home-music/issues/230) — backpressure e limites para filas de trabalho pesado;
 - [ ] [#233](https://github.com/felipe-urgal/home-music/issues/233) — concorrência limitada no scan da biblioteca;
 - [ ] [#234](https://github.com/felipe-urgal/home-music/issues/234) — persistência SQLite somente por delta do scan;
@@ -222,7 +222,7 @@ Esses itens são independentes da #174 e da #81, ambas concluídas.
 
 ## Backlog atual
 
-O backlog implementável atual é a Fase 12, centralizada na #239. A #228 é a atividade em execução; as demais issues seguem a prioridade e ordem descritas acima. A #123 permanece encerrada como registro do ciclo anterior e não deve ser reaberta artificialmente.
+O backlog implementável atual é a Fase 12, centralizada na #239. A #229 é a atividade em execução no PR #242; as demais issues seguem a prioridade e ordem descritas acima. A #123 permanece encerrada como registro do ciclo anterior e não deve ser reaberta artificialmente.
 
 ## Regra de execução
 
