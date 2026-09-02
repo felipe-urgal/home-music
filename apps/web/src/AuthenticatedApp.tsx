@@ -1,13 +1,12 @@
-import { useState } from 'react';
+import { lazy, useState } from 'react';
 import type { AuthenticatedUser } from '@home-music/shared';
-import { AdministrationScreen } from './components/AdministrationScreen';
 import { DesktopNowPlayingScreen } from './components/DesktopNowPlayingScreen';
 import { DesktopPlayerBar } from './components/DesktopPlayerBar';
 import { DesktopPlayerSidebarTools } from './components/DesktopPlayerSidebarTools';
 import { DesktopShell } from './components/DesktopShell';
+import { LazySurfaceBoundary } from './components/LazySurfaceBoundary';
 import { LibraryScreen } from './components/LibraryScreen';
 import { MobileBottomNav } from './components/MobileBottomNav';
-import { MyAccountScreen } from './components/MyAccountScreen';
 import { PlayerScreen } from './components/PlayerScreen';
 import { ResponsiveState } from './components/ResponsiveState';
 import { useRoutedScreen } from './browser-navigation';
@@ -22,6 +21,16 @@ import { type LibraryTab, useLibraryNavigation } from './useLibraryNavigation';
 import { useNetworkQualityProfile } from './useNetworkQualityProfile';
 import { useNextTrackPreload } from './useNextTrackPreload';
 import { useSystemVolumePreference } from './useSystemVolume';
+
+const AdministrationScreen = lazy(async () => {
+  const module = await import('./components/AdministrationScreen');
+  return { default: module.AdministrationScreen };
+});
+
+const MyAccountScreen = lazy(async () => {
+  const module = await import('./components/MyAccountScreen');
+  return { default: module.MyAccountScreen };
+});
 
 type AdministrationReturnScreen = 'library' | 'account';
 
@@ -188,36 +197,40 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
         )}
 
         {screen === 'account' ? (
-          <MyAccountScreen
-            currentUser={currentUser}
-            playbackPreferences={{
-              current,
-              streamingSelection: qualityProfile.selection,
-              effectiveStreamingMode: qualityProfile.effectiveMode,
-              networkPreference: qualityProfile.networkPreference,
-              detectedNetwork: qualityProfile.detectedNetwork,
-              normalizationMode: player.normalizationMode,
-              effectiveNormalizationMode: player.effectiveNormalizationMode,
-              onStreamingSelection: qualityProfile.setSelection,
-              onNetworkPreference: qualityProfile.setNetworkPreference,
-              onNormalizationMode: player.setNormalizationMode
-            }}
-            offlineMode={{
-              supported: offline.supported,
-              loading: offline.loading,
-              availableCount: offline.tracks.length,
-              onOpen: onOpenOffline
-            }}
-            onBack={() => setScreen('library')}
-            onOpenAdministration={() => openAdministration('account')}
-            onSessionEnded={onAuthRefresh}
-            onLogout={onLogout}
-          />
+          <LazySurfaceBoundary loadingTitle="Carregando Minha conta">
+            <MyAccountScreen
+              currentUser={currentUser}
+              playbackPreferences={{
+                current,
+                streamingSelection: qualityProfile.selection,
+                effectiveStreamingMode: qualityProfile.effectiveMode,
+                networkPreference: qualityProfile.networkPreference,
+                detectedNetwork: qualityProfile.detectedNetwork,
+                normalizationMode: player.normalizationMode,
+                effectiveNormalizationMode: player.effectiveNormalizationMode,
+                onStreamingSelection: qualityProfile.setSelection,
+                onNetworkPreference: qualityProfile.setNetworkPreference,
+                onNormalizationMode: player.setNormalizationMode
+              }}
+              offlineMode={{
+                supported: offline.supported,
+                loading: offline.loading,
+                availableCount: offline.tracks.length,
+                onOpen: onOpenOffline
+              }}
+              onBack={() => setScreen('library')}
+              onOpenAdministration={() => openAdministration('account')}
+              onSessionEnded={onAuthRefresh}
+              onLogout={onLogout}
+            />
+          </LazySurfaceBoundary>
         ) : screen === 'admin' && canManageSharedLibrary ? (
-          <AdministrationScreen
-            currentUser={currentUser}
-            onBack={() => setScreen(administrationReturnScreen)}
-          />
+          <LazySurfaceBoundary loadingTitle="Carregando Administração">
+            <AdministrationScreen
+              currentUser={currentUser}
+              onBack={() => setScreen(administrationReturnScreen)}
+            />
+          </LazySurfaceBoundary>
         ) : library.loading ? (
           <ResponsiveState
             variant="loading"
