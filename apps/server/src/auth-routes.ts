@@ -8,8 +8,10 @@ import {
   buildSessionCookie,
   loginRateLimitKey,
   readCookie,
+  SESSION_CAPACITY_RETRY_AFTER_SECONDS,
   SESSION_COOKIE_NAME,
   SESSION_TTL_SECONDS,
+  SessionCapacityError,
   type LoginRateLimiter,
   type SessionManager
 } from './auth.js';
@@ -78,7 +80,17 @@ export function registerAuthRoutes(app: FastifyInstance, dependencies: AuthRoute
       }
 
       loginRateLimiter.clear(key);
-      const token = sessions.createSessionForUser(authenticated.userId);
+      let token: string;
+      try {
+        token = sessions.createSessionForUser(authenticated.userId);
+      } catch (error) {
+        if (!(error instanceof SessionCapacityError)) throw error;
+        reply.header('Retry-After', String(SESSION_CAPACITY_RETRY_AFTER_SECONDS));
+        return reply.code(503).send({
+          error: 'Capacidade de sessões temporariamente atingida. Tente novamente em instantes.'
+        });
+      }
+
       reply.header(
         'Set-Cookie',
         buildSessionCookie(token, SESSION_TTL_SECONDS, requestIsSecure(request))
