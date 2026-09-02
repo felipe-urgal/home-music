@@ -9,6 +9,11 @@ import { scanLibrary } from './library.js';
 
 const DEFAULT_TRACK_COUNT = 2_000;
 const TRACK_COUNT = positiveInteger(process.env.HOME_MUSIC_BENCHMARK_TRACKS, DEFAULT_TRACK_COUNT);
+const DEFAULT_CHANGED_TRACK_COUNT = Math.min(64, TRACK_COUNT);
+const CHANGED_TRACK_COUNT = Math.min(
+  TRACK_COUNT,
+  positiveInteger(process.env.HOME_MUSIC_BENCHMARK_CHANGED_TRACKS, DEFAULT_CHANGED_TRACK_COUNT)
+);
 const SCALE = Math.max(1, TRACK_COUNT / DEFAULT_TRACK_COUNT);
 const MEBIBYTE = 1024 * 1024;
 
@@ -42,6 +47,11 @@ function roundMs(value: number) {
   return Number(value.toFixed(2));
 }
 
+function ratio(numerator: number, denominator: number) {
+  if (denominator <= 0) return null;
+  return Number((numerator / denominator).toFixed(2));
+}
+
 function collectGarbage() {
   const gc = (globalThis as typeof globalThis & { gc?: () => void }).gc;
   gc?.();
@@ -69,6 +79,19 @@ function assertWithin(label: string, actual: number, limit: number, unit: string
     actual <= limit,
     `${label} excedeu o limite de regressão grave: ${actual}${unit} > ${roundMs(limit)}${unit}`
   );
+}
+
+async function withScanConcurrency<T>(concurrency: string | undefined, operation: () => Promise<T>) {
+  const previous = process.env.HOME_MUSIC_SCAN_CONCURRENCY;
+  if (concurrency === undefined) delete process.env.HOME_MUSIC_SCAN_CONCURRENCY;
+  else process.env.HOME_MUSIC_SCAN_CONCURRENCY = concurrency;
+
+  try {
+    return await operation();
+  } finally {
+    if (previous === undefined) delete process.env.HOME_MUSIC_SCAN_CONCURRENCY;
+    else process.env.HOME_MUSIC_SCAN_CONCURRENCY = previous;
+  }
 }
 
 function minimalWaveFile() {
@@ -122,7 +145,11 @@ async function main() {
 
   try {
     const dataset = await measure(() => createSyntheticLibrary(root));
-    const initial = await measure(() => scanLibrary(root));
+
+    const serialInitial = await measure(() => withScanConcurrency('1', () => scanLibrary(root)));
+    resetLibraryIntegrityStatusForTests();
+    const initial = await measure(() => withScanConcurrency(undefined, () => scanLibrary(root)));
+    assert.deepEqual(initial.value, serialInitial.value);
     assert.equal(initial.value.tracks.length, TRACK_COUNT);
     assert.deepEqual(initial.value.stats, {
       added: TRACK_COUNT,
@@ -131,7 +158,9 @@ async function main() {
       unchanged: 0
     });
 
-    const incremental = await measure(() => scanLibrary(root, initial.value.tracks));
+    const serialIncremental = await measure(() => withScanConcurrency('1', () => scanLibrary(root, initial.value.tracks)));
+    const incremental = await measure(() => withScanConcurrency(undefined, () => scanLibrary(root, initial.value.tracks)));
+    assert.deepEqual(incremental.value, serialIncremental.value);
     assert.deepEqual(incremental.value.stats, {
       added: 0,
       updated: 0,
@@ -139,17 +168,27 @@ async function main() {
       unchanged: TRACK_COUNT
     });
 
-    const changedTrack = incremental.value.tracks[Math.floor(TRACK_COUNT / 2)];
-    assert.ok(changedTrack, 'dataset sintético deve conter ao menos uma faixa');
-    const changedMtime = new Date(changedTrack.mtimeMs + 60_000);
-    await utimes(changedTrack.filePath, changedMtime, changedMtime);
+    const changedTracks = incremental.value.tracks.slice(0, CHANGED_TRACK_COUNT);
+    assert.equal(changedTracks.length, CHANGED_TRACK_COUNT);
+    await Promise.all(changedTracks.map((track, index) => {
+      const changedMtime = new Date(track.mtimeMs + 60_000 + index);
+      return utimes(track.filePath, changedMtime, changedMtime);
+    }));
 
-    const changedIncremental = await measure(() => scanLibrary(root, incremental.value.tracks));
+    const serialChangedIncremental = await measure(() => withScanConcurrency(
+      '1',
+      () => scanLibrary(root, incremental.value.tracks)
+    ));
+    const changedIncremental = await measure(() => withScanConcurrency(
+      undefined,
+      () => scanLibrary(root, incremental.value.tracks)
+    ));
+    assert.deepEqual(changedIncremental.value, serialChangedIncremental.value);
     assert.deepEqual(changedIncremental.value.stats, {
       added: 0,
-      updated: 1,
+      updated: CHANGED_TRACK_COUNT,
       removed: 0,
-      unchanged: TRACK_COUNT - 1
+      unchanged: TRACK_COUNT - CHANGED_TRACK_COUNT
     });
 
     const publicPayload = await measure(() => JSON.stringify({
@@ -162,10 +201,19 @@ async function main() {
 
     assertWithin('scan inicial', initial.durationMs, LIMITS.initialScanMs, 'ms');
     assertWithin('scan incremental sem mudanças', incremental.durationMs, LIMITS.incrementalScanMs, 'ms');
-    assertWithin('scan incremental com uma mudança', changedIncremental.durationMs, LIMITS.changedIncrementalScanMs, 'ms');
+    assertWithin('scan incremental com lote alterado', changedIncremental.durationMs, LIMITS.changedIncrementalScanMs, 'ms');
     assertWithin('materialização do payload público', publicPayload.durationMs, LIMITS.publicPayloadMs, 'ms');
 
-    const memorySamples = [dataset, initial, incremental, changedIncremental, publicPayload];
+    const memorySamples = [
+      dataset,
+      serialInitial,
+      initial,
+      serialIncremental,
+      incremental,
+      serialChangedIncremental,
+      changedIncremental,
+      publicPayload
+    ];
     const maxHeapUsedMb = Math.max(...memorySamples.map(sample => sample.heapUsedMb));
     const maxRssMb = Math.max(...memorySamples.map(sample => sample.rssMb));
     assertWithin('heap usado', maxHeapUsedMb, LIMITS.heapUsedMb, 'MB');
@@ -175,21 +223,32 @@ async function main() {
       benchmark: 'large-library-server',
       dataset: {
         tracks: TRACK_COUNT,
+        changedTracks: CHANGED_TRACK_COUNT,
         audio: 'WAV PCM sintético de 1 amostra',
         creationMs: dataset.durationMs
       },
       measurements: {
-        initialScan: {
-          durationMs: initial.durationMs,
-          heapDeltaMb: initial.heapDeltaMb
+        serialBaseline: {
+          initialScanMs: serialInitial.durationMs,
+          incrementalScanNoChangesMs: serialIncremental.durationMs,
+          incrementalScanChangedBatchMs: serialChangedIncremental.durationMs
         },
-        incrementalScanNoChanges: {
-          durationMs: incremental.durationMs,
-          heapDeltaMb: incremental.heapDeltaMb
-        },
-        incrementalScanOneChanged: {
-          durationMs: changedIncremental.durationMs,
-          heapDeltaMb: changedIncremental.heapDeltaMb
+        boundedConcurrency: {
+          initialScan: {
+            durationMs: initial.durationMs,
+            heapDeltaMb: initial.heapDeltaMb,
+            speedupVsSerial: ratio(serialInitial.durationMs, initial.durationMs)
+          },
+          incrementalScanNoChanges: {
+            durationMs: incremental.durationMs,
+            heapDeltaMb: incremental.heapDeltaMb,
+            speedupVsSerial: ratio(serialIncremental.durationMs, incremental.durationMs)
+          },
+          incrementalScanChangedBatch: {
+            durationMs: changedIncremental.durationMs,
+            heapDeltaMb: changedIncremental.heapDeltaMb,
+            speedupVsSerial: ratio(serialChangedIncremental.durationMs, changedIncremental.durationMs)
+          }
         },
         publicLibraryPayload: {
           durationMs: publicPayload.durationMs,
