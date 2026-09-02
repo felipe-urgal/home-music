@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { ImportJob } from '@home-music/shared';
+import {
+  HeavyWorkQueueSaturatedError,
+  withHeavyWorkRequestContext
+} from './heavy-work-queue.js';
 import { ImportJobQueue } from './import-job-queue.js';
 
 function deterministicQueue() {
@@ -128,4 +132,45 @@ test('lista jobs mais recentes primeiro e descarta terminais antigos quando nece
   queue.enqueue({ type: 'url', provider: null }, 'Terceiro');
 
   assert.deepEqual(queue.list().map(job => job.label), ['Terceiro', 'Segundo']);
+});
+
+test('limita jobs não terminais globalmente e por usuário', () => {
+  let id = 0;
+  const queue = new ImportJobQueue({
+    maxNonTerminalJobs: 2,
+    maxNonTerminalJobsPerOwner: 1,
+    retryAfterSeconds: 7,
+    createId: () => `bounded-${++id}`,
+    now: () => new Date('2026-08-27T12:00:00.000Z')
+  });
+
+  const first = withHeavyWorkRequestContext({ ownerId: 'user-a' }, () =>
+    queue.enqueue({ type: 'upload', provider: null }, 'A')
+  );
+  assert.throws(
+    () => withHeavyWorkRequestContext({ ownerId: 'user-a' }, () =>
+      queue.enqueue({ type: 'url', provider: null }, 'A2')
+    ),
+    (error: unknown) => error instanceof HeavyWorkQueueSaturatedError
+      && error.statusCode === 503
+      && error.retryAfterSeconds === 7
+  );
+
+  withHeavyWorkRequestContext({ ownerId: 'user-b' }, () =>
+    queue.enqueue({ type: 'url', provider: null }, 'B')
+  );
+  assert.throws(
+    () => withHeavyWorkRequestContext({ ownerId: 'user-c' }, () =>
+      queue.enqueue({ type: 'url', provider: null }, 'C')
+    ),
+    HeavyWorkQueueSaturatedError
+  );
+  assert.equal(queue.runtime.pending, 2);
+  assert.equal(queue.runtime.rejected, 2);
+
+  queue.transition(first.id, 'completed');
+  const replacement = withHeavyWorkRequestContext({ ownerId: 'user-a' }, () =>
+    queue.enqueue({ type: 'upload', provider: null }, 'A3')
+  );
+  assert.equal(replacement.status, 'pending');
 });
