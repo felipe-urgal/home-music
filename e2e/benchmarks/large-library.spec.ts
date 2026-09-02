@@ -222,7 +222,8 @@ test('keeps a large real-browser library within grave-regression budgets', async
     }
   );
 
-  const loadMore = page.getByRole('button', { name: /Mostrar mais 100 músicas/ });
+  const loadMore = page.getByRole('button', { name: 'Mostrar mais', exact: true });
+  await expect(loadMore).toBeVisible();
   const growListMs = await measureAction(
     () => loadMore.click(),
     () => expect(rows).toHaveCount(200)
