@@ -3,13 +3,18 @@ import { AccountPasswordService } from './account-password.js';
 import { AdminOperationHistoryStore } from './admin-operation-history.js';
 import { AdminUsersService } from './admin-users.js';
 import {
-  LoginRateLimiter,
   MAX_GLOBAL_SESSIONS,
   SESSION_TTL_SECONDS,
   SessionManager
 } from './auth.js';
 import { HomeMusicDatabase } from './database.js';
 import { ImportJobQueue } from './import-job-queue.js';
+import {
+  DEFAULT_LOGIN_ABUSE_PROTECTION_CONFIG,
+  LoginAbuseProtection,
+  parseLoginAbuseProtectionConfig,
+  type LoginAbuseProtectionConfig
+} from './login-abuse-protection.js';
 import { LongJobObservability } from './long-job-observability.js';
 import { TrackAvailabilityStore } from './track-availability-store.js';
 import { TranscodeCacheMaintenance } from './transcode-cache-maintenance.js';
@@ -21,8 +26,22 @@ type ServerInfrastructureOptions = {
   transcodeCachePath: string;
   ffmpegCommand: string;
   transcodeCacheMegabytes: number;
+  loginAbuseProtectionConfig?: LoginAbuseProtectionConfig;
   logger: FastifyBaseLogger;
 };
+
+function resolveLoginAbuseProtectionConfig(options: ServerInfrastructureOptions) {
+  if (options.loginAbuseProtectionConfig) return options.loginAbuseProtectionConfig;
+  try {
+    return parseLoginAbuseProtectionConfig(process.env);
+  } catch (error) {
+    options.logger.warn(
+      { err: error },
+      'Configuração de proteção do login inválida; usando limites seguros padrão.'
+    );
+    return DEFAULT_LOGIN_ABUSE_PROTECTION_CONFIG;
+  }
+}
 
 export function createServerInfrastructure(options: ServerInfrastructureOptions) {
   const database = new HomeMusicDatabase(options.databasePath);
@@ -54,7 +73,7 @@ export function createServerInfrastructure(options: ServerInfrastructureOptions)
       longJobObservability.observeImportJob(job, operationId);
     }
   });
-  const loginRateLimiter = new LoginRateLimiter();
+  const loginAbuseProtection = new LoginAbuseProtection(resolveLoginAbuseProtectionConfig(options));
   const transcodeManager = new TranscodeManager({
     cacheDir: options.transcodeCachePath,
     command: options.ffmpegCommand,
@@ -81,7 +100,7 @@ export function createServerInfrastructure(options: ServerInfrastructureOptions)
     operationHistory,
     longJobObservability,
     importJobs,
-    loginRateLimiter,
+    loginAbuseProtection,
     transcodeManager,
     transcodeCacheMaintenance,
     authConfigured: authUsers.isConfigured(),

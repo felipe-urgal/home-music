@@ -12,10 +12,13 @@ import {
   SESSION_COOKIE_NAME,
   SESSION_TTL_SECONDS,
   SessionCapacityError,
-  type LoginRateLimiter,
   type SessionManager
 } from './auth.js';
 import { resolveAuthStatus } from './auth-status.js';
+import {
+  loginIdentityRateLimitKey,
+  type LoginAbuseProtection
+} from './login-abuse-protection.js';
 import type { UserAuthStore } from './user-auth-store.js';
 
 type AuthRouteDependencies = {
@@ -23,10 +26,12 @@ type AuthRouteDependencies = {
   authUsers: UserAuthStore;
   sessions: SessionManager;
   accountPasswords: AccountPasswordService;
-  loginRateLimiter: LoginRateLimiter;
+  loginAbuseProtection: LoginAbuseProtection;
   forceSecureCookie: boolean;
   trustTailscaleForwardedFor: boolean;
 };
+
+const LOGIN_RATE_LIMIT_MESSAGE = 'Muitas tentativas. Aguarde alguns minutos e tente novamente.';
 
 export function registerAuthRoutes(app: FastifyInstance, dependencies: AuthRouteDependencies) {
   const {
@@ -34,7 +39,7 @@ export function registerAuthRoutes(app: FastifyInstance, dependencies: AuthRoute
     authUsers,
     sessions,
     accountPasswords,
-    loginRateLimiter,
+    loginAbuseProtection,
     forceSecureCookie,
     trustTailscaleForwardedFor
   } = dependencies;
@@ -57,29 +62,40 @@ export function registerAuthRoutes(app: FastifyInstance, dependencies: AuthRoute
     { config: { auth: 'public' } },
     async (request, reply) => {
       reply.header('Cache-Control', 'no-store');
-      const key = loginRateLimitKey(
+      const ipKey = loginRateLimitKey(
         request.raw.socket.remoteAddress || request.ip,
         request.headers['x-forwarded-for'],
         trustTailscaleForwardedFor
       );
-
-      if (loginRateLimiter.isBlocked(key)) {
-        reply.header('Retry-After', '300');
-        return reply.code(429).send({
-          error: 'Muitas tentativas. Aguarde alguns minutos e tente novamente.'
-        });
-      }
-
       const username = typeof request.body?.username === 'string' ? request.body.username : '';
       const password = typeof request.body?.password === 'string' ? request.body.password : '';
-      const authenticated = await accountPasswords.authenticate(username, password);
+      const identityKey = loginIdentityRateLimitKey(username);
+      const attempt = loginAbuseProtection.checkAttempt(ipKey, identityKey);
+
+      if (!attempt.ok) {
+        reply.header('Retry-After', String(attempt.retryAfterSeconds));
+        return reply.code(429).send({ error: LOGIN_RATE_LIMIT_MESSAGE });
+      }
+
+      const verification = loginAbuseProtection.tryStartPasswordVerification();
+      if (!verification.ok) {
+        reply.header('Retry-After', String(verification.retryAfterSeconds));
+        return reply.code(429).send({ error: LOGIN_RATE_LIMIT_MESSAGE });
+      }
+
+      let authenticated: Awaited<ReturnType<AccountPasswordService['authenticate']>>;
+      try {
+        authenticated = await accountPasswords.authenticate(username, password);
+      } finally {
+        verification.lease.release();
+      }
 
       if (!authenticated) {
-        loginRateLimiter.recordFailure(key);
+        loginAbuseProtection.recordFailure(ipKey, identityKey);
         return reply.code(401).send({ error: 'Usuário ou senha inválidos.' });
       }
 
-      loginRateLimiter.clear(key);
+      loginAbuseProtection.recordSuccess(ipKey, identityKey);
       let token: string;
       try {
         token = sessions.createSessionForUser(authenticated.userId);

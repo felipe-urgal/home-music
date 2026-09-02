@@ -259,37 +259,54 @@ export class SessionManager {
   }
 }
 
+type LoginFailureEntry = { failures: number; resetAt: number };
+
 export class LoginRateLimiter {
-  private readonly attempts = new Map<string, { failures: number; resetAt: number }>();
+  private readonly attempts = new Map<string, LoginFailureEntry>();
+  private overflow: LoginFailureEntry | null = null;
 
   constructor(
     private readonly maxFailures = 8,
     private readonly windowMs = 5 * 60 * 1000,
     private readonly maxEntries = 512
-  ) {}
+  ) {
+    if (!Number.isInteger(this.maxFailures) || this.maxFailures < 1) {
+      throw new RangeError('Limite de falhas de login inválido.');
+    }
+    if (!Number.isFinite(this.windowMs) || this.windowMs < 1) {
+      throw new RangeError('Janela de rate limit de login inválida.');
+    }
+    if (!Number.isInteger(this.maxEntries) || this.maxEntries < 1) {
+      throw new RangeError('Capacidade do rate limiter de login inválida.');
+    }
+  }
 
   isBlocked(key: string, now = Date.now()) {
+    this.clearExpired(now);
     const entry = this.attempts.get(key);
-    if (!entry) return false;
-    if (entry.resetAt <= now) {
-      this.attempts.delete(key);
-      return false;
-    }
-    return entry.failures >= this.maxFailures;
+    if (entry) return entry.failures >= this.maxFailures;
+    if (this.attempts.size < this.maxEntries || !this.overflow) return false;
+    return this.overflow.failures >= this.maxFailures;
   }
 
   recordFailure(key: string, now = Date.now()) {
     this.clearExpired(now);
     const current = this.attempts.get(key);
-    if (!current || current.resetAt <= now) {
-      if (this.attempts.size >= this.maxEntries) {
-        const oldest = this.attempts.keys().next().value as string | undefined;
-        if (oldest) this.attempts.delete(oldest);
-      }
+    if (current) {
+      current.failures += 1;
+      return;
+    }
+
+    if (this.attempts.size < this.maxEntries) {
       this.attempts.set(key, { failures: 1, resetAt: now + this.windowMs });
       return;
     }
-    current.failures += 1;
+
+    if (!this.overflow) {
+      this.overflow = { failures: 1, resetAt: now + this.windowMs };
+      return;
+    }
+    this.overflow.failures += 1;
   }
 
   clear(key: string) {
@@ -300,5 +317,6 @@ export class LoginRateLimiter {
     for (const [key, entry] of this.attempts) {
       if (entry.resetAt <= now) this.attempts.delete(key);
     }
+    if (this.overflow && this.overflow.resetAt <= now) this.overflow = null;
   }
 }

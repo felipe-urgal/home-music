@@ -2,7 +2,7 @@
 
 Este diretório mistura documentação **corrente** e registros históricos de implementação. Esta página define qual material deve ser usado como fonte de verdade.
 
-> Inventário e backlog revisados em 2026-09-02. A Fase 11 e o ciclo funcional anterior estão concluídos. A Fase 12 abriu um novo ciclo técnico de Segurança e Performance, centralizado na #239; a #228 é a primeira atividade em implementação no PR #241. A #123 permanece encerrada como índice executivo do ciclo anterior.
+> Inventário e backlog revisados em 2026-09-02. A Fase 11 e o ciclo funcional anterior estão concluídos. A Fase 12 está em andamento, centralizada na #239; a #228 foi entregue pelo PR #241 e a #229 está em revisão no PR #242. A #123 permanece encerrada como índice executivo do ciclo anterior.
 
 ## Desenvolvimento e agentes de IA
 
@@ -28,7 +28,8 @@ A Fase 12 está em andamento e concentra o backlog implementável atual.
 
 | Issue | Estado corrente |
 | --- | --- |
-| [#228](https://github.com/felipe-urgal/home-music/issues/228) | isolamento de sessões entre usuários; implementação em revisão no PR #241 |
+| [#228](https://github.com/felipe-urgal/home-music/issues/228) | isolamento de sessões entre usuários; concluída pelo PR #241 |
+| [#229](https://github.com/felipe-urgal/home-music/issues/229) | proteção contra brute force distribuído e abuso de CPU no login; em revisão no PR #242 |
 | [#239](https://github.com/felipe-urgal/home-music/issues/239) | índice executivo ativo da Fase 12 — Segurança e Performance |
 | [#123](https://github.com/felipe-urgal/home-music/issues/123) | encerrada como índice executivo do ciclo anterior |
 
@@ -46,6 +47,7 @@ A ordem corrente da Fase 12 está em `roadmap.md` e na #239. Itens concluídos d
 ## Segurança e regressões
 
 - [`security-regressions.md`](security-regressions.md) — gate dedicado de regressões negativas para Administração/Importação, invariantes cobertas e regras de isolamento das fixtures.
+- [`login-abuse-protection.md`](login-abuse-protection.md) — rate limits por IP/identidade, gate global de `scrypt`, `Retry-After`, métricas agregadas e política de restart do login.
 
 ## Dependências e CI
 
@@ -132,13 +134,14 @@ Registro de decisão arquitetural:
 Fontes atuais:
 
 - [`multi-user-auth.md`](multi-user-auth.md)
+- [`login-abuse-protection.md`](login-abuse-protection.md)
 - [`password-ux.md`](password-ux.md)
 - [`phase-7.5-operations.md`](phase-7.5-operations.md)
 - [`phase-7.5-admin-users-screen.md`](phase-7.5-admin-users-screen.md)
 - [`phase-7.5-my-account-screen.md`](phase-7.5-my-account-screen.md)
 - [`phase-7.5-remove-env-auth-recovery.md`](phase-7.5-remove-env-auth-recovery.md)
 
-A política corrente de capacidade e isolamento de sessões da #228 está documentada em `multi-user-auth.md`.
+A política corrente de capacidade e isolamento de sessões da #228 está documentada em `multi-user-auth.md`; a proteção de login da #229 está documentada em `login-abuse-protection.md`.
 
 ## Registros históricos `phase-7.5-*`
 
