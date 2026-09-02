@@ -75,8 +75,8 @@ export const DEFAULT_HEAVY_WORK_LIMITS: HeavyWorkLimits = {
     maxPendingPerOwner: 8
   },
   imports: {
-    maxNonTerminal: 64,
-    maxNonTerminalPerOwner: 32
+    maxNonTerminal: 16,
+    maxNonTerminalPerOwner: 8
   },
   integrity: {
     maxConcurrent: 1,
@@ -123,7 +123,7 @@ function parseLimit(
   maximum: number,
   minimum = 1
 ) {
-  if (value == null || value.trim() === '') return fallback;
+  if (value == null || value.trim() === '') return Math.min(maximum, Math.max(minimum, fallback));
   const parsed = Number(value);
   if (!Number.isSafeInteger(parsed) || parsed < minimum || parsed > maximum) {
     throw new Error(`${name} deve ser um inteiro entre ${minimum} e ${maximum}.`);
