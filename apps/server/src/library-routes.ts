@@ -1,5 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 import type { HeavyWorkQueue } from './heavy-work-queue.js';
+import {
+  LibraryHttpSnapshotCache,
+  matchesIfNoneMatch,
+  selectLibraryContentEncoding
+} from './library-http-cache.js';
 import type { LibraryService } from './library-service.js';
 
 export function registerLibraryRoutes(
@@ -7,12 +12,26 @@ export function registerLibraryRoutes(
   library: LibraryService,
   integrityQueue?: HeavyWorkQueue
 ) {
-  app.get('/api/library', async (_request, reply) => {
-    reply.header('Cache-Control', 'private, no-store');
-    return {
-      tracks: library.listPublicTracks(),
-      ...library.status()
-    };
+  const libraryHttpCache = new LibraryHttpSnapshotCache(library);
+
+  app.get('/api/library', async (request, reply) => {
+    const snapshot = libraryHttpCache.snapshot();
+    reply.header('Cache-Control', 'private, no-cache');
+    reply.header('ETag', snapshot.etag);
+    reply.header('Vary', 'Accept-Encoding');
+
+    if (matchesIfNoneMatch(request.headers['if-none-match'], snapshot.etag)) {
+      return reply.code(304).send();
+    }
+
+    const encoding = selectLibraryContentEncoding(
+      request.headers['accept-encoding'],
+      snapshot.body.byteLength
+    );
+    const body = await libraryHttpCache.bodyFor(snapshot, encoding);
+    reply.type('application/json; charset=utf-8');
+    if (encoding !== 'identity') reply.header('Content-Encoding', encoding);
+    return reply.send(body);
   });
 
   app.get('/api/library/status', async (_request, reply) => {
