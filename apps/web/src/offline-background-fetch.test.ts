@@ -1,9 +1,12 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   backgroundFetchFailureMessage,
   backgroundFetchRegistrationId,
   supportsBackgroundFetchCapability
 } from './offline-background-fetch';
+
+const serviceWorkerSource = () => readFileSync(new URL('../public/sw.js', import.meta.url), 'utf8');
 
 describe('offline background fetch', () => {
   it('escopa a registration por usuário e faixa', () => {
@@ -35,6 +38,14 @@ describe('offline background fetch', () => {
     })).toBe(false);
 
     expect(supportsBackgroundFetchCapability(null)).toBe(false);
+  });
+
+  it('mantém a gravação do worker vinculada a um client ativo da conta', () => {
+    const sw = serviceWorkerSource();
+    expect(sw).toContain('async function hasActiveOfflineUserClient(userId)');
+    expect(sw).toContain('if (!await hasActiveOfflineUserClient(scope.userId)) return;');
+    expect(sw).toContain("self.addEventListener('backgroundfetchsuccess'");
+    expect(sw).toContain('version: 4');
   });
 
   it('traduz falha de quota sem anunciar sucesso', () => {
