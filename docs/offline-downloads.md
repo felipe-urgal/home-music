@@ -13,7 +13,7 @@ O Home Music permite disponibilizar offline:
 
 Todas essas superfícies reutilizam **um único scheduler**, limitado a **3 downloads simultâneos**, e **um único artefato físico por `userId + trackId`**.
 
-A continuidade garantida é dentro da mesma execução ativa da aplicação/aba. Background e tela bloqueada continuam dependendo da validação em dispositivos reais da issue [#81](https://github.com/felipe-urgal/home-music/issues/81).
+Em navegadores com Background Fetch e service worker capability v4, a transferência já iniciada pode ser delegada ao navegador para sobreviver melhor à suspensão da página. Navegadores sem essa API mantêm o `fetch()` foreground anterior. A garantia por plataforma continua dependendo da validação em dispositivos reais da issue [#81](https://github.com/felipe-urgal/home-music/issues/81).
 
 ## Modelo: bytes físicos x referências lógicas
 
@@ -55,7 +55,7 @@ Responsabilidades:
 - `offline-audio-v2`: bytes de áudio no Cache Storage;
 - client scope: associação mínima entre aba/service worker e usuário autenticado.
 
-Uma troca de conta durante um download não transfere o resultado para a nova identidade. Cada job captura o `userId` no início e o estado React também é escopado pelo usuário ativo.
+Uma troca de conta durante um download não transfere o resultado para a nova identidade. Cada job captura o `userId` no início e o estado React também é escopado pelo usuário ativo. No caminho Background Fetch, a registration também carrega o proprietário original e o service worker grava no cache daquele usuário.
 
 ## Migração conservadora
 
@@ -86,7 +86,8 @@ Consequências:
 - playlist e pasta que compartilham uma música reutilizam o mesmo job;
 - download individual iniciado enquanto uma coleção baixa a mesma faixa reutiliza o mesmo job;
 - uma coleção não cria um segundo scheduler;
-- falha de uma faixa não cancela automaticamente as demais.
+- falha de uma faixa não cancela automaticamente as demais;
+- Background Fetch não cria uma fila paralela: a registration é iniciada dentro do mesmo job do scheduler.
 
 A sincronização de coleção pode preparar até três itens em paralelo, mas cada faixa ainda atravessa o scheduler global, que continua sendo a autoridade final de concorrência.
 
@@ -101,20 +102,44 @@ referência lógica existe?
    ↓ sim
 scheduler global
    ↓
-fetch autenticado da faixa completa
+Background Fetch suportado pelo worker v4?
+   ├── sim → navegador transfere + worker persiste resposta completa
+   └── não → fetch autenticado foreground
    ↓
-quota best-effort
-   ↓
-cache.put
+bytes confirmados no cache da conta
    ↓
 referência ainda existe?
    ├── não → remove blob recém-gravado
    └── sim → publica no manifesto físico
 ```
 
-Essa segunda validação fecha a corrida em que uma coleção é removida enquanto o `fetch()` está em andamento.
+No fallback foreground, a checagem best-effort de quota continua acontecendo antes de `cache.put()`. No caminho Background Fetch, o próprio navegador pode rejeitar a transferência por quota; o manifesto não é publicado em caso de falha.
 
-Falha de quota ou gravação nunca deve produzir manifesto físico falso de “disponível”.
+A validação depois da transferência fecha a corrida em que uma coleção é removida enquanto o download está em andamento. O service worker **não escreve `offline-tracks:v2`**: ele apenas persiste uma resposta completa no cache correto. A página continua sendo a autoridade de publicação do manifesto após revalidar a referência lógica.
+
+Falha de quota, resposta incompleta, ausência do blob esperado ou falha de gravação nunca devem produzir manifesto físico falso de “disponível”.
+
+## Background Fetch progressivo
+
+O caminho de background é ativado somente quando todos os requisitos abaixo estão presentes:
+
+1. service worker ativo responde capability **v4**;
+2. a resposta anuncia `backgroundFetch: true`;
+3. o registro expõe `ServiceWorkerRegistration.backgroundFetch`.
+
+Se qualquer requisito faltar, a transferência usa o fluxo foreground existente.
+
+A registration usa um identificador escopado por `userId + trackId` e uma `Request` same-origin com credenciais. No evento `backgroundfetchsuccess`, o worker:
+
+1. valida o formato da registration e os IDs;
+2. exige exatamente uma request `GET` same-origin;
+3. exige que a URL seja exatamente `/api/tracks/<trackId>/stream`;
+4. exige resposta completa HTTP `200`;
+5. grava a resposta somente em `home-music-offline-audio-v2-<userId>`.
+
+Quando a página volta a executar, ela aguarda o blob confirmado nesse cache e continua o fluxo normal de referência + manifesto. Se a referência tiver desaparecido durante a suspensão, os bytes são removidos e não são anunciados como concluídos.
+
+Um worker v3 antigo controlando temporariamente um bundle novo não recebe registrations de Background Fetch: o frontend detecta a versão e usa o fallback até a ativação do v4.
 
 ## Download individual
 
@@ -173,7 +198,9 @@ Para faixas novas, o scheduler global garante os downloads que ainda faltam.
 
 `Pausar` interrompe a inclusão de novas faixas na sincronização daquela coleção.
 
-Um `fetch()` já iniciado pode terminar; isso é intencional porque o scheduler é compartilhado e o mesmo job pode servir outra referência. Enquanto esses jobs já iniciados drenam, a ação de retomada permanece desabilitada como `Pausando…`, evitando iniciar uma segunda execução concorrente para a mesma coleção.
+Uma transferência já iniciada pode terminar; isso é intencional porque o scheduler é compartilhado e o mesmo job pode servir outra referência. Em navegador com Background Fetch, uma registration já entregue ao navegador também pode concluir depois da página entrar em background. A revalidação da referência antes do manifesto continua impedindo publicação indevida.
+
+Enquanto esses jobs já iniciados drenam, a ação de retomada permanece desabilitada como `Pausando…`, evitando iniciar uma segunda execução concorrente para a mesma coleção.
 
 Quando não há mais job pendente daquela execução, a coleção permanece persistida como desejada e a UI oferece `Retomar`. A retomada reutiliza o scheduler/cache existentes e usa o snapshot corrente da coleção conectada.
 
@@ -217,9 +244,11 @@ Cada coleção pode reproduzir o subconjunto que realmente está disponível no 
 
 ## Quota e pressão de armazenamento
 
-Antes de cada novo artefato, o frontend consulta `navigator.storage.estimate()` quando disponível e recusa o download quando o tamanho conhecido consumiria praticamente todo o espaço restante.
+No caminho foreground, antes de cada novo artefato o frontend consulta `navigator.storage.estimate()` quando disponível e recusa o download quando o tamanho conhecido consumiria praticamente todo o espaço restante.
 
-`navigator.storage.persist()` continua best-effort.
+No caminho Background Fetch, o navegador controla a reserva e pode encerrar a operação com `quota-exceeded`. Como os bytes já são persistidos pelo worker quando a transferência termina, a checagem foreground de headroom não é repetida depois desse ponto.
+
+`navigator.storage.persist()` continua best-effort depois da publicação do manifesto.
 
 Limites:
 
@@ -237,17 +266,22 @@ Na inicialização do namespace:
 - referências lógicas permanecem, permitindo mostrar coleção parcial e tentar novamente depois;
 - o manifesto lógico não cria bytes por conta própria.
 
+Um Background Fetch concluído enquanto a página está suspensa pode produzir temporariamente um blob sem manifesto. Na retomada normal da mesma página, o job revalida a referência e publica o manifesto. Se a página for encerrada/recarregada antes dessa etapa, o fluxo não promete retomada/publicação automática; blobs órfãos continuam sujeitos à reconciliação conservadora.
+
 Se uma faixa deixar de existir ou ficar desativada no servidor, o snapshot da playlist/pasta pode ficar desatualizado. Enquanto offline, somente o snapshot e os bytes locais conhecidos estão disponíveis; quando conectado, a coleção corrente é comparada à biblioteca real e a UI pede atualização.
 
 ## Service worker e capability
 
-O protocolo do service worker permanece **versão 3**. A #174 não cria rota ou protocolo novo de áudio.
+O protocolo do service worker é **versão 4**.
 
 O worker:
 
 - recebe o `userId` ativo na negociação;
 - associa usuário ao `clientId`/aba;
 - persiste o escopo mínimo;
+- anuncia `backgroundFetch` somente quando a API existe no registro ativo;
+- persiste respostas completas de registrations válidas no cache offline do proprietário;
+- não publica o manifesto físico por conta própria;
 - só serve `/offline-audio/<trackId>` para client com escopo válido;
 - abre o cache da conta associada ao client;
 - mantém `/api/*` fora do cache estático.
@@ -267,22 +301,24 @@ Isso é diferente da migração `tracks:v2 → references:v1`: os dados `v2` já
 
 ## Limite de ciclo de vida e #81
 
-O scheduler executa `fetch()` e `cache.put()` no contexto ativo da aplicação.
+A estratégia é progressiva por capacidade:
 
 - trocar de tela dentro da SPA: **suportado**;
-- recarregar/fechar aba: pode interromper operação em andamento;
-- bloquear tela/background: depende do navegador/sistema;
-- download concluído: permanece até remoção lógica/eviction do navegador.
+- Chromium/Android com Background Fetch + worker v4: transferência iniciada pode continuar enquanto a página fica em background/tela bloqueada, sujeita às políticas reais do navegador/sistema;
+- navegadores sem Background Fetch: continuam usando `fetch()` no contexto da página e podem interromper ao suspender JavaScript;
+- Safari/iPhone/iPad: permanece no fallback enquanto a plataforma não expuser Background Fetch;
+- recarregar/fechar aba: não há garantia de retomada/publicação do job;
+- download concluído e publicado: permanece até remoção lógica/eviction do navegador.
 
-A #174 **não fecha nem altera o aceite da #81**.
+A implementação **não fecha a #81**. O aceite continua exigindo repetir a matriz abaixo em dispositivos físicos no head final e registrar o comportamento observado por plataforma/browser/modelo.
 
 ### Matriz mínima de validação mobile real
 
 | Plataforma | Cenário | Aceite |
 | --- | --- | --- |
-| Android/Chrome/PWA | iniciar arquivo/coleção grande e bloquear a tela | medir se terminou, pausou, retomou ou falhou sem corromper referência/cache |
-| Android/Chrome/PWA | iniciar três downloads e enviar app para background | nenhum item pode aparecer concluído sem arquivo íntegro |
-| iPhone/iPad/Safari/PWA | iniciar arquivo/coleção grande e bloquear a tela | medir comportamento real sem assumir execução contínua de JS |
+| Android/Chrome/PWA | iniciar arquivo/coleção grande e bloquear a tela | confirmar se Background Fetch mantém a transferência e se a faixa só aparece concluída depois de blob íntegro + revalidação |
+| Android/Chrome/PWA | iniciar três downloads e enviar app para background | nenhum item pode aparecer concluído sem arquivo íntegro; scheduler continua limitado a 3 |
+| iPhone/iPad/Safari/PWA | iniciar arquivo/coleção grande e bloquear a tela | registrar o comportamento do fallback sem assumir execução contínua de JS |
 | iPhone/iPad/Safari/PWA | alternar para outro app e retornar | referências, cache e manifesto devem permanecer consistentes após suspensão |
 
 ## Fronteira local
@@ -293,7 +329,7 @@ Cache Storage e `localStorage` pertencem ao perfil do navegador. Essa é uma fro
 
 ## Regressões automatizadas
 
-A #174 adiciona cobertura para:
+A cobertura de downloads offline inclui:
 
 - migração conservadora;
 - deduplicação de IDs e referências sobrepostas;
@@ -302,5 +338,8 @@ A #174 adiciona cobertura para:
 - promoção de faixa já física por coleção para intenção individual sem novo blob;
 - detecção de snapshot alterado;
 - manifesto corrompido/incompatível;
+- escopo da registration Background Fetch por `userId + trackId` e mensagens de falha que não anunciam sucesso;
 - fluxo Playwright real de playlist sobreposta + atualização + garbage-collection;
 - controle de coleção no layout mobile.
+
+A validação de continuidade em tela bloqueada permanece necessariamente física na #81; testes automatizados verificam invariantes, não substituem o sistema operacional real.
