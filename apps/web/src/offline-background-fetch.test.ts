@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   backgroundFetchFailureMessage,
   backgroundFetchRegistrationId,
+  isAndroidBackgroundFetchRuntime,
   supportsBackgroundFetchCapability
 } from './offline-background-fetch';
 
@@ -38,6 +39,13 @@ describe('offline background fetch', () => {
     })).toBe(false);
 
     expect(supportsBackgroundFetchCapability(null)).toBe(false);
+  });
+
+  it('limita o caminho experimental ao runtime Android', () => {
+    expect(isAndroidBackgroundFetchRuntime('Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 Chrome/140 Mobile Safari/537.36')).toBe(true);
+    expect(isAndroidBackgroundFetchRuntime('Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 HeadlessChrome/140 Safari/537.36')).toBe(false);
+    expect(isAndroidBackgroundFetchRuntime('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140 Safari/537.36')).toBe(false);
+    expect(isAndroidBackgroundFetchRuntime('Mozilla/5.0 (iPhone; CPU iPhone OS 19_0 like Mac OS X) AppleWebKit/605.1.15 Version/19.0 Mobile Safari/604.1')).toBe(false);
   });
 
   it('mantém a gravação do worker vinculada a um client ativo da conta', () => {
