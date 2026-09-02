@@ -160,6 +160,7 @@ export class LibraryService {
     const nextTracks = [...this.tracks];
     nextTracks[index] = updated;
     this.setTracks(nextTracks);
+    this.libraryRevision += 1;
     this.invalidateMediaCache();
     return {
       ...this.publicTrack(updated),
