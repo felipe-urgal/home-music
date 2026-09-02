@@ -2,7 +2,7 @@
 
 Este documento é a visão técnica de alto nível do Home Music. A issue [#123](https://github.com/felipe-urgal/home-music/issues/123) preserva o índice executivo do ciclo de backlog concluído em 2026-09-02. O ciclo técnico atual está centralizado na [#239](https://github.com/felipe-urgal/home-music/issues/239).
 
-> Estado revisado em 2026-09-02. O backlog planejado da Fase 11 e o ciclo funcional anterior estão concluídos. A Fase 12 está em andamento; #228, #229, #230, #237 e #233 já foram entregues, e a atividade atual é a #234 no PR #247.
+> Estado revisado em 2026-09-02. O backlog planejado da Fase 11 e o ciclo funcional anterior estão concluídos. A Fase 12 está em andamento; #228, #229, #230, #237, #233 e #234 já foram entregues, e a próxima atividade é a #235.
 
 ## Fases 1–2 — Base do produto e biblioteca pessoal
 
@@ -200,7 +200,7 @@ O PR #207 foi mergeado em 2026-09-01 com CI completo verde e encerrou o backlog 
 - [x] [#229](https://github.com/felipe-urgal/home-music/issues/229) — proteção adicional contra brute force e abuso de CPU no login — entregue pelo PR #242;
 - [x] [#230](https://github.com/felipe-urgal/home-music/issues/230) — backpressure e limites para filas de trabalho pesado — entregue pelo PR #243;
 - [x] [#233](https://github.com/felipe-urgal/home-music/issues/233) — concorrência limitada no scan da biblioteca — entregue pelo PR #245;
-- [ ] [#234](https://github.com/felipe-urgal/home-music/issues/234) — persistência SQLite somente por delta do scan — em execução no PR #247;
+- [x] [#234](https://github.com/felipe-urgal/home-music/issues/234) — persistência SQLite somente por delta do scan — entregue pelo PR #247;
 - [ ] [#235](https://github.com/felipe-urgal/home-music/issues/235) — revision, ETag e compressão da biblioteca.
 
 ### P1
@@ -211,7 +211,7 @@ O PR #207 foi mergeado em 2026-09-01 com CI completo verde e encerrou o backlog 
 - [x] [#237](https://github.com/felipe-urgal/home-music/issues/237) — benchmark de biblioteca grande em navegador real — entregue pelo PR #244;
 - [ ] [#238](https://github.com/felipe-urgal/home-music/issues/238) — reduzir recomputações da navegação da biblioteca.
 
-Ordem atual: concluir `#234 → #235`; depois `#236 → #238`. #231 e #232 podem ocorrer em paralelo quando houver capacidade. O benchmark #237 já está disponível como instrumento de medição para as próximas otimizações.
+Ordem atual: seguir com `#235`; depois `#236 → #238`. #231 e #232 podem ocorrer em paralelo quando houver capacidade. O benchmark #237 já está disponível como instrumento de medição para as próximas otimizações.
 
 ## Backlog visual e PWA
 
@@ -222,7 +222,7 @@ Esses itens são independentes da #174 e da #81, ambas concluídas.
 
 ## Backlog atual
 
-O backlog implementável atual é a Fase 12, centralizada na #239. A #234 é a atividade em execução no PR #247; a próxima dependência serial é a #235. A #123 permanece encerrada como registro do ciclo anterior e não deve ser reaberta artificialmente.
+O backlog implementável atual é a Fase 12, centralizada na #239. A próxima atividade serial é a #235; depois seguem #236 e #238, enquanto #231 e #232 podem ocorrer em paralelo. A #123 permanece encerrada como registro do ciclo anterior e não deve ser reaberta artificialmente.
 
 ## Regra de execução
 
