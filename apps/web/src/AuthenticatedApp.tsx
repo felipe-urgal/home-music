@@ -29,10 +29,11 @@ type AuthenticatedAppProps = {
   currentUser: AuthenticatedUser;
   onLogout: () => Promise<void>;
   onAuthRefresh: () => Promise<void>;
+  onOpenOffline: () => void;
   offline: OfflineDownloads;
 };
 
-export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline }: AuthenticatedAppProps) {
+export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenOffline, offline }: AuthenticatedAppProps) {
   const [administrationReturnScreen, setAdministrationReturnScreen] = useState<AdministrationReturnScreen>('account');
   const library = useLibraryData();
   const libraryReady = !library.loading && !library.error;
@@ -200,6 +201,12 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, offline
               onStreamingSelection: qualityProfile.setSelection,
               onNetworkPreference: qualityProfile.setNetworkPreference,
               onNormalizationMode: player.setNormalizationMode
+            }}
+            offlineMode={{
+              supported: offline.supported,
+              loading: offline.loading,
+              availableCount: offline.tracks.length,
+              onOpen: onOpenOffline
             }}
             onBack={() => setScreen('library')}
             onOpenAdministration={() => openAdministration('account')}
