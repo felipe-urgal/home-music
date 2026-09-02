@@ -5,6 +5,7 @@ const OFFLINE_CLIENT_SCOPE_CACHE_NAME = 'home-music-offline-client-scope-v1';
 const LEGACY_OFFLINE_AUDIO_CACHE_NAME = 'home-music-offline-audio-v1';
 const OFFLINE_AUDIO_PREFIX = '/offline-audio/';
 const OFFLINE_CLIENT_SCOPE_PREFIX = '/__home-music-offline-client/';
+const OFFLINE_BACKGROUND_REGISTRATION_PREFIX = 'home-music-offline-v1:';
 const CAPABILITY_REQUEST = 'HOME_MUSIC_GET_CAPABILITIES';
 const CAPABILITY_RESPONSE = 'HOME_MUSIC_CAPABILITIES';
 const SHELL_URL = '/';
@@ -41,6 +42,17 @@ function offlineAudioCacheName(userId) {
   return `${OFFLINE_AUDIO_CACHE_PREFIX}${encodeURIComponent(userId)}`;
 }
 
+function backgroundFetchScope(registrationId) {
+  if (typeof registrationId !== 'string' || !registrationId.startsWith(OFFLINE_BACKGROUND_REGISTRATION_PREFIX)) return null;
+  const encoded = registrationId.slice(OFFLINE_BACKGROUND_REGISTRATION_PREFIX.length);
+  const separator = encoded.indexOf(':');
+  if (separator <= 0 || separator === encoded.length - 1 || encoded.indexOf(':', separator + 1) !== -1) return null;
+  const userId = encoded.slice(0, separator);
+  const trackId = encoded.slice(separator + 1);
+  if (!USER_ID_RE.test(userId) || !TRACK_ID_RE.test(trackId)) return null;
+  return { userId, trackId };
+}
+
 function offlineClientScopeRequest(clientId) {
   return new Request(`${self.location.origin}${OFFLINE_CLIENT_SCOPE_PREFIX}${encodeURIComponent(clientId)}`);
 }
@@ -72,6 +84,32 @@ async function offlineUserForClient(clientId) {
 
 function sourceAudioUrl(trackId) {
   return `/api/tracks/${encodeURIComponent(trackId)}/stream`;
+}
+
+async function persistBackgroundFetch(registration) {
+  const scope = backgroundFetchScope(registration?.id);
+  if (!scope || typeof registration?.matchAll !== 'function') return;
+
+  const records = await registration.matchAll();
+  if (!Array.isArray(records) || records.length !== 1) return;
+  const record = records[0];
+  if (!record?.request || !record.responseReady) return;
+
+  const request = record.request;
+  const requestUrl = new URL(request.url);
+  const expectedUrl = new URL(sourceAudioUrl(scope.trackId), self.location.origin);
+  if (
+    request.method !== 'GET' ||
+    requestUrl.origin !== self.location.origin ||
+    requestUrl.pathname !== expectedUrl.pathname ||
+    requestUrl.search !== expectedUrl.search
+  ) return;
+
+  const response = await record.responseReady;
+  if (!response || response.status !== 200 || !isCacheableResponse(response)) return;
+
+  const cache = await caches.open(offlineAudioCacheName(scope.userId));
+  await cache.put(sourceAudioUrl(scope.trackId), response);
 }
 
 function parseOfflineRange(value, size) {
@@ -268,10 +306,15 @@ self.addEventListener('message', event => {
   event.waitUntil(offlineScopeUpdateQueue.then(() => {
     event.ports?.[0]?.postMessage({
       type: CAPABILITY_RESPONSE,
-      version: 3,
-      offlineAudio: true
+      version: 4,
+      offlineAudio: true,
+      backgroundFetch: typeof self.registration?.backgroundFetch !== 'undefined'
     });
   }));
+});
+
+self.addEventListener('backgroundfetchsuccess', event => {
+  event.waitUntil(persistBackgroundFetch(event.registration));
 });
 
 self.addEventListener('fetch', event => {
