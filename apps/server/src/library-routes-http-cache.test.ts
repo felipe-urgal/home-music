@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { brotliDecompressSync } from 'node:zlib';
 import test from 'node:test';
 import Fastify from 'fastify';
+import { SessionManager } from './auth.js';
+import { installApiAuthPolicy } from './auth-policy.js';
 import { registerLibraryRoutes } from './library-routes.js';
 import type { LibraryService } from './library-service.js';
 
@@ -130,6 +132,53 @@ test('GET /api/library comprime payload grande com brotli e status continua no-s
     const status = await app.inject({ method: 'GET', url: '/api/library/status' });
     assert.equal(status.statusCode, 200);
     assert.equal(status.headers['cache-control'], 'private, no-store');
+  } finally {
+    await app.close();
+  }
+});
+
+test('autenticacao roda antes do If-None-Match e impede 304 para sessao ausente', async () => {
+  const state = createLibrary();
+  const app = Fastify();
+  const sessions = new SessionManager('admin', 'password-segura-2026');
+  const user = {
+    id: 'user-1',
+    username: 'maria',
+    role: 'user' as const,
+    passwordMustChange: false
+  };
+  installApiAuthPolicy(app, {
+    configured: true,
+    sessions,
+    users: { getEnabledUserById: userId => userId === user.id ? user : null }
+  });
+  registerLibraryRoutes(app, state.library);
+  const token = sessions.createSessionForUser(user.id);
+
+  try {
+    const denied = await app.inject({
+      method: 'GET',
+      url: '/api/library',
+      headers: { 'if-none-match': '*' }
+    });
+    assert.equal(denied.statusCode, 401);
+
+    const first = await app.inject({
+      method: 'GET',
+      url: '/api/library',
+      headers: { cookie: `home_music_session=${token}` }
+    });
+    assert.equal(first.statusCode, 200);
+
+    const revalidated = await app.inject({
+      method: 'GET',
+      url: '/api/library',
+      headers: {
+        cookie: `home_music_session=${token}`,
+        'if-none-match': String(first.headers.etag)
+      }
+    });
+    assert.equal(revalidated.statusCode, 304);
   } finally {
     await app.close();
   }
