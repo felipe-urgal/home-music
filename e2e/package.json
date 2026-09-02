@@ -7,6 +7,7 @@
     "test": "playwright test",
     "test:critical": "playwright test tests/critical-smoke.spec.ts tests/offline-collections-critical.spec.ts tests/desktop-offline-downloads.spec.ts tests/offline-account-isolation.spec.ts",
     "test:headed": "playwright test --headed",
+    "benchmark:large-library": "node scripts/run-large-library-benchmark.mjs",
     "install:browsers": "playwright install --with-deps chromium"
   },
   "devDependencies": {
