@@ -1,6 +1,7 @@
 import { open } from 'node:fs/promises';
 import type { NormalizationMode } from '@home-music/shared';
 import type { FfmpegStatus } from './ffmpeg.js';
+import { HeavyWorkQueue, type HeavyWorkQueueRuntime } from './heavy-work-queue.js';
 import type { LibraryService } from './library-service.js';
 import { readCover } from './library.js';
 import { readTrackLyrics } from './lyrics.js';
@@ -14,7 +15,6 @@ import type { TranscodeManager, TranscodeQuality } from './transcoding.js';
 
 const MAX_COVER_CACHE_BYTES = 16 * 1024 * 1024;
 const MAX_COVER_CACHE_ITEMS = 64;
-const MAX_CONCURRENT_COVER_REQUESTS = 4;
 
 type CachedCover = {
   data: Buffer;
@@ -28,15 +28,28 @@ type TrackMediaInfrastructureOptions = {
   transcodeManager: TranscodeManager;
   transcodeCacheMaintenance: TranscodeCacheMaintenance;
   getFfmpegStatus: () => FfmpegStatus;
+  coverQueue?: {
+    maxConcurrent: number;
+    maxPending: number;
+    maxPendingPerOwner: number;
+    retryAfterSeconds: number;
+  };
 };
 
 export class TrackMediaInfrastructure {
   private coverCacheBytes = 0;
-  private activeCoverRequests = 0;
-  private readonly coverWaiters: Array<() => void> = [];
   private readonly coverCache = new Map<string, CachedCover>();
+  private readonly coverQueue: HeavyWorkQueue;
 
-  constructor(private readonly options: TrackMediaInfrastructureOptions) {}
+  constructor(private readonly options: TrackMediaInfrastructureOptions) {
+    const queue = options.coverQueue ?? {
+      maxConcurrent: 4,
+      maxPending: 32,
+      maxPendingPerOwner: 8,
+      retryAfterSeconds: 2
+    };
+    this.coverQueue = new HeavyWorkQueue({ name: 'cover', ...queue });
+  }
 
   clearCoverCache() {
     this.coverCache.clear();
@@ -45,6 +58,10 @@ export class TrackMediaInfrastructure {
 
   get ffmpegAvailable() {
     return this.options.getFfmpegStatus().available;
+  }
+
+  get coverQueueRuntime(): HeavyWorkQueueRuntime {
+    return this.coverQueue.runtime;
   }
 
   async lyrics(trackId: string) {
@@ -59,7 +76,7 @@ export class TrackMediaInfrastructure {
     const root = this.options.library.root;
     if (!track?.hasCover || !root) return null;
 
-    return this.withCoverRequestSlot(async () => {
+    return this.coverQueue.run(async () => {
       try {
         const opened = await openRegularFileInside(root, track.filePath);
         const cached = this.getCachedCover(track.id, opened.stat.size, opened.stat.mtimeMs);
@@ -141,20 +158,6 @@ export class TrackMediaInfrastructure {
     } catch (error) {
       if (isNotFoundLike(error)) return null;
       throw error;
-    }
-  }
-
-  private async withCoverRequestSlot<T>(operation: () => Promise<T>) {
-    if (this.activeCoverRequests >= MAX_CONCURRENT_COVER_REQUESTS) {
-      await new Promise<void>(resolve => this.coverWaiters.push(resolve));
-    }
-
-    this.activeCoverRequests += 1;
-    try {
-      return await operation();
-    } finally {
-      this.activeCoverRequests -= 1;
-      this.coverWaiters.shift()?.();
     }
   }
 
