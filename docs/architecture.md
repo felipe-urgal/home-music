@@ -141,6 +141,10 @@ Ele mantém, entre outros:
 
 O schema usa migrations via `PRAGMA user_version`, WAL e foreign keys. Tabelas auxiliares de features não destrutivas, como `library_metadata_aliases`, são criadas de forma idempotente pelo respectivo store e permanecem cobertas pelo snapshot do SQLite.
 
+A persistência do índice distingue dois caminhos. Com a mesma `MUSIC_DIR`, o scanner entrega um delta explícito de faixas adicionadas, atualizadas e removidas, e somente esse delta é aplicado à tabela `tracks`; um rescan sem mudanças não executa upsert de faixa. `libraryRoot` e `scannedAt` são atualizados na mesma transação `BEGIN IMMEDIATE` do delta. Quando a raiz muda ou o snapshot persistido não pode ser reutilizado, permanece disponível o full sync seguro que reconcilia o snapshot completo. Falha em qualquer etapa faz rollback integral.
+
+A indexação incremental após uma importação promovida usa o mesmo caminho de delta para inserir ou atualizar apenas a faixa correspondente. A fase SQLite registra modo de persistência, duração, quantidade de upserts e remoções para diagnóstico de performance sem expor dados sensíveis.
+
 Tokens de sessão não são persistidos no SQLite.
 
 ## Biblioteca e scanner
@@ -152,11 +156,12 @@ O scanner:
 1. resolve e valida a raiz;
 2. percorre arquivos suportados;
 3. reaproveita entradas inalteradas por `size + mtime`;
-4. processa arquivos novos/modificados;
-5. reconcilia o índice;
-6. publica o snapshot em memória.
+4. processa arquivos novos/modificados com concorrência limitada;
+5. produz snapshot reconciliado e delta explícito `added / updated / removed`;
+6. persiste somente o delta quando a raiz permanece a mesma;
+7. publica o snapshot em memória somente depois da persistência bem-sucedida.
 
-O scan normal é **mutável/reconciliador**. Se um arquivo indexado desapareceu fisicamente, o scan pode remover seu registro do índice.
+O scan normal é **mutável/reconciliador**. Se um arquivo indexado desapareceu fisicamente, o scan pode remover seu registro do índice. Subpastas temporariamente inacessíveis e arquivos em quarentena preservam as faixas anteriores e não entram como remoção no delta.
 
 Streaming e operações de filesystem revalidam confinement para impedir path traversal/symlink escape.
 
@@ -365,12 +370,13 @@ O workflow obrigatório mantém um único job de validação e executa, em ordem
 - `npm run test:security` para regressões negativas transversais de Administração/Importação;
 - suíte funcional `npm test`;
 - `npm run benchmark:large-library` para regressões graves de performance com dataset sintético;
+- cenário browser-real de biblioteca grande em Chromium;
 - smokes de backup/restore e validações operacionais de scripts, systemd e Tailscale;
 - build de produção;
 - Playwright crítico em mobile/tablet/desktop;
 - smoke real de produção.
 
-A regressão Playwright completa continua disponível sob demanda conforme risco. O benchmark não substitui testes funcionais e seus limites não são SLA de produto. Mudanças no head depois de um run verde invalidam esse run como gate final, conforme `AGENTS.md`.
+A regressão Playwright completa continua disponível sob demanda conforme risco. Os benchmarks não substituem testes funcionais e seus limites não são SLA de produto. Mudanças no head depois de um run verde invalidam esse run como gate final, conforme `AGENTS.md`.
 
 ## Segurança resumida
 
@@ -378,7 +384,7 @@ A regressão Playwright completa continua disponível sob demanda conforme risco
 - produção remota prefere loopback + Tailscale Serve;
 - Funnel é opcional e conscientemente público;
 - cookies `HttpOnly`/`SameSite=Strict` e `Secure` em HTTPS;
-- login com rate limit;
+- login possui proteção por IP/identidade e limites globais de verificação de senha;
 - mutações protegidas por sessão + header da aplicação;
 - paths físicos não são aceitos como autoridade do cliente;
 - streaming/filesystem revalidam confinement e arquivos regulares;

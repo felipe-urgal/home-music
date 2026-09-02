@@ -48,9 +48,16 @@ export type LibraryScanStats = {
   unchanged: number;
 };
 
+export type LibraryTrackDelta = {
+  added: IndexedTrack[];
+  updated: IndexedTrack[];
+  removedIds: string[];
+};
+
 export type LibraryScanResult = {
   tracks: IndexedTrack[];
   stats: LibraryScanStats;
+  delta: LibraryTrackDelta;
 };
 
 type ScannableFile = {
@@ -407,6 +414,7 @@ export async function scanLibrary(
       const tracks: IndexedTrack[] = [];
       const metadataTasks: ScanMetadataTask[] = [];
       const stats: LibraryScanStats = { added: 0, updated: 0, removed: 0, unchanged: 0 };
+      const delta: LibraryTrackDelta = { added: [], updated: [], removedIds: [] };
 
       for (const file of files) {
         seenPaths.add(file.path);
@@ -464,6 +472,12 @@ export async function scanLibrary(
         }
       );
       tracks.push(...scannedTracks);
+      scannedTracks.forEach((track, index) => {
+        const task = metadataTasks[index];
+        if (task.reusePrevious) return;
+        if (task.previous) delta.updated.push(track);
+        else delta.added.push(track);
+      });
 
       for (const previous of previousTracks) {
         if (seenPaths.has(previous.filePath)) continue;
@@ -488,11 +502,12 @@ export async function scanLibrary(
           message: 'Registro indexado não possui mais arquivo correspondente no caminho esperado.'
         });
         stats.removed += 1;
+        delta.removedIds.push(previous.id);
       }
 
       tracks.sort(compareTracks);
       finishLibraryIntegrityCheck();
-      return { tracks, stats };
+      return { tracks, stats, delta };
     } catch (error) {
       abortLibraryIntegrityCheck();
       throw error;

@@ -1,12 +1,36 @@
 import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
+import { performance } from 'node:perf_hooks';
 import { DatabaseSync } from 'node:sqlite';
 import type { PlaybackState, Playlist, PlaylistSource, RepeatMode, StatisticsPeriod, Track } from '@home-music/shared';
-import type { IndexedTrack } from './library.js';
+import type { IndexedTrack, LibraryTrackDelta } from './library.js';
 
 const CURRENT_SCHEMA_VERSION = 11;
 const HISTORY_CAPACITY = 2_000;
+const TRACK_UPSERT_SQL = `
+  INSERT INTO tracks(
+    id, file_path, title, artist, album, album_artist, folder, folder_path,
+    duration, format, has_cover, replaygain_track_db, replaygain_album_db,
+    mime_type, file_size, mtime_ms
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  ON CONFLICT(id) DO UPDATE SET
+    file_path = excluded.file_path,
+    title = excluded.title,
+    artist = excluded.artist,
+    album = excluded.album,
+    album_artist = excluded.album_artist,
+    folder = excluded.folder,
+    folder_path = excluded.folder_path,
+    duration = excluded.duration,
+    format = excluded.format,
+    has_cover = excluded.has_cover,
+    replaygain_track_db = excluded.replaygain_track_db,
+    replaygain_album_db = excluded.replaygain_album_db,
+    mime_type = excluded.mime_type,
+    file_size = excluded.file_size,
+    mtime_ms = excluded.mtime_ms
+`;
 
 const DEFAULT_PLAYBACK_STATE: PlaybackState = {
   currentTrackId: null,
@@ -26,6 +50,13 @@ type ImportedPlaylist = {
   sourceKey: string;
   name: string;
   trackIds: string[];
+};
+
+export type TrackPersistenceMetrics = {
+  mode: 'full' | 'delta';
+  upserted: number;
+  removed: number;
+  durationMs: number;
 };
 
 function numberValue(value: unknown, fallback = 0) {
@@ -73,6 +104,27 @@ function publicTrackFromRow(row: Row): Track {
     replayGainTrackDb: row.replaygain_track_db == null ? null : numberValue(row.replaygain_track_db),
     replayGainAlbumDb: row.replaygain_album_db == null ? null : numberValue(row.replaygain_album_db)
   };
+}
+
+function trackUpsertBindings(track: IndexedTrack) {
+  return [
+    track.id,
+    track.filePath,
+    track.title,
+    track.artist,
+    track.album,
+    track.albumArtist,
+    track.folder,
+    track.folderPath,
+    track.duration,
+    track.format,
+    track.hasCover ? 1 : 0,
+    track.replayGainTrackDb ?? null,
+    track.replayGainAlbumDb ?? null,
+    track.mimeType,
+    track.fileSize,
+    track.mtimeMs
+  ] as const;
 }
 
 export class HomeMusicDatabase {
@@ -661,6 +713,49 @@ export class HomeMusicDatabase {
     `).run(key, value);
   }
 
+  private upsertTracks(tracks: readonly IndexedTrack[]) {
+    if (tracks.length === 0) return;
+    const upsert = this.db.prepare(TRACK_UPSERT_SQL);
+    for (const track of tracks) upsert.run(...trackUpsertBindings(track));
+  }
+
+  private removeTrackIds(trackIds: readonly string[]) {
+    if (trackIds.length === 0) return 0;
+    const remove = this.db.prepare('DELETE FROM tracks WHERE id = ?');
+    let removed = 0;
+    for (const trackId of trackIds) {
+      removed += Number(remove.run(trackId).changes);
+    }
+    return removed;
+  }
+
+  private persistTrackChanges(
+    upserts: readonly IndexedTrack[],
+    removedIds: readonly string[],
+    libraryRoot: string,
+    scannedAt: string,
+    mode: TrackPersistenceMetrics['mode']
+  ): TrackPersistenceMetrics {
+    const startedAt = performance.now();
+    this.db.exec('BEGIN IMMEDIATE;');
+    try {
+      this.upsertTracks(upserts);
+      const removed = this.removeTrackIds(removedIds);
+      this.setMetadata('libraryRoot', libraryRoot);
+      this.setMetadata('scannedAt', scannedAt);
+      this.db.exec('COMMIT;');
+      return {
+        mode,
+        upserted: upserts.length,
+        removed,
+        durationMs: Number((performance.now() - startedAt).toFixed(2))
+      };
+    } catch (error) {
+      this.db.exec('ROLLBACK;');
+      throw error;
+    }
+  }
+
   loadTracks(): IndexedTrack[] {
     const rows = this.db.prepare(`
       SELECT id, file_path, title, artist, album, album_artist, folder, folder_path,
@@ -680,67 +775,26 @@ export class HomeMusicDatabase {
   }
 
   syncTracks(tracks: IndexedTrack[], libraryRoot: string, scannedAt: string) {
-    const existing = new Set(
-      (this.db.prepare('SELECT id FROM tracks').all() as Row[]).map(row => stringValue(row.id))
-    );
+    const incomingIds = new Set(tracks.map(track => track.id));
+    const staleIds = (this.db.prepare('SELECT id FROM tracks').all() as Row[])
+      .map(row => stringValue(row.id))
+      .filter(id => !incomingIds.has(id));
+    return this.persistTrackChanges(tracks, staleIds, libraryRoot, scannedAt, 'full');
+  }
 
-    const upsert = this.db.prepare(`
-      INSERT INTO tracks(
-        id, file_path, title, artist, album, album_artist, folder, folder_path,
-        duration, format, has_cover, replaygain_track_db, replaygain_album_db,
-        mime_type, file_size, mtime_ms
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET
-        file_path = excluded.file_path,
-        title = excluded.title,
-        artist = excluded.artist,
-        album = excluded.album,
-        album_artist = excluded.album_artist,
-        folder = excluded.folder,
-        folder_path = excluded.folder_path,
-        duration = excluded.duration,
-        format = excluded.format,
-        has_cover = excluded.has_cover,
-        replaygain_track_db = excluded.replaygain_track_db,
-        replaygain_album_db = excluded.replaygain_album_db,
-        mime_type = excluded.mime_type,
-        file_size = excluded.file_size,
-        mtime_ms = excluded.mtime_ms
-    `);
-    const remove = this.db.prepare('DELETE FROM tracks WHERE id = ?');
-
-    this.db.exec('BEGIN IMMEDIATE;');
-    try {
-      for (const track of tracks) {
-        upsert.run(
-          track.id,
-          track.filePath,
-          track.title,
-          track.artist,
-          track.album,
-          track.albumArtist,
-          track.folder,
-          track.folderPath,
-          track.duration,
-          track.format,
-          track.hasCover ? 1 : 0,
-          track.replayGainTrackDb ?? null,
-          track.replayGainAlbumDb ?? null,
-          track.mimeType,
-          track.fileSize,
-          track.mtimeMs
-        );
-        existing.delete(track.id);
-      }
-
-      for (const staleId of existing) remove.run(staleId);
-      this.setMetadata('libraryRoot', libraryRoot);
-      this.setMetadata('scannedAt', scannedAt);
-      this.db.exec('COMMIT;');
-    } catch (error) {
-      this.db.exec('ROLLBACK;');
-      throw error;
+  applyTrackDelta(delta: LibraryTrackDelta, libraryRoot: string, scannedAt: string) {
+    const upserts = [...delta.added, ...delta.updated];
+    const upsertIds = new Set(upserts.map(track => track.id));
+    if (upsertIds.size !== upserts.length) {
+      throw new Error('Delta de biblioteca inválido: faixa duplicada entre inclusões e atualizações.');
     }
+
+    const removedIds = [...new Set(delta.removedIds)];
+    if (removedIds.some(id => upsertIds.has(id))) {
+      throw new Error('Delta de biblioteca inválido: a mesma faixa não pode ser atualizada e removida.');
+    }
+
+    return this.persistTrackChanges(upserts, removedIds, libraryRoot, scannedAt, 'delta');
   }
 
   getFavoriteIds(userId: string) {

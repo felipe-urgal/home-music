@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
+import { HomeMusicDatabase } from './database.js';
 import { resetLibraryIntegrityStatusForTests } from './library-integrity.js';
 import { toPublicTrack } from './library-public-track.js';
 import { scanLibrary } from './library.js';
@@ -141,6 +142,7 @@ async function createSyntheticLibrary(root: string) {
 
 async function main() {
   const root = await mkdtemp(path.join(os.tmpdir(), 'home-music-large-library-'));
+  const database = new HomeMusicDatabase(path.join(root, '.benchmark-home-music.db'));
   resetLibraryIntegrityStatusForTests();
 
   try {
@@ -158,6 +160,13 @@ async function main() {
       unchanged: 0
     });
 
+    const initialPersistence = await measure(() => database.syncTracks(
+      initial.value.tracks,
+      root,
+      '2026-01-01T00:00:00.000Z'
+    ));
+    assert.equal(initialPersistence.value.upserted, TRACK_COUNT);
+
     const serialIncremental = await measure(() => withScanConcurrency('1', () => scanLibrary(root, initial.value.tracks)));
     const incremental = await measure(() => withScanConcurrency(undefined, () => scanLibrary(root, initial.value.tracks)));
     assert.deepEqual(incremental.value, serialIncremental.value);
@@ -167,6 +176,41 @@ async function main() {
       removed: 0,
       unchanged: TRACK_COUNT
     });
+
+    const fullNoChangePersistence = await measure(() => database.syncTracks(
+      incremental.value.tracks,
+      root,
+      '2026-01-01T00:01:00.000Z'
+    ));
+    const deltaNoChangePersistence = await measure(() => database.applyTrackDelta(
+      incremental.value.delta,
+      root,
+      '2026-01-01T00:02:00.000Z'
+    ));
+    assert.equal(fullNoChangePersistence.value.upserted, TRACK_COUNT);
+    assert.equal(deltaNoChangePersistence.value.upserted, 0);
+
+    const singleUpdated = {
+      ...incremental.value.tracks[0],
+      mtimeMs: incremental.value.tracks[0].mtimeMs + 1
+    };
+    const deltaSinglePersistence = await measure(() => database.applyTrackDelta(
+      { added: [], updated: [singleUpdated], removedIds: [] },
+      root,
+      '2026-01-01T00:03:00.000Z'
+    ));
+    assert.equal(deltaSinglePersistence.value.upserted, 1);
+
+    const batchUpdated = incremental.value.tracks.slice(0, CHANGED_TRACK_COUNT).map((track, index) => ({
+      ...track,
+      mtimeMs: track.mtimeMs + 10 + index
+    }));
+    const deltaBatchPersistence = await measure(() => database.applyTrackDelta(
+      { added: [], updated: batchUpdated, removedIds: [] },
+      root,
+      '2026-01-01T00:04:00.000Z'
+    ));
+    assert.equal(deltaBatchPersistence.value.upserted, CHANGED_TRACK_COUNT);
 
     const changedTracks = incremental.value.tracks.slice(0, CHANGED_TRACK_COUNT);
     assert.equal(changedTracks.length, CHANGED_TRACK_COUNT);
@@ -208,8 +252,13 @@ async function main() {
       dataset,
       serialInitial,
       initial,
+      initialPersistence,
       serialIncremental,
       incremental,
+      fullNoChangePersistence,
+      deltaNoChangePersistence,
+      deltaSinglePersistence,
+      deltaBatchPersistence,
       serialChangedIncremental,
       changedIncremental,
       publicPayload
@@ -250,6 +299,29 @@ async function main() {
             speedupVsSerial: ratio(serialChangedIncremental.durationMs, changedIncremental.durationMs)
           }
         },
+        sqlitePersistence: {
+          initialFullSync: {
+            durationMs: initialPersistence.durationMs,
+            upserted: initialPersistence.value.upserted
+          },
+          noChangesFullSyncBaseline: {
+            durationMs: fullNoChangePersistence.durationMs,
+            upserted: fullNoChangePersistence.value.upserted
+          },
+          noChangesDelta: {
+            durationMs: deltaNoChangePersistence.durationMs,
+            upserted: deltaNoChangePersistence.value.upserted,
+            speedupVsFullSync: ratio(fullNoChangePersistence.durationMs, deltaNoChangePersistence.durationMs)
+          },
+          oneChangedDelta: {
+            durationMs: deltaSinglePersistence.durationMs,
+            upserted: deltaSinglePersistence.value.upserted
+          },
+          changedBatchDelta: {
+            durationMs: deltaBatchPersistence.durationMs,
+            upserted: deltaBatchPersistence.value.upserted
+          }
+        },
         publicLibraryPayload: {
           durationMs: publicPayload.durationMs,
           payloadMb,
@@ -270,6 +342,7 @@ async function main() {
       }
     }, null, 2));
   } finally {
+    database.close();
     resetLibraryIntegrityStatusForTests();
     await rm(root, { recursive: true, force: true });
   }

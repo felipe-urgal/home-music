@@ -2,7 +2,7 @@
 
 Este diretório mistura documentação **corrente** e registros históricos de implementação. Esta página define qual material deve ser usado como fonte de verdade.
 
-> Inventário e backlog revisados em 2026-09-02. A Fase 11 e o ciclo funcional anterior estão concluídos. A Fase 12 está em andamento, centralizada na #239; a #228 foi entregue pelo PR #241 e a #229 está em revisão no PR #242. A #123 permanece encerrada como índice executivo do ciclo anterior.
+> Inventário e backlog revisados em 2026-09-02. A Fase 11 e o ciclo funcional anterior estão concluídos. A Fase 12 está em andamento, centralizada na #239; #228, #229, #230, #237, #233 e #234 já foram entregues, e a próxima atividade é a #235. A #123 permanece encerrada como índice executivo do ciclo anterior.
 
 ## Desenvolvimento e agentes de IA
 
@@ -29,7 +29,12 @@ A Fase 12 está em andamento e concentra o backlog implementável atual.
 | Issue | Estado corrente |
 | --- | --- |
 | [#228](https://github.com/felipe-urgal/home-music/issues/228) | isolamento de sessões entre usuários; concluída pelo PR #241 |
-| [#229](https://github.com/felipe-urgal/home-music/issues/229) | proteção contra brute force distribuído e abuso de CPU no login; em revisão no PR #242 |
+| [#229](https://github.com/felipe-urgal/home-music/issues/229) | proteção contra brute force distribuído e abuso de CPU no login; concluída pelo PR #242 |
+| [#230](https://github.com/felipe-urgal/home-music/issues/230) | backpressure e limites para trabalho pesado; concluída pelo PR #243 |
+| [#237](https://github.com/felipe-urgal/home-music/issues/237) | benchmark de biblioteca grande em Chromium real; concluída pelo PR #244 |
+| [#233](https://github.com/felipe-urgal/home-music/issues/233) | concorrência limitada no scanner; concluída pelo PR #245 |
+| [#234](https://github.com/felipe-urgal/home-music/issues/234) | persistência SQLite somente por delta do scan; concluída pelo PR #247 |
+| [#235](https://github.com/felipe-urgal/home-music/issues/235) | revision, ETag e compressão da biblioteca; próxima atividade |
 | [#239](https://github.com/felipe-urgal/home-music/issues/239) | índice executivo ativo da Fase 12 — Segurança e Performance |
 | [#123](https://github.com/felipe-urgal/home-music/issues/123) | encerrada como índice executivo do ciclo anterior |
 
@@ -55,7 +60,7 @@ A ordem corrente da Fase 12 está em `roadmap.md` e na #239. Itens concluídos d
 
 ## Performance
 
-- [`large-library-benchmark.md`](large-library-benchmark.md) — dataset sintético, cenários, baseline operacional e limites do gate de regressão grave para bibliotecas grandes.
+- [`large-library-benchmark.md`](large-library-benchmark.md) — dataset sintético, cenários, baseline operacional, scanner concorrente, persistência SQLite incremental e limites do gate de regressão grave para bibliotecas grandes.
 
 ## Acessibilidade
 
@@ -141,7 +146,7 @@ Fontes atuais:
 - [`phase-7.5-my-account-screen.md`](phase-7.5-my-account-screen.md)
 - [`phase-7.5-remove-env-auth-recovery.md`](phase-7.5-remove-env-auth-recovery.md)
 
-A política corrente de capacidade e isolamento de sessões da #228 está documentada em `multi-user-auth.md`; a proteção de login da #229 está documentada em `login-abuse-protection.md`.
+A política de capacidade e isolamento de sessões da #228 está documentada em `multi-user-auth.md`; a proteção de login entregue pela #229 está documentada em `login-abuse-protection.md`.
 
 ## Registros históricos `phase-7.5-*`
 
