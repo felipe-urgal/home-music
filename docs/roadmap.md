@@ -1,8 +1,8 @@
 # Roadmap
 
-Este documento é a visão técnica de alto nível do Home Music. A issue [#123](https://github.com/felipe-urgal/home-music/issues/123) preserva o índice executivo do ciclo de backlog concluído em 2026-09-02.
+Este documento é a visão técnica de alto nível do Home Music. A issue [#123](https://github.com/felipe-urgal/home-music/issues/123) preserva o índice executivo do ciclo de backlog concluído em 2026-09-02. O ciclo técnico atual está centralizado na [#239](https://github.com/felipe-urgal/home-music/issues/239).
 
-> Estado revisado em 2026-09-02. Os PRs #204/#119, #205/#120, #206/#121 e #207/#122 foram mergeados; o backlog planejado da Fase 11 está concluído. A #174 foi entregue pelo PR #218, a #175 pelo PR #221, a #176 pelo PR #222 e a #224 pelo PR #225. A #81 também foi concluída após a validação física em Android e iPhone/iPad reais, encerrando o último gate funcional do ciclo. Não há atividade implementável priorizada no backlog atual.
+> Estado revisado em 2026-09-02. O backlog planejado da Fase 11 e o ciclo funcional anterior estão concluídos. A Fase 12 abriu um novo ciclo técnico de Segurança e Performance; a primeira atividade priorizada é a #228, em implementação no PR #241.
 
 ## Fases 1–2 — Base do produto e biblioteca pessoal
 
@@ -190,6 +190,29 @@ A #118 mantém `npm run test:security` como gate explícito. A #119 mantém `npm
 
 O PR #207 foi mergeado em 2026-09-01 com CI completo verde e encerrou o backlog técnico planejado dessa fase. Novas atividades de engenharia devem ser abertas e priorizadas em issue própria e refletidas neste roadmap; não reutilizar artificialmente a #123 nem manter a #122 como “atividade atual”.
 
+## Fase 12 — Segurança e Performance
+
+**Em andamento.** O índice executivo deste ciclo é a [#239](https://github.com/felipe-urgal/home-music/issues/239).
+
+### P0
+
+- [ ] [#228](https://github.com/felipe-urgal/home-music/issues/228) — isolamento de sessões entre usuários — implementação em revisão no PR #241;
+- [ ] [#229](https://github.com/felipe-urgal/home-music/issues/229) — proteção adicional contra brute force e abuso de CPU no login;
+- [ ] [#230](https://github.com/felipe-urgal/home-music/issues/230) — backpressure e limites para filas de trabalho pesado;
+- [ ] [#233](https://github.com/felipe-urgal/home-music/issues/233) — concorrência limitada no scan da biblioteca;
+- [ ] [#234](https://github.com/felipe-urgal/home-music/issues/234) — persistência SQLite somente por delta do scan;
+- [ ] [#235](https://github.com/felipe-urgal/home-music/issues/235) — revision, ETag e compressão da biblioteca.
+
+### P1
+
+- [ ] [#231](https://github.com/felipe-urgal/home-music/issues/231) — filesystem do serviço systemd com escrita mínima;
+- [ ] [#232](https://github.com/felipe-urgal/home-music/issues/232) — hardening da instalação de dependências npm;
+- [ ] [#236](https://github.com/felipe-urgal/home-music/issues/236) — code splitting das telas secundárias;
+- [ ] [#237](https://github.com/felipe-urgal/home-music/issues/237) — benchmark de biblioteca grande em navegador real;
+- [ ] [#238](https://github.com/felipe-urgal/home-music/issues/238) — reduzir recomputações da navegação da biblioteca.
+
+Ordem sugerida: `#228 → #229 → #230`, iniciar #237 como instrumento de medição, seguir com `#233 → #234 → #235`, depois `#236 → #238`; #231 e #232 podem ocorrer em paralelo quando houver capacidade.
+
 ## Backlog visual e PWA
 
 - [x] [#175](https://github.com/felipe-urgal/home-music/issues/175) — fallback visual consistente e centralizado para músicas sem capa — entregue pelo PR #221; política em [artwork-fallback.md](artwork-fallback.md);
@@ -199,7 +222,7 @@ Esses itens são independentes da #174 e da #81, ambas concluídas.
 
 ## Backlog atual
 
-Não há issue funcional ou atividade implementável priorizada em aberto neste roadmap. A #81 foi encerrada após a validação física Android + iPhone/iPad e a #123 foi encerrada como índice executivo do ciclo concluído. Novo trabalho deve nascer em issue própria e ser priorizado explicitamente neste documento, sem reabrir artificialmente itens já concluídos.
+O backlog implementável atual é a Fase 12, centralizada na #239. A #228 é a atividade em execução; as demais issues seguem a prioridade e ordem descritas acima. A #123 permanece encerrada como registro do ciclo anterior e não deve ser reaberta artificialmente.
 
 ## Regra de execução
 

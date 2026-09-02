@@ -6,6 +6,7 @@ import {
   LoginRateLimiter,
   readCookie,
   SESSION_COOKIE_NAME,
+  SessionCapacityError,
   SessionManager
 } from './auth.js';
 
@@ -125,15 +126,48 @@ test('SessionManager expira sessões antigas', () => {
   assert.equal(sessions.validateSession(token, 1101), false);
 });
 
-test('SessionManager limita a quantidade de sessões em memória', () => {
-  const sessions = new SessionManager('home-music', 'senha-super-segura', 10_000, 2);
-  const first = sessions.createSessionForUser('user-a', 100);
-  const second = sessions.createSessionForUser('user-b', 200);
-  const third = sessions.createSessionForUser('user-c', 300);
+test('SessionManager limita sessões por usuário sem expulsar sessões de outra conta', () => {
+  const sessions = new SessionManager(
+    'home-music',
+    'senha-super-segura',
+    10_000,
+    4,
+    undefined,
+    2
+  );
+  const admin = sessions.createSessionForUser('admin', 100);
+  const first = sessions.createSessionForUser('user-a', 200);
+  const second = sessions.createSessionForUser('user-a', 300);
+  const third = sessions.createSessionForUser('user-a', 400);
 
-  assert.equal(sessions.validateSession(first, 400), false);
-  assert.equal(sessions.validateSession(second, 400), true);
-  assert.equal(sessions.validateSession(third, 400), true);
+  assert.equal(sessions.validateSession(admin, 500), true);
+  assert.equal(sessions.validateSession(first, 500), false);
+  assert.equal(sessions.validateSession(second, 500), true);
+  assert.equal(sessions.validateSession(third, 500), true);
+});
+
+test('SessionManager rejeita saturação global sem revogar sessões existentes', () => {
+  const sessions = new SessionManager('home-music', 'senha-super-segura', 10_000, 2);
+  const admin = sessions.createSessionForUser('admin', 100);
+  const user = sessions.createSessionForUser('user-a', 200);
+
+  assert.throws(
+    () => sessions.createSessionForUser('user-b', 300),
+    SessionCapacityError
+  );
+  assert.equal(sessions.validateSession(admin, 400), true);
+  assert.equal(sessions.validateSession(user, 400), true);
+});
+
+test('SessionManager remove expiradas antes de avaliar a capacidade global', () => {
+  const sessions = new SessionManager('home-music', 'senha-super-segura', 1000, 2);
+  const expired = sessions.createSessionForUser('user-a', 100);
+  const active = sessions.createSessionForUser('user-b', 500);
+  const replacement = sessions.createSessionForUser('user-c', 1200);
+
+  assert.equal(sessions.validateSession(expired, 1200), false);
+  assert.equal(sessions.validateSession(active, 1200), true);
+  assert.equal(sessions.validateSession(replacement, 1200), true);
 });
 
 test('cookies de sessão leem apenas o cookie solicitado', () => {

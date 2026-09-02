@@ -7,6 +7,9 @@ import {
 
 export const SESSION_COOKIE_NAME = 'home_music_session';
 export const SESSION_TTL_SECONDS = 7 * 24 * 60 * 60;
+export const MAX_GLOBAL_SESSIONS = 128;
+export const MAX_SESSIONS_PER_USER = 16;
+export const SESSION_CAPACITY_RETRY_AFTER_SECONDS = 60;
 
 export type AuthSession = Readonly<{
   userId: string | null;
@@ -22,6 +25,13 @@ export type PublicAuthSession = Readonly<{
   lastSeenAt: number;
   expiresAt: number;
 }>;
+
+export class SessionCapacityError extends Error {
+  constructor() {
+    super('Capacidade global de sessões atingida.');
+    this.name = 'SessionCapacityError';
+  }
+}
 
 function safeEqual(left: string, right: string) {
   const a = createHash('sha256').update(left).digest();
@@ -82,9 +92,17 @@ export class SessionManager {
     private readonly username: string,
     private readonly password: string,
     private readonly ttlMs = SESSION_TTL_SECONDS * 1000,
-    private readonly maxSessions = 128,
-    private readonly legacyBinding: LegacyAuthBinding = readLegacyAuthBindingFromEnvironment()
-  ) {}
+    private readonly maxSessions = MAX_GLOBAL_SESSIONS,
+    private readonly legacyBinding: LegacyAuthBinding = readLegacyAuthBindingFromEnvironment(),
+    private readonly maxSessionsPerUser = Math.min(MAX_SESSIONS_PER_USER, maxSessions)
+  ) {
+    if (!Number.isInteger(this.maxSessions) || this.maxSessions < 1) {
+      throw new RangeError('Limite global de sessões inválido.');
+    }
+    if (!Number.isInteger(this.maxSessionsPerUser) || this.maxSessionsPerUser < 1) {
+      throw new RangeError('Limite de sessões por usuário inválido.');
+    }
+  }
 
   get configured() {
     return Boolean(
@@ -198,11 +216,8 @@ export class SessionManager {
 
   private createSessionRecord(userId: string | null, now: number) {
     this.clearExpired(now);
-    while (this.sessions.size >= this.maxSessions) {
-      const oldest = this.sessions.keys().next().value as string | undefined;
-      if (!oldest) break;
-      this.deleteSession(oldest);
-    }
+    this.evictOldestSessionsForUser(userId);
+    if (this.sessions.size >= this.maxSessions) throw new SessionCapacityError();
 
     let token = '';
     do {
@@ -218,6 +233,18 @@ export class SessionManager {
     this.sessions.set(token, session);
     this.sessionActivity.set(token, now);
     return token;
+  }
+
+  private evictOldestSessionsForUser(userId: string | null) {
+    const ownTokens = [...this.sessions.entries()]
+      .filter(([, session]) => session.userId === userId)
+      .map(([token]) => token);
+
+    while (ownTokens.length >= this.maxSessionsPerUser) {
+      const oldest = ownTokens.shift();
+      if (!oldest) break;
+      this.deleteSession(oldest);
+    }
   }
 
   private deleteSession(token: string) {
