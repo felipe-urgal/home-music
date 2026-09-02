@@ -55,6 +55,22 @@ export function backgroundFetchFailureMessage(reason: string) {
   }
 }
 
+export function supportsBackgroundFetchCapability(value: unknown) {
+  if (!value || typeof value !== 'object') return false;
+  const data = value as {
+    type?: unknown;
+    version?: unknown;
+    offlineAudio?: unknown;
+    backgroundFetch?: unknown;
+  };
+  return Boolean(
+    data.type === CAPABILITY_RESPONSE &&
+    Number(data.version) >= BACKGROUND_FETCH_CAPABILITY_VERSION &&
+    data.offlineAudio === true &&
+    data.backgroundFetch === true
+  );
+}
+
 function browserCanProbeBackgroundFetch() {
   return (
     typeof window !== 'undefined' &&
@@ -74,18 +90,7 @@ async function activeWorkerSupportsBackgroundFetch(userId: string) {
     const timeout = window.setTimeout(() => resolve(false), 800);
     channel.port1.onmessage = event => {
       window.clearTimeout(timeout);
-      const data = event.data as {
-        type?: unknown;
-        version?: unknown;
-        offlineAudio?: unknown;
-        backgroundFetch?: unknown;
-      } | null;
-      resolve(Boolean(
-        data?.type === CAPABILITY_RESPONSE &&
-        Number(data.version) >= BACKGROUND_FETCH_CAPABILITY_VERSION &&
-        data.offlineAudio === true &&
-        data.backgroundFetch === true
-      ));
+      resolve(supportsBackgroundFetchCapability(event.data));
     };
 
     try {
