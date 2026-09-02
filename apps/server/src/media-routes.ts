@@ -133,6 +133,8 @@ export function registerMediaRoutes(
       }));
     } catch (error) {
       if (error instanceof TranscodeExecutionError) {
+        if (error.reason === 'aborted' && (request.raw.aborted || reply.raw.destroyed)) return;
+
         const track = library.getTrack(request.params.id);
         app.log.warn(
           {
