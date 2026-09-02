@@ -3,7 +3,6 @@ import { expect, test, type Page } from '@playwright/test';
 const adminUsername = 'playwright';
 const adminPassword = 'playwright-password-2026';
 const mutationHeaders = { 'X-Home-Music-Request': '1' };
-const offlineCompletionTimeout = 20_000;
 
 async function submitLogin(page: Page, username: string, password: string) {
   await page.goto('/');
@@ -66,7 +65,7 @@ test('CacheStorage e referências offline não vazam entre contas no mesmo naveg
   await ensureServiceWorker(page);
   const adminTable = await libraryTable(page);
   await adminTable.getByRole('button', { name: 'Baixar E2E Track para uso offline' }).click();
-  await expect(adminTable.getByRole('button', { name: 'Remover download offline de E2E Track' })).toBeVisible({ timeout: offlineCompletionTimeout });
+  await expect(adminTable.getByRole('button', { name: 'Remover download offline de E2E Track' })).toBeVisible();
   const adminReferences = await offlineReferenceSnapshot(page);
   expect(adminReferences.individualTrackIds).toHaveLength(1);
 
