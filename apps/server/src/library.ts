@@ -4,6 +4,7 @@ import path from 'node:path';
 import type { Readable } from 'node:stream';
 import { parseFile, parseStream, type IAudioMetadata } from 'music-metadata';
 import type { AdminLibraryIntegrityStatus, Track } from '@home-music/shared';
+import { mapWithConcurrency } from './bounded-concurrency.js';
 import {
   abortLibraryIntegrityCheck,
   beginLibraryIntegrityCheck,
@@ -29,6 +30,8 @@ const ALLOWED_COVER_TYPES = new Set([
 ]);
 
 const MAX_COVER_BYTES = 8 * 1024 * 1024;
+const DEFAULT_SCAN_CONCURRENCY = 4;
+const MAX_SCAN_CONCURRENCY = 8;
 const INTEGRITY_MEDIA_CHECK_CONCURRENCY = 4;
 
 export type IndexedTrack = Track & {
@@ -54,6 +57,13 @@ type ScannableFile = {
   path: string;
   size: number;
   mtimeMs: number;
+};
+
+type ScanMetadataTask = {
+  file: ScannableFile;
+  previous?: IndexedTrack;
+  detectedTrackId: string;
+  reusePrevious: boolean;
 };
 
 export type ScanWarningHandler = (message: string, error?: unknown) => void;
@@ -94,12 +104,18 @@ function scannerErrorMessage(error: unknown) {
     : 'O scanner não conseguiu ler os metadados do arquivo.';
 }
 
-async function walk(
+function scanConcurrency(raw = process.env.HOME_MUSIC_SCAN_CONCURRENCY) {
+  const configured = Number(raw);
+  if (!Number.isInteger(configured) || configured < 1) return DEFAULT_SCAN_CONCURRENCY;
+  return Math.min(configured, MAX_SCAN_CONCURRENCY);
+}
+
+async function collectScannablePaths(
   dir: string,
   libraryRoot: string,
   unavailableDirectories: string[],
   onWarning?: ScanWarningHandler
-): Promise<ScannableFile[]> {
+): Promise<string[]> {
   let entries;
   try {
     entries = await readdir(dir, { withFileTypes: true });
@@ -110,49 +126,51 @@ async function walk(
     return [];
   }
 
-  const files: ScannableFile[] = [];
+  const candidates: string[] = [];
 
   for (const entry of entries) {
     if (entry.name.startsWith('.')) continue;
     const fullPath = path.join(dir, entry.name);
 
     if (entry.isDirectory()) {
-      files.push(...await walk(fullPath, libraryRoot, unavailableDirectories, onWarning));
+      candidates.push(...await collectScannablePaths(fullPath, libraryRoot, unavailableDirectories, onWarning));
       continue;
     }
 
     if (!entry.isFile()) continue;
     if (!SUPPORTED_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) continue;
-
-    try {
-      const safeFile = await resolveRegularFileInside(libraryRoot, fullPath);
-      files.push({
-        path: safeFile.path,
-        size: safeFile.stat.size,
-        mtimeMs: safeFile.stat.mtimeMs
-      });
-    } catch (error) {
-      onWarning?.(`Arquivo ignorado durante o scan: ${relativeFilePath(libraryRoot, fullPath)}`, error);
-    }
+    candidates.push(fullPath);
   }
 
-  return files;
+  return candidates;
 }
 
-async function runWithConcurrency<T>(
-  items: readonly T[],
-  concurrency: number,
-  operation: (item: T) => Promise<void>
-) {
-  let cursor = 0;
-  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
-    while (cursor < items.length) {
-      const index = cursor;
-      cursor += 1;
-      await operation(items[index]);
+async function walk(
+  dir: string,
+  libraryRoot: string,
+  unavailableDirectories: string[],
+  onWarning?: ScanWarningHandler
+): Promise<ScannableFile[]> {
+  const candidates = await collectScannablePaths(dir, libraryRoot, unavailableDirectories, onWarning);
+  const resolved = await mapWithConcurrency(
+    candidates,
+    scanConcurrency(),
+    async fullPath => {
+      try {
+        const safeFile = await resolveRegularFileInside(libraryRoot, fullPath);
+        return {
+          path: safeFile.path,
+          size: safeFile.stat.size,
+          mtimeMs: safeFile.stat.mtimeMs
+        } satisfies ScannableFile;
+      } catch (error) {
+        onWarning?.(`Arquivo ignorado durante o scan: ${relativeFilePath(libraryRoot, fullPath)}`, error);
+        return null;
+      }
     }
-  });
-  await Promise.all(workers);
+  );
+
+  return resolved.filter((file): file is ScannableFile => file !== null);
 }
 
 export async function readCover(stream: Readable, mimeType: string) {
@@ -345,7 +363,7 @@ export async function auditLibraryIntegrity(
         if (needsMediaCheck) mediaChecks.push({ file, trackId: detectedTrackId });
       }
 
-      await runWithConcurrency(
+      await mapWithConcurrency(
         mediaChecks,
         INTEGRITY_MEDIA_CHECK_CONCURRENCY,
         async ({ file, trackId: detectedTrackId }) => {
@@ -387,6 +405,7 @@ export async function scanLibrary(
       const previousByPath = new Map(previousTracks.map(track => [track.filePath, track]));
       const seenPaths = new Set<string>();
       const tracks: IndexedTrack[] = [];
+      const metadataTasks: ScanMetadataTask[] = [];
       const stats: LibraryScanStats = { added: 0, updated: 0, removed: 0, unchanged: 0 };
 
       for (const file of files) {
@@ -396,12 +415,19 @@ export async function scanLibrary(
         const shouldRecheckFailure = fileUnchanged && hasLibraryIntegrityFileFailure(file.path);
 
         if (fileUnchanged) {
-          if (shouldRecheckFailure) {
-            clearLibraryIntegrityFileFailures(file.path);
-            await metadataForFile(libraryRoot, file, onWarning, previous!.id);
-          }
-          tracks.push(previous!);
           stats.unchanged += 1;
+          if (!shouldRecheckFailure) {
+            tracks.push(previous!);
+            continue;
+          }
+
+          clearLibraryIntegrityFileFailures(file.path);
+          metadataTasks.push({
+            file,
+            previous,
+            detectedTrackId: previous!.id,
+            reusePrevious: true
+          });
           continue;
         }
 
@@ -414,13 +440,30 @@ export async function scanLibrary(
             trackId: detectedTrackId,
             message: 'Arquivo encontrado sem registro anterior no índice; o scan atual o incluiu para revisão.'
           });
+          stats.added += 1;
+        } else {
+          stats.updated += 1;
         }
 
-        const metadata = await metadataForFile(libraryRoot, file, onWarning, detectedTrackId);
-        tracks.push(fromMetadata(libraryRoot, file, metadata, previous?.id));
-        if (previous) stats.updated += 1;
-        else stats.added += 1;
+        metadataTasks.push({
+          file,
+          previous,
+          detectedTrackId,
+          reusePrevious: false
+        });
       }
+
+      const scannedTracks = await mapWithConcurrency(
+        metadataTasks,
+        scanConcurrency(),
+        async task => {
+          const metadata = await metadataForFile(libraryRoot, task.file, onWarning, task.detectedTrackId);
+          return task.reusePrevious
+            ? task.previous!
+            : fromMetadata(libraryRoot, task.file, metadata, task.previous?.id);
+        }
+      );
+      tracks.push(...scannedTracks);
 
       for (const previous of previousTracks) {
         if (seenPaths.has(previous.filePath)) continue;
