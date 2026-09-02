@@ -4,6 +4,7 @@ import { AdminOperationHistoryStore } from './admin-operation-history.js';
 import { AdminUsersService } from './admin-users.js';
 import {
   LoginRateLimiter,
+  MAX_GLOBAL_SESSIONS,
   SESSION_TTL_SECONDS,
   SessionManager
 } from './auth.js';
@@ -27,7 +28,13 @@ export function createServerInfrastructure(options: ServerInfrastructureOptions)
   const database = new HomeMusicDatabase(options.databasePath);
   const trackAvailability = new TrackAvailabilityStore(options.databasePath);
   const authUsers = new UserAuthStore(options.databasePath);
-  const sessions = new SessionManager('', '', SESSION_TTL_SECONDS * 1000, 128, { status: 'blocked' });
+  const sessions = new SessionManager(
+    '',
+    '',
+    SESSION_TTL_SECONDS * 1000,
+    MAX_GLOBAL_SESSIONS,
+    { status: 'blocked' }
+  );
   const accountPasswords = new AccountPasswordService(options.databasePath, sessions);
   const adminUsers = new AdminUsersService(options.databasePath, sessions);
   const operationHistory = new AdminOperationHistoryStore(options.databasePath);
