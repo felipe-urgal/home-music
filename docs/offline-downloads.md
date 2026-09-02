@@ -13,7 +13,7 @@ O Home Music permite disponibilizar offline:
 
 Todas essas superfícies reutilizam **um único scheduler**, limitado a **3 downloads simultâneos**, e **um único artefato físico por `userId + trackId`**.
 
-Em navegadores com Background Fetch e service worker capability v4, a transferência já iniciada pode ser delegada ao navegador para sobreviver melhor à suspensão da página. Navegadores sem essa API mantêm o `fetch()` foreground anterior. A garantia por plataforma continua dependendo da validação em dispositivos reais da issue [#81](https://github.com/felipe-urgal/home-music/issues/81).
+Em navegadores com Background Fetch e service worker capability v4, a transferência já iniciada pode ser delegada ao navegador para sobreviver melhor à suspensão da página. Navegadores sem essa API mantêm o `fetch()` foreground anterior. A matriz física da issue [#81](https://github.com/felipe-urgal/home-music/issues/81) foi concluída em Android e iPhone/iPad reais; as garantias continuam específicas por capacidade e plataforma.
 
 ## Modelo: bytes físicos x referências lógicas
 
@@ -307,7 +307,7 @@ Como não possuíam ownership, continuam sendo descartadas de modo best-effort; 
 
 Isso é diferente da migração `tracks:v2 → references:v1`: os dados `v2` já possuem ownership e, por isso, podem ser preservados conservadoramente como intenção individual.
 
-## Limite de ciclo de vida e #81
+## Limite de ciclo de vida e validação mobile
 
 A estratégia é progressiva por capacidade:
 
@@ -318,9 +318,9 @@ A estratégia é progressiva por capacidade:
 - recarregar/fechar aba: não há garantia de retomada/publicação do job;
 - download concluído e publicado: permanece até remoção lógica/eviction do navegador.
 
-A implementação **não fecha a #81**. O aceite continua exigindo repetir a matriz abaixo em dispositivos físicos no head final e registrar o comportamento observado por plataforma/browser/modelo.
+A matriz física definida na [#81](https://github.com/felipe-urgal/home-music/issues/81) foi concluída em Android e iPhone/iPad reais e a issue foi encerrada. A tabela abaixo permanece como protocolo de regressão manual para mudanças futuras no pipeline offline, no service worker ou nas garantias documentadas por plataforma.
 
-### Matriz mínima de validação mobile real
+### Matriz de regressão mobile real
 
 | Plataforma | Cenário | Aceite |
 | --- | --- | --- |
@@ -351,4 +351,4 @@ A cobertura de downloads offline inclui:
 - controle de coleção no layout mobile;
 - fronteira de composição garantindo que a entrada manual continue delegando ao `App.tsx` e reutilizando o `OfflineApp`.
 
-A validação de continuidade em tela bloqueada permanece necessariamente física na #81; testes automatizados verificam invariantes, não substituem o sistema operacional real.
+A continuidade em tela bloqueada continua sendo uma verificação física quando esse comportamento mudar. Testes automatizados verificam invariantes, mas não substituem o sistema operacional real.
