@@ -81,6 +81,7 @@ export default function App() {
       currentUser={auth.currentUser}
       onLogout={auth.logout}
       onAuthRefresh={auth.retry}
+      onOpenOffline={() => setOfflineMode(true)}
       offline={offline}
     />
   );
