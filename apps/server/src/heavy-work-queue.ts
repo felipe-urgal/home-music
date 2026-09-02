@@ -217,7 +217,7 @@ export function parseHeavyWorkLimits(env: NodeJS.ProcessEnv): HeavyWorkLimits {
   };
 }
 
-function normalizedOwner(ownerId: string | undefined) {
+function normalizedOwner(ownerId: string | undefined | null) {
   return ownerId?.trim() || SYSTEM_OWNER;
 }
 
@@ -265,9 +265,16 @@ export class HeavyWorkQueue {
     };
   }
 
-  async run<T>(operation: (signal?: AbortSignal) => Promise<T>): Promise<T> {
-    const context = currentHeavyWorkRequestContext();
-    await this.acquire(context.ownerId, context.signal);
+  run<T>(operation: (signal?: AbortSignal) => Promise<T>): Promise<T> {
+    return this.runWithContext(currentHeavyWorkRequestContext(), operation);
+  }
+
+  async runWithContext<T>(
+    context: { ownerId?: string | null; signal?: AbortSignal },
+    operation: (signal?: AbortSignal) => Promise<T>
+  ): Promise<T> {
+    const ownerId = normalizedOwner(context.ownerId);
+    await this.acquire(ownerId, context.signal);
     try {
       if (context.signal?.aborted) throw new HeavyWorkQueueAbortedError(this.options.name);
       return await operation(context.signal);
