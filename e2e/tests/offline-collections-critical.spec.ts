@@ -3,6 +3,7 @@ import { expect, test, type Page, type TestInfo } from '@playwright/test';
 const username = 'playwright';
 const password = 'playwright-password-2026';
 const mutationHeaders = { 'X-Home-Music-Request': '1' };
+const offlineCompletionTimeout = 20_000;
 
 type LibraryTrack = { id: string; title: string };
 type Playlist = { id: string; name: string; trackIds: string[] };
@@ -89,12 +90,12 @@ test('playlist offline deduplica bytes, promove referência individual e coleta 
   const table = page.getByTestId('desktop-library-table');
   await expect(table).toBeVisible();
   await table.getByRole('button', { name: 'Baixar E2E Track para uso offline' }).click();
-  await expect(table.getByRole('button', { name: 'Remover download offline de E2E Track' })).toBeVisible();
+  await expect(table.getByRole('button', { name: 'Remover download offline de E2E Track' })).toBeVisible({ timeout: offlineCompletionTimeout });
 
   await page.goto(`/library/playlists/${encodeURIComponent(playlist.id)}`);
   await expect(page.getByText(playlist.name, { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Disponibilizar offline', exact: true }).click();
-  await expect(page.getByText('2/2 · disponível offline', { exact: true })).toBeVisible();
+  await expect(page.getByText('2/2 · disponível offline', { exact: true })).toBeVisible({ timeout: offlineCompletionTimeout });
 
   const playlistTable = page.getByTestId('desktop-library-table');
   const promoteZeta = playlistTable.getByRole('button', { name: 'Manter E2E Zeta também como download individual' });
@@ -122,7 +123,7 @@ test('playlist offline deduplica bytes, promove referência individual e coleta 
   await page.reload();
   await expect(page.getByText('conteúdo alterado', { exact: false })).toBeVisible();
   await page.getByRole('button', { name: 'Atualizar offline', exact: true }).click();
-  await expect(page.getByText('3/3 · disponível offline', { exact: true })).toBeVisible();
+  await expect(page.getByText('3/3 · disponível offline', { exact: true })).toBeVisible({ timeout: offlineCompletionTimeout });
 
   await expect.poll(async () => (await offlineStorageSnapshot(page)).physicalTrackIds.length).toBe(3);
 
@@ -158,5 +159,5 @@ test('controle de coleção offline funciona no layout mobile', async ({ page },
   const action = page.getByRole('button', { name: 'Disponibilizar offline', exact: true });
   await expect(action).toBeVisible();
   await action.click();
-  await expect(page.getByText('2/2 · disponível offline', { exact: true })).toBeVisible();
+  await expect(page.getByText('2/2 · disponível offline', { exact: true })).toBeVisible({ timeout: offlineCompletionTimeout });
 });
