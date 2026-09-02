@@ -4,6 +4,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import test from 'node:test';
+import {
+  HeavyWorkQueueAbortedError,
+  HeavyWorkQueueSaturatedError,
+  withHeavyWorkRequestContext
+} from './heavy-work-queue.js';
 import { LongJobObservability } from './long-job-observability.js';
 import {
   DEFAULT_TRANSCODE_CACHE_MEGABYTES,
@@ -14,6 +19,20 @@ import {
   transcodeCacheKey,
   type TranscodeRunner
 } from './transcoding.js';
+
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>(next => { resolve = next; });
+  return { promise, resolve };
+}
+
+async function waitFor(predicate: () => boolean) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (predicate()) return;
+    await new Promise(resolve => setTimeout(resolve, 1));
+  }
+  throw new Error('Condição de teste não foi atingida.');
+}
 
 test('parseTranscodeQuality aceita somente perfis conhecidos', () => {
   assert.equal(parseTranscodeQuality(undefined), 'balanced');
@@ -96,6 +115,117 @@ test('TranscodeManager deduplica trabalho concorrente e reutiliza cache', async 
     assert.equal(runs, 1);
     assert.equal(inputs, 1);
   } finally {
+    await rm(cacheDir, { recursive: true, force: true });
+  }
+});
+
+test('TranscodeManager mantém job deduplicado quando apenas um consumidor aborta', async () => {
+  const cacheDir = await mkdtemp(path.join(os.tmpdir(), 'home-music-transcode-abort-dedupe-'));
+  const started = deferred();
+  const release = deferred();
+  let runs = 0;
+  let runnerSignal: AbortSignal | undefined;
+  const runner: TranscodeRunner = async ({ outputPath, signal }) => {
+    runs += 1;
+    runnerSignal = signal;
+    started.resolve();
+    await release.promise;
+    if (signal?.aborted) throw new Error('Job compartilhado foi abortado indevidamente.');
+    await writeFile(outputPath, Buffer.alloc(40, 4));
+  };
+  const manager = new TranscodeManager({
+    cacheDir,
+    command: 'ffmpeg-test',
+    maxCacheBytes: 1_000,
+    runner
+  });
+  const source = {
+    trackId: 'track-shared',
+    sourceSize: 100,
+    sourceMtimeMs: 200,
+    quality: 'balanced' as const,
+    createInput: () => Object.assign(Readable.from(Buffer.from('source')), { fd: 29 })
+  };
+  const firstController = new AbortController();
+  const secondController = new AbortController();
+
+  try {
+    const first = withHeavyWorkRequestContext(
+      { ownerId: 'user-a', signal: firstController.signal },
+      () => manager.prepare(source)
+    );
+    await started.promise;
+    const second = withHeavyWorkRequestContext(
+      { ownerId: 'user-b', signal: secondController.signal },
+      () => manager.prepare(source)
+    );
+    await new Promise(resolve => setTimeout(resolve, 5));
+
+    firstController.abort();
+    await assert.rejects(first, HeavyWorkQueueAbortedError);
+    assert.equal(runnerSignal?.aborted, false);
+
+    release.resolve();
+    const prepared = await second;
+    assert.equal(prepared.cacheHit, true);
+    assert.equal(runs, 1);
+    assert.equal(runnerSignal?.aborted, false);
+  } finally {
+    release.resolve();
+    await rm(cacheDir, { recursive: true, force: true });
+  }
+});
+
+test('TranscodeManager rejeita burst além do backlog sem criar input', async () => {
+  const cacheDir = await mkdtemp(path.join(os.tmpdir(), 'home-music-transcode-backpressure-'));
+  const release = deferred();
+  let runs = 0;
+  const inputs = new Map<string, number>();
+  const runner: TranscodeRunner = async ({ outputPath }) => {
+    runs += 1;
+    if (runs === 1) await release.promise;
+    await writeFile(outputPath, Buffer.alloc(40, 5));
+  };
+  const manager = new TranscodeManager({
+    cacheDir,
+    command: 'ffmpeg-test',
+    maxCacheBytes: 10_000,
+    maxConcurrent: 1,
+    maxPending: 1,
+    maxPendingPerOwner: 1,
+    retryAfterSeconds: 4,
+    runner
+  });
+  const source = (trackId: string) => ({
+    trackId,
+    sourceSize: 100,
+    sourceMtimeMs: 200,
+    quality: 'balanced' as const,
+    createInput: () => {
+      inputs.set(trackId, (inputs.get(trackId) ?? 0) + 1);
+      return Object.assign(Readable.from(Buffer.from('source')), { fd: 31 });
+    }
+  });
+
+  try {
+    const first = withHeavyWorkRequestContext({ ownerId: 'user-a' }, () => manager.prepare(source('a')));
+    await waitFor(() => manager.queueRuntime.active === 1);
+    const queued = withHeavyWorkRequestContext({ ownerId: 'user-b' }, () => manager.prepare(source('b')));
+    await waitFor(() => manager.queueRuntime.pending === 1);
+
+    await assert.rejects(
+      withHeavyWorkRequestContext({ ownerId: 'user-c' }, () => manager.prepare(source('c'))),
+      (error: unknown) => error instanceof HeavyWorkQueueSaturatedError
+        && error.retryAfterSeconds === 4
+    );
+    assert.equal(inputs.get('c') ?? 0, 0);
+    assert.equal(manager.queueRuntime.rejected, 1);
+
+    release.resolve();
+    await Promise.all([first, queued]);
+    assert.equal(runs, 2);
+  } finally {
+    release.resolve();
     await rm(cacheDir, { recursive: true, force: true });
   }
 });
