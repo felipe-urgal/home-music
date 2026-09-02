@@ -2,7 +2,7 @@
 
 Este diretório mistura documentação **corrente** e registros históricos de implementação. Esta página define qual material deve ser usado como fonte de verdade.
 
-> Inventário e backlog revisados em 2026-09-02. Os PRs #204, #205, #206 e #207 concluíram #119–#122 e o backlog planejado da Fase 11. A #174 foi entregue pelo PR #218, a #175 pelo PR #221, a #176 pelo PR #222 e a #224 pelo PR #225. A experiência offline também pode ser aberta manualmente pela conta quando existem downloads salvos. A #81 foi concluída após a validação em dispositivos móveis reais e a #123 foi encerrada como índice executivo do ciclo; não há pendência priorizada no backlog atual.
+> Inventário e backlog revisados em 2026-09-02. A Fase 11 e o ciclo funcional anterior estão concluídos. A Fase 12 abriu um novo ciclo técnico de Segurança e Performance, centralizado na #239; a #228 é a primeira atividade em implementação no PR #241. A #123 permanece encerrada como índice executivo do ciclo anterior.
 
 ## Desenvolvimento e agentes de IA
 
@@ -17,20 +17,22 @@ Comece por:
 1. [`../README.md`](../README.md) — instalação, operação e visão geral do produto;
 2. [`architecture.md`](architecture.md) — arquitetura corrente;
 3. [`roadmap.md`](roadmap.md) — estado técnico das fases e pendências reais;
-4. [issue #123](https://github.com/felipe-urgal/home-music/issues/123) — registro executivo do ciclo de backlog encerrado em 2026-09-02;
-5. [`administration-ui.md`](administration-ui.md) — composição atual de Minha conta/Administração;
-6. documentos funcionais abaixo para invariantes específicas.
+4. [issue #239](https://github.com/felipe-urgal/home-music/issues/239) — índice executivo do ciclo técnico atual de Segurança e Performance;
+5. [issue #123](https://github.com/felipe-urgal/home-music/issues/123) — registro executivo do ciclo de backlog encerrado em 2026-09-02;
+6. [`administration-ui.md`](administration-ui.md) — composição atual de Minha conta/Administração;
+7. documentos funcionais abaixo para invariantes específicas.
 
 ## Estado do backlog atual
 
-Não há atividade funcional ou implementação priorizada em aberto no backlog atual.
+A Fase 12 está em andamento e concentra o backlog implementável atual.
 
 | Issue | Estado corrente |
 | --- | --- |
-| [#81](https://github.com/felipe-urgal/home-music/issues/81) | concluída após validação física em Android e iPhone/iPad reais; os limites por plataforma continuam documentados nos arquivos de PWA/offline |
-| [#123](https://github.com/felipe-urgal/home-music/issues/123) | encerrada como índice executivo do ciclo concluído |
+| [#228](https://github.com/felipe-urgal/home-music/issues/228) | isolamento de sessões entre usuários; implementação em revisão no PR #241 |
+| [#239](https://github.com/felipe-urgal/home-music/issues/239) | índice executivo ativo da Fase 12 — Segurança e Performance |
+| [#123](https://github.com/felipe-urgal/home-music/issues/123) | encerrada como índice executivo do ciclo anterior |
 
-A Fase 11 planejada (#111–#122), a #174, a #175, a #176 e a #224 estão concluídas. Nova atividade deve nascer em issue própria e ser refletida em `roadmap.md` e na documentação funcional afetada, sem reabrir artificialmente itens já encerrados.
+A ordem corrente da Fase 12 está em `roadmap.md` e na #239. Itens concluídos de fases anteriores não devem ser reabertos artificialmente para representar trabalho novo.
 
 ## Composição do frontend
 
@@ -81,7 +83,7 @@ A Fase 11 planejada (#111–#122), a #174, a #175, a #176 e a #224 estão conclu
 - [`offline-downloads.md`](offline-downloads.md) — scheduler global, bytes físicos, referências lógicas, playlist/pasta, deduplicação, sincronização, quota, limites por plataforma e protocolo de regressão mobile;
 - [`app-composition.md`](app-composition.md) — autoridade única de entrada/saída do modo offline, inclusive quando o usuário escolhe usar somente o conteúdo baixado mesmo com o servidor online.
 
-Pendências relacionadas: nenhuma no backlog atual.
+Pendências relacionadas: nenhuma específica de PWA no backlog atual.
 
 ## Biblioteca e inteligência
 
@@ -136,13 +138,15 @@ Fontes atuais:
 - [`phase-7.5-my-account-screen.md`](phase-7.5-my-account-screen.md)
 - [`phase-7.5-remove-env-auth-recovery.md`](phase-7.5-remove-env-auth-recovery.md)
 
+A política corrente de capacidade e isolamento de sessões da #228 está documentada em `multi-user-auth.md`.
+
 ## Registros históricos `phase-7.5-*`
 
 Os demais arquivos `phase-7.5-*` preservam o desenho, decisões e gates dos slices usados durante a migração multiusuário. Eles podem usar linguagem relativa ao momento da implementação.
 
 Para saber **como o sistema funciona hoje**, prefira `README.md`, `architecture.md`, `multi-user-auth.md`, os documentos funcionais atuais e os arquivos `phase-7.5-*` explicitamente listados acima como fonte corrente.
 
-Não use um registro histórico isolado para inferir que uma funcionalidade ainda está pendente. O estado de entrega fica em `roadmap.md` e nas issues abertas; a #123 preserva o índice executivo do ciclo encerrado.
+Não use um registro histórico isolado para inferir que uma funcionalidade ainda está pendente. O estado de entrega fica em `roadmap.md` e nas issues abertas; a #123 preserva o índice executivo do ciclo encerrado e a #239 representa o ciclo técnico atual.
 
 ## E2E
 
@@ -154,7 +158,7 @@ Ao alterar comportamento ou backlog:
 
 - atualize a documentação funcional canônica afetada;
 - atualize `roadmap.md` quando a fase ou pendência mudar;
-- atualize o índice executivo vigente quando houver um ciclo de backlog ativo; a #123 permanece como registro do ciclo encerrado em 2026-09-02;
+- atualize o índice executivo vigente quando houver um ciclo de backlog ativo; hoje é a #239, enquanto a #123 permanece como registro do ciclo encerrado em 2026-09-02;
 - mantenha a issue de implementação com estado/gate reais;
 - preserve ADRs e registros históricos em vez de reescrevê-los como se tivessem sido produzidos hoje;
 - não crie datas/status artificiais em arquivos sem mudança semântica apenas para aparentar revisão.
