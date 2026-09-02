@@ -626,7 +626,7 @@ Quando uma entrega muda o estado do produto:
 
 - atualizar o documento funcional correspondente;
 - atualizar `docs/roadmap.md` quando muda uma fase/pendência;
-- atualizar a issue executiva #123 quando o backlog real muda;
+- atualizar o índice executivo vigente quando existir um ciclo de backlog ativo; a #123 preserva o ciclo encerrado em 2026-09-02 e não deve ser reaberta artificialmente para novas atividades;
 - fechar issue somente quando o escopo foi realmente entregue;
 - não deixar issue/documento dizendo “planejado” para algo já em `main`;
 - não marcar item como concluído apenas porque parte dele existe.
