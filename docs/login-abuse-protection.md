@@ -41,11 +41,11 @@ O mapa não remove mais a entrada mais antiga para admitir uma chave nova.
 Quando todas as entradas estão ocupadas:
 
 - entradas já rastreadas permanecem preservadas, inclusive atacantes já bloqueados;
-- novas chaves passam por um bucket compartilhado de overflow;
+- novas chaves passam por um bucket compartilhado de overflow enquanto a capacidade direta continuar cheia;
 - o overflow tem a mesma janela e o mesmo limite de falhas;
 - limpar uma chave individual em login bem-sucedido não limpa o overflow compartilhado.
 
-Isso impede churn de IPs de expulsar a proteção efetiva de um atacante ativo.
+Isso impede churn de IPs de expulsar a proteção efetiva de um atacante ativo. Se uma vaga direta reaparecer por expiração ou limpeza legítima, uma chave nova pode voltar a ser rastreada individualmente; o gate global de `scrypt` continua limitando o custo agregado independentemente desse estado.
 
 ## Limite por identidade
 
@@ -91,7 +91,7 @@ Retry-After: <segundos>
 {"error":"Muitas tentativas. Aguarde alguns minutos e tente novamente."}
 ```
 
-O motivo interno do bloqueio não é enviado ao cliente.
+O motivo interno do bloqueio não é enviado ao cliente. Nos limiters por IP/identidade, o `Retry-After` é conservador e corresponde à janela configurada; o gate global usa o tempo restante calculado para a condição de concorrência/backoff.
 
 Credenciais inválidas continuam retornando:
 
