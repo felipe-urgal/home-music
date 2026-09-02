@@ -191,7 +191,9 @@ test('keeps a large real-browser library within grave-regression budgets', async
     }
   );
 
-  await search.fill('');
+  // Mantém uma busca ampla ativa para que a raiz de Pastas exercite o conjunto completo
+  // e exponha o controle real de ordenação, sem entrar em uma subpasta artificial.
+  await search.fill('Faixa');
   await expect(rows).toHaveCount(100);
 
   const viewToggle = page.getByRole('button', { name: 'Ordenar, filtrar e gerenciar views' });
