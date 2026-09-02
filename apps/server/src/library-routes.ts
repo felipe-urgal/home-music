@@ -1,7 +1,12 @@
 import type { FastifyInstance } from 'fastify';
+import type { HeavyWorkQueue } from './heavy-work-queue.js';
 import type { LibraryService } from './library-service.js';
 
-export function registerLibraryRoutes(app: FastifyInstance, library: LibraryService) {
+export function registerLibraryRoutes(
+  app: FastifyInstance,
+  library: LibraryService,
+  integrityQueue?: HeavyWorkQueue
+) {
   app.get('/api/library', async (_request, reply) => {
     reply.header('Cache-Control', 'private, no-store');
     return {
@@ -28,7 +33,9 @@ export function registerLibraryRoutes(app: FastifyInstance, library: LibraryServ
 
   app.post('/api/admin/library/integrity/check', async (_request, reply) => {
     reply.header('Cache-Control', 'private, no-store');
-    const overview = await library.checkIntegrity();
+    const overview = integrityQueue
+      ? await integrityQueue.run(() => library.checkIntegrity())
+      : await library.checkIntegrity();
     if (!overview) {
       return reply.code(409).send({
         error: 'Biblioteca não está pronta para verificação de integridade.'
