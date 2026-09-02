@@ -12,6 +12,12 @@ const fixturePath = path.join(libraryDir, 'E2E Track.wav');
 const secondFixturePath = path.join(libraryDir, 'E2E Zeta.wav');
 const thirdFixturePath = path.join(libraryDir, 'E2E Zulu.wav');
 const lyricsFixturePath = path.join(libraryDir, 'E2E Track.lrc');
+const rawLargeLibraryTrackCount = process.env.HOME_MUSIC_E2E_LARGE_LIBRARY_TRACKS?.trim() || '0';
+const largeLibraryTrackCount = Number(rawLargeLibraryTrackCount);
+
+if (!Number.isInteger(largeLibraryTrackCount) || largeLibraryTrackCount < 0 || largeLibraryTrackCount > 50_000) {
+  throw new Error('HOME_MUSIC_E2E_LARGE_LIBRARY_TRACKS deve ser um inteiro entre 0 e 50000.');
+}
 
 function wavFixture(durationSeconds = 10, frequency = 440) {
   const sampleRate = 8_000;
@@ -44,6 +50,45 @@ function wavFixture(durationSeconds = 10, frequency = 440) {
   return buffer;
 }
 
+function benchmarkTracks(trackCount) {
+  const formats = ['MP3', 'AAC', 'FLAC', 'OPUS'];
+  const mimeTypes = {
+    MP3: 'audio/mpeg',
+    AAC: 'audio/aac',
+    FLAC: 'audio/flac',
+    OPUS: 'audio/ogg'
+  };
+  const fixedMtimeMs = Date.parse('2026-01-01T00:00:00.000Z');
+
+  return Array.from({ length: trackCount }, (_, index) => {
+    const format = formats[index % formats.length];
+    const sequence = String(index + 1).padStart(6, '0');
+    const artistIndex = String(index % 200).padStart(3, '0');
+    const albumIndex = String(index % 500).padStart(3, '0');
+    const albumArtistIndex = String(index % 50).padStart(2, '0');
+    const id = `benchmark-${sequence}`;
+
+    return {
+      id,
+      title: `Faixa ${sequence}`,
+      artist: `Artista ${artistIndex}`,
+      album: `Álbum ${albumIndex}`,
+      albumArtist: `Artista do álbum ${albumArtistIndex}`,
+      folder: 'Sem pasta',
+      folderPath: '',
+      duration: 90 + (index % 420),
+      format,
+      hasCover: false,
+      replayGainTrackDb: -6 + (index % 12) / 2,
+      replayGainAlbumDb: -5 + (index % 10) / 2,
+      filePath: path.join(libraryDir, '.benchmark', `${id}.${format.toLowerCase()}`),
+      mimeType: mimeTypes[format],
+      fileSize: 512_000 + (index % 2_048),
+      mtimeMs: fixedMtimeMs
+    };
+  });
+}
+
 await mkdir(libraryDir, { recursive: true });
 await Promise.all([
   writeFile(fixturePath, wavFixture(10, 440)),
@@ -54,10 +99,21 @@ await Promise.all([
 
 // O build já existe quando o webServer do Playwright é iniciado. Criamos o schema
 // temporário e uma playlist Rekordbox compartilhada sem depender de XML ou dados reais.
+// No benchmark de biblioteca grande, o snapshot é semeado pela mesma API de persistência
+// usada em produção. Isso mantém Fastify + SQLite + projeção pública reais sem pagar o
+// custo e a variância de criar/parsear dezenas de milhares de arquivos de áudio.
 const databaseModuleUrl = pathToFileURL(path.join(rootDir, 'apps/server/dist/database.js')).href;
 const { HomeMusicDatabase } = await import(databaseModuleUrl);
 const fixtureDatabase = new HomeMusicDatabase(databasePath);
 try {
+  if (largeLibraryTrackCount > 0) {
+    fixtureDatabase.syncTracks(
+      benchmarkTracks(largeLibraryTrackCount),
+      libraryDir,
+      '2026-01-01T00:00:00.000Z'
+    );
+  }
+
   fixtureDatabase.syncImportedPlaylists('rekordbox', [{
     sourceKey: 'e2e-rekordbox',
     name: 'E2E Rekordbox',
@@ -69,9 +125,15 @@ try {
 
 // O E2E deve atravessar o mesmo preload usado por `npm start`/systemd para
 // validar bootstrap e vínculo de identidade exatamente como em produção.
+const serverArgs = ['--import', './apps/server/dist/bootstrap-preload.js'];
+if (process.env.HOME_MUSIC_E2E_MEMORY_FILE?.trim()) {
+  serverArgs.push('--import', './e2e/scripts/process-memory-probe.mjs');
+}
+serverArgs.push('apps/server/dist/index.js');
+
 const server = spawn(
   process.execPath,
-  ['--import', './apps/server/dist/bootstrap-preload.js', 'apps/server/dist/index.js'],
+  serverArgs,
   {
     cwd: rootDir,
     env: {
