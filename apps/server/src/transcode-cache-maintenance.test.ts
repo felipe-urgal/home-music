@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promis
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { HeavyWorkQueueSaturatedError } from './heavy-work-queue.js';
 import {
   TranscodeCacheBusyError,
   TranscodeCacheMaintenance,
@@ -108,6 +109,34 @@ test('clear bloqueia enquanto operação de transcode está protegida e funciona
     assert.equal(cleared.cache.bytes, 0);
   } finally {
     release?.();
+    await rm(cacheDir, { recursive: true, force: true });
+  }
+});
+
+test('não acumula waiters de transcode enquanto manutenção está ativa', async () => {
+  const cacheDir = await mkdtemp(path.join(os.tmpdir(), 'home-music-cache-backpressure-'));
+  try {
+    await writeFile(path.join(cacheDir, CACHE_A), Buffer.alloc(25));
+    const maintenance = new TranscodeCacheMaintenance({
+      cacheDir,
+      limitBytes: 512,
+      retryAfterSeconds: 6,
+      runtime: () => ({ active: 0, pending: 0 })
+    });
+
+    const clearing = maintenance.clear();
+    await assert.rejects(
+      maintenance.withTranscode(async () => undefined),
+      (error: unknown) => error instanceof HeavyWorkQueueSaturatedError
+        && error.queueName === 'transcode-maintenance'
+        && error.retryAfterSeconds === 6
+    );
+    await assert.rejects(
+      maintenance.clear(),
+      HeavyWorkQueueSaturatedError
+    );
+    await clearing;
+  } finally {
     await rm(cacheDir, { recursive: true, force: true });
   }
 });
