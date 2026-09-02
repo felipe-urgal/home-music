@@ -169,12 +169,16 @@ test('smoke crítico: deep link, acessibilidade, histórico, player, conta e adm
   await expect(page.locator('main.app-shell')).toBeVisible();
 });
 
-test('chunk administrativo indisponível mostra fallback recuperável', async ({ page }) => {
-  await page.route(/\/assets\/AdministrationScreen-[^/]+\.js(?:\?.*)?$/, route => route.abort());
-  await login(page, '/admin');
+test.describe('fallback de chunk lazy', () => {
+  test.use({ serviceWorkers: 'block' });
 
-  const errorState = page.getByTestId('responsive-state-error');
-  await expect(errorState).toBeVisible();
-  await expect(errorState).toContainText('Não foi possível carregar esta área');
-  await expect(errorState.getByRole('button', { name: 'Recarregar aplicativo' })).toBeVisible();
+  test('chunk administrativo indisponível mostra fallback recuperável', async ({ page }) => {
+    await page.route(/\/assets\/AdministrationScreen-[^/]+\.js(?:\?.*)?$/, route => route.abort());
+    await login(page, '/admin');
+
+    const errorState = page.getByTestId('responsive-state-error');
+    await expect(errorState).toBeVisible();
+    await expect(errorState).toContainText('Não foi possível carregar esta área');
+    await expect(errorState.getByRole('button', { name: 'Recarregar aplicativo' })).toBeVisible();
+  });
 });
