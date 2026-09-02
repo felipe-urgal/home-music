@@ -155,7 +155,7 @@ registerAuthRoutes(app, {
   authUsers: infrastructure.authUsers,
   sessions: infrastructure.sessions,
   accountPasswords: infrastructure.accountPasswords,
-  loginRateLimiter: infrastructure.loginRateLimiter,
+  loginAbuseProtection: infrastructure.loginAbuseProtection,
   forceSecureCookie,
   trustTailscaleForwardedFor
 });
