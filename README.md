@@ -260,12 +260,14 @@ npm run service:install
 
 ## Configuração do ambiente
 
-Use `.env.example` como referência principal. As variáveis atuais são:
+Use `.env.example` como referência principal. As variáveis carregadas pela aplicação a partir do `.env` são:
 
 | Variável | Finalidade | Padrão / observação |
 | --- | --- | --- |
 | `MUSIC_DIR` | Raiz física da biblioteca | obrigatória |
+| `HOME_MUSIC_DATABASE_PATH` | Caminho do SQLite principal | `data/home-music.db` quando omitida |
 | `HOME_MUSIC_IMPORT_STAGING_DIR` | Staging temporário de importações | `data/import-staging` quando omitida |
+| `HOME_MUSIC_IMPORT_STAGING_TTL_HOURS` | TTL dos workspaces órfãos do staging | `24`, faixa `1..720` horas |
 | `HOME_MUSIC_IMPORT_UPLOAD_MAX_MB` | Limite de upload por arquivo | `512`, faixa `1..8192` MB |
 | `HOME_MUSIC_IMPORT_URL_MAX_MB` | Limite de download por URL direta | `512`, faixa `1..8192` MB |
 | `HOME_MUSIC_IMPORT_URL_TIMEOUT_SECONDS` | Timeout total de importação por URL | `120`, faixa `5..900` s |
@@ -282,7 +284,10 @@ Use `.env.example` como referência principal. As variáveis atuais são:
 | `HOME_MUSIC_TRUST_TAILSCALE_PROXY` | Confiança restrita no proxy Tailscale | não habilitar manualmente para proxy genérico |
 | `PORT` | Porta interna do backend | `8787` |
 | `HOST` | Bind do backend em desenvolvimento | `127.0.0.1` |
+| `VITE_PROXY_TARGET` | Destino do proxy `/api` do Vite | `http://127.0.0.1:8787`; Compose usa `http://server:8787` |
 | `PRODUCTION_HOST` | Bind de produção | `0.0.0.0` na LAN; `127.0.0.1` atrás do Tailscale |
+
+Os overrides de `npm run prod:verify` são variáveis de processo e ficam documentados separadamente em [`docs/production-verification.md`](docs/production-verification.md); eles não fazem parte da configuração persistente do `.env.example`.
 
 ### Regras importantes para diretórios de importação
 
@@ -368,7 +373,7 @@ Web / Vite: http://localhost:5173
 API:        http://127.0.0.1:8787
 ```
 
-O Vite faz proxy de `/api` para o backend local.
+O Vite faz proxy de `/api` para o backend local. Se o backend estiver em outro endereço, configure `VITE_PROXY_TARGET` no `.env`.
 
 Para testar no celular pela mesma LAN durante o desenvolvimento, abra:
 
@@ -935,6 +940,8 @@ O banco padrão fica em:
 data/home-music.db
 ```
 
+O caminho pode ser sobrescrito por `HOME_MUSIC_DATABASE_PATH`; servidor, bootstrap, backup/restore e recuperação local usam a mesma configuração.
+
 SQLite armazena, entre outros dados:
 
 - usuários e hashes de senha;
@@ -1316,7 +1323,7 @@ Inclui automação de:
 
 ## Documentação complementar
 
-O README é a porta de entrada operacional. Para implementação e decisões específicas, consulte primeiro [`docs/README.md`](docs/README.md), que diferencia fontes correntes de registros históricos e mantém o inventário do backlog aberto.
+O README é a porta de entrada operacional. Para implementação e decisões específicas, consulte primeiro [`docs/README.md`](docs/README.md), que diferencia fontes correntes de registros históricos e mantém o estado do backlog atual.
 
 ### Operação, arquitetura e qualidade
 
