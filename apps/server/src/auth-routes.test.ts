@@ -47,8 +47,8 @@ test('login retorna 503 sem expulsar outra conta quando a capacidade global est√
   await insertUser(databasePath, 'admin-1', 'admin', ADMIN_PASSWORD, 'admin');
   await insertUser(databasePath, 'user-1', 'user', USER_PASSWORD, 'user');
 
-  const sessions = new SessionManager('', '', 10_000, 1, { status: 'blocked' });
-  const adminToken = sessions.createSessionForUser('admin-1', 100);
+  const sessions = new SessionManager('', '', 5 * 60 * 1000, 1, { status: 'blocked' });
+  const adminToken = sessions.createSessionForUser('admin-1');
   const authUsers = new UserAuthStore(databasePath);
   const accountPasswords = new AccountPasswordService(databasePath, sessions);
   const app = Fastify();
@@ -64,6 +64,8 @@ test('login retorna 503 sem expulsar outra conta quando a capacidade global est√
   });
 
   try {
+    assert.equal(sessions.getSession(adminToken)?.userId, 'admin-1');
+
     const response = await app.inject({
       method: 'POST',
       url: '/api/auth/login',
@@ -79,7 +81,7 @@ test('login retorna 503 sem expulsar outra conta quando a capacidade global est√
     assert.deepEqual(response.json(), {
       error: 'Capacidade de sess√µes temporariamente atingida. Tente novamente em instantes.'
     });
-    assert.equal(sessions.getSession(adminToken, 200)?.userId, 'admin-1');
+    assert.equal(sessions.getSession(adminToken)?.userId, 'admin-1');
   } finally {
     await app.close();
     accountPasswords.close();
