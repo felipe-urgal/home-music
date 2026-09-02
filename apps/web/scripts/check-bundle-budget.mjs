@@ -10,7 +10,8 @@ const KIB = 1024;
 const BUDGETS = {
   entry: { gzip: 768 * KIB, brotli: 640 * KIB },
   administration: { gzip: 512 * KIB, brotli: 448 * KIB },
-  account: { gzip: 256 * KIB, brotli: 224 * KIB }
+  account: { gzip: 256 * KIB, brotli: 224 * KIB },
+  offline: { gzip: 384 * KIB, brotli: 320 * KIB }
 };
 
 function matchSingle(files, pattern, label) {
@@ -49,7 +50,8 @@ const jsFiles = files.filter(file => file.endsWith('.js'));
 const targets = {
   entry: matchSingle(jsFiles, /^index-[^.]+\.js$/, 'entrypoint'),
   administration: matchSingle(jsFiles, /^AdministrationScreen-[^.]+\.js$/, 'Administração lazy'),
-  account: matchSingle(jsFiles, /^MyAccountScreen-[^.]+\.js$/, 'Minha conta lazy')
+  account: matchSingle(jsFiles, /^MyAccountScreen-[^.]+\.js$/, 'Minha conta lazy'),
+  offline: matchSingle(jsFiles, /^OfflineApp-[^.]+\.js$/, 'Modo offline lazy')
 };
 
 const report = {};
@@ -66,6 +68,11 @@ for (const [label, filename] of Object.entries(targets)) {
   };
 }
 
+const deferred = {
+  gzipKiB: Number((report.administration.gzipKiB + report.account.gzipKiB + report.offline.gzipKiB).toFixed(1)),
+  brotliKiB: Number((report.administration.brotliKiB + report.account.brotliKiB + report.offline.brotliKiB).toFixed(1))
+};
+
 console.log('Home Music — frontend bundle budget');
-console.log(JSON.stringify(report, null, 2));
-console.log(`::notice title=Frontend bundle budget::entry gzip=${report.entry.gzipKiB}KiB br=${report.entry.brotliKiB}KiB; admin gzip=${report.administration.gzipKiB}KiB br=${report.administration.brotliKiB}KiB; account gzip=${report.account.gzipKiB}KiB br=${report.account.brotliKiB}KiB`);
+console.log(JSON.stringify({ ...report, deferred }, null, 2));
+console.log(`::notice title=Frontend bundle budget::entry gzip=${report.entry.gzipKiB}KiB br=${report.entry.brotliKiB}KiB; deferred gzip=${deferred.gzipKiB}KiB br=${deferred.brotliKiB}KiB; admin=${report.administration.gzipKiB}KiB; account=${report.account.gzipKiB}KiB; offline=${report.offline.gzipKiB}KiB`);
