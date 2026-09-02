@@ -11,7 +11,7 @@ import {
   UnsafeLibraryPathError
 } from './security.js';
 import type { TranscodeCacheMaintenance } from './transcode-cache-maintenance.js';
-import type { TranscodeManager, TranscodeQuality } from './transcoding.js';
+import { TranscodeExecutionError, type TranscodeManager, type TranscodeQuality } from './transcoding.js';
 
 const MAX_COVER_CACHE_BYTES = 16 * 1024 * 1024;
 const MAX_COVER_CACHE_ITEMS = 64;
@@ -134,20 +134,29 @@ export class TrackMediaInfrastructure {
     const gainDb = replayGainForMode(track, normalization);
     try {
       const { prepared, transcoded } = await this.options.transcodeCacheMaintenance.withTranscode(async () => {
-        const source = await openRegularFileInside(root, track.filePath);
-        let prepared;
-        try {
-          prepared = await this.options.transcodeManager.prepare({
-            trackId: track.id,
-            sourceSize: source.stat.size,
-            sourceMtimeMs: source.stat.mtimeMs,
-            quality,
-            normalizationGainDb: gainDb,
-            createInput: () => source.handle.createReadStream({ autoClose: false })
-          });
-        } finally {
-          await source.handle.close().catch(() => undefined);
-        }
+        const inspected = await openRegularFileInside(root, track.filePath);
+        const sourceSize = inspected.stat.size;
+        const sourceMtimeMs = inspected.stat.mtimeMs;
+        await inspected.handle.close();
+
+        const prepared = await this.options.transcodeManager.prepare({
+          trackId: track.id,
+          sourceSize,
+          sourceMtimeMs,
+          quality,
+          normalizationGainDb: gainDb,
+          createInput: async () => {
+            const source = await openRegularFileInside(root, track.filePath);
+            if (source.stat.size !== sourceSize || source.stat.mtimeMs !== sourceMtimeMs) {
+              await source.handle.close().catch(() => undefined);
+              throw new TranscodeExecutionError(
+                'failed',
+                'O arquivo de origem mudou enquanto aguardava o transcoding.'
+              );
+            }
+            return source.handle.createReadStream({ autoClose: true });
+          }
+        });
         return {
           prepared,
           transcoded: await open(prepared.path, 'r')
