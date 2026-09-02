@@ -10,7 +10,9 @@ import {
 import { HomeMusicDatabase } from './database.js';
 import { ImportJobQueue } from './import-job-queue.js';
 import {
+  DEFAULT_LOGIN_ABUSE_PROTECTION_CONFIG,
   LoginAbuseProtection,
+  parseLoginAbuseProtectionConfig,
   type LoginAbuseProtectionConfig
 } from './login-abuse-protection.js';
 import { LongJobObservability } from './long-job-observability.js';
@@ -24,9 +26,22 @@ type ServerInfrastructureOptions = {
   transcodeCachePath: string;
   ffmpegCommand: string;
   transcodeCacheMegabytes: number;
-  loginAbuseProtectionConfig: LoginAbuseProtectionConfig;
+  loginAbuseProtectionConfig?: LoginAbuseProtectionConfig;
   logger: FastifyBaseLogger;
 };
+
+function resolveLoginAbuseProtectionConfig(options: ServerInfrastructureOptions) {
+  if (options.loginAbuseProtectionConfig) return options.loginAbuseProtectionConfig;
+  try {
+    return parseLoginAbuseProtectionConfig(process.env);
+  } catch (error) {
+    options.logger.warn(
+      { err: error },
+      'Configuração de proteção do login inválida; usando limites seguros padrão.'
+    );
+    return DEFAULT_LOGIN_ABUSE_PROTECTION_CONFIG;
+  }
+}
 
 export function createServerInfrastructure(options: ServerInfrastructureOptions) {
   const database = new HomeMusicDatabase(options.databasePath);
@@ -58,7 +73,7 @@ export function createServerInfrastructure(options: ServerInfrastructureOptions)
       longJobObservability.observeImportJob(job, operationId);
     }
   });
-  const loginAbuseProtection = new LoginAbuseProtection(options.loginAbuseProtectionConfig);
+  const loginAbuseProtection = new LoginAbuseProtection(resolveLoginAbuseProtectionConfig(options));
   const transcodeManager = new TranscodeManager({
     cacheDir: options.transcodeCachePath,
     command: options.ffmpegCommand,
