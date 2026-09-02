@@ -3,7 +3,12 @@ import { createHash, randomUUID } from 'node:crypto';
 import { chmod, mkdir, readdir, rename, rm, stat, utimes } from 'node:fs/promises';
 import path from 'node:path';
 import type { Readable } from 'node:stream';
-import { HeavyWorkQueue, type HeavyWorkQueueRuntime } from './heavy-work-queue.js';
+import {
+  currentHeavyWorkRequestContext,
+  HeavyWorkQueue,
+  HeavyWorkQueueAbortedError,
+  type HeavyWorkQueueRuntime
+} from './heavy-work-queue.js';
 import type { LongJobObservability } from './long-job-observability.js';
 import { clampReplayGainDb } from './replay-gain.js';
 
@@ -30,7 +35,7 @@ export type TranscodeSource = {
   sourceMtimeMs: number;
   quality: TranscodeQuality;
   normalizationGainDb?: number | null;
-  createInput: () => SeekableInput;
+  createInput: () => SeekableInput | Promise<SeekableInput>;
 };
 
 export type PreparedTranscode = {
@@ -204,8 +209,15 @@ type CacheEntry = {
   mtimeMs: number;
 };
 
+type PendingTranscode = {
+  promise: Promise<void>;
+  controller: AbortController;
+  consumers: number;
+  settled: boolean;
+};
+
 export class TranscodeManager {
-  private readonly pending = new Map<string, Promise<void>>();
+  private readonly pending = new Map<string, PendingTranscode>();
   private readonly queue: HeavyWorkQueue;
   private initialized: Promise<void> | null = null;
 
@@ -249,6 +261,9 @@ export class TranscodeManager {
 
   async prepare(source: TranscodeSource): Promise<PreparedTranscode> {
     await this.initialize();
+    const context = currentHeavyWorkRequestContext();
+    if (context.signal?.aborted) throw new HeavyWorkQueueAbortedError('transcode');
+
     const key = transcodeCacheKey(source);
     const finalPath = path.join(this.options.cacheDir, `${key}.m4a`);
     const cached = await this.cachedFile(finalPath);
@@ -259,64 +274,97 @@ export class TranscodeManager {
 
     const existing = this.pending.get(finalPath);
     if (existing) {
-      await existing;
+      await this.waitForPending(existing, context.signal);
       const ready = await this.cachedFile(finalPath);
       if (!ready) throw new TranscodeExecutionError('failed', 'Arquivo transcodificado não foi produzido.');
       await this.touch(finalPath);
       return { path: finalPath, size: ready.size, cacheHit: true, quality: source.quality };
     }
 
-    const work = this.queue.run(async signal => {
-      if (await this.cachedFile(finalPath)) return;
+    const controller = new AbortController();
+    const entry: PendingTranscode = {
+      promise: Promise.resolve(),
+      controller,
+      consumers: 0,
+      settled: false
+    };
+    entry.promise = this.queue.runWithContext(
+      { ownerId: context.ownerId, signal: controller.signal },
+      async signal => {
+        if (await this.cachedFile(finalPath)) return;
 
-      const temporaryPath = `${finalPath}.tmp-${randomUUID()}`;
-      const observedRun = this.options.observability?.start({
-        jobType: 'transcode',
-        resourceId: source.trackId
-      });
-      let input: SeekableInput | null = null;
-      try {
-        input = source.createInput();
-        const runner = this.options.runner ?? runFfmpegTranscode;
-        await runner({
-          command: this.options.command,
-          input,
-          outputPath: temporaryPath,
-          bitrate: TRANSCODE_PROFILES[source.quality].bitrate,
-          normalizationGainDb: source.normalizationGainDb == null ? null : clampReplayGainDb(source.normalizationGainDb),
-          timeoutMs: this.options.timeoutMs ?? DEFAULT_TRANSCODE_TIMEOUT_MS,
-          signal
+        const temporaryPath = `${finalPath}.tmp-${randomUUID()}`;
+        const observedRun = this.options.observability?.start({
+          jobType: 'transcode',
+          resourceId: source.trackId
         });
+        let input: SeekableInput | null = null;
+        try {
+          input = await source.createInput();
+          const runner = this.options.runner ?? runFfmpegTranscode;
+          await runner({
+            command: this.options.command,
+            input,
+            outputPath: temporaryPath,
+            bitrate: TRANSCODE_PROFILES[source.quality].bitrate,
+            normalizationGainDb: source.normalizationGainDb == null ? null : clampReplayGainDb(source.normalizationGainDb),
+            timeoutMs: this.options.timeoutMs ?? DEFAULT_TRANSCODE_TIMEOUT_MS,
+            signal
+          });
 
-        const output = await stat(temporaryPath);
-        if (!output.isFile() || output.size <= 0) {
-          throw new TranscodeExecutionError('failed', 'FFmpeg produziu um arquivo de áudio vazio ou inválido.');
+          const output = await stat(temporaryPath);
+          if (!output.isFile() || output.size <= 0) {
+            throw new TranscodeExecutionError('failed', 'FFmpeg produziu um arquivo de áudio vazio ou inválido.');
+          }
+
+          await chmod(temporaryPath, 0o600);
+          await rename(temporaryPath, finalPath);
+          await this.enforceLimit(finalPath);
+          if (observedRun) this.options.observability?.complete(observedRun);
+        } catch (error) {
+          if (observedRun) this.options.observability?.fail(observedRun, error);
+          throw error;
+        } finally {
+          input?.destroy();
+          await rm(temporaryPath, { force: true }).catch(() => undefined);
         }
-
-        await chmod(temporaryPath, 0o600);
-        await rename(temporaryPath, finalPath);
-        await this.enforceLimit(finalPath);
-        if (observedRun) this.options.observability?.complete(observedRun);
-      } catch (error) {
-        if (observedRun) this.options.observability?.fail(observedRun, error);
-        throw error;
-      } finally {
-        input?.destroy();
-        await rm(temporaryPath, { force: true }).catch(() => undefined);
       }
+    ).finally(() => {
+      entry.settled = true;
+      if (this.pending.get(finalPath) === entry) this.pending.delete(finalPath);
     });
 
-    this.pending.set(finalPath, work);
-    try {
-      await work;
-    } finally {
-      this.pending.delete(finalPath);
-    }
+    this.pending.set(finalPath, entry);
+    await this.waitForPending(entry, context.signal);
 
     const ready = await this.cachedFile(finalPath);
     if (!ready) throw new TranscodeExecutionError('failed', 'Arquivo transcodificado não está disponível no cache.');
     await this.touch(finalPath);
     return { path: finalPath, size: ready.size, cacheHit: false, quality: source.quality };
+  }
+
+  private async waitForPending(entry: PendingTranscode, signal?: AbortSignal) {
+    entry.consumers += 1;
+    let onAbort: (() => void) | undefined;
+    try {
+      if (!signal) {
+        await entry.promise;
+        return;
+      }
+      if (signal.aborted) throw new HeavyWorkQueueAbortedError('transcode');
+
+      const aborted = new Promise<never>((_resolve, reject) => {
+        onAbort = () => reject(new HeavyWorkQueueAbortedError('transcode'));
+        signal.addEventListener('abort', onAbort, { once: true });
+      });
+      await Promise.race([entry.promise, aborted]);
+    } finally {
+      if (signal && onAbort) signal.removeEventListener('abort', onAbort);
+      entry.consumers = Math.max(0, entry.consumers - 1);
+      if (signal?.aborted && entry.consumers === 0 && !entry.settled) {
+        entry.controller.abort();
+      }
+    }
   }
 
   private initialize() {
