@@ -82,6 +82,15 @@ async function offlineUserForClient(clientId) {
   return USER_ID_RE.test(userId) ? userId : null;
 }
 
+async function hasActiveOfflineUserClient(userId) {
+  if (!USER_ID_RE.test(userId)) return false;
+  const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+  for (const client of clients) {
+    if (await offlineUserForClient(client.id) === userId) return true;
+  }
+  return false;
+}
+
 function sourceAudioUrl(trackId) {
   return `/api/tracks/${encodeURIComponent(trackId)}/stream`;
 }
@@ -89,6 +98,7 @@ function sourceAudioUrl(trackId) {
 async function persistBackgroundFetch(registration) {
   const scope = backgroundFetchScope(registration?.id);
   if (!scope || typeof registration?.matchAll !== 'function') return;
+  if (!await hasActiveOfflineUserClient(scope.userId)) return;
 
   const records = await registration.matchAll();
   if (!Array.isArray(records) || records.length !== 1) return;
