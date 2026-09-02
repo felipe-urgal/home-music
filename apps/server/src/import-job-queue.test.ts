@@ -168,6 +168,7 @@ test('limita jobs não terminais globalmente e por usuário', () => {
   assert.equal(queue.runtime.pending, 2);
   assert.equal(queue.runtime.rejected, 2);
 
+  queue.transition(first.id, 'processing');
   queue.transition(first.id, 'completed');
   const replacement = withHeavyWorkRequestContext({ ownerId: 'user-a' }, () =>
     queue.enqueue({ type: 'upload', provider: null }, 'A3')
