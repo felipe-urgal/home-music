@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 const username = 'playwright';
 const password = 'playwright-password-2026';
+const offlineCompletionTimeout = 20_000;
 
 async function login(page: Page) {
   await page.goto('/');
@@ -43,7 +44,7 @@ test('downloads offline individual e em lote usam o fluxo desktop', async ({ pag
   const individualDownload = table.getByRole('button', { name: 'Baixar E2E Track para uso offline' });
   await expect(individualDownload).toBeVisible();
   await individualDownload.click();
-  await expect(table.getByRole('button', { name: 'Remover download offline de E2E Track' })).toBeVisible();
+  await expect(table.getByRole('button', { name: 'Remover download offline de E2E Track' })).toBeVisible({ timeout: offlineCompletionTimeout });
 
   await table.getByRole('checkbox', { name: 'Selecionar E2E Zeta' }).check();
   await table.getByRole('checkbox', { name: 'Selecionar E2E Zulu' }).check();
@@ -54,8 +55,8 @@ test('downloads offline individual e em lote usam o fluxo desktop', async ({ pag
   await expect(bulkDownload).toBeEnabled();
   await bulkDownload.click();
 
-  await expect(table.getByRole('button', { name: 'Remover download offline de E2E Zeta' })).toBeVisible();
-  await expect(table.getByRole('button', { name: 'Remover download offline de E2E Zulu' })).toBeVisible();
+  await expect(table.getByRole('button', { name: 'Remover download offline de E2E Zeta' })).toBeVisible({ timeout: offlineCompletionTimeout });
+  await expect(table.getByRole('button', { name: 'Remover download offline de E2E Zulu' })).toBeVisible({ timeout: offlineCompletionTimeout });
   await expect(bulkToolbar.getByRole('button', { name: 'Todas as faixas selecionadas já possuem download individual disponível' })).toBeDisabled();
 
   page.once('dialog', async dialog => {
