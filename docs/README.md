@@ -2,7 +2,7 @@
 
 Este diretório mistura documentação **corrente** e registros históricos de implementação. Esta página define qual material deve ser usado como fonte de verdade.
 
-> Inventário e backlog revisados em 2026-09-02. Os PRs #204, #205, #206 e #207 concluíram #119–#122 e o backlog planejado da Fase 11. A #174 foi entregue pelo PR #218, a #175 pelo PR #221 e a #176 pelo PR #222. A experiência offline agora também pode ser aberta manualmente pela conta quando existem downloads salvos; a #81 permanece como validação separada em dispositivos móveis reais.
+> Inventário e backlog revisados em 2026-09-02. Os PRs #204, #205, #206 e #207 concluíram #119–#122 e o backlog planejado da Fase 11. A #174 foi entregue pelo PR #218, a #175 pelo PR #221, a #176 pelo PR #222 e a #224 pelo PR #225. A experiência offline também pode ser aberta manualmente pela conta quando existem downloads salvos. A #81 foi concluída após a validação em dispositivos móveis reais e a #123 foi encerrada como índice executivo do ciclo; não há pendência priorizada no backlog atual.
 
 ## Desenvolvimento e agentes de IA
 
@@ -17,20 +17,20 @@ Comece por:
 1. [`../README.md`](../README.md) — instalação, operação e visão geral do produto;
 2. [`architecture.md`](architecture.md) — arquitetura corrente;
 3. [`roadmap.md`](roadmap.md) — estado técnico das fases e pendências reais;
-4. [issue #123](https://github.com/felipe-urgal/home-music/issues/123) — índice executivo do backlog aberto;
+4. [issue #123](https://github.com/felipe-urgal/home-music/issues/123) — registro executivo do ciclo de backlog encerrado em 2026-09-02;
 5. [`administration-ui.md`](administration-ui.md) — composição atual de Minha conta/Administração;
 6. documentos funcionais abaixo para invariantes específicas.
 
-## Backlog aberto e ordem atual
+## Estado do backlog atual
 
-As pendências executivas abertas após a entrega da #176 são:
+Não há atividade funcional ou implementação priorizada em aberto no backlog atual.
 
 | Issue | Estado corrente |
 | --- | --- |
-| [#81](https://github.com/felipe-urgal/home-music/issues/81) | validação separada em Android e iPhone/iPad reais de background/tela bloqueada; não é fechada por CI/emulação |
-| [#123](https://github.com/felipe-urgal/home-music/issues/123) | índice executivo; não é uma implementação separada |
+| [#81](https://github.com/felipe-urgal/home-music/issues/81) | concluída após validação física em Android e iPhone/iPad reais; os limites por plataforma continuam documentados nos arquivos de PWA/offline |
+| [#123](https://github.com/felipe-urgal/home-music/issues/123) | encerrada como índice executivo do ciclo concluído |
 
-A Fase 11 planejada (#111–#122), a #174, a #175 e a #176 estão concluídas. A entrada manual no modo offline é uma evolução da experiência existente e não cria nova pendência de backend. Nova priorização deve ser refletida em `roadmap.md`, #123 e nas issues afetadas no mesmo trabalho.
+A Fase 11 planejada (#111–#122), a #174, a #175, a #176 e a #224 estão concluídas. Nova atividade deve nascer em issue própria e ser refletida em `roadmap.md` e na documentação funcional afetada, sem reabrir artificialmente itens já encerrados.
 
 ## Composição do frontend
 
@@ -78,10 +78,10 @@ A Fase 11 planejada (#111–#122), a #174, a #175 e a #176 estão concluídas. A
 
 - [`pwa.md`](pwa.md) — shell, service worker, namespace e integração das coleções offline;
 - [`pwa-icon-identity.md`](pwa-icon-identity.md) — identidade Casa + vinil, matriz `any`/`maskable`, iOS/Safari e geração determinística dos ícones;
-- [`offline-downloads.md`](offline-downloads.md) — scheduler global, bytes físicos, referências lógicas, playlist/pasta, deduplicação, sincronização, quota e limites da #81;
+- [`offline-downloads.md`](offline-downloads.md) — scheduler global, bytes físicos, referências lógicas, playlist/pasta, deduplicação, sincronização, quota, limites por plataforma e protocolo de regressão mobile;
 - [`app-composition.md`](app-composition.md) — autoridade única de entrada/saída do modo offline, inclusive quando o usuário escolhe usar somente o conteúdo baixado mesmo com o servidor online.
 
-Pendência relacionada: #81.
+Pendências relacionadas: nenhuma no backlog atual.
 
 ## Biblioteca e inteligência
 
@@ -142,7 +142,7 @@ Os demais arquivos `phase-7.5-*` preservam o desenho, decisões e gates dos slic
 
 Para saber **como o sistema funciona hoje**, prefira `README.md`, `architecture.md`, `multi-user-auth.md`, os documentos funcionais atuais e os arquivos `phase-7.5-*` explicitamente listados acima como fonte corrente.
 
-Não use um registro histórico isolado para inferir que uma funcionalidade ainda está pendente. O estado de entrega fica em `roadmap.md`, #123 e nas issues abertas.
+Não use um registro histórico isolado para inferir que uma funcionalidade ainda está pendente. O estado de entrega fica em `roadmap.md` e nas issues abertas; a #123 preserva o índice executivo do ciclo encerrado.
 
 ## E2E
 
@@ -154,7 +154,7 @@ Ao alterar comportamento ou backlog:
 
 - atualize a documentação funcional canônica afetada;
 - atualize `roadmap.md` quando a fase ou pendência mudar;
-- atualize #123 quando o backlog executivo mudar;
+- atualize o índice executivo vigente quando houver um ciclo de backlog ativo; a #123 permanece como registro do ciclo encerrado em 2026-09-02;
 - mantenha a issue de implementação com estado/gate reais;
 - preserve ADRs e registros históricos em vez de reescrevê-los como se tivessem sido produzidos hoje;
 - não crie datas/status artificiais em arquivos sem mudança semântica apenas para aparentar revisão.

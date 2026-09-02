@@ -140,18 +140,18 @@ Logout não apaga automaticamente downloads concluídos. A troca de identidade e
 
 ## Limite de background
 
-O comportamento agora é progressivo:
+O comportamento é progressivo:
 
 - **Background Fetch disponível + worker v4:** uma transferência já iniciada pode continuar sob suspensão/background e o service worker persiste a resposta completa;
 - **sem Background Fetch:** o scheduler usa o `fetch()` foreground anterior e a suspensão de JavaScript pode interromper a transferência;
 - **Safari/iPhone/iPad:** permanece no fallback enquanto a plataforma não expuser a API;
-- **recarregar/fechar a aba:** não é tratado como garantia de retomada/publicação do job; o foco da #81 continua sendo background/tela bloqueada em hardware real;
+- **recarregar/fechar a aba:** não é tratado como garantia de retomada/publicação do job;
 - **download concluído e publicado:** permanece até remoção lógica ou eviction do navegador.
 
-A implementação não transforma suporte de API em garantia de sistema operacional. A issue [#81](https://github.com/felipe-urgal/home-music/issues/81) continua aberta até a matriz final ser repetida em Android e iPhone/iPad reais no head que contiver esta mudança.
+A matriz física da [#81](https://github.com/felipe-urgal/home-music/issues/81) foi concluída em Android e iPhone/iPad reais e a issue foi encerrada. Isso não transforma suporte de API em garantia universal de sistema operacional: o comportamento continua condicionado às capacidades e políticas de cada navegador/plataforma.
 
-## Evoluções abertas
+## Estado do backlog relacionado
 
-- [#81](https://github.com/felipe-urgal/home-music/issues/81): validar no hardware final o caminho Background Fetch em Android/Chromium e documentar o fallback observado em iPhone/iPad/Safari.
+Não há evolução PWA/offline priorizada em aberto no backlog atual. A #81 encerrou a validação física do comportamento mobile; a [#174](https://github.com/felipe-urgal/home-music/issues/174) entregou playlists/pastas offline deduplicadas reutilizando o scheduler/cache existente; e a identidade de instalação da #176 está documentada em [pwa-icon-identity.md](pwa-icon-identity.md).
 
-A implementação de playlists/pastas offline deduplicadas pertence à [#174](https://github.com/felipe-urgal/home-music/issues/174) e reutiliza o scheduler/cache existente, sem segundo pipeline físico. A identidade de instalação da #176 está documentada em [pwa-icon-identity.md](pwa-icon-identity.md).
+A matriz de [offline-downloads.md](offline-downloads.md) permanece como protocolo de regressão manual para mudanças futuras no pipeline offline ou no service worker.

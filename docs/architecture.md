@@ -310,7 +310,7 @@ Downloads `tracks:v2` existentes antes da camada de referências são migrados c
 
 Em navegadores com Background Fetch, a transferência de uma faixa pode ser delegada ao navegador. No `backgroundfetchsuccess`, o worker valida a registration `userId + trackId`, exige uma única resposta completa same-origin para a rota de streaming e grava os bytes somente no cache do proprietário. Ele **não publica o manifesto físico**; quando a página volta a executar, o fluxo normal confirma o cache e revalida a referência lógica antes de marcar a faixa como disponível.
 
-Navegadores sem a API continuam no `fetch()` foreground. Safari/iPhone/iPad permanecem nesse fallback enquanto não houver suporte. A #81 continua sendo o gate de hardware: suporte de API não substitui validação real de tela bloqueada/background, e fechar/recarregar a aba ainda não é tratado como garantia de retomada/publicação.
+Navegadores sem a API continuam no `fetch()` foreground. Safari/iPhone/iPad permanecem nesse fallback enquanto não houver suporte. A matriz de hardware da #81 foi concluída e a issue encerrada; suporte de API continua não substituindo os limites reais de cada plataforma, e fechar/recarregar a aba ainda não é tratado como garantia de retomada/publicação.
 
 Detalhes: `offline-downloads.md` e `pwa.md`.
 
