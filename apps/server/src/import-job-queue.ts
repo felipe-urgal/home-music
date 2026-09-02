@@ -118,10 +118,10 @@ export class ImportJobQueue {
     this.now = options.now ?? (() => new Date());
     this.createId = options.createId ?? randomUUID;
     this.maxRetainedJobs = Math.max(1, Math.floor(options.maxRetainedJobs ?? 200));
-    this.maxNonTerminalJobs = Math.max(1, Math.floor(options.maxNonTerminalJobs ?? 64));
+    this.maxNonTerminalJobs = Math.max(1, Math.floor(options.maxNonTerminalJobs ?? 16));
     this.maxNonTerminalJobsPerOwner = Math.min(
       this.maxNonTerminalJobs,
-      Math.max(1, Math.floor(options.maxNonTerminalJobsPerOwner ?? 32))
+      Math.max(1, Math.floor(options.maxNonTerminalJobsPerOwner ?? 8))
     );
     this.retryAfterSeconds = Math.max(1, Math.floor(options.retryAfterSeconds ?? 2));
     this.onChange = options.onChange;
