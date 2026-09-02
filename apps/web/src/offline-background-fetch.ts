@@ -71,12 +71,17 @@ export function supportsBackgroundFetchCapability(value: unknown) {
   );
 }
 
+export function isAndroidBackgroundFetchRuntime(userAgent: string) {
+  return /\bAndroid\b/i.test(userAgent);
+}
+
 function browserCanProbeBackgroundFetch() {
   return (
     typeof window !== 'undefined' &&
     typeof navigator !== 'undefined' &&
     'serviceWorker' in navigator &&
-    'caches' in window
+    'caches' in window &&
+    isAndroidBackgroundFetchRuntime(navigator.userAgent)
   );
 }
 
