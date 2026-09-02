@@ -2,7 +2,7 @@
 
 Este diretório mistura documentação **corrente** e registros históricos de implementação. Esta página define qual material deve ser usado como fonte de verdade.
 
-> Inventário e backlog revisados em 2026-09-02. A Fase 11 e o ciclo funcional anterior estão concluídos. A Fase 12 está em andamento, centralizada na #239; #228, #229, #230, #237, #233, #234 e #235 já foram entregues, e a próxima atividade é a #236. A #123 permanece encerrada como índice executivo do ciclo anterior.
+> Inventário e backlog revisados em 2026-09-02. A Fase 11 e o ciclo funcional anterior estão concluídos. A Fase 12 está em andamento, centralizada na #239; #228, #229, #230, #237, #233, #234, #235 e #236 já foram entregues, e a próxima atividade serial planejada é a #238. A #123 permanece encerrada como índice executivo do ciclo anterior.
 
 ## Desenvolvimento e agentes de IA
 
@@ -35,8 +35,8 @@ A Fase 12 está em andamento e concentra o backlog implementável atual.
 | [#233](https://github.com/felipe-urgal/home-music/issues/233) | concorrência limitada no scanner; concluída pelo PR #245 |
 | [#234](https://github.com/felipe-urgal/home-music/issues/234) | persistência SQLite somente por delta do scan; concluída pelo PR #247 |
 | [#235](https://github.com/felipe-urgal/home-music/issues/235) | revision, ETag e compressão da biblioteca; concluída pelo PR #248 |
-| [#236](https://github.com/felipe-urgal/home-music/issues/236) | code splitting das telas secundárias; próxima atividade serial |
-| [#238](https://github.com/felipe-urgal/home-music/issues/238) | reduzir recomputações da navegação da biblioteca; atividade serial após #236 |
+| [#236](https://github.com/felipe-urgal/home-music/issues/236) | code splitting das telas secundárias; concluída pelo PR #249 |
+| [#238](https://github.com/felipe-urgal/home-music/issues/238) | reduzir recomputações da navegação da biblioteca; próxima atividade serial planejada |
 | [#239](https://github.com/felipe-urgal/home-music/issues/239) | índice executivo ativo da Fase 12 — Segurança e Performance |
 | [#123](https://github.com/felipe-urgal/home-music/issues/123) | encerrada como índice executivo do ciclo anterior |
 
@@ -46,6 +46,7 @@ A ordem corrente da Fase 12 está em `roadmap.md` e na #239. Itens concluídos d
 
 - [`app-composition.md`](app-composition.md) — limites entre raiz de sessão/conectividade, aplicação autenticada e aplicação offline, incluindo a entrada manual pelo painel da conta sem duplicar o estado de conectividade.
 - [`artwork-fallback.md`](artwork-fallback.md) — política canônica de capa efetiva e fallback visual reutilizável entre biblioteca, player e administração.
+- [`frontend-code-splitting.md`](frontend-code-splitting.md) — política de carregamento sob demanda para Administração, Minha conta e Offline, fallback recuperável e budgets de bundle.
 
 ## Composição do backend
 
@@ -64,6 +65,7 @@ A ordem corrente da Fase 12 está em `roadmap.md` e na #239. Itens concluídos d
 
 - [`large-library-benchmark.md`](large-library-benchmark.md) — dataset sintético, cenários, baseline operacional, scanner concorrente, persistência SQLite incremental e limites do gate de regressão grave para bibliotecas grandes.
 - [`library-http-delivery.md`](library-http-delivery.md) — snapshot HTTP autenticado da biblioteca, `revision`, ETag privado, revalidação `304`, compressão Brotli/gzip e cache de projeção/serialização.
+- [`frontend-code-splitting.md`](frontend-code-splitting.md) — chunks secundários sob demanda, invariantes de navegação/autorização e budgets raw/gzip/Brotli validados no build.
 
 ## Acessibilidade
 
@@ -147,7 +149,6 @@ Fontes atuais:
 - [`phase-7.5-operations.md`](phase-7.5-operations.md)
 - [`phase-7.5-admin-users-screen.md`](phase-7.5-admin-users-screen.md)
 - [`phase-7.5-my-account-screen.md`](phase-7.5-my-account-screen.md)
-- [`phase-7.5-remove-env-auth-recovery.md`](phase-7.5-remove-env-auth-recovery.md)
 
 A política de capacidade e isolamento de sessões da #228 está documentada em `multi-user-auth.md`; a proteção de login entregue pela #229 está documentada em `login-abuse-protection.md`.
 
