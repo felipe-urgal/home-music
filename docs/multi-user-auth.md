@@ -187,6 +187,21 @@ Isso permite efeito imediato de:
 - troca/reset de senha;
 - revogação de sessões.
 
+### Capacidade e isolamento
+
+A capacidade em memória é deliberadamente limitada, mas o limite nunca pode permitir que uma conta expulse sessões de outra conta.
+
+Política atual:
+
+- até **16 sessões simultâneas por usuário**;
+- ao criar a 17ª sessão da mesma conta, apenas a sessão mais antiga **da própria conta** é revogada;
+- até **128 sessões globais** no processo, após limpar sessões expiradas;
+- se o limite global continuar cheio e a nova conta ainda estiver abaixo do próprio limite, o login falha de forma controlada com `503 Service Unavailable` e `Retry-After: 60`;
+- pressão global nunca escolhe uma sessão de terceiro para eviction;
+- listagem, revogação manual, logout, troca/reset de senha e expiração continuam usando as mesmas sessões em memória.
+
+Essa separação impede que um usuário comum provoque logout do administrador ou de outra conta repetindo logins. O limite global permanece apenas como proteção de memória do processo.
+
 Reiniciar o processo revoga as sessões em memória.
 
 ## Senha temporária
@@ -286,6 +301,7 @@ A cobertura existente inclui, entre outros:
 
 - hashing/verificação e formatos inválidos;
 - sessão/revogação;
+- isolamento de capacidade entre contas e saturação global sem cross-user eviction;
 - último administrador;
 - usuário desativado;
 - troca obrigatória de senha;
