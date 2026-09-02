@@ -96,6 +96,7 @@ export function createServerInfrastructure(options: ServerInfrastructureOptions)
   const transcodeCacheMaintenance = new TranscodeCacheMaintenance({
     cacheDir: options.transcodeCachePath,
     limitBytes: transcodeManager.maxCacheBytes,
+    retryAfterSeconds: heavyWorkLimits.retryAfterSeconds,
     runtime: () => ({
       active: transcodeManager.activeCount,
       pending: transcodeManager.pendingCount
