@@ -19,7 +19,7 @@ export type AuthSession = Readonly<{
 }>;
 
 export type PublicAuthSession = Readonly<{
-  userId: string | null;
+  id: string;
   current: boolean;
   createdAt: number;
   lastSeenAt: number;
