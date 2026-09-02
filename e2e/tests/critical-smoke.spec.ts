@@ -22,6 +22,18 @@ async function login(page: Page, path = '/') {
   await expect(page.locator('main.app-shell')).toBeVisible();
 }
 
+async function assetPaths(page: Page) {
+  return page.evaluate(() => (performance.getEntriesByType('resource') as PerformanceResourceTiming[])
+    .map(entry => {
+      try {
+        return new URL(entry.name).pathname;
+      } catch {
+        return '';
+      }
+    })
+    .filter(pathname => pathname.startsWith('/assets/')));
+}
+
 async function expectLibrary(page: Page) {
   await expect(page.getByPlaceholder('Música, artista, álbum ou pasta')).toBeVisible();
 }
@@ -111,6 +123,11 @@ test('smoke crítico: deep link, acessibilidade, histórico, player, conta e adm
   await expectLibrary(page);
   await expectAccessibilityBaseline(page);
 
+  expect(
+    (await assetPaths(page)).some(pathname => /^\/assets\/AdministrationScreen-[^/]+\.js$/.test(pathname)),
+    'o fluxo normal da biblioteca não deve baixar o chunk administrativo'
+  ).toBe(false);
+
   const audio = page.locator('audio');
   await expect(audio).toHaveCount(1);
   await audio.evaluate(element => element.setAttribute('data-e2e-route-audio', 'preserved'));
@@ -118,6 +135,9 @@ test('smoke crítico: deep link, acessibilidade, histórico, player, conta e adm
   await openAccount(page);
   await expect(page).toHaveURL(/\/account$/);
   await expect(audio).toHaveAttribute('data-e2e-route-audio', 'preserved');
+  await expect.poll(async () =>
+    (await assetPaths(page)).some(pathname => /^\/assets\/MyAccountScreen-[^/]+\.js$/.test(pathname))
+  ).toBe(true);
 
   await page.goBack();
   await expect(page).toHaveURL(/\/library$/);
@@ -132,6 +152,9 @@ test('smoke crítico: deep link, acessibilidade, histórico, player, conta e adm
   await expect(page).toHaveURL(/\/admin$/);
   await expect(page.locator('#administration-title')).toHaveText('Administração');
   await expect(audio).toHaveAttribute('data-e2e-route-audio', 'preserved');
+  await expect.poll(async () =>
+    (await assetPaths(page)).some(pathname => /^\/assets\/AdministrationScreen-[^/]+\.js$/.test(pathname))
+  ).toBe(true);
 
   await page.reload();
   await expect(page).toHaveURL(/\/admin$/);
@@ -144,4 +167,14 @@ test('smoke crítico: deep link, acessibilidade, histórico, player, conta e adm
   await page.goto('/rota-invalida');
   await expect(page).toHaveURL(/\/$/);
   await expect(page.locator('main.app-shell')).toBeVisible();
+});
+
+test('chunk administrativo indisponível mostra fallback recuperável', async ({ page }) => {
+  await page.route(/\/assets\/AdministrationScreen-[^/]+\.js(?:\?.*)?$/, route => route.abort());
+  await login(page, '/admin');
+
+  const errorState = page.getByTestId('responsive-state-error');
+  await expect(errorState).toBeVisible();
+  await expect(errorState).toContainText('Não foi possível carregar esta área');
+  await expect(errorState.getByRole('button', { name: 'Recarregar aplicativo' })).toBeVisible();
 });
