@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { FfmpegStatus } from './ffmpeg.js';
+import type { HeavyWorkQueueRuntime } from './heavy-work-queue.js';
 import type { LibraryService } from './library-service.js';
 import {
   requestPathname,
@@ -7,6 +8,13 @@ import {
   type PreparedWebApp
 } from './static-web.js';
 import { TRANSCODE_PROFILES } from './transcoding.js';
+
+type HeavyWorkRuntime = {
+  transcode: HeavyWorkQueueRuntime;
+  cover: HeavyWorkQueueRuntime;
+  imports: HeavyWorkQueueRuntime;
+  integrity: HeavyWorkQueueRuntime;
+};
 
 type SystemRouteDependencies = {
   isProduction: boolean;
@@ -17,6 +25,7 @@ type SystemRouteDependencies = {
   getFfmpegStatus: () => FfmpegStatus;
   getSchemaVersion: () => number;
   getTranscodingRuntime: () => { active: number; pending: number };
+  getHeavyWorkRuntime?: () => HeavyWorkRuntime;
   isWebReady: () => boolean;
 };
 
@@ -33,6 +42,7 @@ export function registerSystemRoutes(
     getFfmpegStatus,
     getSchemaVersion,
     getTranscodingRuntime,
+    getHeavyWorkRuntime,
     isWebReady
   } = dependencies;
 
@@ -60,6 +70,7 @@ export function registerSystemRoutes(
     const { ready, webReady } = readinessState();
     const ffmpegStatus = getFfmpegStatus();
     const transcoding = getTranscodingRuntime();
+    const workQueues = getHeavyWorkRuntime?.();
     return {
       ready,
       mode: isProduction ? 'production' : 'development',
@@ -81,8 +92,14 @@ export function registerSystemRoutes(
         profiles: ffmpegStatus.available ? Object.keys(TRANSCODE_PROFILES) : [],
         cacheLimitMegabytes: transcodeCacheMegabytes,
         active: transcoding.active,
-        pending: transcoding.pending
+        pending: transcoding.pending,
+        ...(workQueues ? {
+          rejected: workQueues.transcode.rejected,
+          oldestPendingMs: workQueues.transcode.oldestPendingMs,
+          lastQueueWaitMs: workQueues.transcode.lastQueueWaitMs
+        } : {})
       },
+      ...(workQueues ? { workQueues } : {}),
       schemaVersion: getSchemaVersion()
     };
   });
