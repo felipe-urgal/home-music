@@ -2,7 +2,7 @@
 
 Este documento é a visão técnica de alto nível do Home Music. A issue [#123](https://github.com/felipe-urgal/home-music/issues/123) preserva o índice executivo do ciclo de backlog concluído em 2026-09-02. O ciclo técnico atual está centralizado na [#239](https://github.com/felipe-urgal/home-music/issues/239).
 
-> Estado revisado em 2026-09-02. O backlog planejado da Fase 11 e o ciclo funcional anterior estão concluídos. A Fase 12 está em andamento; #228, #229, #230, #237 e #233 já foram entregues, e a atividade atual é a #234 no PR #246.
+> Estado revisado em 2026-09-02. O backlog planejado da Fase 11 e o ciclo funcional anterior estão concluídos. A Fase 12 está em andamento; #228, #229, #230, #237 e #233 já foram entregues, e a atividade atual é a #234 no PR #247.
 
 ## Fases 1–2 — Base do produto e biblioteca pessoal
 
@@ -200,7 +200,7 @@ O PR #207 foi mergeado em 2026-09-01 com CI completo verde e encerrou o backlog 
 - [x] [#229](https://github.com/felipe-urgal/home-music/issues/229) — proteção adicional contra brute force e abuso de CPU no login — entregue pelo PR #242;
 - [x] [#230](https://github.com/felipe-urgal/home-music/issues/230) — backpressure e limites para filas de trabalho pesado — entregue pelo PR #243;
 - [x] [#233](https://github.com/felipe-urgal/home-music/issues/233) — concorrência limitada no scan da biblioteca — entregue pelo PR #245;
-- [ ] [#234](https://github.com/felipe-urgal/home-music/issues/234) — persistência SQLite somente por delta do scan — em execução no PR #246;
+- [ ] [#234](https://github.com/felipe-urgal/home-music/issues/234) — persistência SQLite somente por delta do scan — em execução no PR #247;
 - [ ] [#235](https://github.com/felipe-urgal/home-music/issues/235) — revision, ETag e compressão da biblioteca.
 
 ### P1
@@ -222,7 +222,7 @@ Esses itens são independentes da #174 e da #81, ambas concluídas.
 
 ## Backlog atual
 
-O backlog implementável atual é a Fase 12, centralizada na #239. A #234 é a atividade em execução no PR #246; a próxima dependência serial é a #235. A #123 permanece encerrada como registro do ciclo anterior e não deve ser reaberta artificialmente.
+O backlog implementável atual é a Fase 12, centralizada na #239. A #234 é a atividade em execução no PR #247; a próxima dependência serial é a #235. A #123 permanece encerrada como registro do ciclo anterior e não deve ser reaberta artificialmente.
 
 ## Regra de execução
 
