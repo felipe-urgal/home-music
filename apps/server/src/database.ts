@@ -8,6 +8,29 @@ import type { IndexedTrack, LibraryTrackDelta } from './library.js';
 
 const CURRENT_SCHEMA_VERSION = 11;
 const HISTORY_CAPACITY = 2_000;
+const TRACK_UPSERT_SQL = `
+  INSERT INTO tracks(
+    id, file_path, title, artist, album, album_artist, folder, folder_path,
+    duration, format, has_cover, replaygain_track_db, replaygain_album_db,
+    mime_type, file_size, mtime_ms
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  ON CONFLICT(id) DO UPDATE SET
+    file_path = excluded.file_path,
+    title = excluded.title,
+    artist = excluded.artist,
+    album = excluded.album,
+    album_artist = excluded.album_artist,
+    folder = excluded.folder,
+    folder_path = excluded.folder_path,
+    duration = excluded.duration,
+    format = excluded.format,
+    has_cover = excluded.has_cover,
+    replaygain_track_db = excluded.replaygain_track_db,
+    replaygain_album_db = excluded.replaygain_album_db,
+    mime_type = excluded.mime_type,
+    file_size = excluded.file_size,
+    mtime_ms = excluded.mtime_ms
+`;
 
 const DEFAULT_PLAYBACK_STATE: PlaybackState = {
   currentTrackId: null,
@@ -81,6 +104,27 @@ function publicTrackFromRow(row: Row): Track {
     replayGainTrackDb: row.replaygain_track_db == null ? null : numberValue(row.replaygain_track_db),
     replayGainAlbumDb: row.replaygain_album_db == null ? null : numberValue(row.replaygain_album_db)
   };
+}
+
+function trackUpsertBindings(track: IndexedTrack) {
+  return [
+    track.id,
+    track.filePath,
+    track.title,
+    track.artist,
+    track.album,
+    track.albumArtist,
+    track.folder,
+    track.folderPath,
+    track.duration,
+    track.format,
+    track.hasCover ? 1 : 0,
+    track.replayGainTrackDb ?? null,
+    track.replayGainAlbumDb ?? null,
+    track.mimeType,
+    track.fileSize,
+    track.mtimeMs
+  ] as const;
 }
 
 export class HomeMusicDatabase {
@@ -671,50 +715,8 @@ export class HomeMusicDatabase {
 
   private upsertTracks(tracks: readonly IndexedTrack[]) {
     if (tracks.length === 0) return;
-    const upsert = this.db.prepare(`
-      INSERT INTO tracks(
-        id, file_path, title, artist, album, album_artist, folder, folder_path,
-        duration, format, has_cover, replaygain_track_db, replaygain_album_db,
-        mime_type, file_size, mtime_ms
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET
-        file_path = excluded.file_path,
-        title = excluded.title,
-        artist = excluded.artist,
-        album = excluded.album,
-        album_artist = excluded.album_artist,
-        folder = excluded.folder,
-        folder_path = excluded.folder_path,
-        duration = excluded.duration,
-        format = excluded.format,
-        has_cover = excluded.has_cover,
-        replaygain_track_db = excluded.replaygain_track_db,
-        replaygain_album_db = excluded.replaygain_album_db,
-        mime_type = excluded.mime_type,
-        file_size = excluded.file_size,
-        mtime_ms = excluded.mtime_ms
-    `);
-
-    for (const track of tracks) {
-      upsert.run(
-        track.id,
-        track.filePath,
-        track.title,
-        track.artist,
-        track.album,
-        track.albumArtist,
-        track.folder,
-        track.folderPath,
-        track.duration,
-        track.format,
-        track.hasCover ? 1 : 0,
-        track.replayGainTrackDb ?? null,
-        track.replayGainAlbumDb ?? null,
-        track.mimeType,
-        track.fileSize,
-        track.mtimeMs
-      );
-    }
+    const upsert = this.db.prepare(TRACK_UPSERT_SQL);
+    for (const track of tracks) upsert.run(...trackUpsertBindings(track));
   }
 
   private removeTrackIds(trackIds: readonly string[]) {
