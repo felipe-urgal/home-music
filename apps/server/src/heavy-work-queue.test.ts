@@ -49,13 +49,12 @@ test('rejects work beyond global and per-user pending limits', async () => {
     HeavyWorkQueueSaturatedError
   );
 
-  assert.deepEqual(queue.runtime, {
-    active: 1,
-    pending: 2,
-    rejected: 2,
-    oldestPendingMs: queue.runtime.oldestPendingMs,
-    lastQueueWaitMs: 0
-  });
+  const runtime = queue.runtime;
+  assert.equal(runtime.active, 1);
+  assert.equal(runtime.pending, 2);
+  assert.equal(runtime.rejected, 2);
+  assert.ok(runtime.oldestPendingMs >= 0);
+  assert.equal(runtime.lastQueueWaitMs, 0);
 
   running.resolve();
   await Promise.all([first, queued, otherQueued]);
@@ -137,6 +136,14 @@ test('parses bounded environment limits', () => {
   assert.deepEqual(limits.cover, { maxConcurrent: 3, maxPending: 20, maxPendingPerOwner: 4 });
   assert.deepEqual(limits.imports, { maxNonTerminal: 40, maxNonTerminalPerOwner: 8 });
   assert.deepEqual(limits.integrity, { maxConcurrent: 1, maxPending: 4, maxPendingPerOwner: 2 });
+
+  const clampedDefaults = parseHeavyWorkLimits({
+    HOME_MUSIC_TRANSCODE_MAX_PENDING: '2',
+    HOME_MUSIC_IMPORT_MAX_NON_TERMINAL: '4'
+  });
+  assert.equal(clampedDefaults.transcode.maxPendingPerOwner, 2);
+  assert.equal(clampedDefaults.imports.maxNonTerminalPerOwner, 4);
+
   assert.throws(
     () => parseHeavyWorkLimits({ HOME_MUSIC_TRANSCODE_MAX_PENDING: '513' }),
     /HOME_MUSIC_TRANSCODE_MAX_PENDING/
