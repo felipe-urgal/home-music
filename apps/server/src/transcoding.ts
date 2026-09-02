@@ -3,6 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { chmod, mkdir, readdir, rename, rm, stat, utimes } from 'node:fs/promises';
 import path from 'node:path';
 import type { Readable } from 'node:stream';
+import { HeavyWorkQueue, type HeavyWorkQueueRuntime } from './heavy-work-queue.js';
 import type { LongJobObservability } from './long-job-observability.js';
 import { clampReplayGainDb } from './replay-gain.js';
 
@@ -46,13 +47,14 @@ export type TranscodeRunnerOptions = {
   bitrate: string;
   normalizationGainDb: number | null;
   timeoutMs: number;
+  signal?: AbortSignal;
 };
 
 export type TranscodeRunner = (options: TranscodeRunnerOptions) => Promise<void>;
 
 export class TranscodeExecutionError extends Error {
   constructor(
-    public readonly reason: 'spawn' | 'timeout' | 'failed',
+    public readonly reason: 'spawn' | 'timeout' | 'failed' | 'aborted',
     message: string
   ) {
     super(message);
@@ -87,11 +89,24 @@ export function seekableInputFd(input: Pick<SeekableInput, 'fd'>) {
   return typeof input.fd === 'number' && Number.isInteger(input.fd) && input.fd >= 0 ? input.fd : null;
 }
 
-export const runFfmpegTranscode: TranscodeRunner = ({ command, input, outputPath, bitrate, normalizationGainDb, timeoutMs }) => new Promise((resolve, reject) => {
+export const runFfmpegTranscode: TranscodeRunner = ({
+  command,
+  input,
+  outputPath,
+  bitrate,
+  normalizationGainDb,
+  timeoutMs,
+  signal
+}) => new Promise((resolve, reject) => {
   const inputFd = seekableInputFd(input);
   if (inputFd === null) {
     input.destroy();
     reject(new TranscodeExecutionError('failed', 'Entrada do FFmpeg não possui descritor seekable.'));
+    return;
+  }
+  if (signal?.aborted) {
+    input.destroy();
+    reject(new TranscodeExecutionError('aborted', 'Transcoding cancelado antes de iniciar.'));
     return;
   }
 
@@ -132,12 +147,20 @@ export const runFfmpegTranscode: TranscodeRunner = ({ command, input, outputPath
 
   let settled = false;
   let timedOut = false;
+  let aborted = false;
   let stderr = '';
+
+  const onAbort = () => {
+    aborted = true;
+    child.kill('SIGKILL');
+  };
+  signal?.addEventListener('abort', onAbort, { once: true });
 
   function finish(error?: Error) {
     if (settled) return;
     settled = true;
     clearTimeout(timer);
+    signal?.removeEventListener('abort', onAbort);
     input.destroy();
     if (error) reject(error);
     else resolve();
@@ -158,6 +181,10 @@ export const runFfmpegTranscode: TranscodeRunner = ({ command, input, outputPath
   });
 
   child.once('close', code => {
+    if (aborted) {
+      finish(new TranscodeExecutionError('aborted', 'Transcoding cancelado pelo cliente.'));
+      return;
+    }
     if (timedOut) {
       finish(new TranscodeExecutionError('timeout', 'FFmpeg excedeu o tempo máximo de transcoding.'));
       return;
@@ -179,8 +206,7 @@ type CacheEntry = {
 
 export class TranscodeManager {
   private readonly pending = new Map<string, Promise<void>>();
-  private readonly waiters: Array<() => void> = [];
-  private active = 0;
+  private readonly queue: HeavyWorkQueue;
   private initialized: Promise<void> | null = null;
 
   constructor(private readonly options: {
@@ -188,17 +214,33 @@ export class TranscodeManager {
     command: string;
     maxCacheBytes: number;
     maxConcurrent?: number;
+    maxPending?: number;
+    maxPendingPerOwner?: number;
+    retryAfterSeconds?: number;
     timeoutMs?: number;
     runner?: TranscodeRunner;
     observability?: LongJobObservability;
-  }) {}
+  }) {
+    const maxPending = Math.max(1, Math.floor(options.maxPending ?? 12));
+    this.queue = new HeavyWorkQueue({
+      name: 'transcode',
+      maxConcurrent: Math.max(1, Math.floor(options.maxConcurrent ?? 1)),
+      maxPending,
+      maxPendingPerOwner: Math.min(maxPending, Math.max(1, Math.floor(options.maxPendingPerOwner ?? 4))),
+      retryAfterSeconds: Math.max(1, Math.floor(options.retryAfterSeconds ?? 2))
+    });
+  }
 
   get activeCount() {
-    return this.active;
+    return this.queue.runtime.active;
   }
 
   get pendingCount() {
-    return this.pending.size;
+    return this.queue.runtime.pending;
+  }
+
+  get queueRuntime(): HeavyWorkQueueRuntime {
+    return this.queue.runtime;
   }
 
   get maxCacheBytes() {
@@ -224,7 +266,7 @@ export class TranscodeManager {
       return { path: finalPath, size: ready.size, cacheHit: true, quality: source.quality };
     }
 
-    const work = this.withSlot(async () => {
+    const work = this.queue.run(async signal => {
       if (await this.cachedFile(finalPath)) return;
 
       const temporaryPath = `${finalPath}.tmp-${randomUUID()}`;
@@ -242,7 +284,8 @@ export class TranscodeManager {
           outputPath: temporaryPath,
           bitrate: TRANSCODE_PROFILES[source.quality].bitrate,
           normalizationGainDb: source.normalizationGainDb == null ? null : clampReplayGainDb(source.normalizationGainDb),
-          timeoutMs: this.options.timeoutMs ?? DEFAULT_TRANSCODE_TIMEOUT_MS
+          timeoutMs: this.options.timeoutMs ?? DEFAULT_TRANSCODE_TIMEOUT_MS,
+          signal
         });
 
         const output = await stat(temporaryPath);
@@ -304,28 +347,6 @@ export class TranscodeManager {
   private async touch(filePath: string) {
     const now = new Date();
     await utimes(filePath, now, now).catch(() => undefined);
-  }
-
-  private async acquireSlot() {
-    const maxConcurrent = Math.max(1, this.options.maxConcurrent ?? 1);
-    if (this.active >= maxConcurrent) {
-      await new Promise<void>(resolve => this.waiters.push(resolve));
-    }
-    this.active += 1;
-  }
-
-  private releaseSlot() {
-    this.active = Math.max(0, this.active - 1);
-    this.waiters.shift()?.();
-  }
-
-  private async withSlot<T>(operation: () => Promise<T>) {
-    await this.acquireSlot();
-    try {
-      return await operation();
-    } finally {
-      this.releaseSlot();
-    }
   }
 
   private async enforceLimit(keepPath?: string) {
