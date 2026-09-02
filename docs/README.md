@@ -2,7 +2,7 @@
 
 Este diretório mistura documentação **corrente** e registros históricos de implementação. Esta página define qual material deve ser usado como fonte de verdade.
 
-> Inventário e backlog revisados em 2026-09-02. A Fase 11 e o ciclo funcional anterior estão concluídos. A Fase 12 está em andamento, centralizada na #239; #228, #229, #230, #237 e #233 já foram entregues, e a atividade atual é a #234 no PR #247. A #123 permanece encerrada como índice executivo do ciclo anterior.
+> Inventário e backlog revisados em 2026-09-02. A Fase 11 e o ciclo funcional anterior estão concluídos. A Fase 12 está em andamento, centralizada na #239; #228, #229, #230, #237, #233 e #234 já foram entregues, e a próxima atividade é a #235. A #123 permanece encerrada como índice executivo do ciclo anterior.
 
 ## Desenvolvimento e agentes de IA
 
@@ -33,8 +33,8 @@ A Fase 12 está em andamento e concentra o backlog implementável atual.
 | [#230](https://github.com/felipe-urgal/home-music/issues/230) | backpressure e limites para trabalho pesado; concluída pelo PR #243 |
 | [#237](https://github.com/felipe-urgal/home-music/issues/237) | benchmark de biblioteca grande em Chromium real; concluída pelo PR #244 |
 | [#233](https://github.com/felipe-urgal/home-music/issues/233) | concorrência limitada no scanner; concluída pelo PR #245 |
-| [#234](https://github.com/felipe-urgal/home-music/issues/234) | persistência SQLite somente por delta do scan; em execução no PR #247 |
-| [#235](https://github.com/felipe-urgal/home-music/issues/235) | revision, ETag e compressão da biblioteca; pendente após #234 |
+| [#234](https://github.com/felipe-urgal/home-music/issues/234) | persistência SQLite somente por delta do scan; concluída pelo PR #247 |
+| [#235](https://github.com/felipe-urgal/home-music/issues/235) | revision, ETag e compressão da biblioteca; próxima atividade |
 | [#239](https://github.com/felipe-urgal/home-music/issues/239) | índice executivo ativo da Fase 12 — Segurança e Performance |
 | [#123](https://github.com/felipe-urgal/home-music/issues/123) | encerrada como índice executivo do ciclo anterior |
 
