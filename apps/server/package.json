@@ -10,6 +10,7 @@
     "test": "tsx --test src/*.test.ts",
     "test:security": "tsx --test src/*security*.test.ts",
     "benchmark:large-library": "node --expose-gc --import tsx src/large-library.benchmark.ts",
+    "benchmark:backpressure": "node --expose-gc --import tsx src/heavy-work-queue.benchmark.ts",
     "ffmpeg:status": "tsx src/ffmpeg-cli.ts",
     "admin:recover": "tsx src/admin-recovery-cli.ts",
     "backup:create": "tsx src/backup-cli.ts create",
