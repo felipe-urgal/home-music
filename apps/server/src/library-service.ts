@@ -250,11 +250,21 @@ export class LibraryService {
         );
         const nextTracks = mergeIndexedTrack(this.tracks, indexed);
         const nextScannedAt = new Date().toISOString();
+        const persistence = this.options.database.applyTrackDelta({
+          added: existing ? [] : [indexed],
+          updated: existing ? [indexed] : [],
+          removedIds: []
+        }, resolvedRoot, nextScannedAt);
 
-        this.options.database.syncTracks(nextTracks, resolvedRoot, nextScannedAt);
         this.applySnapshot(nextTracks, resolvedRoot, nextScannedAt, true);
         this.options.logger.info(
-          { importJobId: jobId, trackId: indexed.id, relativePath: promoted.relativePath },
+          {
+            importJobId: jobId,
+            trackId: indexed.id,
+            relativePath: promoted.relativePath,
+            sqlitePersistenceMs: persistence.durationMs,
+            sqliteUpserted: persistence.upserted
+          },
           'Importação adicionada à biblioteca incrementalmente.'
         );
       } catch (incrementalError) {
@@ -362,9 +372,20 @@ export class LibraryService {
       || result.stats.added > 0
       || result.stats.updated > 0
       || result.stats.removed > 0;
+    const persistence = rootChanged
+      ? this.options.database.syncTracks(result.tracks, resolvedRoot, nextScannedAt)
+      : this.options.database.applyTrackDelta(result.delta, resolvedRoot, nextScannedAt);
 
-    this.options.database.syncTracks(result.tracks, resolvedRoot, nextScannedAt);
     this.applySnapshot(result.tracks, resolvedRoot, nextScannedAt, changed);
+    this.options.logger.info(
+      {
+        persistenceMode: persistence.mode,
+        sqlitePersistenceMs: persistence.durationMs,
+        sqliteUpserted: persistence.upserted,
+        sqliteRemoved: persistence.removed
+      },
+      'Persistência SQLite do scan concluída.'
+    );
 
     return {
       tracks: this.tracksById.size,
