@@ -12,7 +12,8 @@ import {
   MonitorOff,
   ShieldCheck,
   SlidersHorizontal,
-  UserRound
+  UserRound,
+  WifiOff
 } from 'lucide-react';
 import {
   changeOwnPassword,
@@ -31,9 +32,17 @@ import { AccountSessionsScreen } from './AccountSessionsScreen';
 
 type AccountView = 'overview' | 'profile' | 'password' | 'sessions' | 'playback';
 
+type OfflineModeControl = {
+  supported: boolean;
+  loading: boolean;
+  availableCount: number;
+  onOpen: () => void;
+};
+
 type MyAccountScreenProps = {
   currentUser: AuthenticatedUser;
   playbackPreferences?: AccountPlaybackPreferencesValue;
+  offlineMode?: OfflineModeControl;
   onBack: () => void;
   onOpenAdministration: () => void;
   onSessionEnded: () => Promise<void>;
@@ -47,6 +56,7 @@ function errorMessage(error: unknown) {
 export function MyAccountScreen({
   currentUser,
   playbackPreferences,
+  offlineMode,
   onBack,
   onOpenAdministration,
   onSessionEnded,
@@ -67,6 +77,20 @@ export function MyAccountScreen({
   const [notice, setNotice] = useState<string | null>(null);
   const validationError = passwordChangeValidation(currentPassword, newPassword, confirmation);
   const roleLabel = currentUser.role === 'admin' ? 'Administrador' : 'Usuário';
+  const offlineModeAvailable = Boolean(
+    offlineMode?.supported
+    && !offlineMode.loading
+    && offlineMode.availableCount > 0
+  );
+  const offlineModeDetail = !offlineMode
+    ? null
+    : offlineMode.loading
+      ? 'Verificando downloads salvos neste dispositivo.'
+      : !offlineMode.supported
+        ? 'Downloads offline não são suportados neste navegador.'
+        : offlineMode.availableCount > 0
+          ? `Usar somente ${offlineMode.availableCount} ${offlineMode.availableCount === 1 ? 'música salva' : 'músicas salvas'} neste dispositivo.`
+          : 'Baixe músicas, playlists ou pastas para usar este modo.';
 
   useEffect(() => {
     if (view !== 'sessions') return;
@@ -220,15 +244,29 @@ export function MyAccountScreen({
             </div>
           </section>
 
-          {playbackPreferences && (
+          {(playbackPreferences || offlineMode) && (
             <section className="my-account-link-group" aria-labelledby="my-account-group-preferences">
               <span className="my-account-link-group__label" id="my-account-group-preferences">Preferências</span>
               <div className="my-account-links">
-                <button type="button" onClick={() => setView('playback')}>
-                  <span className="my-account-card__icon"><SlidersHorizontal /></span>
-                  <span><strong>Reprodução</strong><small>Qualidade, conexão e normalização.</small></span>
-                  <ChevronRight />
-                </button>
+                {playbackPreferences && (
+                  <button type="button" onClick={() => setView('playback')}>
+                    <span className="my-account-card__icon"><SlidersHorizontal /></span>
+                    <span><strong>Reprodução</strong><small>Qualidade, conexão e normalização.</small></span>
+                    <ChevronRight />
+                  </button>
+                )}
+                {offlineMode && (
+                  <button
+                    type="button"
+                    disabled={!offlineModeAvailable}
+                    aria-disabled={!offlineModeAvailable}
+                    onClick={offlineModeAvailable ? offlineMode.onOpen : undefined}
+                  >
+                    <span className="my-account-card__icon"><WifiOff /></span>
+                    <span><strong>Modo offline</strong><small>{offlineModeDetail}</small></span>
+                    <ChevronRight />
+                  </button>
+                )}
               </div>
             </section>
           )}
