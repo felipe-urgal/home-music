@@ -1,5 +1,6 @@
 import { chmod, lstat, mkdir, readdir, rm } from 'node:fs/promises';
 import path from 'node:path';
+import { HeavyWorkQueueSaturatedError } from './heavy-work-queue.js';
 
 const FINAL_CACHE_FILE = /^[a-f0-9]{64}\.m4a$/;
 const TEMP_CACHE_FILE = /^[a-f0-9]{64}\.m4a\.tmp-[a-f0-9-]{8,}$/;
@@ -54,16 +55,16 @@ function safeCount(value: number) {
 export class TranscodeCacheMaintenance {
   private maintenanceActive = false;
   private activeOperations = 0;
-  private readonly waiters: Array<() => void> = [];
 
   constructor(private readonly options: {
     cacheDir: string;
     limitBytes: number;
     runtime: () => TranscodeCacheRuntime;
+    retryAfterSeconds?: number;
   }) {}
 
   async withTranscode<T>(operation: () => Promise<T>): Promise<T> {
-    await this.enterOperation();
+    this.enterOperation();
     try {
       return await operation();
     } finally {
@@ -77,7 +78,7 @@ export class TranscodeCacheMaintenance {
   }
 
   async clear(): Promise<TranscodeCacheClearResult> {
-    await this.beginMaintenance();
+    this.beginMaintenance();
     try {
       const before = await this.scanFiles();
       const runtime = this.runtime();
@@ -116,24 +117,28 @@ export class TranscodeCacheMaintenance {
     };
   }
 
-  private async enterOperation() {
-    while (this.maintenanceActive) {
-      await new Promise<void>(resolve => this.waiters.push(resolve));
+  private enterOperation() {
+    if (this.maintenanceActive) {
+      throw new HeavyWorkQueueSaturatedError(
+        'transcode-maintenance',
+        Math.max(1, Math.floor(this.options.retryAfterSeconds ?? 2))
+      );
     }
     this.activeOperations += 1;
   }
 
-  private async beginMaintenance() {
-    while (this.maintenanceActive) {
-      await new Promise<void>(resolve => this.waiters.push(resolve));
+  private beginMaintenance() {
+    if (this.maintenanceActive) {
+      throw new HeavyWorkQueueSaturatedError(
+        'transcode-maintenance',
+        Math.max(1, Math.floor(this.options.retryAfterSeconds ?? 2))
+      );
     }
     this.maintenanceActive = true;
   }
 
   private endMaintenance() {
     this.maintenanceActive = false;
-    const waiters = this.waiters.splice(0);
-    waiters.forEach(resolve => resolve());
   }
 
   private async ensureSafeCacheDirectory() {
