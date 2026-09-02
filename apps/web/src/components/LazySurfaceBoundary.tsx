@@ -5,15 +5,21 @@ type LazySurfaceBoundaryProps = {
   children: ReactNode;
   loadingTitle: string;
   loadingDetail?: string;
+  fullScreen?: boolean;
 };
 
 type LazySurfaceErrorBoundaryProps = {
   children: ReactNode;
+  fullScreen: boolean;
 };
 
 type LazySurfaceErrorBoundaryState = {
   failed: boolean;
 };
+
+function withOptionalShell(content: ReactNode, fullScreen: boolean) {
+  return fullScreen ? <main className="app-shell">{content}</main> : content;
+}
 
 class LazySurfaceErrorBoundary extends Component<
   LazySurfaceErrorBoundaryProps,
@@ -27,7 +33,7 @@ class LazySurfaceErrorBoundary extends Component<
 
   render() {
     if (this.state.failed) {
-      return (
+      return withOptionalShell(
         <ResponsiveState
           variant="error"
           title="Não foi possível carregar esta área"
@@ -36,7 +42,8 @@ class LazySurfaceErrorBoundary extends Component<
           <button className="primary-action" type="button" onClick={() => window.location.reload()}>
             Recarregar aplicativo
           </button>
-        </ResponsiveState>
+        </ResponsiveState>,
+        this.props.fullScreen
       );
     }
 
@@ -47,19 +54,21 @@ class LazySurfaceErrorBoundary extends Component<
 export function LazySurfaceBoundary({
   children,
   loadingTitle,
-  loadingDetail = 'Carregando somente os recursos necessários para esta área.'
+  loadingDetail = 'Carregando somente os recursos necessários para esta área.',
+  fullScreen = false
 }: LazySurfaceBoundaryProps) {
+  const fallback = withOptionalShell(
+    <ResponsiveState
+      variant="loading"
+      title={loadingTitle}
+      detail={loadingDetail}
+    />,
+    fullScreen
+  );
+
   return (
-    <LazySurfaceErrorBoundary>
-      <Suspense
-        fallback={(
-          <ResponsiveState
-            variant="loading"
-            title={loadingTitle}
-            detail={loadingDetail}
-          />
-        )}
-      >
+    <LazySurfaceErrorBoundary fullScreen={fullScreen}>
+      <Suspense fallback={fallback}>
         {children}
       </Suspense>
     </LazySurfaceErrorBoundary>
