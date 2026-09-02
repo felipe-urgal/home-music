@@ -16,7 +16,7 @@ O manifest usa PNGs `192x192` e `512x512` em variantes `any` e `maskable`. O she
 
 Os PNGs são gerados deterministicamente por `apps/web/scripts/generate-pwa-icons.mjs` antes de desenvolvimento, build e testes. A fonte visual, safe zone e matriz de assets estão documentadas em [pwa-icon-identity.md](pwa-icon-identity.md).
 
-Essa evolução não altera o service worker, o protocolo de capability nem o namespace de áudio offline.
+Essa evolução não altera o namespace de áudio offline.
 
 ## Cache estático
 
@@ -36,6 +36,10 @@ Conteúdo autenticado de `/api/*` não é colocado no cache estático da PWA. Lo
 Áudio offline é explícito e usa armazenamento separado do app shell.
 
 O frontend possui um scheduler global com até **3 operações simultâneas**. Ele é compartilhado por download individual, lote desktop, playlists e pastas. Navegar na SPA não cria uma segunda fila.
+
+Em navegadores que expõem **Background Fetch** e estão sob o service worker capability v4, a transferência da faixa é delegada ao navegador. Isso permite que a transferência já iniciada continue quando a página perde tempo de CPU ou é suspensa em background, dentro das políticas do navegador. O scheduler continua sendo a autoridade que limita a três transferências iniciadas pelo Home Music.
+
+Em navegadores sem Background Fetch — incluindo Safari/iPhone/iPad no suporte atual — o Home Music mantém o `fetch()` da página como fallback, sem alterar a experiência existente nem prometer continuidade com tela bloqueada.
 
 O namespace por usuário é:
 
@@ -88,17 +92,21 @@ Ela:
 - responde `206` para range válido e `416` para range inválido;
 - não escolhe usuário por parâmetro de URL.
 
-A #174 não altera esse protocolo: coleções são referências frontend sobre o mesmo artefato físico.
+Coleções continuam sendo referências frontend sobre o mesmo artefato físico.
 
 ## Capability e isolamento por client
 
-O protocolo do service worker permanece **versão 3**.
+O protocolo do service worker é **versão 4**.
 
 O frontend negocia a capability informando o `userId` autenticado. O worker associa esse usuário ao `clientId` e persiste somente o vínculo mínimo em `home-music-offline-client-scope-v1` para sobreviver à suspensão/restart do worker.
 
-O worker só considera o client pronto depois de persistir e confirmar o escopo. Trocas rápidas de conta são serializadas para que a identidade mais recente vença.
+A resposta v4 continua anunciando `offlineAudio` e passa a anunciar `backgroundFetch` somente quando a API está disponível no registro ativo. Um bundle novo controlado temporariamente por worker v3 não tenta Background Fetch: ele cai no fluxo foreground até o worker v4 assumir o controle.
 
-Essa camada evita que contas diferentes no mesmo origin reutilizem downloads umas das outras no uso normal.
+Quando uma Background Fetch termina com sucesso, o navegador desperta o service worker. O worker aceita somente registrations com `userId + trackId` válidos, confirma que existe exatamente uma requisição `GET` same-origin para `/api/tracks/<trackId>/stream`, exige resposta completa HTTP `200` e grava os bytes no cache offline daquele usuário.
+
+O **manifesto físico não é publicado pelo service worker**. Quando a página volta a executar, o fluxo normal confirma o blob, revalida que a referência lógica ainda existe e só então publica `offline-tracks:v2`. Se a referência tiver sido removida durante o background, o blob é apagado e a faixa não aparece como concluída.
+
+Trocas rápidas de conta continuam serializadas no escopo por client; cada job de download também captura o `userId` proprietário no início. Uma conclusão em background grava no cache do proprietário original, não no usuário que eventualmente esteja ativo depois.
 
 > Cache Storage e `localStorage` pertencem ao perfil do navegador. O isolamento por usuário é fronteira lógica de produto, não criptografia contra alguém que controla DevTools/armazenamento local.
 
@@ -120,22 +128,30 @@ Coleções parciais reproduzem somente as faixas realmente presentes no cache. O
 
 ## Armazenamento e quota
 
-Antes de concluir novo artefato, o frontend usa `navigator.storage.estimate()` quando disponível e solicita persistência como best-effort.
+No fluxo foreground, antes de concluir novo artefato o frontend usa `navigator.storage.estimate()` quando disponível e solicita persistência como best-effort.
 
-O navegador ainda pode remover dados sob pressão severa. O Home Music nunca marca uma faixa física como concluída sem `cache.put()` + atualização do manifesto físico.
+No caminho de Background Fetch, o navegador controla a reserva/limite da própria transferência e pode encerrá-la com `quota-exceeded`. O Home Music não publica o manifesto físico quando a transferência ou a persistência no Cache Storage falha.
 
-Na inicialização, o manifesto físico é reconciliado com Cache Storage; referências lógicas permanecem para permitir recuperação explícita de coleções que ficaram parciais.
+O navegador ainda pode remover dados sob pressão severa. O Home Music nunca marca uma faixa física como concluída sem confirmar que os bytes existem no cache e atualizar o manifesto físico somente depois da revalidação da referência lógica.
+
+Na inicialização, o manifesto físico é reconciliado com Cache Storage; referências lógicas permanecem para permitir recuperação explícita de coleções que ficaram parciais. Blobs sem manifesto são tratados como órfãos e removidos pela reconciliação.
 
 Logout não apaga automaticamente downloads concluídos. A troca de identidade esconde o namespace anterior e negocia novo escopo com o worker.
 
 ## Limite de background
 
-O scheduler vive na execução da página. Navegar na SPA preserva jobs; fechar/recarregar a aba ou suspensão de JavaScript pelo sistema pode interrompê-los.
+O comportamento agora é progressivo:
 
-A garantia de continuidade com tela bloqueada/background ainda exige validação real em Android e iPhone/iPad. A issue [#81](https://github.com/felipe-urgal/home-music/issues/81) continua sendo o gate específico de hardware e não é fechada pela #174 nem pela #176.
+- **Background Fetch disponível + worker v4:** uma transferência já iniciada pode continuar sob suspensão/background e o service worker persiste a resposta completa;
+- **sem Background Fetch:** o scheduler usa o `fetch()` foreground anterior e a suspensão de JavaScript pode interromper a transferência;
+- **Safari/iPhone/iPad:** permanece no fallback enquanto a plataforma não expuser a API;
+- **recarregar/fechar a aba:** não é tratado como garantia de retomada/publicação do job; o foco da #81 continua sendo background/tela bloqueada em hardware real;
+- **download concluído e publicado:** permanece até remoção lógica ou eviction do navegador.
+
+A implementação não transforma suporte de API em garantia de sistema operacional. A issue [#81](https://github.com/felipe-urgal/home-music/issues/81) continua aberta até a matriz final ser repetida em Android e iPhone/iPad reais no head que contiver esta mudança.
 
 ## Evoluções abertas
 
-- [#81](https://github.com/felipe-urgal/home-music/issues/81): validar comportamento real em background/tela bloqueada.
+- [#81](https://github.com/felipe-urgal/home-music/issues/81): validar no hardware final o caminho Background Fetch em Android/Chromium e documentar o fallback observado em iPhone/iPad/Safari.
 
 A implementação de playlists/pastas offline deduplicadas pertence à [#174](https://github.com/felipe-urgal/home-music/issues/174) e reutiliza o scheduler/cache existente, sem segundo pipeline físico. A identidade de instalação da #176 está documentada em [pwa-icon-identity.md](pwa-icon-identity.md).

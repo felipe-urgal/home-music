@@ -291,7 +291,7 @@ home-music:offline-references:v1:<userId>  # referências lógicas
 home-music-offline-audio-v2-<userId>       # bytes no Cache Storage
 ```
 
-O service worker usa capability v3 e associa cada client/aba ao usuário autenticado antes de servir `/offline-audio/<trackId>`.
+O service worker usa capability **v4** e associa cada client/aba ao usuário autenticado antes de servir `/offline-audio/<trackId>`. A v4 também anuncia `backgroundFetch` quando a API existe no registro ativo.
 
 O scheduler global continua limitado a 3 downloads simultâneos e usa `userId + trackId` como chave. Download individual, lote desktop, playlist e pasta reutilizam esse mesmo pipeline; uma faixa compartilhada por várias referências possui **um único artefato físico**.
 
@@ -308,7 +308,9 @@ Playlists e pastas persistem snapshots lógicos. Mudanças posteriores ficam vis
 
 Downloads `tracks:v2` existentes antes da camada de referências são migrados conservadoramente como intenção individual para impedir cleanup destrutivo. Jobs em voo revalidam a existência de referências antes de publicar o manifesto físico, fechando a corrida com remoção concorrente.
 
-Continuidade em background/tela bloqueada continua dependendo de validação real por plataforma (#81); a deduplicação de coleções não transforma execução em background em garantia.
+Em navegadores com Background Fetch, a transferência de uma faixa pode ser delegada ao navegador. No `backgroundfetchsuccess`, o worker valida a registration `userId + trackId`, exige uma única resposta completa same-origin para a rota de streaming e grava os bytes somente no cache do proprietário. Ele **não publica o manifesto físico**; quando a página volta a executar, o fluxo normal confirma o cache e revalida a referência lógica antes de marcar a faixa como disponível.
+
+Navegadores sem a API continuam no `fetch()` foreground. Safari/iPhone/iPad permanecem nesse fallback enquanto não houver suporte. A #81 continua sendo o gate de hardware: suporte de API não substitui validação real de tela bloqueada/background, e fechar/recarregar a aba ainda não é tratado como garantia de retomada/publicação.
 
 Detalhes: `offline-downloads.md` e `pwa.md`.
 

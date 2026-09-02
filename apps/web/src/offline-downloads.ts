@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Track } from '@home-music/shared';
-import { apiFetch } from './api-client';
+import { fetchOfflineTrackResponse } from './offline-background-fetch';
 import {
   addIndividualOfflineReference,
   collectionReferencedTrackIds,
@@ -513,17 +513,17 @@ export function useOfflineDownloads() {
       const url = streamUrl(track.id);
 
       try {
-        const response = await apiFetch(url, { cache: 'no-store' });
+        const { response, storedByServiceWorker } = await fetchOfflineTrackResponse(track.id, ownerUserId, url);
         if (!response.ok) throw new Error(`Não foi possível baixar a música (HTTP ${response.status}).`);
         if (response.status !== 200) throw new Error('O servidor não retornou o arquivo completo para download offline.');
 
         const sizeHeader = Number(response.headers.get('content-length') || 0);
         const size = Number.isFinite(sizeHeader) && sizeHeader > 0 ? sizeHeader : 0;
         const mimeType = response.headers.get('content-type') || 'application/octet-stream';
-        await ensureStorageHeadroom(size);
+        if (!storedByServiceWorker) await ensureStorageHeadroom(size);
 
         const cache = await caches.open(offlineAudioCacheName(ownerUserId));
-        await cache.put(url, response);
+        if (!storedByServiceWorker) await cache.put(url, response);
 
         // A referência pode ter sido removida enquanto o fetch estava em voo.
         // Nesse caso não publicamos o artefato físico e limpamos o blob.

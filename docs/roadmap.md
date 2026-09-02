@@ -2,7 +2,7 @@
 
 Este documento é a visão técnica de alto nível do Home Music. A issue [#123](https://github.com/felipe-urgal/home-music/issues/123) é o índice executivo das pendências abertas.
 
-> Estado revisado em 2026-09-01. Os PRs #204/#119, #205/#120, #206/#121 e #207/#122 foram mergeados; o backlog planejado da Fase 11 está concluído. A #174 foi entregue pelo PR #218, a #175 pelo PR #221 e a #176 pelo PR #222. A #81 permanece separada porque exige validação em Android e iPhone/iPad reais.
+> Estado revisado em 2026-09-02. Os PRs #204/#119, #205/#120, #206/#121 e #207/#122 foram mergeados; o backlog planejado da Fase 11 está concluído. A #174 foi entregue pelo PR #218, a #175 pelo PR #221 e a #176 pelo PR #222. A #81 permanece aberta porque exige validação em Android e iPhone/iPad reais; o PR #223 implementa um caminho progressivo de Background Fetch para navegadores compatíveis, sem substituir o gate físico.
 
 ## Fases 1–2 — Base do produto e biblioteca pessoal
 
@@ -35,6 +35,8 @@ A experiência principal está concluída. Resta a validação explícita em har
 - [x] [#174](https://github.com/felipe-urgal/home-music/issues/174) — playlists e pastas completas offline com um único artefato físico por faixa e múltiplas referências lógicas — entregue pelo PR #218.
 
 A #174 reutiliza o scheduler/cache atual, adiciona manifesto versionado de referências por usuário, migração conservadora dos downloads antigos como intenção individual, sincronização explícita de snapshots e garbage-collection somente quando nenhuma referência depende da faixa. Detalhes: [offline-downloads.md](offline-downloads.md) e [pwa.md](pwa.md).
+
+Em 2026-09-02, o PR #223 adicionou à #81 uma implementação progressiva baseada em Background Fetch: quando o service worker capability v4 e o navegador anunciam suporte, a transferência longa pode ser delegada ao navegador; caso contrário, o fluxo foreground existente permanece como fallback. O manifesto físico continua sendo publicado pela aplicação somente após revalidar a referência lógica, e a #81 continua aberta até a matriz real Android + iPhone/iPad ser repetida no head final com CI e auto-review aprovados.
 
 ## Fases 4–6 — Produção, acesso remoto e extras
 
@@ -197,7 +199,7 @@ Esses itens são independentes da #174 concluída e da validação física #81.
 
 ## Backlog aberto
 
-As pendências executivas abertas após o merge do PR #222 são #81 e #123. A #123 é somente o índice executivo; a única validação real já registrada no backlog é a #81, que depende de hardware móvel real. Não há outra atividade implementável priorizada neste roadmap neste momento.
+As pendências executivas abertas após o merge do PR #222 são #81 e #123. A #123 é somente o índice executivo. A #81 agora possui a implementação candidata do PR #223 para Background Fetch progressivo, porém continua pendente até o CI e o auto-review do head final estarem verdes e a matriz física Android + iPhone/iPad comprovar o comportamento real. Não há outra atividade implementável priorizada neste roadmap neste momento.
 
 ## Regra de execução
 
