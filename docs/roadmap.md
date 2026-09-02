@@ -1,8 +1,8 @@
 # Roadmap
 
-Este documento é a visão técnica de alto nível do Home Music. A issue [#123](https://github.com/felipe-urgal/home-music/issues/123) é o índice executivo das pendências abertas.
+Este documento é a visão técnica de alto nível do Home Music. A issue [#123](https://github.com/felipe-urgal/home-music/issues/123) preserva o índice executivo do ciclo de backlog concluído em 2026-09-02.
 
-> Estado revisado em 2026-09-02. Os PRs #204/#119, #205/#120, #206/#121 e #207/#122 foram mergeados; o backlog planejado da Fase 11 está concluído. A #174 foi entregue pelo PR #218, a #175 pelo PR #221 e a #176 pelo PR #222. A #81 permanece aberta porque exige validação em Android e iPhone/iPad reais; o PR #223 implementa um caminho progressivo de Background Fetch para navegadores compatíveis, sem substituir o gate físico.
+> Estado revisado em 2026-09-02. Os PRs #204/#119, #205/#120, #206/#121 e #207/#122 foram mergeados; o backlog planejado da Fase 11 está concluído. A #174 foi entregue pelo PR #218, a #175 pelo PR #221, a #176 pelo PR #222 e a #224 pelo PR #225. A #81 também foi concluída após a validação física em Android e iPhone/iPad reais, encerrando o último gate funcional do ciclo. Não há atividade implementável priorizada no backlog atual.
 
 ## Fases 1–2 — Base do produto e biblioteca pessoal
 
@@ -20,7 +20,7 @@ Concluídas.
 
 ## Fase 3 — Experiência mobile e offline
 
-A experiência principal está concluída. Resta a validação explícita em hardware real.
+Concluída, incluindo a validação explícita em hardware real.
 
 - [x] shuffle e repeat `off / all / one`;
 - [x] fila reordenável;
@@ -31,12 +31,12 @@ A experiência principal está concluída. Resta a validação explícita em har
 - [x] layout sem overflow horizontal;
 - [x] download offline individual e em lote com scheduler global de até 3 operações;
 - [x] isolamento de cache/manifesto offline por usuário;
-- [ ] [#81](https://github.com/felipe-urgal/home-music/issues/81) — validar downloads em background/tela bloqueada em Android e iPhone/iPad reais; não pode ser encerrada por emulação/CI;
+- [x] [#81](https://github.com/felipe-urgal/home-music/issues/81) — validação de downloads em background/tela bloqueada concluída em Android e iPhone/iPad reais;
 - [x] [#174](https://github.com/felipe-urgal/home-music/issues/174) — playlists e pastas completas offline com um único artefato físico por faixa e múltiplas referências lógicas — entregue pelo PR #218.
 
 A #174 reutiliza o scheduler/cache atual, adiciona manifesto versionado de referências por usuário, migração conservadora dos downloads antigos como intenção individual, sincronização explícita de snapshots e garbage-collection somente quando nenhuma referência depende da faixa. Detalhes: [offline-downloads.md](offline-downloads.md) e [pwa.md](pwa.md).
 
-Em 2026-09-02, o PR #223 adicionou à #81 uma implementação progressiva baseada em Background Fetch: quando o service worker capability v4 e o navegador anunciam suporte, a transferência longa pode ser delegada ao navegador; caso contrário, o fluxo foreground existente permanece como fallback. O manifesto físico continua sendo publicado pela aplicação somente após revalidar a referência lógica, e a #81 continua aberta até a matriz real Android + iPhone/iPad ser repetida no head final com CI e auto-review aprovados.
+Em 2026-09-02, o PR #223 adicionou à #81 uma implementação progressiva baseada em Background Fetch: quando o service worker capability v4 e o navegador anunciam suporte, a transferência longa pode ser delegada ao navegador; caso contrário, o fluxo foreground existente permanece como fallback. O manifesto físico continua sendo publicado pela aplicação somente após revalidar a referência lógica. A matriz física Android + iPhone/iPad foi concluída posteriormente e a #81 foi encerrada; as garantias continuam específicas por capacidade e plataforma, sem transformar suporte de API em promessa universal.
 
 ## Fases 4–6 — Produção, acesso remoto e extras
 
@@ -188,18 +188,18 @@ A composição atual está documentada em [administration-ui.md](administration-
 
 A #118 mantém `npm run test:security` como gate explícito. A #119 mantém `npm run benchmark:large-library`. A #120 documenta a baseline em [accessibility.md](accessibility.md). A #121 documenta o lifecycle em [long-job-observability.md](long-job-observability.md). A #122 documenta Dependabot/majors/supply chain em [dependency-management.md](dependency-management.md).
 
-O PR #207 foi mergeado em 2026-09-01 com CI completo verde e encerrou o backlog técnico planejado dessa fase. Novas atividades de engenharia devem ser abertas/repriorizadas explicitamente em #123; não manter a #122 artificialmente como “atividade atual”.
+O PR #207 foi mergeado em 2026-09-01 com CI completo verde e encerrou o backlog técnico planejado dessa fase. Novas atividades de engenharia devem ser abertas e priorizadas em issue própria e refletidas neste roadmap; não reutilizar artificialmente a #123 nem manter a #122 como “atividade atual”.
 
 ## Backlog visual e PWA
 
 - [x] [#175](https://github.com/felipe-urgal/home-music/issues/175) — fallback visual consistente e centralizado para músicas sem capa — entregue pelo PR #221; política em [artwork-fallback.md](artwork-fallback.md);
 - [x] [#176](https://github.com/felipe-urgal/home-music/issues/176) — identidade Casa + vinil para favicon/PWA, variantes `any`/`maskable` e integração iOS/Safari — entregue pelo PR #222; política em [pwa-icon-identity.md](pwa-icon-identity.md).
 
-Esses itens são independentes da #174 concluída e da validação física #81.
+Esses itens são independentes da #174 e da #81, ambas concluídas.
 
-## Backlog aberto
+## Backlog atual
 
-As pendências executivas abertas após o merge do PR #222 são #81 e #123. A #123 é somente o índice executivo. A #81 agora possui a implementação candidata do PR #223 para Background Fetch progressivo, porém continua pendente até o CI e o auto-review do head final estarem verdes e a matriz física Android + iPhone/iPad comprovar o comportamento real. Não há outra atividade implementável priorizada neste roadmap neste momento.
+Não há issue funcional ou atividade implementável priorizada em aberto neste roadmap. A #81 foi encerrada após a validação física Android + iPhone/iPad e a #123 foi encerrada como índice executivo do ciclo concluído. Novo trabalho deve nascer em issue própria e ser priorizado explicitamente neste documento, sem reabrir artificialmente itens já concluídos.
 
 ## Regra de execução
 
