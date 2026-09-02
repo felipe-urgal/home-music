@@ -1,9 +1,14 @@
-import { useEffect, useState } from 'react';
+import { lazy, useEffect, useState } from 'react';
 import { AuthenticatedApp } from './AuthenticatedApp';
+import { LazySurfaceBoundary } from './components/LazySurfaceBoundary';
 import { LoginScreen } from './components/LoginScreen';
-import { OfflineApp } from './OfflineApp';
 import { useOfflineDownloads } from './offline-downloads';
 import { useAuth } from './useAuth';
+
+const OfflineApp = lazy(async () => {
+  const module = await import('./OfflineApp');
+  return { default: module.OfflineApp };
+});
 
 export default function App() {
   const auth = useAuth();
@@ -41,13 +46,15 @@ export default function App() {
 
   if (offlineMode) {
     return (
-      <OfflineApp
-        offline={offline}
-        onExit={() => {
-          setOfflineMode(false);
-          void auth.retry();
-        }}
-      />
+      <LazySurfaceBoundary fullScreen loadingTitle="Carregando modo offline">
+        <OfflineApp
+          offline={offline}
+          onExit={() => {
+            setOfflineMode(false);
+            void auth.retry();
+          }}
+        />
+      </LazySurfaceBoundary>
     );
   }
 
