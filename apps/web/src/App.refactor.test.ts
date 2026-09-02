@@ -22,6 +22,18 @@ describe('App responsibility boundaries', () => {
     expect(app).not.toMatch(/<DesktopShell\b/);
   });
 
+  it('mantém App como autoridade da entrada manual no modo offline', () => {
+    const app = source('App.tsx');
+    const authenticated = source('AuthenticatedApp.tsx');
+    const account = source('components/MyAccountScreen.tsx');
+
+    expect(app).toMatch(/onOpenOffline=\{\(\) => setOfflineMode\(true\)\}/);
+    expect(authenticated).toMatch(/offlineMode=\{\{/);
+    expect(authenticated).toMatch(/availableCount: offline\.tracks\.length/);
+    expect(account).toMatch(/<strong>Modo offline<\/strong>/);
+    expect(account).toMatch(/disabled=\{!offlineModeAvailable\}/);
+  });
+
   it('mantém composição autenticada e fontes globais juntas', () => {
     const authenticated = source('AuthenticatedApp.tsx');
 

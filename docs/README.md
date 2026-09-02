@@ -2,7 +2,7 @@
 
 Este diretório mistura documentação **corrente** e registros históricos de implementação. Esta página define qual material deve ser usado como fonte de verdade.
 
-> Inventário e backlog revisados em 2026-09-01. Os PRs #204, #205, #206 e #207 concluíram #119–#122 e o backlog planejado da Fase 11. A #174 foi entregue pelo PR #218, a #175 pelo PR #221 e a #176 pelo PR #222; a #81 permanece como validação separada em dispositivos móveis reais.
+> Inventário e backlog revisados em 2026-09-02. Os PRs #204, #205, #206 e #207 concluíram #119–#122 e o backlog planejado da Fase 11. A #174 foi entregue pelo PR #218, a #175 pelo PR #221 e a #176 pelo PR #222. A experiência offline agora também pode ser aberta manualmente pela conta quando existem downloads salvos; a #81 permanece como validação separada em dispositivos móveis reais.
 
 ## Desenvolvimento e agentes de IA
 
@@ -30,11 +30,11 @@ As pendências executivas abertas após a entrega da #176 são:
 | [#81](https://github.com/felipe-urgal/home-music/issues/81) | validação separada em Android e iPhone/iPad reais de background/tela bloqueada; não é fechada por CI/emulação |
 | [#123](https://github.com/felipe-urgal/home-music/issues/123) | índice executivo; não é uma implementação separada |
 
-A Fase 11 planejada (#111–#122), a #174, a #175 e a #176 estão concluídas. Nova priorização deve ser refletida em `roadmap.md`, #123 e nas issues afetadas no mesmo trabalho.
+A Fase 11 planejada (#111–#122), a #174, a #175 e a #176 estão concluídas. A entrada manual no modo offline é uma evolução da experiência existente e não cria nova pendência de backend. Nova priorização deve ser refletida em `roadmap.md`, #123 e nas issues afetadas no mesmo trabalho.
 
 ## Composição do frontend
 
-- [`app-composition.md`](app-composition.md) — limites entre raiz de sessão/conectividade, aplicação autenticada e aplicação offline.
+- [`app-composition.md`](app-composition.md) — limites entre raiz de sessão/conectividade, aplicação autenticada e aplicação offline, incluindo a entrada manual pelo painel da conta sem duplicar o estado de conectividade.
 - [`artwork-fallback.md`](artwork-fallback.md) — política canônica de capa efetiva e fallback visual reutilizável entre biblioteca, player e administração.
 
 ## Composição do backend
@@ -78,7 +78,8 @@ A Fase 11 planejada (#111–#122), a #174, a #175 e a #176 estão concluídas. N
 
 - [`pwa.md`](pwa.md) — shell, service worker, namespace e integração das coleções offline;
 - [`pwa-icon-identity.md`](pwa-icon-identity.md) — identidade Casa + vinil, matriz `any`/`maskable`, iOS/Safari e geração determinística dos ícones;
-- [`offline-downloads.md`](offline-downloads.md) — scheduler global, bytes físicos, referências lógicas, playlist/pasta, deduplicação, sincronização, quota e limites da #81.
+- [`offline-downloads.md`](offline-downloads.md) — scheduler global, bytes físicos, referências lógicas, playlist/pasta, deduplicação, sincronização, quota e limites da #81;
+- [`app-composition.md`](app-composition.md) — autoridade única de entrada/saída do modo offline, inclusive quando o usuário escolhe usar somente o conteúdo baixado mesmo com o servidor online.
 
 Pendência relacionada: #81.
 

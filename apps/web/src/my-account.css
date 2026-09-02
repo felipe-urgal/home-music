@@ -63,6 +63,8 @@
 }
 .my-account-links > button:last-child { border-bottom: 0; }
 .my-account-links > button:hover { background: rgba(255,255,255,.035); }
+.my-account-links > button:disabled { cursor: not-allowed; opacity: .5; }
+.my-account-links > button:disabled:hover { background: transparent; }
 .my-account-links > button > span:nth-child(2) { min-width: 0; display: grid; gap: 3px; }
 .my-account-links strong { font-size: 13px; }
 .my-account-links small { color: #7d8994; font-size: 11px; line-height: 1.4; }

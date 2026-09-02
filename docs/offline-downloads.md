@@ -242,6 +242,14 @@ Uma faixa que pertence a duas coleções pode aparecer logicamente em ambas, mas
 
 Cada coleção pode reproduzir o subconjunto que realmente está disponível no cache; coleções parciais não anunciam faixas ausentes como baixadas.
 
+## Entrada manual no modo offline
+
+O usuário autenticado também pode abrir essa mesma biblioteca offline enquanto o servidor continua disponível, em `Minha conta → Preferências → Modo offline`.
+
+Esse controle não simula perda de rede nem cria outro cache. Ele apenas troca a composição ativa para o `OfflineApp` já existente, portanto navegação e reprodução passam a usar somente os artefatos físicos reconciliados do usuário naquele dispositivo.
+
+A ação fica desabilitada enquanto os downloads estão carregando, quando o navegador não suporta o armazenamento offline ou quando não existe nenhuma música física disponível. Ao sair, a aplicação retorna ao fluxo online e refaz a verificação de autenticação/conectividade.
+
 ## Quota e pressão de armazenamento
 
 No caminho foreground, antes de cada novo artefato o frontend consulta `navigator.storage.estimate()` quando disponível e recusa o download quando o tamanho conhecido consumiria praticamente todo o espaço restante.
@@ -340,6 +348,7 @@ A cobertura de downloads offline inclui:
 - manifesto corrompido/incompatível;
 - escopo da registration Background Fetch por `userId + trackId` e mensagens de falha que não anunciam sucesso;
 - fluxo Playwright real de playlist sobreposta + atualização + garbage-collection;
-- controle de coleção no layout mobile.
+- controle de coleção no layout mobile;
+- fronteira de composição garantindo que a entrada manual continue delegando ao `App.tsx` e reutilizando o `OfflineApp`.
 
 A validação de continuidade em tela bloqueada permanece necessariamente física na #81; testes automatizados verificam invariantes, não substituem o sistema operacional real.
