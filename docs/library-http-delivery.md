@@ -114,8 +114,26 @@ A entrega possui regressões dedicadas para:
 - round-trip exato do JSON comprimido;
 - `Cache-Control` privado/revalidável no snapshot;
 - `/api/library/status` permanecendo `private, no-store`;
-- proteção `authenticated` já coberta pela suíte central de política de acesso.
+- autenticação antes do caminho condicional de `304`;
+- refresh após scan no Playwright com revalidação do snapshot.
 
 `npm run benchmark:large-library` também executa `library-http-cache.benchmark.ts` com 10.000 faixas. Ele mede baseline de projeção+serialização, lookup quente do snapshot, custo de `JSON.parse`, bytes raw/gzip/Brotli e explicita que um `304` transfere zero bytes de corpo.
 
-Os números do CI de referência ficam registrados em [large-library-benchmark.md](large-library-benchmark.md), junto dos demais gates de biblioteca grande.
+### Baseline de referência da #235
+
+Execução local de referência em 2026-09-02, usando o mesmo dataset sintético e os mesmos parâmetros de compressão do benchmark versionado:
+
+| Medição | Resultado de referência |
+| --- | ---: |
+| projeção + serialização do snapshot de 10k | ~32,3 ms |
+| lookup quente do snapshot | ~0,0007 ms |
+| projeções públicas no caminho quente | 1 |
+| `JSON.parse` do snapshot de 10k | ~17,8 ms |
+| payload bruto | 2.036.554 bytes (~1,94 MiB) |
+| gzip nível 6 | 176.786 bytes (~91,3% menor) |
+| Brotli quality 4 | 117.452 bytes (~94,2% menor) |
+| `304 Not Modified` | 0 bytes de corpo |
+
+Os tempos absolutos dependem da máquina e servem como evidência direcional, não como SLA. Os tamanhos do payload são determinísticos para o dataset versionado. O gate completo do PR #248 também executa o benchmark rápido, o cenário Chromium real e os E2E críticos no head final.
+
+Para guardrails gerais de biblioteca grande e interpretação entre runners, consulte [large-library-benchmark.md](large-library-benchmark.md).
