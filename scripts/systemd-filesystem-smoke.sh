@@ -15,17 +15,6 @@ skip_or_fail() {
   exit 0
 }
 
-systemd_path_value() {
-  local value="$1"
-  value="${value//\\/\\x5c}"
-  value="${value// /\\x20}"
-  value="${value//$'\t'/\\x09}"
-  value="${value//\"/\\x22}"
-  value="${value//\'/\\x27}"
-  value="${value//%/%%}"
-  printf '%s' "${value}"
-}
-
 command -v node >/dev/null 2>&1 || skip_or_fail "Node.js não está disponível"
 command -v systemctl >/dev/null 2>&1 || skip_or_fail "systemctl não está disponível"
 command -v systemd-run >/dev/null 2>&1 || skip_or_fail "systemd-run não está disponível"
@@ -49,7 +38,9 @@ trap cleanup EXIT
 
 POLICY_ROOT="${SMOKE_DIR}/project"
 POLICY_RUNTIME="${SMOKE_DIR}/runtime"
-POLICY_MUSIC="${SMOKE_DIR}/Music Library"
+# O parser/escaping de paths com espaço pertence ao teste do installer. Aqui o objetivo
+# é exercitar o namespace real de leitura/escrita criado pelo systemd-run.
+POLICY_MUSIC="${SMOKE_DIR}/music-library"
 mkdir -p \
   "${POLICY_ROOT}/apps/server/dist" \
   "${POLICY_ROOT}/apps/web/dist" \
@@ -114,13 +105,18 @@ RUN_ARGS=(
   --property="NoNewPrivileges=yes"
   --property="PrivateTmp=yes"
   --property="ProtectSystem=strict"
-  --property="ReadOnlyPaths=$(systemd_path_value "${POLICY_ROOT}")"
+  --property="ReadOnlyPaths=${POLICY_ROOT}"
 )
 for writable_path in "${WRITABLE_PATHS[@]}"; do
-  RUN_ARGS+=(--property="ReadWritePaths=$(systemd_path_value "${writable_path}")")
+  RUN_ARGS+=(--property="ReadWritePaths=${writable_path}")
 done
 
-sudo -n systemd-run "${RUN_ARGS[@]}" /bin/bash "${PROBE_SCRIPT}"
+if ! sudo -n systemd-run "${RUN_ARGS[@]}" /bin/bash "${PROBE_SCRIPT}"; then
+  echo "Erro: unidade transitória falhou; diagnóstico do namespace:" >&2
+  sudo -n systemctl status "${UNIT_NAME}.service" --no-pager -l >&2 || true
+  sudo -n journalctl -u "${UNIT_NAME}.service" --no-pager -n 100 >&2 || true
+  exit 1
+fi
 
 for allowed_file in \
   "${POLICY_ROOT}/data/home-music.db" \
