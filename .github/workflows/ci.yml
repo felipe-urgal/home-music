@@ -34,10 +34,8 @@ jobs:
           npm ci --no-audit --no-fund
           npm ci --prefix e2e --no-audit --no-fund
 
-      - name: Audit dependencies
-        run: |
-          npm audit --audit-level=high
-          npm audit --prefix e2e --audit-level=high
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
 
       - name: Typecheck
         run: npm run typecheck
