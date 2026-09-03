@@ -31,13 +31,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          npm ci
-          npm ci --prefix e2e
-
-      - name: Audit dependencies
-        run: |
-          npm audit --audit-level=high
-          npm audit --prefix e2e --audit-level=high
+          npm ci --no-audit --no-fund
+          npm ci --prefix e2e --no-audit --no-fund
 
       - name: Typecheck
         run: npm run typecheck
@@ -47,6 +42,11 @@ jobs:
 
       - name: Tests
         run: npm test
+
+      - name: Audit dependencies
+        run: |
+          npm audit --audit-level=high
+          npm audit --prefix e2e --audit-level=high
 
       - name: Heavy work backpressure memory guard
         run: npm run benchmark:backpressure
