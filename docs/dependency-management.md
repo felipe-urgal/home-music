@@ -2,7 +2,7 @@
 
 Este documento define a política corrente de atualização de dependências do Home Music.
 
-A baseline foi introduzida na Fase 11 pela issue #122. O objetivo é manter dependências e GitHub Actions atualizadas com baixo risco, sem conceder autoridade de merge a uma automação e sem transformar atualização de versão em exceção aos gates normais do repositório.
+A baseline foi introduzida na Fase 11 pela issue #122. O hardening de execução de lifecycle scripts foi acrescentado na Fase 12 pela #232. O objetivo é manter dependências e GitHub Actions atualizadas com baixo risco, sem conceder autoridade de merge a uma automação, sem executar código implícito de dependências durante instalação e sem transformar atualização de versão em exceção aos gates normais do repositório.
 
 ## Fonte de verdade
 
@@ -22,7 +22,15 @@ e2e/package.json
 e2e/package-lock.json
 ```
 
-O monorepo principal usa npm workspaces e `npm ci` sobre o lockfile da raiz. O Playwright/E2E possui instalação separada e, por isso, recebe uma entrada própria no Dependabot.
+A política de instalação npm vive em:
+
+```text
+.npmrc
+e2e/.npmrc
+scripts/dependency-lifecycle-policy.test.mjs
+```
+
+O monorepo principal usa npm workspaces e `npm ci` sobre o lockfile da raiz. O Playwright/E2E possui instalação separada e, por isso, recebe uma entrada própria no Dependabot e uma configuração npm própria alinhada à raiz.
 
 ## Superfícies monitoradas
 
@@ -103,6 +111,25 @@ Nesses casos, a revisão deve decidir entre:
 
 Não adicionar pacote novo apenas para facilitar uma atualização existente.
 
+## Lifecycle scripts do npm
+
+Instalações do projeto usam `ignore-scripts=true` por padrão tanto na raiz quanto em `e2e/`. Isso impede que uma dependência recém-instalada execute automaticamente `preinstall`, `install` ou `postinstall` durante CI, `service:install`, `service:update` ou instalação do Playwright.
+
+A regra é deliberadamente fail-closed: lifecycle script de dependência não recebe execução automática só porque apareceu em um novo lockfile.
+
+O inventário revisado atual é:
+
+| Lockfile | Pacotes que declaram install script | Decisão |
+| --- | --- | --- |
+| `package-lock.json` | `esbuild`, `fsevents` | não executados implicitamente; build/CI devem funcionar com scripts desabilitados |
+| `e2e/package-lock.json` | `fsevents` | opcional de macOS; não executado implicitamente |
+
+O Playwright não depende de lifecycle npm para baixar o navegador: Chromium continua sendo instalado pela etapa explícita e revisável `npm --prefix e2e run install:browsers`.
+
+`scripts/dependency-lifecycle-policy.test.mjs` compara os lockfiles com esse inventário. Se uma atualização adicionar outro pacote com `hasInstallScript`, o CI falha até que a dependência seja investigada e a decisão seja explícita. Não ampliar a allowlist apenas para deixar o pipeline verde.
+
+Se um lifecycle script se tornar realmente indispensável, preferir uma etapa explícita, limitada e documentada depois de `npm ci`, em vez de reabilitar scripts para toda a árvore.
+
 ## GitHub Actions e supply chain
 
 GitHub Actions também são dependências de supply chain.
@@ -122,7 +149,7 @@ Não substituir pin por SHA por tag mutável somente para facilitar manutenção
 
 ## Lockfiles e reprodutibilidade
 
-Dependabot pode alterar manifesto e lockfile no mesmo PR, mas o fluxo continua exigindo instalação reproduzível:
+Dependabot pode alterar manifesto e lockfile no mesmo PR, mas o fluxo continua exigindo instalação reproduzível. A política `.npmrc` aplica `ignore-scripts=true` automaticamente aos comandos normais:
 
 ```bash
 npm ci
@@ -135,6 +162,7 @@ Regras:
 - não remover lockfile para resolver conflito;
 - não executar upgrade silencioso direto em `main`;
 - atualização deve chegar por PR revisável;
+- não contornar `ignore-scripts=true` sem decisão de segurança documentada;
 - qualquer mudança adicional feita depois de CI/review invalida esses gates, conforme `AGENTS.md`.
 
 ## Auto-merge
@@ -168,6 +196,7 @@ Verificar:
 - changelogs relevantes quando houver mudança comportamental;
 - lockfile coerente;
 - nenhuma dependência inesperada adicionada;
+- inventário de lifecycle scripts inalterado ou explicitamente revisado;
 - CI completo verde;
 - ausência de regressão funcional/performance/segurança.
 
@@ -205,21 +234,24 @@ A cadência pode ser ajustada se houver excesso de ruído ou necessidade operaci
 
 ## O que a automação não faz
 
-A #122 não:
+A #122 e o hardening da #232 não:
 
-- executa merge automático;
-- aplica major silenciosamente;
-- altera código para contornar breaking change;
-- desativa testes/audit;
-- decide aceitar vulnerabilidade;
-- substitui review humano/sênior;
-- garante que toda nova versão seja apropriada para o produto.
+- executam merge automático;
+- aplicam major silenciosamente;
+- alteram código para contornar breaking change;
+- executam lifecycle scripts de dependências automaticamente;
+- desativam testes/audit;
+- decidem aceitar vulnerabilidade;
+- substituem review humano/sênior;
+- garantem que toda nova versão seja apropriada para o produto.
 
 ## Gate para mudanças futuras nesta política
 
-Qualquer alteração em `.github/dependabot.yml`, CI ou política de dependências deve revisar:
+Qualquer alteração em `.github/dependabot.yml`, `.npmrc`, lockfiles relevantes, CI ou política de dependências deve revisar:
 
 - reprodutibilidade dos lockfiles;
+- inventário de lifecycle scripts;
+- necessidade real de qualquer execução explícita permitida;
 - agrupamento e risco de blast radius;
 - majors isoladas;
 - Actions/supply chain;

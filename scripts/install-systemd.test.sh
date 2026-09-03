@@ -120,6 +120,11 @@ if grep -Eq 'NOPASSWD:.*(systemctl|/bin/(ba)?sh|ALL)' "${INSTALLER}"; then
   exit 1
 fi
 
+if ! grep -Fqx 'ignore-scripts=true' "${ROOT_DIR}/.npmrc"; then
+  echo "Erro: installs de produção precisam manter lifecycle scripts npm desabilitados por padrão." >&2
+  exit 1
+fi
+
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "${TMP_DIR}"' EXIT
 HELPER_FIXTURE="${TMP_DIR}/home-music-service-control"
