@@ -2,7 +2,7 @@
 
 Este diretório mistura documentação **corrente** e registros históricos de implementação. Esta página define qual material deve ser usado como fonte de verdade.
 
-> Inventário e backlog revisados em 2026-09-02. A Fase 11 e o ciclo funcional anterior estão concluídos. A Fase 12 está em andamento, centralizada na #239; #228, #229, #230, #237, #233, #234, #235 e #236 já foram entregues, e a próxima atividade serial planejada é a #238. A #123 permanece encerrada como índice executivo do ciclo anterior.
+> Inventário e backlog revisados em 2026-09-03. A Fase 11 e o ciclo funcional anterior estão concluídos. A Fase 12 está em andamento, centralizada na #239; #228, #229, #230, #237, #233, #234, #235, #236 e #238 já foram entregues, a #231 é a atividade serial atual, a #232 permanece aberta e a #251 segue em paralelo como correção transversal de propagação dos overrides. A #123 permanece encerrada como índice executivo do ciclo anterior.
 
 ## Desenvolvimento e agentes de IA
 
@@ -24,7 +24,7 @@ Comece por:
 
 ## Estado do backlog atual
 
-A Fase 12 está em andamento e concentra o backlog implementável atual.
+A Fase 12 está em andamento e concentra o backlog implementável atual. A #251 é uma correção transversal descoberta durante uso real e não altera a prioridade serial da #231.
 
 | Issue | Estado corrente |
 | --- | --- |
@@ -36,7 +36,10 @@ A Fase 12 está em andamento e concentra o backlog implementável atual.
 | [#234](https://github.com/felipe-urgal/home-music/issues/234) | persistência SQLite somente por delta do scan; concluída pelo PR #247 |
 | [#235](https://github.com/felipe-urgal/home-music/issues/235) | revision, ETag e compressão da biblioteca; concluída pelo PR #248 |
 | [#236](https://github.com/felipe-urgal/home-music/issues/236) | code splitting das telas secundárias; concluída pelo PR #249 |
-| [#238](https://github.com/felipe-urgal/home-music/issues/238) | reduzir recomputações da navegação da biblioteca; próxima atividade serial planejada |
+| [#238](https://github.com/felipe-urgal/home-music/issues/238) | reduzir recomputações da navegação da biblioteca; concluída pelo PR #250 |
+| [#231](https://github.com/felipe-urgal/home-music/issues/231) | filesystem do serviço systemd com escrita mínima; atividade serial atual |
+| [#232](https://github.com/felipe-urgal/home-music/issues/232) | hardening da instalação de dependências npm; aberta |
+| [#251](https://github.com/felipe-urgal/home-music/issues/251) | corrigir projeção dos overrides para snapshot HTTP, player e saúde administrativa; em andamento em paralelo |
 | [#239](https://github.com/felipe-urgal/home-music/issues/239) | índice executivo ativo da Fase 12 — Segurança e Performance |
 | [#123](https://github.com/felipe-urgal/home-music/issues/123) | encerrada como índice executivo do ciclo anterior |
 
@@ -64,7 +67,8 @@ A ordem corrente da Fase 12 está em `roadmap.md` e na #239. Itens concluídos d
 ## Performance
 
 - [`large-library-benchmark.md`](large-library-benchmark.md) — dataset sintético, cenários, baseline operacional, scanner concorrente, persistência SQLite incremental e limites do gate de regressão grave para bibliotecas grandes.
-- [`library-http-delivery.md`](library-http-delivery.md) — snapshot HTTP autenticado da biblioteca, `revision`, ETag privado, revalidação `304`, compressão Brotli/gzip e cache de projeção/serialização.
+- [`library-http-delivery.md`](library-http-delivery.md) — snapshot HTTP autenticado da biblioteca, `revision`, projeção efetiva de overrides antes do cache, ETag privado, revalidação `304`, compressão Brotli/gzip e cache de projeção/serialização.
+- [`library-navigation-performance.md`](library-navigation-performance.md) — índice derivado por `libraryRevision`, equivalência semântica e comparativo 10k/25k da navegação/busca.
 - [`frontend-code-splitting.md`](frontend-code-splitting.md) — chunks secundários sob demanda, invariantes de navegação/autorização e budgets raw/gzip/Brotli validados no build.
 
 ## Acessibilidade
@@ -162,7 +166,7 @@ Não use um registro histórico isolado para inferir que uma funcionalidade aind
 
 ## E2E
 
-A suíte Playwright tem instruções próprias em [`../e2e/README.md`](../e2e/README.md). O gate crítico inclui smoke geral, coleções offline deduplicadas, fluxo desktop individual/lote e isolamento offline entre contas; a regressão completa continua disponível conforme o risco da mudança.
+A suíte Playwright tem instruções próprias em [`../e2e/README.md`](../e2e/README.md). O gate crítico inclui smoke geral, coleções offline deduplicadas, fluxo desktop individual/lote e isolamento offline entre contas; a regressão completa continua disponível conforme o risco da mudança. Overrides de metadata também possuem regressão desktop cobrindo propagação imediata para o player e reconciliação da saúde administrativa.
 
 ## Regra para manutenção da documentação
 
