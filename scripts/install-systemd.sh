@@ -237,7 +237,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=${RUN_USER}
-WorkingDirectory="${ROOT_PATH_ESCAPED}"
+WorkingDirectory=${ROOT_PATH_ESCAPED}
 Environment="NODE_ENV=production"
 Environment="HOME=${HOME_ESCAPED}"
 ExecStart="${NODE_ARG_ESCAPED}" --import "${ROOT_ARG_ESCAPED}/apps/server/dist/bootstrap-preload.js" "${ROOT_ARG_ESCAPED}/apps/server/dist/index.js"
