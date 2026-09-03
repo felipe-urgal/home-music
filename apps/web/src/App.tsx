@@ -5,46 +5,31 @@ import { LoginScreen } from './components/LoginScreen';
 import { useOfflineDownloads } from './offline-downloads';
 import { useAuth } from './useAuth';
 
-const OfflineApp = lazy(async () => {
+async function loadOfflineApp() {
   const module = await import('./OfflineApp');
   return { default: module.OfflineApp };
-});
+}
+
+const OfflineApp = lazy(loadOfflineApp);
 
 export default function App() {
   const auth = useAuth();
   const offline = useOfflineDownloads();
   const [offlineMode, setOfflineMode] = useState(false);
-  const [offlineAutoOpened, setOfflineAutoOpened] = useState(false);
+  const offlineCount = offline.supported && !offline.loading ? offline.records.length : 0;
+  const automaticOfflineMode = auth.unreachable && offlineCount > 0;
+  const showOfflineMode = offlineMode || automaticOfflineMode;
 
   useEffect(() => {
-    if (!auth.unreachable) {
-      if (offlineAutoOpened) setOfflineAutoOpened(false);
-      return;
-    }
-    if (
-      offlineAutoOpened
-      || auth.loading
-      || offline.loading
-      || !offline.supported
-      || offline.records.length === 0
-    ) return;
-
-    setOfflineAutoOpened(true);
-    setOfflineMode(true);
-  }, [
-    auth.loading,
-    auth.unreachable,
-    offline.loading,
-    offline.records.length,
-    offline.supported,
-    offlineAutoOpened
-  ]);
+    if (!auth.authenticated || !offline.supported) return;
+    void loadOfflineApp().catch(() => undefined);
+  }, [auth.authenticated, offline.supported]);
 
   useEffect(() => {
     if (offlineMode && !offline.loading && offline.tracks.length === 0) setOfflineMode(false);
   }, [offline.loading, offline.tracks.length, offlineMode]);
 
-  if (offlineMode) {
+  if (showOfflineMode) {
     return (
       <LazySurfaceBoundary fullScreen loadingTitle="Carregando modo offline">
         <OfflineApp
@@ -70,15 +55,13 @@ export default function App() {
   }
 
   if (!auth.authenticated || !auth.currentUser) {
-    const offlineCount = auth.unreachable && offline.supported && !offline.loading ? offline.records.length : 0;
     return (
       <LoginScreen
         configured={auth.configured}
         error={auth.error}
-        offlineCount={offlineCount}
+        unreachable={auth.unreachable}
         onLogin={auth.login}
         onRetry={() => void auth.retry()}
-        onOpenOffline={offlineCount > 0 ? () => setOfflineMode(true) : undefined}
       />
     );
   }
