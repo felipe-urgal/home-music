@@ -23,6 +23,7 @@ SERVICE_UNIT="${SERVICE_NAME}.service"
 SERVICE_PATH="/etc/systemd/system/${SERVICE_UNIT}"
 CONTROL_HELPER_PATH="/usr/local/sbin/home-music-service-control"
 SUDOERS_PATH="/etc/sudoers.d/home-music-${RUN_USER}"
+RUNTIME_PATHS_SCRIPT="${ROOT_DIR}/scripts/systemd-runtime-paths.mjs"
 SERVICE_STOPPED=0
 
 if [[ -z "${NODE_BIN}" || -z "${NPM_BIN}" ]]; then
@@ -32,6 +33,11 @@ fi
 
 if [[ ! -f "${ROOT_DIR}/.env" ]]; then
   echo "Arquivo ${ROOT_DIR}/.env não encontrado. Configure-o antes de instalar o serviço." >&2
+  exit 1
+fi
+
+if [[ ! -f "${RUNTIME_PATHS_SCRIPT}" ]]; then
+  echo "Helper ${RUNTIME_PATHS_SCRIPT} não encontrado. Atualize o checkout antes de instalar o serviço." >&2
   exit 1
 fi
 
@@ -82,25 +88,71 @@ systemd_quote_value() {
   printf '%s' "${value}"
 }
 
-systemd_path_value() {
-  local value="$1"
-  value="${value//\\/\\x5c}"
-  value="${value// /\\x20}"
-  value="${value//$'\t'/\\x09}"
-  value="${value//\"/\\x22}"
-  value="${value//\'/\\x27}"
-  value="${value//%/%%}"
-  printf '%s' "${value}"
-}
-
 reject_multiline "ROOT_DIR" "${ROOT_DIR}"
 reject_multiline "NODE_BIN" "${NODE_BIN}"
 reject_multiline "HOME" "${HOME}"
 
-ROOT_PATH_ESCAPED="$(systemd_path_value "${ROOT_DIR}")"
+ROOT_PATH_ESCAPED="$(systemd_quote_value "${ROOT_DIR}")"
 ROOT_ARG_ESCAPED="$(systemd_quote_value "${ROOT_DIR}")"
 NODE_ARG_ESCAPED="$(systemd_quote_value "${NODE_BIN}")"
 HOME_ESCAPED="$(systemd_quote_value "${HOME}")"
+ROOT_READ_ONLY_DIRECTIVE="ReadOnlyPaths=\"${ROOT_PATH_ESCAPED}\""
+declare -a RUNTIME_READ_WRITE_DIRECTIVES=()
+RUNTIME_READ_WRITE_UNIT_LINES=""
+
+prepare_runtime_policy() {
+  local runtime_paths_output
+  if ! runtime_paths_output="$("${NODE_BIN}" "${RUNTIME_PATHS_SCRIPT}" "${ROOT_DIR}" "${ROOT_DIR}/.env")"; then
+    echo "Falha ao preparar os diretórios graváveis do serviço." >&2
+    exit 1
+  fi
+
+  local -a runtime_paths=()
+  mapfile -t runtime_paths <<<"${runtime_paths_output}"
+  if [[ ${#runtime_paths[@]} -eq 0 || -z "${runtime_paths[0]}" ]]; then
+    echo "Nenhum diretório gravável foi calculado para o serviço." >&2
+    exit 1
+  fi
+
+  local runtime_path
+  for runtime_path in "${runtime_paths[@]}"; do
+    reject_multiline "Runtime path" "${runtime_path}"
+    RUNTIME_READ_WRITE_DIRECTIVES+=("ReadWritePaths=\"$(systemd_quote_value "${runtime_path}")\"")
+  done
+  RUNTIME_READ_WRITE_UNIT_LINES="$(printf '%s\n' "${RUNTIME_READ_WRITE_DIRECTIVES[@]}")"
+}
+
+verify_installed_runtime_policy() {
+  local installed_unit
+  if ! installed_unit="$(systemctl cat "${SERVICE_UNIT}")"; then
+    echo "Não foi possível ler o unit instalado de ${SERVICE_UNIT}." >&2
+    exit 1
+  fi
+
+  local expected
+  for expected in "ProtectSystem=strict" "${ROOT_READ_ONLY_DIRECTIVE}" "${RUNTIME_READ_WRITE_DIRECTIVES[@]}"; do
+    if ! grep -Fqx "${expected}" <<<"${installed_unit}"; then
+      echo "O unit instalado não contém a política de filesystem esperada (${expected}). Execute npm run service:install no terminal antes de usar service:update." >&2
+      exit 1
+    fi
+  done
+
+  local installed_write
+  while IFS= read -r installed_write; do
+    [[ "${installed_write}" == ReadWritePaths=* ]] || continue
+    local known=0
+    for expected in "${RUNTIME_READ_WRITE_DIRECTIVES[@]}"; do
+      if [[ "${installed_write}" == "${expected}" ]]; then
+        known=1
+        break
+      fi
+    done
+    if [[ ${known} -ne 1 ]]; then
+      echo "O unit instalado contém uma exceção de escrita obsoleta (${installed_write}). Execute npm run service:install no terminal para reconciliar a política." >&2
+      exit 1
+    fi
+  done <<<"${installed_unit}"
+}
 
 harden_local_files() {
   chmod 600 "${ROOT_DIR}/.env"
@@ -117,6 +169,18 @@ run_privileged_update_action() {
   fi
 }
 
+verify_service_stable() {
+  local attempt
+  for attempt in 1 2 3; do
+    sleep 1
+    if ! systemctl is-active --quiet "${SERVICE_UNIT}"; then
+      echo "O serviço não permaneceu ativo após o restart (checagem ${attempt}/3)." >&2
+      systemctl status "${SERVICE_UNIT}" --no-pager || true
+      return 1
+    fi
+  done
+}
+
 on_error() {
   if [[ ${SERVICE_STOPPED} -eq 1 ]]; then
     echo >&2
@@ -125,6 +189,11 @@ on_error() {
   fi
 }
 trap on_error ERR
+
+prepare_runtime_policy
+if [[ "${MODE}" == "update" ]]; then
+  verify_installed_runtime_policy
+fi
 
 cd "${ROOT_DIR}"
 harden_local_files
@@ -178,7 +247,9 @@ TimeoutStopSec=30s
 KillSignal=SIGTERM
 NoNewPrivileges=true
 PrivateTmp=true
-ProtectSystem=full
+ProtectSystem=strict
+${ROOT_READ_ONLY_DIRECTIVE}
+${RUNTIME_READ_WRITE_UNIT_LINES}
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true
@@ -276,9 +347,7 @@ EOF_SUDOERS
   fi
 fi
 
-if ! systemctl is-active --quiet "${SERVICE_UNIT}"; then
-  echo "O serviço não ficou ativo após o restart." >&2
-  systemctl status "${SERVICE_UNIT}" --no-pager || true
+if ! verify_service_stable; then
   exit 1
 fi
 

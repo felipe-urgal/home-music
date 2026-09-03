@@ -88,7 +88,7 @@ O servidor rejeita `..`, arquivos ocultos, NUL, barras invertidas e symlinks ao 
 
 ## Instalar como serviço systemd
 
-O instalador usa o usuário atual, detecta o caminho real do projeto e o binário Node atual, endurece os arquivos locais, gera o build e instala `/etc/systemd/system/home-music.service`.
+O instalador usa o usuário atual, detecta o caminho real do projeto e o binário Node atual, endurece os arquivos locais, calcula os paths de runtime que realmente precisam de escrita, gera o build e instala `/etc/systemd/system/home-music.service`.
 
 ```bash
 npm run service:install
@@ -113,7 +113,7 @@ data/                  0700
 data/home-music.db*    0600
 ```
 
-Se já existir um Home Music ativo, ele é parado **antes** de `npm ci` e `npm run build`. Isso evita uma janela em que um processo antigo mantém `index.html` em memória enquanto o diretório `dist` já contém assets de outra versão.
+`npm ci` e `npm run build` sempre acontecem enquanto a versão atualmente instalada ainda pode continuar servindo. A parada só ocorre depois que o novo build e os artefatos operacionais relevantes já foram validados, reduzindo o downtime à troca/restart final.
 
 Depois do build, o instalador:
 
@@ -141,8 +141,29 @@ O serviço possui:
 - `Restart=on-failure`;
 - shutdown por `SIGTERM` com fechamento do Fastify/SQLite;
 - timeout de 30 segundos;
-- `NoNewPrivileges` e outras restrições básicas do systemd;
+- `NoNewPrivileges` e outras restrições do systemd;
+- filesystem read-only por padrão, com escrita somente nos paths de runtime explicitamente permitidos;
 - logs centralizados no journal.
+
+### Filesystem read-only e paths graváveis
+
+O unit usa `ProtectSystem=strict`, tornando o filesystem visível ao serviço somente leitura por padrão. O diretório raiz do checkout também é declarado explicitamente em `ReadOnlyPaths`, para deixar código, `node_modules`, builds e `.env` imutáveis do ponto de vista do processo do Home Music.
+
+A escrita é reaberta apenas por `ReadWritePaths` calculados a partir do `.env` atual:
+
+- `data/` — cobre por padrão SQLite/WAL, cache de transcode, staging de importação e scratch de provider;
+- `MUSIC_DIR` — necessário para importações promovidas, movimentações, quarentena/lixeira e demais operações administrativas físicas;
+- diretório pai de `HOME_MUSIC_DATABASE_PATH`, quando o SQLite foi configurado fora de `data/`;
+- `HOME_MUSIC_IMPORT_STAGING_DIR`, quando customizado fora de `data/`;
+- `HOME_MUSIC_EXTERNAL_PROVIDER_SCRATCH_DIR`, quando customizado fora de `data/`.
+
+Paths redundantes são colapsados. Por exemplo, com os defaults, banco/cache/staging/scratch exigem somente a exceção de `data/`. A quarentena não recebe exceção própria porque fica em `.home-music-trash` dentro de `MUSIC_DIR`.
+
+O helper versionado `scripts/systemd-runtime-paths.mjs` interpreta o `.env`, resolve paths relativos em relação à raiz do projeto, prepara os diretórios de runtime que podem ser criados pelo usuário da aplicação e canonicaliza os paths antes de gerar o unit. Ele recusa configurações que exigiriam liberar escrita na raiz do filesystem, na raiz do projeto ou em um diretório que contenha o próprio checkout.
+
+`PrivateTmp=true` continua fornecendo `/tmp`/`/var/tmp` privados para temporários do processo sem ampliar `ReadWritePaths` persistentes.
+
+Se qualquer path que participa dessa política for alterado no `.env`, rode novamente `npm run service:install`. `service:update` compara a política calculada com o unit instalado e falha antes de `npm ci`/build caso falte uma exceção necessária ou exista uma exceção de escrita obsoleta.
 
 ## Atualizar depois de um novo merge
 
@@ -154,20 +175,22 @@ git pull --ff-only
 npm run service:update
 ```
 
-`service:update` exige que o bootstrap acima já esteja instalado. Antes de tocar no serviço, ele confirma que o unit existe, que o helper root-owned está presente e que `sudo -n ... check` está autorizado. Se isso não estiver pronto, o update falha **antes de parar o Home Music** e orienta executar `npm run service:install` no terminal.
+`service:update` exige que o bootstrap acima já esteja instalado. Antes de instalar dependências ou tocar no serviço, ele confirma que o unit existe, que o helper root-owned está presente, que `sudo -n ... check` está autorizado e que a política de filesystem instalada corresponde exatamente aos paths de runtime atuais. Se isso não estiver pronto, o update falha **antes de parar o Home Music** e orienta executar `npm run service:install` no terminal.
 
 O fluxo normal de update é:
 
 ```text
 preflight helper/NOPASSWD
     ↓
-helper stop
+preparar/validar política de filesystem
     ↓
 npm ci como usuário normal
     ↓
 npm run build como usuário normal
     ↓
 validar artefatos
+    ↓
+helper stop
     ↓
 helper restart
 ```
@@ -180,6 +203,18 @@ Se a atualização falhar depois de o serviço ser parado, o script deixa uma me
 
 O banco `data/home-music.db`, o `.env` e a configuração persistente do Tailscale Serve não são removidos pelo build/update.
 
+### Migração para o contrato read-only
+
+Na primeira atualização que contém o hardening de filesystem da issue #231, um unit antigo ainda usa o contrato anterior e `service:update` vai recusá-lo. Faça uma vez:
+
+```bash
+git checkout main
+git pull --ff-only
+npm run service:install
+```
+
+Depois que o bootstrap novo estiver instalado, `service:update` volta a ser o caminho normal para merges que não alterem o contrato privilegiado nem os paths graváveis.
+
 ### Quando repetir `service:install`
 
 Rode novamente o bootstrap interativo quando houver mudança no próprio contrato privilegiado, por exemplo:
@@ -187,6 +222,7 @@ Rode novamente o bootstrap interativo quando houver mudança no próprio contrat
 - alteração do unit systemd ou de seu hardening;
 - alteração do helper root-owned ou da regra sudoers;
 - mudança do caminho absoluto do Node usado em `ExecStart`;
+- mudança de `MUSIC_DIR`, `HOME_MUSIC_DATABASE_PATH`, `HOME_MUSIC_IMPORT_STAGING_DIR` ou `HOME_MUSIC_EXTERNAL_PROVIDER_SCRATCH_DIR` que altere os paths graváveis;
 - helper/sudoers ausentes ou com permissões incorretas.
 
 Depois desse bootstrap, deploys disparados por um control plane local podem usar `prod:deploy` sem compartilhar senha e sem depender de ticket sudo reutilizável entre árvores de processo.
@@ -208,6 +244,8 @@ sudo /usr/local/sbin/home-music-service-control restart
 ```
 
 ou use **Atualizar biblioteca** no app.
+
+Com o hardening read-only, `MUSIC_DIR` configurado precisa existir no momento do `service:install`, pois o path canonicalizado é gravado como exceção explícita de escrita no unit. Se o ponto de montagem mudar, repita o bootstrap.
 
 ## Node instalado por NVM ou gerenciador semelhante
 
@@ -332,6 +370,8 @@ Isso não remove automaticamente a configuração Tailscale Serve. Se o objetivo
 No perfil LAN, HTTP não criptografa usuário, senha ou áudio. Nunca faça port-forwarding da porta `8787`.
 
 O helper de deploy é deliberadamente mínimo: ele é root-owned, não lê código do repositório, não recebe caminho/comando arbitrário e aceita somente `check`, `stop` ou `restart` sobre `home-music.service`. A regra `NOPASSWD` referencia apenas essas invocações exatas. `npm ci`, build e toda lógica da aplicação continuam executando como usuário normal.
+
+O processo do serviço também não pode tratar o checkout como área de escrita: `ProtectSystem=strict` fecha o filesystem por padrão, o projeto fica explicitamente read-only e somente os diretórios runtime calculados recebem `ReadWritePaths`.
 
 No perfil recomendado:
 

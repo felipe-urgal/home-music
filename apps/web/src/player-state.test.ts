@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PlaybackState, Track } from '@home-music/shared';
 import {
+  nextTrackAfterErrorDecision,
   nextTrackDecision,
   remapQueue,
   resolveOutputVolume,
@@ -100,5 +101,30 @@ describe('nextTrackDecision', () => {
 
   it('para no fim com repeat desligado', () => {
     expect(nextTrackDecision([track('a')], 0, 'off', true)).toEqual({ type: 'stop' });
+  });
+});
+
+describe('nextTrackAfterErrorDecision', () => {
+  const queue = [track('a'), track('b'), track('c')];
+
+  it('avança para a próxima faixa após erro', () => {
+    expect(nextTrackAfterErrorDecision(queue, 0, 'off', new Set(['a']))).toEqual({ type: 'track', id: 'b' });
+  });
+
+  it('ignora repeat one e avança em vez de repetir a faixa quebrada', () => {
+    expect(nextTrackAfterErrorDecision(queue, 0, 'one', new Set(['a']))).toEqual({ type: 'track', id: 'b' });
+  });
+
+  it('pula falhas consecutivas já tentadas', () => {
+    expect(nextTrackAfterErrorDecision(queue, 1, 'off', new Set(['a', 'b', 'c']))).toEqual({ type: 'stop' });
+    expect(nextTrackAfterErrorDecision(queue, 0, 'off', new Set(['a', 'b']))).toEqual({ type: 'track', id: 'c' });
+  });
+
+  it('faz wrap em repeat all sem voltar para uma faixa que já falhou', () => {
+    expect(nextTrackAfterErrorDecision(queue, 2, 'all', new Set(['c', 'a']))).toEqual({ type: 'track', id: 'b' });
+  });
+
+  it('para quando todas as alternativas do ciclo já falharam', () => {
+    expect(nextTrackAfterErrorDecision(queue, 2, 'all', new Set(['a', 'b', 'c']))).toEqual({ type: 'stop' });
   });
 });

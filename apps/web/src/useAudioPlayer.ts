@@ -3,7 +3,13 @@ import type { NormalizationMode, PlaybackState, RepeatMode, Track } from '@home-
 import { apiFetch } from './api-client';
 import { buildQueueContext } from './library-utils';
 import { offlineAudioUrl } from './offline-downloads';
-import { nextTrackDecision, remapQueue, resolveOutputVolume, restorePlayerState } from './player-state';
+import {
+  nextTrackAfterErrorDecision,
+  nextTrackDecision,
+  remapQueue,
+  resolveOutputVolume,
+  restorePlayerState
+} from './player-state';
 import {
   effectiveNormalizationMode as resolveEffectiveNormalizationMode,
   onlineAudioUrl,
@@ -136,6 +142,7 @@ export function useAudioPlayer(
   const restoredPositionRef = useRef(0);
   const sourceTrackRef = useRef<string | null>(null);
   const sourceFallbackRef = useRef<'none' | 'compatibility' | 'original' | 'unnormalized'>('none');
+  const failedPlaybackTrackIdsRef = useRef(new Set<string>());
   const hydratedRef = useRef(false);
   const resumeIntentRef = useRef(false);
   const [orderedQueue, setOrderedQueue] = useState<Track[]>([]);
@@ -167,6 +174,14 @@ export function useAudioPlayer(
     setResumeIntent(value);
   }, []);
 
+  const handlePlayRejection = useCallback((error: unknown) => {
+    setPlaying(false);
+    if (error instanceof DOMException && error.name === 'NotAllowedError') {
+      setPlaybackIntent(false);
+      setAutoplayBlocked(true);
+    }
+  }, [setPlaybackIntent]);
+
   const resumeAudio = useCallback((audio: HTMLAudioElement) => {
     if (!resumeIntentRef.current) return;
     audio.play()
@@ -174,14 +189,8 @@ export function useAudioPlayer(
         setPlaying(true);
         setAutoplayBlocked(false);
       })
-      .catch(error => {
-        setPlaying(false);
-        setPlaybackIntent(false);
-        if (error instanceof DOMException && error.name === 'NotAllowedError') {
-          setAutoplayBlocked(true);
-        }
-      });
-  }, [setPlaybackIntent]);
+      .catch(handlePlayRejection);
+  }, [handlePlayRejection]);
 
   useEffect(() => {
     if (!libraryReady || hydratedRef.current) return;
@@ -250,6 +259,7 @@ export function useAudioPlayer(
       restoredPositionRef.current = 0;
       sourceTrackRef.current = null;
       sourceFallbackRef.current = 'none';
+      failedPlaybackTrackIdsRef.current.clear();
       return;
     }
 
@@ -346,17 +356,17 @@ export function useAudioPlayer(
   const play = useCallback(async () => {
     const audio = audioRef.current;
     if (!audio || !current) return;
+    failedPlaybackTrackIdsRef.current.clear();
     setPlaybackIntent(true);
     setAutoplayBlocked(false);
     setSourceError(null);
     try {
       await audio.play();
       setPlaying(true);
-    } catch {
-      setPlaybackIntent(false);
-      setPlaying(false);
+    } catch (error) {
+      handlePlayRejection(error);
     }
-  }, [current, setPlaybackIntent]);
+  }, [current, handlePlayRejection, setPlaybackIntent]);
 
   const pause = useCallback(() => {
     setPlaybackIntent(false);
@@ -373,18 +383,17 @@ export function useAudioPlayer(
   const restartCurrent = useCallback(() => {
     const audio = audioRef.current;
     if (!audio) return;
+    failedPlaybackTrackIdsRef.current.clear();
     audio.currentTime = 0;
     positionRef.current = 0;
     setCurrentTime(0);
     setPlaybackIntent(true);
     setAutoplayBlocked(false);
-    audio.play().catch(() => {
-      setPlaybackIntent(false);
-      setPlaying(false);
-    });
-  }, [setPlaybackIntent]);
+    audio.play().catch(handlePlayRejection);
+  }, [handlePlayRejection, setPlaybackIntent]);
 
   const next = useCallback((fromEnded = false) => {
+    if (!fromEnded) failedPlaybackTrackIdsRef.current.clear();
     const decision = nextTrackDecision(queue, currentIndex, repeatMode, fromEnded);
 
     if (decision.type === 'restart') {
@@ -402,6 +411,7 @@ export function useAudioPlayer(
   const previous = useCallback(() => {
     const audio = audioRef.current;
     if (!audio || !queue.length || currentIndex < 0) return;
+    failedPlaybackTrackIdsRef.current.clear();
 
     if (audio.currentTime > 3) {
       audio.currentTime = 0;
@@ -458,6 +468,7 @@ export function useAudioPlayer(
     const playbackQueue = shuffle ? shuffledAroundCurrent(baseQueue, track.id) : baseQueue;
     const sameTrack = current?.id === track.id;
 
+    failedPlaybackTrackIdsRef.current.clear();
     setOrderedQueue(baseQueue);
     setQueue(playbackQueue);
     setCurrentTrackId(track.id);
@@ -466,12 +477,9 @@ export function useAudioPlayer(
     setSourceError(null);
 
     if (sameTrack) {
-      audioRef.current?.play().catch(() => {
-        setPlaybackIntent(false);
-        setPlaying(false);
-      });
+      audioRef.current?.play().catch(handlePlayRejection);
     }
-  }, [current?.id, setPlaybackIntent, shuffle]);
+  }, [current?.id, handlePlayRejection, setPlaybackIntent, shuffle]);
 
   const toggleShuffle = useCallback(() => {
     if (!current) return;
@@ -554,6 +562,14 @@ export function useAudioPlayer(
   }
 
   function handleTimeUpdate(audio: HTMLAudioElement) {
+    if (
+      audio.currentTime > 0
+      && current
+      && sourceTrackRef.current === current.id
+      && failedPlaybackTrackIdsRef.current.size
+    ) {
+      failedPlaybackTrackIdsRef.current.clear();
+    }
     positionRef.current = audio.currentTime;
     if (progressVisible) setCurrentTime(audio.currentTime);
 
@@ -582,6 +598,7 @@ export function useAudioPlayer(
   }
 
   function handleError(audio: HTMLAudioElement) {
+    if (!current || sourceTrackRef.current !== current.id) return;
     const mediaErrorCode = audio.error?.code;
 
     if (!offlineMode && current && sourceFallbackRef.current === 'unnormalized') {
@@ -638,12 +655,38 @@ export function useAudioPlayer(
       }
     }
 
+    // MEDIA_ERR_ABORTED indica troca/cancelamento da fonte, não uma faixa quebrada.
+    if (mediaErrorCode === 1) return;
+
+    const errorMessage = offlineMode
+      ? 'Este download não está mais disponível no dispositivo. Remova-o e baixe novamente quando estiver online.'
+      : 'Não foi possível carregar esta música.';
+
+    if (resumeIntentRef.current) {
+      failedPlaybackTrackIdsRef.current.add(current.id);
+      const decision = nextTrackAfterErrorDecision(
+        queue,
+        currentIndex,
+        repeatMode,
+        failedPlaybackTrackIdsRef.current
+      );
+
+      if (decision.type === 'track') {
+        restoredPositionRef.current = 0;
+        positionRef.current = 0;
+        setCurrentTime(0);
+        setDuration(0);
+        setPlaying(false);
+        setSourceError(null);
+        setCurrentTrackId(decision.id);
+        return;
+      }
+    }
+
+    failedPlaybackTrackIdsRef.current.clear();
     setPlaying(false);
     setPlaybackIntent(false);
-    setSourceError(offlineMode
-      ? 'Este download não está mais disponível no dispositivo. Remova-o e baixe novamente quando estiver online.'
-      : 'Não foi possível carregar esta música.'
-    );
+    setSourceError(errorMessage);
   }
 
   return {
