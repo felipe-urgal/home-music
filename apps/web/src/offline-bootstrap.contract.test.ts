@@ -21,6 +21,15 @@ describe('offline bootstrap contract', () => {
     expect(login).not.toMatch(/onOpenOffline/);
   });
 
+  it('mantém resposta real do servidor como autoridade de autenticação', () => {
+    const auth = source('useAuth.ts');
+
+    expect(auth).toMatch(/const response = await fetchAuthStatusResponse\(\);\s+reachedServer = true;/);
+    expect(auth).toMatch(/if \(!response\.ok\) throw new Error/);
+    expect(auth).toMatch(/if \(reachedServer\) forgetOfflineUserId\(\);/);
+    expect(auth).toMatch(/const offline = !reachedServer;/);
+  });
+
   it('serve o shell cacheado antes da rede e mantém APIs fora do cache estático', () => {
     const worker = source('../public/sw.js');
 
