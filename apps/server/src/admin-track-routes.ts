@@ -15,6 +15,7 @@ import {
 } from './admin-track-mutation-service.js';
 export { PERMANENT_DELETE_CONFIRMATION } from './admin-track-mutation-service.js';
 import { LibraryDuplicateReviewError, LibraryDuplicateReviewStore } from './library-duplicate-review.js';
+import type { LibraryRouteProjection } from './library-routes.js';
 import { LibraryMetadataNormalizationStore } from './library-metadata-normalization.js';
 import type { AppliedTrackLocation } from './media-file-move.js';
 import {
@@ -40,6 +41,7 @@ type AdminTrackService = {
 type AdminTrackRouteOptions = {
   databasePath?: string;
   musicDir?: string;
+  libraryProjectionHandledByRoutes?: boolean;
 };
 
 type RevisionPayload = {
@@ -147,6 +149,28 @@ export function registerAdminTrackRoutes(
     return coverOverrides.resolveTrack(metadataOverrides.resolveTrack(track));
   }
 
+  function currentAdminRevision() {
+    return metadataRevision + normalizationRevision + coverRevision + fileRevision;
+  }
+
+  function projectPublicTracks(tracks: Track[]) {
+    metadataOverrides.refresh();
+    metadataNormalization.refresh();
+    coverOverrides.refresh();
+    publicTrackIds = new Set(tracks.map(track => track.id));
+    publicTrackIdsInitialized = true;
+    return tracks.map(track =>
+      coverOverrides.resolveTrack(
+        metadataNormalization.resolveTrack(metadataOverrides.resolveTrack(track))
+      )
+    );
+  }
+
+  const libraryProjection: LibraryRouteProjection = {
+    projectTracks: projectPublicTracks,
+    projectRevision: revision => revision + currentAdminRevision()
+  };
+
   const mutations = new AdminTrackMutationService({
     databasePath,
     musicDir,
@@ -213,30 +237,19 @@ export function registerAdminTrackRoutes(
   });
 
   app.addHook('preSerialization', async (request, _reply, payload) => {
+    if (options.libraryProjectionHandledByRoutes) return payload;
     const pathname = request.url.split('?', 1)[0];
     if (pathname !== '/api/library' && pathname !== '/api/library/status') return payload;
 
     let nextPayload = payload;
     if (pathname === '/api/library' && isTrackArrayPayload(nextPayload)) {
-      metadataOverrides.refresh();
-      metadataNormalization.refresh();
-      coverOverrides.refresh();
-      publicTrackIds = new Set(nextPayload.tracks.map(track => track.id));
-      publicTrackIdsInitialized = true;
       nextPayload = {
         ...nextPayload,
-        tracks: nextPayload.tracks.map(track =>
-          coverOverrides.resolveTrack(
-            metadataNormalization.resolveTrack(metadataOverrides.resolveTrack(track))
-          )
-        )
+        tracks: projectPublicTracks(nextPayload.tracks)
       };
     }
     if (isObjectPayload(nextPayload)) {
-      return withAdminRevision(
-        nextPayload,
-        metadataRevision + normalizationRevision + coverRevision + fileRevision
-      );
+      return withAdminRevision(nextPayload, currentAdminRevision());
     }
     return nextPayload;
   });
@@ -466,4 +479,6 @@ export function registerAdminTrackRoutes(
       }
     }
   );
+
+  return libraryProjection;
 }
