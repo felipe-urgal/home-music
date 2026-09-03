@@ -1,6 +1,7 @@
 import type { AuthStatusResponse, AuthenticatedUser } from '@home-music/shared';
 import { useCallback, useEffect, useState } from 'react';
 import { AUTH_REQUIRED_EVENT, PASSWORD_CHANGE_REQUIRED_EVENT } from './api-client';
+import { fetchAuthStatusResponse } from './auth-status-bootstrap';
 import { forgetOfflineUserId, rememberOfflineUserId } from './offline-user';
 
 function messageFromResponse(response: Response) {
@@ -22,10 +23,7 @@ export function useAuth() {
     setLoading(true);
     let reachedServer = false;
     try {
-      const response = await fetch('/api/auth/status', {
-        cache: 'no-store',
-        credentials: 'same-origin'
-      });
+      const response = await fetchAuthStatusResponse();
       reachedServer = true;
       setUnreachable(false);
       if (!response.ok) throw new Error(await messageFromResponse(response));

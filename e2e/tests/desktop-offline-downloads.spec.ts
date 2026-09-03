@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 
 const username = 'playwright';
 const password = 'playwright-password-2026';
@@ -38,17 +38,26 @@ async function ensureServiceWorkerControl(page: Page) {
   await expect(page.locator('main.app-shell')).toBeVisible();
 }
 
+async function openDesktopLibrary(page: Page) {
+  const sidebar = page.getByTestId('desktop-sidebar');
+  await sidebar.getByRole('button', { name: 'Pastas', exact: true }).click();
+  const table = page.getByTestId('desktop-library-table');
+  await expect(table).toBeVisible();
+  return table;
+}
+
+async function reloadOffline(context: BrowserContext, page: Page) {
+  await context.setOffline(true);
+  await page.reload({ waitUntil: 'domcontentloaded' });
+}
+
 test('downloads offline individual e em lote usam o fluxo desktop', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'desktop-chromium');
 
   await login(page);
   await ensureServiceWorkerControl(page);
 
-  const sidebar = page.getByTestId('desktop-sidebar');
-  await sidebar.getByRole('button', { name: 'Pastas', exact: true }).click();
-
-  const table = page.getByTestId('desktop-library-table');
-  await expect(table).toBeVisible();
+  const table = await openDesktopLibrary(page);
 
   const individualDownload = table.getByRole('button', { name: 'Baixar E2E Track para uso offline' });
   await expect(individualDownload).toBeVisible();
@@ -74,4 +83,42 @@ test('downloads offline individual e em lote usam o fluxo desktop', async ({ pag
   });
   await table.getByRole('button', { name: 'Remover download offline de E2E Track' }).click();
   await expect(table.getByRole('button', { name: 'Baixar E2E Track para uso offline' })).toBeVisible();
+});
+
+test('reload sem rede entra direto nos downloads offline sem exibir login', async ({ context, page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop-chromium');
+
+  await login(page);
+  await ensureServiceWorkerControl(page);
+  const table = await openDesktopLibrary(page);
+
+  await table.getByRole('button', { name: 'Baixar E2E Track para uso offline' }).click();
+  await expect(table.getByRole('button', { name: 'Remover download offline de E2E Track' })).toBeVisible();
+
+  try {
+    await reloadOffline(context, page);
+    await expect(page.getByText('Downloads offline', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Tocar E2E Track, Artista' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Entrar' })).toHaveCount(0);
+    await expect(page.locator('form.login-form')).toHaveCount(0);
+  } finally {
+    await context.setOffline(false);
+  }
+});
+
+test('reload sem rede e sem downloads mostra indisponibilidade sem formulário de login', async ({ context, page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop-chromium');
+
+  await login(page);
+  await ensureServiceWorkerControl(page);
+
+  try {
+    await reloadOffline(context, page);
+    await expect(page.getByRole('heading', { name: 'Home Music indisponível' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Tentar novamente' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Entrar' })).toHaveCount(0);
+    await expect(page.locator('form.login-form')).toHaveCount(0);
+  } finally {
+    await context.setOffline(false);
+  }
 });

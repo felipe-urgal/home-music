@@ -1,37 +1,31 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import {
-  Download,
   Eye,
   EyeOff,
   LockKeyhole,
   Music2,
-  UserRound
+  UserRound,
+  WifiOff
 } from 'lucide-react';
 import { canStorePasswordCredential, storePasswordCredential } from '../password-credentials';
 
 type LoginScreenProps = {
   configured: boolean;
   error: string | null;
-  offlineCount?: number;
+  unreachable: boolean;
   onLogin: (username: string, password: string) => Promise<void>;
   onRetry: () => void;
-  onOpenOffline?: () => void;
 };
 
-export function LoginScreen({ configured, error, offlineCount = 0, onLogin, onRetry, onOpenOffline }: LoginScreenProps) {
+export function LoginScreen({ configured, error, unreachable, onLogin, onRetry }: LoginScreenProps) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [savePassword, setSavePassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-  const autoOpeningOffline = offlineCount > 0 && Boolean(onOpenOffline);
   const canSavePassword = canStorePasswordCredential();
   const displayedError = formError || error;
-
-  useEffect(() => {
-    if (autoOpeningOffline) onOpenOffline?.();
-  }, [autoOpeningOffline, onOpenOffline]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -52,13 +46,14 @@ export function LoginScreen({ configured, error, offlineCount = 0, onLogin, onRe
     }
   }
 
-  if (autoOpeningOffline) {
+  if (unreachable) {
     return (
       <main className="login-shell">
         <section className="login-card login-card--status" aria-live="polite">
-          <div className="login-brand__icon"><Download /></div>
-          <strong>Modo offline</strong>
-          <span>Abrindo suas músicas baixadas…</span>
+          <div className="login-brand__icon"><WifiOff aria-hidden="true" /></div>
+          <h1>Home Music indisponível</h1>
+          <p>Não foi possível acessar o servidor e não há conteúdo offline disponível para abrir agora.</p>
+          <button className="login-submit" type="button" onClick={onRetry}>Tentar novamente</button>
         </section>
       </main>
     );

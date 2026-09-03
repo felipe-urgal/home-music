@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'home-music-static-';
-const CACHE_NAME = `${CACHE_PREFIX}v2`;
+const CACHE_NAME = `${CACHE_PREFIX}v3`;
 const OFFLINE_AUDIO_CACHE_PREFIX = 'home-music-offline-audio-v2-';
 const OFFLINE_CLIENT_SCOPE_CACHE_NAME = 'home-music-offline-client-scope-v1';
 const LEGACY_OFFLINE_AUDIO_CACHE_NAME = 'home-music-offline-audio-v1';
@@ -227,9 +227,7 @@ async function warmStaticCache() {
   ]);
 }
 
-async function networkFirstNavigation(request) {
-  const cache = await caches.open(CACHE_NAME);
-
+async function refreshCachedShell(request, cache) {
   try {
     const response = await fetch(request);
     if (isCacheableResponse(response)) {
@@ -237,14 +235,27 @@ async function networkFirstNavigation(request) {
     }
     return response;
   } catch {
-    const cachedShell = await cache.match(SHELL_URL);
-    if (cachedShell) return cachedShell;
-
-    return new Response('Home Music indisponível offline.', {
-      status: 503,
-      headers: { 'Content-Type': 'text/plain; charset=utf-8' }
-    });
+    return null;
   }
+}
+
+async function cacheFirstNavigation(request) {
+  const cache = await caches.open(CACHE_NAME);
+  const cachedShell = await cache.match(SHELL_URL);
+  const refresh = refreshCachedShell(request, cache);
+
+  if (cachedShell) {
+    void refresh;
+    return cachedShell;
+  }
+
+  const response = await refresh;
+  if (response) return response;
+
+  return new Response('Home Music indisponível offline.', {
+    status: 503,
+    headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+  });
 }
 
 async function cacheFirst(request) {
@@ -346,7 +357,7 @@ self.addEventListener('fetch', event => {
   if (isApiPath(url.pathname)) return;
 
   if (request.mode === 'navigate') {
-    event.respondWith(networkFirstNavigation(request));
+    event.respondWith(cacheFirstNavigation(request));
     return;
   }
 

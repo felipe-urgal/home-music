@@ -35,7 +35,6 @@ jobs:
         run: |
           npm ci --no-audit --no-fund
           npm ci --prefix e2e --no-audit --no-fund
-
       - name: Typecheck
         run: npm run typecheck
 
