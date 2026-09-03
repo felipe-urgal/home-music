@@ -98,7 +98,7 @@ test('reload sem rede entra direto nos downloads offline sem exibir login', asyn
   try {
     await reloadOffline(context, page);
     await expect(page.getByText('Downloads offline', { exact: true })).toBeVisible();
-    await expect(page.getByText('E2E Track', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Tocar E2E Track, Artista' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Entrar' })).toHaveCount(0);
     await expect(page.locator('form.login-form')).toHaveCount(0);
   } finally {
