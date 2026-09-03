@@ -562,6 +562,9 @@ export function useAudioPlayer(
   }
 
   function handleTimeUpdate(audio: HTMLAudioElement) {
+    if (audio.currentTime > 0 && failedPlaybackTrackIdsRef.current.size) {
+      failedPlaybackTrackIdsRef.current.clear();
+    }
     positionRef.current = audio.currentTime;
     if (progressVisible) setCurrentTime(audio.currentTime);
 
@@ -579,7 +582,6 @@ export function useAudioPlayer(
   }
 
   function handlePlay() {
-    failedPlaybackTrackIdsRef.current.clear();
     setPlaybackIntent(true);
     setAutoplayBlocked(false);
     setSourceError(null);
