@@ -7,12 +7,32 @@ import {
 } from './library-http-cache.js';
 import type { LibraryService } from './library-service.js';
 
+export type LibraryRouteProjection = {
+  projectTracks: (
+    tracks: ReturnType<LibraryService['listPublicTracks']>
+  ) => ReturnType<LibraryService['listPublicTracks']>;
+  projectRevision: (revision: number) => number;
+};
+
 export function registerLibraryRoutes(
   app: FastifyInstance,
   library: LibraryService,
-  integrityQueue?: HeavyWorkQueue
+  integrityQueue?: HeavyWorkQueue,
+  projection?: LibraryRouteProjection
 ) {
-  const libraryHttpCache = new LibraryHttpSnapshotCache(library);
+  const source = {
+    listPublicTracks: () => {
+      const tracks = library.listPublicTracks();
+      return projection ? projection.projectTracks(tracks) : tracks;
+    },
+    status: () => {
+      const status = library.status();
+      return projection
+        ? { ...status, revision: projection.projectRevision(status.revision) }
+        : status;
+    }
+  };
+  const libraryHttpCache = new LibraryHttpSnapshotCache(source);
 
   app.get('/api/library', async (request, reply) => {
     const snapshot = libraryHttpCache.snapshot();
@@ -36,7 +56,7 @@ export function registerLibraryRoutes(
 
   app.get('/api/library/status', async (_request, reply) => {
     reply.header('Cache-Control', 'private, no-store');
-    return library.status();
+    return source.status();
   });
 
   app.post('/api/library/scan', async (_request, reply) => {
