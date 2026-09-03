@@ -77,3 +77,24 @@ export function nextTrackDecision(
   if (repeatMode === 'all') return { type: 'track', id: queue[0].id };
   return { type: 'stop' };
 }
+
+export function nextTrackAfterErrorDecision(
+  queue: Track[],
+  currentIndex: number,
+  repeatMode: RepeatMode,
+  failedTrackIds: ReadonlySet<string>
+): { type: 'track'; id: string } | { type: 'stop' } {
+  if (!queue.length || currentIndex < 0) return { type: 'stop' };
+
+  const remainingSteps = repeatMode === 'all'
+    ? queue.length - 1
+    : queue.length - currentIndex - 1;
+
+  for (let offset = 1; offset <= remainingSteps; offset += 1) {
+    const index = (currentIndex + offset) % queue.length;
+    const track = queue[index];
+    if (!failedTrackIds.has(track.id)) return { type: 'track', id: track.id };
+  }
+
+  return { type: 'stop' };
+}
