@@ -159,6 +159,36 @@ Ao recalibrar o cenário:
 4. investigue regressões antes de relaxar um teto;
 5. repita o CI completo no head final depois de qualquer ajuste.
 
+## Otimização da navegação — issue #238 / PR #250
+
+A #238 usa o cenário browser-real da #237 como instrumento de comparação e reduz trabalho repetido em `useLibraryNavigation()` sem alterar o snapshot canônico recebido do backend.
+
+A implementação mantém um **índice derivado e descartável por `libraryRevision`**. Quando a revision muda, todo o índice é reconstruído a partir do novo array de `Track`; quando a API não fornece uma revision útil (`revision === 0`), a identidade do array é usada como fallback conservador de invalidação. O índice nunca é reconciliado independentemente do snapshot e, portanto, não se torna uma segunda fonte de verdade.
+
+O índice contém:
+
+- `trackMap`, eliminando a reconstrução de `Map<id, Track>` em interações de navegação;
+- texto de busca já normalizado por faixa, evitando concatenar/normalizar os mesmos campos a cada alteração da query;
+- visões/membership de pastas e formatos por caminho, evitando um novo recorte O(n) do snapshot a cada entrada/saída de pasta;
+- estatísticas estruturais usadas pelos testes para tornar o custo adicional observável.
+
+O resultado de busca/filtro/ordenação do contexto de pasta também é reutilizado quando ele já é exatamente a lista principal. Para decidir quais subpastas permanecem visíveis sob filtros, o código reutiliza os ids das faixas já aprovadas em vez de executar novamente normalização e predicados completos.
+
+### Custo de memória deliberado
+
+A troca é intencional: CPU repetida por interação é substituída por dados derivados com ciclo de vida igual ao snapshot. O custo adicional é limitado por desenho a:
+
+- **uma entrada de texto de busca normalizado por faixa**;
+- **uma entrada `trackMap` por faixa**;
+- referências de membership nas pastas ancestrais. Para profundidade máxima `D`, o teste exige que `folderTrackReferences <= N × (D + 2)` para `N` faixas;
+- metadados pequenos por nó de pasta e conjuntos/listas de formatos.
+
+Não são mantidas cópias pré-ordenadas para as seis ordenações possíveis. A ordenação continua dinâmica porque cachear todas as variantes aumentaria memória proporcionalmente a múltiplas cópias de `N` referências e não havia medição que justificasse esse custo.
+
+### Evidência antes/depois
+
+O PR #250 deve ser considerado em andamento até o CI executar no head final os mesmos gates da baseline: benchmark rápido e Chromium 10k/25k. Os números de uma execução nova só serão registrados como comparação depois que houver run equivalente; este documento não antecipa ganho nem altera budgets para acomodar a implementação.
+
 ## Baseline histórica — gate rápido
 
 A baseline original de aceitação foi estabelecida em **2026-09-01** no PR #204, usando GitHub Actions `ubuntu-latest` e Node.js 22.
