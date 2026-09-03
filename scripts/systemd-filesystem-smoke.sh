@@ -15,6 +15,17 @@ skip_or_fail() {
   exit 0
 }
 
+systemd_path_value() {
+  local value="$1"
+  value="${value//\\/\\x5c}"
+  value="${value// /\\x20}"
+  value="${value//$'\t'/\\x09}"
+  value="${value//\"/\\x22}"
+  value="${value//\'/\\x27}"
+  value="${value//%/%%}"
+  printf '%s' "${value}"
+}
+
 command -v node >/dev/null 2>&1 || skip_or_fail "Node.js não está disponível"
 command -v systemctl >/dev/null 2>&1 || skip_or_fail "systemctl não está disponível"
 command -v systemd-run >/dev/null 2>&1 || skip_or_fail "systemd-run não está disponível"
@@ -103,10 +114,10 @@ RUN_ARGS=(
   --property="NoNewPrivileges=yes"
   --property="PrivateTmp=yes"
   --property="ProtectSystem=strict"
-  --property="ReadOnlyPaths=${POLICY_ROOT}"
+  --property="ReadOnlyPaths=$(systemd_path_value "${POLICY_ROOT}")"
 )
 for writable_path in "${WRITABLE_PATHS[@]}"; do
-  RUN_ARGS+=(--property="ReadWritePaths=${writable_path}")
+  RUN_ARGS+=(--property="ReadWritePaths=$(systemd_path_value "${writable_path}")")
 done
 
 sudo -n systemd-run "${RUN_ARGS[@]}" /bin/bash "${PROBE_SCRIPT}"
