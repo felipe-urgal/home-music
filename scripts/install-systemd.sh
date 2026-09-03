@@ -88,26 +88,15 @@ systemd_quote_value() {
   printf '%s' "${value}"
 }
 
-systemd_path_value() {
-  local value="$1"
-  value="${value//\\/\\x5c}"
-  value="${value// /\\x20}"
-  value="${value//$'\t'/\\x09}"
-  value="${value//\"/\\x22}"
-  value="${value//\'/\\x27}"
-  value="${value//%/%%}"
-  printf '%s' "${value}"
-}
-
 reject_multiline "ROOT_DIR" "${ROOT_DIR}"
 reject_multiline "NODE_BIN" "${NODE_BIN}"
 reject_multiline "HOME" "${HOME}"
 
-ROOT_PATH_ESCAPED="$(systemd_path_value "${ROOT_DIR}")"
+ROOT_PATH_ESCAPED="$(systemd_quote_value "${ROOT_DIR}")"
 ROOT_ARG_ESCAPED="$(systemd_quote_value "${ROOT_DIR}")"
 NODE_ARG_ESCAPED="$(systemd_quote_value "${NODE_BIN}")"
 HOME_ESCAPED="$(systemd_quote_value "${HOME}")"
-ROOT_READ_ONLY_DIRECTIVE="ReadOnlyPaths=${ROOT_PATH_ESCAPED}"
+ROOT_READ_ONLY_DIRECTIVE="ReadOnlyPaths=\"${ROOT_PATH_ESCAPED}\""
 declare -a RUNTIME_READ_WRITE_DIRECTIVES=()
 RUNTIME_READ_WRITE_UNIT_LINES=""
 
@@ -128,7 +117,7 @@ prepare_runtime_policy() {
   local runtime_path
   for runtime_path in "${runtime_paths[@]}"; do
     reject_multiline "Runtime path" "${runtime_path}"
-    RUNTIME_READ_WRITE_DIRECTIVES+=("ReadWritePaths=$(systemd_path_value "${runtime_path}")")
+    RUNTIME_READ_WRITE_DIRECTIVES+=("ReadWritePaths=\"$(systemd_quote_value "${runtime_path}")\"")
   done
   RUNTIME_READ_WRITE_UNIT_LINES="$(printf '%s\n' "${RUNTIME_READ_WRITE_DIRECTIVES[@]}")"
 }
@@ -178,6 +167,18 @@ run_privileged_update_action() {
     echo "Falha ao executar a ação privilegiada '${action}' pelo helper do Home Music. Rode npm run service:install no terminal para reparar o bootstrap seguro." >&2
     exit 1
   fi
+}
+
+verify_service_stable() {
+  local attempt
+  for attempt in 1 2 3; do
+    sleep 1
+    if ! systemctl is-active --quiet "${SERVICE_UNIT}"; then
+      echo "O serviço não permaneceu ativo após o restart (checagem ${attempt}/3)." >&2
+      systemctl status "${SERVICE_UNIT}" --no-pager || true
+      return 1
+    fi
+  done
 }
 
 on_error() {
@@ -236,7 +237,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=${RUN_USER}
-WorkingDirectory=${ROOT_PATH_ESCAPED}
+WorkingDirectory="${ROOT_PATH_ESCAPED}"
 Environment="NODE_ENV=production"
 Environment="HOME=${HOME_ESCAPED}"
 ExecStart="${NODE_ARG_ESCAPED}" --import "${ROOT_ARG_ESCAPED}/apps/server/dist/bootstrap-preload.js" "${ROOT_ARG_ESCAPED}/apps/server/dist/index.js"
@@ -346,9 +347,7 @@ EOF_SUDOERS
   fi
 fi
 
-if ! systemctl is-active --quiet "${SERVICE_UNIT}"; then
-  echo "O serviço não ficou ativo após o restart." >&2
-  systemctl status "${SERVICE_UNIT}" --no-pager || true
+if ! verify_service_stable; then
   exit 1
 fi
 
