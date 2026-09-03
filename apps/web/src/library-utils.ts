@@ -10,6 +10,7 @@ export type TrackSort =
   | 'album-asc'
   | 'album-desc';
 export type CoverFilter = 'all' | 'with-cover' | 'without-cover';
+export type TrackSearchTextIndex = ReadonlyMap<string, string>;
 
 export type TrackViewOptions = {
   normalizedQuery: string;
@@ -56,16 +57,27 @@ export function normalizeSearch(value: string) {
     .toLocaleLowerCase('pt-BR');
 }
 
-export function matchesTrack(track: Track, normalizedQuery: string) {
-  if (!normalizedQuery) return true;
-
+export function buildTrackSearchText(track: Track) {
   return normalizeSearch(
     `${track.title} ${track.artist} ${track.album} ${track.albumArtist} ${track.folder} ${track.folderPath}`
-  ).includes(normalizedQuery);
+  );
 }
 
-export function matchesTrackView(track: Track, options: Omit<TrackViewOptions, 'sort'>) {
-  if (!matchesTrack(track, options.normalizedQuery)) return false;
+export function matchesTrack(
+  track: Track,
+  normalizedQuery: string,
+  normalizedSearchText?: string
+) {
+  if (!normalizedQuery) return true;
+  return (normalizedSearchText ?? buildTrackSearchText(track)).includes(normalizedQuery);
+}
+
+export function matchesTrackView(
+  track: Track,
+  options: Omit<TrackViewOptions, 'sort'>,
+  searchTextByTrackId?: TrackSearchTextIndex
+) {
+  if (!matchesTrack(track, options.normalizedQuery, searchTextByTrackId?.get(track.id))) return false;
   if (options.format !== 'all' && track.format !== options.format) return false;
   if (options.cover === 'with-cover' && !track.hasCover) return false;
   if (options.cover === 'without-cover' && track.hasCover) return false;
@@ -73,7 +85,11 @@ export function matchesTrackView(track: Track, options: Omit<TrackViewOptions, '
   return true;
 }
 
-function compareTrackText(a: Track, b: Track, fields: Array<keyof Pick<Track, 'title' | 'artist' | 'album' | 'albumArtist'>>) {
+function compareTrackText(
+  a: Track,
+  b: Track,
+  fields: Array<keyof Pick<Track, 'title' | 'artist' | 'album' | 'albumArtist'>>
+) {
   for (const field of fields) {
     const result = libraryCollator.compare(a[field], b[field]);
     if (result !== 0) return result;
@@ -81,31 +97,40 @@ function compareTrackText(a: Track, b: Track, fields: Array<keyof Pick<Track, 't
   return libraryCollator.compare(a.id, b.id);
 }
 
+function compareTracks(a: Track, b: Track, sort: Exclude<TrackSort, 'current'>) {
+  const descending = sort.endsWith('-desc');
+  const direction = descending ? -1 : 1;
+  let comparison = 0;
+
+  if (sort.startsWith('title-')) {
+    comparison = compareTrackText(a, b, ['title', 'artist', 'album']);
+  } else if (sort.startsWith('artist-')) {
+    comparison = compareTrackText(a, b, ['artist', 'album', 'title']);
+  } else {
+    comparison = compareTrackText(a, b, ['album', 'albumArtist', 'title']);
+  }
+
+  return comparison * direction;
+}
+
 export function sortTracks(tracks: Track[], sort: TrackSort) {
   const result = [...tracks];
   if (sort === 'current') return result;
-
-  const descending = sort.endsWith('-desc');
-  const direction = descending ? -1 : 1;
-
-  result.sort((a, b) => {
-    let comparison = 0;
-    if (sort.startsWith('title-')) {
-      comparison = compareTrackText(a, b, ['title', 'artist', 'album']);
-    } else if (sort.startsWith('artist-')) {
-      comparison = compareTrackText(a, b, ['artist', 'album', 'title']);
-    } else {
-      comparison = compareTrackText(a, b, ['album', 'albumArtist', 'title']);
-    }
-    return comparison * direction;
-  });
-
+  result.sort((a, b) => compareTracks(a, b, sort));
   return result;
 }
 
-export function applyTrackView(tracks: Track[], options: TrackViewOptions) {
-  const filtered = tracks.filter(track => matchesTrackView(track, options));
-  return sortTracks(filtered, options.sort);
+export function applyTrackView(
+  tracks: Track[],
+  options: TrackViewOptions,
+  searchTextByTrackId?: TrackSearchTextIndex
+) {
+  const filtered = tracks.filter(track => matchesTrackView(track, options, searchTextByTrackId));
+  const sort = options.sort;
+  if (sort !== 'current') {
+    filtered.sort((a, b) => compareTracks(a, b, sort));
+  }
+  return filtered;
 }
 
 export function buildLibraryReturnLabel(context: LibraryReturnContext) {

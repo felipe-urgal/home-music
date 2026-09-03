@@ -2,7 +2,7 @@
 
 Este documento é a visão técnica de alto nível do Home Music. A issue [#123](https://github.com/felipe-urgal/home-music/issues/123) preserva o índice executivo do ciclo de backlog concluído em 2026-09-02. O ciclo técnico atual está centralizado na [#239](https://github.com/felipe-urgal/home-music/issues/239).
 
-> Estado revisado em 2026-09-02. O backlog planejado da Fase 11 e o ciclo funcional anterior estão concluídos. A Fase 12 está em andamento; #228, #229, #230, #237, #233, #234, #235 e #236 já foram entregues, e a próxima atividade serial planejada é a #238.
+> Estado revisado em 2026-09-03. O backlog planejado da Fase 11 e o ciclo funcional anterior estão concluídos. A Fase 12 está em andamento; #228, #229, #230, #237, #233, #234, #235 e #236 já foram entregues, e a atividade serial atual é a #238 no PR #250.
 
 ## Fases 1–2 — Base do produto e biblioteca pessoal
 
@@ -209,9 +209,9 @@ O PR #207 foi mergeado em 2026-09-01 com CI completo verde e encerrou o backlog 
 - [ ] [#232](https://github.com/felipe-urgal/home-music/issues/232) — hardening da instalação de dependências npm;
 - [x] [#236](https://github.com/felipe-urgal/home-music/issues/236) — code splitting das telas secundárias — entregue pelo PR #249;
 - [x] [#237](https://github.com/felipe-urgal/home-music/issues/237) — benchmark de biblioteca grande em navegador real — entregue pelo PR #244;
-- [ ] [#238](https://github.com/felipe-urgal/home-music/issues/238) — reduzir recomputações da navegação da biblioteca.
+- [ ] [#238](https://github.com/felipe-urgal/home-music/issues/238) — reduzir recomputações da navegação da biblioteca — **em andamento no PR #250**.
 
-Ordem atual: a próxima atividade serial planejada é a `#238`. #231 e #232 podem ocorrer em paralelo quando houver capacidade. O benchmark #237 já está disponível como instrumento de medição para as próximas otimizações.
+Ordem atual: a atividade serial em execução é a `#238`, na branch `refactor/library-navigation-performance` e no PR #250. A implementação usa a `libraryRevision` como chave de invalidação de uma projeção derivada do snapshot, preserva o snapshot do backend como única fonte de verdade e reutiliza o benchmark #237 para medir 10k/25k antes de concluir. #231 e #232 podem ocorrer em paralelo quando houver capacidade.
 
 ## Backlog visual e PWA
 
@@ -222,7 +222,7 @@ Esses itens são independentes da #174 e da #81, ambas concluídas.
 
 ## Backlog atual
 
-O backlog implementável atual é a Fase 12, centralizada na #239. A próxima atividade serial planejada é a #238, enquanto #231 e #232 podem ocorrer em paralelo. A #123 permanece encerrada como registro do ciclo anterior e não deve ser reaberta artificialmente.
+O backlog implementável atual é a Fase 12, centralizada na #239. A #238 é a atividade serial em andamento no PR #250, enquanto #231 e #232 podem ocorrer em paralelo. A #123 permanece encerrada como registro do ciclo anterior e não deve ser reaberta artificialmente.
 
 ## Regra de execução
 

@@ -311,6 +311,7 @@ export function useLibraryData() {
     tracks,
     playlists,
     scannedAt,
+    revision,
     scanning,
     loading,
     error,

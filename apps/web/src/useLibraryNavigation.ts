@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useState } from 'react';
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import type { Playlist, Track } from '@home-music/shared';
 import {
   libraryPathForState,
@@ -10,9 +10,13 @@ import {
   type LibraryViewDefinition
 } from './library-view-types';
 import {
+  buildLibraryNavigationIndex,
+  getIndexedFolderView,
+  shouldRebuildLibraryNavigationIndex,
+  type LibraryNavigationIndexCache
+} from './library-navigation-index';
+import {
   applyTrackView,
-  buildFolderView,
-  matchesTrackView,
   normalizeSearch,
   type CoverFilter,
   type TrackSort,
@@ -33,7 +37,8 @@ function initialLibraryRoute() {
 export function useLibraryNavigation(
   tracks: Track[],
   playlists: Playlist[],
-  libraryReady: boolean
+  libraryReady: boolean,
+  libraryRevision = 0
 ) {
   const initialRoute = useMemo(initialLibraryRoute, []);
   const [libraryTab, setLibraryTab] = useState<LibraryTab>(initialRoute.libraryTab);
@@ -46,7 +51,18 @@ export function useLibraryNavigation(
   const [visibleCount, setVisibleCount] = useState(LIBRARY_PAGE_SIZE);
   const deferredQuery = useDeferredValue(query);
   const normalizedQuery = normalizeSearch(deferredQuery);
-  const trackMap = useMemo(() => new Map(tracks.map(track => [track.id, track])), [tracks]);
+  const navigationIndexCache = useRef<LibraryNavigationIndexCache | null>(null);
+
+  if (shouldRebuildLibraryNavigationIndex(navigationIndexCache.current, tracks, libraryRevision)) {
+    navigationIndexCache.current = {
+      revision: libraryRevision,
+      tracks,
+      index: buildLibraryNavigationIndex(tracks)
+    };
+  }
+
+  const navigationIndex = navigationIndexCache.current!.index;
+  const trackMap = navigationIndex.trackMap;
 
   const selectedPlaylist = useMemo(
     () => playlists.find(playlist => playlist.id === selectedPlaylistId) ?? null,
@@ -67,17 +83,18 @@ export function useLibraryNavigation(
     [selectedPlaylist, trackMap]
   );
 
-  const folderView = useMemo(() => buildFolderView(tracks, folderPath), [folderPath, tracks]);
-
-  const filterScopeTracks = useMemo(() => {
-    if (libraryTab === 'playlists' && selectedPlaylist) return playlistTracks;
-    return folderView.allTracks;
-  }, [folderView.allTracks, libraryTab, playlistTracks, selectedPlaylist]);
-
-  const availableFormats = useMemo(
-    () => [...new Set(filterScopeTracks.map(track => track.format))].sort((a, b) => a.localeCompare(b, 'pt-BR')),
-    [filterScopeTracks]
+  const folderView = useMemo(
+    () => getIndexedFolderView(navigationIndex, folderPath),
+    [folderPath, navigationIndex]
   );
+
+  const availableFormats = useMemo(() => {
+    if (libraryTab === 'playlists' && selectedPlaylist) {
+      return [...new Set(playlistTracks.map(track => track.format))]
+        .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    }
+    return navigationIndex.formatsByFolderPath.get(folderView.path) ?? [];
+  }, [folderView.path, libraryTab, navigationIndex.formatsByFolderPath, playlistTracks, selectedPlaylist]);
 
   const viewOptions = useMemo<TrackViewOptions>(() => ({
     normalizedQuery,
@@ -98,25 +115,50 @@ export function useLibraryNavigation(
     return normalizedQuery ? folderView.allTracks : folderView.directTracks;
   }, [folderView, libraryTab, normalizedQuery, playlistTracks, selectedPlaylist]);
 
-  const libraryTracks = useMemo(
-    () => applyTrackView(baseTracks, viewOptions),
-    [baseTracks, viewOptions]
-  );
-
   const folderContextTracks = useMemo(
-    () => applyTrackView(folderView.allTracks, viewOptions),
-    [folderView.allTracks, viewOptions]
+    () => applyTrackView(folderView.allTracks, viewOptions, navigationIndex.searchTextByTrackId),
+    [folderView.allTracks, navigationIndex.searchTextByTrackId, viewOptions]
   );
 
-  const visibleFolders = useMemo(() => folderView.folders.flatMap(folder => {
-    const matchingTracks = folder.tracks.filter(track => matchesTrackView(track, viewOptions));
-    if (!matchingTracks.length) return [];
-    return [{
-      ...folder,
-      matchingTrackCount: matchingTracks.length,
-      artwork: matchingTracks.find(track => track.hasCover) ?? matchingTracks[0] ?? folder.artwork
-    }];
-  }), [folderView.folders, viewOptions]);
+  const libraryTracks = useMemo(() => {
+    if (baseTracks === folderView.allTracks) return folderContextTracks;
+    return applyTrackView(baseTracks, viewOptions, navigationIndex.searchTextByTrackId);
+  }, [baseTracks, folderContextTracks, folderView.allTracks, navigationIndex.searchTextByTrackId, viewOptions]);
+
+  const visibleFolders = useMemo(() => {
+    const hasFilter = Boolean(normalizedQuery)
+      || formatFilter !== 'all'
+      || coverFilter !== 'all';
+
+    if (!hasFilter) {
+      return folderView.folders.map(folder => ({
+        ...folder,
+        matchingTrackCount: folder.tracks.length,
+        artwork: folder.artwork
+      }));
+    }
+
+    const matchingTrackIds = new Set(folderContextTracks.map(track => track.id));
+    return folderView.folders.flatMap(folder => {
+      let matchingTrackCount = 0;
+      let firstMatchingTrack: Track | undefined;
+      let firstMatchingCover: Track | undefined;
+
+      for (const track of folder.tracks) {
+        if (!matchingTrackIds.has(track.id)) continue;
+        matchingTrackCount += 1;
+        firstMatchingTrack ??= track;
+        if (!firstMatchingCover && track.hasCover) firstMatchingCover = track;
+      }
+
+      if (!matchingTrackCount) return [];
+      return [{
+        ...folder,
+        matchingTrackCount,
+        artwork: firstMatchingCover ?? firstMatchingTrack ?? folder.artwork
+      }];
+    });
+  }, [coverFilter, folderContextTracks, folderView.folders, formatFilter, normalizedQuery]);
 
   const shouldShowTracks = Boolean(selectedPlaylist) ||
     (libraryTab === 'folders' && Boolean(normalizedQuery));

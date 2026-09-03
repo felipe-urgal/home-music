@@ -46,7 +46,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
   const [administrationReturnScreen, setAdministrationReturnScreen] = useState<AdministrationReturnScreen>('account');
   const library = useLibraryData();
   const libraryReady = !library.loading && !library.error;
-  const navigation = useLibraryNavigation(library.tracks, library.playlists, libraryReady);
+  const navigation = useLibraryNavigation(library.tracks, library.playlists, libraryReady, library.revision);
   const canManageSharedLibrary = canUseAdminLibraryActions(currentUser);
   const [screen, setScreen] = useRoutedScreen({
     libraryPath: navigation.routePath,
