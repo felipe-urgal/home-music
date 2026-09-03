@@ -23,7 +23,7 @@ EXPECTED_WRITE_POLICY='${RUNTIME_READ_WRITE_UNIT_LINES}'
 EXPECTED_UPDATE_POLICY_CHECK='verify_installed_runtime_policy'
 EXPECTED_ROOT_QUOTING='ROOT_READ_ONLY_DIRECTIVE="ReadOnlyPaths=\"${ROOT_PATH_ESCAPED}\""'
 EXPECTED_WRITE_QUOTING='    RUNTIME_READ_WRITE_DIRECTIVES+=("ReadWritePaths=\"$(systemd_quote_value "${runtime_path}")\"")'
-EXPECTED_WORKING_DIRECTORY='WorkingDirectory="${ROOT_PATH_ESCAPED}"'
+EXPECTED_WORKING_DIRECTORY='WorkingDirectory=${ROOT_PATH_ESCAPED}'
 EXPECTED_STABILITY_CHECK='if ! verify_service_stable; then'
 
 assert_exact_line() {
@@ -67,8 +67,13 @@ assert_exact_line "${EXPECTED_WRITE_POLICY}" "o unit precisa incluir somente as 
 assert_contains "${EXPECTED_UPDATE_POLICY_CHECK}" "service:update precisa recusar política de filesystem desatualizada."
 assert_exact_line "${EXPECTED_ROOT_QUOTING}" "ReadOnlyPaths precisa usar valor quoted do systemd."
 assert_exact_line "${EXPECTED_WRITE_QUOTING}" "ReadWritePaths precisa usar valor quoted do systemd para preservar espaços."
-assert_exact_line "${EXPECTED_WORKING_DIRECTORY}" "WorkingDirectory precisa ser quoted para suportar checkout com espaço."
+assert_exact_line "${EXPECTED_WORKING_DIRECTORY}" "WorkingDirectory precisa permanecer um path absoluto sem aspas literais."
 assert_exact_line "${EXPECTED_STABILITY_CHECK}" "installer precisa confirmar que o serviço permaneceu ativo após o restart."
+
+if grep -Fq 'WorkingDirectory="${ROOT_PATH_ESCAPED}"' "${INSTALLER}"; then
+  echo "Erro: WorkingDirectory não pode usar aspas literais; systemd deixa de reconhecer o path como absoluto." >&2
+  exit 1
+fi
 
 if grep -Fq '\x20' "${INSTALLER}"; then
   echo "Erro: paths do unit não podem codificar espaços como \\x20; systemd interpreta isso incorretamente em ReadWritePaths." >&2
