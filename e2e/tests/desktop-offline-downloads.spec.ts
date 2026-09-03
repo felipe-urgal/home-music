@@ -8,8 +8,18 @@ async function login(page: Page) {
   await expect(page.getByRole('heading', { name: 'Entrar' })).toBeVisible();
   await page.getByLabel('Usuário', { exact: true }).fill(username);
   await page.getByLabel('Senha', { exact: true }).fill(password);
+
+  const loginResponsePromise = page.waitForResponse(response =>
+    response.request().method() === 'POST'
+      && new URL(response.url()).pathname === '/api/auth/login'
+  );
+
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'E2E Track' })).toBeVisible();
+  const loginResponse = await loginResponsePromise;
+  expect(loginResponse.ok()).toBeTruthy();
+
+  await expect(page.getByRole('heading', { name: 'Entrar' })).toHaveCount(0);
+  await expect(page.locator('main.app-shell')).toBeVisible();
 }
 
 async function ensureServiceWorkerControl(page: Page) {
@@ -25,7 +35,7 @@ async function ensureServiceWorkerControl(page: Page) {
   }
 
   await page.waitForFunction(() => Boolean(navigator.serviceWorker?.controller));
-  await expect(page.getByRole('heading', { name: 'E2E Track' })).toBeVisible();
+  await expect(page.locator('main.app-shell')).toBeVisible();
 }
 
 test('downloads offline individual e em lote usam o fluxo desktop', async ({ page }, testInfo) => {
