@@ -4,13 +4,22 @@ import type { Track } from '@home-music/shared';
 import { describe, expect, it } from 'vitest';
 import { LibraryTrackRows } from './components/LibraryTrackRows';
 import {
+  buildLibraryNavigationIndex,
+  getIndexedFolderView
+} from './library-navigation-index';
+import {
   applyTrackView,
   buildFolderView,
-  normalizeSearch
+  normalizeSearch,
+  type TrackViewOptions
 } from './library-utils';
 import { LIBRARY_PAGE_SIZE } from './useLibraryNavigation';
 
 const TRACK_COUNT = 10_000;
+const COMPARATIVE_TRACK_COUNTS = [10_000, 25_000] as const;
+const COMPARATIVE_RUNS = 5;
+const MAX_INDEXED_SEARCH_RATIO = 0.9;
+const MAX_INDEXED_FOLDER_RATIO = 0.25;
 const MEBIBYTE = 1024 * 1024;
 const LIMITS = {
   payloadDecodeMs: 1_500,
@@ -53,6 +62,21 @@ function measure<T>(operation: () => T): Measurement<T> {
   };
 }
 
+function median(values: number[]) {
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.floor(sorted.length / 2)] ?? 0;
+}
+
+function measureMedianMs(operation: () => unknown) {
+  operation();
+  const durations = Array.from({ length: COMPARATIVE_RUNS }, () => {
+    const startedAt = performance.now();
+    operation();
+    return performance.now() - startedAt;
+  });
+  return median(durations);
+}
+
 function syntheticTrack(index: number): Track {
   const formats = ['MP3', 'AAC', 'FLAC', 'OPUS'];
   const artistIndex = index % 200;
@@ -78,6 +102,15 @@ function syntheticTrack(index: number): Track {
 
 function assertWithin(label: string, actual: number, limit: number, unit: string) {
   expect(actual, `${label}: ${actual}${unit} > ${limit}${unit}`).toBeLessThanOrEqual(limit);
+}
+
+function comparativeSearchCases(): TrackViewOptions[] {
+  return ['artista 042', 'album 123', 'genero 06'].map(query => ({
+    normalizedQuery: normalizeSearch(query),
+    format: 'all',
+    cover: 'all',
+    sort: 'current'
+  }));
 }
 
 describe('large library performance guard', () => {
@@ -167,4 +200,82 @@ describe('large library performance guard', () => {
       regressionLimits: LIMITS
     }, null, 2));
   }, 10_000);
+
+  it('proves indexed navigation improves repeated 10k/25k interactions against the legacy path', () => {
+    const reports = COMPARATIVE_TRACK_COUNTS.map(trackCount => {
+      const tracks = Array.from({ length: trackCount }, (_, index) => syntheticTrack(index));
+      const indexBuild = measure(() => buildLibraryNavigationIndex(tracks));
+      const navigationIndex = indexBuild.value;
+      const searchCases = comparativeSearchCases();
+      const samplePath = syntheticTrack(42).folderPath;
+      const [genre, artist] = samplePath.split('/');
+      const folderPaths = ['', genre, `${genre}/${artist}`, samplePath];
+
+      const legacySearch = () => searchCases.reduce(
+        (total, options) => total + applyTrackView(tracks, options).length,
+        0
+      );
+      const indexedSearch = () => searchCases.reduce(
+        (total, options) => total + applyTrackView(
+          tracks,
+          options,
+          navigationIndex.searchTextByTrackId
+        ).length,
+        0
+      );
+      const legacyFolderNavigation = () => folderPaths.reduce(
+        (total, path) => total + buildFolderView(tracks, path).allTracks.length,
+        0
+      );
+      const indexedFolderNavigation = () => folderPaths.reduce(
+        (total, path) => total + getIndexedFolderView(navigationIndex, path).allTracks.length,
+        0
+      );
+
+      expect(indexedSearch()).toBe(legacySearch());
+      expect(indexedFolderNavigation()).toBe(legacyFolderNavigation());
+
+      const legacySearchMedianMs = measureMedianMs(legacySearch);
+      const indexedSearchMedianMs = measureMedianMs(indexedSearch);
+      const legacyFolderMedianMs = measureMedianMs(legacyFolderNavigation);
+      const indexedFolderMedianMs = measureMedianMs(indexedFolderNavigation);
+
+      expect(
+        indexedSearchMedianMs,
+        `busca indexada ${trackCount}: ${roundMs(indexedSearchMedianMs)}ms deve ser <= ${MAX_INDEXED_SEARCH_RATIO * 100}% do legado (${roundMs(legacySearchMedianMs)}ms)`
+      ).toBeLessThanOrEqual(legacySearchMedianMs * MAX_INDEXED_SEARCH_RATIO);
+      expect(
+        indexedFolderMedianMs,
+        `navegação de pastas indexada ${trackCount}: ${roundMs(indexedFolderMedianMs)}ms deve ser <= ${MAX_INDEXED_FOLDER_RATIO * 100}% do legado (${roundMs(legacyFolderMedianMs)}ms)`
+      ).toBeLessThanOrEqual(legacyFolderMedianMs * MAX_INDEXED_FOLDER_RATIO);
+
+      return {
+        tracks: trackCount,
+        runsPerMeasurement: COMPARATIVE_RUNS,
+        indexBuild: {
+          durationMs: indexBuild.durationMs,
+          heapDeltaMb: indexBuild.heapDeltaMb,
+          stats: navigationIndex.stats
+        },
+        repeatedSearch: {
+          legacyMedianMs: roundMs(legacySearchMedianMs),
+          indexedMedianMs: roundMs(indexedSearchMedianMs),
+          indexedToLegacyRatio: Number((indexedSearchMedianMs / legacySearchMedianMs).toFixed(3)),
+          minimumImprovementPercent: (1 - MAX_INDEXED_SEARCH_RATIO) * 100
+        },
+        folderNavigation: {
+          legacyMedianMs: roundMs(legacyFolderMedianMs),
+          indexedMedianMs: roundMs(indexedFolderMedianMs),
+          indexedToLegacyRatio: Number((indexedFolderMedianMs / legacyFolderMedianMs).toFixed(3)),
+          minimumImprovementPercent: (1 - MAX_INDEXED_FOLDER_RATIO) * 100
+        }
+      };
+    });
+
+    console.log(JSON.stringify({
+      benchmark: 'library-navigation-index-comparison',
+      methodology: 'same-process median after one warm-up; legacy and indexed paths use identical synthetic datasets and interactions',
+      reports
+    }, null, 2));
+  }, 20_000);
 });
