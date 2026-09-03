@@ -4,6 +4,7 @@ import {
   BACKGROUND_HANDOFF_WINDOW_SECONDS,
   configurePlaybackAudioSession,
   isAppleMobileWebKit,
+  resolveAppleBackgroundMediaErrorAction,
   resolveBackgroundAutoAdvance
 } from './background-playback';
 
@@ -26,9 +27,10 @@ function track(id: string): Track {
 
 describe('background playback', () => {
   const queue = [track('a'), track('b')];
+  const iphone = { userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X)' };
 
   it('detecta iPhone/iPad inclusive quando iPadOS se identifica como Mac', () => {
-    expect(isAppleMobileWebKit({ userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X)' })).toBe(true);
+    expect(isAppleMobileWebKit(iphone)).toBe(true);
     expect(isAppleMobileWebKit({ platform: 'MacIntel', maxTouchPoints: 5 })).toBe(true);
     expect(isAppleMobileWebKit({ userAgent: 'Mozilla/5.0 (X11; Linux x86_64)', platform: 'Linux x86_64' })).toBe(false);
   });
@@ -38,6 +40,19 @@ describe('background playback', () => {
     expect(configurePlaybackAudioSession({ audioSession })).toBe(true);
     expect(audioSession.type).toBe('playback');
     expect(configurePlaybackAudioSession({})).toBe(false);
+  });
+
+  it('recupera uma vez erro transitório de rede no Apple mobile em background', () => {
+    expect(resolveAppleBackgroundMediaErrorAction(iphone, true, 2, false)).toBe('retry-current');
+    expect(resolveAppleBackgroundMediaErrorAction(iphone, true, undefined, false)).toBe('retry-current');
+    expect(resolveAppleBackgroundMediaErrorAction(iphone, true, 2, true)).toBe('stop-transient');
+  });
+
+  it('não mascara erro definitivo nem altera foreground/desktop', () => {
+    expect(resolveAppleBackgroundMediaErrorAction(iphone, true, 3, false)).toBe('normal');
+    expect(resolveAppleBackgroundMediaErrorAction(iphone, true, 4, false)).toBe('normal');
+    expect(resolveAppleBackgroundMediaErrorAction(iphone, false, 2, false)).toBe('normal');
+    expect(resolveAppleBackgroundMediaErrorAction({ userAgent: 'Mozilla/5.0 (X11; Linux x86_64)' }, true, 2, false)).toBe('normal');
   });
 
   it('antecipa somente a próxima faixa perto do fim e em background', () => {
