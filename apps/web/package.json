@@ -4,13 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "predev": "node scripts/generate-pwa-icons.mjs",
-    "dev": "vite --host 0.0.0.0",
-    "prebuild": "node scripts/generate-pwa-icons.mjs",
-    "build": "tsc -b && vite build && node scripts/check-bundle-budget.mjs",
+    "dev": "node scripts/generate-pwa-icons.mjs && vite --host 0.0.0.0",
+    "build": "node scripts/generate-pwa-icons.mjs && tsc -b && vite build && node scripts/check-bundle-budget.mjs",
     "typecheck": "tsc -b --pretty false",
-    "pretest": "node scripts/generate-pwa-icons.mjs",
-    "test": "vitest run --exclude src/large-library.performance.test.tsx",
+    "test": "node scripts/generate-pwa-icons.mjs && vitest run --exclude src/large-library.performance.test.tsx",
     "benchmark:large-library": "vitest run src/large-library.performance.test.tsx"
   },
   "dependencies": {
