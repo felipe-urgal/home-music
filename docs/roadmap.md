@@ -2,7 +2,7 @@
 
 Este documento é a visão técnica de alto nível do Home Music. A issue [#123](https://github.com/felipe-urgal/home-music/issues/123) preserva o índice executivo do ciclo de backlog concluído em 2026-09-02. O ciclo técnico atual está centralizado na [#239](https://github.com/felipe-urgal/home-music/issues/239).
 
-> Estado revisado em 2026-09-03. O backlog planejado da Fase 11 e o ciclo funcional anterior estão concluídos. A Fase 12 está em andamento; #228, #229, #230, #237, #233, #234, #235, #236 e #238 já foram entregues. A atividade serial atual é a #231, enquanto a #251 corrige em paralelo a propagação de overrides para o snapshot HTTP, player e saúde administrativa.
+> Estado revisado em 2026-09-03. O backlog planejado da Fase 11 e o ciclo funcional anterior estão concluídos. A Fase 12 está em andamento; #228, #229, #230, #231, #237, #233, #234, #235, #236 e #238 já foram entregues. A atividade serial atual passa a ser a #232, enquanto a #251 corrige em paralelo a propagação de overrides para o snapshot HTTP, player e saúde administrativa.
 
 ## Fases 1–2 — Base do produto e biblioteca pessoal
 
@@ -207,8 +207,8 @@ O PR #207 foi mergeado em 2026-09-01 com CI completo verde e encerrou o backlog 
 
 ### P1
 
-- [ ] [#231](https://github.com/felipe-urgal/home-music/issues/231) — filesystem do serviço systemd com escrita mínima — **atividade serial atual**;
-- [ ] [#232](https://github.com/felipe-urgal/home-music/issues/232) — hardening da instalação de dependências npm;
+- [x] [#231](https://github.com/felipe-urgal/home-music/issues/231) — filesystem do serviço systemd com escrita mínima — entregue pelo PR #253;
+- [ ] [#232](https://github.com/felipe-urgal/home-music/issues/232) — hardening da instalação de dependências npm — **atividade serial atual**;
 - [x] [#236](https://github.com/felipe-urgal/home-music/issues/236) — code splitting das telas secundárias — entregue pelo PR #249;
 - [x] [#237](https://github.com/felipe-urgal/home-music/issues/237) — benchmark de biblioteca grande em navegador real — entregue pelo PR #244;
 - [x] [#238](https://github.com/felipe-urgal/home-music/issues/238) — reduzir recomputações da navegação da biblioteca — entregue pelo PR #250.
@@ -217,7 +217,7 @@ O PR #207 foi mergeado em 2026-09-01 com CI completo verde e encerrou o backlog 
 
 - [ ] [#251](https://github.com/felipe-urgal/home-music/issues/251) — propagar overrides de metadados para o snapshot/cache HTTP, player e saúde da Administração sem rescan nem escrita no arquivo físico.
 
-Ordem atual: a atividade serial em execução é a `#231`; a #232 permanece a outra P1 aberta e pode ocorrer em paralelo quando houver capacidade. A #251 é uma correção de regressão independente da ordem serial, descoberta após a entrega de #235/#250, e preserva a arquitetura de snapshot único do backend.
+Ordem atual: a atividade serial passa a ser a `#232`. A #251 segue como correção de regressão independente da ordem serial, descoberta após a entrega de #235/#250, e preserva a arquitetura de snapshot único do backend.
 
 ## Backlog visual e PWA
 
@@ -228,7 +228,7 @@ Esses itens são independentes da #174 e da #81, ambas concluídas.
 
 ## Backlog atual
 
-O backlog implementável atual é a Fase 12, centralizada na #239. A #231 é a atividade serial atual, a #232 é a outra P1 aberta e a #251 segue em paralelo como correção transversal. A #123 permanece encerrada como registro do ciclo anterior e não deve ser reaberta artificialmente.
+O backlog implementável atual é a Fase 12, centralizada na #239. A #232 passa a ser a atividade serial atual e a #251 segue em paralelo como correção transversal. A #123 permanece encerrada como registro do ciclo anterior e não deve ser reaberta artificialmente.
 
 ## Regra de execução
 
