@@ -41,6 +41,7 @@ type AdminMetadataHealthFilter = {
 type AdminTrackMetadataScreenProps = {
   onBack: () => void;
   initialHealthFilter?: AdminMetadataHealthFilter | null;
+  onHealthFilterCleared?: () => void;
 };
 
 type EditorFeedback = {
@@ -94,7 +95,8 @@ function metadataChanged(metadata: AdminTrackMetadataResponse | null, draft: Edi
 
 export function AdminTrackMetadataScreen({
   onBack,
-  initialHealthFilter = null
+  initialHealthFilter = null,
+  onHealthFilterCleared
 }: AdminTrackMetadataScreenProps) {
   const [tracks, setTracks] = useState<AdminTrack[]>([]);
   const [loading, setLoading] = useState(true);
@@ -141,6 +143,10 @@ export function AdminTrackMetadataScreen({
     () => tracks.find(track => track.id === editingTrackId) ?? null,
     [editingTrackId, tracks]
   );
+
+  useEffect(() => {
+    setHealthFilter(initialHealthFilter);
+  }, [initialHealthFilter]);
 
   useEffect(() => {
     if (page > pageCount) setPage(pageCount);
@@ -371,7 +377,13 @@ export function AdminTrackMetadataScreen({
               <strong>{healthFilter.label}</strong>
               <small>{healthFilter.trackIds.length.toLocaleString('pt-BR')} {healthFilter.trackIds.length === 1 ? 'faixa sinalizada' : 'faixas sinalizadas'}</small>
             </div>
-            <button type="button" onClick={() => setHealthFilter(null)}><X /> Mostrar todas</button>
+            <button
+              type="button"
+              onClick={() => {
+                setHealthFilter(null);
+                onHealthFilterCleared?.();
+              }}
+            ><X /> Mostrar todas</button>
           </div>
         )}
 
