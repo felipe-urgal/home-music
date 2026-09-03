@@ -4,12 +4,30 @@ const adminUsername = 'playwright';
 const adminPassword = 'playwright-password-2026';
 const mutationHeaders = { 'X-Home-Music-Request': '1' };
 
+type LibraryTrack = {
+  id: string;
+  title: string;
+  artist: string;
+  album: string;
+};
+
 async function login(page: Page) {
   await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Entrar' })).toBeVisible();
   await page.getByLabel('Usuário', { exact: true }).fill(adminUsername);
   await page.getByLabel('Senha', { exact: true }).fill(adminPassword);
+
+  const loginResponsePromise = page.waitForResponse(response =>
+    response.request().method() === 'POST'
+      && new URL(response.url()).pathname === '/api/auth/login'
+  );
+
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'E2E Track' })).toBeVisible();
+  const loginResponse = await loginResponsePromise;
+  expect(loginResponse.ok()).toBeTruthy();
+
+  await expect(page.getByRole('heading', { name: 'Entrar' })).toHaveCount(0);
+  await expect(page.locator('main.app-shell')).toBeVisible();
 }
 
 async function openAdministration(page: Page) {
@@ -34,21 +52,33 @@ test('override de metadata atualiza player e saúde sem alterar o arquivo e sobr
   await login(page);
 
   const request = page.context().request;
-  const libraryResponse = await request.get('/api/library');
-  expect(libraryResponse.ok()).toBeTruthy();
-  const library = await libraryResponse.json() as { tracks: Array<{ id: string; title: string; artist: string; album: string }> };
-  const track = library.tracks.find(item => item.title === 'E2E Track') ?? library.tracks[0];
-  expect(track).toBeTruthy();
-
-  await request.delete(`/api/admin/tracks/${encodeURIComponent(track.id)}/metadata`, {
-    headers: mutationHeaders
-  }).catch(() => undefined);
+  let trackId: string | undefined;
 
   try {
-    await playFixtureTrack(page, track.title);
+    const dirtyLibraryResponse = await request.get('/api/library');
+    expect(dirtyLibraryResponse.ok()).toBeTruthy();
+    const dirtyLibrary = await dirtyLibraryResponse.json() as { tracks: LibraryTrack[] };
+    const dirtyTrack = dirtyLibrary.tracks.find(item =>
+      item.title === 'E2E Track' || item.title.startsWith('E2E Track Override ')
+    );
+    expect(dirtyTrack, 'a fixture E2E deve existir mesmo se um retry anterior deixou override').toBeTruthy();
+    trackId = dirtyTrack!.id;
+
+    await request.delete(`/api/admin/tracks/${encodeURIComponent(trackId)}/metadata`, {
+      headers: mutationHeaders
+    }).catch(() => undefined);
+
+    const cleanLibraryResponse = await request.get('/api/library');
+    expect(cleanLibraryResponse.ok()).toBeTruthy();
+    const cleanLibrary = await cleanLibraryResponse.json() as { tracks: LibraryTrack[] };
+    const track = cleanLibrary.tracks.find(item => item.id === trackId);
+    expect(track, 'a fixture E2E deve continuar publicada após restaurar os metadados físicos').toBeTruthy();
+    expect(track!.title).toBe('E2E Track');
+
+    await playFixtureTrack(page, track!.title);
     const playerBar = page.getByTestId('desktop-player-bar');
-    await expect(playerBar).toContainText(track.title);
-    await expect(playerBar).toContainText(track.artist);
+    await expect(playerBar).toContainText(track!.title);
+    await expect(playerBar).toContainText(track!.artist);
 
     const initialOverviewResponse = await request.get('/api/admin/library/overview');
     expect(initialOverviewResponse.ok()).toBeTruthy();
@@ -70,7 +100,7 @@ test('override de metadata atualiza player e saúde sem alterar o arquivo e sobr
     await expect(healthFilter).toContainText('Artista desconhecido');
     await expect(healthFilter).toContainText(`${initialOverview.problems.unknownArtist.toLocaleString('pt-BR')} faixas sinalizadas`);
 
-    const row = page.locator('.admin-metadata-row').filter({ hasText: track.title }).first();
+    const row = page.locator('.admin-metadata-row').filter({ hasText: track!.title }).first();
     await expect(row).toBeVisible();
     await row.click();
 
@@ -80,8 +110,8 @@ test('override de metadata atualiza player e saúde sem alterar o arquivo e sobr
     const artistInput = editor.getByLabel('Artista', { exact: true });
     const albumInput = editor.getByLabel('Álbum', { exact: true });
     const albumArtistInput = editor.getByLabel('Artista do álbum');
-    await expect(titleInput).toHaveValue(track.title);
-    await expect(editor).toContainText(`Arquivo original: ${track.title}`);
+    await expect(titleInput).toHaveValue(track!.title);
+    await expect(editor).toContainText(`Arquivo original: ${track!.title}`);
 
     const editedTitle = `E2E Track Override ${testInfo.retry}`;
     const editedArtist = 'Artista E2E corrigido';
@@ -100,29 +130,29 @@ test('override de metadata atualiza player e saúde sem alterar o arquivo e sobr
     await expect(healthFilter).toContainText(
       `${expectedFilteredCount.toLocaleString('pt-BR')} ${expectedFilteredCount === 1 ? 'faixa sinalizada' : 'faixas sinalizadas'}`
     );
-    await expect(page.locator('.admin-metadata-row').filter({ hasText: track.title })).toHaveCount(0);
+    await expect(page.locator('.admin-metadata-row').filter({ hasText: track!.title })).toHaveCount(0);
 
     const effectiveResponse = await request.get('/api/library');
     expect(effectiveResponse.ok()).toBeTruthy();
     const effectiveLibrary = await effectiveResponse.json() as {
       tracks: Array<{ id: string; title: string; artist: string; album: string; albumArtist: string }>;
     };
-    const effectiveTrack = effectiveLibrary.tracks.find(item => item.id === track.id);
+    const effectiveTrack = effectiveLibrary.tracks.find(item => item.id === track!.id);
     expect(effectiveTrack?.title).toBe(editedTitle);
     expect(effectiveTrack?.artist).toBe(editedArtist);
     expect(effectiveTrack?.album).toBe(editedAlbum);
     expect(effectiveTrack?.albumArtist).toBe(editedArtist);
 
-    const detailResponse = await request.get(`/api/admin/tracks/${encodeURIComponent(track.id)}/metadata`);
+    const detailResponse = await request.get(`/api/admin/tracks/${encodeURIComponent(track!.id)}/metadata`);
     expect(detailResponse.ok()).toBeTruthy();
     const detail = await detailResponse.json() as {
       physical: { title: string; artist: string; album: string };
       override: { title: string | null; artist: string | null; album: string | null };
       effective: { title: string; artist: string; album: string };
     };
-    expect(detail.physical.title).toBe(track.title);
-    expect(detail.physical.artist).toBe(track.artist);
-    expect(detail.physical.album).toBe(track.album);
+    expect(detail.physical.title).toBe(track!.title);
+    expect(detail.physical.artist).toBe(track!.artist);
+    expect(detail.physical.album).toBe(track!.album);
     expect(detail.override.title).toBe(editedTitle);
     expect(detail.override.artist).toBe(editedArtist);
     expect(detail.override.album).toBe(editedAlbum);
@@ -143,19 +173,19 @@ test('override de metadata atualiza player e saúde sem alterar o arquivo e sobr
     const afterScan = await afterScanResponse.json() as {
       tracks: Array<{ id: string; title: string; artist: string; album: string }>;
     };
-    const afterScanTrack = afterScan.tracks.find(item => item.id === track.id);
+    const afterScanTrack = afterScan.tracks.find(item => item.id === track!.id);
     expect(afterScanTrack?.title).toBe(editedTitle);
     expect(afterScanTrack?.artist).toBe(editedArtist);
     expect(afterScanTrack?.album).toBe(editedAlbum);
 
     page.once('dialog', confirmation => confirmation.accept());
     await editor.getByRole('button', { name: 'Restaurar texto', exact: true }).click();
-    await expect(titleInput).toHaveValue(track.title);
+    await expect(titleInput).toHaveValue(track!.title);
     await expect(editor.getByRole('status')).toContainText('voltou a exibir os metadados do arquivo');
-    await expect(playerBar).toContainText(track.title);
-    await expect(playerBar).toContainText(track.artist);
+    await expect(playerBar).toContainText(track!.title);
+    await expect(playerBar).toContainText(track!.artist);
     await expect(healthFilter).toContainText(`${initialOverview.problems.unknownArtist.toLocaleString('pt-BR')} faixas sinalizadas`);
-    await expect(page.locator('.admin-metadata-row').filter({ hasText: track.title }).first()).toBeVisible();
+    await expect(page.locator('.admin-metadata-row').filter({ hasText: track!.title }).first()).toBeVisible();
 
     await page.locator('.admin-metadata-screen').getByRole('button', { name: 'Voltar', exact: true }).click();
     await expect(page.locator('#administration-title')).toHaveText('Administração');
@@ -165,14 +195,16 @@ test('override de metadata atualiza player e saúde sem alterar o arquivo e sobr
 
     const restoredResponse = await request.get('/api/library');
     expect(restoredResponse.ok()).toBeTruthy();
-    const restored = await restoredResponse.json() as { tracks: Array<{ id: string; title: string; artist: string; album: string }> };
-    const restoredTrack = restored.tracks.find(item => item.id === track.id);
-    expect(restoredTrack?.title).toBe(track.title);
-    expect(restoredTrack?.artist).toBe(track.artist);
-    expect(restoredTrack?.album).toBe(track.album);
+    const restored = await restoredResponse.json() as { tracks: LibraryTrack[] };
+    const restoredTrack = restored.tracks.find(item => item.id === track!.id);
+    expect(restoredTrack?.title).toBe(track!.title);
+    expect(restoredTrack?.artist).toBe(track!.artist);
+    expect(restoredTrack?.album).toBe(track!.album);
   } finally {
-    await request.delete(`/api/admin/tracks/${encodeURIComponent(track.id)}/metadata`, {
-      headers: mutationHeaders
-    }).catch(() => undefined);
+    if (trackId) {
+      await request.delete(`/api/admin/tracks/${encodeURIComponent(trackId)}/metadata`, {
+        headers: mutationHeaders
+      }).catch(() => undefined);
+    }
   }
 });
