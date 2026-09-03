@@ -180,6 +180,16 @@ if [[ ${#DEFAULT_PATHS[@]} -ne 2 ]] || \
   exit 1
 fi
 
+TRAILING_SCRATCH="${POLICY_RUNTIME}/scratch com espaço final "
+cat > "${POLICY_ROOT}/.env" <<EOF_ENV
+HOME_MUSIC_EXTERNAL_PROVIDER_SCRATCH_DIR="${TRAILING_SCRATCH}"
+EOF_ENV
+mapfile -t EXACT_PATHS < <(node "${RUNTIME_PATHS_HELPER}" "${POLICY_ROOT}" "${POLICY_ROOT}/.env")
+if ! printf '%s\n' "${EXACT_PATHS[@]}" | grep -Fqx "${TRAILING_SCRATCH}"; then
+  echo "Erro: helper precisa preservar exatamente paths quoted do dotenv, inclusive espaço final." >&2
+  exit 1
+fi
+
 cat > "${POLICY_ROOT}/.env" <<'EOF_ENV'
 HOME_MUSIC_DATABASE_PATH=runtime.db
 EOF_ENV
