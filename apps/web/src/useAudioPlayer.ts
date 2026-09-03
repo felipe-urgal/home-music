@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { NormalizationMode, PlaybackState, RepeatMode, Track } from '@home-music/shared';
 import { apiFetch } from './api-client';
+import { resolveAppleBackgroundMediaErrorAction } from './background-playback';
 import { buildQueueContext } from './library-utils';
 import { offlineAudioUrl } from './offline-downloads';
 import {
@@ -143,6 +144,7 @@ export function useAudioPlayer(
   const sourceTrackRef = useRef<string | null>(null);
   const sourceFallbackRef = useRef<'none' | 'compatibility' | 'original' | 'unnormalized'>('none');
   const failedPlaybackTrackIdsRef = useRef(new Set<string>());
+  const appleBackgroundRecoveryTrackRef = useRef<string | null>(null);
   const hydratedRef = useRef(false);
   const resumeIntentRef = useRef(false);
   const [orderedQueue, setOrderedQueue] = useState<Track[]>([]);
@@ -260,6 +262,7 @@ export function useAudioPlayer(
       sourceTrackRef.current = null;
       sourceFallbackRef.current = 'none';
       failedPlaybackTrackIdsRef.current.clear();
+      appleBackgroundRecoveryTrackRef.current = null;
       return;
     }
 
@@ -287,6 +290,7 @@ export function useAudioPlayer(
 
     if (sourceTrackRef.current !== current.id) {
       sourceTrackRef.current = current.id;
+      appleBackgroundRecoveryTrackRef.current = null;
     }
     sourceFallbackRef.current = 'none';
     setSourceError(null);
@@ -357,6 +361,7 @@ export function useAudioPlayer(
     const audio = audioRef.current;
     if (!audio || !current) return;
     failedPlaybackTrackIdsRef.current.clear();
+    appleBackgroundRecoveryTrackRef.current = null;
     setPlaybackIntent(true);
     setAutoplayBlocked(false);
     setSourceError(null);
@@ -384,6 +389,7 @@ export function useAudioPlayer(
     const audio = audioRef.current;
     if (!audio) return;
     failedPlaybackTrackIdsRef.current.clear();
+    appleBackgroundRecoveryTrackRef.current = null;
     audio.currentTime = 0;
     positionRef.current = 0;
     setCurrentTime(0);
@@ -393,7 +399,11 @@ export function useAudioPlayer(
   }, [handlePlayRejection, setPlaybackIntent]);
 
   const next = useCallback((fromEnded = false) => {
-    if (!fromEnded) failedPlaybackTrackIdsRef.current.clear();
+    // Avanço normal (manual, ended ou handoff de background) prova que o ciclo
+    // anterior não é uma cadeia de faixas quebradas. Erros automáticos não passam
+    // por esta função e continuam preservando o conjunto até haver progresso real.
+    failedPlaybackTrackIdsRef.current.clear();
+    appleBackgroundRecoveryTrackRef.current = null;
     const decision = nextTrackDecision(queue, currentIndex, repeatMode, fromEnded);
 
     if (decision.type === 'restart') {
@@ -412,6 +422,7 @@ export function useAudioPlayer(
     const audio = audioRef.current;
     if (!audio || !queue.length || currentIndex < 0) return;
     failedPlaybackTrackIdsRef.current.clear();
+    appleBackgroundRecoveryTrackRef.current = null;
 
     if (audio.currentTime > 3) {
       audio.currentTime = 0;
@@ -469,6 +480,7 @@ export function useAudioPlayer(
     const sameTrack = current?.id === track.id;
 
     failedPlaybackTrackIdsRef.current.clear();
+    appleBackgroundRecoveryTrackRef.current = null;
     setOrderedQueue(baseQueue);
     setQueue(playbackQueue);
     setCurrentTrackId(track.id);
@@ -566,9 +578,9 @@ export function useAudioPlayer(
       audio.currentTime > 0
       && current
       && sourceTrackRef.current === current.id
-      && failedPlaybackTrackIdsRef.current.size
     ) {
-      failedPlaybackTrackIdsRef.current.clear();
+      if (failedPlaybackTrackIdsRef.current.size) failedPlaybackTrackIdsRef.current.clear();
+      appleBackgroundRecoveryTrackRef.current = null;
     }
     positionRef.current = audio.currentTime;
     if (progressVisible) setCurrentTime(audio.currentTime);
@@ -657,6 +669,36 @@ export function useAudioPlayer(
 
     // MEDIA_ERR_ABORTED indica troca/cancelamento da fonte, não uma faixa quebrada.
     if (mediaErrorCode === 1) return;
+
+    const appleBackgroundErrorAction = resolveAppleBackgroundMediaErrorAction(
+      navigator,
+      document.visibilityState === 'hidden',
+      mediaErrorCode,
+      appleBackgroundRecoveryTrackRef.current === current.id
+    );
+
+    if (appleBackgroundErrorAction === 'retry-current') {
+      const retrySource = audio.currentSrc || audio.src;
+      if (retrySource) {
+        appleBackgroundRecoveryTrackRef.current = current.id;
+        restoredPositionRef.current = positionRef.current;
+        setPlaying(false);
+        setSourceError(null);
+        audio.src = retrySource;
+        audio.load();
+        resumeAudio(audio);
+        return;
+      }
+    }
+
+    if (appleBackgroundErrorAction !== 'normal') {
+      appleBackgroundRecoveryTrackRef.current = null;
+      failedPlaybackTrackIdsRef.current.clear();
+      setPlaying(false);
+      setPlaybackIntent(false);
+      setSourceError('A reprodução em segundo plano foi interrompida pelo iOS. Abra o Home Music e toque novamente.');
+      return;
+    }
 
     const errorMessage = offlineMode
       ? 'Este download não está mais disponível no dispositivo. Remova-o e baixe novamente quando estiver online.'
