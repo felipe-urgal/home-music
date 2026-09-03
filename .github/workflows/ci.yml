@@ -61,6 +61,7 @@ jobs:
         run: |
           bash -n scripts/install-systemd.sh
           bash -n scripts/install-systemd.test.sh
+          bash -n scripts/systemd-filesystem-smoke.sh
           bash -n scripts/configure-tailscale.sh
           bash -n scripts/configure-tailscale.test.sh
           bash -n scripts/configure-funnel.sh
@@ -72,6 +73,11 @@ jobs:
 
       - name: Test systemd startup
         run: bash scripts/install-systemd.test.sh
+
+      - name: Smoke systemd filesystem policy
+        env:
+          HOME_MUSIC_REQUIRE_SYSTEMD_SMOKE: '1'
+        run: bash scripts/systemd-filesystem-smoke.sh
 
       - name: Test Tailscale operations
         run: |
