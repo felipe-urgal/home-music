@@ -41,6 +41,7 @@ type AdminMetadataHealthFilter = {
 type AdminTrackMetadataScreenProps = {
   onBack: () => void;
   initialHealthFilter?: AdminMetadataHealthFilter | null;
+  onHealthFilterCleared?: () => void;
 };
 
 type EditorFeedback = {
@@ -94,7 +95,8 @@ function metadataChanged(metadata: AdminTrackMetadataResponse | null, draft: Edi
 
 export function AdminTrackMetadataScreen({
   onBack,
-  initialHealthFilter = null
+  initialHealthFilter = null,
+  onHealthFilterCleared
 }: AdminTrackMetadataScreenProps) {
   const [tracks, setTracks] = useState<AdminTrack[]>([]);
   const [loading, setLoading] = useState(true);
@@ -141,6 +143,10 @@ export function AdminTrackMetadataScreen({
     () => tracks.find(track => track.id === editingTrackId) ?? null,
     [editingTrackId, tracks]
   );
+
+  useEffect(() => {
+    setHealthFilter(initialHealthFilter);
+  }, [initialHealthFilter]);
 
   useEffect(() => {
     if (page > pageCount) setPage(pageCount);
@@ -371,7 +377,13 @@ export function AdminTrackMetadataScreen({
               <strong>{healthFilter.label}</strong>
               <small>{healthFilter.trackIds.length.toLocaleString('pt-BR')} {healthFilter.trackIds.length === 1 ? 'faixa sinalizada' : 'faixas sinalizadas'}</small>
             </div>
-            <button type="button" onClick={() => setHealthFilter(null)}><X /> Mostrar todas</button>
+            <button
+              type="button"
+              onClick={() => {
+                setHealthFilter(null);
+                onHealthFilterCleared?.();
+              }}
+            ><X /> Mostrar todas</button>
           </div>
         )}
 
@@ -488,22 +500,22 @@ export function AdminTrackMetadataScreen({
                 <div className="admin-metadata-fields admin-metadata-fields--side">
                   <label>
                     <span>Título</span>
-                    <input autoFocus required maxLength={240} value={draft.title} disabled={operationBusy} onChange={event => setField('title', event.target.value)} />
+                    <input aria-label="Título" autoFocus required maxLength={240} value={draft.title} disabled={operationBusy} onChange={event => setField('title', event.target.value)} />
                     <small>Arquivo original: {metadata.physical.title}</small>
                   </label>
                   <label>
                     <span>Artista</span>
-                    <input required maxLength={240} value={draft.artist} disabled={operationBusy} onChange={event => setField('artist', event.target.value)} />
+                    <input aria-label="Artista" required maxLength={240} value={draft.artist} disabled={operationBusy} onChange={event => setField('artist', event.target.value)} />
                     <small>Arquivo original: {metadata.physical.artist}</small>
                   </label>
                   <label>
                     <span>Álbum</span>
-                    <input required maxLength={240} value={draft.album} disabled={operationBusy} onChange={event => setField('album', event.target.value)} />
+                    <input aria-label="Álbum" required maxLength={240} value={draft.album} disabled={operationBusy} onChange={event => setField('album', event.target.value)} />
                     <small>Arquivo original: {metadata.physical.album}</small>
                   </label>
                   <label>
                     <span>Artista do álbum</span>
-                    <input required maxLength={240} value={draft.albumArtist} disabled={operationBusy} onChange={event => setField('albumArtist', event.target.value)} />
+                    <input aria-label="Artista do álbum" required maxLength={240} value={draft.albumArtist} disabled={operationBusy} onChange={event => setField('albumArtist', event.target.value)} />
                     <small>Arquivo original: {metadata.physical.albumArtist}</small>
                   </label>
                 </div>

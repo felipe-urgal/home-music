@@ -204,15 +204,16 @@ registerAdminImportRoutes(app, infrastructure.importJobs, {
 });
 registerAdminOperationHistoryRoutes(app, infrastructure.operationHistory);
 registerAdminTranscodeCacheRoutes(app, infrastructure.transcodeCacheMaintenance);
-registerAdminTrackRoutes(app, {
+const adminLibraryProjection = registerAdminTrackRoutes(app, {
   listTracks: () => library.listAdminTracks(),
   setEnabled: (trackId, enabled) => library.setTrackEnabled(trackId, enabled),
   setLocation: (trackId, location) => library.setTrackLocation(trackId, location)
 }, {
   databasePath,
-  musicDir
+  musicDir,
+  libraryProjectionHandledByRoutes: true
 });
-registerLibraryRoutes(app, library, integrityQueue);
+registerLibraryRoutes(app, library, integrityQueue, adminLibraryProjection);
 registerPersonalRoutes(app, personal);
 registerMediaRoutes(app, library, media);
 registerSystemRoutes(app, {
