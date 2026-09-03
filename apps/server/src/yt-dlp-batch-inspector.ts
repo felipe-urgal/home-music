@@ -147,7 +147,6 @@ function commonArguments(proxyUrl: string) {
     '--no-geo-bypass',
     '--no-colors',
     '--no-warnings',
-    '--ignore-errors',
     '--socket-timeout', '10',
     '--retries', '2',
     '--fragment-retries', '2',
