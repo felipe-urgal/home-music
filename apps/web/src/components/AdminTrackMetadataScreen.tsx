@@ -500,22 +500,22 @@ export function AdminTrackMetadataScreen({
                 <div className="admin-metadata-fields admin-metadata-fields--side">
                   <label>
                     <span>Título</span>
-                    <input autoFocus required maxLength={240} value={draft.title} disabled={operationBusy} onChange={event => setField('title', event.target.value)} />
+                    <input aria-label="Título" autoFocus required maxLength={240} value={draft.title} disabled={operationBusy} onChange={event => setField('title', event.target.value)} />
                     <small>Arquivo original: {metadata.physical.title}</small>
                   </label>
                   <label>
                     <span>Artista</span>
-                    <input required maxLength={240} value={draft.artist} disabled={operationBusy} onChange={event => setField('artist', event.target.value)} />
+                    <input aria-label="Artista" required maxLength={240} value={draft.artist} disabled={operationBusy} onChange={event => setField('artist', event.target.value)} />
                     <small>Arquivo original: {metadata.physical.artist}</small>
                   </label>
                   <label>
                     <span>Álbum</span>
-                    <input required maxLength={240} value={draft.album} disabled={operationBusy} onChange={event => setField('album', event.target.value)} />
+                    <input aria-label="Álbum" required maxLength={240} value={draft.album} disabled={operationBusy} onChange={event => setField('album', event.target.value)} />
                     <small>Arquivo original: {metadata.physical.album}</small>
                   </label>
                   <label>
                     <span>Artista do álbum</span>
-                    <input required maxLength={240} value={draft.albumArtist} disabled={operationBusy} onChange={event => setField('albumArtist', event.target.value)} />
+                    <input aria-label="Artista do álbum" required maxLength={240} value={draft.albumArtist} disabled={operationBusy} onChange={event => setField('albumArtist', event.target.value)} />
                     <small>Arquivo original: {metadata.physical.albumArtist}</small>
                   </label>
                 </div>
