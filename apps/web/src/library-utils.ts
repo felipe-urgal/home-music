@@ -126,8 +126,9 @@ export function applyTrackView(
   searchTextByTrackId?: TrackSearchTextIndex
 ) {
   const filtered = tracks.filter(track => matchesTrackView(track, options, searchTextByTrackId));
-  if (options.sort !== 'current') {
-    filtered.sort((a, b) => compareTracks(a, b, options.sort));
+  const sort = options.sort;
+  if (sort !== 'current') {
+    filtered.sort((a, b) => compareTracks(a, b, sort));
   }
   return filtered;
 }
