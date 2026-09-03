@@ -27,6 +27,7 @@ import {
   type AdminTranscodeCacheStatus
 } from '../admin-library-client';
 import '../administration-health.css';
+import { LIBRARY_CHANGED_EVENT } from '../library-events';
 import { AdminImportMediaScreen } from './AdminImportMediaScreen';
 import { AdminLibraryDuplicateReviewScreen } from './AdminLibraryDuplicateReviewScreen';
 import { AdminLibraryIntegrityScreen } from './AdminLibraryIntegrityScreen';
@@ -50,6 +51,7 @@ type CacheFeedback = {
 };
 
 type MetadataHealthFilter = {
+  problem: AdminLibraryProblemKey;
   label: string;
   trackIds: string[];
 };
@@ -132,10 +134,28 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
     void refreshOverview();
   }, [currentUser.role, refreshOverview]);
 
+  useEffect(() => {
+    if (currentUser.role !== 'admin') return;
+    const onLibraryChanged = () => { void loadOverview(); };
+    window.addEventListener(LIBRARY_CHANGED_EVENT, onLibraryChanged);
+    return () => window.removeEventListener(LIBRARY_CHANGED_EVENT, onLibraryChanged);
+  }, [currentUser.role, loadOverview]);
+
+  useEffect(() => {
+    if (!overview) return;
+    setMetadataHealthFilter(current => {
+      if (!current) return current;
+      return {
+        ...current,
+        trackIds: overview.problems.trackIds[current.problem] ?? []
+      };
+    });
+  }, [overview]);
+
   function openHealthProblem(problem: AdminLibraryProblemKey, label: string) {
     const trackIds = overview?.problems.trackIds[problem] ?? [];
     if (trackIds.length === 0) return;
-    setMetadataHealthFilter({ label, trackIds });
+    setMetadataHealthFilter({ problem, label, trackIds });
     setView('metadata');
   }
 
@@ -187,7 +207,13 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
 
   if (view === 'tracks') return <AdminTrackAvailabilityScreen onBack={() => setView('overview')} />;
   if (view === 'metadata') {
-    return <AdminTrackMetadataScreen initialHealthFilter={metadataHealthFilter} onBack={() => setView('overview')} />;
+    return (
+      <AdminTrackMetadataScreen
+        initialHealthFilter={metadataHealthFilter}
+        onHealthFilterCleared={() => setMetadataHealthFilter(null)}
+        onBack={() => setView('overview')}
+      />
+    );
   }
   if (view === 'normalization') return <AdminLibraryNormalizationScreen onBack={() => setView('overview')} />;
   if (view === 'integrity') return <AdminLibraryIntegrityScreen onBack={() => setView('overview')} />;
