@@ -27,9 +27,24 @@ O cache estático é deliberadamente limitado a recursos públicos necessários 
 - `manifest.webmanifest`;
 - favicon/ícones públicos da aplicação.
 
-Navegações usam estratégia **network-first**. Assets hashados podem usar **cache-first** porque o nome muda junto com o conteúdo.
+Quando já existe shell instalado, navegações usam **cache-first com revalidação em background**: o HTML local é devolvido sem esperar a rede e uma tentativa de rede atualiza `SHELL_URL` para a próxima navegação. Se ainda não houver shell cacheado, a navegação tenta a rede e responde `503` somente quando rede e cache não podem fornecer a aplicação.
+
+Assets hashados continuam **cache-first** porque o nome muda junto com o conteúdo. O `OfflineApp` permanece lazy, mas `App.tsx` aquece esse módulo durante a sessão autenticada assim que o suporte offline do service worker fica pronto. Dessa forma, o código necessário para abrir os downloads também passa pelo cache de assets antes de um reload totalmente sem rede.
 
 Conteúdo autenticado de `/api/*` não é colocado no cache estático da PWA. Login, sessão, biblioteca, favoritos, histórico, playlists, capas privadas e streaming continuam protegidos pelo backend.
+
+## Bootstrap de sessão e conectividade
+
+A verificação inicial de `/api/auth/status` possui um orçamento curto de **1,5 segundo**. Se `navigator.onLine` já reportar ausência de rede, a tentativa é pulada; se a requisição não concluir dentro desse orçamento ou falhar antes de alcançar o servidor, a aplicação marca o Home Music como inalcançável.
+
+Esse timeout não autentica ninguém e não transforma resposta de servidor em falha de rede. Quando o servidor responde, a resposta continua sendo a autoridade: sessão inválida, senha obrigatória ou erro HTTP seguem o fluxo normal de autenticação e podem limpar a identidade offline ativa conforme as regras existentes.
+
+A raiz (`App.tsx`) combina conectividade com o estado offline reconciliado:
+
+- servidor inalcançável + downloads físicos válidos no namespace conhecido → abre `OfflineApp` diretamente;
+- servidor inalcançável + nenhum conteúdo offline utilizável → mostra `Home Music indisponível` e `Tentar novamente`, sem formulário de login;
+- servidor alcançável + sessão válida → aplicação autenticada;
+- servidor alcançável + sessão inválida → login normal, sem bypass offline.
 
 ## Downloads offline
 
@@ -152,6 +167,6 @@ A matriz física da [#81](https://github.com/felipe-urgal/home-music/issues/81) 
 
 ## Estado do backlog relacionado
 
-Não há evolução PWA/offline priorizada em aberto no backlog atual. A #81 encerrou a validação física do comportamento mobile; a [#174](https://github.com/felipe-urgal/home-music/issues/174) entregou playlists/pastas offline deduplicadas reutilizando o scheduler/cache existente; e a identidade de instalação da #176 está documentada em [pwa-icon-identity.md](pwa-icon-identity.md).
+As issues #258 e #259 consolidam o bootstrap offline-first e seu contrato de regressão. A #81 encerrou a validação física do comportamento mobile; a [#174](https://github.com/felipe-urgal/home-music/issues/174) entregou playlists/pastas offline deduplicadas reutilizando o scheduler/cache existente; e a identidade de instalação da #176 está documentada em [pwa-icon-identity.md](pwa-icon-identity.md).
 
 A matriz de [offline-downloads.md](offline-downloads.md) permanece como protocolo de regressão manual para mudanças futuras no pipeline offline ou no service worker.
