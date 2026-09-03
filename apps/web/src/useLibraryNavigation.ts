@@ -61,7 +61,7 @@ export function useLibraryNavigation(
     };
   }
 
-  const navigationIndex = navigationIndexCache.current.index;
+  const navigationIndex = navigationIndexCache.current!.index;
   const trackMap = navigationIndex.trackMap;
 
   const selectedPlaylist = useMemo(
