@@ -28,6 +28,10 @@ Hierarquia:
 
 O estado nunca deve aparecer saudável se a integridade ainda não foi verificada ou se o snapshot ficou desatualizado por falha de refresh.
 
+`Atenção necessária` é derivada de `/api/admin/library/overview`. Alterações de metadata/capa publicam `home-music:library-changed`; enquanto a Administração está montada, esse evento dispara um novo overview em background. Assim, o total de **Metadados**, os chips de atenção e os `trackIds` usados para abrir cada problema acompanham o estado persistido sem exigir o botão **Atualizar** ou um rescan.
+
+O botão **Atualizar** continua existindo como refresh manual de overview + cache operacional, mas não é requisito para refletir uma edição concluída em Metadados.
+
 ## Gerenciar músicas
 
 Padrão atual:
@@ -49,6 +53,12 @@ Usa workspace **lista + editor persistente**.
 - restore/salvar permanecem explícitos;
 - trocar/fechar/sair protege alterações não salvas;
 - respostas assíncronas antigas não podem sobrescrever a faixa atualmente selecionada.
+
+Quando a tela é aberta por um chip de `Atenção necessária`, o filtro conserva a **chave canônica do problema** (`missingTitle`, `missingCover`, `unknownArtist`, `unknownAlbum` ou `missingDuration`) e os ids atualmente informados pelo backend. Depois de salvar/restaurar um override, o overview é recarregado e o filtro recebe os novos `trackIds`. Uma faixa corrigida sai da lista e do contador imediatamente; se a correção for restaurada e o problema voltar a existir, a faixa reaparece.
+
+A regra de classificação não é duplicada no React. O frontend não tenta decidir sozinho se um título é ausente ou se uma capa/artista/álbum é desconhecido; `/api/admin/library/overview` permanece a fonte canônica desses diagnósticos.
+
+O mesmo evento que atualiza o cockpit também faz `useLibraryData()` buscar o snapshot efetivo de `/api/library`, então o player persistente, o player principal, a fila e a biblioteca passam a exibir a edição pelo mesmo `track.id`, sem reiniciar o áudio apenas por uma mudança textual.
 
 ## Importação
 
