@@ -21,6 +21,10 @@ EXPECTED_STRICT_FS='ProtectSystem=strict'
 EXPECTED_READ_ONLY='${ROOT_READ_ONLY_DIRECTIVE}'
 EXPECTED_WRITE_POLICY='${RUNTIME_READ_WRITE_UNIT_LINES}'
 EXPECTED_UPDATE_POLICY_CHECK='verify_installed_runtime_policy'
+EXPECTED_ROOT_QUOTING='ROOT_READ_ONLY_DIRECTIVE="ReadOnlyPaths=\"${ROOT_PATH_ESCAPED}\""'
+EXPECTED_WRITE_QUOTING='    RUNTIME_READ_WRITE_DIRECTIVES+=("ReadWritePaths=\"$(systemd_quote_value "${runtime_path}")\"")'
+EXPECTED_WORKING_DIRECTORY='WorkingDirectory="${ROOT_PATH_ESCAPED}"'
+EXPECTED_STABILITY_CHECK='if ! verify_service_stable; then'
 
 assert_exact_line() {
   local expected="$1"
@@ -61,6 +65,15 @@ assert_exact_line "${EXPECTED_STRICT_FS}" "o serviço precisa usar ProtectSystem
 assert_exact_line "${EXPECTED_READ_ONLY}" "o diretório do projeto precisa ser explicitamente somente leitura."
 assert_exact_line "${EXPECTED_WRITE_POLICY}" "o unit precisa incluir somente as exceções graváveis calculadas."
 assert_contains "${EXPECTED_UPDATE_POLICY_CHECK}" "service:update precisa recusar política de filesystem desatualizada."
+assert_exact_line "${EXPECTED_ROOT_QUOTING}" "ReadOnlyPaths precisa usar valor quoted do systemd."
+assert_exact_line "${EXPECTED_WRITE_QUOTING}" "ReadWritePaths precisa usar valor quoted do systemd para preservar espaços."
+assert_exact_line "${EXPECTED_WORKING_DIRECTORY}" "WorkingDirectory precisa ser quoted para suportar checkout com espaço."
+assert_exact_line "${EXPECTED_STABILITY_CHECK}" "installer precisa confirmar que o serviço permaneceu ativo após o restart."
+
+if grep -Fq '\x20' "${INSTALLER}"; then
+  echo "Erro: paths do unit não podem codificar espaços como \\x20; systemd interpreta isso incorretamente em ReadWritePaths." >&2
+  exit 1
+fi
 
 BUILD_LINE="$(line_number '"${NPM_BIN}" run build')"
 UPDATE_STOP_LINE="$(line_number '    run_privileged_update_action stop')"
@@ -69,6 +82,8 @@ INSTALL_STOP_LINE="$(line_number '    sudo systemctl stop "${SERVICE_UNIT}"')"
 SERVICE_INSTALL_LINE="$(line_number '  sudo install -o root -g root -m 0644 "${TMP_SERVICE}" "${SERVICE_PATH}"')"
 POLICY_CHECK_LINE="$(line_number '  verify_installed_runtime_policy')"
 NPM_CI_LINE="$(line_number '"${NPM_BIN}" ci')"
+STABILITY_CHECK_LINE="$(line_number 'if ! verify_service_stable; then')"
+SUCCESS_MESSAGE_LINE="$(line_number '  echo "Home Music instalado e iniciado."')"
 
 if [[ -z "${BUILD_LINE}" || -z "${UPDATE_STOP_LINE}" || ${UPDATE_STOP_LINE} -le ${BUILD_LINE} ]]; then
   echo "Erro: service:update precisa concluir o build antes de parar produção." >&2
@@ -87,6 +102,11 @@ fi
 
 if [[ -z "${POLICY_CHECK_LINE}" || -z "${NPM_CI_LINE}" || ${POLICY_CHECK_LINE} -ge ${NPM_CI_LINE} ]]; then
   echo "Erro: service:update precisa validar a política de filesystem antes de instalar dependências/buildar." >&2
+  exit 1
+fi
+
+if [[ -z "${STABILITY_CHECK_LINE}" || -z "${SUCCESS_MESSAGE_LINE}" || ${STABILITY_CHECK_LINE} -ge ${SUCCESS_MESSAGE_LINE} ]]; then
+  echo "Erro: o installer só pode declarar sucesso depois da checagem de estabilidade do serviço." >&2
   exit 1
 fi
 
@@ -198,4 +218,4 @@ if node "${RUNTIME_PATHS_HELPER}" "${POLICY_ROOT}" "${POLICY_ROOT}/.env" >/dev/n
   exit 1
 fi
 
-echo "Systemd startup preserva privilégio mínimo, downtime mínimo e filesystem somente leitura fora dos paths runtime necessários."
+echo "Systemd startup preserva privilégio mínimo, downtime mínimo, paths quoted e filesystem somente leitura fora dos paths runtime necessários."
