@@ -21,7 +21,7 @@ function inspectorWith(payload: unknown) {
   return { inspector, requests, proxyClosed: () => proxyClosed };
 }
 
-test('inspeciona playlist com proxy, runtime Node e limite maxItems + 1', async () => {
+test('inspeciona playlist com proxy, runtime Node, tolerância a item quebrado e limite maxItems + 1', async () => {
   const item = inspectorWith({
     _type: 'playlist',
     id: 'PL123',
@@ -46,6 +46,7 @@ test('inspeciona playlist com proxy, runtime Node e limite maxItems + 1', async 
   assert.ok(args.includes('--yes-playlist'));
   assert.ok(args.includes('--flat-playlist'));
   assert.ok(args.includes('--skip-download'));
+  assert.ok(args.includes('--ignore-errors'));
   assert.equal(args.includes('--no-playlist'), false);
   assert.equal(args[args.indexOf('--playlist-end') + 1], '4');
   assert.ok(args.some(value => value.startsWith('node:')));
