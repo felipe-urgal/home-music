@@ -12,6 +12,10 @@ O Home Music pode tratar uma URL de playlist do YouTube/YouTube Music como um lo
 6. falha, duplicata ou item indisponível não apaga nem invalida os demais;
 7. o lote termina com resumo de concluídos, duplicados, ignorados, falhos e cancelados.
 
+A inspeção da playlist executa o `yt-dlp` com tolerância a erros por entrada. Assim, uma música privada, removida, bloqueada ou que falhe durante a extração não deve impedir que as demais entradas válidas sejam descobertas.
+
+Durante a importação, cada música também é uma unidade independente. Se a aquisição ou o pipeline de uma faixa falhar, somente aquele item é marcado como `failed`, seu staging é descartado quando aplicável e o lote segue para a próxima música. O lote pode terminar como `completed` com falhas parciais registradas no resumo; somente uma falha do próprio orquestrador do lote encerra os itens restantes.
+
 URLs retornadas pelo extractor não são reutilizadas como origem confiável dos itens. Para YouTube, os jobs filhos são reconstruídos apenas a partir de identificadores de vídeo validados e apontam novamente para um host conhecido do YouTube.
 
 ## Qualidade de áudio
@@ -59,4 +63,4 @@ A pasta da playlist nunca é usada como caminho confiável. O destino passa pela
 
 Cancelar o lote impede novos itens de começarem e tenta cancelar a aquisição corrente quando ela ainda pertence ao provider. Staging descartado é limpo pelo mesmo fluxo seguro já usado nas importações individuais.
 
-Um item que exige revisão manual de metadata ou de possível duplicata é marcado como ignorado no lote; ele não é promovido automaticamente. Duplicata exata é classificada como duplicada e também não é promovida.
+Um item que exige revisão manual de metadata ou de possível duplicata é marcado como ignorado no lote; ele não é promovido automaticamente. Duplicata exata é classificada como duplicada e também não é promovida. Erros de uma música individual não interrompem as seguintes: a falha permanece visível no item e no resumo final para diagnóstico posterior.
