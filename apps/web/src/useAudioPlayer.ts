@@ -562,7 +562,12 @@ export function useAudioPlayer(
   }
 
   function handleTimeUpdate(audio: HTMLAudioElement) {
-    if (audio.currentTime > 0 && failedPlaybackTrackIdsRef.current.size) {
+    if (
+      audio.currentTime > 0
+      && current
+      && sourceTrackRef.current === current.id
+      && failedPlaybackTrackIdsRef.current.size
+    ) {
       failedPlaybackTrackIdsRef.current.clear();
     }
     positionRef.current = audio.currentTime;
@@ -593,6 +598,7 @@ export function useAudioPlayer(
   }
 
   function handleError(audio: HTMLAudioElement) {
+    if (!current || sourceTrackRef.current !== current.id) return;
     const mediaErrorCode = audio.error?.code;
 
     if (!offlineMode && current && sourceFallbackRef.current === 'unnormalized') {
@@ -656,7 +662,7 @@ export function useAudioPlayer(
       ? 'Este download não está mais disponível no dispositivo. Remova-o e baixe novamente quando estiver online.'
       : 'Não foi possível carregar esta música.';
 
-    if (resumeIntentRef.current && current) {
+    if (resumeIntentRef.current) {
       failedPlaybackTrackIdsRef.current.add(current.id);
       const decision = nextTrackAfterErrorDecision(
         queue,
