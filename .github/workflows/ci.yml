@@ -44,9 +44,23 @@ jobs:
         run: npm test
 
       - name: Audit dependencies
+        env:
+          NPM_CONFIG_FETCH_RETRIES: '1'
+          NPM_CONFIG_FETCH_RETRY_MINTIMEOUT: '1000'
+          NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT: '5000'
+          NPM_CONFIG_FETCH_TIMEOUT: '15000'
         run: |
-          npm audit --audit-level=high
-          npm audit --prefix e2e --audit-level=high
+          root_status=0
+          e2e_status=0
+          npm audit --audit-level=high &
+          root_pid=$!
+          npm audit --prefix e2e --audit-level=high &
+          e2e_pid=$!
+          wait "$root_pid" || root_status=$?
+          wait "$e2e_pid" || e2e_status=$?
+          if [[ "$root_status" -ne 0 || "$e2e_status" -ne 0 ]]; then
+            exit 1
+          fi
 
       - name: Heavy work backpressure memory guard
         run: npm run benchmark:backpressure
