@@ -31,7 +31,7 @@ function main() {
     const value = parsed[name];
     if (typeof value !== 'string') return '';
     if (hasUnsafeLineBreak(value)) fail(`${name} contém caractere inválido para um path de runtime.`);
-    return value.trim();
+    return value;
   };
 
   const resolveConfiguredPath = (name, fallback) => {
