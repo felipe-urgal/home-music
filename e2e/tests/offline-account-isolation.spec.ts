@@ -9,12 +9,21 @@ async function submitLogin(page: Page, username: string, password: string) {
   await expect(page.getByRole('heading', { name: 'Entrar' })).toBeVisible();
   await page.getByLabel('Usuário', { exact: true }).fill(username);
   await page.getByLabel('Senha', { exact: true }).fill(password);
+
+  const loginResponsePromise = page.waitForResponse(response =>
+    response.request().method() === 'POST'
+      && new URL(response.url()).pathname === '/api/auth/login'
+  );
+
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
+  const loginResponse = await loginResponsePromise;
+  expect(loginResponse.ok()).toBeTruthy();
 }
 
 async function login(page: Page, username: string, password: string) {
   await submitLogin(page, username, password);
-  await expect(page.getByRole('heading', { name: 'E2E Track' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Entrar' })).toHaveCount(0);
+  await expect(page.locator('main.app-shell')).toBeVisible();
 }
 
 async function resetSession(page: Page) {
