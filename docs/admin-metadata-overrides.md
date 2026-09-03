@@ -23,6 +23,24 @@ metadata efetiva = metadata física + campos não nulos do override
 
 O scanner continua trabalhando apenas com a versão física. A resolução efetiva acontece na borda HTTP para a biblioteca e para a Administração. Isso evita que um re-scan reutilize metadata efetiva como se tivesse vindo do arquivo.
 
+Para o snapshot público da biblioteca, a ordem canônica é explícita:
+
+```text
+metadata física
+   ↓
+override por faixa
+   ↓
+normalização lógica de artista/álbum
+   ↓
+override de capa
+   ↓
+serialização + ETag + compressão de /api/library
+```
+
+A projeção efetiva ocorre **antes** de `LibraryHttpSnapshotCache` transformar a resposta em `Buffer`. Assim, o mesmo objeto lógico alimenta biblioteca, player, fila, mini player e o cache HTTP; a camada de `preSerialization` permanece apenas como compatibilidade para composições que não usam a projeção explícita das rotas.
+
+Salvar ou restaurar metadata/capa e alterar normalização incrementa a revisão administrativa composta usada por `/api/library/status` e pelo snapshot. O frontend consegue invalidar a representação sem executar scan, e o novo ETag é calculado sobre os valores efetivos realmente publicados.
+
 ## Persistência SQLite
 
 A tabela `track_metadata_overrides` usa `track_id` como chave primária e FK para `tracks(id)`.
@@ -85,7 +103,9 @@ Após o redesign do PR #177, a tela usa um workspace **lista + editor persistent
 
 Trocar de música, fechar o editor, usar `Esc` ou sair da tela não pode descartar silenciosamente alterações ainda não salvas. Respostas assíncronas de uma faixa anterior também não podem sobrescrever o editor da faixa atualmente selecionada.
 
-Depois de salvar ou restaurar, a tela publica `home-music:library-changed` para que a instância canônica de `useLibraryData()` refaça `/api/library` imediatamente.
+Depois de salvar ou restaurar, a tela publica `home-music:library-changed`. A instância canônica de `useLibraryData()` refaz `/api/library`, substitui as faixas pelo snapshot efetivo e o `useAudioPlayer()` remapeia fila/faixa atual por `track.id`. Uma correção apenas textual atualiza imediatamente player, mini player, fila e biblioteca sem reiniciar o áudio, porque a identidade física da faixa permanece a mesma.
+
+O cockpit da Administração escuta o mesmo evento e refaz `/api/admin/library/overview`. Quando Metadados foi aberto por um filtro de saúde, o frontend conserva somente a chave do problema e recebe do backend os novos `trackIds`; ele não reimplementa no cliente as regras de “sem título”, artista/álbum desconhecido ou capa ausente. Por isso, uma faixa corrigida deixa de aparecer no filtro e seu contador é reconciliado ainda com a tela aberta.
 
 ## Re-scan
 
@@ -130,5 +150,6 @@ A cobertura inclui:
 - validação de payload e campos desconhecidos;
 - API administrativa;
 - garantia de que o payload físico original não é mutado pela camada efetiva;
+- caminho HTTP real de `/api/library`, incluindo revisão composta, ETag, revalidação `304`, save e restore sem mutar o objeto físico;
 - helper do frontend para derivação de patches;
-- Playwright desktop com edição, verificação da API, rescan e restauração da fixture.
+- Playwright desktop cobrindo edição no workspace, atualização imediata do player persistente e do filtro/cockpit de saúde, sobrevivência a rescan e restauração da fixture.
