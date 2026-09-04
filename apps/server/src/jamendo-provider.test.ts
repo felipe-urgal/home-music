@@ -171,6 +171,30 @@ test('Jamendo rejeita busca sem configuração e limites fora da allowlist', asy
   );
 });
 
+test('Jamendo interrompe resposta streaming acima de 1 MiB mesmo sem Content-Length', async () => {
+  const chunk = new Uint8Array(600 * 1024);
+  const provider = new JamendoProvider({
+    fetch: async () => new Response(new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(chunk);
+        controller.enqueue(chunk);
+        controller.close();
+      }
+    }), { status: 200 })
+  });
+
+  await assert.rejects(
+    provider.search(
+      { query: 'ambient' },
+      { [JAMENDO_CLIENT_ID_CONFIG]: SECRET_CLIENT_ID }
+    ),
+    (error: unknown) => error instanceof ExternalProviderError
+      && error.code === 'invalid_output'
+      && error.statusCode === 502
+      && error.message.includes('excedeu o limite')
+  );
+});
+
 test('Jamendo não aceita importação física antes do gate de download seguro', () => {
   const provider = new JamendoProvider();
   assert.throws(
