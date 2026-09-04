@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
+import type { ImportJob } from '@home-music/shared';
 import {
   CheckCircle2,
   ChevronLeft,
@@ -22,6 +23,10 @@ import {
 import '../admin-jamendo.css';
 
 const CREATIVE_COMMONS_HOSTS = new Set(['creativecommons.org', 'www.creativecommons.org']);
+
+type AdminJamendoDiscoveryPanelProps = {
+  onJobStarted?: (job: ImportJob) => void;
+};
 
 function formatDuration(seconds: number | null) {
   if (!seconds || !Number.isFinite(seconds) || seconds <= 0) return 'Duração não informada';
@@ -57,7 +62,7 @@ function blockReasonLabel(reason: AdminJamendoImportBlockReason | null) {
   }
 }
 
-export function AdminJamendoDiscoveryPanel() {
+export function AdminJamendoDiscoveryPanel({ onJobStarted }: AdminJamendoDiscoveryPanelProps) {
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [query, setQuery] = useState('');
   const [searchedQuery, setSearchedQuery] = useState('');
@@ -114,6 +119,7 @@ export function AdminJamendoDiscoveryPanel() {
     try {
       const verified = await checkAdminJamendoEligibility(track.sourceId);
       const job = await startAdminJamendoImport(verified.sourceId);
+      onJobStarted?.(job);
       setSelected(verified);
       setStartedJobId(job.id);
     } catch (caught) {
