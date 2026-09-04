@@ -1,0 +1,43 @@
+import type { FastifyInstance, FastifyReply } from 'fastify';
+import { ExternalProviderError } from './external-provider.js';
+import {
+  JAMENDO_CLIENT_ID_CONFIG,
+  type JamendoProvider
+} from './jamendo-provider.js';
+
+type JamendoDiscoveryRouteOptions = Readonly<{
+  provider: JamendoProvider;
+  clientId: string;
+}>;
+
+function sendJamendoError(reply: FastifyReply, error: unknown) {
+  if (error instanceof ExternalProviderError) {
+    return reply.code(error.statusCode).send({ error: error.message });
+  }
+  throw error;
+}
+
+export function registerAdminJamendoDiscoveryRoutes(
+  app: FastifyInstance,
+  options: JamendoDiscoveryRouteOptions
+) {
+  app.get<{
+    Querystring: { q?: unknown; page?: unknown; limit?: unknown };
+  }>('/api/admin/imports/providers/jamendo/search', async (request, reply) => {
+    reply.header('Cache-Control', 'private, no-store');
+    try {
+      return await options.provider.search(
+        {
+          query: request.query?.q,
+          page: request.query?.page,
+          limit: request.query?.limit
+        },
+        {
+          [JAMENDO_CLIENT_ID_CONFIG]: options.clientId
+        }
+      );
+    } catch (error) {
+      return sendJamendoError(reply, error);
+    }
+  });
+}

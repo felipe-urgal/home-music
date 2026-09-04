@@ -6,6 +6,7 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { AdminImportJobsResponse } from '@home-music/shared';
 import { createAdminExternalProviderBatchManager } from './admin-external-provider-batch-bootstrap.js';
 import { registerAdminExternalProviderBatchRoutes } from './admin-external-provider-batch-routes.js';
+import { registerAdminJamendoDiscoveryRoutes } from './admin-jamendo-discovery-routes.js';
 import { AdminImportService } from './admin-import-service.js';
 import type { ImportJobQueue } from './import-job-queue.js';
 import {
@@ -13,6 +14,11 @@ import {
   ExternalProviderImportManager
 } from './external-provider.js';
 import { ExternalProviderScratchManager } from './external-provider-scratch.js';
+import {
+  JAMENDO_CLIENT_ID_CONFIG,
+  JAMENDO_PROVIDER_ID,
+  JamendoProvider
+} from './jamendo-provider.js';
 import { ImportAutomaticFlowManager } from './import-automatic-flow.js';
 import { installImportRetryStarter } from './import-retry.js';
 import { ImportStagingManager, type PromotedImportFile } from './import-staging.js';
@@ -68,6 +74,8 @@ type RegisterAdminImportRoutesOptions = {
   uploads?: ImportUploadManager;
   urls?: ImportUrlManager;
   externalProviders?: ExternalProviderImportManager;
+  jamendoProvider?: JamendoProvider;
+  jamendoClientId?: string;
   mediaValidation?: ImportMediaValidationManager;
   metadataPreview?: ImportMetadataPreviewManager;
   duplicateDetection?: ImportDuplicateDetectionManager;
@@ -230,7 +238,9 @@ function resolveYtDlpCommand(app: FastifyInstance) {
 function createDefaultExternalProviderManager(
   queue: ImportJobQueue,
   staging: ImportStagingManager,
-  ytDlpCommand: string
+  ytDlpCommand: string,
+  jamendoProvider: JamendoProvider,
+  jamendoClientId: string
 ) {
   return new ExternalProviderImportManager({
     queue,
@@ -239,10 +249,13 @@ function createDefaultExternalProviderManager(
       scratchRoot: process.env.HOME_MUSIC_EXTERNAL_PROVIDER_SCRATCH_DIR || defaultExternalProviderScratchPath,
       musicDir: process.env.MUSIC_DIR || ''
     }),
-    providers: [new YtDlpProvider()],
+    providers: [new YtDlpProvider(), jamendoProvider],
     providerConfigs: {
       [YT_DLP_PROVIDER_ID]: {
         [YT_DLP_COMMAND_CONFIG]: ytDlpCommand
+      },
+      [JAMENDO_PROVIDER_ID]: {
+        [JAMENDO_CLIENT_ID_CONFIG]: jamendoClientId
       }
     }
   });
@@ -278,7 +291,18 @@ export function registerAdminImportRoutes(
   const uploads = options.uploads ?? createDefaultUploadManager(app, queue, staging());
   const urls = options.urls ?? createDefaultUrlManager(app, queue, staging());
   const ytDlpCommand = resolveYtDlpCommand(app);
-  const externalProviders = options.externalProviders ?? createDefaultExternalProviderManager(queue, staging(), ytDlpCommand);
+  const jamendoProvider = options.jamendoProvider ?? new JamendoProvider();
+  const jamendoClientId = options.jamendoClientId
+    ?? process.env.HOME_MUSIC_JAMENDO_CLIENT_ID?.trim()
+    ?? '';
+  const externalProviders = options.externalProviders
+    ?? createDefaultExternalProviderManager(
+      queue,
+      staging(),
+      ytDlpCommand,
+      jamendoProvider,
+      jamendoClientId
+    );
   const mediaValidation = options.mediaValidation ?? createDefaultMediaValidationManager(queue, staging());
   const providerMetadata = options.providerMetadata ?? ((jobId: string) => {
     const metadata = externalProviders.getPrepared(jobId)?.metadata;
@@ -347,6 +371,10 @@ export function registerAdminImportRoutes(
   if (providerBatches) {
     registerAdminExternalProviderBatchRoutes(app, { batches: providerBatches });
   }
+  registerAdminJamendoDiscoveryRoutes(app, {
+    provider: jamendoProvider,
+    clientId: jamendoClientId
+  });
 
   const imports = new AdminImportService({
     queue,

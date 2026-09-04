@@ -1,8 +1,8 @@
 # Roadmap
 
-Este documento é a visão técnica de alto nível do Home Music. A issue [#123](https://github.com/felipe-urgal/home-music/issues/123) preserva o índice executivo do ciclo de backlog concluído em 2026-09-02. O ciclo técnico atual está centralizado na [#239](https://github.com/felipe-urgal/home-music/issues/239).
+Este documento é a visão técnica de alto nível do Home Music. A issue [#123](https://github.com/felipe-urgal/home-music/issues/123) preserva o índice executivo do ciclo de backlog concluído em 2026-09-02. A Fase 12 foi encerrada pela [#239](https://github.com/felipe-urgal/home-music/issues/239) e o ciclo técnico atual está centralizado na [#266](https://github.com/felipe-urgal/home-music/issues/266).
 
-> Estado revisado em 2026-09-03. O backlog planejado da Fase 11 e o ciclo funcional anterior estão concluídos. A Fase 12 está em andamento; #228, #229, #230, #237, #233, #234, #235, #236, #238 e #251 já foram entregues. A atividade serial atual é a #231; a #232 permanece a outra P1 aberta.
+> Estado revisado em 2026-09-04. A Fase 12 está concluída. A Fase 13 está ativa: #262 (Jamendo) é P0 e vem antes da #264 (OpenSubsonic). Na #262, registro/configuração segura/busca paginada já estão implementados nesta entrega; UI e importação física permanecem pendentes.
 
 ## Fases 1–2 — Base do produto e biblioteca pessoal
 
@@ -194,7 +194,7 @@ O PR #207 foi mergeado em 2026-09-01 com CI completo verde e encerrou o backlog 
 
 ## Fase 12 — Segurança e Performance
 
-**Em andamento.** O índice executivo deste ciclo é a [#239](https://github.com/felipe-urgal/home-music/issues/239).
+**Concluída em 2026-09-04.** O índice executivo [#239](https://github.com/felipe-urgal/home-music/issues/239) foi reconciliado e encerrado.
 
 ### P0
 
@@ -207,17 +207,40 @@ O PR #207 foi mergeado em 2026-09-01 com CI completo verde e encerrou o backlog 
 
 ### P1
 
-- [ ] [#231](https://github.com/felipe-urgal/home-music/issues/231) — filesystem do serviço systemd com escrita mínima — **atividade serial atual**;
-- [ ] [#232](https://github.com/felipe-urgal/home-music/issues/232) — hardening da instalação de dependências npm;
+- [x] [#231](https://github.com/felipe-urgal/home-music/issues/231) — filesystem do serviço systemd com escrita mínima — entregue pelo PR #253;
+- [x] [#232](https://github.com/felipe-urgal/home-music/issues/232) — hardening da instalação de dependências npm — concluída;
 - [x] [#236](https://github.com/felipe-urgal/home-music/issues/236) — code splitting das telas secundárias — entregue pelo PR #249;
 - [x] [#237](https://github.com/felipe-urgal/home-music/issues/237) — benchmark de biblioteca grande em navegador real — entregue pelo PR #244;
 - [x] [#238](https://github.com/felipe-urgal/home-music/issues/238) — reduzir recomputações da navegação da biblioteca — entregue pelo PR #250.
 
-### Correção transversal
+### Correções transversais
 
-- [x] [#251](https://github.com/felipe-urgal/home-music/issues/251) — propagar overrides de metadados para o snapshot/cache HTTP, player e saúde da Administração sem rescan nem escrita no arquivo físico — entregue pelo PR #252.
+- [x] [#251](https://github.com/felipe-urgal/home-music/issues/251) — propagar overrides de metadados para snapshot/cache HTTP, player e saúde administrativa — entregue pelo PR #252;
+- [x] [#255](https://github.com/felipe-urgal/home-music/issues/255) — regressão de reprodução contínua no PWA em background;
+- [x] [#258](https://github.com/felipe-urgal/home-music/issues/258) — bootstrap offline-first da biblioteca baixada;
+- [x] [#259](https://github.com/felipe-urgal/home-music/issues/259) — testes e documentação do contrato de bootstrap offline.
 
-Ordem atual: a atividade serial em execução é a `#231`; a #232 permanece a outra P1 aberta. A #251 foi concluída em paralelo sem alterar a ordem serial.
+## Fase 13 — Ecossistema aberto e interoperabilidade
+
+**Em andamento.** O índice executivo é a [#266](https://github.com/felipe-urgal/home-music/issues/266).
+
+### P0 — Jamendo
+
+A [#262](https://github.com/felipe-urgal/home-music/issues/262) adiciona descoberta e, em etapas posteriores, importação física de música livre/licenciada usando o pipeline seguro existente.
+
+- [x] registrar `JamendoProvider` no `ExternalProviderImportManager` com capabilities da etapa atual;
+- [x] configuração server-side por `HOME_MUSIC_JAMENDO_CLIENT_ID` e status `configured` sem expor o segredo;
+- [x] busca paginada server-side e normalização sem devolver URLs de preview/download;
+- [ ] tela simples de Descobrir/Importar no workbench;
+- [ ] licença/atribuição e disponibilidade de download antes da confirmação;
+- [ ] download permitido para scratch privado com limites e egress seguro;
+- [ ] staging, validação, metadata, duplicatas, promoção e indexação pelo pipeline comum.
+
+Detalhes da etapa corrente: [jamendo.md](jamendo.md).
+
+### P1 — OpenSubsonic
+
+- [ ] [#264](https://github.com/felipe-urgal/home-music/issues/264) — expor API compatível para clientes externos, somente depois do fechamento end-to-end da #262.
 
 ## Backlog visual e PWA
 
@@ -228,7 +251,7 @@ Esses itens são independentes da #174 e da #81, ambas concluídas.
 
 ## Backlog atual
 
-O backlog implementável atual é a Fase 12, centralizada na #239. A #231 é a atividade serial atual, a #232 é a outra P1 aberta e a #251 já foi concluída como correção transversal. A #123 permanece encerrada como registro do ciclo anterior e não deve ser reaberta artificialmente.
+O backlog implementável atual é a Fase 13, centralizada na #266. A #262 é o P0 em execução e a #264 é P1, explicitamente posterior ao fechamento end-to-end do Jamendo. A #239 e a #123 permanecem encerradas como registros dos ciclos anteriores e não devem ser reabertas artificialmente.
 
 ## Regra de execução
 

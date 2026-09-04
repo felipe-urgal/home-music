@@ -2,7 +2,7 @@
 
 Este diretório mistura documentação **corrente** e registros históricos de implementação. Esta página define qual material deve ser usado como fonte de verdade.
 
-> Inventário e backlog revisados em 2026-09-03. A Fase 11 e o ciclo funcional anterior estão concluídos. A Fase 12 está em andamento, centralizada na #239; #228, #229, #230, #237, #233, #234, #235, #236 e #238 já foram entregues, a #231 é a atividade serial atual, a #232 permanece aberta e a #251 segue em paralelo como correção transversal de propagação dos overrides. A #123 permanece encerrada como índice executivo do ciclo anterior.
+> Inventário e backlog revisados em 2026-09-04. A Fase 12 foi concluída e a #239 encerrada. A Fase 13 está em andamento, centralizada na #266: a #262 (Jamendo) é P0 e a #264 (OpenSubsonic) vem depois. Na entrega corrente da #262, registro/configuração segura/busca paginada do Jamendo estão implementados; UI e importação física permanecem pendentes. A #123 permanece encerrada como índice executivo de um ciclo anterior.
 
 ## Desenvolvimento e agentes de IA
 
@@ -17,33 +17,26 @@ Comece por:
 1. [`../README.md`](../README.md) — instalação, operação e visão geral do produto;
 2. [`architecture.md`](architecture.md) — arquitetura corrente;
 3. [`roadmap.md`](roadmap.md) — estado técnico das fases e pendências reais;
-4. [issue #239](https://github.com/felipe-urgal/home-music/issues/239) — índice executivo do ciclo técnico atual de Segurança e Performance;
-5. [issue #123](https://github.com/felipe-urgal/home-music/issues/123) — registro executivo do ciclo de backlog encerrado em 2026-09-02;
-6. [`administration-ui.md`](administration-ui.md) — composição atual de Minha conta/Administração;
-7. documentos funcionais abaixo para invariantes específicas.
+4. [issue #266](https://github.com/felipe-urgal/home-music/issues/266) — índice executivo ativo da Fase 13;
+5. [issue #262](https://github.com/felipe-urgal/home-music/issues/262) — P0 atual, integração Jamendo;
+6. [issue #239](https://github.com/felipe-urgal/home-music/issues/239) — registro encerrado da Fase 12;
+7. [issue #123](https://github.com/felipe-urgal/home-music/issues/123) — registro executivo do ciclo de backlog encerrado em 2026-09-02;
+8. [`administration-ui.md`](administration-ui.md) — composição atual de Minha conta/Administração;
+9. documentos funcionais abaixo para invariantes específicas.
 
 ## Estado do backlog atual
 
-A Fase 12 está em andamento e concentra o backlog implementável atual. A #251 é uma correção transversal descoberta durante uso real e não altera a prioridade serial da #231.
+A Fase 13 concentra o backlog implementável atual. O Jamendo deve fechar end-to-end antes de iniciar a compatibilidade OpenSubsonic.
 
 | Issue | Estado corrente |
 | --- | --- |
-| [#228](https://github.com/felipe-urgal/home-music/issues/228) | isolamento de sessões entre usuários; concluída pelo PR #241 |
-| [#229](https://github.com/felipe-urgal/home-music/issues/229) | proteção contra brute force distribuído e abuso de CPU no login; concluída pelo PR #242 |
-| [#230](https://github.com/felipe-urgal/home-music/issues/230) | backpressure e limites para trabalho pesado; concluída pelo PR #243 |
-| [#237](https://github.com/felipe-urgal/home-music/issues/237) | benchmark de biblioteca grande em Chromium real; concluída pelo PR #244 |
-| [#233](https://github.com/felipe-urgal/home-music/issues/233) | concorrência limitada no scanner; concluída pelo PR #245 |
-| [#234](https://github.com/felipe-urgal/home-music/issues/234) | persistência SQLite somente por delta do scan; concluída pelo PR #247 |
-| [#235](https://github.com/felipe-urgal/home-music/issues/235) | revision, ETag e compressão da biblioteca; concluída pelo PR #248 |
-| [#236](https://github.com/felipe-urgal/home-music/issues/236) | code splitting das telas secundárias; concluída pelo PR #249 |
-| [#238](https://github.com/felipe-urgal/home-music/issues/238) | reduzir recomputações da navegação da biblioteca; concluída pelo PR #250 |
-| [#231](https://github.com/felipe-urgal/home-music/issues/231) | filesystem do serviço systemd com escrita mínima; atividade serial atual |
-| [#232](https://github.com/felipe-urgal/home-music/issues/232) | hardening da instalação de dependências npm; aberta |
-| [#251](https://github.com/felipe-urgal/home-music/issues/251) | corrigir projeção dos overrides para snapshot HTTP, player e saúde administrativa; em andamento em paralelo |
-| [#239](https://github.com/felipe-urgal/home-music/issues/239) | índice executivo ativo da Fase 12 — Segurança e Performance |
-| [#123](https://github.com/felipe-urgal/home-music/issues/123) | encerrada como índice executivo do ciclo anterior |
+| [#266](https://github.com/felipe-urgal/home-music/issues/266) | índice executivo ativo da Fase 13 — ecossistema aberto e interoperabilidade |
+| [#262](https://github.com/felipe-urgal/home-music/issues/262) | P0 atual; registro/configuração segura/busca paginada implementados nesta entrega; UI e importação física ainda pendentes |
+| [#264](https://github.com/felipe-urgal/home-music/issues/264) | P1; OpenSubsonic somente depois do fechamento end-to-end da #262 |
+| [#239](https://github.com/felipe-urgal/home-music/issues/239) | Fase 12 concluída; índice executivo encerrado em 2026-09-04 |
+| [#123](https://github.com/felipe-urgal/home-music/issues/123) | encerrada como índice executivo de ciclo anterior |
 
-A ordem corrente da Fase 12 está em `roadmap.md` e na #239. Itens concluídos de fases anteriores não devem ser reabertos artificialmente para representar trabalho novo.
+A ordem corrente está em `roadmap.md` e na #266. Itens concluídos de fases anteriores não devem ser reabertos artificialmente para representar trabalho novo.
 
 ## Composição do frontend
 
@@ -133,6 +126,7 @@ Documentação corrente do pipeline:
 - [`external-providers.md`](external-providers.md)
 - [`external-provider-batches.md`](external-provider-batches.md)
 - [`yt-dlp-provider.md`](yt-dlp-provider.md)
+- [`jamendo.md`](jamendo.md) — descoberta server-side, configuração e limites da etapa atual da #262;
 - [`import-metadata-preview.md`](import-metadata-preview.md)
 - [`import-duplicate-detection.md`](import-duplicate-detection.md)
 - [`import-safe-destination.md`](import-safe-destination.md)
@@ -162,7 +156,7 @@ Os demais arquivos `phase-7.5-*` preservam o desenho, decisões e gates dos slic
 
 Para saber **como o sistema funciona hoje**, prefira `README.md`, `architecture.md`, `multi-user-auth.md`, os documentos funcionais atuais e os arquivos `phase-7.5-*` explicitamente listados acima como fonte corrente.
 
-Não use um registro histórico isolado para inferir que uma funcionalidade ainda está pendente. O estado de entrega fica em `roadmap.md` e nas issues abertas; a #123 preserva o índice executivo do ciclo encerrado e a #239 representa o ciclo técnico atual.
+Não use um registro histórico isolado para inferir que uma funcionalidade ainda está pendente. O estado de entrega fica em `roadmap.md` e nas issues abertas; a #123 e a #239 preservam ciclos encerrados e a #266 representa o ciclo técnico atual.
 
 ## E2E
 
@@ -174,7 +168,7 @@ Ao alterar comportamento ou backlog:
 
 - atualize a documentação funcional canônica afetada;
 - atualize `roadmap.md` quando a fase ou pendência mudar;
-- atualize o índice executivo vigente quando houver um ciclo de backlog ativo; hoje é a #239, enquanto a #123 permanece como registro do ciclo encerrado em 2026-09-02;
+- atualize o índice executivo vigente quando houver um ciclo de backlog ativo; hoje é a #266, enquanto #239 e #123 permanecem como registros encerrados;
 - mantenha a issue de implementação com estado/gate reais;
 - preserve ADRs e registros históricos em vez de reescrevê-los como se tivessem sido produzidos hoje;
 - não crie datas/status artificiais em arquivos sem mudança semântica apenas para aparentar revisão.
