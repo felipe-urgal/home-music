@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -11,7 +11,8 @@ import {
   JAMENDO_CLIENT_ID_CONFIG,
   JAMENDO_PROVIDER_ID,
   JamendoProvider,
-  jamendoImportBlockReason
+  jamendoImportBlockReason,
+  jamendoImportUrl
 } from './jamendo-provider.js';
 
 const SECRET_CLIENT_ID = 'jamendo-secret-client-id';
@@ -37,6 +38,15 @@ function allowedTrack(overrides: Record<string, unknown> = {}) {
     audiodownload_allowed: true,
     ...overrides
   };
+}
+
+async function waitForJob(queue: ImportJobQueue, jobId: string) {
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    const job = queue.get(jobId);
+    if (job && job.status !== 'processing') return job;
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
+  throw new Error('Job Jamendo não estabilizou no tempo esperado pelo teste.');
 }
 
 test('Jamendo publica status configurado sem expor client_id', async () => {
@@ -66,7 +76,7 @@ test('Jamendo publica status configurado sem expor client_id', async () => {
       id: JAMENDO_PROVIDER_ID,
       label: 'Jamendo · música livre/licenciada',
       capabilities: {
-        audio: false,
+        audio: true,
         metadata: true,
         thumbnail: true,
         playlists: false
@@ -156,7 +166,7 @@ test('política de licença Jamendo é fail-closed', () => {
   assert.equal(jamendoImportBlockReason(true, 'https://creativecommons.org/publicdomain/zero/1.0/'), null);
 });
 
-test('Jamendo revalida faixa por sourceId antes de permitir futura importação', async () => {
+test('Jamendo revalida faixa por sourceId antes de permitir importação', async () => {
   let requestedUrlText = '';
   const provider = new JamendoProvider({
     fetch: async input => {
@@ -231,12 +241,69 @@ test('Jamendo interrompe resposta streaming acima de 1 MiB mesmo sem Content-Len
   );
 });
 
-test('Jamendo não aceita importação física antes do gate de download seguro', () => {
+test('Jamendo aceita somente URL pública canônica de faixa para aquisição física', () => {
   const provider = new JamendoProvider();
-  assert.throws(
-    () => provider.validate({ url: 'https://www.jamendo.com/track/123' }),
-    (error: unknown) => error instanceof ExternalProviderError
-      && error.code === 'invalid_input'
-      && error.message.includes('descoberta')
-  );
+  assert.doesNotThrow(() => provider.validate({ url: jamendoImportUrl('123') }));
+  for (const url of [
+    'http://www.jamendo.com/track/123',
+    'https://evil.example/track/123',
+    'https://www.jamendo.com/track/123?token=secret',
+    'https://www.jamendo.com/album/123'
+  ]) {
+    assert.throws(
+      () => provider.validate({ url }),
+      (error: unknown) => error instanceof ExternalProviderError && error.code === 'invalid_input'
+    );
+  }
+});
+
+test('Jamendo baixa no scratch fake, transfere ao staging comum e preserva metadata segura', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'home-music-jamendo-physical-'));
+  const musicDir = path.join(root, 'music');
+  await mkdir(musicDir);
+  const queue = new ImportJobQueue();
+  const staging = new ImportStagingManager({ stagingRoot: path.join(root, 'staging'), musicDir });
+  const scratch = new ExternalProviderScratchManager({ scratchRoot: path.join(root, 'scratch'), musicDir });
+  let observedDownloadUrl = '';
+  const provider = new JamendoProvider({
+    fetch: async () => apiResponse({ headers: { status: 'success' }, results: [allowedTrack()] }),
+    download: async ({ url, scratchDir, signal }) => {
+      assert.equal(signal.aborted, false);
+      observedDownloadUrl = url;
+      const relativePath = 'jamendo-track.mp3';
+      await writeFile(path.join(scratchDir, relativePath), Buffer.from('fake-jamendo-audio'));
+      return { relativePath, contentType: 'audio/mpeg' };
+    }
+  });
+
+  try {
+    const manager = new ExternalProviderImportManager({
+      queue,
+      staging,
+      scratch,
+      providers: [provider],
+      providerConfigs: {
+        [JAMENDO_PROVIDER_ID]: { [JAMENDO_CLIENT_ID_CONFIG]: SECRET_CLIENT_ID }
+      }
+    });
+    const started = await manager.start(JAMENDO_PROVIDER_ID, { url: jamendoImportUrl('123') });
+    const job = await waitForJob(queue, started.job.id);
+    assert.equal(job.status, 'pending');
+    assert.equal(observedDownloadUrl, 'https://prod.example/download?token=download-secret');
+    assert.equal(scratch.hasJob(job.id), false);
+    assert.equal(staging.hasJob(job.id), true);
+    assert.equal(await staging.inspectPayload(job.id, target => target.size), Buffer.byteLength('fake-jamendo-audio'));
+
+    const prepared = manager.getPrepared(job.id);
+    assert.ok(prepared);
+    assert.equal(prepared.provider, JAMENDO_PROVIDER_ID);
+    assert.equal(prepared.payload.contentType, 'audio/mpeg');
+    assert.equal(prepared.metadata.sourceId, '123');
+    assert.equal(prepared.metadata.title, 'Música segura');
+    assert.equal(prepared.metadata.artist, 'Artista');
+    assert.equal(prepared.metadata.album, 'Álbum');
+    assert.equal(JSON.stringify(prepared).includes('download-secret'), false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
