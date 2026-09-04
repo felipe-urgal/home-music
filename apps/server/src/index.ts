@@ -50,7 +50,7 @@ const defaultTranscodeCachePath = fileURLToPath(new URL(
 const webDistPath = fileURLToPath(new URL('../../web/dist/', import.meta.url));
 const productionCsp = "default-src 'self'; img-src 'self' data: blob:; media-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
 
-const envResult = config({ path: rootEnvPath });
+const envResult = config({ path: rootEnvPath, override: !isProduction });
 if (envResult.error) {
   const instruction = isProduction
     ? 'Configure o .env antes de iniciar a produção.'
@@ -104,7 +104,7 @@ try {
 }
 
 const musicDir = process.env.MUSIC_DIR || '';
-const port = Number(process.env.PORT || 8787);
+const port = Number(process.env.PORT || (isProduction ? 8787 : 8788));
 const host = isProduction
   ? process.env.PRODUCTION_HOST || '0.0.0.0'
   : process.env.HOST || '127.0.0.1';
@@ -262,7 +262,7 @@ app.setErrorHandler((error, request, reply) => {
       'Fila de trabalho pesado saturada; requisição rejeitada com backpressure.'
     );
     reply.header('Retry-After', String(error.retryAfterSeconds));
-    return reply.code(error.statusCode).send({
+    return reply.code(503).send({
       error: 'Servidor temporariamente ocupado. Tente novamente em instantes.',
       code: 'HEAVY_WORK_QUEUE_SATURATED',
       queue: error.queueName
