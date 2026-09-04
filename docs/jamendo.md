@@ -53,7 +53,7 @@ A resposta normalizada contém apenas:
 - `importAllowed` e motivo de bloqueio calculados pelo servidor;
 - atribuição textual baseada em título/artista/Jamendo.
 
-URLs de preview/download retornadas pelo Jamendo e o `client_id` **não** são encaminhados ao browser nesta etapa.
+URLs de preview/download retornadas pelo Jamendo e o `client_id` **não** são encaminhados ao browser nesta etapa. A URL de licença pode ser mantida para diagnóstico, mas a UI só a transforma em link quando ela aponta para uma licença Creative Commons reconhecida no host oficial; URL externa não reconhecida é mostrada apenas como estado bloqueado, sem navegação clicável.
 
 ## Política de licença e seleção
 
@@ -93,5 +93,5 @@ Nunca escrever bytes do Jamendo diretamente em `MUSIC_DIR`.
 
 - unitários do provider cobrem paginação, sanitização, limite streaming, política de licença e revalidação por `sourceId`;
 - rotas cobrem Jamendo não configurado, elegibilidade permitida e bloqueio `409`;
-- Playwright crítico usa respostas fake para verificar busca, artista/álbum/duração, licença, disponibilidade de download, botão bloqueado e header anti-CSRF da revalidação;
+- Playwright crítico usa respostas fake para verificar busca, artista/álbum/duração, licença oficial clicável, licença externa não reconhecida sem link, disponibilidade de download, botão bloqueado e header anti-CSRF da revalidação;
 - CI não consulta a internet pública para validar a integração.
