@@ -5,9 +5,18 @@ import { bootstrapInitialAdmin } from './bootstrap-admin.js';
 const isProduction = process.env.NODE_ENV === 'production';
 const envFilename = isProduction ? '.env' : '.env.development';
 const rootEnvPath = fileURLToPath(new URL(`../../../${envFilename}`, import.meta.url));
-const defaultDatabasePath = fileURLToPath(new URL('../../../data/home-music.db', import.meta.url));
+const defaultDatabasePath = fileURLToPath(new URL(
+  isProduction ? '../../../data/home-music.db' : '../../../data/development/home-music.db',
+  import.meta.url
+));
 
-config({ path: rootEnvPath });
+const envResult = config({ path: rootEnvPath });
+if (envResult.error) {
+  const instruction = isProduction
+    ? 'Configure o .env antes de iniciar a produção.'
+    : 'Copie .env.development.example para .env.development antes de iniciar o DEV.';
+  throw new Error(`Arquivo ${envFilename} não encontrado. ${instruction}`);
+}
 
 const databasePath = process.env.HOME_MUSIC_DATABASE_PATH || defaultDatabasePath;
 const username = process.env.HOME_MUSIC_USER || '';
