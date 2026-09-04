@@ -11,6 +11,7 @@ import {
   Link2,
   LoaderCircle,
   RefreshCw,
+  Search,
   UploadCloud,
   X
 } from 'lucide-react';
@@ -34,13 +35,14 @@ import {
   AdminImportMetadataPreviewPanel,
   AdminImportMetadataSummary
 } from './AdminImportMetadataPreviewPanel';
+import { AdminJamendoDiscoveryPanel } from './AdminJamendoDiscoveryPanel';
 
 type AdminImportMediaScreenProps = {
   onBack: () => void;
 };
 
 type UploadStage = 'preparing' | 'uploading' | 'cancelling' | 'queued' | 'cancelled' | 'error';
-type SourceMode = 'provider' | 'local';
+type SourceMode = 'provider' | 'jamendo' | 'local';
 
 type ActiveUpload = {
   jobId: string | null;
@@ -328,6 +330,12 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
     handleFiles(event.dataTransfer.files);
   };
 
+  const sourcePanelLabel = sourceMode === 'provider'
+    ? 'admin-import-provider-tab'
+    : sourceMode === 'jamendo'
+      ? 'admin-import-jamendo-tab'
+      : 'admin-import-local-tab';
+
   return (
     <section className="my-account-screen admin-import-screen admin-import-screen--focused admin-import-screen--v3" aria-labelledby="admin-import-title">
       <header className="my-account-header admin-import-focused-header">
@@ -376,6 +384,18 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
               <span><strong>YouTube / YouTube Music</strong><small>Importe a partir de um link</small></span>
             </button>
             <button
+              id="admin-import-jamendo-tab"
+              type="button"
+              role="tab"
+              aria-controls="admin-import-source-panel"
+              aria-selected={sourceMode === 'jamendo'}
+              className={sourceMode === 'jamendo' ? 'is-active' : ''}
+              onClick={() => setSourceMode('jamendo')}
+            >
+              <Search />
+              <span><strong>Descobrir no Jamendo</strong><small>Pesquise música livre/licenciada</small></span>
+            </button>
+            <button
               id="admin-import-local-tab"
               type="button"
               role="tab"
@@ -393,7 +413,7 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
             id="admin-import-source-panel"
             className="admin-import-source-panel"
             role="tabpanel"
-            aria-labelledby={sourceMode === 'provider' ? 'admin-import-provider-tab' : 'admin-import-local-tab'}
+            aria-labelledby={sourcePanelLabel}
           >
             {sourceMode === 'provider' ? (
               <AdminExternalProviderPanel
@@ -402,6 +422,8 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
                 onJobUpdated={handleUpdatedJob}
                 onRefresh={() => loadJobs(true)}
               />
+            ) : sourceMode === 'jamendo' ? (
+              <AdminJamendoDiscoveryPanel />
             ) : (
               <div className="admin-import-local-sources">
                 <section className="admin-import-upload is-compact" aria-labelledby="admin-import-upload-title">
@@ -580,7 +602,7 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
             <div className="admin-import-v3-empty">
               <span><FileAudio /></span>
               <strong>Nenhuma importação em andamento</strong>
-              <small>Use YouTube, um arquivo local ou uma URL direta. O próximo passo aparece automaticamente aqui.</small>
+              <small>Use YouTube, Jamendo, um arquivo local ou uma URL direta. O próximo passo aparece automaticamente aqui.</small>
             </div>
           )}
         </section>
