@@ -36,16 +36,29 @@ import {
   parseTranscodeCacheMegabytes
 } from './transcoding.js';
 
-const rootEnvPath = fileURLToPath(new URL('../../../.env', import.meta.url));
-const defaultDatabasePath = fileURLToPath(new URL('../../../data/home-music.db', import.meta.url));
-const defaultTranscodeCachePath = fileURLToPath(new URL('../../../data/transcode-cache/', import.meta.url));
+const isProduction = process.env.NODE_ENV === 'production';
+const envFilename = isProduction ? '.env' : '.env.development';
+const rootEnvPath = fileURLToPath(new URL(`../../../${envFilename}`, import.meta.url));
+const defaultDatabasePath = fileURLToPath(new URL(
+  isProduction ? '../../../data/home-music.db' : '../../../data/development/home-music.db',
+  import.meta.url
+));
+const defaultTranscodeCachePath = fileURLToPath(new URL(
+  isProduction ? '../../../data/transcode-cache/' : '../../../data/development/transcode-cache/',
+  import.meta.url
+));
 const webDistPath = fileURLToPath(new URL('../../web/dist/', import.meta.url));
 const productionCsp = "default-src 'self'; img-src 'self' data: blob:; media-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
 
-config({ path: rootEnvPath });
+const envResult = config({ path: rootEnvPath, override: !isProduction });
+if (envResult.error) {
+  const instruction = isProduction
+    ? 'Configure o .env antes de iniciar a produção.'
+    : 'Copie .env.development.example para .env.development antes de iniciar o DEV.';
+  throw new Error(`Arquivo ${envFilename} não encontrado. ${instruction}`);
+}
 
 const databasePath = process.env.HOME_MUSIC_DATABASE_PATH || defaultDatabasePath;
-const isProduction = process.env.NODE_ENV === 'production';
 
 if (!isProduction) {
   await import('./bootstrap-preload.js');
@@ -91,7 +104,7 @@ try {
 }
 
 const musicDir = process.env.MUSIC_DIR || '';
-const port = Number(process.env.PORT || 8787);
+const port = Number(process.env.PORT || (isProduction ? 8787 : 8788));
 const host = isProduction
   ? process.env.PRODUCTION_HOST || '0.0.0.0'
   : process.env.HOST || '127.0.0.1';

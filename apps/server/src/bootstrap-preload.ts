@@ -2,10 +2,21 @@ import { config } from 'dotenv';
 import { fileURLToPath } from 'node:url';
 import { bootstrapInitialAdmin } from './bootstrap-admin.js';
 
-const rootEnvPath = fileURLToPath(new URL('../../../.env', import.meta.url));
-const defaultDatabasePath = fileURLToPath(new URL('../../../data/home-music.db', import.meta.url));
+const isProduction = process.env.NODE_ENV === 'production';
+const envFilename = isProduction ? '.env' : '.env.development';
+const rootEnvPath = fileURLToPath(new URL(`../../../${envFilename}`, import.meta.url));
+const defaultDatabasePath = fileURLToPath(new URL(
+  isProduction ? '../../../data/home-music.db' : '../../../data/development/home-music.db',
+  import.meta.url
+));
 
-config({ path: rootEnvPath });
+const envResult = config({ path: rootEnvPath, override: !isProduction });
+if (envResult.error) {
+  const instruction = isProduction
+    ? 'Configure o .env antes de iniciar a produção.'
+    : 'Copie .env.development.example para .env.development antes de iniciar o DEV.';
+  throw new Error(`Arquivo ${envFilename} não encontrado. ${instruction}`);
+}
 
 const databasePath = process.env.HOME_MUSIC_DATABASE_PATH || defaultDatabasePath;
 const username = process.env.HOME_MUSIC_USER || '';
@@ -20,7 +31,7 @@ try {
 
   if (result.status === 'created') {
     console.info('[home-music] Primeiro administrador persistido com sucesso no SQLite.');
-    console.info('[home-music] HOME_MUSIC_USER/HOME_MUSIC_PASSWORD agora podem ser removidos do .env.');
+    console.info(`[home-music] HOME_MUSIC_USER/HOME_MUSIC_PASSWORD agora podem ser removidos do ${envFilename}.`);
   } else if (result.status === 'credentials-not-bootstrapable') {
     console.warn(
       `[home-music] Bootstrap do primeiro administrador não executado: credencial inicial inválida (${result.reason}).`

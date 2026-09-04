@@ -1,6 +1,8 @@
 node_modules/
 dist/
 .env
+.env.development
+.env.*.local
 .DS_Store
 *.log
 *.tsbuildinfo
@@ -9,7 +11,9 @@ dist/
 /apps/web/public/icons/*.png
 data/*.db
 data/*.db-*
+data/development/
 data/transcode-cache/
+music-dev/
 backups/
 coverage/
 e2e/playwright-report/
