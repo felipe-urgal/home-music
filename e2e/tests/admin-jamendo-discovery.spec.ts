@@ -43,7 +43,7 @@ const blockedTrack = {
   album: 'Álbum restrito',
   durationSeconds: 92,
   thumbnailUrl: null,
-  licenseUrl: 'https://creativecommons.org/licenses/by-nc/4.0/',
+  licenseUrl: 'https://malicious.example/license',
   downloadAllowed: false,
   previewAvailable: true,
   importAllowed: false,
@@ -136,7 +136,9 @@ test('Jamendo mostra licença e bloqueia seleção não elegível no workbench',
 
   const blocked = page.locator('.admin-jamendo-track').filter({ hasText: 'Ambient restrito' });
   await expect(blocked).toContainText('Download indisponível');
+  await expect(blocked).toContainText('Licença não reconhecida');
   await expect(blocked).toContainText('O Jamendo não permite download desta faixa.');
+  await expect(blocked.getByRole('link')).toHaveCount(0);
   await expect(blocked.getByRole('button', { name: 'Bloqueada' })).toBeDisabled();
 
   await allowed.getByRole('button', { name: 'Selecionar' }).click();
