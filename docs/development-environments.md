@@ -18,24 +18,29 @@ O comando raiz `npm run dev` define `NODE_ENV=development`. O `npm start` e o un
 
 ## Preparar desenvolvimento
 
-Crie o arquivo local a partir do exemplo dedicado:
+Crie o arquivo local e os diretórios isolados:
 
 ```bash
 cp .env.development.example .env.development
 mkdir -p music-dev data/development
 ```
 
-Ajuste os caminhos absolutos do seu checkout e configure uma senha temporária para o primeiro administrador DEV.
+O exemplo usa paths relativos ao workspace do backend, então não é necessário substituir `/home/seu-usuario/...` por um caminho absoluto.
 
-O contrato recomendado é:
+Antes do primeiro start, configure somente uma senha temporária com pelo menos 12 caracteres:
 
 ```env
-MUSIC_DIR="/home/seu-usuario/Projetos/home-music/music-dev"
-HOME_MUSIC_DATABASE_PATH="/home/seu-usuario/Projetos/home-music/data/development/home-music.db"
-HOME_MUSIC_IMPORT_STAGING_DIR="/home/seu-usuario/Projetos/home-music/data/development/import-staging"
-HOME_MUSIC_EXTERNAL_PROVIDER_SCRATCH_DIR="/home/seu-usuario/Projetos/home-music/data/development/provider-scratch"
 HOME_MUSIC_USER=home-music-dev
 HOME_MUSIC_PASSWORD="uma-senha-exclusiva-para-dev"
+```
+
+O restante do contrato já vem separado:
+
+```env
+MUSIC_DIR="../../music-dev"
+HOME_MUSIC_DATABASE_PATH="../../data/development/home-music.db"
+HOME_MUSIC_IMPORT_STAGING_DIR="../../data/development/import-staging"
+HOME_MUSIC_EXTERNAL_PROVIDER_SCRATCH_DIR="../../data/development/provider-scratch"
 HOME_MUSIC_COOKIE_SECURE=false
 PORT=8788
 HOST=127.0.0.1
@@ -83,6 +88,6 @@ Não copie valores de `.env` para `.env.development` sem revisar os paths. Em es
 
 ## Primeiro administrador DEV
 
-`HOME_MUSIC_USER` e `HOME_MUSIC_PASSWORD` em `.env.development` servem somente para criar o primeiro administrador do banco DEV. Depois de confirmar o login, remova essas duas variáveis do arquivo e reinicie `npm run dev`.
+`HOME_MUSIC_USER` e `HOME_MUSIC_PASSWORD` em `.env.development` servem somente para criar o primeiro administrador do banco DEV. A senha precisa ter no mínimo 12 caracteres.
 
-A remoção dessas credenciais do ambiente DEV não altera o usuário persistido no SQLite de desenvolvimento e não interfere na produção.
+Depois de confirmar o primeiro login, remova essas duas variáveis do arquivo e reinicie `npm run dev`. A conta continua persistida no SQLite de desenvolvimento e não interfere na produção.
