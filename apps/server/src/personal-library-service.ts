@@ -80,6 +80,12 @@ export class PersonalLibraryService {
     return { status: 'ok', trackIds };
   }
 
+  recordHistory(userId: string, trackId: string, playedAt?: string) {
+    if (!this.library.getTrack(trackId)) return false;
+    this.database.recordHistory(userId, trackId, playedAt);
+    return true;
+  }
+
   loadPlaybackState(userId: string) {
     return this.database.loadPlaybackState(userId);
   }
