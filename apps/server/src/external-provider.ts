@@ -32,6 +32,9 @@ export type ExternalProviderMetadata = Readonly<{
   artist: string | null;
   album: string | null;
   thumbnailUrl: string | null;
+  sourceUrl?: string | null;
+  licenseUrl?: string | null;
+  attribution?: string | null;
 }>;
 
 export type ExternalProviderPreparedMedia = Readonly<{
@@ -170,12 +173,18 @@ function cleanMetadataValue(value: unknown) {
 }
 
 function sanitizeMetadata(value: Partial<ExternalProviderMetadata> | null | undefined): ExternalProviderMetadata {
+  const sourceUrl = cleanMetadataValue(value?.sourceUrl);
+  const licenseUrl = cleanMetadataValue(value?.licenseUrl);
+  const attribution = cleanMetadataValue(value?.attribution);
   return {
     sourceId: cleanMetadataValue(value?.sourceId),
     title: cleanMetadataValue(value?.title),
     artist: cleanMetadataValue(value?.artist),
     album: cleanMetadataValue(value?.album),
-    thumbnailUrl: cleanMetadataValue(value?.thumbnailUrl)
+    thumbnailUrl: cleanMetadataValue(value?.thumbnailUrl),
+    ...(sourceUrl ? { sourceUrl } : {}),
+    ...(licenseUrl ? { licenseUrl } : {}),
+    ...(attribution ? { attribution } : {})
   };
 }
 
@@ -379,7 +388,7 @@ export class ExternalProviderImportManager {
     const job = this.queue.get(jobId);
     if (!job) throw new ExternalProviderError('provider_not_found', 'Job de provider não encontrado.', 404);
     if (job.source.type !== 'provider') {
-      throw new ExternalProviderError('provider_not_found', 'Este job não pertence a um provider externo.', 409);
+      throw new ExternalProviderError('provider_not_found', 'Este job não pertence a uma importação de provider externo.', 409);
     }
     if (job.status !== 'processing' && job.status !== 'pending') {
       throw new ExternalProviderError('provider_cancelled', 'Este job não pode mais ser cancelado.', 409);
