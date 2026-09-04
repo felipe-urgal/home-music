@@ -175,6 +175,37 @@ function totalFromHeaders(headers: JamendoApiHeaders | undefined) {
   return null;
 }
 
+function responseTooLargeError() {
+  return new ExternalProviderError('invalid_output', 'A resposta do Jamendo excedeu o limite permitido.', 502);
+}
+
+async function readBoundedResponse(response: Response) {
+  const declaredLength = Number(response.headers.get('content-length') ?? '0');
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_RESPONSE_BYTES) {
+    throw responseTooLargeError();
+  }
+  if (!response.body) return '';
+
+  const reader = response.body.getReader();
+  const chunks: Buffer[] = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > MAX_RESPONSE_BYTES) {
+        await reader.cancel().catch(() => undefined);
+        throw responseTooLargeError();
+      }
+      chunks.push(Buffer.from(value));
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return Buffer.concat(chunks, totalBytes).toString('utf8');
+}
+
 function parseApiResponse(text: string) {
   let parsed: unknown;
   try {
@@ -284,15 +315,7 @@ export class JamendoProvider implements ExternalProvider {
       throw new ExternalProviderError('provider_network_failed', 'O Jamendo não respondeu à busca.', 502);
     }
 
-    const declaredLength = Number(response.headers.get('content-length') ?? '0');
-    if (Number.isFinite(declaredLength) && declaredLength > MAX_RESPONSE_BYTES) {
-      throw new ExternalProviderError('invalid_output', 'A resposta do Jamendo excedeu o limite permitido.', 502);
-    }
-    const text = await response.text();
-    if (Buffer.byteLength(text, 'utf8') > MAX_RESPONSE_BYTES) {
-      throw new ExternalProviderError('invalid_output', 'A resposta do Jamendo excedeu o limite permitido.', 502);
-    }
-
+    const text = await readBoundedResponse(response);
     const payload = parseApiResponse(text);
     const rawItems = payload.results as unknown[];
     const items = rawItems
