@@ -76,15 +76,18 @@ O gate funcional continua deliberadamente focado, mas inclui as regressões cuja
 
 - `critical-smoke.spec.ts` — login, shell autenticado, biblioteca, Minha conta e Administração em mobile/tablet/desktop;
 - `admin-metadata-overrides.spec.ts` — override não destrutivo, projeção efetiva no `/api/library`, atualização imediata do player persistente, reconciliação do filtro/cockpit de saúde, sobrevivência a rescan e restore;
+- `admin-jamendo-discovery.spec.ts` — origem Jamendo no workbench, busca com API fake, artista/álbum/duração, licença/atribuição, disponibilidade de download, bloqueio visual de item não elegível e revalidação server-side da seleção com anti-CSRF;
 - `offline-collections-critical.spec.ts` — playlist offline deduplicada, promoção para referência individual sem novo blob, snapshot desatualizado, atualização, garbage-collection por referência e controle mobile;
 - `desktop-offline-downloads.spec.ts` — download individual e seleção em lote no desktop;
 - `offline-account-isolation.spec.ts` — isolamento de CacheStorage e do manifesto lógico de referências entre contas no mesmo navegador.
 
 A regressão de metadata foi promovida ao conjunto crítico pela #251 porque a quebra afeta simultaneamente a fonte canônica da biblioteca, o player em reprodução e o diagnóstico administrativo. O teste usa a fixture temporária real e não escreve tags no arquivo de áudio.
 
+A regressão Jamendo usa respostas fake e não acessa a internet pública; a política de licença, revalidação por `sourceId` e falhas de provider permanecem cobertas também no servidor. A aquisição física do Jamendo ainda não faz parte desse spec porque continua bloqueada até o próximo slice da #262.
+
 A ampliação do gate offline acompanha a #174 porque essa entrega altera o modelo de ownership local dos artefatos. Ela não transforma toda a regressão E2E em gate obrigatório.
 
-A suíte completa continua necessária quando o risco exigir. Fluxos mais caros e específicos — fila persistente, smart playlists, disponibilidade de faixas, importação e demais operações administrativas — permanecem disponíveis fora do conjunto crítico.
+A suíte completa continua necessária quando o risco exigir. Fluxos mais caros e específicos — fila persistente, smart playlists, disponibilidade de faixas, importação física por providers e demais operações administrativas — permanecem disponíveis fora do conjunto crítico.
 
 Uma falha no conjunto crítico ou no benchmark browser-real falha o mesmo job que governa o merge. O job possui timeout explícito de 30 minutos para o conjunto inteiro de validações, não para o Playwright isoladamente.
 
@@ -104,9 +107,9 @@ Cobertura principal:
 - downloads offline individuais/em lote, coleções offline deduplicadas e isolamento de cache/referências na troca de conta;
 - Minha conta, sessões, troca obrigatória de senha e isolamento multiusuário;
 - Administração: cockpit, músicas, metadata, integridade, usuários, lixeira, cache, histórico e normalização lógica;
-- importação por upload, URL direta e provider, além do workbench validação → metadata → duplicatas → destino/promoção com fixtures controladas.
+- importação por upload, URL direta e provider, descoberta Jamendo e o workbench validação → metadata → duplicatas → destino/promoção com fixtures controladas.
 
-As rotas de URL/provider são interceptadas somente nos testes de orquestração de UI para não depender de internet pública. SSRF, staging, processos externos, validação de mídia e promoção física permanecem cobertos pelos testes de servidor responsáveis por essas invariantes.
+As rotas de URL/provider/Jamendo são interceptadas somente nos testes de orquestração de UI para não depender de internet pública. SSRF, staging, processos externos, validação de mídia e promoção física permanecem cobertos pelos testes de servidor responsáveis por essas invariantes.
 
 ## Isolamento e determinismo
 
