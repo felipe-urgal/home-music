@@ -262,7 +262,7 @@ app.setErrorHandler((error, request, reply) => {
       'Fila de trabalho pesado saturada; requisição rejeitada com backpressure.'
     );
     reply.header('Retry-After', String(error.retryAfterSeconds));
-    return reply.code(503).send({
+    return reply.code(error.statusCode).send({
       error: 'Servidor temporariamente ocupado. Tente novamente em instantes.',
       code: 'HEAVY_WORK_QUEUE_SATURATED',
       queue: error.queueName
