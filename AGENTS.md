@@ -2,747 +2,286 @@
 
 Este arquivo define como agentes de IA e colaboradores automatizados devem trabalhar neste repositório.
 
-O objetivo não é apenas produzir código que compile. Toda alteração deve ser tratada com postura de **engenheiro fullstack sênior**, considerando produto, UX, frontend, backend, contratos, persistência, concorrência, segurança, operação em produção, testes e documentação.
+> Regra principal: **nenhuma tarefa está pronta sem auto code review completo no head final**. Se qualquer arquivo mudar depois do review, repita os gates afetados e o review.
 
-> Regra principal: **nenhuma tarefa está pronta sem auto code review completo no head final**. Se qualquer arquivo for alterado depois do review, o review anterior deixa de valer para o gate final.
-
----
-
-## 1. Antes de alterar código
-
-Não comece implementando pela primeira hipótese.
+## Antes de alterar código
 
 Leia, no mínimo:
 
-1. a issue/tarefa atual;
-2. o PR aberto, quando existir;
-3. `README.md`;
-4. `docs/README.md`;
+1. issue/tarefa e PR relacionado;
+2. `README.md`;
+3. [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md);
+4. [`docs/PRODUCTION.md`](docs/PRODUCTION.md) quando houver operação/deploy/dados;
 5. `docs/architecture.md`;
-6. `docs/roadmap.md`;
-7. os documentos específicos do domínio alterado;
-8. os testes próximos do código que será modificado.
+6. documentos e testes do domínio alterado.
 
-Depois inspecione o fluxo **de ponta a ponta** relevante:
+Confira PRs abertos e a `main` atual antes de criar branch. Não acumule PR paralelo no mesmo fluxo sem necessidade.
+
+Entenda o caminho ponta a ponta relevante:
 
 ```text
 UI
- ↓
-client/hook
- ↓
-contrato compartilhado
- ↓
-rota Fastify
- ↓
-serviço/store
- ↓
-SQLite / filesystem / processo externo
- ↓
-resposta
- ↓
-estado exibido na UI
+-> client/hook
+-> contrato compartilhado
+-> rota Fastify
+-> serviço/store
+-> SQLite / filesystem / processo externo
+-> resposta
+-> estado exibido
 ```
 
-Não assuma que um documento antigo representa o comportamento atual. Documentos `phase-*` podem preservar histórico. Para estado corrente, prefira `README.md`, `docs/README.md`, `docs/architecture.md`, documentos funcionais atuais, código e testes.
+Não trate documentação histórica `phase-*` como estado atual sem validar código/testes.
 
-### Antes de editar, responda mentalmente
+## Princípios de engenharia
 
-- Qual é a fonte de verdade deste estado?
-- Existe outra implementação parecida que deve ser reutilizada?
-- A mudança afeta frontend, backend ou contrato compartilhado?
-- Existe efeito em autenticação/autorização?
-- Existe risco de race condition ou resposta assíncrona obsoleta?
-- Existe operação destrutiva, filesystem, SQLite, upload, URL externa ou processo filho?
-- Qual comportamento antigo precisa continuar funcionando?
-- Quais testes provam a mudança e quais testes negativos impedem regressão?
+- procure a causa raiz, não masque o sintoma;
+- mantenha uma única fonte de verdade por estado/regra;
+- prefira mudanças pequenas, explícitas e reversíveis;
+- não introduza dependência nova sem necessidade clara;
+- não enfraqueça segurança, tipos ou testes para deixar CI verde;
+- preserve compatibilidade de dados/migrations;
+- atualize documentação viva na mesma entrega;
+- não faça merge com blocker/high/medium conhecido pendente.
 
----
+## Desenvolvimento local
 
-## 2. Postura obrigatória de engenharia
-
-Trabalhe como **fullstack sênior**, não como gerador de patch local.
-
-Isso significa:
-
-- entender o problema antes de escrever código;
-- procurar a causa raiz, não mascarar o sintoma;
-- considerar o sistema inteiro, inclusive produção;
-- manter uma única fonte de verdade por estado/regra;
-- evitar duplicação de lógica entre mobile/desktop, frontend/backend ou endpoints;
-- preferir mudanças pequenas e explícitas a abstrações prematuras;
-- não introduzir dependência nova sem necessidade clara;
-- não enfraquecer segurança, tipos ou testes para fazer CI passar;
-- não alterar comportamento fora do escopo sem justificar;
-- remover código morto criado/descoberto pela própria mudança quando for seguro fazê-lo;
-- preservar compatibilidade de dados e migrations existentes;
-- escrever código legível para o próximo mantenedor, não apenas para o agente atual.
-
-### Não fazer
-
-- não usar `any` para escapar de modelagem que pode ser tipada;
-- não duplicar contratos manualmente se eles pertencem a `packages/shared`;
-- não confiar em validação do frontend como controle de segurança;
-- não inventar estado otimista que possa divergir do backend sem estratégia de reconciliação;
-- não silenciar erro importante só para melhorar UX;
-- não trocar teste correto por teste mais frouxo quando ele expõe um bug;
-- não assumir que “CI verde anterior” vale depois de novos commits;
-- não fazer merge com blocker/high/medium conhecido pendente.
-
----
-
-## 3. Fluxo padrão de trabalho
-
-O fluxo normal é:
+DEV é isolado da produção:
 
 ```text
-issue / escopo aprovado
-        ↓
-branch própria
-        ↓
-investigação
-        ↓
-implementação incremental
-        ↓
-testes focados
-        ↓
-typecheck / suíte relevante
-        ↓
-auto code review completo
-        ↓
-correções do review
-        ↓
-reexecutar validações afetadas
-        ↓
-auto code review final no novo head
-        ↓
-PR documentado
-        ↓
-CI completo verde no head final
-        ↓
-APPROVE / MERGE
+Config: .env.development
+Web: 5173
+API: 8788
+SQLite/cache: data/development/
+Biblioteca recomendada: music-dev/
 ```
 
-Quando o usuário pedir explicitamente para ampliar um PR já aberto, o trabalho adicional pode permanecer na mesma branch/PR. Nesse caso, atualize o escopo/documentação do PR e **repita todos os gates no head final**.
-
-### Branches
-
-Use nomes objetivos, por exemplo:
-
-```text
-feature/<descricao>
-bugfix/<descricao>
-hotfix/<descricao>
-refactor/<descricao>
-docs/<descricao>
-style/<descricao>
-test/<descricao>
-```
-
-Não crie branch adicional sem necessidade se a tarefa foi explicitamente autorizada dentro de um PR já em andamento.
-
----
-
-## 4. Contratos fullstack
-
-Mudança de API deve ser analisada nos dois lados.
-
-Quando o formato atravessa frontend/backend:
-
-- preferir contratos/tipos em `packages/shared`;
-- validar payload no backend mesmo que o frontend já valide;
-- manter erros públicos seguros e acionáveis;
-- não expor paths físicos, stack traces, cookies, tokens ou segredos;
-- atualizar clientes, estados vazios/loading/error e testes correspondentes;
-- revisar compatibilidade com chamadas existentes.
-
-Uma alteração não está completa se apenas um lado foi atualizado.
-
----
-
-## 5. Frontend e UX
-
-O Home Music deve permanecer simples, ágil e funcional.
-
-### Estado
-
-- evitar duas fontes de verdade para o mesmo dado;
-- proteger telas contra respostas assíncronas obsoletas;
-- depois de salvar/deletar/mover, reconciliar com a fonte canônica;
-- seleção em lote não pode permanecer invisível depois de filtro/busca que esconda os itens;
-- loading não deve parecer ativo quando a ação está desabilitada;
-- estados nunca verificados não devem aparecer como “saudáveis”.
-
-### Responsividade
-
-Testar mentalmente e, quando possível, com E2E:
-
-- mobile;
-- tablet;
-- desktop;
-- textos/caminhos/nomes longos;
-- lista vazia;
-- loading;
-- erro;
-- estado parcial;
-- lista grande.
-
-As superfícies atuais de Minha conta/Administração usam layout fluido; não reintroduzir `max-width` estreito sem motivo funcional.
-
-### Acessibilidade
-
-Revisar:
-
-- navegação por teclado;
-- foco visível;
-- ordem de foco;
-- `label`/nome acessível;
-- `disabled` real;
-- dialogs/confirmações;
-- contraste;
-- touch targets;
-- checkbox/seleção;
-- feedback de erro/sucesso sem depender apenas de cor.
-
-### Operações destrutivas
-
-- separar visualmente ação reversível de ação permanente;
-- não colocar delete permanente como ação casual repetida em toda linha;
-- exigir confirmação explícita;
-- lote de exclusão permanente mantém confirmação digitada quando prevista;
-- preferir quarentena/restauração antes de delete físico.
-
----
-
-## 6. Backend, autenticação e autorização
-
-O backend é a fronteira real de segurança.
-
-### Política
-
-- rotas sensíveis devem usar a política central apropriada;
-- `/api/admin/*` exige `admin`;
-- `user` comum deve continuar recebendo `403` para operação administrativa;
-- ownership pessoal deve ser derivado da sessão, não de `userId` arbitrário do cliente;
-- quando necessário para evitar enumeração de recurso de outro usuário, usar `404` conforme política existente.
-
-### Mutações autenticadas
-
-Mutações da aplicação usam o header:
-
-```text
-X-Home-Music-Request: 1
-```
-
-Não adicionar nova mutação esquecendo essa proteção e seus testes negativos.
-
-### Sessões e senhas
-
-- nunca logar senha, hash completo, cookie ou token;
-- não persistir senha temporária no frontend;
-- mudança sensível de conta deve preservar invariantes de revogação;
-- nunca permitir remover/rebaixar o último administrador ativo;
-- não criar caminho de auto-lockout administrativo.
-
----
-
-## 7. Filesystem e operações destrutivas
-
-Qualquer operação de arquivo deve ser tratada como superfície de segurança.
-
-Revisar obrigatoriamente:
-
-- path traversal;
-- caminho absoluto inesperado;
-- `..`/encoding equivalente;
-- symlink escape;
-- arquivo não regular;
-- colisão/no-clobber;
-- corrida entre validação e uso;
-- rollback em falha parcial;
-- comportamento quando diretório fica indisponível;
-- concorrência com scan/importação/outro job.
-
-O frontend nunca deve implementar `rename`, `unlink` ou confinement por conta própria.
-
-`MUSIC_DIR` é a fronteira física da biblioteca. Operações administrativas devem permanecer confinadas a ela ou aos diretórios explicitamente seguros de staging/quarentena/cache.
-
-### Lixeira
-
-- biblioteca ativa → quarentena é o caminho destrutivo padrão;
-- restauração é preferível quando aplicável;
-- exclusão permanente é explícita;
-- lote destrutivo precisa preservar confirmação forte;
-- falha parcial deve ser reportada por item e não mascarada.
-
-### Integridade
-
-A ação **Verificar agora** é read-only.
-
-Nunca reutilize o scan normal para satisfazer uma auditoria de Integridade se isso puder reconciliar/remover registros.
-
----
-
-## 8. Importação, URLs e processos externos
-
-O pipeline de importação deve continuar desacoplado da origem:
-
-```text
-origem
- ↓
-staging/scratch
- ↓
-validação
- ↓
-metadata
- ↓
-duplicatas
- ↓
-destino seguro
- ↓
-promoção
- ↓
-indexação incremental
-```
-
-### URL
-
-Revisar SSRF em qualquer alteração:
-
-- protocolos permitidos;
-- localhost;
-- redes privadas/reservadas;
-- DNS/rebinding quando aplicável;
-- redirects;
-- timeout;
-- limite de bytes;
-- Content-Type não confiável;
-- cleanup em falha.
-
-### Provider/processo filho
-
-- usar API de processo sem shell quando possível;
-- argumentos como array, não concatenação de comando;
-- timeout/cancelamento;
-- limite de saída/buffer;
-- cleanup da árvore de processos;
-- saída do provider é entrada não confiável;
-- provider nunca escreve diretamente em `MUSIC_DIR`.
-
-### Retry
-
-Retry é uma **nova tentativa**, não reaproveitamento silencioso de staging inconsistente.
-
----
-
-## 9. SQLite e persistência
-
-Mudanças de persistência exigem revisão de compatibilidade e falhas parciais.
-
-Verificar:
-
-- migration idempotente/ordenada;
-- `PRAGMA user_version` quando pertence ao schema principal;
-- foreign keys;
-- transação para mudanças relacionadas;
-- rollback em erro;
-- comportamento com dados de versão anterior;
-- índices/constraints coerentes;
-- concorrência e locks;
-- backup/restore;
-- teste reabrindo o banco quando persistência é relevante.
-
-Nunca apague dados existentes apenas para simplificar uma migration.
-
----
-
-## 10. Testes obrigatórios
-
-Escolha testes proporcionais ao risco, mas o gate final deve cobrir o sistema inteiro relevante.
-
-### Base local recomendada
+Setup:
 
 ```bash
 npm ci
-npm run typecheck
-npm run test:security
-npm test
-npm run benchmark:large-library
-npm run build
-npm run smoke:production
+cp .env.development.example .env.development
+mkdir -p music-dev data/development
+npm run dev
 ```
 
-O root possui também:
+Nunca aponte desenvolvimento para o SQLite ou `MUSIC_DIR` reais de produção. Veja [`docs/development-environments.md`](docs/development-environments.md).
+
+## Gate normal
+
+Antes do PR:
 
 ```bash
+npm run check
+```
+
+`check` executa:
+
+```text
+typecheck
+-> testes funcionais
+-> build
+```
+
+O CI usa o mesmo gate. Não mantenha outra lista paralela de comandos como requisito normal.
+
+Checks direcionados conforme risco:
+
+```bash
+npm run test:security
+npm run test:policy
+npm run test:ops
+npm run test:e2e
+npm run benchmark:large-library
+npm run benchmark:large-library:browser
+npm run benchmark:backpressure
+npm run smoke:production
 npm run smoke:backup-restore
-npm run e2e
 ```
 
-`npm run test:security` é o gate transversal de regressões negativas de Administração/Importação. `npm run benchmark:large-library` é o guard de regressão grave com dataset sintético; ele não substitui testes funcionais e seus limites não são SLA de produto.
+E2E/benchmarks/smokes/security não são custo fixo de todo PR. Use quando protegem risco material. Política: [`docs/testing-and-quality.md`](docs/testing-and-quality.md).
 
-Use E2E sempre que a mudança afetar fluxo de usuário, navegação, comportamento responsivo ou integração fullstack que a suíte possa cobrir.
+## Contratos fullstack
 
-### Testes focados primeiro
+Mudança de API é analisada nos dois lados.
 
-Durante desenvolvimento, execute primeiro a suíte/arquivo diretamente afetado para obter feedback rápido. Depois execute os gates amplos.
+- tipos compartilhados pertencem a `packages/shared` quando representam contrato real;
+- backend valida payload mesmo que frontend valide;
+- erros públicos são seguros e acionáveis;
+- frontend trata loading/vazio/erro/sucesso e respostas obsoletas;
+- não exponha paths físicos, stack traces, cookies, tokens ou segredos.
 
-### Testes negativos
+## Frontend / UX
 
-Toda mudança de segurança precisa provar também o que **não pode** acontecer.
+O Home Music deve permanecer simples, ágil e funcional.
 
-Exemplos:
+- não duplique fonte de verdade;
+- descarte respostas assíncronas obsoletas;
+- loading só durante trabalho real;
+- ações destrutivas são explícitas e confirmadas;
+- preserve mobile/tablet/desktop, teclado, foco, contraste e touch targets;
+- não use cor como único feedback;
+- prefira quarentena/restauração antes de delete físico permanente;
+- não implemente filesystem/confinement no frontend.
 
-- `user` chamando rota admin;
-- mutação sem header anti-CSRF;
-- path traversal/symlink;
-- URL privada/redirect SSRF;
-- payload malformed/oversized;
-- operação concorrente proibida;
-- delete sem confirmação;
-- stale async response sobrescrevendo seleção nova;
-- falha parcial preservando estado consistente.
+## Backend, autenticação e autorização
 
-### Quando teste falha
+O backend é a fronteira real de segurança.
 
-Não assuma “flaky” antes de investigar.
+- `/api/admin/*` exige `admin`;
+- ownership pessoal deriva da sessão, não de `userId` arbitrário do cliente;
+- mutações autenticadas preservam `X-Home-Music-Request: 1`;
+- nunca logue senha, hash completo, cookie ou token;
+- não permita remover/rebaixar o último administrador ativo;
+- valide input na borda e mantenha mensagens externas sanitizadas.
 
-Procedimento:
+## Filesystem e operações destrutivas
 
-1. reproduzir;
-2. entender causa;
-3. distinguir regressão real de instabilidade pré-existente;
-4. corrigir a causa quando pertence ao PR;
-5. não afrouxar assert correto para ficar verde;
-6. reexecutar o teste e a suíte afetada.
+Revise sempre:
 
-Se um teste realmente for flaky e não causado pela mudança, documente evidência e risco residual; não esconda a falha.
+- traversal e paths absolutos inesperados;
+- symlink escape;
+- arquivos não regulares;
+- colisão/no-clobber;
+- corrida entre validação e uso;
+- rollback/falha parcial;
+- concorrência com scan/importação/outro job.
 
----
+`MUSIC_DIR` é a fronteira física da biblioteca. O frontend nunca executa `rename`, `unlink` ou confinement por conta própria.
 
-## 11. Auto code review obrigatório
+## Importação, URLs e processos externos
 
-**Sempre executar antes de considerar a tarefa pronta.**
-
-O review deve analisar o diff completo contra a base do PR e o comportamento resultante, não apenas os últimos arquivos editados.
-
-### Severidade
-
-Classifique findings como:
-
-- **BLOCKER** — risco de perda de dados, vulnerabilidade, fluxo principal quebrado, comportamento destrutivo inesperado ou impossibilidade de deploy;
-- **HIGH** — bug sério, autorização incorreta, corrupção/inconsistência provável, regressão importante;
-- **MEDIUM** — bug funcional/UX relevante, race condition limitada, estado inconsistente, cobertura insuficiente de comportamento importante;
-- **LOW** — melhoria pequena, dívida ou risco residual não bloqueante.
-
-### Checklist técnico
-
-Revisar no mínimo:
-
-#### Correção
-- requisito realmente atendido;
-- edge cases;
-- vazio/loading/error;
-- concorrência;
-- stale async;
-- falha parcial;
-- retry/idempotência;
-- regressão de comportamento existente.
-
-#### Frontend
-- fonte de verdade;
-- responsividade;
-- acessibilidade;
-- teclado/foco;
-- seleção/filtros;
-- estado destrutivo;
-- feedback de erro/sucesso.
-
-#### Backend
-- validação de input;
-- contrato HTTP;
-- códigos de status;
-- autorização;
-- ownership;
-- anti-CSRF;
-- sanitização de erro.
-
-#### Segurança
-- SSRF;
-- path traversal;
-- symlink;
-- shell/process injection;
-- secret leakage;
-- permissões;
-- operações destrutivas;
-- fail-open vs fail-closed.
-
-#### Dados
-- migration;
-- transação;
-- compatibilidade;
-- backup/restore;
-- consistência memória ↔ SQLite ↔ filesystem.
-
-#### Qualidade
-- código morto;
-- duplicação;
-- nomes;
-- tipos;
-- abstrações desnecessárias;
-- dependência nova;
-- documentação divergente.
-
-#### Testes
-- caminho feliz;
-- casos negativos;
-- regressão;
-- falha parcial;
-- autorização;
-- CI adequado ao risco.
-
-### Regra de correção
-
-Qualquer **BLOCKER, HIGH ou MEDIUM** encontrado deve ser corrigido antes do merge, salvo decisão explícita do mantenedor aceitando o risco.
-
-Depois da correção:
-
-1. reexecute os testes afetados;
-2. reexecute gates amplos necessários;
-3. faça **novo auto code review completo**;
-4. use o novo head como referência do gate final.
-
-### Saída do review
-
-O relatório final deve ser objetivo:
+Pipeline esperado:
 
 ```text
-Auto code review
-
-BLOCKER: 0
-HIGH: 0
-MEDIUM: 0
-LOW: <n>
-
-Findings:
-- ...
-
-Riscos residuais:
-- ...
-
-Validação:
-- typecheck: pass
-- security regressions: pass
-- tests: pass
-- large-library benchmark: pass
-- build: pass
-- smoke: pass
-- E2E/CI: pass ou justificativa
-
-VERDICT: APPROVE / BLOCK
+origem
+-> staging/scratch
+-> validação
+-> metadata
+-> duplicatas
+-> destino seguro
+-> promoção
+-> indexação incremental
 ```
 
-Não usar `APPROVE` se CI do **head final** ainda não estiver verde quando CI for parte do gate.
+Para URLs, revise SSRF, redirects, protocolos, redes privadas/reservadas, timeout, limite de bytes e Content-Type.
 
----
+Para processos externos:
 
-## 12. Padrão de Pull Request
+- prefira programa + args com `shell: false`;
+- limite timeout/saída;
+- cleanup da árvore de processos;
+- trate saída do provider como input não confiável;
+- provider nunca escreve diretamente em `MUSIC_DIR`.
 
-O PR deve permitir que outra pessoa entenda o que mudou sem reconstruir a conversa.
+Retry é nova tentativa, não reaproveitamento silencioso de staging inconsistente.
 
-### Título
+## SQLite e persistência
 
-Use prefixo semântico simples:
+- migrations são ordenadas e compatíveis;
+- preserve `PRAGMA user_version` e dados existentes;
+- use transação para mudanças relacionadas;
+- revise foreign keys, locks e falhas parciais;
+- teste reopen/restore quando persistência for relevante;
+- nunca apague dados só para simplificar migration.
 
-```text
-feat: ...
-fix: ...
-style: ...
-refactor: ...
-docs: ...
-test: ...
-chore: ...
+Mudança com risco de schema/dados precisa considerar backup/restore e [`docs/PRODUCTION.md`](docs/PRODUCTION.md).
+
+## Produção
+
+A produção real usa `.env`, systemd e API/readiness em `8787`.
+
+Interface canônica:
+
+```bash
+npm run prod:status
+npm run prod:check
+npm run prod:backup
+npm run prod:deploy
+npm run prod:verify
+npm run prod:logs
 ```
 
-O título descreve o resultado, não o processo.
+`prod:check` é `check + smoke:production`; não confunda com o gate normal do PR.
 
-### Corpo mínimo
+`prod:deploy` é uma mutação real via `service:update`. `service:install` é bootstrap/reconfiguração privilegiada, não etapa comum de todo deploy.
 
-```md
-## Resumo
-O que mudou e por quê.
-
-## Escopo
-- comportamento novo/alterado;
-- o que ficou explicitamente fora de escopo.
-
-## Implementação
-- decisões importantes;
-- frontend/backend/contratos/dados afetados.
-
-## Segurança e invariantes
-- autorização;
-- operações destrutivas;
-- filesystem/SSRF/segredos quando aplicável.
-
-## UX
-- desktop/mobile;
-- loading/error/empty;
-- acessibilidade relevante.
+Não execute deploy, restart ou backup real apenas para validar PR.
 
 ## Testes
-- comandos/suítes executados;
-- regressões adicionadas.
 
-## Documentação / issues
-- docs atualizados;
-- issue(s) relacionadas.
+Priorize testes que protegem comportamento/material de risco:
 
-## Gate
-- auto code review final;
-- CI verde no head final;
-- zero blocker/high/medium pendente.
-```
+- domínio e contratos HTTP;
+- auth/autorização/isolamento;
+- filesystem e operações destrutivas;
+- SQLite/migrations/concorrência;
+- importação/SSRF/processos externos;
+- regressões reais;
+- UX crítica.
 
-### PR de UI
+Não adicione teste só para aumentar coverage ou congelar detalhe incidental de markup/CSS/configuração.
 
-Além do texto, revisar explicitamente:
+Falha de teste deve ser investigada; não classifique como flaky sem evidência e não afrouxe assertion correta.
 
-- desktop/tablet/mobile;
-- overflow;
-- estados longos/vazios/erro;
-- foco/teclado;
-- ações destrutivas;
-- coerência com o padrão visual atual.
+## Auto code review final
 
-### PR de segurança/filesystem/importação
+Depois do último commit e dos gates aplicáveis, revise o diff completo contra a base como reviewer independente.
 
-Documentar invariantes preservadas e testes negativos relevantes.
+Confira no mínimo:
 
----
+- escopo e comportamento esperado;
+- edge cases e falhas parciais;
+- concorrência/stale async/cleanup;
+- autorização, SSRF, traversal, symlink e command injection;
+- migrations/transações/backup;
+- responsividade/acessibilidade quando houver UI;
+- código morto/duplicação;
+- documentação verdadeira;
+- nenhum segredo ou autoridade nova introduzida.
 
-## 13. Issues, roadmap e documentação
+Se encontrar algo, corrija, gere novo SHA, reexecute os gates afetados e repita o review.
 
-Quando uma entrega muda o estado do produto:
+Antes de mergear, registre no PR:
 
-- atualizar o documento funcional correspondente;
-- atualizar `docs/roadmap.md` quando muda uma fase/pendência;
-- atualizar o índice executivo vigente quando existir um ciclo de backlog ativo; a #123 preserva o ciclo encerrado em 2026-09-02 e não deve ser reaberta artificialmente para novas atividades;
-- fechar issue somente quando o escopo foi realmente entregue;
-- não deixar issue/documento dizendo “planejado” para algo já em `main`;
-- não marcar item como concluído apenas porque parte dele existe.
+- SHA revisado;
+- escopo/riscos conferidos;
+- achados corrigidos;
+- gates aplicáveis verdes;
+- ausência de finding bloqueante.
 
-`docs/README.md` explica quais documentos são canônicos e quais preservam histórico.
-
----
-
-## 14. CI e merge
-
-CI válido é o CI do **commit final que será mergeado**.
-
-Se um commit for adicionado depois de um CI verde, aguarde/execute novamente o pipeline apropriado.
-
-Antes do merge, confirmar:
-
-- branch atualizada o suficiente para detectar conflito relevante;
-- auto code review final concluído;
-- zero BLOCKER/HIGH/MEDIUM pendente;
-- typecheck e regressões de segurança verdes;
-- testes funcionais verdes;
-- benchmark de biblioteca grande verde quando o gate existir no workflow;
-- build e validações operacionais relevantes verdes;
-- smoke de produção verde quando aplicável;
-- E2E/Playwright verde para mudança de fluxo/UI quando aplicável;
-- documentação/issues coerentes;
-- PR descreve o head final.
-
-Só então emitir:
+## Fluxo de entrega
 
 ```text
-VERDICT: APPROVE / MERGE
+issue / escopo
+-> verificar main + PRs
+-> branch
+-> investigar
+-> implementar + testes focados
+-> npm run dev
+-> validação manual
+-> npm run check
+-> checks direcionados conforme risco
+-> PR
+-> CI verde
+-> auto-review no SHA final
+-> merge autorizado
+-> operação pós-merge quando aplicável
 ```
 
-Caso contrário:
+Merge exige autorização do usuário. Depois do merge, produção segue [`docs/PRODUCTION.md`](docs/PRODUCTION.md).
 
-```text
-VERDICT: BLOCK
-```
+## Documentação
 
-com os findings concretos.
+Documentação faz parte do Definition of Done.
 
----
+Fontes principais:
 
-## 15. Depois do merge
+- `README.md` — entrada do projeto;
+- `docs/DEVELOPMENT.md` — setup/gate/PR;
+- `docs/PRODUCTION.md` — produção real;
+- `docs/README.md` — índice detalhado;
+- `docs/architecture.md` — arquitetura;
+- `docs/testing-and-quality.md` — política de gates;
+- documentos funcionais do domínio alterado.
 
-Quando a mudança exige atualização da instalação local/produção, fornecer comandos exatos.
-
-Fluxo normal do Home Music:
-
-```bash
-git switch main
-git pull --ff-only origin main
-npm run service:update
-```
-
-Depois validar:
-
-```bash
-npm run service:status
-curl -i http://127.0.0.1:8787/ready
-```
-
-Não sugerir recriar `.env` em instalações existentes. Mudanças de configuração devem ser apresentadas explicitamente e com cuidado para não perder credenciais/paths locais.
-
----
-
-## 16. Regra final
-
-O agente deve otimizar para **correção e manutenção**, não para velocidade aparente.
-
-Uma tarefa só termina quando:
-
-```text
-implementação correta
-+ segurança preservada
-+ UX coerente
-+ testes adequados
-+ docs/issues sincronizados
-+ auto code review completo no head final
-+ CI final verde
-= pronta para merge
-```
-
-
-### Extra
-
-# Diretrizes Universais de Desenvolvimento (Instruções para Agentes de IA)
-
-Você está atuando como o Principal Engineer e Arquiteto de Software deste repositório. Este arquivo define os padrões inegociáveis de engenharia, arquitetura e qualidade que devem ser aplicados a qualquer tecnologia, linguagem ou framework utilizado aqui.
-
-## 1. Engenharia de Código e Manutenibilidade
-*   **Princípios Práticos:** Aplique KISS (mantenha simples), DRY (não se repita) e YAGNI (não crie o que não precisa agora).
-*   **SOLID Restrito:** 
-    *   Toda classe, função ou componente deve ter uma única responsabilidade.
-    *   Sistemas devem ser abertos para extensão e fechados para modificação.
-    *   Dependa de abstrações/interfaces, nunca de implementações concretas diretamente.
-*   **Legibilidade:** Código legível substitui comentários. Use nomes autoexplicativos para funções, variáveis e métodos. Funções não devem passar de 30 linhas.
-
-## 2. Paradigmas Arquiteturais
-*   **Separação de Conceitos (SoC):** Isole rigidamente a Lógica de Negócio (Domínio) dos detalhes técnicos (Bancos de dados, APIs externas, Interfaces de Usuário, Frameworks).
-*   **Desacoplamento:** Componentes ou serviços devem se comunicar por contratos claros. Evite acoplamento direto que impeça testes isolados.
-*   **Idempotência e Resiliência:** Operações que alteram estado devem ser seguras contra repetições (retries). Todo ponto de integração externa deve prever cenários de falha.
-
-## 3. Qualidade, Testes e Automação
-*   **Testabilidade:** O código gerado deve ser nativamente fácil de testar. Não misture efeitos colaterais (chamadas de rede/data) no meio da lógica pura.
-*   **Testes Automatizados:** Para qualquer nova funcionalidade ou correção de bug, sugira ou implemente os testes unitários ou de integração correspondentes.
-
-## 4. Segurança e Estabilidade por Padrão
-*   **Validação Estrita:** Nunca confie em inputs externos. Valide formatos, tipos e limites na entrada do fluxo.
-*   **Tratamento de Erros Eficiente:** Erros devem ser capturados na camada correta, gerando logs limpos sem expor segredos de infraestrutura ou stack traces para o cliente final.
-*   **Dados Sensíveis:** Certifique-se de que senhas, chaves de API, dados pessoais (LGPD/GDPR) ou tokens nunca sejam expostos em logs, URLs ou código aberto.
-
-## 5. Interfaces com Usuário (Front/Mobile - Se Aplicável)
-*   **Estados Visuais:** Garanta que toda interação tenha feedback claro (Loading, Vazio, Sucesso, Erro).
-*   **Consistência e Acessibilidade:** Siga rigorosamente o Design System ou os padrões visuais já existentes no projeto. Garanta contraste e tags de acessibilidade.
-
----
-**Protocolo de Ação:** Antes de entregar qualquer código ou plano, valide mentalmente: *"Minha solução quebra o SOLID, duplica código ou mistura regras de negócio com infraestrutura?"*. Se sim, corrija-a antes de responder.
+O objetivo de cada PR é deixar o sistema mais simples de entender, mais difícil de quebrar e mais fácil de operar.

@@ -1,6 +1,6 @@
 # Contrato operacional de produção
 
-O Home Music expõe uma interface operacional padronizada para automação local e integração com o Dev Dashboard. Este contrato **não substitui** os runbooks existentes: `service:update`, backup/restore, systemd e `/ready` continuam sendo as fontes de verdade.
+O Home Music expõe uma interface operacional padronizada para automação local e integração com o Dev Dashboard. A entrada canônica para operação é [`PRODUCTION.md`](PRODUCTION.md); este documento detalha o contrato consumido pela automação.
 
 O manifesto versionado fica em:
 
@@ -19,28 +19,28 @@ npm run prod:verify
 npm run prod:logs
 ```
 
-Mapeamento atual:
-
 | Comando | Fonte de verdade | Efeito |
 | --- | --- | --- |
-| `prod:status` | `service:status` | leitura do estado do `home-music.service` |
-| `prod:check` | typecheck + testes + build + smoke de produção | preflight sem alterar a instalação ativa |
+| `prod:status` | `service:status` | leitura do estado de `home-music.service` |
+| `prod:check` | `check` + `smoke:production` | preflight sem alterar a instalação ativa |
 | `prod:backup` | `backup:create` | cria e valida backup SQLite |
-| `prod:deploy` | `service:update` | atualiza a instalação systemd existente usando o helper privilegiado já bootstrapado |
-| `prod:verify` | `GET http://127.0.0.1:8787/ready` | confirma readiness da instância ativa |
+| `prod:deploy` | `service:update` | atualiza a instalação systemd existente |
+| `prod:verify` | verificador de produção / `/ready` | confirma a instância ativa |
 | `prod:logs` | journal do systemd | acompanha logs da instância ativa |
+
+O gate normal de engenharia é `npm run check`; `prod:check` acrescenta o smoke específico de produção. Benchmarks, E2E, regressões de segurança, contratos shell e smoke de backup/restore permanecem direcionados por risco e não são adicionados implicitamente ao preflight.
 
 ## Políticas declaradas
 
 - provider: `systemd`;
 - branch de produção: `main`;
-- backup: obrigatório antes de migrations que alterem dados/schema conforme os runbooks atuais;
+- backup: obrigatório antes de migrations que alterem dados/schema conforme o runbook;
 - migrations: executadas no startup;
 - rollback após avanço incompatível de schema: restaurar backup compatível, nunca reduzir `PRAGMA user_version` manualmente.
 
 ## Bootstrap privilegiado
 
-`prod:deploy` foi desenhado para rodar com stdin fechado a partir de um control plane local. Por isso ele não depende de ticket sudo interativo nem recebe senha do dashboard.
+`prod:deploy` foi desenhado para rodar com stdin fechado a partir de um control plane local. Ele não depende de ticket sudo interativo nem recebe senha do dashboard.
 
 O bootstrap administrativo é feito explicitamente, no terminal, por:
 
@@ -52,22 +52,21 @@ Esse comando instala:
 
 - `/etc/systemd/system/home-music.service`;
 - `/usr/local/sbin/home-music-service-control`, root-owned e com catálogo fechado de `check`, `stop` e `restart` para `home-music.service`;
-- `/etc/sudoers.d/home-music-<usuario>`, validado por `visudo` e limitado exatamente às três ações do helper com `NOPASSWD`.
+- regra sudoers limitada às ações do helper.
 
-Depois do bootstrap, `service:update`/`prod:deploy` executa `npm ci`, build e validações como o usuário normal e usa apenas `sudo -n /usr/local/sbin/home-music-service-control <ação>` nas transições privilegiadas. O helper não executa código do repositório como root, não aceita comando livre e não libera `systemctl` genérico.
+Depois do bootstrap, `service:update`/`prod:deploy` instala dependências, builda e valida como usuário normal e usa apenas o helper root-owned nas transições privilegiadas. O helper não executa código do repositório como root, não aceita comando livre e não libera `systemctl` genérico.
 
-Se helper ou sudoers não estiverem prontos, o update falha **antes** de parar o serviço e orienta executar `npm run service:install` no terminal. Alterações do unit, do caminho do Node ou do próprio helper também exigem novo `service:install`; o update comum não reescreve artefatos root-owned.
+Se helper ou sudoers não estiverem prontos, o update falha antes de parar o serviço e orienta executar `npm run service:install`. Alterações do unit, caminho do Node ou próprio helper também exigem novo bootstrap.
 
 ## Segurança
 
-O manifesto contém apenas metadados e nomes de scripts npm. Ele não contém senha, cookie, token, path secreto ou linha de shell arbitrária configurável pelo navegador.
+O manifesto contém somente metadados e nomes de scripts npm. Ele não contém senha, cookie, token, path secreto ou linha de shell arbitrária configurável pelo navegador.
 
-Executar `prod:deploy` continua sendo uma mutação real de produção e exige confirmação no control plane. A regra `NOPASSWD` não autoriza shell, `systemctl` arbitrário nem execução root de arquivos do projeto; ela autoriza somente o helper root-owned e suas ações fixas sobre `home-music.service`.
-
-Para validação de PR/CI, use `prod:check`; não execute deploy, backup do banco real ou restart apenas para provar que o contrato existe.
+Executar `prod:deploy` continua sendo uma mutação real de produção e exige confirmação no control plane. Para validação de PR/CI, use `npm run check`; para preflight de uma atualização real, use `prod:check`. Não execute deploy, backup real ou restart somente para provar que o contrato existe.
 
 ## Relação com os runbooks
 
-- instalação, update, systemd, helper privilegiado, health/readiness e Tailscale: [`production.md`](production.md);
+- receita operacional: [`PRODUCTION.md`](PRODUCTION.md);
+- instalação/update, systemd, helper e Tailscale: [`production.md`](production.md);
 - backup/restore: [`backup-restore.md`](backup-restore.md);
 - identidade/migrations e recovery: [`phase-7.5-operations.md`](phase-7.5-operations.md).
