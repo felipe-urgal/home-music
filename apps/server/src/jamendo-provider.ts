@@ -1,3 +1,5 @@
+import { mkdir } from 'node:fs/promises';
+import path from 'node:path';
 import {
   ExternalProviderError,
   type ExternalProvider,
@@ -6,11 +8,20 @@ import {
   type ExternalProviderPreparedMedia,
   type ExternalProviderRequest
 } from './external-provider.js';
+import { ImportJobQueue } from './import-job-queue.js';
+import { ImportStagingManager } from './import-staging.js';
+import {
+  DEFAULT_IMPORT_URL_MAX_MEGABYTES,
+  DEFAULT_IMPORT_URL_MAX_REDIRECTS,
+  DEFAULT_IMPORT_URL_TIMEOUT_SECONDS,
+  ImportUrlManager
+} from './import-url.js';
 
 export const JAMENDO_PROVIDER_ID = 'jamendo';
 export const JAMENDO_CLIENT_ID_CONFIG = 'client-id';
 
 const JAMENDO_TRACKS_URL = 'https://api.jamendo.com/v3.0/tracks/';
+const JAMENDO_PUBLIC_TRACK_HOSTS = new Set(['jamendo.com', 'www.jamendo.com']);
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 50;
 const MAX_PAGE = 500;
@@ -86,9 +97,25 @@ type JamendoSearchInput = Readonly<{
   limit?: unknown;
 }>;
 
+type JamendoPhysicalDownloadInput = Readonly<{
+  url: string;
+  scratchDir: string;
+  signal: AbortSignal;
+}>;
+
+type JamendoPhysicalDownloadResult = Readonly<{
+  relativePath: string;
+  contentType: string | null;
+}>;
+
+type JamendoPhysicalDownload = (
+  input: JamendoPhysicalDownloadInput
+) => Promise<JamendoPhysicalDownloadResult>;
+
 type JamendoProviderOptions = Readonly<{
   fetch?: JamendoFetch;
   timeoutMs?: number;
+  download?: JamendoPhysicalDownload;
 }>;
 
 function cleanText(value: unknown, maxLength = 500) {
@@ -218,6 +245,32 @@ function normalizedSourceId(value: unknown) {
   return sourceId;
 }
 
+export function jamendoImportUrl(sourceIdValue: unknown) {
+  const sourceId = normalizedSourceId(sourceIdValue);
+  return `https://www.jamendo.com/track/${sourceId}`;
+}
+
+function sourceIdFromRequest(request: ExternalProviderRequest) {
+  let url: URL;
+  try {
+    url = new URL(request.url);
+  } catch {
+    throw new ExternalProviderError('invalid_input', 'URL de faixa do Jamendo inválida.');
+  }
+  if (
+    url.protocol !== 'https:'
+    || !JAMENDO_PUBLIC_TRACK_HOSTS.has(url.hostname.toLowerCase())
+    || url.port
+    || url.search
+    || url.hash
+  ) {
+    throw new ExternalProviderError('invalid_input', 'Use uma URL pública de faixa do Jamendo.');
+  }
+  const match = url.pathname.match(/^\/track\/(\d+)\/?$/);
+  if (!match) throw new ExternalProviderError('invalid_input', 'Use uma URL pública de faixa do Jamendo.');
+  return normalizedSourceId(match[1]);
+}
+
 function totalFromHeaders(headers: JamendoApiHeaders | undefined) {
   const full = numberValue(headers?.results_fullcount);
   if (full !== null && Number.isSafeInteger(full)) return full;
@@ -286,11 +339,105 @@ function importBlockedMessage(reason: JamendoImportBlockReason) {
   }
 }
 
+function abortReason(signal: AbortSignal) {
+  return signal.reason instanceof Error
+    ? signal.reason
+    : new ExternalProviderError('provider_cancelled', 'Importação do provider cancelada.', 409);
+}
+
+function waitForSignalTick(signal: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    if (signal.aborted) {
+      reject(abortReason(signal));
+      return;
+    }
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(abortReason(signal));
+    };
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, 20);
+    timer.unref?.();
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
+function mapNestedUrlFailure(message: string | null) {
+  const value = message ?? '';
+  if (/excede o limite|limite configurado/i.test(value)) {
+    return new ExternalProviderError('output_too_large', 'A mídia retornada pelo provider excede o limite configurado.', 413);
+  }
+  if (/tempo limite/i.test(value)) {
+    return new ExternalProviderError('provider_timeout', 'O download do Jamendo excedeu o tempo limite.', 504);
+  }
+  if (/não foi reconhecido como áudio|content-type incompatível|arquivo vazio/i.test(value)) {
+    return new ExternalProviderError('invalid_output', 'O Jamendo retornou uma mídia inválida.', 422);
+  }
+  return new ExternalProviderError('provider_network_failed', 'Não foi possível baixar a mídia permitida do Jamendo.', 502);
+}
+
+const downloadThroughSafeUrlManager: JamendoPhysicalDownload = async ({ url, scratchDir, signal }) => {
+  const nestedMusicDir = path.join(scratchDir, 'jamendo-url-music-sentinel');
+  const nestedStagingRoot = path.join(scratchDir, 'jamendo-url-staging');
+  await mkdir(nestedMusicDir, { recursive: true, mode: 0o700 });
+
+  const queue = new ImportJobQueue();
+  const staging = new ImportStagingManager({
+    stagingRoot: nestedStagingRoot,
+    musicDir: nestedMusicDir
+  });
+  const urls = new ImportUrlManager({
+    queue,
+    staging,
+    maxBytes: DEFAULT_IMPORT_URL_MAX_MEGABYTES * 1024 * 1024,
+    timeoutMs: DEFAULT_IMPORT_URL_TIMEOUT_SECONDS * 1000,
+    maxRedirects: DEFAULT_IMPORT_URL_MAX_REDIRECTS
+  });
+
+  const started = await urls.start(url);
+  const nestedJobId = started.job.id;
+  try {
+    while (true) {
+      if (signal.aborted) throw abortReason(signal);
+      const current = queue.get(nestedJobId);
+      if (!current) throw new ExternalProviderError('provider_failed', 'O download temporário do Jamendo foi perdido.', 500);
+      if (current.status === 'pending') break;
+      if (current.status === 'failed') throw mapNestedUrlFailure(current.error);
+      if (current.status === 'cancelled') {
+        throw new ExternalProviderError('provider_cancelled', 'Importação do provider cancelada.', 409);
+      }
+      await waitForSignalTick(signal);
+    }
+
+    const snapshot = await staging.cleanupSnapshot();
+    const workspace = snapshot.activeWorkspaces.find(item => item.jobId === nestedJobId);
+    if (!workspace) {
+      throw new ExternalProviderError('invalid_output', 'O download do Jamendo não produziu um arquivo temporário.', 502);
+    }
+    const payloadPath = path.join(workspace.directory, 'payload.bin');
+    const relativePath = path.relative(scratchDir, payloadPath).split(path.sep).join('/');
+    if (!relativePath || relativePath === '..' || relativePath.startsWith('../') || path.posix.isAbsolute(relativePath)) {
+      throw new ExternalProviderError('invalid_output', 'O download do Jamendo escapou do scratch.', 502);
+    }
+    return { relativePath, contentType: null };
+  } catch (error) {
+    const current = queue.get(nestedJobId);
+    if (current?.status === 'processing' || current?.status === 'pending') {
+      await urls.cancel(nestedJobId).catch(() => undefined);
+    } else {
+      await staging.cleanupJob(nestedJobId).catch(() => undefined);
+    }
+    throw error;
+  }
+};
+
 export class JamendoProvider implements ExternalProvider {
   readonly id = JAMENDO_PROVIDER_ID;
   readonly label = 'Jamendo · música livre/licenciada';
   readonly capabilities = Object.freeze({
-    audio: false,
+    audio: true,
     metadata: true,
     thumbnail: true,
     playlists: false
@@ -299,31 +446,44 @@ export class JamendoProvider implements ExternalProvider {
 
   private readonly request: JamendoFetch;
   private readonly timeoutMs: number;
+  private readonly download: JamendoPhysicalDownload;
 
   constructor(options: JamendoProviderOptions = {}) {
     this.request = options.fetch ?? fetch;
     this.timeoutMs = options.timeoutMs ?? REQUEST_TIMEOUT_MS;
+    this.download = options.download ?? downloadThroughSafeUrlManager;
     if (!Number.isSafeInteger(this.timeoutMs) || this.timeoutMs <= 0 || this.timeoutMs > 60_000) {
       throw new Error('Timeout do Jamendo inválido.');
     }
   }
 
-  validate(_request: ExternalProviderRequest) {
-    throw new ExternalProviderError(
-      'invalid_input',
-      'A importação física do Jamendo ainda não está habilitada; use a descoberta de faixas.'
-    );
+  validate(request: ExternalProviderRequest) {
+    sourceIdFromRequest(request);
   }
 
   async prepare(
-    _request: ExternalProviderRequest,
-    _context: ExternalProviderContext
+    request: ExternalProviderRequest,
+    context: ExternalProviderContext
   ): Promise<ExternalProviderPreparedMedia> {
-    throw new ExternalProviderError(
-      'provider_failed',
-      'A importação física do Jamendo ainda não está habilitada.',
-      409
-    );
+    const sourceId = sourceIdFromRequest(request);
+    const candidate = await this.resolveImportCandidate(sourceId, context.config);
+    if (context.signal.aborted) throw abortReason(context.signal);
+    const downloaded = await this.download({
+      url: candidate.downloadUrl,
+      scratchDir: context.scratchDir,
+      signal: context.signal
+    });
+    return {
+      relativePath: downloaded.relativePath,
+      contentType: downloaded.contentType,
+      metadata: {
+        sourceId: candidate.track.sourceId,
+        title: candidate.track.title,
+        artist: candidate.track.artist,
+        album: candidate.track.album,
+        thumbnailUrl: candidate.track.thumbnailUrl
+      }
+    };
   }
 
   private async requestTracks(
@@ -405,12 +565,14 @@ export class JamendoProvider implements ExternalProvider {
     });
   }
 
-  async inspectImportEligibility(sourceIdValue: unknown, config: ExternalProviderConfig) {
+  private async resolveImportCandidate(sourceIdValue: unknown, config: ExternalProviderConfig) {
     const sourceId = normalizedSourceId(sourceIdValue);
     const payload = await this.requestTracks(config, { id: sourceId, limit: '1' });
-    const track = (payload.results as unknown[])
-      .map(normalizeTrack)
-      .find(candidate => candidate?.sourceId === sourceId) ?? null;
+    const rawTrack = (payload.results as unknown[]).find(value => {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+      return cleanText((value as JamendoApiTrack).id, 80) === sourceId;
+    }) as JamendoApiTrack | undefined;
+    const track = normalizeTrack(rawTrack);
 
     if (!track) {
       throw new ExternalProviderError('invalid_input', 'A faixa do Jamendo não está mais disponível.', 404);
@@ -418,6 +580,14 @@ export class JamendoProvider implements ExternalProvider {
     if (!track.importAllowed && track.importBlockReason) {
       throw new ExternalProviderError('invalid_input', importBlockedMessage(track.importBlockReason), 409);
     }
-    return track;
+    const downloadUrl = cleanPublicUrl(rawTrack?.audiodownload);
+    if (!downloadUrl) {
+      throw new ExternalProviderError('invalid_output', 'O Jamendo não retornou uma URL de download utilizável.', 502);
+    }
+    return { track, downloadUrl };
+  }
+
+  async inspectImportEligibility(sourceIdValue: unknown, config: ExternalProviderConfig) {
+    return (await this.resolveImportCandidate(sourceIdValue, config)).track;
   }
 }
