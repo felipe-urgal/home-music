@@ -2,7 +2,7 @@
 
 Este documento é a visão técnica de alto nível do Home Music. A issue [#123](https://github.com/felipe-urgal/home-music/issues/123) preserva o índice executivo do ciclo de backlog concluído em 2026-09-02. A Fase 12 foi encerrada pela [#239](https://github.com/felipe-urgal/home-music/issues/239) e o ciclo técnico atual está centralizado na [#266](https://github.com/felipe-urgal/home-music/issues/266).
 
-> Estado revisado em 2026-09-04. A Fase 12 está concluída. A Fase 13 está ativa: #262 (Jamendo) é P0 e vem antes da #264 (OpenSubsonic). Na #262, registro/configuração segura/busca paginada já estão implementados nesta entrega; UI e importação física permanecem pendentes.
+> Estado revisado em 2026-09-04. A Fase 12 está concluída. A Fase 13 está ativa: #262 (Jamendo) é P0 e vem antes da #264 (OpenSubsonic). Na #262, descoberta, elegibilidade e aquisição física `scratch → staging` já estão implementadas; permanecem os cenários negativos/operacionais específicos do Jamendo e o fechamento end-to-end da issue.
 
 ## Fases 1–2 — Base do produto e biblioteca pessoal
 
@@ -226,15 +226,17 @@ O PR #207 foi mergeado em 2026-09-01 com CI completo verde e encerrou o backlog 
 
 ### P0 — Jamendo
 
-A [#262](https://github.com/felipe-urgal/home-music/issues/262) adiciona descoberta e, em etapas posteriores, importação física de música livre/licenciada usando o pipeline seguro existente.
+A [#262](https://github.com/felipe-urgal/home-music/issues/262) integra descoberta e importação física de música livre/licenciada ao pipeline seguro existente, sem criar uma segunda biblioteca ou caminho paralelo de promoção.
 
-- [x] registrar `JamendoProvider` no `ExternalProviderImportManager` com capabilities da etapa atual;
+- [x] registrar `JamendoProvider` no `ExternalProviderImportManager` com capabilities reais;
 - [x] configuração server-side por `HOME_MUSIC_JAMENDO_CLIENT_ID` e status `configured` sem expor o segredo;
 - [x] busca paginada server-side e normalização sem devolver URLs de preview/download;
-- [ ] tela simples de Descobrir/Importar no workbench;
-- [ ] licença/atribuição e disponibilidade de download antes da confirmação;
-- [ ] download permitido para scratch privado com limites e egress seguro;
-- [ ] staging, validação, metadata, duplicatas, promoção e indexação pelo pipeline comum.
+- [x] tela simples de Descobrir/Importar no workbench;
+- [x] licença/atribuição e disponibilidade de download antes da confirmação;
+- [x] download permitido para scratch privado com limites e egress seguro;
+- [x] staging, validação, metadata, duplicatas, promoção e indexação pelo pipeline comum.
+
+O PR #270 cobre a aquisição física `scratch → staging`, preserva origem/licença/atribuição na metadata administrativa e mantém a URL assinada de download transitória no servidor. Permanecem na #262 os cenários negativos/operacionais específicos do Jamendo e o fechamento end-to-end da issue.
 
 Detalhes da etapa corrente: [jamendo.md](jamendo.md).
 
