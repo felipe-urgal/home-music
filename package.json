@@ -7,7 +7,7 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "concurrently -n api,web -c auto \"npm run dev -w @home-music/server\" \"npm run dev -w @home-music/web\"",
+    "dev": "NODE_ENV=development concurrently -n api,web -c auto \"npm run dev -w @home-music/server\" \"npm run dev -w @home-music/web\"",
     "build": "npm run build -w @home-music/shared && npm run build -w @home-music/server && npm run build -w @home-music/web",
     "start": "NODE_ENV=production npm run start -w @home-music/server",
     "smoke:production": "node scripts/smoke-production.mjs && node scripts/smoke-production-auth.mjs",
