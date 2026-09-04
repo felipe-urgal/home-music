@@ -51,7 +51,7 @@ const blockedTrack = {
   attribution: '“Ambient restrito” — Artista restrito · Jamendo'
 };
 
-test('Jamendo mostra licença, bloqueia faixa inelegível e inicia importação permitida', async ({ page }, testInfo) => {
+test('Jamendo mostra licença, bloqueia faixa inelegível e integra job permitido ao workbench', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'desktop-chromium');
 
   let eligibilityBody: unknown = null;
@@ -170,6 +170,7 @@ test('Jamendo mostra licença, bloqueia faixa inelegível e inicia importação 
   await allowed.getByRole('button', { name: 'Importar' }).click();
   await expect(page.getByText('Importação de Ambient livre iniciada')).toBeVisible();
   await expect(page.getByText(/pipeline seguro de staging, validação e promoção/)).toBeVisible();
+  await expect(page.locator('.admin-import-v3-current')).toContainText('Jamendo · preparando a mídia');
   expect(eligibilityBody).toEqual({ sourceId: '123' });
   expect(eligibilityHeader).toBe('1');
   expect(importBody).toEqual({
