@@ -17,6 +17,9 @@ const MAX_PAGE = 500;
 const MAX_QUERY_LENGTH = 120;
 const MAX_RESPONSE_BYTES = 1024 * 1024;
 const REQUEST_TIMEOUT_MS = 8_000;
+const CREATIVE_COMMONS_HOSTS = new Set(['creativecommons.org', 'www.creativecommons.org']);
+const CREATIVE_COMMONS_LICENSE_PATH = /^\/licenses\/(?:by|by-sa|by-nd|by-nc|by-nc-sa|by-nc-nd)\/\d+(?:\.\d+)*\/?$/i;
+const CREATIVE_COMMONS_PUBLIC_DOMAIN_PATH = /^\/publicdomain\/(?:zero|mark)\/\d+(?:\.\d+)*\/?$/i;
 
 type JamendoFetch = (input: string | URL, init?: RequestInit) => Promise<Response>;
 
@@ -47,6 +50,11 @@ type JamendoApiResponse = {
   results?: unknown;
 };
 
+export type JamendoImportBlockReason =
+  | 'download-not-allowed'
+  | 'license-missing'
+  | 'license-unsupported';
+
 export type JamendoTrackSummary = Readonly<{
   sourceId: string;
   title: string;
@@ -57,6 +65,9 @@ export type JamendoTrackSummary = Readonly<{
   licenseUrl: string | null;
   downloadAllowed: boolean;
   previewAvailable: boolean;
+  importAllowed: boolean;
+  importBlockReason: JamendoImportBlockReason | null;
+  attribution: string;
 }>;
 
 export type JamendoSearchResult = Readonly<{
@@ -141,6 +152,28 @@ function booleanValue(value: unknown) {
   return value === true || value === 1 || value === '1' || value === 'true';
 }
 
+function licenseImportBlockReason(licenseUrl: string | null): JamendoImportBlockReason | null {
+  if (!licenseUrl) return 'license-missing';
+  try {
+    const url = new URL(licenseUrl);
+    if (!CREATIVE_COMMONS_HOSTS.has(url.hostname.toLowerCase())) return 'license-unsupported';
+    if (CREATIVE_COMMONS_LICENSE_PATH.test(url.pathname) || CREATIVE_COMMONS_PUBLIC_DOMAIN_PATH.test(url.pathname)) {
+      return null;
+    }
+  } catch {
+    // URL já foi higienizada, mas a política permanece fail-closed.
+  }
+  return 'license-unsupported';
+}
+
+export function jamendoImportBlockReason(
+  downloadAllowed: boolean,
+  licenseUrl: string | null
+): JamendoImportBlockReason | null {
+  if (!downloadAllowed) return 'download-not-allowed';
+  return licenseImportBlockReason(licenseUrl);
+}
+
 function normalizeTrack(value: unknown): JamendoTrackSummary | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const track = value as JamendoApiTrack;
@@ -148,16 +181,24 @@ function normalizeTrack(value: unknown): JamendoTrackSummary | null {
   const title = cleanText(track.name, 300);
   if (!sourceId || !/^\d+$/.test(sourceId) || !title) return null;
 
+  const artist = cleanText(track.artist_name, 300);
+  const licenseUrl = cleanPublicUrl(track.license_ccurl);
+  const downloadAllowed = booleanValue(track.audiodownload_allowed);
+  const importBlockReason = jamendoImportBlockReason(downloadAllowed, licenseUrl);
+
   return Object.freeze({
     sourceId,
     title,
-    artist: cleanText(track.artist_name, 300),
+    artist,
     album: cleanText(track.album_name, 300),
     durationSeconds: numberValue(track.duration),
     thumbnailUrl: cleanPublicUrl(track.image) ?? cleanPublicUrl(track.album_image),
-    licenseUrl: cleanPublicUrl(track.license_ccurl),
-    downloadAllowed: booleanValue(track.audiodownload_allowed),
-    previewAvailable: Boolean(cleanPublicUrl(track.audio))
+    licenseUrl,
+    downloadAllowed,
+    previewAvailable: Boolean(cleanPublicUrl(track.audio)),
+    importAllowed: importBlockReason === null,
+    importBlockReason,
+    attribution: `“${title}” — ${artist ?? 'Artista não informado'} · Jamendo`
   });
 }
 
@@ -167,6 +208,14 @@ function normalizedQuery(value: unknown) {
     throw new ExternalProviderError('invalid_input', 'Informe ao menos 2 caracteres para buscar no Jamendo.');
   }
   return query;
+}
+
+function normalizedSourceId(value: unknown) {
+  const sourceId = cleanText(value, 80);
+  if (!sourceId || !/^\d+$/.test(sourceId)) {
+    throw new ExternalProviderError('invalid_input', 'Faixa do Jamendo inválida.');
+  }
+  return sourceId;
 }
 
 function totalFromHeaders(headers: JamendoApiHeaders | undefined) {
@@ -226,6 +275,17 @@ function parseApiResponse(text: string) {
   return response;
 }
 
+function importBlockedMessage(reason: JamendoImportBlockReason) {
+  switch (reason) {
+    case 'download-not-allowed':
+      return 'Esta faixa não permite download pela API do Jamendo.';
+    case 'license-missing':
+      return 'Esta faixa não possui licença verificável para importação.';
+    case 'license-unsupported':
+      return 'A licença desta faixa não é reconhecida como permitida para importação.';
+  }
+}
+
 export class JamendoProvider implements ExternalProvider {
   readonly id = JAMENDO_PROVIDER_ID;
   readonly label = 'Jamendo · música livre/licenciada';
@@ -266,57 +326,65 @@ export class JamendoProvider implements ExternalProvider {
     );
   }
 
-  async search(input: JamendoSearchInput, config: ExternalProviderConfig): Promise<JamendoSearchResult> {
+  private async requestTracks(
+    config: ExternalProviderConfig,
+    parameters: Readonly<Record<string, string>>
+  ) {
     const clientId = requireClientId(config);
-    const query = normalizedQuery(input.query);
-    const page = positiveInteger(input.page, 1, MAX_PAGE, 'Página');
-    const limit = positiveInteger(input.limit, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, 'Limite');
-    const offset = (page - 1) * limit;
-
     const url = new URL(JAMENDO_TRACKS_URL);
     url.searchParams.set('client_id', clientId);
     url.searchParams.set('format', 'json');
-    url.searchParams.set('search', query);
-    url.searchParams.set('order', 'relevance');
-    url.searchParams.set('limit', String(limit));
-    url.searchParams.set('offset', String(offset));
-    url.searchParams.set('fullcount', 'true');
     url.searchParams.set('audioformat', 'mp32');
     url.searchParams.set('audiodlformat', 'mp32');
+    for (const [key, value] of Object.entries(parameters)) url.searchParams.set(key, value);
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
     timeout.unref?.();
 
-    let response: Response;
     try {
-      response = await this.request(url, {
+      const response = await this.request(url, {
         method: 'GET',
         headers: { Accept: 'application/json' },
         redirect: 'error',
         signal: controller.signal
       });
+
+      if (response.status === 401 || response.status === 403) {
+        throw new ExternalProviderError('provider_auth_required', 'A configuração do Jamendo foi recusada.', 503);
+      }
+      if (response.status === 429) {
+        throw new ExternalProviderError('provider_failed', 'O Jamendo limitou temporariamente as buscas.', 503);
+      }
+      if (!response.ok) {
+        throw new ExternalProviderError('provider_network_failed', 'O Jamendo não respondeu à solicitação.', 502);
+      }
+
+      return parseApiResponse(await readBoundedResponse(response));
     } catch (error) {
+      if (error instanceof ExternalProviderError) throw error;
       if (controller.signal.aborted) {
-        throw new ExternalProviderError('provider_timeout', 'A busca no Jamendo excedeu o tempo limite.', 504);
+        throw new ExternalProviderError('provider_timeout', 'A consulta ao Jamendo excedeu o tempo limite.', 504);
       }
       throw new ExternalProviderError('provider_network_failed', 'Não foi possível consultar o Jamendo.', 502);
     } finally {
       clearTimeout(timeout);
     }
+  }
 
-    if (response.status === 401 || response.status === 403) {
-      throw new ExternalProviderError('provider_auth_required', 'A configuração do Jamendo foi recusada.', 503);
-    }
-    if (response.status === 429) {
-      throw new ExternalProviderError('provider_failed', 'O Jamendo limitou temporariamente as buscas.', 503);
-    }
-    if (!response.ok) {
-      throw new ExternalProviderError('provider_network_failed', 'O Jamendo não respondeu à busca.', 502);
-    }
+  async search(input: JamendoSearchInput, config: ExternalProviderConfig): Promise<JamendoSearchResult> {
+    const query = normalizedQuery(input.query);
+    const page = positiveInteger(input.page, 1, MAX_PAGE, 'Página');
+    const limit = positiveInteger(input.limit, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, 'Limite');
+    const offset = (page - 1) * limit;
 
-    const text = await readBoundedResponse(response);
-    const payload = parseApiResponse(text);
+    const payload = await this.requestTracks(config, {
+      search: query,
+      order: 'relevance',
+      limit: String(limit),
+      offset: String(offset),
+      fullcount: 'true'
+    });
     const rawItems = payload.results as unknown[];
     const items = rawItems
       .map(normalizeTrack)
@@ -335,5 +403,21 @@ export class JamendoProvider implements ExternalProvider {
         nextPage: hasNext && page < MAX_PAGE ? page + 1 : null
       })
     });
+  }
+
+  async inspectImportEligibility(sourceIdValue: unknown, config: ExternalProviderConfig) {
+    const sourceId = normalizedSourceId(sourceIdValue);
+    const payload = await this.requestTracks(config, { id: sourceId, limit: '1' });
+    const track = (payload.results as unknown[])
+      .map(normalizeTrack)
+      .find(candidate => candidate?.sourceId === sourceId) ?? null;
+
+    if (!track) {
+      throw new ExternalProviderError('invalid_input', 'A faixa do Jamendo não está mais disponível.', 404);
+    }
+    if (!track.importAllowed && track.importBlockReason) {
+      throw new ExternalProviderError('invalid_input', importBlockedMessage(track.importBlockReason), 409);
+    }
+    return track;
   }
 }

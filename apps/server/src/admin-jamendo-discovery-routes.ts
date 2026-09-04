@@ -17,6 +17,10 @@ function sendJamendoError(reply: FastifyReply, error: unknown) {
   throw error;
 }
 
+function config(options: JamendoDiscoveryRouteOptions) {
+  return { [JAMENDO_CLIENT_ID_CONFIG]: options.clientId };
+}
+
 export function registerAdminJamendoDiscoveryRoutes(
   app: FastifyInstance,
   options: JamendoDiscoveryRouteOptions
@@ -32,10 +36,23 @@ export function registerAdminJamendoDiscoveryRoutes(
           page: request.query?.page,
           limit: request.query?.limit
         },
-        {
-          [JAMENDO_CLIENT_ID_CONFIG]: options.clientId
-        }
+        config(options)
       );
+    } catch (error) {
+      return sendJamendoError(reply, error);
+    }
+  });
+
+  app.post<{
+    Body: { sourceId?: unknown } | null;
+  }>('/api/admin/imports/providers/jamendo/eligibility', async (request, reply) => {
+    reply.header('Cache-Control', 'private, no-store');
+    try {
+      const track = await options.provider.inspectImportEligibility(
+        request.body?.sourceId,
+        config(options)
+      );
+      return { allowed: true, track };
     } catch (error) {
       return sendJamendoError(reply, error);
     }
