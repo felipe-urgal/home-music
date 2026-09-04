@@ -481,7 +481,10 @@ export class JamendoProvider implements ExternalProvider {
         title: candidate.track.title,
         artist: candidate.track.artist,
         album: candidate.track.album,
-        thumbnailUrl: candidate.track.thumbnailUrl
+        thumbnailUrl: candidate.track.thumbnailUrl,
+        sourceUrl: jamendoImportUrl(candidate.track.sourceId),
+        licenseUrl: candidate.track.licenseUrl,
+        attribution: candidate.track.attribution
       }
     };
   }
