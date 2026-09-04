@@ -1,3 +1,7 @@
+.admin-import-screen--v3 .admin-import-source-tabs {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .admin-jamendo {
   display: grid;
   gap: 12px;
@@ -237,6 +241,12 @@
 .admin-jamendo-pagination span {
   color: #7f8e98;
   font-size: .8rem;
+}
+
+@media (max-width: 860px) {
+  .admin-import-screen--v3 .admin-import-source-tabs {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 720px) {
