@@ -88,7 +88,9 @@ function statusIcon(status: ImportJobStatus) {
 }
 
 function sourceLabel(job: ImportJob) {
-  if (job.source.type === 'provider') return 'YouTube / YouTube Music';
+  if (job.source.type === 'provider') {
+    return job.source.provider === 'jamendo' ? 'Jamendo' : 'YouTube / YouTube Music';
+  }
   if (job.source.type === 'url') return 'URL direta';
   return 'Arquivo local';
 }
@@ -423,7 +425,7 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
                 onRefresh={() => loadJobs(true)}
               />
             ) : sourceMode === 'jamendo' ? (
-              <AdminJamendoDiscoveryPanel />
+              <AdminJamendoDiscoveryPanel onJobStarted={handleUpdatedJob} />
             ) : (
               <div className="admin-import-local-sources">
                 <section className="admin-import-upload is-compact" aria-labelledby="admin-import-upload-title">
