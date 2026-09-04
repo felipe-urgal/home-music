@@ -10,7 +10,8 @@ import { ImportStagingManager } from './import-staging.js';
 import {
   JAMENDO_CLIENT_ID_CONFIG,
   JAMENDO_PROVIDER_ID,
-  JamendoProvider
+  JamendoProvider,
+  jamendoImportBlockReason
 } from './jamendo-provider.js';
 
 const SECRET_CLIENT_ID = 'jamendo-secret-client-id';
@@ -20,6 +21,22 @@ function apiResponse(body: unknown, status = 200) {
     status,
     headers: { 'content-type': 'application/json' }
   });
+}
+
+function allowedTrack(overrides: Record<string, unknown> = {}) {
+  return {
+    id: '123',
+    name: 'Música segura',
+    artist_name: 'Artista',
+    album_name: 'Álbum',
+    duration: '185',
+    image: 'https://usercontent.jamendo.com/image.jpg#fragment',
+    license_ccurl: 'https://creativecommons.org/licenses/by/4.0/',
+    audio: 'https://prod.example/preview?token=preview-secret',
+    audiodownload: 'https://prod.example/download?token=download-secret',
+    audiodownload_allowed: true,
+    ...overrides
+  };
 }
 
 test('Jamendo publica status configurado sem expor client_id', async () => {
@@ -80,31 +97,14 @@ test('Jamendo fica não configurado quando client_id está ausente', async () =>
   }
 });
 
-test('Jamendo busca com paginação defensiva e devolve somente modelo normalizado', async () => {
+test('Jamendo busca com paginação defensiva e publica licença, atribuição e elegibilidade', async () => {
   let requestedUrlText = '';
   const provider = new JamendoProvider({
     fetch: async input => {
       requestedUrlText = input.toString();
       return apiResponse({
-        headers: {
-          status: 'success',
-          results_count: 1,
-          results_fullcount: 21
-        },
-        results: [
-          {
-            id: '123',
-            name: '  Música\u0000   segura  ',
-            artist_name: ' Artista ',
-            album_name: ' Álbum ',
-            duration: '185',
-            image: 'https://usercontent.jamendo.com/image.jpg#fragment',
-            license_ccurl: 'https://creativecommons.org/licenses/by/4.0/',
-            audio: 'https://prod.example/preview?token=preview-secret',
-            audiodownload: 'https://prod.example/download?token=download-secret',
-            audiodownload_allowed: true
-          }
-        ]
+        headers: { status: 'success', results_count: 1, results_fullcount: 21 },
+        results: [allowedTrack({ name: '  Música\u0000   segura  ', artist_name: ' Artista ', album_name: ' Álbum ' })]
       });
     }
   });
@@ -134,20 +134,62 @@ test('Jamendo busca com paginação defensiva e devolve somente modelo normaliza
       thumbnailUrl: 'https://usercontent.jamendo.com/image.jpg',
       licenseUrl: 'https://creativecommons.org/licenses/by/4.0/',
       downloadAllowed: true,
-      previewAvailable: true
+      previewAvailable: true,
+      importAllowed: true,
+      importBlockReason: null,
+      attribution: '“Música segura” — Artista · Jamendo'
     }],
-    pagination: {
-      page: 2,
-      limit: 10,
-      total: 21,
-      nextPage: 3
-    }
+    pagination: { page: 2, limit: 10, total: 21, nextPage: 3 }
   });
 
   const serialized = JSON.stringify(result);
   assert.equal(serialized.includes(SECRET_CLIENT_ID), false);
   assert.equal(serialized.includes('preview-secret'), false);
   assert.equal(serialized.includes('download-secret'), false);
+});
+
+test('política de licença Jamendo é fail-closed', () => {
+  assert.equal(jamendoImportBlockReason(false, 'https://creativecommons.org/licenses/by/4.0/'), 'download-not-allowed');
+  assert.equal(jamendoImportBlockReason(true, null), 'license-missing');
+  assert.equal(jamendoImportBlockReason(true, 'https://example.com/license'), 'license-unsupported');
+  assert.equal(jamendoImportBlockReason(true, 'https://creativecommons.org/licenses/by-nc-sa/4.0/'), null);
+  assert.equal(jamendoImportBlockReason(true, 'https://creativecommons.org/publicdomain/zero/1.0/'), null);
+});
+
+test('Jamendo revalida faixa por sourceId antes de permitir futura importação', async () => {
+  let requestedUrlText = '';
+  const provider = new JamendoProvider({
+    fetch: async input => {
+      requestedUrlText = input.toString();
+      return apiResponse({ headers: { status: 'success' }, results: [allowedTrack()] });
+    }
+  });
+
+  const track = await provider.inspectImportEligibility('123', {
+    [JAMENDO_CLIENT_ID_CONFIG]: SECRET_CLIENT_ID
+  });
+
+  assert.equal(new URL(requestedUrlText).searchParams.get('id'), '123');
+  assert.equal(track.importAllowed, true);
+  assert.equal(track.importBlockReason, null);
+});
+
+test('Jamendo bloqueia no backend quando download ou licença não permitem', async () => {
+  for (const [track, expected] of [
+    [allowedTrack({ audiodownload_allowed: false }), 'não permite download'],
+    [allowedTrack({ license_ccurl: '' }), 'não possui licença'],
+    [allowedTrack({ license_ccurl: 'https://example.com/license' }), 'não é reconhecida']
+  ] as const) {
+    const provider = new JamendoProvider({
+      fetch: async () => apiResponse({ headers: { status: 'success' }, results: [track] })
+    });
+    await assert.rejects(
+      provider.inspectImportEligibility('123', { [JAMENDO_CLIENT_ID_CONFIG]: SECRET_CLIENT_ID }),
+      (error: unknown) => error instanceof ExternalProviderError
+        && error.statusCode === 409
+        && error.message.includes(expected)
+    );
+  }
 });
 
 test('Jamendo rejeita busca sem configuração e limites fora da allowlist', async () => {
@@ -163,10 +205,7 @@ test('Jamendo rejeita busca sem configuração e limites fora da allowlist', asy
   );
 
   await assert.rejects(
-    provider.search(
-      { query: 'rock', limit: 51 },
-      { [JAMENDO_CLIENT_ID_CONFIG]: SECRET_CLIENT_ID }
-    ),
+    provider.search({ query: 'rock', limit: 51 }, { [JAMENDO_CLIENT_ID_CONFIG]: SECRET_CLIENT_ID }),
     (error: unknown) => error instanceof ExternalProviderError && error.code === 'invalid_input'
   );
 });
@@ -184,10 +223,7 @@ test('Jamendo interrompe resposta streaming acima de 1 MiB mesmo sem Content-Len
   });
 
   await assert.rejects(
-    provider.search(
-      { query: 'ambient' },
-      { [JAMENDO_CLIENT_ID_CONFIG]: SECRET_CLIENT_ID }
-    ),
+    provider.search({ query: 'ambient' }, { [JAMENDO_CLIENT_ID_CONFIG]: SECRET_CLIENT_ID }),
     (error: unknown) => error instanceof ExternalProviderError
       && error.code === 'invalid_output'
       && error.statusCode === 502
