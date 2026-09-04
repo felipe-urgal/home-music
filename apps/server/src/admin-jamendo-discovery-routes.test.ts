@@ -24,6 +24,7 @@ function allowedTrack(overrides: Record<string, unknown> = {}) {
     license_ccurl: 'https://creativecommons.org/licenses/by/4.0/',
     audiodownload_allowed: true,
     audio: 'https://example.invalid/preview',
+    audiodownload: 'https://example.invalid/download?token=transient-secret',
     ...overrides
   };
 }
@@ -75,7 +76,7 @@ test('rota Jamendo responde 503 sem client_id e não tenta rede pública', async
   }
 });
 
-test('rota de elegibilidade revalida faixa permitida pelo sourceId', async () => {
+test('rota de elegibilidade revalida faixa permitida pelo sourceId sem expor URL assinada', async () => {
   const app = Fastify();
   const provider = new JamendoProvider({ fetch: async () => apiResponse([allowedTrack()]) });
   registerAdminJamendoDiscoveryRoutes(app, { provider, clientId: 'configured' });
@@ -92,6 +93,7 @@ test('rota de elegibilidade revalida faixa permitida pelo sourceId', async () =>
     assert.equal(payload.track.sourceId, '123');
     assert.equal(payload.track.importAllowed, true);
     assert.equal(payload.track.attribution, '“Faixa livre” — Artista livre · Jamendo');
+    assert.equal(response.body.includes('transient-secret'), false);
   } finally {
     await app.close();
   }

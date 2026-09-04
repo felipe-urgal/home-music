@@ -51,11 +51,13 @@ const blockedTrack = {
   attribution: '“Ambient restrito” — Artista restrito · Jamendo'
 };
 
-test('Jamendo mostra licença e bloqueia seleção não elegível no workbench', async ({ page }, testInfo) => {
+test('Jamendo mostra licença, bloqueia faixa inelegível e integra job permitido ao workbench', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'desktop-chromium');
 
   let eligibilityBody: unknown = null;
   let eligibilityHeader: string | undefined;
+  let importBody: unknown = null;
+  let importHeader: string | undefined;
 
   await page.route('**/api/admin/imports', async route => {
     if (route.request().method() !== 'GET') return route.fallback();
@@ -88,7 +90,7 @@ test('Jamendo mostra licença e bloqueia seleção não elegível no workbench',
             id: 'jamendo',
             label: 'Jamendo · música livre/licenciada',
             configured: true,
-            capabilities: { audio: false, metadata: true, thumbnail: true, playlists: false }
+            capabilities: { audio: true, metadata: true, thumbnail: true, playlists: false }
           }
         ]
       })
@@ -121,6 +123,30 @@ test('Jamendo mostra licença e bloqueia seleção não elegível no workbench',
     });
   });
 
+  await page.route('**/api/admin/imports/providers/jamendo', async route => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    const request = route.request();
+    importBody = request.postDataJSON();
+    importHeader = request.headers()['x-home-music-request'];
+    await route.fulfill({
+      status: 202,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        job: {
+          id: 'jamendo-job-123',
+          source: { type: 'provider', provider: 'jamendo' },
+          label: 'Jamendo · música livre/licenciada · importação externa',
+          status: 'processing',
+          error: null,
+          createdAt: '2026-09-04T12:00:00.000Z',
+          updatedAt: '2026-09-04T12:00:00.000Z',
+          mediaDecision: null,
+          metadataPreview: null
+        }
+      })
+    });
+  });
+
   await login(page);
   await openImport(page);
 
@@ -141,8 +167,15 @@ test('Jamendo mostra licença e bloqueia seleção não elegível no workbench',
   await expect(blocked.getByRole('link')).toHaveCount(0);
   await expect(blocked.getByRole('button', { name: 'Bloqueada' })).toBeDisabled();
 
-  await allowed.getByRole('button', { name: 'Selecionar' }).click();
-  await expect(page.getByText('Ambient livre está elegível para importação')).toBeVisible();
+  await allowed.getByRole('button', { name: 'Importar' }).click();
+  await expect(page.getByText('Importação de Ambient livre iniciada')).toBeVisible();
+  await expect(page.getByText(/pipeline seguro de staging, validação e promoção/)).toBeVisible();
+  await expect(page.locator('.admin-import-v3-current')).toContainText('Jamendo · preparando a mídia');
   expect(eligibilityBody).toEqual({ sourceId: '123' });
   expect(eligibilityHeader).toBe('1');
+  expect(importBody).toEqual({
+    url: 'https://www.jamendo.com/track/123',
+    automatic: true
+  });
+  expect(importHeader).toBe('1');
 });

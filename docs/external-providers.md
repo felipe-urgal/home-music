@@ -1,6 +1,6 @@
 # Arquitetura de providers externos
 
-A Fase 9 separa aquisição externa do pipeline principal de importação. O contrato genérico foi criado na #96 e hoje possui um provider concreto baseado em **yt-dlp** (#104), além do fluxo de lotes/playlists (#154).
+A Fase 9 separa aquisição externa do pipeline principal de importação. O contrato genérico foi criado na #96 e hoje possui providers concretos para **yt-dlp** (#104) e **Jamendo** (#262), além do fluxo de lotes/playlists (#154).
 
 A decisão arquitetural original continua válida: o Home Music não acopla o domínio principal a um site específico e não permite que uma engine externa escreva diretamente em `MUSIC_DIR`.
 
@@ -9,7 +9,7 @@ A decisão arquitetural original continua válida: o Home Music não acopla o do
 A arquitetura separa cinco fronteiras:
 
 1. **provider** reconhece a entrada e prepara uma mídia candidata;
-2. **scratch do provider** é a única área de filesystem entregue à engine externa;
+2. **scratch do provider** é a única área de filesystem entregue à engine/adaptador externo;
 3. **core do Home Music** reabre a saída como arquivo regular seguro;
 4. **ImportStagingManager** recebe os bytes copiados pelo core;
 5. validação técnica, metadata, duplicatas, destino, promoção e indexação continuam no pipeline comum.
@@ -19,7 +19,7 @@ Nenhum provider recebe caminho de `MUSIC_DIR` e nenhum provider escreve diretame
 ## Fluxo atual
 
 ```text
-URL transitória
+URL/identificador público
    ↓
 ExternalProvider.validate()
    ↓
@@ -80,13 +80,15 @@ A validação inicial deve ser local e barata. Ela não substitui a política de
 
 Segredos/valores de configuração nunca são retornados ao navegador.
 
-O core continua funcional quando um provider opcional está indisponível. Upload e URL direta não dependem de yt-dlp.
+O core continua funcional quando um provider opcional está indisponível. Upload e URL direta não dependem de yt-dlp nem de Jamendo.
 
 ## Entrada e privacidade
 
 Antes de criar um job, o manager exige uma URL válida para a capability declarada e aplica limites defensivos.
 
 A URL completa é transitória. O histórico/job não deve persistir query string ou credenciais por conveniência. Erros públicos também não devem ecoar `stderr`, stack trace ou paths internos do provider.
+
+Providers que precisam de uma URL temporária/assinada para adquirir bytes devem mantê-la apenas server-side e pelo menor tempo possível. Quando existir uma origem pública canônica, ela deve ser preferida como identificador administrativo/auditável.
 
 ## Scratch do provider
 
@@ -122,6 +124,8 @@ Depois disso, apenas o payload do staging participa das etapas seguintes.
 
 Metadata de provider é sugestão não confiável. Strings são normalizadas/limitadas antes de chegar ao preview.
 
+Além dos campos musicais sugeridos, integrações que possuem obrigações de origem/licença podem manter metadata administrativa segura e pública — por exemplo `sourceId`, origem canônica, licença e atribuição — desde que isso não inclua tokens, query strings assinadas ou credenciais temporárias.
+
 Valores externos nunca são usados diretamente como:
 
 - path de destino;
@@ -133,7 +137,7 @@ O preview administrativo continua responsável pela revisão humana quando houve
 
 ## yt-dlp atual
 
-O primeiro adapter concreto usa yt-dlp como processo externo, sem shell e sem flags arbitrárias vindas da UI.
+O adapter yt-dlp usa processo externo, sem shell e sem flags arbitrárias vindas da UI.
 
 O adapter atual:
 
@@ -150,11 +154,25 @@ Detalhes específicos: [yt-dlp-provider.md](yt-dlp-provider.md).
 
 A avaliação que levou a essa escolha permanece registrada em [external-provider-engine-decision.md](external-provider-engine-decision.md).
 
+## Jamendo atual
+
+O adapter Jamendo não entrega a URL de download ao browser. O navegador trabalha com busca normalizada, licença/atribuição e o `sourceId`; ao iniciar uma importação usa somente a URL pública canônica `https://www.jamendo.com/track/<sourceId>`.
+
+No servidor, o provider reconsulta a API Jamendo, reaplica a política fail-closed de licença/download e mantém `audiodownload` apenas como dado transitório. A transferência acontece dentro do scratch privado.
+
+Para não duplicar a política de SSRF, o download físico reutiliza o `ImportUrlManager` em um staging temporário inteiramente contido no scratch. Portanto o Jamendo herda a mesma validação de DNS/IP, conexão pinada, redirects, Content-Type, limite de bytes, timeout e reconhecimento de áudio da importação por URL. O resultado temporário ainda precisa passar pela fronteira normal do `ExternalProviderImportManager`, que reabre o arquivo regular e copia os bytes para o staging real.
+
+Depois dessa cópia, Jamendo e yt-dlp convergem no mesmo pipeline de FFprobe/FFmpeg, metadata, duplicatas, destino seguro, promoção e indexação.
+
+Detalhes específicos: [jamendo.md](jamendo.md).
+
 ## Isolamento de egress / SSRF
 
 Providers externos são uma fronteira diferente da URL direta. Validar apenas a URL inicial não é suficiente porque a engine pode realizar requests secundários.
 
 O adapter yt-dlp atual executa atrás de um proxy local controlado pelo Home Music, que valida DNS/IP antes de abrir conexões e bloqueia destinos internos/reservados relevantes. O processo recebe a configuração de proxy de forma explícita e não herda livremente o ambiente do servidor.
+
+O adapter Jamendo não executa uma engine arbitrária: a API de descoberta usa endpoint fixo e o download físico reutiliza a implementação SSRF-safe de importação por URL dentro do scratch, incluindo revalidação de redirects.
 
 Qualquer provider futuro precisa oferecer proteção equivalente ou mais forte. Não registrar uma nova engine real sem conseguir provar que processo e auxiliares não podem contornar a política de egress.
 
@@ -182,13 +200,13 @@ Detalhes: [external-provider-batches.md](external-provider-batches.md).
 
 ## Testes
 
-A cobertura usa providers fakes para o contrato genérico e testes dedicados para yt-dlp/egress sem depender de internet pública no CI.
+A cobertura usa providers/downloaders fakes e testes dedicados de egress sem depender de internet pública no CI.
 
 Casos relevantes incluem:
 
 - registry/capabilities;
 - configuração obrigatória sem vazamento de segredo;
-- ausência da URL original no estado persistido;
+- ausência da URL original/assinada no estado público quando não é necessária;
 - scratch separado de `MUSIC_DIR`;
 - traversal/symlink;
 - limite de bytes;
@@ -196,4 +214,6 @@ Casos relevantes incluem:
 - canonicalização de erros;
 - bloqueio de destinos privados/reservados no egress;
 - seleção de formato/metadata do yt-dlp;
+- aquisição Jamendo `scratch → staging` com downloader fake;
+- licença/atribuição Jamendo e ausência da URL assinada nas respostas administrativas;
 - lotes com falha parcial.

@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
+import type { ImportJob } from '@home-music/shared';
 import {
   CheckCircle2,
   ChevronLeft,
@@ -14,6 +15,7 @@ import { getAdminExternalProviders } from '../admin-external-provider-client';
 import {
   checkAdminJamendoEligibility,
   searchAdminJamendo,
+  startAdminJamendoImport,
   type AdminJamendoImportBlockReason,
   type AdminJamendoSearchResult,
   type AdminJamendoTrack
@@ -21,6 +23,10 @@ import {
 import '../admin-jamendo.css';
 
 const CREATIVE_COMMONS_HOSTS = new Set(['creativecommons.org', 'www.creativecommons.org']);
+
+type AdminJamendoDiscoveryPanelProps = {
+  onJobStarted?: (job: ImportJob) => void;
+};
 
 function formatDuration(seconds: number | null) {
   if (!seconds || !Number.isFinite(seconds) || seconds <= 0) return 'Duração não informada';
@@ -56,7 +62,7 @@ function blockReasonLabel(reason: AdminJamendoImportBlockReason | null) {
   }
 }
 
-export function AdminJamendoDiscoveryPanel() {
+export function AdminJamendoDiscoveryPanel({ onJobStarted }: AdminJamendoDiscoveryPanelProps) {
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [query, setQuery] = useState('');
   const [searchedQuery, setSearchedQuery] = useState('');
@@ -64,6 +70,7 @@ export function AdminJamendoDiscoveryPanel() {
   const [loading, setLoading] = useState(false);
   const [checkingId, setCheckingId] = useState<string | null>(null);
   const [selected, setSelected] = useState<AdminJamendoTrack | null>(null);
+  const [startedJobId, setStartedJobId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -86,6 +93,7 @@ export function AdminJamendoDiscoveryPanel() {
     setLoading(true);
     setError(null);
     setSelected(null);
+    setStartedJobId(null);
     try {
       const next = await searchAdminJamendo(clean, page, 20);
       setResult(next);
@@ -102,15 +110,21 @@ export function AdminJamendoDiscoveryPanel() {
     void runSearch(query, 1);
   };
 
-  const selectTrack = async (track: AdminJamendoTrack) => {
+  const importTrack = async (track: AdminJamendoTrack) => {
     if (!track.importAllowed || checkingId) return;
     setCheckingId(track.sourceId);
     setError(null);
+    setSelected(null);
+    setStartedJobId(null);
     try {
       const verified = await checkAdminJamendoEligibility(track.sourceId);
+      const job = await startAdminJamendoImport(verified.sourceId);
+      onJobStarted?.(job);
       setSelected(verified);
+      setStartedJobId(job.id);
     } catch (caught) {
       setSelected(null);
+      setStartedJobId(null);
       setError(caught instanceof Error ? caught.message : 'A faixa não está mais disponível para importação.');
     } finally {
       setCheckingId(null);
@@ -160,17 +174,17 @@ export function AdminJamendoDiscoveryPanel() {
       </form>
 
       <small className="admin-jamendo__policy">
-        <ShieldCheck /> O servidor decide se a licença e a permissão de download tornam a faixa elegível.
+        <ShieldCheck /> O servidor revalida licença e permissão antes de baixar qualquer byte para o scratch privado.
       </small>
 
       {error && <div className="my-account-message is-error admin-import-message" role="alert">{error}</div>}
 
-      {selected && (
+      {selected && startedJobId && (
         <div className="admin-jamendo-selected" role="status">
           <CheckCircle2 />
           <div>
-            <strong>{selected.title} está elegível para importação</strong>
-            <small>{selected.attribution}. A transferência de áudio ainda não está habilitada nesta versão.</small>
+            <strong>Importação de {selected.title} iniciada</strong>
+            <small>{selected.attribution}. O job entrou no pipeline seguro de staging, validação e promoção.</small>
           </div>
         </div>
       )}
@@ -217,11 +231,11 @@ export function AdminJamendoDiscoveryPanel() {
                   <button
                     type="button"
                     disabled={!track.importAllowed || checkingId !== null}
-                    onClick={() => void selectTrack(track)}
+                    onClick={() => void importTrack(track)}
                     title={blockReason ?? undefined}
                   >
-                    {checkingId === track.sourceId ? <LoaderCircle className="is-spinning" /> : track.importAllowed ? <CheckCircle2 /> : <CircleAlert />}
-                    {checkingId === track.sourceId ? 'Verificando…' : track.importAllowed ? 'Selecionar' : 'Bloqueada'}
+                    {checkingId === track.sourceId ? <LoaderCircle className="is-spinning" /> : track.importAllowed ? <Download /> : <CircleAlert />}
+                    {checkingId === track.sourceId ? 'Importando…' : track.importAllowed ? 'Importar' : 'Bloqueada'}
                   </button>
                 </article>
               );

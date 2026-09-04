@@ -2,7 +2,7 @@
 
 Este diretório mistura documentação **corrente** e registros históricos de implementação. Esta página define qual material deve ser usado como fonte de verdade.
 
-> Inventário e backlog revisados em 2026-09-04. A Fase 12 foi concluída e a #239 encerrada. A Fase 13 está em andamento, centralizada na #266: a #262 (Jamendo) é P0 e a #264 (OpenSubsonic) vem depois. Na entrega corrente da #262, registro/configuração segura/busca paginada do Jamendo estão implementados; UI e importação física permanecem pendentes. A #123 permanece encerrada como índice executivo de um ciclo anterior.
+> Inventário e backlog revisados em 2026-09-04. A Fase 12 foi concluída e a #239 encerrada. A Fase 13 está em andamento, centralizada na #266: a #262 (Jamendo) é P0 e a #264 (OpenSubsonic) vem depois. Na entrega corrente da #262, descoberta, elegibilidade e aquisição física `scratch → staging` estão implementadas; permanecem os cenários negativos/operacionais específicos do Jamendo e o fechamento end-to-end da issue. A #123 permanece encerrada como índice executivo de um ciclo anterior.
 
 ## Desenvolvimento e agentes de IA
 
@@ -31,7 +31,7 @@ A Fase 13 concentra o backlog implementável atual. O Jamendo deve fechar end-to
 | Issue | Estado corrente |
 | --- | --- |
 | [#266](https://github.com/felipe-urgal/home-music/issues/266) | índice executivo ativo da Fase 13 — ecossistema aberto e interoperabilidade |
-| [#262](https://github.com/felipe-urgal/home-music/issues/262) | P0 atual; registro/configuração segura/busca paginada implementados nesta entrega; UI e importação física ainda pendentes |
+| [#262](https://github.com/felipe-urgal/home-music/issues/262) | P0 atual; descoberta, elegibilidade e aquisição física `scratch → staging` implementadas; cenários negativos/operacionais e fechamento end-to-end ainda pendentes |
 | [#264](https://github.com/felipe-urgal/home-music/issues/264) | P1; OpenSubsonic somente depois do fechamento end-to-end da #262 |
 | [#239](https://github.com/felipe-urgal/home-music/issues/239) | Fase 12 concluída; índice executivo encerrado em 2026-09-04 |
 | [#123](https://github.com/felipe-urgal/home-music/issues/123) | encerrada como índice executivo de ciclo anterior |
@@ -126,7 +126,7 @@ Documentação corrente do pipeline:
 - [`external-providers.md`](external-providers.md)
 - [`external-provider-batches.md`](external-provider-batches.md)
 - [`yt-dlp-provider.md`](yt-dlp-provider.md)
-- [`jamendo.md`](jamendo.md) — descoberta server-side, configuração e limites da etapa atual da #262;
+- [`jamendo.md`](jamendo.md) — descoberta, elegibilidade, aquisição física segura, origem/licença/atribuição e limites da etapa atual da #262;
 - [`import-metadata-preview.md`](import-metadata-preview.md)
 - [`import-duplicate-detection.md`](import-duplicate-detection.md)
 - [`import-safe-destination.md`](import-safe-destination.md)
@@ -160,7 +160,7 @@ Não use um registro histórico isolado para inferir que uma funcionalidade aind
 
 ## E2E
 
-A suíte Playwright tem instruções próprias em [`../e2e/README.md`](../e2e/README.md). O gate crítico inclui smoke geral, coleções offline deduplicadas, fluxo desktop individual/lote e isolamento offline entre contas; a regressão completa continua disponível conforme o risco da mudança. Overrides de metadata também possuem regressão desktop cobrindo propagação imediata para o player e reconciliação da saúde administrativa.
+A suíte Playwright tem instruções próprias em [`../e2e/README.md`](../e2e/README.md). O gate crítico inclui smoke geral, coleções offline deduplicadas, fluxo desktop individual/lote, isolamento offline entre contas e a regressão Jamendo de licença/elegibilidade/início de importação integrada ao workbench; a regressão completa continua disponível conforme o risco da mudança. Overrides de metadata também possuem regressão desktop cobrindo propagação imediata para o player e reconciliação da saúde administrativa.
 
 ## Regra para manutenção da documentação
 

@@ -1,14 +1,14 @@
-# Jamendo — descoberta server-side e elegibilidade
+# Jamendo — descoberta e importação segura
 
-Estado desta etapa da #262: **descoberta integrada ao workbench; importação física ainda bloqueada**.
+Estado desta etapa da #262: **descoberta, elegibilidade e aquisição física de faixa permitida integradas ao pipeline comum**.
 
-## O que já existe
+## Configuração e capability
 
 O servidor registra `JamendoProvider` no `ExternalProviderImportManager` e publica o provider junto dos demais em `GET /api/admin/imports`.
 
 Capabilities atuais:
 
-- `audio: false` — aquisição/download físico ainda não passou pelos gates restantes da #262;
+- `audio: true` — faixa elegível pode ser adquirida para o scratch privado e transferida ao staging comum;
 - `metadata: true`;
 - `thumbnail: true`;
 - `playlists: false`.
@@ -29,17 +29,17 @@ Endpoint administrativo:
 GET /api/admin/imports/providers/jamendo/search?q=<texto>&page=<1..500>&limit=<1..50>
 ```
 
-A tela **Administração → Importar mídia** possui uma origem própria **Descobrir no Jamendo**, separada do formulário de links do YouTube/yt-dlp e das origens locais.
+A tela **Administração → Importar mídia** possui a origem **Descobrir no Jamendo**, separada do formulário de links do YouTube/yt-dlp e das origens locais.
 
-Regras:
+Regras de descoberta:
 
 - `q` precisa ter pelo menos 2 caracteres e é limitado a 120;
 - `page` aceita `1..500`;
 - `limit` aceita `1..50`, apesar de a API Jamendo suportar limite maior;
 - o servidor consulta somente o endpoint fixo `https://api.jamendo.com/v3.0/tracks/`;
 - a resposta externa é limitada a 1 MiB durante a leitura do stream, inclusive sem `Content-Length`;
-- timeout padrão: 8 segundos cobre conexão e leitura do corpo;
-- CI/testes usam `fetch` injetável e não dependem da internet pública.
+- timeout padrão da consulta de descoberta: 8 segundos;
+- CI/testes usam dependências injetáveis e não dependem da internet pública.
 
 A resposta normalizada contém apenas:
 
@@ -53,19 +53,20 @@ A resposta normalizada contém apenas:
 - `importAllowed` e motivo de bloqueio calculados pelo servidor;
 - atribuição textual baseada em título/artista/Jamendo.
 
-URLs de preview/download retornadas pelo Jamendo e o `client_id` **não** são encaminhados ao browser nesta etapa. A URL de licença pode ser mantida para diagnóstico, mas a UI só a transforma em link quando ela aponta para uma licença Creative Commons reconhecida no host oficial; URL externa não reconhecida é mostrada apenas como estado bloqueado, sem navegação clicável.
+URLs de preview/download retornadas pelo Jamendo e o `client_id` **não** são encaminhados ao browser. A URL de licença pode ser mantida para diagnóstico, mas a UI só a transforma em link quando ela aponta para uma licença Creative Commons reconhecida no host oficial; URL externa não reconhecida é mostrada apenas como estado bloqueado, sem navegação clicável.
 
-## Política de licença e seleção
+## Política de licença e confirmação
 
-A elegibilidade é **fail-closed**. Uma faixa só pode avançar para seleção quando:
+A elegibilidade é **fail-closed**. Uma faixa só pode avançar quando:
 
 1. `audiodownload_allowed` é verdadeiro;
 2. existe `license_ccurl` válida;
-3. a licença aponta para uma licença Creative Commons reconhecida (`BY`, `BY-SA`, `BY-ND`, `BY-NC`, `BY-NC-SA`, `BY-NC-ND`) ou marca/CC0 de domínio público no host oficial `creativecommons.org`.
+3. a licença aponta para uma licença Creative Commons reconhecida (`BY`, `BY-SA`, `BY-ND`, `BY-NC`, `BY-NC-SA`, `BY-NC-ND`) ou marca/CC0 de domínio público no host oficial `creativecommons.org`;
+4. a API ainda retorna uma URL de download utilizável no momento da revalidação.
 
-Qualquer licença ausente, host/path desconhecido ou permissão de download falsa bloqueia a ação na UI.
+Qualquer licença ausente, host/path desconhecido, permissão de download falsa ou ausência da URL física bloqueia a importação.
 
-A UI não é a autoridade. Ao selecionar uma faixa aparentemente permitida, o browser chama:
+A UI não é a autoridade. Antes de iniciar o job, o browser chama:
 
 ```text
 POST /api/admin/imports/providers/jamendo/eligibility
@@ -75,23 +76,95 @@ Content-Type: application/json
 {"sourceId":"123"}
 ```
 
-O servidor consulta novamente a faixa por `sourceId` e responde `409` se a permissão/licença deixou de ser aceitável. Assim, estado antigo no browser ou alteração do DOM não contorna o gate.
+O servidor consulta novamente a faixa por `sourceId`. A atribuição e a licença permanecem visíveis no card antes do botão **Importar**. Se o estado continuar permitido, o browser inicia a importação usando somente a URL pública canônica da faixa:
 
-## Segurança e próximo gate
+```text
+POST /api/admin/imports/providers/jamendo
+X-Home-Music-Request: 1
+Content-Type: application/json
 
-Esta entrega ainda não transfere áudio do Jamendo. O `JamendoProvider` continua recusando o caminho genérico de aquisição enquanto faltam os próximos gates da #262:
+{
+  "url": "https://www.jamendo.com/track/123",
+  "automatic": true
+}
+```
 
-1. aquisição da mídia permitida para scratch privado;
-2. timeout, limite de bytes, Content-Type, redirects/egress e arquivo regular;
-3. transferência ao staging comum;
-4. FFprobe/metadata/duplicatas/destino/promoção/indexação;
-5. persistência/auditoria de origem, licença e atribuição quando aplicável.
+A URL assinada de `audiodownload` nunca volta ao browser e não é usada como identificador persistente do job.
 
-Nunca escrever bytes do Jamendo diretamente em `MUSIC_DIR`.
+## Aquisição física no scratch
 
-## Cobertura
+O `JamendoProvider` aceita somente URLs canônicas HTTPS de faixa em `jamendo.com`/`www.jamendo.com`, sem query string, fragmento, porta alternativa ou credenciais.
 
-- unitários do provider cobrem paginação, sanitização, limite streaming, política de licença e revalidação por `sourceId`;
-- rotas cobrem Jamendo não configurado, elegibilidade permitida e bloqueio `409`;
-- Playwright crítico usa respostas fake para verificar busca, artista/álbum/duração, licença oficial clicável, licença externa não reconhecida sem link, disponibilidade de download, botão bloqueado e header anti-CSRF da revalidação;
+Ao preparar a mídia, o provider:
+
+1. extrai apenas o `sourceId` da URL pública;
+2. consulta novamente a API Jamendo;
+3. reaplica a política de download/licença;
+4. mantém `audiodownload` apenas como dado transitório server-side;
+5. executa a transferência dentro do scratch privado do provider.
+
+Para evitar uma segunda implementação de política de rede, a transferência física reutiliza o `ImportUrlManager` dentro de um staging temporário contido no próprio scratch. Isso herda as proteções já existentes de importação por URL:
+
+- HTTP/HTTPS e portas padrão apenas;
+- bloqueio de localhost/redes privadas, reservadas e especiais;
+- resolução DNS e conexão pinada ao endereço público validado;
+- revalidação da política a cada redirect;
+- limite de redirects;
+- allowlist de `Content-Type` de áudio;
+- limite de bytes por `Content-Length` e durante o stream;
+- timeout global;
+- rejeição de arquivo vazio;
+- leitura por `music-metadata` antes de aceitar o payload como áudio.
+
+Esse staging interno é apenas um mecanismo de download seguro dentro do scratch; ele **não** promove nada para a biblioteca.
+
+## Transferência ao pipeline comum
+
+Depois que a aquisição termina, o `ExternalProviderImportManager` continua como fronteira de confiança:
+
+1. reabre a saída dentro do scratch com as proteções contra traversal/symlink;
+2. exige arquivo regular e não vazio;
+3. aplica novamente o limite de bytes durante a cópia;
+4. detecta mudança de tamanho/mtime durante a transferência;
+5. grava os bytes no `ImportStagingManager` real;
+6. limpa o scratch;
+7. muda o job para `pending`.
+
+Com `automatic: true`, o fluxo existente continua pelas mesmas etapas de qualquer outra importação:
+
+```text
+Jamendo elegível
+  → scratch privado
+  → ImportStagingManager
+  → FFprobe/FFmpeg
+  → metadata
+  → duplicatas
+  → destino seguro
+  → promoção
+  → indexação incremental
+```
+
+Nunca há escrita direta do Jamendo em `MUSIC_DIR`.
+
+## Origem, licença e atribuição
+
+A metadata administrativa de descoberta/elegibilidade preserva os dados auditáveis que são seguros para exibição:
+
+- `sourceId` do Jamendo;
+- URL pública da licença;
+- atribuição textual;
+- título/artista/álbum/thumbnail normalizados.
+
+A origem utilizada para iniciar a importação é a URL pública canônica `https://www.jamendo.com/track/<sourceId>`. A URL assinada de download é deliberadamente transitória: não é devolvida à UI, não aparece no estado público do provider e os testes garantem que o resultado preparado não a ecoa.
+
+## Cobertura desta etapa
+
+- unitários do provider cobrem paginação, sanitização, limite de resposta, política de licença e revalidação por `sourceId`;
+- teste de aquisição física usa downloader fake para provar `scratch → staging` sem internet pública e verifica que a URL assinada não aparece no resultado preparado;
+- rotas cobrem Jamendo não configurado, elegibilidade permitida, bloqueio `409` e ausência da URL assinada na resposta;
+- Playwright crítico valida licença oficial clicável, licença externa bloqueada, revalidação anti-CSRF e início do job com URL canônica + `automatic: true`;
 - CI não consulta a internet pública para validar a integração.
+
+## Próximos gates da #262
+
+Ainda permanecem para os próximos slices os cenários negativos e operacionais específicos do Jamendo — por exemplo rate limit, faixa removida entre busca e importação, respostas malformadas/redirects inseguros/arquivo inválido — além do fechamento documental/end-to-end completo da issue.
