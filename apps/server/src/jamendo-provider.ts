@@ -294,13 +294,14 @@ export class JamendoProvider implements ExternalProvider {
     }
 
     const payload = parseApiResponse(text);
-    const items = (payload.results as unknown[])
+    const rawItems = payload.results as unknown[];
+    const items = rawItems
       .map(normalizeTrack)
       .filter((item): item is JamendoTrackSummary => item !== null);
     const total = totalFromHeaders(payload.headers);
     const hasNext = total === null
-      ? items.length === limit
-      : offset + items.length < total;
+      ? rawItems.length === limit
+      : offset + rawItems.length < total;
 
     return Object.freeze({
       items: Object.freeze(items),
