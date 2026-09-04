@@ -20,6 +20,8 @@ import {
 } from '../admin-jamendo-client';
 import '../admin-jamendo.css';
 
+const CREATIVE_COMMONS_HOSTS = new Set(['creativecommons.org', 'www.creativecommons.org']);
+
 function formatDuration(seconds: number | null) {
   if (!seconds || !Number.isFinite(seconds) || seconds <= 0) return 'Duração não informada';
   const total = Math.round(seconds);
@@ -28,20 +30,21 @@ function formatDuration(seconds: number | null) {
   return `${minutes}:${String(remaining).padStart(2, '0')}`;
 }
 
-function licenseLabel(url: string | null) {
-  if (!url) return 'Licença não informada';
+function trustedLicenseLabel(url: string | null) {
+  if (!url) return null;
   try {
     const parsed = new URL(url);
+    if (!CREATIVE_COMMONS_HOSTS.has(parsed.hostname.toLowerCase())) return null;
     const parts = parsed.pathname.split('/').filter(Boolean);
     if (parts[0] === 'licenses' && parts[1] && parts[2]) {
       return `CC ${parts[1].toUpperCase()} ${parts[2]}`;
     }
-    if (parts[0] === 'publicdomain' && parts[1] === 'zero') return `CC0 ${parts[2] ?? ''}`.trim();
-    if (parts[0] === 'publicdomain' && parts[1] === 'mark') return `Domínio público ${parts[2] ?? ''}`.trim();
+    if (parts[0] === 'publicdomain' && parts[1] === 'zero' && parts[2]) return `CC0 ${parts[2]}`;
+    if (parts[0] === 'publicdomain' && parts[1] === 'mark' && parts[2]) return `Domínio público ${parts[2]}`;
   } catch {
-    return 'Licença externa';
+    return null;
   }
-  return 'Licença Creative Commons';
+  return null;
 }
 
 function blockReasonLabel(reason: AdminJamendoImportBlockReason | null) {
@@ -186,6 +189,7 @@ export function AdminJamendoDiscoveryPanel() {
           <div className="admin-jamendo-list">
             {result.items.map(track => {
               const blockReason = blockReasonLabel(track.importBlockReason);
+              const licenseLabel = trustedLicenseLabel(track.licenseUrl);
               return (
                 <article className={`admin-jamendo-track${track.importAllowed ? '' : ' is-blocked'}`} key={track.sourceId}>
                   <div className="admin-jamendo-track__main">
@@ -199,12 +203,14 @@ export function AdminJamendoDiscoveryPanel() {
                       <span>{track.previewAvailable ? 'Preview disponível' : 'Sem preview'}</span>
                     </div>
                     <small className="admin-jamendo-track__attribution">{track.attribution}</small>
-                    {track.licenseUrl ? (
+                    {track.licenseUrl && licenseLabel ? (
                       <a href={track.licenseUrl} target="_blank" rel="noreferrer noopener">
-                        {licenseLabel(track.licenseUrl)} <ExternalLink />
+                        {licenseLabel} <ExternalLink />
                       </a>
                     ) : (
-                      <small className="admin-jamendo-track__license-missing">Licença não informada</small>
+                      <small className="admin-jamendo-track__license-missing">
+                        {track.licenseUrl ? 'Licença não reconhecida' : 'Licença não informada'}
+                      </small>
                     )}
                     {blockReason && <small className="admin-jamendo-track__block-reason"><CircleAlert /> {blockReason}</small>}
                   </div>
