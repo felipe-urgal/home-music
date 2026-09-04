@@ -10,7 +10,7 @@ const defaultDatabasePath = fileURLToPath(new URL(
   import.meta.url
 ));
 
-const envResult = config({ path: rootEnvPath });
+const envResult = config({ path: rootEnvPath, override: !isProduction });
 if (envResult.error) {
   const instruction = isProduction
     ? 'Configure o .env antes de iniciar a produção.'
