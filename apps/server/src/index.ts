@@ -25,8 +25,12 @@ import {
 import { registerLibraryRoutes } from './library-routes.js';
 import { LibraryService } from './library-service.js';
 import { registerMediaRoutes } from './media-routes.js';
+import { registerOpenSubsonicAccountRoutes } from './open-subsonic-account-routes.js';
+import { OpenSubsonicCredentialStore } from './open-subsonic-credentials.js';
+import { registerOpenSubsonicRoutes } from './open-subsonic-routes.js';
 import { PersonalLibraryService } from './personal-library-service.js';
 import { registerPersonalRoutes } from './personal-routes.js';
+import { sanitizeRequestUrl } from './request-log.js';
 import { createServerInfrastructure } from './server-infrastructure.js';
 import { prepareWebApp, type PreparedWebApp } from './static-web.js';
 import { registerStaticWebRoutes, registerSystemRoutes } from './system-routes.js';
@@ -65,7 +69,16 @@ if (!isProduction) {
 }
 
 const app = Fastify({
-  logger: true,
+  logger: {
+    serializers: {
+      req(request) {
+        return {
+          method: request.method,
+          url: sanitizeRequestUrl(request.url)
+        };
+      }
+    }
+  },
   bodyLimit: 256 * 1024
 });
 
@@ -129,6 +142,7 @@ const infrastructure = createServerInfrastructure({
   heavyWorkLimits,
   logger: app.log
 });
+const openSubsonicCredentials = new OpenSubsonicCredentialStore(databasePath);
 const library = new LibraryService({
   musicDir,
   autoRescanIntervalSeconds,
@@ -211,6 +225,7 @@ registerAuthRoutes(app, {
   forceSecureCookie,
   trustTailscaleForwardedFor
 });
+registerOpenSubsonicAccountRoutes(app, openSubsonicCredentials);
 registerAdminUserRoutes(app, infrastructure.adminUsers);
 registerAdminImportRoutes(app, infrastructure.importJobs, {
   onPromoted: (promoted, jobId) => library.updateForPromotedImport(promoted, jobId)
@@ -229,6 +244,12 @@ const adminLibraryProjection = registerAdminTrackRoutes(app, {
 registerLibraryRoutes(app, library, integrityQueue, adminLibraryProjection);
 registerPersonalRoutes(app, personal);
 registerMediaRoutes(app, library, media);
+registerOpenSubsonicRoutes(app, {
+  library,
+  personal,
+  media,
+  credentials: openSubsonicCredentials
+});
 registerSystemRoutes(app, {
   isProduction,
   musicDirConfigured: Boolean(musicDir),
@@ -252,6 +273,7 @@ registerSystemRoutes(app, {
 
 app.addHook('onClose', async () => {
   stopAutomaticRescan();
+  openSubsonicCredentials.close();
   infrastructure.close();
 });
 
