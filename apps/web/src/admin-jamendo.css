@@ -1,0 +1,254 @@
+.admin-jamendo {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-jamendo__heading,
+.admin-jamendo-results__summary,
+.admin-jamendo-track,
+.admin-jamendo-pagination,
+.admin-jamendo-selected,
+.admin-jamendo-unavailable {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-jamendo__heading > div,
+.admin-jamendo-selected > div,
+.admin-jamendo-unavailable > div,
+.admin-jamendo-track__main {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.admin-jamendo__heading > svg,
+.admin-jamendo-unavailable > svg,
+.admin-jamendo-selected > svg {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+}
+
+.admin-jamendo__heading strong,
+.admin-jamendo-track strong,
+.admin-jamendo-selected strong,
+.admin-jamendo-unavailable strong {
+  color: #edf4f8;
+}
+
+.admin-jamendo__heading small,
+.admin-jamendo-track small,
+.admin-jamendo-results__summary small,
+.admin-jamendo-selected small,
+.admin-jamendo-unavailable small {
+  color: #7e8c97;
+  line-height: 1.45;
+}
+
+.admin-jamendo__search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.admin-jamendo__search input {
+  min-width: 0;
+  height: 42px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, .09);
+  border-radius: 10px;
+  background: #091218;
+  color: #e8f0f5;
+}
+
+.admin-jamendo__search button,
+.admin-jamendo-track > button,
+.admin-jamendo-pagination button {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid rgba(255, 255, 255, .09);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .035);
+  color: #b8c7d1;
+  cursor: pointer;
+}
+
+.admin-jamendo__search button {
+  height: 42px;
+  padding: 0 14px;
+}
+
+.admin-jamendo__search button.is-primary,
+.admin-jamendo-track:not(.is-blocked) > button {
+  border-color: rgba(82, 160, 255, .32);
+  background: rgba(50, 126, 226, .13);
+  color: #d8ebff;
+}
+
+.admin-jamendo button:disabled {
+  opacity: .48;
+  cursor: default;
+}
+
+.admin-jamendo button svg,
+.admin-jamendo-track__facts svg,
+.admin-jamendo-track a svg,
+.admin-jamendo-track__block-reason svg,
+.admin-jamendo__policy svg {
+  width: 15px;
+  height: 15px;
+}
+
+.admin-jamendo__policy {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #80919c;
+  line-height: 1.4;
+}
+
+.admin-jamendo-results {
+  display: grid;
+  gap: 9px;
+}
+
+.admin-jamendo-results__summary {
+  padding-top: 2px;
+}
+
+.admin-jamendo-list {
+  display: grid;
+  gap: 8px;
+}
+
+.admin-jamendo-track {
+  align-items: flex-start;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, .075);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .02);
+}
+
+.admin-jamendo-track.is-blocked {
+  background: rgba(255, 255, 255, .012);
+}
+
+.admin-jamendo-track__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin-top: 3px;
+}
+
+.admin-jamendo-track__facts span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #8898a3;
+  font-size: .78rem;
+}
+
+.admin-jamendo-track__facts span.is-allowed {
+  color: #9fd6b1;
+}
+
+.admin-jamendo-track__facts span.is-blocked,
+.admin-jamendo-track__license-missing,
+.admin-jamendo-track__block-reason {
+  color: #dda7a7;
+}
+
+.admin-jamendo-track__attribution {
+  margin-top: 2px;
+}
+
+.admin-jamendo-track a {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #9bc9f5;
+  font-size: .8rem;
+  text-decoration: none;
+}
+
+.admin-jamendo-track a:hover {
+  text-decoration: underline;
+}
+
+.admin-jamendo-track__block-reason {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.admin-jamendo-track > button {
+  flex: 0 0 auto;
+  padding: 0 11px;
+}
+
+.admin-jamendo-selected,
+.admin-jamendo-unavailable {
+  justify-content: flex-start;
+  padding: 11px 12px;
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, .025);
+}
+
+.admin-jamendo-selected > svg {
+  color: #8dd8a8;
+}
+
+.admin-jamendo-unavailable > svg {
+  color: #d9a1a1;
+}
+
+.admin-jamendo-empty {
+  min-height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #81909a;
+  text-align: center;
+}
+
+.admin-jamendo-empty svg {
+  width: 18px;
+  height: 18px;
+}
+
+.admin-jamendo-pagination {
+  justify-content: center;
+  padding-top: 3px;
+}
+
+.admin-jamendo-pagination button {
+  padding: 0 10px;
+}
+
+.admin-jamendo-pagination span {
+  color: #7f8e98;
+  font-size: .8rem;
+}
+
+@media (max-width: 720px) {
+  .admin-jamendo__search {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-jamendo-track {
+    display: grid;
+  }
+
+  .admin-jamendo-track > button {
+    width: 100%;
+  }
+}
