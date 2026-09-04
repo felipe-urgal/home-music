@@ -81,10 +81,10 @@ test('Jamendo fica não configurado quando client_id está ausente', async () =>
 });
 
 test('Jamendo busca com paginação defensiva e devolve somente modelo normalizado', async () => {
-  let requestedUrl: URL | null = null;
+  let requestedUrlText = '';
   const provider = new JamendoProvider({
     fetch: async input => {
-      requestedUrl = new URL(input.toString());
+      requestedUrlText = input.toString();
       return apiResponse({
         headers: {
           status: 'success',
@@ -114,7 +114,8 @@ test('Jamendo busca com paginação defensiva e devolve somente modelo normaliza
     { [JAMENDO_CLIENT_ID_CONFIG]: SECRET_CLIENT_ID }
   );
 
-  assert.ok(requestedUrl);
+  assert.notEqual(requestedUrlText, '');
+  const requestedUrl = new URL(requestedUrlText);
   assert.equal(requestedUrl.hostname, 'api.jamendo.com');
   assert.equal(requestedUrl.pathname, '/v3.0/tracks/');
   assert.equal(requestedUrl.searchParams.get('client_id'), SECRET_CLIENT_ID);
