@@ -302,6 +302,9 @@ test('Jamendo baixa no scratch fake, transfere ao staging comum e preserva metad
     assert.equal(prepared.metadata.title, 'Música segura');
     assert.equal(prepared.metadata.artist, 'Artista');
     assert.equal(prepared.metadata.album, 'Álbum');
+    assert.equal(prepared.metadata.sourceUrl, 'https://www.jamendo.com/track/123');
+    assert.equal(prepared.metadata.licenseUrl, 'https://creativecommons.org/licenses/by/4.0/');
+    assert.equal(prepared.metadata.attribution, '“Música segura” — Artista · Jamendo');
     assert.equal(JSON.stringify(prepared).includes('download-secret'), false);
   } finally {
     await rm(root, { recursive: true, force: true });
