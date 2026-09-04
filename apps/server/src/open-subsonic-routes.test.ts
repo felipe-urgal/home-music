@@ -168,7 +168,7 @@ async function createTestServer(mediaPath: string) {
             fileSize: 10,
             mtimeMs: 1
           },
-          opened: { handle, stat: await handle.stat() }
+          opened: { handle, path: mediaPath, stat: await handle.stat() }
         };
       },
       async cover(id: string) {
