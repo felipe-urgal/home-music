@@ -25,6 +25,9 @@ jobs:
           node-version: 22
           package-manager-cache: false
 
+      - name: Validate dependency policies
+        run: npm run test:policy
+
       - name: Audit dependencies
         env:
           NPM_CONFIG_FETCH_RETRIES: '1'
