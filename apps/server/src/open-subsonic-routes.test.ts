@@ -237,7 +237,9 @@ test('OpenSubsonic projeta biblioteca e busca sem expor MUSIC_DIR', async () => 
   try {
     const artists = await app.inject({ method: 'GET', url: '/rest/getArtists.view?apiKey=key-a&f=json' });
     const artistsBody = responseBody(artists);
-    assert.equal(artistsBody['subsonic-response'].artists.index.length, 2);
+    const artistIndexes = artistsBody['subsonic-response'].artists.index;
+    assert.equal(artistIndexes.length, 1);
+    assert.equal(artistIndexes[0].artist.length, 2);
     assert.equal(artists.body.includes('/secret/MUSIC_DIR'), false);
 
     const search = await app.inject({
