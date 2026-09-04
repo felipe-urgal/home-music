@@ -278,9 +278,10 @@ app.addHook('onClose', async () => {
 });
 
 app.setErrorHandler((error, request, reply) => {
+  const safeUrl = sanitizeRequestUrl(request.url);
   if (error instanceof HeavyWorkQueueSaturatedError) {
     app.log.warn(
-      { queue: error.queueName, method: request.method, url: request.url },
+      { queue: error.queueName, method: request.method, url: safeUrl },
       'Fila de trabalho pesado saturada; requisição rejeitada com backpressure.'
     );
     reply.header('Retry-After', String(error.retryAfterSeconds));
@@ -298,7 +299,7 @@ app.setErrorHandler((error, request, reply) => {
     });
   }
 
-  app.log.error({ err: error, method: request.method, url: request.url }, 'Erro não tratado no servidor');
+  app.log.error({ err: error, method: request.method, url: safeUrl }, 'Erro não tratado no servidor');
   if (!reply.sent) reply.code(500).send({ error: 'Erro interno do servidor.' });
 });
 
