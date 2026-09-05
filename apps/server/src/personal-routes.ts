@@ -1,17 +1,30 @@
+import { fileURLToPath } from 'node:url';
 import type { FastifyInstance } from 'fastify';
 import type { PlaybackState } from '@home-music/shared';
 import { registerLibraryViewRoutes } from './library-view-routes.js';
 import { registerPlaybackHistoryRoutes } from './playback-history-routes.js';
+import { PersonalDataExportService } from './personal-data-export.js';
+import { registerPersonalDataExportRoutes } from './personal-data-export-routes.js';
 import type { PersonalLibraryService } from './personal-library-service.js';
 import { registerSmartPlaylistRoutes } from './smart-playlist-routes.js';
+
+const defaultDatabasePath = fileURLToPath(new URL('../../../data/home-music.db', import.meta.url));
 
 export function registerPersonalRoutes(
   app: FastifyInstance,
   personal: PersonalLibraryService
 ) {
-  registerLibraryViewRoutes(app);
-  registerSmartPlaylistRoutes(app);
+  const databasePath = process.env.HOME_MUSIC_DATABASE_PATH || defaultDatabasePath;
+  const personalDataExporter = new PersonalDataExportService(personal, databasePath);
+
+  registerLibraryViewRoutes(app, { databasePath });
+  registerSmartPlaylistRoutes(app, { databasePath });
   registerPlaybackHistoryRoutes(app);
+  registerPersonalDataExportRoutes(app, personalDataExporter);
+
+  app.addHook('onClose', async () => {
+    personalDataExporter.close();
+  });
 
   app.get('/api/favorites', async (request, reply) => {
     if (!request.user) {
