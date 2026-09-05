@@ -3,6 +3,10 @@ import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import type { AuthenticatedUser, UserRole } from '@home-music/shared';
+import type {
+  OpenSubsonicAccountKey,
+  OpenSubsonicKeyCreateResponse
+} from '@home-music/shared/open-subsonic';
 
 const MAX_KEY_NAME_LENGTH = 120;
 const MAX_API_KEY_LENGTH = 256;
@@ -10,12 +14,7 @@ const API_KEY_PREFIX = 'hm_os_';
 
 type Row = Record<string, unknown>;
 
-export type OpenSubsonicApiKey = Readonly<{
-  id: string;
-  name: string;
-  hint: string;
-  createdAt: string;
-}>;
+export type OpenSubsonicApiKey = OpenSubsonicAccountKey;
 
 export type OpenSubsonicAuthenticatedKey = Readonly<{
   keyId: string;
@@ -91,7 +90,7 @@ export class OpenSubsonicCredentialStore {
     return rows.map(publicKeyFromRow);
   }
 
-  create(userId: string, rawName: unknown) {
+  create(userId: string, rawName: unknown): OpenSubsonicKeyCreateResponse | null {
     if (!userId || userId.length > 128) return null;
     const name = cleanName(rawName);
     if (!name) return null;
@@ -107,7 +106,7 @@ export class OpenSubsonicCredentialStore {
     `).run(id, userId, name, keyHash(token), hint, createdAt);
 
     return {
-      key: Object.freeze({ id, name, hint, createdAt }) satisfies OpenSubsonicApiKey,
+      key: Object.freeze({ id, name, hint, createdAt }),
       token
     };
   }
