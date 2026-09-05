@@ -9,12 +9,21 @@ import { LibraryViewStore } from './library-views.js';
 import type { PersonalLibraryService } from './personal-library-service.js';
 import { SmartPlaylistStore } from './smart-playlists.js';
 
+type PersonalDataProjection = Pick<
+  PersonalLibraryService,
+  | 'getFavoriteIds'
+  | 'getPlaylists'
+  | 'getHistory'
+  | 'loadPlaybackState'
+  | 'portableTrackReferences'
+>;
+
 export class PersonalDataExportService {
   private readonly smartPlaylists: SmartPlaylistStore;
   private readonly libraryViews: LibraryViewStore;
 
   constructor(
-    private readonly personal: PersonalLibraryService,
+    private readonly personal: PersonalDataProjection,
     databasePath: string,
     private readonly now: () => Date = () => new Date()
   ) {
