@@ -1,3 +1,8 @@
+import type {
+  OpenSubsonicAccountKey,
+  OpenSubsonicKeyCreateResponse,
+  OpenSubsonicKeysResponse
+} from '@home-music/shared/open-subsonic';
 import { apiFetch } from './api-client';
 
 export const MIN_ACCOUNT_PASSWORD_CHARACTERS = 12;
@@ -11,12 +16,7 @@ export type AccountSession = {
   expiresAt: number;
 };
 
-export type AccountOpenSubsonicKey = {
-  id: string;
-  name: string;
-  hint: string;
-  createdAt: string;
-};
+export type AccountOpenSubsonicKey = OpenSubsonicAccountKey;
 
 type RevokeOtherSessionsResponse = {
   revoked: number;
@@ -45,9 +45,9 @@ function isAccountSession(value: unknown): value is AccountSession {
     && Number.isFinite(session.expiresAt);
 }
 
-function isOpenSubsonicKey(value: unknown): value is AccountOpenSubsonicKey {
+function isOpenSubsonicKey(value: unknown): value is OpenSubsonicAccountKey {
   if (!value || typeof value !== 'object') return false;
-  const key = value as Partial<AccountOpenSubsonicKey>;
+  const key = value as Partial<OpenSubsonicAccountKey>;
   return typeof key.id === 'string'
     && typeof key.name === 'string'
     && typeof key.hint === 'string'
@@ -119,7 +119,7 @@ export async function revokeOtherSessions() {
 export async function listOpenSubsonicKeys() {
   const response = await apiFetch('/api/auth/open-subsonic/keys', { cache: 'no-store' });
   if (!response.ok) throw new Error(await responseError(response));
-  const body = await response.json() as { keys?: unknown[] };
+  const body = await response.json() as Partial<OpenSubsonicKeysResponse> & { keys?: unknown[] };
   if (!Array.isArray(body.keys) || !body.keys.every(isOpenSubsonicKey)) {
     throw new Error('Resposta inválida ao carregar chaves de aplicativos.');
   }
@@ -137,11 +137,11 @@ export async function createOpenSubsonicKey(name: string) {
   });
   if (!response.ok) throw new Error(await responseError(response));
 
-  const body = await response.json() as { key?: unknown; token?: unknown };
+  const body = await response.json() as Partial<OpenSubsonicKeyCreateResponse>;
   if (!isOpenSubsonicKey(body.key) || typeof body.token !== 'string' || !body.token.startsWith('hm_os_')) {
     throw new Error('Resposta inválida ao criar chave de aplicativo.');
   }
-  return { key: body.key, token: body.token };
+  return { key: body.key, token: body.token } satisfies OpenSubsonicKeyCreateResponse;
 }
 
 export async function revokeOpenSubsonicKey(id: string) {

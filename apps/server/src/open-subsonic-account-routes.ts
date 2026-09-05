@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import type { OpenSubsonicKeysResponse } from '@home-music/shared/open-subsonic';
 import type { OpenSubsonicCredentialStore } from './open-subsonic-credentials.js';
 
 type AccountKeyRoutesStore = Pick<OpenSubsonicCredentialStore, 'list' | 'create' | 'revoke'>;
@@ -13,7 +14,7 @@ export function registerOpenSubsonicAccountRoutes(
     }
 
     reply.header('Cache-Control', 'private, no-store');
-    return reply.send({ keys: credentials.list(request.user.id) });
+    return reply.send({ keys: credentials.list(request.user.id) } satisfies OpenSubsonicKeysResponse);
   });
 
   app.post<{ Body: { name?: unknown } }>('/api/auth/open-subsonic/keys', async (request, reply) => {
