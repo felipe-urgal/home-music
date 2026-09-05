@@ -18,6 +18,7 @@ const DEFAULT_LIST_COUNT = 20;
 const MAX_LIST_COUNT = 500;
 const VALID_KEY_REQUESTS_PER_MINUTE = 600;
 const INVALID_AUTH_ATTEMPTS_PER_MINUTE = 30;
+export const MAX_OPEN_SUBSONIC_RATE_LIMIT_SUBJECTS = 4_096;
 
 type QueryValue = string | string[] | undefined;
 type Query = Record<string, QueryValue>;
@@ -72,22 +73,30 @@ type Catalog = {
 
 type RateEntry = { windowStartedAt: number; count: number };
 
-class OpenSubsonicRateLimiter {
+export class OpenSubsonicRateLimiter {
   private readonly entries = new Map<string, RateEntry>();
 
   hit(subject: string, limit: number, now = Date.now()) {
     const current = this.entries.get(subject);
-    if (!current || now - current.windowStartedAt >= 60_000) {
-      this.entries.set(subject, { windowStartedAt: now, count: 1 });
-      this.cleanup(now);
-      return true;
+    if (current) {
+      if (now - current.windowStartedAt >= 60_000) {
+        this.entries.set(subject, { windowStartedAt: now, count: 1 });
+        return true;
+      }
+      current.count += 1;
+      return current.count <= limit;
     }
-    current.count += 1;
-    return current.count <= limit;
+
+    if (this.entries.size >= MAX_OPEN_SUBSONIC_RATE_LIMIT_SUBJECTS) {
+      this.cleanup(now);
+      if (this.entries.size >= MAX_OPEN_SUBSONIC_RATE_LIMIT_SUBJECTS) return false;
+    }
+
+    this.entries.set(subject, { windowStartedAt: now, count: 1 });
+    return true;
   }
 
   private cleanup(now: number) {
-    if (this.entries.size < 1_000) return;
     for (const [key, entry] of this.entries) {
       if (now - entry.windowStartedAt >= 120_000) this.entries.delete(key);
     }
