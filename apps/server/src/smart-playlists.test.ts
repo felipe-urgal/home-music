@@ -134,7 +134,7 @@ test('combina artista, pasta, favorito, histórico e período sem materializar p
           WHERE type = 'table' AND name = 'smart_playlists'
         `).get();
         assert.equal(parallelTable, undefined);
-        assert.equal(database.getSchemaVersion(), 11);
+        assert.equal(database.getSchemaVersion(), 12);
         assert.deepEqual(database.getPlaylists('user-a'), []);
       } finally {
         raw.close();
