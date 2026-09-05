@@ -11,9 +11,11 @@ home-music/
 ├── apps/web        React + TypeScript + Vite
 ├── apps/server     Fastify + TypeScript + SQLite
 ├── packages/shared contratos/tipos compartilhados
+├── e2e             Playwright e fixtures browser-real
 ├── data            SQLite e estado derivado local
 ├── scripts         operação, CI/smoke, systemd e Tailscale
-└── docs             documentação técnica
+├── docs            documentação técnica
+└── .github         CI e audit de dependências
 ```
 
 Em produção existe **um processo Fastify**. Ele serve API, frontend compilado, streaming, capas e endpoints administrativos pela mesma porta interna.
@@ -25,10 +27,10 @@ Navegador
    ↓
 Vite :5173
    ↓ proxy /api
-Fastify :8787 em 127.0.0.1
+Fastify :8788 em 127.0.0.1
 ```
 
-O Vite existe apenas para HMR/desenvolvimento.
+O Vite existe apenas para HMR/desenvolvimento. O backend DEV usa porta própria para coexistir com a instalação systemd de produção em `:8787`; detalhes em `DEVELOPMENT.md` e `development-environments.md`.
 
 ## Produção
 
@@ -363,20 +365,27 @@ npm run service:update
 
 ## Qualidade e gates de CI
 
-O workflow obrigatório mantém um único job de validação e executa, em ordem compatível com custo/risco:
+O workflow normal de PR/push (`.github/workflows/ci.yml`) mantém um único job de validação:
 
-- instalação reproduzível e auditoria de dependências;
-- typecheck;
-- `npm run test:security` para regressões negativas transversais de Administração/Importação;
-- suíte funcional `npm test`;
-- `npm run benchmark:large-library` para regressões graves de performance com dataset sintético;
-- cenário browser-real de biblioteca grande em Chromium;
-- smokes de backup/restore e validações operacionais de scripts, systemd e Tailscale;
-- build de produção;
-- Playwright crítico em mobile/tablet/desktop;
-- smoke real de produção.
+```text
+npm ci --no-audit --no-fund
+-> npm run check
+   -> typecheck
+   -> testes funcionais
+   -> build
+```
 
-A regressão Playwright completa continua disponível sob demanda conforme risco. Os benchmarks não substituem testes funcionais e seus limites não são SLA de produto. Mudanças no head depois de um run verde invalidam esse run como gate final, conforme `AGENTS.md`.
+Checks pesados continuam disponíveis, mas são direcionados pelo risco da mudança em vez de fazerem parte do custo fixo de todo PR:
+
+- `npm run test:security` para fronteiras sensíveis de autenticação/administração/importação;
+- `npm run test:ops` para contratos shell de systemd/Tailscale;
+- `npm run test:e2e` para integração browser/fullstack crítica;
+- benchmarks para risco de escala/performance;
+- smokes para build/serviço/backup/restore de produção.
+
+O workflow `audit.yml` é separado do CI normal e roda semanalmente ou sob demanda. Ele executa `npm run test:policy` e `npm audit --audit-level=high` tanto na raiz quanto no workspace E2E.
+
+A política canônica de seleção dos gates está em `testing-and-quality.md`. Mudanças no head depois de um run/review verde invalidam essa evidência como gate final, conforme `AGENTS.md`.
 
 ## Segurança resumida
 
@@ -394,4 +403,4 @@ A regressão Playwright completa continua disponível sob demanda conforme risco
 - normalização lógica não escreve em arquivos e exige admin;
 - Integrity é read-only;
 - dependências usam lockfile + `npm ci`;
-- CI mantém gates explícitos de segurança, funcionalidade, performance, build, E2E crítico e produção.
+- CI normal protege typecheck, testes funcionais e build; segurança, operação, E2E, performance e smokes entram de forma direcionada pelo risco, com audit de dependências separado.
