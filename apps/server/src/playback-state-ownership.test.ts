@@ -179,7 +179,7 @@ test('migration v9 atribui estado global ao primeiro usuário criado e preserva 
     replacePlaybackStateWithLegacyV9(databasePath, LEGACY_STATE);
 
     const migrated = new HomeMusicDatabase(databasePath);
-    assert.equal(migrated.getSchemaVersion(), 11);
+    assert.equal(migrated.getSchemaVersion(), 12);
     const first = migrated.loadPlaybackState(FIRST_USER_ID);
     const second = migrated.loadPlaybackState(SECOND_USER_ID);
     assert.equal(first.currentTrackId, LEGACY_STATE.currentTrackId);
@@ -220,7 +220,7 @@ test('migration pré-bootstrap guarda estado fora da tabela ativa e bootstrap o 
     replacePlaybackStateWithLegacyV9(databasePath, LEGACY_STATE);
 
     const migrated = new HomeMusicDatabase(databasePath);
-    assert.equal(migrated.getSchemaVersion(), 11);
+    assert.equal(migrated.getSchemaVersion(), 12);
     assert.equal(migrated.loadPlaybackState(FIRST_USER_ID).currentTrackId, null);
     migrated.close();
 
@@ -347,7 +347,7 @@ test('migration v10 permanece idempotente quando user_version está atrasado e p
     }
 
     const migrated = new HomeMusicDatabase(databasePath);
-    assert.equal(migrated.getSchemaVersion(), 11);
+    assert.equal(migrated.getSchemaVersion(), 12);
     assert.equal(migrated.loadPlaybackState(FIRST_USER_ID).currentTrackId, 'track-a');
     assert.equal(migrated.loadPlaybackState(FIRST_USER_ID).position, 12);
     migrated.close();
