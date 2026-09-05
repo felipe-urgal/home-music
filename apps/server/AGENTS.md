@@ -21,8 +21,8 @@ stores/managers/infrastructure
 
 Preserve estas fronteiras:
 
-- `index.ts` é composition root; não deve voltar a concentrar regra de domínio ou handlers `/api/*`;
-- `auth-policy.ts` é a política central e fail-closed da API; não instale RBAC paralelo em módulos de rota;
+- `index.ts` é composition root; não deve voltar a concentrar regra de domínio ou handlers de protocolo;
+- `auth-policy.ts` é a política central e fail-closed da API da aplicação (`/api/*`); não instale RBAC paralelo para essas rotas;
 - `LibraryService` é dono do snapshot/revision da biblioteca em memória;
 - `PersonalLibraryService` concentra regras de dados pessoais extraídas dos handlers;
 - `AdminTrackMutationService` coordena operações físicas administrativas sem substituir as garantias dos stores de filesystem;
@@ -35,16 +35,24 @@ Mova lógica para a camada que realmente possui a regra, não apenas para reduzi
 
 O servidor é a fronteira real de segurança.
 
+Para a API da aplicação (`/api/*`):
+
 - classificação `public` / `authenticated` / `admin` continua central;
 - `/api/admin/*` exige `admin`;
 - ownership de favoritos, playlists, histórico, player e demais dados pessoais deriva da identidade autenticada;
 - não aceite `userId` do cliente como autoridade para acessar recurso pessoal;
 - mutações autenticadas preservam a proteção anti-CSRF da aplicação;
-- mudança sensível de conta/sessão preserva revogação e proteção contra auto-lockout/remoção do último admin;
-- mensagens externas são sanitizadas e não revelam existência de recurso de outro usuário quando a política vigente evita enumeração;
-- senha, hash completo, cookie, token, API key/segredo e headers sensíveis não entram em logs.
+- mudança sensível de conta/sessão preserva revogação e proteção contra auto-lockout/remoção do último admin.
 
-Ao criar nova superfície HTTP, confira a política central e adicione teste negativo de acesso quando o risco justificar.
+Se existir ou for criado protocolo HTTP fora da API da aplicação, ele precisa de **fronteira de autenticação explícita e fail-closed própria**. Não herde cookie web, anti-CSRF, role ou credencial de outro protocolo por acidente; compartilhe apenas as autoridades de domínio que forem realmente comuns.
+
+Em qualquer superfície:
+
+- mensagens externas são sanitizadas e não revelam existência de recurso de outro usuário quando a política vigente evita enumeração;
+- senha, hash completo, cookie, token, API key/segredo e headers sensíveis não entram em logs;
+- nova credencial deve ter lifecycle/revogação/ownership explícitos e armazenamento compatível com sua sensibilidade.
+
+Ao criar nova superfície HTTP, confira a fronteira de autenticação correspondente e adicione teste negativo de acesso quando o risco justificar.
 
 ## SQLite e persistência
 
