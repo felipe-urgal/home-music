@@ -212,7 +212,10 @@ test('OpenSubsonic anuncia somente extensions implementadas e exige credencial d
     );
 
     const missing = await app.inject({ method: 'GET', url: '/rest/ping.view?f=json' });
-    assert.equal(responseBody(missing)['subsonic-response'].error.code, 44);
+    assert.equal(responseBody(missing)['subsonic-response'].error.code, 40);
+
+    const invalidApiKey = await app.inject({ method: 'GET', url: '/rest/ping.view?apiKey=invalid&f=json' });
+    assert.equal(responseBody(invalidApiKey)['subsonic-response'].error.code, 44);
 
     const password = await app.inject({ method: 'GET', url: '/rest/ping.view?u=alice&p=secret&f=json' });
     assert.equal(responseBody(password)['subsonic-response'].error.code, 40);
