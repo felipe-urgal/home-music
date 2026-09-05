@@ -2,7 +2,7 @@
 
 Este documento é a visão técnica de alto nível do Home Music. A issue [#123](https://github.com/felipe-urgal/home-music/issues/123) preserva o índice executivo do ciclo de backlog concluído em 2026-09-02. A Fase 12 foi encerrada pela [#239](https://github.com/felipe-urgal/home-music/issues/239) e o ciclo técnico atual está centralizado na [#266](https://github.com/felipe-urgal/home-music/issues/266).
 
-> Estado revisado em 2026-09-05. A Fase 12 está concluída. Na Fase 13, o P0 Jamendo (#262) foi concluído tecnicamente pelo PR #276 e o P1 OpenSubsonic (#264) foi implementado no mesmo PR como adapter sobre os serviços existentes. O único aceite ainda não executado é a validação manual com pelo menos dois clientes OpenSubsonic reais; por isso #264 e #266 permanecem abertas até existir essa evidência.
+> Estado revisado em 2026-09-05. A Fase 12 está concluída. Na Fase 13, o P0 Jamendo (#262) foi concluído tecnicamente pelo PR #276 e o P1 OpenSubsonic (#264) foi implementado no mesmo PR como adapter sobre os serviços existentes. A revisão técnica pós-merge #278–#282 também foi concluída e integrada à `main`. O único aceite ainda não executado é a validação manual com pelo menos dois clientes OpenSubsonic reais; por isso #264 e #266 permanecem abertas até existir essa evidência.
 
 ## Fases 1–2 — Base do produto e biblioteca pessoal
 
@@ -222,7 +222,7 @@ O PR #207 foi mergeado em 2026-09-01 com CI completo verde e encerrou o backlog 
 
 ## Fase 13 — Ecossistema aberto e interoperabilidade
 
-**Em fechamento.** O índice executivo é a [#266](https://github.com/felipe-urgal/home-music/issues/266). O PR #276 consolida P0 + P1 em uma única entrega técnica.
+**Em fechamento.** O índice executivo é a [#266](https://github.com/felipe-urgal/home-music/issues/266). O PR #276 estabeleceu a entrega técnica de P0 + P1; a revisão sênior posterior abriu #278–#282, todos já concluídos e integrados à `main`.
 
 ### P0 — Jamendo
 
@@ -254,6 +254,16 @@ A [#264](https://github.com/felipe-urgal/home-music/issues/264) é implementada 
 - [x] redaction de query string para impedir vazamento de `apiKey` em logs;
 - [ ] validar manualmente pelo menos dois clientes reais (Symfonium + Feishin) e registrar a matriz de aceite.
 
+#### Follow-ups técnicos pós-implementação
+
+- [x] [#278](https://github.com/felipe-urgal/home-music/issues/278) — projeções de catálogo/favoritos sob demanda nos fast paths OpenSubsonic — entregue pelo PR #286;
+- [x] [#279](https://github.com/felipe-urgal/home-music/issues/279) — schema de credenciais versionado na migration SQLite v12 e backup/restore alinhado — entregue pelo PR #287;
+- [x] [#280](https://github.com/felipe-urgal/home-music/issues/280) — reconciliação causal da UI de API keys contra respostas assíncronas obsoletas — entregue pelo PR #283;
+- [x] [#281](https://github.com/felipe-urgal/home-music/issues/281) — contrato HTTP público de chaves centralizado em `@home-music/shared/open-subsonic` — entregue pelo PR #284;
+- [x] [#282](https://github.com/felipe-urgal/home-music/issues/282) — validação dos parâmetros comuns `v`/`c` e compatibilidade de protocolo — entregue pelo PR #285.
+
+Os cinco follow-ups foram reconciliados sequencialmente contra a `main`, passaram `npm run check` no head final e, após a migration v12, os CIs de integração também passaram `Backup restore smoke`. Eles não substituem nem simulam a evidência manual ainda ausente da #264.
+
 Detalhes: [open-subsonic.md](open-subsonic.md).
 
 ## Backlog visual e PWA
@@ -265,7 +275,7 @@ Esses itens são independentes da #174 e da #81, ambas concluídas.
 
 ## Backlog atual
 
-O backlog implementável atual está restrito ao fechamento da Fase 13. O código de #262 e #264 foi consolidado no PR #276; a pendência restante é a validação manual real de clientes OpenSubsonic da #264. A #239 e a #123 permanecem encerradas como registros dos ciclos anteriores e não devem ser reabertas artificialmente.
+O backlog implementável atual está restrito ao fechamento da Fase 13. #262 está concluída; a implementação automatizada de #264 e os follow-ups técnicos #278–#282 estão integrados à `main`. A única pendência restante é a validação manual real de Symfonium + Feishin da #264. A #239 e a #123 permanecem encerradas como registros dos ciclos anteriores e não devem ser reabertas artificialmente.
 
 ## Regra de execução
 
