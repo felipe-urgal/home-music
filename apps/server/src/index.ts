@@ -26,7 +26,6 @@ import { registerLibraryRoutes } from './library-routes.js';
 import { LibraryService } from './library-service.js';
 import { registerMediaRoutes } from './media-routes.js';
 import { registerOpenSubsonicAccountRoutes } from './open-subsonic-account-routes.js';
-import { OpenSubsonicCredentialStore } from './open-subsonic-credentials.js';
 import { registerOpenSubsonicRoutes } from './open-subsonic-routes.js';
 import { PersonalLibraryService } from './personal-library-service.js';
 import { registerPersonalRoutes } from './personal-routes.js';
@@ -142,7 +141,6 @@ const infrastructure = createServerInfrastructure({
   heavyWorkLimits,
   logger: app.log
 });
-const openSubsonicCredentials = new OpenSubsonicCredentialStore(databasePath);
 const library = new LibraryService({
   musicDir,
   autoRescanIntervalSeconds,
@@ -225,7 +223,7 @@ registerAuthRoutes(app, {
   forceSecureCookie,
   trustTailscaleForwardedFor
 });
-registerOpenSubsonicAccountRoutes(app, openSubsonicCredentials);
+registerOpenSubsonicAccountRoutes(app, infrastructure.openSubsonicCredentials);
 registerAdminUserRoutes(app, infrastructure.adminUsers);
 registerAdminImportRoutes(app, infrastructure.importJobs, {
   onPromoted: (promoted, jobId) => library.updateForPromotedImport(promoted, jobId)
@@ -248,7 +246,7 @@ registerOpenSubsonicRoutes(app, {
   library,
   personal,
   media,
-  credentials: openSubsonicCredentials
+  credentials: infrastructure.openSubsonicCredentials
 });
 registerSystemRoutes(app, {
   isProduction,
@@ -273,7 +271,6 @@ registerSystemRoutes(app, {
 
 app.addHook('onClose', async () => {
   stopAutomaticRescan();
-  openSubsonicCredentials.close();
   infrastructure.close();
 });
 
