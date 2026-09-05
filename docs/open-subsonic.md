@@ -163,12 +163,14 @@ A suíte do servidor cobre pelo menos:
 
 ## Matriz de validação manual
 
-Esta tabela deve ser preenchida com evidência real antes de fechar #264.
+Registro final do aceite da Fase 13. A execução manual real confirmada nesta rodada foi feita com Feishin. Em 2026-09-05, o proprietário do projeto aprovou o encerramento da #264 sem exigir um segundo smoke manual real no Symfonium.
 
 | Cliente | Plataforma | Autentica | Lista biblioteca | Reproduz áudio | Observações |
 | --- | --- | --- | --- | --- | --- |
-| Symfonium | Android | pendente | pendente | pendente | usar o campo próprio de API key |
-| Feishin | desktop | pendente | pendente | pendente | username + API key como password + Legacy Authentication |
+| Symfonium | Android | não executado | não executado | não executado | cliente-alvo mantido; segundo smoke manual dispensado por decisão explícita de aceite do proprietário em 2026-09-05 |
+| Feishin | desktop Linux | aprovado | aprovado | aprovado | username + API key como password + Legacy Authentication; seek/HTTP Range também validado manualmente |
 | Tempo/Tempus | Android | opcional | opcional | opcional | terceiro smoke |
+
+No Feishin, a validação real confirmou autenticação, carregamento da biblioteca, reprodução de áudio e seek durante o playback. O aceite de encerramento sem executar o Symfonium é uma decisão de escopo do proprietário, e **não** deve ser interpretado como evidência de teste manual desse cliente.
 
 A validação manual nunca substitui testes de contrato/ownership, e os testes não autorizam marcar cliente real como validado sem execução real.
