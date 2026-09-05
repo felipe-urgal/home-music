@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Copy, KeyRound, LoaderCircle, Trash2 } from 'lucide-react';
 import {
   createOpenSubsonicKey,
@@ -6,6 +6,7 @@ import {
   revokeOpenSubsonicKey,
   type AccountOpenSubsonicKey
 } from '../account-client';
+import { reconcileOpenSubsonicKeySnapshot } from '../open-subsonic-key-state';
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : 'Não foi possível concluir a operação.';
@@ -16,23 +17,42 @@ function createdLabel(value: string) {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString('pt-BR');
 }
 
+type CreatedToken = {
+  keyId: string;
+  token: string;
+};
+
 export function AccountOpenSubsonicKeys() {
   const [keys, setKeys] = useState<AccountOpenSubsonicKey[]>([]);
   const [name, setName] = useState('');
-  const [createdToken, setCreatedToken] = useState<string | null>(null);
+  const [createdToken, setCreatedToken] = useState<CreatedToken | null>(null);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [revokingId, setRevokingId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const mutationGenerationRef = useRef(0);
+  const revokedIdsRef = useRef(new Set<string>());
 
   useEffect(() => {
     let active = true;
+    const generationAtStart = mutationGenerationRef.current;
     setLoading(true);
     setError(null);
     void listOpenSubsonicKeys()
-      .then(items => { if (active) setKeys(items); })
-      .catch(error => { if (active) setError(errorMessage(error)); })
+      .then(items => {
+        if (!active) return;
+        if (generationAtStart === mutationGenerationRef.current) {
+          setKeys(items);
+          return;
+        }
+        setKeys(current => reconcileOpenSubsonicKeySnapshot(current, items, revokedIdsRef.current));
+      })
+      .catch(caught => {
+        if (active && generationAtStart === mutationGenerationRef.current) {
+          setError(errorMessage(caught));
+        }
+      })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, []);
@@ -46,11 +66,13 @@ export function AccountOpenSubsonicKeys() {
     setCopied(false);
     try {
       const created = await createOpenSubsonicKey(cleanName);
-      setKeys(items => [created.key, ...items]);
-      setCreatedToken(created.token);
+      mutationGenerationRef.current += 1;
+      revokedIdsRef.current.delete(created.key.id);
+      setKeys(items => [created.key, ...items.filter(item => item.id !== created.key.id)]);
+      setCreatedToken({ keyId: created.key.id, token: created.token });
       setName('');
-    } catch (error) {
-      setError(errorMessage(error));
+    } catch (caught) {
+      setError(errorMessage(caught));
     } finally {
       setCreating(false);
     }
@@ -59,7 +81,7 @@ export function AccountOpenSubsonicKeys() {
   async function copyToken() {
     if (!createdToken) return;
     try {
-      await navigator.clipboard.writeText(createdToken);
+      await navigator.clipboard.writeText(createdToken.token);
       setCopied(true);
     } catch {
       setError('Não foi possível copiar automaticamente. Selecione a chave e copie manualmente.');
@@ -73,9 +95,15 @@ export function AccountOpenSubsonicKeys() {
     setError(null);
     try {
       await revokeOpenSubsonicKey(key.id);
+      mutationGenerationRef.current += 1;
+      revokedIdsRef.current.add(key.id);
       setKeys(items => items.filter(item => item.id !== key.id));
-    } catch (error) {
-      setError(errorMessage(error));
+      if (createdToken?.keyId === key.id) {
+        setCreatedToken(null);
+        setCopied(false);
+      }
+    } catch (caught) {
+      setError(errorMessage(caught));
     } finally {
       setRevokingId(null);
     }
@@ -126,7 +154,7 @@ export function AccountOpenSubsonicKeys() {
           <div className="my-account-password-form">
             <label className="my-account-password-form__current">
               <span>API key</span>
-              <input readOnly value={createdToken} aria-label="API key OpenSubsonic recém-criada" onFocus={event => event.currentTarget.select()} />
+              <input readOnly value={createdToken.token} aria-label="API key OpenSubsonic recém-criada" onFocus={event => event.currentTarget.select()} />
             </label>
             <button className="primary-action my-account-action" type="button" onClick={() => void copyToken()}>
               <Copy /> {copied ? 'Copiada' : 'Copiar chave'}
