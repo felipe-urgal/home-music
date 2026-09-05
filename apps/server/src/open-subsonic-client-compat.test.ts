@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import Fastify from 'fastify';
+import { registerOpenSubsonicProtocolGuard } from './open-subsonic-protocol.js';
 import { registerOpenSubsonicRoutes } from './open-subsonic-routes.js';
 
 function createServer() {
   const app = Fastify({ logger: false });
+  registerOpenSubsonicProtocolGuard(app);
   registerOpenSubsonicRoutes(app, {
     library: {
       listPublicTracks: () => [],
@@ -70,13 +72,13 @@ test('OpenSubsonic preserva apiKey nativa e impede username cruzado no getUser',
   try {
     const native = await app.inject({
       method: 'GET',
-      url: '/rest/getUser.view?apiKey=key-a&username=alice&f=json'
+      url: '/rest/getUser.view?apiKey=key-a&username=alice&v=1.16.1&c=home-music-tests&f=json'
     });
     assert.equal(native.json()['subsonic-response'].status, 'ok');
 
     const crossUser = await app.inject({
       method: 'GET',
-      url: '/rest/getUser.view?apiKey=key-a&username=bob&f=json'
+      url: '/rest/getUser.view?apiKey=key-a&username=bob&v=1.16.1&c=home-music-tests&f=json'
     });
     const crossBody = crossUser.json()['subsonic-response'];
     assert.equal(crossBody.status, 'failed');
