@@ -116,6 +116,18 @@ No PR #181, a Lixeira adota **lista ampla + inspetor lateral**:
 
 Detalhes: [admin-quarantine.md](admin-quarantine.md).
 
+## Credenciais OpenSubsonic em Minha conta
+
+A listagem/criação/revogação de API keys é uma superfície de credencial e precisa preservar causalidade entre respostas assíncronas:
+
+- uma resposta de listagem iniciada antes de uma criação ou revogação não pode sobrescrever o estado mais novo;
+- criar e revogar atualizam o snapshot visível a partir da mutação confirmada pelo servidor;
+- a chave em claro continua sendo exibida somente após a criação;
+- se a chave recém-criada for revogada enquanto o segredo one-time ainda estiver visível, esse segredo é removido imediatamente da tela;
+- erros de refresh não podem ressuscitar visualmente uma credencial já revogada.
+
+A autoridade continua sendo o backend. Essas regras evitam apenas que uma resposta HTTP antiga faça a UI representar um estado que já deixou de ser verdadeiro.
+
 ## Histórico operacional
 
 Permanece como superfície de diagnóstico/observabilidade para scans e importações. Retry aparece somente quando o servidor informa `canRetry=true`.
