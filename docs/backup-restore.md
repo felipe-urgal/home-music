@@ -175,6 +175,10 @@ A suíte unitária também cobre:
 
 ## Compatibilidade
 
+O schema SQLite corrente é **v12**. A migration v12 incorpora `open_subsonic_api_keys` ao fluxo canônico de `PRAGMA user_version`; o store de credenciais não cria mais essa tabela por conta própria. Instalações que já possuíam a tabela criada pela implementação anterior são preservadas por uma migration aditiva e idempotente.
+
+Backup e restore aceitam schema até v12 nesta versão. Isso é validado contra o mesmo `user_version` que o banco principal expõe, para evitar que uma migration nova torne silenciosamente o próprio backup incompatível.
+
 Um backup com `user_version` mais antigo pode ser restaurado e será migrado normalmente pelo Home Music no próximo start.
 
 Um backup com schema mais novo que a versão instalada é recusado. Atualize primeiro o Home Music para uma versão compatível e repita a verificação/restore.

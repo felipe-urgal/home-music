@@ -6,7 +6,7 @@ import { DatabaseSync } from 'node:sqlite';
 import type { PlaybackState, Playlist, PlaylistSource, RepeatMode, StatisticsPeriod, Track } from '@home-music/shared';
 import type { IndexedTrack, LibraryTrackDelta } from './library.js';
 
-const CURRENT_SCHEMA_VERSION = 11;
+const CURRENT_SCHEMA_VERSION = 12;
 const HISTORY_CAPACITY = 2_000;
 const TRACK_UPSERT_SQL = `
   INSERT INTO tracks(
@@ -678,6 +678,36 @@ export class HomeMusicDatabase {
         `);
         this.db.exec('COMMIT;');
         version = 11;
+      } catch (error) {
+        try {
+          this.db.exec('ROLLBACK;');
+        } catch {
+          // Preserva o erro original se a transação já tiver sido encerrada.
+        }
+        throw error;
+      }
+    }
+
+    if (version < 12) {
+      this.db.exec('BEGIN IMMEDIATE;');
+      try {
+        this.db.exec(`
+          CREATE TABLE IF NOT EXISTS open_subsonic_api_keys (
+            id TEXT PRIMARY KEY NOT NULL,
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            name TEXT NOT NULL CHECK(length(name) BETWEEN 1 AND 120),
+            key_hash TEXT NOT NULL UNIQUE CHECK(length(key_hash) = 64),
+            key_hint TEXT NOT NULL CHECK(length(key_hint) BETWEEN 1 AND 24),
+            created_at TEXT NOT NULL
+          );
+
+          CREATE INDEX IF NOT EXISTS idx_open_subsonic_api_keys_user_created
+          ON open_subsonic_api_keys(user_id, created_at DESC, id DESC);
+
+          PRAGMA user_version = 12;
+        `);
+        this.db.exec('COMMIT;');
+        version = 12;
       } catch (error) {
         try {
           this.db.exec('ROLLBACK;');
