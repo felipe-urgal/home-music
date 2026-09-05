@@ -256,6 +256,27 @@ function buildCatalog(tracks: Track[], library: OpenSubsonicLibrary): Catalog {
   };
 }
 
+function lazyObject<T extends object>(factory: () => T): T {
+  let value: T | null = null;
+  return new Proxy({} as T, {
+    get(_target, property) {
+      value ??= factory();
+      return Reflect.get(value, property, value);
+    }
+  });
+}
+
+function lazyReadonlySet<T>(factory: () => ReadonlySet<T>): ReadonlySet<T> {
+  let value: ReadonlySet<T> | null = null;
+  return new Proxy(new Set<T>(), {
+    get(_target, property) {
+      value ??= factory();
+      const member = Reflect.get(value, property, value);
+      return typeof member === 'function' ? member.bind(value) : member;
+    }
+  });
+}
+
 function coverTrackId(tracks: readonly Track[]) {
   return tracks.find(track => track.hasCover)?.id ?? null;
 }
@@ -597,8 +618,8 @@ export function registerOpenSubsonicRoutes(
       return reply.send(success({ user: userResponse(identity) }));
     }
 
-    const catalog = buildCatalog(options.library.listPublicTracks(), options.library);
-    const favoriteIds = new Set(options.personal.getFavoriteIds(userId));
+    const catalog = lazyObject(() => buildCatalog(options.library.listPublicTracks(), options.library));
+    const favoriteIds = lazyReadonlySet(() => new Set(options.personal.getFavoriteIds(userId)));
 
     if (endpoint === 'getMusicFolders') {
       return reply.send(success({
@@ -764,7 +785,7 @@ export function registerOpenSubsonicRoutes(
     if (endpoint === 'getLyricsBySongId') {
       const id = one(request.query, 'id');
       if (!id) return reply.send(failure(10, 'Parâmetro obrigatório ausente: id.'));
-      const track = catalog.tracks.find(item => item.id === id);
+      const track = options.library.getTrack(id);
       if (!track) return reply.send(failure(70, 'Música não encontrada.'));
       const lyrics = await options.media.lyrics(id);
       const structuredLyrics = lyrics ? [{
