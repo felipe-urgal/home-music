@@ -1,11 +1,11 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
-import type { LibraryService } from './library-service.js';
 import {
   M3u8InputError,
   exportM3u8,
   hashM3u8Content,
   previewM3u8,
   trackIdsFromPreview,
+  type M3u8LibrarySnapshot,
   type M3u8Preview
 } from './m3u8-playlists.js';
 import type { PersonalLibraryService } from './personal-library-service.js';
@@ -14,8 +14,6 @@ type M3u8PersonalLibrary = Pick<
   PersonalLibraryService,
   'getPlaylists' | 'createPlaylist' | 'setPlaylistTracks' | 'deletePlaylist'
 >;
-
-type M3u8Library = Pick<LibraryService, 'root' | 'allTracks'>;
 
 type PreviewBody = {
   content?: unknown;
@@ -31,7 +29,7 @@ type ImportBody = {
 export function registerM3u8PlaylistRoutes(
   app: FastifyInstance,
   personal: M3u8PersonalLibrary,
-  library: M3u8Library
+  library: M3u8LibrarySnapshot
 ) {
   app.post<{ Body: PreviewBody }>('/api/playlists/m3u8/preview', async (request, reply) => {
     if (!request.user) {
