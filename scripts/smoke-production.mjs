@@ -296,7 +296,7 @@ try {
     active: 0,
     pending: 0
   });
-  assert.equal(internalHealthBody.schemaVersion, 11);
+  assert.equal(internalHealthBody.schemaVersion, 12);
 
   const favorites = await fetch(`${baseUrl}/api/favorites`, {
     headers: { Cookie: cookie }
