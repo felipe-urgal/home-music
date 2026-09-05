@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { LibraryService } from './library-service.js';
 import {
   M3u8InputError,
@@ -139,7 +139,7 @@ export function registerM3u8PlaylistRoutes(
   });
 }
 
-function sendInputError(reply: Parameters<FastifyInstance['setErrorHandler']>[0] extends never ? never : any, error: unknown) {
+function sendInputError(reply: FastifyReply, error: unknown) {
   if (error instanceof M3u8InputError) {
     return reply.code(error.statusCode).send({ error: error.message, code: error.code });
   }
