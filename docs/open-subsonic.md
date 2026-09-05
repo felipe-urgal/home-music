@@ -87,6 +87,14 @@ Campos exigidos pelo protocolo/clients, como `created`, `discNumber`, `artists`,
 
 Artwork referencia uma faixa existente que possui capa. O identificador externo nunca contém caminho de arquivo.
 
+## Materialização das projeções
+
+Catálogo de artistas/álbuns e conjunto de favoritos são projeções **sob demanda por requisição**. O adapter só percorre/ordena o snapshot completo quando o endpoint realmente consome essas estruturas.
+
+Caminhos por faixa, como `stream`, `getCoverArt`, `getLyricsBySongId`, `star`/`unstar` e `scrobble`, resolvem o ID diretamente nos serviços canônicos e não constroem previamente o catálogo global. `getMusicFolders` também não precisa materializar a projeção.
+
+Essa regra evita transformar cada abertura de áudio em trabalho O(n)/O(n log n) sobre bibliotecas grandes sem introduzir cache ou índice paralelo. Endpoints de artistas, álbuns, busca e playlists continuam usando a mesma projeção canônica; muda somente o momento em que ela é construída.
+
 ## Streaming
 
 O adapter abre mídia exclusivamente por `TrackMediaInfrastructure`, que já revalida:
@@ -126,7 +134,8 @@ A suíte do servidor cobre pelo menos:
 9. tentativa cross-user/IDOR;
 10. endpoint não suportado retornando falha explícita;
 11. limite de cardinalidade do rate limiter;
-12. ausência de rede pública no teste.
+12. ausência de rede pública no teste;
+13. fast paths por faixa sem leitura global de catálogo/favoritos.
 
 ## Matriz de validação manual
 
