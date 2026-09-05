@@ -191,7 +191,7 @@ async function createTestServer(mediaPath: string) {
   return { app, personal };
 }
 
-test('OpenSubsonic anuncia somente extensions implementadas e exige API key dedicada', async () => {
+test('OpenSubsonic anuncia somente extensions implementadas e exige credencial de app dedicada', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'home-music-open-subsonic-contract-'));
   const mediaPath = path.join(root, 'track.mp3');
   await writeFile(mediaPath, Buffer.from('0123456789'));
@@ -215,7 +215,7 @@ test('OpenSubsonic anuncia somente extensions implementadas e exige API key dedi
     assert.equal(responseBody(missing)['subsonic-response'].error.code, 44);
 
     const password = await app.inject({ method: 'GET', url: '/rest/ping.view?u=alice&p=secret&f=json' });
-    assert.equal(responseBody(password)['subsonic-response'].error.code, 42);
+    assert.equal(responseBody(password)['subsonic-response'].error.code, 40);
 
     const conflict = await app.inject({ method: 'GET', url: '/rest/ping.view?apiKey=key-a&u=alice&f=json' });
     assert.equal(responseBody(conflict)['subsonic-response'].error.code, 43);
