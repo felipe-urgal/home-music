@@ -8,19 +8,32 @@ import {
   exportM3u8,
   hashM3u8Content,
   previewM3u8,
-  type M3u8LibrarySnapshot
+  type M3u8LibrarySnapshot,
+  type M3u8LibraryTrack
 } from './m3u8-playlists.js';
 
 const USER_A = '11111111-1111-4111-8111-111111111111';
 const USER_B = '22222222-2222-4222-8222-222222222222';
 
-const library: M3u8LibrarySnapshot = {
-  root: '/music',
-  allTracks: [
-    { id: 'one', filePath: '/music/Artista/Album/one.mp3' },
-    { id: 'two', filePath: '/music/Artista/Album/two.flac' }
-  ]
-};
+function librarySnapshot(
+  tracks: M3u8LibraryTrack[],
+  enabledIds = tracks.map(track => track.id)
+): M3u8LibrarySnapshot {
+  const enabled = new Set(enabledIds);
+  return {
+    root: '/music',
+    allTracks: tracks,
+    getTrack(trackId: string) {
+      if (!enabled.has(trackId)) return undefined;
+      return tracks.find(track => track.id === trackId);
+    }
+  };
+}
+
+const library = librarySnapshot([
+  { id: 'one', filePath: '/music/Artista/Album/one.mp3' },
+  { id: 'two', filePath: '/music/Artista/Album/two.flac' }
+]);
 
 function manualPlaylist(id = 'playlist-a') {
   return {
@@ -60,17 +73,26 @@ test('preview resolve somente paths relativos seguros e mantém classificação 
 });
 
 test('preview não escolhe silenciosamente path ambíguo', () => {
-  const ambiguousLibrary: M3u8LibrarySnapshot = {
-    root: '/music',
-    allTracks: [
-      { id: 'a', filePath: '/music/dup.mp3' },
-      { id: 'b', filePath: '/music/dup.mp3' }
-    ]
-  };
+  const ambiguousLibrary = librarySnapshot([
+    { id: 'a', filePath: '/music/dup.mp3' },
+    { id: 'b', filePath: '/music/dup.mp3' }
+  ]);
 
   const preview = previewM3u8('dup.mp3\n', ambiguousLibrary);
   assert.equal(preview.entries[0]?.status, 'ambiguous');
   assert.equal(preview.summary.ambiguous, 1);
+});
+
+test('preview não anuncia como resolvida uma faixa desabilitada', () => {
+  const disabledLibrary = librarySnapshot([
+    { id: 'enabled', filePath: '/music/enabled.mp3' },
+    { id: 'disabled', filePath: '/music/disabled.mp3' }
+  ], ['enabled']);
+
+  const preview = previewM3u8('enabled.mp3\ndisabled.mp3\n', disabledLibrary);
+  assert.deepEqual(preview.entries.map(entry => entry.status), ['resolved', 'not-found']);
+  assert.equal(preview.summary.resolved, 1);
+  assert.equal(preview.summary.notFound, 1);
 });
 
 test('preview rejeita conteúdo acima do limite defensivo', () => {
@@ -90,6 +112,23 @@ test('export preserva ordem e sinaliza qualquer faixa sem path portátil', () =>
   );
   assert.deepEqual(exported.omittedTrackIds, ['missing']);
   assert.equal(exported.content.includes('/music/'), false);
+});
+
+test('export falha fechado para faixa desabilitada ou nome que não faz round-trip em M3U8', () => {
+  const unsafeLibrary = librarySnapshot([
+    { id: 'enabled', filePath: '/music/enabled.mp3' },
+    { id: 'disabled', filePath: '/music/disabled.mp3' },
+    { id: 'comment', filePath: '/music/#comment.mp3' },
+    { id: 'space', filePath: '/music/ leading-space.mp3' },
+    { id: 'backslash', filePath: '/music/folder\\track.mp3' }
+  ], ['enabled', 'comment', 'space', 'backslash']);
+
+  const exported = exportM3u8(
+    ['enabled', 'disabled', 'comment', 'space', 'backslash'],
+    unsafeLibrary
+  );
+  assert.equal(exported.content, '#EXTM3U\nenabled.mp3\n');
+  assert.deepEqual(exported.omittedTrackIds, ['disabled', 'comment', 'space', 'backslash']);
 });
 
 test('import exige confirmação/hash e cria playlist somente para a sessão autenticada', async () => {
