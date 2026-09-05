@@ -14,6 +14,7 @@ export type M3u8LibraryTrack = {
 export type M3u8LibrarySnapshot = {
   root: string;
   allTracks: readonly M3u8LibraryTrack[];
+  getTrack(trackId: string): M3u8LibraryTrack | undefined;
 };
 
 export type M3u8PreviewEntry =
@@ -147,7 +148,11 @@ export function trackIdsFromPreview(preview: M3u8Preview) {
 }
 
 export function exportM3u8(trackIds: readonly string[], library: M3u8LibrarySnapshot) {
-  const byId = new Map(library.allTracks.map(track => [track.id, track]));
+  const byId = new Map(
+    library.allTracks
+      .filter(track => Boolean(library.getTrack(track.id)))
+      .map(track => [track.id, track])
+  );
   const lines = ['#EXTM3U'];
   const omittedTrackIds: string[] = [];
 
@@ -176,6 +181,7 @@ function buildLibraryPathIndex(library: M3u8LibrarySnapshot) {
   if (!library.root) return index;
 
   for (const track of library.allTracks) {
+    if (!library.getTrack(track.id)) continue;
     const relativePath = toLibraryRelativePath(library.root, track.filePath);
     if (!relativePath) continue;
     const ids = index.get(relativePath) ?? [];
@@ -191,13 +197,25 @@ function toLibraryRelativePath(root: string, filePath: string) {
   if (!relative || path.isAbsolute(relative)) return null;
   const segments = relative.split(path.sep);
   if (segments.some(segment => segment === '..')) return null;
-  return segments.join('/');
+
+  const portable = segments.join('/');
+  const parsed = parsePortableRelativePath(portable);
+  if (!parsed.ok || parsed.relativePath !== portable) return null;
+  return portable;
 }
 
 function parsePortableRelativePath(value: string):
   | { ok: true; relativePath: string }
   | { ok: false; reason: 'absolute-path' | 'external-uri' | 'path-traversal' | 'invalid-path' } {
-  if (value.includes('\0')) return { ok: false, reason: 'invalid-path' };
+  if (
+    value.includes('\0')
+    || value.includes('\r')
+    || value.includes('\n')
+    || value.startsWith('#')
+    || value !== value.trim()
+  ) {
+    return { ok: false, reason: 'invalid-path' };
+  }
 
   const normalizedSeparators = value.replace(/\\/g, '/');
   if (
