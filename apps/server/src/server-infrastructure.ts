@@ -20,6 +20,7 @@ import {
   type LoginAbuseProtectionConfig
 } from './login-abuse-protection.js';
 import { LongJobObservability } from './long-job-observability.js';
+import { OpenSubsonicCredentialStore } from './open-subsonic-credentials.js';
 import { TrackAvailabilityStore } from './track-availability-store.js';
 import { TranscodeCacheMaintenance } from './transcode-cache-maintenance.js';
 import { TranscodeManager } from './transcoding.js';
@@ -53,6 +54,7 @@ export function createServerInfrastructure(options: ServerInfrastructureOptions)
   const database = new HomeMusicDatabase(options.databasePath);
   const trackAvailability = new TrackAvailabilityStore(options.databasePath);
   const authUsers = new UserAuthStore(options.databasePath);
+  const openSubsonicCredentials = new OpenSubsonicCredentialStore(options.databasePath);
   const sessions = new SessionManager(
     '',
     '',
@@ -107,6 +109,7 @@ export function createServerInfrastructure(options: ServerInfrastructureOptions)
     database,
     trackAvailability,
     authUsers,
+    openSubsonicCredentials,
     sessions,
     accountPasswords,
     adminUsers,
@@ -122,6 +125,7 @@ export function createServerInfrastructure(options: ServerInfrastructureOptions)
       accountPasswords.close();
       adminUsers.close();
       operationHistory.close();
+      openSubsonicCredentials.close();
       authUsers.close();
       trackAvailability.close();
       database.close();
