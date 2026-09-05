@@ -6,7 +6,9 @@ O Home Music usa M3U8 apenas como formato portátil de **referências de playlis
 
 Todo arquivo/conteúdo M3U8 é entrada externa não confiável.
 
-A resolução aceita somente caminhos relativos que existam no snapshot canônico atual da biblioteca (`MUSIC_DIR` já indexado). O servidor não faz requests de rede, não segue `file://`, não interpreta URLs e não acessa caminhos absolutos do host.
+A resolução aceita somente caminhos relativos que existam no snapshot canônico atual da biblioteca (`MUSIC_DIR` já indexado) **e estejam disponíveis para uso**. Faixas administrativamente desabilitadas não são anunciadas como resolvidas, porque o modelo canônico de playlists também não permitiria adicioná-las.
+
+O servidor não faz requests de rede, não segue `file://`, não interpreta URLs e não acessa caminhos absolutos do host.
 
 São rejeitados ou classificados como inválidos:
 
@@ -43,10 +45,10 @@ Content-Type: application/json
 
 O preview é read-only e classifica cada entrada como:
 
-- `resolved` — path relativo corresponde exatamente a uma faixa atual;
-- `not-found` — path seguro, mas ausente da biblioteca atual;
+- `resolved` — path relativo corresponde exatamente a uma faixa atual e disponível;
+- `not-found` — path seguro, mas ausente ou indisponível na biblioteca atual;
 - `invalid` — entrada não suportada ou insegura;
-- `ambiguous` — mais de uma faixa indexada teria o mesmo path portátil; nenhuma é escolhida.
+- `ambiguous` — mais de uma faixa disponível teria o mesmo path portátil; nenhuma é escolhida.
 
 A resposta inclui `previewHash`, SHA-256 do conteúdo exato recebido. Esse hash vincula a confirmação ao mesmo conteúdo que foi revisado.
 
@@ -92,7 +94,7 @@ Somente playlists **manuais da conta autenticada** podem ser exportadas. Playlis
 
 A saída começa com `#EXTM3U` e contém apenas paths relativos POSIX à raiz canônica da biblioteca, mantendo a ordem da playlist.
 
-Paths absolutos nunca são publicados. Se qualquer faixa da playlist não puder ser convertida com segurança para um path portátil no snapshot atual, a exportação falha fechada em vez de omitir a faixa silenciosamente.
+Paths absolutos nunca são publicados. Se qualquer faixa da playlist estiver desabilitada, não puder ser convertida com segurança para um path portátil ou tiver um nome que não faça round-trip determinístico no formato (por exemplo, começando com `#`, whitespace nas bordas ou separador incompatível), a exportação falha fechada em vez de omitir ou reinterpretar a faixa silenciosamente.
 
 ## Invariantes
 
