@@ -1,4 +1,6 @@
+import path from 'node:path';
 import type { PlaybackState, RepeatMode } from '@home-music/shared';
+import type { PortableTrackReferenceV1 } from '@home-music/shared/personal-data';
 import type { HomeMusicDatabase } from './database.js';
 import type { LibraryService } from './library-service.js';
 
@@ -80,6 +82,10 @@ export class PersonalLibraryService {
     return { status: 'ok', trackIds };
   }
 
+  getHistory(userId: string, limit = 200) {
+    return this.database.getHistory(userId, limit);
+  }
+
   recordHistory(userId: string, trackId: string, playedAt?: string) {
     if (!this.library.getTrack(trackId)) return false;
     this.database.recordHistory(userId, trackId, playedAt);
@@ -117,6 +123,32 @@ export class PersonalLibraryService {
       baseQueueIds,
       queueIds
     });
+  }
+
+  portableTrackReferences(trackIds: readonly string[]) {
+    const references = new Map<string, PortableTrackReferenceV1>();
+    const libraryRoot = this.library.root;
+    if (!libraryRoot || trackIds.length === 0) return references;
+
+    const requested = new Set(trackIds);
+    for (const track of this.library.allTracks) {
+      if (!requested.has(track.id)) continue;
+      const relative = path.relative(libraryRoot, track.filePath);
+      if (!relative || path.isAbsolute(relative)) continue;
+      const segments = relative.split(path.sep);
+      if (segments.some(segment => segment === '..')) continue;
+
+      references.set(track.id, {
+        relativePath: segments.join('/'),
+        hints: {
+          title: track.title,
+          artist: track.artist,
+          album: track.album,
+          durationSeconds: track.duration
+        }
+      });
+    }
+    return references;
   }
 }
 

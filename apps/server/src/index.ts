@@ -241,7 +241,7 @@ const adminLibraryProjection = registerAdminTrackRoutes(app, {
   libraryProjectionHandledByRoutes: true
 });
 registerLibraryRoutes(app, library, integrityQueue, adminLibraryProjection);
-registerPersonalRoutes(app, personal);
+registerPersonalRoutes(app, personal, { databasePath });
 registerMediaRoutes(app, library, media);
 registerOpenSubsonicProtocolGuard(app);
 registerOpenSubsonicRoutes(app, {
