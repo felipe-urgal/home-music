@@ -19,6 +19,21 @@ O inventário atual mostrou duas formas de bootstrap relevantes:
 - Symfonium oferece suporte explícito à extensão `apiKeyAuthentication`;
 - Feishin usa `getUser` durante autenticação e, no modo **Legacy Authentication**, envia `u+p`. Para esse caso, o Home Music aceita **a mesma API key revogável como `p`**, nunca a senha web.
 
+## Negociação de protocolo
+
+Toda chamada `/rest/*`, exceto `getOpenSubsonicExtensions`, precisa enviar os parâmetros comuns OpenSubsonic `v` (versão) e `c` (identificador do cliente). A validação ocorre na fronteira do adapter antes do handler do endpoint e antes de qualquer construção de catálogo.
+
+O servidor anuncia `1.16.1` e aceita clientes da linha 1.x que solicitem versão até `1.16.1`. A falha é explícita:
+
+- ausência de `v` ou `c` → erro de parâmetro obrigatório;
+- versão malformada ou major anterior → cliente precisa ser atualizado;
+- versão mais nova que `1.16.1` ou major posterior → servidor precisa ser atualizado;
+- `c` vazio, somente controles ou acima do limite operacional → identificador de cliente inválido.
+
+`c` é somente metadado de protocolo: não participa de autenticação/autorização e não vira autoridade de identidade. A query string continua removida do logging HTTP.
+
+`getOpenSubsonicExtensions` permanece público e sem dependência de `v`/`c`, pois é justamente o endpoint usado para descoberta de capacidades.
+
 ## Autenticação
 
 O adapter **não reutiliza cookie, sessão ou senha web** como credencial genérica de cliente externo.
@@ -124,17 +139,18 @@ HTTP Range preserva `206`, `Content-Range`, `Content-Length` e `416` usando a me
 A suíte do servidor cobre pelo menos:
 
 1. capabilities públicas sem credencial;
-2. chave válida, inválida e revogada;
-3. `apiKeyAuthentication` nativa;
-4. bootstrap `getUser` usando a API key como password legado sem aceitar senha web;
-5. listagem de biblioteca e busca;
-6. Range de streaming;
-7. artwork/lyrics sem path físico;
-8. playlist/favorito/scrobble derivados do owner autenticado;
-9. tentativa cross-user/IDOR;
-10. endpoint não suportado retornando falha explícita;
-11. limite de cardinalidade do rate limiter;
-12. ausência de rede pública no teste.
+2. parâmetros comuns `v`/`c`, incluindo incompatibilidade cliente/servidor;
+3. chave válida, inválida e revogada;
+4. `apiKeyAuthentication` nativa;
+5. bootstrap `getUser` usando a API key como password legado sem aceitar senha web;
+6. listagem de biblioteca e busca;
+7. Range de streaming;
+8. artwork/lyrics sem path físico;
+9. playlist/favorito/scrobble derivados do owner autenticado;
+10. tentativa cross-user/IDOR;
+11. endpoint não suportado retornando falha explícita;
+12. limite de cardinalidade do rate limiter;
+13. ausência de rede pública no teste.
 
 ## Matriz de validação manual
 
