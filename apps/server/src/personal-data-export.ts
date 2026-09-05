@@ -1,13 +1,14 @@
-import {
-  PERSONAL_DATA_FORMAT,
-  PERSONAL_DATA_HISTORY_LIMIT,
-  PERSONAL_DATA_VERSION,
-  type PersonalDataBundleV1,
-  type PortableTrackReferenceV1
+import type {
+  PersonalDataBundleV1,
+  PortableTrackReferenceV1
 } from '@home-music/shared/personal-data';
 import { LibraryViewStore } from './library-views.js';
 import type { PersonalLibraryService } from './personal-library-service.js';
 import { SmartPlaylistStore } from './smart-playlists.js';
+
+export const PERSONAL_DATA_FORMAT = 'home-music-personal-data' as const;
+export const PERSONAL_DATA_VERSION = 1 as const;
+export const PERSONAL_DATA_HISTORY_LIMIT = 500 as const;
 
 type PersonalDataProjection = Pick<
   PersonalLibraryService,
