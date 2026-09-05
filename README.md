@@ -1,8 +1,8 @@
 # Home Music
 
-Servidor pessoal de música para transformar uma pasta local do Ubuntu em uma biblioteca de streaming acessível pelo navegador, celular ou PWA.
+Servidor pessoal de música para transformar uma pasta local do Ubuntu em uma biblioteca de streaming acessível pelo navegador, celular, PWA ou clientes OpenSubsonic compatíveis.
 
-O Home Music usa **React + TypeScript + Vite** no frontend e **Fastify + TypeScript + SQLite** no backend. Em produção, um único processo Fastify serve API, frontend compilado, capas e streaming de áudio.
+O Home Music usa **React + TypeScript + Vite** no frontend e **Fastify + TypeScript + SQLite** no backend. Em produção, um único processo Fastify serve API, frontend compilado, capas, streaming de áudio e o adapter OpenSubsonic.
 
 > O Home Music é self-hosted. Não exponha a porta `8787` diretamente à internet. Para acesso remoto, prefira Tailscale Serve + HTTPS; Funnel é uma opção pública explícita quando necessária.
 
@@ -14,6 +14,8 @@ O Home Music usa **React + TypeScript + Vite** no frontend e **Fastify + TypeScr
 - múltiplas contas com papéis `admin`/`user`, sessões e troca de senha;
 - Administração para biblioteca, metadata, integridade, lixeira/quarentena, importação e usuários;
 - importação por upload, URL e providers externos com staging e validação;
+- descoberta/importação via Jamendo com política fail-closed de licença/download e aquisição `scratch → staging`;
+- adapter OpenSubsonic sobre biblioteca, streaming e estado pessoal existentes, com API keys revogáveis por usuário;
 - FFmpeg/FFprobe para compatibilidade, transcode e validação técnica;
 - SQLite versionado, backup/restore e operação systemd;
 - acesso remoto via Tailscale Serve e Funnel opcional.
@@ -21,10 +23,10 @@ O Home Music usa **React + TypeScript + Vite** no frontend e **Fastify + TypeScr
 ## Arquitetura
 
 ```text
-Browser / PWA
+Browser / PWA / cliente OpenSubsonic
       |
       v
-React / Vite (DEV)
+React / Vite (DEV) ou /rest/*
       |
       v
 Fastify
@@ -34,7 +36,7 @@ Fastify
   +----------> MUSIC_DIR
 ```
 
-Em produção, o frontend compilado é servido pelo próprio Fastify. Mais detalhes: [`docs/architecture.md`](docs/architecture.md).
+Em produção, o frontend compilado é servido pelo próprio Fastify. O adapter OpenSubsonic não mantém scanner, catálogo ou estado pessoal paralelo: ele projeta os mesmos serviços usados pelo frontend. Mais detalhes: [`docs/architecture.md`](docs/architecture.md) e [`docs/open-subsonic.md`](docs/open-subsonic.md).
 
 ## Requisitos
 
@@ -44,7 +46,8 @@ Em produção, o frontend compilado é servido pelo próprio Fastify. Mais detal
 - uma pasta local para a biblioteca de áudio;
 - FFmpeg/FFprobe recomendados;
 - Tailscale recomendado para acesso remoto;
-- `yt-dlp` somente para os providers que dependem dele.
+- `yt-dlp` somente para os providers que dependem dele;
+- `HOME_MUSIC_JAMENDO_CLIENT_ID` somente quando a descoberta/importação pelo Jamendo for usada.
 
 ## Desenvolvimento
 
@@ -192,10 +195,12 @@ Documentação: [`docs/tailscale.md`](docs/tailscale.md), [`docs/public-access.m
 - `.env`, `.env.development`, cookies, tokens e senhas nunca são versionados;
 - o backend é a fronteira de autorização e confinement;
 - mutações autenticadas usam a proteção `X-Home-Music-Request: 1`;
-- paths físicos da biblioteca não são expostos ao frontend;
+- paths físicos da biblioteca não são expostos ao frontend nem ao adapter OpenSubsonic;
 - superfícies sensíveis bloqueiam traversal, symlink escape e arquivos especiais;
 - importação usa staging/scratch antes de promover conteúdo para `MUSIC_DIR`;
 - providers/processos externos não recebem shell livre;
+- chaves OpenSubsonic são independentes da sessão/senha web, revogáveis por usuário e persistidas somente em forma hash;
+- a query string das requisições não é registrada pelo logger HTTP, evitando vazamento de `apiKey`;
 - ações destrutivas devem ser explícitas e preferir quarentena/restauração quando aplicável;
 - produção usa helper privilegiado com catálogo fechado em vez de `systemctl` arbitrário via dashboard.
 
@@ -227,6 +232,8 @@ Comece por:
 - [`docs/PRODUCTION.md`](docs/PRODUCTION.md) — operação da instalação real;
 - [`docs/README.md`](docs/README.md) — índice detalhado e estado vivo da documentação;
 - [`docs/architecture.md`](docs/architecture.md) — arquitetura;
+- [`docs/jamendo.md`](docs/jamendo.md) — descoberta e importação segura via Jamendo;
+- [`docs/open-subsonic.md`](docs/open-subsonic.md) — subset, autenticação, ownership e matriz de compatibilidade OpenSubsonic;
 - [`docs/testing-and-quality.md`](docs/testing-and-quality.md) — política de gates;
 - [`docs/backup-restore.md`](docs/backup-restore.md) — dados/recovery;
 - [`docs/roadmap.md`](docs/roadmap.md) — estado técnico corrente.
