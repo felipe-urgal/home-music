@@ -18,7 +18,7 @@ home-music/
 └── .github         CI e audit de dependências
 ```
 
-Em produção existe **um processo Fastify**. Ele serve API, frontend compilado, streaming, capas e endpoints administrativos pela mesma porta interna.
+Em produção existe **um processo Fastify**. Ele serve API, frontend compilado, streaming, capas, endpoints administrativos e o adapter OpenSubsonic `/rest/*` pela mesma porta interna.
 
 ## Desenvolvimento
 
@@ -37,12 +37,12 @@ O Vite existe apenas para HMR/desenvolvimento. O backend DEV usa porta própria 
 ### LAN
 
 ```text
-Navegador/PWA
+Navegador / PWA / cliente OpenSubsonic
    ↓ HTTP :8787
 Fastify 0.0.0.0:8787
    ├── React compilado
-   ├── autenticação/sessões
-   ├── API
+   ├── autenticação/sessões + API keys de apps
+   ├── API /api/* + adapter /rest/*
    ├── scanner/importação/administração
    ├── streaming/capas
    └── SQLite + MUSIC_DIR
@@ -79,7 +79,7 @@ O servidor:
 - exige `index.html` válido antes de considerar produção pronta;
 - serve assets hashados com cache longo/imutável;
 - serve shell/HTML com `no-store`;
-- mantém `/api/*` como API, sem fallback SPA;
+- mantém `/api/*` e `/rest/*` como APIs, sem fallback SPA;
 - rejeita traversal, NUL, arquivos ocultos inseguros e symlink escape na camada estática.
 
 ## Identidade e autorização
@@ -113,7 +113,7 @@ O token resolve para `userId`; role/estado vigente são avaliados pelo servidor.
 
 ### Política
 
-Rotas são classificadas centralmente como `public`, `authenticated` ou `admin`. Esconder menus no frontend é somente UX.
+Rotas da aplicação são classificadas centralmente como `public`, `authenticated` ou `admin`. Esconder menus no frontend é somente UX.
 
 Mutações autenticadas usam também:
 
@@ -123,6 +123,23 @@ X-Home-Music-Request: 1
 
 para a proteção anti-CSRF da aplicação.
 
+### Credenciais OpenSubsonic
+
+`/rest/*` possui fronteira de autenticação própria e não reutiliza cookie nem senha web.
+
+O usuário cria em **Minha conta** uma API key dedicada por aplicativo:
+
+- o segredo em claro é mostrado somente na criação;
+- o SQLite persiste somente SHA-256 + hint não sensível;
+- a chave pertence a um `userId` imutável;
+- revogar a chave bloqueia `/rest/*` sem revogar a sessão web;
+- conta desabilitada ou com troca obrigatória de senha deixa de autenticar pelo adapter;
+- ownership de playlists, favoritos e histórico deriva da credencial autenticada, nunca de `username` recebido do cliente.
+
+O mecanismo preferido é `apiKeyAuthentication`. Para clientes que só oferecem autenticação Subsonic legada, `u+p` é aceito **somente quando `p` é uma API key Home Music válida**; a senha web nunca é consultada nesse caminho. Token/salt `t+s` permanece recusado.
+
+Como a API key pode trafegar em query parameter pelo protocolo, o logger HTTP registra somente o pathname e também sanitiza URLs nos caminhos explícitos de erro/backpressure.
+
 ## SQLite
 
 O banco padrão é `data/home-music.db`.
@@ -130,6 +147,7 @@ O banco padrão é `data/home-music.db`.
 Ele mantém, entre outros:
 
 - usuários e hashes de senha;
+- hashes/hints das API keys OpenSubsonic;
 - índice da biblioteca;
 - estado ativo/inativo administrativo de faixas;
 - favoritos por usuário;
@@ -141,7 +159,7 @@ Ele mantém, entre outros:
 - estado necessário a operações administrativas/importações;
 - histórico operacional.
 
-O schema usa migrations via `PRAGMA user_version`, WAL e foreign keys. Tabelas auxiliares de features não destrutivas, como `library_metadata_aliases`, são criadas de forma idempotente pelo respectivo store e permanecem cobertas pelo snapshot do SQLite.
+O schema usa migrations via `PRAGMA user_version`, WAL e foreign keys. Tabelas auxiliares de features não destrutivas são criadas de forma idempotente pelo respectivo store e permanecem cobertas pelo snapshot do SQLite.
 
 A persistência do índice distingue dois caminhos. Com a mesma `MUSIC_DIR`, o scanner entrega um delta explícito de faixas adicionadas, atualizadas e removidas, e somente esse delta é aplicado à tabela `tracks`; um rescan sem mudanças não executa upsert de faixa. `libraryRoot` e `scannedAt` são atualizados na mesma transação `BEGIN IMMEDIATE` do delta. Quando a raiz muda ou o snapshot persistido não pode ser reutilizado, permanece disponível o full sync seguro que reconcilia o snapshot completo. Falha em qualquer etapa faz rollback integral.
 
@@ -204,6 +222,8 @@ Superfícies atuais:
 
 As telas redesenhadas preferem listas limpas, inspetores/workspaces contextuais e ações em lote sob demanda, sem mover autorização para o cliente.
 
+**Minha conta** também expõe o autosserviço de API keys OpenSubsonic para criar, listar e revogar somente credenciais do próprio usuário.
+
 ## Operações destrutivas
 
 Princípios:
@@ -238,7 +258,7 @@ alias lógico global/reversível
 metadata canônica publicada
 ```
 
-Aliases são aprovados manualmente em **Administração → Normalização**. Artistas são globais; álbuns são escopados pelo artista do álbum já canônico. A camada não altera `track.id`, não escreve em `MUSIC_DIR` e é reutilizada por `/api/library` e pela avaliação de smart playlists.
+Aliases são aprovados manualmente em **Administração → Normalização**. Artistas são globais; álbuns são escopados pelo artista do álbum já canônico. A camada não altera `track.id`, não escreve em `MUSIC_DIR` e é reutilizada por `/api/library`, pelo adapter OpenSubsonic e pela avaliação de smart playlists.
 
 A mesma ideia não destrutiva vale para capa. Scanner/rescan não deve apagar overrides ou aliases válidos.
 
@@ -270,7 +290,11 @@ indexação incremental
 
 Providers externos são desacoplados do core. O provider `yt-dlp` é opcional e nunca escreve diretamente em `MUSIC_DIR`.
 
+O provider Jamendo segue a mesma fronteira: revalida licença/download no servidor, adquire somente para scratch privado, transfere ao staging comum e deixa validação, duplicatas, promoção e indexação para o pipeline existente. A cobertura final inclui rate limit, resposta malformada, redirect inseguro, conteúdo removido, payload inválido e cleanup, sempre com fakes locais no CI.
+
 O pipeline possui cleanup de staging, retry/diagnóstico e suporte a lotes/playlists por provider com isolamento por item.
+
+Detalhes: `jamendo.md`.
 
 ## Transcoding e ReplayGain
 
@@ -285,6 +309,33 @@ FFmpeg entra para:
 O cache de transcoding é derivado, limitado e recriável. A chave inclui propriedades relevantes do arquivo/perfil/ganho para evitar colisões.
 
 O backend resolve ReplayGain do índice; não aceita ganho arbitrário enviado pelo cliente. O arquivo original nunca é alterado.
+
+## Adapter OpenSubsonic
+
+OpenSubsonic é uma **camada de protocolo**, não um segundo backend.
+
+```text
+cliente OpenSubsonic
+      ↓ /rest/* + credencial de app
+adapter OpenSubsonic
+      ├── LibraryService
+      ├── TrackMediaInfrastructure
+      └── PersonalLibraryService
+              ↓
+       SQLite + MUSIC_DIR existentes
+```
+
+O subset inicial cobre capabilities, `getUser`, biblioteca/artistas/álbuns/faixas, navegação, `search3`, HTTP Range, artwork, lyrics, playlists manuais, favoritos e scrobble. Endpoints fora do subset falham explicitamente em vez de simular sucesso.
+
+IDs de artista/álbum são projeções opacas determinísticas; `track.id` continua sendo o ID da música. Campos de protocolo como `path` são opacos e nunca contêm `filePath` ou `MUSIC_DIR`.
+
+Streaming usa a mesma infraestrutura nativa de confinement, arquivo regular, Range e transcoding. Estado pessoal usa o `userId` derivado da API key e continua coerente com o frontend.
+
+O rate limiter possui cardinalidade máxima e falha fechado sob churn de subjects. O lifecycle do store de credenciais pertence ao `ServerInfrastructure`, junto dos demais recursos de processo; `index.ts` apenas faz wiring.
+
+O CI usa cliente HTTP/fixtures locais para contrato, bootstrap e ownership. Symfonium, Feishin e Tempo/Tempus são alvos de validação manual. A issue #264 só deve ser fechada após registrar evidência real de pelo menos dois clientes autenticando, listando a biblioteca e reproduzindo áudio.
+
+Detalhes: `open-subsonic.md`.
 
 ## PWA e offline
 
@@ -395,10 +446,13 @@ A política canônica de seleção dos gates está em `testing-and-quality.md`. 
 - cookies `HttpOnly`/`SameSite=Strict` e `Secure` em HTTPS;
 - login possui proteção por IP/identidade e limites globais de verificação de senha;
 - mutações protegidas por sessão + header da aplicação;
-- paths físicos não são aceitos como autoridade do cliente;
+- API keys OpenSubsonic são separadas da sessão/senha, revogáveis e persistidas somente em forma hash;
+- query string não entra nos logs HTTP, inclusive caminhos explícitos de erro;
+- paths físicos não são aceitos como autoridade do cliente e não são expostos em `/rest/*`;
 - streaming/filesystem revalidam confinement e arquivos regulares;
 - importação URL aplica proteção SSRF;
 - providers externos usam isolamento/timeout;
+- Jamendo reaplica licença/download no backend antes da aquisição física;
 - operações destrutivas são explícitas;
 - normalização lógica não escreve em arquivos e exige admin;
 - Integrity é read-only;

@@ -1,6 +1,6 @@
 # Jamendo — descoberta e importação segura
 
-Estado desta etapa da #262: **descoberta, elegibilidade e aquisição física de faixa permitida integradas ao pipeline comum**.
+Estado da #262: **P0 tecnicamente concluído no PR #276**, incluindo descoberta, elegibilidade, aquisição física `scratch → staging`, cenários negativos e CI sem dependência de internet pública.
 
 ## Configuração e capability
 
@@ -157,14 +157,21 @@ A metadata administrativa de descoberta/elegibilidade preserva os dados auditáv
 
 A origem utilizada para iniciar a importação é a URL pública canônica `https://www.jamendo.com/track/<sourceId>`. A URL assinada de download é deliberadamente transitória: não é devolvida à UI, não aparece no estado público do provider e os testes garantem que o resultado preparado não a ecoa.
 
-## Cobertura desta etapa
+## Cobertura e hardening final
 
-- unitários do provider cobrem paginação, sanitização, limite de resposta, política de licença e revalidação por `sourceId`;
-- teste de aquisição física usa downloader fake para provar `scratch → staging` sem internet pública e verifica que a URL assinada não aparece no resultado preparado;
-- rotas cobrem Jamendo não configurado, elegibilidade permitida, bloqueio `409` e ausência da URL assinada na resposta;
-- Playwright crítico valida licença oficial clicável, licença externa bloqueada, revalidação anti-CSRF e início do job com URL canônica + `automatic: true`;
-- CI não consulta a internet pública para validar a integração.
+Além do happy path existente, o PR #276 cobre explicitamente:
 
-## Próximos gates da #262
+- `429`/rate limit sem retry oculto;
+- resposta malformada da API;
+- redirect inesperado/inseguro;
+- item parcialmente inválido sem derrubar resultados válidos da mesma página;
+- faixa removida entre descoberta e importação;
+- payload que não é arquivo regular;
+- cleanup de scratch/staging em falhas;
+- fake provider/downloader local, sem internet pública no CI.
 
-Ainda permanecem para os próximos slices os cenários negativos e operacionais específicos do Jamendo — por exemplo rate limit, faixa removida entre busca e importação, respostas malformadas/redirects inseguros/arquivo inválido — além do fechamento documental/end-to-end completo da issue.
+A suíte funcional também preserva as regressões já existentes de licença, elegibilidade, aquisição física e ausência de URL assinada nas respostas públicas.
+
+## Gate de fechamento
+
+O P0 só é considerado concluído quando o head final mantém typecheck, testes e build verdes, sem regressão de SSRF/egress, confinement, cleanup ou exposição de segredo. O PR #276 executa esse fechamento junto com a documentação da Fase 13.

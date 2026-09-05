@@ -25,8 +25,11 @@ import {
 import { registerLibraryRoutes } from './library-routes.js';
 import { LibraryService } from './library-service.js';
 import { registerMediaRoutes } from './media-routes.js';
+import { registerOpenSubsonicAccountRoutes } from './open-subsonic-account-routes.js';
+import { registerOpenSubsonicRoutes } from './open-subsonic-routes.js';
 import { PersonalLibraryService } from './personal-library-service.js';
 import { registerPersonalRoutes } from './personal-routes.js';
+import { sanitizeRequestUrl } from './request-log.js';
 import { createServerInfrastructure } from './server-infrastructure.js';
 import { prepareWebApp, type PreparedWebApp } from './static-web.js';
 import { registerStaticWebRoutes, registerSystemRoutes } from './system-routes.js';
@@ -65,7 +68,16 @@ if (!isProduction) {
 }
 
 const app = Fastify({
-  logger: true,
+  logger: {
+    serializers: {
+      req(request) {
+        return {
+          method: request.method,
+          url: sanitizeRequestUrl(request.url)
+        };
+      }
+    }
+  },
   bodyLimit: 256 * 1024
 });
 
@@ -211,6 +223,7 @@ registerAuthRoutes(app, {
   forceSecureCookie,
   trustTailscaleForwardedFor
 });
+registerOpenSubsonicAccountRoutes(app, infrastructure.openSubsonicCredentials);
 registerAdminUserRoutes(app, infrastructure.adminUsers);
 registerAdminImportRoutes(app, infrastructure.importJobs, {
   onPromoted: (promoted, jobId) => library.updateForPromotedImport(promoted, jobId)
@@ -229,6 +242,12 @@ const adminLibraryProjection = registerAdminTrackRoutes(app, {
 registerLibraryRoutes(app, library, integrityQueue, adminLibraryProjection);
 registerPersonalRoutes(app, personal);
 registerMediaRoutes(app, library, media);
+registerOpenSubsonicRoutes(app, {
+  library,
+  personal,
+  media,
+  credentials: infrastructure.openSubsonicCredentials
+});
 registerSystemRoutes(app, {
   isProduction,
   musicDirConfigured: Boolean(musicDir),
@@ -256,9 +275,10 @@ app.addHook('onClose', async () => {
 });
 
 app.setErrorHandler((error, request, reply) => {
+  const safeUrl = sanitizeRequestUrl(request.url);
   if (error instanceof HeavyWorkQueueSaturatedError) {
     app.log.warn(
-      { queue: error.queueName, method: request.method, url: request.url },
+      { queue: error.queueName, method: request.method, url: safeUrl },
       'Fila de trabalho pesado saturada; requisição rejeitada com backpressure.'
     );
     reply.header('Retry-After', String(error.retryAfterSeconds));
@@ -276,7 +296,7 @@ app.setErrorHandler((error, request, reply) => {
     });
   }
 
-  app.log.error({ err: error, method: request.method, url: request.url }, 'Erro não tratado no servidor');
+  app.log.error({ err: error, method: request.method, url: safeUrl }, 'Erro não tratado no servidor');
   if (!reply.sent) reply.code(500).send({ error: 'Erro interno do servidor.' });
 });
 

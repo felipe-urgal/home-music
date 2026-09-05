@@ -24,13 +24,14 @@ import {
   revokeOwnSession,
   type AccountSession
 } from '../account-client';
+import { AccountOpenSubsonicKeys } from './AccountOpenSubsonicKeys';
 import {
   AccountPlaybackPreferences,
   type AccountPlaybackPreferencesValue
 } from './AccountPlaybackPreferences';
 import { AccountSessionsScreen } from './AccountSessionsScreen';
 
-type AccountView = 'overview' | 'profile' | 'password' | 'sessions' | 'playback';
+type AccountView = 'overview' | 'profile' | 'password' | 'sessions' | 'apps' | 'playback';
 
 type OfflineModeControl = {
   supported: boolean;
@@ -182,18 +183,22 @@ export function MyAccountScreen({
       ? 'Alterar senha'
       : view === 'sessions'
         ? 'Outros dispositivos'
-        : view === 'playback'
-          ? 'Reprodução'
-          : 'Minha conta';
+        : view === 'apps'
+          ? 'Apps e integrações'
+          : view === 'playback'
+            ? 'Reprodução'
+            : 'Minha conta';
   const subtitle = view === 'profile'
     ? 'Informações da conta'
     : view === 'password'
       ? 'Atualize sua senha de acesso'
       : view === 'sessions'
         ? 'Gerencie sessões em dispositivos'
-        : view === 'playback'
-          ? 'Qualidade e normalização'
-          : 'Segurança e sessões';
+        : view === 'apps'
+          ? 'Chaves OpenSubsonic revogáveis'
+          : view === 'playback'
+            ? 'Qualidade e normalização'
+            : 'Segurança e sessões';
 
   return (
     <section className={`my-account-screen my-account-screen--${view}`} aria-labelledby="my-account-title">
@@ -239,6 +244,11 @@ export function MyAccountScreen({
               <button type="button" onClick={() => setView('sessions')}>
                 <span className="my-account-card__icon"><MonitorOff /></span>
                 <span><strong>Outros dispositivos</strong><small>Encerre acessos antigos sem sair deste dispositivo.</small></span>
+                <ChevronRight />
+              </button>
+              <button type="button" onClick={() => setView('apps')}>
+                <span className="my-account-card__icon"><KeyRound /></span>
+                <span><strong>Apps e integrações</strong><small>Crie chaves separadas para clientes OpenSubsonic.</small></span>
                 <ChevronRight />
               </button>
             </div>
@@ -379,6 +389,8 @@ export function MyAccountScreen({
           onRevokeOthers={() => void revokeOthers()}
         />
       )}
+
+      {view === 'apps' && <AccountOpenSubsonicKeys />}
 
       {view === 'playback' && playbackPreferences && (
         <AccountPlaybackPreferences value={playbackPreferences} />
