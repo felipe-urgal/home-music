@@ -44,6 +44,14 @@ Para Feishin, a configuração esperada para o smoke manual é: username Home Mu
 
 Como a chave OpenSubsonic é transportada em query parameter pelo protocolo, o logger HTTP do servidor remove a query string antes de registrar a URL de request, inclusive nos caminhos explícitos de erro/backpressure.
 
+## Contrato HTTP de gerenciamento de chaves
+
+Os payloads públicos usados por **Minha conta** para listar/criar API keys são definidos em `@home-music/shared/open-subsonic`. Server e web consomem o mesmo shape tipado, evitando DTOs paralelos que possam divergir silenciosamente entre as duas camadas.
+
+O contrato compartilhado contém apenas dados públicos da credencial (`id`, nome, hint, data e token one-time somente na resposta de criação). `userId`, hash persistido, detalhes de SQLite e qualquer outro segredo interno não fazem parte dele.
+
+TypeScript compartilhado não substitui validação de fronteira: o frontend continua validando a resposta HTTP em runtime e falha fechado se o payload recebido não corresponder ao contrato esperado.
+
 ## Matriz endpoint → autoridade Home Music
 
 Esta matriz existe **antes dos handlers** para impedir a criação acidental de uma segunda fonte de verdade.
