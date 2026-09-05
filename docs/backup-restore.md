@@ -104,6 +104,51 @@ A verificação exige:
 - `user_version` idêntico ao manifesto;
 - schema não mais novo do que o suportado pela versão atual do Home Music.
 
+## Checkpoint automático antes de `service:update`
+
+`npm run service:update` e, por consequência, `npm run prod:deploy` criam um checkpoint SQLite **antes de qualquer etapa que possa parar ou reiniciar o serviço**.
+
+O checkpoint não é uma segunda implementação de backup: o wrapper chama `backup:create` e `backup:verify`, portanto mantém a Online Backup API, a validação de WAL, o manifesto e todas as guardas já descritas neste runbook.
+
+Os checkpoints automáticos ficam isolados dos backups manuais:
+
+```text
+backups/
+├── home-music-....backup/          # backup manual; retenção automática não toca
+└── update-checkpoints/
+    └── 20260905T190000Z-abc123def456-XXXXXX/
+        ├── source-revision.txt     # SHA do código anterior ao update
+        └── home-music-....backup/  # artefato canônico verificado
+```
+
+A raiz `backups/update-checkpoints/` é privada ao usuário da instalação e não pode ser symlink. O artefato retornado pelo backup canônico precisa permanecer dentro do diretório exclusivo daquela tentativa.
+
+A retenção mantém os **5 checkpoints automáticos mais recentes**. Ela só considera diretórios com o padrão gerado pelo próprio fluxo em `backups/update-checkpoints/`; backups manuais fora dessa raiz não são candidatos à remoção.
+
+Se `backup:create` ou `backup:verify` falhar, `service:update` aborta antes de delegar ao updater systemd. Portanto o serviço não é parado/reiniciado por aquela tentativa e o banco atual não é substituído.
+
+Se a falha ocorrer depois que o checkpoint já foi validado, o comando preserva o caminho do artefato e imprime orientação de recovery. O checkpoint também registra `source-revision.txt`, permitindo identificar qual revisão estava ativa antes da tentativa.
+
+### Recovery de uma atualização malsucedida
+
+Rollback de **estado** e rollback de **código** são operações relacionadas, mas diferentes. Não faça apenas checkout de uma versão antiga e a inicie contra um schema potencialmente migrado pela versão nova.
+
+1. anote o caminho de checkpoint impresso por `service:update`;
+2. mantenha/coloque `home-music.service` parado;
+3. escolha uma versão do código compatível com o schema que será restaurado;
+4. restaure o checkpoint pelo mecanismo canônico:
+
+```bash
+npm run backup:restore -- \
+  --artifact "backups/update-checkpoints/.../home-music-....backup" \
+  --confirm-service-stopped
+```
+
+5. valide o restore e a compatibilidade do código antes de iniciar o serviço;
+6. inicie/reinicie o serviço somente depois dessa validação e confirme `/ready`.
+
+O `source-revision.txt` é diagnóstico, não um comando de rollback automático. O Home Music não executa `git reset --hard`, não faz downgrade cego de schema e não inicia uma versão antiga automaticamente.
+
 ## Restore
 
 O restore é uma operação offline. Para a instalação padrão por systemd:
@@ -172,6 +217,8 @@ A suíte unitária também cobre:
 - artefato inválido sem tocar no banco atual;
 - guarda imediatamente anterior à troca sem tocar no estado válido quando ela bloqueia;
 - rollback automático quando ocorre falha simulada depois da troca.
+
+Os testes de operações também validam que o wrapper de `service:update` cria/verifica o checkpoint antes de delegar ao updater, mantém a retenção isolada, não toca `MUSIC_DIR` e não amplia a superfície privilegiada. Esses testes não executam stop/restart/deploy real.
 
 ## Compatibilidade
 
