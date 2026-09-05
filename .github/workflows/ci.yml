@@ -36,3 +36,6 @@ jobs:
 
       - name: Quality gate
         run: npm run check
+
+      - name: Backup restore smoke
+        run: npm run smoke:backup-restore
