@@ -13,6 +13,10 @@
     "./open-subsonic": {
       "types": "./src/open-subsonic.ts",
       "default": "./dist/open-subsonic.js"
+    },
+    "./personal-data": {
+      "types": "./src/personal-data.ts",
+      "default": "./dist/personal-data.js"
     }
   },
   "scripts": {

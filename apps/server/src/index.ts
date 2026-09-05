@@ -24,7 +24,6 @@ import {
 } from './heavy-work-queue.js';
 import { registerLibraryRoutes } from './library-routes.js';
 import { LibraryService } from './library-service.js';
-import { registerM3u8PlaylistRoutes } from './m3u8-playlist-routes.js';
 import { registerMediaRoutes } from './media-routes.js';
 import { registerOpenSubsonicAccountRoutes } from './open-subsonic-account-routes.js';
 import { registerOpenSubsonicProtocolGuard } from './open-subsonic-protocol.js';
@@ -242,8 +241,7 @@ const adminLibraryProjection = registerAdminTrackRoutes(app, {
   libraryProjectionHandledByRoutes: true
 });
 registerLibraryRoutes(app, library, integrityQueue, adminLibraryProjection);
-registerPersonalRoutes(app, personal);
-registerM3u8PlaylistRoutes(app, personal, library);
+registerPersonalRoutes(app, personal, { databasePath });
 registerMediaRoutes(app, library, media);
 registerOpenSubsonicProtocolGuard(app);
 registerOpenSubsonicRoutes(app, {
