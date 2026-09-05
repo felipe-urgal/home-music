@@ -1,9 +1,11 @@
 import type { FastifyInstance } from 'fastify';
 import type { PersonalDataExportService } from './personal-data-export.js';
 
+type PersonalDataExporter = Pick<PersonalDataExportService, 'exportForUser'>;
+
 export function registerPersonalDataExportRoutes(
   app: FastifyInstance,
-  exporter: PersonalDataExportService
+  exporter: PersonalDataExporter
 ) {
   app.get('/api/account/personal-data/export', async (request, reply) => {
     if (!request.user) {
