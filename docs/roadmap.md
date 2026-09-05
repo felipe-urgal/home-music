@@ -2,7 +2,7 @@
 
 Este documento é a visão técnica de alto nível do Home Music. A issue [#123](https://github.com/felipe-urgal/home-music/issues/123) preserva o índice executivo do ciclo de backlog concluído em 2026-09-02. A Fase 12 foi encerrada pela [#239](https://github.com/felipe-urgal/home-music/issues/239) e o ciclo técnico atual está centralizado na [#266](https://github.com/felipe-urgal/home-music/issues/266).
 
-> Estado revisado em 2026-09-04. A Fase 12 está concluída. A Fase 13 está ativa: #262 (Jamendo) é P0 e vem antes da #264 (OpenSubsonic). Na #262, descoberta, elegibilidade e aquisição física `scratch → staging` já estão implementadas; permanecem os cenários negativos/operacionais específicos do Jamendo e o fechamento end-to-end da issue.
+> Estado revisado em 2026-09-05. A Fase 12 está concluída. Na Fase 13, o P0 Jamendo (#262) foi concluído tecnicamente pelo PR #276 e o P1 OpenSubsonic (#264) foi implementado no mesmo PR como adapter sobre os serviços existentes. O único aceite ainda não executado é a validação manual com pelo menos dois clientes OpenSubsonic reais; por isso #264 e #266 permanecem abertas até existir essa evidência.
 
 ## Fases 1–2 — Base do produto e biblioteca pessoal
 
@@ -222,7 +222,7 @@ O PR #207 foi mergeado em 2026-09-01 com CI completo verde e encerrou o backlog 
 
 ## Fase 13 — Ecossistema aberto e interoperabilidade
 
-**Em andamento.** O índice executivo é a [#266](https://github.com/felipe-urgal/home-music/issues/266).
+**Em fechamento.** O índice executivo é a [#266](https://github.com/felipe-urgal/home-music/issues/266). O PR #276 consolida P0 + P1 em uma única entrega técnica.
 
 ### P0 — Jamendo
 
@@ -234,15 +234,27 @@ A [#262](https://github.com/felipe-urgal/home-music/issues/262) integra descober
 - [x] tela simples de Descobrir/Importar no workbench;
 - [x] licença/atribuição e disponibilidade de download antes da confirmação;
 - [x] download permitido para scratch privado com limites e egress seguro;
-- [x] staging, validação, metadata, duplicatas, promoção e indexação pelo pipeline comum.
+- [x] staging, validação, metadata, duplicatas, promoção e indexação pelo pipeline comum;
+- [x] negativos de rate limit, resposta malformada, redirect inseguro, conteúdo removido e payload inválido;
+- [x] fakes locais/CI sem internet pública;
+- [x] documentação final reconciliada no PR #276.
 
-O PR #270 cobre a aquisição física `scratch → staging`, preserva origem/licença/atribuição na metadata administrativa e mantém a URL assinada de download transitória no servidor. Permanecem na #262 os cenários negativos/operacionais específicos do Jamendo e o fechamento end-to-end da issue.
-
-Detalhes da etapa corrente: [jamendo.md](jamendo.md).
+Detalhes: [jamendo.md](jamendo.md).
 
 ### P1 — OpenSubsonic
 
-- [ ] [#264](https://github.com/felipe-urgal/home-music/issues/264) — expor API compatível para clientes externos, somente depois do fechamento end-to-end da #262.
+A [#264](https://github.com/felipe-urgal/home-music/issues/264) é implementada como adapter de protocolo, sem segundo scanner, catálogo ou store pessoal.
+
+- [x] matriz `endpoint → serviço Home Music` documentada antes dos handlers;
+- [x] API keys dedicadas, revogáveis e persistidas somente em forma hash;
+- [x] biblioteca, artistas, álbuns, faixas, diretórios e busca sobre `LibraryService`;
+- [x] streaming HTTP Range, artwork, lyrics e transcoding delegado à infraestrutura existente;
+- [x] playlists, favoritos e scrobble derivados do `userId` autenticado;
+- [x] testes HTTP locais de contrato, ownership/IDOR, Range e endpoints não suportados;
+- [x] redaction de query string para impedir vazamento de `apiKey` em logs;
+- [ ] validar manualmente pelo menos dois clientes reais (Symfonium + Feishin) e registrar a matriz de aceite.
+
+Detalhes: [open-subsonic.md](open-subsonic.md).
 
 ## Backlog visual e PWA
 
@@ -253,7 +265,7 @@ Esses itens são independentes da #174 e da #81, ambas concluídas.
 
 ## Backlog atual
 
-O backlog implementável atual é a Fase 13, centralizada na #266. A #262 é o P0 em execução e a #264 é P1, explicitamente posterior ao fechamento end-to-end do Jamendo. A #239 e a #123 permanecem encerradas como registros dos ciclos anteriores e não devem ser reabertas artificialmente.
+O backlog implementável atual está restrito ao fechamento da Fase 13. O código de #262 e #264 foi consolidado no PR #276; a pendência restante é a validação manual real de clientes OpenSubsonic da #264. A #239 e a #123 permanecem encerradas como registros dos ciclos anteriores e não devem ser reabertas artificialmente.
 
 ## Regra de execução
 
