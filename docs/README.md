@@ -2,7 +2,7 @@
 
 Este diretório mistura documentação **corrente** e registros históricos de implementação. Esta página define qual material deve ser usado como fonte de verdade.
 
-> Inventário e backlog revisados em 2026-09-05. A Fase 12 foi concluída e a #239 encerrada. Na Fase 13, o P0 Jamendo (#262) está tecnicamente concluído pelo PR #276, incluindo cenários negativos/fakes sem internet pública; o P1 OpenSubsonic (#264) também foi implementado no mesmo PR como adapter sobre os serviços existentes. A única pendência de aceite ainda não executada é a validação manual documentada com pelo menos dois clientes reais OpenSubsonic. A #266 permanece como índice executivo do ciclo até essa validação ser concluída.
+> Inventário e backlog revisados em 2026-09-05. A Fase 12 foi concluída e a #239 encerrada. Na Fase 13, o P0 Jamendo (#262) foi concluído tecnicamente pelo PR #276 e o P1 OpenSubsonic (#264) foi implementado no mesmo PR como adapter sobre os serviços existentes. A revisão pós-merge #278–#282 também foi concluída e integrada à `main`, cobrindo performance das projeções, schema SQLite v12/backup, concorrência da UI de API keys, contrato HTTP compartilhado e negociação `v`/`c`. A única pendência de aceite ainda não executada é a validação manual documentada com pelo menos dois clientes reais OpenSubsonic. A #266 permanece como índice executivo do ciclo até essa validação ser concluída.
 
 ## Desenvolvimento e agentes de IA
 
@@ -19,9 +19,9 @@ Comece por:
 3. [`roadmap.md`](roadmap.md) — estado técnico das fases e pendências reais;
 4. [issue #266](https://github.com/felipe-urgal/home-music/issues/266) — índice executivo ativo da Fase 13;
 5. [issue #262](https://github.com/felipe-urgal/home-music/issues/262) — P0 Jamendo;
-6. [issue #264](https://github.com/felipe-urgal/home-music/issues/264) — P1 OpenSubsonic;
+6. [issue #264](https://github.com/felipe-urgal/home-music/issues/264) — P1 OpenSubsonic e aceite manual ainda pendente;
 7. [`jamendo.md`](jamendo.md) — descoberta, licença e importação segura;
-8. [`open-subsonic.md`](open-subsonic.md) — subset, autenticação, ownership e matriz de validação OpenSubsonic;
+8. [`open-subsonic.md`](open-subsonic.md) — subset, autenticação, ownership, negociação de protocolo, projeções sob demanda e matriz de validação OpenSubsonic;
 9. [issue #239](https://github.com/felipe-urgal/home-music/issues/239) — registro encerrado da Fase 12;
 10. [issue #123](https://github.com/felipe-urgal/home-music/issues/123) — registro executivo do ciclo de backlog encerrado em 2026-09-02;
 11. [`administration-ui.md`](administration-ui.md) — composição atual de Minha conta/Administração;
@@ -29,13 +29,14 @@ Comece por:
 
 ## Estado do backlog atual
 
-A Fase 13 está em fechamento. O código de P0 e P1 foi consolidado no PR #276; a validação manual de clientes reais OpenSubsonic permanece separada do CI e não deve ser marcada como executada sem evidência.
+A Fase 13 está em fechamento. P0 e a base do P1 foram consolidados no PR #276; os follow-ups técnicos #278–#282 foram entregues pelos PRs #286, #287, #283, #284 e #285, respectivamente. A validação manual de clientes reais OpenSubsonic permanece separada do CI e não deve ser marcada como executada sem evidência.
 
 | Issue | Estado corrente |
 | --- | --- |
-| [#266](https://github.com/felipe-urgal/home-music/issues/266) | índice executivo ativo da Fase 13; P0 entregue e P1 implementado, aguardando apenas aceite manual com clientes reais |
+| [#266](https://github.com/felipe-urgal/home-music/issues/266) | índice executivo ativo da Fase 13; P0 e hardening técnico do P1 entregues, aguardando somente aceite manual com clientes reais |
 | [#262](https://github.com/felipe-urgal/home-music/issues/262) | P0 Jamendo concluído tecnicamente no PR #276: negativos, fake provider, documentação e CI final cobertos |
-| [#264](https://github.com/felipe-urgal/home-music/issues/264) | P1 OpenSubsonic implementado no PR #276; contrato/ownership automatizados, matriz Symfonium + Feishin ainda pendente de execução real |
+| [#264](https://github.com/felipe-urgal/home-music/issues/264) | P1 OpenSubsonic implementado e endurecido; matriz Symfonium + Feishin ainda pendente de execução real |
+| [#278–#282](https://github.com/felipe-urgal/home-music/issues/278) | follow-ups técnicos OpenSubsonic concluídos em `main`: projeções lazy, schema v12/backup, causalidade da UI, contrato compartilhado e negociação `v`/`c` |
 | [#239](https://github.com/felipe-urgal/home-music/issues/239) | Fase 12 concluída; índice executivo encerrado em 2026-09-04 |
 | [#123](https://github.com/felipe-urgal/home-music/issues/123) | encerrada como índice executivo de ciclo anterior |
 
@@ -50,13 +51,13 @@ A ordem corrente está em `roadmap.md` e na #266. Itens concluídos de fases ant
 ## Composição do backend
 
 - [`server-composition.md`](server-composition.md) — limites entre composition root, rotas por domínio, serviços e infraestrutura compartilhada do Fastify.
-- [`open-subsonic.md`](open-subsonic.md) — adapter `/rest/*` sobre `LibraryService`, `TrackMediaInfrastructure` e `PersonalLibraryService`, com API keys dedicadas e sem segunda fonte de verdade.
+- [`open-subsonic.md`](open-subsonic.md) — adapter `/rest/*` sobre `LibraryService`, `TrackMediaInfrastructure` e `PersonalLibraryService`, com API keys dedicadas, contrato compartilhado, negociação de protocolo e sem segunda fonte de verdade.
 
 ## Segurança e regressões
 
 - [`security-regressions.md`](security-regressions.md) — gate dedicado de regressões negativas para Administração/Importação, invariantes cobertas e regras de isolamento das fixtures.
 - [`login-abuse-protection.md`](login-abuse-protection.md) — rate limits por IP/identidade, gate global de `scrypt`, `Retry-After`, métricas agregadas e política de restart do login.
-- [`open-subsonic.md`](open-subsonic.md) — ownership derivado da API key, persistência somente do hash, revogação isolada e redaction de query string nos logs.
+- [`open-subsonic.md`](open-subsonic.md) — ownership derivado da API key, persistência somente do hash, revogação isolada, validação `v`/`c` e redaction de query string nos logs.
 
 ## Dependências e CI
 
@@ -68,6 +69,7 @@ A ordem corrente está em `roadmap.md` e na #266. Itens concluídos de fases ant
 - [`library-http-delivery.md`](library-http-delivery.md) — snapshot HTTP autenticado da biblioteca, `revision`, projeção efetiva de overrides antes do cache, ETag privado, revalidação `304`, compressão Brotli/gzip e cache de projeção/serialização.
 - [`library-navigation-performance.md`](library-navigation-performance.md) — índice derivado por `libraryRevision`, equivalência semântica e comparativo 10k/25k da navegação/busca.
 - [`frontend-code-splitting.md`](frontend-code-splitting.md) — chunks secundários sob demanda, invariantes de navegação/autorização e budgets raw/gzip/Brotli validados no build.
+- [`open-subsonic.md`](open-subsonic.md) — projeções de catálogo/favoritos materializadas somente quando o endpoint realmente as consome; fast paths por faixa não percorrem a biblioteca global.
 
 ## Acessibilidade
 
@@ -83,7 +85,7 @@ A ordem corrente está em `roadmap.md` e na #266. Itens concluídos de fases ant
 - [`production-contract.md`](production-contract.md) — interface operacional padronizada `prod:*` e manifesto para automação local.
 - [`production-verification.md`](production-verification.md) — contrato read-only de readiness e retry usado por `prod:verify`.
 - [`long-job-observability.md`](long-job-observability.md) — lifecycle estruturado, correlação com Histórico operacional, redaction, retenção e investigação de scans/imports/transcodes no journal.
-- [`backup-restore.md`](backup-restore.md)
+- [`backup-restore.md`](backup-restore.md) — backup/restore consistente e compatibilidade explícita com o schema SQLite corrente v12.
 - [`ffmpeg.md`](ffmpeg.md)
 - [`tailscale.md`](tailscale.md)
 - [`public-access.md`](public-access.md)
@@ -154,7 +156,7 @@ Fontes atuais:
 - [`phase-7.5-my-account-screen.md`](phase-7.5-my-account-screen.md)
 - [`open-subsonic.md`](open-subsonic.md)
 
-A política de capacidade e isolamento de sessões da #228 está documentada em `multi-user-auth.md`; a proteção de login entregue pela #229 está documentada em `login-abuse-protection.md`. OpenSubsonic usa credencial própria por aplicativo e não reutiliza a sessão/senha web.
+A política de capacidade e isolamento de sessões da #228 está documentada em `multi-user-auth.md`; a proteção de login entregue pela #229 está documentada em `login-abuse-protection.md`. OpenSubsonic usa credencial própria por aplicativo, contratos públicos compartilhados entre server/web e não reutiliza a sessão/senha web.
 
 ## Registros históricos `phase-7.5-*`
 
@@ -168,7 +170,7 @@ Não use um registro histórico isolado para inferir que uma funcionalidade aind
 
 A suíte Playwright tem instruções próprias em [`../e2e/README.md`](../e2e/README.md). O gate crítico inclui smoke geral, coleções offline deduplicadas, fluxo desktop individual/lote, isolamento offline entre contas e a regressão Jamendo de licença/elegibilidade/início de importação integrada ao workbench; a regressão completa continua disponível conforme o risco da mudança. Overrides de metadata também possuem regressão desktop cobrindo propagação imediata para o player e reconciliação da saúde administrativa.
 
-A compatibilidade OpenSubsonic de CI usa testes HTTP locais de contrato/ownership; Symfonium/Feishin/Tempo não são dependências do CI e continuam exigindo registro manual quando forem usados como evidência de aceite.
+A compatibilidade OpenSubsonic de CI usa testes HTTP locais de contrato/ownership, negociação de protocolo e fast paths; Symfonium/Feishin/Tempo não são dependências do CI e continuam exigindo registro manual quando forem usados como evidência de aceite.
 
 ## Regra para manutenção da documentação
 
