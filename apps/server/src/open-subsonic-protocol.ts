@@ -14,9 +14,11 @@ type ParsedVersion = Readonly<{
   patch: number;
 }>;
 
+type OpenSubsonicProtocolErrorCode = 0 | 10 | 20 | 30;
+
 export type OpenSubsonicProtocolValidation =
   | Readonly<{ ok: true; version: string; client: string }>
-  | Readonly<{ ok: false; code: 0 | 10 | 20 | 30; message: string }>;
+  | Readonly<{ ok: false; code: OpenSubsonicProtocolErrorCode; message: string }>;
 
 function one(query: OpenSubsonicProtocolQuery, key: string) {
   const value = query[key];
@@ -104,7 +106,7 @@ export function validateOpenSubsonicCommonParameters(
 }
 
 export function openSubsonicProtocolFailure(
-  code: OpenSubsonicProtocolValidation extends { ok: false; code: infer C } ? C : never,
+  code: OpenSubsonicProtocolErrorCode,
   message: string
 ) {
   return {
