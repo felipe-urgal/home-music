@@ -149,15 +149,26 @@ export function trackIdsFromPreview(preview: M3u8Preview) {
 export function exportM3u8(trackIds: readonly string[], library: M3u8LibrarySnapshot) {
   const byId = new Map(library.allTracks.map(track => [track.id, track]));
   const lines = ['#EXTM3U'];
+  const omittedTrackIds: string[] = [];
 
   for (const trackId of trackIds) {
     const track = byId.get(trackId);
-    if (!track) continue;
+    if (!track) {
+      omittedTrackIds.push(trackId);
+      continue;
+    }
     const relativePath = toLibraryRelativePath(library.root, track.filePath);
-    if (relativePath) lines.push(relativePath);
+    if (!relativePath) {
+      omittedTrackIds.push(trackId);
+      continue;
+    }
+    lines.push(relativePath);
   }
 
-  return `${lines.join('\n')}\n`;
+  return {
+    content: `${lines.join('\n')}\n`,
+    omittedTrackIds
+  };
 }
 
 function buildLibraryPathIndex(library: M3u8LibrarySnapshot) {
@@ -191,7 +202,6 @@ function parsePortableRelativePath(value: string):
   const normalizedSeparators = value.replace(/\\/g, '/');
   if (
     normalizedSeparators.startsWith('/')
-    || normalizedSeparators.startsWith('//')
     || /^[A-Za-z]:\//.test(normalizedSeparators)
     || path.win32.isAbsolute(value)
   ) {
