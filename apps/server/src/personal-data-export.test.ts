@@ -5,16 +5,18 @@ import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
 import Fastify from 'fastify';
+import type {
+  PersonalDataBundleV1,
+  PortableTrackReferenceV1
+} from '@home-music/shared/personal-data';
+import { HomeMusicDatabase } from './database.js';
+import { LibraryViewStore } from './library-views.js';
 import {
   PERSONAL_DATA_FORMAT,
   PERSONAL_DATA_HISTORY_LIMIT,
   PERSONAL_DATA_VERSION,
-  type PersonalDataBundleV1,
-  type PortableTrackReferenceV1
-} from '@home-music/shared/personal-data';
-import { HomeMusicDatabase } from './database.js';
-import { LibraryViewStore } from './library-views.js';
-import { PersonalDataExportService } from './personal-data-export.js';
+  PersonalDataExportService
+} from './personal-data-export.js';
 import { registerPersonalDataExportRoutes } from './personal-data-export-routes.js';
 import { SmartPlaylistStore } from './smart-playlists.js';
 
