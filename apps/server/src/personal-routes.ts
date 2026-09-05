@@ -10,16 +10,23 @@ import { registerSmartPlaylistRoutes } from './smart-playlist-routes.js';
 
 const defaultDatabasePath = fileURLToPath(new URL('../../../data/home-music.db', import.meta.url));
 
+type PersonalRoutesOptions = {
+  databasePath?: string;
+};
+
 export function registerPersonalRoutes(
   app: FastifyInstance,
-  personal: PersonalLibraryService
+  personal: PersonalLibraryService,
+  options: PersonalRoutesOptions = {}
 ) {
-  const databasePath = process.env.HOME_MUSIC_DATABASE_PATH || defaultDatabasePath;
+  const databasePath = options.databasePath
+    || process.env.HOME_MUSIC_DATABASE_PATH
+    || defaultDatabasePath;
   const personalDataExporter = new PersonalDataExportService(personal, databasePath);
 
   registerLibraryViewRoutes(app, { databasePath });
   registerSmartPlaylistRoutes(app, { databasePath });
-  registerPlaybackHistoryRoutes(app);
+  registerPlaybackHistoryRoutes(app, { databasePath });
   registerPersonalDataExportRoutes(app, personalDataExporter);
 
   app.addHook('onClose', async () => {
