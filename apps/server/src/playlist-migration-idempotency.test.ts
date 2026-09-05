@@ -65,7 +65,7 @@ test('migration v9 é idempotente quando user_version fica atrasado após o sche
     }
 
     const recovered = new HomeMusicDatabase(databasePath);
-    assert.equal(recovered.getSchemaVersion(), 11);
+    assert.equal(recovered.getSchemaVersion(), 12);
     const playlists = recovered.getPlaylists(USER_ID);
     assert.equal(playlists.filter(item => item.source === 'manual').length, 1);
     assert.equal(playlists.filter(item => item.source === 'rekordbox').length, 1);
@@ -129,7 +129,7 @@ test('migration v11 amplia ownership somente para smart playlists pessoais', asy
     }
 
     const migrated = new HomeMusicDatabase(databasePath);
-    assert.equal(migrated.getSchemaVersion(), 11);
+    assert.equal(migrated.getSchemaVersion(), 12);
     migrated.close();
 
     const raw = new DatabaseSync(databasePath);

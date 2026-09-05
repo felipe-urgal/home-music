@@ -4,25 +4,27 @@ import os from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
+import { HomeMusicDatabase } from './database.js';
 import { OpenSubsonicCredentialStore } from './open-subsonic-credentials.js';
 import { sanitizeRequestUrl } from './request-log.js';
 
 function createUsers(databasePath: string) {
+  const canonical = new HomeMusicDatabase(databasePath);
+  canonical.close();
+
   const db = new DatabaseSync(databasePath);
-  db.exec(`
-    PRAGMA foreign_keys = ON;
-    CREATE TABLE users (
-      id TEXT PRIMARY KEY NOT NULL,
-      username TEXT NOT NULL,
-      role TEXT NOT NULL CHECK(role IN ('admin', 'user')),
-      enabled INTEGER NOT NULL CHECK(enabled IN (0, 1)),
-      password_must_change INTEGER NOT NULL CHECK(password_must_change IN (0, 1))
-    );
-  `);
+  const now = '2026-09-05T00:00:00.000Z';
   db.prepare(`
-    INSERT INTO users(id, username, role, enabled, password_must_change)
-    VALUES (?, ?, ?, 1, 0), (?, ?, ?, 1, 0);
-  `).run('user-a', 'alice', 'user', 'user-b', 'bob', 'admin');
+    INSERT INTO users(
+      id, username, username_normalized, password_hash, role, enabled,
+      password_must_change, created_at, updated_at, password_changed_at
+    ) VALUES
+      (?, ?, ?, ?, ?, 1, 0, ?, ?, NULL),
+      (?, ?, ?, ?, ?, 1, 0, ?, ?, NULL);
+  `).run(
+    'user-a', 'alice', 'alice', 'test-hash-a', 'user', now, now,
+    'user-b', 'bob', 'bob', 'test-hash-b', 'admin', now, now
+  );
   db.close();
 }
 

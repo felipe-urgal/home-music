@@ -60,19 +60,6 @@ export class OpenSubsonicCredentialStore {
     this.db = new DatabaseSync(databasePath);
     this.db.exec('PRAGMA foreign_keys = ON;');
     this.db.exec('PRAGMA busy_timeout = 5000;');
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS open_subsonic_api_keys (
-        id TEXT PRIMARY KEY NOT NULL,
-        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        name TEXT NOT NULL CHECK(length(name) BETWEEN 1 AND ${MAX_KEY_NAME_LENGTH}),
-        key_hash TEXT NOT NULL UNIQUE CHECK(length(key_hash) = 64),
-        key_hint TEXT NOT NULL CHECK(length(key_hint) BETWEEN 1 AND 24),
-        created_at TEXT NOT NULL
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_open_subsonic_api_keys_user_created
-      ON open_subsonic_api_keys(user_id, created_at DESC, id DESC);
-    `);
   }
 
   close() {
