@@ -2,7 +2,7 @@
 
 Este diretório mistura documentação **corrente** e registros históricos de implementação. Esta página define qual material deve ser usado como fonte de verdade.
 
-> Inventário e backlog revisados em 2026-09-05. A Fase 12 foi concluída e a #239 encerrada. Na Fase 13, o P0 Jamendo (#262) foi concluído tecnicamente pelo PR #276 e o P1 OpenSubsonic (#264) foi implementado no mesmo PR como adapter sobre os serviços existentes. A revisão pós-merge #278–#282 também foi concluída e integrada à `main`, cobrindo performance das projeções, schema SQLite v12/backup, concorrência da UI de API keys, contrato HTTP compartilhado e negociação `v`/`c`. A única pendência de aceite ainda não executada é a validação manual documentada com pelo menos dois clientes reais OpenSubsonic. A #266 permanece como índice executivo do ciclo até essa validação ser concluída.
+> Inventário e backlog revisados em 2026-09-05. A Fase 13 foi encerrada: Jamendo (#262), OpenSubsonic (#264) e os follow-ups técnicos #278–#282 estão integrados à `main`. O aceite manual real de OpenSubsonic foi registrado com Feishin; Symfonium não foi executado e o proprietário aprovou explicitamente o encerramento sem exigir o segundo cliente, sem registrar teste inexistente. A #266 foi encerrada e a #295 passa a ser o índice executivo ativo da Fase 14 — Soberania e recuperação.
 
 ## Desenvolvimento e agentes de IA
 
@@ -17,30 +17,36 @@ Comece por:
 1. [`../README.md`](../README.md) — instalação, operação e visão geral do produto;
 2. [`architecture.md`](architecture.md) — arquitetura corrente;
 3. [`roadmap.md`](roadmap.md) — estado técnico das fases e pendências reais;
-4. [issue #266](https://github.com/felipe-urgal/home-music/issues/266) — índice executivo ativo da Fase 13;
-5. [issue #262](https://github.com/felipe-urgal/home-music/issues/262) — P0 Jamendo;
-6. [issue #264](https://github.com/felipe-urgal/home-music/issues/264) — P1 OpenSubsonic e aceite manual ainda pendente;
-7. [`jamendo.md`](jamendo.md) — descoberta, licença e importação segura;
-8. [`open-subsonic.md`](open-subsonic.md) — subset, autenticação, ownership, negociação de protocolo, projeções sob demanda e matriz de validação OpenSubsonic;
-9. [issue #239](https://github.com/felipe-urgal/home-music/issues/239) — registro encerrado da Fase 12;
-10. [issue #123](https://github.com/felipe-urgal/home-music/issues/123) — registro executivo do ciclo de backlog encerrado em 2026-09-02;
-11. [`administration-ui.md`](administration-ui.md) — composição atual de Minha conta/Administração;
-12. documentos funcionais abaixo para invariantes específicas.
+4. [issue #295](https://github.com/felipe-urgal/home-music/issues/295) — índice executivo ativo da Fase 14;
+5. [issue #291](https://github.com/felipe-urgal/home-music/issues/291) — P0 de checkpoint pré-update recuperável;
+6. [issue #292](https://github.com/felipe-urgal/home-music/issues/292) — P0 de exportação portátil dos dados pessoais;
+7. [issue #293](https://github.com/felipe-urgal/home-music/issues/293) — P1 de importação pessoal segura, dependente da #292;
+8. [issue #294](https://github.com/felipe-urgal/home-music/issues/294) — P1 de interoperabilidade de playlists por M3U8;
+9. [`jamendo.md`](jamendo.md) — descoberta, licença e importação segura;
+10. [`open-subsonic.md`](open-subsonic.md) — subset, autenticação, ownership, negociação de protocolo, projeções sob demanda e matriz de validação OpenSubsonic;
+11. [issue #266](https://github.com/felipe-urgal/home-music/issues/266) — registro encerrado da Fase 13;
+12. [issue #239](https://github.com/felipe-urgal/home-music/issues/239) — registro encerrado da Fase 12;
+13. [issue #123](https://github.com/felipe-urgal/home-music/issues/123) — registro executivo do ciclo de backlog encerrado em 2026-09-02;
+14. [`administration-ui.md`](administration-ui.md) — composição atual de Minha conta/Administração;
+15. documentos funcionais abaixo para invariantes específicas.
 
 ## Estado do backlog atual
 
-A Fase 13 está em fechamento. P0 e a base do P1 foram consolidados no PR #276; os follow-ups técnicos #278–#282 foram entregues pelos PRs #286, #287, #283, #284 e #285, respectivamente. A validação manual de clientes reais OpenSubsonic permanece separada do CI e não deve ser marcada como executada sem evidência.
+A Fase 14 está em andamento e centralizada na #295. A primeira onda é formada por #291, #292 e #294, que podem avançar em paralelo. A #293 depende da estabilização e merge do formato portátil definido pela #292.
 
 | Issue | Estado corrente |
 | --- | --- |
-| [#266](https://github.com/felipe-urgal/home-music/issues/266) | índice executivo ativo da Fase 13; P0 e hardening técnico do P1 entregues, aguardando somente aceite manual com clientes reais |
-| [#262](https://github.com/felipe-urgal/home-music/issues/262) | P0 Jamendo concluído tecnicamente no PR #276: negativos, fake provider, documentação e CI final cobertos |
-| [#264](https://github.com/felipe-urgal/home-music/issues/264) | P1 OpenSubsonic implementado e endurecido; matriz Symfonium + Feishin ainda pendente de execução real |
-| [#278–#282](https://github.com/felipe-urgal/home-music/issues/278) | follow-ups técnicos OpenSubsonic concluídos em `main`: projeções lazy, schema v12/backup, causalidade da UI, contrato compartilhado e negociação `v`/`c` |
+| [#295](https://github.com/felipe-urgal/home-music/issues/295) | índice executivo ativo da Fase 14 — Soberania e recuperação |
+| [#291](https://github.com/felipe-urgal/home-music/issues/291) | P0 aberto: checkpoint pré-update verificável e recuperação determinística do estado SQLite |
+| [#292](https://github.com/felipe-urgal/home-music/issues/292) | P0 aberto: exportação versionada e privada dos dados pessoais do usuário |
+| [#293](https://github.com/felipe-urgal/home-music/issues/293) | P1 aberto, bloqueado pela #292: importação com dry-run, matching conservador e ownership da sessão |
+| [#294](https://github.com/felipe-urgal/home-music/issues/294) | P1 aberto: importação/exportação M3U8 sem importar mídia nem criar segunda biblioteca |
+| [#266](https://github.com/felipe-urgal/home-music/issues/266) | Fase 13 concluída e índice executivo encerrado em 2026-09-05 |
+| [#264](https://github.com/felipe-urgal/home-music/issues/264) | OpenSubsonic concluído; Feishin validado manualmente e Symfonium explicitamente não executado no aceite final |
 | [#239](https://github.com/felipe-urgal/home-music/issues/239) | Fase 12 concluída; índice executivo encerrado em 2026-09-04 |
 | [#123](https://github.com/felipe-urgal/home-music/issues/123) | encerrada como índice executivo de ciclo anterior |
 
-A ordem corrente está em `roadmap.md` e na #266. Itens concluídos de fases anteriores não devem ser reabertos artificialmente para representar trabalho novo.
+A ordem corrente está em `roadmap.md` e na #295. Itens concluídos de fases anteriores não devem ser reabertos artificialmente para representar trabalho novo.
 
 ## Composição do frontend
 
@@ -164,13 +170,13 @@ Os demais arquivos `phase-7.5-*` preservam o desenho, decisões e gates dos slic
 
 Para saber **como o sistema funciona hoje**, prefira `README.md`, `architecture.md`, `multi-user-auth.md`, `open-subsonic.md`, os documentos funcionais atuais e os arquivos `phase-7.5-*` explicitamente listados acima como fonte corrente.
 
-Não use um registro histórico isolado para inferir que uma funcionalidade ainda está pendente. O estado de entrega fica em `roadmap.md` e nas issues abertas; a #123 e a #239 preservam ciclos encerrados e a #266 representa o ciclo técnico atual.
+Não use um registro histórico isolado para inferir que uma funcionalidade ainda está pendente. O estado de entrega fica em `roadmap.md` e nas issues abertas; a #123, a #239 e a #266 preservam ciclos encerrados e a #295 representa o ciclo técnico atual.
 
 ## E2E
 
 A suíte Playwright tem instruções próprias em [`../e2e/README.md`](../e2e/README.md). O gate crítico inclui smoke geral, coleções offline deduplicadas, fluxo desktop individual/lote, isolamento offline entre contas e a regressão Jamendo de licença/elegibilidade/início de importação integrada ao workbench; a regressão completa continua disponível conforme o risco da mudança. Overrides de metadata também possuem regressão desktop cobrindo propagação imediata para o player e reconciliação da saúde administrativa.
 
-A compatibilidade OpenSubsonic de CI usa testes HTTP locais de contrato/ownership, negociação de protocolo e fast paths; Symfonium/Feishin/Tempo não são dependências do CI e continuam exigindo registro manual quando forem usados como evidência de aceite.
+A compatibilidade OpenSubsonic de CI usa testes HTTP locais de contrato/ownership, negociação de protocolo e fast paths; apps externos não são dependências do CI. Feishin foi validado manualmente no encerramento da Fase 13; Symfonium permaneceu explicitamente como não executado após dispensa do segundo smoke manual pelo proprietário.
 
 ## Regra para manutenção da documentação
 
@@ -178,7 +184,7 @@ Ao alterar comportamento ou backlog:
 
 - atualize a documentação funcional canônica afetada;
 - atualize `roadmap.md` quando a fase ou pendência mudar;
-- atualize o índice executivo vigente quando houver um ciclo de backlog ativo; hoje é a #266, enquanto #239 e #123 permanecem como registros encerrados;
+- atualize o índice executivo vigente quando houver um ciclo de backlog ativo; hoje é a #295, enquanto #266, #239 e #123 permanecem como registros encerrados;
 - mantenha a issue de implementação com estado/gate reais;
 - preserve ADRs e registros históricos em vez de reescrevê-los como se tivessem sido produzidos hoje;
 - não crie datas/status artificiais em arquivos sem mudança semântica apenas para aparentar revisão.

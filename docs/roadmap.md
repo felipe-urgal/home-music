@@ -1,8 +1,8 @@
 # Roadmap
 
-Este documento é a visão técnica de alto nível do Home Music. A issue [#123](https://github.com/felipe-urgal/home-music/issues/123) preserva o índice executivo do ciclo de backlog concluído em 2026-09-02. A Fase 12 foi encerrada pela [#239](https://github.com/felipe-urgal/home-music/issues/239) e o ciclo técnico atual está centralizado na [#266](https://github.com/felipe-urgal/home-music/issues/266).
+Este documento é a visão técnica de alto nível do Home Music. A issue [#123](https://github.com/felipe-urgal/home-music/issues/123) preserva o índice executivo do ciclo de backlog concluído em 2026-09-02. A Fase 12 foi encerrada pela [#239](https://github.com/felipe-urgal/home-music/issues/239), a Fase 13 pela [#266](https://github.com/felipe-urgal/home-music/issues/266) e o ciclo técnico atual está centralizado na [#295](https://github.com/felipe-urgal/home-music/issues/295).
 
-> Estado revisado em 2026-09-05. A Fase 12 está concluída. Na Fase 13, o P0 Jamendo (#262) foi concluído tecnicamente pelo PR #276 e o P1 OpenSubsonic (#264) foi implementado no mesmo PR como adapter sobre os serviços existentes. A revisão técnica pós-merge #278–#282 também foi concluída e integrada à `main`. O único aceite ainda não executado é a validação manual com pelo menos dois clientes OpenSubsonic reais; por isso #264 e #266 permanecem abertas até existir essa evidência.
+> Estado revisado em 2026-09-05. A Fase 13 está concluída: Jamendo (#262) foi entregue, o adapter OpenSubsonic (#264) e os follow-ups #278–#282 estão integrados à `main`, e o aceite manual real foi registrado com Feishin. Symfonium não foi executado; o proprietário aprovou explicitamente o encerramento sem exigir o segundo cliente e essa ausência permanece documentada como tal. As issues #264 e #266 foram encerradas. A Fase 14 está aberta sob a #295, com #291 e #292 como P0 e #293 e #294 como P1.
 
 ## Fases 1–2 — Base do produto e biblioteca pessoal
 
@@ -222,7 +222,7 @@ O PR #207 foi mergeado em 2026-09-01 com CI completo verde e encerrou o backlog 
 
 ## Fase 13 — Ecossistema aberto e interoperabilidade
 
-**Em fechamento.** O índice executivo é a [#266](https://github.com/felipe-urgal/home-music/issues/266). O PR #276 estabeleceu a entrega técnica de P0 + P1; a revisão sênior posterior abriu #278–#282, todos já concluídos e integrados à `main`.
+**Concluída em 2026-09-05.** O índice executivo [#266](https://github.com/felipe-urgal/home-music/issues/266) foi encerrado após a conclusão técnica e o aceite final autorizado. O PR #276 estabeleceu a entrega técnica de P0 + P1; a revisão sênior posterior abriu #278–#282, todos concluídos e integrados à `main`.
 
 ### P0 — Jamendo
 
@@ -252,7 +252,7 @@ A [#264](https://github.com/felipe-urgal/home-music/issues/264) é implementada 
 - [x] playlists, favoritos e scrobble derivados do `userId` autenticado;
 - [x] testes HTTP locais de contrato, ownership/IDOR, Range e endpoints não suportados;
 - [x] redaction de query string para impedir vazamento de `apiKey` em logs;
-- [ ] validar manualmente pelo menos dois clientes reais (Symfonium + Feishin) e registrar a matriz de aceite.
+- [x] registrar aceite manual real com Feishin: autenticação por username + API key com Legacy Authentication, biblioteca, reprodução e seek/HTTP Range aprovados; Symfonium permaneceu não executado e foi dispensado explicitamente no aceite final.
 
 #### Follow-ups técnicos pós-implementação
 
@@ -262,9 +262,29 @@ A [#264](https://github.com/felipe-urgal/home-music/issues/264) é implementada 
 - [x] [#281](https://github.com/felipe-urgal/home-music/issues/281) — contrato HTTP público de chaves centralizado em `@home-music/shared/open-subsonic` — entregue pelo PR #284;
 - [x] [#282](https://github.com/felipe-urgal/home-music/issues/282) — validação dos parâmetros comuns `v`/`c` e compatibilidade de protocolo — entregue pelo PR #285.
 
-Os cinco follow-ups foram reconciliados sequencialmente contra a `main`, passaram `npm run check` no head final e, após a migration v12, os CIs de integração também passaram `Backup restore smoke`. Eles não substituem nem simulam a evidência manual ainda ausente da #264.
+Os cinco follow-ups foram reconciliados sequencialmente contra a `main`, passaram `npm run check` no head final e, após a migration v12, os CIs de integração também passaram `Backup restore smoke`. Os gates automatizados não simulam evidência de cliente real: a evidência manual registrada é a execução do Feishin; Symfonium permanece explicitamente como não executado na matriz.
 
 Detalhes: [open-subsonic.md](open-subsonic.md).
+
+## Fase 14 — Soberania e recuperação
+
+**Em andamento.** O índice executivo é a [#295](https://github.com/felipe-urgal/home-music/issues/295).
+
+O objetivo é tornar o Home Music mais seguro para evoluir, migrar e abandonar sem prender o usuário ao banco interno, mantendo a biblioteca física, `MUSIC_DIR` e os serviços atuais como autoridades.
+
+### P0
+
+- [ ] [#291](https://github.com/felipe-urgal/home-music/issues/291) — tornar `service:update` recuperável com checkpoint pré-update, reutilizando o backup/restore canônico e falhando antes de parar o serviço se o estado não puder ser protegido;
+- [ ] [#292](https://github.com/felipe-urgal/home-music/issues/292) — exportar dados pessoais do usuário em bundle portátil, versionado e sem segredos, dados de terceiros ou paths absolutos.
+
+### P1
+
+- [ ] [#293](https://github.com/felipe-urgal/home-music/issues/293) — importar dados pessoais com preview e matching seguro; **depende de #292** e não deve criar contrato paralelo;
+- [ ] [#294](https://github.com/felipe-urgal/home-music/issues/294) — adicionar interoperabilidade de playlists por M3U8 sem importar mídia ou criar segunda fonte de verdade.
+
+### Ordem e paralelismo
+
+A primeira onda pode executar #291, #292 e #294 em paralelo. A #293 só começa depois que o formato portátil e o `PortableTrackReference` da #292 estiverem estabilizados e mergeados. Não há P2 planejado neste ciclo; novos itens exigem evidência concreta.
 
 ## Backlog visual e PWA
 
@@ -275,7 +295,7 @@ Esses itens são independentes da #174 e da #81, ambas concluídas.
 
 ## Backlog atual
 
-O backlog implementável atual está restrito ao fechamento da Fase 13. #262 está concluída; a implementação automatizada de #264 e os follow-ups técnicos #278–#282 estão integrados à `main`. A única pendência restante é a validação manual real de Symfonium + Feishin da #264. A #239 e a #123 permanecem encerradas como registros dos ciclos anteriores e não devem ser reabertas artificialmente.
+O backlog implementável atual é a Fase 14, centralizada na #295. #291, #292 e #294 formam a primeira onda e podem avançar em paralelo; #293 depende da estabilização/merge da #292. A #266, a #239 e a #123 permanecem encerradas como registros de ciclos anteriores e não devem ser reabertas artificialmente para representar trabalho novo.
 
 ## Regra de execução
 
