@@ -5,7 +5,8 @@ import {
   exportM3u8,
   hashM3u8Content,
   previewM3u8,
-  trackIdsFromPreview
+  trackIdsFromPreview,
+  type M3u8Preview
 } from './m3u8-playlists.js';
 import type { PersonalLibraryService } from './personal-library-service.js';
 
@@ -67,7 +68,7 @@ export function registerM3u8PlaylistRoutes(
       });
     }
 
-    let preview;
+    let preview: M3u8Preview;
     try {
       preview = previewM3u8(request.body.content, library);
     } catch (error) {
