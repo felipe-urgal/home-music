@@ -53,6 +53,7 @@ type CatalogAlbum = {
   name: string;
   artistId: string;
   artist: string;
+  created: string;
   tracks: Track[];
 };
 
@@ -179,6 +180,12 @@ function stableId(prefix: 'artist' | 'album', ...parts: string[]) {
   return `${prefix === 'artist' ? 'ar' : 'al'}-${digest}`;
 }
 
+function safeIsoTimestamp(value: number | undefined) {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return '1970-01-01T00:00:00.000Z';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '1970-01-01T00:00:00.000Z' : date.toISOString();
+}
+
 function artistName(track: Track) {
   return cleanText(track.albumArtist, 300) ?? cleanText(track.artist, 300) ?? 'Artista desconhecido';
 }
@@ -187,7 +194,7 @@ function albumName(track: Track) {
   return cleanText(track.album, 300) ?? 'Álbum desconhecido';
 }
 
-function buildCatalog(tracks: Track[]): Catalog {
+function buildCatalog(tracks: Track[], library: OpenSubsonicLibrary): Catalog {
   const artistsByName = new Map<string, { id: string; name: string; albumsByName: Map<string, CatalogAlbum> }>();
   const albumByTrackId = new Map<string, CatalogAlbum>();
 
@@ -206,6 +213,7 @@ function buildCatalog(tracks: Track[]): Catalog {
     }
 
     const albumKey = album.toLocaleLowerCase('pt-BR');
+    const trackCreated = safeIsoTimestamp(library.getTrack(track.id)?.mtimeMs);
     let albumRecord = artistRecord.albumsByName.get(albumKey);
     if (!albumRecord) {
       albumRecord = {
@@ -213,9 +221,12 @@ function buildCatalog(tracks: Track[]): Catalog {
         name: album,
         artistId: artistRecord.id,
         artist: artistRecord.name,
+        created: trackCreated,
         tracks: []
       };
       artistRecord.albumsByName.set(albumKey, albumRecord);
+    } else if (trackCreated < albumRecord.created) {
+      albumRecord.created = trackCreated;
     }
     albumRecord.tracks.push(track);
     albumByTrackId.set(track.id, albumRecord);
@@ -269,7 +280,7 @@ function artistResponse(artist: CatalogArtist) {
 }
 
 function albumResponse(album: CatalogAlbum) {
-  const coverArt = coverArtId(album.tracks);
+  const coverArt = coverArtId(album.tracks) ?? '';
   return {
     id: album.id,
     parent: album.artistId,
@@ -277,11 +288,14 @@ function albumResponse(album: CatalogAlbum) {
     title: album.name,
     name: album.name,
     isDir: true,
+    isVideo: false,
     artist: album.artist,
     artistId: album.artistId,
-    ...(coverArt ? { coverArt } : {}),
+    artists: [{ id: album.artistId, name: album.artist }],
+    coverArt,
     songCount: album.tracks.length,
-    duration: albumDuration(album)
+    duration: albumDuration(album),
+    created: album.created
   };
 }
 
@@ -295,13 +309,18 @@ function songResponse(
   const internal = library.getTrack(track.id);
   if (!album || !internal) return null;
   const coverArt = track.hasCover ? `track:${track.id}` : coverArtId(album.tracks);
+  const displayArtist = track.artist || album.artist;
+  const artist = { id: album.artistId, name: displayArtist };
+  const albumArtist = { id: album.artistId, name: album.artist };
   return {
     id: track.id,
     parent: album.id,
     isDir: false,
     title: track.title,
     album: album.name,
-    artist: track.artist || album.artist,
+    artist: displayArtist,
+    artists: [artist],
+    albumArtists: [albumArtist],
     ...(coverArt ? { coverArt } : {}),
     size: internal.fileSize,
     contentType: internal.mimeType,
@@ -311,6 +330,9 @@ function songResponse(
     artistId: album.artistId,
     type: 'music',
     isVideo: false,
+    path: track.id,
+    discNumber: 1,
+    created: safeIsoTimestamp(internal.mtimeMs),
     ...(favoriteIds?.has(track.id) ? { starred: true } : {})
   };
 }
@@ -361,13 +383,24 @@ function authenticationFailure(query: Query) {
   if (apiKeyPresent && (passwordAuthPresent || tokenAuthPresent)) {
     return failure(43, 'Múltiplos mecanismos de autenticação foram enviados.');
   }
-  if (!apiKeyPresent && tokenAuthPresent) {
+  if (tokenAuthPresent) {
     return failure(41, 'Autenticação token/salt legada não é suportada. Use uma API key do Home Music.');
   }
-  if (!apiKeyPresent && passwordAuthPresent) {
-    return failure(42, 'Senha web não é aceita pelo adapter OpenSubsonic. Use uma API key do Home Music.');
+  if (passwordAuthPresent && (!one(query, 'u') || !one(query, 'p'))) {
+    return failure(42, 'Autenticação legada incompleta. Use usuário + API key do Home Music.');
   }
   return null;
+}
+
+function decodeLegacyApiKey(value: string) {
+  if (!value.startsWith('enc:')) return value;
+  const encoded = value.slice(4);
+  if (!encoded || encoded.length % 2 !== 0 || !/^[0-9a-f]+$/i.test(encoded)) return null;
+  try {
+    return Buffer.from(encoded, 'hex').toString('utf8');
+  } catch {
+    return null;
+  }
 }
 
 function authenticatedRequest(
@@ -380,21 +413,28 @@ function authenticatedRequest(
   if (mechanismError) return { response: mechanismError };
 
   const apiKey = one(query, 'apiKey');
-  if (!apiKey) {
+  const legacyUsername = apiKey ? null : one(query, 'u');
+  const legacyPassword = apiKey ? null : one(query, 'p');
+  const legacyApiKey = legacyPassword ? decodeLegacyApiKey(legacyPassword) : null;
+  const rawKey = apiKey ?? legacyApiKey;
+
+  if (!rawKey) {
     const subject = `invalid:${request.ip}`;
     if (!limiter.hit(subject, INVALID_AUTH_ATTEMPTS_PER_MINUTE)) {
       return { response: failure(0, 'Muitas tentativas de autenticação. Tente novamente em instantes.'), statusCode: 429 };
     }
-    return { response: failure(44, 'API key inválida ou ausente.') };
+    return { response: failure(apiKey ? 44 : 40, apiKey ? 'API key inválida ou ausente.' : 'Usuário ou chave de aplicativo inválidos.') };
   }
 
-  const identity = credentials.authenticate(apiKey);
-  if (!identity) {
+  const identity = credentials.authenticate(rawKey);
+  if (!identity || (legacyUsername != null && legacyUsername !== identity.user.username)) {
     const subject = `invalid:${request.ip}`;
     if (!limiter.hit(subject, INVALID_AUTH_ATTEMPTS_PER_MINUTE)) {
       return { response: failure(0, 'Muitas tentativas de autenticação. Tente novamente em instantes.'), statusCode: 429 };
     }
-    return { response: failure(44, 'API key inválida ou revogada.') };
+    return {
+      response: failure(apiKey ? 44 : 40, apiKey ? 'API key inválida ou revogada.' : 'Usuário ou chave de aplicativo inválidos.')
+    };
   }
 
   if (!limiter.hit(`key:${identity.keyId}`, VALID_KEY_REQUESTS_PER_MINUTE)) {
@@ -489,6 +529,25 @@ function playlistError(status: string) {
   return failure(10, 'Dados da playlist são inválidos.');
 }
 
+function userResponse(identity: OpenSubsonicAuthenticatedKey) {
+  return {
+    username: identity.user.username,
+    scrobblingEnabled: true,
+    adminRole: identity.user.role === 'admin',
+    settingsRole: false,
+    downloadRole: false,
+    uploadRole: false,
+    playlistRole: true,
+    coverArtRole: false,
+    commentRole: false,
+    podcastRole: false,
+    streamRole: true,
+    jukeboxRole: false,
+    shareRole: false,
+    folder: [MUSIC_FOLDER_ID]
+  };
+}
+
 export function registerOpenSubsonicRoutes(
   app: FastifyInstance,
   options: OpenSubsonicRouteOptions
@@ -531,8 +590,14 @@ export function registerOpenSubsonicRoutes(
     if (endpoint === 'tokenInfo') {
       return reply.send(success({ tokenInfo: { username: identity.user.username } }));
     }
+    if (endpoint === 'getUser') {
+      if (!ensureOwnUsername(request.query, identity)) {
+        return reply.send(failure(50, 'Não é permitido consultar outro usuário.'));
+      }
+      return reply.send(success({ user: userResponse(identity) }));
+    }
 
-    const catalog = buildCatalog(options.library.listPublicTracks());
+    const catalog = buildCatalog(options.library.listPublicTracks(), options.library);
     const favoriteIds = new Set(options.personal.getFavoriteIds(userId));
 
     if (endpoint === 'getMusicFolders') {
