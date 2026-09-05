@@ -2,7 +2,7 @@
 
 Este documento é a visão técnica de alto nível do Home Music. A issue [#123](https://github.com/felipe-urgal/home-music/issues/123) preserva o índice executivo do ciclo de backlog concluído em 2026-09-02. A Fase 12 foi encerrada pela [#239](https://github.com/felipe-urgal/home-music/issues/239), a Fase 13 pela [#266](https://github.com/felipe-urgal/home-music/issues/266) e o ciclo técnico atual está centralizado na [#295](https://github.com/felipe-urgal/home-music/issues/295).
 
-> Estado revisado em 2026-09-05. A Fase 13 está concluída: Jamendo (#262) foi entregue, o adapter OpenSubsonic (#264) e os follow-ups #278–#282 estão integrados à `main`, e o aceite manual real foi registrado com Feishin. Symfonium não foi executado; o proprietário aprovou explicitamente o encerramento sem exigir o segundo cliente e essa ausência permanece documentada como tal. As issues #264 e #266 foram encerradas. A Fase 14 está aberta sob a #295, com #291 e #292 como P0 e #293 e #294 como P1.
+> Estado revisado em 2026-09-05. A Fase 13 está concluída. Na Fase 14, a Onda 1 também foi concluída: #291, #292 e #294 estão integradas à `main` pelos PRs #297, #298 e #299. A #293 é a única pendência técnica do ciclo; sua dependência da #292 já foi satisfeita e a implementação está desbloqueada, porém pausada até a próxima retomada. A #295 permanece aberta como índice executivo da fase.
 
 ## Fases 1–2 — Base do produto e biblioteca pessoal
 
@@ -268,23 +268,23 @@ Detalhes: [open-subsonic.md](open-subsonic.md).
 
 ## Fase 14 — Soberania e recuperação
 
-**Em andamento.** O índice executivo é a [#295](https://github.com/felipe-urgal/home-music/issues/295).
+**Em pausa após a conclusão da Onda 1.** O índice executivo é a [#295](https://github.com/felipe-urgal/home-music/issues/295).
 
 O objetivo é tornar o Home Music mais seguro para evoluir, migrar e abandonar sem prender o usuário ao banco interno, mantendo a biblioteca física, `MUSIC_DIR` e os serviços atuais como autoridades.
 
 ### P0
 
-- [ ] [#291](https://github.com/felipe-urgal/home-music/issues/291) — tornar `service:update` recuperável com checkpoint pré-update, reutilizando o backup/restore canônico e falhando antes de parar o serviço se o estado não puder ser protegido;
-- [ ] [#292](https://github.com/felipe-urgal/home-music/issues/292) — exportar dados pessoais do usuário em bundle portátil, versionado e sem segredos, dados de terceiros ou paths absolutos.
+- [x] [#291](https://github.com/felipe-urgal/home-music/issues/291) — `service:update` recuperável com checkpoint pré-update verificável — entregue pelo PR #297;
+- [x] [#292](https://github.com/felipe-urgal/home-music/issues/292) — exportação de dados pessoais em bundle portátil v1 — entregue pelo PR #298.
 
 ### P1
 
-- [ ] [#293](https://github.com/felipe-urgal/home-music/issues/293) — importar dados pessoais com preview e matching seguro; **depende de #292** e não deve criar contrato paralelo;
-- [ ] [#294](https://github.com/felipe-urgal/home-music/issues/294) — adicionar interoperabilidade de playlists por M3U8 sem importar mídia ou criar segunda fonte de verdade.
+- [ ] [#293](https://github.com/felipe-urgal/home-music/issues/293) — importar dados pessoais com preview e matching seguro; a dependência da #292 está satisfeita e a implementação está **desbloqueada, porém pausada**;
+- [x] [#294](https://github.com/felipe-urgal/home-music/issues/294) — interoperabilidade segura de playlists por M3U8 — entregue pelo PR #299.
 
 ### Ordem e paralelismo
 
-A primeira onda pode executar #291, #292 e #294 em paralelo. A #293 só começa depois que o formato portátil e o `PortableTrackReference` da #292 estiverem estabilizados e mergeados. Não há P2 planejado neste ciclo; novos itens exigem evidência concreta.
+A Onda 1 (#291, #292 e #294) está concluída e integrada à `main`. A #293 é a única pendência da fase e deve usar o formato `home-music-personal-data` v1 e o `PortableTrackReferenceV1` já estabilizados pela #292, sem criar contrato concorrente. Não há P2 planejado neste ciclo; novos itens exigem evidência concreta.
 
 ## Backlog visual e PWA
 
@@ -295,7 +295,7 @@ Esses itens são independentes da #174 e da #81, ambas concluídas.
 
 ## Backlog atual
 
-O backlog implementável atual é a Fase 14, centralizada na #295. #291, #292 e #294 formam a primeira onda e podem avançar em paralelo; #293 depende da estabilização/merge da #292. A #266, a #239 e a #123 permanecem encerradas como registros de ciclos anteriores e não devem ser reabertas artificialmente para representar trabalho novo.
+A #293 é a única atividade implementável ainda aberta na Fase 14. Ela está desbloqueada pelo merge da #292, mas deliberadamente pausada até a próxima retomada. A #295 permanece aberta como índice executivo; #291, #292 e #294 estão concluídas. A #266, a #239 e a #123 permanecem encerradas como registros de ciclos anteriores e não devem ser reabertas artificialmente para representar trabalho novo.
 
 ## Regra de execução
 
