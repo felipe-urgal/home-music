@@ -26,6 +26,7 @@ import { registerLibraryRoutes } from './library-routes.js';
 import { LibraryService } from './library-service.js';
 import { registerMediaRoutes } from './media-routes.js';
 import { registerOpenSubsonicAccountRoutes } from './open-subsonic-account-routes.js';
+import { registerOpenSubsonicProtocolGuard } from './open-subsonic-protocol.js';
 import { registerOpenSubsonicRoutes } from './open-subsonic-routes.js';
 import { PersonalLibraryService } from './personal-library-service.js';
 import { registerPersonalRoutes } from './personal-routes.js';
@@ -242,6 +243,7 @@ const adminLibraryProjection = registerAdminTrackRoutes(app, {
 registerLibraryRoutes(app, library, integrityQueue, adminLibraryProjection);
 registerPersonalRoutes(app, personal);
 registerMediaRoutes(app, library, media);
+registerOpenSubsonicProtocolGuard(app);
 registerOpenSubsonicRoutes(app, {
   library,
   personal,
