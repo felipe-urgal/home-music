@@ -2,35 +2,80 @@ import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import {
-  LIBRARY_ASSISTANT_CONTENT_HASH_ALGORITHM,
-  LIBRARY_ASSISTANT_CONTENT_HASH_VERSION,
-  type LibraryAssistantContentIdentity,
-  type LibraryAssistantJob,
-  type LibraryAssistantJobError,
-  type LibraryAssistantJobKind,
-  type LibraryAssistantJobStatus
+  LIBRARY_ASSISTANT_ALGORITHM_VERSION,
+  LIBRARY_ASSISTANT_CONTRACT_VERSION,
+  type LibraryAssistantCapability,
+  type LibraryAssistantConfidenceBand,
+  type LibraryAssistantEvidence,
+  type LibraryAssistantProvenance,
+  type LibraryAssistantReasonCode,
+  type LibraryAssistantRun,
+  type LibraryAssistantRunError,
+  type LibraryAssistantRunStatus,
+  type LibraryAssistantSuggestion,
+  type LibraryAssistantSuggestionStatus,
+  type LibraryAssistantSuggestionTarget
 } from '@home-music/shared/library-assistant';
 
-const INTERRUPTED_ERROR: LibraryAssistantJobError = {
+const DEFAULT_MAX_RETAINED_RUNS = 200;
+const MAX_PROVIDER_CACHE_ENTRIES = 500;
+const MAX_PROVIDER_CACHE_PAYLOAD_BYTES = 64 * 1024;
+const MAX_SUGGESTION_PAYLOAD_BYTES = 64 * 1024;
+const MAX_IDENTIFIER_LENGTH = 192;
+const MAX_REASON_CODES = 16;
+const MAX_EVIDENCE_ITEMS = 32;
+const INTERRUPTED_ERROR: LibraryAssistantRunError = {
   code: 'interrupted',
-  message: 'O job foi interrompido pelo reinício do serviço.',
-  action: 'Inicie o job novamente se ele ainda for necessário.'
+  message: 'A análise foi interrompida pelo reinício do serviço.',
+  action: 'Inicie uma nova análise se ela ainda for necessária.'
 };
+
+const capabilities: readonly LibraryAssistantCapability[] = ['metadata', 'artwork', 'lyrics'];
+const runStatuses: readonly LibraryAssistantRunStatus[] = [
+  'queued', 'running', 'completed', 'failed', 'cancelled', 'stale'
+];
+const suggestionStatuses: readonly LibraryAssistantSuggestionStatus[] = [
+  'pending', 'review', 'applied', 'rejected', 'stale', 'failed'
+];
+const confidenceBands: readonly LibraryAssistantConfidenceBand[] = ['low', 'medium', 'high'];
 
 type Row = Record<string, unknown>;
 
-type CacheEvidence = {
-  relativePath: string;
-  sizeBytes: number;
-  mtimeMs: number;
+type StoreOptions = {
+  now?: () => Date;
+  maxRetainedRuns?: number;
 };
 
-type CreateJobInput = {
+export type LibraryAssistantStoredSuggestionInput = {
   id: string;
-  kind: LibraryAssistantJobKind;
-  libraryRevision: number;
-  total: number;
+  runId: string;
+  capability: LibraryAssistantCapability;
+  trackId: string;
+  status?: 'pending' | 'review';
+  confidence: LibraryAssistantConfidenceBand;
+  reasonCodes: LibraryAssistantReasonCode[];
+  evidence: LibraryAssistantEvidence[];
+  provenance: LibraryAssistantProvenance;
+  target: LibraryAssistantSuggestionTarget;
+  premiseSignature: string;
   createdAt: string;
+};
+
+export type LibraryAssistantStoredSuggestion = {
+  suggestion: LibraryAssistantSuggestion;
+  premiseSignature: string;
+};
+
+export type LibraryAssistantProviderCacheKey = {
+  provider: string;
+  providerVersion: string;
+  cacheKeyHash: string;
+};
+
+export type LibraryAssistantProviderCacheEntry = {
+  payload: unknown;
+  expiresAtMs: number;
+  updatedAt: string;
 };
 
 function stringValue(value: unknown, fallback = '') {
@@ -46,35 +91,183 @@ function numberValue(value: unknown, fallback = 0) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-function parseStatus(value: unknown): LibraryAssistantJobStatus {
+function enumValue<T extends string>(value: unknown, allowed: readonly T[], fallback: T): T {
+  return typeof value === 'string' && allowed.includes(value as T) ? value as T : fallback;
+}
+
+function parseJson(value: unknown, fallback: unknown) {
+  if (typeof value !== 'string') return fallback;
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return fallback;
+  }
+}
+
+function byteLength(value: string) {
+  return Buffer.byteLength(value, 'utf8');
+}
+
+function requireIdentifier(value: string, label: string, maximum = MAX_IDENTIFIER_LENGTH) {
+  if (!value || value.length > maximum || !/^[A-Za-z0-9._:-]+$/.test(value)) {
+    throw new TypeError(`${label} inválido.`);
+  }
+}
+
+function requireTrackId(value: string) {
+  requireIdentifier(value, 'trackId', 64);
+}
+
+function requirePremiseSignature(value: string) {
+  if (!/^[a-f0-9]{64}$/.test(value)) throw new TypeError('Assinatura de premissa inválida.');
+}
+
+function requireSafeText(value: string, label: string, maximum = 1_000) {
+  if (value.length > maximum || /[\r\n\t]/.test(value)) throw new TypeError(`${label} inválido.`);
+}
+
+function validateEvidence(evidence: LibraryAssistantEvidence[]) {
+  if (!Array.isArray(evidence) || evidence.length > MAX_EVIDENCE_ITEMS) {
+    throw new RangeError('Quantidade de evidências inválida.');
+  }
+  for (const item of evidence) {
+    if (item.version !== LIBRARY_ASSISTANT_CONTRACT_VERSION) {
+      throw new TypeError('Versão de evidência não suportada.');
+    }
+    if (item.type === 'duration-delta') {
+      if (!Number.isFinite(item.deltaSeconds) || Math.abs(item.deltaSeconds) > 24 * 60 * 60) {
+        throw new RangeError('Delta de duração inválido.');
+      }
+      continue;
+    }
+    if (item.type === 'album-context') {
+      if (
+        !Number.isSafeInteger(item.matchedTracks)
+        || !Number.isSafeInteger(item.totalTracks)
+        || item.matchedTracks < 0
+        || item.totalTracks < 0
+        || item.matchedTracks > item.totalTracks
+        || item.totalTracks > 10_000
+      ) throw new RangeError('Contexto de álbum inválido.');
+      continue;
+    }
+    if (item.type === 'source-conflict') {
+      if (item.sources.length < 2 || item.sources.length > 8) {
+        throw new RangeError('Conflito entre fontes inválido.');
+      }
+      continue;
+    }
+    if (item.type === 'file-context') {
+      requireSafeText(item.fileName, 'fileName', 255);
+      if (item.fileName.includes('/') || item.fileName.includes('\\')) {
+        throw new TypeError('fileName não pode conter caminho físico.');
+      }
+      if (item.folderName != null) {
+        requireSafeText(item.folderName, 'folderName', 255);
+        if (item.folderName.includes('/') || item.folderName.includes('\\')) {
+          throw new TypeError('folderName não pode conter caminho físico.');
+        }
+      }
+      continue;
+    }
+    if (item.type === 'external-id') {
+      requireSafeText(item.id, 'externalId', 256);
+      continue;
+    }
+    requireSafeText(item.sourceValue, 'sourceValue', 512);
+    requireSafeText(item.candidateValue, 'candidateValue', 512);
+  }
+}
+
+function validateProvenance(provenance: LibraryAssistantProvenance) {
+  if (provenance.providerVersion != null) requireSafeText(provenance.providerVersion, 'providerVersion', 128);
+  if (provenance.externalId != null) requireSafeText(provenance.externalId, 'externalId', 256);
+}
+
+function validateTarget(target: LibraryAssistantSuggestionTarget, capability: LibraryAssistantCapability, trackId: string) {
+  if (target.capability !== capability || target.trackId !== trackId) {
+    throw new TypeError('Target da sugestão não corresponde à capability/faixa.');
+  }
+  if (target.capability === 'metadata') {
+    requireSafeText(target.currentValue, 'currentValue', 1_000);
+    requireSafeText(target.suggestedValue, 'suggestedValue', 1_000);
+    return;
+  }
+  requireSafeText(target.candidateId, 'candidateId', 256);
+  if (target.capability === 'artwork') {
+    if (target.label != null) requireSafeText(target.label, 'artworkLabel', 256);
+    return;
+  }
+  if (target.language != null) requireSafeText(target.language, 'language', 32);
+}
+
+function validateSuggestion(input: LibraryAssistantStoredSuggestionInput) {
+  requireIdentifier(input.id, 'suggestionId');
+  requireIdentifier(input.runId, 'runId');
+  requireTrackId(input.trackId);
+  requirePremiseSignature(input.premiseSignature);
+  if (!capabilities.includes(input.capability)) throw new TypeError('Capability inválida.');
+  if (!confidenceBands.includes(input.confidence)) throw new TypeError('Confiança inválida.');
+  if (input.status && input.status !== 'pending' && input.status !== 'review') {
+    throw new TypeError('Status inicial de sugestão inválido.');
+  }
   if (
-    value === 'queued'
-    || value === 'running'
-    || value === 'completed'
-    || value === 'failed'
-    || value === 'cancelled'
-    || value === 'stale'
-  ) return value;
-  return 'failed';
+    !Array.isArray(input.reasonCodes)
+    || input.reasonCodes.length === 0
+    || input.reasonCodes.length > MAX_REASON_CODES
+  ) throw new RangeError('Reason codes inválidos.');
+  validateEvidence(input.evidence);
+  validateProvenance(input.provenance);
+  validateTarget(input.target, input.capability, input.trackId);
+
+  const payload = JSON.stringify({
+    reasonCodes: input.reasonCodes,
+    evidence: input.evidence,
+    provenance: input.provenance,
+    target: input.target
+  });
+  if (byteLength(payload) > MAX_SUGGESTION_PAYLOAD_BYTES) {
+    throw new RangeError('Sugestão excede o limite de persistência.');
+  }
 }
 
-function parseKind(value: unknown): LibraryAssistantJobKind {
-  return value === 'content-hash' ? value : 'content-hash';
+function runSummary(db: DatabaseSync, runId: string) {
+  const rows = db.prepare(`
+    SELECT status, COUNT(*) AS count
+    FROM library_assistant_suggestions
+    WHERE run_id = ?
+    GROUP BY status;
+  `).all(runId) as Row[];
+  const summary: LibraryAssistantRun['summary'] = {
+    total: 0,
+    pending: 0,
+    review: 0,
+    applied: 0,
+    rejected: 0,
+    stale: 0,
+    failed: 0
+  };
+  for (const row of rows) {
+    const status = enumValue(row.status, suggestionStatuses, 'failed');
+    const count = Math.max(0, Math.trunc(numberValue(row.count)));
+    summary.total += count;
+    summary[status] += count;
+  }
+  return summary;
 }
 
-function jobFromRow(row: Row): LibraryAssistantJob {
+function runFromRow(db: DatabaseSync, row: Row): LibraryAssistantRun {
   const errorCode = nullableString(row.error_code);
   const errorMessage = nullableString(row.error_message);
   const errorAction = nullableString(row.error_action);
+  const id = stringValue(row.id);
   return {
-    id: stringValue(row.id),
-    kind: parseKind(row.kind),
-    status: parseStatus(row.status),
+    id,
+    capability: enumValue(row.capability, capabilities, 'metadata'),
+    status: enumValue(row.status, runStatuses, 'failed'),
     libraryRevision: Math.max(0, Math.trunc(numberValue(row.library_revision))),
-    progress: {
-      completed: Math.max(0, Math.trunc(numberValue(row.completed_items))),
-      total: Math.max(0, Math.trunc(numberValue(row.total_items)))
-    },
+    algorithmVersion: LIBRARY_ASSISTANT_ALGORITHM_VERSION,
+    summary: runSummary(db, id),
     createdAt: stringValue(row.created_at),
     startedAt: nullableString(row.started_at),
     finishedAt: nullableString(row.finished_at),
@@ -84,71 +277,55 @@ function jobFromRow(row: Row): LibraryAssistantJob {
   };
 }
 
-function validateEvidence(evidence: CacheEvidence) {
-  if (!evidence.relativePath || path.posix.isAbsolute(evidence.relativePath) || evidence.relativePath.includes('\\')) {
-    throw new TypeError('Evidência de cache exige caminho relativo normalizado.');
-  }
-  if (!Number.isSafeInteger(evidence.sizeBytes) || evidence.sizeBytes < 0) {
-    throw new RangeError('Tamanho da evidência de cache inválido.');
-  }
-  if (!Number.isFinite(evidence.mtimeMs) || evidence.mtimeMs < 0) {
-    throw new RangeError('mtime da evidência de cache inválido.');
-  }
-}
-
-function validateIdentity(identity: LibraryAssistantContentIdentity) {
-  if (
-    identity.algorithm !== LIBRARY_ASSISTANT_CONTENT_HASH_ALGORITHM
-    || identity.version !== LIBRARY_ASSISTANT_CONTENT_HASH_VERSION
-    || !/^[a-f0-9]{64}$/.test(identity.digest)
-    || !Number.isSafeInteger(identity.sizeBytes)
-    || identity.sizeBytes < 0
-  ) {
-    throw new TypeError('Identidade por conteúdo inválida.');
-  }
+function suggestionFromRow(row: Row): LibraryAssistantStoredSuggestion {
+  const capability = enumValue(row.capability, capabilities, 'metadata');
+  const trackId = stringValue(row.track_id);
+  const target = parseJson(row.target_json, null) as LibraryAssistantSuggestionTarget | null;
+  const evidence = parseJson(row.evidence_json, []) as LibraryAssistantEvidence[];
+  const reasonCodes = parseJson(row.reason_codes_json, []) as LibraryAssistantReasonCode[];
+  const provenance = parseJson(row.provenance_json, null) as LibraryAssistantProvenance | null;
+  if (!target || !provenance) throw new Error('Sugestão persistida inválida.');
+  return {
+    premiseSignature: stringValue(row.premise_signature),
+    suggestion: {
+      id: stringValue(row.id),
+      runId: stringValue(row.run_id),
+      capability,
+      status: enumValue(row.status, suggestionStatuses, 'failed'),
+      confidence: enumValue(row.confidence, confidenceBands, 'low'),
+      reasonCodes,
+      evidence,
+      provenance,
+      target: { ...target, trackId, capability } as LibraryAssistantSuggestionTarget,
+      createdAt: stringValue(row.created_at),
+      updatedAt: stringValue(row.updated_at)
+    }
+  };
 }
 
 export class LibraryAssistantStore {
   private readonly db: DatabaseSync;
+  private readonly now: () => Date;
+  private readonly maxRetainedRuns: number;
 
-  constructor(databasePath: string, now = new Date()) {
+  constructor(databasePath: string, options: StoreOptions = {}) {
     mkdirSync(path.dirname(databasePath), { recursive: true });
     this.db = new DatabaseSync(databasePath);
     this.db.exec('PRAGMA foreign_keys = ON;');
     this.db.exec('PRAGMA busy_timeout = 5000;');
     this.db.exec('PRAGMA journal_mode = WAL;');
+    this.now = options.now ?? (() => new Date());
+    this.maxRetainedRuns = Math.max(10, Math.min(2_000, Math.trunc(
+      options.maxRetainedRuns ?? DEFAULT_MAX_RETAINED_RUNS
+    )));
+
     this.db.exec(`
-      CREATE TABLE IF NOT EXISTS library_assistant_content_identities (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        algorithm TEXT NOT NULL,
-        version INTEGER NOT NULL,
-        digest TEXT NOT NULL CHECK(length(digest) = 64),
-        size_bytes INTEGER NOT NULL CHECK(size_bytes >= 0),
-        created_at TEXT NOT NULL,
-        UNIQUE(algorithm, version, digest, size_bytes)
-      );
-
-      CREATE TABLE IF NOT EXISTS library_assistant_hash_cache (
-        relative_path TEXT NOT NULL,
-        file_size INTEGER NOT NULL CHECK(file_size >= 0),
-        mtime_ms REAL NOT NULL CHECK(mtime_ms >= 0),
-        algorithm TEXT NOT NULL,
-        version INTEGER NOT NULL,
-        identity_id INTEGER NOT NULL REFERENCES library_assistant_content_identities(id) ON DELETE CASCADE,
-        updated_at TEXT NOT NULL,
-        PRIMARY KEY(relative_path, file_size, mtime_ms, algorithm, version)
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_library_assistant_hash_cache_identity
-      ON library_assistant_hash_cache(identity_id);
-
-      CREATE TABLE IF NOT EXISTS library_assistant_jobs (
+      CREATE TABLE IF NOT EXISTS library_assistant_runs (
         id TEXT PRIMARY KEY NOT NULL,
-        kind TEXT NOT NULL CHECK(kind IN ('content-hash')),
+        capability TEXT NOT NULL CHECK(capability IN ('metadata', 'artwork', 'lyrics')),
         status TEXT NOT NULL CHECK(status IN ('queued', 'running', 'completed', 'failed', 'cancelled', 'stale')),
         library_revision INTEGER NOT NULL CHECK(library_revision >= 0),
-        total_items INTEGER NOT NULL CHECK(total_items >= 0),
-        completed_items INTEGER NOT NULL DEFAULT 0 CHECK(completed_items >= 0),
+        algorithm_version INTEGER NOT NULL CHECK(algorithm_version > 0),
         created_at TEXT NOT NULL,
         started_at TEXT,
         finished_at TEXT,
@@ -157,25 +334,46 @@ export class LibraryAssistantStore {
         error_action TEXT
       );
 
-      CREATE INDEX IF NOT EXISTS idx_library_assistant_jobs_created
-      ON library_assistant_jobs(created_at DESC, id DESC);
+      CREATE INDEX IF NOT EXISTS idx_library_assistant_runs_created
+      ON library_assistant_runs(created_at DESC, id DESC);
 
-      CREATE TABLE IF NOT EXISTS library_assistant_job_results (
-        job_id TEXT NOT NULL REFERENCES library_assistant_jobs(id) ON DELETE CASCADE,
-        track_id TEXT NOT NULL,
-        identity_id INTEGER NOT NULL REFERENCES library_assistant_content_identities(id) ON DELETE RESTRICT,
-        PRIMARY KEY(job_id, track_id)
+      CREATE TABLE IF NOT EXISTS library_assistant_suggestions (
+        id TEXT PRIMARY KEY NOT NULL,
+        run_id TEXT NOT NULL REFERENCES library_assistant_runs(id) ON DELETE CASCADE,
+        track_id TEXT NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+        capability TEXT NOT NULL CHECK(capability IN ('metadata', 'artwork', 'lyrics')),
+        status TEXT NOT NULL CHECK(status IN ('pending', 'review', 'applied', 'rejected', 'stale', 'failed')),
+        confidence TEXT NOT NULL CHECK(confidence IN ('low', 'medium', 'high')),
+        reason_codes_json TEXT NOT NULL,
+        evidence_json TEXT NOT NULL,
+        provenance_json TEXT NOT NULL,
+        target_json TEXT NOT NULL,
+        premise_signature TEXT NOT NULL CHECK(length(premise_signature) = 64),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
       );
+
+      CREATE INDEX IF NOT EXISTS idx_library_assistant_suggestions_run_status
+      ON library_assistant_suggestions(run_id, status, created_at ASC, id ASC);
+
+      CREATE TABLE IF NOT EXISTS library_assistant_provider_cache (
+        provider TEXT NOT NULL,
+        provider_version TEXT NOT NULL,
+        cache_key_hash TEXT NOT NULL CHECK(length(cache_key_hash) = 64),
+        payload_json TEXT NOT NULL,
+        expires_at_ms INTEGER NOT NULL,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY(provider, provider_version, cache_key_hash)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_library_assistant_provider_cache_expiry
+      ON library_assistant_provider_cache(expires_at_ms ASC);
     `);
 
-    const interruptedAt = now.toISOString();
+    const interruptedAt = this.now().toISOString();
     this.db.prepare(`
-      UPDATE library_assistant_jobs
-      SET status = 'failed',
-          finished_at = ?,
-          error_code = ?,
-          error_message = ?,
-          error_action = ?
+      UPDATE library_assistant_runs
+      SET status = 'failed', finished_at = ?, error_code = ?, error_message = ?, error_action = ?
       WHERE status IN ('queued', 'running');
     `).run(
       interruptedAt,
@@ -183,213 +381,278 @@ export class LibraryAssistantStore {
       INTERRUPTED_ERROR.message,
       INTERRUPTED_ERROR.action
     );
+    this.pruneExpiredProviderCache(this.now().getTime());
   }
 
   close() {
     this.db.close();
   }
 
-  getCachedIdentity(evidence: CacheEvidence): LibraryAssistantContentIdentity | null {
-    validateEvidence(evidence);
-    const row = this.db.prepare(`
-      SELECT i.algorithm, i.version, i.digest, i.size_bytes
-      FROM library_assistant_hash_cache c
-      JOIN library_assistant_content_identities i ON i.id = c.identity_id
-      WHERE c.relative_path = ?
-        AND c.file_size = ?
-        AND c.mtime_ms = ?
-        AND c.algorithm = ?
-        AND c.version = ?
-      LIMIT 1;
-    `).get(
-      evidence.relativePath,
-      evidence.sizeBytes,
-      evidence.mtimeMs,
-      LIBRARY_ASSISTANT_CONTENT_HASH_ALGORITHM,
-      LIBRARY_ASSISTANT_CONTENT_HASH_VERSION
-    ) as Row | undefined;
-    if (!row) return null;
-    return {
-      algorithm: LIBRARY_ASSISTANT_CONTENT_HASH_ALGORITHM,
-      version: LIBRARY_ASSISTANT_CONTENT_HASH_VERSION,
-      digest: stringValue(row.digest),
-      sizeBytes: Math.max(0, Math.trunc(numberValue(row.size_bytes)))
-    };
-  }
-
-  putCachedIdentity(
-    evidence: CacheEvidence,
-    identity: LibraryAssistantContentIdentity,
-    updatedAt: string
-  ) {
-    validateEvidence(evidence);
-    validateIdentity(identity);
-    if (identity.sizeBytes !== evidence.sizeBytes) {
-      throw new TypeError('Identidade e evidência possuem tamanhos incompatíveis.');
+  createRun(input: {
+    id: string;
+    capability: LibraryAssistantCapability;
+    libraryRevision: number;
+    createdAt: string;
+  }) {
+    requireIdentifier(input.id, 'runId');
+    if (!capabilities.includes(input.capability)) throw new TypeError('Capability inválida.');
+    if (!Number.isSafeInteger(input.libraryRevision) || input.libraryRevision < 0) {
+      throw new RangeError('Library revision inválida.');
     }
-
-    this.db.exec('BEGIN IMMEDIATE;');
-    try {
-      this.db.prepare(`
-        INSERT INTO library_assistant_content_identities(
-          algorithm, version, digest, size_bytes, created_at
-        ) VALUES (?, ?, ?, ?, ?)
-        ON CONFLICT(algorithm, version, digest, size_bytes) DO NOTHING;
-      `).run(identity.algorithm, identity.version, identity.digest, identity.sizeBytes, updatedAt);
-      const identityRow = this.db.prepare(`
-        SELECT id
-        FROM library_assistant_content_identities
-        WHERE algorithm = ? AND version = ? AND digest = ? AND size_bytes = ?;
-      `).get(identity.algorithm, identity.version, identity.digest, identity.sizeBytes) as Row | undefined;
-      const identityId = Math.trunc(numberValue(identityRow?.id));
-      if (identityId <= 0) throw new Error('Identidade por conteúdo não pôde ser persistida.');
-
-      this.db.prepare(`
-        DELETE FROM library_assistant_hash_cache
-        WHERE relative_path = ? AND algorithm = ? AND version = ?;
-      `).run(evidence.relativePath, identity.algorithm, identity.version);
-      this.db.prepare(`
-        INSERT INTO library_assistant_hash_cache(
-          relative_path, file_size, mtime_ms, algorithm, version, identity_id, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?);
-      `).run(
-        evidence.relativePath,
-        evidence.sizeBytes,
-        evidence.mtimeMs,
-        identity.algorithm,
-        identity.version,
-        identityId,
-        updatedAt
-      );
-      this.db.exec('COMMIT;');
-    } catch (error) {
-      this.db.exec('ROLLBACK;');
-      throw error;
-    }
-  }
-
-  createJob(input: CreateJobInput) {
     this.db.prepare(`
-      INSERT INTO library_assistant_jobs(
-        id, kind, status, library_revision, total_items, completed_items, created_at
-      ) VALUES (?, ?, 'queued', ?, ?, 0, ?);
-    `).run(input.id, input.kind, input.libraryRevision, input.total, input.createdAt);
-    return this.getJob(input.id)!;
+      INSERT INTO library_assistant_runs(
+        id, capability, status, library_revision, algorithm_version, created_at
+      ) VALUES (?, ?, 'queued', ?, ?, ?);
+    `).run(
+      input.id,
+      input.capability,
+      input.libraryRevision,
+      LIBRARY_ASSISTANT_ALGORITHM_VERSION,
+      input.createdAt
+    );
+    this.pruneRuns();
+    return this.getRun(input.id)!;
   }
 
-  getJob(id: string) {
+  getRun(id: string) {
     const row = this.db.prepare(`
-      SELECT * FROM library_assistant_jobs WHERE id = ? LIMIT 1;
+      SELECT * FROM library_assistant_runs WHERE id = ? LIMIT 1;
     `).get(id) as Row | undefined;
-    return row ? jobFromRow(row) : null;
+    return row ? runFromRow(this.db, row) : null;
   }
 
-  listJobs(limit = 100) {
-    const safeLimit = Math.max(1, Math.min(500, Math.trunc(limit)));
+  listRuns(limit = 50) {
+    const safeLimit = Math.max(1, Math.min(200, Math.trunc(limit)));
     return (this.db.prepare(`
       SELECT *
-      FROM library_assistant_jobs
+      FROM library_assistant_runs
       ORDER BY created_at DESC, id DESC
       LIMIT ?;
-    `).all(safeLimit) as Row[]).map(jobFromRow);
+    `).all(safeLimit) as Row[]).map(row => runFromRow(this.db, row));
   }
 
-  startJob(id: string, startedAt: string) {
+  startRun(id: string, startedAt: string) {
     const result = this.db.prepare(`
-      UPDATE library_assistant_jobs
+      UPDATE library_assistant_runs
       SET status = 'running', started_at = ?, error_code = NULL, error_message = NULL, error_action = NULL
       WHERE id = ? AND status = 'queued';
     `).run(startedAt, id);
     return Number(result.changes) > 0;
   }
 
-  setProgress(id: string, completed: number) {
-    this.db.prepare(`
-      UPDATE library_assistant_jobs
-      SET completed_items = MIN(total_items, MAX(completed_items, ?))
-      WHERE id = ? AND status = 'running';
-    `).run(Math.max(0, Math.trunc(completed)), id);
-  }
+  insertSuggestions(inputs: readonly LibraryAssistantStoredSuggestionInput[]) {
+    if (inputs.length === 0) return;
+    if (inputs.length > 5_000) throw new RangeError('Análise excedeu o limite de sugestões.');
+    for (const input of inputs) validateSuggestion(input);
 
-  recordResult(jobId: string, trackId: string, identity: LibraryAssistantContentIdentity) {
-    validateIdentity(identity);
-    const row = this.db.prepare(`
-      SELECT id
-      FROM library_assistant_content_identities
-      WHERE algorithm = ? AND version = ? AND digest = ? AND size_bytes = ?
-      LIMIT 1;
-    `).get(identity.algorithm, identity.version, identity.digest, identity.sizeBytes) as Row | undefined;
-    const identityId = Math.trunc(numberValue(row?.id));
-    if (identityId <= 0) throw new Error('Resultado referencia identidade não persistida.');
-    this.db.prepare(`
-      INSERT INTO library_assistant_job_results(job_id, track_id, identity_id)
-      VALUES (?, ?, ?)
-      ON CONFLICT(job_id, track_id) DO UPDATE SET identity_id = excluded.identity_id;
-    `).run(jobId, trackId, identityId);
-  }
-
-  completeJob(id: string, finishedAt: string) {
-    const result = this.db.prepare(`
-      UPDATE library_assistant_jobs
-      SET status = 'completed', completed_items = total_items, finished_at = ?
-      WHERE id = ? AND status = 'running';
-    `).run(finishedAt, id);
-    return Number(result.changes) > 0;
-  }
-
-  failJob(id: string, finishedAt: string, error: LibraryAssistantJobError) {
-    const result = this.db.prepare(`
-      UPDATE library_assistant_jobs
-      SET status = 'failed', finished_at = ?, error_code = ?, error_message = ?, error_action = ?
-      WHERE id = ? AND status IN ('queued', 'running');
-    `).run(finishedAt, error.code, error.message, error.action, id);
-    return Number(result.changes) > 0;
-  }
-
-  cancelJob(id: string, finishedAt: string) {
-    const result = this.db.prepare(`
-      UPDATE library_assistant_jobs
-      SET status = 'cancelled', finished_at = ?, error_code = NULL, error_message = NULL, error_action = NULL
-      WHERE id = ? AND status IN ('queued', 'running');
-    `).run(finishedAt, id);
-    return Number(result.changes) > 0;
-  }
-
-  markStale(id: string, finishedAt: string) {
-    const result = this.db.prepare(`
-      UPDATE library_assistant_jobs
-      SET status = 'stale', finished_at = ?, error_code = NULL, error_message = NULL, error_action = NULL
-      WHERE id = ? AND status IN ('queued', 'running', 'completed');
-    `).run(finishedAt, id);
-    return Number(result.changes) > 0;
-  }
-
-  markStaleForRevision(currentRevision: number, finishedAt: string) {
-    const rows = this.db.prepare(`
-      SELECT id
-      FROM library_assistant_jobs
-      WHERE library_revision <> ? AND status IN ('queued', 'running', 'completed');
-    `).all(currentRevision) as Row[];
-    const ids = rows.map(row => stringValue(row.id)).filter(Boolean);
-    if (ids.length === 0) return ids;
-    const mark = this.db.prepare(`
-      UPDATE library_assistant_jobs
-      SET status = 'stale', finished_at = ?, error_code = NULL, error_message = NULL, error_action = NULL
-      WHERE id = ? AND status IN ('queued', 'running', 'completed');
+    const insert = this.db.prepare(`
+      INSERT INTO library_assistant_suggestions(
+        id, run_id, track_id, capability, status, confidence,
+        reason_codes_json, evidence_json, provenance_json, target_json,
+        premise_signature, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
     `);
     this.db.exec('BEGIN IMMEDIATE;');
     try {
-      for (const id of ids) mark.run(finishedAt, id);
+      for (const input of inputs) {
+        insert.run(
+          input.id,
+          input.runId,
+          input.trackId,
+          input.capability,
+          input.status ?? 'review',
+          input.confidence,
+          JSON.stringify(input.reasonCodes),
+          JSON.stringify(input.evidence),
+          JSON.stringify(input.provenance),
+          JSON.stringify(input.target),
+          input.premiseSignature,
+          input.createdAt,
+          input.createdAt
+        );
+      }
       this.db.exec('COMMIT;');
-      return ids;
     } catch (error) {
       this.db.exec('ROLLBACK;');
       throw error;
     }
   }
 
-  countContentIdentities() {
-    const row = this.db.prepare('SELECT COUNT(*) AS count FROM library_assistant_content_identities;').get() as Row;
-    return Math.max(0, Math.trunc(numberValue(row.count)));
+  listSuggestionRecords(
+    runId: string,
+    filters: { status?: LibraryAssistantSuggestionStatus; limit?: number } = {}
+  ) {
+    const status = filters.status;
+    if (status && !suggestionStatuses.includes(status)) throw new TypeError('Status de sugestão inválido.');
+    const limit = Math.max(1, Math.min(500, Math.trunc(filters.limit ?? 200)));
+    const rows = status
+      ? this.db.prepare(`
+          SELECT * FROM library_assistant_suggestions
+          WHERE run_id = ? AND status = ?
+          ORDER BY created_at ASC, id ASC
+          LIMIT ?;
+        `).all(runId, status, limit) as Row[]
+      : this.db.prepare(`
+          SELECT * FROM library_assistant_suggestions
+          WHERE run_id = ?
+          ORDER BY created_at ASC, id ASC
+          LIMIT ?;
+        `).all(runId, limit) as Row[];
+    return rows.map(suggestionFromRow);
+  }
+
+  markSuggestionStale(id: string, updatedAt: string) {
+    const result = this.db.prepare(`
+      UPDATE library_assistant_suggestions
+      SET status = 'stale', updated_at = ?
+      WHERE id = ? AND status IN ('pending', 'review');
+    `).run(updatedAt, id);
+    return Number(result.changes) > 0;
+  }
+
+  completeRun(id: string, finishedAt: string) {
+    const result = this.db.prepare(`
+      UPDATE library_assistant_runs
+      SET status = 'completed', finished_at = ?
+      WHERE id = ? AND status = 'running';
+    `).run(finishedAt, id);
+    return Number(result.changes) > 0;
+  }
+
+  markRunStale(id: string, finishedAt: string) {
+    const result = this.db.prepare(`
+      UPDATE library_assistant_runs
+      SET status = 'stale', finished_at = COALESCE(finished_at, ?)
+      WHERE id = ? AND status IN ('queued', 'running', 'completed');
+    `).run(finishedAt, id);
+    return Number(result.changes) > 0;
+  }
+
+  failRun(id: string, finishedAt: string, error: LibraryAssistantRunError) {
+    requireSafeText(error.code, 'errorCode', 64);
+    requireSafeText(error.message, 'errorMessage', 320);
+    requireSafeText(error.action, 'errorAction', 320);
+    const result = this.db.prepare(`
+      UPDATE library_assistant_runs
+      SET status = 'failed', finished_at = ?, error_code = ?, error_message = ?, error_action = ?
+      WHERE id = ? AND status IN ('queued', 'running');
+    `).run(finishedAt, error.code, error.message, error.action, id);
+    return Number(result.changes) > 0;
+  }
+
+  cancelRun(id: string, finishedAt: string) {
+    const result = this.db.prepare(`
+      UPDATE library_assistant_runs
+      SET status = 'cancelled', finished_at = ?, error_code = NULL, error_message = NULL, error_action = NULL
+      WHERE id = ? AND status IN ('queued', 'running');
+    `).run(finishedAt, id);
+    return Number(result.changes) > 0;
+  }
+
+  getProviderCache(key: LibraryAssistantProviderCacheKey, nowMs: number): LibraryAssistantProviderCacheEntry | null {
+    this.validateProviderCacheKey(key);
+    const row = this.db.prepare(`
+      SELECT payload_json, expires_at_ms, updated_at
+      FROM library_assistant_provider_cache
+      WHERE provider = ? AND provider_version = ? AND cache_key_hash = ?
+      LIMIT 1;
+    `).get(key.provider, key.providerVersion, key.cacheKeyHash) as Row | undefined;
+    if (!row) return null;
+    const expiresAtMs = Math.trunc(numberValue(row.expires_at_ms));
+    if (expiresAtMs <= nowMs) {
+      this.deleteProviderCache(key);
+      return null;
+    }
+    return {
+      payload: parseJson(row.payload_json, null),
+      expiresAtMs,
+      updatedAt: stringValue(row.updated_at)
+    };
+  }
+
+  putProviderCache(
+    key: LibraryAssistantProviderCacheKey,
+    payload: unknown,
+    expiresAtMs: number,
+    updatedAt: string
+  ) {
+    this.validateProviderCacheKey(key);
+    if (!Number.isSafeInteger(expiresAtMs) || expiresAtMs <= 0) {
+      throw new RangeError('Expiração de cache inválida.');
+    }
+    const payloadJson = JSON.stringify(payload);
+    if (byteLength(payloadJson) > MAX_PROVIDER_CACHE_PAYLOAD_BYTES) {
+      throw new RangeError('Payload normalizado do provider excede o limite de cache.');
+    }
+    this.db.prepare(`
+      INSERT INTO library_assistant_provider_cache(
+        provider, provider_version, cache_key_hash, payload_json, expires_at_ms, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(provider, provider_version, cache_key_hash) DO UPDATE SET
+        payload_json = excluded.payload_json,
+        expires_at_ms = excluded.expires_at_ms,
+        updated_at = excluded.updated_at;
+    `).run(
+      key.provider,
+      key.providerVersion,
+      key.cacheKeyHash,
+      payloadJson,
+      expiresAtMs,
+      updatedAt
+    );
+    this.pruneProviderCache();
+  }
+
+  deleteProviderCache(key: LibraryAssistantProviderCacheKey) {
+    this.validateProviderCacheKey(key);
+    this.db.prepare(`
+      DELETE FROM library_assistant_provider_cache
+      WHERE provider = ? AND provider_version = ? AND cache_key_hash = ?;
+    `).run(key.provider, key.providerVersion, key.cacheKeyHash);
+  }
+
+  clearProviderCache(provider?: string) {
+    if (provider == null) {
+      this.db.exec('DELETE FROM library_assistant_provider_cache;');
+      return;
+    }
+    requireIdentifier(provider, 'provider', 64);
+    this.db.prepare('DELETE FROM library_assistant_provider_cache WHERE provider = ?;').run(provider);
+  }
+
+  private validateProviderCacheKey(key: LibraryAssistantProviderCacheKey) {
+    requireIdentifier(key.provider, 'provider', 64);
+    requireIdentifier(key.providerVersion, 'providerVersion', 64);
+    if (!/^[a-f0-9]{64}$/.test(key.cacheKeyHash)) throw new TypeError('Hash da chave de cache inválido.');
+  }
+
+  private pruneExpiredProviderCache(nowMs: number) {
+    this.db.prepare('DELETE FROM library_assistant_provider_cache WHERE expires_at_ms <= ?;').run(nowMs);
+  }
+
+  private pruneProviderCache() {
+    this.pruneExpiredProviderCache(this.now().getTime());
+    this.db.prepare(`
+      DELETE FROM library_assistant_provider_cache
+      WHERE rowid IN (
+        SELECT rowid
+        FROM library_assistant_provider_cache
+        ORDER BY updated_at DESC, rowid DESC
+        LIMIT -1 OFFSET ?
+      );
+    `).run(MAX_PROVIDER_CACHE_ENTRIES);
+  }
+
+  private pruneRuns() {
+    this.db.prepare(`
+      DELETE FROM library_assistant_runs
+      WHERE id IN (
+        SELECT id
+        FROM library_assistant_runs
+        WHERE status IN ('completed', 'failed', 'cancelled', 'stale')
+        ORDER BY created_at DESC, id DESC
+        LIMIT -1 OFFSET ?
+      );
+    `).run(this.maxRetainedRuns);
   }
 }
