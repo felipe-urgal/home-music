@@ -1,0 +1,208 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import {
+  LibraryAssistantProviderAbortedError,
+  LibraryAssistantProviderGateway,
+  LibraryAssistantProviderResponseError,
+  LibraryAssistantProviderTimeoutError
+} from './library-assistant-provider.js';
+import type {
+  LibraryAssistantProviderCacheEntry,
+  LibraryAssistantProviderCacheKey
+} from './library-assistant-store.js';
+
+function cacheKeyId(key: LibraryAssistantProviderCacheKey) {
+  return `${key.provider}:${key.providerVersion}:${key.cacheKeyHash}`;
+}
+
+function memoryCache() {
+  const entries = new Map<string, LibraryAssistantProviderCacheEntry>();
+  const seenKeys: LibraryAssistantProviderCacheKey[] = [];
+  return {
+    entries,
+    seenKeys,
+    port: {
+      getProviderCache(key: LibraryAssistantProviderCacheKey, nowMs: number) {
+        seenKeys.push(key);
+        const entry = entries.get(cacheKeyId(key)) ?? null;
+        return entry && entry.expiresAtMs > nowMs ? entry : null;
+      },
+      putProviderCache(
+        key: LibraryAssistantProviderCacheKey,
+        payload: unknown,
+        expiresAtMs: number,
+        updatedAt: string
+      ) {
+        seenKeys.push(key);
+        entries.set(cacheKeyId(key), { payload, expiresAtMs, updatedAt });
+      },
+      deleteProviderCache(key: LibraryAssistantProviderCacheKey) {
+        entries.delete(cacheKeyId(key));
+      }
+    }
+  };
+}
+
+const provider = {
+  source: 'musicbrainz' as const,
+  version: 'v1',
+  userAgent: 'HomeMusic/1.0 test@example.invalid'
+};
+
+function normalizeRecording(payload: unknown) {
+  if (!payload || typeof payload !== 'object' || !('id' in payload) || typeof payload.id !== 'string') {
+    throw new TypeError('payload inválido');
+  }
+  return { id: payload.id };
+}
+
+test('provider gateway caches normalized payload using only a deterministic hashed key', async () => {
+  const cache = memoryCache();
+  let calls = 0;
+  const gateway = new LibraryAssistantProviderGateway(cache.port, { minIntervalMs: 0 });
+  const query = {
+    provider,
+    cacheKey: 'title=Faixa|artist=Artista',
+    execute: async ({ userAgent }: { signal: AbortSignal; userAgent: string }) => {
+      calls += 1;
+      assert.equal(userAgent, provider.userAgent);
+      return { id: 'recording-1', ignoredRawField: 'não persistir se normalize remover' };
+    },
+    normalize: normalizeRecording
+  };
+
+  const first = await gateway.query(query);
+  const second = await gateway.query(query);
+
+  assert.deepEqual(first, { value: { id: 'recording-1' }, cache: 'miss' });
+  assert.deepEqual(second, { value: { id: 'recording-1' }, cache: 'hit' });
+  assert.equal(calls, 1);
+  assert.match(cache.seenKeys[0].cacheKeyHash, /^[a-f0-9]{64}$/);
+  assert.notEqual(cache.seenKeys[0].cacheKeyHash, query.cacheKey);
+  assert.deepEqual([...cache.entries.values()][0].payload, { id: 'recording-1' });
+});
+
+test('provider gateway deduplicates concurrent equivalent requests', async () => {
+  const cache = memoryCache();
+  let calls = 0;
+  let release!: () => void;
+  const blocked = new Promise<void>(resolve => { release = resolve; });
+  const gateway = new LibraryAssistantProviderGateway(cache.port, { minIntervalMs: 0 });
+  const query = {
+    provider,
+    cacheKey: 'same-query',
+    execute: async () => {
+      calls += 1;
+      await blocked;
+      return { id: 'recording-1' };
+    },
+    normalize: normalizeRecording
+  };
+
+  const first = gateway.query(query);
+  const second = gateway.query(query);
+  release();
+  assert.deepEqual(await first, await second);
+  assert.equal(calls, 1);
+});
+
+test('provider gateway rate limits requests from the same provider with fake clock', async () => {
+  const cache = memoryCache();
+  let nowMs = 1_000;
+  const sleeps: number[] = [];
+  const gateway = new LibraryAssistantProviderGateway(cache.port, {
+    now: () => new Date(nowMs),
+    minIntervalMs: 1_000,
+    sleep: async delayMs => {
+      sleeps.push(delayMs);
+      nowMs += delayMs;
+    }
+  });
+
+  await gateway.query({
+    provider,
+    cacheKey: 'one',
+    execute: async () => ({ id: 'one' }),
+    normalize: normalizeRecording
+  });
+  await gateway.query({
+    provider,
+    cacheKey: 'two',
+    execute: async () => ({ id: 'two' }),
+    normalize: normalizeRecording
+  });
+
+  assert.deepEqual(sleeps, [1_000]);
+});
+
+test('provider gateway rejects malformed response and sensitive cache keys', async () => {
+  const cache = memoryCache();
+  const gateway = new LibraryAssistantProviderGateway(cache.port, { minIntervalMs: 0 });
+
+  await assert.rejects(
+    gateway.query({
+      provider,
+      cacheKey: 'malformed',
+      execute: async () => ({ wrong: true }),
+      normalize: normalizeRecording
+    }),
+    LibraryAssistantProviderResponseError
+  );
+
+  await assert.rejects(
+    gateway.query({
+      provider,
+      cacheKey: 'token=secret-value',
+      execute: async () => ({ id: 'never' }),
+      normalize: normalizeRecording
+    }),
+    /dado sensível/
+  );
+});
+
+test('provider gateway timeout and caller cancellation stop the provider signal', async () => {
+  const cache = memoryCache();
+  const gateway = new LibraryAssistantProviderGateway(cache.port, { minIntervalMs: 0 });
+  const waitForAbort = ({ signal }: { signal: AbortSignal }) => new Promise<unknown>((_resolve, reject) => {
+    signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })), { once: true });
+  });
+
+  await assert.rejects(
+    gateway.query({
+      provider,
+      cacheKey: 'timeout',
+      timeoutMs: 100,
+      execute: waitForAbort,
+      normalize: normalizeRecording
+    }),
+    LibraryAssistantProviderTimeoutError
+  );
+
+  const controller = new AbortController();
+  const pending = gateway.query({
+    provider,
+    cacheKey: 'cancel',
+    signal: controller.signal,
+    execute: waitForAbort,
+    normalize: normalizeRecording
+  });
+  controller.abort();
+  await assert.rejects(pending, LibraryAssistantProviderAbortedError);
+});
+
+test('provider cache failures degrade to a live normalized result', async () => {
+  const gateway = new LibraryAssistantProviderGateway({
+    getProviderCache() { throw new Error('cache offline'); },
+    putProviderCache() { throw new Error('cache offline'); },
+    deleteProviderCache() { throw new Error('cache offline'); }
+  }, { minIntervalMs: 0 });
+
+  const result = await gateway.query({
+    provider,
+    cacheKey: 'cache-failure',
+    execute: async () => ({ id: 'recording-1' }),
+    normalize: normalizeRecording
+  });
+
+  assert.deepEqual(result, { value: { id: 'recording-1' }, cache: 'miss' });
+});
