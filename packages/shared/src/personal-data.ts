@@ -18,11 +18,10 @@ export const PERSONAL_DATA_IMPORT_LIMITS = {
   maxPlaybackHistory: PERSONAL_DATA_HISTORY_LIMIT,
   maxQueueEntries: 5_000,
   maxTotalTrackReferences: 50_000,
-  maxRelativePathLength: 2_048,
-  maxHintLength: 512,
+  maxRelativePathLength: 4_096,
+  maxHintLength: 4_096,
   maxNameLength: 120,
-  maxTimestampLength: 64,
-  maxDurationSeconds: 24 * 60 * 60
+  maxTimestampLength: 64
 } as const;
 
 export type PortableTrackReferenceV1 = {
