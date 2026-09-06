@@ -58,6 +58,20 @@ O renderer estático limita dimensões, escapa texto antes de serializar XML e c
 
 Não criar placeholders paralelos por tela. Novas superfícies que exibirem artwork devem reutilizar o descriptor e um desses renderers em vez de recalcular seed, iniciais ou palette.
 
+## Media Session
+
+`apps/web/src/media-session-artwork.ts` concentra a projeção estática usada pelos controles do sistema.
+
+A decisão é:
+
+- online + `hasCover = true` → reutilizar `/api/tracks/:id/cover` com `coverVersion` na query quando existir;
+- sem capa efetiva → publicar o SVG local derivado da identidade v1;
+- reprodução offline → usar o fallback derivado localmente e não depender do endpoint autenticado de capa nem de provider externo.
+
+A publicação de `MediaMetadata` é best-effort. Título, artista, álbum e artwork são tentados em uma única atualização. Se a plataforma rejeitar a artwork, o Home Music tenta novamente apenas com metadata textual; se a implementação de Media Session for parcial ou ausente, playback e controles do player continuam funcionando normalmente.
+
+A representação da lock screen é estática. O produto não promete animação de vinil, GIF, vídeo ou atualização de frames no sistema operacional. Compatibilidade real do SVG/data URL em lock screen precisa continuar sendo validada em iPhone/Android físicos; uma limitação da plataforma deve degradar para metadata textual sem criar outro endpoint ou cover override.
+
 ## Superfícies cobertas
 
 A política deve permanecer consistente em:
@@ -67,7 +81,7 @@ A política deve permanecer consistente em:
 - player principal;
 - mini player;
 - Administração → Metadados → preview de capa;
-- Media Session quando a superfície consumir a representação estática;
+- Media Session/lock screen quando a plataforma aceitar artwork estática;
 - outras superfícies futuras que exibirem a capa de uma música.
 
 O editor administrativo pode continuar exibindo um preview local real quando o usuário selecionar uma nova imagem. Quando não existir preview, override ou capa física, deve voltar ao `ArtworkFallback` central.
@@ -89,12 +103,14 @@ Mudanças nesta política devem preservar:
 - precedência `override → capa física → fallback`;
 - semântica de `hasCover` e `coverVersion`;
 - identidade determinística e versionada do fallback;
-- uma única decisão de label/tom/palette para React e render estático;
+- uma única decisão de label/tom/palette para React, render estático e Media Session;
 - nenhuma dependência de rede externa para fallback;
 - nenhuma leitura de path físico para formar a identidade;
+- `coverVersion` como invalidação previsível da capa efetiva no Media Session;
+- playback intacto quando a plataforma rejeitar artwork/MediaMetadata;
 - legibilidade no tema escuro;
 - comportamento em thumbnail e artwork grande;
 - consistência entre biblioteca, player e administração;
 - fallback em falha de carregamento de imagem sem mutar o objeto `Track`.
 
-A cobertura automatizada fica em `apps/web/src/artwork-utils.test.ts` e `apps/web/src/Artwork.test.tsx`.
+A cobertura automatizada fica em `apps/web/src/artwork-utils.test.ts`, `apps/web/src/Artwork.test.tsx`, `apps/web/src/media-session-artwork.test.ts` e `apps/web/src/media-session-metadata.test.ts`.
