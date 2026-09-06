@@ -26,14 +26,7 @@ async function login(page: Page) {
 }
 
 async function openPersonalImport(page: Page) {
-  const mobileAccountButton = page
-    .getByRole('navigation', { name: 'Navegação principal' })
-    .getByRole('button', { name: 'Conta' });
-  if (await mobileAccountButton.isVisible()) {
-    await mobileAccountButton.click();
-  } else {
-    await page.getByRole('button', { name: /Minha conta/ }).filter({ visible: true }).click();
-  }
+  await page.goto('/account');
   await expect(page.locator('#my-account-title')).toHaveText('Minha conta');
   await page.getByRole('button', { name: /Importar dados pessoais/ }).click();
   await expect(page.locator('#my-account-title')).toHaveText('Importar dados pessoais');
