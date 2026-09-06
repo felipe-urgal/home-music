@@ -2,7 +2,7 @@
 
 Baseline de navegador do Home Music com Playwright.
 
-Os testes usam o build real de produção, mas não usam `.env`, biblioteca nem SQLite reais. O runner cria biblioteca/banco temporários, gera fixtures controladas e sobe o Fastify somente em loopback durante a execução.
+Os testes usam o build real de produção, mas não usam `.env`, biblioteca nem SQLite reais. O runner cria biblioteca, banco e arquivo de ambiente temporários, aponta o preload de produção para esse env descartável e sobe o Fastify somente em loopback durante a execução. O `.env` real da raiz nunca é lido nem alterado pelo runner.
 
 ## Instalação
 
@@ -82,8 +82,9 @@ Dependências externas não determinísticas são interceptadas quando apropriad
 
 ## Isolamento e determinismo
 
-- nenhum teste depende da biblioteca, SQLite ou internet do usuário;
+- nenhum teste depende da biblioteca, SQLite, `.env` raiz ou internet do usuário;
 - o servidor E2E usa diretório temporário descartável e loopback;
+- o arquivo de ambiente do preload também vive no diretório temporário e é removido no cleanup;
 - specs que dependem de estado persistente estabelecem explicitamente o próprio estado inicial ou identificadores únicos;
 - seletores novos preferem roles, labels e `data-testid`;
 - não use sleeps arbitrários para sincronizar persistência assíncrona; prefira sinais da UI, respostas HTTP ou `expect.poll` sobre o estado canônico.

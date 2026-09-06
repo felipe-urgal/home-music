@@ -1,21 +1,28 @@
 import { config } from 'dotenv';
 import { fileURLToPath } from 'node:url';
 import { bootstrapInitialAdmin } from './bootstrap-admin.js';
+import { resolveBootstrapEnvFile } from './bootstrap-preload-env.js';
 
-const isProduction = process.env.NODE_ENV === 'production';
-const envFilename = isProduction ? '.env' : '.env.development';
-const rootEnvPath = fileURLToPath(new URL(`../../../${envFilename}`, import.meta.url));
+const {
+  isProduction,
+  envFilename,
+  envPath,
+  source: envSource
+} = resolveBootstrapEnvFile();
 const defaultDatabasePath = fileURLToPath(new URL(
   isProduction ? '../../../data/home-music.db' : '../../../data/development/home-music.db',
   import.meta.url
 ));
 
-const envResult = config({ path: rootEnvPath, override: !isProduction });
+const envResult = config({ path: envPath, override: !isProduction });
 if (envResult.error) {
-  const instruction = isProduction
-    ? 'Configure o .env antes de iniciar a produção.'
-    : 'Copie .env.development.example para .env.development antes de iniciar o DEV.';
-  throw new Error(`Arquivo ${envFilename} não encontrado. ${instruction}`);
+  const instruction = envSource === 'configured'
+    ? 'Verifique HOME_MUSIC_ENV_FILE antes de iniciar a aplicação.'
+    : isProduction
+      ? 'Configure o .env antes de iniciar a produção.'
+      : 'Copie .env.development.example para .env.development antes de iniciar o DEV.';
+  const envDisplayName = envSource === 'configured' ? envPath : envFilename;
+  throw new Error(`Arquivo ${envDisplayName} não encontrado. ${instruction}`);
 }
 
 const databasePath = process.env.HOME_MUSIC_DATABASE_PATH || defaultDatabasePath;
