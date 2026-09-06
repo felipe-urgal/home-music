@@ -18,8 +18,8 @@ type CanonicalTrackReference = {
 };
 
 type MatchCatalog = {
-  entries: CanonicalTrackReference[];
   byRelativePath: Map<string, CanonicalTrackReference[]>;
+  byStrongHints: Map<string, CanonicalTrackReference[]>;
 };
 
 export type PersonalDataTrackMatchStatus = 'found' | 'missing' | 'ambiguous' | 'invalid';
@@ -60,20 +60,27 @@ export class PersonalDataTrackMatcher {
   private buildCatalog(): MatchCatalog {
     const activeTrackIds = this.library.listPublicTracks().map(track => track.id);
     const portableReferences = this.personal.portableTrackReferences(activeTrackIds);
-    const entries: CanonicalTrackReference[] = [];
     const byRelativePath = new Map<string, CanonicalTrackReference[]>();
+    const byStrongHints = new Map<string, CanonicalTrackReference[]>();
 
     for (const trackId of activeTrackIds) {
       const reference = portableReferences.get(trackId);
       if (!reference) continue;
       const entry = { trackId, reference };
-      entries.push(entry);
+
       const pathEntries = byRelativePath.get(reference.relativePath) ?? [];
       pathEntries.push(entry);
       byRelativePath.set(reference.relativePath, pathEntries);
+
+      const hintsKey = strongHintsKey(reference);
+      if (hintsKey && reference.hints.durationSeconds != null) {
+        const hintEntries = byStrongHints.get(hintsKey) ?? [];
+        hintEntries.push(entry);
+        byStrongHints.set(hintsKey, hintEntries);
+      }
     }
 
-    return { entries, byRelativePath };
+    return { byRelativePath, byStrongHints };
   }
 
   private matchWithCatalog(value: unknown, catalog: MatchCatalog): PersonalDataTrackMatchResult {
@@ -112,12 +119,15 @@ export class PersonalDataTrackMatcher {
       );
     }
 
-    if (!hasStrongHints(reference)) {
+    const hintsKey = strongHintsKey(reference);
+    if (!hintsKey || reference.hints.durationSeconds == null) {
       return result('missing', null, null, 'insufficient-hints');
     }
 
-    const hintCandidates = catalog.entries.filter(candidate => {
-      return fallbackHintsMatch(reference, candidate.reference);
+    const importedDuration = reference.hints.durationSeconds;
+    const hintCandidates = (catalog.byStrongHints.get(hintsKey) ?? []).filter(candidate => {
+      const candidateDuration = candidate.reference.hints.durationSeconds;
+      return candidateDuration != null && durationMatches(importedDuration, candidateDuration);
     });
 
     if (hintCandidates.length === 1) {
@@ -157,29 +167,13 @@ function pathHintsCompatible(
   return durationMatches(importedHints.durationSeconds, candidateHints.durationSeconds);
 }
 
-function hasStrongHints(reference: PortableTrackReferenceV1) {
-  return Boolean(
-    comparable(reference.hints.title)
-    && comparable(reference.hints.artist)
-    && comparable(reference.hints.album)
-    && reference.hints.durationSeconds != null
-    && portableFileName(reference.relativePath)
-  );
-}
-
-function fallbackHintsMatch(
-  imported: PortableTrackReferenceV1,
-  candidate: PortableTrackReferenceV1
-) {
-  const importedDuration = imported.hints.durationSeconds;
-  const candidateDuration = candidate.hints.durationSeconds;
-  if (importedDuration == null || candidateDuration == null) return false;
-
-  return portableFileName(imported.relativePath) === portableFileName(candidate.relativePath)
-    && comparable(imported.hints.title) === comparable(candidate.hints.title)
-    && comparable(imported.hints.artist) === comparable(candidate.hints.artist)
-    && comparable(imported.hints.album) === comparable(candidate.hints.album)
-    && durationMatches(importedDuration, candidateDuration);
+function strongHintsKey(reference: PortableTrackReferenceV1) {
+  const filename = portableFileName(reference.relativePath);
+  const title = comparable(reference.hints.title);
+  const artist = comparable(reference.hints.artist);
+  const album = comparable(reference.hints.album);
+  if (!filename || !title || !artist || !album) return null;
+  return JSON.stringify([filename, title, artist, album]);
 }
 
 function portableFileName(relativePath: string) {
