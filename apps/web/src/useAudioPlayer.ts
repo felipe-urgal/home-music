@@ -3,6 +3,7 @@ import type { NormalizationMode, PlaybackState, RepeatMode, Track } from '@home-
 import { apiFetch } from './api-client';
 import { resolveAppleBackgroundMediaErrorAction } from './background-playback';
 import { buildQueueContext } from './library-utils';
+import { publishMediaSessionMetadata } from './media-session-artwork';
 import { offlineAudioUrl } from './offline-downloads';
 import {
   nextTrackAfterErrorDecision,
@@ -522,15 +523,9 @@ export function useAudioPlayer(
   }, [current]);
 
   useEffect(() => {
-    if (!('mediaSession' in navigator) || !current || typeof MediaMetadata === 'undefined') return;
+    if (!('mediaSession' in navigator) || !current) return;
 
-    const artwork = !offlineMode && current.hasCover ? [{ src: `/api/tracks/${current.id}/cover` }] : undefined;
-    navigator.mediaSession.metadata = new MediaMetadata({
-      title: current.title,
-      artist: current.artist,
-      album: current.album,
-      artwork
-    });
+    publishMediaSessionMetadata(navigator.mediaSession, current, { offlineMode });
 
     const handlers: Array<[MediaSessionAction, MediaSessionActionHandler]> = [
       ['play', () => { void play(); }],
