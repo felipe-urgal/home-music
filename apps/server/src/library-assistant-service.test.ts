@@ -10,7 +10,8 @@ import type { IndexedTrack } from './library.js';
 import { LibraryAssistantProviderGateway } from './library-assistant-provider.js';
 import {
   LibraryAssistantService,
-  type LibraryAssistantAnalyzer
+  type LibraryAssistantAnalyzer,
+  type LibraryAssistantSuggestionDraft
 } from './library-assistant-service.js';
 import { LibraryAssistantStore } from './library-assistant-store.js';
 import { LongJobObservability } from './long-job-observability.js';
@@ -175,7 +176,7 @@ test('cancelling a run aborts new work and invalidates already persisted partial
   const blockingAnalyzer: LibraryAssistantAnalyzer = {
     id: 'blocking-test',
     capability: 'metadata',
-    analyze: ({ signal }) => new Promise((_resolve, reject) => {
+    analyze: ({ signal }) => new Promise<readonly LibraryAssistantSuggestionDraft[]>((_resolve, reject) => {
       blockingStarted = true;
       const abort = () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
       if (signal?.aborted) return abort();
