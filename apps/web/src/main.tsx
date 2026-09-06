@@ -21,6 +21,7 @@ import './admin-bulk.css';
 import './admin-transcode-cache.css';
 import './admin-operation-history.css';
 import './my-account.css';
+import './personal-data-import.css';
 import './profile-screen.css';
 import './administration.css';
 import './admin-import-upload.css';

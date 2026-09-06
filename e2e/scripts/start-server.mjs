@@ -8,6 +8,7 @@ const rootDir = fileURLToPath(new URL('../../', import.meta.url));
 const tempDir = await mkdtemp(path.join(tmpdir(), 'home-music-e2e-'));
 const libraryDir = path.join(tempDir, 'library');
 const databasePath = path.join(tempDir, 'home-music.db');
+const envPath = path.join(tempDir, 'bootstrap.env');
 const fixturePath = path.join(libraryDir, 'E2E Track.wav');
 const secondFixturePath = path.join(libraryDir, 'E2E Zeta.wav');
 const thirdFixturePath = path.join(libraryDir, 'E2E Zulu.wav');
@@ -91,6 +92,7 @@ function benchmarkTracks(trackCount) {
 
 await mkdir(libraryDir, { recursive: true });
 await Promise.all([
+  writeFile(envPath, '# Ambiente descartável do runner E2E. As variáveis são injetadas pelo processo.\n', 'utf8'),
   writeFile(fixturePath, wavFixture(10, 440)),
   writeFile(secondFixturePath, wavFixture(10, 523)),
   writeFile(thirdFixturePath, wavFixture(10, 659)),
@@ -123,8 +125,9 @@ try {
   fixtureDatabase.close();
 }
 
-// O E2E deve atravessar o mesmo preload usado por `npm start`/systemd para
-// validar bootstrap e vínculo de identidade exatamente como em produção.
+// O E2E atravessa o mesmo preload usado por `npm start`/systemd para validar
+// bootstrap e vínculo de identidade exatamente como em produção. O arquivo de env,
+// porém, é descartável e isolado: o runner nunca lê nem altera o `.env` real da raiz.
 const serverArgs = ['--import', './apps/server/dist/bootstrap-preload.js'];
 if (process.env.HOME_MUSIC_E2E_MEMORY_FILE?.trim()) {
   serverArgs.push('--import', './e2e/scripts/process-memory-probe.mjs');
@@ -139,6 +142,7 @@ const server = spawn(
     env: {
       ...process.env,
       NODE_ENV: 'production',
+      HOME_MUSIC_ENV_FILE: envPath,
       MUSIC_DIR: libraryDir,
       HOME_MUSIC_DATABASE_PATH: databasePath,
       HOME_MUSIC_USER: 'playwright',

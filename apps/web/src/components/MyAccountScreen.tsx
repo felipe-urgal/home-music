@@ -12,6 +12,7 @@ import {
   MonitorOff,
   ShieldCheck,
   SlidersHorizontal,
+  Upload,
   UserRound,
   WifiOff
 } from 'lucide-react';
@@ -25,13 +26,14 @@ import {
   type AccountSession
 } from '../account-client';
 import { AccountOpenSubsonicKeys } from './AccountOpenSubsonicKeys';
+import { AccountPersonalDataImport } from './AccountPersonalDataImport';
 import {
   AccountPlaybackPreferences,
   type AccountPlaybackPreferencesValue
 } from './AccountPlaybackPreferences';
 import { AccountSessionsScreen } from './AccountSessionsScreen';
 
-type AccountView = 'overview' | 'profile' | 'password' | 'sessions' | 'apps' | 'playback';
+type AccountView = 'overview' | 'profile' | 'password' | 'sessions' | 'apps' | 'playback' | 'data-import';
 
 type OfflineModeControl = {
   supported: boolean;
@@ -187,7 +189,9 @@ export function MyAccountScreen({
           ? 'Apps e integrações'
           : view === 'playback'
             ? 'Reprodução'
-            : 'Minha conta';
+            : view === 'data-import'
+              ? 'Importar dados pessoais'
+              : 'Minha conta';
   const subtitle = view === 'profile'
     ? 'Informações da conta'
     : view === 'password'
@@ -198,7 +202,9 @@ export function MyAccountScreen({
           ? 'Chaves OpenSubsonic revogáveis'
           : view === 'playback'
             ? 'Qualidade e normalização'
-            : 'Segurança e sessões';
+            : view === 'data-import'
+              ? 'Preview seguro antes de aplicar'
+              : 'Segurança e sessões';
 
   return (
     <section className={`my-account-screen my-account-screen--${view}`} aria-labelledby="my-account-title">
@@ -249,6 +255,17 @@ export function MyAccountScreen({
               <button type="button" onClick={() => setView('apps')}>
                 <span className="my-account-card__icon"><KeyRound /></span>
                 <span><strong>Apps e integrações</strong><small>Crie chaves separadas para clientes OpenSubsonic.</small></span>
+                <ChevronRight />
+              </button>
+            </div>
+          </section>
+
+          <section className="my-account-link-group" aria-labelledby="my-account-group-data">
+            <span className="my-account-link-group__label" id="my-account-group-data">Dados</span>
+            <div className="my-account-links">
+              <button type="button" onClick={() => setView('data-import')}>
+                <span className="my-account-card__icon"><Upload /></span>
+                <span><strong>Importar dados pessoais</strong><small>Revise um bundle exportado antes de restaurar dados na sua conta.</small></span>
                 <ChevronRight />
               </button>
             </div>
@@ -395,6 +412,8 @@ export function MyAccountScreen({
       {view === 'playback' && playbackPreferences && (
         <AccountPlaybackPreferences value={playbackPreferences} />
       )}
+
+      {view === 'data-import' && <AccountPersonalDataImport />}
     </section>
   );
 }

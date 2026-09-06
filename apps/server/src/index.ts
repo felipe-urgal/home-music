@@ -12,6 +12,7 @@ import {
   startAutoRescanScheduler
 } from './auto-rescan.js';
 import { installApiAuthPolicy } from './auth-policy.js';
+import { resolveBootstrapEnvFile } from './bootstrap-preload-env.js';
 import { registerAuthRoutes } from './auth-routes.js';
 import { probeFfmpeg, resolveFfmpegCommand, type FfmpegStatus } from './ffmpeg.js';
 import {
@@ -41,9 +42,12 @@ import {
   parseTranscodeCacheMegabytes
 } from './transcoding.js';
 
-const isProduction = process.env.NODE_ENV === 'production';
-const envFilename = isProduction ? '.env' : '.env.development';
-const rootEnvPath = fileURLToPath(new URL(`../../../${envFilename}`, import.meta.url));
+const {
+  isProduction,
+  envFilename,
+  envPath,
+  source: envSource
+} = resolveBootstrapEnvFile();
 const defaultDatabasePath = fileURLToPath(new URL(
   isProduction ? '../../../data/home-music.db' : '../../../data/development/home-music.db',
   import.meta.url
@@ -55,12 +59,15 @@ const defaultTranscodeCachePath = fileURLToPath(new URL(
 const webDistPath = fileURLToPath(new URL('../../web/dist/', import.meta.url));
 const productionCsp = "default-src 'self'; img-src 'self' data: blob:; media-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
 
-const envResult = config({ path: rootEnvPath, override: !isProduction });
+const envResult = config({ path: envPath, override: !isProduction });
 if (envResult.error) {
-  const instruction = isProduction
-    ? 'Configure o .env antes de iniciar a produção.'
-    : 'Copie .env.development.example para .env.development antes de iniciar o DEV.';
-  throw new Error(`Arquivo ${envFilename} não encontrado. ${instruction}`);
+  const instruction = envSource === 'configured'
+    ? 'Verifique HOME_MUSIC_ENV_FILE antes de iniciar a aplicação.'
+    : isProduction
+      ? 'Configure o .env antes de iniciar a produção.'
+      : 'Copie .env.development.example para .env.development antes de iniciar o DEV.';
+  const envDisplayName = envSource === 'configured' ? envPath : envFilename;
+  throw new Error(`Arquivo ${envDisplayName} não encontrado. ${instruction}`);
 }
 
 const databasePath = process.env.HOME_MUSIC_DATABASE_PATH || defaultDatabasePath;

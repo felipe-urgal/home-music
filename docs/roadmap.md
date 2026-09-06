@@ -2,7 +2,7 @@
 
 Este documento é a visão técnica de alto nível do Home Music. A issue [#123](https://github.com/felipe-urgal/home-music/issues/123) preserva o índice executivo do ciclo de backlog concluído em 2026-09-02. A Fase 12 foi encerrada pela [#239](https://github.com/felipe-urgal/home-music/issues/239), a Fase 13 pela [#266](https://github.com/felipe-urgal/home-music/issues/266) e o ciclo técnico atual está centralizado na [#295](https://github.com/felipe-urgal/home-music/issues/295).
 
-> Estado revisado em 2026-09-05. A Fase 13 está concluída. Na Fase 14, a Onda 1 também foi concluída: #291, #292 e #294 estão integradas à `main` pelos PRs #297, #298 e #299. A #293 é a única pendência técnica do ciclo; sua dependência da #292 já foi satisfeita e a implementação está desbloqueada, porém pausada até a próxima retomada. A #295 permanece aberta como índice executivo da fase.
+> Estado revisado em 2026-09-06. A Fase 13 está concluída. Na Fase 14, #291, #292 e #294 já estão integradas à `main`. A #293 foi decomposta em #301–#305: parser, matching, preview e aplicação transacional já estão integrados, e a etapa final de UI/E2E/documentação está em conclusão pelo PR #324. A #295 permanece aberta somente até a reconciliação do gate final da fase.
 
 ## Fases 1–2 — Base do produto e biblioteca pessoal
 
@@ -268,7 +268,7 @@ Detalhes: [open-subsonic.md](open-subsonic.md).
 
 ## Fase 14 — Soberania e recuperação
 
-**Em pausa após a conclusão da Onda 1.** O índice executivo é a [#295](https://github.com/felipe-urgal/home-music/issues/295).
+**Em fechamento técnico.** O índice executivo é a [#295](https://github.com/felipe-urgal/home-music/issues/295) e deve ser encerrado somente depois do merge/gate final da #305.
 
 O objetivo é tornar o Home Music mais seguro para evoluir, migrar e abandonar sem prender o usuário ao banco interno, mantendo a biblioteca física, `MUSIC_DIR` e os serviços atuais como autoridades.
 
@@ -279,12 +279,18 @@ O objetivo é tornar o Home Music mais seguro para evoluir, migrar e abandonar s
 
 ### P1
 
-- [ ] [#293](https://github.com/felipe-urgal/home-music/issues/293) — importar dados pessoais com preview e matching seguro; a dependência da #292 está satisfeita e a implementação está **desbloqueada, porém pausada**;
+- [x] [#293](https://github.com/felipe-urgal/home-music/issues/293) — importação de dados pessoais implementada em #301–#305 com parser fail-closed, matching conservador, preview autenticado, confirmação vinculada ao plano, aplicação transacional/idempotente e fluxo em Minha Conta; fechamento formal aguarda o gate final do PR #324;
 - [x] [#294](https://github.com/felipe-urgal/home-music/issues/294) — interoperabilidade segura de playlists por M3U8 — entregue pelo PR #299.
+
+### Entrega da #293
+
+A importação reutiliza exatamente o formato `home-music-personal-data` v1 da #292. O backend valida o bundle não confiável, resolve faixas pela biblioteca canônica sem fuzzy/best-guess, entrega dry-run sem mutação e exige confirmação vinculada ao usuário + bundle + matching antes de uma aplicação SQLite atômica. Referências `missing`, `ambiguous` ou `conflict` nunca são escolhidas silenciosamente.
+
+A superfície final fica em **Minha Conta → Dados → Importar dados pessoais**. O frontend usa os contratos compartilhados, não replica matching/merge e exige confirmação explícita depois do preview. O E2E direcionado cobre o happy path fullstack e uma versão incompatível, com cleanup para não contaminar a suíte. Detalhes: [personal-data-portability.md](personal-data-portability.md).
 
 ### Ordem e paralelismo
 
-A Onda 1 (#291, #292 e #294) está concluída e integrada à `main`. A #293 é a única pendência da fase e deve usar o formato `home-music-personal-data` v1 e o `PortableTrackReferenceV1` já estabilizados pela #292, sem criar contrato concorrente. Não há P2 planejado neste ciclo; novos itens exigem evidência concreta.
+As quatro atividades técnicas da Fase 14 estão implementadas. #291, #292 e #294 já estão integradas à `main`; a #293 possui backend integrado e a UI/documentação final no PR #324. Não há P2 planejado neste ciclo; novos itens exigem evidência concreta e issue própria.
 
 ## Backlog visual e PWA
 
@@ -295,7 +301,7 @@ Esses itens são independentes da #174 e da #81, ambas concluídas.
 
 ## Backlog atual
 
-A #293 é a única atividade implementável ainda aberta na Fase 14. Ela está desbloqueada pelo merge da #292, mas deliberadamente pausada até a próxima retomada. A #295 permanece aberta como índice executivo; #291, #292 e #294 estão concluídas. A #266, a #239 e a #123 permanecem encerradas como registros de ciclos anteriores e não devem ser reabertas artificialmente para representar trabalho novo.
+A Fase 14 não possui nova atividade técnica planejada além do gate/merge final da #305. A #293 e a #295 permanecem abertas apenas para reconciliação final e devem ser encerradas somente depois do HEAD final verde e da revisão completa do PR #324. A #266, a #239 e a #123 permanecem encerradas como registros de ciclos anteriores e não devem ser reabertas artificialmente para representar trabalho novo.
 
 ## Regra de execução
 
