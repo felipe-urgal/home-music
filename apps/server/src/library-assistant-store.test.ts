@@ -4,6 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import type { LibraryAssistantReasonCode } from '@home-music/shared/library-assistant';
 import { HomeMusicDatabase } from './database.js';
 import type { IndexedTrack } from './library.js';
 import { LibraryAssistantStore } from './library-assistant-store.js';
@@ -40,6 +41,7 @@ async function withDatabase(run: (databasePath: string) => Promise<void> | void)
   }
 }
 
+const reasonCodes: LibraryAssistantReasonCode[] = ['provider-match', 'exact-text-match'];
 const suggestion = {
   id: 'suggestion-1',
   runId: 'run-1',
@@ -47,7 +49,7 @@ const suggestion = {
   trackId: 'track-1',
   status: 'review' as const,
   confidence: 'high' as const,
-  reasonCodes: ['provider-match', 'exact-text-match'] as const,
+  reasonCodes,
   evidence: [{
     type: 'text-match' as const,
     version: 1 as const,
