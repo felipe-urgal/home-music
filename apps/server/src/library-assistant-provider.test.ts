@@ -263,6 +263,8 @@ test('provider gateway caller cancellation returns promptly even when execute ig
   const gateway = new LibraryAssistantProviderGateway(cache.port, { minIntervalMs: 0 });
   const controller = new AbortController();
   const providerSignals: AbortSignal[] = [];
+  let markStarted!: () => void;
+  const started = new Promise<void>(resolve => { markStarted = resolve; });
 
   const pending = gateway.query({
     provider,
@@ -270,10 +272,13 @@ test('provider gateway caller cancellation returns promptly even when execute ig
     signal: controller.signal,
     execute: async ({ signal }) => {
       providerSignals.push(signal);
+      markStarted();
       return new Promise<unknown>(() => {});
     },
     normalize: normalizeRecording
   });
+
+  await started;
   controller.abort();
 
   await assert.rejects(pending, LibraryAssistantProviderAbortedError);
