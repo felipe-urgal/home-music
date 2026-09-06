@@ -1,12 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { isDeepStrictEqual } from 'node:util';
+import type { SmartPlaylistRule } from '@home-music/shared';
 import type {
   PersonalDataImportApplyDomainSummaryV1,
-  PersonalDataImportApplySummaryV1,
-  SmartPlaylistRule
-} from '@home-music/shared';
-import type { PersonalDataImportPlan, PersonalDataImportPlannedReference } from './personal-data-import-plan.js';
+  PersonalDataImportApplySummaryV1
+} from '@home-music/shared/personal-data';
+import type {
+  PersonalDataImportPlan,
+  PersonalDataImportPlannedReference
+} from './personal-data-import-plan.js';
 
 const HISTORY_CAPACITY = 2_000;
 const SMART_PLAYLIST_SOURCE = 'smart';
@@ -14,7 +17,6 @@ const SMART_RULE_VERSION = 1;
 const LIBRARY_VIEW_MAX_NAME_LENGTH = 120;
 
 type Row = Record<string, unknown>;
-
 type DomainSummary = PersonalDataImportApplyDomainSummaryV1;
 
 type ResolvedPlan = {
@@ -71,6 +73,7 @@ export class PersonalDataImportApplyStore {
   }
 
   private applyFavorites(userId: string, trackIds: string[]): DomainSummary {
+    const uniqueTrackIds = unique(trackIds);
     const insert = this.db.prepare(`
       INSERT INTO favorites(user_id, track_id, created_at)
       VALUES (?, ?, ?)
@@ -78,10 +81,10 @@ export class PersonalDataImportApplyStore {
     `);
     const now = new Date().toISOString();
     let applied = 0;
-    for (const trackId of unique(trackIds)) {
+    for (const trackId of uniqueTrackIds) {
       applied += Number(insert.run(userId, trackId, now).changes);
     }
-    return { applied, ignored: unique(trackIds).length - applied };
+    return { applied, ignored: uniqueTrackIds.length - applied };
   }
 
   private applyManualPlaylists(
@@ -112,13 +115,7 @@ export class PersonalDataImportApplyStore {
       }
 
       const id = randomUUID();
-      insertPlaylist.run(
-        id,
-        playlist.name,
-        playlist.createdAt,
-        playlist.updatedAt,
-        userId
-      );
+      insertPlaylist.run(id, playlist.name, playlist.createdAt, playlist.updatedAt, userId);
       trackIds.forEach((trackId, position) => {
         insertTrack.run(id, trackId, position);
       });
