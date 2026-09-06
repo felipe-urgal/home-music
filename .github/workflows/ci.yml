@@ -16,7 +16,7 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
@@ -39,3 +39,12 @@ jobs:
 
       - name: Backup restore smoke
         run: npm run smoke:backup-restore
+
+      - name: Install E2E dependencies
+        run: npm ci --prefix e2e --no-audit --no-fund
+
+      - name: Install Chromium
+        run: npm run install:browsers --prefix e2e
+
+      - name: Personal data import E2E
+        run: npm run test --prefix e2e -- tests/personal-data-import.spec.ts
