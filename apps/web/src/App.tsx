@@ -1,45 +1,90 @@
-import { lazy, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AuthenticatedApp } from './AuthenticatedApp';
-import { LazySurfaceBoundary } from './components/LazySurfaceBoundary';
 import { LoginScreen } from './components/LoginScreen';
-import { useOfflineDownloads } from './offline-downloads';
+import { OfflineApp } from './OfflineApp';
+import { readOfflineColdStartRecords } from './offline-cold-start';
+import { useOfflineDownloads, type OfflineDownloadRecord, type OfflineDownloads } from './offline-downloads';
 import { useAuth } from './useAuth';
 
-async function loadOfflineApp() {
-  const module = await import('./OfflineApp');
-  return { default: module.OfflineApp };
+function offlineSnapshot(
+  offline: OfflineDownloads,
+  records: readonly OfflineDownloadRecord[]
+): OfflineDownloads {
+  const available = [...records];
+  return {
+    ...offline,
+    records: available,
+    tracks: available.map(record => record.track),
+    downloadedIds: new Set(available.map(record => record.track.id)),
+    totalBytes: available.reduce((total, record) => total + record.size, 0),
+    loading: false
+  };
 }
-
-const OfflineApp = lazy(loadOfflineApp);
 
 export default function App() {
   const auth = useAuth();
   const offline = useOfflineDownloads();
   const [offlineMode, setOfflineMode] = useState(false);
-  const offlineCount = offline.supported && !offline.loading ? offline.records.length : 0;
-  const automaticOfflineMode = auth.unreachable && offlineCount > 0;
-  const showOfflineMode = offlineMode || automaticOfflineMode;
+  const [coldStartRecords, setColdStartRecords] = useState<OfflineDownloadRecord[] | null>(null);
 
   useEffect(() => {
-    if (!auth.authenticated || !offline.supported) return;
-    void loadOfflineApp().catch(() => undefined);
-  }, [auth.authenticated, offline.supported]);
+    let disposed = false;
+
+    if (!auth.unreachable) {
+      setColdStartRecords(null);
+      return () => { disposed = true; };
+    }
+
+    if (offline.records.length === 0) {
+      setColdStartRecords([]);
+      return () => { disposed = true; };
+    }
+
+    setColdStartRecords(null);
+    void readOfflineColdStartRecords(offline.records)
+      .then(records => {
+        if (!disposed) setColdStartRecords(records);
+      })
+      .catch(() => {
+        if (!disposed) setColdStartRecords([]);
+      });
+
+    return () => { disposed = true; };
+  }, [auth.unreachable, offline.records]);
 
   useEffect(() => {
     if (offlineMode && !offline.loading && offline.tracks.length === 0) setOfflineMode(false);
   }, [offline.loading, offline.tracks.length, offlineMode]);
 
+  const automaticOfflineMode = auth.unreachable && Boolean(coldStartRecords?.length);
+  const checkingOfflineContent = auth.unreachable
+    && offline.records.length > 0
+    && coldStartRecords === null;
+  const showOfflineMode = offlineMode || automaticOfflineMode;
+  const offlineForMode = automaticOfflineMode && coldStartRecords
+    ? offlineSnapshot(offline, coldStartRecords)
+    : offline;
+
   if (showOfflineMode) {
     return (
-      <LazySurfaceBoundary fullScreen loadingTitle="Carregando modo offline">
-        <OfflineApp
-          offline={offline}
-          onExit={() => {
-            setOfflineMode(false);
-            void auth.retry();
-          }}
-        />
-      </LazySurfaceBoundary>
+      <OfflineApp
+        offline={offlineForMode}
+        onExit={() => {
+          setOfflineMode(false);
+          void auth.retry();
+        }}
+      />
+    );
+  }
+
+  if (checkingOfflineContent) {
+    return (
+      <main className="login-shell">
+        <section className="login-card login-card--status" aria-live="polite">
+          <strong>Home Music</strong>
+          <span>Verificando seus downloads offline…</span>
+        </section>
+      </main>
     );
   }
 
