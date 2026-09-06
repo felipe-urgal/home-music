@@ -5,6 +5,8 @@ import { registerLibraryViewRoutes } from './library-view-routes.js';
 import { registerPlaybackHistoryRoutes } from './playback-history-routes.js';
 import { PersonalDataExportService } from './personal-data-export.js';
 import { registerPersonalDataExportRoutes } from './personal-data-export-routes.js';
+import { registerPersonalDataImportApplyRoutes } from './personal-data-import-apply-routes.js';
+import { PersonalDataImportApplyStore } from './personal-data-import-apply-store.js';
 import { PersonalDataImportPlanner } from './personal-data-import-plan.js';
 import { registerPersonalDataImportPreviewRoutes } from './personal-data-import-preview-routes.js';
 import { PersonalDataTrackMatcher } from './personal-data-track-matcher.js';
@@ -27,6 +29,7 @@ export function registerPersonalRoutes(
     || process.env.HOME_MUSIC_DATABASE_PATH
     || defaultDatabasePath;
   const personalDataExporter = new PersonalDataExportService(personal, databasePath);
+  let personalDataImportApplyStore: PersonalDataImportApplyStore | null = null;
 
   registerLibraryViewRoutes(app, { databasePath });
   registerSmartPlaylistRoutes(app, { databasePath });
@@ -36,11 +39,18 @@ export function registerPersonalRoutes(
   if (options.library) {
     const personalDataMatcher = new PersonalDataTrackMatcher(personal, options.library);
     const personalDataImportPlanner = new PersonalDataImportPlanner(personalDataMatcher);
+    personalDataImportApplyStore = new PersonalDataImportApplyStore(databasePath);
     registerPersonalDataImportPreviewRoutes(app, personalDataImportPlanner);
+    registerPersonalDataImportApplyRoutes(
+      app,
+      personalDataImportPlanner,
+      personalDataImportApplyStore
+    );
   }
 
   app.addHook('onClose', async () => {
     personalDataExporter.close();
+    personalDataImportApplyStore?.close();
   });
 
   app.get('/api/favorites', async (request, reply) => {
@@ -135,7 +145,7 @@ export function registerPersonalRoutes(
       });
     }
 
-    const result = personal.deletePlaylist(request.user.id, request.params.id);
+    const result = personal.deletePlaylist(userIdOrThrow(request), request.params.id);
     if (result.status === 'not-found') {
       return reply.code(404).send({ error: 'Playlist não encontrada.' });
     }
@@ -198,4 +208,9 @@ export function registerPersonalRoutes(
     reply.header('Cache-Control', 'private, no-store');
     return state;
   });
+}
+
+function userIdOrThrow(request: { user?: { id: string } | null }) {
+  if (!request.user) throw new Error('Identidade persistida ausente.');
+  return request.user.id;
 }
