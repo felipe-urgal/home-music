@@ -104,9 +104,22 @@ npm run tailscale:hardening:status
 
 Use os comandos `enable`/`disable` somente quando a mudança de perfil for intencional. Runbooks: [`tailscale.md`](tailscale.md), [`public-access.md`](public-access.md) e [`tailscale-hardening.md`](tailscale-hardening.md).
 
-## Recovery
+## Recovery de dados
 
-Migrations SQLite são versionadas e executadas no startup. Depois de avanço incompatível de schema, não reduza `PRAGMA user_version` manualmente. Quando necessário, pare o serviço e restaure um backup compatível seguindo o runbook.
+Migrations SQLite são versionadas e executadas no startup. Depois de avanço incompatível de schema, não reduza `PRAGMA user_version` manualmente. Quando necessário, pare o serviço e restaure um backup compatível seguindo [`backup-restore.md`](backup-restore.md).
+
+## Recovery de acesso administrativo
+
+Se o acesso administrativo for perdido, use o recovery local suportado para uma conta existente, com o serviço parado:
+
+```bash
+sudo systemctl stop home-music
+npm run admin:recover -- --username <usuario-existente> --confirm-service-stopped
+sudo systemctl start home-music
+npm run prod:verify
+```
+
+O comando pode reativar/promover a conta e gerar uma senha temporária que exige troca no próximo login. Modelo de identidade e invariantes: [`multi-user-auth.md`](multi-user-auth.md).
 
 ## Fontes aprofundadas
 
@@ -114,4 +127,6 @@ Migrations SQLite são versionadas e executadas no startup. Depois de avanço in
 - [`production.md`](production.md) — systemd, helper privilegiado e atualização;
 - [`backup-restore.md`](backup-restore.md) — backup e restore;
 - [`production-verification.md`](production-verification.md) — verificação funcional;
-- [`phase-7.5-operations.md`](phase-7.5-operations.md) — identidade/migrations e recovery histórico ainda aplicável.
+- [`multi-user-auth.md`](multi-user-auth.md) — identidade, sessões, autorização e recovery administrativo.
+
+Documentos da fase 7.5 foram preservados em [`history/phase-7.5/`](history/phase-7.5/) apenas como histórico de implementação; não devem ser usados como runbook atual.

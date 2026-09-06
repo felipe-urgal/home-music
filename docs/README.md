@@ -1,179 +1,144 @@
 # Documentação do Home Music
 
-Este diretório mistura documentação **corrente** e registros históricos de implementação. Esta página define qual material deve ser usado como fonte de verdade.
+Este índice separa **documentação atual**, **planos** e **histórico**. A intenção é evitar que uma decisão antiga seja usada como runbook ou especificação vigente.
 
-> Inventário e backlog revisados em 2026-09-06. A Fase 13 está encerrada. Na Fase 14, #291, #292 e #294 já estão integradas à `main` pelos PRs #297, #298 e #299. A #293 foi decomposta e implementada nas etapas #301–#305: parser, matching, preview e aplicação já estão em `main`, e a UI/E2E final está em conclusão pelo PR #324. A #295 permanece como índice executivo ativo somente até a reconciliação dos gates finais da Fase 14 — Soberania e recuperação.
+## Ordem de confiança
 
-## Desenvolvimento e agentes de IA
+Quando houver divergência, use esta ordem:
 
-Antes de alterar o repositório, leia [`../AGENTS.md`](../AGENTS.md).
+1. código, testes, `package.json`, workflows e contratos executáveis;
+2. documentação canônica atual;
+3. roadmap e issues abertas;
+4. planos/ADRs ainda não incorporados;
+5. `docs/history/` como contexto histórico.
 
-Ele define o fluxo obrigatório de desenvolvimento, postura fullstack sênior, padrão de PR, gates de segurança/testes e a regra de **auto code review completo no head final** antes de aprovar qualquer merge.
+## Comece aqui
 
-## Fontes atuais
+- [`../README.md`](../README.md) — visão geral, comandos e recursos do produto;
+- [`DEVELOPMENT.md`](DEVELOPMENT.md) — setup e fluxo de engenharia;
+- [`PRODUCTION.md`](PRODUCTION.md) — operação canônica da instalação real;
+- [`architecture.md`](architecture.md) — arquitetura do sistema;
+- [`testing-and-quality.md`](testing-and-quality.md) — baseline local, CI e checks direcionados;
+- [`roadmap.md`](roadmap.md) — estado técnico corrente e próxima fase.
 
-Comece por:
+## Estado técnico atual
 
-1. [`../README.md`](../README.md) — instalação, operação e visão geral do produto;
-2. [`architecture.md`](architecture.md) — arquitetura corrente;
-3. [`roadmap.md`](roadmap.md) — estado técnico das fases e pendências reais;
-4. [issue #295](https://github.com/felipe-urgal/home-music/issues/295) — índice executivo da Fase 14 em reconciliação final;
-5. [issue #293](https://github.com/felipe-urgal/home-music/issues/293) — importação pessoal implementada em etapas #301–#305, aguardando apenas gates/fechamento final;
-6. [`personal-data-portability.md`](personal-data-portability.md) — contrato portátil v1, exportação, matching, preview, aplicação transacional e fluxo em Minha Conta;
-7. [`m3u8-playlists.md`](m3u8-playlists.md) — interoperabilidade segura de playlists entregue pela #294 / PR #299;
-8. [`production-contract.md`](production-contract.md) e [`backup-restore.md`](backup-restore.md) — contrato operacional do checkpoint pré-update entregue pela #291 / PR #297;
-9. [issue #291](https://github.com/felipe-urgal/home-music/issues/291) — registro concluído do checkpoint pré-update;
-10. [issue #292](https://github.com/felipe-urgal/home-music/issues/292) — registro concluído da exportação portátil dos dados pessoais;
-11. [issue #294](https://github.com/felipe-urgal/home-music/issues/294) — registro concluído da interoperabilidade M3U8;
-12. [`jamendo.md`](jamendo.md) — descoberta, licença e importação segura;
-13. [`open-subsonic.md`](open-subsonic.md) — subset, autenticação, ownership, negociação de protocolo, projeções sob demanda e matriz de validação OpenSubsonic;
-14. [issue #266](https://github.com/felipe-urgal/home-music/issues/266) — registro encerrado da Fase 13;
-15. [issue #239](https://github.com/felipe-urgal/home-music/issues/239) — registro encerrado da Fase 12;
-16. [issue #123](https://github.com/felipe-urgal/home-music/issues/123) — registro executivo do ciclo de backlog encerrado em 2026-09-02;
-17. [`administration-ui.md`](administration-ui.md) — composição atual de Minha conta/Administração;
-18. documentos funcionais abaixo para invariantes específicas.
+Em **2026-09-06**:
 
-## Estado do backlog atual
+- fase 7.5 (multiusuário/autenticação) está concluída; os documentos de implementação foram arquivados;
+- fase 14 (portabilidade de dados pessoais) está implementada na `main` após o PR #324;
+- fase 15 (Library Assistant) é o ciclo técnico ativo, rastreado pela issue #310;
+- o plano atual da fase 15 está em [`library-assistant-plan.md`](library-assistant-plan.md).
 
-A Fase 14 está **em fechamento técnico** e continua centralizada na #295 até o último gate. #291, #292 e #294 estão concluídas e integradas à `main`. A #293 já possui parser, matching conservador, preview autenticado e aplicação transacional integrados; a etapa final #305 entrega o fluxo de Minha Conta, E2E direcionado e reconciliação documental pelo PR #324.
+Para o estado instantâneo de issues/PRs, GitHub é a fonte de verdade; este índice não tenta reproduzir todo o tracker.
 
-| Issue | Estado corrente |
-| --- | --- |
-| [#295](https://github.com/felipe-urgal/home-music/issues/295) | índice executivo da Fase 14; 4/4 atividades técnicas implementadas, aguardando reconciliação do gate final |
-| [#291](https://github.com/felipe-urgal/home-music/issues/291) | concluída pelo PR #297: checkpoint pré-update verificável e recuperação determinística do estado SQLite |
-| [#292](https://github.com/felipe-urgal/home-music/issues/292) | concluída pelo PR #298: exportação versionada e privada dos dados pessoais do usuário |
-| [#293](https://github.com/felipe-urgal/home-music/issues/293) | P1 em fechamento: importação com validação, matching conservador, dry-run, confirmação transacional e UI em Minha Conta |
-| [#294](https://github.com/felipe-urgal/home-music/issues/294) | concluída pelo PR #299: importação/exportação M3U8 sem importar mídia nem criar segunda biblioteca |
-| [#266](https://github.com/felipe-urgal/home-music/issues/266) | Fase 13 concluída e índice executivo encerrado em 2026-09-05 |
-| [#264](https://github.com/felipe-urgal/home-music/issues/264) | OpenSubsonic concluído; Feishin validado manualmente e Symfonium explicitamente não executado no aceite final |
-| [#239](https://github.com/felipe-urgal/home-music/issues/239) | Fase 12 concluída; índice executivo encerrado em 2026-09-04 |
-| [#123](https://github.com/felipe-urgal/home-music/issues/123) | encerrada como índice executivo de ciclo anterior |
+## Arquitetura e composição
 
-A ordem corrente está em `roadmap.md` e na #295. Itens concluídos não devem ser reabertos artificialmente para representar trabalho novo.
+- [`architecture.md`](architecture.md) — visão arquitetural canônica;
+- [`server-composition.md`](server-composition.md) — composição do backend/Fastify;
+- [`app-composition.md`](app-composition.md) — composição do frontend;
+- [`frontend-code-splitting.md`](frontend-code-splitting.md) — estratégia de code splitting;
+- [`library-screen-responsibilities.md`](library-screen-responsibilities.md) — responsabilidades da Biblioteca;
+- [`player-screen-responsibilities.md`](player-screen-responsibilities.md) — responsabilidades do Player;
+- [`deep-links.md`](deep-links.md) — deep links e navegação.
 
-## Composição do frontend
+## Identidade, contas e segurança
 
-- [`app-composition.md`](app-composition.md) — limites entre raiz de sessão/conectividade, aplicação autenticada e aplicação offline, incluindo a entrada manual pelo painel da conta sem duplicar o estado de conectividade.
-- [`artwork-fallback.md`](artwork-fallback.md) — política canônica de capa efetiva e fallback visual reutilizável entre biblioteca, player e administração.
-- [`frontend-code-splitting.md`](frontend-code-splitting.md) — política de carregamento sob demanda para Administração, Minha conta e Offline, fallback recuperável e budgets de bundle.
+- [`multi-user-auth.md`](multi-user-auth.md) — identidade, papéis, sessões, ownership e recovery;
+- [`administration-ui.md`](administration-ui.md) — Administração e Minha conta;
+- [`personal-data-portability.md`](personal-data-portability.md) — exportação/importação de dados pessoais;
+- [`login-abuse-protection.md`](login-abuse-protection.md) — proteção contra abuso de login;
+- [`password-ux.md`](password-ux.md) — contrato de UX de senha;
+- [`security-regressions.md`](security-regressions.md) — regressões sensíveis e suíte de segurança.
 
-## Composição do backend
+## Biblioteca, metadata e administração
 
-- [`server-composition.md`](server-composition.md) — limites entre composition root, rotas por domínio, serviços e infraestrutura compartilhada do Fastify.
-- [`open-subsonic.md`](open-subsonic.md) — adapter `/rest/*` sobre `LibraryService`, `TrackMediaInfrastructure` e `PersonalLibraryService`, com API keys dedicadas, contrato compartilhado, negociação de protocolo e sem segunda fonte de verdade.
-- [`personal-data-portability.md`](personal-data-portability.md) — projeção portátil v1, importação fail-closed, matching conservador, preview/confirmation token e aplicação transacional com ownership pela sessão.
-- [`m3u8-playlists.md`](m3u8-playlists.md) — preview/import/export M3U8 sobre a biblioteca e playlists canônicas, sem rede, mídia paralela ou autoridade de path externo.
+- [`library-views.md`](library-views.md) — projeções/visões da biblioteca;
+- [`library-http-delivery.md`](library-http-delivery.md) — entrega HTTP da mídia;
+- [`library-metadata-normalization.md`](library-metadata-normalization.md) — normalização de metadata;
+- [`library-navigation-performance.md`](library-navigation-performance.md) — performance de navegação;
+- [`admin-metadata-overrides.md`](admin-metadata-overrides.md) — overrides de metadata;
+- [`admin-cover-overrides.md`](admin-cover-overrides.md) — overrides de capa;
+- [`admin-file-moves.md`](admin-file-moves.md) — organização/movimentação de arquivos;
+- [`admin-bulk-actions.md`](admin-bulk-actions.md) — ações em lote;
+- [`admin-quarantine.md`](admin-quarantine.md) — lixeira/quarentena;
+- [`admin-operation-history.md`](admin-operation-history.md) — histórico operacional;
+- [`admin-transcode-cache.md`](admin-transcode-cache.md) — cache de transcode;
+- [`smart-playlists.md`](smart-playlists.md) — playlists inteligentes;
+- [`m3u8-playlists.md`](m3u8-playlists.md) — playlists M3U8.
 
-## Segurança e regressões
+## Importação e providers
 
-- [`security-regressions.md`](security-regressions.md) — gate dedicado de regressões negativas para Administração/Importação, invariantes cobertas e regras de isolamento das fixtures.
-- [`login-abuse-protection.md`](login-abuse-protection.md) — rate limits por IP/identidade, gate global de `scrypt`, `Retry-After`, métricas agregadas e política de restart do login.
-- [`open-subsonic.md`](open-subsonic.md) — ownership derivado da API key, persistência somente do hash, revogação isolada, validação `v`/`c` e redaction de query string nos logs.
-- [`personal-data-portability.md`](personal-data-portability.md) — export privado e import seguro sem segredos, IDs externos como autoridade ou paths absolutos; referências ambíguas/conflitantes nunca são aplicadas silenciosamente.
-- [`m3u8-playlists.md`](m3u8-playlists.md) — limites defensivos, rejeição de traversal/URLs/paths absolutos e matching somente contra tracks disponíveis da biblioteca atual.
+- [`import-upload.md`](import-upload.md) — upload local;
+- [`import-url.md`](import-url.md) — importação por URL;
+- [`import-staging.md`](import-staging.md) — staging;
+- [`import-staging-cleanup.md`](import-staging-cleanup.md) — limpeza do staging;
+- [`import-safe-destination.md`](import-safe-destination.md) — destino seguro;
+- [`import-duplicate-detection.md`](import-duplicate-detection.md) — duplicatas;
+- [`import-incremental-library-update.md`](import-incremental-library-update.md) — atualização incremental após importação;
+- [`import-metadata-preview.md`](import-metadata-preview.md) — preview de metadata;
+- [`import-job-retry.md`](import-job-retry.md) — retry de jobs;
+- [`external-providers.md`](external-providers.md) — contrato de providers externos;
+- [`external-provider-batches.md`](external-provider-batches.md) — execução em lotes;
+- [`external-provider-engine-decision.md`](external-provider-engine-decision.md) — decisão arquitetural do engine de providers;
+- [`jamendo.md`](jamendo.md) — descoberta/importação Jamendo;
+- [`yt-dlp-provider.md`](yt-dlp-provider.md) — provider baseado em yt-dlp.
 
-## Dependências e CI
+## Player, PWA e offline
 
-- [`dependency-management.md`](dependency-management.md) — Dependabot, cadência, agrupamento patch/minor, tratamento de majors e vulnerabilidades, GitHub Actions/supply chain, lockfiles e regra de ausência de auto-merge.
+- [`pwa.md`](pwa.md) — arquitetura PWA/service worker;
+- [`pwa-icon-identity.md`](pwa-icon-identity.md) — identidade visual dos ícones PWA;
+- [`offline-downloads.md`](offline-downloads.md) — downloads offline e isolamento por usuário;
+- [`artwork-fallback.md`](artwork-fallback.md) — fallback de artwork;
+- [`ffmpeg.md`](ffmpeg.md) — FFmpeg/FFprobe.
 
-## Performance
+## OpenSubsonic
 
-- [`large-library-benchmark.md`](large-library-benchmark.md) — dataset sintético, cenários, baseline operacional, scanner concorrente, persistência SQLite incremental e limites do gate de regressão grave para bibliotecas grandes.
-- [`library-http-delivery.md`](library-http-delivery.md) — snapshot HTTP autenticado da biblioteca, `revision`, projeção efetiva de overrides antes do cache, ETag privado, revalidação `304`, compressão Brotli/gzip e cache de projeção/serialização.
-- [`library-navigation-performance.md`](library-navigation-performance.md) — índice derivado por `libraryRevision`, equivalência semântica e comparativo 10k/25k da navegação/busca.
-- [`frontend-code-splitting.md`](frontend-code-splitting.md) — chunks secundários sob demanda, invariantes de navegação/autorização e budgets raw/gzip/Brotli validados no build.
-- [`open-subsonic.md`](open-subsonic.md) — projeções de catálogo/favoritos materializadas somente quando o endpoint realmente as consome; fast paths por faixa não percorrem a biblioteca global.
+- [`open-subsonic.md`](open-subsonic.md) — subset suportado, autenticação, ownership e compatibilidade.
 
-## Acessibilidade
+A compatibilidade externa deve ser registrada nesse documento e nos testes/validações correspondentes; não use requisitos históricos de fechamento de issue como contrato atual.
 
-- [`accessibility.md`](accessibility.md) — baseline de teclado/foco, nomes e estados acessíveis, movimento reduzido, fila do player, regressões automatizadas e limites conhecidos da revisão da #120.
+## Produção, backup e acesso remoto
 
-## Navegação e URLs
+- [`PRODUCTION.md`](PRODUCTION.md) — runbook canônico;
+- [`production.md`](production.md) — detalhes de systemd/helper privilegiado;
+- [`production-contract.md`](production-contract.md) — contrato consumido pelo Dev Dashboard;
+- [`production-verification.md`](production-verification.md) — verificação funcional;
+- [`backup-restore.md`](backup-restore.md) — backup e restore SQLite;
+- [`tailscale.md`](tailscale.md) — Tailscale Serve;
+- [`public-access.md`](public-access.md) — acesso público/Funnel;
+- [`tailscale-hardening.md`](tailscale-hardening.md) — hardening;
+- [`tailscale-funnel-troubleshooting.md`](tailscale-funnel-troubleshooting.md) — troubleshooting.
 
-- [`deep-links.md`](deep-links.md) — rotas canônicas, integração com o histórico do browser, refresh direto, preservação do player e fallbacks de navegação.
+Os pares `PRODUCTION.md`/`production.md` e `DEVELOPMENT.md`/`development-environments.md` são intencionais: o arquivo em maiúsculas é o ponto de entrada canônico; o complementar aprofunda detalhes mecânicos.
 
-## Operação
+## Desenvolvimento, dependências e qualidade
 
-- [`production.md`](production.md)
-- [`production-contract.md`](production-contract.md) — interface operacional padronizada `prod:*`, incluindo checkpoint verificável antes de `service:update`.
-- [`production-verification.md`](production-verification.md) — contrato read-only de readiness e retry usado por `prod:verify`.
-- [`long-job-observability.md`](long-job-observability.md) — lifecycle estruturado, correlação com Histórico operacional, redaction, retenção e investigação de scans/imports/transcodes no journal.
-- [`backup-restore.md`](backup-restore.md) — backup/restore consistente, recovery determinístico e checkpoint associado ao update.
-- [`ffmpeg.md`](ffmpeg.md)
-- [`tailscale.md`](tailscale.md)
-- [`public-access.md`](public-access.md)
-- [`tailscale-hardening.md`](tailscale-hardening.md)
-- [`tailscale-funnel-troubleshooting.md`](tailscale-funnel-troubleshooting.md)
+- [`development-environments.md`](development-environments.md) — isolamento DEV/produção;
+- [`testing-and-quality.md`](testing-and-quality.md) — política de testes e CI;
+- [`dependency-management.md`](dependency-management.md) — dependências e lifecycle;
+- [`large-library-benchmark.md`](large-library-benchmark.md) — benchmark de biblioteca grande;
+- [`long-job-observability.md`](long-job-observability.md) — observabilidade de jobs longos;
+- [`accessibility.md`](accessibility.md) — acessibilidade.
 
-## PWA e offline
+## Planos e decisões
 
-- [`pwa.md`](pwa.md) — shell, service worker, namespace e integração das coleções offline;
-- [`pwa-icon-identity.md`](pwa-icon-identity.md) — identidade Casa + vinil, matriz `any`/`maskable`, iOS/Safari e geração determinística dos ícones;
-- [`offline-downloads.md`](offline-downloads.md) — scheduler global, bytes físicos, referências lógicas, playlist/pasta, deduplicação, sincronização, quota, limites por plataforma e protocolo de regressão mobile;
-- [`app-composition.md`](app-composition.md) — autoridade única de entrada/saída do modo offline, inclusive quando o usuário escolhe usar somente o conteúdo baixado mesmo com o servidor online.
+- [`library-assistant-plan.md`](library-assistant-plan.md) — plano ativo da fase 15; descreve trabalho planejado e não deve ser interpretado como feature já entregue;
+- documentos com `*-decision.md` preservam decisões arquiteturais específicas e devem ser lidos junto do código atual.
 
-Pendências relacionadas: nenhuma específica de PWA no backlog atual.
+## Histórico
 
-## Biblioteca e inteligência
+- [`history/phase-7.5/`](history/phase-7.5/) — slices e runbooks produzidos durante a migração multiusuário; **não são fonte de verdade atual**;
+- [`history/roadmap-through-phase-14.md`](history/roadmap-through-phase-14.md) — snapshot do roadmap acumulado antes da simplificação para a fase 15.
 
-- [`library-screen-responsibilities.md`](library-screen-responsibilities.md) — limites de responsabilidade de `LibraryScreen` e das superfícies extraídas.
-- [`player-screen-responsibilities.md`](player-screen-responsibilities.md) — limites de responsabilidade de `PlayerScreen` e fonte única de estado de playback.
-- [`smart-playlists.md`](smart-playlists.md) — regras, ownership, preview, persistência e invariantes das playlists inteligentes.
-- [`library-views.md`](library-views.md) — busca/filtros/ordenação salvos como views pessoais reutilizáveis.
-- [`library-metadata-normalization.md`](library-metadata-normalization.md) — aliases lógicos, revisão administrativa e projeção canônica de artistas/álbuns.
+Arquivar não significa apagar conhecimento: significa impedir que material de transição concorra com a documentação canônica.
 
-## Administração
+## Manutenção deste índice
 
-- [`administration-ui.md`](administration-ui.md)
-- [`admin-bulk-actions.md`](admin-bulk-actions.md)
-- [`admin-quarantine.md`](admin-quarantine.md)
-- [`admin-metadata-overrides.md`](admin-metadata-overrides.md)
-- [`admin-cover-overrides.md`](admin-cover-overrides.md)
-- [`admin-file-moves.md`](admin-file-moves.md)
-- [`admin-transcode-cache.md`](admin-transcode-cache.md)
-- [`admin-operation-history.md`](admin-operation-history.md)
+Ao concluir uma mudança relevante:
 
-O fallback visual de artwork entregue pela #175 reutiliza uma única política/componente entre as superfícies e respeita a precedência documentada de capa. Consulte [`artwork-fallback.md`](artwork-fallback.md); não crie comportamento paralelo por tela.
-
-## Importação
-
-Documentação corrente do pipeline:
-
-- [`import-staging.md`](import-staging.md)
-- [`import-staging-cleanup.md`](import-staging-cleanup.md)
-- [`import-upload.md`](import-upload.md)
-- [`import-url.md`](import-url.md)
-- [`external-providers.md`](external-providers.md)
-- [`external-provider-batches.md`](external-provider-batches.md)
-- [`yt-dlp-provider.md`](yt-dlp-provider.md)
-- [`jamendo.md`](jamendo.md) — descoberta, elegibilidade, aquisição física segura, origem/licença/atribuição e cobertura negativa final da #262;
-- [`import-metadata-preview.md`](import-metadata-preview.md)
-- [`import-duplicate-detection.md`](import-duplicate-detection.md)
-- [`import-safe-destination.md`](import-safe-destination.md)
-- [`import-job-retry.md`](import-job-retry.md)
-- [`import-incremental-library-update.md`](import-incremental-library-update.md)
-
-Registro de decisão arquitetural:
-
-- [`external-provider-engine-decision.md`](external-provider-engine-decision.md) — avaliação datada que levou à escolha do yt-dlp; preserve como ADR/registro de decisão, não como status do backlog atual.
-
-## Identidade, contas e clientes externos
-
-Fontes atuais:
-
-- [`multi-user-auth.md`](multi-user-auth.md)
-- [`login-abuse-protection.md`](login-abuse-protection.md)
-- [`password-ux.md`](password-ux.md)
-- [`phase-7.5-operations.md`](phase-7.5-operations.md)
-- [`phase-7.5-admin-users-screen.md`](phase-7.5-admin-users-screen.md)
-- [`phase-7.5-my-account-screen.md`](phase-7.5-my-account-screen.md)
-- [`open-subsonic.md`](open-subsonic.md)
-- [`personal-data-portability.md`](personal-data-portability.md)
-
-A política de capacidade e isolamento de sessões da #228 está documentada em `multi-user-auth.md`; a proteção de login entregue pela #229 está documentada em `login-abuse-protection.md`. OpenSubsonic usa credencial própria por aplicativo, contratos públicos compartilhados entre server/web e não reutiliza a sessão/senha web. A portabilidade pessoal v1 exporta e importa o estado da conta autenticada por um fluxo com preview e confirmação explícita; matching e merge permanecem no backend.
-
-## Registros históricos `phase-7.5-*`
-
-Os demais arquivos `phase-7.5-*` preservam o desenho, decisões e gates dos slices usados durante a migração multiusuário. Eles podem usar linguagem relativa ao momento da implementação.
-
-Para saber **como o sistema funciona hoje**, prefira `README.md`, `architecture.md`, `multi-user-auth.md`, `open-subsonic.md`, `personal-data-portability.md`, `m3u8-playlists.md`, os documentos funcionais atuais e os arquivos `phase-7.5-*` explicitamente listados acima como fonte corrente.
+- atualize a doc de domínio no mesmo PR;
+- se um documento virou apenas contexto histórico, mova-o para `docs/history/` e remova referências operacionais a ele;
+- se uma nova doc for plano, deixe isso explícito no nome e no texto;
+- não duplique contratos executáveis que já têm uma fonte melhor no código/workflow;
+- links para issues/PRs ajudam a explicar história, mas não devem ser usados como status permanente.

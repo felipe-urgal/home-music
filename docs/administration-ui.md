@@ -1,6 +1,6 @@
 # Administração — interface atual
 
-Este documento registra a composição de UX atual da área **Minha conta → Administração** depois do ciclo de redesign de 2026. Regras de segurança/backend continuam nos documentos de cada domínio.
+Este documento registra a composição de UX atual das áreas **Minha conta** e **Administração** depois do ciclo de redesign de 2026. Regras de segurança/backend continuam nos documentos de cada domínio.
 
 ## Princípios do layout
 
@@ -60,7 +60,7 @@ A regra de classificação não é duplicada no React. O frontend não tenta dec
 
 O mesmo evento que atualiza o cockpit também faz `useLibraryData()` buscar o snapshot efetivo de `/api/library`, então o player persistente, o player principal, a fila e a biblioteca passam a exibir a edição pelo mesmo `track.id`, sem reiniciar o áudio apenas por uma mudança textual.
 
-## Importação
+## Importação administrativa
 
 Usa workbench em quatro etapas:
 
@@ -97,10 +97,26 @@ Listagem usa **tabela + inspetor lateral**.
 - selecionar usuário abre contexto sem perder a lista;
 - a própria conta pode ser inspecionada, mas não administrada ali;
 - Novo usuário e Editar usuário são fluxos focados;
-- senha temporária é gerada automaticamente;
-- segurança e zona de perigo ficam separadas.
+- senha temporária é gerada automaticamente e mostrada somente no momento apropriado;
+- reset de senha, sessões, papel/status e remoção obedecem às invariantes do backend;
+- segurança e zona de perigo ficam separadas;
+- o frontend não tenta contornar proteções como último administrador ativo ou auto-lockout.
 
-Detalhes: [phase-7.5-admin-users-screen.md](phase-7.5-admin-users-screen.md).
+Modelo de autorização, sessão e contas: [`multi-user-auth.md`](multi-user-auth.md).
+
+## Minha conta
+
+É a superfície de autosserviço do usuário autenticado e não depende de acesso administrativo.
+
+Ela reúne, conforme as capacidades disponíveis:
+
+- identidade da conta;
+- troca da própria senha;
+- sessões próprias e revogação das demais sessões;
+- credenciais OpenSubsonic;
+- exportação e importação de dados pessoais.
+
+A importação de dados pessoais é deliberadamente separada da importação administrativa de mídia: ela restaura/mescla estado pertencente à conta autenticada e deve preservar isolamento de ownership. Contrato e formato: [`personal-data-portability.md`](personal-data-portability.md).
 
 ## Lixeira
 
@@ -114,7 +130,7 @@ No PR #181, a Lixeira adota **lista ampla + inspetor lateral**:
 - lote aparece somente com seleção;
 - mudar a busca limpa seleção para não manter item destrutivo invisível.
 
-Detalhes: [admin-quarantine.md](admin-quarantine.md).
+Detalhes: [`admin-quarantine.md`](admin-quarantine.md).
 
 ## Credenciais OpenSubsonic em Minha conta
 
@@ -132,7 +148,7 @@ A autoridade continua sendo o backend. Essas regras evitam apenas que uma respos
 
 Permanece como superfície de diagnóstico/observabilidade para scans e importações. Retry aparece somente quando o servidor informa `canRetry=true`.
 
-Detalhes: [admin-operation-history.md](admin-operation-history.md).
+Detalhes: [`admin-operation-history.md`](admin-operation-history.md).
 
 ## Segurança de UX
 
@@ -144,3 +160,5 @@ O frontend deve reforçar — nunca substituir — as invariantes do backend:
 - Integridade não ganha botão de correção automática implícita;
 - credenciais temporárias recebem proteção contra perda silenciosa;
 - filtros não devem deixar seleção destrutiva invisível.
+
+Documentos `phase-7.5-*` foram movidos para [`history/phase-7.5/`](history/phase-7.5/) e permanecem apenas como histórico de implementação.

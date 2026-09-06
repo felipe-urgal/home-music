@@ -1,8 +1,8 @@
 # Identidade, multiusuário e autorização
 
-Este documento registra a arquitetura **atual** de identidade do Home Music. Os arquivos `phase-7.5-*` preservam decisões e slices históricos da migração; este arquivo resume o modelo final incorporado à `main`.
+Este documento registra a arquitetura **atual** de identidade do Home Music. Os documentos da fase 7.5 foram arquivados em [`history/phase-7.5/`](history/phase-7.5/) como contexto histórico da migração; este arquivo é a fonte de verdade documental para o modelo vigente incorporado à `main`.
 
-> Status: **concluído para o escopo da Fase 7.5**. Evoluções futuras de identidade devem abrir issue própria e atualizar este documento quando alterarem as invariantes abaixo.
+> Status: **concluído para o escopo da fase 7.5**. Evoluções futuras de identidade devem abrir issue própria e atualizar este documento quando alterarem as invariantes abaixo.
 
 ## Objetivo
 
@@ -154,9 +154,7 @@ npm run admin:recover -- --username <usuario-existente> --confirm-service-stoppe
 sudo systemctl start home-music
 ```
 
-A recuperação pode reativar/promover a conta e gerar senha temporária, exigindo troca no próximo login.
-
-Detalhes: `phase-7.5-remove-env-auth-recovery.md`.
+A recuperação pode reativar/promover a conta e gerar senha temporária, exigindo troca no próximo login. O runbook operacional vigente está em [`PRODUCTION.md`](PRODUCTION.md).
 
 ## Sessões
 
@@ -220,9 +218,13 @@ Qualquer usuário autenticado pode:
 - trocar a própria senha informando a atual;
 - revisar/encerrar sessões próprias;
 - encerrar outras sessões preservando a atual quando a API específica permitir;
+- gerenciar as próprias credenciais OpenSubsonic;
+- exportar e importar os próprios dados pessoais conforme o contrato de portabilidade;
 - configurar preferências de reprodução locais/por dispositivo conforme a superfície.
 
 O backend deriva o alvo da sessão autenticada; o cliente não escolhe `userId` arbitrário para autosserviço.
+
+A portabilidade pertence à conta autenticada e não é uma forma de importação administrativa de mídia. O formato, validação, dry-run e política de merge estão em [`personal-data-portability.md`](personal-data-portability.md).
 
 ## Administração → Usuários
 
@@ -239,7 +241,7 @@ O fluxo atual permite:
 
 A listagem atual usa tabela + inspetor lateral. A própria conta pode ser inspecionada, mas ações administrativas sobre ela permanecem protegidas.
 
-Detalhes: `phase-7.5-admin-users-screen.md`.
+Composição atual da interface: [`administration-ui.md`](administration-ui.md).
 
 ## Ownership pessoal
 
@@ -251,7 +253,8 @@ Recursos cobertos:
 - histórico e estatísticas;
 - playlists manuais;
 - estado/fila do player;
-- downloads offline no navegador.
+- downloads offline no navegador;
+- exportação/importação dos dados pessoais pertencentes à conta autenticada.
 
 Playlists importadas do Rekordbox permanecem compartilhadas/somente leitura fora do fluxo de reimportação.
 
@@ -268,7 +271,7 @@ home-music-offline-audio-v2-<userId>
 
 O service worker associa cada client/aba ao usuário autenticado antes de servir áudio offline. Cache global legado sem ownership não é atribuído automaticamente a uma conta.
 
-Detalhes: `offline-downloads.md` e `pwa.md`.
+Detalhes: [`offline-downloads.md`](offline-downloads.md) e [`pwa.md`](pwa.md).
 
 ## Matriz de acesso resumida
 
@@ -277,10 +280,10 @@ Detalhes: `offline-downloads.md` e `pwa.md`.
 | Login/logout/status | ✅ | ✅ |
 | Ler/reproduzir biblioteca | ✅ | ✅ |
 | Próprios favoritos/histórico/playlists | ✅ | ✅ |
-| Minha conta | ✅ | ✅ |
+| Minha conta/portabilidade pessoal | ✅ | ✅ |
 | Administração da biblioteca | ❌ | ✅ |
 | Scan manual | ❌ | ✅ |
-| Importação | ❌ | ✅ |
+| Importação administrativa de mídia | ❌ | ✅ |
 | Integridade administrativa | ❌ | ✅ |
 | Gerenciar usuários | ❌ | ✅ |
 | Lixeira/exclusão permanente | ❌ | ✅ |
@@ -309,16 +312,18 @@ A cobertura existente inclui, entre outros:
 - ownership/IDOR;
 - chamadas administrativas como `user`;
 - smoke de produção com admin e usuário comum;
-- E2E multiusuário em diferentes viewports.
+- E2E multiusuário em diferentes viewports;
+- importação pessoal com validação/ownership no fluxo dedicado.
 
-Expansões de cobertura permanecem rastreadas nas issues #111 e #118.
+A política de gates e o conjunto fixo atual do CI estão em [`testing-and-quality.md`](testing-and-quality.md).
 
 ## Documentação relacionada
 
-- `phase-7.5-operations.md` — runbook operacional;
-- `phase-7.5-admin-users-screen.md` — UI atual de usuários;
-- `phase-7.5-my-account-screen.md` — Minha conta atual;
-- `phase-7.5-remove-env-auth-recovery.md` — remoção das credenciais permanentes e recuperação local;
-- demais `phase-7.5-*` — registros históricos dos slices da migração.
+- [`administration-ui.md`](administration-ui.md) — Administração e Minha conta;
+- [`personal-data-portability.md`](personal-data-portability.md) — exportação/importação de dados pessoais;
+- [`offline-downloads.md`](offline-downloads.md) — isolamento de downloads por usuário;
+- [`open-subsonic.md`](open-subsonic.md) — credenciais e projeção OpenSubsonic;
+- [`PRODUCTION.md`](PRODUCTION.md) — recovery administrativo e operação;
+- [`history/phase-7.5/`](history/phase-7.5/) — registros históricos dos slices da migração.
 
 Qualquer mudança futura que introduza cadastro público, novos papéis, autenticação externa, compartilhamento diferente de dados pessoais ou bibliotecas físicas separadas deve atualizar este documento e o roadmap no mesmo PR.
