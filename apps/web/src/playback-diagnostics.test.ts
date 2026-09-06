@@ -29,7 +29,7 @@ function input(index: number) {
     event: `event-${index}`,
     visibilityState: 'hidden',
     trackId: `track-${index}`,
-    playingIntent: true,
+    reactPlaying: true,
     audio: {
       paused: false,
       ended: false,
@@ -85,7 +85,7 @@ describe('playback diagnostics', () => {
       'audio',
       'detail',
       'event',
-      'playingIntent',
+      'reactPlaying',
       'trackId',
       'visibilityState'
     ]);
