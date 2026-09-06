@@ -72,6 +72,8 @@ Restore é operação offline. Procedimento completo: [`backup-restore.md`](back
 
 Delega para `service:update`, o fluxo suportado de atualização da instalação systemd. Ele valida o bootstrap privilegiado, instala dependências/builda como usuário normal e usa somente o helper root-owned com catálogo fechado para as transições necessárias do serviço.
 
+Os scripts internos do fluxo são invocados explicitamente via `bash`; o deploy não depende do bit executável do checkout para `scripts/install-systemd.sh`.
+
 Não execute `service:install` em todo deploy; ele é o bootstrap/reconfiguração privilegiada quando unit/helper/política precisam mudar.
 
 ### `prod:verify`

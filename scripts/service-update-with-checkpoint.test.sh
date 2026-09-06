@@ -7,7 +7,7 @@ WRAPPER="${ROOT_DIR}/scripts/service-update-with-checkpoint.sh"
 assert_contains() {
   local expected="$1"
   local message="$2"
-  if ! grep -Fq "${expected}" "${WRAPPER}"; then
+  if ! grep -Fq -- "${expected}" "${WRAPPER}"; then
     echo "Erro: ${message}" >&2
     exit 1
   fi
@@ -15,7 +15,7 @@ assert_contains() {
 
 line_number() {
   local needle="$1"
-  grep -nF "${needle}" "${WRAPPER}" | head -n1 | cut -d: -f1
+  grep -nF -- "${needle}" "${WRAPPER}" | head -n1 | cut -d: -f1
 }
 
 bash -n "${WRAPPER}"
@@ -27,11 +27,17 @@ assert_contains '"${NPM_BIN}" run backup:verify' "service:update precisa verific
 assert_contains 'source-revision.txt' "checkpoint precisa registrar a revisão associada ao update."
 assert_contains 'backup:restore' "falhas precisam apontar um recovery acionável pelo restore canônico."
 assert_contains "-name '????????T??????Z-????????????-*'" "retenção só pode selecionar diretórios com o padrão de checkpoint automático."
+assert_contains 'bash "${ROOT_DIR}/scripts/install-systemd.sh" update' "service:update precisa invocar o installer via bash para não depender do bit executável do checkout."
 
-CREATE_CALL_LINE="$(grep -nF 'create_verified_checkpoint' "${WRAPPER}" | tail -n1 | cut -d: -f1)"
-PRUNE_CALL_LINE="$(grep -nF 'prune_old_automatic_checkpoints' "${WRAPPER}" | tail -n1 | cut -d: -f1)"
-VERIFY_LINE="$(grep -nF '"${NPM_BIN}" run backup:verify' "${WRAPPER}" | tail -n1 | cut -d: -f1)"
-UPDATE_LINE="$(line_number '"${ROOT_DIR}/scripts/install-systemd.sh" update')"
+if grep -Eq '^[[:space:]]*"\$\{ROOT_DIR\}/scripts/install-systemd\.sh"[[:space:]]+update([[:space:]]|$)' "${WRAPPER}"; then
+  echo "Erro: service:update não pode executar install-systemd.sh diretamente; o arquivo pode estar versionado sem bit executável." >&2
+  exit 1
+fi
+
+CREATE_CALL_LINE="$(grep -nF -- 'create_verified_checkpoint' "${WRAPPER}" | tail -n1 | cut -d: -f1)"
+PRUNE_CALL_LINE="$(grep -nF -- 'prune_old_automatic_checkpoints' "${WRAPPER}" | tail -n1 | cut -d: -f1)"
+VERIFY_LINE="$(grep -nF -- '"${NPM_BIN}" run backup:verify' "${WRAPPER}" | tail -n1 | cut -d: -f1)"
+UPDATE_LINE="$(line_number 'bash "${ROOT_DIR}/scripts/install-systemd.sh" update')"
 
 if [[ -z "${CREATE_CALL_LINE}" || -z "${VERIFY_LINE}" || -z "${UPDATE_LINE}" || ${CREATE_CALL_LINE} -ge ${UPDATE_LINE} || ${VERIFY_LINE} -ge ${UPDATE_LINE} ]]; then
   echo "Erro: checkpoint criado e verificado precisa ocorrer antes de delegar ao updater que pode parar o serviço." >&2
@@ -53,4 +59,4 @@ if grep -Fq 'MUSIC_DIR' "${WRAPPER}"; then
   exit 1
 fi
 
-echo "service:update cria/verifica checkpoint canônico antes do updater, mantém retenção isolada e não amplia privilégios."
+echo "service:update cria/verifica checkpoint canônico antes do updater, mantém retenção isolada, invoca o installer via bash e não amplia privilégios."
