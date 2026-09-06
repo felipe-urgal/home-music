@@ -18,6 +18,7 @@ export const PERSONAL_DATA_IMPORT_LIMITS = {
   maxPlaybackHistory: PERSONAL_DATA_HISTORY_LIMIT,
   maxQueueEntries: 5_000,
   maxTotalTrackReferences: 50_000,
+  maxPreviewIssues: 250,
   maxRelativePathLength: 4_096,
   maxHintLength: 4_096,
   maxNameLength: 120,
@@ -82,4 +83,71 @@ export type PersonalDataBundleV1 = {
   libraryViews: PersonalDataLibraryViewV1[];
   playbackHistory: PersonalDataPlaybackHistoryItemV1[];
   playbackState: PersonalDataPlaybackStateV1;
+};
+
+export type PersonalDataImportPreviewReferenceStatus =
+  | 'found'
+  | 'missing'
+  | 'ambiguous'
+  | 'conflict';
+
+export type PersonalDataImportPreviewReferenceCounts = {
+  total: number;
+  found: number;
+  missing: number;
+  ambiguous: number;
+  conflict: number;
+};
+
+export type PersonalDataImportPreviewDomain =
+  | 'favorites'
+  | 'manual-playlists'
+  | 'playback-history'
+  | 'playback-state';
+
+export type PersonalDataImportPreviewIssueReason =
+  | 'relative-path-conflict'
+  | 'relative-path-ambiguous'
+  | 'hints-ambiguous'
+  | 'insufficient-hints'
+  | 'no-candidate';
+
+export type PersonalDataImportPreviewIssueV1 = {
+  domain: PersonalDataImportPreviewDomain;
+  field: string;
+  relativePath: string;
+  status: Exclude<PersonalDataImportPreviewReferenceStatus, 'found'>;
+  reason: PersonalDataImportPreviewIssueReason;
+};
+
+export type PersonalDataImportPreviewV1 = {
+  format: typeof PERSONAL_DATA_FORMAT;
+  version: typeof PERSONAL_DATA_VERSION;
+  exportedAt: string;
+  references: PersonalDataImportPreviewReferenceCounts;
+  domains: {
+    favorites: {
+      items: number;
+      references: PersonalDataImportPreviewReferenceCounts;
+    };
+    manualPlaylists: {
+      items: number;
+      references: PersonalDataImportPreviewReferenceCounts;
+    };
+    smartPlaylists: {
+      items: number;
+    };
+    libraryViews: {
+      items: number;
+    };
+    playbackHistory: {
+      items: number;
+      references: PersonalDataImportPreviewReferenceCounts;
+    };
+    playbackState: {
+      references: PersonalDataImportPreviewReferenceCounts;
+    };
+  };
+  issues: PersonalDataImportPreviewIssueV1[];
+  issuesTruncated: boolean;
 };
