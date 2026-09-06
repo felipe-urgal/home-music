@@ -7,7 +7,7 @@ WRAPPER="${ROOT_DIR}/scripts/service-update-with-checkpoint.sh"
 assert_contains() {
   local expected="$1"
   local message="$2"
-  if ! grep -Fq "${expected}" "${WRAPPER}"; then
+  if ! grep -Fq -- "${expected}" "${WRAPPER}"; then
     echo "Erro: ${message}" >&2
     exit 1
   fi
@@ -15,7 +15,7 @@ assert_contains() {
 
 line_number() {
   local needle="$1"
-  grep -nF "${needle}" "${WRAPPER}" | head -n1 | cut -d: -f1
+  grep -nF -- "${needle}" "${WRAPPER}" | head -n1 | cut -d: -f1
 }
 
 bash -n "${WRAPPER}"
@@ -34,9 +34,9 @@ if grep -Eq '^[[:space:]]*"\$\{ROOT_DIR\}/scripts/install-systemd\.sh"[[:space:]
   exit 1
 fi
 
-CREATE_CALL_LINE="$(grep -nF 'create_verified_checkpoint' "${WRAPPER}" | tail -n1 | cut -d: -f1)"
-PRUNE_CALL_LINE="$(grep -nF 'prune_old_automatic_checkpoints' "${WRAPPER}" | tail -n1 | cut -d: -f1)"
-VERIFY_LINE="$(grep -nF '"${NPM_BIN}" run backup:verify' "${WRAPPER}" | tail -n1 | cut -d: -f1)"
+CREATE_CALL_LINE="$(grep -nF -- 'create_verified_checkpoint' "${WRAPPER}" | tail -n1 | cut -d: -f1)"
+PRUNE_CALL_LINE="$(grep -nF -- 'prune_old_automatic_checkpoints' "${WRAPPER}" | tail -n1 | cut -d: -f1)"
+VERIFY_LINE="$(grep -nF -- '"${NPM_BIN}" run backup:verify' "${WRAPPER}" | tail -n1 | cut -d: -f1)"
 UPDATE_LINE="$(line_number 'bash "${ROOT_DIR}/scripts/install-systemd.sh" update')"
 
 if [[ -z "${CREATE_CALL_LINE}" || -z "${VERIFY_LINE}" || -z "${UPDATE_LINE}" || ${CREATE_CALL_LINE} -ge ${UPDATE_LINE} || ${VERIFY_LINE} -ge ${UPDATE_LINE} ]]; then
