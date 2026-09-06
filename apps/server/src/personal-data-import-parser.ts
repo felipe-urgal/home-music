@@ -127,8 +127,8 @@ export function parsePersonalDataBundleV1(value: unknown): PersonalDataBundleV1 
   if (playbackState.currentTrack !== null) {
     trackReference(playbackState.currentTrack, '$.playbackState.currentTrack', references);
   }
-  finiteNumber(playbackState.position, '$.playbackState.position', 0, PERSONAL_DATA_IMPORT_LIMITS.maxDurationSeconds);
-  finiteNumber(playbackState.volume, '$.playbackState.volume', 0, 1);
+  nonNegativeNumber(playbackState.position, '$.playbackState.position');
+  numberInRange(playbackState.volume, '$.playbackState.volume', 0, 1);
   boolean(playbackState.shuffle, '$.playbackState.shuffle');
   if (
     playbackState.repeatMode !== 'off'
@@ -185,12 +185,7 @@ function trackReference(value: unknown, field: string, counter: ReferenceCounter
   text(hints.artist, `${field}.hints.artist`, PERSONAL_DATA_IMPORT_LIMITS.maxHintLength);
   text(hints.album, `${field}.hints.album`, PERSONAL_DATA_IMPORT_LIMITS.maxHintLength);
   if (hints.durationSeconds !== null) {
-    finiteNumber(
-      hints.durationSeconds,
-      `${field}.hints.durationSeconds`,
-      0,
-      PERSONAL_DATA_IMPORT_LIMITS.maxDurationSeconds
-    );
+    nonNegativeNumber(hints.durationSeconds, `${field}.hints.durationSeconds`);
   }
 
   return value as PortableTrackReferenceV1;
@@ -248,7 +243,13 @@ function isoDate(value: unknown, field: string) {
   }
 }
 
-function finiteNumber(value: unknown, field: string, min: number, max: number) {
+function nonNegativeNumber(value: unknown, field: string) {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    fail('invalid-bundle', field, 'Número inválido no bundle pessoal.');
+  }
+}
+
+function numberInRange(value: unknown, field: string, min: number, max: number) {
   if (typeof value !== 'number' || !Number.isFinite(value) || value < min || value > max) {
     fail('invalid-bundle', field, 'Número inválido no bundle pessoal.');
   }
