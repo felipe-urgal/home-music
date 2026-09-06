@@ -203,6 +203,8 @@ export class LibraryAssistantProviderGateway {
 
   query<T>(query: LibraryAssistantProviderQuery<T>): Promise<LibraryAssistantProviderQueryResult<T>> {
     const key = providerCacheKey(query as LibraryAssistantProviderQuery<unknown>);
+    if (query.signal?.aborted) return Promise.reject(new LibraryAssistantProviderAbortedError());
+
     const inflightKey = `${key.provider}:${key.providerVersion}:${key.cacheKeyHash}`;
     const existing = this.inFlight.get(inflightKey);
     if (existing) {
@@ -250,9 +252,12 @@ export class LibraryAssistantProviderGateway {
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | null = null;
     let callerAbort: (() => void) | null = null;
+    let timedOut = false;
+    let cancelledByCaller = false;
 
     const timeout = new Promise<never>((_resolve, reject) => {
       timer = setTimeout(() => {
+        timedOut = true;
         controller.abort();
         reject(new LibraryAssistantProviderTimeoutError(query.provider.source));
       }, timeoutMs);
@@ -261,9 +266,14 @@ export class LibraryAssistantProviderGateway {
     const callerCancelled = query.signal
       ? new Promise<never>((_resolve, reject) => {
           callerAbort = () => {
+            cancelledByCaller = true;
             controller.abort();
             reject(new LibraryAssistantProviderAbortedError());
           };
+          if (query.signal?.aborted) {
+            callerAbort();
+            return;
+          }
           query.signal?.addEventListener('abort', callerAbort, { once: true });
         })
       : null;
@@ -293,7 +303,10 @@ export class LibraryAssistantProviderGateway {
       ) {
         throw error;
       }
-      if (query.signal?.aborted) throw new LibraryAssistantProviderAbortedError();
+      if (cancelledByCaller || query.signal?.aborted) {
+        throw new LibraryAssistantProviderAbortedError();
+      }
+      if (timedOut) throw new LibraryAssistantProviderTimeoutError(query.provider.source);
       throw error;
     } finally {
       if (timer) clearTimeout(timer);
