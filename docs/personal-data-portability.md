@@ -149,6 +149,23 @@ A aplicação inteira ocorre em uma única transação SQLite. Qualquer erro ant
 
 Reexecutar o mesmo bundle sobre o mesmo estado não cria duplicação: favoritos e histórico são deduplicados, coleções semanticamente iguais são ignoradas e playback idêntico não é regravado.
 
+## Fluxo na Minha Conta
+
+A interface para usuários fica em **Minha Conta → Dados → Importar dados pessoais**. O navegador lê somente o arquivo JSON selecionado e aplica o mesmo limite de 5 MiB como validação de UX; formato, versão, schema, matching e política de merge continuam sendo autoridade exclusiva do backend.
+
+O fluxo visível é deliberadamente separado em etapas:
+
+1. selecionar um arquivo `.json` exportado pelo Home Music;
+2. aguardar o preview autenticado;
+3. revisar as contagens de referências encontradas, ausentes, ambíguas e conflitantes e, quando existirem, os detalhes portáteis das pendências;
+4. marcar explicitamente a confirmação de que somente os dados resolvidos com segurança devem ser aplicados;
+5. executar a aplicação usando exatamente o `confirmationToken` devolvido pelo preview;
+6. revisar o resumo final de itens aplicados, já existentes, ausentes, ambíguos, conflitantes e falhos.
+
+A ação de importar permanece desabilitada até a confirmação explícita. Se o backend responder `preview-changed`, a interface invalida o preview anterior e exige nova análise; ela não tenta atualizar o token nem repetir a aplicação silenciosamente.
+
+A UI não recebe nem calcula IDs internos de candidatos e não implementa matching, ranking ou merge no frontend. Mensagens de erro são acionáveis, mas não expõem detalhes internos do servidor. O mesmo fluxo é usado nas superfícies mobile, tablet e desktop de Minha Conta.
+
 ## Invariantes operacionais
 
 Exportação e preview são read-only; a aplicação altera somente estado pessoal SQLite da conta autenticada:
