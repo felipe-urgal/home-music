@@ -29,7 +29,7 @@ O cache estático é deliberadamente limitado a recursos públicos necessários 
 
 Quando já existe shell instalado, navegações usam **cache-first com revalidação em background**: o HTML local é devolvido sem esperar a rede e uma tentativa de rede atualiza `SHELL_URL` para a próxima navegação. Se ainda não houver shell cacheado, a navegação tenta a rede e responde `503` somente quando rede e cache não podem fornecer a aplicação.
 
-Assets hashados continuam **cache-first** porque o nome muda junto com o conteúdo. O `OfflineApp` permanece lazy, mas `App.tsx` aquece esse módulo durante a sessão autenticada assim que o suporte offline do service worker fica pronto. Dessa forma, o código necessário para abrir os downloads também passa pelo cache de assets antes de um reload totalmente sem rede.
+Assets hashados continuam **cache-first** porque o nome muda junto com o conteúdo. O `OfflineApp` faz parte do bundle inicial da aplicação: abrir o modo offline em cold start não depende mais de aquecer um lazy chunk durante uma sessão online anterior. Isso aumenta deliberadamente o shell inicial em troca de tornar uma capacidade principal offline independente de runtime warm best-effort.
 
 Conteúdo autenticado de `/api/*` não é colocado no cache estático da PWA. Login, sessão, biblioteca, favoritos, histórico, playlists, capas privadas e streaming continuam protegidos pelo backend.
 
@@ -39,12 +39,21 @@ A verificação inicial de `/api/auth/status` possui um orçamento curto de **1,
 
 Esse timeout não autentica ninguém e não transforma resposta de servidor em falha de rede. Quando o servidor responde, a resposta continua sendo a autoridade: sessão inválida, senha obrigatória ou erro HTTP seguem o fluxo normal de autenticação e podem limpar a identidade offline ativa conforme as regras existentes.
 
-A raiz (`App.tsx`) combina conectividade com o estado offline reconciliado:
+A raiz (`App.tsx`) separa conteúdo local de transporte do service worker:
 
-- servidor inalcançável + downloads físicos válidos no namespace conhecido → abre `OfflineApp` diretamente;
-- servidor inalcançável + nenhum conteúdo offline utilizável → mostra `Home Music indisponível` e `Tentar novamente`, sem formulário de login;
+- `offlineContentAvailable`: usa a identidade offline conhecida, o manifesto já carregado e confirma os bytes de cada faixa diretamente no Cache Storage do namespace do usuário;
+- o capability handshake do service worker continua sendo necessário para o transporte `/offline-audio/<trackId>`, mas um atraso transitório de `controller`/mensageria não faz os downloads desaparecerem da decisão de bootstrap;
+- registros cujo blob não está presente no cache são ignorados na decisão de cold start;
+- nenhuma conta é escolhida por URL e não existe autenticação por senha offline.
+
+Com isso:
+
+- servidor inalcançável + pelo menos um download com bytes físicos válidos → abre `OfflineApp` diretamente;
+- servidor inalcançável + manifesto sem bytes válidos → mostra `Home Music indisponível` e `Tentar novamente`, sem formulário de login;
 - servidor alcançável + sessão válida → aplicação autenticada;
 - servidor alcançável + sessão inválida → login normal, sem bypass offline.
+
+A verificação de Cache Storage é fail-closed. Falha ao abrir o namespace ou confirmar um item não o transforma em download disponível.
 
 ## Downloads offline
 
@@ -130,7 +139,7 @@ Trocas rápidas de conta continuam serializadas no escopo por client; cada job d
 O Home Music diferencia:
 
 1. **servidor acessível, sessão inválida:** autenticação normal; offline não é bypass de login;
-2. **servidor realmente inalcançável:** com namespace conhecido/válido, a interface pode abrir apenas conteúdo já salvo daquela conta.
+2. **servidor realmente inalcançável:** com namespace conhecido/válido e bytes físicos confirmados, a interface pode abrir apenas conteúdo já salvo daquela conta.
 
 No modo offline não são simulados dados dependentes do servidor como Administração, rescan, favoritos remotos ou edição de playlists.
 
@@ -167,6 +176,6 @@ A matriz física da [#81](https://github.com/felipe-urgal/home-music/issues/81) 
 
 ## Estado do backlog relacionado
 
-As issues #258 e #259 consolidam o bootstrap offline-first e seu contrato de regressão. A #81 encerrou a validação física do comportamento mobile; a [#174](https://github.com/felipe-urgal/home-music/issues/174) entregou playlists/pastas offline deduplicadas reutilizando o scheduler/cache existente; e a identidade de instalação da #176 está documentada em [pwa-icon-identity.md](pwa-icon-identity.md).
+As issues #258 e #259 consolidaram o bootstrap offline-first. A #328 acompanha especificamente o cold start real após fechar o PWA no iPhone e permanece dependente de validação física do caso observado. A #81 encerrou a validação física do comportamento mobile; a [#174](https://github.com/felipe-urgal/home-music/issues/174) entregou playlists/pastas offline deduplicadas reutilizando o scheduler/cache existente; e a identidade de instalação da #176 está documentada em [pwa-icon-identity.md](pwa-icon-identity.md).
 
 A matriz de [offline-downloads.md](offline-downloads.md) permanece como protocolo de regressão manual para mudanças futuras no pipeline offline ou no service worker.
