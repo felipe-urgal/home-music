@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type { ImportJob } from '@home-music/shared';
 import { sanitizeOperationError } from './admin-operation-history.js';
 
-export type LongJobType = 'library.scan' | 'import' | 'transcode';
+export type LongJobType = 'library.scan' | 'library.assistant' | 'import' | 'transcode';
 
 type LongJobLogger = {
   info: (bindings: object, message: string) => void;
@@ -119,6 +119,15 @@ export class LongJobObservability {
       durationMs: durationMs(run.startedAtMs, finishedAtMs),
       ...metricBindings(metrics)
     }, 'Job longo concluído.');
+  }
+
+  cancel(run: LongJobRun) {
+    const finishedAtMs = this.now().getTime();
+    this.info({
+      event: 'long_job.cancelled',
+      ...logBindings(run),
+      durationMs: durationMs(run.startedAtMs, finishedAtMs)
+    }, 'Job longo cancelado.');
   }
 
   fail(run: LongJobRun, error: unknown) {
