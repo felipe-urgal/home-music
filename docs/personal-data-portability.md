@@ -79,6 +79,16 @@ Mudanças incompatíveis exigem nova versão. Campos adicionais só podem ser tr
 
 A futura importação/restauração de dados pessoais deve consumir este contrato depois que ele estiver estabilizado; ela não deve definir um formato concorrente.
 
+## Base de validação para importação
+
+O importador trata o bundle como entrada não confiável antes de qualquer matching ou mutação. A validação v1 reutiliza exatamente o contrato acima e falha de forma explícita quando `format`/`version`, estrutura, tipos ou limites defensivos não são compatíveis.
+
+Os limites de entrada vivem em `PERSONAL_DATA_IMPORT_LIMITS`, no pacote compartilhado. Eles cobrem tamanho total do payload, quantidades por coleção, filas, referências totais e comprimentos máximos de campos textuais. O limite do histórico permanece o mesmo `PERSONAL_DATA_HISTORY_LIMIT` de 500 eventos definido pelo formato v1.
+
+`relativePath` precisa continuar sendo relativo e portátil: paths absolutos, drive letters, `\\`, segmentos vazios, `.` e `..` são rejeitados. Regras de smart playlists e definições de views são validadas pelas mesmas funções de normalização usadas pelos respectivos domínios, evitando um segundo conjunto de regras concorrente. Como o parser não reescreve silenciosamente o arquivo importado, valores que só seriam aceitos após coerção ou trim são rejeitados; timestamps também precisam estar no formato ISO canônico emitido pelo v1.
+
+Esta camada é somente a fronteira de validação. Ela não resolve faixas, não altera estado pessoal, não cria mídia e não torna IDs externos autoridade. Preview, matching e aplicação permanecem etapas separadas do fluxo de importação.
+
 ## Invariantes operacionais
 
 A exportação é read-only:

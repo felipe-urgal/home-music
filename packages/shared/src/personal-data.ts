@@ -8,6 +8,22 @@ export const PERSONAL_DATA_FORMAT = 'home-music-personal-data' as const;
 export const PERSONAL_DATA_VERSION = 1 as const;
 export const PERSONAL_DATA_HISTORY_LIMIT = 500 as const;
 
+export const PERSONAL_DATA_IMPORT_LIMITS = {
+  maxBytes: 5 * 1024 * 1024,
+  maxFavorites: 5_000,
+  maxManualPlaylists: 250,
+  maxTracksPerManualPlaylist: 5_000,
+  maxSmartPlaylists: 250,
+  maxLibraryViews: 250,
+  maxPlaybackHistory: PERSONAL_DATA_HISTORY_LIMIT,
+  maxQueueEntries: 5_000,
+  maxTotalTrackReferences: 50_000,
+  maxRelativePathLength: 4_096,
+  maxHintLength: 4_096,
+  maxNameLength: 120,
+  maxTimestampLength: 64
+} as const;
+
 export type PortableTrackReferenceV1 = {
   relativePath: string;
   hints: {
