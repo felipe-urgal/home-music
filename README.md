@@ -11,7 +11,7 @@ O Home Music usa **React + TypeScript + Vite** no frontend e **Fastify + TypeScr
 - biblioteca local com scanner incremental, busca, pastas, artistas, álbuns, favoritos e playlists;
 - player com fila, shuffle/repeat, Media Session, streaming HTTP Range e ReplayGain;
 - PWA e downloads offline isolados por usuário;
-- múltiplas contas com papéis `admin`/`user`, sessões e troca de senha;
+- múltiplas contas com papéis `admin`/`user`, sessões, troca de senha e portabilidade dos dados pessoais;
 - Administração para biblioteca, metadata, integridade, lixeira/quarentena, importação e usuários;
 - importação por upload, URL e providers externos com staging e validação;
 - descoberta/importação via Jamendo com política fail-closed de licença/download e aquisição `scratch → staging`;
@@ -75,7 +75,7 @@ Fluxo completo: [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md). Isolamento dos amb
 
 ## Testes e qualidade
 
-Gate normal antes do PR:
+Gate local normal antes do PR:
 
 ```bash
 npm run check
@@ -89,10 +89,20 @@ typecheck
 -> build
 ```
 
-O CI usa o mesmo `npm run check`. Validações adicionais são direcionadas pelo risco:
+O CI obrigatório executa esse baseline e acrescenta gates fixos de segurança, backup/restore e o E2E focado de importação de dados pessoais:
+
+```text
+npm ci --no-audit --no-fund
+-> npm run check
+-> npm run test:security
+-> npm run smoke:backup-restore
+-> npm run test:e2e:install
+-> npx playwright test e2e/personal-data-import.spec.ts --workers=1
+```
+
+Outras validações continuam direcionadas pelo risco:
 
 ```bash
-npm run test:security
 npm run test:policy
 npm run test:ops
 npm run test:e2e
@@ -100,16 +110,9 @@ npm run benchmark:large-library
 npm run benchmark:large-library:browser
 npm run benchmark:backpressure
 npm run smoke:production
-npm run smoke:backup-restore
 ```
 
-Para instalar o navegador E2E:
-
-```bash
-npm run test:e2e:install
-```
-
-Coverage/benchmarks/E2E/smokes não devem virar custo fixo de todo PR apenas por existirem. Política completa: [`docs/testing-and-quality.md`](docs/testing-and-quality.md).
+Coverage, benchmarks, a suíte E2E completa e outros smokes não viram custo fixo de todo PR apenas por existirem. A fonte executável do CI é `.github/workflows/ci.yml`; política completa em [`docs/testing-and-quality.md`](docs/testing-and-quality.md).
 
 ## Produção
 
@@ -209,7 +212,7 @@ Documentação: [`docs/tailscale.md`](docs/tailscale.md), [`docs/public-access.m
 | Comando | Uso |
 | --- | --- |
 | `npm run dev` | inicia backend + frontend DEV isolados |
-| `npm run check` | gate normal de PR/CI |
+| `npm run check` | baseline local de PR e primeiro gate do CI |
 | `npm run build` | build dos workspaces |
 | `npm test` | testes funcionais |
 | `npm run test:e2e` | suíte Playwright completa |
@@ -230,12 +233,12 @@ Comece por:
 
 - [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) — setup e fluxo de engenharia;
 - [`docs/PRODUCTION.md`](docs/PRODUCTION.md) — operação da instalação real;
-- [`docs/README.md`](docs/README.md) — índice detalhado e estado vivo da documentação;
+- [`docs/README.md`](docs/README.md) — índice e classificação da documentação;
 - [`docs/architecture.md`](docs/architecture.md) — arquitetura;
 - [`docs/jamendo.md`](docs/jamendo.md) — descoberta e importação segura via Jamendo;
 - [`docs/open-subsonic.md`](docs/open-subsonic.md) — subset, autenticação, ownership e matriz de compatibilidade OpenSubsonic;
 - [`docs/testing-and-quality.md`](docs/testing-and-quality.md) — política de gates;
 - [`docs/backup-restore.md`](docs/backup-restore.md) — dados/recovery;
-- [`docs/roadmap.md`](docs/roadmap.md) — estado técnico corrente.
+- [`docs/roadmap.md`](docs/roadmap.md) — roadmap técnico corrente.
 
 Agentes de IA e automações de desenvolvimento devem ler [`AGENTS.md`](AGENTS.md) antes de alterar o repositório.
