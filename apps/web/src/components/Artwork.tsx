@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { Music2 } from 'lucide-react';
 import type { Track } from '@home-music/shared';
 import { buildArtworkFallback } from '../artwork-utils';
@@ -8,17 +8,34 @@ type ArtworkProps = {
   large?: boolean;
 };
 
+type ArtworkFallbackStyle = CSSProperties & {
+  '--artwork-fallback-glow'?: string;
+  '--artwork-fallback-surface'?: string;
+  '--artwork-fallback-base'?: string;
+};
+
 export function ArtworkFallback({ track, large = false }: ArtworkProps) {
   const fallback = track ? buildArtworkFallback(track) : null;
   const className = [
     'artwork',
     large ? 'artwork--large' : '',
-    'artwork--fallback',
-    fallback ? `artwork--tone-${fallback.tone}` : ''
+    'artwork--fallback'
   ].filter(Boolean).join(' ');
+  const style: ArtworkFallbackStyle | undefined = fallback ? {
+    '--artwork-fallback-glow': fallback.palette.glow,
+    '--artwork-fallback-surface': fallback.palette.surface,
+    '--artwork-fallback-base': fallback.palette.base
+  } : undefined;
 
   return (
-    <div className={className} aria-hidden="true" data-artwork-state="fallback">
+    <div
+      className={className}
+      style={style}
+      aria-hidden="true"
+      data-artwork-state="fallback"
+      data-artwork-fallback-version={fallback?.version}
+      data-artwork-fallback-tone={fallback?.tone}
+    >
       {fallback ? (
         <span className="artwork-fallback">
           <span className="artwork-fallback__label">{fallback.label}</span>
