@@ -112,7 +112,8 @@ export function AccountPersonalDataImport() {
   }
 
   async function selectFile(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
+    const input = event.currentTarget;
+    const file = input.files?.[0];
     if (!file || busy) return;
 
     setFileName(file.name);
@@ -130,6 +131,7 @@ export function AccountPersonalDataImport() {
     } catch (error) {
       setError(errorMessage(error));
     } finally {
+      input.value = '';
       setBusy(null);
     }
   }
