@@ -137,7 +137,7 @@ export function AccountPersonalDataImport() {
   }
 
   async function applyImport() {
-    if (!bundle || !preview || !confirmed || busy) return;
+    if (bundle === null || !preview || !confirmed || busy) return;
     setBusy('apply');
     setError(null);
     try {
@@ -192,7 +192,7 @@ export function AccountPersonalDataImport() {
         )}
         {error && <div className="my-account-message is-error" role="alert">{error}</div>}
 
-        {bundle && !preview && !summary && busy !== 'preview' && (
+        {bundle !== null && !preview && !summary && busy !== 'preview' && (
           <button className="secondary-action personal-import-retry" type="button" onClick={() => void analyzeBundle(bundle)}>
             <RotateCcw /> Analisar novamente
           </button>
