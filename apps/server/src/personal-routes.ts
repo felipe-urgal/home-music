@@ -2,9 +2,13 @@ import { fileURLToPath } from 'node:url';
 import type { FastifyInstance } from 'fastify';
 import type { PlaybackState } from '@home-music/shared';
 import { registerLibraryViewRoutes } from './library-view-routes.js';
+import type { LibraryService } from './library-service.js';
 import { registerPlaybackHistoryRoutes } from './playback-history-routes.js';
 import { PersonalDataExportService } from './personal-data-export.js';
 import { registerPersonalDataExportRoutes } from './personal-data-export-routes.js';
+import { PersonalDataImportPlanner } from './personal-data-import-plan.js';
+import { registerPersonalDataImportPreviewRoutes } from './personal-data-import-preview-routes.js';
+import { PersonalDataTrackMatcher } from './personal-data-track-matcher.js';
 import type { PersonalLibraryService } from './personal-library-service.js';
 import { registerSmartPlaylistRoutes } from './smart-playlist-routes.js';
 
@@ -12,6 +16,7 @@ const defaultDatabasePath = fileURLToPath(new URL('../../../data/home-music.db',
 
 type PersonalRoutesOptions = {
   databasePath?: string;
+  library?: Pick<LibraryService, 'listPublicTracks'>;
 };
 
 export function registerPersonalRoutes(
@@ -28,6 +33,12 @@ export function registerPersonalRoutes(
   registerSmartPlaylistRoutes(app, { databasePath });
   registerPlaybackHistoryRoutes(app, { databasePath });
   registerPersonalDataExportRoutes(app, personalDataExporter);
+
+  if (options.library) {
+    const personalDataMatcher = new PersonalDataTrackMatcher(personal, options.library);
+    const personalDataImportPlanner = new PersonalDataImportPlanner(personalDataMatcher);
+    registerPersonalDataImportPreviewRoutes(app, personalDataImportPlanner);
+  }
 
   app.addHook('onClose', async () => {
     personalDataExporter.close();
