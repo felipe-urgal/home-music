@@ -145,7 +145,7 @@ export function registerPersonalRoutes(
       });
     }
 
-    const result = personal.deletePlaylist(userIdOrThrow(request), request.params.id);
+    const result = personal.deletePlaylist(request.user.id, request.params.id);
     if (result.status === 'not-found') {
       return reply.code(404).send({ error: 'Playlist não encontrada.' });
     }
@@ -208,9 +208,4 @@ export function registerPersonalRoutes(
     reply.header('Cache-Control', 'private, no-store');
     return state;
   });
-}
-
-function userIdOrThrow(request: { user?: { id: string } | null }) {
-  if (!request.user) throw new Error('Identidade persistida ausente.');
-  return request.user.id;
 }
