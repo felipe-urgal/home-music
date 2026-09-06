@@ -135,6 +135,35 @@ test('provider gateway rate limits requests from the same provider with fake clo
   assert.deepEqual(sleeps, [1_000]);
 });
 
+test('provider gateway cancellation interrupts the rate-limit wait before execute', async () => {
+  const cache = memoryCache();
+  let calls = 0;
+  const gateway = new LibraryAssistantProviderGateway(cache.port, { minIntervalMs: 1_000 });
+
+  await gateway.query({
+    provider,
+    cacheKey: 'prime-rate-limit',
+    execute: async () => ({ id: 'first' }),
+    normalize: normalizeRecording
+  });
+
+  const controller = new AbortController();
+  const pending = gateway.query({
+    provider,
+    cacheKey: 'cancel-during-rate-limit',
+    signal: controller.signal,
+    execute: async () => {
+      calls += 1;
+      return { id: 'should-not-run' };
+    },
+    normalize: normalizeRecording
+  });
+  setTimeout(() => controller.abort(), 10);
+
+  await assert.rejects(pending, LibraryAssistantProviderAbortedError);
+  assert.equal(calls, 0);
+});
+
 test('provider gateway rejects malformed response and sensitive cache keys', async () => {
   const cache = memoryCache();
   const gateway = new LibraryAssistantProviderGateway(cache.port, { minIntervalMs: 0 });
