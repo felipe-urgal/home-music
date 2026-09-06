@@ -110,6 +110,6 @@ create_verified_checkpoint
 prune_old_automatic_checkpoints
 
 cd "${ROOT_DIR}"
-"${ROOT_DIR}/scripts/install-systemd.sh" update
+bash "${ROOT_DIR}/scripts/install-systemd.sh" update
 
 echo "Checkpoint pré-update preservado para recovery: ${CHECKPOINT_ARTIFACT}"
