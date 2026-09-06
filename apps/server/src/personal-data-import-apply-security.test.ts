@@ -92,7 +92,7 @@ function authenticate(app: ReturnType<typeof Fastify>, userId = USER_A) {
   });
 }
 
-test('apply exige autenticação e confirmação explícita antes do planner/applier', async () => {
+test('apply exige autenticação antes do planner/applier', async () => {
   const app = Fastify();
   let plannerCalls = 0;
   let applyCalls = 0;
@@ -113,23 +113,48 @@ test('apply exige autenticação e confirmação explícita antes do planner/app
   );
 
   try {
-    const unauthenticated = await app.inject({
+    const response = await app.inject({
       method: 'POST',
       url: '/api/account/personal-data/import/apply',
       payload: { bundle: bundle(), confirmed: true, confirmationToken: 'a'.repeat(64) }
     });
-    assert.equal(unauthenticated.statusCode, 409);
+    assert.equal(response.statusCode, 409);
     assert.equal(plannerCalls, 0);
     assert.equal(applyCalls, 0);
+  } finally {
+    await app.close();
+  }
+});
 
-    authenticate(app);
-    const unconfirmed = await app.inject({
+test('apply exige confirmação explícita antes do planner/applier', async () => {
+  const app = Fastify();
+  let plannerCalls = 0;
+  let applyCalls = 0;
+  registerPersonalDataImportApplyRoutes(
+    app,
+    {
+      plan() {
+        plannerCalls += 1;
+        return plan();
+      }
+    },
+    {
+      apply() {
+        applyCalls += 1;
+        return summary();
+      }
+    }
+  );
+  authenticate(app);
+
+  try {
+    const response = await app.inject({
       method: 'POST',
       url: '/api/account/personal-data/import/apply',
       payload: { bundle: bundle(), confirmed: false, confirmationToken: 'a'.repeat(64) }
     });
-    assert.equal(unconfirmed.statusCode, 409);
-    assert.equal(unconfirmed.json().code, 'confirmation-required');
+    assert.equal(response.statusCode, 409);
+    assert.equal(response.json().code, 'confirmation-required');
     assert.equal(plannerCalls, 0);
     assert.equal(applyCalls, 0);
   } finally {
