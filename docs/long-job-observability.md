@@ -1,8 +1,6 @@
 # Observabilidade de jobs longos
 
-Este documento define a observabilidade de runtime para operações longas do Home Music e a fronteira entre **logs estruturados** e o **Histórico operacional persistido**.
-
-A baseline foi introduzida na Fase 11 pela issue #121.
+Este documento define a observabilidade de runtime para operações longas do Home Music e a fronteira entre **logs estruturados** e estado persistido de domínio.
 
 ## Fonte de verdade
 
@@ -11,6 +9,7 @@ A camada de logs **não substitui estado de produto**.
 - scans manuais/automáticos e importações continuam persistidos em **Administração → Histórico operacional**;
 - `ImportJobQueue` continua sendo a autoridade da máquina de estados de importação em runtime;
 - `LibraryService` continua sendo a autoridade da execução de scan;
+- `LibraryAssistantStore` continua sendo a autoridade persistida dos runs/sugestões do Assistente;
 - `TranscodeManager` continua sendo a autoridade de jobs de transcoding/cache;
 - logs estruturados existem para correlação temporal e diagnóstico operacional no servidor.
 
@@ -27,14 +26,14 @@ long_job.failed
 long_job.cancelled
 ```
 
-Eventos terminais incluem `durationMs`. Quando a operação já produz contagens numéricas seguras e úteis, o evento terminal pode repetir essas métricas como snapshot de diagnóstico. Hoje scans persistidos expõem `tracks`, `added`, `updated`, `removed` e `unchanged`; a camada não aceita um mapa arbitrário de payload para esse fim.
+Eventos terminais incluem `durationMs`. Quando a operação já produz contagens numéricas seguras e úteis, o evento terminal pode repetir essas métricas como snapshot de diagnóstico. A camada não aceita payload arbitrário para esse fim.
 
 Campos de correlação possíveis:
 
-- `jobType` — `library.scan`, `import` ou `transcode`;
+- `jobType` — `library.scan`, `library.assistant`, `import` ou `transcode`;
 - `jobId` — identificador interno do job observado;
 - `operationId` — identificador do Histórico operacional quando existe uma correlação persistida;
-- `resourceId` — identificador interno seguro de um recurso quando necessário para diagnóstico; atualmente usado por transcode para a faixa;
+- `resourceId` — identificador interno seguro de um recurso/capability quando necessário;
 - `requestId` — ID interno que o Fastify atribuiu à requisição HTTP que originou a transição, quando existe uma requisição ativa.
 
 Os IDs aceitos pela camada de observabilidade são restritos a caracteres de identificador. Strings parecidas com URL/path não são reutilizadas como ID de log.
@@ -53,50 +52,55 @@ jobId do serviço/fila
 operationId do Histórico, quando existe
 ```
 
-Scans manuais, importações iniciadas/continuadas por API e transcodes podem carregar `requestId`. Scheduler, bootstrap e trabalhos que realmente nascem fora de uma requisição não recebem um request artificial.
+Scans manuais, runs do Assistente iniciados por API, importações e transcodes podem carregar `requestId`. Scheduler, bootstrap e trabalhos que realmente nascem fora de uma requisição não recebem um request artificial.
 
-O contexto não armazena usuário, sessão, cookie, token, URL ou payload. Jobs que continuam em uma cadeia assíncrona criada pela requisição podem preservar aquele `requestId`; uma transição posterior causada por outra requisição pode naturalmente aparecer com o novo `requestId`. O `jobId` continua sendo o elo estável entre as transições.
-
-A regressão automatizada usa Fastify real com `inject()` e requests concorrentes para provar que o contexto chega ao handler sem cruzar IDs entre requisições.
+O contexto não armazena usuário, sessão, cookie, token, URL ou payload. O `jobId` continua sendo o elo estável entre as transições.
 
 ## Scans
 
-### Manual e automático
+Scans iniciados com trigger administrativo já criam um registro no Histórico. O mesmo ID é usado como `jobId` e `operationId`, com `jobType = library.scan`.
 
-Scans iniciados com trigger administrativo já criam um registro no Histórico. O mesmo ID é usado como:
+Em conclusão bem-sucedida, `long_job.completed` pode incluir `tracks`, `added`, `updated`, `removed` e `unchanged`. Elas são convenientes para diagnóstico no journal, mas o Histórico/resultado do scan continua sendo a fonte persistente do estado.
 
-```text
-jobId       = scan-...
-operationId = scan-...
-jobType     = library.scan
-```
+O scan de bootstrap necessário para inicializar uma biblioteca sem snapshot válido continua fora do Histórico administrativo e usa somente lifecycle de runtime.
 
-Assim, o operador pode abrir uma operação na UI e procurar o mesmo `operationId` no journal. Quando o scan foi iniciado pela API, o lifecycle também carrega o `requestId` do Fastify.
+## Assistente da Biblioteca
 
-Em conclusão bem-sucedida, o evento `long_job.completed` também inclui as mesmas contagens numéricas do `ScanResponse`: `tracks`, `added`, `updated`, `removed` e `unchanged`. Elas são convenientes para diagnóstico no journal, mas o Histórico/resultado do scan continua sendo a fonte persistente do estado.
-
-A falha de persistência do Histórico continua best-effort: o scan principal não falha por isso. Se o registro persistido não puder ser criado, o log recebe um `jobId` gerado apenas para runtime e omite `operationId`.
-
-### Bootstrap
-
-O scan de bootstrap necessário para inicializar uma biblioteca sem snapshot válido continua **fora do Histórico administrativo**, como já era o contrato do produto.
-
-Ele recebe eventos de runtime com:
+Runs do Assistente possuem persistência própria e auditável em `LibraryAssistantStore`. `LongJobObservability` apenas espelha o lifecycle de runtime:
 
 ```text
-jobType = library.scan
-jobId   = library-scan-...
+jobType    = library.assistant
+jobId      = <id do LibraryAssistantRun>
+resourceId = metadata | artwork | lyrics
+requestId  = <id Fastify da chamada de start>, quando aplicável
 ```
 
-Não há `operationId`, porque não existe uma operação administrativa persistida para correlacionar. Como o bootstrap nasce fora de request, também não há `requestId`.
+Não existe `operationId`, porque #311 não duplica os runs do Assistente no Histórico operacional.
 
-Chamadas concorrentes que reutilizam a mesma `scanPromise` não criam jobs de scan adicionais.
+O lifecycle observado é:
+
+- início real do worker → `long_job.started`;
+- conclusão → `long_job.completed`;
+- cancelamento → `long_job.cancelled`;
+- falha ou stale detectado durante execução → `long_job.failed` com erro sanitizado.
+
+A fonte de verdade do status continua sendo o run persistido. Um evento de observabilidade nunca muda `queued/running/completed/failed/cancelled/stale`.
+
+A observabilidade do Assistente não inclui:
+
+- evidências completas;
+- candidates/targets;
+- resposta bruta de provider;
+- cache key lógica;
+- path físico;
+- metadata textual da faixa;
+- token/cookie/User-Agent externo.
+
+No shutdown, o `LibraryAssistantService` aborta os controllers e aguarda as promises agendadas antes do fechamento do store. O evento observado permanece best-effort e não participa da transação SQLite.
 
 ## Importações
 
-O `jobId` já existente na `ImportJobQueue` é reutilizado.
-
-Quando o snapshot do job é persistido com sucesso no Histórico:
+O `jobId` já existente na `ImportJobQueue` é reutilizado. Quando o snapshot do job é persistido com sucesso no Histórico:
 
 ```text
 jobId       = <id da ImportJobQueue>
@@ -104,15 +108,7 @@ operationId = import-<jobId>
 jobType     = import
 ```
 
-O primeiro ingresso em `processing` emite `long_job.started`. Uma importação que volta temporariamente para `pending` e depois retoma `processing` preserva `startedAt` e **não emite um segundo início**.
-
-Estados terminais emitem:
-
-- `completed` → `long_job.completed`;
-- `failed` → `long_job.failed`;
-- `cancelled` → `long_job.cancelled`.
-
-Transições disparadas dentro de uma requisição também carregam `requestId`. O ID não é persistido dentro do `ImportJob`: ele é apenas contexto de logging e não altera o contrato compartilhado ou a máquina de estados.
+O primeiro ingresso em `processing` emite `long_job.started`. Estados terminais emitem `completed`, `failed` ou `cancelled` conforme a máquina de estados existente.
 
 Se a persistência do Histórico falhar, o evento de runtime ainda pode usar `jobId`, mas omite `operationId`; isso evita afirmar correlação com um registro inexistente.
 
@@ -120,11 +116,7 @@ Se a persistência do Histórico falhar, o evento de runtime ainda pode usar `jo
 
 Transcodes adaptativos não fazem parte do Histórico administrativo persistido e continuam runtime-only.
 
-Um job estruturado só é criado quando o `TranscodeManager` realmente precisa gerar um arquivo novo. Os seguintes caminhos **não** criam lifecycle adicional:
-
-- cache hit já existente;
-- segundo consumidor aguardando um transcode concorrente já deduplicado;
-- cache preenchido por outro job enquanto o worker aguardava slot.
+Um job estruturado só é criado quando o `TranscodeManager` realmente precisa gerar um arquivo novo. Cache hit, segundo consumidor aguardando trabalho deduplicado e cache preenchido por outro worker não criam lifecycle adicional.
 
 Quando há geração real:
 
@@ -132,16 +124,16 @@ Quando há geração real:
 jobType    = transcode
 jobId      = transcode-<uuid>
 resourceId = <trackId interno>
-requestId  = <id Fastify da chamada /transcode>, quando originado por HTTP
+requestId  = <id Fastify>, quando originado por HTTP
 ```
 
-Nenhum path do arquivo de origem/cache e nenhum stderr bruto do FFmpeg entra nos novos bindings de observabilidade.
+Nenhum path do arquivo de origem/cache e nenhum stderr bruto do FFmpeg entra nos bindings de observabilidade.
 
 ## Privacidade e redaction
 
-Falhas usam a mesma `sanitizeOperationError` do Histórico operacional antes de entrar em um evento `long_job.failed`.
+Falhas usam `sanitizeOperationError` antes de entrar em `long_job.failed`.
 
-Os novos eventos não registram deliberadamente:
+Os eventos não registram deliberadamente:
 
 - senha;
 - cookie;
@@ -149,36 +141,29 @@ Os novos eventos não registram deliberadamente:
 - header Authorization/Bearer;
 - URL original de importação;
 - path físico da biblioteca, staging ou cache;
-- label livre de importação;
+- payload/evidência de provider do Assistente;
+- label livre sensível;
 - stack trace;
 - objeto `err` bruto;
 - stderr bruto do FFmpeg.
 
-`requestId`, `jobId`, `operationId` e `resourceId` são identificadores internos limitados; métricas de scan são somente números não negativos. Nenhum desses campos carrega payload sensível.
-
-A sanitização conhecida substitui URLs e paths e limita o tamanho do diagnóstico. Logs antigos fora desta camada continuam sujeitos às regras próprias do fluxo correspondente; novas instrumentações de job longo devem usar esta camada em vez de adicionar `err` bruto ao evento de lifecycle.
+`requestId`, `jobId`, `operationId` e `resourceId` são identificadores internos limitados. Métricas adicionais são somente números explicitamente tipados.
 
 ## Best-effort
 
 Observabilidade não faz parte do commit lógico do job.
 
-Se o sink de logging lançar uma exceção, `LongJobObservability` a absorve. O resultado do scan/import/transcode continua determinado exclusivamente pela operação principal.
-
-Da mesma forma, a falha do Histórico não deve derrubar scan/importação; essa separação já existia e é preservada.
+Se o sink de logging lançar uma exceção, `LongJobObservability` a absorve. O resultado do scan/Assistente/import/transcode continua determinado exclusivamente pela operação principal e por sua fonte de verdade.
 
 ## Volume e retenção
 
 A camada registra apenas transições relevantes de lifecycle. Não existe heartbeat periódico nem evento por percentual/progresso fino.
 
-Isso mantém volume proporcional ao número real de operações longas.
+A retenção dos logs de runtime é a retenção configurada para o `journald`/ambiente onde o processo roda. `LongJobObservability` não cria retenção própria em SQLite.
 
-A retenção dos logs de runtime é a retenção configurada para o `journald`/ambiente onde o processo roda. A #121 **não cria retenção própria em SQLite** para os eventos de log.
-
-O Histórico operacional mantém sua retenção persistida independente, conforme [`admin-operation-history.md`](admin-operation-history.md).
+Estados persistidos continuam com as retenções de seus domínios: Histórico operacional para scan/importação e `LibraryAssistantStore` para runs/sugestões do Assistente.
 
 ## Investigação em produção
-
-O serviço systemd já centraliza stdout/stderr no journal.
 
 ### Ver jobs longos recentes
 
@@ -186,75 +171,55 @@ O serviço systemd já centraliza stdout/stderr no journal.
 journalctl -u home-music --since "1 hour ago" -o cat | grep '"event":"long_job\.'
 ```
 
-### Procurar uma operação aberta no Histórico
-
-Copie o `operationId` exibido/identificado no Histórico e procure no journal:
+### Assistente
 
 ```bash
-journalctl -u home-music --since today -o cat | grep '"operationId":"scan-SEU_ID"'
+journalctl -u home-music --since today -o cat | grep '"jobType":"library.assistant"'
 ```
 
-Para importação:
+Use o `jobId` para correlacionar com o run administrativo. Não procure por título/path da faixa: esses dados não fazem parte do evento.
+
+### Scan/importação
+
+Quando houver `operationId`, ele pode ser procurado no journal:
 
 ```bash
-journalctl -u home-music --since today -o cat | grep '"operationId":"import-SEU_JOB_ID"'
+journalctl -u home-music --since today -o cat | grep '"operationId":"SEU_ID"'
 ```
 
-### Procurar pelo job de runtime
-
-```bash
-journalctl -u home-music --since today -o cat | grep '"jobId":"SEU_JOB_ID"'
-```
-
-### Correlacionar com uma requisição Fastify
-
-Quando um log de request do Fastify fornece o `reqId`, procure o mesmo valor nos jobs:
+### Request Fastify
 
 ```bash
 journalctl -u home-music --since today -o cat | grep '"requestId":"req-SEU_ID"'
 ```
 
-Para transcodes, comece pelos eventos `jobType="transcode"` e use `jobId`/`resourceId` internos. Não procure por path físico da faixa: ele não é necessário nem deve fazer parte do evento estruturado.
-
-### Interpretar duração
-
-`durationMs` mede a janela conhecida do lifecycle:
-
-- scan/transcode: do início observado ao término;
-- importação: de `startedAt` (ou `createdAt` quando falha antes de iniciar processamento) até `finishedAt`, seguindo a semântica já usada pelo Histórico.
-
-Importações podem aguardar interação administrativa entre etapas; portanto duração longa não significa, isoladamente, CPU/IO ocupado por todo o período.
-
 ## Relação com health/runtime
 
-Os eventos não substituem endpoints de health/readiness.
-
-O estado agregado de transcoding (`active`/`pending`) continua exposto pelo diagnóstico já existente. Use health para responder “como está agora?” e os eventos correlacionados para responder “o que aconteceu com este job?”.
+Os eventos não substituem endpoints de health/readiness. Use health/runtime para responder “como está agora?” e os eventos correlacionados para responder “o que aconteceu com este job?”.
 
 ## Testes
 
-Cobertura automatizada fixa:
+A cobertura automatizada da camada e dos consumidores fixa:
 
-- início/conclusão, duração e métricas tipadas de scan;
-- propagação/isolamento de `requestId` em contexto assíncrono;
-- integração do contexto com `preValidation` real do Fastify via `inject()` concorrente;
+- início/conclusão, duração e métricas tipadas;
+- propagação/isolamento de `requestId`;
 - redaction de erro antes do log;
-- ausência de `err` bruto no evento de falha;
-- logging best-effort que não derruba o job;
-- correlação de scan com `operationId`;
-- correlação e deduplicação do lifecycle de importação;
-- transcode observado somente na geração real, sem novo lifecycle em cache hit.
+- ausência de `err` bruto;
+- logging best-effort;
+- correlação do scan/importação;
+- transcode observado somente na geração real;
+- `library.assistant` como job type conhecido, com lifecycle coordenado pelo `LibraryAssistantService`.
 
 ## Regra para novas operações longas
 
 Ao instrumentar um novo pipeline:
 
 1. identifique primeiro a fonte de verdade já existente;
-2. reutilize o `jobId`/`operationId` canônico quando houver;
-3. use `LongJobObservability` para lifecycle de runtime;
-4. preserve `requestId` somente como contexto de correlação, nunca como estado de domínio;
+2. reutilize `jobId`/`operationId` canônico quando houver;
+3. use `LongJobObservability` somente para lifecycle de runtime;
+4. preserve `requestId` apenas como contexto de correlação;
 5. não passe payload livre, URL, path ou erro bruto como binding;
-6. prefira métricas numéricas explicitamente tipadas a payloads livres;
-7. prefira eventos de transição a heartbeats frequentes;
-8. teste sucesso, falha/redaction, request-context quando aplicável e best-effort;
-9. só adicione persistência/UI se existir requisito de produto que o Histórico atual não cubra.
+6. prefira métricas numéricas explicitamente tipadas;
+7. prefira eventos de transição a heartbeats;
+8. teste sucesso, falha/redaction, request-context e best-effort;
+9. só adicione persistência/UI se existir requisito de produto que a autoridade atual não cubra.

@@ -28,7 +28,8 @@ Em **2026-09-06**:
 - fase 7.5 (multiusuário/autenticação) está concluída; os documentos de implementação foram arquivados;
 - fase 14 (portabilidade de dados pessoais) está implementada na `main` após o PR #324;
 - fase 15 (Library Assistant) é o ciclo técnico ativo, rastreado pela issue #310;
-- o plano atual da fase 15 está em [`library-assistant-plan.md`](library-assistant-plan.md).
+- a fundação do Assistente (#311) possui contrato canônico em [`library-assistant.md`](library-assistant.md);
+- o planejamento das capacidades seguintes permanece em [`library-assistant-plan.md`](library-assistant-plan.md).
 
 Para o estado instantâneo de issues/PRs, GitHub é a fonte de verdade; este índice não tenta reproduzir todo o tracker.
 
@@ -57,6 +58,7 @@ Para o estado instantâneo de issues/PRs, GitHub é a fonte de verdade; este ín
 - [`library-http-delivery.md`](library-http-delivery.md) — entrega HTTP da mídia;
 - [`library-metadata-normalization.md`](library-metadata-normalization.md) — normalização de metadata;
 - [`library-navigation-performance.md`](library-navigation-performance.md) — performance de navegação;
+- [`library-assistant.md`](library-assistant.md) — fundação implementada do Assistente: runs, sugestões, evidências, stale, providers e API administrativa;
 - [`admin-metadata-overrides.md`](admin-metadata-overrides.md) — overrides de metadata;
 - [`admin-cover-overrides.md`](admin-cover-overrides.md) — overrides de capa;
 - [`admin-file-moves.md`](admin-file-moves.md) — organização/movimentação de arquivos;
@@ -123,7 +125,7 @@ Os pares `PRODUCTION.md`/`production.md` e `DEVELOPMENT.md`/`development-environ
 
 ## Planos e decisões
 
-- [`library-assistant-plan.md`](library-assistant-plan.md) — plano ativo da fase 15; descreve trabalho planejado e não deve ser interpretado como feature já entregue;
+- [`library-assistant-plan.md`](library-assistant-plan.md) — plano ativo das capacidades restantes da fase 15; a fundação já implementada é descrita em [`library-assistant.md`](library-assistant.md);
 - documentos com `*-decision.md` preservam decisões arquiteturais específicas e devem ser lidos junto do código atual.
 
 ## Histórico

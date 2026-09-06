@@ -8,8 +8,9 @@ O histórico detalhado acumulado até a fase 14 foi preservado em [`history/road
 
 - **Fase 7.5 — multiusuário/autenticação:** concluída e incorporada à arquitetura atual. Fonte canônica: [`multi-user-auth.md`](multi-user-auth.md).
 - **Fase 14 — portabilidade de dados pessoais:** implementação concluída na `main` com o PR #324. Contrato atual: [`personal-data-portability.md`](personal-data-portability.md).
-- **Fase 15 — Library Assistant:** fase ativa, coordenada pela issue #310 e pelo plano [`library-assistant-plan.md`](library-assistant-plan.md).
-- Correções independentes de PWA/offline continuam sendo tratadas fora da fase 15 quando não alteram seu escopo.
+- **Fase 15 — Library Assistant:** fase ativa, coordenada pela issue #310. A fundação #311 está implementada e documentada em [`library-assistant.md`](library-assistant.md); as integrações concretas continuam no plano [`library-assistant-plan.md`](library-assistant-plan.md).
+- A camada A do fallback de artwork (#321) e a publicação de artwork canônica no Media Session (#325) já foram incorporadas; validações físicas específicas de PWA permanecem registradas nas issues correspondentes como QA pós-merge.
+- Correções de cold start offline (#328) e instrumentação de continuidade de playback iOS (#327) já foram incorporadas; qualquer evidência de hardware adicional continua sendo rastreada nas próprias issues.
 
 A `main` atual já contém exportação e importação de dados pessoais por usuário, validação/dry-run, política de merge e E2E focado de importação pessoal no CI.
 
@@ -19,9 +20,11 @@ Objetivo: evoluir a organização e correção da biblioteca para um fluxo assis
 
 Princípios:
 
-- identificar arquivos/conteúdo de forma estável antes de sugerir mudança;
+- `LibraryAssistantService` coordena análise/sugestões sem virar autoridade de biblioteca;
 - separar descoberta/análise de aplicação;
-- preview antes de mutação;
+- evidências e proveniência devem ser estruturadas, versionadas e explicáveis;
+- stale protection deve revalidar a premissa antes de qualquer aplicação futura;
+- preview/revisão antes de mutação;
 - operações em lote precisam de resultado rastreável e rollback quando aplicável;
 - backend continua sendo a fronteira de segurança e filesystem confinement;
 - nenhuma sugestão deve inventar metadata como fato confirmado;
@@ -31,22 +34,38 @@ Princípios:
 
 Umbrella: **#310 — Library Assistant**.
 
-Issues planejadas:
+| Issue | Entrega | Estado técnico |
+| --- | --- | --- |
+| #311 | fundação de runs/sugestões, evidências, proveniência, stale, cache/provider e lifecycle admin | implementada |
+| #312 | identificação de metadata com MusicBrainz e matching explicável | próxima onda |
+| #313 | revisão e aplicação segura de sugestões de metadata | depende de #312 |
+| #314 | artwork via Cover Art Archive usando cover override canônico | planejada |
+| #315 | enriquecimento de lyrics reutilizando o domínio atual | planejada |
+| #316 | resolução de lyrics consistente entre player/offline/OpenSubsonic | planejada |
+| #318 | autonomia progressiva após scan/importação | posterior ao fluxo manual |
+| #319 | assistência de normalização artista/álbum | planejada |
+| #320 | casos difíceis via Chromaprint/AcoustID opcional | P2 |
+| #321 | fallback canônico de artwork; camada A derivada pronta, camada B persistente opcional | parcial |
+| #322 | transcrição/alinhamento local opcional | P2 |
+| #325 | artwork canônica no Media Session | implementada; QA físico rastreado |
+| #326 | vinil animado no player Agora usando a mesma identidade | planejada |
 
-| Issue | Entrega |
-| --- | --- |
-| #311 | content hashing / identidade estável de arquivo |
-| #312 | importação cross-filesystem segura |
-| #313 | serviços de identidade de mídia |
-| #314 | rename/move orientado por hash |
-| #315 | matching de release |
-| #316 | detecção de boundaries de episódios/faixas |
-| #317 | política/runtime de edição |
-| #318 | aplicação em lote + rollback |
-| #319 | sugestões e reporting |
-| #320 | E2E e critérios de aceitação da fase |
+O detalhamento de arquitetura, riscos, etapas e critérios está em [`library-assistant-plan.md`](library-assistant-plan.md). O comportamento já implementado da fundação está em [`library-assistant.md`](library-assistant.md). Se plano e implementação divergirem, código/testes e a issue executada têm precedência.
 
-O detalhamento de arquitetura, riscos, etapas e critérios está em [`library-assistant-plan.md`](library-assistant-plan.md). Se o plano e uma implementação divergirem, código/testes e a issue executada têm precedência; este roadmap deve ser atualizado no mesmo PR que consolidar a decisão.
+### Fundação já estabilizada (#311)
+
+A base da Fase 15 agora possui:
+
+- contratos compartilhados/versionados para runs, sugestões, evidências, confiança e proveniência;
+- persistência mínima no mesmo SQLite, sem cópia canônica de `tracks`;
+- snapshot/revision da biblioteca efetiva, incluindo projeção administrativa existente;
+- assinatura de premissa e stale protection;
+- lifecycle de start/list/get/cancel sem endpoint de aplicação;
+- cache derivado de provider com TTL/versionamento, rate limit, timeout, cancelamento e User-Agent;
+- reuso de `HeavyWorkQueue` e `LongJobObservability`;
+- regressões de autorização/anti-CSRF, reopen, cancelamento, concorrência e ausência de mutação das autoridades efetivas.
+
+A #312 deve adicionar o primeiro analyzer real sobre esses contratos, sem criar outro lifecycle/cache/modelo de sugestão.
 
 ## Portabilidade pessoal — estado consolidado
 
@@ -65,7 +84,7 @@ Detalhes de identidade/ownership: [`multi-user-auth.md`](multi-user-auth.md).
 
 ## Trabalho paralelo fora da fase 15
 
-Issues podem permanecer fora da fase quando corrigem comportamento já existente sem mudar o escopo do Library Assistant. No momento da atualização deste documento, existem correções abertas relacionadas a PWA/offline, como #327 e #328.
+Bugs e melhorias podem permanecer fora da fase quando corrigem comportamento existente sem mudar o escopo do Library Assistant. As correções de PWA #327/#328 já foram incorporadas; validação física adicional permanece como QA rastreado nas próprias issues e não redefine a arquitetura da Fase 15.
 
 O roadmap não replica todos os bugs abertos. Para estado operacional de issues, o GitHub é a fonte de verdade.
 

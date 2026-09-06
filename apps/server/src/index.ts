@@ -23,6 +23,7 @@ import {
   parseHeavyWorkLimits,
   withHeavyWorkRequestContext
 } from './heavy-work-queue.js';
+import { registerLibraryAssistant } from './library-assistant-bootstrap.js';
 import { registerLibraryRoutes } from './library-routes.js';
 import { LibraryService } from './library-service.js';
 import { registerMediaRoutes } from './media-routes.js';
@@ -247,6 +248,13 @@ const adminLibraryProjection = registerAdminTrackRoutes(app, {
   databasePath,
   musicDir,
   libraryProjectionHandledByRoutes: true
+});
+registerLibraryAssistant(app, {
+  databasePath,
+  library,
+  projection: adminLibraryProjection,
+  queue: integrityQueue,
+  observability: infrastructure.longJobObservability
 });
 registerLibraryRoutes(app, library, integrityQueue, adminLibraryProjection);
 registerPersonalRoutes(app, personal, { databasePath, library });

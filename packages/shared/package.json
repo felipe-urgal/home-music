@@ -17,6 +17,10 @@
     "./personal-data": {
       "types": "./src/personal-data.ts",
       "default": "./dist/personal-data.js"
+    },
+    "./library-assistant": {
+      "types": "./src/library-assistant.ts",
+      "default": "./dist/library-assistant.js"
     }
   },
   "scripts": {
