@@ -77,7 +77,7 @@ Uma conta sem dados pessoais continua recebendo um bundle válido, com coleçõe
 
 Mudanças incompatíveis exigem nova versão. Campos adicionais só podem ser tratados como compatíveis quando não alterarem a semântica dos campos existentes.
 
-A futura importação/restauração de dados pessoais deve consumir este contrato depois que ele estiver estabilizado; ela não deve definir um formato concorrente.
+A importação/restauração de dados pessoais consome este mesmo contrato; ela não define um formato concorrente.
 
 ## Base de validação para importação
 
@@ -120,15 +120,43 @@ Quando a entrada é válida, o preview resume referências por domínio nas clas
 
 Os detalhes de referências não resolvidas usam somente informações portáteis do próprio bundle, como `relativePath`, domínio, campo e motivo seguro. IDs internos de faixa, IDs de candidatos e paths absolutos permanecem no plano server-side e não são serializados. A lista de detalhes é limitada por `PERSONAL_DATA_IMPORT_LIMITS.maxPreviewIssues`; as contagens totais continuam exatas e `issuesTruncated` informa quando houve truncamento.
 
-O planner monta uma única interpretação do bundle e preserva internamente a localização e o resultado de cada referência. A futura etapa de aplicação deve reutilizar esse plano em vez de refazer parsing ou matching com regras diferentes.
+O preview também devolve um `confirmationToken`. Ele é derivado do bundle validado, dos resultados de matching e da identidade autenticada. O token não é uma credencial; ele vincula a confirmação ao plano que o usuário revisou.
+
+## Confirmação e aplicação
+
+A aplicação usa uma rota separada:
+
+```http
+POST /api/account/personal-data/import/apply
+Content-Type: application/json
+```
+
+O corpo contém `bundle`, `confirmationToken` e `confirmed: true`. O destino continua sendo exclusivamente `request.user.id`; `userId` vindo do cliente não escolhe conta de destino.
+
+Antes de mutar, o servidor gera novamente o plano com o mesmo `PersonalDataImportPlanner` e compara seu token com o preview confirmado. Se o bundle, a biblioteca, o resultado de matching ou o usuário tiver mudado, a aplicação responde com `preview-changed` e exige um novo preview. O serviço de aplicação recebe o `PersonalDataImportPlan` confirmado e não possui parser ou matcher concorrente.
+
+A aplicação inteira ocorre em uma única transação SQLite. Qualquer erro antes do `COMMIT` executa rollback do conjunto; não há compensação manual distribuída entre favoritos, playlists, views ou histórico.
+
+### Estratégia de merge v1
+
+- **Favoritos:** união. Somente faixas `found` são inseridas; favorito já existente é ignorado.
+- **Playlists manuais:** somente referências `found` entram, na mesma ordem relativa do bundle. Se já existir uma playlist manual com o mesmo nome e a mesma sequência resolvida, ela é ignorada; caso contrário uma nova playlist é criada. Playlist sem faixa resolvida continua podendo ser restaurada vazia.
+- **Smart playlists:** são importadas como nome + regra dinâmica. Uma definição semanticamente idêntica já existente é ignorada.
+- **Views:** são importadas como nome + definição. Uma view semanticamente idêntica já existente é ignorada.
+- **Histórico:** somente eventos `found` são inseridos. O par `(trackId, playedAt)` é deduplicado e o histórico continua limitado aos 2.000 eventos mais recentes da conta.
+- **Playback e filas:** o estado é substituído pelos valores portáveis do bundle usando somente IDs `found`. Filas preservam ordem, removem duplicatas e mantêm a faixa atual no início caso ela não estivesse mais presente depois da reconciliação.
+- **Missing, ambiguous e conflict:** nunca são aplicados; permanecem contabilizados no resumo final.
+
+Reexecutar o mesmo bundle sobre o mesmo estado não cria duplicação: favoritos e histórico são deduplicados, coleções semanticamente iguais são ignoradas e playback idêntico não é regravado.
 
 ## Invariantes operacionais
 
-Exportação e preview são read-only:
+Exportação e preview são read-only; a aplicação altera somente estado pessoal SQLite da conta autenticada:
 
-- não modificam `MUSIC_DIR`;
-- não criam nem alteram faixas;
-- não alteram favoritos, playlists, views, histórico, fila ou estado do player durante o preview;
-- não disparam scanner;
-- não criam segunda biblioteca;
-- não concedem acesso entre usuários.
+- não modifica `MUSIC_DIR`;
+- não cria nem altera faixas;
+- não cria, move ou apaga mídia;
+- não dispara scanner;
+- não cria segunda biblioteca;
+- não concede acesso entre usuários;
+- não trata IDs do bundle como autoridade.

@@ -151,3 +151,34 @@ export type PersonalDataImportPreviewV1 = {
   issues: PersonalDataImportPreviewIssueV1[];
   issuesTruncated: boolean;
 };
+
+export type PersonalDataImportPreviewResponseV1 = PersonalDataImportPreviewV1 & {
+  confirmationToken: string;
+};
+
+export type PersonalDataImportApplyDomainSummaryV1 = {
+  applied: number;
+  ignored: number;
+};
+
+export type PersonalDataImportApplySummaryV1 = {
+  applied: number;
+  ignored: number;
+  missing: number;
+  ambiguous: number;
+  conflict: number;
+  failed: number;
+  domains: {
+    favorites: PersonalDataImportApplyDomainSummaryV1;
+    manualPlaylists: PersonalDataImportApplyDomainSummaryV1;
+    smartPlaylists: PersonalDataImportApplyDomainSummaryV1;
+    libraryViews: PersonalDataImportApplyDomainSummaryV1;
+    playbackHistory: PersonalDataImportApplyDomainSummaryV1;
+    playbackState: PersonalDataImportApplyDomainSummaryV1;
+  };
+};
+
+export type PersonalDataImportApplyResponseV1 = {
+  preview: PersonalDataImportPreviewV1;
+  summary: PersonalDataImportApplySummaryV1;
+};

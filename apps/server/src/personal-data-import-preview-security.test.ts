@@ -100,7 +100,7 @@ test('preview exige identidade persistida antes de executar o planner', async ()
   }
 });
 
-test('preview autenticado é read-only, privado e não aceita userId como autoridade', async () => {
+test('preview autenticado é read-only, privado, retorna token e não aceita userId como autoridade', async () => {
   const app = Fastify();
   const receivedBodies: unknown[] = [];
   registerPersonalDataImportPreviewRoutes(app, {
@@ -122,6 +122,7 @@ test('preview autenticado é read-only, privado e não aceita userId como autori
     assert.equal(response.headers['cache-control'], 'private, no-store');
     assert.equal(receivedBodies.length, 1);
     assert.deepEqual(receivedBodies[0], input);
+    assert.match(response.json().confirmationToken, /^[a-f0-9]{64}$/);
     assert.equal(response.body.includes(USER_A), false);
     assert.equal(response.body.includes(USER_B), false);
   } finally {
