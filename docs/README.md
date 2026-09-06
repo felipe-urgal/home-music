@@ -2,7 +2,7 @@
 
 Este diretório mistura documentação **corrente** e registros históricos de implementação. Esta página define qual material deve ser usado como fonte de verdade.
 
-> Inventário e backlog revisados em 2026-09-05. A Fase 13 está encerrada. Na Fase 14, #291, #292 e #294 já estão integradas à `main` pelos PRs #297, #298 e #299. A #293 é a única pendência técnica do ciclo: sua dependência da #292 foi satisfeita e ela está desbloqueada, porém deliberadamente pausada até a próxima retomada. A #295 permanece como índice executivo ativo da Fase 14 — Soberania e recuperação.
+> Inventário e backlog revisados em 2026-09-06. A Fase 13 está encerrada. Na Fase 14, #291, #292 e #294 já estão integradas à `main` pelos PRs #297, #298 e #299. A #293 foi decomposta e implementada nas etapas #301–#305: parser, matching, preview e aplicação já estão em `main`, e a UI/E2E final está em conclusão pelo PR #324. A #295 permanece como índice executivo ativo somente até a reconciliação dos gates finais da Fase 14 — Soberania e recuperação.
 
 ## Desenvolvimento e agentes de IA
 
@@ -17,9 +17,9 @@ Comece por:
 1. [`../README.md`](../README.md) — instalação, operação e visão geral do produto;
 2. [`architecture.md`](architecture.md) — arquitetura corrente;
 3. [`roadmap.md`](roadmap.md) — estado técnico das fases e pendências reais;
-4. [issue #295](https://github.com/felipe-urgal/home-music/issues/295) — índice executivo ativo da Fase 14;
-5. [issue #293](https://github.com/felipe-urgal/home-music/issues/293) — única pendência técnica da Fase 14, desbloqueada e pausada;
-6. [`personal-data-portability.md`](personal-data-portability.md) — contrato portátil v1 entregue pela #292 / PR #298;
+4. [issue #295](https://github.com/felipe-urgal/home-music/issues/295) — índice executivo da Fase 14 em reconciliação final;
+5. [issue #293](https://github.com/felipe-urgal/home-music/issues/293) — importação pessoal implementada em etapas #301–#305, aguardando apenas gates/fechamento final;
+6. [`personal-data-portability.md`](personal-data-portability.md) — contrato portátil v1, exportação, matching, preview, aplicação transacional e fluxo em Minha Conta;
 7. [`m3u8-playlists.md`](m3u8-playlists.md) — interoperabilidade segura de playlists entregue pela #294 / PR #299;
 8. [`production-contract.md`](production-contract.md) e [`backup-restore.md`](backup-restore.md) — contrato operacional do checkpoint pré-update entregue pela #291 / PR #297;
 9. [issue #291](https://github.com/felipe-urgal/home-music/issues/291) — registro concluído do checkpoint pré-update;
@@ -35,14 +35,14 @@ Comece por:
 
 ## Estado do backlog atual
 
-A Fase 14 está **em pausa após a conclusão da Onda 1** e continua centralizada na #295. #291, #292 e #294 estão concluídas e integradas à `main`. A #293 é a única pendência técnica; o formato portátil da #292 já está mergeado, portanto ela está desbloqueada para a próxima retomada.
+A Fase 14 está **em fechamento técnico** e continua centralizada na #295 até o último gate. #291, #292 e #294 estão concluídas e integradas à `main`. A #293 já possui parser, matching conservador, preview autenticado e aplicação transacional integrados; a etapa final #305 entrega o fluxo de Minha Conta, E2E direcionado e reconciliação documental pelo PR #324.
 
 | Issue | Estado corrente |
 | --- | --- |
-| [#295](https://github.com/felipe-urgal/home-music/issues/295) | índice executivo ativo da Fase 14; 3/4 atividades técnicas concluídas |
+| [#295](https://github.com/felipe-urgal/home-music/issues/295) | índice executivo da Fase 14; 4/4 atividades técnicas implementadas, aguardando reconciliação do gate final |
 | [#291](https://github.com/felipe-urgal/home-music/issues/291) | concluída pelo PR #297: checkpoint pré-update verificável e recuperação determinística do estado SQLite |
 | [#292](https://github.com/felipe-urgal/home-music/issues/292) | concluída pelo PR #298: exportação versionada e privada dos dados pessoais do usuário |
-| [#293](https://github.com/felipe-urgal/home-music/issues/293) | P1 aberta, desbloqueada e pausada: importação com dry-run, matching conservador e ownership da sessão |
+| [#293](https://github.com/felipe-urgal/home-music/issues/293) | P1 em fechamento: importação com validação, matching conservador, dry-run, confirmação transacional e UI em Minha Conta |
 | [#294](https://github.com/felipe-urgal/home-music/issues/294) | concluída pelo PR #299: importação/exportação M3U8 sem importar mídia nem criar segunda biblioteca |
 | [#266](https://github.com/felipe-urgal/home-music/issues/266) | Fase 13 concluída e índice executivo encerrado em 2026-09-05 |
 | [#264](https://github.com/felipe-urgal/home-music/issues/264) | OpenSubsonic concluído; Feishin validado manualmente e Symfonium explicitamente não executado no aceite final |
@@ -61,7 +61,7 @@ A ordem corrente está em `roadmap.md` e na #295. Itens concluídos não devem s
 
 - [`server-composition.md`](server-composition.md) — limites entre composition root, rotas por domínio, serviços e infraestrutura compartilhada do Fastify.
 - [`open-subsonic.md`](open-subsonic.md) — adapter `/rest/*` sobre `LibraryService`, `TrackMediaInfrastructure` e `PersonalLibraryService`, com API keys dedicadas, contrato compartilhado, negociação de protocolo e sem segunda fonte de verdade.
-- [`personal-data-portability.md`](personal-data-portability.md) — projeção portátil v1 de dados pessoais, ownership pela sessão e referências de faixa sem path absoluto.
+- [`personal-data-portability.md`](personal-data-portability.md) — projeção portátil v1, importação fail-closed, matching conservador, preview/confirmation token e aplicação transacional com ownership pela sessão.
 - [`m3u8-playlists.md`](m3u8-playlists.md) — preview/import/export M3U8 sobre a biblioteca e playlists canônicas, sem rede, mídia paralela ou autoridade de path externo.
 
 ## Segurança e regressões
@@ -69,7 +69,7 @@ A ordem corrente está em `roadmap.md` e na #295. Itens concluídos não devem s
 - [`security-regressions.md`](security-regressions.md) — gate dedicado de regressões negativas para Administração/Importação, invariantes cobertas e regras de isolamento das fixtures.
 - [`login-abuse-protection.md`](login-abuse-protection.md) — rate limits por IP/identidade, gate global de `scrypt`, `Retry-After`, métricas agregadas e política de restart do login.
 - [`open-subsonic.md`](open-subsonic.md) — ownership derivado da API key, persistência somente do hash, revogação isolada, validação `v`/`c` e redaction de query string nos logs.
-- [`personal-data-portability.md`](personal-data-portability.md) — export privado sem segredos, IDs internos ou paths absolutos e base contratual obrigatória para a futura #293.
+- [`personal-data-portability.md`](personal-data-portability.md) — export privado e import seguro sem segredos, IDs externos como autoridade ou paths absolutos; referências ambíguas/conflitantes nunca são aplicadas silenciosamente.
 - [`m3u8-playlists.md`](m3u8-playlists.md) — limites defensivos, rejeição de traversal/URLs/paths absolutos e matching somente contra tracks disponíveis da biblioteca atual.
 
 ## Dependências e CI
@@ -170,29 +170,10 @@ Fontes atuais:
 - [`open-subsonic.md`](open-subsonic.md)
 - [`personal-data-portability.md`](personal-data-portability.md)
 
-A política de capacidade e isolamento de sessões da #228 está documentada em `multi-user-auth.md`; a proteção de login entregue pela #229 está documentada em `login-abuse-protection.md`. OpenSubsonic usa credencial própria por aplicativo, contratos públicos compartilhados entre server/web e não reutiliza a sessão/senha web. A portabilidade pessoal v1 exporta somente o estado do usuário autenticado e é a base contratual da futura importação da #293.
+A política de capacidade e isolamento de sessões da #228 está documentada em `multi-user-auth.md`; a proteção de login entregue pela #229 está documentada em `login-abuse-protection.md`. OpenSubsonic usa credencial própria por aplicativo, contratos públicos compartilhados entre server/web e não reutiliza a sessão/senha web. A portabilidade pessoal v1 exporta e importa o estado da conta autenticada por um fluxo com preview e confirmação explícita; matching e merge permanecem no backend.
 
 ## Registros históricos `phase-7.5-*`
 
 Os demais arquivos `phase-7.5-*` preservam o desenho, decisões e gates dos slices usados durante a migração multiusuário. Eles podem usar linguagem relativa ao momento da implementação.
 
 Para saber **como o sistema funciona hoje**, prefira `README.md`, `architecture.md`, `multi-user-auth.md`, `open-subsonic.md`, `personal-data-portability.md`, `m3u8-playlists.md`, os documentos funcionais atuais e os arquivos `phase-7.5-*` explicitamente listados acima como fonte corrente.
-
-Não use um registro histórico isolado para inferir que uma funcionalidade ainda está pendente. O estado de entrega fica em `roadmap.md` e nas issues abertas; a #123, a #239 e a #266 preservam ciclos encerrados e a #295 representa o ciclo técnico atual.
-
-## E2E
-
-A suíte Playwright tem instruções próprias em [`../e2e/README.md`](../e2e/README.md). O gate crítico inclui smoke geral, coleções offline deduplicadas, fluxo desktop individual/lote, isolamento offline entre contas e a regressão Jamendo de licença/elegibilidade/início de importação integrada ao workbench; a regressão completa continua disponível conforme o risco da mudança. Overrides de metadata também possuem regressão desktop cobrindo propagação imediata para o player e reconciliação da saúde administrativa.
-
-A compatibilidade OpenSubsonic de CI usa testes HTTP locais de contrato/ownership, negociação de protocolo e fast paths; apps externos não são dependências do CI. Feishin foi validado manualmente no encerramento da Fase 13; Symfonium permaneceu explicitamente como não executado após dispensa do segundo smoke manual pelo proprietário.
-
-## Regra para manutenção da documentação
-
-Ao alterar comportamento ou backlog:
-
-- atualize a documentação funcional canônica afetada;
-- atualize `roadmap.md` quando a fase ou pendência mudar;
-- atualize o índice executivo vigente quando houver um ciclo de backlog ativo; hoje é a #295, enquanto #266, #239 e #123 permanecem como registros encerrados;
-- mantenha a issue de implementação com estado/gate reais;
-- preserve ADRs e registros históricos em vez de reescrevê-los como se tivessem sido produzidos hoje;
-- não crie datas/status artificiais em arquivos sem mudança semântica apenas para aparentar revisão.
