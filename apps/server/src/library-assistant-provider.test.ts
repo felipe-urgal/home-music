@@ -56,6 +56,17 @@ function normalizeRecording(payload: unknown) {
   return { id: payload.id };
 }
 
+function waitForProviderAbort({ signal }: { signal: AbortSignal }) {
+  return new Promise<unknown>((_resolve, reject) => {
+    const abort = () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+    if (signal.aborted) {
+      abort();
+      return;
+    }
+    signal.addEventListener('abort', abort, { once: true });
+  });
+}
+
 test('provider gateway caches normalized payload using only a deterministic hashed key', async () => {
   const cache = memoryCache();
   let calls = 0;
@@ -267,6 +278,33 @@ test('provider gateway caller cancellation returns promptly even when execute ig
 
   await assert.rejects(pending, LibraryAssistantProviderAbortedError);
   assert.equal(providerSignals[0]?.aborted, true);
+});
+
+test('provider gateway keeps timeout and caller cancellation classification when execute reacts to abort', async () => {
+  const cache = memoryCache();
+  const gateway = new LibraryAssistantProviderGateway(cache.port, { minIntervalMs: 0 });
+
+  await assert.rejects(
+    gateway.query({
+      provider,
+      cacheKey: 'responsive-timeout',
+      timeoutMs: 100,
+      execute: waitForProviderAbort,
+      normalize: normalizeRecording
+    }),
+    LibraryAssistantProviderTimeoutError
+  );
+
+  const controller = new AbortController();
+  const pending = gateway.query({
+    provider,
+    cacheKey: 'responsive-cancel',
+    signal: controller.signal,
+    execute: waitForProviderAbort,
+    normalize: normalizeRecording
+  });
+  controller.abort();
+  await assert.rejects(pending, LibraryAssistantProviderAbortedError);
 });
 
 test('provider cache failures degrade to a live normalized result', async () => {
