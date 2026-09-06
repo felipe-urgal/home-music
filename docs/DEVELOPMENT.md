@@ -31,9 +31,9 @@ API: http://127.0.0.1:8788
 
 Valide manualmente o fluxo alterado no ambiente DEV antes de considerar a implementação concluída.
 
-## Gate antes do PR
+## Baseline antes do PR
 
-O gate normal é:
+O gate local normal é:
 
 ```bash
 npm run check
@@ -47,11 +47,11 @@ typecheck
 -> build
 ```
 
-O CI executa o mesmo `npm run check` depois de `npm ci`.
+Esse baseline também é o primeiro gate do CI, mas o workflow obrigatório executa validações adicionais. Para reproduzir o estado atual do CI, consulte [`testing-and-quality.md`](testing-and-quality.md) e `.github/workflows/ci.yml`.
 
 ## Checks direcionados
 
-Use conforme o risco da mudança, sem transformar todos em custo fixo de cada PR:
+Além dos gates já promovidos ao CI, use conforme o risco da mudança:
 
 ```bash
 npm run test:security
@@ -65,12 +65,13 @@ npm run smoke:production
 npm run smoke:backup-restore
 ```
 
-- `test:security`: fronteiras sensíveis de autenticação, administração e importação;
+- `test:security`: fronteiras sensíveis de autenticação, administração e importação; atualmente também faz parte do CI obrigatório;
 - `test:policy`: Dependabot e lifecycle/dependency policies; também roda no audit semanal/manual;
 - `test:ops`: contratos shell de systemd e Tailscale, sem instalar/reiniciar produção;
-- `test:e2e`: fluxos em navegador real;
+- `test:e2e`: suíte completa de fluxos em navegador real; o CI mantém apenas um E2E focado de importação pessoal como gate fixo;
 - benchmarks: mudanças com risco de escala/performance;
-- smokes: mudanças em build de produção, serviço, backup/restore ou operação.
+- `smoke:production`: mudanças em build de produção, serviço ou operação;
+- `smoke:backup-restore`: mudanças de SQLite/backup/restore; atualmente também faz parte do CI obrigatório.
 
 Instale o navegador E2E na primeira execução ou quando a versão do Playwright mudar:
 
