@@ -70,6 +70,22 @@ test('matching encontra faixa por relativePath quando os hints continuam compat�
   });
 });
 
+test('matching nunca escolhe silenciosamente entre relativePaths duplicados', () => {
+  const imported = reference('Artista/Álbum/faixa.mp3');
+  const { matcher } = createMatcher([
+    ['track-a', imported],
+    ['track-b', reference('Artista/Álbum/faixa.mp3')]
+  ]);
+
+  assert.deepEqual(matcher.match(imported), {
+    status: 'ambiguous',
+    trackId: null,
+    strategy: 'relative-path',
+    reason: 'relative-path-ambiguous',
+    candidateTrackIds: ['track-a', 'track-b']
+  });
+});
+
 test('matching não confia cegamente em relativePath reutilizado por outro conteúdo', () => {
   const imported = reference('Artista/Álbum/faixa.mp3');
   const current = reference('Artista/Álbum/faixa.mp3', { title: 'Outra faixa' });
@@ -94,6 +110,20 @@ test('matching reconcilia mudança de pasta somente com filename, metadata e dur
     trackId: 'track-a',
     strategy: 'hints',
     reason: 'hints',
+    candidateTrackIds: []
+  });
+});
+
+test('matching rejeita fallback quando duração passa da tolerância de um segundo', () => {
+  const imported = reference('Antiga/Álbum/faixa.mp3', { durationSeconds: 180 });
+  const differentDuration = reference('Nova/Álbum/faixa.mp3', { durationSeconds: 181.01 });
+  const { matcher } = createMatcher([['track-a', differentDuration]]);
+
+  assert.deepEqual(matcher.match(imported), {
+    status: 'missing',
+    trackId: null,
+    strategy: null,
+    reason: 'no-candidate',
     candidateTrackIds: []
   });
 });
