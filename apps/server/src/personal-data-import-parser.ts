@@ -112,7 +112,8 @@ export function parsePersonalDataBundleV1(value: unknown): PersonalDataBundleV1 
     const field = `$.smartPlaylists[${index}]`;
     const playlist = record(value, field);
     name(playlist.name, `${field}.name`);
-    if (!normalizeSmartPlaylistRule(playlist.rule)) {
+    const normalizedRule = normalizeSmartPlaylistRule(playlist.rule);
+    if (!normalizedRule || !canonicalRecordMatches(playlist.rule, normalizedRule)) {
       fail('invalid-bundle', `${field}.rule`, 'Regra de smart playlist inválida.');
     }
     isoDate(playlist.createdAt, `${field}.createdAt`);
@@ -127,10 +128,12 @@ export function parsePersonalDataBundleV1(value: unknown): PersonalDataBundleV1 
   libraryViews.forEach((value, index) => {
     const field = `$.libraryViews[${index}]`;
     const view = record(value, field);
-    if (!normalizeLibraryViewName(view.name)) {
+    const normalizedName = normalizeLibraryViewName(view.name);
+    if (!normalizedName || normalizedName !== view.name) {
       fail('invalid-bundle', `${field}.name`, 'Nome de view da biblioteca inválido.');
     }
-    if (!normalizeLibraryViewDefinition(view.definition)) {
+    const normalizedDefinition = normalizeLibraryViewDefinition(view.definition);
+    if (!normalizedDefinition || !canonicalRecordMatches(view.definition, normalizedDefinition)) {
       fail('invalid-bundle', `${field}.definition`, 'Definição de view da biblioteca inválida.');
     }
     isoDate(view.createdAt, `${field}.createdAt`);
@@ -232,6 +235,15 @@ function record(value: unknown, field: string): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
+function canonicalRecordMatches(value: unknown, canonical: Record<string, unknown>) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const input = value as Record<string, unknown>;
+  const inputKeys = Object.keys(input);
+  const canonicalKeys = Object.keys(canonical);
+  return inputKeys.length === canonicalKeys.length
+    && canonicalKeys.every(key => Object.hasOwn(input, key) && Object.is(input[key], canonical[key]));
+}
+
 function text(value: unknown, field: string, maxLength: number, required = false) {
   if (typeof value !== 'string' || value.length > maxLength || (required && value.length === 0)) {
     fail('invalid-bundle', field, 'Texto inválido no bundle pessoal.');
@@ -241,12 +253,17 @@ function text(value: unknown, field: string, maxLength: number, required = false
 
 function name(value: unknown, field: string) {
   const clean = text(value, field, PERSONAL_DATA_IMPORT_LIMITS.maxNameLength, true).trim();
-  if (!clean) fail('invalid-bundle', field, 'Nome inválido no bundle pessoal.');
+  if (!clean || clean !== value) fail('invalid-bundle', field, 'Nome inválido no bundle pessoal.');
 }
 
 function isoDate(value: unknown, field: string) {
   const candidate = text(value, field, PERSONAL_DATA_IMPORT_LIMITS.maxTimestampLength, true);
-  if (!Number.isFinite(Date.parse(candidate))) {
+  const timestamp = Date.parse(candidate);
+  if (
+    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(candidate)
+    || !Number.isFinite(timestamp)
+    || new Date(timestamp).toISOString() !== candidate
+  ) {
     fail('invalid-bundle', field, 'Data inválida no bundle pessoal.');
   }
 }
