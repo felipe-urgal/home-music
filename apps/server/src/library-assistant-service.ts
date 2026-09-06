@@ -23,7 +23,7 @@ import type {
 } from './library-assistant-store.js';
 
 const MAX_ANALYZERS_PER_CAPABILITY = 8;
-const MAX_SUGGESTIONS_PER_RUN = 5_000;
+const MAX_SUGGESTIONS_PER_RUN = 500;
 const MAX_OWNER_ID_LENGTH = 128;
 const INVALIDATION_BATCH_SIZE = 500;
 
