@@ -228,7 +228,7 @@ test('provider gateway rejects malformed response and sensitive cache keys', asy
 test('provider gateway enforces wall-clock timeout even when execute ignores AbortSignal', async () => {
   const cache = memoryCache();
   const gateway = new LibraryAssistantProviderGateway(cache.port, { minIntervalMs: 0 });
-  let providerSignal: AbortSignal | null = null;
+  const providerSignals: AbortSignal[] = [];
 
   await assert.rejects(
     gateway.query({
@@ -236,7 +236,7 @@ test('provider gateway enforces wall-clock timeout even when execute ignores Abo
       cacheKey: 'timeout',
       timeoutMs: 100,
       execute: async ({ signal }) => {
-        providerSignal = signal;
+        providerSignals.push(signal);
         return new Promise<unknown>(() => {});
       },
       normalize: normalizeRecording
@@ -244,21 +244,21 @@ test('provider gateway enforces wall-clock timeout even when execute ignores Abo
     LibraryAssistantProviderTimeoutError
   );
 
-  assert.equal(providerSignal?.aborted, true);
+  assert.equal(providerSignals[0]?.aborted, true);
 });
 
 test('provider gateway caller cancellation returns promptly even when execute ignores AbortSignal', async () => {
   const cache = memoryCache();
   const gateway = new LibraryAssistantProviderGateway(cache.port, { minIntervalMs: 0 });
   const controller = new AbortController();
-  let providerSignal: AbortSignal | null = null;
+  const providerSignals: AbortSignal[] = [];
 
   const pending = gateway.query({
     provider,
     cacheKey: 'cancel',
     signal: controller.signal,
     execute: async ({ signal }) => {
-      providerSignal = signal;
+      providerSignals.push(signal);
       return new Promise<unknown>(() => {});
     },
     normalize: normalizeRecording
@@ -266,7 +266,7 @@ test('provider gateway caller cancellation returns promptly even when execute ig
   controller.abort();
 
   await assert.rejects(pending, LibraryAssistantProviderAbortedError);
-  assert.equal(providerSignal?.aborted, true);
+  assert.equal(providerSignals[0]?.aborted, true);
 });
 
 test('provider cache failures degrade to a live normalized result', async () => {
