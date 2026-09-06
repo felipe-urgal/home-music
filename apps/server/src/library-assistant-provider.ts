@@ -85,17 +85,18 @@ export class LibraryAssistantProviderResponseError extends Error {
 function defaultSleep(delayMs: number, signal?: AbortSignal) {
   if (signal?.aborted) return Promise.reject(new LibraryAssistantProviderAbortedError());
   return new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(resolve, delayMs);
+    const cleanup = () => signal?.removeEventListener('abort', abort);
+    const timer = setTimeout(() => {
+      cleanup();
+      resolve();
+    }, delayMs);
+    timer.unref?.();
     const abort = () => {
       clearTimeout(timer);
+      cleanup();
       reject(new LibraryAssistantProviderAbortedError());
     };
     signal?.addEventListener('abort', abort, { once: true });
-    if (signal) {
-      timer.unref?.();
-      const cleanup = () => signal.removeEventListener('abort', abort);
-      void Promise.resolve().then(() => undefined).finally(cleanup);
-    }
   });
 }
 
