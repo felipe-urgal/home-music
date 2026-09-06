@@ -102,8 +102,30 @@ function defaultSleep(delayMs: number, signal?: AbortSignal) {
       reject(new LibraryAssistantProviderAbortedError());
     };
     timer = setTimeout(finish, delayMs);
-    timer.unref?.();
     signal?.addEventListener('abort', abort, { once: true });
+  });
+}
+
+function waitForSharedResult<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return promise;
+  if (signal.aborted) return Promise.reject(new LibraryAssistantProviderAbortedError());
+
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    const cleanup = () => signal.removeEventListener('abort', abort);
+    const finish = (complete: () => void) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      complete();
+    };
+    const abort = () => finish(() => reject(new LibraryAssistantProviderAbortedError()));
+
+    signal.addEventListener('abort', abort, { once: true });
+    promise.then(
+      value => finish(() => resolve(value)),
+      error => finish(() => reject(error))
+    );
   });
 }
 
@@ -183,7 +205,12 @@ export class LibraryAssistantProviderGateway {
     const key = providerCacheKey(query as LibraryAssistantProviderQuery<unknown>);
     const inflightKey = `${key.provider}:${key.providerVersion}:${key.cacheKeyHash}`;
     const existing = this.inFlight.get(inflightKey);
-    if (existing) return existing as Promise<LibraryAssistantProviderQueryResult<T>>;
+    if (existing) {
+      return waitForSharedResult(
+        existing as Promise<LibraryAssistantProviderQueryResult<T>>,
+        query.signal
+      );
+    }
 
     const operation = this.performQuery(query, key)
       .finally(() => this.inFlight.delete(inflightKey));
@@ -218,21 +245,39 @@ export class LibraryAssistantProviderGateway {
     }
 
     await this.waitForRateLimit(key.provider, query.signal);
-    const controller = new AbortController();
-    let timedOut = false;
-    const abort = () => controller.abort();
     if (query.signal?.aborted) throw new LibraryAssistantProviderAbortedError();
-    query.signal?.addEventListener('abort', abort, { once: true });
-    const timer = setTimeout(() => {
-      timedOut = true;
-      controller.abort();
-    }, timeoutMs);
-    timer.unref?.();
+
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let callerAbort: (() => void) | null = null;
+
+    const timeout = new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => {
+        controller.abort();
+        reject(new LibraryAssistantProviderTimeoutError(query.provider.source));
+      }, timeoutMs);
+    });
+
+    const callerCancelled = query.signal
+      ? new Promise<never>((_resolve, reject) => {
+          callerAbort = () => {
+            controller.abort();
+            reject(new LibraryAssistantProviderAbortedError());
+          };
+          query.signal?.addEventListener('abort', callerAbort, { once: true });
+        })
+      : null;
 
     try {
-      const raw = await query.execute({ signal: controller.signal, userAgent });
+      const execution = Promise.resolve().then(() => query.execute({
+        signal: controller.signal,
+        userAgent
+      }));
+      const raw = await Promise.race(
+        callerCancelled ? [execution, timeout, callerCancelled] : [execution, timeout]
+      );
       if (query.signal?.aborted) throw new LibraryAssistantProviderAbortedError();
-      if (timedOut) throw new LibraryAssistantProviderTimeoutError(query.provider.source);
+
       const value = normalizeResponse(query.normalize, raw);
       const updatedAt = this.now();
       try {
@@ -242,14 +287,17 @@ export class LibraryAssistantProviderGateway {
       }
       return { value, cache: 'miss' };
     } catch (error) {
-      if (query.signal?.aborted) throw new LibraryAssistantProviderAbortedError();
-      if (timedOut || (error instanceof Error && error.name === 'AbortError')) {
-        throw new LibraryAssistantProviderTimeoutError(query.provider.source);
+      if (
+        error instanceof LibraryAssistantProviderAbortedError ||
+        error instanceof LibraryAssistantProviderTimeoutError
+      ) {
+        throw error;
       }
+      if (query.signal?.aborted) throw new LibraryAssistantProviderAbortedError();
       throw error;
     } finally {
-      clearTimeout(timer);
-      query.signal?.removeEventListener('abort', abort);
+      if (timer) clearTimeout(timer);
+      if (callerAbort) query.signal?.removeEventListener('abort', callerAbort);
     }
   }
 
