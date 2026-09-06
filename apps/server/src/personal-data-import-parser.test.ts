@@ -116,6 +116,20 @@ test('parser rejeita formato e versão desconhecidos de forma explícita', () =>
   );
 });
 
+test('parser rejeita timestamps não canônicos ou datas inexistentes', () => {
+  for (const exportedAt of [
+    '2026-09-06',
+    '2026-09-06T12:00:00Z',
+    '2026-02-30T12:00:00.000Z'
+  ]) {
+    expectValidationError(
+      () => parsePersonalDataBundleV1({ ...bundle(), exportedAt }),
+      'invalid-bundle',
+      '$.exportedAt'
+    );
+  }
+});
+
 test('parser rejeita relativePath absoluto, traversal e separador não portátil', () => {
   for (const invalidPath of [
     '/music/faixa.mp3',
@@ -150,6 +164,32 @@ test('parser valida regras e views usando as mesmas autoridades do domínio', ()
     () => parsePersonalDataBundleV1(invalidView),
     'invalid-bundle',
     '$.libraryViews[0].definition'
+  );
+});
+
+test('parser rejeita valores que normalizadores apenas coerciriam ou aparariam', () => {
+  const coercedRule = bundle();
+  (coercedRule.smartPlaylists[0]!.rule as unknown as Record<string, unknown>).limit = '50';
+  expectValidationError(
+    () => parsePersonalDataBundleV1(coercedRule),
+    'invalid-bundle',
+    '$.smartPlaylists[0].rule'
+  );
+
+  const trimmedView = bundle();
+  trimmedView.libraryViews[0]!.definition.query = '  busca  ';
+  expectValidationError(
+    () => parsePersonalDataBundleV1(trimmedView),
+    'invalid-bundle',
+    '$.libraryViews[0].definition'
+  );
+
+  const trimmedName = bundle();
+  trimmedName.manualPlaylists[0]!.name = '  Favoritas  ';
+  expectValidationError(
+    () => parsePersonalDataBundleV1(trimmedName),
+    'invalid-bundle',
+    '$.manualPlaylists[0].name'
   );
 });
 
