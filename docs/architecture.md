@@ -1,6 +1,8 @@
 # Arquitetura
 
-Este documento descreve a arquitetura **atual** do Home Music. Documentos `phase-*` preservam decisões e etapas históricas; quando houver diferença, este arquivo e o `README.md` representam o estado operacional corrente.
+Este documento descreve a arquitetura **vigente** do Home Music. Ele registra topologia, fronteiras e invariantes duráveis; detalhes de feature, matrizes de compatibilidade e runbooks ficam nas docs de domínio para evitar duplicação e divergência.
+
+Se houver conflito, código, testes, `package.json`, workflows e contratos executáveis têm precedência.
 
 ## Visão geral
 
@@ -12,85 +14,88 @@ home-music/
 ├── apps/server     Fastify + TypeScript + SQLite
 ├── packages/shared contratos/tipos compartilhados
 ├── e2e             Playwright e fixtures browser-real
-├── data            SQLite e estado derivado local
-├── scripts         operação, CI/smoke, systemd e Tailscale
+├── scripts         operação, CI/smokes, systemd e Tailscale
 ├── docs            documentação técnica
-└── .github         CI e audit de dependências
+└── .github         CI e automações
 ```
 
-Em produção existe **um processo Fastify**. Ele serve API, frontend compilado, streaming, capas, endpoints administrativos e o adapter OpenSubsonic `/rest/*` pela mesma porta interna.
+Em produção existe **um processo Fastify**. Ele serve frontend compilado, `/api/*`, streaming/capas e o adapter OpenSubsonic `/rest/*` pela mesma porta interna.
 
-## Desenvolvimento
+## Topologia de execução
+
+### Desenvolvimento
 
 ```text
-Navegador
+Browser
    ↓
 Vite :5173
    ↓ proxy /api
 Fastify :8788 em 127.0.0.1
 ```
 
-O Vite existe apenas para HMR/desenvolvimento. O backend DEV usa porta própria para coexistir com a instalação systemd de produção em `:8787`; detalhes em `DEVELOPMENT.md` e `development-environments.md`.
+O ambiente DEV usa `.env.development`, SQLite/cache em `data/development/` e biblioteca descartável em `music-dev/`. Ele não deve compartilhar SQLite, `MUSIC_DIR` nem credenciais com produção.
 
-## Produção
+Fonte canônica: [`DEVELOPMENT.md`](DEVELOPMENT.md) e [`development-environments.md`](development-environments.md).
 
-### LAN
-
-```text
-Navegador / PWA / cliente OpenSubsonic
-   ↓ HTTP :8787
-Fastify 0.0.0.0:8787
-   ├── React compilado
-   ├── autenticação/sessões + API keys de apps
-   ├── API /api/* + adapter /rest/*
-   ├── scanner/importação/administração
-   ├── streaming/capas
-   └── SQLite + MUSIC_DIR
-```
-
-HTTP LAN é fallback local e não deve ser exposto por port-forwarding.
-
-### Tailscale Serve — recomendado
+### Produção
 
 ```text
-Cliente no tailnet
-   ↓ HTTPS :443 (*.ts.net)
-Tailscale Serve
-   ↓ HTTP loopback
-Fastify 127.0.0.1:8787
+Browser / PWA / cliente OpenSubsonic
+            ↓
+     Tailscale/LAN
+            ↓
+Fastify :8787
+  ├── frontend compilado
+  ├── /api/*
+  ├── /rest/*
+  ├── streaming/capas
+  ├── SQLite
+  └── MUSIC_DIR
 ```
 
-O backend fica inacessível diretamente pela LAN/tailnet nesse perfil. Cookie `Secure` é habilitado explicitamente depois da validação HTTPS.
+Tailscale Serve + HTTPS é o perfil remoto recomendado. Funnel é exposição pública explícita e opcional. A porta interna `8787` não deve ser publicada diretamente na internet.
 
-### Tailscale Funnel — opcional
+Operação: [`PRODUCTION.md`](PRODUCTION.md), [`production.md`](production.md), [`tailscale.md`](tailscale.md) e [`public-access.md`](public-access.md).
 
-Quando o administrador precisa acessar **sem cliente Tailscale** no dispositivo remoto, o projeto possui perfil Funnel opcional.
+## Frontend
 
-Funnel publica a URL `*.ts.net` na internet, mas mantém o Fastify em loopback e preserva a autenticação própria do Home Music. É uma exposição consciente da tela de login, não o perfil recomendado por padrão.
+O frontend é React + TypeScript + Vite.
 
-Veja `tailscale.md`, `public-access.md` e `tailscale-funnel-troubleshooting.md`.
+Princípios estruturais:
 
-## Frontend de produção
+- Vite é ferramenta de desenvolvimento/build; produção é servida pelo Fastify;
+- autorização real nunca depende de menu/rota escondida no React;
+- componentes consomem contratos HTTP/estado do domínio em vez de acessar filesystem ou SQLite;
+- superfícies densas de Administração preferem lista + inspetor/workspace;
+- player e biblioteca compartilham identidade estável de faixa (`track.id`);
+- PWA/offline mantém estado isolado por usuário.
 
-`npm run build` gera `apps/web/dist`.
+Composição: [`app-composition.md`](app-composition.md).
 
-O servidor:
+Responsabilidades de tela: [`library-screen-responsibilities.md`](library-screen-responsibilities.md) e [`player-screen-responsibilities.md`](player-screen-responsibilities.md).
 
-- exige `index.html` válido antes de considerar produção pronta;
-- serve assets hashados com cache longo/imutável;
-- serve shell/HTML com `no-store`;
-- mantém `/api/*` e `/rest/*` como APIs, sem fallback SPA;
-- rejeita traversal, NUL, arquivos ocultos inseguros e symlink escape na camada estática.
+## Backend
 
-## Identidade e autorização
+O backend é Fastify + TypeScript e concentra as fronteiras de confiança:
 
-### Bootstrap
+- autenticação e autorização;
+- validação de input;
+- ownership por usuário;
+- acesso ao SQLite;
+- confinement de filesystem;
+- scanner e projeção da biblioteca;
+- streaming e transcoding;
+- importação e operações administrativas;
+- adapter OpenSubsonic;
+- lifecycle de recursos de processo.
 
-`HOME_MUSIC_USER` e `HOME_MUSIC_PASSWORD` servem **somente para criar o primeiro administrador quando a tabela `users` está vazia**.
+O entrypoint deve permanecer principalmente como composição/wiring. Serviços e infraestrutura encapsulam comportamento de domínio e recursos externos.
 
-Depois que existe usuário persistido no SQLite, login normal usa as contas e hashes do banco. A recomendação operacional é remover as credenciais de bootstrap do `.env` depois de validar o primeiro administrador.
+Composição: [`server-composition.md`](server-composition.md).
 
-### Usuários
+## Identidade, autorização e ownership
+
+A biblioteca física é compartilhada, mas dados pessoais são isolados por `userId`.
 
 Papéis atuais:
 
@@ -99,21 +104,7 @@ admin
 user
 ```
 
-A biblioteca física é compartilhada, mas dados pessoais são isolados por usuário, incluindo favoritos, histórico/estatísticas, playlists manuais, estado do player e namespace offline.
-
-### Sessões
-
-Sessões usam token aleatório opaco em cookie:
-
-- `HttpOnly`;
-- `SameSite=Strict`;
-- `Secure` quando HTTPS está ativo.
-
-O token resolve para `userId`; role/estado vigente são avaliados pelo servidor. Sessões ficam em memória e são revogadas em restart do processo.
-
-### Política
-
-Rotas da aplicação são classificadas centralmente como `public`, `authenticated` ou `admin`. Esconder menus no frontend é somente UX.
+O backend classifica acesso como `public`, `authenticated` ou `admin`. Esconder uma superfície no frontend é somente UX.
 
 Mutações autenticadas usam também:
 
@@ -121,340 +112,215 @@ Mutações autenticadas usam também:
 X-Home-Music-Request: 1
 ```
 
-para a proteção anti-CSRF da aplicação.
+Sessões web usam token opaco; credenciais OpenSubsonic são API keys separadas. A senha web não é usada como credencial do protocolo OpenSubsonic.
 
-### Credenciais OpenSubsonic
+Ownership pessoal cobre, entre outros:
 
-`/rest/*` possui fronteira de autenticação própria e não reutiliza cookie nem senha web.
+- favoritos;
+- histórico/estatísticas;
+- playlists manuais;
+- estado/fila do player;
+- downloads offline;
+- exportação/importação de dados pessoais.
 
-O usuário cria em **Minha conta** uma API key dedicada por aplicativo:
+Fonte canônica: [`multi-user-auth.md`](multi-user-auth.md).
 
-- o segredo em claro é mostrado somente na criação;
-- o SQLite persiste somente SHA-256 + hint não sensível;
-- a chave pertence a um `userId` imutável;
-- revogar a chave bloqueia `/rest/*` sem revogar a sessão web;
-- conta desabilitada ou com troca obrigatória de senha deixa de autenticar pelo adapter;
-- ownership de playlists, favoritos e histórico deriva da credencial autenticada, nunca de `username` recebido do cliente.
-
-O mecanismo preferido é `apiKeyAuthentication`. Para clientes que só oferecem autenticação Subsonic legada, `u+p` é aceito **somente quando `p` é uma API key Home Music válida**; a senha web nunca é consultada nesse caminho. Token/salt `t+s` permanece recusado.
-
-Como a API key pode trafegar em query parameter pelo protocolo, o logger HTTP registra somente o pathname e também sanitiza URLs nos caminhos explícitos de erro/backpressure.
+Portabilidade: [`personal-data-portability.md`](personal-data-portability.md).
 
 ## SQLite
 
-O banco padrão é `data/home-music.db`.
+O SQLite é o estado persistente principal da aplicação.
 
-Ele mantém, entre outros:
+Ele contém, entre outros:
 
 - usuários e hashes de senha;
 - hashes/hints das API keys OpenSubsonic;
 - índice da biblioteca;
-- estado ativo/inativo administrativo de faixas;
-- favoritos por usuário;
-- histórico/estatísticas por usuário;
-- playlists manuais por usuário;
-- estado/fila do player por usuário;
-- overrides de metadata e capa;
-- aliases lógicos de artista/álbum;
-- estado necessário a operações administrativas/importações;
+- estado administrativo das faixas;
+- dados pessoais com ownership;
+- overrides/aliases de metadata e capa;
+- estado de importações/operações administrativas;
 - histórico operacional.
 
-O schema usa migrations via `PRAGMA user_version`, WAL e foreign keys. Tabelas auxiliares de features não destrutivas são criadas de forma idempotente pelo respectivo store e permanecem cobertas pelo snapshot do SQLite.
+Migrations usam `PRAGMA user_version`; produção deve usar o fluxo de backup/restore suportado em vez de editar versão/schema manualmente.
 
-A persistência do índice distingue dois caminhos. Com a mesma `MUSIC_DIR`, o scanner entrega um delta explícito de faixas adicionadas, atualizadas e removidas, e somente esse delta é aplicado à tabela `tracks`; um rescan sem mudanças não executa upsert de faixa. `libraryRoot` e `scannedAt` são atualizados na mesma transação `BEGIN IMMEDIATE` do delta. Quando a raiz muda ou o snapshot persistido não pode ser reutilizado, permanece disponível o full sync seguro que reconcilia o snapshot completo. Falha em qualquer etapa faz rollback integral.
+O índice da biblioteca privilegia atualização incremental quando a raiz pode ser reutilizada e mantém caminho de reconciliação completa quando necessário. Persistência e publicação do snapshot devem preservar atomicidade: falha de SQLite não pode publicar em memória um estado que não foi persistido.
 
-A indexação incremental após uma importação promovida usa o mesmo caminho de delta para inserir ou atualizar apenas a faixa correspondente. A fase SQLite registra modo de persistência, duração, quantidade de upserts e remoções para diagnóstico de performance sem expor dados sensíveis.
+Backup/restore: [`backup-restore.md`](backup-restore.md).
 
-Tokens de sessão não são persistidos no SQLite.
+## Biblioteca e filesystem
 
-## Biblioteca e scanner
+`MUSIC_DIR` é a fonte física da biblioteca.
 
-`MUSIC_DIR` é a fonte física.
+Invariantes:
 
-O scanner:
+- paths vindos do cliente não são autoridade;
+- operações revalidam confinement no servidor;
+- traversal, NUL, symlink escape e arquivos especiais são rejeitados nas superfícies sensíveis;
+- ações destrutivas devem ser explícitas;
+- quarentena/restauração é preferida a exclusão imediata quando aplicável;
+- movimentações não sobrescrevem arquivos silenciosamente.
 
-1. resolve e valida a raiz;
-2. percorre arquivos suportados;
-3. reaproveita entradas inalteradas por `size + mtime`;
-4. processa arquivos novos/modificados com concorrência limitada;
-5. produz snapshot reconciliado e delta explícito `added / updated / removed`;
-6. persiste somente o delta quando a raiz permanece a mesma;
-7. publica o snapshot em memória somente depois da persistência bem-sucedida.
+O scanner reconcilia o índice com a biblioteca física; a auditoria de Integridade é uma superfície read-only separada e não deve executar correções destrutivas implicitamente.
 
-O scan normal é **mutável/reconciliador**. Se um arquivo indexado desapareceu fisicamente, o scan pode remover seu registro do índice. Subpastas temporariamente inacessíveis e arquivos em quarentena preservam as faixas anteriores e não entram como remoção no delta.
+Entrega HTTP: [`library-http-delivery.md`](library-http-delivery.md).
 
-Streaming e operações de filesystem revalidam confinement para impedir path traversal/symlink escape.
+## Metadata e projeção da biblioteca
 
-## Integridade da biblioteca
-
-A auditoria administrativa de Integridade é separada do scan normal.
+A apresentação da faixa é derivada por camadas não destrutivas:
 
 ```text
-Verificar agora
-   ↓
-auditoria read-only
-   ├── scanner-failed
-   ├── media-probe-failed
-   ├── missing-file
-   └── unindexed-file
-```
-
-Ela não remove nem altera arquivo/registro. O snapshot da última verificação fica disponível para o cockpit administrativo.
-
-Essa separação é deliberada: diagnóstico não deve executar reconciliação destrutiva implicitamente.
-
-## Administração
-
-A área administrativa é exclusiva de `admin` e usa layout fluido no desktop.
-
-Superfícies atuais:
-
-- cockpit/visão geral;
-- Gerenciar músicas;
-- Importação;
-- Integridade;
-- Duplicatas;
-- Normalização lógica;
-- Usuários;
-- Metadados;
-- Lixeira/quarentena;
-- histórico e manutenção operacional.
-
-As telas redesenhadas preferem listas limpas, inspetores/workspaces contextuais e ações em lote sob demanda, sem mover autorização para o cliente.
-
-**Minha conta** também expõe o autosserviço de API keys OpenSubsonic para criar, listar e revogar somente credenciais do próprio usuário.
-
-## Operações destrutivas
-
-Princípios:
-
-- desativar faixa é reversível e não remove o arquivo;
-- remoção da biblioteca passa por lixeira/quarentena;
-- restauração é o caminho preferencial;
-- exclusão permanente exige confirmação explícita;
-- exclusão permanente em lote exige confirmação digitada;
-- movimentação de arquivo é confinada a `MUSIC_DIR`, sem overwrite silencioso;
-- diagnóstico de Integridade nunca executa remoção automática.
-
-## Overrides e projeção canônica de metadata/capa
-
-Correções administrativas são não destrutivas por padrão:
-
-```text
-metadata física
-   + override SQLite por faixa
-   = metadata efetiva
-```
-
-Para artista/álbum, a visão consumida pela biblioteca pode receber mais uma camada lógica:
-
-```text
-metadata física
-   ↓
+metadata física/indexada
+       ↓
 override por faixa
-   ↓
-alias lógico global/reversível
-   ↓
-metadata canônica publicada
+       ↓
+alias lógico quando aplicável
+       ↓
+metadata efetiva publicada
 ```
 
-Aliases são aprovados manualmente em **Administração → Normalização**. Artistas são globais; álbuns são escopados pelo artista do álbum já canônico. A camada não altera `track.id`, não escreve em `MUSIC_DIR` e é reutilizada por `/api/library`, pelo adapter OpenSubsonic e pela avaliação de smart playlists.
+Overrides não devem depender de reescrever o arquivo físico. Scanner/rescan não deve apagar correções persistidas válidas.
 
-A mesma ideia não destrutiva vale para capa. Scanner/rescan não deve apagar overrides ou aliases válidos.
+Documentos:
 
-Escrita opcional de volta ao arquivo original não faz parte do comportamento padrão atual.
-
-Detalhes: `admin-metadata-overrides.md` e `library-metadata-normalization.md`.
+- [`admin-metadata-overrides.md`](admin-metadata-overrides.md);
+- [`admin-cover-overrides.md`](admin-cover-overrides.md);
+- [`library-metadata-normalization.md`](library-metadata-normalization.md).
 
 ## Importação
 
-Todas as origens convergem para o mesmo pipeline:
+Origens diferentes convergem para o mesmo modelo de segurança:
 
 ```text
 upload / URL / provider
         ↓
 staging ou scratch fora de MUSIC_DIR
         ↓
-validação técnica (FFprobe/FFmpeg)
+validação técnica
         ↓
-preview/ajuste de metadata
+preview/metadata
         ↓
-detecção de duplicatas
+duplicatas
         ↓
 destino seguro / no-clobber
         ↓
 promoção para MUSIC_DIR
         ↓
-indexação incremental
+indexação
 ```
 
-Providers externos são desacoplados do core. O provider `yt-dlp` é opcional e nunca escreve diretamente em `MUSIC_DIR`.
+Princípios:
 
-O provider Jamendo segue a mesma fronteira: revalida licença/download no servidor, adquire somente para scratch privado, transfere ao staging comum e deixa validação, duplicatas, promoção e indexação para o pipeline existente. A cobertura final inclui rate limit, resposta malformada, redirect inseguro, conteúdo removido, payload inválido e cleanup, sempre com fakes locais no CI.
+- conteúdo externo não escreve diretamente na biblioteca final;
+- URL/processo externo é validado no backend;
+- staging/scratch é confinando e limpável;
+- falha parcial não deve promover artefato inválido;
+- provider externo não recebe shell livre;
+- regras de licença/download que exigem fail-closed permanecem no servidor.
 
-O pipeline possui cleanup de staging, retry/diagnóstico e suporte a lotes/playlists por provider com isolamento por item.
+Docs de importação e providers estão indexadas em [`README.md`](README.md).
 
-Detalhes: `jamendo.md`.
+## Streaming, FFmpeg e cache derivado
 
-## Transcoding e ReplayGain
+Streaming original é preferido quando compatível. FFmpeg/FFprobe entram para validação técnica, transcoding e compatibilidade.
 
-Streaming original é preferido.
+O cache de transcode é derivado e recriável. Ele não substitui o arquivo original nem deve ser tratado como dado primário.
 
-FFmpeg entra para:
+O backend decide parâmetros e ganho aplicáveis; clientes não podem transformar parâmetros de mídia em acesso arbitrário a processo/filesystem.
 
-- Economia/compatibilidade;
-- normalização ReplayGain;
-- decisões do pipeline de importação.
+Detalhes: [`ffmpeg.md`](ffmpeg.md) e [`admin-transcode-cache.md`](admin-transcode-cache.md).
 
-O cache de transcoding é derivado, limitado e recriável. A chave inclui propriedades relevantes do arquivo/perfil/ganho para evitar colisões.
+## OpenSubsonic
 
-O backend resolve ReplayGain do índice; não aceita ganho arbitrário enviado pelo cliente. O arquivo original nunca é alterado.
-
-## Adapter OpenSubsonic
-
-OpenSubsonic é uma **camada de protocolo**, não um segundo backend.
+OpenSubsonic é uma **camada de protocolo sobre o backend existente**, não um segundo catálogo.
 
 ```text
 cliente OpenSubsonic
-      ↓ /rest/* + credencial de app
-adapter OpenSubsonic
-      ├── LibraryService
-      ├── TrackMediaInfrastructure
-      └── PersonalLibraryService
+      ↓ /rest/*
+adapter
+      ├── biblioteca existente
+      ├── streaming existente
+      └── dados pessoais existentes
               ↓
-       SQLite + MUSIC_DIR existentes
+       SQLite + MUSIC_DIR
 ```
 
-O subset inicial cobre capabilities, `getUser`, biblioteca/artistas/álbuns/faixas, navegação, `search3`, HTTP Range, artwork, lyrics, playlists manuais, favoritos e scrobble. Endpoints fora do subset falham explicitamente em vez de simular sucesso.
+Invariantes:
 
-IDs de artista/álbum são projeções opacas determinísticas; `track.id` continua sendo o ID da música. Campos de protocolo como `path` são opacos e nunca contêm `filePath` ou `MUSIC_DIR`.
+- autenticação usa credencial de app vinculada ao usuário;
+- ownership deriva da credencial autenticada;
+- IDs/projeções de protocolo não expõem path físico;
+- streaming reutiliza as mesmas fronteiras de confinement/Range/transcode;
+- endpoints fora do subset suportado falham explicitamente;
+- compatibilidade real de clientes é documentada na matriz própria, não nesta arquitetura nem no status de uma issue histórica.
 
-Streaming usa a mesma infraestrutura nativa de confinement, arquivo regular, Range e transcoding. Estado pessoal usa o `userId` derivado da API key e continua coerente com o frontend.
-
-O rate limiter possui cardinalidade máxima e falha fechado sob churn de subjects. O lifecycle do store de credenciais pertence ao `ServerInfrastructure`, junto dos demais recursos de processo; `index.ts` apenas faz wiring.
-
-O CI usa cliente HTTP/fixtures locais para contrato, bootstrap e ownership. Symfonium, Feishin e Tempo/Tempus são alvos de validação manual. A issue #264 só deve ser fechada após registrar evidência real de pelo menos dois clientes autenticando, listando a biblioteca e reproduzindo áudio.
-
-Detalhes: `open-subsonic.md`.
+Fonte canônica: [`open-subsonic.md`](open-subsonic.md).
 
 ## PWA e offline
 
-O cache estático contém apenas shell/assets públicos. Conteúdo autenticado de `/api/*` não é cacheado como parte do app shell.
+O app shell público pode usar cache estático; respostas autenticadas de `/api/*` não são tratadas como shell compartilhável.
 
-Áudio offline usa namespace por usuário e separa artefato físico de intenção lógica:
+Downloads offline têm namespace por usuário e o service worker deve saber qual identidade está associada ao client antes de servir áudio privado.
 
-```text
-home-music:offline-tracks:v2:<userId>      # manifesto físico
-home-music:offline-references:v1:<userId>  # referências lógicas
-home-music-offline-audio-v2-<userId>       # bytes no Cache Storage
-```
+Mudança de usuário, logout, remoção de conteúdo e evolução do formato do cache devem preservar isolamento e evitar reutilização silenciosa de bytes pertencentes a outro contexto.
 
-O service worker usa capability **v4** e associa cada client/aba ao usuário autenticado antes de servir `/offline-audio/<trackId>`. A v4 também anuncia `backgroundFetch` quando a API existe no registro ativo.
+Fonte canônica: [`pwa.md`](pwa.md) e [`offline-downloads.md`](offline-downloads.md).
 
-O scheduler global continua limitado a 3 downloads simultâneos e usa `userId + trackId` como chave. Download individual, lote desktop, playlist e pasta reutilizam esse mesmo pipeline; uma faixa compartilhada por várias referências possui **um único artefato físico**.
+## Administração
 
-```text
-artefato físico trackId
-        ↑
-        ├── referência individual
-        ├── playlist A
-        ├── playlist B
-        └── pasta X
-```
+Administração é uma projeção de capacidades do backend para `admin`; ela não cria uma fronteira de autorização paralela no frontend.
 
-Playlists e pastas persistem snapshots lógicos. Mudanças posteriores ficam visíveis como conteúdo desatualizado até atualização explícita. Remover uma coleção ou referência individual só coleta os bytes quando nenhuma outra referência do mesmo usuário ainda depende da faixa.
+Superfícies incluem biblioteca, importação, integridade, metadata, usuários, quarentena e histórico operacional. **Minha conta** é autosserviço do usuário autenticado e inclui senha/sessões, credenciais OpenSubsonic e portabilidade pessoal conforme as capacidades atuais.
 
-Downloads `tracks:v2` existentes antes da camada de referências são migrados conservadoramente como intenção individual para impedir cleanup destrutivo. Jobs em voo revalidam a existência de referências antes de publicar o manifesto físico, fechando a corrida com remoção concorrente.
+Composição de UX: [`administration-ui.md`](administration-ui.md).
 
-Em navegadores com Background Fetch, a transferência de uma faixa pode ser delegada ao navegador. No `backgroundfetchsuccess`, o worker valida a registration `userId + trackId`, exige uma única resposta completa same-origin para a rota de streaming e grava os bytes somente no cache do proprietário. Ele **não publica o manifesto físico**; quando a página volta a executar, o fluxo normal confirma o cache e revalida a referência lógica antes de marcar a faixa como disponível.
+## Produção e privilégios
 
-Navegadores sem a API continuam no `fetch()` foreground. Safari/iPhone/iPad permanecem nesse fallback enquanto não houver suporte. A matriz de hardware da #81 foi concluída e a issue encerrada; suporte de API continua não substituindo os limites reais de cada plataforma, e fechar/recarregar a aba ainda não é tratado como garantia de retomada/publicação.
+A aplicação roda sob systemd. Operações privilegiadas devem passar pelo fluxo suportado e por helper de catálogo fechado, não por execução genérica de `systemctl` vinda do produto.
 
-Detalhes: `offline-downloads.md` e `pwa.md`.
-
-## Backup e restore
-
-Backup usa snapshot consistente do SQLite e manifesto verificado. A biblioteca física em `MUSIC_DIR` **não** faz parte do artefato e precisa de backup próprio.
-
-Restore é offline, valida o artefato antes da troca, cria snapshot de rollback e tenta restaurar o estado anterior em falha pós-troca.
-
-Detalhes em `backup-restore.md`.
-
-## Liveness e readiness
-
-Endpoints:
+Fluxo normal após merge:
 
 ```text
-GET /health      público, liveness mínimo
-GET /ready       público, readiness mínimo
-GET /api/health  autenticado, diagnóstico detalhado
+prod:status
+-> prod:check
+-> prod:backup
+-> prod:deploy
+-> prod:verify
 ```
 
-`/ready` exige frontend preparado em produção, autenticação configurada e biblioteca carregável/pronta.
+A necessidade de backup depende do risco/política, mas migrations e dados nunca devem ser tratados como rollback trivial de código.
 
-## Ciclo de vida e systemd
+Runbook: [`PRODUCTION.md`](PRODUCTION.md).
 
-O processo registra handlers de shutdown e fecha Fastify/SQLite de forma coordenada.
+## Qualidade e CI
 
-`scripts/install-systemd.sh`:
-
-- restringe permissões de `.env`, `data/` e SQLite;
-- para o serviço antes de `npm ci`/build no modo update;
-- valida artefatos e unit;
-- executa `systemctl daemon-reload`;
-- habilita/reinicia a unidade;
-- confirma que o serviço terminou ativo;
-- aplica hardening systemd.
-
-Depois de merge:
+O baseline local de engenharia é:
 
 ```bash
-git switch main
-git pull --ff-only origin main
-npm run service:update
+npm run check
 ```
 
-## Qualidade e gates de CI
+Ele cobre typecheck, testes funcionais e build.
 
-O workflow normal de PR/push (`.github/workflows/ci.yml`) mantém um único job de validação:
+O **workflow** `.github/workflows/ci.yml` é a fonte executável do gate obrigatório. Atualmente o CI acrescenta ao baseline:
 
-```text
-npm ci --no-audit --no-fund
--> npm run check
-   -> typecheck
-   -> testes funcionais
-   -> build
-```
+- `npm run test:security`;
+- `npm run smoke:backup-restore`;
+- instalação do Chromium do Playwright;
+- E2E focado `e2e/personal-data-import.spec.ts` com um worker.
 
-Checks pesados continuam disponíveis, mas são direcionados pelo risco da mudança em vez de fazerem parte do custo fixo de todo PR:
+Outras suítes, benchmarks e smokes continuam direcionados pelo risco da mudança, salvo quando forem explicitamente promovidos ao workflow obrigatório.
 
-- `npm run test:security` para fronteiras sensíveis de autenticação/administração/importação;
-- `npm run test:ops` para contratos shell de systemd/Tailscale;
-- `npm run test:e2e` para integração browser/fullstack crítica;
-- benchmarks para risco de escala/performance;
-- smokes para build/serviço/backup/restore de produção.
+Política: [`testing-and-quality.md`](testing-and-quality.md).
 
-O workflow `audit.yml` é separado do CI normal e roda semanalmente ou sob demanda. Ele executa `npm run test:policy` e `npm audit --audit-level=high` tanto na raiz quanto no workspace E2E.
+## Documentação arquitetural
 
-A política canônica de seleção dos gates está em `testing-and-quality.md`. Mudanças no head depois de um run/review verde invalidam essa evidência como gate final, conforme `AGENTS.md`.
+Para evitar que esta doc volte a acumular status temporário:
 
-## Segurança resumida
+- requisitos detalhados de feature ficam na doc de domínio;
+- status de execução fica em issues/PRs/roadmap;
+- planos futuros usam `*-plan.md` ou ADR/issue explícita;
+- milestones encerrados e snapshots substituídos ficam em [`history/`](history/);
+- mudanças de topologia, ownership, fronteira de segurança ou persistência atualizam este arquivo no mesmo PR.
 
-- backend é a fronteira de autorização;
-- produção remota prefere loopback + Tailscale Serve;
-- Funnel é opcional e conscientemente público;
-- cookies `HttpOnly`/`SameSite=Strict` e `Secure` em HTTPS;
-- login possui proteção por IP/identidade e limites globais de verificação de senha;
-- mutações protegidas por sessão + header da aplicação;
-- API keys OpenSubsonic são separadas da sessão/senha, revogáveis e persistidas somente em forma hash;
-- query string não entra nos logs HTTP, inclusive caminhos explícitos de erro;
-- paths físicos não são aceitos como autoridade do cliente e não são expostos em `/rest/*`;
-- streaming/filesystem revalidam confinement e arquivos regulares;
-- importação URL aplica proteção SSRF;
-- providers externos usam isolamento/timeout;
-- Jamendo reaplica licença/download no backend antes da aquisição física;
-- operações destrutivas são explícitas;
-- normalização lógica não escreve em arquivos e exige admin;
-- Integrity é read-only;
-- dependências usam lockfile + `npm ci`;
-- CI normal protege typecheck, testes funcionais e build; segurança, operação, E2E, performance e smokes entram de forma direcionada pelo risco, com audit de dependências separado.
+O snapshot detalhado anterior a esta consolidação foi preservado em [`history/architecture-before-2026-09-doc-audit.md`](history/architecture-before-2026-09-doc-audit.md) apenas para consulta histórica.
