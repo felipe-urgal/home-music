@@ -106,6 +106,42 @@ test('provider gateway deduplicates concurrent equivalent requests', async () =>
   assert.equal(calls, 1);
 });
 
+test('provider gateway lets a deduplicated consumer cancel without aborting shared work', async () => {
+  const cache = memoryCache();
+  let calls = 0;
+  let release!: (value: { id: string }) => void;
+  const blocked = new Promise<{ id: string }>(resolve => { release = resolve; });
+  const gateway = new LibraryAssistantProviderGateway(cache.port, { minIntervalMs: 0 });
+
+  const first = gateway.query({
+    provider,
+    cacheKey: 'shared-cancel',
+    execute: async () => {
+      calls += 1;
+      return blocked;
+    },
+    normalize: normalizeRecording
+  });
+
+  const controller = new AbortController();
+  const second = gateway.query({
+    provider,
+    cacheKey: 'shared-cancel',
+    signal: controller.signal,
+    execute: async () => {
+      calls += 1;
+      return { id: 'should-not-run' };
+    },
+    normalize: normalizeRecording
+  });
+
+  controller.abort();
+  await assert.rejects(second, LibraryAssistantProviderAbortedError);
+  release({ id: 'recording-1' });
+  assert.deepEqual(await first, { value: { id: 'recording-1' }, cache: 'miss' });
+  assert.equal(calls, 1);
+});
+
 test('provider gateway rate limits requests from the same provider with fake clock', async () => {
   const cache = memoryCache();
   let nowMs = 1_000;
@@ -178,8 +214,8 @@ test('provider gateway rejects malformed response and sensitive cache keys', asy
     LibraryAssistantProviderResponseError
   );
 
-  await assert.rejects(
-    gateway.query({
+  assert.throws(
+    () => gateway.query({
       provider,
       cacheKey: 'token=secret-value',
       execute: async () => ({ id: 'never' }),
@@ -189,34 +225,48 @@ test('provider gateway rejects malformed response and sensitive cache keys', asy
   );
 });
 
-test('provider gateway timeout and caller cancellation stop the provider signal', async () => {
+test('provider gateway enforces wall-clock timeout even when execute ignores AbortSignal', async () => {
   const cache = memoryCache();
   const gateway = new LibraryAssistantProviderGateway(cache.port, { minIntervalMs: 0 });
-  const waitForAbort = ({ signal }: { signal: AbortSignal }) => new Promise<unknown>((_resolve, reject) => {
-    signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })), { once: true });
-  });
+  let providerSignal: AbortSignal | null = null;
 
   await assert.rejects(
     gateway.query({
       provider,
       cacheKey: 'timeout',
       timeoutMs: 100,
-      execute: waitForAbort,
+      execute: async ({ signal }) => {
+        providerSignal = signal;
+        return new Promise<unknown>(() => {});
+      },
       normalize: normalizeRecording
     }),
     LibraryAssistantProviderTimeoutError
   );
 
+  assert.equal(providerSignal?.aborted, true);
+});
+
+test('provider gateway caller cancellation returns promptly even when execute ignores AbortSignal', async () => {
+  const cache = memoryCache();
+  const gateway = new LibraryAssistantProviderGateway(cache.port, { minIntervalMs: 0 });
   const controller = new AbortController();
+  let providerSignal: AbortSignal | null = null;
+
   const pending = gateway.query({
     provider,
     cacheKey: 'cancel',
     signal: controller.signal,
-    execute: waitForAbort,
+    execute: async ({ signal }) => {
+      providerSignal = signal;
+      return new Promise<unknown>(() => {});
+    },
     normalize: normalizeRecording
   });
   controller.abort();
+
   await assert.rejects(pending, LibraryAssistantProviderAbortedError);
+  assert.equal(providerSignal?.aborted, true);
 });
 
 test('provider cache failures degrade to a live normalized result', async () => {
