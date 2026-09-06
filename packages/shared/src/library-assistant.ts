@@ -1,53 +1,186 @@
-export const LIBRARY_ASSISTANT_CONTENT_HASH_ALGORITHM = 'sha256' as const;
-export const LIBRARY_ASSISTANT_CONTENT_HASH_VERSION = 1 as const;
+export const LIBRARY_ASSISTANT_CONTRACT_VERSION = 1 as const;
+export const LIBRARY_ASSISTANT_ALGORITHM_VERSION = 1 as const;
 
-export type LibraryAssistantContentIdentity = {
-  algorithm: typeof LIBRARY_ASSISTANT_CONTENT_HASH_ALGORITHM;
-  version: typeof LIBRARY_ASSISTANT_CONTENT_HASH_VERSION;
-  digest: string;
-  sizeBytes: number;
-};
-
-export type LibraryAssistantJobKind = 'content-hash';
-export type LibraryAssistantJobStatus =
+export type LibraryAssistantCapability = 'metadata' | 'artwork' | 'lyrics';
+export type LibraryAssistantRunStatus =
   | 'queued'
   | 'running'
   | 'completed'
   | 'failed'
   | 'cancelled'
   | 'stale';
+export type LibraryAssistantSuggestionStatus =
+  | 'pending'
+  | 'review'
+  | 'applied'
+  | 'rejected'
+  | 'stale'
+  | 'failed';
+export type LibraryAssistantConfidenceBand = 'low' | 'medium' | 'high';
+export type LibraryAssistantProvenanceSource =
+  | 'local'
+  | 'musicbrainz'
+  | 'cover-art-archive'
+  | 'lrclib'
+  | 'acoustid'
+  | 'generated'
+  | 'local-transcription';
 
-export type LibraryAssistantJobError = {
+export type LibraryAssistantMetadataField = 'title' | 'artist' | 'album' | 'albumArtist';
+
+export type LibraryAssistantReasonCode =
+  | 'local-review'
+  | 'metadata-missing'
+  | 'metadata-conflict'
+  | 'exact-text-match'
+  | 'normalized-text-match'
+  | 'duration-close'
+  | 'duration-mismatch'
+  | 'strong-external-id'
+  | 'album-context'
+  | 'source-conflict'
+  | 'provider-match';
+
+export type LibraryAssistantProvenance = {
+  source: LibraryAssistantProvenanceSource;
+  providerVersion: string | null;
+  externalId: string | null;
+};
+
+export type LibraryAssistantTextMatchEvidence = {
+  type: 'text-match';
+  version: typeof LIBRARY_ASSISTANT_CONTRACT_VERSION;
+  field: LibraryAssistantMetadataField;
+  match: 'exact' | 'normalized' | 'different';
+  sourceValue: string;
+  candidateValue: string;
+};
+
+export type LibraryAssistantDurationDeltaEvidence = {
+  type: 'duration-delta';
+  version: typeof LIBRARY_ASSISTANT_CONTRACT_VERSION;
+  deltaSeconds: number;
+};
+
+export type LibraryAssistantExternalIdEvidence = {
+  type: 'external-id';
+  version: typeof LIBRARY_ASSISTANT_CONTRACT_VERSION;
+  source: LibraryAssistantProvenanceSource;
+  id: string;
+};
+
+export type LibraryAssistantAlbumContextEvidence = {
+  type: 'album-context';
+  version: typeof LIBRARY_ASSISTANT_CONTRACT_VERSION;
+  matchedTracks: number;
+  totalTracks: number;
+};
+
+export type LibraryAssistantSourceConflictEvidence = {
+  type: 'source-conflict';
+  version: typeof LIBRARY_ASSISTANT_CONTRACT_VERSION;
+  field: LibraryAssistantMetadataField | 'artwork' | 'lyrics';
+  sources: LibraryAssistantProvenanceSource[];
+};
+
+export type LibraryAssistantFileContextEvidence = {
+  type: 'file-context';
+  version: typeof LIBRARY_ASSISTANT_CONTRACT_VERSION;
+  fileName: string;
+  folderName: string | null;
+};
+
+export type LibraryAssistantEvidence =
+  | LibraryAssistantTextMatchEvidence
+  | LibraryAssistantDurationDeltaEvidence
+  | LibraryAssistantExternalIdEvidence
+  | LibraryAssistantAlbumContextEvidence
+  | LibraryAssistantSourceConflictEvidence
+  | LibraryAssistantFileContextEvidence;
+
+export type LibraryAssistantMetadataTarget = {
+  capability: 'metadata';
+  trackId: string;
+  field: LibraryAssistantMetadataField;
+  currentValue: string;
+  suggestedValue: string;
+};
+
+export type LibraryAssistantArtworkTarget = {
+  capability: 'artwork';
+  trackId: string;
+  candidateId: string;
+  label: string | null;
+};
+
+export type LibraryAssistantLyricsTarget = {
+  capability: 'lyrics';
+  trackId: string;
+  candidateId: string;
+  synchronized: boolean;
+  language: string | null;
+};
+
+export type LibraryAssistantSuggestionTarget =
+  | LibraryAssistantMetadataTarget
+  | LibraryAssistantArtworkTarget
+  | LibraryAssistantLyricsTarget;
+
+export type LibraryAssistantSuggestion = {
+  id: string;
+  runId: string;
+  capability: LibraryAssistantCapability;
+  status: LibraryAssistantSuggestionStatus;
+  confidence: LibraryAssistantConfidenceBand;
+  reasonCodes: LibraryAssistantReasonCode[];
+  evidence: LibraryAssistantEvidence[];
+  provenance: LibraryAssistantProvenance;
+  target: LibraryAssistantSuggestionTarget;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type LibraryAssistantRunError = {
   code: string;
   message: string;
   action: string;
 };
 
-export type LibraryAssistantJobProgress = {
-  completed: number;
+export type LibraryAssistantRunSummary = {
   total: number;
+  pending: number;
+  review: number;
+  applied: number;
+  rejected: number;
+  stale: number;
+  failed: number;
 };
 
-export type LibraryAssistantJob = {
+export type LibraryAssistantRun = {
   id: string;
-  kind: LibraryAssistantJobKind;
-  status: LibraryAssistantJobStatus;
+  capability: LibraryAssistantCapability;
+  status: LibraryAssistantRunStatus;
   libraryRevision: number;
-  progress: LibraryAssistantJobProgress;
+  algorithmVersion: typeof LIBRARY_ASSISTANT_ALGORITHM_VERSION;
+  summary: LibraryAssistantRunSummary;
   createdAt: string;
   startedAt: string | null;
   finishedAt: string | null;
-  error: LibraryAssistantJobError | null;
+  error: LibraryAssistantRunError | null;
 };
 
-export type AdminLibraryAssistantJobsResponse = {
-  jobs: LibraryAssistantJob[];
+export type AdminLibraryAssistantStartRunRequest = {
+  capability: LibraryAssistantCapability;
 };
 
-export type AdminLibraryAssistantJobResponse = {
-  job: LibraryAssistantJob;
+export type AdminLibraryAssistantRunResponse = {
+  run: LibraryAssistantRun;
 };
 
-export type AdminLibraryAssistantStartJobRequest = {
-  kind: LibraryAssistantJobKind;
+export type AdminLibraryAssistantRunsResponse = {
+  runs: LibraryAssistantRun[];
+};
+
+export type AdminLibraryAssistantSuggestionsResponse = {
+  suggestions: LibraryAssistantSuggestion[];
 };
