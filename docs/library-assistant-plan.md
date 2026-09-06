@@ -8,6 +8,8 @@ A Administração atual já permite corrigir metadados e capas de forma segura e
 
 A Fase 15 pretende transformar esse trabalho repetitivo em um fluxo **assistido, explicável e progressivamente autônomo**, onde o sistema resolve casos fortes e apresenta somente exceções ao administrador.
 
+O planejamento também incorpora um problema visual comprovado: quando uma faixa não possui capa, biblioteca, player e controles do sistema precisam apresentar a mesma identidade visual sem transformar a simples ausência de artwork em mutação automática de banco.
+
 ## Autoridades que não mudam
 
 O Assistente não cria uma segunda biblioteca nem substitui os owners atuais:
@@ -18,11 +20,13 @@ O Assistente não cria uma segunda biblioteca nem substitui os owners atuais:
 - `track_metadata_overrides` continua sendo a forma não destrutiva de corrigir metadata textual;
 - `track_cover_overrides` continua sendo a forma não destrutiva de corrigir capa;
 - `library_metadata_aliases` continua sendo a autoridade de normalização lógica;
+- `ArtworkFallback`/política atual continua sendo a origem visual do caso sem capa;
 - o pipeline atual de lyrics (`lyrics.ts` → `LyricsResponse` → consumidores web/OpenSubsonic) deve ser evoluído, não duplicado;
+- Media Session/PWA continuam sendo projeções do playback atual, não outro player;
 - jobs pesados reutilizam fila/backpressure/observabilidade existentes;
 - nenhuma origem externa escreve diretamente em arquivos da biblioteca.
 
-## Arquitetura planejada
+## Arquitetura planejada do Assistente
 
 ```text
 LibraryService / biblioteca efetiva
@@ -79,7 +83,8 @@ Regras obrigatórias:
 - sidecar de lyrics já existente não é substituído automaticamente por provider externo;
 - rejeição explícita deve impedir loop de sugestão sem nova evidência material;
 - mudança entre análise e aplicação torna a sugestão `stale` e exige revalidação;
-- restore/undo continua usando a autoridade de cada domínio.
+- restore/undo continua usando a autoridade de cada domínio;
+- renderizar fallback visual nunca cria por si só um cover override.
 
 ## Providers e estratégia gratuita
 
@@ -108,11 +113,154 @@ Fallback local opcional para:
 
 Nenhum áudio precisa sair da máquina. Modelos não são versionados no repositório nem baixados silenciosamente no startup.
 
-## Capas geradas pelo Home Music
+## Artwork — uma única identidade de fallback
 
-Quando não existir artwork oficial/externo seguro, uma evolução P2 pode gerar capa **determinística e local**, sem IA generativa, a partir de artista/álbum/título e da linguagem visual do Home Music.
+A Fase 15 não deve criar uma regra de capa diferente por tela.
 
-A imagem deve ser marcada como `generated` / `Gerada pelo Home Music` e nunca apresentada como capa oficial. Persistência continua usando cover override.
+A decisão planejada é separar **capa efetiva** de **fallback visual derivado**:
+
+```text
+capa efetiva?
+  ├─ sim → cover override / capa física canônica
+  └─ não → ArtworkFallbackIdentity derivada
+             ├─ biblioteca/cards
+             ├─ player Agora
+             ├─ imagem estática para Media Session
+             └─ opcional: materializar → cover override
+```
+
+O fallback visual **não é uma terceira capa persistida**.
+
+### Identidade determinística
+
+A [#321](https://github.com/felipe-urgal/home-music/issues/321) passa a definir uma identidade única e versionada para os casos sem capa, reutilizando `ArtworkFallback` em vez de substituí-lo por outra engine.
+
+A decisão visual pode derivar de:
+
+- artista;
+- álbum;
+- título quando apropriado;
+- identidade lógica estável;
+- initials/texto curto;
+- seed/hash sem path físico;
+- variante/tokens de composição;
+- versão do algoritmo.
+
+A mesma entrada + versão deve produzir a mesma decisão visual.
+
+### Direção visual
+
+A composição deve parecer parte do Home Music:
+
+- vinil/disco como motivo musical principal;
+- casa/identidade Home Music quando fizer sentido;
+- fundo escuro/gradiente consistente com os tokens atuais;
+- label/iniciais legíveis;
+- bom resultado em thumbnail e artwork grande;
+- assets próprios/licenciados;
+- nenhuma tentativa de imitar interface/capa proprietária de outro produto.
+
+### Renderer visual x renderer estático
+
+Quando possível, separar:
+
+1. descriptor/decisão pura e testável;
+2. renderer React/CSS para a aplicação;
+3. renderer estático somente quando uma superfície exigir bytes/URL de imagem.
+
+Evitar:
+
+- screenshot de componente React no backend;
+- duplicar seed/cores/iniciais manualmente entre web e server;
+- rasterizar BLOB para cada card da biblioteca;
+- criar framework gráfico genérico sem necessidade.
+
+## Artwork gerada e persistida
+
+A #321 também preserva a evolução opcional de gerar uma capa local persistente.
+
+Essa camada é diferente do fallback visual automático:
+
+- geração local e determinística;
+- sem IA generativa;
+- ação explícita/aprovada;
+- passa pela validação canônica do cover override;
+- registra `generated`/`generatorVersion` quando o modelo suportar;
+- muda `coverVersion`/revision pelos mecanismos existentes;
+- restore remove o override e volta à capa física/fallback.
+
+Não persistir uma capa apenas porque a faixa foi exibida sem artwork.
+
+## Media Session e tela bloqueada
+
+A [#325](https://github.com/felipe-urgal/home-music/issues/325) define a integração visual com controles do sistema.
+
+### Com capa efetiva
+
+Publicar no `navigator.mediaSession.metadata` a mesma artwork canônica da faixa, reutilizando endpoint/versionamento atuais em vez de criar outra API de capa.
+
+### Sem capa efetiva
+
+Publicar uma **imagem estática** derivada da identidade de fallback da #321.
+
+Isso não cria `track_cover_overrides`.
+
+### Limite assumido
+
+O planejamento assume de forma conservadora que `MediaMetadata.artwork` é uma representação estática controlada pelo browser/SO.
+
+Portanto:
+
+- não prometer vinil girando na lock screen;
+- não atualizar frames de artwork em loop;
+- não depender de GIF/video/canvas animado como requisito de Media Session;
+- ausência de suporte degrada sem quebrar playback;
+- diferenças entre iOS/Android/browser precisam ser validadas e documentadas em hardware real.
+
+### Offline
+
+Reprodução offline não consulta MusicBrainz, CAA ou qualquer provider externo. Artwork real/fallback deve usar recursos locais/caches derivados compatíveis com o manifesto offline existente e preservar isolamento por usuário.
+
+## Player Agora — vinil animado
+
+A [#326](https://github.com/felipe-urgal/home-music/issues/326) concentra a animação **dentro da aplicação**.
+
+Direção planejada:
+
+```text
+playing → vinil gira
+paused  → vinil para
+resume  → continua visualmente sem reset grosseiro
+track change → troca artwork sem frame stale
+```
+
+A artwork real ou fallback pode funcionar como label central do vinil ou composição equivalente validada por protótipo/screenshot.
+
+### Performance
+
+Preferir animação compositor-friendly:
+
+- `transform`/CSS quando suficiente;
+- sem canvas redraw contínuo se não houver necessidade;
+- sem `setInterval` de alta frequência para controlar ângulo;
+- sem filtros pesados por frame;
+- nenhum trabalho contínuo quando componente/tela não estiver ativo.
+
+### Acessibilidade
+
+`prefers-reduced-motion` é obrigatório:
+
+- com `reduce`, não existe rotação contínua;
+- funcionalidade do player permanece integral;
+- movimento nunca é o único indicador de estado.
+
+O vinil é decorativo e não cria foco/controle adicional.
+
+### Escopo inicial
+
+Aplicar primeiro em **Agora / Tocando agora**.
+
+Não espalhar rotação por biblioteca, listas, resultados de busca, lock screen ou ícone da PWA sem nova evidência de valor/performance.
 
 ## Lyrics — resolução planejada
 
@@ -191,6 +339,8 @@ Não criar override em centenas de faixas para resolver um problema que é corre
 - testes usam letras sintéticas, não letras comerciais completas;
 - Home Music não vira proxy público/catálogo de letras;
 - artwork gerado localmente não é anunciado como oficial;
+- Media Session nunca recebe URL externa arbitrária de provider;
+- fallback derivado não contém path físico/secret e não cria mutação automática;
 - nenhuma API paga/cloud é requisito do happy path;
 - uso comercial futuro exige nova revisão de termos/licenças dos providers.
 
@@ -202,35 +352,42 @@ Não criar override em centenas de faixas para resolver um problema que é corre
 - [#312](https://github.com/felipe-urgal/home-music/issues/312) — MusicBrainz + matching explicável;
 - [#313](https://github.com/felipe-urgal/home-music/issues/313) — revisão/aplicação segura na Administração.
 
-### P1 — enriquecimento e autonomia
+### P1 — enriquecimento, identidade visual e autonomia
 
 - [#314](https://github.com/felipe-urgal/home-music/issues/314) — Cover Art Archive + cover override;
 - [#315](https://github.com/felipe-urgal/home-music/issues/315) — lyrics externas reutilizando pipeline atual;
 - [#316](https://github.com/felipe-urgal/home-music/issues/316) — lyrics sincronizadas no player/desktop/offline/OpenSubsonic;
 - [#318](https://github.com/felipe-urgal/home-music/issues/318) — autonomia progressiva após scan/import;
-- [#319](https://github.com/felipe-urgal/home-music/issues/319) — normalização assistida com evidência externa.
+- [#319](https://github.com/felipe-urgal/home-music/issues/319) — normalização assistida com evidência externa;
+- [#321](https://github.com/felipe-urgal/home-music/issues/321) — identidade/fallback canônico de artwork; materialização persistente permanece opcional;
+- [#325](https://github.com/felipe-urgal/home-music/issues/325) — Media Session + fallback estático da tela bloqueada;
+- [#326](https://github.com/felipe-urgal/home-music/issues/326) — vinil animado no player Agora.
 
-### P2 — casos difíceis e fallbacks locais
+### P2 — casos difíceis e fallbacks locais pesados/opcionais
 
 - [#320](https://github.com/felipe-urgal/home-music/issues/320) — Chromaprint + AcoustID opcional;
-- [#321](https://github.com/felipe-urgal/home-music/issues/321) — artwork determinístico local;
-- [#322](https://github.com/felipe-urgal/home-music/issues/322) — Whisper local para transcrição/alinhamento.
+- [#322](https://github.com/felipe-urgal/home-music/issues/322) — Whisper local para transcrição/alinhamento;
+- camada B da #321 — materialização de artwork local como cover override, sem bloquear o fallback visual.
 
 ## Ordem recomendada
 
 1. #311;
 2. #312;
 3. #313;
-4. #314 + #315 + #319 em paralelo onde não houver conflito;
-5. #316;
-6. #318 após evidência de qualidade do fluxo manual;
-7. #320/#321/#322 como fallbacks opcionais.
+4. #314 + #315 + #319 em paralelo;
+5. camada A da #321 em paralelo com o enriquecimento, pois não depende de CAA;
+6. #325 + #326 em paralelo, compartilhando a mesma resolução de artwork;
+7. #316;
+8. #318 após evidência de qualidade do fluxo manual;
+9. #320/#322 e camada B da #321 como fallbacks opcionais.
 
-## Concorrência com a Fase 14
+## Relação com a Fase 14
 
-Em 2026-09-06 existe trabalho ativo da Fase 14 no PR #317, relacionado à aplicação transacional da importação pessoal. Antes de iniciar #311/#312, conferir novamente `main`, #293/#295 e PRs abertos para não introduzir matcher/serviço concorrente.
+O PR #317, que estava ativo durante o planejamento inicial, foi mergeado em 2026-09-06.
 
-A Fase 15 não deve ser implementada dentro do PR #317 nem alterar o escopo dele.
+As issues #293/#295 ainda são as responsáveis por reconciliar e encerrar o estado executivo da Fase 14. A Fase 15 não deve absorver essa manutenção nem declarar a Fase 14 encerrada por conta própria.
+
+Antes de iniciar #311/#312 ou qualquer trabalho que toque matching/`LibraryService`, conferir novamente `main`, #293/#295 e PRs abertos.
 
 ## Definition of Done por entrega
 
@@ -248,8 +405,16 @@ Cada issue segue `AGENTS.md`:
 - manter CI verde no head final;
 - não fazer merge sem autorização explícita do usuário.
 
+Para artwork/player, acrescentar:
+
+- uma única identidade de fallback entre superfícies;
+- fallback visual não cria cover override automaticamente;
+- Media Session assume imagem estática e degrada por capability;
+- `prefers-reduced-motion` para animação contínua;
+- validação de lock screen/PWA em hardware real quando fizer parte do aceite.
+
 ## Relação com roadmap/índice corrente
 
-Enquanto a Fase 14 estiver ativa, `docs/roadmap.md` e `docs/README.md` continuam representando o ciclo corrente. A #310 e este documento registram a próxima fase sem declarar capacidades não implementadas como estado da `main`.
+`docs/roadmap.md` e `docs/README.md` continuam representando o ciclo corrente da `main`. A #310 e este documento registram a próxima fase sem declarar capacidades não implementadas como estado executável.
 
-Quando a Fase 15 for priorizada para implementação — ou quando o estado corrente da Fase 14 for reconciliado após o PR ativo — `docs/roadmap.md` e `docs/README.md` devem ser atualizados no mesmo fluxo, sem reescrever histórico para aparentar conclusão.
+Como o #317 foi mergeado, a Fase 14 precisa ter #293/#295 e seus documentos reconciliados no fluxo próprio. Quando a Fase 15 for priorizada como ciclo corrente, `docs/roadmap.md` e `docs/README.md` devem ser atualizados no mesmo fluxo, sem reescrever histórico para aparentar conclusão.
