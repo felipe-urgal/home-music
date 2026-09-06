@@ -89,6 +89,20 @@ Os limites de entrada vivem em `PERSONAL_DATA_IMPORT_LIMITS`, no pacote comparti
 
 Esta camada é somente a fronteira de validação. Ela não resolve faixas, não altera estado pessoal, não cria mídia e não torna IDs externos autoridade. Preview, matching e aplicação permanecem etapas separadas do fluxo de importação.
 
+## Matching conservador de faixas
+
+A reconciliação usa somente faixas ativas projetadas pela `LibraryService`; itens desativados e qualquer referência fora da biblioteca atual não são candidatos.
+
+A ordem de decisão é deliberadamente conservadora:
+
+1. procurar o `relativePath` exato na biblioteca atual;
+2. antes de aceitar esse path, conferir se os `hints` continuam compatíveis, evitando ligar um bundle antigo a outro conteúdo que passou a ocupar o mesmo caminho;
+3. quando o path não existe mais, permitir reconciliação auxiliar apenas se título, artista, álbum e nome do arquivo coincidirem e as duas durações conhecidas divergirem no máximo 1 segundo;
+4. aceitar a reconciliação auxiliar somente quando existir exatamente um candidato;
+5. com múltiplos candidatos, retornar ambiguidade; com sinal insuficiente ou nenhum candidato, preferir ausência.
+
+Matching por `hints` não é fuzzy search: não usa similaridade textual, ranking, escolha do “melhor” candidato nem cria faixas. O matcher retorna apenas IDs internos já existentes e informações de classificação; paths absolutos não fazem parte do resultado.
+
 ## Invariantes operacionais
 
 A exportação é read-only:
