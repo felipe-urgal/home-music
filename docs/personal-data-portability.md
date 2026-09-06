@@ -103,12 +103,32 @@ A ordem de decisão é deliberadamente conservadora:
 
 Matching por `hints` não é fuzzy search: não usa similaridade textual, ranking, escolha do “melhor” candidato nem cria faixas. O matcher retorna apenas IDs internos já existentes e informações de classificação; paths absolutos não fazem parte do resultado.
 
+## Preview autenticado do import
+
+Um usuário com identidade persistida pode validar e reconciliar um bundle sem aplicar nenhuma mudança:
+
+```http
+POST /api/account/personal-data/import/preview
+Content-Type: application/json
+```
+
+O corpo é o próprio `PersonalDataBundleV1`. A rota aceita até 5 MiB e responde com `Cache-Control: private, no-store`.
+
+A validação continua fail-closed. Bundle, versão, referência ou valor inválido não produz um preview parcial: a API devolve erro HTTP estável antes de executar matching ou qualquer mutação. JSON malformado e payload acima do limite também possuem erros próprios.
+
+Quando a entrada é válida, o preview resume referências por domínio nas classificações `found`, `missing`, `ambiguous` e `conflict`. `conflict` representa um `relativePath` que existe, mas cujos hints indicam que o conteúdo atual não corresponde com segurança ao item exportado.
+
+Os detalhes de referências não resolvidas usam somente informações portáteis do próprio bundle, como `relativePath`, domínio, campo e motivo seguro. IDs internos de faixa, IDs de candidatos e paths absolutos permanecem no plano server-side e não são serializados. A lista de detalhes é limitada por `PERSONAL_DATA_IMPORT_LIMITS.maxPreviewIssues`; as contagens totais continuam exatas e `issuesTruncated` informa quando houve truncamento.
+
+O planner monta uma única interpretação do bundle e preserva internamente a localização e o resultado de cada referência. A futura etapa de aplicação deve reutilizar esse plano em vez de refazer parsing ou matching com regras diferentes.
+
 ## Invariantes operacionais
 
-A exportação é read-only:
+Exportação e preview são read-only:
 
-- não modifica `MUSIC_DIR`;
-- não cria nem altera faixas;
-- não dispara scanner;
-- não cria segunda biblioteca;
-- não concede acesso entre usuários.
+- não modificam `MUSIC_DIR`;
+- não criam nem alteram faixas;
+- não alteram favoritos, playlists, views, histórico, fila ou estado do player durante o preview;
+- não disparam scanner;
+- não criam segunda biblioteca;
+- não concedem acesso entre usuários.
