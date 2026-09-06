@@ -1,6 +1,6 @@
 # Planejamento — Assistente da Biblioteca (Fase 15)
 
-> **Status: PLANEJADO / NÃO IMPLEMENTADO.** Este documento registra a direção aprovada e o backlog da Fase 15. Ele **não descreve comportamento disponível na `main`**. O estado executável continua sendo definido por código/testes e a priorização executiva vive na issue [#310](https://github.com/felipe-urgal/home-music/issues/310).
+> **Status: FUNDAÇÃO IMPLEMENTADA / CAPACIDADES SEGUINTES PLANEJADAS.** A fundação #311 está descrita no contrato canônico [`library-assistant.md`](library-assistant.md). Este documento preserva a direção e o backlog das capacidades posteriores; quando houver divergência, código/testes, a doc canônica e a issue executada têm precedência. A priorização executiva vive na issue [#310](https://github.com/felipe-urgal/home-music/issues/310).
 
 ## Motivação
 
@@ -15,7 +15,8 @@ O planejamento também incorpora um problema visual comprovado: quando uma faixa
 O Assistente não cria uma segunda biblioteca nem substitui os owners atuais:
 
 - `MUSIC_DIR` + scanner continuam sendo a autoridade física;
-- `LibraryService` continua sendo a autoridade do snapshot/revision da biblioteca;
+- `LibraryService` continua sendo a autoridade do snapshot base/revision da biblioteca;
+- a projeção administrativa existente compõe metadata override, normalização, cover override e suas revisions para o snapshot efetivo usado pelo Assistente;
 - `tracks` continua representando metadata física indexada;
 - `track_metadata_overrides` continua sendo a forma não destrutiva de corrigir metadata textual;
 - `track_cover_overrides` continua sendo a forma não destrutiva de corrigir capa;
@@ -26,7 +27,7 @@ O Assistente não cria uma segunda biblioteca nem substitui os owners atuais:
 - jobs pesados reutilizam fila/backpressure/observabilidade existentes;
 - nenhuma origem externa escreve diretamente em arquivos da biblioteca.
 
-## Arquitetura planejada do Assistente
+## Arquitetura do Assistente
 
 ```text
 LibraryService / biblioteca efetiva
@@ -55,7 +56,7 @@ autoridades existentes
   └─ resolução canônica de lyrics
 ```
 
-`LibraryAssistantService` é um **orquestrador de análise e sugestões**. Ele não se torna dono da metadata efetiva, artwork ou lyrics publicadas.
+`LibraryAssistantService` é um **orquestrador de análise e sugestões**. Ele não se torna dono da metadata efetiva, artwork ou lyrics publicadas. A #311 já implementa o lifecycle, os contratos, a persistência auditável, stale protection, cache/provider gateway e API administrativa sem endpoint de aplicação.
 
 ## Confiança explicável
 
@@ -90,7 +91,7 @@ Regras obrigatórias:
 
 ### MusicBrainz
 
-Fonte principal de identidade externa para recordings/artists/releases/release groups. O cliente será server-side, com política vigente de User-Agent, rate limit, cache, timeout e respostas validadas. CI usa fixtures/fakes e não depende da internet pública.
+Fonte principal de identidade externa para recordings/artists/releases/release groups. A infraestrutura genérica de provider já existe na fundação; a integração real entra em #312, server-side, usando User-Agent, rate limit, cache, timeout, cancelamento e respostas validadas. CI usa fixtures/fakes e não depende da internet pública.
 
 ### Cover Art Archive
 
@@ -117,7 +118,7 @@ Nenhum áudio precisa sair da máquina. Modelos não são versionados no reposit
 
 A Fase 15 não deve criar uma regra de capa diferente por tela.
 
-A decisão planejada é separar **capa efetiva** de **fallback visual derivado**:
+A decisão é separar **capa efetiva** de **fallback visual derivado**:
 
 ```text
 capa efetiva?
@@ -133,7 +134,7 @@ O fallback visual **não é uma terceira capa persistida**.
 
 ### Identidade determinística
 
-A [#321](https://github.com/felipe-urgal/home-music/issues/321) passa a definir uma identidade única e versionada para os casos sem capa, reutilizando `ArtworkFallback` em vez de substituí-lo por outra engine.
+A [#321](https://github.com/felipe-urgal/home-music/issues/321) define uma identidade única e versionada para os casos sem capa, reutilizando `ArtworkFallback` em vez de substituí-lo por outra engine. A camada A derivada já está implementada; materialização persistente continua opcional/P2.
 
 A decisão visual pode derivar de:
 
@@ -193,7 +194,7 @@ Não persistir uma capa apenas porque a faixa foi exibida sem artwork.
 
 ## Media Session e tela bloqueada
 
-A [#325](https://github.com/felipe-urgal/home-music/issues/325) define a integração visual com controles do sistema.
+A [#325](https://github.com/felipe-urgal/home-music/issues/325) implementa a integração visual com controles do sistema. O código foi incorporado; validação física de lock screen permanece registrada como QA pós-merge.
 
 ### Com capa efetiva
 
@@ -207,7 +208,7 @@ Isso não cria `track_cover_overrides`.
 
 ### Limite assumido
 
-O planejamento assume de forma conservadora que `MediaMetadata.artwork` é uma representação estática controlada pelo browser/SO.
+O comportamento assume de forma conservadora que `MediaMetadata.artwork` é uma representação estática controlada pelo browser/SO.
 
 Portanto:
 
@@ -215,11 +216,11 @@ Portanto:
 - não atualizar frames de artwork em loop;
 - não depender de GIF/video/canvas animado como requisito de Media Session;
 - ausência de suporte degrada sem quebrar playback;
-- diferenças entre iOS/Android/browser precisam ser validadas e documentadas em hardware real.
+- diferenças entre iOS/Android/browser precisam ser validadas e documentadas quando houver QA físico.
 
 ### Offline
 
-Reprodução offline não consulta MusicBrainz, CAA ou qualquer provider externo. Artwork real/fallback deve usar recursos locais/caches derivados compatíveis com o manifesto offline existente e preservar isolamento por usuário.
+Reprodução offline não consulta MusicBrainz, CAA ou qualquer provider externo. Artwork real/fallback usa recursos locais/caches derivados compatíveis com o manifesto offline existente e preserva isolamento por usuário.
 
 ## Player Agora — vinil animado
 
@@ -348,46 +349,41 @@ Não criar override em centenas de faixas para resolver um problema que é corre
 
 ### P0 — fundação e valor principal
 
-- [#311](https://github.com/felipe-urgal/home-music/issues/311) — fundar o Assistente com contratos, evidências e execução segura;
-- [#312](https://github.com/felipe-urgal/home-music/issues/312) — MusicBrainz + matching explicável;
-- [#313](https://github.com/felipe-urgal/home-music/issues/313) — revisão/aplicação segura na Administração.
+- [x] [#311](https://github.com/felipe-urgal/home-music/issues/311) — fundação de contratos, evidências, stale, execução segura e API de lifecycle;
+- [ ] [#312](https://github.com/felipe-urgal/home-music/issues/312) — MusicBrainz + matching explicável;
+- [ ] [#313](https://github.com/felipe-urgal/home-music/issues/313) — revisão/aplicação segura na Administração.
 
 ### P1 — enriquecimento, identidade visual e autonomia
 
-- [#314](https://github.com/felipe-urgal/home-music/issues/314) — Cover Art Archive + cover override;
-- [#315](https://github.com/felipe-urgal/home-music/issues/315) — lyrics externas reutilizando pipeline atual;
-- [#316](https://github.com/felipe-urgal/home-music/issues/316) — lyrics sincronizadas no player/desktop/offline/OpenSubsonic;
-- [#318](https://github.com/felipe-urgal/home-music/issues/318) — autonomia progressiva após scan/import;
-- [#319](https://github.com/felipe-urgal/home-music/issues/319) — normalização assistida com evidência externa;
-- [#321](https://github.com/felipe-urgal/home-music/issues/321) — identidade/fallback canônico de artwork; materialização persistente permanece opcional;
-- [#325](https://github.com/felipe-urgal/home-music/issues/325) — Media Session + fallback estático da tela bloqueada;
-- [#326](https://github.com/felipe-urgal/home-music/issues/326) — vinil animado no player Agora.
+- [ ] [#314](https://github.com/felipe-urgal/home-music/issues/314) — Cover Art Archive + cover override;
+- [ ] [#315](https://github.com/felipe-urgal/home-music/issues/315) — lyrics externas reutilizando pipeline atual;
+- [ ] [#316](https://github.com/felipe-urgal/home-music/issues/316) — lyrics sincronizadas no player/desktop/offline/OpenSubsonic;
+- [ ] [#318](https://github.com/felipe-urgal/home-music/issues/318) — autonomia progressiva após scan/import;
+- [ ] [#319](https://github.com/felipe-urgal/home-music/issues/319) — normalização assistida com evidência externa;
+- [~] [#321](https://github.com/felipe-urgal/home-music/issues/321) — identidade/fallback canônico implementado; materialização persistente permanece opcional;
+- [x] [#325](https://github.com/felipe-urgal/home-music/issues/325) — Media Session + fallback estático da tela bloqueada, com QA físico rastreado;
+- [ ] [#326](https://github.com/felipe-urgal/home-music/issues/326) — vinil animado no player Agora.
 
 ### P2 — casos difíceis e fallbacks locais pesados/opcionais
 
-- [#320](https://github.com/felipe-urgal/home-music/issues/320) — Chromaprint + AcoustID opcional;
-- [#322](https://github.com/felipe-urgal/home-music/issues/322) — Whisper local para transcrição/alinhamento;
+- [ ] [#320](https://github.com/felipe-urgal/home-music/issues/320) — Chromaprint + AcoustID opcional;
+- [ ] [#322](https://github.com/felipe-urgal/home-music/issues/322) — Whisper local para transcrição/alinhamento;
 - camada B da #321 — materialização de artwork local como cover override, sem bloquear o fallback visual.
 
-## Ordem recomendada
+## Ordem recomendada a partir da fundação
 
-1. #311;
-2. #312;
-3. #313;
-4. #314 + #315 + #319 em paralelo;
-5. camada A da #321 em paralelo com o enriquecimento, pois não depende de CAA;
-6. #325 + #326 em paralelo, compartilhando a mesma resolução de artwork;
-7. #316;
-8. #318 após evidência de qualidade do fluxo manual;
-9. #320/#322 e camada B da #321 como fallbacks opcionais.
+1. #312 — primeiro analyzer real, reutilizando lifecycle/cache/evidências da #311;
+2. #313 — revisão/aplicação segura;
+3. #314 + #315 + #319 em paralelo;
+4. #326 e #316 conforme prioridade de experiência;
+5. #318 após evidência de qualidade do fluxo manual;
+6. #320/#322 e camada B da #321 como fallbacks opcionais.
 
 ## Relação com a Fase 14
 
-O PR #317, que estava ativo durante o planejamento inicial, foi mergeado em 2026-09-06.
+A Fase 14 foi reconciliada no fluxo próprio: #293 e #295 foram verificadas contra a implementação existente e encerradas. A Fase 15 não reabre nem absorve esse trabalho.
 
-As issues #293/#295 ainda são as responsáveis por reconciliar e encerrar o estado executivo da Fase 14. A Fase 15 não deve absorver essa manutenção nem declarar a Fase 14 encerrada por conta própria.
-
-Antes de iniciar #311/#312 ou qualquer trabalho que toque matching/`LibraryService`, conferir novamente `main`, #293/#295 e PRs abertos.
+Antes de iniciar #312 ou qualquer trabalho que toque matching/`LibraryService`, conferir novamente `main` e PRs abertos para evitar abstrações concorrentes.
 
 ## Definition of Done por entrega
 
@@ -411,10 +407,8 @@ Para artwork/player, acrescentar:
 - fallback visual não cria cover override automaticamente;
 - Media Session assume imagem estática e degrada por capability;
 - `prefers-reduced-motion` para animação contínua;
-- validação de lock screen/PWA em hardware real quando fizer parte do aceite.
+- validação de lock screen/PWA em hardware real quando fizer parte do aceite/QA.
 
 ## Relação com roadmap/índice corrente
 
-`docs/roadmap.md` e `docs/README.md` continuam representando o ciclo corrente da `main`. A #310 e este documento registram a próxima fase sem declarar capacidades não implementadas como estado executável.
-
-Como o #317 foi mergeado, a Fase 14 precisa ter #293/#295 e seus documentos reconciliados no fluxo próprio. Quando a Fase 15 for priorizada como ciclo corrente, `docs/roadmap.md` e `docs/README.md` devem ser atualizados no mesmo fluxo, sem reescrever histórico para aparentar conclusão.
+`docs/roadmap.md` e `docs/README.md` representam o ciclo corrente da `main`. A fundação implementada é documentada em [`library-assistant.md`](library-assistant.md); este arquivo permanece como planejamento das capacidades seguintes e não deve competir com o contrato executável.
