@@ -40,6 +40,30 @@ export function assertPersonalDataImportSize(byteLength: number) {
   }
 }
 
+export function parsePortableTrackReferenceV1(
+  value: unknown,
+  field = '$'
+): PortableTrackReferenceV1 {
+  const reference = record(value, field);
+  const relativePath = text(
+    reference.relativePath,
+    `${field}.relativePath`,
+    PERSONAL_DATA_IMPORT_LIMITS.maxRelativePathLength,
+    true
+  );
+  validateRelativePath(relativePath, `${field}.relativePath`);
+
+  const hints = record(reference.hints, `${field}.hints`);
+  text(hints.title, `${field}.hints.title`, PERSONAL_DATA_IMPORT_LIMITS.maxHintLength);
+  text(hints.artist, `${field}.hints.artist`, PERSONAL_DATA_IMPORT_LIMITS.maxHintLength);
+  text(hints.album, `${field}.hints.album`, PERSONAL_DATA_IMPORT_LIMITS.maxHintLength);
+  if (hints.durationSeconds !== null) {
+    nonNegativeNumber(hints.durationSeconds, `${field}.hints.durationSeconds`);
+  }
+
+  return value as PortableTrackReferenceV1;
+}
+
 export function parsePersonalDataBundleV1(value: unknown): PersonalDataBundleV1 {
   const bundle = record(value, '$');
 
@@ -54,7 +78,9 @@ export function parsePersonalDataBundleV1(value: unknown): PersonalDataBundleV1 
   const references: ReferenceCounter = { total: 0 };
 
   const favorites = array(bundle.favorites, '$.favorites', PERSONAL_DATA_IMPORT_LIMITS.maxFavorites);
-  favorites.forEach((item, index) => trackReference(item, `$.favorites[${index}]`, references));
+  favorites.forEach((item, index) => {
+    countedTrackReference(item, `$.favorites[${index}]`, references);
+  });
 
   const manualPlaylists = array(
     bundle.manualPlaylists,
@@ -73,7 +99,7 @@ export function parsePersonalDataBundleV1(value: unknown): PersonalDataBundleV1 
       PERSONAL_DATA_IMPORT_LIMITS.maxTracksPerManualPlaylist
     );
     tracks.forEach((item, trackIndex) => {
-      trackReference(item, `${field}.tracks[${trackIndex}]`, references);
+      countedTrackReference(item, `${field}.tracks[${trackIndex}]`, references);
     });
   });
 
@@ -119,13 +145,13 @@ export function parsePersonalDataBundleV1(value: unknown): PersonalDataBundleV1 
   playbackHistory.forEach((value, index) => {
     const field = `$.playbackHistory[${index}]`;
     const item = record(value, field);
-    trackReference(item.track, `${field}.track`, references);
+    countedTrackReference(item.track, `${field}.track`, references);
     isoDate(item.playedAt, `${field}.playedAt`);
   });
 
   const playbackState = record(bundle.playbackState, '$.playbackState');
   if (playbackState.currentTrack !== null) {
-    trackReference(playbackState.currentTrack, '$.playbackState.currentTrack', references);
+    countedTrackReference(playbackState.currentTrack, '$.playbackState.currentTrack', references);
   }
   nonNegativeNumber(playbackState.position, '$.playbackState.position');
   numberInRange(playbackState.volume, '$.playbackState.volume', 0, 1);
@@ -145,7 +171,7 @@ export function parsePersonalDataBundleV1(value: unknown): PersonalDataBundleV1 
     PERSONAL_DATA_IMPORT_LIMITS.maxQueueEntries
   );
   baseQueue.forEach((item, index) => {
-    trackReference(item, `$.playbackState.baseQueue[${index}]`, references);
+    countedTrackReference(item, `$.playbackState.baseQueue[${index}]`, references);
   });
 
   const queue = array(
@@ -154,14 +180,14 @@ export function parsePersonalDataBundleV1(value: unknown): PersonalDataBundleV1 
     PERSONAL_DATA_IMPORT_LIMITS.maxQueueEntries
   );
   queue.forEach((item, index) => {
-    trackReference(item, `$.playbackState.queue[${index}]`, references);
+    countedTrackReference(item, `$.playbackState.queue[${index}]`, references);
   });
   isoDate(playbackState.updatedAt, '$.playbackState.updatedAt');
 
   return value as PersonalDataBundleV1;
 }
 
-function trackReference(value: unknown, field: string, counter: ReferenceCounter): PortableTrackReferenceV1 {
+function countedTrackReference(value: unknown, field: string, counter: ReferenceCounter) {
   counter.total += 1;
   if (counter.total > PERSONAL_DATA_IMPORT_LIMITS.maxTotalTrackReferences) {
     fail(
@@ -170,25 +196,7 @@ function trackReference(value: unknown, field: string, counter: ReferenceCounter
       `Bundle excede o limite de ${PERSONAL_DATA_IMPORT_LIMITS.maxTotalTrackReferences} referências de faixa.`
     );
   }
-
-  const reference = record(value, field);
-  const relativePath = text(
-    reference.relativePath,
-    `${field}.relativePath`,
-    PERSONAL_DATA_IMPORT_LIMITS.maxRelativePathLength,
-    true
-  );
-  validateRelativePath(relativePath, `${field}.relativePath`);
-
-  const hints = record(reference.hints, `${field}.hints`);
-  text(hints.title, `${field}.hints.title`, PERSONAL_DATA_IMPORT_LIMITS.maxHintLength);
-  text(hints.artist, `${field}.hints.artist`, PERSONAL_DATA_IMPORT_LIMITS.maxHintLength);
-  text(hints.album, `${field}.hints.album`, PERSONAL_DATA_IMPORT_LIMITS.maxHintLength);
-  if (hints.durationSeconds !== null) {
-    nonNegativeNumber(hints.durationSeconds, `${field}.hints.durationSeconds`);
-  }
-
-  return value as PortableTrackReferenceV1;
+  return parsePortableTrackReferenceV1(value, field);
 }
 
 function validateRelativePath(value: string, field: string) {
