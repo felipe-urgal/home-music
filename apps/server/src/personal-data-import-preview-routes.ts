@@ -1,5 +1,6 @@
 import type { FastifyError, FastifyInstance } from 'fastify';
 import { PERSONAL_DATA_IMPORT_LIMITS } from '@home-music/shared/personal-data';
+import { personalDataImportConfirmationToken } from './personal-data-import-confirmation.js';
 import type { PersonalDataImportPlanner } from './personal-data-import-plan.js';
 import { PersonalDataImportValidationError } from './personal-data-import-parser.js';
 
@@ -41,7 +42,10 @@ export function registerPersonalDataImportPreviewRoutes(
       try {
         const plan = planner.plan(request.body);
         reply.header('Cache-Control', 'private, no-store');
-        return plan.preview;
+        return {
+          ...plan.preview,
+          confirmationToken: personalDataImportConfirmationToken(request.user.id, plan)
+        };
       } catch (error) {
         if (error instanceof PersonalDataImportValidationError) {
           const statusCode = error.code === 'payload-too-large' ? 413 : 400;
