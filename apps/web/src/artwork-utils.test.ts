@@ -91,13 +91,13 @@ describe('artwork fallback estático', () => {
   it('escapa texto antes de serializar SVG e limita dimensões', () => {
     const identity: ArtworkFallbackIdentity = {
       ...buildArtworkFallback(track()),
-      label: '<&"\''
+      label: `<&"'`
     };
     const svg = artworkFallbackSvg(identity, 5000);
 
     expect(svg).toContain('width="1024" height="1024"');
     expect(svg).toContain('&lt;&amp;&quot;&apos;');
-    expect(svg).not.toContain('><&"\'</text>');
+    expect(svg).not.toContain(`<text><&"'`);
   });
 
   it('gera data URL local sem provider ou path físico', () => {
