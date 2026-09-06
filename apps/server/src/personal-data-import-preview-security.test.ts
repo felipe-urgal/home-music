@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import Fastify from 'fastify';
+import Fastify, { type FastifyRequest } from 'fastify';
 import type {
   PersonalDataBundleV1,
   PersonalDataImportPreviewV1
@@ -72,7 +72,7 @@ function plan(value: PersonalDataBundleV1 = bundle()): PersonalDataImportPlan {
 }
 
 function authenticate(app: ReturnType<typeof Fastify>) {
-  app.addHook('preHandler', async request => {
+  app.addHook('preHandler', async (request: FastifyRequest) => {
     request.user = { id: USER_A, username: 'alice', role: 'user' };
   });
 }
