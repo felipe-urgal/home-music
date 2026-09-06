@@ -25,6 +25,7 @@ import type {
 const MAX_ANALYZERS_PER_CAPABILITY = 8;
 const MAX_SUGGESTIONS_PER_RUN = 5_000;
 const MAX_OWNER_ID_LENGTH = 128;
+const INVALIDATION_BATCH_SIZE = 500;
 
 type LibraryAssistantLibrarySource = {
   listTracks: () => Track[];
@@ -118,6 +119,7 @@ export class LibraryAssistantService {
   private readonly premiseSignature: (capability: LibraryAssistantCapability, track: Track) => string;
   private readonly analyzersByCapability = new Map<LibraryAssistantCapability, LibraryAssistantAnalyzer[]>();
   private readonly controllers = new Map<string, AbortController>();
+  private readonly scheduled = new Map<string, Promise<void>>();
 
   constructor(private readonly options: LibraryAssistantServiceOptions) {
     this.now = options.now ?? (() => new Date());
@@ -133,6 +135,12 @@ export class LibraryAssistantService {
       }
       current.push(analyzer);
       this.analyzersByCapability.set(analyzer.capability, current);
+    }
+
+    for (const run of options.store.listRuns(200)) {
+      if (run.status === 'failed' && run.error?.code === 'interrupted') {
+        this.invalidateOpenSuggestions(run.id);
+      }
     }
   }
 
@@ -153,14 +161,17 @@ export class LibraryAssistantService {
     const controller = new AbortController();
     this.controllers.set(runId, controller);
 
-    void this.options.queue.runWithContext(
+    const scheduled = this.options.queue.runWithContext(
       { ownerId: safeOwnerId(ownerId), signal: controller.signal },
       signal => this.executeRun(runId, capability, libraryRevision, tracks, signal)
     ).catch(error => {
       this.handleScheduledFailure(runId, error, controller.signal);
     }).finally(() => {
       this.controllers.delete(runId);
+      this.scheduled.delete(runId);
     });
+    this.scheduled.set(runId, scheduled);
+    void scheduled;
 
     return run;
   }
@@ -190,13 +201,16 @@ export class LibraryAssistantService {
     if (!current) return null;
     if (isTerminal(current)) return current;
     this.controllers.get(runId)?.abort();
+    this.invalidateOpenSuggestions(runId);
     this.options.store.cancelRun(runId, this.now().toISOString());
     return this.options.store.getRun(runId)!;
   }
 
-  close() {
+  async close() {
     for (const controller of this.controllers.values()) controller.abort();
+    await Promise.allSettled([...this.scheduled.values()]);
     this.controllers.clear();
+    this.scheduled.clear();
   }
 
   private async executeRun(
@@ -212,6 +226,7 @@ export class LibraryAssistantService {
       jobId: runId,
       resourceId: capability
     });
+    const trackMap = new Map(tracks.map(track => [track.id, track]));
 
     try {
       if (signal?.aborted) throw new HeavyWorkQueueAbortedError('library-assistant');
@@ -240,7 +255,7 @@ export class LibraryAssistantService {
           this.markRunStale(runId, observed);
           return;
         }
-        const inputs = drafts.map(draft => this.toStoredSuggestion(runId, capability, tracks, draft));
+        const inputs = drafts.map(draft => this.toStoredSuggestion(runId, capability, trackMap, draft));
         this.options.store.insertSuggestions(inputs);
       }
 
@@ -254,10 +269,12 @@ export class LibraryAssistantService {
       }
     } catch (error) {
       if (isCancellation(error, signal)) {
+        this.invalidateOpenSuggestions(runId);
         const changed = this.options.store.cancelRun(runId, this.now().toISOString());
         if (changed) this.options.observability.cancel(observed);
         return;
       }
+      this.invalidateOpenSuggestions(runId);
       const sanitized = sanitizeOperationError(error);
       const changed = this.options.store.failRun(runId, this.now().toISOString(), {
         code: errorCode(error),
@@ -271,13 +288,13 @@ export class LibraryAssistantService {
   private toStoredSuggestion(
     runId: string,
     capability: LibraryAssistantCapability,
-    tracks: readonly Track[],
+    tracks: ReadonlyMap<string, Track>,
     draft: LibraryAssistantSuggestionDraft
   ): LibraryAssistantStoredSuggestionInput {
     if (draft.capability !== capability || draft.target.capability !== capability) {
       throw new TypeError('Analyzer retornou sugestão para capability diferente do run.');
     }
-    const track = tracks.find(item => item.id === draft.target.trackId);
+    const track = tracks.get(draft.target.trackId);
     if (!track) throw new TypeError('Analyzer retornou sugestão para faixa fora do snapshot analisado.');
     return {
       id: `suggestion-${this.createId()}`,
@@ -303,6 +320,7 @@ export class LibraryAssistantService {
 
     if (run.status === 'queued' || run.status === 'running') {
       this.controllers.get(runId)?.abort();
+      this.invalidateOpenSuggestions(runId);
       this.options.store.markRunStale(runId, this.now().toISOString());
       return;
     }
@@ -324,13 +342,32 @@ export class LibraryAssistantService {
     if (stale) this.options.store.markRunStale(runId, updatedAt);
   }
 
+  private invalidateOpenSuggestions(runId: string) {
+    const updatedAt = this.now().toISOString();
+    for (const status of ['pending', 'review'] as const) {
+      for (;;) {
+        const records = this.options.store.listSuggestionRecords(runId, {
+          status,
+          limit: INVALIDATION_BATCH_SIZE
+        });
+        if (records.length === 0) break;
+        for (const record of records) {
+          this.options.store.markSuggestionStale(record.suggestion.id, updatedAt);
+        }
+        if (records.length < INVALIDATION_BATCH_SIZE) break;
+      }
+    }
+  }
+
   private markRunStale(runId: string, observed: LongJobRun) {
+    this.invalidateOpenSuggestions(runId);
     if (this.options.store.markRunStale(runId, this.now().toISOString())) {
       this.options.observability.fail(observed, new Error('Snapshot da biblioteca mudou durante a análise.'));
     }
   }
 
   private handleScheduledFailure(runId: string, error: unknown, signal?: AbortSignal) {
+    this.invalidateOpenSuggestions(runId);
     if (isCancellation(error, signal)) {
       this.options.store.cancelRun(runId, this.now().toISOString());
       return;
