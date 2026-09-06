@@ -17,7 +17,7 @@ export type PlaybackDiagnosticEvent = {
   event: string;
   visibilityState: string;
   trackId: string | null;
-  playingIntent: boolean;
+  reactPlaying: boolean;
   audio: PlaybackDiagnosticAudioState | null;
   detail: string | null;
 };
@@ -60,7 +60,7 @@ export function parsePlaybackDiagnostics(raw: string | null): PlaybackDiagnostic
         && typeof event.event === 'string'
         && typeof event.visibilityState === 'string'
         && (event.trackId === null || typeof event.trackId === 'string')
-        && typeof event.playingIntent === 'boolean'
+        && typeof event.reactPlaying === 'boolean'
         && (event.detail === null || typeof event.detail === 'string')
         && (event.audio === null || typeof event.audio === 'object');
     }).slice(-PLAYBACK_DIAGNOSTICS_LIMIT);
