@@ -6,18 +6,22 @@ function source(name: string) {
 }
 
 describe('offline bootstrap contract', () => {
-  it('mantém a decisão automática de offline na raiz da aplicação', () => {
+  it('mantém OfflineApp no shell inicial e decide cold start por bytes locais, não por workerSupported', () => {
     const app = source('App.tsx');
     const login = source('components/LoginScreen.tsx');
 
-    expect(app).toMatch(/automaticOfflineMode = auth\.unreachable && offlineCount > 0/);
+    expect(app).toMatch(/import \{ OfflineApp \} from '\.\/OfflineApp'/);
+    expect(app).not.toMatch(/lazy\(/);
+    expect(app).not.toMatch(/loadOfflineApp/);
+    expect(app).toMatch(/readOfflineColdStartRecords\(offline\.records\)/);
+    expect(app).toMatch(/automaticOfflineMode = auth\.unreachable && Boolean\(coldStartRecords\?\.length\)/);
     expect(app).toMatch(/showOfflineMode = offlineMode \|\| automaticOfflineMode/);
-    expect(app).toMatch(/void loadOfflineApp\(\)\.catch/);
+    expect(app).not.toMatch(/offline\.supported.*automaticOfflineMode/);
     expect(app).toMatch(/unreachable=\{auth\.unreachable\}/);
 
     expect(login).toMatch(/if \(unreachable\)/);
     expect(login).toMatch(/Home Music indisponível/);
-    expect(login).not.toMatch(/offlineCount/);
+    expect(login).not.toMatch(/coldStartRecords/);
     expect(login).not.toMatch(/onOpenOffline/);
   });
 
