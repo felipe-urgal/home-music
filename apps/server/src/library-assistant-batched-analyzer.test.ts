@@ -73,6 +73,10 @@ function draft(item: Track): LibraryAssistantSuggestionDraft {
   };
 }
 
+function timeout() {
+  return Object.assign(new Error('timeout'), { code: 'provider-timeout' });
+}
+
 test('wrapper envia no máximo 10 faixas por chamada e preserva todas as sugestões', async () => {
   const calls: number[] = [];
   const base: LibraryAssistantAnalyzer = {
@@ -96,23 +100,27 @@ test('wrapper envia no máximo 10 faixas por chamada e preserva todas as sugest�
   assert.equal(result.length, 23);
 });
 
-test('falha de um lote cai para isolamento por faixa e não derruba as vizinhas', async () => {
+test('falha temporária é adiada e recuperada em nova passada sem virar falha definitiva', async () => {
+  const deferred: string[] = [];
   const failures: string[] = [];
+  let singleTrackThreeAttempts = 0;
   const base: LibraryAssistantAnalyzer = {
     id: 'base',
     capability: 'metadata',
     async analyze({ tracks }) {
-      if (tracks.length > 1 && tracks.some(item => item.id === 'track-3')) {
-        throw Object.assign(new Error('timeout'), { code: 'provider-timeout' });
-      }
+      if (tracks.length > 1 && tracks.some(item => item.id === 'track-3')) throw timeout();
       if (tracks[0]?.id === 'track-3') {
-        throw Object.assign(new Error('timeout'), { code: 'provider-timeout' });
+        singleTrackThreeAttempts += 1;
+        if (singleTrackThreeAttempts === 1) throw timeout();
       }
       return tracks.map(draft);
     }
   };
   const analyzer = createBatchedLibraryAssistantAnalyzer(base, {
     batchSize: 10,
+    failureBackoffMs: 0,
+    maxRetryPasses: 1,
+    onTrackDeferred: attempt => deferred.push(attempt.trackId),
     onTrackFailure: failure => failures.push(failure.trackId)
   });
   const tracks = Array.from({ length: 6 }, (_, index) => track(index + 1));
@@ -123,13 +131,14 @@ test('falha de um lote cai para isolamento por faixa e não derruba as vizinhas'
     providers: gateway()
   });
 
-  assert.deepEqual(failures, ['track-3']);
+  assert.deepEqual(deferred, ['track-3']);
+  assert.deepEqual(failures, []);
   assert.deepEqual(result.map(item => item.target.trackId), [
-    'track-1', 'track-2', 'track-4', 'track-5', 'track-6'
+    'track-1', 'track-2', 'track-4', 'track-5', 'track-6', 'track-3'
   ]);
 });
 
-test('wrapper preserva consulta do provider quando o timeout maior está habilitado', async () => {
+test('wrapper preserva consulta do provider quando timeout específico está habilitado', async () => {
   const cache = new Map<string, LibraryAssistantProviderCacheEntry>();
   const providers = new LibraryAssistantProviderGateway({
     getProviderCache(cacheKey, nowMs) {
@@ -158,7 +167,7 @@ test('wrapper preserva consulta do provider quando o timeout maior está habilit
     }
   };
 
-  const analyzer = createBatchedLibraryAssistantAnalyzer(base, { providerTimeoutMs: 15_000 });
+  const analyzer = createBatchedLibraryAssistantAnalyzer(base, { providerTimeoutMs: 10_000 });
   const result = await analyzer.analyze({ runId: 'run-1', tracks: [track(1)], providers });
   assert.equal(result.length, 1);
 });

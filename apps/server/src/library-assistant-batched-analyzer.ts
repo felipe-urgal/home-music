@@ -3,9 +3,10 @@ import type { LibraryAssistantProviderGateway, LibraryAssistantProviderQuery } f
 import type { LibraryAssistantAnalyzer, LibraryAssistantSuggestionDraft } from './library-assistant-service.js';
 
 const DEFAULT_BATCH_SIZE = 10;
-const DEFAULT_PROVIDER_TIMEOUT_MS = 15_000;
-const DEFAULT_FAILURE_BACKOFF_MS = 1_500;
-const FAILURES_BEFORE_BACKOFF = 2;
+const DEFAULT_PROVIDER_TIMEOUT_MS = 10_000;
+const DEFAULT_FAILURE_BACKOFF_MS = 15_000;
+const DEFAULT_FAILURES_BEFORE_BACKOFF = 2;
+const DEFAULT_MAX_RETRY_PASSES = 2;
 const RECOVERABLE_PROVIDER_CODES = new Set([
   'provider-timeout',
   'provider-rate-limited',
@@ -17,23 +18,45 @@ type BatchProgress = {
   analyzerId: string;
   processedTracks: number;
   totalTracks: number;
+  deferredTracks: number;
   failedTracks: number;
+  retryPass: number;
 };
 
-type TrackFailure = {
+type TrackAttempt = {
   analyzerId: string;
   trackId: string;
   durationMs: number;
   error: unknown;
+  attempt: number;
+};
+
+type CircuitCooldown = {
+  analyzerId: string;
+  cooldownMs: number;
+  consecutiveFailures: number;
+  deferredTracks: number;
+  retryPass: number;
 };
 
 type BatchedAnalyzerOptions = {
   batchSize?: number;
   providerTimeoutMs?: number;
   failureBackoffMs?: number;
+  failuresBeforeBackoff?: number;
+  maxRetryPasses?: number;
   sleep?: (delayMs: number, signal?: AbortSignal) => Promise<void>;
   onProgress?: (progress: BatchProgress) => void;
-  onTrackFailure?: (failure: TrackFailure) => void;
+  onTrackDeferred?: (attempt: TrackAttempt) => void;
+  onTrackFailure?: (failure: TrackAttempt) => void;
+  onCircuitCooldown?: (cooldown: CircuitCooldown) => void;
+};
+
+type DeferredTrack = {
+  track: Track;
+  attempts: number;
+  lastDurationMs: number;
+  lastError: unknown;
 };
 
 function isCancellation(error: unknown, signal?: AbortSignal) {
@@ -117,7 +140,19 @@ export function createBatchedLibraryAssistantAnalyzer(
     options.failureBackoffMs,
     DEFAULT_FAILURE_BACKOFF_MS,
     0,
-    30_000
+    60_000
+  );
+  const failuresBeforeBackoff = boundedInteger(
+    options.failuresBeforeBackoff,
+    DEFAULT_FAILURES_BEFORE_BACKOFF,
+    1,
+    20
+  );
+  const maxRetryPasses = boundedInteger(
+    options.maxRetryPasses,
+    DEFAULT_MAX_RETRY_PASSES,
+    0,
+    5
   );
   const sleep = options.sleep ?? defaultSleep;
 
@@ -126,6 +161,7 @@ export function createBatchedLibraryAssistantAnalyzer(
     capability: analyzer.capability,
     async analyze(context) {
       const drafts: LibraryAssistantSuggestionDraft[] = [];
+      let deferred = new Map<string, DeferredTrack>();
       const failedTrackIds = new Set<string>();
       const timedProviders = providersWithTimeout(context.providers, providerTimeoutMs);
       const totalTracks = context.tracks.length;
@@ -135,6 +171,35 @@ export function createBatchedLibraryAssistantAnalyzer(
         tracks,
         providers: timedProviders
       });
+
+      const defer = (track: Track, durationMs: number, error: unknown) => {
+        const previous = deferred.get(track.id);
+        const item: DeferredTrack = {
+          track,
+          attempts: (previous?.attempts ?? 0) + 1,
+          lastDurationMs: durationMs,
+          lastError: error
+        };
+        deferred.set(track.id, item);
+        options.onTrackDeferred?.({
+          analyzerId: analyzer.id,
+          trackId: track.id,
+          durationMs,
+          error,
+          attempt: item.attempts
+        });
+      };
+
+      const cooldown = async (consecutiveFailures: number, retryPass: number) => {
+        options.onCircuitCooldown?.({
+          analyzerId: analyzer.id,
+          cooldownMs: failureBackoffMs,
+          consecutiveFailures,
+          deferredTracks: deferred.size,
+          retryPass
+        });
+        await sleep(failureBackoffMs, context.signal);
+      };
 
       for (let offset = 0; offset < totalTracks; offset += batchSize) {
         if (context.signal?.aborted) break;
@@ -149,25 +214,20 @@ export function createBatchedLibraryAssistantAnalyzer(
           let consecutiveFailures = 0;
           for (const track of batch) {
             if (context.signal?.aborted) break;
-
             const startedAt = Date.now();
             try {
               drafts.push(...await analyzeTracks([track]));
+              deferred.delete(track.id);
               consecutiveFailures = 0;
             } catch (trackError) {
               if (isCancellation(trackError, context.signal)) throw trackError;
               if (!isRecoverableProviderFailure(trackError)) throw trackError;
+              const durationMs = Math.max(0, Date.now() - startedAt);
+              defer(track, durationMs, trackError);
               consecutiveFailures += 1;
-              failedTrackIds.add(track.id);
-              options.onTrackFailure?.({
-                analyzerId: analyzer.id,
-                trackId: track.id,
-                durationMs: Math.max(0, Date.now() - startedAt),
-                error: trackError
-              });
 
-              if (consecutiveFailures >= FAILURES_BEFORE_BACKOFF) {
-                await sleep(failureBackoffMs, context.signal);
+              if (consecutiveFailures >= failuresBeforeBackoff) {
+                await cooldown(consecutiveFailures, 0);
                 consecutiveFailures = 0;
               }
             }
@@ -178,12 +238,87 @@ export function createBatchedLibraryAssistantAnalyzer(
           analyzerId: analyzer.id,
           processedTracks: Math.min(offset + batch.length, totalTracks),
           totalTracks,
-          failedTracks: failedTrackIds.size
+          deferredTracks: deferred.size,
+          failedTracks: 0,
+          retryPass: 0
+        });
+      }
+
+      for (let retryPass = 1; retryPass <= maxRetryPasses && deferred.size > 0; retryPass += 1) {
+        await sleep(failureBackoffMs, context.signal);
+        const pending = [...deferred.values()];
+        const nextDeferred = new Map<string, DeferredTrack>();
+        let consecutiveFailures = 0;
+
+        for (const pendingTrack of pending) {
+          if (context.signal?.aborted) break;
+          const startedAt = Date.now();
+          try {
+            drafts.push(...await analyzeTracks([pendingTrack.track]));
+            consecutiveFailures = 0;
+          } catch (error) {
+            if (isCancellation(error, context.signal)) throw error;
+            if (!isRecoverableProviderFailure(error)) throw error;
+            const durationMs = Math.max(0, Date.now() - startedAt);
+            const item: DeferredTrack = {
+              track: pendingTrack.track,
+              attempts: pendingTrack.attempts + 1,
+              lastDurationMs: durationMs,
+              lastError: error
+            };
+            nextDeferred.set(item.track.id, item);
+            options.onTrackDeferred?.({
+              analyzerId: analyzer.id,
+              trackId: item.track.id,
+              durationMs,
+              error,
+              attempt: item.attempts
+            });
+            consecutiveFailures += 1;
+
+            if (consecutiveFailures >= failuresBeforeBackoff) {
+              deferred = nextDeferred;
+              await cooldown(consecutiveFailures, retryPass);
+              consecutiveFailures = 0;
+            }
+          }
+        }
+
+        deferred = nextDeferred;
+        options.onProgress?.({
+          analyzerId: analyzer.id,
+          processedTracks: totalTracks,
+          totalTracks,
+          deferredTracks: deferred.size,
+          failedTracks: 0,
+          retryPass
+        });
+      }
+
+      for (const item of deferred.values()) {
+        failedTrackIds.add(item.track.id);
+        options.onTrackFailure?.({
+          analyzerId: analyzer.id,
+          trackId: item.track.id,
+          durationMs: item.lastDurationMs,
+          error: item.lastError,
+          attempt: item.attempts
+        });
+      }
+
+      if (deferred.size > 0) {
+        options.onProgress?.({
+          analyzerId: analyzer.id,
+          processedTracks: totalTracks,
+          totalTracks,
+          deferredTracks: 0,
+          failedTracks: failedTrackIds.size,
+          retryPass: maxRetryPasses
         });
       }
 
       if (totalTracks > 0 && failedTrackIds.size === totalTracks) {
-        const error = new Error('O provider não conseguiu analisar nenhuma faixa deste lote de biblioteca.');
+        const error = new Error('O provider não conseguiu analisar nenhuma faixa desta biblioteca.');
         Object.assign(error, { code: 'provider-unavailable' });
         throw error;
       }

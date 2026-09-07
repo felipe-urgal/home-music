@@ -75,11 +75,19 @@ function timeout() {
   return Object.assign(new Error('timeout'), { code: 'provider-timeout' });
 }
 
-test('duas falhas consecutivas fazem backoff mas todas as faixas restantes ainda são tentadas', async () => {
+test('cooldown protege o provider e falha só é definitiva depois da passada de retry', async () => {
   const attempted: string[] = [];
+  const deferred: string[] = [];
   const failures: string[] = [];
-  const backoffs: number[] = [];
-  const progress: Array<{ processedTracks: number; failedTracks: number }> = [];
+  const sleeps: number[] = [];
+  const cooldowns: number[] = [];
+  const progress: Array<{
+    processedTracks: number;
+    deferredTracks: number;
+    failedTracks: number;
+    retryPass: number;
+  }> = [];
+  const attempts = new Map<string, number>();
 
   const base: LibraryAssistantAnalyzer = {
     id: 'base-backoff',
@@ -88,7 +96,10 @@ test('duas falhas consecutivas fazem backoff mas todas as faixas restantes ainda
       if (tracks.length > 1) throw timeout();
       const item = tracks[0];
       attempted.push(item.id);
-      if (item.id === 'track-1' || item.id === 'track-2') throw timeout();
+      const count = (attempts.get(item.id) ?? 0) + 1;
+      attempts.set(item.id, count);
+      if ((item.id === 'track-1' || item.id === 'track-2') && count === 1) throw timeout();
+      if (item.id === 'track-3') throw timeout();
       return [draft(item)];
     }
   };
@@ -96,11 +107,17 @@ test('duas falhas consecutivas fazem backoff mas todas as faixas restantes ainda
   const analyzer = createBatchedLibraryAssistantAnalyzer(base, {
     batchSize: 5,
     failureBackoffMs: 25,
-    sleep: async delayMs => { backoffs.push(delayMs); },
+    failuresBeforeBackoff: 2,
+    maxRetryPasses: 1,
+    sleep: async delayMs => { sleeps.push(delayMs); },
+    onTrackDeferred: item => deferred.push(item.trackId),
     onTrackFailure: failure => failures.push(failure.trackId),
+    onCircuitCooldown: item => cooldowns.push(item.cooldownMs),
     onProgress: item => progress.push({
       processedTracks: item.processedTracks,
-      failedTracks: item.failedTracks
+      deferredTracks: item.deferredTracks,
+      failedTracks: item.failedTracks,
+      retryPass: item.retryPass
     })
   });
 
@@ -110,9 +127,20 @@ test('duas falhas consecutivas fazem backoff mas todas as faixas restantes ainda
     providers: gateway()
   });
 
-  assert.deepEqual(attempted, ['track-1', 'track-2', 'track-3', 'track-4', 'track-5']);
-  assert.deepEqual(failures, ['track-1', 'track-2']);
-  assert.deepEqual(backoffs, [25]);
-  assert.deepEqual(progress, [{ processedTracks: 5, failedTracks: 2 }]);
-  assert.deepEqual(result.map(item => item.target.trackId), ['track-3', 'track-4', 'track-5']);
+  assert.deepEqual(attempted, [
+    'track-1', 'track-2', 'track-3', 'track-4', 'track-5',
+    'track-1', 'track-2', 'track-3'
+  ]);
+  assert.deepEqual(deferred, ['track-1', 'track-2', 'track-3', 'track-3']);
+  assert.deepEqual(failures, ['track-3']);
+  assert.deepEqual(cooldowns, [25]);
+  assert.deepEqual(sleeps, [25, 25]);
+  assert.deepEqual(progress, [
+    { processedTracks: 5, deferredTracks: 3, failedTracks: 0, retryPass: 0 },
+    { processedTracks: 5, deferredTracks: 1, failedTracks: 0, retryPass: 1 },
+    { processedTracks: 5, deferredTracks: 0, failedTracks: 1, retryPass: 1 }
+  ]);
+  assert.deepEqual(result.map(item => item.target.trackId), [
+    'track-4', 'track-5', 'track-1', 'track-2'
+  ]);
 });

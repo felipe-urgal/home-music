@@ -14,6 +14,7 @@ import { registerLibraryAssistantRoutes } from './library-assistant-routes.js';
 import { LibraryAssistantService, type LibraryAssistantAnalyzer } from './library-assistant-service.js';
 import { LibraryAssistantStore } from './library-assistant-store.js';
 import type { LongJobObservability } from './long-job-observability.js';
+import { createMusicBrainzSimpleSearchFetch } from './musicbrainz-simple-search-fetch.js';
 import { createRetryingFetch } from './retrying-fetch.js';
 import { TrackMetadataOverrideStore } from './track-metadata-overrides.js';
 
@@ -28,7 +29,10 @@ type LibraryAssistantBootstrapOptions = {
 
 const METADATA_FIELDS: readonly LibraryAssistantMetadataField[] = ['title', 'artist', 'album', 'albumArtist'];
 const METADATA_BATCH_SIZE = 10;
-const MUSICBRAINZ_QUERY_TIMEOUT_MS = 15_000;
+const MUSICBRAINZ_QUERY_TIMEOUT_MS = 10_000;
+const MUSICBRAINZ_FAILURE_BACKOFF_MS = 15_000;
+const MUSICBRAINZ_FAILURES_BEFORE_BACKOFF = 3;
+const MUSICBRAINZ_MAX_RETRY_PASSES = 2;
 
 export function registerLibraryAssistant(
   app: FastifyInstance,
@@ -37,7 +41,7 @@ export function registerLibraryAssistant(
   const store = new LibraryAssistantStore(options.databasePath);
   const metadataOverrides = new TrackMetadataOverrideStore(options.databasePath);
   const providers = new LibraryAssistantProviderGateway(store);
-  const musicBrainzFetch = createRetryingFetch();
+  const musicBrainzFetch = createMusicBrainzSimpleSearchFetch(createRetryingFetch());
   let assistantMetadataRevision = 0;
   const projectRevision = options.projection.projectRevision;
 
@@ -68,15 +72,43 @@ export function registerLibraryAssistant(
   const defaultAnalyzers = [createBatchedLibraryAssistantAnalyzer(metadataAnalyzer, {
     batchSize: METADATA_BATCH_SIZE,
     providerTimeoutMs: MUSICBRAINZ_QUERY_TIMEOUT_MS,
+    failureBackoffMs: MUSICBRAINZ_FAILURE_BACKOFF_MS,
+    failuresBeforeBackoff: MUSICBRAINZ_FAILURES_BEFORE_BACKOFF,
+    maxRetryPasses: MUSICBRAINZ_MAX_RETRY_PASSES,
     onProgress(progress) {
       app.log.info({
         event: 'library_assistant.batch_completed',
         analyzerId: progress.analyzerId,
         processedTracks: progress.processedTracks,
         totalTracks: progress.totalTracks,
+        deferredTracks: progress.deferredTracks,
         failedTracks: progress.failedTracks,
+        retryPass: progress.retryPass,
         batchSize: METADATA_BATCH_SIZE
-      }, 'Lote do Assistente da Biblioteca concluído.');
+      }, progress.retryPass > 0
+        ? 'Passada de recuperação do Assistente concluída.'
+        : 'Lote do Assistente da Biblioteca concluído.');
+    },
+    onTrackDeferred(attempt) {
+      const sanitized = sanitizeOperationError(attempt.error);
+      app.log.info({
+        event: 'library_assistant.track_deferred',
+        analyzerId: attempt.analyzerId,
+        trackId: attempt.trackId,
+        durationMs: attempt.durationMs,
+        attempt: attempt.attempt,
+        errorMessage: sanitized.message
+      }, 'Falha temporária no provider; faixa adiada para nova tentativa.');
+    },
+    onCircuitCooldown(cooldown) {
+      app.log.warn({
+        event: 'library_assistant.provider_cooldown',
+        analyzerId: cooldown.analyzerId,
+        cooldownMs: cooldown.cooldownMs,
+        consecutiveFailures: cooldown.consecutiveFailures,
+        deferredTracks: cooldown.deferredTracks,
+        retryPass: cooldown.retryPass
+      }, 'Provider instável; Assistente aguardará antes de continuar.');
     },
     onTrackFailure(failure) {
       const sanitized = sanitizeOperationError(failure.error);
@@ -85,9 +117,10 @@ export function registerLibraryAssistant(
         analyzerId: failure.analyzerId,
         trackId: failure.trackId,
         durationMs: failure.durationMs,
+        attempts: failure.attempt,
         errorMessage: sanitized.message,
         errorAction: sanitized.action
-      }, 'Faixa ignorada pelo Assistente após falha isolada; análise continuará.');
+      }, 'Faixa não pôde ser analisada após esgotar as tentativas; análise continuará.');
     }
   })];
   const service = new LibraryAssistantService({
