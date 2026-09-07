@@ -1,3 +1,4 @@
+import path from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import type { LibraryAssistantMetadataField } from '@home-music/shared/library-assistant';
 import type { HeavyWorkQueue } from './heavy-work-queue.js';
@@ -34,6 +35,14 @@ export function registerLibraryAssistant(
       const override = metadataOverrides.get(trackId)?.override;
       if (!override) return [];
       return METADATA_FIELDS.filter(field => override[field] != null);
+    },
+    getFileContext(trackId) {
+      const indexed = options.library.getTrack(trackId);
+      if (!indexed) return null;
+      return {
+        fileName: path.basename(indexed.filePath),
+        folderName: indexed.folder || null
+      };
     }
   })];
   const service = new LibraryAssistantService({
