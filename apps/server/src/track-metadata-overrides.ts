@@ -10,6 +10,8 @@ import type {
 } from '@home-music/shared';
 
 const MAX_METADATA_LENGTH = 240;
+const EDITABLE_METADATA_FIELDS = ['title', 'artist', 'album', 'albumArtist'] as const;
+type EditableMetadataField = (typeof EDITABLE_METADATA_FIELDS)[number];
 
 type Row = Record<string, unknown>;
 
@@ -116,6 +118,16 @@ export class TrackMetadataOverrideStore {
 
       CREATE INDEX IF NOT EXISTS idx_track_metadata_overrides_updated_at
       ON track_metadata_overrides(updated_at DESC);
+
+      CREATE TABLE IF NOT EXISTS track_metadata_override_field_revisions (
+        track_id TEXT NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+        field TEXT NOT NULL CHECK(field IN ('title', 'artist', 'album', 'albumArtist')),
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY(track_id, field)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_track_metadata_override_field_revisions_updated_at
+      ON track_metadata_override_field_revisions(updated_at DESC);
     `);
     this.refresh();
   }
@@ -137,6 +149,16 @@ export class TrackMetadataOverrideStore {
 
   hasOverride(trackId: string) {
     return this.overrides.has(trackId);
+  }
+
+  fieldUpdatedAt(trackId: string, field: EditableMetadataField) {
+    const row = this.db.prepare(`
+      SELECT updated_at
+      FROM track_metadata_override_field_revisions
+      WHERE track_id = ? AND field = ?
+      LIMIT 1;
+    `).get(trackId, field) as Row | undefined;
+    return row ? stringValue(row.updated_at) : null;
   }
 
   resolveTrack<T extends Track>(track: T): T {
@@ -225,10 +247,10 @@ export class TrackMetadataOverrideStore {
       if (next.album === physical.album) next.album = null;
       if (next.albumArtist === physical.albumArtist) next.albumArtist = null;
 
+      const updatedAt = new Date().toISOString();
       if (next.title == null && next.artist == null && next.album == null && next.albumArtist == null) {
         this.db.prepare('DELETE FROM track_metadata_overrides WHERE track_id = ?;').run(trackId);
       } else {
-        const updatedAt = new Date().toISOString();
         this.db.prepare(`
           INSERT INTO track_metadata_overrides(track_id, title, artist, album, album_artist, updated_at)
           VALUES (?, ?, ?, ?, ?, ?)
@@ -241,6 +263,11 @@ export class TrackMetadataOverrideStore {
         `).run(trackId, next.title, next.artist, next.album, next.albumArtist, updatedAt);
       }
 
+      this.markFieldRevisions(
+        trackId,
+        EDITABLE_METADATA_FIELDS.filter(field => patch[field] !== undefined),
+        updatedAt
+      );
       this.db.exec('COMMIT;');
       this.refresh();
       return this.get(trackId);
@@ -251,10 +278,33 @@ export class TrackMetadataOverrideStore {
   }
 
   clear(trackId: string): AdminTrackMetadataResponse | null {
-    const exists = Boolean(this.db.prepare('SELECT 1 FROM tracks WHERE id = ? LIMIT 1;').get(trackId));
-    if (!exists) return null;
-    this.db.prepare('DELETE FROM track_metadata_overrides WHERE track_id = ?;').run(trackId);
-    this.refresh();
-    return this.get(trackId);
+    this.db.exec('BEGIN IMMEDIATE;');
+    try {
+      const exists = Boolean(this.db.prepare('SELECT 1 FROM tracks WHERE id = ? LIMIT 1;').get(trackId));
+      if (!exists) {
+        this.db.exec('ROLLBACK;');
+        return null;
+      }
+      const removed = this.db.prepare('DELETE FROM track_metadata_overrides WHERE track_id = ?;').run(trackId);
+      if (Number(removed.changes) > 0) {
+        this.markFieldRevisions(trackId, EDITABLE_METADATA_FIELDS, new Date().toISOString());
+      }
+      this.db.exec('COMMIT;');
+      this.refresh();
+      return this.get(trackId);
+    } catch (error) {
+      this.db.exec('ROLLBACK;');
+      throw error;
+    }
+  }
+
+  private markFieldRevisions(trackId: string, fields: readonly EditableMetadataField[], updatedAt: string) {
+    if (fields.length === 0) return;
+    const statement = this.db.prepare(`
+      INSERT INTO track_metadata_override_field_revisions(track_id, field, updated_at)
+      VALUES (?, ?, ?)
+      ON CONFLICT(track_id, field) DO UPDATE SET updated_at = excluded.updated_at;
+    `);
+    for (const field of fields) statement.run(trackId, field, updatedAt);
   }
 }
