@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type {
-  LibraryAssistantDecision,
-  LibraryAssistantReviewItem,
-  LibraryAssistantRun,
-  LibraryAssistantSuggestion,
-  LibraryAssistantSuggestionStatus
+import {
+  isLibraryAssistantAutoApplicable,
+  type LibraryAssistantDecision,
+  type LibraryAssistantReviewItem,
+  type LibraryAssistantRun,
+  type LibraryAssistantSuggestion,
+  type LibraryAssistantSuggestionStatus
 } from '@home-music/shared/library-assistant';
 import { AlertTriangle, Check, ChevronLeft, LoaderCircle, RefreshCw, Sparkles, X } from 'lucide-react';
 import {
@@ -47,10 +48,7 @@ function isOpen(suggestion: LibraryAssistantSuggestion) {
 }
 
 function isSafe(suggestion: LibraryAssistantSuggestion) {
-  const blocked = ['human-override', 'ambiguous-candidates', 'source-conflict', 'metadata-conflict'] as const;
-  return isOpen(suggestion)
-    && suggestion.confidence === 'high'
-    && !blocked.some(reason => suggestion.reasonCodes.includes(reason));
+  return isLibraryAssistantAutoApplicable(suggestion);
 }
 
 function confidenceLabel(value: LibraryAssistantSuggestion['confidence']) {
@@ -65,6 +63,23 @@ function statusLabel(status: LibraryAssistantSuggestionStatus) {
 
 function sleep(ms: number) {
   return new Promise(resolve => window.setTimeout(resolve, ms));
+}
+
+function mergeSuggestions(
+  history: LibraryAssistantSuggestion[],
+  reviewItems: LibraryAssistantReviewItem[],
+  runId: string | null
+) {
+  const byId = new Map(history.map(suggestion => [suggestion.id, suggestion]));
+  if (runId) {
+    for (const item of reviewItems) {
+      if (item.suggestion.runId === runId) byId.set(item.suggestion.id, item.suggestion);
+    }
+  }
+  return [...byId.values()].sort((left, right) => {
+    const created = left.createdAt.localeCompare(right.createdAt);
+    return created || left.id.localeCompare(right.id);
+  });
 }
 
 export function AdminLibraryAssistantScreen({ onBack }: Props) {
@@ -93,6 +108,7 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
     if (filter === 'review') return isOpen(suggestion) && !isSafe(suggestion);
     return suggestion.status === filter;
   }), [filter, suggestions]);
+  const visibleSafeSuggestions = useMemo(() => visibleSuggestions.filter(isSafe), [visibleSuggestions]);
 
   const load = useCallback(async (quiet = false) => {
     const version = ++requestVersion.current;
@@ -105,7 +121,7 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
       if (version !== requestVersion.current) return;
       setRuns(runsResponse.runs);
       setReviewItems(reviewResponse.items);
-      setSuggestions(suggestionResponse.suggestions);
+      setSuggestions(mergeSuggestions(suggestionResponse.suggestions, reviewResponse.items, metadataRun?.id ?? null));
     } catch (error) {
       if (version === requestVersion.current) setFeedback({ kind: 'error', message: error instanceof Error ? error.message : 'Não foi possível carregar o Assistente da Biblioteca.' });
     } finally {
@@ -143,7 +159,9 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
         ? { kind: 'error', message: run.error?.message ?? 'A análise não pôde ser concluída.' }
         : run.status === 'cancelled'
           ? { kind: 'warning', message: 'Análise cancelada. Nenhuma sugestão foi aplicada automaticamente.' }
-          : { kind: 'success', message: 'Análise concluída. Revise as sugestões antes de aplicar.' });
+          : run.summary.total === 0
+            ? { kind: 'success', message: 'Análise concluída sem candidatos de metadata. Nenhuma alteração foi aplicada.' }
+            : { kind: 'success', message: 'Análise concluída. Revise as sugestões antes de aplicar.' });
       await load(true);
     } catch (error) {
       if (version === analysisVersion.current) setFeedback({ kind: 'error', message: error instanceof Error ? error.message : 'Não foi possível iniciar a análise.' });
@@ -190,6 +208,8 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
         setFeedback({ kind: 'success', message: 'Sugestão aplicada. A biblioteca foi atualizada sem rescan.' });
       } else if (result.outcome === 'rejected') {
         setFeedback({ kind: 'success', message: 'Sugestão rejeitada e mantida no histórico da análise.' });
+      } else if (result.outcome === 'already-applied' || result.outcome === 'already-rejected') {
+        setFeedback({ kind: 'success', message: 'Esta sugestão já havia sido resolvida. A revisão foi atualizada.' });
       } else if (result.outcome === 'stale') {
         setFeedback({ kind: 'warning', message: result.message ?? 'A sugestão ficou desatualizada. Analise novamente.' });
       } else {
@@ -235,7 +255,7 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
           processed += 1;
           if (item?.outcome === 'applied') applied += 1;
           else if (item?.outcome === 'stale') stale += 1;
-          else if (item?.outcome === 'already-applied') alreadyResolved += 1;
+          else if (item?.outcome === 'already-applied' || item?.outcome === 'already-rejected') alreadyResolved += 1;
           else failed += 1;
         } catch {
           processed += 1;
@@ -266,6 +286,17 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
   }
 
   const runActive = Boolean(latestRun && !TERMINAL_RUNS.has(latestRun.status));
+  const persistentEmptyState = !loading && latestRun && visibleSuggestions.length === 0
+    ? latestRun.status === 'failed'
+      ? { role: 'alert' as const, message: `${latestRun.error?.message ?? 'A análise falhou.'}${latestRun.error?.action ? ` ${latestRun.error.action}` : ''}` }
+      : latestRun.status === 'cancelled'
+        ? { role: 'status' as const, message: 'Análise cancelada. Nenhuma sugestão foi aplicada automaticamente.' }
+        : latestRun.status === 'completed' && latestRun.summary.total === 0
+          ? { role: 'status' as const, message: 'Análise concluída sem candidatos de metadata. Nenhuma alteração foi aplicada.' }
+          : latestRun.status === 'stale' && filter === 'open'
+            ? { role: 'status' as const, message: 'As sugestões abertas ficaram desatualizadas. Execute uma nova análise para continuar.' }
+            : null
+    : null;
 
   return (
     <section className="assistant-admin" aria-labelledby="library-assistant-title">
@@ -289,7 +320,7 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
       <section className="assistant-admin__actions" aria-label="Ações do assistente">
         <button type="button" className="primary-button" disabled={analyzing || mutating || runActive} onClick={() => void analyze()}>{analyzing || runActive ? <LoaderCircle className="is-spinning" /> : <Sparkles />}{analyzing || runActive ? 'Analisando biblioteca…' : 'Analisar biblioteca'}</button>
         {(analyzing || runActive) && <button type="button" onClick={() => void cancelAnalysis()}>Cancelar análise</button>}
-        <button type="button" disabled={mutating || safeSuggestions.length === 0} onClick={() => setSelected(new Set(visibleSuggestions.filter(isSafe).map(item => item.id)))}>Selecionar seguras</button>
+        <button type="button" disabled={mutating || visibleSafeSuggestions.length === 0} onClick={() => setSelected(new Set(visibleSafeSuggestions.map(item => item.id)))}>Selecionar seguras</button>
         <button type="button" disabled={mutating || selected.size === 0} onClick={() => void applySelected()}>{mutating ? <LoaderCircle className="is-spinning" /> : <Check />} {batching ? 'Aplicando lote…' : `Aplicar selecionadas (${selected.size})`}</button>
         {batching && <button type="button" onClick={cancelBatch}>Cancelar lote</button>}
       </section>
@@ -300,24 +331,27 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
 
       {loading ? <div className="assistant-admin__empty" role="status"><LoaderCircle className="is-spinning" /> Carregando sugestões…</div>
         : !latestRun ? <div className="assistant-admin__empty">Nenhuma análise de metadados foi executada. Use “Analisar biblioteca” para começar.</div>
-          : visibleSuggestions.length === 0 ? <div className="assistant-admin__empty">Nenhuma sugestão neste filtro.</div>
-            : <div className="assistant-admin__list" aria-live="polite">{visibleSuggestions.map(suggestion => {
-              const item = reviewMap.get(suggestion.id);
-              const target = suggestion.target.capability === 'metadata' ? suggestion.target : null;
-              const safe = isSafe(suggestion);
-              const canDecide = Boolean(item && target && isOpen(suggestion));
-              return <article key={suggestion.id} className="assistant-admin-card">
-                <div className="assistant-admin-card__topline">
-                  {safe && canDecide ? <label className="assistant-admin-card__select"><input type="checkbox" checked={selected.has(suggestion.id)} onChange={event => setSelected(current => { const next = new Set(current); if (event.target.checked) next.add(suggestion.id); else next.delete(suggestion.id); return next; })} />Selecionar</label> : <span />}
-                  <div className="assistant-admin-card__badges"><span>{statusLabel(suggestion.status)}</span><span>{confidenceLabel(suggestion.confidence)}</span><span>{suggestion.provenance.source}</span></div>
-                </div>
-                <div className="assistant-admin-card__identity"><strong>{item?.track.title ?? `Faixa ${suggestion.target.trackId}`}</strong>{item && <small>{item.track.artist} · {item.track.album}</small>}</div>
-                {target && <dl className="assistant-admin-card__diff"><div><dt>Campo</dt><dd>{FIELD_LABELS[target.field] ?? target.field}</dd></div><div><dt>Atual</dt><dd>{target.currentValue || '—'}</dd></div><div><dt>Sugerido</dt><dd>{target.suggestedValue || '—'}</dd></div></dl>}
-                <div className="assistant-admin-card__evidence"><strong>Por que o assistente sugeriu isso?</strong><ul>{suggestion.reasonCodes.map(reason => <li key={reason}>{REASON_LABELS[reason] ?? reason}</li>)}</ul></div>
-                {suggestion.reasonCodes.includes('human-override') && <div className="assistant-admin-card__warning" role="note"><AlertTriangle /> Existe uma decisão humana neste metadado. Ela nunca entra no lote seguro automaticamente.</div>}
-                {canDecide && <div className="assistant-admin-card__actions"><button type="button" disabled={mutating} onClick={() => void decideOne(suggestion, 'reject')}><X /> Rejeitar</button><button type="button" className="primary-button" disabled={mutating} onClick={() => void decideOne(suggestion, 'apply')}><Check /> Aplicar este campo</button></div>}
-              </article>;
-            })}</div>}
+          : persistentEmptyState ? <div className="assistant-admin__empty" role={persistentEmptyState.role}>{persistentEmptyState.message}</div>
+            : visibleSuggestions.length === 0 ? <div className="assistant-admin__empty">Nenhuma sugestão neste filtro.</div>
+              : <div className="assistant-admin__list" aria-live="polite">{visibleSuggestions.map(suggestion => {
+                const item = reviewMap.get(suggestion.id);
+                const target = suggestion.target.capability === 'metadata' ? suggestion.target : null;
+                const safe = isSafe(suggestion);
+                const canDecide = Boolean(item && target && isOpen(suggestion));
+                const physicalValue = target && item ? item.track.physical[target.field] : null;
+                const showPhysical = physicalValue != null && physicalValue !== target?.currentValue;
+                return <article key={suggestion.id} className="assistant-admin-card">
+                  <div className="assistant-admin-card__topline">
+                    {safe && canDecide ? <label className="assistant-admin-card__select"><input type="checkbox" checked={selected.has(suggestion.id)} onChange={event => setSelected(current => { const next = new Set(current); if (event.target.checked) next.add(suggestion.id); else next.delete(suggestion.id); return next; })} />Selecionar</label> : <span />}
+                    <div className="assistant-admin-card__badges"><span>{statusLabel(suggestion.status)}</span><span>{confidenceLabel(suggestion.confidence)}</span><span>{suggestion.provenance.source}</span></div>
+                  </div>
+                  <div className="assistant-admin-card__identity"><strong>{item?.track.title ?? `Faixa ${suggestion.target.trackId}`}</strong>{item && <small>{item.track.artist} · {item.track.album}</small>}</div>
+                  {target && <dl className="assistant-admin-card__diff"><div><dt>Campo</dt><dd>{FIELD_LABELS[target.field] ?? target.field}</dd></div>{showPhysical && <div><dt>Físico</dt><dd>{physicalValue || '—'}</dd></div>}<div><dt>Atual efetivo</dt><dd>{target.currentValue || '—'}</dd></div><div><dt>Sugerido</dt><dd>{target.suggestedValue || '—'}</dd></div></dl>}
+                  <div className="assistant-admin-card__evidence"><strong>Por que o assistente sugeriu isso?</strong><ul>{suggestion.reasonCodes.map(reason => <li key={reason}>{REASON_LABELS[reason] ?? reason}</li>)}</ul></div>
+                  {suggestion.reasonCodes.includes('human-override') && <div className="assistant-admin-card__warning" role="note"><AlertTriangle /> Existe uma decisão humana neste metadado. Ela nunca entra no lote seguro automaticamente.</div>}
+                  {canDecide && <div className="assistant-admin-card__actions"><button type="button" disabled={mutating} onClick={() => void decideOne(suggestion, 'reject')}><X /> Rejeitar</button><button type="button" className="primary-button" disabled={mutating} onClick={() => void decideOne(suggestion, 'apply')}><Check /> Aplicar este campo</button></div>}
+                </article>;
+              })}</div>}
     </section>
   );
 }
