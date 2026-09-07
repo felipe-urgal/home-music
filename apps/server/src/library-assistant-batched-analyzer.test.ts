@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { Track } from '@home-music/shared';
-import {
-  LibraryAssistantProviderGateway,
-  type LibraryAssistantProviderCacheEntry,
-  type LibraryAssistantProviderCacheKey
-} from './library-assistant-provider.js';
+import { LibraryAssistantProviderGateway } from './library-assistant-provider.js';
+import type {
+  LibraryAssistantProviderCacheEntry,
+  LibraryAssistantProviderCacheKey
+} from './library-assistant-store.js';
 import {
   createBatchedLibraryAssistantAnalyzer
 } from './library-assistant-batched-analyzer.js';
@@ -129,7 +129,7 @@ test('falha de um lote cai para isolamento por faixa e não derruba as vizinhas'
   ]);
 });
 
-test('wrapper aplica timeout padrão maior nas consultas do provider', async () => {
+test('wrapper preserva consulta do provider quando o timeout maior está habilitado', async () => {
   const cache = new Map<string, LibraryAssistantProviderCacheEntry>();
   const providers = new LibraryAssistantProviderGateway({
     getProviderCache(cacheKey, nowMs) {
