@@ -37,48 +37,6 @@ type ReviewServiceOptions = {
 };
 
 type ReviewRun = NonNullable<ReturnType<LibraryAssistantStore['getRun']>>;
-type Row = Record<string, unknown>;
-
-function stringValue(value: unknown) {
-  return typeof value === 'string' ? value : '';
-}
-
-function jsonValue<T>(value: unknown, fallback: T): T {
-  if (typeof value !== 'string') return fallback;
-  try {
-    return JSON.parse(value) as T;
-  } catch {
-    return fallback;
-  }
-}
-
-function storedSuggestionFromRow(row: Row): LibraryAssistantStoredSuggestion {
-  const capability = stringValue(row.capability) as LibraryAssistantStoredSuggestion['suggestion']['capability'];
-  const trackId = stringValue(row.track_id);
-  const target = jsonValue<LibraryAssistantStoredSuggestion['suggestion']['target']>(row.target_json, {
-    capability: 'metadata',
-    trackId,
-    field: 'title',
-    currentValue: '',
-    suggestedValue: ''
-  });
-  return {
-    premiseSignature: stringValue(row.premise_signature),
-    suggestion: {
-      id: stringValue(row.id),
-      runId: stringValue(row.run_id),
-      capability,
-      status: stringValue(row.status) as LibraryAssistantStoredSuggestion['suggestion']['status'],
-      confidence: stringValue(row.confidence) as LibraryAssistantStoredSuggestion['suggestion']['confidence'],
-      reasonCodes: jsonValue(row.reason_codes_json, []),
-      evidence: jsonValue(row.evidence_json, []),
-      provenance: jsonValue(row.provenance_json, { source: 'local', providerVersion: null, externalId: null }),
-      target: { ...target, capability, trackId } as LibraryAssistantStoredSuggestion['suggestion']['target'],
-      createdAt: stringValue(row.created_at),
-      updatedAt: stringValue(row.updated_at)
-    }
-  };
-}
 
 class LibraryAssistantDecisionStore {
   private readonly db: DatabaseSync;
@@ -91,16 +49,6 @@ class LibraryAssistantDecisionStore {
 
   close() {
     this.db.close();
-  }
-
-  getSuggestionRecord(runId: string, suggestionId: string) {
-    const row = this.db.prepare(`
-      SELECT *
-      FROM library_assistant_suggestions
-      WHERE run_id = ? AND id = ?
-      LIMIT 1;
-    `).get(runId, suggestionId) as Row | undefined;
-    return row ? storedSuggestionFromRow(row) : null;
   }
 
   transitionSuggestion(
@@ -256,7 +204,7 @@ export class LibraryAssistantReviewService {
 
     const results: LibraryAssistantDecisionResult[] = [];
     for (const decision of decisions) {
-      const record = this.decisions.getSuggestionRecord(decision.runId, decision.suggestionId);
+      const record = this.findSuggestionRecord(decision.runId, decision.suggestionId);
       if (
         decision.action === 'apply'
         && record
@@ -278,6 +226,12 @@ export class LibraryAssistantReviewService {
       }
     }
     return { results, summary: summary(results) };
+  }
+
+  private findSuggestionRecord(runId: string, suggestionId: string) {
+    return this.options.store
+      .listSuggestionRecords(runId, { limit: MAX_REVIEW_ITEMS })
+      .find(item => item.suggestion.id === suggestionId) ?? null;
   }
 
   private toReviewItem(
@@ -323,7 +277,7 @@ export class LibraryAssistantReviewService {
   private decideSerial(decision: LibraryAssistantDecision): LibraryAssistantDecisionResult {
     const run = this.options.store.getRun(decision.runId);
     if (!run) return result(decision, 'not-found', null, 'Run não encontrado.');
-    const record = this.decisions.getSuggestionRecord(decision.runId, decision.suggestionId);
+    const record = this.findSuggestionRecord(decision.runId, decision.suggestionId);
     if (!record) return result(decision, 'not-found', null, 'Sugestão não encontrada.');
 
     const suggestion = record.suggestion;
@@ -394,7 +348,7 @@ export class LibraryAssistantReviewService {
   }
 
   private resolveRace(decision: LibraryAssistantDecision) {
-    const record = this.decisions.getSuggestionRecord(decision.runId, decision.suggestionId);
+    const record = this.findSuggestionRecord(decision.runId, decision.suggestionId);
     if (!record) return result(decision, 'not-found', null, 'Sugestão não encontrada.');
     if (record.suggestion.status === 'applied') return result(decision, 'already-applied', null);
     if (record.suggestion.status === 'rejected') return result(decision, 'already-rejected', null);
