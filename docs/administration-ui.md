@@ -79,7 +79,12 @@ Sugestão de alta confiança não equivale a autorização automática. Itens co
 
 O componente protege contra respostas assíncronas antigas com versões de request/análise. Carregamento, análise, vazio, erro, cancelamento, mutação, stale e sucesso são estados visíveis. Feedback relevante usa `role="status"`/`role="alert"`, a lista usa região `aria-live` e controles possuem labels/estado pressionado quando aplicável.
 
-O botão de cancelamento atual pertence ao **run de análise**: ele interrompe novo trabalho e não transforma resultados parciais em aplicação automática. Aplicações já confirmadas nunca são revertidas silenciosamente.
+Existem dois cancelamentos distintos:
+
+- **Cancelar análise** interrompe novo trabalho do run e nunca transforma resultados parciais em aplicação automática;
+- **Cancelar lote** é observado entre decisões: o item já em andamento pode concluir, nenhum novo item é iniciado, sucessos confirmados permanecem e itens ainda não iniciados continuam selecionados para revisão/retry.
+
+Aplicações já confirmadas nunca são revertidas silenciosamente.
 
 Contrato completo e regras de backend: [`library-assistant.md`](library-assistant.md).
 
