@@ -4,12 +4,13 @@ Este documento descreve **o estado técnico corrente e o próximo trabalho relev
 
 O histórico detalhado acumulado até a fase 14 foi preservado em [`history/roadmap-through-phase-14.md`](history/roadmap-through-phase-14.md). Documentos de implementação da antiga fase 7.5 ficam em [`history/phase-7.5/`](history/phase-7.5/).
 
-## Estado em 2026-09-06
+## Estado em 2026-09-07
 
 - **Fase 7.5 — multiusuário/autenticação:** concluída e incorporada à arquitetura atual. Fonte canônica: [`multi-user-auth.md`](multi-user-auth.md).
 - **Fase 14 — portabilidade de dados pessoais:** implementação concluída na `main` com o PR #324. Contrato atual: [`personal-data-portability.md`](personal-data-portability.md).
-- **Fase 15 — Library Assistant:** fase ativa, coordenada pela issue #310. A fundação #311 está implementada e documentada em [`library-assistant.md`](library-assistant.md); as integrações concretas continuam no plano [`library-assistant-plan.md`](library-assistant-plan.md).
+- **Fase 15 — Library Assistant:** fase ativa, coordenada pela issue #310. A fundação #311 e a identificação de metadata com MusicBrainz #312 estão implementadas/documentadas em [`library-assistant.md`](library-assistant.md); revisão/aplicação segura segue na #313.
 - A camada A do fallback de artwork (#321) e a publicação de artwork canônica no Media Session (#325) já foram incorporadas; validações físicas específicas de PWA permanecem registradas nas issues correspondentes como QA pós-merge.
+- O player Agora/Tocando agora possui apresentação de vinil animado (#326), reutilizando `Artwork`/fallback canônico e respeitando `prefers-reduced-motion`.
 - Correções de cold start offline (#328) e instrumentação de continuidade de playback iOS (#327) já foram incorporadas; qualquer evidência de hardware adicional continua sendo rastreada nas próprias issues.
 
 A `main` atual já contém exportação e importação de dados pessoais por usuário, validação/dry-run, política de merge e E2E focado de importação pessoal no CI.
@@ -37,8 +38,8 @@ Umbrella: **#310 — Library Assistant**.
 | Issue | Entrega | Estado técnico |
 | --- | --- | --- |
 | #311 | fundação de runs/sugestões, evidências, proveniência, stale, cache/provider e lifecycle admin | implementada |
-| #312 | identificação de metadata com MusicBrainz e matching explicável | próxima onda |
-| #313 | revisão e aplicação segura de sugestões de metadata | depende de #312 |
+| #312 | identificação de metadata com MusicBrainz e matching explicável | implementada |
+| #313 | revisão e aplicação segura de sugestões de metadata | próxima onda; depende do contrato da #312 |
 | #314 | artwork via Cover Art Archive usando cover override canônico | planejada |
 | #315 | enriquecimento de lyrics reutilizando o domínio atual | planejada |
 | #316 | resolução de lyrics consistente entre player/offline/OpenSubsonic | planejada |
@@ -48,13 +49,13 @@ Umbrella: **#310 — Library Assistant**.
 | #321 | fallback canônico de artwork; camada A derivada pronta, camada B persistente opcional | parcial |
 | #322 | transcrição/alinhamento local opcional | P2 |
 | #325 | artwork canônica no Media Session | implementada; QA físico rastreado |
-| #326 | vinil animado no player Agora usando a mesma identidade | planejada |
+| #326 | vinil animado no player Agora usando a mesma identidade | implementada; QA físico de fluidez/bateria continua manual |
 
-O detalhamento de arquitetura, riscos, etapas e critérios está em [`library-assistant-plan.md`](library-assistant-plan.md). O comportamento já implementado da fundação está em [`library-assistant.md`](library-assistant.md). Se plano e implementação divergirem, código/testes e a issue executada têm precedência.
+O detalhamento de arquitetura, riscos, etapas e critérios está em [`library-assistant-plan.md`](library-assistant-plan.md). O comportamento implementado está em [`library-assistant.md`](library-assistant.md). Se plano e implementação divergirem, código/testes e a issue executada têm precedência.
 
-### Fundação já estabilizada (#311)
+### Base estabilizada (#311 + #312)
 
-A base da Fase 15 agora possui:
+A Fase 15 agora possui:
 
 - contratos compartilhados/versionados para runs, sugestões, evidências, confiança e proveniência;
 - persistência mínima no mesmo SQLite, sem cópia canônica de `tracks`;
@@ -63,9 +64,14 @@ A base da Fase 15 agora possui:
 - lifecycle de start/list/get/cancel sem endpoint de aplicação;
 - cache derivado de provider com TTL/versionamento, rate limit, timeout, cancelamento e User-Agent;
 - reuso de `HeavyWorkQueue` e `LongJobObservability`;
-- regressões de autorização/anti-CSRF, reopen, cancelamento, concorrência e ausência de mutação das autoridades efetivas.
+- regressões de autorização/anti-CSRF, reopen, cancelamento, concorrência e ausência de mutação das autoridades efetivas;
+- analyzer real de metadata via MusicBrainz com busca progressiva e endpoint fixo;
+- matching conservador e explicável por título, artista, álbum, `albumArtist`, duração e contexto coletivo;
+- fallback por basename somente quando metadata essencial está ausente, sem envio de path/filename bruto e sempre limitado a baixa confiança;
+- IDs externos tipados de recording/release/release-group/artist;
+- proteção explícita de override humano e bloqueio de high confidence em conflito/ambiguidade.
 
-A #312 deve adicionar o primeiro analyzer real sobre esses contratos, sem criar outro lifecycle/cache/modelo de sugestão.
+A #313 deve consumir essas sugestões e implementar revisão/aplicação segura sem duplicar matcher, lifecycle ou cache.
 
 ## Portabilidade pessoal — estado consolidado
 
