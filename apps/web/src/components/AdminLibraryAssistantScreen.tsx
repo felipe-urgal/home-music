@@ -26,6 +26,16 @@ type Filter = 'all' | 'open' | 'safe' | 'review' | 'stale' | 'applied' | 'reject
 type Feedback = { kind: 'success' | 'error' | 'warning'; message: string };
 
 const TERMINAL_RUNS = new Set(['completed', 'failed', 'cancelled', 'stale']);
+const FILTERS: readonly [Filter, string][] = [
+  ['open', 'Abertas'],
+  ['safe', 'Seguras'],
+  ['review', 'Revisão'],
+  ['stale', 'Desatualizadas'],
+  ['applied', 'Aplicadas'],
+  ['rejected', 'Rejeitadas'],
+  ['failed', 'Falhas'],
+  ['all', 'Todas']
+];
 const FIELD_LABELS: Record<string, string> = { title: 'Título', artist: 'Artista', album: 'Álbum', albumArtist: 'Artista do álbum' };
 const REASON_LABELS: Record<string, string> = {
   'provider-match': 'Correspondência encontrada no provedor',
@@ -59,6 +69,25 @@ function statusLabel(status: LibraryAssistantSuggestionStatus) {
   return ({
     pending: 'Pendente', review: 'Revisão necessária', applied: 'Aplicada', rejected: 'Rejeitada', stale: 'Desatualizada', failed: 'Falhou'
   } satisfies Record<LibraryAssistantSuggestionStatus, string>)[status];
+}
+
+function runTitle(run: LibraryAssistantRun | null) {
+  if (!run) return 'Biblioteca ainda não analisada';
+  if (run.status === 'queued' || run.status === 'running') return 'Análise em andamento';
+  if (run.status === 'failed') return 'Análise interrompida';
+  if (run.status === 'cancelled') return 'Análise cancelada';
+  if (run.status === 'stale') return 'Análise desatualizada';
+  return run.summary.total === 0 ? 'Nenhuma sugestão encontrada' : 'Sugestões prontas para revisão';
+}
+
+function runDescription(run: LibraryAssistantRun | null) {
+  if (!run) return 'Compare seus metadados com o MusicBrainz sem alterar a biblioteca automaticamente.';
+  if (run.status === 'queued' || run.status === 'running') return 'Consultando o MusicBrainz e comparando os resultados com os metadados atuais.';
+  if (run.status === 'failed') return 'O último processamento não terminou. Você pode tentar novamente sem aplicar nenhuma alteração.';
+  if (run.status === 'cancelled') return 'O processamento foi interrompido e nenhuma sugestão foi aplicada automaticamente.';
+  if (run.status === 'stale') return 'A biblioteca mudou desde esta análise. Execute uma nova análise antes de continuar.';
+  if (run.summary.total === 0) return 'A análise terminou sem candidatos confiáveis para revisão.';
+  return `${run.summary.total} sugestão${run.summary.total === 1 ? '' : 'ões'} encontrada${run.summary.total === 1 ? '' : 's'}. Revise antes de aplicar.`;
 }
 
 function sleep(ms: number) {
@@ -101,6 +130,7 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
   const reviewMap = useMemo(() => new Map(reviewItems.map(item => [item.suggestion.id, item])), [reviewItems]);
   const safeSuggestions = useMemo(() => suggestions.filter(isSafe), [suggestions]);
   const reviewSuggestions = useMemo(() => suggestions.filter(item => isOpen(item) && !isSafe(item)), [suggestions]);
+  const openSuggestions = useMemo(() => suggestions.filter(isOpen), [suggestions]);
   const visibleSuggestions = useMemo(() => suggestions.filter(suggestion => {
     if (filter === 'all') return true;
     if (filter === 'open') return isOpen(suggestion);
@@ -149,14 +179,14 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
       let run = (await startLibraryAssistantMetadataRun()).run;
       setRuns(current => [run, ...current.filter(item => item.id !== run.id)]);
       while (!TERMINAL_RUNS.has(run.status)) {
-        await sleep(700);
+        await sleep(1_500);
         if (version !== analysisVersion.current) return;
         run = (await getLibraryAssistantRun(run.id)).run;
         if (version !== analysisVersion.current) return;
         setRuns(current => [run, ...current.filter(item => item.id !== run.id)]);
       }
       setFeedback(run.status === 'failed'
-        ? { kind: 'error', message: run.error?.message ?? 'A análise não pôde ser concluída.' }
+        ? null
         : run.status === 'cancelled'
           ? { kind: 'warning', message: 'Análise cancelada. Nenhuma sugestão foi aplicada automaticamente.' }
           : run.summary.total === 0
@@ -286,72 +316,80 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
   }
 
   const runActive = Boolean(latestRun && !TERMINAL_RUNS.has(latestRun.status));
-  const persistentEmptyState = !loading && latestRun && visibleSuggestions.length === 0
-    ? latestRun.status === 'failed'
-      ? { role: 'alert' as const, message: `${latestRun.error?.message ?? 'A análise falhou.'}${latestRun.error?.action ? ` ${latestRun.error.action}` : ''}` }
-      : latestRun.status === 'cancelled'
-        ? { role: 'status' as const, message: 'Análise cancelada. Nenhuma sugestão foi aplicada automaticamente.' }
-        : latestRun.status === 'completed' && latestRun.summary.total === 0
-          ? { role: 'status' as const, message: 'Análise concluída sem candidatos de metadata. Nenhuma alteração foi aplicada.' }
-          : latestRun.status === 'stale' && filter === 'open'
-            ? { role: 'status' as const, message: 'As sugestões abertas ficaram desatualizadas. Execute uma nova análise para continuar.' }
-            : null
-    : null;
+  const failedRun = latestRun?.status === 'failed' ? latestRun : null;
+  const resolvedCount = (latestRun?.summary.applied ?? 0) + (latestRun?.summary.rejected ?? 0);
 
   return (
     <section className="assistant-admin" aria-labelledby="library-assistant-title">
       <header className="assistant-admin__header">
         <button className="icon-button" type="button" aria-label="Voltar" onClick={onBack}><ChevronLeft /></button>
-        <div><strong id="library-assistant-title">Assistente da Biblioteca</strong><small>Analise, entenda e aplique metadados com revisão humana.</small></div>
+        <div>
+          <strong id="library-assistant-title">Assistente da Biblioteca</strong>
+          <small>Encontre metadados melhores, revise as diferenças e decida o que aplicar.</small>
+        </div>
         <button type="button" className="assistant-admin__refresh" disabled={loading || analyzing || mutating} onClick={() => void load()}><RefreshCw className={loading ? 'is-spinning' : ''} /> Atualizar</button>
       </header>
 
       {feedback && <div className={`assistant-admin__feedback is-${feedback.kind}`} role={feedback.kind === 'error' ? 'alert' : 'status'}>{feedback.kind === 'success' ? <Check /> : <AlertTriangle />}<span>{feedback.message}</span></div>}
 
-      <section className="assistant-admin__summary" aria-label="Resumo da análise">
-        <div><small>Sugestões</small><strong>{latestRun?.summary.total ?? 0}</strong></div>
-        <div><small>Seguras</small><strong>{safeSuggestions.length}</strong></div>
-        <div><small>Precisam de revisão</small><strong>{reviewSuggestions.length}</strong></div>
-        <div><small>Desatualizadas</small><strong>{latestRun?.summary.stale ?? 0}</strong></div>
-        <div><small>Aplicadas</small><strong>{latestRun?.summary.applied ?? 0}</strong></div>
-        <div><small>Rejeitadas</small><strong>{latestRun?.summary.rejected ?? 0}</strong></div>
+      <section className={`assistant-admin__overview${failedRun ? ' is-error' : ''}`} aria-label="Estado da análise">
+        <div className="assistant-admin__overview-main">
+          <div className="assistant-admin__overview-icon" aria-hidden="true">{runActive ? <LoaderCircle className="is-spinning" /> : failedRun ? <AlertTriangle /> : <Sparkles />}</div>
+          <div className="assistant-admin__overview-copy">
+            <small>Última análise</small>
+            <strong>{runTitle(latestRun)}</strong>
+            <span>{runDescription(latestRun)}</span>
+          </div>
+          <div className="assistant-admin__overview-actions">
+            <button type="button" className="primary-button" disabled={analyzing || mutating || runActive} onClick={() => void analyze()}>{analyzing || runActive ? <LoaderCircle className="is-spinning" /> : <Sparkles />}{analyzing || runActive ? 'Analisando…' : failedRun ? 'Tentar novamente' : 'Analisar biblioteca'}</button>
+            {(analyzing || runActive) && <button type="button" onClick={() => void cancelAnalysis()}>Cancelar</button>}
+          </div>
+        </div>
+        <dl className="assistant-admin__metrics">
+          <div><dt>Abertas</dt><dd>{openSuggestions.length}</dd></div>
+          <div><dt>Seguras</dt><dd>{safeSuggestions.length}</dd></div>
+          <div><dt>Revisão</dt><dd>{reviewSuggestions.length}</dd></div>
+          <div><dt>Desatualizadas</dt><dd>{latestRun?.summary.stale ?? 0}</dd></div>
+          <div><dt>Resolvidas</dt><dd>{resolvedCount}</dd></div>
+        </dl>
       </section>
 
-      <section className="assistant-admin__actions" aria-label="Ações do assistente">
-        <button type="button" className="primary-button" disabled={analyzing || mutating || runActive} onClick={() => void analyze()}>{analyzing || runActive ? <LoaderCircle className="is-spinning" /> : <Sparkles />}{analyzing || runActive ? 'Analisando biblioteca…' : 'Analisar biblioteca'}</button>
-        {(analyzing || runActive) && <button type="button" onClick={() => void cancelAnalysis()}>Cancelar análise</button>}
-        <button type="button" disabled={mutating || visibleSafeSuggestions.length === 0} onClick={() => setSelected(new Set(visibleSafeSuggestions.map(item => item.id)))}>Selecionar seguras</button>
-        <button type="button" disabled={mutating || selected.size === 0} onClick={() => void applySelected()}>{mutating ? <LoaderCircle className="is-spinning" /> : <Check />} {batching ? 'Aplicando lote…' : `Aplicar selecionadas (${selected.size})`}</button>
-        {batching && <button type="button" onClick={cancelBatch}>Cancelar lote</button>}
+      <section className="assistant-admin__reviewbar" aria-label="Revisão de sugestões">
+        <nav className="assistant-admin__filters" aria-label="Filtros das sugestões">
+          {FILTERS.map(([value, label]) => <button key={value} type="button" aria-pressed={filter === value} onClick={() => setFilter(value)}>{label}</button>)}
+        </nav>
+        <div className="assistant-admin__selection-actions">
+          <button type="button" disabled={mutating || visibleSafeSuggestions.length === 0} onClick={() => setSelected(new Set(visibleSafeSuggestions.map(item => item.id)))}>Selecionar seguras</button>
+          <button type="button" className="primary-button" disabled={mutating || selected.size === 0} onClick={() => void applySelected()}>{mutating ? <LoaderCircle className="is-spinning" /> : <Check />}{batching ? 'Aplicando…' : `Aplicar (${selected.size})`}</button>
+          {batching && <button type="button" onClick={cancelBatch}>Cancelar lote</button>}
+        </div>
       </section>
 
-      <nav className="assistant-admin__filters" aria-label="Filtros das sugestões">
-        {([['open', 'Abertas'], ['safe', 'Seguras'], ['review', 'Revisão'], ['stale', 'Desatualizadas'], ['applied', 'Aplicadas'], ['rejected', 'Rejeitadas'], ['failed', 'Falhas'], ['all', 'Todas']] as const).map(([value, label]) => <button key={value} type="button" aria-pressed={filter === value} onClick={() => setFilter(value)}>{label}</button>)}
-      </nav>
-
-      {loading ? <div className="assistant-admin__empty" role="status"><LoaderCircle className="is-spinning" /> Carregando sugestões…</div>
-        : !latestRun ? <div className="assistant-admin__empty">Nenhuma análise de metadados foi executada. Use “Analisar biblioteca” para começar.</div>
-          : persistentEmptyState ? <div className="assistant-admin__empty" role={persistentEmptyState.role}>{persistentEmptyState.message}</div>
-            : visibleSuggestions.length === 0 ? <div className="assistant-admin__empty">Nenhuma sugestão neste filtro.</div>
-              : <div className="assistant-admin__list" aria-live="polite">{visibleSuggestions.map(suggestion => {
-                const item = reviewMap.get(suggestion.id);
-                const target = suggestion.target.capability === 'metadata' ? suggestion.target : null;
-                const safe = isSafe(suggestion);
-                const canDecide = Boolean(item && target && isOpen(suggestion));
-                const physicalValue = target && item ? item.track.physical[target.field] : null;
-                const showPhysical = physicalValue != null && physicalValue !== target?.currentValue;
-                return <article key={suggestion.id} className="assistant-admin-card">
-                  <div className="assistant-admin-card__topline">
-                    {safe && canDecide ? <label className="assistant-admin-card__select"><input type="checkbox" checked={selected.has(suggestion.id)} onChange={event => setSelected(current => { const next = new Set(current); if (event.target.checked) next.add(suggestion.id); else next.delete(suggestion.id); return next; })} />Selecionar</label> : <span />}
-                    <div className="assistant-admin-card__badges"><span>{statusLabel(suggestion.status)}</span><span>{confidenceLabel(suggestion.confidence)}</span><span>{suggestion.provenance.source}</span></div>
-                  </div>
-                  <div className="assistant-admin-card__identity"><strong>{item?.track.title ?? `Faixa ${suggestion.target.trackId}`}</strong>{item && <small>{item.track.artist} · {item.track.album}</small>}</div>
-                  {target && <dl className="assistant-admin-card__diff"><div><dt>Campo</dt><dd>{FIELD_LABELS[target.field] ?? target.field}</dd></div>{showPhysical && <div><dt>Físico</dt><dd>{physicalValue || '—'}</dd></div>}<div><dt>Atual efetivo</dt><dd>{target.currentValue || '—'}</dd></div><div><dt>Sugerido</dt><dd>{target.suggestedValue || '—'}</dd></div></dl>}
-                  <div className="assistant-admin-card__evidence"><strong>Por que o assistente sugeriu isso?</strong><ul>{suggestion.reasonCodes.map(reason => <li key={reason}>{REASON_LABELS[reason] ?? reason}</li>)}</ul></div>
-                  {suggestion.reasonCodes.includes('human-override') && <div className="assistant-admin-card__warning" role="note"><AlertTriangle /> Existe uma decisão humana neste metadado. Ela nunca entra no lote seguro automaticamente.</div>}
-                  {canDecide && <div className="assistant-admin-card__actions"><button type="button" disabled={mutating} onClick={() => void decideOne(suggestion, 'reject')}><X /> Rejeitar</button><button type="button" className="primary-button" disabled={mutating} onClick={() => void decideOne(suggestion, 'apply')}><Check /> Aplicar este campo</button></div>}
-                </article>;
-              })}</div>}
+      {loading ? <div className="assistant-admin__empty" role="status"><LoaderCircle className="is-spinning" /><div><strong>Carregando sugestões</strong><span>Buscando o estado mais recente do assistente.</span></div></div>
+        : failedRun && visibleSuggestions.length === 0 ? <div className="assistant-admin__empty is-error" role="alert"><AlertTriangle /><div><strong>Não foi possível concluir a análise</strong><span>{failedRun.error?.message ?? 'O MusicBrainz não respondeu como esperado.'}</span></div><button type="button" className="primary-button" disabled={analyzing || mutating} onClick={() => void analyze()}><RefreshCw /> Tentar novamente</button></div>
+          : !latestRun ? <div className="assistant-admin__empty"><Sparkles /><div><strong>Comece pela análise da biblioteca</strong><span>O assistente apenas cria sugestões; nada é aplicado sem sua confirmação.</span></div></div>
+            : latestRun.status === 'completed' && latestRun.summary.total === 0 ? <div className="assistant-admin__empty"><Check /><div><strong>Nenhuma sugestão encontrada</strong><span>A análise terminou sem candidatos confiáveis para alterar seus metadados.</span></div></div>
+              : latestRun.status === 'stale' && filter === 'open' && visibleSuggestions.length === 0 ? <div className="assistant-admin__empty"><AlertTriangle /><div><strong>Análise desatualizada</strong><span>A biblioteca mudou. Execute uma nova análise para continuar com dados atuais.</span></div></div>
+                : visibleSuggestions.length === 0 ? <div className="assistant-admin__empty"><div><strong>Nada por aqui</strong><span>Não há sugestões neste filtro.</span></div></div>
+                  : <div className="assistant-admin__list" aria-live="polite">{visibleSuggestions.map(suggestion => {
+                    const item = reviewMap.get(suggestion.id);
+                    const target = suggestion.target.capability === 'metadata' ? suggestion.target : null;
+                    const safe = isSafe(suggestion);
+                    const canDecide = Boolean(item && target && isOpen(suggestion));
+                    const physicalValue = target && item ? item.track.physical[target.field] : null;
+                    const showPhysical = physicalValue != null && physicalValue !== target?.currentValue;
+                    return <article key={suggestion.id} className="assistant-admin-card">
+                      <div className="assistant-admin-card__topline">
+                        {safe && canDecide ? <label className="assistant-admin-card__select"><input type="checkbox" checked={selected.has(suggestion.id)} onChange={event => setSelected(current => { const next = new Set(current); if (event.target.checked) next.add(suggestion.id); else next.delete(suggestion.id); return next; })} />Selecionar</label> : <span />}
+                        <div className="assistant-admin-card__badges"><span>{statusLabel(suggestion.status)}</span><span>{confidenceLabel(suggestion.confidence)}</span><span>{suggestion.provenance.source}</span></div>
+                      </div>
+                      <div className="assistant-admin-card__identity"><strong>{item?.track.title ?? `Faixa ${suggestion.target.trackId}`}</strong>{item && <small>{item.track.artist} · {item.track.album}</small>}</div>
+                      {target && <dl className="assistant-admin-card__diff"><div><dt>Campo</dt><dd>{FIELD_LABELS[target.field] ?? target.field}</dd></div>{showPhysical && <div><dt>Físico</dt><dd>{physicalValue || '—'}</dd></div>}<div><dt>Atual efetivo</dt><dd>{target.currentValue || '—'}</dd></div><div className="is-suggested"><dt>Sugerido</dt><dd>{target.suggestedValue || '—'}</dd></div></dl>}
+                      <div className="assistant-admin-card__evidence"><strong>Por que essa sugestão?</strong><ul>{suggestion.reasonCodes.map(reason => <li key={reason}>{REASON_LABELS[reason] ?? reason}</li>)}</ul></div>
+                      {suggestion.reasonCodes.includes('human-override') && <div className="assistant-admin-card__warning" role="note"><AlertTriangle /> Existe uma decisão humana neste metadado. Ela nunca entra no lote seguro automaticamente.</div>}
+                      {canDecide && <div className="assistant-admin-card__actions"><button type="button" disabled={mutating} onClick={() => void decideOne(suggestion, 'reject')}><X /> Rejeitar</button><button type="button" className="primary-button" disabled={mutating} onClick={() => void decideOne(suggestion, 'apply')}><Check /> Aplicar este campo</button></div>}
+                    </article>;
+                  })}</div>}
     </section>
   );
 }
