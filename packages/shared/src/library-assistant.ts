@@ -195,3 +195,74 @@ export type AdminLibraryAssistantRunsResponse = {
 export type AdminLibraryAssistantSuggestionsResponse = {
   suggestions: LibraryAssistantSuggestion[];
 };
+
+export type LibraryAssistantReviewTrack = {
+  id: string;
+  title: string;
+  artist: string;
+  album: string;
+  albumArtist: string;
+};
+
+export type LibraryAssistantReviewItem = {
+  runLibraryRevision: number;
+  suggestion: LibraryAssistantSuggestion;
+  track: LibraryAssistantReviewTrack;
+};
+
+export type AdminLibraryAssistantReviewResponse = {
+  libraryRevision: number;
+  items: LibraryAssistantReviewItem[];
+};
+
+export type LibraryAssistantDecisionAction = 'apply' | 'reject';
+export type LibraryAssistantDecisionOutcome =
+  | 'applied'
+  | 'rejected'
+  | 'already-applied'
+  | 'already-rejected'
+  | 'stale'
+  | 'not-found'
+  | 'unsupported'
+  | 'failed';
+
+export type LibraryAssistantDecision = {
+  runId: string;
+  suggestionId: string;
+  action: LibraryAssistantDecisionAction;
+  expectedLibraryRevision: number;
+  expectedCurrentValue: string;
+};
+
+export type LibraryAssistantDecisionResult = {
+  runId: string;
+  suggestionId: string;
+  action: LibraryAssistantDecisionAction;
+  outcome: LibraryAssistantDecisionOutcome;
+  currentValue: string | null;
+  message: string | null;
+};
+
+export type LibraryAssistantDecisionSummary = {
+  total: number;
+  applied: number;
+  rejected: number;
+  alreadyResolved: number;
+  stale: number;
+  failed: number;
+};
+
+export type AdminLibraryAssistantDecisionRequest = LibraryAssistantDecision;
+
+export type AdminLibraryAssistantDecisionResponse = {
+  result: LibraryAssistantDecisionResult;
+};
+
+export type AdminLibraryAssistantBatchDecisionRequest = {
+  decisions: LibraryAssistantDecision[];
+};
+
+export type AdminLibraryAssistantBatchDecisionResponse = {
+  results: LibraryAssistantDecisionResult[];
+  summary: LibraryAssistantDecisionSummary;
+};
