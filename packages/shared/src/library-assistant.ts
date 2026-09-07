@@ -27,6 +27,7 @@ export type LibraryAssistantProvenanceSource =
   | 'local-transcription';
 
 export type LibraryAssistantMetadataField = 'title' | 'artist' | 'album' | 'albumArtist';
+export type LibraryAssistantExternalIdKind = 'recording' | 'release' | 'release-group' | 'artist';
 
 export type LibraryAssistantReasonCode =
   | 'local-review'
@@ -39,7 +40,9 @@ export type LibraryAssistantReasonCode =
   | 'strong-external-id'
   | 'album-context'
   | 'source-conflict'
-  | 'provider-match';
+  | 'provider-match'
+  | 'human-override'
+  | 'ambiguous-candidates';
 
 export type LibraryAssistantProvenance = {
   source: LibraryAssistantProvenanceSource;
@@ -67,6 +70,7 @@ export type LibraryAssistantExternalIdEvidence = {
   version: typeof LIBRARY_ASSISTANT_CONTRACT_VERSION;
   source: LibraryAssistantProvenanceSource;
   id: string;
+  kind?: LibraryAssistantExternalIdKind;
 };
 
 export type LibraryAssistantAlbumContextEvidence = {
@@ -90,13 +94,20 @@ export type LibraryAssistantFileContextEvidence = {
   folderName: string | null;
 };
 
+export type LibraryAssistantHumanOverrideEvidence = {
+  type: 'human-override';
+  version: typeof LIBRARY_ASSISTANT_CONTRACT_VERSION;
+  field: LibraryAssistantMetadataField;
+};
+
 export type LibraryAssistantEvidence =
   | LibraryAssistantTextMatchEvidence
   | LibraryAssistantDurationDeltaEvidence
   | LibraryAssistantExternalIdEvidence
   | LibraryAssistantAlbumContextEvidence
   | LibraryAssistantSourceConflictEvidence
-  | LibraryAssistantFileContextEvidence;
+  | LibraryAssistantFileContextEvidence
+  | LibraryAssistantHumanOverrideEvidence;
 
 export type LibraryAssistantMetadataTarget = {
   capability: 'metadata';
