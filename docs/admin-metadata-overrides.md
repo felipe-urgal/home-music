@@ -107,6 +107,26 @@ Depois de salvar ou restaurar, a tela publica `home-music:library-changed`. A in
 
 O cockpit da Administração escuta o mesmo evento e refaz `/api/admin/library/overview`. Quando Metadados foi aberto por um filtro de saúde, o frontend conserva somente a chave do problema e recebe do backend os novos `trackIds`; ele não reimplementa no cliente as regras de “sem título”, artista/álbum desconhecido ou capa ausente. Por isso, uma faixa corrigida deixa de aparecer no filtro e seu contador é reconciliado ainda com a tela aberta.
 
+## Assistente da Biblioteca
+
+A revisão/aplicação de metadata do **Administração → Assistente da Biblioteca** converge para a mesma autoridade descrita neste documento.
+
+Regras canônicas:
+
+- o Assistente nunca grava diretamente em `tracks`;
+- o Assistente nunca escreve tags no arquivo físico;
+- cada sugestão textual representa um único campo (`title`, `artist`, `album` ou `albumArtist`);
+- `apply` usa `TrackMetadataOverrideStore.patch()` e, portanto, herda validação, transação e remoção de override redundante;
+- se o sugerido for igual ao valor físico, não permanece uma diferença artificial em `track_metadata_overrides`;
+- `reject` altera somente o lifecycle auditável da sugestão e não mexe na metadata efetiva;
+- antes de aplicar, o backend revalida faixa, sugestão, valor atual esperado e mudanças humanas posteriores à análise;
+- sugestão stale exige nova análise/revisão em vez de sobrescrever silenciosamente uma decisão humana;
+- sucesso parcial em lote preserva os campos já confirmados e reporta stale/falha por item.
+
+Depois de um `apply` confirmado, a revisão administrativa composta é incrementada e a Web publica `home-music:library-changed`; `/api/library`, player e Administração passam a refletir a metadata efetiva sem rescan.
+
+O contrato completo de análise/revisão está em [`library-assistant.md`](library-assistant.md).
+
 ## Re-scan
 
 O fluxo de scan permanece:
@@ -152,4 +172,5 @@ A cobertura inclui:
 - garantia de que o payload físico original não é mutado pela camada efetiva;
 - caminho HTTP real de `/api/library`, incluindo revisão composta, ETag, revalidação `304`, save e restore sem mutar o objeto físico;
 - helper do frontend para derivação de patches;
+- revisão do Library Assistant cobrindo aplicação/rejeição por campo, stale e sucesso parcial em lote;
 - Playwright desktop cobrindo edição no workspace, atualização imediata do player persistente e do filtro/cockpit de saúde, sobrevivência a rescan e restauração da fixture.
