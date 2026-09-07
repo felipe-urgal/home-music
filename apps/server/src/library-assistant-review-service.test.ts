@@ -3,6 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import type { LibraryAssistantReasonCode } from '@home-music/shared/library-assistant';
 import { HomeMusicDatabase } from './database.js';
 import type { IndexedTrack } from './library.js';
 import { LibraryAssistantReviewService } from './library-assistant-review-service.js';
@@ -75,6 +76,8 @@ function seedSuggestion(
     currentValue?: string;
     suggestedValue?: string;
     createdAt?: string;
+    confidence?: 'low' | 'medium' | 'high';
+    reasonCodes?: LibraryAssistantReasonCode[];
   } = {}
 ) {
   const runId = input.runId ?? 'run-1';
@@ -96,8 +99,8 @@ function seedSuggestion(
     capability: 'metadata',
     trackId,
     status: 'review',
-    confidence: 'high',
-    reasonCodes: ['provider-match'],
+    confidence: input.confidence ?? 'high',
+    reasonCodes: input.reasonCodes ?? ['provider-match'],
     evidence: [{
       type: 'text-match',
       version: 1,
@@ -142,6 +145,7 @@ test('review queue applies one metadata field through overrides and is idempoten
     const queue = review.getReviewQueue();
     assert.equal(queue.items.length, 1);
     assert.equal(queue.items[0].track.title, 'Faixa antiga');
+    assert.equal(queue.items[0].track.physical.title, 'Faixa antiga');
 
     const applied = await review.decide(decision());
     assert.equal(applied.outcome, 'applied');
@@ -169,6 +173,57 @@ test('review marks suggestion stale when effective field changed after analysis'
   });
 });
 
+test('same-value human edit after analysis still makes that field stale', async () => {
+  await withReview(async ({ assistant, metadata, review }) => {
+    seedSuggestion(assistant);
+    metadata.patch('track-1', { title: 'Faixa antiga' });
+
+    const result = await review.decide(decision());
+    assert.equal(result.outcome, 'stale');
+    assert.equal(metadata.get('track-1')?.effective.title, 'Faixa antiga');
+  });
+});
+
+test('human edit on a sibling field does not stale the reviewed field', async () => {
+  await withReview(async ({ assistant, metadata, review }) => {
+    seedSuggestion(assistant);
+    metadata.patch('track-1', { artist: 'Artista humana' });
+
+    const result = await review.decide(decision());
+    assert.equal(result.outcome, 'applied');
+    assert.equal(metadata.get('track-1')?.effective.title, 'Faixa correta');
+    assert.equal(metadata.get('track-1')?.effective.artist, 'Artista humana');
+  });
+});
+
+test('applying one field does not stale another suggestion from the same analysis', async () => {
+  await withReview(async ({ assistant, metadata, review }) => {
+    seedSuggestion(assistant, {
+      suggestionId: 'suggestion-title',
+      field: 'title',
+      currentValue: 'Faixa antiga',
+      suggestedValue: 'Faixa correta'
+    });
+    seedSuggestion(assistant, {
+      suggestionId: 'suggestion-artist',
+      field: 'artist',
+      currentValue: 'Artista',
+      suggestedValue: 'Artista correta'
+    });
+
+    const title = await review.decide(decision({ suggestionId: 'suggestion-title' }));
+    const artist = await review.decide(decision({
+      suggestionId: 'suggestion-artist',
+      expectedCurrentValue: 'Artista'
+    }));
+
+    assert.equal(title.outcome, 'applied');
+    assert.equal(artist.outcome, 'applied');
+    assert.equal(metadata.get('track-1')?.effective.title, 'Faixa correta');
+    assert.equal(metadata.get('track-1')?.effective.artist, 'Artista correta');
+  });
+});
+
 test('apply converging to physical metadata removes the redundant override', async () => {
   await withReview(async ({ assistant, metadata, review }) => {
     metadata.patch('track-1', { title: 'Título manual' });
@@ -177,6 +232,10 @@ test('apply converging to physical metadata removes the redundant override', asy
       suggestedValue: 'Faixa antiga',
       createdAt: '2099-01-01T00:00:00.000Z'
     });
+
+    const queue = review.getReviewQueue();
+    assert.equal(queue.items[0].track.title, 'Título manual');
+    assert.equal(queue.items[0].track.physical.title, 'Faixa antiga');
 
     const applied = await review.decide(decision({ expectedCurrentValue: 'Título manual' }));
     assert.equal(applied.outcome, 'applied');
@@ -244,5 +303,69 @@ test('batch keeps explicit partial success when one suggestion is stale', async 
     });
     assert.equal(metadata.get('track-1')?.effective.title, 'Faixa correta');
     assert.equal(metadata.get('track-2')?.effective.title, 'Mudança concorrente');
+  });
+});
+
+test('safe batch rejects low-confidence suggestions while individual review remains available', async () => {
+  await withReview(async ({ assistant, metadata, review }) => {
+    seedSuggestion(assistant, { confidence: 'low' });
+
+    const batch = await review.decideBatch([decision()]);
+    assert.equal(batch.results[0].outcome, 'failed');
+    assert.match(batch.results[0].message ?? '', /revisão individual/);
+    assert.equal(assistant.getRun('run-1')?.summary.review, 1);
+    assert.equal(metadata.get('track-1')?.effective.title, 'Faixa antiga');
+
+    const individual = await review.decide(decision());
+    assert.equal(individual.outcome, 'applied');
+    assert.equal(metadata.get('track-1')?.effective.title, 'Faixa correta');
+  });
+});
+
+test('decision lookup is not limited to the first 500 suggestions of a run', async () => {
+  await withReview(async ({ assistant, metadata, review }) => {
+    assistant.createRun({
+      id: 'run-large',
+      capability: 'metadata',
+      libraryRevision: 7,
+      createdAt: '2026-09-07T12:00:00.000Z'
+    });
+    assistant.startRun('run-large', '2026-09-07T12:00:01.000Z');
+    assistant.insertSuggestions(Array.from({ length: 501 }, (_, index) => ({
+      id: `suggestion-${String(index + 1).padStart(3, '0')}`,
+      runId: 'run-large',
+      capability: 'metadata' as const,
+      trackId: 'track-1',
+      status: 'review' as const,
+      confidence: 'high' as const,
+      reasonCodes: ['provider-match'] as LibraryAssistantReasonCode[],
+      evidence: [{
+        type: 'text-match' as const,
+        version: 1 as const,
+        field: 'title' as const,
+        match: 'different' as const,
+        sourceValue: 'Faixa antiga',
+        candidateValue: `Faixa correta ${index + 1}`
+      }],
+      provenance: { source: 'musicbrainz' as const, providerVersion: 'v1', externalId: `recording-${index + 1}` },
+      target: {
+        capability: 'metadata' as const,
+        trackId: 'track-1',
+        field: 'title' as const,
+        currentValue: 'Faixa antiga',
+        suggestedValue: `Faixa correta ${index + 1}`
+      },
+      premiseSignature: 'a'.repeat(64),
+      createdAt: `2026-09-07T12:00:${String(index % 60).padStart(2, '0')}.000Z`
+    })));
+    assistant.completeRun('run-large', '2026-09-07T12:09:00.000Z');
+
+    const applied = await review.decide(decision({
+      runId: 'run-large',
+      suggestionId: 'suggestion-501'
+    }));
+
+    assert.equal(applied.outcome, 'applied');
+    assert.equal(metadata.get('track-1')?.effective.title, 'Faixa correta 501');
   });
 });
