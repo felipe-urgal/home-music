@@ -5,6 +5,12 @@ import type { LibraryAssistantAnalyzer, LibraryAssistantSuggestionDraft } from '
 const DEFAULT_BATCH_SIZE = 10;
 const DEFAULT_PROVIDER_TIMEOUT_MS = 15_000;
 const MAX_CONSECUTIVE_TRACK_FAILURES = 2;
+const RECOVERABLE_PROVIDER_CODES = new Set([
+  'provider-timeout',
+  'provider-rate-limited',
+  'provider-request-failed',
+  'provider-unavailable'
+]);
 
 type BatchProgress = {
   analyzerId: string;
@@ -32,6 +38,16 @@ function isCancellation(error: unknown, signal?: AbortSignal) {
     error.name === 'AbortError'
     || error.name === 'LibraryAssistantProviderAbortedError'
   ));
+}
+
+function isRecoverableProviderFailure(error: unknown) {
+  if (!(error instanceof Error)) return false;
+  if ('code' in error && RECOVERABLE_PROVIDER_CODES.has(String(error.code))) return true;
+  if (error instanceof TypeError && /fetch|network/i.test(error.message)) return true;
+  const cause = 'cause' in error && error.cause && typeof error.cause === 'object'
+    ? error.cause as { code?: unknown }
+    : null;
+  return Boolean(cause?.code && /^(?:UND_ERR_|E(?:AI_AGAIN|CONNRESET|CONNREFUSED|TIMEDOUT|HOSTUNREACH|NETUNREACH))/i.test(String(cause.code)));
 }
 
 function boundedInteger(value: number | undefined, fallback: number, minimum: number, maximum: number) {
@@ -92,6 +108,7 @@ export function createBatchedLibraryAssistantAnalyzer(
           drafts.push(...await analyzeTracks(batch));
         } catch (error) {
           if (isCancellation(error, context.signal)) throw error;
+          if (!isRecoverableProviderFailure(error)) throw error;
 
           let consecutiveFailures = 0;
           for (let index = 0; index < batch.length; index += 1) {
@@ -104,6 +121,7 @@ export function createBatchedLibraryAssistantAnalyzer(
               consecutiveFailures = 0;
             } catch (trackError) {
               if (isCancellation(trackError, context.signal)) throw trackError;
+              if (!isRecoverableProviderFailure(trackError)) throw trackError;
               consecutiveFailures += 1;
               failedTrackIds.add(track.id);
               options.onTrackFailure?.({
