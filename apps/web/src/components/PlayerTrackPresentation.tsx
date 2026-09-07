@@ -11,10 +11,11 @@ import {
 } from 'lucide-react';
 import type { Playlist, Track } from '@home-music/shared';
 import { playerArtworkTrack } from '../player-presentation';
-import { Artwork } from './Artwork';
+import { NowPlayingVinyl } from './NowPlayingVinyl';
 
 type PlayerTrackPresentationProps = {
   current: Track;
+  playing: boolean;
   queueLength: number;
   libraryReturnLabel: string;
   playlists: Playlist[];
@@ -30,6 +31,7 @@ type PlayerTrackPresentationProps = {
 
 export function PlayerTrackPresentation({
   current,
+  playing,
   queueLength,
   libraryReturnLabel,
   playlists,
@@ -69,7 +71,9 @@ export function PlayerTrackPresentation({
           : <span aria-hidden="true" />}
       </header>
 
-      <div className="hero-art"><Artwork track={playerArtworkTrack(current, offlineMode)} large /></div>
+      <div className="hero-art">
+        <NowPlayingVinyl track={playerArtworkTrack(current, offlineMode)} playing={playing} />
+      </div>
 
       <div className="track-heading">
         <div>
