@@ -73,6 +73,9 @@ function createApp() {
       return reviewResult(decision);
     },
     async decideBatch(decisions: LibraryAssistantDecision[]) {
+      if (decisions.length < 1 || decisions.length > 100) {
+        throw new RangeError('O lote deve conter entre 1 e 100 decisões.');
+      }
       const results = decisions.map(reviewResult);
       return {
         results,
