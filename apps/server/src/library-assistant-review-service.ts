@@ -1,14 +1,15 @@
 import { DatabaseSync } from 'node:sqlite';
 import type { Track } from '@home-music/shared';
-import type {
-  AdminLibraryAssistantBatchDecisionResponse,
-  AdminLibraryAssistantReviewResponse,
-  LibraryAssistantDecision,
-  LibraryAssistantDecisionResult,
-  LibraryAssistantDecisionSummary,
-  LibraryAssistantMetadataTarget,
-  LibraryAssistantReviewItem,
-  LibraryAssistantSuggestionStatus
+import {
+  isLibraryAssistantAutoApplicable,
+  type AdminLibraryAssistantBatchDecisionResponse,
+  type AdminLibraryAssistantReviewResponse,
+  type LibraryAssistantDecision,
+  type LibraryAssistantDecisionResult,
+  type LibraryAssistantDecisionSummary,
+  type LibraryAssistantMetadataTarget,
+  type LibraryAssistantReviewItem,
+  type LibraryAssistantSuggestionStatus
 } from '@home-music/shared/library-assistant';
 import type { LibraryAssistantStore, LibraryAssistantStoredSuggestion } from './library-assistant-store.js';
 import {
@@ -36,6 +37,48 @@ type ReviewServiceOptions = {
 };
 
 type ReviewRun = NonNullable<ReturnType<LibraryAssistantStore['getRun']>>;
+type Row = Record<string, unknown>;
+
+function stringValue(value: unknown) {
+  return typeof value === 'string' ? value : '';
+}
+
+function jsonValue<T>(value: unknown, fallback: T): T {
+  if (typeof value !== 'string') return fallback;
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+function storedSuggestionFromRow(row: Row): LibraryAssistantStoredSuggestion {
+  const capability = stringValue(row.capability) as LibraryAssistantStoredSuggestion['suggestion']['capability'];
+  const trackId = stringValue(row.track_id);
+  const target = jsonValue<LibraryAssistantStoredSuggestion['suggestion']['target']>(row.target_json, {
+    capability: 'metadata',
+    trackId,
+    field: 'title',
+    currentValue: '',
+    suggestedValue: ''
+  });
+  return {
+    premiseSignature: stringValue(row.premise_signature),
+    suggestion: {
+      id: stringValue(row.id),
+      runId: stringValue(row.run_id),
+      capability,
+      status: stringValue(row.status) as LibraryAssistantStoredSuggestion['suggestion']['status'],
+      confidence: stringValue(row.confidence) as LibraryAssistantStoredSuggestion['suggestion']['confidence'],
+      reasonCodes: jsonValue(row.reason_codes_json, []),
+      evidence: jsonValue(row.evidence_json, []),
+      provenance: jsonValue(row.provenance_json, { source: 'local', providerVersion: null, externalId: null }),
+      target: { ...target, capability, trackId } as LibraryAssistantStoredSuggestion['suggestion']['target'],
+      createdAt: stringValue(row.created_at),
+      updatedAt: stringValue(row.updated_at)
+    }
+  };
+}
 
 class LibraryAssistantDecisionStore {
   private readonly db: DatabaseSync;
@@ -48,6 +91,16 @@ class LibraryAssistantDecisionStore {
 
   close() {
     this.db.close();
+  }
+
+  getSuggestionRecord(runId: string, suggestionId: string) {
+    const row = this.db.prepare(`
+      SELECT *
+      FROM library_assistant_suggestions
+      WHERE run_id = ? AND id = ?
+      LIMIT 1;
+    `).get(runId, suggestionId) as Row | undefined;
+    return row ? storedSuggestionFromRow(row) : null;
   }
 
   transitionSuggestion(
@@ -72,13 +125,14 @@ class LibraryAssistantDecisionStore {
   }
 }
 
-function metadataTrack(track: Track) {
+function metadataTrack(track: Track, physical: LibraryAssistantReviewItem['track']['physical']) {
   return {
     id: track.id,
     title: track.title,
     artist: track.artist,
     album: track.album,
-    albumArtist: track.albumArtist
+    albumArtist: track.albumArtist,
+    physical
   };
 }
 
@@ -202,6 +256,21 @@ export class LibraryAssistantReviewService {
 
     const results: LibraryAssistantDecisionResult[] = [];
     for (const decision of decisions) {
+      const record = this.decisions.getSuggestionRecord(decision.runId, decision.suggestionId);
+      if (
+        decision.action === 'apply'
+        && record
+        && OPEN_STATUSES.has(record.suggestion.status)
+        && !isLibraryAssistantAutoApplicable(record.suggestion)
+      ) {
+        results.push(result(
+          decision,
+          'failed',
+          decision.expectedCurrentValue,
+          'Esta sugestão exige revisão individual e não pode ser aplicada pelo lote seguro.'
+        ));
+        continue;
+      }
       try {
         results.push(await this.decide(decision));
       } catch {
@@ -229,7 +298,7 @@ export class LibraryAssistantReviewService {
     const currentValue = liveMetadataValue(track, suggestion.target);
     if (
       currentValue !== suggestion.target.currentValue
-      || this.hasHumanOverrideChangedSinceAnalysis(suggestion.target.trackId, suggestion.createdAt)
+      || this.hasHumanOverrideChangedSinceAnalysis(suggestion.target, suggestion.createdAt)
     ) {
       const updatedAt = this.now().toISOString();
       if (this.decisions.transitionSuggestion(suggestion.id, 'stale', updatedAt)) {
@@ -237,19 +306,24 @@ export class LibraryAssistantReviewService {
       }
       return null;
     }
+    const metadata = this.options.metadataOverrides.get(track.id);
+    const physical = metadata?.physical ?? {
+      title: track.title,
+      artist: track.artist,
+      album: track.album,
+      albumArtist: track.albumArtist
+    };
     return {
       runLibraryRevision: run.libraryRevision,
       suggestion,
-      track: metadataTrack(track)
+      track: metadataTrack(track, physical)
     };
   }
 
   private decideSerial(decision: LibraryAssistantDecision): LibraryAssistantDecisionResult {
     const run = this.options.store.getRun(decision.runId);
     if (!run) return result(decision, 'not-found', null, 'Run não encontrado.');
-    const record = this.options.store
-      .listSuggestionRecords(decision.runId, { limit: MAX_REVIEW_ITEMS })
-      .find(item => item.suggestion.id === decision.suggestionId);
+    const record = this.decisions.getSuggestionRecord(decision.runId, decision.suggestionId);
     if (!record) return result(decision, 'not-found', null, 'Sugestão não encontrada.');
 
     const suggestion = record.suggestion;
@@ -272,12 +346,12 @@ export class LibraryAssistantReviewService {
     if (currentValue == null || currentValue !== suggestion.target.currentValue) {
       return this.markStale(decision, run, currentValue, 'A metadata mudou desde a análise. Revise uma nova sugestão.');
     }
-    if (this.hasHumanOverrideChangedSinceAnalysis(suggestion.target.trackId, suggestion.createdAt)) {
+    if (this.hasHumanOverrideChangedSinceAnalysis(suggestion.target, suggestion.createdAt)) {
       return this.markStale(
         decision,
         run,
         currentValue,
-        'Uma decisão humana de metadata mudou depois da análise. Analise novamente antes de aplicar.'
+        'Uma decisão humana neste campo mudou depois da análise. Analise novamente antes de aplicar.'
       );
     }
 
@@ -301,9 +375,9 @@ export class LibraryAssistantReviewService {
     }
   }
 
-  private hasHumanOverrideChangedSinceAnalysis(trackId: string, analyzedAt: string) {
-    const overrideUpdatedAt = this.options.metadataOverrides.get(trackId)?.override.updatedAt;
-    return Boolean(overrideUpdatedAt && overrideUpdatedAt > analyzedAt);
+  private hasHumanOverrideChangedSinceAnalysis(target: LibraryAssistantMetadataTarget, analyzedAt: string) {
+    const fieldUpdatedAt = this.options.metadataOverrides.fieldUpdatedAt(target.trackId, target.field);
+    return Boolean(fieldUpdatedAt && fieldUpdatedAt > analyzedAt);
   }
 
   private markStale(
@@ -320,9 +394,7 @@ export class LibraryAssistantReviewService {
   }
 
   private resolveRace(decision: LibraryAssistantDecision) {
-    const record = this.options.store
-      .listSuggestionRecords(decision.runId, { limit: MAX_REVIEW_ITEMS })
-      .find(item => item.suggestion.id === decision.suggestionId);
+    const record = this.decisions.getSuggestionRecord(decision.runId, decision.suggestionId);
     if (!record) return result(decision, 'not-found', null, 'Sugestão não encontrada.');
     if (record.suggestion.status === 'applied') return result(decision, 'already-applied', null);
     if (record.suggestion.status === 'rejected') return result(decision, 'already-rejected', null);
