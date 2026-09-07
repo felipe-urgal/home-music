@@ -72,6 +72,22 @@ A publicação de `MediaMetadata` é best-effort. Título, artista, álbum e art
 
 A representação da lock screen é estática. O produto não promete animação de vinil, GIF, vídeo ou atualização de frames no sistema operacional. Compatibilidade real do SVG/data URL em lock screen precisa continuar sendo validada em iPhone/Android físicos; uma limitação da plataforma deve degradar para metadata textual sem criar outro endpoint ou cover override.
 
+## Player Agora / vinil animado
+
+A tela **Agora / Tocando agora** usa `NowPlayingVinyl` somente como camada visual. O componente recebe a `Track` já resolvida pelo fluxo existente e delega a imagem central ao `Artwork`; portanto não replica decisão de `hasCover`, URL, fallback, seed ou palette.
+
+O disco:
+
+- gira apenas quando o estado canônico `playing` está ativo;
+- usa animação CSS baseada em `transform`, sem timer JavaScript ou leitura de layout em loop;
+- pausa com `animation-play-state: paused`, preservando o ângulo para a retomada;
+- fica estático com `prefers-reduced-motion: reduce`;
+- permanece `aria-hidden`, sem foco ou semântica interativa concorrente com os controles;
+- é usado no player padrão e no desktop pela mesma implementação;
+- nunca tenta animar `MediaSession`/lock screen e nunca cria cover override.
+
+A artwork funciona como label central do vinil. Troca de faixa atualiza o `Artwork` no mesmo render React, enquanto a rotação continua derivada exclusivamente do estado de playback da faixa corrente.
+
 ## Superfícies cobertas
 
 A política deve permanecer consistente em:
@@ -111,6 +127,7 @@ Mudanças nesta política devem preservar:
 - legibilidade no tema escuro;
 - comportamento em thumbnail e artwork grande;
 - consistência entre biblioteca, player e administração;
-- fallback em falha de carregamento de imagem sem mutar o objeto `Track`.
+- fallback em falha de carregamento de imagem sem mutar o objeto `Track`;
+- vinil do player derivado de `playing`, sem timer JS e desativado por `prefers-reduced-motion`.
 
-A cobertura automatizada fica em `apps/web/src/artwork-utils.test.ts`, `apps/web/src/Artwork.test.tsx`, `apps/web/src/media-session-artwork.test.ts` e `apps/web/src/media-session-metadata.test.ts`.
+A cobertura automatizada fica em `apps/web/src/artwork-utils.test.ts`, `apps/web/src/Artwork.test.tsx`, `apps/web/src/media-session-artwork.test.ts`, `apps/web/src/media-session-metadata.test.ts` e `apps/web/src/components/NowPlayingVinyl.test.tsx`.
