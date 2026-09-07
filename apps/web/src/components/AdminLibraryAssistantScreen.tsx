@@ -76,9 +76,11 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
   const [mutating, setMutating] = useState(false);
+  const [batching, setBatching] = useState(false);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const requestVersion = useRef(0);
   const analysisVersion = useRef(0);
+  const batchVersion = useRef(0);
 
   const latestRun = useMemo(() => runs.find(run => run.capability === 'metadata') ?? null, [runs]);
   const reviewMap = useMemo(() => new Map(reviewItems.map(item => [item.suggestion.id, item])), [reviewItems]);
@@ -113,7 +115,11 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
 
   useEffect(() => {
     void load();
-    return () => { requestVersion.current += 1; analysisVersion.current += 1; };
+    return () => {
+      requestVersion.current += 1;
+      analysisVersion.current += 1;
+      batchVersion.current += 1;
+    };
   }, [load]);
 
   useEffect(() => setSelected(new Set()), [filter, latestRun?.id]);
@@ -197,26 +203,64 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
     }
   }
 
+  function cancelBatch() {
+    if (!batching) return;
+    batchVersion.current += 1;
+    setFeedback({ kind: 'warning', message: 'Cancelamento do lote solicitado. O item em andamento pode concluir; nenhum novo item será iniciado.' });
+  }
+
   async function applySelected() {
     const decisions = suggestions
       .filter(item => selected.has(item.id) && isSafe(item))
       .map(item => decisionFor(item, 'apply'))
       .filter((item): item is LibraryAssistantDecision => Boolean(item));
     if (mutating || decisions.length === 0) return;
+
+    const version = ++batchVersion.current;
+    let processed = 0;
+    let applied = 0;
+    let stale = 0;
+    let failed = 0;
+    let alreadyResolved = 0;
     setMutating(true);
+    setBatching(true);
     setFeedback(null);
+
     try {
-      const response = await decideLibraryAssistantBatch(decisions);
-      if (response.summary.applied > 0) notifyLibraryChanged();
-      const details = [`${response.summary.applied} aplicada${response.summary.applied === 1 ? '' : 's'}`];
-      if (response.summary.stale) details.push(`${response.summary.stale} desatualizada${response.summary.stale === 1 ? '' : 's'}`);
-      if (response.summary.failed) details.push(`${response.summary.failed} com erro`);
-      setFeedback({ kind: response.summary.stale || response.summary.failed ? 'warning' : 'success', message: `Lote concluído: ${details.join(', ')}.` });
-      setSelected(new Set());
+      for (const decision of decisions) {
+        if (version !== batchVersion.current) break;
+        try {
+          const response = await decideLibraryAssistantBatch([decision]);
+          const item = response.results[0];
+          processed += 1;
+          if (item?.outcome === 'applied') applied += 1;
+          else if (item?.outcome === 'stale') stale += 1;
+          else if (item?.outcome === 'already-applied') alreadyResolved += 1;
+          else failed += 1;
+        } catch {
+          processed += 1;
+          failed += 1;
+        }
+      }
+
+      const cancelled = version !== batchVersion.current;
+      if (applied > 0) notifyLibraryChanged();
+      const details = [`${applied} aplicada${applied === 1 ? '' : 's'}`];
+      if (alreadyResolved) details.push(`${alreadyResolved} já resolvida${alreadyResolved === 1 ? '' : 's'}`);
+      if (stale) details.push(`${stale} desatualizada${stale === 1 ? '' : 's'}`);
+      if (failed) details.push(`${failed} com erro`);
+
+      if (cancelled) {
+        const pending = decisions.slice(processed).map(decision => decision.suggestionId);
+        setSelected(new Set(pending));
+        setFeedback({ kind: 'warning', message: `Lote interrompido: ${details.join(', ')}. ${pending.length} item(ns) não iniciado(s) permanecem selecionados.` });
+      } else {
+        setSelected(new Set());
+        setFeedback({ kind: stale || failed ? 'warning' : 'success', message: `Lote concluído: ${details.join(', ')}.` });
+      }
       await load(true);
-    } catch (error) {
-      setFeedback({ kind: 'error', message: error instanceof Error ? error.message : 'O lote não pôde ser concluído.' });
     } finally {
+      setBatching(false);
       setMutating(false);
     }
   }
@@ -246,7 +290,8 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
         <button type="button" className="primary-button" disabled={analyzing || mutating || runActive} onClick={() => void analyze()}>{analyzing || runActive ? <LoaderCircle className="is-spinning" /> : <Sparkles />}{analyzing || runActive ? 'Analisando biblioteca…' : 'Analisar biblioteca'}</button>
         {(analyzing || runActive) && <button type="button" onClick={() => void cancelAnalysis()}>Cancelar análise</button>}
         <button type="button" disabled={mutating || safeSuggestions.length === 0} onClick={() => setSelected(new Set(visibleSuggestions.filter(isSafe).map(item => item.id)))}>Selecionar seguras</button>
-        <button type="button" disabled={mutating || selected.size === 0} onClick={() => void applySelected()}>{mutating ? <LoaderCircle className="is-spinning" /> : <Check />} Aplicar selecionadas ({selected.size})</button>
+        <button type="button" disabled={mutating || selected.size === 0} onClick={() => void applySelected()}>{mutating ? <LoaderCircle className="is-spinning" /> : <Check />} {batching ? 'Aplicando lote…' : `Aplicar selecionadas (${selected.size})`}</button>
+        {batching && <button type="button" onClick={cancelBatch}>Cancelar lote</button>}
       </section>
 
       <nav className="assistant-admin__filters" aria-label="Filtros das sugestões">
