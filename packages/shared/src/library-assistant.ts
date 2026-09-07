@@ -151,6 +151,21 @@ export type LibraryAssistantSuggestion = {
   updatedAt: string;
 };
 
+const LIBRARY_ASSISTANT_AUTO_APPLY_BLOCKERS = new Set<LibraryAssistantReasonCode>([
+  'human-override',
+  'ambiguous-candidates',
+  'source-conflict',
+  'metadata-conflict'
+]);
+
+export function isLibraryAssistantAutoApplicable(
+  suggestion: Pick<LibraryAssistantSuggestion, 'status' | 'confidence' | 'reasonCodes'>
+) {
+  return (suggestion.status === 'pending' || suggestion.status === 'review')
+    && suggestion.confidence === 'high'
+    && !suggestion.reasonCodes.some(reason => LIBRARY_ASSISTANT_AUTO_APPLY_BLOCKERS.has(reason));
+}
+
 export type LibraryAssistantRunError = {
   code: string;
   message: string;
@@ -202,6 +217,12 @@ export type LibraryAssistantReviewTrack = {
   artist: string;
   album: string;
   albumArtist: string;
+  physical: {
+    title: string;
+    artist: string;
+    album: string;
+    albumArtist: string;
+  };
 };
 
 export type LibraryAssistantReviewItem = {
