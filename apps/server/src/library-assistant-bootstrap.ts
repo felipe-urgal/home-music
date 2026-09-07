@@ -12,6 +12,7 @@ import { registerLibraryAssistantRoutes } from './library-assistant-routes.js';
 import { LibraryAssistantService, type LibraryAssistantAnalyzer } from './library-assistant-service.js';
 import { LibraryAssistantStore } from './library-assistant-store.js';
 import type { LongJobObservability } from './long-job-observability.js';
+import { createRetryingFetch } from './retrying-fetch.js';
 import { TrackMetadataOverrideStore } from './track-metadata-overrides.js';
 
 type LibraryAssistantBootstrapOptions = {
@@ -32,6 +33,7 @@ export function registerLibraryAssistant(
   const store = new LibraryAssistantStore(options.databasePath);
   const metadataOverrides = new TrackMetadataOverrideStore(options.databasePath);
   const providers = new LibraryAssistantProviderGateway(store);
+  const musicBrainzFetch = createRetryingFetch();
   let assistantMetadataRevision = 0;
   const projectRevision = options.projection.projectRevision;
 
@@ -44,6 +46,7 @@ export function registerLibraryAssistant(
     revision: () => options.projection.projectRevision(options.library.status().revision)
   };
   const defaultAnalyzers = [createMusicBrainzMetadataAnalyzer({
+    fetchImpl: musicBrainzFetch,
     getHumanOverrideFields(trackId) {
       const override = metadataOverrides.get(trackId)?.override;
       if (!override) return [];
