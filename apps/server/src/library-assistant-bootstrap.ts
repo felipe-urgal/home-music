@@ -1,7 +1,9 @@
 import path from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import type { LibraryAssistantMetadataField } from '@home-music/shared/library-assistant';
+import { sanitizeOperationError } from './admin-operation-history.js';
 import type { HeavyWorkQueue } from './heavy-work-queue.js';
+import { createBatchedLibraryAssistantAnalyzer } from './library-assistant-batched-analyzer.js';
 import type { LibraryRouteProjection } from './library-routes.js';
 import type { LibraryService } from './library-service.js';
 import { createMusicBrainzMetadataAnalyzer } from './musicbrainz-metadata-analyzer.js';
@@ -25,6 +27,8 @@ type LibraryAssistantBootstrapOptions = {
 };
 
 const METADATA_FIELDS: readonly LibraryAssistantMetadataField[] = ['title', 'artist', 'album', 'albumArtist'];
+const METADATA_BATCH_SIZE = 10;
+const MUSICBRAINZ_QUERY_TIMEOUT_MS = 15_000;
 
 export function registerLibraryAssistant(
   app: FastifyInstance,
@@ -45,7 +49,7 @@ export function registerLibraryAssistant(
     listTracks: () => options.projection.projectTracks(options.library.listPublicTracks()),
     revision: () => options.projection.projectRevision(options.library.status().revision)
   };
-  const defaultAnalyzers = [createMusicBrainzMetadataAnalyzer({
+  const metadataAnalyzer = createMusicBrainzMetadataAnalyzer({
     fetchImpl: musicBrainzFetch,
     getHumanOverrideFields(trackId) {
       const override = metadataOverrides.get(trackId)?.override;
@@ -59,6 +63,31 @@ export function registerLibraryAssistant(
         fileName: path.basename(indexed.filePath),
         folderName: indexed.folder || null
       };
+    }
+  });
+  const defaultAnalyzers = [createBatchedLibraryAssistantAnalyzer(metadataAnalyzer, {
+    batchSize: METADATA_BATCH_SIZE,
+    providerTimeoutMs: MUSICBRAINZ_QUERY_TIMEOUT_MS,
+    onProgress(progress) {
+      app.log.info({
+        event: 'library_assistant.batch_completed',
+        analyzerId: progress.analyzerId,
+        processedTracks: progress.processedTracks,
+        totalTracks: progress.totalTracks,
+        failedTracks: progress.failedTracks,
+        batchSize: METADATA_BATCH_SIZE
+      }, 'Lote do Assistente da Biblioteca concluído.');
+    },
+    onTrackFailure(failure) {
+      const sanitized = sanitizeOperationError(failure.error);
+      app.log.warn({
+        event: 'library_assistant.track_failed',
+        analyzerId: failure.analyzerId,
+        trackId: failure.trackId,
+        durationMs: failure.durationMs,
+        errorMessage: sanitized.message,
+        errorAction: sanitized.action
+      }, 'Faixa ignorada pelo Assistente após falha isolada; análise continuará.');
     }
   })];
   const service = new LibraryAssistantService({
