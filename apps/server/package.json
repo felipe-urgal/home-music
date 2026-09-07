@@ -22,7 +22,7 @@
   "dependencies": {
     "@home-music/shared": "0.1.0",
     "dotenv": "17.4.2",
-    "fastify": "5.12.1",
+    "fastify": "5.12.3",
     "music-metadata": "11.15.0"
   },
   "devDependencies": {
