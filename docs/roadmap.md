@@ -4,12 +4,13 @@ Este documento descreve **o estado técnico corrente e o próximo trabalho relev
 
 O histórico detalhado acumulado até a fase 14 foi preservado em [`history/roadmap-through-phase-14.md`](history/roadmap-through-phase-14.md). Documentos de implementação da antiga fase 7.5 ficam em [`history/phase-7.5/`](history/phase-7.5/).
 
-## Estado em 2026-09-06
+## Estado em 2026-09-07
 
 - **Fase 7.5 — multiusuário/autenticação:** concluída e incorporada à arquitetura atual. Fonte canônica: [`multi-user-auth.md`](multi-user-auth.md).
 - **Fase 14 — portabilidade de dados pessoais:** implementação concluída na `main` com o PR #324. Contrato atual: [`personal-data-portability.md`](personal-data-portability.md).
 - **Fase 15 — Library Assistant:** fase ativa, coordenada pela issue #310. A fundação #311 está implementada e documentada em [`library-assistant.md`](library-assistant.md); as integrações concretas continuam no plano [`library-assistant-plan.md`](library-assistant-plan.md).
 - A camada A do fallback de artwork (#321) e a publicação de artwork canônica no Media Session (#325) já foram incorporadas; validações físicas específicas de PWA permanecem registradas nas issues correspondentes como QA pós-merge.
+- O player Agora/Tocando agora agora possui apresentação de vinil animado (#326), reutilizando `Artwork`/fallback canônico e respeitando `prefers-reduced-motion`.
 - Correções de cold start offline (#328) e instrumentação de continuidade de playback iOS (#327) já foram incorporadas; qualquer evidência de hardware adicional continua sendo rastreada nas próprias issues.
 
 A `main` atual já contém exportação e importação de dados pessoais por usuário, validação/dry-run, política de merge e E2E focado de importação pessoal no CI.
@@ -48,7 +49,7 @@ Umbrella: **#310 — Library Assistant**.
 | #321 | fallback canônico de artwork; camada A derivada pronta, camada B persistente opcional | parcial |
 | #322 | transcrição/alinhamento local opcional | P2 |
 | #325 | artwork canônica no Media Session | implementada; QA físico rastreado |
-| #326 | vinil animado no player Agora usando a mesma identidade | planejada |
+| #326 | vinil animado no player Agora usando a mesma identidade | implementada; QA físico de fluidez/bateria continua manual |
 
 O detalhamento de arquitetura, riscos, etapas e critérios está em [`library-assistant-plan.md`](library-assistant-plan.md). O comportamento já implementado da fundação está em [`library-assistant.md`](library-assistant.md). Se plano e implementação divergirem, código/testes e a issue executada têm precedência.
 
