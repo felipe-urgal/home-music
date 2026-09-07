@@ -75,6 +75,7 @@ export function PlayerScreen({
     <>
       <PlayerTrackPresentation
         current={current}
+        playing={playing}
         queueLength={queue.length}
         libraryReturnLabel={libraryReturnLabel}
         playlists={playlists}
