@@ -174,8 +174,13 @@ function validateEvidence(evidence: LibraryAssistantEvidence[]) {
       requireSafeText(item.id, 'externalId', 256);
       continue;
     }
-    requireSafeText(item.sourceValue, 'sourceValue', 512);
-    requireSafeText(item.candidateValue, 'candidateValue', 512);
+    if (item.type === 'human-override') continue;
+    if (item.type === 'text-match') {
+      requireSafeText(item.sourceValue, 'sourceValue', 512);
+      requireSafeText(item.candidateValue, 'candidateValue', 512);
+      continue;
+    }
+    throw new TypeError('Tipo de evidência não suportado.');
   }
 }
 

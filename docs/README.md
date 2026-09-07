@@ -23,13 +23,13 @@ Quando houver divergência, use esta ordem:
 
 ## Estado técnico atual
 
-Em **2026-09-06**:
+Em **2026-09-07**:
 
 - fase 7.5 (multiusuário/autenticação) está concluída; os documentos de implementação foram arquivados;
 - fase 14 (portabilidade de dados pessoais) está implementada na `main` após o PR #324;
 - fase 15 (Library Assistant) é o ciclo técnico ativo, rastreado pela issue #310;
-- a fundação do Assistente (#311) possui contrato canônico em [`library-assistant.md`](library-assistant.md);
-- o planejamento das capacidades seguintes permanece em [`library-assistant-plan.md`](library-assistant-plan.md).
+- a fundação do Assistente (#311) e a identificação explicável de metadata via MusicBrainz (#312) possuem contrato canônico em [`library-assistant.md`](library-assistant.md);
+- revisão/aplicação segura de sugestões segue na #313 e as capacidades posteriores permanecem no [`library-assistant-plan.md`](library-assistant-plan.md).
 
 Para o estado instantâneo de issues/PRs, GitHub é a fonte de verdade; este índice não tenta reproduzir todo o tracker.
 
@@ -58,7 +58,7 @@ Para o estado instantâneo de issues/PRs, GitHub é a fonte de verdade; este ín
 - [`library-http-delivery.md`](library-http-delivery.md) — entrega HTTP da mídia;
 - [`library-metadata-normalization.md`](library-metadata-normalization.md) — normalização de metadata;
 - [`library-navigation-performance.md`](library-navigation-performance.md) — performance de navegação;
-- [`library-assistant.md`](library-assistant.md) — fundação implementada do Assistente: runs, sugestões, evidências, stale, providers e API administrativa;
+- [`library-assistant.md`](library-assistant.md) — contrato implementado do Assistente: fundação, lifecycle, stale/cache e matching de metadata via MusicBrainz, incluindo score/confiança, política de provider e segurança de filename/path;
 - [`admin-metadata-overrides.md`](admin-metadata-overrides.md) — overrides de metadata;
 - [`admin-cover-overrides.md`](admin-cover-overrides.md) — overrides de capa;
 - [`admin-file-moves.md`](admin-file-moves.md) — organização/movimentação de arquivos;
@@ -91,7 +91,7 @@ Para o estado instantâneo de issues/PRs, GitHub é a fonte de verdade; este ín
 - [`pwa.md`](pwa.md) — arquitetura PWA/service worker;
 - [`pwa-icon-identity.md`](pwa-icon-identity.md) — identidade visual dos ícones PWA;
 - [`offline-downloads.md`](offline-downloads.md) — downloads offline e isolamento por usuário;
-- [`artwork-fallback.md`](artwork-fallback.md) — fallback de artwork;
+- [`artwork-fallback.md`](artwork-fallback.md) — fallback de artwork e contrato visual do vinil do player;
 - [`ffmpeg.md`](ffmpeg.md) — FFmpeg/FFprobe.
 
 ## OpenSubsonic
@@ -125,7 +125,7 @@ Os pares `PRODUCTION.md`/`production.md` e `DEVELOPMENT.md`/`development-environ
 
 ## Planos e decisões
 
-- [`library-assistant-plan.md`](library-assistant-plan.md) — plano ativo das capacidades restantes da fase 15; a fundação já implementada é descrita em [`library-assistant.md`](library-assistant.md);
+- [`library-assistant-plan.md`](library-assistant-plan.md) — plano ativo das capacidades restantes da fase 15; o comportamento já implementado em #311/#312 é descrito em [`library-assistant.md`](library-assistant.md);
 - documentos com `*-decision.md` preservam decisões arquiteturais específicas e devem ser lidos junto do código atual.
 
 ## Histórico
