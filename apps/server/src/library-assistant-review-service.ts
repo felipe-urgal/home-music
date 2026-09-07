@@ -1,4 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
+import type { Track } from '@home-music/shared';
 import type {
   AdminLibraryAssistantBatchDecisionResponse,
   AdminLibraryAssistantReviewResponse,
@@ -7,9 +8,8 @@ import type {
   LibraryAssistantDecisionSummary,
   LibraryAssistantMetadataTarget,
   LibraryAssistantReviewItem,
-  LibraryAssistantSuggestionStatus,
-  Track
-} from '@home-music/shared';
+  LibraryAssistantSuggestionStatus
+} from '@home-music/shared/library-assistant';
 import type { LibraryAssistantStore, LibraryAssistantStoredSuggestion } from './library-assistant-store.js';
 import {
   normalizeMetadataOverridePatch,
@@ -220,7 +220,11 @@ export class LibraryAssistantReviewService {
     if (suggestion.target.capability !== 'metadata' || !OPEN_STATUSES.has(suggestion.status)) return null;
     const track = tracks.get(suggestion.target.trackId);
     const currentValue = track ? liveMetadataValue(track, suggestion.target) : null;
-    if (currentValue == null || currentValue !== suggestion.target.currentValue) {
+    if (
+      currentValue == null
+      || currentValue !== suggestion.target.currentValue
+      || this.hasHumanOverrideChangedSinceAnalysis(suggestion.target.trackId, suggestion.createdAt)
+    ) {
       const updatedAt = this.now().toISOString();
       if (this.decisions.transitionSuggestion(suggestion.id, 'stale', updatedAt)) {
         this.decisions.markRunStale(run.id, updatedAt);
@@ -262,6 +266,14 @@ export class LibraryAssistantReviewService {
     if (currentValue == null || currentValue !== suggestion.target.currentValue) {
       return this.markStale(decision, run, currentValue, 'A metadata mudou desde a análise. Revise uma nova sugestão.');
     }
+    if (this.hasHumanOverrideChangedSinceAnalysis(suggestion.target.trackId, suggestion.createdAt)) {
+      return this.markStale(
+        decision,
+        run,
+        currentValue,
+        'Uma decisão humana de metadata mudou depois da análise. Analise novamente antes de aplicar.'
+      );
+    }
 
     const updatedAt = this.now().toISOString();
     if (decision.action === 'reject') {
@@ -281,6 +293,11 @@ export class LibraryAssistantReviewService {
     } catch {
       return result(decision, 'failed', currentValue, 'Não foi possível aplicar a metadata sugerida.');
     }
+  }
+
+  private hasHumanOverrideChangedSinceAnalysis(trackId: string, analyzedAt: string) {
+    const overrideUpdatedAt = this.options.metadataOverrides.get(trackId)?.override.updatedAt;
+    return Boolean(overrideUpdatedAt && overrideUpdatedAt > analyzedAt);
   }
 
   private markStale(
