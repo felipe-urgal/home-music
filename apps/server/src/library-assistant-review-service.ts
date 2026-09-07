@@ -219,10 +219,16 @@ export class LibraryAssistantReviewService {
     const suggestion = record.suggestion;
     if (suggestion.target.capability !== 'metadata' || !OPEN_STATUSES.has(suggestion.status)) return null;
     const track = tracks.get(suggestion.target.trackId);
-    const currentValue = track ? liveMetadataValue(track, suggestion.target) : null;
+    if (!track) {
+      const updatedAt = this.now().toISOString();
+      if (this.decisions.transitionSuggestion(suggestion.id, 'stale', updatedAt)) {
+        this.decisions.markRunStale(run.id, updatedAt);
+      }
+      return null;
+    }
+    const currentValue = liveMetadataValue(track, suggestion.target);
     if (
-      currentValue == null
-      || currentValue !== suggestion.target.currentValue
+      currentValue !== suggestion.target.currentValue
       || this.hasHumanOverrideChangedSinceAnalysis(suggestion.target.trackId, suggestion.createdAt)
     ) {
       const updatedAt = this.now().toISOString();
