@@ -15,7 +15,7 @@ import {
   SkipForward,
   Volume2
 } from 'lucide-react';
-import { Artwork } from './Artwork';
+import { NowPlayingVinyl } from './NowPlayingVinyl';
 
 function formatTime(value: number) {
   if (!Number.isFinite(value) || value < 0) return '0:00';
@@ -100,7 +100,7 @@ export function DesktopNowPlayingScreen({
 
       <div className="desktop-now-playing-screen__stage">
         <div className="desktop-now-playing-screen__art">
-          <Artwork track={current} large />
+          <NowPlayingVinyl track={current} playing={playing} />
         </div>
 
         <div className="desktop-now-playing-screen__content">
