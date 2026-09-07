@@ -32,6 +32,7 @@ async function withReview(run: (context: {
   assistant: LibraryAssistantStore;
   metadata: TrackMetadataOverrideStore;
   review: LibraryAssistantReviewService;
+  tracks: IndexedTrack[];
   revisionChanges: () => number;
 }) => Promise<void> | void) {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'home-music-assistant-review-'));
@@ -54,7 +55,7 @@ async function withReview(run: (context: {
     now: () => new Date('2026-09-07T12:10:00.000Z')
   });
   try {
-    await run({ assistant, metadata, review, revisionChanges: () => revision });
+    await run({ assistant, metadata, review, tracks: physicalTracks, revisionChanges: () => revision });
   } finally {
     review.close();
     metadata.close();
@@ -73,6 +74,7 @@ function seedSuggestion(
     field?: 'title' | 'artist' | 'album' | 'albumArtist';
     currentValue?: string;
     suggestedValue?: string;
+    createdAt?: string;
   } = {}
 ) {
   const runId = input.runId ?? 'run-1';
@@ -113,7 +115,7 @@ function seedSuggestion(
       suggestedValue: input.suggestedValue ?? 'Faixa correta'
     },
     premiseSignature: 'a'.repeat(64),
-    createdAt: '2026-09-07T12:00:02.000Z'
+    createdAt: input.createdAt ?? '2026-09-07T12:00:02.000Z'
   }]);
   assistant.completeRun(runId, '2026-09-07T12:00:03.000Z');
 }
@@ -164,6 +166,35 @@ test('review marks suggestion stale when effective field changed after analysis'
     assert.equal(result.currentValue, 'Alterada por humano');
     assert.equal(assistant.getRun('run-1')?.summary.stale, 1);
     assert.equal(metadata.get('track-1')?.effective.title, 'Alterada por humano');
+  });
+});
+
+test('apply converging to physical metadata removes the redundant override', async () => {
+  await withReview(async ({ assistant, metadata, review }) => {
+    metadata.patch('track-1', { title: 'Título manual' });
+    seedSuggestion(assistant, {
+      currentValue: 'Título manual',
+      suggestedValue: 'Faixa antiga',
+      createdAt: '2099-01-01T00:00:00.000Z'
+    });
+
+    const applied = await review.decide(decision({ expectedCurrentValue: 'Título manual' }));
+    assert.equal(applied.outcome, 'applied');
+    assert.equal(metadata.get('track-1')?.override.title, null);
+    assert.equal(metadata.get('track-1')?.effective.title, 'Faixa antiga');
+    assert.equal(metadata.get('track-1')?.physical.title, 'Faixa antiga');
+  });
+});
+
+test('review marks suggestion stale when the track is no longer in the effective library', async () => {
+  await withReview(async ({ assistant, metadata, review, tracks }) => {
+    seedSuggestion(assistant);
+    tracks.splice(0, 1);
+
+    const result = await review.decide(decision());
+    assert.equal(result.outcome, 'stale');
+    assert.equal(result.currentValue, null);
+    assert.equal(metadata.get('track-1')?.override.title, null);
   });
 });
 
