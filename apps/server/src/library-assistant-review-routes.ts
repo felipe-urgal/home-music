@@ -4,7 +4,7 @@ import type {
   AdminLibraryAssistantDecisionRequest,
   AdminLibraryAssistantDecisionResponse,
   AdminLibraryAssistantReviewResponse
-} from '@home-music/shared';
+} from '@home-music/shared/library-assistant';
 import type { LibraryAssistantReviewService } from './library-assistant-review-service.js';
 
 const SUGGESTION_ID = /^[A-Za-z0-9._:-]{1,192}$/;
