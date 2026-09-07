@@ -10,3 +10,5 @@ export function notifyLibraryChanged() {
   if (typeof window === 'undefined') return;
   window.dispatchEvent(new Event(LIBRARY_CHANGED_EVENT));
 }
+
+export const dispatchLibraryChanged = notifyLibraryChanged;
