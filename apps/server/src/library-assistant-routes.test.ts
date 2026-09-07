@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import Fastify from 'fastify';
-import type { LibraryAssistantRun } from '@home-music/shared/library-assistant';
+import type { LibraryAssistantDecision, LibraryAssistantRun } from '@home-music/shared/library-assistant';
 import { SESSION_COOKIE_NAME, SessionManager } from './auth.js';
 import { installApiAuthPolicy } from './auth-policy.js';
+import { registerLibraryAssistantReviewRoutes } from './library-assistant-review-routes.js';
+import type { LibraryAssistantReviewService } from './library-assistant-review-service.js';
 import { registerLibraryAssistantRoutes } from './library-assistant-routes.js';
 import type { LibraryAssistantService } from './library-assistant-service.js';
 import type { AuthenticatedUserState } from './user-auth-store.js';
@@ -35,6 +37,17 @@ function run(status: LibraryAssistantRun['status'] = 'completed'): LibraryAssist
   };
 }
 
+function reviewResult(decision: LibraryAssistantDecision) {
+  return {
+    runId: decision.runId,
+    suggestionId: decision.suggestionId,
+    action: decision.action,
+    outcome: decision.action === 'apply' ? 'applied' as const : 'rejected' as const,
+    currentValue: decision.expectedCurrentValue,
+    message: null
+  };
+}
+
 function createApp() {
   const sessions = new SessionManager('admin', 'password-segura-2026');
   const users = new Map<string, AuthenticatedUserState>([
@@ -52,6 +65,31 @@ function createApp() {
     listSuggestions(id: string) { return id === 'assistant-run-1' ? [] : null; },
     cancelRun(id: string) { return id === 'assistant-run-1' ? run('cancelled') : null; }
   } as unknown as LibraryAssistantService;
+  const review = {
+    getReviewQueue() {
+      return { libraryRevision: 7, items: [] };
+    },
+    async decide(decision: LibraryAssistantDecision) {
+      return reviewResult(decision);
+    },
+    async decideBatch(decisions: LibraryAssistantDecision[]) {
+      if (decisions.length < 1 || decisions.length > 100) {
+        throw new RangeError('O lote deve conter entre 1 e 100 decisões.');
+      }
+      const results = decisions.map(reviewResult);
+      return {
+        results,
+        summary: {
+          total: results.length,
+          applied: results.filter(item => item.outcome === 'applied').length,
+          rejected: results.filter(item => item.outcome === 'rejected').length,
+          alreadyResolved: 0,
+          stale: 0,
+          failed: 0
+        }
+      };
+    }
+  } as unknown as LibraryAssistantReviewService;
 
   const app = Fastify();
   installApiAuthPolicy(app, {
@@ -60,10 +98,19 @@ function createApp() {
     users: { getEnabledUserById: userId => users.get(userId) ?? null }
   });
   registerLibraryAssistantRoutes(app, assistant);
+  registerLibraryAssistantReviewRoutes(app, review);
   return { app, sessions, startedBy };
 }
 
-test('Library Assistant API is admin-only and lifecycle mutations require anti-CSRF header', async () => {
+const validDecision = {
+  runId: 'assistant-run-1',
+  suggestionId: 'suggestion-1',
+  action: 'apply' as const,
+  expectedLibraryRevision: 7,
+  expectedCurrentValue: 'Faixa atual'
+};
+
+test('Library Assistant API is admin-only and lifecycle/review mutations require anti-CSRF header', async () => {
   const { app, sessions, startedBy } = createApp();
   const userToken = sessions.createSessionForUser('user-1');
   const adminToken = sessions.createSessionForUser('admin-1');
@@ -76,7 +123,7 @@ test('Library Assistant API is admin-only and lifecycle mutations require anti-C
 
     const user = await app.inject({
       method: 'GET',
-      url: '/api/admin/library-assistant/runs',
+      url: '/api/admin/library-assistant/review',
       headers: { cookie: cookie(userToken) }
     });
     assert.equal(user.statusCode, 403);
@@ -88,6 +135,14 @@ test('Library Assistant API is admin-only and lifecycle mutations require anti-C
       payload: { capability: 'metadata' }
     });
     assert.equal(noCsrf.statusCode, 403);
+
+    const noCsrfDecision = await app.inject({
+      method: 'POST',
+      url: '/api/admin/library-assistant/suggestions/suggestion-1/decision',
+      headers: { cookie: cookie(adminToken), 'content-type': 'application/json' },
+      payload: validDecision
+    });
+    assert.equal(noCsrfDecision.statusCode, 403);
 
     const started = await app.inject({
       method: 'POST',
@@ -104,6 +159,20 @@ test('Library Assistant API is admin-only and lifecycle mutations require anti-C
     assert.deepEqual(startedBy, ['admin-1']);
     assert.equal(started.headers['cache-control'], 'private, no-store');
 
+    const decided = await app.inject({
+      method: 'POST',
+      url: '/api/admin/library-assistant/suggestions/suggestion-1/decision',
+      headers: {
+        cookie: cookie(adminToken),
+        'content-type': 'application/json',
+        'x-home-music-request': '1'
+      },
+      payload: validDecision
+    });
+    assert.equal(decided.statusCode, 200);
+    assert.equal(decided.json().result.outcome, 'applied');
+    assert.equal(decided.headers['cache-control'], 'private, no-store');
+
     const cancelled = await app.inject({
       method: 'POST',
       url: '/api/admin/library-assistant/runs/assistant-run-1/cancel',
@@ -116,7 +185,7 @@ test('Library Assistant API is admin-only and lifecycle mutations require anti-C
   }
 });
 
-test('Library Assistant API validates capability, identifiers, filters and exposes no apply endpoint', async () => {
+test('Library Assistant API validates capability, identifiers, filters and review payloads', async () => {
   const { app, sessions } = createApp();
   const adminToken = sessions.createSessionForUser('admin-1');
   const headers = { cookie: cookie(adminToken), 'x-home-music-request': '1' };
@@ -134,7 +203,9 @@ test('Library Assistant API validates capability, identifiers, filters and expos
       '/api/admin/library-assistant/runs?limit=201',
       '/api/admin/library-assistant/runs/assistant-run-1/suggestions?status=unknown',
       '/api/admin/library-assistant/runs/assistant-run-1/suggestions?limit=501',
-      '/api/admin/library-assistant/runs/%2Fsecret'
+      '/api/admin/library-assistant/runs/%2Fsecret',
+      '/api/admin/library-assistant/review?limit=0',
+      '/api/admin/library-assistant/review?limit=501'
     ]) {
       const response = await app.inject({ method: 'GET', url, headers: { cookie: cookie(adminToken) } });
       assert.equal(response.statusCode, 400, url);
@@ -147,12 +218,21 @@ test('Library Assistant API validates capability, identifiers, filters and expos
     });
     assert.equal(missing.statusCode, 404);
 
-    const noApply = await app.inject({
+    const invalidDecision = await app.inject({
       method: 'POST',
-      url: '/api/admin/library-assistant/runs/assistant-run-1/apply',
-      headers
+      url: '/api/admin/library-assistant/suggestions/%2Fsecret/decision',
+      headers: { ...headers, 'content-type': 'application/json' },
+      payload: validDecision
     });
-    assert.equal(noApply.statusCode, 404);
+    assert.equal(invalidDecision.statusCode, 400);
+
+    const invalidBatch = await app.inject({
+      method: 'POST',
+      url: '/api/admin/library-assistant/decisions',
+      headers: { ...headers, 'content-type': 'application/json' },
+      payload: { decisions: [] }
+    });
+    assert.equal(invalidBatch.statusCode, 400);
   } finally {
     await app.close();
   }

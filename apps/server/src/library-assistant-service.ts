@@ -91,6 +91,15 @@ function defaultPremiseSignature(capability: LibraryAssistantCapability, track: 
   return createHash('sha256').update(JSON.stringify({ capability, premise })).digest('hex');
 }
 
+function metadataPremiseSignature(track: Track, target: Extract<LibraryAssistantSuggestionTarget, { capability: 'metadata' }>) {
+  return createHash('sha256').update(JSON.stringify({
+    capability: 'metadata',
+    trackId: track.id,
+    field: target.field,
+    value: track[target.field]
+  })).digest('hex');
+}
+
 function errorCode(error: unknown) {
   if (!error || typeof error !== 'object' || !('code' in error)) return 'analysis-failed';
   const raw = String(error.code || '').trim().toLowerCase();
@@ -307,14 +316,24 @@ export class LibraryAssistantService {
       evidence: [...draft.evidence],
       provenance: { ...draft.provenance },
       target: { ...draft.target },
-      premiseSignature: this.premiseSignature(capability, track),
+      premiseSignature: this.suggestionPremiseSignature(capability, track, draft.target),
       createdAt: this.now().toISOString()
     };
   }
 
+  private suggestionPremiseSignature(
+    capability: LibraryAssistantCapability,
+    track: Track,
+    target: LibraryAssistantSuggestionTarget
+  ) {
+    return capability === 'metadata' && target.capability === 'metadata'
+      ? metadataPremiseSignature(track, target)
+      : this.premiseSignature(capability, track);
+  }
+
   private refreshStaleRun(runId: string) {
     const run = this.options.store.getRun(runId);
-    if (!run || run.status === 'failed' || run.status === 'cancelled' || run.status === 'stale') return;
+    if (!run || run.status === 'failed' || run.status === 'cancelled') return;
     const currentRevision = this.options.library.revision();
     if (currentRevision === run.libraryRevision) return;
 
@@ -333,7 +352,7 @@ export class LibraryAssistantService {
       if (record.suggestion.status !== 'pending' && record.suggestion.status !== 'review') continue;
       const track = tracks.get(record.suggestion.target.trackId);
       const currentSignature = track
-        ? this.premiseSignature(run.capability, track)
+        ? this.suggestionPremiseSignature(run.capability, track, record.suggestion.target)
         : null;
       if (!currentSignature || currentSignature !== record.premiseSignature) {
         stale = this.options.store.markSuggestionStale(record.suggestion.id, updatedAt) || stale;

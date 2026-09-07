@@ -15,6 +15,7 @@ import {
   RefreshCw,
   ScanLine,
   ShieldCheck,
+  Sparkles,
   Trash2,
   Users
 } from 'lucide-react';
@@ -29,6 +30,7 @@ import {
 import '../administration-health.css';
 import { LIBRARY_CHANGED_EVENT } from '../library-events';
 import { AdminImportMediaScreen } from './AdminImportMediaScreen';
+import { AdminLibraryAssistantScreen } from './AdminLibraryAssistantScreen';
 import { AdminLibraryDuplicateReviewScreen } from './AdminLibraryDuplicateReviewScreen';
 import { AdminLibraryIntegrityScreen } from './AdminLibraryIntegrityScreen';
 import { AdminLibraryNormalizationScreen } from './AdminLibraryNormalizationScreen';
@@ -38,7 +40,7 @@ import { AdminTrackAvailabilityScreen } from './AdminTrackAvailabilityScreen';
 import { AdminTrackMetadataScreen } from './AdminTrackMetadataScreen';
 import { AdminUsersScreen } from './AdminUsersScreen';
 
-type AdministrationView = 'overview' | 'tracks' | 'metadata' | 'normalization' | 'integrity' | 'duplicates' | 'quarantine' | 'import' | 'operations' | 'users';
+type AdministrationView = 'overview' | 'assistant' | 'tracks' | 'metadata' | 'normalization' | 'integrity' | 'duplicates' | 'quarantine' | 'import' | 'operations' | 'users';
 
 type AdministrationScreenProps = {
   currentUser: AuthenticatedUser;
@@ -205,6 +207,7 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
 
   if (currentUser.role !== 'admin') return null;
 
+  if (view === 'assistant') return <AdminLibraryAssistantScreen onBack={() => setView('overview')} />;
   if (view === 'tracks') return <AdminTrackAvailabilityScreen onBack={() => setView('overview')} />;
   if (view === 'metadata') {
     return (
@@ -312,6 +315,7 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
             <div><strong id="administration-actions-title">Ações rápidas</strong><small>Acesse diretamente as ferramentas mais usadas.</small></div>
           </div>
           <div className="administration-cockpit-actions">
+            <button type="button" onClick={() => setView('assistant')}><Sparkles /><span>Assistente da Biblioteca</span></button>
             <button type="button" onClick={() => setView('tracks')}><ListMusic /><span>Gerenciar músicas</span></button>
             <button type="button" onClick={() => setView('import')}><FileInput /><span>Importar mídia</span></button>
             <button type="button" onClick={() => setView('integrity')}><ScanLine /><span>Integridade</span></button>

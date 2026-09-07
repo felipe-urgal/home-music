@@ -2,12 +2,13 @@
 
 ## Estado
 
-A Fase 15 possui duas camadas implementadas:
+A Fase 15 possui três camadas implementadas:
 
 - **#311 — fundação:** contratos, runs, sugestões, persistência auditável, stale protection, lifecycle administrativo, fila/observabilidade e gateway seguro de providers;
-- **#312 — identificação de metadata:** primeiro analyzer real, usando contexto local + MusicBrainz para produzir sugestões explicáveis de `title`, `artist`, `album` e `albumArtist`.
+- **#312 — identificação de metadata:** analyzer real usando contexto local + MusicBrainz para produzir sugestões explicáveis de `title`, `artist`, `album` e `albumArtist`;
+- **#313 — revisão/aplicação segura:** workspace administrativo para revisar, rejeitar e aplicar sugestões de metadata por campo, individualmente ou em lote explícito, sempre pela autoridade canônica de overrides.
 
-O Assistente continua **read-only em relação às autoridades efetivas da biblioteca**. Uma análise pode criar runs, sugestões e cache derivado, mas não altera metadata efetiva, cover override, tags, lyrics nem arquivos. Aplicação de sugestões pertence à #313.
+A análise continua separada da mutação. Nenhuma sugestão é aplicada automaticamente após scan/importação ou apenas por possuir alta confiança. Aplicar depende de uma decisão administrativa explícita e de nova validação no backend.
 
 ## Autoridades preservadas
 
@@ -22,6 +23,8 @@ O Assistente é um orquestrador, não um segundo catálogo. As fontes de verdade
 
 As tabelas `library_assistant_*` guardam somente estado derivado/auditável e nunca substituem `tracks`.
 
+Na #313, aplicar metadata usa exclusivamente `TrackMetadataOverrideStore.patch()`. Não existe `UPDATE tracks` direto, escrita de tags ou alteração do arquivo físico. Quando o valor sugerido converge para o valor físico, a semântica canônica do store evita override redundante.
+
 ## Contratos compartilhados
 
 Os contratos que cruzam web/server vivem em `@home-music/shared/library-assistant` e possuem versão explícita. Eles definem:
@@ -33,7 +36,11 @@ Os contratos que cruzam web/server vivem em `@home-music/shared/library-assistan
 - reason codes estáveis;
 - evidências tipadas/versionadas;
 - proveniência e IDs externos tipados;
-- targets por capability.
+- targets por capability;
+- decisões `apply`/`reject`, resultado individual e resumo de lote;
+- regra compartilhada de elegibilidade do lote seguro.
+
+Cada sugestão textual representa **um campo** de metadata. Por isso, “aplicar parte” de uma identificação significa aceitar somente as sugestões/campos desejados; não existe um payload paralelo de `fields[]` que duplique essa autoridade.
 
 Payload externo arbitrário nunca vira regra de domínio. O MusicBrainz é normalizado antes de entrar no cache ou nas sugestões.
 
@@ -54,7 +61,9 @@ Limites atuais:
 - até 500 entradas de cache de provider;
 - TTL máximo global do gateway: 30 dias.
 
-Ao iniciar um run, `LibraryAssistantService` captura a biblioteca efetiva projetada e sua revision. Cada sugestão recebe assinatura SHA-256 da premissa relevante. Mudança de revision/premissa torna o run ou a sugestão `stale` antes de qualquer aplicação futura.
+Ao iniciar um run, `LibraryAssistantService` captura a biblioteca efetiva projetada e sua revision. Cada sugestão recebe assinatura SHA-256 da premissa relevante. Mudança de revision/premissa torna o run ou a sugestão `stale` no lifecycle de análise.
+
+Na revisão da #313, o backend revalida novamente a existência da faixa, o status da sugestão, o valor atual esperado e a decisão humana **do mesmo campo** antes de aplicar. `TrackMetadataOverrideStore` mantém uma revisão auxiliar por campo: uma edição de `artist` não invalida uma sugestão ainda válida de `title`, enquanto uma decisão explícita posterior sobre `title` — inclusive reafirmando o mesmo valor efetivo — torna a sugestão antiga de `title` stale. Assim, nenhuma edição humana é sobrescrita silenciosamente e campos irmãos continuam revisáveis de forma independente.
 
 Runs encontrados em `queued/running` após restart viram `failed/interrupted`; cancelamento, falha e shutdown invalidam sugestões parciais ainda abertas.
 
@@ -181,9 +190,43 @@ Uma sugestão pode carregar:
 
 A proveniência registra `source = musicbrainz`, provider version e recording ID. Payload bruto inteiro não é persistido.
 
-### Decisões humanas
+## Revisão e aplicação administrativa (#313)
 
-O analyzer recebe a biblioteca **efetiva** e consulta o `TrackMetadataOverrideStore` para saber quais campos têm decisão humana. Ele pode enriquecer outros campos, mas não trata override como “faltante”, não o aplica nem o reverte silenciosamente.
+A superfície **Administração → Assistente da Biblioteca** organiza o fluxo em:
+
+1. **Analisar biblioteca** — inicia um run de metadata; nenhum resultado é aplicado automaticamente;
+2. **Revisar** — mostra campo, valor físico quando diverge, valor efetivo atual, valor sugerido, confiança, provider e motivos/evidências relevantes;
+3. **Decidir** — cada campo pode ser aplicado ou rejeitado individualmente;
+4. **Lote explícito** — somente sugestões selecionadas e classificadas como seguras entram no lote;
+5. **Reconciliar** — após sucesso, a UI publica `home-music:library-changed` e o snapshot efetivo é atualizado sem exigir rescan.
+
+Filtros atuais cobrem abertas, seguras, revisão necessária, stale, aplicadas, rejeitadas, falhas e todas. Confiança/conflito possuem rótulos textuais e não dependem apenas de cor. Sugestões com `human-override`, ambiguidade ou conflito não entram na seleção segura automática.
+
+A regra de lote seguro é compartilhada entre Web e backend e o servidor é a autoridade final: `apply` em lote exige sugestão aberta, `high` confidence e ausência de `human-override`, `ambiguous-candidates`, `source-conflict` e `metadata-conflict`. Um cliente modificado não consegue transformar uma sugestão de revisão em aplicação de lote apenas alterando o payload.
+
+O backend processa decisões de lote isoladamente: uma falha/stale não apaga os sucessos já confirmados nem mascara os demais resultados. Retry sempre passa novamente pelas validações de existência/estado/premissa.
+
+Cancelamento de **análise** interrompe novos trabalhos do run e não reverte resultados já concluídos; cancelamento não transforma sugestões em aplicação automática. **Cancelar lote** é observado entre decisões: o item em andamento pode concluir, nenhum novo item é iniciado, sucessos confirmados permanecem e os itens não iniciados continuam selecionados para retry/revisão.
+
+Ao reabrir/atualizar o workspace, estados terminais permanecem explícitos: falha do run mostra a mensagem/ação sanitizada, cancelamento continua identificado e um run concluído com zero candidatos informa que nenhuma alteração foi aplicada.
+
+## API administrativa
+
+Todas as rotas vivem sob `/api/admin/library-assistant` e usam a política central de admin. Leituras retornam `Cache-Control: private, no-store`. Mutações exigem `X-Home-Music-Request: 1`.
+
+Lifecycle/análise:
+
+- `POST /api/admin/library-assistant/runs` — inicia análise;
+- `GET /api/admin/library-assistant/runs?limit=50` — lista runs;
+- `GET /api/admin/library-assistant/runs/:id` — consulta run;
+- `GET /api/admin/library-assistant/runs/:id/suggestions?status=review&limit=200` — lista sugestões;
+- `POST /api/admin/library-assistant/runs/:id/cancel` — cancela análise.
+
+Revisão/aplicação:
+
+- `GET /api/admin/library-assistant/review?limit=200` — fila revisável com snapshot efetivo/físico necessário à decisão;
+- `POST /api/admin/library-assistant/suggestions/:id/decision` — aplica ou rejeita uma sugestão/campo;
+- `POST /api/admin/library-assistant/decisions` — executa até 100 decisões explícitas e retorna resultado por item + resumo de sucesso parcial.
 
 ## Falhas e segurança
 
@@ -193,40 +236,32 @@ O analyzer recebe a biblioteca **efetiva** e consulta o `TrackMetadataOverrideSt
 - resposta vazia produz zero sugestão;
 - nenhuma falha do provider altera a biblioteca;
 - logs/erros operacionais usam sanitização já existente;
-- não são seguidas URLs arbitrárias vindas do payload do MusicBrainz.
-
-## API administrativa
-
-Todas as rotas vivem sob `/api/admin/library-assistant` e usam a política central de admin.
-
-- `POST /api/admin/library-assistant/runs` — inicia análise; exige `X-Home-Music-Request: 1`;
-- `GET /api/admin/library-assistant/runs?limit=50` — lista runs;
-- `GET /api/admin/library-assistant/runs/:id` — consulta run;
-- `GET /api/admin/library-assistant/runs/:id/suggestions?status=review&limit=200` — lista sugestões;
-- `POST /api/admin/library-assistant/runs/:id/cancel` — cancela; exige header de mutação.
-
-**Não existe endpoint `apply` nesta entrega.**
+- não são seguidas URLs arbitrárias vindas do payload do MusicBrainz;
+- `user` não pode acessar revisão/aplicação administrativa;
+- mutações sem o header anti-CSRF são rejeitadas;
+- sugestão stale não sobrescreve metadata humana;
+- aplicar/rejeitar novamente é idempotente no lifecycle do Assistente.
 
 ## Cobertura de regressão
 
 A fundação continua cobrindo autorização, anti-CSRF, persistência/reopen, stale, cancelamento, concorrência, cache, rate limit, timeout e ausência de mutação.
 
-O analyzer MusicBrainz adiciona fixtures para:
+O analyzer MusicBrainz cobre payload/cache normalizado, matching, duração, ambiguidade, contexto coletivo, filename seguro, override humano, IDs externos e falhas do provider.
 
-- payload bruto e cache normalizado idempotente;
-- acento/caixa/espaços sem apagar pontuação;
-- duração próxima e conflitante;
-- candidatos ambíguos;
-- busca progressiva com e sem álbum;
-- contexto coletivo e outlier bloqueado;
-- filename útil vs filename enganoso;
-- override humano;
-- IDs externos tipados;
-- resposta vazia, rate limit e JSON inválido;
-- endpoint canônico sem envio de path/filename bruto.
+A revisão/aplicação adiciona regressões para:
 
-## Próximo módulo
+- aplicação de um campo via override canônico;
+- rejeição sem alterar metadata efetiva;
+- idempotência de apply/reject;
+- stale quando o mesmo campo efetivo muda após análise;
+- stale quando existe nova decisão explícita no mesmo campo mesmo sem mudança efetiva;
+- preservação de sugestões de campos irmãos quando somente outro campo foi editado/aplicado;
+- exposição do valor físico na fila quando difere do efetivo;
+- convergência ao físico sem override redundante;
+- lote com sucesso parcial e validação server-side da elegibilidade segura;
+- autorização e anti-CSRF das rotas de revisão;
+- cliente Web mantendo payload explícito e header de mutação.
 
-A próxima etapa primária é **#313 — revisão e aplicação segura das sugestões de metadata**. Ela deve consumir o contrato estabilizado aqui, sem criar um segundo matcher, lifecycle ou cache concorrente.
+## Próximos módulos
 
-O plano amplo permanece em [`library-assistant-plan.md`](library-assistant-plan.md).
+A #313 encerra o primeiro fluxo completo **analisar → revisar → aplicar metadata**. As capacidades posteriores continuam no [`library-assistant-plan.md`](library-assistant-plan.md), principalmente artwork (#314), lyrics (#315/#316) e autonomia progressiva somente depois de o fluxo manual estar estabilizado.

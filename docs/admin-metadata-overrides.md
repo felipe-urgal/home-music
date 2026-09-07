@@ -55,7 +55,11 @@ Campos suportados:
 
 Os quatro campos editáveis aceitam até 240 caracteres e não aceitam string vazia quando presentes.
 
-A tabela é criada de forma idempotente pelo `TrackMetadataOverrideStore`, seguindo o mesmo padrão dos stores especializados de disponibilidade e quarentena. O store usa `PRAGMA foreign_keys = ON` e `busy_timeout` para coexistir com as demais conexões SQLite do processo.
+A tabela auxiliar `track_metadata_override_field_revisions` registra a última **decisão explícita por campo** (`track_id`, `field`, `updated_at`). Ela não é uma segunda autoridade de metadata e não muda a precedência descrita acima: existe somente para que fluxos concorrentes, como o Assistente da Biblioteca, consigam detectar que exatamente aquele campo foi editado depois de uma análise. Uma alteração de `artist`, por exemplo, não invalida por si só uma sugestão ainda válida de `title`.
+
+`PATCH` atualiza a revisão apenas dos campos presentes no patch, inclusive quando o valor enviado converge para o valor físico. Assim, uma decisão humana explícita no mesmo campo continua detectável mesmo quando a metadata efetiva não muda. `DELETE` registra revisão dos campos quando realmente remove um override existente. As revisões usam FK com `ON DELETE CASCADE` para não sobreviver à faixa.
+
+As tabelas são criadas de forma idempotente pelo `TrackMetadataOverrideStore`, seguindo o mesmo padrão dos stores especializados de disponibilidade e quarentena. O store usa `PRAGMA foreign_keys = ON` e `busy_timeout` para coexistir com as demais conexões SQLite do processo.
 
 ## API administrativa
 
@@ -107,6 +111,30 @@ Depois de salvar ou restaurar, a tela publica `home-music:library-changed`. A in
 
 O cockpit da Administração escuta o mesmo evento e refaz `/api/admin/library/overview`. Quando Metadados foi aberto por um filtro de saúde, o frontend conserva somente a chave do problema e recebe do backend os novos `trackIds`; ele não reimplementa no cliente as regras de “sem título”, artista/álbum desconhecido ou capa ausente. Por isso, uma faixa corrigida deixa de aparecer no filtro e seu contador é reconciliado ainda com a tela aberta.
 
+## Assistente da Biblioteca
+
+A revisão/aplicação de metadata do **Administração → Assistente da Biblioteca** converge para a mesma autoridade descrita neste documento.
+
+Regras canônicas:
+
+- o Assistente nunca grava diretamente em `tracks`;
+- o Assistente nunca escreve tags no arquivo físico;
+- cada sugestão textual representa um único campo (`title`, `artist`, `album` ou `albumArtist`);
+- a fila mostra o valor físico quando ele difere do valor efetivo analisado;
+- `apply` usa `TrackMetadataOverrideStore.patch()` e, portanto, herda validação, transação e remoção de override redundante;
+- se o sugerido for igual ao valor físico, não permanece uma diferença artificial em `track_metadata_overrides`;
+- `reject` altera somente o lifecycle auditável da sugestão e não mexe na metadata efetiva;
+- antes de aplicar, o backend revalida faixa, sugestão, valor atual esperado e a revisão humana **do mesmo campo** posterior à análise;
+- editar `artist` depois da análise não torna automaticamente uma sugestão de `title` stale, mas editar `title` — inclusive reafirmando explicitamente o mesmo valor — invalida a sugestão antiga de `title`;
+- sugestão stale exige nova análise/revisão em vez de sobrescrever silenciosamente uma decisão humana;
+- o lote seguro é validado também no backend: somente sugestões abertas de alta confiança, sem `human-override`, ambiguidade ou conflito bloqueante, podem receber `apply` em lote;
+- sucesso parcial em lote preserva os campos já confirmados e reporta stale/falha por item;
+- cancelar o lote impede iniciar novos itens; a decisão já em andamento pode concluir e os sucessos confirmados não são revertidos.
+
+Depois de um `apply` confirmado, a revisão administrativa composta é incrementada e a Web publica `home-music:library-changed`; `/api/library`, player e Administração passam a refletir a metadata efetiva sem rescan.
+
+O contrato completo de análise/revisão está em [`library-assistant.md`](library-assistant.md).
+
 ## Re-scan
 
 O fluxo de scan permanece:
@@ -122,7 +150,7 @@ Por isso, um scan não promove overrides para `tracks` e não os apaga enquanto 
 
 A atualização de uma linha de override é transacional. Se uma constraint SQLite falhar, a transação é revertida e o override anterior permanece válido.
 
-Validações de payload acontecem antes da persistência para evitar alterações parciais. A remoção completa usa uma única operação `DELETE`, atômica no SQLite.
+Validações de payload acontecem antes da persistência para evitar alterações parciais. A remoção completa e o registro de revisão por campo ocorrem sob a mesma transação SQLite quando aplicável.
 
 ## Escrita de tags no arquivo
 
@@ -146,10 +174,13 @@ A cobertura inclui:
 - persistência após reinicialização;
 - sobrevivência a alteração física/re-scan;
 - reset parcial e total;
+- revisão por campo e cascade das revisões auxiliares;
 - cascade após remoção da faixa;
 - validação de payload e campos desconhecidos;
 - API administrativa;
 - garantia de que o payload físico original não é mutado pela camada efetiva;
 - caminho HTTP real de `/api/library`, incluindo revisão composta, ETag, revalidação `304`, save e restore sem mutar o objeto físico;
 - helper do frontend para derivação de patches;
-- Playwright desktop cobrindo edição no workspace, atualização imediata do player persistente e do filtro/cockpit de saúde, sobrevivência a rescan e restauração da fixture.
+- revisão do Library Assistant cobrindo aplicação/rejeição por campo, edição concorrente do mesmo campo versus campo irmão, convergência ao físico, stale e sucesso parcial em lote;
+- lote seguro rejeitando sugestão de baixa confiança no backend;
+- Playwright desktop cobrindo edição no workspace de Metadados, atualização imediata do player persistente e do filtro/cockpit de saúde, sobrevivência a rescan e restauração da fixture.

@@ -60,6 +60,34 @@ A regra de classificação não é duplicada no React. O frontend não tenta dec
 
 O mesmo evento que atualiza o cockpit também faz `useLibraryData()` buscar o snapshot efetivo de `/api/library`, então o player persistente, o player principal, a fila e a biblioteca passam a exibir a edição pelo mesmo `track.id`, sem reiniciar o áudio apenas por uma mudança textual.
 
+## Assistente da Biblioteca
+
+A entrada **Administração → Assistente da Biblioteca** é um workspace de análise e revisão humana de metadata textual.
+
+Fluxo atual:
+
+1. **Analisar biblioteca** inicia um run de metadata sem aplicar nada automaticamente;
+2. o resumo mostra sugestões totais, seguras, que precisam de revisão, stale, aplicadas e rejeitadas;
+3. filtros separam abertas, seguras, revisão, stale, aplicadas, rejeitadas, falhas e todas;
+4. cada card mostra faixa, campo, valor atual, valor sugerido, confiança, origem e motivos da sugestão;
+5. o administrador pode **Aplicar este campo** ou **Rejeitar** individualmente;
+6. o lote é explícito: somente sugestões seguras selecionadas pelo usuário entram em **Aplicar selecionadas**;
+7. sucesso parcial é reportado sem esconder itens stale/falhos;
+8. depois de apply confirmado, `home-music:library-changed` atualiza biblioteca/player sem rescan.
+
+Sugestão de alta confiança não equivale a autorização automática. Itens com `human-override`, ambiguidade ou conflito não entram na seleção segura automática. Confiança/status/conflito têm texto próprio e não dependem somente de cor.
+
+O componente protege contra respostas assíncronas antigas com versões de request/análise. Carregamento, análise, vazio, erro, cancelamento, mutação, stale e sucesso são estados visíveis. Feedback relevante usa `role="status"`/`role="alert"`, a lista usa região `aria-live` e controles possuem labels/estado pressionado quando aplicável.
+
+Existem dois cancelamentos distintos:
+
+- **Cancelar análise** interrompe novo trabalho do run e nunca transforma resultados parciais em aplicação automática;
+- **Cancelar lote** é observado entre decisões: o item já em andamento pode concluir, nenhum novo item é iniciado, sucessos confirmados permanecem e itens ainda não iniciados continuam selecionados para revisão/retry.
+
+Aplicações já confirmadas nunca são revertidas silenciosamente.
+
+Contrato completo e regras de backend: [`library-assistant.md`](library-assistant.md).
+
 ## Importação administrativa
 
 Usa workbench em quatro etapas:
@@ -159,6 +187,7 @@ O frontend deve reforçar — nunca substituir — as invariantes do backend:
 - confirmações destrutivas continuam obrigatórias;
 - Integridade não ganha botão de correção automática implícita;
 - credenciais temporárias recebem proteção contra perda silenciosa;
-- filtros não devem deixar seleção destrutiva invisível.
+- filtros não devem deixar seleção destrutiva invisível;
+- o Assistente não aplica sugestões apenas por confiança; toda mutação continua explícita e revalidada no servidor.
 
 Documentos `phase-7.5-*` foram movidos para [`history/phase-7.5/`](history/phase-7.5/) e permanecem apenas como histórico de implementação.

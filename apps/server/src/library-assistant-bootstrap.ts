@@ -6,6 +6,8 @@ import type { LibraryRouteProjection } from './library-routes.js';
 import type { LibraryService } from './library-service.js';
 import { createMusicBrainzMetadataAnalyzer } from './musicbrainz-metadata-analyzer.js';
 import { LibraryAssistantProviderGateway } from './library-assistant-provider.js';
+import { registerLibraryAssistantReviewRoutes } from './library-assistant-review-routes.js';
+import { LibraryAssistantReviewService } from './library-assistant-review-service.js';
 import { registerLibraryAssistantRoutes } from './library-assistant-routes.js';
 import { LibraryAssistantService, type LibraryAssistantAnalyzer } from './library-assistant-service.js';
 import { LibraryAssistantStore } from './library-assistant-store.js';
@@ -30,6 +32,17 @@ export function registerLibraryAssistant(
   const store = new LibraryAssistantStore(options.databasePath);
   const metadataOverrides = new TrackMetadataOverrideStore(options.databasePath);
   const providers = new LibraryAssistantProviderGateway(store);
+  let assistantMetadataRevision = 0;
+  const projectRevision = options.projection.projectRevision;
+
+  // registerLibraryAssistant roda antes de registerLibraryRoutes. Compor a revisão
+  // aqui garante que apply do Assistente invalide ETag/cache da biblioteca sem rescan.
+  options.projection.projectRevision = revision => projectRevision(revision) + assistantMetadataRevision;
+
+  const projectedLibrary = {
+    listTracks: () => options.projection.projectTracks(options.library.listPublicTracks()),
+    revision: () => options.projection.projectRevision(options.library.status().revision)
+  };
   const defaultAnalyzers = [createMusicBrainzMetadataAnalyzer({
     getHumanOverrideFields(trackId) {
       const override = metadataOverrides.get(trackId)?.override;
@@ -51,15 +64,21 @@ export function registerLibraryAssistant(
     observability: options.observability,
     providers,
     analyzers: options.analyzers ?? defaultAnalyzers,
-    library: {
-      listTracks: () => options.projection.projectTracks(options.library.listPublicTracks()),
-      revision: () => options.projection.projectRevision(options.library.status().revision)
-    }
+    library: projectedLibrary
+  });
+  const review = new LibraryAssistantReviewService({
+    databasePath: options.databasePath,
+    store,
+    metadataOverrides,
+    library: projectedLibrary,
+    onMetadataChanged: () => { assistantMetadataRevision += 1; }
   });
 
   registerLibraryAssistantRoutes(app, service);
+  registerLibraryAssistantReviewRoutes(app, review);
   app.addHook('onClose', async () => {
     await service.close();
+    review.close();
     metadataOverrides.close();
     store.close();
   });

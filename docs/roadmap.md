@@ -8,7 +8,7 @@ O histórico detalhado acumulado até a fase 14 foi preservado em [`history/road
 
 - **Fase 7.5 — multiusuário/autenticação:** concluída e incorporada à arquitetura atual. Fonte canônica: [`multi-user-auth.md`](multi-user-auth.md).
 - **Fase 14 — portabilidade de dados pessoais:** implementação concluída na `main` com o PR #324. Contrato atual: [`personal-data-portability.md`](personal-data-portability.md).
-- **Fase 15 — Library Assistant:** fase ativa, coordenada pela issue #310. A fundação #311 e a identificação de metadata com MusicBrainz #312 estão implementadas/documentadas em [`library-assistant.md`](library-assistant.md); revisão/aplicação segura segue na #313.
+- **Fase 15 — Library Assistant:** fase ativa, coordenada pela issue #310. A fundação #311, a identificação de metadata com MusicBrainz #312 e a revisão/aplicação segura de metadata #313 estão implementadas/documentadas em [`library-assistant.md`](library-assistant.md).
 - A camada A do fallback de artwork (#321) e a publicação de artwork canônica no Media Session (#325) já foram incorporadas; validações físicas específicas de PWA permanecem registradas nas issues correspondentes como QA pós-merge.
 - O player Agora/Tocando agora possui apresentação de vinil animado (#326), reutilizando `Artwork`/fallback canônico e respeitando `prefers-reduced-motion`.
 - Correções de cold start offline (#328) e instrumentação de continuidade de playback iOS (#327) já foram incorporadas; qualquer evidência de hardware adicional continua sendo rastreada nas próprias issues.
@@ -24,9 +24,9 @@ Princípios:
 - `LibraryAssistantService` coordena análise/sugestões sem virar autoridade de biblioteca;
 - separar descoberta/análise de aplicação;
 - evidências e proveniência devem ser estruturadas, versionadas e explicáveis;
-- stale protection deve revalidar a premissa antes de qualquer aplicação futura;
+- stale protection deve revalidar a premissa antes de qualquer aplicação;
 - preview/revisão antes de mutação;
-- operações em lote precisam de resultado rastreável e rollback quando aplicável;
+- operações em lote precisam de resultado rastreável e sucesso parcial explícito;
 - backend continua sendo a fronteira de segurança e filesystem confinement;
 - nenhuma sugestão deve inventar metadata como fato confirmado;
 - o usuário mantém controle explícito sobre alterações físicas e metadata persistida.
@@ -39,7 +39,7 @@ Umbrella: **#310 — Library Assistant**.
 | --- | --- | --- |
 | #311 | fundação de runs/sugestões, evidências, proveniência, stale, cache/provider e lifecycle admin | implementada |
 | #312 | identificação de metadata com MusicBrainz e matching explicável | implementada |
-| #313 | revisão e aplicação segura de sugestões de metadata | próxima onda; depende do contrato da #312 |
+| #313 | revisão e aplicação segura de sugestões de metadata | implementada |
 | #314 | artwork via Cover Art Archive usando cover override canônico | planejada |
 | #315 | enriquecimento de lyrics reutilizando o domínio atual | planejada |
 | #316 | resolução de lyrics consistente entre player/offline/OpenSubsonic | planejada |
@@ -53,15 +53,15 @@ Umbrella: **#310 — Library Assistant**.
 
 O detalhamento de arquitetura, riscos, etapas e critérios está em [`library-assistant-plan.md`](library-assistant-plan.md). O comportamento implementado está em [`library-assistant.md`](library-assistant.md). Se plano e implementação divergirem, código/testes e a issue executada têm precedência.
 
-### Base estabilizada (#311 + #312)
+### Base estabilizada (#311 + #312 + #313)
 
 A Fase 15 agora possui:
 
-- contratos compartilhados/versionados para runs, sugestões, evidências, confiança e proveniência;
+- contratos compartilhados/versionados para runs, sugestões, evidências, confiança, proveniência e decisões;
 - persistência mínima no mesmo SQLite, sem cópia canônica de `tracks`;
 - snapshot/revision da biblioteca efetiva, incluindo projeção administrativa existente;
 - assinatura de premissa e stale protection;
-- lifecycle de start/list/get/cancel sem endpoint de aplicação;
+- lifecycle de start/list/get/cancel;
 - cache derivado de provider com TTL/versionamento, rate limit, timeout, cancelamento e User-Agent;
 - reuso de `HeavyWorkQueue` e `LongJobObservability`;
 - regressões de autorização/anti-CSRF, reopen, cancelamento, concorrência e ausência de mutação das autoridades efetivas;
@@ -69,9 +69,14 @@ A Fase 15 agora possui:
 - matching conservador e explicável por título, artista, álbum, `albumArtist`, duração e contexto coletivo;
 - fallback por basename somente quando metadata essencial está ausente, sem envio de path/filename bruto e sempre limitado a baixa confiança;
 - IDs externos tipados de recording/release/release-group/artist;
-- proteção explícita de override humano e bloqueio de high confidence em conflito/ambiguidade.
+- proteção explícita de override humano e bloqueio de high confidence em conflito/ambiguidade;
+- workspace **Administração → Assistente da Biblioteca** com resumo/filtros, atual vs sugerido, confiança, origem e motivos;
+- apply/reject por campo, lote somente sobre seleção explícita e resultado parcial por item;
+- aplicação exclusivamente via `TrackMetadataOverrideStore`, sem `UPDATE tracks`, sem escrita de tags e com remoção canônica de override redundante;
+- revalidação antes da decisão e stale quando a premissa efetiva/humana mudou;
+- atualização do snapshot efetivo/ETag após apply sem exigir rescan.
 
-A #313 deve consumir essas sugestões e implementar revisão/aplicação segura sem duplicar matcher, lifecycle ou cache.
+Com #313, o primeiro fluxo vertical da fase está fechado: **analisar → revisar → aplicar/rejeitar metadata**. A próxima expansão deve reutilizar esse contrato de revisão em vez de criar um lifecycle paralelo.
 
 ## Portabilidade pessoal — estado consolidado
 

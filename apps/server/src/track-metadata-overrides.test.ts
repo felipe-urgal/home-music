@@ -107,6 +107,34 @@ test('valor igual ao arquivo remove override do campo e clear restaura tudo', as
   }
 });
 
+test('revisão de override é registrada por campo sem invalidar campos irmãos', async () => {
+  const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-metadata-overrides-'));
+  const dbPath = path.join(temp, 'home-music.db');
+
+  try {
+    seedTrack(dbPath);
+    const store = new TrackMetadataOverrideStore(dbPath);
+
+    store.patch('track-a', { title: 'Título corrigido' });
+    const titleRevision = store.fieldUpdatedAt('track-a', 'title');
+    assert.ok(titleRevision);
+    assert.equal(store.fieldUpdatedAt('track-a', 'artist'), null);
+
+    store.patch('track-a', { artist: 'Artista corrigido' });
+    assert.equal(store.fieldUpdatedAt('track-a', 'title'), titleRevision);
+    assert.ok(store.fieldUpdatedAt('track-a', 'artist'));
+    assert.equal(store.fieldUpdatedAt('track-a', 'album'), null);
+
+    store.clear('track-a');
+    for (const field of ['title', 'artist', 'album', 'albumArtist'] as const) {
+      assert.ok(store.fieldUpdatedAt('track-a', field));
+    }
+    store.close();
+  } finally {
+    await rm(temp, { recursive: true, force: true });
+  }
+});
+
 test('override é removido por cascade quando a faixa deixa a biblioteca', async () => {
   const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-metadata-overrides-'));
   const dbPath = path.join(temp, 'home-music.db');
@@ -116,6 +144,7 @@ test('override é removido por cascade quando a faixa deixa a biblioteca', async
     const store = new TrackMetadataOverrideStore(dbPath);
     store.patch('track-a', { title: 'Título corrigido' });
     assert.equal(store.hasOverride('track-a'), true);
+    assert.ok(store.fieldUpdatedAt('track-a', 'title'));
 
     const raw = new DatabaseSync(dbPath);
     raw.exec('PRAGMA foreign_keys = ON;');
@@ -125,6 +154,7 @@ test('override é removido por cascade quando a faixa deixa a biblioteca', async
     store.refresh();
     assert.equal(store.hasOverride('track-a'), false);
     assert.equal(store.get('track-a'), null);
+    assert.equal(store.fieldUpdatedAt('track-a', 'title'), null);
     store.close();
   } finally {
     await rm(temp, { recursive: true, force: true });

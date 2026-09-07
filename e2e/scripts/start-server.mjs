@@ -1,7 +1,9 @@
+import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const rootDir = fileURLToPath(new URL('../../', import.meta.url));
@@ -15,6 +17,7 @@ const thirdFixturePath = path.join(libraryDir, 'E2E Zulu.wav');
 const lyricsFixturePath = path.join(libraryDir, 'E2E Track.lrc');
 const rawLargeLibraryTrackCount = process.env.HOME_MUSIC_E2E_LARGE_LIBRARY_TRACKS?.trim() || '0';
 const largeLibraryTrackCount = Number(rawLargeLibraryTrackCount);
+const seedLibraryAssistant = process.env.HOME_MUSIC_E2E_LIBRARY_ASSISTANT?.trim() === '1';
 
 if (!Number.isInteger(largeLibraryTrackCount) || largeLibraryTrackCount < 0 || largeLibraryTrackCount > 50_000) {
   throw new Error('HOME_MUSIC_E2E_LARGE_LIBRARY_TRACKS deve ser um inteiro entre 0 e 50000.');
@@ -159,6 +162,102 @@ const server = spawn(
 );
 
 let stopping = false;
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function seedLibraryAssistantFixture() {
+  const storeModuleUrl = pathToFileURL(path.join(rootDir, 'apps/server/dist/library-assistant-store.js')).href;
+  const { LibraryAssistantStore } = await import(storeModuleUrl);
+  const runId = 'e2e-library-assistant-run';
+  const suggestionId = 'e2e-library-assistant-title';
+
+  for (let attempt = 0; attempt < 200 && !stopping; attempt += 1) {
+    const raw = new DatabaseSync(databasePath);
+    let track;
+    try {
+      track = raw.prepare(`
+        SELECT id, title
+        FROM tracks
+        WHERE title = 'E2E Track'
+        LIMIT 1;
+      `).get();
+    } finally {
+      raw.close();
+    }
+
+    if (!track) {
+      await sleep(100);
+      continue;
+    }
+
+    const currentTitle = String(track.title || '');
+    const trackId = String(track.id || '');
+    const premiseSignature = createHash('sha256').update(JSON.stringify({
+      capability: 'metadata',
+      trackId,
+      field: 'title',
+      value: currentTitle
+    })).digest('hex');
+    const store = new LibraryAssistantStore(databasePath);
+    try {
+      if (!store.getRun(runId)) {
+        store.createRun({
+          id: runId,
+          capability: 'metadata',
+          libraryRevision: 0,
+          createdAt: '2026-09-07T12:00:00.000Z'
+        });
+        store.startRun(runId, '2026-09-07T12:00:01.000Z');
+        store.insertSuggestions([{
+          id: suggestionId,
+          runId,
+          capability: 'metadata',
+          trackId,
+          status: 'review',
+          confidence: 'high',
+          reasonCodes: ['provider-match'],
+          evidence: [{
+            type: 'text-match',
+            version: 1,
+            field: 'title',
+            match: 'different',
+            sourceValue: currentTitle,
+            candidateValue: 'E2E Assistant Title'
+          }],
+          provenance: {
+            source: 'musicbrainz',
+            providerVersion: 'e2e-offline-fixture',
+            externalId: 'e2e-recording'
+          },
+          target: {
+            capability: 'metadata',
+            trackId,
+            field: 'title',
+            currentValue: currentTitle,
+            suggestedValue: 'E2E Assistant Title'
+          },
+          premiseSignature,
+          createdAt: '2026-09-07T12:00:02.000Z'
+        }]);
+        store.completeRun(runId, '2026-09-07T12:00:03.000Z');
+      }
+    } finally {
+      store.close();
+    }
+    return;
+  }
+
+  if (!stopping) throw new Error('Fixture do Library Assistant não encontrou E2E Track após o bootstrap.');
+}
+
+if (seedLibraryAssistant) {
+  void seedLibraryAssistantFixture().catch(error => {
+    console.error('Falha ao preparar fixture E2E do Library Assistant.', error);
+    stop('SIGTERM');
+  });
+}
 
 async function cleanup() {
   await rm(tempDir, { recursive: true, force: true });
