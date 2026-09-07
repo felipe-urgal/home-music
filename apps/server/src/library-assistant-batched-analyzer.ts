@@ -4,7 +4,8 @@ import type { LibraryAssistantAnalyzer, LibraryAssistantSuggestionDraft } from '
 
 const DEFAULT_BATCH_SIZE = 10;
 const DEFAULT_PROVIDER_TIMEOUT_MS = 15_000;
-const MAX_CONSECUTIVE_TRACK_FAILURES = 2;
+const DEFAULT_FAILURE_BACKOFF_MS = 1_500;
+const FAILURES_BEFORE_BACKOFF = 2;
 const RECOVERABLE_PROVIDER_CODES = new Set([
   'provider-timeout',
   'provider-rate-limited',
@@ -29,6 +30,8 @@ type TrackFailure = {
 type BatchedAnalyzerOptions = {
   batchSize?: number;
   providerTimeoutMs?: number;
+  failureBackoffMs?: number;
+  sleep?: (delayMs: number, signal?: AbortSignal) => Promise<void>;
   onProgress?: (progress: BatchProgress) => void;
   onTrackFailure?: (failure: TrackFailure) => void;
 };
@@ -48,6 +51,32 @@ function isRecoverableProviderFailure(error: unknown) {
     ? error.cause as { code?: unknown }
     : null;
   return Boolean(cause?.code && /^(?:UND_ERR_|E(?:AI_AGAIN|CONNRESET|CONNREFUSED|TIMEDOUT|HOSTUNREACH|NETUNREACH))/i.test(String(cause.code)));
+}
+
+function abortError() {
+  return Object.assign(new Error('aborted'), { name: 'AbortError' });
+}
+
+function defaultSleep(delayMs: number, signal?: AbortSignal) {
+  if (delayMs <= 0) return Promise.resolve();
+  if (signal?.aborted) return Promise.reject(abortError());
+  return new Promise<void>((resolve, reject) => {
+    let settled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const cleanup = () => signal?.removeEventListener('abort', abort);
+    const finish = (operation: () => void) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      operation();
+    };
+    const abort = () => {
+      clearTimeout(timer);
+      finish(() => reject(abortError()));
+    };
+    timer = setTimeout(() => finish(resolve), delayMs);
+    signal?.addEventListener('abort', abort, { once: true });
+  });
 }
 
 function boundedInteger(value: number | undefined, fallback: number, minimum: number, maximum: number) {
@@ -84,6 +113,13 @@ export function createBatchedLibraryAssistantAnalyzer(
     100,
     30_000
   );
+  const failureBackoffMs = boundedInteger(
+    options.failureBackoffMs,
+    DEFAULT_FAILURE_BACKOFF_MS,
+    0,
+    30_000
+  );
+  const sleep = options.sleep ?? defaultSleep;
 
   return {
     id: `${analyzer.id}-batched-${batchSize}`,
@@ -111,8 +147,7 @@ export function createBatchedLibraryAssistantAnalyzer(
           if (!isRecoverableProviderFailure(error)) throw error;
 
           let consecutiveFailures = 0;
-          for (let index = 0; index < batch.length; index += 1) {
-            const track = batch[index];
+          for (const track of batch) {
             if (context.signal?.aborted) break;
 
             const startedAt = Date.now();
@@ -131,9 +166,9 @@ export function createBatchedLibraryAssistantAnalyzer(
                 error: trackError
               });
 
-              if (consecutiveFailures >= MAX_CONSECUTIVE_TRACK_FAILURES) {
-                for (const skipped of batch.slice(index + 1)) failedTrackIds.add(skipped.id);
-                break;
+              if (consecutiveFailures >= FAILURES_BEFORE_BACKOFF) {
+                await sleep(failureBackoffMs, context.signal);
+                consecutiveFailures = 0;
               }
             }
           }

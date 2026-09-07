@@ -509,6 +509,12 @@ function searchAttempts(identity: SearchIdentity): QueryTerms[] {
   return attempts;
 }
 
+function isProviderTimeout(error: unknown) {
+  return error instanceof Error
+    && 'code' in error
+    && String(error.code) === 'provider-timeout';
+}
+
 async function fetchCandidates(
   terms: QueryTerms,
   providers: LibraryAssistantProviderGateway,
@@ -571,11 +577,19 @@ async function progressiveCandidates(
   signal?: AbortSignal
 ) {
   let last: MusicBrainzRecordingCandidate[] = [];
-  for (const terms of searchAttempts(identity)) {
+  const attempts = searchAttempts(identity);
+  for (let index = 0; index < attempts.length; index += 1) {
     if (signal?.aborted) break;
-    const candidates = await fetchCandidates(terms, providers, fetchImpl, userAgent, signal);
-    last = candidates;
-    if (candidates.length > 0) return candidates;
+    const terms = attempts[index];
+    try {
+      const candidates = await fetchCandidates(terms, providers, fetchImpl, userAgent, signal);
+      last = candidates;
+      if (candidates.length > 0) return candidates;
+    } catch (error) {
+      const hasBroaderAttempt = index + 1 < attempts.length;
+      if (terms.album && hasBroaderAttempt && isProviderTimeout(error)) continue;
+      throw error;
+    }
   }
   return last;
 }
