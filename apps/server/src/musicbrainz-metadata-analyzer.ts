@@ -16,11 +16,12 @@ import type {
 } from './library-assistant-service.js';
 
 const MUSICBRAINZ_BASE_URL = 'https://musicbrainz.org/ws/2';
-const MUSICBRAINZ_PROVIDER_VERSION = 'ws2-recording-search-v1';
+const MUSICBRAINZ_PROVIDER_VERSION = 'ws2-recording-search-v2';
 const MUSICBRAINZ_USER_AGENT = 'HomeMusic/0.1 (+https://github.com/felipe-urgal/home-music)';
 const MUSICBRAINZ_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1_000;
 const MAX_RESPONSE_CHARS = 1_000_000;
 const MAX_CANDIDATES = 5;
+const MAX_SEARCH_ATTEMPTS = 3;
 const AMBIGUOUS_MARGIN = 15;
 const HIGH_MARGIN = 18;
 
@@ -52,16 +53,32 @@ type RankedCandidate = {
   blockingConflict: boolean;
 };
 
+type SafeFileContext = {
+  fileName: string;
+  folderName: string | null;
+};
+
+type SearchIdentity = {
+  title: string;
+  artist: string;
+  album: string;
+  usedFileContext: boolean;
+  fileContext: SafeFileContext | null;
+};
+
 type TrackMatch = {
   track: Track;
+  matchTrack: Track;
+  usedFileContext: boolean;
+  fileContext: SafeFileContext | null;
   ranked: RankedCandidate[];
 };
 
 type AnalyzerOptions = {
   fetchImpl?: FetchLike;
-  baseUrl?: string;
   userAgent?: string;
   getHumanOverrideFields?: (trackId: string) => readonly LibraryAssistantMetadataField[];
+  getFileContext?: (trackId: string) => SafeFileContext | null;
 };
 
 function record(value: unknown): Record<string, unknown> | null {
@@ -73,7 +90,7 @@ function record(value: unknown): Record<string, unknown> | null {
 function safeText(value: unknown, max = 240) {
   if (typeof value !== 'string') return null;
   const clean = value.trim().replace(/\s+/g, ' ');
-  return clean && clean.length <= max ? clean : null;
+  return clean && clean.length <= max && !/[\r\n\t]/.test(clean) ? clean : null;
 }
 
 function safeId(value: unknown) {
@@ -116,7 +133,65 @@ function normalizeRelease(value: unknown): MusicBrainzRelease | null {
   };
 }
 
+function normalizeCachedRelease(value: unknown): MusicBrainzRelease | null {
+  const item = record(value);
+  if (!item) return null;
+  const id = safeId(item.id);
+  const title = safeText(item.title);
+  if (!id || !title) return null;
+  const releaseGroupId = item.releaseGroupId == null ? null : safeId(item.releaseGroupId);
+  const albumArtist = item.albumArtist == null ? null : safeText(item.albumArtist);
+  const albumArtistId = item.albumArtistId == null ? null : safeId(item.albumArtistId);
+  if (item.releaseGroupId != null && !releaseGroupId) return null;
+  if (item.albumArtist != null && !albumArtist) return null;
+  if (item.albumArtistId != null && !albumArtistId) return null;
+  return { id, title, releaseGroupId, albumArtist, albumArtistId };
+}
+
+function normalizeCachedCandidate(value: unknown): MusicBrainzRecordingCandidate | null {
+  const item = record(value);
+  if (!item) return null;
+  const recordingId = safeId(item.recordingId);
+  const title = safeText(item.title);
+  const artist = safeText(item.artist);
+  if (!recordingId || !title || !artist) return null;
+  const artistId = item.artistId == null ? null : safeId(item.artistId);
+  if (item.artistId != null && !artistId) return null;
+
+  let durationSeconds: number | null = null;
+  if (item.durationSeconds != null) {
+    if (
+      typeof item.durationSeconds !== 'number'
+      || !Number.isFinite(item.durationSeconds)
+      || item.durationSeconds < 0
+      || item.durationSeconds > 24 * 60 * 60
+    ) return null;
+    durationSeconds = item.durationSeconds;
+  }
+
+  if (!Array.isArray(item.releases) || item.releases.length > 8) return null;
+  const releases = item.releases.map(normalizeCachedRelease);
+  if (releases.some(release => release == null)) return null;
+  return {
+    recordingId,
+    title,
+    artist,
+    artistId,
+    durationSeconds,
+    releases: releases as MusicBrainzRelease[]
+  };
+}
+
 export function normalizeMusicBrainzRecordingSearch(payload: unknown): MusicBrainzRecordingCandidate[] {
+  // O gateway persiste o valor já normalizado. A normalização precisa ser idempotente
+  // para que um cache hit não invalide a própria entrada e refaça a consulta externa.
+  if (Array.isArray(payload)) {
+    if (payload.length > MAX_CANDIDATES) throw new LibraryAssistantProviderResponseError();
+    const cached = payload.map(normalizeCachedCandidate);
+    if (cached.some(candidate => candidate == null)) throw new LibraryAssistantProviderResponseError();
+    return cached as MusicBrainzRecordingCandidate[];
+  }
+
   const root = record(payload);
   if (!root || !Array.isArray(root.recordings)) throw new LibraryAssistantProviderResponseError();
   if (root.recordings.length > 100) throw new LibraryAssistantProviderResponseError();
@@ -294,56 +369,167 @@ export function rankMusicBrainzCandidate(track: Track, candidate: MusicBrainzRec
   return { candidate, release, score, evidence, reasonCodes: [...reasonCodes], blockingConflict };
 }
 
-function albumGroupKey(track: Track) {
-  const album = normalizedValue(track.album);
-  const artist = normalizedValue(track.albumArtist || track.artist);
-  return album ? `${artist}\u0000${album}` : '';
+const PLACEHOLDERS = new Set([
+  '',
+  'unknown title',
+  'unknown artist',
+  'unknown album',
+  'titulo desconhecido',
+  'artista desconhecido',
+  'album desconhecido'
+]);
+
+function reliableMetadata(value: string) {
+  return !PLACEHOLDERS.has(normalizedValue(value));
 }
 
-function confidenceFor(match: RankedCandidate, margin: number, humanOverride: boolean): LibraryAssistantConfidenceBand | null {
+function safeFileContext(value: SafeFileContext | null | undefined): SafeFileContext | null {
+  if (!value) return null;
+  const fileName = safeText(value.fileName, 255);
+  const folderName = value.folderName == null ? null : safeText(value.folderName, 255);
+  if (!fileName || fileName.includes('/') || fileName.includes('\\')) return null;
+  if (folderName && (folderName.includes('/') || folderName.includes('\\'))) return null;
+  return { fileName, folderName };
+}
+
+function fileStem(fileName: string) {
+  const dot = fileName.lastIndexOf('.');
+  return dot > 0 ? fileName.slice(0, dot).trim() : fileName.trim();
+}
+
+function parseArtistTitleFromFile(fileName: string) {
+  const stem = fileStem(fileName);
+  const separators = [' - ', ' – ', ' — '] as const;
+  for (const separator of separators) {
+    const first = stem.indexOf(separator);
+    if (first <= 0 || first !== stem.lastIndexOf(separator)) continue;
+    const artist = safeText(stem.slice(0, first));
+    const title = safeText(stem.slice(first + separator.length));
+    if (artist && title) return { artist, title };
+  }
+  return null;
+}
+
+function searchIdentity(track: Track, fileContext: SafeFileContext | null): SearchIdentity | null {
+  const titleReliable = reliableMetadata(track.title);
+  const artistReliable = reliableMetadata(track.artist);
+  const albumReliable = reliableMetadata(track.album);
+  if (titleReliable && artistReliable) {
+    return {
+      title: exactValue(track.title),
+      artist: exactValue(track.artist),
+      album: albumReliable ? exactValue(track.album) : '',
+      usedFileContext: false,
+      fileContext
+    };
+  }
+
+  const parsed = fileContext ? parseArtistTitleFromFile(fileContext.fileName) : null;
+  if (!parsed) return null;
+  const title = titleReliable ? exactValue(track.title) : parsed.title;
+  const artist = artistReliable ? exactValue(track.artist) : parsed.artist;
+  if (!title || !artist) return null;
+  const folderAlbum = fileContext?.folderName && reliableMetadata(fileContext.folderName)
+    ? exactValue(fileContext.folderName)
+    : '';
+  return {
+    title,
+    artist,
+    album: albumReliable ? exactValue(track.album) : folderAlbum,
+    usedFileContext: true,
+    fileContext
+  };
+}
+
+function matchingTrack(track: Track, identity: SearchIdentity): Track {
+  return {
+    ...track,
+    title: identity.title,
+    artist: identity.artist,
+    album: identity.album,
+    albumArtist: reliableMetadata(track.albumArtist) ? track.albumArtist : identity.artist
+  };
+}
+
+function albumGroupKey(track: Track, fileContext: SafeFileContext | null) {
+  const albumSource = reliableMetadata(track.album)
+    ? track.album
+    : fileContext?.folderName ?? '';
+  const artistSource = reliableMetadata(track.albumArtist)
+    ? track.albumArtist
+    : track.artist;
+  const album = normalizedValue(albumSource);
+  const artist = normalizedValue(artistSource);
+  return album && artist ? `${artist}\u0000${album}` : '';
+}
+
+function confidenceFor(
+  match: RankedCandidate,
+  margin: number,
+  humanOverride: boolean,
+  usedFileContext: boolean
+): LibraryAssistantConfidenceBand | null {
   if (match.blockingConflict || match.score < 55) return null;
-  if (humanOverride) return 'low';
+  if (humanOverride || usedFileContext) return 'low';
   if (match.score >= 88 && margin >= HIGH_MARGIN) return 'high';
   if (match.score >= 68 && margin >= 8) return 'medium';
   return 'low';
 }
 
-function queryText(track: Track) {
-  const terms = [`recording:${JSON.stringify(exactValue(track.title))}`, `artist:${JSON.stringify(exactValue(track.artist))}`];
-  if (track.album.trim()) terms.push(`release:${JSON.stringify(exactValue(track.album))}`);
-  return terms.join(' AND ');
+type QueryTerms = { title: string; artist: string; album: string };
+
+function queryText(terms: QueryTerms) {
+  const parts = [
+    `recording:${JSON.stringify(exactValue(terms.title))}`,
+    `artist:${JSON.stringify(exactValue(terms.artist))}`
+  ];
+  if (terms.album) parts.push(`release:${JSON.stringify(exactValue(terms.album))}`);
+  return parts.join(' AND ');
 }
 
-function cacheKey(track: Track) {
+function cacheKey(terms: QueryTerms) {
   return JSON.stringify({
-    title: exactValue(track.title),
-    artist: exactValue(track.artist),
-    album: exactValue(track.album)
+    title: normalizedValue(terms.title),
+    artist: normalizedValue(terms.artist),
+    album: normalizedValue(terms.album)
   });
 }
 
+function searchAttempts(identity: SearchIdentity): QueryTerms[] {
+  const attempts: QueryTerms[] = [];
+  const seen = new Set<string>();
+  const add = (terms: QueryTerms) => {
+    const key = cacheKey(terms);
+    if (seen.has(key) || attempts.length >= MAX_SEARCH_ATTEMPTS) return;
+    seen.add(key);
+    attempts.push(terms);
+  };
+  if (identity.album) add({ title: identity.title, artist: identity.artist, album: identity.album });
+  add({ title: identity.title, artist: identity.artist, album: '' });
+  return attempts;
+}
+
 async function fetchCandidates(
-  track: Track,
+  terms: QueryTerms,
   providers: LibraryAssistantProviderGateway,
   fetchImpl: FetchLike,
-  baseUrl: string,
   userAgent: string,
   signal?: AbortSignal
 ) {
-  const query = queryText(track);
-  const url = new URL(`${baseUrl.replace(/\/$/, '')}/recording`);
-  url.searchParams.set('query', query);
+  const url = new URL(`${MUSICBRAINZ_BASE_URL}/recording`);
+  url.searchParams.set('query', queryText(terms));
   url.searchParams.set('fmt', 'json');
   url.searchParams.set('limit', String(MAX_CANDIDATES));
 
   const result = await providers.query({
     provider: { source: 'musicbrainz', version: MUSICBRAINZ_PROVIDER_VERSION, userAgent },
-    cacheKey: cacheKey(track),
+    cacheKey: cacheKey(terms),
     ttlMs: MUSICBRAINZ_CACHE_TTL_MS,
     signal,
     execute: async ({ signal: providerSignal, userAgent: providerUserAgent }) => {
       const response = await fetchImpl(url, {
         signal: providerSignal,
+        redirect: 'error',
         headers: {
           Accept: 'application/json',
           'User-Agent': providerUserAgent
@@ -353,7 +539,11 @@ async function fetchCandidates(
         const error = new Error(response.status === 429 || response.status === 503
           ? 'MusicBrainz temporariamente indisponível. Tente novamente mais tarde.'
           : 'Falha ao consultar MusicBrainz.');
-        Object.assign(error, { code: response.status === 429 || response.status === 503 ? 'provider-rate-limited' : 'provider-request-failed' });
+        Object.assign(error, {
+          code: response.status === 429 || response.status === 503
+            ? 'provider-rate-limited'
+            : 'provider-request-failed'
+        });
         throw error;
       }
       const declaredLength = Number(response.headers.get('content-length'));
@@ -373,6 +563,23 @@ async function fetchCandidates(
   return result.value;
 }
 
+async function progressiveCandidates(
+  identity: SearchIdentity,
+  providers: LibraryAssistantProviderGateway,
+  fetchImpl: FetchLike,
+  userAgent: string,
+  signal?: AbortSignal
+) {
+  let last: MusicBrainzRecordingCandidate[] = [];
+  for (const terms of searchAttempts(identity)) {
+    if (signal?.aborted) break;
+    const candidates = await fetchCandidates(terms, providers, fetchImpl, userAgent, signal);
+    last = candidates;
+    if (candidates.length > 0) return candidates;
+  }
+  return last;
+}
+
 function metadataValues(match: RankedCandidate) {
   return {
     title: match.candidate.title,
@@ -382,9 +589,18 @@ function metadataValues(match: RankedCandidate) {
   } satisfies Record<LibraryAssistantMetadataField, string>;
 }
 
+function rankCandidates(track: Track, candidates: MusicBrainzRecordingCandidate[]) {
+  return candidates
+    .map(candidate => rankMusicBrainzCandidate(track, candidate))
+    .sort((left, right) => {
+      if (left.blockingConflict !== right.blockingConflict) return left.blockingConflict ? 1 : -1;
+      return right.score - left.score;
+    })
+    .slice(0, MAX_CANDIDATES);
+}
+
 export function createMusicBrainzMetadataAnalyzer(options: AnalyzerOptions = {}): LibraryAssistantAnalyzer {
   const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
-  const baseUrl = options.baseUrl ?? MUSICBRAINZ_BASE_URL;
   const userAgent = options.userAgent ?? MUSICBRAINZ_USER_AGENT;
 
   return {
@@ -394,22 +610,28 @@ export function createMusicBrainzMetadataAnalyzer(options: AnalyzerOptions = {})
       const matches: TrackMatch[] = [];
       for (const track of tracks) {
         if (signal?.aborted) break;
-        if (!track.title.trim() || !track.artist.trim()) continue;
-        const candidates = await fetchCandidates(track, providers, fetchImpl, baseUrl, userAgent, signal);
-        const ranked = candidates
-          .map(candidate => rankMusicBrainzCandidate(track, candidate))
-          .sort((left, right) => right.score - left.score)
-          .slice(0, MAX_CANDIDATES);
-        matches.push({ track, ranked });
+        const fileContext = safeFileContext(options.getFileContext?.(track.id));
+        const identity = searchIdentity(track, fileContext);
+        if (!identity) continue;
+        const matchTrack = matchingTrack(track, identity);
+        const candidates = await progressiveCandidates(identity, providers, fetchImpl, userAgent, signal);
+        matches.push({
+          track,
+          matchTrack,
+          usedFileContext: identity.usedFileContext,
+          fileContext: identity.fileContext,
+          ranked: rankCandidates(matchTrack, candidates)
+        });
       }
 
       const albumContext = new Map<string, Map<string, number>>();
       const groupSizes = new Map<string, number>();
       for (const match of matches) {
-        const key = albumGroupKey(match.track);
+        const key = albumGroupKey(match.matchTrack, match.fileContext);
         if (!key) continue;
         groupSizes.set(key, (groupSizes.get(key) ?? 0) + 1);
-        const releaseId = match.ranked[0]?.release?.id;
+        const best = match.ranked.find(candidate => !candidate.blockingConflict);
+        const releaseId = best?.release?.id;
         if (!releaseId) continue;
         const releases = albumContext.get(key) ?? new Map<string, number>();
         releases.set(releaseId, (releases.get(releaseId) ?? 0) + 1);
@@ -417,16 +639,28 @@ export function createMusicBrainzMetadataAnalyzer(options: AnalyzerOptions = {})
       }
 
       const drafts: LibraryAssistantSuggestionDraft[] = [];
-      for (const { track, ranked } of matches) {
-        const best = ranked[0];
+      for (const match of matches) {
+        const plausible = match.ranked.filter(candidate => !candidate.blockingConflict);
+        const best = plausible[0] ?? match.ranked[0];
         if (!best) continue;
-        const second = ranked[1];
+        const second = plausible[1];
         let margin = second ? best.score - second.score : 100;
         const reasonCodes = new Set(best.reasonCodes);
         const evidence = [...best.evidence];
-        const key = albumGroupKey(track);
+
+        if (match.usedFileContext && match.fileContext) {
+          reasonCodes.add('metadata-missing');
+          evidence.push({
+            type: 'file-context',
+            version: LIBRARY_ASSISTANT_CONTRACT_VERSION,
+            fileName: match.fileContext.fileName,
+            folderName: match.fileContext.folderName
+          });
+        }
+
+        const key = albumGroupKey(match.matchTrack, match.fileContext);
         const releaseId = best.release?.id;
-        if (key && releaseId) {
+        if (!best.blockingConflict && key && releaseId) {
           const matchedTracks = albumContext.get(key)?.get(releaseId) ?? 0;
           const totalTracks = groupSizes.get(key) ?? 0;
           if (matchedTracks >= 2 && totalTracks >= 2) {
@@ -444,12 +678,12 @@ export function createMusicBrainzMetadataAnalyzer(options: AnalyzerOptions = {})
         if (second && margin < AMBIGUOUS_MARGIN) reasonCodes.add('ambiguous-candidates');
 
         const values = metadataValues(best);
-        const humanFields = new Set(options.getHumanOverrideFields?.(track.id) ?? []);
+        const humanFields = new Set(options.getHumanOverrideFields?.(match.track.id) ?? []);
         for (const field of ['title', 'artist', 'album', 'albumArtist'] as const) {
           const suggestedValue = values[field].trim();
-          if (!suggestedValue || exactValue(track[field]) === exactValue(suggestedValue)) continue;
+          if (!suggestedValue || exactValue(match.track[field]) === exactValue(suggestedValue)) continue;
           const humanOverride = humanFields.has(field);
-          const confidence = confidenceFor(best, margin, humanOverride);
+          const confidence = confidenceFor(best, margin, humanOverride, match.usedFileContext);
           if (!confidence) continue;
           const fieldReasonCodes = new Set(reasonCodes);
           const fieldEvidence = [...evidence];
@@ -473,9 +707,9 @@ export function createMusicBrainzMetadataAnalyzer(options: AnalyzerOptions = {})
             },
             target: {
               capability: 'metadata',
-              trackId: track.id,
+              trackId: match.track.id,
               field,
-              currentValue: track[field],
+              currentValue: match.track[field],
               suggestedValue
             }
           });
