@@ -41,12 +41,14 @@ describe('library assistant admin client', () => {
     expect(JSON.parse(String(init.body))).toEqual({ capability: 'metadata' });
   });
 
-  it('envia apenas a decisão explícita da sugestão selecionada', async () => {
-    apiFetchMock.mockResolvedValue(response({ suggestion: { id: 'suggestion-1' } }));
+  it('envia a decisão explícita da sugestão com a premissa esperada', async () => {
+    apiFetchMock.mockResolvedValue(response({ result: { outcome: 'applied' } }));
     const decision = {
+      runId: 'run-1',
       suggestionId: 'suggestion/1',
       action: 'apply' as const,
-      fields: ['title', 'artist'] as const
+      expectedLibraryRevision: 42,
+      expectedCurrentValue: 'Título atual'
     };
 
     await decideLibraryAssistantSuggestion(decision);
@@ -58,11 +60,23 @@ describe('library assistant admin client', () => {
     expect(JSON.parse(String(init.body))).toEqual(decision);
   });
 
-  it('preserva seleção explícita no lote e usa o mesmo header de mutação', async () => {
-    apiFetchMock.mockResolvedValue(response({ results: [] }));
+  it('preserva exatamente as decisões selecionadas no lote', async () => {
+    apiFetchMock.mockResolvedValue(response({ results: [], summary: {} }));
     const decisions = [
-      { suggestionId: 'suggestion-1', action: 'apply' as const, fields: ['album'] as const },
-      { suggestionId: 'suggestion-2', action: 'reject' as const }
+      {
+        runId: 'run-1',
+        suggestionId: 'suggestion-1',
+        action: 'apply' as const,
+        expectedLibraryRevision: 42,
+        expectedCurrentValue: 'Álbum atual'
+      },
+      {
+        runId: 'run-1',
+        suggestionId: 'suggestion-2',
+        action: 'reject' as const,
+        expectedLibraryRevision: 42,
+        expectedCurrentValue: 'Artista atual'
+      }
     ];
 
     await decideLibraryAssistantBatch(decisions);
@@ -76,7 +90,7 @@ describe('library assistant admin client', () => {
 
   it('faz leitura sem cache e expõe a mensagem de erro retornada pelo servidor', async () => {
     apiFetchMock
-      .mockResolvedValueOnce(response({ counts: {}, suggestions: [] }))
+      .mockResolvedValueOnce(response({ libraryRevision: 42, items: [] }))
       .mockResolvedValueOnce(response({ error: 'Sugestão ficou stale.' }, 409));
 
     await getLibraryAssistantReview(123);
