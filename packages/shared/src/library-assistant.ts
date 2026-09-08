@@ -195,6 +195,19 @@ export type LibraryAssistantRun = {
   error: LibraryAssistantRunError | null;
 };
 
+export type LibraryAssistantRunProgressMetrics = {
+  elapsedMs: number;
+  tracksPerSecond: number;
+  etaMs: number | null;
+  searchAttempts: number;
+  externalRequests: number;
+  cacheHits: number;
+  cacheMisses: number;
+  rateLimitWaitMs: number;
+  retriesTotal: number;
+  retriesByReason: Record<string, number>;
+};
+
 export type LibraryAssistantRunProgress = {
   total: number;
   processed: number;
@@ -204,6 +217,7 @@ export type LibraryAssistantRunProgress = {
   noMatch: number;
   retry: number;
   failed: number;
+  metrics?: LibraryAssistantRunProgressMetrics;
 };
 
 export type AdminLibraryAssistantStartRunRequest = {
