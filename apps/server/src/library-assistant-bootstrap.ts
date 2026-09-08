@@ -11,6 +11,7 @@ import { LibraryAssistantProviderGateway } from './library-assistant-provider.js
 import { registerLibraryAssistantReviewRoutes } from './library-assistant-review-routes.js';
 import { LibraryAssistantReviewService } from './library-assistant-review-service.js';
 import { registerLibraryAssistantRoutes } from './library-assistant-routes.js';
+import { LibraryAssistantRunMetrics } from './library-assistant-run-metrics.js';
 import { LibraryAssistantService, type LibraryAssistantAnalyzer } from './library-assistant-service.js';
 import { LibraryAssistantStore } from './library-assistant-store.js';
 import type { LongJobObservability } from './long-job-observability.js';
@@ -28,15 +29,30 @@ type LibraryAssistantBootstrapOptions = {
 
 const METADATA_FIELDS: readonly LibraryAssistantMetadataField[] = ['title', 'artist', 'album', 'albumArtist'];
 
+function instrumentAnalyzer(analyzer: LibraryAssistantAnalyzer, metrics: LibraryAssistantRunMetrics): LibraryAssistantAnalyzer {
+  return {
+    ...analyzer,
+    analyze(context) {
+      metrics.bindSignal(context.runId, context.signal);
+      return analyzer.analyze(context);
+    }
+  };
+}
+
 export function registerLibraryAssistant(
   app: FastifyInstance,
   options: LibraryAssistantBootstrapOptions
 ) {
   const store = new LibraryAssistantStore(options.databasePath);
-  const workQueue = new LibraryAssistantPersistentQueue(options.databasePath);
+  const metrics = new LibraryAssistantRunMetrics();
+  const workQueue = new LibraryAssistantPersistentQueue(options.databasePath, {
+    onRetry: (item, error) => metrics.recordRetry(item.runId, error.code)
+  });
   const incrementalIndex = new LibraryAssistantIncrementalIndex(options.databasePath);
   const metadataOverrides = new TrackMetadataOverrideStore(options.databasePath);
-  const providers = new LibraryAssistantProviderGateway(store);
+  const providers = new LibraryAssistantProviderGateway(store, {
+    onObservation: observation => metrics.observeProvider(observation)
+  });
   const musicBrainzFetch = createMusicBrainzSimpleSearchFetch();
   let assistantMetadataRevision = 0;
   const projectRevision = options.projection.projectRevision;
@@ -65,6 +81,8 @@ export function registerLibraryAssistant(
       };
     }
   });
+  const analyzers = (options.analyzers ?? [metadataAnalyzer])
+    .map(analyzer => instrumentAnalyzer(analyzer, metrics));
   const service = new LibraryAssistantService({
     store,
     workQueue,
@@ -72,7 +90,7 @@ export function registerLibraryAssistant(
     queue: options.queue,
     observability: options.observability,
     providers,
-    analyzers: options.analyzers ?? [metadataAnalyzer],
+    analyzers,
     library: projectedLibrary
   });
   const review = new LibraryAssistantReviewService({
@@ -83,7 +101,7 @@ export function registerLibraryAssistant(
     onMetadataChanged: () => { assistantMetadataRevision += 1; }
   });
 
-  registerLibraryAssistantRoutes(app, service, workQueue);
+  registerLibraryAssistantRoutes(app, service, workQueue, metrics);
   registerLibraryAssistantReviewRoutes(app, review);
   app.addHook('onClose', async () => {
     await service.close();
