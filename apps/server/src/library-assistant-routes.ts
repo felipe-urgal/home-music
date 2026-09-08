@@ -5,9 +5,11 @@ import type {
   AdminLibraryAssistantRunsResponse,
   AdminLibraryAssistantSuggestionsResponse,
   LibraryAssistantCapability,
+  LibraryAssistantRun,
   LibraryAssistantSuggestionStatus
 } from '@home-music/shared/library-assistant';
 import type { LibraryAssistantPersistentQueue } from './library-assistant-persistent-queue.js';
+import type { LibraryAssistantRunMetrics } from './library-assistant-run-metrics.js';
 import type { LibraryAssistantService } from './library-assistant-service.js';
 
 const CAPABILITIES = new Set<LibraryAssistantCapability>(['metadata', 'artwork', 'lyrics']);
@@ -45,10 +47,19 @@ function validRunId(value: string) {
   return RUN_ID.test(value);
 }
 
+function runElapsedMs(run: LibraryAssistantRun) {
+  if (!run.startedAt) return 0;
+  const startedAtMs = Date.parse(run.startedAt);
+  const finishedAtMs = run.finishedAt ? Date.parse(run.finishedAt) : Date.now();
+  if (!Number.isFinite(startedAtMs) || !Number.isFinite(finishedAtMs)) return 0;
+  return Math.max(0, Math.round(finishedAtMs - startedAtMs));
+}
+
 export function registerLibraryAssistantRoutes(
   app: FastifyInstance,
   assistant: LibraryAssistantService,
-  workQueue?: LibraryAssistantPersistentQueue
+  workQueue?: LibraryAssistantPersistentQueue,
+  runMetrics?: LibraryAssistantRunMetrics
 ) {
   app.post<{ Body: { capability?: unknown; full?: unknown } }>(
     '/api/admin/library-assistant/runs',
@@ -105,16 +116,36 @@ export function registerLibraryAssistantRoutes(
         retry: 0,
         failed: 0
       };
+      const processed = summary.matched + summary.no_match + summary.failed;
+      const elapsedMs = runElapsedMs(run);
+      const tracksPerSecond = elapsedMs > 0
+        ? Math.round((processed / (elapsedMs / 1_000)) * 1_000) / 1_000
+        : 0;
+      const remaining = Math.max(0, summary.total - processed);
+      const etaMs = remaining === 0
+        ? 0
+        : tracksPerSecond > 0
+          ? Math.max(0, Math.round((remaining / tracksPerSecond) * 1_000))
+          : null;
+      const observed = runMetrics?.snapshot(request.params.id);
       const response: AdminLibraryAssistantRunProgressResponse = {
         progress: {
           total: summary.total,
-          processed: summary.matched + summary.no_match + summary.failed,
+          processed,
           pending: summary.pending,
           processing: summary.processing,
           matched: summary.matched,
           noMatch: summary.no_match,
           retry: summary.retry,
-          failed: summary.failed
+          failed: summary.failed,
+          ...(observed ? {
+            metrics: {
+              elapsedMs,
+              tracksPerSecond,
+              etaMs,
+              ...observed
+            }
+          } : {})
         }
       };
       return response;
