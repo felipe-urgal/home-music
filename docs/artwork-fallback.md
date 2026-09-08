@@ -78,10 +78,9 @@ A tela **Agora / Tocando agora** usa `NowPlayingVinyl` somente como camada visua
 
 O disco:
 
-- gira apenas quando o estado canônico `playing` está ativo;
+- gira sempre que o estado canônico `playing` está ativo, inclusive quando o sistema sinaliza `prefers-reduced-motion: reduce`;
 - usa animação CSS baseada em `transform`, sem timer JavaScript ou leitura de layout em loop;
 - pausa com `animation-play-state: paused`, preservando o ângulo para a retomada;
-- fica estático com `prefers-reduced-motion: reduce`;
 - permanece `aria-hidden`, sem foco ou semântica interativa concorrente com os controles;
 - é usado no player padrão e no desktop pela mesma implementação;
 - nunca tenta animar `MediaSession`/lock screen e nunca cria cover override.
@@ -128,6 +127,6 @@ Mudanças nesta política devem preservar:
 - comportamento em thumbnail e artwork grande;
 - consistência entre biblioteca, player e administração;
 - fallback em falha de carregamento de imagem sem mutar o objeto `Track`;
-- vinil do player derivado de `playing`, sem timer JS e desativado por `prefers-reduced-motion`.
+- vinil do player derivado de `playing`, sem timer JS e girando durante playback independentemente de `prefers-reduced-motion`.
 
 A cobertura automatizada fica em `apps/web/src/artwork-utils.test.ts`, `apps/web/src/Artwork.test.tsx`, `apps/web/src/media-session-artwork.test.ts`, `apps/web/src/media-session-metadata.test.ts` e `apps/web/src/components/NowPlayingVinyl.test.tsx`.
