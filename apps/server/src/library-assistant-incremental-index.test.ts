@@ -108,6 +108,46 @@ async function withIncrementalService(
   }
 }
 
+test('índice incremental reutiliza uma premissa concluída sem depender da fila', async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'home-music-assistant-index-'));
+  const databasePath = path.join(directory, 'home-music.db');
+  const database = new HomeMusicDatabase(databasePath);
+  database.syncTracks([indexedTrack('track-1')], '/music', '2026-09-08T12:00:00.000Z');
+  const index = new LibraryAssistantIncrementalIndex(databasePath);
+  const premiseSignature = 'a'.repeat(64);
+
+  try {
+    assert.deepEqual(index.planRun({
+      runId: 'assistant-1',
+      capability: 'metadata',
+      analyzerIds: ['metadata-test'],
+      tracks: [{ id: 'track-1', premiseSignature }],
+      updatedAt: '2026-09-08T13:00:00.000Z'
+    }), ['track-1']);
+
+    assert.equal(index.markResult(
+      'assistant-1',
+      'metadata',
+      'metadata-test',
+      'track-1',
+      'no_match',
+      '2026-09-08T13:00:01.000Z'
+    ), 1);
+
+    assert.deepEqual(index.planRun({
+      runId: 'assistant-2',
+      capability: 'metadata',
+      analyzerIds: ['metadata-test'],
+      tracks: [{ id: 'track-1', premiseSignature }],
+      updatedAt: '2026-09-08T14:00:00.000Z'
+    }), []);
+  } finally {
+    index.close();
+    database.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test('reanálise incremental ignora faixas inalteradas e permite forçar análise completa', async () => {
   const calls: string[] = [];
   const analyzer: LibraryAssistantAnalyzer = {
