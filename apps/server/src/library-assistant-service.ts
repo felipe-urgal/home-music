@@ -16,6 +16,7 @@ import {
   type HeavyWorkQueue
 } from './heavy-work-queue.js';
 import type { LongJobObservability, LongJobRun } from './long-job-observability.js';
+import type { LibraryAssistantIncrementalIndex } from './library-assistant-incremental-index.js';
 import type {
   LibraryAssistantPersistentQueue,
   LibraryAssistantWorkItem
@@ -84,10 +85,15 @@ type LibraryAssistantServiceOptions = {
   library: LibraryAssistantLibrarySource;
   analyzers?: readonly LibraryAssistantAnalyzer[];
   workQueue?: LibraryAssistantPersistentQueue;
+  incrementalIndex?: LibraryAssistantIncrementalIndex;
   retryDelaysMs?: readonly number[];
   now?: () => Date;
   createId?: () => string;
   premiseSignature?: (capability: LibraryAssistantCapability, track: Track) => string;
+};
+
+type LibraryAssistantStartRunOptions = {
+  full?: boolean;
 };
 
 function safeOwnerId(value: string | null | undefined) {
@@ -213,7 +219,11 @@ export class LibraryAssistantService {
     }
   }
 
-  startRun(capability: LibraryAssistantCapability, ownerId?: string | null) {
+  startRun(
+    capability: LibraryAssistantCapability,
+    ownerId?: string | null,
+    options: LibraryAssistantStartRunOptions = {}
+  ) {
     const libraryRevision = this.options.library.revision();
     if (!Number.isSafeInteger(libraryRevision) || libraryRevision < 0) {
       throw new Error('Revision atual da biblioteca é inválida.');
@@ -229,12 +239,33 @@ export class LibraryAssistantService {
     });
 
     if (this.options.workQueue) {
+      const analyzers = this.analyzersByCapability.get(capability) ?? [];
+      let trackIds = tracks.map(track => track.id);
+      if (this.options.incrementalIndex) {
+        try {
+          trackIds = this.options.incrementalIndex.planRun({
+            runId,
+            capability,
+            analyzerIds: analyzers.map(analyzer => analyzer.id),
+            tracks: tracks.map(track => ({
+              id: track.id,
+              premiseSignature: this.premiseSignature(capability, track)
+            })),
+            forceFull: options.full === true,
+            updatedAt: createdAt
+          });
+        } catch {
+          // O índice incremental é uma otimização derivada. Em caso de falha,
+          // degradar para uma análise completa preserva o comportamento correto.
+          trackIds = tracks.map(track => track.id);
+        }
+      }
+
       try {
-        const analyzers = this.analyzersByCapability.get(capability) ?? [];
         this.options.workQueue.enqueue(
           runId,
           analyzers.map(analyzer => analyzer.id),
-          tracks.map(track => track.id),
+          trackIds,
           createdAt
         );
       } catch (error) {
@@ -375,13 +406,6 @@ export class LibraryAssistantService {
 
       const tracks = this.options.library.listTracks().map(track => ({ ...track }));
       const trackMap = new Map(tracks.map(track => [track.id, track]));
-      const analyzers = this.analyzersByCapability.get(capability) ?? [];
-      workQueue.enqueue(
-        runId,
-        analyzers.map(analyzer => analyzer.id),
-        tracks.map(track => track.id),
-        this.now().toISOString()
-      );
 
       for (;;) {
         if (signal?.aborted) throw new HeavyWorkQueueAbortedError('library-assistant');
@@ -398,7 +422,14 @@ export class LibraryAssistantService {
           const summary = workQueue.summary(runId);
           const unfinished = summary.pending + summary.processing + summary.retry;
           if (unfinished === 0) {
-            if (this.options.store.completeRun(runId, this.now().toISOString())) {
+            const finishedAt = this.now().toISOString();
+            if (this.options.store.completeRun(runId, finishedAt)) {
+              try {
+                this.options.incrementalIndex?.finishRun(runId, capability, finishedAt);
+              } catch {
+                // Estado incremental é derivado. Falha aqui apenas faz a próxima
+                // execução reprocessar mais faixas do que o necessário.
+              }
               this.options.observability.complete(observed, {
                 tracks: summary.matched + summary.no_match + summary.failed
               });
