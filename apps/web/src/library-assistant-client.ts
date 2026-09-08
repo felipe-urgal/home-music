@@ -3,6 +3,7 @@ import type {
   AdminLibraryAssistantBatchDecisionResponse,
   AdminLibraryAssistantDecisionResponse,
   AdminLibraryAssistantReviewResponse,
+  AdminLibraryAssistantRunProgressResponse,
   AdminLibraryAssistantRunResponse,
   AdminLibraryAssistantRunsResponse,
   AdminLibraryAssistantSuggestionsResponse,
@@ -39,6 +40,15 @@ export async function getLibraryAssistantRun(id: string) {
   const response = await apiFetch(`/api/admin/library-assistant/runs/${encodeURIComponent(id)}`, { cache: 'no-store' });
   if (!response.ok) throw new Error(await responseError(response));
   return response.json() as Promise<AdminLibraryAssistantRunResponse>;
+}
+
+export async function getLibraryAssistantRunProgress(id: string) {
+  const response = await apiFetch(
+    `/api/admin/library-assistant/runs/${encodeURIComponent(id)}/progress`,
+    { cache: 'no-store' }
+  );
+  if (!response.ok) throw new Error(await responseError(response));
+  return response.json() as Promise<AdminLibraryAssistantRunProgressResponse>;
 }
 
 export async function getLibraryAssistantSuggestions(
