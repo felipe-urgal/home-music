@@ -54,14 +54,18 @@ test('run metrics ignore unbound provider observations and sanitize retry reason
   const metrics = new LibraryAssistantRunMetrics();
   const controller = new AbortController();
 
+  assert.equal(metrics.snapshot('assistant-run-missing'), null);
   metrics.observeProvider({
     signal: controller.signal,
     cache: 'miss',
     externalRequest: true,
     rateLimitWaitMs: 1_000
   });
-  metrics.recordRetry('assistant-run-1', 'not safe / reason');
+  assert.equal(metrics.snapshot('assistant-run-missing'), null);
 
-  assert.deepEqual(metrics.snapshot('assistant-run-1').retriesByReason, { unknown: 1 });
-  assert.equal(metrics.snapshot('assistant-run-1').searchAttempts, 0);
+  metrics.recordRetry('assistant-run-1', 'not safe / reason');
+  const snapshot = metrics.snapshot('assistant-run-1');
+  assert.ok(snapshot);
+  assert.deepEqual(snapshot.retriesByReason, { unknown: 1 });
+  assert.equal(snapshot.searchAttempts, 0);
 });
