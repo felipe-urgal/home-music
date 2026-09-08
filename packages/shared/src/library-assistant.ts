@@ -195,6 +195,17 @@ export type LibraryAssistantRun = {
   error: LibraryAssistantRunError | null;
 };
 
+export type LibraryAssistantRunProgress = {
+  total: number;
+  processed: number;
+  pending: number;
+  processing: number;
+  matched: number;
+  noMatch: number;
+  retry: number;
+  failed: number;
+};
+
 export type AdminLibraryAssistantStartRunRequest = {
   capability: LibraryAssistantCapability;
 };
@@ -205,6 +216,10 @@ export type AdminLibraryAssistantRunResponse = {
 
 export type AdminLibraryAssistantRunsResponse = {
   runs: LibraryAssistantRun[];
+};
+
+export type AdminLibraryAssistantRunProgressResponse = {
+  progress: LibraryAssistantRunProgress;
 };
 
 export type AdminLibraryAssistantSuggestionsResponse = {
