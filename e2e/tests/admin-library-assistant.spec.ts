@@ -75,15 +75,15 @@ test('Library Assistant revisa, aplica via override, atualiza player e sobrevive
     await page.getByRole('button', { name: 'Assistente da Biblioteca', exact: true }).click();
     await expect(page.locator('#library-assistant-title')).toHaveText('Assistente da Biblioteca');
 
-    const card = page.locator('.assistant-admin-card').filter({ hasText: 'E2E Track' }).first();
-    await expect(card).toBeVisible();
-    await expect(card).toContainText('Alta confiança');
-    await expect(card).toContainText('Atual efetivo');
-    await expect(card).toContainText('E2E Track');
-    await expect(card).toContainText('Sugerido');
-    await expect(card).toContainText('E2E Assistant Title');
+    const row = page.locator('.assistant-admin-row').filter({ hasText: 'E2E Track' }).first();
+    await expect(row).toBeVisible();
+    await expect(row).toContainText('Confiança alta');
+    await expect(row).toContainText('E2E Track');
+    await expect(row).toContainText('Título');
+    await expect(row).toContainText('E2E Assistant Title');
 
-    await card.getByRole('button', { name: 'Aplicar este campo', exact: true }).click();
+    await row.locator('summary[aria-label="Ações para E2E Track"]').click();
+    await row.getByRole('button', { name: 'Aplicar', exact: true }).click();
     await expect(page.locator('.assistant-admin__feedback')).toContainText('Sugestão aplicada');
     await expect(playerBar).toContainText('E2E Assistant Title');
 
