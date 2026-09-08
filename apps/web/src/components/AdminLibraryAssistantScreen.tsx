@@ -10,21 +10,17 @@ import {
 } from '@home-music/shared/library-assistant';
 import {
   AlertTriangle,
-  BarChart3,
   Check,
   CheckCircle2,
   ChevronDown,
   ChevronLeft,
   Clock3,
-  FileText,
   Info,
-  List,
   LoaderCircle,
   MoreVertical,
   Music2,
   RefreshCw,
   Search,
-  Settings,
   ShieldCheck,
   Sparkles,
   X,
@@ -103,19 +99,28 @@ function runTitle(run: LibraryAssistantRun | null) {
   return 'Análise concluída';
 }
 
-function runDescription(run: LibraryAssistantRun | null) {
-  if (!run) return 'Enriqueça seus metadados com o MusicBrainz. Nada é aplicado sem sua confirmação.';
+function runDescription(run: LibraryAssistantRun | null): readonly [string, string?] {
+  if (!run) {
+    return ['Enriqueça seus metadados com o MusicBrainz.', 'Nada é aplicado sem sua confirmação.'];
+  }
   if (run.status === 'queued' || run.status === 'running') {
-    return 'Enriquecendo seus metadados com o MusicBrainz. O processamento é automático e continua em segundo plano.';
+    return [
+      'Enriquecendo seus metadados com o MusicBrainz.',
+      'O processamento é automático e continua em segundo plano.'
+    ];
   }
   if (run.status === 'failed') {
-    return run.error?.message ?? 'O processamento foi interrompido. Você pode iniciar uma nova análise.';
+    return [run.error?.message ?? 'O processamento foi interrompido.', 'Você pode iniciar uma nova análise.'];
   }
-  if (run.status === 'cancelled') return 'O processamento foi cancelado. As sugestões já encontradas continuam disponíveis.';
-  if (run.status === 'stale') return 'A biblioteca mudou desde esta análise. Execute uma nova análise para trabalhar com dados atuais.';
+  if (run.status === 'cancelled') {
+    return ['O processamento foi cancelado.', 'As sugestões já encontradas continuam disponíveis.'];
+  }
+  if (run.status === 'stale') {
+    return ['A biblioteca mudou desde esta análise.', 'Execute uma nova análise para trabalhar com dados atuais.'];
+  }
   return run.summary.total === 0
-    ? 'A análise terminou sem sugestões de metadata.'
-    : `${run.summary.total} sugestão${run.summary.total === 1 ? '' : 'ões'} encontrada${run.summary.total === 1 ? '' : 's'} para revisão.`;
+    ? ['A análise terminou sem sugestões de metadata.']
+    : [`${run.summary.total} sugestão${run.summary.total === 1 ? '' : 'ões'} encontrada${run.summary.total === 1 ? '' : 's'} para revisão.`];
 }
 
 function runStatusLabel(run: LibraryAssistantRun | null) {
@@ -404,6 +409,7 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
   const suggestionFailureCount = latestRun?.summary.failed ?? 0;
   const failedCount = Math.max(queueFailureCount, suggestionFailureCount);
   const failedRun = latestRun?.status === 'failed';
+  const description = runDescription(latestRun);
 
   return (
     <section className="assistant-admin" aria-labelledby="library-assistant-title">
@@ -411,22 +417,19 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
         <button className="assistant-admin__back" type="button" aria-label="Voltar" onClick={onBack}>
           <ChevronLeft />
         </button>
-        <div className="assistant-admin__header-copy">
-          <strong id="library-assistant-title">Assistente da Biblioteca</strong>
-          <small>Encontre metadados melhores, revise as diferenças e decida o que aplicar.</small>
-        </div>
+        <strong id="library-assistant-title" className="assistant-admin__title">Assistente da Biblioteca</strong>
         <div className="assistant-admin__header-actions">
           <button
             type="button"
-            className="assistant-admin__secondary-button"
+            className="assistant-admin__header-button"
             aria-pressed={showHelp}
             onClick={() => setShowHelp(value => !value)}
           >
-            <Info /> Como funciona?
+            Como funciona?
           </button>
           <button
             type="button"
-            className="assistant-admin__secondary-button"
+            className="assistant-admin__header-button"
             aria-label="Atualizar Assistente da Biblioteca"
             disabled={loading || mutating}
             onClick={() => void load()}
@@ -439,7 +442,7 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
 
       {showHelp && (
         <aside className="assistant-admin__help" role="note">
-          <Sparkles />
+          <Info />
           <div>
             <strong>O assistente só propõe alterações</strong>
             <span>Ele consulta o MusicBrainz faixa por faixa, salva cada resultado e continua em segundo plano. Nada é aplicado automaticamente.</span>
@@ -458,21 +461,22 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
         <div className="assistant-admin__hero-main">
           <div className="assistant-admin__hero-icon" aria-hidden="true"><Music2 /></div>
           <div className="assistant-admin__hero-copy">
-            <div className="assistant-admin__hero-titleline">
-              <strong>{runTitle(latestRun)}</strong>
-              <span className={`assistant-admin__run-badge is-${latestRun?.status ?? 'idle'}`}>
-                {runActive && <span className="assistant-admin__status-dot" />}
-                {runStatusLabel(latestRun)}
-              </span>
-            </div>
-            <span>{runDescription(latestRun)}</span>
+            <strong>{runTitle(latestRun)}</strong>
+            <span>{description[0]}</span>
+            {description[1] && <span>{description[1]}</span>}
           </div>
+          <span className={`assistant-admin__run-badge is-${latestRun?.status ?? 'idle'}`}>
+            {(runActive || latestRun?.status === 'completed') && <CheckCircle2 />}
+            {latestRun?.status === 'failed' && <XCircle />}
+            {latestRun?.status === 'cancelled' && <X />}
+            {runStatusLabel(latestRun)}
+          </span>
         </div>
 
         <div className="assistant-admin__progress-block">
           <div className="assistant-admin__progress-heading">
             <strong>
-              {totalTracks > 0 ? processedTracks.toLocaleString('pt-BR') : 0}
+              {processedTracks.toLocaleString('pt-BR')}
               <span> de {totalTracks.toLocaleString('pt-BR')} faixas processadas</span>
             </strong>
             <strong>{progressPercent}%</strong>
@@ -491,10 +495,10 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
 
         <div className="assistant-admin__hero-footer">
           <dl className="assistant-admin__queue-metrics">
-            <div className="is-found"><CheckCircle2 /><dt>Encontradas</dt><dd>{progress.matched.toLocaleString('pt-BR')}</dd></div>
-            <div className="is-pending"><Clock3 /><dt>Pendentes</dt><dd>{pendingTracks.toLocaleString('pt-BR')}</dd></div>
-            <div className="is-retry"><AlertTriangle /><dt>Em retry</dt><dd>{progress.retry.toLocaleString('pt-BR')}</dd></div>
-            <div className="is-empty"><XCircle /><dt>Sem resultado</dt><dd>{progress.noMatch.toLocaleString('pt-BR')}</dd></div>
+            <div className="is-found"><CheckCircle2 /><dd>{progress.matched.toLocaleString('pt-BR')}</dd><dt>Encontradas</dt></div>
+            <div className="is-pending"><Clock3 /><dd>{pendingTracks.toLocaleString('pt-BR')}</dd><dt>Pendentes</dt></div>
+            <div className="is-retry"><AlertTriangle /><dd>{progress.retry.toLocaleString('pt-BR')}</dd><dt>Em retry</dt></div>
+            <div className="is-empty"><XCircle /><dd>{progress.noMatch.toLocaleString('pt-BR')}</dd><dt>Sem resultado</dt></div>
           </dl>
           {runActive ? (
             <button className="assistant-admin__danger-button" type="button" disabled={mutating} onClick={() => void cancelAnalysis()}>
@@ -510,17 +514,17 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
       </section>
 
       <nav className="assistant-admin__sections" aria-label="Seções do Assistente da Biblioteca">
-        <button type="button" className="is-active" aria-current="page"><List /> Sugestões</button>
-        <button type="button" aria-disabled="true"><List /> Fila</button>
-        <button type="button" aria-disabled="true"><BarChart3 /> Estatísticas</button>
-        <button type="button" aria-disabled="true"><Settings /> Configurações</button>
+        <button type="button" className="is-active" aria-current="page">Sugestões</button>
+        <button type="button" aria-disabled="true">Fila</button>
+        <button type="button" aria-disabled="true">Estatísticas</button>
+        <button type="button" aria-disabled="true">Configurações</button>
       </nav>
 
       <dl className="assistant-admin__metrics" aria-label="Resumo das sugestões">
-        <div className="is-suggestions"><span className="assistant-admin__metric-icon"><FileText /></span><dt>Sugestões</dt><dd>{latestRun?.summary.total ?? suggestions.length}</dd></div>
-        <div className="is-safe"><span className="assistant-admin__metric-icon"><ShieldCheck /></span><dt>Seguras</dt><dd>{safeSuggestions.length}</dd></div>
-        <div className="is-review"><span className="assistant-admin__metric-icon"><AlertTriangle /></span><dt>Revisão</dt><dd>{reviewSuggestions.length}</dd></div>
-        <div className="is-failed"><span className="assistant-admin__metric-icon"><XCircle /></span><dt>Falhas</dt><dd>{failedCount}</dd></div>
+        <div className="is-suggestions"><Music2 /><dt>Sugestões</dt><dd>{latestRun?.summary.total ?? suggestions.length}</dd></div>
+        <div className="is-safe"><ShieldCheck /><dt>Seguras</dt><dd>{safeSuggestions.length}</dd></div>
+        <div className="is-review"><AlertTriangle /><dt>Revisão</dt><dd>{reviewSuggestions.length}</dd></div>
+        <div className="is-failed"><XCircle /><dt>Falhas</dt><dd>{failedCount}</dd></div>
       </dl>
 
       <section className="assistant-admin__review" aria-labelledby="assistant-review-title">
@@ -540,7 +544,7 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
             </button>
             <button
               type="button"
-              className="assistant-admin__primary-button"
+              className="assistant-admin__primary-button assistant-admin__apply-button"
               disabled={mutating || runActive || selected.size === 0}
               onClick={() => void applySelected()}
             >
@@ -558,23 +562,25 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
               </button>
             ))}
           </nav>
-          <label className="assistant-admin__search">
-            <Search aria-hidden="true" />
-            <input
-              type="search"
-              value={search}
-              onChange={event => setSearch(event.target.value)}
-              placeholder="Buscar por artista, álbum ou faixa…"
-              aria-label="Buscar sugestões"
-            />
-          </label>
-          <label className="assistant-admin__sort">
-            <select value={sort} onChange={event => setSort(event.target.value as Sort)} aria-label="Ordenar sugestões">
-              <option value="recent">Mais recentes</option>
-              <option value="oldest">Mais antigas</option>
-            </select>
-            <ChevronDown aria-hidden="true" />
-          </label>
+          <div className="assistant-admin__controls">
+            <label className="assistant-admin__search">
+              <Search aria-hidden="true" />
+              <input
+                type="search"
+                value={search}
+                onChange={event => setSearch(event.target.value)}
+                placeholder="Buscar por artista, álbum ou faixa…"
+                aria-label="Buscar sugestões"
+              />
+            </label>
+            <label className="assistant-admin__sort">
+              <select value={sort} onChange={event => setSort(event.target.value as Sort)} aria-label="Ordenar sugestões">
+                <option value="recent">Mais recentes</option>
+                <option value="oldest">Mais antigas</option>
+              </select>
+              <ChevronDown aria-hidden="true" />
+            </label>
+          </div>
         </div>
 
         <div className="assistant-admin__review-content">
@@ -632,18 +638,13 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
                     <span className="assistant-admin-row__artwork" aria-hidden="true"><Music2 /></span>
                     <div className="assistant-admin-row__identity">
                       <strong>{item?.track.artist ?? 'Faixa da biblioteca'}</strong>
-                      <span>{item?.track.title ?? `Faixa ${suggestion.target.trackId}`}</span>
-                    </div>
-                    <div className="assistant-admin-row__meta">
-                      <Music2 aria-hidden="true" />
-                      <span><small>Álbum</small><strong>{item?.track.album || '—'}</strong></span>
-                    </div>
-                    <div className="assistant-admin-row__meta assistant-admin-row__change">
-                      <FileText aria-hidden="true" />
-                      <span>
-                        <small>{target ? FIELD_LABELS[target.field] ?? target.field : 'Sugestão'}</small>
-                        <strong>{target?.suggestedValue || '—'}</strong>
-                      </span>
+                      <span className="assistant-admin-row__title">{item?.track.title ?? `Faixa ${suggestion.target.trackId}`}</span>
+                      <span className="assistant-admin-row__album">{item?.track.album || '—'}</span>
+                      {target && (
+                        <span className="assistant-admin__sr-only">
+                          {FIELD_LABELS[target.field] ?? target.field} {target.currentValue} {target.suggestedValue}
+                        </span>
+                      )}
                     </div>
                     <span className={`assistant-admin-row__status ${statusTone(suggestion)}`}>
                       {safe && isOpen(suggestion) ? <CheckCircle2 /> : suggestion.status === 'failed' ? <XCircle /> : <AlertTriangle />}
@@ -672,7 +673,7 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
             <Info />
             <div>
               <strong>O processamento pode levar algum tempo.</strong>
-              <span>Você pode sair desta página. A análise continuará em segundo plano.</span>
+              <span>Você será notificado quando a análise for concluída.</span>
             </div>
             <button type="button" onClick={() => setShowInfo(false)}>Entendi</button>
           </aside>
