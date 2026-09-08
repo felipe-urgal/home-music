@@ -202,28 +202,49 @@ test('contexto de álbum converge entre faixas e consultas equivalentes reutiliz
   )));
 });
 
-test('busca progride de álbum restrito para título + artista sem escolher silenciosamente', async () => {
+test('busca faz uma única consulta por título + artista e usa álbum apenas no ranking local', async () => {
   const queries: string[] = [];
   const analyzer = createMusicBrainzMetadataAnalyzer({
     fetchImpl: async input => {
       const url = new URL(String(input));
       queries.push(url.searchParams.get('query') ?? '');
-      return queries.length === 1
-        ? response([])
-        : response([recording({ title: 'Cancao', releases: [{ id: 'release-right', title: 'Album Correto' }] })]);
+      return response([recording({
+        title: 'Cancao',
+        releases: [{ id: 'release-right', title: 'Album Correto' }]
+      })]);
     }
   });
 
   const drafts = await analyzer.analyze({
-    runId: 'run-progressive',
+    runId: 'run-single-search',
     tracks: [track({ album: 'Album Errado' })],
     providers: gateway()
   });
 
-  assert.equal(queries.length, 2);
-  assert.match(queries[0], /release:/);
-  assert.doesNotMatch(queries[1], /release:/);
+  assert.equal(queries.length, 1);
+  assert.match(queries[0], /recording:/);
+  assert.match(queries[0], /artist:/);
+  assert.doesNotMatch(queries[0], /release:/);
   assert.ok(drafts.some(draft => draft.target.capability === 'metadata' && draft.target.field === 'album'));
+});
+
+test('resposta vazia com álbum não repete a mesma consulta externa', async () => {
+  let calls = 0;
+  const analyzer = createMusicBrainzMetadataAnalyzer({
+    fetchImpl: async () => {
+      calls += 1;
+      return response([]);
+    }
+  });
+
+  const drafts = await analyzer.analyze({
+    runId: 'run-empty-single-search',
+    tracks: [track({ album: 'Album conhecido' })],
+    providers: gateway()
+  });
+
+  assert.equal(calls, 1);
+  assert.deepEqual(drafts, []);
 });
 
 test('metadata ausente pode usar filename seguro como apoio sem enviar path ou elevar confiança', async () => {
