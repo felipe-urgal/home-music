@@ -113,7 +113,7 @@ function runDescription(run: LibraryAssistantRun | null): readonly [string, stri
     return [run.error?.message ?? 'O processamento foi interrompido.', 'Você pode iniciar uma nova análise.'];
   }
   if (run.status === 'cancelled') {
-    return ['O processamento foi cancelado.', 'As sugestões já encontradas continuam disponíveis.'];
+    return ['O processamento foi cancelado.', 'Sugestões abertas desse processamento foram invalidadas.'];
   }
   if (run.status === 'stale') {
     return ['A biblioteca mudou desde esta análise.', 'Execute uma nova análise para trabalhar com dados atuais.'];
@@ -324,7 +324,7 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
       await cancelLibraryAssistantRun(run.id);
       setFeedback({
         kind: 'warning',
-        message: 'Cancelamento solicitado. Itens já concluídos não são revertidos.'
+        message: 'Análise cancelada. Sugestões abertas desse processamento foram invalidadas.'
       });
       await load(true);
     } catch (error) {
@@ -697,7 +697,7 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
             <Info />
             <div>
               <strong>O processamento pode levar algum tempo.</strong>
-              <span>Você será notificado quando a análise for concluída.</span>
+              <span>A tela é atualizada automaticamente enquanto a análise estiver em andamento.</span>
             </div>
             <button type="button" onClick={() => setShowInfo(false)}>Entendi</button>
           </aside>
