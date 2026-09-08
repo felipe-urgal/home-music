@@ -159,6 +159,24 @@ test('Library Assistant API is admin-only and lifecycle/review mutations require
     assert.deepEqual(startedBy, ['admin-1']);
     assert.equal(started.headers['cache-control'], 'private, no-store');
 
+    const progress = await app.inject({
+      method: 'GET',
+      url: '/api/admin/library-assistant/runs/assistant-run-1/progress',
+      headers: { cookie: cookie(adminToken) }
+    });
+    assert.equal(progress.statusCode, 200);
+    assert.deepEqual(progress.json().progress, {
+      total: 0,
+      processed: 0,
+      pending: 0,
+      processing: 0,
+      matched: 0,
+      noMatch: 0,
+      retry: 0,
+      failed: 0
+    });
+    assert.equal(progress.headers['cache-control'], 'private, no-store');
+
     const decided = await app.inject({
       method: 'POST',
       url: '/api/admin/library-assistant/suggestions/suggestion-1/decision',
@@ -204,6 +222,7 @@ test('Library Assistant API validates capability, identifiers, filters and revie
       '/api/admin/library-assistant/runs/assistant-run-1/suggestions?status=unknown',
       '/api/admin/library-assistant/runs/assistant-run-1/suggestions?limit=501',
       '/api/admin/library-assistant/runs/%2Fsecret',
+      '/api/admin/library-assistant/runs/%2Fsecret/progress',
       '/api/admin/library-assistant/review?limit=0',
       '/api/admin/library-assistant/review?limit=501'
     ]) {
@@ -217,6 +236,13 @@ test('Library Assistant API validates capability, identifiers, filters and revie
       headers: { cookie: cookie(adminToken) }
     });
     assert.equal(missing.statusCode, 404);
+
+    const missingProgress = await app.inject({
+      method: 'GET',
+      url: '/api/admin/library-assistant/runs/missing/progress',
+      headers: { cookie: cookie(adminToken) }
+    });
+    assert.equal(missingProgress.statusCode, 404);
 
     const invalidDecision = await app.inject({
       method: 'POST',
