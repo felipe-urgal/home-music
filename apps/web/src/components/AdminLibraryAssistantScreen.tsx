@@ -135,15 +135,10 @@ function runStatusLabel(run: LibraryAssistantRun | null) {
 
 function mergeSuggestions(
   history: LibraryAssistantSuggestion[],
-  reviewItems: LibraryAssistantReviewItem[],
-  runId: string | null
+  reviewItems: LibraryAssistantReviewItem[]
 ) {
   const byId = new Map(history.map(suggestion => [suggestion.id, suggestion]));
-  if (runId) {
-    for (const item of reviewItems) {
-      if (item.suggestion.runId === runId) byId.set(item.suggestion.id, item.suggestion);
-    }
-  }
+  for (const item of reviewItems) byId.set(item.suggestion.id, item.suggestion);
   return [...byId.values()];
 }
 
@@ -253,11 +248,7 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
       if (version !== requestVersion.current) return;
       setRuns(runsResponse.runs);
       setReviewItems(reviewResponse.items);
-      setSuggestions(mergeSuggestions(
-        suggestionResponse.suggestions,
-        reviewResponse.items,
-        metadataRun?.id ?? null
-      ));
+      setSuggestions(mergeSuggestions(suggestionResponse.suggestions, reviewResponse.items));
       setProgress(progressResponse.progress);
     } catch (error) {
       if (version === requestVersion.current) {
@@ -295,12 +286,12 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
 
   useEffect(() => setSelected(new Set()), [filter, latestRun?.id, search]);
 
-  async function analyze() {
+  async function analyze(full = false) {
     if (analyzing || mutating || runActive) return;
     setAnalyzing(true);
     setFeedback(null);
     try {
-      const run = (await startLibraryAssistantMetadataRun()).run;
+      const run = (await startLibraryAssistantMetadataRun({ full })).run;
       setRuns(current => [run, ...current.filter(item => item.id !== run.id)]);
       setProgress(EMPTY_PROGRESS);
       setSuggestions([]);
@@ -433,7 +424,13 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
   const suggestionFailureCount = latestRun?.summary.failed ?? 0;
   const failedCount = Math.max(queueFailureCount, suggestionFailureCount);
   const failedRun = latestRun?.status === 'failed';
-  const description = runDescription(latestRun);
+  const noIncrementalChanges = latestRun?.status === 'completed' && totalTracks === 0 && runs.length > 1;
+  const description = noIncrementalChanges
+    ? [
+        'Nenhuma faixa nova ou alterada precisou ser analisada.',
+        'Use “Reanalisar tudo” para forçar uma verificação completa.'
+      ] as const
+    : runDescription(latestRun);
 
   return (
     <section className="assistant-admin" aria-labelledby="library-assistant-title">
@@ -469,7 +466,7 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
           <Info />
           <div>
             <strong>O assistente só propõe alterações</strong>
-            <span>Ele consulta o MusicBrainz faixa por faixa, salva cada resultado e continua em segundo plano. Nada é aplicado automaticamente.</span>
+            <span>Na primeira análise ele percorre a biblioteca. Depois, “Analisar mudanças” processa somente faixas novas, alteradas ou que precisam ser tentadas novamente. Nada é aplicado automaticamente.</span>
           </div>
         </aside>
       )}
@@ -529,10 +526,27 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
               <X /> Cancelar análise
             </button>
           ) : (
-            <button className="assistant-admin__primary-button" type="button" disabled={analyzing || mutating} onClick={() => void analyze()}>
-              {analyzing ? <LoaderCircle className="is-spinning" /> : <Sparkles />}
-              {latestRun ? 'Analisar novamente' : 'Analisar biblioteca'}
-            </button>
+            <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: '.5rem' }}>
+              {latestRun && (
+                <button
+                  className="assistant-admin__secondary-button"
+                  type="button"
+                  disabled={analyzing || mutating}
+                  onClick={() => void analyze(true)}
+                >
+                  <RefreshCw /> Reanalisar tudo
+                </button>
+              )}
+              <button
+                className="assistant-admin__primary-button"
+                type="button"
+                disabled={analyzing || mutating}
+                onClick={() => void analyze(false)}
+              >
+                {analyzing ? <LoaderCircle className="is-spinning" /> : <Sparkles />}
+                {latestRun ? 'Analisar mudanças' : 'Analisar biblioteca'}
+              </button>
+            </div>
           )}
         </div>
       </section>
@@ -545,7 +559,7 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
       </nav>
 
       <dl className="assistant-admin__metrics" aria-label="Resumo das sugestões">
-        <div className="is-suggestions"><Music2 /><dt>Sugestões</dt><dd>{latestRun?.summary.total ?? suggestions.length}</dd></div>
+        <div className="is-suggestions"><Music2 /><dt>Sugestões</dt><dd>{suggestions.length}</dd></div>
         <div className="is-safe"><ShieldCheck /><dt>Seguras</dt><dd>{safeSuggestions.length}</dd></div>
         <div className="is-review"><AlertTriangle /><dt>Revisão</dt><dd>{reviewSuggestions.length}</dd></div>
         <div className="is-failed"><XCircle /><dt>Falhas</dt><dd>{failedCount}</dd></div>
@@ -623,10 +637,13 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
               <Sparkles />
               <div><strong>Ainda não há sugestões para revisar</strong><span>Inicie uma análise para comparar sua biblioteca com o MusicBrainz.</span></div>
             </div>
-          ) : latestRun.status === 'completed' && latestRun.summary.total === 0 ? (
+          ) : latestRun.status === 'completed' && latestRun.summary.total === 0 && suggestions.length === 0 ? (
             <div className="assistant-admin__empty">
               <Check />
-              <div><strong>Nenhuma sugestão encontrada</strong><span>A análise terminou sem candidatos de metadata.</span></div>
+              <div>
+                <strong>{totalTracks === 0 ? 'Biblioteca já está em dia' : 'Nenhuma sugestão encontrada'}</strong>
+                <span>{totalTracks === 0 ? 'Nenhuma faixa nova, alterada ou pendente precisou ser reanalisada.' : 'A análise terminou sem candidatos de metadata.'}</span>
+              </div>
             </div>
           ) : visibleSuggestions.length === 0 ? (
             <div className="assistant-admin__empty">
