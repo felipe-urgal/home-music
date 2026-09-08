@@ -21,7 +21,6 @@ const MUSICBRAINZ_USER_AGENT = 'HomeMusic/0.1 (+https://github.com/felipe-urgal/
 const MUSICBRAINZ_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1_000;
 const MAX_RESPONSE_CHARS = 1_000_000;
 const MAX_CANDIDATES = 5;
-const MAX_SEARCH_ATTEMPTS = 3;
 const AMBIGUOUS_MARGIN = 15;
 const HIGH_MARGIN = 18;
 
@@ -476,43 +475,20 @@ function confidenceFor(
   return 'low';
 }
 
-type QueryTerms = { title: string; artist: string; album: string };
+type QueryTerms = { title: string; artist: string };
 
 function queryText(terms: QueryTerms) {
-  const parts = [
+  return [
     `recording:${JSON.stringify(exactValue(terms.title))}`,
     `artist:${JSON.stringify(exactValue(terms.artist))}`
-  ];
-  if (terms.album) parts.push(`release:${JSON.stringify(exactValue(terms.album))}`);
-  return parts.join(' AND ');
+  ].join(' AND ');
 }
 
 function cacheKey(terms: QueryTerms) {
   return JSON.stringify({
     title: normalizedValue(terms.title),
-    artist: normalizedValue(terms.artist),
-    album: normalizedValue(terms.album)
+    artist: normalizedValue(terms.artist)
   });
-}
-
-function searchAttempts(identity: SearchIdentity): QueryTerms[] {
-  const attempts: QueryTerms[] = [];
-  const seen = new Set<string>();
-  const add = (terms: QueryTerms) => {
-    const key = cacheKey(terms);
-    if (seen.has(key) || attempts.length >= MAX_SEARCH_ATTEMPTS) return;
-    seen.add(key);
-    attempts.push(terms);
-  };
-  if (identity.album) add({ title: identity.title, artist: identity.artist, album: identity.album });
-  add({ title: identity.title, artist: identity.artist, album: '' });
-  return attempts;
-}
-
-function isProviderTimeout(error: unknown) {
-  return error instanceof Error
-    && 'code' in error
-    && String(error.code) === 'provider-timeout';
 }
 
 async function fetchCandidates(
@@ -569,31 +545,6 @@ async function fetchCandidates(
   return result.value;
 }
 
-async function progressiveCandidates(
-  identity: SearchIdentity,
-  providers: LibraryAssistantProviderGateway,
-  fetchImpl: FetchLike,
-  userAgent: string,
-  signal?: AbortSignal
-) {
-  let last: MusicBrainzRecordingCandidate[] = [];
-  const attempts = searchAttempts(identity);
-  for (let index = 0; index < attempts.length; index += 1) {
-    if (signal?.aborted) break;
-    const terms = attempts[index];
-    try {
-      const candidates = await fetchCandidates(terms, providers, fetchImpl, userAgent, signal);
-      last = candidates;
-      if (candidates.length > 0) return candidates;
-    } catch (error) {
-      const hasBroaderAttempt = index + 1 < attempts.length;
-      if (terms.album && hasBroaderAttempt && isProviderTimeout(error)) continue;
-      throw error;
-    }
-  }
-  return last;
-}
-
 function metadataValues(match: RankedCandidate) {
   return {
     title: match.candidate.title,
@@ -628,7 +579,13 @@ export function createMusicBrainzMetadataAnalyzer(options: AnalyzerOptions = {})
         const identity = searchIdentity(track, fileContext);
         if (!identity) continue;
         const matchTrack = matchingTrack(track, identity);
-        const candidates = await progressiveCandidates(identity, providers, fetchImpl, userAgent, signal);
+        const candidates = await fetchCandidates(
+          { title: identity.title, artist: identity.artist },
+          providers,
+          fetchImpl,
+          userAgent,
+          signal
+        );
         matches.push({
           track,
           matchTrack,
