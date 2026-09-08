@@ -4,6 +4,7 @@ import type {
   LibraryAssistantProviderCacheEntry,
   LibraryAssistantProviderCacheKey
 } from './library-assistant-store.js';
+import type { LibraryAssistantProviderObservation } from './library-assistant-run-metrics.js';
 
 const DEFAULT_TIMEOUT_MS = 8_000;
 const MAX_TIMEOUT_MS = 30_000;
@@ -32,6 +33,7 @@ type ProviderGatewayOptions = {
   now?: () => Date;
   sleep?: (delayMs: number, signal?: AbortSignal) => Promise<void>;
   minIntervalMs?: number;
+  onObservation?: (observation: LibraryAssistantProviderObservation) => void;
 };
 
 export type LibraryAssistantProviderDescriptor = {
@@ -187,6 +189,7 @@ export class LibraryAssistantProviderGateway {
   private readonly now: () => Date;
   private readonly sleep: (delayMs: number, signal?: AbortSignal) => Promise<void>;
   private readonly minIntervalMs: number;
+  private readonly onObservation?: (observation: LibraryAssistantProviderObservation) => void;
   private readonly nextAllowedAt = new Map<string, number>();
   private readonly inFlight = new Map<string, Promise<LibraryAssistantProviderQueryResult<unknown>>>();
 
@@ -199,6 +202,7 @@ export class LibraryAssistantProviderGateway {
     this.minIntervalMs = Math.max(0, Math.min(60_000, Math.trunc(
       options.minIntervalMs ?? DEFAULT_MIN_INTERVAL_MS
     )));
+    this.onObservation = options.onObservation;
   }
 
   query<T>(query: LibraryAssistantProviderQuery<T>): Promise<LibraryAssistantProviderQueryResult<T>> {
@@ -233,7 +237,14 @@ export class LibraryAssistantProviderGateway {
       const cached = this.cache.getProviderCache(key, nowMs);
       if (cached) {
         try {
-          return { value: normalizeResponse(query.normalize, cached.payload), cache: 'hit' };
+          const value = normalizeResponse(query.normalize, cached.payload);
+          this.observe({
+            signal: query.signal,
+            cache: 'hit',
+            externalRequest: false,
+            rateLimitWaitMs: 0
+          });
+          return { value, cache: 'hit' };
         } catch {
           try {
             this.cache.deleteProviderCache(key);
@@ -246,7 +257,7 @@ export class LibraryAssistantProviderGateway {
       // Cache é derivado; leitura indisponível degrada para consulta ao provider.
     }
 
-    await this.waitForRateLimit(key.provider, query.signal);
+    const rateLimitWaitMs = await this.waitForRateLimit(key.provider, query.signal);
     if (query.signal?.aborted) throw new LibraryAssistantProviderAbortedError();
 
     const controller = new AbortController();
@@ -295,8 +306,20 @@ export class LibraryAssistantProviderGateway {
       } catch {
         // Resultado normalizado continua válido mesmo quando o cache derivado falha.
       }
+      this.observe({
+        signal: query.signal,
+        cache: 'miss',
+        externalRequest: true,
+        rateLimitWaitMs
+      });
       return { value, cache: 'miss' };
     } catch (error) {
+      this.observe({
+        signal: query.signal,
+        cache: 'miss',
+        externalRequest: true,
+        rateLimitWaitMs
+      });
       if (
         error instanceof LibraryAssistantProviderAbortedError ||
         error instanceof LibraryAssistantProviderTimeoutError
@@ -314,14 +337,23 @@ export class LibraryAssistantProviderGateway {
     }
   }
 
+  private observe(observation: LibraryAssistantProviderObservation) {
+    try {
+      this.onObservation?.(observation);
+    } catch {
+      // Observabilidade é derivada e nunca altera a consulta principal.
+    }
+  }
+
   private async waitForRateLimit(provider: string, signal?: AbortSignal) {
     if (signal?.aborted) throw new LibraryAssistantProviderAbortedError();
-    if (this.minIntervalMs === 0) return;
+    if (this.minIntervalMs === 0) return 0;
     const nowMs = this.now().getTime();
     const previous = this.nextAllowedAt.get(provider) ?? nowMs;
     const scheduledAt = Math.max(nowMs, previous);
     this.nextAllowedAt.set(provider, scheduledAt + this.minIntervalMs);
     const delay = scheduledAt - nowMs;
     if (delay > 0) await this.sleep(delay, signal);
+    return delay;
   }
 }
