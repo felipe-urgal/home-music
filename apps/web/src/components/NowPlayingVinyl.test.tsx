@@ -30,13 +30,13 @@ describe('NowPlayingVinyl', () => {
     expect(playing).toContain('data-playing="true"');
   });
 
-  it('usa pausa de animação CSS para preservar o ângulo e respeita reduced motion', () => {
+  it('usa pausa de animação CSS para preservar o ângulo e mantém o giro enquanto playing estiver ativo', () => {
     const css = readFileSync(new URL('../now-playing-vinyl.css', import.meta.url), 'utf8');
 
     expect(css).toContain('animation-play-state: paused');
     expect(css).toContain('animation-play-state: running');
-    expect(css).toContain('@media (prefers-reduced-motion: reduce)');
     expect(css).toContain('transform: rotate(360deg) translateZ(0)');
+    expect(css).not.toContain('prefers-reduced-motion');
     expect(css).not.toContain('setInterval');
     expect(css).not.toContain('requestAnimationFrame');
   });
