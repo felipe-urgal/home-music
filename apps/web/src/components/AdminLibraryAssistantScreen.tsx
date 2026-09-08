@@ -133,6 +133,15 @@ function runStatusLabel(run: LibraryAssistantRun | null) {
   return 'Desatualizada';
 }
 
+function formatDuration(durationMs: number) {
+  const minutes = Math.max(0, Math.round(durationMs / 60_000));
+  if (minutes < 1) return '<1 min';
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  return remainder ? `${hours}h ${remainder}min` : `${hours}h`;
+}
+
 function mergeSuggestions(
   history: LibraryAssistantSuggestion[],
   reviewItems: LibraryAssistantReviewItem[]
@@ -431,6 +440,21 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
         'Use “Reanalisar tudo” para forçar uma verificação completa.'
       ] as const
     : runDescription(latestRun);
+  const observed = progress.metrics;
+  const cacheQueries = observed ? observed.cacheHits + observed.cacheMisses : 0;
+  const cachePercent = observed && cacheQueries > 0
+    ? Math.round((observed.cacheHits / cacheQueries) * 100)
+    : 0;
+  const progressDiagnostics = observed && latestRun ? [
+    `${observed.tracksPerSecond.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} faixa/s`,
+    runActive
+      ? observed.etaMs == null ? 'estimando tempo restante' : `~${formatDuration(observed.etaMs)} restantes`
+      : `${formatDuration(observed.elapsedMs)} no total`,
+    `${observed.externalRequests.toLocaleString('pt-BR')} consultas externas`,
+    cacheQueries > 0 ? `${cachePercent}% via cache` : null,
+    observed.rateLimitWaitMs > 0 ? `${formatDuration(observed.rateLimitWaitMs)} aguardando limite` : null,
+    observed.retriesTotal > 0 ? `${observed.retriesTotal.toLocaleString('pt-BR')} retries` : null
+  ].filter((value): value is string => Boolean(value)).join(' · ') : null;
 
   return (
     <section className="assistant-admin" aria-labelledby="library-assistant-title">
@@ -485,6 +509,7 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
             <strong>{runTitle(latestRun)}</strong>
             <span>{description[0]}</span>
             {description[1] && <span>{description[1]}</span>}
+            {progressDiagnostics && <span>{progressDiagnostics}</span>}
           </div>
           <span className={`assistant-admin__run-badge is-${latestRun?.status ?? 'idle'}`}>
             {(runActive || latestRun?.status === 'completed') && <CheckCircle2 />}

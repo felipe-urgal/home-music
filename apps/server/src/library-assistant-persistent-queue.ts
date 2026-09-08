@@ -32,10 +32,12 @@ export type LibraryAssistantWorkSummary = Record<LibraryAssistantWorkStatus, num
   total: number;
 };
 
+type WorkError = { code: string; message: string; action: string };
 type Row = Record<string, unknown>;
 
 type PersistentQueueOptions = {
   now?: () => Date;
+  onRetry?: (item: LibraryAssistantWorkItem, error: WorkError) => void;
 };
 
 const workStatuses: readonly LibraryAssistantWorkStatus[] = [
@@ -97,6 +99,7 @@ function itemFromRow(row: Row): LibraryAssistantWorkItem {
 export class LibraryAssistantPersistentQueue {
   private readonly db: DatabaseSync;
   private readonly now: () => Date;
+  private readonly onRetry?: (item: LibraryAssistantWorkItem, error: WorkError) => void;
 
   constructor(databasePath: string, options: PersistentQueueOptions = {}) {
     mkdirSync(path.dirname(databasePath), { recursive: true });
@@ -105,6 +108,7 @@ export class LibraryAssistantPersistentQueue {
     this.db.exec('PRAGMA busy_timeout = 5000;');
     this.db.exec('PRAGMA journal_mode = WAL;');
     this.now = options.now ?? (() => new Date());
+    this.onRetry = options.onRetry;
 
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS library_assistant_work_items (
@@ -240,7 +244,7 @@ export class LibraryAssistantPersistentQueue {
 
   markFailed(
     item: LibraryAssistantWorkItem,
-    error: { code: string; message: string; action: string },
+    error: WorkError,
     updatedAt: string
   ) {
     const result = this.db.prepare(`
@@ -263,7 +267,7 @@ export class LibraryAssistantPersistentQueue {
   markRetry(
     item: LibraryAssistantWorkItem,
     retryAtMs: number,
-    error: { code: string; message: string; action: string },
+    error: WorkError,
     updatedAt: string
   ) {
     if (!Number.isSafeInteger(retryAtMs) || retryAtMs <= 0) throw new RangeError('retryAt inválido.');
@@ -282,7 +286,15 @@ export class LibraryAssistantPersistentQueue {
       item.analyzerId,
       item.trackId
     );
-    return Number(result.changes) > 0;
+    const changed = Number(result.changes) > 0;
+    if (changed) {
+      try {
+        this.onRetry?.(item, error);
+      } catch {
+        // Métrica derivada não pode alterar o estado persistido da fila.
+      }
+    }
+    return changed;
   }
 
   summary(runId: string): LibraryAssistantWorkSummary {
