@@ -114,25 +114,23 @@ A normalização é idempotente: o valor já normalizado armazenado no cache pod
 
 ### Dados enviados
 
-A consulta pode usar somente:
+A consulta ao MusicBrainz usa somente:
 
 - título;
 - artista;
-- álbum quando confiável;
 - valores conservadoramente derivados do filename quando metadata essencial está ausente.
+
+Álbum e pasta continuam fazendo parte do contexto local para ranking, escolha de release e coerência coletiva, mas não aumentam o número de consultas externas.
 
 **Nunca é enviado path físico, `folderPath`, `MUSIC_DIR` ou filename bruto.** O bootstrap extrai apenas `basename(filePath)` no backend. O analyzer valida que `fileName`/`folderName` não contêm separadores de caminho e, quando precisa do filename, só aceita a forma conservadora `Artista - Título` (também com travessão). O texto bruto do filename fica apenas como evidência auditável local.
 
-### Busca progressiva
+### Busca simples e ranking local
 
-Para metadata confiável, a ordem é:
+Cada identidade pesquisável faz no máximo uma consulta lógica por `title + artist`. O álbum não dispara uma segunda busca: ele é aplicado localmente no score e na escolha do melhor release entre os candidatos retornados.
 
-1. `title + artist + album` quando álbum existe;
-2. `title + artist` se a busca restrita não retornar candidatos.
+Quando título ou artista estão ausentes/placeholders, o analyzer só consulta se o basename puder fornecer `Artista - Título` sem ambiguidade. Pasta pode apoiar o álbum localmente. Filename sem estrutura clara não dispara consulta externa.
 
-Quando título ou artista estão ausentes/placeholders, o analyzer só consulta se o basename puder fornecer `Artista - Título` sem ambiguidade. Pasta pode apoiar o álbum. Filename sem estrutura clara não dispara consulta externa.
-
-A chave de cache usa a identidade lógica normalizada (`title`, `artist`, `album`), nunca path/filename bruto.
+A chave de cache usa a mesma identidade lógica da consulta externa (`title`, `artist`), nunca álbum, path ou filename bruto. Assim, consultas equivalentes reaproveitam o mesmo resultado mesmo quando a faixa aparece em álbuns diferentes, e uma resposta vazia não provoca outra chamada idêntica ao MusicBrainz.
 
 ### Matching e score
 
@@ -246,7 +244,7 @@ Revisão/aplicação:
 
 A fundação continua cobrindo autorização, anti-CSRF, persistência/reopen, stale, cancelamento, concorrência, cache, rate limit, timeout e ausência de mutação.
 
-O analyzer MusicBrainz cobre payload/cache normalizado, matching, duração, ambiguidade, contexto coletivo, filename seguro, override humano, IDs externos e falhas do provider.
+O analyzer MusicBrainz cobre payload/cache normalizado, matching, duração, ambiguidade, contexto coletivo, filename seguro, override humano, IDs externos, consulta única por identidade e falhas do provider.
 
 A revisão/aplicação adiciona regressões para:
 
