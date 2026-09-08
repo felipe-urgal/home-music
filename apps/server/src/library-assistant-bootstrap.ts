@@ -14,7 +14,6 @@ import { LibraryAssistantService, type LibraryAssistantAnalyzer } from './librar
 import { LibraryAssistantStore } from './library-assistant-store.js';
 import type { LongJobObservability } from './long-job-observability.js';
 import { createMusicBrainzSimpleSearchFetch } from './musicbrainz-simple-search-fetch.js';
-import { createRetryingFetch } from './retrying-fetch.js';
 import { TrackMetadataOverrideStore } from './track-metadata-overrides.js';
 
 type LibraryAssistantBootstrapOptions = {
@@ -36,7 +35,7 @@ export function registerLibraryAssistant(
   const workQueue = new LibraryAssistantPersistentQueue(options.databasePath);
   const metadataOverrides = new TrackMetadataOverrideStore(options.databasePath);
   const providers = new LibraryAssistantProviderGateway(store);
-  const musicBrainzFetch = createMusicBrainzSimpleSearchFetch(createRetryingFetch());
+  const musicBrainzFetch = createMusicBrainzSimpleSearchFetch();
   let assistantMetadataRevision = 0;
   const projectRevision = options.projection.projectRevision;
 
