@@ -159,7 +159,7 @@ export class LibraryAssistantReviewService {
 
     for (const run of this.options.store.listRuns(MAX_REVIEW_RUNS)) {
       if (items.length >= safeLimit) break;
-      if (run.capability !== 'metadata' || !['completed', 'stale'].includes(run.status)) continue;
+      if (run.capability !== 'metadata' || !['running', 'completed', 'stale'].includes(run.status)) continue;
       for (const status of ['review', 'pending'] as const) {
         const records = this.options.store.listSuggestionRecords(run.id, {
           status,
