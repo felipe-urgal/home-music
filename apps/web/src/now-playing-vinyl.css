@@ -73,12 +73,3 @@
   from { transform: rotate(0deg) translateZ(0); }
   to { transform: rotate(360deg) translateZ(0); }
 }
-
-@media (prefers-reduced-motion: reduce) {
-  .now-playing-vinyl__disc,
-  .now-playing-vinyl.is-playing .now-playing-vinyl__disc {
-    animation: none;
-    transform: none;
-    will-change: auto;
-  }
-}
