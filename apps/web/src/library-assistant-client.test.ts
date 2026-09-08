@@ -39,7 +39,7 @@ describe('library assistant admin client', () => {
       'Content-Type': 'application/json',
       'X-Home-Music-Request': '1'
     });
-    expect(JSON.parse(String(init.body))).toEqual({ capability: 'metadata' });
+    expect(JSON.parse(String(init.body))).toEqual({ capability: 'metadata', full: false });
   });
 
   it('lê o progresso persistente do run sem cache', async () => {
