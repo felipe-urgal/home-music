@@ -46,23 +46,6 @@ function track(): Track {
   };
 }
 
-function response() {
-  return new Response(JSON.stringify({
-    recordings: [{
-      id: 'recording-1',
-      title: 'Cancao',
-      length: 180_000,
-      'artist-credit': [{ name: 'Artista', artist: { id: 'artist-1', name: 'Artista' } }],
-      releases: [{
-        id: 'release-1',
-        title: 'Album Correto',
-        'release-group': { id: 'release-group-1' },
-        'artist-credit': [{ name: 'Artista', artist: { id: 'artist-1', name: 'Artista' } }]
-      }]
-    }]
-  }), { status: 200, headers: { 'content-type': 'application/json' } });
-}
-
 test('timeout com album nao dispara segunda consulta ao provider', async () => {
   const queries: string[] = [];
   const analyzer = createMusicBrainzMetadataAnalyzer({
@@ -101,7 +84,7 @@ test('timeout na busca ampla continua sendo reportado ao isolamento por faixa', 
 
   await assert.rejects(
     analyzer.analyze({
-      runId: 'run-fallback-exhausted',
+      runId: 'run-timeout-propagation',
       tracks: [track()],
       providers: gateway()
     }),
