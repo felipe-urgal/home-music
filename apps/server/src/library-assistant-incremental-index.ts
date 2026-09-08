@@ -5,6 +5,7 @@ const MAX_IDENTIFIER_LENGTH = 192;
 const REUSABLE_STATUSES = new Set(['matched', 'no_match']);
 
 type AnalysisStateStatus = 'pending' | 'matched' | 'no_match' | 'failed';
+type TerminalAnalysisStateStatus = Exclude<AnalysisStateStatus, 'pending'>;
 
 type Row = Record<string, unknown>;
 
@@ -135,6 +136,27 @@ export class LibraryAssistantIncrementalIndex {
     return selected.map(track => track.id);
   }
 
+  markResult(
+    runId: string,
+    capability: LibraryAssistantCapability,
+    analyzerId: string,
+    trackId: string,
+    status: TerminalAnalysisStateStatus,
+    updatedAt: string
+  ) {
+    requireIdentifier(runId, 'runId');
+    requireIdentifier(analyzerId, 'analyzerId', 128);
+    requireIdentifier(trackId, 'trackId', 64);
+    return Number(this.db.prepare(`
+      UPDATE library_assistant_analysis_state
+      SET status = ?, updated_at = ?
+      WHERE capability = ?
+        AND analyzer_id = ?
+        AND track_id = ?
+        AND run_id = ?;
+    `).run(status, updatedAt, capability, analyzerId, trackId, runId).changes);
+  }
+
   finishRun(runId: string, capability: LibraryAssistantCapability, updatedAt: string) {
     requireIdentifier(runId, 'runId');
     const rows = this.db.prepare(`
@@ -144,30 +166,20 @@ export class LibraryAssistantIncrementalIndex {
     `).all(runId) as Row[];
     if (rows.length === 0) return 0;
 
-    const update = this.db.prepare(`
-      UPDATE library_assistant_analysis_state
-      SET status = ?, updated_at = ?
-      WHERE capability = ?
-        AND analyzer_id = ?
-        AND track_id = ?
-        AND run_id = ?;
-    `);
     let changed = 0;
-
     this.db.exec('BEGIN IMMEDIATE;');
     try {
       for (const row of rows) {
         const status = stringValue(row.status);
         if (status !== 'matched' && status !== 'no_match' && status !== 'failed') continue;
-        const result = update.run(
-          status,
-          updatedAt,
+        changed += this.markResult(
+          runId,
           capability,
           stringValue(row.analyzer_id),
           stringValue(row.track_id),
-          runId
+          status,
+          updatedAt
         );
-        changed += Number(result.changes);
       }
       this.db.exec('COMMIT;');
     } catch (error) {
