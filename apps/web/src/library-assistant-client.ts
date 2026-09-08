@@ -17,14 +17,14 @@ async function responseError(response: Response) {
   return payload?.error || `Falha HTTP ${response.status}`;
 }
 
-export async function startLibraryAssistantMetadataRun() {
+export async function startLibraryAssistantMetadataRun(options: { full?: boolean } = {}) {
   const response = await apiFetch('/api/admin/library-assistant/runs', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'X-Home-Music-Request': '1'
     },
-    body: JSON.stringify({ capability: 'metadata' })
+    body: JSON.stringify({ capability: 'metadata', full: options.full === true })
   });
   if (!response.ok) throw new Error(await responseError(response));
   return response.json() as Promise<AdminLibraryAssistantRunResponse>;

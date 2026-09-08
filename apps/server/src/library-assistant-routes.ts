@@ -29,6 +29,11 @@ function parseSuggestionStatus(value: unknown): LibraryAssistantSuggestionStatus
     : null;
 }
 
+function parseOptionalBoolean(value: unknown) {
+  if (value == null) return false;
+  return typeof value === 'boolean' ? value : null;
+}
+
 function parseLimit(value: unknown, fallback: number, maximum: number) {
   if (value == null || value === '') return fallback;
   const parsed = Number(value);
@@ -45,15 +50,17 @@ export function registerLibraryAssistantRoutes(
   assistant: LibraryAssistantService,
   workQueue?: LibraryAssistantPersistentQueue
 ) {
-  app.post<{ Body: { capability?: unknown } }>(
+  app.post<{ Body: { capability?: unknown; full?: unknown } }>(
     '/api/admin/library-assistant/runs',
     async (request, reply) => {
       reply.header('Cache-Control', 'private, no-store');
       const capability = parseCapability(request.body?.capability);
       if (!capability) return reply.code(400).send({ error: 'Capability do assistente inválida.' });
+      const full = parseOptionalBoolean(request.body?.full);
+      if (full == null) return reply.code(400).send({ error: 'Modo de reanálise inválido.' });
 
       const response: AdminLibraryAssistantRunResponse = {
-        run: assistant.startRun(capability, request.user?.id)
+        run: assistant.startRun(capability, request.user?.id, { full })
       };
       return reply.code(202).send(response);
     }

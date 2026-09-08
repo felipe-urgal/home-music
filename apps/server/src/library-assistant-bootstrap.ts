@@ -5,6 +5,7 @@ import type { HeavyWorkQueue } from './heavy-work-queue.js';
 import type { LibraryRouteProjection } from './library-routes.js';
 import type { LibraryService } from './library-service.js';
 import { createMusicBrainzMetadataAnalyzer } from './musicbrainz-metadata-analyzer.js';
+import { LibraryAssistantIncrementalIndex } from './library-assistant-incremental-index.js';
 import { LibraryAssistantPersistentQueue } from './library-assistant-persistent-queue.js';
 import { LibraryAssistantProviderGateway } from './library-assistant-provider.js';
 import { registerLibraryAssistantReviewRoutes } from './library-assistant-review-routes.js';
@@ -33,6 +34,7 @@ export function registerLibraryAssistant(
 ) {
   const store = new LibraryAssistantStore(options.databasePath);
   const workQueue = new LibraryAssistantPersistentQueue(options.databasePath);
+  const incrementalIndex = new LibraryAssistantIncrementalIndex(options.databasePath);
   const metadataOverrides = new TrackMetadataOverrideStore(options.databasePath);
   const providers = new LibraryAssistantProviderGateway(store);
   const musicBrainzFetch = createMusicBrainzSimpleSearchFetch();
@@ -66,6 +68,7 @@ export function registerLibraryAssistant(
   const service = new LibraryAssistantService({
     store,
     workQueue,
+    incrementalIndex,
     queue: options.queue,
     observability: options.observability,
     providers,
@@ -86,6 +89,7 @@ export function registerLibraryAssistant(
     await service.close();
     review.close();
     metadataOverrides.close();
+    incrementalIndex.close();
     workQueue.close();
     store.close();
   });
