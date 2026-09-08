@@ -57,7 +57,15 @@ Quando uma dessas respostas ocorre, o gateway aplica um cooldown compartilhado a
 - evita uma rajada de consultas logo após o cooldown ao reagendar os slots pendentes;
 - volta ao comportamento normal após uma consulta externa bem-sucedida.
 
-`Retry-After` é limitado a no máximo 2 horas para impedir que um header externo inválido paralise o processo indefinidamente. O algoritmo de matching, a ordem das buscas e a política persistida de retry por faixa continuam inalterados nesta etapa.
+`Retry-After` é limitado a no máximo 2 horas para impedir que um header externo inválido paralise o processo indefinidamente. O algoritmo de matching e a política persistida de retry por faixa permanecem inalterados.
+
+## Redução de consultas duplicadas
+
+Depois do cooldown, uma nova baseline chegou a 400 de 1.328 faixas com 726 consultas externas, 160 retries e cerca de 26 minutos acumulados aguardando rate limit/cooldown. O próximo desperdício ficou no volume de consultas.
+
+O analyzer agora usa uma única identidade externa por `title + artist`. Álbum continua participando do ranking local, escolha de release e contexto coletivo, mas não cria uma segunda chamada. A chave de cache usa exatamente a mesma identidade da consulta externa, evitando que uma resposta vazia seja repetida sob outra chave e permitindo reutilização entre faixas equivalentes em álbuns diferentes.
+
+Essa mudança não aumenta concorrência, não reduz o intervalo de 1 requisição/segundo e não afrouxa o cooldown. O ganho esperado vem somente de fazer menos trabalho externo.
 
 ## Como usar a baseline
 
@@ -75,4 +83,4 @@ retriesTotal + retriesByReason
 matched / noMatch / failed
 ```
 
-Com essa baseline, a etapa seguinte deve atacar o maior desperdício observado — por exemplo, reduzir buscas progressivas quando a primeira já for suficiente — sem reduzir o rate limit por tentativa e erro.
+Na próxima execução, o principal comparativo é `externalRequests / faixas processadas`, junto com `rateLimitWaitMs`, retries e vazão. Novas otimizações só devem ser consideradas depois de medir esse resultado, sem reduzir o rate limit por tentativa e erro.

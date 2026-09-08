@@ -46,49 +46,33 @@ function track(): Track {
   };
 }
 
-function response() {
-  return new Response(JSON.stringify({
-    recordings: [{
-      id: 'recording-1',
-      title: 'Cancao',
-      length: 180_000,
-      'artist-credit': [{ name: 'Artista', artist: { id: 'artist-1', name: 'Artista' } }],
-      releases: [{
-        id: 'release-1',
-        title: 'Album Correto',
-        'release-group': { id: 'release-group-1' },
-        'artist-credit': [{ name: 'Artista', artist: { id: 'artist-1', name: 'Artista' } }]
-      }]
-    }]
-  }), { status: 200, headers: { 'content-type': 'application/json' } });
-}
-
-test('timeout na busca com album relaxa para titulo + artista antes de falhar a faixa', async () => {
+test('timeout com album nao dispara segunda consulta ao provider', async () => {
   const queries: string[] = [];
   const analyzer = createMusicBrainzMetadataAnalyzer({
     fetchImpl: async input => {
       const query = new URL(String(input)).searchParams.get('query') ?? '';
       queries.push(query);
-      if (query.includes('release:')) throw new LibraryAssistantProviderTimeoutError('musicbrainz');
-      return response();
+      throw new LibraryAssistantProviderTimeoutError('musicbrainz');
     }
   });
 
-  const drafts = await analyzer.analyze({
-    runId: 'run-fallback-timeout',
-    tracks: [track()],
-    providers: gateway()
-  });
+  await assert.rejects(
+    analyzer.analyze({
+      runId: 'run-single-query-timeout',
+      tracks: [track()],
+      providers: gateway()
+    }),
+    error => Boolean(
+      error instanceof Error
+      && 'code' in error
+      && error.code === 'provider-timeout'
+    )
+  );
 
-  assert.equal(queries.length, 2);
-  assert.match(queries[0], /release:/);
-  assert.doesNotMatch(queries[1], /release:/);
-  assert.ok(drafts.some(draft => (
-    draft.target.capability === 'metadata'
-    && draft.target.field === 'album'
-    && draft.target.currentValue === 'Album Antigo'
-    && draft.target.suggestedValue === 'Album Correto'
-  )));
+  assert.equal(queries.length, 1);
+  assert.match(queries[0], /recording:/);
+  assert.match(queries[0], /artist:/);
+  assert.doesNotMatch(queries[0], /release:/);
 });
 
 test('timeout na busca ampla continua sendo reportado ao isolamento por faixa', async () => {
@@ -100,7 +84,7 @@ test('timeout na busca ampla continua sendo reportado ao isolamento por faixa', 
 
   await assert.rejects(
     analyzer.analyze({
-      runId: 'run-fallback-exhausted',
+      runId: 'run-timeout-propagation',
       tracks: [track()],
       providers: gateway()
     }),
