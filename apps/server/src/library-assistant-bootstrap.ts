@@ -80,7 +80,7 @@ export function registerLibraryAssistant(
     onMetadataChanged: () => { assistantMetadataRevision += 1; }
   });
 
-  registerLibraryAssistantRoutes(app, service);
+  registerLibraryAssistantRoutes(app, service, workQueue);
   registerLibraryAssistantReviewRoutes(app, review);
   app.addHook('onClose', async () => {
     await service.close();
