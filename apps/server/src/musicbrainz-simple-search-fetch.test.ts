@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createMusicBrainzSimpleSearchFetch } from './musicbrainz-simple-search-fetch.js';
+import {
+  createMusicBrainzSimpleSearchFetch,
+  MusicBrainzRetryableRequestError,
+  parseRetryAfterMs
+} from './musicbrainz-simple-search-fetch.js';
 
 test('remove filtro de release apenas da busca de recording do MusicBrainz', async () => {
   const seen: URL[] = [];
@@ -43,4 +47,42 @@ test('preserva outros endpoints e buscas que já são simples', async () => {
     'recording:"Cancao" AND artist:"Artista"'
   );
   assert.equal(seen[1], 'https://example.com/ws/2/recording?query=release%3A%22Album%22');
+});
+
+test('classifica 429 e respeita Retry-After em segundos', async () => {
+  const fetchImpl = createMusicBrainzSimpleSearchFetch(async () => new Response('{}', {
+    status: 429,
+    headers: { 'Retry-After': '12' }
+  }));
+
+  await assert.rejects(
+    fetchImpl('https://musicbrainz.org/ws/2/recording?query=recording%3A%22Teste%22'),
+    error => {
+      assert.ok(error instanceof MusicBrainzRetryableRequestError);
+      assert.equal(error.code, 'provider-rate-limited');
+      assert.equal(error.statusCode, 429);
+      assert.equal(error.retryAfterMs, 12_000);
+      return true;
+    }
+  );
+});
+
+test('separa indisponibilidade 503 de rate limit e aceita Retry-After HTTP-date', async () => {
+  const nowMs = Date.parse('2026-09-08T18:00:00.000Z');
+  const fetchImpl = createMusicBrainzSimpleSearchFetch(async () => new Response('{}', {
+    status: 503,
+    headers: { 'Retry-After': 'Tue, 08 Sep 2026 18:00:30 GMT' }
+  }), () => nowMs);
+
+  await assert.rejects(
+    fetchImpl('https://musicbrainz.org/ws/2/recording?query=recording%3A%22Teste%22'),
+    error => {
+      assert.ok(error instanceof MusicBrainzRetryableRequestError);
+      assert.equal(error.code, 'provider-unavailable');
+      assert.equal(error.statusCode, 503);
+      assert.equal(error.retryAfterMs, 30_000);
+      return true;
+    }
+  );
+  assert.equal(parseRetryAfterMs('invalid', nowMs), null);
 });

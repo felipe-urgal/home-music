@@ -86,3 +86,82 @@ test('provider observations distinguish live requests, cache hits and rate-limit
   assert.equal(observations[0]?.signal, firstSignal);
   assert.equal(observations[1]?.signal, secondSignal);
 });
+
+test('retryable provider failure pauses the provider and honors Retry-After', async () => {
+  let nowMs = 1_000;
+  const sleeps: number[] = [];
+  const observations: LibraryAssistantProviderObservation[] = [];
+  const gateway = new LibraryAssistantProviderGateway(memoryCache(), {
+    now: () => new Date(nowMs),
+    minIntervalMs: 1_000,
+    sleep: async delayMs => {
+      sleeps.push(delayMs);
+      nowMs += delayMs;
+    },
+    onObservation: observation => observations.push(observation)
+  });
+
+  await assert.rejects(gateway.query({
+    provider,
+    cacheKey: 'limited',
+    execute: async () => {
+      throw Object.assign(new Error('limited'), {
+        code: 'provider-rate-limited',
+        statusCode: 429,
+        retryAfterMs: 12_000
+      });
+    },
+    normalize
+  }), /limited/);
+
+  const recovered = await gateway.query({
+    provider,
+    cacheKey: 'after-limited',
+    execute: async () => ({ id: 'ok' }),
+    normalize
+  });
+
+  assert.deepEqual(recovered, { value: { id: 'ok' }, cache: 'miss' });
+  assert.deepEqual(sleeps, [12_000]);
+  assert.equal(observations[0]?.rateLimitWaitMs, 0);
+  assert.equal(observations[1]?.rateLimitWaitMs, 12_000);
+});
+
+test('retryable provider failures apply adaptive cooldown when Retry-After is absent', async () => {
+  let nowMs = 1_000;
+  const sleeps: number[] = [];
+  const gateway = new LibraryAssistantProviderGateway(memoryCache(), {
+    now: () => new Date(nowMs),
+    minIntervalMs: 1_000,
+    sleep: async delayMs => {
+      sleeps.push(delayMs);
+      nowMs += delayMs;
+    }
+  });
+
+  const unavailable = () => Object.assign(new Error('unavailable'), {
+    code: 'provider-unavailable',
+    statusCode: 503
+  });
+
+  await assert.rejects(gateway.query({
+    provider,
+    cacheKey: 'first-failure',
+    execute: async () => { throw unavailable(); },
+    normalize
+  }), /unavailable/);
+  await assert.rejects(gateway.query({
+    provider,
+    cacheKey: 'second-failure',
+    execute: async () => { throw unavailable(); },
+    normalize
+  }), /unavailable/);
+  await gateway.query({
+    provider,
+    cacheKey: 'recovered',
+    execute: async () => ({ id: 'ok' }),
+    normalize
+  });
+
+  assert.deepEqual(sleeps, [5_000, 10_000]);
+});

@@ -24,7 +24,7 @@ A primeira etapa de otimização não altera matching, ordem de buscas, concorr�
 - `searchAttempts` — operações do gateway observadas para o run;
 - `externalRequests` — operações que realmente chegaram ao provider externo;
 - `cacheHits` / `cacheMisses` — resultado do cache do gateway;
-- `rateLimitWaitMs` — tempo acumulado aguardando a janela de rate limit;
+- `rateLimitWaitMs` — tempo acumulado aguardando a janela de rate limit, incluindo cooldown do provider;
 - `retriesTotal` — transições persistidas para `retry`;
 - `retriesByReason` — retries agrupados pelo código sanitizado da falha.
 
@@ -42,6 +42,23 @@ Os contadores detalhados de provider/retry ficam em memória e são limitados ao
 
 Essa escolha é intencional nesta primeira etapa: observabilidade não ganha uma nova tabela nem vira autoridade de domínio. Se a baseline mostrar necessidade de histórico comparável entre restarts, a persistência das métricas deve ser tratada em mudança separada.
 
+## Proteção contra pressão do MusicBrainz
+
+A baseline real mostrou que retries de provider podem dominar o tempo total. Por isso, o caminho de produção do MusicBrainz distingue agora:
+
+- HTTP `429` como `provider-rate-limited`;
+- HTTP `503` como `provider-unavailable`.
+
+Quando uma dessas respostas ocorre, o gateway aplica um cooldown compartilhado ao provider em vez de deixar apenas a faixa atual entrar em retry. O cooldown:
+
+- respeita `Retry-After` em segundos ou HTTP-date quando o MusicBrainz o fornece;
+- usa backoff adaptativo conservador de 5 s, 10 s, 20 s, 40 s e até 60 s quando o provider continua recusando consultas;
+- mantém o intervalo normal de 1 requisição/segundo entre slots;
+- evita uma rajada de consultas logo após o cooldown ao reagendar os slots pendentes;
+- volta ao comportamento normal após uma consulta externa bem-sucedida.
+
+`Retry-After` é limitado a no máximo 2 horas para impedir que um header externo inválido paralise o processo indefinidamente. O algoritmo de matching, a ordem das buscas e a política persistida de retry por faixa continuam inalterados nesta etapa.
+
 ## Como usar a baseline
 
 Para comparar uma execução real, registrar ao final pelo menos:
@@ -58,4 +75,4 @@ retriesTotal + retriesByReason
 matched / noMatch / failed
 ```
 
-Com essa baseline, a etapa seguinte deve atacar o maior desperdício observado — por exemplo, reduzir buscas progressivas quando a primeira já for suficiente ou corrigir retries transitórios excessivos — sem reduzir o rate limit por tentativa e erro.
+Com essa baseline, a etapa seguinte deve atacar o maior desperdício observado — por exemplo, reduzir buscas progressivas quando a primeira já for suficiente — sem reduzir o rate limit por tentativa e erro.
