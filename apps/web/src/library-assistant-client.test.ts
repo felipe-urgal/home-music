@@ -4,6 +4,7 @@ import {
   decideLibraryAssistantBatch,
   decideLibraryAssistantSuggestion,
   getLibraryAssistantReview,
+  getLibraryAssistantRunProgress,
   startLibraryAssistantMetadataRun
 } from './library-assistant-client';
 
@@ -39,6 +40,29 @@ describe('library assistant admin client', () => {
       'X-Home-Music-Request': '1'
     });
     expect(JSON.parse(String(init.body))).toEqual({ capability: 'metadata' });
+  });
+
+  it('lê o progresso persistente do run sem cache', async () => {
+    apiFetchMock.mockResolvedValue(response({
+      progress: {
+        total: 1328,
+        processed: 250,
+        pending: 1040,
+        processing: 1,
+        matched: 213,
+        noMatch: 13,
+        retry: 24,
+        failed: 0
+      }
+    }));
+
+    const result = await getLibraryAssistantRunProgress('run/1');
+
+    expect(result.progress.processed).toBe(250);
+    expect(apiFetchMock).toHaveBeenCalledWith(
+      '/api/admin/library-assistant/runs/run%2F1/progress',
+      { cache: 'no-store' }
+    );
   });
 
   it('envia a decisão explícita da sugestão com a premissa esperada', async () => {
