@@ -11,9 +11,13 @@ const MAX_TIMEOUT_MS = 30_000;
 const DEFAULT_TTL_MS = 24 * 60 * 60 * 1_000;
 const MAX_TTL_MS = 30 * 24 * 60 * 60 * 1_000;
 const DEFAULT_MIN_INTERVAL_MS = 1_000;
+const PROVIDER_COOLDOWN_BASE_MS = 5_000;
+const PROVIDER_COOLDOWN_MAX_MS = 60_000;
+const MAX_RETRY_AFTER_MS = 2 * 60 * 60 * 1_000;
 const MAX_CACHE_KEY_LENGTH = 2_048;
 const MAX_USER_AGENT_LENGTH = 256;
 const SENSITIVE_CACHE_KEY = /(?:authorization|cookie|password|passwd|token|secret|api[_-]?key)\s*[:=]/i;
+const RETRYABLE_PROVIDER_CODES = new Set(['provider-rate-limited', 'provider-unavailable']);
 
 type ProviderCachePort = {
   getProviderCache: (
@@ -185,12 +189,29 @@ function normalizeResponse<T>(normalize: (payload: unknown) => T, payload: unkno
   }
 }
 
+function retryableProviderFailure(error: unknown) {
+  if (!error || typeof error !== 'object') return null;
+  const candidate = error as Record<string, unknown>;
+  const code = typeof candidate.code === 'string' ? candidate.code.trim().toLowerCase() : '';
+  const rawStatus = candidate.statusCode ?? candidate.status;
+  const statusCode = typeof rawStatus === 'number' && Number.isInteger(rawStatus) ? rawStatus : null;
+  if (!RETRYABLE_PROVIDER_CODES.has(code) && statusCode !== 429 && statusCode !== 503) return null;
+
+  const rawRetryAfter = candidate.retryAfterMs;
+  const retryAfterMs = typeof rawRetryAfter === 'number' && Number.isFinite(rawRetryAfter) && rawRetryAfter >= 0
+    ? Math.min(MAX_RETRY_AFTER_MS, Math.round(rawRetryAfter))
+    : null;
+  return { retryAfterMs };
+}
+
 export class LibraryAssistantProviderGateway {
   private readonly now: () => Date;
   private readonly sleep: (delayMs: number, signal?: AbortSignal) => Promise<void>;
   private readonly minIntervalMs: number;
   private readonly onObservation?: (observation: LibraryAssistantProviderObservation) => void;
   private readonly nextAllowedAt = new Map<string, number>();
+  private readonly cooldownUntil = new Map<string, number>();
+  private readonly providerFailureStreak = new Map<string, number>();
   private readonly inFlight = new Map<string, Promise<LibraryAssistantProviderQueryResult<unknown>>>();
 
   constructor(
@@ -298,6 +319,7 @@ export class LibraryAssistantProviderGateway {
         callerCancelled ? [execution, timeout, callerCancelled] : [execution, timeout]
       );
       if (query.signal?.aborted) throw new LibraryAssistantProviderAbortedError();
+      this.noteProviderSuccess(key.provider);
 
       const value = normalizeResponse(query.normalize, raw);
       const updatedAt = this.now();
@@ -330,6 +352,7 @@ export class LibraryAssistantProviderGateway {
         throw new LibraryAssistantProviderAbortedError();
       }
       if (timedOut) throw new LibraryAssistantProviderTimeoutError(query.provider.source);
+      this.applyProviderCooldown(key.provider, error);
       throw error;
     } finally {
       if (timer) clearTimeout(timer);
@@ -345,15 +368,45 @@ export class LibraryAssistantProviderGateway {
     }
   }
 
-  private async waitForRateLimit(provider: string, signal?: AbortSignal) {
-    if (signal?.aborted) throw new LibraryAssistantProviderAbortedError();
-    if (this.minIntervalMs === 0) return 0;
+  private applyProviderCooldown(provider: string, error: unknown) {
+    const failure = retryableProviderFailure(error);
+    if (!failure) return;
+
+    const streak = Math.min(8, (this.providerFailureStreak.get(provider) ?? 0) + 1);
+    this.providerFailureStreak.set(provider, streak);
+    const adaptiveDelayMs = Math.min(
+      PROVIDER_COOLDOWN_MAX_MS,
+      PROVIDER_COOLDOWN_BASE_MS * (2 ** Math.min(streak - 1, 4))
+    );
+    const delayMs = Math.max(adaptiveDelayMs, failure.retryAfterMs ?? 0);
+    const cooldownUntil = this.now().getTime() + delayMs;
+    this.cooldownUntil.set(provider, Math.max(this.cooldownUntil.get(provider) ?? 0, cooldownUntil));
+  }
+
+  private noteProviderSuccess(provider: string) {
     const nowMs = this.now().getTime();
-    const previous = this.nextAllowedAt.get(provider) ?? nowMs;
-    const scheduledAt = Math.max(nowMs, previous);
-    this.nextAllowedAt.set(provider, scheduledAt + this.minIntervalMs);
-    const delay = scheduledAt - nowMs;
-    if (delay > 0) await this.sleep(delay, signal);
-    return delay;
+    if ((this.cooldownUntil.get(provider) ?? 0) > nowMs) return;
+    this.cooldownUntil.delete(provider);
+    this.providerFailureStreak.delete(provider);
+  }
+
+  private async waitForRateLimit(provider: string, signal?: AbortSignal) {
+    let totalDelayMs = 0;
+    for (;;) {
+      if (signal?.aborted) throw new LibraryAssistantProviderAbortedError();
+      const nowMs = this.now().getTime();
+      const previous = this.nextAllowedAt.get(provider) ?? nowMs;
+      const cooldown = this.cooldownUntil.get(provider) ?? nowMs;
+      const scheduledAt = Math.max(nowMs, previous, cooldown);
+      this.nextAllowedAt.set(provider, scheduledAt + this.minIntervalMs);
+      const delay = scheduledAt - nowMs;
+      if (delay > 0) {
+        await this.sleep(delay, signal);
+        totalDelayMs += delay;
+      }
+
+      const afterWaitMs = this.now().getTime();
+      if ((this.cooldownUntil.get(provider) ?? 0) <= afterWaitMs) return totalDelayMs;
+    }
   }
 }
