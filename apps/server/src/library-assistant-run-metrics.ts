@@ -76,19 +76,9 @@ export class LibraryAssistantRunMetrics {
     state.retriesByReason.set(normalized, (state.retriesByReason.get(normalized) ?? 0) + 1);
   }
 
-  snapshot(runId: string): LibraryAssistantRunMetricsSnapshot {
+  snapshot(runId: string): LibraryAssistantRunMetricsSnapshot | null {
     const state = this.runs.get(runId);
-    if (!state) {
-      return {
-        searchAttempts: 0,
-        externalRequests: 0,
-        cacheHits: 0,
-        cacheMisses: 0,
-        rateLimitWaitMs: 0,
-        retriesTotal: 0,
-        retriesByReason: {}
-      };
-    }
+    if (!state) return null;
     return {
       searchAttempts: state.searchAttempts,
       externalRequests: state.externalRequests,
