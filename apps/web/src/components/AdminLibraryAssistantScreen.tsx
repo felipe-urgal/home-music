@@ -161,6 +161,30 @@ function rowStatusLabel(suggestion: LibraryAssistantSuggestion) {
   return statusLabel(suggestion.status);
 }
 
+function AssistantTrackArtwork({ trackId }: { trackId: string }) {
+  const [failed, setFailed] = useState(false);
+  const url = `/api/tracks/${encodeURIComponent(trackId)}/cover`;
+
+  useEffect(() => setFailed(false), [trackId]);
+
+  return (
+    <span className="assistant-admin-row__artwork" aria-hidden="true">
+      {failed ? (
+        <Music2 />
+      ) : (
+        <img
+          src={url}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          draggable={false}
+          onError={() => setFailed(true)}
+        />
+      )}
+    </span>
+  );
+}
+
 export function AdminLibraryAssistantScreen({ onBack }: Props) {
   const [runs, setRuns] = useState<LibraryAssistantRun[]>([]);
   const [suggestions, setSuggestions] = useState<LibraryAssistantSuggestion[]>([]);
@@ -635,7 +659,7 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
                         })}
                       />
                     </label>
-                    <span className="assistant-admin-row__artwork" aria-hidden="true"><Music2 /></span>
+                    <AssistantTrackArtwork trackId={suggestion.target.trackId} />
                     <div className="assistant-admin-row__identity">
                       <strong>{item?.track.artist ?? 'Faixa da biblioteca'}</strong>
                       <span className="assistant-admin-row__title">{item?.track.title ?? `Faixa ${suggestion.target.trackId}`}</span>
