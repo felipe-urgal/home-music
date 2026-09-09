@@ -2,11 +2,6 @@ import type { FastifyBaseLogger } from 'fastify';
 import { AccountPasswordService } from './account-password.js';
 import { AdminOperationHistoryStore } from './admin-operation-history.js';
 import { AdminUsersService } from './admin-users.js';
-import {
-  MAX_GLOBAL_SESSIONS,
-  SESSION_TTL_SECONDS,
-  SessionManager
-} from './auth.js';
 import { HomeMusicDatabase } from './database.js';
 import {
   DEFAULT_HEAVY_WORK_LIMITS,
@@ -21,6 +16,7 @@ import {
 } from './login-abuse-protection.js';
 import { LongJobObservability } from './long-job-observability.js';
 import { OpenSubsonicCredentialStore } from './open-subsonic-credentials.js';
+import { PersistentSessionManager } from './persistent-session-manager.js';
 import { TrackAvailabilityStore } from './track-availability-store.js';
 import { TranscodeCacheMaintenance } from './transcode-cache-maintenance.js';
 import { TranscodeManager } from './transcoding.js';
@@ -55,13 +51,7 @@ export function createServerInfrastructure(options: ServerInfrastructureOptions)
   const trackAvailability = new TrackAvailabilityStore(options.databasePath);
   const authUsers = new UserAuthStore(options.databasePath);
   const openSubsonicCredentials = new OpenSubsonicCredentialStore(options.databasePath);
-  const sessions = new SessionManager(
-    '',
-    '',
-    SESSION_TTL_SECONDS * 1000,
-    MAX_GLOBAL_SESSIONS,
-    { status: 'blocked' }
-  );
+  const sessions = new PersistentSessionManager(options.databasePath);
   const accountPasswords = new AccountPasswordService(options.databasePath, sessions);
   const adminUsers = new AdminUsersService(options.databasePath, sessions);
   const operationHistory = new AdminOperationHistoryStore(options.databasePath);
@@ -125,6 +115,7 @@ export function createServerInfrastructure(options: ServerInfrastructureOptions)
       accountPasswords.close();
       adminUsers.close();
       operationHistory.close();
+      sessions.close();
       openSubsonicCredentials.close();
       authUsers.close();
       trackAvailability.close();
