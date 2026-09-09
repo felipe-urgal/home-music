@@ -306,18 +306,95 @@ test('batch keeps explicit partial success when one suggestion is stale', async 
   });
 });
 
-test('safe batch rejects low-confidence suggestions while individual review remains available', async () => {
+test('review batch requires explicit confirmation and applies after confirmation', async () => {
   await withReview(async ({ assistant, metadata, review }) => {
     seedSuggestion(assistant, { confidence: 'low' });
 
-    const batch = await review.decideBatch([decision()]);
-    assert.equal(batch.results[0].outcome, 'failed');
-    assert.match(batch.results[0].message ?? '', /revisão individual/);
+    const blocked = await review.decideBatch([decision()]);
+    assert.equal(blocked.results[0].outcome, 'failed');
+    assert.match(blocked.results[0].message ?? '', /confirmação explícita/);
     assert.equal(assistant.getRun('run-1')?.summary.review, 1);
     assert.equal(metadata.get('track-1')?.effective.title, 'Faixa antiga');
 
-    const individual = await review.decide(decision());
-    assert.equal(individual.outcome, 'applied');
+    const confirmed = await review.decideBatch([decision()], { confirmReview: true });
+    assert.equal(confirmed.results[0].outcome, 'applied');
     assert.equal(metadata.get('track-1')?.effective.title, 'Faixa correta');
+  });
+});
+
+test('confirmed review batch keeps human override stale protection', async () => {
+  await withReview(async ({ assistant, metadata, review }) => {
+    seedSuggestion(assistant, { confidence: 'low' });
+    metadata.patch('track-1', { title: 'Faixa antiga' });
+
+    const confirmed = await review.decideBatch([decision()], { confirmReview: true });
+    assert.equal(confirmed.results[0].outcome, 'stale');
+    assert.equal(metadata.get('track-1')?.effective.title, 'Faixa antiga');
+  });
+});
+
+test('batch rejects more than 100 decisions', async () => {
+  await withReview(async ({ review }) => {
+    await assert.rejects(
+      () => review.decideBatch(Array.from({ length: 101 }, () => decision())),
+      /entre 1 e 100 decisões/
+    );
+  });
+});
+
+test('reset invalidates only open metadata suggestions and preserves resolved history', async () => {
+  await withReview(async ({ assistant, metadata, review }) => {
+    seedSuggestion(assistant, {
+      runId: 'run-open',
+      suggestionId: 'suggestion-open',
+      trackId: 'track-2',
+      currentValue: 'Outra faixa',
+      suggestedValue: 'Outra faixa revisada'
+    });
+    seedSuggestion(assistant, {
+      runId: 'run-rejected',
+      suggestionId: 'suggestion-rejected'
+    });
+    await review.decide(decision({
+      runId: 'run-rejected',
+      suggestionId: 'suggestion-rejected',
+      action: 'reject'
+    }));
+    seedSuggestion(assistant, {
+      runId: 'run-applied',
+      suggestionId: 'suggestion-applied',
+      suggestedValue: 'Faixa aplicada'
+    });
+    await review.decide(decision({
+      runId: 'run-applied',
+      suggestionId: 'suggestion-applied'
+    }));
+
+    const invalidated = review.resetOpenSuggestions();
+
+    assert.equal(invalidated, 1);
+    assert.equal(assistant.getRun('run-open')?.summary.stale, 1);
+    assert.equal(assistant.getRun('run-open')?.status, 'stale');
+    assert.equal(assistant.getRun('run-rejected')?.summary.rejected, 1);
+    assert.equal(assistant.getRun('run-rejected')?.status, 'completed');
+    assert.equal(assistant.getRun('run-applied')?.summary.applied, 1);
+    assert.equal(assistant.getRun('run-applied')?.status, 'completed');
+    assert.equal(metadata.get('track-1')?.effective.title, 'Faixa aplicada');
+  });
+});
+
+test('reset refuses to mutate review state while metadata analysis is active', async () => {
+  await withReview(async ({ assistant, review }) => {
+    assistant.createRun({
+      id: 'run-active',
+      capability: 'metadata',
+      libraryRevision: 7,
+      createdAt: '2026-09-07T12:09:00.000Z'
+    });
+
+    assert.throws(
+      () => review.resetOpenSuggestions(),
+      /Cancele a análise em andamento/
+    );
   });
 });
