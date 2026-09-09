@@ -3,7 +3,8 @@ import {
   LIBRARY_ASSISTANT_CONTRACT_VERSION,
   type LibraryAssistantEvidence,
   type LibraryAssistantMetadataField,
-  type LibraryAssistantReasonCode
+  type LibraryAssistantReasonCode,
+  type LibraryAssistantTextMatchEvidence
 } from '@home-music/shared/library-assistant';
 import {
   LibraryAssistantProviderResponseError,
@@ -252,7 +253,7 @@ function textEvidence(
   field: LibraryAssistantMetadataField,
   sourceValue: string,
   candidateValue: string
-): LibraryAssistantEvidence {
+): LibraryAssistantTextMatchEvidence {
   return {
     type: 'text-match',
     version: LIBRARY_ASSISTANT_CONTRACT_VERSION,
