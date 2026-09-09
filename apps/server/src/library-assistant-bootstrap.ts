@@ -16,6 +16,7 @@ import { LibraryAssistantService, type LibraryAssistantAnalyzer } from './librar
 import { LibraryAssistantStore } from './library-assistant-store.js';
 import type { LongJobObservability } from './long-job-observability.js';
 import { createMusicBrainzSimpleSearchFetch } from './musicbrainz-simple-search-fetch.js';
+import { TrackCoverOverrideStore } from './track-cover-overrides.js';
 import { TrackMetadataOverrideStore } from './track-metadata-overrides.js';
 
 type LibraryAssistantBootstrapOptions = {
@@ -50,16 +51,17 @@ export function registerLibraryAssistant(
   });
   const incrementalIndex = new LibraryAssistantIncrementalIndex(options.databasePath);
   const metadataOverrides = new TrackMetadataOverrideStore(options.databasePath);
+  const coverOverrides = new TrackCoverOverrideStore(options.databasePath);
   const providers = new LibraryAssistantProviderGateway(store, {
     onObservation: observation => metrics.observeProvider(observation)
   });
   const musicBrainzFetch = createMusicBrainzSimpleSearchFetch();
-  let assistantMetadataRevision = 0;
+  let assistantReviewRevision = 0;
   const projectRevision = options.projection.projectRevision;
 
   // registerLibraryAssistant roda antes de registerLibraryRoutes. Compor a revisão
   // aqui garante que apply do Assistente invalide ETag/cache da biblioteca sem rescan.
-  options.projection.projectRevision = revision => projectRevision(revision) + assistantMetadataRevision;
+  options.projection.projectRevision = revision => projectRevision(revision) + assistantReviewRevision;
 
   const projectedLibrary = {
     listTracks: () => options.projection.projectTracks(options.library.listPublicTracks()),
@@ -97,8 +99,10 @@ export function registerLibraryAssistant(
     databasePath: options.databasePath,
     store,
     metadataOverrides,
+    coverOverrides,
     library: projectedLibrary,
-    onMetadataChanged: () => { assistantMetadataRevision += 1; }
+    onMetadataChanged: () => { assistantReviewRevision += 1; },
+    onArtworkChanged: () => { assistantReviewRevision += 1; }
   });
 
   registerLibraryAssistantRoutes(app, service, workQueue, metrics);
@@ -106,6 +110,7 @@ export function registerLibraryAssistant(
   app.addHook('onClose', async () => {
     await service.close();
     review.close();
+    coverOverrides.close();
     metadataOverrides.close();
     incrementalIndex.close();
     workQueue.close();

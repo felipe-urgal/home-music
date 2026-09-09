@@ -7,6 +7,10 @@ import {
   type LibraryAssistantReasonCode
 } from '@home-music/shared/library-assistant';
 import {
+  COVER_ART_ARCHIVE_PROVIDER_VERSION,
+  findCoverArtArchiveFrontCover
+} from './cover-art-archive.js';
+import {
   LibraryAssistantProviderResponseError,
   type LibraryAssistantProviderGateway
 } from './library-assistant-provider.js';
@@ -564,6 +568,15 @@ function rankCandidates(track: Track, candidates: MusicBrainzRecordingCandidate[
     .slice(0, MAX_CANDIDATES);
 }
 
+function artworkCurrentValue(track: Track) {
+  return track.hasCover ? track.coverVersion ?? 'physical' : '';
+}
+
+function artworkLabel(values: Record<LibraryAssistantMetadataField, string>, release: MusicBrainzRelease) {
+  const album = values.album || release.title;
+  return album ? `Capa frontal — ${album}` : 'Capa frontal do álbum';
+}
+
 export function createMusicBrainzMetadataAnalyzer(options: AnalyzerOptions = {}): LibraryAssistantAnalyzer {
   const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
   const userAgent = options.userAgent ?? MUSICBRAINZ_USER_AGENT;
@@ -650,6 +663,50 @@ export function createMusicBrainzMetadataAnalyzer(options: AnalyzerOptions = {})
 
         const values = metadataValues(best);
         const humanFields = new Set(options.getHumanOverrideFields?.(match.track.id) ?? []);
+        const artworkConfidence = confidenceFor(best, margin, false, match.usedFileContext);
+        if (!match.track.hasCover && artworkConfidence === 'high' && best.release) {
+          try {
+            const artwork = await findCoverArtArchiveFrontCover({
+              releaseId: best.release.id,
+              providers,
+              fetchImpl,
+              userAgent,
+              signal
+            });
+            if (artwork) {
+              const artworkReasonCodes = new Set(reasonCodes);
+              artworkReasonCodes.add('artwork-missing');
+              artworkReasonCodes.add('strong-external-id');
+              drafts.push({
+                capability: 'artwork',
+                confidence: 'high',
+                reasonCodes: [...artworkReasonCodes],
+                evidence,
+                provenance: {
+                  source: 'cover-art-archive',
+                  providerVersion: COVER_ART_ARCHIVE_PROVIDER_VERSION,
+                  externalId: best.release.id
+                },
+                target: {
+                  capability: 'artwork',
+                  trackId: match.track.id,
+                  candidateId: `cover-art-archive:${best.release.id}:${artwork.id}`,
+                  label: artworkLabel(values, best.release),
+                  sourceUrl: artwork.imageUrl,
+                  thumbnailUrl: artwork.thumbnailUrl,
+                  currentHasCover: Boolean(match.track.hasCover),
+                  currentCoverVersion: artworkCurrentValue(match.track) || null,
+                  musicBrainzReleaseId: best.release.id,
+                  musicBrainzReleaseGroupId: best.release.releaseGroupId
+                }
+              });
+            }
+          } catch {
+            // A capa é enriquecimento derivado da identificação confiável do MusicBrainz.
+            // Falhas do CAA não devem bloquear sugestões de metadata da mesma análise.
+          }
+        }
+
         for (const field of ['title', 'artist', 'album', 'albumArtist'] as const) {
           const suggestedValue = values[field].trim();
           if (!suggestedValue || exactValue(match.track[field]) === exactValue(suggestedValue)) continue;

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   isLibraryAssistantAutoApplicable,
+  type LibraryAssistantArtworkTarget,
   type LibraryAssistantDecision,
   type LibraryAssistantReviewItem,
   type LibraryAssistantRun,
@@ -79,6 +80,10 @@ function isSafe(suggestion: LibraryAssistantSuggestion) {
   return isLibraryAssistantAutoApplicable(suggestion);
 }
 
+function canApplyInBatch(suggestion: LibraryAssistantSuggestion) {
+  return isSafe(suggestion) && suggestion.target.capability === 'metadata';
+}
+
 function statusLabel(status: LibraryAssistantSuggestionStatus) {
   return ({
     pending: 'Pendente',
@@ -101,12 +106,12 @@ function runTitle(run: LibraryAssistantRun | null) {
 
 function runDescription(run: LibraryAssistantRun | null): readonly [string, string?] {
   if (!run) {
-    return ['Enriqueça seus metadados com o MusicBrainz.', 'Nada é aplicado sem sua confirmação.'];
+    return ['Enriqueça metadados com o MusicBrainz e capas com o Cover Art Archive.', 'Nada é aplicado sem sua confirmação.'];
   }
   if (run.status === 'queued' || run.status === 'running') {
     return [
-      'Enriquecendo seus metadados com o MusicBrainz.',
-      'O processamento é automático e continua em segundo plano.'
+      'Enriquecendo metadados e procurando capas confiáveis.',
+      'O processamento é automático, mas cada alteração continua dependendo da sua revisão.'
     ];
   }
   if (run.status === 'failed') {
@@ -119,7 +124,7 @@ function runDescription(run: LibraryAssistantRun | null): readonly [string, stri
     return ['A biblioteca mudou desde esta análise.', 'Execute uma nova análise para trabalhar com dados atuais.'];
   }
   return run.summary.total === 0
-    ? ['A análise terminou sem sugestões de metadata.']
+    ? ['A análise terminou sem sugestões de metadata ou capa.']
     : [`${run.summary.total} sugestão${run.summary.total === 1 ? '' : 'ões'} encontrada${run.summary.total === 1 ? '' : 's'} para revisão.`];
 }
 
@@ -160,9 +165,52 @@ function statusTone(suggestion: LibraryAssistantSuggestion) {
 
 function rowStatusLabel(suggestion: LibraryAssistantSuggestion) {
   if (suggestion.status === 'pending' || suggestion.status === 'review') {
+    if (suggestion.target.capability === 'artwork') return 'Capa para revisar';
     return isSafe(suggestion) ? 'Confiança alta' : 'Revisão';
   }
   return statusLabel(suggestion.status);
+}
+
+function artworkExpectedValue(target: LibraryAssistantArtworkTarget) {
+  return target.currentHasCover ? target.currentCoverVersion ?? 'physical' : '';
+}
+
+function expectedCurrentValue(suggestion: LibraryAssistantSuggestion) {
+  if (suggestion.target.capability === 'metadata') return suggestion.target.currentValue;
+  if (suggestion.target.capability === 'artwork') return artworkExpectedValue(suggestion.target);
+  return null;
+}
+
+function capabilityLabel(suggestion: LibraryAssistantSuggestion) {
+  if (suggestion.target.capability === 'artwork') return 'Capa';
+  if (suggestion.target.capability === 'metadata') return FIELD_LABELS[suggestion.target.field] ?? suggestion.target.field;
+  return 'Sugestão';
+}
+
+function rowDetail(suggestion: LibraryAssistantSuggestion, item?: LibraryAssistantReviewItem) {
+  if (suggestion.target.capability === 'artwork') {
+    const album = item?.track.album || 'álbum identificado';
+    return suggestion.target.label ?? `Capa frontal para ${album}`;
+  }
+  if (suggestion.target.capability === 'metadata') {
+    const field = FIELD_LABELS[suggestion.target.field] ?? suggestion.target.field;
+    return `${field}: “${suggestion.target.currentValue || '—'}” → “${suggestion.target.suggestedValue}”`;
+  }
+  return item?.track.album || '—';
+}
+
+function searchText(suggestion: LibraryAssistantSuggestion, item?: LibraryAssistantReviewItem) {
+  const target = suggestion.target;
+  return [
+    item?.track.title,
+    item?.track.artist,
+    item?.track.album,
+    target.capability === 'metadata' ? target.currentValue : null,
+    target.capability === 'metadata' ? target.suggestedValue : null,
+    target.capability === 'artwork' ? target.label : null,
+    target.capability === 'artwork' ? target.musicBrainzReleaseId : null,
+    target.capability === 'artwork' ? target.musicBrainzReleaseGroupId : null
+  ].filter(Boolean).join(' ');
 }
 
 function AssistantTrackArtwork({ trackId }: { trackId: string }) {
@@ -223,15 +271,7 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
         if (!['open', 'safe', 'review'].includes(filter) && suggestion.status !== filter) return false;
       }
       if (!normalizedSearch) return true;
-      const item = reviewMap.get(suggestion.id);
-      const target = suggestion.target.capability === 'metadata' ? suggestion.target : null;
-      return [
-        item?.track.title,
-        item?.track.artist,
-        item?.track.album,
-        target?.currentValue,
-        target?.suggestedValue
-      ].some(value => value?.toLocaleLowerCase('pt-BR').includes(normalizedSearch));
+      return searchText(suggestion, reviewMap.get(suggestion.id)).toLocaleLowerCase('pt-BR').includes(normalizedSearch);
     });
     return filtered.sort((left, right) => {
       const created = left.createdAt.localeCompare(right.createdAt);
@@ -240,7 +280,7 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
     });
   }, [filter, normalizedSearch, reviewMap, sort, suggestions]);
 
-  const visibleSafeSuggestions = useMemo(() => visibleSuggestions.filter(isSafe), [visibleSuggestions]);
+  const visibleSafeSuggestions = useMemo(() => visibleSuggestions.filter(canApplyInBatch), [visibleSuggestions]);
 
   const load = useCallback(async (quiet = false) => {
     const version = ++requestVersion.current;
@@ -340,13 +380,14 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
     action: 'apply' | 'reject'
   ): LibraryAssistantDecision | null {
     const item = reviewMap.get(suggestion.id);
-    if (!item || suggestion.target.capability !== 'metadata') return null;
+    const expected = expectedCurrentValue(suggestion);
+    if (!item || expected == null) return null;
     return {
       runId: suggestion.runId,
       suggestionId: suggestion.id,
       action,
       expectedLibraryRevision: item.runLibraryRevision,
-      expectedCurrentValue: suggestion.target.currentValue
+      expectedCurrentValue: expected
     };
   }
 
@@ -359,7 +400,7 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
       const { result } = await decideLibraryAssistantSuggestion(decision);
       if (result.outcome === 'applied') {
         notifyLibraryChanged();
-        setFeedback({ kind: 'success', message: 'Sugestão aplicada. A biblioteca foi atualizada sem rescan.' });
+        setFeedback({ kind: 'success', message: suggestion.target.capability === 'artwork' ? 'Capa aplicada pelo override existente.' : 'Sugestão aplicada. A biblioteca foi atualizada sem rescan.' });
       } else if (result.outcome === 'rejected') {
         setFeedback({ kind: 'success', message: 'Sugestão rejeitada e mantida no histórico da análise.' });
       } else if (result.outcome === 'already-applied' || result.outcome === 'already-rejected') {
@@ -383,7 +424,7 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
   async function applySelected() {
     if (runActive) return;
     const decisions = suggestions
-      .filter(item => selected.has(item.id) && isSafe(item))
+      .filter(item => selected.has(item.id) && canApplyInBatch(item))
       .map(item => decisionFor(item, 'apply'))
       .filter((item): item is LibraryAssistantDecision => Boolean(item));
     if (mutating || decisions.length === 0) return;
@@ -490,7 +531,7 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
           <Info />
           <div>
             <strong>O assistente só propõe alterações</strong>
-            <span>Na primeira análise ele percorre a biblioteca. Depois, “Analisar mudanças” processa somente faixas novas, alteradas ou que precisam ser tentadas novamente. Nada é aplicado automaticamente.</span>
+            <span>Na primeira análise ele percorre a biblioteca. Depois, “Analisar mudanças” processa somente faixas novas, alteradas ou que precisam ser tentadas novamente. Capas do Cover Art Archive só são baixadas quando você aplica a sugestão individualmente.</span>
           </div>
         </aside>
       )}
@@ -593,8 +634,8 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
       <section className="assistant-admin__review" aria-labelledby="assistant-review-title">
         <header className="assistant-admin__review-heading">
           <div>
-            <strong id="assistant-review-title">Sugestões de metadados</strong>
-            <small>Revise as diferenças encontradas e escolha o que aplicar.</small>
+            <strong id="assistant-review-title">Sugestões de metadados e capas</strong>
+            <small>Revise cada diferença. Capas externas são baixadas apenas no apply individual.</small>
           </div>
           <div className="assistant-admin__selection-actions">
             <button
@@ -632,7 +673,7 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
                 type="search"
                 value={search}
                 onChange={event => setSearch(event.target.value)}
-                placeholder="Buscar por artista, álbum ou faixa…"
+                placeholder="Buscar por artista, álbum, faixa ou capa…"
                 aria-label="Buscar sugestões"
               />
             </label>
@@ -660,14 +701,14 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
           ) : !latestRun ? (
             <div className="assistant-admin__empty">
               <Sparkles />
-              <div><strong>Ainda não há sugestões para revisar</strong><span>Inicie uma análise para comparar sua biblioteca com o MusicBrainz.</span></div>
+              <div><strong>Ainda não há sugestões para revisar</strong><span>Inicie uma análise para comparar sua biblioteca com o MusicBrainz e o Cover Art Archive.</span></div>
             </div>
           ) : latestRun.status === 'completed' && latestRun.summary.total === 0 && suggestions.length === 0 ? (
             <div className="assistant-admin__empty">
               <Check />
               <div>
                 <strong>{totalTracks === 0 ? 'Biblioteca já está em dia' : 'Nenhuma sugestão encontrada'}</strong>
-                <span>{totalTracks === 0 ? 'Nenhuma faixa nova, alterada ou pendente precisou ser reanalisada.' : 'A análise terminou sem candidatos de metadata.'}</span>
+                <span>{totalTracks === 0 ? 'Nenhuma faixa nova, alterada ou pendente precisou ser reanalisada.' : 'A análise terminou sem candidatos de metadata ou capa.'}</span>
               </div>
             </div>
           ) : visibleSuggestions.length === 0 ? (
@@ -682,17 +723,16 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
             <div className="assistant-admin__list" aria-live="polite">
               {visibleSuggestions.map(suggestion => {
                 const item = reviewMap.get(suggestion.id);
-                const target = suggestion.target.capability === 'metadata' ? suggestion.target : null;
                 const safe = isSafe(suggestion);
-                const canDecide = Boolean(item && target && isOpen(suggestion) && !runActive);
-                const selectable = Boolean(item && target && isOpen(suggestion) && safe);
+                const batchSelectable = Boolean(item && isOpen(suggestion) && canApplyInBatch(suggestion));
+                const canDecide = Boolean(item && expectedCurrentValue(suggestion) != null && isOpen(suggestion) && !runActive);
                 return (
                   <article key={suggestion.id} className="assistant-admin-row">
                     <label className="assistant-admin-row__select" aria-label={`Selecionar ${item?.track.title ?? suggestion.target.trackId}`}>
                       <input
                         type="checkbox"
                         checked={selected.has(suggestion.id)}
-                        disabled={!selectable}
+                        disabled={!batchSelectable}
                         onChange={event => setSelected(current => {
                           const next = new Set(current);
                           if (event.target.checked) next.add(suggestion.id);
@@ -705,12 +745,10 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
                     <div className="assistant-admin-row__identity">
                       <strong>{item?.track.artist ?? 'Faixa da biblioteca'}</strong>
                       <span className="assistant-admin-row__title">{item?.track.title ?? `Faixa ${suggestion.target.trackId}`}</span>
-                      <span className="assistant-admin-row__album">{item?.track.album || '—'}</span>
-                      {target && (
-                        <span className="assistant-admin__sr-only">
-                          {FIELD_LABELS[target.field] ?? target.field} {target.currentValue} {target.suggestedValue}
-                        </span>
-                      )}
+                      <span className="assistant-admin-row__album">{rowDetail(suggestion, item)}</span>
+                      <span className="assistant-admin__sr-only">
+                        {capabilityLabel(suggestion)} {rowDetail(suggestion, item)}
+                      </span>
                     </div>
                     <span className={`assistant-admin-row__status ${statusTone(suggestion)}`}>
                       {safe && isOpen(suggestion) ? <CheckCircle2 /> : suggestion.status === 'failed' ? <XCircle /> : <AlertTriangle />}
