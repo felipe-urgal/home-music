@@ -131,7 +131,7 @@ function runDescription(run: LibraryAssistantRun | null): readonly [string, stri
   if (run.status === 'queued' || run.status === 'running') {
     return [
       'Enriquecendo metadados e procurando capas confiáveis.',
-      'O processamento é automático, mas cada alteração continua dependendo da sua revisão.'
+      'Você já pode revisar e aplicar resultados prontos enquanto o restante da biblioteca continua sendo analisado.'
     ];
   }
   if (run.status === 'failed') {
@@ -505,7 +505,7 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
 
   async function decideOne(suggestion: LibraryAssistantSuggestion, action: 'apply' | 'reject') {
     const decision = decisionFor(suggestion, action);
-    if (!decision || mutating || runActive) return;
+    if (!decision || mutating) return;
     setMutating(true);
     setFeedback(null);
     try {
@@ -539,7 +539,7 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
   }
 
   async function applySelected(reviewConfirmed = false) {
-    if (runActive || mutating) return;
+    if (mutating) return;
     const chosen = suggestions.filter(item => (
       selected.has(item.id)
       && canApplyInBatch(item)
@@ -699,7 +699,7 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
           <Info />
           <div>
             <strong>O assistente só propõe alterações</strong>
-            <span>“Analisar mudanças” processa faixas novas, alteradas ou com falha anterior. Metadados em Revisão só entram em lote depois de confirmação explícita; capas do Cover Art Archive continuam com aplicação individual.</span>
+            <span>“Analisar mudanças” processa faixas novas, alteradas ou com falha anterior. Resultados já processados podem ser revisados e aplicados sem esperar a análise terminar; metadados em Revisão ainda exigem confirmação explícita e capas continuam com aplicação individual.</span>
           </div>
         </aside>
       )}
@@ -826,7 +826,7 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
                 <button
                   type="button"
                   className="assistant-admin__secondary-button"
-                  disabled={mutating || runActive || visibleSafeSuggestions.length === 0}
+                  disabled={mutating || visibleSafeSuggestions.length === 0}
                   onClick={() => setSelected(new Set(visibleSafeSuggestions.map(item => item.id)))}
                 >
                   Selecionar seguras
@@ -834,7 +834,7 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
                 <button
                   type="button"
                   className="assistant-admin__secondary-button"
-                  disabled={mutating || runActive || visibleActionableSuggestions.length === 0}
+                  disabled={mutating || visibleActionableSuggestions.length === 0}
                   onClick={() => setSelected(new Set(visibleActionableSuggestions.map(item => item.id)))}
                 >
                   Selecionar visíveis
@@ -842,7 +842,7 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
                 <button
                   type="button"
                   className="assistant-admin__primary-button assistant-admin__apply-button"
-                  disabled={mutating || runActive || selected.size === 0}
+                  disabled={mutating || selected.size === 0}
                   onClick={() => void applySelected()}
                 >
                   {batching ? <LoaderCircle className="is-spinning" /> : <Check />}
@@ -917,8 +917,8 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
                   {visibleSuggestions.map(suggestion => {
                     const item = reviewMap.get(suggestion.id);
                     const safe = isSafe(suggestion);
-                    const canDecide = Boolean(item && expectedCurrentValue(suggestion) != null && isOpen(suggestion) && !runActive);
-                    const selectable = Boolean(item && canApplyInBatch(suggestion) && !runActive);
+                    const canDecide = Boolean(item && expectedCurrentValue(suggestion) != null && isOpen(suggestion));
+                    const selectable = Boolean(item && canApplyInBatch(suggestion));
                     return (
                       <article key={suggestion.id} className="assistant-admin-row">
                         <label className="assistant-admin-row__select" aria-label={`Selecionar ${item?.track.title ?? suggestion.target.trackId}`}>
@@ -970,7 +970,7 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
                 <Info />
                 <div>
                   <strong>O processamento pode levar algum tempo.</strong>
-                  <span>A tela é atualizada automaticamente enquanto a análise estiver em andamento.</span>
+                  <span>Você pode revisar os resultados que já apareceram; a tela continua atualizando a análise automaticamente.</span>
                 </div>
                 <button type="button" onClick={() => setShowInfo(false)}>Entendi</button>
               </aside>
