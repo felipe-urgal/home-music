@@ -8,6 +8,7 @@ import type {
 } from './library-assistant-store.js';
 import {
   createMusicBrainzMetadataAnalyzer,
+  needsMusicBrainzMetadataRepair,
   normalizeMusicBrainzRecordingSearch,
   rankMusicBrainzCandidate
 } from './musicbrainz-metadata-analyzer.js';
@@ -81,6 +82,14 @@ function caaResponse(images: unknown[] = []) {
 function isCaaRequest(input: string | URL) {
   return new URL(String(input)).origin === 'https://coverartarchive.org';
 }
+
+test('triagem local seleciona somente faixas com metadados ausentes ou placeholders', () => {
+  assert.equal(needsMusicBrainzMetadataRepair(track()), false);
+  assert.equal(needsMusicBrainzMetadataRepair(track({ artist: 'Artista desconhecido' })), true);
+  assert.equal(needsMusicBrainzMetadataRepair(track({ album: 'Unknown Album' })), true);
+  assert.equal(needsMusicBrainzMetadataRepair(track({ albumArtist: '' })), true);
+  assert.equal(needsMusicBrainzMetadataRepair(track({ title: 'Título desconhecido' })), true);
+});
 
 test('normaliza somente campos MusicBrainz necessários, mantém ids com escopo e é idempotente no cache', () => {
   const normalized = normalizeMusicBrainzRecordingSearch({

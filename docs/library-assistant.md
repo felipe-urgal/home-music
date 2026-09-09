@@ -81,7 +81,7 @@ O reset operacional da #356 também usa `stale` em vez de apagar histórico: sug
 
 O Assistente reutiliza `HeavyWorkQueue` e `LongJobObservability`; não cria uma segunda fila. O shutdown aborta controllers ativos, aguarda o trabalho agendado e somente depois fecha o store.
 
-A execução incremental é o caminho normal. **Analisar mudanças** planeja novamente faixas novas, alteradas e trabalho que não terminou com estado reutilizável. **Limpar e reanalisar tudo** é a ação excepcional: invalida sugestões abertas e inicia uma análise completa (`full: true`).
+A execução incremental é o caminho normal. Antes de consultar providers externos, a análise de metadados faz uma triagem local e inclui somente faixas com título, artista, álbum ou artista do álbum ausente ou reconhecido como placeholder (por exemplo, `Artista desconhecido`). **Analisar mudanças** planeja novamente, dentro desse conjunto, faixas novas, alteradas e trabalho que não terminou com estado reutilizável. **Limpar e reanalisar tudo** é a ação excepcional: invalida sugestões abertas e refaz todas as faixas que continuam elegíveis (`full: true`), sem consultar novamente faixas com metadados locais completos.
 
 ## Gateway de providers
 

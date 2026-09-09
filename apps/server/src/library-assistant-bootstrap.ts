@@ -6,7 +6,10 @@ import type { LibraryRouteProjection } from './library-routes.js';
 import type { LibraryService } from './library-service.js';
 import { createLrclibLyricsAnalyzer, resolveLrclibLyricsCandidate } from './lrclib-lyrics-analyzer.js';
 import { readSidecarLyrics } from './lyrics.js';
-import { createMusicBrainzMetadataAnalyzer } from './musicbrainz-metadata-analyzer.js';
+import {
+  createMusicBrainzMetadataAnalyzer,
+  needsMusicBrainzMetadataRepair
+} from './musicbrainz-metadata-analyzer.js';
 import { LibraryAssistantCompositeReviewService } from './library-assistant-composite-review-service.js';
 import { LibraryAssistantIncrementalIndex } from './library-assistant-incremental-index.js';
 import { LibraryAssistantPersistentQueue } from './library-assistant-persistent-queue.js';
@@ -119,7 +122,10 @@ export function registerLibraryAssistant(
     observability: options.observability,
     providers,
     analyzers,
-    library: analysisLibrary
+    library: analysisLibrary,
+    isTrackEligible: (capability, track) => (
+      capability !== 'metadata' || needsMusicBrainzMetadataRepair(track)
+    )
   });
   const baseReview = new LibraryAssistantReviewService({
     databasePath: options.databasePath,
