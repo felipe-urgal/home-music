@@ -76,6 +76,7 @@ function bestThumbnail(thumbnails: unknown) {
 }
 
 export function normalizeCoverArtArchiveRelease(payload: unknown): CoverArtArchiveImage | null {
+  if (payload === null) return null;
   const root = record(payload);
   if (!root || !Array.isArray(root.images) || root.images.length > 100) {
     throw new LibraryAssistantProviderResponseError();
