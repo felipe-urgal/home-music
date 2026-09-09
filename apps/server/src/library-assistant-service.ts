@@ -622,15 +622,19 @@ export class LibraryAssistantService {
     tracks: ReadonlyMap<string, Track>,
     draft: LibraryAssistantSuggestionDraft
   ): LibraryAssistantStoredSuggestionInput {
-    if (draft.capability !== capability || draft.target.capability !== capability) {
+    if (draft.target.capability !== draft.capability) {
+      throw new TypeError('Analyzer retornou sugestão com target incompatível.');
+    }
+    if (draft.capability !== capability && capability !== 'metadata') {
       throw new TypeError('Analyzer retornou sugestão para capability diferente do run.');
     }
     const track = tracks.get(draft.target.trackId);
     if (!track) throw new TypeError('Analyzer retornou sugestão para faixa fora do snapshot analisado.');
+    const suggestionCapability = draft.capability;
     return {
       id: `suggestion-${this.createId()}`,
       runId,
-      capability,
+      capability: suggestionCapability,
       trackId: track.id,
       status: 'review',
       confidence: draft.confidence,
@@ -638,7 +642,7 @@ export class LibraryAssistantService {
       evidence: [...draft.evidence],
       provenance: { ...draft.provenance },
       target: { ...draft.target },
-      premiseSignature: this.suggestionPremiseSignature(capability, track, draft.target),
+      premiseSignature: this.suggestionPremiseSignature(suggestionCapability, track, draft.target),
       createdAt: this.now().toISOString()
     };
   }
@@ -677,7 +681,7 @@ export class LibraryAssistantService {
       if (record.suggestion.status !== 'pending' && record.suggestion.status !== 'review') continue;
       const track = tracks.get(record.suggestion.target.trackId);
       const currentSignature = track
-        ? this.suggestionPremiseSignature(run.capability, track, record.suggestion.target)
+        ? this.suggestionPremiseSignature(record.suggestion.capability, track, record.suggestion.target)
         : null;
       if (!currentSignature || currentSignature !== record.premiseSignature) {
         stale = this.options.store.markSuggestionStale(record.suggestion.id, updatedAt) || stale;
