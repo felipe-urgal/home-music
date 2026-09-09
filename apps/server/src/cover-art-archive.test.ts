@@ -57,7 +57,7 @@ test('download de capa segue apenas redirects permitidos e preserva bytes para v
         headers: { location: 'https://ia800100.us.archive.org/1/items/front/front.png' }
       });
     }
-    return new Response(PNG_1X1, {
+    return new Response(new Uint8Array(PNG_1X1), {
       status: 200,
       headers: {
         'content-type': 'image/png',
