@@ -4,14 +4,21 @@ import {
   isLibraryAssistantAutoApplicable,
   type AdminLibraryAssistantBatchDecisionResponse,
   type AdminLibraryAssistantReviewResponse,
+  type LibraryAssistantArtworkTarget,
   type LibraryAssistantDecision,
   type LibraryAssistantDecisionResult,
   type LibraryAssistantDecisionSummary,
   type LibraryAssistantMetadataTarget,
   type LibraryAssistantReviewItem,
-  type LibraryAssistantSuggestionStatus
+  type LibraryAssistantSuggestionStatus,
+  type LibraryAssistantSuggestionTarget
 } from '@home-music/shared/library-assistant';
+import {
+  downloadCoverArtArchiveImage,
+  type DownloadedCoverArtArchiveImage
+} from './cover-art-archive.js';
 import type { LibraryAssistantStore, LibraryAssistantStoredSuggestion } from './library-assistant-store.js';
+import type { TrackCoverOverrideStore } from './track-cover-overrides.js';
 import {
   normalizeMetadataOverridePatch,
   type TrackMetadataOverrideStore
@@ -31,12 +38,16 @@ type ReviewServiceOptions = {
   databasePath: string;
   store: LibraryAssistantStore;
   metadataOverrides: TrackMetadataOverrideStore;
+  coverOverrides: TrackCoverOverrideStore;
   library: ReviewLibrary;
   onMetadataChanged: () => void;
+  onArtworkChanged: () => void;
+  downloadArtwork?: (sourceUrl: string) => Promise<DownloadedCoverArtArchiveImage>;
   now?: () => Date;
 };
 
 type ReviewRun = NonNullable<ReturnType<LibraryAssistantStore['getRun']>>;
+type ReviewableTarget = LibraryAssistantMetadataTarget | LibraryAssistantArtworkTarget;
 
 class LibraryAssistantDecisionStore {
   private readonly db: DatabaseSync;
@@ -88,6 +99,36 @@ function liveMetadataValue(track: Track, target: LibraryAssistantMetadataTarget)
   return track[target.field];
 }
 
+function artworkExpectedValue(target: LibraryAssistantArtworkTarget) {
+  return target.currentHasCover ? target.currentCoverVersion ?? 'physical' : '';
+}
+
+function targetExpectedValue(target: ReviewableTarget) {
+  return target.capability === 'metadata' ? target.currentValue : artworkExpectedValue(target);
+}
+
+function isReviewableTarget(target: LibraryAssistantSuggestionTarget): target is ReviewableTarget {
+  return target.capability === 'metadata' || target.capability === 'artwork';
+}
+
+function liveArtworkValue(trackId: string, coverOverrides: TrackCoverOverrideStore) {
+  coverOverrides.refresh();
+  const cover = coverOverrides.getStatus(trackId);
+  if (!cover) return null;
+  if (cover.override) return cover.override.version;
+  return cover.effectiveHasCover ? 'physical' : '';
+}
+
+function liveTargetValue(
+  track: Track,
+  target: ReviewableTarget,
+  coverOverrides: TrackCoverOverrideStore
+) {
+  return target.capability === 'metadata'
+    ? liveMetadataValue(track, target)
+    : liveArtworkValue(target.trackId, coverOverrides);
+}
+
 function summary(results: LibraryAssistantDecisionResult[]): LibraryAssistantDecisionSummary {
   const value: LibraryAssistantDecisionSummary = {
     total: results.length,
@@ -136,16 +177,24 @@ function validateDecision(decision: LibraryAssistantDecision) {
   if (typeof decision.expectedCurrentValue !== 'string' || decision.expectedCurrentValue.length > 1_000) {
     throw new TypeError('Valor atual esperado inválido.');
   }
+  if (
+    decision.replaceExistingArtworkOverride != null
+    && typeof decision.replaceExistingArtworkOverride !== 'boolean'
+  ) {
+    throw new TypeError('Confirmação de substituição de capa inválida.');
+  }
 }
 
 export class LibraryAssistantReviewService {
   private readonly decisions: LibraryAssistantDecisionStore;
   private readonly now: () => Date;
+  private readonly downloadArtwork: (sourceUrl: string) => Promise<DownloadedCoverArtArchiveImage>;
   private decisionTail: Promise<void> = Promise.resolve();
 
   constructor(private readonly options: ReviewServiceOptions) {
     this.decisions = new LibraryAssistantDecisionStore(options.databasePath);
     this.now = options.now ?? (() => new Date());
+    this.downloadArtwork = options.downloadArtwork ?? (sourceUrl => downloadCoverArtArchiveImage(sourceUrl));
   }
 
   close() {
@@ -159,7 +208,7 @@ export class LibraryAssistantReviewService {
 
     for (const run of this.options.store.listRuns(MAX_REVIEW_RUNS)) {
       if (items.length >= safeLimit) break;
-      if (run.capability !== 'metadata' || !['running', 'completed', 'stale'].includes(run.status)) continue;
+      if (!['metadata', 'artwork'].includes(run.capability) || !['running', 'completed', 'stale'].includes(run.status)) continue;
       for (const status of ['review', 'pending'] as const) {
         const records = this.options.store.listSuggestionRecords(run.id, {
           status,
@@ -188,7 +237,7 @@ export class LibraryAssistantReviewService {
     this.decisionTail = previous.then(() => current);
     await previous;
     try {
-      return this.decideSerial(decision);
+      return await this.decideSerial(decision);
     } finally {
       release();
     }
@@ -205,6 +254,20 @@ export class LibraryAssistantReviewService {
     const results: LibraryAssistantDecisionResult[] = [];
     for (const decision of decisions) {
       const record = this.findSuggestionRecord(decision.runId, decision.suggestionId);
+      if (
+        decision.action === 'apply'
+        && record
+        && OPEN_STATUSES.has(record.suggestion.status)
+        && record.suggestion.target.capability !== 'metadata'
+      ) {
+        results.push(result(
+          decision,
+          'failed',
+          decision.expectedCurrentValue,
+          'Sugestões de capa exigem revisão individual antes de baixar e persistir a imagem externa.'
+        ));
+        continue;
+      }
       if (
         decision.action === 'apply'
         && record
@@ -240,7 +303,7 @@ export class LibraryAssistantReviewService {
     tracks: ReadonlyMap<string, Track>
   ): LibraryAssistantReviewItem | null {
     const suggestion = record.suggestion;
-    if (suggestion.target.capability !== 'metadata' || !OPEN_STATUSES.has(suggestion.status)) return null;
+    if (!isReviewableTarget(suggestion.target) || !OPEN_STATUSES.has(suggestion.status)) return null;
     const track = tracks.get(suggestion.target.trackId);
     if (!track) {
       const updatedAt = this.now().toISOString();
@@ -249,10 +312,12 @@ export class LibraryAssistantReviewService {
       }
       return null;
     }
-    const currentValue = liveMetadataValue(track, suggestion.target);
+    const currentValue = liveTargetValue(track, suggestion.target, this.options.coverOverrides);
     if (
-      currentValue !== suggestion.target.currentValue
-      || this.hasHumanOverrideChangedSinceAnalysis(suggestion.target, suggestion.createdAt)
+      currentValue == null
+      || currentValue !== targetExpectedValue(suggestion.target)
+      || (suggestion.target.capability === 'metadata'
+        && this.hasHumanOverrideChangedSinceAnalysis(suggestion.target, suggestion.createdAt))
     ) {
       const updatedAt = this.now().toISOString();
       if (this.decisions.transitionSuggestion(suggestion.id, 'stale', updatedAt)) {
@@ -274,7 +339,7 @@ export class LibraryAssistantReviewService {
     };
   }
 
-  private decideSerial(decision: LibraryAssistantDecision): LibraryAssistantDecisionResult {
+  private async decideSerial(decision: LibraryAssistantDecision): Promise<LibraryAssistantDecisionResult> {
     const run = this.options.store.getRun(decision.runId);
     if (!run) return result(decision, 'not-found', null, 'Run não encontrado.');
     const record = this.findSuggestionRecord(decision.runId, decision.suggestionId);
@@ -285,22 +350,33 @@ export class LibraryAssistantReviewService {
     if (suggestion.status === 'rejected') return result(decision, 'already-rejected', null);
     if (suggestion.status === 'stale') return result(decision, 'stale', null, 'A sugestão já está desatualizada.');
     if (suggestion.status === 'failed') return result(decision, 'failed', null, 'A sugestão não está disponível para revisão.');
-    if (suggestion.target.capability !== 'metadata') {
+    if (!isReviewableTarget(suggestion.target)) {
       return result(decision, 'unsupported', null, 'Esta capability ainda não suporta apply/reject.');
     }
     if (run.libraryRevision !== decision.expectedLibraryRevision) {
       return this.markStale(decision, run, null, 'A revisão esperada não corresponde ao run analisado.');
     }
-    if (suggestion.target.currentValue !== decision.expectedCurrentValue) {
+    const expectedValue = targetExpectedValue(suggestion.target);
+    if (expectedValue !== decision.expectedCurrentValue) {
       return this.markStale(decision, run, null, 'O valor esperado não corresponde à sugestão analisada.');
     }
 
-    const track = this.options.library.listTracks().find(item => item.id === suggestion.target.trackId);
-    const currentValue = track ? liveMetadataValue(track, suggestion.target) : null;
-    if (currentValue == null || currentValue !== suggestion.target.currentValue) {
+    return suggestion.target.capability === 'metadata'
+      ? this.decideMetadata(decision, run, suggestion.target)
+      : this.decideArtwork(decision, run, suggestion.target);
+  }
+
+  private decideMetadata(
+    decision: LibraryAssistantDecision,
+    run: ReviewRun,
+    target: LibraryAssistantMetadataTarget
+  ): LibraryAssistantDecisionResult {
+    const track = this.options.library.listTracks().find(item => item.id === target.trackId);
+    const currentValue = track ? liveMetadataValue(track, target) : null;
+    if (currentValue == null || currentValue !== target.currentValue) {
       return this.markStale(decision, run, currentValue, 'A metadata mudou desde a análise. Revise uma nova sugestão.');
     }
-    if (this.hasHumanOverrideChangedSinceAnalysis(suggestion.target, suggestion.createdAt)) {
+    if (this.hasHumanOverrideChangedSinceAnalysis(target, this.findSuggestionRecord(decision.runId, decision.suggestionId)?.suggestion.createdAt ?? '')) {
       return this.markStale(
         decision,
         run,
@@ -311,21 +387,67 @@ export class LibraryAssistantReviewService {
 
     const updatedAt = this.now().toISOString();
     if (decision.action === 'reject') {
-      const changed = this.decisions.transitionSuggestion(suggestion.id, 'rejected', updatedAt);
+      const changed = this.decisions.transitionSuggestion(decision.suggestionId, 'rejected', updatedAt);
       if (!changed) return this.resolveRace(decision);
       return result(decision, 'rejected', currentValue);
     }
 
     try {
-      const patch = normalizeMetadataOverridePatch({ [suggestion.target.field]: suggestion.target.suggestedValue });
-      const metadata = this.options.metadataOverrides.patch(suggestion.target.trackId, patch);
+      const patch = normalizeMetadataOverridePatch({ [target.field]: target.suggestedValue });
+      const metadata = this.options.metadataOverrides.patch(target.trackId, patch);
       if (!metadata) return this.markStale(decision, run, null, 'A música não existe mais na biblioteca.');
-      const changed = this.decisions.transitionSuggestion(suggestion.id, 'applied', updatedAt);
+      const changed = this.decisions.transitionSuggestion(decision.suggestionId, 'applied', updatedAt);
       if (!changed) return this.resolveRace(decision);
       this.options.onMetadataChanged();
-      return result(decision, 'applied', metadata.effective[suggestion.target.field]);
+      return result(decision, 'applied', metadata.effective[target.field]);
     } catch {
       return result(decision, 'failed', currentValue, 'Não foi possível aplicar a metadata sugerida.');
+    }
+  }
+
+  private async decideArtwork(
+    decision: LibraryAssistantDecision,
+    run: ReviewRun,
+    target: LibraryAssistantArtworkTarget
+  ): Promise<LibraryAssistantDecisionResult> {
+    const track = this.options.library.listTracks().find(item => item.id === target.trackId);
+    const currentValue = track ? liveArtworkValue(target.trackId, this.options.coverOverrides) : null;
+    if (currentValue == null || currentValue !== artworkExpectedValue(target)) {
+      return this.markStale(decision, run, currentValue, 'A capa mudou desde a análise. Revise uma nova sugestão.');
+    }
+
+    const updatedAt = this.now().toISOString();
+    if (decision.action === 'reject') {
+      const changed = this.decisions.transitionSuggestion(decision.suggestionId, 'rejected', updatedAt);
+      if (!changed) return this.resolveRace(decision);
+      return result(decision, 'rejected', currentValue);
+    }
+
+    try {
+      const cover = this.options.coverOverrides.getStatus(target.trackId);
+      if (!cover) return this.markStale(decision, run, null, 'A música não existe mais na biblioteca.');
+      if (cover.override && !decision.replaceExistingArtworkOverride) {
+        return result(
+          decision,
+          'failed',
+          cover.override.version,
+          'Já existe capa manual para esta faixa. Confirme a substituição antes de aplicar a capa do Cover Art Archive.'
+        );
+      }
+      const downloaded = await this.downloadArtwork(target.sourceUrl);
+      const saved = this.options.coverOverrides.save(target.trackId, downloaded.data, downloaded.contentType);
+      if (!saved) return this.markStale(decision, run, null, 'A música não existe mais na biblioteca.');
+      const changed = this.decisions.transitionSuggestion(decision.suggestionId, 'applied', updatedAt);
+      if (!changed) return this.resolveRace(decision);
+      this.options.onArtworkChanged();
+      return result(decision, 'applied', saved.override?.version ?? 'override');
+    } catch (error) {
+      return result(
+        decision,
+        'failed',
+        currentValue,
+        error instanceof Error ? error.message : 'Não foi possível aplicar a capa sugerida.'
+      );
     }
   }
 
