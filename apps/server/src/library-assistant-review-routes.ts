@@ -48,6 +48,18 @@ export function registerLibraryAssistantReviewRoutes(
     }
   );
 
+  app.post(
+    '/api/admin/library-assistant/review/reset',
+    async (_request, reply) => {
+      reply.header('Cache-Control', 'private, no-store');
+      try {
+        return { invalidated: review.resetOpenSuggestions() };
+      } catch (error) {
+        return sendValidationError(reply, error);
+      }
+    }
+  );
+
   app.post<{ Params: { id: string }; Body: unknown }>(
     '/api/admin/library-assistant/suggestions/:id/decision',
     async (request, reply) => {
