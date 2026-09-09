@@ -8,6 +8,7 @@ import { HomeMusicDatabase } from './database.js';
 import type { IndexedTrack } from './library.js';
 import { LibraryAssistantReviewService } from './library-assistant-review-service.js';
 import { LibraryAssistantStore } from './library-assistant-store.js';
+import { TrackCoverOverrideStore } from './track-cover-overrides.js';
 import { TrackMetadataOverrideStore } from './track-metadata-overrides.js';
 
 function track(id: string, title: string): IndexedTrack {
@@ -32,6 +33,7 @@ function track(id: string, title: string): IndexedTrack {
 async function withReview(run: (context: {
   assistant: LibraryAssistantStore;
   metadata: TrackMetadataOverrideStore;
+  cover: TrackCoverOverrideStore;
   review: LibraryAssistantReviewService;
   tracks: IndexedTrack[];
   revisionChanges: () => number;
@@ -43,22 +45,26 @@ async function withReview(run: (context: {
   database.syncTracks(physicalTracks, '/music', '2026-09-07T12:00:00.000Z');
   const assistant = new LibraryAssistantStore(databasePath);
   const metadata = new TrackMetadataOverrideStore(databasePath);
+  const cover = new TrackCoverOverrideStore(databasePath);
   let revision = 0;
   const review = new LibraryAssistantReviewService({
     databasePath,
     store: assistant,
     metadataOverrides: metadata,
+    coverOverrides: cover,
     library: {
-      listTracks: () => physicalTracks.map(item => metadata.resolveTrack(item)),
+      listTracks: () => physicalTracks.map(item => cover.resolveTrack(metadata.resolveTrack(item))),
       revision: () => 7 + revision
     },
     onMetadataChanged: () => { revision += 1; },
+    onArtworkChanged: () => { revision += 1; },
     now: () => new Date('2026-09-07T12:10:00.000Z')
   });
   try {
-    await run({ assistant, metadata, review, tracks: physicalTracks, revisionChanges: () => revision });
+    await run({ assistant, metadata, cover, review, tracks: physicalTracks, revisionChanges: () => revision });
   } finally {
     review.close();
+    cover.close();
     metadata.close();
     assistant.close();
     database.close();
