@@ -34,7 +34,7 @@
 .assistant-admin__operations-copy,
 .assistant-admin__settings-note {
   color: var(--assistant-muted);
-  font-size: .72rem;
+  font-size: .8125rem;
   line-height: 1.45;
 }
 
@@ -57,7 +57,7 @@
 
 .assistant-admin__operations-grid dt {
   color: #b8c1ca;
-  font-size: .67rem;
+  font-size: .8125rem;
 }
 
 .assistant-admin__operations-grid dd {
@@ -92,7 +92,7 @@
   border: 1px solid #2b3b48;
   border-radius: .48rem;
   background: rgba(18, 29, 38, .7);
-  font-size: .7rem;
+  font-size: .8125rem;
 }
 
 .assistant-admin__history li > span:first-child {
@@ -130,13 +130,13 @@
   gap: .12rem;
 }
 
-.assistant-admin__settings-field strong {
-  font-size: .75rem;
+.assistant-admin__settings-field strong,
+.assistant-admin__settings-field small {
+  font-size: .8125rem;
 }
 
 .assistant-admin__settings-field small {
   color: var(--assistant-muted);
-  font-size: .67rem;
   line-height: 1.35;
 }
 
@@ -184,7 +184,7 @@
 .assistant-admin__confirm p {
   margin: 0;
   color: #c2ccd5;
-  font-size: .76rem;
+  font-size: .8125rem;
   line-height: 1.45;
 }
 
