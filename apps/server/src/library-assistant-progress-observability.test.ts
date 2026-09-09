@@ -91,6 +91,53 @@ test('progress endpoint exposes throughput, ETA and provider/retry observations'
   }
 });
 
+test('progress ETA does not finish before the next retry is eligible', async () => {
+  const now = Date.now();
+  const run = {
+    ...completedRun(),
+    status: 'running',
+    startedAt: new Date(now - 10_000).toISOString(),
+    finishedAt: null
+  } satisfies LibraryAssistantRun;
+  const assistant = {
+    getRun(id: string) { return id === run.id ? run : null; }
+  } as unknown as LibraryAssistantService;
+  const workQueue = {
+    summary() {
+      return {
+        total: 10,
+        pending: 0,
+        processing: 0,
+        matched: 6,
+        no_match: 2,
+        retry: 2,
+        failed: 0
+      };
+    },
+    nextRetryAt() {
+      return now + 10 * 60_000;
+    }
+  } as unknown as LibraryAssistantPersistentQueue;
+  const metrics = new LibraryAssistantRunMetrics();
+  const controller = new AbortController();
+  metrics.bindSignal(run.id, controller.signal);
+
+  const app = Fastify();
+  registerLibraryAssistantRoutes(app, assistant, workQueue, metrics);
+  try {
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/admin/library-assistant/runs/${run.id}/progress`
+    });
+
+    assert.equal(response.statusCode, 200);
+    const etaMs = response.json().progress.metrics.etaMs as number;
+    assert.ok(etaMs >= 9 * 60_000, `ETA deveria respeitar o backoff do retry, recebido: ${etaMs}`);
+  } finally {
+    await app.close();
+  }
+});
+
 test('progress endpoint omits derived metrics when the run was not observed in this process', async () => {
   const assistant = {
     getRun() { return completedRun(); }

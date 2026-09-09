@@ -47,10 +47,10 @@ function validRunId(value: string) {
   return RUN_ID.test(value);
 }
 
-function runElapsedMs(run: LibraryAssistantRun) {
+function runElapsedMs(run: LibraryAssistantRun, nowMs = Date.now()) {
   if (!run.startedAt) return 0;
   const startedAtMs = Date.parse(run.startedAt);
-  const finishedAtMs = run.finishedAt ? Date.parse(run.finishedAt) : Date.now();
+  const finishedAtMs = run.finishedAt ? Date.parse(run.finishedAt) : nowMs;
   if (!Number.isFinite(startedAtMs) || !Number.isFinite(finishedAtMs)) return 0;
   return Math.max(0, Math.round(finishedAtMs - startedAtMs));
 }
@@ -117,16 +117,24 @@ export function registerLibraryAssistantRoutes(
         failed: 0
       };
       const processed = summary.matched + summary.no_match + summary.failed;
-      const elapsedMs = runElapsedMs(run);
+      const nowMs = Date.now();
+      const elapsedMs = runElapsedMs(run, nowMs);
       const tracksPerSecond = elapsedMs > 0
         ? Math.round((processed / (elapsedMs / 1_000)) * 1_000) / 1_000
         : 0;
       const remaining = Math.max(0, summary.total - processed);
-      const etaMs = remaining === 0
+      const throughputEtaMs = remaining === 0
         ? 0
         : tracksPerSecond > 0
           ? Math.max(0, Math.round((remaining / tracksPerSecond) * 1_000))
           : null;
+      const nextRetryAtMs = summary.retry > 0 ? workQueue?.nextRetryAt(request.params.id) ?? null : null;
+      const retryWaitMs = nextRetryAtMs == null ? 0 : Math.max(0, Math.round(nextRetryAtMs - nowMs));
+      const etaMs = remaining === 0
+        ? 0
+        : throughputEtaMs == null
+          ? retryWaitMs > 0 ? retryWaitMs : null
+          : Math.max(throughputEtaMs, retryWaitMs);
       const observed = runMetrics?.snapshot(request.params.id);
       const response: AdminLibraryAssistantRunProgressResponse = {
         progress: {

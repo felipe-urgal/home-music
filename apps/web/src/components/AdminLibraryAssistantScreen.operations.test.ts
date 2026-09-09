@@ -64,4 +64,10 @@ describe('AdminLibraryAssistantScreen operational workflow', () => {
     expect(screen).toMatch(/setConfirmReset\(false\)/);
     expect(screen).toMatch(/<button autoFocus/);
   });
+
+  it('não mostra 100% enquanto ainda existem faixas por concluir', () => {
+    const screen = source();
+
+    expect(screen).toMatch(/Math\.min\(processedTracks < totalTracks \? 99 : 100, Math\.round/);
+  });
 });
