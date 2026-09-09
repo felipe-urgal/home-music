@@ -52,7 +52,7 @@ test('business state and infrastructure stay behind explicit modules', () => {
   assert.doesNotMatch(media, /from ['"]fastify['"]/);
 
   assert.match(infrastructure, /new HomeMusicDatabase\(/);
-  assert.match(infrastructure, /new SessionManager\(/);
+  assert.match(infrastructure, /new PersistentSessionManager\(/);
   assert.match(infrastructure, /new TranscodeManager\(/);
   assert.doesNotMatch(infrastructure, /app\.(?:get|post|put|patch|delete)/);
 });

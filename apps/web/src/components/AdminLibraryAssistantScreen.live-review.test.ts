@@ -10,7 +10,7 @@ describe('AdminLibraryAssistantScreen live review', () => {
     const screen = source();
 
     expect(screen).toMatch(/if \(!decision \|\| mutating\) return;/);
-    expect(screen).toMatch(/async function applySelected\(reviewConfirmed = false\) \{\s*if \(mutating\) return;/);
+    expect(screen).toMatch(/async function applySelected\(reviewConfirmed = false\) \{[\s\S]*await applySuggestions\(chosen, reviewConfirmed\);/);
     expect(screen).toMatch(/disabled=\{mutating \|\| selected\.size === 0\}/);
     expect(screen).toMatch(/const canDecide = Boolean\(item && expectedCurrentValue\(suggestion\) != null && isOpen\(suggestion\)\);/);
     expect(screen).toMatch(/const selectable = Boolean\(item && canApplyInBatch\(suggestion\)\);/);

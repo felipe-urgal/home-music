@@ -10,7 +10,6 @@ import {
   readCookie,
   SESSION_CAPACITY_RETRY_AFTER_SECONDS,
   SESSION_COOKIE_NAME,
-  SESSION_TTL_SECONDS,
   SessionCapacityError,
   type SessionManager
 } from './auth.js';
@@ -30,6 +29,8 @@ type AuthRouteDependencies = {
   forceSecureCookie: boolean;
   trustTailscaleForwardedFor: boolean;
 };
+
+export const SESSION_COOKIE_MAX_AGE_SECONDS = 400 * 24 * 60 * 60;
 
 const LOGIN_RATE_LIMIT_MESSAGE = 'Muitas tentativas. Aguarde alguns minutos e tente novamente.';
 
@@ -54,7 +55,14 @@ export function registerAuthRoutes(app: FastifyInstance, dependencies: AuthRoute
   app.get('/api/auth/status', { config: { auth: 'public' } }, async (request, reply) => {
     reply.header('Cache-Control', 'no-store');
     const token = requestSessionToken(request.headers.cookie);
-    return resolveAuthStatus(authConfigured, token, sessions, authUsers);
+    const status = resolveAuthStatus(authConfigured, token, sessions, authUsers);
+    if (status.authenticated && token) {
+      reply.header(
+        'Set-Cookie',
+        buildSessionCookie(token, SESSION_COOKIE_MAX_AGE_SECONDS, requestIsSecure(request))
+      );
+    }
+    return status;
   });
 
   app.post<{ Body: { username?: unknown; password?: unknown } }>(
@@ -109,7 +117,7 @@ export function registerAuthRoutes(app: FastifyInstance, dependencies: AuthRoute
 
       reply.header(
         'Set-Cookie',
-        buildSessionCookie(token, SESSION_TTL_SECONDS, requestIsSecure(request))
+        buildSessionCookie(token, SESSION_COOKIE_MAX_AGE_SECONDS, requestIsSecure(request))
       );
       return {
         authenticated: true,
