@@ -2,7 +2,7 @@ import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
-const MAX_LYRICS_BYTES = 48 * 1024;
+export const MAX_MANAGED_LYRICS_BYTES = 48 * 1024;
 const MAX_PROVIDER_LENGTH = 80;
 const MAX_EXTERNAL_ID_LENGTH = 256;
 const MAX_LANGUAGE_LENGTH = 32;
@@ -49,7 +49,7 @@ export class TrackLyricsOverrideStore {
       CREATE TABLE IF NOT EXISTS track_lyrics_overrides (
         track_id TEXT PRIMARY KEY REFERENCES tracks(id) ON DELETE CASCADE,
         mode TEXT NOT NULL CHECK(mode IN ('plain', 'synced')),
-        content TEXT NOT NULL CHECK(length(content) BETWEEN 1 AND ${MAX_LYRICS_BYTES}),
+        content TEXT NOT NULL CHECK(length(CAST(content AS BLOB)) BETWEEN 1 AND ${MAX_MANAGED_LYRICS_BYTES}),
         origin TEXT NOT NULL CHECK(origin IN ('external', 'manual', 'generated')),
         provider TEXT,
         external_id TEXT,
@@ -91,8 +91,8 @@ export class TrackLyricsOverrideStore {
   save(trackId: string, input: SaveLyricsOverride): TrackLyricsOverride | null {
     const text = input.text.replace(/^\uFEFF/, '').trim();
     if (!text) throw new RangeError('A letra gerenciada não pode ficar vazia.');
-    if (Buffer.byteLength(text, 'utf8') > MAX_LYRICS_BYTES) {
-      throw new RangeError(`A letra gerenciada deve ter no máximo ${MAX_LYRICS_BYTES} bytes.`);
+    if (Buffer.byteLength(text, 'utf8') > MAX_MANAGED_LYRICS_BYTES) {
+      throw new RangeError(`A letra gerenciada deve ter no máximo ${MAX_MANAGED_LYRICS_BYTES} bytes.`);
     }
     if (input.mode !== 'plain' && input.mode !== 'synced') throw new TypeError('Modo de lyrics inválido.');
     if (!['external', 'manual', 'generated'].includes(input.origin)) throw new TypeError('Origem de lyrics inválida.');
