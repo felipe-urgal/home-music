@@ -82,6 +82,23 @@ O servidor valida os bytes e só então faz o `UPSERT` no SQLite. Uma falha de v
 
 Remove somente o override. Se o arquivo tiver capa embutida, ela volta a ser exibida. Caso contrário, o frontend volta ao fallback visual.
 
+## Assistente da Biblioteca + Cover Art Archive
+
+O Assistente da Biblioteca reutiliza esta mesma autoridade de capa para sugestões vindas do Cover Art Archive. A integração não cria endpoint paralelo nem uma tabela de arte separada.
+
+Fluxo:
+
+1. o MusicBrainz identifica a faixa com confiança alta e um `releaseId` confiável;
+2. o backend consulta o Cover Art Archive somente para metadados da capa frontal;
+3. a sugestão entra na fila existente de revisão do Assistente;
+4. a imagem externa só é baixada quando o administrador aplica a sugestão individualmente;
+5. o download passa por allowlist de host, limite de redirects e limite de bytes;
+6. a persistência final chama `TrackCoverOverrideStore.save()`, reaproveitando validação binária, dimensões, MIME efetivo e `UPSERT` em `track_cover_overrides`.
+
+A análise não baixa BLOB de imagem e não depende de internet real nos testes. O cache do provider guarda apenas o payload normalizado da consulta ao Cover Art Archive.
+
+Sugestões de capa não entram no lote seguro da UI. Isso preserva a confirmação explícita item a item antes de baixar e persistir uma imagem externa. Se a capa efetiva mudar depois da análise, a sugestão fica `stale` e precisa ser analisada novamente.
+
 ## Entrega da capa efetiva
 
 `GET /api/tracks/:id/cover` prioriza o BLOB de override quando a faixa está ativa. Sem override, o handler físico existente continua lendo a capa do arquivo de áudio.
@@ -136,5 +153,7 @@ A cobertura inclui:
 - entrega binária pelo endpoint público;
 - cache-busting por versão;
 - validação antecipada no frontend;
+- normalização de URLs do Cover Art Archive;
+- bloqueio de redirects externos antes do download de capa sugerida;
 - regressão do componente central de artwork/fallback no Vitest;
 - Playwright desktop com preview → salvar → API efetiva → rescan → restauração.
