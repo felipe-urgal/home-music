@@ -2,12 +2,13 @@
 
 ## Estado
 
-A Fase 15 possui quatro camadas implementadas no fluxo de metadata:
+A Fase 15 possui cinco entregas implementadas no fluxo assistido:
 
 - **#311 — fundação:** contratos, runs, sugestões, persistência auditável, stale protection, lifecycle administrativo, fila/observabilidade e gateway seguro de providers;
 - **#312 — identificação de metadata:** analyzer real usando contexto local + MusicBrainz para produzir sugestões explicáveis de `title`, `artist`, `album` e `albumArtist`;
 - **#313 — revisão/aplicação segura:** workspace administrativo para revisar, rejeitar e aplicar sugestões de metadata por campo, sempre pela autoridade canônica de overrides;
-- **#356 — operação em volume:** lote real com confirmação de revisão, reset seguro de sugestões abertas e superfícies de Fila, Estatísticas e Configurações.
+- **#314 — artwork via Cover Art Archive:** sugestões de capa derivadas de identificação confiável do MusicBrainz, com download somente após apply individual explícito;
+- **#356 — operação em volume:** lote real de metadata com confirmação de revisão, reset seguro de sugestões abertas e superfícies de Fila, Estatísticas e Configurações.
 
 A análise continua separada da mutação. Nenhuma sugestão é aplicada automaticamente após scan/importação ou apenas por possuir alta confiança. Aplicar depende de uma decisão administrativa explícita e de nova validação no backend.
 
@@ -26,6 +27,8 @@ As tabelas `library_assistant_*` guardam somente estado derivado/auditável e nu
 
 Aplicar metadata usa exclusivamente `TrackMetadataOverrideStore.patch()`. Não existe `UPDATE tracks` direto, escrita de tags ou alteração do arquivo físico. Quando o valor sugerido converge para o valor físico, a semântica canônica do store evita override redundante.
 
+Aplicar artwork usa o `TrackCoverOverrideStore` existente. A imagem externa só é baixada depois da decisão individual; o Assistente não escreve capa diretamente no arquivo de áudio nem cria uma segunda persistência canônica.
+
 ## Contratos compartilhados
 
 Os contratos que cruzam web/server vivem em `@home-music/shared/library-assistant` e possuem versão explícita. Eles definem:
@@ -37,14 +40,15 @@ Os contratos que cruzam web/server vivem em `@home-music/shared/library-assistan
 - reason codes estáveis;
 - evidências tipadas/versionadas;
 - proveniência e IDs externos tipados;
-- targets por capability;
+- targets por capability, incluindo identificação/URLs controladas de artwork;
 - decisões `apply`/`reject`, resultado individual e resumo de lote;
-- confirmação explícita de lote que contém sugestões de revisão;
+- confirmação explícita de lote que contém sugestões de revisão de metadata;
+- confirmação opcional para substituir override de capa existente na decisão individual;
 - resposta tipada do reset de sugestões abertas.
 
 Cada sugestão textual representa **um campo** de metadata. Por isso, “aplicar parte” de uma identificação significa aceitar somente as sugestões/campos desejados; não existe um payload paralelo de `fields[]` que duplique essa autoridade.
 
-Payload externo arbitrário nunca vira regra de domínio. O MusicBrainz é normalizado antes de entrar no cache ou nas sugestões.
+Payload externo arbitrário nunca vira regra de domínio. MusicBrainz e Cover Art Archive são normalizados/validados antes de entrar no lifecycle de revisão.
 
 ## Persistência, snapshot e stale protection
 
@@ -65,11 +69,13 @@ Limites atuais:
 
 Ao iniciar um run, `LibraryAssistantService` captura a biblioteca efetiva projetada e sua revision. Cada sugestão recebe assinatura SHA-256 da premissa relevante. Mudança de revision/premissa torna o run ou a sugestão `stale` no lifecycle de análise.
 
-Na revisão, o backend revalida novamente a existência da faixa, o status da sugestão, o valor atual esperado e a decisão humana **do mesmo campo** antes de aplicar. `TrackMetadataOverrideStore` mantém uma revisão auxiliar por campo: uma edição de `artist` não invalida uma sugestão ainda válida de `title`, enquanto uma decisão explícita posterior sobre `title` — inclusive reafirmando o mesmo valor efetivo — torna a sugestão antiga de `title` stale. Assim, nenhuma edição humana é sobrescrita silenciosamente e campos irmãos continuam revisáveis de forma independente.
+Na revisão de metadata, o backend revalida novamente a existência da faixa, o status da sugestão, o valor atual esperado e a decisão humana **do mesmo campo** antes de aplicar. `TrackMetadataOverrideStore` mantém uma revisão auxiliar por campo: uma edição de `artist` não invalida uma sugestão ainda válida de `title`, enquanto uma decisão explícita posterior sobre `title` — inclusive reafirmando o mesmo valor efetivo — torna a sugestão antiga de `title` stale. Assim, nenhuma edição humana é sobrescrita silenciosamente e campos irmãos continuam revisáveis de forma independente.
+
+Na revisão de artwork, o backend revalida a capa efetiva/versão esperada antes de baixar e persistir a imagem. Se a capa mudou desde a análise, a sugestão fica stale; um override manual existente exige confirmação explícita de substituição.
 
 Runs encontrados em `queued/running` após restart viram `failed/interrupted`; cancelamento, falha e shutdown invalidam sugestões parciais ainda abertas.
 
-O reset operacional da #356 também usa `stale` em vez de apagar histórico: apenas sugestões de metadata ainda `pending/review` são invalidadas. Sugestões `applied` e `rejected` permanecem auditáveis, assim como os runs anteriores. O reset é recusado enquanto existe uma análise de metadata ativa.
+O reset operacional da #356 também usa `stale` em vez de apagar histórico: sugestões ainda `pending/review` dos runs revisáveis de metadata/artwork são invalidadas, inclusive artwork produzido dentro de um run de metadata. Sugestões `applied` e `rejected` permanecem auditáveis, assim como os runs anteriores. O reset é recusado enquanto existe uma análise revisável ativa.
 
 ## Execução e backpressure
 
@@ -194,23 +200,34 @@ Uma sugestão pode carregar:
 
 A proveniência registra `source = musicbrainz`, provider version e recording ID. Payload bruto inteiro não é persistido.
 
-## Revisão e aplicação administrativa (#313 + #356)
+## Artwork / Cover Art Archive (#314)
+
+Quando a identificação do MusicBrainz fornece release/release-group confiável e a faixa não possui capa adequada, o Assistente pode produzir uma sugestão `artwork` apontando para o Cover Art Archive. A análise persiste apenas a referência/URL controlada; **não baixa a imagem durante a análise**.
+
+A aplicação de artwork é sempre individual. Mesmo que a sugestão tenha alta confiança e mesmo que um request de lote use `confirmReview=true`, o backend rejeita artwork no endpoint de lote. Isso preserva a confirmação explícita antes de download/persistência externa e evita transformar confirmação de metadata em autorização implícita de capa.
+
+O downloader aceita somente hosts/redirects permitidos, limita redirects/tamanho e entrega os bytes ao `TrackCoverOverrideStore.save()`. Se já existir override manual de capa, a decisão precisa sinalizar explicitamente `replaceExistingArtworkOverride=true` antes da substituição.
+
+Detalhes de persistência e política de capa: [`admin-cover-overrides.md`](admin-cover-overrides.md).
+
+## Revisão e aplicação administrativa (#313 + #314 + #356)
 
 A superfície **Administração → Assistente da Biblioteca** organiza o fluxo em quatro seções funcionais:
 
 ### Sugestões
 
 - **Analisar biblioteca/Analisar mudanças** inicia um run sem aplicar resultados automaticamente;
-- cada campo pode ser aplicado ou rejeitado individualmente;
-- **Selecionar seguras** mantém a seleção automática restrita à regra de alta confiança sem blockers;
-- **Selecionar visíveis** permite selecionar manualmente sugestões abertas exibidas, inclusive itens de `Revisão`;
-- se a seleção contém `Revisão`, a Web exige confirmação explícita antes de enviar o lote;
+- metadata e artwork podem ser aplicados/rejeitados individualmente;
+- **Selecionar seguras** mantém a seleção automática de lote restrita à metadata elegível pela regra de alta confiança sem blockers;
+- **Selecionar visíveis** permite selecionar manualmente sugestões abertas de metadata exibidas, inclusive itens de `Revisão`; artwork permanece fora do lote;
+- se a seleção de metadata contém `Revisão`, a Web exige confirmação explícita antes de enviar o lote;
 - o backend recebe `confirmReview=true` somente nesse fluxo e continua revalidando cada item;
 - cada request contém no máximo 100 decisões; seleções maiores são particionadas pela Web em blocos de até 100;
 - sucesso parcial é preservado e o resumo distingue aplicadas, já resolvidas, stale, não encontradas, não suportadas e falhas;
-- mensagens específicas devolvidas pelo servidor ficam disponíveis em **Ver detalhes**.
+- mensagens específicas devolvidas pelo servidor ficam disponíveis em **Ver detalhes**;
+- artwork exige decisão individual, valida a capa atual e só então baixa/persiste a imagem.
 
-A confirmação de revisão **não** torna a sugestão auto-aplicável e não desliga stale protection. Mesmo com `confirmReview=true`, cada decisão passa pela mesma validação de run, status, valor esperado, metadata efetiva e revisão humana do campo. Um cliente que omite a confirmação continua impedido pelo backend de aplicar em lote uma sugestão não elegível ao lote seguro.
+A confirmação de revisão **não** torna a sugestão auto-aplicável e não desliga stale protection. Mesmo com `confirmReview=true`, cada decisão de metadata passa pela mesma validação de run, status, valor esperado, metadata efetiva e revisão humana do campo. Um cliente que omite a confirmação continua impedido pelo backend de aplicar em lote uma sugestão de metadata não elegível ao lote seguro. Artwork continua bloqueado no lote em qualquer modo.
 
 ### Fila
 
@@ -222,11 +239,11 @@ A aba **Estatísticas** reaproveita métricas já observadas pelo backend: tempo
 
 ### Configurações
 
-A aba **Configurações** é deliberadamente pequena. Atualmente permite escolher quais campos (`Título`, `Artista`, `Álbum`, `Artista do álbum`) aparecem na listagem de sugestões. Essa preferência é local à Web e **não altera o analyzer nem o contrato do backend**. Pelo menos um campo permanece visível. Segurança, stale protection e confirmação de revisão não podem ser desativadas por configuração de UI.
+A aba **Configurações** é deliberadamente pequena. Atualmente permite escolher quais campos de metadata (`Título`, `Artista`, `Álbum`, `Artista do álbum`) aparecem na listagem. Essa preferência é local à Web e **não altera o analyzer nem o contrato do backend**. Pelo menos um campo permanece visível e artwork não é ocultado por essa configuração. Segurança, stale protection, confirmação de revisão e a aplicação individual de capa não podem ser desativadas pela UI.
 
 ### Reset operacional
 
-**Limpar e reanalisar tudo** possui confirmação própria. O servidor invalida somente sugestões abertas de metadata (`pending/review`), marcando-as `stale`; `applied`, `rejected` e o histórico de runs são preservados. A operação é recusada se existir run de metadata ativo. Depois de um reset bem-sucedido, a Web solicita uma nova análise completa.
+**Limpar e reanalisar tudo** possui confirmação própria. O servidor invalida somente sugestões abertas (`pending/review`) dos runs revisáveis de metadata/artwork, marcando-as `stale`; isso inclui sugestões `artwork` produzidas em um run de metadata. `applied`, `rejected` e o histórico de runs são preservados. A operação é recusada se existir run revisável ativo. Depois de um reset bem-sucedido, a Web solicita uma nova análise completa.
 
 Após apply confirmado, a UI publica `home-music:library-changed` e o snapshot efetivo é atualizado sem exigir rescan.
 
@@ -247,10 +264,10 @@ Lifecycle/análise:
 
 Revisão/aplicação:
 
-- `GET /api/admin/library-assistant/review?limit=200` — fila revisável com snapshot efetivo/físico necessário à decisão;
-- `POST /api/admin/library-assistant/review/reset` — invalida sugestões abertas de metadata, preservando decisões resolvidas/histórico;
-- `POST /api/admin/library-assistant/suggestions/:id/decision` — aplica ou rejeita uma sugestão/campo;
-- `POST /api/admin/library-assistant/decisions` — executa até 100 decisões explícitas, aceita `confirmReview` booleano e retorna resultado por item + resumo de sucesso parcial.
+- `GET /api/admin/library-assistant/review?limit=200` — fila revisável de metadata/artwork com snapshot efetivo/físico necessário à decisão;
+- `POST /api/admin/library-assistant/review/reset` — invalida sugestões abertas dos runs revisáveis, preservando decisões resolvidas/histórico;
+- `POST /api/admin/library-assistant/suggestions/:id/decision` — aplica ou rejeita individualmente metadata/artwork suportado;
+- `POST /api/admin/library-assistant/decisions` — executa até 100 decisões; `confirmReview` libera somente metadata revisada e artwork continua individual; retorna resultado por item + resumo de sucesso parcial.
 
 ## Falhas e segurança
 
@@ -261,10 +278,12 @@ Revisão/aplicação:
 - nenhuma falha do provider altera a biblioteca;
 - logs/erros operacionais usam sanitização já existente;
 - não são seguidas URLs arbitrárias vindas do payload do MusicBrainz;
+- downloads de artwork obedecem allowlist/limites do Cover Art Archive;
 - `user` não pode acessar revisão/aplicação administrativa;
 - mutações sem o header anti-CSRF são rejeitadas;
-- sugestão stale não sobrescreve metadata humana;
-- lote de revisão sem confirmação explícita é rejeitado por item no backend;
+- sugestão stale não sobrescreve metadata/capa humana;
+- lote de revisão de metadata sem confirmação explícita é rejeitado por item no backend;
+- artwork é rejeitado no endpoint de lote mesmo com confirmação de revisão;
 - reset não apaga decisões `applied/rejected`;
 - aplicar/rejeitar novamente é idempotente no lifecycle do Assistente.
 
@@ -272,7 +291,7 @@ Revisão/aplicação:
 
 A fundação continua cobrindo autorização, anti-CSRF, persistência/reopen, stale, cancelamento, concorrência, cache, rate limit, timeout e ausência de mutação.
 
-O analyzer MusicBrainz cobre payload/cache normalizado, matching, duração, ambiguidade, contexto coletivo, filename seguro, override humano, IDs externos, consulta única por identidade e falhas do provider.
+O analyzer MusicBrainz cobre payload/cache normalizado, matching, duração, ambiguidade, contexto coletivo, filename seguro, override humano, IDs externos, consulta única por identidade e falhas do provider. O fluxo de artwork possui regressões próprias para resolução/URL/redirect do Cover Art Archive e aplicação via override canônico.
 
 A revisão/aplicação cobre:
 
@@ -285,14 +304,15 @@ A revisão/aplicação cobre:
 - exposição do valor físico na fila quando difere do efetivo;
 - convergência ao físico sem override redundante;
 - lote com sucesso parcial;
-- bloqueio de revisão em lote sem confirmação e aplicação após confirmação;
+- bloqueio de revisão de metadata em lote sem confirmação e aplicação após confirmação;
 - stale protection preservada em lote confirmado;
+- artwork permanecendo individual mesmo com lote confirmado;
 - limite server-side de 100 decisões por request e chunking da Web para seleções maiores;
-- reset preservando decisões resolvidas e invalidando somente abertas;
-- reset bloqueado durante análise ativa;
+- reset preservando decisões resolvidas e invalidando metadata/artwork ainda abertos;
+- reset bloqueado durante análise revisável ativa;
 - autorização e anti-CSRF das rotas de revisão/reset;
 - cliente Web mantendo payload explícito e header de mutação.
 
 ## Próximos módulos
 
-O primeiro fluxo completo **analisar → revisar → aplicar metadata** permanece a base das próximas capacidades. Artwork (#314), lyrics (#315/#316) e autonomia progressiva devem reutilizar as mesmas autoridades, stale protection e confirmação explícita em vez de criar lifecycles paralelos. O planejamento está em [`library-assistant-plan.md`](library-assistant-plan.md).
+O fluxo completo **analisar → revisar → aplicar metadata/artwork** permanece a base das próximas capacidades. Lyrics (#315/#316), normalização assistida (#319), casos difíceis opcionais (#320/#322) e autonomia progressiva (#318) devem reutilizar as mesmas autoridades, stale protection e confirmação explícita em vez de criar lifecycles paralelos. O planejamento está em [`library-assistant-plan.md`](library-assistant-plan.md).
