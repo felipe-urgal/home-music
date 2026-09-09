@@ -184,15 +184,16 @@ test('analyzer propõe capa CAA somente depois de identificação MusicBrainz co
   });
 
   const artwork = drafts.find(draft => draft.target.capability === 'artwork');
-  assert.equal(artwork?.capability, 'artwork');
-  assert.equal(artwork?.confidence, 'high');
-  assert.equal(artwork?.provenance.source, 'cover-art-archive');
-  assert.ok(artwork?.reasonCodes.includes('artwork-missing'));
-  assert.ok(artwork?.reasonCodes.includes('strong-external-id'));
-  assert.equal(artwork?.target.sourceUrl, 'https://coverartarchive.org/release/release-1/front');
-  assert.equal(artwork?.target.thumbnailUrl, 'https://coverartarchive.org/release/release-1/500');
-  assert.equal(artwork?.target.musicBrainzReleaseId, 'release-1');
-  assert.equal(artwork?.target.musicBrainzReleaseGroupId, 'release-group-1');
+  assert.ok(artwork && artwork.target.capability === 'artwork');
+  assert.equal(artwork.capability, 'artwork');
+  assert.equal(artwork.confidence, 'high');
+  assert.equal(artwork.provenance.source, 'cover-art-archive');
+  assert.ok(artwork.reasonCodes.includes('artwork-missing'));
+  assert.ok(artwork.reasonCodes.includes('strong-external-id'));
+  assert.equal(artwork.target.sourceUrl, 'https://coverartarchive.org/release/release-1/front');
+  assert.equal(artwork.target.thumbnailUrl, 'https://coverartarchive.org/release/release-1/500');
+  assert.equal(artwork.target.musicBrainzReleaseId, 'release-1');
+  assert.equal(artwork.target.musicBrainzReleaseGroupId, 'release-group-1');
 
   const withPhysicalCover = await analyzer.analyze({
     runId: 'run-artwork-skip',
