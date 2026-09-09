@@ -127,11 +127,17 @@ Regras canônicas:
 - antes de aplicar, o backend revalida faixa, sugestão, valor atual esperado e a revisão humana **do mesmo campo** posterior à análise;
 - editar `artist` depois da análise não torna automaticamente uma sugestão de `title` stale, mas editar `title` — inclusive reafirmando explicitamente o mesmo valor — invalida a sugestão antiga de `title`;
 - sugestão stale exige nova análise/revisão em vez de sobrescrever silenciosamente uma decisão humana;
-- o lote seguro é validado também no backend: somente sugestões abertas de alta confiança, sem `human-override`, ambiguidade ou conflito bloqueante, podem receber `apply` em lote;
-- sucesso parcial em lote preserva os campos já confirmados e reporta stale/falha por item;
-- cancelar o lote impede iniciar novos itens; a decisão já em andamento pode concluir e os sucessos confirmados não são revertidos.
+- **Selecionar seguras** continua usando a regra de alta confiança sem `human-override`, ambiguidade ou conflito bloqueante;
+- sugestões em `Revisão` podem ser selecionadas manualmente em lote, mas exigem confirmação explícita antes do envio e o backend exige `confirmReview=true` para aceitá-las;
+- a confirmação não ignora stale protection nem revisão humana: cada item é revalidado individualmente antes de qualquer patch;
+- o endpoint aceita no máximo 100 decisões por request; a Web divide seleções maiores em blocos de até 100;
+- sucesso parcial preserva os campos já confirmados e reporta separadamente `stale`, `not-found`, `unsupported`, já resolvidos e falhas, mantendo a mensagem do servidor disponível para diagnóstico;
+- **Limpar e reanalisar tudo** marca somente sugestões abertas (`pending/review`) como `stale`; aplicadas, rejeitadas e histórico de runs são preservados;
+- o reset é bloqueado durante uma análise de metadata ativa e, após sucesso, a Web inicia uma análise completa.
 
 Depois de um `apply` confirmado, a revisão administrativa composta é incrementada e a Web publica `home-music:library-changed`; `/api/library`, player e Administração passam a refletir a metadata efetiva sem rescan.
+
+A aba **Configurações** do Assistente controla apenas quais campos aparecem na listagem da Web. Ela não altera o analyzer, não muda a autoridade do store e não permite desligar confirmação, stale protection ou proteção de override humano.
 
 O contrato completo de análise/revisão está em [`library-assistant.md`](library-assistant.md).
 
@@ -182,5 +188,9 @@ A cobertura inclui:
 - caminho HTTP real de `/api/library`, incluindo revisão composta, ETag, revalidação `304`, save e restore sem mutar o objeto físico;
 - helper do frontend para derivação de patches;
 - revisão do Library Assistant cobrindo aplicação/rejeição por campo, edição concorrente do mesmo campo versus campo irmão, convergência ao físico, stale e sucesso parcial em lote;
-- lote seguro rejeitando sugestão de baixa confiança no backend;
+- lote de revisão bloqueado sem confirmação e aplicado somente quando explicitamente confirmado;
+- confirmação de revisão preservando stale protection de override humano;
+- limite de 100 decisões por request;
+- reset do Assistente invalidando somente abertas e preservando aplicadas/rejeitadas;
+- reset do Assistente bloqueado durante análise ativa;
 - Playwright desktop cobrindo edição no workspace de Metadados, atualização imediata do player persistente e do filtro/cockpit de saúde, sobrevivência a rescan e restauração da fixture.
