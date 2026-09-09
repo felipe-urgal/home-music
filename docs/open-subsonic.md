@@ -88,7 +88,7 @@ Esta matriz existe **antes dos handlers** para impedir a criação acidental de 
 | `search3` | `LibraryService.listPublicTracks()` | busca sobre o snapshot vigente; query vazia é aceita para sync |
 | `stream` | `TrackMediaInfrastructure` | usa o mesmo confinement/arquivo regular/Range/transcoding disponível |
 | `getCoverArt` | `TrackMediaInfrastructure.cover()` | artwork por ID opaco; nenhum path físico |
-| `getLyricsBySongId` | `TrackMediaInfrastructure.lyrics()` | adapta a resposta existente; nenhuma leitura paralela de filesystem |
+| `getLyricsBySongId` | `TrackMediaInfrastructure.lyrics()` | usa a resolução canônica `override gerenciado → sidecar → nenhuma letra`; nenhuma leitura paralela de filesystem/provider |
 | `getPlaylists` | `PersonalLibraryService.getPlaylists(userId)` | somente o usuário derivado da chave |
 | `getPlaylist` | `PersonalLibraryService.getPlaylists(userId)` | playlist de outro usuário equivale a não encontrada |
 | `createPlaylist` | `PersonalLibraryService.createPlaylist()` / `setPlaylistTracks()` | backend revalida nome/faixas |
@@ -117,6 +117,14 @@ Catálogo de artistas/álbuns e conjunto de favoritos são projeções **sob dem
 Caminhos por faixa, como `stream`, `getCoverArt`, `getLyricsBySongId`, `star`/`unstar` e `scrobble`, resolvem o ID diretamente nos serviços canônicos e não constroem previamente o catálogo global. `getMusicFolders` também não precisa materializar a projeção.
 
 Essa regra evita transformar cada abertura de áudio em trabalho O(n)/O(n log n) sobre bibliotecas grandes sem introduzir cache ou índice paralelo. Endpoints de artistas, álbuns, busca e playlists continuam usando a mesma projeção canônica; muda somente o momento em que ela é construída.
+
+## Lyrics
+
+`getLyricsBySongId` não possui resolução própria. Ele chama `TrackMediaInfrastructure.lyrics()` exatamente como `/api/tracks/:id/lyrics`, portanto uma letra aprovada pelo Assistente e um sidecar local são observados com a mesma prioridade em todos os consumidores.
+
+A resolução efetiva e a política de persistência estão em [`lyrics.md`](lyrics.md). O ponto importante para o adapter é que **nenhuma chamada OpenSubsonic consulta LRCLIB em tempo de request**. O provider externo participa apenas da análise/aprovação administrativa; o playback e `getLyricsBySongId` consomem estado local já resolvido.
+
+Assim, indisponibilidade, `5xx` ou rate limit do provider não alteram compatibilidade nem disponibilidade do endpoint OpenSubsonic.
 
 ## Streaming
 
@@ -153,7 +161,7 @@ A suíte do servidor cobre pelo menos:
 5. bootstrap `getUser` usando a API key como password legado sem aceitar senha web;
 6. listagem de biblioteca e busca;
 7. Range de streaming;
-8. artwork/lyrics sem path físico;
+8. artwork/lyrics sem path físico e lyrics usando a mesma resolução efetiva da API nativa;
 9. playlist/favorito/scrobble derivados do owner autenticado;
 10. tentativa cross-user/IDOR;
 11. endpoint não suportado retornando falha explícita;
@@ -166,7 +174,7 @@ A suíte do servidor cobre pelo menos:
 Registro final do aceite da Fase 13. A execução manual real confirmada nesta rodada foi feita com Feishin. Em 2026-09-05, o proprietário do projeto aprovou o encerramento da #264 sem exigir um segundo smoke manual real no Symfonium.
 
 | Cliente | Plataforma | Autentica | Lista biblioteca | Reproduz áudio | Observações |
-| --- | --- | --- | --- | --- | --- |
+| --- | --- | --- | --- | --- |
 | Symfonium | Android | não executado | não executado | não executado | cliente-alvo mantido; segundo smoke manual dispensado por decisão explícita de aceite do proprietário em 2026-09-05 |
 | Feishin | desktop Linux | aprovado | aprovado | aprovado | username + API key como password + Legacy Authentication; seek/HTTP Range também validado manualmente |
 | Tempo/Tempus | Android | opcional | opcional | opcional | terceiro smoke |
