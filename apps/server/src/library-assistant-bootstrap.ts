@@ -63,8 +63,16 @@ export function registerLibraryAssistant(
   // aqui garante que apply do Assistente invalide ETag/cache da biblioteca sem rescan.
   options.projection.projectRevision = revision => projectRevision(revision) + assistantReviewRevision;
 
+  const listProjectedTracks = () => options.projection.projectTracks(options.library.listPublicTracks());
+  const analysisLibrary = {
+    listTracks: listProjectedTracks,
+    // A revisão do próprio Assistente atualiza a projeção pública, mas não invalida
+    // o run que originou a sugestão. Mudanças externas continuam entrando em
+    // projectRevision e, portanto, mantêm a stale protection da análise.
+    revision: () => projectRevision(options.library.status().revision)
+  };
   const projectedLibrary = {
-    listTracks: () => options.projection.projectTracks(options.library.listPublicTracks()),
+    listTracks: listProjectedTracks,
     revision: () => options.projection.projectRevision(options.library.status().revision)
   };
   const metadataAnalyzer = createMusicBrainzMetadataAnalyzer({
@@ -93,7 +101,7 @@ export function registerLibraryAssistant(
     observability: options.observability,
     providers,
     analyzers,
-    library: projectedLibrary
+    library: analysisLibrary
   });
   const review = new LibraryAssistantReviewService({
     databasePath: options.databasePath,
