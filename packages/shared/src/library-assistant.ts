@@ -32,6 +32,7 @@ export type LibraryAssistantExternalIdKind = 'recording' | 'release' | 'release-
 export type LibraryAssistantReasonCode =
   | 'local-review'
   | 'metadata-missing'
+  | 'artwork-missing'
   | 'metadata-conflict'
   | 'exact-text-match'
   | 'normalized-text-match'
@@ -122,6 +123,12 @@ export type LibraryAssistantArtworkTarget = {
   trackId: string;
   candidateId: string;
   label: string | null;
+  sourceUrl: string;
+  thumbnailUrl: string | null;
+  currentHasCover: boolean;
+  currentCoverVersion: string | null;
+  musicBrainzReleaseId: string;
+  musicBrainzReleaseGroupId: string | null;
 };
 
 export type LibraryAssistantLyricsTarget = {
@@ -287,6 +294,7 @@ export type LibraryAssistantDecision = {
   action: LibraryAssistantDecisionAction;
   expectedLibraryRevision: number;
   expectedCurrentValue: string;
+  replaceExistingArtworkOverride?: boolean;
 };
 
 export type LibraryAssistantDecisionResult = {
