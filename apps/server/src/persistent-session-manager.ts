@@ -75,7 +75,7 @@ export class PersistentSessionManager extends SessionManager {
   override createSessionForUser(userId: string, now = Date.now()) {
     if (!userId || userId.length > 128) throw new RangeError('userId de sessão inválido.');
 
-    this.evictOldestSessionsForUser(userId);
+    this.evictOldestPersistentSessionsForUser(userId);
     if (this.countSessions() >= this.persistentMaxSessions) throw new SessionCapacityError();
 
     let token = '';
@@ -255,7 +255,7 @@ export class PersistentSessionManager extends SessionManager {
     this.db.prepare('DELETE FROM auth_sessions WHERE token_hash = ?').run(tokenHash);
   }
 
-  private evictOldestSessionsForUser(userId: string) {
+  private evictOldestPersistentSessionsForUser(userId: string) {
     const rows = this.db.prepare(`
       SELECT token_hash
       FROM auth_sessions
