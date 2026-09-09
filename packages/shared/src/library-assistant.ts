@@ -137,6 +137,8 @@ export type LibraryAssistantLyricsTarget = {
   candidateId: string;
   synchronized: boolean;
   language: string | null;
+  currentValue: string;
+  preview: string;
 };
 
 export type LibraryAssistantSuggestionTarget =

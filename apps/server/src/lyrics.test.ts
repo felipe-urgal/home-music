@@ -33,6 +33,41 @@ describe('lyrics', () => {
     });
   });
 
+  it('prefers an approved managed override over an existing sidecar', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'home-music-lyrics-'));
+    const trackPath = path.join(root, 'song.mp3');
+    await writeFile(trackPath, 'audio');
+    await writeFile(path.join(root, 'song.txt'), 'Sidecar local');
+
+    assert.deepEqual(await readTrackLyrics(root, trackPath, {
+      trackId: 'track-1',
+      mode: 'synced',
+      text: '[00:01.00]Linha gerenciada',
+      origin: 'external',
+      provider: 'lrclib',
+      externalId: '123',
+      language: null,
+      updatedAt: '2026-09-09T00:00:00.000Z'
+    }), {
+      source: 'lrc',
+      synchronized: true,
+      lines: [{ time: 1, text: 'Linha gerenciada' }]
+    });
+  });
+
+  it('falls back to the physical sidecar when no managed override exists', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'home-music-lyrics-'));
+    const trackPath = path.join(root, 'song.mp3');
+    await writeFile(trackPath, 'audio');
+    await writeFile(path.join(root, 'song.lrc'), '[00:02.00]Sidecar');
+
+    assert.deepEqual(await readTrackLyrics(root, trackPath, null), {
+      source: 'lrc',
+      synchronized: true,
+      lines: [{ time: 2, text: 'Sidecar' }]
+    });
+  });
+
   it('ignores a sidecar symlink that escapes the library', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'home-music-lyrics-'));
     const outside = await mkdtemp(path.join(os.tmpdir(), 'home-music-lyrics-outside-'));

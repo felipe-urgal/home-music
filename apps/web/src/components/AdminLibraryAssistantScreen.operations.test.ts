@@ -15,11 +15,11 @@ describe('AdminLibraryAssistantScreen operational workflow', () => {
     expect(screen).toMatch(/decideLibraryAssistantBatch\(chunk, \{ confirmReview: reviewCount > 0 \}\)/);
   });
 
-  it('mantém metadata em revisão selecionável, mas exige confirmação antes do lote', () => {
+  it('mantém metadata e letras em revisão selecionáveis, mas exige confirmação antes do lote', () => {
     const screen = source();
 
     expect(screen).toMatch(/function canApplyInBatch\(suggestion: LibraryAssistantSuggestion\)/);
-    expect(screen).toMatch(/suggestion\.target\.capability === 'metadata' && isOpen\(suggestion\)/);
+    expect(screen).toMatch(/suggestion\.target\.capability !== 'artwork' && isOpen\(suggestion\)/);
     expect(screen).toMatch(/visibleActionableSuggestions/);
     expect(screen).toMatch(/const reviewCount = chosen\.filter\(item => !isSafe\(item\)\)\.length;/);
     expect(screen).toMatch(/if \(reviewCount > 0 && !reviewConfirmed\)/);
@@ -27,7 +27,7 @@ describe('AdminLibraryAssistantScreen operational workflow', () => {
     expect(screen).toMatch(/Aplicar sugestões em Revisão\?/);
   });
 
-  it('preserva capas como decisão individual mesmo quando o lote de metadata é confirmado', () => {
+  it('preserva capas como decisão individual mesmo quando o lote é confirmado', () => {
     const screen = source();
 
     expect(screen).toMatch(/suggestion\.target\.capability === 'artwork'/);

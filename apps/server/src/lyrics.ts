@@ -1,6 +1,7 @@
 import path from 'node:path';
 import type { LyricsLine, LyricsResponse } from '@home-music/shared';
 import { openRegularFileInside } from './security.js';
+import type { TrackLyricsOverride } from './track-lyrics-overrides.js';
 
 const MAX_LYRICS_BYTES = 512 * 1024;
 const TIMESTAMP_PATTERN = /\[(\d{1,3}):(\d{2}(?:\.\d{1,3})?)\]/g;
@@ -40,7 +41,7 @@ export function parseLyrics(content: string, source: LyricsResponse['source']): 
   };
 }
 
-export async function readTrackLyrics(libraryRoot: string, audioPath: string): Promise<LyricsResponse | null> {
+export async function readSidecarLyrics(libraryRoot: string, audioPath: string): Promise<LyricsResponse | null> {
   const extension = path.extname(audioPath);
   const stem = audioPath.slice(0, -extension.length);
   const candidates: Array<{ path: string; source: LyricsResponse['source'] }> = [
@@ -68,4 +69,16 @@ export async function readTrackLyrics(libraryRoot: string, audioPath: string): P
   }
 
   return null;
+}
+
+export async function readTrackLyrics(
+  libraryRoot: string,
+  audioPath: string,
+  managed: TrackLyricsOverride | null = null
+): Promise<LyricsResponse | null> {
+  if (managed?.text) {
+    const resolved = parseLyrics(managed.text, managed.mode === 'synced' ? 'lrc' : 'txt');
+    if (resolved.lines.length) return resolved;
+  }
+  return readSidecarLyrics(libraryRoot, audioPath);
 }

@@ -10,6 +10,7 @@ import {
   openRegularFileInside,
   UnsafeLibraryPathError
 } from './security.js';
+import { getActiveTrackLyricsOverride } from './track-lyrics-overrides.js';
 import type { TranscodeCacheMaintenance } from './transcode-cache-maintenance.js';
 import { TranscodeExecutionError, type TranscodeManager, type TranscodeQuality } from './transcoding.js';
 
@@ -68,7 +69,7 @@ export class TrackMediaInfrastructure {
     const track = this.options.library.getTrack(trackId);
     const root = this.options.library.root;
     if (!track || !root) return null;
-    return readTrackLyrics(root, track.filePath);
+    return readTrackLyrics(root, track.filePath, getActiveTrackLyricsOverride(trackId));
   }
 
   async cover(trackId: string) {

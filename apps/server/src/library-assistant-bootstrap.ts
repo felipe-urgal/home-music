@@ -4,7 +4,10 @@ import type { LibraryAssistantMetadataField } from '@home-music/shared/library-a
 import type { HeavyWorkQueue } from './heavy-work-queue.js';
 import type { LibraryRouteProjection } from './library-routes.js';
 import type { LibraryService } from './library-service.js';
+import { createLrclibLyricsAnalyzer, resolveLrclibLyricsCandidate } from './lrclib-lyrics-analyzer.js';
+import { readSidecarLyrics } from './lyrics.js';
 import { createMusicBrainzMetadataAnalyzer } from './musicbrainz-metadata-analyzer.js';
+import { LibraryAssistantCompositeReviewService } from './library-assistant-composite-review-service.js';
 import { LibraryAssistantIncrementalIndex } from './library-assistant-incremental-index.js';
 import { LibraryAssistantPersistentQueue } from './library-assistant-persistent-queue.js';
 import { LibraryAssistantProviderGateway } from './library-assistant-provider.js';
@@ -17,6 +20,10 @@ import { LibraryAssistantStore } from './library-assistant-store.js';
 import type { LongJobObservability } from './long-job-observability.js';
 import { createMusicBrainzSimpleSearchFetch } from './musicbrainz-simple-search-fetch.js';
 import { TrackCoverOverrideStore } from './track-cover-overrides.js';
+import {
+  setActiveTrackLyricsOverrideStore,
+  TrackLyricsOverrideStore
+} from './track-lyrics-overrides.js';
 import { TrackMetadataOverrideStore } from './track-metadata-overrides.js';
 
 type LibraryAssistantBootstrapOptions = {
@@ -52,6 +59,8 @@ export function registerLibraryAssistant(
   const incrementalIndex = new LibraryAssistantIncrementalIndex(options.databasePath);
   const metadataOverrides = new TrackMetadataOverrideStore(options.databasePath);
   const coverOverrides = new TrackCoverOverrideStore(options.databasePath);
+  const lyricsOverrides = new TrackLyricsOverrideStore(options.databasePath);
+  setActiveTrackLyricsOverrideStore(lyricsOverrides);
   const providers = new LibraryAssistantProviderGateway(store, {
     onObservation: observation => metrics.observeProvider(observation)
   });
@@ -75,6 +84,12 @@ export function registerLibraryAssistant(
     listTracks: listProjectedTracks,
     revision: () => options.projection.projectRevision(options.library.status().revision)
   };
+  const hasSidecarLyrics = async (trackId: string) => {
+    const indexed = options.library.getTrack(trackId);
+    const root = options.library.root;
+    if (!indexed || !root) return false;
+    return Boolean(await readSidecarLyrics(root, indexed.filePath));
+  };
   const metadataAnalyzer = createMusicBrainzMetadataAnalyzer({
     fetchImpl: musicBrainzFetch,
     getHumanOverrideFields(trackId) {
@@ -91,7 +106,10 @@ export function registerLibraryAssistant(
       };
     }
   });
-  const analyzers = (options.analyzers ?? [metadataAnalyzer])
+  const lyricsAnalyzer = createLrclibLyricsAnalyzer({
+    hasEffectiveLyrics: async trackId => Boolean(lyricsOverrides.get(trackId)) || await hasSidecarLyrics(trackId)
+  });
+  const analyzers = (options.analyzers ?? [metadataAnalyzer, lyricsAnalyzer])
     .map(analyzer => instrumentAnalyzer(analyzer, metrics));
   const service = new LibraryAssistantService({
     store,
@@ -103,7 +121,7 @@ export function registerLibraryAssistant(
     analyzers,
     library: analysisLibrary
   });
-  const review = new LibraryAssistantReviewService({
+  const baseReview = new LibraryAssistantReviewService({
     databasePath: options.databasePath,
     store,
     metadataOverrides,
@@ -112,12 +130,25 @@ export function registerLibraryAssistant(
     onMetadataChanged: () => { assistantReviewRevision += 1; },
     onArtworkChanged: () => { assistantReviewRevision += 1; }
   });
+  const review = new LibraryAssistantCompositeReviewService({
+    databasePath: options.databasePath,
+    base: baseReview,
+    store,
+    metadataOverrides,
+    lyricsOverrides,
+    library: projectedLibrary,
+    hasSidecarLyrics,
+    resolveLyricsCandidate: candidateId => resolveLrclibLyricsCandidate(providers, candidateId),
+    onLyricsChanged: () => { assistantReviewRevision += 1; }
+  });
 
   registerLibraryAssistantRoutes(app, service, workQueue, metrics);
   registerLibraryAssistantReviewRoutes(app, review);
   app.addHook('onClose', async () => {
     await service.close();
     review.close();
+    setActiveTrackLyricsOverrideStore(null);
+    lyricsOverrides.close();
     coverOverrides.close();
     metadataOverrides.close();
     incrementalIndex.close();

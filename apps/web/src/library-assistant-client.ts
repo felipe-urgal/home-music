@@ -81,6 +81,18 @@ export async function resetLibraryAssistantReview() {
   return response.json() as Promise<AdminLibraryAssistantResetResponse>;
 }
 
+export async function clearLibraryAssistantManagedLyrics(trackId: string) {
+  const response = await apiFetch(
+    `/api/admin/library-assistant/tracks/${encodeURIComponent(trackId)}/lyrics`,
+    {
+      method: 'DELETE',
+      headers: { 'X-Home-Music-Request': '1' }
+    }
+  );
+  if (!response.ok) throw new Error(await responseError(response));
+  return response.json() as Promise<{ removed: boolean }>;
+}
+
 export async function decideLibraryAssistantSuggestion(decision: LibraryAssistantDecision) {
   const response = await apiFetch(
     `/api/admin/library-assistant/suggestions/${encodeURIComponent(decision.suggestionId)}/decision`,
