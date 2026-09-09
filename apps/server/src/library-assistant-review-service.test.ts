@@ -8,6 +8,7 @@ import { HomeMusicDatabase } from './database.js';
 import type { IndexedTrack } from './library.js';
 import { LibraryAssistantReviewService } from './library-assistant-review-service.js';
 import { LibraryAssistantStore } from './library-assistant-store.js';
+import { TrackCoverOverrideStore } from './track-cover-overrides.js';
 import { TrackMetadataOverrideStore } from './track-metadata-overrides.js';
 
 function track(id: string, title: string): IndexedTrack {
@@ -32,6 +33,7 @@ function track(id: string, title: string): IndexedTrack {
 async function withReview(run: (context: {
   assistant: LibraryAssistantStore;
   metadata: TrackMetadataOverrideStore;
+  cover: TrackCoverOverrideStore;
   review: LibraryAssistantReviewService;
   tracks: IndexedTrack[];
   revisionChanges: () => number;
@@ -43,22 +45,26 @@ async function withReview(run: (context: {
   database.syncTracks(physicalTracks, '/music', '2026-09-07T12:00:00.000Z');
   const assistant = new LibraryAssistantStore(databasePath);
   const metadata = new TrackMetadataOverrideStore(databasePath);
+  const cover = new TrackCoverOverrideStore(databasePath);
   let revision = 0;
   const review = new LibraryAssistantReviewService({
     databasePath,
     store: assistant,
     metadataOverrides: metadata,
+    coverOverrides: cover,
     library: {
-      listTracks: () => physicalTracks.map(item => metadata.resolveTrack(item)),
+      listTracks: () => physicalTracks.map(item => cover.resolveTrack(metadata.resolveTrack(item))),
       revision: () => 7 + revision
     },
     onMetadataChanged: () => { revision += 1; },
+    onArtworkChanged: () => { revision += 1; },
     now: () => new Date('2026-09-07T12:10:00.000Z')
   });
   try {
-    await run({ assistant, metadata, review, tracks: physicalTracks, revisionChanges: () => revision });
+    await run({ assistant, metadata, cover, review, tracks: physicalTracks, revisionChanges: () => revision });
   } finally {
     review.close();
+    cover.close();
     metadata.close();
     assistant.close();
     database.close();
@@ -119,6 +125,59 @@ function seedSuggestion(
     },
     premiseSignature: 'a'.repeat(64),
     createdAt: input.createdAt ?? '2026-09-07T12:00:02.000Z'
+  }]);
+  assistant.completeRun(runId, '2026-09-07T12:00:03.000Z');
+}
+
+function seedArtworkSuggestion(
+  assistant: LibraryAssistantStore,
+  input: {
+    runId?: string;
+    suggestionId?: string;
+    trackId?: string;
+  } = {}
+) {
+  const runId = input.runId ?? 'run-artwork';
+  if (!assistant.getRun(runId)) {
+    assistant.createRun({
+      id: runId,
+      capability: 'metadata',
+      libraryRevision: 7,
+      createdAt: '2026-09-07T12:00:00.000Z'
+    });
+    assistant.startRun(runId, '2026-09-07T12:00:01.000Z');
+  }
+  const trackId = input.trackId ?? 'track-2';
+  assistant.insertSuggestions([{
+    id: input.suggestionId ?? 'suggestion-artwork',
+    runId,
+    capability: 'artwork',
+    trackId,
+    status: 'review',
+    confidence: 'high',
+    reasonCodes: ['artwork-missing', 'provider-match'],
+    evidence: [{
+      type: 'external-id',
+      version: 1,
+      source: 'musicbrainz',
+      id: 'release-1',
+      kind: 'release'
+    }],
+    provenance: { source: 'cover-art-archive', providerVersion: 'v1', externalId: 'release-1' },
+    target: {
+      capability: 'artwork',
+      trackId,
+      candidateId: 'release-1:front',
+      label: 'Capa frontal',
+      sourceUrl: 'https://coverartarchive.org/release/release-1/front',
+      thumbnailUrl: null,
+      currentHasCover: false,
+      currentCoverVersion: null,
+      musicBrainzReleaseId: 'release-1',
+      musicBrainzReleaseGroupId: null
+    },
+    premiseSignature: 'b'.repeat(64),
+    createdAt: '2026-09-07T12:00:02.000Z'
   }]);
   assistant.completeRun(runId, '2026-09-07T12:00:03.000Z');
 }
@@ -333,6 +392,24 @@ test('confirmed review batch keeps human override stale protection', async () =>
   });
 });
 
+test('confirmed review batch still keeps artwork apply individual-only', async () => {
+  await withReview(async ({ assistant, review }) => {
+    seedArtworkSuggestion(assistant);
+
+    const confirmed = await review.decideBatch([
+      decision({
+        runId: 'run-artwork',
+        suggestionId: 'suggestion-artwork',
+        expectedCurrentValue: ''
+      })
+    ], { confirmReview: true });
+
+    assert.equal(confirmed.results[0].outcome, 'failed');
+    assert.match(confirmed.results[0].message ?? '', /capa.*revisão individual/i);
+    assert.equal(assistant.getRun('run-artwork')?.summary.review, 1);
+  });
+});
+
 test('batch rejects more than 100 decisions', async () => {
   await withReview(async ({ review }) => {
     await assert.rejects(
@@ -342,7 +419,7 @@ test('batch rejects more than 100 decisions', async () => {
   });
 });
 
-test('reset invalidates only open metadata suggestions and preserves resolved history', async () => {
+test('reset invalidates all open reviewable suggestions and preserves resolved history', async () => {
   await withReview(async ({ assistant, metadata, review }) => {
     seedSuggestion(assistant, {
       runId: 'run-open',
@@ -350,6 +427,11 @@ test('reset invalidates only open metadata suggestions and preserves resolved hi
       trackId: 'track-2',
       currentValue: 'Outra faixa',
       suggestedValue: 'Outra faixa revisada'
+    });
+    seedArtworkSuggestion(assistant, {
+      runId: 'run-artwork-open',
+      suggestionId: 'suggestion-artwork-open',
+      trackId: 'track-2'
     });
     seedSuggestion(assistant, {
       runId: 'run-rejected',
@@ -372,9 +454,11 @@ test('reset invalidates only open metadata suggestions and preserves resolved hi
 
     const invalidated = review.resetOpenSuggestions();
 
-    assert.equal(invalidated, 1);
+    assert.equal(invalidated, 2);
     assert.equal(assistant.getRun('run-open')?.summary.stale, 1);
     assert.equal(assistant.getRun('run-open')?.status, 'stale');
+    assert.equal(assistant.getRun('run-artwork-open')?.summary.stale, 1);
+    assert.equal(assistant.getRun('run-artwork-open')?.status, 'stale');
     assert.equal(assistant.getRun('run-rejected')?.summary.rejected, 1);
     assert.equal(assistant.getRun('run-rejected')?.status, 'completed');
     assert.equal(assistant.getRun('run-applied')?.summary.applied, 1);
@@ -383,11 +467,11 @@ test('reset invalidates only open metadata suggestions and preserves resolved hi
   });
 });
 
-test('reset refuses to mutate review state while metadata analysis is active', async () => {
+test('reset refuses to mutate review state while a reviewable analysis is active', async () => {
   await withReview(async ({ assistant, review }) => {
     assistant.createRun({
       id: 'run-active',
-      capability: 'metadata',
+      capability: 'artwork',
       libraryRevision: 7,
       createdAt: '2026-09-07T12:09:00.000Z'
     });
