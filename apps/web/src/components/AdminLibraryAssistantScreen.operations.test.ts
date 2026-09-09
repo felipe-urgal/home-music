@@ -15,14 +15,24 @@ describe('AdminLibraryAssistantScreen operational workflow', () => {
     expect(screen).toMatch(/decideLibraryAssistantBatch\(chunk, \{ confirmReview: reviewCount > 0 \}\)/);
   });
 
-  it('mantém itens de revisão selecionáveis, mas exige confirmação antes do lote', () => {
+  it('mantém metadata em revisão selecionável, mas exige confirmação antes do lote', () => {
     const screen = source();
 
+    expect(screen).toMatch(/function canApplyInBatch\(suggestion: LibraryAssistantSuggestion\)/);
+    expect(screen).toMatch(/suggestion\.target\.capability === 'metadata' && isOpen\(suggestion\)/);
     expect(screen).toMatch(/visibleActionableSuggestions/);
     expect(screen).toMatch(/const reviewCount = chosen\.filter\(item => !isSafe\(item\)\)\.length;/);
     expect(screen).toMatch(/if \(reviewCount > 0 && !reviewConfirmed\)/);
     expect(screen).toMatch(/setConfirmReviewCount\(reviewCount\)/);
     expect(screen).toMatch(/Aplicar sugestões em Revisão\?/);
+  });
+
+  it('preserva capas como decisão individual mesmo quando o lote de metadata é confirmado', () => {
+    const screen = source();
+
+    expect(screen).toMatch(/suggestion\.target\.capability === 'artwork'/);
+    expect(screen).toMatch(/expectedCurrentValue\(suggestion\)/);
+    expect(screen).toContain('capas do Cover Art Archive continuam com aplicação individual');
   });
 
   it('mantém reset forte separado da análise incremental e expõe as quatro seções', () => {
@@ -44,5 +54,14 @@ describe('AdminLibraryAssistantScreen operational workflow', () => {
     expect(screen).toMatch(/result\.outcome === 'stale'/);
     expect(screen).toMatch(/result\.message/);
     expect(screen).toMatch(/<summary>Ver detalhes<\/summary>/);
+  });
+
+  it('fecha confirmações com Escape e fornece foco inicial no diálogo', () => {
+    const screen = source();
+
+    expect(screen).toMatch(/event\.key !== 'Escape'/);
+    expect(screen).toMatch(/setConfirmReviewCount\(0\)/);
+    expect(screen).toMatch(/setConfirmReset\(false\)/);
+    expect(screen).toMatch(/<button autoFocus/);
   });
 });
