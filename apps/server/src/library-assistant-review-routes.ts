@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import type {
   AdminLibraryAssistantBatchDecisionRequest,
+  AdminLibraryAssistantBatchDecisionResponse,
   AdminLibraryAssistantDecisionRequest,
   AdminLibraryAssistantDecisionResponse,
   AdminLibraryAssistantReviewResponse
@@ -16,17 +17,7 @@ type LibraryAssistantReviewPort = {
   decideBatch: (
     decisions: AdminLibraryAssistantBatchDecisionRequest['decisions'],
     options?: { confirmReview?: boolean }
-  ) => Promise<AdminLibraryAssistantBatchDecisionRequest extends never ? never : {
-    results: Awaited<ReturnType<LibraryAssistantReviewPort['decide']>>[];
-    summary: {
-      total: number;
-      applied: number;
-      rejected: number;
-      alreadyResolved: number;
-      stale: number;
-      failed: number;
-    };
-  }>;
+  ) => Promise<AdminLibraryAssistantBatchDecisionResponse>;
   clearManagedLyrics?: (trackId: string) => boolean | null;
 };
 
