@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import {
   cancelLibraryAssistantRun,
+  clearLibraryAssistantManagedLyrics,
   decideLibraryAssistantBatch,
   decideLibraryAssistantSuggestion,
   getLibraryAssistantReview,
@@ -101,7 +102,7 @@ function isSafe(suggestion: LibraryAssistantSuggestion) {
 }
 
 function canApplyInBatch(suggestion: LibraryAssistantSuggestion) {
-  return suggestion.target.capability === 'metadata' && isOpen(suggestion);
+  return suggestion.target.capability !== 'artwork' && isOpen(suggestion);
 }
 
 function statusLabel(status: LibraryAssistantSuggestionStatus) {
@@ -126,11 +127,11 @@ function runTitle(run: LibraryAssistantRun | null) {
 
 function runDescription(run: LibraryAssistantRun | null): readonly [string, string?] {
   if (!run) {
-    return ['Enriqueça metadados com o MusicBrainz e capas com o Cover Art Archive.', 'Nada é aplicado sem sua confirmação.'];
+    return ['Enriqueça metadados, capas e letras com fontes externas confiáveis.', 'Nada é aplicado sem sua confirmação.'];
   }
   if (run.status === 'queued' || run.status === 'running') {
     return [
-      'Enriquecendo metadados e procurando capas confiáveis.',
+      'Enriquecendo metadados e procurando capas e letras confiáveis.',
       'Você já pode revisar e aplicar resultados prontos enquanto o restante da biblioteca continua sendo analisado.'
     ];
   }
@@ -144,7 +145,7 @@ function runDescription(run: LibraryAssistantRun | null): readonly [string, stri
     return ['A biblioteca mudou desde esta análise.', 'Execute uma nova análise para trabalhar com dados atuais.'];
   }
   return run.summary.total === 0
-    ? ['A análise terminou sem sugestões de metadata ou capa.']
+    ? ['A análise terminou sem sugestões de metadata, capa ou letra.']
     : [`${run.summary.total} sugestão${run.summary.total === 1 ? '' : 'ões'} encontrada${run.summary.total === 1 ? '' : 's'} para revisão.`];
 }
 
@@ -192,6 +193,11 @@ function statusTone(suggestion: LibraryAssistantSuggestion) {
 function rowStatusLabel(suggestion: LibraryAssistantSuggestion) {
   if (suggestion.status === 'pending' || suggestion.status === 'review') {
     if (suggestion.target.capability === 'artwork') return 'Capa para revisar';
+    if (suggestion.target.capability === 'lyrics') {
+      return isSafe(suggestion)
+        ? suggestion.target.synchronized ? 'Letra sincronizada' : 'Letra encontrada'
+        : 'Letra para revisar';
+    }
     return isSafe(suggestion) ? 'Confiança alta' : 'Revisão';
   }
   return statusLabel(suggestion.status);
@@ -204,13 +210,13 @@ function artworkExpectedValue(target: LibraryAssistantArtworkTarget) {
 function expectedCurrentValue(suggestion: LibraryAssistantSuggestion) {
   if (suggestion.target.capability === 'metadata') return suggestion.target.currentValue;
   if (suggestion.target.capability === 'artwork') return artworkExpectedValue(suggestion.target);
-  return null;
+  return suggestion.target.currentValue;
 }
 
 function capabilityLabel(suggestion: LibraryAssistantSuggestion) {
   if (suggestion.target.capability === 'artwork') return 'Capa';
   if (suggestion.target.capability === 'metadata') return FIELD_LABELS[suggestion.target.field];
-  return 'Sugestão';
+  return 'Letra';
 }
 
 function rowDetail(suggestion: LibraryAssistantSuggestion, item?: LibraryAssistantReviewItem) {
@@ -221,7 +227,7 @@ function rowDetail(suggestion: LibraryAssistantSuggestion, item?: LibraryAssista
   if (suggestion.target.capability === 'metadata') {
     return `${FIELD_LABELS[suggestion.target.field]}: “${suggestion.target.currentValue || '—'}” → “${suggestion.target.suggestedValue}”`;
   }
-  return item?.track.album || '—';
+  return `Fonte: LRCLIB · ${suggestion.target.synchronized ? 'sincronizada' : 'não sincronizada'} · “${suggestion.target.preview}”`;
 }
 
 function searchText(suggestion: LibraryAssistantSuggestion, item?: LibraryAssistantReviewItem) {
@@ -234,7 +240,10 @@ function searchText(suggestion: LibraryAssistantSuggestion, item?: LibraryAssist
     target.capability === 'metadata' ? target.suggestedValue : null,
     target.capability === 'artwork' ? target.label : null,
     target.capability === 'artwork' ? target.musicBrainzReleaseId : null,
-    target.capability === 'artwork' ? target.musicBrainzReleaseGroupId : null
+    target.capability === 'artwork' ? target.musicBrainzReleaseGroupId : null,
+    target.capability === 'lyrics' ? target.preview : null,
+    target.capability === 'lyrics' ? target.candidateId : null,
+    target.capability === 'lyrics' ? 'lrclib letra lyrics' : null
   ].filter(Boolean).join(' ');
 }
 
@@ -516,7 +525,9 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
           kind: 'success',
           message: suggestion.target.capability === 'artwork'
             ? 'Capa aplicada pelo override existente.'
-            : 'Sugestão aplicada. A biblioteca foi atualizada sem rescan.'
+            : suggestion.target.capability === 'lyrics'
+              ? 'Letra aprovada e aplicada. O player já usa a nova resolução sem rescan.'
+              : 'Sugestão aplicada. A biblioteca foi atualizada sem rescan.'
         });
       } else if (result.outcome === 'rejected') {
         setFeedback({ kind: 'success', message: 'Sugestão rejeitada e mantida no histórico da análise.' });
@@ -532,6 +543,30 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
       setFeedback({
         kind: 'error',
         message: error instanceof Error ? error.message : 'A decisão não pôde ser concluída.'
+      });
+    } finally {
+      setMutating(false);
+    }
+  }
+
+  async function clearLyrics(suggestion: LibraryAssistantSuggestion) {
+    if (suggestion.target.capability !== 'lyrics' || mutating) return;
+    setMutating(true);
+    setFeedback(null);
+    try {
+      const response = await clearLibraryAssistantManagedLyrics(suggestion.target.trackId);
+      notifyLibraryChanged();
+      setFeedback({
+        kind: 'success',
+        message: response.removed
+          ? 'Letra gerenciada removida. O sidecar local volta a ser usado automaticamente quando existir.'
+          : 'Não havia letra gerenciada para remover.'
+      });
+      await load(true);
+    } catch (error) {
+      setFeedback({
+        kind: 'error',
+        message: error instanceof Error ? error.message : 'Não foi possível remover a letra gerenciada.'
       });
     } finally {
       setMutating(false);
@@ -699,7 +734,7 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
           <Info />
           <div>
             <strong>O assistente só propõe alterações</strong>
-            <span>“Analisar mudanças” processa faixas novas, alteradas ou com falha anterior. Resultados já processados podem ser revisados e aplicados sem esperar a análise terminar; metadados em Revisão ainda exigem confirmação explícita e capas continuam com aplicação individual.</span>
+            <span>“Analisar mudanças” verifica metadados, capas e letras. Resultados já processados podem ser revisados e aplicados sem esperar a análise terminar; itens em Revisão ainda exigem confirmação explícita e capas continuam com aplicação individual.</span>
           </div>
         </aside>
       )}
@@ -819,8 +854,8 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
           <section className="assistant-admin__review" aria-labelledby="assistant-review-title">
             <header className="assistant-admin__review-heading">
               <div>
-                <strong id="assistant-review-title">Sugestões de metadados e capas</strong>
-                <small>Metadados podem ser aplicados em lote; capas externas continuam com revisão e aplicação individual.</small>
+                <strong id="assistant-review-title">Sugestões de metadados, capas e letras</strong>
+                <small>Metadados e letras de alta confiança podem ser aplicados em lote; capas externas continuam com revisão e aplicação individual.</small>
               </div>
               <div className="assistant-admin__selection-actions">
                 <button
@@ -866,7 +901,7 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
                     type="search"
                     value={search}
                     onChange={event => setSearch(event.target.value)}
-                    placeholder="Buscar por artista, álbum, faixa ou capa…"
+                    placeholder="Buscar por artista, álbum, faixa, capa ou letra…"
                     aria-label="Buscar sugestões"
                   />
                 </label>
@@ -894,14 +929,14 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
               ) : !latestRun ? (
                 <div className="assistant-admin__empty">
                   <Sparkles />
-                  <div><strong>Ainda não há sugestões para revisar</strong><span>Inicie uma análise para comparar sua biblioteca com o MusicBrainz e o Cover Art Archive.</span></div>
+                  <div><strong>Ainda não há sugestões para revisar</strong><span>Inicie uma análise para comparar sua biblioteca com MusicBrainz, Cover Art Archive e LRCLIB.</span></div>
                 </div>
               ) : latestRun.status === 'completed' && latestRun.summary.total === 0 && suggestions.length === 0 ? (
                 <div className="assistant-admin__empty">
                   <Check />
                   <div>
                     <strong>{totalTracks === 0 ? 'Biblioteca já está em dia' : 'Nenhuma sugestão encontrada'}</strong>
-                    <span>{totalTracks === 0 ? 'Nenhuma faixa nova, alterada ou pendente precisou ser reanalisada.' : 'A análise terminou sem candidatos de metadata ou capa.'}</span>
+                    <span>{totalTracks === 0 ? 'Nenhuma faixa nova, alterada ou pendente precisou ser reanalisada.' : 'A análise terminou sem candidatos de metadata, capa ou letra.'}</span>
                   </div>
                 </div>
               ) : visibleSuggestions.length === 0 ? (
@@ -919,6 +954,7 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
                     const safe = isSafe(suggestion);
                     const canDecide = Boolean(item && expectedCurrentValue(suggestion) != null && isOpen(suggestion));
                     const selectable = Boolean(item && canApplyInBatch(suggestion));
+                    const canClearLyrics = suggestion.target.capability === 'lyrics' && suggestion.status === 'applied';
                     return (
                       <article key={suggestion.id} className="assistant-admin-row">
                         <label className="assistant-admin-row__select" aria-label={`Selecionar ${item?.track.title ?? suggestion.target.trackId}`}>
@@ -947,12 +983,13 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
                           {safe && isOpen(suggestion) ? <CheckCircle2 /> : suggestion.status === 'failed' ? <XCircle /> : <AlertTriangle />}
                           {rowStatusLabel(suggestion)}
                         </span>
-                        {canDecide ? (
+                        {canDecide || canClearLyrics ? (
                           <details className="assistant-admin-row__menu">
                             <summary aria-label={`Ações para ${item?.track.title ?? suggestion.target.trackId}`}><MoreVertical /></summary>
                             <div>
-                              <button type="button" disabled={mutating} onClick={() => void decideOne(suggestion, 'apply')}><Check /> Aplicar</button>
-                              <button type="button" disabled={mutating} onClick={() => void decideOne(suggestion, 'reject')}><X /> Rejeitar</button>
+                              {canDecide && <button type="button" disabled={mutating} onClick={() => void decideOne(suggestion, 'apply')}><Check /> Aplicar</button>}
+                              {canDecide && <button type="button" disabled={mutating} onClick={() => void decideOne(suggestion, 'reject')}><X /> Rejeitar</button>}
+                              {canClearLyrics && <button type="button" disabled={mutating} onClick={() => void clearLyrics(suggestion)}><RefreshCw /> Voltar ao sidecar</button>}
                             </div>
                           </details>
                         ) : (
@@ -1068,7 +1105,7 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
           </header>
           <div className="assistant-admin__settings">
             <strong>Campos de metadados exibidos</strong>
-            <p className="assistant-admin__settings-note">Esta preferência controla apenas sugestões textuais; sugestões de capa permanecem visíveis e a análise continua verificando todos os campos suportados.</p>
+            <p className="assistant-admin__settings-note">Esta preferência controla apenas sugestões textuais de metadata; capas e letras permanecem visíveis e a análise continua verificando todos os campos suportados.</p>
             {METADATA_FIELDS.map(field => (
               <label key={field} className="assistant-admin__settings-field">
                 <input
@@ -1086,7 +1123,7 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
           </div>
           <div className="assistant-admin__settings">
             <strong>Comportamento da análise</strong>
-            <p className="assistant-admin__settings-note">Use “Analisar mudanças” no dia a dia: itens com falha anterior, faixas novas e alterações voltam para a fila. “Limpar e reanalisar tudo” invalida somente sugestões abertas de metadados e capas; Aplicadas e Rejeitadas permanecem no histórico.</p>
+            <p className="assistant-admin__settings-note">Use “Analisar mudanças” no dia a dia: itens com falha anterior, faixas novas e alterações voltam para a fila. “Limpar e reanalisar tudo” invalida somente sugestões abertas de metadados, capas e letras; Aplicadas e Rejeitadas permanecem no histórico.</p>
           </div>
         </section>
       )}
@@ -1096,7 +1133,7 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
           <section className="assistant-admin__confirm" role="dialog" aria-modal="true" aria-labelledby="assistant-confirm-review-title">
             <h2 id="assistant-confirm-review-title">Aplicar sugestões em Revisão?</h2>
             <p>
-              A seleção contém {confirmReviewCount.toLocaleString('pt-BR')} sugestão{confirmReviewCount === 1 ? '' : 'ões'} de metadados que exige{confirmReviewCount === 1 ? '' : 'm'} revisão humana. O servidor continuará validando metadata atual, revisão da biblioteca e overrides antes de aplicar cada item.
+              A seleção contém {confirmReviewCount.toLocaleString('pt-BR')} sugestão{confirmReviewCount === 1 ? '' : 'ões'} que exige{confirmReviewCount === 1 ? '' : 'm'} revisão humana. O servidor continuará validando a revisão da biblioteca, o estado atual e os overrides antes de aplicar cada item.
             </p>
             <div className="assistant-admin__confirm-actions">
               <button autoFocus className="assistant-admin__secondary-button" type="button" onClick={() => setConfirmReviewCount(0)}>Cancelar</button>
@@ -1110,7 +1147,7 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
         <div className="assistant-admin__confirm-backdrop">
           <section className="assistant-admin__confirm" role="dialog" aria-modal="true" aria-labelledby="assistant-confirm-reset-title">
             <h2 id="assistant-confirm-reset-title">Limpar e reanalisar tudo?</h2>
-            <p>As sugestões abertas de metadados e capas serão marcadas como desatualizadas e uma nova análise completa será iniciada. Aplicadas, Rejeitadas e o histórico das execuções serão preservados.</p>
+            <p>As sugestões abertas de metadados, capas e letras serão marcadas como desatualizadas e uma nova análise completa será iniciada. Aplicadas, Rejeitadas e o histórico das execuções serão preservados.</p>
             <div className="assistant-admin__confirm-actions">
               <button autoFocus className="assistant-admin__secondary-button" type="button" onClick={() => setConfirmReset(false)}>Cancelar</button>
               <button className="assistant-admin__danger-button" type="button" onClick={() => void resetAndAnalyze()}><RefreshCw /> Limpar e reanalisar</button>
