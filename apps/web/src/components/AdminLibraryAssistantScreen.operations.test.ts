@@ -32,7 +32,7 @@ describe('AdminLibraryAssistantScreen operational workflow', () => {
 
     expect(screen).toMatch(/suggestion\.target\.capability === 'artwork'/);
     expect(screen).toMatch(/expectedCurrentValue\(suggestion\)/);
-    expect(screen).toContain('capas do Cover Art Archive continuam com aplicação individual');
+    expect(screen).toContain('capas continuam com aplicação individual');
   });
 
   it('mantém reset forte separado da análise incremental e expõe as quatro seções', () => {
