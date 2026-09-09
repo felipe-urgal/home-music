@@ -386,8 +386,9 @@ function reliableMetadata(value: string) {
   return !PLACEHOLDERS.has(normalizedValue(value));
 }
 
-export function needsMusicBrainzMetadataRepair(track: Track) {
-  return !reliableMetadata(track.title)
+export function needsMusicBrainzEnrichment(track: Track) {
+  return !track.hasCover
+    || !reliableMetadata(track.title)
     || !reliableMetadata(track.artist)
     || !reliableMetadata(track.album)
     || !reliableMetadata(track.albumArtist);

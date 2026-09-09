@@ -8,7 +8,7 @@ import { createLrclibLyricsAnalyzer, resolveLrclibLyricsCandidate } from './lrcl
 import { readSidecarLyrics } from './lyrics.js';
 import {
   createMusicBrainzMetadataAnalyzer,
-  needsMusicBrainzMetadataRepair
+  needsMusicBrainzEnrichment
 } from './musicbrainz-metadata-analyzer.js';
 import { LibraryAssistantCompositeReviewService } from './library-assistant-composite-review-service.js';
 import { LibraryAssistantIncrementalIndex } from './library-assistant-incremental-index.js';
@@ -124,7 +124,7 @@ export function registerLibraryAssistant(
     analyzers,
     library: analysisLibrary,
     isTrackEligible: (capability, track) => (
-      capability !== 'metadata' || needsMusicBrainzMetadataRepair(track)
+      capability !== 'metadata' || needsMusicBrainzEnrichment(track)
     )
   });
   const baseReview = new LibraryAssistantReviewService({

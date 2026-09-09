@@ -8,7 +8,7 @@ import type {
 } from './library-assistant-store.js';
 import {
   createMusicBrainzMetadataAnalyzer,
-  needsMusicBrainzMetadataRepair,
+  needsMusicBrainzEnrichment,
   normalizeMusicBrainzRecordingSearch,
   rankMusicBrainzCandidate
 } from './musicbrainz-metadata-analyzer.js';
@@ -83,12 +83,13 @@ function isCaaRequest(input: string | URL) {
   return new URL(String(input)).origin === 'https://coverartarchive.org';
 }
 
-test('triagem local seleciona somente faixas com metadados ausentes ou placeholders', () => {
-  assert.equal(needsMusicBrainzMetadataRepair(track()), false);
-  assert.equal(needsMusicBrainzMetadataRepair(track({ artist: 'Artista desconhecido' })), true);
-  assert.equal(needsMusicBrainzMetadataRepair(track({ album: 'Unknown Album' })), true);
-  assert.equal(needsMusicBrainzMetadataRepair(track({ albumArtist: '' })), true);
-  assert.equal(needsMusicBrainzMetadataRepair(track({ title: 'Título desconhecido' })), true);
+test('triagem local seleciona faixas com metadados inválidos ou capa ausente', () => {
+  assert.equal(needsMusicBrainzEnrichment(track({ hasCover: true })), false);
+  assert.equal(needsMusicBrainzEnrichment(track({ hasCover: false })), true);
+  assert.equal(needsMusicBrainzEnrichment(track({ hasCover: true, artist: 'Artista desconhecido' })), true);
+  assert.equal(needsMusicBrainzEnrichment(track({ hasCover: true, album: 'Unknown Album' })), true);
+  assert.equal(needsMusicBrainzEnrichment(track({ hasCover: true, albumArtist: '' })), true);
+  assert.equal(needsMusicBrainzEnrichment(track({ hasCover: true, title: 'Título desconhecido' })), true);
 });
 
 test('normaliza somente campos MusicBrainz necessários, mantém ids com escopo e é idempotente no cache', () => {
