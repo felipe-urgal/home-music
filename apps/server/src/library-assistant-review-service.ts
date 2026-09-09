@@ -36,6 +36,10 @@ type ReviewServiceOptions = {
   now?: () => Date;
 };
 
+type ReviewBatchOptions = {
+  confirmReview?: boolean;
+};
+
 type ReviewRun = NonNullable<ReturnType<LibraryAssistantStore['getRun']>>;
 
 class LibraryAssistantDecisionStore {
@@ -194,7 +198,10 @@ export class LibraryAssistantReviewService {
     }
   }
 
-  async decideBatch(decisions: LibraryAssistantDecision[]): Promise<AdminLibraryAssistantBatchDecisionResponse> {
+  async decideBatch(
+    decisions: LibraryAssistantDecision[],
+    options: ReviewBatchOptions = {}
+  ): Promise<AdminLibraryAssistantBatchDecisionResponse> {
     if (!Array.isArray(decisions) || decisions.length < 1 || decisions.length > MAX_BATCH_DECISIONS) {
       throw new RangeError(`O lote deve conter entre 1 e ${MAX_BATCH_DECISIONS} decisões.`);
     }
@@ -210,12 +217,13 @@ export class LibraryAssistantReviewService {
         && record
         && OPEN_STATUSES.has(record.suggestion.status)
         && !isLibraryAssistantAutoApplicable(record.suggestion)
+        && options.confirmReview !== true
       ) {
         results.push(result(
           decision,
           'failed',
           decision.expectedCurrentValue,
-          'Esta sugestão exige revisão individual e não pode ser aplicada pelo lote seguro.'
+          'Esta sugestão exige confirmação explícita para aplicação em lote.'
         ));
         continue;
       }
