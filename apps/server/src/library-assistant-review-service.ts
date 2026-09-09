@@ -46,6 +46,10 @@ type ReviewServiceOptions = {
   now?: () => Date;
 };
 
+type ReviewBatchOptions = {
+  confirmReview?: boolean;
+};
+
 type ReviewRun = NonNullable<ReturnType<LibraryAssistantStore['getRun']>>;
 type ReviewableTarget = LibraryAssistantMetadataTarget | LibraryAssistantArtworkTarget;
 
@@ -81,6 +85,39 @@ class LibraryAssistantDecisionStore {
       SET status = 'stale', finished_at = COALESCE(finished_at, ?)
       WHERE id = ? AND status = 'completed';
     `).run(updatedAt, runId);
+  }
+
+  invalidateOpenReviewSuggestions(updatedAt: string) {
+    this.db.exec('BEGIN IMMEDIATE;');
+    try {
+      this.db.prepare(`
+        UPDATE library_assistant_runs
+        SET status = 'stale', finished_at = COALESCE(finished_at, ?)
+        WHERE capability IN ('metadata', 'artwork')
+          AND status = 'completed'
+          AND EXISTS (
+            SELECT 1
+            FROM library_assistant_suggestions AS suggestion
+            WHERE suggestion.run_id = library_assistant_runs.id
+              AND suggestion.status IN ('pending', 'review')
+          );
+      `).run(updatedAt);
+      const result = this.db.prepare(`
+        UPDATE library_assistant_suggestions
+        SET status = 'stale', updated_at = ?
+        WHERE run_id IN (
+          SELECT id
+          FROM library_assistant_runs
+          WHERE capability IN ('metadata', 'artwork')
+        )
+          AND status IN ('pending', 'review');
+      `).run(updatedAt);
+      this.db.exec('COMMIT;');
+      return Number(result.changes);
+    } catch (error) {
+      this.db.exec('ROLLBACK;');
+      throw error;
+    }
   }
 }
 
@@ -232,6 +269,18 @@ export class LibraryAssistantReviewService {
     return { libraryRevision: this.options.library.revision(), items };
   }
 
+  resetOpenSuggestions() {
+    const activeRun = this.options.store.listRuns(MAX_REVIEW_RUNS)
+      .find(run => (
+        (run.capability === 'metadata' || run.capability === 'artwork')
+        && (run.status === 'queued' || run.status === 'running')
+      ));
+    if (activeRun) {
+      throw new RangeError('Cancele a análise em andamento antes de limpar as sugestões abertas.');
+    }
+    return this.decisions.invalidateOpenReviewSuggestions(this.now().toISOString());
+  }
+
   async decide(decision: LibraryAssistantDecision): Promise<LibraryAssistantDecisionResult> {
     validateDecision(decision);
     const previous = this.decisionTail;
@@ -246,7 +295,10 @@ export class LibraryAssistantReviewService {
     }
   }
 
-  async decideBatch(decisions: LibraryAssistantDecision[]): Promise<AdminLibraryAssistantBatchDecisionResponse> {
+  async decideBatch(
+    decisions: LibraryAssistantDecision[],
+    options: ReviewBatchOptions = {}
+  ): Promise<AdminLibraryAssistantBatchDecisionResponse> {
     if (!Array.isArray(decisions) || decisions.length < 1 || decisions.length > MAX_BATCH_DECISIONS) {
       throw new RangeError(`O lote deve conter entre 1 e ${MAX_BATCH_DECISIONS} decisões.`);
     }
@@ -276,12 +328,13 @@ export class LibraryAssistantReviewService {
         && record
         && OPEN_STATUSES.has(record.suggestion.status)
         && !isLibraryAssistantAutoApplicable(record.suggestion)
+        && options.confirmReview !== true
       ) {
         results.push(result(
           decision,
           'failed',
           decision.expectedCurrentValue,
-          'Esta sugestão exige revisão individual e não pode ser aplicada pelo lote seguro.'
+          'Esta sugestão exige confirmação explícita para aplicação em lote.'
         ));
         continue;
       }

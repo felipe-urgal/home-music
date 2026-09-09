@@ -55,6 +55,8 @@ function createApp() {
     ['admin-1', { id: 'admin-1', username: 'felipe', role: 'admin', passwordMustChange: false }]
   ]);
   const startedBy: Array<string | null | undefined> = [];
+  const batchConfirmations: boolean[] = [];
+  let resetCalls = 0;
   const assistant = {
     startRun(_capability: 'metadata' | 'artwork' | 'lyrics', ownerId?: string | null) {
       startedBy.push(ownerId);
@@ -69,10 +71,15 @@ function createApp() {
     getReviewQueue() {
       return { libraryRevision: 7, items: [] };
     },
+    resetOpenSuggestions() {
+      resetCalls += 1;
+      return 3;
+    },
     async decide(decision: LibraryAssistantDecision) {
       return reviewResult(decision);
     },
-    async decideBatch(decisions: LibraryAssistantDecision[]) {
+    async decideBatch(decisions: LibraryAssistantDecision[], options: { confirmReview?: boolean } = {}) {
+      batchConfirmations.push(options.confirmReview === true);
       if (decisions.length < 1 || decisions.length > 100) {
         throw new RangeError('O lote deve conter entre 1 e 100 decisões.');
       }
@@ -99,7 +106,13 @@ function createApp() {
   });
   registerLibraryAssistantRoutes(app, assistant);
   registerLibraryAssistantReviewRoutes(app, review);
-  return { app, sessions, startedBy };
+  return {
+    app,
+    sessions,
+    startedBy,
+    batchConfirmations,
+    resetCalls: () => resetCalls
+  };
 }
 
 const validDecision = {
@@ -111,7 +124,7 @@ const validDecision = {
 };
 
 test('Library Assistant API is admin-only and lifecycle/review mutations require anti-CSRF header', async () => {
-  const { app, sessions, startedBy } = createApp();
+  const { app, sessions, startedBy, batchConfirmations, resetCalls } = createApp();
   const userToken = sessions.createSessionForUser('user-1');
   const adminToken = sessions.createSessionForUser('admin-1');
   try {
@@ -143,6 +156,14 @@ test('Library Assistant API is admin-only and lifecycle/review mutations require
       payload: validDecision
     });
     assert.equal(noCsrfDecision.statusCode, 403);
+
+    const noCsrfReset = await app.inject({
+      method: 'POST',
+      url: '/api/admin/library-assistant/review/reset',
+      headers: { cookie: cookie(adminToken) }
+    });
+    assert.equal(noCsrfReset.statusCode, 403);
+    assert.equal(resetCalls(), 0);
 
     const started = await app.inject({
       method: 'POST',
@@ -190,6 +211,29 @@ test('Library Assistant API is admin-only and lifecycle/review mutations require
     assert.equal(decided.statusCode, 200);
     assert.equal(decided.json().result.outcome, 'applied');
     assert.equal(decided.headers['cache-control'], 'private, no-store');
+
+    const batch = await app.inject({
+      method: 'POST',
+      url: '/api/admin/library-assistant/decisions',
+      headers: {
+        cookie: cookie(adminToken),
+        'content-type': 'application/json',
+        'x-home-music-request': '1'
+      },
+      payload: { decisions: [validDecision], confirmReview: true }
+    });
+    assert.equal(batch.statusCode, 200);
+    assert.deepEqual(batchConfirmations, [true]);
+
+    const reset = await app.inject({
+      method: 'POST',
+      url: '/api/admin/library-assistant/review/reset',
+      headers: { cookie: cookie(adminToken), 'x-home-music-request': '1' }
+    });
+    assert.equal(reset.statusCode, 200);
+    assert.deepEqual(reset.json(), { invalidated: 3 });
+    assert.equal(resetCalls(), 1);
+    assert.equal(reset.headers['cache-control'], 'private, no-store');
 
     const cancelled = await app.inject({
       method: 'POST',
@@ -259,6 +303,15 @@ test('Library Assistant API validates capability, identifiers, filters and revie
       payload: { decisions: [] }
     });
     assert.equal(invalidBatch.statusCode, 400);
+
+    const invalidConfirmation = await app.inject({
+      method: 'POST',
+      url: '/api/admin/library-assistant/decisions',
+      headers: { ...headers, 'content-type': 'application/json' },
+      payload: { decisions: [validDecision], confirmReview: 'yes' }
+    });
+    assert.equal(invalidConfirmation.statusCode, 400);
+    assert.match(invalidConfirmation.json().error, /Confirmação de revisão inválida/);
   } finally {
     await app.close();
   }

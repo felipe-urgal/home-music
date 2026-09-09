@@ -23,12 +23,12 @@ Quando houver divergência, use esta ordem:
 
 ## Estado técnico atual
 
-Em **2026-09-07**:
+Em **2026-09-09**:
 
 - fase 7.5 (multiusuário/autenticação) está concluída; os documentos de implementação foram arquivados;
 - fase 14 (portabilidade de dados pessoais) está implementada na `main` após o PR #324;
 - fase 15 (Library Assistant) é o ciclo técnico ativo, rastreado pela issue #310;
-- a fundação do Assistente (#311), a identificação explicável via MusicBrainz (#312) e a revisão/aplicação segura de metadata (#313) possuem contrato canônico em [`library-assistant.md`](library-assistant.md);
+- a fundação do Assistente (#311), a identificação explicável via MusicBrainz (#312), a revisão/aplicação segura de metadata (#313), artwork via Cover Art Archive (#314) e a operação em volume/monitoramento (#356) possuem contrato canônico em [`library-assistant.md`](library-assistant.md);
 - as capacidades posteriores da fase 15 permanecem no [`library-assistant-plan.md`](library-assistant-plan.md).
 
 Para o estado instantâneo de issues/PRs, GitHub é a fonte de verdade; este índice não tenta reproduzir todo o tracker.
@@ -58,9 +58,9 @@ Para o estado instantâneo de issues/PRs, GitHub é a fonte de verdade; este ín
 - [`library-http-delivery.md`](library-http-delivery.md) — entrega HTTP da mídia;
 - [`library-metadata-normalization.md`](library-metadata-normalization.md) — normalização de metadata;
 - [`library-navigation-performance.md`](library-navigation-performance.md) — performance de navegação;
-- [`library-assistant.md`](library-assistant.md) — contrato implementado do Assistente: fundação, matching via MusicBrainz e fluxo administrativo seguro de analisar → revisar → aplicar/rejeitar metadata por campo;
-- [`admin-metadata-overrides.md`](admin-metadata-overrides.md) — overrides de metadata;
-- [`admin-cover-overrides.md`](admin-cover-overrides.md) — overrides de capa;
+- [`library-assistant.md`](library-assistant.md) — contrato implementado do Assistente: matching via MusicBrainz, artwork via Cover Art Archive, revisão individual/em lote de metadata com confirmação, reset seguro, fila e observabilidade administrativa;
+- [`admin-metadata-overrides.md`](admin-metadata-overrides.md) — overrides de metadata e autoridade usada pelo apply do Assistente;
+- [`admin-cover-overrides.md`](admin-cover-overrides.md) — overrides de capa e autoridade usada pelo apply individual de artwork do Assistente;
 - [`admin-file-moves.md`](admin-file-moves.md) — organização/movimentação de arquivos;
 - [`admin-bulk-actions.md`](admin-bulk-actions.md) — ações em lote;
 - [`admin-quarantine.md`](admin-quarantine.md) — lixeira/quarentena;
@@ -125,7 +125,7 @@ Os pares `PRODUCTION.md`/`production.md` e `DEVELOPMENT.md`/`development-environ
 
 ## Planos e decisões
 
-- [`library-assistant-plan.md`](library-assistant-plan.md) — plano ativo das capacidades restantes da fase 15; o comportamento já implementado em #311/#312/#313 é descrito em [`library-assistant.md`](library-assistant.md);
+- [`library-assistant-plan.md`](library-assistant-plan.md) — plano ativo das capacidades restantes da fase 15; o comportamento já implementado em #311/#312/#313/#314/#356 é descrito em [`library-assistant.md`](library-assistant.md);
 - documentos com `*-decision.md` preservam decisões arquiteturais específicas e devem ser lidos junto do código atual.
 
 ## Histórico

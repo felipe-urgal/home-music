@@ -2,6 +2,7 @@ import type {
   AdminLibraryAssistantBatchDecisionRequest,
   AdminLibraryAssistantBatchDecisionResponse,
   AdminLibraryAssistantDecisionResponse,
+  AdminLibraryAssistantResetResponse,
   AdminLibraryAssistantReviewResponse,
   AdminLibraryAssistantRunProgressResponse,
   AdminLibraryAssistantRunResponse,
@@ -71,6 +72,15 @@ export async function getLibraryAssistantReview(limit = 500) {
   return response.json() as Promise<AdminLibraryAssistantReviewResponse>;
 }
 
+export async function resetLibraryAssistantReview() {
+  const response = await apiFetch('/api/admin/library-assistant/review/reset', {
+    method: 'POST',
+    headers: { 'X-Home-Music-Request': '1' }
+  });
+  if (!response.ok) throw new Error(await responseError(response));
+  return response.json() as Promise<AdminLibraryAssistantResetResponse>;
+}
+
 export async function decideLibraryAssistantSuggestion(decision: LibraryAssistantDecision) {
   const response = await apiFetch(
     `/api/admin/library-assistant/suggestions/${encodeURIComponent(decision.suggestionId)}/decision`,
@@ -87,8 +97,14 @@ export async function decideLibraryAssistantSuggestion(decision: LibraryAssistan
   return response.json() as Promise<AdminLibraryAssistantDecisionResponse>;
 }
 
-export async function decideLibraryAssistantBatch(decisions: LibraryAssistantDecision[]) {
-  const payload: AdminLibraryAssistantBatchDecisionRequest = { decisions };
+export async function decideLibraryAssistantBatch(
+  decisions: LibraryAssistantDecision[],
+  options: { confirmReview?: boolean } = {}
+) {
+  const payload: AdminLibraryAssistantBatchDecisionRequest = {
+    decisions,
+    confirmReview: options.confirmReview === true
+  };
   const response = await apiFetch('/api/admin/library-assistant/decisions', {
     method: 'POST',
     headers: {

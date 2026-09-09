@@ -5,6 +5,7 @@ import {
   decideLibraryAssistantSuggestion,
   getLibraryAssistantReview,
   getLibraryAssistantRunProgress,
+  resetLibraryAssistantReview,
   startLibraryAssistantMetadataRun
 } from './library-assistant-client';
 
@@ -40,6 +41,15 @@ describe('library assistant admin client', () => {
       'X-Home-Music-Request': '1'
     });
     expect(JSON.parse(String(init.body))).toEqual({ capability: 'metadata', full: false });
+  });
+
+  it('inicia reanálise completa somente quando solicitado', async () => {
+    apiFetchMock.mockResolvedValue(response({ run: { id: 'run-2' } }));
+
+    await startLibraryAssistantMetadataRun({ full: true });
+
+    const [, init] = apiFetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toEqual({ capability: 'metadata', full: true });
   });
 
   it('lê o progresso persistente do run sem cache', async () => {
@@ -84,7 +94,7 @@ describe('library assistant admin client', () => {
     expect(JSON.parse(String(init.body))).toEqual(decision);
   });
 
-  it('preserva exatamente as decisões selecionadas no lote', async () => {
+  it('preserva exatamente as decisões selecionadas no lote seguro', async () => {
     apiFetchMock.mockResolvedValue(response({ results: [], summary: {} }));
     const decisions = [
       {
@@ -109,7 +119,38 @@ describe('library assistant admin client', () => {
     expect(url).toBe('/api/admin/library-assistant/decisions');
     expect(init.method).toBe('POST');
     expect(init.headers).toMatchObject({ 'X-Home-Music-Request': '1' });
-    expect(JSON.parse(String(init.body))).toEqual({ decisions });
+    expect(JSON.parse(String(init.body))).toEqual({ decisions, confirmReview: false });
+  });
+
+  it('propaga confirmação explícita quando o lote contém itens de revisão', async () => {
+    apiFetchMock.mockResolvedValue(response({ results: [], summary: {} }));
+    const decisions = [{
+      runId: 'run-1',
+      suggestionId: 'suggestion-review',
+      action: 'apply' as const,
+      expectedLibraryRevision: 42,
+      expectedCurrentValue: 'Título atual'
+    }];
+
+    await decideLibraryAssistantBatch(decisions, { confirmReview: true });
+
+    const [, init] = apiFetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toEqual({ decisions, confirmReview: true });
+  });
+
+  it('limpa somente a fila aberta por uma mutação administrativa dedicada', async () => {
+    apiFetchMock.mockResolvedValue(response({ invalidated: 38 }));
+
+    const result = await resetLibraryAssistantReview();
+
+    expect(result.invalidated).toBe(38);
+    expect(apiFetchMock).toHaveBeenCalledWith(
+      '/api/admin/library-assistant/review/reset',
+      {
+        method: 'POST',
+        headers: { 'X-Home-Music-Request': '1' }
+      }
+    );
   });
 
   it('faz leitura sem cache e expõe a mensagem de erro retornada pelo servidor', async () => {

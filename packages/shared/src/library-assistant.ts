@@ -229,6 +229,7 @@ export type LibraryAssistantRunProgress = {
 
 export type AdminLibraryAssistantStartRunRequest = {
   capability: LibraryAssistantCapability;
+  full?: boolean;
 };
 
 export type AdminLibraryAssistantRunResponse = {
@@ -270,6 +271,10 @@ export type LibraryAssistantReviewItem = {
 export type AdminLibraryAssistantReviewResponse = {
   libraryRevision: number;
   items: LibraryAssistantReviewItem[];
+};
+
+export type AdminLibraryAssistantResetResponse = {
+  invalidated: number;
 };
 
 export type LibraryAssistantDecisionAction = 'apply' | 'reject';
@@ -318,6 +323,7 @@ export type AdminLibraryAssistantDecisionResponse = {
 
 export type AdminLibraryAssistantBatchDecisionRequest = {
   decisions: LibraryAssistantDecision[];
+  confirmReview?: boolean;
 };
 
 export type AdminLibraryAssistantBatchDecisionResponse = {

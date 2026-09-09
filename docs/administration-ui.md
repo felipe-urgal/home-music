@@ -62,27 +62,45 @@ O mesmo evento que atualiza o cockpit também faz `useLibraryData()` buscar o sn
 
 ## Assistente da Biblioteca
 
-A entrada **Administração → Assistente da Biblioteca** é um workspace de análise e revisão humana de metadata textual.
+A entrada **Administração → Assistente da Biblioteca** é um workspace de análise e revisão humana de metadata textual e capas sugeridas pelo Cover Art Archive, com quatro seções funcionais.
+
+### Sugestões
 
 Fluxo atual:
 
-1. **Analisar biblioteca** inicia um run de metadata sem aplicar nada automaticamente;
-2. o resumo mostra sugestões totais, seguras, que precisam de revisão, stale, aplicadas e rejeitadas;
-3. filtros separam abertas, seguras, revisão, stale, aplicadas, rejeitadas, falhas e todas;
-4. cada card mostra faixa, campo, valor atual, valor sugerido, confiança, origem e motivos da sugestão;
-5. o administrador pode **Aplicar este campo** ou **Rejeitar** individualmente;
-6. o lote é explícito: somente sugestões seguras selecionadas pelo usuário entram em **Aplicar selecionadas**;
-7. sucesso parcial é reportado sem esconder itens stale/falhos;
-8. depois de apply confirmado, `home-music:library-changed` atualiza biblioteca/player sem rescan.
+1. **Analisar biblioteca** inicia o primeiro run; depois **Analisar mudanças** é o caminho cotidiano e incremental;
+2. o resumo mostra sugestões, seguras, revisão necessária e falhas;
+3. filtros separam abertas, seguras, revisão, aplicadas, rejeitadas, falhas e todas;
+4. cada linha mostra identidade da faixa, detalhe da alteração/capa, status de confiança/revisão e ações individuais;
+5. **Selecionar seguras** continua restrito a sugestões de metadata elegíveis pela regra compartilhada;
+6. **Selecionar visíveis** permite seleção manual de sugestões abertas de metadata exibidas, inclusive `Revisão`; sugestões de capa permanecem fora do lote;
+7. quando o lote de metadata contém `Revisão`, um diálogo exige confirmação explícita antes da aplicação;
+8. a Web envia blocos reais de até 100 decisões por request e preserva sucesso parcial;
+9. o feedback separa aplicadas, já resolvidas, stale, não encontradas, não suportadas e falhas, com detalhes das mensagens retornadas pelo servidor;
+10. capas externas são baixadas e persistidas somente no apply individual, reutilizando `TrackCoverOverrideStore` e as proteções definidas para Cover Art Archive;
+11. depois de apply confirmado, `home-music:library-changed` atualiza biblioteca/player sem rescan.
 
-Sugestão de alta confiança não equivale a autorização automática. Itens com `human-override`, ambiguidade ou conflito não entram na seleção segura automática. Confiança/status/conflito têm texto próprio e não dependem somente de cor.
+Sugestão de alta confiança não equivale a autorização automática. Itens de metadata com `human-override`, ambiguidade ou conflito não entram na seleção segura automática. Selecionar manualmente um item de `Revisão` também não o torna seguro: é necessária confirmação e o backend revalida status, premissa, valor atual e revisão humana do mesmo campo. A confirmação de lote não libera artwork; capa continua decisão individual para evitar download/persistência externa implícita em massa.
 
-O componente protege contra respostas assíncronas antigas com versões de request/análise. Carregamento, análise, vazio, erro, cancelamento, mutação, stale e sucesso são estados visíveis. Feedback relevante usa `role="status"`/`role="alert"`, a lista usa região `aria-live` e controles possuem labels/estado pressionado quando aplicável.
+### Fila
 
-Existem dois cancelamentos distintos:
+A aba **Fila** apresenta o estado operacional da análise mais recente: Processando, Pendentes, Em retry, Encontradas, Sem resultado e Falhas. Enquanto o run está ativo, **Cancelar análise** permanece disponível. Em estado terminal, **Analisar mudanças** replaneja alterações e trabalho sem resultado incremental reutilizável; quando existem falhas, a ação recebe o rótulo **Tentar falhas novamente**.
 
-- **Cancelar análise** interrompe novo trabalho do run e nunca transforma resultados parciais em aplicação automática;
-- **Cancelar lote** é observado entre decisões: o item já em andamento pode concluir, nenhum novo item é iniciado, sucessos confirmados permanecem e itens ainda não iniciados continuam selecionados para revisão/retry.
+### Estatísticas
+
+A aba **Estatísticas** usa somente observabilidade já produzida pelo backend: tempo decorrido, faixas por segundo, consultas externas, cache, retries e espera por rate limit. Também mostra um histórico compacto dos runs recentes de metadata. A UI não cria métricas paralelas nem estima dados que o backend não observou.
+
+### Configurações
+
+A aba **Configurações** permanece pequena. Ela controla quais campos de metadata (`Título`, `Artista`, `Álbum`, `Artista do álbum`) aparecem na listagem de sugestões, persistindo a preferência localmente. Pelo menos um campo fica visível; sugestões de capa não são ocultadas por essa preferência.
+
+Essa configuração é **somente de apresentação**: o analyzer continua verificando todos os campos suportados. Não existe opção de UI para desligar stale protection, confirmação de revisão, proteção de override humano ou a exigência de apply individual para capa.
+
+### Limpar e reanalisar tudo
+
+A ação forte **Limpar e reanalisar tudo** possui diálogo próprio. Ela invalida apenas sugestões abertas (`pending/review`) dos runs revisáveis de metadata/artwork e inicia uma nova análise completa. Aplicadas, Rejeitadas e o histórico de runs são preservados. Isso inclui sugestões de artwork emitidas dentro de um run de metadata, evitando que uma reanálise completa deixe capas antigas abertas na fila. O backend recusa o reset enquanto existe uma análise revisável ativa.
+
+O componente protege contra respostas assíncronas antigas com versões de request/análise. Carregamento, análise, vazio, erro, cancelamento, mutação, stale e sucesso são estados visíveis. Feedback relevante usa `role="status"`/`role="alert"`, a lista usa região `aria-live` e os diálogos de confirmação usam `role="dialog"` + `aria-modal="true"`, recebem foco inicial e podem ser fechados com `Escape`.
 
 Aplicações já confirmadas nunca são revertidas silenciosamente.
 
@@ -188,6 +206,7 @@ O frontend deve reforçar — nunca substituir — as invariantes do backend:
 - Integridade não ganha botão de correção automática implícita;
 - credenciais temporárias recebem proteção contra perda silenciosa;
 - filtros não devem deixar seleção destrutiva invisível;
-- o Assistente não aplica sugestões apenas por confiança; toda mutação continua explícita e revalidada no servidor.
+- o Assistente não aplica sugestões apenas por confiança; toda mutação continua explícita e revalidada no servidor;
+- confirmar um lote de revisão autoriza somente metadata selecionada naquele envio, não desliga stale protection e não habilita aplicação em lote de artwork.
 
 Documentos `phase-7.5-*` foram movidos para [`history/phase-7.5/`](history/phase-7.5/) e permanecem apenas como histórico de implementação.
