@@ -75,7 +75,7 @@ test('Library Assistant revisa, aplica via override, atualiza player e sobrevive
     await page.getByRole('button', { name: 'Assistente da Biblioteca', exact: true }).click();
     await expect(page.locator('#library-assistant-title')).toHaveText('Assistente da Biblioteca');
     await expect(page.locator('.assistant-admin__sections').getByRole('button', { name: 'Sugestões', exact: true })).toHaveClass(/is-active/);
-    await expect(page.locator('.assistant-admin__info')).toContainText('A tela é atualizada automaticamente enquanto a análise estiver em andamento.');
+    await expect(page.locator('.assistant-admin__info')).toContainText('Você pode revisar os resultados que já apareceram; a tela continua atualizando a análise automaticamente.');
 
     const row = page.locator('.assistant-admin-row').filter({ hasText: 'E2E Track' }).first();
     await expect(row).toBeVisible();
