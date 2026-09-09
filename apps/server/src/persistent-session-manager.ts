@@ -68,7 +68,7 @@ export class PersistentSessionManager extends SessionManager {
     this.db.close();
   }
 
-  override createSession() {
+  override createSession(_now = Date.now()): string {
     throw new Error('Sessões legadas não são suportadas pelo armazenamento persistente.');
   }
 
