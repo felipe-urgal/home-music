@@ -5,9 +5,30 @@ import type {
   AdminLibraryAssistantDecisionResponse,
   AdminLibraryAssistantReviewResponse
 } from '@home-music/shared/library-assistant';
-import type { LibraryAssistantReviewService } from './library-assistant-review-service.js';
 
 const SUGGESTION_ID = /^[A-Za-z0-9._:-]{1,192}$/;
+const TRACK_ID = /^[A-Za-z0-9._:-]{1,128}$/;
+
+type LibraryAssistantReviewPort = {
+  getReviewQueue: (limit?: number) => AdminLibraryAssistantReviewResponse;
+  resetOpenSuggestions: () => number;
+  decide: (decision: AdminLibraryAssistantDecisionRequest) => Promise<AdminLibraryAssistantDecisionResponse['result']>;
+  decideBatch: (
+    decisions: AdminLibraryAssistantBatchDecisionRequest['decisions'],
+    options?: { confirmReview?: boolean }
+  ) => Promise<AdminLibraryAssistantBatchDecisionRequest extends never ? never : {
+    results: Awaited<ReturnType<LibraryAssistantReviewPort['decide']>>[];
+    summary: {
+      total: number;
+      applied: number;
+      rejected: number;
+      alreadyResolved: number;
+      stale: number;
+      failed: number;
+    };
+  }>;
+  clearManagedLyrics?: (trackId: string) => boolean | null;
+};
 
 function parseLimit(value: unknown) {
   if (value == null || value === '') return 200;
@@ -35,7 +56,7 @@ function parseOptionalBoolean(value: unknown) {
 
 export function registerLibraryAssistantReviewRoutes(
   app: FastifyInstance,
-  review: LibraryAssistantReviewService
+  review: LibraryAssistantReviewPort
 ) {
   app.get<{ Querystring: { limit?: string } }>(
     '/api/admin/library-assistant/review',
@@ -57,6 +78,20 @@ export function registerLibraryAssistantReviewRoutes(
       } catch (error) {
         return sendValidationError(reply, error);
       }
+    }
+  );
+
+  app.delete<{ Params: { id: string } }>(
+    '/api/admin/library-assistant/tracks/:id/lyrics',
+    async (request, reply) => {
+      reply.header('Cache-Control', 'private, no-store');
+      if (!TRACK_ID.test(request.params.id)) {
+        return reply.code(400).send({ error: 'Música inválida.' });
+      }
+      if (!review.clearManagedLyrics) return reply.code(404).send({ error: 'Lyrics gerenciadas indisponíveis.' });
+      const removed = review.clearManagedLyrics(request.params.id);
+      if (removed == null) return reply.code(404).send({ error: 'Música não encontrada.' });
+      return { removed };
     }
   );
 
