@@ -634,7 +634,9 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
 
   const totalTracks = progress.total;
   const processedTracks = Math.min(progress.processed, totalTracks);
-  const progressPercent = totalTracks > 0 ? Math.min(100, Math.round((processedTracks / totalTracks) * 100)) : 0;
+  const progressPercent = totalTracks > 0
+    ? Math.min(processedTracks < totalTracks ? 99 : 100, Math.round((processedTracks / totalTracks) * 100))
+    : 0;
   const pendingTracks = progress.pending + progress.processing;
   const queueFailureCount = progress.failed;
   const suggestionFailureCount = latestRun?.summary.failed ?? 0;
