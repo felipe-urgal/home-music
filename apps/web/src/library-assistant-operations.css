@@ -1,0 +1,214 @@
+.assistant-admin__hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: .5rem;
+}
+
+.assistant-admin__operations-panel {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--assistant-line);
+  border-radius: .65rem;
+  background: linear-gradient(180deg, rgba(20, 31, 40, .94), rgba(15, 24, 32, .94));
+}
+
+.assistant-admin__operations-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.assistant-admin__operations-heading > div {
+  display: grid;
+  gap: .2rem;
+}
+
+.assistant-admin__operations-heading strong {
+  font-size: .9rem;
+}
+
+.assistant-admin__operations-heading small,
+.assistant-admin__operations-copy,
+.assistant-admin__settings-note {
+  color: var(--assistant-muted);
+  font-size: .72rem;
+  line-height: 1.45;
+}
+
+.assistant-admin__operations-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .55rem;
+  margin: 0;
+}
+
+.assistant-admin__operations-grid > div {
+  display: grid;
+  gap: .18rem;
+  min-height: 4rem;
+  padding: .65rem .75rem;
+  border: 1px solid #2e3e4b;
+  border-radius: .55rem;
+  background: rgba(18, 29, 38, .78);
+}
+
+.assistant-admin__operations-grid dt {
+  color: #b8c1ca;
+  font-size: .67rem;
+}
+
+.assistant-admin__operations-grid dd {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 760;
+  font-variant-numeric: tabular-nums;
+}
+
+.assistant-admin__operations-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: .5rem;
+}
+
+.assistant-admin__history {
+  display: grid;
+  gap: .4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.assistant-admin__history li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: .75rem;
+  min-height: 2.6rem;
+  padding: .5rem .65rem;
+  border: 1px solid #2b3b48;
+  border-radius: .48rem;
+  background: rgba(18, 29, 38, .7);
+  font-size: .7rem;
+}
+
+.assistant-admin__history li > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assistant-admin__history-status {
+  color: #c8d1d9;
+  font-weight: 650;
+}
+
+.assistant-admin__settings {
+  display: grid;
+  gap: .55rem;
+}
+
+.assistant-admin__settings-field {
+  display: flex;
+  align-items: flex-start;
+  gap: .6rem;
+  padding: .65rem .7rem;
+  border: 1px solid #2e3e4b;
+  border-radius: .5rem;
+  background: rgba(18, 29, 38, .72);
+}
+
+.assistant-admin__settings-field input {
+  margin-top: .12rem;
+}
+
+.assistant-admin__settings-field > span {
+  display: grid;
+  gap: .12rem;
+}
+
+.assistant-admin__settings-field strong {
+  font-size: .75rem;
+}
+
+.assistant-admin__settings-field small {
+  color: var(--assistant-muted);
+  font-size: .67rem;
+  line-height: 1.35;
+}
+
+.assistant-admin__feedback details {
+  margin-left: auto;
+  max-width: 55%;
+}
+
+.assistant-admin__feedback summary {
+  cursor: pointer;
+  font-weight: 650;
+}
+
+.assistant-admin__feedback ul {
+  margin: .4rem 0 0;
+  padding-left: 1.1rem;
+}
+
+.assistant-admin__confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(3, 8, 12, .72);
+}
+
+.assistant-admin__confirm {
+  display: grid;
+  gap: .75rem;
+  width: min(32rem, 100%);
+  padding: 1rem;
+  border: 1px solid #3a5367;
+  border-radius: .7rem;
+  background: #111d27;
+  box-shadow: 0 1rem 3rem rgba(0, 0, 0, .34);
+}
+
+.assistant-admin__confirm h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.assistant-admin__confirm p {
+  margin: 0;
+  color: #c2ccd5;
+  font-size: .76rem;
+  line-height: 1.45;
+}
+
+.assistant-admin__confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: .5rem;
+}
+
+@media (max-width: 760px) {
+  .assistant-admin__operations-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .assistant-admin__operations-heading,
+  .assistant-admin__history li {
+    grid-template-columns: 1fr;
+  }
+
+  .assistant-admin__operations-heading {
+    display: grid;
+  }
+
+  .assistant-admin__feedback details {
+    max-width: none;
+  }
+}
