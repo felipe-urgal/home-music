@@ -4,11 +4,11 @@ Este documento descreve **o estado técnico corrente e o próximo trabalho relev
 
 O histórico detalhado acumulado até a fase 14 foi preservado em [`history/roadmap-through-phase-14.md`](history/roadmap-through-phase-14.md). Documentos de implementação da antiga fase 7.5 ficam em [`history/phase-7.5/`](history/phase-7.5/).
 
-## Estado em 2026-09-07
+## Estado em 2026-09-09
 
 - **Fase 7.5 — multiusuário/autenticação:** concluída e incorporada à arquitetura atual. Fonte canônica: [`multi-user-auth.md`](multi-user-auth.md).
 - **Fase 14 — portabilidade de dados pessoais:** implementação concluída na `main` com o PR #324. Contrato atual: [`personal-data-portability.md`](personal-data-portability.md).
-- **Fase 15 — Library Assistant:** fase ativa, coordenada pela issue #310. A fundação #311, a identificação de metadata com MusicBrainz #312 e a revisão/aplicação segura de metadata #313 estão implementadas/documentadas em [`library-assistant.md`](library-assistant.md).
+- **Fase 15 — Library Assistant:** fase ativa, coordenada pela issue #310. A fundação #311, a identificação de metadata com MusicBrainz #312 e a revisão/aplicação segura de metadata #313 estão implementadas/documentadas em [`library-assistant.md`](library-assistant.md). A #356 consolida o uso operacional em volume com lote confirmado, reset seguro e abas de monitoramento.
 - A camada A do fallback de artwork (#321) e a publicação de artwork canônica no Media Session (#325) já foram incorporadas; validações físicas específicas de PWA permanecem registradas nas issues correspondentes como QA pós-merge.
 - O player Agora/Tocando agora possui apresentação de vinil animado (#326), reutilizando `Artwork`/fallback canônico e respeitando `prefers-reduced-motion`.
 - Correções de cold start offline (#328) e instrumentação de continuidade de playback iOS (#327) já foram incorporadas; qualquer evidência de hardware adicional continua sendo rastreada nas próprias issues.
@@ -40,6 +40,7 @@ Umbrella: **#310 — Library Assistant**.
 | #311 | fundação de runs/sugestões, evidências, proveniência, stale, cache/provider e lifecycle admin | implementada |
 | #312 | identificação de metadata com MusicBrainz e matching explicável | implementada |
 | #313 | revisão e aplicação segura de sugestões de metadata | implementada |
+| #356 | lote de revisão confirmado, reset operacional e abas Fila/Estatísticas/Configurações | implementada no branch; aguardando merge |
 | #314 | artwork via Cover Art Archive usando cover override canônico | planejada |
 | #315 | enriquecimento de lyrics reutilizando o domínio atual | planejada |
 | #316 | resolução de lyrics consistente entre player/offline/OpenSubsonic | planejada |
@@ -53,7 +54,7 @@ Umbrella: **#310 — Library Assistant**.
 
 O detalhamento de arquitetura, riscos, etapas e critérios está em [`library-assistant-plan.md`](library-assistant-plan.md). O comportamento implementado está em [`library-assistant.md`](library-assistant.md). Se plano e implementação divergirem, código/testes e a issue executada têm precedência.
 
-### Base estabilizada (#311 + #312 + #313)
+### Base estabilizada (#311 + #312 + #313 + #356)
 
 A Fase 15 agora possui:
 
@@ -70,13 +71,17 @@ A Fase 15 agora possui:
 - fallback por basename somente quando metadata essencial está ausente, sem envio de path/filename bruto e sempre limitado a baixa confiança;
 - IDs externos tipados de recording/release/release-group/artist;
 - proteção explícita de override humano e bloqueio de high confidence em conflito/ambiguidade;
-- workspace **Administração → Assistente da Biblioteca** com resumo/filtros, atual vs sugerido, confiança, origem e motivos;
-- apply/reject por campo, lote somente sobre seleção explícita e resultado parcial por item;
+- workspace **Administração → Assistente da Biblioteca** com Sugestões, Fila, Estatísticas e Configurações;
+- apply/reject por campo e seleção em lote também para itens de revisão quando há confirmação explícita;
+- requests de lote limitados a 100 decisões, com chunking na Web, sucesso parcial e diagnóstico por outcome/mensagem;
 - aplicação exclusivamente via `TrackMetadataOverrideStore`, sem `UPDATE tracks`, sem escrita de tags e com remoção canônica de override redundante;
-- revalidação antes da decisão e stale quando a premissa efetiva/humana mudou;
-- atualização do snapshot efetivo/ETag após apply sem exigir rescan.
+- revalidação antes da decisão e stale quando a premissa efetiva/humana mudou, inclusive em lote confirmado;
+- reset operacional que invalida somente `pending/review`, preserva `applied/rejected` e histórico, e inicia reanálise completa;
+- atualização do snapshot efetivo/ETag após apply sem exigir rescan;
+- visualização de fila e métricas existentes sem criar uma segunda fonte de observabilidade;
+- preferências de campos exibidos mantidas como configuração local de apresentação, sem mudar o analyzer ou enfraquecer segurança.
 
-Com #313, o primeiro fluxo vertical da fase está fechado: **analisar → revisar → aplicar/rejeitar metadata**. A próxima expansão deve reutilizar esse contrato de revisão em vez de criar um lifecycle paralelo.
+O fluxo vertical de metadata está operacional para bibliotecas maiores: **analisar mudanças → revisar/selecionar → confirmar quando necessário → aplicar em lote → acompanhar fila/estatísticas**. As próximas capacidades devem reutilizar esse contrato de revisão em vez de criar um lifecycle paralelo.
 
 ## Portabilidade pessoal — estado consolidado
 
