@@ -2,6 +2,7 @@ import type {
   AdminLibraryAssistantBatchDecisionRequest,
   AdminLibraryAssistantBatchDecisionResponse,
   AdminLibraryAssistantDecisionResponse,
+  AdminLibraryAssistantResetResponse,
   AdminLibraryAssistantReviewResponse,
   AdminLibraryAssistantRunProgressResponse,
   AdminLibraryAssistantRunResponse,
@@ -77,7 +78,7 @@ export async function resetLibraryAssistantReview() {
     headers: { 'X-Home-Music-Request': '1' }
   });
   if (!response.ok) throw new Error(await responseError(response));
-  return response.json() as Promise<{ invalidated: number }>;
+  return response.json() as Promise<AdminLibraryAssistantResetResponse>;
 }
 
 export async function decideLibraryAssistantSuggestion(decision: LibraryAssistantDecision) {
