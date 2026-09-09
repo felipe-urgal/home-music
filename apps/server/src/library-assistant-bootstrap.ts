@@ -12,9 +12,11 @@ import {
 } from './musicbrainz-metadata-analyzer.js';
 import { LibraryAssistantCompositeReviewService } from './library-assistant-composite-review-service.js';
 import { LibraryAssistantIncrementalIndex } from './library-assistant-incremental-index.js';
+import { registerLibraryAssistantPolicyRoutes } from './library-assistant-policy-routes.js';
 import { LibraryAssistantPersistentQueue } from './library-assistant-persistent-queue.js';
 import { LibraryAssistantProviderGateway } from './library-assistant-provider.js';
 import { registerLibraryAssistantReviewRoutes } from './library-assistant-review-routes.js';
+import { LibraryAssistantReviewPolicyStore } from './library-assistant-review-policy.js';
 import { LibraryAssistantReviewService } from './library-assistant-review-service.js';
 import { registerLibraryAssistantRoutes } from './library-assistant-routes.js';
 import { LibraryAssistantRunMetrics } from './library-assistant-run-metrics.js';
@@ -55,6 +57,7 @@ export function registerLibraryAssistant(
   options: LibraryAssistantBootstrapOptions
 ) {
   const store = new LibraryAssistantStore(options.databasePath);
+  const reviewPolicy = new LibraryAssistantReviewPolicyStore(options.databasePath);
   const metrics = new LibraryAssistantRunMetrics();
   const workQueue = new LibraryAssistantPersistentQueue(options.databasePath, {
     onRetry: (item, error) => metrics.recordRetry(item.runId, error.code)
@@ -150,9 +153,11 @@ export function registerLibraryAssistant(
 
   registerLibraryAssistantRoutes(app, service, workQueue, metrics);
   registerLibraryAssistantReviewRoutes(app, review);
+  registerLibraryAssistantPolicyRoutes(app, reviewPolicy);
   app.addHook('onClose', async () => {
     await service.close();
     review.close();
+    reviewPolicy.close();
     setActiveTrackLyricsOverrideStore(null);
     lyricsOverrides.close();
     coverOverrides.close();
