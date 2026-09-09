@@ -236,12 +236,13 @@ export class PersistentSessionManager extends SessionManager {
     );
   }
 
-  private getSessionRow(tokenHash: string) {
-    return this.db.prepare(`
+  private getSessionRow(tokenHash: string): PersistedSessionRow | null {
+    const row = this.db.prepare(`
       SELECT token_hash, user_id, created_at, authenticated_at, last_seen_at
       FROM auth_sessions
       WHERE token_hash = ?
-    `).get(tokenHash) as PersistedSessionRow | undefined ?? null;
+    `).get(tokenHash) as PersistedSessionRow | undefined;
+    return row ?? null;
   }
 
   private touchSession(tokenHash: string, lastSeenAt: number) {
