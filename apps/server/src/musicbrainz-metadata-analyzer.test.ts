@@ -71,6 +71,17 @@ function response(recordings: unknown[], status = 200) {
   });
 }
 
+function caaResponse(images: unknown[] = []) {
+  return new Response(JSON.stringify({ images }), {
+    status: 200,
+    headers: { 'content-type': 'application/json' }
+  });
+}
+
+function isCaaRequest(input: string | URL) {
+  return new URL(String(input)).origin === 'https://coverartarchive.org';
+}
+
 test('normaliza somente campos MusicBrainz necessários, mantém ids com escopo e é idempotente no cache', () => {
   const normalized = normalizeMusicBrainzRecordingSearch({
     recordings: [recording({ ignored: { raw: 'não persistir' } })]
@@ -119,10 +130,15 @@ test('duração incompatível impede confiança elegível mesmo com título e ar
 });
 
 test('analyzer produz sugestão explicável, ids externos tipados e preserva override humano', async () => {
-  let calls = 0;
+  let musicBrainzCalls = 0;
+  let coverArtArchiveCalls = 0;
   const analyzer = createMusicBrainzMetadataAnalyzer({
-    fetchImpl: async () => {
-      calls += 1;
+    fetchImpl: async input => {
+      if (isCaaRequest(input)) {
+        coverArtArchiveCalls += 1;
+        return caaResponse();
+      }
+      musicBrainzCalls += 1;
       return response([recording()]);
     },
     getHumanOverrideFields: () => ['title']
@@ -134,7 +150,8 @@ test('analyzer produz sugestão explicável, ids externos tipados e preserva ove
     providers: gateway()
   });
 
-  assert.equal(calls, 1);
+  assert.equal(musicBrainzCalls, 1);
+  assert.equal(coverArtArchiveCalls, 1);
   assert.equal(drafts.length, 1);
   assert.equal(drafts[0].target.capability, 'metadata');
   assert.equal(drafts[0].target.field, 'title');
@@ -143,6 +160,46 @@ test('analyzer produz sugestão explicável, ids externos tipados e preserva ove
   assert.ok(drafts[0].evidence.some(item => item.type === 'human-override'));
   assert.ok(drafts[0].evidence.some(item => item.type === 'external-id' && item.kind === 'recording'));
   assert.ok(drafts[0].evidence.some(item => item.type === 'external-id' && item.kind === 'release-group'));
+});
+
+test('analyzer propõe capa CAA somente depois de identificação MusicBrainz confiável', async () => {
+  const analyzer = createMusicBrainzMetadataAnalyzer({
+    fetchImpl: async input => {
+      if (isCaaRequest(input)) {
+        return caaResponse([{
+          id: 'cover-1',
+          front: true,
+          image: 'https://coverartarchive.org/release/release-1/front',
+          thumbnails: { 500: 'https://coverartarchive.org/release/release-1/500' }
+        }]);
+      }
+      return response([recording()]);
+    }
+  });
+
+  const drafts = await analyzer.analyze({
+    runId: 'run-artwork',
+    tracks: [track()],
+    providers: gateway()
+  });
+
+  const artwork = drafts.find(draft => draft.target.capability === 'artwork');
+  assert.equal(artwork?.capability, 'artwork');
+  assert.equal(artwork?.confidence, 'high');
+  assert.equal(artwork?.provenance.source, 'cover-art-archive');
+  assert.ok(artwork?.reasonCodes.includes('artwork-missing'));
+  assert.ok(artwork?.reasonCodes.includes('strong-external-id'));
+  assert.equal(artwork?.target.sourceUrl, 'https://coverartarchive.org/release/release-1/front');
+  assert.equal(artwork?.target.thumbnailUrl, 'https://coverartarchive.org/release/release-1/500');
+  assert.equal(artwork?.target.musicBrainzReleaseId, 'release-1');
+  assert.equal(artwork?.target.musicBrainzReleaseGroupId, 'release-group-1');
+
+  const withPhysicalCover = await analyzer.analyze({
+    runId: 'run-artwork-skip',
+    tracks: [track({ hasCover: true, coverVersion: 'physical-v1' })],
+    providers: gateway()
+  });
+  assert.equal(withPhysicalCover.some(draft => draft.target.capability === 'artwork'), false);
 });
 
 test('duas opções plausíveis permanecem ambíguas e não viram escolha de alta confiança', async () => {
@@ -173,10 +230,11 @@ test('duas opções plausíveis permanecem ambíguas e não viram escolha de alt
 });
 
 test('contexto de álbum converge entre faixas e consultas equivalentes reutilizam cache normalizado', async () => {
-  let calls = 0;
+  let musicBrainzCalls = 0;
   const analyzer = createMusicBrainzMetadataAnalyzer({
-    fetchImpl: async () => {
-      calls += 1;
+    fetchImpl: async input => {
+      if (isCaaRequest(input)) return caaResponse();
+      musicBrainzCalls += 1;
       return response([recording({
         title: 'Cancao',
         releases: [{
@@ -195,7 +253,7 @@ test('contexto de álbum converge entre faixas e consultas equivalentes reutiliz
     providers: gateway()
   });
 
-  assert.equal(calls, 1);
+  assert.equal(musicBrainzCalls, 1);
   assert.ok(drafts.some(draft => draft.reasonCodes.includes('album-context')));
   assert.ok(drafts.some(draft => draft.evidence.some(
     item => item.type === 'album-context' && item.matchedTracks === 2 && item.totalTracks === 2
@@ -206,6 +264,7 @@ test('busca faz uma única consulta por título + artista e usa álbum apenas no
   const queries: string[] = [];
   const analyzer = createMusicBrainzMetadataAnalyzer({
     fetchImpl: async input => {
+      if (isCaaRequest(input)) return caaResponse();
       const url = new URL(String(input));
       queries.push(url.searchParams.get('query') ?? '');
       return response([recording({
@@ -304,6 +363,7 @@ test('filename enganoso ou sem estrutura conservadora não dispara consulta exte
 test('outlier com conflito forte não é forçado pelo contexto coletivo do álbum', async () => {
   const analyzer = createMusicBrainzMetadataAnalyzer({
     fetchImpl: async input => {
+      if (isCaaRequest(input)) return caaResponse();
       const query = new URL(String(input)).searchParams.get('query') ?? '';
       if (query.includes('Faixa 3')) {
         return response([recording({
