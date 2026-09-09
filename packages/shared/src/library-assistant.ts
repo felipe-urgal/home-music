@@ -27,6 +27,27 @@ export type LibraryAssistantProvenanceSource =
   | 'local-transcription';
 
 export type LibraryAssistantMetadataField = 'title' | 'artist' | 'album' | 'albumArtist';
+export type LibraryAssistantReviewMode = 'ignore' | 'review' | 'bulk';
+export type LibraryAssistantArtworkReviewMode = Exclude<LibraryAssistantReviewMode, 'bulk'>;
+export type LibraryAssistantReviewPolicyKey = LibraryAssistantMetadataField | 'artwork' | 'lyrics';
+export type LibraryAssistantReviewPolicy = {
+  title: LibraryAssistantReviewMode;
+  artist: LibraryAssistantReviewMode;
+  album: LibraryAssistantReviewMode;
+  albumArtist: LibraryAssistantReviewMode;
+  artwork: LibraryAssistantArtworkReviewMode;
+  lyrics: LibraryAssistantReviewMode;
+};
+
+export const DEFAULT_LIBRARY_ASSISTANT_REVIEW_POLICY: LibraryAssistantReviewPolicy = {
+  title: 'review',
+  artist: 'review',
+  album: 'review',
+  albumArtist: 'review',
+  artwork: 'review',
+  lyrics: 'review'
+};
+
 export type LibraryAssistantExternalIdKind = 'recording' | 'release' | 'release-group' | 'artist';
 
 export type LibraryAssistantReasonCode =
@@ -249,6 +270,12 @@ export type AdminLibraryAssistantRunProgressResponse = {
 export type AdminLibraryAssistantSuggestionsResponse = {
   suggestions: LibraryAssistantSuggestion[];
 };
+
+export type AdminLibraryAssistantPolicyResponse = {
+  policy: LibraryAssistantReviewPolicy;
+};
+
+export type AdminLibraryAssistantPolicyUpdateRequest = AdminLibraryAssistantPolicyResponse;
 
 export type LibraryAssistantReviewTrack = {
   id: string;

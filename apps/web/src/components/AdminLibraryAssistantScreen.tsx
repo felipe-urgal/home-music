@@ -1,11 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  DEFAULT_LIBRARY_ASSISTANT_REVIEW_POLICY,
   isLibraryAssistantAutoApplicable,
   type LibraryAssistantArtworkTarget,
   type LibraryAssistantDecision,
   type LibraryAssistantDecisionResult,
   type LibraryAssistantMetadataField,
   type LibraryAssistantReviewItem,
+  type LibraryAssistantReviewMode,
+  type LibraryAssistantReviewPolicy,
+  type LibraryAssistantReviewPolicyKey,
   type LibraryAssistantRun,
   type LibraryAssistantRunProgress,
   type LibraryAssistantSuggestion,
@@ -35,11 +39,13 @@ import {
   decideLibraryAssistantBatch,
   decideLibraryAssistantSuggestion,
   getLibraryAssistantReview,
+  getLibraryAssistantReviewPolicy,
   getLibraryAssistantRunProgress,
   getLibraryAssistantRuns,
   getLibraryAssistantSuggestions,
   resetLibraryAssistantReview,
-  startLibraryAssistantMetadataRun
+  startLibraryAssistantMetadataRun,
+  updateLibraryAssistantReviewPolicy
 } from '../library-assistant-client';
 import { notifyLibraryChanged } from '../library-events';
 import '../library-assistant-admin.css';
@@ -50,10 +56,15 @@ type Filter = 'all' | 'open' | 'safe' | 'review' | 'applied' | 'rejected' | 'fai
 type Sort = 'recent' | 'oldest';
 type Section = 'suggestions' | 'queue' | 'statistics' | 'settings';
 type Feedback = { kind: 'success' | 'error' | 'warning'; message: string; details?: string[] };
+type PolicyRow = {
+  key: LibraryAssistantReviewPolicyKey;
+  label: string;
+  description: string;
+  allowBulk: boolean;
+};
 
 const TERMINAL_RUNS = new Set(['completed', 'failed', 'cancelled', 'stale']);
 const BATCH_SIZE = 100;
-const FIELD_STORAGE_KEY = 'home-music.library-assistant.visible-fields';
 const METADATA_FIELDS: readonly LibraryAssistantMetadataField[] = ['title', 'artist', 'album', 'albumArtist'];
 const FILTERS: readonly [Filter, string][] = [
   ['all', 'Todas'],
@@ -76,12 +87,49 @@ const FIELD_LABELS: Record<LibraryAssistantMetadataField, string> = {
   album: 'Álbum',
   albumArtist: 'Artista do álbum'
 };
-const FIELD_DESCRIPTIONS: Record<LibraryAssistantMetadataField, string> = {
-  title: 'Mostra sugestões que alteram o título da faixa.',
-  artist: 'Mostra sugestões que alteram o artista da faixa.',
-  album: 'Mostra sugestões que alteram o nome do álbum.',
-  albumArtist: 'Mostra sugestões que alteram o artista do álbum.'
-};
+const POLICY_MODES: readonly [LibraryAssistantReviewMode, string][] = [
+  ['ignore', 'Ignorar'],
+  ['review', 'Revisar'],
+  ['bulk', 'Lote']
+];
+const POLICY_ROWS: readonly PolicyRow[] = [
+  {
+    key: 'title',
+    label: 'Título',
+    description: 'Sugestões que alteram o título da faixa.',
+    allowBulk: true
+  },
+  {
+    key: 'artist',
+    label: 'Artista',
+    description: 'Sugestões que alteram o artista da faixa.',
+    allowBulk: true
+  },
+  {
+    key: 'album',
+    label: 'Álbum',
+    description: 'Sugestões que alteram o nome do álbum.',
+    allowBulk: true
+  },
+  {
+    key: 'albumArtist',
+    label: 'Artista do álbum',
+    description: 'Sugestões que alteram o artista do álbum.',
+    allowBulk: true
+  },
+  {
+    key: 'lyrics',
+    label: 'Letras',
+    description: 'Letras externas encontradas para faixas sem uma letra local efetiva.',
+    allowBulk: true
+  },
+  {
+    key: 'artwork',
+    label: 'Capa',
+    description: 'Capas externas continuam com aplicação individual antes do download.',
+    allowBulk: false
+  }
+];
 const EMPTY_PROGRESS: LibraryAssistantRunProgress = {
   total: 0,
   processed: 0,
@@ -103,6 +151,15 @@ function isSafe(suggestion: LibraryAssistantSuggestion) {
 
 function canApplyInBatch(suggestion: LibraryAssistantSuggestion) {
   return suggestion.target.capability !== 'artwork' && isOpen(suggestion);
+}
+
+function policyModeForSuggestion(
+  policy: LibraryAssistantReviewPolicy,
+  suggestion: LibraryAssistantSuggestion
+): LibraryAssistantReviewMode {
+  if (suggestion.target.capability === 'metadata') return policy[suggestion.target.field];
+  if (suggestion.target.capability === 'artwork') return policy.artwork;
+  return policy.lyrics;
 }
 
 function statusLabel(status: LibraryAssistantSuggestionStatus) {
@@ -284,6 +341,10 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
   const [suggestions, setSuggestions] = useState<LibraryAssistantSuggestion[]>([]);
   const [reviewItems, setReviewItems] = useState<LibraryAssistantReviewItem[]>([]);
   const [progress, setProgress] = useState<LibraryAssistantRunProgress>(EMPTY_PROGRESS);
+  const [policy, setPolicy] = useState<LibraryAssistantReviewPolicy>(
+    () => ({ ...DEFAULT_LIBRARY_ASSISTANT_REVIEW_POLICY })
+  );
+  const [policyReady, setPolicyReady] = useState(false);
   const [section, setSection] = useState<Section>('suggestions');
   const [filter, setFilter] = useState<Filter>('all');
   const [sort, setSort] = useState<Sort>('recent');
@@ -291,10 +352,9 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
   const [showHelp, setShowHelp] = useState(false);
   const [showInfo, setShowInfo] = useState(true);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [visibleFields, setVisibleFields] = useState<Set<LibraryAssistantMetadataField>>(
-    () => new Set(METADATA_FIELDS)
-  );
   const [loading, setLoading] = useState(true);
+  const [loadingPolicy, setLoadingPolicy] = useState(true);
+  const [savingPolicy, setSavingPolicy] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [mutating, setMutating] = useState(false);
   const [batching, setBatching] = useState(false);
@@ -302,6 +362,7 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
   const [confirmReset, setConfirmReset] = useState(false);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const requestVersion = useRef(0);
+  const policyRequestVersion = useRef(0);
 
   const latestRun = useMemo(() => runs.find(run => run.capability === 'metadata') ?? null, [runs]);
   const metadataRuns = useMemo(() => runs.filter(run => run.capability === 'metadata'), [runs]);
@@ -313,7 +374,7 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
 
   const visibleSuggestions = useMemo(() => {
     const filtered = suggestions.filter(suggestion => {
-      if (suggestion.target.capability === 'metadata' && !visibleFields.has(suggestion.target.field)) return false;
+      if (isOpen(suggestion) && policyModeForSuggestion(policy, suggestion) === 'ignore') return false;
       if (filter !== 'all') {
         if (filter === 'open' && !isOpen(suggestion)) return false;
         if (filter === 'safe' && !isSafe(suggestion)) return false;
@@ -328,7 +389,7 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
       const stable = created || left.id.localeCompare(right.id);
       return sort === 'recent' ? -stable : stable;
     });
-  }, [filter, normalizedSearch, reviewMap, sort, suggestions, visibleFields]);
+  }, [filter, normalizedSearch, policy, reviewMap, sort, suggestions]);
 
   const visibleSafeSuggestions = useMemo(
     () => visibleSuggestions.filter(item => canApplyInBatch(item) && isSafe(item) && reviewMap.has(item.id)),
@@ -337,6 +398,15 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
   const visibleActionableSuggestions = useMemo(
     () => visibleSuggestions.filter(item => canApplyInBatch(item) && reviewMap.has(item.id)),
     [reviewMap, visibleSuggestions]
+  );
+  const configuredBulkSuggestions = useMemo(
+    () => suggestions.filter(item => (
+      policyModeForSuggestion(policy, item) === 'bulk'
+      && canApplyInBatch(item)
+      && isSafe(item)
+      && reviewMap.has(item.id)
+    )),
+    [policy, reviewMap, suggestions]
   );
 
   const load = useCallback(async (quiet = false) => {
@@ -370,25 +440,36 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
     }
   }, []);
 
-  useEffect(() => {
+  const loadPolicy = useCallback(async (quiet = false) => {
+    const version = ++policyRequestVersion.current;
+    if (!quiet) setLoadingPolicy(true);
     try {
-      const stored = window.localStorage.getItem(FIELD_STORAGE_KEY);
-      const parsed = stored ? JSON.parse(stored) as unknown : null;
-      if (Array.isArray(parsed)) {
-        const valid = parsed.filter((field): field is LibraryAssistantMetadataField => (
-          typeof field === 'string' && METADATA_FIELDS.includes(field as LibraryAssistantMetadataField)
-        ));
-        if (valid.length > 0) setVisibleFields(new Set(valid));
+      const response = await getLibraryAssistantReviewPolicy();
+      if (version !== policyRequestVersion.current) return;
+      setPolicy(response.policy);
+      setPolicyReady(true);
+    } catch (error) {
+      if (version === policyRequestVersion.current) {
+        setFeedback({
+          kind: 'error',
+          message: error instanceof Error
+            ? error.message
+            : 'Não foi possível carregar a política de revisão.'
+        });
       }
-    } catch {
-      // Preferências locais são opcionais; defaults seguros permanecem ativos.
+    } finally {
+      if (version === policyRequestVersion.current) setLoadingPolicy(false);
     }
   }, []);
 
   useEffect(() => {
     void load();
-    return () => { requestVersion.current += 1; };
-  }, [load]);
+    void loadPolicy();
+    return () => {
+      requestVersion.current += 1;
+      policyRequestVersion.current += 1;
+    };
+  }, [load, loadPolicy]);
 
   useEffect(() => {
     if (!runActive) return;
@@ -405,7 +486,7 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
     };
   }, [latestRun?.id, runActive, load]);
 
-  useEffect(() => setSelected(new Set()), [filter, latestRun?.id, search, visibleFields]);
+  useEffect(() => setSelected(new Set()), [filter, latestRun?.id, policy, search]);
 
   useEffect(() => {
     if (confirmReviewCount === 0 && !confirmReset) return;
@@ -573,13 +654,11 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
     }
   }
 
-  async function applySelected(reviewConfirmed = false) {
+  async function applySuggestions(
+    chosen: LibraryAssistantSuggestion[],
+    reviewConfirmed = false
+  ) {
     if (mutating) return;
-    const chosen = suggestions.filter(item => (
-      selected.has(item.id)
-      && canApplyInBatch(item)
-      && reviewMap.has(item.id)
-    ));
     const decisions = chosen
       .map(item => decisionFor(item, 'apply'))
       .filter((item): item is LibraryAssistantDecision => Boolean(item));
@@ -653,18 +732,42 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
     }
   }
 
-  function toggleVisibleField(field: LibraryAssistantMetadataField, checked: boolean) {
-    setVisibleFields(current => {
-      const next = new Set(current);
-      if (checked) next.add(field);
-      else if (next.size > 1) next.delete(field);
-      try {
-        window.localStorage.setItem(FIELD_STORAGE_KEY, JSON.stringify([...next]));
-      } catch {
-        // Persistência local é opcional.
-      }
-      return next;
-    });
+  async function applySelected(reviewConfirmed = false) {
+    const chosen = suggestions.filter(item => (
+      selected.has(item.id)
+      && canApplyInBatch(item)
+      && reviewMap.has(item.id)
+    ));
+    await applySuggestions(chosen, reviewConfirmed);
+  }
+
+  async function applyConfiguredBulk() {
+    await applySuggestions(configuredBulkSuggestions);
+  }
+
+  async function updatePolicyMode(key: LibraryAssistantReviewPolicyKey, mode: LibraryAssistantReviewMode) {
+    if (!policyReady || savingPolicy || mutating || (key === 'artwork' && mode === 'bulk')) return;
+    const previous = policy;
+    const next = { ...policy, [key]: mode } as LibraryAssistantReviewPolicy;
+    const version = ++policyRequestVersion.current;
+    setPolicy(next);
+    setSavingPolicy(true);
+    setFeedback(null);
+    try {
+      const response = await updateLibraryAssistantReviewPolicy(next);
+      if (version !== policyRequestVersion.current) return;
+      setPolicy(response.policy);
+      setFeedback({ kind: 'success', message: 'Política de revisão atualizada.' });
+    } catch (error) {
+      if (version !== policyRequestVersion.current) return;
+      setPolicy(previous);
+      setFeedback({
+        kind: 'error',
+        message: error instanceof Error ? error.message : 'Não foi possível salvar a política de revisão.'
+      });
+    } finally {
+      if (version === policyRequestVersion.current) setSavingPolicy(false);
+    }
   }
 
   const totalTracks = progress.total;
@@ -720,10 +823,13 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
             type="button"
             className="assistant-admin__header-button"
             aria-label="Atualizar Assistente da Biblioteca"
-            disabled={loading || mutating}
-            onClick={() => void load()}
+            disabled={loading || loadingPolicy || mutating || savingPolicy}
+            onClick={() => {
+              void load();
+              void loadPolicy();
+            }}
           >
-            <RefreshCw className={loading ? 'is-spinning' : ''} />
+            <RefreshCw className={loading || loadingPolicy ? 'is-spinning' : ''} />
             Atualizar
           </button>
         </div>
@@ -733,8 +839,8 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
         <aside className="assistant-admin__help" role="note">
           <Info />
           <div>
-            <strong>O assistente só propõe alterações</strong>
-            <span>“Analisar mudanças” verifica metadados, capas e letras. Resultados já processados podem ser revisados e aplicados sem esperar a análise terminar; itens em Revisão ainda exigem confirmação explícita e capas continuam com aplicação individual.</span>
+            <strong>O assistente analisa tudo e respeita sua política de revisão</strong>
+            <span>Ignorar esconde sugestões abertas, Revisar mantém a decisão manual e Lote reúne apenas sugestões seguras para uma confirmação conjunta. Nada é aplicado em segundo plano e capas continuam com aplicação individual.</span>
           </div>
         </aside>
       )}
@@ -855,7 +961,7 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
             <header className="assistant-admin__review-heading">
               <div>
                 <strong id="assistant-review-title">Sugestões de metadados, capas e letras</strong>
-                <small>Metadados e letras de alta confiança podem ser aplicados em lote; capas externas continuam com revisão e aplicação individual.</small>
+                <small>A política de revisão controla o que fica visível e quais sugestões seguras entram no lote; capas externas continuam individuais.</small>
               </div>
               <div className="assistant-admin__selection-actions">
                 <button
@@ -885,6 +991,25 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
                 </button>
               </div>
             </header>
+
+            {policyReady && configuredBulkSuggestions.length > 0 && (
+              <aside className="assistant-admin__bulk-policy" role="status">
+                <ShieldCheck aria-hidden="true" />
+                <div>
+                  <strong>Prontas para aplicar em lote</strong>
+                  <span>{configuredBulkSuggestions.length.toLocaleString('pt-BR')} sugestão{configuredBulkSuggestions.length === 1 ? '' : 'ões'} segura{configuredBulkSuggestions.length === 1 ? '' : 's'} segue{configuredBulkSuggestions.length === 1 ? '' : 'm'} a política configurada. Itens que exigem revisão ficam fora deste lote.</span>
+                </div>
+                <button
+                  type="button"
+                  className="assistant-admin__primary-button"
+                  disabled={mutating || savingPolicy || configuredBulkSuggestions.length === 0}
+                  onClick={() => void applyConfiguredBulk()}
+                >
+                  {batching ? <LoaderCircle className="is-spinning" /> : <Check />}
+                  {batching ? 'Aplicando…' : `Aplicar lote (${configuredBulkSuggestions.length})`}
+                </button>
+              </aside>
+            )}
 
             <div className="assistant-admin__toolbar">
               <nav className="assistant-admin__filters" aria-label="Filtros das sugestões">
@@ -944,7 +1069,7 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
                   {runActive ? <LoaderCircle className="is-spinning" /> : <Search />}
                   <div>
                     <strong>{runActive ? 'Aguardando as próximas sugestões' : 'Nenhum resultado neste filtro'}</strong>
-                    <span>{runActive ? 'Os resultados aparecerão aqui conforme cada faixa for processada.' : 'Ajuste filtros, busca ou campos visíveis nas Configurações.'}</span>
+                    <span>{runActive ? 'Os resultados aparecerão aqui conforme cada faixa for processada.' : 'Ajuste filtros, busca ou a política de revisão nas Configurações.'}</span>
                   </div>
                 </div>
               ) : (
@@ -1100,30 +1225,51 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
           <header className="assistant-admin__operations-heading">
             <div>
               <strong id="assistant-settings-title">Configurações</strong>
-              <small>Preferências simples da revisão. Segurança, stale protection e confirmação de itens em Revisão não podem ser desativadas.</small>
+              <small>A política fica salva no servidor. Segurança, stale protection e confirmação de itens em Revisão não podem ser desativadas.</small>
             </div>
+            {(loadingPolicy || savingPolicy) && <LoaderCircle className="is-spinning assistant-admin__settings-loader" aria-label={savingPolicy ? 'Salvando política' : 'Carregando política'} />}
           </header>
           <div className="assistant-admin__settings">
-            <strong>Campos de metadados exibidos</strong>
-            <p className="assistant-admin__settings-note">Esta preferência controla apenas sugestões textuais de metadata; capas e letras permanecem visíveis e a análise continua verificando todos os campos suportados.</p>
-            {METADATA_FIELDS.map(field => (
-              <label key={field} className="assistant-admin__settings-field">
-                <input
-                  type="checkbox"
-                  checked={visibleFields.has(field)}
-                  disabled={visibleFields.has(field) && visibleFields.size === 1}
-                  onChange={event => toggleVisibleField(field, event.target.checked)}
-                />
-                <span>
-                  <strong>{FIELD_LABELS[field]}</strong>
-                  <small>{FIELD_DESCRIPTIONS[field]}</small>
-                </span>
-              </label>
-            ))}
+            <strong>Política de revisão</strong>
+            <p className="assistant-admin__settings-note">A política controla a revisão, não a análise. Ignorar esconde sugestões abertas; Revisar mantém a decisão manual; Lote reúne apenas sugestões seguras para você confirmar juntas. Sugestões que exigem revisão continuam manuais, mesmo quando o tipo está em Lote.</p>
+            <div className="assistant-admin__policy-list">
+              {POLICY_ROWS.map(row => {
+                const modes = row.allowBulk
+                  ? POLICY_MODES
+                  : POLICY_MODES.filter(([mode]) => mode !== 'bulk');
+                return (
+                  <fieldset
+                    key={row.key}
+                    className="assistant-admin__policy-field"
+                    disabled={!policyReady || savingPolicy || mutating}
+                  >
+                    <legend>{row.label}</legend>
+                    <p>{row.description}</p>
+                    <div className="assistant-admin__policy-options">
+                      {modes.map(([mode, label]) => (
+                        <label key={mode} className="assistant-admin__policy-option">
+                          <input
+                            type="radio"
+                            name={`assistant-policy-${row.key}`}
+                            value={mode}
+                            checked={policy[row.key] === mode}
+                            onChange={() => void updatePolicyMode(row.key, mode)}
+                          />
+                          <span>{label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+                );
+              })}
+            </div>
+            {!policyReady && !loadingPolicy && (
+              <p className="assistant-admin__settings-note" role="alert">Não foi possível carregar a política. Use Atualizar para tentar novamente.</p>
+            )}
           </div>
           <div className="assistant-admin__settings">
             <strong>Comportamento da análise</strong>
-            <p className="assistant-admin__settings-note">Use “Analisar mudanças” no dia a dia: itens com falha anterior, faixas novas e alterações voltam para a fila. “Limpar e reanalisar tudo” invalida somente sugestões abertas de metadados, capas e letras; Aplicadas e Rejeitadas permanecem no histórico.</p>
+            <p className="assistant-admin__settings-note">Use “Analisar mudanças” no dia a dia: itens com falha anterior, faixas novas e alterações voltam para a fila. “Limpar e reanalisar tudo” invalida somente sugestões abertas de metadados, capas e letras; Aplicadas e Rejeitadas permanecem no histórico. Alterar a política não força uma nova análise.</p>
           </div>
         </section>
       )}

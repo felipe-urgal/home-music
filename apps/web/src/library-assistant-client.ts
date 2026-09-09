@@ -2,6 +2,8 @@ import type {
   AdminLibraryAssistantBatchDecisionRequest,
   AdminLibraryAssistantBatchDecisionResponse,
   AdminLibraryAssistantDecisionResponse,
+  AdminLibraryAssistantPolicyResponse,
+  AdminLibraryAssistantPolicyUpdateRequest,
   AdminLibraryAssistantResetResponse,
   AdminLibraryAssistantReviewResponse,
   AdminLibraryAssistantRunProgressResponse,
@@ -9,6 +11,7 @@ import type {
   AdminLibraryAssistantRunsResponse,
   AdminLibraryAssistantSuggestionsResponse,
   LibraryAssistantDecision,
+  LibraryAssistantReviewPolicy,
   LibraryAssistantSuggestionStatus
 } from '@home-music/shared/library-assistant';
 import { apiFetch } from './api-client';
@@ -70,6 +73,26 @@ export async function getLibraryAssistantReview(limit = 500) {
   const response = await apiFetch(`/api/admin/library-assistant/review?limit=${limit}`, { cache: 'no-store' });
   if (!response.ok) throw new Error(await responseError(response));
   return response.json() as Promise<AdminLibraryAssistantReviewResponse>;
+}
+
+export async function getLibraryAssistantReviewPolicy() {
+  const response = await apiFetch('/api/admin/library-assistant/policy', { cache: 'no-store' });
+  if (!response.ok) throw new Error(await responseError(response));
+  return response.json() as Promise<AdminLibraryAssistantPolicyResponse>;
+}
+
+export async function updateLibraryAssistantReviewPolicy(policy: LibraryAssistantReviewPolicy) {
+  const payload: AdminLibraryAssistantPolicyUpdateRequest = { policy };
+  const response = await apiFetch('/api/admin/library-assistant/policy', {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Home-Music-Request': '1'
+    },
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) throw new Error(await responseError(response));
+  return response.json() as Promise<AdminLibraryAssistantPolicyResponse>;
 }
 
 export async function resetLibraryAssistantReview() {
