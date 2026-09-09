@@ -222,6 +222,8 @@ export type LibraryAssistantRunProgress = {
 
 export type AdminLibraryAssistantStartRunRequest = {
   capability: LibraryAssistantCapability;
+  full?: boolean;
+  resetOpenSuggestions?: boolean;
 };
 
 export type AdminLibraryAssistantRunResponse = {
@@ -310,6 +312,7 @@ export type AdminLibraryAssistantDecisionResponse = {
 
 export type AdminLibraryAssistantBatchDecisionRequest = {
   decisions: LibraryAssistantDecision[];
+  confirmReview?: boolean;
 };
 
 export type AdminLibraryAssistantBatchDecisionResponse = {
