@@ -40,7 +40,7 @@ Umbrella: **#310 — Library Assistant**.
 | #311 | fundação de runs/sugestões, evidências, proveniência, stale, cache/provider e lifecycle admin | implementada |
 | #312 | identificação de metadata com MusicBrainz e matching explicável | implementada |
 | #313 | revisão e aplicação segura de sugestões de metadata | implementada |
-| #356 | lote de revisão confirmado, reset operacional e abas Fila/Estatísticas/Configurações | implementada no branch; aguardando merge |
+| #356 | lote de revisão confirmado, reset operacional e abas Fila/Estatísticas/Configurações | implementada |
 | #314 | artwork via Cover Art Archive usando cover override canônico | planejada |
 | #315 | enriquecimento de lyrics reutilizando o domínio atual | planejada |
 | #316 | resolução de lyrics consistente entre player/offline/OpenSubsonic | planejada |
