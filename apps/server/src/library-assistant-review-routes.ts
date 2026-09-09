@@ -28,6 +28,11 @@ function objectBody(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
+function parseOptionalBoolean(value: unknown) {
+  if (value == null) return false;
+  return typeof value === 'boolean' ? value : null;
+}
+
 export function registerLibraryAssistantReviewRoutes(
   app: FastifyInstance,
   review: LibraryAssistantReviewService
@@ -75,9 +80,14 @@ export function registerLibraryAssistantReviewRoutes(
       if (!body || !Array.isArray(body.decisions)) {
         return reply.code(400).send({ error: 'Lote de decisões inválido.' });
       }
+      const confirmReview = parseOptionalBoolean(body.confirmReview);
+      if (confirmReview == null) {
+        return reply.code(400).send({ error: 'Confirmação de revisão inválida.' });
+      }
       try {
         return await review.decideBatch(
-          (body as unknown as AdminLibraryAssistantBatchDecisionRequest).decisions
+          (body as unknown as AdminLibraryAssistantBatchDecisionRequest).decisions,
+          { confirmReview }
         );
       } catch (error) {
         return sendValidationError(reply, error);
