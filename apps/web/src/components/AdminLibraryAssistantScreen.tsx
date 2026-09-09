@@ -775,7 +775,7 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
           <div className="assistant-admin__progress-heading">
             <strong>
               {processedTracks.toLocaleString('pt-BR')}
-              <span> de {totalTracks.toLocaleString('pt-BR')} faixas processadas</span>
+              <span> de {totalTracks.toLocaleString('pt-BR')} faixas com pendências analisadas</span>
             </strong>
             <strong>{progressPercent}%</strong>
           </div>
@@ -1037,7 +1037,7 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
             <p className="assistant-admin__operations-copy">Ainda não há uma análise para acompanhar.</p>
           ) : (
             <p className="assistant-admin__operations-copy">
-              {processedTracks.toLocaleString('pt-BR')} de {totalTracks.toLocaleString('pt-BR')} itens concluídos nesta execução.
+              {processedTracks.toLocaleString('pt-BR')} de {totalTracks.toLocaleString('pt-BR')} faixas com pendências concluídas nesta execução.
               {observed?.etaMs != null && runActive ? ` Estimativa restante: ${formatDuration(observed.etaMs)}.` : ''}
             </p>
           )}

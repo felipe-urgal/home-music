@@ -90,6 +90,7 @@ type LibraryAssistantServiceOptions = {
   now?: () => Date;
   createId?: () => string;
   premiseSignature?: (capability: LibraryAssistantCapability, track: Track) => string;
+  isTrackEligible?: (capability: LibraryAssistantCapability, track: Track) => boolean;
 };
 
 type LibraryAssistantStartRunOptions = {
@@ -176,6 +177,7 @@ export class LibraryAssistantService {
   private readonly now: () => Date;
   private readonly createId: () => string;
   private readonly premiseSignature: (capability: LibraryAssistantCapability, track: Track) => string;
+  private readonly isTrackEligible: (capability: LibraryAssistantCapability, track: Track) => boolean;
   private readonly retryDelaysMs: readonly number[];
   private readonly analyzersByCapability = new Map<LibraryAssistantCapability, LibraryAssistantAnalyzer[]>();
   private readonly analyzersById = new Map<string, LibraryAssistantAnalyzer>();
@@ -188,6 +190,7 @@ export class LibraryAssistantService {
     this.now = options.now ?? (() => new Date());
     this.createId = options.createId ?? randomUUID;
     this.premiseSignature = options.premiseSignature ?? defaultPremiseSignature;
+    this.isTrackEligible = options.isTrackEligible ?? (() => true);
     this.retryDelaysMs = (options.retryDelaysMs?.length ? options.retryDelaysMs : DEFAULT_RETRY_DELAYS_MS)
       .map(value => Math.max(1, Math.trunc(value)));
 
@@ -228,7 +231,9 @@ export class LibraryAssistantService {
     if (!Number.isSafeInteger(libraryRevision) || libraryRevision < 0) {
       throw new Error('Revision atual da biblioteca é inválida.');
     }
-    const tracks = this.options.library.listTracks().map(track => ({ ...track }));
+    const tracks = this.options.library.listTracks()
+      .filter(track => this.isTrackEligible(capability, track))
+      .map(track => ({ ...track }));
     const runId = `assistant-${this.createId()}`;
     const createdAt = this.now().toISOString();
     const run = this.options.store.createRun({

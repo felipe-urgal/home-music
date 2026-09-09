@@ -1,10 +1,10 @@
 # Planejamento — Assistente da Biblioteca (Fase 15)
 
-> **Status: FUNDAÇÃO IMPLEMENTADA / CAPACIDADES SEGUINTES PLANEJADAS.** A fundação #311 está descrita no contrato canônico [`library-assistant.md`](library-assistant.md). Este documento preserva a direção e o backlog das capacidades posteriores; quando houver divergência, código/testes, a doc canônica e a issue executada têm precedência. A priorização executiva vive na issue [#310](https://github.com/felipe-urgal/home-music/issues/310).
+> **Status: BASE OPERACIONAL IMPLEMENTADA / #315 PARCIAL / CAPACIDADES RESTANTES PLANEJADAS.** As entregas #311–#314 e o follow-up operacional #356 estão concluídos. A #315 já possui resolução gerenciada, LRCLIB e revisão/aplicação, mas ainda precisa ligar a capability `lyrics` ao comando normal de análise. O comportamento real está nos contratos canônicos [`library-assistant.md`](library-assistant.md) e [`lyrics.md`](lyrics.md). Este documento preserva a direção e o backlog restante; quando houver divergência, código/testes, a doc canônica e a issue executada têm precedência. A priorização executiva vive na issue [#310](https://github.com/felipe-urgal/home-music/issues/310).
 
 ## Motivação
 
-A Administração atual já permite corrigir metadados e capas de forma segura e reversível, mas a manutenção ainda exige trabalho faixa a faixa. Letras também já existem por sidecars `.lrc`/`.txt`, com suporte a timestamps sincronizados no player, porém não existe preenchimento assistido da biblioteca.
+A Administração já permite corrigir metadados e capas de forma segura e reversível e revisar sugestões em lote. A base de lyrics via LRCLIB também existe sem substituir sidecars, mas o disparo operacional dessa capability ainda faz parte da #315. As demais capacidades concentram normalização assistida, autonomia controlada, coerência de lyrics em todas as superfícies e fallbacks opcionais para casos difíceis.
 
 A Fase 15 pretende transformar esse trabalho repetitivo em um fluxo **assistido, explicável e progressivamente autônomo**, onde o sistema resolve casos fortes e apresenta somente exceções ao administrador.
 
@@ -22,7 +22,7 @@ O Assistente não cria uma segunda biblioteca nem substitui os owners atuais:
 - `track_cover_overrides` continua sendo a forma não destrutiva de corrigir capa;
 - `library_metadata_aliases` continua sendo a autoridade de normalização lógica;
 - `ArtworkFallback`/política atual continua sendo a origem visual do caso sem capa;
-- o pipeline atual de lyrics (`lyrics.ts` → `LyricsResponse` → consumidores web/OpenSubsonic) deve ser evoluído, não duplicado;
+- a resolução canônica de lyrics (`override gerenciado → sidecar → nenhuma letra`) continua única para os consumidores e não deve ser duplicada;
 - Media Session/PWA continuam sendo projeções do playback atual, não outro player;
 - jobs pesados reutilizam fila/backpressure/observabilidade existentes;
 - nenhuma origem externa escreve diretamente em arquivos da biblioteca.
@@ -91,15 +91,15 @@ Regras obrigatórias:
 
 ### MusicBrainz
 
-Fonte principal de identidade externa para recordings/artists/releases/release groups. A infraestrutura genérica de provider já existe na fundação; a integração real entra em #312, server-side, usando User-Agent, rate limit, cache, timeout, cancelamento e respostas validadas. CI usa fixtures/fakes e não depende da internet pública.
+Fonte principal de identidade externa para recordings/artists/releases/release groups. A integração da #312 é server-side e usa User-Agent, rate limit, cache, timeout, cancelamento e respostas validadas. CI usa fixtures/fakes e não depende da internet pública.
 
 ### Cover Art Archive
 
-Artwork será consultado a partir de releases já identificados. Imagens continuam passando pela validação de cover override já existente: formato, bytes, MIME real, dimensões, egress/redirect e rollback.
+Artwork é consultado a partir de releases já identificados. Imagens continuam passando pela validação de cover override existente: formato, bytes, MIME real, dimensões, egress/redirect e rollback.
 
 ### Lyrics
 
-A primeira opção externa planejada é LRCLIB ou alternativa equivalente que satisfaça os requisitos no momento da implementação. O provider deve ser tratado como fonte externa não confiável, com plain/synced lyrics, proveniência e política de conteúdo/licenciamento documentada.
+O provider externo implementado é o LRCLIB, tratado como fonte não confiável com plain/synced lyrics, proveniência, limites e política de conteúdo/licenciamento documentada. O conteúdo completo só é obtido no apply e o playback usa estado local aprovado.
 
 ### Chromaprint + AcoustID
 
@@ -263,11 +263,9 @@ Aplicar primeiro em **Agora / Tocando agora**.
 
 Não espalhar rotação por biblioteca, listas, resultados de busca, lock screen ou ícone da PWA sem nova evidência de valor/performance.
 
-## Lyrics — resolução planejada
+## Lyrics — base parcial e evolução restante
 
-O comportamento atual lê sidecars físicos `.lrc`/`.txt`. A evolução da Fase 15 deve preservar uma única cadeia de resolução.
-
-Direção preferida a validar na implementação:
+O comportamento atual preserva uma única cadeia de resolução:
 
 ```text
 lyrics gerenciada/override aprovada
@@ -279,7 +277,7 @@ nenhuma letra
 
 O Assistente não deve criar `.lrc` dentro de `MUSIC_DIR` automaticamente a partir de provider externo.
 
-Depois de aplicada, a mesma letra efetiva precisa alimentar:
+Depois de aplicada, a mesma letra efetiva alimenta a rota web e o OpenSubsonic. A #315 ainda precisa tornar o run `lyrics` iniciável pelo fluxo administrativo normal; depois disso, a #316 permanece responsável por concluir e validar a experiência coerente em todas as superfícies, especialmente offline:
 
 - rota web atual;
 - `LyricsPanel`;
@@ -350,19 +348,20 @@ Não criar override em centenas de faixas para resolver um problema que é corre
 ### P0 — fundação e valor principal
 
 - [x] [#311](https://github.com/felipe-urgal/home-music/issues/311) — fundação de contratos, evidências, stale, execução segura e API de lifecycle;
-- [ ] [#312](https://github.com/felipe-urgal/home-music/issues/312) — MusicBrainz + matching explicável;
-- [ ] [#313](https://github.com/felipe-urgal/home-music/issues/313) — revisão/aplicação segura na Administração.
+- [x] [#312](https://github.com/felipe-urgal/home-music/issues/312) — MusicBrainz + matching explicável;
+- [x] [#313](https://github.com/felipe-urgal/home-music/issues/313) — revisão/aplicação segura na Administração;
+- [x] [#356](https://github.com/felipe-urgal/home-music/issues/356) — revisão em lote, reset operacional e abas de monitoramento.
 
 ### P1 — enriquecimento, identidade visual e autonomia
 
-- [ ] [#314](https://github.com/felipe-urgal/home-music/issues/314) — Cover Art Archive + cover override;
-- [ ] [#315](https://github.com/felipe-urgal/home-music/issues/315) — lyrics externas reutilizando pipeline atual;
+- [x] [#314](https://github.com/felipe-urgal/home-music/issues/314) — Cover Art Archive + cover override;
+- [~] [#315](https://github.com/felipe-urgal/home-music/issues/315) — resolução, LRCLIB e revisão/aplicação implementados; disparo operacional do run `lyrics` ainda pendente;
 - [ ] [#316](https://github.com/felipe-urgal/home-music/issues/316) — lyrics sincronizadas no player/desktop/offline/OpenSubsonic;
 - [ ] [#318](https://github.com/felipe-urgal/home-music/issues/318) — autonomia progressiva após scan/import;
 - [ ] [#319](https://github.com/felipe-urgal/home-music/issues/319) — normalização assistida com evidência externa;
 - [~] [#321](https://github.com/felipe-urgal/home-music/issues/321) — identidade/fallback canônico implementado; materialização persistente permanece opcional;
 - [x] [#325](https://github.com/felipe-urgal/home-music/issues/325) — Media Session + fallback estático da tela bloqueada, com QA físico rastreado;
-- [ ] [#326](https://github.com/felipe-urgal/home-music/issues/326) — vinil animado no player Agora.
+- [x] [#326](https://github.com/felipe-urgal/home-music/issues/326) — vinil animado no player Agora.
 
 ### P2 — casos difíceis e fallbacks locais pesados/opcionais
 
@@ -370,14 +369,13 @@ Não criar override em centenas de faixas para resolver um problema que é corre
 - [ ] [#322](https://github.com/felipe-urgal/home-music/issues/322) — Whisper local para transcrição/alinhamento;
 - camada B da #321 — materialização de artwork local como cover override, sem bloquear o fallback visual.
 
-## Ordem recomendada a partir da fundação
+## Ordem recomendada para o backlog restante
 
-1. #312 — primeiro analyzer real, reutilizando lifecycle/cache/evidências da #311;
-2. #313 — revisão/aplicação segura;
-3. #314 + #315 + #319 em paralelo;
-4. #326 e #316 conforme prioridade de experiência;
-5. #318 após evidência de qualidade do fluxo manual;
-6. #320/#322 e camada B da #321 como fallbacks opcionais.
+1. concluir o disparo operacional e os gates restantes da #315;
+2. #316 e #319 conforme prioridade de experiência e qualidade da biblioteca;
+3. #318 após evidência de qualidade do fluxo manual;
+4. #320/#322 e camada B da #321 como fallbacks opcionais;
+5. concluir o QA físico ainda rastreado pela #325 sem reabrir o contrato técnico já incorporado.
 
 ## Relação com a Fase 14
 

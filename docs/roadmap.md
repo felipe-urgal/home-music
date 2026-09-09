@@ -8,7 +8,7 @@ O histórico detalhado acumulado até a fase 14 foi preservado em [`history/road
 
 - **Fase 7.5 — multiusuário/autenticação:** concluída e incorporada à arquitetura atual. Fonte canônica: [`multi-user-auth.md`](multi-user-auth.md).
 - **Fase 14 — portabilidade de dados pessoais:** implementação concluída na `main` com o PR #324. Contrato atual: [`personal-data-portability.md`](personal-data-portability.md).
-- **Fase 15 — Library Assistant:** fase ativa, coordenada pela issue #310. A fundação #311, a identificação de metadata com MusicBrainz #312, a revisão/aplicação segura #313, artwork via Cover Art Archive #314 e enriquecimento gerenciado de lyrics #315 estão implementados/documentados em [`library-assistant.md`](library-assistant.md) e [`lyrics.md`](lyrics.md). A #356 consolida o uso operacional em volume com lote confirmado, reset seguro e abas de monitoramento.
+- **Fase 15 — Library Assistant:** fase ativa, coordenada pela issue #310. A fundação #311, a identificação de metadata com MusicBrainz #312, a revisão/aplicação segura #313 e artwork via Cover Art Archive #314 estão implementados/documentados em [`library-assistant.md`](library-assistant.md). A #356 consolida o uso operacional em volume. A #315 possui resolução gerenciada, LRCLIB e revisão/aplicação integrados, mas permanece parcial até o fluxo administrativo disparar explicitamente o run `lyrics`.
 - A camada A do fallback de artwork (#321) e a publicação de artwork canônica no Media Session (#325) já foram incorporadas; validações físicas específicas de PWA permanecem registradas nas issues correspondentes como QA pós-merge.
 - O player Agora/Tocando agora possui apresentação de vinil animado (#326), reutilizando `Artwork`/fallback canônico e respeitando `prefers-reduced-motion`.
 - Correções de cold start offline (#328) e instrumentação de continuidade de playback iOS (#327) já foram incorporadas; qualquer evidência de hardware adicional continua sendo rastreada nas próprias issues.
@@ -42,7 +42,7 @@ Umbrella: **#310 — Library Assistant**.
 | #313 | revisão e aplicação segura de sugestões de metadata | implementada |
 | #356 | lote de revisão confirmado, reset operacional e abas Fila/Estatísticas/Configurações | implementada |
 | #314 | artwork via Cover Art Archive usando cover override canônico | implementada |
-| #315 | enriquecimento de lyrics reutilizando o domínio atual, com LRCLIB e override gerenciado | implementada |
+| #315 | enriquecimento de lyrics reutilizando o domínio atual, com LRCLIB e override gerenciado | parcial; disparo do run `lyrics` pendente |
 | #316 | resolução de lyrics consistente entre player/offline/OpenSubsonic | planejada |
 | #318 | autonomia progressiva após scan/importação | posterior ao fluxo manual |
 | #319 | assistência de normalização artista/álbum | planejada |
@@ -54,7 +54,7 @@ Umbrella: **#310 — Library Assistant**.
 
 O detalhamento de arquitetura, riscos, etapas e critérios está em [`library-assistant-plan.md`](library-assistant-plan.md). O comportamento implementado está em [`library-assistant.md`](library-assistant.md) e, para a cadeia efetiva de letras, em [`lyrics.md`](lyrics.md). Se plano e implementação divergirem, código/testes e a issue executada têm precedência.
 
-### Base estabilizada (#311 + #312 + #313 + #314 + #315 + #356)
+### Base estabilizada (#311 + #312 + #313 + #314 + #356; #315 parcial)
 
 A Fase 15 agora possui:
 
@@ -68,6 +68,7 @@ A Fase 15 agora possui:
 - analyzer real de metadata via MusicBrainz com busca progressiva e endpoint fixo;
 - matching conservador e explicável por título, artista, álbum, `albumArtist`, duração e contexto coletivo;
 - fallback por basename somente quando metadata essencial está ausente, sem envio de path/filename bruto e sempre limitado a baixa confiança;
+- triagem local que limita a fila de metadata/artwork a faixas sem capa efetiva ou com campos ausentes/placeholders, mantendo o total de progresso aderente ao trabalho útil;
 - IDs externos tipados de recording/release/release-group/artist;
 - proteção explícita de override humano e bloqueio de high confidence em conflito/ambiguidade;
 - sugestão de artwork via Cover Art Archive a partir de release confiável, sem download durante a análise;

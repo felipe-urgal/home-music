@@ -2,13 +2,15 @@
 
 ## Estado
 
-A Fase 15 possui cinco entregas implementadas no fluxo assistido:
+A base operacional da Fase 15 possui cinco entregas implementadas no fluxo assistido:
 
 - **#311 — fundação:** contratos, runs, sugestões, persistência auditável, stale protection, lifecycle administrativo, fila/observabilidade e gateway seguro de providers;
 - **#312 — identificação de metadata:** analyzer real usando contexto local + MusicBrainz para produzir sugestões explicáveis de `title`, `artist`, `album` e `albumArtist`;
 - **#313 — revisão/aplicação segura:** workspace administrativo para revisar, rejeitar e aplicar sugestões de metadata por campo, sempre pela autoridade canônica de overrides;
 - **#314 — artwork via Cover Art Archive:** sugestões de capa derivadas de identificação confiável do MusicBrainz, com download somente após apply individual explícito;
 - **#356 — operação em volume:** lote real de metadata com confirmação de revisão, reset seguro de sugestões abertas e superfícies de Fila, Estatísticas e Configurações.
+
+A **#315 permanece parcial**: a resolução gerenciada, o adapter/analyzer LRCLIB e o fluxo de revisão/aplicação já existem, mas o comando normal da tela ainda inicia apenas a capability `metadata`; portanto lyrics não devem ser apresentadas como uma entrega operacional concluída até existir agendamento explícito do run `lyrics` e seus gates finais.
 
 A análise continua separada da mutação. Nenhuma sugestão é aplicada automaticamente após scan/importação ou apenas por possuir alta confiança. Aplicar depende de uma decisão administrativa explícita e de nova validação no backend.
 
@@ -81,7 +83,7 @@ O reset operacional da #356 também usa `stale` em vez de apagar histórico: sug
 
 O Assistente reutiliza `HeavyWorkQueue` e `LongJobObservability`; não cria uma segunda fila. O shutdown aborta controllers ativos, aguarda o trabalho agendado e somente depois fecha o store.
 
-A execução incremental é o caminho normal. **Analisar mudanças** planeja novamente faixas novas, alteradas e trabalho que não terminou com estado reutilizável. **Limpar e reanalisar tudo** é a ação excepcional: invalida sugestões abertas e inicia uma análise completa (`full: true`).
+A execução incremental é o caminho normal. Antes de consultar providers externos, a análise de metadata/artwork faz uma triagem local e inclui somente faixas sem capa efetiva ou com título, artista, álbum ou artista do álbum ausente/reconhecido como placeholder (por exemplo, `Artista desconhecido`). **Analisar mudanças** planeja novamente, dentro desse conjunto, faixas novas, alteradas e trabalho que não terminou com estado reutilizável. **Limpar e reanalisar tudo** é a ação excepcional: invalida sugestões abertas e refaz todas as faixas que continuam elegíveis (`full: true`), sem consultar novamente faixas que já têm capa e metadados locais completos.
 
 ## Gateway de providers
 
@@ -315,4 +317,4 @@ A revisão/aplicação cobre:
 
 ## Próximos módulos
 
-O fluxo completo **analisar → revisar → aplicar metadata/artwork** permanece a base das próximas capacidades. Lyrics (#315/#316), normalização assistida (#319), casos difíceis opcionais (#320/#322) e autonomia progressiva (#318) devem reutilizar as mesmas autoridades, stale protection e confirmação explícita em vez de criar lifecycles paralelos. O planejamento está em [`library-assistant-plan.md`](library-assistant-plan.md).
+O fluxo completo **analisar → revisar → aplicar metadata/artwork** permanece a base das próximas capacidades. A conclusão do enriquecimento de lyrics (#315), seguida da experiência coerente entre todas as superfícies (#316), normalização assistida (#319), casos difíceis opcionais (#320/#322) e autonomia progressiva (#318) devem reutilizar as mesmas autoridades, stale protection e confirmação explícita em vez de criar lifecycles paralelos. O planejamento está em [`library-assistant-plan.md`](library-assistant-plan.md).

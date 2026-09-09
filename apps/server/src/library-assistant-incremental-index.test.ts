@@ -60,7 +60,8 @@ async function withIncrementalService(
     workQueue: LibraryAssistantPersistentQueue;
     tracks: Track[];
     setRevision: (value: number) => void;
-  }) => Promise<void>
+  }) => Promise<void>,
+  isTrackEligible?: (capability: 'metadata' | 'artwork' | 'lyrics', track: Track) => boolean
 ) {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'home-music-assistant-incremental-'));
   const databasePath = path.join(directory, 'home-music.db');
@@ -89,6 +90,7 @@ async function withIncrementalService(
     observability,
     providers,
     analyzers: [analyzer],
+    isTrackEligible,
     createId: () => String(++id),
     library: {
       listTracks: () => tracks.map(track => ({ ...track })),
@@ -146,6 +148,38 @@ test('índice incremental reutiliza uma premissa concluída sem depender da fila
     database.close();
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+test('triagem limita fila e progresso às faixas que precisam de reparo', async () => {
+  const calls: string[] = [];
+  const analyzer: LibraryAssistantAnalyzer = {
+    id: 'metadata-eligibility-test',
+    capability: 'metadata',
+    async analyze({ tracks }) {
+      calls.push(tracks[0].id);
+      return [];
+    }
+  };
+  const healthy = indexedTrack('healthy');
+  const needsRepair = indexedTrack('needs-repair');
+  needsRepair.artist = 'Artista desconhecido';
+
+  await withIncrementalService(
+    [healthy, needsRepair],
+    analyzer,
+    async ({ service, workQueue }) => {
+      const first = service.startRun('metadata', 'admin-1');
+      await waitFor(() => service.getRun(first.id)?.status === 'completed');
+      assert.deepEqual(calls, ['needs-repair']);
+      assert.equal(workQueue.summary(first.id).total, 1);
+
+      const full = service.startRun('metadata', 'admin-1', { full: true });
+      await waitFor(() => service.getRun(full.id)?.status === 'completed');
+      assert.deepEqual(calls, ['needs-repair', 'needs-repair']);
+      assert.equal(workQueue.summary(full.id).total, 1);
+    },
+    (capability, item) => capability !== 'metadata' || item.artist === 'Artista desconhecido'
+  );
 });
 
 test('reanálise incremental ignora faixas inalteradas e permite forçar análise completa', async () => {

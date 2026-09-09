@@ -8,6 +8,7 @@ import type {
 } from './library-assistant-store.js';
 import {
   createMusicBrainzMetadataAnalyzer,
+  needsMusicBrainzEnrichment,
   normalizeMusicBrainzRecordingSearch,
   rankMusicBrainzCandidate
 } from './musicbrainz-metadata-analyzer.js';
@@ -81,6 +82,15 @@ function caaResponse(images: unknown[] = []) {
 function isCaaRequest(input: string | URL) {
   return new URL(String(input)).origin === 'https://coverartarchive.org';
 }
+
+test('triagem local seleciona faixas com metadados inválidos ou capa ausente', () => {
+  assert.equal(needsMusicBrainzEnrichment(track({ hasCover: true })), false);
+  assert.equal(needsMusicBrainzEnrichment(track({ hasCover: false })), true);
+  assert.equal(needsMusicBrainzEnrichment(track({ hasCover: true, artist: 'Artista desconhecido' })), true);
+  assert.equal(needsMusicBrainzEnrichment(track({ hasCover: true, album: 'Unknown Album' })), true);
+  assert.equal(needsMusicBrainzEnrichment(track({ hasCover: true, albumArtist: '' })), true);
+  assert.equal(needsMusicBrainzEnrichment(track({ hasCover: true, title: 'Título desconhecido' })), true);
+});
 
 test('normaliza somente campos MusicBrainz necessários, mantém ids com escopo e é idempotente no cache', () => {
   const normalized = normalizeMusicBrainzRecordingSearch({

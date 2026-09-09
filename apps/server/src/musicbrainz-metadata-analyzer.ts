@@ -386,6 +386,14 @@ function reliableMetadata(value: string) {
   return !PLACEHOLDERS.has(normalizedValue(value));
 }
 
+export function needsMusicBrainzEnrichment(track: Track) {
+  return !track.hasCover
+    || !reliableMetadata(track.title)
+    || !reliableMetadata(track.artist)
+    || !reliableMetadata(track.album)
+    || !reliableMetadata(track.albumArtist);
+}
+
 function safeFileContext(value: SafeFileContext | null | undefined): SafeFileContext | null {
   if (!value) return null;
   const fileName = safeText(value.fileName, 255);
