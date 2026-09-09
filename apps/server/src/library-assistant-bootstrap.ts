@@ -17,6 +17,10 @@ import { LibraryAssistantStore } from './library-assistant-store.js';
 import type { LongJobObservability } from './long-job-observability.js';
 import { createMusicBrainzSimpleSearchFetch } from './musicbrainz-simple-search-fetch.js';
 import { TrackCoverOverrideStore } from './track-cover-overrides.js';
+import {
+  setActiveTrackLyricsOverrideStore,
+  TrackLyricsOverrideStore
+} from './track-lyrics-overrides.js';
 import { TrackMetadataOverrideStore } from './track-metadata-overrides.js';
 
 type LibraryAssistantBootstrapOptions = {
@@ -52,6 +56,8 @@ export function registerLibraryAssistant(
   const incrementalIndex = new LibraryAssistantIncrementalIndex(options.databasePath);
   const metadataOverrides = new TrackMetadataOverrideStore(options.databasePath);
   const coverOverrides = new TrackCoverOverrideStore(options.databasePath);
+  const lyricsOverrides = new TrackLyricsOverrideStore(options.databasePath);
+  setActiveTrackLyricsOverrideStore(lyricsOverrides);
   const providers = new LibraryAssistantProviderGateway(store, {
     onObservation: observation => metrics.observeProvider(observation)
   });
@@ -118,6 +124,8 @@ export function registerLibraryAssistant(
   app.addHook('onClose', async () => {
     await service.close();
     review.close();
+    setActiveTrackLyricsOverrideStore(null);
+    lyricsOverrides.close();
     coverOverrides.close();
     metadataOverrides.close();
     incrementalIndex.close();
