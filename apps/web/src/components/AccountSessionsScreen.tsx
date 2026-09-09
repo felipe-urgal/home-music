@@ -10,11 +10,19 @@ type AccountSessionsScreenProps = {
   onRevokeOthers: () => void;
 };
 
+const PERSISTENT_SESSION_YEAR = 9999;
+
 function formatSessionDate(value: number) {
   return new Intl.DateTimeFormat('pt-BR', {
     dateStyle: 'short',
     timeStyle: 'short'
   }).format(new Date(value));
+}
+
+function formatSessionExpiration(value: number) {
+  return new Date(value).getUTCFullYear() >= PERSISTENT_SESSION_YEAR
+    ? 'Não expira'
+    : formatSessionDate(value);
 }
 
 export function AccountSessionsScreen({
@@ -92,7 +100,7 @@ export function AccountSessionsScreen({
                     </div>
                     <div className="account-session-card__detail">
                       <ShieldCheck />
-                      <span><small>Expira em</small><strong>{formatSessionDate(session.expiresAt)}</strong></span>
+                      <span><small>Expira em</small><strong>{formatSessionExpiration(session.expiresAt)}</strong></span>
                     </div>
 
                     {session.current ? (
