@@ -19,7 +19,7 @@ describe('AdminLibraryAssistantScreen operational workflow', () => {
     const screen = source();
 
     expect(screen).toMatch(/function canApplyInBatch\(suggestion: LibraryAssistantSuggestion\)/);
-    expect(screen).toMatch(/suggestion\.target\.capability === 'metadata' && isOpen\(suggestion\)/);
+    expect(screen).toMatch(/suggestion\.target\.capability !== 'artwork' && isOpen\(suggestion\)/);
     expect(screen).toMatch(/visibleActionableSuggestions/);
     expect(screen).toMatch(/const reviewCount = chosen\.filter\(item => !isSafe\(item\)\)\.length;/);
     expect(screen).toMatch(/if \(reviewCount > 0 && !reviewConfirmed\)/);
