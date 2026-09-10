@@ -17,13 +17,18 @@ import type {
 import { apiFetch } from './api-client';
 
 export type LibraryAssistantFingerprintStatus = {
-  localFingerprint: boolean;
+  fpcalc: {
+    available: boolean;
+    version: string | null;
+    issue: 'invalid-command' | 'not-found' | 'timeout' | 'failed' | 'invalid-output' | null;
+  };
   acoustIdEnabled: boolean;
   acoustIdConfigured: boolean;
 };
 
 export type LibraryAssistantFingerprintResult = {
   fingerprintGenerated: boolean;
+  cacheHit: boolean;
   externalLookup: boolean;
   identified: boolean;
   acoustIdEnabled: boolean;
