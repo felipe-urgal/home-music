@@ -106,6 +106,32 @@ test('reload sem rede entra direto nos downloads offline sem exibir login', asyn
   }
 });
 
+test('cold start em nova página sem rede abre os downloads pelo shell local', async ({ context, page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop-chromium');
+
+  await login(page);
+  await ensureServiceWorkerControl(page);
+  const table = await openDesktopLibrary(page);
+
+  await table.getByRole('button', { name: 'Baixar E2E Track para uso offline' }).click();
+  await expect(table.getByRole('button', { name: 'Remover download offline de E2E Track' })).toBeVisible();
+
+  await page.close();
+  await context.setOffline(true);
+
+  const coldStartPage = await context.newPage();
+  try {
+    await coldStartPage.goto('/', { waitUntil: 'domcontentloaded' });
+    await expect(coldStartPage.getByText('Downloads offline', { exact: true })).toBeVisible();
+    await expect(coldStartPage.getByRole('button', { name: 'Tocar E2E Track, Artista' })).toBeVisible();
+    await expect(coldStartPage.getByRole('heading', { name: 'Entrar' })).toHaveCount(0);
+    await expect(coldStartPage.locator('form.login-form')).toHaveCount(0);
+  } finally {
+    await context.setOffline(false);
+    await coldStartPage.close();
+  }
+});
+
 test('reload sem rede e sem downloads mostra indisponibilidade sem formulário de login', async ({ context, page }, testInfo) => {
   test.skip(testInfo.project.name !== 'desktop-chromium');
 
