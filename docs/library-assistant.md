@@ -2,17 +2,20 @@
 
 ## Estado
 
-A base operacional da Fase 15 possui cinco entregas implementadas no fluxo assistido:
+A base operacional da Fase 15 possui oito entregas implementadas no fluxo assistido:
 
 - **#311 — fundação:** contratos, runs, sugestões, persistência auditável, stale protection, lifecycle administrativo, fila/observabilidade e gateway seguro de providers;
 - **#312 — identificação de metadata:** analyzer real usando contexto local + MusicBrainz para produzir sugestões explicáveis de `title`, `artist`, `album` e `albumArtist`;
 - **#313 — revisão/aplicação segura:** workspace administrativo para revisar, rejeitar e aplicar sugestões de metadata por campo, sempre pela autoridade canônica de overrides;
 - **#314 — artwork via Cover Art Archive:** sugestões de capa derivadas de identificação confiável do MusicBrainz, com download somente após apply individual explícito;
+- **#315 — lyrics externas:** LRCLIB opera em run `lyrics` independente, iniciado em paralelo ao run de metadata, mantendo a revisão unificada e a resolução canônica de letras;
+- **#319 — normalização assistida:** a revisão existente de artistas/álbuns reutiliza evidências MusicBrainz persistidas pelo Assistente, sem segundo motor/store de aliases;
+- **#320 — fingerprint acústico:** casos difíceis podem usar Chromaprint/`fpcalc` local e AcoustID opcional como evidência adicional do matcher existente;
 - **#356 — operação em volume:** lote real de metadata com confirmação de revisão, reset seguro de sugestões abertas e superfícies de Fila, Estatísticas e Configurações.
 
 A operação também possui uma **política de revisão persistida no servidor**. Para título, artista, álbum, artista do álbum e letras, o administrador escolhe `Ignorar`, `Revisar` ou `Lote`; capa aceita apenas `Ignorar` ou `Revisar` e continua sempre individual. A política não reduz o escopo do analyzer e não aplica nada em segundo plano: `Lote` apenas reúne sugestões seguras para uma confirmação conjunta explícita.
 
-A **#315 permanece parcial**: a resolução gerenciada, o adapter/analyzer LRCLIB e o fluxo de revisão/aplicação já existem, mas o comando normal da tela ainda inicia apenas a capability `metadata`; portanto lyrics não devem ser apresentadas como uma entrega operacional concluída até existir agendamento explícito do run `lyrics` e seus gates finais.
+`metadata` e `lyrics` são capabilities independentes. A Administração dispara os dois runs em paralelo no fluxo normal e cancela os runs ativos em conjunto, preservando métricas, cache, retries e incrementalidade por capability sem criar uma segunda experiência de revisão.
 
 A análise continua separada da mutação. Nenhuma sugestão é aplicada automaticamente após scan/importação ou apenas por possuir alta confiança. Aplicar depende de uma decisão administrativa explícita e de nova validação no backend.
 
@@ -219,13 +222,13 @@ O downloader aceita somente hosts/redirects permitidos, limita redirects/tamanho
 
 Detalhes de persistência e política de capa: [`admin-cover-overrides.md`](admin-cover-overrides.md).
 
-## Revisão e aplicação administrativa (#313 + #314 + #356)
+## Revisão e aplicação administrativa (#313 + #314 + #315 + #356)
 
 A superfície **Administração → Assistente da Biblioteca** organiza o fluxo em quatro seções funcionais:
 
 ### Sugestões
 
-- **Analisar biblioteca/Analisar mudanças** inicia um run sem aplicar resultados automaticamente;
+- **Analisar biblioteca/Analisar mudanças** inicia runs de `metadata` e `lyrics` sem aplicar resultados automaticamente;
 - metadata, artwork e lyrics revisáveis podem ser aplicados/rejeitados individualmente pelas capacidades já suportadas;
 - a política `Ignorar` remove somente sugestões abertas daquele tipo da listagem; histórico resolvido continua consultável e o analyzer continua verificando o tipo;
 - a política `Revisar` mantém o item no fluxo manual normal;
@@ -284,11 +287,11 @@ Lifecycle/análise:
 
 Revisão/aplicação:
 
-- `GET /api/admin/library-assistant/review?limit=200` — fila revisável de metadata/artwork com snapshot efetivo/físico necessário à decisão;
+- `GET /api/admin/library-assistant/review?limit=200` — fila revisável de metadata/artwork/lyrics com snapshot efetivo/físico necessário à decisão;
 - `GET /api/admin/library-assistant/policy` — lê a política administrativa persistida;
 - `PUT /api/admin/library-assistant/policy` — substitui a política completa após validação server-side;
 - `POST /api/admin/library-assistant/review/reset` — invalida sugestões abertas dos runs revisáveis, preservando decisões resolvidas/histórico;
-- `POST /api/admin/library-assistant/suggestions/:id/decision` — aplica ou rejeita individualmente metadata/artwork suportado;
+- `POST /api/admin/library-assistant/suggestions/:id/decision` — aplica ou rejeita individualmente metadata/artwork/lyrics suportados;
 - `POST /api/admin/library-assistant/decisions` — executa até 100 decisões; `confirmReview` libera somente sugestões revisadas suportadas e artwork continua individual; retorna resultado por item + resumo de sucesso parcial.
 
 ## Falhas e segurança
@@ -337,6 +340,8 @@ A revisão/aplicação cobre:
 - autorização e anti-CSRF das rotas de revisão/reset;
 - cliente Web mantendo payload explícito e header de mutação.
 
+As entregas #315, #319 e #320 acrescentam regressões determinísticas próprias para execução independente de lyrics, evidência externa na normalização e subprocesso/filesystem/AcoustID, respectivamente. Nenhum desses testes depende de internet pública.
+
 ## Próximos módulos
 
-O fluxo completo **analisar → revisar → aplicar metadata/artwork** permanece a base das próximas capacidades. A conclusão do enriquecimento de lyrics (#315), seguida da experiência coerente entre todas as superfícies (#316), normalização assistida (#319), casos difíceis opcionais (#320/#322) e autonomia progressiva (#318) devem reutilizar as mesmas autoridades, stale protection e confirmação explícita em vez de criar lifecycles paralelos. O planejamento está em [`library-assistant-plan.md`](library-assistant-plan.md).
+O fluxo completo **analisar → revisar → aplicar** permanece a base das próximas capacidades. A experiência coerente entre superfícies (#316), transcrição/alinhamento local opcional (#322) e autonomia progressiva (#318) devem reutilizar as mesmas autoridades, stale protection e confirmação explícita em vez de criar lifecycles paralelos. O planejamento está em [`library-assistant-plan.md`](library-assistant-plan.md).
