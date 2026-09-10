@@ -48,6 +48,35 @@ Aliases de álbum são escopados pelo `albumArtist` já canônico.
 
 Isso evita juntar discos homônimos de artistas diferentes. Por exemplo, uma associação de `Lemonade → Lémonade` em `Beyoncé` não afeta um álbum chamado `Lemonade` de outro artista.
 
+## Evidência do Assistente da Biblioteca
+
+A tela de Normalização reutiliza a evidência MusicBrainz que já foi produzida pelo Assistente da Biblioteca. Ela **não** executa uma segunda busca externa, não mantém outro matcher e não cria outra tabela de aliases.
+
+O fluxo permanece:
+
+```text
+heurística local conservadora encontra o grupo
+        ↓
+review consulta evidência já persistida pelo Assistente
+        ↓
+MusicBrainz pode corroborar uma grafia existente
+        ↓
+administrador confirma a associação no store atual
+```
+
+Para artistas, um MBID consistente entre as variantes pode corroborar a grafia canônica devolvida pelo MusicBrainz. Para álbuns, `release-group` é preferido como identidade externa; `release` é usado apenas quando esse identificador mais estável não está disponível.
+
+A evidência é somente auxiliar:
+
+- o grupo continua sendo criado exclusivamente pela heurística local da normalização;
+- a grafia externa só é pré-selecionada quando ela existe exatamente entre as variantes locais;
+- IDs externos conflitantes removem a sugestão automática e deixam a decisão para revisão humana;
+- ausência de dados do Assistente/MusicBrainz não remove nem altera os candidatos locais;
+- pontuação, artigos e diferenças semânticas continuam fora da equivalência conservadora;
+- nenhum alias é aplicado automaticamente.
+
+Isso preserva a separação entre correção por faixa e alias global: o Assistente não cria overrides em massa para resolver uma variação global, e a Normalização não transforma uma sugestão de uma única faixa em alias para toda a biblioteca.
+
 ## Persistência
 
 Aliases são persistidos na tabela SQLite:
@@ -66,6 +95,8 @@ Cada linha registra:
 
 A combinação `(kind, scope, source_value)` é única. O backend bloqueia associações que criariam cadeias de aliases ou reutilizariam uma origem já associada.
 
+Evidências externas **não** são copiadas para `library_metadata_aliases`. O review lê apenas os dados derivados já presentes nas sugestões do Assistente; a tabela de aliases continua sendo a única autoridade de normalização persistida.
+
 ## Revisão administrativa
 
 A área **Administração → Normalização** apresenta:
@@ -73,10 +104,12 @@ A área **Administração → Normalização** apresenta:
 - grupos prováveis encontrados na biblioteca efetiva;
 - contagem de faixas por grafia;
 - escolha explícita da grafia canônica;
+- evidência MusicBrainz quando disponível;
+- MBIDs relevantes e conflitos entre identidades externas;
 - aliases ativos;
 - ação `Desfazer` por alias.
 
-Nenhuma associação é criada automaticamente. O administrador sempre escolhe a grafia canônica antes da persistência.
+Nenhuma associação é criada automaticamente. O administrador sempre confirma a grafia canônica antes da persistência, mesmo quando MusicBrainz fornece evidência consistente.
 
 A interface deixa explícito que arquivos físicos e tags embutidas não são alterados.
 
@@ -96,7 +129,7 @@ Mutações também exigem:
 X-Home-Music-Request: 1
 ```
 
-`GET` retorna candidatos, aliases e contagens. `POST` valida novamente a equivalência e a presença das grafias na biblioteca atual antes de persistir. `DELETE` desfaz uma associação sem tocar no arquivo físico.
+`GET` retorna candidatos, aliases e contagens. Quando existe evidência MusicBrainz reaproveitável, cada candidato pode carregar dados auxiliares de canônico provável, IDs externos e conflito. `POST` continua validando novamente a equivalência e a presença das grafias na biblioteca atual antes de persistir. `DELETE` desfaz uma associação sem tocar no arquivo físico.
 
 ## Navegação e filtros
 
@@ -136,7 +169,9 @@ A normalização lógica:
 - não contorna overrides administrativos por faixa;
 - não pode ser administrada por usuário com role `user`;
 - é reversível pela remoção do alias;
-- mantém álbuns confinados ao artista canônico correspondente.
+- mantém álbuns confinados ao artista canônico correspondente;
+- não faz egress externo durante o review de Normalização;
+- não auto-aplica alias global com base em evidência externa.
 
 ## Testes relevantes
 
@@ -151,6 +186,9 @@ A feature cobre:
 - escopo de álbum;
 - precedência de override por faixa;
 - consumo por smart playlists;
+- evidência MusicBrainz consistente entre variantes;
+- conflito entre MBIDs sem perda do candidato local;
+- fallback para review local quando não existe evidência externa;
 - 403 para usuário comum;
 - exigência do header de mutação;
 - fluxo Playwright de revisão, aplicação e undo.

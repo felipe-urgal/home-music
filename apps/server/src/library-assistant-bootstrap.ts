@@ -130,9 +130,13 @@ export function registerLibraryAssistant(
       };
     }
   });
-  const lyricsAnalyzer = createLrclibLyricsAnalyzer({
-    hasEffectiveLyrics: async trackId => Boolean(lyricsOverrides.get(trackId)) || await hasSidecarLyrics(trackId)
-  });
+  const lyricsAnalyzer = {
+    ...createLrclibLyricsAnalyzer({
+      hasEffectiveLyrics: async trackId => Boolean(lyricsOverrides.get(trackId)) || await hasSidecarLyrics(trackId)
+    }),
+    // LRCLIB opera em um run próprio; metadata não deve disparar consultas de lyrics.
+    capability: 'lyrics' as const
+  } satisfies LibraryAssistantAnalyzer;
   const analyzers = (options.analyzers ?? [metadataAnalyzer, lyricsAnalyzer])
     .map(analyzer => instrumentAnalyzer(analyzer, metrics));
   const service = new LibraryAssistantService({
