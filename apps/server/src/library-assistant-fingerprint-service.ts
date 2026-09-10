@@ -25,7 +25,7 @@ const HIGH_ACOUSTID_SCORE = 0.95;
 const AMBIGUOUS_SCORE_MARGIN = 0.03;
 const MAX_RUN_SUGGESTIONS = 4;
 
-const METADATA_FIELDS: readonly LibraryAssistantMetadataField[] = ['title', 'artist', 'album', 'albumArtist'];
+const METADATA_FIELDS: readonly LibraryAssistantMetadataField[] = ['title', 'artist', 'album'];
 
 type FingerprintLibrary = {
   listTracks: () => Track[];
@@ -128,9 +128,8 @@ function valuesFor(identified: IdentifiedRecording) {
   return {
     title: recording.title,
     artist: recording.artist,
-    album: recording.releaseGroupTitle,
-    albumArtist: recording.artist
-  } satisfies Record<LibraryAssistantMetadataField, string | null>;
+    album: recording.releaseGroupTitle
+  } satisfies Record<(typeof METADATA_FIELDS)[number], string | null>;
 }
 
 function sameFile(left: { filePath: string; signature: string }, right: { filePath: string; signature: string }) {
@@ -185,6 +184,15 @@ export class LibraryAssistantFingerprintService {
     }
 
     return this.options.queue.run(async signal => {
+      const queuedRecord = this.options.store.listSuggestionRecords(runId, { limit: 500 })
+        .find(item => item.suggestion.id === suggestionId);
+      if (!queuedRecord || !isOpenDifficultMetadataSuggestion(queuedRecord.suggestion)) {
+        throw new RangeError('A sugestão foi resolvida enquanto aguardava o fingerprint. Atualize a revisão.');
+      }
+      if (this.options.library.revision() !== initialRevision) {
+        throw new RangeError('A biblioteca mudou enquanto o fingerprint aguardava na fila. Atualize a revisão.');
+      }
+
       const cached = this.options.cache.get(track.id, inputFile.signature);
       let local: AudioFingerprint;
       let cacheHit = Boolean(cached);
@@ -271,8 +279,16 @@ export class LibraryAssistantFingerprintService {
         'provider-match',
         'strong-external-id'
       ]);
-      if (ambiguous) reasonCodes.add('ambiguous-candidates');
-      if (externalConflict || matcherConflict) reasonCodes.add('source-conflict');
+      if (best.candidate.score >= HIGH_ACOUSTID_SCORE) reasonCodes.add('fingerprint.match-strong');
+      if (ambiguous) {
+        reasonCodes.add('ambiguous-candidates');
+        reasonCodes.add('fingerprint.multiple-recordings');
+      }
+      if (durationConflict) reasonCodes.add('fingerprint.duration-conflict');
+      if (externalConflict || matcherConflict) {
+        reasonCodes.add('source-conflict');
+        reasonCodes.add('fingerprint.external-conflict');
+      }
       if (conflict) reasonCodes.add('metadata-conflict');
       if (sourceSuggestion.reasonCodes.includes('human-override')) reasonCodes.add('human-override');
       const confidence = conflict || ambiguous
