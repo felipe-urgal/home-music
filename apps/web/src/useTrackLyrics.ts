@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { LyricsResponse, Track } from '@home-music/shared';
 import { apiFetch } from './api-client';
+import { readOfflineLyricsSnapshot } from './offline-lyrics-cache';
 
 const LYRICS_PROBE_DELAY_MS = 250;
 
@@ -11,7 +12,14 @@ export function useTrackLyrics(track: Track | null | undefined, offlineMode = fa
   useEffect(() => {
     setLyrics(null);
     setResolvedTrackId(null);
-    if (!track || offlineMode) return;
+    if (!track) return;
+
+    if (offlineMode) {
+      // Offline é estritamente local: nenhuma tentativa de rede/provider é feita aqui.
+      setLyrics(readOfflineLyricsSnapshot(track.id));
+      setResolvedTrackId(track.id);
+      return;
+    }
 
     const controller = new AbortController();
     let disposed = false;
