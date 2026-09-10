@@ -39,7 +39,11 @@ export async function startLibraryAssistantRun(
 }
 
 export async function startLibraryAssistantMetadataRun(options: { full?: boolean } = {}) {
-  return startLibraryAssistantRun('metadata', options);
+  const [metadata] = await Promise.all([
+    startLibraryAssistantRun('metadata', options),
+    startLibraryAssistantRun('lyrics', options)
+  ]);
+  return metadata;
 }
 
 export async function startLibraryAssistantLyricsRun(options: { full?: boolean } = {}) {
@@ -164,11 +168,24 @@ export async function decideLibraryAssistantBatch(
   return response.json() as Promise<AdminLibraryAssistantBatchDecisionResponse>;
 }
 
-export async function cancelLibraryAssistantRun(id: string) {
+async function cancelRunRequest(id: string) {
   const response = await apiFetch(`/api/admin/library-assistant/runs/${encodeURIComponent(id)}/cancel`, {
     method: 'POST',
     headers: { 'X-Home-Music-Request': '1' }
   });
   if (!response.ok) throw new Error(await responseError(response));
   return response.json() as Promise<AdminLibraryAssistantRunResponse>;
+}
+
+export async function cancelLibraryAssistantRun(id: string) {
+  const listed = await getLibraryAssistantRuns();
+  const active = listed.runs.filter(run => (
+    (run.capability === 'metadata' || run.capability === 'lyrics')
+    && !['completed', 'failed', 'cancelled', 'stale'].includes(run.status)
+  ));
+  const targets = active.some(run => run.id === id)
+    ? active
+    : [{ id }];
+  const results = await Promise.all(targets.map(run => cancelRunRequest(run.id)));
+  return results.find(result => result.run.id === id) ?? results[0];
 }
