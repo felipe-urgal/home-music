@@ -41,7 +41,7 @@ Esse timeout não autentica ninguém e não transforma resposta de servidor em f
 
 A raiz (`App.tsx`) separa conteúdo local de transporte do service worker:
 
-- `offlineContentAvailable`: usa a identidade offline conhecida, o manifesto já carregado e confirma os bytes de cada faixa diretamente no Cache Storage do namespace do usuário;
+- `offlineContentAvailable`: usa a identidade offline conhecida, o manifesto já carregado e cruza seus IDs com uma única listagem das chaves do Cache Storage do usuário, sem disparar uma consulta por faixa;
 - o capability handshake do service worker continua sendo necessário para o transporte `/offline-audio/<trackId>`, mas um atraso transitório de `controller`/mensageria não faz os downloads desaparecerem da decisão de bootstrap;
 - registros cujo blob não está presente no cache são ignorados na decisão de cold start;
 - nenhuma conta é escolhida por URL e não existe autenticação por senha offline.

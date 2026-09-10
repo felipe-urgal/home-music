@@ -2,7 +2,7 @@ import type { Track } from '@home-music/shared';
 import { describe, expect, it } from 'vitest';
 import type { OfflineDownloadRecord } from './offline-downloads';
 import {
-  filterOfflineRecordsWithBytes,
+  offlineCachedStreamHref,
   offlineCachedStreamUrl,
   readOfflineColdStartRecords
 } from './offline-cold-start';
@@ -32,57 +32,35 @@ function record(id: string): OfflineDownloadRecord {
 }
 
 describe('offline cold start', () => {
-  it('preserva ordem e ignora registros cujo blob não existe mais', async () => {
-    const records = [record('a'), record('b'), record('c')];
-    const result = await filterOfflineRecordsWithBytes(
-      records,
-      async trackId => trackId !== 'b'
-    );
-
-    expect(result.map(item => item.track.id)).toEqual(['a', 'c']);
-  });
-
-  it('falha fechado quando a verificação física de um item falha', async () => {
-    const records = [record('a'), record('b')];
-    const result = await filterOfflineRecordsWithBytes(records, async trackId => {
-      if (trackId === 'a') throw new Error('cache indisponível');
-      return true;
-    });
-
-    expect(result.map(item => item.track.id)).toEqual(['b']);
-  });
-
   it('usa a mesma chave física de stream criada pelo downloader', () => {
     expect(offlineCachedStreamUrl('faixa / 1')).toBe('/api/tracks/faixa%20%2F%201/stream');
+    expect(offlineCachedStreamHref('faixa / 1', 'https://music.example')).toBe('https://music.example/api/tracks/faixa%20%2F%201/stream');
   });
 
   it('reconcilia manifesto contra o cache do usuário sem depender de serviceWorker.controller', async () => {
     const openedNames: string[] = [];
-    const matchedUrls: string[] = [];
+    let keysCalls = 0;
+    const records = Array.from({ length: 780 }, (_value, index) => record(`track-${index}`));
     const cacheStorage = {
       async open(name: string) {
         openedNames.push(name);
         return {
-          async match(input: RequestInfo | URL) {
-            const value = String(input);
-            matchedUrls.push(value);
-            return value.includes('/track-a/') ? new Response('audio') : undefined;
+          async keys() {
+            keysCalls += 1;
+            return records.map(item => new Request(`http://localhost/api/tracks/${item.track.id}/stream`));
           }
         };
       }
     } as unknown as CacheStorage;
 
     const result = await readOfflineColdStartRecords(
-      [record('track-a'), record('track-b')],
+      records,
       { userId: 'user-a', cacheStorage }
     );
 
     expect(openedNames).toEqual(['home-music-offline-audio-v2-user-a']);
-    expect(matchedUrls).toEqual([
-      '/api/tracks/track-a/stream',
-      '/api/tracks/track-b/stream'
-    ]);
-    expect(result.map(item => item.track.id)).toEqual(['track-a']);
+    expect(keysCalls).toBe(1);
+    expect(result).toEqual(records);
   });
 
   it('não reutiliza cache sem identidade offline conhecida', async () => {

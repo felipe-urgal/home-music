@@ -440,19 +440,22 @@ export function useOfflineDownloads() {
       return;
     }
 
+    // No cold start sem rede, App.tsx faz a reconciliação física necessária
+    // para entrar no OfflineApp. Evite repetir a varredura do mesmo cache.
+    if (navigator.onLine === false) {
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     void (async () => {
       try {
         const scopedRecords = readManifest(userId);
         const cache = await caches.open(offlineAudioCacheName(userId));
         const expectedUrls = new Set(scopedRecords.map(record => new URL(streamUrl(record.track.id), window.location.origin).href));
-        const availability = await Promise.all(scopedRecords.map(async record => {
-          const cached = await cache.match(streamUrl(record.track.id));
-          return Boolean(cached);
-        }));
-        const available = scopedRecords.filter((_record, index) => availability[index]);
-
         const keys = await cache.keys();
+        const cachedUrls = new Set(keys.map(request => request.url));
+        const available = scopedRecords.filter(record => cachedUrls.has(new URL(streamUrl(record.track.id), window.location.origin).href));
         await Promise.all(keys
           .filter(request => !expectedUrls.has(request.url))
           .map(request => cache.delete(request))

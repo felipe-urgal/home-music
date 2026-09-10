@@ -6,15 +6,11 @@ export function offlineCachedStreamUrl(trackId: string) {
   return `/api/tracks/${encodeURIComponent(trackId)}/stream`;
 }
 
-export async function filterOfflineRecordsWithBytes(
-  records: readonly OfflineDownloadRecord[],
-  hasBytes: (trackId: string) => Promise<boolean>
+export function offlineCachedStreamHref(
+  trackId: string,
+  origin = typeof window === 'undefined' ? 'http://localhost' : window.location.origin
 ) {
-  const checks = await Promise.all(records.map(async record => ({
-    record,
-    available: await hasBytes(record.track.id).catch(() => false)
-  })));
-  return checks.filter(item => item.available).map(item => item.record);
+  return new URL(offlineCachedStreamUrl(trackId), origin).href;
 }
 
 type OfflineColdStartOptions = {
@@ -36,10 +32,8 @@ export async function readOfflineColdStartRecords(
 
   try {
     const cache = await cacheStorage.open(offlineAudioCacheName(userId));
-    return filterOfflineRecordsWithBytes(records, async trackId => {
-      const response = await cache.match(offlineCachedStreamUrl(trackId));
-      return Boolean(response);
-    });
+    const cachedUrls = new Set((await cache.keys()).map(request => request.url));
+    return records.filter(record => cachedUrls.has(offlineCachedStreamHref(record.track.id)));
   } catch {
     return [];
   }
