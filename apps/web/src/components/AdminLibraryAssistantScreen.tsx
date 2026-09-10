@@ -22,6 +22,7 @@ import {
   ChevronDown,
   ChevronLeft,
   Clock3,
+  Fingerprint,
   Info,
   LoaderCircle,
   MoreVertical,
@@ -38,6 +39,8 @@ import {
   clearLibraryAssistantManagedLyrics,
   decideLibraryAssistantBatch,
   decideLibraryAssistantSuggestion,
+  fingerprintLibraryAssistantSuggestion,
+  getLibraryAssistantFingerprintStatus,
   getLibraryAssistantReview,
   getLibraryAssistantReviewPolicy,
   getLibraryAssistantRunProgress,
@@ -45,7 +48,8 @@ import {
   getLibraryAssistantSuggestions,
   resetLibraryAssistantReview,
   startLibraryAssistantMetadataRun,
-  updateLibraryAssistantReviewPolicy
+  updateLibraryAssistantReviewPolicy,
+  type LibraryAssistantFingerprintStatus
 } from '../library-assistant-client';
 import { notifyLibraryChanged } from '../library-events';
 import '../library-assistant-admin.css';
@@ -147,6 +151,10 @@ function isOpen(suggestion: LibraryAssistantSuggestion) {
 
 function isSafe(suggestion: LibraryAssistantSuggestion) {
   return isLibraryAssistantAutoApplicable(suggestion);
+}
+
+function canTryFingerprint(suggestion: LibraryAssistantSuggestion) {
+  return suggestion.target.capability === 'metadata' && isOpen(suggestion) && !isSafe(suggestion);
 }
 
 function canApplyInBatch(suggestion: LibraryAssistantSuggestion) {
@@ -312,6 +320,15 @@ function batchOutcomeLabel(result: LibraryAssistantDecisionResult) {
   return result.outcome;
 }
 
+function fingerprintIssueLabel(issue: LibraryAssistantFingerprintStatus['fpcalc']['issue']) {
+  if (issue === 'not-found') return 'fpcalc não encontrado';
+  if (issue === 'timeout') return 'fpcalc não respondeu';
+  if (issue === 'invalid-command') return 'configuração de fpcalc inválida';
+  if (issue === 'invalid-output') return 'versão do fpcalc não reconhecida';
+  if (issue === 'failed') return 'falha ao executar fpcalc';
+  return 'Chromaprint indisponível';
+}
+
 function AssistantTrackArtwork({ trackId }: { trackId: string }) {
   const [failed, setFailed] = useState(false);
   const url = `/api/tracks/${encodeURIComponent(trackId)}/cover`;
@@ -345,6 +362,9 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
     () => ({ ...DEFAULT_LIBRARY_ASSISTANT_REVIEW_POLICY })
   );
   const [policyReady, setPolicyReady] = useState(false);
+  const [fingerprintStatus, setFingerprintStatus] = useState<LibraryAssistantFingerprintStatus | null>(null);
+  const [fingerprintStatusError, setFingerprintStatusError] = useState<string | null>(null);
+  const [fingerprintingId, setFingerprintingId] = useState<string | null>(null);
   const [section, setSection] = useState<Section>('suggestions');
   const [filter, setFilter] = useState<Filter>('all');
   const [sort, setSort] = useState<Sort>('recent');
@@ -354,6 +374,7 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [loadingPolicy, setLoadingPolicy] = useState(true);
+  const [loadingFingerprintStatus, setLoadingFingerprintStatus] = useState(true);
   const [savingPolicy, setSavingPolicy] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [mutating, setMutating] = useState(false);
@@ -363,6 +384,7 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const requestVersion = useRef(0);
   const policyRequestVersion = useRef(0);
+  const fingerprintRequestVersion = useRef(0);
 
   const latestRun = useMemo(() => runs.find(run => run.capability === 'metadata') ?? null, [runs]);
   const metadataRuns = useMemo(() => runs.filter(run => run.capability === 'metadata'), [runs]);
@@ -462,14 +484,33 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
     }
   }, []);
 
+  const loadFingerprintStatus = useCallback(async () => {
+    const version = ++fingerprintRequestVersion.current;
+    setLoadingFingerprintStatus(true);
+    try {
+      const response = await getLibraryAssistantFingerprintStatus();
+      if (version !== fingerprintRequestVersion.current) return;
+      setFingerprintStatus(response);
+      setFingerprintStatusError(null);
+    } catch (error) {
+      if (version !== fingerprintRequestVersion.current) return;
+      setFingerprintStatus(null);
+      setFingerprintStatusError(error instanceof Error ? error.message : 'Não foi possível verificar o Chromaprint.');
+    } finally {
+      if (version === fingerprintRequestVersion.current) setLoadingFingerprintStatus(false);
+    }
+  }, []);
+
   useEffect(() => {
     void load();
     void loadPolicy();
+    void loadFingerprintStatus();
     return () => {
       requestVersion.current += 1;
       policyRequestVersion.current += 1;
+      fingerprintRequestVersion.current += 1;
     };
-  }, [load, loadPolicy]);
+  }, [load, loadFingerprintStatus, loadPolicy]);
 
   useEffect(() => {
     if (!runActive) return;
@@ -654,6 +695,51 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
     }
   }
 
+  async function identifyByAudio(suggestion: LibraryAssistantSuggestion) {
+    if (!canTryFingerprint(suggestion) || fingerprintingId || !fingerprintStatus?.fpcalc.available) return;
+    setFingerprintingId(suggestion.id);
+    setFeedback(null);
+    try {
+      const result = await fingerprintLibraryAssistantSuggestion(suggestion.runId, suggestion.id);
+      if (!result.externalLookup) {
+        setFeedback({
+          kind: 'success',
+          message: result.cacheHit
+            ? 'Fingerprint local reutilizado do cache. AcoustID está desativado; nenhum dado foi enviado externamente.'
+            : 'Fingerprint local gerado. AcoustID está desativado; nenhum dado foi enviado externamente.'
+        });
+      } else if (!result.identified) {
+        setFeedback({
+          kind: 'warning',
+          message: 'Fingerprint gerado, mas o AcoustID não encontrou uma gravação confiável para esta faixa.'
+        });
+      } else if (result.ambiguous) {
+        setFeedback({
+          kind: 'warning',
+          message: 'O áudio aponta para múltiplas gravações próximas. As novas sugestões foram mantidas em revisão.'
+        });
+      } else if (result.conflict) {
+        setFeedback({
+          kind: 'warning',
+          message: 'O áudio encontrou uma gravação, mas há conflito com a metadata ou evidência atual. Nada foi aplicado automaticamente.'
+        });
+      } else {
+        setFeedback({
+          kind: 'success',
+          message: `${result.suggestionIds.length.toLocaleString('pt-BR')} sugestão${result.suggestionIds.length === 1 ? '' : 'ões'} reforçada${result.suggestionIds.length === 1 ? '' : 's'} pela identificação do áudio e adicionada${result.suggestionIds.length === 1 ? '' : 's'} para revisão.`
+        });
+      }
+      await load(true);
+    } catch (error) {
+      setFeedback({
+        kind: 'error',
+        message: error instanceof Error ? error.message : 'Não foi possível identificar esta faixa pelo áudio.'
+      });
+    } finally {
+      setFingerprintingId(null);
+    }
+  }
+
   async function applySuggestions(
     chosen: LibraryAssistantSuggestion[],
     reviewConfirmed = false
@@ -827,6 +913,7 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
             onClick={() => {
               void load();
               void loadPolicy();
+              void loadFingerprintStatus();
             }}
           >
             <RefreshCw className={loading || loadingPolicy ? 'is-spinning' : ''} />
@@ -1080,6 +1167,8 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
                     const canDecide = Boolean(item && expectedCurrentValue(suggestion) != null && isOpen(suggestion));
                     const selectable = Boolean(item && canApplyInBatch(suggestion));
                     const canClearLyrics = suggestion.target.capability === 'lyrics' && suggestion.status === 'applied';
+                    const canFingerprint = canTryFingerprint(suggestion);
+                    const fingerprintUnavailable = !fingerprintStatus?.fpcalc.available;
                     return (
                       <article key={suggestion.id} className="assistant-admin-row">
                         <label className="assistant-admin-row__select" aria-label={`Selecionar ${item?.track.title ?? suggestion.target.trackId}`}>
@@ -1108,10 +1197,27 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
                           {safe && isOpen(suggestion) ? <CheckCircle2 /> : suggestion.status === 'failed' ? <XCircle /> : <AlertTriangle />}
                           {rowStatusLabel(suggestion)}
                         </span>
-                        {canDecide || canClearLyrics ? (
+                        {canDecide || canClearLyrics || canFingerprint ? (
                           <details className="assistant-admin-row__menu">
                             <summary aria-label={`Ações para ${item?.track.title ?? suggestion.target.trackId}`}><MoreVertical /></summary>
                             <div>
+                              {canFingerprint && (
+                                <button
+                                  type="button"
+                                  disabled={mutating || Boolean(fingerprintingId) || fingerprintUnavailable}
+                                  title={fingerprintUnavailable
+                                    ? loadingFingerprintStatus
+                                      ? 'Verificando disponibilidade do Chromaprint.'
+                                      : fingerprintStatus
+                                        ? fingerprintIssueLabel(fingerprintStatus.fpcalc.issue)
+                                        : fingerprintStatusError ?? 'Chromaprint indisponível.'
+                                    : 'Gera fingerprint local e consulta AcoustID somente quando habilitado no servidor.'}
+                                  onClick={() => void identifyByAudio(suggestion)}
+                                >
+                                  {fingerprintingId === suggestion.id ? <LoaderCircle className="is-spinning" /> : <Fingerprint />}
+                                  {fingerprintingId === suggestion.id ? 'Identificando…' : 'Tentar identificar pelo áudio'}
+                                </button>
+                              )}
                               {canDecide && <button type="button" disabled={mutating} onClick={() => void decideOne(suggestion, 'apply')}><Check /> Aplicar</button>}
                               {canDecide && <button type="button" disabled={mutating} onClick={() => void decideOne(suggestion, 'reject')}><X /> Rejeitar</button>}
                               {canClearLyrics && <button type="button" disabled={mutating} onClick={() => void clearLyrics(suggestion)}><RefreshCw /> Voltar ao sidecar</button>}
@@ -1265,6 +1371,24 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
             </div>
             {!policyReady && !loadingPolicy && (
               <p className="assistant-admin__settings-note" role="alert">Não foi possível carregar a política. Use Atualizar para tentar novamente.</p>
+            )}
+          </div>
+          <div className="assistant-admin__settings">
+            <strong>Identificação por áudio</strong>
+            {loadingFingerprintStatus ? (
+              <p className="assistant-admin__settings-note">Verificando Chromaprint e AcoustID…</p>
+            ) : fingerprintStatus ? (
+              <p className="assistant-admin__settings-note">
+                Chromaprint: {fingerprintStatus.fpcalc.available
+                  ? `disponível${fingerprintStatus.fpcalc.version ? ` (${fingerprintStatus.fpcalc.version})` : ''}`
+                  : fingerprintIssueLabel(fingerprintStatus.fpcalc.issue)}.
+                {' '}AcoustID: {fingerprintStatus.acoustIdEnabled
+                  ? fingerprintStatus.acoustIdConfigured ? 'habilitado' : 'habilitado, mas sem chave configurada'
+                  : 'desativado'}.
+                {' '}A ação “Tentar identificar pelo áudio” aparece somente em sugestões de metadata que ainda exigem revisão; o fingerprint fica local e só fingerprint + duração são enviados ao AcoustID quando o opt-in server-side está habilitado.
+              </p>
+            ) : (
+              <p className="assistant-admin__settings-note" role="alert">{fingerprintStatusError ?? 'Não foi possível verificar a identificação por áudio.'}</p>
             )}
           </div>
           <div className="assistant-admin__settings">

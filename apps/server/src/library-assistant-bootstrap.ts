@@ -11,6 +11,9 @@ import {
   needsMusicBrainzEnrichment
 } from './musicbrainz-metadata-analyzer.js';
 import { LibraryAssistantCompositeReviewService } from './library-assistant-composite-review-service.js';
+import { LibraryAssistantFingerprintCache } from './library-assistant-fingerprint-cache.js';
+import { registerLibraryAssistantFingerprintRoutes } from './library-assistant-fingerprint-routes.js';
+import { LibraryAssistantFingerprintService } from './library-assistant-fingerprint-service.js';
 import { LibraryAssistantIncrementalIndex } from './library-assistant-incremental-index.js';
 import { registerLibraryAssistantPolicyRoutes } from './library-assistant-policy-routes.js';
 import { LibraryAssistantPersistentQueue } from './library-assistant-persistent-queue.js';
@@ -38,6 +41,11 @@ type LibraryAssistantBootstrapOptions = {
   queue: HeavyWorkQueue;
   observability: LongJobObservability;
   analyzers?: readonly LibraryAssistantAnalyzer[];
+  fingerprint?: {
+    fpcalcCommand?: string;
+    acoustIdEnabled?: boolean;
+    acoustIdApiKey?: string;
+  };
 };
 
 const METADATA_FIELDS: readonly LibraryAssistantMetadataField[] = ['title', 'artist', 'album', 'albumArtist'];
@@ -52,11 +60,20 @@ function instrumentAnalyzer(analyzer: LibraryAssistantAnalyzer, metrics: Library
   };
 }
 
+function fingerprintConfig(options: LibraryAssistantBootstrapOptions) {
+  return options.fingerprint ?? {
+    fpcalcCommand: process.env.HOME_MUSIC_FPCALC_PATH,
+    acoustIdEnabled: process.env.HOME_MUSIC_ACOUSTID_ENABLED === 'true',
+    acoustIdApiKey: process.env.HOME_MUSIC_ACOUSTID_API_KEY
+  };
+}
+
 export function registerLibraryAssistant(
   app: FastifyInstance,
   options: LibraryAssistantBootstrapOptions
 ) {
   const store = new LibraryAssistantStore(options.databasePath);
+  const fingerprintCache = new LibraryAssistantFingerprintCache(options.databasePath);
   const reviewPolicy = new LibraryAssistantReviewPolicyStore(options.databasePath);
   const metrics = new LibraryAssistantRunMetrics();
   const workQueue = new LibraryAssistantPersistentQueue(options.databasePath, {
@@ -73,6 +90,7 @@ export function registerLibraryAssistant(
   const musicBrainzFetch = createMusicBrainzSimpleSearchFetch();
   let assistantReviewRevision = 0;
   const projectRevision = options.projection.projectRevision;
+  const fingerprint = fingerprintConfig(options);
 
   // registerLibraryAssistant roda antes de registerLibraryRoutes. Compor a revisão
   // aqui garante que apply do Assistente invalide ETag/cache da biblioteca sem rescan.
@@ -116,8 +134,7 @@ export function registerLibraryAssistant(
     ...createLrclibLyricsAnalyzer({
       hasEffectiveLyrics: async trackId => Boolean(lyricsOverrides.get(trackId)) || await hasSidecarLyrics(trackId)
     }),
-    // LRCLIB agora é executado por um run próprio. O draft já é `lyrics`; manter a
-    // capability do analyzer alinhada impede consultas LRCLIB em runs de metadata.
+    // LRCLIB opera em um run próprio; metadata não deve disparar consultas de lyrics.
     capability: 'lyrics' as const
   } satisfies LibraryAssistantAnalyzer;
   const analyzers = (options.analyzers ?? [metadataAnalyzer, lyricsAnalyzer])
@@ -134,6 +151,23 @@ export function registerLibraryAssistant(
     isTrackEligible: (capability, track) => (
       capability !== 'metadata' || needsMusicBrainzEnrichment(track)
     )
+  });
+  const fingerprints = new LibraryAssistantFingerprintService({
+    store,
+    cache: fingerprintCache,
+    providers,
+    queue: options.queue,
+    library: {
+      listTracks: listProjectedTracks,
+      revision: () => projectRevision(options.library.status().revision),
+      root: () => options.library.root,
+      resolveTrackFile(trackId) {
+        return options.library.getTrack(trackId)?.filePath ?? null;
+      }
+    },
+    fpcalcCommand: fingerprint.fpcalcCommand,
+    acoustIdEnabled: fingerprint.acoustIdEnabled,
+    acoustIdApiKey: fingerprint.acoustIdApiKey
   });
   const baseReview = new LibraryAssistantReviewService({
     databasePath: options.databasePath,
@@ -157,6 +191,7 @@ export function registerLibraryAssistant(
   });
 
   registerLibraryAssistantRoutes(app, service, workQueue, metrics);
+  registerLibraryAssistantFingerprintRoutes(app, fingerprints);
   registerLibraryAssistantReviewRoutes(app, review);
   registerLibraryAssistantPolicyRoutes(app, reviewPolicy);
   app.addHook('onClose', async () => {
@@ -169,6 +204,7 @@ export function registerLibraryAssistant(
     metadataOverrides.close();
     incrementalIndex.close();
     workQueue.close();
+    fingerprintCache.close();
     store.close();
   });
 

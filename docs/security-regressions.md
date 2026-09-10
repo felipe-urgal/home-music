@@ -1,6 +1,6 @@
 # Regressões de segurança
 
-A Fase 11 mantém uma suíte dedicada de regressões negativas para as superfícies de maior risco de **Administração** e **Importação**.
+A Fase 11 mantém uma suíte dedicada de regressões negativas para as superfícies de maior risco de **Administração** e **Importação**. A identificação por áudio do Assistente também entra nesse perímetro por combinar filesystem, processo filho e egress opcional.
 
 O objetivo não é implementar uma segunda camada de hardening. Os controles continuam pertencendo às políticas, stores e managers já existentes; a suíte fixa esses comportamentos como contratos que não podem ser enfraquecidos silenciosamente.
 
@@ -31,6 +31,23 @@ A regressão dedicada cobre, no mínimo:
 
 Testes específicos de cada feature continuam responsáveis pela matriz detalhada de edge cases, como ranges de IP, Content-Type, concorrência e rollback. Esta suíte é a camada transversal de proteção contra regressões arquiteturais.
 
+## Fingerprint acústico
+
+A integração Chromaprint/AcoustID preserva invariantes adicionais:
+
+- `trackId` é a única referência de mídia recebida do cliente; path nunca é input da API;
+- antes do subprocesso, raiz e arquivo passam por `realpath`, confinement e validação de arquivo regular;
+- symlink que escape de `MUSIC_DIR`, arquivo removido ou arquivo alterado durante a operação invalida a tentativa;
+- `fpcalc` usa `execFile` com programa + argumentos, timeout, limite de stdout/stderr e `AbortSignal`, sem shell;
+- erros de subprocesso são sanitizados e não repetem command line, path, stdout ou stderr;
+- fingerprint é derivado/cacheado por assinatura física e nunca vira autoridade do catálogo;
+- AcoustID é opt-in e a application key fica somente no servidor;
+- URL e cache key lógica do provider não carregam key nem fingerprint bruto;
+- testes do provider usam `fetch` fake e nunca egress público;
+- ausência de `fpcalc`/chave não enfraquece nem bloqueia o fluxo normal de MusicBrainz, scan ou playback.
+
+O contrato operacional completo está em [`library-assistant-audio-fingerprint.md`](library-assistant-audio-fingerprint.md).
+
 ## Isolamento das fixtures
 
 Os testes de segurança devem permanecer determinísticos e seguros para CI:
@@ -45,6 +62,6 @@ Os testes de segurança devem permanecer determinísticos e seguros para CI:
 
 ## Processo
 
-Mudança futura que tocar autorização, filesystem, upload, URL externa, provider/processo filho, lixeira ou Integridade deve avaliar se a suíte dedicada precisa de um novo caso negativo.
+Mudança futura que tocar autorização, filesystem, upload, URL externa, provider/processo filho, lixeira, fingerprint acústico ou Integridade deve avaliar se a suíte dedicada precisa de um novo caso negativo.
 
 Não afrouxe uma asserção de segurança para fazer o CI passar. Quando um caso falhar, investigue se houve regressão real ou se o contrato documentado mudou conscientemente e com revisão de segurança.

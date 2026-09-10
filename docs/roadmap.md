@@ -4,11 +4,11 @@ Este documento descreve **o estado técnico corrente e o próximo trabalho relev
 
 O histórico detalhado acumulado até a fase 14 foi preservado em [`history/roadmap-through-phase-14.md`](history/roadmap-through-phase-14.md). Documentos de implementação da antiga fase 7.5 ficam em [`history/phase-7.5/`](history/phase-7.5/).
 
-## Estado em 2026-09-09
+## Estado em 2026-09-10
 
 - **Fase 7.5 — multiusuário/autenticação:** concluída e incorporada à arquitetura atual. Fonte canônica: [`multi-user-auth.md`](multi-user-auth.md).
 - **Fase 14 — portabilidade de dados pessoais:** implementação concluída na `main` com o PR #324. Contrato atual: [`personal-data-portability.md`](personal-data-portability.md).
-- **Fase 15 — Library Assistant:** fase ativa, coordenada pela issue #310. A fundação #311, a identificação de metadata com MusicBrainz #312, a revisão/aplicação segura #313 e artwork via Cover Art Archive #314 estão implementados/documentados em [`library-assistant.md`](library-assistant.md). A #356 consolida o uso operacional em volume. A #315 possui resolução gerenciada, LRCLIB e revisão/aplicação integrados, mas permanece parcial até o fluxo administrativo disparar explicitamente o run `lyrics`.
+- **Fase 15 — Library Assistant:** fase ativa, coordenada pela issue #310. A fundação #311, a identificação de metadata com MusicBrainz #312, a revisão/aplicação segura #313, artwork via Cover Art Archive #314, lyrics operacionais via LRCLIB #315, a operação em volume #356, a normalização assistida por evidência MusicBrainz #319 e a identificação opcional por áudio #320 estão implementadas/documentadas nos documentos canônicos da fase.
 - A camada A do fallback de artwork (#321) e a publicação de artwork canônica no Media Session (#325) já foram incorporadas; validações físicas específicas de PWA permanecem registradas nas issues correspondentes como QA pós-merge.
 - O player Agora/Tocando agora possui apresentação de vinil animado (#326), reutilizando `Artwork`/fallback canônico e respeitando `prefers-reduced-motion`.
 - Correções de cold start offline (#328) e instrumentação de continuidade de playback iOS (#327) já foram incorporadas; qualquer evidência de hardware adicional continua sendo rastreada nas próprias issues.
@@ -42,19 +42,19 @@ Umbrella: **#310 — Library Assistant**.
 | #313 | revisão e aplicação segura de sugestões de metadata | implementada |
 | #356 | lote de revisão confirmado, reset operacional e abas Fila/Estatísticas/Configurações | implementada |
 | #314 | artwork via Cover Art Archive usando cover override canônico | implementada |
-| #315 | enriquecimento de lyrics reutilizando o domínio atual, com LRCLIB e override gerenciado | parcial; disparo do run `lyrics` pendente |
+| #315 | enriquecimento de lyrics reutilizando o domínio atual, com LRCLIB, override gerenciado e run operacional independente | implementada |
 | #316 | resolução de lyrics consistente entre player/offline/OpenSubsonic | planejada |
 | #318 | autonomia progressiva após scan/importação | posterior ao fluxo manual |
-| #319 | assistência de normalização artista/álbum | planejada |
-| #320 | casos difíceis via Chromaprint/AcoustID opcional | P2 |
+| #319 | assistência de normalização artista/álbum com evidência MusicBrainz reutilizada | implementada |
+| #320 | casos difíceis via Chromaprint/AcoustID opcional | implementada; fallback manual e opt-in |
 | #321 | fallback canônico de artwork; camada A derivada pronta, camada B persistente opcional | parcial |
 | #322 | transcrição/alinhamento local opcional | P2 |
 | #325 | artwork canônica no Media Session | implementada; QA físico rastreado |
 | #326 | vinil animado no player Agora usando a mesma identidade | implementada; QA físico de fluidez/bateria continua manual |
 
-O detalhamento de arquitetura, riscos, etapas e critérios está em [`library-assistant-plan.md`](library-assistant-plan.md). O comportamento implementado está em [`library-assistant.md`](library-assistant.md) e, para a cadeia efetiva de letras, em [`lyrics.md`](lyrics.md). Se plano e implementação divergirem, código/testes e a issue executada têm precedência.
+O detalhamento de arquitetura, riscos, etapas e critérios está em [`library-assistant-plan.md`](library-assistant-plan.md). O comportamento implementado está em [`library-assistant.md`](library-assistant.md), a normalização assistida em [`library-metadata-normalization.md`](library-metadata-normalization.md), o fallback acústico em [`library-assistant-audio-fingerprint.md`](library-assistant-audio-fingerprint.md) e, para a cadeia efetiva de letras, em [`lyrics.md`](lyrics.md). Se plano e implementação divergirem, código/testes e a issue executada têm precedência.
 
-### Base estabilizada (#311 + #312 + #313 + #314 + #356; #315 parcial)
+### Base estabilizada (#311 + #312 + #313 + #314 + #315 + #319 + #320 + #356)
 
 A Fase 15 agora possui:
 
@@ -74,8 +74,15 @@ A Fase 15 agora possui:
 - sugestão de artwork via Cover Art Archive a partir de release confiável, sem download durante a análise;
 - aplicação de capa somente por decisão individual e `TrackCoverOverrideStore`, preservando confirmação de substituição de override existente;
 - enriquecimento de lyrics via LRCLIB server-side, com matching por identidade/duração, preview curto e conteúdo completo obtido somente no apply;
+- execução de `metadata` e `lyrics` em runs independentes iniciados em paralelo pela Administração, com cancelamento conjunto dos runs ativos;
 - persistência de letra aprovada em `track_lyrics_overrides`, fora de `MUSIC_DIR`, com provenance, limite defensivo, cascade e rollback para sidecar;
 - resolução efetiva de lyrics `override gerenciado → sidecar .lrc/.txt → nenhuma letra`, reutilizada pela rota pública e OpenSubsonic sem dependência de rede no playback;
+- normalização de artista/álbum preservando a heurística e store existentes, enriquecida por evidências MusicBrainz já persistidas pelo Assistente, com conflitos de IDs bloqueando sugestão canônica segura;
+- fallback manual de identificação por áudio somente para metadata ainda difícil, usando Chromaprint/`fpcalc` local e AcoustID opcional;
+- resolução física de fingerprint por `trackId` server-side, com `realpath`, confinement, arquivo regular e revalidação depois do trabalho pesado;
+- cache de fingerprint associado a assinatura física do arquivo, com invalidação quando conteúdo/identidade física muda e cascade quando a faixa some;
+- AcoustID com opt-in explícito, segredo somente no servidor e gateway compartilhado para rate limit/cache/timeout/cancelamento;
+- retorno dos candidatos acústicos ao `rankMusicBrainzCandidate` existente, sem criar segundo matcher, com reason codes próprios para match forte, múltiplas gravações, duração conflitante e conflito externo;
 - workspace **Administração → Assistente da Biblioteca** com Sugestões, Fila, Estatísticas e Configurações;
 - apply/reject por campo e seleção em lote de metadata/letras também para itens de revisão quando há confirmação explícita;
 - artwork permanece fora do lote mesmo com confirmação de revisão;
@@ -87,7 +94,7 @@ A Fase 15 agora possui:
 - visualização de fila e métricas existentes sem criar uma segunda fonte de observabilidade;
 - preferências de campos de metadata exibidos mantidas como configuração local de apresentação, sem mudar o analyzer ou enfraquecer segurança.
 
-O fluxo vertical está operacional para bibliotecas maiores: **analisar mudanças → revisar/selecionar metadata e letras → confirmar quando necessário → aplicar em lote → revisar capas individualmente → acompanhar fila/estatísticas**. As próximas capacidades devem reutilizar esse contrato de revisão em vez de criar um lifecycle paralelo.
+O fluxo vertical está operacional para bibliotecas maiores: **analisar mudanças → revisar/selecionar metadata e letras → usar evidência externa na normalização existente → usar fingerprint apenas quando um caso difícil precisar de evidência adicional → confirmar quando necessário → aplicar em lote → revisar capas individualmente → acompanhar fila/estatísticas**. As próximas capacidades devem reutilizar esse contrato de revisão em vez de criar um lifecycle paralelo.
 
 ## Portabilidade pessoal — estado consolidado
 
