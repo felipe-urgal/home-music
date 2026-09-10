@@ -11,6 +11,8 @@ import {
   needsMusicBrainzEnrichment
 } from './musicbrainz-metadata-analyzer.js';
 import { LibraryAssistantCompositeReviewService } from './library-assistant-composite-review-service.js';
+import { registerLibraryAssistantFingerprintRoutes } from './library-assistant-fingerprint-routes.js';
+import { LibraryAssistantFingerprintService } from './library-assistant-fingerprint-service.js';
 import { LibraryAssistantIncrementalIndex } from './library-assistant-incremental-index.js';
 import { registerLibraryAssistantPolicyRoutes } from './library-assistant-policy-routes.js';
 import { LibraryAssistantPersistentQueue } from './library-assistant-persistent-queue.js';
@@ -38,6 +40,11 @@ type LibraryAssistantBootstrapOptions = {
   queue: HeavyWorkQueue;
   observability: LongJobObservability;
   analyzers?: readonly LibraryAssistantAnalyzer[];
+  fingerprint?: {
+    fpcalcCommand?: string;
+    acoustIdEnabled?: boolean;
+    acoustIdApiKey?: string;
+  };
 };
 
 const METADATA_FIELDS: readonly LibraryAssistantMetadataField[] = ['title', 'artist', 'album', 'albumArtist'];
@@ -130,6 +137,22 @@ export function registerLibraryAssistant(
       capability !== 'metadata' || needsMusicBrainzEnrichment(track)
     )
   });
+  const fingerprints = new LibraryAssistantFingerprintService({
+    store,
+    providers,
+    queue: options.queue,
+    library: {
+      listTracks: listProjectedTracks,
+      revision: () => projectRevision(options.library.status().revision),
+      root: () => options.library.root,
+      resolveTrackFile(trackId) {
+        return options.library.getTrack(trackId)?.filePath ?? null;
+      }
+    },
+    fpcalcCommand: options.fingerprint?.fpcalcCommand,
+    acoustIdEnabled: options.fingerprint?.acoustIdEnabled,
+    acoustIdApiKey: options.fingerprint?.acoustIdApiKey
+  });
   const baseReview = new LibraryAssistantReviewService({
     databasePath: options.databasePath,
     store,
@@ -152,6 +175,7 @@ export function registerLibraryAssistant(
   });
 
   registerLibraryAssistantRoutes(app, service, workQueue, metrics);
+  registerLibraryAssistantFingerprintRoutes(app, fingerprints);
   registerLibraryAssistantReviewRoutes(app, review);
   registerLibraryAssistantPolicyRoutes(app, reviewPolicy);
   app.addHook('onClose', async () => {
