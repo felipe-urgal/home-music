@@ -12,7 +12,8 @@ import {
   fingerprintAudioFile,
   probeFpcalc,
   resolveFingerprintFile,
-  type AudioFingerprint
+  type AudioFingerprint,
+  type FingerprintFile
 } from './audio-fingerprint.js';
 import type { HeavyWorkQueue } from './heavy-work-queue.js';
 import type { LibraryAssistantFingerprintCache } from './library-assistant-fingerprint-cache.js';
@@ -67,6 +68,17 @@ export type LibraryAssistantFingerprintResult = {
   conflict: boolean;
   ambiguous: boolean;
 };
+
+export class LibraryAssistantFingerprintOperationError extends Error {
+  constructor(
+    message: string,
+    public readonly statusCode: 409 | 503,
+    public readonly code: 'fingerprint-input-invalid' | 'fingerprint-unavailable'
+  ) {
+    super(message);
+    this.name = 'LibraryAssistantFingerprintOperationError';
+  }
+}
 
 function exactValue(value: string) {
   return value.trim().replace(/\s+/g, ' ');
@@ -136,6 +148,27 @@ function sameFile(left: { filePath: string; signature: string }, right: { filePa
   return left.filePath === right.filePath && left.signature === right.signature;
 }
 
+async function resolveInputFile(root: string, filePath: string): Promise<FingerprintFile> {
+  try {
+    return await resolveFingerprintFile(root, filePath);
+  } catch (error) {
+    throw new LibraryAssistantFingerprintOperationError(
+      error instanceof Error ? error.message : 'A faixa não está disponível para fingerprint local.',
+      409,
+      'fingerprint-input-invalid'
+    );
+  }
+}
+
+function providerFailureMessage(error: unknown) {
+  if (error && typeof error === 'object' && 'code' in error) {
+    const code = String(error.code || '');
+    if (code === 'provider-timeout') return 'AcoustID não respondeu dentro do tempo limite. Tente novamente.';
+    if (code === 'provider-rate-limited') return 'AcoustID atingiu o limite de consultas. Tente novamente mais tarde.';
+  }
+  return 'AcoustID está temporariamente indisponível. Tente novamente mais tarde.';
+}
+
 export class LibraryAssistantFingerprintService {
   private readonly fingerprint: NonNullable<FingerprintServiceOptions['fingerprint']>;
   private readonly lookup: typeof lookupAcoustIdFingerprint;
@@ -175,12 +208,16 @@ export class LibraryAssistantFingerprintService {
     const root = this.options.library.root();
     const rawFilePath = this.options.library.resolveTrackFile(sourceSuggestion.target.trackId);
     if (!track || !root || !rawFilePath) throw new RangeError('Faixa não está disponível para fingerprint local.');
-    const inputFile = await resolveFingerprintFile(root, rawFilePath);
+    const inputFile = await resolveInputFile(root, rawFilePath);
     const initialRevision = this.options.library.revision();
     const acoustIdEnabled = this.options.acoustIdEnabled === true;
     const apiKey = this.options.acoustIdApiKey?.trim() ?? '';
     if (acoustIdEnabled && !apiKey) {
-      throw new Error('AcoustID foi habilitado, mas a chave da aplicação não está configurada.');
+      throw new LibraryAssistantFingerprintOperationError(
+        'AcoustID está habilitado, mas a chave da aplicação não está configurada.',
+        503,
+        'fingerprint-unavailable'
+      );
     }
 
     return this.options.queue.run(async signal => {
@@ -199,11 +236,22 @@ export class LibraryAssistantFingerprintService {
       if (cached) {
         local = { durationSeconds: cached.durationSeconds, fingerprint: cached.fingerprint };
       } else {
-        local = await this.fingerprint(inputFile.filePath, {
-          command: this.options.fpcalcCommand,
-          signal
-        });
-        const afterFingerprint = await resolveFingerprintFile(root, rawFilePath);
+        try {
+          local = await this.fingerprint(inputFile.filePath, {
+            command: this.options.fpcalcCommand,
+            signal
+          });
+        } catch (error) {
+          if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) throw error;
+          throw new LibraryAssistantFingerprintOperationError(
+            error instanceof Error && /^Chromaprint\/fpcalc /.test(error.message)
+              ? error.message
+              : 'Chromaprint/fpcalc não conseguiu gerar o fingerprint.',
+            503,
+            'fingerprint-unavailable'
+          );
+        }
+        const afterFingerprint = await resolveInputFile(root, rawFilePath);
         if (!sameFile(inputFile, afterFingerprint)) {
           throw new RangeError('O arquivo mudou durante o fingerprint. Atualize a biblioteca antes de tentar novamente.');
         }
@@ -232,13 +280,23 @@ export class LibraryAssistantFingerprintService {
         };
       }
 
-      const candidates = await this.lookup(this.options.providers, {
-        apiKey,
-        durationSeconds: local.durationSeconds,
-        fingerprint: local.fingerprint,
-        signal
-      });
-      const finalFile = await resolveFingerprintFile(root, rawFilePath);
+      let candidates: AcoustIdFingerprintCandidate[];
+      try {
+        candidates = await this.lookup(this.options.providers, {
+          apiKey,
+          durationSeconds: local.durationSeconds,
+          fingerprint: local.fingerprint,
+          signal
+        });
+      } catch (error) {
+        if (signal?.aborted || (error instanceof Error && error.name === 'LibraryAssistantProviderAbortedError')) throw error;
+        throw new LibraryAssistantFingerprintOperationError(
+          providerFailureMessage(error),
+          503,
+          'fingerprint-unavailable'
+        );
+      }
+      const finalFile = await resolveInputFile(root, rawFilePath);
       if (!sameFile(inputFile, finalFile) || this.options.library.revision() !== initialRevision) {
         throw new RangeError('A faixa mudou durante a identificação. Atualize a biblioteca antes de tentar novamente.');
       }
