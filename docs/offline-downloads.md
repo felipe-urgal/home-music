@@ -15,7 +15,7 @@ Todas essas superfícies reutilizam **um único scheduler**, limitado a **3 down
 
 Em navegadores com Background Fetch e service worker capability v4, a transferência já iniciada pode ser delegada ao navegador para sobreviver melhor à suspensão da página. Navegadores sem essa API mantêm o `fetch()` foreground anterior. A matriz física da issue [#81](https://github.com/felipe-urgal/home-music/issues/81) foi concluída em Android e iPhone/iPad reais; as garantias continuam específicas por capacidade e plataforma.
 
-No cold start da PWA, um shell já armazenado é servido diretamente. Quando o navegador reporta ausência de conectividade, o service worker não inicia uma revalidação de navegação paralela; online, essa revalidação permanece vinculada ao ciclo de vida do evento do worker.
+No cold start da PWA, um shell já armazenado é servido diretamente sem revalidação de rede concorrente. A atualização online do shell só começa por mensagem depois que a interface já montou. A reconciliação dos downloads consulta em paralelo os registros físicos do Cache Storage para não atrasar desnecessariamente a disponibilidade do modo offline em Preferências.
 
 ## Modelo: bytes físicos x referências lógicas
 
