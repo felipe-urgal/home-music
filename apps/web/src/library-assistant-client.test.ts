@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { apiFetch } from './api-client';
 import {
+  cancelLibraryAssistantRun,
   decideLibraryAssistantBatch,
   decideLibraryAssistantSuggestion,
   getLibraryAssistantReview,
@@ -27,29 +28,61 @@ afterEach(() => {
 });
 
 describe('library assistant admin client', () => {
-  it('inicia análise de metadata com mutação administrativa explícita', async () => {
-    apiFetchMock.mockResolvedValue(response({ run: { id: 'run-1' } }));
+  it('inicia metadata e lyrics como capabilities independentes em uma análise administrativa', async () => {
+    apiFetchMock
+      .mockResolvedValueOnce(response({ run: { id: 'run-metadata' } }))
+      .mockResolvedValueOnce(response({ run: { id: 'run-lyrics' } }));
 
-    await startLibraryAssistantMetadataRun();
+    const result = await startLibraryAssistantMetadataRun();
 
-    expect(apiFetchMock).toHaveBeenCalledTimes(1);
-    const [url, init] = apiFetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe('/api/admin/library-assistant/runs');
-    expect(init.method).toBe('POST');
-    expect(init.headers).toMatchObject({
-      'Content-Type': 'application/json',
-      'X-Home-Music-Request': '1'
-    });
-    expect(JSON.parse(String(init.body))).toEqual({ capability: 'metadata', full: false });
+    expect(result.run.id).toBe('run-metadata');
+    expect(apiFetchMock).toHaveBeenCalledTimes(2);
+    for (const call of apiFetchMock.mock.calls) {
+      expect(call[0]).toBe('/api/admin/library-assistant/runs');
+      expect(call[1]).toMatchObject({
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Home-Music-Request': '1'
+        }
+      });
+    }
+    expect(apiFetchMock.mock.calls.map(([, init]) => JSON.parse(String(init?.body)))).toEqual([
+      { capability: 'metadata', full: false },
+      { capability: 'lyrics', full: false }
+    ]);
   });
 
-  it('inicia reanálise completa somente quando solicitado', async () => {
-    apiFetchMock.mockResolvedValue(response({ run: { id: 'run-2' } }));
+  it('propaga reanálise completa para metadata e lyrics', async () => {
+    apiFetchMock
+      .mockResolvedValueOnce(response({ run: { id: 'run-metadata' } }))
+      .mockResolvedValueOnce(response({ run: { id: 'run-lyrics' } }));
 
     await startLibraryAssistantMetadataRun({ full: true });
 
-    const [, init] = apiFetchMock.mock.calls[0] as [string, RequestInit];
-    expect(JSON.parse(String(init.body))).toEqual({ capability: 'metadata', full: true });
+    expect(apiFetchMock.mock.calls.map(([, init]) => JSON.parse(String(init?.body)))).toEqual([
+      { capability: 'metadata', full: true },
+      { capability: 'lyrics', full: true }
+    ]);
+  });
+
+  it('cancela metadata e lyrics ativos como uma única análise da Administração', async () => {
+    apiFetchMock
+      .mockResolvedValueOnce(response({
+        runs: [
+          { id: 'run-metadata', capability: 'metadata', status: 'running' },
+          { id: 'run-lyrics', capability: 'lyrics', status: 'queued' },
+          { id: 'old-run', capability: 'metadata', status: 'completed' }
+        ]
+      }))
+      .mockResolvedValueOnce(response({ run: { id: 'run-metadata' } }))
+      .mockResolvedValueOnce(response({ run: { id: 'run-lyrics' } }));
+
+    await cancelLibraryAssistantRun('run-metadata');
+
+    expect(apiFetchMock).toHaveBeenCalledTimes(3);
+    expect(apiFetchMock.mock.calls[1]?.[0]).toBe('/api/admin/library-assistant/runs/run-metadata/cancel');
+    expect(apiFetchMock.mock.calls[2]?.[0]).toBe('/api/admin/library-assistant/runs/run-lyrics/cancel');
   });
 
   it('lê o progresso persistente do run sem cache', async () => {
