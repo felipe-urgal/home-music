@@ -1,5 +1,4 @@
 import { createHash, randomUUID } from 'node:crypto';
-import path from 'node:path';
 import type { Track } from '@home-music/shared';
 import {
   LIBRARY_ASSISTANT_CONTRACT_VERSION,
@@ -9,10 +8,17 @@ import {
   type LibraryAssistantSuggestion
 } from '@home-music/shared/library-assistant';
 import { lookupAcoustIdFingerprint, type AcoustIdFingerprintCandidate } from './acoustid-fingerprint-lookup.js';
-import { fingerprintAudioFile, type AudioFingerprint } from './audio-fingerprint.js';
+import {
+  fingerprintAudioFile,
+  probeFpcalc,
+  resolveFingerprintFile,
+  type AudioFingerprint
+} from './audio-fingerprint.js';
 import type { HeavyWorkQueue } from './heavy-work-queue.js';
+import type { LibraryAssistantFingerprintCache } from './library-assistant-fingerprint-cache.js';
 import type { LibraryAssistantProviderGateway } from './library-assistant-provider.js';
 import type { LibraryAssistantStore } from './library-assistant-store.js';
+import { rankMusicBrainzCandidate } from './musicbrainz-metadata-analyzer.js';
 
 const MIN_ACOUSTID_SCORE = 0.75;
 const HIGH_ACOUSTID_SCORE = 0.95;
@@ -30,6 +36,7 @@ type FingerprintLibrary = {
 
 type FingerprintServiceOptions = {
   store: LibraryAssistantStore;
+  cache: LibraryAssistantFingerprintCache;
   providers: LibraryAssistantProviderGateway;
   queue: HeavyWorkQueue;
   library: FingerprintLibrary;
@@ -38,6 +45,7 @@ type FingerprintServiceOptions = {
   acoustIdApiKey?: string;
   fingerprint?: (filePath: string, options: { command?: string; signal?: AbortSignal }) => Promise<AudioFingerprint>;
   lookup?: typeof lookupAcoustIdFingerprint;
+  probe?: typeof probeFpcalc;
   now?: () => Date;
   createId?: () => string;
 };
@@ -49,6 +57,7 @@ type IdentifiedRecording = {
 
 export type LibraryAssistantFingerprintResult = {
   fingerprintGenerated: boolean;
+  cacheHit: boolean;
   externalLookup: boolean;
   identified: boolean;
   acoustIdEnabled: boolean;
@@ -61,31 +70,6 @@ export type LibraryAssistantFingerprintResult = {
 
 function exactValue(value: string) {
   return value.trim().replace(/\s+/g, ' ');
-}
-
-function normalizedValue(value: string) {
-  return exactValue(value)
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLocaleLowerCase('en-US');
-}
-
-function textEvidence(field: LibraryAssistantMetadataField, sourceValue: string, candidateValue: string) {
-  const sourceExact = exactValue(sourceValue);
-  const candidateExact = exactValue(candidateValue);
-  const match = sourceExact === candidateExact
-    ? 'exact'
-    : normalizedValue(sourceExact) === normalizedValue(candidateExact)
-      ? 'normalized'
-      : 'different';
-  return {
-    type: 'text-match' as const,
-    version: LIBRARY_ASSISTANT_CONTRACT_VERSION,
-    field,
-    match,
-    sourceValue,
-    candidateValue
-  };
 }
 
 function metadataPremiseSignature(track: Track, field: LibraryAssistantMetadataField) {
@@ -139,17 +123,7 @@ function chooseRecording(candidates: AcoustIdFingerprintCandidate[]) {
   return { best, ambiguous };
 }
 
-function ensureConfinedFile(root: string, filePath: string) {
-  const resolvedRoot = path.resolve(root);
-  const resolvedFile = path.resolve(filePath);
-  const relative = path.relative(resolvedRoot, resolvedFile);
-  if (!resolvedRoot || !resolvedFile || relative.startsWith('..') || path.isAbsolute(relative)) {
-    throw new Error('Arquivo da faixa está fora da biblioteca configurada.');
-  }
-  return resolvedFile;
-}
-
-function valuesFor(track: Track, identified: IdentifiedRecording) {
+function valuesFor(identified: IdentifiedRecording) {
   const recording = identified.recording;
   return {
     title: recording.title,
@@ -159,23 +133,29 @@ function valuesFor(track: Track, identified: IdentifiedRecording) {
   } satisfies Record<LibraryAssistantMetadataField, string | null>;
 }
 
+function sameFile(left: { filePath: string; signature: string }, right: { filePath: string; signature: string }) {
+  return left.filePath === right.filePath && left.signature === right.signature;
+}
+
 export class LibraryAssistantFingerprintService {
   private readonly fingerprint: NonNullable<FingerprintServiceOptions['fingerprint']>;
   private readonly lookup: typeof lookupAcoustIdFingerprint;
+  private readonly probe: typeof probeFpcalc;
   private readonly now: () => Date;
   private readonly createId: () => string;
 
   constructor(private readonly options: FingerprintServiceOptions) {
     this.fingerprint = options.fingerprint ?? ((filePath, request) => fingerprintAudioFile(filePath, request));
     this.lookup = options.lookup ?? lookupAcoustIdFingerprint;
+    this.probe = options.probe ?? probeFpcalc;
     this.now = options.now ?? (() => new Date());
     this.createId = options.createId ?? randomUUID;
   }
 
-  status() {
-    const acoustIdEnabled = optionsBoolean(this.options.acoustIdEnabled);
+  async status() {
+    const acoustIdEnabled = this.options.acoustIdEnabled === true;
     return {
-      localFingerprint: true,
+      fpcalc: await this.probe(this.options.fpcalcCommand),
       acoustIdEnabled,
       acoustIdConfigured: acoustIdEnabled && Boolean(this.options.acoustIdApiKey?.trim())
     };
@@ -196,25 +176,43 @@ export class LibraryAssistantFingerprintService {
     const root = this.options.library.root();
     const rawFilePath = this.options.library.resolveTrackFile(sourceSuggestion.target.trackId);
     if (!track || !root || !rawFilePath) throw new RangeError('Faixa não está disponível para fingerprint local.');
-    const filePath = ensureConfinedFile(root, rawFilePath);
+    const inputFile = await resolveFingerprintFile(root, rawFilePath);
     const initialRevision = this.options.library.revision();
-    const acoustIdEnabled = optionsBoolean(this.options.acoustIdEnabled);
+    const acoustIdEnabled = this.options.acoustIdEnabled === true;
     const apiKey = this.options.acoustIdApiKey?.trim() ?? '';
     if (acoustIdEnabled && !apiKey) {
-      throw new Error('AcoustID foi habilitado, mas HOME_MUSIC_ACOUSTID_API_KEY não está configurado.');
+      throw new Error('AcoustID foi habilitado, mas a chave da aplicação não está configurada.');
     }
 
     return this.options.queue.run(async signal => {
-      const local = await this.fingerprint(filePath, {
-        command: this.options.fpcalcCommand,
-        signal
-      });
+      const cached = this.options.cache.get(track.id, inputFile.signature);
+      let local: AudioFingerprint;
+      let cacheHit = Boolean(cached);
+      if (cached) {
+        local = { durationSeconds: cached.durationSeconds, fingerprint: cached.fingerprint };
+      } else {
+        local = await this.fingerprint(inputFile.filePath, {
+          command: this.options.fpcalcCommand,
+          signal
+        });
+        const afterFingerprint = await resolveFingerprintFile(root, rawFilePath);
+        if (!sameFile(inputFile, afterFingerprint)) {
+          throw new RangeError('O arquivo mudou durante o fingerprint. Atualize a biblioteca antes de tentar novamente.');
+        }
+        this.options.cache.put(track.id, {
+          signature: inputFile.signature,
+          durationSeconds: local.durationSeconds,
+          fingerprint: local.fingerprint
+        }, this.now().toISOString());
+        cacheHit = false;
+      }
       if (this.options.library.revision() !== initialRevision) {
         throw new RangeError('A biblioteca mudou durante o fingerprint. Atualize a revisão antes de tentar novamente.');
       }
       if (!acoustIdEnabled) {
         return {
           fingerprintGenerated: true,
+          cacheHit,
           externalLookup: false,
           identified: false,
           acoustIdEnabled: false,
@@ -232,13 +230,15 @@ export class LibraryAssistantFingerprintService {
         fingerprint: local.fingerprint,
         signal
       });
-      if (this.options.library.revision() !== initialRevision) {
-        throw new RangeError('A biblioteca mudou durante a identificação. Atualize a revisão antes de tentar novamente.');
+      const finalFile = await resolveFingerprintFile(root, rawFilePath);
+      if (!sameFile(inputFile, finalFile) || this.options.library.revision() !== initialRevision) {
+        throw new RangeError('A faixa mudou durante a identificação. Atualize a biblioteca antes de tentar novamente.');
       }
       const { best, ambiguous } = chooseRecording(candidates);
       if (!best) {
         return {
           fingerprintGenerated: true,
+          cacheHit,
           externalLookup: true,
           identified: false,
           acoustIdEnabled: true,
@@ -251,13 +251,29 @@ export class LibraryAssistantFingerprintService {
       }
 
       const previousRecordingIds = sourceRecordingIds(sourceSuggestion);
-      const conflict = previousRecordingIds.size > 0 && !previousRecordingIds.has(best.recording.recordingId);
-      const reasonCodes = new Set<LibraryAssistantReasonCode>(['provider-match', 'strong-external-id']);
+      const externalConflict = previousRecordingIds.size > 0
+        && !previousRecordingIds.has(best.recording.recordingId);
+      const matcher = best.recording.title && best.recording.artist
+        ? rankMusicBrainzCandidate(track, {
+            recordingId: best.recording.recordingId,
+            title: best.recording.title,
+            artist: best.recording.artist,
+            artistId: best.recording.artistId,
+            durationSeconds: best.recording.durationSeconds,
+            releases: []
+          })
+        : null;
+      const durationConflict = Boolean(matcher?.reasonCodes.includes('duration-mismatch'));
+      const matcherConflict = Boolean(matcher?.blockingConflict);
+      const conflict = externalConflict || durationConflict || matcherConflict;
+      const reasonCodes = new Set<LibraryAssistantReasonCode>([
+        ...(matcher?.reasonCodes ?? []),
+        'provider-match',
+        'strong-external-id'
+      ]);
       if (ambiguous) reasonCodes.add('ambiguous-candidates');
-      if (conflict) {
-        reasonCodes.add('source-conflict');
-        reasonCodes.add('metadata-conflict');
-      }
+      if (externalConflict || matcherConflict) reasonCodes.add('source-conflict');
+      if (conflict) reasonCodes.add('metadata-conflict');
       if (sourceSuggestion.reasonCodes.includes('human-override')) reasonCodes.add('human-override');
       const confidence = conflict || ambiguous
         ? 'low'
@@ -265,28 +281,20 @@ export class LibraryAssistantFingerprintService {
           ? 'high'
           : 'medium';
       const commonEvidence: LibraryAssistantEvidence[] = [
+        ...(matcher?.evidence ?? []),
         {
           type: 'external-id',
           version: LIBRARY_ASSISTANT_CONTRACT_VERSION,
           source: 'acoustid',
           id: best.candidate.acoustId
-        },
-        {
-          type: 'external-id',
-          version: LIBRARY_ASSISTANT_CONTRACT_VERSION,
-          source: 'musicbrainz',
-          kind: 'recording',
-          id: best.recording.recordingId
         }
       ];
-      if (best.recording.artistId) commonEvidence.push({
-        type: 'external-id',
-        version: LIBRARY_ASSISTANT_CONTRACT_VERSION,
-        source: 'musicbrainz',
-        kind: 'artist',
-        id: best.recording.artistId
-      });
-      if (best.recording.releaseGroupId) commonEvidence.push({
+      if (best.recording.releaseGroupId && !commonEvidence.some(item => (
+        item.type === 'external-id'
+        && item.source === 'musicbrainz'
+        && item.kind === 'release-group'
+        && item.id === best.recording.releaseGroupId
+      ))) commonEvidence.push({
         type: 'external-id',
         version: LIBRARY_ASSISTANT_CONTRACT_VERSION,
         source: 'musicbrainz',
@@ -294,17 +302,14 @@ export class LibraryAssistantFingerprintService {
         id: best.recording.releaseGroupId
       });
 
-      const values = valuesFor(track, best);
+      const values = valuesFor(best);
       const createdAt = this.now().toISOString();
       const fingerprintRunId = `assistant-fingerprint-${this.createId()}`;
       const suggestions = METADATA_FIELDS.flatMap(field => {
         const suggestedValue = values[field]?.trim();
         if (!suggestedValue || exactValue(track[field]) === exactValue(suggestedValue)) return [];
-        const evidence: LibraryAssistantEvidence[] = [
-          ...commonEvidence,
-          textEvidence(field, track[field], suggestedValue)
-        ];
-        if (conflict) evidence.push({
+        const evidence: LibraryAssistantEvidence[] = [...commonEvidence];
+        if (externalConflict || matcherConflict) evidence.push({
           type: 'source-conflict',
           version: LIBRARY_ASSISTANT_CONTRACT_VERSION,
           field,
@@ -352,6 +357,7 @@ export class LibraryAssistantFingerprintService {
 
       return {
         fingerprintGenerated: true,
+        cacheHit,
         externalLookup: true,
         identified: true,
         acoustIdEnabled: true,
@@ -363,8 +369,4 @@ export class LibraryAssistantFingerprintService {
       };
     });
   }
-}
-
-function optionsBoolean(value: boolean | undefined) {
-  return value === true;
 }
