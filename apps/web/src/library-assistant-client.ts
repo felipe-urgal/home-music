@@ -10,6 +10,7 @@ import type {
   AdminLibraryAssistantRunResponse,
   AdminLibraryAssistantRunsResponse,
   AdminLibraryAssistantSuggestionsResponse,
+  LibraryAssistantCapability,
   LibraryAssistantDecision,
   LibraryAssistantReviewPolicy,
   LibraryAssistantSuggestionStatus
@@ -21,17 +22,28 @@ async function responseError(response: Response) {
   return payload?.error || `Falha HTTP ${response.status}`;
 }
 
-export async function startLibraryAssistantMetadataRun(options: { full?: boolean } = {}) {
+export async function startLibraryAssistantRun(
+  capability: LibraryAssistantCapability,
+  options: { full?: boolean } = {}
+) {
   const response = await apiFetch('/api/admin/library-assistant/runs', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'X-Home-Music-Request': '1'
     },
-    body: JSON.stringify({ capability: 'metadata', full: options.full === true })
+    body: JSON.stringify({ capability, full: options.full === true })
   });
   if (!response.ok) throw new Error(await responseError(response));
   return response.json() as Promise<AdminLibraryAssistantRunResponse>;
+}
+
+export async function startLibraryAssistantMetadataRun(options: { full?: boolean } = {}) {
+  return startLibraryAssistantRun('metadata', options);
+}
+
+export async function startLibraryAssistantLyricsRun(options: { full?: boolean } = {}) {
+  return startLibraryAssistantRun('lyrics', options);
 }
 
 export async function getLibraryAssistantRuns(limit = 30) {
