@@ -26,7 +26,7 @@ const HIGH_ACOUSTID_SCORE = 0.95;
 const AMBIGUOUS_SCORE_MARGIN = 0.03;
 const MAX_RUN_SUGGESTIONS = 4;
 
-const METADATA_FIELDS: readonly LibraryAssistantMetadataField[] = ['title', 'artist', 'album'];
+const METADATA_FIELDS = ['title', 'artist', 'album'] as const satisfies readonly LibraryAssistantMetadataField[];
 
 type FingerprintLibrary = {
   listTracks: () => Track[];
@@ -349,7 +349,7 @@ export class LibraryAssistantFingerprintService {
       }
       if (conflict) reasonCodes.add('metadata-conflict');
       if (sourceSuggestion.reasonCodes.includes('human-override')) reasonCodes.add('human-override');
-      const confidence = conflict || ambiguous
+      const confidence: LibraryAssistantSuggestion['confidence'] = conflict || ambiguous
         ? 'low'
         : best.candidate.score >= HIGH_ACOUSTID_SCORE
           ? 'high'
