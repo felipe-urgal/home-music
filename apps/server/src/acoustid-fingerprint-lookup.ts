@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import {
   LibraryAssistantProviderResponseError,
   type LibraryAssistantProviderGateway
@@ -120,6 +121,7 @@ export async function lookupAcoustIdFingerprint(
   const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
   const userAgent = options.userAgent ?? ACOUSTID_USER_AGENT;
   const duration = Math.max(1, Math.round(input.durationSeconds));
+  const fingerprintHash = createHash('sha256').update(input.fingerprint).digest('hex');
   const body = new URLSearchParams({
     client: apiKey,
     duration: String(duration),
@@ -130,7 +132,7 @@ export async function lookupAcoustIdFingerprint(
 
   const result = await providers.query({
     provider: { source: 'acoustid', version: ACOUSTID_PROVIDER_VERSION, userAgent },
-    cacheKey: `lookup:${duration}:${input.fingerprint}`,
+    cacheKey: `lookup:${duration}:${fingerprintHash}`,
     ttlMs: ACOUSTID_CACHE_TTL_MS,
     signal: input.signal,
     execute: async ({ signal, userAgent: providerUserAgent }) => {
