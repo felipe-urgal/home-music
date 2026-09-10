@@ -64,7 +64,11 @@ export type LibraryAssistantReasonCode =
   | 'source-conflict'
   | 'provider-match'
   | 'human-override'
-  | 'ambiguous-candidates';
+  | 'ambiguous-candidates'
+  | 'fingerprint.match-strong'
+  | 'fingerprint.multiple-recordings'
+  | 'fingerprint.duration-conflict'
+  | 'fingerprint.external-conflict';
 
 export type LibraryAssistantProvenance = {
   source: LibraryAssistantProvenanceSource;
