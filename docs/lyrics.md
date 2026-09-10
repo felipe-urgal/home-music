@@ -42,6 +42,14 @@ O Home Music identifica suas requisições com `User-Agent` próprio, trata `404
 
 Referência vigente do provider: <https://lrclib.net/docs>.
 
+## Execução pelo Assistente da Biblioteca
+
+`lyrics` é uma capability independente de `metadata`. O analyzer LRCLIB é registrado no runtime com `capability: 'lyrics'`, portanto uma análise de metadados não executa consultas LRCLIB dentro do mesmo run.
+
+Na Administração, **Analisar biblioteca**, **Analisar mudanças** e a reanálise completa disparam os runs de `metadata` e `lyrics` em paralelo. A tela continua usando a revisão unificada: sugestões prontas de qualquer um dos dois runs aparecem na mesma fila e seguem a mesma política de aprovação. Cancelar uma análise administrativa cancela os runs ativos de ambas as capabilities.
+
+Essa separação mantém métricas, cache, retries e incrementalidade por capability sem criar uma segunda experiência de revisão para o usuário.
+
 ## Plain e sincronizada
 
 Quando o provider oferece LRC válido, a representação sincronizada é preservada e passa pelo parser já existente. Se não houver LRC válido, uma letra plain válida pode ser usada. Não existe formato proprietário de timestamps.
@@ -85,4 +93,5 @@ A cobertura deve preservar:
 - provider sem resultado, malformed/oversized, timeout/rate limit por infraestrutura compartilhada;
 - stale entre análise e aplicação;
 - reopen/cascade/limite do store SQLite;
-- mesma resolução para rota pública/player e OpenSubsonic.
+- mesma resolução para rota pública/player e OpenSubsonic;
+- disparo administrativo separado de `metadata` e `lyrics`, incluindo cancelamento conjunto.
