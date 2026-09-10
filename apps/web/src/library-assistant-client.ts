@@ -10,6 +10,7 @@ import type {
   AdminLibraryAssistantRunResponse,
   AdminLibraryAssistantRunsResponse,
   AdminLibraryAssistantSuggestionsResponse,
+  LibraryAssistantCapability,
   LibraryAssistantDecision,
   LibraryAssistantReviewPolicy,
   LibraryAssistantSuggestionStatus
@@ -21,17 +22,32 @@ async function responseError(response: Response) {
   return payload?.error || `Falha HTTP ${response.status}`;
 }
 
-export async function startLibraryAssistantMetadataRun(options: { full?: boolean } = {}) {
+export async function startLibraryAssistantRun(
+  capability: LibraryAssistantCapability,
+  options: { full?: boolean } = {}
+) {
   const response = await apiFetch('/api/admin/library-assistant/runs', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'X-Home-Music-Request': '1'
     },
-    body: JSON.stringify({ capability: 'metadata', full: options.full === true })
+    body: JSON.stringify({ capability, full: options.full === true })
   });
   if (!response.ok) throw new Error(await responseError(response));
   return response.json() as Promise<AdminLibraryAssistantRunResponse>;
+}
+
+export async function startLibraryAssistantMetadataRun(options: { full?: boolean } = {}) {
+  const [metadata] = await Promise.all([
+    startLibraryAssistantRun('metadata', options),
+    startLibraryAssistantRun('lyrics', options)
+  ]);
+  return metadata;
+}
+
+export async function startLibraryAssistantLyricsRun(options: { full?: boolean } = {}) {
+  return startLibraryAssistantRun('lyrics', options);
 }
 
 export async function getLibraryAssistantRuns(limit = 30) {
@@ -152,11 +168,24 @@ export async function decideLibraryAssistantBatch(
   return response.json() as Promise<AdminLibraryAssistantBatchDecisionResponse>;
 }
 
-export async function cancelLibraryAssistantRun(id: string) {
+async function cancelRunRequest(id: string) {
   const response = await apiFetch(`/api/admin/library-assistant/runs/${encodeURIComponent(id)}/cancel`, {
     method: 'POST',
     headers: { 'X-Home-Music-Request': '1' }
   });
   if (!response.ok) throw new Error(await responseError(response));
   return response.json() as Promise<AdminLibraryAssistantRunResponse>;
+}
+
+export async function cancelLibraryAssistantRun(id: string) {
+  const listed = await getLibraryAssistantRuns();
+  const active = listed.runs.filter(run => (
+    (run.capability === 'metadata' || run.capability === 'lyrics')
+    && !['completed', 'failed', 'cancelled', 'stale'].includes(run.status)
+  ));
+  const targets = active.some(run => run.id === id)
+    ? active
+    : [{ id }];
+  const results = await Promise.all(targets.map(run => cancelRunRequest(run.id)));
+  return results.find(result => result.run.id === id) ?? results[0];
 }
