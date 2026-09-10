@@ -59,6 +59,14 @@ function instrumentAnalyzer(analyzer: LibraryAssistantAnalyzer, metrics: Library
   };
 }
 
+function fingerprintConfig(options: LibraryAssistantBootstrapOptions) {
+  return options.fingerprint ?? {
+    fpcalcCommand: process.env.HOME_MUSIC_FPCALC_PATH,
+    acoustIdEnabled: process.env.HOME_MUSIC_ACOUSTID_ENABLED === 'true',
+    acoustIdApiKey: process.env.HOME_MUSIC_ACOUSTID_API_KEY
+  };
+}
+
 export function registerLibraryAssistant(
   app: FastifyInstance,
   options: LibraryAssistantBootstrapOptions
@@ -80,6 +88,7 @@ export function registerLibraryAssistant(
   const musicBrainzFetch = createMusicBrainzSimpleSearchFetch();
   let assistantReviewRevision = 0;
   const projectRevision = options.projection.projectRevision;
+  const fingerprint = fingerprintConfig(options);
 
   // registerLibraryAssistant roda antes de registerLibraryRoutes. Compor a revisão
   // aqui garante que apply do Assistente invalide ETag/cache da biblioteca sem rescan.
@@ -149,9 +158,9 @@ export function registerLibraryAssistant(
         return options.library.getTrack(trackId)?.filePath ?? null;
       }
     },
-    fpcalcCommand: options.fingerprint?.fpcalcCommand,
-    acoustIdEnabled: options.fingerprint?.acoustIdEnabled,
-    acoustIdApiKey: options.fingerprint?.acoustIdApiKey
+    fpcalcCommand: fingerprint.fpcalcCommand,
+    acoustIdEnabled: fingerprint.acoustIdEnabled,
+    acoustIdApiKey: fingerprint.acoustIdApiKey
   });
   const baseReview = new LibraryAssistantReviewService({
     databasePath: options.databasePath,
