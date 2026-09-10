@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronUp, Music2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, LocateFixed, Music2 } from 'lucide-react';
 import type { Track } from '@home-music/shared';
-import { useDesktopLayout } from '../useDesktopLayout';
 import { useTrackLyrics } from '../useTrackLyrics';
 
 type LyricsPanelProps = {
@@ -12,12 +11,13 @@ type LyricsPanelProps = {
 
 export function LyricsPanel({ track, currentTime, offlineMode }: LyricsPanelProps) {
   const [open, setOpen] = useState(false);
+  const [autoFollow, setAutoFollow] = useState(true);
   const activeLineRef = useRef<HTMLParagraphElement | null>(null);
-  const desktopLayout = useDesktopLayout();
-  const lyrics = useTrackLyrics(track, offlineMode || desktopLayout);
+  const lyrics = useTrackLyrics(track, offlineMode);
 
   useEffect(() => {
     setOpen(false);
+    setAutoFollow(true);
   }, [track.id]);
 
   const activeLine = useMemo(() => {
@@ -32,10 +32,12 @@ export function LyricsPanel({ track, currentTime, offlineMode }: LyricsPanelProp
   }, [currentTime, lyrics]);
 
   useEffect(() => {
-    if (open) activeLineRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }, [activeLine, open]);
+    if (open && autoFollow) {
+      activeLineRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [activeLine, autoFollow, open]);
 
-  if (offlineMode || desktopLayout || !lyrics) return null;
+  if (!lyrics) return null;
 
   return (
     <section className="lyrics-panel">
@@ -50,13 +52,28 @@ export function LyricsPanel({ track, currentTime, offlineMode }: LyricsPanelProp
       </button>
 
       {open && (
-        <div className="lyrics-panel__content" aria-live="polite">
-          <div className={lyrics.synchronized ? 'lyrics-panel__lines is-synchronized' : 'lyrics-panel__lines'}>
+        <div className="lyrics-panel__content">
+          {lyrics.synchronized && !autoFollow && (
+            <button
+              type="button"
+              className="lyrics-panel__follow"
+              onClick={() => setAutoFollow(true)}
+            >
+              <LocateFixed aria-hidden="true" />
+              Acompanhar reprodução
+            </button>
+          )}
+          <div
+            className={lyrics.synchronized ? 'lyrics-panel__lines is-synchronized' : 'lyrics-panel__lines'}
+            onWheel={() => setAutoFollow(false)}
+            onTouchMove={() => setAutoFollow(false)}
+          >
             {lyrics.lines.map((line, index) => (
               <p
                 key={`${line.time ?? 'plain'}-${index}`}
                 ref={index === activeLine ? activeLineRef : null}
                 className={index === activeLine ? 'is-active' : ''}
+                aria-current={index === activeLine ? 'true' : undefined}
               >
                 {line.text || '♪'}
               </p>
