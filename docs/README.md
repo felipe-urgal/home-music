@@ -23,12 +23,12 @@ Quando houver divergência, use esta ordem:
 
 ## Estado técnico atual
 
-Em **2026-09-09**:
+Em **2026-09-10**:
 
 - fase 7.5 (multiusuário/autenticação) está concluída; os documentos de implementação foram arquivados;
 - fase 14 (portabilidade de dados pessoais) está implementada na `main` após o PR #324;
 - fase 15 (Library Assistant) é o ciclo técnico ativo, rastreado pela issue #310;
-- a fundação do Assistente (#311), a identificação explicável via MusicBrainz (#312), a revisão/aplicação segura de metadata (#313), artwork via Cover Art Archive (#314) e a operação em volume/monitoramento (#356) estão implementadas; a #315 possui base de lyrics via LRCLIB integrada, mas permanece parcial até o disparo operacional do run `lyrics`; os contratos estão em [`library-assistant.md`](library-assistant.md) e [`lyrics.md`](lyrics.md);
+- a fundação do Assistente (#311), a identificação explicável via MusicBrainz (#312), a revisão/aplicação segura de metadata (#313), artwork via Cover Art Archive (#314), a operação em volume/monitoramento (#356) e a identificação opcional por áudio (#320) estão implementadas; a #315 possui base de lyrics via LRCLIB integrada, mas permanece parcial até o disparo operacional do run `lyrics`; os contratos estão em [`library-assistant.md`](library-assistant.md), [`library-assistant-audio-fingerprint.md`](library-assistant-audio-fingerprint.md) e [`lyrics.md`](lyrics.md);
 - as capacidades posteriores da fase 15 permanecem no [`library-assistant-plan.md`](library-assistant-plan.md).
 
 Para o estado instantâneo de issues/PRs, GitHub é a fonte de verdade; este índice não tenta reproduzir todo o tracker.
@@ -59,6 +59,7 @@ Para o estado instantâneo de issues/PRs, GitHub é a fonte de verdade; este ín
 - [`library-metadata-normalization.md`](library-metadata-normalization.md) — normalização de metadata;
 - [`library-navigation-performance.md`](library-navigation-performance.md) — performance de navegação;
 - [`library-assistant.md`](library-assistant.md) — contrato implementado do Assistente: triagem de faixas com pendências, matching via MusicBrainz, artwork via Cover Art Archive, revisão individual/em lote, lyrics via LRCLIB, reset seguro, fila e observabilidade administrativa;
+- [`library-assistant-audio-fingerprint.md`](library-assistant-audio-fingerprint.md) — fallback manual de identificação por áudio com Chromaprint/fpcalc local, cache físico e AcoustID opcional reaproveitando o matcher/review existentes;
 - [`lyrics.md`](lyrics.md) — resolução canônica de lyrics, sidecars, override gerenciado, integração LRCLIB, rollback e política de conteúdo;
 - [`admin-metadata-overrides.md`](admin-metadata-overrides.md) — overrides de metadata e autoridade usada pelo apply do Assistente;
 - [`admin-cover-overrides.md`](admin-cover-overrides.md) — overrides de capa e autoridade usada pelo apply individual de artwork do Assistente;
@@ -127,7 +128,7 @@ Os pares `PRODUCTION.md`/`production.md` e `DEVELOPMENT.md`/`development-environ
 
 ## Planos e decisões
 
-- [`library-assistant-plan.md`](library-assistant-plan.md) — plano ativo das capacidades restantes da fase 15; o comportamento concluído em #311/#312/#313/#314/#356 e a implementação parcial da #315 são descritos em [`library-assistant.md`](library-assistant.md) e [`lyrics.md`](lyrics.md);
+- [`library-assistant-plan.md`](library-assistant-plan.md) — plano ativo das capacidades restantes da fase 15; o comportamento concluído em #311/#312/#313/#314/#320/#356, a implementação parcial da #315 e o fallback por áudio canônico são descritos em [`library-assistant.md`](library-assistant.md), [`library-assistant-audio-fingerprint.md`](library-assistant-audio-fingerprint.md) e [`lyrics.md`](lyrics.md);
 - documentos com `*-decision.md` preservam decisões arquiteturais específicas e devem ser lidos junto do código atual.
 
 ## Histórico
