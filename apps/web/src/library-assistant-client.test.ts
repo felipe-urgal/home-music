@@ -3,6 +3,8 @@ import { apiFetch } from './api-client';
 import {
   decideLibraryAssistantBatch,
   decideLibraryAssistantSuggestion,
+  fingerprintLibraryAssistantSuggestion,
+  getLibraryAssistantFingerprintStatus,
   getLibraryAssistantReview,
   getLibraryAssistantRunProgress,
   resetLibraryAssistantReview,
@@ -72,6 +74,48 @@ describe('library assistant admin client', () => {
     expect(apiFetchMock).toHaveBeenCalledWith(
       '/api/admin/library-assistant/runs/run%2F1/progress',
       { cache: 'no-store' }
+    );
+  });
+
+  it('lê capability de fingerprint sem expor path ou segredo', async () => {
+    apiFetchMock.mockResolvedValue(response({
+      fpcalc: { available: true, version: '1.5.1', issue: null },
+      acoustIdEnabled: true,
+      acoustIdConfigured: true
+    }));
+
+    const result = await getLibraryAssistantFingerprintStatus();
+
+    expect(result.fpcalc.available).toBe(true);
+    expect(result.acoustIdConfigured).toBe(true);
+    expect(apiFetchMock).toHaveBeenCalledWith(
+      '/api/admin/library-assistant/fingerprint',
+      { cache: 'no-store' }
+    );
+  });
+
+  it('solicita identificação por áudio usando apenas ids server-side', async () => {
+    apiFetchMock.mockResolvedValue(response({
+      fingerprintGenerated: true,
+      cacheHit: false,
+      externalLookup: true,
+      identified: true,
+      acoustIdEnabled: true,
+      runId: 'assistant-fingerprint-1',
+      suggestionIds: ['suggestion-2'],
+      recordingId: 'recording-1',
+      conflict: false,
+      ambiguous: false
+    }));
+
+    await fingerprintLibraryAssistantSuggestion('run/1', 'suggestion/1');
+
+    expect(apiFetchMock).toHaveBeenCalledWith(
+      '/api/admin/library-assistant/runs/run%2F1/suggestions/suggestion%2F1/fingerprint',
+      {
+        method: 'POST',
+        headers: { 'X-Home-Music-Request': '1' }
+      }
     );
   });
 
