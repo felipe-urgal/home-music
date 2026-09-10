@@ -1,5 +1,8 @@
 import type { FastifyInstance } from 'fastify';
-import type { LibraryAssistantFingerprintService } from './library-assistant-fingerprint-service.js';
+import {
+  LibraryAssistantFingerprintOperationError,
+  type LibraryAssistantFingerprintService
+} from './library-assistant-fingerprint-service.js';
 
 const ID = /^[A-Za-z0-9._:-]{1,192}$/;
 
@@ -28,6 +31,9 @@ export function registerLibraryAssistantFingerprintRoutes(
         if (!result) return reply.code(404).send({ error: 'Sugestão do assistente não encontrada.' });
         return result;
       } catch (error) {
+        if (error instanceof LibraryAssistantFingerprintOperationError) {
+          return reply.code(error.statusCode).send({ error: error.message, code: error.code });
+        }
         if (error instanceof RangeError || error instanceof TypeError) {
           return reply.code(409).send({ error: error.message });
         }
