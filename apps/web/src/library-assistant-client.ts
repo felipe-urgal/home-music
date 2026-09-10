@@ -16,6 +16,24 @@ import type {
 } from '@home-music/shared/library-assistant';
 import { apiFetch } from './api-client';
 
+export type LibraryAssistantFingerprintStatus = {
+  localFingerprint: boolean;
+  acoustIdEnabled: boolean;
+  acoustIdConfigured: boolean;
+};
+
+export type LibraryAssistantFingerprintResult = {
+  fingerprintGenerated: boolean;
+  externalLookup: boolean;
+  identified: boolean;
+  acoustIdEnabled: boolean;
+  runId: string | null;
+  suggestionIds: string[];
+  recordingId: string | null;
+  conflict: boolean;
+  ambiguous: boolean;
+};
+
 async function responseError(response: Response) {
   const payload = await response.json().catch(() => null) as { error?: string } | null;
   return payload?.error || `Falha HTTP ${response.status}`;
@@ -79,6 +97,24 @@ export async function getLibraryAssistantReviewPolicy() {
   const response = await apiFetch('/api/admin/library-assistant/policy', { cache: 'no-store' });
   if (!response.ok) throw new Error(await responseError(response));
   return response.json() as Promise<AdminLibraryAssistantPolicyResponse>;
+}
+
+export async function getLibraryAssistantFingerprintStatus() {
+  const response = await apiFetch('/api/admin/library-assistant/fingerprint', { cache: 'no-store' });
+  if (!response.ok) throw new Error(await responseError(response));
+  return response.json() as Promise<LibraryAssistantFingerprintStatus>;
+}
+
+export async function fingerprintLibraryAssistantSuggestion(runId: string, suggestionId: string) {
+  const response = await apiFetch(
+    `/api/admin/library-assistant/runs/${encodeURIComponent(runId)}/suggestions/${encodeURIComponent(suggestionId)}/fingerprint`,
+    {
+      method: 'POST',
+      headers: { 'X-Home-Music-Request': '1' }
+    }
+  );
+  if (!response.ok) throw new Error(await responseError(response));
+  return response.json() as Promise<LibraryAssistantFingerprintResult>;
 }
 
 export async function updateLibraryAssistantReviewPolicy(policy: LibraryAssistantReviewPolicy) {
