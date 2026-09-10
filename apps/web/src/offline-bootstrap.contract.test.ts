@@ -34,15 +34,18 @@ describe('offline bootstrap contract', () => {
     expect(auth).toMatch(/const offline = !reachedServer;/);
   });
 
-  it('serve o shell cacheado antes da rede e mantém APIs fora do cache estático', () => {
+  it('serve o shell cacheado sem revalidar durante a navegação e mantém APIs fora do cache estático', () => {
     const worker = source('../public/sw.js');
+    const registration = source('register-service-worker.ts');
 
     expect(worker).toMatch(/const CACHE_NAME = `\$\{CACHE_PREFIX\}v3`/);
-    expect(worker).toMatch(/async function prepareCacheFirstNavigation\(request\)/);
+    expect(worker).toMatch(/async function cacheFirstNavigation\(request\)/);
     expect(worker).toMatch(/const cachedShell = await cache\.match\(SHELL_URL\)/);
-    expect(worker).toMatch(/if \(cachedShell\) \{[\s\S]*self\.navigator\.onLine !== false[\s\S]*refreshCachedShell\(request, cache\)[\s\S]*return \{ response: cachedShell, maintenance \};/);
+    expect(worker).toMatch(/if \(cachedShell\) return cachedShell;/);
     expect(worker).toMatch(/if \(isApiPath\(url\.pathname\)\) return;[\s\S]*if \(request\.mode === 'navigate'\)/);
-    expect(worker).toMatch(/event\.respondWith\(navigation\.then\(result => result\.response\)\)/);
-    expect(worker).toMatch(/event\.waitUntil\(navigation\.then\(result => result\.maintenance\)\)/);
+    expect(worker).toMatch(/event\.respondWith\(cacheFirstNavigation\(request\)\)/);
+    expect(worker).toMatch(/event\.data\?\.type === SHELL_REFRESH_REQUEST[\s\S]*event\.waitUntil\(refreshShellAfterClientLoad\(\)\)/);
+    expect(registration).toMatch(/navigator\.onLine === false/);
+    expect(registration).toMatch(/postMessage\(\{ type: SHELL_REFRESH_REQUEST \}\)/);
   });
 });
