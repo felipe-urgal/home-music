@@ -27,7 +27,7 @@ O cache estático é deliberadamente limitado a recursos públicos necessários 
 - `manifest.webmanifest`;
 - favicon/ícones públicos da aplicação.
 
-Quando já existe shell instalado, navegações usam **cache-first com revalidação em background somente quando o navegador reporta conectividade**: o HTML local é devolvido sem esperar a rede e, online, uma tentativa de rede vinculada ao ciclo de vida do evento atualiza `SHELL_URL` para a próxima navegação. Em cold start offline, o worker não inicia uma navegação de rede desnecessária durante a retomada do WebKit. Se ainda não houver shell cacheado, a navegação tenta a rede e responde `503` somente quando rede e cache não podem fornecer a aplicação.
+Quando já existe shell instalado, navegações usam **cache-first sem revalidação concorrente**: o HTML local é devolvido sem iniciar rede durante o evento de navegação. Depois que a interface monta online, o cliente envia uma mensagem ao service worker e a atualização de `SHELL_URL` ocorre fora do caminho crítico do cold start. Se ainda não houver shell cacheado, a navegação tenta a rede e responde `503` somente quando rede e cache não podem fornecer a aplicação.
 
 Assets hashados continuam **cache-first** porque o nome muda junto com o conteúdo. O `OfflineApp` faz parte do bundle inicial da aplicação: abrir o modo offline em cold start não depende mais de aquecer um lazy chunk durante uma sessão online anterior. Isso aumenta deliberadamente o shell inicial em troca de tornar uma capacidade principal offline independente de runtime warm best-effort.
 

@@ -8,6 +8,7 @@ const OFFLINE_CLIENT_SCOPE_PREFIX = '/__home-music-offline-client/';
 const OFFLINE_BACKGROUND_REGISTRATION_PREFIX = 'home-music-offline-v1:';
 const CAPABILITY_REQUEST = 'HOME_MUSIC_GET_CAPABILITIES';
 const CAPABILITY_RESPONSE = 'HOME_MUSIC_CAPABILITIES';
+const SHELL_REFRESH_REQUEST = 'HOME_MUSIC_REFRESH_SHELL';
 const SHELL_URL = '/';
 const REVALIDATED_STATIC = new Set(['/manifest.webmanifest', '/favicon.svg']);
 const USER_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
@@ -239,30 +240,30 @@ async function refreshCachedShell(request, cache) {
   }
 }
 
-async function prepareCacheFirstNavigation(request) {
+async function cacheFirstNavigation(request) {
   const cache = await caches.open(CACHE_NAME);
   const cachedShell = await cache.match(SHELL_URL);
 
-  if (cachedShell) {
-    // No cold start offline, iniciar uma navegação de rede desnecessária pode
-    // desestabilizar o processo retomado do WebKit antes de o shell local montar.
-    // Online, mantenha a revalidação vinculada ao ciclo de vida do fetch event.
-    const maintenance = self.navigator.onLine !== false
-      ? refreshCachedShell(request, cache)
-      : Promise.resolve(null);
-    return { response: cachedShell, maintenance };
-  }
+  // A navegação standalone nunca disputa com uma revalidação de rede. O cliente
+  // atualiza o shell por mensagem somente depois que a interface montou online.
+  if (cachedShell) return cachedShell;
 
   const response = await refreshCachedShell(request, cache);
-  if (response) return { response, maintenance: Promise.resolve(null) };
+  if (response) return response;
 
-  return {
-    response: new Response('Home Music indisponível offline.', {
-      status: 503,
-      headers: { 'Content-Type': 'text/plain; charset=utf-8' }
-    }),
-    maintenance: Promise.resolve(null)
-  };
+  return new Response('Home Music indisponível offline.', {
+    status: 503,
+    headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+  });
+}
+
+async function refreshShellAfterClientLoad() {
+  const cache = await caches.open(CACHE_NAME);
+  const request = new Request(`${self.location.origin}${SHELL_URL}`, {
+    cache: 'no-store',
+    credentials: 'same-origin'
+  });
+  await refreshCachedShell(request, cache);
 }
 
 async function cacheFirst(request) {
@@ -320,6 +321,11 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('message', event => {
+  if (event.data?.type === SHELL_REFRESH_REQUEST) {
+    event.waitUntil(refreshShellAfterClientLoad());
+    return;
+  }
+
   if (event.data?.type !== CAPABILITY_REQUEST) return;
 
   const clientId = typeof event.source?.id === 'string' ? event.source.id : null;
@@ -364,9 +370,7 @@ self.addEventListener('fetch', event => {
   if (isApiPath(url.pathname)) return;
 
   if (request.mode === 'navigate') {
-    const navigation = prepareCacheFirstNavigation(request);
-    event.respondWith(navigation.then(result => result.response));
-    event.waitUntil(navigation.then(result => result.maintenance));
+    event.respondWith(cacheFirstNavigation(request));
     return;
   }
 

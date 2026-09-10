@@ -445,13 +445,12 @@ export function useOfflineDownloads() {
       try {
         const scopedRecords = readManifest(userId);
         const cache = await caches.open(offlineAudioCacheName(userId));
-        const available: OfflineDownloadRecord[] = [];
         const expectedUrls = new Set(scopedRecords.map(record => new URL(streamUrl(record.track.id), window.location.origin).href));
-
-        for (const record of scopedRecords) {
+        const availability = await Promise.all(scopedRecords.map(async record => {
           const cached = await cache.match(streamUrl(record.track.id));
-          if (cached) available.push(record);
-        }
+          return Boolean(cached);
+        }));
+        const available = scopedRecords.filter((_record, index) => availability[index]);
 
         const keys = await cache.keys();
         await Promise.all(keys
