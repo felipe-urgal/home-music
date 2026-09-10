@@ -12,6 +12,7 @@ import type {
 } from '@home-music/shared';
 
 const MAX_METADATA_LENGTH = 240;
+const MAX_ASSISTANT_EVIDENCE_ROWS = 10_000;
 
 type Row = Record<string, unknown>;
 type AliasableMetadataTrack = Pick<Track, 'id' | 'artist' | 'album' | 'albumArtist'>;
@@ -20,6 +21,27 @@ type EffectiveMetadataTrack = AliasableMetadataTrack & Pick<Track, 'title'>;
 type AliasMaps = {
   artist: Map<string, string>;
   album: Map<string, Map<string, string>>;
+};
+
+type TrackExternalEvidence = {
+  artistCanonical: string | null;
+  albumCanonical: string | null;
+  artistIds: string[];
+  releaseIds: string[];
+  releaseGroupIds: string[];
+};
+
+type NormalizationExternalEvidence = {
+  source: 'musicbrainz';
+  providerCanonical: string | null;
+  suggestedCanonical: string | null;
+  externalIds: string[];
+  conflict: boolean;
+  reasonCodes: string[];
+};
+
+type EnrichedNormalizationCandidate = LibraryMetadataNormalizationCandidate & {
+  externalEvidence?: NormalizationExternalEvidence;
 };
 
 function stringValue(value: unknown) {
@@ -89,7 +111,131 @@ function spacingPenalty(value: string) {
   return value === value.trim().replace(/\s+/g, ' ') ? 0 : 1;
 }
 
-function candidateGroups(kind: LibraryMetadataAliasKind, tracks: AliasableMetadataTrack[]) {
+function objectValue(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function jsonObject(value: unknown) {
+  if (typeof value !== 'string') return null;
+  try {
+    return objectValue(JSON.parse(value));
+  } catch {
+    return null;
+  }
+}
+
+function jsonArray(value: unknown) {
+  if (typeof value !== 'string') return [] as unknown[];
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [] as unknown[];
+  }
+}
+
+function boundedExternalId(value: unknown) {
+  return typeof value === 'string' && value.length > 0 && value.length <= 256 ? value : null;
+}
+
+function readTrackExternalEvidence(row: Row): TrackExternalEvidence | null {
+  const provenance = jsonObject(row.provenance_json);
+  if (provenance?.source !== 'musicbrainz') return null;
+
+  let artistCanonical: string | null = null;
+  let albumCanonical: string | null = null;
+  const artistIds = new Set<string>();
+  const releaseIds = new Set<string>();
+  const releaseGroupIds = new Set<string>();
+
+  for (const rawEvidence of jsonArray(row.evidence_json)) {
+    const evidence = objectValue(rawEvidence);
+    if (!evidence) continue;
+    if (evidence.type === 'text-match' && typeof evidence.candidateValue === 'string') {
+      if (evidence.field === 'artist') artistCanonical ??= evidence.candidateValue;
+      if (evidence.field === 'album') albumCanonical ??= evidence.candidateValue;
+      continue;
+    }
+    if (evidence.type !== 'external-id' || evidence.source !== 'musicbrainz') continue;
+    const id = boundedExternalId(evidence.id);
+    if (!id) continue;
+    if (evidence.kind === 'artist') artistIds.add(id);
+    else if (evidence.kind === 'release') releaseIds.add(id);
+    else if (evidence.kind === 'release-group') releaseGroupIds.add(id);
+  }
+
+  if (!artistCanonical && !albumCanonical && artistIds.size === 0 && releaseIds.size === 0 && releaseGroupIds.size === 0) {
+    return null;
+  }
+  return {
+    artistCanonical,
+    albumCanonical,
+    artistIds: [...artistIds],
+    releaseIds: [...releaseIds],
+    releaseGroupIds: [...releaseGroupIds]
+  };
+}
+
+function buildExternalEvidence(
+  kind: LibraryMetadataAliasKind,
+  variants: Map<string, Set<string>>,
+  evidenceByTrackId: Map<string, TrackExternalEvidence>
+): NormalizationExternalEvidence | undefined {
+  const canonicalValues = new Set<string>();
+  const identityIds = new Set<string>();
+  const displayIds = new Set<string>();
+
+  for (const ids of variants.values()) {
+    for (const trackId of ids) {
+      const evidence = evidenceByTrackId.get(trackId);
+      if (!evidence) continue;
+      if (kind === 'artist') {
+        if (evidence.artistCanonical) canonicalValues.add(evidence.artistCanonical);
+        for (const id of evidence.artistIds) {
+          identityIds.add(id);
+          displayIds.add(`artist:${id}`);
+        }
+      } else {
+        if (evidence.albumCanonical) canonicalValues.add(evidence.albumCanonical);
+        const stableIds = evidence.releaseGroupIds.length > 0
+          ? evidence.releaseGroupIds
+          : evidence.releaseIds;
+        for (const id of stableIds) identityIds.add(id);
+        for (const id of evidence.releaseGroupIds) displayIds.add(`release-group:${id}`);
+        for (const id of evidence.releaseIds) displayIds.add(`release:${id}`);
+      }
+    }
+  }
+
+  if (canonicalValues.size === 0 && displayIds.size === 0) return undefined;
+  const normalizedCanonicals = new Set([...canonicalValues].map(normalizationComparisonKey));
+  const conflict = identityIds.size > 1 || normalizedCanonicals.size > 1;
+  const providerCanonical = canonicalValues.size === 1 ? [...canonicalValues][0] : null;
+  const suggestedCanonical = !conflict && providerCanonical && variants.has(providerCanonical)
+    ? providerCanonical
+    : null;
+  const reasonCodes = ['normalization.local-equivalent', 'variant.track-count'];
+  if (conflict) reasonCodes.push('external-id.conflict');
+  else if (kind === 'artist' && providerCanonical) reasonCodes.push('musicbrainz.artist-canonical');
+  else if (kind === 'album' && identityIds.size === 1) reasonCodes.push('musicbrainz.release-consistent');
+
+  return {
+    source: 'musicbrainz',
+    providerCanonical,
+    suggestedCanonical,
+    externalIds: [...displayIds].sort(),
+    conflict,
+    reasonCodes
+  };
+}
+
+function candidateGroups(
+  kind: LibraryMetadataAliasKind,
+  tracks: AliasableMetadataTrack[],
+  evidenceByTrackId: Map<string, TrackExternalEvidence>
+) {
   const groups = new Map<string, Map<string, Set<string>>>();
 
   function add(scope: string, value: string, trackId: string) {
@@ -112,12 +258,13 @@ function candidateGroups(kind: LibraryMetadataAliasKind, tracks: AliasableMetada
     }
   }
 
-  const candidates: LibraryMetadataNormalizationCandidate[] = [];
+  const candidates: EnrichedNormalizationCandidate[] = [];
   for (const [rawKey, variants] of groups) {
     if (variants.size < 2) continue;
     const separator = rawKey.indexOf('\u0000');
     const scope = rawKey.slice(0, separator);
     const comparison = rawKey.slice(separator + 1);
+    const externalEvidence = buildExternalEvidence(kind, variants, evidenceByTrackId);
     candidates.push({
       key: JSON.stringify([kind, scope, comparison]),
       kind,
@@ -128,7 +275,8 @@ function candidateGroups(kind: LibraryMetadataAliasKind, tracks: AliasableMetada
           right.trackCount - left.trackCount
           || spacingPenalty(left.value) - spacingPenalty(right.value)
           || left.value.localeCompare(right.value, 'pt-BR')
-        )
+        ),
+      ...(externalEvidence ? { externalEvidence } : {})
     });
   }
 
@@ -189,12 +337,37 @@ export class LibraryMetadataNormalizationStore {
     return resolveWithMaps(track, this.maps);
   }
 
-  private hasMetadataOverrides() {
+  private hasTable(name: string) {
     return Boolean(this.db.prepare(`
       SELECT 1 FROM sqlite_master
-      WHERE type = 'table' AND name = 'track_metadata_overrides'
+      WHERE type = 'table' AND name = ?
       LIMIT 1;
-    `).get());
+    `).get(name));
+  }
+
+  private hasMetadataOverrides() {
+    return this.hasTable('track_metadata_overrides');
+  }
+
+  private loadAssistantEvidence() {
+    const byTrackId = new Map<string, TrackExternalEvidence>();
+    if (!this.hasTable('library_assistant_suggestions')) return byTrackId;
+    const rows = this.db.prepare(`
+      SELECT track_id, evidence_json, provenance_json, updated_at
+      FROM library_assistant_suggestions
+      WHERE capability = 'metadata'
+        AND status IN ('pending', 'review', 'applied')
+      ORDER BY updated_at DESC, rowid DESC
+      LIMIT ?;
+    `).all(MAX_ASSISTANT_EVIDENCE_ROWS) as Row[];
+
+    for (const row of rows) {
+      const trackId = stringValue(row.track_id);
+      if (!trackId || byTrackId.has(trackId)) continue;
+      const evidence = readTrackExternalEvidence(row);
+      if (evidence) byTrackId.set(trackId, evidence);
+    }
+    return byTrackId;
   }
 
   private loadEffectiveTracksBeforeAliases(): EffectiveMetadataTrack[] {
@@ -237,8 +410,9 @@ export class LibraryMetadataNormalizationStore {
   review(now = new Date()): AdminLibraryNormalizationReviewResponse {
     this.refresh();
     const tracks = this.loadEffectiveTracksBeforeAliases().map(track => this.resolveTrack(track));
-    const artistCandidates = candidateGroups('artist', tracks);
-    const albumCandidates = candidateGroups('album', tracks);
+    const assistantEvidence = this.loadAssistantEvidence();
+    const artistCandidates = candidateGroups('artist', tracks, assistantEvidence);
+    const albumCandidates = candidateGroups('album', tracks, assistantEvidence);
     return {
       checkedAt: now.toISOString(),
       counts: {
