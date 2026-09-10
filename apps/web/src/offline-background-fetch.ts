@@ -1,4 +1,5 @@
 import { apiFetch } from './api-client';
+import { commitOfflineLyricsSnapshot, prepareOfflineLyricsSnapshot } from './offline-lyrics-cache';
 
 const CAPABILITY_REQUEST = 'HOME_MUSIC_GET_CAPABILITIES';
 const CAPABILITY_RESPONSE = 'HOME_MUSIC_CAPABILITIES';
@@ -171,14 +172,29 @@ async function startOrReuseBackgroundFetch(
   }
 }
 
+async function finalizeOfflineTransfer(
+  transfer: OfflineTrackTransfer,
+  preparedLyrics: ReturnType<typeof prepareOfflineLyricsSnapshot>
+) {
+  const snapshot = await preparedLyrics;
+  if (snapshot) commitOfflineLyricsSnapshot(snapshot);
+  return transfer;
+}
+
 export async function fetchOfflineTrackResponse(
   trackId: string,
   userId: string,
   url: string
 ): Promise<OfflineTrackTransfer> {
+  // Lyrics usa o mesmo endpoint canônico da reprodução online e é preparado junto
+  // do áudio. Falha de lyrics nunca impede o download da faixa.
+  const preparedLyrics = prepareOfflineLyricsSnapshot(trackId, userId);
   const manager = await backgroundFetchManager(userId);
   if (!manager) {
-    return { response: await apiFetch(url, { cache: 'no-store' }), storedByServiceWorker: false };
+    return finalizeOfflineTransfer(
+      { response: await apiFetch(url, { cache: 'no-store' }), storedByServiceWorker: false },
+      preparedLyrics
+    );
   }
 
   let registration: BackgroundFetchRegistrationLike;
@@ -190,7 +206,10 @@ export async function fetchOfflineTrackResponse(
     );
   } catch (error) {
     if (shouldFallbackToForeground(error)) {
-      return { response: await apiFetch(url, { cache: 'no-store' }), storedByServiceWorker: false };
+      return finalizeOfflineTransfer(
+        { response: await apiFetch(url, { cache: 'no-store' }), storedByServiceWorker: false },
+        preparedLyrics
+      );
     }
     throw error;
   }
@@ -205,5 +224,5 @@ export async function fetchOfflineTrackResponse(
     throw new Error('O download terminou, mas o arquivo não pôde ser confirmado no armazenamento offline.');
   }
 
-  return { response, storedByServiceWorker: true };
+  return finalizeOfflineTransfer({ response, storedByServiceWorker: true }, preparedLyrics);
 }
