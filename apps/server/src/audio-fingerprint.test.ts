@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -41,7 +41,7 @@ test('erro do processo é sanitizado sem repetir path nem stdout/stderr', async 
   );
 });
 
-test('timeout e binário ausente produzem diagnóstico acionável', async () => {
+test('timeout, output excessivo e binário ausente produzem diagnóstico acionável', async () => {
   const timeoutRunner: FpcalcRunner = async () => {
     const error = new Error('timeout') as Error & { code?: string; killed?: boolean };
     error.code = 'ETIMEDOUT';
@@ -51,6 +51,18 @@ test('timeout e binário ausente produzem diagnóstico acionável', async () => 
   await assert.rejects(
     fingerprintAudioFile('/music/faixa.flac', { runner: timeoutRunner }),
     /tempo limite/
+  );
+
+  const outputRunner: FpcalcRunner = async () => {
+    const error = new Error('stdout leaked') as Error & { code?: string };
+    error.code = 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER';
+    throw error;
+  };
+  await assert.rejects(
+    fingerprintAudioFile('/music/faixa.flac', { runner: outputRunner }),
+    error => error instanceof Error
+      && error.message === 'Chromaprint/fpcalc excedeu o limite de saída permitido.'
+      && !error.message.includes('stdout')
   );
 
   const missingRunner: FpcalcRunner = async () => {
@@ -63,6 +75,22 @@ test('timeout e binário ausente produzem diagnóstico acionável', async () => 
     version: null,
     issue: 'not-found'
   });
+});
+
+test('cancelamento preserva AbortError para liberar o processo chamador', async () => {
+  const controller = new AbortController();
+  const runner: FpcalcRunner = async (_command, _args, options) => {
+    assert.equal(options.signal, controller.signal);
+    controller.abort();
+    const error = new Error('aborted');
+    error.name = 'AbortError';
+    throw error;
+  };
+
+  await assert.rejects(
+    fingerprintAudioFile('/music/faixa.flac', { runner, signal: controller.signal }),
+    error => error instanceof Error && error.name === 'AbortError'
+  );
 });
 
 test('health reconhece versão do fpcalc sem depender de arquivo de áudio', async () => {
@@ -83,7 +111,7 @@ test('resolução usa realpath, exige arquivo regular e invalida assinatura apó
   const outside = path.join(temp, 'outside.flac');
   const file = path.join(root, 'inside.flac');
   try {
-    await import('node:fs/promises').then(fs => fs.mkdir(root, { recursive: true }));
+    await mkdir(root, { recursive: true });
     await writeFile(file, 'audio-a');
     await writeFile(outside, 'outside');
 
@@ -95,6 +123,13 @@ test('resolução usa realpath, exige arquivo regular e invalida assinatura apó
     const outsideLink = path.join(root, 'escape.flac');
     await symlink(outside, outsideLink);
     await assert.rejects(resolveFingerprintFile(root, outsideLink), /confinado/);
+
+    const directory = path.join(root, 'not-a-file');
+    await mkdir(directory);
+    await assert.rejects(resolveFingerprintFile(root, directory), /arquivo regular/);
+
+    await rm(file);
+    await assert.rejects(resolveFingerprintFile(root, file), /não está mais disponível/);
   } finally {
     await rm(temp, { recursive: true, force: true });
   }
