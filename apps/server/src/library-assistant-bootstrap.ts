@@ -112,9 +112,14 @@ export function registerLibraryAssistant(
       };
     }
   });
-  const lyricsAnalyzer = createLrclibLyricsAnalyzer({
-    hasEffectiveLyrics: async trackId => Boolean(lyricsOverrides.get(trackId)) || await hasSidecarLyrics(trackId)
-  });
+  const lyricsAnalyzer = {
+    ...createLrclibLyricsAnalyzer({
+      hasEffectiveLyrics: async trackId => Boolean(lyricsOverrides.get(trackId)) || await hasSidecarLyrics(trackId)
+    }),
+    // LRCLIB agora é executado por um run próprio. O draft já é `lyrics`; manter a
+    // capability do analyzer alinhada impede consultas LRCLIB em runs de metadata.
+    capability: 'lyrics' as const
+  } satisfies LibraryAssistantAnalyzer;
   const analyzers = (options.analyzers ?? [metadataAnalyzer, lyricsAnalyzer])
     .map(analyzer => instrumentAnalyzer(analyzer, metrics));
   const service = new LibraryAssistantService({
