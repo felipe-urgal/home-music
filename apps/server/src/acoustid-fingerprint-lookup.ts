@@ -20,6 +20,7 @@ export type AcoustIdFingerprintRecording = {
   title: string | null;
   artist: string | null;
   artistId: string | null;
+  durationSeconds: number | null;
   releaseGroupId: string | null;
   releaseGroupTitle: string | null;
 };
@@ -48,6 +49,12 @@ function safeText(value: unknown, maximum = 240) {
   return clean && clean.length <= maximum && !/[\r\n\t]/.test(clean) ? clean : null;
 }
 
+function safeDuration(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 && value <= 24 * 60 * 60
+    ? Math.round(value * 10) / 10
+    : null;
+}
+
 function artist(value: unknown) {
   if (!Array.isArray(value) || value.length === 0 || value.length > 20) {
     return { name: null as string | null, id: null as string | null };
@@ -74,6 +81,7 @@ function normalizeRecording(value: unknown): AcoustIdFingerprintRecording | null
     title: safeText(item.title),
     artist: recordingArtist.name,
     artistId: recordingArtist.id,
+    durationSeconds: safeDuration(item.duration),
     releaseGroupId: safeUuid(firstGroup?.id),
     releaseGroupTitle: safeText(firstGroup?.title)
   };
