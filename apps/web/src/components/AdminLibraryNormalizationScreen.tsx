@@ -21,6 +21,23 @@ type AdminLibraryNormalizationScreenProps = {
   onBack: () => void;
 };
 
+type NormalizationExternalEvidence = {
+  source: 'musicbrainz';
+  providerCanonical: string | null;
+  suggestedCanonical: string | null;
+  externalIds: string[];
+  conflict: boolean;
+  reasonCodes: string[];
+};
+
+type EnrichedNormalizationCandidate = LibraryMetadataNormalizationCandidate & {
+  externalEvidence?: NormalizationExternalEvidence;
+};
+
+function evidenceFor(candidate: LibraryMetadataNormalizationCandidate) {
+  return (candidate as EnrichedNormalizationCandidate).externalEvidence;
+}
+
 function kindLabel(kind: LibraryMetadataNormalizationCandidate['kind']) {
   return kind === 'artist' ? 'Artista' : 'Álbum';
 }
@@ -28,6 +45,21 @@ function kindLabel(kind: LibraryMetadataNormalizationCandidate['kind']) {
 function candidateDescription(candidate: LibraryMetadataNormalizationCandidate) {
   if (candidate.kind === 'artist') return 'Mesma grafia provável em artista ou artista do álbum.';
   return `Álbum dentro de ${candidate.scope || 'artista desconhecido'}.`;
+}
+
+function evidenceDescription(candidate: LibraryMetadataNormalizationCandidate) {
+  const evidence = evidenceFor(candidate);
+  if (!evidence) return null;
+  if (evidence.conflict) {
+    return 'MusicBrainz encontrou IDs externos conflitantes. A heurística local continua visível, mas nenhuma grafia é sugerida automaticamente.';
+  }
+  if (evidence.suggestedCanonical) {
+    return `MusicBrainz corrobora “${evidence.suggestedCanonical}” como grafia canônica provável.`;
+  }
+  if (evidence.providerCanonical) {
+    return `MusicBrainz identificou “${evidence.providerCanonical}”, mas essa grafia não está presente exatamente entre as variantes locais.`;
+  }
+  return 'MusicBrainz forneceu evidência externa para este grupo sem determinar uma grafia canônica local.';
 }
 
 export function AdminLibraryNormalizationScreen({ onBack }: AdminLibraryNormalizationScreenProps) {
@@ -52,9 +84,13 @@ export function AdminLibraryNormalizationScreen({ onBack }: AdminLibraryNormaliz
         const nextSelections: Record<string, string> = {};
         for (const candidate of next.candidates) {
           const currentValue = current[candidate.key];
+          const evidence = evidenceFor(candidate);
+          const suggested = !evidence?.conflict ? evidence?.suggestedCanonical : null;
           nextSelections[candidate.key] = candidate.variants.some(variant => variant.value === currentValue)
             ? currentValue
-            : candidate.variants[0]?.value ?? '';
+            : suggested && candidate.variants.some(variant => variant.value === suggested)
+              ? suggested
+              : candidate.variants[0]?.value ?? '';
         }
         return nextSelections;
       });
@@ -228,12 +264,20 @@ export function AdminLibraryNormalizationScreen({ onBack }: AdminLibraryNormaliz
                   {candidates.map(candidate => {
                     const selected = selectedCanonical[candidate.key] || candidate.variants[0]?.value || '';
                     const busy = mutatingKey === candidate.key;
+                    const evidence = evidenceFor(candidate);
+                    const evidenceCopy = evidenceDescription(candidate);
                     return (
                       <article className="admin-normalization__candidate" key={candidate.key}>
                         <div className="admin-normalization__candidate-copy">
                           <span>{kindLabel(candidate.kind)}</span>
                           <strong>{candidateDescription(candidate)}</strong>
                           <small>Escolha qual grafia será exibida como canônica.</small>
+                          {evidenceCopy && (
+                            <small role={evidence?.conflict ? 'alert' : 'note'}>
+                              {evidenceCopy}
+                              {evidence?.externalIds.length ? ` MBID: ${evidence.externalIds.slice(0, 2).join(', ')}${evidence.externalIds.length > 2 ? '…' : ''}` : ''}
+                            </small>
+                          )}
                         </div>
 
                         <fieldset disabled={Boolean(mutatingKey)}>
