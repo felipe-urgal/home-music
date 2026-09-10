@@ -11,6 +11,7 @@ import {
   needsMusicBrainzEnrichment
 } from './musicbrainz-metadata-analyzer.js';
 import { LibraryAssistantCompositeReviewService } from './library-assistant-composite-review-service.js';
+import { LibraryAssistantFingerprintCache } from './library-assistant-fingerprint-cache.js';
 import { registerLibraryAssistantFingerprintRoutes } from './library-assistant-fingerprint-routes.js';
 import { LibraryAssistantFingerprintService } from './library-assistant-fingerprint-service.js';
 import { LibraryAssistantIncrementalIndex } from './library-assistant-incremental-index.js';
@@ -72,6 +73,7 @@ export function registerLibraryAssistant(
   options: LibraryAssistantBootstrapOptions
 ) {
   const store = new LibraryAssistantStore(options.databasePath);
+  const fingerprintCache = new LibraryAssistantFingerprintCache(options.databasePath);
   const reviewPolicy = new LibraryAssistantReviewPolicyStore(options.databasePath);
   const metrics = new LibraryAssistantRunMetrics();
   const workQueue = new LibraryAssistantPersistentQueue(options.databasePath, {
@@ -148,6 +150,7 @@ export function registerLibraryAssistant(
   });
   const fingerprints = new LibraryAssistantFingerprintService({
     store,
+    cache: fingerprintCache,
     providers,
     queue: options.queue,
     library: {
@@ -197,6 +200,7 @@ export function registerLibraryAssistant(
     metadataOverrides.close();
     incrementalIndex.close();
     workQueue.close();
+    fingerprintCache.close();
     store.close();
   });
 
