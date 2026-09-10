@@ -239,23 +239,30 @@ async function refreshCachedShell(request, cache) {
   }
 }
 
-async function cacheFirstNavigation(request) {
+async function prepareCacheFirstNavigation(request) {
   const cache = await caches.open(CACHE_NAME);
   const cachedShell = await cache.match(SHELL_URL);
-  const refresh = refreshCachedShell(request, cache);
 
   if (cachedShell) {
-    void refresh;
-    return cachedShell;
+    // No cold start offline, iniciar uma navegação de rede desnecessária pode
+    // desestabilizar o processo retomado do WebKit antes de o shell local montar.
+    // Online, mantenha a revalidação vinculada ao ciclo de vida do fetch event.
+    const maintenance = self.navigator.onLine !== false
+      ? refreshCachedShell(request, cache)
+      : Promise.resolve(null);
+    return { response: cachedShell, maintenance };
   }
 
-  const response = await refresh;
-  if (response) return response;
+  const response = await refreshCachedShell(request, cache);
+  if (response) return { response, maintenance: Promise.resolve(null) };
 
-  return new Response('Home Music indisponível offline.', {
-    status: 503,
-    headers: { 'Content-Type': 'text/plain; charset=utf-8' }
-  });
+  return {
+    response: new Response('Home Music indisponível offline.', {
+      status: 503,
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+    }),
+    maintenance: Promise.resolve(null)
+  };
 }
 
 async function cacheFirst(request) {
@@ -357,7 +364,9 @@ self.addEventListener('fetch', event => {
   if (isApiPath(url.pathname)) return;
 
   if (request.mode === 'navigate') {
-    event.respondWith(cacheFirstNavigation(request));
+    const navigation = prepareCacheFirstNavigation(request);
+    event.respondWith(navigation.then(result => result.response));
+    event.waitUntil(navigation.then(result => result.maintenance));
     return;
   }
 
