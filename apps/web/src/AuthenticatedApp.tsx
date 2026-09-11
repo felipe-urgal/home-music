@@ -153,6 +153,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
         ref={player.deckARef}
         preload="auto"
         onPlay={event => player.audioHandlers.onPlay(event.currentTarget)}
+        onPlaying={event => player.audioHandlers.onPlaying(event.currentTarget)}
         onPause={event => player.audioHandlers.onPause(event.currentTarget)}
         onTimeUpdate={event => player.audioHandlers.onTimeUpdate(event.currentTarget)}
         onLoadedMetadata={event => player.audioHandlers.onLoadedMetadata(event.currentTarget)}
@@ -164,6 +165,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
         preload="auto"
         aria-hidden="true"
         onPlay={event => player.audioHandlers.onPlay(event.currentTarget)}
+        onPlaying={event => player.audioHandlers.onPlaying(event.currentTarget)}
         onPause={event => player.audioHandlers.onPause(event.currentTarget)}
         onTimeUpdate={event => player.audioHandlers.onTimeUpdate(event.currentTarget)}
         onLoadedMetadata={event => player.audioHandlers.onLoadedMetadata(event.currentTarget)}
