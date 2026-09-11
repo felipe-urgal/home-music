@@ -35,6 +35,12 @@ async function openAdministration(page: Page) {
   await expect(page.locator('#administration-title')).toHaveText('Administração');
 }
 
+async function openAssistant(page: Page) {
+  await openAdministration(page);
+  await page.getByRole('button', { name: 'Assistente da Biblioteca', exact: true }).click();
+  await expect(page.locator('#library-assistant-title')).toHaveText('Assistente da Biblioteca');
+}
+
 async function playFixtureTrack(page: Page, title: string) {
   const sidebar = page.getByTestId('desktop-sidebar');
   await sidebar.getByRole('button', { name: 'Pastas', exact: true }).click();
@@ -71,9 +77,7 @@ test('Library Assistant revisa, aplica via override, atualiza player e sobrevive
     const playerBar = page.getByTestId('desktop-player-bar');
     await expect(playerBar).toContainText('E2E Track');
 
-    await openAdministration(page);
-    await page.getByRole('button', { name: 'Assistente da Biblioteca', exact: true }).click();
-    await expect(page.locator('#library-assistant-title')).toHaveText('Assistente da Biblioteca');
+    await openAssistant(page);
     await expect(page.locator('.assistant-admin__sections').getByRole('button', { name: 'Sugestões', exact: true })).toHaveClass(/is-active/);
     await expect(page.locator('.assistant-admin__info')).toContainText('Você pode revisar os resultados que já apareceram; a tela continua atualizando a análise automaticamente.');
 
@@ -127,4 +131,110 @@ test('Library Assistant revisa, aplica via override, atualiza player e sobrevive
       }).catch(() => undefined);
     }
   }
+});
+
+test('Library Assistant executa o fluxo visual de lyrics local com job fake', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop-chromium');
+  await login(page);
+
+  let jobPolls = 0;
+  await page.route('**/api/admin/library-assistant/local-lyrics/capability', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        available: true,
+        issue: null,
+        action: null,
+        whisperVersion: 'whisper.cpp fake 1.0',
+        model: { configured: true, label: 'ggml-test.bin', sizeBytes: 1024 }
+      })
+    });
+  });
+  await page.route('**/api/admin/library-assistant/local-lyrics/tracks?*', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        tracks: [{
+          id: 'e2e-local-lyrics-track',
+          title: 'E2E Local Lyrics',
+          artist: 'Synthetic Artist',
+          album: 'Synthetic Album',
+          action: 'transcribe',
+          currentSynchronized: false
+        }]
+      })
+    });
+  });
+  await page.route('**/api/admin/library-assistant/local-lyrics/jobs', async route => {
+    await route.fulfill({
+      status: 202,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        job: {
+          id: 'localjob:e2e-fake',
+          trackId: 'e2e-local-lyrics-track',
+          mode: 'transcribe',
+          status: 'queued',
+          stage: 'Aguardando recursos locais',
+          createdAt: new Date().toISOString(),
+          startedAt: null,
+          finishedAt: null,
+          candidateSuggestionId: null,
+          error: null,
+          quality: null,
+          previewLines: []
+        }
+      })
+    });
+  });
+  await page.route('**/api/admin/library-assistant/local-lyrics/jobs/localjob%3Ae2e-fake', async route => {
+    jobPolls += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        job: {
+          id: 'localjob:e2e-fake',
+          trackId: 'e2e-local-lyrics-track',
+          mode: 'transcribe',
+          status: 'review',
+          stage: 'Pronto para revisão humana',
+          createdAt: new Date().toISOString(),
+          startedAt: new Date().toISOString(),
+          finishedAt: new Date().toISOString(),
+          candidateSuggestionId: 'localsuggestion:e2e-fake',
+          error: null,
+          quality: {
+            totalLines: 2,
+            alignedLines: 2,
+            lowConfidenceLines: 0,
+            unalignedLines: 0,
+            coverage: 1,
+            monotonic: true,
+            divergence: 0,
+            durationSeconds: 120,
+            maxTimestampSeconds: 4
+          },
+          previewLines: [
+            { time: 1, text: 'primeira linha', state: 'aligned' },
+            { time: 4, text: 'segunda linha', state: 'aligned' }
+          ]
+        }
+      })
+    });
+  });
+
+  await openAssistant(page);
+  await page.getByRole('button', { name: 'Lyrics local', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Lyrics local' });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText('O áudio não sai deste servidor');
+  await expect(dialog.getByRole('option', { name: 'E2E Local Lyrics — Synthetic Artist' })).toBeVisible();
+  await dialog.getByRole('button', { name: 'Transcrever localmente' }).click();
+
+  await expect.poll(() => jobPolls, { timeout: 6_000 }).toBeGreaterThan(0);
+  await expect(dialog).toBeHidden({ timeout: 6_000 });
+  await expect(page.locator('#library-assistant-title')).toHaveText('Assistente da Biblioteca');
 });
