@@ -189,7 +189,7 @@ test('Library Assistant executa o fluxo visual de lyrics local com job fake', as
       })
     });
   });
-  await page.route('**/api/admin/library-assistant/local-lyrics/jobs/localjob%3Ae2e-fake', async route => {
+  await page.route(/\/api\/admin\/library-assistant\/local-lyrics\/jobs\/localjob(?:%3A|:)e2e-fake$/i, async route => {
     jobPolls += 1;
     await route.fulfill({
       status: 200,
@@ -231,7 +231,9 @@ test('Library Assistant executa o fluxo visual de lyrics local com job fake', as
   const dialog = page.getByRole('dialog', { name: 'Lyrics local' });
   await expect(dialog).toBeVisible();
   await expect(dialog).toContainText('O áudio não sai deste servidor');
-  await expect(dialog.getByRole('option', { name: 'E2E Local Lyrics — Synthetic Artist' })).toBeVisible();
+  const trackSelect = dialog.getByRole('combobox', { name: 'Faixa elegível' });
+  await expect(trackSelect).toHaveValue('e2e-local-lyrics-track');
+  await expect(trackSelect.locator('option')).toHaveText(['E2E Local Lyrics — Synthetic Artist']);
   await dialog.getByRole('button', { name: 'Transcrever localmente' }).click();
 
   await expect.poll(() => jobPolls, { timeout: 6_000 }).toBeGreaterThan(0);
