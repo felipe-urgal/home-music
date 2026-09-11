@@ -26,7 +26,7 @@ A reprodução online autenticada pode envolver `useAudioPlayer` com `useCrossfa
 A preferência é local ao dispositivo e configurada em segundos:
 
 - `0 s`: comportamento canônico sem sobreposição;
-- `1–12 s`: duração da mistura entre o fim da faixa atual e o começo da próxima;
+- `1–30 s`: duração da mistura entre o fim da faixa atual e o começo da próxima;
 - preferências antigas `soft` e `continuous` são migradas para `3 s` e `5 s` respectivamente.
 
 Quando o crossfade está ativo, dois elementos de áudio funcionam como decks A/B. O deck que entra durante a transição continua sendo a fonte audível depois que a faixa anterior termina; ele não é reiniciado nem recebe seek para outra cópia audível. O deck anterior pode ser reutilizado brevemente e sem volume para o `useAudioPlayer` concluir a troca canônica de faixa, sendo descartado assim que o handoff é confirmado.
