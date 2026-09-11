@@ -13,7 +13,11 @@ import type {
   LibraryAssistantCapability,
   LibraryAssistantDecision,
   LibraryAssistantReviewPolicy,
-  LibraryAssistantSuggestionStatus
+  LibraryAssistantSuggestionStatus,
+  LocalLyricsCapabilityResponse,
+  LocalLyricsEligibleTracksResponse,
+  LocalLyricsJobResponse,
+  LocalLyricsStartJobRequest
 } from '@home-music/shared/library-assistant';
 import { apiFetch } from './api-client';
 
@@ -124,6 +128,57 @@ export async function getLibraryAssistantFingerprintStatus() {
   const response = await apiFetch('/api/admin/library-assistant/fingerprint', { cache: 'no-store' });
   if (!response.ok) throw new Error(await responseError(response));
   return response.json() as Promise<LibraryAssistantFingerprintStatus>;
+}
+
+export async function getLocalLyricsCapability() {
+  const response = await apiFetch('/api/admin/library-assistant/local-lyrics/capability', { cache: 'no-store' });
+  if (!response.ok) throw new Error(await responseError(response));
+  return response.json() as Promise<LocalLyricsCapabilityResponse>;
+}
+
+export async function getLocalLyricsEligibleTracks(query = '', limit = 50) {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (query.trim()) params.set('query', query.trim());
+  const response = await apiFetch(
+    `/api/admin/library-assistant/local-lyrics/tracks?${params}`,
+    { cache: 'no-store' }
+  );
+  if (!response.ok) throw new Error(await responseError(response));
+  return response.json() as Promise<LocalLyricsEligibleTracksResponse>;
+}
+
+export async function startLocalLyricsJob(payload: LocalLyricsStartJobRequest) {
+  const response = await apiFetch('/api/admin/library-assistant/local-lyrics/jobs', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Home-Music-Request': '1'
+    },
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) throw new Error(await responseError(response));
+  return response.json() as Promise<LocalLyricsJobResponse>;
+}
+
+export async function getLocalLyricsJob(id: string) {
+  const response = await apiFetch(
+    `/api/admin/library-assistant/local-lyrics/jobs/${encodeURIComponent(id)}`,
+    { cache: 'no-store' }
+  );
+  if (!response.ok) throw new Error(await responseError(response));
+  return response.json() as Promise<LocalLyricsJobResponse>;
+}
+
+export async function cancelLocalLyricsJob(id: string) {
+  const response = await apiFetch(
+    `/api/admin/library-assistant/local-lyrics/jobs/${encodeURIComponent(id)}/cancel`,
+    {
+      method: 'POST',
+      headers: { 'X-Home-Music-Request': '1' }
+    }
+  );
+  if (!response.ok) throw new Error(await responseError(response));
+  return response.json() as Promise<LocalLyricsJobResponse>;
 }
 
 export async function fingerprintLibraryAssistantSuggestion(runId: string, suggestionId: string) {
