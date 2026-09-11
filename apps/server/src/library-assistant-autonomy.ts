@@ -1,5 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
-import { isLibraryAssistantAutoApplicable, type LibraryAssistantDecision } from '@home-music/shared/library-assistant';
+import { isLibraryAssistantAutoApplicable, type LibraryAssistantDecision, type LibraryAssistantRun } from '@home-music/shared/library-assistant';
 import type { LibraryService } from './library-service.js';
 import type { LibraryAssistantService } from './library-assistant-service.js';
 import type { LibraryAssistantCompositeReviewService } from './library-assistant-composite-review-service.js';
@@ -60,24 +60,30 @@ export class LibraryAssistantAutonomyStore {
 
 type ReviewPort = Pick<LibraryAssistantCompositeReviewService, 'getReviewQueue' | 'decideBatch'>;
 
+type AssistantPort = Pick<LibraryAssistantService, 'startRun' | 'getRun' | 'cancelRun'>;
+
 export class LibraryAssistantAutonomyController {
   private draining = false;
   private closed = false;
   constructor(
     private readonly store: LibraryAssistantAutonomyStore,
-    private readonly assistant: Pick<LibraryAssistantService, 'startRun' | 'getRun' | 'cancelRun'>,
+    private readonly assistant: AssistantPort,
     private readonly review: ReviewPort
   ) {}
 
   state() { return this.store.get(); }
-  resume() { if (this.store.get().config.enabled) void this.drain(); }
+  resume() { if (this.store.get().config.enabled) this.scheduleDrain(); }
   configure(input: unknown) {
     const config = this.store.setConfig(input);
     if (!config.enabled) {
       const active = this.store.get().activeRunId;
-      if (active) this.assistant.cancelRun(active);
+      if (active) {
+        try { this.assistant.cancelRun(active); } catch { /* scan/import/manual flows must remain isolated */ }
+      }
       this.store.setActive(null);
-    } else void this.drain();
+    } else {
+      this.scheduleDrain();
+    }
     return this.store.get();
   }
 
@@ -85,10 +91,27 @@ export class LibraryAssistantAutonomyController {
     const state = this.store.get();
     if (!state.config.enabled || !state.config.metadata || relevantChanges <= 0) return;
     this.store.setPending(revision);
-    void this.drain();
+    this.scheduleDrain();
   }
 
   async close() { this.closed = true; }
+
+  private scheduleDrain() {
+    void this.drain().catch(() => {
+      const state = this.store.get();
+      if (state.activeRunId) {
+        this.store.setSummary({
+          runId: state.activeRunId,
+          applied: 0,
+          review: 0,
+          stale: 0,
+          failed: 1,
+          finishedAt: new Date().toISOString()
+        });
+        this.store.setActive(null);
+      }
+    });
+  }
 
   private async drain() {
     if (this.draining || this.closed) return;
@@ -96,42 +119,74 @@ export class LibraryAssistantAutonomyController {
     try {
       for (;;) {
         const state = this.store.get();
-        if (!state.config.enabled || !state.config.metadata || state.pendingRevision == null || this.closed) return;
-        this.store.setPending(null);
-        const run = this.assistant.startRun('metadata', 'assistant-autonomy');
-        this.store.setActive(run.id);
-        const settled = await this.waitForRun(run.id);
-        if (!settled || this.closed) return;
-        let applied = 0;
-        let stale = settled.status === 'stale' ? 1 : 0;
-        let failed = settled.status === 'failed' ? 1 : 0;
-        if (settled.status === 'completed' && this.store.get().config.enabled) {
-          const queue = this.review.getReviewQueue(500);
-          const decisions: LibraryAssistantDecision[] = queue.items
-            .filter(item => item.suggestion.runId === run.id)
-            .filter(item => item.suggestion.target.capability === 'metadata')
-            .filter(item => item.suggestion.target.currentValue.trim() === '')
-            .filter(item => isLibraryAssistantAutoApplicable(item.suggestion))
-            .slice(0, 100)
-            .map(item => ({
-              runId: run.id,
-              suggestionId: item.suggestion.id,
-              action: 'apply' as const,
-              expectedLibraryRevision: item.runLibraryRevision,
-              expectedCurrentValue: item.suggestion.target.currentValue
-            }));
-          if (decisions.length) {
-            const result = await this.review.decideBatch(decisions);
-            applied = result.summary.applied;
-            stale += result.summary.stale;
-            failed += result.summary.failed;
+        if (!state.config.enabled || !state.config.metadata || this.closed) return;
+
+        let run: LibraryAssistantRun | null = null;
+        if (state.activeRunId) {
+          run = this.assistant.getRun(state.activeRunId);
+          if (!run) {
+            this.store.setActive(null);
+            continue;
           }
-          const remaining = this.review.getReviewQueue(500).items.filter(item => item.suggestion.runId === run.id).length;
-          this.store.setSummary({ runId: run.id, applied, review: remaining, stale, failed, finishedAt: new Date().toISOString() });
+        } else if (state.pendingRevision != null) {
+          this.store.setPending(null);
+          run = this.assistant.startRun('metadata', 'assistant-autonomy');
+          this.store.setActive(run.id);
+        } else {
+          return;
         }
+
+        const settled = await this.waitForRun(run.id);
+        if (!settled || this.closed) {
+          if (!settled) this.store.setActive(null);
+          return;
+        }
+        await this.finalizeRun(settled);
         this.store.setActive(null);
       }
-    } finally { this.draining = false; }
+    } finally {
+      this.draining = false;
+    }
+  }
+
+  private async finalizeRun(run: LibraryAssistantRun) {
+    let applied = 0;
+    let stale = run.status === 'stale' ? 1 : 0;
+    let failed = run.status === 'failed' ? 1 : 0;
+    let reviewCount = 0;
+
+    if (run.status === 'completed' && this.store.get().config.enabled) {
+      const queue = this.review.getReviewQueue(500);
+      const decisions: LibraryAssistantDecision[] = queue.items
+        .filter(item => item.suggestion.runId === run.id)
+        .filter(item => item.suggestion.target.capability === 'metadata')
+        .filter(item => item.suggestion.target.currentValue.trim() === '')
+        .filter(item => isLibraryAssistantAutoApplicable(item.suggestion))
+        .slice(0, 100)
+        .map(item => ({
+          runId: run.id,
+          suggestionId: item.suggestion.id,
+          action: 'apply' as const,
+          expectedLibraryRevision: item.runLibraryRevision,
+          expectedCurrentValue: item.suggestion.target.currentValue
+        }));
+      if (decisions.length) {
+        const result = await this.review.decideBatch(decisions);
+        applied = result.summary.applied;
+        stale += result.summary.stale;
+        failed += result.summary.failed;
+      }
+      reviewCount = this.review.getReviewQueue(500).items.filter(item => item.suggestion.runId === run.id).length;
+    }
+
+    this.store.setSummary({
+      runId: run.id,
+      applied,
+      review: reviewCount,
+      stale,
+      failed,
+      finishedAt: new Date().toISOString()
+    });
   }
 
   private async waitForRun(runId: string) {
@@ -148,7 +203,8 @@ export function attachLibraryAssistantAutonomyLifecycle(library: LibraryService,
   library.rescan = ((trigger?: Parameters<LibraryService['rescan']>[0]) => {
     const before = library.status().revision;
     return originalRescan(trigger).then(result => {
-      if (library.status().revision !== before) controller.notifyLibraryChanged(library.status().revision, result.added + result.updated);
+      const after = library.status().revision;
+      if (after !== before) controller.notifyLibraryChanged(after, result.added + result.updated);
       return result;
     });
   }) as LibraryService['rescan'];
