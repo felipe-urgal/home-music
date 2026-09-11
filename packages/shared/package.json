@@ -10,6 +10,10 @@
       "types": "./src/index.ts",
       "default": "./dist/index.js"
     },
+    "./artwork": {
+      "types": "./src/artwork.ts",
+      "default": "./dist/artwork.js"
+    },
     "./open-subsonic": {
       "types": "./src/open-subsonic.ts",
       "default": "./dist/open-subsonic.js"

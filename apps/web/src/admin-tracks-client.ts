@@ -94,6 +94,15 @@ export async function getAdminTrackCover(trackId: string) {
   return response.json() as Promise<AdminTrackCoverResponse>;
 }
 
+export async function generateAdminTrackCover(trackId: string) {
+  const response = await apiFetch(`/api/admin/tracks/${encodeURIComponent(trackId)}/cover/generated`, {
+    method: 'POST',
+    headers: { 'X-Home-Music-Request': '1' }
+  });
+  if (!response.ok) throw new Error(await responseError(response));
+  return response.json() as Promise<AdminTrackCoverResponse>;
+}
+
 export async function updateAdminTrackCover(trackId: string, file: File) {
   const response = await apiFetch(`/api/admin/tracks/${encodeURIComponent(trackId)}/cover`, {
     method: 'PUT',
