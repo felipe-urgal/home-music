@@ -30,7 +30,7 @@ export class LibraryAssistantAutonomyStore {
       pending_revision INTEGER,
       active_run_id TEXT,
       last_summary_json TEXT
-    ); INSERT OR IGNORE INTO library_assistant_autonomy(singleton) VALUES (1);`);
+    ); INSERT OR IGNORE INTO library_assistant_autonomy(singleton, enabled, metadata) VALUES (1, ${DEFAULT_CONFIG.enabled ? 1 : 0}, ${DEFAULT_CONFIG.metadata ? 1 : 0});`);
   }
   get(): LibraryAssistantAutonomyState {
     const row = this.db.prepare('SELECT * FROM library_assistant_autonomy WHERE singleton = 1').get() as Record<string, unknown>;
@@ -70,6 +70,7 @@ export class LibraryAssistantAutonomyController {
   ) {}
 
   state() { return this.store.get(); }
+  resume() { if (this.store.get().config.enabled) void this.drain(); }
   configure(input: unknown) {
     const config = this.store.setConfig(input);
     if (!config.enabled) {
