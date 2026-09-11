@@ -34,6 +34,7 @@ Quando o crossfade está ativo, um segundo elemento de áudio é usado apenas co
 Regras de segurança da transição:
 
 - só inicia com `document.visibilityState === 'visible'`;
+- Apple mobile WebKit (iPhone/iPad) permanece no fluxo canônico de um único elemento de áudio nesta primeira versão;
 - `repeat one` não cria um segundo stream concorrente da mesma faixa;
 - ações manuais de next/previous/seek, mudanças de shuffle/repeat, troca de qualidade/normalização e seleção de outra música cancelam a mistura;
 - se o segundo áudio falhar ou não puder iniciar, o volume do player principal é restaurado e o avanço normal assume a fila;
