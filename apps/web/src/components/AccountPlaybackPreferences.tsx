@@ -1,5 +1,6 @@
 import type { NormalizationMode, Track } from '@home-music/shared';
 import { CheckCircle2, Music2, Play, ShieldCheck, Volume2, Wifi } from 'lucide-react';
+import type { CrossfadeMode } from '../crossfade';
 import type {
   DetectedNetwork,
   NetworkPreference,
@@ -12,6 +13,12 @@ const STREAMING_CHOICES: Array<{ mode: StreamingSelection; label: string; detail
   { mode: 'auto', label: 'Automática', detail: 'Original + compatibilidade' },
   { mode: 'original', label: 'Original', detail: 'Sem conversão' },
   { mode: 'economy', label: 'Economia', detail: 'AAC · 96 kbps' }
+];
+
+const CROSSFADE_CHOICES: Array<{ mode: CrossfadeMode; label: string; detail: string }> = [
+  { mode: 'off', label: 'Desativada', detail: 'Troca de faixa sem sobreposição' },
+  { mode: 'soft', label: 'Suave', detail: 'Mistura os últimos 3 segundos' },
+  { mode: 'continuous', label: 'Contínua', detail: 'Mistura os últimos 5 segundos' }
 ];
 
 const NORMALIZATION_CHOICES: Array<{ mode: NormalizationMode; label: string; detail: string }> = [
@@ -44,10 +51,12 @@ export type AccountPlaybackPreferencesValue = {
   effectiveStreamingMode: StreamingMode;
   networkPreference: NetworkPreference;
   detectedNetwork: DetectedNetwork;
+  crossfadeMode: CrossfadeMode;
   normalizationMode: NormalizationMode;
   effectiveNormalizationMode: NormalizationMode;
   onStreamingSelection: (selection: StreamingSelection) => void;
   onNetworkPreference: (preference: NetworkPreference) => void;
+  onCrossfadeMode: (mode: CrossfadeMode) => void;
   onNormalizationMode: (mode: NormalizationMode) => void;
 };
 
@@ -62,10 +71,12 @@ export function AccountPlaybackPreferences({ value }: AccountPlaybackPreferences
     effectiveStreamingMode,
     networkPreference,
     detectedNetwork,
+    crossfadeMode,
     normalizationMode,
     effectiveNormalizationMode,
     onStreamingSelection,
     onNetworkPreference,
+    onCrossfadeMode,
     onNormalizationMode
   } = value;
 
@@ -75,7 +86,7 @@ export function AccountPlaybackPreferences({ value }: AccountPlaybackPreferences
         <div className="account-playback-hero__copy">
           <span className="account-playback-hero__eyebrow">Preferências deste dispositivo</span>
           <strong id="account-playback-hero-title">Seu áudio, do seu jeito.</strong>
-          <small>Escolha como o Home Music entrega e normaliza suas músicas neste aparelho.</small>
+          <small>Escolha como o Home Music entrega, mistura e normaliza suas músicas neste aparelho.</small>
           <div className="account-playback-hero__status" aria-label="Configuração efetiva agora">
             <span><Music2 /> {streamingModeLabel(effectiveStreamingMode)}</span>
             <span><Volume2 /> {normalizationModeLabel(effectiveNormalizationMode)}</span>
@@ -135,6 +146,43 @@ export function AccountPlaybackPreferences({ value }: AccountPlaybackPreferences
               </select>
             </label>
             <small className="account-playback-network__effective">Aplicado agora: {streamingModeLabel(effectiveStreamingMode)}</small>
+          </div>
+        )}
+      </section>
+
+      <section className="account-playback-group" aria-labelledby="account-playback-transition-title">
+        <div className="account-playback-group__heading">
+          <span className="account-playback-group__icon"><Music2 /></span>
+          <div>
+            <strong id="account-playback-transition-title">Transição entre músicas</strong>
+            <small>Misture o fim da faixa atual com o começo da próxima enquanto o app estiver em primeiro plano.</small>
+          </div>
+        </div>
+
+        <div className="account-playback-options">
+          {CROSSFADE_CHOICES.map(choice => (
+            <button
+              key={choice.mode}
+              className={crossfadeMode === choice.mode ? 'is-selected' : ''}
+              type="button"
+              aria-pressed={crossfadeMode === choice.mode}
+              onClick={() => onCrossfadeMode(choice.mode)}
+            >
+              <span className="account-playback-option__copy">
+                <strong>{choice.label}</strong>
+                <small>{choice.detail}</small>
+              </span>
+              {crossfadeMode === choice.mode
+                ? <CheckCircle2 className="account-playback-option__check" aria-hidden="true" />
+                : <span className="account-playback-option__dot" aria-hidden="true" />}
+            </button>
+          ))}
+        </div>
+
+        {crossfadeMode !== 'off' && (
+          <div className="account-playback-warning" role="status">
+            <Music2 />
+            <span>Em segundo plano ou com a tela bloqueada, o Home Music mantém a troca de faixa normal para preservar compatibilidade.</span>
           </div>
         )}
       </section>
