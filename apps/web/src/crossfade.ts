@@ -2,9 +2,14 @@ import type { RepeatMode, Track } from '@home-music/shared';
 import { nextTrackDecision } from './player-state';
 
 export const MAX_CROSSFADE_SECONDS = 12;
+export type CrossfadeDeck = 'a' | 'b';
 
 const CROSSFADE_SECONDS_STORAGE_KEY = 'home-music:crossfade-seconds:v2';
 const LEGACY_CROSSFADE_MODE_STORAGE_KEY = 'home-music:crossfade-mode:v1';
+
+export function otherCrossfadeDeck(deck: CrossfadeDeck): CrossfadeDeck {
+  return deck === 'a' ? 'b' : 'a';
+}
 
 export function normalizeCrossfadeSeconds(value: unknown) {
   const numericValue = typeof value === 'number' ? value : Number(value);
