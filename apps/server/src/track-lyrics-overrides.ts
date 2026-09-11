@@ -148,9 +148,9 @@ export class TrackLyricsOverrideStore {
             requiredText(current.mode),
             requiredText(current.content),
             requiredText(current.origin),
-            current.provider ?? null,
-            current.external_id ?? null,
-            current.language ?? null,
+            optionalText(current.provider),
+            optionalText(current.external_id),
+            optionalText(current.language),
             requiredText(current.updated_at)
           );
         } else {
@@ -214,9 +214,9 @@ export class TrackLyricsOverrideStore {
           requiredText(previous.mode),
           requiredText(previous.content),
           requiredText(previous.origin),
-          previous.provider ?? null,
-          previous.external_id ?? null,
-          previous.language ?? null,
+          optionalText(previous.provider),
+          optionalText(previous.external_id),
+          optionalText(previous.language),
           requiredText(previous.updated_at),
           trackId
         );
