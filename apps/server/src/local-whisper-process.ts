@@ -62,22 +62,20 @@ export function runBoundedProcess(options: BoundedProcessOptions): Promise<Bound
     let stderr = '';
     let outputBytes = 0;
     let settled = false;
-    let forceTimer: NodeJS.Timeout | null = null;
 
     const cleanup = () => {
       clearTimeout(timeout);
-      if (forceTimer) clearTimeout(forceTimer);
       options.signal?.removeEventListener('abort', onAbort);
     };
     const fail = (error: Error, terminate = false) => {
       if (settled) return;
       settled = true;
+      cleanup();
       if (terminate) {
         terminateProcessTree(child.pid);
-        forceTimer = setTimeout(() => terminateProcessTree(child.pid, true), DEFAULT_TERMINATION_GRACE_MS);
+        const forceTimer = setTimeout(() => terminateProcessTree(child.pid, true), DEFAULT_TERMINATION_GRACE_MS);
         forceTimer.unref?.();
       }
-      cleanup();
       reject(error);
     };
     const append = (kind: 'stdout' | 'stderr', chunk: Buffer | string) => {
