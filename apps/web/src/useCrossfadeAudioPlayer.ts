@@ -49,6 +49,7 @@ export function useCrossfadeAudioPlayer(
   const startingTrackIdRef = useRef<string | null>(null);
   const activeTrackIdRef = useRef<string | null>(null);
   const pendingHandoffRef = useRef<PendingHandoff | null>(null);
+  const handoffSeekingRef = useRef(false);
   const currentTrackIdRef = useRef<string | null>(player.current?.id ?? null);
   const outputVolumeRef = useRef(resolveOutputVolume(player.volume, usesSystemVolume));
   const [crossfadeMode, setCrossfadeModeState] = useState<CrossfadeMode>(initialCrossfadeMode);
@@ -78,11 +79,20 @@ export function useCrossfadeAudioPlayer(
     startingTrackIdRef.current = null;
     activeTrackIdRef.current = null;
     pendingHandoffRef.current = null;
+    handoffSeekingRef.current = false;
     clearTransitionAudio();
 
     const primaryAudio = player.audioRef.current;
     if (primaryAudio) primaryAudio.volume = outputVolumeRef.current;
   }, [cancelAnimation, clearTransitionAudio, player.audioRef]);
+
+  const finishHandoff = useCallback(() => {
+    pendingHandoffRef.current = null;
+    handoffSeekingRef.current = false;
+    clearTransitionAudio();
+    const primaryAudio = player.audioRef.current;
+    if (primaryAudio) primaryAudio.volume = outputVolumeRef.current;
+  }, [clearTransitionAudio, player.audioRef]);
 
   useEffect(() => {
     function handleVisibilityChange() {
@@ -242,6 +252,7 @@ export function useCrossfadeAudioPlayer(
     originTrackIdRef.current = null;
     startingTrackIdRef.current = null;
     activeTrackIdRef.current = null;
+    handoffSeekingRef.current = false;
     pendingHandoffRef.current = {
       trackId: candidate.trackId,
       position: transitionAudio.currentTime
@@ -258,10 +269,12 @@ export function useCrossfadeAudioPlayer(
     const pendingHandoff = pendingHandoffRef.current;
     if (!pendingHandoff || pendingHandoff.trackId !== player.current?.id) return;
 
+    const transitionPosition = transitionAudioRef.current?.currentTime ?? pendingHandoff.position;
     const maximum = Number.isFinite(audio.duration) && audio.duration > 0
       ? Math.max(0, audio.duration - 0.05)
-      : pendingHandoff.position;
-    const position = Math.min(pendingHandoff.position, maximum);
+      : transitionPosition;
+    const position = Math.min(transitionPosition, maximum);
+    pendingHandoff.position = position;
     if (position > 0) player.seek(position);
   }, [player.audioHandlers, player.current?.id, player.seek]);
 
@@ -269,11 +282,35 @@ export function useCrossfadeAudioPlayer(
     const pendingHandoff = pendingHandoffRef.current;
     if (!pendingHandoff || pendingHandoff.trackId !== player.current?.id) return;
 
-    pendingHandoffRef.current = null;
-    clearTransitionAudio();
+    const transitionAudio = transitionAudioRef.current;
     const primaryAudio = player.audioRef.current;
-    if (primaryAudio) primaryAudio.volume = outputVolumeRef.current;
-  }, [clearTransitionAudio, player.audioRef, player.current?.id]);
+    if (!transitionAudio || !primaryAudio) {
+      finishHandoff();
+      return;
+    }
+
+    const transitionPosition = transitionAudio.currentTime;
+    const maximum = Number.isFinite(primaryAudio.duration) && primaryAudio.duration > 0
+      ? Math.max(0, primaryAudio.duration - 0.05)
+      : transitionPosition;
+    const position = Math.min(transitionPosition, maximum);
+    pendingHandoff.position = position;
+
+    if (position <= 0 || Math.abs(primaryAudio.currentTime - position) <= 0.05) {
+      finishHandoff();
+      return;
+    }
+
+    handoffSeekingRef.current = true;
+    player.seek(position);
+  }, [finishHandoff, player.audioRef, player.current?.id, player.seek]);
+
+  const handleSeeked = useCallback(() => {
+    if (!handoffSeekingRef.current) return;
+    const pendingHandoff = pendingHandoffRef.current;
+    if (!pendingHandoff || pendingHandoff.trackId !== player.current?.id) return;
+    finishHandoff();
+  }, [finishHandoff, player.current?.id]);
 
   const handlePrimaryError = useCallback((audio: HTMLAudioElement) => {
     if (
@@ -358,7 +395,8 @@ export function useCrossfadeAudioPlayer(
       onLoadedMetadata: handleLoadedMetadata,
       onEnded: handleEnded,
       onError: handlePrimaryError,
-      onPlaying: handlePlaying
+      onPlaying: handlePlaying,
+      onSeeked: handleSeeked
     },
     transitionAudioHandlers: {
       onError: cancelCrossfade,
