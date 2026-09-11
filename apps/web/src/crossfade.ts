@@ -1,7 +1,7 @@
 import type { RepeatMode, Track } from '@home-music/shared';
 import { nextTrackDecision } from './player-state';
 
-export const MAX_CROSSFADE_SECONDS = 12;
+export const MAX_CROSSFADE_SECONDS = 30;
 export type CrossfadeDeck = 'a' | 'b';
 
 const CROSSFADE_SECONDS_STORAGE_KEY = 'home-music:crossfade-seconds:v2';
