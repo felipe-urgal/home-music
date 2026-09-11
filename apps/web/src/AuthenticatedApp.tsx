@@ -13,8 +13,8 @@ import { useRoutedScreen } from './browser-navigation';
 import { canUseAdminLibraryActions } from './frontend-access';
 import { buildLibraryReturnLabel } from './library-utils';
 import type { OfflineDownloads } from './offline-downloads';
-import { useAudioPlayer } from './useAudioPlayer';
 import { useBackgroundPlaybackContinuity } from './useBackgroundPlaybackContinuity';
+import { useCrossfadeAudioPlayer } from './useCrossfadeAudioPlayer';
 import { useDesktopLayout } from './useDesktopLayout';
 import { useLibraryData } from './useLibraryData';
 import { type LibraryTab, useLibraryNavigation } from './useLibraryNavigation';
@@ -54,7 +54,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
   });
   const usesSystemVolume = useSystemVolumePreference();
   const desktopLayout = useDesktopLayout();
-  const player = useAudioPlayer(library.tracks, screen === 'player' || desktopLayout, libraryReady, usesSystemVolume);
+  const player = useCrossfadeAudioPlayer(library.tracks, screen === 'player' || desktopLayout, libraryReady, usesSystemVolume);
   const qualityProfile = useNetworkQualityProfile(player.streamingMode, player.setStreamingMode);
   useBackgroundPlaybackContinuity({
     audioRef: player.audioRef,
@@ -152,11 +152,20 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
       <audio
         ref={player.audioRef}
         onPlay={player.audioHandlers.onPlay}
+        onPlaying={player.audioHandlers.onPlaying}
+        onSeeked={player.audioHandlers.onSeeked}
         onPause={player.audioHandlers.onPause}
         onTimeUpdate={event => player.audioHandlers.onTimeUpdate(event.currentTarget)}
         onLoadedMetadata={event => player.audioHandlers.onLoadedMetadata(event.currentTarget)}
         onEnded={player.audioHandlers.onEnded}
         onError={event => player.audioHandlers.onError(event.currentTarget)}
+      />
+      <audio
+        ref={player.transitionAudioRef}
+        preload="auto"
+        aria-hidden="true"
+        onEnded={player.transitionAudioHandlers.onEnded}
+        onError={player.transitionAudioHandlers.onError}
       />
 
       <DesktopShell
@@ -206,10 +215,12 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
                 effectiveStreamingMode: qualityProfile.effectiveMode,
                 networkPreference: qualityProfile.networkPreference,
                 detectedNetwork: qualityProfile.detectedNetwork,
+                crossfadeMode: player.crossfadeMode,
                 normalizationMode: player.normalizationMode,
                 effectiveNormalizationMode: player.effectiveNormalizationMode,
                 onStreamingSelection: qualityProfile.setSelection,
                 onNetworkPreference: qualityProfile.setNetworkPreference,
+                onCrossfadeMode: player.setCrossfadeMode,
                 onNormalizationMode: player.setNormalizationMode
               }}
               offlineMode={{
