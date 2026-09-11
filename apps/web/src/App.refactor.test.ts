@@ -39,7 +39,7 @@ describe('App responsibility boundaries', () => {
 
     expect(authenticated).toMatch(/useLibraryData\(\)/);
     expect(authenticated).toMatch(/useLibraryNavigation\(/);
-    expect(authenticated).toMatch(/useAudioPlayer\(/);
+    expect(authenticated).toMatch(/useCrossfadeAudioPlayer\(/);
     expect(authenticated).toMatch(/useRoutedScreen\(/);
     expect(authenticated).toMatch(/<DesktopShell\b/);
   });
