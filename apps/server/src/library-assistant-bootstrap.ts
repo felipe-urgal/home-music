@@ -10,6 +10,12 @@ import {
   createMusicBrainzMetadataAnalyzer,
   needsMusicBrainzEnrichment
 } from './musicbrainz-metadata-analyzer.js';
+import {
+  attachLibraryAssistantAutonomyLifecycle,
+  LibraryAssistantAutonomyController,
+  LibraryAssistantAutonomyStore
+} from './library-assistant-autonomy.js';
+import { registerLibraryAssistantAutonomyRoutes } from './library-assistant-autonomy-routes.js';
 import { LibraryAssistantCompositeReviewService } from './library-assistant-composite-review-service.js';
 import { LibraryAssistantFingerprintCache } from './library-assistant-fingerprint-cache.js';
 import { registerLibraryAssistantFingerprintRoutes } from './library-assistant-fingerprint-routes.js';
@@ -75,6 +81,7 @@ export function registerLibraryAssistant(
   const store = new LibraryAssistantStore(options.databasePath);
   const fingerprintCache = new LibraryAssistantFingerprintCache(options.databasePath);
   const reviewPolicy = new LibraryAssistantReviewPolicyStore(options.databasePath);
+  const autonomyStore = new LibraryAssistantAutonomyStore(options.databasePath);
   const metrics = new LibraryAssistantRunMetrics();
   const workQueue = new LibraryAssistantPersistentQueue(options.databasePath, {
     onRetry: (item, error) => metrics.recordRetry(item.runId, error.code)
@@ -92,16 +99,11 @@ export function registerLibraryAssistant(
   const projectRevision = options.projection.projectRevision;
   const fingerprint = fingerprintConfig(options);
 
-  // registerLibraryAssistant roda antes de registerLibraryRoutes. Compor a revisão
-  // aqui garante que apply do Assistente invalide ETag/cache da biblioteca sem rescan.
   options.projection.projectRevision = revision => projectRevision(revision) + assistantReviewRevision;
 
   const listProjectedTracks = () => options.projection.projectTracks(options.library.listPublicTracks());
   const analysisLibrary = {
     listTracks: listProjectedTracks,
-    // A revisão do próprio Assistente atualiza a projeção pública, mas não invalida
-    // o run que originou a sugestão. Mudanças externas continuam entrando em
-    // projectRevision e, portanto, mantêm a stale protection da análise.
     revision: () => projectRevision(options.library.status().revision)
   };
   const projectedLibrary = {
@@ -134,7 +136,6 @@ export function registerLibraryAssistant(
     ...createLrclibLyricsAnalyzer({
       hasEffectiveLyrics: async trackId => Boolean(lyricsOverrides.get(trackId)) || await hasSidecarLyrics(trackId)
     }),
-    // LRCLIB opera em um run próprio; metadata não deve disparar consultas de lyrics.
     capability: 'lyrics' as const
   } satisfies LibraryAssistantAnalyzer;
   const analyzers = (options.analyzers ?? [metadataAnalyzer, lyricsAnalyzer])
@@ -189,15 +190,21 @@ export function registerLibraryAssistant(
     resolveLyricsCandidate: candidateId => resolveLrclibLyricsCandidate(providers, candidateId),
     onLyricsChanged: () => { assistantReviewRevision += 1; }
   });
+  const autonomy = new LibraryAssistantAutonomyController(autonomyStore, service, review);
+  attachLibraryAssistantAutonomyLifecycle(options.library, autonomy);
+  autonomy.resume();
 
   registerLibraryAssistantRoutes(app, service, workQueue, metrics);
   registerLibraryAssistantFingerprintRoutes(app, fingerprints);
   registerLibraryAssistantReviewRoutes(app, review);
   registerLibraryAssistantPolicyRoutes(app, reviewPolicy);
+  registerLibraryAssistantAutonomyRoutes(app, autonomy);
   app.addHook('onClose', async () => {
+    await autonomy.close();
     await service.close();
     review.close();
     reviewPolicy.close();
+    autonomyStore.close();
     setActiveTrackLyricsOverrideStore(null);
     lyricsOverrides.close();
     coverOverrides.close();
