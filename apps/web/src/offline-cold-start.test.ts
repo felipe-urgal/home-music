@@ -1,10 +1,11 @@
 import type { Track } from '@home-music/shared';
 import { describe, expect, it } from 'vitest';
-import type { OfflineDownloadRecord } from './offline-downloads';
+import type { OfflineCollectionSummary, OfflineDownloadRecord } from './offline-downloads';
 import {
   offlineCachedStreamHref,
   offlineCachedStreamUrl,
-  readOfflineColdStartRecords
+  readOfflineColdStartRecords,
+  reconcileOfflineColdStartCollections
 } from './offline-cold-start';
 
 function track(id: string): Track {
@@ -28,6 +29,24 @@ function record(id: string): OfflineDownloadRecord {
     size: 100,
     mimeType: 'audio/mpeg',
     downloadedAt: '2026-09-06T12:00:00.000Z'
+  };
+}
+
+function collection(trackIds: string[]): OfflineCollectionSummary {
+  return {
+    key: 'folder:Coleção',
+    reference: {
+      kind: 'folder',
+      sourceId: 'Coleção',
+      name: 'Coleção',
+      trackIds,
+      updatedAt: '2026-09-06T12:00:00.000Z'
+    },
+    totalCount: trackIds.length,
+    downloadedCount: trackIds.length,
+    downloadingCount: 0,
+    status: 'available',
+    error: null
   };
 }
 
@@ -61,6 +80,23 @@ describe('offline cold start', () => {
     expect(openedNames).toEqual(['home-music-offline-audio-v2-user-a']);
     expect(keysCalls).toBe(1);
     expect(result).toEqual(records);
+  });
+
+  it('recalcula contagem e status das coleções após filtrar bytes ausentes', () => {
+    const result = reconcileOfflineColdStartCollections(
+      [collection(['a', 'b'])],
+      [record('a')]
+    );
+
+    expect(result[0]?.downloadedCount).toBe(1);
+    expect(result[0]?.status).toBe('partial');
+
+    const empty = reconcileOfflineColdStartCollections(
+      [collection(['a', 'b'])],
+      []
+    );
+    expect(empty[0]?.downloadedCount).toBe(0);
+    expect(empty[0]?.status).toBe('not-downloaded');
   });
 
   it('não reutiliza cache sem identidade offline conhecida', async () => {
