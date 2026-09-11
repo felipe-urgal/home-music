@@ -39,6 +39,52 @@ describe('TrackLyricsOverrideStore', () => {
     reopened.close();
   });
 
+  it('restores the previous managed source after a generated override is cleared', async () => {
+    const { databasePath, trackId } = await databaseWithTrack();
+    const store = new TrackLyricsOverrideStore(databasePath);
+    const previous = store.save(trackId, {
+      mode: 'plain',
+      text: 'letra original',
+      origin: 'external',
+      provider: 'lrclib',
+      externalId: 'lrclib:123',
+      language: 'pt-BR'
+    });
+    assert.ok(previous);
+
+    const generated = store.save(trackId, {
+      mode: 'synced',
+      text: '[00:01.00]letra original',
+      origin: 'generated',
+      provider: 'local-alignment',
+      externalId: 'whisper.cpp:model.bin',
+      language: 'pt-BR'
+    }, { preservePrevious: true });
+    assert.equal(generated?.origin, 'generated');
+    assert.equal(generated?.mode, 'synced');
+
+    assert.equal(store.clear(trackId), true);
+    assert.deepEqual(store.get(trackId), previous);
+    store.close();
+  });
+
+  it('removes generated lyrics when there is no previous managed source', async () => {
+    const { databasePath, trackId } = await databaseWithTrack();
+    const store = new TrackLyricsOverrideStore(databasePath);
+    assert.ok(store.save(trackId, {
+      mode: 'synced',
+      text: '[00:01.00]transcrição local',
+      origin: 'generated',
+      provider: 'local-transcription',
+      externalId: 'whisper.cpp:model.bin',
+      language: null
+    }, { preservePrevious: true }));
+
+    assert.equal(store.clear(trackId), true);
+    assert.equal(store.get(trackId), null);
+    store.close();
+  });
+
   it('cascades managed lyrics when the track is removed', async () => {
     const { databasePath, trackId } = await databaseWithTrack();
     const store = new TrackLyricsOverrideStore(databasePath);

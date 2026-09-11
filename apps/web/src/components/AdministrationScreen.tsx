@@ -30,7 +30,7 @@ import {
 import '../administration-health.css';
 import { LIBRARY_CHANGED_EVENT } from '../library-events';
 import { AdminImportMediaScreen } from './AdminImportMediaScreen';
-import { AdminLibraryAssistantScreen } from './AdminLibraryAssistantScreen';
+import { AdminLibraryAssistantWithLocalLyricsScreen } from './AdminLibraryAssistantWithLocalLyricsScreen';
 import { AdminLibraryDuplicateReviewScreen } from './AdminLibraryDuplicateReviewScreen';
 import { AdminLibraryIntegrityScreen } from './AdminLibraryIntegrityScreen';
 import { AdminLibraryNormalizationScreen } from './AdminLibraryNormalizationScreen';
@@ -207,7 +207,7 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
 
   if (currentUser.role !== 'admin') return null;
 
-  if (view === 'assistant') return <AdminLibraryAssistantScreen onBack={() => setView('overview')} />;
+  if (view === 'assistant') return <AdminLibraryAssistantWithLocalLyricsScreen onBack={() => setView('overview')} />;
   if (view === 'tracks') return <AdminTrackAvailabilityScreen onBack={() => setView('overview')} />;
   if (view === 'metadata') {
     return (

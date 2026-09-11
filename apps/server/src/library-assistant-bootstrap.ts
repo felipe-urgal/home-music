@@ -5,7 +5,7 @@ import type { HeavyWorkQueue } from './heavy-work-queue.js';
 import type { LibraryRouteProjection } from './library-routes.js';
 import type { LibraryService } from './library-service.js';
 import { createLrclibLyricsAnalyzer, resolveLrclibLyricsCandidate } from './lrclib-lyrics-analyzer.js';
-import { readSidecarLyrics } from './lyrics.js';
+import { readSidecarLyrics, readTrackLyrics } from './lyrics.js';
 import {
   createMusicBrainzMetadataAnalyzer,
   needsMusicBrainzEnrichment
@@ -16,7 +16,10 @@ import {
   LibraryAssistantAutonomyStore
 } from './library-assistant-autonomy.js';
 import { registerLibraryAssistantAutonomyRoutes } from './library-assistant-autonomy-routes.js';
-import { LibraryAssistantCompositeReviewService } from './library-assistant-composite-review-service.js';
+import {
+  LibraryAssistantCompositeReviewService,
+  type ResolvedManagedLyricsCandidate
+} from './library-assistant-composite-review-service.js';
 import { LibraryAssistantFingerprintCache } from './library-assistant-fingerprint-cache.js';
 import { registerLibraryAssistantFingerprintRoutes } from './library-assistant-fingerprint-routes.js';
 import { LibraryAssistantFingerprintService } from './library-assistant-fingerprint-service.js';
@@ -31,6 +34,9 @@ import { registerLibraryAssistantRoutes } from './library-assistant-routes.js';
 import { LibraryAssistantRunMetrics } from './library-assistant-run-metrics.js';
 import { LibraryAssistantService, type LibraryAssistantAnalyzer } from './library-assistant-service.js';
 import { LibraryAssistantStore } from './library-assistant-store.js';
+import { LocalLyricsCandidateStore } from './local-lyrics-candidates.js';
+import { registerLocalLyricsRoutes } from './local-lyrics-routes.js';
+import { fingerprintEffectiveLyrics, LocalLyricsWhisperService } from './local-lyrics-whisper.js';
 import type { LongJobObservability } from './long-job-observability.js';
 import { createMusicBrainzSimpleSearchFetch } from './musicbrainz-simple-search-fetch.js';
 import { TrackCoverOverrideStore } from './track-cover-overrides.js';
@@ -90,6 +96,7 @@ export function registerLibraryAssistant(
   const metadataOverrides = new TrackMetadataOverrideStore(options.databasePath);
   const coverOverrides = new TrackCoverOverrideStore(options.databasePath);
   const lyricsOverrides = new TrackLyricsOverrideStore(options.databasePath);
+  const localLyricsCandidates = new LocalLyricsCandidateStore(options.databasePath);
   setActiveTrackLyricsOverrideStore(lyricsOverrides);
   const providers = new LibraryAssistantProviderGateway(store, {
     onObservation: observation => metrics.observeProvider(observation)
@@ -115,6 +122,12 @@ export function registerLibraryAssistant(
     const root = options.library.root;
     if (!indexed || !root) return false;
     return Boolean(await readSidecarLyrics(root, indexed.filePath));
+  };
+  const readEffectiveLyrics = async (trackId: string) => {
+    const indexed = options.library.getTrack(trackId);
+    const root = options.library.root;
+    if (!indexed || !root) return null;
+    return readTrackLyrics(root, indexed.filePath, lyricsOverrides.get(trackId));
   };
   const metadataAnalyzer = createMusicBrainzMetadataAnalyzer({
     fetchImpl: musicBrainzFetch,
@@ -170,6 +183,21 @@ export function registerLibraryAssistant(
     acoustIdEnabled: fingerprint.acoustIdEnabled,
     acoustIdApiKey: fingerprint.acoustIdApiKey
   });
+  const localLyrics = new LocalLyricsWhisperService({
+    assistantStore: store,
+    candidates: localLyricsCandidates,
+    lyricsOverrides,
+    queue: options.queue,
+    library: {
+      listTracks: listProjectedTracks,
+      revision: projectedLibrary.revision,
+      root: () => options.library.root,
+      resolveTrackFile(trackId) {
+        return options.library.getTrack(trackId)?.filePath ?? null;
+      },
+      readEffectiveLyrics
+    }
+  });
   const baseReview = new LibraryAssistantReviewService({
     databasePath: options.databasePath,
     store,
@@ -187,7 +215,42 @@ export function registerLibraryAssistant(
     lyricsOverrides,
     library: projectedLibrary,
     hasSidecarLyrics,
-    resolveLyricsCandidate: candidateId => resolveLrclibLyricsCandidate(providers, candidateId),
+    effectiveLyricsFingerprint: async trackId => fingerprintEffectiveLyrics(await readEffectiveLyrics(trackId)),
+    async resolveLyricsCandidate(candidateId): Promise<ResolvedManagedLyricsCandidate | null> {
+      if (candidateId.startsWith('local:')) {
+        const candidate = localLyricsCandidates.get(candidateId);
+        if (!candidate) return null;
+        return {
+          candidateId: candidate.id,
+          synchronized: candidate.synchronized,
+          language: candidate.language,
+          text: candidate.text,
+          source: candidate.source,
+          origin: 'generated',
+          provider: candidate.source,
+          externalId: `whisper.cpp:${candidate.modelLabel}`,
+          preservePrevious: true,
+          baseLyricsFingerprint: candidate.baseLyricsFingerprint
+        };
+      }
+      const candidate = await resolveLrclibLyricsCandidate(providers, candidateId);
+      if (!candidate) return null;
+      return {
+        candidateId: candidate.candidateId,
+        synchronized: candidate.synchronized,
+        language: candidate.language,
+        text: candidate.text,
+        source: 'lrclib',
+        origin: 'external',
+        provider: 'lrclib',
+        externalId: candidate.candidateId,
+        preservePrevious: false,
+        baseLyricsFingerprint: null
+      };
+    },
+    discardLyricsCandidate(candidateId) {
+      if (candidateId.startsWith('local:')) localLyricsCandidates.delete(candidateId);
+    },
     onLyricsChanged: () => { assistantReviewRevision += 1; }
   });
   const autonomy = new LibraryAssistantAutonomyController(autonomyStore, service, review);
@@ -199,13 +262,16 @@ export function registerLibraryAssistant(
   registerLibraryAssistantReviewRoutes(app, review);
   registerLibraryAssistantPolicyRoutes(app, reviewPolicy);
   registerLibraryAssistantAutonomyRoutes(app, autonomy);
+  registerLocalLyricsRoutes(app, localLyrics);
   app.addHook('onClose', async () => {
+    await localLyrics.close();
     await autonomy.close();
     await service.close();
     review.close();
     reviewPolicy.close();
     autonomyStore.close();
     setActiveTrackLyricsOverrideStore(null);
+    localLyricsCandidates.close();
     lyricsOverrides.close();
     coverOverrides.close();
     metadataOverrides.close();

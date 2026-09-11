@@ -101,11 +101,18 @@ async function fixture(options: { sidecar?: boolean } = {}) {
     lyricsOverrides,
     library: { listTracks: () => [track()], revision: () => 7 },
     hasSidecarLyrics: async () => options.sidecar === true,
+    effectiveLyricsFingerprint: async () => '0'.repeat(64),
     resolveLyricsCandidate: async candidateId => ({
       candidateId,
       synchronized: true,
       language: null,
-      text: '[00:01.00]linha sintética criada para teste'
+      text: '[00:01.00]linha sintética criada para teste',
+      source: 'lrclib',
+      origin: 'external',
+      provider: 'lrclib',
+      externalId: candidateId,
+      preservePrevious: false,
+      baseLyricsFingerprint: null
     }),
     onLyricsChanged: () => { lyricsChanges += 1; },
     now: () => new Date('2026-09-09T12:05:00.000Z')

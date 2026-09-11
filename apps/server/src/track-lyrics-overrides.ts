@@ -22,6 +22,7 @@ export type TrackLyricsOverride = {
 };
 
 type SaveLyricsOverride = Omit<TrackLyricsOverride, 'trackId' | 'updatedAt'>;
+type SaveLyricsOverrideOptions = { preservePrevious?: boolean };
 type Row = Record<string, unknown>;
 
 function optionalText(value: unknown) {
@@ -35,6 +36,21 @@ function requiredText(value: unknown) {
 function validateOptional(value: string | null, maximum: number, label: string) {
   if (value == null) return;
   if (value.length > maximum || /[\r\n\t]/.test(value)) throw new TypeError(`${label} inválido.`);
+}
+
+function fromRow(row: Row): TrackLyricsOverride {
+  const mode = row.mode === 'synced' ? 'synced' : 'plain';
+  const origin = row.origin === 'manual' || row.origin === 'generated' ? row.origin : 'external';
+  return {
+    trackId: requiredText(row.track_id),
+    mode,
+    text: requiredText(row.content),
+    origin,
+    provider: optionalText(row.provider),
+    externalId: optionalText(row.external_id),
+    language: optionalText(row.language),
+    updatedAt: requiredText(row.updated_at)
+  };
 }
 
 export class TrackLyricsOverrideStore {
@@ -59,6 +75,17 @@ export class TrackLyricsOverrideStore {
 
       CREATE INDEX IF NOT EXISTS idx_track_lyrics_overrides_updated_at
       ON track_lyrics_overrides(updated_at DESC);
+
+      CREATE TABLE IF NOT EXISTS track_lyrics_override_history (
+        track_id TEXT PRIMARY KEY REFERENCES tracks(id) ON DELETE CASCADE,
+        mode TEXT NOT NULL CHECK(mode IN ('plain', 'synced')),
+        content TEXT NOT NULL CHECK(length(CAST(content AS BLOB)) BETWEEN 1 AND ${MAX_MANAGED_LYRICS_BYTES}),
+        origin TEXT NOT NULL CHECK(origin IN ('external', 'manual', 'generated')),
+        provider TEXT,
+        external_id TEXT,
+        language TEXT,
+        updated_at TEXT NOT NULL
+      );
     `);
   }
 
@@ -73,22 +100,14 @@ export class TrackLyricsOverrideStore {
       WHERE track_id = ?
       LIMIT 1;
     `).get(trackId) as Row | undefined;
-    if (!row) return null;
-    const mode = row.mode === 'synced' ? 'synced' : 'plain';
-    const origin = row.origin === 'manual' || row.origin === 'generated' ? row.origin : 'external';
-    return {
-      trackId: requiredText(row.track_id),
-      mode,
-      text: requiredText(row.content),
-      origin,
-      provider: optionalText(row.provider),
-      externalId: optionalText(row.external_id),
-      language: optionalText(row.language),
-      updatedAt: requiredText(row.updated_at)
-    };
+    return row ? fromRow(row) : null;
   }
 
-  save(trackId: string, input: SaveLyricsOverride): TrackLyricsOverride | null {
+  save(
+    trackId: string,
+    input: SaveLyricsOverride,
+    options: SaveLyricsOverrideOptions = {}
+  ): TrackLyricsOverride | null {
     const text = input.text.replace(/^\uFEFF/, '').trim();
     if (!text) throw new RangeError('A letra gerenciada não pode ficar vazia.');
     if (Buffer.byteLength(text, 'utf8') > MAX_MANAGED_LYRICS_BYTES) {
@@ -103,34 +122,114 @@ export class TrackLyricsOverrideStore {
     const exists = this.db.prepare('SELECT 1 FROM tracks WHERE id = ? LIMIT 1;').get(trackId);
     if (!exists) return null;
     const updatedAt = new Date().toISOString();
-    this.db.prepare(`
-      INSERT INTO track_lyrics_overrides(
-        track_id, mode, content, origin, provider, external_id, language, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(track_id) DO UPDATE SET
-        mode = excluded.mode,
-        content = excluded.content,
-        origin = excluded.origin,
-        provider = excluded.provider,
-        external_id = excluded.external_id,
-        language = excluded.language,
-        updated_at = excluded.updated_at;
-    `).run(
-      trackId,
-      input.mode,
-      text,
-      input.origin,
-      input.provider,
-      input.externalId,
-      input.language,
-      updatedAt
-    );
+
+    this.db.exec('BEGIN IMMEDIATE;');
+    try {
+      if (options.preservePrevious) {
+        const current = this.db.prepare(`
+          SELECT track_id, mode, content, origin, provider, external_id, language, updated_at
+          FROM track_lyrics_overrides WHERE track_id = ? LIMIT 1;
+        `).get(trackId) as Row | undefined;
+        if (current) {
+          this.db.prepare(`
+            INSERT INTO track_lyrics_override_history(
+              track_id, mode, content, origin, provider, external_id, language, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(track_id) DO UPDATE SET
+              mode = excluded.mode,
+              content = excluded.content,
+              origin = excluded.origin,
+              provider = excluded.provider,
+              external_id = excluded.external_id,
+              language = excluded.language,
+              updated_at = excluded.updated_at;
+          `).run(
+            trackId,
+            requiredText(current.mode),
+            requiredText(current.content),
+            requiredText(current.origin),
+            optionalText(current.provider),
+            optionalText(current.external_id),
+            optionalText(current.language),
+            requiredText(current.updated_at)
+          );
+        } else {
+          this.db.prepare('DELETE FROM track_lyrics_override_history WHERE track_id = ?;').run(trackId);
+        }
+      } else {
+        this.db.prepare('DELETE FROM track_lyrics_override_history WHERE track_id = ?;').run(trackId);
+      }
+
+      this.db.prepare(`
+        INSERT INTO track_lyrics_overrides(
+          track_id, mode, content, origin, provider, external_id, language, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(track_id) DO UPDATE SET
+          mode = excluded.mode,
+          content = excluded.content,
+          origin = excluded.origin,
+          provider = excluded.provider,
+          external_id = excluded.external_id,
+          language = excluded.language,
+          updated_at = excluded.updated_at;
+      `).run(
+        trackId,
+        input.mode,
+        text,
+        input.origin,
+        input.provider,
+        input.externalId,
+        input.language,
+        updatedAt
+      );
+      this.db.exec('COMMIT;');
+    } catch (error) {
+      this.db.exec('ROLLBACK;');
+      throw error;
+    }
     return this.get(trackId);
   }
 
   clear(trackId: string) {
-    const result = this.db.prepare('DELETE FROM track_lyrics_overrides WHERE track_id = ?;').run(trackId);
-    return Number(result.changes) > 0;
+    this.db.exec('BEGIN IMMEDIATE;');
+    try {
+      const current = this.db.prepare('SELECT 1 FROM track_lyrics_overrides WHERE track_id = ? LIMIT 1;').get(trackId);
+      if (!current) {
+        this.db.prepare('DELETE FROM track_lyrics_override_history WHERE track_id = ?;').run(trackId);
+        this.db.exec('COMMIT;');
+        return false;
+      }
+
+      const previous = this.db.prepare(`
+        SELECT track_id, mode, content, origin, provider, external_id, language, updated_at
+        FROM track_lyrics_override_history WHERE track_id = ? LIMIT 1;
+      `).get(trackId) as Row | undefined;
+
+      if (previous) {
+        this.db.prepare(`
+          UPDATE track_lyrics_overrides
+          SET mode = ?, content = ?, origin = ?, provider = ?, external_id = ?, language = ?, updated_at = ?
+          WHERE track_id = ?;
+        `).run(
+          requiredText(previous.mode),
+          requiredText(previous.content),
+          requiredText(previous.origin),
+          optionalText(previous.provider),
+          optionalText(previous.external_id),
+          optionalText(previous.language),
+          requiredText(previous.updated_at),
+          trackId
+        );
+      } else {
+        this.db.prepare('DELETE FROM track_lyrics_overrides WHERE track_id = ?;').run(trackId);
+      }
+      this.db.prepare('DELETE FROM track_lyrics_override_history WHERE track_id = ?;').run(trackId);
+      this.db.exec('COMMIT;');
+      return true;
+    } catch (error) {
+      this.db.exec('ROLLBACK;');
+      throw error;
+    }
   }
 }
 

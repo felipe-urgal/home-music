@@ -1,6 +1,6 @@
 # Lyrics
 
-O Home Music possui uma única cadeia efetiva de letras para o player, API HTTP e OpenSubsonic. O enriquecimento externo do Assistente da Biblioteca amplia essa cadeia sem criar um segundo endpoint, parser ou catálogo público de letras.
+O Home Music possui uma única cadeia efetiva de letras para o player, API HTTP e OpenSubsonic. O enriquecimento externo do Assistente da Biblioteca e o fallback local opcional com Whisper ampliam essa cadeia sem criar um segundo endpoint, parser ou catálogo público de letras.
 
 ## Resolução canônica
 
@@ -12,7 +12,7 @@ A ordem de resolução é:
 
 O parser existente de `apps/server/src/lyrics.ts` continua sendo a fonte de verdade para conteúdo plain e LRC sincronizado, incluindo timestamps e `offset`. A rota `/api/tracks/:id/lyrics`, o player e `getLyricsBySongId` do OpenSubsonic chegam à mesma resolução por `TrackMediaInfrastructure.lyrics()`.
 
-A reprodução nunca consulta um provider externo. Depois da aprovação, o conteúdo necessário para playback está no SQLite local; se o provider estiver offline, lento ou limitar requisições, a reprodução e a leitura de letras já aprovadas continuam funcionando normalmente.
+A reprodução nunca consulta um provider externo nem executa Whisper. Depois da aprovação, o conteúdo necessário para playback está no SQLite local; se provider, FFmpeg ou Whisper estiverem offline/indisponíveis, a reprodução e a leitura de letras já aprovadas continuam funcionando normalmente.
 
 ## Persistência gerenciada
 
@@ -28,7 +28,9 @@ Cada registro contém:
 - idioma quando conhecido;
 - `updated_at`.
 
-Como o override faz parte do banco principal, ele segue a estratégia normal de backup/restore da aplicação. Remover a letra gerenciada não altera o áudio nem o sidecar: a resolução volta automaticamente ao `.lrc`/`.txt` local quando ele existir.
+Como o override faz parte do banco principal, ele segue a estratégia normal de backup/restore da aplicação. Remover a letra gerenciada não altera o áudio nem o sidecar.
+
+Quando uma letra gerada localmente substitui outro override gerenciado, o store preserva uma única versão anterior em `track_lyrics_override_history`. A ação de rollback restaura essa fonte anterior; se não existia override anterior, a resolução volta automaticamente ao `.lrc`/`.txt` físico quando ele existir.
 
 ## LRCLIB
 
@@ -42,31 +44,93 @@ O Home Music identifica suas requisições com `User-Agent` próprio, trata `404
 
 Referência vigente do provider: <https://lrclib.net/docs>.
 
+## Fallback local opcional com Whisper
+
+O fallback local da #322 é uma capacidade administrativa opcional. Ele não baixa modelos automaticamente, não envia áudio para terceiros e não participa do playback. O operador instala o executável/modelo localmente e habilita a capacidade por configuração do servidor.
+
+Configuração:
+
+- `HOME_MUSIC_WHISPER_PATH`: caminho **absoluto** para o executável local compatível com `whisper.cpp`;
+- `HOME_MUSIC_WHISPER_MODEL`: caminho para um modelo já instalado pelo operador;
+- `HOME_MUSIC_FFMPEG_PATH`: comando/caminho do FFmpeg usado para preparar PCM mono 16 kHz; quando ausente, usa `ffmpeg`.
+
+Sem `HOME_MUSIC_WHISPER_PATH` ou modelo válido, a capability aparece como indisponível e o restante do Home Music continua funcionando normalmente. O sistema nunca tenta baixar um modelo em runtime.
+
+### Elegibilidade
+
+A Administração oferece somente faixas que ainda precisam de trabalho:
+
+- sem letra efetiva adequada → **Transcrever localmente**;
+- letra plain confiável e sem timestamps → **Sincronizar localmente**;
+- letra já sincronizada → não entra na lista local.
+
+A transcrição usa os segmentos/timestamps retornados pelo Whisper para formar um candidato LRC. O alinhamento mantém o texto plain existente como autoridade textual e usa a transcrição local apenas para estimar timestamps. Linhas com baixa confiança ou sem match ficam explicitamente marcadas no preview.
+
+Nenhum resultado local é autoaplicável. `local-transcription`, `local-alignment`, alinhamento parcial e baixa confiança são blockers explícitos do fluxo de auto-apply; toda mutação exige revisão humana.
+
+### Pipeline e limites
+
+O processamento segue:
+
+```text
+trackId
+  → resolução server-side do arquivo físico
+  → open/realpath/confinement em MUSIC_DIR
+  → cópia para scratch privado fora de MUSIC_DIR
+  → FFmpeg: PCM mono 16 kHz
+  → Whisper local
+  → validação/normalização da saída
+  → candidato local privado
+  → sugestão do Assistente
+  → revisão humana
+  → track_lyrics_overrides
+```
+
+O runner externo usa `shell: false`, timeout, limite agregado de stdout/stderr, cancelamento por `AbortSignal` e encerramento da árvore de processos. O áudio temporário fica em diretório scratch do sistema com arquivos privados e é removido no `finally`; nenhum áudio derivado é gravado em `MUSIC_DIR`.
+
+Guardrails atuais:
+
+- arquivo de origem limitado defensivamente antes da cópia;
+- duração precisa ser conhecida e ficar dentro do limite do serviço;
+- modelo local precisa ser arquivo regular legível e tem limite defensivo de tamanho;
+- saída JSON do Whisper e saída de processo têm limites próprios;
+- conteúdo gerenciado final continua limitado a 48 KiB;
+- jobs reutilizam `HeavyWorkQueue`, portanto backpressure/cancelamento seguem a infraestrutura pesada existente;
+- não há shell interpolation de título, artista, path ou texto de lyrics.
+
+### Stale protection
+
+Antes de iniciar, o serviço calcula a letra efetiva usada como premissa. Depois do processamento e novamente no apply, um fingerprint SHA-256 dessa representação é comparado ao estado atual.
+
+Se sidecar/override/letra efetiva mudar enquanto o job está rodando ou aguardando revisão, a sugestão local não pode ser aplicada silenciosamente. O administrador precisa executar uma nova tentativa com a premissa atual.
+
+### Proveniência e rollback
+
+Resultados locais são persistidos como `origin: generated` e distinguem `local-transcription` de `local-alignment`. A sugestão registra também versão identificável do executável quando disponível e o nome do modelo sem expor path físico.
+
+Ao aplicar um resultado gerado, o override gerenciado anterior é preservado para um rollback de uma etapa. Remover o resultado local restaura esse override anterior; sem anterior, volta para o sidecar/fallback canônico. Nenhum `.lrc` é criado automaticamente ao lado da música.
+
 ## Execução pelo Assistente da Biblioteca
 
 `lyrics` é uma capability independente de `metadata`. O analyzer LRCLIB é registrado no runtime com `capability: 'lyrics'`, portanto uma análise de metadados não executa consultas LRCLIB dentro do mesmo run.
 
-Na Administração, **Analisar biblioteca**, **Analisar mudanças** e a reanálise completa disparam os runs de `metadata` e `lyrics` em paralelo. A tela continua usando a revisão unificada: sugestões prontas de qualquer um dos dois runs aparecem na mesma fila e seguem a mesma política de aprovação. Cancelar uma análise administrativa cancela os runs ativos de ambas as capabilities.
+Na Administração, **Analisar biblioteca**, **Analisar mudanças** e a reanálise completa disparam os runs de `metadata` e `lyrics` em paralelo. A tela continua usando a revisão unificada: sugestões prontas de qualquer um dos dois runs e candidatos locais aparecem na mesma fila e seguem a mesma política de aprovação. Cancelar uma análise administrativa cancela os runs ativos de ambas as capabilities; jobs Whisper possuem cancelamento próprio por serem ações explícitas por faixa.
 
-Essa separação mantém métricas, cache, retries e incrementalidade por capability sem criar uma segunda experiência de revisão para o usuário.
+Essa separação mantém métricas, cache, retries e incrementalidade por capability sem criar uma segunda autoridade de revisão.
 
 ## Plain e sincronizada
 
 Quando o provider oferece LRC válido, a representação sincronizada é preservada e passa pelo parser já existente. Se não houver LRC válido, uma letra plain válida pode ser usada. Não existe formato proprietário de timestamps.
 
+No alinhamento local, o texto plain existente é mantido linha a linha; somente timestamps são derivados da evidência de reconhecimento. A qualidade expõe cobertura, linhas alinhadas, baixa confiança, não alinhadas, monotonicidade e divergência para revisão.
+
 ## Revisão administrativa e rollback
 
-O Assistente mostra:
+O Assistente mostra a proveniência real da sugestão (`LRCLIB`, transcrição local ou alinhamento local), estado sincronizado, preview limitado e ações Aprovar/Rejeitar. O painel local também mostra aviso de uso de CPU, progresso/cancelamento e qualidade do alinhamento antes da revisão final.
 
-- fonte `LRCLIB`;
-- estado sincronizada/não sincronizada;
-- evidências de identidade;
-- preview limitado;
-- ações Aprovar/Rejeitar.
+Lote é permitido somente pelo fluxo seguro do Assistente. Itens locais nunca são considerados seguros para auto-apply; se incluídos em lote, exigem confirmação explícita de revisão. Capas continuam com seu fluxo individual próprio.
 
-Lote é permitido somente pelo fluxo seguro do Assistente. Itens que não atendem à política de auto-aplicação exigem confirmação explícita. Capas continuam com seu fluxo individual próprio.
-
-Uma letra aplicada pode ser removida pela ação **Voltar ao sidecar**, que limpa somente o override gerenciado. O histórico da sugestão continua representando a decisão que ocorreu; a fonte efetiva volta a ser calculada pela cadeia canônica.
+Uma letra aplicada pode ser removida pela ação de restauração. Para fonte externa sem histórico anterior, isso limpa somente o override gerenciado. Para letra gerada localmente, restaura o override gerenciado anterior quando houver. O histórico da sugestão continua representando a decisão que ocorreu.
 
 ## Privacidade, conteúdo e licenciamento
 
@@ -75,11 +139,14 @@ Letras permanecem sujeitas aos direitos de seus autores e titulares. O uso previ
 Regras de implementação:
 
 - não registrar conteúdo integral de letras em logs;
+- não registrar stdout/stderr bruto do Whisper;
+- não persistir áudio temporário depois do job;
 - não persistir resposta HTTP bruta ou HTML do provider;
-- não criar automaticamente `.lrc` dentro de `MUSIC_DIR` a partir do provider;
+- não criar automaticamente `.lrc` dentro de `MUSIC_DIR`;
+- não baixar modelo Whisper automaticamente;
 - não usar scraping, bypass de login/paywall ou fontes sem permissão adequada;
 - fixtures de teste usam somente conteúdo sintético e curto;
-- testes do provider não dependem da internet pública;
+- testes do provider e do Whisper local não dependem da internet pública;
 - uso comercial futuro exige nova revisão de termos/licenciamento.
 
 ## Testes de regressão
@@ -88,10 +155,13 @@ A cobertura deve preservar:
 
 - sidecar LRC/TXT e segurança de caminhos;
 - prioridade do override gerenciado e fallback após remoção;
+- rollback para override anterior depois de resultado gerado;
 - plain e synced externos;
 - matching forte, duração divergente e candidatos ambíguos;
 - provider sem resultado, malformed/oversized, timeout/rate limit por infraestrutura compartilhada;
 - stale entre análise e aplicação;
 - reopen/cascade/limite do store SQLite;
-- mesma resolução para rota pública/player e OpenSubsonic;
+- runner externo com timeout, output cap e cancelamento;
+- fake FFmpeg/Whisper para transcrição e alinhamento sem dependência de binário/modelo real;
+- mesma resolução para rota pública/player/offline e OpenSubsonic;
 - disparo administrativo separado de `metadata` e `lyrics`, incluindo cancelamento conjunto.

@@ -7,14 +7,14 @@ import {
   type LibraryAssistantDecision,
   type LibraryAssistantDecisionResult,
   type LibraryAssistantDecisionSummary,
+  type LibraryAssistantLyricsSource,
   type LibraryAssistantLyricsTarget,
   type LibraryAssistantReviewItem,
   type LibraryAssistantSuggestionStatus
 } from '@home-music/shared/library-assistant';
-import type { ResolvedLrclibLyrics } from './lrclib-lyrics-analyzer.js';
 import type { LibraryAssistantReviewService } from './library-assistant-review-service.js';
 import type { LibraryAssistantStore, LibraryAssistantStoredSuggestion } from './library-assistant-store.js';
-import type { TrackLyricsOverrideStore } from './track-lyrics-overrides.js';
+import type { TrackLyricsOverrideStore, ManagedLyricsOrigin } from './track-lyrics-overrides.js';
 import type { TrackMetadataOverrideStore } from './track-metadata-overrides.js';
 
 const MAX_REVIEW_ITEMS = 500;
@@ -32,6 +32,19 @@ type ReviewLibrary = {
   revision: () => number;
 };
 
+export type ResolvedManagedLyricsCandidate = {
+  candidateId: string;
+  synchronized: boolean;
+  language: string | null;
+  text: string;
+  source: LibraryAssistantLyricsSource;
+  origin: ManagedLyricsOrigin;
+  provider: string | null;
+  externalId: string | null;
+  preservePrevious: boolean;
+  baseLyricsFingerprint: string | null;
+};
+
 type CompositeReviewOptions = {
   databasePath: string;
   base: BaseReviewPort;
@@ -40,7 +53,9 @@ type CompositeReviewOptions = {
   lyricsOverrides: TrackLyricsOverrideStore;
   library: ReviewLibrary;
   hasSidecarLyrics: (trackId: string) => Promise<boolean>;
-  resolveLyricsCandidate: (candidateId: string) => Promise<ResolvedLrclibLyrics | null>;
+  effectiveLyricsFingerprint: (trackId: string) => Promise<string>;
+  resolveLyricsCandidate: (candidateId: string) => Promise<ResolvedManagedLyricsCandidate | null>;
+  discardLyricsCandidate?: (candidateId: string) => void;
   onLyricsChanged: () => void;
   now?: () => Date;
 };
@@ -134,6 +149,10 @@ function validateDecision(decision: LibraryAssistantDecision) {
 function managedLyricsValue(store: TrackLyricsOverrideStore, trackId: string) {
   const current = store.get(trackId);
   return current ? `managed:${current.updatedAt}` : '';
+}
+
+function isLocalTarget(target: LibraryAssistantLyricsTarget) {
+  return target.source === 'local-transcription' || target.source === 'local-alignment';
 }
 
 function metadataTrack(
@@ -285,10 +304,12 @@ export class LibraryAssistantCompositeReviewService {
       this.markStale(suggestion.id, run.id);
       return null;
     }
-    const currentValue = managedLyricsValue(this.options.lyricsOverrides, track.id);
-    if (currentValue !== suggestion.target.currentValue) {
-      this.markStale(suggestion.id, run.id);
-      return null;
+    if (!isLocalTarget(suggestion.target)) {
+      const currentValue = managedLyricsValue(this.options.lyricsOverrides, track.id);
+      if (currentValue !== suggestion.target.currentValue) {
+        this.markStale(suggestion.id, run.id);
+        return null;
+      }
     }
     const metadata = this.options.metadataOverrides.get(track.id);
     const physical = metadata?.physical ?? {
@@ -325,20 +346,29 @@ export class LibraryAssistantCompositeReviewService {
 
     const track = this.options.library.listTracks().find(item => item.id === target.trackId);
     if (!track) return this.markStaleResult(decision, run, null, 'A música não existe mais na biblioteca.');
-    const currentValue = managedLyricsValue(this.options.lyricsOverrides, target.trackId);
+    const local = isLocalTarget(target);
+    const currentValue = local
+      ? `effective:${await this.options.effectiveLyricsFingerprint(target.trackId)}`
+      : managedLyricsValue(this.options.lyricsOverrides, target.trackId);
     if (currentValue !== target.currentValue) {
-      return this.markStaleResult(decision, run, currentValue, 'A letra gerenciada mudou desde a análise.');
+      return this.markStaleResult(
+        decision,
+        run,
+        currentValue,
+        local ? 'A letra efetiva mudou desde o processamento local.' : 'A letra gerenciada mudou desde a análise.'
+      );
     }
 
     const updatedAt = this.now().toISOString();
     if (decision.action === 'reject') {
       const changed = this.decisions.transition(decision.suggestionId, 'rejected', updatedAt);
       if (!changed) return this.resolveRace(decision);
+      if (local) this.options.discardLyricsCandidate?.(target.candidateId);
       return result(decision, 'rejected', currentValue);
     }
 
     try {
-      if (await this.options.hasSidecarLyrics(target.trackId)) {
+      if (!local && await this.options.hasSidecarLyrics(target.trackId)) {
         return this.markStaleResult(
           decision,
           run,
@@ -346,34 +376,45 @@ export class LibraryAssistantCompositeReviewService {
           'Uma letra local apareceu desde a análise. O provider externo não substituiu o sidecar.'
         );
       }
-      if (managedLyricsValue(this.options.lyricsOverrides, target.trackId) !== target.currentValue) {
-        return this.markStaleResult(decision, run, managedLyricsValue(this.options.lyricsOverrides, target.trackId), 'A letra gerenciada mudou desde a análise.');
+      const recheckedValue = local
+        ? `effective:${await this.options.effectiveLyricsFingerprint(target.trackId)}`
+        : managedLyricsValue(this.options.lyricsOverrides, target.trackId);
+      if (recheckedValue !== target.currentValue) {
+        return this.markStaleResult(decision, run, recheckedValue, 'A fonte de lyrics mudou desde a revisão.');
       }
 
       const candidate = await this.options.resolveLyricsCandidate(target.candidateId);
       if (!candidate) {
-        return result(decision, 'failed', currentValue, 'A letra sugerida não está mais disponível no LRCLIB.');
+        return result(decision, 'failed', currentValue, 'A letra sugerida não está mais disponível.');
       }
-      if (candidate.candidateId !== target.candidateId || candidate.synchronized !== target.synchronized) {
+      if (
+        candidate.candidateId !== target.candidateId
+        || candidate.synchronized !== target.synchronized
+        || candidate.source !== (target.source ?? 'lrclib')
+      ) {
         return result(
           decision,
           'failed',
           currentValue,
-          'A letra do provider mudou desde a revisão. Execute uma nova análise antes de aplicar.'
+          'A letra candidata mudou desde a revisão. Execute uma nova análise antes de aplicar.'
         );
+      }
+      if (local && candidate.baseLyricsFingerprint !== target.currentValue.replace(/^effective:/, '')) {
+        return this.markStaleResult(decision, run, currentValue, 'A premissa da letra local não corresponde mais à revisão.');
       }
 
       const saved = this.options.lyricsOverrides.save(target.trackId, {
         mode: candidate.synchronized ? 'synced' : 'plain',
         text: candidate.text,
-        origin: 'external',
-        provider: 'lrclib',
-        externalId: target.candidateId,
+        origin: candidate.origin,
+        provider: candidate.provider,
+        externalId: candidate.externalId,
         language: candidate.language
-      });
+      }, { preservePrevious: candidate.preservePrevious });
       if (!saved) return this.markStaleResult(decision, run, null, 'A música não existe mais na biblioteca.');
       const changed = this.decisions.transition(decision.suggestionId, 'applied', updatedAt);
       if (!changed) return this.resolveRace(decision);
+      if (local) this.options.discardLyricsCandidate?.(target.candidateId);
       this.options.onLyricsChanged();
       return result(decision, 'applied', `managed:${saved.updatedAt}`);
     } catch {
@@ -381,7 +422,7 @@ export class LibraryAssistantCompositeReviewService {
         decision,
         'failed',
         currentValue,
-        'Não foi possível obter e persistir a letra externa. Tente novamente depois.'
+        'Não foi possível validar e persistir a letra sugerida. Tente novamente depois.'
       );
     }
   }

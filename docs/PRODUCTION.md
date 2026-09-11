@@ -16,6 +16,19 @@ API/readiness: http://127.0.0.1:8787/ready
 
 O ambiente de desenvolvimento é separado e não deve compartilhar SQLite, biblioteca ou configuração com produção. Veja [`DEVELOPMENT.md`](DEVELOPMENT.md).
 
+## Dependências opcionais locais
+
+O servidor continua funcional sem Whisper. Para habilitar manualmente o fallback local de lyrics do Assistente:
+
+```dotenv
+HOME_MUSIC_WHISPER_PATH=/usr/local/bin/whisper-cli
+HOME_MUSIC_WHISPER_MODEL=/var/lib/home-music/models/ggml-base.bin
+```
+
+`HOME_MUSIC_WHISPER_PATH` deve ser um caminho absoluto para executável local e `HOME_MUSIC_WHISPER_MODEL` deve apontar para um modelo previamente instalado pelo operador. O Home Music **não baixa pesos automaticamente**. FFmpeg também precisa estar disponível por `HOME_MUSIC_FFMPEG_PATH` ou `PATH` para a preparação PCM.
+
+O modelo pode consumir memória/CPU significativas conforme tamanho/hardware; CPU-only é suportado como baseline e nenhum tempo de conclusão é prometido. A capability administrativa informa quando binário/modelo/FFmpeg não estão disponíveis sem afetar scan, playback ou providers normais. Detalhes de segurança, scratch, limites e rollback: [`lyrics.md`](lyrics.md).
+
 ## Primeiro bootstrap
 
 Depois de preparar `.env`, a instalação privilegiada inicial é explícita:
@@ -127,6 +140,7 @@ O comando pode reativar/promover a conta e gerar uma senha temporária que exige
 - [`production.md`](production.md) — systemd, helper privilegiado e atualização;
 - [`backup-restore.md`](backup-restore.md) — backup e restore;
 - [`production-verification.md`](production-verification.md) — verificação funcional;
-- [`multi-user-auth.md`](multi-user-auth.md) — identidade, sessões, autorização e recovery administrativo.
+- [`multi-user-auth.md`](multi-user-auth.md) — identidade, sessões, autorização e recovery administrativo;
+- [`lyrics.md`](lyrics.md) — LRCLIB, Whisper local opcional, persistência e rollback de lyrics.
 
 Documentos da fase 7.5 foram preservados em [`history/phase-7.5/`](history/phase-7.5/) apenas como histórico de implementação; não devem ser usados como runbook atual.
