@@ -23,26 +23,27 @@ Media Session, preload, continuidade em background e helpers de diagnóstico nã
 
 A reprodução online autenticada pode envolver `useAudioPlayer` com `useCrossfadeAudioPlayer` para oferecer uma transição opcional entre faixas sem deslocar a autoridade do player.
 
-A preferência é local ao dispositivo e possui três estados:
+A preferência é local ao dispositivo e configurada em segundos:
 
-- `off`: comportamento canônico sem sobreposição;
-- `soft`: crossfade de 3 segundos;
-- `continuous`: crossfade de 5 segundos.
+- `0 s`: comportamento canônico sem sobreposição;
+- `1–30 s`: duração da mistura entre o fim da faixa atual e o começo da próxima;
+- preferências antigas `soft` e `continuous` são migradas para `3 s` e `5 s` respectivamente.
 
-Quando o crossfade está ativo, um segundo elemento de áudio é usado apenas como **deck transitório** nos últimos segundos da faixa atual. A fila, a decisão de próxima faixa, shuffle, repeat, persistência e Media Session continuam pertencendo ao `useAudioPlayer` principal.
+Quando o crossfade está ativo, dois elementos de áudio funcionam como decks A/B. O deck que entra durante a transição continua sendo a fonte audível depois que a faixa anterior termina; ele não é reiniciado nem recebe seek para outra cópia audível. O deck anterior pode ser reutilizado brevemente e sem volume para o `useAudioPlayer` concluir a troca canônica de faixa, sendo descartado assim que o handoff é confirmado.
+
+A fila, a decisão de próxima faixa, shuffle, repeat, persistência e Media Session continuam pertencendo ao `useAudioPlayer` principal. Os decks são recursos de reprodução, não fontes paralelas de estado.
 
 Regras de segurança da transição:
 
 - só inicia com `document.visibilityState === 'visible'`;
-- Apple mobile WebKit (iPhone/iPad) permanece no fluxo canônico de um único elemento de áudio nesta primeira versão;
+- Apple mobile WebKit (iPhone/iPad) permanece no fluxo canônico de um único elemento de áudio;
 - `repeat one` não cria um segundo stream concorrente da mesma faixa;
 - ações manuais de next/previous/seek, mudanças de shuffle/repeat, troca de qualidade/normalização e seleção de outra música cancelam a mistura;
-- se o segundo áudio falhar ou não puder iniciar, o volume do player principal é restaurado e o avanço normal assume a fila;
-- no fim da faixa atual, o player principal assume a próxima a partir da posição já reproduzida pelo deck transitório;
-- ao ir para background/tela bloqueada, o deck transitório é descartado e o fluxo existente de um único player permanece ativo;
-- o modo offline continua usando diretamente `useAudioPlayer`, sem crossfade nesta primeira versão.
-
-O segundo elemento não é uma segunda fonte de verdade e não mantém estado persistente próprio.
+- se o deck de entrada falhar ou não puder iniciar, o volume do deck ativo é restaurado e o avanço normal assume a fila;
+- o fade usa curva de potência equivalente para reduzir a sensação de queda de volume no meio da mistura;
+- ao concluir a transição, o deck de entrada é promovido sem interromper a música que já está tocando;
+- ao ir para background/tela bloqueada, qualquer sobreposição é descartada e o fluxo existente de um único player permanece ativo;
+- o modo offline continua usando diretamente `useAudioPlayer`, sem crossfade.
 
 ## Erros de mídia
 

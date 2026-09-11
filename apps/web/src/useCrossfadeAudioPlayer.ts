@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { NormalizationMode, Track } from '@home-music/shared';
 import { isAppleMobileWebKit } from './background-playback';
 import {
-  readCrossfadeMode,
+  normalizeCrossfadeSeconds,
+  otherCrossfadeDeck,
+  readCrossfadeSeconds,
   resolveCrossfadeCandidate,
-  writeCrossfadeMode,
-  type CrossfadeMode
+  writeCrossfadeSeconds,
+  type CrossfadeDeck
 } from './crossfade';
 import { resolveOutputVolume } from './player-state';
 import {
@@ -15,26 +17,28 @@ import {
 } from './streaming-quality';
 import { useAudioPlayer } from './useAudioPlayer';
 
-function initialCrossfadeMode(): CrossfadeMode {
+type PendingPromotion = {
+  trackId: string;
+  audibleAudio: HTMLAudioElement;
+  shadowAudio: HTMLAudioElement;
+  adopted: boolean;
+};
+
+function initialCrossfadeSeconds() {
   try {
-    return readCrossfadeMode(window.localStorage);
+    return readCrossfadeSeconds(window.localStorage);
   } catch {
-    return 'off';
+    return 0;
   }
 }
 
-function persistCrossfadeMode(mode: CrossfadeMode) {
+function persistCrossfadeSeconds(seconds: number) {
   try {
-    writeCrossfadeMode(window.localStorage, mode);
+    writeCrossfadeSeconds(window.localStorage, seconds);
   } catch {
     // Preferência local e best-effort; playback não depende da persistência.
   }
 }
-
-type PendingHandoff = {
-  trackId: string;
-  position: number;
-};
 
 export function useCrossfadeAudioPlayer(
   tracks: Track[],
@@ -43,20 +47,39 @@ export function useCrossfadeAudioPlayer(
   usesSystemVolume: boolean
 ) {
   const player = useAudioPlayer(tracks, progressVisible, libraryReady, usesSystemVolume);
-  const transitionAudioRef = useRef<HTMLAudioElement>(null);
+  const deckARef = useRef<HTMLAudioElement>(null);
+  const deckBRef = useRef<HTMLAudioElement>(null);
+  const activeDeckRef = useRef<CrossfadeDeck>('a');
   const animationFrameRef = useRef<number | null>(null);
   const attemptRef = useRef(0);
   const originTrackIdRef = useRef<string | null>(null);
   const startingTrackIdRef = useRef<string | null>(null);
-  const activeTrackIdRef = useRef<string | null>(null);
-  const pendingHandoffRef = useRef<PendingHandoff | null>(null);
-  const handoffSeekingRef = useRef(false);
+  const incomingTrackIdRef = useRef<string | null>(null);
+  const pendingPromotionRef = useRef<PendingPromotion | null>(null);
   const currentTrackIdRef = useRef<string | null>(player.current?.id ?? null);
   const outputVolumeRef = useRef(resolveOutputVolume(player.volume, usesSystemVolume));
-  const [crossfadeMode, setCrossfadeModeState] = useState<CrossfadeMode>(initialCrossfadeMode);
+  const [crossfadeSeconds, setCrossfadeSecondsState] = useState(initialCrossfadeSeconds);
 
   currentTrackIdRef.current = player.current?.id ?? null;
   outputVolumeRef.current = resolveOutputVolume(player.volume, usesSystemVolume);
+
+  const getDeckAudio = useCallback((deck: CrossfadeDeck) => (
+    deck === 'a' ? deckARef.current : deckBRef.current
+  ), []);
+
+  const getActiveAudio = useCallback(() => getDeckAudio(activeDeckRef.current), [getDeckAudio]);
+
+  const getInactiveAudio = useCallback(() => (
+    getDeckAudio(otherCrossfadeDeck(activeDeckRef.current))
+  ), [getDeckAudio]);
+
+  const clearAudio = useCallback((audio: HTMLAudioElement | null) => {
+    if (!audio) return;
+    audio.pause();
+    audio.volume = 0;
+    audio.removeAttribute('src');
+    audio.load();
+  }, []);
 
   const cancelAnimation = useCallback(() => {
     if (animationFrameRef.current == null) return;
@@ -64,36 +87,57 @@ export function useCrossfadeAudioPlayer(
     animationFrameRef.current = null;
   }, []);
 
-  const clearTransitionAudio = useCallback(() => {
-    const transitionAudio = transitionAudioRef.current;
-    if (!transitionAudio) return;
-    transitionAudio.pause();
-    transitionAudio.volume = 0;
-    transitionAudio.removeAttribute('src');
-    transitionAudio.load();
-  }, []);
+  const finishPendingPromotion = useCallback((pending: PendingPromotion) => {
+    if (pendingPromotionRef.current !== pending) return;
+    player.audioRef.current = pending.audibleAudio;
+    pending.adopted = true;
+    player.audioHandlers.onLoadedMetadata(pending.audibleAudio);
+    player.audioHandlers.onTimeUpdate(pending.audibleAudio);
+    player.audioHandlers.onPlay();
+  }, [player.audioHandlers, player.audioRef]);
+
+  const releasePromotionShadow = useCallback((pending: PendingPromotion) => {
+    if (pendingPromotionRef.current !== pending) return;
+    pendingPromotionRef.current = null;
+    clearAudio(pending.shadowAudio);
+    if (!pending.audibleAudio.paused && !pending.audibleAudio.ended) {
+      player.audioHandlers.onPlay();
+    }
+  }, [clearAudio, player.audioHandlers]);
 
   const cancelCrossfade = useCallback(() => {
     attemptRef.current += 1;
     cancelAnimation();
     originTrackIdRef.current = null;
     startingTrackIdRef.current = null;
-    activeTrackIdRef.current = null;
-    pendingHandoffRef.current = null;
-    handoffSeekingRef.current = false;
-    clearTransitionAudio();
+    incomingTrackIdRef.current = null;
 
-    const primaryAudio = player.audioRef.current;
-    if (primaryAudio) primaryAudio.volume = outputVolumeRef.current;
-  }, [cancelAnimation, clearTransitionAudio, player.audioRef]);
+    const pendingPromotion = pendingPromotionRef.current;
+    if (pendingPromotion) {
+      player.audioRef.current = pendingPromotion.audibleAudio;
+      pendingPromotionRef.current = null;
+      clearAudio(pendingPromotion.shadowAudio);
+    }
 
-  const finishHandoff = useCallback(() => {
-    pendingHandoffRef.current = null;
-    handoffSeekingRef.current = false;
-    clearTransitionAudio();
-    const primaryAudio = player.audioRef.current;
-    if (primaryAudio) primaryAudio.volume = outputVolumeRef.current;
-  }, [clearTransitionAudio, player.audioRef]);
+    const activeAudio = getActiveAudio();
+    const inactiveAudio = getInactiveAudio();
+    if (activeAudio) {
+      player.audioRef.current = activeAudio;
+      activeAudio.volume = outputVolumeRef.current;
+    }
+    if (inactiveAudio && inactiveAudio !== activeAudio) clearAudio(inactiveAudio);
+  }, [cancelAnimation, clearAudio, getActiveAudio, getInactiveAudio, player.audioRef]);
+
+  useLayoutEffect(() => {
+    const initialAudio = deckARef.current;
+    if (!initialAudio) return;
+    activeDeckRef.current = 'a';
+    player.audioRef.current = initialAudio;
+
+    return () => {
+      player.audioRef.current = null;
+    };
+  }, [player.audioRef]);
 
   useEffect(() => {
     function handleVisibilityChange() {
@@ -106,100 +150,110 @@ export function useCrossfadeAudioPlayer(
 
   useEffect(() => {
     const currentTrackId = player.current?.id ?? null;
-    const pendingHandoff = pendingHandoffRef.current;
-    if (pendingHandoff?.trackId === currentTrackId) return;
-
     const originTrackId = originTrackIdRef.current;
     if (originTrackId && originTrackId !== currentTrackId) cancelCrossfade();
   }, [cancelCrossfade, player.current?.id]);
 
   useEffect(() => {
-    if (!player.playing && !pendingHandoffRef.current) cancelCrossfade();
+    if (!player.playing && (startingTrackIdRef.current || incomingTrackIdRef.current)) {
+      cancelCrossfade();
+    }
   }, [cancelCrossfade, player.playing]);
+
+  useEffect(() => {
+    const pendingPromotion = pendingPromotionRef.current;
+    if (!pendingPromotion) return;
+    pendingPromotion.shadowAudio.volume = 0;
+    pendingPromotion.audibleAudio.volume = outputVolumeRef.current;
+  }, [player.volume, usesSystemVolume]);
 
   useEffect(() => () => {
     attemptRef.current += 1;
     cancelAnimation();
-    clearTransitionAudio();
-  }, [cancelAnimation, clearTransitionAudio]);
+    clearAudio(deckARef.current);
+    clearAudio(deckBRef.current);
+  }, [cancelAnimation, clearAudio]);
 
-  const setCrossfadeMode = useCallback((mode: CrossfadeMode) => {
+  const setCrossfadeSeconds = useCallback((seconds: number) => {
+    const normalizedSeconds = normalizeCrossfadeSeconds(seconds);
     cancelCrossfade();
-    persistCrossfadeMode(mode);
-    setCrossfadeModeState(mode);
+    persistCrossfadeSeconds(normalizedSeconds);
+    setCrossfadeSecondsState(normalizedSeconds);
   }, [cancelCrossfade]);
 
-  const maybeStartCrossfade = useCallback((primaryAudio: HTMLAudioElement) => {
+  const maybeStartCrossfade = useCallback((activeAudio: HTMLAudioElement) => {
     if (isAppleMobileWebKit(navigator)) return;
-    if (!player.playing || primaryAudio.paused || primaryAudio.ended) return;
-    if (startingTrackIdRef.current || activeTrackIdRef.current || pendingHandoffRef.current) return;
-    if (!Number.isFinite(primaryAudio.duration) || primaryAudio.duration <= 0) return;
+    if (activeAudio !== getActiveAudio()) return;
+    if (!player.playing || activeAudio.paused || activeAudio.ended) return;
+    if (startingTrackIdRef.current || incomingTrackIdRef.current || pendingPromotionRef.current) return;
+    if (!Number.isFinite(activeAudio.duration) || activeAudio.duration <= 0) return;
 
     const candidate = resolveCrossfadeCandidate({
       queue: player.queue,
       currentIndex: player.currentIndex,
       currentTrackId: player.current?.id ?? null,
       repeatMode: player.repeatMode,
-      mode: crossfadeMode,
+      durationSeconds: crossfadeSeconds,
       visibilityState: document.visibilityState,
-      remainingSeconds: Math.max(0, primaryAudio.duration - primaryAudio.currentTime)
+      remainingSeconds: Math.max(0, activeAudio.duration - activeAudio.currentTime)
     });
     if (!candidate) return;
 
     const nextTrack = player.queue.find(track => track.id === candidate.trackId);
-    const transitionAudio = transitionAudioRef.current;
+    const incomingAudio = getInactiveAudio();
     const originTrackId = player.current?.id ?? null;
-    if (!nextTrack || !transitionAudio || !originTrackId) return;
+    if (!nextTrack || !incomingAudio || !originTrackId) return;
 
     const attempt = attemptRef.current + 1;
     attemptRef.current = attempt;
     originTrackIdRef.current = originTrackId;
     startingTrackIdRef.current = candidate.trackId;
-    activeTrackIdRef.current = null;
-    transitionAudio.pause();
-    transitionAudio.volume = 0;
-    transitionAudio.currentTime = 0;
-    transitionAudio.src = onlineAudioUrl(
+    incomingTrackIdRef.current = null;
+
+    clearAudio(incomingAudio);
+    incomingAudio.volume = 0;
+    incomingAudio.src = onlineAudioUrl(
       nextTrack.id,
       player.streamingMode,
       false,
       effectiveNormalizationMode(nextTrack, player.normalizationMode)
     );
-    transitionAudio.load();
+    incomingAudio.load();
 
-    void transitionAudio.play()
+    void incomingAudio.play()
       .then(() => {
         if (
           attemptRef.current !== attempt
           || currentTrackIdRef.current !== originTrackId
           || document.visibilityState !== 'visible'
+          || getActiveAudio() !== activeAudio
         ) {
           cancelCrossfade();
           return;
         }
 
         startingTrackIdRef.current = null;
-        activeTrackIdRef.current = candidate.trackId;
+        incomingTrackIdRef.current = candidate.trackId;
 
         const animate = () => {
           if (attemptRef.current !== attempt) return;
-          if (primaryAudio.ended) {
+          if (activeAudio.ended) {
             animationFrameRef.current = null;
             return;
           }
           if (
             document.visibilityState !== 'visible'
-            || primaryAudio.paused
-            || transitionAudio.paused
-            || transitionAudio.ended
-            || transitionAudio.error
+            || activeAudio.paused
+            || incomingAudio.paused
+            || incomingAudio.ended
+            || incomingAudio.error
           ) {
             cancelCrossfade();
             return;
           }
 
-          const remainingSeconds = Number.isFinite(primaryAudio.duration)
-            ? primaryAudio.duration - primaryAudio.currentTime
+          const remainingSeconds = Number.isFinite(activeAudio.duration)
+            ? activeAudio.duration - activeAudio.currentTime
             : candidate.durationSeconds;
           if (remainingSeconds > candidate.durationSeconds + 0.75) {
             cancelCrossfade();
@@ -208,11 +262,12 @@ export function useCrossfadeAudioPlayer(
 
           const progress = Math.max(
             0,
-            Math.min(1, transitionAudio.currentTime / candidate.durationSeconds)
+            Math.min(1, incomingAudio.currentTime / candidate.durationSeconds)
           );
           const outputVolume = outputVolumeRef.current;
-          primaryAudio.volume = outputVolume * (1 - progress);
-          transitionAudio.volume = outputVolume * progress;
+          const angle = progress * Math.PI * 0.5;
+          activeAudio.volume = outputVolume * Math.cos(angle);
+          incomingAudio.volume = outputVolume * Math.sin(angle);
           animationFrameRef.current = window.requestAnimationFrame(animate);
         };
 
@@ -221,28 +276,33 @@ export function useCrossfadeAudioPlayer(
       .catch(() => {
         if (attemptRef.current === attempt) cancelCrossfade();
       });
-  }, [cancelCrossfade, crossfadeMode, player.current?.id, player.currentIndex, player.normalizationMode, player.playing, player.queue, player.repeatMode, player.streamingMode]);
+  }, [cancelCrossfade, clearAudio, crossfadeSeconds, getActiveAudio, getInactiveAudio, player.current?.id, player.currentIndex, player.normalizationMode, player.playing, player.queue, player.repeatMode, player.streamingMode]);
 
-  const handleEnded = useCallback(() => {
-    const transitionAudio = transitionAudioRef.current;
-    const activeTrackId = activeTrackIdRef.current;
+  const handleDeckEnded = useCallback((audio: HTMLAudioElement) => {
+    if (audio !== getActiveAudio()) {
+      if (incomingTrackIdRef.current || startingTrackIdRef.current) cancelCrossfade();
+      return;
+    }
+
     const candidate = resolveCrossfadeCandidate({
       queue: player.queue,
       currentIndex: player.currentIndex,
       currentTrackId: player.current?.id ?? null,
       repeatMode: player.repeatMode,
-      mode: crossfadeMode,
+      durationSeconds: crossfadeSeconds,
       visibilityState: document.visibilityState,
       remainingSeconds: 0
     });
+    const incomingAudio = getInactiveAudio();
+    const incomingTrackId = incomingTrackIdRef.current;
 
     if (
-      !transitionAudio
-      || !candidate
-      || candidate.trackId !== activeTrackId
-      || transitionAudio.paused
-      || transitionAudio.ended
-      || transitionAudio.currentTime <= 0
+      !candidate
+      || !incomingAudio
+      || candidate.trackId !== incomingTrackId
+      || incomingAudio.paused
+      || incomingAudio.ended
+      || incomingAudio.currentTime <= 0
     ) {
       cancelCrossfade();
       player.audioHandlers.onEnded();
@@ -253,75 +313,74 @@ export function useCrossfadeAudioPlayer(
     cancelAnimation();
     originTrackIdRef.current = null;
     startingTrackIdRef.current = null;
-    activeTrackIdRef.current = null;
-    handoffSeekingRef.current = false;
-    pendingHandoffRef.current = {
+    incomingTrackIdRef.current = null;
+
+    activeDeckRef.current = otherCrossfadeDeck(activeDeckRef.current);
+    incomingAudio.volume = outputVolumeRef.current;
+    audio.volume = 0;
+    pendingPromotionRef.current = {
       trackId: candidate.trackId,
-      position: transitionAudio.currentTime
+      audibleAudio: incomingAudio,
+      shadowAudio: audio,
+      adopted: false
     };
-    transitionAudio.volume = outputVolumeRef.current;
 
-    const primaryAudio = player.audioRef.current;
-    if (primaryAudio) primaryAudio.volume = 0;
+    player.audioHandlers.onPlay();
     player.audioHandlers.onEnded();
-  }, [cancelAnimation, cancelCrossfade, crossfadeMode, player.audioHandlers, player.audioRef, player.current?.id, player.currentIndex, player.queue, player.repeatMode]);
+  }, [cancelAnimation, cancelCrossfade, crossfadeSeconds, getActiveAudio, getInactiveAudio, player.audioHandlers, player.current?.id, player.currentIndex, player.queue, player.repeatMode]);
 
-  const handleLoadedMetadata = useCallback((audio: HTMLAudioElement) => {
-    player.audioHandlers.onLoadedMetadata(audio);
-    const pendingHandoff = pendingHandoffRef.current;
-    if (!pendingHandoff || pendingHandoff.trackId !== player.current?.id) return;
-
-    const transitionPosition = transitionAudioRef.current?.currentTime ?? pendingHandoff.position;
-    const maximum = Number.isFinite(audio.duration) && audio.duration > 0
-      ? Math.max(0, audio.duration - 0.05)
-      : transitionPosition;
-    const position = Math.min(transitionPosition, maximum);
-    pendingHandoff.position = position;
-    if (position > 0) player.seek(position);
-  }, [player.audioHandlers, player.current?.id, player.seek]);
-
-  const handlePlaying = useCallback(() => {
-    const pendingHandoff = pendingHandoffRef.current;
-    if (!pendingHandoff || pendingHandoff.trackId !== player.current?.id) return;
-
-    const transitionAudio = transitionAudioRef.current;
-    const primaryAudio = player.audioRef.current;
-    if (!transitionAudio || !primaryAudio) {
-      finishHandoff();
+  const handleDeckLoadedMetadata = useCallback((audio: HTMLAudioElement) => {
+    const pendingPromotion = pendingPromotionRef.current;
+    if (pendingPromotion?.shadowAudio === audio) {
+      finishPendingPromotion(pendingPromotion);
       return;
     }
 
-    const transitionPosition = transitionAudio.currentTime;
-    const maximum = Number.isFinite(primaryAudio.duration) && primaryAudio.duration > 0
-      ? Math.max(0, primaryAudio.duration - 0.05)
-      : transitionPosition;
-    const position = Math.min(transitionPosition, maximum);
-    pendingHandoff.position = position;
+    if (audio === getActiveAudio()) player.audioHandlers.onLoadedMetadata(audio);
+  }, [finishPendingPromotion, getActiveAudio, player.audioHandlers]);
 
-    if (position <= 0 || Math.abs(primaryAudio.currentTime - position) <= 0.05) {
-      finishHandoff();
+  const handleDeckPlaying = useCallback((audio: HTMLAudioElement) => {
+    const pendingPromotion = pendingPromotionRef.current;
+    if (pendingPromotion?.shadowAudio === audio) {
+      if (!pendingPromotion.adopted) finishPendingPromotion(pendingPromotion);
+      releasePromotionShadow(pendingPromotion);
+    }
+  }, [finishPendingPromotion, releasePromotionShadow]);
+
+  const handleDeckError = useCallback((audio: HTMLAudioElement) => {
+    const pendingPromotion = pendingPromotionRef.current;
+    if (pendingPromotion?.shadowAudio === audio) {
+      if (!pendingPromotion.adopted) finishPendingPromotion(pendingPromotion);
+      releasePromotionShadow(pendingPromotion);
+      window.setTimeout(() => {
+        if (
+          player.audioRef.current === pendingPromotion.audibleAudio
+          && !pendingPromotion.audibleAudio.paused
+          && !pendingPromotion.audibleAudio.ended
+        ) player.audioHandlers.onPlay();
+      }, 0);
       return;
     }
 
-    handoffSeekingRef.current = true;
-    player.seek(position);
-  }, [finishHandoff, player.audioRef, player.current?.id, player.seek]);
+    if (audio === getActiveAudio()) {
+      cancelCrossfade();
+      player.audioHandlers.onError(audio);
+      return;
+    }
 
-  const handleSeeked = useCallback(() => {
-    if (!handoffSeekingRef.current) return;
-    const pendingHandoff = pendingHandoffRef.current;
-    if (!pendingHandoff || pendingHandoff.trackId !== player.current?.id) return;
-    finishHandoff();
-  }, [finishHandoff, player.current?.id]);
+    if (startingTrackIdRef.current || incomingTrackIdRef.current) cancelCrossfade();
+  }, [cancelCrossfade, finishPendingPromotion, getActiveAudio, player.audioHandlers, player.audioRef, releasePromotionShadow]);
 
-  const handlePrimaryError = useCallback((audio: HTMLAudioElement) => {
-    if (
-      startingTrackIdRef.current
-      || activeTrackIdRef.current
-      || pendingHandoffRef.current
-    ) cancelCrossfade();
-    player.audioHandlers.onError(audio);
-  }, [cancelCrossfade, player.audioHandlers]);
+  const handleDeckPause = useCallback((audio: HTMLAudioElement) => {
+    const pendingPromotion = pendingPromotionRef.current;
+    if (pendingPromotion?.shadowAudio === audio) return;
+
+    if (audio === getActiveAudio()) {
+      player.audioHandlers.onPause();
+      return;
+    }
+    if (startingTrackIdRef.current || incomingTrackIdRef.current) cancelCrossfade();
+  }, [cancelCrossfade, getActiveAudio, player.audioHandlers]);
 
   const togglePlay = useCallback(() => {
     cancelCrossfade();
@@ -375,9 +434,10 @@ export function useCrossfadeAudioPlayer(
 
   return {
     ...player,
-    transitionAudioRef,
-    crossfadeMode,
-    setCrossfadeMode,
+    deckARef,
+    deckBRef,
+    crossfadeSeconds,
+    setCrossfadeSeconds,
     togglePlay,
     next,
     previous,
@@ -389,20 +449,19 @@ export function useCrossfadeAudioPlayer(
     cycleRepeat,
     reorderQueue,
     audioHandlers: {
-      ...player.audioHandlers,
+      onPlay: (audio: HTMLAudioElement) => {
+        if (audio === getActiveAudio()) player.audioHandlers.onPlay();
+      },
+      onPlaying: handleDeckPlaying,
+      onPause: handleDeckPause,
       onTimeUpdate: (audio: HTMLAudioElement) => {
+        if (audio !== getActiveAudio()) return;
         player.audioHandlers.onTimeUpdate(audio);
         maybeStartCrossfade(audio);
       },
-      onLoadedMetadata: handleLoadedMetadata,
-      onEnded: handleEnded,
-      onError: handlePrimaryError,
-      onPlaying: handlePlaying,
-      onSeeked: handleSeeked
-    },
-    transitionAudioHandlers: {
-      onError: cancelCrossfade,
-      onEnded: cancelCrossfade
+      onLoadedMetadata: handleDeckLoadedMetadata,
+      onEnded: handleDeckEnded,
+      onError: handleDeckError
     }
   };
 }

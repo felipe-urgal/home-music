@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { Track } from '@home-music/shared';
 import {
-  crossfadeDurationSeconds,
-  readCrossfadeMode,
+  MAX_CROSSFADE_SECONDS,
+  normalizeCrossfadeSeconds,
+  otherCrossfadeDeck,
+  readCrossfadeSeconds,
   resolveCrossfadeCandidate,
-  writeCrossfadeMode
+  writeCrossfadeSeconds
 } from './crossfade';
 
 function track(id: string): Track {
@@ -27,24 +29,36 @@ function track(id: string): Track {
 describe('crossfade', () => {
   const queue = [track('a'), track('b'), track('c')];
 
-  it('mapeia os presets para janelas curtas e previsíveis', () => {
-    expect(crossfadeDurationSeconds('off')).toBe(0);
-    expect(crossfadeDurationSeconds('soft')).toBe(3);
-    expect(crossfadeDurationSeconds('continuous')).toBe(5);
+  it('alterna os decks sem promover uma terceira fonte de playback', () => {
+    expect(otherCrossfadeDeck('a')).toBe('b');
+    expect(otherCrossfadeDeck('b')).toBe('a');
   });
 
-  it('é desativado por padrão e persiste somente valores suportados', () => {
+  it('normaliza a duração configurável para um intervalo seguro', () => {
+    expect(normalizeCrossfadeSeconds(-1)).toBe(0);
+    expect(normalizeCrossfadeSeconds(4.6)).toBe(5);
+    expect(normalizeCrossfadeSeconds(8)).toBe(8);
+    expect(normalizeCrossfadeSeconds(99)).toBe(MAX_CROSSFADE_SECONDS);
+    expect(normalizeCrossfadeSeconds('inválido')).toBe(0);
+  });
+
+  it('é desativado por padrão, persiste segundos e migra os presets antigos', () => {
     const values = new Map<string, string>();
     const storage = {
       getItem: (key: string) => values.get(key) ?? null,
       setItem: (key: string, value: string) => { values.set(key, value); }
     };
 
-    expect(readCrossfadeMode(storage)).toBe('off');
-    writeCrossfadeMode(storage, 'continuous');
-    expect(readCrossfadeMode(storage)).toBe('continuous');
-    values.set('home-music:crossfade-mode:v1', 'inválido');
-    expect(readCrossfadeMode(storage)).toBe('off');
+    expect(readCrossfadeSeconds(storage)).toBe(0);
+
+    values.set('home-music:crossfade-mode:v1', 'soft');
+    expect(readCrossfadeSeconds(storage)).toBe(3);
+
+    values.set('home-music:crossfade-mode:v1', 'continuous');
+    expect(readCrossfadeSeconds(storage)).toBe(5);
+
+    writeCrossfadeSeconds(storage, 7);
+    expect(readCrossfadeSeconds(storage)).toBe(7);
   });
 
   it('libera a próxima faixa somente dentro da janela configurada e em foreground', () => {
@@ -53,7 +67,7 @@ describe('crossfade', () => {
       currentIndex: 0,
       currentTrackId: 'a',
       repeatMode: 'off',
-      mode: 'continuous',
+      durationSeconds: 5,
       visibilityState: 'visible',
       remainingSeconds: 4.8
     })).toEqual({ trackId: 'b', durationSeconds: 5 });
@@ -63,7 +77,7 @@ describe('crossfade', () => {
       currentIndex: 0,
       currentTrackId: 'a',
       repeatMode: 'off',
-      mode: 'continuous',
+      durationSeconds: 5,
       visibilityState: 'visible',
       remainingSeconds: 6
     })).toBeNull();
@@ -73,9 +87,21 @@ describe('crossfade', () => {
       currentIndex: 0,
       currentTrackId: 'a',
       repeatMode: 'off',
-      mode: 'continuous',
+      durationSeconds: 5,
       visibilityState: 'hidden',
       remainingSeconds: 4
+    })).toBeNull();
+  });
+
+  it('desativa a transição com duração zero', () => {
+    expect(resolveCrossfadeCandidate({
+      queue,
+      currentIndex: 0,
+      currentTrackId: 'a',
+      repeatMode: 'off',
+      durationSeconds: 0,
+      visibilityState: 'visible',
+      remainingSeconds: 0
     })).toBeNull();
   });
 
@@ -85,7 +111,7 @@ describe('crossfade', () => {
       currentIndex: 0,
       currentTrackId: 'a',
       repeatMode: 'one',
-      mode: 'soft',
+      durationSeconds: 5,
       visibilityState: 'visible',
       remainingSeconds: 2
     })).toBeNull();
@@ -97,7 +123,7 @@ describe('crossfade', () => {
       currentIndex: 2,
       currentTrackId: 'c',
       repeatMode: 'all',
-      mode: 'soft',
+      durationSeconds: 3,
       visibilityState: 'visible',
       remainingSeconds: 1
     })).toEqual({ trackId: 'a', durationSeconds: 3 });

@@ -150,22 +150,27 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
   return (
     <main className="app-shell">
       <audio
-        ref={player.audioRef}
-        onPlay={player.audioHandlers.onPlay}
-        onPlaying={player.audioHandlers.onPlaying}
-        onSeeked={player.audioHandlers.onSeeked}
-        onPause={player.audioHandlers.onPause}
+        ref={player.deckARef}
+        preload="auto"
+        onPlay={event => player.audioHandlers.onPlay(event.currentTarget)}
+        onPlaying={event => player.audioHandlers.onPlaying(event.currentTarget)}
+        onPause={event => player.audioHandlers.onPause(event.currentTarget)}
         onTimeUpdate={event => player.audioHandlers.onTimeUpdate(event.currentTarget)}
         onLoadedMetadata={event => player.audioHandlers.onLoadedMetadata(event.currentTarget)}
-        onEnded={player.audioHandlers.onEnded}
+        onEnded={event => player.audioHandlers.onEnded(event.currentTarget)}
         onError={event => player.audioHandlers.onError(event.currentTarget)}
       />
       <audio
-        ref={player.transitionAudioRef}
+        ref={player.deckBRef}
         preload="auto"
         aria-hidden="true"
-        onEnded={player.transitionAudioHandlers.onEnded}
-        onError={player.transitionAudioHandlers.onError}
+        onPlay={event => player.audioHandlers.onPlay(event.currentTarget)}
+        onPlaying={event => player.audioHandlers.onPlaying(event.currentTarget)}
+        onPause={event => player.audioHandlers.onPause(event.currentTarget)}
+        onTimeUpdate={event => player.audioHandlers.onTimeUpdate(event.currentTarget)}
+        onLoadedMetadata={event => player.audioHandlers.onLoadedMetadata(event.currentTarget)}
+        onEnded={event => player.audioHandlers.onEnded(event.currentTarget)}
+        onError={event => player.audioHandlers.onError(event.currentTarget)}
       />
 
       <DesktopShell
@@ -215,12 +220,12 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
                 effectiveStreamingMode: qualityProfile.effectiveMode,
                 networkPreference: qualityProfile.networkPreference,
                 detectedNetwork: qualityProfile.detectedNetwork,
-                crossfadeMode: player.crossfadeMode,
+                crossfadeSeconds: player.crossfadeSeconds,
                 normalizationMode: player.normalizationMode,
                 effectiveNormalizationMode: player.effectiveNormalizationMode,
                 onStreamingSelection: qualityProfile.setSelection,
                 onNetworkPreference: qualityProfile.setNetworkPreference,
-                onCrossfadeMode: player.setCrossfadeMode,
+                onCrossfadeSeconds: player.setCrossfadeSeconds,
                 onNormalizationMode: player.setNormalizationMode
               }}
               offlineMode={{
