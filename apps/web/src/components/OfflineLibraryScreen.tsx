@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Download, Folder, ListMusic, Play, Trash2, Wifi } from 'lucide-react';
 import type { Track } from '@home-music/shared';
 import type { OfflineCollectionKind } from '../offline-collection-references';
@@ -6,6 +7,7 @@ import {
   type OfflineCollectionSummary,
   type OfflineDownloadRecord
 } from '../offline-downloads';
+import { LIBRARY_PAGE_SIZE } from '../useLibraryNavigation';
 import { Artwork } from './Artwork';
 import { MiniPlayer } from './MiniPlayer';
 import { ResponsiveState } from './ResponsiveState';
@@ -56,9 +58,12 @@ export function OfflineLibraryScreen({
   onRemoveCollection,
   onExitOffline
 }: OfflineLibraryScreenProps) {
+  const [visibleIndividualCount, setVisibleIndividualCount] = useState(LIBRARY_PAGE_SIZE);
   const recordsById = new Map(records.map(record => [record.track.id, record]));
   const individualRecords = records.filter(record => individualTrackIds.has(record.track.id));
   const individualTracks = individualRecords.map(record => record.track);
+  const visibleIndividualRecords = individualRecords.slice(0, visibleIndividualCount);
+  const remainingIndividualCount = Math.max(0, individualRecords.length - visibleIndividualRecords.length);
 
   return (
     <>
@@ -126,7 +131,7 @@ export function OfflineLibraryScreen({
         <section className="library-content">
           <div className="section-heading"><span>Downloads individuais</span><small>{individualRecords.length}</small></div>
           <div className="library-track-list">
-            {individualRecords.map(record => {
+            {visibleIndividualRecords.map(record => {
               const track = record.track;
               const isCurrent = track.id === current?.id;
               return (
@@ -159,6 +164,15 @@ export function OfflineLibraryScreen({
               );
             })}
           </div>
+          {remainingIndividualCount > 0 && (
+            <button
+              className="load-more"
+              type="button"
+              onClick={() => setVisibleIndividualCount(count => count + LIBRARY_PAGE_SIZE)}
+            >
+              Mostrar mais {Math.min(LIBRARY_PAGE_SIZE, remainingIndividualCount)} músicas
+            </button>
+          )}
         </section>
       ) : collections.length === 0 ? (
         <ResponsiveState

@@ -2,7 +2,10 @@ import { useEffect, useState } from 'react';
 import { AuthenticatedApp } from './AuthenticatedApp';
 import { LoginScreen } from './components/LoginScreen';
 import { OfflineApp } from './OfflineApp';
-import { readOfflineColdStartRecords } from './offline-cold-start';
+import {
+  readOfflineColdStartRecords,
+  reconcileOfflineColdStartCollections
+} from './offline-cold-start';
 import { useOfflineDownloads, type OfflineDownloadRecord, type OfflineDownloads } from './offline-downloads';
 import { useAuth } from './useAuth';
 
@@ -11,11 +14,13 @@ function offlineSnapshot(
   records: readonly OfflineDownloadRecord[]
 ): OfflineDownloads {
   const available = [...records];
+  const downloadedIds = new Set(available.map(record => record.track.id));
   return {
     ...offline,
     records: available,
     tracks: available.map(record => record.track),
-    downloadedIds: new Set(available.map(record => record.track.id)),
+    downloadedIds,
+    collections: reconcileOfflineColdStartCollections(offline.collections, available),
     totalBytes: available.reduce((total, record) => total + record.size, 0),
     loading: false
   };
@@ -30,24 +35,19 @@ export default function App() {
   useEffect(() => {
     let disposed = false;
 
-    if (!auth.unreachable) {
+    // Com rede disponível, useOfflineDownloads já reconcilia o namespace físico.
+    // App cobre somente o cold start realmente offline, sem duplicar cache.keys().
+    if (!auth.unreachable || offline.records.length === 0 || navigator.onLine !== false) {
       setColdStartRecords(null);
-      return () => { disposed = true; };
-    }
-
-    if (offline.records.length === 0) {
-      setColdStartRecords([]);
       return () => { disposed = true; };
     }
 
     setColdStartRecords(null);
     void readOfflineColdStartRecords(offline.records)
       .then(records => {
-        if (!disposed) setColdStartRecords(records);
+        if (!disposed && records !== null) setColdStartRecords(records);
       })
-      .catch(() => {
-        if (!disposed) setColdStartRecords([]);
-      });
+      .catch(() => undefined);
 
     return () => { disposed = true; };
   }, [auth.unreachable, offline.records]);
@@ -56,13 +56,10 @@ export default function App() {
     if (offlineMode && !offline.loading && offline.tracks.length === 0) setOfflineMode(false);
   }, [offline.loading, offline.tracks.length, offlineMode]);
 
-  const automaticOfflineMode = auth.unreachable && Boolean(coldStartRecords?.length);
-  const checkingOfflineContent = auth.unreachable
-    && offline.records.length > 0
-    && coldStartRecords === null;
+  const automaticOfflineMode = auth.unreachable && offline.records.length > 0;
   const showOfflineMode = offlineMode || automaticOfflineMode;
-  const offlineForMode = automaticOfflineMode && coldStartRecords
-    ? offlineSnapshot(offline, coldStartRecords)
+  const offlineForMode = automaticOfflineMode
+    ? offlineSnapshot(offline, coldStartRecords ?? offline.records)
     : offline;
 
   if (showOfflineMode) {
@@ -74,17 +71,6 @@ export default function App() {
           void auth.retry();
         }}
       />
-    );
-  }
-
-  if (checkingOfflineContent) {
-    return (
-      <main className="login-shell">
-        <section className="login-card login-card--status" aria-live="polite">
-          <strong>Home Music</strong>
-          <span>Verificando seus downloads offline…</span>
-        </section>
-      </main>
     );
   }
 

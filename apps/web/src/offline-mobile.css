@@ -1,0 +1,6 @@
+@media (max-width: 699px) {
+  .phone-surface--offline .topbar__back-to-library {
+    visibility: visible;
+    pointer-events: auto;
+  }
+}
