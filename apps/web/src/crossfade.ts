@@ -1,23 +1,29 @@
 import type { RepeatMode, Track } from '@home-music/shared';
 import { nextTrackDecision } from './player-state';
 
-export type CrossfadeMode = 'off' | 'soft' | 'continuous';
+export const MAX_CROSSFADE_SECONDS = 12;
 
-const CROSSFADE_STORAGE_KEY = 'home-music:crossfade-mode:v1';
+const CROSSFADE_SECONDS_STORAGE_KEY = 'home-music:crossfade-seconds:v2';
+const LEGACY_CROSSFADE_MODE_STORAGE_KEY = 'home-music:crossfade-mode:v1';
 
-export function crossfadeDurationSeconds(mode: CrossfadeMode) {
-  if (mode === 'soft') return 3;
-  if (mode === 'continuous') return 5;
+export function normalizeCrossfadeSeconds(value: unknown) {
+  const numericValue = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(numericValue)) return 0;
+  return Math.max(0, Math.min(MAX_CROSSFADE_SECONDS, Math.round(numericValue)));
+}
+
+export function readCrossfadeSeconds(storage: Pick<Storage, 'getItem'>) {
+  const storedValue = storage.getItem(CROSSFADE_SECONDS_STORAGE_KEY);
+  if (storedValue !== null) return normalizeCrossfadeSeconds(storedValue);
+
+  const legacyMode = storage.getItem(LEGACY_CROSSFADE_MODE_STORAGE_KEY);
+  if (legacyMode === 'soft') return 3;
+  if (legacyMode === 'continuous') return 5;
   return 0;
 }
 
-export function readCrossfadeMode(storage: Pick<Storage, 'getItem'>): CrossfadeMode {
-  const value = storage.getItem(CROSSFADE_STORAGE_KEY);
-  return value === 'soft' || value === 'continuous' ? value : 'off';
-}
-
-export function writeCrossfadeMode(storage: Pick<Storage, 'setItem'>, mode: CrossfadeMode) {
-  storage.setItem(CROSSFADE_STORAGE_KEY, mode);
+export function writeCrossfadeSeconds(storage: Pick<Storage, 'setItem'>, seconds: number) {
+  storage.setItem(CROSSFADE_SECONDS_STORAGE_KEY, String(normalizeCrossfadeSeconds(seconds)));
 }
 
 type CrossfadeCandidateOptions = {
@@ -25,7 +31,7 @@ type CrossfadeCandidateOptions = {
   currentIndex: number;
   currentTrackId: string | null;
   repeatMode: RepeatMode;
-  mode: CrossfadeMode;
+  durationSeconds: number;
   visibilityState: DocumentVisibilityState;
   remainingSeconds: number;
 };
@@ -40,19 +46,23 @@ export function resolveCrossfadeCandidate({
   currentIndex,
   currentTrackId,
   repeatMode,
-  mode,
+  durationSeconds,
   visibilityState,
   remainingSeconds
 }: CrossfadeCandidateOptions): CrossfadeCandidate | null {
-  const durationSeconds = crossfadeDurationSeconds(mode);
-  if (!durationSeconds || visibilityState !== 'visible') return null;
-  if (!Number.isFinite(remainingSeconds) || remainingSeconds < 0 || remainingSeconds > durationSeconds) return null;
+  const normalizedDurationSeconds = normalizeCrossfadeSeconds(durationSeconds);
+  if (!normalizedDurationSeconds || visibilityState !== 'visible') return null;
+  if (
+    !Number.isFinite(remainingSeconds)
+    || remainingSeconds < 0
+    || remainingSeconds > normalizedDurationSeconds
+  ) return null;
 
   const decision = nextTrackDecision(queue, currentIndex, repeatMode, true);
   if (decision.type !== 'track' || decision.id === currentTrackId) return null;
 
   return {
     trackId: decision.id,
-    durationSeconds
+    durationSeconds: normalizedDurationSeconds
   };
 }
