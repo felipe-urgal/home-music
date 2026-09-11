@@ -2,7 +2,10 @@ import { useEffect, useState } from 'react';
 import { AuthenticatedApp } from './AuthenticatedApp';
 import { LoginScreen } from './components/LoginScreen';
 import { OfflineApp } from './OfflineApp';
-import { readOfflineColdStartRecords } from './offline-cold-start';
+import {
+  readOfflineColdStartRecords,
+  reconcileOfflineColdStartCollections
+} from './offline-cold-start';
 import { useOfflineDownloads, type OfflineDownloadRecord, type OfflineDownloads } from './offline-downloads';
 import { useAuth } from './useAuth';
 
@@ -11,11 +14,13 @@ function offlineSnapshot(
   records: readonly OfflineDownloadRecord[]
 ): OfflineDownloads {
   const available = [...records];
+  const downloadedIds = new Set(available.map(record => record.track.id));
   return {
     ...offline,
     records: available,
     tracks: available.map(record => record.track),
-    downloadedIds: new Set(available.map(record => record.track.id)),
+    downloadedIds,
+    collections: reconcileOfflineColdStartCollections(offline.collections, available),
     totalBytes: available.reduce((total, record) => total + record.size, 0),
     loading: false
   };
