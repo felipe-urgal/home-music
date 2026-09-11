@@ -3,6 +3,7 @@ import type { Track } from '@home-music/shared';
 import {
   MAX_CROSSFADE_SECONDS,
   normalizeCrossfadeSeconds,
+  otherCrossfadeDeck,
   readCrossfadeSeconds,
   resolveCrossfadeCandidate,
   writeCrossfadeSeconds
@@ -27,6 +28,11 @@ function track(id: string): Track {
 
 describe('crossfade', () => {
   const queue = [track('a'), track('b'), track('c')];
+
+  it('alterna os decks sem promover uma terceira fonte de playback', () => {
+    expect(otherCrossfadeDeck('a')).toBe('b');
+    expect(otherCrossfadeDeck('b')).toBe('a');
+  });
 
   it('normaliza a duração configurável para um intervalo seguro', () => {
     expect(normalizeCrossfadeSeconds(-1)).toBe(0);
