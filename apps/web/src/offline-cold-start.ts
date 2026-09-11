@@ -1,4 +1,4 @@
-import type { OfflineDownloadRecord } from './offline-downloads';
+import type { OfflineCollectionSummary, OfflineDownloadRecord } from './offline-downloads';
 import { offlineAudioCacheName } from './offline-downloads';
 import { readOfflineUserId } from './offline-user';
 
@@ -11,6 +11,30 @@ export function offlineCachedStreamHref(
   origin = typeof window === 'undefined' ? 'http://localhost' : window.location.origin
 ) {
   return new URL(offlineCachedStreamUrl(trackId), origin).href;
+}
+
+export function reconcileOfflineColdStartCollections(
+  collections: readonly OfflineCollectionSummary[],
+  records: readonly OfflineDownloadRecord[]
+): OfflineCollectionSummary[] {
+  const availableIds = new Set(records.map(record => record.track.id));
+
+  return collections.map(collection => {
+    const downloadedCount = collection.reference.trackIds.reduce(
+      (count, trackId) => count + (availableIds.has(trackId) ? 1 : 0),
+      0
+    );
+
+    let status = collection.status;
+    if (collection.error && collection.downloadingCount === 0) status = 'error';
+    else if (collection.status === 'paused') status = 'paused';
+    else if (collection.status === 'downloading' || collection.downloadingCount > 0) status = 'downloading';
+    else if (collection.totalCount > 0 && downloadedCount === collection.totalCount) status = 'available';
+    else if (downloadedCount > 0) status = 'partial';
+    else status = 'not-downloaded';
+
+    return { ...collection, downloadedCount, status };
+  });
 }
 
 type OfflineColdStartOptions = {
