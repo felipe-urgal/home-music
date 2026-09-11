@@ -155,7 +155,7 @@ export function AccountPlaybackPreferences({ value }: AccountPlaybackPreferences
           <span className="account-playback-group__icon"><Music2 /></span>
           <div>
             <strong id="account-playback-transition-title">Transição entre músicas</strong>
-            <small>Misture o fim da faixa atual com o começo da próxima enquanto o app estiver em primeiro plano.</small>
+            <small>Misture o fim da faixa atual com o começo da próxima em navegadores compatíveis e em primeiro plano.</small>
           </div>
         </div>
 
@@ -182,7 +182,7 @@ export function AccountPlaybackPreferences({ value }: AccountPlaybackPreferences
         {crossfadeMode !== 'off' && (
           <div className="account-playback-warning" role="status">
             <Music2 />
-            <span>Em segundo plano ou com a tela bloqueada, o Home Music mantém a troca de faixa normal para preservar compatibilidade.</span>
+            <span>No iPhone/iPad e em segundo plano ou com a tela bloqueada, o Home Music mantém a troca de faixa normal para preservar compatibilidade.</span>
           </div>
         )}
       </section>
