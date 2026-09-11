@@ -153,6 +153,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
         ref={player.audioRef}
         onPlay={player.audioHandlers.onPlay}
         onPlaying={player.audioHandlers.onPlaying}
+        onSeeked={player.audioHandlers.onSeeked}
         onPause={player.audioHandlers.onPause}
         onTimeUpdate={event => player.audioHandlers.onTimeUpdate(event.currentTarget)}
         onLoadedMetadata={event => player.audioHandlers.onLoadedMetadata(event.currentTarget)}
