@@ -3,9 +3,11 @@ import type { NormalizationMode, Track } from '@home-music/shared';
 import { isAppleMobileWebKit } from './background-playback';
 import {
   normalizeCrossfadeSeconds,
+  otherCrossfadeDeck,
   readCrossfadeSeconds,
   resolveCrossfadeCandidate,
-  writeCrossfadeSeconds
+  writeCrossfadeSeconds,
+  type CrossfadeDeck
 } from './crossfade';
 import { resolveOutputVolume } from './player-state';
 import {
@@ -14,8 +16,6 @@ import {
   type StreamingMode
 } from './streaming-quality';
 import { useAudioPlayer } from './useAudioPlayer';
-
-type Deck = 'a' | 'b';
 
 type PendingPromotion = {
   trackId: string;
@@ -49,7 +49,7 @@ export function useCrossfadeAudioPlayer(
   const player = useAudioPlayer(tracks, progressVisible, libraryReady, usesSystemVolume);
   const deckARef = useRef<HTMLAudioElement>(null);
   const deckBRef = useRef<HTMLAudioElement>(null);
-  const activeDeckRef = useRef<Deck>('a');
+  const activeDeckRef = useRef<CrossfadeDeck>('a');
   const animationFrameRef = useRef<number | null>(null);
   const attemptRef = useRef(0);
   const originTrackIdRef = useRef<string | null>(null);
@@ -63,14 +63,14 @@ export function useCrossfadeAudioPlayer(
   currentTrackIdRef.current = player.current?.id ?? null;
   outputVolumeRef.current = resolveOutputVolume(player.volume, usesSystemVolume);
 
-  const getDeckAudio = useCallback((deck: Deck) => (
+  const getDeckAudio = useCallback((deck: CrossfadeDeck) => (
     deck === 'a' ? deckARef.current : deckBRef.current
   ), []);
 
   const getActiveAudio = useCallback(() => getDeckAudio(activeDeckRef.current), [getDeckAudio]);
 
   const getInactiveAudio = useCallback(() => (
-    getDeckAudio(activeDeckRef.current === 'a' ? 'b' : 'a')
+    getDeckAudio(otherCrossfadeDeck(activeDeckRef.current))
   ), [getDeckAudio]);
 
   const clearAudio = useCallback((audio: HTMLAudioElement | null) => {
@@ -159,6 +159,13 @@ export function useCrossfadeAudioPlayer(
       cancelCrossfade();
     }
   }, [cancelCrossfade, player.playing]);
+
+  useEffect(() => {
+    const pendingPromotion = pendingPromotionRef.current;
+    if (!pendingPromotion) return;
+    pendingPromotion.shadowAudio.volume = 0;
+    pendingPromotion.audibleAudio.volume = outputVolumeRef.current;
+  }, [player.volume, usesSystemVolume]);
 
   useEffect(() => () => {
     attemptRef.current += 1;
@@ -308,7 +315,7 @@ export function useCrossfadeAudioPlayer(
     startingTrackIdRef.current = null;
     incomingTrackIdRef.current = null;
 
-    activeDeckRef.current = activeDeckRef.current === 'a' ? 'b' : 'a';
+    activeDeckRef.current = otherCrossfadeDeck(activeDeckRef.current);
     incomingAudio.volume = outputVolumeRef.current;
     audio.volume = 0;
     pendingPromotionRef.current = {
