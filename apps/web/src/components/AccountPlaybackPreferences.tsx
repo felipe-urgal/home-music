@@ -1,6 +1,6 @@
 import type { NormalizationMode, Track } from '@home-music/shared';
 import { CheckCircle2, Music2, Play, ShieldCheck, Volume2, Wifi } from 'lucide-react';
-import type { CrossfadeMode } from '../crossfade';
+import { MAX_CROSSFADE_SECONDS } from '../crossfade';
 import type {
   DetectedNetwork,
   NetworkPreference,
@@ -15,11 +15,7 @@ const STREAMING_CHOICES: Array<{ mode: StreamingSelection; label: string; detail
   { mode: 'economy', label: 'Economia', detail: 'AAC · 96 kbps' }
 ];
 
-const CROSSFADE_CHOICES: Array<{ mode: CrossfadeMode; label: string; detail: string }> = [
-  { mode: 'off', label: 'Desativada', detail: 'Troca de faixa sem sobreposição' },
-  { mode: 'soft', label: 'Suave', detail: 'Mistura os últimos 3 segundos' },
-  { mode: 'continuous', label: 'Contínua', detail: 'Mistura os últimos 5 segundos' }
-];
+const CROSSFADE_SECONDS = Array.from({ length: MAX_CROSSFADE_SECONDS + 1 }, (_, seconds) => seconds);
 
 const NORMALIZATION_CHOICES: Array<{ mode: NormalizationMode; label: string; detail: string }> = [
   { mode: 'off', label: 'Desativada', detail: 'Sem ajuste de ganho' },
@@ -51,12 +47,12 @@ export type AccountPlaybackPreferencesValue = {
   effectiveStreamingMode: StreamingMode;
   networkPreference: NetworkPreference;
   detectedNetwork: DetectedNetwork;
-  crossfadeMode: CrossfadeMode;
+  crossfadeSeconds: number;
   normalizationMode: NormalizationMode;
   effectiveNormalizationMode: NormalizationMode;
   onStreamingSelection: (selection: StreamingSelection) => void;
   onNetworkPreference: (preference: NetworkPreference) => void;
-  onCrossfadeMode: (mode: CrossfadeMode) => void;
+  onCrossfadeSeconds: (seconds: number) => void;
   onNormalizationMode: (mode: NormalizationMode) => void;
 };
 
@@ -71,12 +67,12 @@ export function AccountPlaybackPreferences({ value }: AccountPlaybackPreferences
     effectiveStreamingMode,
     networkPreference,
     detectedNetwork,
-    crossfadeMode,
+    crossfadeSeconds,
     normalizationMode,
     effectiveNormalizationMode,
     onStreamingSelection,
     onNetworkPreference,
-    onCrossfadeMode,
+    onCrossfadeSeconds,
     onNormalizationMode
   } = value;
 
@@ -155,31 +151,36 @@ export function AccountPlaybackPreferences({ value }: AccountPlaybackPreferences
           <span className="account-playback-group__icon"><Music2 /></span>
           <div>
             <strong id="account-playback-transition-title">Transição entre músicas</strong>
-            <small>Misture o fim da faixa atual com o começo da próxima em navegadores compatíveis e em primeiro plano.</small>
+            <small>Escolha por quantos segundos o fim da faixa atual mistura com o começo da próxima.</small>
           </div>
         </div>
 
-        <div className="account-playback-options">
-          {CROSSFADE_CHOICES.map(choice => (
-            <button
-              key={choice.mode}
-              className={crossfadeMode === choice.mode ? 'is-selected' : ''}
-              type="button"
-              aria-pressed={crossfadeMode === choice.mode}
-              onClick={() => onCrossfadeMode(choice.mode)}
+        <div className="account-playback-network">
+          <div className="account-playback-network__heading">
+            <Music2 />
+            <div>
+              <strong>Crossfade</strong>
+              <small>{crossfadeSeconds === 0 ? 'Desativado' : `${crossfadeSeconds} s de transição contínua`}</small>
+            </div>
+          </div>
+          <label>
+            <span>Duração</span>
+            <select
+              value={crossfadeSeconds}
+              onChange={event => onCrossfadeSeconds(Number(event.target.value))}
+              aria-label="Duração do crossfade em segundos"
             >
-              <span className="account-playback-option__copy">
-                <strong>{choice.label}</strong>
-                <small>{choice.detail}</small>
-              </span>
-              {crossfadeMode === choice.mode
-                ? <CheckCircle2 className="account-playback-option__check" aria-hidden="true" />
-                : <span className="account-playback-option__dot" aria-hidden="true" />}
-            </button>
-          ))}
+              {CROSSFADE_SECONDS.map(seconds => (
+                <option key={seconds} value={seconds}>
+                  {seconds === 0 ? '0 s · desativado' : `${seconds} s`}
+                </option>
+              ))}
+            </select>
+          </label>
+          <small className="account-playback-network__effective">0 desativa · máximo {MAX_CROSSFADE_SECONDS} s neste dispositivo.</small>
         </div>
 
-        {crossfadeMode !== 'off' && (
+        {crossfadeSeconds > 0 && (
           <div className="account-playback-warning" role="status">
             <Music2 />
             <span>No iPhone/iPad e em segundo plano ou com a tela bloqueada, o Home Music mantém a troca de faixa normal para preservar compatibilidade.</span>
