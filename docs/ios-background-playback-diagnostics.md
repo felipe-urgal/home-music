@@ -1,8 +1,10 @@
 # Diagnóstico de playback em background no iOS
 
-Status: protocolo de investigação da #327.
+**Status:** protocolo opcional de diagnóstico/regressão.
 
-Este documento descreve a instrumentação **local e opt-in** usada para investigar interrupções de playback no PWA instalado no iPhone. Ela não é telemetria, não envia eventos ao servidor e não substitui a máquina de estados de `useAudioPlayer`.
+Este documento descreve a instrumentação local e opt-in usada para investigar interrupções de playback no PWA instalado no iPhone. Ela não é telemetria, não envia eventos ao servidor e não substitui a máquina de estados de `useAudioPlayer`.
+
+A implementação nasceu na #327. A issue foi encerrada por decisão do projeto após o hardening técnico; o QA físico residual foi aceito como risco de plataforma. Este protocolo permanece disponível caso uma regressão real volte a ser observada.
 
 ## Objetivo
 
@@ -10,39 +12,31 @@ Separar, com evidência observável, situações como:
 
 - pausa/interrupção no meio da faixa;
 - falha perto do handoff para a próxima faixa;
-- perda de pipeline do `HTMLAudioElement` pelo WebKit;
+- perda do pipeline de áudio pelo WebKit;
 - erro de rede/decode;
 - retorno do documento ao foreground;
-- evento `play`/`playing` que não volta a produzir áudio.
+- evento de reprodução que não volta a produzir áudio.
 
-A instrumentação não tenta manter o processo vivo e não adiciona retry de `play()`.
+A instrumentação não tenta manter o processo vivo e não adiciona retry ilimitado de playback.
 
 ## Privacidade e retenção
 
-O log contém somente:
-
-- timestamp;
-- nome do evento;
-- `document.visibilityState`;
-- ID interno da faixa atual;
-- estado React `playing` observado;
-- `paused`, `ended`, `readyState`, `networkState`, `currentTime`, `duration` e `MediaError.code` do elemento de áudio;
-- detalhe técnico curto para handoff/audio session quando aplicável.
+O log guarda somente dados técnicos mínimos, como timestamp, evento, visibilidade da página, ID interno da faixa e estado do elemento de áudio.
 
 Não são registrados título, artista, álbum, URL de stream, headers, cookies, tokens, path físico, capa ou bytes de mídia.
 
-O buffer usa `localStorage`, mantém no máximo **150 eventos** e fica desabilitado por padrão. Os eventos permanecem somente no perfil local até serem limpos ou substituídos pelo ring buffer.
+O buffer usa `localStorage`, mantém no máximo **150 eventos** e fica desabilitado por padrão.
 
 ## Habilitar
 
-No contexto do Home Music, via Web Inspector/DevTools:
+Via Web Inspector/DevTools no contexto do Home Music:
 
 ```js
 localStorage.setItem('home-music:playback-diagnostics:v1:enabled', '1');
 location.reload();
 ```
 
-Depois da reprodução, ler o buffer:
+Ler o buffer:
 
 ```js
 JSON.parse(localStorage.getItem('home-music:playback-diagnostics:v1:events') || '[]');
@@ -57,7 +51,7 @@ localStorage.removeItem('home-music:playback-diagnostics:v1:events');
 
 ## Eventos observados
 
-Em Apple mobile WebKit, `useBackgroundPlaybackContinuity` registra quando o modo está habilitado:
+A instrumentação pode registrar eventos do elemento de áudio, lifecycle do documento, handoff e configuração de audio session, entre eles:
 
 - `continuity:attached`;
 - `audio:waiting`;
@@ -74,23 +68,23 @@ Em Apple mobile WebKit, `useBackgroundPlaybackContinuity` registra quando o modo
 - `background-handoff`;
 - `audio-session-configure`.
 
-Ao receber `playing`, `pageshow` ou `visibilitychange` durante reprodução, a camada de continuidade também revalida `navigator.audioSession.type = "playback"` quando a API existe. Isso é idempotente e não chama `audio.play()`.
+A revalidação da audio session, quando suportada pela plataforma, é idempotente e não deve disparar reprodução por conta própria.
 
 ## Como interpretar
 
-Alguns padrões úteis:
+Exemplos de sinais úteis:
 
-- `reactPlaying: true` + `audio.paused: true` após suspensão sugere divergência entre estado observado da UI e pipeline real;
-- `audio:error` com `errorCode: 2` em `hidden` é compatível com a classe transitória já tratada pela política Apple;
-- `audio:error` com código 3/4 continua sendo evidência de decode/source e não deve ser mascarado como suspensão;
-- `background-handoff` imediatamente antes da falha aponta investigação para troca de faixa;
-- ausência completa de eventos durante a tentativa de Play na lock screen sugere que o WebKit não devolveu tempo de CPU/evento ao documento, mas isso precisa ser comparado com Safari normal antes de classificar como limite de plataforma.
+- estado React de reprodução ativo + elemento de áudio pausado após suspensão pode indicar divergência entre UI e pipeline real;
+- erro de rede em background pode pertencer à classe transitória tratada pela política Apple;
+- erro de decode/source deve continuar sendo tratado como falha de mídia, não como simples suspensão;
+- `background-handoff` imediatamente antes da falha direciona a investigação para a troca de faixa;
+- ausência completa de eventos durante ação na lock screen pode indicar que o WebKit não devolveu tempo de CPU/evento ao documento.
 
-O campo `reactPlaying` **não é chamado de intenção do usuário**: a intenção interna continua pertencendo a `useAudioPlayer`. Se a investigação exigir distinguir diretamente `resumeIntent`/`stop-transient`, a instrumentação deve ser estendida na autoridade do player em um passo posterior, sem inferir esse estado a partir do DOM.
+Diagnóstico não deve inferir intenção interna do usuário apenas a partir do DOM. A autoridade continua em `useAudioPlayer`.
 
-## Protocolo físico mínimo
+## Protocolo de regressão física
 
-Registrar na issue/PR:
+Quando houver uma regressão reproduzível, registre:
 
 1. modelo do iPhone e versão exata do iOS;
 2. PWA instalada versus Safari normal;
@@ -98,6 +92,7 @@ Registrar na issue/PR:
 4. sequência de faixas curtas para vários handoffs;
 5. pause/resume e next/previous pela lock screen;
 6. retorno ao app depois da falha;
-7. quando possível, alternância Wi-Fi/celular e interrupção de sistema.
+7. quando possível, alternância Wi-Fi/celular e interrupção de sistema;
+8. trecho relevante do ring buffer local.
 
-O PR de instrumentação pode ficar verde em CI, mas a #327 só pode ser encerrada depois da reprodução/validação em iPhone real.
+Esse protocolo é diagnóstico futuro, não gate retroativo para as issues já encerradas.

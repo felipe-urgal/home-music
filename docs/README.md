@@ -1,149 +1,135 @@
 # Documentação do Home Music
 
-Este índice separa **documentação atual**, **planos** e **histórico**. A intenção é evitar que uma decisão antiga seja usada como runbook ou especificação vigente.
+A raiz de `docs/` contém apenas documentação **viva e operacional**. Planos encerrados, decisões de fases antigas e snapshots substituídos ficam em [`history/`](history/README.md).
 
 ## Ordem de confiança
 
-Quando houver divergência, use esta ordem:
+Quando houver divergência:
 
 1. código, testes, `package.json`, workflows e contratos executáveis;
 2. documentação canônica atual;
-3. roadmap e issues abertas;
-4. planos/ADRs ainda não incorporados;
-5. `docs/history/` como contexto histórico.
+3. [`roadmap.md`](roadmap.md) e issues abertas;
+4. `docs/history/` apenas como contexto histórico.
 
 ## Comece aqui
 
-- [`../README.md`](../README.md) — visão geral, comandos e recursos do produto;
-- [`DEVELOPMENT.md`](DEVELOPMENT.md) — setup e fluxo de engenharia;
-- [`PRODUCTION.md`](PRODUCTION.md) — operação canônica da instalação real;
-- [`architecture.md`](architecture.md) — arquitetura do sistema;
-- [`testing-and-quality.md`](testing-and-quality.md) — baseline local, CI e checks direcionados;
-- [`roadmap.md`](roadmap.md) — estado técnico corrente e próxima fase.
+- [`../README.md`](../README.md) — visão geral do produto;
+- [`roadmap.md`](roadmap.md) — estado técnico corrente;
+- [`architecture.md`](architecture.md) — arquitetura vigente;
+- [`DEVELOPMENT.md`](DEVELOPMENT.md) — desenvolvimento;
+- [`PRODUCTION.md`](PRODUCTION.md) — operação da instalação real;
+- [`testing-and-quality.md`](testing-and-quality.md) — testes e CI.
 
-## Estado técnico atual
+## Biblioteca e player
 
-Em **2026-09-11**:
-
-- fase 7.5 (multiusuário/autenticação) está concluída; os documentos de implementação foram arquivados;
-- fase 14 (portabilidade de dados pessoais) está implementada na `main` após o PR #324;
-- fase 15 (Library Assistant) é o ciclo técnico ativo, rastreado pela issue #310;
-- a fundação do Assistente (#311), identificação via MusicBrainz (#312), revisão/aplicação segura (#313), artwork externo (#314), lyrics via LRCLIB (#315), resolução unificada de lyrics (#316), autonomia progressiva (#318), normalização (#319), identificação opcional por áudio (#320), fallback canônico de artwork (#321) e operação em volume (#356) estão implementadas;
-- a transcrição/alinhamento local opcional de lyrics com Whisper (#322) está em revisão na PR #375. O contrato operacional e de segurança fica em [`lyrics.md`](lyrics.md).
-
-Para o estado instantâneo de issues/PRs, GitHub é a fonte de verdade; este índice não tenta reproduzir todo o tracker.
-
-## Arquitetura e composição
-
-- [`architecture.md`](architecture.md) — visão arquitetural canônica;
-- [`server-composition.md`](server-composition.md) — composição do backend/Fastify;
-- [`app-composition.md`](app-composition.md) — composição do frontend;
-- [`frontend-code-splitting.md`](frontend-code-splitting.md) — estratégia de code splitting;
-- [`library-screen-responsibilities.md`](library-screen-responsibilities.md) — responsabilidades da Biblioteca;
-- [`player-screen-responsibilities.md`](player-screen-responsibilities.md) — responsabilidades do Player;
-- [`deep-links.md`](deep-links.md) — deep links e navegação.
-
-## Identidade, contas e segurança
-
-- [`multi-user-auth.md`](multi-user-auth.md) — identidade, papéis, sessões, ownership e recovery;
-- [`administration-ui.md`](administration-ui.md) — Administração e Minha conta;
-- [`personal-data-portability.md`](personal-data-portability.md) — exportação/importação de dados pessoais;
-- [`login-abuse-protection.md`](login-abuse-protection.md) — proteção contra abuso de login;
-- [`password-ux.md`](password-ux.md) — contrato de UX de senha;
-- [`security-regressions.md`](security-regressions.md) — regressões sensíveis e suíte de segurança.
-
-## Biblioteca, metadata e administração
-
-- [`library-views.md`](library-views.md) — projeções/visões da biblioteca;
-- [`library-http-delivery.md`](library-http-delivery.md) — entrega HTTP da mídia;
-- [`library-metadata-normalization.md`](library-metadata-normalization.md) — normalização de metadata e evidência externa reutilizada do Assistente;
+- [`library-views.md`](library-views.md) — projeções da biblioteca;
+- [`library-http-delivery.md`](library-http-delivery.md) — entrega HTTP de mídia;
 - [`library-navigation-performance.md`](library-navigation-performance.md) — performance de navegação;
-- [`library-assistant.md`](library-assistant.md) — contrato implementado do Assistente: triagem, MusicBrainz, artwork, revisão individual/em lote, lyrics, autonomia progressiva, reset seguro, fila e observabilidade;
-- [`library-assistant-audio-fingerprint.md`](library-assistant-audio-fingerprint.md) — fallback manual de identificação por áudio com Chromaprint/fpcalc local, cache físico e AcoustID opcional reaproveitando o matcher/review existentes;
-- [`lyrics.md`](lyrics.md) — resolução canônica de lyrics, sidecars, override gerenciado, LRCLIB, Whisper local opcional, stale protection, rollback e política de conteúdo;
-- [`admin-metadata-overrides.md`](admin-metadata-overrides.md) — overrides de metadata e autoridade usada pelo apply do Assistente;
-- [`admin-cover-overrides.md`](admin-cover-overrides.md) — overrides de capa e autoridade usada pelo apply individual de artwork do Assistente;
-- [`admin-file-moves.md`](admin-file-moves.md) — organização/movimentação de arquivos;
-- [`admin-bulk-actions.md`](admin-bulk-actions.md) — ações em lote;
-- [`admin-quarantine.md`](admin-quarantine.md) — lixeira/quarentena;
-- [`admin-operation-history.md`](admin-operation-history.md) — histórico operacional;
-- [`admin-transcode-cache.md`](admin-transcode-cache.md) — cache de transcode;
+- [`library-screen-responsibilities.md`](library-screen-responsibilities.md) — fronteiras da tela de Biblioteca;
+- [`player-screen-responsibilities.md`](player-screen-responsibilities.md) — autoridade do player, erros e continuidade;
+- [`deep-links.md`](deep-links.md) — deep links;
 - [`smart-playlists.md`](smart-playlists.md) — playlists inteligentes;
 - [`m3u8-playlists.md`](m3u8-playlists.md) — playlists M3U8.
 
+## Metadata, artwork e lyrics
+
+- [`admin-metadata-overrides.md`](admin-metadata-overrides.md) — overrides de metadata;
+- [`admin-cover-overrides.md`](admin-cover-overrides.md) — overrides de capa;
+- [`library-metadata-normalization.md`](library-metadata-normalization.md) — normalização de artista/álbum;
+- [`artwork-fallback.md`](artwork-fallback.md) — fallback visual e Media Session;
+- [`lyrics.md`](lyrics.md) — resolução canônica, LRCLIB e Whisper local;
+- [`lyrics-offline.md`](lyrics-offline.md) — snapshot de lyrics para reprodução offline.
+
+## Assistente da Biblioteca
+
+- [`library-assistant.md`](library-assistant.md) — contrato principal e estado atual;
+- [`library-assistant-audio-fingerprint.md`](library-assistant-audio-fingerprint.md) — Chromaprint/AcoustID;
+- [`library-assistant-autonomy.md`](library-assistant-autonomy.md) — autonomia opt-in;
+- [`library-assistant-observability.md`](library-assistant-observability.md) — métricas, retries e baseline operacional.
+
+A Fase 15 está encerrada. O planejamento original foi movido integralmente para [`history/library-assistant-plan-phase-15.md`](history/library-assistant-plan-phase-15.md).
+
+## PWA e offline
+
+- [`pwa.md`](pwa.md) — PWA, bootstrap e Media Session;
+- [`offline-downloads.md`](offline-downloads.md) — downloads, cache e referências lógicas;
+- [`pwa-icon-identity.md`](pwa-icon-identity.md) — identidade da instalação;
+- [`ios-background-playback-diagnostics.md`](ios-background-playback-diagnostics.md) — protocolo local de diagnóstico/regressão no iOS.
+
+## Administração e conta
+
+- [`administration-ui.md`](administration-ui.md) — composição atual de Administração/Minha conta;
+- [`admin-bulk-actions.md`](admin-bulk-actions.md) — ações em lote;
+- [`admin-file-moves.md`](admin-file-moves.md) — movimentação/organização de arquivos;
+- [`admin-quarantine.md`](admin-quarantine.md) — lixeira/quarentena;
+- [`admin-operation-history.md`](admin-operation-history.md) — histórico operacional;
+- [`admin-transcode-cache.md`](admin-transcode-cache.md) — cache de transcode;
+- [`multi-user-auth.md`](multi-user-auth.md) — usuários, papéis, sessões e ownership;
+- [`password-ux.md`](password-ux.md) — UX segura de senha;
+- [`login-abuse-protection.md`](login-abuse-protection.md) — proteção de login;
+- [`personal-data-portability.md`](personal-data-portability.md) — exportação/importação pessoal;
+- [`security-regressions.md`](security-regressions.md) — regressões sensíveis.
+
 ## Importação e providers
 
-- [`import-upload.md`](import-upload.md) — upload local;
-- [`import-url.md`](import-url.md) — importação por URL;
+- [`import-upload.md`](import-upload.md) — upload;
+- [`import-url.md`](import-url.md) — URL;
 - [`import-staging.md`](import-staging.md) — staging;
-- [`import-staging-cleanup.md`](import-staging-cleanup.md) — limpeza do staging;
+- [`import-staging-cleanup.md`](import-staging-cleanup.md) — cleanup;
 - [`import-safe-destination.md`](import-safe-destination.md) — destino seguro;
 - [`import-duplicate-detection.md`](import-duplicate-detection.md) — duplicatas;
-- [`import-incremental-library-update.md`](import-incremental-library-update.md) — atualização incremental após importação;
+- [`import-incremental-library-update.md`](import-incremental-library-update.md) — atualização incremental;
 - [`import-metadata-preview.md`](import-metadata-preview.md) — preview de metadata;
-- [`import-job-retry.md`](import-job-retry.md) — retry de jobs;
-- [`external-providers.md`](external-providers.md) — contrato de providers externos;
-- [`external-provider-batches.md`](external-provider-batches.md) — execução em lotes;
-- [`external-provider-engine-decision.md`](external-provider-engine-decision.md) — decisão arquitetural do engine de providers;
-- [`jamendo.md`](jamendo.md) — descoberta/importação Jamendo;
-- [`yt-dlp-provider.md`](yt-dlp-provider.md) — provider baseado em yt-dlp.
+- [`import-job-retry.md`](import-job-retry.md) — retry;
+- [`external-providers.md`](external-providers.md) — arquitetura atual de providers;
+- [`external-provider-batches.md`](external-provider-batches.md) — lotes/playlists de provider;
+- [`yt-dlp-provider.md`](yt-dlp-provider.md) — provider yt-dlp;
+- [`jamendo.md`](jamendo.md) — Jamendo.
 
-## Player, PWA e offline
-
-- [`pwa.md`](pwa.md) — arquitetura PWA/service worker;
-- [`pwa-icon-identity.md`](pwa-icon-identity.md) — identidade visual dos ícones PWA;
-- [`offline-downloads.md`](offline-downloads.md) — downloads offline e isolamento por usuário;
-- [`artwork-fallback.md`](artwork-fallback.md) — fallback de artwork e contrato visual do vinil do player;
-- [`ffmpeg.md`](ffmpeg.md) — FFmpeg/FFprobe, também reutilizado para preparar PCM em jobs locais de lyrics.
+A avaliação original que escolheu yt-dlp como engine principal é histórica e está em [`history/external-provider-engine-decision-phase-9.md`](history/external-provider-engine-decision-phase-9.md).
 
 ## OpenSubsonic
 
-- [`open-subsonic.md`](open-subsonic.md) — subset suportado, autenticação, ownership e compatibilidade;
-- [`lyrics.md`](lyrics.md) — fonte de verdade da resolução de letras também consumida por `getLyricsBySongId`.
+- [`open-subsonic.md`](open-subsonic.md) — subset suportado, autenticação, ownership e compatibilidade.
 
-A compatibilidade externa deve ser registrada nesse documento e nos testes/validações correspondentes; não use requisitos históricos de fechamento de issue como contrato atual.
+## Arquitetura e composição
 
-## Produção, backup e acesso remoto
+- [`app-composition.md`](app-composition.md) — composição do frontend;
+- [`server-composition.md`](server-composition.md) — composição do backend;
+- [`frontend-code-splitting.md`](frontend-code-splitting.md) — code splitting;
+- [`long-job-observability.md`](long-job-observability.md) — observabilidade de jobs;
+- [`ffmpeg.md`](ffmpeg.md) — FFmpeg/FFprobe.
 
-- [`PRODUCTION.md`](PRODUCTION.md) — runbook canônico;
-- [`production.md`](production.md) — detalhes de systemd/helper privilegiado;
-- [`production-contract.md`](production-contract.md) — contrato consumido pelo Dev Dashboard;
+## Produção e acesso remoto
+
+- [`PRODUCTION.md`](PRODUCTION.md) — runbook principal;
+- [`production.md`](production.md) — systemd/helper e detalhes operacionais;
+- [`production-contract.md`](production-contract.md) — contrato do Dev Dashboard;
 - [`production-verification.md`](production-verification.md) — verificação funcional;
-- [`backup-restore.md`](backup-restore.md) — backup e restore SQLite;
+- [`backup-restore.md`](backup-restore.md) — backup/restore;
 - [`tailscale.md`](tailscale.md) — Tailscale Serve;
-- [`public-access.md`](public-access.md) — acesso público/Funnel;
+- [`public-access.md`](public-access.md) — Funnel/acesso público;
 - [`tailscale-hardening.md`](tailscale-hardening.md) — hardening;
 - [`tailscale-funnel-troubleshooting.md`](tailscale-funnel-troubleshooting.md) — troubleshooting.
 
-Os pares `PRODUCTION.md`/`production.md` e `DEVELOPMENT.md`/`development-environments.md` são intencionais: o arquivo em maiúsculas é o ponto de entrada canônico; o complementar aprofunda detalhes mecânicos.
-
-## Desenvolvimento, dependências e qualidade
+## Engenharia
 
 - [`development-environments.md`](development-environments.md) — isolamento DEV/produção;
-- [`testing-and-quality.md`](testing-and-quality.md) — política de testes e CI;
-- [`dependency-management.md`](dependency-management.md) — dependências e lifecycle;
+- [`dependency-management.md`](dependency-management.md) — dependências/lifecycle;
 - [`large-library-benchmark.md`](large-library-benchmark.md) — benchmark de biblioteca grande;
-- [`long-job-observability.md`](long-job-observability.md) — observabilidade de jobs longos;
 - [`accessibility.md`](accessibility.md) — acessibilidade.
-
-## Planos e decisões
-
-- [`library-assistant-plan.md`](library-assistant-plan.md) — plano e decisões de evolução da fase 15; comportamento incorporado deve ser consultado primeiro nas docs canônicas por domínio;
-- documentos com `*-decision.md` preservam decisões arquiteturais específicas e devem ser lidos junto do código atual.
 
 ## Histórico
 
-- [`history/phase-7.5/`](history/phase-7.5/) — slices e runbooks produzidos durante a migração multiusuário; **não são fonte de verdade atual**;
-- [`history/roadmap-through-phase-14.md`](history/roadmap-through-phase-14.md) — snapshot do roadmap acumulado antes da simplificação para a fase 15.
+Use [`history/README.md`](history/README.md) para navegar snapshots e decisões encerradas. Arquivos de `history/` não são especificação operacional corrente.
 
-Arquivar não significa apagar conhecimento: significa impedir que material de transição concorra com a documentação canônica.
-
-## Manutenção deste índice
+## Regra de manutenção
 
 Ao concluir uma mudança relevante:
 
-- atualize a doc de domínio no mesmo PR;
-- se um documento virou apenas contexto histórico, mova-o para `docs/history/` e remova referências operacionais a ele;
-- se uma nova doc for plano, deixe isso explícito no nome e no texto;
-- não duplique contratos executáveis que já têm uma fonte melhor no código/workflow;
-- links para issues/PRs ajudam a explicar história, mas não devem ser usados como status permanente.
+- atualize a doc canônica no mesmo PR;
+- remova ou arquive planos encerrados;
+- evite criar docs pequenas que apenas repetem outra fonte;
+- não use checklists antigos de issue como estado do produto;
+- não declare hardware/serviço externo como validado sem evidência;
+- prefira uma única fonte canônica por regra.
