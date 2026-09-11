@@ -1,187 +1,67 @@
-# PWA, cache seletivo e downloads offline
+# PWA e modo offline
 
-Este documento descreve o comportamento **atual** da PWA do Home Music. Para scheduler, referências lógicas, deduplicação, sincronização e matriz de validação mobile, veja também [offline-downloads.md](offline-downloads.md).
+Este documento descreve o comportamento corrente da PWA do Home Music. Para detalhes de downloads, cache e regressões manuais, veja [`offline-downloads.md`](offline-downloads.md).
 
-## Registro e atualização
+## App shell
 
-O service worker é registrado no build de produção quando o navegador oferece a API de Service Worker. Em acesso remoto, o cenário recomendado é HTTPS via Tailscale Serve.
+O service worker mantém um shell público mínimo com HTML, assets compilados, manifest e ícones. O `OfflineApp` faz parte do bundle inicial, portanto um cold start sem rede não depende de carregar código adicional.
 
-`/sw.js` é servido com `Cache-Control: no-store`, permitindo que o navegador verifique atualizações da política do worker. Caches estáticos antigos com prefixo conhecido são removidos durante a ativação quando deixam de ser compatíveis.
+Quando o shell já está instalado, a aplicação consegue montar a interface a partir do conteúdo local e atualizar o shell depois, fora do caminho crítico de abertura.
 
-## Identidade de instalação
+## Bootstrap offline
 
-A #176 substituiu o placeholder genérico por uma identidade **Casa + vinil**, sem texto dentro do ícone e alinhada ao fundo escuro + azul atual.
+A aplicação separa disponibilidade local de disponibilidade do servidor.
 
-O manifest usa PNGs `192x192` e `512x512` em variantes `any` e `maskable`. O shell HTML também expõe `apple-touch-icon` `180x180`, favicon SVG e pinned tab monocromático do Safari.
+Quando o servidor não pode ser alcançado e existe uma identidade local conhecida com downloads registrados, `App.tsx` abre o `OfflineApp` pelo manifesto local e reconcilia os bytes físicos depois da montagem.
 
-Os PNGs são gerados deterministicamente por `apps/web/scripts/generate-pwa-icons.mjs` antes de desenvolvimento, build e testes. A fonte visual, safe zone e matriz de assets estão documentadas em [pwa-icon-identity.md](pwa-icon-identity.md).
+A reconciliação posterior remove itens realmente ausentes quando consegue verificar o Cache Storage. Uma falha transitória nessa verificação não transforma o manifesto em vazio nem impede a abertura inicial.
 
-Essa evolução não altera o namespace de áudio offline.
+Uma resposta real do servidor continua tendo precedência sobre o modo offline; offline não substitui autenticação normal.
 
-## Cache estático
+## Isolamento por usuário
 
-O cache estático é deliberadamente limitado a recursos públicos necessários para montar a aplicação:
+Downloads, referências lógicas e cache de áudio continuam escopados ao usuário. Troca de conta não reutiliza silenciosamente conteúdo de outra identidade.
 
-- `index.html`;
-- assets hashados do Vite em `/assets/*`;
-- `manifest.webmanifest`;
-- favicon/ícones públicos da aplicação.
+A reprodução offline continua usando a rota virtual `/offline-audio/<trackId>` servida pelo service worker para o contexto correto.
 
-Quando já existe shell instalado, navegações usam **cache-first sem revalidação concorrente**: o HTML local é devolvido sem iniciar rede durante o evento de navegação. Depois que a interface monta online, o cliente envia uma mensagem ao service worker e a atualização de `SHELL_URL` ocorre fora do caminho crítico do cold start. Se ainda não houver shell cacheado, a navegação tenta a rede e responde `503` somente quando rede e cache não podem fornecer a aplicação.
+## Downloads
 
-Assets hashados continuam **cache-first** porque o nome muda junto com o conteúdo. O `OfflineApp` faz parte do bundle inicial da aplicação: abrir o modo offline em cold start não depende mais de aquecer um lazy chunk durante uma sessão online anterior. Isso aumenta deliberadamente o shell inicial em troca de tornar uma capacidade principal offline independente de runtime warm best-effort.
+O frontend reutiliza um scheduler global com até três operações simultâneas para download individual, lote, playlists e pastas. A mesma faixa física pode servir várias referências lógicas sem duplicar os bytes.
 
-Conteúdo autenticado de `/api/*` não é colocado no cache estático da PWA. Login, sessão, biblioteca, favoritos, histórico, playlists, capas privadas e streaming continuam protegidos pelo backend.
+Quando a plataforma oferece Background Fetch, uma transferência iniciada pode ser delegada ao navegador. Sem essa capacidade, o Home Music usa o fluxo foreground existente e não promete continuidade durante suspensão da página.
 
-## Bootstrap de sessão e conectividade
+Detalhes: [`offline-downloads.md`](offline-downloads.md).
 
-A verificação inicial de `/api/auth/status` possui um orçamento curto de **1,5 segundo**. Se `navigator.onLine` já reportar ausência de rede, a tentativa é pulada; se a requisição não concluir dentro desse orçamento ou falhar antes de alcançar o servidor, a aplicação marca o Home Music como inalcançável.
+## Media Session
 
-Esse timeout não autentica ninguém e não transforma resposta de servidor em falha de rede. Quando o servidor responde, a resposta continua sendo a autoridade: sessão inválida, senha obrigatória ou erro HTTP seguem o fluxo normal de autenticação e podem limpar a identidade offline ativa conforme as regras existentes.
+`useAudioPlayer` continua sendo a autoridade única de playback. Media Session apenas projeta a faixa corrente para os controles do sistema.
 
-A raiz (`App.tsx`) separa o índice local usado para abrir a interface da reconciliação física do Cache Storage:
+A metadata usa a capa efetiva quando existe e o fallback estático canônico quando não existe. Se a plataforma não aceitar artwork, o Home Music degrada para metadata textual sem quebrar reprodução.
 
-- `offlineContentAvailable`: usa a identidade offline conhecida e o manifesto físico local já carregado; se existem registros e o servidor está inalcançável, o `OfflineApp` pode ser montado sem esperar `cache.keys()`;
-- a enumeração física do cache do usuário continua sendo executada depois da montagem, em background, com uma única listagem das chaves e sem disparar uma consulta por faixa;
-- quando essa reconciliação conclui com sucesso, registros cujo blob não está presente são retirados do snapshot da sessão;
-- falha transitória para abrir/enumerar Cache Storage não transforma o manifesto em vazio nem volta a bloquear o cold start;
-- o capability handshake do service worker continua sendo necessário para o transporte `/offline-audio/<trackId>`, mas um atraso transitório de `controller`/mensageria não faz os downloads desaparecerem da decisão de bootstrap;
-- nenhuma conta é escolhida por URL e não existe autenticação por senha offline.
+A lock screen recebe representação estática; animação pertence ao player dentro da aplicação.
 
-Com isso:
+Detalhes: [`artwork-fallback.md`](artwork-fallback.md).
 
-- servidor inalcançável + manifesto físico local com pelo menos um download → abre `OfflineApp` diretamente e reconcilia Cache Storage depois;
-- servidor inalcançável + manifesto vazio → mostra `Home Music indisponível` e `Tentar novamente`, sem formulário de login;
-- servidor alcançável + sessão válida → aplicação autenticada;
-- servidor alcançável + sessão inválida → login normal, sem bypass offline.
+## Continuidade no iOS
 
-A decisão de abertura é deliberadamente **fail-soft para disponibilidade**, mas a reprodução continua **fail-closed por faixa**: `/offline-audio/<trackId>` só devolve áudio quando o blob existe no cache escopado ao usuário. Se o navegador tiver evicted um arquivo, a reconciliação posterior pode removê-lo do snapshot e, até isso acontecer, a tentativa de reprodução recebe indisponibilidade em vez de conteúdo incorreto.
+O player possui hardening específico para Apple mobile sem criar um segundo player: preparação de handoff, recuperação limitada de falhas transitórias, proteção contra ciclos de retry e diagnóstico local opt-in para eventos de playback/lifecycle.
 
-## Downloads offline
+Helpers de background podem observar e aplicar política, mas `useAudioPlayer` permanece a única fonte de verdade.
 
-Áudio offline é explícito e usa armazenamento separado do app shell.
+Detalhes: [`player-screen-responsibilities.md`](player-screen-responsibilities.md).
 
-O frontend possui um scheduler global com até **3 operações simultâneas**. Ele é compartilhado por download individual, lote desktop, playlists e pastas. Navegar na SPA não cria uma segunda fila.
+## Estado consolidado
 
-Em navegadores que expõem **Background Fetch** e estão sob o service worker capability v4, a transferência da faixa é delegada ao navegador. Isso permite que a transferência já iniciada continue quando a página perde tempo de CPU ou é suspensa em background, dentro das políticas do navegador. O scheduler continua sendo a autoridade que limita a três transferências iniciadas pelo Home Music.
+As frentes abaixo foram incorporadas e encerradas:
 
-Em navegadores sem Background Fetch — incluindo Safari/iPhone/iPad no suporte atual — o Home Music mantém o `fetch()` da página como fallback, sem alterar a experiência existente nem prometer continuidade com tela bloqueada.
+- #325 — artwork canônica no Media Session;
+- #327 — diagnóstico/hardening de continuidade com a tela bloqueada;
+- #328 — cold start offline e redução do trabalho no caminho crítico.
 
-O namespace por usuário é:
+Os QAs físicos residuais dessas issues foram dispensados como gate de encerramento por decisão do projeto e aceitos como risco de plataforma. Isso não significa que os testes em hardware tenham sido executados.
 
-```text
-home-music:offline-user-id:v1
-home-music:offline-tracks:v2:<userId>
-home-music:offline-references:v1:<userId>
-home-music-offline-audio-v2-<userId>
-home-music-offline-client-scope-v1
-/offline-audio/<trackId>
-```
+## Limites de plataforma
 
-A chave do scheduler continua sendo `userId + trackId`, então a mesma faixa física é reutilizada quando pertence a várias coleções.
+Recursos de PWA, armazenamento local, Media Session, background audio e Background Fetch variam entre navegadores e sistemas operacionais. O Home Music deve degradar de forma segura quando uma capacidade não estiver disponível.
 
-## Referências de playlist/pasta
-
-O manifesto `offline-references:v1` separa intenção lógica dos bytes físicos:
-
-```text
-trackId físico único
-       ↑
-       ├── individual
-       ├── playlist
-       └── pasta
-```
-
-Playlists persistem snapshot ordenado dos `trackIds`. Pastas persistem o conjunto completo de `folderView.allTracks`, incluindo subpastas e sem aplicar busca/filtro temporário.
-
-Quando o conteúdo conectado muda, o snapshot aparece como desatualizado e o usuário aplica `Atualizar offline` explicitamente.
-
-Remover uma coleção só apaga bytes que não tenham mais nenhuma referência.
-
-Downloads físicos existentes anteriores ao manifesto de referências são migrados conservadoramente como intenções individuais.
-
-Detalhes de concorrência, pause/remove e garbage-collection: [offline-downloads.md](offline-downloads.md).
-
-## Rota virtual de áudio
-
-O service worker atende:
-
-```text
-/offline-audio/<trackId>
-```
-
-Ela:
-
-- não é rota pública do Fastify;
-- lê somente o cache offline da conta associada ao `clientId`/aba;
-- suporta `GET`, `HEAD` e byte ranges para seek;
-- responde `206` para range válido e `416` para range inválido;
-- não escolhe usuário por parâmetro de URL.
-
-Coleções continuam sendo referências frontend sobre o mesmo artefato físico.
-
-## Capability e isolamento por client
-
-O protocolo do service worker é **versão 4**.
-
-O frontend negocia a capability informando o `userId` autenticado. O worker associa esse usuário ao `clientId` e persiste somente o vínculo mínimo em `home-music-offline-client-scope-v1` para sobreviver à suspensão/restart do worker.
-
-A resposta v4 continua anunciando `offlineAudio` e passa a anunciar `backgroundFetch` somente quando a API está disponível no registro ativo. Um bundle novo controlado temporariamente por worker v3 não tenta Background Fetch: ele cai no fluxo foreground até o worker v4 assumir o controle.
-
-Quando uma Background Fetch termina com sucesso, o navegador desperta o service worker. O worker aceita somente registrations com `userId + trackId` válidos, confirma que existe exatamente uma requisição `GET` same-origin para `/api/tracks/<trackId>/stream`, exige resposta completa HTTP `200` e grava os bytes no cache offline daquele usuário.
-
-O **manifesto físico não é publicado pelo service worker**. Quando a página volta a executar, o fluxo normal confirma o blob, revalida que a referência lógica ainda existe e só então publica `offline-tracks:v2`. Se a referência tiver sido removida durante o background, o blob é apagado e a faixa não aparece como concluída.
-
-Trocas rápidas de conta continuam serializadas no escopo por client; cada job de download também captura o `userId` proprietário no início. Uma conclusão em background grava no cache do proprietário original, não no usuário que eventualmente esteja ativo depois.
-
-> Cache Storage e `localStorage` pertencem ao perfil do navegador. O isolamento por usuário é fronteira lógica de produto, não criptografia contra alguém que controla DevTools/armazenamento local.
-
-## Entrada no modo offline
-
-O Home Music diferencia:
-
-1. **servidor acessível, sessão inválida:** autenticação normal; offline não é bypass de login;
-2. **servidor realmente inalcançável:** com namespace conhecido e manifesto físico local não vazio, a interface pode abrir imediatamente o conteúdo salvo daquela conta e reconciliar os bytes depois.
-
-No modo offline não são simulados dados dependentes do servidor como Administração, rescan, favoritos remotos ou edição de playlists.
-
-A biblioteca local organiza:
-
-- coleções offline (playlists/pastas);
-- downloads individuais.
-
-Coleções reproduzem somente as faixas presentes no snapshot reconciliado corrente. O total de armazenamento conta bytes físicos únicos, não soma referências duplicadas.
-
-Para bibliotecas grandes, a lista de downloads individuais monta inicialmente **100 faixas** e oferece `Mostrar mais` em blocos de 100. A fila usada pelo player continua contendo a coleção completa, portanto a paginação visual não limita reprodução.
-
-No mobile, o player online esconde o botão superior de retorno porque existe navegação inferior. O `OfflineApp` não possui essa barra; por isso sua superfície reexibe `Voltar aos downloads`, inclusive quando uma pasta/playlist offline iniciou a reprodução.
-
-## Armazenamento e quota
-
-No fluxo foreground, antes de concluir novo artefato o frontend usa `navigator.storage.estimate()` quando disponível e solicita persistência como best-effort.
-
-No caminho de Background Fetch, o navegador controla a reserva/limite da própria transferência e pode encerrá-la com `quota-exceeded`. O Home Music não publica o manifesto físico quando a transferência ou a persistência no Cache Storage falha.
-
-O navegador ainda pode remover dados sob pressão severa. O Home Music nunca marca uma faixa física como concluída sem confirmar que os bytes existem no cache e atualizar o manifesto físico somente depois da revalidação da referência lógica.
-
-No cold start automático, o manifesto físico é usado primeiro para abrir a interface; a enumeração do Cache Storage ocorre depois e filtra o snapshot quando conclui. No fluxo normal de reconciliação do namespace, referências lógicas permanecem para permitir recuperação explícita de coleções que ficaram parciais, e blobs sem manifesto continuam sendo tratados como órfãos conforme a política existente.
-
-Logout não apaga automaticamente downloads concluídos. A troca de identidade esconde o namespace anterior e negocia novo escopo com o worker.
-
-## Limite de background
-
-O comportamento é progressivo:
-
-- **Background Fetch disponível + worker v4:** uma transferência já iniciada pode continuar sob suspensão/background e o service worker persiste a resposta completa;
-- **sem Background Fetch:** o scheduler usa o `fetch()` foreground anterior e a suspensão de JavaScript pode interromper a transferência;
-- **Safari/iPhone/iPad:** permanece no fallback enquanto a plataforma não expuser a API;
-- **recarregar/fechar a aba:** não é tratado como garantia de retomada/publicação do job;
-- **download concluído e publicado:** permanece até remoção lógica ou eviction do navegador.
-
-A matriz física da [#81](https://github.com/felipe-urgal/home-music/issues/81) foi concluída em Android e iPhone/iPad reais e a issue foi encerrada. Isso não transforma suporte de API em garantia universal de sistema operacional: o comportamento continua condicionado às capacidades e políticas de cada navegador/plataforma.
-
-## Estado do backlog relacionado
-
-As issues #258 e #259 consolidaram o bootstrap offline-first. A #328 acompanha o cold start real após fechar o PWA no iPhone; a implementação atual passa a abrir pelo manifesto sem colocar `cache.keys()` no caminho crítico, mas a validação física do head final em iPhone real continua obrigatória antes de considerar o caso encerrado. A #81 encerrou a validação física do comportamento mobile; a [#174](https://github.com/felipe-urgal/home-music/issues/174) entregou playlists/pastas offline deduplicadas reutilizando o scheduler/cache existente; e a identidade de instalação da #176 está documentada em [pwa-icon-identity.md](pwa-icon-identity.md).
-
-A matriz de [offline-downloads.md](offline-downloads.md) permanece como protocolo de regressão manual para mudanças futuras no pipeline offline ou no service worker.
+Mudanças futuras nessas áreas devem usar a matriz de [`offline-downloads.md`](offline-downloads.md) como protocolo de regressão e abrir uma nova issue quando houver evidência de comportamento específico de plataforma.

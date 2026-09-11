@@ -1,6 +1,6 @@
 # Home Music
 
-Servidor pessoal de música para transformar uma pasta local do Ubuntu em uma biblioteca de streaming acessível pelo navegador, celular, PWA ou clientes OpenSubsonic compatíveis.
+Servidor pessoal de música para transformar uma pasta local em uma biblioteca de streaming acessível pelo navegador, celular, PWA e clientes OpenSubsonic compatíveis.
 
 O Home Music usa **React + TypeScript + Vite** no frontend e **Fastify + TypeScript + SQLite** no backend. Em produção, um único processo Fastify serve API, frontend compilado, capas, streaming de áudio e o adapter OpenSubsonic.
 
@@ -9,14 +9,18 @@ O Home Music usa **React + TypeScript + Vite** no frontend e **Fastify + TypeScr
 ## Principais recursos
 
 - biblioteca local com scanner incremental, busca, pastas, artistas, álbuns, favoritos e playlists;
-- player com fila, shuffle/repeat, Media Session, streaming HTTP Range e ReplayGain;
-- PWA e downloads offline isolados por usuário;
+- player com fila, shuffle/repeat, ReplayGain, streaming HTTP Range, Media Session e retomada persistida;
+- PWA com shell offline, downloads isolados por usuário, playlists/pastas offline deduplicadas e cold start manifest-first;
 - múltiplas contas com papéis `admin`/`user`, sessões, troca de senha e portabilidade dos dados pessoais;
-- Administração para biblioteca, metadata, integridade, lixeira/quarentena, importação e usuários;
-- importação por upload, URL e providers externos com staging e validação;
-- descoberta/importação via Jamendo com política fail-closed de licença/download e aquisição `scratch → staging`;
+- Administração para biblioteca, metadata, integridade, lixeira/quarentena, importação, usuários e Assistente da Biblioteca;
+- Assistente da Biblioteca com MusicBrainz, Cover Art Archive, LRCLIB, normalização assistida, revisão individual/em lote e automação opt-in;
+- fallback opcional para casos difíceis com Chromaprint/AcoustID e transcrição/alinhamento local de lyrics com Whisper/whisper.cpp;
+- resolução única de lyrics para player, offline e OpenSubsonic, com overrides gerenciados, sidecars e rollback;
+- fallback canônico de artwork reutilizado na biblioteca, player e Media Session, com materialização local explícita quando desejada;
+- importação por upload, URL e providers externos com staging, validação e promoção segura para `MUSIC_DIR`;
+- descoberta/importação via Jamendo com política fail-closed de licença/download;
 - adapter OpenSubsonic sobre biblioteca, streaming e estado pessoal existentes, com API keys revogáveis por usuário;
-- FFmpeg/FFprobe para compatibilidade, transcode e validação técnica;
+- FFmpeg/FFprobe para compatibilidade, transcode, validação técnica e preparação local de áudio para jobs opcionais;
 - SQLite versionado, backup/restore e operação systemd;
 - acesso remoto via Tailscale Serve e Funnel opcional.
 
@@ -31,23 +35,32 @@ React / Vite (DEV) ou /rest/*
       v
 Fastify
   |   |   |
-  |   |   +--> streaming / FFmpeg / importação
+  |   |   +--> streaming / FFmpeg / importação / jobs locais
   |   +------> SQLite
   +----------> MUSIC_DIR
 ```
 
-Em produção, o frontend compilado é servido pelo próprio Fastify. O adapter OpenSubsonic não mantém scanner, catálogo ou estado pessoal paralelo: ele projeta os mesmos serviços usados pelo frontend. Mais detalhes: [`docs/architecture.md`](docs/architecture.md) e [`docs/open-subsonic.md`](docs/open-subsonic.md).
+Em produção, o frontend compilado é servido pelo próprio Fastify. OpenSubsonic, o Assistente e o modo offline reutilizam as mesmas autoridades de biblioteca e dados; não existe um segundo catálogo canônico. Mais detalhes: [`docs/architecture.md`](docs/architecture.md).
 
 ## Requisitos
+
+Obrigatórios para o fluxo normal:
 
 - Ubuntu/Linux para o fluxo operacional suportado;
 - Node.js 22 ou superior;
 - npm;
-- uma pasta local para a biblioteca de áudio;
-- FFmpeg/FFprobe recomendados;
-- Tailscale recomendado para acesso remoto;
-- `yt-dlp` somente para os providers que dependem dele;
-- `HOME_MUSIC_JAMENDO_CLIENT_ID` somente quando a descoberta/importação pelo Jamendo for usada.
+- uma pasta local para a biblioteca de áudio.
+
+Recomendados/opcionais conforme a capacidade usada:
+
+- FFmpeg/FFprobe para compatibilidade, transcode e validação;
+- Tailscale para acesso remoto;
+- `yt-dlp` para providers que dependem dele;
+- `HOME_MUSIC_JAMENDO_CLIENT_ID` para descoberta/importação Jamendo;
+- `fpcalc` + configuração AcoustID para identificação acústica opcional;
+- `whisper.cpp` + modelo local para transcrição/alinhamento opcional de lyrics.
+
+Nenhum provider pago ou modelo Whisper é requisito para o happy path. O Home Music não baixa modelo Whisper automaticamente.
 
 ## Desenvolvimento
 
@@ -81,28 +94,12 @@ Gate local normal antes do PR:
 npm run check
 ```
 
-Esse comando executa:
+Esse comando cobre typecheck, testes funcionais e build. O CI obrigatório adiciona os gates definidos em `.github/workflows/ci.yml`, incluindo segurança, backup/restore e E2E promovidos ao workflow.
 
-```text
-typecheck
--> testes funcionais
--> build
-```
-
-O CI obrigatório executa esse baseline e acrescenta gates fixos de segurança, backup/restore e o E2E focado de importação de dados pessoais:
-
-```text
-npm ci --no-audit --no-fund
--> npm run check
--> npm run test:security
--> npm run smoke:backup-restore
--> npm run test:e2e:install
--> npx playwright test e2e/personal-data-import.spec.ts --workers=1
-```
-
-Outras validações continuam direcionadas pelo risco:
+Validações adicionais continuam proporcionais ao risco:
 
 ```bash
+npm run test:security
 npm run test:policy
 npm run test:ops
 npm run test:e2e
@@ -112,7 +109,7 @@ npm run benchmark:backpressure
 npm run smoke:production
 ```
 
-Coverage, benchmarks, a suíte E2E completa e outros smokes não viram custo fixo de todo PR apenas por existirem. A fonte executável do CI é `.github/workflows/ci.yml`; política completa em [`docs/testing-and-quality.md`](docs/testing-and-quality.md).
+Política completa: [`docs/testing-and-quality.md`](docs/testing-and-quality.md).
 
 ## Produção
 
@@ -134,15 +131,13 @@ npm run prod:deploy
 npm run prod:verify
 ```
 
-`prod:backup` é obrigatório antes de migration quando a política declarada exigir e é recomendado sempre que houver risco de schema/dados.
-
 Logs:
 
 ```bash
 npm run prod:logs
 ```
 
-A receita canônica está em [`docs/PRODUCTION.md`](docs/PRODUCTION.md). Detalhes de systemd/helper privilegiado em [`docs/production.md`](docs/production.md) e do contrato consumido pelo Dev Dashboard em [`docs/production-contract.md`](docs/production-contract.md).
+A receita canônica está em [`docs/PRODUCTION.md`](docs/PRODUCTION.md). Detalhes de systemd/helper privilegiado em [`docs/production.md`](docs/production.md).
 
 ## Backup e restore
 
@@ -185,27 +180,20 @@ npm run tailscale:public:enable
 npm run tailscale:public:status
 ```
 
-Hardening:
-
-```bash
-npm run tailscale:hardening:status
-```
-
 Documentação: [`docs/tailscale.md`](docs/tailscale.md), [`docs/public-access.md`](docs/public-access.md) e [`docs/tailscale-hardening.md`](docs/tailscale-hardening.md).
 
 ## Segurança operacional
 
 - `.env`, `.env.development`, cookies, tokens e senhas nunca são versionados;
-- o backend é a fronteira de autorização e confinement;
-- mutações autenticadas usam a proteção `X-Home-Music-Request: 1`;
+- o backend é a fronteira real de autenticação, autorização e confinement;
+- mutações autenticadas preservam `X-Home-Music-Request: 1` quando o contrato exigir;
 - paths físicos da biblioteca não são expostos ao frontend nem ao adapter OpenSubsonic;
 - superfícies sensíveis bloqueiam traversal, symlink escape e arquivos especiais;
 - importação usa staging/scratch antes de promover conteúdo para `MUSIC_DIR`;
-- providers/processos externos não recebem shell livre;
-- chaves OpenSubsonic são independentes da sessão/senha web, revogáveis por usuário e persistidas somente em forma hash;
-- a query string das requisições não é registrada pelo logger HTTP, evitando vazamento de `apiKey`;
+- providers e processos externos não recebem shell livre;
+- chaves OpenSubsonic são independentes da senha/sessão web e persistidas somente em forma hash;
 - ações destrutivas devem ser explícitas e preferir quarentena/restauração quando aplicável;
-- produção usa helper privilegiado com catálogo fechado em vez de `systemctl` arbitrário via dashboard.
+- sugestões do Assistente continuam sujeitas a revisão, stale protection e às autoridades canônicas de cada domínio.
 
 ## Comandos principais
 
@@ -220,8 +208,8 @@ Documentação: [`docs/tailscale.md`](docs/tailscale.md), [`docs/public-access.m
 | `npm run test:security` | regressões negativas sensíveis |
 | `npm run test:policy` | políticas de dependência/lifecycle |
 | `npm run prod:status` | estado da instalação systemd |
-| `npm run prod:check` | preflight de produção (`check` + smoke) |
-| `npm run prod:backup` | backup antes da mutação de produção |
+| `npm run prod:check` | preflight de produção |
+| `npm run prod:backup` | backup antes de mutação de produção |
 | `npm run prod:deploy` | atualização segura via `service:update` |
 | `npm run prod:verify` | readiness/verificação funcional |
 | `npm run prod:logs` | logs do systemd |
@@ -231,14 +219,15 @@ Documentação: [`docs/tailscale.md`](docs/tailscale.md), [`docs/public-access.m
 
 Comece por:
 
+- [`docs/README.md`](docs/README.md) — índice e classificação da documentação;
+- [`docs/roadmap.md`](docs/roadmap.md) — estado técnico corrente e próximos ciclos;
+- [`docs/architecture.md`](docs/architecture.md) — arquitetura vigente;
 - [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) — setup e fluxo de engenharia;
 - [`docs/PRODUCTION.md`](docs/PRODUCTION.md) — operação da instalação real;
-- [`docs/README.md`](docs/README.md) — índice e classificação da documentação;
-- [`docs/architecture.md`](docs/architecture.md) — arquitetura;
-- [`docs/jamendo.md`](docs/jamendo.md) — descoberta e importação segura via Jamendo;
-- [`docs/open-subsonic.md`](docs/open-subsonic.md) — subset, autenticação, ownership e matriz de compatibilidade OpenSubsonic;
-- [`docs/testing-and-quality.md`](docs/testing-and-quality.md) — política de gates;
-- [`docs/backup-restore.md`](docs/backup-restore.md) — dados/recovery;
-- [`docs/roadmap.md`](docs/roadmap.md) — roadmap técnico corrente.
+- [`docs/library-assistant.md`](docs/library-assistant.md) — Assistente da Biblioteca;
+- [`docs/lyrics.md`](docs/lyrics.md) — resolução de lyrics, LRCLIB e Whisper local;
+- [`docs/pwa.md`](docs/pwa.md) e [`docs/offline-downloads.md`](docs/offline-downloads.md) — PWA/offline;
+- [`docs/open-subsonic.md`](docs/open-subsonic.md) — compatibilidade OpenSubsonic;
+- [`docs/testing-and-quality.md`](docs/testing-and-quality.md) — política de gates.
 
 Agentes de IA e automações de desenvolvimento devem ler [`AGENTS.md`](AGENTS.md) antes de alterar o repositório.

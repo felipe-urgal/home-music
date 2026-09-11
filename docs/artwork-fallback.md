@@ -1,115 +1,76 @@
 # Política de fallback de artwork
 
-Status: canônico.
+Status: **canônico**.
 
-Este documento define como o Home Music representa visualmente músicas que não possuem uma capa efetiva disponível.
+Este documento define como o Home Music representa músicas que não possuem uma capa efetiva e como a mesma identidade é reutilizada entre biblioteca, player e Media Session.
 
-## Regra funcional
+## Precedência
 
-A precedência de capa continua sendo:
+A decisão de capa continua sendo:
 
 1. override administrativo salvo no SQLite;
 2. capa física embutida no arquivo de áudio;
 3. fallback visual derivado.
 
-O fallback é apenas apresentação. Ele **não** altera `hasCover`, `coverVersion`, o scanner, o arquivo físico nem o estado de overrides.
+O fallback não altera `hasCover`, `coverVersion`, scanner, arquivo físico ou estado de overrides.
 
-Se `hasCover` for `true`, o frontend tenta carregar `/api/tracks/:id/cover`, preservando `coverVersion` na URL quando presente. Se a imagem falhar no navegador, o componente mostra o fallback localmente sem reescrever o contrato da música.
+## Identidade canônica
 
-## Identidade canônica v1
+A identidade de fallback é determinística e versionada. A mesma metadata e a mesma versão produzem o mesmo descriptor visual.
 
-A decisão visual do fallback vive em `apps/web/src/artwork-utils.ts` e possui versão explícita (`ARTWORK_FALLBACK_VERSION = 1`). A mesma metadata e a mesma versão produzem o mesmo descriptor, composto por:
+A derivação usa somente metadata já exibida pela aplicação, priorizando contexto de álbum/artista e usando título quando necessário. Path físico nunca participa da identidade.
 
-- label curta;
-- índice de tom;
-- palette usada pelos renderers.
+`Artwork` e `ArtworkFallback` consomem essa decisão no React; o renderer estático usa a mesma identidade para superfícies que precisam de bytes/URL de imagem.
 
-A identidade usa somente metadata já exibida pela aplicação e nunca usa path físico como seed:
+Não criar placeholders independentes por tela.
 
-- usa primeiro o álbum quando ele é conhecido;
-- caso contrário usa artista do álbum/artista;
-- por fim usa o título;
-- faixas do mesmo álbum mantêm a mesma identidade visual;
-- texto longo, Unicode e acentos são reduzidos para uma label curta de forma determinística.
+## Capa efetiva
 
-A versão faz parte do descriptor para que mudanças futuras de linguagem visual não alterem silenciosamente caches ou representações persistidas. Uma nova versão de algoritmo deve ser deliberada e testada.
+Quando `hasCover` é verdadeiro, o frontend usa o endpoint canônico de capa e inclui `coverVersion` para invalidação previsível quando aplicável.
 
-## Direção visual escolhida
-
-Para a #175 foram comparadas três direções simples:
-
-1. ícone musical central sobre fundo neutro;
-2. iniciais sobre gradiente;
-3. iniciais + detalhe de disco sobre um tom estável por identidade musical.
-
-A direção 3 é a política adotada. Ela mantém a interface leve, evita aparência de imagem quebrada e oferece identidade visual suficiente sem ser confundida com uma capa real.
-
-## Renderers
-
-`apps/web/src/components/Artwork.tsx` é a implementação React central.
-
-- `Artwork` decide entre capa efetiva e fallback e trata falha de carregamento da imagem;
-- `ArtworkFallback` consome o descriptor canônico e renderiza sua palette por variáveis CSS;
-- `artworkFallbackSvg()` produz uma representação quadrada estática a partir **do mesmo descriptor** para superfícies que não renderizam React, sem provider externo, browser headless ou persistência em `track_cover_overrides`;
-- `artworkFallbackDataUrl()` empacota esse SVG como recurso local derivado;
-- `apps/web/src/artwork.css` concentra layout e escala, mas não mantém uma segunda tabela de cores/tom.
-
-O renderer estático limita dimensões, escapa texto antes de serializar XML e carrega a versão do descriptor. Ele é arte derivada, não uma capa efetiva e não altera a precedência canônica.
-
-Não criar placeholders paralelos por tela. Novas superfícies que exibirem artwork devem reutilizar o descriptor e um desses renderers em vez de recalcular seed, iniciais ou palette.
+Falha de carregamento no navegador degrada visualmente para o fallback sem mutar o objeto da faixa nem reescrever o estado persistido.
 
 ## Media Session
 
-`apps/web/src/media-session-artwork.ts` concentra a projeção estática usada pelos controles do sistema.
+A projeção de artwork para Media Session segue a mesma política:
 
-A decisão é:
+- capa efetiva disponível → endpoint canônico da faixa;
+- sem capa efetiva → representação estática derivada da identidade de fallback;
+- modo offline → recurso local/fallback sem depender de provider externo.
 
-- online + `hasCover = true` → reutilizar `/api/tracks/:id/cover` com `coverVersion` na query quando existir;
-- sem capa efetiva → publicar o SVG local derivado da identidade v1;
-- reprodução offline → usar o fallback derivado localmente e não depender do endpoint autenticado de capa nem de provider externo.
+A publicação de metadata é best-effort. Se a plataforma rejeitar artwork, o Home Music pode degradar para título/artista/álbum sem interromper playback.
 
-A publicação de `MediaMetadata` é best-effort. Título, artista, álbum e artwork são tentados em uma única atualização. Se a plataforma rejeitar a artwork, o Home Music tenta novamente apenas com metadata textual; se a implementação de Media Session for parcial ou ausente, playback e controles do player continuam funcionando normalmente.
+A lock screen recebe uma representação estática. O produto não promete vinil girando, vídeo ou atualização contínua de frames no sistema operacional.
 
-A representação da lock screen é estática. O produto não promete animação de vinil, GIF, vídeo ou atualização de frames no sistema operacional. Compatibilidade real do SVG/data URL em lock screen precisa continuar sendo validada em iPhone/Android físicos; uma limitação da plataforma deve degradar para metadata textual sem criar outro endpoint ou cover override.
+## Player Agora
 
-## Player Agora / vinil animado
+A tela **Agora / Tocando agora** usa `NowPlayingVinyl` como camada visual e reutiliza `Artwork` no centro do disco.
 
-A tela **Agora / Tocando agora** usa `NowPlayingVinyl` somente como camada visual. O componente recebe a `Track` já resolvida pelo fluxo existente e delega a imagem central ao `Artwork`; portanto não replica decisão de `hasCover`, URL, fallback, seed ou palette.
+O componente não decide novamente qual é a capa e não cria fonte paralela de estado. A rotação deriva do estado canônico de reprodução e a troca de faixa atualiza a mesma artwork resolvida pelo fluxo normal.
 
-O disco:
+A animação deve continuar leve e compositor-friendly, sem timers de alta frequência ou redraw contínuo desnecessário.
 
-- gira sempre que o estado canônico `playing` está ativo, inclusive quando o sistema sinaliza `prefers-reduced-motion: reduce`;
-- usa animação CSS baseada em `transform`, sem timer JavaScript ou leitura de layout em loop;
-- pausa com `animation-play-state: paused`, preservando o ângulo para a retomada;
-- permanece `aria-hidden`, sem foco ou semântica interativa concorrente com os controles;
-- é usado no player padrão e no desktop pela mesma implementação;
-- nunca tenta animar `MediaSession`/lock screen e nunca cria cover override.
+## Materialização persistente
 
-A artwork funciona como label central do vinil. Troca de faixa atualiza o `Artwork` no mesmo render React, enquanto a rotação continua derivada exclusivamente do estado de playback da faixa corrente.
+A #321 também incorporou a possibilidade de materializar o fallback de forma explícita/reversível pelo pipeline canônico de cover override.
+
+Materialização não acontece só porque uma faixa foi exibida sem capa. Quando usada, ela passa a ser uma capa efetiva normal e participa da precedência existente.
 
 ## Superfícies cobertas
 
 A política deve permanecer consistente em:
 
-- biblioteca mobile;
-- tabela/biblioteca desktop;
-- player principal;
-- mini player;
-- Administração → Metadados → preview de capa;
-- Media Session/lock screen quando a plataforma aceitar artwork estática;
-- outras superfícies futuras que exibirem a capa de uma música.
+- biblioteca mobile/desktop;
+- player principal e mini player;
+- Administração;
+- Media Session/lock screen quando a plataforma aceitar artwork;
+- futuras superfícies que exibam capa de faixa.
 
-O editor administrativo pode continuar exibindo um preview local real quando o usuário selecionar uma nova imagem. Quando não existir preview, override ou capa física, deve voltar ao `ArtworkFallback` central.
+## Estado da integração de sistema
 
-## Camada persistente
+A implementação relacionada à #325 foi incorporada e a issue foi encerrada. A validação física residual de lock screen foi dispensada como gate por decisão do projeto e aceita como risco de plataforma; não deve ser descrita como teste em hardware executado.
 
-Renderizar fallback não cria uma capa persistida. A eventual materialização de uma imagem gerada pelo Home Music é uma capacidade separada e explícita da #321: deve passar pelo pipeline canônico de cover override, registrar proveniência quando o modelo suportar e permitir restore. A Camada A descrita neste documento não escreve banco, mídia ou override.
-
-## Acessibilidade e estados de erro
-
-O artwork é decorativo porque título, artista e contexto já são apresentados como texto nas superfícies que o utilizam. Por isso o wrapper permanece com `aria-hidden="true"` e imagens de artwork usadas no componente central têm `alt=""`.
-
-A ausência ou falha da imagem não depende de animação, cor isolada ou mensagem técnica: a UI troca imediatamente para o fallback estático. Estados de loading e erro das telas continuam sendo comunicados pelos componentes funcionais correspondentes.
+Mudanças futuras em formato/tamanho/compatibilidade de artwork no sistema operacional devem abrir nova investigação quando houver evidência concreta de plataforma.
 
 ## Regressões obrigatórias
 
@@ -117,16 +78,12 @@ Mudanças nesta política devem preservar:
 
 - precedência `override → capa física → fallback`;
 - semântica de `hasCover` e `coverVersion`;
-- identidade determinística e versionada do fallback;
-- uma única decisão de label/tom/palette para React, render estático e Media Session;
-- nenhuma dependência de rede externa para fallback;
-- nenhuma leitura de path físico para formar a identidade;
-- `coverVersion` como invalidação previsível da capa efetiva no Media Session;
-- playback intacto quando a plataforma rejeitar artwork/MediaMetadata;
-- legibilidade no tema escuro;
-- comportamento em thumbnail e artwork grande;
-- consistência entre biblioteca, player e administração;
-- fallback em falha de carregamento de imagem sem mutar o objeto `Track`;
-- vinil do player derivado de `playing`, sem timer JS e girando durante playback independentemente de `prefers-reduced-motion`.
+- identidade determinística/versionada;
+- uma única decisão visual para React, renderer estático e Media Session;
+- ausência de provider externo durante playback;
+- ausência de path físico na identidade;
+- playback intacto quando Media Session/artwork falhar;
+- fallback de carregamento sem mutação de `Track`;
+- nenhuma persistência automática apenas pela ausência de capa.
 
-A cobertura automatizada fica em `apps/web/src/artwork-utils.test.ts`, `apps/web/src/Artwork.test.tsx`, `apps/web/src/media-session-artwork.test.ts`, `apps/web/src/media-session-metadata.test.ts` e `apps/web/src/components/NowPlayingVinyl.test.tsx`.
+Cobertura relevante fica nos testes de artwork, Media Session e `NowPlayingVinyl` do workspace Web.
