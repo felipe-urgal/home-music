@@ -16,6 +16,8 @@ function track(id: string): Track {
     albumArtist: 'Artista',
     folder: 'Pasta',
     folderPath: '',
+    path: `/music/${id}.mp3`,
+    size: 1_024,
     duration: 180,
     format: 'MP3',
     hasCover: false,
