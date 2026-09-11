@@ -16,12 +16,14 @@ import {
   RotateCcw,
   Save,
   Search,
+  Sparkles,
   Upload,
   X
 } from 'lucide-react';
 import { adminCoverUrl, validateAdminCoverFile } from '../admin-track-cover';
 import { buildTrackMetadataOverridePatch } from '../admin-track-metadata';
 import {
+  generateAdminTrackCover,
   getAdminTrackCover,
   getAdminTrackMetadata,
   listAdminTracks,
@@ -49,7 +51,7 @@ type EditorFeedback = {
   error: boolean;
 };
 
-type SavingAction = 'text-save' | 'text-reset' | 'cover-save' | 'cover-reset' | null;
+type SavingAction = 'text-save' | 'text-reset' | 'cover-save' | 'cover-reset' | 'cover-generate' | null;
 
 const PAGE_SIZE = 50;
 
@@ -316,6 +318,20 @@ export function AdminTrackMetadataScreen({
     }
   }
 
+  async function generateCover() {
+    if (!editingTrackId || !cover || cover.effectiveHasCover || coverFile || operationBusy) return;
+    setSavingAction('cover-generate');
+    setEditorFeedback(null);
+    try {
+      const updated = await generateAdminTrackCover(editingTrackId);
+      commitCover(updated, 'Capa gerada materializada como override local. O arquivo de áudio original não foi alterado.');
+    } catch (error) {
+      setEditorFeedback({ message: errorMessage(error), error: true });
+    } finally {
+      setSavingAction(null);
+    }
+  }
+
   async function saveCover() {
     if (!editingTrackId || !coverFile || operationBusy) return;
     setSavingAction('cover-save');
@@ -537,7 +553,7 @@ export function AdminTrackMetadataScreen({
                               ? `Override ativo · ${cover.override.width}×${cover.override.height} · ${formatBytes(cover.override.sizeBytes)}`
                               : cover.physicalHasCover
                                 ? 'Usando a capa embutida no arquivo.'
-                                : 'O arquivo original não possui capa.'}
+                                : 'O arquivo original não possui capa. Você pode materializar a capa gerada exibida ao lado.'}
                         </small>
                       </div>
                       {cover.override && <span>Override</span>}
@@ -551,6 +567,11 @@ export function AdminTrackMetadataScreen({
                     )}
 
                     <div className="admin-cover-editor__actions">
+                      {!cover.effectiveHasCover && !coverFile && (
+                        <button className="admin-cover-save" type="button" disabled={operationBusy} onClick={() => void generateCover()}>
+                          {savingAction === 'cover-generate' ? <LoaderCircle className="is-spinning" /> : <Sparkles />} Usar capa gerada
+                        </button>
+                      )}
                       <label className={`admin-cover-upload ${operationBusy ? 'is-disabled' : ''}`}>
                         <Upload /> {coverFile ? 'Trocar imagem' : 'Selecionar imagem'}
                         <input
