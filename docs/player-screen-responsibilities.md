@@ -29,7 +29,7 @@ A preferência é local ao dispositivo e configurada em segundos:
 - `1–30 s`: duração da mistura entre o fim da faixa atual e o começo da próxima;
 - preferências antigas `soft` e `continuous` são migradas para `3 s` e `5 s` respectivamente.
 
-Quando o crossfade está ativo, dois elementos de áudio funcionam como decks A/B. O deck que entra durante a transição continua sendo a fonte audível depois que a faixa anterior termina; ele não é reiniciado nem recebe seek para outra cópia audível. O deck anterior pode ser reutilizado brevemente e sem volume para o `useAudioPlayer` concluir a troca canônica de faixa, sendo descartado assim que o handoff é confirmado.
+Quando o crossfade está ativo, dois elementos de áudio funcionam como decks A/B. O deck que entra durante a transição continua sendo a própria fonte audível depois que a faixa anterior termina. Antes de avançar a faixa canônica, o wrapper registra esse deck no `useAudioPlayer` como uma fonte já carregada; ao receber o novo `currentTrackId`, o player adota a fonte e a posição correntes sem reatribuir `src`, chamar `load()` ou voltar para `0 s`.
 
 A fila, a decisão de próxima faixa, shuffle, repeat, persistência e Media Session continuam pertencendo ao `useAudioPlayer` principal. Os decks são recursos de reprodução, não fontes paralelas de estado.
 
@@ -40,8 +40,8 @@ Regras de segurança da transição:
 - `repeat one` não cria um segundo stream concorrente da mesma faixa;
 - ações manuais de next/previous/seek, mudanças de shuffle/repeat, troca de qualidade/normalização e seleção de outra música cancelam a mistura;
 - se o deck de entrada falhar ou não puder iniciar, o volume do deck ativo é restaurado e o avanço normal assume a fila;
-- o fade usa curva de potência equivalente para reduzir a sensação de queda de volume no meio da mistura;
-- ao concluir a transição, o deck de entrada é promovido sem interromper a música que já está tocando;
+- o fade usa curva de potência equivalente: a faixa atual reduz progressivamente enquanto a próxima aumenta progressivamente, evitando queda perceptível de volume no meio da mistura;
+- ao concluir a transição, o deck de entrada é promovido sem interromper ou reiniciar a música que já está tocando;
 - ao ir para background/tela bloqueada, qualquer sobreposição é descartada e o fluxo existente de um único player permanece ativo;
 - o modo offline continua usando diretamente `useAudioPlayer`, sem crossfade.
 
