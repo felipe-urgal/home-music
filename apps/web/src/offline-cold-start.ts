@@ -21,20 +21,22 @@ type OfflineColdStartOptions = {
 export async function readOfflineColdStartRecords(
   records: readonly OfflineDownloadRecord[],
   options: OfflineColdStartOptions = {}
-) {
+): Promise<OfflineDownloadRecord[] | null> {
+  if (records.length === 0) return [];
+
   const userId = options.userId === undefined ? readOfflineUserId() : options.userId;
-  if (!userId || records.length === 0) return [];
+  if (!userId) return null;
 
   const cacheStorage = options.cacheStorage === undefined
     ? (typeof window !== 'undefined' && 'caches' in window ? window.caches : null)
     : options.cacheStorage;
-  if (!cacheStorage) return [];
+  if (!cacheStorage) return null;
 
   try {
     const cache = await cacheStorage.open(offlineAudioCacheName(userId));
     const cachedUrls = new Set((await cache.keys()).map(request => request.url));
     return records.filter(record => cachedUrls.has(offlineCachedStreamHref(record.track.id)));
   } catch {
-    return [];
+    return null;
   }
 }

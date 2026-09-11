@@ -15,7 +15,9 @@ Todas essas superfícies reutilizam **um único scheduler**, limitado a **3 down
 
 Em navegadores com Background Fetch e service worker capability v4, a transferência já iniciada pode ser delegada ao navegador para sobreviver melhor à suspensão da página. Navegadores sem essa API mantêm o `fetch()` foreground anterior. A matriz física da issue [#81](https://github.com/felipe-urgal/home-music/issues/81) foi concluída em Android e iPhone/iPad reais; as garantias continuam específicas por capacidade e plataforma.
 
-No cold start da PWA, um shell já armazenado é servido diretamente sem revalidação de rede concorrente. A atualização online do shell só começa por mensagem depois que a interface já montou. A reconciliação obtém uma única listagem das chaves físicas do Cache Storage e cruza essa lista com o manifesto; ela não dispara centenas de consultas simultâneas nem repete a varredura enquanto `App.tsx` prepara a entrada offline.
+No cold start da PWA, um shell já armazenado é servido diretamente sem revalidação de rede concorrente. A atualização online do shell só começa por mensagem depois que a interface já montou. Quando o servidor está inalcançável e o manifesto físico local contém downloads, `App.tsx` monta o `OfflineApp` sem esperar a enumeração completa do Cache Storage. A reconciliação física continua acontecendo depois da montagem, com uma única listagem das chaves do cache do usuário; quando ela conclui com sucesso, o snapshot exibido é filtrado pelos bytes realmente encontrados. Falha transitória ao abrir/enumerar o cache não transforma o manifesto em vazio nem bloqueia a abertura do modo offline.
+
+Essa otimização não lê os arquivos de áudio inteiros no bootstrap. O manifesto funciona como índice local rápido; a rota `/offline-audio/<trackId>` continua buscando a faixa específica no cache quando ela é reproduzida, e uma faixa evicted pode ficar visível por um intervalo curto até a reconciliação terminar ou a tentativa de reprodução confirmar sua indisponibilidade.
 
 ## Modelo: bytes físicos x referências lógicas
 
@@ -242,7 +244,11 @@ Quando o servidor está inalcançável, a biblioteca local organiza conteúdo em
 
 Uma faixa que pertence a duas coleções pode aparecer logicamente em ambas, mas o total de armazenamento no topo conta os bytes físicos uma única vez.
 
-Cada coleção pode reproduzir o subconjunto que realmente está disponível no cache; coleções parciais não anunciam faixas ausentes como baixadas.
+Cada coleção reproduz o subconjunto conhecido como disponível naquele snapshot; a reconciliação física posterior ao primeiro render pode reduzir esse conjunto se o navegador tiver removido algum blob.
+
+Para evitar montar centenas de linhas no cold start, downloads individuais são renderizados em páginas de **100 faixas**. `Mostrar mais` adiciona mais 100 sem alterar a fila completa usada para reprodução.
+
+No mobile, abrir uma coleção inicia a reprodução no player offline. Como esse fluxo não possui a navegação inferior da aplicação autenticada, o botão do topo `Voltar aos downloads` permanece visível para retornar à biblioteca local.
 
 ## Entrada manual no modo offline
 
@@ -264,17 +270,17 @@ Limites:
 
 - tamanho pode ser desconhecido quando o servidor/navegador não fornece `Content-Length`;
 - o navegador ainda pode remover Cache Storage sob pressão severa;
-- na inicialização, o manifesto físico é reconciliado com os bytes realmente presentes;
+- no cold start automático, o manifesto abre a interface primeiro e a conferência dos bytes ocorre depois, sem bloquear a biblioteca;
 - uma coleção pode ficar parcial depois de eviction e deve ser atualizada/rebaixada explicitamente.
 
 ## Reconciliação e stale state
 
-Na inicialização do namespace:
+Existem dois momentos de reconciliação complementares:
 
-- registros físicos sem bytes são removidos do manifesto;
-- blobs de cache sem registro físico esperado são removidos;
-- referências lógicas permanecem, permitindo mostrar coleção parcial e tentar novamente depois;
-- o manifesto lógico não cria bytes por conta própria.
+- no cold start automático com servidor inalcançável, `App.tsx` enumera o cache em background e usa o resultado bem-sucedido para filtrar o snapshot da sessão, sem bloquear a primeira renderização;
+- no fluxo normal do namespace, `useOfflineDownloads` mantém a reconciliação canônica que remove registros físicos sem bytes, coleta blobs órfãos e preserva referências lógicas para recuperação.
+
+Se a enumeração física do cold start falhar, o manifesto local continua sendo usado naquela sessão em vez de ser tratado como vazio. Isso é deliberadamente fail-soft para disponibilidade: a rota virtual de áudio ainda consulta o cache da conta por faixa e devolve indisponibilidade quando o blob específico não existe.
 
 Um Background Fetch concluído enquanto a página está suspensa pode produzir temporariamente um blob sem manifesto. Na retomada normal da mesma página, o job revalida a referência e publica o manifesto. Se a página for encerrada/recarregada antes dessa etapa, o fluxo não promete retomada/publicação automática; blobs órfãos continuam sujeitos à reconciliação conservadora.
 
@@ -330,6 +336,8 @@ A matriz física definida na [#81](https://github.com/felipe-urgal/home-music/is
 | Android/Chrome/PWA | iniciar três downloads e enviar app para background | nenhum item pode aparecer concluído sem arquivo íntegro; scheduler continua limitado a 3 |
 | iPhone/iPad/Safari/PWA | iniciar arquivo/coleção grande e bloquear a tela | registrar o comportamento do fallback sem assumir execução contínua de JS |
 | iPhone/iPad/Safari/PWA | alternar para outro app e retornar | referências, cache e manifesto devem permanecer consistentes após suspensão |
+| iPhone/iPad/PWA | servidor desligado + biblioteca grande já baixada | OfflineApp deve abrir pelo manifesto sem esperar a enumeração completa do Cache Storage; conferir depois que playback e reconciliação continuam consistentes |
+| iPhone/iPad/PWA | abrir coleção offline e entrar no player | botão `Voltar aos downloads` deve permanecer visível e retornar à biblioteca offline |
 
 ## Fronteira local
 
@@ -351,6 +359,9 @@ A cobertura de downloads offline inclui:
 - escopo da registration Background Fetch por `userId + trackId` e mensagens de falha que não anunciam sucesso;
 - fluxo Playwright real de playlist sobreposta + atualização + garbage-collection;
 - controle de coleção no layout mobile;
+- cold start manifest-first com reconciliação física posterior;
+- primeira página offline limitada a 100 downloads individuais;
+- retorno do player para downloads preservado no layout offline mobile;
 - fronteira de composição garantindo que a entrada manual continue delegando ao `App.tsx` e reutilizando o `OfflineApp`.
 
 A continuidade em tela bloqueada continua sendo uma verificação física quando esse comportamento mudar. Testes automatizados verificam invariantes, mas não substituem o sistema operacional real.

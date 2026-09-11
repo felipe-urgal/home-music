@@ -6,7 +6,7 @@ function source(name: string) {
 }
 
 describe('offline bootstrap contract', () => {
-  it('mantém OfflineApp no shell inicial e decide cold start por bytes locais, não por workerSupported', () => {
+  it('mantém OfflineApp no shell inicial, entra pelo manifesto e reconcilia bytes fora do caminho crítico', () => {
     const app = source('App.tsx');
     const login = source('components/LoginScreen.tsx');
 
@@ -14,8 +14,12 @@ describe('offline bootstrap contract', () => {
     expect(app).not.toMatch(/lazy\(/);
     expect(app).not.toMatch(/loadOfflineApp/);
     expect(app).toMatch(/readOfflineColdStartRecords\(offline\.records\)/);
-    expect(app).toMatch(/automaticOfflineMode = auth\.unreachable && Boolean\(coldStartRecords\?\.length\)/);
+    expect(app).toMatch(/navigator\.onLine !== false/);
+    expect(app).toMatch(/automaticOfflineMode = auth\.unreachable && offline\.records\.length > 0/);
+    expect(app).toMatch(/offlineSnapshot\(offline, coldStartRecords \?\? offline\.records\)/);
+    expect(app).toMatch(/loading: false/);
     expect(app).toMatch(/showOfflineMode = offlineMode \|\| automaticOfflineMode/);
+    expect(app).not.toMatch(/Verificando seus downloads offline/);
     expect(app).not.toMatch(/offline\.supported.*automaticOfflineMode/);
     expect(app).toMatch(/unreachable=\{auth\.unreachable\}/);
 

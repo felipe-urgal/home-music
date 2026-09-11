@@ -39,21 +39,23 @@ A verificação inicial de `/api/auth/status` possui um orçamento curto de **1,
 
 Esse timeout não autentica ninguém e não transforma resposta de servidor em falha de rede. Quando o servidor responde, a resposta continua sendo a autoridade: sessão inválida, senha obrigatória ou erro HTTP seguem o fluxo normal de autenticação e podem limpar a identidade offline ativa conforme as regras existentes.
 
-A raiz (`App.tsx`) separa conteúdo local de transporte do service worker:
+A raiz (`App.tsx`) separa o índice local usado para abrir a interface da reconciliação física do Cache Storage:
 
-- `offlineContentAvailable`: usa a identidade offline conhecida, o manifesto já carregado e cruza seus IDs com uma única listagem das chaves do Cache Storage do usuário, sem disparar uma consulta por faixa;
+- `offlineContentAvailable`: usa a identidade offline conhecida e o manifesto físico local já carregado; se existem registros e o servidor está inalcançável, o `OfflineApp` pode ser montado sem esperar `cache.keys()`;
+- a enumeração física do cache do usuário continua sendo executada depois da montagem, em background, com uma única listagem das chaves e sem disparar uma consulta por faixa;
+- quando essa reconciliação conclui com sucesso, registros cujo blob não está presente são retirados do snapshot da sessão;
+- falha transitória para abrir/enumerar Cache Storage não transforma o manifesto em vazio nem volta a bloquear o cold start;
 - o capability handshake do service worker continua sendo necessário para o transporte `/offline-audio/<trackId>`, mas um atraso transitório de `controller`/mensageria não faz os downloads desaparecerem da decisão de bootstrap;
-- registros cujo blob não está presente no cache são ignorados na decisão de cold start;
 - nenhuma conta é escolhida por URL e não existe autenticação por senha offline.
 
 Com isso:
 
-- servidor inalcançável + pelo menos um download com bytes físicos válidos → abre `OfflineApp` diretamente;
-- servidor inalcançável + manifesto sem bytes válidos → mostra `Home Music indisponível` e `Tentar novamente`, sem formulário de login;
+- servidor inalcançável + manifesto físico local com pelo menos um download → abre `OfflineApp` diretamente e reconcilia Cache Storage depois;
+- servidor inalcançável + manifesto vazio → mostra `Home Music indisponível` e `Tentar novamente`, sem formulário de login;
 - servidor alcançável + sessão válida → aplicação autenticada;
 - servidor alcançável + sessão inválida → login normal, sem bypass offline.
 
-A verificação de Cache Storage é fail-closed. Falha ao abrir o namespace ou confirmar um item não o transforma em download disponível.
+A decisão de abertura é deliberadamente **fail-soft para disponibilidade**, mas a reprodução continua **fail-closed por faixa**: `/offline-audio/<trackId>` só devolve áudio quando o blob existe no cache escopado ao usuário. Se o navegador tiver evicted um arquivo, a reconciliação posterior pode removê-lo do snapshot e, até isso acontecer, a tentativa de reprodução recebe indisponibilidade em vez de conteúdo incorreto.
 
 ## Downloads offline
 
@@ -139,7 +141,7 @@ Trocas rápidas de conta continuam serializadas no escopo por client; cada job d
 O Home Music diferencia:
 
 1. **servidor acessível, sessão inválida:** autenticação normal; offline não é bypass de login;
-2. **servidor realmente inalcançável:** com namespace conhecido/válido e bytes físicos confirmados, a interface pode abrir apenas conteúdo já salvo daquela conta.
+2. **servidor realmente inalcançável:** com namespace conhecido e manifesto físico local não vazio, a interface pode abrir imediatamente o conteúdo salvo daquela conta e reconciliar os bytes depois.
 
 No modo offline não são simulados dados dependentes do servidor como Administração, rescan, favoritos remotos ou edição de playlists.
 
@@ -148,7 +150,11 @@ A biblioteca local organiza:
 - coleções offline (playlists/pastas);
 - downloads individuais.
 
-Coleções parciais reproduzem somente as faixas realmente presentes no cache. O total de armazenamento conta bytes físicos únicos, não soma referências duplicadas.
+Coleções reproduzem somente as faixas presentes no snapshot reconciliado corrente. O total de armazenamento conta bytes físicos únicos, não soma referências duplicadas.
+
+Para bibliotecas grandes, a lista de downloads individuais monta inicialmente **100 faixas** e oferece `Mostrar mais` em blocos de 100. A fila usada pelo player continua contendo a coleção completa, portanto a paginação visual não limita reprodução.
+
+No mobile, o player online esconde o botão superior de retorno porque existe navegação inferior. O `OfflineApp` não possui essa barra; por isso sua superfície reexibe `Voltar aos downloads`, inclusive quando uma pasta/playlist offline iniciou a reprodução.
 
 ## Armazenamento e quota
 
@@ -158,7 +164,7 @@ No caminho de Background Fetch, o navegador controla a reserva/limite da própri
 
 O navegador ainda pode remover dados sob pressão severa. O Home Music nunca marca uma faixa física como concluída sem confirmar que os bytes existem no cache e atualizar o manifesto físico somente depois da revalidação da referência lógica.
 
-Na inicialização, o manifesto físico é reconciliado com Cache Storage; referências lógicas permanecem para permitir recuperação explícita de coleções que ficaram parciais. Blobs sem manifesto são tratados como órfãos e removidos pela reconciliação.
+No cold start automático, o manifesto físico é usado primeiro para abrir a interface; a enumeração do Cache Storage ocorre depois e filtra o snapshot quando conclui. No fluxo normal de reconciliação do namespace, referências lógicas permanecem para permitir recuperação explícita de coleções que ficaram parciais, e blobs sem manifesto continuam sendo tratados como órfãos conforme a política existente.
 
 Logout não apaga automaticamente downloads concluídos. A troca de identidade esconde o namespace anterior e negocia novo escopo com o worker.
 
@@ -176,6 +182,6 @@ A matriz física da [#81](https://github.com/felipe-urgal/home-music/issues/81) 
 
 ## Estado do backlog relacionado
 
-As issues #258 e #259 consolidaram o bootstrap offline-first. A #328 acompanha especificamente o cold start real após fechar o PWA no iPhone e permanece dependente de validação física do caso observado. A #81 encerrou a validação física do comportamento mobile; a [#174](https://github.com/felipe-urgal/home-music/issues/174) entregou playlists/pastas offline deduplicadas reutilizando o scheduler/cache existente; e a identidade de instalação da #176 está documentada em [pwa-icon-identity.md](pwa-icon-identity.md).
+As issues #258 e #259 consolidaram o bootstrap offline-first. A #328 acompanha o cold start real após fechar o PWA no iPhone; a implementação atual passa a abrir pelo manifesto sem colocar `cache.keys()` no caminho crítico, mas a validação física do head final em iPhone real continua obrigatória antes de considerar o caso encerrado. A #81 encerrou a validação física do comportamento mobile; a [#174](https://github.com/felipe-urgal/home-music/issues/174) entregou playlists/pastas offline deduplicadas reutilizando o scheduler/cache existente; e a identidade de instalação da #176 está documentada em [pwa-icon-identity.md](pwa-icon-identity.md).
 
 A matriz de [offline-downloads.md](offline-downloads.md) permanece como protocolo de regressão manual para mudanças futuras no pipeline offline ou no service worker.

@@ -37,7 +37,7 @@ describe('offline cold start', () => {
     expect(offlineCachedStreamHref('faixa / 1', 'https://music.example')).toBe('https://music.example/api/tracks/faixa%20%2F%201/stream');
   });
 
-  it('reconcilia manifesto contra o cache do usuário sem depender de serviceWorker.controller', async () => {
+  it('reconcilia manifesto contra o cache do usuário com uma única listagem física', async () => {
     const openedNames: string[] = [];
     let keysCalls = 0;
     const records = Array.from({ length: 780 }, (_value, index) => record(`track-${index}`));
@@ -77,7 +77,22 @@ describe('offline cold start', () => {
       cacheStorage
     });
 
-    expect(result).toEqual([]);
+    expect(result).toBeNull();
     expect(opened).toBe(false);
+  });
+
+  it('preserva o manifesto quando a reconciliação física não pode ser concluída', async () => {
+    const cacheStorage = {
+      async open() {
+        throw new Error('cache temporariamente indisponível');
+      }
+    } as unknown as CacheStorage;
+
+    const result = await readOfflineColdStartRecords([record('a')], {
+      userId: 'user-a',
+      cacheStorage
+    });
+
+    expect(result).toBeNull();
   });
 });

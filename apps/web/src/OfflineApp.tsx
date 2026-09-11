@@ -5,6 +5,7 @@ import { OfflineLibraryScreen } from './components/OfflineLibraryScreen';
 import { PlayerScreen } from './components/PlayerScreen';
 import { ResponsiveState } from './components/ResponsiveState';
 import type { OfflineDownloads } from './offline-downloads';
+import './offline-mobile.css';
 import { useAudioPlayer } from './useAudioPlayer';
 import { useBackgroundPlaybackContinuity } from './useBackgroundPlaybackContinuity';
 import { useDesktopLayout } from './useDesktopLayout';
@@ -63,7 +64,7 @@ export function OfflineApp({ offline, onExit }: OfflineAppProps) {
         onOpenLibrary={() => setScreen('library')}
         onPlayTrack={player.playTrack}
         onReorderQueue={player.reorderQueue}
-        surfaceClassName={`phone-surface ${screen === 'library' ? 'phone-surface--library' : ''}`}
+        surfaceClassName={`phone-surface phone-surface--offline ${screen === 'library' ? 'phone-surface--library' : ''}`}
       >
         {offline.loading || (offline.tracks.length > 0 && !player.hydrated) ? (
           <ResponsiveState
