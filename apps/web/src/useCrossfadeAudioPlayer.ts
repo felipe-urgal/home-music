@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import type { NormalizationMode, Track } from '@home-music/shared';
 import { isAppleMobileWebKit } from './background-playback';
 import {
+  isCrossfadeCompletionPause,
   normalizeCrossfadeSeconds,
   otherCrossfadeDeck,
   readCrossfadeSeconds,
@@ -308,6 +309,15 @@ export function useCrossfadeAudioPlayer(
 
   const handleDeckPause = useCallback((audio: HTMLAudioElement) => {
     if (audio === getActiveAudio()) {
+      // Alguns browsers emitem `pause` imediatamente antes de `ended` no fim
+      // natural. A faixa de entrada já está tocando; manter `playing` evita que o
+      // efeito de cancelamento descarte esse deck antes do handoff em `ended`.
+      if (isCrossfadeCompletionPause({
+        hasIncomingTrack: Boolean(incomingTrackIdRef.current),
+        currentTime: audio.currentTime,
+        duration: audio.duration,
+        ended: audio.ended
+      })) return;
       player.audioHandlers.onPause();
       return;
     }

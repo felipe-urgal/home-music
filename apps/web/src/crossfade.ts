@@ -46,6 +46,25 @@ export type CrossfadeCandidate = {
   durationSeconds: number;
 };
 
+type CrossfadePauseOptions = {
+  hasIncomingTrack: boolean;
+  currentTime: number;
+  duration: number;
+  ended: boolean;
+};
+
+export function isCrossfadeCompletionPause({
+  hasIncomingTrack,
+  currentTime,
+  duration,
+  ended
+}: CrossfadePauseOptions) {
+  if (!hasIncomingTrack) return false;
+  if (ended) return true;
+  if (!Number.isFinite(currentTime) || !Number.isFinite(duration) || duration <= 0) return false;
+  return duration - currentTime <= 0.25;
+}
+
 export function resolveCrossfadeCandidate({
   queue,
   currentIndex,

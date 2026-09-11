@@ -28,4 +28,17 @@ describe('crossfade handoff', () => {
     expect(player).toContain('positionRef.current = audio.currentTime;');
     expect(player).toContain('setCurrentTime(audio.currentTime);');
   });
+
+  it('não cancela o handoff quando pause antecede ended no fim natural', () => {
+    const crossfade = source('useCrossfadeAudioPlayer.ts');
+    const pauseHandler = crossfade.slice(
+      crossfade.indexOf('const handleDeckPause'),
+      crossfade.indexOf('const togglePlay')
+    );
+    const completionGuard = pauseHandler.indexOf('isCrossfadeCompletionPause({');
+    const canonicalPause = pauseHandler.indexOf('player.audioHandlers.onPause();');
+
+    expect(completionGuard).toBeGreaterThanOrEqual(0);
+    expect(canonicalPause).toBeGreaterThan(completionGuard);
+  });
 });

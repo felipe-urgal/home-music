@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Track } from '@home-music/shared';
 import {
+  isCrossfadeCompletionPause,
   MAX_CROSSFADE_SECONDS,
   normalizeCrossfadeSeconds,
   otherCrossfadeDeck,
@@ -27,6 +28,36 @@ function track(id: string): Track {
 }
 
 describe('crossfade', () => {
+  it('preserva o deck de entrada quando pause antecede ended no fim natural', () => {
+    expect(isCrossfadeCompletionPause({
+      hasIncomingTrack: true,
+      currentTime: 179.9,
+      duration: 180,
+      ended: false
+    })).toBe(true);
+    expect(isCrossfadeCompletionPause({
+      hasIncomingTrack: true,
+      currentTime: 180,
+      duration: 180,
+      ended: true
+    })).toBe(true);
+  });
+
+  it('não confunde uma pausa comum com a conclusão do crossfade', () => {
+    expect(isCrossfadeCompletionPause({
+      hasIncomingTrack: true,
+      currentTime: 120,
+      duration: 180,
+      ended: false
+    })).toBe(false);
+    expect(isCrossfadeCompletionPause({
+      hasIncomingTrack: false,
+      currentTime: 180,
+      duration: 180,
+      ended: true
+    })).toBe(false);
+  });
+
   const queue = [track('a'), track('b'), track('c')];
 
   it('alterna os decks sem promover uma terceira fonte de playback', () => {
