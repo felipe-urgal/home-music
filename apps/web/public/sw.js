@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'home-music-static-';
-const CACHE_NAME = `${CACHE_PREFIX}v3`;
+const CACHE_NAME = `${CACHE_PREFIX}v4`;
 const OFFLINE_AUDIO_CACHE_PREFIX = 'home-music-offline-audio-v2-';
 const OFFLINE_CLIENT_SCOPE_CACHE_NAME = 'home-music-offline-client-scope-v1';
 const LEGACY_OFFLINE_AUDIO_CACHE_NAME = 'home-music-offline-audio-v1';
@@ -111,7 +111,7 @@ async function persistBackgroundFetch(registration) {
   const expectedUrl = new URL(sourceAudioUrl(scope.trackId), self.location.origin);
   if (
     request.method !== 'GET' ||
-    requestUrl.origin !== self.location.origin ||
+    requestUrl.origin !== expectedUrl.origin ||
     requestUrl.pathname !== expectedUrl.pathname ||
     requestUrl.search !== expectedUrl.search
   ) return;
@@ -212,6 +212,18 @@ function assetUrlsFromHtml(html) {
   return [...urls];
 }
 
+async function cacheShellSnapshot(cache, shellResponse, extraUrls = []) {
+  const html = await shellResponse.clone().text();
+  const requiredUrls = [...extraUrls, ...assetUrlsFromHtml(html)];
+
+  // O HTML só vira o shell oficial depois que todos os bundles que ele referencia
+  // estão disponíveis. Se algum download falhar, o shell anterior permanece válido.
+  if (requiredUrls.length > 0) {
+    await cache.addAll(requiredUrls);
+  }
+  await cache.put(SHELL_URL, shellResponse);
+}
+
 async function warmStaticCache() {
   const cache = await caches.open(CACHE_NAME);
   const shellResponse = await fetch(SHELL_URL, { cache: 'no-store' });
@@ -219,12 +231,9 @@ async function warmStaticCache() {
     throw new Error(`Não foi possível preparar o shell da PWA: HTTP ${shellResponse.status}`);
   }
 
-  const html = await shellResponse.clone().text();
-  await cache.put(SHELL_URL, shellResponse);
-  await cache.addAll([
+  await cacheShellSnapshot(cache, shellResponse, [
     '/manifest.webmanifest',
-    '/favicon.svg',
-    ...assetUrlsFromHtml(html)
+    '/favicon.svg'
   ]);
 }
 
@@ -232,7 +241,12 @@ async function refreshCachedShell(request, cache) {
   try {
     const response = await fetch(request);
     if (isCacheableResponse(response)) {
-      await cache.put(SHELL_URL, response.clone());
+      try {
+        await cacheShellSnapshot(cache, response.clone());
+      } catch {
+        // Não publica um HTML que dependa de bundles que não ficaram disponíveis.
+        // A resposta de rede ainda pode ser usada pela navegação corrente.
+      }
     }
     return response;
   } catch {
@@ -302,7 +316,10 @@ async function staleWhileRevalidate(request) {
 }
 
 self.addEventListener('install', event => {
-  event.waitUntil(warmStaticCache());
+  event.waitUntil((async () => {
+    await warmStaticCache();
+    await self.skipWaiting();
+  })());
 });
 
 self.addEventListener('activate', event => {

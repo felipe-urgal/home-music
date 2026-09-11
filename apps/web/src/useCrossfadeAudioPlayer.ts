@@ -17,13 +17,6 @@ import {
 } from './streaming-quality';
 import { useAudioPlayer } from './useAudioPlayer';
 
-type PendingPromotion = {
-  trackId: string;
-  audibleAudio: HTMLAudioElement;
-  shadowAudio: HTMLAudioElement;
-  adopted: boolean;
-};
-
 function initialCrossfadeSeconds() {
   try {
     return readCrossfadeSeconds(window.localStorage);
@@ -55,7 +48,6 @@ export function useCrossfadeAudioPlayer(
   const originTrackIdRef = useRef<string | null>(null);
   const startingTrackIdRef = useRef<string | null>(null);
   const incomingTrackIdRef = useRef<string | null>(null);
-  const pendingPromotionRef = useRef<PendingPromotion | null>(null);
   const currentTrackIdRef = useRef<string | null>(player.current?.id ?? null);
   const outputVolumeRef = useRef(resolveOutputVolume(player.volume, usesSystemVolume));
   const [crossfadeSeconds, setCrossfadeSecondsState] = useState(initialCrossfadeSeconds);
@@ -87,37 +79,12 @@ export function useCrossfadeAudioPlayer(
     animationFrameRef.current = null;
   }, []);
 
-  const finishPendingPromotion = useCallback((pending: PendingPromotion) => {
-    if (pendingPromotionRef.current !== pending) return;
-    player.audioRef.current = pending.audibleAudio;
-    pending.adopted = true;
-    player.audioHandlers.onLoadedMetadata(pending.audibleAudio);
-    player.audioHandlers.onTimeUpdate(pending.audibleAudio);
-    player.audioHandlers.onPlay();
-  }, [player.audioHandlers, player.audioRef]);
-
-  const releasePromotionShadow = useCallback((pending: PendingPromotion) => {
-    if (pendingPromotionRef.current !== pending) return;
-    pendingPromotionRef.current = null;
-    clearAudio(pending.shadowAudio);
-    if (!pending.audibleAudio.paused && !pending.audibleAudio.ended) {
-      player.audioHandlers.onPlay();
-    }
-  }, [clearAudio, player.audioHandlers]);
-
   const cancelCrossfade = useCallback(() => {
     attemptRef.current += 1;
     cancelAnimation();
     originTrackIdRef.current = null;
     startingTrackIdRef.current = null;
     incomingTrackIdRef.current = null;
-
-    const pendingPromotion = pendingPromotionRef.current;
-    if (pendingPromotion) {
-      player.audioRef.current = pendingPromotion.audibleAudio;
-      pendingPromotionRef.current = null;
-      clearAudio(pendingPromotion.shadowAudio);
-    }
 
     const activeAudio = getActiveAudio();
     const inactiveAudio = getInactiveAudio();
@@ -160,13 +127,6 @@ export function useCrossfadeAudioPlayer(
     }
   }, [cancelCrossfade, player.playing]);
 
-  useEffect(() => {
-    const pendingPromotion = pendingPromotionRef.current;
-    if (!pendingPromotion) return;
-    pendingPromotion.shadowAudio.volume = 0;
-    pendingPromotion.audibleAudio.volume = outputVolumeRef.current;
-  }, [player.volume, usesSystemVolume]);
-
   useEffect(() => () => {
     attemptRef.current += 1;
     cancelAnimation();
@@ -185,7 +145,7 @@ export function useCrossfadeAudioPlayer(
     if (isAppleMobileWebKit(navigator)) return;
     if (activeAudio !== getActiveAudio()) return;
     if (!player.playing || activeAudio.paused || activeAudio.ended) return;
-    if (startingTrackIdRef.current || incomingTrackIdRef.current || pendingPromotionRef.current) return;
+    if (startingTrackIdRef.current || incomingTrackIdRef.current) return;
     if (!Number.isFinite(activeAudio.duration) || activeAudio.duration <= 0) return;
 
     const candidate = resolveCrossfadeCandidate({
@@ -318,50 +278,25 @@ export function useCrossfadeAudioPlayer(
     activeDeckRef.current = otherCrossfadeDeck(activeDeckRef.current);
     incomingAudio.volume = outputVolumeRef.current;
     audio.volume = 0;
-    pendingPromotionRef.current = {
-      trackId: candidate.trackId,
-      audibleAudio: incomingAudio,
-      shadowAudio: audio,
-      adopted: false
-    };
 
+    // A próxima faixa já está carregada e avançou durante o crossfade. Registra a
+    // adoção antes de avançar o estado para que o player canônico não faça src/load
+    // novamente e não devolva a faixa para 0s.
+    player.adoptAudioSource(candidate.trackId, incomingAudio);
+    clearAudio(audio);
     player.audioHandlers.onPlay();
     player.audioHandlers.onEnded();
-  }, [cancelAnimation, cancelCrossfade, crossfadeSeconds, getActiveAudio, getInactiveAudio, player.audioHandlers, player.current?.id, player.currentIndex, player.queue, player.repeatMode]);
+  }, [cancelAnimation, cancelCrossfade, clearAudio, crossfadeSeconds, getActiveAudio, getInactiveAudio, player.adoptAudioSource, player.audioHandlers, player.current?.id, player.currentIndex, player.queue, player.repeatMode]);
 
   const handleDeckLoadedMetadata = useCallback((audio: HTMLAudioElement) => {
-    const pendingPromotion = pendingPromotionRef.current;
-    if (pendingPromotion?.shadowAudio === audio) {
-      finishPendingPromotion(pendingPromotion);
-      return;
-    }
-
     if (audio === getActiveAudio()) player.audioHandlers.onLoadedMetadata(audio);
-  }, [finishPendingPromotion, getActiveAudio, player.audioHandlers]);
+  }, [getActiveAudio, player.audioHandlers]);
 
   const handleDeckPlaying = useCallback((audio: HTMLAudioElement) => {
-    const pendingPromotion = pendingPromotionRef.current;
-    if (pendingPromotion?.shadowAudio === audio) {
-      if (!pendingPromotion.adopted) finishPendingPromotion(pendingPromotion);
-      releasePromotionShadow(pendingPromotion);
-    }
-  }, [finishPendingPromotion, releasePromotionShadow]);
+    if (audio === getActiveAudio()) player.audioHandlers.onPlay();
+  }, [getActiveAudio, player.audioHandlers]);
 
   const handleDeckError = useCallback((audio: HTMLAudioElement) => {
-    const pendingPromotion = pendingPromotionRef.current;
-    if (pendingPromotion?.shadowAudio === audio) {
-      if (!pendingPromotion.adopted) finishPendingPromotion(pendingPromotion);
-      releasePromotionShadow(pendingPromotion);
-      window.setTimeout(() => {
-        if (
-          player.audioRef.current === pendingPromotion.audibleAudio
-          && !pendingPromotion.audibleAudio.paused
-          && !pendingPromotion.audibleAudio.ended
-        ) player.audioHandlers.onPlay();
-      }, 0);
-      return;
-    }
-
     if (audio === getActiveAudio()) {
       cancelCrossfade();
       player.audioHandlers.onError(audio);
@@ -369,12 +304,9 @@ export function useCrossfadeAudioPlayer(
     }
 
     if (startingTrackIdRef.current || incomingTrackIdRef.current) cancelCrossfade();
-  }, [cancelCrossfade, finishPendingPromotion, getActiveAudio, player.audioHandlers, player.audioRef, releasePromotionShadow]);
+  }, [cancelCrossfade, getActiveAudio, player.audioHandlers]);
 
   const handleDeckPause = useCallback((audio: HTMLAudioElement) => {
-    const pendingPromotion = pendingPromotionRef.current;
-    if (pendingPromotion?.shadowAudio === audio) return;
-
     if (audio === getActiveAudio()) {
       player.audioHandlers.onPause();
       return;

@@ -41,6 +41,11 @@ type AudioPlayerOptions = {
   offlineMode?: boolean;
 };
 
+type AdoptedAudioSource = {
+  trackId: string;
+  audio: HTMLAudioElement;
+};
+
 function mutationFetch(url: string, init: RequestInit) {
   const headers = new Headers(init.headers);
   headers.set('X-Home-Music-Request', '1');
@@ -140,6 +145,7 @@ export function useAudioPlayer(
 ) {
   const offlineMode = Boolean(options.offlineMode);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const adoptedAudioSourceRef = useRef<AdoptedAudioSource | null>(null);
   const positionRef = useRef(0);
   const restoredPositionRef = useRef(0);
   const sourceTrackRef = useRef<string | null>(null);
@@ -194,6 +200,11 @@ export function useAudioPlayer(
       })
       .catch(handlePlayRejection);
   }, [handlePlayRejection]);
+
+  const adoptAudioSource = useCallback((trackId: string, audio: HTMLAudioElement) => {
+    adoptedAudioSourceRef.current = { trackId, audio };
+    audioRef.current = audio;
+  }, []);
 
   useEffect(() => {
     if (!libraryReady || hydratedRef.current) return;
@@ -262,6 +273,7 @@ export function useAudioPlayer(
       restoredPositionRef.current = 0;
       sourceTrackRef.current = null;
       sourceFallbackRef.current = 'none';
+      adoptedAudioSourceRef.current = null;
       failedPlaybackTrackIdsRef.current.clear();
       appleBackgroundRecoveryTrackRef.current = null;
       return;
@@ -289,6 +301,28 @@ export function useAudioPlayer(
     const audio = audioRef.current;
     if (!audio || !current || !hydrated) return;
 
+    const adoptedSource = adoptedAudioSourceRef.current;
+    if (adoptedSource?.trackId === current.id && adoptedSource.audio === audio) {
+      adoptedAudioSourceRef.current = null;
+      sourceTrackRef.current = current.id;
+      sourceFallbackRef.current = 'none';
+      appleBackgroundRecoveryTrackRef.current = null;
+      restoredPositionRef.current = 0;
+      positionRef.current = audio.currentTime;
+      setCurrentTime(audio.currentTime);
+      setDuration(audio.duration || current.duration || 0);
+      setSourceError(null);
+      setAutoplayBlocked(false);
+      if (!audio.paused && !audio.ended) {
+        setPlaybackIntent(true);
+        setPlaying(true);
+      } else {
+        resumeAudio(audio);
+      }
+      return;
+    }
+    if (adoptedSource) adoptedAudioSourceRef.current = null;
+
     if (sourceTrackRef.current !== current.id) {
       sourceTrackRef.current = current.id;
       appleBackgroundRecoveryTrackRef.current = null;
@@ -303,7 +337,7 @@ export function useAudioPlayer(
       : onlineAudioUrl(current.id, streamingMode, false, effectiveNormalizationMode);
     audio.load();
     resumeAudio(audio);
-  }, [current?.id, effectiveNormalizationMode, hydrated, offlineMode, resumeAudio, streamingMode]);
+  }, [current?.id, effectiveNormalizationMode, hydrated, offlineMode, resumeAudio, setPlaybackIntent, streamingMode]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -755,6 +789,7 @@ export function useAudioPlayer(
     toggleShuffle,
     cycleRepeat,
     reorderQueue,
+    adoptAudioSource,
     syncVisibleProgress: () => setCurrentTime(positionRef.current),
     audioHandlers: {
       onPlay: handlePlay,

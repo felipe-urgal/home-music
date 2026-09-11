@@ -42,7 +42,7 @@ describe('offline bootstrap contract', () => {
     const worker = source('../public/sw.js');
     const registration = source('register-service-worker.ts');
 
-    expect(worker).toMatch(/const CACHE_NAME = `\$\{CACHE_PREFIX\}v3`/);
+    expect(worker).toMatch(/const CACHE_NAME = `\$\{CACHE_PREFIX\}v4`/);
     expect(worker).toMatch(/async function cacheFirstNavigation\(request\)/);
     expect(worker).toMatch(/const cachedShell = await cache\.match\(SHELL_URL\)/);
     expect(worker).toMatch(/if \(cachedShell\) return cachedShell;/);

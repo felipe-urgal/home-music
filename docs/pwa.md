@@ -8,6 +8,12 @@ O service worker mantém um shell público mínimo com HTML, assets compilados, 
 
 Quando o shell já está instalado, a aplicação consegue montar a interface a partir do conteúdo local e atualizar o shell depois, fora do caminho crítico de abertura.
 
+### Atualização após deploy
+
+O shell e os bundles compilados formam um snapshot coerente. Durante instalação ou atualização, o service worker baixa primeiro todos os assets com hash referenciados pelo HTML e só depois publica esse HTML como novo shell. Se qualquer bundle falhar, o último shell funcional permanece no cache.
+
+Uma nova versão do cache estático força a recuperação de instalações antigas quando a política do shell muda. O worker atualizado usa ativação imediata e assume os clientes existentes, enquanto a limpeza de versões anteriores permanece restrita ao cache estático e ao cache de áudio legado. Os caches `home-music-offline-audio-v2-*` por usuário não são removidos por essa atualização.
+
 ## Bootstrap offline
 
 A aplicação separa disponibilidade local de disponibilidade do servidor.
