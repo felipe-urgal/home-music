@@ -24,7 +24,8 @@ export type LibraryAssistantProvenanceSource =
   | 'lrclib'
   | 'acoustid'
   | 'generated'
-  | 'local-transcription';
+  | 'local-transcription'
+  | 'local-alignment';
 
 export type LibraryAssistantMetadataField = 'title' | 'artist' | 'album' | 'albumArtist';
 export type LibraryAssistantReviewMode = 'ignore' | 'review' | 'bulk';
@@ -65,6 +66,10 @@ export type LibraryAssistantReasonCode =
   | 'provider-match'
   | 'human-override'
   | 'ambiguous-candidates'
+  | 'local-transcription'
+  | 'local-alignment'
+  | 'alignment-partial'
+  | 'alignment-low-confidence'
   | 'fingerprint.match-strong'
   | 'fingerprint.multiple-recordings'
   | 'fingerprint.duration-conflict'
@@ -156,6 +161,8 @@ export type LibraryAssistantArtworkTarget = {
   musicBrainzReleaseGroupId: string | null;
 };
 
+export type LibraryAssistantLyricsSource = 'lrclib' | 'local-transcription' | 'local-alignment';
+
 export type LibraryAssistantLyricsTarget = {
   capability: 'lyrics';
   trackId: string;
@@ -164,6 +171,7 @@ export type LibraryAssistantLyricsTarget = {
   language: string | null;
   currentValue: string;
   preview: string;
+  source?: LibraryAssistantLyricsSource;
 };
 
 export type LibraryAssistantSuggestionTarget =
@@ -189,7 +197,11 @@ const LIBRARY_ASSISTANT_AUTO_APPLY_BLOCKERS = new Set<LibraryAssistantReasonCode
   'human-override',
   'ambiguous-candidates',
   'source-conflict',
-  'metadata-conflict'
+  'metadata-conflict',
+  'local-transcription',
+  'local-alignment',
+  'alignment-partial',
+  'alignment-low-confidence'
 ]);
 
 export function isLibraryAssistantAutoApplicable(
@@ -362,4 +374,91 @@ export type AdminLibraryAssistantBatchDecisionRequest = {
 export type AdminLibraryAssistantBatchDecisionResponse = {
   results: LibraryAssistantDecisionResult[];
   summary: LibraryAssistantDecisionSummary;
+};
+
+export type LocalLyricsMode = 'transcribe' | 'align';
+export type LocalLyricsJobStatus =
+  | 'queued'
+  | 'preparing'
+  | 'recognizing'
+  | 'aligning'
+  | 'review'
+  | 'failed'
+  | 'cancelled';
+export type LocalLyricsCapabilityIssue =
+  | 'not-configured'
+  | 'model-not-configured'
+  | 'model-invalid'
+  | 'model-too-large'
+  | 'ffmpeg-unavailable'
+  | 'whisper-unavailable'
+  | 'invalid-command';
+
+export type LocalLyricsCapabilityResponse = {
+  available: boolean;
+  issue: LocalLyricsCapabilityIssue | null;
+  action: string | null;
+  whisperVersion: string | null;
+  model: {
+    configured: boolean;
+    label: string | null;
+    sizeBytes: number | null;
+  };
+};
+
+export type LocalLyricsEligibleTrack = {
+  id: string;
+  title: string;
+  artist: string;
+  album: string;
+  action: LocalLyricsMode;
+  currentSynchronized: boolean;
+};
+
+export type LocalLyricsEligibleTracksResponse = {
+  tracks: LocalLyricsEligibleTrack[];
+};
+
+export type LocalLyricsPreviewLineState = 'aligned' | 'low-confidence' | 'unaligned';
+export type LocalLyricsPreviewLine = {
+  time: number | null;
+  text: string;
+  state: LocalLyricsPreviewLineState;
+};
+
+export type LocalLyricsQuality = {
+  totalLines: number;
+  alignedLines: number;
+  lowConfidenceLines: number;
+  unalignedLines: number;
+  coverage: number;
+  monotonic: boolean;
+  divergence: number;
+  durationSeconds: number | null;
+  maxTimestampSeconds: number | null;
+};
+
+export type LocalLyricsJob = {
+  id: string;
+  trackId: string;
+  mode: LocalLyricsMode;
+  status: LocalLyricsJobStatus;
+  stage: string;
+  createdAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  candidateSuggestionId: string | null;
+  error: string | null;
+  quality: LocalLyricsQuality | null;
+  previewLines: LocalLyricsPreviewLine[];
+};
+
+export type LocalLyricsStartJobRequest = {
+  trackId: string;
+  mode: LocalLyricsMode;
+  languageHint?: string | null;
+};
+
+export type LocalLyricsJobResponse = {
+  job: LocalLyricsJob;
 };
