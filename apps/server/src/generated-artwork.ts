@@ -31,7 +31,7 @@ function clampByte(value: number) {
   return Math.max(0, Math.min(255, Math.round(value)));
 }
 
-function crc32(data: Buffer) {
+function crc32(data: Uint8Array) {
   let crc = 0xffffffff;
   for (const byte of data) {
     crc ^= byte;
@@ -42,13 +42,14 @@ function crc32(data: Buffer) {
   return (crc ^ 0xffffffff) >>> 0;
 }
 
-function pngChunk(type: string, data = Buffer.alloc(0)) {
+function pngChunk(type: string, data: Uint8Array = new Uint8Array()) {
   const name = Buffer.from(type, 'ascii');
+  const payload = Buffer.from(data);
   const length = Buffer.allocUnsafe(4);
-  length.writeUInt32BE(data.length, 0);
+  length.writeUInt32BE(payload.length, 0);
   const checksum = Buffer.allocUnsafe(4);
-  checksum.writeUInt32BE(crc32(Buffer.concat([name, data])), 0);
-  return Buffer.concat([length, name, data, checksum]);
+  checksum.writeUInt32BE(crc32(Buffer.concat([name, payload])), 0);
+  return Buffer.concat([length, name, payload, checksum]);
 }
 
 function renderPixels(identity: ArtworkFallbackIdentity, size: number) {
