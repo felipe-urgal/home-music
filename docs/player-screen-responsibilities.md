@@ -19,6 +19,30 @@ Desktop e mobile recebem o mesmo estado/callbacks originados de `useAudioPlayer`
 
 Media Session, preload, continuidade em background e helpers de diagnóstico não são players paralelos.
 
+## Transição contínua em foreground
+
+A reprodução online autenticada pode envolver `useAudioPlayer` com `useCrossfadeAudioPlayer` para oferecer uma transição opcional entre faixas sem deslocar a autoridade do player.
+
+A preferência é local ao dispositivo e possui três estados:
+
+- `off`: comportamento canônico sem sobreposição;
+- `soft`: crossfade de 3 segundos;
+- `continuous`: crossfade de 5 segundos.
+
+Quando o crossfade está ativo, um segundo elemento de áudio é usado apenas como **deck transitório** nos últimos segundos da faixa atual. A fila, a decisão de próxima faixa, shuffle, repeat, persistência e Media Session continuam pertencendo ao `useAudioPlayer` principal.
+
+Regras de segurança da transição:
+
+- só inicia com `document.visibilityState === 'visible'`;
+- `repeat one` não cria um segundo stream concorrente da mesma faixa;
+- ações manuais de next/previous/seek, mudanças de shuffle/repeat, troca de qualidade/normalização e seleção de outra música cancelam a mistura;
+- se o segundo áudio falhar ou não puder iniciar, o volume do player principal é restaurado e o avanço normal assume a fila;
+- no fim da faixa atual, o player principal assume a próxima a partir da posição já reproduzida pelo deck transitório;
+- ao ir para background/tela bloqueada, o deck transitório é descartado e o fluxo existente de um único player permanece ativo;
+- o modo offline continua usando diretamente `useAudioPlayer`, sem crossfade nesta primeira versão.
+
+O segundo elemento não é uma segunda fonte de verdade e não mantém estado persistente próprio.
+
 ## Erros de mídia
 
 Falha definitiva de uma faixa é tratada somente depois dos fallbacks suportados. Quando a intenção de reprodução continua válida, o player pode avançar para a próxima faixa sem criar loop infinito.
