@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { NormalizationMode, Track } from '@home-music/shared';
+import { isAppleMobileWebKit } from './background-playback';
 import {
   readCrossfadeMode,
   resolveCrossfadeCandidate,
@@ -129,6 +130,7 @@ export function useCrossfadeAudioPlayer(
   }, [cancelCrossfade]);
 
   const maybeStartCrossfade = useCallback((primaryAudio: HTMLAudioElement) => {
+    if (isAppleMobileWebKit(navigator)) return;
     if (!player.playing || primaryAudio.paused || primaryAudio.ended) return;
     if (startingTrackIdRef.current || activeTrackIdRef.current || pendingHandoffRef.current) return;
     if (!Number.isFinite(primaryAudio.duration) || primaryAudio.duration <= 0) return;
