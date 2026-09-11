@@ -14,6 +14,7 @@ import {
   AdminTrackMutationService
 } from './admin-track-mutation-service.js';
 export { PERMANENT_DELETE_CONFIRMATION } from './admin-track-mutation-service.js';
+import { renderGeneratedArtworkPng } from './generated-artwork.js';
 import { LibraryDuplicateReviewError, LibraryDuplicateReviewStore } from './library-duplicate-review.js';
 import type { LibraryRouteProjection } from './library-routes.js';
 import { LibraryMetadataNormalizationStore } from './library-metadata-normalization.js';
@@ -21,6 +22,7 @@ import type { AppliedTrackLocation } from './media-file-move.js';
 import {
   COVER_OVERRIDE_CONTENT_TYPES,
   CoverOverrideValidationError,
+  inspectCoverOverride,
   MAX_COVER_OVERRIDE_BYTES,
   TrackCoverOverrideStore
 } from './track-cover-overrides.js';
@@ -402,6 +404,41 @@ export function registerAdminTrackRoutes(
     const cover = coverOverrides.getStatus(request.params.id);
     if (!cover) return reply.code(404).send({ error: 'Música não encontrada.' });
     return cover;
+  });
+
+  app.post<{ Params: { id: string } }>('/api/admin/tracks/:id/cover/generated', async (request, reply) => {
+    reply.header('Cache-Control', 'private, no-store');
+    if (mutations.hasHidden(request.params.id)) {
+      return reply.code(409).send({ error: 'Música está na lixeira. Restaure antes de editar a capa.' });
+    }
+
+    const physicalTrack = service.listTracks().find(track => track.id === request.params.id);
+    if (!physicalTrack) return reply.code(404).send({ error: 'Música não encontrada.' });
+    const before = coverOverrides.getStatus(request.params.id);
+    if (!before) return reply.code(404).send({ error: 'Música não encontrada.' });
+
+    try {
+      metadataOverrides.refresh();
+      metadataNormalization.refresh();
+      const effectiveTrack = metadataNormalization.resolveTrack(metadataOverrides.resolveTrack(physicalTrack));
+      const generated = renderGeneratedArtworkPng(effectiveTrack);
+      const inspected = inspectCoverOverride(generated.data, generated.contentType);
+
+      if (before.effectiveHasCover) {
+        const alreadyMaterialized = !before.physicalHasCover && before.override?.version === inspected.version;
+        if (alreadyMaterialized) return before;
+        return reply.code(409).send({
+          error: 'A música já possui uma capa real. Remova o override explicitamente antes de gerar outra capa.'
+        });
+      }
+
+      const cover = coverOverrides.save(request.params.id, generated.data, generated.contentType);
+      if (!cover) return reply.code(404).send({ error: 'Música não encontrada.' });
+      if (before.override?.version !== cover.override?.version) coverRevision += 1;
+      return cover;
+    } catch (error) {
+      return sendCoverValidationError(reply, error);
+    }
   });
 
   app.put<{ Params: { id: string }; Body: Buffer }>(
