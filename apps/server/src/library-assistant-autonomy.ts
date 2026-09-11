@@ -157,19 +157,22 @@ export class LibraryAssistantAutonomyController {
 
     if (run.status === 'completed' && this.store.get().config.enabled) {
       const queue = this.review.getReviewQueue(500);
-      const decisions: LibraryAssistantDecision[] = queue.items
-        .filter(item => item.suggestion.runId === run.id)
-        .filter(item => item.suggestion.target.capability === 'metadata')
-        .filter(item => item.suggestion.target.currentValue.trim() === '')
-        .filter(item => isLibraryAssistantAutoApplicable(item.suggestion))
-        .slice(0, 100)
-        .map(item => ({
+      const decisions: LibraryAssistantDecision[] = [];
+      for (const item of queue.items) {
+        if (decisions.length >= 100) break;
+        if (item.suggestion.runId !== run.id) continue;
+        const target = item.suggestion.target;
+        if (target.capability !== 'metadata') continue;
+        if (target.currentValue.trim() !== '') continue;
+        if (!isLibraryAssistantAutoApplicable(item.suggestion)) continue;
+        decisions.push({
           runId: run.id,
           suggestionId: item.suggestion.id,
-          action: 'apply' as const,
+          action: 'apply',
           expectedLibraryRevision: item.runLibraryRevision,
-          expectedCurrentValue: item.suggestion.target.currentValue
-        }));
+          expectedCurrentValue: target.currentValue
+        });
+      }
       if (decisions.length) {
         const result = await this.review.decideBatch(decisions);
         applied = result.summary.applied;
