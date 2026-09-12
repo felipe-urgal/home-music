@@ -1,6 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Folder, ListMusic, Menu, Music2, Radio, UserRound, X } from 'lucide-react';
 import { navigateAppPath } from '../browser-navigation';
+
+const DRAWER_FOCUSABLE_SELECTOR = [
+  'button:not([disabled])',
+  'a[href]',
+  'input:not([disabled])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])'
+].join(',');
 
 type MobileBottomNavProps = {
   active: 'player' | 'library' | 'account';
@@ -21,18 +30,55 @@ export function MobileBottomNav({
   onOpenAccount
 }: MobileBottomNavProps) {
   const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const drawerRef = useRef<HTMLElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const wasOpenRef = useRef(false);
 
   useEffect(() => {
     setOpen(false);
   }, [active]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      if (!wasOpenRef.current) return;
+      wasOpenRef.current = false;
+      const frame = window.requestAnimationFrame(() => triggerRef.current?.focus());
+      return () => window.cancelAnimationFrame(frame);
+    }
+
+    wasOpenRef.current = true;
+    const frame = window.requestAnimationFrame(() => closeButtonRef.current?.focus());
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false);
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setOpen(false);
+        return;
+      }
+
+      if (event.key !== 'Tab') return;
+      const drawer = drawerRef.current;
+      if (!drawer) return;
+      const focusable = Array.from(drawer.querySelectorAll<HTMLElement>(DRAWER_FOCUSABLE_SELECTOR));
+      const first = focusable[0];
+      const last = focusable.at(-1);
+      if (!first || !last) return;
+
+      const activeElement = document.activeElement;
+      if (event.shiftKey && (activeElement === first || !drawer.contains(activeElement))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (activeElement === last || !drawer.contains(activeElement))) {
+        event.preventDefault();
+        first.focus();
+      }
     };
+
     window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener('keydown', onKeyDown);
+    };
   }, [open]);
 
   function navigate(action: () => void) {
@@ -53,6 +99,7 @@ export function MobileBottomNav({
   return (
     <>
       <button
+        ref={triggerRef}
         className="mobile-nav-trigger"
         type="button"
         aria-label="Abrir navegação"
@@ -66,6 +113,7 @@ export function MobileBottomNav({
       {open && <button className="mobile-navigation-backdrop" type="button" aria-label="Fechar navegação" onClick={() => setOpen(false)} />}
 
       <nav
+        ref={drawerRef}
         id="mobile-navigation-drawer"
         className={`mobile-navigation-drawer ${open ? 'is-open' : ''}`}
         aria-label="Navegação principal"
@@ -74,7 +122,7 @@ export function MobileBottomNav({
         <div className="mobile-navigation-drawer__brand">
           <span><Music2 aria-hidden="true" /></span>
           <div><strong>Home Music</strong><small>Sua biblioteca</small></div>
-          <button type="button" aria-label="Fechar navegação" onClick={() => setOpen(false)}><X aria-hidden="true" /></button>
+          <button ref={closeButtonRef} type="button" aria-label="Fechar navegação" onClick={() => setOpen(false)}><X aria-hidden="true" /></button>
         </div>
 
         <div className="mobile-navigation-drawer__items">
