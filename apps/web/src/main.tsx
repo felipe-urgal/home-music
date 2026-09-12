@@ -39,6 +39,7 @@ import './desktop-scrollbars.css';
 import './desktop-navigation.css';
 import './phase7-interactions.css';
 import './desktop-now-playing.css';
+import './desktop-lyrics.css';
 import './account-shell.css';
 import './desktop-overlays.css';
 import './mobile-shell.css';
