@@ -12,6 +12,7 @@ type LyricsPanelProps = {
 export function LyricsPanel({ track, currentTime, offlineMode }: LyricsPanelProps) {
   const [open, setOpen] = useState(false);
   const [autoFollow, setAutoFollow] = useState(true);
+  const linesRef = useRef<HTMLDivElement | null>(null);
   const activeLineRef = useRef<HTMLParagraphElement | null>(null);
   const lyrics = useTrackLyrics(track, offlineMode);
 
@@ -32,9 +33,22 @@ export function LyricsPanel({ track, currentTime, offlineMode }: LyricsPanelProp
   }, [currentTime, lyrics]);
 
   useEffect(() => {
-    if (open && autoFollow) {
-      activeLineRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
+    if (!open || !autoFollow) return;
+
+    const container = linesRef.current;
+    const activeLineElement = activeLineRef.current;
+    if (!container || !activeLineElement) return;
+
+    const containerRect = container.getBoundingClientRect();
+    const lineRect = activeLineElement.getBoundingClientRect();
+    const targetTop = container.scrollTop
+      + (lineRect.top - containerRect.top)
+      - ((container.clientHeight - lineRect.height) / 2);
+
+    container.scrollTo({
+      top: Math.max(0, targetTop),
+      behavior: 'smooth'
+    });
   }, [activeLine, autoFollow, open]);
 
   if (!lyrics) return null;
@@ -64,6 +78,7 @@ export function LyricsPanel({ track, currentTime, offlineMode }: LyricsPanelProp
             </button>
           )}
           <div
+            ref={linesRef}
             className={lyrics.synchronized ? 'lyrics-panel__lines is-synchronized' : 'lyrics-panel__lines'}
             onWheel={() => setAutoFollow(false)}
             onTouchMove={() => setAutoFollow(false)}
