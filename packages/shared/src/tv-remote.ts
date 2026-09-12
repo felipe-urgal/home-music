@@ -1,10 +1,10 @@
-import type { TvRemotePlaybackSnapshot } from './index.js';
+import type {
+  TvRemoteCommand as LegacyTvRemoteCommand,
+  TvRemotePlaybackSnapshot
+} from './index.js';
 
 export type TvRemoteCommand =
-  | { type: 'toggle-play' }
-  | { type: 'previous' }
-  | { type: 'next' }
-  | { type: 'seek'; deltaSeconds: -10 | 10 }
+  | LegacyTvRemoteCommand
   | { type: 'play-track'; trackId: string };
 
 export type TvRemoteEvent =

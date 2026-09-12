@@ -1,11 +1,28 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { TvRemotePlaybackSnapshot } from '@home-music/shared';
-import type { TvRemoteEvent } from '@home-music/shared/tv-remote';
-import { parseTvRemoteCommand } from './tv-remote-command.js';
+import type { TvRemoteCommand, TvRemoteEvent } from '@home-music/shared/tv-remote';
 import type { TvRemoteSessionManager } from './tv-remote-session-manager.js';
 
 type SessionParams = { Params: { sessionId: string } };
 const missing = { error: 'Controle remoto não encontrado.' };
+
+function parseCommand(value: unknown): TvRemoteCommand | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const body = value as Record<string, unknown>;
+  if (body.type === 'toggle-play' || body.type === 'previous' || body.type === 'next') {
+    return Object.keys(body).length === 1 ? { type: body.type } : null;
+  }
+  if (body.type === 'seek' && (body.deltaSeconds === -10 || body.deltaSeconds === 10)) {
+    return Object.keys(body).length === 2 ? { type: 'seek', deltaSeconds: body.deltaSeconds } : null;
+  }
+  if (body.type === 'play-track' && typeof body.trackId === 'string') {
+    const trackId = body.trackId.trim();
+    return Object.keys(body).length === 2 && trackId.length > 0 && trackId.length <= 1024
+      ? { type: 'play-track', trackId }
+      : null;
+  }
+  return null;
+}
 
 function nullableString(value: unknown): value is string | null {
   return value === null || typeof value === 'string';
@@ -72,7 +89,7 @@ export function registerTvRemoteRoutes(app: FastifyInstance, manager: TvRemoteSe
     const ownerId = request.user!.id;
     const sessionId = request.params.sessionId;
     if (!manager.get(ownerId, sessionId)) return reply.code(404).send(missing);
-    const command = parseTvRemoteCommand(request.body);
+    const command = parseCommand(request.body);
     if (!command) return reply.code(400).send({ error: 'Comando de controle remoto inválido.' });
     if (!manager.publishCommand(ownerId, sessionId, command)) return reply.code(404).send(missing);
     return reply.code(202).send();

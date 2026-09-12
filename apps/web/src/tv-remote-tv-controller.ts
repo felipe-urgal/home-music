@@ -17,7 +17,7 @@ export type TvRemoteCanonicalControls = {
   previous: () => void;
   next: () => void;
   seek: (seconds: number) => void;
-  playTrack: (trackId: string) => void | Promise<void>;
+  playTrack: (trackId: string) => void;
 };
 
 export function tvRemoteSnapshot(

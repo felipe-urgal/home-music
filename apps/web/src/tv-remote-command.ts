@@ -5,7 +5,7 @@ export type TvRemotePlayerControls = {
   previous: () => void;
   next: () => void;
   seekBy: (deltaSeconds: -10 | 10) => void;
-  playTrack: (trackId: string) => void | Promise<void>;
+  playTrack: (trackId: string) => void;
 };
 
 export function applyTvRemoteCommand(
@@ -26,7 +26,7 @@ export function applyTvRemoteCommand(
       controls.seekBy(command.deltaSeconds);
       return;
     case 'play-track':
-      void controls.playTrack(command.trackId);
+      controls.playTrack(command.trackId);
       return;
   }
 }

@@ -15,12 +15,12 @@ import {
   tvRemoteSnapshotKey,
   type TvRemotePlaybackState
 } from './tv-remote-tv-controller';
+import { requestTvRemoteTrack } from './tv-remote-track-request';
 
 type TvRemoteSessionState = 'idle' | 'creating' | 'waiting' | 'connected' | 'error' | 'closed';
 
 type UseTvRemoteSessionOptions = {
   current?: Track;
-  tracks: Track[];
   playing: boolean;
   currentTime: number;
   duration: number;
@@ -28,7 +28,6 @@ type UseTvRemoteSessionOptions = {
   onPrevious: () => void;
   onNext: () => void;
   onSeek: (seconds: number) => void;
-  onPlayTrack: (track: Track, contextTracks: Track[]) => void | Promise<void>;
 };
 
 export function useTvRemoteSession(options: UseTvRemoteSessionOptions) {
@@ -144,11 +143,7 @@ export function useTvRemoteSession(options: UseTvRemoteSessionOptions) {
           previous: controls.onPrevious,
           next: controls.onNext,
           seek: controls.onSeek,
-          playTrack: trackId => {
-            const track = controls.tracks.find(item => item.id === trackId);
-            if (!track) return;
-            return controls.onPlayTrack(track, controls.tracks);
-          }
+          playTrack: requestTvRemoteTrack
         });
         scheduleChanged();
       },

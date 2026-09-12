@@ -31,7 +31,6 @@ export function TvRemotePairingDialog({ open, state, pairingUrl, error, onRegene
       <aside className="tv-now-playing__qr tv-remote-inline-qr" aria-label="Controle pelo celular">
         <a href={pairingUrl} aria-label="Abrir controle no celular">
           <img src={qrDataUrl} alt="QR code para controlar a TV pelo celular" width="124" height="124" />
-          <span>Escaneie para<br />controlar pelo celular</span>
         </a>
       </aside>
     );

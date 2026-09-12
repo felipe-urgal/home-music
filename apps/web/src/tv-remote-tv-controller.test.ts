@@ -42,18 +42,18 @@ describe('tv remote TV controller', () => {
     expect(controls.seek).toHaveBeenCalledWith(deltaSeconds < 0 ? 0 : 120);
   });
 
-  it('encaminha play-track ao controle canônico sem transportar a faixa inteira', () => {
+  it('encaminha a seleção remota de faixa sem alterar seek', () => {
     const controls = {
       togglePlay: vi.fn(), previous: vi.fn(), next: vi.fn(), seek: vi.fn(), playTrack: vi.fn()
     };
 
     applyTvRemotePlayerCommand(
-      { type: 'play-track', trackId: 'track-9' },
-      { currentTime: 12, duration: 120 },
+      { type: 'play-track', trackId: 'track-42' },
+      { currentTime: 25, duration: 180 },
       controls
     );
 
-    expect(controls.playTrack).toHaveBeenCalledWith('track-9');
+    expect(controls.playTrack).toHaveBeenCalledWith('track-42');
     expect(controls.seek).not.toHaveBeenCalled();
   });
 });

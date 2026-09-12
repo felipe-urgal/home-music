@@ -41,6 +41,14 @@ type CrossfadeCandidateOptions = {
   remainingSeconds: number;
 };
 
+type ManualCrossfadeCandidateOptions = {
+  currentTrackId: string | null;
+  targetTrackId: string | null;
+  durationSeconds: number;
+  playing: boolean;
+  visibilityState: DocumentVisibilityState;
+};
+
 export type CrossfadeCandidate = {
   trackId: string;
   durationSeconds: number;
@@ -63,6 +71,29 @@ export function isCrossfadeCompletionPause({
   if (ended) return true;
   if (!Number.isFinite(currentTime) || !Number.isFinite(duration) || duration <= 0) return false;
   return duration - currentTime <= 0.25;
+}
+
+export function resolveManualCrossfadeCandidate({
+  currentTrackId,
+  targetTrackId,
+  durationSeconds,
+  playing,
+  visibilityState
+}: ManualCrossfadeCandidateOptions): CrossfadeCandidate | null {
+  const normalizedDurationSeconds = normalizeCrossfadeSeconds(durationSeconds);
+  if (
+    !playing
+    || visibilityState !== 'visible'
+    || !normalizedDurationSeconds
+    || !currentTrackId
+    || !targetTrackId
+    || currentTrackId === targetTrackId
+  ) return null;
+
+  return {
+    trackId: targetTrackId,
+    durationSeconds: normalizedDurationSeconds
+  };
 }
 
 export function resolveCrossfadeCandidate({
