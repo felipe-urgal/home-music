@@ -3,11 +3,11 @@ import { Folder, ListMusic, Menu, Music2, Radio, UserRound, X } from 'lucide-rea
 
 type MobileBottomNavProps = {
   active: 'player' | 'library' | 'account';
-  username: string;
+  username?: string;
   onOpenPlayer: () => void;
   onOpenLibrary: () => void;
-  onOpenFolders: () => void;
-  onOpenPlaylists: () => void;
+  onOpenFolders?: () => void;
+  onOpenPlaylists?: () => void;
   onOpenAccount: () => void;
 };
 
@@ -72,14 +72,13 @@ export function MobileBottomNav({
             <Radio aria-hidden="true" /><span>Tocando agora</span>
           </button>
           <div className="mobile-navigation-drawer__label">Biblioteca</div>
-          <button type="button" onClick={() => navigate(onOpenFolders)}><Folder aria-hidden="true" /><span>Pastas</span></button>
-          <button type="button" onClick={() => navigate(onOpenPlaylists)}><ListMusic aria-hidden="true" /><span>Playlists</span></button>
-          <button type="button" className={active === 'library' ? 'is-active mobile-navigation-drawer__library' : 'mobile-navigation-drawer__library'} onClick={() => navigate(onOpenLibrary)}><ListMusic aria-hidden="true" /><span>Biblioteca</span></button>
+          <button type="button" onClick={() => navigate(onOpenFolders ?? onOpenLibrary)}><Folder aria-hidden="true" /><span>Pastas</span></button>
+          <button type="button" onClick={() => navigate(onOpenPlaylists ?? onOpenLibrary)}><ListMusic aria-hidden="true" /><span>Playlists</span></button>
         </div>
 
         <button className={`mobile-navigation-drawer__account ${active === 'account' ? 'is-active' : ''}`} type="button" onClick={() => navigate(onOpenAccount)}>
           <UserRound aria-hidden="true" />
-          <span><strong>Minha conta</strong><small>{username}</small></span>
+          <span><strong>Minha conta</strong>{username && <small>{username}</small>}</span>
         </button>
       </nav>
     </>
