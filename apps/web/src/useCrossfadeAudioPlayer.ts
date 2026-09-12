@@ -10,6 +10,7 @@ import {
   writeCrossfadeSeconds,
   type CrossfadeDeck
 } from './crossfade';
+import { offlineAudioUrl } from './offline-downloads';
 import { resolveOutputVolume } from './player-state';
 import {
   effectiveNormalizationMode,
@@ -34,13 +35,19 @@ function persistCrossfadeSeconds(seconds: number) {
   }
 }
 
+type CrossfadeAudioPlayerOptions = {
+  offlineMode?: boolean;
+};
+
 export function useCrossfadeAudioPlayer(
   tracks: Track[],
   progressVisible: boolean,
   libraryReady: boolean,
-  usesSystemVolume: boolean
+  usesSystemVolume: boolean,
+  options: CrossfadeAudioPlayerOptions = {}
 ) {
-  const player = useAudioPlayer(tracks, progressVisible, libraryReady, usesSystemVolume);
+  const offlineMode = Boolean(options.offlineMode);
+  const player = useAudioPlayer(tracks, progressVisible, libraryReady, usesSystemVolume, options);
   const deckARef = useRef<HTMLAudioElement>(null);
   const deckBRef = useRef<HTMLAudioElement>(null);
   const activeDeckRef = useRef<CrossfadeDeck>('a');
@@ -173,12 +180,14 @@ export function useCrossfadeAudioPlayer(
 
     clearAudio(incomingAudio);
     incomingAudio.volume = 0;
-    incomingAudio.src = onlineAudioUrl(
-      nextTrack.id,
-      player.streamingMode,
-      false,
-      effectiveNormalizationMode(nextTrack, player.normalizationMode)
-    );
+    incomingAudio.src = offlineMode
+      ? offlineAudioUrl(nextTrack.id)
+      : onlineAudioUrl(
+          nextTrack.id,
+          player.streamingMode,
+          false,
+          effectiveNormalizationMode(nextTrack, player.normalizationMode)
+        );
     incomingAudio.load();
 
     void incomingAudio.play()
@@ -237,7 +246,7 @@ export function useCrossfadeAudioPlayer(
       .catch(() => {
         if (attemptRef.current === attempt) cancelCrossfade();
       });
-  }, [cancelCrossfade, clearAudio, crossfadeSeconds, getActiveAudio, getInactiveAudio, player.current?.id, player.currentIndex, player.normalizationMode, player.playing, player.queue, player.repeatMode, player.streamingMode]);
+  }, [cancelCrossfade, clearAudio, crossfadeSeconds, getActiveAudio, getInactiveAudio, offlineMode, player.current?.id, player.currentIndex, player.normalizationMode, player.playing, player.queue, player.repeatMode, player.streamingMode]);
 
   const handleDeckEnded = useCallback((audio: HTMLAudioElement) => {
     if (audio !== getActiveAudio()) {
