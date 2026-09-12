@@ -1,0 +1,17 @@
+@media (min-width: 1024px) {
+  .desktop-now-playing-screen__content {
+    max-height: 100%;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-right: 8px;
+    scrollbar-width: thin;
+  }
+
+  .desktop-now-playing-screen__content .lyrics-panel {
+    margin: 16px 0 0;
+  }
+
+  .desktop-now-playing-screen__content .lyrics-panel__content {
+    max-height: min(34vh, 300px);
+  }
+}
