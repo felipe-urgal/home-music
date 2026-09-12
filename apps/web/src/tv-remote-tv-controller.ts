@@ -1,4 +1,5 @@
-import type { TvRemoteCommand, TvRemotePlaybackSnapshot } from '@home-music/shared';
+import type { TvRemotePlaybackSnapshot } from '@home-music/shared';
+import type { TvRemoteCommand } from '@home-music/shared/tv-remote';
 import { applyTvRemoteCommand } from './tv-remote-command';
 import { clampTvSeek } from './tv-controls';
 
@@ -16,6 +17,7 @@ export type TvRemoteCanonicalControls = {
   previous: () => void;
   next: () => void;
   seek: (seconds: number) => void;
+  playTrack: (trackId: string) => void;
 };
 
 export function tvRemoteSnapshot(
@@ -55,6 +57,7 @@ export function applyTvRemotePlayerCommand(
     togglePlay: controls.togglePlay,
     previous: controls.previous,
     next: controls.next,
-    seekBy: deltaSeconds => controls.seek(clampTvSeek(playback.currentTime, playback.duration, deltaSeconds))
+    seekBy: deltaSeconds => controls.seek(clampTvSeek(playback.currentTime, playback.duration, deltaSeconds)),
+    playTrack: controls.playTrack
   });
 }
