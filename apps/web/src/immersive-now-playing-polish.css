@@ -9,6 +9,14 @@
     padding-inline: 42px;
   }
 
+  .mobile-navigation-drawer {
+    visibility: hidden;
+  }
+
+  .mobile-navigation-drawer.is-open {
+    visibility: visible;
+  }
+
   .mobile-nav-trigger:focus-visible,
   .mobile-navigation-drawer button:focus-visible,
   .queue-sheet__handle:focus-visible,
