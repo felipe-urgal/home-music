@@ -32,7 +32,7 @@ describe('tv remote TV controller', () => {
 
   it.each([-10, 10] as const)('converte seek remoto %ss para posição absoluta limitada', deltaSeconds => {
     const controls = {
-      togglePlay: vi.fn(), previous: vi.fn(), next: vi.fn(), seek: vi.fn()
+      togglePlay: vi.fn(), previous: vi.fn(), next: vi.fn(), seek: vi.fn(), playTrack: vi.fn()
     };
     applyTvRemotePlayerCommand(
       { type: 'seek', deltaSeconds },
@@ -40,5 +40,20 @@ describe('tv remote TV controller', () => {
       controls
     );
     expect(controls.seek).toHaveBeenCalledWith(deltaSeconds < 0 ? 0 : 120);
+  });
+
+  it('encaminha play-track ao controle canônico sem transportar a faixa inteira', () => {
+    const controls = {
+      togglePlay: vi.fn(), previous: vi.fn(), next: vi.fn(), seek: vi.fn(), playTrack: vi.fn()
+    };
+
+    applyTvRemotePlayerCommand(
+      { type: 'play-track', trackId: 'track-9' },
+      { currentTime: 12, duration: 120 },
+      controls
+    );
+
+    expect(controls.playTrack).toHaveBeenCalledWith('track-9');
+    expect(controls.seek).not.toHaveBeenCalled();
   });
 });
