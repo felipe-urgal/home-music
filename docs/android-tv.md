@@ -120,6 +120,17 @@ Desligado | 3 s | 5 s | 8 s | 12 s
 
 Se o dispositivo já tiver um valor salvo fora desses presets, o valor atual também é apresentado para não alterar silenciosamente a preferência. A seleção continua persistida pela mesma autoridade de preferências de reprodução existente.
 
+## Minha conta em mobile e TV
+
+Para manter a tela de conta curta e focada em ações frequentes, quatro entradas avançadas ficam ocultas em **mobile (até 699 px)** e no **modo TV**:
+
+- **Outros dispositivos**;
+- **Apps e integrações**;
+- **Importar dados pessoais**;
+- **Administração**.
+
+Essas funcionalidades não foram removidas: continuam disponíveis na experiência desktop. Alterar senha, Reprodução, Modo offline e Sair da conta continuam visíveis nas superfícies compactas quando aplicáveis.
+
 ## Login
 
 O login continua usando a autenticação web normal do Home Music. O APK não recebe, armazena ou conhece a senha do usuário por uma bridge nativa.
