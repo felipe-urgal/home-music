@@ -9,10 +9,12 @@ import { LibraryScreen } from './components/LibraryScreen';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { PlayerScreen } from './components/PlayerScreen';
 import { ResponsiveState } from './components/ResponsiveState';
+import { TvExperience } from './components/TvExperience';
 import { useRoutedScreen } from './browser-navigation';
 import { canUseAdminLibraryActions } from './frontend-access';
 import { buildLibraryReturnLabel } from './library-utils';
 import type { OfflineDownloads } from './offline-downloads';
+import { isTvMode } from './tv-mode';
 import { useBackgroundPlaybackContinuity } from './useBackgroundPlaybackContinuity';
 import { useCrossfadeAudioPlayer } from './useCrossfadeAudioPlayer';
 import { useDesktopLayout } from './useDesktopLayout';
@@ -146,9 +148,10 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
   const showMyAccountEntry = !desktopLayout
     && !utilityArea
     && (screen === 'library' || Boolean(library.error) || !current);
+  const tvMode = isTvMode();
 
-  return (
-    <main className="app-shell">
+  const audioDecks = (
+    <>
       <audio
         ref={player.deckARef}
         preload="auto"
@@ -172,6 +175,59 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
         onEnded={event => player.audioHandlers.onEnded(event.currentTarget)}
         onError={event => player.audioHandlers.onError(event.currentTarget)}
       />
+    </>
+  );
+
+  if (tvMode && !utilityArea) {
+    if (library.loading) {
+      return <main className="app-shell tv-app">{audioDecks}<ResponsiveState variant="loading" title="Carregando sua biblioteca" detail="Preparando o Home Music para a TV." /></main>;
+    }
+    if (library.error) {
+      return (
+        <main className="app-shell tv-app">
+          {audioDecks}
+          <ResponsiveState variant="error" title="Servidor indisponível" detail={library.error}>
+            <button className="primary-action" onClick={() => run(library.retry())}>Tentar novamente</button>
+          </ResponsiveState>
+        </main>
+      );
+    }
+    if (library.tracks.length > 0 && !player.hydrated) {
+      return <main className="app-shell tv-app">{audioDecks}<ResponsiveState variant="loading" title="Restaurando o player" detail="Recuperando sua fila e a última faixa reproduzida." /></main>;
+    }
+
+    return (
+      <>
+        {audioDecks}
+        <TvExperience
+          username={currentUser.username}
+          tracks={library.tracks}
+          playlists={library.playlists}
+          navigation={navigation}
+          current={current}
+          playing={player.playing}
+          currentTime={player.currentTime}
+          duration={player.duration}
+          volume={player.volume}
+          usesSystemVolume={usesSystemVolume}
+          onTogglePlay={() => void player.togglePlay()}
+          onPrevious={player.previous}
+          onNext={player.next}
+          onSeek={player.seek}
+          onVolume={player.setVolume}
+          onPlayTrack={player.playTrack}
+          onOpenAccount={() => setScreen('account')}
+        />
+        {library.actionError && (
+          <button className="app-toast" role="status" onClick={library.clearActionError}>{library.actionError}</button>
+        )}
+      </>
+    );
+  }
+
+  return (
+    <main className="app-shell">
+      {audioDecks}
 
       <DesktopShell
         active={desktopScreen}
