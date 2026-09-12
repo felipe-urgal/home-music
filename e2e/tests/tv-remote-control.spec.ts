@@ -21,9 +21,12 @@ test('TV mostra o now playing aprovado e celular autenticado controla a reprodu√
     data: { username, password }
   });
   expect(loginResponse.ok()).toBeTruthy();
+  const playbackStateResponse = await page.context().request.get('/api/player/state');
+  expect(playbackStateResponse.ok()).toBeTruthy();
+  const playbackState = await playbackStateResponse.json() as Record<string, unknown>;
   const resetResponse = await page.context().request.put('/api/player/state', {
     headers: mutationHeaders,
-    data: { position: 0, wasPlaying: false }
+    data: { ...playbackState, position: 0, wasPlaying: false }
   });
   expect(resetResponse.ok()).toBeTruthy();
 
