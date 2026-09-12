@@ -3,6 +3,7 @@ import type { Playlist, Track } from '@home-music/shared';
 import { AudioLines, Music2, Pause, Play, Shuffle, SkipBack, SkipForward } from 'lucide-react';
 import { useCrossfadeVisualState } from '../crossfade-visual';
 import { resolveTvCrossfadePresentation } from '../tv-crossfade';
+import { subscribeToTvRemoteTrackRequests } from '../tv-remote-track-request';
 import type { LibraryNavigation } from '../useLibraryNavigation';
 import { Artwork } from './Artwork';
 import '../tv-now-playing.css';
@@ -34,8 +35,18 @@ function formatTime(value: number) {
   return `${minutes}:${seconds}`;
 }
 
+function visibleMetadata(value: string | null | undefined, unknownLabel: string) {
+  const trimmed = value?.trim() ?? '';
+  return trimmed.toLocaleLowerCase('pt-BR') === unknownLabel.toLocaleLowerCase('pt-BR') ? '' : trimmed;
+}
+
 function trackArtist(track: Track) {
-  return track.albumArtist || track.artist || 'Artista desconhecido';
+  return visibleMetadata(track.albumArtist, 'Artista desconhecido')
+    || visibleMetadata(track.artist, 'Artista desconhecido');
+}
+
+function trackAlbum(track: Track) {
+  return visibleMetadata(track.album, 'Álbum desconhecido');
 }
 
 export function TvExperience({ tracks, current, playing, currentTime, duration, onTogglePlay, onPrevious, onNext, onPlayTrack }: TvExperienceProps) {
@@ -45,6 +56,10 @@ export function TvExperience({ tracks, current, playing, currentTime, duration, 
   const incomingTrack = crossfadePresentation.incomingTrack;
   const crossfadeProgress = crossfadePresentation.progress ?? 0;
   const progress = duration > 0 ? Math.max(0, Math.min(100, currentTime / duration * 100)) : 0;
+  const currentArtist = current ? trackArtist(current) : '';
+  const currentAlbum = current ? trackAlbum(current) : '';
+  const incomingArtist = incomingTrack ? trackArtist(incomingTrack) : '';
+  const incomingAlbum = incomingTrack ? trackAlbum(incomingTrack) : '';
 
   useEffect(() => {
     const root = rootRef.current;
@@ -64,6 +79,11 @@ export function TvExperience({ tracks, current, playing, currentTime, duration, 
     window.addEventListener('keydown', onKeyDown);
     return () => { window.clearTimeout(timer); window.removeEventListener('keydown', onKeyDown); };
   }, []);
+
+  useEffect(() => subscribeToTvRemoteTrackRequests(trackId => {
+    const track = tracks.find(candidate => candidate.id === trackId);
+    if (track) onPlayTrack(track, tracks);
+  }), [onPlayTrack, tracks]);
 
   function playRandom() {
     if (!tracks.length) return;
@@ -110,8 +130,9 @@ export function TvExperience({ tracks, current, playing, currentTime, duration, 
           >
             <div className="tv-now-playing__art"><Artwork track={current} large /></div>
             <h1 className="tv-now-playing__title">{current?.title || 'Nada tocando'}</h1>
-            <p className="tv-now-playing__artist">{current ? trackArtist(current) : 'Use o celular para escolher uma música'}</p>
-            <p className="tv-now-playing__album">{current?.album || ''}</p>
+            {currentArtist && <p className="tv-now-playing__artist">{currentArtist}</p>}
+            {!current && <p className="tv-now-playing__artist">Use o celular para escolher uma música</p>}
+            {currentAlbum && <p className="tv-now-playing__album">{currentAlbum}</p>}
           </div>
 
           {incomingTrack && (
@@ -125,8 +146,8 @@ export function TvExperience({ tracks, current, playing, currentTime, duration, 
             >
               <div className="tv-now-playing__art"><Artwork track={incomingTrack} large /></div>
               <div className="tv-now-playing__title">{incomingTrack.title}</div>
-              <p className="tv-now-playing__artist">{trackArtist(incomingTrack)}</p>
-              <p className="tv-now-playing__album">{incomingTrack.album || ''}</p>
+              {incomingArtist && <p className="tv-now-playing__artist">{incomingArtist}</p>}
+              {incomingAlbum && <p className="tv-now-playing__album">{incomingAlbum}</p>}
             </div>
           )}
         </div>
@@ -143,7 +164,7 @@ export function TvExperience({ tracks, current, playing, currentTime, duration, 
         </div>
       </section>
 
-      <footer className="tv-now-playing__footer"><div><AudioLines aria-hidden="true" /><span>TOCANDO AGORA</span></div><p>“Good music<br/>makes a better home.”</p></footer>
+      <footer className="tv-now-playing__footer" data-playing={playing ? 'true' : 'false'}><div><AudioLines aria-hidden="true" /><span>TOCANDO AGORA</span></div><p>“Good music<br/>makes a better home.”</p></footer>
     </main>
   );
 }
