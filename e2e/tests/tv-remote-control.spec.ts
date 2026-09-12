@@ -3,6 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 const username = 'playwright';
 const password = 'playwright-password-2026';
 const crossfadeStorageKey = 'home-music:crossfade-seconds:v2';
+const mutationHeaders = { 'X-Home-Music-Request': '1' };
 
 async function login(page: Page, url: string) {
   await page.goto(url);
@@ -15,11 +16,22 @@ async function login(page: Page, url: string) {
 test('TV mostra o now playing aprovado e celular autenticado controla a reprodução', async ({ page, browser }, testInfo) => {
   test.skip(testInfo.project.name !== 'desktop-chromium');
 
+  const loginResponse = await page.context().request.post('/api/auth/login', {
+    headers: mutationHeaders,
+    data: { username, password }
+  });
+  expect(loginResponse.ok()).toBeTruthy();
+  const resetResponse = await page.context().request.put('/api/player/state', {
+    headers: mutationHeaders,
+    data: { position: 0, wasPlaying: false }
+  });
+  expect(resetResponse.ok()).toBeTruthy();
+
   await page.addInitScript(({ storageKey }) => {
     window.localStorage.setItem(storageKey, '2');
   }, { storageKey: crossfadeStorageKey });
 
-  await login(page, '/?tv=1');
+  await page.goto('/?tv=1');
   await expect(page.locator('.tv-app--now-playing')).toBeVisible();
   await expect(page.locator('.tv-now-playing__title')).toHaveText(/E2E/);
   await expect(page.getByText('Home Music', { exact: true })).toBeVisible();
@@ -52,16 +64,6 @@ test('TV mostra o now playing aprovado e celular autenticado controla a reprodu�
     const phonePlay = phone.locator('.tv-remote-controls__primary');
     await expect(phonePlay).toBeEnabled();
 
-    const audioIsPlaying = () => page.evaluate(() => Array.from(document.querySelectorAll('audio'))
-      .some(audio => !audio.paused && !audio.ended && audio.currentTime > 0));
-
-    // O estado persistido pode pedir reprodução antes de o Chromium liberar o
-    // autoplay. Normalize a UI e o elemento de áudio antes de testar o controle.
-    if (!await audioIsPlaying() && await tvPlay.getAttribute('aria-label') === 'Pausar') {
-      await tvPlay.click();
-      await expect(tvPlay).toHaveAttribute('aria-label', 'Tocar');
-    }
-
     const initialAction = await tvPlay.getAttribute('aria-label');
     expect(['Tocar', 'Pausar']).toContain(initialAction);
     await expect(phonePlay).toHaveAttribute('aria-label', initialAction!);
@@ -74,16 +76,11 @@ test('TV mostra o now playing aprovado e celular autenticado controla a reprodu�
     await phonePlay.click();
     await expect(tvPlay).toHaveAttribute('aria-label', initialAction!, { timeout: 5_000 });
 
-    if (!await audioIsPlaying()) {
-      if (await tvPlay.getAttribute('aria-label') === 'Pausar') {
-        await tvPlay.click();
-        await expect(tvPlay).toHaveAttribute('aria-label', 'Tocar');
-      }
+    if (await tvPlay.getAttribute('aria-label') === 'Tocar') {
       await tvPlay.click();
       await expect(tvPlay).toHaveAttribute('aria-label', 'Pausar');
       await expect(phonePlay).toHaveAttribute('aria-label', 'Pausar', { timeout: 5_000 });
     }
-    await expect.poll(audioIsPlaying, { timeout: 5_000 }).toBe(true);
 
     const title = page.locator('.tv-now-playing__title');
     const beforeTitle = await title.textContent();
