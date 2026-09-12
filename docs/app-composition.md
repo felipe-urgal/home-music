@@ -26,7 +26,7 @@ Essa separação é intencional: o manifesto é o índice de bootstrap, enquanto
 
 - `useLibraryData` para biblioteca e playlists;
 - `useLibraryNavigation` e `useRoutedScreen` para navegação autenticada;
-- `useAudioPlayer` como fonte canônica do playback online;
+- `useCrossfadeAudioPlayer` como camada de transição sobre o `useAudioPlayer`, que continua sendo a fonte canônica do playback online;
 - continuidade, preload, qualidade de rede e preferência de volume;
 - composição dos shells e superfícies mobile/desktop;
 - disponibilização, para `MyAccountScreen`, do estado derivado dos downloads e do callback de entrada manual no modo offline.
@@ -38,13 +38,13 @@ Extrair esses hooks para stores ou contexts independentes sem uma necessidade co
 `OfflineApp.tsx` compõe a experiência isolada de downloads offline. Ele mantém:
 
 - navegação local entre biblioteca offline e player;
-- uma instância de `useAudioPlayer` com `offlineMode: true`;
-- continuidade de reprodução offline;
+- uma instância de `useCrossfadeAudioPlayer` com `offlineMode: true`, reutilizando o mesmo `useAudioPlayer` canônico e resolvendo os decks pela rota `/offline-audio/<trackId>`;
+- continuidade de reprodução offline e fallback para troca normal quando crossfade não pode ser mantido;
 - shell e barra do player reutilizados pela experiência principal;
 - uma marca de superfície `phone-surface--offline` usada para diferenças responsivas estritamente próprias do modo offline, como manter `Voltar aos downloads` visível no player mobile;
 - saída pelo mesmo callback de `App.tsx`, que restaura a experiência online e refaz a verificação de autenticação/conectividade.
 
-O player offline é deliberadamente separado do player autenticado porque opera com outra coleção e outra persistência, mas cada modo continua tendo uma única fonte de verdade.
+O player offline é deliberadamente separado do player autenticado porque opera com outra coleção e outra persistência, mas cada modo continua tendo uma única fonte de verdade. O crossfade não cria estado paralelo de playback: o segundo deck é somente uma transição temporária e é adotado pelo `useAudioPlayer` no handoff.
 
 A biblioteca offline também limita a montagem inicial dos downloads individuais a 100 linhas. `Mostrar mais` expande em blocos de 100, enquanto a fila passada ao player continua completa. Essa paginação é responsabilidade da própria superfície offline e não cria outra fonte de dados.
 
