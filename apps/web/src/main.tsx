@@ -58,6 +58,8 @@ import './account-layout-widths.css';
 import './admin-users-v1.css';
 import './admin-quarantine-v1.css';
 import './accessibility.css';
+import './immersive-now-playing.css';
+import './immersive-now-playing-polish.css';
 
 installPlaybackHistoryTracking();
 

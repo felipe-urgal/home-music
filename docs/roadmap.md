@@ -2,7 +2,7 @@
 
 Este documento descreve **o estado técnico corrente e o próximo trabalho relevante** do Home Music. Histórico detalhado de ciclos encerrados fica em [`history/`](history/).
 
-## Estado em 2026-09-11
+## Estado em 2026-09-12
 
 - **Fase 7.5 — multiusuário/autenticação:** concluída e incorporada à arquitetura atual.
 - **Fase 14 — portabilidade de dados pessoais:** concluída na `main` com o PR #324.
@@ -11,6 +11,7 @@ Este documento descreve **o estado técnico corrente e o próximo trabalho relev
 - **#325 — artwork no Media Session:** implementação incorporada e issue encerrada.
 - **#327 — continuidade de playback no iOS:** instrumentação/hardening incorporados e issue encerrada.
 - **#328 — cold start offline no iOS:** correções de bootstrap/performance incorporadas e issue encerrada.
+- **#388 — redesign imersivo de Tocando agora:** concluído pelo PR #389, com shell desktop responsivo, sidebar esquerda recolhível, fila direita redimensionável e experiência mobile com drawer/bottom sheet.
 
 As issues #325, #327 e #328 tinham validações físicas residuais. Por decisão do projeto, esses QAs foram **dispensados como gate de encerramento e aceitos como risco de plataforma**. Isso não equivale a afirmar que os cenários em hardware foram executados ou aprovados.
 
@@ -58,7 +59,8 @@ A `main` atual possui, entre outras capacidades:
 - revisão individual/em lote, sucesso parcial, stale protection e proteção de decisões humanas;
 - autonomia progressiva opt-in após eventos consistentes da biblioteca;
 - PWA/offline com shell cacheado, `OfflineApp` no bundle inicial, bootstrap manifest-first e reconciliação posterior do Cache Storage;
-- hardening de playback/Media Session para Apple mobile sem criar segundo player ou retry infinito.
+- hardening de playback/Media Session para Apple mobile sem criar segundo player ou retry infinito;
+- player **Tocando agora** imersivo/responsivo com estado de playback canônico preservado, navegação mobile em drawer e fila adaptativa entre desktop e mobile.
 
 Documentos canônicos:
 

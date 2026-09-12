@@ -45,11 +45,41 @@ describe('accessibility contracts', () => {
 
   it('mantém reordenação da fila acessível por botões e com anúncio de resultado', () => {
     const queue = source('components/PlayerQueuePanel.tsx');
+    const desktopShell = source('components/DesktopShell.tsx');
 
     expect(queue).toMatch(/role="status"/);
     expect(queue).toMatch(/aria-atomic="true"/);
     expect(queue).toMatch(/Mover \$\{track\.title\} para cima/);
     expect(queue).toMatch(/Mover \$\{track\.title\} para baixo/);
     expect(queue).toMatch(/movida para a posição/);
+    expect(desktopShell).toMatch(/Mais opções para \$\{track\.title\}/);
+    expect(desktopShell).toMatch(/Mover para cima/);
+    expect(desktopShell).toMatch(/Mover para baixo/);
+  });
+
+  it('mantém foco contido e restaurado nos overlays do player mobile', () => {
+    const navigation = source('components/MobileBottomNav.tsx');
+    const queue = source('components/PlayerQueuePanel.tsx');
+
+    expect(navigation).toMatch(/event\.key === 'Escape'/);
+    expect(navigation).toMatch(/event\.key !== 'Tab'/);
+    expect(navigation).toMatch(/triggerRef\.current\?\.focus/);
+    expect(navigation).toMatch(/closeButtonRef\.current\?\.focus/);
+
+    expect(queue).toMatch(/role="separator"/);
+    expect(queue).toMatch(/aria-modal=\{showQueue \? true/);
+    expect(queue).toMatch(/event\.key === 'Escape'/);
+    expect(queue).toMatch(/event\.key !== 'Tab'/);
+    expect(queue).toMatch(/queueToggleRef\.current\?\.focus/);
+    expect(queue).toMatch(/event\.key === 'ArrowUp'/);
+  });
+
+  it('preserva nome acessível no sidebar recolhido e retorno offline no mobile', () => {
+    const sidebarTools = source('components/DesktopPlayerSidebarTools.tsx');
+    const polish = source('immersive-now-playing-polish.css');
+
+    expect(sidebarTools).toMatch(/aria-label=\{accountLabel\}/);
+    expect(sidebarTools).toMatch(/title=\{accountLabel\}/);
+    expect(polish).toMatch(/phone-surface:not\(\.phone-surface--offline\).*player-screen-immersive/s);
   });
 });

@@ -5,6 +5,7 @@ import {
   ChevronDown,
   Download,
   LoaderCircle,
+  MoreHorizontal,
   Pause,
   Play,
   Plus,
@@ -24,6 +25,10 @@ function formatTime(value: number) {
   const seconds = Math.floor(value % 60).toString().padStart(2, '0');
   return `${minutes}:${seconds}`;
 }
+
+type ImmersiveStyle = CSSProperties & {
+  '--now-playing-artwork'?: string;
+};
 
 type DesktopNowPlayingScreenProps = {
   current: Track;
@@ -77,6 +82,7 @@ export function DesktopNowPlayingScreen({
   onAddToPlaylist
 }: DesktopNowPlayingScreenProps) {
   const [playlistOpen, setPlaylistOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const progress = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
   const repeatLabel = repeatMode === 'one'
     ? 'Repetir uma'
@@ -92,12 +98,30 @@ export function DesktopNowPlayingScreen({
       : availableViaCollection
         ? 'Manter também como download individual'
         : 'Baixar para uso offline';
+  const coverVersion = current.coverVersion ? `?v=${encodeURIComponent(current.coverVersion)}` : '';
+  const coverUrl = current.hasCover ? `/api/tracks/${encodeURIComponent(current.id)}/cover${coverVersion}` : null;
+  const immersiveStyle: ImmersiveStyle | undefined = coverUrl
+    ? { '--now-playing-artwork': `url("${coverUrl}")` }
+    : undefined;
+
+  function openPlaylistPicker() {
+    setMoreOpen(false);
+    setPlaylistOpen(value => !value);
+  }
+
+  function runDownloadAction() {
+    setMoreOpen(false);
+    onToggleDownload?.();
+  }
 
   return (
-    <section className="desktop-now-playing-screen" aria-labelledby="desktop-now-playing-title">
-      <header className="desktop-now-playing-screen__header">
-        <strong>Tocando agora</strong>
-      </header>
+    <section
+      className="desktop-now-playing-screen"
+      aria-labelledby="desktop-now-playing-title"
+      style={immersiveStyle}
+      data-has-artwork={coverUrl ? 'true' : 'false'}
+    >
+      <div className="desktop-now-playing-screen__backdrop" aria-hidden="true" />
 
       <div className="desktop-now-playing-screen__stage">
         <div className="desktop-now-playing-screen__art">
@@ -111,35 +135,17 @@ export function DesktopNowPlayingScreen({
           </div>
 
           <div className="desktop-now-playing-screen__actions" aria-label="Ações da faixa">
-            {onToggleDownload && (
-              <button
-                className={isDownloaded || availableViaCollection ? 'is-active' : ''}
-                type="button"
-                disabled={downloading}
-                aria-label={offlineActionLabel}
-                aria-pressed={isDownloaded}
-                title={availableViaCollection && !isDownloaded ? 'Esta música já está offline por uma coleção.' : undefined}
-                onClick={onToggleDownload}
-              >
-                {downloading
-                  ? <LoaderCircle className="desktop-now-playing-screen__spinner" aria-hidden="true" />
-                  : isDownloaded
-                    ? <CheckCircle2 aria-hidden="true" />
-                    : <Download aria-hidden="true" />}
-                <span>{isDownloaded ? 'Download' : availableViaCollection ? 'Manter' : 'Download'}</span>
-              </button>
-            )}
-
             <div className="desktop-now-playing-screen__playlist">
               <button
+                className="desktop-now-playing-screen__add"
                 type="button"
                 aria-haspopup="menu"
                 aria-expanded={playlistOpen}
-                onClick={() => setPlaylistOpen(open => !open)}
+                onClick={openPlaylistPicker}
               >
-                <Plus />
-                <span>Adicionar</span>
-                <ChevronDown className="desktop-now-playing-screen__chevron" />
+                <Plus aria-hidden="true" />
+                <span>Adicionar à playlist</span>
+                <ChevronDown className="desktop-now-playing-screen__chevron" aria-hidden="true" />
               </button>
 
               {playlistOpen && (
@@ -158,6 +164,46 @@ export function DesktopNowPlayingScreen({
                       {playlist.name}
                     </button>
                   )) : <span>Nenhuma playlist criada ainda.</span>}
+                </div>
+              )}
+            </div>
+
+            {onToggleDownload && (
+              <button
+                className={`desktop-now-playing-screen__action-icon ${isDownloaded || availableViaCollection ? 'is-active' : ''}`}
+                type="button"
+                disabled={downloading}
+                aria-label={offlineActionLabel}
+                aria-pressed={isDownloaded}
+                title={offlineActionLabel}
+                onClick={onToggleDownload}
+              >
+                {downloading
+                  ? <LoaderCircle className="desktop-now-playing-screen__spinner" aria-hidden="true" />
+                  : isDownloaded
+                    ? <CheckCircle2 aria-hidden="true" />
+                    : <Download aria-hidden="true" />}
+              </button>
+            )}
+
+            <div className="desktop-now-playing-screen__more">
+              <button
+                className="desktop-now-playing-screen__action-icon"
+                type="button"
+                aria-label="Mais opções"
+                aria-haspopup="menu"
+                aria-expanded={moreOpen}
+                onClick={() => {
+                  setPlaylistOpen(false);
+                  setMoreOpen(value => !value);
+                }}
+              >
+                <MoreHorizontal aria-hidden="true" />
+              </button>
+              {moreOpen && (
+                <div className="desktop-now-playing-screen__more-menu" role="menu" aria-label="Mais opções da faixa">
+                  <button type="button" role="menuitem" onClick={openPlaylistPicker}><Plus aria-hidden="true" />Adicionar à playlist</button>
+                  {onToggleDownload && <button type="button" role="menuitem" disabled={downloading} onClick={runDownloadAction}><Download aria-hidden="true" />{isDownloaded ? 'Remover download' : 'Baixar'}</button>}
                 </div>
               )}
             </div>

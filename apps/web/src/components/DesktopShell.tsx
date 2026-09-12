@@ -1,10 +1,24 @@
-import { useEffect, useRef, useState, type DragEvent, type ReactNode } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type DragEvent,
+  type KeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode
+} from 'react';
 import type { Track } from '@home-music/shared';
 import {
+  ChevronDown,
+  ChevronUp,
   Folder,
   GripVertical,
   ListMusic,
+  MoreHorizontal,
   Music2,
+  PanelLeftClose,
+  PanelLeftOpen,
   Radio,
   RefreshCw
 } from 'lucide-react';
@@ -15,6 +29,16 @@ import { Artwork } from './Artwork';
 
 const DESKTOP_QUEUE_PREVIEW_SIZE = 32;
 const DESKTOP_QUEUE_LOAD_THRESHOLD_PX = 120;
+const DESKTOP_SIDEBAR_EXPANDED_WIDTH = 236;
+const DESKTOP_SIDEBAR_COLLAPSED_WIDTH = 74;
+const DESKTOP_CONTEXT_MIN_WIDTH = 280;
+const DESKTOP_CONTEXT_MAX_WIDTH = 520;
+const DESKTOP_CONTEXT_DEFAULT_WIDTH = 340;
+
+type DesktopLayoutStyle = CSSProperties & {
+  '--desktop-sidebar-width'?: string;
+  '--desktop-context-width'?: string;
+};
 
 export type DesktopSection = 'player' | 'library' | 'users' | 'account';
 type DesktopContextTab = 'queue' | 'lyrics';
@@ -55,6 +79,7 @@ function NavigationButton({ active, label, icon, nested = false, onClick }: Navi
       className={`desktop-nav__item ${nested ? 'desktop-nav__item--nested' : ''} ${active ? 'is-active' : ''}`}
       type="button"
       aria-current={active ? 'page' : undefined}
+      title={label}
       onClick={onClick}
     >
       {icon}
@@ -65,6 +90,10 @@ function NavigationButton({ active, label, icon, nested = false, onClick }: Navi
 
 function artworkTrack(track: Track, offlineMode: boolean): Track {
   return offlineMode && track.hasCover ? { ...track, hasCover: false } : track;
+}
+
+function clampContextWidth(value: number) {
+  return Math.max(DESKTOP_CONTEXT_MIN_WIDTH, Math.min(DESKTOP_CONTEXT_MAX_WIDTH, value));
 }
 
 export function DesktopShell({
@@ -91,15 +120,24 @@ export function DesktopShell({
   const [contextTab, setContextTab] = useState<DesktopContextTab>('queue');
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   const [dragOver, setDragOver] = useState<number | null>(null);
+  const [queueMenuIndex, setQueueMenuIndex] = useState<number | null>(null);
   const [queueVisibleCount, setQueueVisibleCount] = useState(DESKTOP_QUEUE_PREVIEW_SIZE);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [contextWidth, setContextWidth] = useState(DESKTOP_CONTEXT_DEFAULT_WIDTH);
   const queueListRef = useRef<HTMLDivElement>(null);
   const queueLoadMoreRef = useRef<HTMLDivElement>(null);
+  const contextResizeStartRef = useRef<{ x: number; width: number } | null>(null);
   const desktopLayout = useDesktopLayout();
   const lyrics = useTrackLyrics(current, offlineMode || !desktopLayout);
   const contextTrack = current ? artworkTrack(current, offlineMode) : null;
   const queueStart = currentIndex >= 0 ? currentIndex + 1 : 0;
   const queuePreview = queue.slice(queueStart, queueStart + queueVisibleCount);
   const remainingQueueCount = Math.max(0, queue.length - queueStart - queuePreview.length);
+  const upcomingCount = Math.max(0, queue.length - queueStart);
+  const layoutStyle: DesktopLayoutStyle = {
+    '--desktop-sidebar-width': `${sidebarCollapsed ? DESKTOP_SIDEBAR_COLLAPSED_WIDTH : DESKTOP_SIDEBAR_EXPANDED_WIDTH}px`,
+    '--desktop-context-width': `${contextWidth}px`
+  };
 
   useEffect(() => {
     if (!lyrics && contextTab === 'lyrics') setContextTab('queue');
@@ -107,6 +145,7 @@ export function DesktopShell({
 
   useEffect(() => {
     setContextTab('queue');
+    setQueueMenuIndex(null);
     setQueueVisibleCount(DESKTOP_QUEUE_PREVIEW_SIZE);
   }, [current?.id]);
 
@@ -132,6 +171,7 @@ export function DesktopShell({
     if (!onReorderQueue) return;
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData('text/plain', String(queueIndex));
+    setQueueMenuIndex(null);
     setDragFrom(queueIndex);
     setDragOver(queueIndex);
   }
@@ -151,9 +191,57 @@ export function DesktopShell({
     setDragOver(null);
   }
 
+  function beginContextResize(event: ReactPointerEvent<HTMLDivElement>) {
+    contextResizeStartRef.current = { x: event.clientX, width: contextWidth };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    document.body.classList.add('is-resizing-desktop-context');
+  }
+
+  function resizeContext(event: ReactPointerEvent<HTMLDivElement>) {
+    const start = contextResizeStartRef.current;
+    if (!start || !event.currentTarget.hasPointerCapture(event.pointerId)) return;
+    setContextWidth(clampContextWidth(start.width + (start.x - event.clientX)));
+  }
+
+  function finishContextResize(event: ReactPointerEvent<HTMLDivElement>) {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    contextResizeStartRef.current = null;
+    document.body.classList.remove('is-resizing-desktop-context');
+  }
+
+  function resizeContextWithKeyboard(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight' && event.key !== 'Home' && event.key !== 'End') return;
+    event.preventDefault();
+    if (event.key === 'Home') {
+      setContextWidth(DESKTOP_CONTEXT_MIN_WIDTH);
+      return;
+    }
+    if (event.key === 'End') {
+      setContextWidth(DESKTOP_CONTEXT_MAX_WIDTH);
+      return;
+    }
+    setContextWidth(width => clampContextWidth(width + (event.key === 'ArrowLeft' ? 20 : -20)));
+  }
+
   return (
-    <div className="desktop-layout" data-desktop-active={active}>
+    <div
+      className="desktop-layout"
+      data-desktop-active={active}
+      data-sidebar-collapsed={sidebarCollapsed ? 'true' : 'false'}
+      style={layoutStyle}
+    >
       <aside className={`desktop-sidebar ${sidebarUtilities ? 'has-utilities' : ''}`} data-testid="desktop-sidebar">
+        <button
+          className="desktop-sidebar__collapse"
+          type="button"
+          aria-label={sidebarCollapsed ? 'Expandir navegação' : 'Recolher navegação'}
+          title={sidebarCollapsed ? 'Expandir navegação' : 'Recolher navegação'}
+          aria-pressed={sidebarCollapsed}
+          onClick={() => setSidebarCollapsed(value => !value)}
+        >
+          {sidebarCollapsed ? <PanelLeftOpen aria-hidden="true" /> : <PanelLeftClose aria-hidden="true" />}
+        </button>
+
         <div className="desktop-brand">
           <span className="desktop-brand__icon"><Music2 /></span>
           <div>
@@ -197,23 +285,40 @@ export function DesktopShell({
         <div className={`desktop-main-content desktop-main-content--${active}`}>{children}</div>
       </section>
 
-      <aside className="desktop-context" data-testid="desktop-context" aria-label="Contexto da reprodução">
-        <div className="desktop-context__heading">
-          <span>Contexto</span>
+      <aside className="desktop-context" data-testid="desktop-context" aria-label="Fila de reprodução">
+        <div
+          className="desktop-context__resizer"
+          role="separator"
+          tabIndex={0}
+          aria-label="Redimensionar fila"
+          aria-orientation="vertical"
+          aria-valuemin={DESKTOP_CONTEXT_MIN_WIDTH}
+          aria-valuemax={DESKTOP_CONTEXT_MAX_WIDTH}
+          aria-valuenow={Math.round(contextWidth)}
+          onPointerDown={beginContextResize}
+          onPointerMove={resizeContext}
+          onPointerUp={finishContextResize}
+          onPointerCancel={finishContextResize}
+          onKeyDown={resizeContextWithKeyboard}
+        >
+          <span aria-hidden="true"><GripVertical /></span>
+        </div>
+
+        <div className="desktop-context__heading desktop-context__heading--queue">
+          <strong>Fila</strong>
+          <span>· {queue.length} {queue.length === 1 ? 'faixa' : 'faixas'}</span>
           {active !== 'player' && <small>{playing ? 'Reproduzindo' : 'Pausado'}</small>}
         </div>
 
         {contextTrack ? (
-          <button className="desktop-now-playing" type="button" onClick={onOpenPlayer}>
-            <Artwork track={contextTrack} />
-            <span className="desktop-now-playing__text"><strong>{contextTrack.title}</strong><small>{contextTrack.artist || 'Artista desconhecido'}</small></span>
-          </button>
+          <section className="desktop-context__current" aria-label="Em reprodução">
+            <strong>Em reprodução</strong>
+            <button className="desktop-now-playing" type="button" onClick={onOpenPlayer}>
+              <Artwork track={contextTrack} />
+              <span className="desktop-now-playing__text"><strong>{contextTrack.title}</strong><small>{contextTrack.artist || 'Artista desconhecido'}</small></span>
+            </button>
+          </section>
         ) : <div className="desktop-context__empty">Nenhuma faixa selecionada.</div>}
-
-        <div className="desktop-context__summary">
-          <span>{queue.length} {queue.length === 1 ? 'faixa na fila' : 'faixas na fila'}</span>
-          {active !== 'player' && <><span>·</span><span>{libraryCount} {offlineMode ? 'downloads' : 'na biblioteca'}</span></>}
-        </div>
 
         {lyrics && (
           <div className="desktop-context__tabs" role="tablist" aria-label="Painel contextual">
@@ -230,7 +335,7 @@ export function DesktopShell({
           </section>
         ) : (
           <section className="desktop-queue" aria-label="Fila de reprodução" data-testid="desktop-queue">
-            <div className="desktop-queue__header"><strong>Próximas</strong><span>{Math.max(0, queue.length - queueStart)}</span></div>
+            <div className="desktop-queue__header"><strong>A seguir</strong><span>{upcomingCount}</span></div>
             <div
               ref={queueListRef}
               className="desktop-queue__list"
@@ -244,13 +349,13 @@ export function DesktopShell({
             >
               {queuePreview.length ? queuePreview.map((track, previewIndex) => {
                 const queueIndex = queueStart + previewIndex;
-                const isCurrent = queueIndex === currentIndex;
                 const isDragging = queueIndex === dragFrom;
                 const isDragOver = queueIndex === dragOver && dragFrom !== queueIndex;
+                const menuOpen = queueIndex === queueMenuIndex;
                 return (
                   <div
                     key={`${track.id}-${queueIndex}`}
-                    className={`desktop-queue__row ${isCurrent ? 'is-current' : ''} ${isDragging ? 'is-dragging' : ''} ${isDragOver ? 'is-drag-over' : ''}`.trim()}
+                    className={`desktop-queue__row ${isDragging ? 'is-dragging' : ''} ${isDragOver ? 'is-drag-over' : ''}`.trim()}
                     data-queue-index={queueIndex}
                     onDragOver={event => {
                       if (!onReorderQueue) return;
@@ -260,14 +365,42 @@ export function DesktopShell({
                     }}
                     onDrop={event => dropQueue(event, queueIndex)}
                   >
-                    <button className="desktop-queue__drag-handle" type="button" draggable={!isCurrent && Boolean(onReorderQueue)} disabled={isCurrent || !onReorderQueue} aria-label={isCurrent ? 'Faixa atual' : `Arrastar ${track.title}`} onDragStart={event => beginQueueDrag(event, queueIndex)} onDragEnd={finishQueueDrag}><GripVertical aria-hidden="true" /></button>
-                    <button className="desktop-queue__item" type="button" aria-current={isCurrent ? 'true' : undefined} onClick={() => onPlayTrack?.(track, queue)}>
+                    <button className="desktop-queue__drag-handle" type="button" draggable={Boolean(onReorderQueue)} disabled={!onReorderQueue} aria-label={`Arrastar ${track.title}`} onDragStart={event => beginQueueDrag(event, queueIndex)} onDragEnd={finishQueueDrag}><GripVertical aria-hidden="true" /></button>
+                    <button className="desktop-queue__item" type="button" onClick={() => { setQueueMenuIndex(null); onPlayTrack?.(track, queue); }}>
                       <Artwork track={artworkTrack(track, offlineMode)} />
                       <span><strong>{track.title}</strong><small>{track.artist || 'Artista desconhecido'}</small></span>
                     </button>
+                    <div
+                      className="desktop-queue__more"
+                      onBlur={event => {
+                        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setQueueMenuIndex(null);
+                      }}
+                      onKeyDown={event => {
+                        if (event.key !== 'Escape') return;
+                        event.preventDefault();
+                        setQueueMenuIndex(null);
+                        event.currentTarget.querySelector<HTMLElement>('.desktop-queue__more-trigger')?.focus();
+                      }}
+                    >
+                      <button
+                        className="desktop-queue__more-trigger"
+                        type="button"
+                        aria-label={`Mais opções para ${track.title}`}
+                        aria-haspopup="menu"
+                        aria-expanded={menuOpen}
+                        onClick={() => setQueueMenuIndex(index => index === queueIndex ? null : queueIndex)}
+                      ><MoreHorizontal aria-hidden="true" /></button>
+                      {menuOpen && (
+                        <div className="desktop-queue__more-menu" role="menu" aria-label={`Opções de ${track.title}`}>
+                          <button type="button" role="menuitem" onClick={() => { setQueueMenuIndex(null); onPlayTrack?.(track, queue); }}><Radio aria-hidden="true" />Tocar agora</button>
+                          <button type="button" role="menuitem" disabled={!onReorderQueue || queueIndex <= 0} onClick={() => { onReorderQueue?.(queueIndex, queueIndex - 1); setQueueMenuIndex(null); }}><ChevronUp aria-hidden="true" />Mover para cima</button>
+                          <button type="button" role="menuitem" disabled={!onReorderQueue || queueIndex >= queue.length - 1} onClick={() => { onReorderQueue?.(queueIndex, queueIndex + 1); setQueueMenuIndex(null); }}><ChevronDown aria-hidden="true" />Mover para baixo</button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 );
-              }) : <div className="desktop-queue__empty">A fila está vazia.</div>}
+              }) : <div className="desktop-queue__empty">Não há próximas faixas.</div>}
               {remainingQueueCount > 0 && (
                 <div ref={queueLoadMoreRef} className="desktop-queue__load-sentinel" style={{ minHeight: 1 }} aria-hidden="true" />
               )}

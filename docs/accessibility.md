@@ -32,7 +32,7 @@ O frontend deve preferir elementos HTML nativos para interação:
 - `table` com cabeçalhos semânticos quando os dados são tabulares;
 - `dialog` nativo para dialogs modais quando a superfície usa esse padrão.
 
-Não transformar `div`/`span` em controle por `onClick` quando um elemento nativo resolve o mesmo comportamento.
+Não transformar `div`/`span` em controle por `onClick` quando um elemento nativo resolve o mesmo comportamento. Separadores redimensionáveis são uma exceção semântica válida quando usam `role="separator"`, foco por teclado e valores ARIA coerentes com seus limites.
 
 ### Foco visível
 
@@ -76,11 +76,30 @@ Os controles principais permanecem botões nativos com nomes acessíveis.
 - erro de reprodução usa `role="alert"`;
 - bloqueio de autoplay usa `role="status"`.
 
+O layout imersivo não altera essas autoridades: capa/fundo são apresentação derivada, enquanto os controles continuam delegando ao mesmo estado canônico de playback.
+
 ### Fila e reordenação
 
 Drag-and-drop não é o único caminho para reordenar a fila.
 
-Cada item não atual possui botões de mover para cima/baixo, utilizáveis por teclado. Depois da alteração, uma região `role="status"` anuncia a faixa e a nova posição. Touch/drag continuam como atalhos de interação, não como requisito exclusivo.
+Cada item não atual possui caminho utilizável por teclado para mover para cima/baixo. No player mobile/tablet isso permanece exposto pelos botões de reordenação; na fila desktop o menu `…` oferece as mesmas ações além do drag handle. Depois da alteração, o fluxo mobile/tablet mantém uma região `role="status"` que anuncia a faixa e a nova posição. Touch/drag continuam como atalhos de interação, não como requisito exclusivo.
+
+Os divisores redimensionáveis da fila usam `role="separator"` e expõem limites/valor atual. No desktop, setas e `Home`/`End` ajustam a largura do painel. No bottom sheet mobile, setas e `Home`/`End` ajustam a altura.
+
+### Overlays responsivos do player
+
+O drawer de navegação mobile e o bottom sheet da fila são overlays modais de interação mesmo quando não usam o elemento HTML `<dialog>`.
+
+Enquanto estiverem abertos:
+
+- o foco inicial entra no overlay;
+- `Tab`/`Shift+Tab` permanecem contidos nos controles do overlay;
+- `Escape` fecha o overlay;
+- fechar pelo botão ou backdrop devolve o foco ao controle que abriu a superfície;
+- controles ocultos pelo estado fechado não permanecem alcançáveis pelo teclado;
+- nomes e estados `aria-expanded`, `aria-controls`, `aria-modal`/papéis equivalentes devem refletir o estado visual real.
+
+Esse contrato foi reforçado no redesign da issue #388 e deve ser preservado em mudanças futuras do shell/player.
 
 ### Tabelas e listas
 
@@ -111,7 +130,8 @@ Confirmações simples ainda usam `window.confirm`/`window.prompt` em alguns flu
 - associação de erros de autenticação;
 - estado corrente da Biblioteca;
 - estado de repeat;
-- reordenação da fila com anúncio.
+- reordenação da fila com anúncio;
+- foco contido/restaurado nos overlays responsivos do player e resize por teclado.
 
 Ele roda dentro da suíte web normal e, portanto, no passo `Tests` do CI.
 
@@ -162,7 +182,7 @@ Antes de concluir uma mudança de UI:
 2. confirme foco visível e ordem lógica;
 3. confirme nome/estado de controles icon-only e toggles;
 4. confirme que erro, loading, seleção e sucesso não dependem só de cor/animação;
-5. valide dialogs e retorno de foco quando forem alterados;
+5. valide dialogs/overlays e retorno de foco quando forem alterados;
 6. revise touch targets e ações que aparecem apenas por hover;
 7. adicione regressão automatizada quando o comportamento puder ser provado de forma estável;
 8. execute o auto code review completo do `AGENTS.md` no head final.
