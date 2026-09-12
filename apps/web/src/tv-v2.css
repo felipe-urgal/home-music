@@ -1,0 +1,384 @@
+/* TV v2: fewer destinations, predictable focus zones and remote-first player controls. */
+
+.tv-app--v2 {
+  --tv-player-height: clamp(88px, 9.5vh, 104px);
+}
+
+.tv-app--v2 .tv-shell {
+  grid-template-columns: clamp(124px, 11.5vw, 168px) minmax(0, 1fr);
+}
+
+.tv-app--v2 .tv-sidebar {
+  padding: clamp(14px, 1.6vw, 24px) 10px 14px;
+}
+
+.tv-app--v2 .tv-brand {
+  min-height: 44px;
+  gap: 7px;
+  padding: 0 8px clamp(14px, 1.6vw, 22px);
+}
+
+.tv-app--v2 .tv-brand > svg {
+  width: clamp(22px, 1.7vw, 28px);
+  height: clamp(22px, 1.7vw, 28px);
+}
+
+.tv-app--v2 .tv-brand strong {
+  font-size: clamp(14px, 1.25vw, 19px);
+}
+
+.tv-app--v2 .tv-brand span {
+  font-size: clamp(10px, .82vw, 13px);
+}
+
+.tv-app--v2 .tv-nav {
+  gap: clamp(6px, .75vh, 10px);
+}
+
+.tv-app--v2 .tv-nav button {
+  min-height: clamp(48px, 5.5vh, 58px);
+  grid-template-columns: 25px minmax(0, 1fr);
+  gap: 9px;
+  padding: 0 10px;
+}
+
+.tv-app--v2 .tv-nav button span {
+  font-size: clamp(12px, 1.05vw, 16px);
+}
+
+.tv-app--v2 .tv-content-shell {
+  grid-template-rows: clamp(54px, 6.4vh, 68px) minmax(0, 1fr);
+}
+
+.tv-app--v2 .tv-topbar {
+  gap: 12px;
+  padding: 0 clamp(18px, 2.1vw, 34px);
+}
+
+.tv-app--v2 .tv-topbar__hint {
+  font-size: clamp(10px, .76vw, 12px);
+}
+
+.tv-app--v2 .tv-topbar .tv-account-button {
+  width: auto;
+  min-width: 0;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border-radius: 11px;
+  background: rgba(14, 28, 43, .72);
+  color: #b9c9dc;
+}
+
+.tv-app--v2 .tv-account-button svg {
+  width: 19px;
+  height: 19px;
+}
+
+.tv-app--v2 .tv-account-button span {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.tv-app--v2 .tv-content {
+  padding: 0 clamp(18px, 2.2vw, 34px) clamp(26px, 3.6vh, 42px);
+}
+
+.tv-app--v2 .tv-view-heading {
+  min-height: clamp(52px, 6.2vh, 68px);
+  margin-bottom: clamp(10px, 1.5vh, 18px);
+}
+
+.tv-app--v2 .tv-home-heading {
+  margin-bottom: 6px;
+}
+
+.tv-app--v2 .tv-section-title h2,
+.tv-app--v2 .tv-view-heading h1 {
+  font-size: clamp(20px, 1.75vw, 30px);
+}
+
+.tv-app--v2 .tv-section {
+  margin-bottom: clamp(20px, 2.7vh, 32px);
+}
+
+.tv-app--v2 .tv-section-title {
+  min-height: 36px;
+  margin-bottom: clamp(8px, 1.1vh, 12px);
+}
+
+.tv-app--v2 .tv-section-title button,
+.tv-app--v2 .tv-back-button {
+  min-height: 38px;
+  padding: 0 13px;
+}
+
+.tv-app--v2 .tv-home-grid,
+.tv-app--v2 .tv-folder-grid,
+.tv-app--v2 .tv-collection-grid {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: clamp(9px, .9vw, 14px);
+}
+
+.tv-app--v2 .tv-folder-grid--browse,
+.tv-app--v2 .tv-collection-grid--browse {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.tv-app--v2 .tv-folder-card {
+  aspect-ratio: 1 / .92;
+  border-radius: 11px;
+}
+
+.tv-app--v2 .tv-collection-card__art {
+  border-radius: 10px;
+}
+
+.tv-app--v2 .tv-folder-card__copy strong,
+.tv-app--v2 .tv-collection-card strong,
+.tv-app--v2 .tv-playlist-card strong {
+  font-size: clamp(12px, .98vw, 15px);
+}
+
+.tv-app--v2 .tv-folder-card__copy small,
+.tv-app--v2 .tv-collection-card small,
+.tv-app--v2 .tv-playlist-card small {
+  font-size: clamp(9px, .75vw, 12px);
+}
+
+.tv-library-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.tv-library-tabs button {
+  min-height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  border: 1px solid rgba(135, 169, 207, .12);
+  border-radius: 12px;
+  background: rgba(10, 20, 31, .72);
+  color: #8fa2b8;
+  font-weight: 650;
+}
+
+.tv-library-tabs button svg {
+  width: 21px;
+  height: 21px;
+}
+
+.tv-library-tabs button.is-active {
+  border-color: rgba(90, 176, 255, .5);
+  background: rgba(48, 128, 215, .2);
+  color: #f5f9ff;
+}
+
+.tv-library-body {
+  min-height: 0;
+}
+
+.tv-app--v2 .tv-track-row {
+  min-height: clamp(52px, 5.9vh, 64px);
+  grid-template-columns: 28px clamp(38px, 3.4vw, 50px) minmax(0, 1fr) max-content;
+  gap: 10px;
+  border-radius: 10px;
+}
+
+.tv-app--v2 .tv-track-row .artwork {
+  width: clamp(38px, 3.4vw, 50px);
+  height: clamp(38px, 3.4vw, 50px);
+}
+
+.tv-app--v2 .tv-search-field {
+  width: min(680px, 72%);
+  min-height: 52px;
+  margin-bottom: 18px;
+}
+
+.tv-app--v2 .tv-playerbar {
+  grid-template-columns: minmax(190px, 1fr) auto minmax(260px, 1.45fr) minmax(118px, .55fr);
+  gap: clamp(10px, 1.25vw, 20px);
+  padding: 8px clamp(16px, 1.8vw, 28px);
+}
+
+.tv-app--v2 .tv-playerbar__track {
+  grid-template-columns: clamp(44px, 3.7vw, 54px) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.tv-app--v2 .tv-playerbar__track .artwork {
+  width: clamp(44px, 3.7vw, 54px);
+  height: clamp(44px, 3.7vw, 54px);
+  border-radius: 8px;
+}
+
+.tv-app--v2 .tv-playerbar__controls button {
+  width: clamp(38px, 3vw, 46px);
+  height: clamp(38px, 3vw, 46px);
+}
+
+.tv-app--v2 .tv-playerbar__controls .tv-playerbar__play {
+  width: clamp(48px, 3.9vw, 58px);
+  height: clamp(48px, 3.9vw, 58px);
+}
+
+.tv-playerbar__seek {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "bar hint"
+    "time hint";
+  align-items: center;
+  column-gap: 12px;
+  row-gap: 5px;
+  padding: 9px 11px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  text-align: left;
+}
+
+.tv-playerbar__seek-track {
+  grid-area: bar;
+  height: 5px;
+  display: block;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(126, 151, 180, .23);
+}
+
+.tv-playerbar__seek-track > span {
+  height: 100%;
+  display: block;
+  border-radius: inherit;
+  background: #58a9ff;
+}
+
+.tv-playerbar__seek-time {
+  grid-area: time;
+  display: flex;
+  justify-content: space-between;
+  color: #7f93aa;
+  font-variant-numeric: tabular-nums;
+}
+
+.tv-playerbar__seek-time small {
+  font-size: 10px;
+}
+
+.tv-playerbar__seek-hint {
+  grid-area: hint;
+  color: #8195ad;
+  white-space: nowrap;
+  font-size: 10px;
+}
+
+.tv-app--v2 .tv-playerbar__volume {
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 7px;
+}
+
+.tv-playerbar__volume-control {
+  min-width: 0;
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 0 9px;
+  border: 1px solid rgba(130, 160, 195, .12);
+  border-radius: 9px;
+  background: rgba(11, 23, 36, .76);
+  color: #c3d1df;
+}
+
+.tv-playerbar__volume-control > span {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tv-playerbar__volume-control small {
+  font-size: 9px;
+}
+
+html[data-tv-mode="true"] .account-playback-tv-crossfade {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+  gap: 10px;
+}
+
+html[data-tv-mode="true"] .account-playback-tv-crossfade button {
+  min-height: 54px;
+  border: 1px solid rgba(137, 174, 214, .18);
+  border-radius: 12px;
+  background: rgba(13, 27, 42, .78);
+  color: #b8c8da;
+  font-weight: 700;
+}
+
+html[data-tv-mode="true"] .account-playback-tv-crossfade button.is-selected {
+  border-color: rgba(90, 176, 255, .58);
+  background: rgba(55, 139, 225, .22);
+  color: #fff;
+}
+
+html[data-tv-mode="true"] .account-playback-tv-crossfade button:focus-visible {
+  outline: 3px solid #5ab0ff;
+  outline-offset: 3px;
+  box-shadow: 0 0 0 6px rgba(52, 141, 236, .18);
+}
+
+@media (max-width: 1180px) {
+  .tv-app--v2 .tv-shell {
+    grid-template-columns: 126px minmax(0, 1fr);
+  }
+
+  .tv-app--v2 .tv-brand strong,
+  .tv-app--v2 .tv-brand span {
+    display: none;
+  }
+
+  .tv-app--v2 .tv-home-grid,
+  .tv-app--v2 .tv-folder-grid,
+  .tv-app--v2 .tv-collection-grid,
+  .tv-app--v2 .tv-folder-grid--browse,
+  .tv-app--v2 .tv-collection-grid--browse {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .tv-app--v2 .tv-playerbar {
+    grid-template-columns: minmax(160px, .9fr) auto minmax(220px, 1.25fr);
+  }
+
+  .tv-app--v2 .tv-playerbar__volume {
+    display: none;
+  }
+}
+
+@media (max-height: 720px) {
+  .tv-app--v2 {
+    --tv-player-height: 82px;
+  }
+
+  .tv-app--v2 .tv-nav button {
+    min-height: 42px;
+  }
+
+  .tv-app--v2 .tv-view-heading {
+    min-height: 46px;
+  }
+
+  .tv-library-tabs button {
+    min-height: 46px;
+  }
+}
