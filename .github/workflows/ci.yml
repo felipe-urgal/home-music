@@ -49,6 +49,9 @@ jobs:
       - name: Install Chromium
         run: npm run install:browsers --prefix e2e
 
+      - name: Mobile crossfade E2E
+        run: npm run test --prefix e2e -- tests/crossfade-mobile.spec.ts --project=mobile-chromium
+
       - name: Personal data import E2E
         run: npm run test --prefix e2e -- tests/personal-data-import.spec.ts
 
