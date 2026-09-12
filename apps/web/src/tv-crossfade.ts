@@ -10,7 +10,7 @@ export type TvCrossfadePresentation = {
 };
 
 export function resolveTvCrossfadePresentation(
-  current: Track | undefined,
+  current: Pick<Track, 'id'> | undefined,
   crossfade: CrossfadeVisualState | null
 ): TvCrossfadePresentation {
   if (!current || !crossfade || crossfade.originTrackId !== current.id) {
@@ -56,14 +56,14 @@ export function syncTvCrossfadeCss(root: HTMLElement | null, crossfade: Crossfad
     return;
   }
 
-  const duration = Math.max(0.1, crossfade.durationSeconds);
-  const progress = Math.max(0, Math.min(1, crossfade.elapsedSeconds / duration));
-  const incoming = crossfade.incomingTrack;
+  const presentation = resolveTvCrossfadePresentation({ id: crossfade.originTrackId }, crossfade);
+  const incoming = presentation.incomingTrack;
+  if (!incoming || presentation.progress === null) return;
   const cover = artworkUrl(incoming);
 
   root.setAttribute('data-tv-crossfade', 'true');
-  root.style.setProperty('--tv-crossfade-outgoing-opacity', String(1 - progress));
-  root.style.setProperty('--tv-crossfade-incoming-opacity', String(progress));
+  root.style.setProperty('--tv-crossfade-outgoing-opacity', String(presentation.outgoingOpacity));
+  root.style.setProperty('--tv-crossfade-incoming-opacity', String(presentation.incomingOpacity));
   root.style.setProperty('--tv-crossfade-incoming-title', cssString(incoming.title));
   root.style.setProperty('--tv-crossfade-incoming-artist', cssString(incoming.albumArtist || incoming.artist || 'Artista desconhecido'));
   root.style.setProperty('--tv-crossfade-incoming-cover', cover ? `url("${cover}")` : 'none');
