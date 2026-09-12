@@ -1,18 +1,25 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import type { TvRemoteCommand, TvRemoteEvent, TvRemotePlaybackSnapshot } from '@home-music/shared';
+import type { TvRemotePlaybackSnapshot } from '@home-music/shared';
+import type { TvRemoteCommand, TvRemoteEvent } from '@home-music/shared/tv-remote';
 import type { TvRemoteSessionManager } from './tv-remote-session-manager.js';
 
 type SessionParams = { Params: { sessionId: string } };
 const missing = { error: 'Controle remoto não encontrado.' };
 
 function parseCommand(value: unknown): TvRemoteCommand | null {
-  if (!value || typeof value !== 'object') return null;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const body = value as Record<string, unknown>;
   if (body.type === 'toggle-play' || body.type === 'previous' || body.type === 'next') {
     return Object.keys(body).length === 1 ? { type: body.type } : null;
   }
   if (body.type === 'seek' && (body.deltaSeconds === -10 || body.deltaSeconds === 10)) {
     return Object.keys(body).length === 2 ? { type: 'seek', deltaSeconds: body.deltaSeconds } : null;
+  }
+  if (body.type === 'play-track' && typeof body.trackId === 'string') {
+    const trackId = body.trackId.trim();
+    return Object.keys(body).length === 2 && trackId.length > 0 && trackId.length <= 1024
+      ? { type: 'play-track', trackId }
+      : null;
   }
   return null;
 }
