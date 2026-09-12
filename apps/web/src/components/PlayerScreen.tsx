@@ -1,8 +1,13 @@
+import type { CSSProperties } from 'react';
 import type { Playlist, RepeatMode, Track } from '@home-music/shared';
 import { LyricsPanel } from './LyricsPanel';
 import { PlayerPlaybackControls } from './PlayerPlaybackControls';
 import { PlayerQueuePanel } from './PlayerQueuePanel';
 import { PlayerTrackPresentation } from './PlayerTrackPresentation';
+
+type PlayerScreenStyle = CSSProperties & {
+  '--player-artwork'?: string;
+};
 
 type PlayerScreenProps = {
   current: Track;
@@ -71,55 +76,66 @@ export function PlayerScreen({
   onAddToPlaylist,
   onExitOffline
 }: PlayerScreenProps) {
+  const coverVersion = current.coverVersion ? `?v=${encodeURIComponent(current.coverVersion)}` : '';
+  const coverUrl = !offlineMode && current.hasCover
+    ? `/api/tracks/${encodeURIComponent(current.id)}/cover${coverVersion}`
+    : null;
+  const immersiveStyle: PlayerScreenStyle | undefined = coverUrl
+    ? { '--player-artwork': `url("${coverUrl}")` }
+    : undefined;
+
   return (
-    <>
-      <PlayerTrackPresentation
-        current={current}
-        playing={playing}
-        queueLength={queue.length}
-        libraryReturnLabel={libraryReturnLabel}
-        playlists={playlists}
-        offlineMode={offlineMode}
-        isDownloaded={isDownloaded}
-        availableViaCollection={availableViaCollection}
-        downloading={downloading}
-        onOpenLibrary={onOpenLibrary}
-        onToggleDownload={onToggleDownload}
-        onAddToPlaylist={onAddToPlaylist}
-        onExitOffline={onExitOffline}
-      />
+    <div className="player-screen-immersive" style={immersiveStyle} data-has-artwork={coverUrl ? 'true' : 'false'}>
+      <div className="player-screen-immersive__backdrop" aria-hidden="true" />
+      <div className="player-screen-immersive__content">
+        <PlayerTrackPresentation
+          current={current}
+          playing={playing}
+          queueLength={queue.length}
+          libraryReturnLabel={libraryReturnLabel}
+          playlists={playlists}
+          offlineMode={offlineMode}
+          isDownloaded={isDownloaded}
+          availableViaCollection={availableViaCollection}
+          downloading={downloading}
+          onOpenLibrary={onOpenLibrary}
+          onToggleDownload={onToggleDownload}
+          onAddToPlaylist={onAddToPlaylist}
+          onExitOffline={onExitOffline}
+        />
 
-      <PlayerPlaybackControls
-        queueLength={queue.length}
-        currentIndex={currentIndex}
-        playing={playing}
-        autoplayBlocked={autoplayBlocked}
-        playbackError={playbackError}
-        currentTime={currentTime}
-        duration={duration}
-        volume={volume}
-        usesSystemVolume={usesSystemVolume}
-        shuffle={shuffle}
-        repeatMode={repeatMode}
-        onTogglePlay={onTogglePlay}
-        onPrevious={onPrevious}
-        onNext={onNext}
-        onSeek={onSeek}
-        onVolume={onVolume}
-        onShuffle={onShuffle}
-        onRepeat={onRepeat}
-      />
+        <PlayerPlaybackControls
+          queueLength={queue.length}
+          currentIndex={currentIndex}
+          playing={playing}
+          autoplayBlocked={autoplayBlocked}
+          playbackError={playbackError}
+          currentTime={currentTime}
+          duration={duration}
+          volume={volume}
+          usesSystemVolume={usesSystemVolume}
+          shuffle={shuffle}
+          repeatMode={repeatMode}
+          onTogglePlay={onTogglePlay}
+          onPrevious={onPrevious}
+          onNext={onNext}
+          onSeek={onSeek}
+          onVolume={onVolume}
+          onShuffle={onShuffle}
+          onRepeat={onRepeat}
+        />
 
-      <LyricsPanel track={current} currentTime={currentTime} offlineMode={offlineMode} />
+        <LyricsPanel track={current} currentTime={currentTime} offlineMode={offlineMode} />
 
-      <PlayerQueuePanel
-        current={current}
-        queue={queue}
-        currentIndex={currentIndex}
-        offlineMode={offlineMode}
-        onPlayTrack={onPlayTrack}
-        onReorderQueue={onReorderQueue}
-      />
-    </>
+        <PlayerQueuePanel
+          current={current}
+          queue={queue}
+          currentIndex={currentIndex}
+          offlineMode={offlineMode}
+          onPlayTrack={onPlayTrack}
+          onReorderQueue={onReorderQueue}
+        />
+      </div>
+    </div>
   );
 }
