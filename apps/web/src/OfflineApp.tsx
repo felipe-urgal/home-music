@@ -70,6 +70,7 @@ export function OfflineApp({ offline, onExit }: OfflineAppProps) {
         active={screen === 'player' ? 'player' : 'library'}
         current={current}
         playing={player.playing}
+        currentTime={player.currentTime}
         libraryCount={offline.tracks.length}
         queue={player.queue}
         currentIndex={player.currentIndex}

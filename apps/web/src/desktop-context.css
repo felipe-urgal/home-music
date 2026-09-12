@@ -85,6 +85,41 @@
     color: #8a96a2;
   }
 
+  .desktop-lyrics__lines.is-synchronized {
+    padding-block: var(--lyrics-follow-edge-space, 0px);
+  }
+
+  .desktop-lyrics__lines.is-synchronized p.is-active {
+    color: #f3f7fb;
+    font-weight: 650;
+    transform: translateX(4px);
+  }
+
+  .desktop-lyrics__follow {
+    position: sticky;
+    z-index: 2;
+    top: 0;
+    min-height: 34px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    margin: 0 0 12px;
+    padding: 0 10px;
+    border: 1px solid rgba(88, 182, 255, 0.2);
+    border-radius: 8px;
+    background: rgba(13, 24, 34, 0.96);
+    color: #8acbff;
+    cursor: pointer;
+    font: inherit;
+    font-size: 11px;
+    font-weight: 620;
+  }
+
+  .desktop-lyrics__follow svg {
+    width: 15px;
+    height: 15px;
+  }
+
   .desktop-main-content--library .library-header {
     grid-template-columns: 44px minmax(0, 1fr) 44px;
     margin-bottom: 10px;

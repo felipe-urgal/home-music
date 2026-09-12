@@ -99,7 +99,25 @@ await Promise.all([
   writeFile(fixturePath, wavFixture(10, 440)),
   writeFile(secondFixturePath, wavFixture(10, 523)),
   writeFile(thirdFixturePath, wavFixture(10, 659)),
-  writeFile(lyricsFixturePath, '[00:00.00]Linha E2E um\n[00:03.00]Linha E2E dois\n', 'utf8')
+  writeFile(lyricsFixturePath, [
+    '[00:00.00]Linha E2E um',
+    '[00:00.60]Linha E2E dois',
+    '[00:01.20]Linha E2E três',
+    '[00:01.80]Linha E2E quatro',
+    '[00:02.40]Linha E2E cinco',
+    '[00:03.00]Linha E2E seis',
+    '[00:03.60]Linha E2E sete',
+    '[00:04.20]Linha E2E oito',
+    '[00:04.80]Linha E2E nove',
+    '[00:05.40]Linha E2E dez',
+    '[00:06.00]Linha E2E onze',
+    '[00:06.60]Linha E2E doze',
+    '[00:07.20]Linha E2E treze',
+    '[00:07.80]Linha E2E quatorze',
+    '[00:08.40]Linha E2E quinze',
+    '[00:09.00]Linha E2E dezesseis',
+    ''
+  ].join('\n'), 'utf8')
 ]);
 
 // O build já existe quando o webServer do Playwright é iniciado. Criamos o schema
