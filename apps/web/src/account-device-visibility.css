@@ -1,0 +1,25 @@
+/* Keep advanced account operations off constrained mobile/TV surfaces. */
+
+@media (max-width: 699px) {
+  .my-account-overview section[aria-labelledby="my-account-group-account"] .my-account-links > button:nth-child(2),
+  .my-account-overview section[aria-labelledby="my-account-group-account"] .my-account-links > button:nth-child(3),
+  .my-account-overview section[aria-labelledby="my-account-group-data"],
+  .my-account-overview section[aria-labelledby="my-account-group-admin"] {
+    display: none !important;
+  }
+
+  .my-account-overview section[aria-labelledby="my-account-group-account"] .my-account-links > button:first-child {
+    border-bottom: 0;
+  }
+}
+
+html[data-tv-mode="true"] .my-account-overview section[aria-labelledby="my-account-group-account"] .my-account-links > button:nth-child(2),
+html[data-tv-mode="true"] .my-account-overview section[aria-labelledby="my-account-group-account"] .my-account-links > button:nth-child(3),
+html[data-tv-mode="true"] .my-account-overview section[aria-labelledby="my-account-group-data"],
+html[data-tv-mode="true"] .my-account-overview section[aria-labelledby="my-account-group-admin"] {
+  display: none !important;
+}
+
+html[data-tv-mode="true"] .my-account-overview section[aria-labelledby="my-account-group-account"] .my-account-links > button:first-child {
+  border-bottom: 0;
+}

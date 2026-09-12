@@ -7,6 +7,8 @@ import type {
   StreamingMode,
   StreamingSelection
 } from '../streaming-quality';
+import { tvCrossfadeOptions } from '../tv-controls';
+import { isTvMode } from '../tv-mode';
 
 const STREAMING_CHOICES: Array<{ mode: StreamingSelection; label: string; detail: string }> = [
   { mode: 'network', label: 'Por conexão', detail: 'Wi-Fi auto · móvel 96 kbps' },
@@ -75,6 +77,8 @@ export function AccountPlaybackPreferences({ value }: AccountPlaybackPreferences
     onCrossfadeSeconds,
     onNormalizationMode
   } = value;
+  const tvMode = isTvMode();
+  const tvCrossfadeChoices = tvCrossfadeOptions(crossfadeSeconds);
 
   return (
     <div className="account-playback-screen">
@@ -163,21 +167,39 @@ export function AccountPlaybackPreferences({ value }: AccountPlaybackPreferences
               <small>{crossfadeSeconds === 0 ? 'Desativado' : `${crossfadeSeconds} s de transição contínua`}</small>
             </div>
           </div>
-          <label>
-            <span>Duração</span>
-            <select
-              value={crossfadeSeconds}
-              onChange={event => onCrossfadeSeconds(Number(event.target.value))}
-              aria-label="Duração do crossfade em segundos"
-            >
-              {CROSSFADE_SECONDS.map(seconds => (
-                <option key={seconds} value={seconds}>
-                  {seconds === 0 ? '0 s · desativado' : `${seconds} s`}
-                </option>
+          {tvMode ? (
+            <div className="account-playback-tv-crossfade" aria-label="Duração do crossfade em segundos">
+              {tvCrossfadeChoices.map(seconds => (
+                <button
+                  key={seconds}
+                  type="button"
+                  className={crossfadeSeconds === seconds ? 'is-selected' : ''}
+                  aria-pressed={crossfadeSeconds === seconds}
+                  onClick={() => onCrossfadeSeconds(seconds)}
+                >
+                  {seconds === 0 ? 'Desligado' : `${seconds} s`}
+                </button>
               ))}
-            </select>
-          </label>
-          <small className="account-playback-network__effective">0 desativa · máximo {MAX_CROSSFADE_SECONDS} s neste dispositivo.</small>
+            </div>
+          ) : (
+            <label>
+              <span>Duração</span>
+              <select
+                value={crossfadeSeconds}
+                onChange={event => onCrossfadeSeconds(Number(event.target.value))}
+                aria-label="Duração do crossfade em segundos"
+              >
+                {CROSSFADE_SECONDS.map(seconds => (
+                  <option key={seconds} value={seconds}>
+                    {seconds === 0 ? '0 s · desativado' : `${seconds} s`}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <small className="account-playback-network__effective">
+            {tvMode ? 'Presets grandes para uso com o controle remoto.' : `0 desativa · máximo ${MAX_CROSSFADE_SECONDS} s neste dispositivo.`}
+          </small>
         </div>
 
         {crossfadeSeconds > 0 && (

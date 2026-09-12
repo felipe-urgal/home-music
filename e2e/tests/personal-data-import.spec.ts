@@ -100,6 +100,8 @@ function testPlaylistName(testInfo: TestInfo) {
 }
 
 test('Minha Conta faz preview antes de confirmar e aplica o bundle real', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name === 'mobile-chromium', 'Importação de dados pessoais fica oculta no mobile.');
+
   await login(page);
   const originalPlaybackState = await apiJson<PlaybackState>(page, '/api/player/state');
   const playlistName = testPlaylistName(testInfo);
@@ -138,6 +140,8 @@ test('Minha Conta faz preview antes de confirmar e aplica o bundle real', async 
 });
 
 test('bundle incompatível mostra erro do backend e nunca oferece confirmação', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name === 'mobile-chromium', 'Importação de dados pessoais fica oculta no mobile.');
+
   await login(page);
   await openPersonalImport(page);
 
@@ -150,4 +154,13 @@ test('bundle incompatível mostra erro do backend e nunca oferece confirmação'
   await expect(page.getByRole('alert')).toContainText('Bundle de dados pessoais inválido');
   await expect(page.getByText('Preview da importação')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Confirmar e importar' })).toHaveCount(0);
+});
+
+test('mobile oculta a importação de dados pessoais', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-chromium', 'A regra de visibilidade é exclusiva do mobile.');
+
+  await login(page);
+  await page.goto('/account');
+  await expect(page.locator('#my-account-title')).toHaveText('Minha conta');
+  await expect(page.getByRole('button', { name: /Importar dados pessoais/ })).toHaveCount(0);
 });

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { AuthenticatedApp } from './AuthenticatedApp';
+import { authenticatedSurfaceForPath } from './browser-navigation';
 import { LoginScreen } from './components/LoginScreen';
+import { TvRemoteControlScreen } from './components/TvRemoteControlScreen';
 import { OfflineApp } from './OfflineApp';
 import {
   readOfflineColdStartRecords,
@@ -95,6 +97,11 @@ export default function App() {
         onRetry={() => void auth.retry()}
       />
     );
+  }
+
+  const surface = authenticatedSurfaceForPath(window.location.pathname);
+  if (surface.type === 'remote') {
+    return <TvRemoteControlScreen sessionId={surface.sessionId} username={auth.currentUser.username} />;
   }
 
   return (

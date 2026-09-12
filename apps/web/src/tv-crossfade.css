@@ -1,0 +1,76 @@
+html[data-tv-mode="true"] .tv-playerbar__track {
+  position: relative;
+}
+
+html[data-tv-mode="true"][data-tv-crossfade="true"] .tv-playerbar__track > .artwork,
+html[data-tv-mode="true"][data-tv-crossfade="true"] .tv-playerbar__track > span > strong,
+html[data-tv-mode="true"][data-tv-crossfade="true"] .tv-playerbar__track > span > small {
+  opacity: var(--tv-crossfade-outgoing-opacity, 1);
+  transition: opacity 40ms linear;
+}
+
+html[data-tv-mode="true"] .tv-playerbar__track > span {
+  position: relative;
+}
+
+html[data-tv-mode="true"][data-tv-crossfade="true"] .tv-playerbar__track::before {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  left: 0;
+  top: 50%;
+  width: clamp(48px, 4.5vw, 66px);
+  height: clamp(48px, 4.5vw, 66px);
+  border-radius: 10px;
+  background-color: #0b141e;
+  background-image: var(--tv-crossfade-incoming-cover, none);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  opacity: var(--tv-crossfade-incoming-opacity, 0);
+  transform: translateY(-50%);
+  transition: opacity 40ms linear;
+  pointer-events: none;
+}
+
+html[data-tv-mode="true"][data-tv-crossfade="true"] .tv-playerbar__track > span::before,
+html[data-tv-mode="true"][data-tv-crossfade="true"] .tv-playerbar__track > span::after {
+  position: absolute;
+  z-index: 2;
+  left: 0;
+  right: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  opacity: var(--tv-crossfade-incoming-opacity, 0);
+  transition: opacity 40ms linear;
+  pointer-events: none;
+}
+
+html[data-tv-mode="true"][data-tv-crossfade="true"] .tv-playerbar__track > span::before {
+  content: var(--tv-crossfade-incoming-title, "");
+  top: 0;
+  color: #f6f9fc;
+  font-size: clamp(14px, 1.25vw, 20px);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+html[data-tv-mode="true"][data-tv-crossfade="true"] .tv-playerbar__track > span::after {
+  content: var(--tv-crossfade-incoming-artist, "");
+  bottom: 0;
+  color: #8798ac;
+  font-size: clamp(11px, .95vw, 15px);
+  line-height: 1.2;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-tv-mode="true"] .tv-playerbar__track > .artwork,
+  html[data-tv-mode="true"] .tv-playerbar__track > span > strong,
+  html[data-tv-mode="true"] .tv-playerbar__track > span > small,
+  html[data-tv-mode="true"] .tv-playerbar__track::before,
+  html[data-tv-mode="true"] .tv-playerbar__track > span::before,
+  html[data-tv-mode="true"] .tv-playerbar__track > span::after {
+    transition: none !important;
+  }
+}

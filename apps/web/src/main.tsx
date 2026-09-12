@@ -5,6 +5,7 @@ import { RequiredPasswordGate } from './components/RequiredPasswordGate';
 import { installPlaybackHistoryTracking } from './playback-history';
 import { registerServiceWorker } from './register-service-worker';
 import './tv-mode';
+import './tv-focus-recovery';
 import './styles.css';
 import './features.css';
 import './artwork.css';
@@ -23,6 +24,7 @@ import './admin-bulk.css';
 import './admin-transcode-cache.css';
 import './admin-operation-history.css';
 import './my-account.css';
+import './account-device-visibility.css';
 import './personal-data-import.css';
 import './profile-screen.css';
 import './administration.css';
@@ -65,6 +67,8 @@ import './folder-library-visual.css';
 import './now-playing-crossfade.css';
 import './tv.css';
 import './tv-login.css';
+import './tv-v2.css';
+import './tv-remote.css';
 
 installPlaybackHistoryTracking();
 

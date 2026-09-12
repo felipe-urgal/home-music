@@ -34,6 +34,9 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
+      - name: TV regression gate
+        run: npm run test -w @home-music/web -- src/tv-controls.test.ts src/tv-crossfade.test.ts
+
       - name: Quality gate
         run: npm run check
 
@@ -51,6 +54,9 @@ jobs:
 
       - name: Mobile crossfade E2E
         run: npm run test --prefix e2e -- tests/crossfade-mobile.spec.ts --project=mobile-chromium
+
+      - name: TV remote control E2E
+        run: npm run test --prefix e2e -- tests/tv-remote-control.spec.ts --project=desktop-chromium
 
       - name: Personal data import E2E
         run: npm run test --prefix e2e -- tests/personal-data-import.spec.ts

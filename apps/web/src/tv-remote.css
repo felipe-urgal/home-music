@@ -1,0 +1,126 @@
+.tv-remote-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: grid;
+  place-items: center;
+  padding: 32px;
+  background: rgb(4 8 16 / 72%);
+  backdrop-filter: blur(12px);
+}
+
+.tv-remote-dialog {
+  width: min(680px, 100%);
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 28px;
+  padding: 28px;
+  background: #111722;
+  box-shadow: 0 28px 80px rgb(0 0 0 / 45%);
+  color: #fff;
+}
+
+.tv-remote-dialog header,
+.tv-remote-dialog header > div,
+.tv-remote-dialog__actions,
+.tv-remote-card__header,
+.tv-remote-card__header > div,
+.tv-remote-progress div {
+  display: flex;
+  align-items: center;
+}
+
+.tv-remote-dialog header { justify-content: space-between; gap: 18px; }
+.tv-remote-dialog header > div { gap: 14px; }
+.tv-remote-dialog h2 { margin: 2px 0 0; font-size: 28px; }
+.tv-remote-dialog header small,
+.tv-remote-dialog__privacy { color: #aeb9c9; }
+.tv-remote-dialog button,
+.tv-remote-card button {
+  min-width: 48px;
+  min-height: 48px;
+  border: 0;
+  border-radius: 14px;
+  font: inherit;
+}
+.tv-remote-dialog header button { display: grid; place-items: center; background: rgb(255 255 255 / 8%); color: inherit; }
+.tv-remote-dialog__status { margin: 28px 0 18px; font-weight: 700; }
+.tv-remote-dialog__status--connected { color: #78e3a7; }
+.tv-remote-dialog__url {
+  display: block;
+  overflow-wrap: anywhere;
+  margin: 10px 0 18px;
+  padding: 16px;
+  border-radius: 14px;
+  background: rgb(255 255 255 / 7%);
+  color: #fff;
+}
+.tv-remote-dialog__actions { flex-wrap: wrap; gap: 12px; margin: 0 0 20px; }
+.tv-remote-dialog__actions button { display: inline-flex; align-items: center; gap: 9px; padding: 0 16px; }
+.tv-remote-dialog__error,
+.tv-remote-card__error { color: #ff9b9b; }
+.tv-remote-dialog__loading { width: 42px; height: 42px; margin: 28px auto; border: 4px solid rgb(255 255 255 / 18%); border-top-color: currentColor; border-radius: 50%; animation: tv-remote-spin .8s linear infinite; }
+
+.tv-remote-screen {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: radial-gradient(circle at top, #1b2940, #090d14 58%);
+  color: #fff;
+}
+
+.tv-remote-card {
+  width: min(520px, 100%);
+  padding: 24px;
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 28px;
+  background: rgb(15 21 31 / 94%);
+  box-shadow: 0 24px 70px rgb(0 0 0 / 34%);
+}
+.tv-remote-card--status { text-align: center; }
+.tv-remote-card--status > svg { width: 48px; height: 48px; margin-bottom: 14px; }
+.tv-remote-card--status span,
+.tv-remote-card--status p { display: block; color: #aeb9c9; }
+.tv-remote-card__header { justify-content: space-between; gap: 16px; }
+.tv-remote-card__header > div { gap: 10px; }
+.tv-remote-card__header span { display: grid; }
+.tv-remote-card__header small,
+.tv-remote-now-playing > small,
+.tv-remote-now-playing p,
+.tv-remote-card__hint { color: #9faabb; }
+.tv-remote-now-playing { padding: 48px 0 28px; text-align: center; }
+.tv-remote-now-playing h1 { margin: 8px 0 6px; font-size: clamp(28px, 8vw, 42px); line-height: 1.05; }
+.tv-remote-now-playing p { margin: 0; }
+.tv-remote-progress { margin-top: 34px; }
+.tv-remote-progress > span { display: block; height: 6px; overflow: hidden; border-radius: 999px; background: rgb(255 255 255 / 12%); }
+.tv-remote-progress i { display: block; height: 100%; border-radius: inherit; background: currentColor; }
+.tv-remote-progress div { justify-content: space-between; margin-top: 8px; color: #aeb9c9; }
+.tv-remote-controls { display: grid; grid-template-columns: repeat(5, 1fr); align-items: center; gap: 10px; }
+.tv-remote-controls button { display: grid; place-items: center; gap: 2px; min-height: 58px; background: rgb(255 255 255 / 8%); color: #fff; }
+.tv-remote-controls button svg { width: 24px; height: 24px; }
+.tv-remote-controls button span { font-size: 11px; }
+.tv-remote-controls__primary { min-height: 72px !important; border-radius: 50% !important; background: #fff !important; color: #0b1018 !important; }
+.tv-remote-controls__primary svg { width: 30px !important; height: 30px !important; }
+.tv-remote-controls button:disabled { opacity: .42; }
+.tv-remote-card__hint { margin: 22px 0 0; text-align: center; font-size: 13px; }
+
+.tv-remote-open-button { display: inline-grid; place-items: center; }
+
+@keyframes tv-remote-spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 520px) {
+  .tv-remote-screen { padding: 12px; }
+  .tv-remote-card { padding: 20px 16px; border-radius: 22px; }
+  .tv-remote-controls { gap: 6px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tv-remote-dialog__loading { animation: none; }
+}
+
+@media (forced-colors: active) {
+  .tv-remote-dialog,
+  .tv-remote-card,
+  .tv-remote-dialog__url,
+  .tv-remote-controls button { border: 1px solid CanvasText; }
+}

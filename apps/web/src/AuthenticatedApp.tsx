@@ -10,6 +10,8 @@ import { MobileBottomNav } from './components/MobileBottomNav';
 import { PlayerScreen } from './components/PlayerScreen';
 import { ResponsiveState } from './components/ResponsiveState';
 import { TvExperience } from './components/TvExperience';
+import { TvRemoteEntryButton } from './components/TvRemoteEntryButton';
+import { TvRemotePairingDialog } from './components/TvRemotePairingDialog';
 import { useRoutedScreen } from './browser-navigation';
 import { canUseAdminLibraryActions } from './frontend-access';
 import { buildLibraryReturnLabel } from './library-utils';
@@ -23,6 +25,7 @@ import { type LibraryTab, useLibraryNavigation } from './useLibraryNavigation';
 import { useNetworkQualityProfile } from './useNetworkQualityProfile';
 import { useNextTrackPreload } from './useNextTrackPreload';
 import { useSystemVolumePreference } from './useSystemVolume';
+import { useTvRemoteSession } from './useTvRemoteSession';
 
 const AdministrationScreen = lazy(async () => {
   const module = await import('./components/AdministrationScreen');
@@ -149,6 +152,16 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     && !utilityArea
     && (screen === 'library' || Boolean(library.error) || !current);
   const tvMode = isTvMode();
+  const tvRemote = useTvRemoteSession({
+    current,
+    playing: player.playing,
+    currentTime: player.currentTime,
+    duration: player.duration,
+    onTogglePlay: player.togglePlay,
+    onPrevious: player.previous,
+    onNext: player.next,
+    onSeek: player.seek
+  });
 
   const audioDecks = (
     <>
@@ -217,6 +230,16 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
           onVolume={player.setVolume}
           onPlayTrack={player.playTrack}
           onOpenAccount={() => setScreen('account')}
+        />
+        <TvRemoteEntryButton onClick={() => { void tvRemote.openPairing(); }} />
+        <TvRemotePairingDialog
+          open={tvRemote.open}
+          state={tvRemote.state}
+          transport={tvRemote.transport}
+          pairingUrl={tvRemote.pairingUrl}
+          error={tvRemote.error}
+          onClose={tvRemote.closePairing}
+          onRegenerate={() => { void tvRemote.regenerate(); }}
         />
         {library.actionError && (
           <button className="app-toast" role="status" onClick={library.clearActionError}>{library.actionError}</button>

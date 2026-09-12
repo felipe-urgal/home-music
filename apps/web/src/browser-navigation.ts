@@ -15,6 +15,10 @@ export type AppRoute = {
   library?: LibraryRouteState;
 };
 
+export type AuthenticatedSurface =
+  | { type: 'app' }
+  | { type: 'remote'; sessionId: string };
+
 const NAVIGATION_EVENT = 'home-music:navigation';
 
 function canonicalPathname(pathname: string) {
@@ -32,6 +36,28 @@ function decodeSegments(encoded: string) {
   } catch {
     return null;
   }
+}
+
+export function parseRemoteSessionPath(pathname: string): string | null {
+  const prefix = '/remote/';
+  if (!pathname.startsWith(prefix)) return null;
+  const encodedSessionId = pathname.slice(prefix.length);
+  if (!encodedSessionId || encodedSessionId.includes('/')) return null;
+  try {
+    const sessionId = decodeURIComponent(encodedSessionId);
+    return sessionId || null;
+  } catch {
+    return null;
+  }
+}
+
+export function remoteSessionPath(sessionId: string): string {
+  return `/remote/${encodeURIComponent(sessionId)}`;
+}
+
+export function authenticatedSurfaceForPath(pathname: string): AuthenticatedSurface {
+  const sessionId = parseRemoteSessionPath(pathname);
+  return sessionId === null ? { type: 'app' } : { type: 'remote', sessionId };
 }
 
 function invalidRoute(): AppRoute {
