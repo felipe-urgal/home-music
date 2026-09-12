@@ -18,19 +18,26 @@
 }
 
 .now-playing-vinyl__label--outgoing.is-crossfading {
-  animation: now-playing-crossfade-cover-out var(--now-playing-crossfade-duration, 1s) linear var(--now-playing-crossfade-delay, 0s) both;
+  opacity: var(--now-playing-crossfade-outgoing-opacity, 1);
+  transition: opacity 40ms linear;
 }
 
 .now-playing-vinyl__label--incoming {
-  animation: now-playing-crossfade-cover-in var(--now-playing-crossfade-duration, 1s) linear var(--now-playing-crossfade-delay, 0s) both;
+  opacity: var(--now-playing-crossfade-incoming-opacity, 0);
+  transform: scale(var(--now-playing-crossfade-incoming-scale, 0.92));
+  transition: opacity 40ms linear, transform 40ms linear;
 }
 
 .now-playing-transition-copy__layer--outgoing.is-crossfading {
-  animation: now-playing-crossfade-copy-out var(--now-playing-crossfade-duration, 1s) linear var(--now-playing-crossfade-delay, 0s) both;
+  opacity: var(--now-playing-crossfade-outgoing-opacity, 1);
+  transform: translateY(var(--now-playing-crossfade-outgoing-y, 0));
+  transition: opacity 40ms linear, transform 40ms linear;
 }
 
 .now-playing-transition-copy__layer--incoming {
-  animation: now-playing-crossfade-copy-in var(--now-playing-crossfade-duration, 1s) linear var(--now-playing-crossfade-delay, 0s) both;
+  opacity: var(--now-playing-crossfade-incoming-opacity, 0);
+  transform: translateY(var(--now-playing-crossfade-incoming-y, 8px));
+  transition: opacity 40ms linear, transform 40ms linear;
 }
 
 /* Remove somente a sombra externa do disco; os detalhes internos continuam dando leitura ao vinil. */
@@ -44,47 +51,10 @@
   filter: none;
 }
 
-@keyframes now-playing-crossfade-cover-out {
-  from { opacity: 1; }
-  to { opacity: 0; }
-}
-
-@keyframes now-playing-crossfade-cover-in {
-  from {
-    opacity: 0;
-    transform: scale(0.92);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-@keyframes now-playing-crossfade-copy-out {
-  from {
-    opacity: 1;
-    transform: translateY(0);
-  }
-  to {
-    opacity: 0;
-    transform: translateY(-8px);
-  }
-}
-
-@keyframes now-playing-crossfade-copy-in {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .now-playing-vinyl__label,
   .now-playing-transition-copy__layer {
+    transition: none !important;
     transform: none !important;
   }
 }
