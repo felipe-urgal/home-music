@@ -15,6 +15,7 @@ import {
   tvRemoteSnapshotKey,
   type TvRemotePlaybackState
 } from './tv-remote-tv-controller';
+import { requestTvRemoteTrack } from './tv-remote-track-request';
 
 type TvRemoteSessionState = 'idle' | 'creating' | 'waiting' | 'connected' | 'error' | 'closed';
 
@@ -141,7 +142,8 @@ export function useTvRemoteSession(options: UseTvRemoteSessionOptions) {
           togglePlay: controls.onTogglePlay,
           previous: controls.onPrevious,
           next: controls.onNext,
-          seek: controls.onSeek
+          seek: controls.onSeek,
+          playTrack: requestTvRemoteTrack
         });
         scheduleChanged();
       },
