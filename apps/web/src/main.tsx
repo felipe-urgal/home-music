@@ -60,6 +60,7 @@ import './admin-quarantine-v1.css';
 import './accessibility.css';
 import './immersive-now-playing.css';
 import './immersive-now-playing-polish.css';
+import './folder-library-visual.css';
 
 installPlaybackHistoryTracking();
 
