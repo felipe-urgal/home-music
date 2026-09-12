@@ -17,6 +17,10 @@ test('index remains a composition root instead of implementing domains', () => {
   assert.match(index, /registerAuthRoutes\(/);
   assert.match(index, /registerLibraryRoutes\(/);
   assert.match(index, /registerPersonalRoutes\(/);
+  assert.match(index, /new TvRemoteSessionManager\(/);
+  assert.match(index, /registerTvRemoteRoutes\(app, tvRemote\)/);
+  assert.ok(index.indexOf('registerPersonalRoutes(app,') < index.indexOf('registerTvRemoteRoutes(app,'));
+  assert.match(index, /app\.addHook\('onClose', async \(\) => \{\s*tvRemote\.shutdown\(\);\s*\}\)/);
   assert.match(index, /registerMediaRoutes\(/);
   assert.match(index, /registerSystemRoutes\(/);
 
@@ -64,6 +68,7 @@ test('HTTP handlers are grouped by domain while auth policy stays central', () =
   const personal = source('personal-routes.ts');
   const media = source('media-routes.ts');
   const system = source('system-routes.ts');
+  const tvRemote = source('tv-remote-routes.ts');
 
   assert.match(auth, /\/api\/auth\/login/);
   assert.match(sessions, /\/api\/auth\/sessions/);
@@ -84,7 +89,9 @@ test('HTTP handlers are grouped by domain while auth policy stays central', () =
   assert.match(system, /\/api\/health/);
   assert.doesNotMatch(system, /ServerInfrastructure/);
 
-  for (const routeSource of [auth, sessions, library, personal, media, system]) {
+  assert.match(tvRemote, /\/api\/tv-remote\/sessions/);
+  assert.doesNotMatch(tvRemote, /HomeMusicDatabase|new TvRemoteSessionManager/);
+  for (const routeSource of [auth, sessions, library, personal, media, system, tvRemote]) {
     assert.doesNotMatch(routeSource, /installApiAuthPolicy\(/);
   }
 });

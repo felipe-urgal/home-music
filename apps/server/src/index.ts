@@ -38,6 +38,8 @@ import { createServerInfrastructure } from './server-infrastructure.js';
 import { prepareWebApp, type PreparedWebApp } from './static-web.js';
 import { registerStaticWebRoutes, registerSystemRoutes } from './system-routes.js';
 import { TrackMediaInfrastructure } from './track-media-infrastructure.js';
+import { TvRemoteSessionManager } from './tv-remote-session-manager.js';
+import { registerTvRemoteRoutes } from './tv-remote-routes.js';
 import {
   DEFAULT_TRANSCODE_CACHE_MEGABYTES,
   parseTranscodeCacheMegabytes
@@ -161,6 +163,7 @@ const library = new LibraryService({
   longJobObservability: infrastructure.longJobObservability
 });
 const personal = new PersonalLibraryService(infrastructure.database, library);
+const tvRemote = new TvRemoteSessionManager();
 let ffmpegStatus: FfmpegStatus = {
   available: false,
   version: null,
@@ -258,6 +261,7 @@ registerLibraryAssistant(app, {
 });
 registerLibraryRoutes(app, library, integrityQueue, adminLibraryProjection);
 registerPersonalRoutes(app, personal, { databasePath, library });
+registerTvRemoteRoutes(app, tvRemote);
 registerM3u8PlaylistRoutes(app, personal, library);
 registerMediaRoutes(app, library, media);
 registerOpenSubsonicProtocolGuard(app);
@@ -286,6 +290,10 @@ registerSystemRoutes(app, {
     integrity: integrityQueue.runtime
   }),
   isWebReady: () => Boolean(webApp)
+});
+
+app.addHook('onClose', async () => {
+  tvRemote.shutdown();
 });
 
 app.addHook('onClose', async () => {
