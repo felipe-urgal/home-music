@@ -5,8 +5,11 @@ import { playerArtworkTrack } from '../player-presentation';
 import { NowPlayingVinyl } from './NowPlayingVinyl';
 
 type CrossfadeStyle = CSSProperties & {
-  '--now-playing-crossfade-duration'?: string;
-  '--now-playing-crossfade-delay'?: string;
+  '--now-playing-crossfade-outgoing-opacity'?: string;
+  '--now-playing-crossfade-incoming-opacity'?: string;
+  '--now-playing-crossfade-incoming-scale'?: string;
+  '--now-playing-crossfade-outgoing-y'?: string;
+  '--now-playing-crossfade-incoming-y'?: string;
 };
 
 type CrossfadePresentationProps = {
@@ -27,13 +30,20 @@ function activeCrossfade(current: Track, crossfade: CrossfadeVisualState | null)
   return crossfade?.originTrackId === current.id ? crossfade : null;
 }
 
-function crossfadeStyle(crossfade: CrossfadeVisualState | null): CrossfadeStyle | undefined {
-  if (!crossfade) return undefined;
+function crossfadeProgress(crossfade: CrossfadeVisualState | null) {
+  if (!crossfade) return null;
   const duration = Math.max(0.1, crossfade.durationSeconds);
-  const elapsed = Math.max(0, Math.min(duration, crossfade.elapsedSeconds));
+  return Math.max(0, Math.min(1, crossfade.elapsedSeconds / duration));
+}
+
+function crossfadeStyle(progress: number | null): CrossfadeStyle | undefined {
+  if (progress === null) return undefined;
   return {
-    '--now-playing-crossfade-duration': `${duration}s`,
-    '--now-playing-crossfade-delay': `${-elapsed}s`
+    '--now-playing-crossfade-outgoing-opacity': String(1 - progress),
+    '--now-playing-crossfade-incoming-opacity': String(progress),
+    '--now-playing-crossfade-incoming-scale': String(0.92 + (progress * 0.08)),
+    '--now-playing-crossfade-outgoing-y': `${-8 * progress}px`,
+    '--now-playing-crossfade-incoming-y': `${8 * (1 - progress)}px`
   };
 }
 
@@ -44,13 +54,15 @@ export function NowPlayingCrossfadeVinyl({
   offlineMode = false
 }: CrossfadeVinylProps) {
   const active = activeCrossfade(current, crossfade);
-  const style = crossfadeStyle(active);
+  const progress = crossfadeProgress(active);
+  const style = crossfadeStyle(progress);
 
   return (
     <div
       className={`now-playing-transition-art ${active ? 'is-crossfading' : ''}`}
       style={style}
       data-crossfading={active ? 'true' : 'false'}
+      data-crossfade-progress={progress === null ? undefined : progress.toFixed(3)}
       data-crossfade-incoming-title={active?.incomingTrack.title}
     >
       <NowPlayingVinyl
@@ -69,13 +81,15 @@ export function NowPlayingCrossfadeIdentity({
   titleId
 }: CrossfadeIdentityProps) {
   const active = activeCrossfade(current, crossfade);
-  const style = crossfadeStyle(active);
+  const progress = crossfadeProgress(active);
+  const style = crossfadeStyle(progress);
 
   return (
     <div
       className={`now-playing-transition-copy ${active ? 'is-crossfading' : ''}`}
       style={style}
       data-crossfading={active ? 'true' : 'false'}
+      data-crossfade-progress={progress === null ? undefined : progress.toFixed(3)}
       data-crossfade-incoming-title={active?.incomingTrack.title}
     >
       <div className={`now-playing-transition-copy__layer now-playing-transition-copy__layer--outgoing ${active ? 'is-crossfading' : ''}`}>
