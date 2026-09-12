@@ -7,8 +7,11 @@ A `PlayerScreen` é a composição visual do player mobile/tablet. Ela não é d
 - `PlayerTrackPresentation`: topbar, artwork, metadata e ações da faixa;
 - `PlayerPlaybackControls`: progresso/seek, play/pause, anterior/próxima, shuffle, repeat e volume;
 - `LyricsPanel`: apresentação e sincronização visual de letras;
-- `PlayerQueuePanel`: expansão, paginação visual e reordenação da fila;
-- `PlayerScreen`: compõe essas superfícies por props;
+- `PlayerQueuePanel`: expansão, paginação visual, reordenação da fila e comportamento do bottom sheet mobile;
+- `PlayerScreen`: compõe essas superfícies por props e projeta somente a ambientação visual derivada da faixa atual;
+- `DesktopNowPlayingScreen`: composição imersiva específica de desktop, reutilizando o mesmo estado/callbacks canônicos de playback;
+- `DesktopShell`: navegação desktop, estado visual de recolhimento da sidebar esquerda e largura visual da sidebar direita/fila;
+- `MobileBottomNav`: navegação mobile em drawer, sem criar estado paralelo de rota;
 - `useAudioPlayer`: fonte única de verdade para playback, erros de mídia e persistência.
 
 Estado local de UI não pode substituir ou espelhar a fila canônica, faixa atual, `playing`, posição, volume, shuffle ou repeat.
@@ -17,7 +20,24 @@ Estado local de UI não pode substituir ou espelhar a fila canônica, faixa atua
 
 Desktop e mobile recebem o mesmo estado/callbacks originados de `useAudioPlayer`. O modo offline usa uma instância própria apenas porque opera sobre outra coleção/persistência, mas dentro de cada modo continua existindo uma única autoridade de playback.
 
+O redesign imersivo da issue #388 mantém essa separação:
+
+- o fundo do player é uma projeção visual da artwork corrente, não uma nova fonte de metadata;
+- recolher/expandir a sidebar esquerda altera somente layout;
+- redimensionar a sidebar direita altera somente a largura visual, preservando a mesma fila canônica;
+- o menu `…` dos itens da fila desktop reutiliza `onPlayTrack` e `onReorderQueue`; não mantém uma cópia própria da fila;
+- o drawer mobile mantém somente estado aberto/fechado e delega a navegação às rotas/callbacks existentes;
+- o bottom sheet da fila mantém somente expansão, altura, paginação e estado de interação dentro de `PlayerQueuePanel`.
+
 Media Session, preload, continuidade em background e helpers de diagnóstico não são players paralelos.
+
+## Responsividade e foco dos overlays
+
+No desktop (breakpoint atual a partir de 1024 px), `DesktopShell` compõe três regiões: navegação esquerda, player/biblioteca central e contexto/fila direita. A sidebar esquerda pode ser compactada; a direita permanece presente e pode ser redimensionada dentro de limites mínimos/máximos, inclusive por teclado no separador.
+
+No mobile, a navegação vira drawer e a fila do player pode abrir como bottom sheet. Esses overlays são estados locais de apresentação: ao abrir, o foco entra no overlay; `Tab` permanece contido enquanto ele estiver modal; `Escape` e as ações de fechamento encerram o overlay; ao fechar, o foco retorna ao controle que o abriu. O handle do bottom sheet também aceita redimensionamento por teclado com setas e limites `Home`/`End`.
+
+Tablet continua usando a composição mobile/tablet da `PlayerScreen` e não cria uma terceira autoridade de playback.
 
 ## Transição contínua em foreground
 
@@ -98,6 +118,8 @@ Mudanças futuras devem preservar:
 - shuffle/repeat e anterior/próxima;
 - reordenação/persistência da fila;
 - mesma autoridade de estado em mobile/desktop;
+- player responsivo sem overflow e sem duplicação do estado canônico;
+- drawer e bottom sheet com foco contido/restaurado e fechamento por teclado;
 - avanço seguro após erro definitivo;
 - recuperação limitada para erro transitório de background;
 - ausência de retry infinito/cascata de fontes;
