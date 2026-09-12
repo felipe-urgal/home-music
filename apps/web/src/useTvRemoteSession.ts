@@ -61,24 +61,14 @@ export function useTvRemoteSession(options: UseTvRemoteSessionOptions) {
     }
   }, []);
 
-  const closePairing = useCallback(() => {
-    const id = activeSessionRef.current;
-    activeSessionRef.current = null;
-    setSessionId(null);
-    setPairingUrl(null);
-    setState('idle');
-    setOpen(false);
-    setError(null);
-    void disposeSession(id);
-  }, [disposeSession]);
-
-  const openPairing = useCallback(async () => {
+  const createFreshSession = useCallback(async () => {
     const previous = activeSessionRef.current;
     activeSessionRef.current = null;
     setSessionId(null);
     setPairingUrl(null);
     setOpen(true);
     setState('creating');
+    setTransport('connecting');
     setError(null);
     if (previous) await disposeSession(previous);
 
@@ -93,6 +83,18 @@ export function useTvRemoteSession(options: UseTvRemoteSessionOptions) {
       setError(cause instanceof Error ? cause.message : 'Não foi possível criar o controle remoto.');
     }
   }, [disposeSession]);
+
+  const closePairing = useCallback(() => {
+    // Closing the QR overlay must not revoke an already paired phone. The
+    // active session remains owned by this TV until regeneration/unmount.
+    setOpen(false);
+  }, []);
+
+  const openPairing = useCallback(async () => {
+    setOpen(true);
+    if (activeSessionRef.current && pairingUrl) return;
+    await createFreshSession();
+  }, [createFreshSession, pairingUrl]);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -143,6 +145,7 @@ export function useTvRemoteSession(options: UseTvRemoteSessionOptions) {
         activeSessionRef.current = null;
         setState('closed');
         setSessionId(null);
+        setPairingUrl(null);
       },
       onTransportStatus: setTransport,
       onError: () => setError('O controle remoto recebeu um evento inválido.')
@@ -180,6 +183,6 @@ export function useTvRemoteSession(options: UseTvRemoteSessionOptions) {
     error,
     openPairing,
     closePairing,
-    regenerate: openPairing
+    regenerate: createFreshSession
   };
 }

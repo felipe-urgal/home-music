@@ -24,6 +24,11 @@ test('celular autenticado na mesma conta controla o player da TV sem criar áudi
   const pairingUrl = await pairingLink.getAttribute('href');
   expect(pairingUrl).toBeTruthy();
 
+  // O X só esconde o pareamento; a sessão deve continuar viva enquanto a TV
+  // permanece aberta. Isso também libera o player para validação bidirecional.
+  await page.getByRole('button', { name: 'Fechar controle remoto' }).click();
+  await expect(page.locator('.tv-remote-dialog')).toBeHidden();
+
   const origin = new URL(page.url()).origin;
   const phoneContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const phone = await phoneContext.newPage();
@@ -35,24 +40,28 @@ test('celular autenticado na mesma conta controla o player da TV sem criar áudi
     await expect(phone.locator('.tv-remote-screen')).toBeVisible();
     await expect(phone.locator('audio')).toHaveCount(0);
     await expect(phone.getByText('Home Music TV', { exact: true })).toBeVisible();
-    await expect(phone.getByRole('button', { name: 'Tocar', exact: true })).toBeEnabled();
 
     const tvPlay = page.locator('.tv-playerbar__play');
-    await tvPlay.click();
-    await expect(tvPlay).toHaveAttribute('aria-label', 'Pausar');
-    await expect(phone.getByRole('button', { name: 'Pausar', exact: true })).toBeVisible({ timeout: 5_000 });
+    const phonePlay = phone.locator('.tv-remote-controls__primary');
+    await expect(phonePlay).toBeEnabled();
 
-    await phone.getByRole('button', { name: 'Pausar', exact: true }).click();
-    await expect(tvPlay).toHaveAttribute('aria-label', 'Tocar');
+    const initialAction = await tvPlay.getAttribute('aria-label');
+    expect(['Tocar', 'Pausar']).toContain(initialAction);
+    await expect(phonePlay).toHaveAttribute('aria-label', initialAction!);
+
+    const toggledAction = initialAction === 'Tocar' ? 'Pausar' : 'Tocar';
+    await tvPlay.click();
+    await expect(tvPlay).toHaveAttribute('aria-label', toggledAction);
+    await expect(phonePlay).toHaveAttribute('aria-label', toggledAction, { timeout: 5_000 });
+
+    await phonePlay.click();
+    await expect(tvPlay).toHaveAttribute('aria-label', initialAction!, { timeout: 5_000 });
 
     const title = page.locator('.tv-playerbar__track strong');
     const beforeTitle = await title.textContent();
     await phone.getByRole('button', { name: 'Próxima faixa', exact: true }).click();
     await expect.poll(async () => title.textContent(), { timeout: 5_000 }).not.toBe(beforeTitle);
 
-    await tvPlay.click();
-    await expect(tvPlay).toHaveAttribute('aria-label', 'Pausar');
-    await expect(phone.getByRole('button', { name: 'Pausar', exact: true })).toBeVisible({ timeout: 5_000 });
     const seek = page.locator('.tv-playerbar__seek');
     const beforeSeek = await seek.getAttribute('aria-label');
     await phone.getByRole('button', { name: 'Avançar 10 segundos', exact: true }).click();
