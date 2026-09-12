@@ -61,6 +61,7 @@ import './accessibility.css';
 import './immersive-now-playing.css';
 import './immersive-now-playing-polish.css';
 import './folder-library-visual.css';
+import './now-playing-crossfade.css';
 
 installPlaybackHistoryTracking();
 
