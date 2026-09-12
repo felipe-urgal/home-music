@@ -5,9 +5,17 @@ type NowPlayingVinylProps = {
   track: Track;
   playing: boolean;
   className?: string;
+  incomingTrack?: Track;
+  crossfadeAttempt?: number;
 };
 
-export function NowPlayingVinyl({ track, playing, className }: NowPlayingVinylProps) {
+export function NowPlayingVinyl({
+  track,
+  playing,
+  className,
+  incomingTrack,
+  crossfadeAttempt
+}: NowPlayingVinylProps) {
   const classes = [
     'now-playing-vinyl',
     playing ? 'is-playing' : '',
@@ -21,9 +29,17 @@ export function NowPlayingVinyl({ track, playing, className }: NowPlayingVinylPr
       aria-hidden="true"
     >
       <div className="now-playing-vinyl__disc">
-        <div className="now-playing-vinyl__label">
+        <div className={`now-playing-vinyl__label now-playing-vinyl__label--outgoing ${incomingTrack ? 'is-crossfading' : ''}`}>
           <Artwork track={track} />
         </div>
+        {incomingTrack && (
+          <div
+            key={`${crossfadeAttempt ?? 0}:${incomingTrack.id}`}
+            className="now-playing-vinyl__label now-playing-vinyl__label--incoming"
+          >
+            <Artwork track={incomingTrack} />
+          </div>
+        )}
         <span className="now-playing-vinyl__spindle" />
       </div>
     </div>
