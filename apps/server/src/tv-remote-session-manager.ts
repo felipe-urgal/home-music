@@ -1,10 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import type {
-  TvRemoteCommand,
-  TvRemoteEvent,
-  TvRemotePlaybackSnapshot,
-  TvRemoteSessionSummary
-} from '@home-music/shared';
+import type { TvRemotePlaybackSnapshot, TvRemoteSessionSummary } from '@home-music/shared';
+import type { TvRemoteCommand, TvRemoteEvent } from '@home-music/shared/tv-remote';
 
 const SESSION_TTL_MS = 60_000;
 const MAX_SESSIONS_PER_USER = 3;

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { TvRemoteEvent, TvRemotePlaybackSnapshot } from '@home-music/shared';
+import type { TvRemotePlaybackSnapshot } from '@home-music/shared';
+import type { TvRemoteEvent } from '@home-music/shared/tv-remote';
 import { TvRemoteSessionManager } from './tv-remote-session-manager.js';
 
 function managerAt(value: number | (() => number)) {
