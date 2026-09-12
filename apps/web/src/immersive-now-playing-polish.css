@@ -1,3 +1,53 @@
+@media (min-width: 1024px) and (max-width: 1220px) {
+  .desktop-now-playing-screen {
+    overflow-y: auto;
+  }
+
+  .desktop-now-playing-screen__stage {
+    min-height: 100%;
+    height: auto;
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    align-content: center;
+    gap: 18px;
+    padding: 30px 24px 36px;
+  }
+
+  .desktop-now-playing-screen__art {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .desktop-now-playing-screen__art .now-playing-vinyl {
+    width: min(31vh, 250px);
+    max-width: 250px;
+  }
+
+  .desktop-now-playing-screen__content {
+    max-width: 430px;
+  }
+
+  .desktop-now-playing-screen__heading {
+    text-align: center;
+  }
+
+  .desktop-now-playing-screen__heading h1 {
+    font-size: 28px;
+  }
+
+  .desktop-now-playing-screen__actions {
+    justify-content: center;
+  }
+
+  .desktop-now-playing-screen__progress {
+    margin-top: 22px;
+  }
+
+  .desktop-now-playing-screen__controls {
+    min-height: 76px;
+  }
+}
+
 @media (max-width: 699px) {
   /* O drawer assume a navegação principal no mobile; evita sobrepor dois controles no canto esquerdo. */
   .player-screen-immersive .topbar__back-to-library {
