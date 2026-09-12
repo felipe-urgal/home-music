@@ -52,6 +52,16 @@ test('TV mostra o now playing aprovado e celular autenticado controla a reprodu√
     const phonePlay = phone.locator('.tv-remote-controls__primary');
     await expect(phonePlay).toBeEnabled();
 
+    const audioIsPlaying = () => page.evaluate(() => Array.from(document.querySelectorAll('audio'))
+      .some(audio => !audio.paused && !audio.ended && audio.currentTime > 0));
+
+    // O estado persistido pode pedir reprodu√ß√£o antes de o Chromium liberar o
+    // autoplay. Normalize a UI e o elemento de √°udio antes de testar o controle.
+    if (!await audioIsPlaying() && await tvPlay.getAttribute('aria-label') === 'Pausar') {
+      await tvPlay.click();
+      await expect(tvPlay).toHaveAttribute('aria-label', 'Tocar');
+    }
+
     const initialAction = await tvPlay.getAttribute('aria-label');
     expect(['Tocar', 'Pausar']).toContain(initialAction);
     await expect(phonePlay).toHaveAttribute('aria-label', initialAction!);
@@ -64,11 +74,16 @@ test('TV mostra o now playing aprovado e celular autenticado controla a reprodu√
     await phonePlay.click();
     await expect(tvPlay).toHaveAttribute('aria-label', initialAction!, { timeout: 5_000 });
 
-    if (await tvPlay.getAttribute('aria-label') === 'Tocar') {
+    if (!await audioIsPlaying()) {
+      if (await tvPlay.getAttribute('aria-label') === 'Pausar') {
+        await tvPlay.click();
+        await expect(tvPlay).toHaveAttribute('aria-label', 'Tocar');
+      }
       await tvPlay.click();
       await expect(tvPlay).toHaveAttribute('aria-label', 'Pausar');
       await expect(phonePlay).toHaveAttribute('aria-label', 'Pausar', { timeout: 5_000 });
     }
+    await expect.poll(audioIsPlaying, { timeout: 5_000 }).toBe(true);
 
     const title = page.locator('.tv-now-playing__title');
     const beforeTitle = await title.textContent();
