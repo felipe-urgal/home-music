@@ -1,3 +1,16 @@
+@media (min-width: 1024px) {
+  .desktop-layout {
+    grid-template-columns:
+      var(--desktop-sidebar-width, 236px)
+      minmax(0, 1fr)
+      clamp(
+        280px,
+        var(--desktop-context-width, 340px),
+        min(520px, calc(100vw - var(--desktop-sidebar-width, 236px) - 430px))
+      );
+  }
+}
+
 @media (min-width: 1024px) and (max-width: 1220px) {
   .desktop-now-playing-screen {
     overflow-y: auto;
