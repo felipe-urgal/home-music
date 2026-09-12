@@ -38,6 +38,10 @@ test('crossfade mistura dois decks reais no Chromium mobile e faz handoff sem re
   await expect(visualTransition).toHaveAttribute('data-crossfade-incoming-title', 'E2E Zeta');
   await expect(page.locator('.now-playing-transition-copy[data-crossfading="true"]'))
     .toHaveAttribute('data-crossfade-incoming-title', 'E2E Zeta');
+  await expect.poll(async () => {
+    const value = Number(await visualTransition.getAttribute('data-crossfade-progress'));
+    return value > 0 && value < 1;
+  }).toBe(true);
 
   const incomingPositionDuringMix = await page.evaluate(() => {
     const audios = Array.from(document.querySelectorAll('audio'));
