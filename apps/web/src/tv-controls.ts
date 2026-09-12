@@ -1,6 +1,6 @@
 export const TV_SEEK_STEP_SECONDS = 10;
 export const TV_VOLUME_STEP = 0.1;
-export const TV_CROSSFADE_PRESETS = [0, 3, 5, 8, 12] as const;
+export const TV_CROSSFADE_PRESETS = [0, 10, 20, 30] as const;
 
 export function clampTvSeek(currentTime: number, duration: number, deltaSeconds: number) {
   const safeDuration = Number.isFinite(duration) && duration > 0 ? duration : 0;
@@ -13,9 +13,6 @@ export function stepTvVolume(volume: number, delta: number) {
   return Math.max(0, Math.min(1, Math.round((safeVolume + delta) * 100) / 100));
 }
 
-export function tvCrossfadeOptions(current: number) {
-  const normalized = Number.isFinite(current) ? Math.max(0, Math.min(30, Math.round(current))) : 0;
-  const values = new Set<number>(TV_CROSSFADE_PRESETS);
-  values.add(normalized);
-  return [...values].sort((a, b) => a - b);
+export function tvCrossfadeOptions(_current: number) {
+  return [...TV_CROSSFADE_PRESETS];
 }
