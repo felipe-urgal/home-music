@@ -1,0 +1,28 @@
+.tv-remote-inline-qr {
+  position: fixed;
+  z-index: 6;
+  top: clamp(34px, 4.2vh, 58px);
+  right: clamp(46px, 4.6vw, 86px);
+}
+
+.tv-remote-inline-qr--status {
+  color: #d9dde3;
+  text-align: center;
+}
+
+.tv-remote-inline-qr--status button {
+  min-height: 48px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 12px;
+  background: rgba(255,255,255,.08);
+  color: #fff;
+  font: inherit;
+}
+
+@media (max-height: 760px) {
+  .tv-remote-inline-qr { top: 24px; }
+}

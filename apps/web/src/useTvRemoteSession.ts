@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Track } from '@home-music/shared';
 import { remoteSessionPath } from './browser-navigation';
+import { isTvMode } from './tv-mode';
 import {
   closeTvRemoteSession,
   createTvRemoteSession,
@@ -85,8 +86,6 @@ export function useTvRemoteSession(options: UseTvRemoteSessionOptions) {
   }, [disposeSession]);
 
   const closePairing = useCallback(() => {
-    // Closing the QR overlay must not revoke an already paired phone. The
-    // active session remains owned by this TV until regeneration/unmount.
     setOpen(false);
   }, []);
 
@@ -95,6 +94,11 @@ export function useTvRemoteSession(options: UseTvRemoteSessionOptions) {
     if (activeSessionRef.current && pairingUrl) return;
     await createFreshSession();
   }, [createFreshSession, pairingUrl]);
+
+  useEffect(() => {
+    if (!isTvMode() || state !== 'idle' || activeSessionRef.current) return;
+    void createFreshSession();
+  }, [createFreshSession, state]);
 
   useEffect(() => {
     if (!sessionId) return;

@@ -11,30 +11,25 @@ async function login(page: Page, url: string) {
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
 }
 
-test('celular autenticado na mesma conta controla o player da TV sem criar áudio local', async ({ page, browser }, testInfo) => {
+test('TV mostra o now playing aprovado e celular autenticado controla a reprodução', async ({ page, browser }, testInfo) => {
   test.skip(testInfo.project.name !== 'desktop-chromium');
 
   await login(page, '/?tv=1');
-  await expect(page.locator('.tv-app--v2')).toBeVisible();
-  await expect(page.locator('.tv-playerbar__track strong')).toHaveText(/E2E/);
+  await expect(page.locator('.tv-app--now-playing')).toBeVisible();
+  await expect(page.locator('.tv-now-playing__title')).toHaveText(/E2E/);
+  await expect(page.getByText('Home Music', { exact: true })).toBeVisible();
+  await expect(page.getByText('TOCANDO AGORA', { exact: true })).toBeVisible();
+  await expect(page.getByText(/Good music/)).toBeVisible();
 
-  const remoteEntry = page.getByRole('button', { name: 'Conectar controle pelo celular' });
-  await remoteEntry.focus();
-  await remoteEntry.click();
-  const closePairing = page.getByRole('button', { name: 'Fechar controle remoto' });
-  const pairingLink = page.locator('.tv-remote-dialog__url');
+  const pairingLink = page.getByRole('link', { name: 'Abrir controle no celular' });
   await expect(pairingLink).toBeVisible();
-  await expect(closePairing).toBeFocused();
+  await expect(pairingLink.locator('img')).toHaveAttribute('alt', 'QR code para controlar a TV pelo celular');
   const pairingUrl = await pairingLink.getAttribute('href');
   expect(pairingUrl).toBeTruthy();
 
-  // O modal precisa manter o D-pad dentro dele e devolver o foco ao gatilho ao
-  // fechar. O X/Escape só escondem o pareamento: a sessão permanece ativa.
-  await page.keyboard.press('ArrowDown');
-  await expect(pairingLink).toBeFocused();
-  await page.keyboard.press('Escape');
-  await expect(page.locator('.tv-remote-dialog')).toBeHidden();
-  await expect(remoteEntry).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Aleatório', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Faixa anterior', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Próxima faixa', exact: true })).toBeEnabled();
 
   const origin = new URL(page.url()).origin;
   const phoneContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
@@ -48,7 +43,7 @@ test('celular autenticado na mesma conta controla o player da TV sem criar áudi
     await expect(phone.locator('audio')).toHaveCount(0);
     await expect(phone.getByText('Home Music TV', { exact: true })).toBeVisible();
 
-    const tvPlay = page.locator('.tv-playerbar__play');
+    const tvPlay = page.locator('.tv-now-playing__play');
     const phonePlay = phone.locator('.tv-remote-controls__primary');
     await expect(phonePlay).toBeEnabled();
 
@@ -64,15 +59,15 @@ test('celular autenticado na mesma conta controla o player da TV sem criar áudi
     await phonePlay.click();
     await expect(tvPlay).toHaveAttribute('aria-label', initialAction!, { timeout: 5_000 });
 
-    const title = page.locator('.tv-playerbar__track strong');
+    const title = page.locator('.tv-now-playing__title');
     const beforeTitle = await title.textContent();
     await phone.getByRole('button', { name: 'Próxima faixa', exact: true }).click();
     await expect.poll(async () => title.textContent(), { timeout: 5_000 }).not.toBe(beforeTitle);
 
-    const seek = page.locator('.tv-playerbar__seek');
-    const beforeSeek = await seek.getAttribute('aria-label');
+    const progress = page.locator('.tv-now-playing__progress');
+    const beforeSeek = await progress.getAttribute('aria-label');
     await phone.getByRole('button', { name: 'Avançar 10 segundos', exact: true }).click();
-    await expect.poll(async () => seek.getAttribute('aria-label'), { timeout: 5_000 }).not.toBe(beforeSeek);
+    await expect.poll(async () => progress.getAttribute('aria-label'), { timeout: 5_000 }).not.toBe(beforeSeek);
   } finally {
     await phoneContext.close();
   }

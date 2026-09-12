@@ -1,0 +1,249 @@
+.tv-app--now-playing {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  min-height: 0;
+  overflow: hidden;
+  background: #05090d;
+  color: #f7f8fa;
+}
+
+.tv-now-playing__scene,
+.tv-now-playing__shade {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.tv-now-playing__scene { object-fit: cover; }
+.tv-now-playing__shade {
+  background:
+    linear-gradient(180deg, rgba(3, 7, 11, .18), rgba(3, 7, 11, .52)),
+    radial-gradient(circle at 50% 42%, transparent 0 28%, rgba(3, 7, 11, .20) 58%, rgba(3, 7, 11, .80) 100%);
+}
+
+.tv-now-playing__header {
+  position: absolute;
+  z-index: 2;
+  inset: clamp(34px, 4.2vh, 58px) clamp(46px, 4.6vw, 86px) auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.tv-now-playing__brand {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: clamp(20px, 1.7vw, 30px);
+}
+
+.tv-now-playing__brand > span {
+  width: clamp(40px, 3.2vw, 54px);
+  height: clamp(40px, 3.2vw, 54px);
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: #fff;
+  color: #090d12;
+}
+
+.tv-now-playing__brand svg { width: 68%; height: 68%; stroke-width: 2.8; }
+.tv-now-playing__brand strong { letter-spacing: -.035em; }
+
+.tv-now-playing__qr {
+  width: clamp(194px, 14.5vw, 270px);
+  min-height: clamp(134px, 11.5vw, 188px);
+  display: grid;
+  place-items: center;
+  padding: 10px 12px;
+  border: 1px solid rgba(255,255,255,.22);
+  border-radius: 24px;
+  background: rgba(16, 20, 25, .70);
+  box-shadow: 0 18px 46px rgba(0,0,0,.30);
+  backdrop-filter: blur(12px);
+}
+
+.tv-now-playing__qr a {
+  width: 100%;
+  display: grid;
+  grid-template-columns: clamp(70px, 5.9vw, 106px) 1fr;
+  align-items: center;
+  gap: 14px;
+  color: #fff;
+  text-decoration: none;
+}
+
+.tv-now-playing__qr img {
+  width: 100%;
+  aspect-ratio: 1;
+  display: block;
+  border-radius: 5px;
+  background: #fff;
+}
+
+.tv-now-playing__qr a > span {
+  color: #e5e8ed;
+  font-size: clamp(12px, 1.0vw, 17px);
+  line-height: 1.28;
+}
+
+.tv-now-playing__qr-loading { color: #c7cbd1; font-size: clamp(13px, 1vw, 17px); }
+
+.tv-now-playing__center {
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  top: 50%;
+  width: min(760px, 46vw);
+  transform: translate(-50%, -48%);
+  text-align: center;
+}
+
+.tv-now-playing__art {
+  width: clamp(180px, 17vw, 292px);
+  aspect-ratio: 1;
+  margin: 0 auto clamp(20px, 2.5vh, 30px);
+  overflow: hidden;
+  border-radius: 10px;
+  box-shadow: 0 22px 55px rgba(0,0,0,.42);
+}
+
+.tv-now-playing__art .artwork,
+.tv-now-playing__art .artwork img {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+}
+
+.tv-now-playing__art .artwork img { object-fit: cover; }
+.tv-now-playing__title {
+  margin: 0;
+  font-size: clamp(34px, 4vw, 64px);
+  line-height: 1.02;
+  letter-spacing: -.045em;
+  font-weight: 800;
+}
+
+.tv-now-playing__artist,
+.tv-now-playing__album {
+  margin: 0;
+  color: #d4d7dc;
+  font-size: clamp(17px, 1.7vw, 27px);
+  line-height: 1.28;
+}
+
+.tv-now-playing__artist { margin-top: 14px; }
+.tv-now-playing__album { margin-top: 4px; color: #b9bdc5; }
+
+.tv-now-playing__progress {
+  width: min(720px, 44vw);
+  margin: clamp(28px, 3.8vh, 44px) auto 0;
+}
+
+.tv-now-playing__progress > span {
+  display: block;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255,255,255,.25);
+}
+
+.tv-now-playing__progress > span > i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #fff;
+}
+
+.tv-now-playing__progress > div {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 10px;
+  color: #e3e5e8;
+  font-size: clamp(11px, .95vw, 15px);
+  font-variant-numeric: tabular-nums;
+}
+
+.tv-now-playing__controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(20px, 2vw, 34px);
+  margin-top: clamp(20px, 2.7vh, 34px);
+}
+
+.tv-now-playing__controls button {
+  width: clamp(54px, 4.6vw, 78px);
+  height: clamp(54px, 4.6vw, 78px);
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(33, 37, 43, .88);
+  color: #fff;
+  box-shadow: none;
+}
+
+.tv-now-playing__controls button:first-child,
+.tv-now-playing__controls button:last-child {
+  background: transparent;
+}
+
+.tv-now-playing__controls button svg { width: 44%; height: 44%; stroke-width: 2.5; }
+.tv-now-playing__controls button.is-active { color: #fff; filter: drop-shadow(0 0 9px rgba(255,255,255,.35)); }
+.tv-now-playing__controls button:disabled { opacity: .34; }
+.tv-now-playing__controls button:focus-visible { outline: 4px solid #fff; outline-offset: 6px; }
+
+.tv-now-playing__controls .tv-now-playing__play {
+  width: clamp(68px, 5.8vw, 98px);
+  height: clamp(68px, 5.8vw, 98px);
+  background: #fff;
+  color: #090d12;
+}
+
+.tv-now-playing__controls .tv-now-playing__play svg { width: 42%; height: 42%; stroke-width: 3; }
+
+.tv-now-playing__footer {
+  position: absolute;
+  z-index: 2;
+  left: clamp(46px, 4.6vw, 86px);
+  right: clamp(46px, 4.6vw, 86px);
+  bottom: clamp(36px, 4.5vh, 64px);
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  color: rgba(223,226,231,.56);
+}
+
+.tv-now-playing__footer > div {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  letter-spacing: .12em;
+  font-size: clamp(11px, .9vw, 15px);
+}
+
+.tv-now-playing__footer svg { width: clamp(34px, 2.7vw, 50px); height: clamp(34px, 2.7vw, 50px); }
+.tv-now-playing__footer p { margin: 0; max-width: 240px; font-size: clamp(15px, 1.35vw, 22px); line-height: 1.55; text-align: left; }
+
+@media (max-height: 760px) {
+  .tv-now-playing__header { top: 24px; }
+  .tv-now-playing__center { transform: translate(-50%, -46%); }
+  .tv-now-playing__art { width: clamp(150px, 14vw, 220px); margin-bottom: 16px; }
+  .tv-now-playing__progress { margin-top: 20px; }
+  .tv-now-playing__controls { margin-top: 14px; }
+  .tv-now-playing__footer { bottom: 22px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tv-app--now-playing * { scroll-behavior: auto !important; }
+}
+
+@media (forced-colors: active) {
+  .tv-now-playing__qr,
+  .tv-now-playing__controls button { border: 1px solid CanvasText; }
+}
