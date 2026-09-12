@@ -1,6 +1,6 @@
 # Home Music
 
-Servidor pessoal de música para transformar uma pasta local em uma biblioteca de streaming acessível pelo navegador, celular, PWA e clientes OpenSubsonic compatíveis.
+Servidor pessoal de música para transformar uma pasta local em uma biblioteca de streaming acessível pelo navegador, celular, PWA, Android TV/boxes e clientes OpenSubsonic compatíveis.
 
 O Home Music usa **React + TypeScript + Vite** no frontend e **Fastify + TypeScript + SQLite** no backend. Em produção, um único processo Fastify serve API, frontend compilado, capas, streaming de áudio e o adapter OpenSubsonic.
 
@@ -11,6 +11,7 @@ O Home Music usa **React + TypeScript + Vite** no frontend e **Fastify + TypeScr
 - biblioteca local com scanner incremental, busca, pastas, artistas, álbuns, favoritos e playlists;
 - player com fila, shuffle/repeat, ReplayGain, streaming HTTP Range, Media Session e retomada persistida;
 - PWA com shell offline, downloads isolados por usuário, playlists/pastas offline deduplicadas e cold start manifest-first;
+- Home Music TV com APK Android, GeckoView embarcado, layout 16:9 dedicado, D-pad/OK e compatibilidade em validação no BTV 11;
 - múltiplas contas com papéis `admin`/`user`, sessões, troca de senha e portabilidade dos dados pessoais;
 - Administração para biblioteca, metadata, integridade, lixeira/quarentena, importação, usuários e Assistente da Biblioteca;
 - Assistente da Biblioteca com MusicBrainz, Cover Art Archive, LRCLIB, normalização assistida, revisão individual/em lote e automação opt-in;
@@ -27,7 +28,7 @@ O Home Music usa **React + TypeScript + Vite** no frontend e **Fastify + TypeScr
 ## Arquitetura
 
 ```text
-Browser / PWA / cliente OpenSubsonic
+Browser / PWA / Android TV / cliente OpenSubsonic
       |
       v
 React / Vite (DEV) ou /rest/*
@@ -40,7 +41,7 @@ Fastify
   +----------> MUSIC_DIR
 ```
 
-Em produção, o frontend compilado é servido pelo próprio Fastify. OpenSubsonic, o Assistente e o modo offline reutilizam as mesmas autoridades de biblioteca e dados; não existe um segundo catálogo canônico. Mais detalhes: [`docs/architecture.md`](docs/architecture.md).
+Em produção, o frontend compilado é servido pelo próprio Fastify. OpenSubsonic, o Assistente, o modo offline e o cliente TV reutilizam as mesmas autoridades de biblioteca e dados; não existe um segundo catálogo canônico. Mais detalhes: [`docs/architecture.md`](docs/architecture.md).
 
 ## Requisitos
 
@@ -224,6 +225,7 @@ Comece por:
 - [`docs/architecture.md`](docs/architecture.md) — arquitetura vigente;
 - [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) — setup e fluxo de engenharia;
 - [`docs/PRODUCTION.md`](docs/PRODUCTION.md) — operação da instalação real;
+- [`docs/android-tv.md`](docs/android-tv.md) — Home Music TV, BTV 11, instalação e navegação por controle;
 - [`docs/library-assistant.md`](docs/library-assistant.md) — Assistente da Biblioteca;
 - [`docs/lyrics.md`](docs/lyrics.md) — resolução de lyrics, LRCLIB e Whisper local;
 - [`docs/pwa.md`](docs/pwa.md) e [`docs/offline-downloads.md`](docs/offline-downloads.md) — PWA/offline;
