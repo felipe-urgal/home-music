@@ -15,8 +15,9 @@ import {
   SkipForward,
   Volume2
 } from 'lucide-react';
+import { useCrossfadeVisualState } from '../crossfade-visual';
 import { LyricsPanel } from './LyricsPanel';
-import { NowPlayingVinyl } from './NowPlayingVinyl';
+import { NowPlayingCrossfadeIdentity, NowPlayingCrossfadeVinyl } from './NowPlayingCrossfade';
 
 function formatTime(value: number) {
   if (!Number.isFinite(value) || value < 0) return '0:00';
@@ -81,6 +82,7 @@ export function DesktopNowPlayingScreen({
   onAddToPlaylist
 }: DesktopNowPlayingScreenProps) {
   const [playlistOpen, setPlaylistOpen] = useState(false);
+  const crossfadeVisual = useCrossfadeVisualState();
   const progress = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
   const repeatLabel = repeatMode === 'one'
     ? 'Repetir uma'
@@ -117,13 +119,20 @@ export function DesktopNowPlayingScreen({
 
       <div className="desktop-now-playing-screen__stage">
         <div className="desktop-now-playing-screen__art">
-          <NowPlayingVinyl track={current} playing={playing} />
+          <NowPlayingCrossfadeVinyl
+            current={current}
+            crossfade={crossfadeVisual}
+            playing={playing}
+          />
         </div>
 
         <div className="desktop-now-playing-screen__content">
           <div className="desktop-now-playing-screen__heading">
-            <h1 id="desktop-now-playing-title">{current.title}</h1>
-            <p>{current.artist || 'Artista desconhecido'}</p>
+            <NowPlayingCrossfadeIdentity
+              current={current}
+              crossfade={crossfadeVisual}
+              titleId="desktop-now-playing-title"
+            />
           </div>
 
           <div className="desktop-now-playing-screen__actions" aria-label="Ações da faixa">
