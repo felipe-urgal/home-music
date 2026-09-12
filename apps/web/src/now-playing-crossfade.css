@@ -1,0 +1,98 @@
+.now-playing-transition-art {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  place-items: center;
+}
+
+.now-playing-transition-art__layer {
+  width: 100%;
+  min-width: 0;
+  grid-area: 1 / 1;
+  display: grid;
+  place-items: center;
+}
+
+.now-playing-transition-copy {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  overflow: hidden;
+}
+
+.now-playing-transition-copy__layer {
+  min-width: 0;
+  grid-area: 1 / 1;
+}
+
+.now-playing-transition-art__layer--outgoing.is-crossfading {
+  animation: now-playing-crossfade-art-out var(--now-playing-crossfade-duration, 1s) linear var(--now-playing-crossfade-delay, 0s) both;
+}
+
+.now-playing-transition-art__layer--incoming {
+  animation: now-playing-crossfade-art-in var(--now-playing-crossfade-duration, 1s) linear var(--now-playing-crossfade-delay, 0s) both;
+}
+
+.now-playing-transition-copy__layer--outgoing.is-crossfading {
+  animation: now-playing-crossfade-copy-out var(--now-playing-crossfade-duration, 1s) linear var(--now-playing-crossfade-delay, 0s) both;
+}
+
+.now-playing-transition-copy__layer--incoming {
+  animation: now-playing-crossfade-copy-in var(--now-playing-crossfade-duration, 1s) linear var(--now-playing-crossfade-delay, 0s) both;
+}
+
+/* Remove somente a sombra externa do disco; os detalhes internos continuam dando leitura ao vinil. */
+#root .now-playing-vinyl__disc {
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.1),
+    inset 0 0 34px rgba(255, 255, 255, 0.04);
+}
+
+#root .desktop-now-playing-screen__art .now-playing-vinyl {
+  filter: none;
+}
+
+@keyframes now-playing-crossfade-art-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes now-playing-crossfade-art-in {
+  from {
+    opacity: 0;
+    transform: scale(0.965);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes now-playing-crossfade-copy-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes now-playing-crossfade-copy-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .now-playing-transition-art__layer,
+  .now-playing-transition-copy__layer {
+    transform: none !important;
+  }
+}
