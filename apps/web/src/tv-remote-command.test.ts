@@ -1,6 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { TvRemoteCommand } from '@home-music/shared';
+import type { TvRemoteCommand } from '@home-music/shared/tv-remote';
 import { applyTvRemoteCommand } from './tv-remote-command';
+
+function controls() {
+  return {
+    togglePlay: vi.fn(),
+    previous: vi.fn(),
+    next: vi.fn(),
+    seekBy: vi.fn(),
+    playTrack: vi.fn()
+  };
+}
 
 describe('applyTvRemoteCommand', () => {
   it.each([
@@ -8,32 +18,36 @@ describe('applyTvRemoteCommand', () => {
     [{ type: 'previous' } as TvRemoteCommand, 'previous'],
     [{ type: 'next' } as TvRemoteCommand, 'next']
   ] as const)('aplica %o no controle canônico', (command, expected) => {
-    const controls = {
-      togglePlay: vi.fn(),
-      previous: vi.fn(),
-      next: vi.fn(),
-      seekBy: vi.fn()
-    };
+    const playerControls = controls();
 
-    applyTvRemoteCommand(command, controls);
+    applyTvRemoteCommand(command, playerControls);
 
-    expect(controls[expected]).toHaveBeenCalledTimes(1);
-    expect(controls.seekBy).not.toHaveBeenCalled();
+    expect(playerControls[expected]).toHaveBeenCalledTimes(1);
+    expect(playerControls.seekBy).not.toHaveBeenCalled();
+    expect(playerControls.playTrack).not.toHaveBeenCalled();
   });
 
   it.each([-10, 10] as const)('aplica seek de %ss sem inventar outro comando', deltaSeconds => {
-    const controls = {
-      togglePlay: vi.fn(),
-      previous: vi.fn(),
-      next: vi.fn(),
-      seekBy: vi.fn()
-    };
+    const playerControls = controls();
 
-    applyTvRemoteCommand({ type: 'seek', deltaSeconds }, controls);
+    applyTvRemoteCommand({ type: 'seek', deltaSeconds }, playerControls);
 
-    expect(controls.seekBy).toHaveBeenCalledWith(deltaSeconds);
-    expect(controls.togglePlay).not.toHaveBeenCalled();
-    expect(controls.previous).not.toHaveBeenCalled();
-    expect(controls.next).not.toHaveBeenCalled();
+    expect(playerControls.seekBy).toHaveBeenCalledWith(deltaSeconds);
+    expect(playerControls.togglePlay).not.toHaveBeenCalled();
+    expect(playerControls.previous).not.toHaveBeenCalled();
+    expect(playerControls.next).not.toHaveBeenCalled();
+    expect(playerControls.playTrack).not.toHaveBeenCalled();
+  });
+
+  it('encaminha somente o id ao escolher uma música', () => {
+    const playerControls = controls();
+
+    applyTvRemoteCommand({ type: 'play-track', trackId: 'track-42' }, playerControls);
+
+    expect(playerControls.playTrack).toHaveBeenCalledWith('track-42');
+    expect(playerControls.togglePlay).not.toHaveBeenCalled();
+    expect(playerControls.previous).not.toHaveBeenCalled();
+    expect(playerControls.next).not.toHaveBeenCalled();
+    expect(playerControls.seekBy).not.toHaveBeenCalled();
   });
 });
