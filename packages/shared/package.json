@@ -25,6 +25,10 @@
     "./library-assistant": {
       "types": "./src/library-assistant.ts",
       "default": "./dist/library-assistant.js"
+    },
+    "./tv-remote": {
+      "types": "./src/tv-remote.ts",
+      "default": "./dist/tv-remote.js"
     }
   },
   "scripts": {
