@@ -10,7 +10,11 @@ import {
   writeCrossfadeSeconds,
   type CrossfadeDeck
 } from './crossfade';
-import { clearCrossfadeVisualState, setCrossfadeVisualState } from './crossfade-visual';
+import {
+  clearCrossfadeVisualState,
+  setCrossfadeVisualState,
+  syncCrossfadeVisualElapsed
+} from './crossfade-visual';
 import { offlineAudioUrl } from './offline-downloads';
 import { resolveOutputVolume } from './player-state';
 import {
@@ -244,6 +248,7 @@ export function useCrossfadeAudioPlayer(
             0,
             Math.min(1, incomingAudio.currentTime / candidate.durationSeconds)
           );
+          syncCrossfadeVisualElapsed(attempt, incomingAudio.currentTime);
           const outputVolume = outputVolumeRef.current;
           const angle = progress * Math.PI * 0.5;
           activeAudio.volume = outputVolume * Math.cos(angle);
