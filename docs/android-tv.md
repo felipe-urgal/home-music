@@ -112,13 +112,13 @@ Essa abordagem evita depender do comportamento de `input[type=range]` do Gecko/f
 
 No desktop/mobile a preferência de crossfade continua oferecendo o seletor completo de 0 a 30 segundos.
 
-No modo TV, Minha conta substitui o `<select>` por botões grandes com presets simples:
+No modo TV, Minha conta substitui o `<select>` por quatro botões grandes e previsíveis:
 
 ```text
-Desligado | 3 s | 5 s | 8 s | 12 s
+Desligado | 10 s | 20 s | 30 s
 ```
 
-Se o dispositivo já tiver um valor salvo fora desses presets, o valor atual também é apresentado para não alterar silenciosamente a preferência. A seleção continua persistida pela mesma autoridade de preferências de reprodução existente.
+A seleção continua persistida pela mesma autoridade de preferências de reprodução existente. Durante a transição, o player inferior acompanha o mesmo progresso do crossfade de áudio: a **capa atual perde opacidade enquanto a próxima aparece**, e **título/artista atuais fazem fade-out enquanto os dados da próxima faixa fazem fade-in**. O objetivo é evitar uma troca visual brusca no fim do crossfade.
 
 ## Minha conta em mobile e TV
 
@@ -210,6 +210,8 @@ android-tv/app/build/outputs/apk/debug/app-debug.apk
 
 O workflow **Android TV** executa `assembleDebug` e `lintDebug` e publica `home-music-tv-debug-apk` como artifact. Alterações exclusivamente no frontend TV são validadas pelo CI web e não exigem gerar outro APK.
 
+O CI web também possui um **TV regression gate** dedicado aos controles e à apresentação do crossfade antes do quality gate completo. Isso faz regressões de seek, volume, presets e transição visual falharem cedo no PR.
+
 ## Instalação de teste no BTV
 
 1. baixe o artifact mais recente do workflow Android TV quando houver alteração no APK;
@@ -248,4 +250,4 @@ O keystore não deve ser commitado. Ele precisa de backup seguro porque perder a
 
 ## Validação restante
 
-A issue #392 continua sendo a fonte de verdade para testes no hardware real. Após cada deploy do modo TV, devem ser verificados foco e retorno entre zonas, Biblioteca, Busca, Playlists, seek de 10 segundos, volume, crossfade, login, overscan/escala e comportamento do launcher.
+A issue #392 continua sendo a fonte de verdade para testes no hardware real. Após cada deploy do modo TV, devem ser verificados foco e retorno entre zonas, Biblioteca, Busca, Playlists, seek de 10 segundos, volume, presets de crossfade, transição visual de capa/título/artista, login, overscan/escala e comportamento do launcher.
