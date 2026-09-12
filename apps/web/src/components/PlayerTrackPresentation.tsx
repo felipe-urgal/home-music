@@ -10,8 +10,8 @@ import {
   Wifi
 } from 'lucide-react';
 import type { Playlist, Track } from '@home-music/shared';
-import { playerArtworkTrack } from '../player-presentation';
-import { NowPlayingVinyl } from './NowPlayingVinyl';
+import { useCrossfadeVisualState } from '../crossfade-visual';
+import { NowPlayingCrossfadeIdentity, NowPlayingCrossfadeVinyl } from './NowPlayingCrossfade';
 
 type PlayerTrackPresentationProps = {
   current: Track;
@@ -45,6 +45,7 @@ export function PlayerTrackPresentation({
   onExitOffline
 }: PlayerTrackPresentationProps) {
   const [showPlaylistPicker, setShowPlaylistPicker] = useState(false);
+  const crossfadeVisual = useCrossfadeVisualState();
   const offlineActionLabel = downloading
     ? 'Baixando para uso offline'
     : isDownloaded
@@ -76,14 +77,16 @@ export function PlayerTrackPresentation({
       </header>
 
       <div className="hero-art">
-        <NowPlayingVinyl track={playerArtworkTrack(current, offlineMode)} playing={playing} />
+        <NowPlayingCrossfadeVinyl
+          current={current}
+          crossfade={crossfadeVisual}
+          playing={playing}
+          offlineMode={offlineMode}
+        />
       </div>
 
       <div className="track-heading player-track-heading">
-        <div>
-          <h1>{current.title}</h1>
-          <p>{current.artist || 'Artista desconhecido'}</p>
-        </div>
+        <NowPlayingCrossfadeIdentity current={current} crossfade={crossfadeVisual} />
       </div>
 
       {!offlineMode && (
