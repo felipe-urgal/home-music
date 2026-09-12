@@ -9,6 +9,8 @@ export type CrossfadeVisualState = {
   elapsedSeconds: number;
 };
 
+const MIN_VISUAL_FRAME_SECONDS = 1 / 30;
+
 let crossfadeVisualState: CrossfadeVisualState | null = null;
 const listeners = new Set<() => void>();
 
@@ -18,6 +20,22 @@ function emit() {
 
 export function setCrossfadeVisualState(nextState: CrossfadeVisualState) {
   crossfadeVisualState = nextState;
+  emit();
+}
+
+export function syncCrossfadeVisualElapsed(attempt: number, elapsedSeconds: number) {
+  if (!crossfadeVisualState || crossfadeVisualState.attempt !== attempt) return;
+  if (!Number.isFinite(elapsedSeconds)) return;
+
+  const duration = Math.max(0, crossfadeVisualState.durationSeconds);
+  const nextElapsed = Math.max(0, Math.min(duration, elapsedSeconds));
+  const previousElapsed = crossfadeVisualState.elapsedSeconds;
+  if (nextElapsed < duration && Math.abs(nextElapsed - previousElapsed) < MIN_VISUAL_FRAME_SECONDS) return;
+
+  crossfadeVisualState = {
+    ...crossfadeVisualState,
+    elapsedSeconds: nextElapsed
+  };
   emit();
 }
 
