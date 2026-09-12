@@ -53,18 +53,12 @@ export function NowPlayingCrossfadeVinyl({
       data-crossfading={active ? 'true' : 'false'}
       data-crossfade-incoming-title={active?.incomingTrack.title}
     >
-      <div className={`now-playing-transition-art__layer now-playing-transition-art__layer--outgoing ${active ? 'is-crossfading' : ''}`}>
-        <NowPlayingVinyl track={playerArtworkTrack(current, offlineMode)} playing={playing} />
-      </div>
-      {active && (
-        <div
-          key={`${active.attempt}:${active.incomingTrack.id}`}
-          className="now-playing-transition-art__layer now-playing-transition-art__layer--incoming"
-          aria-hidden="true"
-        >
-          <NowPlayingVinyl track={playerArtworkTrack(active.incomingTrack, offlineMode)} playing={playing} />
-        </div>
-      )}
+      <NowPlayingVinyl
+        track={playerArtworkTrack(current, offlineMode)}
+        playing={playing}
+        incomingTrack={active ? playerArtworkTrack(active.incomingTrack, offlineMode) : undefined}
+        crossfadeAttempt={active?.attempt}
+      />
     </div>
   );
 }
