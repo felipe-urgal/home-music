@@ -84,6 +84,8 @@ test('TV mostra o now playing aprovado e celular autenticado controla a reproduÃ
       await expect(tvPlay).toHaveAttribute('aria-label', 'Pausar');
       await expect(phonePlay).toHaveAttribute('aria-label', 'Pausar', { timeout: 5_000 });
     }
+    await expect.poll(async () => page.evaluate(() => Array.from(document.querySelectorAll('audio'))
+      .some(audio => !audio.paused && !audio.ended && audio.currentTime > 0)), { timeout: 5_000 }).toBe(true);
 
     const title = page.locator('.tv-now-playing__title');
     const beforeTitle = await title.textContent();
