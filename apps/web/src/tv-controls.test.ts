@@ -20,9 +20,9 @@ describe('tv controls', () => {
     expect(stepTvVolume(0.95, 0.1)).toBe(1);
   });
 
-  it('oferece presets simples de crossfade sem perder um valor já salvo', () => {
-    expect(TV_CROSSFADE_PRESETS).toEqual([0, 3, 5, 8, 12]);
-    expect(tvCrossfadeOptions(7)).toEqual([0, 3, 5, 7, 8, 12]);
-    expect(tvCrossfadeOptions(5)).toEqual([0, 3, 5, 8, 12]);
+  it('oferece somente os quatro presets de crossfade pensados para a TV', () => {
+    expect(TV_CROSSFADE_PRESETS).toEqual([0, 10, 20, 30]);
+    expect(tvCrossfadeOptions(7)).toEqual([0, 10, 20, 30]);
+    expect(tvCrossfadeOptions(20)).toEqual([0, 10, 20, 30]);
   });
 });
