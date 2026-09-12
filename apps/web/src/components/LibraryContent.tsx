@@ -63,13 +63,24 @@ export function LibraryContent({
 
           {pagedFolders.length > 0 && (
             <>
-              <div className={`section-heading ${!folderPath ? 'section-heading--folders-root' : ''}`}><span>Pastas</span><small>{visibleFolders.length}</small></div>
-              <div className="group-list">
+              <div className={`section-heading ${!folderPath ? 'section-heading--folders-root' : ''}`}>
+                <span>{folderPath ? 'Subpastas' : 'Pastas'}</span>
+                <small>{visibleFolders.length}</small>
+              </div>
+              <div className="folder-visual-grid">
                 {pagedFolders.map(folder => (
-                  <button className="group-item" key={folder.path} onClick={() => enterFolder(folder.path)}>
+                  <button
+                    className="folder-visual-card"
+                    key={folder.path}
+                    type="button"
+                    aria-label={`Abrir ${folder.name}, ${folder.matchingTrackCount} músicas`}
+                    onClick={() => enterFolder(folder.path)}
+                  >
                     <Artwork track={folder.artwork} />
-                    <span className="group-item__text"><strong>{folder.name}</strong><small>{folder.matchingTrackCount} músicas</small></span>
-                    <ChevronRight />
+                    <span className="folder-visual-card__text">
+                      <strong>{folder.name}</strong>
+                      <small>{folder.matchingTrackCount} músicas</small>
+                    </span>
                   </button>
                 ))}
               </div>
