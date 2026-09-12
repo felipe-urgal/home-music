@@ -1,0 +1,155 @@
+html[data-tv-mode="true"] .login-shell {
+  min-height: 100vh;
+  padding: clamp(30px, 5vh, 56px) clamp(46px, 8vw, 130px);
+  background:
+    radial-gradient(circle at 24% 25%, rgba(35, 126, 230, .2), transparent 30rem),
+    radial-gradient(circle at 78% 4%, rgba(34, 72, 132, .14), transparent 34rem),
+    linear-gradient(135deg, #06101a 0%, #02070c 55%, #020509 100%);
+}
+
+html[data-tv-mode="true"] .login-card:not(.login-card--status) {
+  width: min(1060px, 86vw);
+  max-width: none;
+  min-height: min(610px, 78vh);
+  display: grid;
+  grid-template-columns: minmax(0, .8fr) minmax(360px, 1fr);
+  grid-template-rows: auto 1fr auto;
+  column-gap: clamp(46px, 6vw, 92px);
+  row-gap: 20px;
+  align-items: start;
+  padding: clamp(36px, 4.6vw, 70px);
+  border-radius: 24px;
+  border-color: rgba(76, 157, 239, .28);
+  background:
+    radial-gradient(circle at 18% 10%, rgba(37, 132, 237, .11), transparent 24rem),
+    linear-gradient(145deg, rgba(10, 20, 31, .99), rgba(5, 11, 18, .995));
+}
+
+html[data-tv-mode="true"] .login-brand {
+  grid-column: 1;
+  grid-row: 1;
+  gap: 16px;
+}
+
+html[data-tv-mode="true"] .login-brand__icon {
+  width: clamp(58px, 4.8vw, 76px);
+  height: clamp(58px, 4.8vw, 76px);
+  border-radius: 20px;
+}
+
+html[data-tv-mode="true"] .login-brand span {
+  font-size: clamp(23px, 2vw, 32px);
+}
+
+html[data-tv-mode="true"] .login-brand small {
+  font-size: clamp(13px, 1vw, 16px);
+}
+
+html[data-tv-mode="true"] .login-heading {
+  grid-column: 1;
+  grid-row: 2;
+  align-self: center;
+  margin: 0;
+}
+
+html[data-tv-mode="true"] .login-heading h1 {
+  font-size: clamp(34px, 3.6vw, 56px);
+}
+
+html[data-tv-mode="true"] .login-heading p {
+  max-width: 390px;
+  margin-top: 14px;
+  font-size: clamp(15px, 1.15vw, 18px);
+  line-height: 1.6;
+}
+
+html[data-tv-mode="true"] .login-form {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  gap: clamp(18px, 2.1vh, 24px);
+}
+
+html[data-tv-mode="true"] .login-field {
+  gap: 10px;
+  font-size: clamp(13px, 1vw, 16px);
+}
+
+html[data-tv-mode="true"] .login-input-shell {
+  height: clamp(58px, 7vh, 72px);
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  gap: 14px;
+  padding: 0 18px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #111c28, #0c1620);
+}
+
+html[data-tv-mode="true"] .login-form input {
+  font-size: clamp(17px, 1.35vw, 21px);
+}
+
+html[data-tv-mode="true"] .login-password-toggle {
+  width: 44px;
+  height: 44px;
+}
+
+html[data-tv-mode="true"] .login-submit {
+  min-height: clamp(58px, 7vh, 72px);
+  border-radius: 14px;
+  font-size: clamp(17px, 1.35vw, 21px);
+}
+
+html[data-tv-mode="true"] .login-save-password {
+  min-height: 54px;
+  align-items: center;
+}
+
+html[data-tv-mode="true"] .login-footnote {
+  grid-column: 2;
+  grid-row: 3;
+  margin: 0;
+  justify-self: center;
+  color: #71839a;
+}
+
+html[data-tv-mode="true"] .login-card--status {
+  width: min(720px, 68vw);
+  max-width: none;
+  padding: clamp(38px, 5vw, 70px);
+  border-radius: 24px;
+}
+
+html[data-tv-mode="true"] .login-card--status h1 {
+  font-size: clamp(28px, 2.7vw, 42px);
+}
+
+html[data-tv-mode="true"] .login-card--status p {
+  max-width: 580px;
+  font-size: clamp(14px, 1.2vw, 18px);
+}
+
+html[data-tv-mode="true"] .login-card button:focus-visible,
+html[data-tv-mode="true"] .login-card input:focus-visible,
+html[data-tv-mode="true"] .login-input-shell:focus-within {
+  outline: 3px solid #5ab0ff;
+  outline-offset: 3px;
+  box-shadow: 0 0 0 6px rgba(52, 141, 236, .18), 0 14px 36px rgba(25, 106, 194, .24);
+}
+
+@media (max-width: 1180px), (max-height: 720px) {
+  html[data-tv-mode="true"] .login-shell {
+    padding: 28px 46px;
+  }
+
+  html[data-tv-mode="true"] .login-card:not(.login-card--status) {
+    width: min(920px, 90vw);
+    min-height: 0;
+    grid-template-columns: minmax(0, .72fr) minmax(330px, 1fr);
+    column-gap: 38px;
+    padding: 34px 40px;
+  }
+
+  html[data-tv-mode="true"] .login-heading h1 {
+    font-size: 38px;
+  }
+}
