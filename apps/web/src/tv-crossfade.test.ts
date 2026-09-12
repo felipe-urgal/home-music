@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Track } from '@home-music/shared';
+import { resolveManualCrossfadeCandidate } from './crossfade';
 import type { CrossfadeVisualState } from './crossfade-visual';
 import { resolveTvCrossfadePresentation } from './tv-crossfade';
 
@@ -44,5 +45,39 @@ describe('tv crossfade presentation', () => {
       outgoingOpacity: 1,
       incomingOpacity: 0
     });
+  });
+
+  it('libera troca manual com crossfade apenas enquanto a faixa atual está tocando em foreground', () => {
+    expect(resolveManualCrossfadeCandidate({
+      currentTrackId: 'a',
+      targetTrackId: 'b',
+      durationSeconds: 3,
+      playing: true,
+      visibilityState: 'visible'
+    })).toEqual({ trackId: 'b', durationSeconds: 3 });
+
+    expect(resolveManualCrossfadeCandidate({
+      currentTrackId: 'a',
+      targetTrackId: 'b',
+      durationSeconds: 3,
+      playing: false,
+      visibilityState: 'visible'
+    })).toBeNull();
+
+    expect(resolveManualCrossfadeCandidate({
+      currentTrackId: 'a',
+      targetTrackId: 'b',
+      durationSeconds: 0,
+      playing: true,
+      visibilityState: 'visible'
+    })).toBeNull();
+
+    expect(resolveManualCrossfadeCandidate({
+      currentTrackId: 'a',
+      targetTrackId: 'a',
+      durationSeconds: 3,
+      playing: true,
+      visibilityState: 'visible'
+    })).toBeNull();
   });
 });
