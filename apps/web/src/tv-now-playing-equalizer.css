@@ -1,0 +1,27 @@
+@keyframes tv-now-playing-audio-line-a {
+  0%, 100% { transform: scaleY(.62); }
+  50% { transform: scaleY(1); }
+}
+
+@keyframes tv-now-playing-audio-line-b {
+  0%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(.58); }
+}
+
+.tv-now-playing__footer[data-playing="true"] svg path {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: tv-now-playing-audio-line-a .72s ease-in-out infinite;
+}
+
+.tv-now-playing__footer[data-playing="true"] svg path:nth-child(even) {
+  animation-name: tv-now-playing-audio-line-b;
+  animation-duration: .9s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tv-now-playing__footer[data-playing="true"] svg path {
+    animation: none;
+    transform: none;
+  }
+}
