@@ -154,13 +154,15 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
   const tvMode = isTvMode();
   const tvRemote = useTvRemoteSession({
     current,
+    tracks: library.tracks,
     playing: player.playing,
     currentTime: player.currentTime,
     duration: player.duration,
     onTogglePlay: player.togglePlay,
     onPrevious: player.previous,
     onNext: player.next,
-    onSeek: player.seek
+    onSeek: player.seek,
+    onPlayTrack: player.playTrack
   });
 
   const audioDecks = (
