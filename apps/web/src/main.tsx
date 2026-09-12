@@ -5,6 +5,7 @@ import { RequiredPasswordGate } from './components/RequiredPasswordGate';
 import { installPlaybackHistoryTracking } from './playback-history';
 import { registerServiceWorker } from './register-service-worker';
 import './tv-mode';
+import './tv-focus-recovery';
 import './styles.css';
 import './features.css';
 import './artwork.css';
