@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react';
 import type { Playlist, Track } from '@home-music/shared';
 import { AudioLines, Music2, Pause, Play, Shuffle, SkipBack, SkipForward } from 'lucide-react';
+import { useCrossfadeVisualState } from '../crossfade-visual';
+import { resolveTvCrossfadePresentation } from '../tv-crossfade';
 import type { LibraryNavigation } from '../useLibraryNavigation';
 import { Artwork } from './Artwork';
 import '../tv-now-playing.css';
@@ -38,6 +40,10 @@ function trackArtist(track: Track) {
 
 export function TvExperience({ tracks, current, playing, currentTime, duration, onTogglePlay, onPrevious, onNext, onPlayTrack }: TvExperienceProps) {
   const rootRef = useRef<HTMLElement>(null);
+  const crossfade = useCrossfadeVisualState();
+  const crossfadePresentation = resolveTvCrossfadePresentation(current, crossfade);
+  const incomingTrack = crossfadePresentation.incomingTrack;
+  const crossfadeProgress = crossfadePresentation.progress ?? 0;
   const progress = duration > 0 ? Math.max(0, Math.min(100, currentTime / duration * 100)) : 0;
 
   useEffect(() => {
@@ -90,10 +96,41 @@ export function TvExperience({ tracks, current, playing, currentTime, duration, 
       </header>
 
       <section className="tv-now-playing__center" aria-live="polite">
-        <div className="tv-now-playing__art"><Artwork track={current} large /></div>
-        <h1 className="tv-now-playing__title">{current?.title || 'Nada tocando'}</h1>
-        <p className="tv-now-playing__artist">{current ? trackArtist(current) : 'Use o celular para escolher uma música'}</p>
-        <p className="tv-now-playing__album">{current?.album || ''}</p>
+        <div
+          className="tv-now-playing__identity-stack"
+          data-crossfading={incomingTrack ? 'true' : 'false'}
+          data-crossfade-progress={crossfadePresentation.progress ?? undefined}
+        >
+          <div
+            className="tv-now-playing__identity tv-now-playing__identity--outgoing"
+            style={{
+              opacity: crossfadePresentation.outgoingOpacity,
+              transform: `scale(${1 - crossfadeProgress * 0.035})`
+            }}
+          >
+            <div className="tv-now-playing__art"><Artwork track={current} large /></div>
+            <h1 className="tv-now-playing__title">{current?.title || 'Nada tocando'}</h1>
+            <p className="tv-now-playing__artist">{current ? trackArtist(current) : 'Use o celular para escolher uma música'}</p>
+            <p className="tv-now-playing__album">{current?.album || ''}</p>
+          </div>
+
+          {incomingTrack && (
+            <div
+              className="tv-now-playing__identity tv-now-playing__identity--incoming"
+              aria-hidden="true"
+              style={{
+                opacity: crossfadePresentation.incomingOpacity,
+                transform: `scale(${0.965 + crossfadeProgress * 0.035})`
+              }}
+            >
+              <div className="tv-now-playing__art"><Artwork track={incomingTrack} large /></div>
+              <div className="tv-now-playing__title">{incomingTrack.title}</div>
+              <p className="tv-now-playing__artist">{trackArtist(incomingTrack)}</p>
+              <p className="tv-now-playing__album">{incomingTrack.album || ''}</p>
+            </div>
+          )}
+        </div>
+
         <div className="tv-now-playing__progress" role="progressbar" aria-label={`${formatTime(currentTime)} de ${formatTime(duration)}`} aria-valuemin={0} aria-valuemax={Math.max(0, Math.round(duration))} aria-valuenow={Math.max(0, Math.round(currentTime))}>
           <span><i style={{ width: `${progress}%` }} /></span><div><small>{formatTime(currentTime)}</small><small>{formatTime(duration)}</small></div>
         </div>
