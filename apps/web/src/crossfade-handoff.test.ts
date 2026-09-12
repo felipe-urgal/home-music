@@ -41,4 +41,31 @@ describe('crossfade handoff', () => {
     expect(completionGuard).toBeGreaterThanOrEqual(0);
     expect(canonicalPause).toBeGreaterThan(completionGuard);
   });
+
+  it('usa a rota offline no deck de entrada quando o player está em offlineMode', () => {
+    const crossfade = source('useCrossfadeAudioPlayer.ts');
+
+    expect(crossfade).toContain("import { offlineAudioUrl } from './offline-downloads';");
+    expect(crossfade).toContain('const offlineMode = Boolean(options.offlineMode);');
+    expect(crossfade).toContain('? offlineAudioUrl(nextTrack.id)');
+  });
+
+  it('mantém Apple mobile WebKit fora do fluxo de dois decks', () => {
+    const crossfade = source('useCrossfadeAudioPlayer.ts');
+    const platformGuard = crossfade.indexOf('if (isAppleMobileWebKit(navigator)) return;');
+    const candidate = crossfade.indexOf('const candidate = resolveCrossfadeCandidate({', platformGuard);
+
+    expect(platformGuard).toBeGreaterThanOrEqual(0);
+    expect(candidate).toBeGreaterThan(platformGuard);
+  });
+
+  it('monta os mesmos dois decks no OfflineApp sem criar outro player canônico', () => {
+    const offlineApp = source('OfflineApp.tsx');
+
+    expect(offlineApp).toContain('const player = useCrossfadeAudioPlayer(');
+    expect(offlineApp).toContain('{ offlineMode: true }');
+    expect(offlineApp).toContain('ref={player.deckARef}');
+    expect(offlineApp).toContain('ref={player.deckBRef}');
+    expect(offlineApp).not.toContain('const player = useAudioPlayer(');
+  });
 });
