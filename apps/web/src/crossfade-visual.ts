@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import type { Track } from '@home-music/shared';
+import { syncTvCrossfadeCss } from './tv-crossfade';
 
 export type CrossfadeVisualState = {
   attempt: number;
@@ -14,7 +15,13 @@ const MIN_VISUAL_FRAME_SECONDS = 1 / 30;
 let crossfadeVisualState: CrossfadeVisualState | null = null;
 const listeners = new Set<() => void>();
 
+function syncTvCss() {
+  if (typeof document === 'undefined') return;
+  syncTvCrossfadeCss(document.documentElement, crossfadeVisualState);
+}
+
 function emit() {
+  syncTvCss();
   for (const listener of listeners) listener();
 }
 
