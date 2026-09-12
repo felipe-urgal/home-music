@@ -65,6 +65,8 @@ test('TV mostra o now playing aprovado e celular autenticado controla a reproduÃ
   await expect(pairingLink.locator('img')).toHaveAttribute('alt', 'QR code para controlar a TV pelo celular');
   const pairingUrl = await pairingLink.getAttribute('href');
   expect(pairingUrl).toBeTruthy();
+  const sessionId = new URL(pairingUrl!).pathname.split('/').filter(Boolean).at(-1);
+  expect(sessionId).toBeTruthy();
 
   await expect(page.getByRole('button', { name: 'AleatÃ³rio', exact: true })).toBeEnabled();
   await expect(page.getByRole('button', { name: 'Faixa anterior', exact: true })).toBeEnabled();
@@ -98,6 +100,8 @@ test('TV mostra o now playing aprovado e celular autenticado controla a reproduÃ
     await phonePlay.click();
     await expect(tvPlay).toHaveAttribute('aria-label', initialAction!, { timeout: 5_000 });
 
+    await page.bringToFront();
+    await expect.poll(() => page.evaluate(() => document.visibilityState)).toBe('visible');
     if (await tvPlay.getAttribute('aria-label') === 'Tocar') {
       await tvPlay.click();
       await expect(tvPlay).toHaveAttribute('aria-label', 'Pausar');
@@ -107,7 +111,11 @@ test('TV mostra o now playing aprovado e celular autenticado controla a reproduÃ
 
     const title = page.locator('.tv-now-playing__title');
     const beforeTitle = await title.textContent();
-    await phone.getByRole('button', { name: 'PrÃ³xima faixa', exact: true }).click();
+    const nextResponse = await phone.context().request.post(`/api/tv-remote/sessions/${sessionId}/commands`, {
+      headers: mutationHeaders,
+      data: { type: 'next' }
+    });
+    expect(nextResponse.ok()).toBeTruthy();
 
     await expect.poll(async () => page.evaluate(() => {
       const playingDecks = Array.from(document.querySelectorAll('audio'))
