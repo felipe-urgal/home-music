@@ -6,7 +6,6 @@ import {
   Download,
   ListMusic,
   LoaderCircle,
-  MoreHorizontal,
   Plus,
   Wifi
 } from 'lucide-react';
@@ -46,7 +45,6 @@ export function PlayerTrackPresentation({
   onExitOffline
 }: PlayerTrackPresentationProps) {
   const [showPlaylistPicker, setShowPlaylistPicker] = useState(false);
-  const [showMore, setShowMore] = useState(false);
   const offlineActionLabel = downloading
     ? 'Baixando para uso offline'
     : isDownloaded
@@ -59,11 +57,9 @@ export function PlayerTrackPresentation({
 
   useEffect(() => {
     setShowPlaylistPicker(false);
-    setShowMore(false);
   }, [current.id, queueLength]);
 
   function togglePlaylistPicker() {
-    setShowMore(false);
     setShowPlaylistPicker(value => !value);
   }
 
@@ -120,28 +116,6 @@ export function PlayerTrackPresentation({
               <span>{isDownloaded ? 'Baixado' : 'Baixar'}</span>
             </button>
           )}
-
-          <div className="player-track-actions__more-wrap">
-            <button
-              className="player-track-actions__more"
-              type="button"
-              aria-label="Mais opções"
-              aria-haspopup="menu"
-              aria-expanded={showMore}
-              onClick={() => {
-                setShowPlaylistPicker(false);
-                setShowMore(value => !value);
-              }}
-            >
-              <MoreHorizontal aria-hidden="true" />
-            </button>
-            {showMore && (
-              <div className="player-track-actions__menu" role="menu" aria-label="Mais opções da faixa">
-                <button type="button" role="menuitem" onClick={togglePlaylistPicker}><Plus aria-hidden="true" />Adicionar à playlist</button>
-                {onToggleDownload && <button type="button" role="menuitem" disabled={downloading} onClick={() => { setShowMore(false); onToggleDownload(); }}><Download aria-hidden="true" />{isDownloaded ? 'Remover download' : 'Baixar'}</button>}
-              </div>
-            )}
-          </div>
         </div>
       )}
 
