@@ -46,9 +46,11 @@ describe('App responsibility boundaries', () => {
 
   it('mantém playback offline isolado da aplicação autenticada', () => {
     const offline = source('OfflineApp.tsx');
+    const crossfade = source('useCrossfadeAudioPlayer.ts');
 
-    expect(offline).toMatch(/useAudioPlayer\(/);
+    expect(offline).toMatch(/useCrossfadeAudioPlayer\(/);
     expect(offline).toMatch(/offlineMode: true/);
+    expect(crossfade).toMatch(/const player = useAudioPlayer\(/);
     expect(offline).not.toMatch(/useLibraryData\(/);
     expect(offline).not.toMatch(/useLibraryNavigation\(/);
   });

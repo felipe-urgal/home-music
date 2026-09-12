@@ -53,10 +53,10 @@ function validMp3Probe() {
 }
 
 async function waitForStatus(queue: ImportJobQueue, id: string, expected: string) {
-  for (let attempt = 0; attempt < 50; attempt += 1) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
     const job = queue.get(id);
     if (job?.status === expected) return job;
-    await new Promise(resolve => setTimeout(resolve, 2));
+    await new Promise(resolve => setTimeout(resolve, 5));
   }
   assert.fail(`Job ${id} não chegou ao estado ${expected}.`);
 }

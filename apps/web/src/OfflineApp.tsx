@@ -6,8 +6,8 @@ import { PlayerScreen } from './components/PlayerScreen';
 import { ResponsiveState } from './components/ResponsiveState';
 import type { OfflineDownloads } from './offline-downloads';
 import './offline-mobile.css';
-import { useAudioPlayer } from './useAudioPlayer';
 import { useBackgroundPlaybackContinuity } from './useBackgroundPlaybackContinuity';
+import { useCrossfadeAudioPlayer } from './useCrossfadeAudioPlayer';
 import { useDesktopLayout } from './useDesktopLayout';
 import { useSystemVolumePreference } from './useSystemVolume';
 
@@ -22,7 +22,7 @@ export function OfflineApp({ offline, onExit }: OfflineAppProps) {
   const [screen, setScreen] = useState<OfflineScreen>('library');
   const usesSystemVolume = useSystemVolumePreference();
   const desktopLayout = useDesktopLayout();
-  const player = useAudioPlayer(
+  const player = useCrossfadeAudioPlayer(
     offline.tracks,
     screen === 'player' || desktopLayout,
     !offline.loading,
@@ -43,12 +43,26 @@ export function OfflineApp({ offline, onExit }: OfflineAppProps) {
   return (
     <main className="app-shell">
       <audio
-        ref={player.audioRef}
-        onPlay={player.audioHandlers.onPlay}
-        onPause={player.audioHandlers.onPause}
+        ref={player.deckARef}
+        preload="auto"
+        onPlay={event => player.audioHandlers.onPlay(event.currentTarget)}
+        onPlaying={event => player.audioHandlers.onPlaying(event.currentTarget)}
+        onPause={event => player.audioHandlers.onPause(event.currentTarget)}
         onTimeUpdate={event => player.audioHandlers.onTimeUpdate(event.currentTarget)}
         onLoadedMetadata={event => player.audioHandlers.onLoadedMetadata(event.currentTarget)}
-        onEnded={player.audioHandlers.onEnded}
+        onEnded={event => player.audioHandlers.onEnded(event.currentTarget)}
+        onError={event => player.audioHandlers.onError(event.currentTarget)}
+      />
+      <audio
+        ref={player.deckBRef}
+        preload="auto"
+        aria-hidden="true"
+        onPlay={event => player.audioHandlers.onPlay(event.currentTarget)}
+        onPlaying={event => player.audioHandlers.onPlaying(event.currentTarget)}
+        onPause={event => player.audioHandlers.onPause(event.currentTarget)}
+        onTimeUpdate={event => player.audioHandlers.onTimeUpdate(event.currentTarget)}
+        onLoadedMetadata={event => player.audioHandlers.onLoadedMetadata(event.currentTarget)}
+        onEnded={event => player.audioHandlers.onEnded(event.currentTarget)}
         onError={event => player.audioHandlers.onError(event.currentTarget)}
       />
 

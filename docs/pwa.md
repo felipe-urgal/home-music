@@ -38,6 +38,20 @@ Quando a plataforma oferece Background Fetch, uma transferência iniciada pode s
 
 Detalhes: [`offline-downloads.md`](offline-downloads.md).
 
+## Crossfade
+
+O crossfade é uma preferência local do dispositivo e usa dois elementos de áudio somente durante a janela de transição. `useAudioPlayer` continua sendo a autoridade canônica de fila, faixa corrente, posição e persistência; ao concluir a mistura, o deck que já está tocando é adotado pelo player canônico em vez de reiniciar a próxima faixa.
+
+Matriz corrente:
+
+- Chromium mobile/Android com a aplicação em primeiro plano: crossfade disponível quando configurado;
+- PWA instalada em Chromium/Android e online: usa a mesma composição da aplicação autenticada, portanto segue o mesmo comportamento em foreground;
+- modo offline/PWA offline em foreground: reutiliza a mesma preferência de crossfade e carrega a próxima faixa pela rota virtual `/offline-audio/<trackId>`;
+- iPhone/iPad, inclusive PWA WebKit: o crossfade permanece desativado por política de compatibilidade e a troca de faixa normal é preservada;
+- segundo plano ou tela bloqueada: qualquer mistura em andamento é cancelada e o player degrada para a troca normal de faixa. No Apple mobile, o hardening específico de continuidade continua responsável pelo handoff próximo ao fim da música.
+
+A suíte Playwright cobre o caminho real de dois decks no projeto `mobile-chromium` usando os WAVs locais do ambiente E2E. Instalação standalone real da PWA e comportamento com tela fisicamente bloqueada continuam sendo validações de plataforma/hardware; não devem ser declarados como executados sem evidência manual.
+
 ## Media Session
 
 `useAudioPlayer` continua sendo a autoridade única de playback. Media Session apenas projeta a faixa corrente para os controles do sistema.
@@ -50,9 +64,9 @@ Detalhes: [`artwork-fallback.md`](artwork-fallback.md).
 
 ## Continuidade no iOS
 
-O player possui hardening específico para Apple mobile sem criar um segundo player: preparação de handoff, recuperação limitada de falhas transitórias, proteção contra ciclos de retry e diagnóstico local opt-in para eventos de playback/lifecycle.
+O player possui hardening específico para Apple mobile sem criar um segundo player canônico: preparação de handoff, recuperação limitada de falhas transitórias, proteção contra ciclos de retry e diagnóstico local opt-in para eventos de playback/lifecycle.
 
-Helpers de background podem observar e aplicar política, mas `useAudioPlayer` permanece a única fonte de verdade.
+Helpers de background podem observar e aplicar política, mas `useAudioPlayer` permanece a única fonte de verdade. O crossfade não é iniciado em Apple mobile WebKit; essa plataforma permanece no caminho de continuidade normal.
 
 Detalhes: [`player-screen-responsibilities.md`](player-screen-responsibilities.md).
 
