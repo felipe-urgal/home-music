@@ -77,9 +77,35 @@ test('login, biblioteca e player permanecem utilizáveis', async ({ page }) => {
     await expect(queueTab).toHaveAttribute('aria-selected', 'true');
     await expect(lyricsTab).toBeVisible();
     await lyricsTab.click();
-    await expect(page.getByTestId('desktop-lyrics')).toBeVisible();
-    await expect(page.getByTestId('desktop-lyrics')).toContainText('Linha E2E um');
+    const desktopLyrics = page.getByTestId('desktop-lyrics');
+    await expect(desktopLyrics).toBeVisible();
+    await expect(desktopLyrics).toContainText('Linha E2E um');
     await expect(page.getByTestId('desktop-queue')).toHaveCount(0);
+    await page.getByRole('slider', { name: 'Progresso da música' }).fill('8.4');
+    await expect(desktopLyrics.getByText('Linha E2E quinze', { exact: true })).toHaveAttribute('aria-current', 'true');
+    const activeLineCenterOffset = () => desktopLyrics.evaluate(element => {
+      const activeLine = element.querySelector<HTMLElement>('[aria-current="true"]');
+      if (!activeLine) return Number.POSITIVE_INFINITY;
+      const containerRect = element.getBoundingClientRect();
+      const lineRect = activeLine.getBoundingClientRect();
+      return Math.abs(
+        (lineRect.top + lineRect.height / 2)
+        - (containerRect.top + containerRect.height / 2)
+      );
+    });
+    await expect.poll(activeLineCenterOffset).toBeLessThanOrEqual(3);
+
+    await desktopLyrics.hover();
+    await page.mouse.wheel(0, -180);
+    const resumeLyrics = desktopLyrics.getByRole('button', { name: 'Acompanhar reprodução' });
+    await expect(resumeLyrics).toBeVisible();
+    const pausedScrollTop = await desktopLyrics.evaluate(element => element.scrollTop);
+    await page.getByRole('slider', { name: 'Progresso da música' }).fill('9');
+    await expect.poll(() => desktopLyrics.evaluate(element => element.scrollTop)).toBe(pausedScrollTop);
+    await resumeLyrics.click();
+    await expect(resumeLyrics).toHaveCount(0);
+    await expect(desktopLyrics).toBeFocused();
+    await expect.poll(activeLineCenterOffset).toBeLessThanOrEqual(3);
     await queueTab.click();
     await expect(desktopQueue).toBeVisible();
 

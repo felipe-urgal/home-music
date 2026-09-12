@@ -15,6 +15,7 @@ import {
   Folder,
   GripVertical,
   ListMusic,
+  LocateFixed,
   MoreHorizontal,
   Music2,
   PanelLeftClose,
@@ -26,6 +27,7 @@ import { useDesktopLayout } from '../useDesktopLayout';
 import type { LibraryTab } from '../useLibraryNavigation';
 import { useTrackLyrics } from '../useTrackLyrics';
 import { Artwork } from './Artwork';
+import { useLyricsAutoFollow } from './LyricsPanel';
 
 const DESKTOP_QUEUE_PREVIEW_SIZE = 32;
 const DESKTOP_QUEUE_LOAD_THRESHOLD_PX = 120;
@@ -48,6 +50,7 @@ type DesktopShellProps = {
   activeLibraryTab?: LibraryTab;
   current?: Track | null;
   playing: boolean;
+  currentTime: number;
   libraryCount: number;
   queue: Track[];
   currentIndex: number;
@@ -101,6 +104,7 @@ export function DesktopShell({
   activeLibraryTab,
   current,
   playing,
+  currentTime,
   libraryCount,
   queue,
   currentIndex,
@@ -129,6 +133,12 @@ export function DesktopShell({
   const contextResizeStartRef = useRef<{ x: number; width: number } | null>(null);
   const desktopLayout = useDesktopLayout();
   const lyrics = useTrackLyrics(current, offlineMode || !desktopLayout);
+  const lyricsFollow = useLyricsAutoFollow<HTMLElement>(
+    lyrics,
+    currentTime,
+    contextTab === 'lyrics',
+    current?.id ?? ''
+  );
   const contextTrack = current ? artworkTrack(current, offlineMode) : null;
   const queueStart = currentIndex >= 0 ? currentIndex + 1 : 0;
   const queuePreview = queue.slice(queueStart, queueStart + queueVisibleCount);
@@ -328,9 +338,37 @@ export function DesktopShell({
         )}
 
         {contextTab === 'lyrics' && lyrics ? (
-          <section className="desktop-lyrics" aria-label="Letra da música" data-testid="desktop-lyrics">
+          <section
+            ref={lyricsFollow.scrollContainerRef}
+            className="desktop-lyrics"
+            aria-label="Letra da música"
+            data-testid="desktop-lyrics"
+            tabIndex={0}
+            onKeyDown={lyricsFollow.pauseAutoFollowOnKey}
+            onWheel={lyricsFollow.pauseAutoFollow}
+            onTouchMove={lyricsFollow.pauseAutoFollow}
+          >
+            {lyrics.synchronized && !lyricsFollow.autoFollow && (
+              <button
+                type="button"
+                className="desktop-lyrics__follow"
+                onClick={lyricsFollow.resumeAutoFollow}
+              >
+                <LocateFixed aria-hidden="true" />
+                Acompanhar reprodução
+              </button>
+            )}
             <div className={lyrics.synchronized ? 'desktop-lyrics__lines is-synchronized' : 'desktop-lyrics__lines'}>
-              {lyrics.lines.map((line, index) => <p key={`${line.time ?? 'plain'}-${index}`}>{line.text || '♪'}</p>)}
+              {lyrics.lines.map((line, index) => (
+                <p
+                  key={`${line.time ?? 'plain'}-${index}`}
+                  ref={index === lyricsFollow.activeLine ? lyricsFollow.activeLineRef : null}
+                  className={index === lyricsFollow.activeLine ? 'is-active' : ''}
+                  aria-current={index === lyricsFollow.activeLine ? 'true' : undefined}
+                >
+                  {line.text || '♪'}
+                </p>
+              ))}
             </div>
           </section>
         ) : (

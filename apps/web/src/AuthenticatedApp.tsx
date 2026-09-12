@@ -234,6 +234,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
         activeLibraryTab={screen === 'library' ? navigation.libraryTab : undefined}
         current={current}
         playing={player.playing}
+        currentTime={player.currentTime}
         libraryCount={library.tracks.length}
         queue={player.queue}
         currentIndex={player.currentIndex}
