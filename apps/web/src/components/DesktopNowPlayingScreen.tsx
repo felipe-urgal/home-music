@@ -15,6 +15,7 @@ import {
   SkipForward,
   Volume2
 } from 'lucide-react';
+import { LyricsPanel } from './LyricsPanel';
 import { NowPlayingVinyl } from './NowPlayingVinyl';
 
 function formatTime(value: number) {
@@ -213,6 +214,8 @@ export function DesktopNowPlayingScreen({
               <span>{Math.round(volume * 100)}%</span>
             </div>
           )}
+
+          <LyricsPanel track={current} currentTime={currentTime} offlineMode={false} />
         </div>
       </div>
     </section>
