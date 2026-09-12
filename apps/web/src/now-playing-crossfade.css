@@ -1,0 +1,60 @@
+.now-playing-transition-art {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  place-items: center;
+}
+
+.now-playing-transition-copy {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  overflow: hidden;
+}
+
+.now-playing-transition-copy__layer {
+  min-width: 0;
+  grid-area: 1 / 1;
+}
+
+.now-playing-vinyl__label--outgoing.is-crossfading {
+  opacity: var(--now-playing-crossfade-outgoing-opacity, 1);
+  transition: opacity 40ms linear;
+}
+
+.now-playing-vinyl__label--incoming {
+  opacity: var(--now-playing-crossfade-incoming-opacity, 0);
+  transform: scale(var(--now-playing-crossfade-incoming-scale, 0.92));
+  transition: opacity 40ms linear, transform 40ms linear;
+}
+
+.now-playing-transition-copy__layer--outgoing.is-crossfading {
+  opacity: var(--now-playing-crossfade-outgoing-opacity, 1);
+  transform: translateY(var(--now-playing-crossfade-outgoing-y, 0));
+  transition: opacity 40ms linear, transform 40ms linear;
+}
+
+.now-playing-transition-copy__layer--incoming {
+  opacity: var(--now-playing-crossfade-incoming-opacity, 0);
+  transform: translateY(var(--now-playing-crossfade-incoming-y, 8px));
+  transition: opacity 40ms linear, transform 40ms linear;
+}
+
+/* Remove somente a sombra externa do disco; os detalhes internos continuam dando leitura ao vinil. */
+#root .now-playing-vinyl__disc {
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.1),
+    inset 0 0 34px rgba(255, 255, 255, 0.04);
+}
+
+#root .desktop-now-playing-screen__art .now-playing-vinyl {
+  filter: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .now-playing-vinyl__label,
+  .now-playing-transition-copy__layer {
+    transition: none !important;
+    transform: none !important;
+  }
+}

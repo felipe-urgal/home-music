@@ -25,6 +25,7 @@ export function LibraryViewTools({
   reportError
 }: LibraryViewToolsProps) {
   const {
+    libraryTab,
     query,
     sort,
     formatFilter,
@@ -40,6 +41,9 @@ export function LibraryViewTools({
     resetViewOptions
   } = navigation;
   const run = (operation: Promise<unknown>) => void operation.catch(() => undefined);
+  const searchPlaceholder = libraryTab === 'folders'
+    ? 'Buscar em Pastas'
+    : 'Música, artista ou álbum';
 
   return (
     <section className="library-smart-view-tools" aria-label="Busca, filtros e views inteligentes">
@@ -50,7 +54,7 @@ export function LibraryViewTools({
           <input
             value={query}
             onChange={event => changeQuery(event.target.value)}
-            placeholder="Música, artista, álbum ou pasta"
+            placeholder={searchPlaceholder}
           />
         </label>
         <button

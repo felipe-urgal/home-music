@@ -5,7 +5,6 @@ import {
   ChevronDown,
   Download,
   LoaderCircle,
-  MoreHorizontal,
   Pause,
   Play,
   Plus,
@@ -16,8 +15,9 @@ import {
   SkipForward,
   Volume2
 } from 'lucide-react';
+import { useCrossfadeVisualState } from '../crossfade-visual';
 import { LyricsPanel } from './LyricsPanel';
-import { NowPlayingVinyl } from './NowPlayingVinyl';
+import { NowPlayingCrossfadeIdentity, NowPlayingCrossfadeVinyl } from './NowPlayingCrossfade';
 
 function formatTime(value: number) {
   if (!Number.isFinite(value) || value < 0) return '0:00';
@@ -82,7 +82,7 @@ export function DesktopNowPlayingScreen({
   onAddToPlaylist
 }: DesktopNowPlayingScreenProps) {
   const [playlistOpen, setPlaylistOpen] = useState(false);
-  const [moreOpen, setMoreOpen] = useState(false);
+  const crossfadeVisual = useCrossfadeVisualState();
   const progress = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
   const repeatLabel = repeatMode === 'one'
     ? 'Repetir uma'
@@ -105,13 +105,7 @@ export function DesktopNowPlayingScreen({
     : undefined;
 
   function openPlaylistPicker() {
-    setMoreOpen(false);
     setPlaylistOpen(value => !value);
-  }
-
-  function runDownloadAction() {
-    setMoreOpen(false);
-    onToggleDownload?.();
   }
 
   return (
@@ -125,13 +119,20 @@ export function DesktopNowPlayingScreen({
 
       <div className="desktop-now-playing-screen__stage">
         <div className="desktop-now-playing-screen__art">
-          <NowPlayingVinyl track={current} playing={playing} />
+          <NowPlayingCrossfadeVinyl
+            current={current}
+            crossfade={crossfadeVisual}
+            playing={playing}
+          />
         </div>
 
         <div className="desktop-now-playing-screen__content">
           <div className="desktop-now-playing-screen__heading">
-            <h1 id="desktop-now-playing-title">{current.title}</h1>
-            <p>{current.artist || 'Artista desconhecido'}</p>
+            <NowPlayingCrossfadeIdentity
+              current={current}
+              crossfade={crossfadeVisual}
+              titleId="desktop-now-playing-title"
+            />
           </div>
 
           <div className="desktop-now-playing-screen__actions" aria-label="Ações da faixa">
@@ -185,28 +186,6 @@ export function DesktopNowPlayingScreen({
                     : <Download aria-hidden="true" />}
               </button>
             )}
-
-            <div className="desktop-now-playing-screen__more">
-              <button
-                className="desktop-now-playing-screen__action-icon"
-                type="button"
-                aria-label="Mais opções"
-                aria-haspopup="menu"
-                aria-expanded={moreOpen}
-                onClick={() => {
-                  setPlaylistOpen(false);
-                  setMoreOpen(value => !value);
-                }}
-              >
-                <MoreHorizontal aria-hidden="true" />
-              </button>
-              {moreOpen && (
-                <div className="desktop-now-playing-screen__more-menu" role="menu" aria-label="Mais opções da faixa">
-                  <button type="button" role="menuitem" onClick={openPlaylistPicker}><Plus aria-hidden="true" />Adicionar à playlist</button>
-                  {onToggleDownload && <button type="button" role="menuitem" disabled={downloading} onClick={runDownloadAction}><Download aria-hidden="true" />{isDownloaded ? 'Remover download' : 'Baixar'}</button>}
-                </div>
-              )}
-            </div>
           </div>
 
           {autoplayBlocked && (

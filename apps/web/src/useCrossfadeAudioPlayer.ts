@@ -10,6 +10,11 @@ import {
   writeCrossfadeSeconds,
   type CrossfadeDeck
 } from './crossfade';
+import {
+  clearCrossfadeVisualState,
+  setCrossfadeVisualState,
+  syncCrossfadeVisualElapsed
+} from './crossfade-visual';
 import { offlineAudioUrl } from './offline-downloads';
 import { resolveOutputVolume } from './player-state';
 import {
@@ -93,6 +98,7 @@ export function useCrossfadeAudioPlayer(
     originTrackIdRef.current = null;
     startingTrackIdRef.current = null;
     incomingTrackIdRef.current = null;
+    clearCrossfadeVisualState();
 
     const activeAudio = getActiveAudio();
     const inactiveAudio = getInactiveAudio();
@@ -138,6 +144,7 @@ export function useCrossfadeAudioPlayer(
   useEffect(() => () => {
     attemptRef.current += 1;
     cancelAnimation();
+    clearCrossfadeVisualState();
     clearAudio(deckARef.current);
     clearAudio(deckBRef.current);
   }, [cancelAnimation, clearAudio]);
@@ -204,6 +211,13 @@ export function useCrossfadeAudioPlayer(
 
         startingTrackIdRef.current = null;
         incomingTrackIdRef.current = candidate.trackId;
+        setCrossfadeVisualState({
+          attempt,
+          originTrackId,
+          incomingTrack: nextTrack,
+          durationSeconds: candidate.durationSeconds,
+          elapsedSeconds: Math.max(0, Math.min(candidate.durationSeconds, incomingAudio.currentTime))
+        });
 
         const animate = () => {
           if (attemptRef.current !== attempt) return;
@@ -234,6 +248,7 @@ export function useCrossfadeAudioPlayer(
             0,
             Math.min(1, incomingAudio.currentTime / candidate.durationSeconds)
           );
+          syncCrossfadeVisualElapsed(attempt, incomingAudio.currentTime);
           const outputVolume = outputVolumeRef.current;
           const angle = progress * Math.PI * 0.5;
           activeAudio.volume = outputVolume * Math.cos(angle);
@@ -279,6 +294,7 @@ export function useCrossfadeAudioPlayer(
       return;
     }
 
+    const visualAttempt = attemptRef.current;
     attemptRef.current += 1;
     cancelAnimation();
     originTrackIdRef.current = null;
@@ -296,6 +312,7 @@ export function useCrossfadeAudioPlayer(
     clearAudio(audio);
     player.audioHandlers.onPlay();
     player.audioHandlers.onEnded();
+    window.requestAnimationFrame(() => clearCrossfadeVisualState(visualAttempt));
   }, [cancelAnimation, cancelCrossfade, clearAudio, crossfadeSeconds, getActiveAudio, getInactiveAudio, player.adoptAudioSource, player.audioHandlers, player.current?.id, player.currentIndex, player.queue, player.repeatMode]);
 
   const handleDeckLoadedMetadata = useCallback((audio: HTMLAudioElement) => {
