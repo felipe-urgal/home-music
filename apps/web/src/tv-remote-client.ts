@@ -1,9 +1,8 @@
 import type {
-  TvRemoteCommand,
-  TvRemoteEvent,
   TvRemotePlaybackSnapshot,
   TvRemoteSessionSummary
 } from '@home-music/shared';
+import type { TvRemoteCommand, TvRemoteEvent } from '@home-music/shared/tv-remote';
 import { apiFetch } from './api-client';
 
 const sessionsPath = '/api/tv-remote/sessions';
