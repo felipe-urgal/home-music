@@ -9,7 +9,6 @@ import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.provider.Settings;
 import android.text.InputType;
 import android.view.Gravity;
 import android.view.KeyEvent;
@@ -59,7 +58,7 @@ public final class MainActivity extends Activity {
         enterImmersiveMode();
 
         String savedAddress = preferences.getString(KEY_URL, "");
-        if (savedAddress == null || savedAddress.isBlank()) {
+        if (!hasText(savedAddress)) {
             showSetup("");
         } else {
             showWeb(savedAddress);
@@ -105,7 +104,7 @@ public final class MainActivity extends Activity {
     public void onBackPressed() {
         if (showingSetup) {
             String saved = preferences.getString(KEY_URL, "");
-            if (saved != null && !saved.isBlank()) {
+            if (hasText(saved)) {
                 showWeb(saved);
                 return;
             }
@@ -167,7 +166,7 @@ public final class MainActivity extends Activity {
 
         EditText address = new EditText(this);
         address.setSingleLine(true);
-        address.setText(initialAddress == null || initialAddress.isBlank() ? "https://" : initialAddress);
+        address.setText(hasText(initialAddress) ? initialAddress : "https://");
         address.setHint("https://musica.exemplo.com");
         address.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
         address.setTextSize(18);
@@ -199,7 +198,7 @@ public final class MainActivity extends Activity {
         card.addView(note, noteParams);
 
         String saved = preferences.getString(KEY_URL, "");
-        if (saved != null && !saved.isBlank()) {
+        if (hasText(saved)) {
             Button cancel = new Button(this);
             cancel.setText("Cancelar");
             LinearLayout.LayoutParams cancelParams = new LinearLayout.LayoutParams(
@@ -402,8 +401,12 @@ public final class MainActivity extends Activity {
         Uri uri = Uri.parse(value);
         String scheme = uri.getScheme();
         if (!("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme))) return null;
-        if (uri.getHost() == null || uri.getHost().isBlank()) return null;
+        if (!hasText(uri.getHost())) return null;
         return uri.toString();
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.trim().isEmpty();
     }
 
     private TextView text(String value, int sizeSp, int color) {
