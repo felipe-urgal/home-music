@@ -84,6 +84,7 @@ export function LibraryScreen({
     folderPath,
     folderView,
     folderContextTracks,
+    visibleFolders,
     currentViewDefinition,
     libraryTracks,
     selectTab,
@@ -143,12 +144,14 @@ export function LibraryScreen({
   function title() {
     if (selectedPlaylist) return selectedPlaylist.name;
     if (libraryTab === 'folders' && folderPath) return folderView.name;
+    if (libraryTab === 'folders') return 'Pastas';
     return 'Biblioteca';
   }
 
   function subtitle() {
     if (selectedPlaylist) return `${libraryTracks.length} músicas`;
     if (libraryTab === 'folders' && folderPath) return `${folderContextTracks.length} músicas`;
+    if (libraryTab === 'folders') return `${visibleFolders.length} pastas`;
     return `${tracks.length} músicas`;
   }
 
