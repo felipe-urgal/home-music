@@ -11,7 +11,7 @@ async function login(page: Page, url: string) {
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
 }
 
-test('TV mostra o now playing aprovado e celular autenticado controla a reprodução', async ({ page, browser }, testInfo) => {
+test('TV mostra o now playing aprovado e celular autenticado controla e escolhe a reprodução', async ({ page, browser }, testInfo) => {
   test.skip(testInfo.project.name !== 'desktop-chromium');
 
   await login(page, '/?tv=1');
@@ -42,6 +42,7 @@ test('TV mostra o now playing aprovado e celular autenticado controla a reprodu�
     await expect(phone.locator('.tv-remote-screen')).toBeVisible();
     await expect(phone.locator('audio')).toHaveCount(0);
     await expect(phone.getByText('Home Music TV', { exact: true })).toBeVisible();
+    await expect(phone.getByRole('heading', { name: 'Escolher música' })).toBeVisible();
 
     const tvPlay = page.locator('.tv-now-playing__play');
     const phonePlay = phone.locator('.tv-remote-controls__primary');
@@ -68,6 +69,16 @@ test('TV mostra o now playing aprovado e celular autenticado controla a reprodu�
     const beforeSeek = await progress.getAttribute('aria-label');
     await phone.getByRole('button', { name: 'Avançar 10 segundos', exact: true }).click();
     await expect.poll(async () => progress.getAttribute('aria-label'), { timeout: 5_000 }).not.toBe(beforeSeek);
+
+    const search = phone.getByRole('searchbox', { name: 'Buscar música, artista ou álbum' });
+    await search.fill('E2E Track');
+    const trackButton = phone.getByRole('button', { name: 'Tocar E2E Track na TV' });
+    await expect(trackButton).toBeVisible();
+    await trackButton.click();
+
+    await expect(title).toHaveText('E2E Track', { timeout: 5_000 });
+    await expect(trackButton).toHaveAttribute('aria-current', 'true', { timeout: 5_000 });
+    await expect(phone.locator('audio')).toHaveCount(0);
   } finally {
     await phoneContext.close();
   }
