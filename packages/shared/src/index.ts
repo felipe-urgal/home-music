@@ -24,6 +24,33 @@ export type AdminOperationKind = 'scan' | 'import';
 export type AdminOperationStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
 export type AdminScanTrigger = 'manual' | 'automatic';
 
+export type TvRemoteCommand =
+  | { type: 'toggle-play' }
+  | { type: 'previous' }
+  | { type: 'next' }
+  | { type: 'seek'; deltaSeconds: -10 | 10 };
+
+export type TvRemotePlaybackSnapshot = {
+  trackId: string | null;
+  title: string | null;
+  artist: string | null;
+  playing: boolean;
+  currentTime: number;
+  duration: number;
+  updatedAt: string;
+};
+
+export type TvRemoteSessionSummary = {
+  id: string;
+  expiresAt: string;
+  snapshot: TvRemotePlaybackSnapshot | null;
+};
+
+export type TvRemoteEvent =
+  | { id: number; type: 'command'; data: TvRemoteCommand }
+  | { id: number; type: 'snapshot'; data: TvRemotePlaybackSnapshot }
+  | { id: number; type: 'closed'; data: { reason: 'closed' | 'expired' } };
+
 export const PERMANENT_DELETE_CONFIRMATION = 'EXCLUIR PERMANENTEMENTE' as const;
 
 export type AuthenticatedUser = {
