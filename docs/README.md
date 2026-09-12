@@ -56,6 +56,11 @@ A Fase 15 está encerrada. O planejamento original foi movido integralmente para
 - [`pwa-icon-identity.md`](pwa-icon-identity.md) — identidade da instalação;
 - [`ios-background-playback-diagnostics.md`](ios-background-playback-diagnostics.md) — protocolo local de diagnóstico/regressão no iOS.
 
+## Android TV
+
+- [`android-tv.md`](android-tv.md) — arquitetura do Home Music TV, modo TV, BTV 11, instalação, launcher, D-pad e distribuição do APK;
+- [`../android-tv/README.md`](../android-tv/README.md) — contrato técnico de build do módulo Android.
+
 ## Administração e conta
 
 - [`administration-ui.md`](administration-ui.md) — composição atual de Administração/Minha conta;
