@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { TvRemoteCommand } from '@home-music/shared';
+import type { TvRemoteCommand } from '@home-music/shared/tv-remote';
 import { applyTvRemoteCommand } from './tv-remote-command';
 
 describe('applyTvRemoteCommand', () => {
