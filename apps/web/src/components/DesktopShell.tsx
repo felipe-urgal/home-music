@@ -10,9 +10,12 @@ import {
 } from 'react';
 import type { Track } from '@home-music/shared';
 import {
+  ChevronDown,
+  ChevronUp,
   Folder,
   GripVertical,
   ListMusic,
+  MoreHorizontal,
   Music2,
   PanelLeftClose,
   PanelLeftOpen,
@@ -117,6 +120,7 @@ export function DesktopShell({
   const [contextTab, setContextTab] = useState<DesktopContextTab>('queue');
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   const [dragOver, setDragOver] = useState<number | null>(null);
+  const [queueMenuIndex, setQueueMenuIndex] = useState<number | null>(null);
   const [queueVisibleCount, setQueueVisibleCount] = useState(DESKTOP_QUEUE_PREVIEW_SIZE);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [contextWidth, setContextWidth] = useState(DESKTOP_CONTEXT_DEFAULT_WIDTH);
@@ -141,6 +145,7 @@ export function DesktopShell({
 
   useEffect(() => {
     setContextTab('queue');
+    setQueueMenuIndex(null);
     setQueueVisibleCount(DESKTOP_QUEUE_PREVIEW_SIZE);
   }, [current?.id]);
 
@@ -166,6 +171,7 @@ export function DesktopShell({
     if (!onReorderQueue) return;
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData('text/plain', String(queueIndex));
+    setQueueMenuIndex(null);
     setDragFrom(queueIndex);
     setDragOver(queueIndex);
   }
@@ -345,6 +351,7 @@ export function DesktopShell({
                 const queueIndex = queueStart + previewIndex;
                 const isDragging = queueIndex === dragFrom;
                 const isDragOver = queueIndex === dragOver && dragFrom !== queueIndex;
+                const menuOpen = queueIndex === queueMenuIndex;
                 return (
                   <div
                     key={`${track.id}-${queueIndex}`}
@@ -359,10 +366,38 @@ export function DesktopShell({
                     onDrop={event => dropQueue(event, queueIndex)}
                   >
                     <button className="desktop-queue__drag-handle" type="button" draggable={Boolean(onReorderQueue)} disabled={!onReorderQueue} aria-label={`Arrastar ${track.title}`} onDragStart={event => beginQueueDrag(event, queueIndex)} onDragEnd={finishQueueDrag}><GripVertical aria-hidden="true" /></button>
-                    <button className="desktop-queue__item" type="button" onClick={() => onPlayTrack?.(track, queue)}>
+                    <button className="desktop-queue__item" type="button" onClick={() => { setQueueMenuIndex(null); onPlayTrack?.(track, queue); }}>
                       <Artwork track={artworkTrack(track, offlineMode)} />
                       <span><strong>{track.title}</strong><small>{track.artist || 'Artista desconhecido'}</small></span>
                     </button>
+                    <div
+                      className="desktop-queue__more"
+                      onBlur={event => {
+                        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setQueueMenuIndex(null);
+                      }}
+                      onKeyDown={event => {
+                        if (event.key !== 'Escape') return;
+                        event.preventDefault();
+                        setQueueMenuIndex(null);
+                        event.currentTarget.querySelector<HTMLElement>('.desktop-queue__more-trigger')?.focus();
+                      }}
+                    >
+                      <button
+                        className="desktop-queue__more-trigger"
+                        type="button"
+                        aria-label={`Mais opções para ${track.title}`}
+                        aria-haspopup="menu"
+                        aria-expanded={menuOpen}
+                        onClick={() => setQueueMenuIndex(index => index === queueIndex ? null : queueIndex)}
+                      ><MoreHorizontal aria-hidden="true" /></button>
+                      {menuOpen && (
+                        <div className="desktop-queue__more-menu" role="menu" aria-label={`Opções de ${track.title}`}>
+                          <button type="button" role="menuitem" onClick={() => { setQueueMenuIndex(null); onPlayTrack?.(track, queue); }}><Radio aria-hidden="true" />Tocar agora</button>
+                          <button type="button" role="menuitem" disabled={!onReorderQueue || queueIndex <= 0} onClick={() => { onReorderQueue?.(queueIndex, queueIndex - 1); setQueueMenuIndex(null); }}><ChevronUp aria-hidden="true" />Mover para cima</button>
+                          <button type="button" role="menuitem" disabled={!onReorderQueue || queueIndex >= queue.length - 1} onClick={() => { onReorderQueue?.(queueIndex, queueIndex + 1); setQueueMenuIndex(null); }}><ChevronDown aria-hidden="true" />Mover para baixo</button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 );
               }) : <div className="desktop-queue__empty">Não há próximas faixas.</div>}
