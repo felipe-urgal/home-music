@@ -157,8 +157,8 @@
     bottom: max(10px, env(safe-area-inset-bottom));
   }
 
-  /* O drawer assume a navegação principal no mobile; evita sobrepor dois controles no canto esquerdo. */
-  .player-screen-immersive .topbar__back-to-library {
+  /* O drawer substitui o botão de voltar somente na experiência autenticada. */
+  .phone-surface:not(.phone-surface--offline) .player-screen-immersive .topbar__back-to-library {
     visibility: hidden;
     pointer-events: none;
   }
