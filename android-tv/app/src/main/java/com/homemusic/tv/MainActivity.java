@@ -27,6 +27,7 @@ import org.mozilla.geckoview.GeckoView;
 public final class MainActivity extends Activity {
     private static final String PREFS = "home_music_tv";
     private static final String KEY_URL = "home_music_url";
+    private static final String DEFAULT_URL = "https://home-music.tail6ab100.ts.net/";
     private static final int BG = Color.rgb(7, 13, 20);
     private static final int PANEL = Color.rgb(15, 24, 34);
     private static final int TEXT = Color.rgb(238, 244, 249);
@@ -37,7 +38,6 @@ public final class MainActivity extends Activity {
     private SharedPreferences preferences;
     private GeckoView browserView;
     private GeckoSession session;
-    private FrameLayout browserRoot;
     private LinearLayout errorPanel;
     private ProgressBar progressBar;
     private String currentAddress;
@@ -53,8 +53,8 @@ public final class MainActivity extends Activity {
         enterImmersiveMode();
 
         String savedAddress = preferences.getString(KEY_URL, "");
-        if (!hasText(savedAddress)) showSetup("");
-        else showBrowser(savedAddress);
+        if (hasText(savedAddress)) showBrowser(savedAddress);
+        else showSetup(DEFAULT_URL);
     }
 
     @Override
@@ -67,7 +67,7 @@ public final class MainActivity extends Activity {
     public boolean dispatchKeyEvent(KeyEvent event) {
         if (event.getAction() == KeyEvent.ACTION_UP
             && (event.getKeyCode() == KeyEvent.KEYCODE_MENU || event.getKeyCode() == KeyEvent.KEYCODE_SETTINGS)) {
-            showSetup(currentAddress == null ? "" : currentAddress);
+            showSetup(hasText(currentAddress) ? currentAddress : DEFAULT_URL);
             return true;
         }
         return super.dispatchKeyEvent(event);
@@ -93,7 +93,7 @@ public final class MainActivity extends Activity {
         new AlertDialog.Builder(this)
             .setTitle(R.string.app_name)
             .setItems(new CharSequence[]{"Alterar endereço", "Sair"}, (dialog, which) -> {
-                if (which == 0) showSetup(currentAddress == null ? "" : currentAddress);
+                if (which == 0) showSetup(hasText(currentAddress) ? currentAddress : DEFAULT_URL);
                 else finish();
             })
             .setNegativeButton("Cancelar", null)
@@ -131,7 +131,7 @@ public final class MainActivity extends Activity {
         card.addView(title);
 
         TextView subtitle = text(
-            "Informe o endereço do seu Home Music. Ele fica salvo somente neste aparelho.",
+            "O endereço padrão já está preenchido. Altere somente se o servidor mudar.",
             16,
             MUTED
         );
@@ -145,8 +145,8 @@ public final class MainActivity extends Activity {
 
         EditText address = new EditText(this);
         address.setSingleLine(true);
-        address.setText(hasText(initialAddress) ? initialAddress : "https://");
-        address.setHint("https://musica.exemplo.com");
+        address.setText(hasText(initialAddress) ? initialAddress : DEFAULT_URL);
+        address.setHint(DEFAULT_URL);
         address.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
         address.setTextSize(18);
         card.addView(address, new LinearLayout.LayoutParams(
@@ -164,7 +164,7 @@ public final class MainActivity extends Activity {
         card.addView(open, buttonParams);
 
         TextView note = text(
-            "Esta versão usa um navegador próprio para não depender do WebView antigo do BTV.",
+            "O modo TV é ativado automaticamente ao abrir pelo aplicativo.",
             13,
             MUTED
         );
@@ -200,7 +200,7 @@ public final class MainActivity extends Activity {
         });
 
         setContentView(root);
-        address.requestFocus();
+        open.requestFocus();
         enterImmersiveMode();
     }
 
@@ -210,7 +210,7 @@ public final class MainActivity extends Activity {
         canGoBack = false;
         destroyBrowser();
 
-        browserRoot = new FrameLayout(this);
+        FrameLayout browserRoot = new FrameLayout(this);
         browserRoot.setBackgroundColor(BG);
 
         browserView = new GeckoView(this);
@@ -223,10 +223,7 @@ public final class MainActivity extends Activity {
         ));
 
         progressBar = new ProgressBar(this);
-        browserRoot.addView(
-            progressBar,
-            new FrameLayout.LayoutParams(dp(52), dp(52), Gravity.CENTER)
-        );
+        browserRoot.addView(progressBar, new FrameLayout.LayoutParams(dp(52), dp(52), Gravity.CENTER));
 
         errorPanel = buildErrorPanel();
         errorPanel.setVisibility(View.GONE);
@@ -276,7 +273,7 @@ public final class MainActivity extends Activity {
         if (runtime == null) runtime = GeckoRuntime.create(getApplicationContext());
         session.open(runtime);
         browserView.setSession(session);
-        session.loadUri(address);
+        session.loadUri(withTvMode(address));
         browserView.requestFocus();
         enterImmersiveMode();
     }
@@ -307,7 +304,7 @@ public final class MainActivity extends Activity {
         panel.addView(retry, new LinearLayout.LayoutParams(dp(320), dp(56)));
         retry.setOnClickListener(view -> {
             hideError();
-            if (session != null && hasText(currentAddress)) session.loadUri(currentAddress);
+            if (session != null && hasText(currentAddress)) session.loadUri(withTvMode(currentAddress));
         });
 
         Button settingsButton = new Button(this);
@@ -315,7 +312,7 @@ public final class MainActivity extends Activity {
         LinearLayout.LayoutParams settingsParams = new LinearLayout.LayoutParams(dp(320), dp(52));
         settingsParams.topMargin = dp(10);
         panel.addView(settingsButton, settingsParams);
-        settingsButton.setOnClickListener(view -> showSetup(currentAddress));
+        settingsButton.setOnClickListener(view -> showSetup(hasText(currentAddress) ? currentAddress : DEFAULT_URL));
 
         return panel;
     }
@@ -338,7 +335,6 @@ public final class MainActivity extends Activity {
             session = null;
         }
         browserView = null;
-        browserRoot = null;
         errorPanel = null;
         progressBar = null;
         canGoBack = false;
@@ -352,6 +348,12 @@ public final class MainActivity extends Activity {
         if (!("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme))) return null;
         if (!hasText(uri.getHost())) return null;
         return uri.toString();
+    }
+
+    private static String withTvMode(String address) {
+        Uri uri = Uri.parse(address);
+        if ("1".equals(uri.getQueryParameter("tv"))) return uri.toString();
+        return uri.buildUpon().appendQueryParameter("tv", "1").build().toString();
     }
 
     private static boolean hasText(String value) {
