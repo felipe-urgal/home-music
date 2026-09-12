@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 const username = 'playwright';
 const password = 'playwright-password-2026';
+const crossfadeStorageKey = 'home-music:crossfade-seconds:v2';
 
 async function login(page: Page, url: string) {
   await page.goto(url);
@@ -13,6 +14,10 @@ async function login(page: Page, url: string) {
 
 test('TV mostra o now playing aprovado e celular autenticado controla a reprodução', async ({ page, browser }, testInfo) => {
   test.skip(testInfo.project.name !== 'desktop-chromium');
+
+  await page.addInitScript(({ storageKey }) => {
+    window.localStorage.setItem(storageKey, '2');
+  }, { storageKey: crossfadeStorageKey });
 
   await login(page, '/?tv=1');
   await expect(page.locator('.tv-app--now-playing')).toBeVisible();
@@ -59,9 +64,24 @@ test('TV mostra o now playing aprovado e celular autenticado controla a reprodu�
     await phonePlay.click();
     await expect(tvPlay).toHaveAttribute('aria-label', initialAction!, { timeout: 5_000 });
 
+    if (await tvPlay.getAttribute('aria-label') === 'Tocar') {
+      await tvPlay.click();
+      await expect(tvPlay).toHaveAttribute('aria-label', 'Pausar');
+      await expect(phonePlay).toHaveAttribute('aria-label', 'Pausar', { timeout: 5_000 });
+    }
+
     const title = page.locator('.tv-now-playing__title');
     const beforeTitle = await title.textContent();
     await phone.getByRole('button', { name: 'Próxima faixa', exact: true }).click();
+
+    await expect.poll(async () => page.evaluate(() => {
+      const playingDecks = Array.from(document.querySelectorAll('audio'))
+        .filter(audio => !audio.paused && !audio.ended && audio.currentTime > 0);
+      return playingDecks.length === 2
+        && playingDecks.every(audio => audio.volume > 0 && audio.volume < 1);
+    }), { timeout: 5_000, intervals: [100, 200] }).toBe(true);
+
+    await expect(page.locator('.tv-now-playing__identity-stack[data-crossfading="true"]')).toBeVisible();
     await expect.poll(async () => title.textContent(), { timeout: 5_000 }).not.toBe(beforeTitle);
 
     const progress = page.locator('.tv-now-playing__progress');
