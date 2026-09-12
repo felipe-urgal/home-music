@@ -102,6 +102,104 @@
 .tv-remote-controls__primary { min-height: 72px !important; border-radius: 50% !important; background: #fff !important; color: #0b1018 !important; }
 .tv-remote-controls__primary svg { width: 30px !important; height: 30px !important; }
 .tv-remote-controls button:disabled { opacity: .42; }
+
+.tv-remote-picker {
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1px solid rgb(255 255 255 / 9%);
+}
+.tv-remote-picker__heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+.tv-remote-picker__heading small { color: #d1a84b; text-transform: uppercase; letter-spacing: .12em; font-weight: 800; }
+.tv-remote-picker__heading h2 { margin: 3px 0 0; font-size: 22px; }
+.tv-remote-picker__heading > span { color: #8e99a9; font-size: 12px; }
+.tv-remote-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 50px;
+  padding: 0 14px;
+  border: 1px solid rgb(255 255 255 / 11%);
+  border-radius: 16px;
+  background: rgb(255 255 255 / 6%);
+}
+.tv-remote-search:focus-within { border-color: #d1a84b; box-shadow: 0 0 0 3px rgb(209 168 75 / 12%); }
+.tv-remote-search > svg { flex: 0 0 auto; width: 20px; color: #8e99a9; }
+.tv-remote-search input {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+}
+.tv-remote-search input::placeholder { color: #7f8a9a; }
+.tv-remote-track-list {
+  display: grid;
+  gap: 6px;
+  max-height: min(46dvh, 430px);
+  overflow-y: auto;
+  margin-top: 12px;
+  padding-right: 2px;
+}
+.tv-remote-track {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px !important;
+  background: transparent;
+  color: #fff;
+  text-align: left;
+}
+.tv-remote-track:hover:not(:disabled),
+.tv-remote-track:focus-visible { background: rgb(255 255 255 / 7%); }
+.tv-remote-track--current { background: rgb(209 168 75 / 9%); }
+.tv-remote-track:disabled { opacity: .62; }
+.tv-remote-track--current:disabled { opacity: 1; }
+.tv-remote-track__art {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: linear-gradient(145deg, #2a3342, #151b25);
+  color: #d1a84b;
+}
+.tv-remote-track__art svg { width: 19px; height: 19px; }
+.tv-remote-track__copy { min-width: 0; display: grid; gap: 3px; }
+.tv-remote-track__copy strong,
+.tv-remote-track__copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tv-remote-track__copy strong { font-size: 14px; }
+.tv-remote-track__copy small { color: #8e99a9; font-size: 12px; }
+.tv-remote-track__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #d1a84b;
+  font-size: 11px;
+  font-weight: 800;
+}
+.tv-remote-track__status svg { width: 16px; height: 16px; }
+.tv-remote-picker__state {
+  min-height: 88px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 10px 0 0;
+  color: #8e99a9;
+  text-align: center;
+  font-size: 13px;
+}
+.tv-remote-picker__state--error { color: #ff9b9b; }
+.tv-remote-spin { animation: tv-remote-spin .8s linear infinite; }
 .tv-remote-card__hint { margin: 22px 0 0; text-align: center; font-size: 13px; }
 
 .tv-remote-open-button { display: inline-grid; place-items: center; }
@@ -109,18 +207,23 @@
 @keyframes tv-remote-spin { to { transform: rotate(360deg); } }
 
 @media (max-width: 520px) {
-  .tv-remote-screen { padding: 12px; }
+  .tv-remote-screen { padding: 12px; align-items: start; }
   .tv-remote-card { padding: 20px 16px; border-radius: 22px; }
+  .tv-remote-now-playing { padding: 34px 0 24px; }
   .tv-remote-controls { gap: 6px; }
+  .tv-remote-track-list { max-height: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tv-remote-dialog__loading { animation: none; }
+  .tv-remote-dialog__loading,
+  .tv-remote-spin { animation: none; }
 }
 
 @media (forced-colors: active) {
   .tv-remote-dialog,
   .tv-remote-card,
   .tv-remote-dialog__url,
-  .tv-remote-controls button { border: 1px solid CanvasText; }
+  .tv-remote-controls button,
+  .tv-remote-search,
+  .tv-remote-track { border: 1px solid CanvasText; }
 }
