@@ -2,9 +2,14 @@ package com.homemusic.tv;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.ShortcutInfo;
+import android.content.pm.ShortcutManager;
 import android.graphics.Color;
+import android.graphics.drawable.Icon;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.text.InputType;
 import android.view.Gravity;
@@ -18,6 +23,7 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import org.mozilla.geckoview.GeckoRuntime;
 import org.mozilla.geckoview.GeckoSession;
@@ -92,8 +98,9 @@ public final class MainActivity extends Activity {
 
         new AlertDialog.Builder(this)
             .setTitle(R.string.app_name)
-            .setItems(new CharSequence[]{"Alterar endereço", "Sair"}, (dialog, which) -> {
+            .setItems(new CharSequence[]{"Alterar endereço", "Adicionar à tela inicial", "Sair"}, (dialog, which) -> {
                 if (which == 0) showSetup(hasText(currentAddress) ? currentAddress : DEFAULT_URL);
+                else if (which == 1) requestHomeScreenShortcut();
                 else finish();
             })
             .setNegativeButton("Cancelar", null)
@@ -163,8 +170,18 @@ public final class MainActivity extends Activity {
         buttonParams.topMargin = dp(18);
         card.addView(open, buttonParams);
 
+        Button pin = new Button(this);
+        pin.setText("Adicionar à tela inicial");
+        LinearLayout.LayoutParams pinParams = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            dp(54)
+        );
+        pinParams.topMargin = dp(10);
+        card.addView(pin, pinParams);
+        pin.setOnClickListener(view -> requestHomeScreenShortcut());
+
         TextView note = text(
-            "O modo TV é ativado automaticamente ao abrir pelo aplicativo.",
+            "O modo TV é ativado automaticamente. O atalho na tela inicial depende do launcher instalado no BTV.",
             13,
             MUTED
         );
@@ -315,6 +332,47 @@ public final class MainActivity extends Activity {
         settingsButton.setOnClickListener(view -> showSetup(hasText(currentAddress) ? currentAddress : DEFAULT_URL));
 
         return panel;
+    }
+
+    private void requestHomeScreenShortcut() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            showShortcutUnsupported();
+            return;
+        }
+
+        ShortcutManager shortcutManager = getSystemService(ShortcutManager.class);
+        if (shortcutManager == null || !shortcutManager.isRequestPinShortcutSupported()) {
+            showShortcutUnsupported();
+            return;
+        }
+
+        Intent launchIntent = new Intent(this, MainActivity.class);
+        launchIntent.setAction(Intent.ACTION_VIEW);
+
+        ShortcutInfo shortcut = new ShortcutInfo.Builder(this, "home-music-tv")
+            .setShortLabel("Home Music")
+            .setLongLabel("Home Music TV")
+            .setIcon(Icon.createWithResource(this, R.drawable.ic_launcher))
+            .setIntent(launchIntent)
+            .build();
+
+        boolean requested = shortcutManager.requestPinShortcut(shortcut, null);
+        if (requested) {
+            Toast.makeText(this, "Pedido enviado ao launcher. Confirme o atalho se o BTV solicitar.", Toast.LENGTH_LONG).show();
+        } else {
+            showShortcutUnsupported();
+        }
+    }
+
+    private void showShortcutUnsupported() {
+        new AlertDialog.Builder(this)
+            .setTitle("Tela inicial do BTV")
+            .setMessage(
+                "O launcher deste BTV não oferece a API padrão para fixar atalhos. "
+                    + "O Home Music continua instalado e aparece na lista de aplicativos; a tela inicial depende do launcher do aparelho."
+            )
+            .setPositiveButton("OK", null)
+            .show();
     }
 
     private void showError(String message) {
