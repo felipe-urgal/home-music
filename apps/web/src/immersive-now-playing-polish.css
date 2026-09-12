@@ -62,6 +62,18 @@
 }
 
 @media (max-width: 699px) {
+  .phone-surface--mobile-nav {
+    padding-bottom: max(28px, env(safe-area-inset-bottom));
+  }
+
+  .phone-surface--library.phone-surface--mobile-nav {
+    padding-bottom: calc(96px + env(safe-area-inset-bottom));
+  }
+
+  .mini-player {
+    bottom: max(10px, env(safe-area-inset-bottom));
+  }
+
   /* O drawer assume a navegação principal no mobile; evita sobrepor dois controles no canto esquerdo. */
   .player-screen-immersive .topbar__back-to-library {
     visibility: hidden;
@@ -86,5 +98,16 @@
   .queue-sheet__close:focus-visible {
     outline: 2px solid rgba(93, 184, 255, 0.88);
     outline-offset: 2px;
+  }
+}
+
+@media (max-width: 360px) {
+  .player-screen-immersive {
+    width: calc(100% + 28px);
+    margin-inline: -14px;
+  }
+
+  .player-screen-immersive__content {
+    padding-inline: 14px;
   }
 }
