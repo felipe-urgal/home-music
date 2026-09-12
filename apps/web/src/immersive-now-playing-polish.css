@@ -9,6 +9,89 @@
         min(520px, calc(100vw - var(--desktop-sidebar-width, 236px) - 430px))
       );
   }
+
+  .desktop-queue__row {
+    position: relative;
+    grid-template-columns: 25px minmax(0, 1fr) 34px;
+  }
+
+  .desktop-queue__more {
+    position: relative;
+    display: grid;
+    place-items: center;
+  }
+
+  .desktop-queue__more-trigger {
+    width: 32px;
+    height: 32px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    color: #7f8c97;
+    cursor: pointer;
+    opacity: .68;
+  }
+
+  .desktop-queue__row:hover .desktop-queue__more-trigger,
+  .desktop-queue__more:focus-within .desktop-queue__more-trigger {
+    color: #d8e1e8;
+    background: rgba(255, 255, 255, .045);
+    opacity: 1;
+  }
+
+  .desktop-queue__more-trigger svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .desktop-queue__more-menu {
+    position: absolute;
+    z-index: 60;
+    right: 36px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 4px;
+    border: 1px solid rgba(255, 255, 255, .1);
+    border-radius: 10px;
+    background: rgba(9, 15, 21, .98);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, .38);
+  }
+
+  .desktop-queue__more-menu button {
+    width: 34px;
+    height: 34px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    overflow: hidden;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: #c8d2da;
+    cursor: pointer;
+    font-size: 0;
+  }
+
+  .desktop-queue__more-menu button:hover:not(:disabled),
+  .desktop-queue__more-menu button:focus-visible {
+    background: rgba(70, 162, 235, .12);
+    color: #ecf6ff;
+  }
+
+  .desktop-queue__more-menu button:disabled {
+    opacity: .32;
+  }
+
+  .desktop-queue__more-menu svg {
+    width: 16px;
+    height: 16px;
+  }
 }
 
 @media (min-width: 1024px) and (max-width: 1220px) {
