@@ -1,3 +1,4 @@
+import './tv-crossfade.css';
 import type { Track } from '@home-music/shared';
 import type { CrossfadeVisualState } from './crossfade-visual';
 
