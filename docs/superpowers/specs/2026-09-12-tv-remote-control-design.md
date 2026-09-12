@@ -1,43 +1,65 @@
 # Controle remoto do modo TV
 
+## Estado
+
+Implementado no PR #393. Este documento descreve o desenho efetivamente entregue; a homologação física de QR/câmera e interação no BTV 11 continua acompanhada pela issue #392.
+
 ## Objetivo
 
-Permitir que uma pessoa autenticada no Home Music controle a reprodução aberta no modo TV usando o celular. O primeiro corte deve ser simples e previsível: pareamento por QR Code e comandos de play/pause, faixa anterior, próxima faixa, retroceder 10 segundos e avançar 10 segundos.
+Permitir que uma pessoa autenticada no Home Music controle a reprodução aberta no modo TV usando o celular. O MVP oferece pareamento por QR Code e exatamente cinco comandos: play/pause, faixa anterior, próxima faixa, retroceder 10 segundos e avançar 10 segundos.
 
-O controle não seleciona faixas, não edita a fila e não tenta alterar o volume do sistema da TV. O controle físico continua responsável pelo volume quando o player usa `usesSystemVolume`.
+O celular não seleciona faixas, não edita a fila e não controla o volume do sistema da TV.
 
 ## Experiência
 
-Na interface TV, uma ação **Controlar pelo celular** abre um painel central com:
+Na interface TV, **Controle pelo celular** abre um modal com:
 
-- QR Code apontando para a URL desta instalação, em `/remote/<sessionId>`;
-- endereço curto em texto como fallback;
-- estado de pareamento: aguardando, celular conectado ou conexão encerrada;
-- ação para gerar uma nova sessão.
+- QR Code apontando para `/remote/<sessionId>` na mesma origem;
+- endereço textual como fallback;
+- estado aguardando/conectado/reconectando/erro;
+- ação **Gerar novo código**.
 
-Ao ler o QR Code, o celular abre a mesma instalação do Home Music. Se a pessoa ainda não estiver autenticada, faz login normalmente e permanece na URL remota. Depois da autenticação, aparece uma superfície compacta com a faixa atual, artista, estado de reprodução, progresso e os cinco comandos do MVP.
+O QR é gerado localmente pelo frontend, sem biblioteca ou serviço externo. Fechar/Escape apenas esconde o overlay e devolve o foco ao gatilho; a sessão continua ativa. Reabrir mostra a mesma sessão enquanto ela existir. **Gerar novo código** encerra a anterior e cria outra.
 
-O celular não monta `AuthenticatedApp` nem `useAudioPlayer`. Ele é somente um controle do player que já existe na TV, evitando reprodução duplicada e disputa pelo estado persistido da conta.
+O modal mantém a navegação por D-pad dentro dos elementos focáveis e impede o recuperador global da TV de roubar foco para a tela de fundo.
 
-## Arquitetura escolhida
+Ao abrir a URL no celular, a autenticação normal continua sendo obrigatória. Depois do login, `App.tsx` reconhece a rota remota e monta uma superfície compacta com faixa, artista, progresso e controles.
 
-O backend terá um `TvRemoteSessionManager` em memória e um módulo de rotas autenticadas em `/api/tv-remote`. A sessão é efêmera: não cria migration, não entra em backup e desaparece quando o servidor reinicia ou quando a TV encerra o vínculo.
+## Autoridade de playback
 
-O transporte será REST + Server-Sent Events (SSE):
+A TV continua sendo a única autoridade de reprodução. O celular não monta `AuthenticatedApp`, `useAudioPlayer`, `useCrossfadeAudioPlayer` ou `<audio>`. Ele apenas envia comandos para o player que já existe na TV.
 
-- REST cria/encerra a sessão e publica comandos ou snapshots do player;
-- um stream SSE entrega comandos à TV e snapshots ao celular com baixa latência;
-- eventos possuem ID crescente e um buffer curto para reconexão via `Last-Event-ID`;
-- heartbeats mantêm proxies e conexões intermediárias ativos;
-- `EventSource` reconecta automaticamente após uma interrupção temporária.
+`AuthenticatedApp` mantém o `useCrossfadeAudioPlayer` canônico. `useTvRemoteSession` recebe somente estado atual e callbacks do player para publicar snapshots e aplicar comandos. As funções puras de snapshot/seek ficam em `tv-remote-tv-controller.ts`.
 
-Essa solução evita adicionar infraestrutura de WebSocket e preserva o Fastify como servidor único. O único pacote novo previsto é uma biblioteca pequena e fixada para gerar o QR Code no frontend; a geração não depende de serviço externo.
+## Backend
+
+O backend possui um `TvRemoteSessionManager` process-local e rotas em `/api/tv-remote/sessions`.
+
+A sessão é efêmera:
+
+- não cria migration;
+- não entra em backup;
+- não sobrevive ao restart do processo;
+- possui no máximo três sessões ativas por usuário;
+- expira após 60 segundos sem snapshot/heartbeat da TV;
+- conserva somente os 32 eventos mais recentes.
+
+Criar uma quarta sessão do mesmo usuário encerra a mais antiga.
+
+## Transporte
+
+O transporte é REST + Server-Sent Events (SSE):
+
+- REST cria/encerra a sessão e publica comandos/snapshots;
+- SSE entrega comandos à TV e snapshots ao celular;
+- eventos recebem IDs monotônicos por sessão;
+- `Last-Event-ID` permite replay curto após reconexão;
+- heartbeat SSE mantém a conexão intermediária ativa;
+- `EventSource` cuida da reconexão de transporte.
+
+O heartbeat SSE não renova a sessão. Somente snapshots publicados pela TV renovam o TTL.
 
 ## Contratos compartilhados
-
-`@home-music/shared` definirá unions discriminadas e respostas consumidas pelas duas pontas.
-
-### Comando
 
 ```ts
 type TvRemoteCommand =
@@ -45,13 +67,7 @@ type TvRemoteCommand =
   | { type: 'previous' }
   | { type: 'next' }
   | { type: 'seek'; deltaSeconds: -10 | 10 };
-```
 
-Valores fora dessa allowlist são rejeitados pelo servidor. O cliente não envia funções, IDs de usuário, posição absoluta nem valores arbitrários de seek.
-
-### Snapshot
-
-```ts
 type TvRemotePlaybackSnapshot = {
   trackId: string | null;
   title: string | null;
@@ -63,103 +79,102 @@ type TvRemotePlaybackSnapshot = {
 };
 ```
 
-Tempos são normalizados para números finitos e limitados ao intervalo válido. O snapshot é apresentação descartável da TV, não uma segunda autoridade do player e não substitui `/api/player/state`.
+Valores fora da allowlist são rejeitados. Snapshot é apresentação descartável da TV e não substitui o estado canônico do player.
 
-## API
+## API e segurança
 
-Todas as rotas abaixo permanecem dentro da política central `/api/*` e exigem sessão autenticada. Mutações exigem `X-Home-Music-Request: 1`.
+Todas as rotas usam a política central `/api/*` e exigem sessão autenticada. Mutações exigem `X-Home-Music-Request: 1`.
 
-- `POST /api/tv-remote/sessions` — cria uma sessão pertencente a `request.user.id`.
-- `GET /api/tv-remote/sessions/:sessionId` — retorna metadados e o último snapshot somente ao mesmo usuário.
-- `GET /api/tv-remote/sessions/:sessionId/events` — abre o stream SSE do proprietário.
-- `PUT /api/tv-remote/sessions/:sessionId/status` — TV publica heartbeat e snapshot normalizado.
-- `POST /api/tv-remote/sessions/:sessionId/commands` — celular publica um comando validado.
-- `DELETE /api/tv-remote/sessions/:sessionId` — TV encerra a sessão.
+- `POST /api/tv-remote/sessions` — cria sessão para `request.user.id`;
+- `GET /api/tv-remote/sessions/:sessionId` — lê resumo/snapshot do mesmo usuário;
+- `GET /api/tv-remote/sessions/:sessionId/events` — abre SSE do proprietário;
+- `PUT /api/tv-remote/sessions/:sessionId/status` — TV publica snapshot e renova TTL;
+- `POST /api/tv-remote/sessions/:sessionId/commands` — celular publica comando validado;
+- `DELETE /api/tv-remote/sessions/:sessionId` — encerra a sessão.
 
-O servidor nunca aceita `userId` do cliente. Sessão inexistente, expirada ou de outro usuário produz a mesma resposta 404, evitando enumeração. O `sessionId` é aleatório e possui entropia suficiente para aparecer na URL sem funcionar como autorização; a sessão autenticada da mesma conta continua obrigatória.
+O servidor nunca aceita `userId` do cliente. Sessão inexistente, expirada ou pertencente a outro usuário retorna a mesma resposta 404. O `sessionId` é opaco/aleatório, mas não funciona como autorização: o cookie da mesma conta continua obrigatório.
 
-## Ciclo de vida e limites
-
-- no máximo três sessões remotas ativas por usuário; criar uma quarta remove a mais antiga;
-- a TV renova a sessão por heartbeat enquanto a superfície está montada;
-- sessão sem heartbeat da TV expira após 60 segundos;
-- comandos e eventos têm payload pequeno e tamanho limitado pelas validações existentes do Fastify;
-- cada sessão conserva somente os eventos recentes necessários para uma reconexão curta;
-- ao desmontar, a TV tenta `DELETE` com `keepalive`; expiração cobre encerramentos abruptos;
-- no shutdown, o manager cancela timers, encerra streams e libera listeners.
-
-Uma sessão expirada informa o celular de forma explícita e oferece somente voltar ou ler um novo QR Code. O cliente não tenta recriar uma TV remotamente.
+O frontend usa `keepalive: true` no DELETE de cleanup para aumentar a chance de encerramento durante desmontagem/navegação. Expiração cobre shutdowns abruptos em que a requisição não chega ao servidor.
 
 ## Frontend TV
 
-Um hook `useTvRemoteSession` pertence à composição online e só é ativado quando `isTvMode()` é verdadeiro. Ele:
+A sessão é criada apenas por ação explícita da pessoa no modo TV. `useTvRemoteSession`:
 
-- cria a sessão sob ação explícita da pessoa na TV;
-- abre o stream SSE;
-- traduz comandos válidos para as operações canônicas já expostas por `useCrossfadeAudioPlayer`;
-- publica snapshots derivados do player de forma limitada, além de heartbeat periódico;
-- deduplica eventos por ID após reconexão;
-- encerra a sessão no cleanup.
+- cria/substitui a sessão;
+- abre SSE;
+- publica snapshot imediatamente;
+- limita atualizações materiais a aproximadamente 1 Hz;
+- publica heartbeat/status a cada 15 s;
+- usa o estado mais recente do player ao calcular seek;
+- tenta DELETE em regeneração/unmount;
+- mantém a sessão ao apenas esconder o modal.
 
-`TvExperience` recebe apenas estado e callbacks de apresentação para abrir/fechar o painel. Ele não chama API nem controla o manager diretamente.
+O botão e o modal existem somente na experiência TV. A lógica do hook pode estar composta em `AuthenticatedApp`, mas nenhuma sessão é criada fora da ação visível do modo TV.
 
 ## Frontend celular
 
-`App.tsx` reconhece `/remote/<sessionId>` depois de resolver autenticação e monta `TvRemoteControlScreen` antes de `AuthenticatedApp`. Assim, login, expiração de sessão e conectividade continuam sob a autoridade de `App`, mas biblioteca, navegação e player locais não são inicializados.
+`App.tsx` resolve `/remote/<sessionId>` somente depois de autenticação/offline e antes de `AuthenticatedApp`.
 
 A tela remota:
 
-- valida a sessão com GET e abre o stream;
-- mostra conexão, faixa e progresso recebidos da TV;
-- envia um comando por clique e evita múltiplos envios enquanto a requisição correspondente está em voo;
-- trata 401 pelo fluxo global de autenticação e 404 como sessão encerrada;
-- mantém alvos de toque grandes, nomes acessíveis e feedback que não depende só de cor.
+- valida a sessão via GET;
+- abre SSE e acompanha snapshots;
+- exibe conexão/reconexão, faixa, artista e progresso;
+- serializa comandos: enquanto uma mutação está em voo, os controles ficam temporariamente desabilitados;
+- trata 404 como sessão inexistente/encerrada;
+- não cria áudio local.
 
-## QR Code e segurança de navegação
+## QR Code
 
-O QR Code é gerado localmente a partir de `window.location.origin` e do `sessionId` retornado pelo servidor. Nenhum endereço, token ou dado de reprodução é enviado a terceiros. A URL usa o mesmo protocolo e host já abertos na TV.
+`apps/web/src/tv-remote-qr.ts` implementa geração SVG local, versão 10 com correção M para o tamanho esperado das URLs de pareamento. O resultado é usado como `data:image/svg+xml` em `<img>`, sem `dangerouslySetInnerHTML` e sem transmitir a URL a terceiros.
 
-O HTML de produção continua com `Referrer-Policy: no-referrer`. O identificador remoto não concede acesso sem o cookie autenticado e não é persistido em logs de aplicação além do tratamento normal da URL pelo servidor.
+A URL textual permanece disponível caso a câmera/decoder do aparelho não leia o QR. A leitura física do QR no BTV/celular continua requisito de homologação, porque o E2E não simula câmera.
 
 ## Testes
 
 ### Servidor
 
-- criação, limite por usuário, heartbeat, expiração e cleanup;
-- ownership entre duas identidades e resposta indistinguível para sessão alheia;
-- rejeição de comando, snapshot e números inválidos;
-- ordenação, deduplicação e replay curto de eventos;
-- exigência de autenticação e proteção anti-CSRF nas mutações.
+- sessão, cap por usuário, TTL e cleanup;
+- ownership entre identidades e 404 indistinguível;
+- validação de comandos/snapshots;
+- replay, IDs, heartbeat e fechamento SSE;
+- autenticação/CSRF;
+- backpressure e shutdown do Fastify.
 
 ### Frontend
 
-- parsing seguro de `/remote/<sessionId>` e preservação da rota após login;
-- mapeamento de cada comando para a operação canônica do player;
-- deduplicação dos eventos e cleanup de timers/EventSource;
-- estados aguardando, conectado, encerrado e erro;
-- geração do link de pareamento somente para a origem atual.
+- parser da rota remota;
+- cliente HTTP/SSE e deduplicação;
+- `keepalive` de cleanup;
+- mapeamento de comandos e seek;
+- normalização de snapshot;
+- geração local do QR.
 
 ### E2E
 
-Um cenário com dois contexts autenticados abre a TV, cria o pareamento, abre a URL remota no viewport mobile e confirma que play/pause, próxima e seek alteram o player da TV. O teste também confirma que uma segunda conta não consegue consultar nem comandar a sessão.
+`e2e/tests/tv-remote-control.spec.ts` usa dois contexts do Chromium autenticados na mesma conta para provar:
 
-Os gates finais são `npm run check`, `npm run test:security` e a spec E2E focada. A validação no BTV 11 permanece manual porque autoplay, scanner de QR e volume do sistema dependem do hardware.
+- abertura do pareamento pela UI da TV;
+- D-pad isolado no modal e retorno de foco ao fechar;
+- sessão ativa depois de esconder o overlay;
+- ausência de `<audio>` no celular;
+- sincronização play/pause nos dois sentidos;
+- próxima faixa e seek enviados pelo celular.
 
-## Documentação
+O isolamento entre contas é testado na integração HTTP real de `tv-remote-routes.test.ts`, onde outro usuário recebe 404 em consulta/comandos e demais endpoints da sessão.
 
-Atualizar:
+## CI e homologação
 
-- `docs/android-tv.md` com pareamento, comandos, limites e validação em hardware;
-- `docs/app-composition.md` com a superfície remota acima de `AuthenticatedApp`;
-- `docs/server-composition.md` com manager, rotas e lifecycle;
-- `docs/testing-and-quality.md` caso o E2E remoto seja promovido a gate fixo do workflow.
+O CI fixo inclui TV regression gate, quality, security, backup smoke, Mobile crossfade E2E, TV remote control E2E, Personal data import E2E e Library Assistant E2E.
+
+CI verde prova o contrato automatizado, mas não substitui BTV 11 real. Permanecem físicos: câmera/QR, legibilidade a distância, D-pad do controle real, overscan e comportamento específico do GeckoView/firmware.
 
 ## Fora do escopo
 
-- selecionar músicas ou navegar na biblioteca pelo celular;
-- editar/reordenar fila;
-- controlar volume do sistema da TV;
-- controlar mais de uma TV ao mesmo tempo na mesma tela;
-- persistir sessões após restart do servidor;
-- acesso sem autenticação ou por conta diferente;
-- funcionamento no modo offline.
+- escolher músicas/navegar na biblioteca pelo celular;
+- editar ou reordenar fila;
+- controlar volume do sistema;
+- controlar múltiplas TVs na mesma tela;
+- persistir sessões após restart;
+- acesso sem autenticação ou por outra conta;
+- funcionamento offline.
