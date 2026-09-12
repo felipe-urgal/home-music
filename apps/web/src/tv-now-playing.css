@@ -102,6 +102,22 @@
   text-align: center;
 }
 
+.tv-now-playing__identity-stack {
+  display: grid;
+}
+
+.tv-now-playing__identity {
+  grid-area: 1 / 1;
+  min-width: 0;
+  transform-origin: center 42%;
+  transition: opacity 40ms linear, transform 40ms linear;
+  will-change: opacity, transform;
+}
+
+.tv-now-playing__identity--incoming {
+  pointer-events: none;
+}
+
 .tv-now-playing__art {
   width: clamp(180px, 17vw, 292px);
   aspect-ratio: 1;
@@ -241,6 +257,10 @@
 
 @media (prefers-reduced-motion: reduce) {
   .tv-app--now-playing * { scroll-behavior: auto !important; }
+  .tv-now-playing__identity {
+    transition: none !important;
+    transform: none !important;
+  }
 }
 
 @media (forced-colors: active) {
