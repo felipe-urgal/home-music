@@ -4,6 +4,7 @@ import App from './App';
 import { RequiredPasswordGate } from './components/RequiredPasswordGate';
 import { installPlaybackHistoryTracking } from './playback-history';
 import { registerServiceWorker } from './register-service-worker';
+import './tv-mode';
 import './styles.css';
 import './features.css';
 import './artwork.css';
@@ -62,6 +63,8 @@ import './immersive-now-playing.css';
 import './immersive-now-playing-polish.css';
 import './folder-library-visual.css';
 import './now-playing-crossfade.css';
+import './tv.css';
+import './tv-login.css';
 
 installPlaybackHistoryTracking();
 
