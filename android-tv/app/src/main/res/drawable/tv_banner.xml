@@ -1,1 +1,33 @@
-<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle"><solid android:color="#07111B" /></shape>
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="320dp"
+    android:height="180dp"
+    android:viewportWidth="320"
+    android:viewportHeight="180">
+
+    <path android:fillColor="#07111B" android:pathData="M0,0 H320 V180 H0 Z" />
+    <path android:fillColor="#0B1824" android:pathData="M0,0 H320 V90 C250,125 140,130 0,104 Z" />
+
+    <path
+        android:fillColor="@android:color/transparent"
+        android:pathData="M40,90 L86,48 L132,90"
+        android:strokeColor="#1E8BE8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeWidth="13" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:pathData="M48,85 L48,132 M124,85 L124,132"
+        android:strokeColor="#1E8BE8"
+        android:strokeLineCap="round"
+        android:strokeWidth="9" />
+    <path
+        android:fillColor="#F0F7FC"
+        android:pathData="M116,111 A30,30 0,1 1 56,111 A30,30 0,1 1 116,111 Z" />
+    <path
+        android:fillColor="#1E8BE8"
+        android:pathData="M95,111 A9,9 0,1 1 77,111 A9,9 0,1 1 95,111 Z" />
+    <path
+        android:fillColor="#7FC2FF"
+        android:pathData="M174,64 H280 V76 H174 Z M174,88 H254 V100 H174 Z M174,112 H292 V124 H174 Z" />
+</vector>
