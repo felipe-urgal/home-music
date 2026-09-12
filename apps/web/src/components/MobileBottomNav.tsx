@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Folder, ListMusic, Menu, Music2, Radio, UserRound, X } from 'lucide-react';
+import { navigateAppPath } from '../browser-navigation';
 
 type MobileBottomNavProps = {
   active: 'player' | 'library' | 'account';
@@ -40,6 +41,16 @@ export function MobileBottomNav({
     setOpen(false);
   }
 
+  function navigateLibraryRoute(path: '/library' | '/library/playlists', action?: () => void) {
+    if (action) {
+      navigate(action);
+      return;
+    }
+    navigateAppPath(path);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    setOpen(false);
+  }
+
   return (
     <>
       <button
@@ -72,8 +83,8 @@ export function MobileBottomNav({
             <Radio aria-hidden="true" /><span>Tocando agora</span>
           </button>
           <div className="mobile-navigation-drawer__label">Biblioteca</div>
-          <button type="button" onClick={() => navigate(onOpenFolders ?? onOpenLibrary)}><Folder aria-hidden="true" /><span>Pastas</span></button>
-          <button type="button" onClick={() => navigate(onOpenPlaylists ?? onOpenLibrary)}><ListMusic aria-hidden="true" /><span>Playlists</span></button>
+          <button type="button" onClick={() => navigateLibraryRoute('/library', onOpenFolders)}><Folder aria-hidden="true" /><span>Pastas</span></button>
+          <button type="button" onClick={() => navigateLibraryRoute('/library/playlists', onOpenPlaylists)}><ListMusic aria-hidden="true" /><span>Playlists</span></button>
         </div>
 
         <button className={`mobile-navigation-drawer__account ${active === 'account' ? 'is-active' : ''}`} type="button" onClick={() => navigate(onOpenAccount)}>
