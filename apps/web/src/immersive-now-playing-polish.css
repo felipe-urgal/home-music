@@ -10,6 +10,19 @@
       );
   }
 
+  .desktop-brand small,
+  .desktop-nav__group-label {
+    font-size: 12px;
+  }
+
+  .desktop-player-sidebar-tools__account strong {
+    font-size: 13px;
+  }
+
+  .desktop-player-sidebar-tools__account small {
+    font-size: 11px;
+  }
+
   .desktop-queue__row {
     position: relative;
     grid-template-columns: 25px minmax(0, 1fr) 34px;
