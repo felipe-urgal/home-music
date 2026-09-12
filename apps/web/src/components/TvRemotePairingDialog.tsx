@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { RefreshCw } from 'lucide-react';
 import type { TvRemoteTransportStatus } from '../tv-remote-client';
 import { tvRemoteQrDataUrl } from '../tv-remote-qr';
+import '../tv-remote-inline.css';
 
 type TvRemotePairingDialogProps = {
   open: boolean;
