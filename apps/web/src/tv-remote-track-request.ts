@@ -1,3 +1,5 @@
+import './tv-now-playing-equalizer.css';
+
 export const TV_REMOTE_TRACK_REQUEST_EVENT = 'home-music:tv-remote-track-request';
 
 type TvRemoteTrackRequestDetail = {
