@@ -65,6 +65,7 @@ import './folder-library-visual.css';
 import './now-playing-crossfade.css';
 import './tv.css';
 import './tv-login.css';
+import './tv-v2.css';
 
 installPlaybackHistoryTracking();
 
