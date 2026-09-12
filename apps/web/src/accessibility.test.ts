@@ -52,4 +52,21 @@ describe('accessibility contracts', () => {
     expect(queue).toMatch(/Mover \$\{track\.title\} para baixo/);
     expect(queue).toMatch(/movida para a posição/);
   });
+
+  it('mantém foco contido e restaurado nos overlays do player mobile', () => {
+    const navigation = source('components/MobileBottomNav.tsx');
+    const queue = source('components/PlayerQueuePanel.tsx');
+
+    expect(navigation).toMatch(/event\.key === 'Escape'/);
+    expect(navigation).toMatch(/event\.key !== 'Tab'/);
+    expect(navigation).toMatch(/triggerRef\.current\?\.focus/);
+    expect(navigation).toMatch(/closeButtonRef\.current\?\.focus/);
+
+    expect(queue).toMatch(/role="separator"/);
+    expect(queue).toMatch(/aria-modal=\{showQueue \? true/);
+    expect(queue).toMatch(/event\.key === 'Escape'/);
+    expect(queue).toMatch(/event\.key !== 'Tab'/);
+    expect(queue).toMatch(/queueToggleRef\.current\?\.focus/);
+    expect(queue).toMatch(/event\.key === 'ArrowUp'/);
+  });
 });
