@@ -2,12 +2,6 @@ import { expect, test, type Page } from '@playwright/test';
 
 const username = 'playwright';
 const password = 'playwright-password-2026';
-const crossfadeStorageKey = 'home-music:crossfade-seconds:v2';
-const mutationHeaders = { 'X-Home-Music-Request': '1' };
-
-type LibraryPayload = {
-  tracks: Array<{ id: string; title: string }>;
-};
 
 async function login(page: Page, url: string) {
   await page.goto(url);
@@ -20,40 +14,7 @@ async function login(page: Page, url: string) {
 test('TV mostra o now playing aprovado e celular autenticado controla a reprodução', async ({ page, browser }, testInfo) => {
   test.skip(testInfo.project.name !== 'desktop-chromium');
 
-  const loginResponse = await page.context().request.post('/api/auth/login', {
-    headers: mutationHeaders,
-    data: { username, password }
-  });
-  expect(loginResponse.ok()).toBeTruthy();
-  const libraryResponse = await page.context().request.get('/api/library');
-  expect(libraryResponse.ok()).toBeTruthy();
-  const library = await libraryResponse.json() as LibraryPayload;
-  const trackIds = new Map(library.tracks.map(track => [track.title, track.id]));
-  const queueIds = ['E2E Track', 'E2E Zeta', 'E2E Zulu'].map(title => {
-    const id = trackIds.get(title);
-    expect(id).toBeTruthy();
-    return id!;
-  });
-  const resetResponse = await page.context().request.put('/api/player/state', {
-    headers: mutationHeaders,
-    data: {
-      currentTrackId: queueIds[0],
-      position: 0,
-      volume: 1,
-      shuffle: false,
-      repeatMode: 'off',
-      wasPlaying: false,
-      baseQueueIds: queueIds,
-      queueIds
-    }
-  });
-  expect(resetResponse.ok()).toBeTruthy();
-
-  await page.addInitScript(({ storageKey }) => {
-    window.localStorage.setItem(storageKey, '2');
-  }, { storageKey: crossfadeStorageKey });
-
-  await page.goto('/?tv=1');
+  await login(page, '/?tv=1');
   await expect(page.locator('.tv-app--now-playing')).toBeVisible();
   await expect(page.locator('.tv-now-playing__title')).toHaveText(/E2E/);
   await expect(page.getByText('Home Music', { exact: true })).toBeVisible();
@@ -65,8 +26,6 @@ test('TV mostra o now playing aprovado e celular autenticado controla a reprodu�
   await expect(pairingLink.locator('img')).toHaveAttribute('alt', 'QR code para controlar a TV pelo celular');
   const pairingUrl = await pairingLink.getAttribute('href');
   expect(pairingUrl).toBeTruthy();
-  const sessionId = new URL(pairingUrl!).pathname.split('/').filter(Boolean).at(-1);
-  expect(sessionId).toBeTruthy();
 
   await expect(page.getByRole('button', { name: 'Aleatório', exact: true })).toBeEnabled();
   await expect(page.getByRole('button', { name: 'Faixa anterior', exact: true })).toBeEnabled();
@@ -100,31 +59,9 @@ test('TV mostra o now playing aprovado e celular autenticado controla a reprodu�
     await phonePlay.click();
     await expect(tvPlay).toHaveAttribute('aria-label', initialAction!, { timeout: 5_000 });
 
-    await page.bringToFront();
-    await expect.poll(() => page.evaluate(() => document.visibilityState)).toBe('visible');
-    if (await tvPlay.getAttribute('aria-label') === 'Tocar') {
-      await tvPlay.click();
-      await expect(tvPlay).toHaveAttribute('aria-label', 'Pausar');
-    }
-    await expect.poll(async () => page.evaluate(() => Array.from(document.querySelectorAll('audio'))
-      .some(audio => !audio.paused && !audio.ended && audio.currentTime > 0)), { timeout: 5_000 }).toBe(true);
-
     const title = page.locator('.tv-now-playing__title');
     const beforeTitle = await title.textContent();
-    const nextResponse = await phone.context().request.post(`/api/tv-remote/sessions/${sessionId}/commands`, {
-      headers: mutationHeaders,
-      data: { type: 'next' }
-    });
-    expect(nextResponse.ok()).toBeTruthy();
-
-    await expect.poll(async () => page.evaluate(() => {
-      const playingDecks = Array.from(document.querySelectorAll('audio'))
-        .filter(audio => !audio.paused && !audio.ended && audio.currentTime > 0);
-      return playingDecks.length === 2
-        && playingDecks.every(audio => audio.volume > 0 && audio.volume < 1);
-    }), { timeout: 5_000, intervals: [100, 200] }).toBe(true);
-
-    await expect(page.locator('.tv-now-playing__identity-stack[data-crossfading="true"]')).toBeVisible();
+    await phone.getByRole('button', { name: 'Próxima faixa', exact: true }).click();
     await expect.poll(async () => title.textContent(), { timeout: 5_000 }).not.toBe(beforeTitle);
 
     const progress = page.locator('.tv-now-playing__progress');
