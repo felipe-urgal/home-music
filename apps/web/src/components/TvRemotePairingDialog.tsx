@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Copy, RefreshCw, Smartphone, X } from 'lucide-react';
 import type { TvRemoteTransportStatus } from '../tv-remote-client';
+import { tvRemoteQrDataUrl } from '../tv-remote-qr';
 
 type TvRemotePairingDialogProps = {
   open: boolean;
@@ -17,6 +18,14 @@ export function TvRemotePairingDialog({
 }: TvRemotePairingDialogProps) {
   const closeRef = useRef<HTMLButtonElement>(null);
   const [copied, setCopied] = useState(false);
+  const qrDataUrl = useMemo(() => {
+    if (!pairingUrl) return null;
+    try {
+      return tvRemoteQrDataUrl(pairingUrl);
+    } catch {
+      return null;
+    }
+  }, [pairingUrl]);
 
   useEffect(() => {
     if (!open) return;
@@ -61,11 +70,17 @@ export function TvRemotePairingDialog({
         <p className={`tv-remote-dialog__status tv-remote-dialog__status--${state}`} aria-live="polite">{status}</p>
         {pairingUrl ? (
           <>
-            <p>Abra este endereço no celular conectado ao mesmo Home Music:</p>
+            {qrDataUrl && (
+              <div className="tv-remote-dialog__qr">
+                <img src={qrDataUrl} alt="QR code para abrir o controle remoto no celular" width="280" height="280" />
+                <strong>Aponte a câmera do celular</strong>
+              </div>
+            )}
+            <p>{qrDataUrl ? 'Ou abra este endereço no celular conectado ao mesmo Home Music:' : 'Abra este endereço no celular conectado ao mesmo Home Music:'}</p>
             <a className="tv-remote-dialog__url" href={pairingUrl}>{pairingUrl}</a>
             <div className="tv-remote-dialog__actions">
               <button type="button" onClick={() => void copyUrl()}><Copy />{copied ? 'Copiado' : 'Copiar endereço'}</button>
-              <button type="button" onClick={onRegenerate}><RefreshCw />Novo código</button>
+              <button type="button" onClick={onRegenerate}><RefreshCw />Gerar novo código</button>
             </div>
           </>
         ) : state === 'creating' ? (
