@@ -14,24 +14,43 @@ android {
 
     defaultConfig {
         applicationId 'com.homemusic.tv'
-        minSdk 28
-        targetSdk 35
-        versionCode 1
-        versionName '0.1.0'
+        // Keep the launcher compatible with older/custom Android TV firmware.
+        minSdk 23
+        targetSdk 28
+        versionCode 2
+        versionName '0.1.1'
     }
 
     signingConfigs {
+        debug {
+            // Some Android TV boxes use an older/custom package installer that
+            // still expects a JAR (v1) signature even when Android itself can
+            // validate APK Signature Scheme v2.
+            enableV1Signing = true
+            enableV2Signing = true
+            enableV3Signing = false
+            enableV4Signing = false
+        }
+
         if (hasReleaseSigning) {
             release {
                 storeFile file(releaseStoreFile)
                 storePassword releaseStorePassword
                 keyAlias releaseKeyAlias
                 keyPassword releaseKeyPassword
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = false
+                enableV4Signing = false
             }
         }
     }
 
     buildTypes {
+        debug {
+            signingConfig signingConfigs.debug
+        }
+
         release {
             minifyEnabled false
             if (hasReleaseSigning) {
@@ -42,8 +61,8 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
     }
 
     lint {
