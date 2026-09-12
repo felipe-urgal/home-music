@@ -5,7 +5,6 @@ import {
   ChevronDown,
   Download,
   LoaderCircle,
-  MoreHorizontal,
   Pause,
   Play,
   Plus,
@@ -82,7 +81,6 @@ export function DesktopNowPlayingScreen({
   onAddToPlaylist
 }: DesktopNowPlayingScreenProps) {
   const [playlistOpen, setPlaylistOpen] = useState(false);
-  const [moreOpen, setMoreOpen] = useState(false);
   const progress = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
   const repeatLabel = repeatMode === 'one'
     ? 'Repetir uma'
@@ -105,13 +103,7 @@ export function DesktopNowPlayingScreen({
     : undefined;
 
   function openPlaylistPicker() {
-    setMoreOpen(false);
     setPlaylistOpen(value => !value);
-  }
-
-  function runDownloadAction() {
-    setMoreOpen(false);
-    onToggleDownload?.();
   }
 
   return (
@@ -185,28 +177,6 @@ export function DesktopNowPlayingScreen({
                     : <Download aria-hidden="true" />}
               </button>
             )}
-
-            <div className="desktop-now-playing-screen__more">
-              <button
-                className="desktop-now-playing-screen__action-icon"
-                type="button"
-                aria-label="Mais opções"
-                aria-haspopup="menu"
-                aria-expanded={moreOpen}
-                onClick={() => {
-                  setPlaylistOpen(false);
-                  setMoreOpen(value => !value);
-                }}
-              >
-                <MoreHorizontal aria-hidden="true" />
-              </button>
-              {moreOpen && (
-                <div className="desktop-now-playing-screen__more-menu" role="menu" aria-label="Mais opções da faixa">
-                  <button type="button" role="menuitem" onClick={openPlaylistPicker}><Plus aria-hidden="true" />Adicionar à playlist</button>
-                  {onToggleDownload && <button type="button" role="menuitem" disabled={downloading} onClick={runDownloadAction}><Download aria-hidden="true" />{isDownloaded ? 'Remover download' : 'Baixar'}</button>}
-                </div>
-              )}
-            </div>
           </div>
 
           {autoplayBlocked && (
