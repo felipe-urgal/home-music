@@ -1,0 +1,11 @@
+<resources>
+    <style name="Theme.HomeMusicTV" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:navigationBarColor">#070D14</item>
+        <item name="android:statusBarColor">#070D14</item>
+        <item name="android:colorAccent">#57B5FF</item>
+        <item name="android:windowActionModeOverlay">true</item>
+    </style>
+</resources>

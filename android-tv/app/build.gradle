@@ -1,0 +1,53 @@
+plugins {
+    id 'com.android.application'
+}
+
+def releaseStoreFile = System.getenv('ANDROID_TV_KEYSTORE_PATH')
+def releaseStorePassword = System.getenv('ANDROID_TV_KEYSTORE_PASSWORD')
+def releaseKeyAlias = System.getenv('ANDROID_TV_KEY_ALIAS')
+def releaseKeyPassword = System.getenv('ANDROID_TV_KEY_PASSWORD')
+def hasReleaseSigning = releaseStoreFile && releaseStorePassword && releaseKeyAlias && releaseKeyPassword
+
+android {
+    namespace 'com.homemusic.tv'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'com.homemusic.tv'
+        minSdk 28
+        targetSdk 35
+        versionCode 1
+        versionName '0.1.0'
+    }
+
+    signingConfigs {
+        if (hasReleaseSigning) {
+            release {
+                storeFile file(releaseStoreFile)
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    lint {
+        abortOnError true
+        checkReleaseBuilds true
+    }
+}
