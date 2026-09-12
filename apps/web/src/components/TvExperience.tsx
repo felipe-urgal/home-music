@@ -10,7 +10,6 @@ import {
   Pause,
   Play,
   Search,
-  Settings,
   SkipBack,
   SkipForward,
   UserRound,
@@ -20,13 +19,12 @@ import {
   clampTvSeek,
   stepTvVolume,
   TV_SEEK_STEP_SECONDS,
-  TV_VOLUME_STEP,
-  tvCrossfadeOptions
+  TV_VOLUME_STEP
 } from '../tv-controls';
 import type { LibraryNavigation } from '../useLibraryNavigation';
 import { Artwork } from './Artwork';
 
-type TvView = 'home' | 'library' | 'search' | 'playlists' | 'settings';
+type TvView = 'home' | 'library' | 'search' | 'playlists';
 type LibrarySection = 'folders' | 'albums' | 'artists' | 'songs';
 type TvZone = 'sidebar' | 'content' | 'player';
 
@@ -49,13 +47,11 @@ type TvExperienceProps = {
   duration: number;
   volume: number;
   usesSystemVolume: boolean;
-  crossfadeSeconds: number;
   onTogglePlay: () => void;
   onPrevious: () => void;
   onNext: () => void;
   onSeek: (seconds: number) => void;
   onVolume: (volume: number) => void;
-  onCrossfadeSeconds: (seconds: number) => void;
   onPlayTrack: (track: Track, context: Track[]) => void;
   onOpenAccount: () => void;
 };
@@ -163,7 +159,7 @@ function useTvNavigation(
       if (!zone) return;
 
       if (
-        (active.matches('input[type="search"], input[type="text"], textarea'))
+        active.matches('input[type="search"], input[type="text"], textarea')
         && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')
       ) return;
 
@@ -297,9 +293,7 @@ function SectionTitle({ title, action, onAction }: { title: string; action?: str
   return (
     <header className="tv-section-title">
       <h2>{title}</h2>
-      {action && onAction && (
-        <button data-tv-zone="content" type="button" onClick={onAction}>{action}</button>
-      )}
+      {action && onAction && <button data-tv-zone="content" type="button" onClick={onAction}>{action}</button>}
     </header>
   );
 }
@@ -324,12 +318,7 @@ function TrackRow({ track, index, current, playing, context, onPlay }: {
 }) {
   const isCurrent = track.id === current?.id;
   return (
-    <button
-      data-tv-zone="content"
-      className={`tv-track-row ${isCurrent ? 'is-current' : ''}`}
-      type="button"
-      onClick={() => onPlay(track, context)}
-    >
+    <button data-tv-zone="content" className={`tv-track-row ${isCurrent ? 'is-current' : ''}`} type="button" onClick={() => onPlay(track, context)}>
       <span className="tv-track-row__index">{isCurrent && playing ? <Pause /> : index + 1}</span>
       <Artwork track={track} />
       <span className="tv-track-row__copy">
@@ -352,13 +341,11 @@ export function TvExperience({
   duration,
   volume,
   usesSystemVolume,
-  crossfadeSeconds,
   onTogglePlay,
   onPrevious,
   onNext,
   onSeek,
   onVolume,
-  onCrossfadeSeconds,
   onPlayTrack,
   onOpenAccount
 }: TvExperienceProps) {
@@ -376,7 +363,6 @@ export function TvExperience({
       .some(value => value?.toLocaleLowerCase('pt-BR').includes(query))).slice(0, 80);
   }, [searchQuery, tracks]);
   const progressPercent = duration > 0 ? Math.max(0, Math.min(100, (currentTime / duration) * 100)) : 0;
-  const crossfadeOptions = useMemo(() => tvCrossfadeOptions(crossfadeSeconds), [crossfadeSeconds]);
 
   useTvNavigation(rootRef, { currentTime, duration, volume, onSeek, onVolume });
 
@@ -402,24 +388,16 @@ export function TvExperience({
     const homeAlbums = albums.slice(0, 6);
     return (
       <>
-        <div className="tv-view-heading tv-home-heading">
-          <div><span>Início</span><h1>O que você quer ouvir?</h1></div>
-        </div>
+        <div className="tv-view-heading tv-home-heading"><div><span>Início</span><h1>O que você quer ouvir?</h1></div></div>
         <section className="tv-section">
           <SectionTitle title="Pastas" action="Abrir biblioteca" onAction={() => openLibrary('folders')} />
           <div className="tv-folder-grid tv-home-grid">
             {folders.map(folder => (
-              <button
-                data-tv-zone="content"
-                className="tv-folder-card"
-                type="button"
-                key={folder.path}
-                onClick={() => {
-                  navigation.enterFolder(folder.path);
-                  setLibrarySection('folders');
-                  setView('library');
-                }}
-              >
+              <button data-tv-zone="content" className="tv-folder-card" type="button" key={folder.path} onClick={() => {
+                navigation.enterFolder(folder.path);
+                setLibrarySection('folders');
+                setView('library');
+              }}>
                 <span className="tv-folder-card__art"><Artwork track={folder.artwork} /></span>
                 <span className="tv-folder-card__shade" />
                 <span className="tv-folder-card__copy">
@@ -430,7 +408,6 @@ export function TvExperience({
             ))}
           </div>
         </section>
-
         <section className="tv-section">
           <SectionTitle title="Álbuns" action="Ver todos" onAction={() => openLibrary('albums')} />
           <div className="tv-collection-grid tv-home-grid">
@@ -446,19 +423,11 @@ export function TvExperience({
     return (
       <>
         {navigation.folderPath && (
-          <button data-tv-zone="content" className="tv-back-button" type="button" onClick={navigation.leaveFolder}>
-            <ChevronLeft /> Voltar
-          </button>
+          <button data-tv-zone="content" className="tv-back-button" type="button" onClick={navigation.leaveFolder}><ChevronLeft /> Voltar</button>
         )}
         <div className="tv-folder-grid tv-folder-grid--browse">
           {navigation.visibleFolders.slice(0, 48).map(folder => (
-            <button
-              data-tv-zone="content"
-              className="tv-folder-card"
-              type="button"
-              key={folder.path}
-              onClick={() => navigation.enterFolder(folder.path)}
-            >
+            <button data-tv-zone="content" className="tv-folder-card" type="button" key={folder.path} onClick={() => navigation.enterFolder(folder.path)}>
               <span className="tv-folder-card__art"><Artwork track={folder.artwork} /></span>
               <span className="tv-folder-card__shade" />
               <span className="tv-folder-card__copy">
@@ -472,9 +441,7 @@ export function TvExperience({
           <section className="tv-section tv-section--tracks">
             <SectionTitle title="Músicas" />
             <div className="tv-track-list">
-              {folderTracks.map((track, index) => (
-                <TrackRow key={track.id} track={track} index={index} current={current} playing={playing} context={folderTracks} onPlay={onPlayTrack} />
-              ))}
+              {folderTracks.map((track, index) => <TrackRow key={track.id} track={track} index={index} current={current} playing={playing} context={folderTracks} onPlay={onPlayTrack} />)}
             </div>
           </section>
         )}
@@ -493,9 +460,7 @@ export function TvExperience({
   function renderSongs(context = tracks) {
     return (
       <div className="tv-track-list">
-        {context.slice(0, 100).map((track, index) => (
-          <TrackRow key={track.id} track={track} index={index} current={current} playing={playing} context={context} onPlay={onPlayTrack} />
-        ))}
+        {context.slice(0, 100).map((track, index) => <TrackRow key={track.id} track={track} index={index} current={current} playing={playing} context={context} onPlay={onPlayTrack} />)}
       </div>
     );
   }
@@ -513,24 +478,15 @@ export function TvExperience({
 
     return (
       <>
-        <div className="tv-view-heading">
-          <div><span>Biblioteca</span><h1>{title}</h1></div>
-        </div>
+        <div className="tv-view-heading"><div><span>Biblioteca</span><h1>{title}</h1></div></div>
         <div className="tv-library-tabs" aria-label="Seções da biblioteca">
           {sections.map(section => {
             const Icon = section.icon;
             return (
-              <button
-                data-tv-zone="content"
-                type="button"
-                key={section.id}
-                className={librarySection === section.id ? 'is-active' : ''}
-                aria-pressed={librarySection === section.id}
-                onClick={() => {
-                  if (section.id === 'folders' && librarySection !== 'folders') navigation.selectTab('folders');
-                  setLibrarySection(section.id);
-                }}
-              >
+              <button data-tv-zone="content" type="button" key={section.id} className={librarySection === section.id ? 'is-active' : ''} aria-pressed={librarySection === section.id} onClick={() => {
+                if (section.id === 'folders' && librarySection !== 'folders') navigation.selectTab('folders');
+                setLibrarySection(section.id);
+              }}>
                 <Icon /><span>{section.label}</span>
               </button>
             );
@@ -552,19 +508,11 @@ export function TvExperience({
         <div className="tv-view-heading"><div><span>Biblioteca</span><h1>Buscar</h1></div></div>
         <label className="tv-search-field">
           <Search aria-hidden="true" />
-          <input
-            data-tv-zone="content"
-            type="search"
-            value={searchQuery}
-            placeholder="Música, artista, álbum ou pasta"
-            onChange={event => setSearchQuery(event.target.value)}
-          />
+          <input data-tv-zone="content" type="search" value={searchQuery} placeholder="Música, artista, álbum ou pasta" onChange={event => setSearchQuery(event.target.value)} />
         </label>
         <div className="tv-track-list tv-search-results">
           {searchQuery.trim() && searchResults.length === 0 && <p className="tv-empty">Nenhum resultado encontrado.</p>}
-          {searchResults.map((track, index) => (
-            <TrackRow key={track.id} track={track} index={index} current={current} playing={playing} context={searchResults} onPlay={onPlayTrack} />
-          ))}
+          {searchResults.map((track, index) => <TrackRow key={track.id} track={track} index={index} current={current} playing={playing} context={searchResults} onPlay={onPlayTrack} />)}
         </div>
       </>
     );
@@ -576,15 +524,11 @@ export function TvExperience({
       return (
         <>
           <div className="tv-view-heading">
-            <button data-tv-zone="content" className="tv-back-button" type="button" onClick={navigation.leavePlaylist}>
-              <ChevronLeft /> Playlists
-            </button>
+            <button data-tv-zone="content" className="tv-back-button" type="button" onClick={navigation.leavePlaylist}><ChevronLeft /> Playlists</button>
             <div><span>Playlist</span><h1>{navigation.selectedPlaylist.name}</h1></div>
           </div>
           <div className="tv-track-list">
-            {playlistTracks.map((track, index) => (
-              <TrackRow key={track.id} track={track} index={index} current={current} playing={playing} context={playlistTracks} onPlay={onPlayTrack} />
-            ))}
+            {playlistTracks.map((track, index) => <TrackRow key={track.id} track={track} index={index} current={current} playing={playing} context={playlistTracks} onPlay={onPlayTrack} />)}
           </div>
         </>
       );
@@ -595,16 +539,8 @@ export function TvExperience({
         <div className="tv-view-heading"><div><span>Biblioteca</span><h1>Playlists</h1></div></div>
         <div className="tv-playlist-grid">
           {playlists.map(playlist => (
-            <button
-              data-tv-zone="content"
-              className="tv-playlist-card"
-              type="button"
-              key={playlist.id}
-              onClick={() => navigation.selectPlaylist(playlist.id)}
-            >
-              <ListMusic />
-              <strong>{playlist.name}</strong>
-              <small>{playlist.trackIds.length} música{playlist.trackIds.length === 1 ? '' : 's'}</small>
+            <button data-tv-zone="content" className="tv-playlist-card" type="button" key={playlist.id} onClick={() => navigation.selectPlaylist(playlist.id)}>
+              <ListMusic /><strong>{playlist.name}</strong><small>{playlist.trackIds.length} música{playlist.trackIds.length === 1 ? '' : 's'}</small>
             </button>
           ))}
         </div>
@@ -612,48 +548,7 @@ export function TvExperience({
     );
   }
 
-  function renderSettings() {
-    return (
-      <>
-        <div className="tv-view-heading"><div><span>TV</span><h1>Ajustes rápidos</h1></div></div>
-        <section className="tv-settings-card">
-          <div className="tv-settings-card__heading">
-            <Music2 />
-            <div>
-              <strong>Crossfade</strong>
-              <small>{crossfadeSeconds === 0 ? 'Desativado' : `${crossfadeSeconds} s entre músicas`}</small>
-            </div>
-          </div>
-          <div className="tv-choice-row" aria-label="Duração do crossfade">
-            {crossfadeOptions.map(seconds => (
-              <button
-                data-tv-zone="content"
-                key={seconds}
-                type="button"
-                aria-pressed={crossfadeSeconds === seconds}
-                className={crossfadeSeconds === seconds ? 'is-active' : ''}
-                onClick={() => onCrossfadeSeconds(seconds)}
-              >
-                {seconds === 0 ? 'Desligado' : `${seconds} s`}
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <section className="tv-settings-card tv-settings-card--account">
-          <div className="tv-settings-card__heading">
-            <UserRound />
-            <div><strong>{username}</strong><small>Conta, sessões e preferências avançadas</small></div>
-          </div>
-          <button data-tv-zone="content" className="tv-settings-account" type="button" onClick={onOpenAccount}>
-            Abrir Minha conta
-          </button>
-        </section>
-      </>
-    );
-  }
-
-  const navItems: Array<{ view: Exclude<TvView, 'settings'>; label: string; icon: typeof House }> = [
+  const navItems: Array<{ view: TvView; label: string; icon: typeof House }> = [
     { view: 'home', label: 'Início', icon: House },
     { view: 'library', label: 'Biblioteca', icon: Folder },
     { view: 'search', label: 'Buscar', icon: Search },
@@ -670,15 +565,7 @@ export function TvExperience({
               const Icon = item.icon;
               const active = item.view === view;
               return (
-                <button
-                  key={item.label}
-                  data-tv-zone="sidebar"
-                  data-tv-view={item.view}
-                  type="button"
-                  className={active ? 'is-active' : ''}
-                  data-tv-autofocus={item.view === 'home' ? 'true' : undefined}
-                  onClick={() => openView(item.view)}
-                >
+                <button key={item.label} data-tv-zone="sidebar" data-tv-view={item.view} type="button" className={active ? 'is-active' : ''} data-tv-autofocus={item.view === 'home' ? 'true' : undefined} onClick={() => openView(item.view)}>
                   <Icon aria-hidden="true" /><span>{item.label}</span>
                 </button>
               );
@@ -690,14 +577,8 @@ export function TvExperience({
           <header className="tv-topbar">
             <span className="tv-topbar__hint">Setas navegam · OK seleciona</span>
             <button data-tv-zone="content" type="button" aria-label="Buscar" onClick={() => openView('search')}><Search /></button>
-            <button
-              data-tv-zone="content"
-              className={`tv-account-button ${view === 'settings' ? 'is-active' : ''}`}
-              type="button"
-              aria-label="Ajustes rápidos e Minha conta"
-              onClick={() => setView('settings')}
-            >
-              <Settings /><span>{username}</span>
+            <button data-tv-zone="content" className="tv-account-button" type="button" aria-label="Minha conta" onClick={onOpenAccount}>
+              <UserRound /><span>{username}</span>
             </button>
             <time>{clock}</time>
           </header>
@@ -706,7 +587,6 @@ export function TvExperience({
             {view === 'library' && renderLibrary()}
             {view === 'search' && renderSearch()}
             {view === 'playlists' && renderPlaylists()}
-            {view === 'settings' && renderSettings()}
           </div>
         </section>
       </div>
@@ -718,27 +598,10 @@ export function TvExperience({
         </div>
         <div className="tv-playerbar__controls">
           <button data-tv-zone="player" type="button" aria-label="Anterior" disabled={!current} onClick={onPrevious}><SkipBack /></button>
-          <button
-            data-tv-zone="player"
-            data-tv-player-primary="true"
-            className="tv-playerbar__play"
-            type="button"
-            aria-label={playing ? 'Pausar' : 'Tocar'}
-            disabled={!current}
-            onClick={onTogglePlay}
-          >
-            {playing ? <Pause /> : <Play />}
-          </button>
+          <button data-tv-zone="player" data-tv-player-primary="true" className="tv-playerbar__play" type="button" aria-label={playing ? 'Pausar' : 'Tocar'} disabled={!current} onClick={onTogglePlay}>{playing ? <Pause /> : <Play />}</button>
           <button data-tv-zone="player" type="button" aria-label="Próxima" disabled={!current} onClick={onNext}><SkipForward /></button>
         </div>
-        <button
-          data-tv-zone="player"
-          data-tv-control="seek"
-          className="tv-playerbar__seek"
-          type="button"
-          disabled={!current || duration <= 0}
-          aria-label={`Progresso ${formatTime(currentTime)} de ${formatTime(duration)}. Use esquerda e direita para pular ${TV_SEEK_STEP_SECONDS} segundos.`}
-        >
+        <button data-tv-zone="player" data-tv-control="seek" className="tv-playerbar__seek" type="button" disabled={!current || duration <= 0} aria-label={`Progresso ${formatTime(currentTime)} de ${formatTime(duration)}. Use esquerda e direita para pular ${TV_SEEK_STEP_SECONDS} segundos.`}>
           <span className="tv-playerbar__seek-track"><span style={{ width: `${progressPercent}%` }} /></span>
           <span className="tv-playerbar__seek-time"><small>{formatTime(currentTime)}</small><small>{formatTime(duration)}</small></span>
           <small className="tv-playerbar__seek-hint">← / → {TV_SEEK_STEP_SECONDS}s</small>
@@ -746,13 +609,7 @@ export function TvExperience({
         <div className="tv-playerbar__volume">
           <Volume2 />
           {usesSystemVolume ? <small>Volume da TV</small> : (
-            <button
-              data-tv-zone="player"
-              data-tv-control="volume"
-              className="tv-playerbar__volume-control"
-              type="button"
-              aria-label={`Volume ${Math.round(volume * 100)}%. Use esquerda e direita para ajustar.`}
-            >
+            <button data-tv-zone="player" data-tv-control="volume" className="tv-playerbar__volume-control" type="button" aria-label={`Volume ${Math.round(volume * 100)}%. Use esquerda e direita para ajustar.`}>
               <span>{Math.round(volume * 100)}%</span><small>← / →</small>
             </button>
           )}
