@@ -5,8 +5,9 @@ import {
   ChevronRight,
   Download,
   ListMusic,
-  ListPlus,
   LoaderCircle,
+  MoreHorizontal,
+  Plus,
   Wifi
 } from 'lucide-react';
 import type { Playlist, Track } from '@home-music/shared';
@@ -45,6 +46,7 @@ export function PlayerTrackPresentation({
   onExitOffline
 }: PlayerTrackPresentationProps) {
   const [showPlaylistPicker, setShowPlaylistPicker] = useState(false);
+  const [showMore, setShowMore] = useState(false);
   const offlineActionLabel = downloading
     ? 'Baixando para uso offline'
     : isDownloaded
@@ -57,11 +59,17 @@ export function PlayerTrackPresentation({
 
   useEffect(() => {
     setShowPlaylistPicker(false);
+    setShowMore(false);
   }, [current.id, queueLength]);
+
+  function togglePlaylistPicker() {
+    setShowMore(false);
+    setShowPlaylistPicker(value => !value);
+  }
 
   return (
     <>
-      <header className="topbar">
+      <header className="topbar player-topbar">
         <button className="icon-button topbar__back-to-library" type="button" aria-label={libraryReturnLabel} title={libraryReturnLabel} onClick={onOpenLibrary}>
           <ChevronDown aria-hidden="true" />
         </button>
@@ -75,30 +83,32 @@ export function PlayerTrackPresentation({
         <NowPlayingVinyl track={playerArtworkTrack(current, offlineMode)} playing={playing} />
       </div>
 
-      <div className="track-heading">
+      <div className="track-heading player-track-heading">
         <div>
           <h1>{current.title}</h1>
-          <p>{current.artist}</p>
+          <p>{current.artist || 'Artista desconhecido'}</p>
         </div>
-        <div className="track-heading__actions">
-          {!offlineMode && (
+      </div>
+
+      {!offlineMode && (
+        <div className="player-track-actions" aria-label="Ações da faixa">
+          <button
+            className={`player-track-actions__add ${showPlaylistPicker ? 'is-active' : ''}`}
+            type="button"
+            aria-label="Adicionar à playlist"
+            aria-expanded={showPlaylistPicker}
+            onClick={togglePlaylistPicker}
+          >
+            <Plus aria-hidden="true" /><span>Adicionar</span>
+          </button>
+
+          {onToggleDownload && (
             <button
-              className={`icon-button icon-button--large ${showPlaylistPicker ? 'is-active' : ''}`}
-              type="button"
-              aria-label="Adicionar à playlist"
-              aria-expanded={showPlaylistPicker}
-              onClick={() => setShowPlaylistPicker(value => !value)}
-            >
-              <ListPlus aria-hidden="true" />
-            </button>
-          )}
-          {!offlineMode && onToggleDownload && (
-            <button
-              className={`icon-button icon-button--large ${isDownloaded || availableViaCollection ? 'is-downloaded' : ''}`}
+              className={`player-track-actions__download ${isDownloaded || availableViaCollection ? 'is-downloaded' : ''}`}
               type="button"
               aria-label={offlineActionLabel}
               aria-pressed={isDownloaded}
-              title={availableViaCollection && !isDownloaded ? 'Esta música já está offline por uma coleção.' : undefined}
+              title={offlineActionLabel}
               disabled={downloading}
               onClick={onToggleDownload}
             >
@@ -107,10 +117,33 @@ export function PlayerTrackPresentation({
                 : isDownloaded
                   ? <CheckCircle2 aria-hidden="true" />
                   : <Download aria-hidden="true" />}
+              <span>{isDownloaded ? 'Baixado' : 'Baixar'}</span>
             </button>
           )}
+
+          <div className="player-track-actions__more-wrap">
+            <button
+              className="player-track-actions__more"
+              type="button"
+              aria-label="Mais opções"
+              aria-haspopup="menu"
+              aria-expanded={showMore}
+              onClick={() => {
+                setShowPlaylistPicker(false);
+                setShowMore(value => !value);
+              }}
+            >
+              <MoreHorizontal aria-hidden="true" />
+            </button>
+            {showMore && (
+              <div className="player-track-actions__menu" role="menu" aria-label="Mais opções da faixa">
+                <button type="button" role="menuitem" onClick={togglePlaylistPicker}><Plus aria-hidden="true" />Adicionar à playlist</button>
+                {onToggleDownload && <button type="button" role="menuitem" disabled={downloading} onClick={() => { setShowMore(false); onToggleDownload(); }}><Download aria-hidden="true" />{isDownloaded ? 'Remover download' : 'Baixar'}</button>}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {showPlaylistPicker && !offlineMode && (
         <section className="player-playlist-picker" aria-label="Escolher playlist">
