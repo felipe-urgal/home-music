@@ -1,0 +1,146 @@
+.library-content {
+  container-type: inline-size;
+}
+
+.section-heading--folders-root {
+  margin-bottom: 6px;
+}
+
+.folder-visual-grid {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 12px;
+  margin: 0 0 22px;
+}
+
+.folder-visual-card {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  gap: 9px;
+  padding: 6px;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background 140ms ease, transform 140ms ease;
+}
+
+.folder-visual-card > .artwork {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1 / 1;
+  border-radius: 12px;
+  box-shadow:
+    0 12px 28px rgba(0, 0, 0, 0.24),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+.folder-visual-card__text {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  padding: 0 2px 3px;
+}
+
+.folder-visual-card__text strong,
+.folder-visual-card__text small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder-visual-card__text strong {
+  color: #edf2f6;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.folder-visual-card__text small {
+  color: #7f8a95;
+  font-size: 11px;
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+}
+
+.folder-visual-card:active {
+  background: rgba(255, 255, 255, 0.045);
+  transform: scale(0.985);
+}
+
+.folder-visual-card:focus-visible {
+  outline: 2px solid rgba(87, 181, 255, 0.68);
+  outline-offset: 2px;
+}
+
+#root .library-status {
+  margin-top: 18px;
+  padding: 7px 2px 2px;
+  color: #5f6a75;
+  font-size: 10px;
+  text-align: left;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .folder-visual-card:hover {
+    background: rgba(255, 255, 255, 0.028);
+    transform: translateY(-2px);
+  }
+
+  .folder-visual-card:hover .folder-visual-card__text strong {
+    color: #ffffff;
+  }
+}
+
+@container (min-width: 540px) {
+  .folder-visual-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px 14px;
+  }
+}
+
+@container (min-width: 790px) {
+  .folder-visual-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 18px 16px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .folder-visual-card {
+    padding: 7px;
+  }
+
+  .folder-visual-card__text strong {
+    font-size: 12px;
+  }
+
+  .folder-visual-card__text small {
+    font-size: 10px;
+  }
+}
+
+@media (max-width: 360px) {
+  .folder-visual-grid {
+    gap: 12px 9px;
+  }
+
+  .folder-visual-card {
+    padding: 4px;
+    gap: 7px;
+  }
+
+  .folder-visual-card__text strong {
+    font-size: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .folder-visual-card {
+    transition: none;
+  }
+}
