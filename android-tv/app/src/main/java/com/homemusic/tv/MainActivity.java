@@ -2,12 +2,9 @@ package com.homemusic.tv;
 
 import android.app.Activity;
 import android.app.AlertDialog;
-import android.content.ActivityNotFoundException;
-import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
 import android.text.InputType;
 import android.view.Gravity;
@@ -15,21 +12,17 @@ import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
-import android.webkit.CookieManager;
-import android.webkit.WebChromeClient;
-import android.webkit.WebResourceError;
-import android.webkit.WebResourceRequest;
-import android.webkit.WebResourceResponse;
-import android.webkit.WebSettings;
-import android.webkit.WebView;
-import android.webkit.WebViewClient;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
-import android.widget.Toast;
+
+import org.mozilla.geckoview.GeckoRuntime;
+import org.mozilla.geckoview.GeckoSession;
+import org.mozilla.geckoview.GeckoSessionSettings;
+import org.mozilla.geckoview.GeckoView;
 
 public final class MainActivity extends Activity {
     private static final String PREFS = "home_music_tv";
@@ -39,13 +32,17 @@ public final class MainActivity extends Activity {
     private static final int TEXT = Color.rgb(238, 244, 249);
     private static final int MUTED = Color.rgb(151, 164, 176);
 
+    private static GeckoRuntime runtime;
+
     private SharedPreferences preferences;
-    private WebView webView;
-    private FrameLayout webRoot;
+    private GeckoView browserView;
+    private GeckoSession session;
+    private FrameLayout browserRoot;
     private LinearLayout errorPanel;
     private ProgressBar progressBar;
     private String currentAddress;
     private boolean showingSetup;
+    private boolean canGoBack;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -56,30 +53,8 @@ public final class MainActivity extends Activity {
         enterImmersiveMode();
 
         String savedAddress = preferences.getString(KEY_URL, "");
-        if (!hasText(savedAddress)) {
-            showSetup("");
-        } else {
-            showWeb(savedAddress);
-        }
-    }
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-        enterImmersiveMode();
-        if (webView != null) webView.onResume();
-    }
-
-    @Override
-    protected void onPause() {
-        if (webView != null) webView.onPause();
-        super.onPause();
-    }
-
-    @Override
-    protected void onDestroy() {
-        destroyWebView();
-        super.onDestroy();
+        if (!hasText(savedAddress)) showSetup("");
+        else showBrowser(savedAddress);
     }
 
     @Override
@@ -103,15 +78,15 @@ public final class MainActivity extends Activity {
         if (showingSetup) {
             String saved = preferences.getString(KEY_URL, "");
             if (hasText(saved)) {
-                showWeb(saved);
+                showBrowser(saved);
                 return;
             }
             super.onBackPressed();
             return;
         }
 
-        if (webView != null && webView.canGoBack()) {
-            webView.goBack();
+        if (session != null && canGoBack) {
+            session.goBack();
             return;
         }
 
@@ -125,9 +100,15 @@ public final class MainActivity extends Activity {
             .show();
     }
 
+    @Override
+    protected void onDestroy() {
+        destroyBrowser();
+        super.onDestroy();
+    }
+
     private void showSetup(String initialAddress) {
         showingSetup = true;
-        destroyWebView();
+        destroyBrowser();
         currentAddress = initialAddress;
 
         LinearLayout root = new LinearLayout(this);
@@ -168,7 +149,6 @@ public final class MainActivity extends Activity {
         address.setHint("https://musica.exemplo.com");
         address.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
         address.setTextSize(18);
-        address.setSelectAllOnFocus(false);
         card.addView(address, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             dp(58)
@@ -184,7 +164,7 @@ public final class MainActivity extends Activity {
         card.addView(open, buttonParams);
 
         TextView note = text(
-            "Use HTTPS quando possível. Para um servidor local sem HTTPS, informe http:// explicitamente.",
+            "Esta versão usa um navegador próprio para não depender do WebView antigo do BTV.",
             13,
             MUTED
         );
@@ -205,7 +185,7 @@ public final class MainActivity extends Activity {
             );
             cancelParams.topMargin = dp(10);
             card.addView(cancel, cancelParams);
-            cancel.setOnClickListener(view -> showWeb(saved));
+            cancel.setOnClickListener(view -> showBrowser(saved));
         }
 
         open.setOnClickListener(view -> {
@@ -216,7 +196,7 @@ public final class MainActivity extends Activity {
                 return;
             }
             preferences.edit().putString(KEY_URL, normalized).apply();
-            showWeb(normalized);
+            showBrowser(normalized);
         });
 
         setContentView(root);
@@ -224,109 +204,81 @@ public final class MainActivity extends Activity {
         enterImmersiveMode();
     }
 
-    private void showWeb(String address) {
+    private void showBrowser(String address) {
         showingSetup = false;
         currentAddress = address;
-        destroyWebView();
+        canGoBack = false;
+        destroyBrowser();
 
-        webRoot = new FrameLayout(this);
-        webRoot.setBackgroundColor(BG);
-        webView = new WebView(this);
-        webView.setBackgroundColor(BG);
-        webView.setFocusable(true);
-        webView.setFocusableInTouchMode(true);
-        configureWebView(webView);
+        browserRoot = new FrameLayout(this);
+        browserRoot.setBackgroundColor(BG);
 
-        webRoot.addView(webView, new FrameLayout.LayoutParams(
+        browserView = new GeckoView(this);
+        browserView.setBackgroundColor(BG);
+        browserView.setFocusable(true);
+        browserView.setFocusableInTouchMode(true);
+        browserRoot.addView(browserView, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT
         ));
 
         progressBar = new ProgressBar(this);
-        FrameLayout.LayoutParams progressParams = new FrameLayout.LayoutParams(dp(52), dp(52), Gravity.CENTER);
-        webRoot.addView(progressBar, progressParams);
+        browserRoot.addView(
+            progressBar,
+            new FrameLayout.LayoutParams(dp(52), dp(52), Gravity.CENTER)
+        );
 
         errorPanel = buildErrorPanel();
         errorPanel.setVisibility(View.GONE);
-        FrameLayout.LayoutParams errorParams = new FrameLayout.LayoutParams(
+        browserRoot.addView(errorPanel, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT
-        );
-        webRoot.addView(errorPanel, errorParams);
+        ));
 
-        setContentView(webRoot);
-        webView.loadUrl(address);
-        webView.requestFocus();
-        enterImmersiveMode();
-    }
+        setContentView(browserRoot);
 
-    private void configureWebView(WebView view) {
-        WebSettings settings = view.getSettings();
-        settings.setJavaScriptEnabled(true);
-        settings.setDomStorageEnabled(true);
-        settings.setDatabaseEnabled(true);
-        settings.setMediaPlaybackRequiresUserGesture(false);
-        settings.setSupportZoom(false);
-        settings.setBuiltInZoomControls(false);
-        settings.setDisplayZoomControls(false);
-        settings.setAllowFileAccess(false);
-        settings.setAllowContentAccess(false);
-        settings.setJavaScriptCanOpenWindowsAutomatically(false);
-        settings.setSupportMultipleWindows(false);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            settings.setSafeBrowsingEnabled(true);
-        }
-        settings.setUserAgentString(settings.getUserAgentString() + " HomeMusicTV/0.1");
+        GeckoSessionSettings sessionSettings = new GeckoSessionSettings.Builder()
+            .userAgentMode(GeckoSessionSettings.USER_AGENT_MODE_DESKTOP)
+            .viewportMode(GeckoSessionSettings.VIEWPORT_MODE_DESKTOP)
+            .displayMode(GeckoSessionSettings.DISPLAY_MODE_STANDALONE)
+            .usePrivateMode(false)
+            .useTrackingProtection(false)
+            .suspendMediaWhenInactive(false)
+            .build();
 
-        CookieManager.getInstance().setAcceptCookie(true);
-        CookieManager.getInstance().setAcceptThirdPartyCookies(view, false);
-        view.setWebChromeClient(new WebChromeClient());
-        view.setWebViewClient(new WebViewClient() {
+        session = new GeckoSession(sessionSettings);
+        session.setContentDelegate(new GeckoSession.ContentDelegate() {
             @Override
-            public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
+            public void onCrash(GeckoSession crashedSession) {
+                showError("O navegador interno foi encerrado. Tente novamente.");
+            }
+        });
+        session.setProgressDelegate(new GeckoSession.ProgressDelegate() {
+            @Override
+            public void onPageStart(GeckoSession geckoSession, String url) {
                 hideError();
                 if (progressBar != null) progressBar.setVisibility(View.VISIBLE);
             }
 
             @Override
-            public void onPageFinished(WebView view, String url) {
+            public void onPageStop(GeckoSession geckoSession, boolean success) {
                 if (progressBar != null) progressBar.setVisibility(View.GONE);
-            }
-
-            @Override
-            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-                return handleNavigation(request.getUrl());
-            }
-
-            @Override
-            @SuppressWarnings("deprecation")
-            public boolean shouldOverrideUrlLoading(WebView view, String url) {
-                return handleNavigation(Uri.parse(url));
-            }
-
-            @Override
-            public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
-                if (request.isForMainFrame()) showError("Não foi possível abrir o Home Music.");
-            }
-
-            @Override
-            public void onReceivedHttpError(WebView view, WebResourceRequest request, WebResourceResponse errorResponse) {
-                if (request.isForMainFrame() && errorResponse.getStatusCode() >= 500) {
-                    showError("O servidor Home Music respondeu com erro " + errorResponse.getStatusCode() + ".");
-                }
+                if (!success) showError("Não foi possível abrir o Home Music.");
             }
         });
-    }
+        session.setNavigationDelegate(new GeckoSession.NavigationDelegate() {
+            @Override
+            public void onCanGoBack(GeckoSession geckoSession, boolean value) {
+                canGoBack = value;
+            }
+        });
 
-    private boolean handleNavigation(Uri uri) {
-        String scheme = uri.getScheme();
-        if ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme)) return false;
-        try {
-            startActivity(new Intent(Intent.ACTION_VIEW, uri));
-        } catch (ActivityNotFoundException ignored) {
-            Toast.makeText(this, "Não há aplicativo para abrir este link.", Toast.LENGTH_SHORT).show();
-        }
-        return true;
+        if (runtime == null) runtime = GeckoRuntime.create(getApplicationContext());
+        session.open(runtime);
+        browserView.setSession(session);
+        session.loadUri(address);
+        browserView.requestFocus();
+        enterImmersiveMode();
     }
 
     private LinearLayout buildErrorPanel() {
@@ -336,11 +288,11 @@ public final class MainActivity extends Activity {
         panel.setPadding(dp(72), dp(48), dp(72), dp(48));
         panel.setBackgroundColor(BG);
 
-        TextView title = text("Sem conexão com o Home Music", 24, TEXT);
+        TextView title = text("Não foi possível abrir o Home Music", 24, TEXT);
         title.setTypeface(title.getTypeface(), android.graphics.Typeface.BOLD);
         panel.addView(title);
 
-        TextView message = text("Verifique a rede e tente novamente.", 16, MUTED);
+        TextView message = text("Verifique o endereço e a conexão.", 16, MUTED);
         LinearLayout.LayoutParams messageParams = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.WRAP_CONTENT,
             ViewGroup.LayoutParams.WRAP_CONTENT
@@ -355,7 +307,7 @@ public final class MainActivity extends Activity {
         panel.addView(retry, new LinearLayout.LayoutParams(dp(320), dp(56)));
         retry.setOnClickListener(view -> {
             hideError();
-            if (webView != null) webView.loadUrl(currentAddress);
+            if (session != null && hasText(currentAddress)) session.loadUri(currentAddress);
         });
 
         Button settingsButton = new Button(this);
@@ -380,19 +332,16 @@ public final class MainActivity extends Activity {
         if (errorPanel != null) errorPanel.setVisibility(View.GONE);
     }
 
-    private void destroyWebView() {
-        if (webView == null) return;
-        webView.stopLoading();
-        webView.setWebChromeClient(null);
-        webView.setWebViewClient(null);
-        webView.loadUrl("about:blank");
-        webView.clearHistory();
-        webView.removeAllViews();
-        webView.destroy();
-        webView = null;
-        webRoot = null;
+    private void destroyBrowser() {
+        if (session != null) {
+            session.close();
+            session = null;
+        }
+        browserView = null;
+        browserRoot = null;
         errorPanel = null;
         progressBar = null;
+        canGoBack = false;
     }
 
     private static String normalizeAddress(String raw) {
