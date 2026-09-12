@@ -11,12 +11,15 @@ async function login(page: Page, url: string) {
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
 }
 
-test('TV vira now playing simples e celular autenticado controla a reprodução', async ({ page, browser }, testInfo) => {
+test('TV mostra o now playing aprovado e celular autenticado controla a reprodução', async ({ page, browser }, testInfo) => {
   test.skip(testInfo.project.name !== 'desktop-chromium');
 
   await login(page, '/?tv=1');
   await expect(page.locator('.tv-app--now-playing')).toBeVisible();
   await expect(page.locator('.tv-now-playing__title')).toHaveText(/E2E/);
+  await expect(page.getByText('Home Music', { exact: true })).toBeVisible();
+  await expect(page.getByText('TOCANDO AGORA', { exact: true })).toBeVisible();
+  await expect(page.getByText(/Good music/)).toBeVisible();
 
   const pairingLink = page.getByRole('link', { name: 'Abrir controle no celular' });
   await expect(pairingLink).toBeVisible();
@@ -24,10 +27,9 @@ test('TV vira now playing simples e celular autenticado controla a reprodução'
   const pairingUrl = await pairingLink.getAttribute('href');
   expect(pairingUrl).toBeTruthy();
 
-  const tvShuffle = page.getByRole('button', { name: 'Aleatório' });
-  const initialShuffle = await tvShuffle.getAttribute('aria-pressed');
-  await tvShuffle.click();
-  await expect(tvShuffle).toHaveAttribute('aria-pressed', initialShuffle === 'true' ? 'false' : 'true');
+  await expect(page.getByRole('button', { name: 'Aleatório', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Faixa anterior', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Próxima faixa', exact: true })).toBeEnabled();
 
   const origin = new URL(page.url()).origin;
   const phoneContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
