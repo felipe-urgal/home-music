@@ -16,7 +16,6 @@ export function MobileBottomNav({
   active,
   username,
   onOpenPlayer,
-  onOpenLibrary,
   onOpenFolders,
   onOpenPlaylists,
   onOpenAccount
