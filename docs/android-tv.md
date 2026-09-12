@@ -6,16 +6,17 @@ O cliente Android não replica backend, biblioteca ou autenticação. Ele abre o
 
 ## Estado atual
 
-A implementação está no PR #391 e a validação em hardware real é acompanhada pela issue #392.
+O cliente Android e o primeiro modo TV foram incorporados pelo PR #391. A validação em hardware real e os refinamentos continuam acompanhados pela issue #392.
 
-Já foi confirmado em BTV 11 real que:
+Já foi confirmado em um BTV 11 real que:
 
 - o APK pode ser instalado após os ajustes de compatibilidade do package installer;
 - o app abre o servidor Home Music em tela cheia;
 - o WebView original do aparelho não é suficiente para o frontend atual, então o APK embarca GeckoView;
-- a UI desktop não é adequada à TV, então o frontend possui um modo TV separado.
+- o modo `?tv=1` é reconhecido depois do deploy do frontend e melhora a composição em relação ao desktop;
+- a primeira iteração ainda tinha navegação irregular, sidebar excessiva, progresso difícil de operar e `select` de crossfade inadequado ao controle remoto.
 
-A versão de teste atual é `0.4.0` (`versionCode 5`).
+A versão de APK de teste continua `0.4.0` (`versionCode 5`). Os ajustes de TV v2 são de frontend e, portanto, não exigem reinstalar o APK depois do deploy.
 
 ## Arquitetura
 
@@ -33,7 +34,7 @@ Home Music TV APK
 Frontend Home Music
   - login adaptado para TV
   - layout 16:9 dedicado
-  - D-pad / OK / foco espacial
+  - navegação por zonas de foco
   - biblioteca e player existentes
       |
       v
@@ -54,23 +55,70 @@ O usuário ainda pode trocar por outro endereço `https://` ou `http://`. A esco
 
 Ao abrir o site, o APK acrescenta `tv=1`. O frontend guarda o modo TV na sessão para preservar a experiência durante navegação interna sem mudar o comportamento normal de desktop, celular ou PWA.
 
-## Interface TV
+## Interface TV v2
 
-O modo TV não tenta apenas reduzir o layout desktop. Ele possui composição própria para uso a distância e em 16:9.
+O modo TV possui composição própria para uso a distância e em 16:9. A segunda iteração reduz a quantidade de destinos simultâneos e prioriza previsibilidade com o controle remoto.
 
-Superfícies principais:
+A sidebar principal contém somente:
 
-- Home;
-- Pastas;
-- Álbuns;
-- Artistas;
-- Músicas;
-- Busca;
-- Playlists;
-- player inferior persistente;
-- Minha conta como entrada utilitária.
+- **Início**;
+- **Biblioteca**;
+- **Buscar**;
+- **Playlists**.
 
-A navegação principal usa D-pad/OK com foco visível e scroll automático para elementos que entram em foco. A tela de login e superfícies utilitárias também recebem navegação por teclado/controle quando o modo TV está ativo.
+A tela **Biblioteca** agrupa **Pastas**, **Álbuns**, **Artistas** e **Músicas** como abas grandes dentro da própria área de conteúdo. **Minha conta** fica no topo em vez de ocupar um destino da sidebar.
+
+A Home também foi simplificada: mostra Pastas e Álbuns em destaque e deixa listas longas para Biblioteca. Isso reduz saltos de foco e a quantidade de elementos simultâneos na tela.
+
+## Navegação por controle remoto
+
+A navegação da tela principal é dividida em três zonas explícitas:
+
+```text
+Sidebar  <->  Conteúdo
+                 |
+                 v
+              Player
+```
+
+Regras principais:
+
+- ↑/↓ na sidebar percorrem somente seus quatro destinos;
+- → sai da sidebar e entra no conteúdo;
+- ← no limite esquerdo do conteúdo retorna à sidebar ativa;
+- ↑/↓ e ←/→ dentro do conteúdo procuram somente elementos daquela zona;
+- ↓ no limite inferior do conteúdo entra no player;
+- ↑ no player retorna ao último elemento de conteúdo usado;
+- OK/Enter ativa o controle focado;
+- o foco continua visualmente destacado e itens de conteúdo fazem scroll para a área visível.
+
+Telas utilitárias, login e Minha conta continuam usando a navegação auxiliar por D-pad quando o modo TV está ativo.
+
+## Player para TV
+
+Sliders HTML pequenos não são tratados como interação principal na TV.
+
+No player inferior:
+
+- anterior, play/pause e próxima continuam ações diretas;
+- o progresso é um controle focável e visual;
+- com o progresso focado, ← retrocede **10 s** e → avança **10 s**;
+- quando o Home Music controla o volume internamente, ←/→ ajustam em passos de **10%**;
+- quando o volume pertence ao sistema/TV, a interface apenas indica **Volume da TV**.
+
+Essa abordagem evita depender do comportamento de `input[type=range]` do Gecko/firmware para o D-pad.
+
+## Crossfade na TV
+
+No desktop/mobile a preferência de crossfade continua oferecendo o seletor completo de 0 a 30 segundos.
+
+No modo TV, Minha conta substitui o `<select>` por botões grandes com presets simples:
+
+```text
+Desligado | 3 s | 5 s | 8 s | 12 s
+```
+
+Se o dispositivo já tiver um valor salvo fora desses presets, o valor atual também é apresentado para não alterar silenciosamente a preferência. A seleção continua persistida pela mesma autoridade de preferências de reprodução existente.
 
 ## Login
 
@@ -87,8 +135,6 @@ No modo TV:
 Depois do login, cookies e storage do GeckoView preservam a sessão no armazenamento privado do aplicativo.
 
 ## Compatibilidade com BTV 11
-
-Durante os testes reais foram encontrados três problemas importantes.
 
 ### Package installer
 
@@ -111,7 +157,7 @@ Isso aumenta bastante o tamanho do APK, mas remove a versão do WebView do BTV d
 
 ### Launcher
 
-O manifest declara as duas entradas:
+O manifest declara:
 
 ```text
 android.intent.category.LAUNCHER
@@ -120,11 +166,11 @@ android.intent.category.LEANBACK_LAUNCHER
 
 O app também possui ícone `android:icon`, `android:roundIcon` e banner próprio do Home Music.
 
-A opção **Adicionar à tela inicial** usa `ShortcutManager.requestPinShortcut()` quando o launcher expõe a API padrão. Launchers customizados, como o do BTV, podem ignorar ou não oferecer essa capacidade; nesse caso o app informa a limitação e continua disponível na lista de aplicativos.
+A opção **Adicionar à tela inicial** usa `ShortcutManager.requestPinShortcut()` quando o launcher expõe a API padrão. Launchers customizados podem ignorar ou não oferecer essa capacidade; nesse caso o app informa a limitação e continua disponível na lista de aplicativos.
 
-## Controles
+## Controles Android
 
-- **D-pad**: move o foco na interface TV;
+- **D-pad**: navega no frontend;
 - **OK / Enter**: ativa o item focado;
 - **Voltar**: usa histórico quando disponível; na raiz oferece alterar endereço, adicionar à tela inicial ou sair;
 - **Menu / Settings**: abre a configuração de endereço quando o controle expõe uma dessas teclas.
@@ -151,11 +197,11 @@ APK:
 android-tv/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-O workflow **Android TV** executa `assembleDebug` e `lintDebug` e publica `home-music-tv-debug-apk` como artifact. O workflow é acionado apenas por mudanças em `android-tv/**`, no próprio workflow ou manualmente.
+O workflow **Android TV** executa `assembleDebug` e `lintDebug` e publica `home-music-tv-debug-apk` como artifact. Alterações exclusivamente no frontend TV são validadas pelo CI web e não exigem gerar outro APK.
 
 ## Instalação de teste no BTV
 
-1. baixe o artifact mais recente do workflow Android TV;
+1. baixe o artifact mais recente do workflow Android TV quando houver alteração no APK;
 2. extraia `app-debug.apk` caso esteja dentro de ZIP;
 3. copie o APK para um pendrive ou baixe diretamente no aparelho;
 4. no BTV, permita instalação por fonte desconhecida para o gerenciador/Downloader usado;
@@ -189,6 +235,6 @@ O keystore não deve ser commitado. Ele precisa de backup seguro porque perder a
 - HTTPS é preferido; HTTP continua permitido para instalações locais controladas;
 - erros TLS não devem ser ignorados para “fazer funcionar” um servidor com certificado inválido.
 
-## Limitações e próximos passos
+## Validação restante
 
-A validação final é feita no hardware real e está registrada na issue #392. Os pontos principais são navegação por D-pad, escala/overscan em 1080p, player, login, persistência de sessão, comportamento do launcher e estratégia de distribuição de um APK release assinado.
+A issue #392 continua sendo a fonte de verdade para testes no hardware real. Após cada deploy do modo TV, devem ser verificados foco e retorno entre zonas, Biblioteca, Busca, Playlists, seek de 10 segundos, volume, crossfade, login, overscan/escala e comportamento do launcher.
