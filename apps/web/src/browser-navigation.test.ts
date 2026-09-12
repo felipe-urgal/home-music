@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  authenticatedSurfaceForPath,
   libraryPathForState,
   libraryRouteFromPath,
   parseAppPath,
+  parseRemoteSessionPath,
+  remoteSessionPath,
   routeForAccess
 } from './browser-navigation';
 
@@ -94,5 +97,28 @@ describe('browser navigation routes', () => {
       path: '/account',
       valid: true
     });
+  });
+});
+
+describe('remote browser route', () => {
+  it('faz round-trip do id opaco sem expor barras cruas', () => {
+    expect(remoteSessionPath('abc/123')).toBe('/remote/abc%2F123');
+    expect(parseRemoteSessionPath('/remote/abc%2F123')).toBe('abc/123');
+  });
+
+  it('rejeita sessão vazia, segmentos extras e encoding inválido', () => {
+    expect(parseRemoteSessionPath('/remote/')).toBeNull();
+    expect(parseRemoteSessionPath('/remote/a/b')).toBeNull();
+    expect(parseRemoteSessionPath('/remote/%E0%A4%A')).toBeNull();
+    expect(parseRemoteSessionPath('/library')).toBeNull();
+  });
+
+  it('separa a tela remota do app autenticado normal', () => {
+    expect(authenticatedSurfaceForPath('/remote/session-1')).toEqual({
+      type: 'remote',
+      sessionId: 'session-1'
+    });
+    expect(authenticatedSurfaceForPath('/')).toEqual({ type: 'app' });
+    expect(authenticatedSurfaceForPath('/remote/a/b')).toEqual({ type: 'app' });
   });
 });
