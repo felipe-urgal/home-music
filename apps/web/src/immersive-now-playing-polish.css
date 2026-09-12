@@ -1,0 +1,19 @@
+@media (max-width: 699px) {
+  /* O drawer assume a navegação principal no mobile; evita sobrepor dois controles no canto esquerdo. */
+  .player-screen-immersive .topbar__back-to-library {
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  .player-screen-immersive .player-topbar {
+    padding-inline: 42px;
+  }
+
+  .mobile-nav-trigger:focus-visible,
+  .mobile-navigation-drawer button:focus-visible,
+  .queue-sheet__handle:focus-visible,
+  .queue-sheet__close:focus-visible {
+    outline: 2px solid rgba(93, 184, 255, 0.88);
+    outline-offset: 2px;
+  }
+}
