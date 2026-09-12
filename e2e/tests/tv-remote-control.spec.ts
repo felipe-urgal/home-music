@@ -18,16 +18,23 @@ test('celular autenticado na mesma conta controla o player da TV sem criar áudi
   await expect(page.locator('.tv-app--v2')).toBeVisible();
   await expect(page.locator('.tv-playerbar__track strong')).toHaveText(/E2E/);
 
-  await page.getByRole('button', { name: 'Conectar controle pelo celular' }).click();
+  const remoteEntry = page.getByRole('button', { name: 'Conectar controle pelo celular' });
+  await remoteEntry.focus();
+  await remoteEntry.click();
+  const closePairing = page.getByRole('button', { name: 'Fechar controle remoto' });
   const pairingLink = page.locator('.tv-remote-dialog__url');
   await expect(pairingLink).toBeVisible();
+  await expect(closePairing).toBeFocused();
   const pairingUrl = await pairingLink.getAttribute('href');
   expect(pairingUrl).toBeTruthy();
 
-  // O X só esconde o pareamento; a sessão deve continuar viva enquanto a TV
-  // permanece aberta. Isso também libera o player para validação bidirecional.
-  await page.getByRole('button', { name: 'Fechar controle remoto' }).click();
+  // O modal precisa manter o D-pad dentro dele e devolver o foco ao gatilho ao
+  // fechar. O X/Escape só escondem o pareamento: a sessão permanece ativa.
+  await page.keyboard.press('ArrowDown');
+  await expect(pairingLink).toBeFocused();
+  await page.keyboard.press('Escape');
   await expect(page.locator('.tv-remote-dialog')).toBeHidden();
+  await expect(remoteEntry).toBeFocused();
 
   const origin = new URL(page.url()).origin;
   const phoneContext = await browser.newContext({ viewport: { width: 390, height: 844 } });

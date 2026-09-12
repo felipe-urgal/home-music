@@ -5,6 +5,20 @@ function recoverTvFocus(event: KeyboardEvent) {
   if (!root) return;
 
   const active = document.activeElement as HTMLElement | null;
+  const modal = document.querySelector<HTMLElement>('[role="dialog"][aria-modal="true"]');
+  if (modal) {
+    if (active && modal.contains(active)) return;
+    const modalTarget = modal.querySelector<HTMLElement>(
+      'button:not(:disabled), a[href], input:not(:disabled), [tabindex]:not([tabindex="-1"])'
+    );
+    if (modalTarget) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      modalTarget.focus({ preventScroll: true });
+    }
+    return;
+  }
+
   if (active && root.contains(active)) return;
 
   const target = root.querySelector<HTMLElement>('[data-tv-zone="sidebar"].is-active:not(:disabled)')

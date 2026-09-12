@@ -68,7 +68,8 @@ export async function sendTvRemoteCommand(sessionId: string, command: TvRemoteCo
 export async function closeTvRemoteSession(sessionId: string): Promise<void> {
   const response = await apiFetch(`${sessionsPath}/${encodeURIComponent(sessionId)}`, {
     method: 'DELETE',
-    headers: { 'X-Home-Music-Request': '1' }
+    headers: { 'X-Home-Music-Request': '1' },
+    keepalive: true
   });
   await expectEmpty(response, 'Não foi possível encerrar o controle remoto.');
 }

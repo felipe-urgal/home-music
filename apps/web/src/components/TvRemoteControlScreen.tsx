@@ -87,12 +87,14 @@ export function TvRemoteControlScreen({ sessionId, username }: TvRemoteControlSc
     ? Math.max(0, Math.min(100, (snapshot.currentTime / snapshot.duration) * 100))
     : 0;
   const hasTrack = Boolean(snapshot?.trackId);
+  const controlsDisabled = !hasTrack || pending !== null;
+  const transportLabel = transport === 'open' ? 'Conectado' : transport === 'error' ? 'Reconectando…' : 'Conectando…';
 
   return (
     <main className="tv-remote-screen">
       <section className="tv-remote-card">
         <header className="tv-remote-card__header">
-          <div><Tv aria-hidden="true" /><span><small>Home Music TV</small><strong>{transport === 'error' ? 'Reconectando…' : 'Conectado'}</strong></span></div>
+          <div><Tv aria-hidden="true" /><span><small>Home Music TV</small><strong>{transportLabel}</strong></span></div>
           <small>{username}</small>
         </header>
 
@@ -106,12 +108,12 @@ export function TvRemoteControlScreen({ sessionId, username }: TvRemoteControlSc
           </div>
         </div>
 
-        <div className="tv-remote-controls" aria-label="Controles da TV">
-          <button type="button" aria-label="Voltar 10 segundos" disabled={!hasTrack || pending === 'back'} onClick={() => void send('back', { type: 'seek', deltaSeconds: -10 })}><RotateCcw /><span>10s</span></button>
-          <button type="button" aria-label="Faixa anterior" disabled={!hasTrack || pending === 'previous'} onClick={() => void send('previous', { type: 'previous' })}><SkipBack /></button>
-          <button className="tv-remote-controls__primary" type="button" aria-label={snapshot?.playing ? 'Pausar' : 'Tocar'} disabled={!hasTrack || pending === 'toggle'} onClick={() => void send('toggle', { type: 'toggle-play' })}>{snapshot?.playing ? <Pause /> : <Play />}</button>
-          <button type="button" aria-label="Próxima faixa" disabled={!hasTrack || pending === 'next'} onClick={() => void send('next', { type: 'next' })}><SkipForward /></button>
-          <button type="button" aria-label="Avançar 10 segundos" disabled={!hasTrack || pending === 'forward'} onClick={() => void send('forward', { type: 'seek', deltaSeconds: 10 })}><RotateCw /><span>10s</span></button>
+        <div className="tv-remote-controls" aria-label="Controles da TV" aria-busy={pending !== null}>
+          <button type="button" aria-label="Voltar 10 segundos" disabled={controlsDisabled} onClick={() => void send('back', { type: 'seek', deltaSeconds: -10 })}><RotateCcw /><span>10s</span></button>
+          <button type="button" aria-label="Faixa anterior" disabled={controlsDisabled} onClick={() => void send('previous', { type: 'previous' })}><SkipBack /></button>
+          <button className="tv-remote-controls__primary" type="button" aria-label={snapshot?.playing ? 'Pausar' : 'Tocar'} disabled={controlsDisabled} onClick={() => void send('toggle', { type: 'toggle-play' })}>{snapshot?.playing ? <Pause /> : <Play />}</button>
+          <button type="button" aria-label="Próxima faixa" disabled={controlsDisabled} onClick={() => void send('next', { type: 'next' })}><SkipForward /></button>
+          <button type="button" aria-label="Avançar 10 segundos" disabled={controlsDisabled} onClick={() => void send('forward', { type: 'seek', deltaSeconds: 10 })}><RotateCw /><span>10s</span></button>
         </div>
 
         {error && <p className="tv-remote-card__error" role="alert">{error}</p>}

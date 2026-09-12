@@ -13,10 +13,14 @@ type TvRemotePairingDialogProps = {
   onRegenerate: () => void;
 };
 
+const focusableSelector = 'button:not(:disabled), a[href], input:not(:disabled), [tabindex]:not([tabindex="-1"])';
+
 export function TvRemotePairingDialog({
   open, state, transport, pairingUrl, error, onClose, onRegenerate
 }: TvRemotePairingDialogProps) {
+  const dialogRef = useRef<HTMLElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
   const [copied, setCopied] = useState(false);
   const qrDataUrl = useMemo(() => {
     if (!pairingUrl) return null;
@@ -29,12 +33,38 @@ export function TvRemotePairingDialog({
 
   useEffect(() => {
     if (!open) return;
+    returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     closeRef.current?.focus();
+
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+      const dialog = dialogRef.current;
+      if (!dialog) return;
+      const focusables = [...dialog.querySelectorAll<HTMLElement>(focusableSelector)]
+        .filter(element => element.getClientRects().length > 0);
+      if (focusables.length < 2) return;
+      const active = document.activeElement as HTMLElement | null;
+      const currentIndex = Math.max(0, focusables.indexOf(active ?? focusables[0]));
+      const delta = event.key === 'ArrowDown' || event.key === 'ArrowRight' ? 1 : -1;
+      const nextIndex = (currentIndex + delta + focusables.length) % focusables.length;
+      event.preventDefault();
+      focusables[nextIndex]?.focus({ preventScroll: true });
     };
+
     window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      const returnTarget = returnFocusRef.current;
+      returnFocusRef.current = null;
+      if (returnTarget?.isConnected) {
+        window.requestAnimationFrame(() => returnTarget.focus({ preventScroll: true }));
+      }
+    };
   }, [onClose, open]);
 
   useEffect(() => setCopied(false), [pairingUrl]);
@@ -62,7 +92,7 @@ export function TvRemotePairingDialog({
     <div className="tv-remote-dialog-backdrop" role="presentation" onMouseDown={event => {
       if (event.target === event.currentTarget) onClose();
     }}>
-      <section className="tv-remote-dialog" role="dialog" aria-modal="true" aria-labelledby="tv-remote-title">
+      <section ref={dialogRef} className="tv-remote-dialog" role="dialog" aria-modal="true" aria-labelledby="tv-remote-title">
         <header>
           <div><Smartphone aria-hidden="true" /><div><small>Controle pelo celular</small><h2 id="tv-remote-title">Conectar celular</h2></div></div>
           <button ref={closeRef} type="button" aria-label="Fechar controle remoto" onClick={onClose}><X /></button>

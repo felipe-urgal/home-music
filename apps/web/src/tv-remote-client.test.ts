@@ -87,6 +87,9 @@ describe('tv remote HTTP client', () => {
         'X-Home-Music-Request': '1'
       }));
     }
+    expect(fetchMock).toHaveBeenNthCalledWith(5, '/api/tv-remote/sessions/a%2Fb', expect.objectContaining({
+      method: 'DELETE', credentials: 'same-origin', keepalive: true
+    }));
   });
 
   it('propaga a mensagem estável do servidor em falhas', async () => {
