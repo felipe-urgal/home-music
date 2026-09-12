@@ -5,6 +5,10 @@ const password = 'playwright-password-2026';
 const crossfadeStorageKey = 'home-music:crossfade-seconds:v2';
 const mutationHeaders = { 'X-Home-Music-Request': '1' };
 
+type LibraryPayload = {
+  tracks: Array<{ id: string; title: string }>;
+};
+
 async function login(page: Page, url: string) {
   await page.goto(url);
   await expect(page.getByRole('heading', { name: 'Entrar' })).toBeVisible();
@@ -21,12 +25,27 @@ test('TV mostra o now playing aprovado e celular autenticado controla a reprodu√
     data: { username, password }
   });
   expect(loginResponse.ok()).toBeTruthy();
-  const playbackStateResponse = await page.context().request.get('/api/player/state');
-  expect(playbackStateResponse.ok()).toBeTruthy();
-  const playbackState = await playbackStateResponse.json() as Record<string, unknown>;
+  const libraryResponse = await page.context().request.get('/api/library');
+  expect(libraryResponse.ok()).toBeTruthy();
+  const library = await libraryResponse.json() as LibraryPayload;
+  const trackIds = new Map(library.tracks.map(track => [track.title, track.id]));
+  const queueIds = ['E2E Track', 'E2E Zeta', 'E2E Zulu'].map(title => {
+    const id = trackIds.get(title);
+    expect(id).toBeTruthy();
+    return id!;
+  });
   const resetResponse = await page.context().request.put('/api/player/state', {
     headers: mutationHeaders,
-    data: { ...playbackState, position: 0, wasPlaying: false }
+    data: {
+      currentTrackId: queueIds[0],
+      position: 0,
+      volume: 1,
+      shuffle: false,
+      repeatMode: 'off',
+      wasPlaying: false,
+      baseQueueIds: queueIds,
+      queueIds
+    }
   });
   expect(resetResponse.ok()).toBeTruthy();
 
