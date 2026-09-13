@@ -153,7 +153,7 @@ export function TvRemoteControlScreen({ sessionId, username }: TvRemoteControlSc
     : 0;
   const hasTrack = Boolean(snapshot?.trackId);
   const trackControlsDisabled = !hasTrack || pendingControl !== null;
-  const modeControlsDisabled = pendingControl !== null;
+  const modeControlsDisabled = !hasTrack || pendingControl !== null;
   const connected = transport === 'open';
   const transportLabel = connected ? 'TV conectada' : transport === 'error' ? 'Reconectando…' : 'Conectando…';
   const snapshotArtist = visibleMetadata(snapshot?.artist, 'Artista desconhecido');
@@ -222,7 +222,7 @@ export function TvRemoteControlScreen({ sessionId, username }: TvRemoteControlSc
             <label className="tv-remote-library__search">
               <Search aria-hidden="true" />
               <span className="sr-only">Buscar na biblioteca</span>
-              <input value={query} onChange={event => setQuery(event.target.value)} placeholder="Buscar música, artista ou álbum…" autoComplete="off" autoFocus />
+              <input value={query} onChange={event => setQuery(event.target.value)} placeholder="Buscar música, artista ou álbum…" autoComplete="off" />
             </label>
 
             {library.loading ? (
