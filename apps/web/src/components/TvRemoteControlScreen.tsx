@@ -231,7 +231,10 @@ export function TvRemoteControlScreen({ sessionId, username }: TvRemoteControlSc
   }
 
   function showMoreTracks() {
-    expandedTrackFocusIndexRef.current = visibleTracks.length;
+    const firstHiddenTrackIndex = visibleTracks.length;
+    expandedTrackFocusIndexRef.current = firstHiddenTrackIndex + TRACK_PAGE_SIZE >= matchingTracks.length
+      ? firstHiddenTrackIndex
+      : null;
     setVisibleTrackLimit(limit => limit + TRACK_PAGE_SIZE);
   }
 
