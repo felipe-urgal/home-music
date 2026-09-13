@@ -18,4 +18,5 @@ export type TvRemoteCommand =
 export type TvRemoteEvent =
   | { id: number; type: 'command'; data: TvRemoteCommand }
   | { id: number; type: 'snapshot'; data: TvRemotePlaybackSnapshot }
+  | { id: number; type: 'remote-connected'; data: Record<string, never> }
   | { id: number; type: 'closed'; data: { reason: 'closed' | 'expired' } };
