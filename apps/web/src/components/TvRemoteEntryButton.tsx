@@ -1,26 +1,13 @@
-import { useEffect, useRef } from 'react';
 import { ChevronRight, Smartphone } from 'lucide-react';
 import '../tv-remote-inline.css';
 
 type TvRemoteEntryButtonProps = {
   onClick: () => void;
-  autoFocus?: boolean;
 };
 
-export function TvRemoteEntryButton({ onClick, autoFocus = false }: TvRemoteEntryButtonProps) {
-  const buttonRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    if (!autoFocus) return;
-    const timer = window.setTimeout(() => {
-      buttonRef.current?.focus({ preventScroll: true });
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [autoFocus]);
-
+export function TvRemoteEntryButton({ onClick }: TvRemoteEntryButtonProps) {
   return (
     <button
-      ref={buttonRef}
       className="tv-remote-entry-button"
       data-tv-entry
       type="button"
