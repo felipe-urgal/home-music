@@ -13,6 +13,7 @@ type TvExperienceProps = {
   playlists: Playlist[];
   navigation: LibraryNavigation;
   current?: Track;
+  nextTrack?: Track;
   playing: boolean;
   currentTime: number;
   duration: number;
@@ -53,18 +54,14 @@ function trackAlbum(track: Track) {
   return visibleMetadata(track.album, 'Álbum desconhecido');
 }
 
-export function TvExperience({ tracks, current, playing, currentTime, duration, onTogglePlay, onPrevious, onNext, onPlayTrack }: TvExperienceProps) {
+export function TvExperience({ tracks, current, nextTrack, playing, currentTime, duration, onTogglePlay, onPrevious, onNext, onPlayTrack }: TvExperienceProps) {
   const rootRef = useRef<HTMLElement>(null);
-  const currentTrackIndex = current ? tracks.findIndex(track => track.id === current.id) : -1;
-  const nextTrack = currentTrackIndex >= 0 && currentTrackIndex < tracks.length - 1
-    ? tracks[currentTrackIndex + 1]
-    : undefined;
   const accent = useTvArtworkAccent(current);
   const progress = duration > 0 ? Math.max(0, Math.min(100, currentTime / duration * 100)) : 0;
   const currentArtist = current ? trackArtist(current) : '';
   const currentAlbum = current ? trackAlbum(current) : '';
   const nextArtist = nextTrack ? trackArtist(nextTrack) : '';
-  const showNextTrack = Boolean(current && nextTrack && nextTrack.id !== current.id);
+  const showNextTrack = Boolean(current && nextTrack);
   const themeStyle: TvThemeStyle = {
     '--tv-accent': accent.color,
     '--tv-accent-rgb': accent.rgb
