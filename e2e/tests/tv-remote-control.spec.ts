@@ -72,8 +72,11 @@ test('TV mostra o now playing e celular autenticado controla a reprodução', as
 
     const title = page.locator('.tv-now-playing__title');
     const beforeTitle = await title.textContent();
+    await remoteEntry.focus();
+    await expect(remoteEntry).toBeFocused();
     await phone.getByRole('button', { name: 'Próxima faixa', exact: true }).click();
     await expect.poll(async () => title.textContent(), { timeout: 5_000 }).not.toBe(beforeTitle);
+    await expect(remoteEntry).toBeFocused();
 
     const shuffle = phone.getByRole('button', { name: 'Aleatório', exact: true });
     const initialShuffle = await shuffle.getAttribute('aria-pressed');
@@ -89,9 +92,15 @@ test('TV mostra o now playing e celular autenticado controla a reprodução', as
     const currentTitle = await title.textContent();
     await expect(page.locator('.tv-now-playing__next-copy p')).toContainText(currentTitle!);
 
-    await phone.getByRole('button', { name: /Biblioteca/ }).click();
+    const libraryEntry = phone.getByRole('button', { name: /Biblioteca/ });
+    await libraryEntry.focus();
+    await libraryEntry.press('Enter');
     await expect(phone.getByRole('heading', { name: 'Biblioteca' })).toBeVisible();
+    const backToControl = phone.getByRole('button', { name: 'Voltar ao controle' });
+    await expect(backToControl).toBeFocused();
     await expect(phone.getByPlaceholder('Buscar música, artista ou álbum…')).toBeVisible();
+    await backToControl.press('Enter');
+    await expect(libraryEntry).toBeFocused();
   } finally {
     await phoneContext.close();
   }
