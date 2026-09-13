@@ -98,9 +98,9 @@ export function useTvRemoteSession(options: UseTvRemoteSessionOptions) {
 
   const openPairing = useCallback(async () => {
     setOpen(true);
-    if (activeSessionRef.current && pairingUrl) return;
+    if (state === 'creating' || (activeSessionRef.current && pairingUrl)) return;
     await createFreshSession(true);
-  }, [createFreshSession, pairingUrl]);
+  }, [createFreshSession, pairingUrl, state]);
 
   const regenerate = useCallback(async () => {
     await createFreshSession(true);
