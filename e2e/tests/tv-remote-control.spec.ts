@@ -176,11 +176,14 @@ test('TV mostra o now playing e celular autenticado controla a reprodução', as
 
     const rootTrackButtons = phone.getByRole('button', { name: /Faixa raiz/ });
     await expect(rootTrackButtons).toHaveCount(40);
-    await expect(phone.getByRole('button', { name: /Faixa raiz 41/ })).toHaveCount(0);
+    const rootTrack41 = phone.getByRole('button', { name: /Faixa raiz 41/ });
+    await expect(rootTrack41).toHaveCount(0);
     const showMoreRoot = phone.getByRole('button', { name: 'Mostrar mais músicas', exact: true });
-    await showMoreRoot.click();
+    await showMoreRoot.focus();
+    await showMoreRoot.press('Enter');
     await expect(rootTrackButtons).toHaveCount(41);
-    await expect(phone.getByRole('button', { name: /Faixa raiz 41/ })).toBeVisible();
+    await expect(rootTrack41).toBeVisible();
+    await expect(rootTrack41).toBeFocused();
     await expect(showMoreRoot).toHaveCount(0);
 
     const mpbEntry = phone.getByRole('button', { name: /^MPB/ });
@@ -192,11 +195,14 @@ test('TV mostra o now playing e celular autenticado controla a reprodução', as
 
     const folderTrackButtons = phone.getByRole('button', { name: /Faixa MPB/ });
     await expect(folderTrackButtons).toHaveCount(40);
-    await expect(phone.getByRole('button', { name: /Faixa MPB 41/ })).toHaveCount(0);
+    const folderTrack41 = phone.getByRole('button', { name: /Faixa MPB 41/ });
+    await expect(folderTrack41).toHaveCount(0);
     const showMoreFolder = phone.getByRole('button', { name: 'Mostrar mais músicas', exact: true });
-    await showMoreFolder.click();
+    await showMoreFolder.focus();
+    await showMoreFolder.press('Enter');
     await expect(folderTrackButtons).toHaveCount(41);
-    await expect(phone.getByRole('button', { name: /Faixa MPB 41/ })).toBeVisible();
+    await expect(folderTrack41).toBeVisible();
+    await expect(folderTrack41).toBeFocused();
     await expect(showMoreFolder).toHaveCount(0);
 
     await libraryBack.press('Enter');
@@ -222,10 +228,13 @@ test('TV mostra o now playing e celular autenticado controla a reprodução', as
     const playlistTrackButtons = phone.getByRole('button', { name: /Faixa raiz/ });
     await expect(playlistTrackButtons).toHaveCount(40);
     await expect(playlistTrackButtons.nth(0)).toContainText('Faixa raiz 01');
+    const playlistTrack41 = playlistTrackButtons.nth(40);
     const showMorePlaylist = phone.getByRole('button', { name: 'Mostrar mais músicas', exact: true });
-    await showMorePlaylist.click();
+    await showMorePlaylist.focus();
+    await showMorePlaylist.press('Enter');
     await expect(playlistTrackButtons).toHaveCount(41);
-    await expect(playlistTrackButtons.nth(40)).toContainText('Faixa raiz 41');
+    await expect(playlistTrack41).toContainText('Faixa raiz 41');
+    await expect(playlistTrack41).toBeFocused();
     await expect(showMorePlaylist).toHaveCount(0);
 
     await libraryBack.press('Enter');
