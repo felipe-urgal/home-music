@@ -1,8 +1,8 @@
 # AGENTS.md — regras globais do Home Music
 
-Este arquivo define as regras globais para agentes de IA e automações que alteram este repositório. Regras específicas ficam próximas do código em arquivos `AGENTS.md` locais.
+Este arquivo define as regras globais e duráveis para agentes de IA e automações que alteram este repositório. Regras específicas ficam próximas do código em arquivos `AGENTS.md` locais.
 
-> Regra principal: **nenhuma tarefa está pronta sem revisão completa do diff no head final**. Se qualquer arquivo mudar depois da revisão, reexecute os gates afetados e repita a revisão.
+> Regra principal: **nenhuma mudança está pronta para merge sem revisão completa do diff no head final e sem os gates obrigatórios aplicáveis ao mesmo head**. Se qualquer arquivo mudar depois da revisão ou da validação, reavalie os gates afetados e repita a revisão necessária.
 
 ## Como estas instruções se aplicam
 
@@ -14,17 +14,60 @@ O `AGENTS.md` da raiz vale para todo o repositório. Existem instruções comple
 - `e2e/AGENTS.md` — Playwright e fixtures browser-real;
 - `scripts/AGENTS.md` — systemd, Tailscale, smoke/policy e automação operacional.
 
-Leia o arquivo mais próximo do código alterado. Regras locais podem especializar o fluxo, mas **não podem enfraquecer** as regras globais de segurança, produção, revisão final ou autorização de merge.
+Leia o arquivo mais próximo do código alterado. Regras locais podem especializar o fluxo, mas não podem enfraquecer invariantes globais de segurança, dados, produção, validação ou autorização.
 
 Não duplique aqui runbooks que já têm fonte canônica. Prefira links para a documentação viva.
 
-## Fontes de verdade
+## Integração com `agent-workflow`
 
-Quando houver divergência, use esta ordem:
+Quando a execução vier do repositório externo `felipe-urgal/agent-workflow`:
+
+1. leia `AGENTS-CONTRACT.md` no `agent-workflow`;
+2. leia a definição do agent atual;
+3. leia a task ativa no caminho canônico registrado pelo workflow;
+4. leia este `AGENTS.md` e os `AGENTS.md` locais aplicáveis;
+5. revalide o estado real de base, branch, head, PR, CI e ambiente antes de agir.
+
+A divisão de autoridade é intencional:
+
+- `AGENTS-CONTRACT.md` controla protocolo global de execução, modos, handoff, estados terminais, sincronização da task e autorizações;
+- a task ativa define o objetivo, escopo e decisões específicas já aprovadas para a entrega;
+- este repositório define invariantes duráveis de arquitetura, segurança, dados, operação e gates;
+- código, testes, workflows e documentação local são evidência técnica do estado atual, mas não devem redefinir silenciosamente decisão de produto já aprovada na task;
+- se uma decisão da task entrar em conflito com segurança, invariantes duráveis ou realidade técnica atual, não escolha silenciosamente: registre a contradição e siga o mecanismo de escalonamento do contrato compartilhado.
+
+A task externa é **estado operacional do workflow**, não backlog do Home Music. Backlog e planejamento do produto continuam nas fontes locais apropriadas, como issues e roadmap.
+
+### Modos de execução e evidência
+
+A execução pode ocorrer em `FULL`, `REMOTE`, `PREPARE` ou `BLOCKED`, conforme `AGENTS-CONTRACT.md`.
+
+- ausência de checkout local, shell ou Git local não encerra automaticamente o trabalho se existir caminho `REMOTE` seguro, suficiente e autorizado;
+- teste local, CI remoto, inspeção estática de diff e validação manual são evidências diferentes e devem ser registradas como tal;
+- nunca declare um gate como executado quando ele não foi realmente rodado ou observado;
+- uma etapa do workflow pode terminar com limitações explicitamente registradas quando o papel daquele agent foi cumprido;
+- **merge readiness** continua exigindo os gates obrigatórios deste projeto no head final e qualquer validação manual material que os testes não cubram adequadamente.
+
+### Autorizações remotas
+
+No modo `REMOTE`, trate autorizações separadamente:
+
+- `remote_commits` pode autorizar commits por API remota na branch de trabalho;
+- `push` autoriza push Git tradicional quando houver checkout/Git local;
+- uma autorização não implica automaticamente a outra;
+- criar/atualizar PR, merge, deploy, release, exclusões remotas e outras mutações continuam exigindo a autorização correspondente registrada na task ou dada explicitamente pelo usuário.
+
+Quando não houver task ativa no `agent-workflow`, siga o fluxo local normal deste repositório.
+
+## Fontes de verdade do projeto
+
+Para uma task ativa do `agent-workflow`, use a task para objetivo, escopo e decisões aprovadas da entrega e use o repositório para verificar implementação e invariantes.
+
+Para o estado técnico/local, considere:
 
 1. comportamento executável atual: código, testes, `package.json`, workflows e exemplos de ambiente;
 2. documentação corrente: `README.md`, `docs/DEVELOPMENT.md`, `docs/PRODUCTION.md`, `docs/architecture.md` e documentos funcionais do domínio;
-3. `docs/roadmap.md` e issues abertas para estado de backlog/entrega;
+3. `docs/roadmap.md` e issues abertas para backlog e planejamento do produto;
 4. ADRs, PRs antigos e documentos `phase-*` como histórico e contexto.
 
 PR aberto descreve trabalho **ainda não mergeado**. Não trate seu comportamento futuro como estado da `main` sem necessidade explícita da tarefa.
@@ -33,7 +76,7 @@ Se código/testes e documentação corrente discordarem, confirme a implementaç
 
 ## Antes de alterar código
 
-1. Leia a issue/tarefa e o PR relacionado, quando existir.
+1. Leia a task/issue e o PR relacionado, quando existir.
 2. Confira a `main` atual e PRs abertos para evitar trabalho paralelo ou conflito desnecessário.
 3. Leia o `AGENTS.md` local aplicável.
 4. Leia somente os documentos e testes necessários para entender o domínio alterado.
@@ -52,7 +95,7 @@ UI
 -> estado exibido
 ```
 
-Não transforme uma tarefa pequena em auditoria geral do produto. Investigue o suficiente para corrigir a causa raiz e preservar as invariantes do fluxo afetado. Achados relevantes fora do escopo devem ser relatados separadamente, não corrigidos silenciosamente no mesmo PR.
+Não transforme uma tarefa pequena em auditoria geral do produto. Investigue o suficiente para corrigir a causa raiz e preservar as invariantes do fluxo afetado. Achados relevantes fora do escopo devem ser registrados separadamente, não corrigidos silenciosamente no mesmo PR.
 
 ## Princípios de engenharia
 
@@ -105,7 +148,7 @@ O gate normal do repositório é:
 npm run check
 ```
 
-Ele representa a baseline compartilhada por desenvolvimento e CI: typecheck, testes funcionais e build. Para mudanças de código/configuração/build, execute-o antes do PR quando o ambiente permitir.
+Ele representa a baseline compartilhada por desenvolvimento e CI: typecheck, testes funcionais e build. Para mudanças de código/configuração/build, execute-o localmente quando o modo permitir ou observe a execução equivalente no CI do head correto.
 
 Checks adicionais entram pelo risco da mudança, não por ritual:
 
@@ -120,7 +163,7 @@ Checks adicionais entram pelo risco da mudança, não por ritual:
 
 Política detalhada: `docs/testing-and-quality.md`.
 
-Mudança exclusivamente documental não exige subir `npm run dev` só para cumprir ritual. Faça validação estática/coerência dos documentos e registre com precisão o que foi ou não executado; o CI do PR continua sendo evidência independente do head publicado.
+Mudança exclusivamente documental não exige subir `npm run dev` só para cumprir ritual. Faça validação estática/coerência dos documentos e registre com precisão o que foi ou não executado; o CI do PR, quando existir, é evidência independente do head publicado.
 
 Validação manual é necessária quando existe comportamento observável que os testes não cobrem adequadamente. Não declare teste manual, hardware, serviço externo ou operação real como executado sem evidência.
 
@@ -143,12 +186,17 @@ Comandos read-only de produção também só devem ser usados quando forem perti
 
 ## Git e PR
 
+Quando houver task ativa no `agent-workflow`, o contrato compartilhado controla handoff, estados terminais, sincronização da task e autorizações; este arquivo não duplica esse protocolo.
+
+Regras locais que permanecem válidas:
+
 - parta da `main` atual, salvo base explicitamente diferente;
 - use branch curta e objetiva;
 - antes de criar branch, confira se já existe PR cobrindo o mesmo fluxo;
 - não mova trabalho para PR não relacionado apenas para evitar abrir outro;
 - quando o usuário ampliar explicitamente um PR existente, atualize o escopo e repita os gates/review no novo head;
-- não faça merge sem autorização explícita do usuário.
+- não execute push, commits remotos, abertura/atualização de PR, merge, delete remoto, deploy ou release sem a autorização aplicável ao fluxo atual;
+- merge continua exigindo autorização explícita mesmo com CI verde.
 
 O PR deve registrar, conforme aplicável:
 
@@ -157,11 +205,11 @@ O PR deve registrar, conforme aplicável:
 - testes/checks realmente executados e os que não foram executados;
 - documentação atualizada;
 - SHA do head submetido ao review final;
-- findings corrigidos e ausência de `BLOCKER`/`HIGH`/`MEDIUM` conhecido.
+- findings corrigidos e bloqueios conhecidos.
 
-## Auto code review final
+## Revisão final do diff
 
-Depois da última alteração e dos gates aplicáveis, revise o diff completo contra a base como reviewer independente.
+A revisão independente do workflow não substitui a necessidade de o head entregue permanecer coerente com o que foi validado. Depois da última alteração e dos gates aplicáveis, o diff completo contra a base deve ser revisado no head correspondente.
 
 Confira no mínimo:
 
@@ -175,19 +223,24 @@ Confira no mínimo:
 - documentação coerente com código, scripts e workflows;
 - nenhum segredo ou nova autoridade indevida introduzida.
 
-Se encontrar um problema, corrija, reexecute os gates afetados e repita o review no novo head. Review de um SHA antigo não vale como gate final depois de nova alteração.
+Se o SHA mudar depois de review/CI, reavalie o que foi invalidado pela mudança antes de declarar readiness de merge.
 
-## Definition of Done
+## Definição de pronto
 
-Uma entrega está pronta quando:
+Para uma **etapa do `agent-workflow`**, pronto significa que o agent cumpriu seu papel, revisou o estado/diff aplicável, registrou evidências reais, limitações e findings e sincronizou a task para um estado terminal válido conforme o contrato compartilhado.
+
+Para uma mudança estar **pronta para merge** no Home Music:
 
 - o escopo pedido está implementado sem mudança lateral desnecessária;
 - contratos e invariantes das camadas afetadas foram preservados;
 - testes focados relevantes existem/passam quando necessários;
-- gates proporcionais ao risco foram executados ou a limitação foi registrada honestamente;
+- `npm run check` e gates adicionais obrigatórios ao risco passaram no head final por execução local ou CI equivalente realmente observado;
+- validação manual material foi concluída quando os testes não cobrem adequadamente o comportamento observável;
 - documentação viva foi atualizada quando necessário;
-- o diff final foi revisado sem finding bloqueante conhecido;
-- o PR descreve o estado real, sem afirmar validações não executadas.
+- o diff final foi revisado no head correspondente;
+- não existem findings bloqueantes conhecidos;
+- o PR descreve o estado real sem afirmar validações não executadas;
+- merge só ocorre após autorização explícita do usuário.
 
 ## Referências canônicas
 
