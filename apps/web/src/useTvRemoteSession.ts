@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Track } from '@home-music/shared';
+import type { RepeatMode, Track } from '@home-music/shared';
 import { remoteSessionPath } from './browser-navigation';
 import { isTvMode } from './tv-mode';
 import {
@@ -24,10 +24,14 @@ type UseTvRemoteSessionOptions = {
   playing: boolean;
   currentTime: number;
   duration: number;
+  shuffle: boolean;
+  repeatMode: RepeatMode;
   onTogglePlay: () => void | Promise<void>;
   onPrevious: () => void;
   onNext: () => void;
   onSeek: (seconds: number) => void;
+  onToggleShuffle: () => void;
+  onCycleRepeat: () => void;
 };
 
 export function useTvRemoteSession(options: UseTvRemoteSessionOptions) {
@@ -50,7 +54,9 @@ export function useTvRemoteSession(options: UseTvRemoteSessionOptions) {
       artist: current?.albumArtist || current?.artist || null,
       playing: latestRef.current.playing,
       currentTime: latestRef.current.currentTime,
-      duration: latestRef.current.duration
+      duration: latestRef.current.duration,
+      shuffle: latestRef.current.shuffle,
+      repeatMode: latestRef.current.repeatMode
     };
   }, []);
 
@@ -143,6 +149,8 @@ export function useTvRemoteSession(options: UseTvRemoteSessionOptions) {
           previous: controls.onPrevious,
           next: controls.onNext,
           seek: controls.onSeek,
+          toggleShuffle: controls.onToggleShuffle,
+          cycleRepeatMode: controls.onCycleRepeat,
           playTrack: requestTvRemoteTrack
         });
         scheduleChanged();
@@ -172,7 +180,7 @@ export function useTvRemoteSession(options: UseTvRemoteSessionOptions) {
   useEffect(() => {
     publishChangedRef.current?.();
   }, [options.current?.id, options.current?.title, options.current?.artist, options.current?.albumArtist,
-    options.playing, options.currentTime, options.duration]);
+    options.playing, options.currentTime, options.duration, options.shuffle, options.repeatMode]);
 
   useEffect(() => () => {
     const id = activeSessionRef.current;
