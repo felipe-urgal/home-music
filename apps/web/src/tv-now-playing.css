@@ -27,14 +27,17 @@
 
 .tv-now-playing__accent-stop {
   stop-color: var(--tv-accent);
+  transition: stop-color 420ms ease;
 }
 
 .tv-now-playing__accent-stroke {
   stroke: var(--tv-accent);
+  transition: stroke 420ms ease;
 }
 
 .tv-now-playing__accent-fill {
   fill: var(--tv-accent);
+  transition: fill 420ms ease;
 }
 
 .tv-now-playing__shade {
