@@ -69,6 +69,7 @@ import './tv.css';
 import './tv-login.css';
 import './tv-v2.css';
 import './tv-remote.css';
+import './tv-photo-background.css';
 
 installPlaybackHistoryTracking();
 
