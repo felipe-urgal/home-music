@@ -3,12 +3,73 @@ import { expect, test, type Page } from '@playwright/test';
 const username = 'playwright';
 const password = 'playwright-password-2026';
 
+const remoteRootTracks = Array.from({ length: 41 }, (_, index) => {
+  const number = String(index + 1).padStart(2, '0');
+  return {
+    id: `remote-root-${number}`,
+    title: `Faixa raiz ${number}`,
+    artist: 'Artista E2E',
+    album: 'Álbum E2E',
+    albumArtist: 'Artista E2E',
+    folder: '',
+    folderPath: '',
+    duration: 180,
+    format: 'mp3',
+    hasCover: false
+  };
+});
+
+const remoteFolderTrack = {
+  id: 'remote-mpb-01',
+  title: 'Faixa MPB',
+  artist: 'Artista MPB',
+  album: 'Álbum MPB',
+  albumArtist: 'Artista MPB',
+  folder: 'MPB',
+  folderPath: 'MPB',
+  duration: 180,
+  format: 'mp3',
+  hasCover: false
+};
+
+const remotePlaylist = {
+  id: 'remote-playlist-41',
+  name: 'Playlist 41',
+  trackIds: remoteRootTracks.map(track => track.id),
+  createdAt: '2026-09-13T00:00:00.000Z',
+  updatedAt: '2026-09-13T00:00:00.000Z',
+  source: 'manual'
+};
+
 async function login(page: Page, url: string) {
   await page.goto(url);
   await expect(page.getByRole('heading', { name: 'Entrar' })).toBeVisible();
   await page.getByLabel('Usuário', { exact: true }).fill(username);
   await page.getByLabel('Senha', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
+}
+
+async function mockRemoteLibrary(page: Page) {
+  await page.route('**/api/library', route => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      tracks: [...remoteRootTracks, remoteFolderTrack],
+      scannedAt: '2026-09-13T00:00:00.000Z',
+      scanning: false,
+      revision: 1
+    })
+  }));
+  await page.route('**/api/playlists', route => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ playlists: [remotePlaylist] })
+  }));
+  await page.route('**/api/smart-playlists', route => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ playlists: [] })
+  }));
 }
 
 test('TV mostra o now playing e celular autenticado controla a reprodução', async ({ page, browser }, testInfo) => {
@@ -46,6 +107,7 @@ test('TV mostra o now playing e celular autenticado controla a reprodução', as
   try {
     await login(phone, `${origin}/`);
     await expect(phone.locator('.app-shell')).toBeVisible();
+    await mockRemoteLibrary(phone);
     await phone.goto(pairingUrl!);
 
     await expect(phone.locator('.tv-remote-screen')).toBeVisible();
@@ -96,10 +158,71 @@ test('TV mostra o now playing e celular autenticado controla a reprodução', as
     await libraryEntry.focus();
     await libraryEntry.press('Enter');
     await expect(phone.getByRole('heading', { name: 'Biblioteca' })).toBeVisible();
-    const backToControl = phone.getByRole('button', { name: 'Voltar ao controle' });
-    await expect(backToControl).toBeFocused();
-    await expect(phone.getByPlaceholder('Buscar música, artista ou álbum…')).toBeVisible();
-    await backToControl.press('Enter');
+
+    const libraryBack = phone.getByRole('button', { name: 'Voltar', exact: true });
+    const search = phone.getByPlaceholder('Buscar música, artista ou álbum…');
+    await expect(libraryBack).toBeFocused();
+    await expect(search).toHaveCount(0);
+
+    const foldersEntry = phone.getByRole('button', { name: /^Pastas/ });
+    await foldersEntry.focus();
+    await foldersEntry.press('Enter');
+    await expect(phone.getByRole('heading', { name: 'Pastas' })).toBeVisible();
+    await expect(libraryBack).toBeFocused();
+    await expect(search).toHaveCount(0);
+
+    const rootTrackButtons = phone.getByRole('button', { name: /Faixa raiz/ });
+    await expect(rootTrackButtons).toHaveCount(40);
+    await expect(phone.getByRole('button', { name: /Faixa raiz 41/ })).toHaveCount(0);
+    const showMoreRoot = phone.getByRole('button', { name: 'Mostrar mais músicas', exact: true });
+    await showMoreRoot.click();
+    await expect(rootTrackButtons).toHaveCount(41);
+    await expect(phone.getByRole('button', { name: /Faixa raiz 41/ })).toBeVisible();
+    await expect(showMoreRoot).toHaveCount(0);
+
+    const mpbEntry = phone.getByRole('button', { name: /^MPB/ });
+    await mpbEntry.focus();
+    await mpbEntry.press('Enter');
+    await expect(phone.getByRole('heading', { name: 'MPB' })).toBeVisible();
+    await expect(libraryBack).toBeFocused();
+    await expect(search).toBeVisible();
+
+    await libraryBack.press('Enter');
+    await expect(phone.getByRole('heading', { name: 'Pastas' })).toBeVisible();
+    await expect(libraryBack).toBeFocused();
+    await libraryBack.press('Enter');
+    await expect(phone.getByRole('heading', { name: 'Biblioteca' })).toBeVisible();
+    await expect(libraryBack).toBeFocused();
+
+    const playlistsEntry = phone.getByRole('button', { name: /^Playlists/ });
+    await playlistsEntry.focus();
+    await playlistsEntry.press('Enter');
+    await expect(phone.getByRole('heading', { name: 'Playlists' })).toBeVisible();
+    await expect(libraryBack).toBeFocused();
+
+    const playlistEntry = phone.getByRole('button', { name: /^Playlist 41/ });
+    await playlistEntry.focus();
+    await playlistEntry.press('Enter');
+    await expect(phone.getByRole('heading', { name: 'Playlist 41' })).toBeVisible();
+    await expect(libraryBack).toBeFocused();
+    await expect(search).toBeVisible();
+
+    const playlistTrackButtons = phone.getByRole('button', { name: /Faixa raiz/ });
+    await expect(playlistTrackButtons).toHaveCount(40);
+    await expect(playlistTrackButtons.nth(0)).toContainText('Faixa raiz 01');
+    const showMorePlaylist = phone.getByRole('button', { name: 'Mostrar mais músicas', exact: true });
+    await showMorePlaylist.click();
+    await expect(playlistTrackButtons).toHaveCount(41);
+    await expect(playlistTrackButtons.nth(40)).toContainText('Faixa raiz 41');
+    await expect(showMorePlaylist).toHaveCount(0);
+
+    await libraryBack.press('Enter');
+    await expect(phone.getByRole('heading', { name: 'Playlists' })).toBeVisible();
+    await expect(libraryBack).toBeFocused();
+    await libraryBack.press('Enter');
+    await expect(phone.getByRole('heading', { name: 'Biblioteca' })).toBeVisible();
+    await expect(libraryBack).toBeFocused();
+    await libraryBack.press('Enter');
     await expect(libraryEntry).toBeFocused();
   } finally {
     await phoneContext.close();
