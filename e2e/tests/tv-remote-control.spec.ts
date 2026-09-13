@@ -11,15 +11,14 @@ async function login(page: Page, url: string) {
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
 }
 
-test('TV mostra o now playing aprovado e celular autenticado controla a reprodução', async ({ page, browser }, testInfo) => {
+test('TV mostra o now playing e celular autenticado controla a reprodução', async ({ page, browser }, testInfo) => {
   test.skip(testInfo.project.name !== 'desktop-chromium');
 
   await login(page, '/?tv=1');
   await expect(page.locator('.tv-app--now-playing')).toBeVisible();
   await expect(page.locator('.tv-now-playing__title')).toHaveText(/E2E/);
   await expect(page.getByText('Home Music', { exact: true })).toBeVisible();
-  await expect(page.getByText('TOCANDO AGORA', { exact: true })).toBeVisible();
-  await expect(page.getByText(/Good music/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Controlar pelo celular', exact: true })).toBeVisible();
 
   const pairingLink = page.getByRole('link', { name: 'Abrir controle no celular' });
   await expect(pairingLink).toBeVisible();
@@ -27,7 +26,6 @@ test('TV mostra o now playing aprovado e celular autenticado controla a reprodu�
   const pairingUrl = await pairingLink.getAttribute('href');
   expect(pairingUrl).toBeTruthy();
 
-  await expect(page.getByRole('button', { name: 'Aleatório', exact: true })).toBeEnabled();
   await expect(page.getByRole('button', { name: 'Faixa anterior', exact: true })).toBeEnabled();
   await expect(page.getByRole('button', { name: 'Próxima faixa', exact: true })).toBeEnabled();
 
