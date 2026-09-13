@@ -19,18 +19,21 @@ const remoteRootTracks = Array.from({ length: 41 }, (_, index) => {
   };
 });
 
-const remoteFolderTrack = {
-  id: 'remote-mpb-01',
-  title: 'Faixa MPB',
-  artist: 'Artista MPB',
-  album: 'Álbum MPB',
-  albumArtist: 'Artista MPB',
-  folder: 'MPB',
-  folderPath: 'MPB',
-  duration: 180,
-  format: 'mp3',
-  hasCover: false
-};
+const remoteFolderTracks = Array.from({ length: 41 }, (_, index) => {
+  const number = String(index + 1).padStart(2, '0');
+  return {
+    id: `remote-mpb-${number}`,
+    title: `Faixa MPB ${number}`,
+    artist: 'Artista MPB',
+    album: 'Álbum MPB',
+    albumArtist: 'Artista MPB',
+    folder: 'MPB',
+    folderPath: 'MPB',
+    duration: 180,
+    format: 'mp3',
+    hasCover: false
+  };
+});
 
 const remotePlaylist = {
   id: 'remote-playlist-41',
@@ -54,7 +57,7 @@ async function mockRemoteLibrary(page: Page) {
     status: 200,
     contentType: 'application/json',
     body: JSON.stringify({
-      tracks: [...remoteRootTracks, remoteFolderTrack],
+      tracks: [...remoteRootTracks, ...remoteFolderTracks],
       scannedAt: '2026-09-13T00:00:00.000Z',
       scanning: false,
       revision: 1
@@ -186,6 +189,15 @@ test('TV mostra o now playing e celular autenticado controla a reprodução', as
     await expect(phone.getByRole('heading', { name: 'MPB' })).toBeVisible();
     await expect(libraryBack).toBeFocused();
     await expect(search).toBeVisible();
+
+    const folderTrackButtons = phone.getByRole('button', { name: /Faixa MPB/ });
+    await expect(folderTrackButtons).toHaveCount(40);
+    await expect(phone.getByRole('button', { name: /Faixa MPB 41/ })).toHaveCount(0);
+    const showMoreFolder = phone.getByRole('button', { name: 'Mostrar mais músicas', exact: true });
+    await showMoreFolder.click();
+    await expect(folderTrackButtons).toHaveCount(41);
+    await expect(phone.getByRole('button', { name: /Faixa MPB 41/ })).toBeVisible();
+    await expect(showMoreFolder).toHaveCount(0);
 
     await libraryBack.press('Enter');
     await expect(phone.getByRole('heading', { name: 'Pastas' })).toBeVisible();
