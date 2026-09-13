@@ -1,10 +1,18 @@
 import type {
+  RepeatMode,
   TvRemoteCommand as LegacyTvRemoteCommand,
-  TvRemotePlaybackSnapshot
+  TvRemotePlaybackSnapshot as LegacyTvRemotePlaybackSnapshot
 } from './index.js';
+
+export type TvRemotePlaybackSnapshot = LegacyTvRemotePlaybackSnapshot & {
+  shuffle?: boolean;
+  repeatMode?: RepeatMode;
+};
 
 export type TvRemoteCommand =
   | LegacyTvRemoteCommand
+  | { type: 'toggle-shuffle' }
+  | { type: 'cycle-repeat' }
   | { type: 'play-track'; trackId: string };
 
 export type TvRemoteEvent =
