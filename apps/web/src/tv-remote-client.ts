@@ -1,8 +1,9 @@
 import type {
+  TvRemoteCommand,
+  TvRemoteEvent,
   TvRemotePlaybackSnapshot,
   TvRemoteSessionSummary
-} from '@home-music/shared';
-import type { TvRemoteCommand, TvRemoteEvent } from '@home-music/shared/tv-remote';
+} from '@home-music/shared/tv-remote';
 import { apiFetch } from './api-client';
 
 const sessionsPath = '/api/tv-remote/sessions';
@@ -78,6 +79,7 @@ export type TvRemoteTransportStatus = 'connecting' | 'open' | 'error';
 export type TvRemoteEventHandlers = {
   onCommand?: (command: TvRemoteCommand, eventId: number) => void;
   onSnapshot?: (snapshot: TvRemotePlaybackSnapshot, eventId: number) => void;
+  onRemoteConnected?: (eventId: number) => void;
   onClosed?: (reason: Extract<TvRemoteEvent, { type: 'closed' }>['data']['reason'], eventId: number) => void;
   onTransportStatus?: (status: TvRemoteTransportStatus) => void;
   onError?: (error: unknown) => void;
@@ -115,6 +117,12 @@ export function openTvRemoteEvents(sessionId: string, handlers: TvRemoteEventHan
     handle<TvRemotePlaybackSnapshot>(event as MessageEvent<string>, (snapshot, eventId) => {
       handlers.onSnapshot?.(snapshot, eventId);
     });
+  });
+  source.addEventListener('remote-connected', event => {
+    handle<Extract<TvRemoteEvent, { type: 'remote-connected' }>['data']>(
+      event as MessageEvent<string>,
+      (_data, eventId) => handlers.onRemoteConnected?.(eventId)
+    );
   });
   source.addEventListener('closed', event => {
     handle<Extract<TvRemoteEvent, { type: 'closed' }>['data']>(

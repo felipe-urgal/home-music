@@ -1,9 +1,8 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type CSSProperties } from 'react';
 import type { Playlist, Track } from '@home-music/shared';
-import { AudioLines, Music2, Pause, Play, Shuffle, SkipBack, SkipForward } from 'lucide-react';
-import { useCrossfadeVisualState } from '../crossfade-visual';
-import { resolveTvCrossfadePresentation } from '../tv-crossfade';
+import { Music2, Pause, Play, SkipBack, SkipForward } from 'lucide-react';
 import { subscribeToTvRemoteTrackRequests } from '../tv-remote-track-request';
+import { useTvArtworkAccent } from '../useTvArtworkAccent';
 import type { LibraryNavigation } from '../useLibraryNavigation';
 import { Artwork } from './Artwork';
 import '../tv-now-playing.css';
@@ -14,6 +13,7 @@ type TvExperienceProps = {
   playlists: Playlist[];
   navigation: LibraryNavigation;
   current?: Track;
+  nextTrack?: Track;
   playing: boolean;
   currentTime: number;
   duration: number;
@@ -26,6 +26,11 @@ type TvExperienceProps = {
   onVolume: (volume: number) => void;
   onPlayTrack: (track: Track, context: Track[]) => void;
   onOpenAccount: () => void;
+};
+
+type TvThemeStyle = CSSProperties & {
+  '--tv-accent'?: string;
+  '--tv-accent-rgb'?: string;
 };
 
 function formatTime(value: number) {
@@ -49,35 +54,90 @@ function trackAlbum(track: Track) {
   return visibleMetadata(track.album, 'Álbum desconhecido');
 }
 
-export function TvExperience({ tracks, current, playing, currentTime, duration, onTogglePlay, onPrevious, onNext, onPlayTrack }: TvExperienceProps) {
+export function TvExperience({ tracks, current, nextTrack, playing, currentTime, duration, onTogglePlay, onPrevious, onNext, onPlayTrack }: TvExperienceProps) {
   const rootRef = useRef<HTMLElement>(null);
-  const crossfade = useCrossfadeVisualState();
-  const crossfadePresentation = resolveTvCrossfadePresentation(current, crossfade);
-  const incomingTrack = crossfadePresentation.incomingTrack;
-  const crossfadeProgress = crossfadePresentation.progress ?? 0;
+  const accent = useTvArtworkAccent(current);
   const progress = duration > 0 ? Math.max(0, Math.min(100, currentTime / duration * 100)) : 0;
   const currentArtist = current ? trackArtist(current) : '';
   const currentAlbum = current ? trackAlbum(current) : '';
-  const incomingArtist = incomingTrack ? trackArtist(incomingTrack) : '';
-  const incomingAlbum = incomingTrack ? trackAlbum(incomingTrack) : '';
+  const nextArtist = nextTrack ? trackArtist(nextTrack) : '';
+  const showNextTrack = Boolean(current && nextTrack);
+  const themeStyle: TvThemeStyle = {
+    '--tv-accent': accent.color,
+    '--tv-accent-rgb': accent.rgb
+  };
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const previousAccent = root.style.getPropertyValue('--tv-accent');
+    const previousAccentRgb = root.style.getPropertyValue('--tv-accent-rgb');
+
+    root.style.setProperty('--tv-accent', accent.color);
+    root.style.setProperty('--tv-accent-rgb', accent.rgb);
+
+    return () => {
+      if (previousAccent) root.style.setProperty('--tv-accent', previousAccent);
+      else root.style.removeProperty('--tv-accent');
+
+      if (previousAccentRgb) root.style.setProperty('--tv-accent-rgb', previousAccentRgb);
+      else root.style.removeProperty('--tv-accent-rgb');
+    };
+  }, [accent.color, accent.rgb]);
 
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
-    const timer = window.setTimeout(() => root.querySelector<HTMLButtonElement>('[data-tv-primary]')?.focus({ preventScroll: true }), 0);
+
+    const timer = window.setTimeout(() => {
+      const target = current
+        ? root.querySelector<HTMLButtonElement>('[data-tv-primary]')
+        : document.querySelector<HTMLButtonElement>('[data-tv-entry]');
+      target?.focus({ preventScroll: true });
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
       const active = document.activeElement as HTMLButtonElement | null;
-      if (!active || !root.contains(active) || !active.matches('[data-tv-control]')) return;
+      if (!active) return;
+
+      if (event.key === 'ArrowDown' && active.matches('[data-tv-entry]')) {
+        const primary = root.querySelector<HTMLButtonElement>('[data-tv-primary]:not(:disabled)');
+        if (!primary) return;
+        event.preventDefault();
+        primary.focus({ preventScroll: true });
+        return;
+      }
+
+      if (!root.contains(active)) return;
+
+      if (event.key === 'ArrowUp' && active.matches('[data-tv-control]')) {
+        const remoteEntry = document.querySelector<HTMLButtonElement>('[data-tv-entry]');
+        if (!remoteEntry) return;
+        event.preventDefault();
+        remoteEntry.focus({ preventScroll: true });
+        return;
+      }
+
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+      if (!active.matches('[data-tv-control]')) return;
+
       const controls = [...root.querySelectorAll<HTMLButtonElement>('[data-tv-control]:not(:disabled)')];
       const index = controls.indexOf(active);
       const target = controls[index + (event.key === 'ArrowRight' ? 1 : -1)];
       if (!target) return;
+
       event.preventDefault();
       target.focus({ preventScroll: true });
     };
+
     window.addEventListener('keydown', onKeyDown);
-    return () => { window.clearTimeout(timer); window.removeEventListener('keydown', onKeyDown); };
+    return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
   useEffect(() => subscribeToTvRemoteTrackRequests(trackId => {
@@ -85,86 +145,102 @@ export function TvExperience({ tracks, current, playing, currentTime, duration, 
     if (track) onPlayTrack(track, tracks);
   }), [onPlayTrack, tracks]);
 
-  function playRandom() {
-    if (!tracks.length) return;
-    const alternatives = current && tracks.length > 1 ? tracks.filter(track => track.id !== current.id) : tracks;
-    const track = alternatives[Math.floor(Math.random() * alternatives.length)];
-    if (track) onPlayTrack(track, tracks);
-  }
-
   return (
-    <main ref={rootRef} className="app-shell tv-app tv-app--now-playing">
+    <main ref={rootRef} className="app-shell tv-app tv-app--now-playing" style={themeStyle}>
       <svg className="tv-now-playing__scene" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
         <defs>
-          <radialGradient id="tv-record-glow" cx="52%" cy="40%" r="58%"><stop offset="0" stopColor="#d78a4d" stopOpacity=".52"/><stop offset=".44" stopColor="#683c28" stopOpacity=".34"/><stop offset="1" stopColor="#05090d" stopOpacity="0"/></radialGradient>
-          <linearGradient id="tv-record-fill" x1="0" y1="0" x2="1" y2="1"><stop stopColor="#17181c"/><stop offset=".5" stopColor="#050608"/><stop offset=".72" stopColor="#3d2015"/><stop offset="1" stopColor="#08090b"/></linearGradient>
-          <linearGradient id="tv-arm-fill" x1="0" y1="0" x2="1" y2="1"><stop stopColor="#33363a"/><stop offset=".7" stopColor="#0a0b0e"/><stop offset="1" stopColor="#b96838"/></linearGradient>
-          <filter id="tv-scene-blur"><feGaussianBlur stdDeviation="18"/></filter>
+          <radialGradient id="tv-record-glow" cx="52%" cy="40%" r="58%">
+            <stop offset="0" className="tv-now-playing__accent-stop" stopOpacity=".58" />
+            <stop offset=".44" className="tv-now-playing__accent-stop" stopOpacity=".22" />
+            <stop offset="1" stopColor="#05090d" stopOpacity="0" />
+          </radialGradient>
+          <linearGradient id="tv-record-fill" x1="0" y1="0" x2="1" y2="1">
+            <stop stopColor="#17181c" />
+            <stop offset=".5" stopColor="#050608" />
+            <stop offset=".72" className="tv-now-playing__accent-stop" stopOpacity=".30" />
+            <stop offset="1" stopColor="#08090b" />
+          </linearGradient>
+          <linearGradient id="tv-arm-fill" x1="0" y1="0" x2="1" y2="1">
+            <stop stopColor="#33363a" />
+            <stop offset=".7" stopColor="#0a0b0e" />
+            <stop offset="1" className="tv-now-playing__accent-stop" stopOpacity=".72" />
+          </linearGradient>
+          <filter id="tv-scene-blur"><feGaussianBlur stdDeviation="18" /></filter>
         </defs>
-        <rect width="1920" height="1080" fill="#05090d"/>
-        <ellipse cx="1030" cy="445" rx="760" ry="360" fill="url(#tv-record-glow)" filter="url(#tv-scene-blur)"/>
-        <ellipse cx="1045" cy="505" rx="690" ry="310" fill="url(#tv-record-fill)" transform="rotate(-7 1045 505)"/>
-        <ellipse cx="1045" cy="505" rx="520" ry="226" fill="none" stroke="#754635" strokeOpacity=".40" strokeWidth="8" transform="rotate(-7 1045 505)"/>
-        <ellipse cx="1045" cy="505" rx="365" ry="158" fill="none" stroke="#dc9364" strokeOpacity=".18" strokeWidth="5" transform="rotate(-7 1045 505)"/>
-        <path d="M1370 244 L1850 205 L1878 310 L1420 366 Z" fill="url(#tv-arm-fill)" opacity=".98"/>
-        <path d="M1410 357 L1490 375 L1462 485 L1393 463 Z" fill="#14161a"/><path d="M1430 452 L1470 465 L1452 520 L1412 507 Z" fill="#9a4d2c"/>
+        <rect width="1920" height="1080" fill="#05090d" />
+        <ellipse cx="1115" cy="500" rx="845" ry="405" fill="url(#tv-record-glow)" filter="url(#tv-scene-blur)" />
+        <ellipse cx="1110" cy="610" rx="790" ry="350" fill="url(#tv-record-fill)" transform="rotate(-7 1110 610)" />
+        <ellipse cx="1110" cy="610" rx="620" ry="270" fill="none" className="tv-now-playing__accent-stroke" strokeOpacity=".24" strokeWidth="8" transform="rotate(-7 1110 610)" />
+        <ellipse cx="1110" cy="610" rx="455" ry="198" fill="none" className="tv-now-playing__accent-stroke" strokeOpacity=".16" strokeWidth="5" transform="rotate(-7 1110 610)" />
+        <path d="M1400 255 L1880 214 L1900 330 L1452 389 Z" fill="url(#tv-arm-fill)" opacity=".98" />
+        <path d="M1446 380 L1528 398 L1496 512 L1428 489 Z" fill="#14161a" />
+        <path d="M1468 478 L1505 490 L1484 548 L1445 534 Z" className="tv-now-playing__accent-fill" opacity=".72" />
       </svg>
       <div className="tv-now-playing__shade" aria-hidden="true" />
 
       <header className="tv-now-playing__header">
-        <div className="tv-now-playing__brand"><span><Music2 aria-hidden="true" /></span><strong>Home Music</strong></div>
+        <div className="tv-now-playing__brand">
+          <span><Music2 aria-hidden="true" /></span>
+          <strong>Home Music</strong>
+        </div>
       </header>
 
-      <section className="tv-now-playing__center" aria-live="polite">
-        <div
-          className="tv-now-playing__identity-stack"
-          data-crossfading={incomingTrack ? 'true' : 'false'}
-          data-crossfade-progress={crossfadePresentation.progress ?? undefined}
-        >
-          <div
-            className="tv-now-playing__identity tv-now-playing__identity--outgoing"
-            style={{
-              opacity: crossfadePresentation.outgoingOpacity,
-              transform: `scale(${1 - crossfadeProgress * 0.035})`
-            }}
-          >
-            <div className="tv-now-playing__art"><Artwork track={current} large /></div>
+      <section className="tv-now-playing__content" aria-live="polite">
+        <div className="tv-now-playing__identity">
+          <div className="tv-now-playing__art"><Artwork track={current} large /></div>
+          <div className="tv-now-playing__details">
             <h1 className="tv-now-playing__title">{current?.title || 'Nada tocando'}</h1>
             {currentArtist && <p className="tv-now-playing__artist">{currentArtist}</p>}
-            {!current && <p className="tv-now-playing__artist">Use o celular para escolher uma música</p>}
+            {!current && <p className="tv-now-playing__artist">Escolha uma música pelo celular</p>}
             {currentAlbum && <p className="tv-now-playing__album">{currentAlbum}</p>}
           </div>
+        </div>
 
-          {incomingTrack && (
+        {current && (
+          <div className="tv-now-playing__transport">
             <div
-              className="tv-now-playing__identity tv-now-playing__identity--incoming"
-              aria-hidden="true"
-              style={{
-                opacity: crossfadePresentation.incomingOpacity,
-                transform: `scale(${0.965 + crossfadeProgress * 0.035})`
-              }}
+              className="tv-now-playing__progress"
+              role="progressbar"
+              aria-label={`${formatTime(currentTime)} de ${formatTime(duration)}`}
+              aria-valuemin={0}
+              aria-valuemax={Math.max(0, Math.round(duration))}
+              aria-valuenow={Math.max(0, Math.round(currentTime))}
             >
-              <div className="tv-now-playing__art"><Artwork track={incomingTrack} large /></div>
-              <div className="tv-now-playing__title">{incomingTrack.title}</div>
-              {incomingArtist && <p className="tv-now-playing__artist">{incomingArtist}</p>}
-              {incomingAlbum && <p className="tv-now-playing__album">{incomingAlbum}</p>}
+              <span><i style={{ width: `${progress}%` }} /></span>
+              <div><small>{formatTime(currentTime)}</small><small>{formatTime(duration)}</small></div>
             </div>
-          )}
-        </div>
 
-        <div className="tv-now-playing__progress" role="progressbar" aria-label={`${formatTime(currentTime)} de ${formatTime(duration)}`} aria-valuemin={0} aria-valuemax={Math.max(0, Math.round(duration))} aria-valuenow={Math.max(0, Math.round(currentTime))}>
-          <span><i style={{ width: `${progress}%` }} /></span><div><small>{formatTime(currentTime)}</small><small>{formatTime(duration)}</small></div>
-        </div>
-        <div className="tv-now-playing__controls" aria-label="Controles da TV">
-          <button data-tv-control type="button" aria-label="Aleatório" disabled={!current} onClick={playRandom}><Shuffle aria-hidden="true" /></button>
-          <button data-tv-control type="button" aria-label="Faixa anterior" disabled={!current} onClick={onPrevious}><SkipBack aria-hidden="true" /></button>
-          <button data-tv-control data-tv-primary type="button" className="tv-now-playing__play" aria-label={playing ? 'Pausar' : 'Tocar'} disabled={!current} onClick={onTogglePlay}>{playing ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}</button>
-          <button data-tv-control type="button" aria-label="Próxima faixa" disabled={!current} onClick={onNext}><SkipForward aria-hidden="true" /></button>
-          <button data-tv-control type="button" aria-label="Outra faixa aleatória" disabled={!current} onClick={playRandom}><Shuffle aria-hidden="true" /></button>
-        </div>
+            <div className="tv-now-playing__controls" aria-label="Controles da TV">
+              <button data-tv-control type="button" aria-label="Faixa anterior" onClick={onPrevious}>
+                <SkipBack aria-hidden="true" />
+              </button>
+              <button
+                data-tv-control
+                data-tv-primary
+                type="button"
+                className="tv-now-playing__play"
+                aria-label={playing ? 'Pausar' : 'Tocar'}
+                onClick={onTogglePlay}
+              >
+                {playing ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
+              </button>
+              <button data-tv-control type="button" aria-label="Próxima faixa" onClick={onNext}>
+                <SkipForward aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+        )}
       </section>
 
-      <footer className="tv-now-playing__footer" data-playing={playing ? 'true' : 'false'}><div><AudioLines aria-hidden="true" /><span>TOCANDO AGORA</span></div><p>“Good music<br/>makes a better home.”</p></footer>
+      {showNextTrack && nextTrack && (
+        <aside className="tv-now-playing__next" aria-label="A seguir">
+          <div className="tv-now-playing__next-copy">
+            <span>A SEGUIR</span>
+            <p>{nextTrack.title}{nextArtist ? ` • ${nextArtist}` : ''}</p>
+          </div>
+          <div className="tv-now-playing__next-art"><Artwork track={nextTrack} /></div>
+        </aside>
+      )}
     </main>
   );
 }

@@ -16,6 +16,7 @@ import { useRoutedScreen } from './browser-navigation';
 import { canUseAdminLibraryActions } from './frontend-access';
 import { buildLibraryReturnLabel } from './library-utils';
 import type { OfflineDownloads } from './offline-downloads';
+import { nextTrackDecision } from './player-state';
 import { isTvMode } from './tv-mode';
 import { useBackgroundPlaybackContinuity } from './useBackgroundPlaybackContinuity';
 import { useCrossfadeAudioPlayer } from './useCrossfadeAudioPlayer';
@@ -79,6 +80,12 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     playing: player.playing
   });
   const current = player.current;
+  const tvNextDecision = nextTrackDecision(player.queue, player.currentIndex, player.repeatMode, true);
+  const tvNextTrack = tvNextDecision.type === 'restart'
+    ? current
+    : tvNextDecision.type === 'track'
+      ? player.queue.find(track => track.id === tvNextDecision.id)
+      : undefined;
   const currentHasPhysicalDownload = Boolean(current && offline.downloadedIds.has(current.id));
   const currentHasIndividualDownload = Boolean(currentHasPhysicalDownload && current && offline.individualDownloadedIds.has(current.id));
   const currentAvailableViaCollection = Boolean(currentHasPhysicalDownload && current && offline.collectionDownloadedIds.has(current.id));
@@ -157,10 +164,14 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     playing: player.playing,
     currentTime: player.currentTime,
     duration: player.duration,
+    shuffle: player.shuffle,
+    repeatMode: player.repeatMode,
     onTogglePlay: player.togglePlay,
     onPrevious: player.previous,
     onNext: player.next,
-    onSeek: player.seek
+    onSeek: player.seek,
+    onToggleShuffle: player.toggleShuffle,
+    onCycleRepeat: player.cycleRepeat
   });
 
   const audioDecks = (
@@ -218,6 +229,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
           playlists={library.playlists}
           navigation={navigation}
           current={current}
+          nextTrack={tvNextTrack}
           playing={player.playing}
           currentTime={player.currentTime}
           duration={player.duration}
@@ -231,16 +243,18 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
           onPlayTrack={player.playTrack}
           onOpenAccount={() => setScreen('account')}
         />
-        <TvRemoteEntryButton onClick={() => { void tvRemote.openPairing(); }} />
-        <TvRemotePairingDialog
-          open={tvRemote.open}
-          state={tvRemote.state}
-          transport={tvRemote.transport}
-          pairingUrl={tvRemote.pairingUrl}
-          error={tvRemote.error}
-          onClose={tvRemote.closePairing}
-          onRegenerate={() => { void tvRemote.regenerate(); }}
-        />
+        <div className="tv-remote-pairing-stack">
+          <TvRemoteEntryButton onClick={() => { void tvRemote.openPairing(); }} />
+          <TvRemotePairingDialog
+            open={tvRemote.open}
+            state={tvRemote.state}
+            transport={tvRemote.transport}
+            pairingUrl={tvRemote.pairingUrl}
+            error={tvRemote.error}
+            onClose={tvRemote.closePairing}
+            onRegenerate={() => { void tvRemote.regenerate(); }}
+          />
+        </div>
         {library.actionError && (
           <button className="app-toast" role="status" onClick={library.clearActionError}>{library.actionError}</button>
         )}

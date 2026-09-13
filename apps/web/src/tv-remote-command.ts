@@ -5,6 +5,8 @@ export type TvRemotePlayerControls = {
   previous: () => void;
   next: () => void;
   seekBy: (deltaSeconds: -10 | 10) => void;
+  toggleShuffle: () => void;
+  cycleRepeatMode: () => void;
   playTrack: (trackId: string) => void;
 };
 
@@ -24,6 +26,12 @@ export function applyTvRemoteCommand(
       return;
     case 'seek':
       controls.seekBy(command.deltaSeconds);
+      return;
+    case 'toggle-shuffle':
+      controls.toggleShuffle();
+      return;
+    case 'cycle-repeat':
+      controls.cycleRepeatMode();
       return;
     case 'play-track':
       controls.playTrack(command.trackId);

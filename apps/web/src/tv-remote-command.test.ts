@@ -8,6 +8,8 @@ function controls() {
     previous: vi.fn(),
     next: vi.fn(),
     seekBy: vi.fn(),
+    toggleShuffle: vi.fn(),
+    cycleRepeatMode: vi.fn(),
     playTrack: vi.fn()
   };
 }
@@ -16,7 +18,9 @@ describe('applyTvRemoteCommand', () => {
   it.each([
     [{ type: 'toggle-play' } as TvRemoteCommand, 'togglePlay'],
     [{ type: 'previous' } as TvRemoteCommand, 'previous'],
-    [{ type: 'next' } as TvRemoteCommand, 'next']
+    [{ type: 'next' } as TvRemoteCommand, 'next'],
+    [{ type: 'toggle-shuffle' } as TvRemoteCommand, 'toggleShuffle'],
+    [{ type: 'cycle-repeat' } as TvRemoteCommand, 'cycleRepeatMode']
   ] as const)('aplica %o no controle canônico', (command, expected) => {
     const playerControls = controls();
 
@@ -36,6 +40,8 @@ describe('applyTvRemoteCommand', () => {
     expect(playerControls.togglePlay).not.toHaveBeenCalled();
     expect(playerControls.previous).not.toHaveBeenCalled();
     expect(playerControls.next).not.toHaveBeenCalled();
+    expect(playerControls.toggleShuffle).not.toHaveBeenCalled();
+    expect(playerControls.cycleRepeatMode).not.toHaveBeenCalled();
     expect(playerControls.playTrack).not.toHaveBeenCalled();
   });
 
@@ -49,5 +55,7 @@ describe('applyTvRemoteCommand', () => {
     expect(playerControls.previous).not.toHaveBeenCalled();
     expect(playerControls.next).not.toHaveBeenCalled();
     expect(playerControls.seekBy).not.toHaveBeenCalled();
+    expect(playerControls.toggleShuffle).not.toHaveBeenCalled();
+    expect(playerControls.cycleRepeatMode).not.toHaveBeenCalled();
   });
 });

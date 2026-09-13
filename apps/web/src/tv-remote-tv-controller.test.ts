@@ -1,6 +1,18 @@
 import { describe, expect, it, vi } from 'vitest';
 import { applyTvRemotePlayerCommand, tvRemoteSnapshot, tvRemoteSnapshotKey } from './tv-remote-tv-controller';
 
+function controls() {
+  return {
+    togglePlay: vi.fn(),
+    previous: vi.fn(),
+    next: vi.fn(),
+    seek: vi.fn(),
+    toggleShuffle: vi.fn(),
+    cycleRepeatMode: vi.fn(),
+    playTrack: vi.fn()
+  };
+}
+
 describe('tv remote TV controller', () => {
   it('normaliza o snapshot publicado pela TV', () => {
     expect(tvRemoteSnapshot({
@@ -21,6 +33,22 @@ describe('tv remote TV controller', () => {
     });
   });
 
+  it('publica shuffle e repetição quando o player fornece os modos', () => {
+    expect(tvRemoteSnapshot({
+      trackId: 'track-1',
+      title: 'Faixa',
+      artist: 'Artista',
+      playing: false,
+      currentTime: 12,
+      duration: 120,
+      shuffle: true,
+      repeatMode: 'one'
+    }, () => new Date('2026-09-12T18:00:00.000Z'))).toMatchObject({
+      shuffle: true,
+      repeatMode: 'one'
+    });
+  });
+
   it('ignora timestamp e pequenas frações para detectar mudança material', () => {
     const base = tvRemoteSnapshot({
       trackId: 'track-1', title: 'Faixa', artist: 'Artista', playing: true,
@@ -31,29 +59,25 @@ describe('tv remote TV controller', () => {
   });
 
   it.each([-10, 10] as const)('converte seek remoto %ss para posição absoluta limitada', deltaSeconds => {
-    const controls = {
-      togglePlay: vi.fn(), previous: vi.fn(), next: vi.fn(), seek: vi.fn(), playTrack: vi.fn()
-    };
+    const playerControls = controls();
     applyTvRemotePlayerCommand(
       { type: 'seek', deltaSeconds },
       { currentTime: deltaSeconds < 0 ? 5 : 118, duration: 120 },
-      controls
+      playerControls
     );
-    expect(controls.seek).toHaveBeenCalledWith(deltaSeconds < 0 ? 0 : 120);
+    expect(playerControls.seek).toHaveBeenCalledWith(deltaSeconds < 0 ? 0 : 120);
   });
 
   it('encaminha a seleção remota de faixa sem alterar seek', () => {
-    const controls = {
-      togglePlay: vi.fn(), previous: vi.fn(), next: vi.fn(), seek: vi.fn(), playTrack: vi.fn()
-    };
+    const playerControls = controls();
 
     applyTvRemotePlayerCommand(
       { type: 'play-track', trackId: 'track-42' },
       { currentTime: 25, duration: 180 },
-      controls
+      playerControls
     );
 
-    expect(controls.playTrack).toHaveBeenCalledWith('track-42');
-    expect(controls.seek).not.toHaveBeenCalled();
+    expect(playerControls.playTrack).toHaveBeenCalledWith('track-42');
+    expect(playerControls.seek).not.toHaveBeenCalled();
   });
 });

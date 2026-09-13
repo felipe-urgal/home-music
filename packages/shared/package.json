@@ -4,10 +4,10 @@
   "private": true,
   "type": "module",
   "main": "./dist/index.js",
-  "types": "./src/index.ts",
+  "types": "./src/root.ts",
   "exports": {
     ".": {
-      "types": "./src/index.ts",
+      "types": "./src/root.ts",
       "default": "./dist/index.js"
     },
     "./artwork": {

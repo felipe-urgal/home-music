@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Track } from '@home-music/shared';
+import type { RepeatMode, Track } from '@home-music/shared';
 import { remoteSessionPath } from './browser-navigation';
 import { isTvMode } from './tv-mode';
 import {
@@ -24,10 +24,14 @@ type UseTvRemoteSessionOptions = {
   playing: boolean;
   currentTime: number;
   duration: number;
+  shuffle: boolean;
+  repeatMode: RepeatMode;
   onTogglePlay: () => void | Promise<void>;
   onPrevious: () => void;
   onNext: () => void;
   onSeek: (seconds: number) => void;
+  onToggleShuffle: () => void;
+  onCycleRepeat: () => void;
 };
 
 export function useTvRemoteSession(options: UseTvRemoteSessionOptions) {
@@ -50,7 +54,9 @@ export function useTvRemoteSession(options: UseTvRemoteSessionOptions) {
       artist: current?.albumArtist || current?.artist || null,
       playing: latestRef.current.playing,
       currentTime: latestRef.current.currentTime,
-      duration: latestRef.current.duration
+      duration: latestRef.current.duration,
+      shuffle: latestRef.current.shuffle,
+      repeatMode: latestRef.current.repeatMode
     };
   }, []);
 
@@ -63,12 +69,12 @@ export function useTvRemoteSession(options: UseTvRemoteSessionOptions) {
     }
   }, []);
 
-  const createFreshSession = useCallback(async () => {
+  const createFreshSession = useCallback(async (showPairing: boolean) => {
     const previous = activeSessionRef.current;
     activeSessionRef.current = null;
     setSessionId(null);
     setPairingUrl(null);
-    setOpen(true);
+    setOpen(showPairing);
     setState('creating');
     setTransport('connecting');
     setError(null);
@@ -92,13 +98,17 @@ export function useTvRemoteSession(options: UseTvRemoteSessionOptions) {
 
   const openPairing = useCallback(async () => {
     setOpen(true);
-    if (activeSessionRef.current && pairingUrl) return;
-    await createFreshSession();
-  }, [createFreshSession, pairingUrl]);
+    if (state === 'creating' || (activeSessionRef.current && pairingUrl)) return;
+    await createFreshSession(true);
+  }, [createFreshSession, pairingUrl, state]);
+
+  const regenerate = useCallback(async () => {
+    await createFreshSession(true);
+  }, [createFreshSession]);
 
   useEffect(() => {
     if (!isTvMode() || state !== 'idle' || activeSessionRef.current) return;
-    void createFreshSession();
+    void createFreshSession(false);
   }, [createFreshSession, state]);
 
   useEffect(() => {
@@ -133,9 +143,15 @@ export function useTvRemoteSession(options: UseTvRemoteSessionOptions) {
     };
     publishChangedRef.current = scheduleChanged;
 
+    const markConnected = () => {
+      setState('connected');
+      setOpen(false);
+    };
+
     const stopEvents = openTvRemoteEvents(sessionId, {
+      onRemoteConnected: markConnected,
       onCommand: command => {
-        setState('connected');
+        markConnected();
         const current = playbackState();
         const controls = latestRef.current;
         applyTvRemotePlayerCommand(command, current, {
@@ -143,12 +159,15 @@ export function useTvRemoteSession(options: UseTvRemoteSessionOptions) {
           previous: controls.onPrevious,
           next: controls.onNext,
           seek: controls.onSeek,
+          toggleShuffle: controls.onToggleShuffle,
+          cycleRepeatMode: controls.onCycleRepeat,
           playTrack: requestTvRemoteTrack
         });
         scheduleChanged();
       },
       onClosed: () => {
         activeSessionRef.current = null;
+        setOpen(false);
         setState('closed');
         setSessionId(null);
         setPairingUrl(null);
@@ -172,7 +191,7 @@ export function useTvRemoteSession(options: UseTvRemoteSessionOptions) {
   useEffect(() => {
     publishChangedRef.current?.();
   }, [options.current?.id, options.current?.title, options.current?.artist, options.current?.albumArtist,
-    options.playing, options.currentTime, options.duration]);
+    options.playing, options.currentTime, options.duration, options.shuffle, options.repeatMode]);
 
   useEffect(() => () => {
     const id = activeSessionRef.current;
@@ -189,6 +208,6 @@ export function useTvRemoteSession(options: UseTvRemoteSessionOptions) {
     error,
     openPairing,
     closePairing,
-    regenerate: createFreshSession
+    regenerate
   };
 }
