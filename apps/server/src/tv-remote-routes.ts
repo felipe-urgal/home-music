@@ -1,15 +1,23 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import type { TvRemotePlaybackSnapshot } from '@home-music/shared';
-import type { TvRemoteCommand, TvRemoteEvent } from '@home-music/shared/tv-remote';
+import type { TvRemoteCommand, TvRemoteEvent, TvRemotePlaybackSnapshot } from '@home-music/shared/tv-remote';
 import type { TvRemoteSessionManager } from './tv-remote-session-manager.js';
 
 type SessionParams = { Params: { sessionId: string } };
 const missing = { error: 'Controle remoto não encontrado.' };
+const snapshotKeys = new Set([
+  'trackId', 'title', 'artist', 'playing', 'currentTime', 'duration', 'updatedAt', 'shuffle', 'repeatMode'
+]);
 
 function parseCommand(value: unknown): TvRemoteCommand | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const body = value as Record<string, unknown>;
-  if (body.type === 'toggle-play' || body.type === 'previous' || body.type === 'next') {
+  if (
+    body.type === 'toggle-play'
+    || body.type === 'previous'
+    || body.type === 'next'
+    || body.type === 'toggle-shuffle'
+    || body.type === 'cycle-repeat'
+  ) {
     return Object.keys(body).length === 1 ? { type: body.type } : null;
   }
   if (body.type === 'seek' && (body.deltaSeconds === -10 || body.deltaSeconds === 10)) {
@@ -31,12 +39,15 @@ function nullableString(value: unknown): value is string | null {
 function parseSnapshot(value: unknown): TvRemotePlaybackSnapshot | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const body = value as Record<string, unknown>;
-  if (Object.keys(body).length !== 7
+  const keys = Object.keys(body);
+  if (keys.length < 7 || keys.length > 9 || keys.some(key => !snapshotKeys.has(key))
     || !nullableString(body.trackId) || !nullableString(body.title) || !nullableString(body.artist)
     || typeof body.playing !== 'boolean'
     || typeof body.currentTime !== 'number' || !Number.isFinite(body.currentTime)
     || typeof body.duration !== 'number' || !Number.isFinite(body.duration)
-    || typeof body.updatedAt !== 'string' || !Number.isFinite(Date.parse(body.updatedAt))) return null;
+    || typeof body.updatedAt !== 'string' || !Number.isFinite(Date.parse(body.updatedAt))
+    || (body.shuffle !== undefined && typeof body.shuffle !== 'boolean')
+    || (body.repeatMode !== undefined && body.repeatMode !== 'off' && body.repeatMode !== 'all' && body.repeatMode !== 'one')) return null;
   const duration = Math.max(0, body.duration);
   const currentTime = Math.max(0, body.currentTime);
   return {
@@ -46,7 +57,9 @@ function parseSnapshot(value: unknown): TvRemotePlaybackSnapshot | null {
     playing: body.playing,
     currentTime: duration > 0 ? Math.min(currentTime, duration) : currentTime,
     duration,
-    updatedAt: new Date(body.updatedAt).toISOString()
+    updatedAt: new Date(body.updatedAt).toISOString(),
+    ...(body.shuffle === undefined ? {} : { shuffle: body.shuffle }),
+    ...(body.repeatMode === undefined ? {} : { repeatMode: body.repeatMode })
   };
 }
 
@@ -56,7 +69,6 @@ async function requireIdentity(request: FastifyRequest, reply: FastifyReply) {
 
 export function registerTvRemoteRoutes(app: FastifyInstance, manager: TvRemoteSessionManager) {
   const streams = new Set<() => void>();
-  // onClose runs after HTTP connections finish; drain SSE before that phase.
   app.addHook('preClose', async () => {
     for (const close of [...streams]) close();
   });
