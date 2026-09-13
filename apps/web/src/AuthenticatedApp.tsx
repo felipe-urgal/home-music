@@ -157,10 +157,14 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     playing: player.playing,
     currentTime: player.currentTime,
     duration: player.duration,
+    shuffle: player.shuffle,
+    repeatMode: player.repeatMode,
     onTogglePlay: player.togglePlay,
     onPrevious: player.previous,
     onNext: player.next,
-    onSeek: player.seek
+    onSeek: player.seek,
+    onToggleShuffle: player.toggleShuffle,
+    onCycleRepeat: player.cycleRepeat
   });
 
   const audioDecks = (
