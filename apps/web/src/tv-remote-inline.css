@@ -19,7 +19,7 @@
     0 0 26px rgb(var(--tv-accent-rgb, 255 146 56) / .14);
   text-align: left;
   backdrop-filter: blur(16px);
-  transition: border-color 420ms ease, box-shadow 420ms ease, background 160ms ease, transform 160ms ease;
+  transition: border-color 420ms ease, box-shadow 420ms ease;
 }
 
 .tv-remote-entry-button:hover,
