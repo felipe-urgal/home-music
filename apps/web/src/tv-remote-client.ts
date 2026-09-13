@@ -80,7 +80,7 @@ export type TvRemoteEventHandlers = {
   onCommand?: (command: TvRemoteCommand, eventId: number) => void;
   onSnapshot?: (snapshot: TvRemotePlaybackSnapshot, eventId: number) => void;
   onRemoteConnected?: (eventId: number) => void;
-  onClosed?: (reason: Extract<TvRemoteEvent, { type: 'closed' }>['data']['reason)], eventId: number) => void;
+  onClosed?: (reason: Extract<TvRemoteEvent, { type: 'closed' }>['data']['reason'], eventId: number) => void;
   onTransportStatus?: (status: TvRemoteTransportStatus) => void;
   onError?: (error: unknown) => void;
 };
