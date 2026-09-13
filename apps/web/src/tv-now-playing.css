@@ -93,24 +93,12 @@
   transform: translateY(-47%);
 }
 
-.tv-now-playing__identity-stack {
-  display: grid;
-}
-
 .tv-now-playing__identity {
-  grid-area: 1 / 1;
   min-width: 0;
   display: grid;
   grid-template-columns: var(--tv-art-size) minmax(0, 1fr);
   gap: var(--tv-content-gap);
   align-items: center;
-  transform-origin: center;
-  transition: opacity 40ms linear, transform 40ms linear;
-  will-change: opacity, transform;
-}
-
-.tv-now-playing__identity--incoming {
-  pointer-events: none;
 }
 
 .tv-now-playing__art {
@@ -235,7 +223,6 @@
   color: #fff;
   box-shadow: 0 12px 30px rgba(0, 0, 0, .22);
   backdrop-filter: blur(10px);
-  transition: border-color 160ms ease, background 420ms ease, box-shadow 420ms ease, transform 160ms ease;
 }
 
 .tv-now-playing__controls button svg {
@@ -264,6 +251,7 @@
   box-shadow:
     0 16px 38px rgba(0, 0, 0, .30),
     0 0 34px rgb(var(--tv-accent-rgb) / .30);
+  transition: background 420ms ease, box-shadow 420ms ease;
 }
 
 .tv-now-playing__controls .tv-now-playing__play svg {
@@ -410,10 +398,6 @@
   .tv-app--now-playing *::after {
     scroll-behavior: auto !important;
     transition: none !important;
-  }
-
-  .tv-now-playing__identity {
-    transform: none !important;
   }
 }
 
