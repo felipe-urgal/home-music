@@ -1,8 +1,6 @@
 import { useEffect, useRef, type CSSProperties } from 'react';
 import type { Playlist, Track } from '@home-music/shared';
 import { Music2, Pause, Play, SkipBack, SkipForward } from 'lucide-react';
-import { useCrossfadeVisualState } from '../crossfade-visual';
-import { resolveTvCrossfadePresentation } from '../tv-crossfade';
 import { subscribeToTvRemoteTrackRequests } from '../tv-remote-track-request';
 import { useTvArtworkAccent } from '../useTvArtworkAccent';
 import type { LibraryNavigation } from '../useLibraryNavigation';
@@ -57,20 +55,14 @@ function trackAlbum(track: Track) {
 
 export function TvExperience({ tracks, current, playing, currentTime, duration, onTogglePlay, onPrevious, onNext, onPlayTrack }: TvExperienceProps) {
   const rootRef = useRef<HTMLElement>(null);
-  const crossfade = useCrossfadeVisualState();
-  const crossfadePresentation = resolveTvCrossfadePresentation(current, crossfade);
-  const incomingTrack = crossfadePresentation.incomingTrack;
-  const crossfadeProgress = crossfadePresentation.progress ?? 0;
   const currentTrackIndex = current ? tracks.findIndex(track => track.id === current.id) : -1;
   const nextTrack = currentTrackIndex >= 0 && currentTrackIndex < tracks.length - 1
     ? tracks[currentTrackIndex + 1]
     : undefined;
-  const accent = useTvArtworkAccent(incomingTrack ?? current);
+  const accent = useTvArtworkAccent(current);
   const progress = duration > 0 ? Math.max(0, Math.min(100, currentTime / duration * 100)) : 0;
   const currentArtist = current ? trackArtist(current) : '';
   const currentAlbum = current ? trackAlbum(current) : '';
-  const incomingArtist = incomingTrack ? trackArtist(incomingTrack) : '';
-  const incomingAlbum = incomingTrack ? trackAlbum(incomingTrack) : '';
   const nextArtist = nextTrack ? trackArtist(nextTrack) : '';
   const showNextTrack = Boolean(current && nextTrack && nextTrack.id !== current.id);
   const themeStyle: TvThemeStyle = {
@@ -193,44 +185,14 @@ export function TvExperience({ tracks, current, playing, currentTime, duration, 
       </header>
 
       <section className="tv-now-playing__content" aria-live="polite">
-        <div
-          className="tv-now-playing__identity-stack"
-          data-crossfading={incomingTrack ? 'true' : 'false'}
-          data-crossfade-progress={crossfadePresentation.progress ?? undefined}
-        >
-          <div
-            className="tv-now-playing__identity tv-now-playing__identity--outgoing"
-            style={{
-              opacity: crossfadePresentation.outgoingOpacity,
-              transform: `scale(${1 - crossfadeProgress * 0.025})`
-            }}
-          >
-            <div className="tv-now-playing__art"><Artwork track={current} large /></div>
-            <div className="tv-now-playing__details">
-              <h1 className="tv-now-playing__title">{current?.title || 'Nada tocando'}</h1>
-              {currentArtist && <p className="tv-now-playing__artist">{currentArtist}</p>}
-              {!current && <p className="tv-now-playing__artist">Escolha uma música pelo celular</p>}
-              {currentAlbum && <p className="tv-now-playing__album">{currentAlbum}</p>}
-            </div>
+        <div className="tv-now-playing__identity">
+          <div className="tv-now-playing__art"><Artwork track={current} large /></div>
+          <div className="tv-now-playing__details">
+            <h1 className="tv-now-playing__title">{current?.title || 'Nada tocando'}</h1>
+            {currentArtist && <p className="tv-now-playing__artist">{currentArtist}</p>}
+            {!current && <p className="tv-now-playing__artist">Escolha uma música pelo celular</p>}
+            {currentAlbum && <p className="tv-now-playing__album">{currentAlbum}</p>}
           </div>
-
-          {incomingTrack && (
-            <div
-              className="tv-now-playing__identity tv-now-playing__identity--incoming"
-              aria-hidden="true"
-              style={{
-                opacity: crossfadePresentation.incomingOpacity,
-                transform: `scale(${0.975 + crossfadeProgress * 0.025})`
-              }}
-            >
-              <div className="tv-now-playing__art"><Artwork track={incomingTrack} large /></div>
-              <div className="tv-now-playing__details">
-                <div className="tv-now-playing__title">{incomingTrack.title}</div>
-                {incomingArtist && <p className="tv-now-playing__artist">{incomingArtist}</p>}
-                {incomingAlbum && <p className="tv-now-playing__album">{incomingAlbum}</p>}
-              </div>
-            </div>
-          )}
         </div>
 
         {current && (
