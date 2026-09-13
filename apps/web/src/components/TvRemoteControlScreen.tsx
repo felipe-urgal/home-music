@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { Track } from '@home-music/shared';
 import type { TvRemoteCommand, TvRemotePlaybackSnapshot } from '@home-music/shared/tv-remote';
 import {
   ChevronLeft,
@@ -165,7 +166,7 @@ export function TvRemoteControlScreen({ sessionId, username }: TvRemoteControlSc
       : selectedPlaylist
         ? selectedPlaylist.trackIds
           .map(id => libraryIndex.trackMap.get(id))
-          .filter(track => track !== undefined)
+          .filter((track): track is Track => Boolean(track))
         : [];
 
     if (normalizedQuery) {
@@ -255,7 +256,6 @@ export function TvRemoteControlScreen({ sessionId, username }: TvRemoteControlSc
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : 'Não foi possível tocar esta música.';
       setError(message);
-      if (message.includes('não encontrado')) setState('missing');
     } finally {
       pendingTrackRef.current = null;
       setPendingTrackId(null);
@@ -288,7 +288,7 @@ export function TvRemoteControlScreen({ sessionId, username }: TvRemoteControlSc
   const snapshotArtist = visibleMetadata(snapshot?.artist, 'Artista desconhecido');
   const repeatMode = snapshot?.repeatMode ?? 'off';
 
-  const renderTrack = (track: (typeof library.tracks)[number]) => {
+  const renderTrack = (track: Track) => {
     const current = snapshot?.trackId === track.id;
     const loadingTrack = pendingTrackId === track.id;
     const artist = visibleMetadata(track.albumArtist || track.artist, 'Artista desconhecido');
