@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { TvRemoteCommand, TvRemotePlaybackSnapshot } from '@home-music/shared/tv-remote';
 import {
   ChevronLeft,
@@ -21,6 +21,7 @@ import {
   sendTvRemoteCommand,
   type TvRemoteTransportStatus
 } from '../tv-remote-client';
+import { isTvRemotePlaybackFresh } from '../tv-remote-presence';
 import { useLibraryData } from '../useLibraryData';
 import { Artwork } from './Artwork';
 
@@ -57,11 +58,16 @@ export function TvRemoteControlScreen({ sessionId, username }: TvRemoteControlSc
   const [state, setState] = useState<RemoteState>('loading');
   const [transport, setTransport] = useState<TvRemoteTransportStatus>('connecting');
   const [snapshot, setSnapshot] = useState<TvRemotePlaybackSnapshot | null>(null);
+  const [lastSnapshotReceivedAt, setLastSnapshotReceivedAt] = useState<number | null>(null);
+  const [presenceNow, setPresenceNow] = useState(() => Date.now());
   const [pendingControl, setPendingControl] = useState<string | null>(null);
   const [pendingTrackId, setPendingTrackId] = useState<string | null>(null);
   const [view, setView] = useState<RemoteView>('control');
   const [query, setQuery] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const libraryEntryRef = useRef<HTMLButtonElement>(null);
+  const libraryBackRef = useRef<HTMLButtonElement>(null);
+  const focusViewRef = useRef<RemoteView | null>(null);
 
   useEffect(() => {
     let disposed = false;
@@ -69,13 +75,22 @@ export function TvRemoteControlScreen({ sessionId, username }: TvRemoteControlSc
     setState('loading');
     setError(null);
     setSnapshot(null);
+    setLastSnapshotReceivedAt(null);
 
     void getTvRemoteSession(sessionId).then(session => {
       if (disposed) return;
+      const receivedAt = Date.now();
       setSnapshot(session.snapshot);
+      setLastSnapshotReceivedAt(session.snapshot ? receivedAt : null);
+      setPresenceNow(receivedAt);
       setState('ready');
       stopEvents = openTvRemoteEvents(sessionId, {
-        onSnapshot: next => setSnapshot(next),
+        onSnapshot: next => {
+          const nextReceivedAt = Date.now();
+          setSnapshot(next);
+          setLastSnapshotReceivedAt(nextReceivedAt);
+          setPresenceNow(nextReceivedAt);
+        },
         onClosed: () => setState('closed'),
         onTransportStatus: setTransport,
         onError: () => setError('A TV enviou uma atualização inválida.')
@@ -93,6 +108,19 @@ export function TvRemoteControlScreen({ sessionId, username }: TvRemoteControlSc
     };
   }, [sessionId]);
 
+  useEffect(() => {
+    if (state !== 'ready') return;
+    const timer = window.setInterval(() => setPresenceNow(Date.now()), 5_000);
+    return () => window.clearInterval(timer);
+  }, [state]);
+
+  useEffect(() => {
+    if (focusViewRef.current !== view) return;
+    const target = view === 'library' ? libraryBackRef.current : libraryEntryRef.current;
+    target?.focus({ preventScroll: true });
+    focusViewRef.current = null;
+  }, [view]);
+
   const visibleTracks = useMemo(() => {
     const needle = normalized(query);
     return library.tracks.filter(track => {
@@ -107,6 +135,11 @@ export function TvRemoteControlScreen({ sessionId, username }: TvRemoteControlSc
     () => library.tracks.find(track => track.id === snapshot?.trackId),
     [library.tracks, snapshot?.trackId]
   );
+
+  function switchView(next: RemoteView) {
+    focusViewRef.current = next;
+    setView(next);
+  }
 
   async function sendControl(key: string, command: TvRemoteCommand) {
     if (pendingControl) return;
@@ -152,10 +185,16 @@ export function TvRemoteControlScreen({ sessionId, username }: TvRemoteControlSc
     ? Math.max(0, Math.min(100, (snapshot.currentTime / snapshot.duration) * 100))
     : 0;
   const hasTrack = Boolean(snapshot?.trackId);
-  const trackControlsDisabled = !hasTrack || pendingControl !== null;
-  const modeControlsDisabled = !hasTrack || pendingControl !== null;
-  const connected = transport === 'open';
-  const transportLabel = connected ? 'TV conectada' : transport === 'error' ? 'Reconectando…' : 'Conectando…';
+  const connected = isTvRemotePlaybackFresh(transport, lastSnapshotReceivedAt, presenceNow);
+  const trackControlsDisabled = !connected || !hasTrack || pendingControl !== null;
+  const modeControlsDisabled = !connected || !hasTrack || pendingControl !== null;
+  const transportLabel = connected
+    ? 'TV conectada'
+    : transport === 'error'
+      ? 'Reconectando…'
+      : transport === 'open' && lastSnapshotReceivedAt !== null
+        ? 'TV desconectada'
+        : 'Conectando…';
   const snapshotArtist = visibleMetadata(snapshot?.artist, 'Artista desconhecido');
   const repeatMode = snapshot?.repeatMode ?? 'off';
 
@@ -206,16 +245,18 @@ export function TvRemoteControlScreen({ sessionId, username }: TvRemoteControlSc
               >{repeatMode === 'one' ? <Repeat1 aria-hidden="true" /> : <Repeat2 aria-hidden="true" />}</button>
             </div>
 
-            <button className="tv-remote-library-entry" type="button" onClick={() => setView('library')}>
+            <button ref={libraryEntryRef} className="tv-remote-library-entry" type="button" onClick={() => switchView('library')}>
               <span className="tv-remote-library-entry__icon"><ListMusic aria-hidden="true" /></span>
               <span className="tv-remote-library-entry__copy"><strong>Biblioteca</strong><small>Buscar e escolher músicas</small></span>
               <ChevronRight aria-hidden="true" />
             </button>
+
+            {error && <p className="tv-remote-card__error" role="alert">{error}</p>}
           </>
         ) : (
           <section className="tv-remote-library" aria-label="Biblioteca">
             <div className="tv-remote-library__heading">
-              <button type="button" aria-label="Voltar ao controle" onClick={() => setView('control')}><ChevronLeft aria-hidden="true" /></button>
+              <button ref={libraryBackRef} type="button" aria-label="Voltar ao controle" onClick={() => switchView('control')}><ChevronLeft aria-hidden="true" /></button>
               <div><h1>Biblioteca</h1><p>Escolha uma música para tocar na TV.</p></div>
             </div>
 
@@ -224,6 +265,8 @@ export function TvRemoteControlScreen({ sessionId, username }: TvRemoteControlSc
               <span className="sr-only">Buscar na biblioteca</span>
               <input value={query} onChange={event => setQuery(event.target.value)} placeholder="Buscar música, artista ou álbum…" autoComplete="off" />
             </label>
+
+            {error && <p className="tv-remote-card__error" role="alert">{error}</p>}
 
             {library.loading ? (
               <p className="tv-remote-library__status">Carregando biblioteca…</p>
@@ -257,8 +300,6 @@ export function TvRemoteControlScreen({ sessionId, username }: TvRemoteControlSc
             )}
           </section>
         )}
-
-        {error && <p className="tv-remote-card__error" role="alert">{error}</p>}
       </section>
     </main>
   );

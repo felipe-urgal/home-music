@@ -8,19 +8,18 @@ A composição do frontend mantém sessão, navegação e playback com responsab
 
 - inicializa autenticação e downloads offline em paralelo;
 - decide entre loading de sessão, login, aplicação autenticada, aplicação offline e superfície remota;
-- controla entrada/saída manual do modo offline;
+- controla entrada e saída manual do modo offline;
 - deriva a entrada offline automática de `auth.unreachable` + manifesto físico local;
-- no cold start realmente offline, reconcilia Cache Storage fora do caminho crítico;
 - mantém `OfflineApp` no shell inicial;
-- não conhece composição interna de biblioteca/player.
+- não conhece a composição interna de biblioteca/player.
 
-A ordem é importante. Depois de resolver autenticação/offline, `App` examina a URL autenticada. Uma rota válida `/remote/<sessionId>` monta `TvRemoteControlScreen` **antes** de `AuthenticatedApp`. Dessa forma o celular reutiliza sessão/autenticação da raiz, mas não inicializa biblioteca nem player online e não cria `<audio>`.
+Depois de resolver autenticação/offline, `App` examina a URL autenticada. Uma rota válida `/remote/<sessionId>` monta `TvRemoteControlScreen` **antes** de `AuthenticatedApp`. Dessa forma o celular reutiliza sessão/autenticação da raiz, mas não inicializa biblioteca nem player online e não cria `<audio>`.
 
 Rotas normais continuam montando `AuthenticatedApp`.
 
 ## AuthenticatedApp
 
-`AuthenticatedApp.tsx` é a composição da experiência autenticada e mantém juntas as fontes globais que compartilham ciclo de vida:
+`AuthenticatedApp.tsx` compõe a experiência autenticada e mantém juntas as fontes globais que compartilham ciclo de vida:
 
 - `useLibraryData` para biblioteca/playlists;
 - `useLibraryNavigation` e `useRoutedScreen` para navegação;
@@ -28,11 +27,13 @@ Rotas normais continuam montando `AuthenticatedApp`.
 - continuidade, preload, qualidade de rede e preferência de volume;
 - shells e superfícies mobile/desktop/TV;
 - dados/callback de entrada manual no modo offline;
-- `useTvRemoteSession`, que recebe estado/callbacks do player existente e só cria uma sessão remota após a ação explícita **Controle pelo celular** no modo TV.
+- `useTvRemoteSession`, que recebe estado e callbacks do player existente.
 
-O controle remoto não adiciona um segundo player. `useTvRemoteSession` deriva snapshots do mesmo `useCrossfadeAudioPlayer` e converte comandos remotos para `togglePlay`, `previous`, `next` e `seek` já existentes.
+No modo TV, `useTvRemoteSession` prepara uma sessão efêmera em background para que o pareamento esteja pronto sem atrasar a interação. Isso não abre automaticamente o QR: a ação explícita **Controlar pelo celular** apenas abre a apresentação da sessão preparada. O QR fica abaixo do CTA e é escondido quando o controlador remoto realmente conecta.
 
-O botão remoto é composto apenas na experiência TV. O overlay pode ser escondido sem destruir a sessão; gerar novo código substitui a sessão anterior. No unmount da experiência autenticada, o hook tenta encerrar a sessão com DELETE best-effort.
+O controle remoto não adiciona um segundo player. `useTvRemoteSession` deriva snapshots do mesmo `useCrossfadeAudioPlayer` e converte comandos remotos para os callbacks canônicos de play/pause, anterior, próxima, seek legado, shuffle e repeat. `play-track` solicita a faixa ao mesmo fluxo de reprodução da TV.
+
+`A SEGUIR` recebe a decisão da fila canônica do player em vez de derivar a próxima faixa da biblioteca completa.
 
 Extrair esses hooks para stores/contexts independentes sem necessidade concreta voltaria a espalhar estado global e não faz parte desta arquitetura.
 
@@ -43,9 +44,11 @@ Extrair esses hooks para stores/contexts independentes sem necessidade concreta 
 `TvRemoteControlScreen`:
 
 - valida a sessão remota autenticada;
-- abre SSE para snapshots/fechamento;
-- mostra conexão, faixa e progresso;
+- abre SSE para snapshots e encerramento;
+- considera **TV conectada** somente quando o transporte ao servidor está aberto **e** existe snapshot recente da TV;
+- mostra faixa, progresso, shuffle e repeat;
 - envia comandos serializados;
+- oferece uma tela secundária de Biblioteca para buscar e escolher faixas;
 - nunca monta `AuthenticatedApp`, `useAudioPlayer` ou `<audio>`.
 
 O telefone é um controle do player da TV, não outra superfície de reprodução.
@@ -55,26 +58,12 @@ O telefone é um controle do player da TV, não outra superfície de reproduçã
 `OfflineApp.tsx` compõe a experiência isolada de downloads offline. Ele mantém:
 
 - navegação local entre biblioteca offline e player;
-- uma instância de `useCrossfadeAudioPlayer` com `offlineMode: true` e decks pela rota `/offline-audio/<trackId>`;
+- uma instância de `useCrossfadeAudioPlayer` com `offlineMode: true`;
 - continuidade de reprodução offline e fallback de transição;
 - shell/barra do player reutilizados;
-- `phone-surface--offline` para diferenças responsivas próprias do modo;
-- saída pelo callback de `App.tsx`, que restaura a experiência online e refaz a verificação de autenticação/conectividade.
+- saída pelo callback de `App.tsx`, que restaura a experiência online.
 
-O player offline é separado porque opera com outra coleção/persistência, mas cada modo mantém uma única fonte de verdade. O segundo deck de crossfade é somente transição temporária e é adotado pelo `useAudioPlayer` no handoff.
-
-A biblioteca offline limita a montagem inicial dos downloads individuais a 100 linhas. `Mostrar mais` expande em blocos de 100, enquanto a fila do player continua completa.
-
-## Entrada manual no modo offline
-
-Enquanto autenticado e conectado, a conta exibe `Preferências → Modo offline`.
-
-A ação:
-
-- usa os downloads físicos reconciliados por `useOfflineDownloads`;
-- fica desabilitada durante loading, sem suporte do navegador ou sem música salva;
-- não simula `navigator.onLine`, não bloqueia rede e não altera servidor;
-- troca a superfície ativa para a implementação real de `OfflineApp`.
+O player offline é separado porque opera com outra coleção/persistência, mas cada modo mantém uma única fonte de verdade. O segundo deck de crossfade é somente uma transição temporária adotada pelo `useAudioPlayer` no handoff.
 
 ## Regras
 
@@ -85,6 +74,7 @@ A ação:
 - o controle remoto da TV deve usar o player canônico, nunca uma store paralela;
 - diferenças mobile/desktop/TV pertencem às superfícies responsáveis;
 - mudanças de composição devem preservar autenticação, deep links, retomada do player, offline e comportamento responsivo;
-- resposta válida do servidor informando sessão inválida continua exigindo autenticação online; indisponibilidade de transporte pode liberar somente conteúdo local associado ao namespace conhecido.
+- conexão do celular ao servidor não deve ser confundida com presença da TV; a presença é derivada dos snapshots/heartbeats recentes;
+- resposta válida do servidor informando sessão inválida continua exigindo autenticação online.
 
-Este desenho corresponde ao refactor da issue #115, às evoluções offline #258/#259/#328 e ao controle remoto TV implementado pelo PR #393.
+Este desenho corresponde ao refactor da issue #115, às evoluções offline #258/#259/#328 e ao controle remoto TV iniciado no PR #393 e evoluído no PR #398.

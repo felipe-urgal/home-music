@@ -95,6 +95,13 @@ export function TvExperience({ tracks, current, nextTrack, playing, currentTime,
       target?.focus({ preventScroll: true });
     }, 0);
 
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+
     const onKeyDown = (event: KeyboardEvent) => {
       const active = document.activeElement as HTMLButtonElement | null;
       if (!active) return;
@@ -130,11 +137,8 @@ export function TvExperience({ tracks, current, nextTrack, playing, currentTime,
     };
 
     window.addEventListener('keydown', onKeyDown);
-    return () => {
-      window.clearTimeout(timer);
-      window.removeEventListener('keydown', onKeyDown);
-    };
-  }, [current?.id]);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   useEffect(() => subscribeToTvRemoteTrackRequests(trackId => {
     const track = tracks.find(candidate => candidate.id === trackId);

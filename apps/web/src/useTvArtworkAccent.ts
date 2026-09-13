@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { Track } from '@home-music/shared';
 import { buildArtworkFallback } from './artwork-utils';
 
-type Rgb = {
+export type Rgb = {
   r: number;
   g: number;
   b: number;
@@ -84,17 +84,32 @@ function hslToRgb(hue: number, saturation: number, lightness: number): Rgb {
   };
 }
 
-function normalizeAccent(rgb: Rgb) {
+function linearChannel(value: number) {
+  const srgb = value / 255;
+  return srgb <= 0.04045 ? srgb / 12.92 : ((srgb + 0.055) / 1.055) ** 2.4;
+}
+
+function contrastWithWhite({ r, g, b }: Rgb) {
+  const luminance = 0.2126 * linearChannel(r) + 0.7152 * linearChannel(g) + 0.0722 * linearChannel(b);
+  return 1.05 / (luminance + 0.05);
+}
+
+export function normalizeTvAccent(rgb: Rgb) {
   const hsl = rgbToHsl(rgb);
-  return hslToRgb(
-    hsl.hue,
-    clamp(Math.max(hsl.saturation, 0.46), 0.46, 0.88),
-    clamp(hsl.lightness, 0.46, 0.60)
-  );
+  const saturation = clamp(Math.max(hsl.saturation, 0.46), 0.46, 0.88);
+  let lightness = clamp(hsl.lightness, 0.46, 0.60);
+  let normalized = hslToRgb(hsl.hue, saturation, lightness);
+
+  while (contrastWithWhite(normalized) < 3 && lightness > 0.20) {
+    lightness = Math.max(0.20, lightness - 0.01);
+    normalized = hslToRgb(hsl.hue, saturation, lightness);
+  }
+
+  return normalized;
 }
 
 function accentFromRgb(rgb: Rgb): TvArtworkAccent {
-  const normalized = normalizeAccent(rgb);
+  const normalized = normalizeTvAccent(rgb);
   return {
     color: `rgb(${normalized.r} ${normalized.g} ${normalized.b})`,
     rgb: `${normalized.r} ${normalized.g} ${normalized.b}`
