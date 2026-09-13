@@ -41,7 +41,7 @@ test('TV mostra o now playing aprovado e celular autenticado controla a reprodu�
 
     await expect(phone.locator('.tv-remote-screen')).toBeVisible();
     await expect(phone.locator('audio')).toHaveCount(0);
-    await expect(phone.getByText('Home Music TV', { exact: true })).toBeVisible();
+    await expect(phone.getByText('TV conectada', { exact: true })).toBeVisible({ timeout: 5_000 });
 
     const tvPlay = page.locator('.tv-now-playing__play');
     const phonePlay = phone.locator('.tv-remote-controls__primary');
@@ -64,10 +64,24 @@ test('TV mostra o now playing aprovado e celular autenticado controla a reprodu�
     await phone.getByRole('button', { name: 'Próxima faixa', exact: true }).click();
     await expect.poll(async () => title.textContent(), { timeout: 5_000 }).not.toBe(beforeTitle);
 
-    const progress = page.locator('.tv-now-playing__progress');
-    const beforeSeek = await progress.getAttribute('aria-label');
-    await phone.getByRole('button', { name: 'Avançar 10 segundos', exact: true }).click();
-    await expect.poll(async () => progress.getAttribute('aria-label'), { timeout: 5_000 }).not.toBe(beforeSeek);
+    const shuffle = phone.getByRole('button', { name: 'Aleatório', exact: true });
+    const initialShuffle = await shuffle.getAttribute('aria-pressed');
+    await shuffle.click();
+    await expect(shuffle).toHaveAttribute('aria-pressed', initialShuffle === 'true' ? 'false' : 'true', { timeout: 5_000 });
+
+    const repeat = phone.getByRole('button', { name: /Repetição desligada|Repetir fila|Repetir uma/ });
+    const initialRepeat = await repeat.getAttribute('aria-label');
+    const nextRepeat = initialRepeat === 'Repetição desligada'
+      ? 'Repetir fila'
+      : initialRepeat === 'Repetir fila'
+        ? 'Repetir uma'
+        : 'Repetição desligada';
+    await repeat.click();
+    await expect(repeat).toHaveAttribute('aria-label', nextRepeat, { timeout: 5_000 });
+
+    await phone.getByRole('button', { name: /Biblioteca/ }).click();
+    await expect(phone.getByRole('heading', { name: 'Biblioteca' })).toBeVisible();
+    await expect(phone.getByPlaceholder('Buscar música, artista ou álbum…')).toBeVisible();
   } finally {
     await phoneContext.close();
   }
