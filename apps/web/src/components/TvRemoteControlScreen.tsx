@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { Track } from '@home-music/shared';
 import type { TvRemoteCommand, TvRemotePlaybackSnapshot } from '@home-music/shared/tv-remote';
 import {
   ChevronLeft,
   ChevronRight,
+  Folder,
   ListMusic,
   LoaderCircle,
   Pause,
@@ -16,6 +18,16 @@ import {
   Tv
 } from 'lucide-react';
 import {
+  buildLibraryNavigationIndex,
+  getIndexedFolderView
+} from '../library-navigation-index';
+import { matchesTrack, normalizeSearch } from '../library-utils';
+import {
+  backTvRemoteLibraryLocation,
+  shouldShowTvRemoteLibrarySearch,
+  type TvRemoteLibraryLocation
+} from '../tv-remote-library-navigation';
+import {
   getTvRemoteSession,
   openTvRemoteEvents,
   sendTvRemoteCommand,
@@ -27,6 +39,8 @@ import { Artwork } from './Artwork';
 
 type RemoteState = 'loading' | 'ready' | 'missing' | 'closed' | 'error';
 type RemoteView = 'control' | 'library';
+
+const TRACK_PAGE_SIZE = 40;
 
 type TvRemoteControlScreenProps = {
   sessionId: string;
@@ -63,11 +77,17 @@ export function TvRemoteControlScreen({ sessionId, username }: TvRemoteControlSc
   const [pendingControl, setPendingControl] = useState<string | null>(null);
   const [pendingTrackId, setPendingTrackId] = useState<string | null>(null);
   const [view, setView] = useState<RemoteView>('control');
+  const [libraryLocation, setLibraryLocation] = useState<TvRemoteLibraryLocation>({ kind: 'root' });
   const [query, setQuery] = useState('');
+  const [visibleTrackLimit, setVisibleTrackLimit] = useState(TRACK_PAGE_SIZE);
   const [error, setError] = useState<string | null>(null);
   const libraryEntryRef = useRef<HTMLButtonElement>(null);
   const libraryBackRef = useRef<HTMLButtonElement>(null);
+  const expandedTrackFocusRef = useRef<HTMLButtonElement>(null);
+  const expandedTrackFocusIndexRef = useRef<number | null>(null);
   const focusViewRef = useRef<RemoteView | null>(null);
+  const focusLibraryLocationRef = useRef(false);
+  const pendingTrackRef = useRef<string | null>(null);
 
   useEffect(() => {
     let disposed = false;
@@ -121,24 +141,135 @@ export function TvRemoteControlScreen({ sessionId, username }: TvRemoteControlSc
     focusViewRef.current = null;
   }, [view]);
 
-  const visibleTracks = useMemo(() => {
-    const needle = normalized(query);
-    return library.tracks.filter(track => {
-      if (!needle) return true;
-      return normalized(track.title).includes(needle)
-        || normalized(`${track.artist} ${track.albumArtist}`).includes(needle)
-        || normalized(track.album).includes(needle);
-    }).slice(0, 40);
-  }, [library.tracks, query]);
+  useEffect(() => {
+    if (view !== 'library' || !focusLibraryLocationRef.current) return;
+    libraryBackRef.current?.focus({ preventScroll: true });
+    focusLibraryLocationRef.current = false;
+  }, [libraryLocation, view]);
+
+  useEffect(() => {
+    if (expandedTrackFocusIndexRef.current === null) return;
+    expandedTrackFocusRef.current?.focus({ preventScroll: true });
+    expandedTrackFocusIndexRef.current = null;
+  }, [visibleTrackLimit]);
+
+  const libraryIndex = useMemo(
+    () => buildLibraryNavigationIndex(library.tracks),
+    [library.tracks]
+  );
+
+  const folderView = useMemo(
+    () => libraryLocation.kind === 'folders'
+      ? getIndexedFolderView(libraryIndex, libraryLocation.folderPath)
+      : null,
+    [libraryIndex, libraryLocation]
+  );
+
+  const selectedPlaylist = useMemo(
+    () => libraryLocation.kind === 'playlist'
+      ? library.playlists.find(playlist => playlist.id === libraryLocation.playlistId) ?? null
+      : null,
+    [library.playlists, libraryLocation]
+  );
+
+  const normalizedQuery = normalizeSearch(query);
+  const visibleFolders = useMemo(
+    () => folderView && !normalizedQuery ? folderView.folders : [],
+    [folderView, normalizedQuery]
+  );
+
+  const matchingTracks = useMemo(() => {
+    let contextTracks = folderView
+      ? normalizedQuery ? folderView.allTracks : folderView.directTracks
+      : selectedPlaylist
+        ? selectedPlaylist.trackIds
+          .map(id => libraryIndex.trackMap.get(id))
+          .filter((track): track is Track => Boolean(track))
+        : [];
+
+    if (normalizedQuery) {
+      contextTracks = contextTracks.filter(track => matchesTrack(
+        track,
+        normalizedQuery,
+        libraryIndex.searchTextByTrackId.get(track.id)
+      ));
+    }
+
+    return contextTracks;
+  }, [folderView, libraryIndex, normalizedQuery, selectedPlaylist]);
+
+  const visibleTracks = useMemo(
+    () => matchingTracks.slice(0, visibleTrackLimit),
+    [matchingTracks, visibleTrackLimit]
+  );
+  const hasMoreTracks = visibleTracks.length < matchingTracks.length;
 
   const currentTrack = useMemo(
     () => library.tracks.find(track => track.id === snapshot?.trackId),
     [library.tracks, snapshot?.trackId]
   );
 
+  const libraryTitle = libraryLocation.kind === 'root'
+    ? 'Biblioteca'
+    : libraryLocation.kind === 'folders'
+      ? folderView?.name ?? 'Pastas'
+      : libraryLocation.kind === 'playlists'
+        ? 'Playlists'
+        : selectedPlaylist?.name ?? 'Playlist';
+  const librarySubtitle = libraryLocation.kind === 'root'
+    ? 'Escolha onde procurar uma música.'
+    : libraryLocation.kind === 'folders'
+      ? libraryLocation.folderPath ? 'Escolha uma subpasta ou música.' : 'Escolha uma pasta.'
+      : libraryLocation.kind === 'playlists'
+        ? 'Escolha uma playlist.'
+        : 'Escolha uma música para tocar na TV.';
+  const showLibrarySearch = shouldShowTvRemoteLibrarySearch(libraryLocation);
+
+  function resetVisibleTracks() {
+    expandedTrackFocusIndexRef.current = null;
+    setVisibleTrackLimit(TRACK_PAGE_SIZE);
+  }
+
+  function showMoreTracks() {
+    const firstHiddenTrackIndex = visibleTracks.length;
+    expandedTrackFocusIndexRef.current = firstHiddenTrackIndex + TRACK_PAGE_SIZE >= matchingTracks.length
+      ? firstHiddenTrackIndex
+      : null;
+    setVisibleTrackLimit(limit => limit + TRACK_PAGE_SIZE);
+  }
+
   function switchView(next: RemoteView) {
     focusViewRef.current = next;
     setView(next);
+  }
+
+  function openLibrary() {
+    setLibraryLocation({ kind: 'root' });
+    setQuery('');
+    resetVisibleTracks();
+    setError(null);
+    switchView('library');
+  }
+
+  function navigateLibrary(next: TvRemoteLibraryLocation) {
+    focusLibraryLocationRef.current = true;
+    setLibraryLocation(next);
+    setQuery('');
+    resetVisibleTracks();
+    setError(null);
+  }
+
+  function backLibrary() {
+    const previous = backTvRemoteLibraryLocation(libraryLocation);
+    setQuery('');
+    resetVisibleTracks();
+    setError(null);
+    if (!previous) {
+      switchView('control');
+      return;
+    }
+    focusLibraryLocationRef.current = true;
+    setLibraryLocation(previous);
   }
 
   async function sendControl(key: string, command: TvRemoteCommand) {
@@ -157,17 +288,18 @@ export function TvRemoteControlScreen({ sessionId, username }: TvRemoteControlSc
   }
 
   async function playTrack(trackId: string) {
-    if (pendingTrackId) return;
+    if (pendingTrackRef.current) return;
+    pendingTrackRef.current = trackId;
     setPendingTrackId(trackId);
     setError(null);
     try {
       await sendTvRemoteCommand(sessionId, { type: 'play-track', trackId });
-      setView('control');
+      switchView('control');
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : 'Não foi possível tocar esta música.';
       setError(message);
-      if (message.includes('não encontrado')) setState('missing');
     } finally {
+      pendingTrackRef.current = null;
       setPendingTrackId(null);
     }
   }
@@ -197,6 +329,36 @@ export function TvRemoteControlScreen({ sessionId, username }: TvRemoteControlSc
         : 'Conectando…';
   const snapshotArtist = visibleMetadata(snapshot?.artist, 'Artista desconhecido');
   const repeatMode = snapshot?.repeatMode ?? 'off';
+
+  const renderTrack = (track: Track, index: number) => {
+    const current = snapshot?.trackId === track.id;
+    const loadingTrack = pendingTrackId === track.id;
+    const artist = visibleMetadata(track.albumArtist || track.artist, 'Artista desconhecido');
+    const album = visibleMetadata(track.album, 'Álbum desconhecido');
+    return (
+      <button
+        key={track.id}
+        ref={index === expandedTrackFocusIndexRef.current ? expandedTrackFocusRef : undefined}
+        className="tv-remote-library__track"
+        type="button"
+        aria-current={current ? 'true' : undefined}
+        aria-busy={loadingTrack}
+        disabled={loadingTrack}
+        onClick={() => void playTrack(track.id)}
+      >
+        <span><strong>{track.title}</strong><small>{[artist, album].filter(Boolean).join(' · ')}</small></span>
+        {loadingTrack ? <LoaderCircle className="tv-remote-library__spinner" aria-hidden="true" /> : current ? <em>Tocando</em> : <Play aria-hidden="true" />}
+      </button>
+    );
+  };
+
+  const renderMoreTracks = hasMoreTracks ? (
+    <div className="tv-remote-library__status">
+      <button type="button" onClick={showMoreTracks}>
+        Mostrar mais músicas
+      </button>
+    </div>
+  ) : null;
 
   return (
     <main className="tv-remote-screen">
@@ -245,9 +407,9 @@ export function TvRemoteControlScreen({ sessionId, username }: TvRemoteControlSc
               >{repeatMode === 'one' ? <Repeat1 aria-hidden="true" /> : <Repeat2 aria-hidden="true" />}</button>
             </div>
 
-            <button ref={libraryEntryRef} className="tv-remote-library-entry" type="button" onClick={() => switchView('library')}>
+            <button ref={libraryEntryRef} className="tv-remote-library-entry" type="button" onClick={openLibrary}>
               <span className="tv-remote-library-entry__icon"><ListMusic aria-hidden="true" /></span>
-              <span className="tv-remote-library-entry__copy"><strong>Biblioteca</strong><small>Buscar e escolher músicas</small></span>
+              <span className="tv-remote-library-entry__copy"><strong>Biblioteca</strong><small>Pastas e playlists</small></span>
               <ChevronRight aria-hidden="true" />
             </button>
 
@@ -256,15 +418,25 @@ export function TvRemoteControlScreen({ sessionId, username }: TvRemoteControlSc
         ) : (
           <section className="tv-remote-library" aria-label="Biblioteca">
             <div className="tv-remote-library__heading">
-              <button ref={libraryBackRef} type="button" aria-label="Voltar ao controle" onClick={() => switchView('control')}><ChevronLeft aria-hidden="true" /></button>
-              <div><h1>Biblioteca</h1><p>Escolha uma música para tocar na TV.</p></div>
+              <button ref={libraryBackRef} type="button" aria-label="Voltar" onClick={backLibrary}><ChevronLeft aria-hidden="true" /></button>
+              <div><h1>{libraryTitle}</h1><p>{librarySubtitle}</p></div>
             </div>
 
-            <label className="tv-remote-library__search">
-              <Search aria-hidden="true" />
-              <span className="sr-only">Buscar na biblioteca</span>
-              <input value={query} onChange={event => setQuery(event.target.value)} placeholder="Buscar música, artista ou álbum…" autoComplete="off" />
-            </label>
+            {showLibrarySearch && (
+              <label className="tv-remote-library__search">
+                <Search aria-hidden="true" />
+                <span className="sr-only">Buscar músicas neste contexto</span>
+                <input
+                  value={query}
+                  onChange={event => {
+                    setQuery(event.target.value);
+                    resetVisibleTracks();
+                  }}
+                  placeholder="Buscar música, artista ou álbum…"
+                  autoComplete="off"
+                />
+              </label>
+            )}
 
             {error && <p className="tv-remote-card__error" role="alert">{error}</p>}
 
@@ -272,30 +444,57 @@ export function TvRemoteControlScreen({ sessionId, username }: TvRemoteControlSc
               <p className="tv-remote-library__status">Carregando biblioteca…</p>
             ) : library.error ? (
               <div className="tv-remote-library__status"><span>{library.error}</span><button type="button" onClick={() => void library.retry()}>Tentar novamente</button></div>
+            ) : libraryLocation.kind === 'root' ? (
+              <div className="tv-remote-library__results">
+                <button className="tv-remote-library__item" type="button" onClick={() => navigateLibrary({ kind: 'folders', folderPath: '' })}>
+                  <span className="tv-remote-library__item-icon"><Folder aria-hidden="true" /></span>
+                  <span className="tv-remote-library__item-copy"><strong>Pastas</strong><small>Navegar pela organização da biblioteca</small></span>
+                  <ChevronRight aria-hidden="true" />
+                </button>
+                <button className="tv-remote-library__item" type="button" onClick={() => navigateLibrary({ kind: 'playlists' })}>
+                  <span className="tv-remote-library__item-icon"><ListMusic aria-hidden="true" /></span>
+                  <span className="tv-remote-library__item-copy"><strong>Playlists</strong><small>{library.playlists.length} {library.playlists.length === 1 ? 'playlist' : 'playlists'}</small></span>
+                  <ChevronRight aria-hidden="true" />
+                </button>
+              </div>
+            ) : libraryLocation.kind === 'playlists' ? (
+              library.playlists.length === 0 ? (
+                <p className="tv-remote-library__status">Nenhuma playlist encontrada.</p>
+              ) : (
+                <div className="tv-remote-library__results">
+                  {library.playlists.map(playlist => (
+                    <button key={playlist.id} className="tv-remote-library__item" type="button" onClick={() => navigateLibrary({ kind: 'playlist', playlistId: playlist.id })}>
+                      <span className="tv-remote-library__item-icon"><ListMusic aria-hidden="true" /></span>
+                      <span className="tv-remote-library__item-copy"><strong>{playlist.name}</strong><small>{playlist.trackIds.length} {playlist.trackIds.length === 1 ? 'música' : 'músicas'}</small></span>
+                      <ChevronRight aria-hidden="true" />
+                    </button>
+                  ))}
+                </div>
+              )
+            ) : libraryLocation.kind === 'folders' ? (
+              visibleFolders.length === 0 && visibleTracks.length === 0 ? (
+                <p className="tv-remote-library__status">{normalizedQuery ? 'Nenhuma música encontrada.' : 'Esta pasta está vazia.'}</p>
+              ) : (
+                <div className="tv-remote-library__results" aria-live="polite">
+                  {visibleFolders.map(folder => (
+                    <button key={folder.path} className="tv-remote-library__item" type="button" onClick={() => navigateLibrary({ kind: 'folders', folderPath: folder.path })}>
+                      <span className="tv-remote-library__item-icon"><Folder aria-hidden="true" /></span>
+                      <span className="tv-remote-library__item-copy"><strong>{folder.name}</strong><small>{folder.tracks.length} {folder.tracks.length === 1 ? 'música' : 'músicas'}</small></span>
+                      <ChevronRight aria-hidden="true" />
+                    </button>
+                  ))}
+                  {visibleTracks.map(renderTrack)}
+                  {renderMoreTracks}
+                </div>
+              )
+            ) : !selectedPlaylist ? (
+              <p className="tv-remote-library__status">Playlist não encontrada.</p>
             ) : visibleTracks.length === 0 ? (
-              <p className="tv-remote-library__status">Nenhuma música encontrada.</p>
+              <p className="tv-remote-library__status">{normalizedQuery ? 'Nenhuma música encontrada.' : 'Esta playlist está vazia.'}</p>
             ) : (
               <div className="tv-remote-library__results" aria-live="polite">
-                {visibleTracks.map(track => {
-                  const current = snapshot?.trackId === track.id;
-                  const loadingTrack = pendingTrackId === track.id;
-                  const artist = visibleMetadata(track.albumArtist || track.artist, 'Artista desconhecido');
-                  const album = visibleMetadata(track.album, 'Álbum desconhecido');
-                  return (
-                    <button
-                      key={track.id}
-                      className="tv-remote-library__track"
-                      type="button"
-                      aria-current={current ? 'true' : undefined}
-                      aria-busy={loadingTrack}
-                      disabled={pendingTrackId !== null}
-                      onClick={() => void playTrack(track.id)}
-                    >
-                      <span><strong>{track.title}</strong><small>{[artist, album].filter(Boolean).join(' · ')}</small></span>
-                      {loadingTrack ? <LoaderCircle className="tv-remote-library__spinner" aria-hidden="true" /> : current ? <em>Tocando</em> : <Play aria-hidden="true" />}
-                    </button>
-                  );
-                })}
+                {visibleTracks.map(renderTrack)}
+                {renderMoreTracks}
               </div>
             )}
           </section>

@@ -76,6 +76,7 @@
 
 .tv-remote-card {
   width: min(440px, 100%);
+  min-width: 0;
   min-height: min(760px, calc(100dvh - 24px));
   display: flex;
   flex-direction: column;
@@ -144,8 +145,9 @@
   border-radius: inherit;
 }
 .tv-remote-artwork img { width: 100%; height: 100%; object-fit: cover; }
-.tv-remote-now-playing__meta { width: 100%; margin-top: clamp(18px, 3dvh, 26px); }
+.tv-remote-now-playing__meta { width: 100%; min-width: 0; max-width: 100%; margin-top: clamp(18px, 3dvh, 26px); }
 .tv-remote-now-playing h1 {
+  width: 100%;
   max-width: 100%;
   overflow: hidden;
   margin: 0;
@@ -231,11 +233,12 @@
 .tv-remote-library-entry__copy small { overflow: hidden; color: #9faabb; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
 .tv-remote-library-entry > svg { width: 20px; height: 20px; color: #b7c1ce; }
 
-.tv-remote-library { display: flex; flex: 1; flex-direction: column; min-height: 0; padding-top: 24px; }
-.tv-remote-library__heading { display: flex; align-items: center; gap: 13px; }
+.tv-remote-library { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; padding-top: 24px; }
+.tv-remote-library__heading { display: flex; align-items: center; gap: 13px; min-width: 0; }
 .tv-remote-library__heading > button { display: grid; place-items: center; flex: 0 0 auto; background: rgb(255 255 255 / 6%); color: #fff; }
-.tv-remote-library__heading h1 { margin: 0; font-size: 25px; line-height: 1.1; }
-.tv-remote-library__heading p { margin: 5px 0 0; color: #9faabb; font-size: 13px; }
+.tv-remote-library__heading > div { min-width: 0; }
+.tv-remote-library__heading h1 { overflow: hidden; margin: 0; text-overflow: ellipsis; white-space: nowrap; font-size: 25px; line-height: 1.1; }
+.tv-remote-library__heading p { overflow: hidden; margin: 5px 0 0; color: #9faabb; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
 .tv-remote-library__search {
   min-height: 50px;
   display: flex;
@@ -251,6 +254,32 @@
 .tv-remote-library__search input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; color: #fff; font: inherit; }
 .tv-remote-library__search input::placeholder { color: #7f8b9b; }
 .tv-remote-library__results { display: grid; gap: 7px; margin-top: 14px; }
+.tv-remote-library__item {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) 20px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px !important;
+  background: rgb(255 255 255 / 4%);
+  color: #fff;
+  text-align: left;
+}
+.tv-remote-library__item-icon {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: rgb(255 255 255 / 5%);
+  color: #dce5ef;
+}
+.tv-remote-library__item-icon svg { width: 21px; height: 21px; }
+.tv-remote-library__item-copy { min-width: 0; display: grid; gap: 3px; }
+.tv-remote-library__item-copy strong,
+.tv-remote-library__item-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tv-remote-library__item-copy small { color: #9faabb; font-size: 12px; }
+.tv-remote-library__item > svg { width: 18px; height: 18px; color: #b7c1ce; }
 .tv-remote-library__track {
   width: 100%;
   display: flex;
@@ -280,23 +309,6 @@
 
 @keyframes tv-remote-spin { to { transform: rotate(360deg); } }
 
-@media (max-width: 520px) {
-  .tv-remote-screen { place-items: start center; }
-  .tv-remote-card {
-    width: 100%;
-    min-height: calc(100dvh - max(24px, env(safe-area-inset-top) + env(safe-area-inset-bottom)));
-    border-radius: 24px;
-  }
-}
-
-@media (max-width: 360px) {
-  .tv-remote-card { padding-inline: 14px; }
-  .tv-remote-artwork { width: clamp(142px, 26dvh, 182px); }
-  .tv-remote-controls { gap: 2px; }
-  .tv-remote-controls button { min-height: 48px; }
-  .tv-remote-controls__primary { width: 64px; min-width: 64px !important; height: 64px; min-height: 64px !important; }
-}
-
 @media (max-height: 720px) {
   .tv-remote-card { min-height: calc(100dvh - 24px); }
   .tv-remote-now-playing { padding-block: 16px; }
@@ -315,6 +327,35 @@
   .tv-remote-controls__primary { width: 62px; min-width: 62px !important; height: 62px; min-height: 62px !important; }
 }
 
+@media (max-width: 520px) {
+  .tv-remote-screen {
+    place-items: start stretch;
+    padding: 0;
+  }
+  .tv-remote-card {
+    width: 100%;
+    min-height: 100dvh;
+    padding-top: max(18px, env(safe-area-inset-top));
+    padding-right: max(18px, env(safe-area-inset-right));
+    padding-bottom: max(18px, env(safe-area-inset-bottom));
+    padding-left: max(18px, env(safe-area-inset-left));
+    border-right: 0;
+    border-left: 0;
+    border-radius: 0;
+  }
+}
+
+@media (max-width: 360px) {
+  .tv-remote-card {
+    padding-right: max(14px, env(safe-area-inset-right));
+    padding-left: max(14px, env(safe-area-inset-left));
+  }
+  .tv-remote-artwork { width: clamp(142px, 26dvh, 182px); }
+  .tv-remote-controls { gap: 2px; }
+  .tv-remote-controls button { min-height: 48px; }
+  .tv-remote-controls__primary { width: 64px; min-width: 64px !important; height: 64px; min-height: 64px !important; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .tv-remote-dialog__loading,
   .tv-remote-library__spinner { animation: none; }
@@ -327,6 +368,7 @@
   .tv-remote-dialog__url,
   .tv-remote-controls button,
   .tv-remote-library-entry,
+  .tv-remote-library__item,
   .tv-remote-library__search,
   .tv-remote-library__track { border: 1px solid CanvasText; }
 }
