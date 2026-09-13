@@ -83,8 +83,12 @@ export function registerTvRemoteRoutes(app: FastifyInstance, manager: TvRemoteSe
   });
 
   app.get<SessionParams>('/api/tv-remote/sessions/:sessionId', options, async (request, reply) => {
-    const session = manager.get(request.user!.id, request.params.sessionId);
-    return session ?? reply.code(404).send(missing);
+    const ownerId = request.user!.id;
+    const sessionId = request.params.sessionId;
+    const session = manager.get(ownerId, sessionId);
+    if (!session) return reply.code(404).send(missing);
+    manager.publishRemoteConnected(ownerId, sessionId);
+    return session;
   });
 
   app.put<SessionParams>('/api/tv-remote/sessions/:sessionId/status', options, async (request, reply) => {
