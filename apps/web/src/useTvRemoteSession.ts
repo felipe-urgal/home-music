@@ -69,12 +69,12 @@ export function useTvRemoteSession(options: UseTvRemoteSessionOptions) {
     }
   }, []);
 
-  const createFreshSession = useCallback(async () => {
+  const createFreshSession = useCallback(async (showPairing: boolean) => {
     const previous = activeSessionRef.current;
     activeSessionRef.current = null;
     setSessionId(null);
     setPairingUrl(null);
-    setOpen(true);
+    setOpen(showPairing);
     setState('creating');
     setTransport('connecting');
     setError(null);
@@ -99,12 +99,16 @@ export function useTvRemoteSession(options: UseTvRemoteSessionOptions) {
   const openPairing = useCallback(async () => {
     setOpen(true);
     if (activeSessionRef.current && pairingUrl) return;
-    await createFreshSession();
+    await createFreshSession(true);
   }, [createFreshSession, pairingUrl]);
+
+  const regenerate = useCallback(async () => {
+    await createFreshSession(true);
+  }, [createFreshSession]);
 
   useEffect(() => {
     if (!isTvMode() || state !== 'idle' || activeSessionRef.current) return;
-    void createFreshSession();
+    void createFreshSession(false);
   }, [createFreshSession, state]);
 
   useEffect(() => {
@@ -139,9 +143,15 @@ export function useTvRemoteSession(options: UseTvRemoteSessionOptions) {
     };
     publishChangedRef.current = scheduleChanged;
 
+    const markConnected = () => {
+      setState('connected');
+      setOpen(false);
+    };
+
     const stopEvents = openTvRemoteEvents(sessionId, {
+      onRemoteConnected: markConnected,
       onCommand: command => {
-        setState('connected');
+        markConnected();
         const current = playbackState();
         const controls = latestRef.current;
         applyTvRemotePlayerCommand(command, current, {
@@ -157,6 +167,7 @@ export function useTvRemoteSession(options: UseTvRemoteSessionOptions) {
       },
       onClosed: () => {
         activeSessionRef.current = null;
+        setOpen(false);
         setState('closed');
         setSessionId(null);
         setPairingUrl(null);
@@ -197,6 +208,6 @@ export function useTvRemoteSession(options: UseTvRemoteSessionOptions) {
     error,
     openPairing,
     closePairing,
-    regenerate: createFreshSession
+    regenerate
   };
 }
