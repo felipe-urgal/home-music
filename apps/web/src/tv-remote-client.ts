@@ -1,14 +1,20 @@
 import type {
-  TvRemotePlaybackSnapshot,
-  TvRemoteSessionSummary
-} from '@home-music/shared';
-import type { TvRemoteCommand, TvRemoteEvent } from '@home-music/shared/tv-remote';
+  TvRemoteCommand,
+  TvRemoteEvent,
+  TvRemotePlaybackSnapshot
+} from '@home-music/shared/tv-remote';
 import { apiFetch } from './api-client';
 
 const sessionsPath = '/api/tv-remote/sessions';
 const mutationHeaders = {
   'Content-Type': 'application/json',
   'X-Home-Music-Request': '1'
+};
+
+type TvRemoteSessionSummary = {
+  id: string;
+  expiresAt: string;
+  snapshot: TvRemotePlaybackSnapshot | null;
 };
 
 async function responseError(response: Response, fallback: string) {
