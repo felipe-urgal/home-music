@@ -83,6 +83,8 @@ export function TvRemoteControlScreen({ sessionId, username }: TvRemoteControlSc
   const [error, setError] = useState<string | null>(null);
   const libraryEntryRef = useRef<HTMLButtonElement>(null);
   const libraryBackRef = useRef<HTMLButtonElement>(null);
+  const expandedTrackFocusRef = useRef<HTMLButtonElement>(null);
+  const expandedTrackFocusIndexRef = useRef<number | null>(null);
   const focusViewRef = useRef<RemoteView | null>(null);
   const focusLibraryLocationRef = useRef(false);
   const pendingTrackRef = useRef<string | null>(null);
@@ -144,6 +146,12 @@ export function TvRemoteControlScreen({ sessionId, username }: TvRemoteControlSc
     libraryBackRef.current?.focus({ preventScroll: true });
     focusLibraryLocationRef.current = false;
   }, [libraryLocation, view]);
+
+  useEffect(() => {
+    if (expandedTrackFocusIndexRef.current === null) return;
+    expandedTrackFocusRef.current?.focus({ preventScroll: true });
+    expandedTrackFocusIndexRef.current = null;
+  }, [visibleTrackLimit]);
 
   const libraryIndex = useMemo(
     () => buildLibraryNavigationIndex(library.tracks),
@@ -218,7 +226,13 @@ export function TvRemoteControlScreen({ sessionId, username }: TvRemoteControlSc
   const showLibrarySearch = shouldShowTvRemoteLibrarySearch(libraryLocation);
 
   function resetVisibleTracks() {
+    expandedTrackFocusIndexRef.current = null;
     setVisibleTrackLimit(TRACK_PAGE_SIZE);
+  }
+
+  function showMoreTracks() {
+    expandedTrackFocusIndexRef.current = visibleTracks.length;
+    setVisibleTrackLimit(limit => limit + TRACK_PAGE_SIZE);
   }
 
   function switchView(next: RemoteView) {
@@ -313,7 +327,7 @@ export function TvRemoteControlScreen({ sessionId, username }: TvRemoteControlSc
   const snapshotArtist = visibleMetadata(snapshot?.artist, 'Artista desconhecido');
   const repeatMode = snapshot?.repeatMode ?? 'off';
 
-  const renderTrack = (track: Track) => {
+  const renderTrack = (track: Track, index: number) => {
     const current = snapshot?.trackId === track.id;
     const loadingTrack = pendingTrackId === track.id;
     const artist = visibleMetadata(track.albumArtist || track.artist, 'Artista desconhecido');
@@ -321,6 +335,7 @@ export function TvRemoteControlScreen({ sessionId, username }: TvRemoteControlSc
     return (
       <button
         key={track.id}
+        ref={index === expandedTrackFocusIndexRef.current ? expandedTrackFocusRef : undefined}
         className="tv-remote-library__track"
         type="button"
         aria-current={current ? 'true' : undefined}
@@ -336,7 +351,7 @@ export function TvRemoteControlScreen({ sessionId, username }: TvRemoteControlSc
 
   const renderMoreTracks = hasMoreTracks ? (
     <div className="tv-remote-library__status">
-      <button type="button" onClick={() => setVisibleTrackLimit(limit => limit + TRACK_PAGE_SIZE)}>
+      <button type="button" onClick={showMoreTracks}>
         Mostrar mais músicas
       </button>
     </div>
