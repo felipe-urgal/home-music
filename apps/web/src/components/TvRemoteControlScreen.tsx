@@ -40,6 +40,8 @@ import { Artwork } from './Artwork';
 type RemoteState = 'loading' | 'ready' | 'missing' | 'closed' | 'error';
 type RemoteView = 'control' | 'library';
 
+const TRACK_PAGE_SIZE = 40;
+
 type TvRemoteControlScreenProps = {
   sessionId: string;
   username: string;
@@ -77,10 +79,12 @@ export function TvRemoteControlScreen({ sessionId, username }: TvRemoteControlSc
   const [view, setView] = useState<RemoteView>('control');
   const [libraryLocation, setLibraryLocation] = useState<TvRemoteLibraryLocation>({ kind: 'root' });
   const [query, setQuery] = useState('');
+  const [visibleTrackLimit, setVisibleTrackLimit] = useState(TRACK_PAGE_SIZE);
   const [error, setError] = useState<string | null>(null);
   const libraryEntryRef = useRef<HTMLButtonElement>(null);
   const libraryBackRef = useRef<HTMLButtonElement>(null);
   const focusViewRef = useRef<RemoteView | null>(null);
+  const focusLibraryLocationRef = useRef(false);
   const pendingTrackRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -135,6 +139,12 @@ export function TvRemoteControlScreen({ sessionId, username }: TvRemoteControlSc
     focusViewRef.current = null;
   }, [view]);
 
+  useEffect(() => {
+    if (view !== 'library' || !focusLibraryLocationRef.current) return;
+    libraryBackRef.current?.focus({ preventScroll: true });
+    focusLibraryLocationRef.current = false;
+  }, [libraryLocation, view]);
+
   const libraryIndex = useMemo(
     () => buildLibraryNavigationIndex(library.tracks),
     [library.tracks]
@@ -160,7 +170,7 @@ export function TvRemoteControlScreen({ sessionId, username }: TvRemoteControlSc
     [folderView, normalizedQuery]
   );
 
-  const visibleTracks = useMemo(() => {
+  const matchingTracks = useMemo(() => {
     let contextTracks = folderView
       ? normalizedQuery ? folderView.allTracks : folderView.directTracks
       : selectedPlaylist
@@ -177,8 +187,14 @@ export function TvRemoteControlScreen({ sessionId, username }: TvRemoteControlSc
       ));
     }
 
-    return contextTracks.slice(0, 40);
+    return contextTracks;
   }, [folderView, libraryIndex, normalizedQuery, selectedPlaylist]);
+
+  const visibleTracks = useMemo(
+    () => matchingTracks.slice(0, visibleTrackLimit),
+    [matchingTracks, visibleTrackLimit]
+  );
+  const hasMoreTracks = visibleTracks.length < matchingTracks.length;
 
   const currentTrack = useMemo(
     () => library.tracks.find(track => track.id === snapshot?.trackId),
@@ -201,6 +217,10 @@ export function TvRemoteControlScreen({ sessionId, username }: TvRemoteControlSc
         : 'Escolha uma música para tocar na TV.';
   const showLibrarySearch = shouldShowTvRemoteLibrarySearch(libraryLocation);
 
+  function resetVisibleTracks() {
+    setVisibleTrackLimit(TRACK_PAGE_SIZE);
+  }
+
   function switchView(next: RemoteView) {
     focusViewRef.current = next;
     setView(next);
@@ -209,24 +229,29 @@ export function TvRemoteControlScreen({ sessionId, username }: TvRemoteControlSc
   function openLibrary() {
     setLibraryLocation({ kind: 'root' });
     setQuery('');
+    resetVisibleTracks();
     setError(null);
     switchView('library');
   }
 
   function navigateLibrary(next: TvRemoteLibraryLocation) {
+    focusLibraryLocationRef.current = true;
     setLibraryLocation(next);
     setQuery('');
+    resetVisibleTracks();
     setError(null);
   }
 
   function backLibrary() {
     const previous = backTvRemoteLibraryLocation(libraryLocation);
     setQuery('');
+    resetVisibleTracks();
     setError(null);
     if (!previous) {
       switchView('control');
       return;
     }
+    focusLibraryLocationRef.current = true;
     setLibraryLocation(previous);
   }
 
@@ -309,6 +334,14 @@ export function TvRemoteControlScreen({ sessionId, username }: TvRemoteControlSc
     );
   };
 
+  const renderMoreTracks = hasMoreTracks ? (
+    <div className="tv-remote-library__status">
+      <button type="button" onClick={() => setVisibleTrackLimit(limit => limit + TRACK_PAGE_SIZE)}>
+        Mostrar mais músicas
+      </button>
+    </div>
+  ) : null;
+
   return (
     <main className="tv-remote-screen">
       <section className={`tv-remote-card tv-remote-card--${view}`}>
@@ -375,7 +408,15 @@ export function TvRemoteControlScreen({ sessionId, username }: TvRemoteControlSc
               <label className="tv-remote-library__search">
                 <Search aria-hidden="true" />
                 <span className="sr-only">Buscar músicas neste contexto</span>
-                <input value={query} onChange={event => setQuery(event.target.value)} placeholder="Buscar música, artista ou álbum…" autoComplete="off" />
+                <input
+                  value={query}
+                  onChange={event => {
+                    setQuery(event.target.value);
+                    resetVisibleTracks();
+                  }}
+                  placeholder="Buscar música, artista ou álbum…"
+                  autoComplete="off"
+                />
               </label>
             )}
 
@@ -425,6 +466,7 @@ export function TvRemoteControlScreen({ sessionId, username }: TvRemoteControlSc
                     </button>
                   ))}
                   {visibleTracks.map(renderTrack)}
+                  {renderMoreTracks}
                 </div>
               )
             ) : !selectedPlaylist ? (
@@ -434,6 +476,7 @@ export function TvRemoteControlScreen({ sessionId, username }: TvRemoteControlSc
             ) : (
               <div className="tv-remote-library__results" aria-live="polite">
                 {visibleTracks.map(renderTrack)}
+                {renderMoreTracks}
               </div>
             )}
           </section>
