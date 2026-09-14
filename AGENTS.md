@@ -12,56 +12,19 @@ O `AGENTS.md` da raiz vale para todo o repositório. Existem instruções comple
 - `apps/server/AGENTS.md` — Fastify, autenticação, SQLite, filesystem, mídia e importação;
 - `packages/shared/AGENTS.md` — contratos compartilhados frontend/backend;
 - `e2e/AGENTS.md` — Playwright e fixtures browser-real;
-- `scripts/AGENTS.md` — systemd, Tailscale, smoke/policy e automação operacional.
+- `scripts/AGENTS.md` — systemd, Tailscale, smoke/policy e automação operacional;
+- `agent-orchestrator/agents/` — overlays locais por papel para execuções coordenadas pelo `agent-orchestrator`;
+- `agent-workflow-browser/agents/` — overlays locais por papel para execuções coordenadas pelo `agent-workflow-browser`.
 
 Leia o arquivo mais próximo do código alterado. Regras locais podem especializar o fluxo, mas não podem enfraquecer invariantes globais de segurança, dados, produção, validação ou autorização.
 
+Quando a execução vier de um dos workflows externos acima, leia também o arquivo de overlay cujo identificador corresponde ao papel atual, quando existir. Esses overlays contêm somente contexto específico do Home Music; contrato, state machine, handoff e autorizações do workflow continuam definidos no projeto externo responsável pela execução.
+
 Não duplique aqui runbooks que já têm fonte canônica. Prefira links para a documentação viva.
-
-## Integração com `agent-workflow`
-
-Quando a execução vier do repositório externo `felipe-urgal/agent-workflow`:
-
-1. leia `AGENTS-CONTRACT.md` no `agent-workflow`;
-2. leia a definição do agent atual;
-3. leia a task ativa no caminho canônico registrado pelo workflow;
-4. leia este `AGENTS.md` e os `AGENTS.md` locais aplicáveis;
-5. revalide o estado real de base, branch, head, PR, CI e ambiente antes de agir.
-
-A divisão de autoridade é intencional:
-
-- `AGENTS-CONTRACT.md` controla protocolo global de execução, modos, handoff, estados terminais, sincronização da task e autorizações;
-- a task ativa define o objetivo, escopo e decisões específicas já aprovadas para a entrega;
-- este repositório define invariantes duráveis de arquitetura, segurança, dados, operação e gates;
-- código, testes, workflows e documentação local são evidência técnica do estado atual, mas não devem redefinir silenciosamente decisão de produto já aprovada na task;
-- se uma decisão da task entrar em conflito com segurança, invariantes duráveis ou realidade técnica atual, não escolha silenciosamente: registre a contradição e siga o mecanismo de escalonamento do contrato compartilhado.
-
-A task externa é **estado operacional do workflow**, não backlog do Home Music. Backlog e planejamento do produto continuam nas fontes locais apropriadas, como issues e roadmap.
-
-### Modos de execução e evidência
-
-A execução pode ocorrer em `FULL`, `REMOTE`, `PREPARE` ou `BLOCKED`, conforme `AGENTS-CONTRACT.md`.
-
-- ausência de checkout local, shell ou Git local não encerra automaticamente o trabalho se existir caminho `REMOTE` seguro, suficiente e autorizado;
-- teste local, CI remoto, inspeção estática de diff e validação manual são evidências diferentes e devem ser registradas como tal;
-- nunca declare um gate como executado quando ele não foi realmente rodado ou observado;
-- uma etapa do workflow pode terminar com limitações explicitamente registradas quando o papel daquele agent foi cumprido;
-- **merge readiness** continua exigindo os gates obrigatórios deste projeto no head final e qualquer validação manual material que os testes não cubram adequadamente.
-
-### Autorizações remotas
-
-No modo `REMOTE`, trate autorizações separadamente:
-
-- `remote_commits` pode autorizar commits por API remota na branch de trabalho;
-- `push` autoriza push Git tradicional quando houver checkout/Git local;
-- uma autorização não implica automaticamente a outra;
-- criar/atualizar PR, merge, deploy, release, exclusões remotas e outras mutações continuam exigindo a autorização correspondente registrada na task ou dada explicitamente pelo usuário.
-
-Quando não houver task ativa no `agent-workflow`, siga o fluxo local normal deste repositório.
 
 ## Fontes de verdade do projeto
 
-Para uma task ativa do `agent-workflow`, use a task para objetivo, escopo e decisões aprovadas da entrega e use o repositório para verificar implementação e invariantes.
+Quando uma task externa for fornecida por um workflow de automação, use-a para objetivo, escopo e decisões específicas já aprovadas para a entrega. O repositório continua sendo a fonte para verificar implementação, arquitetura, invariantes e comportamento técnico atual.
 
 Para o estado técnico/local, considere:
 
@@ -186,9 +149,7 @@ Comandos read-only de produção também só devem ser usados quando forem perti
 
 ## Git e PR
 
-Quando houver task ativa no `agent-workflow`, o contrato compartilhado controla handoff, estados terminais, sincronização da task e autorizações; este arquivo não duplica esse protocolo.
-
-Regras locais que permanecem válidas:
+Regras locais:
 
 - parta da `main` atual, salvo base explicitamente diferente;
 - use branch curta e objetiva;
@@ -209,7 +170,7 @@ O PR deve registrar, conforme aplicável:
 
 ## Revisão final do diff
 
-A revisão independente do workflow não substitui a necessidade de o head entregue permanecer coerente com o que foi validado. Depois da última alteração e dos gates aplicáveis, o diff completo contra a base deve ser revisado no head correspondente.
+A revisão independente não substitui a necessidade de o head entregue permanecer coerente com o que foi validado. Depois da última alteração e dos gates aplicáveis, o diff completo contra a base deve ser revisado no head correspondente.
 
 Confira no mínimo:
 
@@ -226,8 +187,6 @@ Confira no mínimo:
 Se o SHA mudar depois de review/CI, reavalie o que foi invalidado pela mudança antes de declarar readiness de merge.
 
 ## Definição de pronto
-
-Para uma **etapa do `agent-workflow`**, pronto significa que o agent cumpriu seu papel, revisou o estado/diff aplicável, registrou evidências reais, limitações e findings e sincronizou a task para um estado terminal válido conforme o contrato compartilhado.
 
 Para uma mudança estar **pronta para merge** no Home Music:
 
