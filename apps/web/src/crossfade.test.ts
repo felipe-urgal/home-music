@@ -7,6 +7,7 @@ import {
   otherCrossfadeDeck,
   readCrossfadeSeconds,
   resolveCrossfadeCandidate,
+  resolveManualCrossfadeCandidate,
   writeCrossfadeSeconds
 } from './crossfade';
 
@@ -158,5 +159,15 @@ describe('crossfade', () => {
       visibilityState: 'visible',
       remainingSeconds: 1
     })).toEqual({ trackId: 'a', durationSeconds: 3 });
+  });
+
+  it('mantém trocas manuais imediatas mesmo com crossfade configurado', () => {
+    expect(resolveManualCrossfadeCandidate({
+      currentTrackId: 'a',
+      targetTrackId: 'b',
+      durationSeconds: 8,
+      playing: true,
+      visibilityState: 'visible'
+    })).toBeNull();
   });
 });
