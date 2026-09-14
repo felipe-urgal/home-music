@@ -73,27 +73,10 @@ export function isCrossfadeCompletionPause({
   return duration - currentTime <= 0.25;
 }
 
-export function resolveManualCrossfadeCandidate({
-  currentTrackId,
-  targetTrackId,
-  durationSeconds,
-  playing,
-  visibilityState
-}: ManualCrossfadeCandidateOptions): CrossfadeCandidate | null {
-  const normalizedDurationSeconds = normalizeCrossfadeSeconds(durationSeconds);
-  if (
-    !playing
-    || visibilityState !== 'visible'
-    || !normalizedDurationSeconds
-    || !currentTrackId
-    || !targetTrackId
-    || currentTrackId === targetTrackId
-  ) return null;
-
-  return {
-    trackId: targetTrackId,
-    durationSeconds: normalizedDurationSeconds
-  };
+export function resolveManualCrossfadeCandidate(
+  _options: ManualCrossfadeCandidateOptions
+): CrossfadeCandidate | null {
+  return null;
 }
 
 export function resolveCrossfadeCandidate({
