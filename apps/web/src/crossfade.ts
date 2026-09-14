@@ -1,7 +1,9 @@
 import type { RepeatMode, Track } from '@home-music/shared';
 import { nextTrackDecision } from './player-state';
 
-export const MAX_CROSSFADE_SECONDS = 30;
+import { TV_REMOTE_CROSSFADE_MAX_SECONDS } from '@home-music/shared/tv-remote';
+
+export const MAX_CROSSFADE_SECONDS = TV_REMOTE_CROSSFADE_MAX_SECONDS;
 export type CrossfadeDeck = 'a' | 'b';
 
 const CROSSFADE_SECONDS_STORAGE_KEY = 'home-music:crossfade-seconds:v2';
@@ -41,14 +43,6 @@ type CrossfadeCandidateOptions = {
   remainingSeconds: number;
 };
 
-type ManualCrossfadeCandidateOptions = {
-  currentTrackId: string | null;
-  targetTrackId: string | null;
-  durationSeconds: number;
-  playing: boolean;
-  visibilityState: DocumentVisibilityState;
-};
-
 export type CrossfadeCandidate = {
   trackId: string;
   durationSeconds: number;
@@ -71,12 +65,6 @@ export function isCrossfadeCompletionPause({
   if (ended) return true;
   if (!Number.isFinite(currentTime) || !Number.isFinite(duration) || duration <= 0) return false;
   return duration - currentTime <= 0.25;
-}
-
-export function resolveManualCrossfadeCandidate(
-  _options: ManualCrossfadeCandidateOptions
-): CrossfadeCandidate | null {
-  return null;
 }
 
 export function resolveCrossfadeCandidate({

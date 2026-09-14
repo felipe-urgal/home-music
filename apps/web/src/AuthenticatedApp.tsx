@@ -1,4 +1,4 @@
-import { lazy, useState } from 'react';
+import { lazy, useRef, useCallback, useState } from 'react';
 import type { AuthenticatedUser } from '@home-music/shared';
 import { DesktopNowPlayingScreen } from './components/DesktopNowPlayingScreen';
 import { DesktopPlayerBar } from './components/DesktopPlayerBar';
@@ -60,7 +60,9 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
   });
   const usesSystemVolume = useSystemVolumePreference();
   const desktopLayout = useDesktopLayout();
-  const player = useCrossfadeAudioPlayer(library.tracks, screen === 'player' || desktopLayout, libraryReady, usesSystemVolume);
+  const cancelPreloadRef = useRef<(() => void) | null>(null);
+  const cancelPreload = useCallback(() => cancelPreloadRef.current?.(), []);
+  const player = useCrossfadeAudioPlayer(library.tracks, screen === 'player' || desktopLayout, libraryReady, usesSystemVolume, { beforeManualPlaybackChange: cancelPreload });
   const qualityProfile = useNetworkQualityProfile(player.streamingMode, player.setStreamingMode);
   useBackgroundPlaybackContinuity({
     audioRef: player.audioRef,
@@ -69,18 +71,20 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     currentTrackId: player.current?.id ?? null,
     repeatMode: player.repeatMode,
     playing: player.playing,
-    onNext: player.next
+    onNext: player.advanceNaturally
   });
   useNextTrackPreload({
+    cancellationRef: cancelPreloadRef,
     queue: player.queue,
     currentIndex: player.currentIndex,
     repeatMode: player.repeatMode,
     streamingMode: player.streamingMode,
     normalizationMode: player.normalizationMode,
+    manualPlaybackRevision: player.manualPlaybackRevision,
     playing: player.playing
   });
   const current = player.current;
-  const tvNextDecision = nextTrackDecision(player.queue, player.currentIndex, player.repeatMode, true);
+  const tvNextDecision = nextTrackDecision(player.queue, player.currentIndex, player.repeatMode, false);
   const tvNextTrack = tvNextDecision.type === 'restart'
     ? current
     : tvNextDecision.type === 'track'
@@ -171,6 +175,8 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     onNext: player.next,
     onSeek: player.seek,
     onToggleShuffle: player.toggleShuffle,
+    crossfadeSeconds: player.crossfadeSeconds,
+    onSetCrossfadeSeconds: player.setCrossfadeSeconds,
     onCycleRepeat: player.cycleRepeat
   });
 
@@ -180,6 +186,10 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
         ref={player.deckARef}
         preload="auto"
         onPlay={event => player.audioHandlers.onPlay(event.currentTarget)}
+        onLoadStart={event => player.audioHandlers.onWaiting(event.currentTarget)}
+        onWaiting={event => player.audioHandlers.onWaiting(event.currentTarget)}
+        onCanPlay={event => player.audioHandlers.onCanPlay(event.currentTarget)}
+        onAbort={event => player.audioHandlers.onAbort(event.currentTarget)}
         onPlaying={event => player.audioHandlers.onPlaying(event.currentTarget)}
         onPause={event => player.audioHandlers.onPause(event.currentTarget)}
         onTimeUpdate={event => player.audioHandlers.onTimeUpdate(event.currentTarget)}
@@ -192,6 +202,10 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
         preload="auto"
         aria-hidden="true"
         onPlay={event => player.audioHandlers.onPlay(event.currentTarget)}
+        onLoadStart={event => player.audioHandlers.onWaiting(event.currentTarget)}
+        onWaiting={event => player.audioHandlers.onWaiting(event.currentTarget)}
+        onCanPlay={event => player.audioHandlers.onCanPlay(event.currentTarget)}
+        onAbort={event => player.audioHandlers.onAbort(event.currentTarget)}
         onPlaying={event => player.audioHandlers.onPlaying(event.currentTarget)}
         onPause={event => player.audioHandlers.onPause(event.currentTarget)}
         onTimeUpdate={event => player.audioHandlers.onTimeUpdate(event.currentTarget)}
@@ -223,25 +237,6 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     return (
       <>
         {audioDecks}
-        <TvExperience
-          username={currentUser.username}
-          tracks={library.tracks}
-          playlists={library.playlists}
-          navigation={navigation}
-          current={current}
-          nextTrack={tvNextTrack}
-          playing={player.playing}
-          currentTime={player.currentTime}
-          duration={player.duration}
-          volume={player.volume}
-          usesSystemVolume={usesSystemVolume}
-          onTogglePlay={() => void player.togglePlay()}
-          onNext={player.next}
-          onSeek={player.seek}
-          onVolume={player.setVolume}
-          onPlayTrack={player.playTrack}
-          onOpenAccount={() => setScreen('account')}
-        />
         <div className="tv-remote-pairing-stack">
           <TvRemoteEntryButton onClick={() => { void tvRemote.openPairing(); }} />
           <TvRemotePairingDialog
@@ -254,6 +249,30 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
             onRegenerate={() => { void tvRemote.regenerate(); }}
           />
         </div>
+        <TvExperience
+          username={currentUser.username}
+          tracks={library.tracks}
+          playlists={library.playlists}
+          navigation={navigation}
+          current={current}
+          nextTrack={tvNextTrack}
+          repeatMode={player.repeatMode}
+          loading={player.loading}
+          sourceError={player.sourceError}
+          autoplayBlocked={player.autoplayBlocked}
+          playing={player.playing}
+          currentTime={player.currentTime}
+          duration={player.duration}
+          volume={player.volume}
+          usesSystemVolume={usesSystemVolume}
+          onTogglePlay={() => void player.togglePlay()}
+          onNext={player.next}
+          onSeek={player.seek}
+          onVolume={player.setVolume}
+          onPlayTrack={player.playTrack}
+          onOpenAccount={() => setScreen('account')}
+        />
+
         {library.actionError && (
           <button className="app-toast" role="status" onClick={library.clearActionError}>{library.actionError}</button>
         )}

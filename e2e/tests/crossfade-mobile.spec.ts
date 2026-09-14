@@ -65,3 +65,36 @@ test('crossfade mistura dois decks reais no Chromium mobile e faz handoff sem re
   ));
   expect(adoptedPosition).toBeGreaterThan(0.25);
 });
+
+for (const action of ['nexttrack', 'previoustrack', 'seekto', 'pause'] as const) {
+  test(`MediaSession ${action} cancela a mistura natural antes de aplicar o comando`, async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'mobile-chromium');
+    await page.addInitScript(() => {
+      localStorage.setItem('home-music:crossfade-seconds:v2', '2');
+      const actions = new Map<MediaSessionAction, MediaSessionActionHandler>();
+      const original = navigator.mediaSession.setActionHandler.bind(navigator.mediaSession);
+      navigator.mediaSession.setActionHandler = (action, handler) => {
+        if (handler) actions.set(action, handler); else actions.delete(action);
+        original(action, handler);
+      };
+      Object.assign(window, { invokeMediaAction: (action: MediaSessionAction) => {
+        const handler = actions.get(action);
+        if (!handler) throw new Error(`Missing MediaSession handler: ${action}`);
+        handler({ action, seekTime: 0 });
+      } });
+    });
+    await login(page);
+    await page.getByRole('button', { name: 'Tocar', exact: true }).click();
+    await expect.poll(() => page.evaluate(() => [...document.querySelectorAll('audio')].filter(audio => !audio.paused && audio.volume > 0 && audio.volume < 1).length), { timeout: 12000 }).toBe(2);
+    await page.evaluate(action => {
+      const target = window as Window & { invokeMediaAction: (action: MediaSessionAction) => void };
+      target.invokeMediaAction(action);
+    }, action);
+    await expect(page.locator('[data-crossfading="true"]')).toHaveCount(0);
+    await expect.poll(() => page.evaluate(() => [...document.querySelectorAll('audio')].filter(audio => !audio.paused && !audio.ended).length)).toBe(action === 'pause' ? 0 : 1);
+    if (action === 'nexttrack') await expect(page.getByRole('heading', { name: 'E2E Zeta' })).toBeVisible();
+    if (action === 'previoustrack' || action === 'seekto') {
+      await expect.poll(() => page.evaluate(() => [...document.querySelectorAll('audio')].find(audio => !audio.paused)?.currentTime ?? Infinity)).toBeLessThan(3);
+    }
+  });
+}

@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { createTvRemoteStatusPublisher } from './tv-remote-status-publisher';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { RepeatMode, Track } from '@home-music/shared';
 import { remoteSessionPath } from './browser-navigation';
 import { isTvMode } from './tv-mode';
@@ -12,7 +13,6 @@ import {
 import {
   applyTvRemotePlayerCommand,
   tvRemoteSnapshot,
-  tvRemoteSnapshotKey,
   type TvRemotePlaybackState
 } from './tv-remote-tv-controller';
 import { requestTvRemoteTrack } from './tv-remote-track-request';
@@ -26,6 +26,8 @@ type UseTvRemoteSessionOptions = {
   duration: number;
   shuffle: boolean;
   repeatMode: RepeatMode;
+  crossfadeSeconds: number;
+  onSetCrossfadeSeconds: (seconds: number) => void;
   onTogglePlay: () => void | Promise<void>;
   onPrevious: () => void;
   onNext: () => void;
@@ -36,9 +38,13 @@ type UseTvRemoteSessionOptions = {
 
 export function useTvRemoteSession(options: UseTvRemoteSessionOptions) {
   const latestRef = useRef(options);
-  latestRef.current = options;
+  useLayoutEffect(() => { latestRef.current = options; });
+  const creationGenerationRef = useRef(0);
   const activeSessionRef = useRef<string | null>(null);
   const publishChangedRef = useRef<(() => void) | null>(null);
+  const [crossfadeCapable, setCrossfadeCapable] = useState(false);
+  const appliedIdRef = useRef(0);
+  const [appliedId, setAppliedId] = useState(0);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [pairingUrl, setPairingUrl] = useState<string | null>(null);
   const [state, setState] = useState<TvRemoteSessionState>('idle');
@@ -56,9 +62,13 @@ export function useTvRemoteSession(options: UseTvRemoteSessionOptions) {
       currentTime: latestRef.current.currentTime,
       duration: latestRef.current.duration,
       shuffle: latestRef.current.shuffle,
-      repeatMode: latestRef.current.repeatMode
+      repeatMode: latestRef.current.repeatMode,
+      ...(crossfadeCapable ? { crossfadeSeconds: latestRef.current.crossfadeSeconds, lastAppliedCrossfadeCommandId: appliedId } : {})
     };
-  }, []);
+  }, [crossfadeCapable, appliedId]);
+
+  const playbackStateRef = useRef(playbackState);
+  useLayoutEffect(() => { playbackStateRef.current = playbackState; });
 
   const disposeSession = useCallback(async (id: string | null) => {
     if (!id) return;
@@ -70,6 +80,7 @@ export function useTvRemoteSession(options: UseTvRemoteSessionOptions) {
   }, []);
 
   const createFreshSession = useCallback(async (showPairing: boolean) => {
+    const generation = ++creationGenerationRef.current;
     const previous = activeSessionRef.current;
     activeSessionRef.current = null;
     setSessionId(null);
@@ -82,11 +93,16 @@ export function useTvRemoteSession(options: UseTvRemoteSessionOptions) {
 
     try {
       const session = await createTvRemoteSession();
+      if (generation !== creationGenerationRef.current) { await disposeSession(session.id); return; }
+      appliedIdRef.current = 0;
+      setAppliedId(0);
+      setCrossfadeCapable(session.capabilities?.crossfadeControl === true);
       activeSessionRef.current = session.id;
       setSessionId(session.id);
       setPairingUrl(`${window.location.origin}${remoteSessionPath(session.id)}`);
       setState('waiting');
     } catch (cause) {
+      if (generation !== creationGenerationRef.current) return;
       setState('error');
       setError(cause instanceof Error ? cause.message : 'Não foi possível criar o controle remoto.');
     }
@@ -113,34 +129,12 @@ export function useTvRemoteSession(options: UseTvRemoteSessionOptions) {
 
   useEffect(() => {
     if (!sessionId) return;
-    let stopped = false;
-    let timer: number | null = null;
-    let lastPublishedAt = 0;
-    let lastKey = '';
-
-    const publish = async (force: boolean) => {
-      if (stopped) return;
-      const snapshot = tvRemoteSnapshot(playbackState());
-      const key = tvRemoteSnapshotKey(snapshot);
-      if (!force && key === lastKey) return;
-      try {
-        await publishTvRemoteStatus(sessionId, snapshot);
-        if (stopped) return;
-        lastPublishedAt = Date.now();
-        lastKey = key;
-      } catch (cause) {
-        if (!stopped) setError(cause instanceof Error ? cause.message : 'Falha ao atualizar o controle remoto.');
-      }
-    };
-
-    const scheduleChanged = () => {
-      if (stopped || timer !== null) return;
-      const delay = Math.max(0, 1000 - (Date.now() - lastPublishedAt));
-      timer = window.setTimeout(() => {
-        timer = null;
-        void publish(false);
-      }, delay);
-    };
+    const publisher = createTvRemoteStatusPublisher(
+      () => tvRemoteSnapshot(playbackStateRef.current()),
+      snapshot => publishTvRemoteStatus(sessionId, snapshot),
+      cause => setError(cause instanceof Error ? cause.message : 'Falha ao atualizar o controle remoto.')
+    );
+    const scheduleChanged = () => publisher.request();
     publishChangedRef.current = scheduleChanged;
 
     const markConnected = () => {
@@ -150,9 +144,16 @@ export function useTvRemoteSession(options: UseTvRemoteSessionOptions) {
 
     const stopEvents = openTvRemoteEvents(sessionId, {
       onRemoteConnected: markConnected,
-      onCommand: command => {
+      onCommand: (command, eventId) => {
         markConnected();
-        const current = playbackState();
+        if (command.type === 'set-crossfade') {
+          if (!crossfadeCapable || eventId <= appliedIdRef.current) return;
+          latestRef.current.onSetCrossfadeSeconds(command.seconds);
+          appliedIdRef.current = eventId;
+          setAppliedId(eventId);
+          return;
+        }
+        const current = playbackStateRef.current();
         const controls = latestRef.current;
         applyTvRemotePlayerCommand(command, current, {
           togglePlay: controls.onTogglePlay,
@@ -176,24 +177,24 @@ export function useTvRemoteSession(options: UseTvRemoteSessionOptions) {
       onError: () => setError('O controle remoto recebeu um evento inválido.')
     });
 
-    void publish(true);
-    const heartbeat = window.setInterval(() => { void publish(true); }, 15_000);
+    publisher.request(true);
+    const heartbeat = window.setInterval(() => { publisher.request(true); }, 15_000);
 
     return () => {
-      stopped = true;
+      publisher.stop();
       publishChangedRef.current = null;
       stopEvents();
       window.clearInterval(heartbeat);
-      if (timer !== null) window.clearTimeout(timer);
     };
-  }, [playbackState, sessionId]);
+  }, [crossfadeCapable, sessionId]);
 
   useEffect(() => {
     publishChangedRef.current?.();
   }, [options.current?.id, options.current?.title, options.current?.artist, options.current?.albumArtist,
-    options.playing, options.currentTime, options.duration, options.shuffle, options.repeatMode]);
+    options.playing, options.currentTime, options.duration, options.shuffle, options.repeatMode, options.crossfadeSeconds, appliedId]);
 
   useEffect(() => () => {
+    creationGenerationRef.current += 1;
     const id = activeSessionRef.current;
     activeSessionRef.current = null;
     void disposeSession(id);

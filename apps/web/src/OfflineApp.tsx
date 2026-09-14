@@ -36,7 +36,7 @@ export function OfflineApp({ offline, onExit }: OfflineAppProps) {
     currentTrackId: player.current?.id ?? null,
     repeatMode: player.repeatMode,
     playing: player.playing,
-    onNext: player.next
+    onNext: player.advanceNaturally
   });
   const current = player.current;
 
@@ -46,6 +46,10 @@ export function OfflineApp({ offline, onExit }: OfflineAppProps) {
         ref={player.deckARef}
         preload="auto"
         onPlay={event => player.audioHandlers.onPlay(event.currentTarget)}
+        onLoadStart={event => player.audioHandlers.onWaiting(event.currentTarget)}
+        onWaiting={event => player.audioHandlers.onWaiting(event.currentTarget)}
+        onCanPlay={event => player.audioHandlers.onCanPlay(event.currentTarget)}
+        onAbort={event => player.audioHandlers.onAbort(event.currentTarget)}
         onPlaying={event => player.audioHandlers.onPlaying(event.currentTarget)}
         onPause={event => player.audioHandlers.onPause(event.currentTarget)}
         onTimeUpdate={event => player.audioHandlers.onTimeUpdate(event.currentTarget)}
@@ -58,6 +62,10 @@ export function OfflineApp({ offline, onExit }: OfflineAppProps) {
         preload="auto"
         aria-hidden="true"
         onPlay={event => player.audioHandlers.onPlay(event.currentTarget)}
+        onLoadStart={event => player.audioHandlers.onWaiting(event.currentTarget)}
+        onWaiting={event => player.audioHandlers.onWaiting(event.currentTarget)}
+        onCanPlay={event => player.audioHandlers.onCanPlay(event.currentTarget)}
+        onAbort={event => player.audioHandlers.onAbort(event.currentTarget)}
         onPlaying={event => player.audioHandlers.onPlaying(event.currentTarget)}
         onPause={event => player.audioHandlers.onPause(event.currentTarget)}
         onTimeUpdate={event => player.audioHandlers.onTimeUpdate(event.currentTarget)}

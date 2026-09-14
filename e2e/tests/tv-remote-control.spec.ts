@@ -101,8 +101,10 @@ test('TV mostra o now playing e celular autenticado controla a reprodução', as
   const pairingUrl = await pairingLink.getAttribute('href');
   expect(pairingUrl).toBeTruthy();
 
-  await expect(page.getByRole('button', { name: 'Faixa anterior', exact: true })).toBeEnabled();
-  await expect(page.getByRole('button', { name: 'Próxima faixa', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Faixa anterior', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /^Próxima faixa:/ })).toBeEnabled();
+  await expect(page.locator('.tv-now-playing__photo')).toHaveAttribute('data-loaded', 'true');
+  expect(await page.locator('.tv-now-playing__photo').evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true);
 
   const origin = new URL(page.url()).origin;
   const phoneContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
@@ -119,21 +121,21 @@ test('TV mostra o now playing e celular autenticado controla a reprodução', as
     await expect(pairingLink).toHaveCount(0);
     await expect(remoteEntry).toBeVisible();
 
-    const tvPlay = page.locator('.tv-now-playing__play');
+    const tvPlay = page.getByRole('button', { name: /^(Tocar|Pausar):/ });
     const phonePlay = phone.locator('.tv-remote-controls__primary');
     await expect(phonePlay).toBeEnabled();
 
-    const initialAction = await tvPlay.getAttribute('aria-label');
+    const initialAction = (await tvPlay.getAttribute('aria-label'))!.split(':')[0];
     expect(['Tocar', 'Pausar']).toContain(initialAction);
     await expect(phonePlay).toHaveAttribute('aria-label', initialAction!);
 
     const toggledAction = initialAction === 'Tocar' ? 'Pausar' : 'Tocar';
     await tvPlay.click();
-    await expect(tvPlay).toHaveAttribute('aria-label', toggledAction);
+    await expect(tvPlay).toHaveAttribute('aria-label', new RegExp(`^${toggledAction}:`));
     await expect(phonePlay).toHaveAttribute('aria-label', toggledAction, { timeout: 5_000 });
 
     await phonePlay.click();
-    await expect(tvPlay).toHaveAttribute('aria-label', initialAction!, { timeout: 5_000 });
+    await expect(tvPlay).toHaveAttribute('aria-label', new RegExp(`^${initialAction}:`), { timeout: 5_000 });
 
     const title = page.locator('.tv-now-playing__title');
     const beforeTitle = await title.textContent();
@@ -154,8 +156,19 @@ test('TV mostra o now playing e celular autenticado controla a reprodução', as
     for (let index = 0; index < repeatClicks; index += 1) await repeat.click();
     await expect(repeat).toHaveAttribute('aria-label', 'Repetir uma', { timeout: 5_000 });
 
-    const currentTitle = await title.textContent();
-    await expect(page.locator('.tv-now-playing__next-copy p')).toContainText(currentTitle!);
+    await expect(page.getByText('Ao terminar, repete a atual')).toBeVisible();
+    const preview = await page.locator('.tv-now-playing__next-copy p').textContent();
+    await page.getByRole('button', { name: /^Próxima faixa:/ }).click();
+    await expect.poll(async () => preview!.includes((await title.textContent())!)).toBe(true);
+
+    const crossfade = phone.getByLabel('Crossfade', { exact: true });
+    await expect(crossfade).toBeEnabled({ timeout: 20_000 });
+    for (const seconds of [3, 5, 30, 0]) {
+      await crossfade.selectOption(String(seconds));
+      await expect(phone.getByRole('status')).toContainText(`Crossfade: ${seconds} s`);
+      await expect(crossfade).toHaveValue(String(seconds));
+      await expect.poll(() => page.evaluate(() => localStorage.getItem('home-music:crossfade-seconds:v2'))).toBe(String(seconds));
+    }
 
     const libraryEntry = phone.getByRole('button', { name: /Biblioteca/ });
     await libraryEntry.focus();
@@ -270,4 +283,41 @@ test('TV mostra o now playing e celular autenticado controla a reprodução', as
   } finally {
     await phoneContext.close();
   }
+});
+
+test('TV mantém fotografia/fallback e percurso de foco nas três áreas', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop-chromium');
+  await login(page, '/?tv=1');
+  const entry = page.getByRole('button', { name: 'Controlar pelo celular', exact: true });
+  const cover = page.getByRole('button', { name: /^(Tocar|Pausar):/ });
+  const next = page.getByRole('button', { name: /^Próxima faixa:/ });
+  await expect(cover).toBeFocused();
+  await cover.press('ArrowUp');
+  await expect(entry).toBeFocused();
+  await entry.press('ArrowDown');
+  await expect(cover).toBeFocused();
+  await cover.press('ArrowRight');
+  await expect(next).toBeFocused();
+  await next.press('ArrowLeft');
+  await expect(cover).toBeFocused();
+  await entry.focus();
+  await entry.press('Tab');
+  await expect(cover).toBeFocused();
+  await cover.press('Tab');
+  await expect(next).toBeFocused();
+  await entry.click();
+  await expect(page.getByRole('link', { name: 'Abrir controle no celular' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(entry).toBeFocused();
+  await expect(page.getByRole('link', { name: 'Abrir controle no celular' })).toHaveCount(0);
+  for (const [width, height] of [[1280, 720], [1920, 1080], [3840, 2160], [390, 844]]) {
+    await page.setViewportSize({ width, height });
+    await expect(cover).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
+  await page.route('**/tv-turntable-*.webp', route => route.abort());
+  await page.reload();
+  await expect(page.locator('.tv-now-playing__photo')).toHaveAttribute('data-loaded', 'false');
+  await expect(page.locator('.tv-now-playing__scene')).toBeVisible();
+  await expect(cover).toBeEnabled();
 });

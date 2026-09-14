@@ -1,5 +1,8 @@
-import { useEffect, useRef, type CSSProperties } from 'react';
-import type { Playlist, Track } from '@home-music/shared';
+import { useCrossfadeVisualState } from '../crossfade-visual';
+import { resolveTvCrossfadePresentation } from '../tv-crossfade';
+import turntablePhoto from '../assets/tv-turntable.webp';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import type { Playlist, RepeatMode, Track } from '@home-music/shared';
 import { Music2, Pause, Play, SkipForward } from 'lucide-react';
 import { subscribeToTvRemoteTrackRequests } from '../tv-remote-track-request';
 import { useTvArtworkAccent } from '../useTvArtworkAccent';
@@ -15,6 +18,10 @@ type TvExperienceProps = {
   current?: Track;
   nextTrack?: Track;
   playing: boolean;
+  repeatMode: RepeatMode;
+  loading: boolean;
+  sourceError: string | null;
+  autoplayBlocked: boolean;
   currentTime: number;
   duration: number;
   volume: number;
@@ -53,8 +60,13 @@ function trackAlbum(track: Track) {
   return visibleMetadata(track.album, 'Álbum desconhecido');
 }
 
-export function TvExperience({ tracks, current, nextTrack, playing, currentTime, duration, onTogglePlay, onNext, onPlayTrack }: TvExperienceProps) {
+export function TvExperience({ tracks, current, nextTrack, playing, repeatMode, loading, sourceError, autoplayBlocked, currentTime, duration, onTogglePlay, onNext, onPlayTrack }: TvExperienceProps) {
+  const [photoLoaded, setPhotoLoaded] = useState(false);
+  const photoRef = useRef<HTMLImageElement>(null);
+  const focusedControlRef = useRef<HTMLButtonElement | null>(null);
   const rootRef = useRef<HTMLElement>(null);
+  const crossfade = useCrossfadeVisualState();
+  const presentation = resolveTvCrossfadePresentation(current, crossfade);
   const accent = useTvArtworkAccent(current);
   const progress = duration > 0 ? Math.max(0, Math.min(100, currentTime / duration * 100)) : 0;
   const currentArtist = current ? trackArtist(current) : '';
@@ -65,6 +77,15 @@ export function TvExperience({ tracks, current, nextTrack, playing, currentTime,
     '--tv-accent': accent.color,
     '--tv-accent-rgb': accent.rgb
   };
+
+  useEffect(() => {
+    const focused = focusedControlRef.current;
+    if (focused && (!focused.isConnected || focused.disabled)) {
+      const target = rootRef.current?.querySelector<HTMLButtonElement>('[data-tv-primary]:not(:disabled)')
+        ?? document.querySelector<HTMLButtonElement>('[data-tv-entry]');
+      target?.focus({ preventScroll: true });
+    }
+  }, [current?.id, nextTrack?.id]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -103,10 +124,10 @@ export function TvExperience({ tracks, current, nextTrack, playing, currentTime,
 
     const onKeyDown = (event: KeyboardEvent) => {
       const active = document.activeElement as HTMLButtonElement | null;
-      if (!active) return;
+      if (!active || active.closest('[role="dialog"]')) return;
 
       if (event.key === 'ArrowDown' && active.matches('[data-tv-entry]')) {
-        const primary = root.querySelector<HTMLButtonElement>('[data-tv-primary]:not(:disabled)');
+        const primary = root.querySelector<HTMLButtonElement>('[data-tv-primary]:not(:disabled), [data-tv-control]:not(:disabled)');
         if (!primary) return;
         event.preventDefault();
         primary.focus({ preventScroll: true });
@@ -145,7 +166,8 @@ export function TvExperience({ tracks, current, nextTrack, playing, currentTime,
   }), [onPlayTrack, tracks]);
 
   return (
-    <main ref={rootRef} className="app-shell tv-app tv-app--now-playing" style={themeStyle}>
+    <main ref={rootRef} className="app-shell tv-app tv-app--now-playing" style={themeStyle}
+      onFocusCapture={event => { focusedControlRef.current = event.target instanceof HTMLButtonElement ? event.target : null; }}>
       <svg className="tv-now-playing__scene" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
         <defs>
           <radialGradient id="tv-record-glow" cx="52%" cy="40%" r="58%">
@@ -174,6 +196,11 @@ export function TvExperience({ tracks, current, nextTrack, playing, currentTime,
         <path d="M1446 380 L1528 398 L1496 512 L1428 489 Z" fill="#14161a" />
         <path d="M1468 478 L1505 490 L1484 548 L1445 534 Z" className="tv-now-playing__accent-fill" opacity=".72" />
       </svg>
+      <img ref={photoRef} src={turntablePhoto} className="tv-now-playing__photo" alt="" aria-hidden="true"
+        data-loaded={photoLoaded} onLoad={event => {
+          const image = event.currentTarget;
+          void image.decode().then(() => { if (photoRef.current === image) setPhotoLoaded(true); }).catch(() => setPhotoLoaded(false));
+        }} onError={() => setPhotoLoaded(false)} />
       <div className="tv-now-playing__shade" aria-hidden="true" />
 
       <header className="tv-now-playing__header">
@@ -183,18 +210,20 @@ export function TvExperience({ tracks, current, nextTrack, playing, currentTime,
         </div>
       </header>
 
-      <section className="tv-now-playing__content" aria-live="polite">
+      <section className="tv-now-playing__content">
         <div className="tv-now-playing__identity">
           <button
             data-tv-control
             data-tv-primary
             className="tv-now-playing__art"
             type="button"
-            aria-label={current ? (playing ? 'Pausar' : 'Tocar') : 'Nenhuma música tocando'}
+            aria-label={current ? `${playing ? 'Pausar' : 'Tocar'}: ${current.title}` : 'Nenhuma música tocando'}
+            aria-busy={loading}
             disabled={!current}
             onClick={onTogglePlay}
           >
-            <Artwork track={current} large />
+            <span className="tv-now-playing__art-layer" style={{ opacity: presentation.outgoingOpacity }}><Artwork track={current} large /></span>
+            {presentation.incomingTrack && <span className="tv-now-playing__art-layer tv-now-playing__art-layer--incoming" aria-hidden="true" style={{ opacity: presentation.incomingOpacity }}><Artwork track={presentation.incomingTrack} large /></span>}
             {current && (
               <span className="tv-now-playing__art-action" aria-hidden="true">
                 {playing ? <Pause /> : <Play />}
@@ -202,10 +231,18 @@ export function TvExperience({ tracks, current, nextTrack, playing, currentTime,
             )}
           </button>
           <div className="tv-now-playing__details">
+            <div style={{ opacity: presentation.outgoingOpacity }}>
             <h1 className="tv-now-playing__title">{current?.title || 'Nada tocando'}</h1>
             {currentArtist && <p className="tv-now-playing__artist">{currentArtist}</p>}
             {!current && <p className="tv-now-playing__artist">Escolha uma música pelo celular</p>}
             {currentAlbum && <p className="tv-now-playing__album">{currentAlbum}</p>}
+            </div>
+            {presentation.incomingTrack && <div className="tv-now-playing__incoming-details" aria-hidden="true" style={{ opacity: presentation.incomingOpacity }}>
+              <div className="tv-now-playing__title">{presentation.incomingTrack.title}</div>
+              <p className="tv-now-playing__artist">{trackArtist(presentation.incomingTrack)}</p>
+              <p className="tv-now-playing__album">{trackAlbum(presentation.incomingTrack)}</p>
+            </div>}
+            <p className="tv-now-playing__status" role="status">{sourceError ?? (autoplayBlocked ? 'Toque na capa para iniciar a reprodução.' : loading ? 'Carregando música…' : '')}</p>
           </div>
         </div>
 
@@ -226,10 +263,12 @@ export function TvExperience({ tracks, current, nextTrack, playing, currentTime,
         )}
       </section>
 
+      {!showNextTrack && <div className="tv-now-playing__next">Sem próxima faixa</div>}
       {showNextTrack && nextTrack && (
-        <button data-tv-control className="tv-now-playing__next" type="button" aria-label={`Tocar próxima faixa: ${nextTrack.title}`} onClick={onNext}>
+        <button data-tv-control className="tv-now-playing__next" type="button" aria-label={`Próxima faixa: ${nextTrack.title}`} onClick={onNext}>
           <div className="tv-now-playing__next-copy">
             <span>A SEGUIR</span>
+            {repeatMode === 'one' && <small>Ao terminar, repete a atual</small>}
             <p>{nextTrack.title}{nextArtist ? ` • ${nextArtist}` : ''}</p>
           </div>
           <div className="tv-now-playing__next-art"><Artwork track={nextTrack} /></div>

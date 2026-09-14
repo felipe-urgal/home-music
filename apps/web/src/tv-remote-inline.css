@@ -108,3 +108,10 @@
     min-height: 82px;
   }
 }
+
+@media (max-width: 800px), (max-height: 550px) {
+  .tv-remote-pairing-stack { position: relative; inset: auto; width: auto; margin: 24px 5vw; }
+  .tv-remote-entry-button__copy strong { white-space: normal; }
+  .tv-remote-inline-qr { width: 100%; min-width: 0; }
+  .tv-remote-pairing-stack + .tv-app--now-playing { padding-top: 100px; }
+}

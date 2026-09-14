@@ -31,6 +31,7 @@ test('create returns an opaque summary with the initial expiration', () => {
   const manager = managerAt(0);
 
   assert.deepEqual(manager.create('user-7'), {
+    capabilities: { crossfadeControl: true },
     id: 'session-1',
     expiresAt: '1970-01-01T00:01:00.000Z',
     snapshot: null
@@ -91,6 +92,7 @@ test('publishing a snapshot updates the TV heartbeat, summary and expiration', (
   assert.equal(manager.publishSnapshot('user-7', session.id, current), true);
   now = 99_999;
   assert.deepEqual(manager.get('user-7', session.id), {
+    capabilities: { crossfadeControl: true },
     id: session.id,
     expiresAt: '1970-01-01T00:01:40.000Z',
     snapshot: current
@@ -203,4 +205,15 @@ test('the owned cleanup timer expires sessions and shutdown clears that timer an
     type: 'closed',
     data: { reason: 'closed' }
   });
+});
+
+
+test('command ID belongs to the published command even when a listener publishes reentrantly', () => {
+  const manager = managerAt(0);
+  const session = manager.create('user');
+  manager.subscribe('user', session.id, event => {
+    if (event.type === 'command') manager.publishSnapshot('user', session.id, snapshot({ crossfadeSeconds: 5, lastAppliedCrossfadeCommandId: event.id }));
+  });
+  assert.equal(manager.publishCommand('user', session.id, { type: 'set-crossfade', seconds: 5 }), 1);
+  assert.deepEqual(manager.eventsAfter('user', session.id, 0)?.map(event => event.id), [1, 2]);
 });

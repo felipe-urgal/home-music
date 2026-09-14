@@ -1,3 +1,5 @@
+import { hasTvRemoteCrossfadePair, TV_REMOTE_CROSSFADE_MAX_SECONDS } from '@home-music/shared/tv-remote';
+import { useRemoteCrossfade } from '../useRemoteCrossfade';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Track } from '@home-music/shared';
 import type { TvRemoteCommand, TvRemotePlaybackSnapshot } from '@home-music/shared/tv-remote';
@@ -69,6 +71,8 @@ function visibleMetadata(value: string | null | undefined, unknownLabel: string)
 
 export function TvRemoteControlScreen({ sessionId, username }: TvRemoteControlScreenProps) {
   const library = useLibraryData();
+  const [crossfadeCapable, setCrossfadeCapable] = useState(false);
+  const [liveSnapshotAt, setLiveSnapshotAt] = useState<number | null>(null);
   const [state, setState] = useState<RemoteState>('loading');
   const [transport, setTransport] = useState<TvRemoteTransportStatus>('connecting');
   const [snapshot, setSnapshot] = useState<TvRemotePlaybackSnapshot | null>(null);
@@ -91,6 +95,9 @@ export function TvRemoteControlScreen({ sessionId, username }: TvRemoteControlSc
 
   useEffect(() => {
     let disposed = false;
+    let live = false;
+    setCrossfadeCapable(false);
+    setLiveSnapshotAt(null);
     let stopEvents: (() => void) | null = null;
     setState('loading');
     setError(null);
@@ -99,20 +106,26 @@ export function TvRemoteControlScreen({ sessionId, username }: TvRemoteControlSc
 
     void getTvRemoteSession(sessionId).then(session => {
       if (disposed) return;
+      setCrossfadeCapable(session.capabilities?.crossfadeControl === true);
       const receivedAt = Date.now();
       setSnapshot(session.snapshot);
       setLastSnapshotReceivedAt(session.snapshot ? receivedAt : null);
       setPresenceNow(receivedAt);
       setState('ready');
       stopEvents = openTvRemoteEvents(sessionId, {
+        onReady: () => { live = true; },
         onSnapshot: next => {
+          if (live) setLiveSnapshotAt(Date.now());
           const nextReceivedAt = Date.now();
           setSnapshot(next);
           setLastSnapshotReceivedAt(nextReceivedAt);
           setPresenceNow(nextReceivedAt);
         },
         onClosed: () => setState('closed'),
-        onTransportStatus: setTransport,
+        onTransportStatus: status => {
+          if (status !== 'open') { live = false; setLiveSnapshotAt(null); }
+          setTransport(status);
+        },
         onError: () => setError('A TV enviou uma atualização inválida.')
       });
     }).catch(cause => {
@@ -304,6 +317,10 @@ export function TvRemoteControlScreen({ sessionId, username }: TvRemoteControlSc
     }
   }
 
+  const crossfadeConnected = state === 'ready' && isTvRemotePlaybackFresh(transport, liveSnapshotAt, presenceNow);
+  const crossfadeAvailable = Boolean(snapshot && hasTvRemoteCrossfadePair(snapshot) && crossfadeCapable);
+  const crossfade = useRemoteCrossfade(sessionId, snapshot, crossfadeConnected && crossfadeAvailable);
+
   if (state === 'loading') {
     return <main className="tv-remote-screen"><section className="tv-remote-card tv-remote-card--status" aria-live="polite"><Tv /><strong>Conectando à TV…</strong><span>Validando a sessão de {username}.</span></section></main>;
   }
@@ -405,6 +422,25 @@ export function TvRemoteControlScreen({ sessionId, username }: TvRemoteControlSc
                 disabled={modeControlsDisabled}
                 onClick={() => void sendControl('repeat', { type: 'cycle-repeat' })}
               >{repeatMode === 'one' ? <Repeat1 aria-hidden="true" /> : <Repeat2 aria-hidden="true" />}</button>
+            </div>
+
+            <div className="tv-remote-crossfade" aria-busy={crossfade.pending !== null}>
+              <label htmlFor="remote-crossfade">Crossfade</label>
+              <select id="remote-crossfade" aria-describedby="remote-crossfade-help remote-crossfade-status"
+                value={snapshot && hasTvRemoteCrossfadePair(snapshot) ? snapshot.crossfadeSeconds : ''}
+                disabled={!crossfadeConnected || !crossfadeAvailable || crossfade.pending !== null}
+                onChange={event => void crossfade.choose(Number(event.target.value))}>
+                <option value="" disabled>—</option>
+                {Array.from({ length: TV_REMOTE_CROSSFADE_MAX_SECONDS + 1 }, (_, seconds) => (
+                  <option key={seconds} value={seconds}>{seconds === 0 ? 'Desligado (0 s)' : `${seconds} s`}</option>
+                ))}
+              </select>
+              <small id="remote-crossfade-help">Só na troca automática entre músicas.</small>
+              <p id="remote-crossfade-status" role="status">{crossfade.pending !== null
+                ? `Aguardando a TV: ${crossfade.pending} s…`
+                : crossfade.message ?? (!snapshot ? 'Aguardando a TV…' : !crossfadeAvailable
+                  ? 'Crossfade indisponível nesta TV' : !crossfadeConnected
+                    ? 'Último valor recebido. Aguardando a TV…' : '')}</p>
             </div>
 
             <button ref={libraryEntryRef} className="tv-remote-library-entry" type="button" onClick={openLibrary}>

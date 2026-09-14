@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import type { Track } from '@home-music/shared';
-import { resolveManualCrossfadeCandidate } from './crossfade';
 import type { CrossfadeVisualState } from './crossfade-visual';
 import { resolveTvCrossfadePresentation } from './tv-crossfade';
 
@@ -47,37 +46,4 @@ describe('tv crossfade presentation', () => {
     });
   });
 
-  it('mantém toda troca manual imediata e sem crossfade', () => {
-    expect(resolveManualCrossfadeCandidate({
-      currentTrackId: 'a',
-      targetTrackId: 'b',
-      durationSeconds: 3,
-      playing: true,
-      visibilityState: 'visible'
-    })).toBeNull();
-
-    expect(resolveManualCrossfadeCandidate({
-      currentTrackId: 'a',
-      targetTrackId: 'b',
-      durationSeconds: 3,
-      playing: false,
-      visibilityState: 'visible'
-    })).toBeNull();
-
-    expect(resolveManualCrossfadeCandidate({
-      currentTrackId: 'a',
-      targetTrackId: 'b',
-      durationSeconds: 0,
-      playing: true,
-      visibilityState: 'visible'
-    })).toBeNull();
-
-    expect(resolveManualCrossfadeCandidate({
-      currentTrackId: 'a',
-      targetTrackId: 'a',
-      durationSeconds: 3,
-      playing: true,
-      visibilityState: 'visible'
-    })).toBeNull();
-  });
 });

@@ -96,8 +96,7 @@ export class TvRemoteSessionManager {
   publishCommand(ownerId: string, sessionId: string, command: TvRemoteCommand) {
     const session = this.resolve(ownerId, sessionId);
     if (!session) return false;
-    this.publish(session, { type: 'command', data: command });
-    return true;
+    return this.publish(session, { type: 'command', data: command });
   }
 
   publishSnapshot(ownerId: string, sessionId: string, snapshot: TvRemotePlaybackSnapshot) {
@@ -146,6 +145,7 @@ export class TvRemoteSessionManager {
 
   private summary(session: Session): TvRemoteSessionSummary {
     return {
+      capabilities: { crossfadeControl: true },
       id: session.id,
       expiresAt: new Date(session.lastTvHeartbeatAt + SESSION_TTL_MS).toISOString(),
       snapshot: session.snapshot
@@ -190,6 +190,7 @@ export class TvRemoteSessionManager {
         session.listeners.delete(listener);
       }
     }
+    return published.id;
   }
 
   private remove(session: Session, reason: 'closed' | 'expired') {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, type RefObject } from 'react';
 import type { NormalizationMode, RepeatMode, Track } from '@home-music/shared';
 import { apiFetch } from './api-client';
 import { resolveNextTrackPreload, warmTranscodedTrack } from './next-track-preload';
@@ -7,21 +7,25 @@ import type { StreamingMode } from './streaming-quality';
 const PRELOAD_DELAY_MS = 1_000;
 
 type NextTrackPreloadOptions = {
+  cancellationRef: RefObject<(() => void) | null>;
   queue: Track[];
   currentIndex: number;
   repeatMode: RepeatMode;
   streamingMode: StreamingMode;
   normalizationMode: NormalizationMode;
   playing: boolean;
+  manualPlaybackRevision: number;
 };
 
 export function useNextTrackPreload({
+  cancellationRef,
   queue,
   currentIndex,
   repeatMode,
   streamingMode,
   normalizationMode,
-  playing
+  playing,
+  manualPlaybackRevision
 }: NextTrackPreloadOptions) {
   const candidate = useMemo(() => resolveNextTrackPreload(
     queue,
@@ -40,9 +44,11 @@ export function useNextTrackPreload({
         .catch(() => undefined);
     }, PRELOAD_DELAY_MS);
 
+    const cancel = () => { window.clearTimeout(timeout); controller.abort(); };
+    cancellationRef.current = cancel;
     return () => {
-      window.clearTimeout(timeout);
-      controller.abort();
+      cancel();
+      if (cancellationRef.current === cancel) cancellationRef.current = null;
     };
-  }, [candidate, playing]);
+  }, [candidate, playing, manualPlaybackRevision, cancellationRef]);
 }

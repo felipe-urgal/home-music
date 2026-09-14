@@ -10,6 +10,8 @@ export type TvRemotePlaybackState = {
   playing: boolean;
   currentTime: number;
   duration: number;
+  crossfadeSeconds?: number;
+  lastAppliedCrossfadeCommandId?: number;
   shuffle?: boolean;
   repeatMode?: RepeatMode;
 };
@@ -31,6 +33,7 @@ export function tvRemoteSnapshot(
   const duration = Number.isFinite(state.duration) ? Math.max(0, state.duration) : 0;
   const currentTime = Number.isFinite(state.currentTime) ? Math.max(0, state.currentTime) : 0;
   return {
+    ...(state.crossfadeSeconds === undefined ? {} : { crossfadeSeconds: state.crossfadeSeconds, lastAppliedCrossfadeCommandId: state.lastAppliedCrossfadeCommandId }),
     trackId: state.trackId,
     title: state.title,
     artist: state.artist,
@@ -45,6 +48,8 @@ export function tvRemoteSnapshot(
 
 export function tvRemoteSnapshotKey(snapshot: TvRemotePlaybackSnapshot): string {
   return JSON.stringify({
+    crossfadeSeconds: snapshot.crossfadeSeconds,
+    lastAppliedCrossfadeCommandId: snapshot.lastAppliedCrossfadeCommandId,
     trackId: snapshot.trackId,
     title: snapshot.title,
     artist: snapshot.artist,

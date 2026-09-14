@@ -372,3 +372,9 @@
   .tv-remote-library__search,
   .tv-remote-library__track { border: 1px solid CanvasText; }
 }
+
+.tv-remote-crossfade { display: grid; grid-template-columns: minmax(0, 1fr) minmax(130px, 1fr); gap: 8px 16px; align-items: center; margin: 20px 0; }
+.tv-remote-crossfade select { min-height: 44px; width: 100%; min-width: 0; padding: 8px; color: #fff; background: #20252c; border: 1px solid #9399a2; border-radius: 8px; }
+.tv-remote-crossfade small, .tv-remote-crossfade p { grid-column: 1 / -1; margin: 0; }
+.tv-remote-crossfade select:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+@media (max-width: 350px) { .tv-remote-crossfade { grid-template-columns: 1fr; } }
