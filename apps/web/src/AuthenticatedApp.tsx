@@ -236,7 +236,6 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
           volume={player.volume}
           usesSystemVolume={usesSystemVolume}
           onTogglePlay={() => void player.togglePlay()}
-          onPrevious={player.previous}
           onNext={player.next}
           onSeek={player.seek}
           onVolume={player.setVolume}
