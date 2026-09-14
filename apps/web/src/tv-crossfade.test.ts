@@ -47,14 +47,14 @@ describe('tv crossfade presentation', () => {
     });
   });
 
-  it('libera troca manual com crossfade apenas enquanto a faixa atual está tocando em foreground', () => {
+  it('mantém toda troca manual imediata e sem crossfade', () => {
     expect(resolveManualCrossfadeCandidate({
       currentTrackId: 'a',
       targetTrackId: 'b',
       durationSeconds: 3,
       playing: true,
       visibilityState: 'visible'
-    })).toEqual({ trackId: 'b', durationSeconds: 3 });
+    })).toBeNull();
 
     expect(resolveManualCrossfadeCandidate({
       currentTrackId: 'a',
