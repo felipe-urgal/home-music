@@ -167,7 +167,11 @@ export function TvExperience({ tracks, current, nextTrack, playing, repeatMode, 
 
   return (
     <main ref={rootRef} className="app-shell tv-app tv-app--now-playing" style={themeStyle}
-      onFocusCapture={event => { focusedControlRef.current = event.target instanceof HTMLButtonElement ? event.target : null; }}>
+      onFocusCapture={event => { focusedControlRef.current = event.target instanceof HTMLButtonElement ? event.target : null; }}
+      onBlurCapture={event => {
+        const nextFocus = event.relatedTarget;
+        if (nextFocus instanceof Node && !event.currentTarget.contains(nextFocus)) focusedControlRef.current = null;
+      }}>
       <svg className="tv-now-playing__scene" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
         <defs>
           <radialGradient id="tv-record-glow" cx="52%" cy="40%" r="58%">
