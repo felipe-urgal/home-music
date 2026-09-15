@@ -26,12 +26,14 @@ type UseTvRemoteSessionOptions = {
   duration: number;
   shuffle: boolean;
   repeatMode: RepeatMode;
+  crossfadeSeconds: number;
   onTogglePlay: () => void | Promise<void>;
   onPrevious: () => void;
   onNext: () => void;
   onSeek: (seconds: number) => void;
   onToggleShuffle: () => void;
   onCycleRepeat: () => void;
+  onCrossfadeSeconds: (seconds: number) => void;
 };
 
 export function useTvRemoteSession(options: UseTvRemoteSessionOptions) {
@@ -39,6 +41,7 @@ export function useTvRemoteSession(options: UseTvRemoteSessionOptions) {
   latestRef.current = options;
   const activeSessionRef = useRef<string | null>(null);
   const publishChangedRef = useRef<(() => void) | null>(null);
+  const lastAppliedCrossfadeCommandIdRef = useRef(0);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [pairingUrl, setPairingUrl] = useState<string | null>(null);
   const [state, setState] = useState<TvRemoteSessionState>('idle');
@@ -56,7 +59,9 @@ export function useTvRemoteSession(options: UseTvRemoteSessionOptions) {
       currentTime: latestRef.current.currentTime,
       duration: latestRef.current.duration,
       shuffle: latestRef.current.shuffle,
-      repeatMode: latestRef.current.repeatMode
+      repeatMode: latestRef.current.repeatMode,
+      crossfadeSeconds: latestRef.current.crossfadeSeconds,
+      lastAppliedCrossfadeCommandId: lastAppliedCrossfadeCommandIdRef.current
     };
   }, []);
 
@@ -150,10 +155,13 @@ export function useTvRemoteSession(options: UseTvRemoteSessionOptions) {
 
     const stopEvents = openTvRemoteEvents(sessionId, {
       onRemoteConnected: markConnected,
-      onCommand: command => {
+      onCommand: (command, eventId) => {
         markConnected();
         const current = playbackState();
         const controls = latestRef.current;
+        if (command.type === 'set-crossfade') {
+          lastAppliedCrossfadeCommandIdRef.current = eventId;
+        }
         applyTvRemotePlayerCommand(command, current, {
           togglePlay: controls.onTogglePlay,
           previous: controls.onPrevious,
@@ -161,7 +169,8 @@ export function useTvRemoteSession(options: UseTvRemoteSessionOptions) {
           seek: controls.onSeek,
           toggleShuffle: controls.onToggleShuffle,
           cycleRepeatMode: controls.onCycleRepeat,
-          playTrack: requestTvRemoteTrack
+          playTrack: requestTvRemoteTrack,
+          setCrossfade: controls.onCrossfadeSeconds
         });
         scheduleChanged();
       },
@@ -191,7 +200,7 @@ export function useTvRemoteSession(options: UseTvRemoteSessionOptions) {
   useEffect(() => {
     publishChangedRef.current?.();
   }, [options.current?.id, options.current?.title, options.current?.artist, options.current?.albumArtist,
-    options.playing, options.currentTime, options.duration, options.shuffle, options.repeatMode]);
+    options.playing, options.currentTime, options.duration, options.shuffle, options.repeatMode, options.crossfadeSeconds]);
 
   useEffect(() => () => {
     const id = activeSessionRef.current;

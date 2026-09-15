@@ -17,7 +17,7 @@ import {
   syncCrossfadeVisualElapsed
 } from './crossfade-visual';
 import { offlineAudioUrl } from './offline-downloads';
-import { nextTrackDecision, resolveOutputVolume } from './player-state';
+import { resolveOutputVolume } from './player-state';
 import {
   effectiveNormalizationMode,
   onlineAudioUrl,
@@ -496,38 +496,14 @@ export function useCrossfadeAudioPlayer(
   }, [cancelCrossfade, player.togglePlay]);
 
   const next = useCallback(() => {
-    const decision = nextTrackDecision(player.queue, player.currentIndex, player.repeatMode, false);
-    const nextTrack = decision.type === 'track'
-      ? player.queue.find(track => track.id === decision.id)
-      : undefined;
-
-    if (nextTrack && startManualCrossfade(nextTrack, () => player.next())) return;
     cancelCrossfade();
     player.next();
-  }, [cancelCrossfade, player.currentIndex, player.next, player.queue, player.repeatMode, startManualCrossfade]);
+  }, [cancelCrossfade, player.next]);
 
   const previous = useCallback(() => {
-    const activeAudio = getActiveAudio();
-    if (!activeAudio || activeAudio.currentTime > 3) {
-      cancelCrossfade();
-      player.previous();
-      return;
-    }
-
-    const previousTrack = player.currentIndex > 0
-      ? player.queue[player.currentIndex - 1]
-      : player.repeatMode === 'all' && player.queue.length > 1
-        ? player.queue[player.queue.length - 1]
-        : undefined;
-
-    if (previousTrack && startManualCrossfade(previousTrack, outgoingAudio => {
-      outgoingAudio.currentTime = 0;
-      player.previous();
-    })) return;
-
     cancelCrossfade();
     player.previous();
-  }, [cancelCrossfade, getActiveAudio, player.currentIndex, player.previous, player.queue, player.repeatMode, startManualCrossfade]);
+  }, [cancelCrossfade, player.previous]);
 
   const seek = useCallback((value: number) => {
     cancelCrossfade();
@@ -535,10 +511,9 @@ export function useCrossfadeAudioPlayer(
   }, [cancelCrossfade, player.seek]);
 
   const playTrack = useCallback((track: Track, contextTracks: Track[]) => {
-    if (startManualCrossfade(track, () => player.playTrack(track, contextTracks))) return;
     cancelCrossfade();
     player.playTrack(track, contextTracks);
-  }, [cancelCrossfade, player.playTrack, startManualCrossfade]);
+  }, [cancelCrossfade, player.playTrack]);
 
   const setStreamingMode = useCallback((mode: StreamingMode) => {
     cancelCrossfade();

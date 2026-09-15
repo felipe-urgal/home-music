@@ -80,7 +80,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     playing: player.playing
   });
   const current = player.current;
-  const tvNextDecision = nextTrackDecision(player.queue, player.currentIndex, player.repeatMode, true);
+  const tvNextDecision = nextTrackDecision(player.queue, player.currentIndex, player.repeatMode, false);
   const tvNextTrack = tvNextDecision.type === 'restart'
     ? current
     : tvNextDecision.type === 'track'
@@ -166,12 +166,14 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     duration: player.duration,
     shuffle: player.shuffle,
     repeatMode: player.repeatMode,
+    crossfadeSeconds: player.crossfadeSeconds,
     onTogglePlay: player.togglePlay,
     onPrevious: player.previous,
     onNext: player.next,
     onSeek: player.seek,
     onToggleShuffle: player.toggleShuffle,
-    onCycleRepeat: player.cycleRepeat
+    onCycleRepeat: player.cycleRepeat,
+    onCrossfadeSeconds: player.setCrossfadeSeconds
   });
 
   const audioDecks = (
@@ -236,7 +238,6 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
           volume={player.volume}
           usesSystemVolume={usesSystemVolume}
           onTogglePlay={() => void player.togglePlay()}
-          onPrevious={player.previous}
           onNext={player.next}
           onSeek={player.seek}
           onVolume={player.setVolume}

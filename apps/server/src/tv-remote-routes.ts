@@ -1,11 +1,17 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import type { TvRemoteCommand, TvRemoteEvent, TvRemotePlaybackSnapshot } from '@home-music/shared/tv-remote';
+import {
+  hasTvRemoteCrossfadePair,
+  isTvRemoteCrossfadeSeconds,
+  type TvRemoteCommand,
+  type TvRemoteEvent,
+  type TvRemotePlaybackSnapshot
+} from '@home-music/shared/tv-remote';
 import type { TvRemoteSessionManager } from './tv-remote-session-manager.js';
 
 type SessionParams = { Params: { sessionId: string } };
 const missing = { error: 'Controle remoto não encontrado.' };
 const snapshotKeys = new Set([
-  'trackId', 'title', 'artist', 'playing', 'currentTime', 'duration', 'updatedAt', 'shuffle', 'repeatMode'
+  'trackId', 'title', 'artist', 'playing', 'currentTime', 'duration', 'updatedAt', 'shuffle', 'repeatMode', 'crossfadeSeconds', 'lastAppliedCrossfadeCommandId'
 ]);
 
 function parseCommand(value: unknown): TvRemoteCommand | null {
@@ -19,6 +25,9 @@ function parseCommand(value: unknown): TvRemoteCommand | null {
     || body.type === 'cycle-repeat'
   ) {
     return Object.keys(body).length === 1 ? { type: body.type } : null;
+  }
+  if (body.type === 'set-crossfade' && isTvRemoteCrossfadeSeconds(body.seconds)) {
+    return Object.keys(body).length === 2 ? { type: 'set-crossfade', seconds: body.seconds } : null;
   }
   if (body.type === 'seek' && (body.deltaSeconds === -10 || body.deltaSeconds === 10)) {
     return Object.keys(body).length === 2 ? { type: 'seek', deltaSeconds: body.deltaSeconds } : null;
@@ -40,7 +49,7 @@ function parseSnapshot(value: unknown): TvRemotePlaybackSnapshot | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const body = value as Record<string, unknown>;
   const keys = Object.keys(body);
-  if (keys.length < 7 || keys.length > 9 || keys.some(key => !snapshotKeys.has(key))
+  if (keys.length < 7 || keys.length > 11 || keys.some(key => !snapshotKeys.has(key))
     || !nullableString(body.trackId) || !nullableString(body.title) || !nullableString(body.artist)
     || typeof body.playing !== 'boolean'
     || typeof body.currentTime !== 'number' || !Number.isFinite(body.currentTime)
@@ -48,9 +57,15 @@ function parseSnapshot(value: unknown): TvRemotePlaybackSnapshot | null {
     || typeof body.updatedAt !== 'string' || !Number.isFinite(Date.parse(body.updatedAt))
     || (body.shuffle !== undefined && typeof body.shuffle !== 'boolean')
     || (body.repeatMode !== undefined && body.repeatMode !== 'off' && body.repeatMode !== 'all' && body.repeatMode !== 'one')) return null;
+  const hasPair = 'crossfadeSeconds' in body || 'lastAppliedCrossfadeCommandId' in body;
+  if (hasPair && !hasTvRemoteCrossfadePair(body)) return null;
   const duration = Math.max(0, body.duration);
   const currentTime = Math.max(0, body.currentTime);
   return {
+    ...(hasTvRemoteCrossfadePair(body) ? {
+      crossfadeSeconds: body.crossfadeSeconds,
+      lastAppliedCrossfadeCommandId: body.lastAppliedCrossfadeCommandId
+    } : {}),
     trackId: body.trackId,
     title: body.title?.trim() ?? null,
     artist: body.artist?.trim() ?? null,
@@ -107,8 +122,13 @@ export function registerTvRemoteRoutes(app: FastifyInstance, manager: TvRemoteSe
     if (!manager.get(ownerId, sessionId)) return reply.code(404).send(missing);
     const command = parseCommand(request.body);
     if (!command) return reply.code(400).send({ error: 'Comando de controle remoto inválido.' });
-    if (!manager.publishCommand(ownerId, sessionId, command)) return reply.code(404).send(missing);
-    return reply.code(202).send();
+    if (command.type === 'set-crossfade') {
+      const snapshot = manager.get(ownerId, sessionId)?.snapshot;
+      if (!snapshot || !hasTvRemoteCrossfadePair(snapshot)) return reply.code(409).send({ error: 'Crossfade indisponível neste dispositivo.' });
+    }
+    const commandEventId = manager.publishCommand(ownerId, sessionId, command);
+    if (!commandEventId) return reply.code(404).send(missing);
+    return reply.code(202).send(command.type === 'set-crossfade' ? { commandEventId } : undefined);
   });
 
   app.delete<SessionParams>('/api/tv-remote/sessions/:sessionId', options, async (request, reply) => {

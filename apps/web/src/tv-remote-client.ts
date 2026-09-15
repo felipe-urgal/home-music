@@ -56,13 +56,17 @@ export async function publishTvRemoteStatus(
   await expectEmpty(response, 'Não foi possível atualizar o controle remoto.');
 }
 
-export async function sendTvRemoteCommand(sessionId: string, command: TvRemoteCommand): Promise<void> {
+export async function sendTvRemoteCommand(sessionId: string, command: TvRemoteCommand): Promise<{ commandEventId: number } | null> {
   const response = await apiFetch(`${sessionsPath}/${encodeURIComponent(sessionId)}/commands`, {
     method: 'POST',
     headers: mutationHeaders,
     body: JSON.stringify(command)
   });
+  if (command.type === 'set-crossfade') {
+    return expectJson<{ commandEventId: number }>(response, 'Não foi possível alterar o Crossfade.');
+  }
   await expectEmpty(response, 'Não foi possível enviar o comando.');
+  return null;
 }
 
 export async function closeTvRemoteSession(sessionId: string): Promise<void> {

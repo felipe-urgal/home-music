@@ -10,7 +10,8 @@ function controls() {
     seekBy: vi.fn(),
     toggleShuffle: vi.fn(),
     cycleRepeatMode: vi.fn(),
-    playTrack: vi.fn()
+    playTrack: vi.fn(),
+    setCrossfade: vi.fn()
   };
 }
 
@@ -40,6 +41,21 @@ describe('applyTvRemoteCommand', () => {
     expect(playerControls.togglePlay).not.toHaveBeenCalled();
     expect(playerControls.previous).not.toHaveBeenCalled();
     expect(playerControls.next).not.toHaveBeenCalled();
+    expect(playerControls.toggleShuffle).not.toHaveBeenCalled();
+    expect(playerControls.cycleRepeatMode).not.toHaveBeenCalled();
+    expect(playerControls.playTrack).not.toHaveBeenCalled();
+  });
+
+  it('aplica a duração de crossfade no controle canônico', () => {
+    const playerControls = controls();
+
+    applyTvRemoteCommand({ type: 'set-crossfade', seconds: 20 }, playerControls);
+
+    expect(playerControls.setCrossfade).toHaveBeenCalledWith(20);
+    expect(playerControls.togglePlay).not.toHaveBeenCalled();
+    expect(playerControls.previous).not.toHaveBeenCalled();
+    expect(playerControls.next).not.toHaveBeenCalled();
+    expect(playerControls.seekBy).not.toHaveBeenCalled();
     expect(playerControls.toggleShuffle).not.toHaveBeenCalled();
     expect(playerControls.cycleRepeatMode).not.toHaveBeenCalled();
     expect(playerControls.playTrack).not.toHaveBeenCalled();

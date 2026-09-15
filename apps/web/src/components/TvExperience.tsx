@@ -1,6 +1,6 @@
 import { useEffect, useRef, type CSSProperties } from 'react';
 import type { Playlist, Track } from '@home-music/shared';
-import { Music2, Pause, Play, SkipBack, SkipForward } from 'lucide-react';
+import { Music2, Pause, Play } from 'lucide-react';
 import { subscribeToTvRemoteTrackRequests } from '../tv-remote-track-request';
 import { useTvArtworkAccent } from '../useTvArtworkAccent';
 import type { LibraryNavigation } from '../useLibraryNavigation';
@@ -20,7 +20,6 @@ type TvExperienceProps = {
   volume: number;
   usesSystemVolume: boolean;
   onTogglePlay: () => void;
-  onPrevious: () => void;
   onNext: () => void;
   onSeek: (seconds: number) => void;
   onVolume: (volume: number) => void;
@@ -54,7 +53,7 @@ function trackAlbum(track: Track) {
   return visibleMetadata(track.album, 'Álbum desconhecido');
 }
 
-export function TvExperience({ tracks, current, nextTrack, playing, currentTime, duration, onTogglePlay, onPrevious, onNext, onPlayTrack }: TvExperienceProps) {
+export function TvExperience({ tracks, current, nextTrack, playing, currentTime, duration, onTogglePlay, onNext, onPlayTrack }: TvExperienceProps) {
   const rootRef = useRef<HTMLElement>(null);
   const accent = useTvArtworkAccent(current);
   const progress = duration > 0 ? Math.max(0, Math.min(100, currentTime / duration * 100)) : 0;
@@ -167,7 +166,6 @@ export function TvExperience({ tracks, current, nextTrack, playing, currentTime,
           </linearGradient>
           <filter id="tv-scene-blur"><feGaussianBlur stdDeviation="18" /></filter>
         </defs>
-        <rect width="1920" height="1080" fill="#05090d" />
         <ellipse cx="1115" cy="500" rx="845" ry="405" fill="url(#tv-record-glow)" filter="url(#tv-scene-blur)" />
         <ellipse cx="1110" cy="610" rx="790" ry="350" fill="url(#tv-record-fill)" transform="rotate(-7 1110 610)" />
         <ellipse cx="1110" cy="610" rx="620" ry="270" fill="none" className="tv-now-playing__accent-stroke" strokeOpacity=".24" strokeWidth="8" transform="rotate(-7 1110 610)" />
@@ -187,7 +185,23 @@ export function TvExperience({ tracks, current, nextTrack, playing, currentTime,
 
       <section className="tv-now-playing__content" aria-live="polite">
         <div className="tv-now-playing__identity">
-          <div className="tv-now-playing__art"><Artwork track={current} large /></div>
+          <button
+            data-tv-control
+            data-tv-primary
+            type="button"
+            className="tv-now-playing__art"
+            aria-label={playing ? 'Pausar' : 'Tocar'}
+            aria-pressed={playing}
+            disabled={!current}
+            onClick={onTogglePlay}
+          >
+            <Artwork track={current} large />
+            {current && (
+              <span className="tv-now-playing__art-action" aria-hidden="true">
+                {playing ? <Pause /> : <Play />}
+              </span>
+            )}
+          </button>
           <div className="tv-now-playing__details">
             <h1 className="tv-now-playing__title">{current?.title || 'Nada tocando'}</h1>
             {currentArtist && <p className="tv-now-playing__artist">{currentArtist}</p>}
@@ -210,36 +224,24 @@ export function TvExperience({ tracks, current, nextTrack, playing, currentTime,
               <div><small>{formatTime(currentTime)}</small><small>{formatTime(duration)}</small></div>
             </div>
 
-            <div className="tv-now-playing__controls" aria-label="Controles da TV">
-              <button data-tv-control type="button" aria-label="Faixa anterior" onClick={onPrevious}>
-                <SkipBack aria-hidden="true" />
-              </button>
-              <button
-                data-tv-control
-                data-tv-primary
-                type="button"
-                className="tv-now-playing__play"
-                aria-label={playing ? 'Pausar' : 'Tocar'}
-                onClick={onTogglePlay}
-              >
-                {playing ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
-              </button>
-              <button data-tv-control type="button" aria-label="Próxima faixa" onClick={onNext}>
-                <SkipForward aria-hidden="true" />
-              </button>
-            </div>
           </div>
         )}
       </section>
 
       {showNextTrack && nextTrack && (
-        <aside className="tv-now-playing__next" aria-label="A seguir">
-          <div className="tv-now-playing__next-copy">
+        <button
+          data-tv-control
+          type="button"
+          className="tv-now-playing__next"
+          aria-label={`Tocar próxima faixa: ${nextTrack.title}`}
+          onClick={onNext}
+        >
+          <span className="tv-now-playing__next-copy">
             <span>A SEGUIR</span>
-            <p>{nextTrack.title}{nextArtist ? ` • ${nextArtist}` : ''}</p>
-          </div>
-          <div className="tv-now-playing__next-art"><Artwork track={nextTrack} /></div>
-        </aside>
+            <span>{nextTrack.title}{nextArtist ? ` • ${nextArtist}` : ''}</span>
+          </span>
+          <span className="tv-now-playing__next-art"><Artwork track={nextTrack} /></span>
+        </button>
       )}
     </main>
   );

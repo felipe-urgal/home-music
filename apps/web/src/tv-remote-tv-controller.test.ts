@@ -9,7 +9,8 @@ function controls() {
     seek: vi.fn(),
     toggleShuffle: vi.fn(),
     cycleRepeatMode: vi.fn(),
-    playTrack: vi.fn()
+    playTrack: vi.fn(),
+    setCrossfade: vi.fn()
   };
 }
 
@@ -66,6 +67,19 @@ describe('tv remote TV controller', () => {
       playerControls
     );
     expect(playerControls.seek).toHaveBeenCalledWith(deltaSeconds < 0 ? 0 : 120);
+  });
+
+  it('encaminha alteração remota de crossfade para o player canônico', () => {
+    const playerControls = controls();
+
+    applyTvRemotePlayerCommand(
+      { type: 'set-crossfade', seconds: 30 },
+      { currentTime: 25, duration: 180 },
+      playerControls
+    );
+
+    expect(playerControls.setCrossfade).toHaveBeenCalledWith(30);
+    expect(playerControls.seek).not.toHaveBeenCalled();
   });
 
   it('encaminha a seleção remota de faixa sem alterar seek', () => {

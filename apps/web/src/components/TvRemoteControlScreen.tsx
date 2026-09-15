@@ -33,6 +33,7 @@ import {
   sendTvRemoteCommand,
   type TvRemoteTransportStatus
 } from '../tv-remote-client';
+import { tvCrossfadeOptions } from '../tv-controls';
 import { isTvRemotePlaybackFresh } from '../tv-remote-presence';
 import { useLibraryData } from '../useLibraryData';
 import { Artwork } from './Artwork';
@@ -74,6 +75,7 @@ export function TvRemoteControlScreen({ sessionId, username }: TvRemoteControlSc
   const [snapshot, setSnapshot] = useState<TvRemotePlaybackSnapshot | null>(null);
   const [lastSnapshotReceivedAt, setLastSnapshotReceivedAt] = useState<number | null>(null);
   const [presenceNow, setPresenceNow] = useState(() => Date.now());
+  const [crossfadeControlAvailable, setCrossfadeControlAvailable] = useState(false);
   const [pendingControl, setPendingControl] = useState<string | null>(null);
   const [pendingTrackId, setPendingTrackId] = useState<string | null>(null);
   const [view, setView] = useState<RemoteView>('control');
@@ -96,11 +98,13 @@ export function TvRemoteControlScreen({ sessionId, username }: TvRemoteControlSc
     setError(null);
     setSnapshot(null);
     setLastSnapshotReceivedAt(null);
+    setCrossfadeControlAvailable(false);
 
     void getTvRemoteSession(sessionId).then(session => {
       if (disposed) return;
       const receivedAt = Date.now();
       setSnapshot(session.snapshot);
+      setCrossfadeControlAvailable(session.capabilities?.crossfadeControl === true);
       setLastSnapshotReceivedAt(session.snapshot ? receivedAt : null);
       setPresenceNow(receivedAt);
       setState('ready');
@@ -329,6 +333,8 @@ export function TvRemoteControlScreen({ sessionId, username }: TvRemoteControlSc
         : 'Conectando…';
   const snapshotArtist = visibleMetadata(snapshot?.artist, 'Artista desconhecido');
   const repeatMode = snapshot?.repeatMode ?? 'off';
+  const crossfadeSeconds = snapshot?.crossfadeSeconds;
+  const crossfadeControlsDisabled = !connected || crossfadeSeconds === undefined || pendingControl !== null;
 
   const renderTrack = (track: Track, index: number) => {
     const current = snapshot?.trackId === track.id;
@@ -406,6 +412,26 @@ export function TvRemoteControlScreen({ sessionId, username }: TvRemoteControlSc
                 onClick={() => void sendControl('repeat', { type: 'cycle-repeat' })}
               >{repeatMode === 'one' ? <Repeat1 aria-hidden="true" /> : <Repeat2 aria-hidden="true" />}</button>
             </div>
+
+            {crossfadeControlAvailable && crossfadeSeconds !== undefined && (
+              <div className="tv-remote-crossfade" aria-label="Duração do crossfade em segundos">
+                <span>Crossfade</span>
+                <div>
+                  {tvCrossfadeOptions(crossfadeSeconds).map(seconds => (
+                    <button
+                      key={seconds}
+                      type="button"
+                      className={crossfadeSeconds === seconds ? 'is-active' : ''}
+                      aria-pressed={crossfadeSeconds === seconds}
+                      disabled={crossfadeControlsDisabled}
+                      onClick={() => void sendControl(`crossfade-${seconds}`, { type: 'set-crossfade', seconds })}
+                    >
+                      {seconds === 0 ? 'Desligado' : `${seconds} s`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <button ref={libraryEntryRef} className="tv-remote-library-entry" type="button" onClick={openLibrary}>
               <span className="tv-remote-library-entry__icon"><ListMusic aria-hidden="true" /></span>

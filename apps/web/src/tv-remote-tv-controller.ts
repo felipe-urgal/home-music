@@ -12,6 +12,8 @@ export type TvRemotePlaybackState = {
   duration: number;
   shuffle?: boolean;
   repeatMode?: RepeatMode;
+  crossfadeSeconds?: number;
+  lastAppliedCrossfadeCommandId?: number;
 };
 
 export type TvRemoteCanonicalControls = {
@@ -22,6 +24,7 @@ export type TvRemoteCanonicalControls = {
   toggleShuffle: () => void;
   cycleRepeatMode: () => void;
   playTrack: (trackId: string) => void;
+  setCrossfade: (seconds: number) => void;
 };
 
 export function tvRemoteSnapshot(
@@ -39,7 +42,11 @@ export function tvRemoteSnapshot(
     duration,
     updatedAt: now().toISOString(),
     ...(state.shuffle === undefined ? {} : { shuffle: state.shuffle }),
-    ...(state.repeatMode === undefined ? {} : { repeatMode: state.repeatMode })
+    ...(state.repeatMode === undefined ? {} : { repeatMode: state.repeatMode }),
+    ...(state.crossfadeSeconds === undefined || state.lastAppliedCrossfadeCommandId === undefined ? {} : {
+      crossfadeSeconds: state.crossfadeSeconds,
+      lastAppliedCrossfadeCommandId: state.lastAppliedCrossfadeCommandId
+    })
   };
 }
 
@@ -52,7 +59,9 @@ export function tvRemoteSnapshotKey(snapshot: TvRemotePlaybackSnapshot): string 
     currentTime: Math.round(snapshot.currentTime),
     duration: Math.round(snapshot.duration),
     shuffle: snapshot.shuffle ?? false,
-    repeatMode: snapshot.repeatMode ?? 'off'
+    repeatMode: snapshot.repeatMode ?? 'off',
+    crossfadeSeconds: snapshot.crossfadeSeconds,
+    lastAppliedCrossfadeCommandId: snapshot.lastAppliedCrossfadeCommandId
   });
 }
 
@@ -68,6 +77,7 @@ export function applyTvRemotePlayerCommand(
     seekBy: deltaSeconds => controls.seek(clampTvSeek(playback.currentTime, playback.duration, deltaSeconds)),
     toggleShuffle: controls.toggleShuffle,
     cycleRepeatMode: controls.cycleRepeatMode,
-    playTrack: controls.playTrack
+    playTrack: controls.playTrack,
+    setCrossfade: controls.setCrossfade
   });
 }
