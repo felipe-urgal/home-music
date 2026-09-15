@@ -321,3 +321,28 @@ test('TV mantém fotografia/fallback e percurso de foco nas três áreas', async
   await expect(page.locator('.tv-now-playing__scene')).toBeVisible();
   await expect(cover).toBeEnabled();
 });
+
+test('TV preserva o foco externo quando a ação interna previamente focada desaparece', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop-chromium');
+  await login(page, '/?tv=1');
+
+  const entry = page.getByRole('button', { name: 'Controlar pelo celular', exact: true });
+  const next = page.getByRole('button', { name: /^Próxima faixa:/ });
+  const title = page.locator('.tv-now-playing__title');
+
+  await expect(next).toBeEnabled();
+  await next.focus();
+  await expect(next).toBeFocused();
+  await entry.focus();
+  await expect(entry).toBeFocused();
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    if (await next.count() === 0) break;
+    const beforeTitle = await title.textContent();
+    await next.evaluate((button: HTMLButtonElement) => button.click());
+    await expect.poll(async () => title.textContent(), { timeout: 5_000 }).not.toBe(beforeTitle);
+  }
+
+  await expect(next).toHaveCount(0);
+  await expect(entry).toBeFocused();
+});
