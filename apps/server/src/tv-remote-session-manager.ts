@@ -96,7 +96,8 @@ export class TvRemoteSessionManager {
   publishCommand(ownerId: string, sessionId: string, command: TvRemoteCommand) {
     const session = this.resolve(ownerId, sessionId);
     if (!session) return false;
-    return this.publish(session, { type: 'command', data: command });
+    const eventId = this.publish(session, { type: 'command', data: command });
+    return command.type === 'set-crossfade' ? eventId : true;
   }
 
   publishSnapshot(ownerId: string, sessionId: string, snapshot: TvRemotePlaybackSnapshot) {

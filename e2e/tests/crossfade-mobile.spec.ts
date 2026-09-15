@@ -5,6 +5,10 @@ const password = 'playwright-password-2026';
 const crossfadeStorageKey = 'home-music:crossfade-seconds:v2';
 
 async function login(page: Page) {
+  await page.route('**/api/player/state', async route => {
+    if (route.request().method() !== 'GET') return route.continue();
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ currentTrackId: null, position: 0, volume: 1, shuffle: false, repeatMode: 'off', wasPlaying: false, baseQueueIds: [], queueIds: [], updatedAt: '1970-01-01T00:00:00.000Z' }) });
+  });
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Entrar' })).toBeVisible();
   await page.getByLabel('Usuário').fill(username);
