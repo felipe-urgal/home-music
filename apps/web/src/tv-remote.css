@@ -206,41 +206,6 @@
 .tv-remote-controls__primary svg { width: 31px !important; height: 31px !important; }
 .tv-remote-controls button:disabled { opacity: .34; }
 
-.tv-remote-crossfade {
-  display: grid;
-  gap: 8px;
-  margin: -8px 0 clamp(16px, 2.6dvh, 24px);
-}
-.tv-remote-crossfade > span {
-  color: #9faabb;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: .04em;
-  text-transform: uppercase;
-}
-.tv-remote-crossfade > div {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 7px;
-}
-.tv-remote-crossfade button {
-  min-width: 0;
-  padding: 0 8px;
-  border: 1px solid rgb(255 255 255 / 10%);
-  background: rgb(255 255 255 / 5%);
-  color: #dce5ef;
-  font-size: 12px;
-  font-weight: 700;
-  transition: border-color 160ms ease, background 160ms ease, color 160ms ease, opacity 160ms ease;
-}
-.tv-remote-crossfade button.is-active {
-  border-color: rgb(120 227 167 / 34%);
-  background: rgb(120 227 167 / 12%);
-  color: #78e3a7;
-}
-.tv-remote-crossfade button:disabled { opacity: .42; }
-.tv-remote-crossfade button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
-
 .tv-remote-library-entry {
   width: 100%;
   display: grid;
@@ -402,9 +367,14 @@
   .tv-remote-card,
   .tv-remote-dialog__url,
   .tv-remote-controls button,
-  .tv-remote-crossfade button,
   .tv-remote-library-entry,
   .tv-remote-library__item,
   .tv-remote-library__search,
   .tv-remote-library__track { border: 1px solid CanvasText; }
 }
+
+.tv-remote-crossfade { display: grid; grid-template-columns: minmax(0, 1fr) minmax(130px, 1fr); gap: 8px 16px; align-items: center; margin: 20px 0; }
+.tv-remote-crossfade select { min-height: 44px; width: 100%; min-width: 0; padding: 8px; color: #fff; background: #20252c; border: 1px solid #9399a2; border-radius: 8px; }
+.tv-remote-crossfade small, .tv-remote-crossfade p { grid-column: 1 / -1; margin: 0; }
+.tv-remote-crossfade select:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+@media (max-width: 350px) { .tv-remote-crossfade { grid-template-columns: 1fr; } }

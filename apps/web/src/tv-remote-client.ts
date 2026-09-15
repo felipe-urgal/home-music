@@ -1,3 +1,4 @@
+import { hasTvRemoteCrossfadePair, isTvRemoteCrossfadeSeconds } from '@home-music/shared/tv-remote';
 import type {
   TvRemoteCommand,
   TvRemoteEvent,
@@ -56,17 +57,13 @@ export async function publishTvRemoteStatus(
   await expectEmpty(response, 'Não foi possível atualizar o controle remoto.');
 }
 
-export async function sendTvRemoteCommand(sessionId: string, command: TvRemoteCommand): Promise<{ commandEventId: number } | null> {
+export async function sendTvRemoteCommand(sessionId: string, command: TvRemoteCommand): Promise<void> {
   const response = await apiFetch(`${sessionsPath}/${encodeURIComponent(sessionId)}/commands`, {
     method: 'POST',
     headers: mutationHeaders,
     body: JSON.stringify(command)
   });
-  if (command.type === 'set-crossfade') {
-    return expectJson<{ commandEventId: number }>(response, 'Não foi possível alterar o Crossfade.');
-  }
   await expectEmpty(response, 'Não foi possível enviar o comando.');
-  return null;
 }
 
 export async function closeTvRemoteSession(sessionId: string): Promise<void> {
@@ -81,6 +78,7 @@ export async function closeTvRemoteSession(sessionId: string): Promise<void> {
 export type TvRemoteTransportStatus = 'connecting' | 'open' | 'error';
 
 export type TvRemoteEventHandlers = {
+  onReady?: () => void;
   onCommand?: (command: TvRemoteCommand, eventId: number) => void;
   onSnapshot?: (snapshot: TvRemotePlaybackSnapshot, eventId: number) => void;
   onRemoteConnected?: (eventId: number) => void;
@@ -110,15 +108,26 @@ export function openTvRemoteEvents(sessionId: string, handlers: TvRemoteEventHan
     }
   };
 
+  source.addEventListener('ready', event => {
+    if (stopped) return;
+    try {
+      const data: unknown = JSON.parse((event as MessageEvent<string>).data);
+      if (data && typeof data === 'object' && !Array.isArray(data) && Object.keys(data).length === 0) handlers.onReady?.();
+    } catch (error) { handlers.onError?.(error); }
+  });
+
   source.onopen = () => handlers.onTransportStatus?.('open');
   source.onerror = () => handlers.onTransportStatus?.('error');
   source.addEventListener('command', event => {
     handle<TvRemoteCommand>(event as MessageEvent<string>, (command, eventId) => {
+      if (command.type === 'set-crossfade' && (!isTvRemoteCrossfadeSeconds(command.seconds) || Object.keys(command).length !== 2)) return;
       handlers.onCommand?.(command, eventId);
     });
   });
   source.addEventListener('snapshot', event => {
     handle<TvRemotePlaybackSnapshot>(event as MessageEvent<string>, (snapshot, eventId) => {
+      if (!snapshot || typeof snapshot !== 'object') return;
+      if (('crossfadeSeconds' in snapshot || 'lastAppliedCrossfadeCommandId' in snapshot) && !hasTvRemoteCrossfadePair(snapshot)) return;
       handlers.onSnapshot?.(snapshot, eventId);
     });
   });
@@ -144,4 +153,16 @@ export function openTvRemoteEvents(sessionId: string, handlers: TvRemoteEventHan
     stopped = true;
     source.close();
   };
+}
+
+export async function sendTvRemoteCrossfade(sessionId: string, seconds: number, signal: AbortSignal): Promise<number> {
+  const response = await apiFetch(`${sessionsPath}/${encodeURIComponent(sessionId)}/commands`, {
+    method: 'POST', headers: mutationHeaders, signal,
+    body: JSON.stringify({ type: 'set-crossfade', seconds })
+  });
+  const body = await expectJson<{ commandEventId?: unknown }>(response, 'Não foi possível alterar o Crossfade. Tente novamente.');
+  if (typeof body.commandEventId !== 'number' || !Number.isSafeInteger(body.commandEventId) || body.commandEventId <= 0) {
+    throw new Error('Confirmação de comando inválida.');
+  }
+  return body.commandEventId;
 }

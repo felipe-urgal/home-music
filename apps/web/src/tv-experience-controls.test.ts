@@ -24,7 +24,11 @@ describe('tv experience controls', () => {
   it('não mantém os controles visuais separados nem o fundo preto sólido', () => {
     const component = source('components/TvExperience.tsx');
     const styles = source('tv-now-playing.css');
+    const photoStyles = source('tv-photo-background.css');
 
+    expect(component).toContain("import turntablePhoto from '../assets/tv-turntable.webp'");
+    expect(component).toContain('className="tv-now-playing__photo"');
+    expect(photoStyles).toContain('.tv-now-playing__photo[data-loaded="true"]');
     expect(component).not.toContain('SkipBack');
     expect(component).not.toContain('SkipForward');
     expect(component).not.toContain('tv-now-playing__controls');

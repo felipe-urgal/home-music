@@ -1,11 +1,6 @@
+import { hasTvRemoteCrossfadePair, isTvRemoteCrossfadeSeconds } from '@home-music/shared/tv-remote';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import {
-  hasTvRemoteCrossfadePair,
-  isTvRemoteCrossfadeSeconds,
-  type TvRemoteCommand,
-  type TvRemoteEvent,
-  type TvRemotePlaybackSnapshot
-} from '@home-music/shared/tv-remote';
+import type { TvRemoteCommand, TvRemoteEvent, TvRemotePlaybackSnapshot } from '@home-music/shared/tv-remote';
 import type { TvRemoteSessionManager } from './tv-remote-session-manager.js';
 
 type SessionParams = { Params: { sessionId: string } };
@@ -62,10 +57,7 @@ function parseSnapshot(value: unknown): TvRemotePlaybackSnapshot | null {
   const duration = Math.max(0, body.duration);
   const currentTime = Math.max(0, body.currentTime);
   return {
-    ...(hasTvRemoteCrossfadePair(body) ? {
-      crossfadeSeconds: body.crossfadeSeconds,
-      lastAppliedCrossfadeCommandId: body.lastAppliedCrossfadeCommandId
-    } : {}),
+    ...(hasTvRemoteCrossfadePair(body) ? { crossfadeSeconds: body.crossfadeSeconds, lastAppliedCrossfadeCommandId: body.lastAppliedCrossfadeCommandId } : {}),
     trackId: body.trackId,
     title: body.title?.trim() ?? null,
     artist: body.artist?.trim() ?? null,
@@ -122,9 +114,8 @@ export function registerTvRemoteRoutes(app: FastifyInstance, manager: TvRemoteSe
     if (!manager.get(ownerId, sessionId)) return reply.code(404).send(missing);
     const command = parseCommand(request.body);
     if (!command) return reply.code(400).send({ error: 'Comando de controle remoto inválido.' });
-    if (command.type === 'set-crossfade') {
-      const snapshot = manager.get(ownerId, sessionId)?.snapshot;
-      if (!snapshot || !hasTvRemoteCrossfadePair(snapshot)) return reply.code(409).send({ error: 'Crossfade indisponível neste dispositivo.' });
+    if (command.type === 'set-crossfade' && !hasTvRemoteCrossfadePair(manager.get(ownerId, sessionId)?.snapshot ?? {})) {
+      return reply.code(409).send({ error: 'Crossfade indisponível nesta TV.' });
     }
     const commandEventId = manager.publishCommand(ownerId, sessionId, command);
     if (!commandEventId) return reply.code(404).send(missing);
@@ -183,6 +174,7 @@ export function registerTvRemoteRoutes(app: FastifyInstance, manager: TvRemoteSe
     reply.raw.once('close', close);
     writeFrame('retry: 3000\n\n');
     for (const event of replay) write(event);
+    writeFrame('event: ready\ndata: {}\n\n');
     if (!closed) {
       heartbeat = setInterval(() => writeFrame(': heartbeat\n\n'), 15_000);
       heartbeat.unref();

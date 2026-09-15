@@ -7,7 +7,6 @@ import {
   otherCrossfadeDeck,
   readCrossfadeSeconds,
   resolveCrossfadeCandidate,
-  resolveManualCrossfadeCandidate,
   writeCrossfadeSeconds,
   type CrossfadeDeck
 } from './crossfade';
@@ -43,6 +42,7 @@ function persistCrossfadeSeconds(seconds: number) {
 
 type CrossfadeAudioPlayerOptions = {
   offlineMode?: boolean;
+  beforeManualPlaybackChange?: () => void;
 };
 
 export function useCrossfadeAudioPlayer(
@@ -53,7 +53,14 @@ export function useCrossfadeAudioPlayer(
   options: CrossfadeAudioPlayerOptions = {}
 ) {
   const offlineMode = Boolean(options.offlineMode);
-  const player = useAudioPlayer(tracks, progressVisible, libraryReady, usesSystemVolume, options);
+  const cancelRef = useRef<(() => void) | null>(null);
+  const externalCancelRef = useRef(options.beforeManualPlaybackChange);
+  externalCancelRef.current = options.beforeManualPlaybackChange;
+  const beforeManualPlaybackChange = useCallback(() => {
+    cancelRef.current?.();
+    externalCancelRef.current?.();
+  }, []);
+  const player = useAudioPlayer(tracks, progressVisible, libraryReady, usesSystemVolume, { ...options, beforeManualPlaybackChange });
   const deckARef = useRef<HTMLAudioElement>(null);
   const deckBRef = useRef<HTMLAudioElement>(null);
   const activeDeckRef = useRef<CrossfadeDeck>('a');
@@ -111,6 +118,11 @@ export function useCrossfadeAudioPlayer(
   }, [cancelAnimation, clearAudio, getActiveAudio, getInactiveAudio, player.audioRef]);
 
   useLayoutEffect(() => {
+    cancelRef.current = cancelCrossfade;
+    return () => { cancelRef.current = null; };
+  }, [cancelCrossfade]);
+
+  useLayoutEffect(() => {
     const initialAudio = deckARef.current;
     if (!initialAudio) return;
     activeDeckRef.current = 'a';
@@ -157,145 +169,6 @@ export function useCrossfadeAudioPlayer(
     setCrossfadeSecondsState(normalizedSeconds);
   }, [cancelCrossfade]);
 
-  const startManualCrossfade = useCallback((
-    nextTrack: Track,
-    onCommit: (activeAudio: HTMLAudioElement) => void
-  ) => {
-    if (isAppleMobileWebKit(navigator)) return false;
-
-    const candidate = resolveManualCrossfadeCandidate({
-      currentTrackId: player.current?.id ?? null,
-      targetTrackId: nextTrack.id,
-      durationSeconds: crossfadeSeconds,
-      playing: player.playing,
-      visibilityState: document.visibilityState
-    });
-    if (!candidate) return false;
-
-    cancelCrossfade();
-
-    const activeAudio = getActiveAudio();
-    const incomingAudio = getInactiveAudio();
-    const originTrackId = player.current?.id ?? null;
-    if (
-      !activeAudio
-      || !incomingAudio
-      || !originTrackId
-      || activeAudio.paused
-      || activeAudio.ended
-    ) return false;
-
-    const attempt = attemptRef.current + 1;
-    attemptRef.current = attempt;
-    originTrackIdRef.current = originTrackId;
-    startingTrackIdRef.current = candidate.trackId;
-    incomingTrackIdRef.current = null;
-
-    const fallbackToImmediateChange = () => {
-      if (
-        attemptRef.current !== attempt
-        || currentTrackIdRef.current !== originTrackId
-      ) return;
-      cancelCrossfade();
-      onCommit(activeAudio);
-    };
-
-    const finishCrossfade = () => {
-      if (attemptRef.current !== attempt) return;
-      const visualAttempt = attempt;
-      attemptRef.current += 1;
-      cancelAnimation();
-      originTrackIdRef.current = null;
-      startingTrackIdRef.current = null;
-      incomingTrackIdRef.current = null;
-
-      // Atualiza o estado canônico antes de adotar o deck de entrada. Os setters do
-      // React só renderizam depois deste callback, então a fonte adotada já estará
-      // registrada quando o novo current chegar ao useAudioPlayer.
-      onCommit(activeAudio);
-      activeDeckRef.current = otherCrossfadeDeck(activeDeckRef.current);
-      incomingAudio.volume = outputVolumeRef.current;
-      activeAudio.volume = 0;
-      player.adoptAudioSource(candidate.trackId, incomingAudio);
-      clearAudio(activeAudio);
-      player.audioHandlers.onPlay();
-      window.requestAnimationFrame(() => clearCrossfadeVisualState(visualAttempt));
-    };
-
-    clearAudio(incomingAudio);
-    incomingAudio.volume = 0;
-    incomingAudio.src = offlineMode
-      ? offlineAudioUrl(nextTrack.id)
-      : onlineAudioUrl(
-          nextTrack.id,
-          player.streamingMode,
-          false,
-          effectiveNormalizationMode(nextTrack, player.normalizationMode)
-        );
-    incomingAudio.load();
-
-    void incomingAudio.play()
-      .then(() => {
-        if (
-          attemptRef.current !== attempt
-          || currentTrackIdRef.current !== originTrackId
-          || document.visibilityState !== 'visible'
-          || getActiveAudio() !== activeAudio
-        ) {
-          fallbackToImmediateChange();
-          return;
-        }
-
-        startingTrackIdRef.current = null;
-        incomingTrackIdRef.current = candidate.trackId;
-        setCrossfadeVisualState({
-          attempt,
-          originTrackId,
-          incomingTrack: nextTrack,
-          durationSeconds: candidate.durationSeconds,
-          elapsedSeconds: Math.max(0, Math.min(candidate.durationSeconds, incomingAudio.currentTime))
-        });
-
-        const animate = () => {
-          if (attemptRef.current !== attempt) return;
-          if (
-            document.visibilityState !== 'visible'
-            || activeAudio.paused
-            || activeAudio.ended
-            || incomingAudio.paused
-            || incomingAudio.ended
-            || incomingAudio.error
-          ) {
-            fallbackToImmediateChange();
-            return;
-          }
-
-          const progress = Math.max(
-            0,
-            Math.min(1, incomingAudio.currentTime / candidate.durationSeconds)
-          );
-          syncCrossfadeVisualElapsed(attempt, progress * candidate.durationSeconds);
-          const outputVolume = outputVolumeRef.current;
-          const angle = progress * Math.PI * 0.5;
-          activeAudio.volume = outputVolume * Math.cos(angle);
-          incomingAudio.volume = outputVolume * Math.sin(angle);
-
-          if (progress >= 1) {
-            animationFrameRef.current = null;
-            finishCrossfade();
-            return;
-          }
-
-          animationFrameRef.current = window.requestAnimationFrame(animate);
-        };
-
-        animationFrameRef.current = window.requestAnimationFrame(animate);
-      })
-      .catch(() => fallbackToImmediateChange());
-
-    return true;
-  }, [cancelAnimation, cancelCrossfade, clearAudio, crossfadeSeconds, getActiveAudio, getInactiveAudio, offlineMode, player.adoptAudioSource, player.audioHandlers, player.current?.id, player.normalizationMode, player.playing, player.streamingMode]);
-
   const maybeStartCrossfade = useCallback((activeAudio: HTMLAudioElement) => {
     if (isAppleMobileWebKit(navigator)) return;
     if (activeAudio !== getActiveAudio()) return;
@@ -339,9 +212,9 @@ export function useCrossfadeAudioPlayer(
 
     void incomingAudio.play()
       .then(() => {
+        if (attemptRef.current !== attempt) return;
         if (
-          attemptRef.current !== attempt
-          || currentTrackIdRef.current !== originTrackId
+          currentTrackIdRef.current !== originTrackId
           || document.visibilityState !== 'visible'
           || getActiveAudio() !== activeAudio
         ) {
@@ -404,10 +277,7 @@ export function useCrossfadeAudioPlayer(
   }, [cancelCrossfade, clearAudio, crossfadeSeconds, getActiveAudio, getInactiveAudio, offlineMode, player.current?.id, player.currentIndex, player.normalizationMode, player.playing, player.queue, player.repeatMode, player.streamingMode]);
 
   const handleDeckEnded = useCallback((audio: HTMLAudioElement) => {
-    if (audio !== getActiveAudio()) {
-      if (incomingTrackIdRef.current || startingTrackIdRef.current) cancelCrossfade();
-      return;
-    }
+    if (audio !== getActiveAudio() || !audio.ended) return;
 
     const candidate = resolveCrossfadeCandidate({
       queue: player.queue,
@@ -460,21 +330,20 @@ export function useCrossfadeAudioPlayer(
   }, [getActiveAudio, player.audioHandlers]);
 
   const handleDeckPlaying = useCallback((audio: HTMLAudioElement) => {
-    if (audio === getActiveAudio()) player.audioHandlers.onPlay();
+    if (audio === getActiveAudio() && !audio.paused && !audio.ended) player.audioHandlers.onPlaying();
   }, [getActiveAudio, player.audioHandlers]);
 
   const handleDeckError = useCallback((audio: HTMLAudioElement) => {
-    if (audio === getActiveAudio()) {
+    if (audio === getActiveAudio() && audio.error) {
       cancelCrossfade();
       player.audioHandlers.onError(audio);
       return;
     }
 
-    if (startingTrackIdRef.current || incomingTrackIdRef.current) cancelCrossfade();
   }, [cancelCrossfade, getActiveAudio, player.audioHandlers]);
 
   const handleDeckPause = useCallback((audio: HTMLAudioElement) => {
-    if (audio === getActiveAudio()) {
+    if (audio === getActiveAudio() && audio.paused) {
       // Alguns browsers emitem `pause` imediatamente antes de `ended` no fim
       // natural. A faixa de entrada já está tocando; manter `playing` evita que o
       // efeito de cancelamento descarte esse deck antes do handoff em `ended`.
@@ -487,33 +356,12 @@ export function useCrossfadeAudioPlayer(
       player.audioHandlers.onPause();
       return;
     }
-    if (startingTrackIdRef.current || incomingTrackIdRef.current) cancelCrossfade();
   }, [cancelCrossfade, getActiveAudio, player.audioHandlers]);
 
   const togglePlay = useCallback(() => {
     cancelCrossfade();
     return player.togglePlay();
   }, [cancelCrossfade, player.togglePlay]);
-
-  const next = useCallback(() => {
-    cancelCrossfade();
-    player.next();
-  }, [cancelCrossfade, player.next]);
-
-  const previous = useCallback(() => {
-    cancelCrossfade();
-    player.previous();
-  }, [cancelCrossfade, player.previous]);
-
-  const seek = useCallback((value: number) => {
-    cancelCrossfade();
-    player.seek(value);
-  }, [cancelCrossfade, player.seek]);
-
-  const playTrack = useCallback((track: Track, contextTracks: Track[]) => {
-    cancelCrossfade();
-    player.playTrack(track, contextTracks);
-  }, [cancelCrossfade, player.playTrack]);
 
   const setStreamingMode = useCallback((mode: StreamingMode) => {
     cancelCrossfade();
@@ -547,10 +395,6 @@ export function useCrossfadeAudioPlayer(
     crossfadeSeconds,
     setCrossfadeSeconds,
     togglePlay,
-    next,
-    previous,
-    seek,
-    playTrack,
     setStreamingMode,
     setNormalizationMode,
     toggleShuffle,
@@ -558,9 +402,12 @@ export function useCrossfadeAudioPlayer(
     reorderQueue,
     audioHandlers: {
       onPlay: (audio: HTMLAudioElement) => {
-        if (audio === getActiveAudio()) player.audioHandlers.onPlay();
+        if (audio === getActiveAudio() && !audio.paused && !audio.ended) player.audioHandlers.onPlay();
       },
       onPlaying: handleDeckPlaying,
+      onWaiting: (audio: HTMLAudioElement) => { if (audio === getActiveAudio()) player.audioHandlers.onWaiting(audio); },
+      onCanPlay: (audio: HTMLAudioElement) => { if (audio === getActiveAudio()) player.audioHandlers.onCanPlay(audio); },
+      onAbort: (audio: HTMLAudioElement) => { if (audio === getActiveAudio()) player.audioHandlers.onAbort(audio); },
       onPause: handleDeckPause,
       onTimeUpdate: (audio: HTMLAudioElement) => {
         if (audio !== getActiveAudio()) return;

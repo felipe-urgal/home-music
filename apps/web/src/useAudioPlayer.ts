@@ -39,6 +39,7 @@ const EMPTY_STATE: PlaybackState = {
 
 type AudioPlayerOptions = {
   offlineMode?: boolean;
+  beforeManualPlaybackChange?: () => void;
 };
 
 type AdoptedAudioSource = {
@@ -144,6 +145,15 @@ export function useAudioPlayer(
   options: AudioPlayerOptions = {}
 ) {
   const offlineMode = Boolean(options.offlineMode);
+  const manualChangeRef = useRef(options.beforeManualPlaybackChange);
+  manualChangeRef.current = options.beforeManualPlaybackChange;
+  const playbackGenerationRef = useRef(0);
+  const [manualPlaybackRevision, setManualPlaybackRevision] = useState(0);
+  const beforeManualChange = useCallback(() => {
+    playbackGenerationRef.current += 1;
+    manualChangeRef.current?.();
+    setManualPlaybackRevision(value => value + 1);
+  }, []);
   const audioRef = useRef<HTMLAudioElement>(null);
   const adoptedAudioSourceRef = useRef<AdoptedAudioSource | null>(null);
   const positionRef = useRef(0);
@@ -160,6 +170,7 @@ export function useAudioPlayer(
   const [playing, setPlaying] = useState(false);
   const [resumeIntent, setResumeIntent] = useState(false);
   const [autoplayBlocked, setAutoplayBlocked] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [sourceError, setSourceError] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -184,6 +195,7 @@ export function useAudioPlayer(
   }, []);
 
   const handlePlayRejection = useCallback((error: unknown) => {
+    setLoading(false);
     setPlaying(false);
     if (error instanceof DOMException && error.name === 'NotAllowedError') {
       setPlaybackIntent(false);
@@ -191,17 +203,27 @@ export function useAudioPlayer(
     }
   }, [setPlaybackIntent]);
 
-  const resumeAudio = useCallback((audio: HTMLAudioElement) => {
-    if (!resumeIntentRef.current) return;
-    audio.play()
-      .then(() => {
-        setPlaying(true);
-        setAutoplayBlocked(false);
-      })
-      .catch(handlePlayRejection);
+  const attemptPlay = useCallback(async (audio: HTMLAudioElement) => {
+    const generation = playbackGenerationRef.current;
+    const src = audio.src;
+    setLoading(true);
+    try {
+      await audio.play();
+      if (generation !== playbackGenerationRef.current || audioRef.current !== audio || audio.src !== src || !resumeIntentRef.current) return;
+      setLoading(false);
+      setPlaying(true);
+      setAutoplayBlocked(false);
+    } catch (error) {
+      if (generation === playbackGenerationRef.current && audioRef.current === audio && audio.src === src) handlePlayRejection(error);
+    }
   }, [handlePlayRejection]);
 
+  const resumeAudio = useCallback((audio: HTMLAudioElement) => {
+    if (resumeIntentRef.current) void attemptPlay(audio);
+  }, [attemptPlay]);
+
   const adoptAudioSource = useCallback((trackId: string, audio: HTMLAudioElement) => {
+    playbackGenerationRef.current += 1;
     adoptedAudioSourceRef.current = { trackId, audio };
     audioRef.current = audio;
   }, []);
@@ -332,6 +354,8 @@ export function useAudioPlayer(
     setCurrentTime(0);
     setDuration(current.duration ?? 0);
     positionRef.current = 0;
+    playbackGenerationRef.current += 1;
+    setLoading(resumeIntentRef.current);
     audio.src = offlineMode
       ? offlineAudioUrl(current.id)
       : onlineAudioUrl(current.id, streamingMode, false, effectiveNormalizationMode);
@@ -400,19 +424,16 @@ export function useAudioPlayer(
     setPlaybackIntent(true);
     setAutoplayBlocked(false);
     setSourceError(null);
-    try {
-      await audio.play();
-      setPlaying(true);
-    } catch (error) {
-      handlePlayRejection(error);
-    }
-  }, [current, handlePlayRejection, setPlaybackIntent]);
+    await attemptPlay(audio);
+  }, [attemptPlay, current, setPlaybackIntent]);
 
   const pause = useCallback(() => {
+    beforeManualChange();
+    setLoading(false);
     setPlaybackIntent(false);
     audioRef.current?.pause();
     setPlaying(false);
-  }, [setPlaybackIntent]);
+  }, [beforeManualChange, setPlaybackIntent]);
 
   const togglePlay = useCallback(() => {
     if (audioRef.current?.paused) return play();
@@ -430,10 +451,11 @@ export function useAudioPlayer(
     setCurrentTime(0);
     setPlaybackIntent(true);
     setAutoplayBlocked(false);
-    audio.play().catch(handlePlayRejection);
-  }, [handlePlayRejection, setPlaybackIntent]);
+    void attemptPlay(audio);
+  }, [attemptPlay, setPlaybackIntent]);
 
   const next = useCallback((fromEnded = false) => {
+    if (!fromEnded) beforeManualChange();
     // Avanço normal (manual, ended ou handoff de background) prova que o ciclo
     // anterior não é uma cadeia de faixas quebradas. Erros automáticos não passam
     // por esta função e continuam preservando o conjunto até haver progresso real.
@@ -450,10 +472,12 @@ export function useAudioPlayer(
       return;
     }
     setPlaybackIntent(false);
+    setLoading(false);
     setPlaying(false);
-  }, [currentIndex, queue, repeatMode, restartCurrent, setPlaybackIntent]);
+  }, [beforeManualChange, currentIndex, queue, repeatMode, restartCurrent, setPlaybackIntent]);
 
   const previous = useCallback(() => {
+    beforeManualChange();
     const audio = audioRef.current;
     if (!audio || !queue.length || currentIndex < 0) return;
     failedPlaybackTrackIdsRef.current.clear();
@@ -479,16 +503,17 @@ export function useAudioPlayer(
     audio.currentTime = 0;
     positionRef.current = 0;
     setCurrentTime(0);
-  }, [currentIndex, queue, repeatMode]);
+  }, [beforeManualChange, currentIndex, queue, repeatMode]);
 
   const seek = useCallback((value: number) => {
+    beforeManualChange();
     const audio = audioRef.current;
     if (!audio) return;
     const nextValue = Math.max(0, Math.min(value, Number.isFinite(audio.duration) ? audio.duration : value));
     audio.currentTime = nextValue;
     positionRef.current = nextValue;
     setCurrentTime(nextValue);
-  }, []);
+  }, [beforeManualChange]);
 
   const setVolume = useCallback((value: number) => {
     setVolumeState(Math.max(0, Math.min(1, value)));
@@ -509,6 +534,7 @@ export function useAudioPlayer(
   }, [normalizationMode, offlineMode]);
 
   const playTrack = useCallback((track: Track, contextTracks: Track[]) => {
+    beforeManualChange();
     const context = buildQueueContext(track, contextTracks);
     const baseQueue = context.queue;
     const playbackQueue = shuffle ? shuffledAroundCurrent(baseQueue, track.id) : baseQueue;
@@ -524,9 +550,9 @@ export function useAudioPlayer(
     setSourceError(null);
 
     if (sameTrack) {
-      audioRef.current?.play().catch(handlePlayRejection);
+      if (audioRef.current) void attemptPlay(audioRef.current);
     }
-  }, [current?.id, handlePlayRejection, setPlaybackIntent, shuffle]);
+  }, [attemptPlay, beforeManualChange, current?.id, setPlaybackIntent, shuffle]);
 
   const toggleShuffle = useCallback(() => {
     if (!current) return;
@@ -635,11 +661,11 @@ export function useAudioPlayer(
   }
 
   function handlePause() {
-    setPlaying(false);
+    setLoading(false);    setPlaying(false);
   }
 
   function handleError(audio: HTMLAudioElement) {
-    if (!current || sourceTrackRef.current !== current.id) return;
+    setLoading(false);    if (!current || sourceTrackRef.current !== current.id) return;
     const mediaErrorCode = audio.error?.code;
 
     if (!offlineMode && current && sourceFallbackRef.current === 'unnormalized') {
@@ -781,6 +807,9 @@ export function useAudioPlayer(
     playTrack,
     togglePlay,
     next: () => next(false),
+    advanceNaturally: () => next(true),
+    manualPlaybackRevision,
+    loading,
     previous,
     seek,
     setVolume,
@@ -793,6 +822,10 @@ export function useAudioPlayer(
     syncVisibleProgress: () => setCurrentTime(positionRef.current),
     audioHandlers: {
       onPlay: handlePlay,
+      onPlaying: () => { setLoading(false); handlePlay(); },
+      onWaiting: (audio: HTMLAudioElement) => { if (audio === audioRef.current && resumeIntentRef.current) setLoading(true); },
+      onCanPlay: (audio: HTMLAudioElement) => { if (audio === audioRef.current) setLoading(false); },
+      onAbort: (audio: HTMLAudioElement) => { if (audio === audioRef.current) setLoading(false); },
       onPause: handlePause,
       onTimeUpdate: handleTimeUpdate,
       onLoadedMetadata: handleLoadedMetadata,

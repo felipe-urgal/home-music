@@ -1,6 +1,7 @@
-import { useEffect, useRef, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import type { Playlist, Track } from '@home-music/shared';
 import { Music2, Pause, Play } from 'lucide-react';
+import turntablePhoto from '../assets/tv-turntable.webp';
 import { subscribeToTvRemoteTrackRequests } from '../tv-remote-track-request';
 import { useTvArtworkAccent } from '../useTvArtworkAccent';
 import type { LibraryNavigation } from '../useLibraryNavigation';
@@ -54,6 +55,8 @@ function trackAlbum(track: Track) {
 }
 
 export function TvExperience({ tracks, current, nextTrack, playing, currentTime, duration, onTogglePlay, onNext, onPlayTrack }: TvExperienceProps) {
+  const [photoLoaded, setPhotoLoaded] = useState(false);
+  const photoRef = useRef<HTMLImageElement>(null);
   const rootRef = useRef<HTMLElement>(null);
   const accent = useTvArtworkAccent(current);
   const progress = duration > 0 ? Math.max(0, Math.min(100, currentTime / duration * 100)) : 0;
@@ -174,6 +177,21 @@ export function TvExperience({ tracks, current, nextTrack, playing, currentTime,
         <path d="M1446 380 L1528 398 L1496 512 L1428 489 Z" fill="#14161a" />
         <path d="M1468 478 L1505 490 L1484 548 L1445 534 Z" className="tv-now-playing__accent-fill" opacity=".72" />
       </svg>
+      <img
+        ref={photoRef}
+        src={turntablePhoto}
+        className="tv-now-playing__photo"
+        alt=""
+        aria-hidden="true"
+        data-loaded={photoLoaded}
+        onLoad={event => {
+          const image = event.currentTarget;
+          void image.decode()
+            .then(() => { if (photoRef.current === image) setPhotoLoaded(true); })
+            .catch(() => setPhotoLoaded(false));
+        }}
+        onError={() => setPhotoLoaded(false)}
+      />
       <div className="tv-now-playing__shade" aria-hidden="true" />
 
       <header className="tv-now-playing__header">

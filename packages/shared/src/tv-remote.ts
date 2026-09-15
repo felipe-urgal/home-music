@@ -25,9 +25,7 @@ export type TvRemotePlaybackSnapshot = {
 };
 
 export type TvRemoteSessionSummary = {
-  capabilities?: {
-    crossfadeControl: true;
-  };
+  capabilities?: { crossfadeControl: true };
   id: string;
   expiresAt: string;
   snapshot: TvRemotePlaybackSnapshot | null;
@@ -42,16 +40,13 @@ export type TvRemoteEvent =
 export const TV_REMOTE_CROSSFADE_MAX_SECONDS = 30;
 
 export function isTvRemoteCrossfadeSeconds(value: unknown): value is number {
-  return typeof value === 'number'
-    && Number.isInteger(value)
-    && value >= 0
-    && value <= TV_REMOTE_CROSSFADE_MAX_SECONDS;
+  return typeof value === 'number' && Number.isInteger(value)
+    && value >= 0 && value <= TV_REMOTE_CROSSFADE_MAX_SECONDS;
 }
 
-export function hasTvRemoteCrossfadePair<T extends Record<string, unknown>>(
-  value: T
-): value is T & { crossfadeSeconds: number; lastAppliedCrossfadeCommandId: number } {
+export function hasTvRemoteCrossfadePair<T extends { crossfadeSeconds?: unknown; lastAppliedCrossfadeCommandId?: unknown }>(value: T): value is T & { crossfadeSeconds: number; lastAppliedCrossfadeCommandId: number } {
   return isTvRemoteCrossfadeSeconds(value.crossfadeSeconds)
     && typeof value.lastAppliedCrossfadeCommandId === 'number'
-    && Number.isSafeInteger(value.lastAppliedCrossfadeCommandId);
+    && Number.isSafeInteger(value.lastAppliedCrossfadeCommandId)
+    && value.lastAppliedCrossfadeCommandId >= 0;
 }
