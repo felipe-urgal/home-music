@@ -101,8 +101,13 @@ test('TV mostra o now playing e celular autenticado controla a reprodução', as
   const pairingUrl = await pairingLink.getAttribute('href');
   expect(pairingUrl).toBeTruthy();
 
-  await expect(page.getByRole('button', { name: 'Faixa anterior', exact: true })).toBeEnabled();
-  await expect(page.getByRole('button', { name: 'Próxima faixa', exact: true })).toBeEnabled();
+  const tvPlay = page.locator('.tv-now-playing__art');
+  const tvNext = page.locator('.tv-now-playing__next');
+  await expect(tvPlay).toBeEnabled();
+  await expect(tvNext).toBeEnabled();
+  await expect(tvNext).toHaveAttribute('aria-label', /^Tocar próxima faixa: /);
+  await expect(page.getByRole('button', { name: 'Faixa anterior', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Próxima faixa', exact: true })).toHaveCount(0);
 
   const origin = new URL(page.url()).origin;
   const phoneContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
@@ -119,7 +124,6 @@ test('TV mostra o now playing e celular autenticado controla a reprodução', as
     await expect(pairingLink).toHaveCount(0);
     await expect(remoteEntry).toBeVisible();
 
-    const tvPlay = page.locator('.tv-now-playing__play');
     const phonePlay = phone.locator('.tv-remote-controls__primary');
     await expect(phonePlay).toBeEnabled();
 
@@ -155,7 +159,8 @@ test('TV mostra o now playing e celular autenticado controla a reprodução', as
     await expect(repeat).toHaveAttribute('aria-label', 'Repetir uma', { timeout: 5_000 });
 
     const currentTitle = await title.textContent();
-    await expect(page.locator('.tv-now-playing__next-copy p')).toContainText(currentTitle!);
+    await expect(tvNext).toContainText('A SEGUIR');
+    await expect(tvNext).not.toContainText(currentTitle!);
 
     const libraryEntry = phone.getByRole('button', { name: /Biblioteca/ });
     await libraryEntry.focus();
