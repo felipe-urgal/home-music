@@ -8,6 +8,7 @@ export type TvRemotePlayerControls = {
   toggleShuffle: () => void;
   cycleRepeatMode: () => void;
   playTrack: (trackId: string) => void;
+  setCrossfade: (seconds: number) => void;
 };
 
 export function applyTvRemoteCommand(
@@ -35,6 +36,9 @@ export function applyTvRemoteCommand(
       return;
     case 'play-track':
       controls.playTrack(command.trackId);
+      return;
+    case 'set-crossfade':
+      controls.setCrossfade(command.seconds);
       return;
   }
 }

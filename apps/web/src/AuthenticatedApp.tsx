@@ -1,4 +1,4 @@
-import { lazy, useState } from 'react';
+import { lazy, useCallback, useRef, useState } from 'react';
 import type { AuthenticatedUser } from '@home-music/shared';
 import { DesktopNowPlayingScreen } from './components/DesktopNowPlayingScreen';
 import { DesktopPlayerBar } from './components/DesktopPlayerBar';
@@ -60,7 +60,15 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
   });
   const usesSystemVolume = useSystemVolumePreference();
   const desktopLayout = useDesktopLayout();
-  const player = useCrossfadeAudioPlayer(library.tracks, screen === 'player' || desktopLayout, libraryReady, usesSystemVolume);
+  const cancelPreloadRef = useRef<(() => void) | null>(null);
+  const cancelPreload = useCallback(() => cancelPreloadRef.current?.(), []);
+  const player = useCrossfadeAudioPlayer(
+    library.tracks,
+    screen === 'player' || desktopLayout,
+    libraryReady,
+    usesSystemVolume,
+    { beforeManualPlaybackChange: cancelPreload }
+  );
   const qualityProfile = useNetworkQualityProfile(player.streamingMode, player.setStreamingMode);
   useBackgroundPlaybackContinuity({
     audioRef: player.audioRef,
@@ -69,18 +77,20 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     currentTrackId: player.current?.id ?? null,
     repeatMode: player.repeatMode,
     playing: player.playing,
-    onNext: player.next
+    onNext: player.advanceNaturally
   });
   useNextTrackPreload({
+    cancellationRef: cancelPreloadRef,
     queue: player.queue,
     currentIndex: player.currentIndex,
     repeatMode: player.repeatMode,
     streamingMode: player.streamingMode,
     normalizationMode: player.normalizationMode,
+    manualPlaybackRevision: player.manualPlaybackRevision,
     playing: player.playing
   });
   const current = player.current;
-  const tvNextDecision = nextTrackDecision(player.queue, player.currentIndex, player.repeatMode, true);
+  const tvNextDecision = nextTrackDecision(player.queue, player.currentIndex, player.repeatMode, false);
   const tvNextTrack = tvNextDecision.type === 'restart'
     ? current
     : tvNextDecision.type === 'track'
@@ -166,12 +176,14 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     duration: player.duration,
     shuffle: player.shuffle,
     repeatMode: player.repeatMode,
+    crossfadeSeconds: player.crossfadeSeconds,
     onTogglePlay: player.togglePlay,
     onPrevious: player.previous,
     onNext: player.next,
     onSeek: player.seek,
     onToggleShuffle: player.toggleShuffle,
-    onCycleRepeat: player.cycleRepeat
+    onCycleRepeat: player.cycleRepeat,
+    onSetCrossfadeSeconds: player.setCrossfadeSeconds
   });
 
   const audioDecks = (
@@ -236,7 +248,6 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
           volume={player.volume}
           usesSystemVolume={usesSystemVolume}
           onTogglePlay={() => void player.togglePlay()}
-          onPrevious={player.previous}
           onNext={player.next}
           onSeek={player.seek}
           onVolume={player.setVolume}

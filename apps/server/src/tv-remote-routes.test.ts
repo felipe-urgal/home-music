@@ -192,6 +192,8 @@ test('SSE replays only newer events, delivers live normalized snapshots and ends
   assert.equal(stream.response.headers['cache-control'], 'no-cache, no-transform');
   assert.equal(stream.response.headers.connection, 'keep-alive');
   await stream.until('id: 2\nevent: command\ndata: {"type":"next"}\n\n');
+  await stream.until('event: ready\ndata: {}\n\n');
+  assert.ok(stream.read().indexOf('event: ready') > stream.read().indexOf('event: command'));
   assert.match(stream.read(), /retry: \d+\n\n/);
   assert.doesNotMatch(stream.read(), /id: 1\n/);
   await inject('PUT', `${base}/${id}/status`, { payload: snapshot });
@@ -289,4 +291,36 @@ test('SSE backpressure releases the listener and transport without closing the r
   assert.equal(writes, writesAtClose);
   assert.notEqual(manager.get('owner', id), null);
   assert.deepEqual(manager.eventsAfter('owner', id, 0)?.map(event => event.id), [1, 2]);
+});
+
+
+test('Crossfade requires negotiated TV support, strict integer seconds and a complete snapshot pair', async t => {
+  const { inject, create, manager } = setup(t);
+  const id = await create();
+  const command = (payload: object) => inject('POST', `${base}/${id}/commands`, { payload });
+  assert.equal((await command({ type: 'set-crossfade', seconds: 5 })).statusCode, 409);
+  for (const seconds of [-1, 31, 1.5, '5', null]) {
+    assert.equal((await command({ type: 'set-crossfade', seconds })).statusCode, 400);
+  }
+  for (const pair of [ { crossfadeSeconds: 5 }, { lastAppliedCrossfadeCommandId: 0 },
+    { crossfadeSeconds: 5, lastAppliedCrossfadeCommandId: -1 },
+    { crossfadeSeconds: 5, lastAppliedCrossfadeCommandId: 2 ** 53 },
+    { crossfadeSeconds: 5, lastAppliedCrossfadeCommandId: '0' },
+    { crossfadeSeconds: 5, lastAppliedCrossfadeCommandId: 0, extra: true } ]) {
+    assert.equal((await inject('PUT', `${base}/${id}/status`, { payload: { ...snapshot, ...pair } })).statusCode, 400);
+  }
+  for (const seconds of [0, 1, 3, 5, 30]) {
+    assert.equal((await inject('PUT', `${base}/${id}/status`, { payload: { ...snapshot, crossfadeSeconds: seconds, lastAppliedCrossfadeCommandId: 0 } })).statusCode, 204);
+    const response = await command({ type: 'set-crossfade', seconds });
+    assert.equal(response.statusCode, 202);
+    const event = manager.eventsAfter('owner', id, 0)?.at(-1);
+    assert.deepEqual(response.json(), { commandEventId: event?.id });
+    assert.equal(manager.get('owner', id)?.snapshot?.lastAppliedCrossfadeCommandId, 0);
+  }
+  assert.equal((await command({ type: 'set-crossfade', seconds: 5, extra: true })).statusCode, 400);
+  assert.equal((await inject('POST', `${base}/${id}/commands`, { user: 'other', payload: { type: 'set-crossfade', seconds: 5 } })).statusCode, 404);
+  assert.equal((await inject('POST', `${base}/${id}/commands`, { csrf: false, payload: { type: 'set-crossfade', seconds: 5 } })).statusCode, 403);
+  assert.equal((await command({ type: 'next' })).body, '');
+  assert.equal((await inject('PUT', `${base}/${id}/status`, { payload: snapshot })).statusCode, 204);
+  assert.equal((await command({ type: 'set-crossfade', seconds: 5 })).statusCode, 409);
 });
