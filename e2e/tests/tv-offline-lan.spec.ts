@@ -109,6 +109,7 @@ test('PWA envia duas faixas e comandos para o receiver LAN sem backend', async (
   test.skip(testInfo.project.name !== 'desktop-chromium');
 
   await login(page, '/');
+  await page.context().grantPermissions(['local-network-access'], { origin: 'http://127.0.0.1:8791' });
   const tracks = await seedOfflineTracks(page, ['E2E Zeta', 'E2E Zulu']);
   const fixture = lanFixture();
   const tvContext = await browser.newContext({ viewport: { width: 1280, height: 720 } });
