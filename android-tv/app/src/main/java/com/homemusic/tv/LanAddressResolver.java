@@ -17,7 +17,12 @@ final class LanAddressResolver {
         Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
         if (interfaces == null) return null;
         List<NetworkInterface> networks = Collections.list(interfaces);
-        networks.sort(Comparator.comparingInt(network -> interfacePriority(network.getName())));
+        Collections.sort(networks, new Comparator<NetworkInterface>() {
+            @Override
+            public int compare(NetworkInterface left, NetworkInterface right) {
+                return Integer.compare(interfacePriority(left.getName()), interfacePriority(right.getName()));
+            }
+        });
         for (NetworkInterface network : networks) {
             if (!network.isUp() || network.isLoopback() || network.isVirtual() || network.isPointToPoint()) continue;
             if (interfacePriority(network.getName()) >= 100) continue;
