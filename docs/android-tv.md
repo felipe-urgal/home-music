@@ -2,7 +2,26 @@
 
 O Home Music possui um cliente Android TV em `android-tv/` para abrir a aplicação web em tela cheia em TVs e boxes Android. O alvo inicial é o **BTV 11**; o projeto mantém compatibilidade com Android 6/API 23 ou superior quando o firmware oferece os recursos necessários.
 
-O cliente Android não replica backend, biblioteca ou autenticação. Ele abre o frontend existente com `?tv=1`, mantendo o servidor Home Music como autoridade única para sessão, biblioteca, player e dados pessoais.
+No modo online, o cliente Android abre o frontend existente com `?tv=1`. No modo offline local, ele inicia um serviço HTTP efêmero, exibe QR de pareamento e abre o receiver embarcado por loopback; não replica conta, biblioteca nem credenciais Home Music.
+
+## Modo offline local
+
+O APK empacota `tv-offline-receiver.html` e assets versionados gerados por `npm run build:tv-receiver -w @home-music/web`. O listener LAN fornece somente challenge/join, signaling e bootstrap loopback. O áudio não passa pelo HTTP local: músicas baixadas no PWA são enviadas pelo DataChannel.
+
+Pré-condições: PWA e faixas já armazenados no celular, celular e TV na mesma LAN, rede sem client isolation e browser com acesso à rede local. QR e token são efêmeros; regenerar o pareamento invalida sessão, mailbox e segredo anteriores.
+
+Roteiro físico reproduzível:
+
+1. instalar o APK do mesmo head e abrir o receiver offline;
+2. desligar WAN e servidor Home Music, mantendo a LAN;
+3. abrir o PWA em cold start e confirmar duas faixas baixadas;
+4. parear pelo QR, tocar as duas faixas e exercer play/pause/seek/próxima;
+5. alternar background/foreground no celular;
+6. regenerar o QR e confirmar que a sessão anterior não reconecta;
+7. repetir negativos de permissão negada, outra Wi-Fi/client isolation, perda de Wi-Fi, receiver fechado, IP alterado, arquivo ausente/corrompido e faixa acima do limite;
+8. religar WAN/servidor e confirmar o modo online.
+
+Registrar versões de BTV/Android, Chrome/PWA e GeckoView, além do resultado de cada cenário. O CI não autoriza declarar hardware validado.
 
 ## Estado atual
 
@@ -207,7 +226,7 @@ APK:
 android-tv/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-O workflow **Android TV** executa `assembleDebug` + `lintDebug` e publica `home-music-tv-debug-apk`. Mudanças exclusivamente web/server do modo TV são validadas pelo CI principal e não exigem outro APK.
+O workflow **Android TV** gera o receiver, executa testes JVM, `assembleDebug` + `lintDebug`, verifica os assets dentro do APK e publica `home-music-tv-debug-apk`.
 
 O CI web contém TV regression gate e TV remote control E2E, além dos gates gerais descritos em [`testing-and-quality.md`](testing-and-quality.md).
 

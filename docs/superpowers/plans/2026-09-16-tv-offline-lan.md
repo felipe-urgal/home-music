@@ -105,7 +105,7 @@
 - [ ] Testar permissões negadas, browser incompatível e rede inalcançável.
 - [ ] Commitar como `feat(web): connect offline PWA to TV over LAN`.
 
-### Task 5: Unificar sessão e mover controles para DataChannel (#421)
+### Task 5: Unificar sessão e mover controles para DataChannel (#421) — concluída
 
 **Files:**
 - Create/refactor session transport facade in `apps/web/src/`.
@@ -115,12 +115,12 @@
 **Interfaces:**
 - Produces: adapters `server` e `lan` sob a mesma interface; comandos/estado contínuos via DataChannel.
 
-- [ ] Escrever testes de contrato para adapters e controles.
-- [ ] Introduzir facade de signaling/session sem mudar comportamento online.
-- [ ] Estender framing DataChannel para comandos/estado mantendo mídia binária e backpressure seguros.
-- [ ] Integrar queue offline e ordenação `media-ready` → `play-track`.
-- [ ] Validar reconnect/cleanup/version mismatch e zero backend no modo LAN.
-- [ ] Commitar como `feat(remote): unify online and LAN TV sessions`.
+- [x] Escrever testes de contrato para adapters e controles.
+- [x] Introduzir facade de signaling/session sem mudar comportamento online.
+- [x] Estender framing DataChannel para comandos/estado mantendo mídia binária e backpressure seguros.
+- [x] Integrar queue offline e ordenação `media-ready` → `play-track`.
+- [x] Validar reconnect/cleanup/version mismatch e zero backend no modo LAN.
+- [x] Commitar como `feat(remote): unify online and LAN TV sessions`.
 
 ### Task 6: Regressão, E2E, docs e QA (#422)
 

@@ -127,6 +127,15 @@ Regras:
 
 Sem STUN/TURN público no modo LAN v1. O peer deve usar candidates host/local e falhar explicitamente quando a rede bloquear comunicação entre clientes.
 
+## DataChannel comum
+
+Depois da sinalização, online e LAN usam o mesmo canal ordenado `home-music-media-v1`. Há dois framings não ambíguos:
+
+- bytes binários pertencem à transferência de mídia anunciada por `media-start`;
+- strings JSON são controles de mídia existentes ou envelopes `home-music-data-v1` para comando, snapshot, erro e disconnect.
+
+Cada envelope possui `id` efêmero limitado e é deduplicado com memória bounded. Versão, shape ou limites inválidos são ignorados/rejeitados. O sender conclui os chunks, aguarda `media-ready` e somente então envia `play-track`. A TV valida a faixa transitória disponível e continua sendo autoridade do player.
+
 ## Lifecycle
 
 - TTL do QR/challenge: 2 min;
@@ -189,3 +198,7 @@ Com o servidor Home Music e WAN desligados:
 10. registrar versão do Chrome, Android, BTV/GeckoView e comportamento observado.
 
 Se o browser alvo não permitir HTTPS → HTTP LAN de forma utilizável, #417 deve ser reaberta como decisão arquitetural antes de avançar para uma implementação completa; não mascarar a limitação com fallback inseguro.
+
+## Evidência e suporte
+
+O CI cobre contrato, HMAC, TTL/replay, receiver empacotado, WebRTC/DataChannel Chromium e ausência de requests `/api/*` durante playback LAN. Isso não comprova Local Network Access, GeckoView ou firmware do BTV 11. Suporte real só deve ser registrado após executar o roteiro físico de `docs/android-tv.md` com WAN e servidor desligados e anotar versões/resultados na issue #422.

@@ -105,6 +105,14 @@ Também ficam fora de escopo:
 - persistir automaticamente a faixa recebida na TV;
 - alterar o APK ou criar bridge JavaScript nativa.
 
+## Offline total pela LAN
+
+A fase seguinte mantém o mesmo protocolo binário e player, mas substitui a sinalização online por uma sessão LAN efêmera. O PWA continua na origin Home Music para preservar Cache Storage; o APK serve o receiver embarcado por loopback. Depois de abrir o DataChannel, mídia, comandos e snapshots trafegam diretamente entre celular e TV, sem REST/SSE do Home Music.
+
+Frames textuais usam `home-music-data-v1`; chunks de áudio continuam binários. `sendTrackAndPlay` aguarda `media-ready` antes de publicar `play-track`, e a TV permanece autoridade do playback. Faixa ausente no cache falha explicitamente, sem fallback online no modo LAN.
+
+O modo anterior continua disponível quando o servidor está acessível; não há troca automática entre sessões online e LAN.
+
 ## Testes automatizados
 
 A cobertura inclui:
@@ -119,6 +127,8 @@ A cobertura inclui:
 - E2E em dois contexts de navegador, mantendo o celular sem `<audio>` e verificando que a TV termina com uma fonte `blob:` para a faixa enviada.
 
 O gate direcionado de TV executa `tv-remote-control.spec.ts` e `tv-offline-cast.spec.ts` em Chromium desktop.
+
+O gate `tv-offline-lan.spec.ts` acrescenta cold start do PWA com `/api/*` indisponível, fixture LAN autenticada, receiver embarcado real, duas faixas e DataChannel real em Chromium.
 
 ## Validação física pendente
 
