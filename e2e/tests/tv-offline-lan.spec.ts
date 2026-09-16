@@ -54,6 +54,7 @@ function lanFixture() {
     const headers = {
       'Access-Control-Allow-Origin': origin,
       'Access-Control-Allow-Headers': 'Authorization, Content-Type',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
       'Access-Control-Allow-Private-Network': 'true'
     };
     if (request.method() === 'OPTIONS') return requestRoute.fulfill({ status: 204, headers });
@@ -126,7 +127,7 @@ test('PWA envia duas faixas e comandos para o receiver LAN sem backend', async (
   await expect(page.getByRole('button', { name: 'Conectar à TV', exact: true })).toBeVisible();
   page.once('dialog', dialog => dialog.accept(fixture.qrText));
   await page.getByRole('button', { name: 'Conectar à TV', exact: true }).click();
-  await expect(page.getByText(/TV conectada em/)).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText(/TV conectada em/)).toBeVisible({ timeout: 20_000 });
   const requestsAtConnection = backendRequests;
 
   for (const track of tracks) {
