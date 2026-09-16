@@ -8,6 +8,12 @@ const username = 'playwright';
 const password = ['playwright', 'password', '2026'].join('-');
 const receiverRoot = path.resolve(fileURLToPath(new URL('../../apps/web/dist-tv-receiver/', import.meta.url)));
 
+test.use({
+  launchOptions: {
+    args: ['--autoplay-policy=no-user-gesture-required']
+  }
+});
+
 async function login(page: Page, url: string) {
   await page.goto(url);
   await page.getByLabel('Usuário', { exact: true }).fill(username);
@@ -237,8 +243,10 @@ test('PWA envia faixas e controla o receiver LAN sem backend', async ({ page, br
   await expect.poll(async () => tv.locator('audio').evaluateAll(elements => (
     elements.some(element => (element as HTMLAudioElement).src.startsWith('blob:'))
   ))).toBe(true);
+  await expect(tv.getByRole('button', { name: 'Pausar', exact: true })).toBeVisible({ timeout: 5_000 });
 
   await expect(page.getByTestId('mini-player')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Pausar', exact: true })).toBeVisible({ timeout: 5_000 });
   await page.getByRole('button', { name: 'Pausar', exact: true }).click();
   await expect(tv.getByRole('button', { name: 'Continuar', exact: true })).toBeVisible({ timeout: 5_000 });
   await page.getByRole('button', { name: 'Tocar', exact: true }).click();
