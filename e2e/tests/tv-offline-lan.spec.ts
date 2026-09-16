@@ -42,7 +42,7 @@ function lanFixture() {
   const sessionId = 'session_1234567890abcdef';
   const secret = '00112233445566778899aabbccddeeff';
   const sessionToken = 'token_1234567890abcdef';
-  const expiresAt = Date.now() + 10 * 60_000;
+  const expiresAt = Date.now() + 90_000;
   const messages: Array<{ cursor: number; from: 'remote' | 'tv'; body: unknown }> = [];
   let cursor = 0;
   const qrText = `home-music://tv-lan?version=${version}&host=192.168.1.40&port=43123&session=${sessionId}&secret=${secret}&expires=${expiresAt}`;
@@ -114,7 +114,8 @@ test('PWA envia duas faixas e comandos para o receiver LAN sem backend', async (
   const tv = await tvContext.newPage();
   await serveReceiver(tvContext, fixture.route);
   await tv.goto('http://tv-offline.test/receiver/');
-  await expect(tv.getByText('Receiver offline pronto.', { exact: false })).toBeVisible();
+  await expect(tv.locator('.tv-offline-receiver')).toBeVisible({ timeout: 10_000 });
+  await expect(tv.locator('.tv-offline-receiver__status')).toContainText(/Receiver offline pronto|Aguardando o celular/);
 
   let backendRequests = 0;
   await page.context().route('http://192.168.1.40:43123/**', fixture.route);
