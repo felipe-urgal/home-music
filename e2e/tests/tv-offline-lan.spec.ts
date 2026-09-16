@@ -96,7 +96,37 @@ function lanFixture() {
     }
     return requestRoute.fulfill({ status: 404, headers });
   };
-  return { qrText, route, diagnostics: () => ({ cursor, messages, requests }) };
+  const binding = async (input: { url: string; method: string; body?: string }) => {
+    const url = new URL(input.url);
+    requests.push({ method: input.method, path: `${url.pathname}${url.search}`, origin: 'http://127.0.0.1:8791' });
+    if (url.pathname === '/challenge') {
+      const clientNonce = url.searchParams.get('clientNonce') || '';
+      return { status: 200, json: { sessionId, clientNonce, tvNonce: 'tvnonce_1234567890', expiresAt: Math.min(expiresAt, Date.now() + 60_000) } };
+    }
+    if (url.pathname === '/join') {
+      const body = JSON.parse(input.body || '{}') as Record<string, unknown>;
+      const proofMessage = [version, body.sessionId, body.clientNonce, body.tvNonce, body.expiresAt].join('\n');
+      const expected = createHmac('sha256', Buffer.from(secret, 'hex')).update(proofMessage).digest('base64url');
+      return body.proof === expected
+        ? { status: 200, json: { sessionToken, expiresAt } }
+        : { status: 401, json: { error: 'invalid proof' } };
+    }
+    if (url.pathname === '/signals' && input.method === 'POST') {
+      const body = JSON.parse(input.body || '{}') as { from: 'remote' | 'tv' };
+      messages.push({ cursor: ++cursor, from: body.from, body });
+      return { status: 204 };
+    }
+    if (url.pathname === '/signals') {
+      const role = url.searchParams.get('role');
+      const after = Number(url.searchParams.get('cursor') || 0);
+      return {
+        status: 200,
+        json: { cursor, messages: messages.filter(message => message.cursor > after && message.from !== role).map(message => message.body) }
+      };
+    }
+    return { status: 404, json: { error: 'not found' } };
+  };
+  return { qrText, route, binding, diagnostics: () => ({ cursor, messages, requests }) };
 }
 
 async function serveReceiver(context: BrowserContext, fixtureRoute: (route: Route) => Promise<void>) {
@@ -143,14 +173,27 @@ test('PWA envia duas faixas e comandos para o receiver LAN sem backend', async (
   });
   const phoneContext = page.context();
   await phoneContext.route('**/api/**', route => { backendRequests += 1; return route.abort('connectionrefused'); });
+  await phoneContext.exposeFunction('__homeMusicLanFixture', fixture.binding);
   await phoneContext.addInitScript(() => {
     Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false });
     const nativeFetch = window.fetch.bind(window);
-    window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+    window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       const rawUrl = typeof input === 'string' || input instanceof URL ? String(input) : input.url;
       if (!rawUrl.startsWith('http://192.168.1.40:43123/')) return nativeFetch(input, init);
-      const mapped = rawUrl.replace('http://192.168.1.40:43123/', 'http://127.0.0.1:43123/');
-      return nativeFetch(input instanceof Request ? new Request(mapped, input) : mapped, init);
+      const request = input instanceof Request ? input : null;
+      const bridge = (window as unknown as {
+        __homeMusicLanFixture: (value: { url: string; method: string; body?: string }) =>
+          Promise<{ status: number; json?: unknown }>;
+      }).__homeMusicLanFixture;
+      const result = await bridge({
+        url: rawUrl,
+        method: init?.method || request?.method || 'GET',
+        body: typeof init?.body === 'string' ? init.body : undefined
+      });
+      return new Response(result.json === undefined ? null : JSON.stringify(result.json), {
+        status: result.status,
+        headers: result.json === undefined ? undefined : { 'Content-Type': 'application/json' }
+      });
     };
   });
   await page.close();
