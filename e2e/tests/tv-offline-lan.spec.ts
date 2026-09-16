@@ -59,7 +59,7 @@ function lanFixture() {
     };
     if (request.method() === 'OPTIONS') return requestRoute.fulfill({ status: 204, headers });
     if (url.pathname === '/receiver/bootstrap') {
-      return requestRoute.fulfill({ status: 200, headers, json: { version, sessionId, sessionToken, expiresAt, signalingBase: 'http://127.0.0.1:43123' } });
+      return requestRoute.fulfill({ status: 200, headers, json: { version, sessionId, sessionToken, expiresAt, signalingBase: url.origin } });
     }
     if (url.pathname === '/challenge') {
       const clientNonce = url.searchParams.get('clientNonce') || '';
@@ -92,11 +92,9 @@ function lanFixture() {
 }
 
 async function serveReceiver(context: BrowserContext, fixtureRoute: (route: Route) => Promise<void>) {
-  await context.route('http://127.0.0.1:43123/**', fixtureRoute);
-  await context.route('http://192.168.1.40:43123/**', fixtureRoute);
-  await context.route('http://tv-offline.test/**', async route => {
+  await context.route('http://192.168.1.40:43123/**', async route => {
     const url = new URL(route.request().url());
-    if (url.pathname === '/receiver/bootstrap') return fixtureRoute(route);
+    if (!url.pathname.startsWith('/receiver/') || url.pathname === '/receiver/bootstrap') return fixtureRoute(route);
     const relative = url.pathname === '/receiver/' ? 'tv-offline-receiver.html' : url.pathname.replace(/^\/receiver\//, '');
     const file = path.resolve(receiverRoot, relative);
     if (!file.startsWith(receiverRoot)) return route.fulfill({ status: 404 });
@@ -115,7 +113,7 @@ test('PWA envia duas faixas e comandos para o receiver LAN sem backend', async (
   const tvContext = await browser.newContext({ viewport: { width: 1280, height: 720 } });
   const tv = await tvContext.newPage();
   await serveReceiver(tvContext, fixture.route);
-  await tv.goto('http://tv-offline.test/receiver/');
+  await tv.goto('http://192.168.1.40:43123/receiver/');
   await expect(tv.locator('.tv-offline-receiver')).toBeVisible({ timeout: 10_000 });
   await expect(tv.locator('.tv-offline-receiver__status')).toContainText(/Receiver offline pronto|Aguardando o celular/);
 
