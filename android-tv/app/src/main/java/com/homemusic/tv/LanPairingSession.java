@@ -114,6 +114,12 @@ final class LanPairingSession {
         return pairingExpiresAt;
     }
 
+    synchronized long receiverExpiresAt() {
+        expireIfNeeded();
+        if (closed) return 0L;
+        return joined ? establishedExpiresAt : pairingExpiresAt;
+    }
+
     synchronized boolean isClosed() {
         expireIfNeeded();
         return closed;

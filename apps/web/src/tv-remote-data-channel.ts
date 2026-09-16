@@ -68,6 +68,12 @@ function parseCommand(value: unknown): TvRemoteCommand | null {
     return exactKeys(command, ['type', 'deltaSeconds']) && (command.deltaSeconds === -10 || command.deltaSeconds === 10)
       ? command as TvRemoteCommand : null;
   }
+  if (command.type === 'seek-to') {
+    return exactKeys(command, ['type', 'seconds']) && typeof command.seconds === 'number'
+      && Number.isFinite(command.seconds) && command.seconds >= 0
+      ? command as TvRemoteCommand
+      : null;
+  }
   if (command.type === 'set-crossfade') {
     return exactKeys(command, ['type', 'seconds']) && isTvRemoteCrossfadeSeconds(command.seconds)
       ? command as TvRemoteCommand : null;

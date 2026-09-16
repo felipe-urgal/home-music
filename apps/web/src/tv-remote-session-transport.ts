@@ -65,7 +65,11 @@ export function createServerTvRemoteSessionTransport(
       const handlers: TvRemoteEventHandlers = {
         onReady,
         onClosed,
-        onSignal: signal => { void listener(signal); },
+        onSignal: signal => {
+          void Promise.resolve(listener(signal)).catch(error => {
+            onError?.(error instanceof Error ? error : new Error('Falha ao processar sinal remoto.'));
+          });
+        },
         onError: error => onError?.(error instanceof Error ? error : new Error('Evento remoto inválido.'))
       };
       return subscribe(handlers);
