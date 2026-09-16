@@ -88,7 +88,7 @@ function lanFixture() {
     }
     return requestRoute.fulfill({ status: 404, headers });
   };
-  return { qrText, route };
+  return { qrText, route, diagnostics: () => ({ cursor, messages }) };
 }
 
 async function serveReceiver(context: BrowserContext, fixtureRoute: (route: Route) => Promise<void>) {
@@ -126,7 +126,20 @@ test('PWA envia duas faixas e comandos para o receiver LAN sem backend', async (
   await expect(page.getByRole('button', { name: 'Conectar à TV', exact: true })).toBeVisible();
   page.once('dialog', dialog => dialog.accept(fixture.qrText));
   await page.getByRole('button', { name: 'Conectar à TV', exact: true }).click();
-  await expect(page.getByText(/TV conectada em/)).toBeVisible({ timeout: 20_000 });
+  try {
+    await expect(page.getByText(/TV conectada em/)).toBeVisible({ timeout: 20_000 });
+  } catch (error) {
+    const [phoneText, tvText] = await Promise.all([
+      page.locator('body').innerText(),
+      tv.locator('body').innerText()
+    ]);
+    throw new Error([
+      error instanceof Error ? error.message : String(error),
+      `Phone UI: ${phoneText}`,
+      `TV UI: ${tvText}`,
+      `Signaling: ${JSON.stringify(fixture.diagnostics())}`
+    ].join('\n\n'));
+  }
   const requestsAtConnection = backendRequests;
 
   for (const track of tracks) {
