@@ -1,8 +1,8 @@
-# Home Music TV — protocolo LAN offline v1
+# Home Music TV — protocolo LAN offline v2
 
 ## Objetivo
 
-`home-music-lan-remote-v1` permite parear o PWA Home Music já instalado no celular com o BTV 11 pela mesma LAN quando **WAN e servidor Home Music estão indisponíveis**.
+`home-music-lan-remote-v2` permite parear o PWA Home Music já instalado no celular com o BTV 11 pela mesma LAN quando **WAN e servidor Home Music estão indisponíveis**.
 
 O protocolo local não substitui a conta Home Music. Ele autoriza somente uma sessão efêmera entre o celular que possui o segredo exibido pela TV e o receiver daquele aparelho.
 
@@ -13,6 +13,7 @@ O protocolo local não substitui a conta Home Music. Ele autoriza somente uma se
 - O receiver offline roda no GeckoView e fala com o serviço nativo por loopback.
 - Depois que o RTCDataChannel abre, mídia, comandos e estado usam o peer; o HTTP local não é proxy de áudio.
 - Nenhum cookie, username, senha, token de sessão ou user id Home Music é requisito do protocolo LAN.
+- O bearer simples do receiver é aceito somente no papel `tv`, usado pelo receiver embarcado via loopback. Requisições `remote` vindas do celular exigem assinatura HMAC por request.
 
 ## Compatibilidade inicial
 
@@ -29,23 +30,23 @@ O suporte real deve ser confirmado no spike físico da issue #417 antes de consi
 | Safari/iOS | não validado nesta fase |
 | redes com AP/client isolation | não suportadas |
 
-WebSocket local não é requisito de v1. Bootstrap/sinalização usam HTTP `fetch` + polling/long-poll para reduzir dependência de permissões e comportamento de WebSocket na rede local.
+WebSocket local não é requisito de v2. Bootstrap/sinalização usam HTTP `fetch` + polling para reduzir dependência de comportamento de WebSocket na rede local.
 
 ## QR
 
 Texto canônico:
 
 ```text
-home-music://tv-lan?version=home-music-lan-remote-v1&host=192.168.1.40&port=43123&session=<id>&secret=<segredo>&expires=<epoch-ms>
+home-music://tv-lan?version=home-music-lan-remote-v2&host=192.168.1.40&port=43123&session=<id>&secret=<segredo>&expires=<epoch-ms>
 ```
 
 Campos:
 
-- `version`: exatamente `home-music-lan-remote-v1`;
+- `version`: exatamente `home-music-lan-remote-v2`;
 - `host`: IPv4 privado RFC1918 (`10/8`, `172.16/12`, `192.168/16`);
 - `port`: `1024..65535`;
-- `session`: token base64url/URL-safe aleatório de alta entropia;
-- `secret`: segredo base64url/URL-safe aleatório de alta entropia, diferente de qualquer credencial Home Music;
+- `session`: token URL-safe aleatório de alta entropia;
+- `secret`: segredo URL-safe aleatório de alta entropia, diferente de qualquer credencial Home Music;
 - `expires`: epoch em milissegundos, no máximo 2 minutos após criação.
 
 O scanner do PWA **lê o texto; não navega para essa URI**.
@@ -77,27 +78,83 @@ O celular gera `clientNonce` aleatório e solicita challenge para `sessionId`. A
 
 A TV associa esse challenge à sessão e aceita cada `clientNonce/tvNonce` uma única vez.
 
-### 3. Prova
+### 3. Prova de posse do QR
 
 A mensagem autenticada é UTF-8, exatamente:
 
 ```text
-home-music-lan-remote-v1
+home-music-lan-remote-v2
 <sessionId>
 <clientNonce>
 <tvNonce>
-<expiresAt>
+<challengeExpiresAt>
 ```
 
 `proof = base64url(HMAC-SHA256(secret, mensagem))`.
 
 O servidor local compara a prova em tempo constante. Challenge expirado, nonces reutilizados, segredo consumido ou sessão regenerada são rejeitados.
 
-### 4. Join
+### 4. Join e chave de autenticação da sessão
 
-Após prova válida, o segredo do QR é marcado como consumido para novos joins. A TV retorna um `sessionToken` aleatório e a expiração da sessão estabelecida. Requisições autenticadas seguintes usam o token efêmero; o segredo original não precisa continuar trafegando.
+Após prova válida, a TV retorna `sessionToken` e `sessionExpiresAt`. Antes de descartar o segredo do QR, TV e celular derivam independentemente a mesma chave de request:
+
+```text
+requestKey = HMAC-SHA256(secret, UTF8(
+  "home-music-lan-remote-v2\nrequest-key\n" +
+  sessionId + "\n" +
+  clientNonce + "\n" +
+  tvNonce + "\n" +
+  challengeExpiresAt + "\n" +
+  sessionToken + "\n" +
+  sessionExpiresAt
+))
+```
+
+A `requestKey` nunca trafega pela rede. O `sessionToken` passa a identificar/vincular a sessão, mas **não é suficiente sozinho para autorizar o papel `remote`**.
 
 No MVP existe no máximo **um remoto ativo por sessão**.
+
+### 5. Autenticação de cada request remoto
+
+Toda requisição do celular para `/signals` ou `/close` usa:
+
+```text
+Authorization: HomeMusic <sessionToken>.<timestamp>.<requestNonce>.<signature>
+```
+
+O corpo é hasheado exatamente como foi enviado:
+
+```text
+bodyHash = base64url(SHA256(rawHttpBodyBytes))
+```
+
+A mensagem assinada é:
+
+```text
+home-music-lan-remote-v2
+request
+<sessionId>
+<sessionToken>
+<METHOD_EM_MAIÚSCULAS>
+<path+query exatos>
+<bodyHash>
+<timestamp>
+<requestNonce>
+```
+
+`signature = base64url(HMAC-SHA256(requestKey, mensagem))`.
+
+A TV verifica antes de aceitar o request:
+
+- token associado à sessão remota ativa;
+- assinatura em tempo constante;
+- método, path/query e hash do body exatamente vinculados à assinatura;
+- timestamp dentro da janela máxima de 60 s;
+- `requestNonce` URL-safe ainda não aceito naquela sessão.
+
+Nonces aceitos são guardados em cache limitado a 256 itens. Capturar somente o `sessionToken` não permite criar novos requests válidos e um request já aceito não pode ser repetido com sucesso.
+
+O receiver embarcado usa `Bearer <receiverToken>` apenas no papel `tv` e somente pelo endpoint loopback `127.0.0.1`.
 
 ## Sinalização WebRTC
 
@@ -123,9 +180,9 @@ Regras:
 - mailbox tem no máximo 128 sinais pendentes;
 - polling recomendado: até 25 s;
 - body HTTP máximo: 320 KiB;
-- o serviço deve aplicar rate limit por IP/sessão e encerrar abuso sem afetar o receiver local.
+- o serviço aplica rate limit por IP e encerra abuso sem afetar o receiver local.
 
-Sem STUN/TURN público no modo LAN v1. O peer deve usar candidates host/local e falhar explicitamente quando a rede bloquear comunicação entre clientes.
+Sem STUN/TURN público no modo LAN v2. O peer deve usar candidates host/local e falhar explicitamente quando a rede bloquear comunicação entre clientes.
 
 ## DataChannel comum
 
@@ -136,48 +193,65 @@ Depois da sinalização, online e LAN usam o mesmo canal ordenado `home-music-me
 
 Cada envelope possui `id` efêmero limitado e é deduplicado com memória bounded. Versão, shape ou limites inválidos são ignorados/rejeitados. O sender conclui os chunks, aguarda `media-ready` e somente então envia `play-track`. A TV valida a faixa transitória disponível e continua sendo autoridade do player.
 
+O receiver mantém no máximo três fontes de mídia transitórias e mantém a fila/metadados sincronizados com esse conjunto reproduzível; URLs de blob expulsas são revogadas e não permanecem como entradas de fila inutilizáveis.
+
 ## Lifecycle
 
 - TTL do QR/challenge: 2 min;
 - TTL máximo da sessão estabelecida sem renovação válida: 30 min;
-- regenerar QR invalida secret, challenge, token e mailbox anteriores;
+- regenerar QR invalida secret, challenge, token, request key, nonces e mailbox anteriores;
 - fechar pareamento/receiver limpa material efêmero;
 - mudança de IP invalida o QR antigo e exige novo pareamento;
 - Activity/app encerrado fecha listener;
-- reconnect só é permitido enquanto a mesma sessão/token continuar válida;
+- reconnect só é permitido enquanto a mesma sessão continuar válida;
 - blobs de mídia continuam transitórios e são revogados no receiver.
 
 ## CORS e Local Network Access
 
-O serviço LAN deve responder somente aos métodos/headers necessários. Para requests vindos do PWA, a origin permitida deve ser validada conforme configuração/contrato do app; endpoints autenticados não devem usar uma política permissiva indiscriminada.
+O serviço LAN responde somente aos métodos/headers necessários. Para requests vindos do PWA, a origin permitida é validada conforme configuração/contrato do app; endpoints autenticados não usam política permissiva indiscriminada.
 
-Preflight/headers exigidos pela implementação de Local Network Access do browser alvo devem ser cobertos pelo spike físico. Negação da permissão deve gerar um estado separado de “TV não encontrada”.
+Preflight/headers exigidos pela implementação de Local Network Access do browser alvo devem ser cobertos pelo spike físico. Negação da permissão gera estado separado de “TV não encontrada”.
 
 ## Threat model
 
 ### Protegido
 
 - dispositivo aleatório da LAN não controla a TV apenas conhecendo IP/porta;
-- captura de um request antigo não autoriza replay indefinido;
+- `sessionToken` capturado isoladamente não autoriza requests `remote`;
+- alteração de método, query ou corpo invalida uma assinatura capturada;
+- request assinado já aceito não pode ser repetido por causa do `requestNonce`;
+- requests com timestamp fora da janela são rejeitados;
 - QR antigo deixa de valer ao expirar/regenerar;
 - credenciais Home Music não são expostas ao serviço LAN;
-- payloads grandes/filas sem limite não podem crescer indefinidamente;
-- sessão fechada não deixa listener/token reaproveitável.
+- payloads, mailbox, cache de nonces e mídia transitória têm limites explícitos;
+- sessão fechada não deixa material de autenticação reaproveitável.
 
 ### Não protegido nesta fase
 
-- atacante que fotografa/captura o QR válido antes do uso pode tentar parear durante a janela curta;
-- rede local maliciosa pode causar DoS/bloquear tráfego;
-- modo offline não fornece acesso entre redes diferentes;
-- não há identidade persistente do celular: a confiança é o segredo efêmero apresentado fisicamente pela TV.
+O HTTP de bootstrap/sinalização na LAN continua **sem confidencialidade**. Portanto um atacante com capacidade de observar ou interferir no caminho local ainda pode:
 
-## Limites v1
+- ler metadados HTTP, SDP/ICE e outros dados de sinalização que trafegam antes do DataChannel;
+- bloquear, atrasar ou derrubar tráfego (DoS);
+- tentar retransmitir um request assinado capturado antes que a TV o receba. A assinatura impede alteração/forja e o nonce impede novo uso depois da primeira aceitação, mas não transforma HTTP local em TLS.
+
+Além disso:
+
+- atacante que fotografa/captura o QR válido antes do uso pode tentar parear durante a janela curta;
+- modo offline não fornece acesso entre redes diferentes;
+- não há identidade persistente do celular: a confiança inicial é o segredo efêmero apresentado fisicamente pela TV.
+
+Depois que o WebRTC DataChannel está estabelecido, mídia e comandos deixam de usar o HTTP LAN de sinalização e seguem pelo transporte seguro do WebRTC.
+
+## Limites v2
 
 - pairing TTL: `120000 ms`;
 - established session TTL: `1800000 ms`;
+- request timestamp skew: `60000 ms`;
+- request nonces lembrados: `256`;
 - poll: `25000 ms`;
 - pending signals: `128`;
 - HTTP request body: `327680 bytes`;
+- transient receiver media sources: `3`;
 - SDP: `256 KiB` (mesmo contrato online);
 - ICE candidate: `8 KiB`;
 - uma conexão remota ativa.
@@ -186,19 +260,19 @@ Preflight/headers exigidos pela implementação de Local Network Access do brows
 
 Com o servidor Home Music e WAN desligados:
 
-1. instalar APK contendo um endpoint temporário/implementação inicial do serviço LAN;
+1. instalar APK contendo o serviço LAN;
 2. abrir o PWA já instalado no Chrome Android;
 3. a partir de gesto explícito, executar `fetch(http://<ip-tv>:<porta>/health)`;
 4. confirmar prompt/permissão Local Network Access e CORS/preflight;
 5. negar a permissão e confirmar erro distinguível;
 6. conceder e executar challenge/join;
-7. trocar offer/answer/ICE por polling;
-8. abrir `home-music-media-v1` entre Chrome e GeckoView 126 sem STUN/TURN;
-9. repetir com WAN desligada;
-10. registrar versão do Chrome, Android, BTV/GeckoView e comportamento observado.
+7. confirmar `/signals` e `/close` com autenticação v2 assinada;
+8. trocar offer/answer/ICE por polling;
+9. abrir `home-music-media-v1` entre Chrome e GeckoView 126 sem STUN/TURN;
+10. repetir com WAN desligada e registrar versões do Chrome, Android, BTV/GeckoView e comportamento observado.
 
-Se o browser alvo não permitir HTTPS → HTTP LAN de forma utilizável, #417 deve ser reaberta como decisão arquitetural antes de avançar para uma implementação completa; não mascarar a limitação com fallback inseguro.
+Se o browser alvo não permitir HTTPS → HTTP LAN de forma utilizável, #417 deve ser reaberta como decisão arquitetural antes de considerar a compatibilidade concluída; não mascarar a limitação com fallback inseguro.
 
 ## Evidência e suporte
 
-O CI cobre contrato, HMAC, TTL/replay, receiver empacotado, WebRTC/DataChannel Chromium e ausência de requests `/api/*` durante playback LAN. Isso não comprova Local Network Access, GeckoView ou firmware do BTV 11. Suporte real só deve ser registrado após executar o roteiro físico de `docs/android-tv.md` com WAN e servidor desligados e anotar versões/resultados na issue #422.
+O CI cobre contrato, vetores HMAC Web/Android, autenticação por request, TTL/replay, receiver empacotado, WebRTC/DataChannel Chromium, fila de mídia bounded e ausência de requests `/api/*` durante playback LAN. Isso não comprova Local Network Access, GeckoView nem firmware do BTV 11. Suporte real só deve ser registrado após executar o roteiro físico de `docs/android-tv.md` com WAN e servidor desligados e anotar versões/resultados na issue #422.

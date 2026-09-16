@@ -75,10 +75,16 @@ function base64Url(bytes: Uint8Array) {
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
 }
 
+function toArrayBuffer(bytes: Uint8Array) {
+  const buffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(buffer).set(bytes);
+  return buffer;
+}
+
 async function importHmacKey(raw: Uint8Array, cryptoImpl: Crypto) {
   return cryptoImpl.subtle.importKey(
     'raw',
-    raw,
+    toArrayBuffer(raw),
     { name: 'HMAC', hash: 'SHA-256' },
     false,
     ['sign']
