@@ -1,8 +1,10 @@
 import {
+  TV_LAN_REMOTE_VERSION,
   isTvLanEphemeralToken,
   isTvLanSignalEnvelope,
   parseTvLanQrText,
   tvLanProofMessage,
+  tvLanRequestKeyMessage,
   type TvLanChallenge,
   type TvLanJoinResponse,
   type TvLanQrPayload,
@@ -18,6 +20,7 @@ type TvLanRemoteOptions = {
   requestTimeoutMs?: number;
   createClientNonce?: () => string;
   createMessageId?: () => string;
+  createRequestNonce?: () => string;
   now?: () => number;
   cryptoImpl?: Crypto;
   signal?: AbortSignal;
@@ -30,6 +33,18 @@ export type TvLanRemoteSignaling = {
   sendSignal: (signal: TvRemoteSignal) => Promise<void>;
   start: (onSignal: (signal: TvRemoteSignal) => void | Promise<void>, onError?: (error: Error) => void) => void;
   close: () => void;
+};
+
+type TvLanRequestAuthorizationInput = {
+  secret: string;
+  challenge: TvLanChallenge;
+  session: TvLanJoinResponse;
+  method: string;
+  target: string;
+  body?: string;
+  timestamp: number;
+  nonce: string;
+  cryptoImpl?: Crypto;
 };
 
 function remoteError(message: string) {
@@ -60,25 +75,58 @@ function base64Url(bytes: Uint8Array) {
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
 }
 
+async function importHmacKey(raw: Uint8Array, cryptoImpl: Crypto) {
+  return cryptoImpl.subtle.importKey(
+    'raw',
+    raw,
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+}
+
 export async function computeTvLanJoinProof(
   secret: string,
   challenge: TvLanChallenge,
   cryptoImpl: Crypto = crypto
 ) {
   if (!cryptoImpl.subtle) throw remoteError('Este navegador não oferece criptografia para o pareamento LAN.');
-  const key = await cryptoImpl.subtle.importKey(
-    'raw',
-    decodeHex(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign']
-  );
+  const key = await importHmacKey(decodeHex(secret), cryptoImpl);
   const signature = await cryptoImpl.subtle.sign(
     'HMAC',
     key,
     new TextEncoder().encode(tvLanProofMessage(challenge))
   );
   return base64Url(new Uint8Array(signature));
+}
+
+export async function computeTvLanRequestAuthorization(input: TvLanRequestAuthorizationInput) {
+  const cryptoImpl = input.cryptoImpl ?? crypto;
+  if (!cryptoImpl.subtle) throw remoteError('Este navegador não oferece criptografia para a sessão LAN.');
+  const method = input.method.toUpperCase();
+  if (!/^[A-Z]+$/.test(method) || !input.target.startsWith('/') || input.target.includes('\n')) {
+    throw remoteError('Requisição LAN inválida para autenticação.');
+  }
+  if (!Number.isSafeInteger(input.timestamp) || !isTvLanEphemeralToken(input.nonce, 128)) {
+    throw remoteError('Nonce ou timestamp de autenticação LAN inválido.');
+  }
+
+  const pairingKey = await importHmacKey(decodeHex(input.secret), cryptoImpl);
+  const requestKeyBytes = new Uint8Array(await cryptoImpl.subtle.sign(
+    'HMAC',
+    pairingKey,
+    new TextEncoder().encode(tvLanRequestKeyMessage(input.challenge, input.session))
+  ));
+  const bodyBytes = new TextEncoder().encode(input.body ?? '');
+  const bodyHash = base64Url(new Uint8Array(await cryptoImpl.subtle.digest('SHA-256', bodyBytes)));
+  const canonical = `${TV_LAN_REMOTE_VERSION}\nrequest\n${input.challenge.sessionId}\n${input.session.sessionToken}\n${method}\n${input.target}\n${bodyHash}\n${input.timestamp}\n${input.nonce}`;
+  const requestKey = await importHmacKey(requestKeyBytes, cryptoImpl);
+  const signature = new Uint8Array(await cryptoImpl.subtle.sign(
+    'HMAC',
+    requestKey,
+    new TextEncoder().encode(canonical)
+  ));
+  return `HomeMusic ${input.session.sessionToken}.${input.timestamp}.${input.nonce}.${base64Url(signature)}`;
 }
 
 function parseChallenge(value: unknown, pairing: TvLanQrPayload, clientNonce: string, now: number): TvLanChallenge | null {
@@ -184,6 +232,7 @@ export async function createTvLanRemoteSignaling(
   try {
     const createClientNonce = options.createClientNonce ?? (() => randomToken(cryptoImpl));
     const createMessageId = options.createMessageId ?? (() => randomToken(cryptoImpl));
+    const createRequestNonce = options.createRequestNonce ?? (() => randomToken(cryptoImpl));
     const clientNonce = createClientNonce();
     if (!isTvLanEphemeralToken(clientNonce, 128)) throw remoteError('Nonce de pareamento LAN inválido.');
 
@@ -206,12 +255,34 @@ export async function createTvLanRemoteSignaling(
     if (!joinResponse.ok) throw responseError(joinResponse, 'Não foi possível concluir o pareamento com a TV.');
     const session = parseJoin(await readJson(joinResponse), now());
     if (!session) throw remoteError('A TV retornou uma sessão LAN inválida.');
+
+    const signedAuthorization = (method: string, target: string, body = '') => computeTvLanRequestAuthorization({
+      secret: pairing.secret,
+      challenge,
+      session,
+      method,
+      target,
+      body,
+      timestamp: now(),
+      nonce: createRequestNonce(),
+      cryptoImpl
+    });
+    const bestEffortClose = async () => {
+      const target = '/close?role=remote';
+      try {
+        const authorization = await signedAuthorization('POST', target);
+        await fetchImpl(`${baseUrl}${target}`, {
+          method: 'POST',
+          headers: { Authorization: authorization },
+          cache: 'no-store'
+        });
+      } catch {
+        // Closing is best effort; session TTL is the final cleanup boundary.
+      }
+    };
+
     if (controller.signal.aborted) {
-      void fetchImpl(`${baseUrl}/close?role=remote`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${session.sessionToken}` },
-        cache: 'no-store'
-      }).catch(() => undefined);
+      void bestEffortClose();
       throw remoteError('Conexão LAN cancelada.');
     }
 
@@ -219,8 +290,6 @@ export async function createTvLanRemoteSignaling(
     let cursor = 0;
     let started = false;
     let closed = false;
-
-    const authHeaders = () => ({ Authorization: `Bearer ${session.sessionToken}` });
 
     const ensureActive = () => {
       if (closed || controller.signal.aborted) throw remoteError('A conexão LAN com a TV foi encerrada.');
@@ -239,14 +308,17 @@ export async function createTvLanRemoteSignaling(
         signal: { ...signal, from: 'remote' }
       };
       if (!isTvLanSignalEnvelope(envelope)) throw remoteError('Sinalização WebRTC inválida.');
+      const target = '/signals?role=remote';
+      const body = JSON.stringify(envelope);
+      const authorization = await signedAuthorization('POST', target, body);
 
-      const response = await lanFetch(`${baseUrl}/signals?role=remote`, {
+      const response = await lanFetch(`${baseUrl}${target}`, {
         method: 'POST',
         headers: {
-          ...authHeaders(),
+          Authorization: authorization,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(envelope),
+        body,
         cache: 'no-store'
       });
       if (!response.ok) throw responseError(response, 'Falha ao enviar sinalização local para a TV.');
@@ -262,9 +334,11 @@ export async function createTvLanRemoteSignaling(
         while (!closed && !controller.signal.aborted) {
           try {
             ensureActive();
+            const target = `/signals?role=remote&cursor=${encodeURIComponent(String(cursor))}`;
+            const authorization = await signedAuthorization('GET', target);
             const response = await lanFetch(
-              `${baseUrl}/signals?role=remote&cursor=${encodeURIComponent(String(cursor))}`,
-              { headers: authHeaders(), cache: 'no-store' }
+              `${baseUrl}${target}`,
+              { headers: { Authorization: authorization }, cache: 'no-store' }
             );
             if (!response.ok) {
               const error = responseError(response, 'Falha ao receber sinalização local da TV.');
@@ -311,11 +385,7 @@ export async function createTvLanRemoteSignaling(
         closed = true;
         controller.abort();
         cleanupExternalAbort();
-        void fetchImpl(`${baseUrl}/close?role=remote`, {
-          method: 'POST',
-          headers: authHeaders(),
-          cache: 'no-store'
-        }).catch(() => undefined);
+        void bestEffortClose();
       }
     };
   } catch (error) {

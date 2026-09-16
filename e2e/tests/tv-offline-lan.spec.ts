@@ -56,7 +56,7 @@ async function seedOfflineTracks(page: Page, titles: string[]) {
 }
 
 function lanFixture() {
-  const version = 'home-music-lan-remote-v1';
+  const version = 'home-music-lan-remote-v2';
   const sessionId = 'session_1234567890abcdef';
   const secret = Array.from({ length: 16 }, (_, index) => (index * 17).toString(16).padStart(2, '0')).join('');
   const sessionToken = ['token', '1234567890abcdef'].join('_');

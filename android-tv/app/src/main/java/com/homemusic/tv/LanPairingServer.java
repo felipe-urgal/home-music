@@ -219,20 +219,20 @@ final class LanPairingServer implements AutoCloseable {
 
             if ("POST".equals(request.method) && "/signals".equals(path)) {
                 String role = query.get("role");
-                String token = bearer(request.headers.get("authorization"));
+                if (!authorizeRequest(session, request, role)) return error(401, "Sessão não autorizada.");
                 JSONObject body = request.json();
                 if (!validSignalEnvelope(body, role)) return error(400, "Sinalização WebRTC inválida.");
-                boolean accepted = session.publish(role, token, body.optString("messageId", ""), body.toString());
+                String payload = new String(request.body, StandardCharsets.UTF_8);
+                boolean accepted = session.publishAuthorized(role, body.optString("messageId", ""), payload);
                 if (!accepted) return error(401, "Sessão inválida, expirada ou mensagem repetida.");
                 return Response.json(202, "{}");
             }
 
             if ("GET".equals(request.method) && "/signals".equals(path)) {
                 String role = query.get("role");
-                String token = bearer(request.headers.get("authorization"));
                 long cursor = parseLong(query.get("cursor"), 0L);
-                if (!session.authorize(role, token)) return error(401, "Sessão não autorizada.");
-                List<LanPairingSession.SignalMessage> messages = session.poll(role, token, cursor);
+                if (!authorizeRequest(session, request, role)) return error(401, "Sessão não autorizada.");
+                List<LanPairingSession.SignalMessage> messages = session.pollAuthorized(role, cursor);
                 JSONArray items = new JSONArray();
                 for (LanPairingSession.SignalMessage message : messages) items.put(new JSONObject(message.payload));
                 return Response.json(200, new JSONObject()
@@ -243,8 +243,7 @@ final class LanPairingServer implements AutoCloseable {
 
             if ("POST".equals(request.method) && "/close".equals(path)) {
                 String role = query.get("role");
-                String token = bearer(request.headers.get("authorization"));
-                if (!session.authorize(role, token)) return error(401, "Sessão não autorizada.");
+                if (!authorizeRequest(session, request, role)) return error(401, "Sessão não autorizada.");
                 session.close();
                 return Response.json(200, "{}");
             }
@@ -253,6 +252,14 @@ final class LanPairingServer implements AutoCloseable {
         } catch (IllegalArgumentException | JSONException error) {
             return error(400, "Requisição LAN inválida.");
         }
+    }
+
+    private static boolean authorizeRequest(LanPairingSession session, Request request, String role) {
+        String authorization = request.headers.get("authorization");
+        if ("remote".equals(role)) {
+            return session.authorizeRemoteRequest(authorization, request.method, request.target, request.body);
+        }
+        return "tv".equals(role) && session.authorize("tv", bearer(authorization));
     }
 
     private Response receiverAsset(String requestPath) {

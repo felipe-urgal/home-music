@@ -40,7 +40,7 @@ describe('TV LAN remote client', () => {
       expiresAt: 2_000_000_000_000
     });
 
-    expect(value).toBe('GeNEINzEVdCHdYHLDcYHjtpsM77NmoLlYvRwvDO9dHQ');
+    expect(value).toBe('ZEGvvLn30JrMOqlhtv8H0Wa7W5ShpFH1pDBK9ZJOwoQ');
   });
 
   it('computes the Android-compatible per-request authorization', async () => {

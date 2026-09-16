@@ -1,6 +1,6 @@
 import { isTvRemoteSignal, type TvRemotePeerRole, type TvRemoteSignal } from './tv-remote.js';
 
-export const TV_LAN_REMOTE_VERSION = 'home-music-lan-remote-v1' as const;
+export const TV_LAN_REMOTE_VERSION = 'home-music-lan-remote-v2' as const;
 export const TV_LAN_PAIRING_TTL_MS = 2 * 60 * 1000;
 export const TV_LAN_ESTABLISHED_TTL_MS = 30 * 60 * 1000;
 export const TV_LAN_POLL_TIMEOUT_MS = 25 * 1000;
@@ -127,6 +127,15 @@ export function tvLanProofMessage(challenge: TvLanChallenge) {
     throw new Error('Challenge LAN inválido.');
   }
   return `${TV_LAN_REMOTE_VERSION}\n${challenge.sessionId}\n${challenge.clientNonce}\n${challenge.tvNonce}\n${challenge.expiresAt}`;
+}
+
+export function tvLanRequestKeyMessage(challenge: TvLanChallenge, session: TvLanJoinResponse) {
+  tvLanProofMessage(challenge);
+  if (!isTvLanEphemeralToken(session.sessionToken)
+    || !Number.isSafeInteger(session.expiresAt)) {
+    throw new Error('Sessão LAN inválida.');
+  }
+  return `${TV_LAN_REMOTE_VERSION}\nrequest-key\n${challenge.sessionId}\n${challenge.clientNonce}\n${challenge.tvNonce}\n${challenge.expiresAt}\n${session.sessionToken}\n${session.expiresAt}`;
 }
 
 export function isTvLanSignalEnvelope(value: unknown): value is TvLanSignalEnvelope {
