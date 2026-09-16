@@ -3,7 +3,8 @@ import type {
   TvRemoteCommand,
   TvRemoteEvent,
   TvRemotePlaybackSnapshot,
-  TvRemoteSessionSummary
+  TvRemoteSessionSummary,
+  TvRemoteSignal
 } from '@home-music/shared/tv-remote';
 
 const SESSION_TTL_MS = 60_000;
@@ -16,6 +17,7 @@ type PendingEvent =
   | { type: 'command'; data: TvRemoteCommand }
   | { type: 'snapshot'; data: TvRemotePlaybackSnapshot }
   | { type: 'remote-connected'; data: Record<string, never> }
+  | { type: 'signal'; data: TvRemoteSignal }
   | { type: 'closed'; data: { reason: 'closed' | 'expired' } };
 type SetIntervalFunction = (callback: () => void, intervalMs: number) => unknown;
 type ClearIntervalFunction = (timer: unknown) => void;
@@ -116,6 +118,13 @@ export class TvRemoteSessionManager {
     return true;
   }
 
+  publishSignal(ownerId: string, sessionId: string, signal: TvRemoteSignal) {
+    const session = this.resolve(ownerId, sessionId);
+    if (!session) return false;
+    this.publish(session, { type: 'signal', data: signal });
+    return true;
+  }
+
   eventsAfter(ownerId: string, sessionId: string, lastEventId: number) {
     const session = this.resolve(ownerId, sessionId);
     if (!session) return null;
@@ -177,6 +186,8 @@ export class TvRemoteSessionManager {
     } else if (event.type === 'snapshot') {
       published = { id: session.nextEventId, type: event.type, data: event.data };
     } else if (event.type === 'remote-connected') {
+      published = { id: session.nextEventId, type: event.type, data: event.data };
+    } else if (event.type === 'signal') {
       published = { id: session.nextEventId, type: event.type, data: event.data };
     } else {
       published = { id: session.nextEventId, type: event.type, data: event.data };

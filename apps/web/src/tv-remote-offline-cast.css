@@ -1,0 +1,44 @@
+.tv-remote-offline-cast {
+  position: fixed;
+  z-index: 20;
+  left: 50%;
+  bottom: max(18px, env(safe-area-inset-bottom));
+  width: min(390px, calc(100vw - 32px));
+  display: grid;
+  gap: 4px;
+  transform: translateX(-50%);
+  padding: 11px 14px;
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 14px;
+  background: rgb(8 14 22 / 94%);
+  box-shadow: 0 12px 36px rgb(0 0 0 / 34%);
+  color: #fff;
+  pointer-events: none;
+}
+
+.tv-remote-offline-cast strong {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.tv-remote-offline-cast span {
+  color: #aeb9c9;
+  font-size: 12px;
+}
+
+.tv-remote-offline-cast--error span { color: #ff9b9b; }
+
+.tv-remote-offline-cast__progress {
+  height: 3px;
+  overflow: hidden;
+  margin-top: 4px;
+  border-radius: 999px;
+  background: #334050;
+}
+
+.tv-remote-offline-cast__progress i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #78e3a7;
+}

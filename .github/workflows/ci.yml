@@ -58,6 +58,9 @@ jobs:
       - name: TV remote control E2E
         run: npm run test --prefix e2e -- tests/tv-remote-control.spec.ts --project=desktop-chromium
 
+      - name: TV offline cast E2E
+        run: npm run test --prefix e2e -- tests/tv-offline-cast.spec.ts --project=desktop-chromium
+
       - name: Personal data import E2E
         run: npm run test --prefix e2e -- tests/personal-data-import.spec.ts
 

@@ -22,6 +22,7 @@ import {
   onlineAudioUrl,
   type StreamingMode
 } from './streaming-quality';
+import { getTvRemoteMediaSource } from './tv-remote-media-source';
 import { useAudioPlayer } from './useAudioPlayer';
 
 function initialCrossfadeSeconds() {
@@ -200,14 +201,14 @@ export function useCrossfadeAudioPlayer(
 
     clearAudio(incomingAudio);
     incomingAudio.volume = 0;
-    incomingAudio.src = offlineMode
+    incomingAudio.src = getTvRemoteMediaSource(nextTrack.id) ?? (offlineMode
       ? offlineAudioUrl(nextTrack.id)
       : onlineAudioUrl(
           nextTrack.id,
           player.streamingMode,
           false,
           effectiveNormalizationMode(nextTrack, player.normalizationMode)
-        );
+        ));
     incomingAudio.load();
 
     void incomingAudio.play()
@@ -356,7 +357,22 @@ export function useCrossfadeAudioPlayer(
       player.audioHandlers.onPause();
       return;
     }
-  }, [cancelCrossfade, getActiveAudio, player.audioHandlers]);
+  }, [getActiveAudio, player.audioHandlers]);
+
+  const playTrack = useCallback((track: Track, contextTracks: Track[]) => {
+    cancelCrossfade();
+    const source = getTvRemoteMediaSource(track.id);
+    const audio = getActiveAudio();
+    if (source && audio) {
+      audio.pause();
+      audio.currentTime = 0;
+      audio.volume = outputVolumeRef.current;
+      audio.src = source;
+      audio.load();
+      player.adoptAudioSource(track.id, audio);
+    }
+    player.playTrack(track, contextTracks);
+  }, [cancelCrossfade, getActiveAudio, player.adoptAudioSource, player.playTrack]);
 
   const togglePlay = useCallback(() => {
     cancelCrossfade();
@@ -394,6 +410,7 @@ export function useCrossfadeAudioPlayer(
     deckBRef,
     crossfadeSeconds,
     setCrossfadeSeconds,
+    playTrack,
     togglePlay,
     setStreamingMode,
     setNormalizationMode,
