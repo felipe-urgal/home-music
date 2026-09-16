@@ -7,6 +7,7 @@ import type {
   TvRemoteSignal
 } from '@home-music/shared/tv-remote';
 import { apiFetch } from './api-client';
+import { prepareTvRemoteTrack } from './tv-remote-track-preflight';
 
 const sessionsPath = '/api/tv-remote/sessions';
 const mutationHeaders = {
@@ -59,6 +60,7 @@ export async function publishTvRemoteStatus(
 }
 
 export async function sendTvRemoteCommand(sessionId: string, command: TvRemoteCommand): Promise<void> {
+  if (command.type === 'play-track') await prepareTvRemoteTrack(sessionId, command.trackId);
   const response = await apiFetch(`${sessionsPath}/${encodeURIComponent(sessionId)}/commands`, {
     method: 'POST',
     headers: mutationHeaders,
