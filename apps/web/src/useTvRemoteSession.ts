@@ -1,4 +1,3 @@
-import { createTvRemoteStatusPublisher } from './tv-remote-status-publisher';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { RepeatMode, Track } from '@home-music/shared';
 import { remoteSessionPath } from './browser-navigation';
@@ -8,6 +7,7 @@ import {
   createTvRemoteSession,
   openTvRemoteEvents,
   publishTvRemoteStatus,
+  sendTvRemoteSignal,
   type TvRemoteTransportStatus
 } from './tv-remote-client';
 import {
@@ -15,7 +15,11 @@ import {
   tvRemoteSnapshot,
   type TvRemotePlaybackState
 } from './tv-remote-tv-controller';
+import { createTvRemoteMediaEndpoint, type TvRemoteMediaEndpoint } from './tv-remote-media';
+import { clearTvRemoteMediaSources, setTvRemoteMediaSource } from './tv-remote-media-source';
+import { createTvRemotePeerController } from './tv-remote-peer';
 import { requestTvRemoteTrack } from './tv-remote-track-request';
+import { createTvRemoteStatusPublisher } from './tv-remote-status-publisher';
 
 type TvRemoteSessionState = 'idle' | 'creating' | 'waiting' | 'connected' | 'error' | 'closed';
 
@@ -83,6 +87,7 @@ export function useTvRemoteSession(options: UseTvRemoteSessionOptions) {
     const generation = ++creationGenerationRef.current;
     const previous = activeSessionRef.current;
     activeSessionRef.current = null;
+    clearTvRemoteMediaSources();
     setSessionId(null);
     setPairingUrl(null);
     setOpen(showPairing);
@@ -129,6 +134,20 @@ export function useTvRemoteSession(options: UseTvRemoteSessionOptions) {
 
   useEffect(() => {
     if (!sessionId) return;
+    let mediaEndpoint: TvRemoteMediaEndpoint | null = null;
+    const peer = createTvRemotePeerController({
+      role: 'tv',
+      sendSignal: signal => sendTvRemoteSignal(sessionId, signal),
+      onChannel: channel => {
+        mediaEndpoint?.close();
+        mediaEndpoint = createTvRemoteMediaEndpoint(channel, {
+          onReceive: media => {
+            setTvRemoteMediaSource(media.trackId, media.blob);
+          }
+        });
+      },
+      onError: cause => setError(cause instanceof Error ? cause.message : 'Falha na conexão P2P com o celular.')
+    });
     const publisher = createTvRemoteStatusPublisher(
       () => tvRemoteSnapshot(playbackStateRef.current()),
       snapshot => publishTvRemoteStatus(sessionId, snapshot),
@@ -144,6 +163,9 @@ export function useTvRemoteSession(options: UseTvRemoteSessionOptions) {
 
     const stopEvents = openTvRemoteEvents(sessionId, {
       onRemoteConnected: markConnected,
+      onSignal: signal => {
+        void peer.handleSignal(signal).catch(() => undefined);
+      },
       onCommand: (command, eventId) => {
         markConnected();
         if (command.type === 'set-crossfade') {
@@ -169,6 +191,10 @@ export function useTvRemoteSession(options: UseTvRemoteSessionOptions) {
       },
       onClosed: () => {
         activeSessionRef.current = null;
+        mediaEndpoint?.close();
+        mediaEndpoint = null;
+        peer.close();
+        clearTvRemoteMediaSources();
         setOpen(false);
         setState('closed');
         setSessionId(null);
@@ -186,6 +212,8 @@ export function useTvRemoteSession(options: UseTvRemoteSessionOptions) {
       publishChangedRef.current = null;
       stopEvents();
       window.clearInterval(heartbeat);
+      mediaEndpoint?.close();
+      peer.close();
     };
   }, [crossfadeCapable, sessionId]);
 
@@ -198,6 +226,7 @@ export function useTvRemoteSession(options: UseTvRemoteSessionOptions) {
     creationGenerationRef.current += 1;
     const id = activeSessionRef.current;
     activeSessionRef.current = null;
+    clearTvRemoteMediaSources();
     void disposeSession(id);
   }, [disposeSession]);
 
