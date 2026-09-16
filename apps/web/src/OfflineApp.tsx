@@ -7,9 +7,10 @@ import { PlayerScreen } from './components/PlayerScreen';
 import { ResponsiveState } from './components/ResponsiveState';
 import { offlineAudioUrl, type OfflineDownloads } from './offline-downloads';
 import './offline-mobile.css';
-import { createTvLanRemoteSignaling, type TvLanRemoteSignaling } from './tv-lan-remote-client';
-import { createTvRemoteMediaEndpoint, type TvRemoteMediaEndpoint } from './tv-remote-media';
+import { createTvLanRemoteSignaling } from './tv-lan-remote-client';
+import { createTvRemoteDataChannel, type TvRemoteDataChannel } from './tv-remote-data-channel';
 import { createTvRemotePeerController, type TvRemotePeerController, type TvRemotePeerState } from './tv-remote-peer';
+import { wrapLanTvRemoteSessionTransport, type TvRemoteSessionTransport } from './tv-remote-session-transport';
 import { useBackgroundPlaybackContinuity } from './useBackgroundPlaybackContinuity';
 import { useCrossfadeAudioPlayer } from './useCrossfadeAudioPlayer';
 import { useDesktopLayout } from './useDesktopLayout';
@@ -31,9 +32,9 @@ export function OfflineApp({ offline, onExit }: OfflineAppProps) {
   const [screen, setScreen] = useState<OfflineScreen>('library');
   const [tvState, setTvState] = useState<TvLanState>('disconnected');
   const [tvMessage, setTvMessage] = useState<string | null>(null);
-  const tvSignalingRef = useRef<TvLanRemoteSignaling | null>(null);
+  const tvTransportRef = useRef<TvRemoteSessionTransport | null>(null);
   const tvPeerRef = useRef<TvRemotePeerController | null>(null);
-  const tvMediaRef = useRef<TvRemoteMediaEndpoint | null>(null);
+  const tvChannelRef = useRef<TvRemoteDataChannel | null>(null);
   const usesSystemVolume = useSystemVolumePreference();
   const desktopLayout = useDesktopLayout();
   const player = useCrossfadeAudioPlayer(
@@ -55,12 +56,12 @@ export function OfflineApp({ offline, onExit }: OfflineAppProps) {
   const current = player.current;
 
   const closeTvSession = useCallback(() => {
-    tvMediaRef.current?.close();
-    tvMediaRef.current = null;
+    tvChannelRef.current?.close();
+    tvChannelRef.current = null;
     tvPeerRef.current?.close();
     tvPeerRef.current = null;
-    tvSignalingRef.current?.close();
-    tvSignalingRef.current = null;
+    tvTransportRef.current?.close();
+    tvTransportRef.current = null;
   }, []);
 
   useEffect(() => () => closeTvSession(), [closeTvSession]);
@@ -81,7 +82,8 @@ export function OfflineApp({ offline, onExit }: OfflineAppProps) {
 
     try {
       const signaling = await createTvLanRemoteSignaling(qrText);
-      tvSignalingRef.current = signaling;
+      const transport = wrapLanTvRemoteSessionTransport(signaling);
+      tvTransportRef.current = transport;
       let peer: TvRemotePeerController;
       const updatePeerState = (next: TvRemotePeerState) => {
         if (next === 'open') {
@@ -103,16 +105,24 @@ export function OfflineApp({ offline, onExit }: OfflineAppProps) {
 
       peer = createTvRemotePeerController({
         role: 'remote',
-        sendSignal: signal => signaling.sendSignal(signal),
+        sendSignal: signal => transport.sendSignal(signal),
         onState: updatePeerState,
         onError: failTvSession,
         onChannel: channel => {
-          tvMediaRef.current?.close();
-          tvMediaRef.current = createTvRemoteMediaEndpoint(channel);
+          tvChannelRef.current?.close();
+          tvChannelRef.current = createTvRemoteDataChannel(channel, {
+            onSnapshot: snapshot => {
+              setTvMessage(snapshot.trackId
+                ? `${snapshot.playing ? 'Tocando' : 'Pausada'} na TV: ${snapshot.title ?? 'música offline'}.`
+                : 'TV conectada e pronta.');
+            },
+            onDisconnect: () => failTvSession(new Error('A TV encerrou a sessão local.')),
+            onError: failTvSession
+          });
         }
       });
       tvPeerRef.current = peer;
-      signaling.start(
+      transport.subscribeSignals(
         signal => peer.handleSignal(signal),
         error => failTvSession(error)
       );
@@ -129,7 +139,7 @@ export function OfflineApp({ offline, onExit }: OfflineAppProps) {
   }, [closeTvSession]);
 
   const sendTrackToTv = useCallback(async (track: Track) => {
-    const endpoint = tvMediaRef.current;
+    const endpoint = tvChannelRef.current;
     if (!endpoint) {
       setTvState('disconnected');
       setTvMessage('A conexão P2P com a TV não está pronta. Conecte novamente.');
@@ -147,7 +157,7 @@ export function OfflineApp({ offline, onExit }: OfflineAppProps) {
       if (!response.ok) throw new Error('O download offline selecionado não está mais disponível neste dispositivo.');
       const blob = await response.blob();
       const record = offline.records.find(item => item.track.id === track.id);
-      await endpoint.send({
+      await endpoint.sendTrackAndPlay({
         trackId: track.id,
         blob,
         mimeType: record?.mimeType || blob.type
@@ -155,7 +165,7 @@ export function OfflineApp({ offline, onExit }: OfflineAppProps) {
       setTvState('connected');
       setTvMessage(`“${track.title}” enviada para a TV.`);
     } catch (error) {
-      setTvState(tvMediaRef.current ? 'connected' : 'disconnected');
+      setTvState(tvChannelRef.current ? 'connected' : 'disconnected');
       setTvMessage(tvErrorMessage(error));
     }
   }, [offline.records, tvState]);

@@ -2,8 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Track } from '@home-music/shared';
 import { createTvLanReceiverSignaling } from './tv-lan-receiver-client';
 import { clearTvRemoteMediaSources, getTvRemoteMediaSource, setTvRemoteMediaSource } from './tv-remote-media-source';
-import { createTvRemoteMediaEndpoint, type TvRemoteMediaEndpoint } from './tv-remote-media';
+import { createTvRemoteDataChannel, type TvRemoteDataChannel } from './tv-remote-data-channel';
 import { createTvRemotePeerController, type TvRemotePeerController, type TvRemotePeerState } from './tv-remote-peer';
+import { wrapLanTvRemoteSessionTransport, type TvRemoteSessionTransport } from './tv-remote-session-transport';
+import { applyTvRemotePlayerCommand, tvRemoteSnapshot } from './tv-remote-tv-controller';
 import { useCrossfadeAudioPlayer } from './useCrossfadeAudioPlayer';
 import './tv-offline-receiver.css';
 
@@ -30,14 +32,38 @@ export function TvOfflineReceiver() {
   const [tracks, setTracks] = useState<Track[]>([]);
   const [readyTrackId, setReadyTrackId] = useState<string | null>(null);
   const peerRef = useRef<TvRemotePeerController | null>(null);
-  const mediaRef = useRef<TvRemoteMediaEndpoint | null>(null);
+  const channelRef = useRef<TvRemoteDataChannel | null>(null);
+  const transportRef = useRef<TvRemoteSessionTransport | null>(null);
+  const receivedTracksRef = useRef(new Map<string, Track>());
   const player = useCrossfadeAudioPlayer(tracks, true, true, false, { offlineMode: true });
   const playTrackRef = useRef(player.playTrack);
   playTrackRef.current = player.playTrack;
+  const playerRef = useRef(player);
+  playerRef.current = player;
   const readyTrack = useMemo(
     () => readyTrackId ? tracks.find(track => track.id === readyTrackId) ?? null : null,
     [readyTrackId, tracks]
   );
+
+  useEffect(() => {
+    const channel = channelRef.current;
+    if (!channel) return;
+    try {
+      channel.sendSnapshot(tvRemoteSnapshot({
+        trackId: player.current?.id ?? null,
+        title: player.current?.title ?? null,
+        artist: player.current?.artist ?? null,
+        playing: player.playing,
+        currentTime: player.currentTime,
+        duration: player.duration,
+        shuffle: player.shuffle,
+        repeatMode: player.repeatMode
+      }));
+    } catch {
+      // Peer cleanup owns disconnected-channel errors.
+    }
+  }, [player.current?.id, player.current?.title, player.current?.artist, player.playing,
+    player.currentTime, player.duration, player.shuffle, player.repeatMode]);
 
   useEffect(() => {
     let disposed = false;
@@ -71,9 +97,11 @@ export function TvOfflineReceiver() {
           return;
         }
 
+        const transport = wrapLanTvRemoteSessionTransport(signaling);
+        transportRef.current = transport;
         const peer = createTvRemotePeerController({
           role: 'tv',
-          sendSignal: signal => signaling!.sendSignal(signal),
+          sendSignal: signal => transport.sendSignal(signal),
           onState: updatePeerState,
           onError: error => {
             if (disposed) return;
@@ -85,24 +113,53 @@ export function TvOfflineReceiver() {
               channel.close();
               return;
             }
-            mediaRef.current?.close();
-            mediaRef.current = createTvRemoteMediaEndpoint(channel, {
-              onReceive: media => {
+            channelRef.current?.close();
+            const dataChannel = createTvRemoteDataChannel(channel, {
+              onMedia: media => {
                 const track = receivedTrack(media.trackId);
                 setTvRemoteMediaSource(media.trackId, media.blob);
+                receivedTracksRef.current.set(media.trackId, track);
                 setTracks(current => {
                   const withoutPrevious = current.filter(item => item.id !== media.trackId);
                   return [...withoutPrevious, track];
                 });
                 setReadyTrackId(media.trackId);
-                setDetail('Música recebida. Iniciando reprodução na TV…');
-                playTrackRef.current(track, [track]);
+                setDetail('Música recebida e pronta para reprodução na TV.');
+              },
+              onCommand: command => {
+                const current = playerRef.current;
+                applyTvRemotePlayerCommand(command, {
+                  currentTime: current.currentTime,
+                  duration: current.duration
+                }, {
+                  togglePlay: current.togglePlay,
+                  previous: current.previous,
+                  next: current.next,
+                  seek: current.seek,
+                  toggleShuffle: current.toggleShuffle,
+                  cycleRepeatMode: current.cycleRepeat,
+                  playTrack: trackId => {
+                    const track = receivedTracksRef.current.get(trackId);
+                    if (!track || !getTvRemoteMediaSource(trackId)) {
+                      setStatus('error');
+                      setDetail('A música solicitada não está disponível offline na TV.');
+                      return;
+                    }
+                    playTrackRef.current(track, Array.from(receivedTracksRef.current.values()));
+                  },
+                  setCrossfade: current.setCrossfadeSeconds
+                });
+              },
+              onDisconnect: () => {
+                setStatus('waiting');
+                setDetail('Celular desconectado. Gere um novo pareamento se necessário.');
               }
             });
+            channelRef.current = dataChannel;
           }
         });
         peerRef.current = peer;
-        signaling.start(
+        transport.subscribeSignals(
           signal => peer.handleSignal(signal),
           error => {
             if (disposed) return;
@@ -123,12 +180,14 @@ export function TvOfflineReceiver() {
     void start();
     return () => {
       disposed = true;
-      signaling?.close();
-      mediaRef.current?.close();
-      mediaRef.current = null;
+      transportRef.current?.close();
+      transportRef.current = null;
+      channelRef.current?.close();
+      channelRef.current = null;
       peerRef.current?.close();
       peerRef.current = null;
       clearTvRemoteMediaSources();
+      receivedTracksRef.current.clear();
     };
   }, []);
 
