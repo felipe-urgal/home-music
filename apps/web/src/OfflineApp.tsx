@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Track } from '@home-music/shared';
+import type { TvRemoteCommand, TvRemotePlaybackSnapshot } from '@home-music/shared/tv-remote';
 import { DesktopPlayerBar } from './components/DesktopPlayerBar';
 import { DesktopShell } from './components/DesktopShell';
 import { OfflineLibraryScreen } from './components/OfflineLibraryScreen';
@@ -8,6 +9,7 @@ import { ResponsiveState } from './components/ResponsiveState';
 import { offlineAudioUrl, type OfflineDownloads } from './offline-downloads';
 import './offline-mobile.css';
 import { createTvLanRemoteSignaling } from './tv-lan-remote-client';
+import { TvLanQrScanner } from './TvLanQrScanner';
 import { createTvRemoteDataChannel, type TvRemoteDataChannel } from './tv-remote-data-channel';
 import { createTvRemotePeerController, type TvRemotePeerController, type TvRemotePeerState } from './tv-remote-peer';
 import { wrapLanTvRemoteSessionTransport, type TvRemoteSessionTransport } from './tv-remote-session-transport';
@@ -32,9 +34,14 @@ export function OfflineApp({ offline, onExit }: OfflineAppProps) {
   const [screen, setScreen] = useState<OfflineScreen>('library');
   const [tvState, setTvState] = useState<TvLanState>('disconnected');
   const [tvMessage, setTvMessage] = useState<string | null>(null);
+  const [tvSnapshot, setTvSnapshot] = useState<TvRemotePlaybackSnapshot | null>(null);
+  const [tvTrackId, setTvTrackId] = useState<string | null>(null);
+  const [qrScannerOpen, setQrScannerOpen] = useState(false);
   const tvTransportRef = useRef<TvRemoteSessionTransport | null>(null);
   const tvPeerRef = useRef<TvRemotePeerController | null>(null);
   const tvChannelRef = useRef<TvRemoteDataChannel | null>(null);
+  const tvConnectAbortRef = useRef<AbortController | null>(null);
+  const tvQueueRef = useRef<Track[]>(offline.tracks);
   const usesSystemVolume = useSystemVolumePreference();
   const desktopLayout = useDesktopLayout();
   const player = useCrossfadeAudioPlayer(
@@ -53,9 +60,18 @@ export function OfflineApp({ offline, onExit }: OfflineAppProps) {
     playing: player.playing,
     onNext: player.next
   });
-  const current = player.current;
+
+  const tvActive = tvState === 'connected' || tvState === 'sending';
+
+  const pauseLocalPlayback = useCallback(() => {
+    player.deckARef.current?.pause();
+    player.deckBRef.current?.pause();
+  }, [player.deckARef, player.deckBRef]);
 
   const closeTvSession = useCallback(() => {
+    tvConnectAbortRef.current?.abort();
+    tvConnectAbortRef.current = null;
+    try { tvChannelRef.current?.disconnect('remote-closed'); } catch { /* channel may already be closed */ }
     tvChannelRef.current?.close();
     tvChannelRef.current = null;
     tvPeerRef.current?.close();
@@ -66,27 +82,40 @@ export function OfflineApp({ offline, onExit }: OfflineAppProps) {
 
   useEffect(() => () => closeTvSession(), [closeTvSession]);
 
+  useEffect(() => {
+    if (!tvActive) tvQueueRef.current = offline.tracks;
+  }, [offline.tracks, tvActive]);
+
   const failTvSession = useCallback((error: unknown) => {
     closeTvSession();
     setTvState('disconnected');
+    setTvSnapshot(null);
+    setTvTrackId(null);
     setTvMessage(tvErrorMessage(error));
   }, [closeTvSession]);
 
-  const connectTv = useCallback(async () => {
-    const qrText = window.prompt('Cole o conteúdo do QR de pareamento exibido pela TV:');
-    if (!qrText?.trim()) return;
-
+  const connectTv = useCallback(async (qrText: string) => {
+    setQrScannerOpen(false);
     closeTvSession();
+    setTvSnapshot(null);
+    setTvTrackId(null);
     setTvState('connecting');
     setTvMessage('Conectando diretamente à TV pela rede local…');
+    const abortController = new AbortController();
+    tvConnectAbortRef.current = abortController;
 
     try {
-      const signaling = await createTvLanRemoteSignaling(qrText);
+      const signaling = await createTvLanRemoteSignaling(qrText, { signal: abortController.signal });
+      if (abortController.signal.aborted) {
+        signaling.close();
+        return;
+      }
       const transport = wrapLanTvRemoteSessionTransport(signaling);
       tvTransportRef.current = transport;
       let peer: TvRemotePeerController;
       const updatePeerState = (next: TvRemotePeerState) => {
         if (next === 'open') {
+          pauseLocalPlayback();
           setTvState('connected');
           setTvMessage(`TV conectada em ${signaling.pairing.host}.`);
         } else if (next === 'connecting') {
@@ -99,6 +128,8 @@ export function OfflineApp({ offline, onExit }: OfflineAppProps) {
         } else if (next === 'closed' && tvPeerRef.current === peer) {
           closeTvSession();
           setTvState('disconnected');
+          setTvSnapshot(null);
+          setTvTrackId(null);
           setTvMessage('Conexão com a TV encerrada.');
         }
       };
@@ -112,8 +143,11 @@ export function OfflineApp({ offline, onExit }: OfflineAppProps) {
           tvChannelRef.current?.close();
           tvChannelRef.current = createTvRemoteDataChannel(channel, {
             onSnapshot: snapshot => {
+              setTvSnapshot(snapshot);
+              if (snapshot.trackId) setTvTrackId(snapshot.trackId);
+              const track = snapshot.trackId ? offline.tracks.find(item => item.id === snapshot.trackId) : null;
               setTvMessage(snapshot.trackId
-                ? `${snapshot.playing ? 'Tocando' : 'Pausada'} na TV: ${snapshot.title ?? 'música offline'}.`
+                ? `${snapshot.playing ? 'Tocando' : 'Pausada'} na TV: ${track?.title ?? snapshot.title ?? 'música offline'}.`
                 : 'TV conectada e pronta.');
             },
             onDisconnect: () => failTvSession(new Error('A TV encerrou a sessão local.')),
@@ -128,17 +162,37 @@ export function OfflineApp({ offline, onExit }: OfflineAppProps) {
       );
       await peer.start();
     } catch (error) {
+      if (abortController.signal.aborted) return;
       failTvSession(error);
+    } finally {
+      if (tvConnectAbortRef.current === abortController) tvConnectAbortRef.current = null;
     }
-  }, [closeTvSession, failTvSession]);
+  }, [closeTvSession, failTvSession, offline.tracks, pauseLocalPlayback]);
 
   const disconnectTv = useCallback(() => {
     closeTvSession();
     setTvState('disconnected');
+    setTvSnapshot(null);
+    setTvTrackId(null);
     setTvMessage('TV desconectada.');
   }, [closeTvSession]);
 
-  const sendTrackToTv = useCallback(async (track: Track) => {
+  const sendTvCommand = useCallback((command: TvRemoteCommand) => {
+    const channel = tvChannelRef.current;
+    if (!channel) {
+      failTvSession(new Error('A conexão P2P com a TV não está pronta. Conecte novamente.'));
+      return false;
+    }
+    try {
+      channel.sendCommand(command);
+      return true;
+    } catch (error) {
+      failTvSession(error);
+      return false;
+    }
+  }, [failTvSession]);
+
+  const sendTrackToTv = useCallback(async (track: Track, context?: Track[]) => {
     const endpoint = tvChannelRef.current;
     if (!endpoint) {
       setTvState('disconnected');
@@ -150,6 +204,10 @@ export function OfflineApp({ offline, onExit }: OfflineAppProps) {
       return;
     }
 
+    pauseLocalPlayback();
+    if (context?.length) tvQueueRef.current = context;
+    setTvTrackId(track.id);
+    setTvSnapshot(null);
     setTvState('sending');
     setTvMessage(`Enviando “${track.title}” para a TV…`);
     try {
@@ -168,20 +226,75 @@ export function OfflineApp({ offline, onExit }: OfflineAppProps) {
       setTvState(tvChannelRef.current ? 'connected' : 'disconnected');
       setTvMessage(tvErrorMessage(error));
     }
-  }, [offline.records, tvState]);
+  }, [offline.records, pauseLocalPlayback, tvState]);
 
   const playTrack = useCallback((track: Track, context: Track[]) => {
     if (tvState === 'connecting') {
       setTvMessage('Aguarde a conexão com a TV terminar.');
       return;
     }
-    if (tvState === 'connected' || tvState === 'sending') {
-      void sendTrackToTv(track);
+    if (tvActive) {
+      void sendTrackToTv(track, context);
       return;
     }
     player.playTrack(track, context);
     setScreen('player');
-  }, [player.playTrack, sendTrackToTv, tvState]);
+  }, [player.playTrack, sendTrackToTv, tvActive, tvState]);
+
+  const remoteTrackId = tvSnapshot?.trackId ?? tvTrackId;
+  const remoteQueue = tvQueueRef.current.length > 0 ? tvQueueRef.current : offline.tracks;
+  const remoteIndex = remoteTrackId ? remoteQueue.findIndex(track => track.id === remoteTrackId) : -1;
+  const remoteCurrent = remoteTrackId ? offline.tracks.find(track => track.id === remoteTrackId) ?? null : null;
+  const displayCurrent = tvActive ? remoteCurrent : player.current;
+  const displayPlaying = tvActive ? Boolean(tvSnapshot?.playing) : player.playing;
+  const displayCurrentTime = tvActive ? (tvSnapshot?.currentTime ?? 0) : player.currentTime;
+  const displayDuration = tvActive ? (tvSnapshot?.duration ?? 0) : player.duration;
+  const displayShuffle = tvActive ? Boolean(tvSnapshot?.shuffle) : player.shuffle;
+  const displayRepeatMode = tvActive ? (tvSnapshot?.repeatMode ?? 'off') : player.repeatMode;
+  const displayQueue = tvActive ? remoteQueue : player.queue;
+  const displayCurrentIndex = tvActive ? remoteIndex : player.currentIndex;
+  const displayHasNext = tvActive
+    ? remoteIndex >= 0 && (remoteIndex < remoteQueue.length - 1 || displayRepeatMode === 'all')
+    : player.hasNext;
+
+  const togglePlayback = useCallback(() => {
+    if (tvActive) sendTvCommand({ type: 'toggle-play' });
+    else void player.togglePlay();
+  }, [player.togglePlay, sendTvCommand, tvActive]);
+
+  const adjacentTrack = useCallback((direction: -1 | 1) => {
+    if (!tvActive) {
+      if (direction < 0) player.previous();
+      else player.next();
+      return;
+    }
+    const queue = tvQueueRef.current;
+    const id = tvSnapshot?.trackId ?? tvTrackId;
+    const index = id ? queue.findIndex(track => track.id === id) : -1;
+    if (index < 0 || queue.length === 0) return;
+    let targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= queue.length) {
+      if ((tvSnapshot?.repeatMode ?? 'off') !== 'all') return;
+      targetIndex = targetIndex < 0 ? queue.length - 1 : 0;
+    }
+    const target = queue[targetIndex];
+    if (target) void sendTrackToTv(target, queue);
+  }, [player.next, player.previous, sendTrackToTv, tvActive, tvSnapshot?.repeatMode, tvSnapshot?.trackId, tvTrackId]);
+
+  const seekPlayback = useCallback((seconds: number) => {
+    if (tvActive) sendTvCommand({ type: 'seek-to', seconds });
+    else player.seek(seconds);
+  }, [player.seek, sendTvCommand, tvActive]);
+
+  const toggleShuffle = useCallback(() => {
+    if (tvActive) sendTvCommand({ type: 'toggle-shuffle' });
+    else player.toggleShuffle();
+  }, [player.toggleShuffle, sendTvCommand, tvActive]);
+
+  const cycleRepeat = useCallback(() => {
+    if (tvActive) sendTvCommand({ type: 'cycle-repeat' });
+    else player.cycleRepeat();
+  }, [player.cycleRepeat, sendTvCommand, tvActive]);
 
   return (
     <main className="app-shell">
@@ -211,17 +324,17 @@ export function OfflineApp({ offline, onExit }: OfflineAppProps) {
 
       <DesktopShell
         active={screen === 'player' ? 'player' : 'library'}
-        current={current}
-        playing={player.playing}
-        currentTime={player.currentTime}
+        current={displayCurrent}
+        playing={displayPlaying}
+        currentTime={displayCurrentTime}
         libraryCount={offline.tracks.length}
-        queue={player.queue}
-        currentIndex={player.currentIndex}
+        queue={displayQueue}
+        currentIndex={displayCurrentIndex}
         offlineMode
         onOpenPlayer={() => setScreen('player')}
         onOpenLibrary={() => setScreen('library')}
-        onPlayTrack={player.playTrack}
-        onReorderQueue={player.reorderQueue}
+        onPlayTrack={playTrack}
+        onReorderQueue={tvActive ? () => undefined : player.reorderQueue}
         surfaceClassName={`phone-surface phone-surface--offline ${screen === 'library' ? 'phone-surface--library' : ''}`}
       >
         {offline.loading || (offline.tracks.length > 0 && !player.hydrated) ? (
@@ -235,78 +348,86 @@ export function OfflineApp({ offline, onExit }: OfflineAppProps) {
             records={offline.records}
             collections={offline.collections}
             individualTrackIds={offline.individualDownloadedIds}
-            current={current}
-            playing={player.playing}
-            hasNext={player.hasNext}
+            current={displayCurrent ?? undefined}
+            playing={displayPlaying}
+            hasNext={displayHasNext}
             totalBytes={offline.totalBytes}
             tvState={tvState}
             tvMessage={tvMessage}
-            onTvConnect={() => { void connectTv(); }}
+            onTvConnect={() => setQrScannerOpen(true)}
             onTvDisconnect={disconnectTv}
             onOpenPlayer={() => setScreen('player')}
-            onTogglePlay={() => void player.togglePlay()}
-            onNext={player.next}
+            onTogglePlay={togglePlayback}
+            onNext={() => adjacentTrack(1)}
             onPlayTrack={playTrack}
             onRemove={trackId => { void offline.remove(trackId).catch(() => undefined); }}
             onRemoveCollection={(kind, sourceId) => { void offline.removeCollection(kind, sourceId).catch(() => undefined); }}
             onExitOffline={onExit}
           />
-        ) : current ? (
+        ) : displayCurrent ? (
           <PlayerScreen
-            current={current}
+            current={displayCurrent}
             libraryReturnLabel="Voltar aos downloads"
-            queue={player.queue}
-            currentIndex={player.currentIndex}
-            playing={player.playing}
-            autoplayBlocked={player.autoplayBlocked}
-            playbackError={player.sourceError}
-            currentTime={player.currentTime}
-            duration={player.duration}
+            queue={displayQueue}
+            currentIndex={displayCurrentIndex}
+            playing={displayPlaying}
+            autoplayBlocked={tvActive ? false : player.autoplayBlocked}
+            playbackError={tvActive ? null : player.sourceError}
+            currentTime={displayCurrentTime}
+            duration={displayDuration}
             volume={player.volume}
-            usesSystemVolume={usesSystemVolume}
-            shuffle={player.shuffle}
-            repeatMode={player.repeatMode}
+            usesSystemVolume={usesSystemVolume || tvActive}
+            shuffle={displayShuffle}
+            repeatMode={displayRepeatMode}
             playlists={[]}
             offlineMode
             onOpenLibrary={() => setScreen('library')}
-            onTogglePlay={() => void player.togglePlay()}
-            onPrevious={player.previous}
-            onNext={player.next}
-            onSeek={player.seek}
+            onTogglePlay={togglePlayback}
+            onPrevious={() => adjacentTrack(-1)}
+            onNext={() => adjacentTrack(1)}
+            onSeek={seekPlayback}
             onVolume={player.setVolume}
-            onShuffle={player.toggleShuffle}
-            onRepeat={player.cycleRepeat}
-            onPlayTrack={player.playTrack}
-            onReorderQueue={player.reorderQueue}
+            onShuffle={toggleShuffle}
+            onRepeat={cycleRepeat}
+            onPlayTrack={playTrack}
+            onReorderQueue={tvActive ? () => undefined : player.reorderQueue}
             onAddToPlaylist={() => undefined}
             onExitOffline={onExit}
           />
         ) : (
           <ResponsiveState
             variant="empty"
-            title="Nenhum download offline"
-            detail="Conecte ao Home Music e disponibilize músicas, playlists ou pastas para uso offline."
+            title={tvActive ? 'TV conectada e pronta' : 'Nenhum download offline'}
+            detail={tvActive
+              ? 'Escolha uma música nos downloads para enviar à TV.'
+              : 'Conecte ao Home Music e disponibilize músicas, playlists ou pastas para uso offline.'}
           >
-            <button className="secondary-action" type="button" onClick={onExit}>Tentar conectar</button>
+            <button className="secondary-action" type="button" onClick={() => setScreen('library')}>Voltar aos downloads</button>
           </ResponsiveState>
         )}
       </DesktopShell>
 
       <DesktopPlayerBar
-        current={current}
-        playing={player.playing}
-        currentTime={player.currentTime}
-        duration={player.duration}
+        current={displayCurrent}
+        playing={displayPlaying}
+        currentTime={displayCurrentTime}
+        duration={displayDuration}
         volume={player.volume}
-        usesSystemVolume={usesSystemVolume}
-        hasNext={player.hasNext}
+        usesSystemVolume={usesSystemVolume || tvActive}
+        hasNext={displayHasNext}
         offlineMode
         onOpenPlayer={() => setScreen('player')}
-        onTogglePlay={() => void player.togglePlay()}
-        onPrevious={player.previous}
-        onNext={player.next}
-        onSeek={player.seek}
+        onTogglePlay={togglePlayback}
+        onPrevious={() => adjacentTrack(-1)}
+        onNext={() => adjacentTrack(1)}
+        onSeek={seekPlayback}
         onVolume={player.setVolume}
+      />
+
+      <TvLanQrScanner
+        open={qrScannerOpen}
+        onDetected={value => { void connectTv(value); }}
+        onCancel={() => setQrScannerOpen(false)}
       />
     </main>
   );

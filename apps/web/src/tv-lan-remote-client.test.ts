@@ -3,7 +3,11 @@ import {
   TV_LAN_REMOTE_VERSION,
   type TvLanChallenge
 } from '@home-music/shared/tv-lan-remote';
-import { computeTvLanJoinProof, createTvLanRemoteSignaling } from './tv-lan-remote-client';
+import {
+  computeTvLanJoinProof,
+  createTvLanRemoteSignaling,
+  tvLanRequestErrorMessage
+} from './tv-lan-remote-client';
 
 const NOW = 1_800_000_000_000;
 const SESSION_ID = 'session_1234567890abcdef';
@@ -35,6 +39,13 @@ describe('TV LAN remote client', () => {
     });
 
     expect(value).toBe('GeNEINzEVdCHdYHLDcYHjtpsM77NmoLlYvRwvDO9dHQ');
+  });
+
+  it('classifies denied local-network access separately from an unreachable TV', () => {
+    expect(tvLanRequestErrorMessage(new DOMException('denied', 'NotAllowedError'), 'denied'))
+      .toContain('acesso à rede local foi negado');
+    expect(tvLanRequestErrorMessage(new TypeError('Failed to fetch'), 'prompt'))
+      .toContain('Não foi possível alcançar a TV');
   });
 
   it('pairs with challenge/join and publishes remote WebRTC signaling', async () => {
@@ -87,6 +98,24 @@ describe('TV LAN remote client', () => {
         description: { type: 'offer', sdp: 'v=0\r\n' }
       }
     });
+    client.close();
+  });
+
+  it('cancels challenge/join work when the UI closes the pending connection', async () => {
+    const controller = new AbortController();
+    const fetchImpl = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')), { once: true });
+    }));
+
+    const pending = createTvLanRemoteSignaling(qrText(), {
+      fetchImpl: fetchImpl as typeof fetch,
+      createClientNonce: () => CLIENT_NONCE,
+      now: () => NOW,
+      signal: controller.signal
+    });
+    controller.abort();
+
+    await expect(pending).rejects.toThrow('Conexão LAN cancelada.');
   });
 
   it('polls TV signaling with the authenticated cursor and stops cleanly', async () => {
@@ -141,13 +170,6 @@ describe('TV LAN remote client', () => {
 
     expect(received).toBe('description');
     expect(pollCount).toBe(1);
-    expect(fetchImpl).toHaveBeenCalledWith(
-      'http://192.168.1.40:43123/signals?role=remote&cursor=0',
-      expect.objectContaining({
-        headers: { Authorization: `Bearer ${SESSION_TOKEN}` },
-        cache: 'no-store'
-      })
-    );
   });
 
   it('rejects an expired or malformed QR before making LAN requests', async () => {

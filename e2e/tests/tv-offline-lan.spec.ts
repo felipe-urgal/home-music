@@ -130,6 +130,7 @@ function lanFixture() {
         json: { cursor, messages: messages.filter(message => message.cursor > after && message.from !== role).map(message => message.body) }
       };
     }
+    if (url.pathname === '/close') return { status: 200, json: {} };
     return { status: 404, json: { error: 'not found' } };
   };
   return { qrText, route, binding, diagnostics: () => ({ cursor, messages, requests }) };
@@ -149,7 +150,7 @@ async function serveReceiver(context: BrowserContext, fixtureRoute: (route: Rout
   });
 }
 
-test('PWA envia duas faixas e comandos para o receiver LAN sem backend', async ({ page, browser }, testInfo) => {
+test('PWA envia faixas e controla o receiver LAN sem backend', async ({ page, browser }, testInfo) => {
   test.skip(testInfo.project.name !== 'desktop-chromium');
 
   await login(page, '/');
@@ -207,8 +208,10 @@ test('PWA envia duas faixas e comandos para o receiver LAN sem backend', async (
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
   await expect(page.getByRole('button', { name: 'Conectar à TV', exact: true })).toBeVisible();
-  page.once('dialog', dialog => dialog.accept(fixture.qrText));
   await page.getByRole('button', { name: 'Conectar à TV', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Conectar à TV por QR' })).toBeVisible();
+  await page.getByLabel('Conteúdo do QR').fill(fixture.qrText);
+  await page.getByRole('button', { name: 'Conectar', exact: true }).click();
   try {
     await expect(page.getByText(/TV conectada em/)).toBeVisible({ timeout: 20_000 });
   } catch (error) {
@@ -225,15 +228,41 @@ test('PWA envia duas faixas e comandos para o receiver LAN sem backend', async (
   }
   const requestsAtConnection = backendRequests;
 
-  for (const track of tracks) {
-    await page.getByRole('button', {
-      name: `Enviar para a TV ${track.title}, ${track.artist}`,
-      exact: true
-    }).click();
-    await expect(tv.locator('.tv-offline-receiver__now-playing strong')).toBeVisible({ timeout: 10_000 });
-    await expect.poll(async () => tv.locator('audio').evaluateAll(elements => (
-      elements.some(element => (element as HTMLAudioElement).src.startsWith('blob:'))
-    ))).toBe(true);
+  const first = tracks[0]!;
+  await page.getByRole('button', {
+    name: `Enviar para a TV ${first.title}, ${first.artist}`,
+    exact: true
+  }).click();
+  await expect(tv.locator('.tv-offline-receiver__now-playing strong')).toBeVisible({ timeout: 10_000 });
+  await expect.poll(async () => tv.locator('audio').evaluateAll(elements => (
+    elements.some(element => (element as HTMLAudioElement).src.startsWith('blob:'))
+  ))).toBe(true);
+
+  await expect(page.getByTestId('mini-player')).toBeVisible();
+  await page.getByRole('button', { name: 'Pausar', exact: true }).click();
+  await expect(tv.getByRole('button', { name: 'Continuar', exact: true })).toBeVisible({ timeout: 5_000 });
+  await page.getByRole('button', { name: 'Tocar', exact: true }).click();
+  await expect(tv.getByRole('button', { name: 'Pausar', exact: true })).toBeVisible({ timeout: 5_000 });
+
+  const firstBlobSources = await tv.locator('audio').evaluateAll(elements => (
+    elements.map(element => (element as HTMLAudioElement).src).filter(src => src.startsWith('blob:'))
+  ));
+  await page.getByRole('button', { name: 'Próxima', exact: true }).click();
+  await expect.poll(async () => tv.locator('audio').evaluateAll(elements => (
+    elements.map(element => (element as HTMLAudioElement).src).filter(src => src.startsWith('blob:'))
+  ))).not.toEqual(firstBlobSources);
+
+  await page.getByTestId('mini-player').locator('.mini-player__main').click();
+  const progress = page.getByLabel('Progresso da música');
+  await expect(progress).toBeVisible();
+  const duration = await progress.evaluate(element => Number((element as HTMLInputElement).max));
+  if (duration > 0.5) {
+    const target = Math.min(duration - 0.1, Math.max(0.2, duration / 2));
+    await progress.fill(String(target));
+    await expect.poll(async () => tv.locator('audio').evaluateAll(elements => {
+      const active = elements.find(element => !(element as HTMLAudioElement).paused && Number.isFinite((element as HTMLAudioElement).currentTime));
+      return active ? (active as HTMLAudioElement).currentTime : 0;
+    })).toBeGreaterThan(Math.max(0, target - 0.5));
   }
 
   expect(backendRequests).toBe(requestsAtConnection);
