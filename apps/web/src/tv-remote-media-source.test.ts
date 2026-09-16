@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   clearTvRemoteMediaSources,
+  filterTracksWithTvRemoteMediaSource,
   getTvRemoteMediaSource,
   setTvRemoteMediaSource
 } from './tv-remote-media-source';
@@ -43,6 +44,29 @@ describe('TV remote transient media sources', () => {
     expect(getTvRemoteMediaSource('track-2')).toBe('blob:two');
     expect(getTvRemoteMediaSource('track-4')).toBe('blob:four');
     expect(revoke).toHaveBeenCalledWith('blob:one');
+  });
+
+  it('filters receiver metadata to tracks that still have a playable transient source', () => {
+    vi.spyOn(URL, 'createObjectURL')
+      .mockReturnValueOnce('blob:one')
+      .mockReturnValueOnce('blob:two')
+      .mockReturnValueOnce('blob:three')
+      .mockReturnValueOnce('blob:four');
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+
+    setTvRemoteMediaSource('track-1', new Blob(['one']));
+    setTvRemoteMediaSource('track-2', new Blob(['two']));
+    setTvRemoteMediaSource('track-3', new Blob(['three']));
+    setTvRemoteMediaSource('track-4', new Blob(['four']));
+
+    const tracks = [
+      { id: 'track-1', title: 'One' },
+      { id: 'track-2', title: 'Two' },
+      { id: 'track-3', title: 'Three' },
+      { id: 'track-4', title: 'Four' }
+    ];
+
+    expect(filterTracksWithTvRemoteMediaSource(tracks)).toEqual(tracks.slice(1));
   });
 
   it('clears every transient source', () => {
