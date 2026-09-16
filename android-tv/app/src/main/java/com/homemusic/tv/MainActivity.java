@@ -32,6 +32,7 @@ import com.google.zxing.MultiFormatWriter;
 import com.google.zxing.WriterException;
 import com.google.zxing.common.BitMatrix;
 
+import org.mozilla.geckoview.GeckoResult;
 import org.mozilla.geckoview.GeckoRuntime;
 import org.mozilla.geckoview.GeckoSession;
 import org.mozilla.geckoview.GeckoSessionSettings;
@@ -308,6 +309,20 @@ public final class MainActivity extends Activity {
             .build();
 
         session = new GeckoSession(sessionSettings);
+        session.setPermissionDelegate(new GeckoSession.PermissionDelegate() {
+            @Override
+            public GeckoResult<Integer> onContentPermissionRequest(
+                GeckoSession geckoSession,
+                ContentPermission permission
+            ) {
+                if (offlineReceiverMode
+                    && (permission.permission == PERMISSION_AUTOPLAY_AUDIBLE
+                        || permission.permission == PERMISSION_AUTOPLAY_INAUDIBLE)) {
+                    return GeckoResult.fromValue(ContentPermission.VALUE_ALLOW);
+                }
+                return GeckoResult.fromValue(ContentPermission.VALUE_PROMPT);
+            }
+        });
         session.setContentDelegate(new GeckoSession.ContentDelegate() {
             @Override
             public void onCrash(GeckoSession crashedSession) {
