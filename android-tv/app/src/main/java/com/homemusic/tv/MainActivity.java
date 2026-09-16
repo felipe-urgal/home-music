@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.ShortcutInfo;
 import android.content.pm.ShortcutManager;
+import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.drawable.Icon;
 import android.net.Uri;
@@ -20,15 +21,23 @@ import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.google.zxing.BarcodeFormat;
+import com.google.zxing.MultiFormatWriter;
+import com.google.zxing.WriterException;
+import com.google.zxing.common.BitMatrix;
+
 import org.mozilla.geckoview.GeckoRuntime;
 import org.mozilla.geckoview.GeckoSession;
 import org.mozilla.geckoview.GeckoSessionSettings;
 import org.mozilla.geckoview.GeckoView;
+
+import java.io.IOException;
 
 public final class MainActivity extends Activity {
     private static final String PREFS = "home_music_tv";
@@ -48,7 +57,9 @@ public final class MainActivity extends Activity {
     private ProgressBar progressBar;
     private String currentAddress;
     private boolean showingSetup;
+    private boolean offlineReceiverMode;
     private boolean canGoBack;
+    private LanPairingServer lanServer;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -73,7 +84,7 @@ public final class MainActivity extends Activity {
     public boolean dispatchKeyEvent(KeyEvent event) {
         if (event.getAction() == KeyEvent.ACTION_UP
             && (event.getKeyCode() == KeyEvent.KEYCODE_MENU || event.getKeyCode() == KeyEvent.KEYCODE_SETTINGS)) {
-            showSetup(hasText(currentAddress) ? currentAddress : DEFAULT_URL);
+            showAppMenu();
             return true;
         }
         return super.dispatchKeyEvent(event);
@@ -91,30 +102,50 @@ public final class MainActivity extends Activity {
             return;
         }
 
-        if (session != null && canGoBack) {
+        if (!offlineReceiverMode && session != null && canGoBack) {
             session.goBack();
             return;
         }
 
-        new AlertDialog.Builder(this)
-            .setTitle(R.string.app_name)
-            .setItems(new CharSequence[]{"Alterar endereço", "Adicionar à tela inicial", "Sair"}, (dialog, which) -> {
-                if (which == 0) showSetup(hasText(currentAddress) ? currentAddress : DEFAULT_URL);
-                else if (which == 1) requestHomeScreenShortcut();
-                else finish();
-            })
-            .setNegativeButton("Cancelar", null)
-            .show();
+        showAppMenu();
     }
 
     @Override
     protected void onDestroy() {
         destroyBrowser();
+        stopLanServer();
         super.onDestroy();
+    }
+
+    private void showAppMenu() {
+        new AlertDialog.Builder(this)
+            .setTitle(R.string.app_name)
+            .setItems(
+                offlineReceiverMode
+                    ? new CharSequence[]{"Novo pareamento offline", "Tentar modo online", "Alterar endereço", "Sair"}
+                    : new CharSequence[]{"Modo offline local", "Alterar endereço", "Adicionar à tela inicial", "Sair"},
+                (dialog, which) -> {
+                    if (offlineReceiverMode) {
+                        if (which == 0) showOfflinePairing();
+                        else if (which == 1) showSavedServer();
+                        else if (which == 2) showSetup(savedOrDefaultAddress());
+                        else finish();
+                    } else {
+                        if (which == 0) showOfflinePairing();
+                        else if (which == 1) showSetup(savedOrDefaultAddress());
+                        else if (which == 2) requestHomeScreenShortcut();
+                        else finish();
+                    }
+                }
+            )
+            .setNegativeButton("Cancelar", null)
+            .show();
     }
 
     private void showSetup(String initialAddress) {
         showingSetup = true;
+        offlineReceiverMode = false;
+        stopLanServer();
         destroyBrowser();
         currentAddress = initialAddress;
 
@@ -170,6 +201,16 @@ public final class MainActivity extends Activity {
         buttonParams.topMargin = dp(18);
         card.addView(open, buttonParams);
 
+        Button offline = new Button(this);
+        offline.setText("Usar modo offline local");
+        LinearLayout.LayoutParams offlineParams = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            dp(54)
+        );
+        offlineParams.topMargin = dp(10);
+        card.addView(offline, offlineParams);
+        offline.setOnClickListener(view -> showOfflinePairing());
+
         Button pin = new Button(this);
         pin.setText("Adicionar à tela inicial");
         LinearLayout.LayoutParams pinParams = new LinearLayout.LayoutParams(
@@ -181,7 +222,7 @@ public final class MainActivity extends Activity {
         pin.setOnClickListener(view -> requestHomeScreenShortcut());
 
         TextView note = text(
-            "O modo TV é ativado automaticamente. O atalho na tela inicial depende do launcher instalado no BTV.",
+            "O modo offline local funciona sem o servidor quando o celular e o BTV estão na mesma rede e a música já foi baixada no celular.",
             13,
             MUTED
         );
@@ -222,8 +263,14 @@ public final class MainActivity extends Activity {
     }
 
     private void showBrowser(String address) {
-        showingSetup = false;
+        stopLanServer();
+        offlineReceiverMode = false;
         currentAddress = address;
+        showBrowserUri(withTvMode(address));
+    }
+
+    private void showBrowserUri(String uri) {
+        showingSetup = false;
         canGoBack = false;
         destroyBrowser();
 
@@ -277,7 +324,13 @@ public final class MainActivity extends Activity {
             @Override
             public void onPageStop(GeckoSession geckoSession, boolean success) {
                 if (progressBar != null) progressBar.setVisibility(View.GONE);
-                if (!success) showError("Não foi possível abrir o Home Music.");
+                if (!success) {
+                    showError(
+                        offlineReceiverMode
+                            ? "Não foi possível abrir o receiver offline embarcado."
+                            : "Não foi possível abrir o Home Music. Use o modo offline local se o servidor estiver indisponível."
+                    );
+                }
             }
         });
         session.setNavigationDelegate(new GeckoSession.NavigationDelegate() {
@@ -290,9 +343,119 @@ public final class MainActivity extends Activity {
         if (runtime == null) runtime = GeckoRuntime.create(getApplicationContext());
         session.open(runtime);
         browserView.setSession(session);
-        session.loadUri(withTvMode(address));
+        session.loadUri(uri);
         browserView.requestFocus();
         enterImmersiveMode();
+    }
+
+    private void showOfflinePairing() {
+        showingSetup = false;
+        offlineReceiverMode = true;
+        destroyBrowser();
+        stopLanServer();
+
+        try {
+            lanServer = new LanPairingServer(originFor(savedOrDefaultAddress()), getAssets());
+            lanServer.start();
+            LanPairingServer.PairingInfo info = lanServer.pairingInfo();
+
+            LinearLayout root = new LinearLayout(this);
+            root.setOrientation(LinearLayout.HORIZONTAL);
+            root.setGravity(Gravity.CENTER);
+            root.setBackgroundColor(BG);
+            root.setPadding(dp(56), dp(42), dp(56), dp(42));
+
+            ImageView qr = new ImageView(this);
+            qr.setImageBitmap(createQrBitmap(info.qrText, dp(330)));
+            LinearLayout.LayoutParams qrParams = new LinearLayout.LayoutParams(dp(360), dp(360));
+            qrParams.rightMargin = dp(48);
+            root.addView(qr, qrParams);
+
+            LinearLayout copy = new LinearLayout(this);
+            copy.setOrientation(LinearLayout.VERTICAL);
+            copy.setGravity(Gravity.CENTER_VERTICAL);
+            root.addView(copy, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+
+            TextView badge = text("Modo offline local", 16, MUTED);
+            copy.addView(badge);
+            TextView title = text("Conectar celular", 32, TEXT);
+            title.setTypeface(title.getTypeface(), android.graphics.Typeface.BOLD);
+            LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            );
+            titleParams.topMargin = dp(8);
+            copy.addView(title, titleParams);
+
+            TextView detail = text(
+                "No Home Music do celular, abra Downloads → Conectar à TV e escaneie este QR. A Internet e o servidor podem permanecer desligados.",
+                18,
+                MUTED
+            );
+            LinearLayout.LayoutParams detailParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            );
+            detailParams.topMargin = dp(12);
+            detailParams.bottomMargin = dp(20);
+            copy.addView(detail, detailParams);
+
+            TextView address = text("TV na rede local: " + info.host + ":" + info.port, 14, MUTED);
+            copy.addView(address);
+
+            Button receiver = new Button(this);
+            receiver.setText("Abrir receiver offline");
+            LinearLayout.LayoutParams receiverParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                dp(58)
+            );
+            receiverParams.topMargin = dp(20);
+            copy.addView(receiver, receiverParams);
+            receiver.setOnClickListener(view -> openOfflineReceiver());
+
+            Button regenerate = new Button(this);
+            regenerate.setText("Gerar novo QR");
+            LinearLayout.LayoutParams regenerateParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                dp(52)
+            );
+            regenerateParams.topMargin = dp(10);
+            copy.addView(regenerate, regenerateParams);
+            regenerate.setOnClickListener(view -> showOfflinePairing());
+
+            Button online = new Button(this);
+            online.setText("Tentar modo online");
+            LinearLayout.LayoutParams onlineParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                dp(52)
+            );
+            onlineParams.topMargin = dp(10);
+            copy.addView(online, onlineParams);
+            online.setOnClickListener(view -> showSavedServer());
+
+            setContentView(root);
+            receiver.requestFocus();
+            enterImmersiveMode();
+        } catch (IOException | WriterException error) {
+            stopLanServer();
+            offlineReceiverMode = false;
+            new AlertDialog.Builder(this)
+                .setTitle("Modo offline indisponível")
+                .setMessage(error.getMessage() == null ? "Não foi possível iniciar o serviço local da TV." : error.getMessage())
+                .setPositiveButton("Voltar", (dialog, which) -> showSetup(savedOrDefaultAddress()))
+                .setCancelable(false)
+                .show();
+        }
+    }
+
+    private void openOfflineReceiver() {
+        if (lanServer == null || lanServer.port() < 1) {
+            showOfflinePairing();
+            return;
+        }
+        offlineReceiverMode = true;
+        String receiverUrl = "http://127.0.0.1:" + lanServer.port() + "/receiver/tv-offline-receiver.html";
+        showBrowserUri(receiverUrl);
     }
 
     private LinearLayout buildErrorPanel() {
@@ -302,11 +465,11 @@ public final class MainActivity extends Activity {
         panel.setPadding(dp(72), dp(48), dp(72), dp(48));
         panel.setBackgroundColor(BG);
 
-        TextView title = text("Não foi possível abrir o Home Music", 24, TEXT);
+        TextView title = text(offlineReceiverMode ? "Receiver offline indisponível" : "Não foi possível abrir o Home Music", 24, TEXT);
         title.setTypeface(title.getTypeface(), android.graphics.Typeface.BOLD);
         panel.addView(title);
 
-        TextView message = text("Verifique o endereço e a conexão.", 16, MUTED);
+        TextView message = text("Verifique a conexão e tente novamente.", 16, MUTED);
         LinearLayout.LayoutParams messageParams = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.WRAP_CONTENT,
             ViewGroup.LayoutParams.WRAP_CONTENT
@@ -318,20 +481,70 @@ public final class MainActivity extends Activity {
 
         Button retry = new Button(this);
         retry.setText("Tentar novamente");
-        panel.addView(retry, new LinearLayout.LayoutParams(dp(320), dp(56)));
+        panel.addView(retry, new LinearLayout.LayoutParams(dp(340), dp(56)));
         retry.setOnClickListener(view -> {
             hideError();
-            if (session != null && hasText(currentAddress)) session.loadUri(withTvMode(currentAddress));
+            if (offlineReceiverMode) openOfflineReceiver();
+            else if (session != null && hasText(currentAddress)) session.loadUri(withTvMode(currentAddress));
+        });
+
+        Button alternate = new Button(this);
+        alternate.setText(offlineReceiverMode ? "Tentar modo online" : "Usar modo offline local");
+        LinearLayout.LayoutParams alternateParams = new LinearLayout.LayoutParams(dp(340), dp(52));
+        alternateParams.topMargin = dp(10);
+        panel.addView(alternate, alternateParams);
+        alternate.setOnClickListener(view -> {
+            if (offlineReceiverMode) showSavedServer();
+            else showOfflinePairing();
         });
 
         Button settingsButton = new Button(this);
         settingsButton.setText("Alterar endereço");
-        LinearLayout.LayoutParams settingsParams = new LinearLayout.LayoutParams(dp(320), dp(52));
+        LinearLayout.LayoutParams settingsParams = new LinearLayout.LayoutParams(dp(340), dp(52));
         settingsParams.topMargin = dp(10);
         panel.addView(settingsButton, settingsParams);
-        settingsButton.setOnClickListener(view -> showSetup(hasText(currentAddress) ? currentAddress : DEFAULT_URL));
+        settingsButton.setOnClickListener(view -> showSetup(savedOrDefaultAddress()));
 
         return panel;
+    }
+
+    private void showSavedServer() {
+        showBrowser(savedOrDefaultAddress());
+    }
+
+    private String savedOrDefaultAddress() {
+        String saved = preferences.getString(KEY_URL, "");
+        if (hasText(saved)) return saved;
+        if (hasText(currentAddress)) return currentAddress;
+        return DEFAULT_URL;
+    }
+
+    private static String originFor(String address) {
+        Uri uri = Uri.parse(address);
+        if (!hasText(uri.getScheme()) || !hasText(uri.getAuthority())) return "";
+        return uri.getScheme() + "://" + uri.getAuthority();
+    }
+
+    private static Bitmap createQrBitmap(String value, int size) throws WriterException {
+        BitMatrix matrix = new MultiFormatWriter().encode(value, BarcodeFormat.QR_CODE, size, size);
+        int width = matrix.getWidth();
+        int height = matrix.getHeight();
+        int[] pixels = new int[width * height];
+        for (int y = 0; y < height; y += 1) {
+            int row = y * width;
+            for (int x = 0; x < width; x += 1) {
+                pixels[row + x] = matrix.get(x, y) ? Color.BLACK : Color.WHITE;
+            }
+        }
+        Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+        bitmap.setPixels(pixels, 0, width, 0, 0, width, height);
+        return bitmap;
+    }
+
+    private void stopLanServer() {
+        if (lanServer == null) return;
+        lanServer.close();
+        lanServer = null;
     }
 
     private void requestHomeScreenShortcut() {

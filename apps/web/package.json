@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "node scripts/generate-pwa-icons.mjs && vite --host 0.0.0.0",
-    "build": "node scripts/generate-pwa-icons.mjs && tsc -b && vite build && node scripts/check-bundle-budget.mjs",
+    "build": "node scripts/generate-pwa-icons.mjs && tsc -b && vite build && node scripts/check-bundle-budget.mjs && npm run build:tv-receiver",
+    "build:tv-receiver": "vite build --config vite.tv-offline-receiver.config.ts",
     "typecheck": "tsc -b --pretty false",
     "test": "node scripts/generate-pwa-icons.mjs && vitest run --exclude src/large-library.performance.test.tsx",
     "benchmark:large-library": "vitest run src/large-library.performance.test.tsx"

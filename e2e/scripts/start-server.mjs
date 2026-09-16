@@ -195,6 +195,7 @@ async function seedLibraryAssistantFixture() {
     const raw = new DatabaseSync(databasePath);
     let track;
     try {
+      raw.exec('PRAGMA busy_timeout = 5000;');
       track = raw.prepare(`
         SELECT id, title
         FROM tracks

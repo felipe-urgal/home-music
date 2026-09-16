@@ -1,5 +1,7 @@
 package com.homemusic.tv;
 
+import android.content.res.AssetManager;
+
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -8,6 +10,7 @@ import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.EOFException;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetAddress;
@@ -42,8 +45,10 @@ final class LanPairingServer implements AutoCloseable {
     private static final int MAX_HEADER_LINE = 8 * 1024;
     private static final int RATE_WINDOW_MS = 10_000;
     private static final int RATE_MAX_REQUESTS = 120;
+    private static final int MAX_RECEIVER_ASSET_BYTES = 8 * 1024 * 1024;
 
     private final String allowedOrigin;
+    private final AssetManager assets;
     private final ExecutorService clients = Executors.newCachedThreadPool();
     private final Map<String, ArrayDeque<Long>> requestTimes = new HashMap<>();
     private volatile boolean running;
@@ -51,8 +56,9 @@ final class LanPairingServer implements AutoCloseable {
     private ServerSocket serverSocket;
     private Thread acceptThread;
 
-    LanPairingServer(String allowedOrigin) {
+    LanPairingServer(String allowedOrigin, AssetManager assets) {
         this.allowedOrigin = allowedOrigin == null ? "" : allowedOrigin;
+        this.assets = assets;
         this.pairingSession = new LanPairingSession();
     }
 
@@ -124,7 +130,7 @@ final class LanPairingServer implements AutoCloseable {
             }
             writeResponse(client, origin, route(request, loopback));
         } catch (Exception ignored) {
-            // O listener é efêmero; erro de uma conexão nunca derruba a sessão inteira.
+            // Uma conexão inválida nunca derruba o listener efêmero inteiro.
         }
     }
 
@@ -151,6 +157,11 @@ final class LanPairingServer implements AutoCloseable {
                     .put("expiresAt", session.pairingExpiresAt())
                     .put("signalingBase", "http://127.0.0.1:" + port())
                     .toString());
+            }
+
+            if ("GET".equals(request.method) && ("/receiver".equals(path) || path.startsWith("/receiver/"))) {
+                if (!loopback) return error(403, "Receiver embarcado é somente loopback.");
+                return receiverAsset(path);
             }
 
             if ("GET".equals(request.method) && "/challenge".equals(path)) {
@@ -186,12 +197,7 @@ final class LanPairingServer implements AutoCloseable {
                 String token = bearer(request.headers.get("authorization"));
                 JSONObject body = request.json();
                 if (!validSignalEnvelope(body, role)) return error(400, "Sinalização WebRTC inválida.");
-                boolean accepted = session.publish(
-                    role,
-                    token,
-                    body.optString("messageId", ""),
-                    body.toString()
-                );
+                boolean accepted = session.publish(role, token, body.optString("messageId", ""), body.toString());
                 if (!accepted) return error(401, "Sessão inválida, expirada ou mensagem repetida.");
                 return Response.json(202, "{}");
             }
@@ -224,6 +230,43 @@ final class LanPairingServer implements AutoCloseable {
         }
     }
 
+    private Response receiverAsset(String requestPath) {
+        String assetPath = requestPath.equals("/receiver") || requestPath.equals("/receiver/")
+            ? "tv-offline-receiver.html"
+            : requestPath.substring("/receiver/".length());
+        if (assetPath.isEmpty()) assetPath = "tv-offline-receiver.html";
+        if (assetPath.startsWith("/") || assetPath.contains("..") || assetPath.contains("\\")) {
+            return error(400, "Asset inválido.");
+        }
+        try (InputStream input = assets.open(assetPath, AssetManager.ACCESS_STREAMING)) {
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            byte[] buffer = new byte[16 * 1024];
+            int total = 0;
+            int read;
+            while ((read = input.read(buffer)) >= 0) {
+                total += read;
+                if (total > MAX_RECEIVER_ASSET_BYTES) return error(413, "Asset excede limite.");
+                output.write(buffer, 0, read);
+            }
+            return new Response(200, contentType(assetPath), output.toByteArray());
+        } catch (FileNotFoundException error) {
+            return error(404, "Asset do receiver não encontrado.");
+        } catch (IOException error) {
+            return error(500, "Falha ao ler receiver embarcado.");
+        }
+    }
+
+    private static String contentType(String path) {
+        if (path.endsWith(".html")) return "text/html; charset=utf-8";
+        if (path.endsWith(".js")) return "text/javascript; charset=utf-8";
+        if (path.endsWith(".css")) return "text/css; charset=utf-8";
+        if (path.endsWith(".svg")) return "image/svg+xml";
+        if (path.endsWith(".png")) return "image/png";
+        if (path.endsWith(".webp")) return "image/webp";
+        if (path.endsWith(".json")) return "application/json; charset=utf-8";
+        return "application/octet-stream";
+    }
+
     private static boolean validSignalEnvelope(JSONObject body, String role) {
         if (!("tv".equals(role) || "remote".equals(role))) return false;
         String messageId = body.optString("messageId", "");
@@ -237,8 +280,7 @@ final class LanPairingServer implements AutoCloseable {
             if (description == null) return false;
             String descriptionType = description.optString("type", "");
             String sdp = description.optString("sdp", "");
-            return ("offer".equals(descriptionType) || "answer".equals(descriptionType))
-                && !sdp.isEmpty() && sdp.length() <= 256 * 1024;
+            return ("offer".equals(descriptionType) || "answer".equals(descriptionType)) && !sdp.isEmpty() && sdp.length() <= 256 * 1024;
         }
         if ("ice-candidate".equals(type)) {
             JSONObject candidate = signal.optJSONObject("candidate");
@@ -319,10 +361,7 @@ final class LanPairingServer implements AutoCloseable {
             String line = readLine(input);
             if (line == null || line.isEmpty()) break;
             int separator = line.indexOf(':');
-            if (separator > 0) headers.put(
-                line.substring(0, separator).trim().toLowerCase(Locale.ROOT),
-                line.substring(separator + 1).trim()
-            );
+            if (separator > 0) headers.put(line.substring(0, separator).trim().toLowerCase(Locale.ROOT), line.substring(separator + 1).trim());
         }
         int length = (int) parseLong(headers.get("content-length"), 0L);
         if (length < 0 || length > LanPairingSession.MAX_REQUEST_BYTES) throw new IOException("Body excede limite.");
@@ -362,6 +401,7 @@ final class LanPairingServer implements AutoCloseable {
             : response.status == 403 ? "Forbidden"
             : response.status == 404 ? "Not Found"
             : response.status == 410 ? "Gone"
+            : response.status == 413 ? "Payload Too Large"
             : response.status == 429 ? "Too Many Requests"
             : "Error";
         StringBuilder headers = new StringBuilder()
@@ -373,6 +413,9 @@ final class LanPairingServer implements AutoCloseable {
             .append("Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n")
             .append("Access-Control-Allow-Headers: Content-Type, Authorization\r\n")
             .append("Access-Control-Allow-Private-Network: true\r\n");
+        if (response.contentType.startsWith("text/html")) {
+            headers.append("Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; media-src 'self' blob:; img-src 'self' data: blob:; object-src 'none'; base-uri 'none'\r\n");
+        }
         if (origin != null && !origin.isEmpty()) headers.append("Access-Control-Allow-Origin: ").append(origin).append("\r\nVary: Origin\r\n");
         headers.append("\r\n");
         output.write(headers.toString().getBytes(StandardCharsets.US_ASCII));
