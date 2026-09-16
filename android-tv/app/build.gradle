@@ -64,6 +64,7 @@ android {
     }
 
     compileOptions {
+        coreLibraryDesugaringEnabled true
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
@@ -97,6 +98,7 @@ tasks.named('preBuild').configure {
 }
 
 dependencies {
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.3'
     // Bundle a modern browser engine so old/custom BTV WebView builds do not
     // determine whether the Home Music frontend can render.
     implementation 'org.mozilla.geckoview:geckoview:126.0.20240526221752'
