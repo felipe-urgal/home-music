@@ -50,8 +50,9 @@ function lanFixture() {
   const route = async (requestRoute: Route) => {
     const request = requestRoute.request();
     const url = new URL(request.url());
+    const origin = request.headers().origin || 'http://127.0.0.1:8791';
     const headers = {
-      'Access-Control-Allow-Origin': 'http://127.0.0.1:8791',
+      'Access-Control-Allow-Origin': origin,
       'Access-Control-Allow-Headers': 'Authorization, Content-Type',
       'Access-Control-Allow-Private-Network': 'true'
     };
