@@ -50,6 +50,7 @@ function lanFixture() {
   const sessionToken = 'token_1234567890abcdef';
   const expiresAt = Date.now() + 90_000;
   const messages: Array<{ cursor: number; from: 'remote' | 'tv'; body: unknown }> = [];
+  const requests: Array<{ method: string; path: string; origin: string | null }> = [];
   let cursor = 0;
   const qrText = `home-music://tv-lan?version=${version}&host=192.168.1.40&port=43123&session=${sessionId}&secret=${secret}&expires=${expiresAt}`;
 
@@ -57,6 +58,7 @@ function lanFixture() {
     const request = requestRoute.request();
     const url = new URL(request.url());
     const origin = request.headers().origin || 'http://127.0.0.1:8791';
+    requests.push({ method: request.method(), path: `${url.pathname}${url.search}`, origin: request.headers().origin || null });
     const headers = {
       'Access-Control-Allow-Origin': origin,
       'Access-Control-Allow-Headers': 'Authorization, Content-Type',
@@ -94,7 +96,7 @@ function lanFixture() {
     }
     return requestRoute.fulfill({ status: 404, headers });
   };
-  return { qrText, route, diagnostics: () => ({ cursor, messages }) };
+  return { qrText, route, diagnostics: () => ({ cursor, messages, requests }) };
 }
 
 async function serveReceiver(context: BrowserContext, fixtureRoute: (route: Route) => Promise<void>) {
