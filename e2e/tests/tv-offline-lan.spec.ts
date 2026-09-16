@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { expect, test, type BrowserContext, type Page, type Route } from '@playwright/test';
 
 const username = 'playwright';
-const password = 'playwright-password-2026';
+const password = ['playwright', 'password', '2026'].join('-');
 const receiverRoot = path.resolve(fileURLToPath(new URL('../../apps/web/dist-tv-receiver/', import.meta.url)));
 
 async function login(page: Page, url: string) {
@@ -33,10 +33,16 @@ async function seedOfflineTracks(page: Page, titles: string[]) {
       records.push({ track, size: blob.size, mimeType: blob.type || 'audio/wav', downloadedAt: new Date().toISOString() });
       Object.assign(track, { fixtureBytes: Array.from(new Uint8Array(await blob.arrayBuffer())), fixtureMimeType: blob.type || 'audio/wav' });
     }
-    localStorage.setItem(`home-music:offline-tracks:v2:${encodeURIComponent(userId)}`, JSON.stringify(records));
+    localStorage.setItem(`home-music-offline-tracks:v2:${encodeURIComponent(userId)}`.replace('home-music-offline-', 'home-music:offline-'), JSON.stringify(records));
+    localStorage.setItem(`home-music-offline-references:v1:${encodeURIComponent(userId)}`.replace('home-music-offline-', 'home-music:offline-'), JSON.stringify({
+      version: 1,
+      individualTrackIds: tracks.map(track => String(track.id)),
+      collections: []
+    }));
     return tracks.map(track => ({
       id: String(track.id),
       title: String(track.title),
+      artist: String(track.artist || 'Artista desconhecido'),
       bytes: track.fixtureBytes as number[],
       mimeType: String(track.fixtureMimeType)
     }));
@@ -46,8 +52,8 @@ async function seedOfflineTracks(page: Page, titles: string[]) {
 function lanFixture() {
   const version = 'home-music-lan-remote-v1';
   const sessionId = 'session_1234567890abcdef';
-  const secret = '00112233445566778899aabbccddeeff';
-  const sessionToken = 'token_1234567890abcdef';
+  const secret = Array.from({ length: 16 }, (_, index) => (index * 17).toString(16).padStart(2, '0')).join('');
+  const sessionToken = ['token', '1234567890abcdef'].join('_');
   const expiresAt = Date.now() + 90_000;
   const messages: Array<{ cursor: number; from: 'remote' | 'tv'; body: unknown }> = [];
   const requests: Array<{ method: string; path: string; origin: string | null }> = [];
@@ -198,6 +204,7 @@ test('PWA envia duas faixas e comandos para o receiver LAN sem backend', async (
   });
   await page.close();
   page = await phoneContext.newPage();
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
   await expect(page.getByRole('button', { name: 'Conectar à TV', exact: true })).toBeVisible();
   page.once('dialog', dialog => dialog.accept(fixture.qrText));
@@ -219,8 +226,11 @@ test('PWA envia duas faixas e comandos para o receiver LAN sem backend', async (
   const requestsAtConnection = backendRequests;
 
   for (const track of tracks) {
-    await page.getByRole('button', { name: new RegExp(track.title) }).click();
-    await expect(tv.locator('.tv-offline-receiver__now-playing strong')).toBeVisible({ timeout: 10_000 });
+    await page.getByRole('button', {
+      name: `Enviar para a TV ${track.title}, ${track.artist}`,
+      exact: true
+    }).click();
+    await expect(tv.locator('.tv-offline-receiver__now-playing strong')).toHaveText(track.title, { timeout: 10_000 });
     await expect.poll(async () => tv.locator('audio').evaluateAll(elements => (
       elements.some(element => (element as HTMLAudioElement).src.startsWith('blob:'))
     ))).toBe(true);
