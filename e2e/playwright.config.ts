@@ -47,7 +47,12 @@ export default defineConfig({
       name: 'desktop-chromium',
       use: {
         browserName: 'chromium',
-        viewport: { width: 1440, height: 900 }
+        viewport: { width: 1440, height: 900 },
+        launchOptions: {
+          args: [
+            '--disable-features=BlockInsecurePrivateNetworkRequests,PrivateNetworkAccessSendPreflights,PrivateNetworkAccessRespectPreflightResults,LocalNetworkAccessChecks'
+          ]
+        }
       }
     }
   ]
