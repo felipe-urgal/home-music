@@ -13,6 +13,7 @@ async function login(page: Page, url: string) {
   await page.getByLabel('Usuário', { exact: true }).fill(username);
   await page.getByLabel('Senha', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
+  await expect(page.locator('.app-shell')).toBeVisible();
 }
 
 async function seedOfflineTracks(page: Page, titles: string[]) {
