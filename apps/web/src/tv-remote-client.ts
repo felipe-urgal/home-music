@@ -1,9 +1,10 @@
-import { hasTvRemoteCrossfadePair, isTvRemoteCrossfadeSeconds } from '@home-music/shared/tv-remote';
+import { hasTvRemoteCrossfadePair, isTvRemoteCrossfadeSeconds, isTvRemoteSignal } from '@home-music/shared/tv-remote';
 import type {
   TvRemoteCommand,
   TvRemoteEvent,
   TvRemotePlaybackSnapshot,
-  TvRemoteSessionSummary
+  TvRemoteSessionSummary,
+  TvRemoteSignal
 } from '@home-music/shared/tv-remote';
 import { apiFetch } from './api-client';
 
@@ -66,6 +67,15 @@ export async function sendTvRemoteCommand(sessionId: string, command: TvRemoteCo
   await expectEmpty(response, 'Não foi possível enviar o comando.');
 }
 
+export async function sendTvRemoteSignal(sessionId: string, signal: TvRemoteSignal): Promise<void> {
+  const response = await apiFetch(`${sessionsPath}/${encodeURIComponent(sessionId)}/signals`, {
+    method: 'POST',
+    headers: mutationHeaders,
+    body: JSON.stringify(signal)
+  });
+  await expectEmpty(response, 'Não foi possível sinalizar a conexão com a TV.');
+}
+
 export async function closeTvRemoteSession(sessionId: string): Promise<void> {
   const response = await apiFetch(`${sessionsPath}/${encodeURIComponent(sessionId)}`, {
     method: 'DELETE',
@@ -82,6 +92,7 @@ export type TvRemoteEventHandlers = {
   onCommand?: (command: TvRemoteCommand, eventId: number) => void;
   onSnapshot?: (snapshot: TvRemotePlaybackSnapshot, eventId: number) => void;
   onRemoteConnected?: (eventId: number) => void;
+  onSignal?: (signal: TvRemoteSignal, eventId: number) => void;
   onClosed?: (reason: Extract<TvRemoteEvent, { type: 'closed' }>['data']['reason'], eventId: number) => void;
   onTransportStatus?: (status: TvRemoteTransportStatus) => void;
   onError?: (error: unknown) => void;
@@ -136,6 +147,12 @@ export function openTvRemoteEvents(sessionId: string, handlers: TvRemoteEventHan
       event as MessageEvent<string>,
       (_data, eventId) => handlers.onRemoteConnected?.(eventId)
     );
+  });
+  source.addEventListener('signal', event => {
+    handle<TvRemoteSignal>(event as MessageEvent<string>, (signal, eventId) => {
+      if (!isTvRemoteSignal(signal)) return;
+      handlers.onSignal?.(signal, eventId);
+    });
   });
   source.addEventListener('closed', event => {
     handle<Extract<TvRemoteEvent, { type: 'closed' }>['data']>(

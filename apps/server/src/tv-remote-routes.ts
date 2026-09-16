@@ -1,4 +1,4 @@
-import { hasTvRemoteCrossfadePair, isTvRemoteCrossfadeSeconds } from '@home-music/shared/tv-remote';
+import { hasTvRemoteCrossfadePair, isTvRemoteCrossfadeSeconds, isTvRemoteSignal } from '@home-music/shared/tv-remote';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { TvRemoteCommand, TvRemoteEvent, TvRemotePlaybackSnapshot } from '@home-music/shared/tv-remote';
 import type { TvRemoteSessionManager } from './tv-remote-session-manager.js';
@@ -120,6 +120,15 @@ export function registerTvRemoteRoutes(app: FastifyInstance, manager: TvRemoteSe
     const commandEventId = manager.publishCommand(ownerId, sessionId, command);
     if (!commandEventId) return reply.code(404).send(missing);
     return reply.code(202).send(command.type === 'set-crossfade' ? { commandEventId } : undefined);
+  });
+
+  app.post<SessionParams>('/api/tv-remote/sessions/:sessionId/signals', options, async (request, reply) => {
+    const ownerId = request.user!.id;
+    const sessionId = request.params.sessionId;
+    if (!manager.get(ownerId, sessionId)) return reply.code(404).send(missing);
+    if (!isTvRemoteSignal(request.body)) return reply.code(400).send({ error: 'Sinalização WebRTC inválida.' });
+    if (!manager.publishSignal(ownerId, sessionId, request.body)) return reply.code(404).send(missing);
+    return reply.code(202).send();
   });
 
   app.delete<SessionParams>('/api/tv-remote/sessions/:sessionId', options, async (request, reply) => {
