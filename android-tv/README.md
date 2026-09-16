@@ -16,6 +16,8 @@ A documentação funcional e de compatibilidade fica em [`../docs/android-tv.md`
 - opção nativa **Adicionar à tela inicial** quando o launcher suporta pin shortcut;
 - URL padrão `https://home-music.tail6ab100.ts.net/` pré-preenchida e persistida em `SharedPreferences`;
 - o servidor é carregado com `?tv=1`, ativando a experiência dedicada para TV no frontend.
+- serviço LAN efêmero com QR/challenge/join e signaling autenticado;
+- receiver offline web empacotado no APK e servido somente por loopback.
 
 ## Build local
 
@@ -26,7 +28,9 @@ Requisitos:
 - Gradle 8.10.2.
 
 ```bash
-gradle -p android-tv :app:assembleDebug
+npm run build -w @home-music/shared
+npm run build:tv-receiver -w @home-music/web
+gradle -p android-tv :app:testDebugUnitTest :app:assembleDebug :app:lintDebug
 ```
 
 APK:
@@ -35,7 +39,7 @@ APK:
 android-tv/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-O workflow `.github/workflows/android-tv.yml` executa o mesmo build mais `lintDebug` e publica o APK como artifact `home-music-tv-debug-apk`.
+O workflow `.github/workflows/android-tv.yml` executa esses gates, confere `tv-offline-receiver.html` e bundles dentro do APK e publica `home-music-tv-debug-apk`.
 
 ## Instalação de teste
 
@@ -65,4 +69,4 @@ A chave privada não deve ser commitada. Preserve um backup seguro do keystore u
 
 `android-tv/` fica fora dos workspaces npm. Alterações normais no servidor, PWA e frontend não dependem do Gradle/Android SDK.
 
-A validação no BTV 11 e os itens restantes estão na issue #392.
+A validação automatizada não substitui o BTV 11. Para offline total, testar com WAN e servidor desligados, duas faixas já baixadas, comandos P2P, regeneração/expiração do QR, perda de Wi-Fi, mudança de IP e recuperação online. Registrar versões e evidências na issue #422.

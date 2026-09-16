@@ -75,6 +75,7 @@ export function applyTvRemotePlayerCommand(
     previous: controls.previous,
     next: controls.next,
     seekBy: deltaSeconds => controls.seek(clampTvSeek(playback.currentTime, playback.duration, deltaSeconds)),
+    seekTo: seconds => controls.seek(playback.duration > 0 ? Math.min(seconds, playback.duration) : seconds),
     toggleShuffle: controls.toggleShuffle,
     cycleRepeatMode: controls.cycleRepeatMode,
     playTrack: controls.playTrack,

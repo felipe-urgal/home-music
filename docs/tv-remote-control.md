@@ -34,6 +34,8 @@ O snapshot publicado pela TV contém `trackId`, título, artista, estado de repr
 
 Eventos `signal` carregam somente sinalização WebRTC validada (`offer`, `answer` e ICE). Bytes de áudio não entram no SSE nem nas rotas REST.
 
+No modo LAN, a mesma interface de sessão adapta o polling HTTP local. Após o DataChannel abrir, comandos, snapshots e mídia usam o peer comum. Frames textuais são versionados e deduplicados; mídia permanece em frames de controle próprios + chunks binários com backpressure.
+
 ## Presença e heartbeat
 
 A TV publica mudanças materiais no máximo uma vez por segundo e também envia heartbeat periódico a cada 15 segundos. No servidor, a sessão expira quando a TV deixa de atualizar o heartbeat por 60 segundos.
@@ -90,12 +92,12 @@ O E2E `e2e/tests/tv-remote-control.spec.ts` usa dois contextos de navegador e va
 
 O E2E `e2e/tests/tv-offline-cast.spec.ts` salva uma faixa real no cache offline do celular, estabelece WebRTC entre os dois contexts, envia a faixa e confirma que a TV termina reproduzindo uma fonte `blob:` enquanto o celular permanece sem `<audio>`.
 
-O CI executa os dois cenários no gate **TV remote control E2E** depois do Mobile crossfade E2E.
+O CI executa esses cenários e o E2E `tv-offline-lan.spec.ts`, que bloqueia `/api/*` durante a sessão LAN e usa o receiver dedicado do APK.
 
 ## Limitações e validação física
 
 O fluxo usa uma única instância de servidor e não foi projetado para distribuição horizontal sem estado compartilhado ou sticky session. A sessão é transitória e não sobrevive a restart.
 
-A transmissão de downloads ainda precisa do servidor Home Music alcançável para autenticação e sinalização. Pareamento totalmente local/offline, TURN e streaming progressivo não fazem parte desta primeira versão.
+O fluxo online de transmissão ainda usa o servidor para autenticação e sinalização. O modo LAN é uma ação explícita separada, exige PWA/downloads previamente instalados, mesma rede local e suporte do navegador a Local Network Access. TURN, redes diferentes e streaming progressivo permanecem fora de escopo.
 
 Testes automatizados não substituem validação no BTV 11 real. QR/câmera, legibilidade à distância, foco por D-pad, overscan, WebRTC/DataChannel no GeckoView, consumo de memória e comportamento com perda de internet ainda precisam ser conferidos em hardware.

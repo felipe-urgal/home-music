@@ -29,6 +29,10 @@
     "./tv-remote": {
       "types": "./src/tv-remote.ts",
       "default": "./dist/tv-remote.js"
+    },
+    "./tv-lan-remote": {
+      "types": "./src/tv-lan-remote.ts",
+      "default": "./dist/tv-lan-remote.js"
     }
   },
   "scripts": {

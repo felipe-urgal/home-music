@@ -42,6 +42,7 @@ O workflow principal promoveu alguns cenários direcionados a gates obrigatório
 
 - `tests/crossfade-mobile.spec.ts --project=mobile-chromium`;
 - `tests/tv-remote-control.spec.ts` + `tests/tv-offline-cast.spec.ts --project=desktop-chromium`;
+- `tests/tv-offline-lan.spec.ts --project=desktop-chromium`;
 - `tests/personal-data-import.spec.ts`;
 - `tests/admin-library-assistant.spec.ts --project=desktop-chromium` com o flag de fixture correspondente.
 
@@ -68,6 +69,8 @@ A lista executável continua sendo `.github/workflows/ci.yml`; este README deve 
 - um dos decks da TV termina usando URL `blob:`, comprovando adoção da mídia recebida em vez de um player paralelo no celular.
 
 Os E2Es não simulam câmera nem decodificam o QR. A leitura física do QR e o comportamento do GeckoView/WebRTC no BTV permanecem na homologação em hardware. Também não criam uma segunda conta apenas para repetir ownership: isolamento de usuário é coberto pelos testes HTTP reais das rotas remotas.
+
+`tv-offline-lan.spec.ts` usa o receiver dedicado gerado para o APK e uma fixture LAN compatível com challenge/join HMAC e signaling. Depois de pré-semear Cache Storage, derruba todas as respostas `/api/*`, força o cold start offline do PWA, abre WebRTC/DataChannel real, envia duas faixas e confirma fonte `blob:` na TV. O teste também fixa o contador de tentativas ao backend depois da conexão: playback e troca de faixa não podem acrescentar requests Home Music.
 
 ## Quando E2E é necessário
 

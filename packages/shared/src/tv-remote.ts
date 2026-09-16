@@ -6,6 +6,7 @@ export type TvRemoteCommand =
   | { type: 'previous' }
   | { type: 'next' }
   | { type: 'seek'; deltaSeconds: -10 | 10 }
+  | { type: 'seek-to'; seconds: number }
   | { type: 'toggle-shuffle' }
   | { type: 'cycle-repeat' }
   | { type: 'play-track'; trackId: string };

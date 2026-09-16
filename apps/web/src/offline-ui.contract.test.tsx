@@ -42,6 +42,10 @@ describe('offline library UX contract', () => {
         playing={false}
         hasNext={false}
         totalBytes={records.reduce((total, item) => total + item.size, 0)}
+        tvState="disconnected"
+        tvMessage={null}
+        onTvConnect={() => undefined}
+        onTvDisconnect={() => undefined}
         onOpenPlayer={() => undefined}
         onTogglePlay={() => undefined}
         onNext={() => undefined}
@@ -52,6 +56,7 @@ describe('offline library UX contract', () => {
       />
     );
 
+    expect(html).toContain('Conectar à TV');
     expect(html).toContain('Tocar Faixa 99');
     expect(html).not.toContain('Tocar Faixa 100,');
     expect(html).toContain('Mostrar mais 100 músicas');

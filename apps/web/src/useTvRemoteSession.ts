@@ -5,9 +5,7 @@ import { isTvMode } from './tv-mode';
 import {
   closeTvRemoteSession,
   createTvRemoteSession,
-  openTvRemoteEvents,
   publishTvRemoteStatus,
-  sendTvRemoteSignal,
   type TvRemoteTransportStatus
 } from './tv-remote-client';
 import {
@@ -18,6 +16,7 @@ import {
 import { createTvRemoteMediaEndpoint, type TvRemoteMediaEndpoint } from './tv-remote-media';
 import { clearTvRemoteMediaSources, setTvRemoteMediaSource } from './tv-remote-media-source';
 import { createTvRemotePeerController } from './tv-remote-peer';
+import { createServerTvRemoteSessionTransport } from './tv-remote-session-transport';
 import { requestTvRemoteTrack } from './tv-remote-track-request';
 import { createTvRemoteStatusPublisher } from './tv-remote-status-publisher';
 
@@ -135,9 +134,10 @@ export function useTvRemoteSession(options: UseTvRemoteSessionOptions) {
   useEffect(() => {
     if (!sessionId) return;
     let mediaEndpoint: TvRemoteMediaEndpoint | null = null;
+    const transportFacade = createServerTvRemoteSessionTransport(sessionId);
     const peer = createTvRemotePeerController({
       role: 'tv',
-      sendSignal: signal => sendTvRemoteSignal(sessionId, signal),
+      sendSignal: signal => transportFacade.sendSignal(signal),
       onChannel: channel => {
         mediaEndpoint?.close();
         mediaEndpoint = createTvRemoteMediaEndpoint(channel, {
@@ -161,7 +161,7 @@ export function useTvRemoteSession(options: UseTvRemoteSessionOptions) {
       setOpen(false);
     };
 
-    const stopEvents = openTvRemoteEvents(sessionId, {
+    const stopEvents = transportFacade.subscribeEvents({
       onRemoteConnected: markConnected,
       onSignal: signal => {
         void peer.handleSignal(signal).catch(() => undefined);
@@ -211,6 +211,7 @@ export function useTvRemoteSession(options: UseTvRemoteSessionOptions) {
       publisher.stop();
       publishChangedRef.current = null;
       stopEvents();
+      transportFacade.close();
       window.clearInterval(heartbeat);
       mediaEndpoint?.close();
       peer.close();

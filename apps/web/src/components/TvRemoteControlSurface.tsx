@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { OfflineDownloadRecord } from '../offline-downloads';
-import { openTvRemoteEvents, sendTvRemoteSignal } from '../tv-remote-client';
 import { createTvRemoteMediaEndpoint, type TvRemoteMediaEndpoint } from '../tv-remote-media';
 import { readTvRemoteOfflineMedia } from '../tv-remote-offline-media';
 import { createTvRemotePeerController, type TvRemotePeerState } from '../tv-remote-peer';
+import { createServerTvRemoteSessionTransport } from '../tv-remote-session-transport';
 import { registerTvRemoteTrackPreflight } from '../tv-remote-track-preflight';
 import { TvRemoteControlScreen } from './TvRemoteControlScreen';
 import '../tv-remote-offline-cast.css';
@@ -39,9 +39,10 @@ export function TvRemoteControlSurface({ sessionId, username, offlineRecords }: 
       if (!disposed) setPeerState(next);
     };
 
+    const transport = createServerTvRemoteSessionTransport(sessionId);
     const peer = createTvRemotePeerController({
       role: 'remote',
-      sendSignal: signal => sendTvRemoteSignal(sessionId, signal),
+      sendSignal: signal => transport.sendSignal(signal),
       onChannel: channel => {
         mediaEndpoint?.close();
         mediaEndpoint = createTvRemoteMediaEndpoint(channel);
@@ -61,25 +62,26 @@ export function TvRemoteControlSurface({ sessionId, username, offlineRecords }: 
       void peer.start().catch(() => undefined);
     };
 
-    const stopEvents = openTvRemoteEvents(sessionId, {
+    const stopSignals = transport.subscribeSignals(
+      signal => {
+        if (!eventStreamReady) return;
+        return peer.handleSignal(signal);
+      },
+      undefined,
       // O servidor envia o replay antes de `ready`. O celular é sempre o initiator,
       // então ignora sinalização antiga de uma conexão anterior e cria uma offer nova
       // somente quando alcançou a borda ao vivo do stream.
-      onReady: () => {
+      () => {
         eventStreamReady = true;
         startPeer();
       },
-      onSignal: signal => {
-        if (!eventStreamReady) return;
-        void peer.handleSignal(signal).catch(() => undefined);
-      },
-      onClosed: () => {
+      () => {
         updatePeerState('closed');
         mediaEndpoint?.close();
         mediaEndpoint = null;
         mediaEndpointRef.current = null;
       }
-    });
+    );
 
     const unregisterPreflight = registerTvRemoteTrackPreflight(sessionId, async trackId => {
       if (!downloadedIdsRef.current.has(trackId)) return;
@@ -126,7 +128,8 @@ export function TvRemoteControlSurface({ sessionId, username, offlineRecords }: 
       disposed = true;
       if (clearStatusTimer !== null) window.clearTimeout(clearStatusTimer);
       unregisterPreflight();
-      stopEvents();
+      stopSignals();
+      transport.close();
       mediaEndpoint?.close();
       mediaEndpointRef.current = null;
       peer.close();

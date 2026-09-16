@@ -7,6 +7,7 @@ def releaseStorePassword = System.getenv('ANDROID_TV_KEYSTORE_PASSWORD')
 def releaseKeyAlias = System.getenv('ANDROID_TV_KEY_ALIAS')
 def releaseKeyPassword = System.getenv('ANDROID_TV_KEY_PASSWORD')
 def hasReleaseSigning = releaseStoreFile && releaseStorePassword && releaseKeyAlias && releaseKeyPassword
+def receiverDistDir = file("${rootProject.projectDir}/../apps/web/dist-tv-receiver")
 
 android {
     namespace 'com.homemusic.tv'
@@ -56,9 +57,20 @@ android {
         }
     }
 
+    sourceSets {
+        main {
+            assets.srcDir receiverDistDir
+        }
+    }
+
     compileOptions {
+        coreLibraryDesugaringEnabled true
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
+    }
+
+    testOptions {
+        unitTests.returnDefaultValues = true
     }
 
     lint {
@@ -67,8 +79,29 @@ android {
     }
 }
 
+tasks.register('verifyTvOfflineReceiverAssets') {
+    inputs.dir(receiverDistDir)
+    doLast {
+        def entry = new File(receiverDistDir, 'tv-offline-receiver.html')
+        if (!entry.isFile()) {
+            throw new GradleException("Receiver offline ausente: execute npm run build:tv-receiver -w @home-music/web antes do build Android.")
+        }
+        def assetDir = new File(receiverDistDir, 'assets')
+        if (!assetDir.isDirectory() || assetDir.listFiles() == null || assetDir.listFiles().length == 0) {
+            throw new GradleException('Receiver offline inválido: bundle assets/ não foi gerado.')
+        }
+    }
+}
+
+tasks.named('preBuild').configure {
+    dependsOn tasks.named('verifyTvOfflineReceiverAssets')
+}
+
 dependencies {
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.3'
     // Bundle a modern browser engine so old/custom BTV WebView builds do not
     // determine whether the Home Music frontend can render.
     implementation 'org.mozilla.geckoview:geckoview:126.0.20240526221752'
+    implementation 'com.google.zxing:core:3.5.3'
+    testImplementation 'junit:junit:4.13.2'
 }

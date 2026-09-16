@@ -4,12 +4,20 @@ on:
   pull_request:
     paths:
       - 'android-tv/**'
+      - 'apps/web/**'
+      - 'packages/shared/**'
+      - 'package.json'
+      - 'package-lock.json'
       - '.github/workflows/android-tv.yml'
   push:
     branches:
       - main
     paths:
       - 'android-tv/**'
+      - 'apps/web/**'
+      - 'packages/shared/**'
+      - 'package.json'
+      - 'package-lock.json'
       - '.github/workflows/android-tv.yml'
   workflow_dispatch:
 
@@ -19,11 +27,26 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
 
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          package-manager-cache: false
+
+      - name: Install web dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Build offline TV receiver
+        run: |
+          npm run build -w @home-music/shared
+          npm run build:tv-receiver -w @home-music/web
 
       - name: Setup Java
         uses: actions/setup-java@v6
@@ -44,8 +67,11 @@ jobs:
         with:
           gradle-version: '8.10.2'
 
-      - name: Build and lint Home Music TV
-        run: gradle -p android-tv :app:assembleDebug :app:lintDebug --stacktrace
+      - name: Test, build and lint Home Music TV
+        run: gradle -p android-tv :app:testDebugUnitTest :app:assembleDebug :app:lintDebug --stacktrace
+
+      - name: Verify embedded receiver
+        run: unzip -l android-tv/app/build/outputs/apk/debug/app-debug.apk | grep -E 'assets/(tv-offline-receiver\.html|assets/.+\.(js|css))'
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v7
