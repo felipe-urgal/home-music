@@ -32,6 +32,8 @@ export function TvOfflineReceiver() {
   const peerRef = useRef<TvRemotePeerController | null>(null);
   const mediaRef = useRef<TvRemoteMediaEndpoint | null>(null);
   const player = useCrossfadeAudioPlayer(tracks, true, true, false, { offlineMode: true });
+  const playTrackRef = useRef(player.playTrack);
+  playTrackRef.current = player.playTrack;
   const readyTrack = useMemo(
     () => readyTrackId ? tracks.find(track => track.id === readyTrackId) ?? null : null,
     [readyTrackId, tracks]
@@ -86,13 +88,15 @@ export function TvOfflineReceiver() {
             mediaRef.current?.close();
             mediaRef.current = createTvRemoteMediaEndpoint(channel, {
               onReceive: media => {
+                const track = receivedTrack(media.trackId);
                 setTvRemoteMediaSource(media.trackId, media.blob);
                 setTracks(current => {
-                  if (current.some(track => track.id === media.trackId)) return current;
-                  return [...current, receivedTrack(media.trackId)];
+                  const withoutPrevious = current.filter(item => item.id !== media.trackId);
+                  return [...withoutPrevious, track];
                 });
                 setReadyTrackId(media.trackId);
-                setDetail('Música recebida. Pronta para tocar sem servidor.');
+                setDetail('Música recebida. Iniciando reprodução na TV…');
+                playTrackRef.current(track, [track]);
               }
             });
           }

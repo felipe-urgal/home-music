@@ -12,6 +12,8 @@ import { Artwork } from './Artwork';
 import { MiniPlayer } from './MiniPlayer';
 import { ResponsiveState } from './ResponsiveState';
 
+type TvLanState = 'disconnected' | 'connecting' | 'connected' | 'sending';
+
 type OfflineLibraryScreenProps = {
   records: OfflineDownloadRecord[];
   collections: OfflineCollectionSummary[];
@@ -20,6 +22,10 @@ type OfflineLibraryScreenProps = {
   playing: boolean;
   hasNext: boolean;
   totalBytes: number;
+  tvState: TvLanState;
+  tvMessage: string | null;
+  onTvConnect: () => void;
+  onTvDisconnect: () => void;
   onOpenPlayer: () => void;
   onTogglePlay: () => void;
   onNext: () => void;
@@ -50,6 +56,10 @@ export function OfflineLibraryScreen({
   playing,
   hasNext,
   totalBytes,
+  tvState,
+  tvMessage,
+  onTvConnect,
+  onTvDisconnect,
   onOpenPlayer,
   onTogglePlay,
   onNext,
@@ -64,6 +74,9 @@ export function OfflineLibraryScreen({
   const individualTracks = individualRecords.map(record => record.track);
   const visibleIndividualRecords = individualRecords.slice(0, visibleIndividualCount);
   const remainingIndividualCount = Math.max(0, individualRecords.length - visibleIndividualRecords.length);
+  const tvConnected = tvState === 'connected' || tvState === 'sending';
+  const tvBusy = tvState === 'connecting' || tvState === 'sending';
+  const playVerb = tvConnected ? 'Enviar para a TV' : 'Tocar';
 
   return (
     <>
@@ -78,7 +91,21 @@ export function OfflineLibraryScreen({
 
       <div className="offline-banner" role="status">
         <Download aria-hidden="true" />
-        <span>Modo offline. O espaço acima conta cada música física uma única vez, mesmo quando ela pertence a várias coleções.</span>
+        <span>{tvMessage ?? 'Modo offline. O espaço acima conta cada música física uma única vez, mesmo quando ela pertence a várias coleções.'}</span>
+        <button
+          className="secondary-action"
+          type="button"
+          disabled={tvBusy}
+          onClick={tvConnected ? onTvDisconnect : onTvConnect}
+        >
+          {tvState === 'connecting'
+            ? 'Conectando…'
+            : tvState === 'sending'
+              ? 'Enviando…'
+              : tvConnected
+                ? 'Desconectar TV'
+                : 'Conectar à TV'}
+        </button>
       </div>
 
       {collections.length > 0 && (
@@ -100,7 +127,7 @@ export function OfflineLibraryScreen({
                     type="button"
                     disabled={!first}
                     onClick={() => first && onPlayTrack(first, availableTracks)}
-                    aria-label={first ? `Tocar coleção offline ${collection.reference.name}` : `Coleção offline ${collection.reference.name} sem músicas disponíveis`}
+                    aria-label={first ? `${playVerb} coleção offline ${collection.reference.name}` : `Coleção offline ${collection.reference.name} sem músicas disponíveis`}
                   >
                     <span className="offline-collection-card__icon"><CollectionIcon aria-hidden="true" /></span>
                     <span className="offline-collection-card__copy">
@@ -140,7 +167,7 @@ export function OfflineLibraryScreen({
                     className="library-track__main"
                     type="button"
                     aria-current={isCurrent ? 'true' : undefined}
-                    aria-label={`Tocar ${track.title}, ${track.artist || 'Artista desconhecido'}`}
+                    aria-label={`${playVerb} ${track.title}, ${track.artist || 'Artista desconhecido'}`}
                     onClick={() => onPlayTrack(track, individualTracks)}
                   >
                     <Artwork track={fallbackTrack(track)} />
@@ -148,7 +175,7 @@ export function OfflineLibraryScreen({
                       <strong>{track.title}</strong>
                       <small>{track.artist} · {formatOfflineBytes(record.size)}</small>
                     </span>
-                    {isCurrent && playing ? <span className="playing-indicator" aria-hidden="true">▶</span> : <Play className="library-track__action" aria-hidden="true" />}
+                    {isCurrent && playing && !tvConnected ? <span className="playing-indicator" aria-hidden="true">▶</span> : <Play className="library-track__action" aria-hidden="true" />}
                   </button>
                   <button
                     className="track-action"
