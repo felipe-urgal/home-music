@@ -131,6 +131,84 @@ public final class LanPairingSessionTest {
     }
 
     @Test
+    public void requestAuthorizationMatchesWebClientVector() {
+        LanPairingSession.Challenge vectorChallenge = new LanPairingSession.Challenge(
+            "session_1234567890abcdef",
+            "client_1234567890abcdef",
+            "tvnonce_1234567890abcdef",
+            1_800_000_030_000L
+        );
+        LanPairingSession.JoinResult vectorSession = new LanPairingSession.JoinResult(
+            "token_1234567890abcdef1234567890abcdef",
+            1_800_000_120_000L
+        );
+        String body = "{\"messageId\":\"message_1234567890abcdef\",\"from\":\"remote\",\"signal\":{\"from\":\"remote\",\"type\":\"description\",\"description\":{\"type\":\"offer\",\"sdp\":\"v=0\\r\\n\"}}}";
+
+        assertEquals(
+            "HomeMusic token_1234567890abcdef1234567890abcdef.1800000000000.request_1234567890abcdef.I8zKt0Vy5QC006hebmXRWDRLMiVZmzf8xhibdqTxSGY",
+            LanPairingSession.computeRequestAuthorization(
+                "0123456789abcdef0123456789abcdef",
+                vectorChallenge,
+                vectorSession,
+                "POST",
+                "/signals?role=remote",
+                body.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                1_800_000_000_000L,
+                "request_1234567890abcdef"
+            )
+        );
+    }
+
+    @Test
+    public void remoteRequestSignatureRejectsBearerTamperingAndReplay() {
+        FakeClock clock = new FakeClock();
+        LanPairingSession session = new LanPairingSession(new SecureRandom(), clock);
+        String secret = session.pairingSecret();
+        LanPairingSession.Challenge challenge = session.createChallenge("client_nonce_request_1234");
+        LanPairingSession.JoinResult joined = session.join(
+            challenge.clientNonce,
+            challenge.tvNonce,
+            challenge.expiresAt,
+            LanPairingSession.computeProof(secret, challenge)
+        );
+        assertNotNull(joined);
+
+        String target = "/signals?role=remote";
+        byte[] body = "{}".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        String authorization = LanPairingSession.computeRequestAuthorization(
+            secret,
+            challenge,
+            joined,
+            "POST",
+            target,
+            body,
+            clock.now,
+            "request_nonce_1234567890"
+        );
+
+        assertFalse(session.authorizeRemoteRequest(
+            "Bearer " + joined.sessionToken,
+            "POST",
+            target,
+            body
+        ));
+        assertTrue(session.authorizeRemoteRequest(authorization, "POST", target, body));
+        assertFalse(session.authorizeRemoteRequest(authorization, "POST", target, body));
+
+        String tampered = LanPairingSession.computeRequestAuthorization(
+            secret,
+            challenge,
+            joined,
+            "POST",
+            target,
+            body,
+            clock.now,
+            "request_nonce_abcdefghijk"
+        );
+        assertFalse(session.authorizeRemoteRequest(tampered, "POST", target + "&cursor=1", body));
+    }
+
+    @Test
     public void addressResolverSelectsOnlyRfc1918Ipv4AndPrioritizesLanInterfaces() throws Exception {
         List<InetAddress> addresses = Arrays.asList(
             InetAddress.getByName("8.8.8.8"),

@@ -5,6 +5,7 @@ import {
 } from '@home-music/shared/tv-lan-remote';
 import {
   computeTvLanJoinProof,
+  computeTvLanRequestAuthorization,
   createTvLanRemoteSignaling,
   tvLanRequestErrorMessage
 } from './tv-lan-remote-client';
@@ -15,6 +16,7 @@ const CLIENT_NONCE = 'client_1234567890abcdef';
 const TV_NONCE = 'tvnonce_1234567890abcdef';
 const SECRET = '0123456789abcdef0123456789abcdef';
 const SESSION_TOKEN = 'token_1234567890abcdef1234567890abcdef';
+const REQUEST_NONCE = 'request_1234567890abcdef';
 
 function qrText() {
   return `home-music://tv-lan?version=${TV_LAN_REMOTE_VERSION}&host=192.168.1.40&port=43123&session=${SESSION_ID}&secret=${SECRET}&expires=${NOW + 60_000}`;
@@ -41,6 +43,33 @@ describe('TV LAN remote client', () => {
     expect(value).toBe('GeNEINzEVdCHdYHLDcYHjtpsM77NmoLlYvRwvDO9dHQ');
   });
 
+  it('computes the Android-compatible per-request authorization', async () => {
+    const body = JSON.stringify({
+      messageId: 'message_1234567890abcdef',
+      from: 'remote',
+      signal: {
+        from: 'remote',
+        type: 'description',
+        description: { type: 'offer', sdp: 'v=0\r\n' }
+      }
+    });
+
+    const authorization = await computeTvLanRequestAuthorization({
+      secret: SECRET,
+      challenge: challenge(),
+      session: { sessionToken: SESSION_TOKEN, expiresAt: NOW + 120_000 },
+      method: 'POST',
+      target: '/signals?role=remote',
+      body,
+      timestamp: NOW,
+      nonce: REQUEST_NONCE
+    });
+
+    expect(authorization).toBe(
+      `HomeMusic ${SESSION_TOKEN}.${NOW}.${REQUEST_NONCE}.I8zKt0Vy5QC006hebmXRWDRLMiVZmzf8xhibdqTxSGY`
+    );
+  });
+
   it('classifies denied local-network access separately from an unreachable TV', () => {
     expect(tvLanRequestErrorMessage(new DOMException('denied', 'NotAllowedError'), 'denied'))
       .toContain('acesso à rede local foi negado');
@@ -48,7 +77,7 @@ describe('TV LAN remote client', () => {
       .toContain('Não foi possível alcançar a TV');
   });
 
-  it('pairs with challenge/join and publishes remote WebRTC signaling', async () => {
+  it('pairs with challenge/join and publishes remote WebRTC signaling with a one-request signature', async () => {
     const calls: Array<{ url: string; init?: RequestInit }> = [];
     const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
@@ -69,6 +98,7 @@ describe('TV LAN remote client', () => {
       fetchImpl: fetchImpl as typeof fetch,
       createClientNonce: () => CLIENT_NONCE,
       createMessageId: () => 'message_1234567890abcdef',
+      createRequestNonce: () => REQUEST_NONCE,
       now: () => NOW
     });
 
@@ -86,7 +116,7 @@ describe('TV LAN remote client', () => {
 
     expect(calls[2]?.url).toBe('http://192.168.1.40:43123/signals?role=remote');
     expect(calls[2]?.init?.headers).toMatchObject({
-      Authorization: `Bearer ${SESSION_TOKEN}`,
+      Authorization: `HomeMusic ${SESSION_TOKEN}.${NOW}.${REQUEST_NONCE}.I8zKt0Vy5QC006hebmXRWDRLMiVZmzf8xhibdqTxSGY`,
       'Content-Type': 'application/json'
     });
     expect(JSON.parse(String(calls[2]?.init?.body))).toEqual({
