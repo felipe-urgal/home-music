@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { parseTvLanQrText } from '@home-music/shared/tv-lan-remote';
 
 type BarcodeResult = { rawValue?: string };
 type BarcodeDetectorLike = { detect: (source: HTMLVideoElement) => Promise<BarcodeResult[]> };
@@ -22,17 +23,26 @@ function scannerErrorMessage(error: unknown) {
   return 'Não foi possível abrir a câmera. Cole o conteúdo do QR abaixo.';
 }
 
+function bridgeNonce() {
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
 export function TvLanQrScanner({ open, onDetected, onCancel }: TvLanQrScannerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const onDetectedRef = useRef(onDetected);
   const [manualValue, setManualValue] = useState('');
   const [cameraMessage, setCameraMessage] = useState<string | null>(null);
+  const [bridgeMessage, setBridgeMessage] = useState<string | null>(null);
   onDetectedRef.current = onDetected;
 
   useEffect(() => {
     if (!open) return;
     setManualValue('');
     setCameraMessage(null);
+    setBridgeMessage(null);
 
     const Detector = barcodeDetectorConstructor();
     if (!navigator.mediaDevices?.getUserMedia || !Detector || !window.isSecureContext) {
@@ -107,6 +117,56 @@ export function TvLanQrScanner({ open, onDetected, onCancel }: TvLanQrScannerPro
     if (value) onDetectedRef.current(value);
   };
 
+  const testIosBridge = () => {
+    const pairing = parseTvLanQrText(manualValue.trim());
+    if (!pairing) {
+      setBridgeMessage('Cole um QR válido e ainda não expirado antes de testar o bridge.');
+      return;
+    }
+
+    const bridgeOrigin = `http://${pairing.host}:${pairing.port}`;
+    const nonce = bridgeNonce();
+    let bridgeWindow: Window | null = null;
+    let timeout: number | null = null;
+    let finished = false;
+
+    const cleanup = () => {
+      window.removeEventListener('message', onMessage);
+      if (timeout !== null) window.clearTimeout(timeout);
+    };
+
+    const onMessage = (event: MessageEvent) => {
+      if (event.source !== bridgeWindow || event.origin !== bridgeOrigin) return;
+      const data = event.data as { type?: unknown; nonce?: unknown } | null;
+      if (!data || typeof data !== 'object') return;
+      if (data.type === 'home-music-lan-bridge-ready') {
+        setBridgeMessage('Bridge abriu no iOS. Enviando PING…');
+        bridgeWindow?.postMessage({ type: 'home-music-lan-bridge-ping', nonce }, bridgeOrigin);
+        return;
+      }
+      if (data.type === 'home-music-lan-bridge-pong' && data.nonce === nonce) {
+        finished = true;
+        cleanup();
+        setBridgeMessage('PONG recebido. window.open + postMessage funciona neste iPhone.');
+      }
+    };
+
+    window.addEventListener('message', onMessage);
+    bridgeWindow = window.open(`${bridgeOrigin}/bridge`, 'home-music-ios-lan-bridge');
+    if (!bridgeWindow) {
+      cleanup();
+      setBridgeMessage('O iOS bloqueou a abertura da página bridge.');
+      return;
+    }
+
+    setBridgeMessage('Página bridge aberta. Aguardando resposta…');
+    timeout = window.setTimeout(() => {
+      if (finished) return;
+      cleanup();
+      setBridgeMessage('Sem PONG. A página abriu, mas o canal window.opener/postMessage não voltou ao Home Music.');
+    }, 12_000);
+  };
+
   return (
     <div className="tv-lan-qr-overlay">
       <section className="tv-lan-qr-dialog" role="dialog" aria-modal="true" aria-labelledby="tv-lan-qr-title">
@@ -135,6 +195,10 @@ export function TvLanQrScanner({ open, onDetected, onCancel }: TvLanQrScannerPro
             rows={3}
           />
           <button className="primary-action" type="submit" disabled={!manualValue.trim()}>Conectar</button>
+          <button className="secondary-action" type="button" disabled={!manualValue.trim()} onClick={testIosBridge}>
+            Testar bridge iOS (spike)
+          </button>
+          {bridgeMessage && <p role="status">{bridgeMessage}</p>}
         </form>
       </section>
     </div>
