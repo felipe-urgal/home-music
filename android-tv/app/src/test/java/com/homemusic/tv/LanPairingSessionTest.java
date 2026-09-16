@@ -47,6 +47,26 @@ public final class LanPairingSessionTest {
     }
 
     @Test
+    public void establishedSessionKeepsReceiverBootstrapAliveBeyondPairingTtl() {
+        FakeClock clock = new FakeClock();
+        LanPairingSession session = new LanPairingSession(new SecureRandom(), clock);
+        String secret = session.pairingSecret();
+        LanPairingSession.Challenge challenge = session.createChallenge("client_nonce_receiver_123");
+        LanPairingSession.JoinResult joined = session.join(
+            challenge.clientNonce,
+            challenge.tvNonce,
+            challenge.expiresAt,
+            LanPairingSession.computeProof(secret, challenge)
+        );
+
+        assertNotNull(joined);
+        assertEquals(joined.expiresAt, session.receiverExpiresAt());
+        clock.now += LanPairingSession.PAIRING_TTL_MS + 1;
+        assertFalse(session.isClosed());
+        assertEquals(joined.expiresAt, session.receiverExpiresAt());
+    }
+
+    @Test
     public void invalidProofConsumesChallengeAndExpiredPairingClosesSession() {
         FakeClock clock = new FakeClock();
         LanPairingSession session = new LanPairingSession(new SecureRandom(), clock);

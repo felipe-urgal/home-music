@@ -60,6 +60,18 @@ describe('TV remote DataChannel protocol', () => {
       payload: { type: 'toggle-play' }
     })?.kind).toBe('command');
     expect(parseTvRemoteDataFrame({
+      version: TV_REMOTE_DATA_VERSION,
+      id: 'message_seek_to_123',
+      kind: 'command',
+      payload: { type: 'seek-to', seconds: 42.5 }
+    })?.kind).toBe('command');
+    expect(parseTvRemoteDataFrame({
+      version: TV_REMOTE_DATA_VERSION,
+      id: 'message_seek_to_bad',
+      kind: 'command',
+      payload: { type: 'seek-to', seconds: -1 }
+    })).toBeNull();
+    expect(parseTvRemoteDataFrame({
       version: 'old', id: 'message_1234567890', kind: 'command', payload: { type: 'toggle-play' }
     })).toBeNull();
     expect(parseTvRemoteDataFrame({

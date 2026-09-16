@@ -26,6 +26,25 @@ describe('TV remote transient media sources', () => {
     expect(getTvRemoteMediaSource('track-1')).toBe('blob:second');
   });
 
+  it('evicts the oldest transient source so long TV sessions stay memory bounded', () => {
+    vi.spyOn(URL, 'createObjectURL')
+      .mockReturnValueOnce('blob:one')
+      .mockReturnValueOnce('blob:two')
+      .mockReturnValueOnce('blob:three')
+      .mockReturnValueOnce('blob:four');
+    const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+
+    setTvRemoteMediaSource('track-1', new Blob(['one']));
+    setTvRemoteMediaSource('track-2', new Blob(['two']));
+    setTvRemoteMediaSource('track-3', new Blob(['three']));
+    setTvRemoteMediaSource('track-4', new Blob(['four']));
+
+    expect(getTvRemoteMediaSource('track-1')).toBeNull();
+    expect(getTvRemoteMediaSource('track-2')).toBe('blob:two');
+    expect(getTvRemoteMediaSource('track-4')).toBe('blob:four');
+    expect(revoke).toHaveBeenCalledWith('blob:one');
+  });
+
   it('clears every transient source', () => {
     vi.spyOn(URL, 'createObjectURL')
       .mockReturnValueOnce('blob:one')
