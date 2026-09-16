@@ -31,9 +31,15 @@ async function seedOfflineTracks(page: Page, titles: string[]) {
       const blob = await response.clone().blob();
       await cache.put(streamPath, response);
       records.push({ track, size: blob.size, mimeType: blob.type || 'audio/wav', downloadedAt: new Date().toISOString() });
+      Object.assign(track, { fixtureBytes: Array.from(new Uint8Array(await blob.arrayBuffer())), fixtureMimeType: blob.type || 'audio/wav' });
     }
     localStorage.setItem(`home-music:offline-tracks:v2:${encodeURIComponent(userId)}`, JSON.stringify(records));
-    return tracks.map(track => ({ id: String(track.id), title: String(track.title) }));
+    return tracks.map(track => ({
+      id: String(track.id),
+      title: String(track.title),
+      bytes: track.fixtureBytes as number[],
+      mimeType: String(track.fixtureMimeType)
+    }));
   }, titles);
 }
 
@@ -121,6 +127,17 @@ test('PWA envia duas faixas e comandos para o receiver LAN sem backend', async (
 
   let backendRequests = 0;
   await page.context().route('http://192.168.1.40:43123/**', fixture.route);
+  await page.context().route('**/offline-audio/**', route => {
+    const trackId = decodeURIComponent(new URL(route.request().url()).pathname.split('/').pop() || '');
+    const track = tracks.find(item => item.id === trackId);
+    return track
+      ? route.fulfill({ status: 200, contentType: track.mimeType, body: Buffer.from(track.bytes) })
+      : route.fulfill({ status: 404 });
+  });
+  await page.evaluate(async () => {
+    const registrations = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(registrations.map(registration => registration.unregister()));
+  });
   await page.context().route('**/api/**', route => { backendRequests += 1; return route.abort('connectionrefused'); });
   await page.addInitScript(() => Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false }));
   await page.reload();
