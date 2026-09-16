@@ -41,7 +41,7 @@ Esses comandos internos não substituem o nome canônico da suíte completa na r
 O workflow principal promoveu alguns cenários direcionados a gates obrigatórios. Atualmente executa:
 
 - `tests/crossfade-mobile.spec.ts --project=mobile-chromium`;
-- `tests/tv-remote-control.spec.ts --project=desktop-chromium`;
+- `tests/tv-remote-control.spec.ts` + `tests/tv-offline-cast.spec.ts --project=desktop-chromium`;
 - `tests/personal-data-import.spec.ts`;
 - `tests/admin-library-assistant.spec.ts --project=desktop-chromium` com o flag de fixture correspondente.
 
@@ -57,9 +57,17 @@ A lista executável continua sendo `.github/workflows/ci.yml`; este README deve 
 - rota mobile sem `<audio>`;
 - estado play/pause sincronizado entre TV e celular;
 - comando de próxima faixa;
-- seek +10 s.
+- seek +10 s;
+- navegação da biblioteca remota, paginação e foco.
 
-Esse E2E não simula câmera nem decodifica o QR. A leitura física do QR permanece na homologação BTV. Também não cria uma segunda conta apenas para repetir ownership: isolamento de usuário é coberto pelos testes HTTP reais de `tv-remote-routes.test.ts`.
+`tv-offline-cast.spec.ts` usa a mesma integração browser + Fastify em dois contexts, sem mock de WebRTC. O cenário salva uma faixa real da fixture no namespace offline do celular, aguarda o DataChannel, seleciona a faixa pela biblioteca remota e valida:
+
+- confirmação de envio direto no celular;
+- celular remoto continua sem `<audio>`;
+- título da TV muda para a faixa enviada;
+- um dos decks da TV termina usando URL `blob:`, comprovando adoção da mídia recebida em vez de um player paralelo no celular.
+
+Os E2Es não simulam câmera nem decodificam o QR. A leitura física do QR e o comportamento do GeckoView/WebRTC no BTV permanecem na homologação em hardware. Também não criam uma segunda conta apenas para repetir ownership: isolamento de usuário é coberto pelos testes HTTP reais das rotas remotas.
 
 ## Quando E2E é necessário
 

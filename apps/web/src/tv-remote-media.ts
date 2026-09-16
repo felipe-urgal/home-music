@@ -278,13 +278,12 @@ export function createTvRemoteMediaEndpoint(channel: RTCDataChannel, options: En
           sent = end;
           onProgress?.(sent, input.blob.size);
         }
-        sendControl({ type: 'media-complete', transferId });
       } catch (error) {
         sendControl({ type: 'media-cancel', transferId, reason: 'Envio interrompido.' });
         throw error;
       }
 
-      await new Promise<void>((resolve, reject) => {
+      const confirmation = new Promise<void>((resolve, reject) => {
         const timeout = scheduleTimeout(() => {
           if (pending?.transferId !== transferId) return;
           pending = null;
@@ -292,6 +291,10 @@ export function createTvRemoteMediaEndpoint(channel: RTCDataChannel, options: En
         }, ACK_TIMEOUT_MS);
         pending = { transferId, trackId: input.trackId, resolve, reject, timeout };
       });
+      if (!sendControl({ type: 'media-complete', transferId })) {
+        rejectPending(mediaError('A conexão P2P com a TV foi encerrada.'));
+      }
+      await confirmation;
     },
     cancel: reason => {
       if (pending) {

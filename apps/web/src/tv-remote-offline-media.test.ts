@@ -3,15 +3,26 @@ import { offlineAudioCacheName } from './offline-downloads';
 import { OFFLINE_USER_ID_KEY } from './offline-user';
 import { readTvRemoteOfflineMedia } from './tv-remote-offline-media';
 
+function createMemoryStorage(): Storage {
+  const values = new Map<string, string>();
+  return {
+    get length() { return values.size; },
+    clear() { values.clear(); },
+    getItem(key: string) { return values.get(key) ?? null; },
+    key(index: number) { return Array.from(values.keys())[index] ?? null; },
+    removeItem(key: string) { values.delete(key); },
+    setItem(key: string, value: string) { values.set(key, String(value)); }
+  };
+}
+
 describe('tv remote offline media reader', () => {
   beforeEach(() => {
-    window.localStorage.clear();
+    vi.stubGlobal('window', { localStorage: createMemoryStorage() });
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
-    window.localStorage.clear();
   });
 
   it('opens only the active user cache and reads the canonical cached stream request', async () => {

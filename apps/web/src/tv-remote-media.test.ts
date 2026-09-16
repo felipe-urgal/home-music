@@ -39,6 +39,12 @@ function pair() {
   return [left, right] as const;
 }
 
+const testSetTimeout = ((handler: () => void, timeout?: number) =>
+  globalThis.setTimeout(handler, timeout) as unknown as number) as typeof window.setTimeout;
+const testClearTimeout = ((handle?: number) =>
+  globalThis.clearTimeout(handle)) as typeof window.clearTimeout;
+const timerOptions = { setTimeout: testSetTimeout, clearTimeout: testClearTimeout };
+
 describe('tv remote media protocol', () => {
   it('accepts only bounded audio transfer controls', () => {
     expect(parseTvRemoteMediaControl({
@@ -60,11 +66,13 @@ describe('tv remote media protocol', () => {
     const received: Array<{ trackId: string; text: string; size: number }> = [];
     const progress: number[] = [];
     const receiver = createTvRemoteMediaEndpoint(receiverChannel as unknown as RTCDataChannel, {
+      ...timerOptions,
       onReceive: async media => {
         received.push({ trackId: media.trackId, text: await media.blob.text(), size: media.size });
       }
     });
     const sender = createTvRemoteMediaEndpoint(senderChannel as unknown as RTCDataChannel, {
+      ...timerOptions,
       createTransferId: () => 'transfer-1'
     });
     const payload = 'x'.repeat(TV_REMOTE_MEDIA_CHUNK_BYTES + 17);
@@ -81,6 +89,7 @@ describe('tv remote media protocol', () => {
   it('rejects oversized local media before writing to the channel', async () => {
     const [senderChannel] = pair();
     const sender = createTvRemoteMediaEndpoint(senderChannel as unknown as RTCDataChannel, {
+      ...timerOptions,
       createTransferId: () => 'transfer-1'
     });
     const fakeBlob = { size: TV_REMOTE_MEDIA_MAX_BYTES + 1, type: 'audio/mpeg' } as Blob;

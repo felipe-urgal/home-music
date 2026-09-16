@@ -83,8 +83,7 @@ test('WebRTC signaling rejects malformed or oversized messages without publishin
   const { inject, create, manager } = setup(t);
   const id = await create();
   const path = `${base}/${id}/signals`;
-  const invalid = [
-    null,
+  const invalid: InjectOptions['payload'][] = [
     {},
     { ...offer, from: 'other' },
     { ...offer, extra: true },

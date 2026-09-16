@@ -29,6 +29,8 @@ export function TvRemoteControlSurface({ sessionId, username, offlineRecords }: 
 
   useEffect(() => {
     let disposed = false;
+    let eventStreamReady = false;
+    let peerStarted = false;
     let clearStatusTimer: number | null = null;
     let mediaEndpoint: TvRemoteMediaEndpoint | null = null;
 
@@ -53,8 +55,24 @@ export function TvRemoteControlSurface({ sessionId, username, offlineRecords }: 
       }
     });
 
+    const startPeer = () => {
+      if (peerStarted || disposed) return;
+      peerStarted = true;
+      void peer.start().catch(() => undefined);
+    };
+
     const stopEvents = openTvRemoteEvents(sessionId, {
-      onSignal: signal => { void peer.handleSignal(signal).catch(() => undefined); },
+      // O servidor envia o replay antes de `ready`. O celular é sempre o initiator,
+      // então ignora sinalização antiga de uma conexão anterior e cria uma offer nova
+      // somente quando alcançou a borda ao vivo do stream.
+      onReady: () => {
+        eventStreamReady = true;
+        startPeer();
+      },
+      onSignal: signal => {
+        if (!eventStreamReady) return;
+        void peer.handleSignal(signal).catch(() => undefined);
+      },
       onClosed: () => {
         updatePeerState('closed');
         mediaEndpoint?.close();
@@ -103,8 +121,6 @@ export function TvRemoteControlSurface({ sessionId, username, offlineRecords }: 
         throw cause;
       }
     });
-
-    void peer.start().catch(() => undefined);
 
     return () => {
       disposed = true;
