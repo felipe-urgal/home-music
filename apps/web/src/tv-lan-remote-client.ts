@@ -121,12 +121,15 @@ function responseError(response: Response, fallback: string) {
 
 async function defaultLocalNetworkPermissionState(): Promise<PermissionState | null> {
   if (typeof navigator === 'undefined' || !navigator.permissions?.query) return null;
-  try {
-    const status = await navigator.permissions.query({ name: 'local-network-access' } as PermissionDescriptor);
-    return status.state;
-  } catch {
-    return null;
+  for (const name of ['local-network', 'local-network-access']) {
+    try {
+      const status = await navigator.permissions.query({ name } as unknown as PermissionDescriptor);
+      return status.state;
+    } catch {
+      // Older Chromium builds may know only the legacy alias.
+    }
   }
+  return null;
 }
 
 export function tvLanRequestErrorMessage(error: unknown, permissionState: PermissionState | null = null) {

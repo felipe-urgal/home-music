@@ -8,6 +8,7 @@ function controls() {
     previous: vi.fn(),
     next: vi.fn(),
     seekBy: vi.fn(),
+    seekTo: vi.fn(),
     toggleShuffle: vi.fn(),
     cycleRepeatMode: vi.fn(),
     playTrack: vi.fn(),
@@ -29,6 +30,7 @@ describe('applyTvRemoteCommand', () => {
 
     expect(playerControls[expected]).toHaveBeenCalledTimes(1);
     expect(playerControls.seekBy).not.toHaveBeenCalled();
+    expect(playerControls.seekTo).not.toHaveBeenCalled();
     expect(playerControls.playTrack).not.toHaveBeenCalled();
   });
 
@@ -38,12 +40,22 @@ describe('applyTvRemoteCommand', () => {
     applyTvRemoteCommand({ type: 'seek', deltaSeconds }, playerControls);
 
     expect(playerControls.seekBy).toHaveBeenCalledWith(deltaSeconds);
+    expect(playerControls.seekTo).not.toHaveBeenCalled();
     expect(playerControls.togglePlay).not.toHaveBeenCalled();
     expect(playerControls.previous).not.toHaveBeenCalled();
     expect(playerControls.next).not.toHaveBeenCalled();
     expect(playerControls.toggleShuffle).not.toHaveBeenCalled();
     expect(playerControls.cycleRepeatMode).not.toHaveBeenCalled();
     expect(playerControls.playTrack).not.toHaveBeenCalled();
+  });
+
+  it('encaminha seek absoluto usado pelo slider remoto', () => {
+    const playerControls = controls();
+
+    applyTvRemoteCommand({ type: 'seek-to', seconds: 42.5 }, playerControls);
+
+    expect(playerControls.seekTo).toHaveBeenCalledWith(42.5);
+    expect(playerControls.seekBy).not.toHaveBeenCalled();
   });
 
   it('aplica a duração de crossfade no controle canônico', () => {
@@ -56,6 +68,7 @@ describe('applyTvRemoteCommand', () => {
     expect(playerControls.previous).not.toHaveBeenCalled();
     expect(playerControls.next).not.toHaveBeenCalled();
     expect(playerControls.seekBy).not.toHaveBeenCalled();
+    expect(playerControls.seekTo).not.toHaveBeenCalled();
     expect(playerControls.toggleShuffle).not.toHaveBeenCalled();
     expect(playerControls.cycleRepeatMode).not.toHaveBeenCalled();
     expect(playerControls.playTrack).not.toHaveBeenCalled();
@@ -71,6 +84,7 @@ describe('applyTvRemoteCommand', () => {
     expect(playerControls.previous).not.toHaveBeenCalled();
     expect(playerControls.next).not.toHaveBeenCalled();
     expect(playerControls.seekBy).not.toHaveBeenCalled();
+    expect(playerControls.seekTo).not.toHaveBeenCalled();
     expect(playerControls.toggleShuffle).not.toHaveBeenCalled();
     expect(playerControls.cycleRepeatMode).not.toHaveBeenCalled();
   });

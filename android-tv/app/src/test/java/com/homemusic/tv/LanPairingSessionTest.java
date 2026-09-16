@@ -131,7 +131,7 @@ public final class LanPairingSessionTest {
     }
 
     @Test
-    public void addressResolverSelectsOnlyRfc1918Ipv4() throws Exception {
+    public void addressResolverSelectsOnlyRfc1918Ipv4AndPrioritizesLanInterfaces() throws Exception {
         List<InetAddress> addresses = Arrays.asList(
             InetAddress.getByName("8.8.8.8"),
             InetAddress.getByName("2001:db8::1"),
@@ -142,5 +142,7 @@ public final class LanPairingSessionTest {
         assertTrue(LanAddressResolver.isPrivateIpv4("172.31.1.5"));
         assertFalse(LanAddressResolver.isPrivateIpv4("172.32.1.5"));
         assertFalse(LanAddressResolver.isPrivateIpv4("192.168.01.5"));
+        assertTrue(LanAddressResolver.interfacePriority("wlan0") < LanAddressResolver.interfacePriority("rmnet_data0"));
+        assertTrue(LanAddressResolver.interfacePriority("eth0") < LanAddressResolver.interfacePriority("tun0"));
     }
 }

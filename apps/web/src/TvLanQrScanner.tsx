@@ -24,8 +24,10 @@ function scannerErrorMessage(error: unknown) {
 
 export function TvLanQrScanner({ open, onDetected, onCancel }: TvLanQrScannerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const onDetectedRef = useRef(onDetected);
   const [manualValue, setManualValue] = useState('');
   const [cameraMessage, setCameraMessage] = useState<string | null>(null);
+  onDetectedRef.current = onDetected;
 
   useEffect(() => {
     if (!open) return;
@@ -79,7 +81,7 @@ export function TvLanQrScanner({ open, onDetected, onCancel }: TvLanQrScannerPro
               if (!value) return;
               disposed = true;
               stop();
-              onDetected(value);
+              onDetectedRef.current(value);
             })
             .catch(() => undefined)
             .finally(() => { detecting = false; });
@@ -95,14 +97,14 @@ export function TvLanQrScanner({ open, onDetected, onCancel }: TvLanQrScannerPro
       disposed = true;
       stop();
     };
-  }, [open, onDetected]);
+  }, [open]);
 
   if (!open) return null;
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
     const value = manualValue.trim();
-    if (value) onDetected(value);
+    if (value) onDetectedRef.current(value);
   };
 
   return (

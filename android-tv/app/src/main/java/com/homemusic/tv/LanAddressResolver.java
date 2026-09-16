@@ -4,23 +4,37 @@ import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.net.SocketException;
-import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Enumeration;
 import java.util.List;
+import java.util.Locale;
 
 final class LanAddressResolver {
     private LanAddressResolver() {}
 
     static String resolve() throws SocketException {
-        List<InetAddress> addresses = new ArrayList<>();
         Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
         if (interfaces == null) return null;
-        for (NetworkInterface network : Collections.list(interfaces)) {
-            if (!network.isUp() || network.isLoopback()) continue;
-            addresses.addAll(Collections.list(network.getInetAddresses()));
+        List<NetworkInterface> networks = Collections.list(interfaces);
+        networks.sort(Comparator.comparingInt(network -> interfacePriority(network.getName())));
+        for (NetworkInterface network : networks) {
+            if (!network.isUp() || network.isLoopback() || network.isVirtual() || network.isPointToPoint()) continue;
+            if (interfacePriority(network.getName()) >= 100) continue;
+            String selected = selectAddress(Collections.list(network.getInetAddresses()));
+            if (selected != null) return selected;
         }
-        return selectAddress(addresses);
+        return null;
+    }
+
+    static int interfacePriority(String name) {
+        String value = name == null ? "" : name.toLowerCase(Locale.ROOT);
+        if (value.startsWith("wlan") || value.contains("wifi")) return 0;
+        if (value.startsWith("eth") || value.startsWith("en")) return 1;
+        if (value.startsWith("tun") || value.startsWith("tap") || value.startsWith("ppp")
+            || value.startsWith("rmnet") || value.startsWith("ccmni") || value.startsWith("clat")
+            || value.startsWith("v4-") || value.startsWith("dummy")) return 100;
+        return 10;
     }
 
     static String selectAddress(List<InetAddress> addresses) {

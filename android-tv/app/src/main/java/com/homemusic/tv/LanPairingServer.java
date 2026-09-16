@@ -24,8 +24,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 final class LanPairingServer implements AutoCloseable {
     static final class PairingInfo {
@@ -43,13 +45,22 @@ final class LanPairingServer implements AutoCloseable {
     }
 
     private static final int MAX_HEADER_LINE = 8 * 1024;
+    private static final int MAX_HEADER_COUNT = 64;
     private static final int RATE_WINDOW_MS = 10_000;
     private static final int RATE_MAX_REQUESTS = 120;
+    private static final int MAX_RATE_IPS = 128;
     private static final int MAX_RECEIVER_ASSET_BYTES = 8 * 1024 * 1024;
 
     private final String allowedOrigin;
     private final AssetManager assets;
-    private final ExecutorService clients = Executors.newCachedThreadPool();
+    private final ThreadPoolExecutor clients = new ThreadPoolExecutor(
+        2,
+        8,
+        30L,
+        TimeUnit.SECONDS,
+        new ArrayBlockingQueue<>(32),
+        new ThreadPoolExecutor.AbortPolicy()
+    );
     private final Map<String, ArrayDeque<Long>> requestTimes = new HashMap<>();
     private volatile boolean running;
     private volatile LanPairingSession pairingSession;
@@ -101,16 +112,28 @@ final class LanPairingServer implements AutoCloseable {
         while (running) {
             try {
                 Socket socket = serverSocket.accept();
-                clients.execute(() -> handle(socket));
+                try {
+                    clients.execute(() -> handle(socket));
+                } catch (RejectedExecutionException rejected) {
+                    closeSocket(socket);
+                }
             } catch (IOException error) {
                 if (running) error.printStackTrace();
             }
         }
     }
 
+    private static void closeSocket(Socket socket) {
+        try {
+            socket.close();
+        } catch (IOException ignored) {
+            // best-effort ao rejeitar excesso de conexões
+        }
+    }
+
     private void handle(Socket socket) {
         try (Socket client = socket) {
-            client.setSoTimeout(30_000);
+            client.setSoTimeout(10_000);
             String remoteIp = client.getInetAddress().getHostAddress();
             if (!allowRequest(remoteIp)) {
                 writeResponse(client, null, Response.json(429, "{\"error\":\"Muitas requisições.\"}"));
@@ -150,11 +173,13 @@ final class LanPairingServer implements AutoCloseable {
 
             if ("GET".equals(request.method) && "/receiver/bootstrap".equals(path)) {
                 if (!loopback) return error(403, "Bootstrap do receiver é somente loopback.");
+                long expiresAt = session.receiverExpiresAt();
+                if (expiresAt <= 0L) return error(410, "Sessão do receiver expirou.");
                 return Response.json(200, new JSONObject()
                     .put("version", LanPairingSession.VERSION)
                     .put("sessionId", session.sessionId())
                     .put("sessionToken", session.receiverToken())
-                    .put("expiresAt", session.pairingExpiresAt())
+                    .put("expiresAt", expiresAt)
                     .put("signalingBase", "http://127.0.0.1:" + port())
                     .toString());
             }
@@ -300,8 +325,10 @@ final class LanPairingServer implements AutoCloseable {
 
     private synchronized boolean allowRequest(String ip) {
         long now = System.currentTimeMillis();
+        pruneRateEntries(now);
         ArrayDeque<Long> times = requestTimes.get(ip);
         if (times == null) {
+            if (requestTimes.size() >= MAX_RATE_IPS) return false;
             times = new ArrayDeque<>();
             requestTimes.put(ip, times);
         }
@@ -309,6 +336,14 @@ final class LanPairingServer implements AutoCloseable {
         if (times.size() >= RATE_MAX_REQUESTS) return false;
         times.addLast(now);
         return true;
+    }
+
+    private void pruneRateEntries(long now) {
+        requestTimes.entrySet().removeIf(entry -> {
+            ArrayDeque<Long> times = entry.getValue();
+            while (!times.isEmpty() && now - times.peekFirst() > RATE_WINDOW_MS) times.removeFirst();
+            return times.isEmpty();
+        });
     }
 
     private boolean originAllowed(String origin, boolean loopback) {
@@ -357,9 +392,12 @@ final class LanPairingServer implements AutoCloseable {
         String[] requestParts = requestLine.split(" ", 3);
         if (requestParts.length < 2) throw new IOException("Request line inválida.");
         Map<String, String> headers = new HashMap<>();
+        int headerCount = 0;
         while (true) {
             String line = readLine(input);
             if (line == null || line.isEmpty()) break;
+            headerCount += 1;
+            if (headerCount > MAX_HEADER_COUNT) throw new IOException("Cabeçalhos excedem limite.");
             int separator = line.indexOf(':');
             if (separator > 0) headers.put(line.substring(0, separator).trim().toLowerCase(Locale.ROOT), line.substring(separator + 1).trim());
         }
