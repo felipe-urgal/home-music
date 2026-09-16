@@ -127,6 +127,7 @@ test('PWA envia duas faixas e comandos para o receiver LAN sem backend', async (
 
   let backendRequests = 0;
   await page.context().route('http://192.168.1.40:43123/**', fixture.route);
+  await page.context().route('http://127.0.0.1:43123/**', fixture.route);
   await page.context().route('**/offline-audio/**', route => {
     const trackId = decodeURIComponent(new URL(route.request().url()).pathname.split('/').pop() || '');
     const track = tracks.find(item => item.id === trackId);
@@ -140,7 +141,16 @@ test('PWA envia duas faixas e comandos para o receiver LAN sem backend', async (
   });
   const phoneContext = page.context();
   await phoneContext.route('**/api/**', route => { backendRequests += 1; return route.abort('connectionrefused'); });
-  await phoneContext.addInitScript(() => Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false }));
+  await phoneContext.addInitScript(() => {
+    Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false });
+    const nativeFetch = window.fetch.bind(window);
+    window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+      const rawUrl = typeof input === 'string' || input instanceof URL ? String(input) : input.url;
+      if (!rawUrl.startsWith('http://192.168.1.40:43123/')) return nativeFetch(input, init);
+      const mapped = rawUrl.replace('http://192.168.1.40:43123/', 'http://127.0.0.1:43123/');
+      return nativeFetch(input instanceof Request ? new Request(mapped, input) : mapped, init);
+    };
+  });
   await page.close();
   page = await phoneContext.newPage();
   await page.goto('/');
