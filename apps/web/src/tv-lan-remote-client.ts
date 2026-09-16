@@ -165,7 +165,7 @@ export async function createTvLanRemoteSignaling(
     let timedOut = false;
     const abortRequest = () => requestController.abort();
     controller.signal.addEventListener('abort', abortRequest, { once: true });
-    const timeout = window.setTimeout(() => {
+    const timeout = setTimeout(() => {
       timedOut = true;
       requestController.abort();
     }, requestTimeoutMs);
@@ -176,7 +176,7 @@ export async function createTvLanRemoteSignaling(
       if (timedOut) throw remoteError('A TV não respondeu a tempo na rede local.');
       throw remoteError(tvLanRequestErrorMessage(error, await permissionState()));
     } finally {
-      window.clearTimeout(timeout);
+      clearTimeout(timeout);
       controller.signal.removeEventListener('abort', abortRequest);
     }
   };
