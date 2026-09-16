@@ -23,6 +23,10 @@ export function getTvRemoteMediaSource(trackId: string) {
   return sources.get(trackId) ?? null;
 }
 
+export function filterTracksWithTvRemoteMediaSource<T extends { id: string }>(tracks: T[]) {
+  return tracks.filter(track => sources.has(track.id));
+}
+
 export function clearTvRemoteMediaSources() {
   for (const url of sources.values()) URL.revokeObjectURL(url);
   sources.clear();

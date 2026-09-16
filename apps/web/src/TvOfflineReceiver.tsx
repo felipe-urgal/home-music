@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Track } from '@home-music/shared';
 import { createTvLanReceiverSignaling } from './tv-lan-receiver-client';
-import { clearTvRemoteMediaSources, getTvRemoteMediaSource, setTvRemoteMediaSource } from './tv-remote-media-source';
+import {
+  clearTvRemoteMediaSources,
+  filterTracksWithTvRemoteMediaSource,
+  getTvRemoteMediaSource,
+  setTvRemoteMediaSource
+} from './tv-remote-media-source';
 import { createTvRemoteDataChannel, type TvRemoteDataChannel } from './tv-remote-data-channel';
 import { createTvRemotePeerController, type TvRemotePeerController, type TvRemotePeerState } from './tv-remote-peer';
 import { wrapLanTvRemoteSessionTransport, type TvRemoteSessionTransport } from './tv-remote-session-transport';
@@ -118,11 +123,12 @@ export function TvOfflineReceiver() {
               onMedia: media => {
                 const track = receivedTrack(media.trackId);
                 setTvRemoteMediaSource(media.trackId, media.blob);
+                receivedTracksRef.current.delete(media.trackId);
                 receivedTracksRef.current.set(media.trackId, track);
-                setTracks(current => {
-                  const withoutPrevious = current.filter(item => item.id !== media.trackId);
-                  return [...withoutPrevious, track];
-                });
+                for (const trackId of Array.from(receivedTracksRef.current.keys())) {
+                  if (!getTvRemoteMediaSource(trackId)) receivedTracksRef.current.delete(trackId);
+                }
+                setTracks(filterTracksWithTvRemoteMediaSource(Array.from(receivedTracksRef.current.values())));
                 setReadyTrackId(media.trackId);
                 setDetail('Música recebida e pronta para reprodução na TV.');
               },
