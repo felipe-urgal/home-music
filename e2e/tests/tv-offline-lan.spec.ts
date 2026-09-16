@@ -138,9 +138,12 @@ test('PWA envia duas faixas e comandos para o receiver LAN sem backend', async (
     const registrations = await navigator.serviceWorker.getRegistrations();
     await Promise.all(registrations.map(registration => registration.unregister()));
   });
-  await page.context().route('**/api/**', route => { backendRequests += 1; return route.abort('connectionrefused'); });
-  await page.addInitScript(() => Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false }));
-  await page.reload();
+  const phoneContext = page.context();
+  await phoneContext.route('**/api/**', route => { backendRequests += 1; return route.abort('connectionrefused'); });
+  await phoneContext.addInitScript(() => Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false }));
+  await page.close();
+  page = await phoneContext.newPage();
+  await page.goto('/');
   await expect(page.getByRole('button', { name: 'Conectar à TV', exact: true })).toBeVisible();
   page.once('dialog', dialog => dialog.accept(fixture.qrText));
   await page.getByRole('button', { name: 'Conectar à TV', exact: true }).click();
