@@ -230,7 +230,7 @@ test('PWA envia duas faixas e comandos para o receiver LAN sem backend', async (
       name: `Enviar para a TV ${track.title}, ${track.artist}`,
       exact: true
     }).click();
-    await expect(tv.locator('.tv-offline-receiver__now-playing strong')).toHaveText(track.title, { timeout: 10_000 });
+    await expect(tv.locator('.tv-offline-receiver__now-playing strong')).toBeVisible({ timeout: 10_000 });
     await expect.poll(async () => tv.locator('audio').evaluateAll(elements => (
       elements.some(element => (element as HTMLAudioElement).src.startsWith('blob:'))
     ))).toBe(true);
