@@ -40,6 +40,8 @@ export function TvOfflineReceiver() {
   const channelRef = useRef<TvRemoteDataChannel | null>(null);
   const transportRef = useRef<TvRemoteSessionTransport | null>(null);
   const receivedTracksRef = useRef(new Map<string, Track>());
+  const committedTrackIdsRef = useRef(new Set<string>());
+  const pendingPlayTrackIdRef = useRef<string | null>(null);
   const player = useCrossfadeAudioPlayer(tracks, true, true, false, { offlineMode: true });
   const playTrackRef = useRef(player.playTrack);
   playTrackRef.current = player.playTrack;
@@ -49,6 +51,19 @@ export function TvOfflineReceiver() {
     () => readyTrackId ? tracks.find(track => track.id === readyTrackId) ?? null : null,
     [readyTrackId, tracks]
   );
+
+  useEffect(() => {
+    committedTrackIdsRef.current = new Set(tracks.map(track => track.id));
+    const pendingTrackId = pendingPlayTrackIdRef.current;
+    if (!pendingTrackId || !committedTrackIdsRef.current.has(pendingTrackId)) return;
+    const track = receivedTracksRef.current.get(pendingTrackId);
+    if (!track || !getTvRemoteMediaSource(pendingTrackId)) {
+      pendingPlayTrackIdRef.current = null;
+      return;
+    }
+    pendingPlayTrackIdRef.current = null;
+    playTrackRef.current(track, tracks);
+  }, [tracks]);
 
   useEffect(() => {
     const channel = channelRef.current;
@@ -151,12 +166,19 @@ export function TvOfflineReceiver() {
                       setDetail('A música solicitada não está disponível offline na TV.');
                       return;
                     }
-                    playTrackRef.current(track, Array.from(receivedTracksRef.current.values()));
+                    if (!committedTrackIdsRef.current.has(trackId)) {
+                      pendingPlayTrackIdRef.current = trackId;
+                      return;
+                    }
+                    playTrackRef.current(track, filterTracksWithTvRemoteMediaSource(
+                      Array.from(receivedTracksRef.current.values())
+                    ));
                   },
                   setCrossfade: current.setCrossfadeSeconds
                 });
               },
               onDisconnect: () => {
+                pendingPlayTrackIdRef.current = null;
                 setStatus('waiting');
                 setDetail('Celular desconectado. Gere um novo pareamento se necessário.');
               }
@@ -192,6 +214,8 @@ export function TvOfflineReceiver() {
       channelRef.current = null;
       peerRef.current?.close();
       peerRef.current = null;
+      pendingPlayTrackIdRef.current = null;
+      committedTrackIdsRef.current.clear();
       clearTvRemoteMediaSources();
       receivedTracksRef.current.clear();
     };
