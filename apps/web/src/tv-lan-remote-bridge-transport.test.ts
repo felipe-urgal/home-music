@@ -120,7 +120,11 @@ describe('TV LAN remote client with bridge transport', () => {
     await client.sendSignal({
       from: 'remote',
       type: 'ice-candidate',
-      candidate: { candidate: 'candidate:1 1 udp 1 127.0.0.1 9 typ host' },
+      candidate: {
+        candidate: 'candidate:1 1 udp 1 127.0.0.1 9 typ host',
+        sdpMid: '0',
+        sdpMLineIndex: 0
+      },
     });
     expect(signalSend).not.toHaveBeenCalled();
 
