@@ -30,6 +30,10 @@ function tvErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : 'Falha na conexão local com a TV.';
 }
 
+function tvRecoveryMessage(error: unknown) {
+  return `${tvErrorMessage(error)} Na TV, abra Menu → Novo pareamento offline e escaneie o novo QR.`;
+}
+
 export function OfflineApp({ offline, onExit }: OfflineAppProps) {
   const [screen, setScreen] = useState<OfflineScreen>('library');
   const [tvState, setTvState] = useState<TvLanState>('disconnected');
@@ -91,7 +95,7 @@ export function OfflineApp({ offline, onExit }: OfflineAppProps) {
     setTvState('disconnected');
     setTvSnapshot(null);
     setTvTrackId(null);
-    setTvMessage(tvErrorMessage(error));
+    setTvMessage(tvRecoveryMessage(error));
   }, [closeTvSession]);
 
   const connectTv = useCallback(async (qrText: string) => {
@@ -124,14 +128,10 @@ export function OfflineApp({ offline, onExit }: OfflineAppProps) {
           setTvMessage('Abrindo conexão P2P com a TV…');
         } else if (next === 'unsupported') {
           failTvSession(new Error('Este navegador não oferece WebRTC compatível.'));
-        } else if (next === 'error') {
-          failTvSession(new Error('Não foi possível abrir a conexão P2P com a TV.'));
+        } else if (next === 'error' && tvPeerRef.current === peer) {
+          failTvSession(new Error('Não foi possível manter a conexão P2P com a TV.'));
         } else if (next === 'closed' && tvPeerRef.current === peer) {
-          closeTvSession();
-          setTvState('disconnected');
-          setTvSnapshot(null);
-          setTvTrackId(null);
-          setTvMessage('Conexão com a TV encerrada.');
+          failTvSession(new Error('Conexão com a TV foi perdida.'));
         }
       };
 
@@ -139,8 +139,14 @@ export function OfflineApp({ offline, onExit }: OfflineAppProps) {
         role: 'remote',
         sendSignal: signal => transport.sendSignal(signal),
         onState: updatePeerState,
-        onError: failTvSession,
+        onError: error => {
+          if (tvPeerRef.current === peer) failTvSession(error);
+        },
         onChannel: channel => {
+          if (tvPeerRef.current !== peer) {
+            channel.close();
+            return;
+          }
           tvChannelRef.current?.close();
           tvChannelRef.current = createTvRemoteDataChannel(channel, {
             onSnapshot: snapshot => {
@@ -159,7 +165,9 @@ export function OfflineApp({ offline, onExit }: OfflineAppProps) {
       tvPeerRef.current = peer;
       transport.subscribeSignals(
         signal => peer.handleSignal(signal),
-        error => failTvSession(error)
+        error => {
+          if (tvPeerRef.current === peer) failTvSession(error);
+        }
       );
       await peer.start();
     } catch (error) {
@@ -175,13 +183,13 @@ export function OfflineApp({ offline, onExit }: OfflineAppProps) {
     setTvState('disconnected');
     setTvSnapshot(null);
     setTvTrackId(null);
-    setTvMessage('TV desconectada.');
+    setTvMessage('TV desconectada. Para conectar novamente, gere um novo pareamento na TV.');
   }, [closeTvSession]);
 
   const sendTvCommand = useCallback((command: TvRemoteCommand) => {
     const channel = tvChannelRef.current;
     if (!channel) {
-      failTvSession(new Error('A conexão P2P com a TV não está pronta. Conecte novamente.'));
+      failTvSession(new Error('A conexão P2P com a TV não está pronta.'));
       return false;
     }
     try {
@@ -196,8 +204,7 @@ export function OfflineApp({ offline, onExit }: OfflineAppProps) {
   const sendTrackToTv = useCallback(async (track: Track, context?: Track[]) => {
     const endpoint = tvChannelRef.current;
     if (!endpoint) {
-      setTvState('disconnected');
-      setTvMessage('A conexão P2P com a TV não está pronta. Conecte novamente.');
+      failTvSession(new Error('A conexão P2P com a TV não está pronta.'));
       return;
     }
     if (tvState === 'sending') {
@@ -211,23 +218,33 @@ export function OfflineApp({ offline, onExit }: OfflineAppProps) {
     setTvSnapshot(null);
     setTvState('sending');
     setTvMessage(`Enviando “${track.title}” para a TV…`);
+
+    let blob: Blob;
+    let mimeType: string;
     try {
       const response = await fetch(offlineAudioUrl(track.id));
       if (!response.ok) throw new Error('O download offline selecionado não está mais disponível neste dispositivo.');
-      const blob = await response.blob();
+      blob = await response.blob();
       const record = offline.records.find(item => item.track.id === track.id);
-      await endpoint.sendTrackAndPlay({
-        trackId: track.id,
-        blob,
-        mimeType: record?.mimeType || blob.type
-      });
+      mimeType = record?.mimeType || blob.type;
+    } catch (error) {
+      if (tvChannelRef.current === endpoint) {
+        setTvState('connected');
+        setTvMessage(tvErrorMessage(error));
+      }
+      return;
+    }
+
+    if (tvChannelRef.current !== endpoint) return;
+    try {
+      await endpoint.sendTrackAndPlay({ trackId: track.id, blob, mimeType });
+      if (tvChannelRef.current !== endpoint) return;
       setTvState('connected');
       setTvMessage(`“${track.title}” enviada para a TV.`);
     } catch (error) {
-      setTvState(tvChannelRef.current ? 'connected' : 'disconnected');
-      setTvMessage(tvErrorMessage(error));
+      failTvSession(error);
     }
-  }, [offline.records, pauseLocalPlayback, tvState]);
+  }, [failTvSession, offline.records, pauseLocalPlayback, tvState]);
 
   const playTrack = useCallback((track: Track, context: Track[]) => {
     if (tvState === 'connecting') {
