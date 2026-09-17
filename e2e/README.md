@@ -43,6 +43,7 @@ O workflow principal promoveu alguns cenários direcionados a gates obrigatório
 - `tests/crossfade-mobile.spec.ts --project=mobile-chromium`;
 - `tests/tv-remote-control.spec.ts` + `tests/tv-offline-cast.spec.ts --project=desktop-chromium`;
 - `tests/tv-offline-lan.spec.ts --project=desktop-chromium`;
+- `tests/tv-offline-lan-bridge.spec.ts --project=desktop-chromium`;
 - `tests/personal-data-import.spec.ts`;
 - `tests/admin-library-assistant.spec.ts --project=desktop-chromium` com o flag de fixture correspondente.
 
@@ -58,7 +59,7 @@ A lista executável continua sendo `.github/workflows/ci.yml`; este README deve 
 - rota mobile sem `<audio>`;
 - estado play/pause sincronizado entre TV e celular;
 - comando de próxima faixa;
-- seek +10 s;
+- controles remotos cobertos pelo fluxo atual;
 - navegação da biblioteca remota, paginação e foco.
 
 `tv-offline-cast.spec.ts` usa a mesma integração browser + Fastify em dois contexts, sem mock de WebRTC. O cenário salva uma faixa real da fixture no namespace offline do celular, aguarda o DataChannel, seleciona a faixa pela biblioteca remota e valida:
@@ -68,9 +69,42 @@ A lista executável continua sendo `.github/workflows/ci.yml`; este README deve 
 - título da TV muda para a faixa enviada;
 - um dos decks da TV termina usando URL `blob:`, comprovando adoção da mídia recebida em vez de um player paralelo no celular.
 
-Os E2Es não simulam câmera nem decodificam o QR. A leitura física do QR e o comportamento do GeckoView/WebRTC no BTV permanecem na homologação em hardware. Também não criam uma segunda conta apenas para repetir ownership: isolamento de usuário é coberto pelos testes HTTP reais das rotas remotas.
+Os E2Es não substituem homologação em hardware real. QR/câmera, comportamento de browser mobile, Local Network Access, GeckoView/BTV, background/lock e condições reais da LAN continuam exigindo evidência física.
 
-`tv-offline-lan.spec.ts` usa o receiver dedicado gerado para o APK e uma fixture LAN compatível com challenge/join HMAC e signaling. Depois de pré-semear Cache Storage, derruba todas as respostas `/api/*`, força o cold start offline do PWA, abre WebRTC/DataChannel real, envia duas faixas e confirma fonte `blob:` na TV. O teste também fixa o contador de tentativas ao backend depois da conexão: playback e troca de faixa não podem acrescentar requests Home Music.
+### TV totalmente offline pela LAN
+
+`tv-offline-lan.spec.ts` usa o receiver dedicado gerado para o APK e uma fixture LAN compatível com challenge/join HMAC e signaling. Depois de pré-semear Cache Storage, derruba todas as respostas `/api/*`, força o cold start offline do PWA, abre WebRTC/DataChannel real, envia duas faixas e confirma fonte `blob:` na TV.
+
+O teste também fixa o contador de tentativas ao backend depois da conexão: playback e troca de faixa não podem acrescentar requests Home Music.
+
+A cobertura unitária/componente associada também protege:
+
+- QR/TTL/replay/HMAC;
+- lifecycle de signaling e cleanup;
+- `join` autenticado notificando abertura automática do receiver uma única vez;
+- `RTCPeerConnection` em `disconnected` permanecendo recuperável;
+- retorno `disconnected → connected` restaurando a sessão;
+- `disconnected → failed` continuando terminal;
+- erro/fechamento real do DataChannel continuando terminal.
+
+### Bridge LAN para iOS
+
+`tv-offline-lan-bridge.spec.ts` valida o adaptador usado por iPhone/iPad sem transformar o bridge em transporte de mídia.
+
+O cenário cobre:
+
+- `bridge.html`/`bridge.js` reais;
+- handshake de `postMessage` e vínculo de canal;
+- `challenge → join → signaling → DataChannel` via bridge;
+- proof/HMAC permanecendo no PWA;
+- ausência do `secret` do QR no bridge;
+- handoff `complete` depois do P2P pronto;
+- ausência de `/close?role=remote` no handoff normal;
+- fim do tráfego do bridge depois que o DataChannel abre;
+- mídia continuando no WebRTC/DataChannel;
+- tentativa de fechamento da janela do bridge, com lifecycle coberto pelo contrato.
+
+Esse E2E roda em Chromium desktop como prova do contrato e da integração. Ele **não comprova** as políticas/restrições reais do Safari/WebKit no iPhone; o QA físico continua sendo a fonte dessa evidência.
 
 ## Quando E2E é necessário
 
@@ -80,6 +114,7 @@ Use Playwright quando a mudança depender da integração real entre browser, Fa
 - biblioteca/player e navegação responsiva;
 - Administração e operações críticas;
 - downloads/coleções offline;
+- TV/controle remoto/transporte P2P;
 - importação/origens externas com fixtures controladas;
 - mudanças fullstack cuja regressão não seja bem protegida por unidade/componente.
 
