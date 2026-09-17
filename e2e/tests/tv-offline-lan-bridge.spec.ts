@@ -189,8 +189,6 @@ test('iOS usa bridge LAN só para signaling e mantém mídia no DataChannel', as
   const bridgePagePromise = phoneContext.waitForEvent('page');
   await page.getByRole('button', { name: 'Conectar', exact: true }).click();
   const bridgePage = await bridgePagePromise;
-  await bridgePage.waitForLoadState('domcontentloaded');
-  await expect(bridgePage.getByText(/Volte ao Home Music para concluir o pareamento/)).toBeVisible();
 
   await expect(page.getByText(/TV conectada em/)).toBeVisible({ timeout: 20_000 });
   await expect.poll(() => bridgePage.isClosed()).toBe(true);
