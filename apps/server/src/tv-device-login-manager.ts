@@ -224,6 +224,12 @@ export class TvDeviceLoginManager {
     return request.state === 'consuming' ? 'approved' : request.state;
   }
 
+  preview(approvalToken: unknown): TvDeviceLoginApproval | null {
+    const request = this.resolveApprovalRequest(approvalToken);
+    if (!request || request.state !== 'pending') return null;
+    return Object.freeze({ displayCode: request.displayCode });
+  }
+
   approve(approvalToken: unknown, userId: string): TvDeviceLoginApproval | null {
     if (!userId || userId.length > MAX_USER_ID_LENGTH) return null;
     const request = this.resolveApprovalRequest(approvalToken);
