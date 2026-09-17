@@ -80,27 +80,30 @@ Estas regras não devem ser relaxadas para fazer o bridge funcionar:
 
 Criar um contrato pequeno e versionado para a comunicação PWA ↔ bridge. Esse contrato é interno ao adaptador e **não altera** `home-music-lan-remote-v2`.
 
+Contrato implementado em `apps/web/src/tv-lan-bridge-protocol.ts` e documentado em [`docs/ios-lan-bridge-protocol-v1.md`](ios-lan-bridge-protocol-v1.md). O envelope usa `version: 1`, `channelId`, `requestId`, `expiresAt`, payload JSON e limite serializado de 2 MiB.
+
 Requisitos:
 
-- [ ] criar identificador de versão do bridge;
-- [ ] criar `channelId`/nonce aleatório por abertura;
-- [ ] correlacionar cada operação com `requestId` único;
-- [ ] aceitar mensagens somente da janela `opener` esperada;
-- [ ] validar `event.origin` e `event.source` em ambos os lados;
-- [ ] rejeitar mensagens com shape desconhecido, IDs inválidos ou payload acima do limite;
-- [ ] implementar timeout por request;
-- [ ] implementar cancelamento/cleanup quando PWA, bridge ou sessão fecharem;
-- [ ] garantir que responses tardias de uma sessão anterior sejam ignoradas.
+- [x] criar identificador de versão do bridge;
+- [x] criar `channelId`/nonce aleatório por abertura;
+- [x] correlacionar cada operação com `requestId` único;
+- [x] aceitar mensagens somente da janela `opener` esperada;
+- [x] validar `event.origin` e `event.source` em ambos os lados;
+- [x] rejeitar mensagens com shape desconhecido, IDs inválidos ou payload acima do limite;
+- [x] implementar timeout por request;
+- [x] implementar cancelamento/cleanup quando PWA, bridge ou sessão fecharem;
+- [x] garantir que responses tardias de uma sessão anterior sejam ignoradas.
 
-Operações permitidas devem ser semânticas e fechadas, por exemplo:
+Operações permitidas são semânticas e fechadas:
 
+- `probe` — temporária enquanto o spike ainda existe;
 - `challenge`;
 - `join`;
 - `signal-send`;
 - `signal-poll`;
 - `close`.
 
-O bridge não deve aceitar URL arbitrária, host arbitrário, método arbitrário ou headers arbitrários.
+O bridge não aceita URL arbitrária, host arbitrário, método arbitrário ou headers arbitrários. Nesta etapa somente `probe` é executada; as operações de produção respondem `not_implemented` até o relay da atividade 3.
 
 ### 3. Produzir o bridge real na BTV
 
@@ -110,9 +113,12 @@ Arquivos principais:
 - `android-tv/app/src/main/assets/bridge.js`;
 - `android-tv/app/src/main/java/com/homemusic/tv/LanPairingServer.java`.
 
+Os endpoints `/challenge`, `/join`, `/signals` e `/close` já existem no `LanPairingServer`. Esta etapa deve conectar o bridge a esses endpoints same-origin, sem recriar a semântica do protocolo v2.
+
 Atividades:
 
-- [ ] substituir o PING/PONG de teste pelo relay das operações permitidas;
+- [x] confirmar que `/challenge`, `/join`, `/signals` e `/close` já existem e preservam as validações atuais;
+- [ ] substituir a operação `probe` pelo relay das operações permitidas;
 - [ ] usar requests same-origin para o próprio `LanPairingServer`;
 - [ ] reconstruir targets de forma determinística, sem aceitar target arbitrário vindo do PWA;
 - [ ] aplicar `cache: no-store`/equivalente às requests de sessão;
@@ -195,25 +201,27 @@ Se o iOS suspender uma das páginas de forma que impossibilite a sinalização, 
 
 Aplicar TDD nas mudanças de comportamento.
 
+A cobertura unitária do contrato está em `apps/web/src/tv-lan-bridge-protocol.test.ts`. Os itens de lifecycle/browser e relay real continuam abertos.
+
 Cobrir no mínimo:
 
 - [ ] handshake bridge `ready`/channel binding;
-- [ ] `event.source` incorreto é ignorado;
-- [ ] `event.origin` incorreto é ignorado;
-- [ ] nonce/channel incorreto é ignorado;
-- [ ] request/response correlacionados por ID;
+- [x] `event.source` incorreto é ignorado;
+- [x] `event.origin` incorreto é ignorado;
+- [x] nonce/channel incorreto é ignorado;
+- [x] request/response correlacionados por ID;
 - [ ] timeout;
 - [ ] popup bloqueado;
 - [ ] fechamento/abort durante request;
-- [ ] response tardia de tentativa anterior;
-- [ ] bridge não aceita operação fora da allowlist;
+- [x] response tardia de tentativa anterior;
+- [x] bridge não aceita operação fora da allowlist;
 - [ ] challenge via bridge;
 - [ ] join via bridge com proof calculada no PWA;
 - [ ] `signals` POST via bridge com autorização assinada;
 - [ ] `signals` GET/poll via bridge;
 - [ ] `close` best-effort via bridge;
 - [ ] QR expirado/regenerado;
-- [ ] resposta inválida/malformada;
+- [x] resposta inválida/malformada;
 - [ ] caminho direto continua funcionando;
 - [ ] nenhum segredo é incluído nas mensagens do bridge além do estritamente necessário ao protocolo de request já autenticado;
 - [ ] cleanup remove listeners/timers/window refs.

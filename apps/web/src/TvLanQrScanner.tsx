@@ -1,5 +1,13 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { parseTvLanQrText } from '@home-music/shared/tv-lan-remote';
+import {
+  TV_LAN_BRIDGE_REQUEST_TIMEOUT_MS,
+  createTvLanBridgeId,
+  createTvLanBridgeRequest,
+  isExpectedTvLanBridgeEvent,
+  isMatchingTvLanBridgeResponse,
+  parseTvLanBridgeMessage,
+} from './tv-lan-bridge-protocol';
 
 type BarcodeResult = { rawValue?: string };
 type BarcodeDetectorLike = { detect: (source: HTMLVideoElement) => Promise<BarcodeResult[]> };
@@ -23,20 +31,19 @@ function scannerErrorMessage(error: unknown) {
   return 'Não foi possível abrir a câmera. Cole o conteúdo do QR abaixo.';
 }
 
-function bridgeNonce() {
-  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
-  const bytes = new Uint8Array(16);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
-}
-
 export function TvLanQrScanner({ open, onDetected, onCancel }: TvLanQrScannerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const onDetectedRef = useRef(onDetected);
+  const bridgeAbortRef = useRef<AbortController | null>(null);
   const [manualValue, setManualValue] = useState('');
   const [cameraMessage, setCameraMessage] = useState<string | null>(null);
   const [bridgeMessage, setBridgeMessage] = useState<string | null>(null);
   onDetectedRef.current = onDetected;
+
+  useEffect(() => {
+    if (!open) bridgeAbortRef.current?.abort();
+    return () => bridgeAbortRef.current?.abort();
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -124,47 +131,109 @@ export function TvLanQrScanner({ open, onDetected, onCancel }: TvLanQrScannerPro
       return;
     }
 
+    bridgeAbortRef.current?.abort();
+    const controller = new AbortController();
+    bridgeAbortRef.current = controller;
+
     const bridgeOrigin = `http://${pairing.host}:${pairing.port}`;
-    const nonce = bridgeNonce();
+    let channelId: string;
+    try {
+      channelId = createTvLanBridgeId();
+    } catch {
+      bridgeAbortRef.current = null;
+      setBridgeMessage('Não foi possível criar um canal seguro para o bridge.');
+      return;
+    }
+
+    const bridgeUrl = `${bridgeOrigin}/bridge?origin=${encodeURIComponent(window.location.origin)}&channelId=${encodeURIComponent(channelId)}`;
     let bridgeWindow: Window | null = null;
-    let timeout: number | null = null;
+    let readyTimeout: number | null = null;
+    let requestTimeout: number | null = null;
+    let closePoll: number | null = null;
+    let requestId: string | null = null;
     let finished = false;
 
     const cleanup = () => {
       window.removeEventListener('message', onMessage);
-      if (timeout !== null) window.clearTimeout(timeout);
+      controller.signal.removeEventListener('abort', onAbort);
+      if (readyTimeout !== null) window.clearTimeout(readyTimeout);
+      if (requestTimeout !== null) window.clearTimeout(requestTimeout);
+      if (closePoll !== null) window.clearInterval(closePoll);
+      if (bridgeAbortRef.current === controller) bridgeAbortRef.current = null;
+      try {
+        if (bridgeWindow && !bridgeWindow.closed) bridgeWindow.close();
+      } catch {
+        // best-effort: alguns navegadores podem impedir window.close()
+      }
+    };
+
+    const finish = (message: string | null) => {
+      if (finished) return;
+      finished = true;
+      cleanup();
+      if (message !== null && !controller.signal.aborted) setBridgeMessage(message);
+    };
+
+    const onAbort = () => finish(null);
+
+    const sendProbe = () => {
+      if (!bridgeWindow || requestId !== null || finished) return;
+      let request;
+      try {
+        request = createTvLanBridgeRequest(channelId, 'probe', null);
+      } catch {
+        finish('Não foi possível criar uma request válida para o bridge.');
+        return;
+      }
+      requestId = request.requestId;
+      if (readyTimeout !== null) {
+        window.clearTimeout(readyTimeout);
+        readyTimeout = null;
+      }
+      requestTimeout = window.setTimeout(() => {
+        finish('Bridge abriu, mas não respondeu ao probe dentro do tempo esperado.');
+      }, TV_LAN_BRIDGE_REQUEST_TIMEOUT_MS);
+      bridgeWindow.postMessage(request, bridgeOrigin);
+      setBridgeMessage('Bridge abriu no iOS. Validando canal v1…');
     };
 
     const onMessage = (event: MessageEvent) => {
-      if (event.source !== bridgeWindow || event.origin !== bridgeOrigin) return;
-      const data = event.data as { type?: unknown; nonce?: unknown } | null;
-      if (!data || typeof data !== 'object') return;
-      if (data.type === 'home-music-lan-bridge-ready') {
-        setBridgeMessage('Bridge abriu no iOS. Enviando PING…');
-        bridgeWindow?.postMessage({ type: 'home-music-lan-bridge-ping', nonce }, bridgeOrigin);
+      if (!isExpectedTvLanBridgeEvent(event, bridgeOrigin, bridgeWindow)) return;
+      const message = parseTvLanBridgeMessage(event.data);
+      if (!message || message.channelId !== channelId) return;
+
+      if (message.type === 'ready') {
+        sendProbe();
         return;
       }
-      if (data.type === 'home-music-lan-bridge-pong' && data.nonce === nonce) {
-        finished = true;
-        cleanup();
-        setBridgeMessage('PONG recebido. window.open + postMessage funciona neste iPhone.');
+      if (!requestId || !isMatchingTvLanBridgeResponse(message, { channelId, requestId, operation: 'probe' })) return;
+      if (!message.ok) {
+        finish(`Bridge respondeu com erro de protocolo: ${message.error ?? 'unknown_error'}.`);
+        return;
       }
+      const payload = message.payload;
+      if (!payload || typeof payload !== 'object' || Array.isArray(payload) || (payload as { pong?: unknown }).pong !== true) {
+        finish('Bridge respondeu com payload inválido.');
+        return;
+      }
+      finish('Bridge v1 respondeu ao probe. O canal seguro window.open + postMessage está funcionando.');
     };
 
+    controller.signal.addEventListener('abort', onAbort, { once: true });
     window.addEventListener('message', onMessage);
-    bridgeWindow = window.open(`${bridgeOrigin}/bridge`, 'home-music-ios-lan-bridge');
+    bridgeWindow = window.open(bridgeUrl, 'home-music-ios-lan-bridge');
     if (!bridgeWindow) {
-      cleanup();
-      setBridgeMessage('O iOS bloqueou a abertura da página bridge.');
+      finish('O iOS bloqueou a abertura da página bridge.');
       return;
     }
 
-    setBridgeMessage('Página bridge aberta. Aguardando resposta…');
-    timeout = window.setTimeout(() => {
-      if (finished) return;
-      cleanup();
-      setBridgeMessage('Sem PONG. A página abriu, mas o canal window.opener/postMessage não voltou ao Home Music.');
-    }, 12_000);
+    setBridgeMessage('Página bridge aberta. Aguardando canal v1…');
+    readyTimeout = window.setTimeout(() => {
+      finish('A página bridge abriu, mas não confirmou o canal v1 dentro do tempo esperado.');
+    }, TV_LAN_BRIDGE_REQUEST_TIMEOUT_MS);
+    closePoll = window.setInterval(() => {
+      if (bridgeWindow?.closed) finish('A página bridge foi fechada antes de concluir o teste.');
+    }, 250);
   };
 
   return (
