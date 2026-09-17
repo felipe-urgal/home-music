@@ -11,11 +11,15 @@ import {
   type TvLanSignalEnvelope
 } from '@home-music/shared/tv-lan-remote';
 import type { TvRemoteSignal } from '@home-music/shared/tv-remote';
+import { createTvLanBridgeTransport } from './tv-lan-bridge-client';
+import type { TvLanTransport, TvLanTransportFactory, TvLanTransportResponse } from './tv-lan-transport';
+import { selectTvLanTransport } from './tv-lan-transport-selection';
 
 type FetchLike = typeof fetch;
 
 type TvLanRemoteOptions = {
   fetchImpl?: FetchLike;
+  transportFactory?: TvLanTransportFactory;
   pollDelayMs?: number;
   requestTimeoutMs?: number;
   createClientNonce?: () => string;
@@ -32,6 +36,7 @@ export type TvLanRemoteSignaling = {
   session: TvLanJoinResponse;
   sendSignal: (signal: TvRemoteSignal) => Promise<void>;
   start: (onSignal: (signal: TvRemoteSignal) => void | Promise<void>, onError?: (error: Error) => void) => void;
+  finish: () => void;
   close: () => void;
 };
 
@@ -157,20 +162,16 @@ function parseJoin(value: unknown, now: number): TvLanJoinResponse | null {
   return joined as TvLanJoinResponse;
 }
 
-async function readJson(response: Response) {
-  try {
-    return await response.json() as unknown;
-  } catch {
-    throw remoteError('A TV retornou uma resposta LAN inválida.');
-  }
+function responseError(status: number, fallback: string) {
+  if (status === 401) return remoteError('O código de pareamento da TV é inválido ou expirou.');
+  if (status === 403) return remoteError('A TV recusou esta origem do Home Music.');
+  if (status === 404 || status === 410) return remoteError('O pareamento da TV expirou. Gere um novo QR.');
+  if (status === 429) return remoteError('A TV recebeu muitas tentativas. Aguarde e gere um novo pareamento.');
+  return remoteError(fallback);
 }
 
-function responseError(response: Response, fallback: string) {
-  if (response.status === 401) return remoteError('O código de pareamento da TV é inválido ou expirou.');
-  if (response.status === 403) return remoteError('A TV recusou esta origem do Home Music.');
-  if (response.status === 404 || response.status === 410) return remoteError('O pareamento da TV expirou. Gere um novo QR.');
-  if (response.status === 429) return remoteError('A TV recebeu muitas tentativas. Aguarde e gere um novo pareamento.');
-  return remoteError(fallback);
+function responseOk(response: TvLanTransportResponse) {
+  return response.status >= 200 && response.status < 300;
 }
 
 async function defaultLocalNetworkPermissionState(): Promise<PermissionState | null> {
@@ -194,6 +195,86 @@ export function tvLanRequestErrorMessage(error: unknown, permissionState: Permis
   return 'Não foi possível alcançar a TV na rede local. Confirme que celular e TV estão na mesma rede e sem isolamento entre clientes.';
 }
 
+function createDirectTransportFactory(
+  fetchImpl: FetchLike,
+  permissionState: () => Promise<PermissionState | null>,
+): TvLanTransportFactory {
+  return async (pairing, options) => {
+    const baseUrl = `http://${pairing.host}:${pairing.port}`;
+    const controller = new AbortController();
+    const abortFromParent = () => controller.abort();
+    options.signal.addEventListener('abort', abortFromParent, { once: true });
+    if (options.signal.aborted) controller.abort();
+
+    const lanFetch = async (
+      target: string,
+      init: RequestInit = {},
+      readBody = true,
+    ): Promise<TvLanTransportResponse> => {
+      if (controller.signal.aborted) throw remoteError('Conexão LAN cancelada.');
+      const requestController = new AbortController();
+      let timedOut = false;
+      const abortRequest = () => requestController.abort();
+      controller.signal.addEventListener('abort', abortRequest, { once: true });
+      const timeout = setTimeout(() => {
+        timedOut = true;
+        requestController.abort();
+      }, options.requestTimeoutMs);
+      try {
+        const response = await fetchImpl(`${baseUrl}${target}`, { ...init, cache: 'no-store', signal: requestController.signal });
+        let body: unknown = null;
+        if (readBody) {
+          try {
+            body = await response.json() as unknown;
+          } catch {
+            throw remoteError('A TV retornou uma resposta LAN inválida.');
+          }
+        }
+        return { status: response.status, body };
+      } catch (error) {
+        if (controller.signal.aborted) throw remoteError('Conexão LAN cancelada.');
+        if (timedOut) throw remoteError('A TV não respondeu a tempo na rede local.');
+        if (error instanceof Error && error.message === 'A TV retornou uma resposta LAN inválida.') throw error;
+        throw remoteError(tvLanRequestErrorMessage(error, await permissionState()));
+      } finally {
+        clearTimeout(timeout);
+        controller.signal.removeEventListener('abort', abortRequest);
+      }
+    };
+
+    const dispose = () => {
+      options.signal.removeEventListener('abort', abortFromParent);
+      controller.abort();
+    };
+
+    return {
+      challenge: input => lanFetch(`/challenge?session=${encodeURIComponent(input.sessionId)}&clientNonce=${encodeURIComponent(input.clientNonce)}`),
+      join: input => lanFetch('/join', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      }),
+      signalSend: input => lanFetch('/signals?role=remote', {
+        method: 'POST',
+        headers: {
+          Authorization: input.authorization,
+          'Content-Type': 'application/json',
+        },
+        body: input.body,
+      }, false),
+      signalPoll: input => lanFetch(`/signals?role=remote&cursor=${encodeURIComponent(String(input.cursor))}`, {
+        headers: { Authorization: input.authorization },
+      }),
+      close: input => lanFetch('/close?role=remote', {
+        method: 'POST',
+        headers: { Authorization: input.authorization },
+      }, false),
+      finish: dispose,
+      dispose,
+    } satisfies TvLanTransport;
+  };
+}
+
 export async function createTvLanRemoteSignaling(
   qrText: string,
   options: TvLanRemoteOptions = {}
@@ -212,28 +293,12 @@ export async function createTvLanRemoteSignaling(
   const cleanupExternalAbort = () => externalSignal?.removeEventListener('abort', abortFromExternal);
   const permissionState = options.localNetworkPermissionState ?? defaultLocalNetworkPermissionState;
   const requestTimeoutMs = Math.max(1_000, options.requestTimeoutMs ?? 10_000);
-
-  const lanFetch = async (input: RequestInfo | URL, init: RequestInit = {}) => {
-    if (controller.signal.aborted) throw remoteError('Conexão LAN cancelada.');
-    const requestController = new AbortController();
-    let timedOut = false;
-    const abortRequest = () => requestController.abort();
-    controller.signal.addEventListener('abort', abortRequest, { once: true });
-    const timeout = setTimeout(() => {
-      timedOut = true;
-      requestController.abort();
-    }, requestTimeoutMs);
-    try {
-      return await fetchImpl(input, { ...init, signal: requestController.signal });
-    } catch (error) {
-      if (controller.signal.aborted) throw remoteError('Conexão LAN cancelada.');
-      if (timedOut) throw remoteError('A TV não respondeu a tempo na rede local.');
-      throw remoteError(tvLanRequestErrorMessage(error, await permissionState()));
-    } finally {
-      clearTimeout(timeout);
-      controller.signal.removeEventListener('abort', abortRequest);
-    }
-  };
+  const transportFactory = options.transportFactory ?? (
+    selectTvLanTransport() === 'bridge'
+      ? ((bridgePairing, transportOptions) => createTvLanBridgeTransport(bridgePairing, transportOptions))
+      : createDirectTransportFactory(fetchImpl, permissionState)
+  );
+  let transport: TvLanTransport | null = null;
 
   try {
     const createClientNonce = options.createClientNonce ?? (() => randomToken(cryptoImpl));
@@ -242,24 +307,16 @@ export async function createTvLanRemoteSignaling(
     const clientNonce = createClientNonce();
     if (!isTvLanEphemeralToken(clientNonce, 128)) throw remoteError('Nonce de pareamento LAN inválido.');
 
-    const baseUrl = `http://${pairing.host}:${pairing.port}`;
-    const challengeResponse = await lanFetch(
-      `${baseUrl}/challenge?session=${encodeURIComponent(pairing.sessionId)}&clientNonce=${encodeURIComponent(clientNonce)}`,
-      { cache: 'no-store' }
-    );
-    if (!challengeResponse.ok) throw responseError(challengeResponse, 'Não foi possível iniciar o pareamento com a TV.');
-    const challenge = parseChallenge(await readJson(challengeResponse), pairing, clientNonce, now());
+    transport = await transportFactory(pairing, { signal: controller.signal, requestTimeoutMs });
+    const challengeResponse = await transport.challenge({ sessionId: pairing.sessionId, clientNonce });
+    if (!responseOk(challengeResponse)) throw responseError(challengeResponse.status, 'Não foi possível iniciar o pareamento com a TV.');
+    const challenge = parseChallenge(challengeResponse.body, pairing, clientNonce, now());
     if (!challenge) throw remoteError('A TV retornou um challenge de pareamento inválido.');
 
     const proof = await computeTvLanJoinProof(pairing.secret, challenge, cryptoImpl);
-    const joinResponse = await lanFetch(`${baseUrl}/join`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...challenge, proof }),
-      cache: 'no-store'
-    });
-    if (!joinResponse.ok) throw responseError(joinResponse, 'Não foi possível concluir o pareamento com a TV.');
-    const session = parseJoin(await readJson(joinResponse), now());
+    const joinResponse = await transport.join({ ...challenge, proof });
+    if (!responseOk(joinResponse)) throw responseError(joinResponse.status, 'Não foi possível concluir o pareamento com a TV.');
+    const session = parseJoin(joinResponse.body, now());
     if (!session) throw remoteError('A TV retornou uma sessão LAN inválida.');
 
     const signedAuthorization = (method: string, target: string, body = '') => computeTvLanRequestAuthorization({
@@ -277,11 +334,7 @@ export async function createTvLanRemoteSignaling(
       const target = '/close?role=remote';
       try {
         const authorization = await signedAuthorization('POST', target);
-        await fetchImpl(`${baseUrl}${target}`, {
-          method: 'POST',
-          headers: { Authorization: authorization },
-          cache: 'no-store'
-        });
+        await transport?.close({ authorization });
       } catch {
         // Closing is best effort; session TTL is the final cleanup boundary.
       }
@@ -289,24 +342,34 @@ export async function createTvLanRemoteSignaling(
 
     if (controller.signal.aborted) {
       void bestEffortClose();
+      transport.dispose();
       throw remoteError('Conexão LAN cancelada.');
     }
 
     const pollDelayMs = Math.max(100, options.pollDelayMs ?? 300);
     let cursor = 0;
     let started = false;
+    let finished = false;
     let closed = false;
+
+    const disposeTerminalSession = () => {
+      if (closed) return;
+      closed = true;
+      cleanupExternalAbort();
+      transport?.dispose();
+      controller.abort();
+    };
 
     const ensureActive = () => {
       if (closed || controller.signal.aborted) throw remoteError('A conexão LAN com a TV foi encerrada.');
       if (now() >= session.expiresAt) {
-        closed = true;
-        controller.abort();
+        disposeTerminalSession();
         throw remoteError('A sessão de pareamento com a TV expirou.');
       }
     };
 
     const sendSignal = async (signal: TvRemoteSignal) => {
+      if (finished) return;
       ensureActive();
       const envelope: TvLanSignalEnvelope = {
         messageId: createMessageId(),
@@ -318,43 +381,31 @@ export async function createTvLanRemoteSignaling(
       const body = JSON.stringify(envelope);
       const authorization = await signedAuthorization('POST', target, body);
 
-      const response = await lanFetch(`${baseUrl}${target}`, {
-        method: 'POST',
-        headers: {
-          Authorization: authorization,
-          'Content-Type': 'application/json'
-        },
-        body,
-        cache: 'no-store'
-      });
-      if (!response.ok) throw responseError(response, 'Falha ao enviar sinalização local para a TV.');
+      const response = await transport!.signalSend({ authorization, body });
+      if (!responseOk(response)) throw responseError(response.status, 'Falha ao enviar sinalização local para a TV.');
     };
 
     const start = (
       onSignal: (signal: TvRemoteSignal) => void | Promise<void>,
       onError?: (error: Error) => void
     ) => {
-      if (started || closed) return;
+      if (started || closed || finished) return;
       started = true;
       const run = async () => {
-        while (!closed && !controller.signal.aborted) {
+        while (!closed && !finished && !controller.signal.aborted) {
           try {
             ensureActive();
             const target = `/signals?role=remote&cursor=${encodeURIComponent(String(cursor))}`;
             const authorization = await signedAuthorization('GET', target);
-            const response = await lanFetch(
-              `${baseUrl}${target}`,
-              { headers: { Authorization: authorization }, cache: 'no-store' }
-            );
-            if (!response.ok) {
-              const error = responseError(response, 'Falha ao receber sinalização local da TV.');
+            const response = await transport!.signalPoll({ authorization, cursor });
+            if (!responseOk(response)) {
+              const error = responseError(response.status, 'Falha ao receber sinalização local da TV.');
               if (response.status === 401 || response.status === 410) {
-                closed = true;
-                controller.abort();
+                disposeTerminalSession();
               }
               throw error;
             }
-            const value = await readJson(response);
+            const value = response.body;
             if (!value || typeof value !== 'object' || Array.isArray(value)) {
               throw remoteError('Resposta de sinalização local inválida.');
             }
@@ -368,13 +419,13 @@ export async function createTvLanRemoteSignaling(
               await onSignal(message.signal);
             }
           } catch (error) {
-            if (closed || controller.signal.aborted) {
-              if (error instanceof Error && error.message.includes('expirou')) onError?.(error);
+            if (closed || finished || controller.signal.aborted) {
+              if (!finished && error instanceof Error && error.message.includes('expirou')) onError?.(error);
               return;
             }
             onError?.(error instanceof Error ? error : remoteError('Falha na sinalização local da TV.'));
           }
-          if (closed || controller.signal.aborted) return;
+          if (closed || finished || controller.signal.aborted) return;
           await new Promise(resolve => setTimeout(resolve, pollDelayMs));
         }
       };
@@ -386,16 +437,31 @@ export async function createTvLanRemoteSignaling(
       session,
       sendSignal,
       start,
+      finish: () => {
+        if (closed || finished) return;
+        finished = true;
+        cleanupExternalAbort();
+        if (transport?.finish) transport.finish();
+        else transport?.dispose();
+      },
       close: () => {
         if (closed) return;
         closed = true;
-        controller.abort();
         cleanupExternalAbort();
-        void bestEffortClose();
+        if (finished) {
+          controller.abort();
+          transport?.dispose();
+          return;
+        }
+        void bestEffortClose().finally(() => {
+          controller.abort();
+          transport?.dispose();
+        });
       }
     };
   } catch (error) {
     controller.abort();
+    transport?.dispose();
     cleanupExternalAbort();
     throw error;
   }

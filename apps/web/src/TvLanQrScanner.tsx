@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { selectTvLanTransport } from './tv-lan-transport-selection';
 
 type BarcodeResult = { rawValue?: string };
 type BarcodeDetectorLike = { detect: (source: HTMLVideoElement) => Promise<BarcodeResult[]> };
@@ -8,6 +9,7 @@ type TvLanQrScannerProps = {
   open: boolean;
   onDetected: (value: string) => void;
   onCancel: () => void;
+  requireConnectGesture?: boolean;
 };
 
 function barcodeDetectorConstructor() {
@@ -22,7 +24,12 @@ function scannerErrorMessage(error: unknown) {
   return 'Não foi possível abrir a câmera. Cole o conteúdo do QR abaixo.';
 }
 
-export function TvLanQrScanner({ open, onDetected, onCancel }: TvLanQrScannerProps) {
+export function TvLanQrScanner({
+  open,
+  onDetected,
+  onCancel,
+  requireConnectGesture = selectTvLanTransport() === 'bridge',
+}: TvLanQrScannerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const onDetectedRef = useRef(onDetected);
   const [manualValue, setManualValue] = useState('');
@@ -81,6 +88,11 @@ export function TvLanQrScanner({ open, onDetected, onCancel }: TvLanQrScannerPro
               if (!value) return;
               disposed = true;
               stop();
+              if (requireConnectGesture) {
+                setManualValue(value);
+                setCameraMessage('QR lido. Toque em Conectar para abrir o canal local da TV.');
+                return;
+              }
               onDetectedRef.current(value);
             })
             .catch(() => undefined)
@@ -97,7 +109,7 @@ export function TvLanQrScanner({ open, onDetected, onCancel }: TvLanQrScannerPro
       disposed = true;
       stop();
     };
-  }, [open]);
+  }, [open, requireConnectGesture]);
 
   if (!open) return null;
 

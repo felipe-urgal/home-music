@@ -92,6 +92,7 @@ export function TvOfflineReceiver() {
     const updatePeerState = (next: TvRemotePeerState) => {
       if (disposed) return;
       if (next === 'open') {
+        signaling?.finish();
         setStatus('connected');
         setDetail('Celular conectado pela rede local.');
       } else if (next === 'connecting') {

@@ -171,6 +171,14 @@ final class LanPairingServer implements AutoCloseable {
                     .toString());
             }
 
+            if ("GET".equals(request.method) && "/bridge".equals(path)) {
+                return receiverAsset("/receiver/bridge.html");
+            }
+
+            if ("GET".equals(request.method) && "/bridge.js".equals(path)) {
+                return receiverAsset("/receiver/bridge.js");
+            }
+
             if ("GET".equals(request.method) && "/receiver/bootstrap".equals(path)) {
                 if (!loopback) return error(403, "Bootstrap do receiver é somente loopback.");
                 long expiresAt = session.receiverExpiresAt();

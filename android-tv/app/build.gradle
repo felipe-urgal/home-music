@@ -8,6 +8,7 @@ def releaseKeyAlias = System.getenv('ANDROID_TV_KEY_ALIAS')
 def releaseKeyPassword = System.getenv('ANDROID_TV_KEY_PASSWORD')
 def hasReleaseSigning = releaseStoreFile && releaseStorePassword && releaseKeyAlias && releaseKeyPassword
 def receiverDistDir = file("${rootProject.projectDir}/../apps/web/dist-tv-receiver")
+def bridgeAssetDir = file('src/main/assets')
 
 android {
     namespace 'com.homemusic.tv'
@@ -81,6 +82,7 @@ android {
 
 tasks.register('verifyTvOfflineReceiverAssets') {
     inputs.dir(receiverDistDir)
+    inputs.dir(bridgeAssetDir)
     doLast {
         def entry = new File(receiverDistDir, 'tv-offline-receiver.html')
         if (!entry.isFile()) {
@@ -89,6 +91,14 @@ tasks.register('verifyTvOfflineReceiverAssets') {
         def assetDir = new File(receiverDistDir, 'assets')
         if (!assetDir.isDirectory() || assetDir.listFiles() == null || assetDir.listFiles().length == 0) {
             throw new GradleException('Receiver offline inválido: bundle assets/ não foi gerado.')
+        }
+        def bridgeHtml = new File(bridgeAssetDir, 'bridge.html')
+        def bridgeScript = new File(bridgeAssetDir, 'bridge.js')
+        if (!bridgeHtml.isFile() || !bridgeScript.isFile()) {
+            throw new GradleException('Bridge LAN incompleto: bridge.html e bridge.js precisam estar empacotados nos assets da TV.')
+        }
+        if (!bridgeHtml.getText('UTF-8').contains('src="/bridge.js"') || bridgeScript.length() == 0L) {
+            throw new GradleException('Bridge LAN inválido: HTML precisa carregar /bridge.js e o script não pode estar vazio.')
         }
     }
 }

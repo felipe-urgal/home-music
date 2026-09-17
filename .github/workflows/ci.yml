@@ -64,6 +64,9 @@ jobs:
       - name: TV fully offline LAN E2E
         run: npm run test --prefix e2e -- tests/tv-offline-lan.spec.ts --project=desktop-chromium
 
+      - name: TV iOS LAN bridge E2E
+        run: npm run test --prefix e2e -- tests/tv-offline-lan-bridge.spec.ts --project=desktop-chromium
+
       - name: Personal data import E2E
         run: npm run test --prefix e2e -- tests/personal-data-import.spec.ts
 
