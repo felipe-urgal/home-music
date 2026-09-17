@@ -1,5 +1,9 @@
 (() => {
-  const status = document.getElementById('status');
+  const body = document.body;
+  const title = document.getElementById('bridge-title');
+  const status = document.getElementById('bridge-status');
+  const stateLabel = document.getElementById('bridge-state-label');
+  const returnButton = document.getElementById('bridge-return');
   const opener = window.opener;
   const params = new URLSearchParams(window.location.search);
   const PROTOCOL_VERSION = 1;
@@ -17,12 +21,66 @@
   const ID_PATTERN = /^[A-Za-z0-9._:-]{16,128}$/;
   const TOKEN_PATTERN = /^[A-Za-z0-9_-]{16,192}$/;
   const AUTHORIZATION_PATTERN = /^HomeMusic [A-Za-z0-9_-]{16,192}\.[0-9]+\.[A-Za-z0-9._:-]{16,192}\.[A-Za-z0-9_-]+$/;
+  const STATE_LABELS = {
+    initializing: 'Inicializando',
+    waiting: 'Aguardando',
+    pairing: 'Pareando',
+    ready: 'P2P pronto',
+    expired: 'Expirado',
+    closed: 'Encerrado',
+    error: 'Erro',
+  };
   const parentOrigin = normalizeOrigin(params.get('origin'));
   const channelId = params.get('channelId');
 
-  function setStatus(message) {
+  function renderState(state, nextTitle, message, { showReturn = false } = {}) {
+    if (body) body.dataset.state = state;
+    if (stateLabel) stateLabel.textContent = STATE_LABELS[state] ?? STATE_LABELS.error;
+    if (title) title.textContent = nextTitle;
     if (status) status.textContent = message;
+    if (returnButton) returnButton.hidden = !showReturn;
   }
+
+  function returnToHomeMusic() {
+    try {
+      opener?.focus();
+    } catch {
+      // The manual close remains available when the browser blocks focus.
+    }
+    window.close();
+  }
+
+  function scheduleClose() {
+    window.setTimeout(() => window.close(), 100);
+  }
+
+  function renderPairing() {
+    renderState(
+      'pairing',
+      'Pareando com a TV',
+      'Mantenha esta aba aberta por alguns instantes. O Home Music está concluindo a conexão P2P.'
+    );
+  }
+
+  function renderRequestError(result) {
+    if (result?.payload?.status === 410) {
+      renderState(
+        'expired',
+        'Pareamento expirou',
+        'Este pareamento não é mais válido. Volte ao Home Music e gere um novo pareamento.',
+        { showReturn: true }
+      );
+      return;
+    }
+    renderState(
+      'error',
+      'Não foi possível conectar',
+      'Volte ao Home Music e tente o pareamento novamente. Nenhum dado de autorização é exibido nesta página.',
+      { showReturn: true }
+    );
+  }
+
+  if (returnButton) returnButton.addEventListener('click', returnToHomeMusic);
 
   function normalizeOrigin(value) {
     if (!value) return null;
@@ -154,16 +212,16 @@
         return { ok: false, payload: null, error: 'response_too_large' };
       }
 
-      let body = null;
+      let responseBody = null;
       if (text !== '') {
         try {
-          body = JSON.parse(text);
+          responseBody = JSON.parse(text);
         } catch {
           return { ok: false, payload: { status: response.status }, error: 'invalid_response' };
         }
       }
 
-      const payload = { status: response.status, body };
+      const payload = { status: response.status, body: responseBody };
       if (!response.ok) return { ok: false, payload, error: 'http_error' };
       return { ok: true, payload, error: null };
     } catch {
@@ -212,8 +270,8 @@
       if (typeof payload.authorization !== 'string' || !AUTHORIZATION_PATTERN.test(payload.authorization)) return null;
       if (typeof payload.body !== 'string' || textByteLength(payload.body) > MAX_REQUEST_BODY_BYTES) return null;
       try {
-        const body = JSON.parse(payload.body);
-        if (!isJsonValue(body)) return null;
+        const parsedBody = JSON.parse(payload.body);
+        if (!isJsonValue(parsedBody)) return null;
       } catch {
         return null;
       }
@@ -250,11 +308,20 @@
   }
 
   if (!opener) {
-    setStatus('Sem janela de origem. Abra este bridge pelo Home Music.');
+    renderState(
+      'error',
+      'Abra pelo Home Music',
+      'Este bridge precisa ser aberto pelo Home Music para iniciar uma conexão local.'
+    );
     return;
   }
   if (!parentOrigin || typeof channelId !== 'string' || !ID_PATTERN.test(channelId)) {
-    setStatus('Canal do bridge inválido. Volte ao Home Music e tente novamente.');
+    renderState(
+      'error',
+      'Canal inválido',
+      'Volte ao Home Music e inicie um novo pareamento.',
+      { showReturn: true }
+    );
     return;
   }
 
@@ -268,23 +335,42 @@
       return;
     }
 
+    if (request.operation !== 'complete' && request.operation !== 'close') renderPairing();
+
     inFlight.add(request.requestId);
     try {
       const result = await executeRequest(request);
       if (!result) {
         invalidPayload(request);
+        renderState(
+          'error',
+          'Não foi possível conectar',
+          'O Home Music enviou uma solicitação inválida. Volte ao aplicativo e inicie um novo pareamento.',
+          { showReturn: true }
+        );
         return;
       }
       if (request.expiresAt <= Date.now()) return;
       postResponse(request, result.ok, result.payload, result.error);
+
       if (request.operation === 'complete' && result.ok) {
-        setStatus('Conexão P2P pronta. Volte ao Home Music. Você pode fechar esta aba se ela não fechar automaticamente.');
-        window.setTimeout(() => window.close(), 100);
+        renderState(
+          'ready',
+          'Conexão P2P pronta',
+          'Volte ao Home Music para continuar. Se esta aba não fechar automaticamente, use o botão abaixo.',
+          { showReturn: true }
+        );
+        scheduleClose();
       } else if (request.operation === 'close' && result.ok) {
-        setStatus('Sessão encerrada. Você pode voltar ao Home Music.');
-        window.setTimeout(() => window.close(), 100);
-      } else {
-        setStatus(result.ok ? 'Comando LAN concluído. Aguardando próximo passo…' : 'Não foi possível concluir o comando LAN. Volte ao Home Music.');
+        renderState(
+          'closed',
+          'Sessão encerrada',
+          'A sessão local foi encerrada. Volte ao Home Music para continuar.',
+          { showReturn: true }
+        );
+        scheduleClose();
+      } else if (!result.ok) {
+        renderRequestError(result);
       }
     } finally {
       inFlight.delete(request.requestId);
@@ -296,5 +382,9 @@
     type: 'ready',
     channelId,
   }, parentOrigin);
-  setStatus('Bridge aberto. Volte ao Home Music para concluir o pareamento. Mantenha esta aba aberta até a conexão P2P ser confirmada.');
+  renderState(
+    'waiting',
+    'Aguardando Home Music',
+    'Volte ao Home Music para concluir o pareamento. Mantenha esta aba aberta até a conexão P2P ser confirmada.'
+  );
 })();

@@ -22,7 +22,6 @@ export function TvRemoteControlSurface({ sessionId, username, offlineRecords }: 
   downloadedIdsRef.current = downloadedIds;
   const mediaEndpointRef = useRef<TvRemoteMediaEndpoint | null>(null);
   const peerStateRef = useRef<TvRemotePeerState>('connecting');
-  const [peerState, setPeerState] = useState<TvRemotePeerState>('connecting');
   const [transferState, setTransferState] = useState<TransferState>('idle');
   const [progress, setProgress] = useState(0);
   const [statusText, setStatusText] = useState<string | null>(null);
@@ -36,7 +35,6 @@ export function TvRemoteControlSurface({ sessionId, username, offlineRecords }: 
 
     const updatePeerState = (next: TvRemotePeerState) => {
       peerStateRef.current = next;
-      if (!disposed) setPeerState(next);
     };
 
     const transport = createServerTvRemoteSessionTransport(sessionId);
@@ -137,11 +135,11 @@ export function TvRemoteControlSurface({ sessionId, username, offlineRecords }: 
   }, [sessionId]);
 
   const showDirectStatus = downloadedIds.size > 0 && (
-    transferState !== 'idle' || peerState === 'open' || statusText !== null
+    transferState !== 'idle' || statusText !== null
   );
   const directStatusText = transferState === 'sending'
     ? `${statusText ?? 'Enviando para a TV…'} ${progress}%`
-    : statusText ?? (peerState === 'open' ? 'Áudio direto pronto para seus downloads.' : null);
+    : statusText;
 
   return (
     <>

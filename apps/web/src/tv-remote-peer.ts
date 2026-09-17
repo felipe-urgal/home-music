@@ -2,6 +2,8 @@ import type { TvRemotePeerRole, TvRemoteSignal } from '@home-music/shared/tv-rem
 
 export const TV_REMOTE_MEDIA_CHANNEL = 'home-music-media-v1';
 
+const TV_REMOTE_DISCONNECT_GRACE_MS = 5_000;
+
 export type TvRemotePeerState = 'connecting' | 'open' | 'closed' | 'unsupported' | 'error';
 
 export type TvRemotePeerController = {
@@ -48,10 +50,51 @@ export function createTvRemotePeerController(options: PeerOptions): TvRemotePeer
   let started = false;
   let closed = false;
   let channel: RTCDataChannel | null = null;
+  let removeChannelListeners: (() => void) | null = null;
+  let disconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  let lastState: TvRemotePeerState | null = null;
+
+  const emitState = (state: TvRemotePeerState) => {
+    if (lastState === state) return;
+    lastState = state;
+    options.onState?.(state);
+  };
+
+  const clearDisconnectTimer = () => {
+    if (disconnectTimer === null) return;
+    clearTimeout(disconnectTimer);
+    disconnectTimer = null;
+  };
+
+  const detachChannel = (shouldClose: boolean) => {
+    const current = channel;
+    removeChannelListeners?.();
+    removeChannelListeners = null;
+    channel = null;
+    if (shouldClose && current && current.readyState !== 'closed') current.close();
+  };
+
+  const cleanup = () => {
+    if (closed) return false;
+    closed = true;
+    clearDisconnectTimer();
+    pendingCandidates.length = 0;
+    detachChannel(true);
+    peer.removeEventListener('icecandidate', onIceCandidate);
+    peer.removeEventListener('connectionstatechange', onConnectionStateChange);
+    peer.removeEventListener('datachannel', onDataChannel);
+    peer.close();
+    return true;
+  };
+
+  const reportClosed = () => {
+    if (!cleanup()) return;
+    emitState('closed');
+  };
 
   const reportError = (error: unknown) => {
-    if (closed) return;
-    options.onState?.('error');
+    if (!cleanup()) return;
+    emitState('error');
     options.onError?.(error);
   };
 
@@ -60,37 +103,77 @@ export function createTvRemotePeerController(options: PeerOptions): TvRemotePeer
       if (next.label !== TV_REMOTE_MEDIA_CHANNEL) next.close();
       return;
     }
-    channel?.close();
+    if (channel && channel !== next) detachChannel(true);
     channel = next;
     next.binaryType = 'arraybuffer';
+
     const onOpen = () => {
-      if (!closed) options.onState?.('open');
+      if (!closed && channel === next) {
+        clearDisconnectTimer();
+        emitState('open');
+      }
     };
     const onClose = () => {
-      if (!closed) options.onState?.('closed');
+      if (!closed && channel === next) reportClosed();
     };
+    const onError = () => {
+      if (!closed && channel === next) reportError(new Error('Canal P2P com a TV ficou indisponível.'));
+    };
+
     next.addEventListener('open', onOpen);
     next.addEventListener('close', onClose);
+    next.addEventListener('error', onError);
+    removeChannelListeners = () => {
+      next.removeEventListener('open', onOpen);
+      next.removeEventListener('close', onClose);
+      next.removeEventListener('error', onError);
+    };
+
     if (next.readyState === 'open') onOpen();
     options.onChannel(next);
   };
 
-  peer.addEventListener('icecandidate', event => {
+  function onIceCandidate(event: RTCPeerConnectionIceEvent) {
     if (closed || !event.candidate) return;
     void options.sendSignal({
       from: options.role,
       type: 'ice-candidate',
       candidate: serializableCandidate(event.candidate)
     }).catch(reportError);
-  });
+  }
 
-  peer.addEventListener('connectionstatechange', () => {
+  function onConnectionStateChange() {
     if (closed) return;
-    if (peer.connectionState === 'failed') reportError(new Error('Falha na conexão P2P com a TV.'));
-    else if (peer.connectionState === 'closed') options.onState?.('closed');
-  });
+    if (peer.connectionState === 'failed') {
+      reportError(new Error('Falha na conexão P2P com a TV.'));
+      return;
+    }
+    if (peer.connectionState === 'closed') {
+      reportClosed();
+      return;
+    }
+    if (peer.connectionState === 'disconnected') {
+      emitState('connecting');
+      clearDisconnectTimer();
+      disconnectTimer = setTimeout(() => {
+        disconnectTimer = null;
+        reportError(new Error('Conexão P2P com a TV foi perdida. Gere um novo pareamento para reconectar.'));
+      }, TV_REMOTE_DISCONNECT_GRACE_MS);
+      return;
+    }
+    if (peer.connectionState === 'connected') {
+      clearDisconnectTimer();
+      emitState(channel?.readyState === 'open' ? 'open' : 'connecting');
+    }
+  }
 
-  peer.addEventListener('datachannel', event => attachChannel(event.channel));
+  function onDataChannel(event: RTCDataChannelEvent) {
+    attachChannel(event.channel);
+  }
+
+  peer.addEventListener('icecandidate', onIceCandidate);
+  peer.addEventListener('connectionstatechange', onConnectionStateChange);
+  peer.addEventListener('datachannel', onDataChannel);
 
   const publishLocalDescription = async () => {
     const description = peer.localDescription;
@@ -116,7 +199,7 @@ export function createTvRemotePeerController(options: PeerOptions): TvRemotePeer
     start: async () => {
       if (closed || started || options.role !== 'remote') return;
       started = true;
-      options.onState?.('connecting');
+      emitState('connecting');
       try {
         attachChannel(peer.createDataChannel(TV_REMOTE_MEDIA_CHANNEL, { ordered: true }));
         const offer = await peer.createOffer();
@@ -138,7 +221,7 @@ export function createTvRemotePeerController(options: PeerOptions): TvRemotePeer
         }
 
         if (options.role === 'tv' && signal.description.type === 'offer') {
-          options.onState?.('connecting');
+          emitState('connecting');
           await peer.setRemoteDescription(signal.description);
           await flushCandidates();
           const answer = await peer.createAnswer();
@@ -156,13 +239,7 @@ export function createTvRemotePeerController(options: PeerOptions): TvRemotePeer
       }
     },
     close: () => {
-      if (closed) return;
-      closed = true;
-      pendingCandidates.length = 0;
-      channel?.close();
-      channel = null;
-      peer.close();
-      options.onState?.('closed');
+      cleanup();
     }
   };
 }

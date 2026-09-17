@@ -89,7 +89,7 @@
 .offline-collection-card {
   min-width: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 38px;
+  grid-template-columns: minmax(0, 1fr) 38px 38px;
   align-items: center;
   border: 1px solid rgba(255,255,255,.07);
   border-radius: 12px;
@@ -139,6 +139,42 @@
 .offline-collection-card__copy strong { font-size: 13px; }
 .offline-collection-card__copy small { color: #7e8a95; font-size: 11px; }
 .offline-collection-card > .track-action { justify-self: center; }
+
+.offline-collection-detail__header {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.offline-collection-detail__copy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+.offline-collection-detail__copy strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15px;
+}
+.offline-collection-detail__copy small {
+  color: #7e8a95;
+  font-size: 11px;
+}
+
+.offline-collection-detail__play-all {
+  width: auto;
+  min-height: 38px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.offline-collection-detail__play-all svg { width: 15px; height: 15px; }
 
 .track-heading > .track-heading__actions {
   min-width: auto;
@@ -210,4 +246,12 @@
   .offline-collection-control__actions { justify-content: flex-end; }
   .offline-collection-control__actions .primary-action,
   .offline-collection-control__actions .secondary-action { flex: 1; }
+
+  .offline-collection-detail__header {
+    grid-template-columns: 40px minmax(0, 1fr);
+  }
+  .offline-collection-detail__play-all {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
 }

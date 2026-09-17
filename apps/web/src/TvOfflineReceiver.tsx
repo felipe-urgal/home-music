@@ -89,6 +89,25 @@ export function TvOfflineReceiver() {
     let disposed = false;
     let signaling: Awaited<ReturnType<typeof createTvLanReceiverSignaling>> | null = null;
 
+    const closeAttempt = () => {
+      transportRef.current?.close();
+      transportRef.current = null;
+      channelRef.current?.close();
+      channelRef.current = null;
+      peerRef.current?.close();
+      peerRef.current = null;
+      signaling?.close();
+      signaling = null;
+      pendingPlayTrackIdRef.current = null;
+    };
+
+    const requireNewPairing = (message: string, nextStatus: ReceiverStatus = 'waiting') => {
+      if (disposed) return;
+      closeAttempt();
+      setStatus(nextStatus);
+      setDetail(`${message} Abra Menu → Novo pareamento offline para gerar um novo QR.`);
+    };
+
     const updatePeerState = (next: TvRemotePeerState) => {
       if (disposed) return;
       if (next === 'open') {
@@ -99,14 +118,13 @@ export function TvOfflineReceiver() {
         setStatus('waiting');
         setDetail('Aguardando o celular concluir a conexão P2P…');
       } else if (next === 'unsupported') {
+        closeAttempt();
         setStatus('error');
         setDetail('Este navegador interno não oferece WebRTC compatível.');
       } else if (next === 'error') {
-        setStatus('error');
-        setDetail('Não foi possível abrir a conexão P2P local.');
+        requireNewPairing('A conexão P2P local foi perdida.', 'error');
       } else if (next === 'closed') {
-        setStatus('waiting');
-        setDetail('Conexão encerrada. Gere um novo pareamento se necessário.');
+        requireNewPairing('Conexão com o celular encerrada.');
       }
     };
 
@@ -125,12 +143,14 @@ export function TvOfflineReceiver() {
           sendSignal: signal => transport.sendSignal(signal),
           onState: updatePeerState,
           onError: error => {
-            if (disposed) return;
-            setStatus('error');
-            setDetail(error instanceof Error ? error.message : 'Falha na conexão P2P local.');
+            if (disposed || peerRef.current !== peer) return;
+            requireNewPairing(
+              error instanceof Error ? error.message : 'Falha na conexão P2P local.',
+              'error'
+            );
           },
           onChannel: channel => {
-            if (disposed) {
+            if (disposed || peerRef.current !== peer) {
               channel.close();
               return;
             }
@@ -179,9 +199,10 @@ export function TvOfflineReceiver() {
                 });
               },
               onDisconnect: () => {
-                pendingPlayTrackIdRef.current = null;
-                setStatus('waiting');
-                setDetail('Celular desconectado. Gere um novo pareamento se necessário.');
+                requireNewPairing('Celular desconectado.');
+              },
+              onError: error => {
+                requireNewPairing(error.message, 'error');
               }
             });
             channelRef.current = dataChannel;
@@ -191,9 +212,8 @@ export function TvOfflineReceiver() {
         transport.subscribeSignals(
           signal => peer.handleSignal(signal),
           error => {
-            if (disposed) return;
-            setStatus('error');
-            setDetail(error instanceof Error ? error.message : 'Falha no signaling local.');
+            if (disposed || peerRef.current !== peer) return;
+            requireNewPairing(error.message || 'Falha no signaling local.', 'error');
           }
         );
         setStatus('waiting');
@@ -201,21 +221,17 @@ export function TvOfflineReceiver() {
         await peer.start();
       } catch (error) {
         if (disposed) return;
-        setStatus('error');
-        setDetail(error instanceof Error ? error.message : 'Falha ao iniciar receiver offline local.');
+        requireNewPairing(
+          error instanceof Error ? error.message : 'Falha ao iniciar receiver offline local.',
+          'error'
+        );
       }
     };
 
     void start();
     return () => {
       disposed = true;
-      transportRef.current?.close();
-      transportRef.current = null;
-      channelRef.current?.close();
-      channelRef.current = null;
-      peerRef.current?.close();
-      peerRef.current = null;
-      pendingPlayTrackIdRef.current = null;
+      closeAttempt();
       committedTrackIdsRef.current.clear();
       clearTvRemoteMediaSources();
       receivedTracksRef.current.clear();

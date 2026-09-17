@@ -61,12 +61,36 @@ test('celular envia faixa baixada por WebRTC e a TV toca a fonte P2P', async ({ 
     await login(phone, `${origin}/`);
     await expect(phone.locator('.app-shell')).toBeVisible();
     const target = await seedOfflineTrack(phone, 'E2E Zulu');
+    await phone.addInitScript(() => {
+      const originalCreateDataChannel = RTCPeerConnection.prototype.createDataChannel;
+      Object.defineProperty(RTCPeerConnection.prototype, 'createDataChannel', {
+        configurable: true,
+        value: function (this: RTCPeerConnection, label: string, options?: RTCDataChannelInit) {
+          const channel = originalCreateDataChannel.call(this, label, options);
+          if (label === 'home-music-media-v1') {
+            const setReady = (ready: boolean) => {
+              (window as typeof window & { __homeMusicTvMediaReady?: boolean }).__homeMusicTvMediaReady = ready;
+            };
+            channel.addEventListener('open', () => setReady(true));
+            channel.addEventListener('close', () => setReady(false));
+            setReady(channel.readyState === 'open');
+          }
+          return channel;
+        }
+      });
+    });
     await phone.goto(pairingUrl!);
 
     await expect(phone.locator('.tv-remote-screen')).toBeVisible();
     await expect(phone.locator('audio')).toHaveCount(0);
     await expect(phone.getByText('TV conectada', { exact: true })).toBeVisible({ timeout: 5_000 });
-    await expect(phone.getByText('Áudio direto pronto para seus downloads.', { exact: true })).toBeVisible({ timeout: 10_000 });
+    await expect.poll(
+      () => phone.evaluate(() => (
+        (window as typeof window & { __homeMusicTvMediaReady?: boolean }).__homeMusicTvMediaReady === true
+      )),
+      { timeout: 10_000 }
+    ).toBe(true);
+    await expect(phone.getByText('Áudio direto pronto para seus downloads.', { exact: true })).toHaveCount(0);
 
     await phone.getByRole('button', { name: /Biblioteca/ }).click();
     await phone.getByRole('button', { name: /^Pastas/ }).click();
