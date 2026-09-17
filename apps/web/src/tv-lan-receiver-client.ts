@@ -21,6 +21,7 @@ export type TvLanReceiverSignaling = {
   bootstrap: TvLanReceiverBootstrap;
   sendSignal: (signal: TvRemoteSignal) => Promise<void>;
   start: (onSignal: (signal: TvRemoteSignal) => void | Promise<void>, onError?: (error: Error) => void) => void;
+  finish: () => void;
   close: () => void;
 };
 
@@ -75,6 +76,7 @@ export async function createTvLanReceiverSignaling(options: ReceiverSignalingOpt
   const createMessageId = options.createMessageId ?? defaultMessageId;
   let cursor = 0;
   let started = false;
+  let finished = false;
   let closed = false;
 
   const authHeaders = () => ({
@@ -82,6 +84,7 @@ export async function createTvLanReceiverSignaling(options: ReceiverSignalingOpt
   });
 
   const sendSignal = async (signal: TvRemoteSignal) => {
+    if (finished) return;
     if (closed) throw receiverError('A sessão offline local foi encerrada.');
     const envelope: TvLanSignalEnvelope = {
       messageId: createMessageId(),
@@ -103,10 +106,10 @@ export async function createTvLanReceiverSignaling(options: ReceiverSignalingOpt
   };
 
   const start = (onSignal: (signal: TvRemoteSignal) => void | Promise<void>, onError?: (error: Error) => void) => {
-    if (started || closed) return;
+    if (started || closed || finished) return;
     started = true;
     const run = async () => {
-      while (!closed && !controller.signal.aborted) {
+      while (!closed && !finished && !controller.signal.aborted) {
         try {
           const response = await fetchImpl(
             `${bootstrap.signalingBase}/signals?role=tv&cursor=${encodeURIComponent(String(cursor))}`,
@@ -126,10 +129,10 @@ export async function createTvLanReceiverSignaling(options: ReceiverSignalingOpt
             await onSignal(message.signal);
           }
         } catch (error) {
-          if (closed || controller.signal.aborted) return;
+          if (closed || finished || controller.signal.aborted) return;
           onError?.(error instanceof Error ? error : receiverError('Falha na sinalização local.'));
         }
-        if (closed || controller.signal.aborted) return;
+        if (closed || finished || controller.signal.aborted) return;
         await new Promise(resolve => setTimeout(resolve, pollDelayMs));
       }
     };
@@ -140,6 +143,11 @@ export async function createTvLanReceiverSignaling(options: ReceiverSignalingOpt
     bootstrap,
     sendSignal,
     start,
+    finish: () => {
+      if (closed || finished) return;
+      finished = true;
+      controller.abort();
+    },
     close: () => {
       if (closed) return;
       closed = true;
