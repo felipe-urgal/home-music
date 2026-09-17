@@ -18,6 +18,8 @@ import {
   loginIdentityRateLimitKey,
   type LoginAbuseProtection
 } from './login-abuse-protection.js';
+import { TvDeviceLoginManager } from './tv-device-login-manager.js';
+import { registerTvDeviceLoginRoutes } from './tv-device-login-routes.js';
 import type { UserAuthStore } from './user-auth-store.js';
 
 type AuthRouteDependencies = {
@@ -184,5 +186,12 @@ export function registerAuthRoutes(app: FastifyInstance, dependencies: AuthRoute
     return reply.code(204).send();
   });
 
+  registerTvDeviceLoginRoutes(app, {
+    manager: new TvDeviceLoginManager(),
+    sessions,
+    forceSecureCookie,
+    trustTailscaleForwardedFor,
+    sessionCookieMaxAgeSeconds: SESSION_COOKIE_MAX_AGE_SECONDS
+  });
   registerAccountSessionRoutes(app, sessions);
 }
