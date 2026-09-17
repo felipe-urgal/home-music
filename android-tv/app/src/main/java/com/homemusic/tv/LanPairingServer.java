@@ -143,7 +143,8 @@ final class LanPairingServer implements AutoCloseable {
             if (request == null) return;
             boolean loopback = client.getInetAddress().isLoopbackAddress();
             String origin = request.headers.get("origin");
-            if (!originAllowed(origin, loopback)) {
+            String requestHost = request.headers.get("host");
+            if (!originAllowedForRequest(origin, loopback, allowedOrigin, requestHost)) {
                 writeResponse(client, null, Response.json(403, "{\"error\":\"Origin não autorizada.\"}"));
                 return;
             }
@@ -361,9 +362,10 @@ final class LanPairingServer implements AutoCloseable {
         });
     }
 
-    private boolean originAllowed(String origin, boolean loopback) {
+    static boolean originAllowedForRequest(String origin, boolean loopback, String allowedOrigin, String requestHost) {
         if (origin == null || origin.isEmpty()) return true;
         if (origin.equals(allowedOrigin)) return true;
+        if (requestHost != null && !requestHost.isEmpty() && origin.equals("http://" + requestHost)) return true;
         return loopback && (origin.startsWith("http://127.0.0.1:") || origin.startsWith("http://localhost:"));
     }
 
