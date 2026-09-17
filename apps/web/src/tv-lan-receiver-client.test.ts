@@ -52,4 +52,27 @@ describe('TV offline receiver LAN client', () => {
       signal: { from: 'tv', type: 'description' }
     });
   });
+
+  it('stops receiver signaling after P2P and ignores late ICE candidates', async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      calls.push({ url, init });
+      if (url === '/receiver/bootstrap') {
+        return new Response(JSON.stringify(bootstrap()), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      return new Response('{}', { status: 202, headers: { 'Content-Type': 'application/json' } });
+    });
+
+    const client = await createTvLanReceiverSignaling({ fetchImpl: fetchImpl as typeof fetch });
+    client.finish();
+    await client.sendSignal({
+      from: 'tv',
+      type: 'ice-candidate',
+      candidate: { candidate: 'candidate:1 1 udp 1 127.0.0.1 9 typ host' }
+    });
+
+    expect(calls).toHaveLength(1);
+    client.close();
+  });
 });
