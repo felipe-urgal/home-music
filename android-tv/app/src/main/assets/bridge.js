@@ -7,7 +7,6 @@
   const MAX_REQUEST_BODY_BYTES = 320 * 1024;
   const MAX_RELAY_TIMEOUT_MS = 10_000;
   const ALLOWED_OPERATIONS = new Set([
-    'probe',
     'challenge',
     'join',
     'signal-send',
@@ -178,11 +177,6 @@
   async function executeRequest(request) {
     const payload = request.payload;
 
-    if (request.operation === 'probe') {
-      if (payload !== null) return { ok: false, payload: null, error: 'invalid_payload' };
-      return { ok: true, payload: { pong: true }, error: null };
-    }
-
     if (request.operation === 'complete') {
       if (payload !== null) return { ok: false, payload: null, error: 'invalid_payload' };
       return { ok: true, payload: { status: 204, body: null }, error: null };
@@ -283,9 +277,7 @@
       }
       if (request.expiresAt <= Date.now()) return;
       postResponse(request, result.ok, result.payload, result.error);
-      if (request.operation === 'probe' && result.ok) {
-        setStatus('Canal v1 validado. Aguardando pareamento…');
-      } else if (request.operation === 'complete' && result.ok) {
+      if (request.operation === 'complete' && result.ok) {
         setStatus('Conexão P2P pronta. Volte ao Home Music. Você pode fechar esta aba se ela não fechar automaticamente.');
         window.setTimeout(() => window.close(), 100);
       } else if (request.operation === 'close' && result.ok) {
