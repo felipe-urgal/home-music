@@ -17,7 +17,7 @@ O spike deste PR validou fisicamente que:
 - Home Music e bridge conseguem trocar `PING/PONG` com `postMessage`;
 - o segredo do QR não precisa ser enviado para a página bridge para provar essa comunicação.
 
-No head `ad1b7b267698ca6a5e96784152c020ef70b3e4fc`, CI #1937 e Android TV #90 concluíram com sucesso. No head `6071db07ed847dfcf53e6a1778bfae3b95a7bb2c`, após a atividade 2, CI #1939 e Android TV #92 também concluíram com sucesso. Alterações posteriores da atividade 3 exigem nova observação dos gates antes de usar essa evidência como final.
+No head `ad1b7b267698ca6a5e96784152c020ef70b3e4fc`, CI #1937 e Android TV #90 concluíram com sucesso. No head `6071db07ed847dfcf53e6a1778bfae3b95a7bb2c`, após a atividade 2, CI #1939 e Android TV #92 também concluíram com sucesso. O código das atividades 3–5 foi adicionado depois dessas evidências; os gates precisam ser observados novamente no head final antes de considerar a evolução validada.
 
 ## Objetivo
 
@@ -74,7 +74,7 @@ Estas regras não devem ser relaxadas para fazer o bridge funcionar:
 - [x] validar `window.opener` no iPhone real;
 - [x] validar `postMessage` HTTPS ↔ HTTP com `PING/PONG` no iPhone real;
 - [x] confirmar que o spike não precisa receber o `secret` do QR;
-- [ ] remover a UI/textos de diagnóstico do spike quando o fluxo real substituir o teste.
+- [x] remover o botão/UI de diagnóstico do spike do fluxo normal; a operação `probe` permanece temporariamente disponível até a limpeza final.
 
 ### 2. Definir contrato interno do bridge
 
@@ -96,14 +96,14 @@ Requisitos:
 
 Operações permitidas são semânticas e fechadas:
 
-- `probe` — temporária enquanto o spike ainda existe;
+- `probe` — temporária até a limpeza final;
 - `challenge`;
 - `join`;
 - `signal-send`;
 - `signal-poll`;
 - `close`.
 
-O bridge não aceita URL arbitrária, host arbitrário, método arbitrário ou headers arbitrários. A atividade 3 passou a executar as operações de produção com targets same-origin determinísticos; `probe` continua apenas enquanto a UI temporária do spike ainda não foi removida.
+O bridge não aceita URL arbitrária, host arbitrário, método arbitrário ou headers arbitrários. A atividade 3 passou a executar as operações de produção com targets same-origin determinísticos.
 
 ### 3. Produzir o bridge real na BTV
 
@@ -118,7 +118,7 @@ Os endpoints `/challenge`, `/join`, `/signals` e `/close` já existem no `LanPai
 Atividades:
 
 - [x] confirmar que `/challenge`, `/join`, `/signals` e `/close` já existem e preservam as validações atuais;
-- [x] substituir `not_implemented` pelo relay das operações permitidas, mantendo `probe` temporariamente para o spike;
+- [x] substituir `not_implemented` pelo relay das operações permitidas, mantendo `probe` temporariamente para diagnóstico;
 - [x] usar requests same-origin para o próprio `LanPairingServer`;
 - [x] reconstruir targets de forma determinística, sem aceitar target arbitrário vindo do PWA;
 - [x] aplicar `cache: no-store` e `credentials: omit` às requests de sessão;
@@ -135,53 +135,56 @@ Contrato detalhado do relay e shapes de payload: [`docs/ios-lan-bridge-protocol-
 
 ### 4. Criar transporte bridge no PWA
 
-Arquivos esperados:
+Arquivos principais:
 
+- `apps/web/src/tv-lan-transport.ts`;
+- `apps/web/src/tv-lan-bridge-client.ts`;
 - `apps/web/src/tv-lan-remote-client.ts`;
-- novo módulo dedicado ao bridge, se necessário;
-- `apps/web/src/TvLanQrScanner.tsx`;
-- `apps/web/src/OfflineApp.tsx` apenas se a integração exigir.
+- `apps/web/src/tv-lan-bridge-client.test.ts`;
+- `apps/web/src/tv-lan-remote-bridge-transport.test.ts`.
 
 Atividades:
 
-- [ ] extrair/introduzir uma abstração de transporte para as requests LAN;
-- [ ] manter o transporte HTTP direto atual como caminho existente;
-- [ ] adicionar transporte via bridge usando `window.open` + `postMessage`;
-- [ ] fazer `challenge` via bridge;
-- [ ] calcular `proof` no PWA e fazer `join` via bridge;
-- [ ] validar o `join` no PWA exatamente como no caminho direto;
-- [ ] calcular `Authorization` HMAC no PWA para `signals` e `close`;
-- [ ] enviar/receber sinalização via bridge sem alterar envelopes v2;
-- [ ] manter cursor e validações de polling existentes;
-- [ ] encerrar bridge/sinalização quando o DataChannel abrir ou a sessão for fechada;
-- [ ] manter `AbortSignal`, timeouts e cleanup do cliente atual;
-- [ ] não duplicar lógica criptográfica entre transporte direto e bridge;
-- [ ] impedir duas conexões/bridges concorrentes para a mesma tentativa de pareamento.
+- [x] extrair/introduzir uma abstração de transporte para as requests LAN;
+- [x] manter o transporte HTTP direto atual como caminho existente;
+- [x] adicionar transporte via bridge usando `window.open` + `postMessage`;
+- [x] fazer `challenge` via bridge;
+- [x] calcular `proof` no PWA e fazer `join` via bridge;
+- [x] validar o `join` no PWA exatamente como no caminho direto;
+- [x] calcular `Authorization` HMAC no PWA para `signals` e `close`;
+- [x] enviar sinalização via bridge sem alterar envelopes v2;
+- [x] manter cursor e validações de polling existentes na lógica compartilhada;
+- [ ] encerrar o bridge assim que o DataChannel abrir; o fechamento de sessão/abort já faz cleanup, mas o fechamento antecipado pós-P2P ainda depende da integração de lifecycle;
+- [x] manter `AbortSignal`, timeouts e cleanup do cliente/transport;
+- [x] não duplicar lógica criptográfica entre transporte direto e bridge;
+- [x] a tentativa anterior é abortada/fechada antes de uma nova conexão pelo fluxo existente; validar isso também no lifecycle físico do iOS.
 
 ### 5. Estratégia de seleção do transporte
 
 Não fazer fallback silencioso que esconda erro real de rede.
 
-- [ ] preservar transporte direto para plataformas onde ele funciona;
-- [ ] definir condição explícita para oferecer/usar bridge no iOS;
-- [ ] se houver tentativa direta antes do bridge, distinguir falha de mixed-content/plataforma de TV realmente inalcançável quando tecnicamente possível;
-- [ ] evitar abrir popup/aba local sem ação do usuário;
-- [ ] manter erro acionável quando popup estiver bloqueado;
-- [ ] manter erro acionável quando a TV estiver fora da rede, sessão expirar ou bridge não responder.
+- [x] preservar transporte direto para plataformas onde ele funciona;
+- [x] selecionar explicitamente o bridge em iPhone/iPad/iPadOS, inclusive iPadOS com plataforma desktop-style;
+- [x] não tentar HTTP direto antes do bridge no iOS, evitando confundir bloqueio de mixed-content/plataforma com TV inalcançável;
+- [x] evitar abrir popup/aba local sem ação do usuário: em plataforma bridge, leitura automática apenas preenche o QR e exige toque em `Conectar`;
+- [x] manter erro acionável quando popup estiver bloqueado;
+- [x] manter erro acionável quando a TV estiver fora da rede, sessão expirar ou bridge não responder.
+
+Implementação: `apps/web/src/tv-lan-transport-selection.ts`, com cobertura em `apps/web/src/tv-lan-transport-selection.test.ts`.
 
 ### 6. UX do pareamento no iPhone
 
 O objetivo desta entrega é tornar o pareamento funcional; não é necessário introduzir uma biblioteca nova de leitura de QR apenas para substituir o fallback manual.
 
-- [ ] manter validação do payload antes de tentar conectar;
-- [ ] manter fallback de colar o conteúdo bruto do QR no iOS;
-- [ ] remover o botão `Testar bridge iOS (spike)` quando o bridge real estiver integrado;
-- [ ] botão `Conectar` deve disparar fluxo real e sempre produzir estado visível;
-- [ ] exibir estados de abertura do bridge, pareamento, conexão P2P, conectado e erro;
-- [ ] orientar o usuário quando a janela/aba bridge abrir;
+- [x] manter validação do payload antes de tentar conectar;
+- [x] manter fallback de colar o conteúdo bruto do QR no iOS;
+- [x] remover o botão `Testar bridge iOS (spike)` quando o bridge real estiver integrado;
+- [x] botão `Conectar` dispara o fluxo real e falhas do bridge retornam erro acionável;
+- [ ] revisar mensagens de estado para distinguir abertura do bridge, pareamento, P2P, conectado e erro;
+- [ ] orientar explicitamente o usuário quando a janela/aba bridge abrir;
 - [ ] fechar automaticamente a janela bridge quando possível após o DataChannel abrir;
-- [ ] fornecer fallback de retorno ao Home Music se o iOS não permitir `window.close()`;
-- [ ] não mostrar secret/token completo em UI ou diagnóstico.
+- [ ] fornecer fallback de retorno ao Home Music se o iOS não permitir `window.close()` após conexão;
+- [x] não mostrar secret/token completo em UI ou diagnóstico.
 
 ### 7. Lifecycle e riscos específicos do iOS
 
@@ -204,30 +207,30 @@ Se o iOS suspender uma das páginas de forma que impossibilite a sinalização, 
 
 Aplicar TDD nas mudanças de comportamento.
 
-A cobertura unitária do contrato está em `apps/web/src/tv-lan-bridge-protocol.test.ts`. O relay real existe no runtime da BTV, mas seus testes dedicados e a integração PWA continuam abertos.
+A cobertura unitária está distribuída entre o contrato, cliente do popup, seleção de transporte e cliente LAN compartilhado. O lifecycle real e o E2E do relay continuam abertos.
 
 Cobrir no mínimo:
 
-- [ ] handshake bridge `ready`/channel binding;
+- [x] handshake bridge `ready`/channel binding no cliente do popup;
 - [x] `event.source` incorreto é ignorado;
 - [x] `event.origin` incorreto é ignorado;
 - [x] nonce/channel incorreto é ignorado;
 - [x] request/response correlacionados por ID;
-- [ ] timeout;
-- [ ] popup bloqueado;
+- [ ] timeout dedicado do cliente bridge;
+- [x] popup bloqueado;
 - [ ] fechamento/abort durante request;
 - [x] response tardia de tentativa anterior;
 - [x] bridge não aceita operação fora da allowlist;
-- [ ] challenge via bridge;
-- [ ] join via bridge com proof calculada no PWA;
-- [ ] `signals` POST via bridge com autorização assinada;
-- [ ] `signals` GET/poll via bridge;
-- [ ] `close` best-effort via bridge;
-- [ ] QR expirado/regenerado;
+- [x] challenge via bridge;
+- [x] join via abstração bridge com proof calculada no PWA;
+- [x] `signals` POST via abstração bridge com autorização assinada;
+- [ ] `signals` GET/poll via bridge em teste dedicado;
+- [x] `close` best-effort acionado pela abstração bridge;
+- [ ] QR expirado/regenerado no caminho bridge;
 - [x] resposta inválida/malformada;
-- [ ] caminho direto continua funcionando;
-- [ ] nenhum segredo é incluído nas mensagens do bridge além do estritamente necessário ao protocolo de request já autenticado;
-- [ ] cleanup remove listeners/timers/window refs.
+- [x] caminho direto continua coberto pelos testes existentes;
+- [x] teste confirma que o `secret` não é enviado ao transport bridge e que proof/HMAC são calculados no PWA;
+- [ ] teste dedicado confirma cleanup de listeners/timers/window refs durante abort em voo.
 
 ### 9. Testes automatizados — Android TV
 
@@ -332,7 +335,8 @@ Depois que o comportamento estiver validado:
 ### 14. Limpeza antes do merge
 
 - [ ] remover `docs/spikes/ios-lan-bridge-probe.html` se ele não tiver mais valor diagnóstico;
-- [ ] remover mensagens/botões exclusivamente de spike;
+- [x] remover botão/mensagem de teste do bridge da UI normal;
+- [ ] remover operação `probe` e código diagnóstico quando não forem mais necessários;
 - [ ] remover código morto e listeners/timers temporários;
 - [ ] confirmar que não há logs de secret/token/Authorization;
 - [ ] confirmar que bridge não expõe fetch/proxy arbitrário;
