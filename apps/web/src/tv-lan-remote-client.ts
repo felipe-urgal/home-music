@@ -11,7 +11,9 @@ import {
   type TvLanSignalEnvelope
 } from '@home-music/shared/tv-lan-remote';
 import type { TvRemoteSignal } from '@home-music/shared/tv-remote';
+import { createTvLanBridgeTransport } from './tv-lan-bridge-client';
 import type { TvLanTransport, TvLanTransportFactory, TvLanTransportResponse } from './tv-lan-transport';
+import { selectTvLanTransport } from './tv-lan-transport-selection';
 
 type FetchLike = typeof fetch;
 
@@ -281,7 +283,11 @@ export async function createTvLanRemoteSignaling(
   const cleanupExternalAbort = () => externalSignal?.removeEventListener('abort', abortFromExternal);
   const permissionState = options.localNetworkPermissionState ?? defaultLocalNetworkPermissionState;
   const requestTimeoutMs = Math.max(1_000, options.requestTimeoutMs ?? 10_000);
-  const transportFactory = options.transportFactory ?? createDirectTransportFactory(fetchImpl, permissionState);
+  const transportFactory = options.transportFactory ?? (
+    selectTvLanTransport() === 'bridge'
+      ? ((bridgePairing, transportOptions) => createTvLanBridgeTransport(bridgePairing, transportOptions))
+      : createDirectTransportFactory(fetchImpl, permissionState)
+  );
   let transport: TvLanTransport | null = null;
 
   try {
