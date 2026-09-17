@@ -135,7 +135,7 @@ describe('TV LAN remote client with bridge transport', () => {
 
   it('disposes the bridge when polling reports a regenerated or expired session', async () => {
     const { signalPoll, close, dispose, transportFactory } = bridgeTransportMocks();
-    signalPoll.mockResolvedValueOnce({ status: 410, body: {} });
+    signalPoll.mockResolvedValueOnce({ status: 410, body: { cursor: 0, messages: [] } });
 
     const client = await createTvLanRemoteSignaling(qrText(), {
       transportFactory,
