@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { selectTvLanTransport } from './tv-lan-transport-selection';
 
 type BarcodeResult = { rawValue?: string };
 type BarcodeDetectorLike = { detect: (source: HTMLVideoElement) => Promise<BarcodeResult[]> };
@@ -23,7 +24,12 @@ function scannerErrorMessage(error: unknown) {
   return 'Não foi possível abrir a câmera. Cole o conteúdo do QR abaixo.';
 }
 
-export function TvLanQrScanner({ open, onDetected, onCancel, requireConnectGesture = false }: TvLanQrScannerProps) {
+export function TvLanQrScanner({
+  open,
+  onDetected,
+  onCancel,
+  requireConnectGesture = selectTvLanTransport() === 'bridge',
+}: TvLanQrScannerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const onDetectedRef = useRef(onDetected);
   const [manualValue, setManualValue] = useState('');
