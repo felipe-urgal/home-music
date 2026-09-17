@@ -1,6 +1,6 @@
 # Contrato interno — bridge LAN v1
 
-Status: **implementado como atividade 2 do PR #425**  
+Status: **atividades 2 e 3 implementadas no PR #425**  
 Escopo: comunicação interna `Home Music HTTPS (PWA) ↔ BTV HTTP /bridge`
 
 Este contrato existe somente para o adaptador de transporte usado no iOS. Ele **não substitui nem altera** o protocolo LAN `home-music-lan-remote-v2`, o pareamento, a derivação de `proof`/HMAC ou o transporte WebRTC/DataChannel.
@@ -75,53 +75,184 @@ Cada operação recebe um `requestId` novo. `expiresAt` é epoch em milissegundo
 
 Em erro, `ok` é `false`, `payload` pode ser `null` e `error` contém um código curto e estruturado. O PWA só aceita a resposta quando `channelId`, `requestId` e `operation` correspondem à request pendente.
 
-## Allowlist de operações
+## Operações permitidas
 
-O contrato reconhece somente operações semânticas fechadas:
+O bridge reconhece somente operações semânticas fechadas. Não existe campo de URL, host, método ou headers arbitrários.
 
-- `probe` — temporária enquanto o spike ainda existe;
-- `challenge`;
-- `join`;
-- `signal-send`;
-- `signal-poll`;
-- `close`.
+### `probe`
 
-Não existem campos para URL, host, método ou headers arbitrários. Na atividade 2, somente `probe` é executada pelo `bridge.js`; as operações de produção respondem `not_implemented` até o relay da atividade 3 ser implementado.
+Temporária enquanto a UI de spike ainda existe.
 
-Os endpoints LAN necessários já existem no `LanPairingServer`: `/challenge`, `/join`, `/signals` e `/close`. A próxima etapa deve apenas mapear as operações acima para esses endpoints same-origin, preservando as regras existentes do protocolo v2.
+Request:
 
-## Validação e limites
+```json
+null
+```
+
+Response de sucesso:
+
+```json
+{ "pong": true }
+```
+
+### `challenge`
+
+Payload:
+
+```json
+{
+  "sessionId": "<session-id>",
+  "clientNonce": "<client-nonce>"
+}
+```
+
+Target reconstruído pelo bridge:
+
+```text
+GET /challenge?session=<sessionId>&clientNonce=<clientNonce>
+```
+
+### `join`
+
+O `proof` é calculado no PWA e somente retransmitido de forma transitória pelo bridge.
+
+Payload:
+
+```json
+{
+  "sessionId": "<session-id>",
+  "clientNonce": "<client-nonce>",
+  "tvNonce": "<tv-nonce>",
+  "expiresAt": 0,
+  "proof": "<proof-hmac>"
+}
+```
+
+Target reconstruído pelo bridge:
+
+```text
+POST /join
+```
+
+### `signal-send`
+
+A autorização HMAC continua sendo calculada no PWA. O corpo é enviado como string JSON para preservar exatamente os bytes usados na assinatura.
+
+Payload:
+
+```json
+{
+  "authorization": "HomeMusic <assinatura>",
+  "body": "{\"messageId\":\"...\",\"from\":\"remote\",\"signal\":{...}}"
+}
+```
+
+Target fixo:
+
+```text
+POST /signals?role=remote
+```
+
+### `signal-poll`
+
+Payload:
+
+```json
+{
+  "authorization": "HomeMusic <assinatura>",
+  "cursor": 0
+}
+```
+
+Target reconstruído:
+
+```text
+GET /signals?role=remote&cursor=<cursor>
+```
+
+### `close`
+
+Payload:
+
+```json
+{
+  "authorization": "HomeMusic <assinatura>"
+}
+```
+
+Target fixo:
+
+```text
+POST /close?role=remote
+```
+
+Depois de uma resposta de sucesso, o bridge tenta fechar sua janela em best-effort. Se o navegador impedir `window.close()`, a página mostra instrução para voltar ao Home Music.
+
+## Respostas do relay
+
+Para requests HTTP concluídas, o payload de resposta é:
+
+```json
+{
+  "status": 200,
+  "body": {}
+}
+```
+
+Erros normalizados atualmente:
+
+- `invalid_payload` — payload não corresponde ao shape da operação;
+- `duplicate_request` — o mesmo `requestId` já está em execução;
+- `timeout` — request same-origin ultrapassou o deadline;
+- `network_error` — falha de transporte local;
+- `http_error` — o `LanPairingServer` respondeu HTTP não-2xx; `payload.status` e `payload.body` são preservados quando válidos;
+- `invalid_response` — response HTTP não contém JSON válido;
+- `response_too_large` — resposta excedeu o limite do contrato.
+
+O bridge não traduz códigos de pareamento em semântica nova. O PWA continua responsável por transformar status como `401`, `403`, `404`, `410` e `429` nos mesmos erros de UX já usados pelo transporte direto.
+
+## Segurança e limites
 
 - mensagens precisam ter exatamente o shape esperado para seu `type`;
 - `channelId` e `requestId` aceitam somente `[A-Za-z0-9._:-]`, entre 16 e 128 caracteres;
+- tokens do protocolo LAN aceitam o mesmo limite de 16 a 192 caracteres usado pelo `LanPairingSession`;
 - `operation` precisa pertencer à allowlist;
 - `payload` precisa ser um valor JSON puro, sem ciclos, funções, `undefined`, `BigInt` ou objetos com protótipo customizado;
 - profundidade máxima validada: 32 níveis;
-- tamanho máximo serializado por mensagem: **2 MiB**;
-- requests/responses expiradas são descartadas;
-- timeout padrão por request no PWA: **12 segundos**.
+- tamanho máximo serializado por mensagem `postMessage`: **2 MiB**;
+- corpo de `signal-send`: máximo **320 KiB**, alinhado a `LanPairingSession.MAX_REQUEST_BYTES`;
+- requests same-origin usam `cache: no-store`, `credentials: omit` e `AbortController`;
+- timeout interno do relay: no máximo **10 segundos**, nunca além de `expiresAt` da request;
+- responses expiradas não são reenviadas ao PWA;
+- o bridge não recebe o `secret` do QR nem deriva chaves;
+- `proof` e `Authorization` atravessam o bridge apenas de forma transitória e não são exibidos, persistidos ou logados;
+- `signal-send` preserva o corpo assinado sem reserialização;
+- targets HTTP são reconstruídos pelo bridge e sempre apontam para o próprio `LanPairingServer` same-origin;
+- `/receiver/*` continua protegido pela regra loopback-only do servidor e não é exposto pelo bridge.
 
-O limite de 2 MiB mantém margem para o tamanho de sinalização permitido atualmente pelo `LanPairingServer`, sem deixar o canal `postMessage` ilimitado.
+## Concorrência e lifecycle
 
-## Lifecycle e cleanup
+O bridge permite requests diferentes em paralelo, necessário para não bloquear envio de ICE enquanto o polling de sinalização está em andamento. O mesmo `requestId` não pode ser executado duas vezes simultaneamente.
 
-No probe atual:
+No fluxo atual:
 
 1. o PWA cria `channelId` e abre o bridge;
 2. o bridge envia `ready` para o origin exato;
-3. o PWA cria `requestId`, envia `probe` e inicia timeout próprio da request;
-4. o bridge valida source/origin/envelope e responde com o mesmo `channelId`, `requestId`, `operation` e deadline;
-5. o PWA valida correlação e payload;
-6. listeners, timeouts e polling de fechamento são removidos;
-7. a janela bridge é fechada em best-effort.
+3. cada request recebe `requestId` e `expiresAt` próprios;
+4. o bridge valida source/origin/envelope e o payload da operação;
+5. o bridge executa somente o endpoint same-origin correspondente;
+6. a response volta com o mesmo `channelId`, `requestId`, `operation` e deadline;
+7. responses expiradas são descartadas;
+8. `close` tenta encerrar a sessão LAN e a janela bridge.
 
-Se o scanner fechar, uma nova tentativa começar ou o `AbortController` for abortado, a tentativa anterior é limpa. Mensagens tardias deixam de ter listener ativo e, enquanto a tentativa existir, também são rejeitadas por `channelId`, `requestId` ou `expiresAt`.
+O lifecycle completo do popup e a integração com o cliente LAN do PWA continuam na atividade 4 e seguintes.
 
 ## Implementação e testes
 
-- PWA: `apps/web/src/tv-lan-bridge-protocol.ts`;
+- contrato PWA: `apps/web/src/tv-lan-bridge-protocol.ts`;
 - testes de contrato: `apps/web/src/tv-lan-bridge-protocol.test.ts`;
 - integração temporária do probe: `apps/web/src/TvLanQrScanner.tsx`;
-- runtime local da BTV: `android-tv/app/src/main/assets/bridge.js`.
+- runtime local da BTV: `android-tv/app/src/main/assets/bridge.js`;
+- endpoints e regras LAN existentes: `android-tv/app/src/main/java/com/homemusic/tv/LanPairingServer.java` e `LanPairingSession.java`.
 
-Os testes de contrato cobrem versão, IDs, allowlist, shape exato, limite de payload, expiração, source/origin e correlação de responses. Testes de lifecycle completo do popup e o relay real permanecem nas atividades posteriores do plano de produção.
+A atividade 3 implementa o relay real, mas ainda não declara o fluxo iOS funcional de ponta a ponta. Faltam o transporte bridge no PWA, testes dedicados do relay, E2E e QA físico no iPhone/BTV antes de remover o `probe` e declarar suporte de produção.
