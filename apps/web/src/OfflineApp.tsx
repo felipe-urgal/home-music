@@ -100,7 +100,7 @@ export function OfflineApp({ offline, onExit }: OfflineAppProps) {
     setTvSnapshot(null);
     setTvTrackId(null);
     setTvState('connecting');
-    setTvMessage('Conectando diretamente à TV pela rede local…');
+    setTvMessage('Iniciando o pareamento local com a TV…');
     const abortController = new AbortController();
     tvConnectAbortRef.current = abortController;
 
@@ -115,6 +115,7 @@ export function OfflineApp({ offline, onExit }: OfflineAppProps) {
       let peer: TvRemotePeerController;
       const updatePeerState = (next: TvRemotePeerState) => {
         if (next === 'open') {
+          signaling.finish();
           pauseLocalPlayback();
           setTvState('connected');
           setTvMessage(`TV conectada em ${signaling.pairing.host}.`);
