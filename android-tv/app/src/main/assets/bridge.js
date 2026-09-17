@@ -4,6 +4,7 @@
   const params = new URLSearchParams(window.location.search);
   const PROTOCOL_VERSION = 1;
   const MAX_MESSAGE_BYTES = 2 * 1024 * 1024;
+  const MAX_REQUEST_BODY_BYTES = 320 * 1024;
   const MAX_RELAY_TIMEOUT_MS = 10_000;
   const ALLOWED_OPERATIONS = new Set([
     'probe',
@@ -14,8 +15,8 @@
     'close',
   ]);
   const ID_PATTERN = /^[A-Za-z0-9._:-]{16,128}$/;
-  const TOKEN_PATTERN = /^[A-Za-z0-9._:-]{16,128}$/;
-  const AUTHORIZATION_PATTERN = /^HomeMusic [A-Za-z0-9._:-]+\.[0-9]+\.[A-Za-z0-9._:-]+\.[A-Za-z0-9_-]+$/;
+  const TOKEN_PATTERN = /^[A-Za-z0-9_-]{16,192}$/;
+  const AUTHORIZATION_PATTERN = /^HomeMusic [A-Za-z0-9_-]{16,192}\.[0-9]+\.[A-Za-z0-9._:-]{16,192}\.[A-Za-z0-9_-]+$/;
   const parentOrigin = normalizeOrigin(params.get('origin'));
   const channelId = params.get('channelId');
 
@@ -209,7 +210,7 @@
     if (request.operation === 'signal-send') {
       if (!isPlainObject(payload) || !hasExactKeys(payload, ['authorization', 'body'])) return null;
       if (typeof payload.authorization !== 'string' || !AUTHORIZATION_PATTERN.test(payload.authorization)) return null;
-      if (typeof payload.body !== 'string' || textByteLength(payload.body) > MAX_MESSAGE_BYTES) return null;
+      if (typeof payload.body !== 'string' || textByteLength(payload.body) > MAX_REQUEST_BODY_BYTES) return null;
       try {
         const body = JSON.parse(payload.body);
         if (!isJsonValue(body)) return null;
