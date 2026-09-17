@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { AuthenticatedApp } from './AuthenticatedApp';
 import { authenticatedSurfaceForPath } from './browser-navigation';
 import { LoginScreen } from './components/LoginScreen';
+import { TvDeviceApprovalScreen } from './components/TvDeviceApprovalScreen';
+import { TvDeviceLoginScreen } from './components/TvDeviceLoginScreen';
 import { TvRemoteControlSurface } from './components/TvRemoteControlSurface';
 import { OfflineApp } from './OfflineApp';
 import {
@@ -9,6 +11,11 @@ import {
   reconcileOfflineColdStartCollections
 } from './offline-cold-start';
 import { useOfflineDownloads, type OfflineDownloadRecord, type OfflineDownloads } from './offline-downloads';
+import {
+  approvalLocationWithoutToken,
+  readTvDeviceApprovalIntent
+} from './tv-device-login-intent';
+import { isTvMode } from './tv-mode';
 import { useAuth } from './useAuth';
 
 function offlineSnapshot(
@@ -33,6 +40,20 @@ export default function App() {
   const offline = useOfflineDownloads();
   const [offlineMode, setOfflineMode] = useState(false);
   const [coldStartRecords, setColdStartRecords] = useState<OfflineDownloadRecord[] | null>(null);
+  const [tvPasswordLogin, setTvPasswordLogin] = useState(false);
+  const [approvalToken, setApprovalToken] = useState<string | null>(() => (
+    readTvDeviceApprovalIntent(window.location)
+  ));
+  const tvMode = isTvMode();
+
+  useEffect(() => {
+    if (!approvalToken) return;
+    window.history.replaceState(
+      window.history.state,
+      '',
+      approvalLocationWithoutToken(window.location)
+    );
+  }, [approvalToken]);
 
   useEffect(() => {
     let disposed = false;
@@ -88,6 +109,15 @@ export default function App() {
   }
 
   if (!auth.authenticated || !auth.currentUser) {
+    if (tvMode && !tvPasswordLogin && !approvalToken) {
+      return (
+        <TvDeviceLoginScreen
+          onAuthenticated={auth.retry}
+          onUsePassword={() => setTvPasswordLogin(true)}
+        />
+      );
+    }
+
     return (
       <LoginScreen
         configured={auth.configured}
@@ -95,6 +125,20 @@ export default function App() {
         unreachable={auth.unreachable}
         onLogin={auth.login}
         onRetry={() => void auth.retry()}
+        secondaryActionLabel={tvMode ? 'Entrar com celular' : undefined}
+        onSecondaryAction={tvMode ? () => setTvPasswordLogin(false) : undefined}
+      />
+    );
+  }
+
+  if (approvalToken) {
+    return (
+      <TvDeviceApprovalScreen
+        approvalToken={approvalToken}
+        onDone={() => {
+          setApprovalToken(null);
+          window.history.replaceState(window.history.state, '', '/');
+        }}
       />
     );
   }
