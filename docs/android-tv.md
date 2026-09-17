@@ -15,7 +15,8 @@ A base de TV inclui:
 - modo totalmente offline na LAN, sem backend/WAN durante a sessão;
 - serviço LAN efêmero com protocolo `home-music-lan-remote-v2`;
 - receiver offline web empacotado no APK;
-- bridge HTTP local para iPhone/iPad, usada somente para adaptar signaling quando o browser não permite o `fetch()` HTTPS → HTTP privado do transporte direto.
+- bridge HTTP local para iPhone/iPad, usada somente para adaptar signaling quando o browser não permite o `fetch()` HTTPS → HTTP privado do transporte direto;
+- protocolo backend para login da TV pelo celular com pedido efêmero e sessão final independente; a UI desse fluxo ainda está em desenvolvimento.
 
 Os componentes principais do modo LAN foram incorporados pelos PRs #423 e #427. O PR #430 acrescentou dois comportamentos importantes do fluxo físico iPhone + BTV:
 
@@ -174,9 +175,21 @@ Arquitetura e segurança: [`tv-remote-control.md`](tv-remote-control.md). Envio 
 
 ## Login
 
-Hoje o login da TV usa a autenticação web normal. O APK não recebe nem armazena senha por bridge nativa; cookies/storage do GeckoView preservam a sessão no armazenamento privado do app.
+O APK não recebe nem armazena senha por bridge nativa; cookies/storage do GeckoView preservam a sessão web no armazenamento privado do app.
 
-A evolução de produto para **login da TV pelo celular via QR** é acompanhada pela issue #428. Enquanto ela não for implementada, usuário/senha no frontend continua sendo o fluxo de autenticação da TV.
+O primeiro estágio de **login da TV pelo celular via QR** foi incorporado pelo PR #429. A `main` já possui o protocolo backend com:
+
+- pedido efêmero de 5 minutos;
+- `deviceToken` separado do `approvalToken`;
+- approve/deny/status/consume/cancel;
+- rate limit, capacidade e proteção contra replay;
+- consumo que cria uma sessão web própria e revogável para a TV via `SessionManager`.
+
+Senha, cookie e token da sessão do celular não são enviados para a TV.
+
+A experiência visível na TV/celular — QR + código curto, aprovação em `/tv-login`, polling/consume e retorno após login do celular — ainda está sendo implementada no PR #431, relacionado à issue #428. Até esse estágio ser mergeado, usuário/senha continua sendo o fluxo visível/fallback de autenticação na TV.
+
+Esse device login online é separado do pareamento `home-music-lan-remote-v2`; o bridge LAN/WebRTC offline não participa da autenticação da conta.
 
 ## Compatibilidade com BTV 11
 
@@ -262,6 +275,7 @@ O keystore não deve ser commitado e precisa de backup seguro.
 
 - nenhuma bridge JavaScript nativa genérica é exposta;
 - autenticação/autorização online permanecem no backend;
+- o device login usa tokens separados, TTL, consumo único e sessão própria da TV;
 - o protocolo LAN usa sessão curta, segredo de alta entropia, challenge/HMAC, TTL e proteção contra replay;
 - a bridge iOS é uma allowlist de operações de signaling, não um proxy HTTP arbitrário;
 - segredo do QR e derivação HMAC permanecem no PWA;
