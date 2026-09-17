@@ -352,11 +352,18 @@ export async function createTvLanRemoteSignaling(
     let finished = false;
     let closed = false;
 
+    const disposeTerminalSession = () => {
+      if (closed) return;
+      closed = true;
+      cleanupExternalAbort();
+      transport?.dispose();
+      controller.abort();
+    };
+
     const ensureActive = () => {
       if (closed || controller.signal.aborted) throw remoteError('A conexão LAN com a TV foi encerrada.');
       if (now() >= session.expiresAt) {
-        closed = true;
-        controller.abort();
+        disposeTerminalSession();
         throw remoteError('A sessão de pareamento com a TV expirou.');
       }
     };
@@ -394,8 +401,7 @@ export async function createTvLanRemoteSignaling(
             if (!responseOk(response)) {
               const error = responseError(response.status, 'Falha ao receber sinalização local da TV.');
               if (response.status === 401 || response.status === 410) {
-                closed = true;
-                controller.abort();
+                disposeTerminalSession();
               }
               throw error;
             }
