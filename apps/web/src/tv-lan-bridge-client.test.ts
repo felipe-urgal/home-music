@@ -70,7 +70,7 @@ function fakeWindow() {
     clearTimeout: ((id: number) => window.clearTimeout(id)),
   };
 
-  return { windowImpl, popup };
+  return { windowImpl, popup, listeners };
 }
 
 describe('iOS LAN bridge client', () => {
@@ -99,6 +99,17 @@ describe('iOS LAN bridge client', () => {
       },
     });
 
+    const poll = await transport.signalPoll({
+      authorization: 'HomeMusic token_1234567890abcdef.1800000000000.request_1234567890abcdef.signature',
+      cursor: 7,
+    });
+    expect(poll.body).toEqual({
+      echoed: {
+        authorization: 'HomeMusic token_1234567890abcdef.1800000000000.request_1234567890abcdef.signature',
+        cursor: 7,
+      },
+    });
+
     transport.dispose();
     expect(popup.close).toHaveBeenCalledOnce();
   });
@@ -116,5 +127,42 @@ describe('iOS LAN bridge client', () => {
     await expect(createTvLanBridgeTransport(pairing, {
       windowImpl: windowImpl as unknown as Window,
     })).rejects.toThrow('bloqueou a abertura do bridge local');
+  });
+
+  it('times out a request that never receives a bridge response', async () => {
+    const { windowImpl, popup } = fakeWindow();
+    const transport = await createTvLanBridgeTransport(pairing, {
+      windowImpl: windowImpl as unknown as Window,
+      requestTimeoutMs: 1_000,
+    });
+    popup.postMessage.mockImplementation(() => undefined);
+
+    await expect(transport.signalPoll({
+      authorization: 'HomeMusic token_1234567890abcdef.1800000000000.request_1234567890abcdef.signature',
+      cursor: 0,
+    })).rejects.toThrow('não respondeu dentro do tempo esperado');
+
+    transport.dispose();
+  });
+
+  it('aborts an in-flight request and removes the window listener', async () => {
+    const controller = new AbortController();
+    const { windowImpl, popup, listeners } = fakeWindow();
+    const transport = await createTvLanBridgeTransport(pairing, {
+      windowImpl: windowImpl as unknown as Window,
+      requestTimeoutMs: 1_000,
+      signal: controller.signal,
+    });
+    popup.postMessage.mockImplementation(() => undefined);
+
+    const pending = transport.signalPoll({
+      authorization: 'HomeMusic token_1234567890abcdef.1800000000000.request_1234567890abcdef.signature',
+      cursor: 0,
+    });
+    controller.abort();
+
+    await expect(pending).rejects.toThrow('cancelada');
+    expect(listeners.size).toBe(0);
+    expect(popup.close).toHaveBeenCalledOnce();
   });
 });
