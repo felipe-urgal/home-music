@@ -115,6 +115,17 @@ export function registerTvDeviceLoginRoutes(
   );
 
   app.post<{ Body: { approvalToken?: unknown } }>(
+    '/api/auth/device/preview',
+    async (request, reply) => {
+      noStore(reply);
+      if (!request.user) return reply.code(401).send({ error: 'Autenticação necessária.' });
+      const preview = manager.preview(request.body?.approvalToken);
+      if (!preview) return unavailable(reply);
+      return { displayCode: preview.displayCode };
+    }
+  );
+
+  app.post<{ Body: { approvalToken?: unknown } }>(
     '/api/auth/device/approve',
     async (request, reply) => {
       noStore(reply);
