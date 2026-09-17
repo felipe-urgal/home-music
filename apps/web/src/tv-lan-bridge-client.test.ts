@@ -114,6 +114,23 @@ describe('iOS LAN bridge client', () => {
     expect(popup.close).toHaveBeenCalledOnce();
   });
 
+  it('finishes the bridge after P2P setup and removes the message listener', async () => {
+    const { windowImpl, popup, listeners } = fakeWindow();
+    const transport = await createTvLanBridgeTransport(pairing, {
+      windowImpl: windowImpl as unknown as Window,
+      requestTimeoutMs: 1_000,
+    });
+
+    transport.finish?.();
+
+    await vi.waitFor(() => expect(popup.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ operation: 'complete', payload: null }),
+      'http://192.168.1.40:43123'
+    ));
+    await vi.waitFor(() => expect(popup.close).toHaveBeenCalledOnce());
+    expect(listeners.size).toBe(0);
+  });
+
   it('fails with an actionable error when the popup is blocked', async () => {
     const windowImpl = {
       location: { origin: 'https://music.example.com' },
