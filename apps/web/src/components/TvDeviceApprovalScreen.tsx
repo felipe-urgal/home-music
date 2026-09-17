@@ -66,12 +66,13 @@ export function TvDeviceApprovalScreen({ approvalToken, onDone }: TvDeviceApprov
   }
 
   if (message) {
+    const approved = message.startsWith('TV autorizada');
     return (
       <main className="tv-device-approval-shell">
         <section className="tv-device-approval-card" aria-live="polite">
           <span className="tv-device-login__eyebrow">Home Music na TV</span>
-          <h1>{message.startsWith('TV autorizada') ? 'TV autorizada' : 'Solicitação encerrada'}</h1>
-          <p>{message}</p>
+          <h1>{approved ? 'TV autorizada' : 'Solicitação encerrada'}</h1>
+          <p>{approved ? 'Você já pode continuar pela televisão.' : message}</p>
           <button className="login-submit" type="button" onClick={onDone}>Voltar ao Home Music</button>
         </section>
       </main>
