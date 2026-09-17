@@ -10,10 +10,6 @@ async function login(page: Page) {
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
 }
 
-function sessionCookie(cookies: Awaited<ReturnType<Page['context']>> extends never ? never : never) {
-  return cookies;
-}
-
 test('TV entra com aprovação de um celular inicialmente deslogado e mantém sessões independentes', async ({ page, browser }, testInfo) => {
   test.skip(testInfo.project.name !== 'desktop-chromium');
 
