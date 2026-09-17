@@ -70,8 +70,11 @@ jobs:
       - name: Test, build and lint Home Music TV
         run: gradle -p android-tv :app:testDebugUnitTest :app:assembleDebug :app:lintDebug --stacktrace
 
-      - name: Verify embedded receiver
-        run: unzip -l android-tv/app/build/outputs/apk/debug/app-debug.apk | grep -E 'assets/(tv-offline-receiver\.html|assets/.+\.(js|css))'
+      - name: Verify embedded receiver and bridge
+        run: |
+          unzip -l android-tv/app/build/outputs/apk/debug/app-debug.apk | grep -E 'assets/(tv-offline-receiver\.html|assets/.+\.(js|css))'
+          unzip -l android-tv/app/build/outputs/apk/debug/app-debug.apk | grep 'assets/bridge.html'
+          unzip -l android-tv/app/build/outputs/apk/debug/app-debug.apk | grep 'assets/bridge.js'
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v7
