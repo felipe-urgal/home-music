@@ -17,6 +17,7 @@ export type TvLanTransport = {
   signalSend: (input: { authorization: string; body: string }) => Promise<TvLanTransportResponse>;
   signalPoll: (input: { authorization: string; cursor: number }) => Promise<TvLanTransportResponse>;
   close: (input: { authorization: string }) => Promise<TvLanTransportResponse>;
+  finish?: () => void;
   dispose: () => void;
 };
 
