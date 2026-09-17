@@ -56,10 +56,18 @@ A Fase 15 está encerrada. O planejamento original foi movido integralmente para
 - [`pwa-icon-identity.md`](pwa-icon-identity.md) — identidade da instalação;
 - [`ios-background-playback-diagnostics.md`](ios-background-playback-diagnostics.md) — protocolo local de diagnóstico/regressão no iOS.
 
-## Android TV
+## Android TV, controle remoto e LAN offline
 
-- [`android-tv.md`](android-tv.md) — arquitetura do Home Music TV, modo TV, BTV 11, instalação, launcher, D-pad e distribuição do APK;
-- [`../android-tv/README.md`](../android-tv/README.md) — contrato técnico de build do módulo Android.
+- [`android-tv.md`](android-tv.md) — arquitetura e comportamento atual do Home Music TV, BTV 11, instalação, D-pad, modo online e modo LAN;
+- [`tv-remote-control.md`](tv-remote-control.md) — controle remoto online/LAN, autoridade do player e lifecycle do peer;
+- [`tv-offline-cast.md`](tv-offline-cast.md) — envio de downloads do celular para a TV via WebRTC/DataChannel;
+- [`tv-offline-lan-protocol.md`](tv-offline-lan-protocol.md) — protocolo `home-music-lan-remote-v2`, HMAC, TTL, replay protection, bridge iOS e limites;
+- [`ios-lan-bridge-protocol-v1.md`](ios-lan-bridge-protocol-v1.md) — contrato interno do bridge usado no iPhone/iPad;
+- [`ios-lan-bridge-production-plan.md`](ios-lan-bridge-production-plan.md) — registro de implementação/QA do bridge enquanto a homologação física final não for encerrada;
+- [`../android-tv/README.md`](../android-tv/README.md) — contrato técnico de build do módulo Android;
+- [`../e2e/README.md`](../e2e/README.md) — E2Es promovidos, incluindo LAN totalmente offline e bridge iOS.
+
+As issues #417/#422 são a fonte de evidência física ainda pendente do modo LAN; a issue #428 acompanha a próxima feature de login da TV pelo celular via QR.
 
 ## Administração e conta
 
