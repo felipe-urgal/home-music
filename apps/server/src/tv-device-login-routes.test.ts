@@ -63,13 +63,13 @@ async function startDevice(app: ReturnType<typeof Fastify>) {
     headers: CSRF_HEADERS
   });
   assert.equal(response.statusCode, 200);
-  return response.json<{
+  return response.json() as {
     requestId: string;
     deviceToken: string;
     approvalToken: string;
     displayCode: string;
     expiresAt: string;
-  }>();
+  };
 }
 
 function sessionTokenFromSetCookie(value: string | string[] | undefined) {

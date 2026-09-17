@@ -104,7 +104,7 @@ function secretMatches(expectedHash: Buffer, value: string) {
   return timingSafeEqual(expectedHash, candidate);
 }
 
-function validOpaqueToken(value: unknown) {
+function validOpaqueToken(value: unknown): value is string {
   return typeof value === 'string'
     && value.length >= 16
     && value.length <= MAX_OPAQUE_TOKEN_LENGTH
