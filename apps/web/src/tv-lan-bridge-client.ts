@@ -173,12 +173,20 @@ export async function createTvLanBridgeTransport(
     });
   };
 
+  const finish = () => {
+    if (disposed) return;
+    void request('complete', null)
+      .catch(() => undefined)
+      .finally(() => dispose());
+  };
+
   return {
     challenge: input => request('challenge', input),
     join: input => request('join', input),
     signalSend: input => request('signal-send', input),
     signalPoll: input => request('signal-poll', input),
     close: input => request('close', input),
+    finish,
     dispose: () => dispose(),
   };
 }
