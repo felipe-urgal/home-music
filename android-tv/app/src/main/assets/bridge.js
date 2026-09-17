@@ -165,7 +165,7 @@
       const payload = { status: response.status, body };
       if (!response.ok) return { ok: false, payload, error: 'http_error' };
       return { ok: true, payload, error: null };
-    } catch (error) {
+    } catch {
       if (controller.signal.aborted) return { ok: false, payload: null, error: 'timeout' };
       return { ok: false, payload: null, error: 'network_error' };
     } finally {
@@ -257,17 +257,17 @@
     return;
   }
 
-  let busy = false;
+  const inFlight = new Set();
   window.addEventListener('message', async event => {
     if (event.source !== opener || event.origin !== parentOrigin) return;
     const request = parseRequest(event.data);
     if (!request) return;
-    if (busy) {
-      postResponse(request, false, null, 'busy');
+    if (inFlight.has(request.requestId)) {
+      postResponse(request, false, null, 'duplicate_request');
       return;
     }
 
-    busy = true;
+    inFlight.add(request.requestId);
     try {
       const result = await executeRequest(request);
       if (!result) {
@@ -285,7 +285,7 @@
         setStatus(result.ok ? 'Comando LAN concluído. Aguardando próximo passo…' : 'Não foi possível concluir o comando LAN. Volte ao Home Music.');
       }
     } finally {
-      busy = false;
+      inFlight.delete(request.requestId);
     }
   });
 
