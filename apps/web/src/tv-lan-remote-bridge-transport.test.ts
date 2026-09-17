@@ -132,4 +132,30 @@ describe('TV LAN remote client with bridge transport', () => {
     expect(close).not.toHaveBeenCalled();
     expect(dispose).toHaveBeenCalledOnce();
   });
+
+  it('disposes the bridge when polling reports a regenerated or expired session', async () => {
+    const { signalPoll, close, dispose, transportFactory } = bridgeTransportMocks();
+    signalPoll.mockResolvedValueOnce({ status: 410, body: {} });
+
+    const client = await createTvLanRemoteSignaling(qrText(), {
+      transportFactory,
+      createClientNonce: () => CLIENT_NONCE,
+      createRequestNonce: () => REQUEST_NONCE,
+      now: () => NOW,
+      pollDelayMs: 100,
+    });
+
+    const error = await new Promise<Error>((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('poll timeout')), 1_000);
+      client.start(() => undefined, value => {
+        clearTimeout(timeout);
+        resolve(value);
+      });
+    });
+
+    expect(error.message).toContain('expirou');
+    expect(signalPoll).toHaveBeenCalledOnce();
+    expect(close).not.toHaveBeenCalled();
+    expect(dispose).toHaveBeenCalledOnce();
+  });
 });
