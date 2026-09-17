@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Download, Folder, ListMusic, Play, Trash2, Wifi } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, Folder, ListMusic, Play, Trash2, Wifi } from 'lucide-react';
 import type { Track } from '@home-music/shared';
 import type { OfflineCollectionKind } from '../offline-collection-references';
 import {
@@ -48,6 +48,15 @@ function collectionStatusLabel(collection: OfflineCollectionSummary) {
   return 'Pendente';
 }
 
+function availableCollectionRecords(
+  collection: OfflineCollectionSummary,
+  recordsById: Map<string, OfflineDownloadRecord>
+) {
+  return collection.reference.trackIds
+    .map(trackId => recordsById.get(trackId))
+    .filter((record): record is OfflineDownloadRecord => Boolean(record));
+}
+
 export function OfflineLibraryScreen({
   records,
   collections,
@@ -69,11 +78,20 @@ export function OfflineLibraryScreen({
   onExitOffline
 }: OfflineLibraryScreenProps) {
   const [visibleIndividualCount, setVisibleIndividualCount] = useState(LIBRARY_PAGE_SIZE);
+  const [selectedCollectionKey, setSelectedCollectionKey] = useState<string | null>(null);
   const recordsById = new Map(records.map(record => [record.track.id, record]));
   const individualRecords = records.filter(record => individualTrackIds.has(record.track.id));
   const individualTracks = individualRecords.map(record => record.track);
   const visibleIndividualRecords = individualRecords.slice(0, visibleIndividualCount);
   const remainingIndividualCount = Math.max(0, individualRecords.length - visibleIndividualRecords.length);
+  const selectedCollection = selectedCollectionKey
+    ? collections.find(collection => collection.key === selectedCollectionKey) ?? null
+    : null;
+  const selectedCollectionRecords = selectedCollection
+    ? availableCollectionRecords(selectedCollection, recordsById)
+    : [];
+  const selectedCollectionTracks = selectedCollectionRecords.map(record => record.track);
+  const selectedCollectionFirst = selectedCollectionTracks[0];
   const tvConnected = tvState === 'connected' || tvState === 'sending';
   const tvBusy = tvState === 'connecting' || tvState === 'sending';
   const playVerb = tvConnected ? 'Enviar para a TV' : 'Tocar';
@@ -108,108 +126,182 @@ export function OfflineLibraryScreen({
         </button>
       </div>
 
-      {collections.length > 0 && (
-        <section className="library-content offline-collections-section">
-          <div className="section-heading"><span>Coleções offline</span><small>{collections.length}</small></div>
-          <div className="offline-collection-list">
-            {collections.map(collection => {
-              const availableRecords = collection.reference.trackIds
-                .map(trackId => recordsById.get(trackId))
-                .filter((record): record is OfflineDownloadRecord => Boolean(record));
-              const availableTracks = availableRecords.map(record => record.track);
-              const first = availableTracks[0];
-              const CollectionIcon = collection.reference.kind === 'playlist' ? ListMusic : Folder;
-
-              return (
-                <article className="offline-collection-card" key={collection.key}>
-                  <button
-                    className="offline-collection-card__main"
-                    type="button"
-                    disabled={!first}
-                    onClick={() => first && onPlayTrack(first, availableTracks)}
-                    aria-label={first ? `${playVerb} coleção offline ${collection.reference.name}` : `Coleção offline ${collection.reference.name} sem músicas disponíveis`}
-                  >
-                    <span className="offline-collection-card__icon"><CollectionIcon aria-hidden="true" /></span>
-                    <span className="offline-collection-card__copy">
-                      <strong>{collection.reference.name}</strong>
-                      <small>{collection.downloadedCount}/{collection.totalCount} músicas · {collectionStatusLabel(collection)}</small>
-                    </span>
-                    {first && <Play aria-hidden="true" />}
-                  </button>
-                  <button
-                    className="track-action"
-                    type="button"
-                    aria-label={`Remover coleção offline ${collection.reference.name}`}
-                    onClick={() => {
-                      if (!window.confirm(`Remover “${collection.reference.name}” das coleções offline? Músicas compartilhadas serão preservadas.`)) return;
-                      onRemoveCollection(collection.reference.kind, collection.reference.sourceId);
-                    }}
-                  >
-                    <Trash2 aria-hidden="true" />
-                  </button>
-                </article>
-              );
-            })}
-          </div>
-        </section>
-      )}
-
-      {individualRecords.length > 0 ? (
-        <section className="library-content">
-          <div className="section-heading"><span>Downloads individuais</span><small>{individualRecords.length}</small></div>
-          <div className="library-track-list">
-            {visibleIndividualRecords.map(record => {
-              const track = record.track;
-              const isCurrent = track.id === current?.id;
-              return (
-                <div className={`library-track ${isCurrent ? 'is-current' : ''}`} key={track.id}>
-                  <button
-                    className="library-track__main"
-                    type="button"
-                    aria-current={isCurrent ? 'true' : undefined}
-                    aria-label={`${playVerb} ${track.title}, ${track.artist || 'Artista desconhecido'}`}
-                    onClick={() => onPlayTrack(track, individualTracks)}
-                  >
-                    <Artwork track={fallbackTrack(track)} />
-                    <span className="library-track__text">
-                      <strong>{track.title}</strong>
-                      <small>{track.artist} · {formatOfflineBytes(record.size)}</small>
-                    </span>
-                    {isCurrent && playing && !tvConnected ? <span className="playing-indicator" aria-hidden="true">▶</span> : <Play className="library-track__action" aria-hidden="true" />}
-                  </button>
-                  <button
-                    className="track-action"
-                    type="button"
-                    aria-label={`Remover download individual de ${track.title}`}
-                    onClick={() => {
-                      if (window.confirm(`Remover o download individual de “${track.title}”? Se uma coleção também usar esta música, o arquivo será preservado.`)) onRemove(track.id);
-                    }}
-                  >
-                    <Trash2 aria-hidden="true" />
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-          {remainingIndividualCount > 0 && (
+      {selectedCollection ? (
+        <section className="library-content offline-collection-detail">
+          <div className="offline-collection-detail__header">
             <button
-              className="load-more"
+              className="icon-button"
               type="button"
-              onClick={() => setVisibleIndividualCount(count => count + LIBRARY_PAGE_SIZE)}
+              aria-label="Voltar às coleções offline"
+              onClick={() => setSelectedCollectionKey(null)}
             >
-              Mostrar mais {Math.min(LIBRARY_PAGE_SIZE, remainingIndividualCount)} músicas
+              <ChevronLeft aria-hidden="true" />
             </button>
+            <div className="offline-collection-detail__copy">
+              <strong>{selectedCollection.reference.name}</strong>
+              <small>
+                {selectedCollectionTracks.length}/{selectedCollection.totalCount} músicas disponíveis · {collectionStatusLabel(selectedCollection)}
+              </small>
+            </div>
+            <button
+              className="secondary-action offline-collection-detail__play-all"
+              type="button"
+              disabled={!selectedCollectionFirst || tvBusy}
+              aria-label={`${playVerb} todas as músicas de ${selectedCollection.reference.name}`}
+              onClick={() => selectedCollectionFirst && onPlayTrack(selectedCollectionFirst, selectedCollectionTracks)}
+            >
+              <Play aria-hidden="true" />
+              {tvConnected ? 'Enviar tudo' : 'Tocar tudo'}
+            </button>
+          </div>
+
+          {selectedCollectionRecords.length > 0 ? (
+            <div className="library-track-list">
+              {selectedCollectionRecords.map(record => {
+                const track = record.track;
+                const isCurrent = track.id === current?.id;
+                return (
+                  <div className={`library-track ${isCurrent ? 'is-current' : ''}`} key={track.id}>
+                    <button
+                      className="library-track__main"
+                      type="button"
+                      aria-current={isCurrent ? 'true' : undefined}
+                      aria-label={`${playVerb} ${track.title}, ${track.artist || 'Artista desconhecido'}`}
+                      onClick={() => onPlayTrack(track, selectedCollectionTracks)}
+                    >
+                      <Artwork track={fallbackTrack(track)} />
+                      <span className="library-track__text">
+                        <strong>{track.title}</strong>
+                        <small>{track.artist} · {formatOfflineBytes(record.size)}</small>
+                      </span>
+                      {isCurrent && playing && !tvConnected
+                        ? <span className="playing-indicator" aria-hidden="true">▶</span>
+                        : <Play className="library-track__action" aria-hidden="true" />}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <ResponsiveState
+              variant="empty"
+              title="Nenhuma música disponível"
+              detail="Esta coleção não tem músicas baixadas neste dispositivo."
+            />
           )}
         </section>
-      ) : collections.length === 0 ? (
-        <ResponsiveState
-          variant="empty"
-          title="Nenhum download offline"
-          detail="Conecte ao Home Music e disponibilize músicas, playlists ou pastas para uso offline."
-        >
-          <button className="secondary-action" type="button" onClick={onExitOffline}>Tentar conectar</button>
-        </ResponsiveState>
-      ) : null}
+      ) : (
+        <>
+          {collections.length > 0 && (
+            <section className="library-content offline-collections-section">
+              <div className="section-heading"><span>Coleções offline</span><small>{collections.length}</small></div>
+              <div className="offline-collection-list">
+                {collections.map(collection => {
+                  const availableRecords = availableCollectionRecords(collection, recordsById);
+                  const availableTracks = availableRecords.map(record => record.track);
+                  const first = availableTracks[0];
+                  const CollectionIcon = collection.reference.kind === 'playlist' ? ListMusic : Folder;
+
+                  return (
+                    <article className="offline-collection-card" key={collection.key}>
+                      <button
+                        className="offline-collection-card__main"
+                        type="button"
+                        onClick={() => setSelectedCollectionKey(collection.key)}
+                        aria-label={`Abrir coleção offline ${collection.reference.name}`}
+                      >
+                        <span className="offline-collection-card__icon"><CollectionIcon aria-hidden="true" /></span>
+                        <span className="offline-collection-card__copy">
+                          <strong>{collection.reference.name}</strong>
+                          <small>{collection.downloadedCount}/{collection.totalCount} músicas · {collectionStatusLabel(collection)}</small>
+                        </span>
+                        <ChevronRight aria-hidden="true" />
+                      </button>
+                      <button
+                        className="track-action"
+                        type="button"
+                        disabled={!first || tvBusy}
+                        aria-label={`${playVerb} coleção offline ${collection.reference.name}`}
+                        onClick={() => first && onPlayTrack(first, availableTracks)}
+                      >
+                        <Play aria-hidden="true" />
+                      </button>
+                      <button
+                        className="track-action"
+                        type="button"
+                        aria-label={`Remover coleção offline ${collection.reference.name}`}
+                        onClick={() => {
+                          if (!window.confirm(`Remover “${collection.reference.name}” das coleções offline? Músicas compartilhadas serão preservadas.`)) return;
+                          onRemoveCollection(collection.reference.kind, collection.reference.sourceId);
+                        }}
+                      >
+                        <Trash2 aria-hidden="true" />
+                      </button>
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
+          {individualRecords.length > 0 ? (
+            <section className="library-content">
+              <div className="section-heading"><span>Downloads individuais</span><small>{individualRecords.length}</small></div>
+              <div className="library-track-list">
+                {visibleIndividualRecords.map(record => {
+                  const track = record.track;
+                  const isCurrent = track.id === current?.id;
+                  return (
+                    <div className={`library-track ${isCurrent ? 'is-current' : ''}`} key={track.id}>
+                      <button
+                        className="library-track__main"
+                        type="button"
+                        aria-current={isCurrent ? 'true' : undefined}
+                        aria-label={`${playVerb} ${track.title}, ${track.artist || 'Artista desconhecido'}`}
+                        onClick={() => onPlayTrack(track, individualTracks)}
+                      >
+                        <Artwork track={fallbackTrack(track)} />
+                        <span className="library-track__text">
+                          <strong>{track.title}</strong>
+                          <small>{track.artist} · {formatOfflineBytes(record.size)}</small>
+                        </span>
+                        {isCurrent && playing && !tvConnected ? <span className="playing-indicator" aria-hidden="true">▶</span> : <Play className="library-track__action" aria-hidden="true" />}
+                      </button>
+                      <button
+                        className="track-action"
+                        type="button"
+                        aria-label={`Remover download individual de ${track.title}`}
+                        onClick={() => {
+                          if (window.confirm(`Remover o download individual de “${track.title}”? Se uma coleção também usar esta música, o arquivo será preservado.`)) onRemove(track.id);
+                        }}
+                      >
+                        <Trash2 aria-hidden="true" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+              {remainingIndividualCount > 0 && (
+                <button
+                  className="load-more"
+                  type="button"
+                  onClick={() => setVisibleIndividualCount(count => count + LIBRARY_PAGE_SIZE)}
+                >
+                  Mostrar mais {Math.min(LIBRARY_PAGE_SIZE, remainingIndividualCount)} músicas
+                </button>
+              )}
+            </section>
+          ) : collections.length === 0 ? (
+            <ResponsiveState
+              variant="empty"
+              title="Nenhum download offline"
+              detail="Conecte ao Home Music e disponibilize músicas, playlists ou pastas para uso offline."
+            >
+              <button className="secondary-action" type="button" onClick={onExitOffline}>Tentar conectar</button>
+            </ResponsiveState>
+          ) : null}
+        </>
+      )}
 
       {current && (
         <MiniPlayer
