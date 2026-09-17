@@ -30,6 +30,10 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 final class LanPairingServer implements AutoCloseable {
+    interface JoinListener {
+        void onRemoteJoined(LanPairingServer server);
+    }
+
     static final class PairingInfo {
         final String host;
         final int port;
@@ -53,6 +57,7 @@ final class LanPairingServer implements AutoCloseable {
 
     private final String allowedOrigin;
     private final AssetManager assets;
+    private final JoinListener joinListener;
     private final ThreadPoolExecutor clients = new ThreadPoolExecutor(
         2,
         8,
@@ -68,9 +73,18 @@ final class LanPairingServer implements AutoCloseable {
     private Thread acceptThread;
 
     LanPairingServer(String allowedOrigin, AssetManager assets) {
+        this(allowedOrigin, assets, server -> {});
+    }
+
+    LanPairingServer(String allowedOrigin, AssetManager assets, JoinListener joinListener) {
         this.allowedOrigin = allowedOrigin == null ? "" : allowedOrigin;
         this.assets = assets;
-        this.pairingSession = new LanPairingSession();
+        this.joinListener = joinListener == null ? server -> {} : joinListener;
+        this.pairingSession = newPairingSession();
+    }
+
+    private LanPairingSession newPairingSession() {
+        return new LanPairingSession(() -> joinListener.onRemoteJoined(this));
     }
 
     synchronized void start() throws IOException {
@@ -100,7 +114,7 @@ final class LanPairingServer implements AutoCloseable {
 
     synchronized PairingInfo regeneratePairing() throws IOException {
         pairingSession.close();
-        pairingSession = new LanPairingSession();
+        pairingSession = newPairingSession();
         return pairingInfo();
     }
 
