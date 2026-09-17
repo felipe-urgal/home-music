@@ -29,21 +29,32 @@ O caminho principal **iPhone → bridge LAN → WebRTC/DataChannel → envio de 
 
 As issues de implementação #418, #419, #420 e #421 já estão cobertas pelo código mergeado; não representam backlog de feature pendente.
 
-### Próxima feature de produto: login da TV pelo celular
+### Login da TV pelo celular
 
-A issue **#428 — Login da TV pelo celular via QR** é o próximo desenvolvimento funcional ainda não implementado.
+A issue **#428 — Login da TV pelo celular via QR** está parcialmente implementada.
 
-Objetivo do MVP:
+O **PR #429** já foi incorporado à `main` com o primeiro estágio, de backend/protocolo/segurança:
 
-1. TV mostra QR + código curto;
-2. celular abre o Home Music e autentica se necessário;
-3. celular confirma **Entrar nesta TV?**;
-4. servidor cria uma sessão própria e revogável para a TV;
-5. senha/cookie/token da sessão do celular nunca são transferidos para a TV;
-6. usuário/senha na TV continua como fallback;
-7. fluxo de login online permanece separado do pareamento LAN/WebRTC offline.
+- `TvDeviceLoginManager` efêmero com TTL e limites;
+- `requestId`, `deviceToken` e `approvalToken` separados;
+- start/status/approve/deny/consume/cancel;
+- proteção contra replay e enumeração;
+- rate limit/capacidade por origem e global;
+- consumo criando sessão própria da TV via `SessionManager.createSessionForUser`;
+- sessão da TV independente e revogável, sem transferir cookie/token/senha do celular;
+- testes de lifecycle e segurança.
 
-A implementação planejada é dividida em backend/segurança e depois TV/celular/E2E. O PR #429 contém documentação de desenho/planejamento e não altera runtime por si só.
+O **PR #431** está em andamento para o segundo estágio:
+
+- cliente web do device login;
+- QR + código curto na TV;
+- aprovação em `/tv-login` no celular;
+- retorno à aprovação quando o celular precisa autenticar primeiro;
+- polling/consume na TV;
+- usuário/senha preservado como fallback;
+- E2E com contexts separados de TV e celular.
+
+Até esse segundo estágio ser mergeado, o protocolo existe no backend, mas a experiência visível **Entrar com o celular** ainda não deve ser descrita como entregue na `main`.
 
 ## Fase 15 — estado consolidado
 
@@ -92,7 +103,8 @@ A `main` atual possui, entre outras capacidades:
 - Home Music TV com GeckoView, controle remoto online, envio P2P de downloads, receiver offline embarcado e modo LAN sem backend;
 - protocolo LAN `home-music-lan-remote-v2` com TTL, HMAC, replay protection e signaling efêmero;
 - bridge LAN restrito para iPhone/iPad, mantendo mídia no DataChannel;
-- regressões de lifecycle que distinguem `disconnected` recuperável de falha terminal real.
+- regressões de lifecycle que distinguem `disconnected` recuperável de falha terminal real;
+- protocolo backend de login da TV pelo celular com pedido efêmero, tokens separados, aprovação autenticada e sessão final independente da sessão do celular.
 
 Documentos canônicos principais:
 
@@ -104,6 +116,8 @@ Documentos canônicos principais:
 - [`pwa.md`](pwa.md);
 - [`offline-downloads.md`](offline-downloads.md);
 - [`player-screen-responsibilities.md`](player-screen-responsibilities.md);
+- [`multi-user-auth.md`](multi-user-auth.md);
+- [`login-abuse-protection.md`](login-abuse-protection.md);
 - [`android-tv.md`](android-tv.md);
 - [`tv-remote-control.md`](tv-remote-control.md);
 - [`tv-offline-cast.md`](tv-offline-cast.md);
@@ -114,7 +128,7 @@ Documentos canônicos principais:
 Há dois tipos de trabalho diferentes e eles não devem ser confundidos:
 
 1. **QA/evidência do modo TV offline já implementado** — concluir ou explicitamente dispensar os critérios físicos de #417/#422 e então encerrar a Epic #416;
-2. **nova feature #428** — implementar login da TV pelo celular via QR, começando pelo backend/protocolo/segurança antes da UX final TV/celular.
+2. **concluir #428** — implementar/validar a experiência TV + celular do login por QR em cima do backend já mergeado no #429; esse segundo estágio está no PR #431.
 
 Bugs e melhorias pontuais continuam sendo rastreados diretamente em issues próprias.
 
