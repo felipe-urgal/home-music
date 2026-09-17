@@ -60,6 +60,18 @@ describe('tv lan bridge protocol', () => {
     }, now)).toBeNull();
   });
 
+  it('rejeita a operação temporária probe após a limpeza do spike', () => {
+    expect(parseTvLanBridgeMessage({
+      version: TV_LAN_BRIDGE_PROTOCOL_VERSION,
+      type: 'request',
+      channelId,
+      requestId,
+      operation: 'probe',
+      expiresAt: now + 500,
+      payload: null,
+    }, now)).toBeNull();
+  });
+
   it('rejeita payload acima do limite e requests expiradas', () => {
     const oversized = 'x'.repeat(TV_LAN_BRIDGE_MAX_MESSAGE_BYTES);
     expect(() => createTvLanBridgeRequest(channelId, 'signal-send', oversized, {
@@ -87,25 +99,25 @@ describe('tv lan bridge protocol', () => {
       type: 'response',
       channelId,
       requestId,
-      operation: 'probe',
+      operation: 'challenge',
       expiresAt: now + 500,
       ok: true,
-      payload: { pong: true },
+      payload: { status: 200, body: {} },
       error: null,
     }, now);
     expect(response).not.toBeNull();
     if (!response) return;
 
-    expect(isMatchingTvLanBridgeResponse(response, { channelId, requestId, operation: 'probe' })).toBe(true);
+    expect(isMatchingTvLanBridgeResponse(response, { channelId, requestId, operation: 'challenge' })).toBe(true);
     expect(isMatchingTvLanBridgeResponse(response, {
       channelId: 'channel-0987654321',
       requestId,
-      operation: 'probe',
+      operation: 'challenge',
     })).toBe(false);
     expect(isMatchingTvLanBridgeResponse(response, {
       channelId,
       requestId: 'request-0987654321',
-      operation: 'probe',
+      operation: 'challenge',
     })).toBe(false);
   });
 
