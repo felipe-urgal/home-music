@@ -36,6 +36,7 @@ export type TvLanRemoteSignaling = {
   session: TvLanJoinResponse;
   sendSignal: (signal: TvRemoteSignal) => Promise<void>;
   start: (onSignal: (signal: TvRemoteSignal) => void | Promise<void>, onError?: (error: Error) => void) => void;
+  finish: () => void;
   close: () => void;
 };
 
@@ -241,6 +242,11 @@ function createDirectTransportFactory(
       }
     };
 
+    const dispose = () => {
+      options.signal.removeEventListener('abort', abortFromParent);
+      controller.abort();
+    };
+
     return {
       challenge: input => lanFetch(`/challenge?session=${encodeURIComponent(input.sessionId)}&clientNonce=${encodeURIComponent(input.clientNonce)}`),
       join: input => lanFetch('/join', {
@@ -263,10 +269,8 @@ function createDirectTransportFactory(
         method: 'POST',
         headers: { Authorization: input.authorization },
       }, false),
-      dispose: () => {
-        options.signal.removeEventListener('abort', abortFromParent);
-        controller.abort();
-      },
+      finish: dispose,
+      dispose,
     } satisfies TvLanTransport;
   };
 }
@@ -345,6 +349,7 @@ export async function createTvLanRemoteSignaling(
     const pollDelayMs = Math.max(100, options.pollDelayMs ?? 300);
     let cursor = 0;
     let started = false;
+    let finished = false;
     let closed = false;
 
     const ensureActive = () => {
@@ -357,6 +362,7 @@ export async function createTvLanRemoteSignaling(
     };
 
     const sendSignal = async (signal: TvRemoteSignal) => {
+      if (finished) return;
       ensureActive();
       const envelope: TvLanSignalEnvelope = {
         messageId: createMessageId(),
@@ -376,10 +382,10 @@ export async function createTvLanRemoteSignaling(
       onSignal: (signal: TvRemoteSignal) => void | Promise<void>,
       onError?: (error: Error) => void
     ) => {
-      if (started || closed) return;
+      if (started || closed || finished) return;
       started = true;
       const run = async () => {
-        while (!closed && !controller.signal.aborted) {
+        while (!closed && !finished && !controller.signal.aborted) {
           try {
             ensureActive();
             const target = `/signals?role=remote&cursor=${encodeURIComponent(String(cursor))}`;
@@ -407,13 +413,13 @@ export async function createTvLanRemoteSignaling(
               await onSignal(message.signal);
             }
           } catch (error) {
-            if (closed || controller.signal.aborted) {
-              if (error instanceof Error && error.message.includes('expirou')) onError?.(error);
+            if (closed || finished || controller.signal.aborted) {
+              if (!finished && error instanceof Error && error.message.includes('expirou')) onError?.(error);
               return;
             }
             onError?.(error instanceof Error ? error : remoteError('Falha na sinalização local da TV.'));
           }
-          if (closed || controller.signal.aborted) return;
+          if (closed || finished || controller.signal.aborted) return;
           await new Promise(resolve => setTimeout(resolve, pollDelayMs));
         }
       };
@@ -425,10 +431,22 @@ export async function createTvLanRemoteSignaling(
       session,
       sendSignal,
       start,
+      finish: () => {
+        if (closed || finished) return;
+        finished = true;
+        cleanupExternalAbort();
+        if (transport?.finish) transport.finish();
+        else transport?.dispose();
+      },
       close: () => {
         if (closed) return;
         closed = true;
         cleanupExternalAbort();
+        if (finished) {
+          controller.abort();
+          transport?.dispose();
+          return;
+        }
         void bestEffortClose().finally(() => {
           controller.abort();
           transport?.dispose();
