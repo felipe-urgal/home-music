@@ -1,72 +1,109 @@
 # Home Music TV / Android TV
 
-O Home Music possui um cliente Android TV em `android-tv/` para abrir a aplicação web em tela cheia em TVs e boxes Android. O alvo inicial é o **BTV 11**; o projeto mantém compatibilidade com Android 6/API 23 ou superior quando o firmware oferece os recursos necessários.
+O Home Music possui um cliente Android TV em `android-tv/` para abrir a aplicação web em tela cheia em TVs e boxes Android. O alvo inicial é o **BTV 11**; o módulo mantém `minSdk 23` e usa GeckoView embarcado para não depender do WebView antigo/customizado do aparelho.
 
-No modo online, o cliente Android abre o frontend existente com `?tv=1`. No modo offline local, ele inicia um serviço HTTP efêmero, exibe QR de pareamento e abre o receiver embarcado por loopback; não replica conta, biblioteca nem credenciais Home Music.
-
-## Modo offline local
-
-O APK empacota `tv-offline-receiver.html` e assets versionados gerados por `npm run build:tv-receiver -w @home-music/web`. O listener LAN fornece somente challenge/join, signaling e bootstrap loopback. O áudio não passa pelo HTTP local: músicas baixadas no PWA são enviadas pelo DataChannel.
-
-Pré-condições: PWA e faixas já armazenados no celular, celular e TV na mesma LAN, rede sem client isolation e browser com acesso à rede local. QR e token são efêmeros; regenerar o pareamento invalida sessão, mailbox e segredo anteriores.
-
-Roteiro físico reproduzível:
-
-1. instalar o APK do mesmo head e abrir o receiver offline;
-2. desligar WAN e servidor Home Music, mantendo a LAN;
-3. abrir o PWA em cold start e confirmar duas faixas baixadas;
-4. parear pelo QR, tocar as duas faixas e exercer play/pause/seek/próxima;
-5. alternar background/foreground no celular;
-6. regenerar o QR e confirmar que a sessão anterior não reconecta;
-7. repetir negativos de permissão negada, outra Wi-Fi/client isolation, perda de Wi-Fi, receiver fechado, IP alterado, arquivo ausente/corrompido e faixa acima do limite;
-8. religar WAN/servidor e confirmar o modo online.
-
-Registrar versões de BTV/Android, Chrome/PWA e GeckoView, além do resultado de cada cenário. O CI não autoriza declarar hardware validado.
+No modo online, o APK abre o frontend existente com `?tv=1`. No modo offline local, ele inicia um serviço HTTP efêmero, exibe o QR de pareamento e disponibiliza um receiver web embarcado por loopback. Conta, biblioteca e credenciais Home Music não são copiadas para o APK.
 
 ## Estado atual
 
-O cliente Android e o primeiro modo TV entraram no PR #391. A segunda iteração de UX e o controle pelo celular são desenvolvidos no PR #393 e acompanhados pela issue #392.
+A base de TV inclui:
 
-Já foi confirmado em um BTV 11 real que:
+- experiência web dedicada ativada por `?tv=1`;
+- navegação por D-pad/OK, player canônico e layout 16:9;
+- controle remoto online pelo celular usando sessão REST/SSE autenticada;
+- envio P2P de faixa baixada do celular para a TV por WebRTC/DataChannel;
+- modo totalmente offline na LAN, sem backend/WAN durante a sessão;
+- serviço LAN efêmero com protocolo `home-music-lan-remote-v2`;
+- receiver offline web empacotado no APK;
+- bridge HTTP local para iPhone/iPad, usada somente para adaptar signaling quando o browser não permite o `fetch()` HTTPS → HTTP privado do transporte direto.
 
-- o APK instala após os ajustes de compatibilidade do package installer;
-- o app abre o servidor em tela cheia;
-- o WebView original do aparelho não suporta adequadamente o frontend atual, por isso o APK embarca GeckoView;
-- `?tv=1` ativa a experiência dedicada;
-- login, navegação TV v2, player, seek, volume aplicável, presets de crossfade, crossfade audiovisual, overscan e persistência foram exercitados no hardware na rodada anterior da #392.
+Os componentes principais do modo LAN foram incorporados pelos PRs #423 e #427. O PR #430 acrescentou dois comportamentos importantes do fluxo físico iPhone + BTV:
 
-A versão de APK de teste continua `0.4.0` (`versionCode 5`). As mudanças do PR #393 são web/server e não exigem reinstalar o APK depois do deploy.
+- após um `join` LAN autenticado, o APK abre o receiver offline automaticamente; **Abrir receiver offline** continua disponível apenas como fallback manual;
+- `RTCPeerConnection.connectionState = disconnected` é tratado como transitório e recuperável. A sessão não é destruída apenas por esse estado; `failed`, `closed` e fechamento/erro real do DataChannel continuam terminais.
+
+Isso não equivale a declarar o hardware totalmente homologado. As issues #417 e #422 continuam abertas para registrar a matriz física final e cenários negativos.
+
+## Modo offline local
+
+O APK empacota `tv-offline-receiver.html` e assets versionados gerados por:
+
+```bash
+npm run build:tv-receiver -w @home-music/web
+```
+
+O listener LAN fornece somente bootstrap, challenge/join e sinalização. O áudio não passa pelo HTTP local: músicas já baixadas no PWA são enviadas pelo DataChannel.
+
+Pré-condições gerais:
+
+- PWA já instalado/cached no celular;
+- faixas já armazenadas localmente;
+- celular e TV na mesma LAN;
+- rede sem AP/client isolation;
+- browser com um transporte LAN suportado para aquela plataforma.
+
+Android/desktop usam o transporte HTTP LAN direto quando a plataforma permite. iPhone/iPad usam o bridge local top-level + `postMessage`; segredo do QR, proof e HMAC continuam no PWA, e a mídia continua no WebRTC/DataChannel.
+
+QR, challenge e sessão são efêmeros. Regenerar o pareamento invalida material anterior conforme o protocolo v2.
+
+### Lifecycle do receiver
+
+Ao iniciar um pareamento offline, a TV mantém o receiver local disponível por loopback. Depois que o celular conclui um `join` autenticado, o APK solicita a abertura automática do receiver uma única vez para aquela entrada válida. Isso evita depender de um clique adicional no controle remoto.
+
+O botão/atalho manual para abrir o receiver permanece como recuperação explícita. Replays do mesmo `join` não devem iniciar o receiver novamente.
+
+### Lifecycle do peer
+
+Depois de aberto o DataChannel:
+
+- `connected` + canal aberto corresponde ao estado utilizável;
+- `disconnected` muda a UI para reconectando/conectando, mas não fecha o peer por timeout arbitrário;
+- se o WebRTC voltar a `connected`, a sessão pode retornar a `open` sem novo QR;
+- `failed`, `closed`, erro do DataChannel ou fechamento inesperado real continuam encerrando a tentativa;
+- quando a sessão realmente termina, um novo pareamento/QR é o caminho seguro; sessão expirada/regenerada não é reutilizada.
+
+Esse comportamento é especialmente importante para background/lock em mobile, onde `disconnected` pode ser temporário.
+
+## Roteiro físico reproduzível
+
+Usar APK e PWA correspondentes ao mesmo estado de código:
+
+1. instalar o APK e abrir o modo offline;
+2. desligar WAN e servidor Home Music, mantendo a LAN;
+3. abrir o PWA em cold start e confirmar ao menos duas faixas baixadas;
+4. gerar QR e parear sem clicar em **Abrir receiver offline**;
+5. confirmar que o receiver abre automaticamente após o `join` autenticado;
+6. tocar duas faixas e exercer play/pause/seek/anterior/próxima;
+7. colocar o celular em background/lock e voltar;
+8. confirmar que um `disconnected` transitório não destrói a sessão e que os controles retornam quando o peer se recupera;
+9. regenerar o QR e confirmar que a sessão anterior não reconecta;
+10. testar perda real de rede e confirmar que falha terminal exige novo pareamento;
+11. repetir negativos de permissão/bridge bloqueado, outra Wi-Fi/client isolation, receiver fechado, IP alterado, arquivo ausente/corrompido e faixa acima do limite;
+12. religar WAN/servidor e confirmar o modo online.
+
+Registrar modelo/versão do celular, browser/PWA, BTV/Android, GeckoView, commit/APK e resultado dos cenários. O CI não autoriza declarar hardware validado.
 
 ## Arquitetura
 
 ```text
-BTV / Android TV
-      |
-      v
-Home Music TV APK
-  - Activity Android
-  - GeckoView embarcado
-  - URL persistida localmente
-      |
-      | abre com ?tv=1
-      v
-Frontend Home Music
-  - login para TV
-  - layout 16:9
-  - navegação D-pad
-  - player canônico
-  - pareamento do celular
-      |
-      v
-Servidor Home Music
-  - auth/biblioteca/player state
-  - sessão remota efêmera REST + SSE
-      |
-      v
-SQLite / MUSIC_DIR
+Modo online
+Celular/Browser ── HTTPS ──> Home Music/Fastify <── HTTPS ── GeckoView/BTV
+                     │                 │
+                     └── signaling ────┘
+                           WebRTC P2P para mídia quando aplicável
+
+Modo LAN offline
+PWA no celular ── signaling LAN ──> serviço efêmero no APK
+      │                                  │
+      └──────── WebRTC/DataChannel ──────┘
+                         │
+                         v
+             receiver web por loopback
 ```
 
-O projeto Android fica fora dos workspaces npm. O CI web não depende de Gradle/Android SDK; existe workflow separado em `.github/workflows/android-tv.yml`.
+No iOS, o bloco de signaling LAN é adaptado pela página local `/bridge`; a página não transporta áudio nem recebe o segredo do QR.
+
+O projeto Android fica fora dos workspaces npm. O workflow próprio é `.github/workflows/android-tv.yml`.
 
 ## URL do servidor
 
@@ -76,11 +113,9 @@ Na primeira configuração, o campo vem pré-preenchido com:
 https://home-music.tail6ab100.ts.net/
 ```
 
-O usuário pode trocar por outro endereço `https://` ou `http://`. A escolha fica em `SharedPreferences` no aparelho.
+O usuário pode trocar por outro endereço `https://` ou `http://`. A escolha fica em `SharedPreferences` no aparelho. Ao abrir o site, o APK acrescenta `tv=1`.
 
-Ao abrir o site, o APK acrescenta `tv=1`. O frontend preserva o modo TV durante a sessão sem mudar desktop, celular ou PWA.
-
-## Interface TV v2
+## Interface TV
 
 A sidebar principal contém:
 
@@ -89,9 +124,9 @@ A sidebar principal contém:
 - **Buscar**;
 - **Playlists**.
 
-Biblioteca agrupa **Pastas**, **Álbuns**, **Artistas** e **Músicas** como abas grandes. **Minha conta** fica no topo. A Home mostra Pastas + Álbuns em destaque para reduzir elementos simultâneos e saltos de foco.
+Biblioteca agrupa **Pastas**, **Álbuns**, **Artistas** e **Músicas** como abas grandes. **Minha conta** fica no topo.
 
-## Navegação por D-pad
+### Navegação por D-pad
 
 A tela principal trabalha com três zonas:
 
@@ -105,17 +140,12 @@ Sidebar  <->  Conteúdo
 - ↑/↓ na sidebar percorrem os destinos;
 - → entra no conteúdo;
 - ← no limite esquerdo retorna à sidebar;
-- setas no conteúdo permanecem naquela zona enquanto houver destino útil;
 - ↓ no limite inferior entra no player;
 - ↑ no player retorna ao conteúdo;
 - OK/Enter ativa o item focado;
 - foco visível e scroll acompanham a navegação.
 
 Login, telas utilitárias e Minha conta também recebem navegação auxiliar por D-pad.
-
-### Modal do controle pelo celular
-
-O modal de pareamento é uma superfície modal real: ao abrir, o foco entra nele; setas percorrem seus elementos focáveis; o recuperador global não move o foco para a tela de fundo; Escape/fechar escondem o overlay e devolvem foco ao botão **Controle pelo celular**.
 
 ## Player para TV
 
@@ -126,11 +156,7 @@ No player inferior:
 - quando o Home Music controla volume internamente, ←/→ mudam **10%**;
 - quando o volume é do sistema, a UI indica **Volume da TV**.
 
-Isso evita depender de `input[type=range]` pequeno ou do comportamento do firmware.
-
-## Crossfade na TV
-
-Desktop/mobile mantêm o seletor completo de 0 a 30 s. No modo TV, Minha conta usa quatro botões:
+Desktop/mobile mantêm o seletor completo de crossfade. No modo TV, Minha conta oferece os presets:
 
 ```text
 Desligado | 10 s | 20 s | 30 s
@@ -138,53 +164,27 @@ Desligado | 10 s | 20 s | 30 s
 
 Durante a transição, capa, título e artista acompanham o progresso do crossfade de áudio.
 
-## Controle pelo celular
+## Controle online pelo celular
 
-No modo TV, **Controle pelo celular** cria uma sessão remota efêmera no servidor e mostra:
+No modo online, **Controle pelo celular** cria uma sessão remota efêmera no servidor e mostra QR/URL de pareamento. O celular precisa estar autenticado na mesma conta.
 
-- QR Code gerado localmente no navegador;
-- URL textual como fallback;
-- estado da conexão;
-- ação **Gerar novo código**.
+A superfície remota não cria player local. Ela controla o player canônico da TV e suporta play/pause, anterior/próxima, seleção de faixa e os controles compartilhados expostos pela UI atual. Sinalização WebRTC pode usar a mesma sessão para enviar uma faixa já baixada diretamente pelo DataChannel.
 
-O QR aponta para `/remote/<sessionId>` na mesma instalação. Nenhuma URL é enviada a serviço externo.
-
-O celular precisa estar autenticado na **mesma conta**. A tela remota não cria player local nem `<audio>`; ela envia somente:
-
-- play/pause;
-- anterior;
-- próxima;
-- -10 s;
-- +10 s.
-
-Fechar o overlay na TV apenas o esconde e mantém a sessão viva. Gerar novo código substitui a sessão anterior. Sessões são process-local, limitadas a três por usuário e expiram após 60 s sem heartbeat/status da TV. Reiniciar o servidor invalida os vínculos.
-
-Arquitetura e segurança detalhadas: [`tv-remote-control.md`](tv-remote-control.md).
-
-## Minha conta em mobile e TV
-
-Para manter a tela curta, ficam ocultos em mobile (até 699 px) e TV:
-
-- Outros dispositivos;
-- Apps e integrações;
-- Importar dados pessoais;
-- Administração.
-
-As funções continuam disponíveis no desktop. Alterar senha, Reprodução, Modo offline e Sair permanecem visíveis quando aplicáveis.
+Arquitetura e segurança: [`tv-remote-control.md`](tv-remote-control.md). Envio P2P e modo LAN: [`tv-offline-cast.md`](tv-offline-cast.md) e [`tv-offline-lan-protocol.md`](tv-offline-lan-protocol.md).
 
 ## Login
 
-O login usa a autenticação web normal. O APK não recebe nem armazena senha por bridge nativa.
+Hoje o login da TV usa a autenticação web normal. O APK não recebe nem armazena senha por bridge nativa; cookies/storage do GeckoView preservam a sessão no armazenamento privado do app.
 
-No modo TV os alvos são maiores, o foco é visível, D-pad vertical percorre campos/ações e o teclado vem do Android/BTV. Cookies/storage do GeckoView preservam a sessão no armazenamento privado do app.
+A evolução de produto para **login da TV pelo celular via QR** é acompanhada pela issue #428. Enquanto ela não for implementada, usuário/senha no frontend continua sendo o fluxo de autenticação da TV.
 
 ## Compatibilidade com BTV 11
 
 ### Package installer
 
-Para evitar o erro de análise de pacote encontrado no primeiro APK:
+Para evitar o erro de análise de pacote encontrado nos primeiros builds:
 
-- `minSdk` 23;
+- `minSdk 23`;
 - assinatura v1 + v2;
 - v3/v4 desabilitadas nessa distribuição de compatibilidade;
 - APIs modernas evitadas quando não há fallback.
@@ -217,7 +217,9 @@ A tela permanece ativa enquanto a Activity estiver aberta.
 Requisitos: JDK 17, Android SDK 35, Gradle 8.10.2.
 
 ```bash
-gradle -p android-tv :app:assembleDebug
+npm run build -w @home-music/shared
+npm run build:tv-receiver -w @home-music/web
+gradle -p android-tv :app:testDebugUnitTest :app:assembleDebug :app:lintDebug
 ```
 
 APK:
@@ -226,26 +228,26 @@ APK:
 android-tv/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-O workflow **Android TV** gera o receiver, executa testes JVM, `assembleDebug` + `lintDebug`, verifica os assets dentro do APK e publica `home-music-tv-debug-apk`.
+A versão de teste atual é `0.4.0` (`versionCode 5`).
 
-O CI web contém TV regression gate e TV remote control E2E, além dos gates gerais descritos em [`testing-and-quality.md`](testing-and-quality.md).
+O workflow **Android TV** gera o receiver, executa testes JVM, build/lint, verifica os assets do receiver e do bridge dentro do APK e publica `home-music-tv-debug-apk`.
+
+O CI web mantém gates específicos para controle remoto, offline cast, LAN totalmente offline e bridge iOS, além dos gates gerais descritos em [`testing-and-quality.md`](testing-and-quality.md).
 
 ## Instalação de teste
 
-1. baixe o artifact Android TV quando houver alteração do APK;
-2. extraia `app-debug.apk` se necessário;
-3. copie/baixe no aparelho;
-4. permita fonte desconhecida para o instalador usado;
-5. instale;
-6. abra Home Music TV;
-7. confirme a URL;
-8. faça login e valide usando somente o controle.
+1. baixe o artifact do workflow **Android TV**;
+2. extraia `app-debug.apk`;
+3. transfira para o aparelho;
+4. permita instalação de apps desconhecidos para a origem usada;
+5. instale e abra **Home Music TV**;
+6. confirme a URL e valide o modo desejado.
 
 Builds de teste com assinatura incompatível podem exigir reinstalação limpa, removendo URL/login locais.
 
 ## Assinatura release
 
-O APK debug é para sideload/validação. Releases atualizáveis precisam da mesma chave privada.
+O APK debug é para sideload/validação. Releases atualizáveis precisam da mesma chave privada:
 
 ```text
 ANDROID_TV_KEYSTORE_PATH
@@ -258,25 +260,29 @@ O keystore não deve ser commitado e precisa de backup seguro.
 
 ## Segurança
 
-- nenhuma bridge JavaScript nativa é exposta;
-- autenticação/autorização permanecem no backend;
-- URL fica no storage privado do app;
-- HTTPS é preferido; HTTP permanece para instalações locais controladas;
-- erros TLS não são ignorados;
-- controle remoto exige a mesma conta autenticada e usa sessão opaca/efêmera;
-- QR é gerado localmente e não concede autorização por si só.
+- nenhuma bridge JavaScript nativa genérica é exposta;
+- autenticação/autorização online permanecem no backend;
+- o protocolo LAN usa sessão curta, segredo de alta entropia, challenge/HMAC, TTL e proteção contra replay;
+- a bridge iOS é uma allowlist de operações de signaling, não um proxy HTTP arbitrário;
+- segredo do QR e derivação HMAC permanecem no PWA;
+- mídia e comandos após o pareamento usam WebRTC/DataChannel;
+- URL configurada fica no storage privado do app;
+- HTTPS é preferido para o servidor Home Music; HTTP permanece para instalações locais controladas;
+- erros TLS não são ignorados.
 
 ## Validação restante
 
-A issue #392 continua sendo a fonte de verdade para hardware/distribuição. A rodada TV v2 anterior já foi validada no BTV; após o deploy do controle remoto ainda precisam de teste físico:
+A implementação automatizada do modo offline LAN está na `main`, mas a homologação física final continua nas issues #417 e #422. Já houve QA físico em iPhone + BTV confirmando o caminho principal até WebRTC/DataChannel e reprodução; as rodadas seguintes motivaram os hardenings dos PRs #427 e #430.
 
-- leitura do QR pela câmera de um celular e legibilidade a distância;
-- login/retorno para `/remote/<sessionId>` quando o celular não estiver autenticado;
-- play/pause, anterior/próxima e seek ±10 s controlando o BTV real;
-- esconder/reabrir o overlay sem perder a sessão;
-- gerar novo código e confirmar invalidação do anterior;
-- foco do modal com o D-pad físico e retorno ao botão de origem;
-- layout/overscan do modal no televisor;
-- reconexão/comportamento da sessão no GeckoView real.
+Ainda devem ser registrados de forma reproduzível, no head/APK final usado para homologação:
 
-Os itens de assinatura release e estratégia de distribuição também permanecem na #392.
+- cold start completo com WAN/backend desligados;
+- matriz real de browser/iOS/Android/BTV/GeckoView;
+- background/lock/foreground por tempo prolongado;
+- perda real de Wi-Fi versus `disconnected` transitório;
+- QR expirado/regenerado e cleanup;
+- AP/client isolation e redes bloqueadas;
+- comportamento de popup/fechamento do bridge iOS;
+- recuperação do modo online após religar backend/WAN.
+
+Não declarar suporte físico completo além da evidência registrada nessas issues.
