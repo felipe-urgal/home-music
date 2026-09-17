@@ -149,4 +149,23 @@ describe('TV remote DataChannel protocol', () => {
     remote.close();
     tv.close();
   });
+
+  it('rejects commands and media after the underlying channel closes', async () => {
+    const [remoteChannel] = pair();
+    const remote = createTvRemoteDataChannel(remoteChannel as unknown as RTCDataChannel, {
+      ...timerOptions,
+      createTransferId: () => 'transfer-closed',
+      createMessageId: () => 'remote_message_closed'
+    });
+
+    remoteChannel.close();
+
+    expect(() => remote.sendCommand({ type: 'toggle-play' })).toThrow(/encerrada/);
+    await expect(remote.sendTrackAndPlay({
+      trackId: 'track-1',
+      blob: new Blob(['audio'], { type: 'audio/mpeg' })
+    })).rejects.toThrow(/P2P/);
+
+    remote.close();
+  });
 });
