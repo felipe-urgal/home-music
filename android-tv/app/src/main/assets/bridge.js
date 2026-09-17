@@ -12,6 +12,7 @@
     'join',
     'signal-send',
     'signal-poll',
+    'complete',
     'close',
   ]);
   const ID_PATTERN = /^[A-Za-z0-9._:-]{16,128}$/;
@@ -182,6 +183,11 @@
       return { ok: true, payload: { pong: true }, error: null };
     }
 
+    if (request.operation === 'complete') {
+      if (payload !== null) return { ok: false, payload: null, error: 'invalid_payload' };
+      return { ok: true, payload: { status: 204, body: null }, error: null };
+    }
+
     if (request.operation === 'challenge') {
       if (!isPlainObject(payload) || !hasExactKeys(payload, ['clientNonce', 'sessionId'])) return null;
       if (!isSafeToken(payload.sessionId) || !isSafeToken(payload.clientNonce)) return null;
@@ -279,6 +285,9 @@
       postResponse(request, result.ok, result.payload, result.error);
       if (request.operation === 'probe' && result.ok) {
         setStatus('Canal v1 validado. Aguardando pareamento…');
+      } else if (request.operation === 'complete' && result.ok) {
+        setStatus('Conexão P2P pronta. Volte ao Home Music. Você pode fechar esta aba se ela não fechar automaticamente.');
+        window.setTimeout(() => window.close(), 100);
       } else if (request.operation === 'close' && result.ok) {
         setStatus('Sessão encerrada. Você pode voltar ao Home Music.');
         window.setTimeout(() => window.close(), 100);
@@ -295,5 +304,5 @@
     type: 'ready',
     channelId,
   }, parentOrigin);
-  setStatus('Bridge v1 aberto. Aguardando pareamento do Home Music…');
+  setStatus('Bridge aberto. Volte ao Home Music para concluir o pareamento. Mantenha esta aba aberta até a conexão P2P ser confirmada.');
 })();
