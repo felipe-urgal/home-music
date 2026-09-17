@@ -3,7 +3,6 @@ export const TV_LAN_BRIDGE_MAX_MESSAGE_BYTES = 2 * 1024 * 1024;
 export const TV_LAN_BRIDGE_REQUEST_TIMEOUT_MS = 12_000;
 
 export const TV_LAN_BRIDGE_OPERATIONS = [
-  'probe',
   'challenge',
   'join',
   'signal-send',
