@@ -5,7 +5,10 @@ const password = 'playwright-password-2026';
 
 async function login(page: Page, url: string) {
   await page.goto(url);
-  await expect(page.getByRole('heading', { name: 'Entrar' })).toBeVisible();
+  if (new URL(page.url()).searchParams.get('tv') === '1') {
+    await page.getByRole('button', { name: 'Entrar com usuário e senha', exact: true }).click();
+  }
+  await expect(page.getByRole('heading', { name: 'Entrar', exact: true })).toBeVisible();
   await page.getByLabel('Usuário', { exact: true }).fill(username);
   await page.getByLabel('Senha', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
