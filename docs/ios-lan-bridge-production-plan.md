@@ -17,7 +17,7 @@ O spike deste PR validou fisicamente que:
 - Home Music e bridge conseguem trocar `PING/PONG` com `postMessage`;
 - o segredo do QR não precisa ser enviado para a página bridge para provar essa comunicação.
 
-No head `ad1b7b267698ca6a5e96784152c020ef70b3e4fc`, CI #1937 e Android TV #90 concluíram com sucesso. Essa evidência é anterior às alterações seguintes do PR e deve ser revalidada no head final.
+No head `ad1b7b267698ca6a5e96784152c020ef70b3e4fc`, CI #1937 e Android TV #90 concluíram com sucesso. No head `6071db07ed847dfcf53e6a1778bfae3b95a7bb2c`, após a atividade 2, CI #1939 e Android TV #92 também concluíram com sucesso. Alterações posteriores da atividade 3 exigem nova observação dos gates antes de usar essa evidência como final.
 
 ## Objetivo
 
@@ -103,7 +103,7 @@ Operações permitidas são semânticas e fechadas:
 - `signal-poll`;
 - `close`.
 
-O bridge não aceita URL arbitrária, host arbitrário, método arbitrário ou headers arbitrários. Nesta etapa somente `probe` é executada; as operações de produção respondem `not_implemented` até o relay da atividade 3.
+O bridge não aceita URL arbitrária, host arbitrário, método arbitrário ou headers arbitrários. A atividade 3 passou a executar as operações de produção com targets same-origin determinísticos; `probe` continua apenas enquanto a UI temporária do spike ainda não foi removida.
 
 ### 3. Produzir o bridge real na BTV
 
@@ -113,22 +113,25 @@ Arquivos principais:
 - `android-tv/app/src/main/assets/bridge.js`;
 - `android-tv/app/src/main/java/com/homemusic/tv/LanPairingServer.java`.
 
-Os endpoints `/challenge`, `/join`, `/signals` e `/close` já existem no `LanPairingServer`. Esta etapa deve conectar o bridge a esses endpoints same-origin, sem recriar a semântica do protocolo v2.
+Os endpoints `/challenge`, `/join`, `/signals` e `/close` já existem no `LanPairingServer`. O bridge agora os usa como relay same-origin, sem recriar a semântica do protocolo v2.
 
 Atividades:
 
 - [x] confirmar que `/challenge`, `/join`, `/signals` e `/close` já existem e preservam as validações atuais;
-- [ ] substituir a operação `probe` pelo relay das operações permitidas;
-- [ ] usar requests same-origin para o próprio `LanPairingServer`;
-- [ ] reconstruir targets de forma determinística, sem aceitar target arbitrário vindo do PWA;
-- [ ] aplicar `cache: no-store`/equivalente às requests de sessão;
-- [ ] limitar tamanho de payload e response;
-- [ ] normalizar erros HTTP em resposta estruturada ao PWA;
-- [ ] não exibir nem registrar segredo, proof, Authorization completa ou payload sensível;
-- [ ] oferecer estado visual mínimo enquanto o bridge estiver aberto;
-- [ ] suportar comando de encerramento do bridge após conexão/cleanup;
-- [ ] impedir que assets `/receiver/*` restritos a loopback se tornem acessíveis pela inclusão do bridge;
-- [ ] preservar rate limit, TTL e validações atuais do `LanPairingServer`.
+- [x] substituir `not_implemented` pelo relay das operações permitidas, mantendo `probe` temporariamente para o spike;
+- [x] usar requests same-origin para o próprio `LanPairingServer`;
+- [x] reconstruir targets de forma determinística, sem aceitar target arbitrário vindo do PWA;
+- [x] aplicar `cache: no-store` e `credentials: omit` às requests de sessão;
+- [x] limitar mensagem do bridge a 2 MiB, body LAN a 320 KiB e response a 2 MiB;
+- [x] normalizar falhas em `invalid_payload`, `timeout`, `network_error`, `http_error`, `invalid_response` e `response_too_large`;
+- [x] não exibir nem registrar segredo, proof, Authorization completa ou payload sensível;
+- [x] oferecer estado visual mínimo enquanto o bridge estiver aberto;
+- [x] suportar comando `close` e fechamento best-effort da janela após sucesso;
+- [x] manter assets `/receiver/*` restritos a loopback; o bridge não cria rota/proxy para esses assets;
+- [x] preservar rate limit, TTL, replay protection e validações atuais do `LanPairingServer`/`LanPairingSession`;
+- [x] permitir requests distintas concorrentes sem bloquear envio de ICE durante polling e rejeitar `requestId` duplicado em execução.
+
+Contrato detalhado do relay e shapes de payload: [`docs/ios-lan-bridge-protocol-v1.md`](ios-lan-bridge-protocol-v1.md).
 
 ### 4. Criar transporte bridge no PWA
 
@@ -201,7 +204,7 @@ Se o iOS suspender uma das páginas de forma que impossibilite a sinalização, 
 
 Aplicar TDD nas mudanças de comportamento.
 
-A cobertura unitária do contrato está em `apps/web/src/tv-lan-bridge-protocol.test.ts`. Os itens de lifecycle/browser e relay real continuam abertos.
+A cobertura unitária do contrato está em `apps/web/src/tv-lan-bridge-protocol.test.ts`. O relay real existe no runtime da BTV, mas seus testes dedicados e a integração PWA continuam abertos.
 
 Cobrir no mínimo:
 
