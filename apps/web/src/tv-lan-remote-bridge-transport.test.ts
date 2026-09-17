@@ -17,7 +17,7 @@ function qrText() {
 
 describe('TV LAN remote client with bridge transport', () => {
   it('keeps proof/HMAC in the PWA and sends only semantic relay payloads', async () => {
-    const challenge = vi.fn(async () => ({
+    const challenge = vi.fn(async (_input: { sessionId: string; clientNonce: string }) => ({
       status: 200,
       body: {
         sessionId: SESSION_ID,
@@ -26,13 +26,22 @@ describe('TV LAN remote client with bridge transport', () => {
         expiresAt: NOW + 30_000,
       },
     }));
-    const join = vi.fn(async () => ({
+    const join = vi.fn(async (_input: {
+      sessionId: string;
+      clientNonce: string;
+      tvNonce: string;
+      expiresAt: number;
+      proof: string;
+    }) => ({
       status: 200,
       body: { sessionToken: SESSION_TOKEN, expiresAt: NOW + 120_000 },
     }));
-    const signalSend = vi.fn(async () => ({ status: 202, body: {} }));
-    const signalPoll = vi.fn(async () => ({ status: 200, body: { cursor: 0, messages: [] } }));
-    const close = vi.fn(async () => ({ status: 200, body: {} }));
+    const signalSend = vi.fn(async (_input: { authorization: string; body: string }) => ({ status: 202, body: {} }));
+    const signalPoll = vi.fn(async (_input: { authorization: string; cursor: number }) => ({
+      status: 200,
+      body: { cursor: 0, messages: [] },
+    }));
+    const close = vi.fn(async (_input: { authorization: string }) => ({ status: 200, body: {} }));
     const dispose = vi.fn();
     const transportFactory: TvLanTransportFactory = vi.fn(async () => ({
       challenge,
