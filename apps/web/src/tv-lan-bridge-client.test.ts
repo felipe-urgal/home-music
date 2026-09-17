@@ -1,0 +1,120 @@
+import { describe, expect, it, vi } from 'vitest';
+import { TV_LAN_BRIDGE_PROTOCOL_VERSION } from './tv-lan-bridge-protocol';
+import { createTvLanBridgeTransport } from './tv-lan-bridge-client';
+
+const pairing = {
+  version: 'home-music-lan-remote-v2' as const,
+  host: '192.168.1.40',
+  port: 43123,
+  sessionId: 'session_1234567890abcdef',
+  secret: '0123456789abcdef0123456789abcdef',
+  expiresAt: Date.now() + 60_000,
+};
+
+type MessageListener = (event: MessageEvent) => void;
+
+function fakeWindow() {
+  const listeners = new Set<MessageListener>();
+  let bridgeOrigin = '';
+  let channelId = '';
+  const popup = {
+    closed: false,
+    close: vi.fn(() => { popup.closed = true; }),
+    postMessage: vi.fn((message: any) => {
+      queueMicrotask(() => {
+        for (const listener of listeners) {
+          listener({
+            origin: bridgeOrigin,
+            source: popup,
+            data: {
+              version: TV_LAN_BRIDGE_PROTOCOL_VERSION,
+              type: 'response',
+              channelId,
+              requestId: message.requestId,
+              operation: message.operation,
+              expiresAt: message.expiresAt,
+              ok: true,
+              payload: { status: 200, body: { echoed: message.payload } },
+              error: null,
+            },
+          } as unknown as MessageEvent);
+        }
+      });
+    }),
+  };
+
+  const windowImpl = {
+    location: { origin: 'https://music.example.com' },
+    open: vi.fn((url: string) => {
+      const parsed = new URL(url);
+      bridgeOrigin = parsed.origin;
+      channelId = parsed.searchParams.get('channelId') ?? '';
+      queueMicrotask(() => {
+        for (const listener of listeners) {
+          listener({
+            origin: bridgeOrigin,
+            source: popup,
+            data: {
+              version: TV_LAN_BRIDGE_PROTOCOL_VERSION,
+              type: 'ready',
+              channelId,
+            },
+          } as unknown as MessageEvent);
+        }
+      });
+      return popup;
+    }),
+    addEventListener: vi.fn((_type: string, listener: EventListener) => listeners.add(listener as unknown as MessageListener)),
+    removeEventListener: vi.fn((_type: string, listener: EventListener) => listeners.delete(listener as unknown as MessageListener)),
+    setTimeout: ((handler: TimerHandler, timeout?: number) => window.setTimeout(handler, timeout)),
+    clearTimeout: ((id: number) => window.clearTimeout(id)),
+  };
+
+  return { windowImpl, popup };
+}
+
+describe('iOS LAN bridge client', () => {
+  it('opens the local bridge and correlates semantic requests by requestId', async () => {
+    const { windowImpl, popup } = fakeWindow();
+    const transport = await createTvLanBridgeTransport(pairing, {
+      windowImpl: windowImpl as unknown as Window,
+      requestTimeoutMs: 1_000,
+    });
+
+    const response = await transport.challenge({
+      sessionId: pairing.sessionId,
+      clientNonce: 'client_1234567890abcdef',
+    });
+
+    expect(windowImpl.open).toHaveBeenCalledOnce();
+    expect(String(windowImpl.open.mock.calls[0]?.[0])).toContain('/bridge?origin=https%3A%2F%2Fmusic.example.com&channelId=');
+    expect(popup.postMessage).toHaveBeenCalledOnce();
+    expect(response).toEqual({
+      status: 200,
+      body: {
+        echoed: {
+          sessionId: pairing.sessionId,
+          clientNonce: 'client_1234567890abcdef',
+        },
+      },
+    });
+
+    transport.dispose();
+    expect(popup.close).toHaveBeenCalledOnce();
+  });
+
+  it('fails with an actionable error when the popup is blocked', async () => {
+    const windowImpl = {
+      location: { origin: 'https://music.example.com' },
+      open: vi.fn(() => null),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      setTimeout: window.setTimeout.bind(window),
+      clearTimeout: window.clearTimeout.bind(window),
+    };
+
+    await expect(createTvLanBridgeTransport(pairing, {
+      windowImpl: windowImpl as unknown as Window,
+    })).rejects.toThrow('bloqueou a abertura do bridge local');
+  });
+});
