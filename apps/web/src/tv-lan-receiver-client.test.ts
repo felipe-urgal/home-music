@@ -69,7 +69,11 @@ describe('TV offline receiver LAN client', () => {
     await client.sendSignal({
       from: 'tv',
       type: 'ice-candidate',
-      candidate: { candidate: 'candidate:1 1 udp 1 127.0.0.1 9 typ host' }
+      candidate: {
+        candidate: 'candidate:1 1 udp 1 127.0.0.1 9 typ host',
+        sdpMid: '0',
+        sdpMLineIndex: 0
+      }
     });
 
     expect(calls).toHaveLength(1);
