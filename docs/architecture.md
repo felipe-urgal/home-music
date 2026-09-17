@@ -110,7 +110,8 @@ Fastify + TypeScript concentra as fronteiras de confiança online:
 - jobs locais/opcionais como fingerprint e Whisper;
 - adapter OpenSubsonic;
 - lifecycle de recursos/processos;
-- sessões remotas online e signaling REST/SSE quando o servidor participa do controle da TV.
+- sessões remotas online e signaling REST/SSE quando o servidor participa do controle da TV;
+- protocolo efêmero de device login para criar uma sessão própria da TV a partir de aprovação em outro cliente autenticado.
 
 O entrypoint deve permanecer principalmente composição/wiring. Serviços encapsulam comportamento e recursos externos.
 
@@ -129,7 +130,9 @@ O backend é a fronteira real de autorização para fluxos online. Sessão web e
 
 Ownership pessoal cobre favoritos, histórico/estatísticas, playlists, estado do player, downloads offline e portabilidade pessoal.
 
-No modo TV LAN offline, a identidade persistida no PWA serve apenas para localizar cache/downloads do próprio dispositivo. Ela não autentica a TV; o acesso à TV vem exclusivamente da sessão LAN efêmera.
+O device login da TV é somente um caminho alternativo para **emitir uma sessão web normal e independente para a TV**. `requestId`, `deviceToken` e `approvalToken` são efêmeros/process-local; senha, cookie e token da sessão já existente no celular não são transferidos para o aparelho. O protocolo backend está na `main`; a superfície TV/celular é um estágio de UI separado.
+
+No modo TV LAN offline, a identidade persistida no PWA serve apenas para localizar cache/downloads do próprio dispositivo. Ela não autentica a TV; o acesso à TV vem exclusivamente da sessão LAN efêmera. Device login online e pareamento LAN offline não reutilizam tokens nem fronteiras de confiança.
 
 Fonte: [`multi-user-auth.md`](multi-user-auth.md).
 
@@ -145,7 +148,7 @@ SQLite é o estado persistente principal. Ele contém, entre outros:
 - runs, sugestões, cache/proveniência e política do Assistente;
 - estado de importações e histórico operacional.
 
-O pareamento LAN offline da TV é efêmero/process-local no APK e não cria nova persistência SQLite.
+O pareamento LAN offline da TV e os pedidos de device login são efêmeros/process-local e não criam nova persistência SQLite. A sessão web final criada para a TV segue o mesmo `SessionManager` em memória das demais sessões.
 
 Migrations usam `PRAGMA user_version`. Produção deve usar backup/restore suportado em vez de editar schema manualmente.
 
@@ -277,7 +280,7 @@ Fontes: [`pwa.md`](pwa.md) e [`offline-downloads.md`](offline-downloads.md).
 
 O APK Android TV usa GeckoView e possui dois caminhos:
 
-- **online:** carrega o Home Music com `?tv=1`, usa autenticação web normal e pode criar sessão remota REST/SSE para o celular;
+- **online:** carrega o Home Music com `?tv=1`, usa sessão web normal e pode criar sessão remota REST/SSE para o celular; o backend já suporta iniciar/aprovar/consumir pedidos de login da TV pelo celular, embora a UI desse fluxo ainda seja um estágio separado;
 - **LAN offline:** inicia serviço local efêmero, gera QR, serve receiver embarcado por loopback e abre WebRTC/DataChannel sem backend.
 
 O protocolo `home-music-lan-remote-v2` usa segredo efêmero, challenge/HMAC, TTL, nonces e replay protection. O receiver abre automaticamente depois de `join` autenticado; replay não dispara nova abertura.
@@ -286,7 +289,7 @@ No iPhone/iPad, uma página local `/bridge` adapta apenas signaling via `postMes
 
 O peer trata `disconnected` como potencialmente transitório. `failed`, `closed` e erro/fechamento real do DataChannel continuam terminais.
 
-Fontes: [`android-tv.md`](android-tv.md), [`tv-remote-control.md`](tv-remote-control.md), [`tv-offline-cast.md`](tv-offline-cast.md) e [`tv-offline-lan-protocol.md`](tv-offline-lan-protocol.md).
+Fontes: [`android-tv.md`](android-tv.md), [`multi-user-auth.md`](multi-user-auth.md), [`tv-remote-control.md`](tv-remote-control.md), [`tv-offline-cast.md`](tv-offline-cast.md) e [`tv-offline-lan-protocol.md`](tv-offline-lan-protocol.md).
 
 ## Administração
 
