@@ -75,6 +75,7 @@ final class LanPairingSession {
     private static final char[] BASE64_URL = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_".toCharArray();
     private final SecureRandom random;
     private final Clock clock;
+    private final Runnable onRemoteJoined;
     private final String sessionId;
     private String secret;
     private final String receiverToken;
@@ -92,12 +93,21 @@ final class LanPairingSession {
     private boolean closed;
 
     LanPairingSession() {
-        this(new SecureRandom(), System::currentTimeMillis);
+        this(new SecureRandom(), System::currentTimeMillis, () -> {});
+    }
+
+    LanPairingSession(Runnable onRemoteJoined) {
+        this(new SecureRandom(), System::currentTimeMillis, onRemoteJoined);
     }
 
     LanPairingSession(SecureRandom random, Clock clock) {
+        this(random, clock, () -> {});
+    }
+
+    LanPairingSession(SecureRandom random, Clock clock, Runnable onRemoteJoined) {
         this.random = random;
         this.clock = clock;
+        this.onRemoteJoined = onRemoteJoined == null ? () -> {} : onRemoteJoined;
         this.sessionId = randomToken(16);
         this.secret = randomToken(32);
         this.receiverToken = randomToken(32);
@@ -157,6 +167,11 @@ final class LanPairingSession {
         remoteRequestKey = deriveRequestKey(secret, challenge, result);
         secret = null;
         challenges.clear();
+        try {
+            onRemoteJoined.run();
+        } catch (RuntimeException ignored) {
+            // O pareamento autenticado continua válido mesmo se a notificação de UI falhar.
+        }
         return result;
     }
 

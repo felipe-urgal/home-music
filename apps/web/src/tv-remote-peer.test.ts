@@ -162,7 +162,34 @@ describe('tv remote peer controller', () => {
     controller.close();
   });
 
-  it('fails and tears down a peer that stays disconnected beyond the grace period', async () => {
+  it('tears down and reports an error when a transient disconnect becomes a failed peer', async () => {
+    const peer = new FakePeer();
+    const states: string[] = [];
+    const errors: Error[] = [];
+    const controller = createTvRemotePeerController({
+      role: 'remote',
+      createPeer: () => peer as unknown as RTCPeerConnection,
+      sendSignal: async () => undefined,
+      onChannel: () => undefined,
+      onState: state => states.push(state),
+      onError: error => errors.push(error as Error)
+    });
+
+    await controller.start();
+    peer.channel.open();
+    peer.setConnectionState('disconnected');
+
+    expect(peer.close).not.toHaveBeenCalled();
+
+    peer.setConnectionState('failed');
+
+    expect(peer.close).toHaveBeenCalledTimes(1);
+    expect(states).toEqual(['connecting', 'open', 'connecting', 'error']);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.message).toBe('Falha na conexão P2P com a TV.');
+  });
+
+  it('keeps the peer alive through a prolonged disconnect and restores it when iOS resumes', async () => {
     vi.useFakeTimers();
     const peer = new FakePeer();
     const states: string[] = [];
@@ -179,11 +206,16 @@ describe('tv remote peer controller', () => {
     await controller.start();
     peer.channel.open();
     peer.setConnectionState('disconnected');
-    await vi.advanceTimersByTimeAsync(5_001);
+    await vi.advanceTimersByTimeAsync(30_000);
 
-    expect(peer.close).toHaveBeenCalledTimes(1);
-    expect(states).toEqual(['connecting', 'open', 'connecting', 'error']);
-    expect(errors).toHaveLength(1);
-    expect(errors[0]?.message).toContain('perdida');
+    expect(peer.close).not.toHaveBeenCalled();
+    expect(states).toEqual(['connecting', 'open', 'connecting']);
+    expect(errors).toHaveLength(0);
+
+    peer.setConnectionState('connected');
+
+    expect(states).toEqual(['connecting', 'open', 'connecting', 'open']);
+    expect(peer.close).not.toHaveBeenCalled();
+    controller.close();
   });
 });

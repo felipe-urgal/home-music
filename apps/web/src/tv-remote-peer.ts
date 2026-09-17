@@ -2,8 +2,6 @@ import type { TvRemotePeerRole, TvRemoteSignal } from '@home-music/shared/tv-rem
 
 export const TV_REMOTE_MEDIA_CHANNEL = 'home-music-media-v1';
 
-const TV_REMOTE_DISCONNECT_GRACE_MS = 5_000;
-
 export type TvRemotePeerState = 'connecting' | 'open' | 'closed' | 'unsupported' | 'error';
 
 export type TvRemotePeerController = {
@@ -51,19 +49,12 @@ export function createTvRemotePeerController(options: PeerOptions): TvRemotePeer
   let closed = false;
   let channel: RTCDataChannel | null = null;
   let removeChannelListeners: (() => void) | null = null;
-  let disconnectTimer: ReturnType<typeof setTimeout> | null = null;
   let lastState: TvRemotePeerState | null = null;
 
   const emitState = (state: TvRemotePeerState) => {
     if (lastState === state) return;
     lastState = state;
     options.onState?.(state);
-  };
-
-  const clearDisconnectTimer = () => {
-    if (disconnectTimer === null) return;
-    clearTimeout(disconnectTimer);
-    disconnectTimer = null;
   };
 
   const detachChannel = (shouldClose: boolean) => {
@@ -77,7 +68,6 @@ export function createTvRemotePeerController(options: PeerOptions): TvRemotePeer
   const cleanup = () => {
     if (closed) return false;
     closed = true;
-    clearDisconnectTimer();
     pendingCandidates.length = 0;
     detachChannel(true);
     peer.removeEventListener('icecandidate', onIceCandidate);
@@ -108,10 +98,7 @@ export function createTvRemotePeerController(options: PeerOptions): TvRemotePeer
     next.binaryType = 'arraybuffer';
 
     const onOpen = () => {
-      if (!closed && channel === next) {
-        clearDisconnectTimer();
-        emitState('open');
-      }
+      if (!closed && channel === next) emitState('open');
     };
     const onClose = () => {
       if (!closed && channel === next) reportClosed();
@@ -154,15 +141,9 @@ export function createTvRemotePeerController(options: PeerOptions): TvRemotePeer
     }
     if (peer.connectionState === 'disconnected') {
       emitState('connecting');
-      clearDisconnectTimer();
-      disconnectTimer = setTimeout(() => {
-        disconnectTimer = null;
-        reportError(new Error('Conexão P2P com a TV foi perdida. Gere um novo pareamento para reconectar.'));
-      }, TV_REMOTE_DISCONNECT_GRACE_MS);
       return;
     }
     if (peer.connectionState === 'connected') {
-      clearDisconnectTimer();
       emitState(channel?.readyState === 'open' ? 'open' : 'connecting');
     }
   }
