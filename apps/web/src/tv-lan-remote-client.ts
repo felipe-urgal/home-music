@@ -205,7 +205,11 @@ function createDirectTransportFactory(
     options.signal.addEventListener('abort', abortFromParent, { once: true });
     if (options.signal.aborted) controller.abort();
 
-    const lanFetch = async (target: string, init: RequestInit = {}): Promise<TvLanTransportResponse> => {
+    const lanFetch = async (
+      target: string,
+      init: RequestInit = {},
+      readBody = true,
+    ): Promise<TvLanTransportResponse> => {
       if (controller.signal.aborted) throw remoteError('Conexão LAN cancelada.');
       const requestController = new AbortController();
       let timedOut = false;
@@ -218,10 +222,12 @@ function createDirectTransportFactory(
       try {
         const response = await fetchImpl(`${baseUrl}${target}`, { ...init, cache: 'no-store', signal: requestController.signal });
         let body: unknown = null;
-        try {
-          body = await response.json() as unknown;
-        } catch {
-          throw remoteError('A TV retornou uma resposta LAN inválida.');
+        if (readBody) {
+          try {
+            body = await response.json() as unknown;
+          } catch {
+            throw remoteError('A TV retornou uma resposta LAN inválida.');
+          }
         }
         return { status: response.status, body };
       } catch (error) {
@@ -249,14 +255,14 @@ function createDirectTransportFactory(
           'Content-Type': 'application/json',
         },
         body: input.body,
-      }),
+      }, false),
       signalPoll: input => lanFetch(`/signals?role=remote&cursor=${encodeURIComponent(String(input.cursor))}`, {
         headers: { Authorization: input.authorization },
       }),
       close: input => lanFetch('/close?role=remote', {
         method: 'POST',
         headers: { Authorization: input.authorization },
-      }),
+      }, false),
       dispose: () => {
         options.signal.removeEventListener('abort', abortFromParent);
         controller.abort();
