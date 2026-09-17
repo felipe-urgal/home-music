@@ -2,7 +2,7 @@
 
 Este documento registra a arquitetura **atual** de identidade do Home Music. Os documentos da fase 7.5 foram arquivados em [`history/phase-7.5/`](history/phase-7.5/) como contexto histórico da migração; este arquivo é a fonte de verdade documental para o modelo vigente incorporado à `main`.
 
-> Status: **concluído para o escopo da fase 7.5**. Evoluções futuras de identidade devem abrir issue própria e atualizar este documento quando alterarem as invariantes abaixo.
+> Status: **concluído para o escopo da fase 7.5**. Evoluções de identidade, como o login da TV pelo celular, são documentadas aqui quando alteram as invariantes vigentes.
 
 ## Objetivo
 
@@ -202,6 +202,88 @@ Essa separação impede que um usuário comum provoque logout do administrador o
 
 Reiniciar o processo revoga as sessões em memória.
 
+## Login da TV pelo celular — protocolo backend
+
+O primeiro estágio da issue #428 foi incorporado pelo PR #429. A `main` já possui o protocolo backend para autorizar uma TV a partir de um celular autenticado, mas a experiência de UI TV/celular ainda é um estágio separado.
+
+O objetivo é que a TV termine com **uma sessão web normal própria**, sem receber senha, cookie ou token da sessão do celular.
+
+### Tokens e estado
+
+`TvDeviceLoginManager` mantém solicitações somente em memória. Cada início gera valores independentes:
+
+- `requestId`: identifica o pedido;
+- `deviceToken`: segredo da TV para status/consume/cancel;
+- `approvalToken`: segredo carregado pelo fluxo de aprovação no celular;
+- `displayCode`: código visual de 6 dígitos para conferir TV ↔ celular;
+- `expiresAt`: expiração do pedido.
+
+Os segredos são armazenados internamente somente como hash SHA-256. `deviceToken` e `approvalToken` são distintos e não substituem a sessão final.
+
+Estados atuais:
+
+```text
+pending → approved → consumed
+        ↘ denied
+        ↘ expired
+```
+
+O consumo possui reserva/commit/rollback para que falha ao criar a sessão final não destrua silenciosamente uma aprovação válida.
+
+### Rotas
+
+```text
+POST   /api/auth/device/start
+GET    /api/auth/device/:requestId/status
+POST   /api/auth/device/approve
+POST   /api/auth/device/deny
+POST   /api/auth/device/:requestId/consume
+DELETE /api/auth/device/:requestId
+```
+
+As mutações continuam sujeitas à política central de `X-Home-Music-Request: 1` conforme a rota/autenticação aplicável.
+
+### Sessão independente da TV
+
+Depois da aprovação, `consume` chama `SessionManager.createSessionForUser`. A TV recebe o mesmo tipo de cookie/sessão usado pelo login normal e passa a aparecer no gerenciamento normal de sessões.
+
+Consequências:
+
+- logout/revogação da TV não encerra a sessão do celular;
+- logout do celular não transfere nem invalida magicamente o cookie já emitido para a TV;
+- capacidade por usuário/global do `SessionManager` continua valendo;
+- a sessão final pode ser revogada pelos mecanismos normais.
+
+### TTL, replay e capacidade
+
+Defaults do manager:
+
+- TTL do pedido: **5 minutos**;
+- retenção de estado terminal: **60 segundos**;
+- até **64** pedidos ativos globais;
+- até **4** pedidos ativos por origem/IP;
+- até **8** inícios por origem a cada **60 segundos**;
+- até **512** entradas diretas no limiter antes do bucket de overflow.
+
+Aprovação, recusa e consumo são one-shot/estado-dependentes. Tokens malformados ou grandes são rejeitados e replay não cria uma segunda sessão.
+
+Polling/status não expõe identidade do usuário aprovado nem segredos internos. Respostas do fluxo usam `Cache-Control: no-store`.
+
+### Fronteira com o modo LAN offline
+
+O device login online é separado de `home-music-lan-remote-v2`:
+
+- device login usa o servidor Home Music para autorizar uma nova sessão web da TV;
+- LAN offline usa segredo efêmero do QR local para autorizar uma sessão P2P na mesma rede;
+- tokens/segredos de um fluxo não são reutilizados no outro;
+- o bridge iOS da LAN não participa do login da conta.
+
+### Estado da UI
+
+Na `main` atual, o protocolo backend está disponível, mas a experiência completa **Entrar com o celular** ainda não deve ser descrita como entregue até o estágio de UI/E2E ser mergeado. Enquanto isso, usuário/senha continua sendo o fallback/fluxo visível existente na TV.
+
+A implementação da superfície TV/celular é acompanhada pelo PR #431 e pela issue #428.
+
 ## Senha temporária
 
 Criação/reset de conta retorna uma senha temporária somente naquela resposta.
@@ -278,6 +360,7 @@ Detalhes: [`offline-downloads.md`](offline-downloads.md) e [`pwa.md`](pwa.md).
 | Operação | user | admin |
 | --- | :---: | :---: |
 | Login/logout/status | ✅ | ✅ |
+| Aprovar login da própria TV | ✅ | ✅ |
 | Ler/reproduzir biblioteca | ✅ | ✅ |
 | Próprios favoritos/histórico/playlists | ✅ | ✅ |
 | Minha conta/portabilidade pessoal | ✅ | ✅ |
@@ -313,16 +396,19 @@ A cobertura existente inclui, entre outros:
 - chamadas administrativas como `user`;
 - smoke de produção com admin e usuário comum;
 - E2E multiusuário em diferentes viewports;
-- importação pessoal com validação/ownership no fluxo dedicado.
+- importação pessoal com validação/ownership no fluxo dedicado;
+- device login: TTL, tokens independentes, approve/deny/consume, replay, capacidade/rate limit, rollback e sessão da TV independente da sessão do celular.
 
 A política de gates e o conjunto fixo atual do CI estão em [`testing-and-quality.md`](testing-and-quality.md).
 
 ## Documentação relacionada
 
 - [`administration-ui.md`](administration-ui.md) — Administração e Minha conta;
+- [`login-abuse-protection.md`](login-abuse-protection.md) — proteção contra abuso do login e pedidos de device login;
 - [`personal-data-portability.md`](personal-data-portability.md) — exportação/importação de dados pessoais;
 - [`offline-downloads.md`](offline-downloads.md) — isolamento de downloads por usuário;
 - [`open-subsonic.md`](open-subsonic.md) — credenciais e projeção OpenSubsonic;
+- [`android-tv.md`](android-tv.md) — autenticação e experiência no cliente TV;
 - [`PRODUCTION.md`](PRODUCTION.md) — recovery administrativo e operação;
 - [`history/phase-7.5/`](history/phase-7.5/) — registros históricos dos slices da migração.
 
