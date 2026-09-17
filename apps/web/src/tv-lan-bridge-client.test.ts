@@ -66,8 +66,8 @@ function fakeWindow() {
     }),
     addEventListener: vi.fn((_type: string, listener: EventListener) => listeners.add(listener as unknown as MessageListener)),
     removeEventListener: vi.fn((_type: string, listener: EventListener) => listeners.delete(listener as unknown as MessageListener)),
-    setTimeout: ((handler: TimerHandler, timeout?: number) => window.setTimeout(handler, timeout)),
-    clearTimeout: ((id: number) => window.clearTimeout(id)),
+    setTimeout: ((handler: TimerHandler, timeout?: number) => globalThis.setTimeout(handler, timeout)),
+    clearTimeout: ((id: number) => globalThis.clearTimeout(id)),
   };
 
   return { windowImpl, popup, listeners };
@@ -120,8 +120,8 @@ describe('iOS LAN bridge client', () => {
       open: vi.fn(() => null),
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
-      setTimeout: window.setTimeout.bind(window),
-      clearTimeout: window.clearTimeout.bind(window),
+      setTimeout: globalThis.setTimeout.bind(globalThis),
+      clearTimeout: globalThis.clearTimeout.bind(globalThis),
     };
 
     await expect(createTvLanBridgeTransport(pairing, {
