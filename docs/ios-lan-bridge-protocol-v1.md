@@ -1,6 +1,6 @@
 # Contrato interno — bridge LAN v1
 
-Status: **atividades 2, 3 e 4 implementadas no PR #425**  
+Status: **contrato, relay, transporte e lifecycle automatizado implementados no PR #425**  
 Escopo: comunicação interna `Home Music HTTPS (PWA) ↔ BTV HTTP /bridge`
 
 Este contrato existe somente para o adaptador de transporte usado no iOS. Ele **não substitui nem altera** o protocolo LAN `home-music-lan-remote-v2`, o pareamento, a derivação de `proof`/HMAC ou o transporte WebRTC/DataChannel.
@@ -79,22 +79,6 @@ Em erro, `ok` é `false`, `payload` pode ser `null` e `error` contém um código
 
 O bridge reconhece somente operações semânticas fechadas. Não existe campo de URL, host, método ou headers arbitrários.
 
-### `probe`
-
-Temporária enquanto a UI de spike ainda existe.
-
-Request:
-
-```json
-null
-```
-
-Response de sucesso:
-
-```json
-{ "pong": true }
-```
-
 ### `challenge`
 
 Payload:
@@ -170,7 +154,30 @@ Target reconstruído:
 GET /signals?role=remote&cursor=<cursor>
 ```
 
+### `complete`
+
+Operação local de handoff usada quando o `RTCDataChannel` já abriu. Ela **não** chama `/close` e não encerra a sessão P2P.
+
+Payload:
+
+```json
+null
+```
+
+Resposta de sucesso:
+
+```json
+{
+  "status": 204,
+  "body": null
+}
+```
+
+Depois da resposta, o bridge informa que a conexão P2P está pronta e tenta fechar sua janela em best-effort. Se o navegador impedir `window.close()`, a instrução para voltar ao Home Music permanece visível.
+
 ### `close`
+
+Usada para encerrar a sessão LAN antes do handoff P2P quando necessário.
 
 Payload:
 
@@ -232,7 +239,7 @@ O bridge não traduz códigos de pareamento em semântica nova. O PWA continua r
 
 ## Cliente PWA e abstração de transporte
 
-A atividade 4 introduziu `TvLanTransport`/`TvLanTransportFactory` em `apps/web/src/tv-lan-transport.ts`. O `createTvLanRemoteSignaling` usa essa interface para `challenge`, `join`, `signal-send`, `signal-poll` e `close`.
+A atividade 4 introduziu `TvLanTransport`/`TvLanTransportFactory` em `apps/web/src/tv-lan-transport.ts`. O `createTvLanRemoteSignaling` usa essa interface para `challenge`, `join`, `signal-send`, `signal-poll`, `complete` e `close`.
 
 O transporte direto continua sendo o default e preserva o comportamento existente. O bridge é implementado em `apps/web/src/tv-lan-bridge-client.ts` e pode ser fornecido como `transportFactory`, sem duplicar:
 
@@ -259,12 +266,13 @@ No fluxo atual:
 5. o bridge executa somente o endpoint same-origin correspondente;
 6. a response volta com o mesmo `channelId`, `requestId`, `operation` e deadline;
 7. responses expiradas ou de outra tentativa não resolvem requests pendentes;
-8. abort/cleanup remove listener, timers, pending requests e referência da janela;
-9. `close` tenta encerrar a sessão LAN e a janela bridge.
+8. quando o DataChannel abre, PWA e receiver finalizam o signaling local;
+9. no transporte bridge, `complete` encerra listeners/timers/popup do adaptador sem chamar `/close` e sem derrubar o P2P;
+10. antes do handoff, `close` continua disponível para encerrar a sessão LAN quando necessário.
 
 O cliente do popup trata `popup blocked`, timeout de `ready`, timeout por request, `AbortSignal`, correlação por `requestId` e fechamento best-effort.
 
-A seleção automática/explicitamente acionada do bridge no fluxo de UI permanece como atividade 5/6; a infraestrutura de transporte e a integração com o cliente LAN estão implementadas.
+A seleção do transporte está integrada ao fluxo de UI: iPhone/iPad/iPadOS usam bridge por ação explícita do usuário; Android/desktop preservam o transporte direto. O lifecycle automatizado está coberto, mas background/foreground e fechamento bloqueado ainda dependem do QA físico no iPhone.
 
 ## Implementação e testes
 
@@ -274,9 +282,11 @@ A seleção automática/explicitamente acionada do bridge no fluxo de UI permane
 - cliente popup/bridge: `apps/web/src/tv-lan-bridge-client.ts`;
 - testes do cliente popup: `apps/web/src/tv-lan-bridge-client.test.ts`;
 - integração do transporte no cliente LAN: `apps/web/src/tv-lan-remote-client.ts`;
-- teste de proof/HMAC via transporte bridge: `apps/web/src/tv-lan-remote-bridge-transport.test.ts`;
-- integração temporária do probe: `apps/web/src/TvLanQrScanner.tsx`;
+- teste de proof/HMAC e lifecycle via transporte bridge: `apps/web/src/tv-lan-remote-bridge-transport.test.ts`;
+- seleção do transporte: `apps/web/src/tv-lan-transport-selection.ts`;
+- integração do QR/gesto de conexão: `apps/web/src/TvLanQrScanner.tsx`;
 - runtime local da BTV: `android-tv/app/src/main/assets/bridge.js`;
+- E2E do caminho bridge: `e2e/tests/tv-offline-lan-bridge.spec.ts`;
 - endpoints e regras LAN existentes: `android-tv/app/src/main/java/com/homemusic/tv/LanPairingServer.java` e `LanPairingSession.java`.
 
-Ainda não há declaração de suporte iOS de produção: faltam seleção/UX do transporte, E2E do fluxo bridge e QA físico no iPhone/BTV antes de remover o `probe` e declarar o caminho final validado.
+A operação temporária `probe` foi removida do contrato e do runtime após a integração do fluxo real. O caminho automatizado de produção está implementado; a declaração final de suporte continua pendente do QA físico completo no iPhone/BTV e da matriz real de compatibilidade.
