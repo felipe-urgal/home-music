@@ -15,42 +15,49 @@ function qrText() {
   return `home-music://tv-lan?version=${TV_LAN_REMOTE_VERSION}&host=192.168.1.40&port=43123&session=${SESSION_ID}&secret=${SECRET}&expires=${NOW + 60_000}`;
 }
 
+function bridgeTransportMocks() {
+  const challenge = vi.fn(async (_input: { sessionId: string; clientNonce: string }) => ({
+    status: 200,
+    body: {
+      sessionId: SESSION_ID,
+      clientNonce: CLIENT_NONCE,
+      tvNonce: TV_NONCE,
+      expiresAt: NOW + 30_000,
+    },
+  }));
+  const join = vi.fn(async (_input: {
+    sessionId: string;
+    clientNonce: string;
+    tvNonce: string;
+    expiresAt: number;
+    proof: string;
+  }) => ({
+    status: 200,
+    body: { sessionToken: SESSION_TOKEN, expiresAt: NOW + 120_000 },
+  }));
+  const signalSend = vi.fn(async (_input: { authorization: string; body: string }) => ({ status: 202, body: {} }));
+  const signalPoll = vi.fn(async (_input: { authorization: string; cursor: number }) => ({
+    status: 200,
+    body: { cursor: 0, messages: [] },
+  }));
+  const close = vi.fn(async (_input: { authorization: string }) => ({ status: 200, body: {} }));
+  const finish = vi.fn();
+  const dispose = vi.fn();
+  const transportFactory: TvLanTransportFactory = vi.fn(async () => ({
+    challenge,
+    join,
+    signalSend,
+    signalPoll,
+    close,
+    finish,
+    dispose,
+  }));
+  return { challenge, join, signalSend, signalPoll, close, finish, dispose, transportFactory };
+}
+
 describe('TV LAN remote client with bridge transport', () => {
   it('keeps proof/HMAC in the PWA and sends only semantic relay payloads', async () => {
-    const challenge = vi.fn(async (_input: { sessionId: string; clientNonce: string }) => ({
-      status: 200,
-      body: {
-        sessionId: SESSION_ID,
-        clientNonce: CLIENT_NONCE,
-        tvNonce: TV_NONCE,
-        expiresAt: NOW + 30_000,
-      },
-    }));
-    const join = vi.fn(async (_input: {
-      sessionId: string;
-      clientNonce: string;
-      tvNonce: string;
-      expiresAt: number;
-      proof: string;
-    }) => ({
-      status: 200,
-      body: { sessionToken: SESSION_TOKEN, expiresAt: NOW + 120_000 },
-    }));
-    const signalSend = vi.fn(async (_input: { authorization: string; body: string }) => ({ status: 202, body: {} }));
-    const signalPoll = vi.fn(async (_input: { authorization: string; cursor: number }) => ({
-      status: 200,
-      body: { cursor: 0, messages: [] },
-    }));
-    const close = vi.fn(async (_input: { authorization: string }) => ({ status: 200, body: {} }));
-    const dispose = vi.fn();
-    const transportFactory: TvLanTransportFactory = vi.fn(async () => ({
-      challenge,
-      join,
-      signalSend,
-      signalPoll,
-      close,
-      dispose,
-    }));
+    const { challenge, join, signalSend, close, transportFactory } = bridgeTransportMocks();
 
     const client = await createTvLanRemoteSignaling(qrText(), {
       transportFactory,
@@ -94,5 +101,31 @@ describe('TV LAN remote client with bridge transport', () => {
 
     client.close();
     await vi.waitFor(() => expect(close).toHaveBeenCalledOnce());
+  });
+
+  it('finishes signaling after P2P without closing the LAN session or sending late ICE', async () => {
+    const { signalSend, close, finish, dispose, transportFactory } = bridgeTransportMocks();
+    const client = await createTvLanRemoteSignaling(qrText(), {
+      transportFactory,
+      createClientNonce: () => CLIENT_NONCE,
+      createMessageId: () => 'message_1234567890abcdef',
+      createRequestNonce: () => REQUEST_NONCE,
+      now: () => NOW,
+    });
+
+    client.finish();
+    expect(finish).toHaveBeenCalledOnce();
+    expect(close).not.toHaveBeenCalled();
+
+    await client.sendSignal({
+      from: 'remote',
+      type: 'ice-candidate',
+      candidate: { candidate: 'candidate:1 1 udp 1 127.0.0.1 9 typ host' },
+    });
+    expect(signalSend).not.toHaveBeenCalled();
+
+    client.close();
+    expect(close).not.toHaveBeenCalled();
+    expect(dispose).toHaveBeenCalledOnce();
   });
 });
