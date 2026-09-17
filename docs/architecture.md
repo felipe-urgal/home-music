@@ -6,20 +6,21 @@ Se houver conflito, código, testes, `package.json`, workflows e contratos execu
 
 ## Visão geral
 
-O Home Music é um monorepo npm workspaces:
+O Home Music é um monorepo com workspaces npm e um módulo Android separado:
 
 ```text
 home-music/
 ├── apps/web        React + TypeScript + Vite
 ├── apps/server     Fastify + TypeScript + SQLite
 ├── packages/shared contratos/tipos compartilhados
+├── android-tv      APK Android TV + GeckoView + serviço LAN efêmero
 ├── e2e             Playwright
 ├── scripts         operação, smokes, systemd e Tailscale
 ├── docs            documentação técnica
 └── .github         CI e automações
 ```
 
-Em produção existe **um processo Fastify** servindo frontend compilado, `/api/*`, `/rest/*`, streaming/capas e integrações do backend pela mesma porta interna.
+Em produção existe **um processo Fastify** servindo frontend compilado, `/api/*`, `/rest/*`, streaming/capas e integrações do backend pela mesma porta interna. O APK Android TV é um cliente separado; no modo offline LAN ele também hospeda um serviço HTTP local efêmero que não substitui o backend e não persiste catálogo.
 
 ## Topologia
 
@@ -35,23 +36,45 @@ Fastify :8788
 
 DEV usa `.env.development`, dados em `data/development/` e biblioteca descartável. Não deve compartilhar SQLite, `MUSIC_DIR` nem credenciais com produção.
 
-### Produção
+### Produção online
 
 ```text
-Browser / PWA / cliente OpenSubsonic
-            ↓
-     Tailscale/LAN
-            ↓
-Fastify :8787
-  ├── frontend compilado
-  ├── /api/*
-  ├── /rest/*
-  ├── streaming/capas
-  ├── SQLite
-  └── MUSIC_DIR
+Browser / PWA / Android TV / cliente OpenSubsonic
+                    ↓
+             Tailscale/LAN
+                    ↓
+              Fastify :8787
+          ├── frontend compilado
+          ├── /api/*
+          ├── /rest/*
+          ├── streaming/capas
+          ├── SQLite
+          └── MUSIC_DIR
 ```
 
 Tailscale Serve + HTTPS é o perfil remoto recomendado. Funnel é exposição pública explícita/opcional.
+
+### TV totalmente offline na LAN
+
+Quando WAN e servidor Home Music estão indisponíveis, o fluxo TV não passa pelo Fastify:
+
+```text
+PWA já instalado no celular
+  ├── Cache Storage / manifesto offline
+  ├── signaling LAN direto ou bridge iOS
+  └── WebRTC/DataChannel
+               │
+               ▼
+Android TV APK / BTV
+  ├── serviço HTTP LAN efêmero
+  ├── challenge/join + signaling
+  └── receiver web embarcado por loopback
+               │
+               ▼
+       player canônico da TV
+```
+
+O serviço LAN existe somente para bootstrap/autenticação efêmera/sinalização. Áudio, comandos e estado passam pelo DataChannel após o pareamento. Nenhuma credencial Home Music é requisito dessa sessão.
 
 ## Frontend
 
@@ -64,14 +87,16 @@ Princípios:
 - componentes consomem contratos HTTP/estado de domínio, não filesystem ou SQLite;
 - player e biblioteca compartilham identidade estável de faixa;
 - PWA/offline preserva isolamento por usuário;
-- `useAudioPlayer` permanece autoridade de playback por modo;
-- Assistente/Administração são projeções das capacidades do backend, não autoridades paralelas.
+- `useAudioPlayer`/player canônico permanece autoridade de playback por modo;
+- Assistente/Administração são projeções das capacidades do backend, não autoridades paralelas;
+- superfícies de controle remoto não criam player local concorrente;
+- modo LAN reutiliza peer/protocolo de mídia em vez de duplicar player ou fila.
 
 Composição: [`app-composition.md`](app-composition.md).
 
 ## Backend
 
-Fastify + TypeScript concentra as fronteiras de confiança:
+Fastify + TypeScript concentra as fronteiras de confiança online:
 
 - autenticação e autorização;
 - validação de input;
@@ -84,7 +109,8 @@ Fastify + TypeScript concentra as fronteiras de confiança:
 - Assistente da Biblioteca e gateways de providers;
 - jobs locais/opcionais como fingerprint e Whisper;
 - adapter OpenSubsonic;
-- lifecycle de recursos/processos.
+- lifecycle de recursos/processos;
+- sessões remotas online e signaling REST/SSE quando o servidor participa do controle da TV.
 
 O entrypoint deve permanecer principalmente composição/wiring. Serviços encapsulam comportamento e recursos externos.
 
@@ -99,9 +125,11 @@ admin
 user
 ```
 
-O backend é a fronteira real de autorização. Sessão web e credenciais OpenSubsonic são mecanismos separados.
+O backend é a fronteira real de autorização para fluxos online. Sessão web e credenciais OpenSubsonic são mecanismos separados.
 
 Ownership pessoal cobre favoritos, histórico/estatísticas, playlists, estado do player, downloads offline e portabilidade pessoal.
+
+No modo TV LAN offline, a identidade persistida no PWA serve apenas para localizar cache/downloads do próprio dispositivo. Ela não autentica a TV; o acesso à TV vem exclusivamente da sessão LAN efêmera.
 
 Fonte: [`multi-user-auth.md`](multi-user-auth.md).
 
@@ -116,6 +144,8 @@ SQLite é o estado persistente principal. Ele contém, entre outros:
 - lyrics gerenciadas e histórico de rollback;
 - runs, sugestões, cache/proveniência e política do Assistente;
 - estado de importações e histórico operacional.
+
+O pareamento LAN offline da TV é efêmero/process-local no APK e não cria nova persistência SQLite.
 
 Migrations usam `PRAGMA user_version`. Produção deve usar backup/restore suportado em vez de editar schema manualmente.
 
@@ -239,7 +269,24 @@ O app shell público pode ser cacheado; dados autenticados não viram shell comp
 
 Cold start offline usa manifesto local como índice rápido e reconcilia os bytes depois da montagem. Media Session continua uma projeção do player, não outro controller.
 
+No modo TV LAN, o PWA permanece na origin Home Music justamente para reutilizar esse Cache Storage. O QR fornece material de pareamento; ele não navega o PWA para uma aplicação hospedada pela TV.
+
 Fontes: [`pwa.md`](pwa.md) e [`offline-downloads.md`](offline-downloads.md).
+
+## Android TV e controle remoto
+
+O APK Android TV usa GeckoView e possui dois caminhos:
+
+- **online:** carrega o Home Music com `?tv=1`, usa autenticação web normal e pode criar sessão remota REST/SSE para o celular;
+- **LAN offline:** inicia serviço local efêmero, gera QR, serve receiver embarcado por loopback e abre WebRTC/DataChannel sem backend.
+
+O protocolo `home-music-lan-remote-v2` usa segredo efêmero, challenge/HMAC, TTL, nonces e replay protection. O receiver abre automaticamente depois de `join` autenticado; replay não dispara nova abertura.
+
+No iPhone/iPad, uma página local `/bridge` adapta apenas signaling via `postMessage`; segredo/HMAC permanecem no PWA e mídia continua no DataChannel.
+
+O peer trata `disconnected` como potencialmente transitório. `failed`, `closed` e erro/fechamento real do DataChannel continuam terminais.
+
+Fontes: [`android-tv.md`](android-tv.md), [`tv-remote-control.md`](tv-remote-control.md), [`tv-offline-cast.md`](tv-offline-cast.md) e [`tv-offline-lan-protocol.md`](tv-offline-lan-protocol.md).
 
 ## Administração
 
@@ -273,7 +320,7 @@ Baseline local:
 npm run check
 ```
 
-Gates adicionais dependem do risco e o workflow `.github/workflows/ci.yml` é a fonte executável do CI obrigatório.
+Gates adicionais dependem do risco e o workflow `.github/workflows/ci.yml` é a fonte executável do CI obrigatório. O módulo Android possui workflow separado para testes JVM, build/lint e verificação dos assets do receiver/bridge no APK.
 
 Política: [`testing-and-quality.md`](testing-and-quality.md).
 
