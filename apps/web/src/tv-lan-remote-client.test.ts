@@ -77,7 +77,7 @@ describe('TV LAN remote client', () => {
       .toContain('Não foi possível alcançar a TV');
   });
 
-  it('pairs with challenge/join and publishes remote WebRTC signaling with a one-request signature', async () => {
+  it('pairs with challenge/join and accepts a no-content signal acknowledgement', async () => {
     const calls: Array<{ url: string; init?: RequestInit }> = [];
     const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
@@ -90,6 +90,9 @@ describe('TV LAN remote client', () => {
           status: 200,
           headers: { 'Content-Type': 'application/json' }
         });
+      }
+      if (url.endsWith('/signals?role=remote')) {
+        return new Response(null, { status: 204 });
       }
       return new Response('{}', { status: 202, headers: { 'Content-Type': 'application/json' } });
     });
