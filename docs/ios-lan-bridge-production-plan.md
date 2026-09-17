@@ -1,139 +1,117 @@
 # Plano de produção — bridge LAN para iOS
 
-Status: **em execução no PR #425**  
+Status: **implementação automatizada concluída; QA físico final pendente no PR #425**  
 Branch: `spike/ios-lan-bridge`  
 Relacionados: #417, #422
 
 ## Contexto
 
-O modo TV totalmente offline já usa o protocolo `home-music-lan-remote-v2`: o PWA lê o QR efêmero, faz `challenge`/`join`, usa sinalização HTTP autenticada para abrir o WebRTC e, depois que o `RTCDataChannel` abre, envia mídia e comandos diretamente para a TV.
+O modo TV totalmente offline usa `home-music-lan-remote-v2`: o PWA lê o QR efêmero, faz `challenge`/`join`, usa sinalização HTTP autenticada para abrir WebRTC e, depois que o `RTCDataChannel` abre, envia mídia e comandos diretamente para a TV.
 
-No iPhone/iOS foi identificado um bloqueio específico de plataforma: a página Home Music em HTTPS consegue alcançar a BTV por navegação top-level HTTP, porém Safari e Chrome no iOS não conseguem usar o `fetch()` HTTPS → HTTP que o cliente LAN v2 usa hoje.
+No iPhone/iOS foi identificado um bloqueio específico de plataforma: o Home Music em HTTPS consegue alcançar a BTV por navegação top-level HTTP, mas o browser no iOS não consegue usar o `fetch()` HTTPS → HTTP usado pelo transporte LAN direto.
 
-O spike deste PR validou fisicamente que:
+O spike inicial já validou fisicamente em iPhone real que:
 
-- o Home Music HTTPS consegue abrir `http://<ip-tv>:<porta>/bridge` como navegação top-level;
-- a página local servida pela BTV preserva `window.opener`;
-- Home Music e bridge conseguem trocar `PING/PONG` com `postMessage`;
-- o segredo do QR não precisa ser enviado para a página bridge para provar essa comunicação.
+- Home Music HTTPS abre `http://<ip-tv>:<porta>/bridge` como navegação top-level;
+- a página local preserva `window.opener`;
+- PWA e bridge trocam mensagens por `postMessage`;
+- o `secret` do QR não precisa ser enviado ao bridge.
 
-No head `ad1b7b267698ca6a5e96784152c020ef70b3e4fc`, CI #1937 e Android TV #90 concluíram com sucesso. No head `6071db07ed847dfcf53e6a1778bfae3b95a7bb2c`, após a atividade 2, CI #1939 e Android TV #92 também concluíram com sucesso. O código das atividades 3–5 foi adicionado depois dessas evidências; os gates precisam ser observados novamente no head final antes de considerar a evolução validada.
+A evolução deste PR transforma essa prova em um adaptador de transporte para a sinalização LAN. O bridge não transporta mídia e não substitui o protocolo v2.
 
-## Objetivo
-
-Transformar o spike em um caminho de produção para iOS sem criar um segundo protocolo de pareamento e sem mudar o transporte de mídia.
-
-A solução alvo é um **adaptador de transporte HTTP local**:
+## Arquitetura alvo
 
 ```text
 Home Music HTTPS (PWA)
-  ├─ mantém QR/secret e criptografia/HMAC
-  ├─ mantém RTCPeerConnection + RTCDataChannel
-  ├─ mantém mídia offline e comandos
+  ├─ QR/secret + proof/HMAC
+  ├─ RTCPeerConnection + RTCDataChannel
+  ├─ mídia offline + comandos
   │
   └─ postMessage
        │
        ▼
 BTV HTTP /bridge (top-level)
-  ├─ faz somente requests LAN same-origin permitidos
   ├─ challenge
   ├─ join
-  ├─ signals
-  └─ close
+  ├─ signal-send / signal-poll
+  ├─ complete (handoff local após P2P)
+  └─ close (encerramento de sessão antes do handoff)
        │
        ▼
-LanPairingServer / protocolo home-music-lan-remote-v2
+LanPairingServer / home-music-lan-remote-v2
 ```
-
-O bridge não substitui o protocolo v2. Ele apenas contorna a restrição de `fetch()` cross-scheme do iOS.
 
 ## Invariantes
 
-Estas regras não devem ser relaxadas para fazer o bridge funcionar:
+- [x] manter `home-music-lan-remote-v2` como protocolo LAN;
+- [x] não colocar credenciais da conta Home Music no QR;
+- [x] manter o `secret` efêmero do QR no PWA;
+- [x] calcular `proof` de `join` no PWA;
+- [x] calcular a autorização HMAC no PWA;
+- [x] bridge não deriva chaves nem persiste segredo/token/autorização;
+- [x] bridge não é proxy HTTP genérico para a LAN;
+- [x] WebRTC/DataChannel continuam no PWA/receiver;
+- [x] mídia continua no DataChannel P2P;
+- [x] Android/desktop preservam o transporte direto;
+- [x] regeneração/expiração/fechamento continuam usando as regras v2;
+- [x] PR permanece draft até o fluxo físico completo ser validado no iPhone/BTV.
 
-- [ ] manter `home-music-lan-remote-v2` como protocolo LAN entre PWA e TV;
-- [ ] não colocar username, cookie, token de conta Home Music ou qualquer credencial da conta no QR;
-- [ ] manter o `secret` efêmero do QR no PWA;
-- [ ] calcular `proof` de `join` no PWA;
-- [ ] calcular a autorização HMAC das requests remotas no PWA;
-- [ ] o bridge não deriva chaves e não persiste segredo/token/autorização;
-- [ ] qualquer material de sessão que atravesse o bridge é transitório, opaco e nunca deve ser logado;
-- [ ] bridge não pode virar proxy HTTP genérico para a LAN;
-- [ ] WebRTC e DataChannel continuam no PWA/receiver, não no bridge;
-- [ ] mídia continua indo pelo DataChannel P2P;
-- [ ] Android/Chrome que já funciona pelo transporte direto não pode regredir;
-- [ ] regenerar QR, expiração e fechamento continuam invalidando a sessão conforme o protocolo atual;
-- [ ] manter PR em draft até o fluxo completo ser comprovado fisicamente no iPhone.
-
-## Atividades
-
-### 1. Congelar a conclusão do spike
+## 1. Spike inicial e limpeza de diagnóstico
 
 - [x] disponibilizar `/bridge` e `/bridge.js` no serviço LAN da BTV;
 - [x] abrir bridge HTTP por ação explícita do usuário;
 - [x] validar `window.opener` no iPhone real;
-- [x] validar `postMessage` HTTPS ↔ HTTP com `PING/PONG` no iPhone real;
-- [x] confirmar que o spike não precisa receber o `secret` do QR;
-- [x] remover o botão/UI de diagnóstico do spike do fluxo normal; a operação `probe` permanece temporariamente disponível até a limpeza final.
+- [x] validar `postMessage` HTTPS ↔ HTTP no iPhone real;
+- [x] confirmar que o bridge não precisa receber o `secret`;
+- [x] remover botão/mensagem de diagnóstico do fluxo normal;
+- [x] remover a operação temporária `probe` do contrato PWA e do runtime BTV;
+- [ ] decidir após o QA físico se `docs/spikes/ios-lan-bridge-probe.html` ainda tem valor diagnóstico ou deve ser removido.
 
-### 2. Definir contrato interno do bridge
+## 2. Contrato interno do bridge
 
-Criar um contrato pequeno e versionado para a comunicação PWA ↔ bridge. Esse contrato é interno ao adaptador e **não altera** `home-music-lan-remote-v2`.
+Implementação: `apps/web/src/tv-lan-bridge-protocol.ts`.  
+Documento detalhado: [`ios-lan-bridge-protocol-v1.md`](ios-lan-bridge-protocol-v1.md).
 
-Contrato implementado em `apps/web/src/tv-lan-bridge-protocol.ts` e documentado em [`docs/ios-lan-bridge-protocol-v1.md`](ios-lan-bridge-protocol-v1.md). O envelope usa `version: 1`, `channelId`, `requestId`, `expiresAt`, payload JSON e limite serializado de 2 MiB.
+- [x] `version: 1`;
+- [x] `channelId` aleatório por abertura;
+- [x] `requestId` por operação;
+- [x] `expiresAt` por request;
+- [x] validação estrita de `event.source` e `event.origin`;
+- [x] shape fechado de mensagens;
+- [x] limite serializado de 2 MiB;
+- [x] timeout/cancelamento/cleanup;
+- [x] respostas tardias de outra tentativa são ignoradas;
+- [x] allowlist final contém somente `challenge`, `join`, `signal-send`, `signal-poll`, `complete` e `close`.
 
-Requisitos:
+Não existe campo arbitrário de URL, host, método ou headers.
 
-- [x] criar identificador de versão do bridge;
-- [x] criar `channelId`/nonce aleatório por abertura;
-- [x] correlacionar cada operação com `requestId` único;
-- [x] aceitar mensagens somente da janela `opener` esperada;
-- [x] validar `event.origin` e `event.source` em ambos os lados;
-- [x] rejeitar mensagens com shape desconhecido, IDs inválidos ou payload acima do limite;
-- [x] implementar timeout por request;
-- [x] implementar cancelamento/cleanup quando PWA, bridge ou sessão fecharem;
-- [x] garantir que responses tardias de uma sessão anterior sejam ignoradas.
-
-Operações permitidas são semânticas e fechadas:
-
-- `probe` — temporária até a limpeza final;
-- `challenge`;
-- `join`;
-- `signal-send`;
-- `signal-poll`;
-- `close`.
-
-O bridge não aceita URL arbitrária, host arbitrário, método arbitrário ou headers arbitrários. A atividade 3 passou a executar as operações de produção com targets same-origin determinísticos.
-
-### 3. Produzir o bridge real na BTV
+## 3. Relay real na BTV
 
 Arquivos principais:
 
 - `android-tv/app/src/main/assets/bridge.html`;
 - `android-tv/app/src/main/assets/bridge.js`;
-- `android-tv/app/src/main/java/com/homemusic/tv/LanPairingServer.java`.
+- `android-tv/app/src/main/java/com/homemusic/tv/LanPairingServer.java`;
+- `android-tv/app/src/main/java/com/homemusic/tv/LanPairingSession.java`.
 
-Os endpoints `/challenge`, `/join`, `/signals` e `/close` já existem no `LanPairingServer`. O bridge agora os usa como relay same-origin, sem recriar a semântica do protocolo v2.
+- [x] `challenge` → `GET /challenge?...`;
+- [x] `join` → `POST /join`;
+- [x] `signal-send` → `POST /signals?role=remote`;
+- [x] `signal-poll` → `GET /signals?role=remote&cursor=...`;
+- [x] `close` → `POST /close?role=remote`;
+- [x] `complete` é local ao bridge e não chama `/close`;
+- [x] targets são reconstruídos de forma determinística;
+- [x] requests usam `cache: no-store`, `credentials: omit` e timeout;
+- [x] mensagem `postMessage` limitada a 2 MiB;
+- [x] body de `signal-send` limitado a 320 KiB;
+- [x] response limitada a 2 MiB;
+- [x] erros normalizados (`invalid_payload`, `duplicate_request`, `timeout`, `network_error`, `http_error`, `invalid_response`, `response_too_large`);
+- [x] requests distintas podem concorrer durante ICE/polling;
+- [x] TTL, replay protection, rate limit e autenticação continuam no `LanPairingServer`/`LanPairingSession`;
+- [x] `/receiver/*` continua loopback-only;
+- [x] bridge não exibe/persiste/loga `secret`, `proof` ou `Authorization`.
 
-Atividades:
-
-- [x] confirmar que `/challenge`, `/join`, `/signals` e `/close` já existem e preservam as validações atuais;
-- [x] substituir `not_implemented` pelo relay das operações permitidas, mantendo `probe` temporariamente para diagnóstico;
-- [x] usar requests same-origin para o próprio `LanPairingServer`;
-- [x] reconstruir targets de forma determinística, sem aceitar target arbitrário vindo do PWA;
-- [x] aplicar `cache: no-store` e `credentials: omit` às requests de sessão;
-- [x] limitar mensagem do bridge a 2 MiB, body LAN a 320 KiB e response a 2 MiB;
-- [x] normalizar falhas em `invalid_payload`, `timeout`, `network_error`, `http_error`, `invalid_response` e `response_too_large`;
-- [x] não exibir nem registrar segredo, proof, Authorization completa ou payload sensível;
-- [x] oferecer estado visual mínimo enquanto o bridge estiver aberto;
-- [x] suportar comando `close` e fechamento best-effort da janela após sucesso;
-- [x] manter assets `/receiver/*` restritos a loopback; o bridge não cria rota/proxy para esses assets;
-- [x] preservar rate limit, TTL, replay protection e validações atuais do `LanPairingServer`/`LanPairingSession`;
-- [x] permitir requests distintas concorrentes sem bloquear envio de ICE durante polling e rejeitar `requestId` duplicado em execução.
-
-Contrato detalhado do relay e shapes de payload: [`docs/ios-lan-bridge-protocol-v1.md`](ios-lan-bridge-protocol-v1.md).
-
-### 4. Criar transporte bridge no PWA
+## 4. Transporte bridge no PWA
 
 Arquivos principais:
 
@@ -143,127 +121,117 @@ Arquivos principais:
 - `apps/web/src/tv-lan-bridge-client.test.ts`;
 - `apps/web/src/tv-lan-remote-bridge-transport.test.ts`.
 
-Atividades:
+- [x] abstração `TvLanTransport`/`TvLanTransportFactory`;
+- [x] transporte HTTP direto preservado;
+- [x] transporte bridge com `window.open` + `postMessage`;
+- [x] `challenge` via bridge;
+- [x] `join` via bridge com `proof` calculado no PWA;
+- [x] `signals` com HMAC calculado no PWA;
+- [x] cursor/polling compartilhados com o caminho direto;
+- [x] `AbortSignal`, timeout e cleanup preservados;
+- [x] `secret` nunca é enviado ao transport bridge;
+- [x] `finish()` separa handoff P2P de `close()` de sessão;
+- [x] ao abrir o DataChannel, signaling remoto e receiver são finalizados localmente;
+- [x] late ICE depois do handoff é ignorado sem reabrir signaling;
+- [x] bridge recebe `complete`, encerra listeners/pending requests e tenta fechar a janela sem derrubar o P2P.
 
-- [x] extrair/introduzir uma abstração de transporte para as requests LAN;
-- [x] manter o transporte HTTP direto atual como caminho existente;
-- [x] adicionar transporte via bridge usando `window.open` + `postMessage`;
-- [x] fazer `challenge` via bridge;
-- [x] calcular `proof` no PWA e fazer `join` via bridge;
-- [x] validar o `join` no PWA exatamente como no caminho direto;
-- [x] calcular `Authorization` HMAC no PWA para `signals` e `close`;
-- [x] enviar sinalização via bridge sem alterar envelopes v2;
-- [x] manter cursor e validações de polling existentes na lógica compartilhada;
-- [ ] encerrar o bridge assim que o DataChannel abrir; o fechamento de sessão/abort já faz cleanup, mas o fechamento antecipado pós-P2P ainda depende da integração de lifecycle;
-- [x] manter `AbortSignal`, timeouts e cleanup do cliente/transport;
-- [x] não duplicar lógica criptográfica entre transporte direto e bridge;
-- [x] a tentativa anterior é abortada/fechada antes de uma nova conexão pelo fluxo existente; validar isso também no lifecycle físico do iOS.
+## 5. Seleção do transporte e UX
 
-### 5. Estratégia de seleção do transporte
+Implementação: `apps/web/src/tv-lan-transport-selection.ts` e `apps/web/src/TvLanQrScanner.tsx`.
 
-Não fazer fallback silencioso que esconda erro real de rede.
+- [x] iPhone/iPad/iPadOS usam explicitamente o bridge;
+- [x] Android/desktop continuam no caminho direto;
+- [x] não existe fallback silencioso direto → bridge;
+- [x] popup do bridge exige gesto explícito do usuário;
+- [x] leitura automática do QR em plataforma bridge apenas preenche o valor e pede toque em `Conectar`;
+- [x] fallback manual de QR preservado;
+- [x] erro acionável para popup bloqueado;
+- [x] erro acionável para timeout/bridge indisponível;
+- [x] erro acionável para sessão recusada/expirada;
+- [x] bridge orienta retorno ao Home Music enquanto aguarda o P2P;
+- [x] `complete` mostra P2P pronto e tenta `window.close()`;
+- [x] se `window.close()` for bloqueado, a página mantém instrução de retorno/fechamento manual;
+- [ ] confirmar fisicamente no iOS o comportamento de background/foreground e o fallback de fechamento bloqueado.
 
-- [x] preservar transporte direto para plataformas onde ele funciona;
-- [x] selecionar explicitamente o bridge em iPhone/iPad/iPadOS, inclusive iPadOS com plataforma desktop-style;
-- [x] não tentar HTTP direto antes do bridge no iOS, evitando confundir bloqueio de mixed-content/plataforma com TV inalcançável;
-- [x] evitar abrir popup/aba local sem ação do usuário: em plataforma bridge, leitura automática apenas preenche o QR e exige toque em `Conectar`;
-- [x] manter erro acionável quando popup estiver bloqueado;
-- [x] manter erro acionável quando a TV estiver fora da rede, sessão expirar ou bridge não responder.
+## 6. Cobertura automatizada — Web
 
-Implementação: `apps/web/src/tv-lan-transport-selection.ts`, com cobertura em `apps/web/src/tv-lan-transport-selection.test.ts`.
-
-### 6. UX do pareamento no iPhone
-
-O objetivo desta entrega é tornar o pareamento funcional; não é necessário introduzir uma biblioteca nova de leitura de QR apenas para substituir o fallback manual.
-
-- [x] manter validação do payload antes de tentar conectar;
-- [x] manter fallback de colar o conteúdo bruto do QR no iOS;
-- [x] remover o botão `Testar bridge iOS (spike)` quando o bridge real estiver integrado;
-- [x] botão `Conectar` dispara o fluxo real e falhas do bridge retornam erro acionável;
-- [ ] revisar mensagens de estado para distinguir abertura do bridge, pareamento, P2P, conectado e erro;
-- [ ] orientar explicitamente o usuário quando a janela/aba bridge abrir;
-- [ ] fechar automaticamente a janela bridge quando possível após o DataChannel abrir;
-- [ ] fornecer fallback de retorno ao Home Music se o iOS não permitir `window.close()` após conexão;
-- [x] não mostrar secret/token completo em UI ou diagnóstico.
-
-### 7. Lifecycle e riscos específicos do iOS
-
-O PING/PONG prova comunicação, mas ainda não prova que o ciclo completo de sinalização/WebRTC sobreviverá ao comportamento de abas do iOS.
-
-Validar:
-
-- [ ] opener continua executando enquanto bridge está em foreground;
-- [ ] bridge continua processando request/poll enquanto Home Music volta ao foreground;
-- [ ] `postMessage` não é perdido durante alternância entre abas/janelas;
-- [ ] WebRTC consegue concluir offer/answer/ICE nesse lifecycle;
-- [ ] DataChannel abre sem STUN/TURN e sem WAN;
-- [ ] bridge pode ser encerrado depois que o DataChannel estiver aberto;
-- [ ] background/foreground do PWA após conexão não quebra controles já suportados;
-- [ ] timeout/abort não deixa polling, popup ou sessão órfãos.
-
-Se o iOS suspender uma das páginas de forma que impossibilite a sinalização, o desenho precisa ser revisto antes de declarar suporte.
-
-### 8. Testes automatizados — Web
-
-Aplicar TDD nas mudanças de comportamento.
-
-A cobertura unitária está distribuída entre o contrato, cliente do popup, seleção de transporte e cliente LAN compartilhado. O lifecycle real e o E2E do relay continuam abertos.
-
-Cobrir no mínimo:
-
-- [x] handshake bridge `ready`/channel binding no cliente do popup;
-- [x] `event.source` incorreto é ignorado;
-- [x] `event.origin` incorreto é ignorado;
-- [x] nonce/channel incorreto é ignorado;
+- [x] handshake `ready`/channel binding;
+- [x] `event.source` incorreto ignorado;
+- [x] `event.origin` incorreto ignorado;
+- [x] channel/request incorretos ignorados;
 - [x] request/response correlacionados por ID;
-- [ ] timeout dedicado do cliente bridge;
+- [x] timeout do cliente bridge;
 - [x] popup bloqueado;
-- [ ] fechamento/abort durante request;
-- [x] response tardia de tentativa anterior;
-- [x] bridge não aceita operação fora da allowlist;
-- [x] challenge via bridge;
-- [x] join via abstração bridge com proof calculada no PWA;
-- [x] `signals` POST via abstração bridge com autorização assinada;
-- [ ] `signals` GET/poll via bridge em teste dedicado;
-- [x] `close` best-effort acionado pela abstração bridge;
-- [ ] QR expirado/regenerado no caminho bridge;
-- [x] resposta inválida/malformada;
-- [x] caminho direto continua coberto pelos testes existentes;
-- [x] teste confirma que o `secret` não é enviado ao transport bridge e que proof/HMAC são calculados no PWA;
-- [ ] teste dedicado confirma cleanup de listeners/timers/window refs durante abort em voo.
+- [x] abort durante request;
+- [x] response tardia ignorada;
+- [x] operação fora da allowlist rejeitada;
+- [x] operação temporária `probe` rejeitada após limpeza;
+- [x] challenge/join/signals via abstração bridge;
+- [x] HMAC/proof permanecem no PWA;
+- [x] `secret` não chega ao bridge;
+- [x] polling e erro de sessão expirada/regenerada limpam o transport;
+- [x] handoff `complete` remove listener/window refs;
+- [x] signaling para após P2P sem chamar `/close`;
+- [x] receiver para signaling após P2P e ignora late ICE;
+- [x] caminho direto continua coberto.
 
-### 9. Testes automatizados — Android TV
+## 7. Cobertura automatizada — E2E/CI
 
-- [ ] testar roteamento de `/bridge` e `/bridge.js`;
-- [ ] validar que os assets estão empacotados no APK;
-- [ ] validar MIME/content-type dos assets;
-- [ ] cobrir requests permitidas pelo relay sem abrir proxy genérico;
-- [ ] validar limites de payload;
-- [ ] validar erro/timeout sem derrubar o listener LAN;
-- [ ] manter testes existentes de sessão, TTL, replay e autenticação;
-- [ ] manter receiver `/receiver/*` restrito a loopback.
+Arquivo: `e2e/tests/tv-offline-lan-bridge.spec.ts`.
 
-### 10. E2E/CI
+- [x] fixture real do `bridge.html`/`bridge.js`;
+- [x] `challenge → join → signals → DataChannel` usando bridge;
+- [x] popup bridge encerra após handoff P2P;
+- [x] handoff não envia `/close?role=remote`;
+- [x] mídia continua no DataChannel depois do signaling;
+- [x] não há tráfego LAN adicional do bridge após P2P;
+- [x] E2E direto de LAN permanece no workflow;
+- [x] regressões online/offline existentes permanecem no workflow;
+- [x] CI executa o novo E2E bridge em `desktop-chromium`.
 
-- [ ] adaptar/criar fixture de bridge para browser test quando aplicável;
-- [ ] exercitar `challenge → join → signals → DataChannel` usando o transporte bridge;
-- [ ] comprovar que o payload de mídia continua no DataChannel, não no bridge;
-- [ ] manter E2E do transporte LAN direto;
-- [ ] manter regressão do modo TV online;
-- [ ] manter E2E offline total existente;
-- [ ] executar `npm run check` ou CI equivalente no mesmo head final;
-- [ ] security regression gate no mesmo head final;
-- [ ] Android TV build + lint + testes no mesmo head final;
-- [ ] verificação de assets do receiver/bridge no APK;
-- [ ] revisar o diff completo contra `main` no head final.
+O primeiro E2E bridge observava uma mensagem transitória da janela e foi ajustado para estados estáveis: P2P conectado, operações de signaling via bridge, ausência de `/close` no handoff e popup encerrado.
 
-### 11. QA físico obrigatório — iPhone + BTV 11
+## 8. Cobertura Android TV / APK
+
+- [x] build valida que `bridge.html` e `bridge.js` existem antes do APK;
+- [x] build valida que `bridge.html` referencia `/bridge.js` e que o script não está vazio;
+- [x] workflow Android executa unit tests, assemble e lint;
+- [x] workflow inspeciona o APK e exige `assets/bridge.html` e `assets/bridge.js` além do receiver;
+- [x] testes existentes continuam cobrindo sessão, TTL, replay e autenticação do protocolo LAN;
+- [ ] teste Android dedicado do roteamento/MIME do bridge pode ser adicionado se o QA físico revelar necessidade; não é necessário para duplicar o E2E browser já existente.
+
+## 9. Gates
+
+Evidência automatizada previamente verde após a integração principal:
+
+- CI #1978 no head `629ff9336f06f4f402af641610f200f9e635b8ed`;
+- Android TV #131 no mesmo ciclo de validação.
+
+Depois disso foram adicionados testes de lifecycle/cleanup e a remoção final de `probe`. O head final precisa novamente apresentar, no **mesmo commit**:
+
+- [ ] Quality gate verde;
+- [ ] TV regression gate verde;
+- [ ] Security regression gate verde;
+- [ ] Backup restore smoke verde;
+- [ ] Mobile crossfade E2E verde;
+- [ ] TV remote control E2E verde;
+- [ ] TV offline cast E2E verde;
+- [ ] TV fully offline LAN E2E verde;
+- [ ] TV iOS LAN bridge E2E verde;
+- [ ] Personal data import E2E verde;
+- [ ] Library Assistant E2E verde;
+- [ ] Android TV build/lint/testes verde;
+- [ ] verificação dos assets do bridge no APK verde.
+
+Esses checkboxes devem ser atualizados somente com evidência do head final.
+
+## 10. QA físico obrigatório — iPhone + BTV 11
 
 Pré-condições:
 
-- APK deste PR instalado na BTV 11;
-- Home Music/PWA já disponível no iPhone;
-- pelo menos duas faixas já baixadas;
+- APK do head final instalado na BTV 11;
+- Home Music/PWA disponível no iPhone;
+- pelo menos duas faixas baixadas;
 - iPhone e TV na mesma LAN;
 - servidor Home Music desligado;
 - WAN desligada.
@@ -281,92 +249,93 @@ Roteiro:
 - [ ] completar offer/answer/ICE;
 - [ ] confirmar DataChannel aberto;
 - [ ] reproduzir faixa A somente na TV;
-- [ ] testar pause/play;
-- [ ] testar seek;
-- [ ] testar next/previous;
+- [ ] pause/play;
+- [ ] seek;
+- [ ] next/previous;
 - [ ] reproduzir faixa B;
-- [ ] background/foreground do Home Music;
+- [ ] background/foreground do Home Music durante signaling e após P2P;
+- [ ] confirmar fechamento automático ou fallback manual do bridge;
 - [ ] regenerar QR e confirmar invalidação da sessão anterior;
 - [ ] encerrar receiver e confirmar cleanup;
-- [ ] religar WAN/backend e confirmar que modo online continua íntegro.
+- [ ] religar WAN/backend e confirmar modo online íntegro.
 
 Registrar:
 
 - modelo do iPhone;
 - versão do iOS;
-- Safari/Chrome e versão usada;
+- Safari/Chrome e versão;
 - firmware/Android da BTV;
 - GeckoView do APK;
 - comportamento de popup/aba bridge;
-- latência aproximada de pareamento;
-- resultado dos controles e playback;
+- latência aproximada do pareamento;
+- resultado de playback/controles;
 - qualquer erro reproduzível.
 
-### 12. Testes físicos negativos
+## 11. Testes físicos negativos
 
 - [ ] TV fora da LAN/inalcançável;
 - [ ] popup bloqueado;
 - [ ] QR expirado;
 - [ ] QR regenerado durante conexão;
 - [ ] fechar bridge antes do join;
-- [ ] fechar bridge durante polling de sinalização;
+- [ ] fechar bridge durante polling;
 - [ ] fechar receiver durante conexão;
 - [ ] desligar Wi-Fi durante sinalização;
 - [ ] desligar Wi-Fi durante transferência de mídia;
 - [ ] AP/client isolation;
 - [ ] sessão expirada após estabelecida;
-- [ ] tentar reutilizar mensagem/autorização já consumida quando aplicável.
+- [ ] tentativa de reutilização de mensagem/autorização consumida quando aplicável.
 
-### 13. Documentação de produção
+## 12. Documentação de produção após QA físico
 
-Depois que o comportamento estiver validado:
+Somente depois do teste real, atualizar o que foi efetivamente validado em:
 
-- [ ] atualizar `docs/tv-offline-lan-protocol.md` com o bridge como adaptação de transporte, sem alterar a semântica v2;
-- [ ] atualizar `docs/tv-offline-cast.md`;
-- [ ] atualizar `docs/tv-remote-control.md`;
-- [ ] atualizar `docs/android-tv.md`;
-- [ ] atualizar `android-tv/README.md`;
-- [ ] atualizar `e2e/README.md` se houver novo cenário/gate;
-- [ ] registrar matriz real de compatibilidade para iOS;
-- [ ] deixar explícito que leitura automática de QR no Safari/iOS pode continuar usando fallback manual, se esse continuar sendo o comportamento validado;
-- [ ] registrar limitações de popup/lifecycle e AP/client isolation;
-- [ ] registrar procedimento físico reproduzível.
+- [ ] `docs/tv-offline-lan-protocol.md`;
+- [ ] `docs/tv-offline-cast.md`;
+- [ ] `docs/tv-remote-control.md`;
+- [ ] `docs/android-tv.md`;
+- [ ] `android-tv/README.md`;
+- [ ] `e2e/README.md`, se necessário;
+- [ ] matriz real de compatibilidade iOS/BTV;
+- [ ] limitações de popup/lifecycle e AP/client isolation;
+- [ ] procedimento físico reproduzível.
 
-### 14. Limpeza antes do merge
+## 13. Limpeza final antes de ready/merge
 
-- [ ] remover `docs/spikes/ios-lan-bridge-probe.html` se ele não tiver mais valor diagnóstico;
-- [x] remover botão/mensagem de teste do bridge da UI normal;
-- [ ] remover operação `probe` e código diagnóstico quando não forem mais necessários;
-- [ ] remover código morto e listeners/timers temporários;
-- [ ] confirmar que não há logs de secret/token/Authorization;
-- [ ] confirmar que bridge não expõe fetch/proxy arbitrário;
-- [ ] confirmar que não existe duplicação da lógica v2;
-- [ ] atualizar descrição do PR com testes realmente executados;
-- [ ] manter o PR draft enquanto faltar QA físico ou gate bloqueante;
-- [ ] só marcar ready/merge após revisão do diff e gates no head final.
+- [x] botão/mensagem de teste removidos da UI normal;
+- [x] operação `probe` removida do contrato e do runtime;
+- [x] bridge não expõe fetch/proxy arbitrário;
+- [x] lógica de proof/HMAC não foi duplicada no bridge;
+- [x] cleanup automatizado de listeners/timers/polling/window refs coberto;
+- [ ] revisar se o HTML de spike antigo deve ser mantido ou removido;
+- [ ] revisar diff completo contra `main` no head final;
+- [ ] atualizar descrição do PR com os gates do head final;
+- [ ] registrar QA físico;
+- [ ] completar documentação/matriz de compatibilidade baseada no QA;
+- [ ] somente então retirar draft e decidir merge.
 
-## Critérios de aceite desta evolução
-
-A evolução do PR só pode ser considerada pronta quando todos estes pontos forem verdadeiros:
+## Critérios de aceite finais
 
 - [ ] iPhone real completa pareamento sem `fetch()` HTTPS → HTTP direto;
-- [ ] `challenge`, `join`, `signals` e `close` passam pelo bridge com as mesmas regras do protocolo v2;
-- [ ] secret do QR e derivação HMAC permanecem no PWA;
-- [ ] WebRTC/DataChannel continua sendo o transporte P2P;
-- [ ] duas faixas offline tocam na BTV com WAN e servidor Home Music desligados;
-- [ ] controles essenciais funcionam;
-- [ ] sessão expirada/regenerada não é reutilizável;
-- [ ] bridge/polling/listeners/timers são limpos ao encerrar;
-- [ ] caminho direto Android/Chrome continua verde;
-- [ ] modo online continua verde;
+- [x] bridge automatizado cobre `challenge`, `join` e `signals` mantendo as regras v2;
+- [x] `complete` finaliza apenas signaling/bridge após DataChannel aberto;
+- [x] secret do QR e derivação HMAC permanecem no PWA;
+- [x] mídia automatizada continua no DataChannel P2P;
+- [ ] duas faixas offline tocam na BTV real com WAN/backend desligados;
+- [ ] pause/play, seek, next/previous funcionam no QA físico;
+- [ ] sessão expirada/regenerada não pode ser reutilizada no QA físico;
+- [x] cleanup automatizado cobre polling/listeners/timers/popup;
+- [x] transporte LAN direto permanece coberto;
+- [x] regressões automatizadas do modo TV permanecem cobertas;
 - [ ] CI completo aplicável está verde no mesmo head final;
-- [ ] QA físico do iPhone/BTV está registrado;
-- [ ] documentação e matriz de compatibilidade refletem somente o que foi realmente validado.
+- [ ] Android TV está verde no mesmo head final;
+- [ ] QA físico iPhone/BTV está registrado;
+- [ ] documentação e matriz de compatibilidade refletem somente o que foi validado.
 
 ## Fora de escopo
 
 - transformar o bridge em servidor de mídia;
-- enviar áudio pelo `postMessage`;
+- enviar áudio por `postMessage`;
 - substituir WebRTC/DataChannel;
 - alterar o protocolo LAN v2 sem necessidade demonstrada;
 - criar proxy HTTP genérico para a rede local;
@@ -374,5 +343,5 @@ A evolução do PR só pode ser considerada pronta quando todos estes pontos for
 - mDNS/discovery automático;
 - instalação inicial do PWA sem internet;
 - download de novas músicas com backend indisponível;
-- afirmar suporte a browser/hardware que não foi testado fisicamente;
-- adicionar dependência nova de scanner QR no iOS apenas para eliminar o fallback manual.
+- afirmar suporte a browser/hardware não testado fisicamente;
+- adicionar dependência nova de scanner QR somente para eliminar o fallback manual.
