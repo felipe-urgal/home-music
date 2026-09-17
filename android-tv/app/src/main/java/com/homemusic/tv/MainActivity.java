@@ -370,7 +370,14 @@ public final class MainActivity extends Activity {
         stopLanServer();
 
         try {
-            lanServer = new LanPairingServer(originFor(savedOrDefaultAddress()), getAssets());
+            LanPairingServer nextServer = new LanPairingServer(
+                originFor(savedOrDefaultAddress()),
+                getAssets(),
+                joinedServer -> runOnUiThread(() -> {
+                    if (offlineReceiverMode && lanServer == joinedServer) openOfflineReceiver();
+                })
+            );
+            lanServer = nextServer;
             lanServer.start();
             LanPairingServer.PairingInfo info = lanServer.pairingInfo();
 
@@ -584,7 +591,7 @@ public final class MainActivity extends Activity {
             .setIntent(launchIntent)
             .build();
 
-        boolean requested = shortcutManager.requestPinShortcut(shortcut, null);
+        boolean requested = shortcutManager.requestPinShortcut(launchIntent == null ? null : shortcutManager.requestPinShortcutSupportedIntent());
         if (requested) {
             Toast.makeText(this, "Pedido enviado ao launcher. Confirme o atalho se o BTV solicitar.", Toast.LENGTH_LONG).show();
         } else {
