@@ -8,6 +8,7 @@ export const TV_LAN_BRIDGE_OPERATIONS = [
   'join',
   'signal-send',
   'signal-poll',
+  'complete',
   'close',
 ] as const;
 
