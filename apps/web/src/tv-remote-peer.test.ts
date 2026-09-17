@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { TvRemoteSignal } from '@home-music/shared/tv-remote';
 import { createTvRemotePeerController, TV_REMOTE_MEDIA_CHANNEL } from './tv-remote-peer';
 
@@ -6,7 +6,17 @@ class FakeChannel extends EventTarget {
   label = TV_REMOTE_MEDIA_CHANNEL;
   readyState: RTCDataChannelState = 'connecting';
   binaryType: BinaryType = 'blob';
-  close = vi.fn(() => { this.readyState = 'closed'; });
+  close = vi.fn(() => {
+    if (this.readyState === 'closed') return;
+    this.readyState = 'closed';
+    this.dispatchEvent(new Event('close'));
+  });
+
+  open() {
+    if (this.readyState === 'open') return;
+    this.readyState = 'open';
+    this.dispatchEvent(new Event('open'));
+  }
 }
 
 class FakePeer extends EventTarget {
@@ -27,7 +37,16 @@ class FakePeer extends EventTarget {
   });
   addIceCandidate = vi.fn(async (candidate: RTCIceCandidateInit) => { this.candidates.push(candidate); });
   close = vi.fn(() => { this.connectionState = 'closed'; });
+
+  setConnectionState(state: RTCPeerConnectionState) {
+    this.connectionState = state;
+    this.dispatchEvent(new Event('connectionstatechange'));
+  }
 }
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe('tv remote peer controller', () => {
   it('remote creates the media channel and publishes an offer', async () => {
@@ -78,5 +97,93 @@ describe('tv remote peer controller', () => {
       from: 'tv', type: 'description', description: { type: 'answer', sdp: 'answer-sdp' }
     }]);
     controller.close();
+  });
+
+  it('does not report an unexpected closure when the controller is closed explicitly', async () => {
+    const peer = new FakePeer();
+    const states: string[] = [];
+    const controller = createTvRemotePeerController({
+      role: 'remote',
+      createPeer: () => peer as unknown as RTCPeerConnection,
+      sendSignal: async () => undefined,
+      onChannel: () => undefined,
+      onState: state => states.push(state)
+    });
+
+    await controller.start();
+    controller.close();
+
+    expect(peer.close).toHaveBeenCalledTimes(1);
+    expect(states).toEqual(['connecting']);
+  });
+
+  it('tears down the peer and reports closed once when the media channel closes unexpectedly', async () => {
+    const peer = new FakePeer();
+    const states: string[] = [];
+    const controller = createTvRemotePeerController({
+      role: 'remote',
+      createPeer: () => peer as unknown as RTCPeerConnection,
+      sendSignal: async () => undefined,
+      onChannel: () => undefined,
+      onState: state => states.push(state)
+    });
+
+    await controller.start();
+    peer.channel.open();
+    peer.channel.close();
+    peer.setConnectionState('closed');
+
+    expect(peer.close).toHaveBeenCalledTimes(1);
+    expect(states).toEqual(['connecting', 'open', 'closed']);
+  });
+
+  it('leaves open state during a transient disconnect and restores it when the peer reconnects', async () => {
+    const peer = new FakePeer();
+    const states: string[] = [];
+    const controller = createTvRemotePeerController({
+      role: 'remote',
+      createPeer: () => peer as unknown as RTCPeerConnection,
+      sendSignal: async () => undefined,
+      onChannel: () => undefined,
+      onState: state => states.push(state)
+    });
+
+    await controller.start();
+    peer.channel.open();
+    peer.setConnectionState('disconnected');
+
+    expect(states).toEqual(['connecting', 'open', 'connecting']);
+    expect(peer.close).not.toHaveBeenCalled();
+
+    peer.setConnectionState('connected');
+
+    expect(states).toEqual(['connecting', 'open', 'connecting', 'open']);
+    expect(peer.close).not.toHaveBeenCalled();
+    controller.close();
+  });
+
+  it('fails and tears down a peer that stays disconnected beyond the grace period', async () => {
+    vi.useFakeTimers();
+    const peer = new FakePeer();
+    const states: string[] = [];
+    const errors: Error[] = [];
+    const controller = createTvRemotePeerController({
+      role: 'remote',
+      createPeer: () => peer as unknown as RTCPeerConnection,
+      sendSignal: async () => undefined,
+      onChannel: () => undefined,
+      onState: state => states.push(state),
+      onError: error => errors.push(error as Error)
+    });
+
+    await controller.start();
+    peer.channel.open();
+    peer.setConnectionState('disconnected');
+    await vi.advanceTimersByTimeAsync(5_001);
+
+    expect(peer.close).toHaveBeenCalledTimes(1);
+    expect(states).toEqual(['connecting', 'open', 'connecting', 'error']);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.message).toContain('perdida');
   });
 });
