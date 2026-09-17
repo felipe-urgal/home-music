@@ -15,9 +15,19 @@ type LoginScreenProps = {
   unreachable: boolean;
   onLogin: (username: string, password: string) => Promise<void>;
   onRetry: () => void;
+  secondaryActionLabel?: string;
+  onSecondaryAction?: () => void;
 };
 
-export function LoginScreen({ configured, error, unreachable, onLogin, onRetry }: LoginScreenProps) {
+export function LoginScreen({
+  configured,
+  error,
+  unreachable,
+  onLogin,
+  onRetry,
+  secondaryActionLabel,
+  onSecondaryAction
+}: LoginScreenProps) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -159,6 +169,11 @@ export function LoginScreen({ configured, error, unreachable, onLogin, onRetry }
           <button className="login-submit" type="submit" disabled={submitting || !username.trim() || !password}>
             {submitting ? 'Entrando…' : 'Entrar'}
           </button>
+          {secondaryActionLabel && onSecondaryAction && (
+            <button className="tv-device-login__secondary" type="button" disabled={submitting} onClick={onSecondaryAction}>
+              {secondaryActionLabel}
+            </button>
+          )}
         </form>
 
         <p className="login-footnote"><LockKeyhole aria-hidden="true" /> Sessão protegida neste navegador.</p>
