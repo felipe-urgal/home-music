@@ -153,3 +153,181 @@ html[data-tv-mode="true"] .login-input-shell:focus-within {
     font-size: 38px;
   }
 }
+
+.tv-device-login-shell,
+.tv-device-approval-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  background:
+    radial-gradient(circle at 24% 24%, rgba(35, 126, 230, .18), transparent 30rem),
+    linear-gradient(135deg, #06101a, #02070c 58%, #020509);
+  color: #f4f8fc;
+}
+
+.tv-device-login-card {
+  width: min(1080px, 92vw);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 420px);
+  gap: clamp(36px, 6vw, 88px);
+  align-items: center;
+  padding: clamp(38px, 5vw, 68px);
+  border: 1px solid rgba(76, 157, 239, .28);
+  border-radius: 26px;
+  background: linear-gradient(145deg, rgba(10, 20, 31, .98), rgba(5, 11, 18, .995));
+  box-shadow: 0 28px 80px rgba(0, 0, 0, .38);
+}
+
+.tv-device-login__copy h1,
+.tv-device-approval-card h1 {
+  margin: 10px 0 14px;
+  font-size: clamp(34px, 4vw, 58px);
+  line-height: 1.05;
+}
+
+.tv-device-login__copy > p,
+.tv-device-approval-card > p,
+.tv-device-login__visual > p {
+  color: #9fb0c3;
+  line-height: 1.6;
+}
+
+.tv-device-login__eyebrow {
+  color: #67b4ff;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+
+.tv-device-login__visual {
+  display: grid;
+  justify-items: center;
+  gap: 16px;
+  text-align: center;
+}
+
+.tv-device-login__qr,
+.tv-device-login__qr-placeholder {
+  width: min(34vw, 330px);
+  aspect-ratio: 1;
+  padding: 14px;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 16px 46px rgba(0, 0, 0, .34);
+}
+
+.tv-device-login__qr svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  image-rendering: pixelated;
+}
+
+.tv-device-login__qr-placeholder {
+  opacity: .18;
+}
+
+.tv-device-login__code-block,
+.tv-device-approval__code {
+  display: grid;
+  gap: 8px;
+  width: fit-content;
+  margin: 28px 0;
+}
+
+.tv-device-login__code-block span,
+.tv-device-approval__code span {
+  color: #8397ac;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+
+.tv-device-login__code-block strong,
+.tv-device-approval__code strong {
+  font-size: clamp(34px, 4vw, 54px);
+  letter-spacing: .16em;
+  font-variant-numeric: tabular-nums;
+}
+
+.tv-device-login__actions,
+.tv-device-approval__actions {
+  display: grid;
+  gap: 12px;
+  max-width: 390px;
+}
+
+.tv-device-login__secondary {
+  min-height: 50px;
+  border: 1px solid rgba(132, 161, 192, .3);
+  border-radius: 12px;
+  background: rgba(18, 32, 47, .72);
+  color: #dbe8f5;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.tv-device-login__secondary:disabled {
+  cursor: default;
+  opacity: .55;
+}
+
+.tv-device-login__secondary:focus-visible,
+.tv-device-login-card button:focus-visible,
+.tv-device-approval-card button:focus-visible {
+  outline: 3px solid #5ab0ff;
+  outline-offset: 3px;
+}
+
+.tv-device-login__error {
+  color: #ffb6b6 !important;
+}
+
+.tv-device-approval-card {
+  width: min(520px, 92vw);
+  padding: clamp(28px, 6vw, 48px);
+  border: 1px solid rgba(76, 157, 239, .25);
+  border-radius: 22px;
+  background: linear-gradient(145deg, rgba(10, 20, 31, .99), rgba(5, 11, 18, .995));
+  box-shadow: 0 24px 72px rgba(0, 0, 0, .36);
+}
+
+.tv-device-approval-card h1 {
+  font-size: clamp(30px, 8vw, 42px);
+}
+
+.tv-device-approval__code {
+  width: 100%;
+  margin: 28px 0;
+  padding: 20px;
+  border: 1px solid rgba(94, 158, 226, .2);
+  border-radius: 16px;
+  background: rgba(8, 18, 28, .7);
+  text-align: center;
+}
+
+.tv-device-approval__code strong {
+  font-size: clamp(30px, 10vw, 44px);
+}
+
+@media (max-width: 760px) {
+  .tv-device-login-card {
+    grid-template-columns: 1fr;
+    width: min(560px, 94vw);
+    gap: 28px;
+    padding: 28px;
+  }
+
+  .tv-device-login__visual {
+    order: -1;
+  }
+
+  .tv-device-login__qr,
+  .tv-device-login__qr-placeholder {
+    width: min(72vw, 290px);
+  }
+}
