@@ -1,10 +1,10 @@
 # Proteção contra abuso no login
 
-Este documento descreve a proteção corrente do endpoint `POST /api/auth/login` contra brute force distribuído e abuso de CPU das verificações `scrypt`.
+Este documento descreve as proteções correntes dos fluxos de autenticação contra brute force, abuso de CPU e criação excessiva de pedidos efêmeros.
 
 A proteção é deliberadamente **em camadas**. Nenhuma camada depende de o usuário existir no SQLite para decidir a resposta pública.
 
-## Fluxo
+## Login por usuário e senha
 
 ```text
 requisição de login
@@ -20,9 +20,9 @@ scrypt / autenticação
 sessão
 ```
 
-O limite de sessões é independente e continua documentado em `multi-user-auth.md`.
+O limite de sessões é independente e continua documentado em [`multi-user-auth.md`](multi-user-auth.md).
 
-## Limite por IP
+### Limite por IP
 
 O IP efetivo continua sendo resolvido por `loginRateLimitKey`.
 
@@ -34,7 +34,7 @@ Default:
 - janela de 5 minutos;
 - até 512 chaves rastreadas diretamente.
 
-### Saturação do mapa
+#### Saturação do mapa
 
 O mapa não remove mais a entrada mais antiga para admitir uma chave nova.
 
@@ -47,7 +47,7 @@ Quando todas as entradas estão ocupadas:
 
 Isso impede churn de IPs de expulsar a proteção efetiva de um atacante ativo. Se uma vaga direta reaparecer por expiração ou limpeza legítima, uma chave nova pode voltar a ser rastreada individualmente; o gate global de `scrypt` continua limitando o custo agregado independentemente desse estado.
 
-## Limite por identidade
+### Limite por identidade
 
 A identidade usa a mesma normalização de username aplicada pela autenticação:
 
@@ -67,7 +67,7 @@ Vários IPs atacando o mesmo username portanto compartilham o orçamento da iden
 
 Essa camada é aplicada antes da consulta/verificação de credencial e não consulta se a conta existe. Usuário existente e inexistente continuam recebendo a mesma resposta pública para credenciais inválidas.
 
-## Gate global de `scrypt`
+### Gate global de `scrypt`
 
 Mesmo com IPs e identidades diferentes, a quantidade de trabalho criptográfico é limitada globalmente por processo.
 
@@ -81,7 +81,7 @@ O gate é adquirido imediatamente antes de `AccountPasswordService.authenticate`
 
 Não existe fila ilimitada de verificações de senha. Se a concorrência já estiver cheia, a nova tentativa recebe rate limit e pode tentar novamente depois.
 
-## Respostas públicas
+### Respostas públicas
 
 Bloqueios por IP, identidade, concorrência ou orçamento global usam a mesma superfície:
 
@@ -100,11 +100,63 @@ HTTP 401
 {"error":"Usuário ou senha inválidos."}
 ```
 
-A saturação do armazenamento de sessões é outro domínio e continua retornando `503` conforme `multi-user-auth.md`.
+A saturação do armazenamento de sessões é outro domínio e continua retornando `503` conforme [`multi-user-auth.md`](multi-user-auth.md).
 
-## Configuração
+## Login da TV pelo celular
 
-Todos os limites têm defaults seguros e podem ser ajustados por ambiente:
+O fluxo de device login entregue no primeiro estágio da issue #428 não executa `scrypt`, mas cria estado efêmero e portanto possui limites próprios.
+
+`POST /api/auth/device/start` é protegido por `TvDeviceLoginManager` antes de criar um pedido novo.
+
+Defaults:
+
+- TTL do pedido: 5 minutos;
+- até 64 pedidos ativos globais;
+- até 4 pedidos ativos por origem/IP;
+- até 8 tentativas de `start` por origem a cada 60 segundos;
+- até 512 entradas diretas no mapa de rate limit, com bucket de overflow quando saturado.
+
+A chave de origem é derivada da origem/IP efetivo do request conforme o wiring de autenticação. O manager não precisa saber se alguma conta existe para aceitar ou limitar o início do fluxo.
+
+### Capacidade e rate limit
+
+Há duas proteções separadas:
+
+1. **rate limit de criação** — limita frequência de chamadas a `start` por origem;
+2. **capacidade ativa** — limita quantos pedidos ainda pendentes/aprovados/consumindo podem existir globalmente e por origem.
+
+Ao atingir limite, a API responde de forma controlada com `Retry-After`. O objetivo é evitar consumo de memória ou spam de QR/pedidos sem expulsar estado válido de terceiros.
+
+Pedidos terminais (`denied`, `expired`, `consumed`) são retidos por uma janela curta de 60 segundos e depois limpos.
+
+### Replay e enumeração
+
+Além do rate limit:
+
+- `requestId`, `deviceToken` e `approvalToken` são valores independentes;
+- tokens brutos não ficam armazenados no estado interno;
+- approve/deny/consume são condicionados ao estado atual;
+- consumo é único;
+- replay não cria nova sessão;
+- polling/status não expõe identidade do usuário aprovado;
+- respostas usam `Cache-Control: no-store`;
+- tokens malformados/grandes são rejeitados antes de trabalho desnecessário.
+
+O código curto visual não é credencial e não substitui `approvalToken`/`deviceToken`.
+
+### Separação do login por senha
+
+Os budgets não são compartilhados automaticamente:
+
+- brute force de senha continua sob IP + identidade + gate global de `scrypt`;
+- criação de pedidos de login da TV usa os limites do `TvDeviceLoginManager`;
+- capacidade do `SessionManager` só entra quando o pedido aprovado é consumido para criar a sessão final da TV.
+
+Essa separação evita transformar device login em bypass dos limites de sessão ou misturar custo de `scrypt` com um fluxo que não verifica senha na TV.
+
+## Configuração do login por senha
+
+Os limites do login por usuário/senha têm defaults seguros e podem ser ajustados por ambiente:
 
 | Variável | Default | Finalidade |
 | --- | ---: | --- |
@@ -119,9 +171,11 @@ Todos os limites têm defaults seguros e podem ser ajustados por ambiente:
 
 Configurações inválidas não derrubam o servidor: a infraestrutura registra aviso e volta ao conjunto padrão completo.
 
+Os limites do device login são atualmente constantes do manager e têm cobertura unitária com opções injetáveis para teste. Mudança futura para torná-los configuráveis por ambiente deve atualizar esta tabela/documento.
+
 ## Métricas e dados sensíveis
 
-`LoginAbuseProtection.metrics()` mantém contadores agregados em memória para inspeção/integração de observabilidade:
+`LoginAbuseProtection.metrics()` mantém contadores agregados em memória para o fluxo de senha:
 
 - tentativas avaliadas;
 - autenticações com sucesso/falha;
@@ -132,25 +186,27 @@ Configurações inválidas não derrubam o servidor: a infraestrutura registra a
 
 Esses contadores não carregam senha, cookie, token, username bruto nem chave de limiter.
 
+O device login mantém apenas estado operacional necessário em memória e hashes dos segredos; não deve expor `deviceToken`, `approvalToken`, cookie de sessão ou identidade aprovada em logs/métricas.
+
 ## Persistência e restart
 
-Os limiters, orçamento global e métricas são **voláteis por processo**.
+As proteções descritas aqui são **voláteis por processo**.
 
 Reiniciar o servidor zera:
 
-- falhas por IP;
-- falhas por identidade;
-- overflow;
-- janela/backoff global;
-- contadores agregados.
+- falhas por IP/identidade do login por senha;
+- overflow e budget/backoff global de `scrypt`;
+- contadores agregados;
+- pedidos de device login, respectivos rate limits e estado terminal retido;
+- sessões web em memória.
 
-A decisão é intencional para esta fase: não persistir estado de defesa no SQLite evita escrita síncrona no caminho crítico de login e evita transformar corrupção/staleness de rate limit em indisponibilidade persistente. A defesa continua efetiva durante a vida do processo e o restart já invalida as sessões em memória.
-
-Persistência distribuída ou compartilhada deve ser tratada em issue própria se o Home Music passar a operar com múltiplos processos/instâncias.
+A decisão é intencional para a arquitetura atual de instância única. Persistência distribuída/compartilhada deve ser tratada em issue própria se o Home Music passar a operar com múltiplos processos/instâncias.
 
 ## Regressões obrigatórias
 
 A cobertura deve preservar pelo menos:
+
+### Login por senha
 
 - IP único bloqueado e recuperação após janela;
 - múltiplos IPs contra a mesma identidade;
@@ -160,4 +216,16 @@ A cobertura deve preservar pelo menos:
 - resposta pública indistinguível para usuário existente/inexistente com credencial inválida;
 - nenhuma emissão de cookie quando o login não conclui com sucesso.
 
-As regressões centrais desta política fazem parte de `npm run test:security` além da suíte geral.
+### Device login
+
+- limite de `start` por origem;
+- capacidade global e por origem;
+- overflow do limiter sem crescimento ilimitado;
+- TTL/cleanup;
+- approve/deny/consume one-shot;
+- replay de consume sem segunda sessão;
+- rollback quando `SessionManager` não consegue criar a sessão final;
+- tokens malformados/grandes rejeitados;
+- nenhuma exposição dos segredos brutos no estado interno.
+
+As regressões sensíveis continuam fazendo parte da suíte geral e dos gates de segurança aplicáveis.

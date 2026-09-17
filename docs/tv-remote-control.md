@@ -1,103 +1,151 @@
 # Controle remoto da TV pelo celular
 
-O modo TV do Home Music permite usar um celular autenticado na **mesma conta** como controle remoto. A reprodução continua pertencendo ao player canônico da TV; a rota remota no celular não cria `<audio>` nem reproduz mídia localmente.
+O modo TV do Home Music permite usar um celular como controle remoto da reprodução. A TV continua dona do player canônico; as superfícies remotas no celular não criam `<audio>` nem mantêm um segundo player.
 
-Quando a faixa escolhida já está baixada no celular, a mesma sessão pode estabelecer um DataChannel WebRTC e enviar os bytes diretamente para a TV antes do `play-track`. O backend continua apenas como fronteira de autenticação, ownership e sinalização. Detalhes: [`tv-offline-cast.md`](tv-offline-cast.md).
+Há dois modos relacionados, mas com fronteiras diferentes:
 
-## Fluxo
+- **remoto online**: celular e TV estão autenticados na mesma conta e a sessão REST/SSE do servidor fornece ownership e signaling;
+- **remoto LAN offline**: celular e TV pareiam por sessão efêmera `home-music-lan-remote-v2`, sem backend durante a sessão.
+
+Quando uma faixa já está baixada no celular, os dois modos podem reutilizar o mesmo WebRTC/DataChannel para enviar os bytes diretamente à TV. Detalhes de mídia: [`tv-offline-cast.md`](tv-offline-cast.md).
+
+## Fluxo online
 
 1. Ao montar o modo TV, `useTvRemoteSession` prepara uma sessão efêmera em background e começa a publicar o estado do player.
-2. O card **Controlar pelo celular** permanece disponível no topo direito.
-3. Ao ativar o card, a TV exibe o QR abaixo dele, sem cobrir o gatilho.
+2. O card **Controle pelo celular** permanece disponível na TV.
+3. Ao ativar o card, a TV exibe o QR/URL da sessão.
 4. O QR é gerado localmente no frontend; o endereço de pareamento não é enviado a serviço externo.
 5. Se necessário, o celular autentica com a mesma conta e abre `/remote/<sessionId>`.
-6. A validação da rota sinaliza `remote-connected` à TV; o QR é escondido quando o controlador realmente carrega, enquanto o card permanece visível.
-7. O celular envia comandos ao servidor e a TV os recebe por SSE, aplicando-os ao player existente.
-8. Em paralelo, celular e TV podem trocar offer/answer/ICE pela mesma sessão e abrir `home-music-media-v1` para mídia P2P.
+6. A rota remota sinaliza presença; o QR pode ser escondido quando o controlador realmente carrega.
+7. Comandos/snapshots online usam a sessão remota do backend.
+8. Em paralelo, offer/answer/ICE podem abrir `home-music-media-v1` para mídia P2P.
 
 A sessão preparada em background não significa que a interface de pareamento esteja aberta. Reabrir o card pode reapresentar o QR da sessão ativa; regenerar encerra a sessão anterior e cria outra.
 
-## Protocolo
+## Comandos e estado
 
-Os comandos atuais são:
+O contrato compartilhado de controle suporta, conforme a superfície exposta:
 
 - play/pause (`toggle-play`);
 - faixa anterior (`previous`);
 - próxima faixa (`next`);
 - alternar aleatório (`toggle-shuffle`);
 - alternar repetição (`cycle-repeat`);
-- escolher uma faixa da biblioteca (`play-track`).
+- escolher uma faixa (`play-track`);
+- seek quando disponibilizado pela superfície/contrato.
 
-Os comandos legados de seek (`seek: -10` e `seek: +10`) continuam aceitos por compatibilidade, mas não fazem parte dos controles primários da interface atual do celular.
+O snapshot publicado pela TV contém estado suficiente para renderizar now playing e controles, incluindo faixa atual, título, artista, reprodução, posição/duração e estado de shuffle/repeat quando disponível.
 
-O snapshot publicado pela TV contém `trackId`, título, artista, estado de reprodução, posição, duração e `updatedAt`. Quando disponíveis, também inclui `shuffle` e `repeatMode`.
+Eventos de signaling carregam somente offer/answer/ICE validados. Bytes de áudio não entram no SSE nem nas rotas REST.
 
-Eventos `signal` carregam somente sinalização WebRTC validada (`offer`, `answer` e ICE). Bytes de áudio não entram no SSE nem nas rotas REST.
+## Modo LAN offline
 
-No modo LAN, a mesma interface de sessão adapta o polling HTTP local. Após o DataChannel abrir, comandos, snapshots e mídia usam o peer comum. Frames textuais são versionados e deduplicados; mídia permanece em frames de controle próprios + chunks binários com backpressure.
+O modo LAN separa **sinalização da sessão** de **peer/controle/mídia**:
 
-## Presença e heartbeat
+1. o PWA lê o QR LAN sem sair da origin Home Music;
+2. challenge/join autenticam a sessão efêmera;
+3. offer/answer/ICE trafegam pelo transporte LAN;
+4. o receiver offline responde pelo serviço loopback;
+5. quando o DataChannel abre, comandos, snapshots e mídia usam o peer comum;
+6. o backend Home Music deixa de fazer parte da sessão.
 
-A TV publica mudanças materiais no máximo uma vez por segundo e também envia heartbeat periódico a cada 15 segundos. No servidor, a sessão expira quando a TV deixa de atualizar o heartbeat por 60 segundos.
+Android/desktop usam o transporte HTTP LAN direto quando suportado. iPhone/iPad usam o bridge local top-level + `postMessage` para adaptar signaling; segredo do QR e HMAC permanecem no PWA, e o bridge não transporta mídia.
 
-No celular, `EventSource` aberto significa apenas que o controlador alcança o servidor. O rótulo **TV conectada** e a habilitação dos controles dependem também de um snapshot recente da TV. Depois de dois heartbeats perdidos (30 segundos sem snapshot recebido), a TV é tratada como desconectada até chegar nova atualização.
+O protocolo LAN detalhado está em [`tv-offline-lan-protocol.md`](tv-offline-lan-protocol.md).
 
-Há no máximo três sessões simultâneas por usuário; ao ultrapassar o limite, a mais antiga é encerrada. Reiniciar o processo do servidor invalida as sessões em memória.
+### Abertura automática do receiver
+
+Após um `join` LAN autenticado, o serviço Android notifica a Activity para abrir o receiver offline automaticamente. A notificação ocorre uma vez para aquele join válido; replay não abre novamente.
+
+**Abrir receiver offline** continua disponível como fallback manual, mas o happy path não exige esse clique adicional.
+
+### Recuperação do WebRTC
+
+`RTCPeerConnection.connectionState = disconnected` é tratado como estado transitório. Não existe mais timeout fixo que converta esse estado sozinho em erro terminal.
+
+- `disconnected` → UI volta para conectando/recuperando sem encerrar o peer;
+- retorno a `connected` → estado pode voltar a `open` se o DataChannel continua aberto;
+- `failed` e `closed` continuam terminais;
+- fechamento/erro real do DataChannel continua terminal.
+
+Isso permite tolerar oscilações de background/lock em mobile sem reutilizar sessão inválida ou esconder perda real de conexão. Se o peer/DataChannel realmente falhar, a recuperação segura continua sendo novo pareamento/QR; não há ICE restart complexo nesta fase.
+
+## Presença e heartbeat online
+
+No modo online, a TV publica mudanças materiais e heartbeat periódico. A sessão remota do servidor é efêmera, process-local e limitada por usuário.
+
+`EventSource` aberto significa apenas que o controlador alcança o servidor. O estado de TV realmente conectada depende também do snapshot/heartbeat recebido da TV.
+
+O modo LAN não depende desse heartbeat do backend depois que o DataChannel está estabelecido.
 
 ## Segurança
 
-- todos os endpoints exigem a autenticação normal do Home Music;
+### Online
+
+- endpoints exigem autenticação Home Music;
 - a sessão pertence ao usuário que a criou;
-- outro usuário recebe o mesmo `404` usado para sessão inexistente ou expirada;
 - mutações usam `X-Home-Music-Request: 1` além do cookie same-origin;
-- o identificador da sessão é opaco e aleatório;
-- o QR é gerado no navegador e não usa serviço remoto;
-- sinalização WebRTC possui validação e limites de tamanho;
-- áudio P2P não passa pelo backend;
-- cache offline permanece isolado pelo usuário autenticado no dispositivo;
-- regenerar ou desmontar a TV tenta remover a sessão anterior no servidor;
-- SSE, peer e DataChannel são encerrados no cleanup do frontend e no shutdown aplicável.
+- identificadores de sessão são opacos e efêmeros;
+- sinalização WebRTC possui validação e limites.
+
+### LAN
+
+- QR não contém credenciais da conta Home Music;
+- challenge/join e requests remotos usam HMAC, TTL, nonces e proteção contra replay;
+- regenerar/expirar sessão invalida material anterior;
+- o bridge iOS é allowlist de operações de signaling, não proxy arbitrário;
+- segredo do QR e derivação HMAC permanecem no PWA;
+- áudio e comandos depois do pareamento usam WebRTC/DataChannel.
+
+Nos dois modos, cache offline e object URLs permanecem locais/transitórios, e o celular não inicia reprodução local quando a TV é o destino.
 
 ## Composição do frontend
 
-`App.tsx` seleciona a superfície autenticada `/remote/<sessionId>` antes de `AuthenticatedApp`, impedindo que o celular inicialize o player online. `TvRemoteControlSurface` acrescenta apenas o peer/DataChannel e o preflight de faixas baixadas; a rota continua sem `<audio>` local.
+`App.tsx` seleciona a superfície autenticada `/remote/<sessionId>` antes de `AuthenticatedApp`, impedindo que o controle online inicialize o player normal do celular.
 
-Na TV, `AuthenticatedApp` continua dono de `useCrossfadeAudioPlayer`. `useTvRemoteSession` recebe o estado e callbacks canônicos de play/pause, anterior, próxima, seek legado, shuffle e repeat. Escolhas da biblioteca chegam como `play-track` e são encaminhadas ao mesmo player.
+Na TV, `AuthenticatedApp` continua dono de `useCrossfadeAudioPlayer`. O peer apenas entrega comandos/mídia ao mesmo player.
 
-Quando uma faixa P2P foi recebida, ela é registrada como object URL transitório por `trackId`. O mesmo `useCrossfadeAudioPlayer` prefere essa fonte tanto na reprodução manual quanto no deck de entrada do crossfade, sem criar player paralelo.
+Quando uma faixa P2P é recebida, ela é registrada como object URL transitório por `trackId`. O mesmo player prefere essa fonte quando aplicável, sem criar player paralelo.
 
-A TV mostra **A SEGUIR** a partir da decisão canônica da fila, inclusive em shuffle e nos modos Repeat All/Repeat One.
+No modo offline local, o `OfflineApp` permanece montado no celular para preservar Cache Storage, coleções e a identidade offline já persistida.
 
 ## Foco e acessibilidade
 
-A TV define o foco inicial ao montar a experiência, mas não o redefine em cada troca de faixa. Assim, autoplay, Next ou escolha remota não interrompem a navegação por D-pad.
+A TV define o foco inicial ao montar a experiência, mas não o redefine a cada troca de faixa. Assim autoplay, Next ou escolha remota não interrompem a navegação por D-pad.
 
-No celular, entrar em **Biblioteca** move o foco para **Voltar ao controle**; voltar restaura o foco no gatilho da Biblioteca. Erros de seleção de faixa são exibidos junto à área da Biblioteca, próximos da ação que falhou. A transmissão P2P reutiliza o estado ocupado do item e exibe progresso em uma região `aria-live` separada.
+No celular, navegação entre controle e biblioteca preserva foco útil. Erros de seleção/envio são exibidos próximos à ação que falhou; progresso de transmissão usa região `aria-live` separada.
 
 A cor de destaque extraída da capa é normalizada para preservar contraste mínimo de 3:1 com os ícones brancos dos controles principais.
 
 ## Testes e CI
 
-A cobertura inclui parser de rota, comandos e snapshots ampliados, presença remota, contrato compartilhado, contraste da paleta, adaptação dos comandos ao player, sinalização WebRTC, protocolo binário, limites, cache offline, object URLs e ordem `transferência -> play-track`.
+A cobertura automatizada inclui:
 
-O E2E `e2e/tests/tv-remote-control.spec.ts` usa dois contextos de navegador e valida, entre outros pontos:
+- parser de rota, comandos, snapshots e presença online;
+- signaling WebRTC e protocolo binário;
+- limites, cache offline, object URLs e ordem `transferência -> media-ready -> play-track`;
+- controle remoto em dois contexts de navegador;
+- sessão LAN sem requests `/api/*` durante playback;
+- receiver dedicado do APK;
+- bridge iOS para signaling;
+- fechamento voluntário versus inesperado do DataChannel;
+- `disconnected` transitório/prolongado recuperável;
+- `disconnected → failed` terminal;
+- `join` autenticado abrindo o receiver apenas uma vez.
 
-- CTA e QR sem sobreposição;
-- desaparecimento do QR quando o celular conecta;
-- ausência de `<audio>` no celular;
-- play/pause, próxima faixa, shuffle e repeat;
-- `A SEGUIR` em Repeat One;
-- preservação de foco da TV durante troca de faixa;
-- transferência e restauração de foco ao entrar/sair da Biblioteca.
+Os E2Es promovidos incluem:
 
-O E2E `e2e/tests/tv-offline-cast.spec.ts` salva uma faixa real no cache offline do celular, estabelece WebRTC entre os dois contexts, envia a faixa e confirma que a TV termina reproduzindo uma fonte `blob:` enquanto o celular permanece sem `<audio>`.
-
-O CI executa esses cenários e o E2E `tv-offline-lan.spec.ts`, que bloqueia `/api/*` durante a sessão LAN e usa o receiver dedicado do APK.
+- `e2e/tests/tv-remote-control.spec.ts`;
+- `e2e/tests/tv-offline-cast.spec.ts`;
+- `e2e/tests/tv-offline-lan.spec.ts`;
+- `e2e/tests/tv-offline-lan-bridge.spec.ts`.
 
 ## Limitações e validação física
 
-O fluxo usa uma única instância de servidor e não foi projetado para distribuição horizontal sem estado compartilhado ou sticky session. A sessão é transitória e não sobrevive a restart.
+O fluxo online continua dependente de uma única instância do servidor para a sessão process-local. O modo LAN exige PWA/downloads previamente disponíveis, mesma rede local e capacidade de transporte compatível com a plataforma.
 
-O fluxo online de transmissão ainda usa o servidor para autenticação e sinalização. O modo LAN é uma ação explícita separada, exige PWA/downloads previamente instalados, mesma rede local e suporte do navegador a Local Network Access. TURN, redes diferentes e streaming progressivo permanecem fora de escopo.
+No iPhone + BTV, QA físico já confirmou o caminho principal bridge → WebRTC/DataChannel → envio de música → reprodução. As rodadas físicas posteriores identificaram problemas de lifecycle e motivaram os PRs #427 e #430.
 
-Testes automatizados não substituem validação no BTV 11 real. QR/câmera, legibilidade à distância, foco por D-pad, overscan, WebRTC/DataChannel no GeckoView, consumo de memória e comportamento com perda de internet ainda precisam ser conferidos em hardware.
+Ainda falta registrar a homologação final nas issues #417/#422, incluindo background/lock prolongado, perda real de rede, QR expirado/regenerado, AP/client isolation, comportamento de popup/bridge e versões exatas de iOS/browser/BTV/GeckoView.
+
+Não declarar compatibilidade física completa além da evidência registrada.

@@ -56,10 +56,18 @@ A Fase 15 está encerrada. O planejamento original foi movido integralmente para
 - [`pwa-icon-identity.md`](pwa-icon-identity.md) — identidade da instalação;
 - [`ios-background-playback-diagnostics.md`](ios-background-playback-diagnostics.md) — protocolo local de diagnóstico/regressão no iOS.
 
-## Android TV
+## Android TV, controle remoto e LAN offline
 
-- [`android-tv.md`](android-tv.md) — arquitetura do Home Music TV, modo TV, BTV 11, instalação, launcher, D-pad e distribuição do APK;
-- [`../android-tv/README.md`](../android-tv/README.md) — contrato técnico de build do módulo Android.
+- [`android-tv.md`](android-tv.md) — arquitetura e comportamento atual do Home Music TV, BTV 11, instalação, D-pad, modo online, login e modo LAN;
+- [`tv-remote-control.md`](tv-remote-control.md) — controle remoto online/LAN, autoridade do player e lifecycle do peer;
+- [`tv-offline-cast.md`](tv-offline-cast.md) — envio de downloads do celular para a TV via WebRTC/DataChannel;
+- [`tv-offline-lan-protocol.md`](tv-offline-lan-protocol.md) — protocolo `home-music-lan-remote-v2`, HMAC, TTL, replay protection, bridge iOS e limites;
+- [`ios-lan-bridge-protocol-v1.md`](ios-lan-bridge-protocol-v1.md) — contrato interno do bridge usado no iPhone/iPad;
+- [`ios-lan-bridge-production-plan.md`](ios-lan-bridge-production-plan.md) — registro de implementação/QA do bridge enquanto a homologação física final não for encerrada;
+- [`../android-tv/README.md`](../android-tv/README.md) — contrato técnico de build do módulo Android;
+- [`../e2e/README.md`](../e2e/README.md) — E2Es promovidos, incluindo LAN totalmente offline e bridge iOS.
+
+As issues #417/#422 são a fonte de evidência física ainda pendente do modo LAN. Na autenticação da TV, o backend/protocolo do login pelo celular já foi incorporado pelo PR #429; a experiência QR/código na TV e aprovação no celular continua sendo concluída na issue #428 pelo PR #431.
 
 ## Administração e conta
 
@@ -69,9 +77,9 @@ A Fase 15 está encerrada. O planejamento original foi movido integralmente para
 - [`admin-quarantine.md`](admin-quarantine.md) — lixeira/quarentena;
 - [`admin-operation-history.md`](admin-operation-history.md) — histórico operacional;
 - [`admin-transcode-cache.md`](admin-transcode-cache.md) — cache de transcode;
-- [`multi-user-auth.md`](multi-user-auth.md) — usuários, papéis, sessões e ownership;
+- [`multi-user-auth.md`](multi-user-auth.md) — usuários, papéis, sessões, ownership e protocolo backend de login da TV pelo celular;
 - [`password-ux.md`](password-ux.md) — UX segura de senha;
-- [`login-abuse-protection.md`](login-abuse-protection.md) — proteção de login;
+- [`login-abuse-protection.md`](login-abuse-protection.md) — proteção de login por senha e limites do device login;
 - [`personal-data-portability.md`](personal-data-portability.md) — exportação/importação pessoal;
 - [`security-regressions.md`](security-regressions.md) — regressões sensíveis.
 

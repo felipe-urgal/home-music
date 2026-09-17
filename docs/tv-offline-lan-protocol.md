@@ -14,23 +14,24 @@ O protocolo local não substitui a conta Home Music. Ele autoriza somente uma se
 - Depois que o RTCDataChannel abre, mídia, comandos e estado usam o peer; o HTTP local não é proxy de áudio.
 - Nenhum cookie, username, senha, token de sessão ou user id Home Music é requisito do protocolo LAN.
 - O bearer simples do receiver é aceito somente no papel `tv`, usado pelo receiver embarcado via loopback. Requisições `remote` vindas do celular exigem assinatura HMAC por request.
+- No iPhone/iPad, `/bridge` pode adaptar somente as operações de signaling por navegação top-level + `postMessage`; ele não recebe o segredo do QR, não deriva HMAC e não transporta mídia.
 
-## Compatibilidade inicial
+## Compatibilidade observada e pendente
 
-O alvo do MVP é Android/Chrome com Local Network Access disponível para uma aplicação HTTPS alcançar `http://<ipv4-privado-da-tv>:<porta>` após ação explícita do usuário. O hardware alvo é BTV 11 com GeckoView 126 no receiver.
+O caminho direto do MVP é Android/Chrome com Local Network Access disponível para uma aplicação HTTPS alcançar `http://<ipv4-privado-da-tv>:<porta>` após ação explícita do usuário. O hardware alvo é BTV 11 com GeckoView 126 no receiver.
 
-O suporte real deve ser confirmado no spike físico da issue #417 antes de considerar a matriz abaixo como garantida:
+No iPhone/iOS, o transporte direto HTTPS → HTTP privado não é assumido. O caminho implementado usa o bridge local top-level. QA físico em 17/09/2026 confirmou o caminho principal **iPhone → bridge LAN → WebRTC/DataChannel → envio de música offline → reprodução na BTV**. A homologação final de estabilidade, background/lock, perda de rede e matriz de versões continua pendente nas issues #417/#422.
 
-| Ambiente | Estado inicial |
+| Ambiente | Estado atual |
 | --- | --- |
-| Chrome Android com Local Network Access | alvo do MVP; validar fisicamente |
+| Chrome Android com Local Network Access | alvo do transporte direto; validação física final ainda deve registrar versões e negativos |
 | PWA instalado | alvo principal |
-| aba normal na mesma origin | validar; não assumir paridade com PWA |
-| GeckoView 126 no BTV 11 | receiver alvo; validar DataChannel sem STUN/TURN |
-| Safari/iOS | não validado nesta fase |
-| redes com AP/client isolation | não suportadas |
+| aba normal na mesma origin | não assumir paridade com PWA sem teste específico |
+| GeckoView 126 no BTV 11 | receiver alvo; caminho principal já exercitado fisicamente com iPhone, matriz final pendente |
+| iPhone/iPad | bridge LAN implementado; caminho principal validado fisicamente, estabilidade/lifecycle final pendentes |
+| redes com AP/client isolation | não suportadas; devem falhar de forma distinguível |
 
-WebSocket local não é requisito de v2. Bootstrap/sinalização usam HTTP `fetch` + polling para reduzir dependência de comportamento de WebSocket na rede local.
+WebSocket local não é requisito de v2. Bootstrap/sinalização usam HTTP `fetch` + polling no caminho direto e o mesmo contrato lógico por bridge no iOS.
 
 ## QR
 
@@ -114,6 +115,8 @@ A `requestKey` nunca trafega pela rede. O `sessionToken` passa a identificar/vin
 
 No MVP existe no máximo **um remoto ativo por sessão**.
 
+Depois de um `join` autenticado aceito, o servidor LAN notifica a Activity Android para abrir o receiver offline automaticamente. A notificação é one-shot para aquele join válido; replay do mesmo join permanece rejeitado e não deve reabrir o receiver.
+
 ### 5. Autenticação de cada request remoto
 
 Toda requisição do celular para `/signals` ou `/close` usa:
@@ -156,6 +159,21 @@ Nonces aceitos são guardados em cache limitado a 256 itens. Capturar somente o 
 
 O receiver embarcado usa `Bearer <receiverToken>` apenas no papel `tv` e somente pelo endpoint loopback `127.0.0.1`.
 
+## Bridge LAN no iOS
+
+O bridge é um adaptador restrito para plataformas em que o PWA HTTPS não consegue executar diretamente o `fetch()` para o HTTP privado da TV.
+
+Fluxo:
+
+1. o PWA abre `http://<host>:<port>/bridge` por ação explícita do usuário;
+2. PWA e bridge vinculam a sessão com `window.opener`, `postMessage`, `origin`, `source` e `channelId`;
+3. o PWA continua calculando proof/HMAC e mantendo o `secret`;
+4. o bridge executa apenas operações allowlisted (`challenge`, `join`, `signal-send`, `signal-poll`, `complete`, `close`);
+5. ao abrir o DataChannel, o PWA envia `complete`; signaling termina e a janela tenta fechar;
+6. se `window.close()` for bloqueado, a página mantém instrução para retornar/fechar manualmente.
+
+O bridge não aceita URL, host, método ou headers arbitrários do PWA e não é caminho de mídia.
+
 ## Sinalização WebRTC
 
 Cada mensagem usa envelope:
@@ -195,6 +213,18 @@ Cada envelope possui `id` efêmero limitado e é deduplicado com memória bounde
 
 O receiver mantém no máximo três fontes de mídia transitórias e mantém a fila/metadados sincronizados com esse conjunto reproduzível; URLs de blob expulsas são revogadas e não permanecem como entradas de fila inutilizáveis.
 
+### Estados de conexão
+
+`RTCPeerConnection.connectionState = disconnected` não encerra a sessão por timeout fixo. Esse estado pode ser transitório em background/lock ou durante oscilação breve da rede.
+
+- `disconnected`: peer permanece vivo e a UI pode indicar reconexão;
+- retorno a `connected`: sessão pode voltar a `open` se o DataChannel continua aberto;
+- `failed`: terminal, com erro/cleanup;
+- `closed`: terminal;
+- fechamento/erro real do DataChannel: terminal.
+
+Não há ICE restart complexo nesta versão. Se a conexão realmente falhar, novo QR/pareamento é exigido.
+
 ## Lifecycle
 
 - TTL do QR/challenge: 2 min;
@@ -204,13 +234,16 @@ O receiver mantém no máximo três fontes de mídia transitórias e mantém a f
 - mudança de IP invalida o QR antigo e exige novo pareamento;
 - Activity/app encerrado fecha listener;
 - reconnect só é permitido enquanto a mesma sessão continuar válida;
+- `disconnected` transitório por si só não invalida a sessão nem fecha o peer;
 - blobs de mídia continuam transitórios e são revogados no receiver.
 
 ## CORS e Local Network Access
 
-O serviço LAN responde somente aos métodos/headers necessários. Para requests vindos do PWA, a origin permitida é validada conforme configuração/contrato do app; endpoints autenticados não usam política permissiva indiscriminada.
+O serviço LAN responde somente aos métodos/headers necessários. Para requests vindos do PWA no caminho direto, a origin permitida é validada conforme configuração/contrato do app; endpoints autenticados não usam política permissiva indiscriminada.
 
-Preflight/headers exigidos pela implementação de Local Network Access do browser alvo devem ser cobertos pelo spike físico. Negação da permissão gera estado separado de “TV não encontrada”.
+Preflight/headers exigidos pela implementação de Local Network Access do browser alvo devem ser cobertos pelo QA físico. Negação da permissão deve gerar estado separado de “TV não encontrada”.
+
+No iOS, o bridge top-level existe justamente para não depender de um `fetch()` HTTPS → HTTP privado que a plataforma não oferece de forma utilizável no fluxo validado.
 
 ## Threat model
 
@@ -224,7 +257,8 @@ Preflight/headers exigidos pela implementação de Local Network Access do brows
 - QR antigo deixa de valer ao expirar/regenerar;
 - credenciais Home Music não são expostas ao serviço LAN;
 - payloads, mailbox, cache de nonces e mídia transitória têm limites explícitos;
-- sessão fechada não deixa material de autenticação reaproveitável.
+- sessão fechada não deixa material de autenticação reaproveitável;
+- bridge não recebe o segredo do QR nem oferece proxy arbitrário.
 
 ### Não protegido nesta fase
 
@@ -252,27 +286,29 @@ Depois que o WebRTC DataChannel está estabelecido, mídia e comandos deixam de 
 - pending signals: `128`;
 - HTTP request body: `327680 bytes`;
 - transient receiver media sources: `3`;
-- SDP: `256 KiB` (mesmo contrato online);
+- SDP: `256 KiB`;
 - ICE candidate: `8 KiB`;
 - uma conexão remota ativa.
 
-## Spike físico obrigatório antes de fechar #417
+## QA físico antes de fechar #417/#422
 
 Com o servidor Home Music e WAN desligados:
 
-1. instalar APK contendo o serviço LAN;
-2. abrir o PWA já instalado no Chrome Android;
-3. a partir de gesto explícito, executar `fetch(http://<ip-tv>:<porta>/health)`;
-4. confirmar prompt/permissão Local Network Access e CORS/preflight;
-5. negar a permissão e confirmar erro distinguível;
-6. conceder e executar challenge/join;
-7. confirmar `/signals` e `/close` com autenticação v2 assinada;
-8. trocar offer/answer/ICE por polling;
-9. abrir `home-music-media-v1` entre Chrome e GeckoView 126 sem STUN/TURN;
-10. repetir com WAN desligada e registrar versões do Chrome, Android, BTV/GeckoView e comportamento observado.
-
-Se o browser alvo não permitir HTTPS → HTTP LAN de forma utilizável, #417 deve ser reaberta como decisão arquitetural antes de considerar a compatibilidade concluída; não mascarar a limitação com fallback inseguro.
+1. instalar APK do mesmo head usado no PWA;
+2. abrir o modo offline e gerar QR novo;
+3. parear pelo transporte esperado da plataforma: direto no Android/Chrome ou bridge no iPhone/iPad;
+4. confirmar challenge/join e abertura automática do receiver;
+5. trocar offer/answer/ICE;
+6. abrir `home-music-media-v1` com o GeckoView 126;
+7. reproduzir duas faixas e exercer comandos essenciais;
+8. bloquear/colocar o celular em background por período prolongado e verificar recuperação de `disconnected` transitório;
+9. provocar perda real de rede e confirmar estado terminal/novo QR;
+10. validar QR expirado/regenerado, AP/client isolation e cleanup;
+11. religar backend/WAN e confirmar modo online;
+12. registrar versões do celular/browser, Android/BTV, GeckoView e comportamento observado.
 
 ## Evidência e suporte
 
-O CI cobre contrato, vetores HMAC Web/Android, autenticação por request, TTL/replay, receiver empacotado, WebRTC/DataChannel Chromium, fila de mídia bounded e ausência de requests `/api/*` durante playback LAN. Isso não comprova Local Network Access, GeckoView nem firmware do BTV 11. Suporte real só deve ser registrado após executar o roteiro físico de `docs/android-tv.md` com WAN e servidor desligados e anotar versões/resultados na issue #422.
+O CI cobre contrato, vetores HMAC Web/Android, autenticação por request, TTL/replay, receiver empacotado, bridge iOS, WebRTC/DataChannel Chromium, fila de mídia bounded, ausência de requests `/api/*` durante playback LAN, `disconnected` recuperável e falha terminal real.
+
+Isso não comprova sozinho firmware, Local Network Access, lifecycle de browser mobile ou todas as condições da LAN real. O caminho principal iPhone + BTV já foi exercitado fisicamente, mas suporte final só deve ser registrado após concluir o roteiro e anotar versões/resultados nas issues #417/#422.
