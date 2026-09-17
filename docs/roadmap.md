@@ -2,20 +2,48 @@
 
 Este documento descreve **o estado técnico corrente e o próximo trabalho relevante** do Home Music. Histórico detalhado de ciclos encerrados fica em [`history/`](history/).
 
-## Estado em 2026-09-12
+## Estado em 2026-09-17
 
-- **Fase 7.5 — multiusuário/autenticação:** concluída e incorporada à arquitetura atual.
-- **Fase 14 — portabilidade de dados pessoais:** concluída na `main` com o PR #324.
-- **Fase 15 — Assistente da Biblioteca:** concluída tecnicamente; umbrella #310 encerrada.
-- **#322 — Whisper local para lyrics:** incorporada pelo PR #375.
-- **#325 — artwork no Media Session:** implementação incorporada e issue encerrada.
-- **#327 — continuidade de playback no iOS:** instrumentação/hardening incorporados e issue encerrada.
-- **#328 — cold start offline no iOS:** correções de bootstrap/performance incorporadas e issue encerrada.
-- **#388 — redesign imersivo de Tocando agora:** concluído pelo PR #389, com shell desktop responsivo, sidebar esquerda recolhível, fila direita redimensionável e experiência mobile com drawer/bottom sheet.
+A base consolidada anterior continua válida:
 
-As issues #325, #327 e #328 tinham validações físicas residuais. Por decisão do projeto, esses QAs foram **dispensados como gate de encerramento e aceitos como risco de plataforma**. Isso não equivale a afirmar que os cenários em hardware foram executados ou aprovados.
+- **Fase 7.5 — multiusuário/autenticação:** concluída e incorporada à arquitetura atual;
+- **Fase 14 — portabilidade de dados pessoais:** concluída na `main` com o PR #324;
+- **Fase 15 — Assistente da Biblioteca:** concluída tecnicamente; umbrella #310 encerrada;
+- **#322 — Whisper local para lyrics:** incorporada pelo PR #375;
+- **#325 — artwork no Media Session:** implementação incorporada e issue encerrada;
+- **#327 — continuidade de playback no iOS:** instrumentação/hardening incorporados e issue encerrada;
+- **#328 — cold start offline no iOS:** correções de bootstrap/performance incorporadas e issue encerrada;
+- **#388 — redesign imersivo de Tocando agora:** concluído pelo PR #389.
 
-Não existe uma nova fase ativa definida neste momento. O próximo ciclo deve nascer de uma nova necessidade de produto/arquitetura, não de checkboxes antigos da Fase 15.
+Depois dessa consolidação, o ciclo ativo passou a ser a experiência de **Home Music TV**.
+
+### TV / controle remoto / offline LAN
+
+A implementação do modo TV totalmente offline pela LAN está incorporada na `main`:
+
+- PR #423 entregou serviço LAN efêmero, receiver offline embarcado, controle offline no PWA e transporte compartilhado;
+- PR #427 adicionou hardening pós-QA físico, navegação das coleções offline e bridge LAN para iPhone/iPad;
+- PR #430 fez o receiver abrir automaticamente após `join` LAN autenticado e tornou `RTCPeerConnection.disconnected` recuperável, mantendo `failed`, `closed` e erro/fechamento real do DataChannel como terminais.
+
+O caminho principal **iPhone → bridge LAN → WebRTC/DataChannel → envio de música offline → reprodução na BTV** já foi observado em hardware real. Isso ainda não fecha a homologação: as issues #417 e #422 permanecem abertas para registrar matriz de versões, background/lock, perda real de rede, AP/client isolation, QR expirado/regenerado e demais negativos físicos. A Epic #416 deve ser encerrada somente depois da decisão final sobre esse QA.
+
+As issues de implementação #418, #419, #420 e #421 já estão cobertas pelo código mergeado; não representam backlog de feature pendente.
+
+### Próxima feature de produto: login da TV pelo celular
+
+A issue **#428 — Login da TV pelo celular via QR** é o próximo desenvolvimento funcional ainda não implementado.
+
+Objetivo do MVP:
+
+1. TV mostra QR + código curto;
+2. celular abre o Home Music e autentica se necessário;
+3. celular confirma **Entrar nesta TV?**;
+4. servidor cria uma sessão própria e revogável para a TV;
+5. senha/cookie/token da sessão do celular nunca são transferidos para a TV;
+6. usuário/senha na TV continua como fallback;
+7. fluxo de login online permanece separado do pareamento LAN/WebRTC offline.
+
+A implementação planejada é dividida em backend/segurança e depois TV/celular/E2E. O PR #429 contém documentação de desenho/planejamento e não altera runtime por si só.
 
 ## Fase 15 — estado consolidado
 
@@ -60,9 +88,13 @@ A `main` atual possui, entre outras capacidades:
 - autonomia progressiva opt-in após eventos consistentes da biblioteca;
 - PWA/offline com shell cacheado, `OfflineApp` no bundle inicial, bootstrap manifest-first e reconciliação posterior do Cache Storage;
 - hardening de playback/Media Session para Apple mobile sem criar segundo player ou retry infinito;
-- player **Tocando agora** imersivo/responsivo com estado de playback canônico preservado, navegação mobile em drawer e fila adaptativa entre desktop e mobile.
+- player **Tocando agora** imersivo/responsivo com estado de playback canônico preservado;
+- Home Music TV com GeckoView, controle remoto online, envio P2P de downloads, receiver offline embarcado e modo LAN sem backend;
+- protocolo LAN `home-music-lan-remote-v2` com TTL, HMAC, replay protection e signaling efêmero;
+- bridge LAN restrito para iPhone/iPad, mantendo mídia no DataChannel;
+- regressões de lifecycle que distinguem `disconnected` recuperável de falha terminal real.
 
-Documentos canônicos:
+Documentos canônicos principais:
 
 - [`library-assistant.md`](library-assistant.md);
 - [`lyrics.md`](lyrics.md);
@@ -71,19 +103,20 @@ Documentos canônicos:
 - [`artwork-fallback.md`](artwork-fallback.md);
 - [`pwa.md`](pwa.md);
 - [`offline-downloads.md`](offline-downloads.md);
-- [`player-screen-responsibilities.md`](player-screen-responsibilities.md).
+- [`player-screen-responsibilities.md`](player-screen-responsibilities.md);
+- [`android-tv.md`](android-tv.md);
+- [`tv-remote-control.md`](tv-remote-control.md);
+- [`tv-offline-cast.md`](tv-offline-cast.md);
+- [`tv-offline-lan-protocol.md`](tv-offline-lan-protocol.md).
 
-## Próximo ciclo
+## Próximo trabalho
 
-Não há backlog de implementação da Fase 15 a ser “continuado” automaticamente. Uma nova fase deve entrar neste roadmap quando houver:
+Há dois tipos de trabalho diferentes e eles não devem ser confundidos:
 
-1. objetivo de produto ou arquitetura claro;
-2. issue umbrella ou decisão equivalente;
-3. fronteiras explícitas de escopo;
-4. riscos e critérios de aceitação identificados;
-5. relação com documentação canônica definida.
+1. **QA/evidência do modo TV offline já implementado** — concluir ou explicitamente dispensar os critérios físicos de #417/#422 e então encerrar a Epic #416;
+2. **nova feature #428** — implementar login da TV pelo celular via QR, começando pelo backend/protocolo/segurança antes da UX final TV/celular.
 
-Bugs e melhorias pontuais podem existir fora de uma fase e devem ser rastreados diretamente em issues próprias.
+Bugs e melhorias pontuais continuam sendo rastreados diretamente em issues próprias.
 
 ## Política de QA e evidência
 
