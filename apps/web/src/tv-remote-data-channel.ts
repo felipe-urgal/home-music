@@ -14,9 +14,17 @@ const MAX_MESSAGE_ID_LENGTH = 128;
 const MAX_TEXT_LENGTH = 1024;
 const MAX_SEEN_MESSAGES = 512;
 
+export type TvRemoteTrackMetadata = {
+  trackId: string;
+  title: string;
+  artist: string;
+  album: string;
+};
+
 type TvRemoteDataFrame =
   | { version: typeof TV_REMOTE_DATA_VERSION; id: string; kind: 'command'; payload: TvRemoteCommand }
   | { version: typeof TV_REMOTE_DATA_VERSION; id: string; kind: 'snapshot'; payload: TvRemotePlaybackSnapshot }
+  | { version: typeof TV_REMOTE_DATA_VERSION; id: string; kind: 'track-metadata'; payload: TvRemoteTrackMetadata }
   | { version: typeof TV_REMOTE_DATA_VERSION; id: string; kind: 'disconnect'; payload: { reason: string } }
   | { version: typeof TV_REMOTE_DATA_VERSION; id: string; kind: 'error'; payload: { code: string; message: string } };
 
@@ -25,7 +33,7 @@ export type TvRemoteDataChannel = {
   sendCommand: (command: TvRemoteCommand) => void;
   sendSnapshot: (snapshot: TvRemotePlaybackSnapshot) => void;
   sendTrackAndPlay: (
-    input: { trackId: string; blob: Blob; mimeType?: string },
+    input: { trackId: string; blob: Blob; mimeType?: string; metadata?: TvRemoteTrackMetadata },
     onProgress?: (sent: number, total: number) => void
   ) => Promise<void>;
   disconnect: (reason?: string) => void;
@@ -35,6 +43,7 @@ export type TvRemoteDataChannel = {
 type DataChannelOptions = {
   onCommand?: (command: TvRemoteCommand) => void;
   onSnapshot?: (snapshot: TvRemotePlaybackSnapshot) => void;
+  onTrackMetadata?: (metadata: TvRemoteTrackMetadata) => void;
   onMedia?: (media: TvRemoteReceivedMedia) => void | Promise<void>;
   onDisconnect?: (reason: string) => void;
   onError?: (error: Error) => void;
@@ -107,6 +116,15 @@ function parseSnapshot(value: unknown): TvRemotePlaybackSnapshot | null {
   return snapshot as TvRemotePlaybackSnapshot;
 }
 
+function parseTrackMetadata(value: unknown): TvRemoteTrackMetadata | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const metadata = value as Record<string, unknown>;
+  if (!exactKeys(metadata, ['trackId', 'title', 'artist', 'album'])) return null;
+  if (!validText(metadata.trackId) || !metadata.trackId) return null;
+  if (!validText(metadata.title) || !validText(metadata.artist) || !validText(metadata.album)) return null;
+  return metadata as TvRemoteTrackMetadata;
+}
+
 export function parseTvRemoteDataFrame(value: unknown): TvRemoteDataFrame | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const frame = value as Record<string, unknown>;
@@ -119,6 +137,10 @@ export function parseTvRemoteDataFrame(value: unknown): TvRemoteDataFrame | null
   if (frame.kind === 'snapshot') {
     const payload = parseSnapshot(frame.payload);
     return payload ? { version: TV_REMOTE_DATA_VERSION, id: frame.id as string, kind: 'snapshot', payload } : null;
+  }
+  if (frame.kind === 'track-metadata') {
+    const payload = parseTrackMetadata(frame.payload);
+    return payload ? { version: TV_REMOTE_DATA_VERSION, id: frame.id as string, kind: 'track-metadata', payload } : null;
   }
   if (frame.kind === 'disconnect') {
     const payload = frame.payload as Record<string, unknown> | null;
@@ -173,6 +195,7 @@ export function createTvRemoteDataChannel(channel: RTCDataChannel, options: Data
       }
       if (frame.kind === 'command') options.onCommand?.(frame.payload);
       else if (frame.kind === 'snapshot') options.onSnapshot?.(frame.payload);
+      else if (frame.kind === 'track-metadata') options.onTrackMetadata?.(frame.payload);
       else if (frame.kind === 'disconnect') options.onDisconnect?.(frame.payload.reason);
       else options.onError?.(new Error(frame.payload.message));
     } catch {
@@ -195,6 +218,10 @@ export function createTvRemoteDataChannel(channel: RTCDataChannel, options: Data
     sendCommand: command => send('command', command),
     sendSnapshot: value => send('snapshot', value),
     sendTrackAndPlay: async (input, onProgress) => {
+      if (input.metadata) {
+        if (input.metadata.trackId !== input.trackId) throw new Error('Metadados da música não correspondem ao áudio.');
+        send('track-metadata', input.metadata);
+      }
       await media.send(input, onProgress);
       send('command', { type: 'play-track', trackId: input.trackId });
     },
