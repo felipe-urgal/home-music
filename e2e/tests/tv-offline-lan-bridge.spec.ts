@@ -51,6 +51,8 @@ async function seedOfflineTracks(page: Page, titles: string[]) {
       id: String(track.id),
       title: String(track.title),
       artist: String(track.artist || 'Artista desconhecido'),
+      displayArtist: String(track.albumArtist || track.artist || 'Artista desconhecido'),
+      album: String(track.album || 'Álbum desconhecido'),
       bytes: track.fixtureBytes as number[],
       mimeType: String(track.fixtureMimeType)
     }));
@@ -190,7 +192,7 @@ test('iOS usa bridge LAN só para signaling e mantém mídia no DataChannel', as
   await page.getByRole('button', { name: 'Conectar', exact: true }).click();
   const bridgePage = await bridgePagePromise;
 
-  await expect(page.getByText(/TV conectada em/)).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText(/TV conectada (?:em|e pronta)/)).toBeVisible({ timeout: 20_000 });
   await expect.poll(() => bridgePage.isClosed()).toBe(true);
   const diagnosticsAtConnection = fixture.diagnostics();
   expect(diagnosticsAtConnection.requests.some(request => request.path.startsWith('/challenge?'))).toBe(true);
@@ -207,7 +209,9 @@ test('iOS usa bridge LAN só para signaling e mantém mídia no DataChannel', as
     name: `Enviar para a TV ${first.title}, ${first.artist}`,
     exact: true
   }).click();
-  await expect(tv.locator('.tv-offline-receiver__now-playing strong')).toBeVisible({ timeout: 10_000 });
+  await expect(tv.locator('.tv-offline-receiver__details h1')).toHaveText(first.title, { timeout: 10_000 });
+  await expect(tv.locator('.tv-offline-receiver__artist')).toHaveText(first.displayArtist);
+  await expect(tv.locator('.tv-offline-receiver__album')).toHaveText(first.album);
   await expect.poll(async () => tv.locator('audio').evaluateAll(elements => (
     elements.some(element => (element as HTMLAudioElement).src.startsWith('blob:'))
   ))).toBe(true);

@@ -282,4 +282,14 @@ A matriz final de suporte deve ser baseada em evidência física, não apenas em
 - lifecycle/background;
 - reprodução e controles por DataChannel.
 
+### Navegador comum e celular bloqueado
+
+A instalação como PWA não é requisito do protocolo LAN. O pareamento pode ser iniciado em uma aba normal do navegador, desde que o navegador tenha acesso aos downloads offline, WebRTC e à rede local.
+
+Depois que uma faixa termina de ser enviada, o áudio fica em memória na TV e a reprodução não depende da execução contínua do JavaScript no celular. Se o sistema suspender a aba/PWA ao bloquear a tela, a faixa já recebida continua tocando na TV.
+
+Ao retomar o navegador, um DataChannel encerrado é recriado automaticamente quando o `RTCPeerConnection` ainda está válido. Isso evita exigir um novo QR em suspensões transitórias. Se o sistema operacional ou a rede levarem o peer ao estado terminal `failed`, um novo pareamento continua sendo necessário.
+
+Comandos novos e o envio de outra faixa não podem ser garantidos enquanto o navegador estiver totalmente suspenso pelo sistema operacional.
+
 Enquanto essa homologação não terminar, não ampliar a declaração de suporte para hardware ou browsers não verificados.
