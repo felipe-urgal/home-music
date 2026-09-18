@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Track } from '@home-music/shared';
+import { artworkFallbackDataUrl, buildArtworkFallback } from './artwork-utils';
 import { createTvLanReceiverSignaling } from './tv-lan-receiver-client';
 import {
   clearTvRemoteMediaSources,
@@ -358,6 +359,9 @@ export function TvOfflineReceiver() {
 
   const current = player.current;
   const displayTrack = current ?? readyTrack;
+  const displayArtwork = displayTrack
+    ? artworkFallbackDataUrl(buildArtworkFallback(displayTrack), 640)
+    : null;
 
   return (
     <main className="tv-offline-receiver">
@@ -404,8 +408,14 @@ export function TvOfflineReceiver() {
       <section className="tv-offline-receiver__card" aria-live="polite">
         <div className="tv-offline-receiver__cover-column">
           <div className="tv-offline-receiver__cover" aria-hidden="true">
-            <span>♪</span>
-            <small>{displayTrack?.album || 'Home Music'}</small>
+            {displayArtwork ? (
+              <img src={displayArtwork} alt="" />
+            ) : (
+              <>
+                <span>♪</span>
+                <small>Home Music</small>
+              </>
+            )}
           </div>
           <p className="tv-offline-receiver__source">
             <span aria-hidden="true">▥</span>
