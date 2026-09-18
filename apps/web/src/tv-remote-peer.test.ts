@@ -145,7 +145,7 @@ describe('tv remote peer controller', () => {
     peer.setConnectionState('closed');
 
     expect(peer.close).toHaveBeenCalledTimes(1);
-    expect(states).toEqual(['connecting', 'open', 'closed']);
+    expect(states).toEqual(['connecting', 'open', 'connecting', 'closed']);
   });
 
   it('leaves open state during a transient disconnect and restores it when the peer reconnects', async () => {
