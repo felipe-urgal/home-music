@@ -100,7 +100,7 @@ export function TvExperience({ tracks, current, nextTrack, playing, currentTime,
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, [current, onNext, onOpenRemote, onTogglePlay]);
+  }, []);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -159,7 +159,7 @@ export function TvExperience({ tracks, current, nextTrack, playing, currentTime,
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
+  }, [current, onNext, onOpenRemote, onTogglePlay]);
 
   useEffect(() => subscribeToTvRemoteTrackRequests(trackId => {
     const track = tracks.find(candidate => candidate.id === trackId);
