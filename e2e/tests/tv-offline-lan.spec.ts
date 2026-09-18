@@ -49,6 +49,8 @@ async function seedOfflineTracks(page: Page, titles: string[]) {
       id: String(track.id),
       title: String(track.title),
       artist: String(track.artist || 'Artista desconhecido'),
+      displayArtist: String(track.albumArtist || track.artist || 'Artista desconhecido'),
+      album: String(track.album || 'Álbum desconhecido'),
       bytes: track.fixtureBytes as number[],
       mimeType: String(track.fixtureMimeType)
     }));
@@ -80,6 +82,9 @@ function lanFixture() {
     if (request.method() === 'OPTIONS') return requestRoute.fulfill({ status: 204, headers });
     if (url.pathname === '/receiver/bootstrap') {
       return requestRoute.fulfill({ status: 200, headers, json: { version, sessionId, sessionToken, expiresAt, signalingBase: 'http://127.0.0.1:43123' } });
+    }
+    if (url.pathname === '/receiver/regenerate' && request.method() === 'POST') {
+      return requestRoute.fulfill({ status: 200, headers, json: { host: '192.168.1.40', port: 43123, qrText, expiresAt } });
     }
     if (url.pathname === '/challenge') {
       const clientNonce = url.searchParams.get('clientNonce') || '';
@@ -146,7 +151,9 @@ async function serveReceiver(context: BrowserContext, fixtureRoute: (route: Rout
   await context.route('http://127.0.0.1:43123/**', fixtureRoute);
   await context.route('http://192.168.1.40:43123/**', async route => {
     const url = new URL(route.request().url());
-    if (!url.pathname.startsWith('/receiver/') || url.pathname === '/receiver/bootstrap') return fixtureRoute(route);
+    if (!url.pathname.startsWith('/receiver/')
+      || url.pathname === '/receiver/bootstrap'
+      || url.pathname === '/receiver/regenerate') return fixtureRoute(route);
     const relative = url.pathname === '/receiver/' ? 'tv-offline-receiver.html' : url.pathname.replace(/^\/receiver\//, '');
     const file = path.resolve(receiverRoot, relative);
     if (!file.startsWith(receiverRoot)) return route.fulfill({ status: 404 });
@@ -156,7 +163,7 @@ async function serveReceiver(context: BrowserContext, fixtureRoute: (route: Rout
   });
 }
 
-test('PWA envia faixas e controla o receiver LAN sem backend', async ({ page, browser }, testInfo) => {
+test('navegador envia faixas, recupera o canal e controla o receiver LAN sem backend', async ({ page, browser }, testInfo) => {
   test.skip(testInfo.project.name !== 'desktop-chromium');
 
   await login(page, '/');
@@ -189,6 +196,19 @@ test('PWA envia faixas e controla o receiver LAN sem backend', async ({ page, br
   await phoneContext.exposeFunction('__homeMusicLanFixture', fixture.binding);
   await phoneContext.addInitScript(() => {
     Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false });
+    const originalCreateDataChannel = RTCPeerConnection.prototype.createDataChannel;
+    Object.defineProperty(RTCPeerConnection.prototype, 'createDataChannel', {
+      configurable: true,
+      value: function (this: RTCPeerConnection, label: string, options?: RTCDataChannelInit) {
+        const channel = originalCreateDataChannel.call(this, label, options);
+        if (label === 'home-music-media-v1') {
+          const scope = window as typeof window & { __homeMusicTvChannels?: RTCDataChannel[] };
+          scope.__homeMusicTvChannels ??= [];
+          scope.__homeMusicTvChannels.push(channel);
+        }
+        return channel;
+      }
+    });
     const nativeFetch = window.fetch.bind(window);
     window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       const rawUrl = typeof input === 'string' || input instanceof URL ? String(input) : input.url;
@@ -213,6 +233,7 @@ test('PWA envia faixas e controla o receiver LAN sem backend', async ({ page, br
   page = await phoneContext.newPage();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
+  expect(await page.evaluate(() => matchMedia('(display-mode: standalone)').matches)).toBe(false);
   await expect(page.getByRole('button', { name: 'Conectar à TV', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Conectar à TV', exact: true }).click();
   await expect(page.getByRole('dialog', { name: 'Conectar à TV por QR' })).toBeVisible();
@@ -234,12 +255,28 @@ test('PWA envia faixas e controla o receiver LAN sem backend', async ({ page, br
   }
   const requestsAtConnection = backendRequests;
 
+  const channelCountBeforeResume = await page.evaluate(() => (
+    (window as typeof window & { __homeMusicTvChannels?: RTCDataChannel[] }).__homeMusicTvChannels?.length ?? 0
+  ));
+  await page.evaluate(() => {
+    const channels = (window as typeof window & { __homeMusicTvChannels?: RTCDataChannel[] }).__homeMusicTvChannels ?? [];
+    const active = [...channels].reverse().find(channel => channel.readyState === 'open');
+    if (!active) throw new Error('media channel not open');
+    active.close();
+  });
+  await expect.poll(async () => page.evaluate(() => (
+    (window as typeof window & { __homeMusicTvChannels?: RTCDataChannel[] }).__homeMusicTvChannels?.length ?? 0
+  )), { timeout: 10_000 }).toBeGreaterThan(channelCountBeforeResume);
+  await expect(page.getByText(/TV conectada em/)).toBeVisible({ timeout: 10_000 });
+
   const first = tracks[0]!;
   await page.getByRole('button', {
     name: `Enviar para a TV ${first.title}, ${first.artist}`,
     exact: true
   }).click();
-  await expect(tv.locator('.tv-offline-receiver__now-playing strong')).toBeVisible({ timeout: 10_000 });
+  await expect(tv.locator('.tv-offline-receiver__details h1')).toHaveText(first.title, { timeout: 10_000 });
+  await expect(tv.locator('.tv-offline-receiver__artist')).toHaveText(first.displayArtist);
+  await expect(tv.locator('.tv-offline-receiver__album')).toHaveText(first.album);
   await expect.poll(async () => tv.locator('audio').evaluateAll(elements => (
     elements.some(element => (element as HTMLAudioElement).src.startsWith('blob:'))
   ))).toBe(true);
@@ -275,5 +312,11 @@ test('PWA envia faixas e controla o receiver LAN sem backend', async ({ page, br
 
   expect(backendRequests).toBe(requestsAtConnection);
   expect(await page.locator('audio').evaluateAll(elements => elements.every(element => (element as HTMLAudioElement).paused))).toBe(true);
+
+  await tv.getByRole('button', { name: 'Novo pareamento', exact: true }).click();
+  await expect(tv.getByRole('dialog', { name: 'Novo pareamento offline' })).toBeVisible();
+  await expect(tv.getByAltText('QR code para novo pareamento offline')).toBeVisible();
+  await expect(tv.getByText(/não é necessário instalar a PWA/i)).toBeVisible();
+
   await tvContext.close();
 });
