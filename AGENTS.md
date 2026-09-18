@@ -4,6 +4,15 @@
 
 Trabalhe de forma autônoma, incremental e verificável. Prefira a menor solução completa e de menor manutenção.
 
+## Workflow central
+
+- O workflow, os papéis globais e as tasks operacionais canônicas ficam em `felipe-urgal/agent-workflow-browser`.
+- Este repositório não mantém cópias locais dos papéis `00-orchestrator` a `07-maintainer`; regras específicas do Home Music vivem neste `AGENTS.md` e nos `AGENTS.md` das áreas.
+- A task central registra estado/handoff da execução; backlog e planejamento do produto continuam em issues e documentação viva do Home Music.
+- Capacidade local de edição/teste não concede push, PR, merge, deploy ou release.
+- Em mudanças fullstack, preserve a direção conceitual `packages/shared -> apps/server -> apps/web -> e2e` e consulte os `AGENTS.md` das áreas afetadas.
+- Produção, biblioteca real, hardware e serviços reais não são etapas implícitas de validação.
+
 ## Fluxo
 
 1. Inspecione o comportamento atual.
