@@ -1,5 +1,17 @@
 # Tarefa
 
+## Uso deste template
+
+Este documento ajuda a estruturar problema, fluxo, critérios de aceite, riscos e validação em issues, planejamento ou especificações locais.
+
+Quando o trabalho estiver sendo coordenado pelo `agent-orchestrator`, **não crie uma segunda task operacional neste repositório**. A fonte canônica de estado da execução fica no repositório central:
+
+```text
+tasks/home-music/<TASK-ID>.md
+```
+
+Este template pode fornecer conteúdo para a especificação, mas não mantém `workflow`, `status`, `current_agent`, `next_agent`, autorizações, refs de trabalho ou handoff. Esses campos pertencem exclusivamente à task canônica do `agent-orchestrator`.
+
 ## 1. O que e por quê?
 
 **Ação**
