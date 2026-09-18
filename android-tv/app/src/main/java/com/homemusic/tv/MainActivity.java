@@ -8,6 +8,8 @@ import android.content.pm.ShortcutInfo;
 import android.content.pm.ShortcutManager;
 import android.graphics.Bitmap;
 import android.graphics.Color;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.Icon;
 import android.net.Uri;
 import android.os.Build;
@@ -39,6 +41,8 @@ import org.mozilla.geckoview.GeckoSessionSettings;
 import org.mozilla.geckoview.GeckoView;
 
 import java.io.IOException;
+import java.net.HttpURLConnection;
+import java.net.URL;
 
 public final class MainActivity extends Activity {
     private static final String PREFS = "home_music_tv";
@@ -48,6 +52,16 @@ public final class MainActivity extends Activity {
     private static final int PANEL = Color.rgb(15, 24, 34);
     private static final int TEXT = Color.rgb(238, 244, 249);
     private static final int MUTED = Color.rgb(151, 164, 176);
+    private static final int SETUP_TEXT = Color.rgb(246, 249, 255);
+    private static final int SETUP_MUTED = Color.rgb(185, 205, 235);
+    private static final int SETUP_ACCENT = Color.rgb(40, 139, 255);
+    private static final int SETUP_ACCENT_BRIGHT = Color.rgb(86, 214, 255);
+    private static final int SETUP_SUCCESS = Color.rgb(53, 232, 143);
+    private static final int SETUP_DANGER = Color.rgb(255, 117, 117);
+    private static final int SETUP_OPEN = 0;
+    private static final int SETUP_OFFLINE = 1;
+    private static final int SETUP_SERVER = 2;
+    private static final int SETUP_SHORTCUT = 3;
 
     private static GeckoRuntime runtime;
 
@@ -61,6 +75,15 @@ public final class MainActivity extends Activity {
     private boolean offlineReceiverMode;
     private boolean canGoBack;
     private LanPairingServer lanServer;
+    private TextView setupDetailLabel;
+    private TextView setupDetailTitle;
+    private TextView setupDetailDescription;
+    private View setupStatusDot;
+    private TextView setupStatusTitle;
+    private TextView setupStatusDetail;
+    private int setupFocusedAction = SETUP_OPEN;
+    private boolean setupServerReachabilityKnown;
+    private boolean setupServerReachable;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -148,119 +171,458 @@ public final class MainActivity extends Activity {
         offlineReceiverMode = false;
         stopLanServer();
         destroyBrowser();
-        currentAddress = initialAddress;
+
+        String normalized = normalizeAddress(initialAddress);
+        currentAddress = normalized == null ? DEFAULT_URL : normalized;
+        setupFocusedAction = SETUP_OPEN;
+        setupServerReachabilityKnown = false;
+        setupServerReachable = false;
 
         LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setGravity(Gravity.CENTER);
-        root.setBackgroundColor(BG);
-        root.setPadding(dp(72), dp(48), dp(72), dp(48));
+        root.setOrientation(LinearLayout.HORIZONTAL);
+        root.setGravity(Gravity.CENTER_VERTICAL);
+        root.setPadding(dp(48), dp(34), dp(48), dp(34));
+        root.setBackground(setupScreenBackground());
 
-        LinearLayout card = new LinearLayout(this);
-        card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(dp(36), dp(30), dp(36), dp(30));
-        card.setBackgroundColor(PANEL);
-        root.addView(card, new LinearLayout.LayoutParams(
+        LinearLayout menu = new LinearLayout(this);
+        menu.setOrientation(LinearLayout.VERTICAL);
+        menu.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams menuParams = new LinearLayout.LayoutParams(
+            0,
             ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT
-        ));
-
-        TextView title = text("Home Music TV", 28, TEXT);
-        title.setTypeface(title.getTypeface(), android.graphics.Typeface.BOLD);
-        card.addView(title);
-
-        TextView subtitle = text(
-            "O endereço padrão já está preenchido. Altere somente se o servidor mudar.",
-            16,
-            MUTED
+            46
         );
+        menuParams.rightMargin = dp(34);
+        root.addView(menu, menuParams);
+
+        TextView title = text("Home Music TV", 36, SETUP_TEXT);
+        title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        menu.addView(title);
+
+        TextView subtitle = text("Sua música, do seu jeito.", 18, SETUP_MUTED);
         LinearLayout.LayoutParams subtitleParams = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.WRAP_CONTENT
         );
-        subtitleParams.topMargin = dp(8);
-        subtitleParams.bottomMargin = dp(22);
-        card.addView(subtitle, subtitleParams);
+        subtitleParams.topMargin = dp(3);
+        subtitleParams.bottomMargin = dp(26);
+        menu.addView(subtitle, subtitleParams);
 
-        EditText address = new EditText(this);
+        LinearLayout open = createSetupMenuItem(
+            SETUP_OPEN,
+            R.drawable.ic_tv_play,
+            "Abrir Home Music",
+            this::openConfiguredServer
+        );
+        menu.addView(open, setupMenuParams(false));
+
+        LinearLayout offline = createSetupMenuItem(
+            SETUP_OFFLINE,
+            R.drawable.ic_tv_music,
+            "Modo offline local",
+            this::showOfflinePairing
+        );
+        menu.addView(offline, setupMenuParams(true));
+
+        LinearLayout server = createSetupMenuItem(
+            SETUP_SERVER,
+            R.drawable.ic_tv_server,
+            "Alterar servidor",
+            this::showServerAddressDialog
+        );
+        menu.addView(server, setupMenuParams(true));
+
+        LinearLayout shortcut = createSetupMenuItem(
+            SETUP_SHORTCUT,
+            R.drawable.ic_tv_add,
+            "Adicionar à tela inicial",
+            this::requestHomeScreenShortcut
+        );
+        menu.addView(shortcut, setupMenuParams(true));
+
+        View divider = new View(this);
+        divider.setBackgroundColor(Color.argb(90, 103, 166, 255));
+        LinearLayout.LayoutParams dividerParams = new LinearLayout.LayoutParams(
+            dp(1),
+            ViewGroup.LayoutParams.MATCH_PARENT
+        );
+        dividerParams.rightMargin = dp(32);
+        root.addView(divider, dividerParams);
+
+        FrameLayout detailCard = new FrameLayout(this);
+        detailCard.setBackground(setupDetailBackground());
+        LinearLayout.LayoutParams detailCardParams = new LinearLayout.LayoutParams(
+            0,
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            54
+        );
+        root.addView(detailCard, detailCardParams);
+
+        ImageView decoration = new ImageView(this);
+        decoration.setImageResource(R.drawable.ic_tv_music);
+        decoration.setColorFilter(Color.rgb(91, 145, 255));
+        decoration.setAlpha(0.16f);
+        FrameLayout.LayoutParams decorationParams = new FrameLayout.LayoutParams(
+            dp(118),
+            dp(118),
+            Gravity.TOP | Gravity.END
+        );
+        decorationParams.topMargin = dp(18);
+        decorationParams.rightMargin = dp(20);
+        detailCard.addView(decoration, decorationParams);
+
+        LinearLayout detailContent = new LinearLayout(this);
+        detailContent.setOrientation(LinearLayout.VERTICAL);
+        detailContent.setPadding(dp(34), dp(36), dp(34), dp(30));
+        detailCard.addView(detailContent, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT
+        ));
+
+        setupDetailLabel = text("HOME MUSIC TV", 12, Color.rgb(158, 190, 238));
+        setupDetailLabel.setLetterSpacing(0.16f);
+        detailContent.addView(setupDetailLabel);
+
+        setupDetailTitle = text("", 29, SETUP_TEXT);
+        setupDetailTitle.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        LinearLayout.LayoutParams detailTitleParams = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        );
+        detailTitleParams.topMargin = dp(16);
+        detailContent.addView(setupDetailTitle, detailTitleParams);
+
+        setupDetailDescription = text("", 18, SETUP_MUTED);
+        setupDetailDescription.setLineSpacing(dp(2), 1f);
+        LinearLayout.LayoutParams detailDescriptionParams = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        );
+        detailDescriptionParams.topMargin = dp(14);
+        detailContent.addView(setupDetailDescription, detailDescriptionParams);
+
+        View detailSpacer = new View(this);
+        detailContent.addView(detailSpacer, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            0,
+            1
+        ));
+
+        View horizontalRule = new View(this);
+        horizontalRule.setBackgroundColor(Color.argb(100, 134, 178, 239));
+        LinearLayout.LayoutParams ruleParams = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            dp(1)
+        );
+        ruleParams.bottomMargin = dp(24);
+        detailContent.addView(horizontalRule, ruleParams);
+
+        LinearLayout statusRow = new LinearLayout(this);
+        statusRow.setOrientation(LinearLayout.HORIZONTAL);
+        statusRow.setGravity(Gravity.CENTER_VERTICAL);
+        detailContent.addView(statusRow);
+
+        setupStatusDot = new View(this);
+        LinearLayout.LayoutParams dotParams = new LinearLayout.LayoutParams(dp(11), dp(11));
+        dotParams.rightMargin = dp(12);
+        statusRow.addView(setupStatusDot, dotParams);
+
+        setupStatusTitle = text("", 17, SETUP_TEXT);
+        setupStatusTitle.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        statusRow.addView(setupStatusTitle);
+
+        setupStatusDetail = text("", 14, SETUP_MUTED);
+        LinearLayout.LayoutParams statusDetailParams = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        );
+        statusDetailParams.leftMargin = dp(23);
+        statusDetailParams.topMargin = dp(6);
+        detailContent.addView(setupStatusDetail, statusDetailParams);
+
+        renderSetupDetails(SETUP_OPEN);
+
+        setContentView(root);
+        open.requestFocus();
+        checkSetupServerReachability(currentAddress);
+        enterImmersiveMode();
+    }
+
+    private LinearLayout.LayoutParams setupMenuParams(boolean withTopMargin) {
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            dp(68)
+        );
+        if (withTopMargin) params.topMargin = dp(10);
+        return params;
+    }
+
+    private LinearLayout createSetupMenuItem(
+        int action,
+        int iconResource,
+        String label,
+        Runnable onClick
+    ) {
+        LinearLayout item = new LinearLayout(this);
+        item.setOrientation(LinearLayout.HORIZONTAL);
+        item.setGravity(Gravity.CENTER_VERTICAL);
+        item.setPadding(dp(19), 0, dp(16), 0);
+        item.setFocusable(true);
+        item.setFocusableInTouchMode(true);
+        item.setClickable(true);
+        item.setDescendantFocusability(ViewGroup.FOCUS_BLOCK_DESCENDANTS);
+        item.setBackground(setupMenuBackground(false));
+
+        ImageView icon = new ImageView(this);
+        icon.setImageResource(iconResource);
+        icon.setColorFilter(Color.rgb(210, 226, 250));
+        LinearLayout.LayoutParams iconParams = new LinearLayout.LayoutParams(dp(30), dp(30));
+        iconParams.rightMargin = dp(18);
+        item.addView(icon, iconParams);
+
+        TextView labelView = text(label, 20, SETUP_TEXT);
+        item.addView(labelView, new LinearLayout.LayoutParams(
+            0,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            1
+        ));
+
+        ImageView chevron = new ImageView(this);
+        chevron.setImageResource(R.drawable.ic_tv_chevron_right);
+        chevron.setColorFilter(Color.rgb(205, 222, 248));
+        item.addView(chevron, new LinearLayout.LayoutParams(dp(24), dp(24)));
+
+        item.setOnFocusChangeListener((view, hasFocus) -> {
+            item.setBackground(setupMenuBackground(hasFocus));
+            item.setElevation(hasFocus ? dp(12) : dp(1));
+            icon.setColorFilter(hasFocus ? Color.WHITE : Color.rgb(210, 226, 250));
+            chevron.setColorFilter(hasFocus ? Color.WHITE : Color.rgb(205, 222, 248));
+            labelView.setTypeface(Typeface.DEFAULT, hasFocus ? Typeface.BOLD : Typeface.NORMAL);
+            item.animate()
+                .scaleX(hasFocus ? 1.015f : 1f)
+                .scaleY(hasFocus ? 1.015f : 1f)
+                .setDuration(120)
+                .start();
+            if (hasFocus) {
+                setupFocusedAction = action;
+                renderSetupDetails(action);
+            }
+        });
+        item.setOnClickListener(view -> onClick.run());
+        return item;
+    }
+
+    private GradientDrawable setupScreenBackground() {
+        return new GradientDrawable(
+            GradientDrawable.Orientation.TL_BR,
+            new int[]{
+                Color.rgb(3, 14, 43),
+                Color.rgb(5, 52, 139),
+                Color.rgb(3, 20, 61)
+            }
+        );
+    }
+
+    private GradientDrawable setupDetailBackground() {
+        GradientDrawable background = new GradientDrawable(
+            GradientDrawable.Orientation.TL_BR,
+            new int[]{
+                Color.rgb(13, 54, 126),
+                Color.rgb(8, 35, 89)
+            }
+        );
+        background.setCornerRadius(dp(14));
+        background.setStroke(dp(1), Color.argb(150, 83, 151, 244));
+        return background;
+    }
+
+    private GradientDrawable setupMenuBackground(boolean focused) {
+        GradientDrawable background = new GradientDrawable(
+            GradientDrawable.Orientation.LEFT_RIGHT,
+            focused
+                ? new int[]{Color.rgb(19, 120, 255), Color.rgb(14, 87, 223)}
+                : new int[]{Color.rgb(16, 54, 112), Color.rgb(12, 42, 91)}
+        );
+        background.setCornerRadius(dp(13));
+        background.setStroke(
+            dp(focused ? 2 : 1),
+            focused ? SETUP_ACCENT_BRIGHT : Color.argb(125, 106, 157, 232)
+        );
+        return background;
+    }
+
+    private GradientDrawable setupStatusDotBackground(int color) {
+        GradientDrawable dot = new GradientDrawable();
+        dot.setShape(GradientDrawable.OVAL);
+        dot.setColor(color);
+        return dot;
+    }
+
+    private void renderSetupDetails(int action) {
+        if (setupDetailTitle == null || setupStatusTitle == null) return;
+
+        if (action == SETUP_OFFLINE) {
+            setupDetailLabel.setText("MODO OFFLINE LOCAL");
+            setupDetailTitle.setText("Modo offline local");
+            setupDetailDescription.setText(
+                "Toque na TV as músicas já baixadas no celular, mesmo sem Internet ou servidor."
+            );
+            setSetupStatus(
+                SETUP_ACCENT_BRIGHT,
+                "Não depende do servidor",
+                "Celular e BTV precisam estar na mesma rede local"
+            );
+            return;
+        }
+
+        if (action == SETUP_SERVER) {
+            setupDetailLabel.setText("CONFIGURAÇÃO");
+            setupDetailTitle.setText("Alterar servidor");
+            setupDetailDescription.setText(
+                "Configure o endereço usado pelo Home Music TV quando o servidor mudar."
+            );
+            setSetupStatus(
+                SETUP_ACCENT_BRIGHT,
+                "Servidor atual",
+                displayServerAddress(currentAddress)
+            );
+            return;
+        }
+
+        if (action == SETUP_SHORTCUT) {
+            setupDetailLabel.setText("ACESSO RÁPIDO");
+            setupDetailTitle.setText("Adicionar à tela inicial");
+            setupDetailDescription.setText(
+                "Peça ao launcher do BTV para criar um atalho direto para o Home Music."
+            );
+            setSetupStatus(
+                SETUP_ACCENT_BRIGHT,
+                "Atalho do BTV",
+                "A disponibilidade depende do launcher instalado"
+            );
+            return;
+        }
+
+        setupDetailLabel.setText("HOME MUSIC TV");
+        setupDetailTitle.setText("Abrir Home Music");
+        setupDetailDescription.setText(
+            "Entre na sua biblioteca e continue ouvindo normalmente."
+        );
+        if (!setupServerReachabilityKnown) {
+            setSetupStatus(
+                SETUP_ACCENT_BRIGHT,
+                "Verificando servidor",
+                displayServerAddress(currentAddress)
+            );
+        } else if (setupServerReachable) {
+            setSetupStatus(
+                SETUP_SUCCESS,
+                "Servidor conectado",
+                displayServerAddress(currentAddress)
+            );
+        } else {
+            setSetupStatus(
+                SETUP_DANGER,
+                "Servidor indisponível",
+                displayServerAddress(currentAddress)
+            );
+        }
+    }
+
+    private void setSetupStatus(int color, String title, String detail) {
+        setupStatusDot.setBackground(setupStatusDotBackground(color));
+        setupStatusTitle.setText(title);
+        setupStatusDetail.setText(detail);
+    }
+
+    private void openConfiguredServer() {
+        String normalized = normalizeAddress(currentAddress);
+        if (normalized == null) {
+            showServerAddressDialog();
+            return;
+        }
+        preferences.edit().putString(KEY_URL, normalized).apply();
+        showBrowser(normalized);
+    }
+
+    private void showServerAddressDialog() {
+        final EditText address = new EditText(this);
         address.setSingleLine(true);
-        address.setText(hasText(initialAddress) ? initialAddress : DEFAULT_URL);
+        address.setText(hasText(currentAddress) ? currentAddress : DEFAULT_URL);
         address.setHint(DEFAULT_URL);
         address.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
         address.setTextSize(18);
-        card.addView(address, new LinearLayout.LayoutParams(
+        address.setSelectAllOnFocus(false);
+
+        FrameLayout wrapper = new FrameLayout(this);
+        wrapper.setPadding(dp(24), dp(4), dp(24), 0);
+        wrapper.addView(address, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             dp(58)
         ));
 
-        Button open = new Button(this);
-        open.setText("Abrir Home Music");
-        LinearLayout.LayoutParams buttonParams = new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            dp(58)
-        );
-        buttonParams.topMargin = dp(18);
-        card.addView(open, buttonParams);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("Alterar servidor")
+            .setMessage("Informe o endereço http:// ou https:// usado pelo Home Music TV.")
+            .setView(wrapper)
+            .setPositiveButton("Salvar", null)
+            .setNegativeButton("Cancelar", null)
+            .create();
 
-        Button offline = new Button(this);
-        offline.setText("Usar modo offline local");
-        LinearLayout.LayoutParams offlineParams = new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            dp(54)
-        );
-        offlineParams.topMargin = dp(10);
-        card.addView(offline, offlineParams);
-        offline.setOnClickListener(view -> showOfflinePairing());
-
-        Button pin = new Button(this);
-        pin.setText("Adicionar à tela inicial");
-        LinearLayout.LayoutParams pinParams = new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            dp(54)
-        );
-        pinParams.topMargin = dp(10);
-        card.addView(pin, pinParams);
-        pin.setOnClickListener(view -> requestHomeScreenShortcut());
-
-        TextView note = text(
-            "O modo offline local funciona sem o servidor quando o celular e o BTV estão na mesma rede e a música já foi baixada no celular.",
-            13,
-            MUTED
-        );
-        LinearLayout.LayoutParams noteParams = new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT
-        );
-        noteParams.topMargin = dp(16);
-        card.addView(note, noteParams);
-
-        String saved = preferences.getString(KEY_URL, "");
-        if (hasText(saved)) {
-            Button cancel = new Button(this);
-            cancel.setText("Cancelar");
-            LinearLayout.LayoutParams cancelParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                dp(52)
-            );
-            cancelParams.topMargin = dp(10);
-            card.addView(cancel, cancelParams);
-            cancel.setOnClickListener(view -> showBrowser(saved));
-        }
-
-        open.setOnClickListener(view -> {
-            String normalized = normalizeAddress(address.getText().toString());
-            if (normalized == null) {
+        dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
+            String nextAddress = normalizeAddress(address.getText().toString());
+            if (nextAddress == null) {
                 address.setError("Informe um endereço http:// ou https:// válido.");
                 address.requestFocus();
                 return;
             }
-            preferences.edit().putString(KEY_URL, normalized).apply();
-            showBrowser(normalized);
-        });
+            preferences.edit().putString(KEY_URL, nextAddress).apply();
+            currentAddress = nextAddress;
+            dialog.dismiss();
+            showSetup(nextAddress);
+        }));
+        dialog.show();
+        address.requestFocus();
+    }
 
-        setContentView(root);
-        open.requestFocus();
-        enterImmersiveMode();
+    private void checkSetupServerReachability(String address) {
+        final String checkedAddress = address;
+        new Thread(() -> {
+            boolean reachable = false;
+            HttpURLConnection connection = null;
+            try {
+                URL url = new URL(checkedAddress);
+                connection = (HttpURLConnection) url.openConnection();
+                connection.setConnectTimeout(2500);
+                connection.setReadTimeout(2500);
+                connection.setUseCaches(false);
+                connection.setInstanceFollowRedirects(true);
+                connection.setRequestMethod("HEAD");
+                int status = connection.getResponseCode();
+                reachable = status >= 100 && status <= 599;
+            } catch (Exception ignored) {
+                reachable = false;
+            } finally {
+                if (connection != null) connection.disconnect();
+            }
+
+            final boolean serverReachable = reachable;
+            runOnUiThread(() -> {
+                if (!showingSetup || !checkedAddress.equals(currentAddress)) return;
+                setupServerReachabilityKnown = true;
+                setupServerReachable = serverReachable;
+                if (setupFocusedAction == SETUP_OPEN) renderSetupDetails(SETUP_OPEN);
+            });
+        }, "home-music-tv-server-check").start();
+    }
+
+    private static String displayServerAddress(String address) {
+        if (!hasText(address)) return "";
+        Uri uri = Uri.parse(address);
+        if (!hasText(uri.getAuthority())) return address;
+        String path = uri.getPath();
+        if (!hasText(path) || "/".equals(path)) return uri.getAuthority();
+        return uri.getAuthority() + path;
     }
 
     private void showBrowser(String address) {
