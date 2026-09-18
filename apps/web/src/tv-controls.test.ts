@@ -4,7 +4,8 @@ import {
   stepTvVolume,
   TV_CROSSFADE_PRESETS,
   TV_SEEK_STEP_SECONDS,
-  tvCrossfadeOptions
+  tvCrossfadeOptions,
+  tvNumericShortcut
 } from './tv-controls';
 
 describe('tv controls', () => {
@@ -24,5 +25,14 @@ describe('tv controls', () => {
     expect(TV_CROSSFADE_PRESETS).toEqual([0, 10, 20, 30]);
     expect(tvCrossfadeOptions(7)).toEqual([0, 10, 20, 30]);
     expect(tvCrossfadeOptions(20)).toEqual([0, 10, 20, 30]);
+  });
+  it('mapeia as teclas numéricas do controle da TV para ações rápidas', () => {
+    expect(tvNumericShortcut('1')).toBe('open-remote');
+    expect(tvNumericShortcut('2')).toBe('toggle-play');
+    expect(tvNumericShortcut('3')).toBe('next');
+    expect(tvNumericShortcut('Unidentified', 'Digit1')).toBe('open-remote');
+    expect(tvNumericShortcut('Unidentified', 'Numpad2')).toBe('toggle-play');
+    expect(tvNumericShortcut('Unidentified', '', 51)).toBe('next');
+    expect(tvNumericShortcut('4')).toBeNull();
   });
 });
