@@ -154,6 +154,21 @@ export function TvOfflineReceiver() {
         setStatus('connected');
         setPairingPreview(null);
         setDetail('Celular conectado pela rede local.');
+        const current = playerRef.current;
+        try {
+          channelRef.current?.sendSnapshot(tvRemoteSnapshot({
+            trackId: current.current?.id ?? null,
+            title: current.current?.title ?? null,
+            artist: current.current?.artist ?? null,
+            playing: current.playing,
+            currentTime: current.currentTime,
+            duration: current.duration,
+            shuffle: current.shuffle,
+            repeatMode: current.repeatMode
+          }));
+        } catch {
+          // O próximo update do player publica o snapshot novamente.
+        }
       } else if (next === 'connecting') {
         setStatus('waiting');
         setDetail('Reconectando o celular pela rede local…');
