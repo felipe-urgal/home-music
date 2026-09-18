@@ -125,6 +125,42 @@ describe('TV remote DataChannel protocol', () => {
     tv.close();
   });
 
+  it('delivers track metadata before the media transfer without changing the media protocol', async () => {
+    const [remoteChannel, tvChannel] = pair();
+    const events: string[] = [];
+    const tv = createTvRemoteDataChannel(tvChannel as unknown as RTCDataChannel, {
+      ...timerOptions,
+      onTrackMetadata: metadata => events.push(`metadata:${metadata.title}:${metadata.artist}:${metadata.album}`),
+      onMedia: media => { events.push(`media:${media.trackId}`); },
+      onCommand: command => events.push(`command:${command.type}`),
+      createMessageId: () => 'tv_message_123456'
+    });
+    const remote = createTvRemoteDataChannel(remoteChannel as unknown as RTCDataChannel, {
+      ...timerOptions,
+      createTransferId: () => 'transfer-metadata',
+      createMessageId: () => 'remote_message_metadata'
+    });
+
+    await remote.sendTrackAndPlay({
+      trackId: 'track-1',
+      blob: new Blob(['audio'], { type: 'audio/mpeg' }),
+      metadata: {
+        trackId: 'track-1',
+        title: 'Marvin - Patches',
+        artist: 'Titãs',
+        album: 'Acústico MTV'
+      }
+    });
+
+    expect(events).toEqual([
+      'metadata:Marvin - Patches:Titãs:Acústico MTV',
+      'media:track-1',
+      'command:play-track'
+    ]);
+    remote.close();
+    tv.close();
+  });
+
   it('waits for media-ready before sending play-track', async () => {
     const [remoteChannel, tvChannel] = pair();
     const order: string[] = [];
