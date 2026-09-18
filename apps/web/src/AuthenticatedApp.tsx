@@ -253,6 +253,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
           onVolume={player.setVolume}
           onPlayTrack={player.playTrack}
           onOpenAccount={() => setScreen('account')}
+          onOpenRemote={() => { void tvRemote.openPairing(); }}
         />
         <div className="tv-remote-pairing-stack">
           <TvRemoteEntryButton onClick={() => { void tvRemote.openPairing(); }} />
