@@ -31,5 +31,6 @@ O Home Music é self-hosted. Não exponha a porta 8787 diretamente à internet. 
 - [Desenvolvimento](docs/DEVELOPMENT.md)
 - [Template de tarefa](docs/TASK_TEMPLATE.md)
 - [Guia de code review](docs/CODE_REVIEW.md)
+- [Protocolo LAN offline da TV](docs/tv-offline-lan-protocol.md)
 
 Regras para agentes estão em [AGENTS.md](AGENTS.md).
