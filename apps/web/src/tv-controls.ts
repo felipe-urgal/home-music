@@ -16,3 +16,20 @@ export function stepTvVolume(volume: number, delta: number) {
 export function tvCrossfadeOptions(_current: number) {
   return [...TV_CROSSFADE_PRESETS];
 }
+
+export type TvNumericShortcut = 'open-remote' | 'toggle-play' | 'next';
+
+export function tvNumericShortcut(key: string, code = '', keyCode = 0): TvNumericShortcut | null {
+  const numericKey = key === '1' || code === 'Digit1' || code === 'Numpad1' || keyCode === 49 || keyCode === 97
+    ? 1
+    : key === '2' || code === 'Digit2' || code === 'Numpad2' || keyCode === 50 || keyCode === 98
+      ? 2
+      : key === '3' || code === 'Digit3' || code === 'Numpad3' || keyCode === 51 || keyCode === 99
+        ? 3
+        : 0;
+
+  if (numericKey === 1) return 'open-remote';
+  if (numericKey === 2) return 'toggle-play';
+  if (numericKey === 3) return 'next';
+  return null;
+}

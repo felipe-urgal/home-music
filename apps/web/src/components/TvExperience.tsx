@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import type { Playlist, Track } from '@home-music/shared';
 import { Music2, Pause, Play } from 'lucide-react';
 import turntablePhoto from '../assets/tv-turntable.webp';
+import { tvNumericShortcut } from '../tv-controls';
 import { subscribeToTvRemoteTrackRequests } from '../tv-remote-track-request';
 import { useTvArtworkAccent } from '../useTvArtworkAccent';
 import type { LibraryNavigation } from '../useLibraryNavigation';
@@ -26,6 +27,7 @@ type TvExperienceProps = {
   onVolume: (volume: number) => void;
   onPlayTrack: (track: Track, context: Track[]) => void;
   onOpenAccount: () => void;
+  onOpenRemote: () => void;
 };
 
 type TvThemeStyle = CSSProperties & {
@@ -54,7 +56,7 @@ function trackAlbum(track: Track) {
   return visibleMetadata(track.album, 'Álbum desconhecido');
 }
 
-export function TvExperience({ tracks, current, nextTrack, playing, currentTime, duration, onTogglePlay, onNext, onPlayTrack }: TvExperienceProps) {
+export function TvExperience({ tracks, current, nextTrack, playing, currentTime, duration, onTogglePlay, onNext, onPlayTrack, onOpenRemote }: TvExperienceProps) {
   const [photoLoaded, setPhotoLoaded] = useState(false);
   const photoRef = useRef<HTMLImageElement>(null);
   const rootRef = useRef<HTMLElement>(null);
@@ -105,8 +107,25 @@ export function TvExperience({ tracks, current, nextTrack, playing, currentTime,
     if (!root) return;
 
     const onKeyDown = (event: KeyboardEvent) => {
-      const active = document.activeElement as HTMLButtonElement | null;
+      const active = document.activeElement as HTMLElement | null;
       if (!active) return;
+
+      const shortcut = tvNumericShortcut(event.key, event.code, event.keyCode);
+      const shortcutScope = root.contains(active) || active.matches('[data-tv-entry]');
+      if (shortcut && shortcutScope && !event.repeat) {
+        event.preventDefault();
+        if (shortcut === 'open-remote') {
+          onOpenRemote();
+          return;
+        }
+        if (!current) return;
+        if (shortcut === 'toggle-play') {
+          onTogglePlay();
+          return;
+        }
+        onNext();
+        return;
+      }
 
       if (event.key === 'ArrowDown' && active.matches('[data-tv-entry]')) {
         const primary = root.querySelector<HTMLButtonElement>('[data-tv-primary]:not(:disabled)');
@@ -130,7 +149,7 @@ export function TvExperience({ tracks, current, nextTrack, playing, currentTime,
       if (!active.matches('[data-tv-control]')) return;
 
       const controls = [...root.querySelectorAll<HTMLButtonElement>('[data-tv-control]:not(:disabled)')];
-      const index = controls.indexOf(active);
+      const index = controls.indexOf(active as HTMLButtonElement);
       const target = controls[index + (event.key === 'ArrowRight' ? 1 : -1)];
       if (!target) return;
 
@@ -140,7 +159,7 @@ export function TvExperience({ tracks, current, nextTrack, playing, currentTime,
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
+  }, [current, onNext, onOpenRemote, onTogglePlay]);
 
   useEffect(() => subscribeToTvRemoteTrackRequests(trackId => {
     const track = tracks.find(candidate => candidate.id === trackId);

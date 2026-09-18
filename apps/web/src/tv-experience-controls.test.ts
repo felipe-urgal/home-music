@@ -21,6 +21,19 @@ describe('tv experience controls', () => {
     );
   });
 
+  it('liga atalhos numéricos do controle às ações da tela da TV', () => {
+    const component = source('components/TvExperience.tsx');
+    const app = source('AuthenticatedApp.tsx');
+
+    expect(component).toContain("tvNumericShortcut(event.key, event.code, event.keyCode)");
+    expect(component).toContain("shortcut === 'open-remote'");
+    expect(component).toContain("shortcut === 'toggle-play'");
+    expect(component).toContain('onOpenRemote();');
+    expect(component).toContain('onTogglePlay();');
+    expect(component).toContain('onNext();');
+    expect(app).toContain('onOpenRemote={() => { void tvRemote.openPairing(); }}');
+  });
+
   it('não mantém os controles visuais separados nem o fundo preto sólido', () => {
     const component = source('components/TvExperience.tsx');
     const styles = source('tv-now-playing.css');
