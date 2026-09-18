@@ -240,7 +240,7 @@ test('navegador envia faixas, recupera o canal e controla o receiver LAN sem bac
   await page.getByLabel('Conteúdo do QR').fill(fixture.qrText);
   await page.getByRole('button', { name: 'Conectar', exact: true }).click();
   try {
-    await expect(page.getByText(/TV conectada em/)).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(/TV conectada (?:em|e pronta)/)).toBeVisible({ timeout: 20_000 });
   } catch (error) {
     const [phoneText, tvText] = await Promise.all([
       page.locator('body').innerText(),
@@ -267,7 +267,7 @@ test('navegador envia faixas, recupera o canal e controla o receiver LAN sem bac
   await expect.poll(async () => page.evaluate(() => (
     (window as typeof window & { __homeMusicTvChannels?: RTCDataChannel[] }).__homeMusicTvChannels?.length ?? 0
   )), { timeout: 10_000 }).toBeGreaterThan(channelCountBeforeResume);
-  await expect(page.getByText(/TV conectada em/)).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText(/TV conectada (?:em|e pronta)/)).toBeVisible({ timeout: 10_000 });
 
   const first = tracks[0]!;
   await page.getByRole('button', {
