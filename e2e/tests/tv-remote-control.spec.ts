@@ -91,7 +91,9 @@ test('TV mostra o now playing e celular autenticado controla a reprodução', as
   await expect(remoteEntry).toBeVisible();
   await expect(pairingLink).toHaveCount(0);
 
-  await remoteEntry.click();
+  await remoteEntry.focus();
+  await expect(remoteEntry).toBeFocused();
+  await page.keyboard.press('1');
   await expect(pairingLink).toBeVisible();
   await expect(pairingLink.locator('img')).toHaveAttribute('alt', 'QR code para controlar a TV pelo celular');
 
@@ -111,6 +113,20 @@ test('TV mostra o now playing e celular autenticado controla a reprodução', as
   await expect(tvNext).toHaveAttribute('aria-label', /^Tocar próxima faixa: /);
   await expect(page.getByRole('button', { name: 'Faixa anterior', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Próxima faixa', exact: true })).toHaveCount(0);
+
+  const numericInitialAction = await tvPlay.getAttribute('aria-label');
+  expect(['Tocar', 'Pausar']).toContain(numericInitialAction);
+  const numericToggledAction = numericInitialAction === 'Tocar' ? 'Pausar' : 'Tocar';
+
+  await page.keyboard.press('2');
+  await expect(tvPlay).toHaveAttribute('aria-label', numericToggledAction);
+  await page.keyboard.press('2');
+  await expect(tvPlay).toHaveAttribute('aria-label', numericInitialAction!);
+
+  const numericTitle = page.locator('.tv-now-playing__title');
+  const numericBeforeTitle = await numericTitle.textContent();
+  await page.keyboard.press('3');
+  await expect.poll(async () => numericTitle.textContent(), { timeout: 5_000 }).not.toBe(numericBeforeTitle);
 
   const origin = new URL(page.url()).origin;
   const phoneContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
