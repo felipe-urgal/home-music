@@ -135,10 +135,11 @@ describe('TV remote DataChannel protocol', () => {
       onCommand: command => events.push(`command:${command.type}`),
       createMessageId: () => 'tv_message_123456'
     });
+    let remoteMessageIndex = 0;
     const remote = createTvRemoteDataChannel(remoteChannel as unknown as RTCDataChannel, {
       ...timerOptions,
       createTransferId: () => 'transfer-metadata',
-      createMessageId: () => 'remote_message_metadata'
+      createMessageId: () => `remote_message_metadata_${++remoteMessageIndex}`
     });
 
     await remote.sendTrackAndPlay({
@@ -152,6 +153,7 @@ describe('TV remote DataChannel protocol', () => {
       }
     });
 
+    await vi.waitFor(() => expect(events).toHaveLength(3));
     expect(events).toEqual([
       'metadata:Marvin - Patches:Titãs:Acústico MTV',
       'media:track-1',
