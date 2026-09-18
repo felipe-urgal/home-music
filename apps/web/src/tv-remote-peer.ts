@@ -100,12 +100,31 @@ export function createTvRemotePeerController(options: PeerOptions): TvRemotePeer
     const onOpen = () => {
       if (!closed && channel === next) emitState('open');
     };
-    const onClose = () => {
-      if (!closed && channel === next) reportClosed();
+    const recoverChannel = () => {
+      if (closed || channel !== next) return;
+      detachChannel(false);
+      if (peer.connectionState === 'failed') {
+        reportError(new Error('Falha na conexão P2P com a TV.'));
+        return;
+      }
+      if (peer.connectionState === 'closed') {
+        reportClosed();
+        return;
+      }
+      emitState('connecting');
+      if (options.role === 'remote' && peer.connectionState === 'connected') {
+        queueMicrotask(() => {
+          if (closed || channel || peer.connectionState !== 'connected') return;
+          try {
+            attachChannel(peer.createDataChannel(TV_REMOTE_MEDIA_CHANNEL, { ordered: true }));
+          } catch (error) {
+            reportError(error);
+          }
+        });
+      }
     };
-    const onError = () => {
-      if (!closed && channel === next) reportError(new Error('Canal P2P com a TV ficou indisponível.'));
-    };
+    const onClose = recoverChannel;
+    const onError = recoverChannel;
 
     next.addEventListener('open', onOpen);
     next.addEventListener('close', onClose);
@@ -144,6 +163,14 @@ export function createTvRemotePeerController(options: PeerOptions): TvRemotePeer
       return;
     }
     if (peer.connectionState === 'connected') {
+      if (!channel && options.role === 'remote') {
+        try {
+          attachChannel(peer.createDataChannel(TV_REMOTE_MEDIA_CHANNEL, { ordered: true }));
+        } catch (error) {
+          reportError(error);
+          return;
+        }
+      }
       emitState(channel?.readyState === 'open' ? 'open' : 'connecting');
     }
   }
