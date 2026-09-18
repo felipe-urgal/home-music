@@ -237,7 +237,17 @@ export function OfflineApp({ offline, onExit }: OfflineAppProps) {
 
     if (tvChannelRef.current !== endpoint) return;
     try {
-      await endpoint.sendTrackAndPlay({ trackId: track.id, blob, mimeType });
+      await endpoint.sendTrackAndPlay({
+        trackId: track.id,
+        blob,
+        mimeType,
+        metadata: {
+          trackId: track.id,
+          title: track.title,
+          artist: track.albumArtist || track.artist,
+          album: track.album
+        }
+      });
       if (tvChannelRef.current !== endpoint) return;
       setTvState('connected');
       setTvMessage(`“${track.title}” enviada para a TV.`);
