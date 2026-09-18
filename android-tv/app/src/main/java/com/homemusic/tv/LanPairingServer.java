@@ -207,6 +207,21 @@ final class LanPairingServer implements AutoCloseable {
                     .toString());
             }
 
+            if ("POST".equals(request.method) && "/receiver/regenerate".equals(path)) {
+                if (!loopback) return error(403, "Regeneração do receiver é somente loopback.");
+                try {
+                    PairingInfo info = regeneratePairing();
+                    return Response.json(200, new JSONObject()
+                        .put("host", info.host)
+                        .put("port", info.port)
+                        .put("qrText", info.qrText)
+                        .put("expiresAt", info.expiresAt)
+                        .toString());
+                } catch (IOException error) {
+                    return error(500, "Não foi possível gerar um novo pareamento LAN.");
+                }
+            }
+
             if ("GET".equals(request.method) && ("/receiver".equals(path) || path.startsWith("/receiver/"))) {
                 if (!loopback) return error(403, "Receiver embarcado é somente loopback.");
                 return receiverAsset(path);
