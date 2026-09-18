@@ -149,7 +149,7 @@ export function TvExperience({ tracks, current, nextTrack, playing, currentTime,
       if (!active.matches('[data-tv-control]')) return;
 
       const controls = [...root.querySelectorAll<HTMLButtonElement>('[data-tv-control]:not(:disabled)')];
-      const index = controls.indexOf(active);
+      const index = controls.indexOf(active as HTMLButtonElement);
       const target = controls[index + (event.key === 'ArrowRight' ? 1 : -1)];
       if (!target) return;
 
