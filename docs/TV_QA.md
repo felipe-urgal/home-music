@@ -21,7 +21,7 @@ Antes de testar:
 - deixar TV e celular na mesma LAN, sem VPN;
 - ter pelo menos duas faixas baixadas no celular;
 - confirmar que o Home Music abre normalmente com backend disponível;
-- confirmar que o PWA já foi instalada/carregada antes do teste offline.
+- confirmar que a PWA já foi instalada/carregada antes do teste offline.
 
 Não registrar QR, segredo, token, cookie ou conteúdo de credenciais em screenshots ou comentários.
 
