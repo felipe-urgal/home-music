@@ -2,12 +2,11 @@ import { useState, type CSSProperties } from 'react';
 import type { Playlist, RepeatMode, Track } from '@home-music/shared';
 import {
   CheckCircle2,
-  ChevronDown,
   Download,
   LoaderCircle,
+  MoreHorizontal,
   Pause,
   Play,
-  Plus,
   Repeat1,
   Repeat2,
   Shuffle,
@@ -144,9 +143,7 @@ export function DesktopNowPlayingScreen({
                 aria-expanded={playlistOpen}
                 onClick={openPlaylistPicker}
               >
-                <Plus aria-hidden="true" />
-                <span>Adicionar à playlist</span>
-                <ChevronDown className="desktop-now-playing-screen__chevron" aria-hidden="true" />
+                <MoreHorizontal aria-hidden="true" />
               </button>
 
               {playlistOpen && (
