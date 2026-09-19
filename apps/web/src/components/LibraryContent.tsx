@@ -1,4 +1,4 @@
-import { ChevronRight, ListMusic, Play, Plus, Sparkles } from 'lucide-react';
+import { ListMusic, Play, Plus, Sparkles } from 'lucide-react';
 import type { Playlist, Track } from '@home-music/shared';
 import { LIBRARY_PAGE_SIZE, type LibraryNavigation } from '../useLibraryNavigation';
 import { Artwork } from './Artwork';
@@ -114,7 +114,7 @@ export function LibraryContent({
           <div className="section-heading">
             <span>Playlists</span>
             <div className="section-heading__actions">
-              <button className="text-action" onClick={() => run(onCreatePlaylist())}><Plus />Nova</button>
+              <button className="text-action" onClick={() => run(onCreatePlaylist())}><Plus />Nova playlist</button>
               <button className="text-action" onClick={onCreateSmartPlaylist}><Sparkles />Inteligente</button>
             </div>
           </div>
@@ -130,7 +130,7 @@ export function LibraryContent({
                       {playlist.source === 'rekordbox' ? ' · Importada' : playlist.source === 'smart' ? ' · Inteligente' : ''}
                     </small>
                   </span>
-                  <ChevronRight />
+                  <Play aria-hidden="true" />
                 </button>
               ))}
             </div>
