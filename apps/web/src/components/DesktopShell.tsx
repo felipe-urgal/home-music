@@ -243,7 +243,7 @@ export function DesktopShell({
       data-offline={offlineMode ? 'true' : 'false'}
       style={layoutStyle}
     >
-      <header className={`desktop-sidebar desktop-topbar ${sidebarUtilities ? 'has-utilities' : ''}`} data-testid="desktop-topbar">
+      <header className={`desktop-sidebar desktop-topbar ${sidebarUtilities ? 'has-utilities' : ''}`} data-testid="desktop-sidebar">
         <button
           className="desktop-sidebar__collapse"
           type="button"
