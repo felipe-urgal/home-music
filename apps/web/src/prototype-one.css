@@ -25,6 +25,8 @@
 }
 
 #root:has(.desktop-layout[data-offline="false"]) .app-shell {
+  --prototype-accent: #f1bc79;
+  --prototype-text: #f6eee6;
   background:
     radial-gradient(circle at 10% 45%, rgba(178, 72, 36, 0.16), transparent 34rem),
     radial-gradient(circle at 87% 14%, rgba(30, 65, 118, 0.23), transparent 40rem),
@@ -868,7 +870,7 @@
     backdrop-filter: blur(22px);
   }
 
-  #root .app-shell:has(.desktop-layout[data-offline="false"]) > .mobile-library-brand-bar__brand {
+  #root .app-shell:has(.desktop-layout[data-offline="false"]) > .mobile-library-brand-bar .mobile-library-brand-bar__brand {
     min-width: 0;
     min-height: 42px;
     padding: 0;
@@ -880,7 +882,7 @@
     color: #f4ece5;
   }
 
-  #root .app-shell:has(.desktop-layout[data-offline="false"]) > .mobile-library-brand-bar__brand > span {
+  #root .app-shell:has(.desktop-layout[data-offline="false"]) > .mobile-library-brand-bar .mobile-library-brand-bar__brand > span {
     width: 28px;
     height: 28px;
     display: grid;
@@ -888,23 +890,23 @@
     color: var(--prototype-accent);
   }
 
-  #root .app-shell:has(.desktop-layout[data-offline="false"]) > .mobile-library-brand-bar__brand svg {
+  #root .app-shell:has(.desktop-layout[data-offline="false"]) > .mobile-library-brand-bar .mobile-library-brand-bar__brand svg {
     width: 19px;
     height: 19px;
   }
 
-  #root .app-shell:has(.desktop-layout[data-offline="false"]) > .mobile-library-brand-bar__brand strong {
+  #root .app-shell:has(.desktop-layout[data-offline="false"]) > .mobile-library-brand-bar .mobile-library-brand-bar__brand strong {
     font-size: 13px;
     font-weight: 680;
   }
 
-  #root .app-shell:has(.desktop-layout[data-offline="false"]) > .mobile-library-brand-bar__actions {
+  #root .app-shell:has(.desktop-layout[data-offline="false"]) > .mobile-library-brand-bar .mobile-library-brand-bar__actions {
     display: flex;
     align-items: center;
     gap: 6px;
   }
 
-  #root .app-shell:has(.desktop-layout[data-offline="false"]) > .mobile-library-brand-bar__actions > button {
+  #root .app-shell:has(.desktop-layout[data-offline="false"]) > .mobile-library-brand-bar .mobile-library-brand-bar__actions > button {
     width: 36px;
     height: 36px;
     padding: 0;
@@ -916,23 +918,23 @@
     background: transparent;
   }
 
-  #root .app-shell:has(.desktop-layout[data-offline="false"]) > .mobile-library-brand-bar__actions > button > svg {
+  #root .app-shell:has(.desktop-layout[data-offline="false"]) > .mobile-library-brand-bar .mobile-library-brand-bar__actions > button > svg {
     width: 18px;
     height: 18px;
   }
 
-  #root .app-shell:has(.desktop-layout[data-offline="false"]) > .mobile-library-brand-bar__account {
+  #root .app-shell:has(.desktop-layout[data-offline="false"]) > .mobile-library-brand-bar .mobile-library-brand-bar__account {
     position: relative;
     border: 1px solid rgba(241,188,121,.28) !important;
     color: transparent !important;
     background: linear-gradient(145deg, #342b53, #161a2e) !important;
   }
 
-  #root .app-shell:has(.desktop-layout[data-offline="false"]) > .mobile-library-brand-bar__account svg {
+  #root .app-shell:has(.desktop-layout[data-offline="false"]) > .mobile-library-brand-bar .mobile-library-brand-bar__account svg {
     display: none;
   }
 
-  #root .app-shell:has(.desktop-layout[data-offline="false"]) > .mobile-library-brand-bar__account span {
+  #root .app-shell:has(.desktop-layout[data-offline="false"]) > .mobile-library-brand-bar .mobile-library-brand-bar__account span {
     color: #f5c781;
     font-size: 11px;
     font-weight: 750;
