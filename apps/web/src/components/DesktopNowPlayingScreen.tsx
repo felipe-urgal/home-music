@@ -95,6 +95,7 @@ export function DesktopNowPlayingScreen({
   const [actionsOpen, setActionsOpen] = useState(false);
   const crossfadeVisual = useCrossfadeVisualState();
   const progress = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
+  const playedWaveBars = Math.round((progress / 100) * WAVEFORM_HEIGHTS.length);
   const repeatLabel = repeatMode === 'one'
     ? 'Repetir uma'
     : repeatMode === 'all'
@@ -223,7 +224,7 @@ export function DesktopNowPlayingScreen({
             {WAVEFORM_HEIGHTS.map((height, index) => (
               <span
                 key={index}
-                className={index < 13 ? 'is-played' : ''}
+                className={index < playedWaveBars ? 'is-played' : ''}
                 style={{ '--wave-height': `${height}%` } as WaveStyle}
               />
             ))}
