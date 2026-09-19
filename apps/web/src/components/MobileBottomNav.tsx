@@ -36,7 +36,7 @@ export function MobileBottomNav({
   }
 
   function focusLibrarySearch() {
-    onOpenLibrary();
+    openLibraryRoute('/library', onOpenFolders);
     window.requestAnimationFrame(() => {
       document.querySelector<HTMLInputElement>('.search-box--library input')?.focus();
     });
