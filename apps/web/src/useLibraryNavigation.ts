@@ -130,32 +130,36 @@ export function useLibraryNavigation(
       || formatFilter !== 'all'
       || coverFilter !== 'all';
 
-    const folders = !hasFilter
-      ? folderView.folders.map(folder => ({
+    let folders;
+
+    if (!hasFilter) {
+      folders = folderView.folders.map(folder => ({
+        ...folder,
+        matchingTrackCount: folder.tracks.length,
+        artwork: folder.artwork
+      }));
+    } else {
+      const matchingTrackIds = new Set(folderContextTracks.map(track => track.id));
+      folders = folderView.folders.flatMap(folder => {
+        let matchingTrackCount = 0;
+        let firstMatchingTrack: Track | undefined;
+        let firstMatchingCover: Track | undefined;
+
+        for (const track of folder.tracks) {
+          if (!matchingTrackIds.has(track.id)) continue;
+          matchingTrackCount += 1;
+          firstMatchingTrack ??= track;
+          if (!firstMatchingCover && track.hasCover) firstMatchingCover = track;
+        }
+
+        if (!matchingTrackCount) return [];
+        return [{
           ...folder,
-          matchingTrackCount: folder.tracks.length,
-          artwork: folder.artwork
-        }))
-      : folderView.folders.flatMap(folder => {
-          const matchingTrackIds = new Set(folderContextTracks.map(track => track.id));
-          let matchingTrackCount = 0;
-          let firstMatchingTrack: Track | undefined;
-          let firstMatchingCover: Track | undefined;
-
-          for (const track of folder.tracks) {
-            if (!matchingTrackIds.has(track.id)) continue;
-            matchingTrackCount += 1;
-            firstMatchingTrack ??= track;
-            if (!firstMatchingCover && track.hasCover) firstMatchingCover = track;
-          }
-
-          if (!matchingTrackCount) return [];
-          return [{
-            ...folder,
-            matchingTrackCount,
-            artwork: firstMatchingCover ?? firstMatchingTrack ?? folder.artwork
-          }];
-        });
+          matchingTrackCount,
+          artwork: firstMatchingCover ?? firstMatchingTrack ?? folder.artwork
+        }];
+      });
+    }
 
     return [...folders].sort((left, right) => (
       sort === 'title-desc'
