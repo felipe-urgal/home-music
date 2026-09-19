@@ -57,14 +57,16 @@ describe('accessibility contracts', () => {
     expect(desktopShell).toMatch(/Mover para baixo/);
   });
 
-  it('mantém foco contido e restaurado nos overlays do player mobile', () => {
+  it('mantém navegação mobile identificável e foco contido nos overlays do player', () => {
     const navigation = source('components/MobileBottomNav.tsx');
     const queue = source('components/PlayerQueuePanel.tsx');
 
-    expect(navigation).toMatch(/event\.key === 'Escape'/);
-    expect(navigation).toMatch(/event\.key !== 'Tab'/);
-    expect(navigation).toMatch(/triggerRef\.current\?\.focus/);
-    expect(navigation).toMatch(/closeButtonRef\.current\?\.focus/);
+    expect(navigation).toMatch(/aria-label="Navegação principal"/);
+    expect(navigation).toMatch(/aria-current=\{active === 'player' \? 'page'/);
+    expect(navigation).toMatch(/aria-current=\{foldersActive \? 'page'/);
+    expect(navigation).toMatch(/aria-current=\{playlistsActive \? 'page'/);
+    expect(navigation).toMatch(/aria-label="Buscar na biblioteca"/);
+    expect(navigation).toMatch(/aria-label=\{username \? `Minha conta/);
 
     expect(queue).toMatch(/role="separator"/);
     expect(queue).toMatch(/aria-modal=\{showQueue \? true/);
