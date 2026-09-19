@@ -130,36 +130,36 @@ export function useLibraryNavigation(
       || formatFilter !== 'all'
       || coverFilter !== 'all';
 
-    let folders;
-
-    if (!hasFilter) {
-      folders = folderView.folders.map(folder => ({
-        ...folder,
-        matchingTrackCount: folder.tracks.length,
-        artwork: folder.artwork
-      }));
-    } else {
-      const matchingTrackIds = new Set(folderContextTracks.map(track => track.id));
-      folders = folderView.folders.flatMap(folder => {
-        let matchingTrackCount = 0;
-        let firstMatchingTrack: Track | undefined;
-        let firstMatchingCover: Track | undefined;
-
-        for (const track of folder.tracks) {
-          if (!matchingTrackIds.has(track.id)) continue;
-          matchingTrackCount += 1;
-          firstMatchingTrack ??= track;
-          if (!firstMatchingCover && track.hasCover) firstMatchingCover = track;
-        }
-
-        if (!matchingTrackCount) return [];
+    const matchingTrackIds = hasFilter
+      ? new Set(folderContextTracks.map(track => track.id))
+      : null;
+    const folders = folderView.folders.flatMap(folder => {
+      if (!matchingTrackIds) {
         return [{
           ...folder,
-          matchingTrackCount,
-          artwork: firstMatchingCover ?? firstMatchingTrack ?? folder.artwork
+          matchingTrackCount: folder.tracks.length,
+          artwork: folder.artwork
         }];
-      });
-    }
+      }
+
+      let matchingTrackCount = 0;
+      let firstMatchingTrack: Track | undefined;
+      let firstMatchingCover: Track | undefined;
+
+      for (const track of folder.tracks) {
+        if (!matchingTrackIds.has(track.id)) continue;
+        matchingTrackCount += 1;
+        firstMatchingTrack ??= track;
+        if (!firstMatchingCover && track.hasCover) firstMatchingCover = track;
+      }
+
+      if (!matchingTrackCount) return [];
+      return [{
+        ...folder,
+        matchingTrackCount,
+        artwork: firstMatchingCover ?? firstMatchingTrack ?? folder.artwork
+      }];
+    });
 
     return [...folders].sort((left, right) => (
       sort === 'title-desc'
