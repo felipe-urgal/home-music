@@ -1,5 +1,3 @@
-import { UserRound } from 'lucide-react';
-
 type DesktopPlayerSidebarToolsProps = {
   username: string;
   accountActive?: boolean;
@@ -12,6 +10,7 @@ export function DesktopPlayerSidebarTools({
   onOpenAccount
 }: DesktopPlayerSidebarToolsProps) {
   const accountLabel = `Minha conta · ${username}`;
+  const accountInitial = username.trim().charAt(0).toUpperCase() || 'U';
 
   return (
     <div className="desktop-player-sidebar-tools">
@@ -23,8 +22,8 @@ export function DesktopPlayerSidebarTools({
         title={accountLabel}
         onClick={onOpenAccount}
       >
-        <UserRound aria-hidden="true" />
-        <span><strong>Minha conta</strong><small>{username}</small></span>
+        <span className="desktop-player-sidebar-tools__initial" aria-hidden="true">{accountInitial}</span>
+        <span className="desktop-player-sidebar-tools__copy"><strong>Minha conta</strong><small>{username}</small></span>
       </button>
     </div>
   );
