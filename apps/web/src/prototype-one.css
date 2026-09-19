@@ -1231,9 +1231,131 @@
 }
 
 @media (min-width: 700px) and (max-width: 1023px) {
-  #root .app-shell:has(.desktop-layout[data-offline="false"]) > .mobile-bottom-nav,
+  #root .desktop-layout[data-offline="false"][data-desktop-active="library"] .phone-surface--library {
+    padding-top: 84px;
+    padding-bottom: 108px;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-desktop-active="player"] .phone-surface {
+    padding-bottom: 108px;
+  }
+
   #root .app-shell:has(.desktop-layout[data-offline="false"]) > .mobile-library-brand-bar {
+    position: fixed;
+    z-index: 18;
+    top: 12px;
+    left: 50%;
+    width: min(calc(100% - 40px), 860px);
+    min-height: 54px;
+    padding: 6px 14px;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    border: 1px solid rgba(255, 226, 195, .09);
+    border-radius: 14px;
+    background: rgba(8, 12, 20, .94);
+    box-shadow: 0 14px 34px rgba(0,0,0,.24);
+    backdrop-filter: blur(22px);
+  }
+
+  #root .app-shell:has(.desktop-layout[data-offline="false"]) > .mobile-library-brand-bar .mobile-library-brand-bar__brand {
+    min-height: 40px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: 0;
+    background: transparent;
+    color: #f4ece5;
+  }
+
+  #root .app-shell:has(.desktop-layout[data-offline="false"]) > .mobile-library-brand-bar .mobile-library-brand-bar__brand > span {
+    width: 28px;
+    height: 28px;
+    display: grid;
+    place-items: center;
+    color: var(--prototype-accent);
+  }
+
+  #root .app-shell:has(.desktop-layout[data-offline="false"]) > .mobile-library-brand-bar .mobile-library-brand-bar__brand svg {
+    width: 19px;
+    height: 19px;
+  }
+
+  #root .app-shell:has(.desktop-layout[data-offline="false"]) > .mobile-library-brand-bar .mobile-library-brand-bar__brand strong {
+    font-size: 13px;
+    font-weight: 680;
+  }
+
+  #root .app-shell:has(.desktop-layout[data-offline="false"]) > .mobile-library-brand-bar .mobile-library-brand-bar__actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  #root .app-shell:has(.desktop-layout[data-offline="false"]) > .mobile-library-brand-bar .mobile-library-brand-bar__actions > button {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    border: 0;
+    border-radius: 50%;
+    color: #bbb2ad;
+    background: transparent;
+  }
+
+  #root .app-shell:has(.desktop-layout[data-offline="false"]) > .mobile-library-brand-bar .mobile-library-brand-bar__account {
+    border: 1px solid rgba(241,188,121,.28) !important;
+    color: #f5c781 !important;
+    background: linear-gradient(145deg, #342b53, #161a2e) !important;
+  }
+
+  #root .app-shell:has(.desktop-layout[data-offline="false"]) > .mobile-library-brand-bar .mobile-library-brand-bar__account svg {
     display: none;
+  }
+
+  #root .app-shell:has(.desktop-layout[data-offline="false"]) > .mobile-bottom-nav {
+    position: fixed;
+    z-index: 17;
+    left: 50%;
+    bottom: 12px;
+    width: min(calc(100% - 40px), 720px);
+    min-height: 66px;
+    padding: 6px 12px;
+    transform: translateX(-50%);
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    border: 1px solid rgba(255, 226, 195, .09);
+    border-radius: 15px;
+    background: rgba(8, 12, 20, .95);
+    box-shadow: 0 16px 42px rgba(0,0,0,.34);
+    backdrop-filter: blur(22px);
+  }
+
+  #root .app-shell:has(.desktop-layout[data-offline="false"]) > .mobile-bottom-nav button {
+    min-height: 52px;
+    display: grid;
+    place-items: center;
+    align-content: center;
+    gap: 4px;
+    border: 0;
+    border-radius: 10px;
+    color: #837c7b;
+    background: transparent;
+    font-size: 10px;
+  }
+
+  #root .app-shell:has(.desktop-layout[data-offline="false"]) > .mobile-bottom-nav button svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  #root .app-shell:has(.desktop-layout[data-offline="false"]) > .mobile-bottom-nav button.is-active {
+    color: var(--prototype-accent);
+    background: rgba(241,188,121,.06);
   }
 }
 
