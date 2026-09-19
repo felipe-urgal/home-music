@@ -10,6 +10,7 @@ import {
 } from 'react';
 import type { Track } from '@home-music/shared';
 import {
+  AudioLines,
   ChevronDown,
   ChevronUp,
   Folder,
@@ -256,7 +257,7 @@ export function DesktopShell({
         </button>
 
         <div className="desktop-brand">
-          <span className="desktop-brand__icon"><Music2 /></span>
+          <span className="desktop-brand__icon"><AudioLines /></span>
           <div>
             <strong>Home Music</strong>
             <small>{offlineMode ? 'Modo offline' : 'Sua biblioteca'}</small>
@@ -264,7 +265,7 @@ export function DesktopShell({
         </div>
 
         <nav className="desktop-nav" aria-label="Navegação principal">
-          <NavigationButton active={active === 'player'} label="Tocando agora" icon={<Radio />} onClick={onOpenPlayer} />
+          <NavigationButton active={active === 'player'} label="Tocando Agora" icon={<Radio />} onClick={onOpenPlayer} />
 
           {offlineMode || !onOpenLibraryTab ? (
             <NavigationButton active={active === 'library'} label={offlineMode ? 'Downloads' : 'Biblioteca'} icon={<ListMusic />} onClick={onOpenLibrary} />
