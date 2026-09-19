@@ -84,7 +84,6 @@ export function LibraryScreen({
     folderPath,
     folderView,
     folderContextTracks,
-    visibleFolders,
     currentViewDefinition,
     libraryTracks,
     selectTab,
