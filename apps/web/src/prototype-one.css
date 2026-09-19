@@ -1690,13 +1690,18 @@
   /* Desktop — Tocando Agora ----------------------------------------------- */
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-surface {
     padding: 0 34px !important;
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen {
     position: relative;
     width: 100%;
+    height: auto;
     min-height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     overflow: hidden;
     border: 0;
     border-radius: 0;
