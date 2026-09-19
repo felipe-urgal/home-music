@@ -3080,7 +3080,7 @@
     height: 17px;
   }
 
-  #root .app-shell:has(.desktop-layout[data-offline="false"]) > .mobile-now-playing-footer__copy {
+  #root .app-shell:has(.desktop-layout[data-offline="false"]) > .mobile-now-playing-footer .mobile-now-playing-footer__copy {
     color: #d9cec7;
     font-size: 9px;
     line-height: 1.25;
