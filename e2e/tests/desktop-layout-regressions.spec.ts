@@ -18,7 +18,7 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   const navigation = topbar.getByRole('navigation', { name: 'Navegação principal' });
 
   await navigation.getByRole('button', { name: 'Pastas', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Suas Pastas' })).toBeVisible();
+  await expect(page.getByText('Suas Pastas', { exact: true })).toBeVisible();
   await expect(playerBar).toBeHidden();
 
   const topbarBox = await topbar.boundingBox();
