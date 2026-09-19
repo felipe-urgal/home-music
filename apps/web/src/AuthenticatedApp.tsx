@@ -115,6 +115,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
 
   function openLibraryTab(tab: LibraryTab) {
     navigation.selectTab(tab);
+    setScreen('library');
   }
 
   function openAdministration(returnScreen: AdministrationReturnScreen) {
