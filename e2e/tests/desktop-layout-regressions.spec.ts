@@ -16,6 +16,23 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   const topbar = page.getByTestId('desktop-sidebar');
   const playerBar = page.getByTestId('desktop-player-bar');
   const navigation = topbar.getByRole('navigation', { name: 'Navegação principal' });
+  const nowPlaying = page.locator('.desktop-now-playing-screen');
+  const nowPlayingArt = page.locator('.desktop-now-playing-screen__art');
+  const nowPlayingContent = page.locator('.desktop-now-playing-screen__content');
+
+  await expect(nowPlayingArt).toBeVisible();
+  await expect(nowPlayingContent).toBeVisible();
+
+  const nowPlayingBox = await nowPlaying.boundingBox();
+  const artworkBox = await nowPlayingArt.boundingBox();
+  const contentBox = await nowPlayingContent.boundingBox();
+  expect(nowPlayingBox).not.toBeNull();
+  expect(artworkBox).not.toBeNull();
+  expect(contentBox).not.toBeNull();
+  expect(artworkBox!.y).toBeGreaterThanOrEqual(nowPlayingBox!.y - 1);
+  expect(contentBox!.y).toBeGreaterThanOrEqual(nowPlayingBox!.y - 1);
+  expect(artworkBox!.y + artworkBox!.height).toBeLessThanOrEqual(nowPlayingBox!.y + nowPlayingBox!.height + 1);
+  expect(contentBox!.y + contentBox!.height).toBeLessThanOrEqual(nowPlayingBox!.y + nowPlayingBox!.height + 1);
 
   await navigation.getByRole('button', { name: 'Pastas', exact: true }).click();
   await expect(page.getByText('Suas Pastas', { exact: true })).toBeVisible();
