@@ -65,6 +65,7 @@ import './immersive-now-playing.css';
 import './immersive-now-playing-polish.css';
 import './folder-library-visual.css';
 import './now-playing-crossfade.css';
+import './prototype-one.css';
 import './tv.css';
 import './tv-login.css';
 import './tv-v2.css';
