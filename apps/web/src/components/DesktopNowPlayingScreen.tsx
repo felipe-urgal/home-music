@@ -1,10 +1,12 @@
 import { useState, type CSSProperties } from 'react';
 import type { Playlist, RepeatMode, Track } from '@home-music/shared';
 import {
+  AudioLines,
   CheckCircle2,
   Download,
+  Heart,
   LoaderCircle,
-  MoreHorizontal,
+  MoreVertical,
   Pause,
   Play,
   Repeat1,
@@ -28,6 +30,15 @@ function formatTime(value: number) {
 type ImmersiveStyle = CSSProperties & {
   '--now-playing-artwork'?: string;
 };
+
+type WaveStyle = CSSProperties & {
+  '--wave-height'?: string;
+};
+
+const WAVEFORM_HEIGHTS = [
+  14, 22, 34, 48, 61, 72, 82, 68, 51, 38, 57, 76, 92, 69, 45, 31, 54, 73, 87, 65,
+  50, 34, 24, 18, 30, 42, 55, 46, 36, 27, 21, 16, 12, 9, 7, 5, 4, 3
+];
 
 type DesktopNowPlayingScreenProps = {
   current: Track;
@@ -81,8 +92,10 @@ export function DesktopNowPlayingScreen({
   onAddToPlaylist
 }: DesktopNowPlayingScreenProps) {
   const [playlistOpen, setPlaylistOpen] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(false);
   const crossfadeVisual = useCrossfadeVisualState();
   const progress = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
+  const playedWaveBars = Math.round((progress / 100) * WAVEFORM_HEIGHTS.length);
   const repeatLabel = repeatMode === 'one'
     ? 'Repetir uma'
     : repeatMode === 'all'
@@ -103,10 +116,6 @@ export function DesktopNowPlayingScreen({
     ? { '--now-playing-artwork': `url("${coverUrl}")` }
     : undefined;
 
-  function openPlaylistPicker() {
-    setPlaylistOpen(value => !value);
-  }
-
   return (
     <section
       className="desktop-now-playing-screen"
@@ -126,63 +135,99 @@ export function DesktopNowPlayingScreen({
         </div>
 
         <div className="desktop-now-playing-screen__content">
-          <div className="desktop-now-playing-screen__heading">
-            <NowPlayingCrossfadeIdentity
-              current={current}
-              crossfade={crossfadeVisual}
-              titleId="desktop-now-playing-title"
-            />
-          </div>
-
-          <div className="desktop-now-playing-screen__actions" aria-label="Ações da faixa">
-            <div className="desktop-now-playing-screen__playlist">
-              <button
-                className="desktop-now-playing-screen__add"
-                type="button"
-                aria-haspopup="menu"
-                aria-expanded={playlistOpen}
-                onClick={openPlaylistPicker}
-              >
-                <MoreHorizontal aria-hidden="true" />
-              </button>
-
-              {playlistOpen && (
-                <div className="desktop-now-playing-screen__playlist-menu" role="menu" aria-label="Adicionar à playlist">
-                  <strong>Adicionar à playlist</strong>
-                  {playlists.length ? playlists.map(playlist => (
-                    <button
-                      key={playlist.id}
-                      type="button"
-                      role="menuitem"
-                      onClick={() => {
-                        onAddToPlaylist(playlist);
-                        setPlaylistOpen(false);
-                      }}
-                    >
-                      {playlist.name}
-                    </button>
-                  )) : <span>Nenhuma playlist criada ainda.</span>}
-                </div>
-              )}
+          <div className="desktop-now-playing-screen__identity-row">
+            <div className="desktop-now-playing-screen__heading">
+              <NowPlayingCrossfadeIdentity
+                current={current}
+                crossfade={crossfadeVisual}
+                titleId="desktop-now-playing-title"
+              />
             </div>
 
-            {onToggleDownload && (
-              <button
-                className={`desktop-now-playing-screen__action-icon ${isDownloaded || availableViaCollection ? 'is-active' : ''}`}
-                type="button"
-                disabled={downloading}
-                aria-label={offlineActionLabel}
-                aria-pressed={isDownloaded}
-                title={offlineActionLabel}
-                onClick={onToggleDownload}
-              >
-                {downloading
-                  ? <LoaderCircle className="desktop-now-playing-screen__spinner" aria-hidden="true" />
-                  : isDownloaded
-                    ? <CheckCircle2 aria-hidden="true" />
-                    : <Download aria-hidden="true" />}
-              </button>
-            )}
+            <div className="desktop-now-playing-screen__actions" aria-label="Ações da faixa">
+              <div className="desktop-now-playing-screen__playlist">
+                <button
+                  className={`desktop-now-playing-screen__favorite ${playlistOpen ? 'is-active' : ''}`}
+                  type="button"
+                  aria-label="Adicionar à playlist"
+                  aria-haspopup="menu"
+                  aria-expanded={playlistOpen}
+                  onClick={() => {
+                    setPlaylistOpen(value => !value);
+                    setActionsOpen(false);
+                  }}
+                >
+                  <Heart aria-hidden="true" />
+                </button>
+
+                {playlistOpen && (
+                  <div className="desktop-now-playing-screen__playlist-menu" role="menu" aria-label="Adicionar à playlist">
+                    <strong>Adicionar à playlist</strong>
+                    {playlists.length ? playlists.map(playlist => (
+                      <button
+                        key={playlist.id}
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          onAddToPlaylist(playlist);
+                          setPlaylistOpen(false);
+                        }}
+                      >
+                        {playlist.name}
+                      </button>
+                    )) : <span>Nenhuma playlist criada ainda.</span>}
+                  </div>
+                )}
+              </div>
+
+              <div className="desktop-now-playing-screen__more-wrap">
+                <button
+                  className="desktop-now-playing-screen__more"
+                  type="button"
+                  aria-label="Mais opções da faixa"
+                  aria-haspopup="menu"
+                  aria-expanded={actionsOpen}
+                  onClick={() => {
+                    setActionsOpen(value => !value);
+                    setPlaylistOpen(false);
+                  }}
+                >
+                  <MoreVertical aria-hidden="true" />
+                </button>
+                {actionsOpen && (
+                  <div className="desktop-now-playing-screen__more-menu" role="menu" aria-label="Mais opções da faixa">
+                    {onToggleDownload && (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        disabled={downloading}
+                        onClick={() => {
+                          onToggleDownload();
+                          setActionsOpen(false);
+                        }}
+                      >
+                        {downloading
+                          ? <LoaderCircle className="desktop-now-playing-screen__spinner" aria-hidden="true" />
+                          : isDownloaded
+                            ? <CheckCircle2 aria-hidden="true" />
+                            : <Download aria-hidden="true" />}
+                        <span>{offlineActionLabel}</span>
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="desktop-now-playing-screen__waveform" aria-hidden="true">
+            {WAVEFORM_HEIGHTS.map((height, index) => (
+              <span
+                key={index}
+                className={index < playedWaveBars ? 'is-played' : ''}
+                style={{ '--wave-height': `${height}%` } as WaveStyle}
+              />
+            ))}
           </div>
 
           {autoplayBlocked && (
@@ -239,6 +284,15 @@ export function DesktopNowPlayingScreen({
 
           <LyricsPanel track={current} currentTime={currentTime} offlineMode={false} />
         </div>
+      </div>
+
+      <div className="desktop-now-playing-screen__quote" aria-hidden="true">
+        <span>Boa música</span>
+        <strong>torna tudo mais leve.</strong>
+      </div>
+      <div className="desktop-now-playing-screen__signature" aria-hidden="true">
+        <span>Qualidade de vida em forma de som.</span>
+        <AudioLines />
       </div>
     </section>
   );

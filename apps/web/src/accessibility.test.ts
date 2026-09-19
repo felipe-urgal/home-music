@@ -61,8 +61,9 @@ describe('accessibility contracts', () => {
     const navigation = source('components/MobileBottomNav.tsx');
     const queue = source('components/PlayerQueuePanel.tsx');
 
+    expect(navigation).toMatch(/mobile-now-playing-footer/);
+    expect(navigation).toMatch(/aria-label="Abrir biblioteca"/);
     expect(navigation).toMatch(/aria-label="Navegação principal"/);
-    expect(navigation).toMatch(/aria-current=\{active === 'player' \? 'page'/);
     expect(navigation).toMatch(/aria-current=\{foldersActive \? 'page'/);
     expect(navigation).toMatch(/aria-current=\{playlistsActive \? 'page'/);
     expect(navigation).toMatch(/aria-label="Buscar na biblioteca"/);

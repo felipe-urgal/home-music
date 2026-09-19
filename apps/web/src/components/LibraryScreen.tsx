@@ -270,6 +270,7 @@ export function LibraryScreen({
       <LibraryContent
         navigation={navigation}
         playlists={playlists}
+        tracks={tracks}
         current={current}
         playing={playing}
         offlineTrackProps={offlineTrackProps}

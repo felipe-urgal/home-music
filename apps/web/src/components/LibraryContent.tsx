@@ -1,4 +1,5 @@
-import { ListMusic, Play, Plus, Sparkles } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { MoreHorizontal, Play, Plus, Sparkles } from 'lucide-react';
 import type { Playlist, Track } from '@home-music/shared';
 import { LIBRARY_PAGE_SIZE, type LibraryNavigation } from '../useLibraryNavigation';
 import { Artwork } from './Artwork';
@@ -7,6 +8,7 @@ import { LibraryTrackRows, type LibraryTrackOfflineProps } from './LibraryTrackR
 type LibraryContentProps = {
   navigation: LibraryNavigation;
   playlists: Playlist[];
+  tracks: Track[];
   current?: Track;
   playing: boolean;
   offlineTrackProps: LibraryTrackOfflineProps;
@@ -19,9 +21,17 @@ type LibraryContentProps = {
   onSetPlaylistTracks: (playlistId: string, trackIds: string[]) => Promise<unknown>;
 };
 
+type PlaylistOrder = 'recent' | 'name';
+
+function formatPlaylistDate(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toLocaleDateString('pt-BR');
+}
+
 export function LibraryContent({
   navigation,
   playlists,
+  tracks,
   current,
   playing,
   offlineTrackProps,
@@ -51,7 +61,17 @@ export function LibraryContent({
     changeSort,
     showMore
   } = navigation;
+  const [playlistOrder, setPlaylistOrder] = useState<PlaylistOrder>('recent');
   const run = (operation: Promise<unknown>) => void operation.catch(() => undefined);
+  const tracksById = useMemo(() => new Map(tracks.map(track => [track.id, track])), [tracks]);
+  const orderedPlaylists = useMemo(() => {
+    const result = [...playlists];
+    result.sort((left, right) => {
+      if (playlistOrder === 'name') return left.name.localeCompare(right.name, 'pt-BR');
+      return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
+    });
+    return result;
+  }, [playlistOrder, playlists]);
 
   return (
     <section className="library-content">
@@ -81,6 +101,7 @@ export function LibraryContent({
                       <strong>{folder.name}</strong>
                       <small>{folder.matchingTrackCount} músicas</small>
                     </span>
+                    <MoreHorizontal className="folder-visual-card__more" aria-hidden="true" />
                   </button>
                 ))}
               </div>
@@ -111,28 +132,56 @@ export function LibraryContent({
         </>
       ) : libraryTab === 'playlists' && !selectedPlaylist ? (
         <>
-          <div className="section-heading">
+          <div className="section-heading section-heading--playlists-root">
             <span>Playlists</span>
             <div className="section-heading__actions">
-              <button className="text-action" onClick={() => run(onCreatePlaylist())}><Plus />Nova playlist</button>
-              <button className="text-action" onClick={onCreateSmartPlaylist}><Sparkles />Inteligente</button>
+              <button className="text-action playlist-create-action" onClick={() => run(onCreatePlaylist())}><Plus />Nova playlist</button>
+              <button className="text-action playlist-smart-action" onClick={onCreateSmartPlaylist}><Sparkles />Inteligente</button>
+              <label className="playlist-order-control">
+                <span>Ordenar:</span>
+                <select value={playlistOrder} onChange={event => setPlaylistOrder(event.target.value as PlaylistOrder)}>
+                  <option value="recent">Recentes</option>
+                  <option value="name">A–Z</option>
+                </select>
+              </label>
             </div>
           </div>
-          {playlists.length ? (
+          {orderedPlaylists.length ? (
             <div className="group-list">
-              {playlists.map(playlist => (
-                <button className="group-item" key={playlist.id} onClick={() => selectPlaylist(playlist.id)}>
-                  <div className="playlist-icon">{playlist.source === 'smart' ? <Sparkles /> : <ListMusic />}</div>
-                  <span className="group-item__text">
-                    <strong>{playlist.name}</strong>
-                    <small>
-                      {playlist.trackIds.length} músicas
-                      {playlist.source === 'rekordbox' ? ' · Importada' : playlist.source === 'smart' ? ' · Inteligente' : ''}
-                    </small>
-                  </span>
-                  <Play aria-hidden="true" />
-                </button>
-              ))}
+              {orderedPlaylists.map(playlist => {
+                const contextTracks = playlist.trackIds
+                  .map(trackId => tracksById.get(trackId))
+                  .filter((track): track is Track => Boolean(track));
+                const coverTrack = contextTracks.find(track => track.hasCover) ?? contextTracks[0];
+                const updatedAt = formatPlaylistDate(playlist.updatedAt);
+
+                return (
+                  <div className="group-item" key={playlist.id}>
+                    <button className="group-item__main" type="button" onClick={() => selectPlaylist(playlist.id)}>
+                      <Artwork track={coverTrack} />
+                      <span className="group-item__text">
+                        <strong>{playlist.name}</strong>
+                        <small>
+                          {playlist.trackIds.length} músicas
+                          {updatedAt && <span className="group-item__updated"> · Atualizada em {updatedAt}</span>}
+                        </small>
+                      </span>
+                    </button>
+                    <button
+                      className="group-item__play"
+                      type="button"
+                      aria-label={`Tocar ${playlist.name}`}
+                      disabled={!contextTracks.length}
+                      onClick={() => {
+                        if (contextTracks[0]) onPlayTrack(contextTracks[0], contextTracks);
+                      }}
+                    >
+                      <Play aria-hidden="true" />
+                    </button>
+                    <MoreHorizontal className="group-item__more" aria-hidden="true" />
+                  </div>
+                );
+              })}
             </div>
           ) : <div className="empty-library">Crie uma playlist manual ou inteligente para organizar suas músicas.</div>}
         </>

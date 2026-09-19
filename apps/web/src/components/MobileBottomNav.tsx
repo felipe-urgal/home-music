@@ -1,4 +1,4 @@
-import { Folder, ListMusic, Music2, Search, UserRound } from 'lucide-react';
+import { AudioLines, Folder, ListMusic, Menu, Music2, Search, UserRound } from 'lucide-react';
 import { navigateAppPath } from '../browser-navigation';
 import type { LibraryTab } from '../useLibraryNavigation';
 
@@ -42,6 +42,18 @@ export function MobileBottomNav({
     });
   }
 
+  if (active === 'player') {
+    return (
+      <div className="mobile-now-playing-footer">
+        <span className="mobile-now-playing-footer__mark"><AudioLines aria-hidden="true" /></span>
+        <span className="mobile-now-playing-footer__copy">Música boa em<br />qualquer lugar.</span>
+        <button type="button" aria-label="Abrir biblioteca" onClick={() => openLibraryRoute('/library', onOpenFolders)}>
+          <Menu aria-hidden="true" />
+        </button>
+      </div>
+    );
+  }
+
   const foldersActive = active === 'library' && libraryTab !== 'playlists';
   const playlistsActive = active === 'library' && libraryTab === 'playlists';
 
@@ -50,7 +62,7 @@ export function MobileBottomNav({
       {active === 'library' && (
         <header className="mobile-library-brand-bar">
           <button className="mobile-library-brand-bar__brand" type="button" onClick={() => openLibraryRoute('/library', onOpenFolders)}>
-            <span><Music2 aria-hidden="true" /></span>
+            <span><AudioLines aria-hidden="true" /></span>
             <strong>Home Music</strong>
           </button>
           <div className="mobile-library-brand-bar__actions">
@@ -64,9 +76,9 @@ export function MobileBottomNav({
       )}
 
       <nav className="mobile-bottom-nav" aria-label="Navegação principal">
-        <button className={active === 'player' ? 'is-active' : ''} type="button" aria-current={active === 'player' ? 'page' : undefined} onClick={onOpenPlayer}>
+        <button type="button" onClick={onOpenPlayer}>
           <Music2 aria-hidden="true" />
-          <span>Tocando agora</span>
+          <span>Tocando Agora</span>
         </button>
         <button className={foldersActive ? 'is-active' : ''} type="button" aria-current={foldersActive ? 'page' : undefined} onClick={() => openLibraryRoute('/library', onOpenFolders)}>
           <Folder aria-hidden="true" />

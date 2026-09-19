@@ -130,16 +130,18 @@ export function useLibraryNavigation(
       || formatFilter !== 'all'
       || coverFilter !== 'all';
 
-    if (!hasFilter) {
-      return folderView.folders.map(folder => ({
-        ...folder,
-        matchingTrackCount: folder.tracks.length,
-        artwork: folder.artwork
-      }));
-    }
+    const matchingTrackIds = hasFilter
+      ? new Set(folderContextTracks.map(track => track.id))
+      : null;
+    const folders = folderView.folders.flatMap(folder => {
+      if (!matchingTrackIds) {
+        return [{
+          ...folder,
+          matchingTrackCount: folder.tracks.length,
+          artwork: folder.artwork
+        }];
+      }
 
-    const matchingTrackIds = new Set(folderContextTracks.map(track => track.id));
-    return folderView.folders.flatMap(folder => {
       let matchingTrackCount = 0;
       let firstMatchingTrack: Track | undefined;
       let firstMatchingCover: Track | undefined;
@@ -158,7 +160,13 @@ export function useLibraryNavigation(
         artwork: firstMatchingCover ?? firstMatchingTrack ?? folder.artwork
       }];
     });
-  }, [coverFilter, folderContextTracks, folderView.folders, formatFilter, normalizedQuery]);
+
+    return [...folders].sort((left, right) => (
+      sort === 'title-desc'
+        ? right.name.localeCompare(left.name, 'pt-BR')
+        : left.name.localeCompare(right.name, 'pt-BR')
+    ));
+  }, [coverFilter, folderContextTracks, folderView.folders, formatFilter, normalizedQuery, sort]);
 
   const shouldShowTracks = Boolean(selectedPlaylist) ||
     (libraryTab === 'folders' && Boolean(normalizedQuery));
