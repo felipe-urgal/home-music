@@ -298,7 +298,8 @@ export function DesktopShell({
             aria-label="Buscar na biblioteca"
             title="Buscar na biblioteca"
             onClick={() => {
-              onOpenLibrary();
+              if (onOpenLibraryTab) onOpenLibraryTab('folders');
+              else onOpenLibrary();
               window.requestAnimationFrame(() => {
                 document.querySelector<HTMLInputElement>('.search-box--library input')?.focus();
               });
