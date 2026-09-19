@@ -31,7 +31,8 @@ export function LibraryNavigationChrome({
   onScan,
   onOpenPlayer
 }: LibraryNavigationChromeProps) {
-  const { libraryTab, folderView, enterFolder } = navigation;
+  const { libraryTab, folderView, visibleFolders, sort, enterFolder, changeSort } = navigation;
+  const folderSort = sort === 'title-desc' ? 'title-desc' : 'title-asc';
 
   return (
     <>
@@ -45,6 +46,22 @@ export function LibraryNavigationChrome({
           <strong>{title}</strong>
           <small>{subtitle}</small>
         </div>
+        {!isDetail && libraryTab === 'folders' && (
+          <div className="library-header__folder-meta">
+            <span>{visibleFolders.length} {visibleFolders.length === 1 ? 'pasta' : 'pastas'}</span>
+            <label>
+              <span className="sr-only">Ordenar pastas</span>
+              <select
+                aria-label="Ordenar pastas"
+                value={folderSort}
+                onChange={event => changeSort(event.target.value === 'title-desc' ? 'title-desc' : 'title-asc')}
+              >
+                <option value="title-asc">A–Z</option>
+                <option value="title-desc">Z–A</option>
+              </select>
+            </label>
+          </div>
+        )}
         {canManageSharedLibrary && (
           <button className={`icon-button ${scanning ? 'is-loading' : ''}`} type="button" aria-label="Atualizar biblioteca" disabled={scanning} onClick={onScan}><RefreshCw aria-hidden="true" /></button>
         )}
