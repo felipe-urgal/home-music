@@ -13,7 +13,7 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   const viewport = page.viewportSize();
   test.skip(!viewport || viewport.width < 1024, 'Regressão específica do layout desktop.');
 
-  const topbar = page.getByTestId('desktop-topbar');
+  const topbar = page.getByTestId('desktop-sidebar');
   const playerBar = page.getByTestId('desktop-player-bar');
   const navigation = topbar.getByRole('navigation', { name: 'Navegação principal' });
 
