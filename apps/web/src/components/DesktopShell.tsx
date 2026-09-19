@@ -21,7 +21,8 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Radio,
-  RefreshCw
+  RefreshCw,
+  Search
 } from 'lucide-react';
 import { useDesktopLayout } from '../useDesktopLayout';
 import type { LibraryTab } from '../useLibraryNavigation';
@@ -238,9 +239,11 @@ export function DesktopShell({
       className="desktop-layout"
       data-desktop-active={active}
       data-sidebar-collapsed={sidebarCollapsed ? 'true' : 'false'}
+      data-library-tab={activeLibraryTab}
+      data-offline={offlineMode ? 'true' : 'false'}
       style={layoutStyle}
     >
-      <aside className={`desktop-sidebar ${sidebarUtilities ? 'has-utilities' : ''}`} data-testid="desktop-sidebar">
+      <header className={`desktop-sidebar desktop-topbar ${sidebarUtilities ? 'has-utilities' : ''}`} data-testid="desktop-topbar">
         <button
           className="desktop-sidebar__collapse"
           type="button"
@@ -288,8 +291,24 @@ export function DesktopShell({
           )}
         </nav>
 
-        {sidebarUtilities && <div className="desktop-sidebar__utilities">{sidebarUtilities}</div>}
-      </aside>
+        <div className="desktop-topbar__actions">
+          <button
+            className="desktop-topbar__search"
+            type="button"
+            aria-label="Buscar na biblioteca"
+            title="Buscar na biblioteca"
+            onClick={() => {
+              onOpenLibrary();
+              window.requestAnimationFrame(() => {
+                document.querySelector<HTMLInputElement>('.search-box--library input')?.focus();
+              });
+            }}
+          >
+            <Search aria-hidden="true" />
+          </button>
+          {sidebarUtilities && <div className="desktop-sidebar__utilities">{sidebarUtilities}</div>}
+        </div>
+      </header>
 
       <section className={surfaceClassName} data-desktop-section={active}>
         <div className={`desktop-main-content desktop-main-content--${active}`}>{children}</div>
