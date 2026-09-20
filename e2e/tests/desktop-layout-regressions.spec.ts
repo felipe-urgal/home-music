@@ -86,6 +86,44 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
       - (playlistOrderBox!.y + playlistOrderBox!.height / 2)
   )).toBeLessThanOrEqual(2);
 
+  const importedPlaylist = page.locator('.group-item__main').filter({ hasText: 'E2E Rekordbox' });
+  await expect(importedPlaylist).toBeVisible();
+  await importedPlaylist.click();
+
+  const playlistDetail = page.getByTestId('desktop-playlist-detail-layout');
+  const playlistSummary = page.getByTestId('desktop-playlist-summary');
+  const playlistDetailMain = page.locator('.desktop-playlist-detail-main');
+  const playlistTitle = playlistDetailMain.locator('.library-header__title');
+  const playlistSearch = page.getByPlaceholder('Buscar nesta playlist…');
+  const playlistQuickFilters = page.getByLabel('Filtros rápidos da playlist');
+
+  await expect(playlistDetail).toBeVisible();
+  await expect(playlistSummary).toBeVisible();
+  await expect(playlistSearch).toBeVisible();
+  await expect(playlistQuickFilters).toBeVisible();
+  await expect(playlistQuickFilters.getByRole('button', { name: 'Todas', exact: true })).toBeVisible();
+
+  const playlistDetailBox = await playlistDetail.boundingBox();
+  const playlistSummaryBox = await playlistSummary.boundingBox();
+  const playlistDetailMainBox = await playlistDetailMain.boundingBox();
+  const playlistTitleBox = await playlistTitle.boundingBox();
+  const playlistSearchBox = await playlistSearch.boundingBox();
+  const playlistFiltersBox = await playlistQuickFilters.boundingBox();
+
+  expect(playlistDetailBox).not.toBeNull();
+  expect(playlistSummaryBox).not.toBeNull();
+  expect(playlistDetailMainBox).not.toBeNull();
+  expect(playlistTitleBox).not.toBeNull();
+  expect(playlistSearchBox).not.toBeNull();
+  expect(playlistFiltersBox).not.toBeNull();
+  expect(playlistDetailBox!.width).toBeGreaterThanOrEqual(viewport!.width * 0.9);
+  expect(playlistSummaryBox!.x + playlistSummaryBox!.width).toBeLessThanOrEqual(playlistDetailMainBox!.x + 1);
+  expect(playlistSearchBox!.y).toBeGreaterThanOrEqual(playlistTitleBox!.y + playlistTitleBox!.height);
+  expect(playlistFiltersBox!.y).toBeGreaterThanOrEqual(playlistSearchBox!.y + playlistSearchBox!.height - 1);
+
+  const collectionScrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+  expect(collectionScrollWidth).toBeLessThanOrEqual(viewport!.width + 1);
+
   await topbar.getByRole('button', { name: /Minha conta/ }).click();
   await expect(page.locator('#my-account-title')).toHaveText('Minha conta');
   await expect(playerBar).toBeHidden();
