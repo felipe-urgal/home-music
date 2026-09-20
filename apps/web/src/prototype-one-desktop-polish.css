@@ -1364,11 +1364,11 @@
   }
 
   #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .folder-visual-card__text strong {
-    font-size: 12px;
+    font-size: 14px;
   }
 
   #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .folder-visual-card__text small {
-    font-size: 9px;
+    font-size: 11px;
   }
 
   /* Desktop library root: one header action and one mixed collection grid. */
@@ -1393,12 +1393,14 @@
 
   #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-root-create-playlist {
     width: auto;
-    min-height: 36px;
+    min-height: 38px;
     margin-left: auto;
-    padding: 0 16px;
+    padding: 0 18px;
     display: inline-flex;
     align-items: center;
-    gap: 7px;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 650;
   }
 
   #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-root-create-playlist svg {
@@ -1472,15 +1474,15 @@
   #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-collection-grid .playlist-visual-card .group-item__text strong {
     overflow: hidden;
     color: #f1e8e1;
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 620;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-collection-grid .playlist-visual-card .group-item__text small {
-    color: #817977;
-    font-size: 9px;
+    color: #928a87;
+    font-size: 11px;
   }
 
   #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-collection-grid .playlist-visual-card .group-item__updated,
