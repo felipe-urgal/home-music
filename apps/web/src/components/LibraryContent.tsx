@@ -132,36 +132,36 @@ export function LibraryContent({
             <button className="play-all" onClick={() => onPlayTrack(folderContextTracks[0], folderContextTracks)}><Play />Tocar tudo <span>{folderContextTracks.length}</span></button>
           )}
 
-          {(pagedFolders.length > 0 || (desktopLayout && !folderPath && !query && orderedPlaylists.length > 0)) && (
+          {(pagedFolders.length > 0 || (desktopLayout && !folderPath && !query)) && (
             <>
               <div className={`section-heading ${!folderPath ? 'section-heading--folders-root' : ''}`}>
-                <span>
-                  {folderPath ? 'Subpastas' : (
-                    <>
-                      <span className="folder-heading__desktop">Biblioteca</span>
-                      <span className="folder-heading__mobile">Suas pastas</span>
-                    </>
-                  )}
-                </span>
-                {!folderPath && desktopLayout && !query && (
+                {desktopLayout && !folderPath && !query ? (
                   <button className="text-action playlist-create-action library-root-create-playlist" type="button" onClick={() => run(onCreatePlaylist())}>
                     <Plus aria-hidden="true" />Nova playlist
                   </button>
+                ) : (
+                  <>
+                    <span>
+                      {folderPath ? 'Subpastas' : (
+                        <span className="folder-heading__mobile">Suas pastas</span>
+                      )}
+                    </span>
+                    {!folderPath && (
+                      <label className="folder-order-control">
+                        <span>Ordenar</span>
+                        <select
+                          aria-label="Ordenar pastas da biblioteca"
+                          value={folderSort}
+                          onChange={event => changeSort(event.target.value === 'title-desc' ? 'title-desc' : 'title-asc')}
+                        >
+                          <option value="title-asc">A–Z</option>
+                          <option value="title-desc">Z–A</option>
+                        </select>
+                      </label>
+                    )}
+                    <small>{visibleFolders.length}</small>
+                  </>
                 )}
-                {!folderPath && (
-                  <label className="folder-order-control">
-                    <span>Ordenar</span>
-                    <select
-                      aria-label="Ordenar pastas da biblioteca"
-                      value={folderSort}
-                      onChange={event => changeSort(event.target.value === 'title-desc' ? 'title-desc' : 'title-asc')}
-                    >
-                      <option value="title-asc">A–Z</option>
-                      <option value="title-desc">Z–A</option>
-                    </select>
-                  </label>
-                )}
-                <small>{desktopLayout && !folderPath && !query ? visibleFolders.length + orderedPlaylists.length : visibleFolders.length}</small>
               </div>
               <div className={`folder-visual-grid ${desktopLayout && !folderPath && !query ? 'library-collection-grid' : ''}`}>
                 {pagedFolders.map(folder => (
