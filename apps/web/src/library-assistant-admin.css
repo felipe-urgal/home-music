@@ -108,6 +108,16 @@
   color: #f3f6f9;
 }
 
+.assistant-admin__header-button--icon {
+  width: 2.1rem;
+  padding: 0;
+}
+
+.assistant-admin__header-button--icon svg {
+  width: 1rem;
+  height: 1rem;
+}
+
 .assistant-admin__header-button:hover:not(:disabled),
 .assistant-admin__secondary-button:hover:not(:disabled) {
   border-color: #5d6975;
@@ -413,7 +423,7 @@
 
 .assistant-admin__sections {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: center;
   min-height: 2.15rem;
   padding: .08rem;
@@ -462,39 +472,39 @@
 .assistant-admin__metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: .55rem;
+  gap: .45rem;
   margin: 0;
 }
 
 .assistant-admin__metrics > div {
   display: grid;
-  grid-template-columns: 2.2rem minmax(0, 1fr);
-  grid-template-areas: 'icon label' 'icon value';
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: 'icon label value';
   align-items: center;
-  min-height: 3.6rem;
-  padding: .55rem .7rem;
+  gap: .45rem;
+  min-height: 2.65rem;
+  padding: .45rem .6rem;
   border: 1px solid #2e3e4b;
-  border-radius: .55rem;
-  background: linear-gradient(180deg, rgba(25, 36, 45, .92), rgba(20, 29, 37, .92));
+  border-radius: .5rem;
+  background: rgba(20, 30, 39, .82);
 }
 
 .assistant-admin__metrics > div > svg {
   grid-area: icon;
-  justify-self: center;
-  width: 1.2rem;
-  height: 1.2rem;
+  width: 1rem;
+  height: 1rem;
 }
 
 .assistant-admin__metrics dt {
   grid-area: label;
   color: #b8c1ca;
-  font-size: .67rem;
+  font-size: .69rem;
 }
 
 .assistant-admin__metrics dd {
   grid-area: value;
   margin: 0;
-  font-size: 1rem;
+  font-size: .88rem;
   font-weight: 820;
   font-variant-numeric: tabular-nums;
 }
