@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Clock, Download, Image, ListMusic } from 'lucide-react';
+import { Clock, Download, Image, Pause, Play, ListMusic } from 'lucide-react';
 import type { Track } from '@home-music/shared';
 import { Artwork } from './Artwork';
 
@@ -8,6 +8,8 @@ type DesktopPlaylistSummaryProps = {
   tracks: Track[];
   downloadedIds: ReadonlySet<string>;
   offlineControl?: ReactNode;
+  playing: boolean;
+  onTogglePlayback: () => void;
 };
 
 function formatTotalDuration(tracks: Track[]) {
@@ -33,7 +35,9 @@ export function DesktopPlaylistSummary({
   name,
   tracks,
   downloadedIds,
-  offlineControl
+  offlineControl,
+  playing,
+  onTogglePlayback
 }: DesktopPlaylistSummaryProps) {
   const artworkTrack = tracks.find(track => track.hasCover) ?? tracks[0];
   const offlineCount = tracks.reduce((count, track) => count + (downloadedIds.has(track.id) ? 1 : 0), 0);
@@ -45,10 +49,18 @@ export function DesktopPlaylistSummary({
       data-testid="desktop-playlist-summary"
       aria-label={`Resumo da playlist ${name}`}
     >
-      <div className="desktop-folder-summary__cover">
+      <button
+        className="desktop-folder-summary__cover"
+        type="button"
+        aria-label={playing ? 'Pausar playlist' : 'Tocar playlist'}
+        disabled={!tracks.length}
+        onClick={onTogglePlayback}
+      >
         <Artwork track={artworkTrack} />
-        <span className="desktop-folder-summary__cover-title">{name}</span>
-      </div>
+        <span className="desktop-folder-summary__cover-play" aria-hidden="true">
+          {playing ? <Pause /> : <Play />}
+        </span>
+      </button>
 
       <div className="desktop-folder-summary__identity">
         <span className="desktop-folder-summary__identity-icon" aria-hidden="true"><ListMusic /></span>
