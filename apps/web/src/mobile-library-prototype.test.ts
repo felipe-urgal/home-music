@@ -93,13 +93,14 @@ describe('mobile library prototype one contracts', () => {
     expect(screen).toMatch(/Aleatório ligado/);
     expect(screen).toMatch(/repeatLabel/);
     expect(app).toMatch(/nextTrack=\{nextTrack\}/);
-    expect(css).toMatch(/desktop-now-playing-screen__more-menu[\s\S]*width: 248px/);
+    expect(css).toMatch(/desktop-now-playing-screen__more-menu--portal[\s\S]*width: 270px/);
     expect(css).toMatch(/desktop-now-playing-screen__more-submenu/);
+    expect(css).toMatch(/desktop-now-playing-screen__more-menu--portal > button[\s\S]*font-size: 13px/);
     expect(css).toMatch(/desktop-now-playing-screen__heading h1[\s\S]*font-size: clamp\(24px, 2\.15vw, 34px\)/);
     expect(css).toMatch(/desktop-now-playing-screen__waveform-progress[\s\S]*width: min\(100%, 470px\)/);
     expect(css).toMatch(/desktop-now-playing-screen__waveform span[\s\S]*var\(--wave-fill, 0%\)/);
     expect(css).toMatch(/desktop-now-playing-screen__quote[\s\S]*font-size: 12px/);
-    expect(css).toMatch(/desktop-now-playing-screen__next-track[\s\S]*width: min\(360px/);
+    expect(css).toMatch(/desktop-now-playing-screen__next-track[\s\S]*width: min\(410px/);
     expect(css).toMatch(/desktop-now-playing-screen__art-frame[\s\S]*width: min\(100%, 500px\)/);
   });
 
