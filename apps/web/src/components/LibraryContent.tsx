@@ -202,7 +202,7 @@ export function LibraryContent({
                 sort={sort}
                 onSort={changeSort}
                 onPlayTrack={onPlayTrack}
-                desktopVariant={folderPath ? 'grid' : 'table'}
+                desktopVariant={folderPath || query ? 'grid' : 'table'}
                 {...offlineTrackProps}
               />
             </>
