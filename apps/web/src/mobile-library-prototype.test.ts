@@ -40,16 +40,21 @@ describe('mobile library prototype one contracts', () => {
     expect(shell).not.toMatch(/label="Tocando Agora"/);
   });
 
-  it('usa largura total e a mesma grade visual em pastas e playlists desktop', () => {
+  it('integra playlists à raiz de pastas no desktop', () => {
+    const shell = source('components/DesktopShell.tsx');
     const content = source('components/LibraryContent.tsx');
     const navigation = source('components/LibraryNavigationChrome.tsx');
     const css = source('prototype-one-desktop-polish.css');
 
     expect(navigation).not.toMatch(/aria-label="Ordenar pastas"/);
+    expect(shell).not.toMatch(/label="Playlists"/);
+    expect(content).toMatch(/desktop-library-playlists/);
+    expect(content).toMatch(/section-heading--embedded-playlists/);
+    expect(content).toMatch(/Nova playlist/);
     expect(content).toMatch(/playlist-visual-grid/);
     expect(content).toMatch(/playlist-visual-card/);
+    expect(css).toMatch(/desktop-library-playlists/);
     expect(css).toMatch(/grid-template-columns: repeat\(auto-fill, minmax\(230px, 1fr\)\)/);
-    expect(css).toMatch(/playlist-order-control[\s\S]*display: none !important/);
   });
 
   it('move play/pause para a capa e usa a próxima faixa como avanço no desktop', () => {
