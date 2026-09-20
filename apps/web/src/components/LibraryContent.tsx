@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { MoreHorizontal, Play, Plus, Sparkles } from 'lucide-react';
+import { ChevronRight, Folder, MoreHorizontal, Play, Plus, Sparkles } from 'lucide-react';
 import type { Playlist, Track } from '@home-music/shared';
 import { LIBRARY_PAGE_SIZE, type LibraryNavigation } from '../useLibraryNavigation';
 import { Artwork } from './Artwork';
@@ -62,6 +62,7 @@ export function LibraryContent({
     showMore
   } = navigation;
   const [playlistOrder, setPlaylistOrder] = useState<PlaylistOrder>('recent');
+  const folderSort = sort === 'title-desc' ? 'title-desc' : 'title-asc';
   const run = (operation: Promise<unknown>) => void operation.catch(() => undefined);
   const tracksById = useMemo(() => new Map(tracks.map(track => [track.id, track])), [tracks]);
   const orderedPlaylists = useMemo(() => {
@@ -84,7 +85,27 @@ export function LibraryContent({
           {pagedFolders.length > 0 && (
             <>
               <div className={`section-heading ${!folderPath ? 'section-heading--folders-root' : ''}`}>
-                <span>{folderPath ? 'Subpastas' : 'Pastas'}</span>
+                <span>
+                  {folderPath ? 'Subpastas' : (
+                    <>
+                      <span className="folder-heading__desktop">Pastas</span>
+                      <span className="folder-heading__mobile">Suas pastas</span>
+                    </>
+                  )}
+                </span>
+                {!folderPath && (
+                  <label className="folder-order-control">
+                    <span>Ordenar</span>
+                    <select
+                      aria-label="Ordenar pastas da biblioteca"
+                      value={folderSort}
+                      onChange={event => changeSort(event.target.value === 'title-desc' ? 'title-desc' : 'title-asc')}
+                    >
+                      <option value="title-asc">A–Z</option>
+                      <option value="title-desc">Z–A</option>
+                    </select>
+                  </label>
+                )}
                 <small>{visibleFolders.length}</small>
               </div>
               <div className="folder-visual-grid">
@@ -96,12 +117,14 @@ export function LibraryContent({
                     aria-label={`Abrir ${folder.name}, ${folder.matchingTrackCount} músicas`}
                     onClick={() => enterFolder(folder.path)}
                   >
+                    <span className="folder-visual-card__mobile-icon" aria-hidden="true"><Folder /></span>
                     <Artwork track={folder.artwork} />
                     <span className="folder-visual-card__text">
                       <strong>{folder.name}</strong>
                       <small>{folder.matchingTrackCount} músicas</small>
                     </span>
                     <MoreHorizontal className="folder-visual-card__more" aria-hidden="true" />
+                    <ChevronRight className="folder-visual-card__chevron" aria-hidden="true" />
                   </button>
                 ))}
               </div>
