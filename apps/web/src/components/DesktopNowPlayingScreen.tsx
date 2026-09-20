@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import type { Playlist, RepeatMode, Track } from '@home-music/shared';
 import {
   CheckCircle2,
@@ -93,7 +93,39 @@ export function DesktopNowPlayingScreen({
 }: DesktopNowPlayingScreenProps) {
   const [playlistOpen, setPlaylistOpen] = useState(false);
   const [actionsOpen, setActionsOpen] = useState(false);
+  const actionsRef = useRef<HTMLDivElement>(null);
   const crossfadeVisual = useCrossfadeVisualState();
+
+  useEffect(() => {
+    if (!actionsOpen) return;
+
+    function closeMenu() {
+      setActionsOpen(false);
+      setPlaylistOpen(false);
+    }
+
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target;
+      if (!(target instanceof Node) || actionsRef.current?.contains(target)) return;
+      closeMenu();
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') closeMenu();
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [actionsOpen]);
+
+  useEffect(() => {
+    setActionsOpen(false);
+    setPlaylistOpen(false);
+  }, [current.id]);
   const progress = duration > 0 ? Math.max(0, Math.min(100, (currentTime / duration) * 100)) : 0;
   const waveformPosition = (progress / 100) * WAVEFORM_HEIGHTS.length;
   const repeatLabel = repeatMode === 'one'
@@ -156,7 +188,7 @@ export function DesktopNowPlayingScreen({
             </div>
 
             <div className="desktop-now-playing-screen__actions" aria-label="Ações da faixa">
-              <div className="desktop-now-playing-screen__more-wrap">
+              <div ref={actionsRef} className="desktop-now-playing-screen__more-wrap">
                 <button
                   className="desktop-now-playing-screen__more"
                   type="button"
