@@ -16,23 +16,43 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   const topbar = page.getByTestId('desktop-sidebar');
   const playerBar = page.getByTestId('desktop-player-bar');
   const navigation = topbar.getByRole('navigation', { name: 'Navegação principal' });
+  const nowPlayingSurface = page.locator('.desktop-now-playing-surface');
   const nowPlaying = page.locator('.desktop-now-playing-screen');
   const nowPlayingArt = page.locator('.desktop-now-playing-screen__art');
+  const nowPlayingArtworkSurface = page.locator('.desktop-now-playing-screen__art .now-playing-vinyl__disc');
   const nowPlayingContent = page.locator('.desktop-now-playing-screen__content');
 
   await expect(nowPlayingArt).toBeVisible();
+  await expect(nowPlayingArtworkSurface).toBeVisible();
   await expect(nowPlayingContent).toBeVisible();
 
+  const surfaceBox = await nowPlayingSurface.boundingBox();
   const nowPlayingBox = await nowPlaying.boundingBox();
   const artworkBox = await nowPlayingArt.boundingBox();
+  const artworkSurfaceBox = await nowPlayingArtworkSurface.boundingBox();
   const contentBox = await nowPlayingContent.boundingBox();
+  expect(surfaceBox).not.toBeNull();
   expect(nowPlayingBox).not.toBeNull();
   expect(artworkBox).not.toBeNull();
+  expect(artworkSurfaceBox).not.toBeNull();
   expect(contentBox).not.toBeNull();
+  expect(surfaceBox!.width).toBeGreaterThanOrEqual(viewport!.width - 1);
+  expect(artworkSurfaceBox!.width).toBeGreaterThanOrEqual(300);
+  expect(artworkSurfaceBox!.height).toBeGreaterThanOrEqual(300);
   expect(artworkBox!.y).toBeGreaterThanOrEqual(nowPlayingBox!.y - 1);
   expect(contentBox!.y).toBeGreaterThanOrEqual(nowPlayingBox!.y - 1);
   expect(artworkBox!.y + artworkBox!.height).toBeLessThanOrEqual(nowPlayingBox!.y + nowPlayingBox!.height + 1);
   expect(contentBox!.y + contentBox!.height).toBeLessThanOrEqual(nowPlayingBox!.y + nowPlayingBox!.height + 1);
+
+  const navItems = await Promise.all(
+    ['Tocando Agora', 'Pastas', 'Playlists'].map(async name => {
+      const box = await navigation.getByRole('button', { name, exact: true }).boundingBox();
+      expect(box).not.toBeNull();
+      return box!;
+    })
+  );
+  const navCenters = navItems.map(box => box.y + box.height / 2);
+  expect(Math.max(...navCenters) - Math.min(...navCenters)).toBeLessThanOrEqual(2);
 
   await navigation.getByRole('button', { name: 'Pastas', exact: true }).click();
   await expect(page.getByText('Suas Pastas', { exact: true })).toBeVisible();
