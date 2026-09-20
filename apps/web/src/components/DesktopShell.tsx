@@ -291,8 +291,7 @@ export function DesktopShell({
                   </button>
                 )}
               </div>
-              <NavigationButton nested active={active === 'library' && activeLibraryTab === 'folders'} label="Pastas" icon={<Folder />} onClick={() => onOpenLibraryTab('folders')} />
-              <NavigationButton nested active={active === 'library' && activeLibraryTab === 'playlists'} label="Playlists" icon={<ListMusic />} onClick={() => onOpenLibraryTab('playlists')} />
+              <NavigationButton nested active={active === 'library'} label="Pastas" icon={<Folder />} onClick={() => onOpenLibraryTab('folders')} />
             </div>
           )}
         </nav>
