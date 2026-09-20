@@ -126,7 +126,7 @@ export function LibraryContent({
     <section className="library-content">
       {libraryTab === 'folders' ? (
         <>
-          {folderContextTracks.length > 0 && folderPath && (
+          {folderContextTracks.length > 0 && folderPath && !desktopLayout && (
             <button className="play-all" onClick={() => onPlayTrack(folderContextTracks[0], folderContextTracks)}><Play />Tocar tudo <span>{folderContextTracks.length}</span></button>
           )}
 
@@ -202,6 +202,7 @@ export function LibraryContent({
                 sort={sort}
                 onSort={changeSort}
                 onPlayTrack={onPlayTrack}
+                desktopVariant={folderPath ? 'grid' : 'table'}
                 {...offlineTrackProps}
               />
             </>
@@ -235,7 +236,7 @@ export function LibraryContent({
         </>
       ) : shouldShowTracks ? (
         <>
-          {selectedPlaylist && (
+          {selectedPlaylist && !desktopLayout && (
             <div className="collection-actions">
               {libraryTracks.length > 0 && <button className="play-all" onClick={() => onPlayTrack(libraryTracks[0], libraryTracks)}><Play />Tocar tudo</button>}
               {selectedPlaylist.source === 'manual' ? (
@@ -264,6 +265,7 @@ export function LibraryContent({
               onSort={changeSort}
               onPlayTrack={onPlayTrack}
               onRemove={selectedPlaylist?.source === 'manual' ? trackId => run(onSetPlaylistTracks(selectedPlaylist.id, selectedPlaylist.trackIds.filter(id => id !== trackId))) : undefined}
+              desktopVariant={selectedPlaylist ? 'grid' : 'table'}
               {...offlineTrackProps}
             />
           ) : <div className="empty-library">Nenhuma música encontrada.</div>}
