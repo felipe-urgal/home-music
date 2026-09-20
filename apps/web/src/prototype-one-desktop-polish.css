@@ -1769,7 +1769,7 @@
   .desktop-now-playing-screen__more-menu--portal {
     position: fixed;
     z-index: 1000;
-    width: 248px;
+    width: 270px;
     max-height: none;
     padding: 8px;
     overflow: visible;
@@ -1799,10 +1799,10 @@
   }
 
   .desktop-now-playing-screen__more-menu--portal > button {
-    min-height: 38px;
-    padding: 8px 9px;
-    gap: 9px;
-    font-size: 11px;
+    min-height: 42px;
+    padding: 9px 10px;
+    gap: 10px;
+    font-size: 13px;
   }
 
   .desktop-now-playing-screen__more-menu--portal > button:hover,
@@ -1811,8 +1811,8 @@
   }
 
   .desktop-now-playing-screen__more-menu--portal > button svg {
-    width: 17px;
-    height: 17px;
+    width: 18px;
+    height: 18px;
     flex: 0 0 auto;
   }
 
@@ -1830,15 +1830,15 @@
   }
 
   .desktop-now-playing-screen__more-menu--portal .desktop-now-playing-screen__more-submenu button {
-    min-height: 30px;
-    padding: 6px 8px;
-    font-size: 10px;
+    min-height: 34px;
+    padding: 7px 9px;
+    font-size: 12px;
   }
 
   .desktop-now-playing-screen__more-menu--portal .desktop-now-playing-screen__more-empty {
-    padding: 6px 8px;
+    padding: 7px 9px;
     color: #8f8784;
-    font-size: 9px;
+    font-size: 11px;
     line-height: 1.35;
   }
 
@@ -1902,13 +1902,13 @@
     z-index: 5;
     right: 25px;
     bottom: 20px;
-    width: min(360px, calc(100% - 50px));
-    min-height: 72px;
-    padding: 8px 12px 8px 8px;
+    width: min(410px, calc(100% - 50px));
+    min-height: 84px;
+    padding: 10px 14px 10px 10px;
     display: grid;
-    grid-template-columns: 54px minmax(0, 1fr) 22px;
+    grid-template-columns: 62px minmax(0, 1fr) 24px;
     align-items: center;
-    gap: 12px;
+    gap: 14px;
     overflow: hidden;
     border: 1px solid rgba(232, 211, 190, .16);
     border-radius: 10px;
@@ -1933,8 +1933,8 @@
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track > .artwork {
-    width: 54px;
-    height: 54px;
+    width: 62px;
+    height: 62px;
     max-width: none;
     overflow: hidden;
     border: 0;
@@ -1956,7 +1956,7 @@
 
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track-copy small {
     color: #c89a70;
-    font-size: 9px;
+    font-size: 10px;
     font-weight: 700;
     letter-spacing: .14em;
     text-transform: uppercase;
@@ -1971,18 +1971,18 @@
 
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track-copy strong {
     color: #f3e9e1;
-    font-size: 13px;
+    font-size: 15px;
     font-weight: 650;
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track-copy > span {
     color: #9f9793;
-    font-size: 10px;
+    font-size: 12px;
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track > svg {
-    width: 19px;
-    height: 19px;
+    width: 21px;
+    height: 21px;
     color: #d7b17e;
     stroke-width: 1.8;
   }
@@ -1995,7 +1995,7 @@
 
   @media (max-width: 1180px) {
     #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track {
-      width: min(310px, calc(100% - 42px));
+      width: min(350px, calc(100% - 42px));
       right: 21px;
       bottom: 18px;
     }
