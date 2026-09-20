@@ -86,38 +86,32 @@ describe('mobile library prototype one contracts', () => {
     expect(css).toMatch(/desktop-now-playing-screen__art-frame[\s\S]*width: min\(100%, 500px\)/);
   });
 
-  it('aplica o protótipo 2 na listagem de pasta desktop', () => {
+  it('simplifica o detalhe de pasta desktop para capa clicável e grade de faixas', () => {
     const screen = source('components/LibraryScreen.tsx');
     const summary = source('components/DesktopFolderSummary.tsx');
-    const tools = source('components/LibraryViewTools.tsx');
+    const rows = source('components/LibraryTrackRows.tsx');
     const css = source('prototype-one-desktop-polish.css');
 
     expect(screen).toMatch(/desktop-folder-detail-layout/);
-    expect(screen).toMatch(/DesktopFolderSummary/);
-    expect(summary).toMatch(/Duração total/);
-    expect(summary).toMatch(/Disponível offline/);
-    expect(summary).toMatch(/Formato predominante/);
-    expect(tools).toMatch(/Buscar nesta pasta…/);
-    expect(tools).toMatch(/library-folder-quick-filters/);
-    expect(css).toMatch(/grid-template-columns: 220px minmax\(0, 1fr\)/);
-    expect(css).toMatch(/desktop-folder-detail-main[\s\S]*desktop-library-table__album[\s\S]*display: none/);
+    expect(screen).toMatch(/onTogglePlayback=\{\(\) => toggleCollectionPlayback\(folderView\.allTracks\)\}/);
+    expect(summary).toMatch(/aria-label=\{playing \? 'Pausar pasta' : 'Tocar pasta'\}/);
+    expect(summary).toMatch(/desktop-folder-summary__cover-play/);
+    expect(rows).toMatch(/desktopVariant === 'grid'/);
+    expect(rows).toMatch(/desktop-track-grid/);
+    expect(css).toMatch(/desktop-track-grid[\s\S]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
+    expect(css).toMatch(/@media \(min-width: 1500px\)[\s\S]*desktop-track-grid[\s\S]*repeat\(5, minmax\(0, 1fr\)\)/);
+    expect(css).toMatch(/desktop-track-card__copy strong[\s\S]*font-size: 14px/);
   });
 
-  it('usa o mesmo protótipo 2 no detalhe de playlist desktop e neutraliza os controles antigos', () => {
+  it('usa o mesmo detalhe simplificado para playlist desktop', () => {
     const screen = source('components/LibraryScreen.tsx');
     const summary = source('components/DesktopPlaylistSummary.tsx');
-    const tools = source('components/LibraryViewTools.tsx');
-    const css = source('prototype-one-desktop-polish.css');
+    const content = source('components/LibraryContent.tsx');
 
     expect(screen).toMatch(/desktop-playlist-detail-layout/);
-    expect(screen).toMatch(/DesktopPlaylistSummary/);
-    expect(summary).toMatch(/Resumo da playlist/);
-    expect(summary).toMatch(/Duração total/);
-    expect(summary).toMatch(/Disponível offline/);
-    expect(tools).toMatch(/Buscar nesta playlist…/);
-    expect(tools).toMatch(/collectionDetail/);
-    expect(css).toMatch(/desktop-folder-detail-main[\s\S]*search-box--library[\s\S]*opacity: 1/);
-    expect(css).toMatch(/desktop-folder-detail-main[\s\S]*library-filter-toggle::after[\s\S]*content: none/);
-    expect(css).toMatch(/desktop-playlist-detail-main[\s\S]*collection-actions/);
+    expect(screen).toMatch(/onTogglePlayback=\{\(\) => toggleCollectionPlayback\(playlistSummaryTracks\)\}/);
+    expect(summary).toMatch(/aria-label=\{playing \? 'Pausar playlist' : 'Tocar playlist'\}/);
+    expect(content).toMatch(/desktopVariant=\{selectedPlaylist \? 'grid' : 'table'\}/);
+    expect(content).toMatch(/selectedPlaylist && !desktopLayout/);
   });
 });
