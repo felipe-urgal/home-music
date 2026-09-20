@@ -32,6 +32,26 @@ describe('mobile library prototype one contracts', () => {
     expect(content).toMatch(/aria-label="Ordenar pastas da biblioteca"/);
   });
 
+  it('usa a marca Home Music como acesso ao player no desktop', () => {
+    const shell = source('components/DesktopShell.tsx');
+
+    expect(shell).toMatch(/aria-label="Abrir Tocando Agora"/);
+    expect(shell).toMatch(/onClick=\{onOpenPlayer\}/);
+    expect(shell).not.toMatch(/label="Tocando Agora"/);
+  });
+
+  it('usa largura total e a mesma grade visual em pastas e playlists desktop', () => {
+    const content = source('components/LibraryContent.tsx');
+    const navigation = source('components/LibraryNavigationChrome.tsx');
+    const css = source('prototype-one-desktop-polish.css');
+
+    expect(navigation).not.toMatch(/aria-label="Ordenar pastas"/);
+    expect(content).toMatch(/playlist-visual-grid/);
+    expect(content).toMatch(/playlist-visual-card/);
+    expect(css).toMatch(/grid-template-columns: repeat\(auto-fill, minmax\(230px, 1fr\)\)/);
+    expect(css).toMatch(/playlist-order-control[\s\S]*display: none !important/);
+  });
+
   it('aplica o protótipo 2 na listagem de pasta desktop', () => {
     const screen = source('components/LibraryScreen.tsx');
     const summary = source('components/DesktopFolderSummary.tsx');
