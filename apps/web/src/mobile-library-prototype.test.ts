@@ -48,4 +48,22 @@ describe('mobile library prototype one contracts', () => {
     expect(css).toMatch(/grid-template-columns: 220px minmax\(0, 1fr\)/);
     expect(css).toMatch(/desktop-folder-detail-main[\s\S]*desktop-library-table__album[\s\S]*display: none/);
   });
+
+  it('usa o mesmo protótipo 2 no detalhe de playlist desktop e neutraliza os controles antigos', () => {
+    const screen = source('components/LibraryScreen.tsx');
+    const summary = source('components/DesktopPlaylistSummary.tsx');
+    const tools = source('components/LibraryViewTools.tsx');
+    const css = source('prototype-one-desktop-polish.css');
+
+    expect(screen).toMatch(/desktop-playlist-detail-layout/);
+    expect(screen).toMatch(/DesktopPlaylistSummary/);
+    expect(summary).toMatch(/Resumo da playlist/);
+    expect(summary).toMatch(/Duração total/);
+    expect(summary).toMatch(/Disponível offline/);
+    expect(tools).toMatch(/Buscar nesta playlist…/);
+    expect(tools).toMatch(/collectionDetail/);
+    expect(css).toMatch(/desktop-folder-detail-main[\s\S]*search-box--library[\s\S]*opacity: 1/);
+    expect(css).toMatch(/desktop-folder-detail-main[\s\S]*library-filter-toggle::after[\s\S]*content: none/);
+    expect(css).toMatch(/desktop-playlist-detail-main[\s\S]*collection-actions/);
+  });
 });
