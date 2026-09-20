@@ -7,6 +7,7 @@ import type { LibraryNavigation, LibraryTab } from '../useLibraryNavigation';
 import { useDesktopLayout } from '../useDesktopLayout';
 import { useLibraryViews } from '../useLibraryViews';
 import { DesktopFolderSummary } from './DesktopFolderSummary';
+import { DesktopPlaylistSummary } from './DesktopPlaylistSummary';
 import { LibraryContent } from './LibraryContent';
 import { LibraryNavigationChrome } from './LibraryNavigationChrome';
 import { LibraryViewTools } from './LibraryViewTools';
@@ -297,6 +298,10 @@ export function LibraryScreen({
   );
 
   const desktopFolderDetail = desktopLayout && libraryTab === 'folders' && Boolean(folderPath);
+  const desktopPlaylistDetail = desktopLayout && libraryTab === 'playlists' && Boolean(selectedPlaylist);
+  const playlistSummaryTracks = offlineCollectionTarget?.kind === 'playlist'
+    ? offlineCollectionTarget.tracks
+    : libraryTracks;
 
   return (
     <>
@@ -309,6 +314,21 @@ export function LibraryScreen({
             offlineControl={offlineControl}
           />
           <section className="desktop-folder-detail-main">
+            {navigationChrome}
+            {viewTools}
+            {libraryContent}
+            {libraryStatus}
+          </section>
+        </div>
+      ) : desktopPlaylistDetail && selectedPlaylist ? (
+        <div className="desktop-folder-detail-layout desktop-playlist-detail-layout" data-testid="desktop-playlist-detail-layout">
+          <DesktopPlaylistSummary
+            name={selectedPlaylist.name}
+            tracks={playlistSummaryTracks}
+            downloadedIds={offline.downloadedIds}
+            offlineControl={offlineControl}
+          />
+          <section className="desktop-folder-detail-main desktop-playlist-detail-main">
             {navigationChrome}
             {viewTools}
             {libraryContent}
