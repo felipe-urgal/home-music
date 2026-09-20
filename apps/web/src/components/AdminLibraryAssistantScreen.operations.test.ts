@@ -35,15 +35,37 @@ describe('AdminLibraryAssistantScreen operational workflow', () => {
     expect(screen).toContain('capas continuam com aplicação individual');
   });
 
-  it('mantém reset forte separado da análise incremental e expõe as quatro seções', () => {
+  it('mantém reset forte separado e simplifica a navegação principal', () => {
     const screen = source();
 
     expect(screen).toMatch(/resetLibraryAssistantReview\(\)/);
     expect(screen).toMatch(/startLibraryAssistantMetadataRun\(\{ full: true \}\)/);
     expect(screen).toMatch(/Limpar e reanalisar tudo/);
-    for (const label of ['Sugestões', 'Fila', 'Estatísticas', 'Configurações']) {
+    for (const label of ['Sugestões', 'Processamento', 'Configurações']) {
       expect(screen).toContain(label);
     }
+    expect(screen).not.toContain("['queue', 'Fila']");
+    expect(screen).not.toContain("['statistics', 'Estatísticas']");
+  });
+
+  it('diferencia fila de execução ativa e prioriza filtros por tipo de sugestão', () => {
+    const screen = source();
+
+    expect(screen).toMatch(/run\.status === 'queued'\) return 'Análise na fila'/);
+    expect(screen).toMatch(/faixas aguardando processamento/);
+    for (const label of ['Metadados', 'Capas', 'Letras', 'Revisão', 'Falhas']) {
+      expect(screen).toContain(label);
+    }
+    expect(screen).toMatch(/filter === 'metadata'.*capability !== 'metadata'/s);
+    expect(screen).toMatch(/filter === 'artwork'.*capability !== 'artwork'/s);
+    expect(screen).toMatch(/filter === 'lyrics'.*capability !== 'lyrics'/s);
+  });
+
+  it('mantém lyrics local dentro das Configurações em vez de launcher flutuante', () => {
+    const screen = source();
+
+    expect(screen).toContain('Abrir lyrics local');
+    expect(screen).toContain('Fallback opcional com Whisper');
   });
 
   it('expõe detalhes dos resultados de lote em vez de reduzir tudo a erro genérico', () => {
