@@ -114,16 +114,16 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
 
   const embeddedPlaylists = page.locator('.desktop-library-playlists');
   const playlistCreate = embeddedPlaylists.getByRole('button', { name: 'Nova playlist' });
-  const playlistGrid = embeddedPlaylists.locator('.playlist-visual-grid');
+  const embeddedPlaylistGrid = embeddedPlaylists.locator('.playlist-visual-grid');
   const embeddedPlaylistsBox = await embeddedPlaylists.boundingBox();
   const playlistCreateBox = await playlistCreate.boundingBox();
-  const playlistGridBox = await playlistGrid.boundingBox();
+  const embeddedPlaylistGridBox = await embeddedPlaylistGrid.boundingBox();
 
   await expect(embeddedPlaylists.getByText('Playlists', { exact: true })).toBeVisible();
   expect(embeddedPlaylistsBox).not.toBeNull();
   expect(playlistCreateBox).not.toBeNull();
-  expect(playlistGridBox).not.toBeNull();
-  expect(playlistGridBox!.width).toBeGreaterThanOrEqual(folderMainBox!.width * 0.95);
+  expect(embeddedPlaylistGridBox).not.toBeNull();
+  expect(embeddedPlaylistGridBox!.width).toBeGreaterThanOrEqual(folderMainBox!.width * 0.95);
 
   const importedPlaylist = embeddedPlaylists.locator('.group-item__main').filter({ hasText: 'E2E Rekordbox' });
   await expect(importedPlaylist).toBeVisible();
@@ -132,8 +132,8 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   const playlistDetail = page.getByTestId('desktop-playlist-detail-layout');
   const playlistSummary = page.getByTestId('desktop-playlist-summary');
   const playlistDetailMain = page.locator('.desktop-playlist-detail-main');
-  const playlistGrid = playlistDetailMain.getByTestId('desktop-track-grid');
-  const playlistCards = playlistGrid.locator('.desktop-track-card');
+  const detailPlaylistGrid = playlistDetailMain.getByTestId('desktop-track-grid');
+  const playlistCards = detailPlaylistGrid.locator('.desktop-track-card');
   const playlistCoverPlayback = playlistSummary.getByRole('button', { name: /Tocar playlist|Pausar playlist/ });
 
   await expect(playlistDetail).toBeVisible();
@@ -142,24 +142,24 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   await expect(playlistDetailMain.locator('.library-header.is-detail')).toHaveCount(0);
   await expect(page.getByPlaceholder('Buscar nesta playlist…')).toHaveCount(0);
   await expect(page.locator('[aria-label="Filtros rápidos da playlist"]')).toHaveCount(0);
-  await expect(playlistGrid).toBeVisible();
+  await expect(detailPlaylistGrid).toBeVisible();
   await expect(playlistCards.first()).toBeVisible();
 
   const playlistDetailBox = await playlistDetail.boundingBox();
   const playlistSummaryBox = await playlistSummary.boundingBox();
   const playlistDetailMainBox = await playlistDetailMain.boundingBox();
   const playlistCoverBox = await playlistCoverPlayback.boundingBox();
-  const playlistGridBox = await playlistGrid.boundingBox();
+  const detailPlaylistGridBox = await detailPlaylistGrid.boundingBox();
   const firstPlaylistCard = playlistCards.first();
   const firstPlaylistCardTitle = firstPlaylistCard.locator('.desktop-track-card__copy strong');
-  const gridColumns = await playlistGrid.evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').filter(Boolean).length);
+  const gridColumns = await detailPlaylistGrid.evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').filter(Boolean).length);
   const cardTitleSize = Number.parseFloat(await firstPlaylistCardTitle.evaluate(element => getComputedStyle(element).fontSize));
 
   expect(playlistDetailBox).not.toBeNull();
   expect(playlistSummaryBox).not.toBeNull();
   expect(playlistDetailMainBox).not.toBeNull();
   expect(playlistCoverBox).not.toBeNull();
-  expect(playlistGridBox).not.toBeNull();
+  expect(detailPlaylistGridBox).not.toBeNull();
   expect(playlistDetailBox!.width).toBeGreaterThanOrEqual(viewport!.width * 0.9);
   expect(playlistSummaryBox!.x + playlistSummaryBox!.width).toBeLessThanOrEqual(playlistDetailMainBox!.x + 1);
   expect(playlistCoverBox!.width).toBeGreaterThanOrEqual(220);
