@@ -113,11 +113,20 @@ export class MissingCoverFillService {
 
   private eligibleTracks() {
     this.options.coverOverrides.refresh();
-    return this.options.library.listTracks().filter(track => {
+    return this.options.library.listTracks().flatMap(track => {
       const cover = this.options.coverOverrides.getStatus(track.id);
-      if (!cover || cover.physicalHasCover) return false;
-      if (!cover.override) return true;
-      return this.isGeneratedOverride(track, cover.override.version);
+      if (!cover || cover.physicalHasCover) return [];
+      const eligible = !cover.override || this.isGeneratedOverride(track, cover.override.version);
+      if (!eligible) return [];
+
+      // Overrides gerados contam como capa efetiva na projeção. Para tentar
+      // substituir o fallback por uma capa real, o analyzer precisa enxergar
+      // esta faixa como ainda sem artwork.
+      return [{
+        ...track,
+        hasCover: false,
+        coverVersion: undefined
+      }];
     });
   }
 
