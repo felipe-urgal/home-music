@@ -1364,11 +1364,192 @@
   }
 
   #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .folder-visual-card__text strong {
-    font-size: 12px;
+    font-size: 14px;
   }
 
   #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .folder-visual-card__text small {
-    font-size: 9px;
+    font-size: 11px;
+  }
+
+  /* Desktop library root: one header action and one mixed collection grid. */
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-header.is-root,
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-tabs {
+    display: none !important;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-smart-view-tools {
+    position: relative;
+    z-index: 40;
+    width: 100%;
+    height: 0;
+    min-height: 0;
+    margin: 0;
+    overflow: visible;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-smart-view-tools .library-tools {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: min(440px, calc(100vw - 420px));
+    margin: 0;
+    display: block;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-4px);
+    transition: opacity 120ms ease, transform 120ms ease;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-smart-view-tools:focus-within .library-tools,
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-smart-view-tools:has(.search-box--library input:not(:placeholder-shown)) .library-tools {
+    opacity: 1;
+    pointer-events: auto;
+    transform: none;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-smart-view-tools .search-box--library {
+    width: 100%;
+    min-height: 40px;
+    margin: 0;
+    border: 1px solid rgba(236,215,194,.13);
+    border-radius: 9px;
+    background: rgba(9,16,27,.96);
+    box-shadow: 0 14px 34px rgba(0,0,0,.28);
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-smart-view-tools .search-box--library input {
+    font-size: 13px;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-smart-view-tools .library-filter-toggle,
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-smart-view-tools .library-saved-view-strip,
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-smart-view-tools .library-view-controls {
+    display: none !important;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .section-heading--folders-root {
+    min-height: 42px;
+    margin: 0 0 16px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .section-heading--folders-root > span,
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .section-heading--folders-root > small,
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .section-heading--folders-root .folder-order-control {
+    display: none !important;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-root-create-playlist {
+    width: auto;
+    min-height: 38px;
+    margin-left: auto;
+    padding: 0 18px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 650;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-root-create-playlist svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-collection-grid {
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px 16px;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-collection-grid .playlist-visual-card {
+    position: relative;
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    display: block;
+    overflow: hidden;
+    border: 1px solid rgba(231, 209, 187, .11);
+    border-radius: 9px;
+    background: #101827;
+    box-shadow: 0 10px 28px rgba(0,0,0,.16);
+    transform: none;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-collection-grid .playlist-visual-card:hover {
+    border-color: rgba(244,196,126,.28);
+    background: #121c2d;
+    transform: translateY(-1px);
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-collection-grid .playlist-visual-card__main {
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    display: block;
+    border: 0;
+    color: inherit;
+    background: transparent;
+    text-align: left;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-collection-grid .playlist-visual-card__main .artwork {
+    width: 100%;
+    height: auto;
+    max-width: none;
+    aspect-ratio: 1.36 / 1;
+    overflow: hidden;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-collection-grid .playlist-visual-card__main .artwork img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-collection-grid .playlist-visual-card .group-item__text {
+    min-height: 48px;
+    padding: 9px 34px 9px 10px;
+    display: grid;
+    align-content: center;
+    gap: 3px;
+    text-align: left;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-collection-grid .playlist-visual-card .group-item__text strong {
+    overflow: hidden;
+    color: #f1e8e1;
+    font-size: 14px;
+    font-weight: 620;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-collection-grid .playlist-visual-card .group-item__text small {
+    color: #928a87;
+    font-size: 11px;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-collection-grid .playlist-visual-card .group-item__updated,
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-collection-grid .playlist-visual-card .group-item__play,
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-collection-grid .playlist-visual-card .group-item__chevron {
+    display: none !important;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-collection-grid .playlist-visual-card .group-item__more {
+    position: absolute;
+    right: 9px;
+    bottom: 14px;
+    width: 15px;
+    height: 15px;
+    margin: 0;
+    color: #aaa19d;
+    stroke-width: 1.7;
   }
 
   /* Desktop library root: playlists live below folders instead of occupying a navbar tab. */
@@ -1585,6 +1766,82 @@
     opacity: 1;
   }
 
+  .desktop-now-playing-screen__more-menu--portal {
+    position: fixed;
+    z-index: 1000;
+    width: 270px;
+    max-height: none;
+    padding: 8px;
+    overflow: visible;
+    border: 1px solid rgba(231, 209, 187, .16);
+    border-radius: 10px;
+    color: #ddd3cc;
+    background: rgba(11, 16, 26, .98);
+    box-shadow: 0 20px 46px rgba(0,0,0,.36);
+    scrollbar-width: none;
+  }
+
+  .desktop-now-playing-screen__more-menu--portal::-webkit-scrollbar {
+    display: none;
+  }
+
+  .desktop-now-playing-screen__more-menu--portal > button,
+  .desktop-now-playing-screen__more-menu--portal .desktop-now-playing-screen__more-submenu button {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    border: 0;
+    border-radius: 7px;
+    color: inherit;
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .desktop-now-playing-screen__more-menu--portal > button {
+    min-height: 42px;
+    padding: 9px 10px;
+    gap: 10px;
+    font-size: 13px;
+  }
+
+  .desktop-now-playing-screen__more-menu--portal > button:hover,
+  .desktop-now-playing-screen__more-menu--portal .desktop-now-playing-screen__more-submenu button:hover {
+    background: rgba(255,255,255,.05);
+  }
+
+  .desktop-now-playing-screen__more-menu--portal > button svg {
+    width: 18px;
+    height: 18px;
+    flex: 0 0 auto;
+  }
+
+  .desktop-now-playing-screen__more-menu--portal > button.is-active {
+    color: #f4c47e;
+    background: rgba(244,196,126,.07);
+  }
+
+  .desktop-now-playing-screen__more-menu--portal .desktop-now-playing-screen__more-submenu {
+    margin: 3px 0 5px 26px;
+    padding: 4px 0 4px 8px;
+    display: grid;
+    gap: 2px;
+    border-left: 1px solid rgba(244,196,126,.16);
+  }
+
+  .desktop-now-playing-screen__more-menu--portal .desktop-now-playing-screen__more-submenu button {
+    min-height: 34px;
+    padding: 7px 9px;
+    font-size: 12px;
+  }
+
+  .desktop-now-playing-screen__more-menu--portal .desktop-now-playing-screen__more-empty {
+    padding: 7px 9px;
+    color: #8f8784;
+    font-size: 11px;
+    line-height: 1.35;
+  }
+
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__more-wrap {
     overflow: visible;
   }
@@ -1645,13 +1902,13 @@
     z-index: 5;
     right: 25px;
     bottom: 20px;
-    width: min(360px, calc(100% - 50px));
-    min-height: 72px;
-    padding: 8px 12px 8px 8px;
+    width: min(410px, calc(100% - 50px));
+    min-height: 84px;
+    padding: 10px 14px 10px 10px;
     display: grid;
-    grid-template-columns: 54px minmax(0, 1fr) 22px;
+    grid-template-columns: 62px minmax(0, 1fr) 24px;
     align-items: center;
-    gap: 12px;
+    gap: 14px;
     overflow: hidden;
     border: 1px solid rgba(232, 211, 190, .16);
     border-radius: 10px;
@@ -1676,8 +1933,8 @@
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track > .artwork {
-    width: 54px;
-    height: 54px;
+    width: 62px;
+    height: 62px;
     max-width: none;
     overflow: hidden;
     border: 0;
@@ -1699,7 +1956,7 @@
 
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track-copy small {
     color: #c89a70;
-    font-size: 9px;
+    font-size: 10px;
     font-weight: 700;
     letter-spacing: .14em;
     text-transform: uppercase;
@@ -1714,18 +1971,18 @@
 
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track-copy strong {
     color: #f3e9e1;
-    font-size: 13px;
+    font-size: 15px;
     font-weight: 650;
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track-copy > span {
     color: #9f9793;
-    font-size: 10px;
+    font-size: 12px;
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track > svg {
-    width: 19px;
-    height: 19px;
+    width: 21px;
+    height: 21px;
     color: #d7b17e;
     stroke-width: 1.8;
   }
@@ -1738,7 +1995,7 @@
 
   @media (max-width: 1180px) {
     #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track {
-      width: min(310px, calc(100% - 42px));
+      width: min(350px, calc(100% - 42px));
       right: 21px;
       bottom: 18px;
     }
@@ -1838,11 +2095,13 @@
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-folder-summary__identity strong {
-    font-size: 14px;
+    font-size: 16px;
+    line-height: 1.25;
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-folder-summary__identity small {
-    font-size: 11px;
+    font-size: 13px;
+    line-height: 1.35;
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-folder-summary__stats > div {
@@ -1852,8 +2111,9 @@
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-folder-summary__stats dt {
-    gap: 9px;
-    font-size: 10px;
+    gap: 10px;
+    font-size: 12px;
+    line-height: 1.35;
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-folder-summary__stats dt svg {
@@ -1862,13 +2122,14 @@
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-folder-summary__stats dd {
-    margin-left: 25px;
-    font-size: 13px;
+    margin-left: 26px;
+    font-size: 15px;
+    line-height: 1.35;
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-folder-summary__quote {
-    font-size: 11px;
-    line-height: 1.55;
+    font-size: 13px;
+    line-height: 1.6;
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-folder-detail-main {
@@ -1988,21 +2249,21 @@
 
   #root .desktop-layout[data-offline="false"] .desktop-track-card__copy strong {
     color: #f6eee8;
-    font-size: 14px;
+    font-size: 16px;
     font-weight: 660;
     line-height: 1.25;
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-track-card__copy > span {
     color: #b0a7a2;
-    font-size: 11px;
-    line-height: 1.3;
+    font-size: 13px;
+    line-height: 1.35;
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-track-card__copy small {
-    color: #777f8a;
-    font-size: 10px;
-    line-height: 1.3;
+    color: #858d98;
+    font-size: 12px;
+    line-height: 1.35;
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-track-card__actions {
@@ -2038,8 +2299,8 @@
 
   #root .desktop-layout[data-offline="false"] .desktop-folder-detail-main .library-status {
     margin-top: 24px;
-    color: #626a76;
-    font-size: 9px;
+    color: #707986;
+    font-size: 11px;
   }
 
 }

@@ -143,6 +143,7 @@ describe('large library performance guard', () => {
         sort="current"
         onSort={() => undefined}
         onPlayTrack={() => undefined}
+        onTogglePlay={() => undefined}
         offlineSupported={false}
         downloadedIds={new Set<string>()}
         individualDownloadedIds={new Set<string>()}

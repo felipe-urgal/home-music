@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { createPortal } from 'react-dom';
 import type { Playlist, RepeatMode, Track } from '@home-music/shared';
 import {
   CheckCircle2,
@@ -93,8 +94,25 @@ export function DesktopNowPlayingScreen({
 }: DesktopNowPlayingScreenProps) {
   const [playlistOpen, setPlaylistOpen] = useState(false);
   const [actionsOpen, setActionsOpen] = useState(false);
+  const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
   const actionsRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const crossfadeVisual = useCrossfadeVisualState();
+
+  function positionActionsMenu() {
+    const trigger = actionsRef.current?.querySelector<HTMLButtonElement>('.desktop-now-playing-screen__more');
+    if (!trigger) return;
+    const rect = trigger.getBoundingClientRect();
+    const menuWidth = 270;
+    const viewportPadding = 12;
+    setMenuPosition({
+      top: Math.min(window.innerHeight - 12, rect.bottom + 8),
+      left: Math.min(
+        window.innerWidth - menuWidth - viewportPadding,
+        Math.max(viewportPadding, rect.right - menuWidth)
+      )
+    });
+  }
 
   useEffect(() => {
     if (!actionsOpen) return;
@@ -106,7 +124,8 @@ export function DesktopNowPlayingScreen({
 
     function handlePointerDown(event: PointerEvent) {
       const target = event.target;
-      if (!(target instanceof Node) || actionsRef.current?.contains(target)) return;
+      if (!(target instanceof Node)) return;
+      if (actionsRef.current?.contains(target) || menuRef.current?.contains(target)) return;
       closeMenu();
     }
 
@@ -114,11 +133,19 @@ export function DesktopNowPlayingScreen({
       if (event.key === 'Escape') closeMenu();
     }
 
+    function handleViewportChange() {
+      closeMenu();
+    }
+
     document.addEventListener('pointerdown', handlePointerDown);
     document.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('resize', handleViewportChange);
+    window.addEventListener('scroll', handleViewportChange, true);
     return () => {
       document.removeEventListener('pointerdown', handlePointerDown);
       document.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('resize', handleViewportChange);
+      window.removeEventListener('scroll', handleViewportChange, true);
     };
   }, [actionsOpen]);
 
@@ -197,15 +224,25 @@ export function DesktopNowPlayingScreen({
                   aria-expanded={actionsOpen}
                   onClick={() => {
                     setActionsOpen(value => {
-                      if (value) setPlaylistOpen(false);
-                      return !value;
+                      if (value) {
+                        setPlaylistOpen(false);
+                        return false;
+                      }
+                      positionActionsMenu();
+                      return true;
                     });
                   }}
                 >
                   <MoreVertical aria-hidden="true" />
                 </button>
-                {actionsOpen && (
-                  <div className="desktop-now-playing-screen__more-menu" role="menu" aria-label="Mais opções da faixa">
+                {actionsOpen && createPortal(
+                  <div
+                    ref={menuRef}
+                    className="desktop-now-playing-screen__more-menu desktop-now-playing-screen__more-menu--portal"
+                    role="menu"
+                    aria-label="Mais opções da faixa"
+                    style={{ top: menuPosition.top, left: menuPosition.left }}
+                  >
                     <button
                       type="button"
                       role="menuitem"
@@ -283,7 +320,8 @@ export function DesktopNowPlayingScreen({
                         <span>{offlineActionLabel}</span>
                       </button>
                     )}
-                  </div>
+                  </div>,
+                  document.body
                 )}
               </div>
             </div>

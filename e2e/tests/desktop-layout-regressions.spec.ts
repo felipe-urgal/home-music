@@ -44,12 +44,19 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   await expect(page.locator('.desktop-now-playing-screen__play')).toHaveCount(0);
   await expect(nowPlaying.getByRole('button', { name: 'Adicionar à playlist' })).toHaveCount(0);
   await moreActions.click();
-  const moreMenu = nowPlaying.getByRole('menu', { name: 'Mais opções da faixa' });
+  const moreMenu = page.getByRole('menu', { name: 'Mais opções da faixa' });
   await expect(moreMenu).toBeVisible();
+  await expect(moreMenu).toHaveClass(/desktop-now-playing-screen__more-menu--portal/);
   await expect(moreMenu.getByRole('menuitem', { name: 'Adicionar à playlist' })).toBeVisible();
   await expect(moreMenu.getByRole('menuitemcheckbox', { name: /Aleatório/ })).toBeVisible();
   await expect(moreMenu.getByRole('menuitem', { name: /Repetição|Repetir/ })).toBeVisible();
+  expect(await moreMenu.evaluate(element => getComputedStyle(element).position)).toBe('fixed');
   expect(await moreMenu.evaluate(element => getComputedStyle(element).overflowY)).toBe('visible');
+
+  await moreMenu.getByRole('menuitem', { name: 'Adicionar à playlist' }).click();
+  await expect(moreMenu.getByRole('group', { name: 'Adicionar à playlist' })).toBeVisible();
+  const scrollWidthWithPlaylistMenu = await page.evaluate(() => document.documentElement.scrollWidth);
+  expect(scrollWidthWithPlaylistMenu).toBeLessThanOrEqual(viewport!.width + 1);
 
   await nowPlaying.locator('.desktop-now-playing-screen__heading').click();
   await expect(moreMenu).toHaveCount(0);
@@ -119,6 +126,12 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   await expect(searchResultGrid).toBeVisible();
   await expect(searchResultGrid.locator('.desktop-track-card').filter({ hasText: 'E2E Track' })).toBeVisible();
   await expect(page.getByTestId('desktop-library-table')).toHaveCount(0);
+  const searchTrackControl = searchResultGrid.locator('.desktop-track-card__main').filter({ hasText: 'E2E Track' });
+  await expect(searchTrackControl).toHaveAttribute('aria-label', /^(Tocar|Pausar) E2E Track,/);
+  const searchTrackTitleSize = Number.parseFloat(
+    await searchTrackControl.locator('.desktop-track-card__copy strong').evaluate(element => getComputedStyle(element).fontSize)
+  );
+  expect(searchTrackTitleSize).toBeGreaterThanOrEqual(16);
   await librarySearch.clear();
 
   await homeBrand.click();
@@ -131,20 +144,22 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   expect(topbarBox!.width).toBeGreaterThanOrEqual(viewport!.width - 1);
   expect(topbarBox!.height).toBeLessThan(100);
 
-  const embeddedPlaylists = page.locator('.desktop-library-playlists');
-  const playlistCreate = embeddedPlaylists.getByRole('button', { name: 'Nova playlist' });
-  const embeddedPlaylistGrid = embeddedPlaylists.locator('.playlist-visual-grid');
-  const embeddedPlaylistsBox = await embeddedPlaylists.boundingBox();
+  const rootHeading = page.locator('.section-heading--folders-root');
+  const playlistCreate = rootHeading.getByRole('button', { name: 'Nova playlist' });
+  const collectionGrid = page.locator('.library-collection-grid');
   const playlistCreateBox = await playlistCreate.boundingBox();
-  const embeddedPlaylistGridBox = await embeddedPlaylistGrid.boundingBox();
+  const collectionGridBox = await collectionGrid.boundingBox();
 
-  await expect(embeddedPlaylists.getByText('Playlists', { exact: true })).toBeVisible();
-  expect(embeddedPlaylistsBox).not.toBeNull();
+  await expect(playlistCreate).toBeVisible();
+  await expect(rootHeading.locator(':scope > span')).toHaveCount(0);
+  await expect(rootHeading.locator(':scope > small')).toHaveCount(0);
+  await expect(rootHeading.locator('.folder-order-control')).toHaveCount(0);
+  await expect(page.locator('.desktop-library-playlists')).toHaveCount(0);
   expect(playlistCreateBox).not.toBeNull();
-  expect(embeddedPlaylistGridBox).not.toBeNull();
-  expect(embeddedPlaylistGridBox!.width).toBeGreaterThanOrEqual(folderMainBox!.width * 0.95);
+  expect(collectionGridBox).not.toBeNull();
+  expect(collectionGridBox!.width).toBeGreaterThanOrEqual(folderMainBox!.width * 0.95);
 
-  const importedPlaylist = embeddedPlaylists.locator('.group-item__main').filter({ hasText: 'E2E Rekordbox' });
+  const importedPlaylist = collectionGrid.locator('.playlist-visual-card .group-item__main').filter({ hasText: 'E2E Rekordbox' });
   await expect(importedPlaylist).toBeVisible();
   await importedPlaylist.click();
 

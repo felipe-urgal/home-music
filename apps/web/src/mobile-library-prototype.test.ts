@@ -40,7 +40,7 @@ describe('mobile library prototype one contracts', () => {
     expect(shell).not.toMatch(/label="Tocando Agora"/);
   });
 
-  it('integra playlists e amplia as pastas na raiz desktop', () => {
+  it('unifica pastas e playlists na mesma grade e deixa só nova playlist no header desktop', () => {
     const shell = source('components/DesktopShell.tsx');
     const content = source('components/LibraryContent.tsx');
     const navigation = source('components/LibraryNavigationChrome.tsx');
@@ -49,17 +49,21 @@ describe('mobile library prototype one contracts', () => {
 
     expect(navigation).not.toMatch(/aria-label="Ordenar pastas"/);
     expect(shell).not.toMatch(/label="Playlists"/);
-    expect(content).toMatch(/desktop-library-playlists/);
-    expect(content).toMatch(/section-heading--embedded-playlists/);
+    expect(content).toMatch(/library-collection-grid/);
+    expect(content).toMatch(/library-root-create-playlist/);
     expect(content).toMatch(/Nova playlist/);
-    expect(content).toMatch(/playlist-visual-grid/);
+    expect(content).toMatch(/renderPlaylistCards\(\)/);
     expect(content).toMatch(/playlist-visual-card/);
+    expect(content).toMatch(/playlistArtworkTracks[\s\S]*slice\(0, 4\)/);
+    expect(content).toMatch(/playlist-visual-card__artwork-mosaic/);
     expect(content).toMatch(/folder-visual-card__artwork-mosaic/);
     expect(libraryNavigation).toMatch(/folderArtworkTracks\(tracks: Track\[], limit = 4\)/);
     expect(libraryNavigation).toMatch(/artworks: folderArtworkTracks/);
-    expect(css).toMatch(/desktop-library-playlists/);
-    expect(css).toMatch(/folder-visual-grid[\s\S]*minmax\(300px, 1fr\)/);
-    expect(css).toMatch(/folder-visual-card__artwork-mosaic[\s\S]*grid-template-columns: repeat\(2/);
+    expect(css).toMatch(/library-collection-grid[\s\S]*minmax\(300px, 1fr\)/);
+    expect(css).toMatch(/section-heading--folders-root[\s\S]*justify-content: flex-end/);
+    expect(css).toMatch(/library-root-create-playlist[\s\S]*font-size: 13px/);
+    expect(css).toMatch(/folder-visual-card__text strong[\s\S]*font-size: 14px/);
+    expect(css).toMatch(/library-collection-grid[\s\S]*playlist-visual-card[\s\S]*font-size: 14px/);
   });
 
   it('usa a mesma grade visual do detalhe nos resultados de busca desktop', () => {
@@ -82,18 +86,21 @@ describe('mobile library prototype one contracts', () => {
     expect(screen).not.toMatch(/aria-label="Anterior"/);
     expect(screen).not.toMatch(/className="desktop-now-playing-screen__play"/);
     expect(screen).not.toMatch(/desktop-now-playing-screen__controls/);
+    expect(screen).toMatch(/createPortal/);
+    expect(screen).toMatch(/desktop-now-playing-screen__more-menu--portal/);
     expect(screen).toMatch(/Adicionar à playlist/);
     expect(screen).toMatch(/role="menuitemcheckbox"/);
     expect(screen).toMatch(/Aleatório ligado/);
     expect(screen).toMatch(/repeatLabel/);
     expect(app).toMatch(/nextTrack=\{nextTrack\}/);
-    expect(css).toMatch(/desktop-now-playing-screen__more-menu[\s\S]*width: 248px/);
+    expect(css).toMatch(/desktop-now-playing-screen__more-menu--portal[\s\S]*width: 270px/);
     expect(css).toMatch(/desktop-now-playing-screen__more-submenu/);
+    expect(css).toMatch(/desktop-now-playing-screen__more-menu--portal > button[\s\S]*font-size: 13px/);
     expect(css).toMatch(/desktop-now-playing-screen__heading h1[\s\S]*font-size: clamp\(24px, 2\.15vw, 34px\)/);
     expect(css).toMatch(/desktop-now-playing-screen__waveform-progress[\s\S]*width: min\(100%, 470px\)/);
     expect(css).toMatch(/desktop-now-playing-screen__waveform span[\s\S]*var\(--wave-fill, 0%\)/);
     expect(css).toMatch(/desktop-now-playing-screen__quote[\s\S]*font-size: 12px/);
-    expect(css).toMatch(/desktop-now-playing-screen__next-track[\s\S]*width: min\(360px/);
+    expect(css).toMatch(/desktop-now-playing-screen__next-track[\s\S]*width: min\(410px/);
     expect(css).toMatch(/desktop-now-playing-screen__art-frame[\s\S]*width: min\(100%, 500px\)/);
   });
 
@@ -109,9 +116,15 @@ describe('mobile library prototype one contracts', () => {
     expect(summary).toMatch(/desktop-folder-summary__cover-play/);
     expect(rows).toMatch(/desktopVariant === 'grid'/);
     expect(rows).toMatch(/desktop-track-grid/);
+    expect(rows).toMatch(/if \(isCurrent\) onTogglePlay\(\)/);
+    expect(rows).toMatch(/isCurrent && playing \? <Pause \/> : <Play \/>/);
     expect(css).toMatch(/desktop-track-grid[\s\S]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
     expect(css).toMatch(/@media \(min-width: 1500px\)[\s\S]*desktop-track-grid[\s\S]*repeat\(5, minmax\(0, 1fr\)\)/);
-    expect(css).toMatch(/desktop-track-card__copy strong[\s\S]*font-size: 14px/);
+    expect(css).toMatch(/desktop-track-card__copy strong[\s\S]*font-size: 16px/);
+    expect(css).toMatch(/desktop-track-card__copy > span[\s\S]*font-size: 13px/);
+    expect(css).toMatch(/desktop-folder-summary__identity strong[\s\S]*font-size: 16px/);
+    expect(css).toMatch(/desktop-folder-summary__stats dt[\s\S]*font-size: 12px/);
+    expect(css).toMatch(/desktop-folder-summary__stats dd[\s\S]*font-size: 15px/);
   });
 
   it('usa o mesmo detalhe simplificado para playlist desktop', () => {

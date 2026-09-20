@@ -284,6 +284,7 @@ export function LibraryScreen({
       playing={playing}
       offlineTrackProps={offlineTrackProps}
       onPlayTrack={onPlayTrack}
+      onTogglePlay={onTogglePlay}
       onCreatePlaylist={makePlaylist}
       onEditPlaylist={editPlaylist}
       onRemovePlaylist={removePlaylist}
@@ -355,6 +356,13 @@ export function LibraryScreen({
             {libraryStatus}
           </section>
         </div>
+      ) : desktopLayout ? (
+        <>
+          {navigationChrome}
+          {viewTools}
+          {libraryContent}
+          {libraryStatus}
+        </>
       ) : (
         <>
           {navigationChrome}
