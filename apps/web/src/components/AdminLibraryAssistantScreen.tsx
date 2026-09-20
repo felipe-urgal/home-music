@@ -55,10 +55,13 @@ import { notifyLibraryChanged } from '../library-events';
 import '../library-assistant-admin.css';
 import '../library-assistant-operations.css';
 
-type Props = { onBack: () => void };
-type Filter = 'all' | 'open' | 'safe' | 'review' | 'applied' | 'rejected' | 'failed';
+type Props = {
+  onBack: () => void;
+  onOpenLocalLyrics?: () => void;
+};
+type Filter = 'all' | 'metadata' | 'artwork' | 'lyrics' | 'review' | 'failed';
 type Sort = 'recent' | 'oldest';
-type Section = 'suggestions' | 'queue' | 'statistics' | 'settings';
+type Section = 'suggestions' | 'processing' | 'settings';
 type Feedback = { kind: 'success' | 'error' | 'warning'; message: string; details?: string[] };
 type PolicyRow = {
   key: LibraryAssistantReviewPolicyKey;
@@ -72,17 +75,15 @@ const BATCH_SIZE = 100;
 const METADATA_FIELDS: readonly LibraryAssistantMetadataField[] = ['title', 'artist', 'album', 'albumArtist'];
 const FILTERS: readonly [Filter, string][] = [
   ['all', 'Todas'],
-  ['open', 'Abertas'],
-  ['safe', 'Seguras'],
+  ['metadata', 'Metadados'],
+  ['artwork', 'Capas'],
+  ['lyrics', 'Letras'],
   ['review', 'Revisão'],
-  ['applied', 'Aplicadas'],
-  ['rejected', 'Rejeitadas'],
   ['failed', 'Falhas']
 ];
 const SECTIONS: readonly [Section, string][] = [
   ['suggestions', 'Sugestões'],
-  ['queue', 'Fila'],
-  ['statistics', 'Estatísticas'],
+  ['processing', 'Processamento'],
   ['settings', 'Configurações']
 ];
 const FIELD_LABELS: Record<LibraryAssistantMetadataField, string> = {
@@ -183,7 +184,8 @@ function statusLabel(status: LibraryAssistantSuggestionStatus) {
 
 function runTitle(run: LibraryAssistantRun | null) {
   if (!run) return 'Pronto para analisar sua biblioteca';
-  if (run.status === 'queued' || run.status === 'running') return 'Analisando sua biblioteca';
+  if (run.status === 'queued') return 'Análise na fila';
+  if (run.status === 'running') return 'Analisando sua biblioteca';
   if (run.status === 'failed') return 'Análise interrompida';
   if (run.status === 'cancelled') return 'Análise cancelada';
   if (run.status === 'stale') return 'Análise desatualizada';
@@ -194,7 +196,13 @@ function runDescription(run: LibraryAssistantRun | null): readonly [string, stri
   if (!run) {
     return ['Enriqueça metadados, capas e letras com fontes externas confiáveis.', 'Nada é aplicado sem sua confirmação.'];
   }
-  if (run.status === 'queued' || run.status === 'running') {
+  if (run.status === 'queued') {
+    return [
+      'A análise está aguardando o processamento começar.',
+      'As sugestões aparecerão automaticamente assim que a primeira faixa for processada.'
+    ];
+  }
+  if (run.status === 'running') {
     return [
       'Enriquecendo metadados e procurando capas e letras confiáveis.',
       'Você já pode revisar e aplicar resultados prontos enquanto o restante da biblioteca continua sendo analisado.'
@@ -353,7 +361,7 @@ function AssistantTrackArtwork({ trackId }: { trackId: string }) {
   );
 }
 
-export function AdminLibraryAssistantScreen({ onBack }: Props) {
+export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props) {
   const [runs, setRuns] = useState<LibraryAssistantRun[]>([]);
   const [suggestions, setSuggestions] = useState<LibraryAssistantSuggestion[]>([]);
   const [reviewItems, setReviewItems] = useState<LibraryAssistantReviewItem[]>([]);
@@ -398,10 +406,11 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
     const filtered = suggestions.filter(suggestion => {
       if (isOpen(suggestion) && policyModeForSuggestion(policy, suggestion) === 'ignore') return false;
       if (filter !== 'all') {
-        if (filter === 'open' && !isOpen(suggestion)) return false;
-        if (filter === 'safe' && !isSafe(suggestion)) return false;
+        if (filter === 'metadata' && suggestion.target.capability !== 'metadata') return false;
+        if (filter === 'artwork' && suggestion.target.capability !== 'artwork') return false;
+        if (filter === 'lyrics' && suggestion.target.capability !== 'lyrics') return false;
         if (filter === 'review' && (!isOpen(suggestion) || isSafe(suggestion))) return false;
-        if (!['open', 'safe', 'review'].includes(filter) && suggestion.status !== filter) return false;
+        if (filter === 'failed' && suggestion.status !== 'failed') return false;
       }
       if (!normalizedSearch) return true;
       return searchText(suggestion, reviewMap.get(suggestion.id)).toLocaleLowerCase('pt-BR').includes(normalizedSearch);
@@ -899,11 +908,13 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
         <div className="assistant-admin__header-actions">
           <button
             type="button"
-            className="assistant-admin__header-button"
+            className="assistant-admin__header-button assistant-admin__header-button--icon"
+            aria-label="Como funciona o Assistente"
+            title="Como funciona"
             aria-pressed={showHelp}
             onClick={() => setShowHelp(value => !value)}
           >
-            Como funciona?
+            <Info />
           </button>
           <button
             type="button"
@@ -967,8 +978,11 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
         <div className="assistant-admin__progress-block">
           <div className="assistant-admin__progress-heading">
             <strong>
-              {processedTracks.toLocaleString('pt-BR')}
-              <span> de {totalTracks.toLocaleString('pt-BR')} faixas com pendências analisadas</span>
+              {latestRun?.status === 'queued' ? (
+                <>{totalTracks.toLocaleString('pt-BR')}<span> faixas aguardando processamento</span></>
+              ) : (
+                <>{processedTracks.toLocaleString('pt-BR')}<span> de {totalTracks.toLocaleString('pt-BR')} faixas com pendências analisadas</span></>
+              )}
             </strong>
             <strong>{progressPercent}%</strong>
           </div>
@@ -1155,8 +1169,8 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
                 <div className="assistant-admin__empty">
                   {runActive ? <LoaderCircle className="is-spinning" /> : <Search />}
                   <div>
-                    <strong>{runActive ? 'Aguardando as próximas sugestões' : 'Nenhum resultado neste filtro'}</strong>
-                    <span>{runActive ? 'Os resultados aparecerão aqui conforme cada faixa for processada.' : 'Ajuste filtros, busca ou a política de revisão nas Configurações.'}</span>
+                    <strong>{runActive ? 'Nenhum resultado pronto ainda' : 'Nenhum resultado neste filtro'}</strong>
+                    <span>{runActive ? 'Metadados, capas e letras aparecem aqui conforme cada faixa termina de ser processada.' : 'Ajuste filtros, busca ou a política de revisão nas Configurações.'}</span>
                   </div>
                 </div>
               ) : (
@@ -1247,31 +1261,65 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
         </>
       )}
 
-      {section === 'queue' && (
-        <section className="assistant-admin__operations-panel" aria-labelledby="assistant-queue-title">
+      {section === 'processing' && (
+        <section className="assistant-admin__operations-panel" aria-labelledby="assistant-processing-title">
           <header className="assistant-admin__operations-heading">
             <div>
-              <strong id="assistant-queue-title">Fila de processamento</strong>
-              <small>Estado operacional da análise mais recente. Falhas entram novamente no próximo “Analisar mudanças”.</small>
+              <strong id="assistant-processing-title">Processamento</strong>
+              <small>Fila atual, desempenho da análise e histórico das execuções recentes.</small>
             </div>
             <span className={`assistant-admin__run-badge is-${latestRun?.status ?? 'idle'}`}>{runStatusLabel(latestRun)}</span>
           </header>
-          <dl className="assistant-admin__operations-grid">
-            <div><dt>Processando</dt><dd>{progress.processing.toLocaleString('pt-BR')}</dd></div>
-            <div><dt>Pendentes</dt><dd>{progress.pending.toLocaleString('pt-BR')}</dd></div>
-            <div><dt>Em retry</dt><dd>{progress.retry.toLocaleString('pt-BR')}</dd></div>
-            <div><dt>Encontradas</dt><dd>{progress.matched.toLocaleString('pt-BR')}</dd></div>
-            <div><dt>Sem resultado</dt><dd>{progress.noMatch.toLocaleString('pt-BR')}</dd></div>
-            <div><dt>Falhas</dt><dd>{progress.failed.toLocaleString('pt-BR')}</dd></div>
-          </dl>
-          {!latestRun ? (
-            <p className="assistant-admin__operations-copy">Ainda não há uma análise para acompanhar.</p>
-          ) : (
-            <p className="assistant-admin__operations-copy">
-              {processedTracks.toLocaleString('pt-BR')} de {totalTracks.toLocaleString('pt-BR')} faixas com pendências concluídas nesta execução.
-              {observed?.etaMs != null && runActive ? ` Estimativa restante: ${formatDuration(observed.etaMs)}.` : ''}
-            </p>
-          )}
+
+          <div className="assistant-admin__operations-section">
+            <strong>Agora</strong>
+            <dl className="assistant-admin__operations-grid">
+              <div><dt>Processando</dt><dd>{progress.processing.toLocaleString('pt-BR')}</dd></div>
+              <div><dt>Pendentes</dt><dd>{progress.pending.toLocaleString('pt-BR')}</dd></div>
+              <div><dt>Em retry</dt><dd>{progress.retry.toLocaleString('pt-BR')}</dd></div>
+              <div><dt>Encontradas</dt><dd>{progress.matched.toLocaleString('pt-BR')}</dd></div>
+              <div><dt>Sem resultado</dt><dd>{progress.noMatch.toLocaleString('pt-BR')}</dd></div>
+              <div><dt>Falhas</dt><dd>{progress.failed.toLocaleString('pt-BR')}</dd></div>
+            </dl>
+            {!latestRun ? (
+              <p className="assistant-admin__operations-copy">Ainda não há uma análise para acompanhar.</p>
+            ) : (
+              <p className="assistant-admin__operations-copy">
+                {processedTracks.toLocaleString('pt-BR')} de {totalTracks.toLocaleString('pt-BR')} faixas com pendências concluídas nesta execução.
+                {observed?.etaMs != null && runActive ? ` Estimativa restante: ${formatDuration(observed.etaMs)}.` : ''}
+              </p>
+            )}
+          </div>
+
+          <div className="assistant-admin__operations-section">
+            <strong>Desempenho</strong>
+            <dl className="assistant-admin__operations-grid assistant-admin__operations-grid--secondary">
+              <div><dt>Tempo</dt><dd>{observed ? formatDuration(observed.elapsedMs) : '—'}</dd></div>
+              <div><dt>Velocidade</dt><dd>{observed ? observed.tracksPerSecond.toLocaleString('pt-BR', { maximumFractionDigits: 2 }) : '—'}</dd></div>
+              <div><dt>Consultas externas</dt><dd>{observed ? observed.externalRequests.toLocaleString('pt-BR') : '—'}</dd></div>
+              <div><dt>Cache</dt><dd>{cacheQueries > 0 ? `${cachePercent}%` : '—'}</dd></div>
+              <div><dt>Retries</dt><dd>{observed ? observed.retriesTotal.toLocaleString('pt-BR') : '—'}</dd></div>
+              <div><dt>Espera por limite</dt><dd>{observed ? formatDuration(observed.rateLimitWaitMs) : '—'}</dd></div>
+            </dl>
+          </div>
+
+          <div className="assistant-admin__operations-section">
+            <strong>Últimas análises</strong>
+            {metadataRuns.length === 0 ? (
+              <p className="assistant-admin__operations-copy">Nenhuma execução registrada.</p>
+            ) : (
+              <ul className="assistant-admin__history">
+                {metadataRuns.slice(0, 8).map(run => (
+                  <li key={run.id}>
+                    <span>{formatRunDate(run.createdAt)}</span>
+                    <span className="assistant-admin__history-status">{runStatusLabel(run)}</span>
+                    <span>{run.summary.total.toLocaleString('pt-BR')} sugestões</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
           <div className="assistant-admin__operations-actions">
             {runActive ? (
               <button className="assistant-admin__danger-button" type="button" disabled={mutating} onClick={() => void cancelAnalysis()}>
@@ -1286,41 +1334,6 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
               >
                 <RefreshCw /> {progress.failed > 0 ? 'Tentar falhas novamente' : 'Analisar mudanças'}
               </button>
-            )}
-          </div>
-        </section>
-      )}
-
-      {section === 'statistics' && (
-        <section className="assistant-admin__operations-panel" aria-labelledby="assistant-statistics-title">
-          <header className="assistant-admin__operations-heading">
-            <div>
-              <strong id="assistant-statistics-title">Estatísticas</strong>
-              <small>Métricas da análise mais recente e histórico das últimas execuções de metadados.</small>
-            </div>
-          </header>
-          <dl className="assistant-admin__operations-grid">
-            <div><dt>Tempo</dt><dd>{observed ? formatDuration(observed.elapsedMs) : '—'}</dd></div>
-            <div><dt>Velocidade</dt><dd>{observed ? observed.tracksPerSecond.toLocaleString('pt-BR', { maximumFractionDigits: 2 }) : '—'}</dd></div>
-            <div><dt>Consultas externas</dt><dd>{observed ? observed.externalRequests.toLocaleString('pt-BR') : '—'}</dd></div>
-            <div><dt>Cache</dt><dd>{cacheQueries > 0 ? `${cachePercent}%` : '—'}</dd></div>
-            <div><dt>Retries</dt><dd>{observed ? observed.retriesTotal.toLocaleString('pt-BR') : '—'}</dd></div>
-            <div><dt>Espera por limite</dt><dd>{observed ? formatDuration(observed.rateLimitWaitMs) : '—'}</dd></div>
-          </dl>
-          <div>
-            <strong>Últimas análises</strong>
-            {metadataRuns.length === 0 ? (
-              <p className="assistant-admin__operations-copy">Nenhuma execução registrada.</p>
-            ) : (
-              <ul className="assistant-admin__history">
-                {metadataRuns.slice(0, 8).map(run => (
-                  <li key={run.id}>
-                    <span>{formatRunDate(run.createdAt)}</span>
-                    <span className="assistant-admin__history-status">{runStatusLabel(run)}</span>
-                    <span>{run.summary.total.toLocaleString('pt-BR')} sugestões</span>
-                  </li>
-                ))}
-              </ul>
             )}
           </div>
         </section>
@@ -1391,6 +1404,17 @@ export function AdminLibraryAssistantScreen({ onBack }: Props) {
               <p className="assistant-admin__settings-note" role="alert">{fingerprintStatusError ?? 'Não foi possível verificar a identificação por áudio.'}</p>
             )}
           </div>
+          {onOpenLocalLyrics && (
+            <div className="assistant-admin__settings assistant-admin__settings--action">
+              <div>
+                <strong>Lyrics local</strong>
+                <p className="assistant-admin__settings-note">Fallback opcional com Whisper. O áudio permanece neste servidor e qualquer resultado sempre volta para revisão antes de ser aplicado.</p>
+              </div>
+              <button className="assistant-admin__secondary-button" type="button" onClick={onOpenLocalLyrics}>
+                <Music2 /> Abrir lyrics local
+              </button>
+            </div>
+          )}
           <div className="assistant-admin__settings">
             <strong>Comportamento da análise</strong>
             <p className="assistant-admin__settings-note">Use “Analisar mudanças” no dia a dia: itens com falha anterior, faixas novas e alterações voltam para a fila. “Limpar e reanalisar tudo” invalida somente sugestões abertas de metadados, capas e letras; Aplicadas e Rejeitadas permanecem no histórico. Alterar a política não força uma nova análise.</p>
