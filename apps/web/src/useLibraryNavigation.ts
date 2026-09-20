@@ -26,6 +26,12 @@ import {
 export const LIBRARY_PAGE_SIZE = 100;
 export type LibraryTab = 'folders' | 'playlists';
 
+function folderArtworkTracks(tracks: Track[], limit = 4) {
+  const withCover = tracks.filter(track => track.hasCover);
+  const withoutCover = tracks.filter(track => !track.hasCover);
+  return [...withCover, ...withoutCover].slice(0, limit);
+}
+
 function initialLibraryRoute() {
   if (typeof window === 'undefined') {
     return { libraryTab: 'folders' as LibraryTab, folderPath: '', selectedPlaylistId: null as string | null };
@@ -138,17 +144,20 @@ export function useLibraryNavigation(
         return [{
           ...folder,
           matchingTrackCount: folder.tracks.length,
-          artwork: folder.artwork
+          artwork: folder.artwork,
+          artworks: folderArtworkTracks(folder.tracks)
         }];
       }
 
       let matchingTrackCount = 0;
       let firstMatchingTrack: Track | undefined;
       let firstMatchingCover: Track | undefined;
+      const matchingTracks: Track[] = [];
 
       for (const track of folder.tracks) {
         if (!matchingTrackIds.has(track.id)) continue;
         matchingTrackCount += 1;
+        matchingTracks.push(track);
         firstMatchingTrack ??= track;
         if (!firstMatchingCover && track.hasCover) firstMatchingCover = track;
       }
@@ -157,7 +166,8 @@ export function useLibraryNavigation(
       return [{
         ...folder,
         matchingTrackCount,
-        artwork: firstMatchingCover ?? firstMatchingTrack ?? folder.artwork
+        artwork: firstMatchingCover ?? firstMatchingTrack ?? folder.artwork,
+        artworks: folderArtworkTracks(matchingTracks)
       }];
     });
 
