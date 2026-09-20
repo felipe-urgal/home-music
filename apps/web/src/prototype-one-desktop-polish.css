@@ -1,3 +1,7 @@
+.library-folder-quick-filters {
+  display: none;
+}
+
 /*
  * Desktop polish for Prototype 1.
  * Keeps the top navigation on one baseline and lets Now Playing own the full desktop canvas.
@@ -272,9 +276,583 @@
   #root .desktop-layout[data-offline="false"][data-library-tab="playlists"]:has(.library-header.is-root) .group-item__text small {
     font-size: 9px;
   }
+
+  /* Prototype 2 — desktop folder detail: summary rail + wide content. */
+  #root .desktop-layout[data-offline="false"] > .phone-surface:has(.desktop-folder-detail-layout) {
+    padding: 22px 28px 30px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-main-content--library:has(.desktop-folder-detail-layout) {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+  }
+
+  #root .desktop-folder-detail-layout {
+    width: 100%;
+    min-width: 0;
+    display: grid;
+    grid-template-columns: 220px minmax(0, 1fr);
+    align-items: start;
+    gap: 28px;
+  }
+
+  #root .desktop-folder-summary {
+    position: sticky;
+    top: 0;
+    min-width: 0;
+    min-height: calc(100vh - 112px);
+    padding: 0 20px 0 0;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid rgba(244, 196, 126, .10);
+  }
+
+  #root .desktop-folder-summary__cover {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    overflow: hidden;
+    border: 1px solid rgba(231, 209, 187, .12);
+    border-radius: 10px;
+    background: #101827;
+    box-shadow: 0 18px 42px rgba(0,0,0,.20);
+  }
+
+  #root .desktop-folder-summary__cover::after {
+    content: "";
+    position: absolute;
+    inset: 48% 0 0;
+    z-index: 1;
+    pointer-events: none;
+    background: linear-gradient(180deg, transparent, rgba(5, 10, 18, .88));
+  }
+
+  #root .desktop-folder-summary__cover .artwork,
+  #root .desktop-folder-summary__cover .artwork img {
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    border: 0;
+    border-radius: 0;
+    object-fit: cover;
+    box-shadow: none;
+  }
+
+  #root .desktop-folder-summary__cover .artwork-fallback__label {
+    font-size: clamp(24px, 2.4vw, 38px);
+    letter-spacing: -.045em;
+  }
+
+  #root .desktop-folder-summary__cover-title {
+    position: absolute;
+    z-index: 2;
+    left: 14px;
+    right: 14px;
+    bottom: 13px;
+    overflow: hidden;
+    color: #fff1e4;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: .13em;
+    text-align: center;
+    text-overflow: ellipsis;
+    text-transform: uppercase;
+    white-space: nowrap;
+    text-shadow: 0 2px 12px rgba(0,0,0,.6);
+  }
+
+  #root .desktop-folder-summary__identity {
+    min-height: 58px;
+    margin: 10px 0 5px;
+    padding: 8px 9px;
+    display: grid;
+    grid-template-columns: 30px minmax(0, 1fr);
+    align-items: center;
+    gap: 9px;
+    border: 1px solid rgba(244,196,126,.10);
+    border-radius: 9px;
+    background: rgba(255,255,255,.018);
+  }
+
+  #root .desktop-folder-summary__identity-icon {
+    width: 30px;
+    height: 30px;
+    display: grid;
+    place-items: center;
+    border-radius: 8px;
+    color: #f2bd77;
+    background: rgba(240, 157, 74, .10);
+  }
+
+  #root .desktop-folder-summary__identity-icon svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  #root .desktop-folder-summary__identity > span:last-child {
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+  }
+
+  #root .desktop-folder-summary__identity strong,
+  #root .desktop-folder-summary__identity small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #root .desktop-folder-summary__identity strong {
+    color: #f2e9e2;
+    font-size: 11px;
+    font-weight: 650;
+  }
+
+  #root .desktop-folder-summary__identity small {
+    color: #887f7b;
+    font-size: 9px;
+  }
+
+  #root .desktop-folder-summary__stats {
+    margin: 0;
+    display: grid;
+  }
+
+  #root .desktop-folder-summary__stats > div {
+    min-height: 53px;
+    padding: 8px 4px;
+    display: grid;
+    align-content: center;
+    gap: 4px;
+    border-bottom: 1px solid rgba(255,255,255,.045);
+  }
+
+  #root .desktop-folder-summary__stats dt {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #817a78;
+    font-size: 8px;
+  }
+
+  #root .desktop-folder-summary__stats dt svg {
+    width: 14px;
+    height: 14px;
+    color: #aca09a;
+  }
+
+  #root .desktop-folder-summary__stats dd {
+    margin: 0 0 0 22px;
+    color: #e1d6cf;
+    font-size: 11px;
+    font-weight: 590;
+    font-variant-numeric: tabular-nums;
+  }
+
+  #root .desktop-folder-summary__offline-action .offline-collection-control {
+    margin: 10px 0 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+
+  #root .desktop-folder-summary__offline-action .offline-collection-control__copy {
+    display: none;
+  }
+
+  #root .desktop-folder-summary__offline-action .offline-collection-control__actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px;
+  }
+
+  #root .desktop-folder-summary__offline-action .offline-collection-control__actions .primary-action,
+  #root .desktop-folder-summary__offline-action .offline-collection-control__actions .secondary-action {
+    width: 100%;
+    min-height: 34px;
+    border-color: rgba(244,196,126,.15);
+    background: rgba(255,255,255,.025);
+    color: #bcb0aa;
+    font-size: 9px;
+  }
+
+  #root .desktop-folder-summary__offline-action .offline-collection-control__remove {
+    width: 34px;
+    height: 34px;
+  }
+
+  #root .desktop-folder-summary__quote {
+    margin-top: auto;
+    padding: 22px 3px 2px;
+    display: grid;
+    gap: 2px;
+    color: #c99067;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 9px;
+    font-style: italic;
+    line-height: 1.45;
+    letter-spacing: .08em;
+  }
+
+  #root .desktop-folder-summary__quote::before {
+    content: "";
+    width: 24px;
+    height: 1px;
+    margin-bottom: 10px;
+    background: #a86f4b;
+  }
+
+  #root .desktop-folder-summary__quote strong {
+    font-weight: 500;
+  }
+
+  #root .desktop-folder-detail-main {
+    position: relative;
+    min-width: 0;
+    width: 100%;
+    padding-top: 2px;
+  }
+
+  #root .desktop-folder-detail-main .library-header.is-detail {
+    min-height: 72px;
+    margin: 0;
+    padding: 3px 150px 0 0;
+    display: grid;
+    grid-template-columns: 38px minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+  }
+
+  #root .desktop-folder-detail-main .library-header.is-detail > .icon-button:first-child {
+    width: 34px;
+    height: 34px;
+    color: #e6ddd7;
+  }
+
+  #root .desktop-folder-detail-main .library-header.is-detail > .icon-button:first-child svg {
+    width: 17px;
+    height: 17px;
+  }
+
+  #root .desktop-folder-detail-main .library-header.is-detail .library-header__title {
+    min-width: 0;
+    display: grid;
+    gap: 4px;
+    text-align: left;
+  }
+
+  #root .desktop-folder-detail-main .library-header.is-detail .library-header__title strong {
+    overflow: hidden;
+    color: #fff0e4;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 25px;
+    font-weight: 500;
+    letter-spacing: -.03em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #root .desktop-folder-detail-main .library-header.is-detail .library-header__title small {
+    color: #918985;
+    font-size: 10px;
+  }
+
+  #root .desktop-folder-detail-main .library-header.is-detail .library-header__player-button,
+  #root .desktop-folder-detail-main .library-header.is-detail > .icon-button[aria-label="Atualizar biblioteca"] {
+    display: none !important;
+  }
+
+  #root .desktop-folder-detail-main .breadcrumbs {
+    min-height: 24px;
+    margin: -5px 0 11px 46px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    color: #787f8a;
+    font-size: 9px;
+  }
+
+  #root .desktop-folder-detail-main .breadcrumbs button {
+    color: #9aa4b0;
+  }
+
+  #root .desktop-folder-detail-main .breadcrumbs span {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  #root .desktop-folder-detail-main .breadcrumbs svg {
+    width: 11px;
+    height: 11px;
+  }
+
+  #root .desktop-folder-detail-main .library-smart-view-tools {
+    position: relative;
+    z-index: 20;
+    width: 100%;
+    margin: 0 0 12px;
+  }
+
+  #root .desktop-folder-detail-main .library-tools {
+    width: 100%;
+    margin: 0 0 9px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 40px;
+    gap: 8px;
+  }
+
+  #root .desktop-folder-detail-main .search-box--library {
+    height: 40px;
+    min-height: 40px;
+    margin: 0;
+    border: 1px solid rgba(236,215,194,.11);
+    border-radius: 8px;
+    background: rgba(9, 16, 27, .74);
+    box-shadow: none;
+  }
+
+  #root .desktop-folder-detail-main .search-box--library input {
+    font-size: 10px;
+  }
+
+  #root .desktop-folder-detail-main .library-filter-toggle {
+    width: 40px;
+    height: 40px;
+    border-color: rgba(236,215,194,.11);
+    border-radius: 8px;
+    background: rgba(9, 16, 27, .74);
+  }
+
+  #root .desktop-folder-detail-main .library-folder-quick-filters {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 34px;
+  }
+
+  #root .desktop-folder-detail-main .library-folder-quick-filters > button,
+  #root .desktop-folder-detail-main .library-folder-quick-filters > label {
+    min-height: 30px;
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid rgba(232,211,190,.10);
+    border-radius: 7px;
+    color: #9a9491;
+    background: rgba(255,255,255,.018);
+    font-size: 8px;
+  }
+
+  #root .desktop-folder-detail-main .library-folder-quick-filters > button {
+    padding: 0 11px;
+    cursor: pointer;
+  }
+
+  #root .desktop-folder-detail-main .library-folder-quick-filters > button:hover,
+  #root .desktop-folder-detail-main .library-folder-quick-filters > button.is-active {
+    border-color: rgba(246,203,143,.40);
+    color: #302016;
+    background: linear-gradient(180deg, #ffd49a, #e9a35c);
+  }
+
+  #root .desktop-folder-detail-main .library-folder-quick-filters > label {
+    padding: 0 8px;
+    gap: 5px;
+  }
+
+  #root .desktop-folder-detail-main .library-folder-quick-filters select {
+    min-height: 28px;
+    padding: 0 16px 0 2px;
+    border: 0;
+    outline: 0;
+    color: #b5ada8;
+    background: transparent;
+    font-size: 8px;
+  }
+
+  #root .desktop-folder-detail-main .library-folder-quick-filters__sort {
+    margin-left: auto;
+  }
+
+  #root .desktop-folder-detail-main .library-saved-view-strip {
+    display: none;
+  }
+
+  #root .desktop-folder-detail-main .library-view-controls {
+    position: absolute;
+    z-index: 50;
+    top: 47px;
+    right: 0;
+    width: min(390px, 48vw);
+    border-color: rgba(236,215,194,.15);
+    background: rgba(9, 15, 25, .99);
+    box-shadow: 0 22px 55px rgba(0,0,0,.40);
+  }
+
+  #root .desktop-folder-detail-main .library-content {
+    position: static;
+    min-width: 0;
+  }
+
+  #root .desktop-folder-detail-main .library-content > .play-all {
+    position: absolute;
+    z-index: 10;
+    top: 20px;
+    right: 0;
+    min-height: 36px;
+    margin: 0;
+    padding: 0 15px;
+    border: 1px solid #f5ca8a;
+    border-radius: 8px;
+    color: #342014;
+    background: linear-gradient(180deg, #ffd49a, #eda75c);
+    box-shadow: 0 7px 20px rgba(172,84,31,.16);
+    font-size: 9px;
+    font-weight: 720;
+  }
+
+  #root .desktop-folder-detail-main .library-content > .play-all svg {
+    width: 13px;
+    height: 13px;
+  }
+
+  #root .desktop-folder-detail-main .library-content > .play-all span {
+    display: none;
+  }
+
+  #root .desktop-folder-detail-main .library-content > .section-heading {
+    display: none;
+  }
+
+  #root .desktop-folder-detail-main .desktop-library-table-shell {
+    width: 100%;
+    overflow: hidden;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  #root .desktop-folder-detail-main .desktop-bulk-toolbar {
+    display: none;
+  }
+
+  #root .desktop-folder-detail-main .desktop-library-table-shell:has(.desktop-bulk-toolbar__actions) .desktop-bulk-toolbar {
+    min-height: 42px;
+    margin: 0 0 6px;
+    padding: 0 8px;
+    display: flex;
+    border: 1px solid rgba(244,196,126,.12);
+    border-radius: 8px;
+    background: rgba(255,255,255,.018);
+  }
+
+  #root .desktop-folder-detail-main .desktop-library-table {
+    width: 100%;
+    table-layout: fixed;
+  }
+
+  #root .desktop-folder-detail-main .desktop-library-table th {
+    height: 33px;
+    padding: 0 8px;
+    border-top: 1px solid rgba(255,255,255,.055);
+    border-bottom: 1px solid rgba(255,255,255,.07);
+    color: #777f8c;
+    font-size: 8px;
+    letter-spacing: .07em;
+  }
+
+  #root .desktop-folder-detail-main .desktop-library-table th:nth-child(2) {
+    width: 52%;
+  }
+
+  #root .desktop-folder-detail-main .desktop-library-table th:nth-child(3) {
+    width: 32%;
+  }
+
+  #root .desktop-folder-detail-main .desktop-library-table__album,
+  #root .desktop-folder-detail-main .desktop-library-table__folder,
+  #root .desktop-folder-detail-main .desktop-library-table__format {
+    display: none;
+  }
+
+  #root .desktop-folder-detail-main .desktop-library-table__select {
+    width: 38px;
+  }
+
+  #root .desktop-folder-detail-main .desktop-library-table__duration {
+    width: 66px;
+    color: #929aa7;
+  }
+
+  #root .desktop-folder-detail-main .desktop-library-table__actions {
+    width: 54px;
+  }
+
+  #root .desktop-folder-detail-main .desktop-library-table tbody tr {
+    height: 43px;
+    border-bottom-color: rgba(255,255,255,.045);
+  }
+
+  #root .desktop-folder-detail-main .desktop-library-table tbody tr:hover {
+    background: rgba(255,255,255,.025);
+  }
+
+  #root .desktop-folder-detail-main .desktop-library-table td {
+    padding: 4px 8px;
+    font-size: 10px;
+  }
+
+  #root .desktop-folder-detail-main .desktop-library-table__track {
+    grid-template-columns: 30px minmax(0, 1fr) 18px;
+    gap: 8px;
+  }
+
+  #root .desktop-folder-detail-main .desktop-library-table__track .artwork {
+    width: 30px;
+    height: 30px;
+    border-radius: 6px;
+  }
+
+  #root .desktop-folder-detail-main .desktop-library-table__track-copy strong {
+    font-size: 10px;
+  }
+
+  #root .desktop-folder-detail-main .desktop-library-table__track-copy small {
+    display: none;
+  }
+
+  #root .desktop-folder-detail-main .desktop-library-table__text-cell {
+    font-size: 9px;
+  }
+
+  #root .desktop-folder-detail-main .desktop-library-table__action {
+    width: 26px;
+    height: 26px;
+  }
+
+  #root .desktop-folder-detail-main .library-status {
+    margin-top: 10px;
+    color: #4f535c;
+    font-size: 7px;
+  }
+
 }
 
 @media (min-width: 1500px) {
+  #root .desktop-folder-detail-layout {
+    grid-template-columns: 245px minmax(0, 1fr);
+    gap: 34px;
+  }
+
+  #root .desktop-layout[data-offline="false"] > .phone-surface:has(.desktop-folder-detail-layout) {
+    padding-inline: 34px;
+  }
+
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__stage {
     width: min(calc(100% - 120px), 1280px);
     grid-template-columns: minmax(360px, 460px) minmax(420px, 540px);
