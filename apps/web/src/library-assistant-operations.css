@@ -38,6 +38,22 @@
   line-height: 1.45;
 }
 
+.assistant-admin__operations-section {
+  display: grid;
+  gap: .55rem;
+  padding-top: .2rem;
+}
+
+.assistant-admin__operations-section + .assistant-admin__operations-section {
+  padding-top: .9rem;
+  border-top: 1px solid rgba(77, 97, 112, .32);
+}
+
+.assistant-admin__operations-section > strong {
+  font-size: .78rem;
+  color: #dbe3e9;
+}
+
 .assistant-admin__operations-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -109,6 +125,25 @@
 .assistant-admin__settings {
   display: grid;
   gap: .55rem;
+}
+
+.assistant-admin__settings--action {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1rem;
+  padding: .75rem;
+  border: 1px solid #2e3e4b;
+  border-radius: .55rem;
+  background: rgba(18, 29, 38, .72);
+}
+
+.assistant-admin__settings--action > div {
+  display: grid;
+  gap: .3rem;
+}
+
+.assistant-admin__settings--action .assistant-admin__settings-note {
+  margin: 0;
 }
 
 .assistant-admin__settings-loader {
