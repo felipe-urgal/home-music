@@ -21,8 +21,10 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   const nowPlaying = page.locator('.desktop-now-playing-screen');
   const nowPlayingArt = page.locator('.desktop-now-playing-screen__art');
   const nowPlayingArtworkSurface = page.locator('.desktop-now-playing-screen__art .now-playing-vinyl__disc');
+  const nowPlayingArtFrame = page.locator('.desktop-now-playing-screen__art-frame');
   const nowPlayingContent = page.locator('.desktop-now-playing-screen__content');
   const waveformSeek = page.locator('.desktop-now-playing-screen__waveform-seek');
+  const waveformBar = page.locator('.desktop-now-playing-screen__waveform span').first();
   const coverPlay = page.locator('.desktop-now-playing-screen__cover-play');
   const playerModeControls = page.locator('.desktop-now-playing-screen__controls button');
 
@@ -33,6 +35,7 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   await expect(waveformSeek).toBeVisible();
   await expect(waveformSeek).toHaveAttribute('aria-label', 'Progresso da música');
   await expect(waveformSeek).toHaveAttribute('aria-valuetext', /\d+:\d{2} de \d+:\d{2}/);
+  await expect(waveformBar).toHaveAttribute('style', /--wave-fill:/);
   await expect(page.locator('.desktop-now-playing-screen__progress')).toHaveCount(0);
   await expect(coverPlay).toBeVisible();
   await expect(coverPlay).toHaveAttribute('aria-label', /Tocar|Pausar/);
@@ -45,15 +48,24 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   const nowPlayingBox = await nowPlaying.boundingBox();
   const artworkBox = await nowPlayingArt.boundingBox();
   const artworkSurfaceBox = await nowPlayingArtworkSurface.boundingBox();
+  const artFrameBox = await nowPlayingArtFrame.boundingBox();
+  const coverPlayBox = await coverPlay.boundingBox();
   const contentBox = await nowPlayingContent.boundingBox();
   expect(surfaceBox).not.toBeNull();
   expect(nowPlayingBox).not.toBeNull();
   expect(artworkBox).not.toBeNull();
   expect(artworkSurfaceBox).not.toBeNull();
+  expect(artFrameBox).not.toBeNull();
+  expect(coverPlayBox).not.toBeNull();
   expect(contentBox).not.toBeNull();
   expect(surfaceBox!.width).toBeGreaterThanOrEqual(viewport!.width - 1);
   expect(artworkSurfaceBox!.width).toBeGreaterThanOrEqual(300);
   expect(artworkSurfaceBox!.height).toBeGreaterThanOrEqual(300);
+  expect(artFrameBox!.width).toBeGreaterThanOrEqual(artworkSurfaceBox!.width - 1);
+  expect(coverPlayBox!.x).toBeGreaterThanOrEqual(artworkSurfaceBox!.x);
+  expect(coverPlayBox!.y).toBeGreaterThanOrEqual(artworkSurfaceBox!.y);
+  expect(coverPlayBox!.x + coverPlayBox!.width).toBeLessThanOrEqual(artworkSurfaceBox!.x + artworkSurfaceBox!.width + 1);
+  expect(coverPlayBox!.y + coverPlayBox!.height).toBeLessThanOrEqual(artworkSurfaceBox!.y + artworkSurfaceBox!.height + 1);
   expect(artworkBox!.y).toBeGreaterThanOrEqual(nowPlayingBox!.y - 1);
   expect(contentBox!.y).toBeGreaterThanOrEqual(nowPlayingBox!.y - 1);
   expect(artworkBox!.y + artworkBox!.height).toBeLessThanOrEqual(nowPlayingBox!.y + nowPlayingBox!.height + 1);
