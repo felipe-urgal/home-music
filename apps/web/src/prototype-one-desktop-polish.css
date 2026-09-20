@@ -139,6 +139,139 @@
     width: 100%;
     max-width: 520px;
   }
+
+  /* Playlists desktop: remove the editorial split that squeezed the actual library.
+     Keep the same visual language, but let the collection use the desktop canvas. */
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"]:has(.library-header.is-root) .desktop-main-content--library {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"]:has(.library-header.is-root) .library-header.is-root {
+    min-height: 88px;
+    margin: 0 0 12px;
+    padding: 18px 0 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"]:has(.library-header.is-root) .library-header.is-root::before {
+    left: 0;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"]:has(.library-header.is-root) .library-header__title {
+    display: grid !important;
+    grid-column: 1;
+    gap: 5px;
+    text-align: left;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"]:has(.library-header.is-root) .library-header__title strong {
+    display: block;
+    color: #fff0e4;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: clamp(26px, 2.1vw, 32px);
+    font-weight: 500;
+    line-height: 1.05;
+    letter-spacing: -.035em;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"]:has(.library-header.is-root) .library-header__title small {
+    display: block;
+    margin: 0;
+    color: #938b88;
+    font-size: 10px;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"]:has(.library-header.is-root) .library-content {
+    width: 100%;
+    display: block;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"]:has(.library-header.is-root) .library-content::before {
+    content: none;
+    display: none;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"]:has(.library-header.is-root) .section-heading--playlists-root {
+    width: 100%;
+    min-height: 42px;
+    margin: 0 0 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"]:has(.library-header.is-root) .section-heading--playlists-root > span {
+    display: block;
+    color: #d8cec7;
+    font-size: 12px;
+    font-weight: 620;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"]:has(.library-header.is-root) .section-heading__actions {
+    min-width: 0;
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"]:has(.library-header.is-root) .playlist-create-action {
+    min-height: 36px;
+    padding-inline: 16px;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"]:has(.library-header.is-root) .playlist-order-control {
+    min-height: 36px;
+    padding: 0 10px;
+    border: 1px solid rgba(236, 215, 194, .12);
+    border-radius: 8px;
+    background: rgba(12, 18, 29, .58);
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"]:has(.library-header.is-root) .playlist-order-control select {
+    min-height: 34px;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"]:has(.library-header.is-root) .group-list {
+    width: 100%;
+    grid-column: auto;
+    display: grid;
+    gap: 8px;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"]:has(.library-header.is-root) .group-item {
+    width: 100%;
+    min-height: 70px;
+    grid-template-columns: minmax(0, 1fr) 38px 22px;
+    gap: 8px;
+    border-radius: 10px;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"]:has(.library-header.is-root) .group-item__main {
+    min-height: 68px;
+    padding: 8px;
+    grid-template-columns: 72px minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"]:has(.library-header.is-root) .group-item__main .artwork {
+    width: 72px;
+    height: 50px;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"]:has(.library-header.is-root) .group-item__text strong {
+    font-size: 11px;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"]:has(.library-header.is-root) .group-item__text small {
+    font-size: 9px;
+  }
 }
 
 @media (min-width: 1500px) {
