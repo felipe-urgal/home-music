@@ -188,6 +188,7 @@
   }
 
   #root .desktop-layout[data-offline="false"] .folder-order-control {
+    position: relative;
     min-width: 0;
     display: flex;
     align-items: center;
@@ -207,10 +208,11 @@
 
   #root .desktop-layout[data-offline="false"] .folder-order-control select {
     position: absolute;
-    width: 1px;
-    height: 1px;
+    inset: -8px -4px;
+    width: calc(100% + 8px);
+    height: calc(100% + 16px);
     opacity: 0;
-    pointer-events: none;
+    cursor: pointer;
   }
 
   #root .desktop-layout[data-offline="false"] .folder-order-control:focus-within {
