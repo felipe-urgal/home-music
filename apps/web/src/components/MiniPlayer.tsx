@@ -32,12 +32,12 @@ export function MiniPlayer({
   return (
     <div className="mini-player" data-testid="mini-player">
       <div className="mini-player__progress" aria-hidden="true"><span style={{ width: `${progress}%` }} /></div>
-      <button className="mini-player__main" onClick={onOpenPlayer}>
+      <button className="mini-player__main" type="button" aria-label="Abrir Tocando Agora" onClick={onOpenPlayer}>
         <Artwork track={current} />
         <span className="mini-player__text"><strong>{current.title}</strong><small>{current.artist}</small></span>
       </button>
-      <button className="icon-button" aria-label={playing ? 'Pausar' : 'Tocar'} onClick={onTogglePlay}>{playing ? <Pause /> : <Play />}</button>
-      <button className="icon-button" aria-label="Próxima" onClick={onNext} disabled={!hasNext}><SkipForward /></button>
+      <button className="icon-button mini-player__toggle" type="button" aria-label={playing ? 'Pausar' : 'Tocar'} onClick={onTogglePlay}>{playing ? <Pause /> : <Play />}</button>
+      <button className="icon-button mini-player__next" type="button" aria-label="Próxima" onClick={onNext} disabled={!hasNext}><SkipForward /></button>
     </div>
   );
 }
