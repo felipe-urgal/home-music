@@ -75,6 +75,7 @@ export function LibraryScreen({
     updateSmartPlaylist,
     deleteSmartPlaylist,
     setPlaylistTracks,
+    addTrackToPlaylist,
     reportError
   } = data;
   const savedViews = useLibraryViews(reportError);
@@ -93,6 +94,7 @@ export function LibraryScreen({
 
   const isDetail = Boolean(selectedPlaylist || folderPath);
   const showViewTools = !(libraryTab === 'playlists' && !selectedPlaylist);
+  const editablePlaylists = playlists.filter(playlist => playlist.source === 'manual');
 
   const offlineCollectionTarget = useMemo<OfflineCollectionDownloadInput | null>(() => {
     if (selectedPlaylist) {
@@ -292,9 +294,13 @@ export function LibraryScreen({
           hasNext={hasNext}
           currentTime={currentTime}
           duration={duration}
+          playlists={editablePlaylists}
           onOpenPlayer={onOpenPlayer}
           onTogglePlay={onTogglePlay}
           onNext={onNext}
+          onAddToPlaylist={playlist => {
+            void addTrackToPlaylist(playlist, current.id).catch(reportError);
+          }}
         />
       )}
 
