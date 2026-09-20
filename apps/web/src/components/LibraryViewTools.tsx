@@ -45,6 +45,13 @@ export function LibraryViewTools({
     ? 'Buscar em Pastas'
     : 'Música, artista ou álbum';
   const folderDetail = libraryTab === 'folders' && Boolean(navigation.folderPath);
+  const playlistDetail = libraryTab === 'playlists' && Boolean(navigation.selectedPlaylist);
+  const collectionDetail = folderDetail || playlistDetail;
+  const detailSearchPlaceholder = folderDetail
+    ? 'Buscar nesta pasta…'
+    : playlistDetail
+      ? 'Buscar nesta playlist…'
+      : searchPlaceholder;
 
   return (
     <section className="library-smart-view-tools" aria-label="Busca, filtros e views inteligentes">
@@ -55,7 +62,7 @@ export function LibraryViewTools({
           <input
             value={query}
             onChange={event => changeQuery(event.target.value)}
-            placeholder={folderDetail ? 'Buscar nesta pasta…' : searchPlaceholder}
+            placeholder={detailSearchPlaceholder}
           />
         </label>
         <button
@@ -70,8 +77,8 @@ export function LibraryViewTools({
         </button>
       </div>
 
-      {folderDetail && (
-        <div className="library-folder-quick-filters" aria-label="Filtros rápidos da pasta">
+      {collectionDetail && (
+        <div className="library-folder-quick-filters" aria-label={folderDetail ? 'Filtros rápidos da pasta' : 'Filtros rápidos da playlist'}>
           <button
             className={!query && coverFilter === 'all' && formatFilter === 'all' ? 'is-active' : ''}
             type="button"
