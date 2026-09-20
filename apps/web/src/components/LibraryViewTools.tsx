@@ -73,9 +73,10 @@ export function LibraryViewTools({
       {folderDetail && (
         <div className="library-folder-quick-filters" aria-label="Filtros rápidos da pasta">
           <button
-            className={coverFilter === 'all' && formatFilter === 'all' ? 'is-active' : ''}
+            className={!query && coverFilter === 'all' && formatFilter === 'all' ? 'is-active' : ''}
             type="button"
             onClick={() => {
+              changeQuery('');
               changeCoverFilter('all');
               changeFormatFilter('all');
             }}
