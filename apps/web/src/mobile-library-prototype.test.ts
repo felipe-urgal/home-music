@@ -31,4 +31,21 @@ describe('mobile library prototype one contracts', () => {
     expect(content).toMatch(/group-item__chevron/);
     expect(content).toMatch(/aria-label="Ordenar pastas da biblioteca"/);
   });
+
+  it('aplica o protótipo 2 na listagem de pasta desktop', () => {
+    const screen = source('components/LibraryScreen.tsx');
+    const summary = source('components/DesktopFolderSummary.tsx');
+    const tools = source('components/LibraryViewTools.tsx');
+    const css = source('prototype-one-desktop-polish.css');
+
+    expect(screen).toMatch(/desktop-folder-detail-layout/);
+    expect(screen).toMatch(/DesktopFolderSummary/);
+    expect(summary).toMatch(/Duração total/);
+    expect(summary).toMatch(/Disponível offline/);
+    expect(summary).toMatch(/Formato predominante/);
+    expect(tools).toMatch(/Buscar nesta pasta…/);
+    expect(tools).toMatch(/library-folder-quick-filters/);
+    expect(css).toMatch(/grid-template-columns: 220px minmax\(0, 1fr\)/);
+    expect(css).toMatch(/desktop-folder-detail-main[\s\S]*desktop-library-table__album[\s\S]*display: none/);
+  });
 });
