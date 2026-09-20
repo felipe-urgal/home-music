@@ -84,12 +84,25 @@ export function LibraryContent({
         .map(trackId => tracksById.get(trackId))
         .filter((track): track is Track => Boolean(track));
       const coverTrack = contextTracks.find(track => track.hasCover) ?? contextTracks[0];
+      const playlistArtworkTracks = [
+        ...contextTracks.filter(track => track.hasCover),
+        ...contextTracks.filter(track => !track.hasCover)
+      ].slice(0, 4);
       const updatedAt = formatPlaylistDate(playlist.updatedAt);
 
       return (
         <div className="group-item playlist-visual-card library-collection-card" key={playlist.id}>
           <button className="group-item__main playlist-visual-card__main" type="button" onClick={() => selectPlaylist(playlist.id)}>
-            <Artwork track={coverTrack} />
+            {desktopLayout && playlistArtworkTracks.length ? (
+              <span
+                className={`folder-visual-card__artwork-mosaic playlist-visual-card__artwork-mosaic is-count-${playlistArtworkTracks.length}`}
+                aria-hidden="true"
+              >
+                {playlistArtworkTracks.map(track => <Artwork key={track.id} track={track} />)}
+              </span>
+            ) : (
+              <Artwork track={coverTrack} />
+            )}
             <span className="group-item__text">
               <strong>{playlist.name}</strong>
               <small>
