@@ -128,6 +128,10 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   await expect(page.getByTestId('desktop-library-table')).toHaveCount(0);
   const searchTrackControl = searchResultGrid.locator('.desktop-track-card__main').filter({ hasText: 'E2E Track' });
   await expect(searchTrackControl).toHaveAttribute('aria-label', /^(Tocar|Pausar) E2E Track,/);
+  const searchTrackTitleSize = Number.parseFloat(
+    await searchTrackControl.locator('.desktop-track-card__copy strong').evaluate(element => getComputedStyle(element).fontSize)
+  );
+  expect(searchTrackTitleSize).toBeGreaterThanOrEqual(16);
   await librarySearch.clear();
 
   await homeBrand.click();
