@@ -64,6 +64,27 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   expect(topbarBox!.width).toBeGreaterThanOrEqual(viewport!.width - 1);
   expect(topbarBox!.height).toBeLessThan(100);
 
+  await navigation.getByRole('button', { name: 'Playlists', exact: true }).click();
+  await expect(page.getByText('Suas Playlists', { exact: true })).toBeVisible();
+
+  const playlistMain = page.locator('.desktop-main-content--library');
+  const playlistContent = page.locator('.library-content');
+  const playlistCreate = page.locator('.playlist-create-action');
+  const playlistOrder = page.locator('.playlist-order-control');
+  const playlistMainBox = await playlistMain.boundingBox();
+  const playlistCreateBox = await playlistCreate.boundingBox();
+  const playlistOrderBox = await playlistOrder.boundingBox();
+
+  expect(playlistMainBox).not.toBeNull();
+  expect(playlistMainBox!.width).toBeGreaterThanOrEqual(viewport!.width * 0.9);
+  expect(await playlistContent.evaluate(element => getComputedStyle(element, '::before').display)).toBe('none');
+  expect(playlistCreateBox).not.toBeNull();
+  expect(playlistOrderBox).not.toBeNull();
+  expect(Math.abs(
+    (playlistCreateBox!.y + playlistCreateBox!.height / 2)
+      - (playlistOrderBox!.y + playlistOrderBox!.height / 2)
+  )).toBeLessThanOrEqual(2);
+
   await topbar.getByRole('button', { name: /Minha conta/ }).click();
   await expect(page.locator('#my-account-title')).toHaveText('Minha conta');
   await expect(playerBar).toBeHidden();
