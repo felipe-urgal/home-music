@@ -1371,6 +1371,135 @@
     font-size: 9px;
   }
 
+  /* Desktop library root: one header action and one mixed collection grid. */
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-header.is-root,
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-tabs {
+    display: none !important;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .section-heading--folders-root {
+    min-height: 42px;
+    margin: 0 0 16px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .section-heading--folders-root > span,
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .section-heading--folders-root > small,
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .section-heading--folders-root .folder-order-control {
+    display: none !important;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-root-create-playlist {
+    width: auto;
+    min-height: 36px;
+    margin-left: auto;
+    padding: 0 16px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-root-create-playlist svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-collection-grid {
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px 16px;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-collection-grid .playlist-visual-card {
+    position: relative;
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    display: block;
+    overflow: hidden;
+    border: 1px solid rgba(231, 209, 187, .11);
+    border-radius: 9px;
+    background: #101827;
+    box-shadow: 0 10px 28px rgba(0,0,0,.16);
+    transform: none;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-collection-grid .playlist-visual-card:hover {
+    border-color: rgba(244,196,126,.28);
+    background: #121c2d;
+    transform: translateY(-1px);
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-collection-grid .playlist-visual-card__main {
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    display: block;
+    border: 0;
+    color: inherit;
+    background: transparent;
+    text-align: left;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-collection-grid .playlist-visual-card__main .artwork {
+    width: 100%;
+    height: auto;
+    max-width: none;
+    aspect-ratio: 1.36 / 1;
+    overflow: hidden;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-collection-grid .playlist-visual-card__main .artwork img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-collection-grid .playlist-visual-card .group-item__text {
+    min-height: 48px;
+    padding: 9px 34px 9px 10px;
+    display: grid;
+    align-content: center;
+    gap: 3px;
+    text-align: left;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-collection-grid .playlist-visual-card .group-item__text strong {
+    overflow: hidden;
+    color: #f1e8e1;
+    font-size: 12px;
+    font-weight: 620;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-collection-grid .playlist-visual-card .group-item__text small {
+    color: #817977;
+    font-size: 9px;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-collection-grid .playlist-visual-card .group-item__updated,
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-collection-grid .playlist-visual-card .group-item__play,
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-collection-grid .playlist-visual-card .group-item__chevron {
+    display: none !important;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-collection-grid .playlist-visual-card .group-item__more {
+    position: absolute;
+    right: 9px;
+    bottom: 14px;
+    width: 15px;
+    height: 15px;
+    margin: 0;
+    color: #aaa19d;
+    stroke-width: 1.7;
+  }
+
   /* Desktop library root: playlists live below folders instead of occupying a navbar tab. */
   #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .desktop-library-playlists {
     width: 100%;
@@ -1583,6 +1712,82 @@
 
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__waveform-progress:hover .desktop-now-playing-screen__waveform span {
     opacity: 1;
+  }
+
+  .desktop-now-playing-screen__more-menu--portal {
+    position: fixed;
+    z-index: 1000;
+    width: 248px;
+    max-height: none;
+    padding: 8px;
+    overflow: visible;
+    border: 1px solid rgba(231, 209, 187, .16);
+    border-radius: 10px;
+    color: #ddd3cc;
+    background: rgba(11, 16, 26, .98);
+    box-shadow: 0 20px 46px rgba(0,0,0,.36);
+    scrollbar-width: none;
+  }
+
+  .desktop-now-playing-screen__more-menu--portal::-webkit-scrollbar {
+    display: none;
+  }
+
+  .desktop-now-playing-screen__more-menu--portal > button,
+  .desktop-now-playing-screen__more-menu--portal .desktop-now-playing-screen__more-submenu button {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    border: 0;
+    border-radius: 7px;
+    color: inherit;
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .desktop-now-playing-screen__more-menu--portal > button {
+    min-height: 38px;
+    padding: 8px 9px;
+    gap: 9px;
+    font-size: 11px;
+  }
+
+  .desktop-now-playing-screen__more-menu--portal > button:hover,
+  .desktop-now-playing-screen__more-menu--portal .desktop-now-playing-screen__more-submenu button:hover {
+    background: rgba(255,255,255,.05);
+  }
+
+  .desktop-now-playing-screen__more-menu--portal > button svg {
+    width: 17px;
+    height: 17px;
+    flex: 0 0 auto;
+  }
+
+  .desktop-now-playing-screen__more-menu--portal > button.is-active {
+    color: #f4c47e;
+    background: rgba(244,196,126,.07);
+  }
+
+  .desktop-now-playing-screen__more-menu--portal .desktop-now-playing-screen__more-submenu {
+    margin: 3px 0 5px 26px;
+    padding: 4px 0 4px 8px;
+    display: grid;
+    gap: 2px;
+    border-left: 1px solid rgba(244,196,126,.16);
+  }
+
+  .desktop-now-playing-screen__more-menu--portal .desktop-now-playing-screen__more-submenu button {
+    min-height: 30px;
+    padding: 6px 8px;
+    font-size: 10px;
+  }
+
+  .desktop-now-playing-screen__more-menu--portal .desktop-now-playing-screen__more-empty {
+    padding: 6px 8px;
+    color: #8f8784;
+    font-size: 9px;
+    line-height: 1.35;
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__more-wrap {
