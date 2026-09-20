@@ -111,7 +111,18 @@ export function registerLibraryAssistant(
   options.projection.projectRevision = revision => projectRevision(revision) + assistantReviewRevision;
 
   const listProjectedTracks = () => options.projection.projectTracks(options.library.listPublicTracks());
-  const listProjectedAdminTracks = () => options.projection.projectTracks(options.library.listAdminTracks());
+  const listCoverFillTracks = () => {
+    const projectedPublicTracks = listProjectedTracks();
+    const publicTrackIds = new Set(projectedPublicTracks.map(track => track.id));
+    metadataOverrides.refresh();
+    coverOverrides.refresh();
+    const inactiveTracks = options.library.listAdminTracks()
+      .filter(track => !publicTrackIds.has(track.id))
+      .map(({ enabled: _enabled, ...track }) =>
+        coverOverrides.resolveTrack(metadataOverrides.resolveTrack(track))
+      );
+    return [...projectedPublicTracks, ...inactiveTracks];
+  };
   const analysisLibrary = {
     listTracks: listProjectedTracks,
     revision: () => projectRevision(options.library.status().revision)
@@ -269,7 +280,7 @@ export function registerLibraryAssistant(
     onLyricsChanged: () => { assistantReviewRevision += 1; }
   });
   const coverFill = new MissingCoverFillService({
-    library: { listTracks: listProjectedAdminTracks },
+    library: { listTracks: listCoverFillTracks },
     analyzer: artworkAnalyzer,
     providers,
     coverOverrides,
