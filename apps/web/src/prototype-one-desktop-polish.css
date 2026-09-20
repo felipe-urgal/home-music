@@ -1387,16 +1387,48 @@
     opacity: 1;
   }
 
-  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__controls {
-    min-height: 54px;
-    margin-top: 10px;
-    grid-template-columns: repeat(2, 46px);
-    gap: 20px;
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__more-menu {
+    width: 248px;
+    padding: 8px;
   }
 
-  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__controls button {
-    width: 42px;
-    height: 42px;
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__more-menu > button {
+    min-height: 38px;
+    padding: 8px 9px;
+    gap: 9px;
+    font-size: 11px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__more-menu > button svg {
+    width: 17px;
+    height: 17px;
+    flex: 0 0 auto;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__more-menu > button.is-active {
+    color: var(--hm-gold);
+    background: rgba(244, 196, 126, .07);
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__more-submenu {
+    margin: 3px 0 5px 26px;
+    padding: 4px 0 4px 8px;
+    display: grid;
+    gap: 2px;
+    border-left: 1px solid rgba(244, 196, 126, .16);
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__more-submenu button {
+    min-height: 30px;
+    padding: 6px 8px;
+    font-size: 10px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__more-empty {
+    padding: 6px 8px;
+    color: #8f8784;
+    font-size: 9px;
+    line-height: 1.35;
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track {
