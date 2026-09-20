@@ -146,6 +146,29 @@
   margin: 0;
 }
 
+.assistant-admin__settings-status {
+  width: fit-content;
+  max-width: 100%;
+  padding: .24rem .46rem;
+  border: 1px solid #384a57;
+  border-radius: 999px;
+  color: #aebbc4;
+  font-size: .7rem;
+  line-height: 1.35;
+}
+
+.assistant-admin__settings-status.is-ready {
+  border-color: rgba(54, 223, 124, .28);
+  color: #8ee6b1;
+  background: rgba(54, 223, 124, .06);
+}
+
+.assistant-admin__settings-status.is-warning {
+  border-color: rgba(255, 208, 37, .22);
+  color: #d9c77b;
+  background: rgba(255, 208, 37, .045);
+}
+
 .assistant-admin__settings-loader {
   width: 1rem;
   height: 1rem;
