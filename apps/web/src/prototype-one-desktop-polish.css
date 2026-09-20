@@ -66,36 +66,36 @@
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__stage {
-    width: min(calc(100% - 96px), 1180px);
-    min-height: 560px;
+    width: min(calc(100% - 96px), 1260px);
+    min-height: 580px;
     padding: 54px 24px 92px;
-    grid-template-columns: minmax(320px, 420px) minmax(400px, 520px);
+    grid-template-columns: minmax(335px, 455px) minmax(420px, 560px);
     justify-content: center;
-    gap: clamp(64px, 7vw, 112px);
+    gap: clamp(68px, 7vw, 118px);
   }
 
   /* Always render a real artwork surface on desktop, even when the track has no embedded cover.
      ArtworkFallback already derives initials and a palette from the track. */
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__art {
     width: 100%;
-    min-width: 320px;
+    min-width: 335px;
     display: grid;
     place-items: center;
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__art .now-playing-transition-art,
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__art .now-playing-vinyl {
-    width: min(100%, 420px);
-    max-width: 420px;
-    min-width: 320px;
+    width: min(100%, 455px);
+    max-width: 455px;
+    min-width: 335px;
     aspect-ratio: 1 / 1;
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__art .now-playing-vinyl__disc {
     width: 100%;
     height: 100%;
-    min-width: 320px;
-    min-height: 320px;
+    min-width: 335px;
+    min-height: 335px;
     border: 1px solid rgba(255, 216, 175, .22);
     border-radius: 16px;
     background: #131823;
@@ -141,7 +141,37 @@
 
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__content {
     width: 100%;
-    max-width: 520px;
+    max-width: 560px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__heading h1 {
+    font-size: clamp(24px, 2.15vw, 34px);
+    line-height: 1.06;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__heading p {
+    margin-top: 7px;
+    font-size: 13px;
+    line-height: 1.4;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__waveform-progress {
+    width: min(100%, 440px);
+    margin-top: 28px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__waveform {
+    height: 104px;
+    gap: 3px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__waveform-seek {
+    height: 104px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__waveform-time {
+    margin-top: 5px;
+    font-size: 10px;
   }
 
   /* Playlists desktop: remove the editorial split that squeezed the actual library.
@@ -1397,7 +1427,7 @@
 
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track-copy small {
     color: #b98962;
-    font-size: 7px;
+    font-size: 8px;
     font-weight: 700;
     letter-spacing: .14em;
     text-transform: uppercase;
@@ -1412,13 +1442,13 @@
 
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track-copy strong {
     color: #f3e9e1;
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 650;
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track-copy > span {
     color: #8f8885;
-    font-size: 8px;
+    font-size: 9px;
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track > svg {
@@ -1453,13 +1483,17 @@
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__stage {
-    width: min(calc(100% - 120px), 1280px);
-    grid-template-columns: minmax(360px, 460px) minmax(420px, 540px);
-    gap: clamp(78px, 8vw, 128px);
+    width: min(calc(100% - 120px), 1360px);
+    grid-template-columns: minmax(380px, 500px) minmax(440px, 580px);
+    gap: clamp(82px, 8vw, 136px);
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__art .now-playing-transition-art,
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__art .now-playing-vinyl {
-    max-width: 460px;
+    max-width: 500px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__waveform-progress {
+    width: min(100%, 470px);
   }
 }
