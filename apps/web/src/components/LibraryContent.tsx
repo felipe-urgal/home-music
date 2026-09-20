@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { ChevronRight, Folder, MoreHorizontal, Play, Plus, Sparkles } from 'lucide-react';
 import type { Playlist, Track } from '@home-music/shared';
 import { LIBRARY_PAGE_SIZE, type LibraryNavigation } from '../useLibraryNavigation';
+import { useDesktopLayout } from '../useDesktopLayout';
 import { Artwork } from './Artwork';
 import { LibraryTrackRows, type LibraryTrackOfflineProps } from './LibraryTrackRows';
 
@@ -61,6 +62,7 @@ export function LibraryContent({
     changeSort,
     showMore
   } = navigation;
+  const desktopLayout = useDesktopLayout();
   const [playlistOrder, setPlaylistOrder] = useState<PlaylistOrder>('recent');
   const folderSort = sort === 'title-desc' ? 'title-desc' : 'title-asc';
   const run = (operation: Promise<unknown>) => void operation.catch(() => undefined);
@@ -74,11 +76,57 @@ export function LibraryContent({
     return result;
   }, [playlistOrder, playlists]);
 
+  function renderPlaylistGrid() {
+    if (!orderedPlaylists.length) {
+      return <div className="empty-library">Crie uma playlist para organizar suas músicas.</div>;
+    }
+
+    return (
+      <div className="group-list playlist-visual-grid">
+        {orderedPlaylists.map(playlist => {
+          const contextTracks = playlist.trackIds
+            .map(trackId => tracksById.get(trackId))
+            .filter((track): track is Track => Boolean(track));
+          const coverTrack = contextTracks.find(track => track.hasCover) ?? contextTracks[0];
+          const updatedAt = formatPlaylistDate(playlist.updatedAt);
+
+          return (
+            <div className="group-item playlist-visual-card" key={playlist.id}>
+              <button className="group-item__main playlist-visual-card__main" type="button" onClick={() => selectPlaylist(playlist.id)}>
+                <Artwork track={coverTrack} />
+                <span className="group-item__text">
+                  <strong>{playlist.name}</strong>
+                  <small>
+                    {playlist.trackIds.length} músicas
+                    {updatedAt && <span className="group-item__updated"> · Atualizada em {updatedAt}</span>}
+                  </small>
+                </span>
+              </button>
+              <button
+                className="group-item__play"
+                type="button"
+                aria-label={`Tocar ${playlist.name}`}
+                disabled={!contextTracks.length}
+                onClick={() => {
+                  if (contextTracks[0]) onPlayTrack(contextTracks[0], contextTracks);
+                }}
+              >
+                <Play aria-hidden="true" />
+              </button>
+              <MoreHorizontal className="group-item__more" aria-hidden="true" />
+              <ChevronRight className="group-item__chevron" aria-hidden="true" />
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
   return (
     <section className="library-content">
       {libraryTab === 'folders' ? (
         <>
-          {folderContextTracks.length > 0 && folderPath && (
+          {folderContextTracks.length > 0 && folderPath && !desktopLayout && (
             <button className="play-all" onClick={() => onPlayTrack(folderContextTracks[0], folderContextTracks)}><Play />Tocar tudo <span>{folderContextTracks.length}</span></button>
           )}
 
@@ -118,7 +166,15 @@ export function LibraryContent({
                     onClick={() => enterFolder(folder.path)}
                   >
                     <span className="folder-visual-card__mobile-icon" aria-hidden="true"><Folder /></span>
-                    <Artwork track={folder.artwork} />
+                    {desktopLayout ? (
+                      <span className={`folder-visual-card__artwork-mosaic is-count-${Math.max(1, Math.min(4, folder.artworks.length))}`} aria-hidden="true">
+                        {(folder.artworks.length ? folder.artworks : [folder.artwork]).map((artworkTrack, index) => (
+                          <Artwork key={artworkTrack?.id ?? `${folder.path}-artwork-${index}`} track={artworkTrack} />
+                        ))}
+                      </span>
+                    ) : (
+                      <Artwork track={folder.artwork} />
+                    )}
                     <span className="folder-visual-card__text">
                       <strong>{folder.name}</strong>
                       <small>{folder.matchingTrackCount} músicas</small>
@@ -129,6 +185,18 @@ export function LibraryContent({
                 ))}
               </div>
             </>
+          )}
+
+          {desktopLayout && !folderPath && !query && (
+            <section className="desktop-library-playlists" aria-labelledby="desktop-library-playlists-title">
+              <div className="section-heading section-heading--embedded-playlists">
+                <span id="desktop-library-playlists-title">Playlists</span>
+                <button className="text-action playlist-create-action" type="button" onClick={() => run(onCreatePlaylist())}>
+                  <Plus aria-hidden="true" />Nova playlist
+                </button>
+              </div>
+              {renderPlaylistGrid()}
+            </section>
           )}
 
           {pagedTracks.length > 0 && (
@@ -142,12 +210,15 @@ export function LibraryContent({
                 sort={sort}
                 onSort={changeSort}
                 onPlayTrack={onPlayTrack}
+                desktopVariant={folderPath || query ? 'grid' : 'table'}
                 {...offlineTrackProps}
               />
             </>
           )}
 
-          {!pagedFolders.length && !pagedTracks.length && <div className="empty-library">Nenhum item encontrado nesta pasta.</div>}
+          {!pagedFolders.length && !pagedTracks.length && (!desktopLayout || Boolean(folderPath) || Boolean(query)) && (
+            <div className="empty-library">Nenhum item encontrado nesta pasta.</div>
+          )}
 
           {visibleCount < Math.max(visibleFolders.length, libraryTracks.length) && (
             <button className="load-more" onClick={showMore}>Mostrar mais</button>
@@ -169,49 +240,11 @@ export function LibraryContent({
               </label>
             </div>
           </div>
-          {orderedPlaylists.length ? (
-            <div className="group-list playlist-visual-grid">
-              {orderedPlaylists.map(playlist => {
-                const contextTracks = playlist.trackIds
-                  .map(trackId => tracksById.get(trackId))
-                  .filter((track): track is Track => Boolean(track));
-                const coverTrack = contextTracks.find(track => track.hasCover) ?? contextTracks[0];
-                const updatedAt = formatPlaylistDate(playlist.updatedAt);
-
-                return (
-                  <div className="group-item playlist-visual-card" key={playlist.id}>
-                    <button className="group-item__main playlist-visual-card__main" type="button" onClick={() => selectPlaylist(playlist.id)}>
-                      <Artwork track={coverTrack} />
-                      <span className="group-item__text">
-                        <strong>{playlist.name}</strong>
-                        <small>
-                          {playlist.trackIds.length} músicas
-                          {updatedAt && <span className="group-item__updated"> · Atualizada em {updatedAt}</span>}
-                        </small>
-                      </span>
-                    </button>
-                    <button
-                      className="group-item__play"
-                      type="button"
-                      aria-label={`Tocar ${playlist.name}`}
-                      disabled={!contextTracks.length}
-                      onClick={() => {
-                        if (contextTracks[0]) onPlayTrack(contextTracks[0], contextTracks);
-                      }}
-                    >
-                      <Play aria-hidden="true" />
-                    </button>
-                    <MoreHorizontal className="group-item__more" aria-hidden="true" />
-                    <ChevronRight className="group-item__chevron" aria-hidden="true" />
-                  </div>
-                );
-              })}
-            </div>
-          ) : <div className="empty-library">Crie uma playlist manual ou inteligente para organizar suas músicas.</div>}
+          {renderPlaylistGrid()}
         </>
       ) : shouldShowTracks ? (
         <>
-          {selectedPlaylist && (
+          {selectedPlaylist && !desktopLayout && (
             <div className="collection-actions">
               {libraryTracks.length > 0 && <button className="play-all" onClick={() => onPlayTrack(libraryTracks[0], libraryTracks)}><Play />Tocar tudo</button>}
               {selectedPlaylist.source === 'manual' ? (
@@ -240,6 +273,7 @@ export function LibraryContent({
               onSort={changeSort}
               onPlayTrack={onPlayTrack}
               onRemove={selectedPlaylist?.source === 'manual' ? trackId => run(onSetPlaylistTracks(selectedPlaylist.id, selectedPlaylist.trackIds.filter(id => id !== trackId))) : undefined}
+              desktopVariant={selectedPlaylist ? 'grid' : 'table'}
               {...offlineTrackProps}
             />
           ) : <div className="empty-library">Nenhuma música encontrada.</div>}

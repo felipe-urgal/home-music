@@ -21,10 +21,13 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   const nowPlaying = page.locator('.desktop-now-playing-screen');
   const nowPlayingArt = page.locator('.desktop-now-playing-screen__art');
   const nowPlayingArtworkSurface = page.locator('.desktop-now-playing-screen__art .now-playing-vinyl__disc');
+  const nowPlayingArtFrame = page.locator('.desktop-now-playing-screen__art-frame');
   const nowPlayingContent = page.locator('.desktop-now-playing-screen__content');
   const waveformSeek = page.locator('.desktop-now-playing-screen__waveform-seek');
+  const waveformBar = page.locator('.desktop-now-playing-screen__waveform span').first();
   const coverPlay = page.locator('.desktop-now-playing-screen__cover-play');
-  const playerModeControls = page.locator('.desktop-now-playing-screen__controls button');
+  const moreActions = nowPlaying.getByRole('button', { name: 'Mais opções da faixa' });
+  const playerModeControls = page.locator('.desktop-now-playing-screen__controls');
 
   await expect(nowPlayingArt).toBeVisible();
   await expect(nowPlayingArtworkSurface).toBeVisible();
@@ -33,11 +36,20 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   await expect(waveformSeek).toBeVisible();
   await expect(waveformSeek).toHaveAttribute('aria-label', 'Progresso da música');
   await expect(waveformSeek).toHaveAttribute('aria-valuetext', /\d+:\d{2} de \d+:\d{2}/);
+  await expect(waveformBar).toHaveAttribute('style', /--wave-fill:/);
   await expect(page.locator('.desktop-now-playing-screen__progress')).toHaveCount(0);
   await expect(coverPlay).toBeVisible();
   await expect(coverPlay).toHaveAttribute('aria-label', /Tocar|Pausar/);
-  await expect(playerModeControls).toHaveCount(2);
+  await expect(playerModeControls).toHaveCount(0);
   await expect(page.locator('.desktop-now-playing-screen__play')).toHaveCount(0);
+  await expect(nowPlaying.getByRole('button', { name: 'Adicionar à playlist' })).toHaveCount(0);
+  await moreActions.click();
+  const moreMenu = nowPlaying.getByRole('menu', { name: 'Mais opções da faixa' });
+  await expect(moreMenu).toBeVisible();
+  await expect(moreMenu.getByRole('menuitem', { name: 'Adicionar à playlist' })).toBeVisible();
+  await expect(moreMenu.getByRole('menuitemcheckbox', { name: /Aleatório/ })).toBeVisible();
+  await expect(moreMenu.getByRole('menuitem', { name: /Repetição|Repetir/ })).toBeVisible();
+  await moreActions.click();
   await expect(nowPlaying.getByRole('button', { name: 'Anterior', exact: true })).toHaveCount(0);
   await expect(nowPlaying.getByRole('button', { name: 'Próxima', exact: true })).toHaveCount(0);
 
@@ -45,15 +57,24 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   const nowPlayingBox = await nowPlaying.boundingBox();
   const artworkBox = await nowPlayingArt.boundingBox();
   const artworkSurfaceBox = await nowPlayingArtworkSurface.boundingBox();
+  const artFrameBox = await nowPlayingArtFrame.boundingBox();
+  const coverPlayBox = await coverPlay.boundingBox();
   const contentBox = await nowPlayingContent.boundingBox();
   expect(surfaceBox).not.toBeNull();
   expect(nowPlayingBox).not.toBeNull();
   expect(artworkBox).not.toBeNull();
   expect(artworkSurfaceBox).not.toBeNull();
+  expect(artFrameBox).not.toBeNull();
+  expect(coverPlayBox).not.toBeNull();
   expect(contentBox).not.toBeNull();
   expect(surfaceBox!.width).toBeGreaterThanOrEqual(viewport!.width - 1);
   expect(artworkSurfaceBox!.width).toBeGreaterThanOrEqual(300);
   expect(artworkSurfaceBox!.height).toBeGreaterThanOrEqual(300);
+  expect(artFrameBox!.width).toBeGreaterThanOrEqual(artworkSurfaceBox!.width - 1);
+  expect(coverPlayBox!.x).toBeGreaterThanOrEqual(artworkSurfaceBox!.x);
+  expect(coverPlayBox!.y).toBeGreaterThanOrEqual(artworkSurfaceBox!.y);
+  expect(coverPlayBox!.x + coverPlayBox!.width).toBeLessThanOrEqual(artworkSurfaceBox!.x + artworkSurfaceBox!.width + 1);
+  expect(coverPlayBox!.y + coverPlayBox!.height).toBeLessThanOrEqual(artworkSurfaceBox!.y + artworkSurfaceBox!.height + 1);
   expect(artworkBox!.y).toBeGreaterThanOrEqual(nowPlayingBox!.y - 1);
   expect(contentBox!.y).toBeGreaterThanOrEqual(nowPlayingBox!.y - 1);
   expect(artworkBox!.y + artworkBox!.height).toBeLessThanOrEqual(nowPlayingBox!.y + nowPlayingBox!.height + 1);
@@ -62,15 +83,8 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   await expect(homeBrand).toHaveAttribute('aria-current', 'page');
   await expect(navigation.getByRole('button', { name: 'Tocando Agora', exact: true })).toHaveCount(0);
 
-  const navItems = await Promise.all(
-    ['Pastas', 'Playlists'].map(async name => {
-      const box = await navigation.getByRole('button', { name, exact: true }).boundingBox();
-      expect(box).not.toBeNull();
-      return box!;
-    })
-  );
-  const navCenters = navItems.map(box => box.y + box.height / 2);
-  expect(Math.max(...navCenters) - Math.min(...navCenters)).toBeLessThanOrEqual(2);
+  await expect(navigation.getByRole('button', { name: 'Pastas', exact: true })).toBeVisible();
+  await expect(navigation.getByRole('button', { name: 'Playlists', exact: true })).toHaveCount(0);
 
   await navigation.getByRole('button', { name: 'Pastas', exact: true }).click();
   await expect(navigation.getByRole('button', { name: 'Pastas', exact: true })).toHaveAttribute('aria-current', 'page');
@@ -88,6 +102,16 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   expect(folderMainBox!.width).toBeGreaterThanOrEqual(viewport!.width * 0.9);
   expect(folderContentBox!.width).toBeGreaterThanOrEqual(folderMainBox!.width * 0.95);
 
+  await topbar.getByRole('button', { name: 'Buscar na biblioteca' }).click();
+  const librarySearch = page.locator('.search-box--library input');
+  await expect(librarySearch).toBeFocused();
+  await librarySearch.fill('E2E Track');
+  const searchResultGrid = page.getByTestId('desktop-track-grid');
+  await expect(searchResultGrid).toBeVisible();
+  await expect(searchResultGrid.locator('.desktop-track-card').filter({ hasText: 'E2E Track' })).toBeVisible();
+  await expect(page.getByTestId('desktop-library-table')).toHaveCount(0);
+  await librarySearch.clear();
+
   await homeBrand.click();
   await expect(page.locator('.desktop-now-playing-screen')).toBeVisible();
   await expect(homeBrand).toHaveAttribute('aria-current', 'page');
@@ -98,60 +122,50 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   expect(topbarBox!.width).toBeGreaterThanOrEqual(viewport!.width - 1);
   expect(topbarBox!.height).toBeLessThan(100);
 
-  await navigation.getByRole('button', { name: 'Playlists', exact: true }).click();
-  await expect(page.locator('.library-header.is-root .library-header__title strong')).toBeHidden();
-
-  const playlistMain = page.locator('.desktop-main-content--library');
-  const playlistContent = page.locator('.library-content');
-  const playlistCreate = page.locator('.playlist-create-action');
-  const playlistOrder = page.locator('.playlist-order-control');
-  const playlistGrid = page.locator('.playlist-visual-grid');
-  const playlistMainBox = await playlistMain.boundingBox();
+  const embeddedPlaylists = page.locator('.desktop-library-playlists');
+  const playlistCreate = embeddedPlaylists.getByRole('button', { name: 'Nova playlist' });
+  const embeddedPlaylistGrid = embeddedPlaylists.locator('.playlist-visual-grid');
+  const embeddedPlaylistsBox = await embeddedPlaylists.boundingBox();
   const playlistCreateBox = await playlistCreate.boundingBox();
-  const playlistGridBox = await playlistGrid.boundingBox();
+  const embeddedPlaylistGridBox = await embeddedPlaylistGrid.boundingBox();
 
-  expect(playlistMainBox).not.toBeNull();
-  expect(playlistMainBox!.width).toBeGreaterThanOrEqual(viewport!.width * 0.9);
-  expect(await playlistContent.evaluate(element => getComputedStyle(element, '::before').display)).toBe('none');
+  await expect(embeddedPlaylists.getByText('Playlists', { exact: true })).toBeVisible();
+  expect(embeddedPlaylistsBox).not.toBeNull();
   expect(playlistCreateBox).not.toBeNull();
-  expect(playlistGridBox).not.toBeNull();
-  expect(playlistGridBox!.width).toBeGreaterThanOrEqual(playlistMainBox!.width * 0.95);
-  await expect(playlistOrder).toBeHidden();
+  expect(embeddedPlaylistGridBox).not.toBeNull();
+  expect(embeddedPlaylistGridBox!.width).toBeGreaterThanOrEqual(folderMainBox!.width * 0.95);
 
-  const importedPlaylist = page.locator('.group-item__main').filter({ hasText: 'E2E Rekordbox' });
+  const importedPlaylist = embeddedPlaylists.locator('.group-item__main').filter({ hasText: 'E2E Rekordbox' });
   await expect(importedPlaylist).toBeVisible();
   await importedPlaylist.click();
 
   const playlistDetail = page.getByTestId('desktop-playlist-detail-layout');
   const playlistSummary = page.getByTestId('desktop-playlist-summary');
   const playlistDetailMain = page.locator('.desktop-playlist-detail-main');
-  const playlistTitle = playlistDetailMain.locator('.library-header__title');
-  const playlistSearch = page.getByPlaceholder('Buscar nesta playlist…');
-  const playlistQuickFilters = page.locator('[aria-label="Filtros rápidos da playlist"]');
+  const playlistCoverPlayback = playlistSummary.getByRole('button', { name: /Tocar playlist|Pausar playlist/ });
 
   await expect(playlistDetail).toBeVisible();
   await expect(playlistSummary).toBeVisible();
-  await expect(playlistSearch).toBeVisible();
-  await expect(playlistQuickFilters).toBeVisible();
-  await expect(playlistQuickFilters.getByRole('button', { name: 'Todas', exact: true })).toBeVisible();
+  await expect(playlistCoverPlayback).toBeVisible();
+  await expect(playlistCoverPlayback).toBeDisabled();
+  await expect(playlistDetailMain.locator('.library-header.is-detail')).toHaveCount(0);
+  await expect(page.getByPlaceholder('Buscar nesta playlist…')).toHaveCount(0);
+  await expect(page.locator('[aria-label="Filtros rápidos da playlist"]')).toHaveCount(0);
+  await expect(playlistDetailMain.getByText('Nenhuma música encontrada.', { exact: true })).toBeVisible();
+  await expect(playlistDetailMain.getByTestId('desktop-track-grid')).toHaveCount(0);
 
   const playlistDetailBox = await playlistDetail.boundingBox();
   const playlistSummaryBox = await playlistSummary.boundingBox();
   const playlistDetailMainBox = await playlistDetailMain.boundingBox();
-  const playlistTitleBox = await playlistTitle.boundingBox();
-  const playlistSearchBox = await playlistSearch.boundingBox();
-  const playlistFiltersBox = await playlistQuickFilters.boundingBox();
+  const playlistCoverBox = await playlistCoverPlayback.boundingBox();
 
   expect(playlistDetailBox).not.toBeNull();
   expect(playlistSummaryBox).not.toBeNull();
   expect(playlistDetailMainBox).not.toBeNull();
-  expect(playlistTitleBox).not.toBeNull();
-  expect(playlistSearchBox).not.toBeNull();
-  expect(playlistFiltersBox).not.toBeNull();
+  expect(playlistCoverBox).not.toBeNull();
   expect(playlistDetailBox!.width).toBeGreaterThanOrEqual(viewport!.width * 0.9);
   expect(playlistSummaryBox!.x + playlistSummaryBox!.width).toBeLessThanOrEqual(playlistDetailMainBox!.x + 1);
-  expect(playlistSearchBox!.y).toBeGreaterThanOrEqual(playlistTitleBox!.y + playlistTitleBox!.height);
-  expect(playlistFiltersBox!.y).toBeGreaterThanOrEqual(playlistSearchBox!.y + playlistSearchBox!.height - 1);
+  expect(playlistCoverBox!.width).toBeGreaterThanOrEqual(220);
 
   const collectionScrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
   expect(collectionScrollWidth).toBeLessThanOrEqual(viewport!.width + 1);

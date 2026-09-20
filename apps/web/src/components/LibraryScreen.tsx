@@ -137,8 +137,10 @@ export function LibraryScreen({
 
   function goBack() {
     setViewControlsOpen(false);
-    if (selectedPlaylist) leavePlaylist();
-    else if (folderPath) leaveFolder();
+    if (selectedPlaylist) {
+      if (desktopLayout) selectTab('folders');
+      else leavePlaylist();
+    } else if (folderPath) leaveFolder();
   }
 
   function changeTab(tab: LibraryTab) {
@@ -303,6 +305,24 @@ export function LibraryScreen({
     ? offlineCollectionTarget.tracks
     : libraryTracks;
 
+  function toggleCollectionPlayback(collectionTracks: Track[]) {
+    if (!collectionTracks.length) return;
+    const currentInCollection = Boolean(current && collectionTracks.some(track => track.id === current.id));
+    if (currentInCollection) onTogglePlay();
+    else onPlayTrack(collectionTracks[0], collectionTracks);
+  }
+
+  const folderPlaying = Boolean(
+    playing
+    && current
+    && folderView.allTracks.some(track => track.id === current.id)
+  );
+  const playlistPlaying = Boolean(
+    playing
+    && current
+    && playlistSummaryTracks.some(track => track.id === current.id)
+  );
+
   return (
     <>
       {desktopFolderDetail ? (
@@ -312,10 +332,10 @@ export function LibraryScreen({
             tracks={folderView.allTracks}
             downloadedIds={offline.downloadedIds}
             offlineControl={offlineControl}
+            playing={folderPlaying}
+            onTogglePlayback={() => toggleCollectionPlayback(folderView.allTracks)}
           />
           <section className="desktop-folder-detail-main">
-            {navigationChrome}
-            {viewTools}
             {libraryContent}
             {libraryStatus}
           </section>
@@ -327,10 +347,10 @@ export function LibraryScreen({
             tracks={playlistSummaryTracks}
             downloadedIds={offline.downloadedIds}
             offlineControl={offlineControl}
+            playing={playlistPlaying}
+            onTogglePlayback={() => toggleCollectionPlayback(playlistSummaryTracks)}
           />
           <section className="desktop-folder-detail-main desktop-playlist-detail-main">
-            {navigationChrome}
-            {viewTools}
             {libraryContent}
             {libraryStatus}
           </section>
