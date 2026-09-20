@@ -8,8 +8,10 @@ import {
   getLibraryAssistantFingerprintStatus,
   getLibraryAssistantReview,
   getLibraryAssistantRunProgress,
+  getMissingCoverFillJob,
   resetLibraryAssistantReview,
-  startLibraryAssistantMetadataRun
+  startLibraryAssistantMetadataRun,
+  startMissingCoverFillJob
 } from './library-assistant-client';
 
 vi.mock('./api-client', () => ({
@@ -85,6 +87,42 @@ describe('library assistant admin client', () => {
     expect(apiFetchMock).toHaveBeenCalledTimes(3);
     expect(apiFetchMock.mock.calls[1]?.[0]).toBe('/api/admin/library-assistant/runs/run-metadata/cancel');
     expect(apiFetchMock.mock.calls[2]?.[0]).toBe('/api/admin/library-assistant/runs/run-lyrics/cancel');
+  });
+
+  it('inicia e consulta o preenchimento de capas ausentes', async () => {
+    const job = {
+      id: 'cover-fill-1',
+      status: 'running',
+      phase: 'searching',
+      total: 12,
+      searched: 3,
+      externalFound: 1,
+      generated: 0,
+      failed: 0,
+      startedAt: '2026-09-20T00:00:00.000Z',
+      finishedAt: null,
+      error: null
+    };
+    apiFetchMock
+      .mockResolvedValueOnce(response({ job }))
+      .mockResolvedValueOnce(response({ job }));
+
+    const started = await startMissingCoverFillJob();
+    const current = await getMissingCoverFillJob();
+
+    expect(started.job?.id).toBe('cover-fill-1');
+    expect(current.job?.searched).toBe(3);
+    expect(apiFetchMock.mock.calls[0]).toEqual([
+      '/api/admin/library-assistant/covers/fill',
+      {
+        method: 'POST',
+        headers: { 'X-Home-Music-Request': '1' }
+      }
+    ]);
+    expect(apiFetchMock.mock.calls[1]).toEqual([
+      '/api/admin/library-assistant/covers/fill',
+      { cache: 'no-store' }
+    ]);
   });
 
   it('lê o progresso persistente do run sem cache', async () => {

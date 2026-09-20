@@ -5,6 +5,7 @@ import type {
   AdminTrackMetadataResponse,
   EditableTrackMetadata
 } from '@home-music/shared';
+import type { MissingCoverFillJob } from '@home-music/shared/library-assistant';
 import {
   ChevronLeft,
   ChevronRight,
@@ -32,6 +33,10 @@ import {
   updateAdminTrackCover,
   updateAdminTrackMetadata
 } from '../admin-tracks-client';
+import {
+  getMissingCoverFillJob,
+  startMissingCoverFillJob
+} from '../library-assistant-client';
 import { notifyLibraryChanged } from '../library-events';
 import { ArtworkFallback } from './Artwork';
 
@@ -117,7 +122,10 @@ export function AdminTrackMetadataScreen({
   const [savingAction, setSavingAction] = useState<SavingAction>(null);
   const [error, setError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [coverFillJob, setCoverFillJob] = useState<MissingCoverFillJob | null>(null);
+  const [coverFillError, setCoverFillError] = useState<string | null>(null);
   const editorRequestRef = useRef(0);
+  const handledCoverFillJobRef = useRef<string | null>(null);
   const operationBusy = savingAction !== null;
   const editorDirty = Boolean(coverFile) || metadataChanged(metadata, draft);
 
@@ -145,6 +153,11 @@ export function AdminTrackMetadataScreen({
     () => tracks.find(track => track.id === editingTrackId) ?? null,
     [editingTrackId, tracks]
   );
+  const missingCoverCount = useMemo(
+    () => tracks.filter(track => !track.hasCover).length,
+    [tracks]
+  );
+  const coverFillRunning = coverFillJob?.status === 'running';
 
   useEffect(() => {
     setHealthFilter(initialHealthFilter);
@@ -194,6 +207,65 @@ export function AdminTrackMetadataScreen({
   useEffect(() => {
     void loadTracks();
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void getMissingCoverFillJob()
+      .then(response => {
+        if (!cancelled) setCoverFillJob(response.job);
+      })
+      .catch(error => {
+        if (!cancelled) setCoverFillError(errorMessage(error));
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!coverFillRunning) return;
+    const timer = window.setInterval(() => {
+      void getMissingCoverFillJob()
+        .then(response => {
+          setCoverFillJob(response.job);
+          setCoverFillError(null);
+        })
+        .catch(error => setCoverFillError(errorMessage(error)));
+    }, 1500);
+    return () => window.clearInterval(timer);
+  }, [coverFillRunning]);
+
+  useEffect(() => {
+    if (!coverFillJob || coverFillJob.status === 'running') return;
+    if (handledCoverFillJobRef.current === coverFillJob.id) return;
+    handledCoverFillJobRef.current = coverFillJob.id;
+    if (coverFillJob.status === 'completed') {
+      notifyLibraryChanged();
+      void loadTracks(true);
+    }
+  }, [coverFillJob]);
+
+  async function startCoverFill() {
+    if (coverFillRunning) return;
+    setCoverFillError(null);
+    setFeedback(null);
+    try {
+      const response = await startMissingCoverFillJob();
+      setCoverFillJob(response.job);
+    } catch (error) {
+      setCoverFillError(errorMessage(error));
+    }
+  }
+
+  function coverFillStatusText(job: MissingCoverFillJob) {
+    if (job.status === 'failed') return job.error ?? 'O preenchimento de capas foi interrompido.';
+    if (job.status === 'completed') {
+      return `${job.externalFound.toLocaleString('pt-BR')} reais · ${job.generated.toLocaleString('pt-BR')} geradas · ${job.failed.toLocaleString('pt-BR')} falhas`;
+    }
+    if (job.phase === 'searching') {
+      return `Buscando capas reais · ${job.searched.toLocaleString('pt-BR')} de ${job.total.toLocaleString('pt-BR')}`;
+    }
+    if (job.phase === 'applying') return `Aplicando ${job.externalFound.toLocaleString('pt-BR')} capas reais encontradas…`;
+    return 'Gerando capas para o que não foi encontrado…';
+  }
 
   function confirmEditorDiscard() {
     return !editorDirty || window.confirm('Descartar as alterações ainda não salvas desta música?');
@@ -415,6 +487,16 @@ export function AdminTrackMetadataScreen({
             />
           </label>
           <button
+            className="admin-cover-fill-action"
+            type="button"
+            disabled={loading || coverFillRunning}
+            onClick={() => void startCoverFill()}
+          >
+            {coverFillRunning ? <LoaderCircle className="is-spinning" /> : <Sparkles />}
+            <span>Preencher capas ausentes</span>
+            {!coverFillRunning && missingCoverCount > 0 && <small>{missingCoverCount.toLocaleString('pt-BR')}</small>}
+          </button>
+          <button
             className="admin-tracks-refresh"
             type="button"
             aria-label="Atualizar músicas"
@@ -425,6 +507,19 @@ export function AdminTrackMetadataScreen({
           </button>
         </section>
 
+        {coverFillJob && (
+          <div
+            className={`admin-cover-fill-status ${coverFillJob.status === 'failed' ? 'is-error' : coverFillJob.status === 'completed' ? 'is-success' : ''}`}
+            role="status"
+          >
+            <span>
+              {coverFillRunning ? <LoaderCircle className="is-spinning" /> : <Sparkles />}
+              <strong>{coverFillRunning ? 'Preenchendo capas' : coverFillJob.status === 'completed' ? 'Capas preenchidas' : 'Preenchimento interrompido'}</strong>
+            </span>
+            <small>{coverFillStatusText(coverFillJob)}</small>
+          </div>
+        )}
+        {coverFillError && <div className="admin-tracks-message is-error" role="alert">{coverFillError}</div>}
         {error && <div className="admin-tracks-message is-error" role="alert">{error}</div>}
         {feedback && <div className="admin-tracks-message is-success" role="status">{feedback}</div>}
 

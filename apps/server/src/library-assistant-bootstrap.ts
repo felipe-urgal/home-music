@@ -39,6 +39,8 @@ import { registerLocalLyricsRoutes } from './local-lyrics-routes.js';
 import { fingerprintEffectiveLyrics, LocalLyricsWhisperService } from './local-lyrics-whisper.js';
 import type { LongJobObservability } from './long-job-observability.js';
 import { createMusicBrainzSimpleSearchFetch } from './musicbrainz-simple-search-fetch.js';
+import { registerMissingCoverFillRoutes } from './missing-cover-fill-routes.js';
+import { MissingCoverFillService } from './missing-cover-fill-service.js';
 import { TrackCoverOverrideStore } from './track-cover-overrides.js';
 import {
   setActiveTrackLyricsOverrideStore,
@@ -109,6 +111,18 @@ export function registerLibraryAssistant(
   options.projection.projectRevision = revision => projectRevision(revision) + assistantReviewRevision;
 
   const listProjectedTracks = () => options.projection.projectTracks(options.library.listPublicTracks());
+  const listCoverFillTracks = () => {
+    const projectedPublicTracks = listProjectedTracks();
+    const publicTrackIds = new Set(projectedPublicTracks.map(track => track.id));
+    metadataOverrides.refresh();
+    coverOverrides.refresh();
+    const inactiveTracks = options.library.listAdminTracks()
+      .filter(track => !publicTrackIds.has(track.id))
+      .map(({ enabled: _enabled, ...track }) =>
+        coverOverrides.resolveTrack(metadataOverrides.resolveTrack(track))
+      );
+    return [...projectedPublicTracks, ...inactiveTracks];
+  };
   const analysisLibrary = {
     listTracks: listProjectedTracks,
     revision: () => projectRevision(options.library.status().revision)
@@ -145,13 +159,21 @@ export function registerLibraryAssistant(
       };
     }
   });
+  const artworkAnalyzer = {
+    id: `${metadataAnalyzer.id}-artwork`,
+    capability: 'artwork' as const,
+    async analyze(context) {
+      const drafts = await metadataAnalyzer.analyze(context);
+      return drafts.filter(draft => draft.capability === 'artwork');
+    }
+  } satisfies LibraryAssistantAnalyzer;
   const lyricsAnalyzer = {
     ...createLrclibLyricsAnalyzer({
       hasEffectiveLyrics: async trackId => Boolean(lyricsOverrides.get(trackId)) || await hasSidecarLyrics(trackId)
     }),
     capability: 'lyrics' as const
   } satisfies LibraryAssistantAnalyzer;
-  const analyzers = (options.analyzers ?? [metadataAnalyzer, lyricsAnalyzer])
+  const analyzers = (options.analyzers ?? [metadataAnalyzer, artworkAnalyzer, lyricsAnalyzer])
     .map(analyzer => instrumentAnalyzer(analyzer, metrics));
   const service = new LibraryAssistantService({
     store,
@@ -163,7 +185,11 @@ export function registerLibraryAssistant(
     analyzers,
     library: analysisLibrary,
     isTrackEligible: (capability, track) => (
-      capability !== 'metadata' || needsMusicBrainzEnrichment(track)
+      capability === 'metadata'
+        ? needsMusicBrainzEnrichment(track)
+        : capability === 'artwork'
+          ? !track.hasCover
+          : true
     )
   });
   const fingerprints = new LibraryAssistantFingerprintService({
@@ -253,17 +279,26 @@ export function registerLibraryAssistant(
     },
     onLyricsChanged: () => { assistantReviewRevision += 1; }
   });
+  const coverFill = new MissingCoverFillService({
+    library: { listTracks: listCoverFillTracks },
+    analyzer: artworkAnalyzer,
+    providers,
+    coverOverrides,
+    onArtworkChanged: () => { assistantReviewRevision += 1; }
+  });
   const autonomy = new LibraryAssistantAutonomyController(autonomyStore, service, review);
   attachLibraryAssistantAutonomyLifecycle(options.library, autonomy);
   autonomy.resume();
 
   registerLibraryAssistantRoutes(app, service, workQueue, metrics);
+  registerMissingCoverFillRoutes(app, coverFill);
   registerLibraryAssistantFingerprintRoutes(app, fingerprints);
   registerLibraryAssistantReviewRoutes(app, review);
   registerLibraryAssistantPolicyRoutes(app, reviewPolicy);
   registerLibraryAssistantAutonomyRoutes(app, autonomy);
   registerLocalLyricsRoutes(app, localLyrics);
   app.addHook('onClose', async () => {
+    await coverFill.close();
     await localLyrics.close();
     await autonomy.close();
     await service.close();

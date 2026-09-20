@@ -79,12 +79,81 @@
 .admin-metadata-health-filter--v1 > button svg { width: 14px; height: 14px; }
 
 .admin-metadata-toolbar--v1 {
-  grid-template-columns: minmax(0,1fr) 42px !important;
+  grid-template-columns: minmax(0,1fr) auto 42px !important;
 }
 
 .admin-metadata-toolbar--v1 .admin-tracks-search { height: 44px; }
 .admin-metadata-toolbar--v1 .admin-tracks-search input { font-size: .9375rem; }
 .admin-metadata-toolbar--v1 .admin-tracks-refresh { width: 42px; height: 42px; }
+
+.admin-cover-fill-action {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 13px;
+  border: 1px solid rgba(224,171,88,.24);
+  border-radius: 9px;
+  background: rgba(224,171,88,.075);
+  color: #e8c889;
+  font: inherit;
+  font-size: .8125rem;
+  font-weight: 650;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.admin-cover-fill-action:hover:not(:disabled) {
+  border-color: rgba(224,171,88,.42);
+  background: rgba(224,171,88,.12);
+}
+.admin-cover-fill-action:disabled { opacity: .55; cursor: default; }
+.admin-cover-fill-action svg { width: 15px; height: 15px; }
+.admin-cover-fill-action small {
+  min-width: 20px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(224,171,88,.13);
+  color: #f0d5a4;
+  font-size: .6875rem;
+  text-align: center;
+}
+
+.admin-cover-fill-status {
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 9px 12px;
+  border: 1px solid rgba(224,171,88,.14);
+  border-radius: 10px;
+  background: rgba(224,171,88,.04);
+}
+.admin-cover-fill-status > span {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #e6c78f;
+}
+.admin-cover-fill-status > span svg { width: 15px; height: 15px; }
+.admin-cover-fill-status strong { font-size: .8125rem; }
+.admin-cover-fill-status small {
+  color: #968979;
+  font-size: .75rem;
+  text-align: right;
+}
+.admin-cover-fill-status.is-success {
+  border-color: rgba(95,187,130,.17);
+  background: rgba(72,160,106,.045);
+}
+.admin-cover-fill-status.is-success > span { color: #9dd7af; }
+.admin-cover-fill-status.is-error {
+  border-color: rgba(255,90,90,.2);
+  background: rgba(140,41,41,.08);
+}
+.admin-cover-fill-status.is-error > span { color: #ffb1b1; }
 
 .admin-metadata-workspace {
   min-width: 0;

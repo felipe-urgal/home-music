@@ -293,6 +293,27 @@ export type AdminLibraryAssistantPolicyResponse = {
 
 export type AdminLibraryAssistantPolicyUpdateRequest = AdminLibraryAssistantPolicyResponse;
 
+export type MissingCoverFillJobStatus = 'running' | 'completed' | 'failed';
+export type MissingCoverFillPhase = 'searching' | 'applying' | 'generating' | 'completed' | 'failed';
+
+export type MissingCoverFillJob = {
+  id: string;
+  status: MissingCoverFillJobStatus;
+  phase: MissingCoverFillPhase;
+  total: number;
+  searched: number;
+  externalFound: number;
+  generated: number;
+  failed: number;
+  startedAt: string;
+  finishedAt: string | null;
+  error: string | null;
+};
+
+export type AdminMissingCoverFillResponse = {
+  job: MissingCoverFillJob | null;
+};
+
 export type LibraryAssistantReviewTrack = {
   id: string;
   title: string;
