@@ -733,12 +733,83 @@
     height: 20px;
   }
 
+  #root .desktop-layout[data-offline="false"] .mini-player__playlist {
+    color: #f3f6fb;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mini-player__playlist svg {
+    fill: none;
+    stroke-width: 1.8;
+  }
+
   #root .desktop-layout[data-offline="false"] .mini-player__toggle svg {
     fill: currentColor;
   }
 
   #root .desktop-layout[data-offline="false"] .mini-player__next {
-    color: #aeb9c9;
+    display: none !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mini-player__playlist-picker {
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    bottom: calc(100% + 8px);
+    max-height: min(280px, 46vh);
+    padding: 8px;
+    display: grid;
+    gap: 3px;
+    overflow-y: auto;
+    border: 1px solid rgba(112, 148, 202, .2);
+    border-radius: 12px;
+    background: rgba(9, 19, 33, .99);
+    box-shadow: 0 18px 44px rgba(0, 0, 0, .42);
+    backdrop-filter: blur(20px);
+  }
+
+  #root .desktop-layout[data-offline="false"] .mini-player__playlist-picker > strong {
+    padding: 5px 7px 7px;
+    color: #9ba9bd;
+    font-size: 10px;
+    font-weight: 650;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mini-player__playlist-picker > button {
+    min-height: 38px;
+    padding: 7px 8px;
+    display: grid;
+    grid-template-columns: 20px minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+    border: 0;
+    border-radius: 8px;
+    color: #e9eff8;
+    background: transparent;
+    text-align: left;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mini-player__playlist-picker > button:active {
+    background: rgba(77, 143, 255, .12);
+  }
+
+  #root .desktop-layout[data-offline="false"] .mini-player__playlist-picker > button svg {
+    width: 17px;
+    height: 17px;
+    color: #8db8ff;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mini-player__playlist-picker > button span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mini-player__playlist-picker > small {
+    padding: 8px;
+    color: #8997aa;
+    font-size: 11px;
   }
 
   #root .desktop-layout[data-offline="false"] .load-more {
