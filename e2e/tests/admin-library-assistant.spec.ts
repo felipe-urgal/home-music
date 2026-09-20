@@ -78,8 +78,14 @@ test('Library Assistant revisa, aplica via override, atualiza player e sobrevive
     await expect(playerBar).toContainText('E2E Track');
 
     await openAssistant(page);
-    await expect(page.locator('.assistant-admin__sections').getByRole('button', { name: 'Sugestões', exact: true })).toHaveClass(/is-active/);
-    await expect(page.locator('.assistant-admin__info')).toContainText('Você pode revisar os resultados que já apareceram; a tela continua atualizando a análise automaticamente.');
+    const assistantSections = page.locator('.assistant-admin__sections');
+    await expect(assistantSections.getByRole('button', { name: 'Sugestões', exact: true })).toHaveClass(/is-active/);
+    await expect(assistantSections.getByRole('button', { name: 'Processamento', exact: true })).toBeVisible();
+    await expect(assistantSections.getByRole('button', { name: 'Configurações', exact: true })).toBeVisible();
+    await expect(page.locator('.assistant-admin__info')).toHaveCount(0);
+    await expect(page.locator('.assistant-admin__filters').getByRole('button', { name: 'Metadados', exact: true })).toBeVisible();
+    await expect(page.locator('.assistant-admin__filters').getByRole('button', { name: 'Capas', exact: true })).toBeVisible();
+    await expect(page.locator('.assistant-admin__filters').getByRole('button', { name: 'Letras', exact: true })).toBeVisible();
 
     const row = page.locator('.assistant-admin-row').filter({ hasText: 'E2E Track' }).first();
     await expect(row).toBeVisible();
@@ -227,7 +233,8 @@ test('Library Assistant executa o fluxo visual de lyrics local com job fake', as
   });
 
   await openAssistant(page);
-  await page.getByRole('button', { name: 'Lyrics local', exact: true }).click();
+  await page.locator('.assistant-admin__sections').getByRole('button', { name: 'Configurações', exact: true }).click();
+  await page.getByRole('button', { name: 'Abrir lyrics local', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Lyrics local' });
   await expect(dialog).toBeVisible();
   await expect(dialog).toContainText('O áudio não sai deste servidor');
