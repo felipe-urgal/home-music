@@ -1308,6 +1308,141 @@
   }
 
 
+  /* Desktop library root: playlists live below folders instead of occupying a navbar tab. */
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .desktop-library-playlists {
+    width: 100%;
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1px solid rgba(244, 196, 126, .10);
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .section-heading--embedded-playlists {
+    width: 100%;
+    min-height: 38px;
+    margin: 0 0 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .section-heading--embedded-playlists > span {
+    color: #d8cec7;
+    font-size: 12px;
+    font-weight: 650;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .section-heading--embedded-playlists .playlist-create-action {
+    width: auto;
+    min-height: 34px;
+    padding: 0 15px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .section-heading--embedded-playlists .playlist-create-action svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .desktop-library-playlists .playlist-visual-grid {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 14px 13px;
+    margin: 0 0 18px;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .desktop-library-playlists .playlist-visual-card {
+    position: relative;
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    display: block;
+    overflow: hidden;
+    border: 1px solid rgba(231, 209, 187, .11);
+    border-radius: 9px;
+    background: #101827;
+    box-shadow: 0 10px 28px rgba(0,0,0,.16);
+    transform: none;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .desktop-library-playlists .playlist-visual-card:hover {
+    border-color: rgba(244,196,126,.28);
+    background: #121c2d;
+    transform: translateY(-1px);
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .desktop-library-playlists .playlist-visual-card__main {
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    display: block;
+    border: 0;
+    color: inherit;
+    background: transparent;
+    text-align: left;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .desktop-library-playlists .playlist-visual-card__main .artwork {
+    width: 100%;
+    height: auto;
+    max-width: none;
+    aspect-ratio: 1.48 / 1;
+    overflow: hidden;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .desktop-library-playlists .playlist-visual-card__main .artwork img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .desktop-library-playlists .playlist-visual-card .group-item__text {
+    min-height: 40px;
+    padding: 7px 28px 7px 8px;
+    display: grid;
+    align-content: center;
+    gap: 2px;
+    text-align: left;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .desktop-library-playlists .playlist-visual-card .group-item__text strong {
+    overflow: hidden;
+    color: #f1e8e1;
+    font-size: 9px;
+    font-weight: 620;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .desktop-library-playlists .playlist-visual-card .group-item__text small {
+    color: #817977;
+    font-size: 7px;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .desktop-library-playlists .playlist-visual-card .group-item__updated,
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .desktop-library-playlists .playlist-visual-card .group-item__play,
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .desktop-library-playlists .playlist-visual-card .group-item__chevron {
+    display: none !important;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .desktop-library-playlists .playlist-visual-card .group-item__more {
+    position: absolute;
+    right: 7px;
+    bottom: 10px;
+    width: 14px;
+    height: 14px;
+    margin: 0;
+    color: #aaa19d;
+    stroke-width: 1.7;
+  }
+
   /* Now Playing: playback lives on the artwork; only mode controls stay below. */
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__art {
     position: relative;
