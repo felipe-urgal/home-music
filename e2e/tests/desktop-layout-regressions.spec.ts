@@ -102,6 +102,16 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   expect(folderMainBox!.width).toBeGreaterThanOrEqual(viewport!.width * 0.9);
   expect(folderContentBox!.width).toBeGreaterThanOrEqual(folderMainBox!.width * 0.95);
 
+  await topbar.getByRole('button', { name: 'Buscar na biblioteca' }).click();
+  const librarySearch = page.locator('.search-box--library input');
+  await expect(librarySearch).toBeFocused();
+  await librarySearch.fill('E2E Track');
+  const searchResultGrid = page.getByTestId('desktop-track-grid');
+  await expect(searchResultGrid).toBeVisible();
+  await expect(searchResultGrid.locator('.desktop-track-card').filter({ hasText: 'E2E Track' })).toBeVisible();
+  await expect(page.getByTestId('desktop-library-table')).toHaveCount(0);
+  await librarySearch.clear();
+
   await homeBrand.click();
   await expect(page.locator('.desktop-now-playing-screen')).toBeVisible();
   await expect(homeBrand).toHaveAttribute('aria-current', 'page');
