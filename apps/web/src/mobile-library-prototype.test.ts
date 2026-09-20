@@ -65,8 +65,14 @@ describe('mobile library prototype one contracts', () => {
     expect(screen).toMatch(/desktop-now-playing-screen__next-track/);
     expect(screen).not.toMatch(/aria-label="Anterior"/);
     expect(screen).not.toMatch(/className="desktop-now-playing-screen__play"/);
+    expect(screen).not.toMatch(/desktop-now-playing-screen__controls/);
+    expect(screen).toMatch(/Adicionar à playlist/);
+    expect(screen).toMatch(/role="menuitemcheckbox"/);
+    expect(screen).toMatch(/Aleatório ligado/);
+    expect(screen).toMatch(/repeatLabel/);
     expect(app).toMatch(/nextTrack=\{nextTrack\}/);
-    expect(css).toMatch(/desktop-now-playing-screen__controls[\s\S]*grid-template-columns: repeat\(2, 46px\)/);
+    expect(css).toMatch(/desktop-now-playing-screen__more-menu[\s\S]*width: 248px/);
+    expect(css).toMatch(/desktop-now-playing-screen__more-submenu/);
     expect(css).toMatch(/desktop-now-playing-screen__heading h1[\s\S]*font-size: clamp\(24px, 2\.15vw, 34px\)/);
     expect(css).toMatch(/desktop-now-playing-screen__waveform-progress[\s\S]*width: min\(100%, 470px\)/);
     expect(css).toMatch(/desktop-now-playing-screen__waveform span[\s\S]*var\(--wave-fill, 0%\)/);
