@@ -1277,6 +1277,169 @@
     stroke-width: 1.7;
   }
 
+
+  /* Now Playing: playback lives on the artwork; only mode controls stay below. */
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__art {
+    position: relative;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__cover-play {
+    position: absolute;
+    z-index: 8;
+    right: 16px;
+    bottom: 16px;
+    width: 58px;
+    height: 58px;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    border: 2px solid rgba(255, 220, 166, .92);
+    border-radius: 50%;
+    color: #fff2df;
+    background: rgba(8, 13, 21, .82);
+    box-shadow:
+      0 0 0 4px rgba(7, 11, 18, .64),
+      0 12px 28px rgba(0, 0, 0, .32);
+    backdrop-filter: blur(12px);
+    cursor: pointer;
+    transition: transform 140ms ease, background 140ms ease, border-color 140ms ease;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__cover-play:hover {
+    transform: translateY(-1px) scale(1.03);
+    border-color: #ffd79c;
+    background: rgba(18, 22, 30, .92);
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__cover-play:focus-visible {
+    outline: 2px solid rgba(255, 216, 158, .72);
+    outline-offset: 4px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__cover-play svg {
+    width: 22px;
+    height: 22px;
+    stroke-width: 2;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__art .artwork-fallback__disc {
+    display: none;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__controls {
+    min-height: 54px;
+    margin-top: 10px;
+    grid-template-columns: repeat(2, 46px);
+    gap: 20px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__controls button {
+    width: 42px;
+    height: 42px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track {
+    position: absolute;
+    z-index: 5;
+    right: 25px;
+    bottom: 20px;
+    width: min(310px, calc(100% - 50px));
+    min-height: 58px;
+    padding: 7px 10px 7px 7px;
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr) 20px;
+    align-items: center;
+    gap: 10px;
+    overflow: hidden;
+    border: 1px solid rgba(232, 211, 190, .16);
+    border-radius: 10px;
+    color: #d8cec8;
+    background: rgba(8, 13, 22, .58);
+    box-shadow: 0 12px 30px rgba(0,0,0,.18);
+    backdrop-filter: blur(14px);
+    text-align: left;
+    cursor: pointer;
+    transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track:hover {
+    border-color: rgba(244, 196, 126, .34);
+    background: rgba(13, 20, 31, .82);
+    transform: translateY(-1px);
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track:focus-visible {
+    outline: 2px solid rgba(244, 196, 126, .55);
+    outline-offset: 3px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track > .artwork {
+    width: 44px;
+    height: 44px;
+    max-width: none;
+    overflow: hidden;
+    border: 0;
+    border-radius: 7px;
+    box-shadow: none;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track > .artwork img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track-copy {
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track-copy small {
+    color: #b98962;
+    font-size: 7px;
+    font-weight: 700;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track-copy strong,
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track-copy > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track-copy strong {
+    color: #f3e9e1;
+    font-size: 10px;
+    font-weight: 650;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track-copy > span {
+    color: #8f8885;
+    font-size: 8px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track > svg {
+    width: 17px;
+    height: 17px;
+    color: #d7b17e;
+    stroke-width: 1.8;
+  }
+
+  @media (max-width: 1180px) {
+    #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track {
+      width: min(260px, calc(100% - 42px));
+      right: 21px;
+      bottom: 18px;
+    }
+
+    #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__quote {
+      left: 21px;
+    }
+  }
+
 }
 
 @media (min-width: 1500px) {
