@@ -36,8 +36,8 @@ export function MiniPlayer({
         <Artwork track={current} />
         <span className="mini-player__text"><strong>{current.title}</strong><small>{current.artist}</small></span>
       </button>
-      <button className="icon-button mini-player__toggle" type="button" aria-label={playing ? 'Pausar' : 'Tocar'} onClick={onTogglePlay}>{playing ? <Pause /> : <Play />}</button>
       <button className="icon-button mini-player__next" type="button" aria-label="Próxima" onClick={onNext} disabled={!hasNext}><SkipForward /></button>
+      <button className="icon-button mini-player__toggle" type="button" aria-label={playing ? 'Pausar' : 'Tocar'} onClick={onTogglePlay}>{playing ? <Pause /> : <Play />}</button>
     </div>
   );
 }
