@@ -40,10 +40,11 @@ describe('mobile library prototype one contracts', () => {
     expect(shell).not.toMatch(/label="Tocando Agora"/);
   });
 
-  it('integra playlists à raiz de pastas no desktop', () => {
+  it('integra playlists e amplia as pastas na raiz desktop', () => {
     const shell = source('components/DesktopShell.tsx');
     const content = source('components/LibraryContent.tsx');
     const navigation = source('components/LibraryNavigationChrome.tsx');
+    const libraryNavigation = source('useLibraryNavigation.ts');
     const css = source('prototype-one-desktop-polish.css');
 
     expect(navigation).not.toMatch(/aria-label="Ordenar pastas"/);
@@ -53,8 +54,18 @@ describe('mobile library prototype one contracts', () => {
     expect(content).toMatch(/Nova playlist/);
     expect(content).toMatch(/playlist-visual-grid/);
     expect(content).toMatch(/playlist-visual-card/);
+    expect(content).toMatch(/folder-visual-card__artwork-mosaic/);
+    expect(libraryNavigation).toMatch(/folderArtworkTracks\(tracks: Track\[], limit = 4\)/);
+    expect(libraryNavigation).toMatch(/artworks: folderArtworkTracks/);
     expect(css).toMatch(/desktop-library-playlists/);
-    expect(css).toMatch(/grid-template-columns: repeat\(auto-fill, minmax\(230px, 1fr\)\)/);
+    expect(css).toMatch(/folder-visual-grid[\s\S]*minmax\(300px, 1fr\)/);
+    expect(css).toMatch(/folder-visual-card__artwork-mosaic[\s\S]*grid-template-columns: repeat\(2/);
+  });
+
+  it('usa a mesma grade visual do detalhe nos resultados de busca desktop', () => {
+    const content = source('components/LibraryContent.tsx');
+
+    expect(content).toMatch(/desktopVariant=\{folderPath \|\| query \? 'grid' : 'table'\}/);
   });
 
   it('move play/pause para a capa e usa a próxima faixa como avanço no desktop', () => {
