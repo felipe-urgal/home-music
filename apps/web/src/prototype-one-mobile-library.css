@@ -1,0 +1,782 @@
+/*
+ * Prototype 1 — mobile library
+ * Selected direction: top tabs, compact list rows and persistent mini player.
+ * This layer intentionally only overrides the phone library surface.
+ */
+
+.folder-visual-card__mobile-icon,
+.folder-visual-card__chevron,
+.group-item__chevron,
+.folder-heading__mobile,
+.folder-order-control {
+  display: none;
+}
+
+@media (max-width: 699px) {
+  /* One navigation hierarchy on phones: fixed top bar + library tabs. */
+  #root .app-shell:has(.desktop-layout[data-offline="false"]) > .mobile-bottom-nav {
+    display: none !important;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-desktop-active="library"] > .phone-surface {
+    padding:
+      calc(64px + env(safe-area-inset-top))
+      16px
+      calc(94px + env(safe-area-inset-bottom));
+    background:
+      radial-gradient(circle at 50% -8%, rgba(47, 91, 175, .13), transparent 21rem),
+      linear-gradient(180deg, #08111f 0%, #070d18 58%, #060b13 100%);
+  }
+
+  /* Top navbar: preserve the existing global actions and match the chosen mock. */
+  #root .app-shell:has(.desktop-layout[data-offline="false"]) > .mobile-library-brand-bar {
+    width: min(100%, 480px);
+    min-height: calc(64px + env(safe-area-inset-top));
+    padding: max(10px, env(safe-area-inset-top)) 16px 8px;
+    border-bottom: 1px solid rgba(126, 161, 214, .12);
+    background: rgba(7, 14, 25, .97);
+    box-shadow: 0 8px 26px rgba(0, 0, 0, .12);
+  }
+
+  #root .app-shell:has(.desktop-layout[data-offline="false"]) > .mobile-library-brand-bar .mobile-library-brand-bar__brand {
+    min-height: 42px;
+    gap: 9px;
+    color: #f7f9fc;
+  }
+
+  #root .app-shell:has(.desktop-layout[data-offline="false"]) > .mobile-library-brand-bar .mobile-library-brand-bar__brand > span {
+    width: 26px;
+    height: 26px;
+    color: #f2f6fb;
+  }
+
+  #root .app-shell:has(.desktop-layout[data-offline="false"]) > .mobile-library-brand-bar .mobile-library-brand-bar__brand svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  #root .app-shell:has(.desktop-layout[data-offline="false"]) > .mobile-library-brand-bar .mobile-library-brand-bar__brand strong {
+    font-size: 14px;
+    font-weight: 690;
+    letter-spacing: -.015em;
+  }
+
+  #root .app-shell:has(.desktop-layout[data-offline="false"]) > .mobile-library-brand-bar .mobile-library-brand-bar__actions {
+    gap: 8px;
+  }
+
+  #root .app-shell:has(.desktop-layout[data-offline="false"]) > .mobile-library-brand-bar .mobile-library-brand-bar__actions > button {
+    width: 38px;
+    height: 38px;
+    color: #d7deea;
+  }
+
+  #root .app-shell:has(.desktop-layout[data-offline="false"]) > .mobile-library-brand-bar .mobile-library-brand-bar__actions > button > svg {
+    width: 21px;
+    height: 21px;
+    stroke-width: 1.8;
+  }
+
+  #root .app-shell:has(.desktop-layout[data-offline="false"]) > .mobile-library-brand-bar .mobile-library-brand-bar__account {
+    border-color: rgba(235, 190, 111, .46) !important;
+    background: radial-gradient(circle at 32% 28%, #3c3564, #1b1d39 72%) !important;
+  }
+
+  #root .app-shell:has(.desktop-layout[data-offline="false"]) > .mobile-library-brand-bar .mobile-library-brand-bar__account span {
+    color: #f2ca82;
+    font-size: 11px;
+  }
+
+  /* Root title is intentionally replaced by the tabs + "Suas pastas" list header. */
+  #root .desktop-layout[data-offline="false"][data-desktop-active="library"] .library-header.is-root {
+    display: none !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .library-tabs {
+    width: 100%;
+    min-height: 50px;
+    margin: 16px 0 20px;
+    padding: 0;
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px;
+    overflow: hidden;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  #root .desktop-layout[data-offline="false"] .library-tabs button {
+    min-width: 0;
+    height: 50px;
+    padding: 0 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    border: 1px solid rgba(116, 153, 211, .19);
+    border-radius: 12px;
+    color: #aebbd0;
+    background: rgba(14, 27, 45, .82);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .015);
+    font-size: 14px;
+    font-weight: 570;
+  }
+
+  #root .desktop-layout[data-offline="false"] .library-tabs button svg {
+    display: block;
+    width: 20px;
+    height: 20px;
+    stroke-width: 2;
+  }
+
+  #root .desktop-layout[data-offline="false"] .library-tabs button.is-active {
+    color: #fff;
+    border-color: rgba(100, 165, 255, .8);
+    background: linear-gradient(135deg, #2f86f7 0%, #4d8fff 50%, #4e7bea 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, .2),
+      0 8px 22px rgba(50, 121, 237, .18);
+  }
+
+  #root .desktop-layout[data-offline="false"] .library-content {
+    min-height: 0;
+  }
+
+  /* Search remains available from the top navbar, but does not consume layout. */
+  #root .desktop-layout[data-offline="false"] .library-smart-view-tools {
+    position: relative;
+    z-index: 36;
+    width: 100%;
+    height: 0;
+    min-height: 0;
+    margin: 0;
+  }
+
+  #root .desktop-layout[data-offline="false"] .library-smart-view-tools .library-tools {
+    top: calc(66px + env(safe-area-inset-top));
+    width: min(calc(100% - 32px), 448px);
+  }
+
+  /* Folders root: exact single-column row language from prototype 1. */
+  #root .desktop-layout[data-offline="false"] .section-heading--folders-root {
+    min-height: 34px;
+    margin: 0 0 10px;
+    display: flex !important;
+    align-items: center;
+    gap: 10px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .section-heading--folders-root > span {
+    margin-right: auto;
+    color: #f3f6fb;
+    font-size: 17px;
+    font-weight: 690;
+    letter-spacing: -.018em;
+  }
+
+  #root .desktop-layout[data-offline="false"] .folder-heading__desktop {
+    display: none;
+  }
+
+  #root .desktop-layout[data-offline="false"] .folder-heading__mobile {
+    display: inline;
+  }
+
+  #root .desktop-layout[data-offline="false"] .section-heading--folders-root > small {
+    display: none;
+  }
+
+  #root .desktop-layout[data-offline="false"] .folder-order-control {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    color: #aab7cb;
+    font-size: 12px;
+    font-weight: 520;
+  }
+
+  #root .desktop-layout[data-offline="false"] .folder-order-control::after {
+    content: "⌄";
+    margin: -3px 0 0 -2px;
+    color: #8190a6;
+    font-size: 13px;
+    pointer-events: none;
+  }
+
+  #root .desktop-layout[data-offline="false"] .folder-order-control select {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  #root .desktop-layout[data-offline="false"] .folder-order-control:focus-within {
+    outline: 2px solid #67b9ff;
+    outline-offset: 4px;
+    border-radius: 3px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .folder-visual-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 7px;
+    margin: 0 0 14px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .folder-visual-card {
+    width: 100%;
+    min-height: 68px;
+    padding: 8px 12px;
+    display: grid;
+    grid-template-columns: 48px minmax(0, 1fr) 22px;
+    align-items: center;
+    gap: 12px;
+    overflow: visible;
+    border: 1px solid rgba(112, 148, 202, .13);
+    border-radius: 12px;
+    color: inherit;
+    background: rgba(13, 25, 42, .86);
+    box-shadow: none;
+    text-align: left;
+  }
+
+  #root .desktop-layout[data-offline="false"] .folder-visual-card:active {
+    border-color: rgba(94, 154, 246, .32);
+    background: rgba(18, 34, 56, .96);
+    transform: none;
+  }
+
+  #root .desktop-layout[data-offline="false"] .folder-visual-card > .artwork,
+  #root .desktop-layout[data-offline="false"] .folder-visual-card__more {
+    display: none !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .folder-visual-card__mobile-icon {
+    width: 48px;
+    height: 48px;
+    display: grid;
+    place-items: center;
+    border-radius: 10px;
+    color: #ff6686;
+    background:
+      radial-gradient(circle at 24% 18%, rgba(255, 120, 143, .2), transparent 45%),
+      #3b1e31;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .035);
+  }
+
+  #root .desktop-layout[data-offline="false"] .folder-visual-card:nth-child(4n + 2) .folder-visual-card__mobile-icon {
+    color: #ffc46f;
+    background:
+      radial-gradient(circle at 24% 18%, rgba(255, 205, 119, .19), transparent 45%),
+      #3c3020;
+  }
+
+  #root .desktop-layout[data-offline="false"] .folder-visual-card:nth-child(4n + 3) .folder-visual-card__mobile-icon {
+    color: #79b4ff;
+    background:
+      radial-gradient(circle at 24% 18%, rgba(99, 166, 255, .19), transparent 45%),
+      #1c3155;
+  }
+
+  #root .desktop-layout[data-offline="false"] .folder-visual-card:nth-child(4n) .folder-visual-card__mobile-icon {
+    color: #b982ff;
+    background:
+      radial-gradient(circle at 24% 18%, rgba(177, 112, 255, .19), transparent 45%),
+      #322354;
+  }
+
+  #root .desktop-layout[data-offline="false"] .folder-visual-card__mobile-icon svg {
+    width: 23px;
+    height: 23px;
+    stroke-width: 1.9;
+    fill: currentColor;
+    fill-opacity: .16;
+  }
+
+  #root .desktop-layout[data-offline="false"] .folder-visual-card__text {
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    display: grid;
+    align-content: center;
+    gap: 4px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .folder-visual-card__text strong {
+    overflow: hidden;
+    color: #f4f7fb;
+    font-size: 14px;
+    font-weight: 660;
+    line-height: 1.15;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #root .desktop-layout[data-offline="false"] .folder-visual-card__text small {
+    color: #8997aa;
+    font-size: 12px;
+    line-height: 1.15;
+  }
+
+  #root .desktop-layout[data-offline="false"] .folder-visual-card__chevron {
+    width: 18px;
+    height: 18px;
+    display: block;
+    justify-self: end;
+    color: #9eacc1;
+    stroke-width: 1.8;
+  }
+
+  /* Playlists use the same compact navigation rhythm instead of the old card stack. */
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"] .section-heading--playlists-root {
+    min-height: 38px;
+    margin: 0 0 10px;
+    display: flex;
+    align-items: center;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"] .section-heading--playlists-root > span {
+    display: block !important;
+    color: #f3f6fb;
+    font-size: 17px;
+    font-weight: 690;
+    letter-spacing: -.018em;
+  }
+
+  #root .desktop-layout[data-offline="false"] .section-heading--playlists-root .section-heading__actions {
+    width: auto;
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .playlist-create-action {
+    width: auto;
+    min-height: 34px;
+    padding: 0 11px;
+    border: 1px solid rgba(92, 151, 240, .28);
+    border-radius: 9px;
+    color: #bcd6ff;
+    background: rgba(35, 86, 161, .16);
+    font-size: 11px;
+    font-weight: 620;
+  }
+
+  #root .desktop-layout[data-offline="false"] .playlist-create-action svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .playlist-smart-action,
+  #root .desktop-layout[data-offline="false"] .playlist-order-control {
+    display: none !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .group-list {
+    display: grid;
+    gap: 7px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .group-item {
+    width: 100%;
+    min-height: 68px;
+    padding: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 22px;
+    align-items: center;
+    gap: 10px;
+    overflow: hidden;
+    border: 1px solid rgba(112, 148, 202, .13);
+    border-radius: 12px;
+    background: rgba(13, 25, 42, .86);
+  }
+
+  #root .desktop-layout[data-offline="false"] .group-item__main {
+    min-width: 0;
+    min-height: 66px;
+    padding: 8px 0 8px 8px;
+    display: grid;
+    grid-template-columns: 48px minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .group-item__main .artwork {
+    width: 48px;
+    height: 48px;
+    border-radius: 10px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .group-item__text {
+    min-width: 0;
+    gap: 4px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .group-item__text strong {
+    color: #f4f7fb;
+    font-size: 14px;
+    font-weight: 660;
+  }
+
+  #root .desktop-layout[data-offline="false"] .group-item__text small {
+    color: #8997aa;
+    font-size: 12px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .group-item__updated,
+  #root .desktop-layout[data-offline="false"] .group-item__play,
+  #root .desktop-layout[data-offline="false"] .group-item__more {
+    display: none !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .group-item__chevron {
+    width: 18px;
+    height: 18px;
+    display: block;
+    justify-self: end;
+    margin-right: 11px;
+    color: #9eacc1;
+    stroke-width: 1.8;
+  }
+
+  /* Details: compact header, offline state, primary action and track rows. */
+  #root .desktop-layout[data-offline="false"] .library-header.is-detail {
+    min-height: 62px;
+    margin: 8px 0 8px;
+    display: grid;
+    grid-template-columns: 42px minmax(0, 1fr) 42px;
+    align-items: center;
+  }
+
+  #root .desktop-layout[data-offline="false"] .library-header.is-detail > .icon-button:first-child {
+    width: 40px;
+    height: 40px;
+    justify-self: start;
+    color: #e7edf6;
+  }
+
+  #root .desktop-layout[data-offline="false"] .library-header.is-detail .library-header__title {
+    gap: 4px;
+    text-align: center;
+  }
+
+  #root .desktop-layout[data-offline="false"] .library-header.is-detail .library-header__title strong {
+    color: #f7f9fc;
+    font-size: 18px;
+    font-weight: 690;
+  }
+
+  #root .desktop-layout[data-offline="false"] .library-header.is-detail .library-header__title small {
+    color: #8d9aad;
+    font-size: 12px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .library-header.is-detail .library-header__player-button,
+  #root .desktop-layout[data-offline="false"] .library-header.is-detail > .icon-button[aria-label="Atualizar biblioteca"] {
+    display: none !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .breadcrumbs {
+    margin: 0 0 12px;
+    padding: 0;
+    color: #8795a9;
+    font-size: 11px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .breadcrumbs button {
+    color: inherit;
+  }
+
+  #root .desktop-layout[data-offline="false"] .offline-collection-control {
+    min-height: 58px;
+    margin: 0 0 12px;
+    padding: 9px 10px 9px 12px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    border: 1px solid rgba(87, 139, 218, .18);
+    border-radius: 12px;
+    background: rgba(12, 26, 46, .72);
+  }
+
+  #root .desktop-layout[data-offline="false"] .offline-collection-control__copy {
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .offline-collection-control__copy strong {
+    color: #edf3fb;
+    font-size: 12px;
+    font-weight: 650;
+  }
+
+  #root .desktop-layout[data-offline="false"] .offline-collection-control__copy small {
+    color: #8798af;
+    font-size: 10px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .offline-collection-control__actions {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .offline-collection-control__actions .primary-action,
+  #root .desktop-layout[data-offline="false"] .offline-collection-control__actions .secondary-action {
+    min-height: 34px;
+    padding: 0 10px;
+    border-radius: 9px;
+    font-size: 10px;
+    white-space: nowrap;
+  }
+
+  #root .desktop-layout[data-offline="false"] .offline-collection-control__remove {
+    width: 34px;
+    height: 34px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .play-all {
+    min-height: 42px;
+    margin: 4px 0 12px;
+    padding: 0 14px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid rgba(85, 151, 247, .34);
+    border-radius: 11px;
+    color: #bfdaff;
+    background: rgba(39, 100, 193, .16);
+    font-size: 13px;
+    font-weight: 620;
+  }
+
+  #root .desktop-layout[data-offline="false"] .play-all svg {
+    width: 18px;
+    height: 18px;
+    fill: currentColor;
+  }
+
+  #root .desktop-layout[data-offline="false"] .play-all span {
+    color: #8fb4e7;
+  }
+
+  #root .desktop-layout[data-offline="false"] .collection-actions {
+    gap: 7px;
+    margin-bottom: 12px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .collection-actions .text-action {
+    min-height: 38px;
+    font-size: 11px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .section-heading:not(.section-heading--folders-root):not(.section-heading--playlists-root) {
+    min-height: 36px;
+    margin-top: 2px;
+    color: #aeb9ca;
+    font-size: 13px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .library-track-list {
+    display: grid;
+    gap: 0;
+  }
+
+  #root .desktop-layout[data-offline="false"] .library-track {
+    min-height: 66px;
+    padding: 7px 0;
+    gap: 0;
+    border: 0;
+    border-bottom: 1px solid rgba(111, 142, 184, .11);
+    border-radius: 0;
+    background: transparent;
+  }
+
+  #root .desktop-layout[data-offline="false"] .library-track:last-child {
+    border-bottom: 0;
+  }
+
+  #root .desktop-layout[data-offline="false"] .library-track__main {
+    min-width: 0;
+    width: 100%;
+    display: grid;
+    grid-template-columns: 48px minmax(0, 1fr) 30px;
+    align-items: center;
+    gap: 11px;
+    padding: 0;
+  }
+
+  #root .desktop-layout[data-offline="false"] .library-track__main .artwork {
+    width: 48px;
+    height: 48px;
+    border-radius: 10px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .library-track__text {
+    min-width: 0;
+    gap: 4px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .library-track__text strong {
+    color: #f4f7fb;
+    font-size: 14px;
+    font-weight: 650;
+  }
+
+  #root .desktop-layout[data-offline="false"] .library-track__text small {
+    color: #8794a7;
+    font-size: 12px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .library-track__action,
+  #root .desktop-layout[data-offline="false"] .playing-indicator {
+    justify-self: end;
+    margin-right: 2px;
+    color: #91a0b5;
+  }
+
+  #root .desktop-layout[data-offline="false"] .track-action {
+    margin-left: 5px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .library-status {
+    display: none !important;
+  }
+
+  /* Persistent mini player: the only bottom-level navigation on library screens. */
+  #root .desktop-layout[data-offline="false"] .mini-player {
+    position: fixed;
+    z-index: 35;
+    left: 50%;
+    bottom: max(10px, env(safe-area-inset-bottom));
+    width: min(calc(100% - 24px), 456px);
+    min-height: 70px;
+    padding: 8px 9px;
+    transform: translateX(-50%);
+    display: flex !important;
+    align-items: center;
+    gap: 3px;
+    overflow: hidden;
+    border: 1px solid rgba(112, 148, 202, .2);
+    border-radius: 14px;
+    background: rgba(12, 24, 40, .97);
+    box-shadow:
+      0 18px 48px rgba(0, 0, 0, .42),
+      inset 0 1px 0 rgba(255, 255, 255, .02);
+    backdrop-filter: blur(20px);
+  }
+
+  #root .desktop-layout[data-offline="false"] .mini-player__progress {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    overflow: hidden;
+    background: rgba(122, 151, 192, .13);
+  }
+
+  #root .desktop-layout[data-offline="false"] .mini-player__progress span {
+    display: block;
+    height: 100%;
+    background: linear-gradient(90deg, #4e94ff, #6b8dff);
+  }
+
+  #root .desktop-layout[data-offline="false"] .mini-player__main {
+    min-width: 0;
+    flex: 1 1 auto;
+    display: grid;
+    grid-template-columns: 48px minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+    padding: 0;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mini-player__main .artwork {
+    width: 48px;
+    height: 48px;
+    border-radius: 10px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mini-player__text {
+    min-width: 0;
+    gap: 3px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mini-player__text strong {
+    color: #f6f8fc;
+    font-size: 12px;
+    font-weight: 650;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mini-player__text small {
+    color: #9aa7b9;
+    font-size: 10px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mini-player .icon-button {
+    width: 36px;
+    height: 36px;
+    flex: 0 0 auto;
+    color: #f3f6fb;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mini-player .icon-button svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mini-player__toggle svg {
+    fill: currentColor;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mini-player__next {
+    color: #aeb9c9;
+  }
+
+  #root .desktop-layout[data-offline="false"] .load-more {
+    margin-bottom: 8px;
+    border-color: rgba(94, 145, 221, .16);
+    background: rgba(14, 28, 46, .8);
+    color: #a8cbff;
+  }
+}
+
+@media (max-width: 370px) {
+  #root .desktop-layout[data-offline="false"] .library-tabs button {
+    padding-inline: 9px;
+    font-size: 13px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .folder-visual-card {
+    grid-template-columns: 44px minmax(0, 1fr) 20px;
+    gap: 10px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .folder-visual-card__mobile-icon,
+  #root .desktop-layout[data-offline="false"] .group-item__main .artwork,
+  #root .desktop-layout[data-offline="false"] .library-track__main .artwork {
+    width: 44px;
+    height: 44px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mini-player {
+    width: min(calc(100% - 16px), 456px);
+    padding-inline: 7px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mini-player__main {
+    grid-template-columns: 44px minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mini-player__main .artwork {
+    width: 44px;
+    height: 44px;
+  }
+}
