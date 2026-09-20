@@ -333,7 +333,8 @@
   .assistant-admin__operations-heading,
   .assistant-admin__history li,
   .assistant-admin__policy-field,
-  .assistant-admin__bulk-policy {
+  .assistant-admin__bulk-policy,
+  .assistant-admin__settings--action {
     grid-template-columns: 1fr;
   }
 
@@ -350,7 +351,8 @@
     display: none;
   }
 
-  .assistant-admin__bulk-policy > button {
+  .assistant-admin__bulk-policy > button,
+  .assistant-admin__settings--action > button {
     justify-self: start;
   }
 
