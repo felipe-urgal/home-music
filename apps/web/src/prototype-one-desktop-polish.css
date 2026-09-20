@@ -1585,9 +1585,20 @@
     opacity: 1;
   }
 
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__more-wrap {
+    overflow: visible;
+  }
+
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__more-menu {
     width: 248px;
+    max-height: none;
     padding: 8px;
+    overflow: visible;
+    scrollbar-width: none;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__more-menu::-webkit-scrollbar {
+    display: none;
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__more-menu > button {

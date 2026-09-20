@@ -49,7 +49,16 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   await expect(moreMenu.getByRole('menuitem', { name: 'Adicionar à playlist' })).toBeVisible();
   await expect(moreMenu.getByRole('menuitemcheckbox', { name: /Aleatório/ })).toBeVisible();
   await expect(moreMenu.getByRole('menuitem', { name: /Repetição|Repetir/ })).toBeVisible();
+  expect(await moreMenu.evaluate(element => getComputedStyle(element).overflowY)).toBe('visible');
+
+  await nowPlaying.locator('.desktop-now-playing-screen__heading').click();
+  await expect(moreMenu).toHaveCount(0);
+
   await moreActions.click();
+  await expect(moreMenu).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(moreMenu).toHaveCount(0);
+
   await expect(nowPlaying.getByRole('button', { name: 'Anterior', exact: true })).toHaveCount(0);
   await expect(nowPlaying.getByRole('button', { name: 'Próxima', exact: true })).toHaveCount(0);
 
