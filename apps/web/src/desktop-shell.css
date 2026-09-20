@@ -63,6 +63,12 @@
     align-items: center;
     gap: 11px;
     padding: 0 9px 16px;
+    border: 0;
+    color: inherit;
+    background: transparent;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
   }
 
   .desktop-brand__icon {
@@ -82,7 +88,8 @@
     height: 20px;
   }
 
-  .desktop-brand > div {
+  .desktop-brand > div,
+  .desktop-brand__copy {
     min-width: 0;
     display: grid;
     gap: 2px;
