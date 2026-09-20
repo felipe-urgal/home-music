@@ -52,8 +52,8 @@ jobs:
       - name: Install Chromium
         run: npm run install:browsers --prefix e2e
 
-      - name: Mobile crossfade E2E
-        run: npm run test --prefix e2e -- tests/crossfade-mobile.spec.ts --project=mobile-chromium
+      - name: Mobile playback and library E2E
+        run: npm run test --prefix e2e -- tests/crossfade-mobile.spec.ts tests/mobile-library-prototype.spec.ts --project=mobile-chromium
 
       - name: TV device login E2E
         run: npm run test --prefix e2e -- tests/tv-device-login.spec.ts --project=desktop-chromium
