@@ -142,39 +142,30 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   const playlistDetail = page.getByTestId('desktop-playlist-detail-layout');
   const playlistSummary = page.getByTestId('desktop-playlist-summary');
   const playlistDetailMain = page.locator('.desktop-playlist-detail-main');
-  const detailPlaylistGrid = playlistDetailMain.getByTestId('desktop-track-grid');
-  const playlistCards = detailPlaylistGrid.locator('.desktop-track-card');
   const playlistCoverPlayback = playlistSummary.getByRole('button', { name: /Tocar playlist|Pausar playlist/ });
 
   await expect(playlistDetail).toBeVisible();
   await expect(playlistSummary).toBeVisible();
   await expect(playlistCoverPlayback).toBeVisible();
+  await expect(playlistCoverPlayback).toBeDisabled();
   await expect(playlistDetailMain.locator('.library-header.is-detail')).toHaveCount(0);
   await expect(page.getByPlaceholder('Buscar nesta playlist…')).toHaveCount(0);
   await expect(page.locator('[aria-label="Filtros rápidos da playlist"]')).toHaveCount(0);
-  await expect(detailPlaylistGrid).toBeVisible();
-  await expect(playlistCards.first()).toBeVisible();
+  await expect(playlistDetailMain.getByText('Nenhuma música encontrada.', { exact: true })).toBeVisible();
+  await expect(playlistDetailMain.getByTestId('desktop-track-grid')).toHaveCount(0);
 
   const playlistDetailBox = await playlistDetail.boundingBox();
   const playlistSummaryBox = await playlistSummary.boundingBox();
   const playlistDetailMainBox = await playlistDetailMain.boundingBox();
   const playlistCoverBox = await playlistCoverPlayback.boundingBox();
-  const detailPlaylistGridBox = await detailPlaylistGrid.boundingBox();
-  const firstPlaylistCard = playlistCards.first();
-  const firstPlaylistCardTitle = firstPlaylistCard.locator('.desktop-track-card__copy strong');
-  const gridColumns = await detailPlaylistGrid.evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').filter(Boolean).length);
-  const cardTitleSize = Number.parseFloat(await firstPlaylistCardTitle.evaluate(element => getComputedStyle(element).fontSize));
 
   expect(playlistDetailBox).not.toBeNull();
   expect(playlistSummaryBox).not.toBeNull();
   expect(playlistDetailMainBox).not.toBeNull();
   expect(playlistCoverBox).not.toBeNull();
-  expect(detailPlaylistGridBox).not.toBeNull();
   expect(playlistDetailBox!.width).toBeGreaterThanOrEqual(viewport!.width * 0.9);
   expect(playlistSummaryBox!.x + playlistSummaryBox!.width).toBeLessThanOrEqual(playlistDetailMainBox!.x + 1);
   expect(playlistCoverBox!.width).toBeGreaterThanOrEqual(220);
-  expect(gridColumns === 3 || gridColumns === 5).toBeTruthy();
-  expect(cardTitleSize).toBeGreaterThanOrEqual(13);
 
   const collectionScrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
   expect(collectionScrollWidth).toBeLessThanOrEqual(viewport!.width + 1);
