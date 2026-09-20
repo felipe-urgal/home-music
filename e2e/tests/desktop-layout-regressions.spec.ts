@@ -16,6 +16,7 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   const topbar = page.getByTestId('desktop-sidebar');
   const playerBar = page.getByTestId('desktop-player-bar');
   const navigation = topbar.getByRole('navigation', { name: 'Navegação principal' });
+  const homeBrand = topbar.getByRole('button', { name: 'Abrir Tocando Agora' });
   const nowPlayingSurface = page.locator('.desktop-now-playing-surface');
   const nowPlaying = page.locator('.desktop-now-playing-screen');
   const nowPlayingArt = page.locator('.desktop-now-playing-screen__art');
@@ -45,8 +46,11 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   expect(artworkBox!.y + artworkBox!.height).toBeLessThanOrEqual(nowPlayingBox!.y + nowPlayingBox!.height + 1);
   expect(contentBox!.y + contentBox!.height).toBeLessThanOrEqual(nowPlayingBox!.y + nowPlayingBox!.height + 1);
 
+  await expect(homeBrand).toHaveAttribute('aria-current', 'page');
+  await expect(navigation.getByRole('button', { name: 'Tocando Agora', exact: true })).toHaveCount(0);
+
   const navItems = await Promise.all(
-    ['Tocando Agora', 'Pastas', 'Playlists'].map(async name => {
+    ['Pastas', 'Playlists'].map(async name => {
       const box = await navigation.getByRole('button', { name, exact: true }).boundingBox();
       expect(box).not.toBeNull();
       return box!;
@@ -58,7 +62,23 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   await navigation.getByRole('button', { name: 'Pastas', exact: true }).click();
   await expect(navigation.getByRole('button', { name: 'Pastas', exact: true })).toHaveAttribute('aria-current', 'page');
   await expect(page.locator('.library-header.is-root .library-header__title strong')).toBeHidden();
+  await expect(page.locator('.library-header__folder-meta select')).toHaveCount(0);
+  await expect(page.locator('.folder-order-control')).toBeHidden();
   await expect(playerBar).toBeHidden();
+
+  const folderMain = page.locator('.desktop-main-content--library');
+  const folderGrid = page.locator('.folder-visual-grid');
+  const folderMainBox = await folderMain.boundingBox();
+  const folderGridBox = await folderGrid.boundingBox();
+  expect(folderMainBox).not.toBeNull();
+  expect(folderGridBox).not.toBeNull();
+  expect(folderMainBox!.width).toBeGreaterThanOrEqual(viewport!.width * 0.9);
+  expect(folderGridBox!.width).toBeGreaterThanOrEqual(folderMainBox!.width * 0.95);
+
+  await homeBrand.click();
+  await expect(page.locator('.desktop-now-playing-screen')).toBeVisible();
+  await expect(homeBrand).toHaveAttribute('aria-current', 'page');
+  await navigation.getByRole('button', { name: 'Pastas', exact: true }).click();
 
   const topbarBox = await topbar.boundingBox();
   expect(topbarBox).not.toBeNull();
@@ -66,25 +86,24 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   expect(topbarBox!.height).toBeLessThan(100);
 
   await navigation.getByRole('button', { name: 'Playlists', exact: true }).click();
-  await expect(page.getByText('Suas Playlists', { exact: true })).toBeVisible();
+  await expect(page.locator('.library-header.is-root .library-header__title strong')).toBeHidden();
 
   const playlistMain = page.locator('.desktop-main-content--library');
   const playlistContent = page.locator('.library-content');
   const playlistCreate = page.locator('.playlist-create-action');
   const playlistOrder = page.locator('.playlist-order-control');
+  const playlistGrid = page.locator('.playlist-visual-grid');
   const playlistMainBox = await playlistMain.boundingBox();
   const playlistCreateBox = await playlistCreate.boundingBox();
-  const playlistOrderBox = await playlistOrder.boundingBox();
+  const playlistGridBox = await playlistGrid.boundingBox();
 
   expect(playlistMainBox).not.toBeNull();
   expect(playlistMainBox!.width).toBeGreaterThanOrEqual(viewport!.width * 0.9);
   expect(await playlistContent.evaluate(element => getComputedStyle(element, '::before').display)).toBe('none');
   expect(playlistCreateBox).not.toBeNull();
-  expect(playlistOrderBox).not.toBeNull();
-  expect(Math.abs(
-    (playlistCreateBox!.y + playlistCreateBox!.height / 2)
-      - (playlistOrderBox!.y + playlistOrderBox!.height / 2)
-  )).toBeLessThanOrEqual(2);
+  expect(playlistGridBox).not.toBeNull();
+  expect(playlistGridBox!.width).toBeGreaterThanOrEqual(playlistMainBox!.width * 0.95);
+  await expect(playlistOrder).toBeHidden();
 
   const importedPlaylist = page.locator('.group-item__main').filter({ hasText: 'E2E Rekordbox' });
   await expect(importedPlaylist).toBeVisible();
