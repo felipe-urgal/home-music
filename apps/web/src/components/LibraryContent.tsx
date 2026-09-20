@@ -202,6 +202,7 @@ export function LibraryContent({
                       <Play aria-hidden="true" />
                     </button>
                     <MoreHorizontal className="group-item__more" aria-hidden="true" />
+                    <ChevronRight className="group-item__chevron" aria-hidden="true" />
                   </div>
                 );
               })}
