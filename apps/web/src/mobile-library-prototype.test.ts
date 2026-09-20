@@ -57,7 +57,10 @@ describe('mobile library prototype one contracts', () => {
     const app = source('AuthenticatedApp.tsx');
     const css = source('prototype-one-desktop-polish.css');
 
+    expect(screen).toMatch(/desktop-now-playing-screen__art-frame/);
     expect(screen).toMatch(/desktop-now-playing-screen__cover-play/);
+    expect(screen).toMatch(/--wave-fill/);
+    expect(screen).not.toMatch(/playedWaveBars/);
     expect(screen).toMatch(/nextTrack && nextTrack\.id !== current\.id/);
     expect(screen).toMatch(/desktop-now-playing-screen__next-track/);
     expect(screen).not.toMatch(/aria-label="Anterior"/);
@@ -66,7 +69,10 @@ describe('mobile library prototype one contracts', () => {
     expect(css).toMatch(/desktop-now-playing-screen__controls[\s\S]*grid-template-columns: repeat\(2, 46px\)/);
     expect(css).toMatch(/desktop-now-playing-screen__heading h1[\s\S]*font-size: clamp\(24px, 2\.15vw, 34px\)/);
     expect(css).toMatch(/desktop-now-playing-screen__waveform-progress[\s\S]*width: min\(100%, 470px\)/);
-    expect(css).toMatch(/now-playing-vinyl[\s\S]*max-width: 500px/);
+    expect(css).toMatch(/desktop-now-playing-screen__waveform span[\s\S]*var\(--wave-fill, 0%\)/);
+    expect(css).toMatch(/desktop-now-playing-screen__quote[\s\S]*font-size: 12px/);
+    expect(css).toMatch(/desktop-now-playing-screen__next-track[\s\S]*width: min\(360px/);
+    expect(css).toMatch(/desktop-now-playing-screen__art-frame[\s\S]*width: min\(100%, 500px\)/);
   });
 
   it('aplica o protótipo 2 na listagem de pasta desktop', () => {
