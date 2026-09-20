@@ -663,7 +663,7 @@
     display: flex !important;
     align-items: center;
     gap: 3px;
-    overflow: hidden;
+    overflow: visible;
     border: 1px solid rgba(112, 148, 202, .2);
     border-radius: 14px;
     background: rgba(12, 24, 40, .97);
