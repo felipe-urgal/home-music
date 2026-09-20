@@ -64,6 +64,9 @@ describe('mobile library prototype one contracts', () => {
     expect(screen).not.toMatch(/className="desktop-now-playing-screen__play"/);
     expect(app).toMatch(/nextTrack=\{nextTrack\}/);
     expect(css).toMatch(/desktop-now-playing-screen__controls[\s\S]*grid-template-columns: repeat\(2, 46px\)/);
+    expect(css).toMatch(/desktop-now-playing-screen__heading h1[\s\S]*font-size: clamp\(24px, 2\.15vw, 34px\)/);
+    expect(css).toMatch(/desktop-now-playing-screen__waveform-progress[\s\S]*width: min\(100%, 470px\)/);
+    expect(css).toMatch(/now-playing-vinyl[\s\S]*max-width: 500px/);
   });
 
   it('aplica o protótipo 2 na listagem de pasta desktop', () => {
