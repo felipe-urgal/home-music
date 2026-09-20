@@ -170,7 +170,7 @@ export function LibraryContent({
             </div>
           </div>
           {orderedPlaylists.length ? (
-            <div className="group-list">
+            <div className="group-list playlist-visual-grid">
               {orderedPlaylists.map(playlist => {
                 const contextTracks = playlist.trackIds
                   .map(trackId => tracksById.get(trackId))
@@ -179,8 +179,8 @@ export function LibraryContent({
                 const updatedAt = formatPlaylistDate(playlist.updatedAt);
 
                 return (
-                  <div className="group-item" key={playlist.id}>
-                    <button className="group-item__main" type="button" onClick={() => selectPlaylist(playlist.id)}>
+                  <div className="group-item playlist-visual-card" key={playlist.id}>
+                    <button className="group-item__main playlist-visual-card__main" type="button" onClick={() => selectPlaylist(playlist.id)}>
                       <Artwork track={coverTrack} />
                       <span className="group-item__text">
                         <strong>{playlist.name}</strong>
