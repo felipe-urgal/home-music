@@ -117,7 +117,11 @@ describe('mobile library prototype one contracts', () => {
     expect(rows).toMatch(/isCurrent && playing \? <Pause \/> : <Play \/>/);
     expect(css).toMatch(/desktop-track-grid[\s\S]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
     expect(css).toMatch(/@media \(min-width: 1500px\)[\s\S]*desktop-track-grid[\s\S]*repeat\(5, minmax\(0, 1fr\)\)/);
-    expect(css).toMatch(/desktop-track-card__copy strong[\s\S]*font-size: 14px/);
+    expect(css).toMatch(/desktop-track-card__copy strong[\s\S]*font-size: 16px/);
+    expect(css).toMatch(/desktop-track-card__copy > span[\s\S]*font-size: 13px/);
+    expect(css).toMatch(/desktop-folder-summary__identity strong[\s\S]*font-size: 16px/);
+    expect(css).toMatch(/desktop-folder-summary__stats dt[\s\S]*font-size: 12px/);
+    expect(css).toMatch(/desktop-folder-summary__stats dd[\s\S]*font-size: 15px/);
   });
 
   it('usa o mesmo detalhe simplificado para playlist desktop', () => {
