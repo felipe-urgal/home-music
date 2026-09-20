@@ -166,7 +166,15 @@ export function LibraryContent({
                     onClick={() => enterFolder(folder.path)}
                   >
                     <span className="folder-visual-card__mobile-icon" aria-hidden="true"><Folder /></span>
-                    <Artwork track={folder.artwork} />
+                    {desktopLayout ? (
+                      <span className={`folder-visual-card__artwork-mosaic is-count-${Math.max(1, Math.min(4, folder.artworks.length))}`} aria-hidden="true">
+                        {(folder.artworks.length ? folder.artworks : [folder.artwork]).map((artworkTrack, index) => (
+                          <Artwork key={artworkTrack?.id ?? `${folder.path}-artwork-${index}`} track={artworkTrack} />
+                        ))}
+                      </span>
+                    ) : (
+                      <Artwork track={folder.artwork} />
+                    )}
                     <span className="folder-visual-card__text">
                       <strong>{folder.name}</strong>
                       <small>{folder.matchingTrackCount} músicas</small>
