@@ -358,6 +358,7 @@ export function LibraryScreen({
         </div>
       ) : desktopLayout ? (
         <>
+          {navigationChrome}
           {libraryContent}
           {libraryStatus}
         </>
