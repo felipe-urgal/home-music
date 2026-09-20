@@ -80,13 +80,13 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   await expect(playerBar).toBeHidden();
 
   const folderMain = page.locator('.desktop-main-content--library');
-  const folderGrid = page.locator('.folder-visual-grid');
+  const folderContent = page.locator('.library-content');
   const folderMainBox = await folderMain.boundingBox();
-  const folderGridBox = await folderGrid.boundingBox();
+  const folderContentBox = await folderContent.boundingBox();
   expect(folderMainBox).not.toBeNull();
-  expect(folderGridBox).not.toBeNull();
+  expect(folderContentBox).not.toBeNull();
   expect(folderMainBox!.width).toBeGreaterThanOrEqual(viewport!.width * 0.9);
-  expect(folderGridBox!.width).toBeGreaterThanOrEqual(folderMainBox!.width * 0.95);
+  expect(folderContentBox!.width).toBeGreaterThanOrEqual(folderMainBox!.width * 0.95);
 
   await homeBrand.click();
   await expect(page.locator('.desktop-now-playing-screen')).toBeVisible();
