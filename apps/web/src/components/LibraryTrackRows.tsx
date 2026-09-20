@@ -1,4 +1,4 @@
-import { Play, Trash2 } from 'lucide-react';
+import { CheckCircle2, Download, LoaderCircle, Play, Trash2 } from 'lucide-react';
 import type { Track } from '@home-music/shared';
 import type { TrackSort } from '../library-utils';
 import { useDesktopLayout } from '../useDesktopLayout';
@@ -24,6 +24,7 @@ type LibraryTrackRowsProps = LibraryTrackOfflineProps & {
   onSort: (sort: TrackSort) => void;
   onPlayTrack: (track: Track, context: Track[]) => void;
   onRemove?: (trackId: string) => void;
+  desktopVariant?: 'table' | 'grid';
 };
 
 export function LibraryTrackRows({
@@ -35,6 +36,7 @@ export function LibraryTrackRows({
   onSort,
   onPlayTrack,
   onRemove,
+  desktopVariant = 'table',
   offlineSupported,
   downloadedIds,
   individualDownloadedIds,
@@ -44,6 +46,87 @@ export function LibraryTrackRows({
   onRemoveDownload
 }: LibraryTrackRowsProps) {
   const isDesktop = useDesktopLayout();
+
+  if (isDesktop && desktopVariant === 'grid') {
+    const offlineActionsAvailable = offlineSupported && Boolean(onDownload) && Boolean(onRemoveDownload);
+
+    return (
+      <div className="desktop-track-grid" data-testid="desktop-track-grid">
+        {tracks.map(track => {
+          const isCurrent = track.id === current?.id;
+          const downloading = downloadingIds.has(track.id);
+          const downloaded = downloadedIds.has(track.id);
+          const hasIndividual = individualDownloadedIds.has(track.id);
+          const trackArtist = track.albumArtist || track.artist || 'Artista desconhecido';
+
+          return (
+            <article className={`desktop-track-card ${isCurrent ? 'is-current' : ''}`} key={track.id}>
+              <button
+                className="desktop-track-card__main"
+                type="button"
+                aria-current={isCurrent ? 'true' : undefined}
+                aria-label={`Tocar ${track.title}, ${trackArtist}${isCurrent && playing ? ' — reproduzindo agora' : ''}`}
+                onClick={() => onPlayTrack(track, context)}
+              >
+                <span className="desktop-track-card__artwork">
+                  <Artwork track={track} />
+                  <span className="desktop-track-card__play" aria-hidden="true"><Play /></span>
+                </span>
+                <span className="desktop-track-card__copy">
+                  <strong>{track.title}</strong>
+                  <span>{trackArtist}</span>
+                  <small>{track.album || 'Álbum desconhecido'}</small>
+                </span>
+              </button>
+
+              {(offlineActionsAvailable || onRemove) && (
+                <div className="desktop-track-card__actions">
+                  {offlineActionsAvailable && onDownload && onRemoveDownload && (
+                    <button
+                      type="button"
+                      disabled={downloading}
+                      aria-label={downloading
+                        ? `Baixando ${track.title}`
+                        : downloaded && hasIndividual
+                          ? `Remover download de ${track.title}`
+                          : `Salvar ${track.title} offline`}
+                      title={downloading
+                        ? 'Baixando…'
+                        : downloaded && hasIndividual
+                          ? 'Remover download'
+                          : 'Salvar offline'}
+                      onClick={() => {
+                        const operation = downloaded && hasIndividual
+                          ? onRemoveDownload(track)
+                          : onDownload(track);
+                        void operation.catch(() => undefined);
+                      }}
+                    >
+                      {downloading
+                        ? <LoaderCircle className="desktop-offline-spinner" aria-hidden="true" />
+                        : downloaded && hasIndividual
+                          ? <CheckCircle2 aria-hidden="true" />
+                          : <Download aria-hidden="true" />}
+                    </button>
+                  )}
+                  {onRemove && (
+                    <button
+                      type="button"
+                      aria-label={`Remover ${track.title} da playlist`}
+                      title="Remover da playlist"
+                      onClick={() => onRemove(track.id)}
+                    >
+                      <Trash2 aria-hidden="true" />
+                    </button>
+                  )}
+                </div>
+              )}
+            </article>
+          );
+        })}
+      </div>
+    );
+  }
 
   if (isDesktop) {
     return (
