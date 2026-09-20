@@ -1308,6 +1308,69 @@
   }
 
 
+  /* Root folders: larger cards with a four-track artwork mosaic when possible. */
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .folder-visual-grid {
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px 16px;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .folder-visual-card__artwork-mosaic {
+    width: 100%;
+    aspect-ratio: 1.36 / 1;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+    overflow: hidden;
+    background: #0d1522;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .folder-visual-card__artwork-mosaic.is-count-1 {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .folder-visual-card__artwork-mosaic.is-count-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: 1fr;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .folder-visual-card__artwork-mosaic.is-count-3 > .artwork:last-child {
+    grid-column: 1 / -1;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .folder-visual-card__artwork-mosaic > .artwork,
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .folder-visual-card__artwork-mosaic > .artwork img {
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    min-width: 0;
+    min-height: 0;
+    border: 0;
+    border-radius: 0;
+    object-fit: cover;
+    box-shadow: none;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .folder-visual-card__artwork-mosaic > .artwork {
+    overflow: hidden;
+    border-right: 1px solid rgba(9,14,23,.72);
+    border-bottom: 1px solid rgba(9,14,23,.72);
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .folder-visual-card__text {
+    min-height: 48px;
+    padding: 9px 34px 9px 10px;
+    gap: 3px;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .folder-visual-card__text strong {
+    font-size: 12px;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .folder-visual-card__text small {
+    font-size: 9px;
+  }
+
   /* Desktop library root: playlists live below folders instead of occupying a navbar tab. */
   #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .desktop-library-playlists {
     width: 100%;
