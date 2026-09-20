@@ -841,6 +841,221 @@
     font-size: 7px;
   }
 
+
+  /* Collection detail alignment: neutralize root-library controls inside detail screens. */
+  #root .desktop-layout[data-offline="false"] > .phone-surface:has(.desktop-folder-detail-layout) {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-folder-detail-layout {
+    box-sizing: border-box;
+    max-width: 100%;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-folder-detail-main {
+    overflow: hidden;
+    padding-top: 0;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-folder-detail-main .library-header.is-detail {
+    min-height: 68px;
+    margin: 0 0 2px;
+    padding: 0 180px 0 0;
+    align-items: center;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-folder-detail-main .breadcrumbs {
+    min-height: 24px;
+    margin: 0 0 14px 46px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-folder-detail-main .library-smart-view-tools {
+    position: relative;
+    z-index: 20;
+    width: 100%;
+    min-height: 0;
+    height: auto;
+    margin: 0 0 16px;
+    display: block;
+    justify-content: initial;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-folder-detail-main .library-tools {
+    position: relative;
+    inset: auto;
+    width: 100%;
+    margin: 0 0 10px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 40px;
+    align-items: center;
+    gap: 8px;
+    opacity: 1;
+    pointer-events: auto;
+    transform: none;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-folder-detail-main .search-box--library {
+    position: relative;
+    inset: auto;
+    width: 100%;
+    min-width: 0;
+    height: 40px;
+    min-height: 40px;
+    opacity: 1;
+    pointer-events: auto;
+    transform: none;
+    box-shadow: none;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-folder-detail-main .library-smart-view-tools:focus-within .search-box--library {
+    opacity: 1;
+    pointer-events: auto;
+    transform: none;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-folder-detail-main .library-filter-toggle {
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-folder-detail-main .library-filter-toggle svg {
+    display: block;
+    width: 16px;
+    height: 16px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-folder-detail-main .library-filter-toggle::after {
+    content: none;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-folder-detail-main .library-folder-quick-filters {
+    width: 100%;
+    min-height: 32px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    flex-wrap: nowrap;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-folder-detail-main .library-folder-quick-filters__sort {
+    margin-left: auto;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-folder-detail-main .library-content {
+    position: static;
+    width: 100%;
+    min-width: 0;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-folder-detail-main .library-content > .play-all {
+    top: 16px;
+    right: 0;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-playlist-detail-main .library-header.is-detail {
+    padding-right: 330px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-playlist-detail-main .collection-actions {
+    position: absolute;
+    z-index: 12;
+    top: 16px;
+    right: 0;
+    min-height: 36px;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 7px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-playlist-detail-main .collection-actions .play-all {
+    min-height: 36px;
+    margin: 0;
+    padding: 0 15px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    border: 1px solid #f5ca8a;
+    border-radius: 8px;
+    color: #342014;
+    background: linear-gradient(180deg, #ffd49a, #eda75c);
+    box-shadow: 0 7px 20px rgba(172,84,31,.16);
+    font-size: 9px;
+    font-weight: 720;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-playlist-detail-main .collection-actions .play-all svg {
+    width: 13px;
+    height: 13px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-playlist-detail-main .collection-actions .text-action {
+    min-height: 34px;
+    margin: 0;
+    padding: 0 10px;
+    border: 1px solid rgba(236, 215, 194, .10);
+    border-radius: 8px;
+    color: #aaa3a0;
+    background: rgba(255,255,255,.018);
+    font-size: 9px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-playlist-detail-main .collection-actions .text-action:hover {
+    border-color: rgba(236, 215, 194, .20);
+    color: #e4dbd5;
+    background: rgba(255,255,255,.035);
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-playlist-detail-main .collection-actions .text-action--danger {
+    color: #df8f91;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-playlist-detail-main .playlist-source-note {
+    color: #8e8987;
+    font-size: 9px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-folder-detail-main .desktop-library-table th:nth-child(2) {
+    width: 56%;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-folder-detail-main .desktop-library-table th:nth-child(3) {
+    width: 34%;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-folder-detail-main .desktop-library-table__duration {
+    width: 72px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-playlist-detail-main .desktop-library-table__actions {
+    width: 58px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-playlist-summary .desktop-folder-summary__identity-icon {
+    color: #f6c47f;
+    background: rgba(240, 157, 74, .10);
+  }
+
+  @media (max-width: 1180px) {
+    #root .desktop-layout[data-offline="false"] .desktop-folder-detail-layout {
+      grid-template-columns: 196px minmax(0, 1fr);
+      gap: 22px;
+    }
+
+    #root .desktop-layout[data-offline="false"] .desktop-playlist-detail-main .library-header.is-detail {
+      padding-right: 250px;
+    }
+
+    #root .desktop-layout[data-offline="false"] .desktop-playlist-detail-main .collection-actions .text-action {
+      padding-inline: 8px;
+    }
+  }
+
 }
 
 @media (min-width: 1500px) {
