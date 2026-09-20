@@ -55,6 +55,9 @@ jobs:
       - name: Mobile playback and library E2E
         run: npm run test --prefix e2e -- tests/crossfade-mobile.spec.ts tests/mobile-library-prototype.spec.ts --project=mobile-chromium
 
+      - name: Desktop prototype layout E2E
+        run: npm run test --prefix e2e -- tests/desktop-layout-regressions.spec.ts --project=desktop-chromium
+
       - name: TV device login E2E
         run: npm run test --prefix e2e -- tests/tv-device-login.spec.ts --project=desktop-chromium
 
