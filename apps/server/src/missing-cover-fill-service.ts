@@ -25,11 +25,16 @@ type CoverFillLibrary = {
   listTracks: () => Track[];
 };
 
+type CoverOverrideStore = Pick<
+  TrackCoverOverrideStore,
+  'refresh' | 'getStatus' | 'save'
+>;
+
 type MissingCoverFillServiceOptions = {
   library: CoverFillLibrary;
   analyzer: LibraryAssistantAnalyzer;
   providers: LibraryAssistantProviderGateway;
-  coverOverrides: TrackCoverOverrideStore;
+  coverOverrides: CoverOverrideStore;
   onArtworkChanged: () => void;
   now?: () => Date;
   createId?: () => string;
