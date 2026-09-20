@@ -14,6 +14,7 @@ type LibraryContentProps = {
   playing: boolean;
   offlineTrackProps: LibraryTrackOfflineProps;
   onPlayTrack: (track: Track, context: Track[]) => void;
+  onTogglePlay: () => void;
   onCreatePlaylist: () => Promise<void>;
   onEditPlaylist: (playlist: Playlist) => Promise<void>;
   onRemovePlaylist: (playlist: Playlist) => Promise<void>;
@@ -37,6 +38,7 @@ export function LibraryContent({
   playing,
   offlineTrackProps,
   onPlayTrack,
+  onTogglePlay,
   onCreatePlaylist,
   onEditPlaylist,
   onRemovePlaylist,
@@ -204,6 +206,8 @@ export function LibraryContent({
                 sort={sort}
                 onSort={changeSort}
                 onPlayTrack={onPlayTrack}
+              onTogglePlay={onTogglePlay}
+                onTogglePlay={onTogglePlay}
                 desktopVariant={folderPath || query ? 'grid' : 'table'}
                 {...offlineTrackProps}
               />
@@ -266,6 +270,7 @@ export function LibraryContent({
               sort={sort}
               onSort={changeSort}
               onPlayTrack={onPlayTrack}
+              onTogglePlay={onTogglePlay}
               onRemove={selectedPlaylist?.source === 'manual' ? trackId => run(onSetPlaylistTracks(selectedPlaylist.id, selectedPlaylist.trackIds.filter(id => id !== trackId))) : undefined}
               desktopVariant={selectedPlaylist ? 'grid' : 'table'}
               {...offlineTrackProps}
