@@ -44,6 +44,7 @@ export function LibraryViewTools({
   const searchPlaceholder = libraryTab === 'folders'
     ? 'Buscar em Pastas'
     : 'Música, artista ou álbum';
+  const folderDetail = libraryTab === 'folders' && Boolean(navigation.folderPath);
 
   return (
     <section className="library-smart-view-tools" aria-label="Busca, filtros e views inteligentes">
@@ -54,7 +55,7 @@ export function LibraryViewTools({
           <input
             value={query}
             onChange={event => changeQuery(event.target.value)}
-            placeholder={searchPlaceholder}
+            placeholder={folderDetail ? 'Buscar nesta pasta…' : searchPlaceholder}
           />
         </label>
         <button
@@ -68,6 +69,57 @@ export function LibraryViewTools({
           {activeViewOptionCount > 0 && <span>{activeViewOptionCount}</span>}
         </button>
       </div>
+
+      {folderDetail && (
+        <div className="library-folder-quick-filters" aria-label="Filtros rápidos da pasta">
+          <button
+            className={!query && coverFilter === 'all' && formatFilter === 'all' ? 'is-active' : ''}
+            type="button"
+            onClick={() => {
+              changeQuery('');
+              changeCoverFilter('all');
+              changeFormatFilter('all');
+            }}
+          >
+            Todas
+          </button>
+          <button
+            className={coverFilter === 'with-cover' ? 'is-active' : ''}
+            type="button"
+            onClick={() => changeCoverFilter('with-cover')}
+          >
+            Com capa
+          </button>
+          <button
+            className={coverFilter === 'without-cover' ? 'is-active' : ''}
+            type="button"
+            onClick={() => changeCoverFilter('without-cover')}
+          >
+            Sem capa
+          </button>
+          <label className="library-folder-quick-filters__format">
+            <span>Formato</span>
+            <select value={formatFilter} onChange={event => changeFormatFilter(event.target.value)}>
+              <option value="all">Todos</option>
+              {availableFormats.map(format => <option key={format} value={format}>{format}</option>)}
+            </select>
+          </label>
+          {canSortTracks && (
+            <label className="library-folder-quick-filters__sort">
+              <span>Ordenar:</span>
+              <select value={sort} onChange={event => changeSort(event.target.value as TrackSort)}>
+                <option value="current">Padrão</option>
+                <option value="title-asc">Título A–Z</option>
+                <option value="title-desc">Título Z–A</option>
+                <option value="artist-asc">Artista A–Z</option>
+                <option value="artist-desc">Artista Z–A</option>
+                <option value="album-asc">Álbum A–Z</option>
+                <option value="album-desc">Álbum Z–A</option>
+              </select>
+            </label>
+          )}
+        </div>
+      )}
 
       {savedViews.views.length > 0 && (
         <div className="library-saved-view-strip" aria-label="Views salvas">

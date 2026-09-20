@@ -4,7 +4,9 @@ import { canUseAdminLibraryActions } from '../frontend-access';
 import type { OfflineCollectionDownloadInput, OfflineDownloads } from '../offline-downloads';
 import type { LibraryData } from '../useLibraryData';
 import type { LibraryNavigation, LibraryTab } from '../useLibraryNavigation';
+import { useDesktopLayout } from '../useDesktopLayout';
 import { useLibraryViews } from '../useLibraryViews';
+import { DesktopFolderSummary } from './DesktopFolderSummary';
 import { LibraryContent } from './LibraryContent';
 import { LibraryNavigationChrome } from './LibraryNavigationChrome';
 import { LibraryViewTools } from './LibraryViewTools';
@@ -58,6 +60,7 @@ export function LibraryScreen({
   onPlayTrack
 }: LibraryScreenProps) {
   const canManageSharedLibrary = canUseAdminLibraryActions(currentUser);
+  const desktopLayout = useDesktopLayout();
   const [smartPlaylistEditor, setSmartPlaylistEditor] = useState<{ playlist: Playlist | null } | null>(null);
   const [viewControlsOpen, setViewControlsOpen] = useState(false);
   const {
@@ -75,6 +78,7 @@ export function LibraryScreen({
     updateSmartPlaylist,
     deleteSmartPlaylist,
     setPlaylistTracks,
+    addTrackToPlaylist,
     reportError
   } = data;
   const savedViews = useLibraryViews(reportError);
@@ -93,6 +97,7 @@ export function LibraryScreen({
 
   const isDetail = Boolean(selectedPlaylist || folderPath);
   const showViewTools = !(libraryTab === 'playlists' && !selectedPlaylist);
+  const editablePlaylists = playlists.filter(playlist => playlist.source === 'manual');
 
   const offlineCollectionTarget = useMemo<OfflineCollectionDownloadInput | null>(() => {
     if (selectedPlaylist) {
@@ -228,62 +233,97 @@ export function LibraryScreen({
     onRemoveDownload: removeTrackDownload
   };
 
+  const offlineControl = offline.supported && offlineCollectionTarget && offlineCollectionState ? (
+    <OfflineCollectionControl
+      target={offlineCollectionTarget}
+      state={offlineCollectionState}
+      onSync={offline.syncCollection}
+      onPause={() => offline.pauseCollection(offlineCollectionTarget.kind, offlineCollectionTarget.sourceId)}
+      onRemove={() => offline.removeCollection(offlineCollectionTarget.kind, offlineCollectionTarget.sourceId)}
+      onError={reportError}
+    />
+  ) : null;
+
+  const navigationChrome = (
+    <LibraryNavigationChrome
+      navigation={navigation}
+      isDetail={isDetail}
+      title={title()}
+      subtitle={subtitle()}
+      canManageSharedLibrary={canManageSharedLibrary}
+      scanning={scanning}
+      onBack={goBack}
+      onChangeTab={changeTab}
+      onScan={() => void scanNow()}
+      onOpenPlayer={onOpenPlayer}
+    />
+  );
+
+  const viewTools = showViewTools ? (
+    <LibraryViewTools
+      navigation={navigation}
+      savedViews={savedViews}
+      open={viewControlsOpen}
+      onToggleOpen={() => setViewControlsOpen(open => !open)}
+      onSaveCurrentView={saveCurrentView}
+      onRenameSavedView={renameSavedView}
+      onRemoveSavedView={removeSavedView}
+      reportError={reportError}
+    />
+  ) : null;
+
+  const libraryContent = (
+    <LibraryContent
+      navigation={navigation}
+      playlists={playlists}
+      tracks={tracks}
+      current={current}
+      playing={playing}
+      offlineTrackProps={offlineTrackProps}
+      onPlayTrack={onPlayTrack}
+      onCreatePlaylist={makePlaylist}
+      onEditPlaylist={editPlaylist}
+      onRemovePlaylist={removePlaylist}
+      onCreateSmartPlaylist={() => setSmartPlaylistEditor({ playlist: null })}
+      onEditSmartPlaylist={playlist => setSmartPlaylistEditor({ playlist })}
+      onSetPlaylistTracks={setPlaylistTracks}
+    />
+  );
+
+  const libraryStatus = (
+    <div className="library-status">
+      Última indexação: {scannedAt ? new Date(scannedAt).toLocaleString('pt-BR') : 'ainda não realizada'}
+    </div>
+  );
+
+  const desktopFolderDetail = desktopLayout && libraryTab === 'folders' && Boolean(folderPath);
+
   return (
     <>
-      <LibraryNavigationChrome
-        navigation={navigation}
-        isDetail={isDetail}
-        title={title()}
-        subtitle={subtitle()}
-        canManageSharedLibrary={canManageSharedLibrary}
-        scanning={scanning}
-        onBack={goBack}
-        onChangeTab={changeTab}
-        onScan={() => void scanNow()}
-        onOpenPlayer={onOpenPlayer}
-      />
-
-      {offline.supported && offlineCollectionTarget && offlineCollectionState && (
-        <OfflineCollectionControl
-          target={offlineCollectionTarget}
-          state={offlineCollectionState}
-          onSync={offline.syncCollection}
-          onPause={() => offline.pauseCollection(offlineCollectionTarget.kind, offlineCollectionTarget.sourceId)}
-          onRemove={() => offline.removeCollection(offlineCollectionTarget.kind, offlineCollectionTarget.sourceId)}
-          onError={reportError}
-        />
+      {desktopFolderDetail ? (
+        <div className="desktop-folder-detail-layout" data-testid="desktop-folder-detail-layout">
+          <DesktopFolderSummary
+            name={folderView.name}
+            tracks={folderView.allTracks}
+            downloadedIds={offline.downloadedIds}
+            offlineControl={offlineControl}
+          />
+          <section className="desktop-folder-detail-main">
+            {navigationChrome}
+            {viewTools}
+            {libraryContent}
+            {libraryStatus}
+          </section>
+        </div>
+      ) : (
+        <>
+          {navigationChrome}
+          {offlineControl}
+          {viewTools}
+          {libraryContent}
+          {libraryStatus}
+        </>
       )}
-
-      {showViewTools && (
-        <LibraryViewTools
-          navigation={navigation}
-          savedViews={savedViews}
-          open={viewControlsOpen}
-          onToggleOpen={() => setViewControlsOpen(open => !open)}
-          onSaveCurrentView={saveCurrentView}
-          onRenameSavedView={renameSavedView}
-          onRemoveSavedView={removeSavedView}
-          reportError={reportError}
-        />
-      )}
-
-      <LibraryContent
-        navigation={navigation}
-        playlists={playlists}
-        tracks={tracks}
-        current={current}
-        playing={playing}
-        offlineTrackProps={offlineTrackProps}
-        onPlayTrack={onPlayTrack}
-        onCreatePlaylist={makePlaylist}
-        onEditPlaylist={editPlaylist}
-        onRemovePlaylist={removePlaylist}
-        onCreateSmartPlaylist={() => setSmartPlaylistEditor({ playlist: null })}
-        onEditSmartPlaylist={playlist => setSmartPlaylistEditor({ playlist })}
-        onSetPlaylistTracks={setPlaylistTracks}
-      />
-
-      <div className="library-status">Última indexação: {scannedAt ? new Date(scannedAt).toLocaleString('pt-BR') : 'ainda não realizada'}</div>
 
       {current && (
         <MiniPlayer
@@ -292,9 +332,13 @@ export function LibraryScreen({
           hasNext={hasNext}
           currentTime={currentTime}
           duration={duration}
+          playlists={editablePlaylists}
           onOpenPlayer={onOpenPlayer}
           onTogglePlay={onTogglePlay}
           onNext={onNext}
+          onAddToPlaylist={playlist => {
+            void addTrackToPlaylist(playlist, current.id).catch(reportError);
+          }}
         />
       )}
 
