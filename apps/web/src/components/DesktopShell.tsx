@@ -256,17 +256,22 @@ export function DesktopShell({
           {sidebarCollapsed ? <PanelLeftOpen aria-hidden="true" /> : <PanelLeftClose aria-hidden="true" />}
         </button>
 
-        <div className="desktop-brand">
+        <button
+          className={`desktop-brand ${active === 'player' ? 'is-active' : ''}`}
+          type="button"
+          aria-label="Abrir Tocando Agora"
+          aria-current={active === 'player' ? 'page' : undefined}
+          title="Tocando Agora"
+          onClick={onOpenPlayer}
+        >
           <span className="desktop-brand__icon"><AudioLines /></span>
-          <div>
+          <span className="desktop-brand__copy">
             <strong>Home Music</strong>
             <small>{offlineMode ? 'Modo offline' : 'Sua biblioteca'}</small>
-          </div>
-        </div>
+          </span>
+        </button>
 
         <nav className="desktop-nav" aria-label="Navegação principal">
-          <NavigationButton active={active === 'player'} label="Tocando Agora" icon={<Radio />} onClick={onOpenPlayer} />
-
           {offlineMode || !onOpenLibraryTab ? (
             <NavigationButton active={active === 'library'} label={offlineMode ? 'Downloads' : 'Biblioteca'} icon={<ListMusic />} onClick={onOpenLibrary} />
           ) : (

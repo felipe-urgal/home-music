@@ -32,6 +32,43 @@ describe('mobile library prototype one contracts', () => {
     expect(content).toMatch(/aria-label="Ordenar pastas da biblioteca"/);
   });
 
+  it('usa a marca Home Music como acesso ao player no desktop', () => {
+    const shell = source('components/DesktopShell.tsx');
+
+    expect(shell).toMatch(/aria-label="Abrir Tocando Agora"/);
+    expect(shell).toMatch(/onClick=\{onOpenPlayer\}/);
+    expect(shell).not.toMatch(/label="Tocando Agora"/);
+  });
+
+  it('usa largura total e a mesma grade visual em pastas e playlists desktop', () => {
+    const content = source('components/LibraryContent.tsx');
+    const navigation = source('components/LibraryNavigationChrome.tsx');
+    const css = source('prototype-one-desktop-polish.css');
+
+    expect(navigation).not.toMatch(/aria-label="Ordenar pastas"/);
+    expect(content).toMatch(/playlist-visual-grid/);
+    expect(content).toMatch(/playlist-visual-card/);
+    expect(css).toMatch(/grid-template-columns: repeat\(auto-fill, minmax\(230px, 1fr\)\)/);
+    expect(css).toMatch(/playlist-order-control[\s\S]*display: none !important/);
+  });
+
+  it('move play/pause para a capa e usa a próxima faixa como avanço no desktop', () => {
+    const screen = source('components/DesktopNowPlayingScreen.tsx');
+    const app = source('AuthenticatedApp.tsx');
+    const css = source('prototype-one-desktop-polish.css');
+
+    expect(screen).toMatch(/desktop-now-playing-screen__cover-play/);
+    expect(screen).toMatch(/nextTrack && nextTrack\.id !== current\.id/);
+    expect(screen).toMatch(/desktop-now-playing-screen__next-track/);
+    expect(screen).not.toMatch(/aria-label="Anterior"/);
+    expect(screen).not.toMatch(/className="desktop-now-playing-screen__play"/);
+    expect(app).toMatch(/nextTrack=\{nextTrack\}/);
+    expect(css).toMatch(/desktop-now-playing-screen__controls[\s\S]*grid-template-columns: repeat\(2, 46px\)/);
+    expect(css).toMatch(/desktop-now-playing-screen__heading h1[\s\S]*font-size: clamp\(24px, 2\.15vw, 34px\)/);
+    expect(css).toMatch(/desktop-now-playing-screen__waveform-progress[\s\S]*width: min\(100%, 470px\)/);
+    expect(css).toMatch(/now-playing-vinyl[\s\S]*max-width: 500px/);
+  });
+
   it('aplica o protótipo 2 na listagem de pasta desktop', () => {
     const screen = source('components/LibraryScreen.tsx');
     const summary = source('components/DesktopFolderSummary.tsx');

@@ -66,36 +66,36 @@
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__stage {
-    width: min(calc(100% - 96px), 1180px);
-    min-height: 560px;
+    width: min(calc(100% - 96px), 1260px);
+    min-height: 580px;
     padding: 54px 24px 92px;
-    grid-template-columns: minmax(320px, 420px) minmax(400px, 520px);
+    grid-template-columns: minmax(335px, 455px) minmax(420px, 560px);
     justify-content: center;
-    gap: clamp(64px, 7vw, 112px);
+    gap: clamp(68px, 7vw, 118px);
   }
 
   /* Always render a real artwork surface on desktop, even when the track has no embedded cover.
      ArtworkFallback already derives initials and a palette from the track. */
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__art {
     width: 100%;
-    min-width: 320px;
+    min-width: 335px;
     display: grid;
     place-items: center;
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__art .now-playing-transition-art,
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__art .now-playing-vinyl {
-    width: min(100%, 420px);
-    max-width: 420px;
-    min-width: 320px;
+    width: min(100%, 455px);
+    max-width: 455px;
+    min-width: 335px;
     aspect-ratio: 1 / 1;
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__art .now-playing-vinyl__disc {
     width: 100%;
     height: 100%;
-    min-width: 320px;
-    min-height: 320px;
+    min-width: 335px;
+    min-height: 335px;
     border: 1px solid rgba(255, 216, 175, .22);
     border-radius: 16px;
     background: #131823;
@@ -141,7 +141,37 @@
 
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__content {
     width: 100%;
-    max-width: 520px;
+    max-width: 560px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__heading h1 {
+    font-size: clamp(24px, 2.15vw, 34px);
+    line-height: 1.06;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__heading p {
+    margin-top: 7px;
+    font-size: 13px;
+    line-height: 1.4;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__waveform-progress {
+    width: min(100%, 440px);
+    margin-top: 28px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__waveform {
+    height: 104px;
+    gap: 3px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__waveform-seek {
+    height: 104px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__waveform-time {
+    margin-top: 5px;
+    font-size: 10px;
   }
 
   /* Playlists desktop: remove the editorial split that squeezed the actual library.
@@ -1067,6 +1097,379 @@
     }
   }
 
+
+  /* Top navigation: the Home Music brand is the single entry point to Now Playing. */
+  #root .desktop-layout[data-offline="false"] .desktop-brand {
+    position: relative;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    color: inherit;
+    background: transparent;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-brand__copy {
+    display: block;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-brand:hover strong,
+  #root .desktop-layout[data-offline="false"] .desktop-brand.is-active strong {
+    color: #fff0df;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-brand:focus-visible {
+    outline: 2px solid rgba(244, 196, 126, .55);
+    outline-offset: 5px;
+    border-radius: 5px;
+  }
+
+  /* Root collections share the same full-width desktop canvas. */
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"] .desktop-main-content--library:has(.library-header.is-root),
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"] .desktop-main-content--library:has(.library-header.is-root) {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-header.is-root,
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"]:has(.library-header.is-root) .library-header.is-root {
+    min-height: 46px;
+    margin: 0 0 12px;
+    padding: 18px 0 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 16px;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-header.is-root::before,
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"]:has(.library-header.is-root) .library-header.is-root::before {
+    content: "BIBLIOTECA";
+    left: 0;
+    top: 0;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-header__title,
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"]:has(.library-header.is-root) .library-header__title {
+    display: none !important;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-header__folder-meta {
+    grid-column: 2;
+    min-height: 20px;
+    margin: 0;
+    align-self: start;
+    gap: 0;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-header__folder-meta::after {
+    display: none;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .folder-order-control {
+    display: none !important;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .library-content,
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"]:has(.library-header.is-root) .library-content {
+    width: 100%;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .folder-visual-grid,
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"]:has(.library-header.is-root) .playlist-visual-grid {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 14px 13px;
+    margin: 3px 0 18px;
+  }
+
+  /* Playlists use the same visual card language as folders on desktop. */
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"]:has(.library-header.is-root) .section-heading--playlists-root {
+    width: 100%;
+    min-height: 36px;
+    margin: 0 0 12px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"]:has(.library-header.is-root) .section-heading--playlists-root > span,
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"]:has(.library-header.is-root) .playlist-smart-action,
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"]:has(.library-header.is-root) .playlist-order-control {
+    display: none !important;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"]:has(.library-header.is-root) .section-heading__actions {
+    width: auto;
+    min-width: 0;
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"]:has(.library-header.is-root) .playlist-create-action {
+    width: auto;
+    min-height: 34px;
+    padding: 0 15px;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"]:has(.library-header.is-root) .playlist-visual-card {
+    position: relative;
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    display: block;
+    overflow: hidden;
+    border: 1px solid rgba(231, 209, 187, .11);
+    border-radius: 9px;
+    background: #101827;
+    box-shadow: 0 10px 28px rgba(0,0,0,.16);
+    transform: none;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"]:has(.library-header.is-root) .playlist-visual-card:hover {
+    border-color: rgba(244,196,126,.28);
+    background: #121c2d;
+    transform: translateY(-1px);
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"]:has(.library-header.is-root) .playlist-visual-card__main {
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    display: block;
+    border: 0;
+    color: inherit;
+    background: transparent;
+    text-align: left;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"]:has(.library-header.is-root) .playlist-visual-card__main .artwork {
+    width: 100%;
+    height: auto;
+    max-width: none;
+    aspect-ratio: 1.48 / 1;
+    overflow: hidden;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"]:has(.library-header.is-root) .playlist-visual-card__main .artwork img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"]:has(.library-header.is-root) .playlist-visual-card .group-item__text {
+    min-height: 40px;
+    padding: 7px 28px 7px 8px;
+    display: grid;
+    align-content: center;
+    gap: 2px;
+    text-align: left;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"]:has(.library-header.is-root) .playlist-visual-card .group-item__text strong {
+    overflow: hidden;
+    color: #f1e8e1;
+    font-size: 9px;
+    font-weight: 620;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"]:has(.library-header.is-root) .playlist-visual-card .group-item__text small {
+    color: #817977;
+    font-size: 7px;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"]:has(.library-header.is-root) .playlist-visual-card .group-item__updated,
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"]:has(.library-header.is-root) .playlist-visual-card .group-item__play,
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"]:has(.library-header.is-root) .playlist-visual-card .group-item__chevron {
+    display: none !important;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"]:has(.library-header.is-root) .playlist-visual-card .group-item__more {
+    position: absolute;
+    right: 7px;
+    bottom: 10px;
+    width: 14px;
+    height: 14px;
+    margin: 0;
+    color: #aaa19d;
+    stroke-width: 1.7;
+  }
+
+
+  /* Now Playing: playback lives on the artwork; only mode controls stay below. */
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__art {
+    position: relative;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__cover-play {
+    position: absolute;
+    z-index: 8;
+    right: 16px;
+    bottom: 16px;
+    width: 58px;
+    height: 58px;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    border: 2px solid rgba(255, 220, 166, .92);
+    border-radius: 50%;
+    color: #fff2df;
+    background: rgba(8, 13, 21, .82);
+    box-shadow:
+      0 0 0 4px rgba(7, 11, 18, .64),
+      0 12px 28px rgba(0, 0, 0, .32);
+    backdrop-filter: blur(12px);
+    cursor: pointer;
+    transition: transform 140ms ease, background 140ms ease, border-color 140ms ease;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__cover-play:hover {
+    transform: translateY(-1px) scale(1.03);
+    border-color: #ffd79c;
+    background: rgba(18, 22, 30, .92);
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__cover-play:focus-visible {
+    outline: 2px solid rgba(255, 216, 158, .72);
+    outline-offset: 4px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__cover-play svg {
+    width: 22px;
+    height: 22px;
+    stroke-width: 2;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__art .artwork-fallback__disc {
+    display: none;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__controls {
+    min-height: 54px;
+    margin-top: 10px;
+    grid-template-columns: repeat(2, 46px);
+    gap: 20px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__controls button {
+    width: 42px;
+    height: 42px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track {
+    position: absolute;
+    z-index: 5;
+    right: 25px;
+    bottom: 20px;
+    width: min(310px, calc(100% - 50px));
+    min-height: 58px;
+    padding: 7px 10px 7px 7px;
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr) 20px;
+    align-items: center;
+    gap: 10px;
+    overflow: hidden;
+    border: 1px solid rgba(232, 211, 190, .16);
+    border-radius: 10px;
+    color: #d8cec8;
+    background: rgba(8, 13, 22, .58);
+    box-shadow: 0 12px 30px rgba(0,0,0,.18);
+    backdrop-filter: blur(14px);
+    text-align: left;
+    cursor: pointer;
+    transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track:hover {
+    border-color: rgba(244, 196, 126, .34);
+    background: rgba(13, 20, 31, .82);
+    transform: translateY(-1px);
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track:focus-visible {
+    outline: 2px solid rgba(244, 196, 126, .55);
+    outline-offset: 3px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track > .artwork {
+    width: 44px;
+    height: 44px;
+    max-width: none;
+    overflow: hidden;
+    border: 0;
+    border-radius: 7px;
+    box-shadow: none;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track > .artwork img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track-copy {
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track-copy small {
+    color: #b98962;
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track-copy strong,
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track-copy > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track-copy strong {
+    color: #f3e9e1;
+    font-size: 11px;
+    font-weight: 650;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track-copy > span {
+    color: #8f8885;
+    font-size: 9px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track > svg {
+    width: 17px;
+    height: 17px;
+    color: #d7b17e;
+    stroke-width: 1.8;
+  }
+
+  @media (max-width: 1180px) {
+    #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track {
+      width: min(260px, calc(100% - 42px));
+      right: 21px;
+      bottom: 18px;
+    }
+
+    #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__quote {
+      left: 21px;
+    }
+  }
+
 }
 
 @media (min-width: 1500px) {
@@ -1080,13 +1483,17 @@
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__stage {
-    width: min(calc(100% - 120px), 1280px);
-    grid-template-columns: minmax(360px, 460px) minmax(420px, 540px);
-    gap: clamp(78px, 8vw, 128px);
+    width: min(calc(100% - 120px), 1360px);
+    grid-template-columns: minmax(380px, 500px) minmax(440px, 580px);
+    gap: clamp(82px, 8vw, 136px);
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__art .now-playing-transition-art,
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__art .now-playing-vinyl {
-    max-width: 460px;
+    max-width: 500px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__waveform-progress {
+    width: min(100%, 470px);
   }
 }
