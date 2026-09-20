@@ -103,7 +103,7 @@ export function DesktopNowPlayingScreen({
     const trigger = actionsRef.current?.querySelector<HTMLButtonElement>('.desktop-now-playing-screen__more');
     if (!trigger) return;
     const rect = trigger.getBoundingClientRect();
-    const menuWidth = 248;
+    const menuWidth = 270;
     const viewportPadding = 12;
     setMenuPosition({
       top: Math.min(window.innerHeight - 12, rect.bottom + 8),
