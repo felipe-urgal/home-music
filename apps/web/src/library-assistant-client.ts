@@ -17,7 +17,8 @@ import type {
   LocalLyricsCapabilityResponse,
   LocalLyricsEligibleTracksResponse,
   LocalLyricsJobResponse,
-  LocalLyricsStartJobRequest
+  LocalLyricsStartJobRequest,
+  AdminMissingCoverFillResponse
 } from '@home-music/shared/library-assistant';
 import { apiFetch } from './api-client';
 
@@ -75,6 +76,21 @@ export async function startLibraryAssistantMetadataRun(options: { full?: boolean
 
 export async function startLibraryAssistantLyricsRun(options: { full?: boolean } = {}) {
   return startLibraryAssistantRun('lyrics', options);
+}
+
+export async function getMissingCoverFillJob() {
+  const response = await apiFetch('/api/admin/library-assistant/covers/fill', { cache: 'no-store' });
+  if (!response.ok) throw new Error(await responseError(response));
+  return response.json() as Promise<AdminMissingCoverFillResponse>;
+}
+
+export async function startMissingCoverFillJob() {
+  const response = await apiFetch('/api/admin/library-assistant/covers/fill', {
+    method: 'POST',
+    headers: { 'X-Home-Music-Request': '1' }
+  });
+  if (!response.ok) throw new Error(await responseError(response));
+  return response.json() as Promise<AdminMissingCoverFillResponse>;
 }
 
 export async function getLibraryAssistantRuns(limit = 30) {
@@ -276,7 +292,7 @@ async function cancelRunRequest(id: string) {
 export async function cancelLibraryAssistantRun(id: string) {
   const listed = await getLibraryAssistantRuns();
   const active = listed.runs.filter(run => (
-    (run.capability === 'metadata' || run.capability === 'lyrics')
+    (run.capability === 'metadata' || run.capability === 'artwork' || run.capability === 'lyrics')
     && !['completed', 'failed', 'cancelled', 'stale'].includes(run.status)
   ));
   const targets = active.some(run => run.id === id)
