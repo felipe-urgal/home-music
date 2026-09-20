@@ -52,6 +52,20 @@ describe('mobile library prototype one contracts', () => {
     expect(css).toMatch(/playlist-order-control[\s\S]*display: none !important/);
   });
 
+  it('move play/pause para a capa e usa a próxima faixa como avanço no desktop', () => {
+    const screen = source('components/DesktopNowPlayingScreen.tsx');
+    const app = source('AuthenticatedApp.tsx');
+    const css = source('prototype-one-desktop-polish.css');
+
+    expect(screen).toMatch(/desktop-now-playing-screen__cover-play/);
+    expect(screen).toMatch(/nextTrack && nextTrack\.id !== current\.id/);
+    expect(screen).toMatch(/desktop-now-playing-screen__next-track/);
+    expect(screen).not.toMatch(/aria-label="Anterior"/);
+    expect(screen).not.toMatch(/className="desktop-now-playing-screen__play"/);
+    expect(app).toMatch(/nextTrack=\{nextTrack\}/);
+    expect(css).toMatch(/desktop-now-playing-screen__controls[\s\S]*grid-template-columns: repeat\(2, 46px\)/);
+  });
+
   it('aplica o protótipo 2 na listagem de pasta desktop', () => {
     const screen = source('components/LibraryScreen.tsx');
     const summary = source('components/DesktopFolderSummary.tsx');
