@@ -32,6 +32,7 @@ type ImmersiveStyle = CSSProperties & {
 
 type WaveStyle = CSSProperties & {
   '--wave-height'?: string;
+  '--wave-fill'?: string;
 };
 
 const WAVEFORM_HEIGHTS = [
@@ -93,8 +94,8 @@ export function DesktopNowPlayingScreen({
   const [playlistOpen, setPlaylistOpen] = useState(false);
   const [actionsOpen, setActionsOpen] = useState(false);
   const crossfadeVisual = useCrossfadeVisualState();
-  const progress = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
-  const playedWaveBars = Math.round((progress / 100) * WAVEFORM_HEIGHTS.length);
+  const progress = duration > 0 ? Math.max(0, Math.min(100, (currentTime / duration) * 100)) : 0;
+  const waveformPosition = (progress / 100) * WAVEFORM_HEIGHTS.length;
   const repeatLabel = repeatMode === 'one'
     ? 'Repetir uma'
     : repeatMode === 'all'
@@ -126,20 +127,22 @@ export function DesktopNowPlayingScreen({
 
       <div className="desktop-now-playing-screen__stage">
         <div className="desktop-now-playing-screen__art">
-          <NowPlayingCrossfadeVinyl
-            current={current}
-            crossfade={crossfadeVisual}
-            playing={playing}
-          />
-          <button
-            className="desktop-now-playing-screen__cover-play"
-            type="button"
-            aria-label={playing ? 'Pausar' : 'Tocar'}
-            title={playing ? 'Pausar' : 'Tocar'}
-            onClick={onTogglePlay}
-          >
-            {playing ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
-          </button>
+          <div className="desktop-now-playing-screen__art-frame">
+            <NowPlayingCrossfadeVinyl
+              current={current}
+              crossfade={crossfadeVisual}
+              playing={playing}
+            />
+            <button
+              className="desktop-now-playing-screen__cover-play"
+              type="button"
+              aria-label={playing ? 'Pausar' : 'Tocar'}
+              title={playing ? 'Pausar' : 'Tocar'}
+              onClick={onTogglePlay}
+            >
+              {playing ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
+            </button>
+          </div>
         </div>
 
         <div className="desktop-now-playing-screen__content">
@@ -230,13 +233,18 @@ export function DesktopNowPlayingScreen({
 
           <div className="desktop-now-playing-screen__waveform-progress">
             <div className="desktop-now-playing-screen__waveform" aria-hidden="true">
-              {WAVEFORM_HEIGHTS.map((height, index) => (
-                <span
-                  key={index}
-                  className={index < playedWaveBars ? 'is-played' : ''}
-                  style={{ '--wave-height': `${height}%` } as WaveStyle}
-                />
-              ))}
+              {WAVEFORM_HEIGHTS.map((height, index) => {
+                const fill = Math.max(0, Math.min(100, (waveformPosition - index) * 100));
+                return (
+                  <span
+                    key={index}
+                    style={{
+                      '--wave-height': `${height}%`,
+                      '--wave-fill': `${fill}%`
+                    } as WaveStyle}
+                  />
+                );
+              })}
             </div>
             <input
               className="desktop-now-playing-screen__waveform-seek"
