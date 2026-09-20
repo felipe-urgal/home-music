@@ -13,7 +13,8 @@ import {
   type LibraryAssistantRun,
   type LibraryAssistantRunProgress,
   type LibraryAssistantSuggestion,
-  type LibraryAssistantSuggestionStatus
+  type LibraryAssistantSuggestionStatus,
+  type LocalLyricsCapabilityResponse
 } from '@home-music/shared/library-assistant';
 import {
   AlertTriangle,
@@ -46,6 +47,7 @@ import {
   getLibraryAssistantRunProgress,
   getLibraryAssistantRuns,
   getLibraryAssistantSuggestions,
+  getLocalLyricsCapability,
   resetLibraryAssistantReview,
   startLibraryAssistantMetadataRun,
   updateLibraryAssistantReviewPolicy,
@@ -382,6 +384,8 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
   const [loading, setLoading] = useState(true);
   const [loadingPolicy, setLoadingPolicy] = useState(true);
   const [loadingFingerprintStatus, setLoadingFingerprintStatus] = useState(true);
+  const [localLyricsCapability, setLocalLyricsCapability] = useState<LocalLyricsCapabilityResponse | null>(null);
+  const [localLyricsCapabilityError, setLocalLyricsCapabilityError] = useState<string | null>(null);
   const [savingPolicy, setSavingPolicy] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [mutating, setMutating] = useState(false);
@@ -492,6 +496,17 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
     }
   }, []);
 
+  const loadLocalLyricsCapability = useCallback(async () => {
+    try {
+      const response = await getLocalLyricsCapability();
+      setLocalLyricsCapability(response);
+      setLocalLyricsCapabilityError(null);
+    } catch (error) {
+      setLocalLyricsCapability(null);
+      setLocalLyricsCapabilityError(error instanceof Error ? error.message : 'Não foi possível verificar o Whisper local.');
+    }
+  }, []);
+
   const loadFingerprintStatus = useCallback(async () => {
     const version = ++fingerprintRequestVersion.current;
     setLoadingFingerprintStatus(true);
@@ -513,12 +528,13 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
     void load();
     void loadPolicy();
     void loadFingerprintStatus();
+    void loadLocalLyricsCapability();
     return () => {
       requestVersion.current += 1;
       policyRequestVersion.current += 1;
       fingerprintRequestVersion.current += 1;
     };
-  }, [load, loadFingerprintStatus, loadPolicy]);
+  }, [load, loadFingerprintStatus, loadLocalLyricsCapability, loadPolicy]);
 
   useEffect(() => {
     if (!runActive) return;
@@ -913,6 +929,7 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
               void load();
               void loadPolicy();
               void loadFingerprintStatus();
+              void loadLocalLyricsCapability();
             }}
           >
             <RefreshCw className={loading || loadingPolicy ? 'is-spinning' : ''} />
@@ -1386,8 +1403,23 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
               <div>
                 <strong>Lyrics local</strong>
                 <p className="assistant-admin__settings-note">Fallback opcional com Whisper. O áudio permanece neste servidor e qualquer resultado sempre volta para revisão antes de ser aplicado.</p>
+                <span className={`assistant-admin__settings-status ${localLyricsCapability?.available ? 'is-ready' : 'is-warning'}`}>
+                  {localLyricsCapabilityError
+                    ? localLyricsCapabilityError
+                    : localLyricsCapability == null
+                      ? 'Verificando disponibilidade…'
+                      : localLyricsCapability.available
+                        ? `Disponível${localLyricsCapability.whisperVersion ? ` · ${localLyricsCapability.whisperVersion}` : ''}`
+                        : localLyricsCapability.action ?? 'Whisper local não configurado.'}
+                </span>
               </div>
-              <button className="assistant-admin__secondary-button" type="button" onClick={onOpenLocalLyrics}>
+              <button
+                className="assistant-admin__secondary-button"
+                type="button"
+                disabled={!localLyricsCapability?.available}
+                title={!localLyricsCapability?.available ? localLyricsCapability?.action ?? localLyricsCapabilityError ?? 'Whisper local não configurado.' : undefined}
+                onClick={onOpenLocalLyrics}
+              >
                 <Music2 /> Abrir lyrics local
               </button>
             </div>
