@@ -54,6 +54,8 @@ describe('mobile library prototype one contracts', () => {
     expect(content).toMatch(/Nova playlist/);
     expect(content).toMatch(/renderPlaylistCards\(\)/);
     expect(content).toMatch(/playlist-visual-card/);
+    expect(content).toMatch(/playlistArtworkTracks[\s\S]*slice\(0, 4\)/);
+    expect(content).toMatch(/playlist-visual-card__artwork-mosaic/);
     expect(content).toMatch(/folder-visual-card__artwork-mosaic/);
     expect(libraryNavigation).toMatch(/folderArtworkTracks\(tracks: Track\[], limit = 4\)/);
     expect(libraryNavigation).toMatch(/artworks: folderArtworkTracks/);
