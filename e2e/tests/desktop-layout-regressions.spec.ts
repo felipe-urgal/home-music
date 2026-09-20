@@ -24,6 +24,7 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
 
   await expect(nowPlayingArt).toBeVisible();
   await expect(nowPlayingArtworkSurface).toBeVisible();
+  await expect(nowPlayingArt.locator('.artwork-fallback__label')).toBeVisible();
   await expect(nowPlayingContent).toBeVisible();
 
   const surfaceBox = await nowPlayingSurface.boundingBox();
