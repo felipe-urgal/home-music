@@ -932,6 +932,17 @@
     content: none;
   }
 
+  #root .desktop-layout[data-offline="false"] .desktop-folder-detail-main .library-view-controls {
+    position: absolute;
+    z-index: 50;
+    top: 48px;
+    right: 0;
+    width: min(390px, 48vw);
+    border-color: rgba(236,215,194,.15);
+    background: rgba(9,15,25,.99);
+    box-shadow: 0 22px 55px rgba(0,0,0,.40);
+  }
+
   #root .desktop-layout[data-offline="false"] .desktop-folder-detail-main .library-folder-quick-filters {
     width: 100%;
     min-height: 32px;
@@ -1021,11 +1032,11 @@
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-folder-detail-main .desktop-library-table th:nth-child(2) {
-    width: 56%;
+    width: 58%;
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-folder-detail-main .desktop-library-table th:nth-child(3) {
-    width: 34%;
+    width: auto;
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-folder-detail-main .desktop-library-table__duration {
