@@ -206,7 +206,6 @@ export function LibraryContent({
                 sort={sort}
                 onSort={changeSort}
                 onPlayTrack={onPlayTrack}
-              onTogglePlay={onTogglePlay}
                 onTogglePlay={onTogglePlay}
                 desktopVariant={folderPath || query ? 'grid' : 'table'}
                 {...offlineTrackProps}
