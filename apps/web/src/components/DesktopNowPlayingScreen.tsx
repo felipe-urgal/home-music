@@ -1,7 +1,6 @@
 import { useState, type CSSProperties } from 'react';
 import type { Playlist, RepeatMode, Track } from '@home-music/shared';
 import {
-  AudioLines,
   CheckCircle2,
   Download,
   Heart,
@@ -12,11 +11,11 @@ import {
   Repeat1,
   Repeat2,
   Shuffle,
-  SkipBack,
   SkipForward,
   Volume2
 } from 'lucide-react';
 import { useCrossfadeVisualState } from '../crossfade-visual';
+import { Artwork } from './Artwork';
 import { LyricsPanel } from './LyricsPanel';
 import { NowPlayingCrossfadeIdentity, NowPlayingCrossfadeVinyl } from './NowPlayingCrossfade';
 
@@ -52,11 +51,11 @@ type DesktopNowPlayingScreenProps = {
   shuffle: boolean;
   repeatMode: RepeatMode;
   playlists: Playlist[];
+  nextTrack?: Track;
   isDownloaded?: boolean;
   availableViaCollection?: boolean;
   downloading?: boolean;
   onTogglePlay: () => void;
-  onPrevious: () => void;
   onNext: () => void;
   onSeek: (value: number) => void;
   onVolume: (value: number) => void;
@@ -78,11 +77,11 @@ export function DesktopNowPlayingScreen({
   shuffle,
   repeatMode,
   playlists,
+  nextTrack,
   isDownloaded = false,
   availableViaCollection = false,
   downloading = false,
   onTogglePlay,
-  onPrevious,
   onNext,
   onSeek,
   onVolume,
@@ -132,6 +131,15 @@ export function DesktopNowPlayingScreen({
             crossfade={crossfadeVisual}
             playing={playing}
           />
+          <button
+            className="desktop-now-playing-screen__cover-play"
+            type="button"
+            aria-label={playing ? 'Pausar' : 'Tocar'}
+            title={playing ? 'Pausar' : 'Tocar'}
+            onClick={onTogglePlay}
+          >
+            {playing ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
+          </button>
         </div>
 
         <div className="desktop-now-playing-screen__content">
@@ -220,14 +228,32 @@ export function DesktopNowPlayingScreen({
             </div>
           </div>
 
-          <div className="desktop-now-playing-screen__waveform" aria-hidden="true">
-            {WAVEFORM_HEIGHTS.map((height, index) => (
-              <span
-                key={index}
-                className={index < playedWaveBars ? 'is-played' : ''}
-                style={{ '--wave-height': `${height}%` } as WaveStyle}
-              />
-            ))}
+          <div className="desktop-now-playing-screen__waveform-progress">
+            <div className="desktop-now-playing-screen__waveform" aria-hidden="true">
+              {WAVEFORM_HEIGHTS.map((height, index) => (
+                <span
+                  key={index}
+                  className={index < playedWaveBars ? 'is-played' : ''}
+                  style={{ '--wave-height': `${height}%` } as WaveStyle}
+                />
+              ))}
+            </div>
+            <input
+              className="desktop-now-playing-screen__waveform-seek"
+              aria-label="Progresso da música"
+              aria-valuetext={`${formatTime(currentTime)} de ${formatTime(duration)}`}
+              type="range"
+              min="0"
+              max={duration || 0}
+              step="0.1"
+              value={Math.min(currentTime, duration || 0)}
+              disabled={duration <= 0}
+              onChange={event => onSeek(Number(event.target.value))}
+            />
+            <div className="desktop-now-playing-screen__waveform-time" aria-hidden="true">
+              <span>{formatTime(currentTime)}</span>
+              <span>{formatTime(duration)}</span>
+            </div>
           </div>
 
           {autoplayBlocked && (
@@ -237,30 +263,8 @@ export function DesktopNowPlayingScreen({
           )}
           {playbackError && <div className="desktop-now-playing-screen__notice is-error" role="alert">{playbackError}</div>}
 
-          <div className="desktop-now-playing-screen__progress">
-            <input
-              aria-label="Progresso da música"
-              type="range"
-              min="0"
-              max={duration || 0}
-              step="0.1"
-              value={Math.min(currentTime, duration || 0)}
-              style={{ '--progress': `${progress}%` } as CSSProperties}
-              onChange={event => onSeek(Number(event.target.value))}
-            />
-            <div>
-              <span>{formatTime(currentTime)}</span>
-              <span>{formatTime(duration)}</span>
-            </div>
-          </div>
-
           <div className="desktop-now-playing-screen__controls" aria-label="Controles de reprodução">
             <button className={shuffle ? 'is-active' : ''} type="button" aria-label="Aleatório" title="Aleatório" aria-pressed={shuffle} onClick={onShuffle}><Shuffle style={{ fill: 'none' }} /></button>
-            <button type="button" aria-label="Anterior" onClick={onPrevious}><SkipBack /></button>
-            <button className="desktop-now-playing-screen__play" type="button" aria-label={playing ? 'Pausar' : 'Tocar'} onClick={onTogglePlay}>
-              {playing ? <Pause /> : <Play />}
-            </button>
-            <button type="button" aria-label="Próxima" onClick={onNext}><SkipForward /></button>
             <button className={repeatMode !== 'off' ? 'is-active' : ''} type="button" aria-label={repeatLabel} title={repeatLabel} onClick={onRepeat}>
               {repeatMode === 'one' ? <Repeat1 style={{ fill: 'none' }} /> : <Repeat2 style={{ fill: 'none' }} />}
             </button>
@@ -290,10 +294,22 @@ export function DesktopNowPlayingScreen({
         <span>Boa música</span>
         <strong>torna tudo mais leve.</strong>
       </div>
-      <div className="desktop-now-playing-screen__signature" aria-hidden="true">
-        <span>Qualidade de vida em forma de som.</span>
-        <AudioLines />
-      </div>
+      {nextTrack && nextTrack.id !== current.id && (
+        <button
+          className="desktop-now-playing-screen__next-track"
+          type="button"
+          aria-label={`Tocar próxima: ${nextTrack.title}`}
+          onClick={onNext}
+        >
+          <Artwork track={nextTrack} />
+          <span className="desktop-now-playing-screen__next-track-copy">
+            <small>Próxima música</small>
+            <strong>{nextTrack.title}</strong>
+            <span>{nextTrack.artist || 'Artista desconhecido'}</span>
+          </span>
+          <SkipForward aria-hidden="true" />
+        </button>
+      )}
     </section>
   );
 }
