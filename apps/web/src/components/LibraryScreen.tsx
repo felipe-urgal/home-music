@@ -284,6 +284,7 @@ export function LibraryScreen({
       playing={playing}
       offlineTrackProps={offlineTrackProps}
       onPlayTrack={onPlayTrack}
+      onTogglePlay={onTogglePlay}
       onCreatePlaylist={makePlaylist}
       onEditPlaylist={editPlaylist}
       onRemovePlaylist={removePlaylist}
