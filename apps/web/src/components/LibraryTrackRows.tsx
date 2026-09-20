@@ -1,4 +1,4 @@
-import { CheckCircle2, Download, LoaderCircle, Play, Trash2 } from 'lucide-react';
+import { CheckCircle2, Download, LoaderCircle, Pause, Play, Trash2 } from 'lucide-react';
 import type { Track } from '@home-music/shared';
 import type { TrackSort } from '../library-utils';
 import { useDesktopLayout } from '../useDesktopLayout';
@@ -23,6 +23,7 @@ type LibraryTrackRowsProps = LibraryTrackOfflineProps & {
   sort: TrackSort;
   onSort: (sort: TrackSort) => void;
   onPlayTrack: (track: Track, context: Track[]) => void;
+  onTogglePlay: () => void;
   onRemove?: (trackId: string) => void;
   desktopVariant?: 'table' | 'grid';
 };
@@ -35,6 +36,7 @@ export function LibraryTrackRows({
   sort,
   onSort,
   onPlayTrack,
+  onTogglePlay,
   onRemove,
   desktopVariant = 'table',
   offlineSupported,
@@ -65,12 +67,17 @@ export function LibraryTrackRows({
                 className="desktop-track-card__main"
                 type="button"
                 aria-current={isCurrent ? 'true' : undefined}
-                aria-label={`Tocar ${track.title}, ${trackArtist}${isCurrent && playing ? ' — reproduzindo agora' : ''}`}
-                onClick={() => onPlayTrack(track, context)}
+                aria-label={`${isCurrent && playing ? 'Pausar' : 'Tocar'} ${track.title}, ${trackArtist}`}
+                onClick={() => {
+                  if (isCurrent) onTogglePlay();
+                  else onPlayTrack(track, context);
+                }}
               >
                 <span className="desktop-track-card__artwork">
                   <Artwork track={track} />
-                  <span className="desktop-track-card__play" aria-hidden="true"><Play /></span>
+                  <span className="desktop-track-card__play" aria-hidden="true">
+                    {isCurrent && playing ? <Pause /> : <Play />}
+                  </span>
                 </span>
                 <span className="desktop-track-card__copy">
                   <strong>{track.title}</strong>
