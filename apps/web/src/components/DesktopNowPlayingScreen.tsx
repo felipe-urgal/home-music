@@ -156,41 +156,6 @@ export function DesktopNowPlayingScreen({
             </div>
 
             <div className="desktop-now-playing-screen__actions" aria-label="Ações da faixa">
-              <div className="desktop-now-playing-screen__playlist">
-                <button
-                  className={`desktop-now-playing-screen__favorite ${playlistOpen ? 'is-active' : ''}`}
-                  type="button"
-                  aria-label="Adicionar à playlist"
-                  aria-haspopup="menu"
-                  aria-expanded={playlistOpen}
-                  onClick={() => {
-                    setPlaylistOpen(value => !value);
-                    setActionsOpen(false);
-                  }}
-                >
-                  <Heart aria-hidden="true" />
-                </button>
-
-                {playlistOpen && (
-                  <div className="desktop-now-playing-screen__playlist-menu" role="menu" aria-label="Adicionar à playlist">
-                    <strong>Adicionar à playlist</strong>
-                    {playlists.length ? playlists.map(playlist => (
-                      <button
-                        key={playlist.id}
-                        type="button"
-                        role="menuitem"
-                        onClick={() => {
-                          onAddToPlaylist(playlist);
-                          setPlaylistOpen(false);
-                        }}
-                      >
-                        {playlist.name}
-                      </button>
-                    )) : <span>Nenhuma playlist criada ainda.</span>}
-                  </div>
-                )}
-              </div>
-
               <div className="desktop-now-playing-screen__more-wrap">
                 <button
                   className="desktop-now-playing-screen__more"
@@ -199,14 +164,75 @@ export function DesktopNowPlayingScreen({
                   aria-haspopup="menu"
                   aria-expanded={actionsOpen}
                   onClick={() => {
-                    setActionsOpen(value => !value);
-                    setPlaylistOpen(false);
+                    setActionsOpen(value => {
+                      if (value) setPlaylistOpen(false);
+                      return !value;
+                    });
                   }}
                 >
                   <MoreVertical aria-hidden="true" />
                 </button>
                 {actionsOpen && (
                   <div className="desktop-now-playing-screen__more-menu" role="menu" aria-label="Mais opções da faixa">
+                    <button
+                      type="button"
+                      role="menuitem"
+                      aria-haspopup="true"
+                      aria-expanded={playlistOpen}
+                      onClick={() => setPlaylistOpen(value => !value)}
+                    >
+                      <Heart aria-hidden="true" />
+                      <span>Adicionar à playlist</span>
+                    </button>
+
+                    {playlistOpen && (
+                      <div className="desktop-now-playing-screen__more-submenu" role="group" aria-label="Adicionar à playlist">
+                        {playlists.length ? playlists.map(playlist => (
+                          <button
+                            key={playlist.id}
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                              onAddToPlaylist(playlist);
+                              setPlaylistOpen(false);
+                              setActionsOpen(false);
+                            }}
+                          >
+                            <span>{playlist.name}</span>
+                          </button>
+                        )) : <span className="desktop-now-playing-screen__more-empty">Nenhuma playlist criada ainda.</span>}
+                      </div>
+                    )}
+
+                    <button
+                      className={shuffle ? 'is-active' : ''}
+                      type="button"
+                      role="menuitemcheckbox"
+                      aria-checked={shuffle}
+                      onClick={() => {
+                        onShuffle();
+                        setActionsOpen(false);
+                      }}
+                    >
+                      <Shuffle aria-hidden="true" style={{ fill: 'none' }} />
+                      <span>{shuffle ? 'Aleatório ligado' : 'Aleatório'}</span>
+                    </button>
+
+                    <button
+                      className={repeatMode !== 'off' ? 'is-active' : ''}
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        onRepeat();
+                        setActionsOpen(false);
+                      }}
+                    >
+                      {repeatMode === 'one'
+                        ? <Repeat1 aria-hidden="true" style={{ fill: 'none' }} />
+                        : <Repeat2 aria-hidden="true" style={{ fill: 'none' }} />}
+                      <span>{repeatLabel}</span>
+                    </button>
+
                     {onToggleDownload && (
                       <button
                         type="button"
@@ -270,13 +296,6 @@ export function DesktopNowPlayingScreen({
             </div>
           )}
           {playbackError && <div className="desktop-now-playing-screen__notice is-error" role="alert">{playbackError}</div>}
-
-          <div className="desktop-now-playing-screen__controls" aria-label="Controles de reprodução">
-            <button className={shuffle ? 'is-active' : ''} type="button" aria-label="Aleatório" title="Aleatório" aria-pressed={shuffle} onClick={onShuffle}><Shuffle style={{ fill: 'none' }} /></button>
-            <button className={repeatMode !== 'off' ? 'is-active' : ''} type="button" aria-label={repeatLabel} title={repeatLabel} onClick={onRepeat}>
-              {repeatMode === 'one' ? <Repeat1 style={{ fill: 'none' }} /> : <Repeat2 style={{ fill: 'none' }} />}
-            </button>
-          </div>
 
           {!usesSystemVolume && (
             <div className="desktop-now-playing-screen__volume">
