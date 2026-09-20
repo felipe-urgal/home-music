@@ -90,11 +90,11 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     playing: player.playing
   });
   const current = player.current;
-  const tvNextDecision = nextTrackDecision(player.queue, player.currentIndex, player.repeatMode, false);
-  const tvNextTrack = tvNextDecision.type === 'restart'
+  const nextDecision = nextTrackDecision(player.queue, player.currentIndex, player.repeatMode, false);
+  const nextTrack = nextDecision.type === 'restart'
     ? current
-    : tvNextDecision.type === 'track'
-      ? player.queue.find(track => track.id === tvNextDecision.id)
+    : nextDecision.type === 'track'
+      ? player.queue.find(track => track.id === nextDecision.id)
       : undefined;
   const currentHasPhysicalDownload = Boolean(current && offline.downloadedIds.has(current.id));
   const currentHasIndividualDownload = Boolean(currentHasPhysicalDownload && current && offline.individualDownloadedIds.has(current.id));
@@ -242,7 +242,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
           playlists={library.playlists}
           navigation={navigation}
           current={current}
-          nextTrack={tvNextTrack}
+          nextTrack={nextTrack}
           playing={player.playing}
           currentTime={player.currentTime}
           duration={player.duration}
@@ -414,11 +414,11 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
             shuffle={player.shuffle}
             repeatMode={player.repeatMode}
             playlists={editablePlaylists}
+            nextTrack={nextTrack}
             isDownloaded={currentHasIndividualDownload}
             availableViaCollection={currentAvailableViaCollection}
             downloading={offline.downloadingIds.has(current.id)}
             onTogglePlay={() => void player.togglePlay()}
-            onPrevious={player.previous}
             onNext={player.next}
             onSeek={player.seek}
             onVolume={player.setVolume}
