@@ -378,7 +378,6 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
   const [sort, setSort] = useState<Sort>('recent');
   const [search, setSearch] = useState('');
   const [showHelp, setShowHelp] = useState(false);
-  const [showInfo, setShowInfo] = useState(true);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [loadingPolicy, setLoadingPolicy] = useState(true);
@@ -887,17 +886,6 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
   const cachePercent = observed && cacheQueries > 0
     ? Math.round((observed.cacheHits / cacheQueries) * 100)
     : 0;
-  const progressDiagnostics = observed && latestRun ? [
-    `${observed.tracksPerSecond.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} faixa/s`,
-    runActive
-      ? observed.etaMs == null ? 'estimando tempo restante' : `~${formatDuration(observed.etaMs)} restantes`
-      : `${formatDuration(observed.elapsedMs)} no total`,
-    `${observed.externalRequests.toLocaleString('pt-BR')} consultas externas`,
-    cacheQueries > 0 ? `${cachePercent}% via cache` : null,
-    observed.rateLimitWaitMs > 0 ? `${formatDuration(observed.rateLimitWaitMs)} aguardando limite` : null,
-    observed.retriesTotal > 0 ? `${observed.retriesTotal.toLocaleString('pt-BR')} retries` : null
-  ].filter((value): value is string => Boolean(value)).join(' · ') : null;
-
   return (
     <section className="assistant-admin" aria-labelledby="library-assistant-title">
       <header className="assistant-admin__header">
@@ -965,7 +953,6 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
             <strong>{runTitle(latestRun)}</strong>
             <span>{description[0]}</span>
             {description[1] && <span>{description[1]}</span>}
-            {progressDiagnostics && <span>{progressDiagnostics}</span>}
           </div>
           <span className={`assistant-admin__run-badge is-${latestRun?.status ?? 'idle'}`}>
             {(runActive || latestRun?.status === 'completed') && <CheckCircle2 />}
@@ -1247,16 +1234,6 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
               )}
             </div>
 
-            {showInfo && (
-              <aside className="assistant-admin__info" role="note">
-                <Info />
-                <div>
-                  <strong>O processamento pode levar algum tempo.</strong>
-                  <span>Você pode revisar os resultados que já apareceram; a tela continua atualizando a análise automaticamente.</span>
-                </div>
-                <button type="button" onClick={() => setShowInfo(false)}>Entendi</button>
-              </aside>
-            )}
           </section>
         </>
       )}
