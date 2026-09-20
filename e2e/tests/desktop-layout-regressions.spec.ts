@@ -26,7 +26,8 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   const waveformSeek = page.locator('.desktop-now-playing-screen__waveform-seek');
   const waveformBar = page.locator('.desktop-now-playing-screen__waveform span').first();
   const coverPlay = page.locator('.desktop-now-playing-screen__cover-play');
-  const playerModeControls = page.locator('.desktop-now-playing-screen__controls button');
+  const moreActions = nowPlaying.getByRole('button', { name: 'Mais opções da faixa' });
+  const playerModeControls = page.locator('.desktop-now-playing-screen__controls');
 
   await expect(nowPlayingArt).toBeVisible();
   await expect(nowPlayingArtworkSurface).toBeVisible();
@@ -39,8 +40,16 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   await expect(page.locator('.desktop-now-playing-screen__progress')).toHaveCount(0);
   await expect(coverPlay).toBeVisible();
   await expect(coverPlay).toHaveAttribute('aria-label', /Tocar|Pausar/);
-  await expect(playerModeControls).toHaveCount(2);
+  await expect(playerModeControls).toHaveCount(0);
   await expect(page.locator('.desktop-now-playing-screen__play')).toHaveCount(0);
+  await expect(nowPlaying.getByRole('button', { name: 'Adicionar à playlist' })).toHaveCount(0);
+  await moreActions.click();
+  const moreMenu = nowPlaying.getByRole('menu', { name: 'Mais opções da faixa' });
+  await expect(moreMenu).toBeVisible();
+  await expect(moreMenu.getByRole('menuitem', { name: 'Adicionar à playlist' })).toBeVisible();
+  await expect(moreMenu.getByRole('menuitemcheckbox', { name: /Aleatório/ })).toBeVisible();
+  await expect(moreMenu.getByRole('menuitem', { name: /Repetição|Repetir/ })).toBeVisible();
+  await moreActions.click();
   await expect(nowPlaying.getByRole('button', { name: 'Anterior', exact: true })).toHaveCount(0);
   await expect(nowPlaying.getByRole('button', { name: 'Próxima', exact: true })).toHaveCount(0);
 
