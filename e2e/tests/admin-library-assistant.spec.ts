@@ -227,7 +227,8 @@ test('Library Assistant executa o fluxo visual de lyrics local com job fake', as
   });
 
   await openAssistant(page);
-  await page.getByRole('button', { name: 'Lyrics local', exact: true }).click();
+  await page.locator('.assistant-admin__sections').getByRole('button', { name: 'Configurações', exact: true }).click();
+  await page.getByRole('button', { name: 'Abrir lyrics local', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Lyrics local' });
   await expect(dialog).toBeVisible();
   await expect(dialog).toContainText('O áudio não sai deste servidor');
