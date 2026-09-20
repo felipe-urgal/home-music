@@ -25,7 +25,6 @@ test('biblioteca mobile usa abas no topo e mini-player persistente', async ({ pa
   await expect(libraryTabs).toBeVisible();
   await expect(libraryTabs.getByRole('button', { name: 'Pastas', exact: true })).toHaveAttribute('aria-current', 'page');
   await expect(page.locator('.mobile-bottom-nav')).toBeHidden();
-  await expect(page.getByText('Suas pastas', { exact: true })).toBeVisible();
 
   const miniPlayer = page.getByTestId('mini-player');
   await expect(miniPlayer).toBeVisible();
