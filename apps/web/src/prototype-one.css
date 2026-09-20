@@ -1905,57 +1905,74 @@
     background: rgba(255,255,255,.05);
   }
 
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__waveform-progress {
+    position: relative;
+    width: min(100%, 390px);
+    margin: 26px 0 0;
+  }
+
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__waveform {
-    width: min(100%, 310px);
-    height: 84px;
-    margin: 28px 0 5px;
+    width: 100%;
+    height: 92px;
+    padding: 4px 0;
     display: flex;
     align-items: center;
-    gap: 2px;
+    gap: 3px;
+    border-radius: 12px;
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__waveform span {
     flex: 1 1 0;
     min-width: 2px;
-    height: max(2px, var(--wave-height));
+    height: max(3px, var(--wave-height));
     border-radius: 999px;
-    background: #444451;
-    opacity: .82;
+    background: #55545f;
+    opacity: .52;
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__waveform span.is-played {
-    background: linear-gradient(180deg, #ff993e, #df682a);
-    box-shadow: 0 0 8px rgba(238, 116, 45, .12);
+    background: linear-gradient(180deg, #ff9f49, #db6228);
+    box-shadow: 0 0 10px rgba(238, 116, 45, .16);
+    opacity: 1;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__waveform-progress:hover .desktop-now-playing-screen__waveform span:not(.is-played) {
+    opacity: .72;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__waveform-progress:focus-within .desktop-now-playing-screen__waveform {
+    box-shadow: 0 0 0 2px rgba(244, 196, 126, .34);
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__waveform-seek {
+    position: absolute;
+    z-index: 2;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 92px;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__waveform-seek:disabled {
+    cursor: default;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__waveform-time {
+    margin-top: 4px;
+    display: flex;
+    justify-content: space-between;
+    color: #a09591;
+    font-size: 9px;
+    font-variant-numeric: tabular-nums;
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__notice {
     margin: 0 0 10px;
     color: #d7c9c0;
     font-size: 10px;
-  }
-
-  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__progress {
-    width: min(100%, 390px);
-    margin: 0;
-  }
-
-  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__progress input[type="range"] {
-    width: 100%;
-    height: 3px;
-    accent-color: var(--hm-gold);
-    background: linear-gradient(to right, #f3c67d 0 var(--progress), #625a5e var(--progress) 100%);
-  }
-
-  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__progress input[type="range"]::-webkit-slider-thumb {
-    width: 7px;
-    height: 7px;
-    background: #ffe5b8;
-  }
-
-  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__progress > div {
-    margin-top: 7px;
-    color: #a09591;
-    font-size: 9px;
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__controls {

@@ -220,14 +220,32 @@ export function DesktopNowPlayingScreen({
             </div>
           </div>
 
-          <div className="desktop-now-playing-screen__waveform" aria-hidden="true">
-            {WAVEFORM_HEIGHTS.map((height, index) => (
-              <span
-                key={index}
-                className={index < playedWaveBars ? 'is-played' : ''}
-                style={{ '--wave-height': `${height}%` } as WaveStyle}
-              />
-            ))}
+          <div className="desktop-now-playing-screen__waveform-progress">
+            <div className="desktop-now-playing-screen__waveform" aria-hidden="true">
+              {WAVEFORM_HEIGHTS.map((height, index) => (
+                <span
+                  key={index}
+                  className={index < playedWaveBars ? 'is-played' : ''}
+                  style={{ '--wave-height': `${height}%` } as WaveStyle}
+                />
+              ))}
+            </div>
+            <input
+              className="desktop-now-playing-screen__waveform-seek"
+              aria-label="Progresso da música"
+              aria-valuetext={`${formatTime(currentTime)} de ${formatTime(duration)}`}
+              type="range"
+              min="0"
+              max={duration || 0}
+              step="0.1"
+              value={Math.min(currentTime, duration || 0)}
+              disabled={duration <= 0}
+              onChange={event => onSeek(Number(event.target.value))}
+            />
+            <div className="desktop-now-playing-screen__waveform-time" aria-hidden="true">
+              <span>{formatTime(currentTime)}</span>
+              <span>{formatTime(duration)}</span>
+            </div>
           </div>
 
           {autoplayBlocked && (
@@ -236,23 +254,6 @@ export function DesktopNowPlayingScreen({
             </div>
           )}
           {playbackError && <div className="desktop-now-playing-screen__notice is-error" role="alert">{playbackError}</div>}
-
-          <div className="desktop-now-playing-screen__progress">
-            <input
-              aria-label="Progresso da música"
-              type="range"
-              min="0"
-              max={duration || 0}
-              step="0.1"
-              value={Math.min(currentTime, duration || 0)}
-              style={{ '--progress': `${progress}%` } as CSSProperties}
-              onChange={event => onSeek(Number(event.target.value))}
-            />
-            <div>
-              <span>{formatTime(currentTime)}</span>
-              <span>{formatTime(duration)}</span>
-            </div>
-          </div>
 
           <div className="desktop-now-playing-screen__controls" aria-label="Controles de reprodução">
             <button className={shuffle ? 'is-active' : ''} type="button" aria-label="Aleatório" title="Aleatório" aria-pressed={shuffle} onClick={onShuffle}><Shuffle style={{ fill: 'none' }} /></button>
