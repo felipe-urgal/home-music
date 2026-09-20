@@ -137,8 +137,10 @@ export function LibraryScreen({
 
   function goBack() {
     setViewControlsOpen(false);
-    if (selectedPlaylist) leavePlaylist();
-    else if (folderPath) leaveFolder();
+    if (selectedPlaylist) {
+      if (desktopLayout) selectTab('folders');
+      else leavePlaylist();
+    } else if (folderPath) leaveFolder();
   }
 
   function changeTab(tab: LibraryTab) {
