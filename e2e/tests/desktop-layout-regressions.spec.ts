@@ -95,7 +95,7 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   const playlistDetailMain = page.locator('.desktop-playlist-detail-main');
   const playlistTitle = playlistDetailMain.locator('.library-header__title');
   const playlistSearch = page.getByPlaceholder('Buscar nesta playlist…');
-  const playlistQuickFilters = page.getByLabel('Filtros rápidos da playlist');
+  const playlistQuickFilters = page.locator('[aria-label="Filtros rápidos da playlist"]');
 
   await expect(playlistDetail).toBeVisible();
   await expect(playlistSummary).toBeVisible();
