@@ -111,6 +111,7 @@ export function registerLibraryAssistant(
   options.projection.projectRevision = revision => projectRevision(revision) + assistantReviewRevision;
 
   const listProjectedTracks = () => options.projection.projectTracks(options.library.listPublicTracks());
+  const listProjectedAdminTracks = () => options.projection.projectTracks(options.library.listAdminTracks());
   const analysisLibrary = {
     listTracks: listProjectedTracks,
     revision: () => projectRevision(options.library.status().revision)
@@ -268,7 +269,7 @@ export function registerLibraryAssistant(
     onLyricsChanged: () => { assistantReviewRevision += 1; }
   });
   const coverFill = new MissingCoverFillService({
-    library: { listTracks: listProjectedTracks },
+    library: { listTracks: listProjectedAdminTracks },
     analyzer: artworkAnalyzer,
     providers,
     coverOverrides,
