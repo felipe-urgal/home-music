@@ -29,6 +29,7 @@ test('biblioteca mobile usa abas no topo e mini-player persistente', async ({ pa
   const miniPlayer = page.getByTestId('mini-player');
   await expect(miniPlayer).toBeVisible();
   await expect(miniPlayer.getByRole('button', { name: 'Abrir Tocando Agora' })).toBeVisible();
+  await expect(miniPlayer.getByRole('button', { name: 'Adicionar à playlist' })).toBeVisible();
 
   await libraryTabs.getByRole('button', { name: 'Playlists', exact: true }).click();
   await expect(libraryTabs.getByRole('button', { name: 'Playlists', exact: true })).toHaveAttribute('aria-current', 'page');
