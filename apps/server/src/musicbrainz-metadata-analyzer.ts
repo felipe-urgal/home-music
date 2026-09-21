@@ -66,6 +66,7 @@ type SearchIdentity = {
   artist: string;
   album: string;
   usedFileContext: boolean;
+  usedTitleIdentity: boolean;
   fileContext: SafeFileContext | null;
 };
 
@@ -73,6 +74,7 @@ type TrackMatch = {
   track: Track;
   matchTrack: Track;
   usedFileContext: boolean;
+  usedTitleIdentity: boolean;
   fileContext: SafeFileContext | null;
   ranked: RankedCandidate[];
 };
@@ -408,17 +410,22 @@ function fileStem(fileName: string) {
   return dot > 0 ? fileName.slice(0, dot).trim() : fileName.trim();
 }
 
-function parseArtistTitleFromFile(fileName: string) {
-  const stem = fileStem(fileName);
+function parseArtistTitle(value: string) {
+  const clean = safeText(value);
+  if (!clean) return null;
   const separators = [' - ', ' – ', ' — '] as const;
   for (const separator of separators) {
-    const first = stem.indexOf(separator);
-    if (first <= 0 || first !== stem.lastIndexOf(separator)) continue;
-    const artist = safeText(stem.slice(0, first));
-    const title = safeText(stem.slice(first + separator.length));
+    const first = clean.indexOf(separator);
+    if (first <= 0 || first !== clean.lastIndexOf(separator)) continue;
+    const artist = safeText(clean.slice(0, first));
+    const title = safeText(clean.slice(first + separator.length));
     if (artist && title) return { artist, title };
   }
   return null;
+}
+
+function parseArtistTitleFromFile(fileName: string) {
+  return parseArtistTitle(fileStem(fileName));
 }
 
 function searchIdentity(track: Track, fileContext: SafeFileContext | null): SearchIdentity | null {
@@ -431,23 +438,42 @@ function searchIdentity(track: Track, fileContext: SafeFileContext | null): Sear
       artist: exactValue(track.artist),
       album: albumReliable ? exactValue(track.album) : '',
       usedFileContext: false,
+      usedTitleIdentity: false,
       fileContext
     };
   }
 
-  const parsed = fileContext ? parseArtistTitleFromFile(fileContext.fileName) : null;
+  // Bibliotecas antigas e downloads frequentemente chegam como
+  // "Artista - Faixa" dentro do próprio campo de título enquanto artist/album
+  // ficam como placeholders. Quando o artista está ausente, essa estrutura é
+  // mais útil para identificação do que pesquisar o título combinado inteiro.
+  const parsedTitle = !artistReliable && titleReliable
+    ? parseArtistTitle(track.title)
+    : null;
+  const parsedFile = fileContext ? parseArtistTitleFromFile(fileContext.fileName) : null;
+  const parsed = parsedTitle ?? parsedFile;
   if (!parsed) return null;
-  const title = titleReliable ? exactValue(track.title) : parsed.title;
+
+  const title = parsedTitle
+    ? parsedTitle.title
+    : titleReliable
+      ? exactValue(track.title)
+      : parsed.title;
   const artist = artistReliable ? exactValue(track.artist) : parsed.artist;
   if (!title || !artist) return null;
-  const folderAlbum = fileContext?.folderName && reliableMetadata(fileContext.folderName)
+
+  // Pasta pode ser gênero/coleção. Só usamos folderName como pista de álbum
+  // no fallback de filename; um título combinado já fornece identidade
+  // suficiente e não deve perder score por um nome de pasta não relacionado.
+  const folderAlbum = !parsedTitle && fileContext?.folderName && reliableMetadata(fileContext.folderName)
     ? exactValue(fileContext.folderName)
     : '';
   return {
     title,
     artist,
     album: albumReliable ? exactValue(track.album) : folderAlbum,
-    usedFileContext: true,
+    usedFileContext: !parsedTitle && Boolean(parsedFile),
+    usedTitleIdentity: Boolean(parsedTitle),
     fileContext
   };
 }
@@ -611,6 +637,7 @@ export function createMusicBrainzMetadataAnalyzer(options: AnalyzerOptions = {})
           track,
           matchTrack,
           usedFileContext: identity.usedFileContext,
+          usedTitleIdentity: identity.usedTitleIdentity,
           fileContext: identity.fileContext,
           ranked: rankCandidates(matchTrack, candidates)
         });
@@ -640,8 +667,10 @@ export function createMusicBrainzMetadataAnalyzer(options: AnalyzerOptions = {})
         const reasonCodes = new Set(best.reasonCodes);
         const evidence = [...best.evidence];
 
-        if (match.usedFileContext && match.fileContext) {
+        if (match.usedFileContext || match.usedTitleIdentity) {
           reasonCodes.add('metadata-missing');
+        }
+        if (match.usedFileContext && match.fileContext) {
           evidence.push({
             type: 'file-context',
             version: LIBRARY_ASSISTANT_CONTRACT_VERSION,

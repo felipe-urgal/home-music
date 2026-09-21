@@ -35,6 +35,7 @@ import {
   X,
   XCircle
 } from 'lucide-react';
+import { listAdminTracks } from '../admin-tracks-client';
 import {
   cancelLibraryAssistantRun,
   clearLibraryAssistantManagedLyrics,
@@ -368,6 +369,7 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
   const [suggestions, setSuggestions] = useState<LibraryAssistantSuggestion[]>([]);
   const [reviewItems, setReviewItems] = useState<LibraryAssistantReviewItem[]>([]);
   const [progress, setProgress] = useState<LibraryAssistantRunProgress>(EMPTY_PROGRESS);
+  const [libraryCounts, setLibraryCounts] = useState({ total: 0, active: 0, inactive: 0 });
   const [policy, setPolicy] = useState<LibraryAssistantReviewPolicy>(
     () => ({ ...DEFAULT_LIBRARY_ASSISTANT_REVIEW_POLICY })
   );
@@ -474,6 +476,19 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
     }
   }, []);
 
+  const loadLibraryCounts = useCallback(async () => {
+    try {
+      const response = await listAdminTracks();
+      setLibraryCounts({
+        total: response.active + response.inactive,
+        active: response.active,
+        inactive: response.inactive
+      });
+    } catch {
+      // A contagem é informativa e não deve bloquear o Assistente.
+    }
+  }, []);
+
   const loadPolicy = useCallback(async (quiet = false) => {
     const version = ++policyRequestVersion.current;
     if (!quiet) setLoadingPolicy(true);
@@ -526,6 +541,7 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
 
   useEffect(() => {
     void load();
+    void loadLibraryCounts();
     void loadPolicy();
     void loadFingerprintStatus();
     void loadLocalLyricsCapability();
@@ -534,7 +550,7 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
       policyRequestVersion.current += 1;
       fingerprintRequestVersion.current += 1;
     };
-  }, [load, loadFingerprintStatus, loadLocalLyricsCapability, loadPolicy]);
+  }, [load, loadFingerprintStatus, loadLibraryCounts, loadLocalLyricsCapability, loadPolicy]);
 
   useEffect(() => {
     if (!runActive) return;
@@ -927,6 +943,7 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
             disabled={loading || loadingPolicy || mutating || savingPolicy}
             onClick={() => {
               void load();
+              void loadLibraryCounts();
               void loadPolicy();
               void loadFingerprintStatus();
               void loadLocalLyricsCapability();
@@ -990,6 +1007,14 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
             </strong>
             <strong>{progressPercent}%</strong>
           </div>
+          {libraryCounts.total > 0 && (
+            <div className="assistant-admin__library-scope" aria-label="Escopo da biblioteca">
+              <span><strong>{libraryCounts.total.toLocaleString('pt-BR')}</strong> músicas na biblioteca</span>
+              <span>{libraryCounts.active.toLocaleString('pt-BR')} ativas</span>
+              {libraryCounts.inactive > 0 && <span>{libraryCounts.inactive.toLocaleString('pt-BR')} inativas</span>}
+              <span><strong>{totalTracks.toLocaleString('pt-BR')}</strong> nesta análise</span>
+            </div>
+          )}
           <div
             className="assistant-admin__progress-track"
             role="progressbar"
@@ -1268,6 +1293,8 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
           <div className="assistant-admin__operations-section">
             <strong>Agora</strong>
             <dl className="assistant-admin__operations-grid">
+              <div><dt>Biblioteca</dt><dd>{libraryCounts.total > 0 ? libraryCounts.total.toLocaleString('pt-BR') : '—'}</dd></div>
+              <div><dt>Nesta análise</dt><dd>{totalTracks.toLocaleString('pt-BR')}</dd></div>
               <div><dt>Processando</dt><dd>{progress.processing.toLocaleString('pt-BR')}</dd></div>
               <div><dt>Pendentes</dt><dd>{progress.pending.toLocaleString('pt-BR')}</dd></div>
               <div><dt>Em retry</dt><dd>{progress.retry.toLocaleString('pt-BR')}</dd></div>
@@ -1279,7 +1306,7 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
               <p className="assistant-admin__operations-copy">Ainda não há uma análise para acompanhar.</p>
             ) : (
               <p className="assistant-admin__operations-copy">
-                {processedTracks.toLocaleString('pt-BR')} de {totalTracks.toLocaleString('pt-BR')} faixas com pendências concluídas nesta execução.
+                {processedTracks.toLocaleString('pt-BR')} de {totalTracks.toLocaleString('pt-BR')} faixas elegíveis nesta execução concluídas.
                 {observed?.etaMs != null && runActive ? ` Estimativa restante: ${formatDuration(observed.etaMs)}.` : ''}
               </p>
             )}

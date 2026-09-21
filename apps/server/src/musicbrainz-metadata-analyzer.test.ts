@@ -351,6 +351,95 @@ test('metadata ausente pode usar filename seguro como apoio sem enviar path ou e
   )));
 });
 
+test('título combinado recupera artista ausente e permite identificar álbum e capa', async () => {
+  const queries: string[] = [];
+  let coverArtArchiveCalls = 0;
+  const analyzer = createMusicBrainzMetadataAnalyzer({
+    getFileContext: () => ({
+      fileName: 'Legião Urbana - Ainda É Cedo.mp3',
+      folderName: 'Rock nacional'
+    }),
+    fetchImpl: async input => {
+      if (isCaaRequest(input)) {
+        coverArtArchiveCalls += 1;
+        return caaResponse([{
+          id: 'cover-legiao',
+          front: true,
+          image: 'https://coverartarchive.org/release/release-legiao/front',
+          thumbnails: { 500: 'https://coverartarchive.org/release/release-legiao/500' }
+        }]);
+      }
+      const query = new URL(String(input)).searchParams.get('query') ?? '';
+      queries.push(query);
+      return response([recording({
+        id: 'recording-legiao',
+        title: 'Ainda É Cedo',
+        'artist-credit': [{
+          name: 'Legião Urbana',
+          artist: { id: 'artist-legiao', name: 'Legião Urbana' }
+        }],
+        releases: [{
+          id: 'release-legiao',
+          title: 'Legião Urbana',
+          'release-group': { id: 'release-group-legiao' },
+          'artist-credit': [{
+            name: 'Legião Urbana',
+            artist: { id: 'artist-legiao', name: 'Legião Urbana' }
+          }]
+        }]
+      })]);
+    }
+  });
+
+  const drafts = await analyzer.analyze({
+    runId: 'run-title-artist',
+    tracks: [track({
+      title: 'Legião Urbana - Ainda É Cedo',
+      artist: 'Artista desconhecido',
+      album: 'Álbum desconhecido',
+      albumArtist: 'Artista desconhecido',
+      folder: 'Rock nacional',
+      folderPath: 'Rock nacional'
+    })],
+    providers: gateway()
+  });
+
+  assert.equal(queries.length, 1);
+  assert.match(queries[0], /recording:"Ainda É Cedo"/);
+  assert.match(queries[0], /artist:"Legião Urbana"/);
+  assert.doesNotMatch(queries[0], /Legião Urbana - Ainda É Cedo/);
+  assert.equal(coverArtArchiveCalls, 1);
+
+  const metadata = drafts.filter(draft => draft.target.capability === 'metadata');
+  assert.ok(metadata.some(draft => (
+    draft.target.capability === 'metadata'
+    && draft.target.field === 'title'
+    && draft.target.suggestedValue === 'Ainda É Cedo'
+  )));
+  assert.ok(metadata.some(draft => (
+    draft.target.capability === 'metadata'
+    && draft.target.field === 'artist'
+    && draft.target.suggestedValue === 'Legião Urbana'
+  )));
+  assert.ok(metadata.some(draft => (
+    draft.target.capability === 'metadata'
+    && draft.target.field === 'album'
+    && draft.target.suggestedValue === 'Legião Urbana'
+  )));
+  assert.ok(metadata.some(draft => (
+    draft.target.capability === 'metadata'
+    && draft.target.field === 'albumArtist'
+    && draft.target.suggestedValue === 'Legião Urbana'
+  )));
+  assert.ok(metadata.every(draft => draft.reasonCodes.includes('metadata-missing')));
+  assert.ok(metadata.every(draft => draft.confidence === 'high'));
+
+  const artwork = drafts.find(draft => draft.target.capability === 'artwork');
+  assert.ok(artwork && artwork.target.capability === 'artwork');
+  assert.equal(artwork.confidence, 'high');
+  assert.equal(artwork.target.musicBrainzReleaseId, 'release-legiao');
+});
+
 test('filename enganoso ou sem estrutura conservadora não dispara consulta externa', async () => {
   let calls = 0;
   const analyzer = createMusicBrainzMetadataAnalyzer({
