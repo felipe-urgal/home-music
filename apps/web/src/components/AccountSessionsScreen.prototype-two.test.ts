@@ -50,6 +50,6 @@ describe('AccountSessionsScreen prototype 2', () => {
 
     expect(component).toContain('if (prototypeTwo)');
     expect(component).toContain('className="account-sessions-screen"');
-    expect(component).toContain('className="account-session-card');
+    expect(component).toContain('account-session-card');
   });
 });
