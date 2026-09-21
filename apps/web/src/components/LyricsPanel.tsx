@@ -21,6 +21,36 @@ export function findActiveLyricsLineIndex(lyrics: LyricsResponse | null, current
   return index;
 }
 
+export function currentLyricsLineText(lyrics: LyricsResponse | null, currentTime: number) {
+  const index = findActiveLyricsLineIndex(lyrics, currentTime);
+  if (index < 0) return null;
+  const text = lyrics?.lines[index]?.text.trim();
+  return text || null;
+}
+
+export function CurrentLyricsLine({
+  track,
+  currentTime,
+  offlineMode = false
+}: LyricsPanelProps) {
+  const lyrics = useTrackLyrics(track, offlineMode);
+  const activeLine = findActiveLyricsLineIndex(lyrics, currentTime);
+  const text = currentLyricsLineText(lyrics, currentTime);
+
+  if (!lyrics?.synchronized || activeLine < 0 || !text) return null;
+
+  return (
+    <div
+      className="desktop-now-playing-screen__current-lyric"
+      data-testid="desktop-current-lyric"
+      aria-live="polite"
+      aria-atomic="true"
+    >
+      <span key={`${track.id}-${activeLine}`}>{text}</span>
+    </div>
+  );
+}
+
 export function useLyricsAutoFollow<T extends HTMLElement>(
   lyrics: LyricsResponse | null,
   currentTime: number,
