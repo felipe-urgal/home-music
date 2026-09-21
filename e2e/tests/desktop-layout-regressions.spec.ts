@@ -257,20 +257,21 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   const sessionsBackground = await page.locator('.my-account-screen--sessions').evaluate(
     element => getComputedStyle(element).backgroundColor
   );
-  const sessionsColumns = await sessionsV2.locator('.account-sessions-v2__cards').evaluate(element => (
+  const sessionsGrid = sessionsV2.locator('.account-sessions-v2__cards');
+  const sessionsColumns = await sessionsGrid.evaluate(element => (
     getComputedStyle(element).gridTemplateColumns.split(' ').filter(Boolean).length
   ));
+  const sessionsGridBox = await sessionsGrid.boundingBox();
   const currentSessionBox = await currentSessionCard.boundingBox();
-  const firstOtherSessionBox = await sessionsCards.nth(1).boundingBox();
 
   expect(sessionsBox).not.toBeNull();
+  expect(sessionsGridBox).not.toBeNull();
   expect(currentSessionBox).not.toBeNull();
-  expect(firstOtherSessionBox).not.toBeNull();
   expect(sessionsBox!.width).toBeGreaterThanOrEqual(viewport!.width * 0.95);
   expect(sessionsBackground).not.toBe('rgb(247, 247, 249)');
   expect(sessionsBackground).not.toBe('rgb(255, 255, 255)');
   expect(sessionsColumns).toBe(2);
-  expect(currentSessionBox!.width).toBeGreaterThan(firstOtherSessionBox!.width * 1.8);
+  expect(currentSessionBox!.width).toBeGreaterThanOrEqual(sessionsGridBox!.width * 0.98);
 
   await sessionsV2.getByRole('button', { name: 'Minha conta', exact: true }).click();
   await expect(accountV3).toBeVisible();
