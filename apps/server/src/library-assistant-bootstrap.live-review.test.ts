@@ -15,11 +15,11 @@ test('library assistant live review revision boundary keeps assistant apply from
   );
   assert.match(
     bootstrap,
-    /const analysisLibrary = \{[\s\S]*revision: \(\) => projectRevision\(options\.library\.status\(\)\.revision\)/
+    /const analysisLibrary = \{[\s\S]*listTracks: listCoverFillTracks,[\s\S]*revision: \(\) => projectRevision\(options\.library\.status\(\)\.revision\)/
   );
   assert.match(
     bootstrap,
-    /const projectedLibrary = \{[\s\S]*revision: \(\) => options\.projection\.projectRevision\(options\.library\.status\(\)\.revision\)/
+    /const projectedLibrary = \{[\s\S]*listTracks: listCoverFillTracks,[\s\S]*revision: \(\) => options\.projection\.projectRevision\(options\.library\.status\(\)\.revision\)/
   );
   assert.match(bootstrap, /new LibraryAssistantService\(\{[\s\S]*library: analysisLibrary/);
   assert.match(bootstrap, /new LibraryAssistantReviewService\(\{[\s\S]*library: projectedLibrary/);
