@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import type { Track } from '@home-music/shared';
+import type { LibraryAssistantCapability } from '@home-music/shared/library-assistant';
 import { HomeMusicDatabase } from './database.js';
 import { HeavyWorkQueue } from './heavy-work-queue.js';
 import type { IndexedTrack } from './library.js';
@@ -63,7 +64,10 @@ async function withService(
     database: HomeMusicDatabase;
     tracks: Track[];
     setRevision: (value: number) => void;
-  }) => Promise<void>
+  }) => Promise<void>,
+  options: {
+    isTrackEligible?: (capability: LibraryAssistantCapability, track: Track) => boolean;
+  } = {}
 ) {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'home-music-assistant-service-'));
   const databasePath = path.join(directory, 'home-music.db');
@@ -95,7 +99,8 @@ async function withService(
     library: {
       listTracks: () => tracks.map(track => ({ ...track })),
       revision: () => revision
-    }
+    },
+    isTrackEligible: options.isTrackEligible
   });
 
   try {
@@ -204,4 +209,44 @@ test('two analyses of the same snapshot can coexist without sharing mutable run 
     assert.equal(service.getRun(first.id)?.libraryRevision, 1);
     assert.equal(service.getRun(second.id)?.libraryRevision, 1);
   });
+});
+
+
+test('full reanalysis bypasses incremental eligibility and sends every library track to analyzers', async () => {
+  const seenRuns: string[][] = [];
+  const recordingAnalyzer: LibraryAssistantAnalyzer = {
+    id: 'record-full-scope',
+    capability: 'metadata',
+    async analyze({ tracks }) {
+      seenRuns.push(tracks.map(track => track.id));
+      return [];
+    }
+  };
+
+  await withService(
+    [recordingAnalyzer],
+    async ({ service, tracks }) => {
+      tracks.push(publicTrack(indexedTrack({
+        id: 'track-2',
+        title: 'Faixa completa',
+        artist: 'Artista completo',
+        album: 'Álbum completo',
+        albumArtist: 'Artista completo',
+        hasCover: true,
+        filePath: '/music/track-2.mp3'
+      })));
+
+      const incremental = service.startRun('metadata', 'admin-1');
+      await waitFor(() => service.getRun(incremental.id)?.status === 'completed');
+
+      const full = service.startRun('metadata', 'admin-1', { full: true });
+      await waitFor(() => service.getRun(full.id)?.status === 'completed');
+
+      assert.deepEqual(seenRuns[0], ['track-1']);
+      assert.deepEqual(seenRuns[1], ['track-1', 'track-2']);
+    },
+    {
+      isTrackEligible: (_capability, track) => track.id === 'track-1'
+    }
+  );
 });
