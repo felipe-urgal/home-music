@@ -246,6 +246,39 @@
     font-size: 10px;
   }
 
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__waveform-hover-time {
+    position: absolute;
+    z-index: 4;
+    top: 4px;
+    min-width: 44px;
+    padding: 5px 7px;
+    border: 1px solid rgba(231, 209, 187, .16);
+    border-radius: 7px;
+    color: #f4ece6;
+    background: rgba(9, 14, 23, .94);
+    box-shadow: 0 8px 22px rgba(0,0,0,.28);
+    font-size: 10px;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    text-align: center;
+    pointer-events: none;
+    transform: translate(-50%, -100%);
+    backdrop-filter: blur(10px);
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__waveform-hover-time::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    width: 1px;
+    height: 14px;
+    background: var(--now-playing-wave-accent, #ff9f49);
+    transform: translateX(-50%);
+    opacity: .82;
+  }
+
   /* Playlists desktop: remove the editorial split that squeezed the actual library.
      Keep the same visual language, but let the collection use the desktop canvas. */
   #root .desktop-layout[data-offline="false"][data-library-tab="playlists"]:has(.library-header.is-root) .desktop-main-content--library {
@@ -1853,7 +1886,7 @@
     opacity: 1;
     background: linear-gradient(
       90deg,
-      #ff9f49 0 var(--wave-fill, 0%),
+      var(--now-playing-wave-accent, #ff9f49) 0 var(--wave-fill, 0%),
       rgba(85, 84, 95, .58) var(--wave-fill, 0%) 100%
     );
     box-shadow: none;
