@@ -230,6 +230,40 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   expect(accountGridColumns).toBe(3);
   expect(accountProfileRadius).toBeGreaterThanOrEqual(30);
 
+  await accountProfile.click();
+  const profileV1 = page.getByTestId('my-account-profile-prototype-one');
+  const profileInfoGrid = profileV1.locator('.my-account-profile-v1__info-grid');
+  const profileIdentity = profileV1.locator('.my-account-profile-v1__identity');
+
+  await expect(profileV1).toBeVisible();
+  await expect(page.locator('.my-account-profile-page--legacy')).toBeHidden();
+  await expect(profileV1.getByRole('heading', { name: 'Perfil', exact: true })).toBeVisible();
+  await expect(profileV1.getByText('Seus dados, do seu jeito.', { exact: true })).toBeVisible();
+  await expect(profileV1.locator('.my-account-profile-v1__avatar img')).toHaveAttribute('src', '/account-v3-avatar.webp');
+  await expect(profileV1.getByText('Sessão ativa', { exact: true })).toBeVisible();
+  await expect(profileV1.getByText('Informações da conta', { exact: true })).toBeVisible();
+  await expect(profileV1.getByRole('button', { name: 'Alterar senha', exact: true })).toBeVisible();
+  await expect(profileV1.getByRole('button', { name: /Sua conta está protegida/ })).toBeVisible();
+
+  const profileBox = await profileV1.boundingBox();
+  const profileIdentityBox = await profileIdentity.boundingBox();
+  const profileInfoColumns = await profileInfoGrid.evaluate(element => (
+    getComputedStyle(element).gridTemplateColumns.split(' ').filter(Boolean).length
+  ));
+  const profileHeadphones = await profileV1.locator('.my-account-profile-v1__headphones').evaluate(
+    element => getComputedStyle(element).backgroundImage
+  );
+
+  expect(profileBox).not.toBeNull();
+  expect(profileIdentityBox).not.toBeNull();
+  expect(profileBox!.width).toBeGreaterThanOrEqual(viewport!.width * 0.95);
+  expect(profileIdentityBox!.width).toBeGreaterThanOrEqual(profileBox!.width * 0.9);
+  expect(profileInfoColumns).toBe(2);
+  expect(profileHeadphones).toContain('account-v3-headphones.webp');
+
+  await profileV1.getByRole('button', { name: /Minha conta/ }).click();
+  await expect(accountV3).toBeVisible();
+
   await accountV3.getByRole('button', { name: /Administração/ }).click();
   await expect(page.locator('#administration-title')).toHaveText('Administração');
   await expect(playerBar).toBeHidden();
