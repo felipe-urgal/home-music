@@ -325,7 +325,7 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   await profileV1.getByRole('button', { name: /Minha conta/ }).click();
   await expect(accountV3).toBeVisible();
 
-  await accountV3.getByRole('button', { name: 'Apps e integrações', exact: true }).click();
+  await accountV3.getByRole('button', { name: /Apps e integrações/ }).click();
   const appsV2 = page.getByTestId('account-apps-prototype-two');
   const appsCreate = appsV2.locator('.account-apps-v2__create');
   const appsAuthorized = appsV2.locator('.account-apps-v2__authorized');
