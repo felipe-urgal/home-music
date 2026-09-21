@@ -232,31 +232,37 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
 
   await accountV3.getByRole('button', { name: 'Outros dispositivos' }).click();
   const sessionsV2 = page.getByTestId('account-sessions-prototype-two');
-  const sessionsWorkspace = sessionsV2.locator('.account-sessions-v2__workspace');
-  const sessionsSidebar = sessionsV2.locator('.account-sessions-v2__sidebar');
-  const sessionsDetail = sessionsV2.locator('.account-sessions-v2__detail');
+  const sessionsCards = sessionsV2.locator('.account-sessions-v2__card');
+  const currentSessionCard = sessionsV2.locator('.account-sessions-v2__card.is-current');
 
   await expect(sessionsV2).toBeVisible();
-  await expect(sessionsV2.getByText('Mantenha sua conta protegida', { exact: true })).toBeVisible();
-  await expect(sessionsV2.getByRole('heading', { name: 'Sessões em dispositivos', exact: true })).toBeVisible();
-  await expect(sessionsV2.getByRole('button', { name: /Todas \(/ })).toBeVisible();
-  await expect(sessionsV2.getByRole('button', { name: /Este dispositivo \(/ })).toBeVisible();
-  await expect(sessionsV2.getByRole('button', { name: 'Atualizar', exact: true })).toBeVisible();
-  await expect(sessionsSidebar).toBeVisible();
-  await expect(sessionsDetail).toBeVisible();
-  await expect(sessionsDetail.getByRole('heading', { name: 'Este dispositivo', exact: true })).toBeVisible();
-  await expect(sessionsDetail.getByText('Informações da sessão', { exact: true })).toBeVisible();
-  await expect(sessionsDetail.getByText('Esta é a sua sessão atual', { exact: true })).toBeVisible();
+  await expect(sessionsV2.getByRole('button', { name: 'Minha conta', exact: true })).toBeVisible();
+  await expect(sessionsV2.getByLabel('Ajuda')).toBeVisible();
+  await expect(sessionsV2.getByRole('heading', { name: 'Outros dispositivos', exact: true })).toBeVisible();
+  await expect(sessionsV2.getByText('Gerencie as sessões ativas da sua conta.', { exact: true })).toBeVisible();
+  await expect(sessionsV2.getByText('Mantenha sua conta segura', { exact: true })).toBeVisible();
+  await expect(sessionsV2.getByText('Se não reconhecer um dispositivo, encerre a sessão.', { exact: true })).toBeVisible();
+  await expect(sessionsV2.getByRole('heading', { name: 'Sessões ativas', exact: true })).toBeVisible();
+  await expect(sessionsCards.first()).toBeVisible();
+  await expect(currentSessionCard).toContainText('Este dispositivo');
+  await expect(currentSessionCard).toContainText('Atual');
+  await expect(currentSessionCard).toContainText('Ativo agora');
+  await expect(sessionsV2.getByRole('button', { name: 'Encerrar todas as outras sessões', exact: true })).toBeVisible();
+  await expect(sessionsV2.getByText('Isso não afetará este dispositivo.', { exact: true })).toBeVisible();
+  await expect(sessionsV2.locator('.account-sessions-v2__workspace')).toHaveCount(0);
+  await expect(sessionsV2.locator('.account-sessions-v2__sidebar')).toHaveCount(0);
+  await expect(sessionsV2.locator('.account-sessions-v2__detail')).toHaveCount(0);
 
-  const sessionsWorkspaceBox = await sessionsWorkspace.boundingBox();
-  const sessionsSidebarBox = await sessionsSidebar.boundingBox();
-  const sessionsDetailBox = await sessionsDetail.boundingBox();
-  expect(sessionsWorkspaceBox).not.toBeNull();
-  expect(sessionsSidebarBox).not.toBeNull();
-  expect(sessionsDetailBox).not.toBeNull();
-  expect(sessionsDetailBox!.width).toBeGreaterThan(sessionsSidebarBox!.width);
+  const sessionsBox = await sessionsV2.boundingBox();
+  const sessionsBackground = await page.locator('.my-account-screen--sessions').evaluate(
+    element => getComputedStyle(element).backgroundColor
+  );
+  expect(sessionsBox).not.toBeNull();
+  expect(sessionsBox!.width).toBeLessThanOrEqual(765);
+  expect(sessionsBox!.width).toBeGreaterThanOrEqual(600);
+  expect(sessionsBackground).toBe('rgb(247, 247, 249)');
 
-  await page.getByRole('button', { name: 'Voltar', exact: true }).click();
+  await sessionsV2.getByRole('button', { name: 'Minha conta', exact: true }).click();
   await expect(accountV3).toBeVisible();
 
   await accountProfile.click();
