@@ -40,6 +40,39 @@
   transition: opacity 40ms linear, transform 40ms linear;
 }
 
+.now-playing-transition-art.is-polished .now-playing-vinyl__label--outgoing.is-crossfading,
+.now-playing-transition-art.is-polished .now-playing-vinyl__label--incoming {
+  transition-duration: 70ms;
+  transition-timing-function: linear;
+}
+
+.now-playing-transition-art.is-polished .now-playing-vinyl__label--incoming {
+  transition-property: opacity, transform;
+}
+
+.now-playing-transition-copy.is-polished .now-playing-transition-copy__layer--outgoing.is-crossfading,
+.now-playing-transition-copy.is-polished .now-playing-transition-copy__layer--incoming {
+  transition-duration: 70ms;
+  transition-timing-function: linear;
+}
+
+#root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__backdrop-incoming {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: var(--now-playing-backdrop-incoming-opacity, 0);
+  background-image:
+    linear-gradient(90deg, rgba(54, 24, 19, .62), rgba(8, 13, 24, .9)),
+    var(
+      --now-playing-artwork,
+      radial-gradient(circle at 42% 38%, rgba(198, 85, 45, .18), transparent 42rem)
+    );
+  background-position: center;
+  background-size: cover;
+  transition: opacity 70ms linear;
+  will-change: opacity;
+}
+
 /* Remove somente a sombra externa do disco; os detalhes internos continuam dando leitura ao vinil. */
 #root .now-playing-vinyl__disc {
   box-shadow:
@@ -53,8 +86,20 @@
 
 @media (prefers-reduced-motion: reduce) {
   .now-playing-vinyl__label,
-  .now-playing-transition-copy__layer {
+  .now-playing-transition-copy__layer,
+  .desktop-now-playing-screen__backdrop-incoming {
     transition: none !important;
     transform: none !important;
+  }
+
+  .now-playing-transition-art.is-polished .now-playing-vinyl__label--outgoing.is-crossfading,
+  .now-playing-transition-copy.is-polished .now-playing-transition-copy__layer--outgoing.is-crossfading {
+    opacity: 1 !important;
+  }
+
+  .now-playing-transition-art.is-polished .now-playing-vinyl__label--incoming,
+  .now-playing-transition-copy.is-polished .now-playing-transition-copy__layer--incoming,
+  .desktop-now-playing-screen__backdrop-incoming {
+    opacity: 0 !important;
   }
 }
