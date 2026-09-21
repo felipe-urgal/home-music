@@ -51,18 +51,36 @@ test('mobile segue o protótipo 3 na biblioteca, detalhe e player', async ({ pag
   const controls = page.locator('.controls');
   const playerSurface = page.locator('.desktop-layout[data-desktop-active="player"] > .phone-surface');
 
+  const topbar = page.locator('.player-topbar');
+  const artwork = page.locator('.hero-art');
+  const heading = page.locator('.player-track-heading');
+  const progress = page.locator('.progress-wrap');
+
   await expect(player).toBeVisible();
-  await expect(page.locator('.player-topbar').getByRole('button', { name: 'Biblioteca' })).toBeVisible();
-  await expect(page.locator('.player-topbar').getByRole('button', { name: 'Mais opções da faixa' })).toBeVisible();
+  await expect(topbar.getByRole('button', { name: 'Biblioteca' })).toBeVisible();
+  await expect(topbar.getByRole('button', { name: 'Mais opções da faixa' })).toBeVisible();
   await expect(page.locator('.player-hero-play')).toBeVisible();
   await expect(page.locator('.player-hero-play__control')).toBeVisible();
   await expect(controls.getByRole('button', { name: 'Anterior' })).toBeVisible();
   await expect(controls.getByRole('button', { name: 'Pausar' })).toBeHidden();
   await expect(controls.getByRole('button', { name: 'Próxima' })).toBeVisible();
   await expect(controls.getByRole('button', { name: 'Aleatório' })).toBeHidden();
-  await expect(page.locator('.player-mobile-playlist-action')).toBeVisible();
   await expect(controls.getByRole('button', { name: /Repet/ })).toBeHidden();
+  await expect(page.locator('.player-mobile-playlist-action')).toHaveCount(0);
   await expect(page.getByLabel('Progresso da música')).toBeEnabled();
+
+  const boxes = await Promise.all([topbar, artwork, heading, progress, controls].map(locator => locator.boundingBox()));
+  const [topbarBox, artworkBox, headingBox, progressBox, controlsBox] = boxes;
+  expect(topbarBox && artworkBox && headingBox && progressBox && controlsBox).toBeTruthy();
+  expect(artworkBox!.y).toBeGreaterThanOrEqual(topbarBox!.y + topbarBox!.height);
+  expect(artworkBox!.x).toBeGreaterThanOrEqual(20);
+  expect(artworkBox!.width).toBeLessThan(page.viewportSize()!.width - 40);
+  expect(headingBox!.y).toBeGreaterThan(artworkBox!.y + artworkBox!.height);
+  expect(progressBox!.y).toBeGreaterThan(headingBox!.y);
+  expect(controlsBox!.y).toBeGreaterThan(progressBox!.y);
+
+  await topbar.getByRole('button', { name: 'Mais opções da faixa' }).click();
+  await expect(page.getByRole('menu', { name: 'Mais opções da faixa' }).getByText('Adicionar à playlist')).toBeVisible();
 
   const overflow = await playerSurface.evaluate(element => element.scrollHeight - element.clientHeight);
   expect(overflow).toBeLessThanOrEqual(1);
