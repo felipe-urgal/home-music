@@ -204,6 +204,10 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   await expect(accountV3.getByRole('heading', { name: /Seu som,\s*suas escolhas\./ })).toBeVisible();
   await expect(accountV3.getByRole('heading', { name: 'O controle é seu' })).toBeVisible();
   await expect(accountProfile).toBeVisible();
+  await expect(accountProfile.locator('.my-account-v3__avatar img')).toHaveAttribute('src', '/account-v3-avatar.webp');
+  await expect(accountV3.locator('.my-account-v3__aside-quote')).toContainText('Boa música');
+  const headphonesBackground = await accountV3.locator('.my-account-v3__headphones').evaluate(element => getComputedStyle(element).backgroundImage);
+  expect(headphonesBackground).toContain('account-v3-headphones.webp');
   await expect(accountV3.getByRole('button', { name: 'Alterar senha' })).toBeVisible();
   await expect(accountV3.getByRole('button', { name: 'Outros dispositivos' })).toBeVisible();
   await expect(accountV3.getByRole('button', { name: 'Apps e integrações' })).toBeVisible();
