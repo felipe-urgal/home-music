@@ -100,22 +100,27 @@ export function normalizeCoverArtArchiveRelease(payload: unknown): CoverArtArchi
   return null;
 }
 
-export async function findCoverArtArchiveFrontCover(options: {
-  releaseId: string;
+type CoverArtArchiveLookupOptions = {
   providers: LibraryAssistantProviderGateway;
   fetchImpl?: FetchLike;
   userAgent?: string;
   signal?: AbortSignal;
-}) {
-  const releaseId = safeId(options.releaseId);
-  if (!releaseId) return null;
+};
+
+async function findCoverArtArchiveFrontCoverByEntity(
+  entity: 'release' | 'release-group',
+  rawId: string,
+  options: CoverArtArchiveLookupOptions
+) {
+  const id = safeId(rawId);
+  if (!id) return null;
   const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
   const userAgent = options.userAgent ?? COVER_ART_ARCHIVE_USER_AGENT;
-  const url = new URL(`/release/${releaseId}`, COVER_ART_ARCHIVE_BASE_URL);
+  const url = new URL(`/${entity}/${id}`, COVER_ART_ARCHIVE_BASE_URL);
 
   const result = await options.providers.query({
     provider: { source: 'cover-art-archive', version: COVER_ART_ARCHIVE_PROVIDER_VERSION, userAgent },
-    cacheKey: `release:${releaseId}`,
+    cacheKey: `${entity}:${id}`,
     ttlMs: COVER_ART_ARCHIVE_CACHE_TTL_MS,
     signal: options.signal,
     execute: async ({ signal: providerSignal, userAgent: providerUserAgent }) => {
@@ -156,6 +161,18 @@ export async function findCoverArtArchiveFrontCover(options: {
   });
 
   return result.value;
+}
+
+export function findCoverArtArchiveFrontCover(options: {
+  releaseId: string;
+} & CoverArtArchiveLookupOptions) {
+  return findCoverArtArchiveFrontCoverByEntity('release', options.releaseId, options);
+}
+
+export function findCoverArtArchiveReleaseGroupFrontCover(options: {
+  releaseGroupId: string;
+} & CoverArtArchiveLookupOptions) {
+  return findCoverArtArchiveFrontCoverByEntity('release-group', options.releaseGroupId, options);
 }
 
 function normalizeRedirectLocation(base: URL, value: string | null) {
