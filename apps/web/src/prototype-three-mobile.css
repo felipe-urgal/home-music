@@ -45,6 +45,7 @@
   #root .desktop-layout[data-offline="false"] .player-screen-immersive {
     position: relative;
     width: 100%;
+    margin: 0;
     isolation: isolate;
     background: #05080d;
   }
