@@ -142,6 +142,9 @@
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__content {
     width: 100%;
     max-width: 560px;
+    max-height: none;
+    padding-right: 0;
+    overflow: visible;
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__heading h1 {
@@ -155,9 +158,78 @@
     line-height: 1.4;
   }
 
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__current-lyric {
+    position: relative;
+    width: min(100%, 560px);
+    min-height: 62px;
+    margin-top: 20px;
+    display: grid;
+    place-items: center;
+    padding: 14px 20px;
+    overflow: hidden;
+    text-align: center;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__current-lyric::before,
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__current-lyric::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 1px;
+    pointer-events: none;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 154, 72, .16) 18%,
+      rgba(255, 160, 79, .48) 50%,
+      rgba(255, 154, 72, .16) 82%,
+      transparent 100%
+    );
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__current-lyric::before {
+    top: 0;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__current-lyric::after {
+    bottom: 0;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__current-lyric > span {
+    width: 100%;
+    overflow: hidden;
+    color: #f2a25e;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: clamp(19px, 1.45vw, 24px);
+    font-style: italic;
+    font-weight: 500;
+    line-height: 1.2;
+    letter-spacing: .01em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-shadow: 0 0 22px rgba(255, 144, 67, .08);
+    animation: desktop-current-lyric-in 180ms ease-out;
+  }
+
+  @keyframes desktop-current-lyric-in {
+    from {
+      opacity: 0;
+      transform: translateY(3px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__waveform-progress {
     width: min(100%, 440px);
     margin-top: 28px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__current-lyric + .desktop-now-playing-screen__waveform-progress {
+    margin-top: 20px;
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__waveform {
