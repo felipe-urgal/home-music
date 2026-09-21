@@ -61,11 +61,13 @@ export function LibraryContent({
     pagedFolders,
     enterFolder,
     selectPlaylist,
+    selectTab,
     changeSort,
     showMore
   } = navigation;
   const desktopLayout = useDesktopLayout();
   const [playlistOrder, setPlaylistOrder] = useState<PlaylistOrder>('recent');
+  const [showAllMobileFolders, setShowAllMobileFolders] = useState(false);
   const folderSort = sort === 'title-desc' ? 'title-desc' : 'title-asc';
   const run = (operation: Promise<unknown>) => void operation.catch(() => undefined);
   const tracksById = useMemo(() => new Map(tracks.map(track => [track.id, track])), [tracks]);
@@ -78,8 +80,8 @@ export function LibraryContent({
     return result;
   }, [playlistOrder, playlists]);
 
-  function renderPlaylistCards() {
-    return orderedPlaylists.map(playlist => {
+  function renderPlaylistCards(items: Playlist[] = orderedPlaylists) {
+    return items.map(playlist => {
       const contextTracks = playlist.trackIds
         .map(trackId => tracksById.get(trackId))
         .filter((track): track is Track => Boolean(track));
@@ -137,9 +139,64 @@ export function LibraryContent({
     return <div className="group-list playlist-visual-grid">{renderPlaylistCards()}</div>;
   }
 
+  const mobileLibraryHome = !desktopLayout && libraryTab === 'folders' && !folderPath && !query;
+  const mobileHomeFolders = (showAllMobileFolders ? visibleFolders : visibleFolders.slice(0, 3));
+  const mobileHomePlaylists = orderedPlaylists.slice(0, 3);
+
   return (
     <section className="library-content">
-      {libraryTab === 'folders' ? (
+      {mobileLibraryHome ? (
+        <div className="mobile-library-home" data-testid="mobile-library-home">
+          <section className="mobile-library-home__section">
+            <header className="mobile-library-home__heading">
+              <strong>Pastas</strong>
+              {!showAllMobileFolders && visibleFolders.length > 3 && (
+                <button type="button" onClick={() => setShowAllMobileFolders(true)}>
+                  Ver todas <ChevronRight aria-hidden="true" />
+                </button>
+              )}
+            </header>
+            <div className="mobile-library-home__folders">
+              {mobileHomeFolders.map(folder => (
+                <button
+                  className="mobile-library-home__folder"
+                  key={folder.path}
+                  type="button"
+                  aria-label={`Abrir ${folder.name}, ${folder.matchingTrackCount} músicas`}
+                  onClick={() => enterFolder(folder.path)}
+                >
+                  <Artwork track={folder.artwork} />
+                  <span>
+                    <strong>{folder.name}</strong>
+                    <small>{folder.matchingTrackCount} músicas</small>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section className="mobile-library-home__section">
+            <header className="mobile-library-home__heading">
+              <strong>Playlists</strong>
+              {orderedPlaylists.length > 0 && (
+                <button type="button" onClick={() => selectTab('playlists')}>
+                  Ver todas <ChevronRight aria-hidden="true" />
+                </button>
+              )}
+            </header>
+            {mobileHomePlaylists.length ? (
+              <div className="mobile-library-home__playlists">
+                {renderPlaylistCards(mobileHomePlaylists)}
+              </div>
+            ) : (
+              <button className="mobile-library-home__empty-playlist" type="button" onClick={() => run(onCreatePlaylist())}>
+                <Plus aria-hidden="true" />
+                <span>Criar playlist</span>
+              </button>
+            )}
+          </section>
+        </div>
+      ) : libraryTab === 'folders' ? (
         <>
           {folderContextTracks.length > 0 && folderPath && !desktopLayout && (
             <button className="play-all" onClick={() => onPlayTrack(folderContextTracks[0], folderContextTracks)}><Play />Tocar tudo <span>{folderContextTracks.length}</span></button>
