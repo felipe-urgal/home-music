@@ -801,15 +801,7 @@ export function MyAccountScreen({
           busySessionId={busySessionId}
           revokingAll={revokingSessions}
           prototypeTwo={useSessionsPrototypeTwo}
-          onRefresh={() => {
-            if (loadingSessions) return;
-            setLoadingSessions(true);
-            setError(null);
-            void listOwnSessions()
-              .then(items => setSessions(items))
-              .catch(error => setError(errorMessage(error)))
-              .finally(() => setLoadingSessions(false));
-          }}
+          onBack={goBack}
           onRevokeOne={session => void revokeOne(session)}
           onRevokeOthers={() => void revokeOthers()}
         />
