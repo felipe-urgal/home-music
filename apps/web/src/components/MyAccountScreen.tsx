@@ -77,6 +77,7 @@ export function MyAccountScreen({
   const desktopLayout = useDesktopLayout();
   const tvMode = typeof document !== 'undefined' && document.documentElement.dataset.tvMode === 'true';
   const usePasswordPrototypeThree = desktopLayout && !tvMode;
+  const useSessionsPrototypeTwo = desktopLayout && !tvMode;
   const [view, setView] = useState<AccountView>('overview');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -799,6 +800,16 @@ export function MyAccountScreen({
           loading={loadingSessions}
           busySessionId={busySessionId}
           revokingAll={revokingSessions}
+          prototypeTwo={useSessionsPrototypeTwo}
+          onRefresh={() => {
+            if (loadingSessions) return;
+            setLoadingSessions(true);
+            setError(null);
+            void listOwnSessions()
+              .then(items => setSessions(items))
+              .catch(error => setError(errorMessage(error)))
+              .finally(() => setLoadingSessions(false));
+          }}
           onRevokeOne={session => void revokeOne(session)}
           onRevokeOthers={() => void revokeOthers()}
         />
