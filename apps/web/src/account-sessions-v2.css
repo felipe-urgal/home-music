@@ -1,5 +1,5 @@
-/* Outros dispositivos — protótipo 2 aprovado.
-   Desktop reproduz a tela clara com cards detalhados.
+/* Outros dispositivos — versão desktop ampla.
+   Mantém a estrutura de cards do protótipo 2, mas integrada ao tema escuro do Home Music.
    Mobile e TV continuam usando o fluxo legado. */
 
 @media (min-width: 1024px) {
@@ -9,9 +9,11 @@
     min-height: calc(100vh - 56px);
     margin: 0;
     padding: 0;
+    color: #eef3f8;
     background:
-      radial-gradient(circle at 50% 0%, rgba(111, 82, 214, .035), transparent 24%),
-      #f7f7f9;
+      radial-gradient(ellipse at 78% 10%, rgba(52, 76, 130, .14), transparent 32%),
+      radial-gradient(ellipse at 8% 62%, rgba(54, 39, 86, .10), transparent 36%),
+      linear-gradient(145deg, #08111d 0%, #091522 52%, #070d16 100%);
   }
 
   #root .desktop-layout[data-offline="false"] .my-account-screen--sessions > .my-account-header {
@@ -19,92 +21,105 @@
   }
 
   #root .desktop-layout[data-offline="false"] .my-account-screen--sessions > .my-account-message {
-    width: min(calc(100% - 48px), 760px);
-    margin: 12px auto 0;
+    width: calc(100% - 48px);
+    margin: 14px 24px 0;
   }
 
   #root .desktop-layout[data-offline="false"] .account-sessions-v2 {
-    width: min(calc(100% - 48px), 760px);
+    width: calc(100% - 36px);
     min-width: 0;
+    min-height: calc(100vh - 92px);
     display: grid;
     align-content: start;
-    gap: 0;
-    margin: 0 auto;
-    padding: 24px 0 46px;
-    color: #171b25;
+    gap: 18px;
+    margin: 18px;
+    padding: 0 30px 30px;
+    overflow: hidden;
+    border: 1px solid rgba(81, 104, 130, .34);
+    border-radius: 16px;
+    color: #edf3f8;
+    background:
+      radial-gradient(circle at 87% 2%, rgba(68, 72, 135, .10), transparent 25%),
+      linear-gradient(180deg, rgba(10, 22, 36, .98), rgba(7, 17, 28, .98));
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.018),
+      0 18px 46px rgba(0,0,0,.14);
   }
 
   #root .desktop-layout[data-offline="false"] .account-sessions-v2__topbar {
-    min-height: 38px;
+    min-height: 64px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 25px;
+    margin-inline: -30px;
+    padding-inline: 30px;
+    border-bottom: 1px solid rgba(75, 96, 118, .25);
   }
 
   #root .desktop-layout[data-offline="false"] .account-sessions-v2__topbar > button {
-    min-height: 34px;
+    min-height: 36px;
     display: inline-flex;
     align-items: center;
     gap: 10px;
     padding: 0;
     border: 0;
     background: transparent;
-    color: #171b25;
+    color: #edf2f7;
     font: inherit;
-    font-size: 13px;
-    font-weight: 700;
+    font-size: 14px;
+    font-weight: 680;
     cursor: pointer;
   }
 
   #root .desktop-layout[data-offline="false"] .account-sessions-v2__topbar > button:hover {
-    color: #5639ce;
+    color: #fff;
   }
 
   #root .desktop-layout[data-offline="false"] .account-sessions-v2__topbar > button svg {
-    width: 17px;
-    height: 17px;
+    width: 19px;
+    height: 19px;
     stroke-width: 1.9;
   }
 
   #root .desktop-layout[data-offline="false"] .account-sessions-v2__help {
-    min-height: 36px;
+    min-height: 38px;
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    padding: 0 12px;
-    border: 1px solid #e4e5ea;
+    padding: 0 14px;
+    border: 1px solid rgba(107, 126, 148, .30);
     border-radius: 10px;
-    background: #fff;
-    color: #5a41cf;
-    box-shadow: 0 4px 14px rgba(30, 29, 45, .045);
-    font-size: 11px;
+    background: rgba(22, 34, 49, .74);
+    color: #dfe8f2;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.02);
+    font-size: 12px;
     font-weight: 650;
   }
 
   #root .desktop-layout[data-offline="false"] .account-sessions-v2__help svg {
     width: 16px;
     height: 16px;
+    color: #9c8bff;
   }
 
   #root .desktop-layout[data-offline="false"] .account-sessions-v2__intro {
     display: grid;
     gap: 8px;
-    margin-bottom: 27px;
+    padding: 8px 2px 0;
   }
 
   #root .desktop-layout[data-offline="false"] .account-sessions-v2__intro h1 {
     margin: 0;
-    color: #171b25;
-    font-size: 31px;
+    color: #f6f7f9;
+    font-size: 34px;
     font-weight: 790;
-    line-height: 1.08;
+    line-height: 1.06;
     letter-spacing: -.035em;
   }
 
   #root .desktop-layout[data-offline="false"] .account-sessions-v2__intro p {
     margin: 0;
-    color: #727b8d;
+    color: #8fa0b4;
     font-size: 13px;
     line-height: 1.45;
   }
@@ -112,28 +127,30 @@
   #root .desktop-layout[data-offline="false"] .account-sessions-v2__security {
     min-height: 78px;
     display: grid;
-    grid-template-columns: 44px minmax(0, 1fr);
+    grid-template-columns: 48px minmax(0, 1fr);
     align-items: center;
     gap: 15px;
-    margin-bottom: 26px;
     padding: 15px 18px;
-    border: 1px solid #eeeafb;
-    border-radius: 11px;
+    border: 1px solid rgba(99, 79, 212, .35);
+    border-radius: 12px;
     background:
-      linear-gradient(90deg, #f4f1ff, #f8f6ff);
+      radial-gradient(circle at 92% 20%, rgba(89, 66, 186, .10), transparent 34%),
+      linear-gradient(90deg, rgba(40, 33, 78, .62), rgba(20, 29, 45, .74));
   }
 
   #root .desktop-layout[data-offline="false"] .account-sessions-v2__security-icon {
-    width: 40px;
-    height: 40px;
+    width: 44px;
+    height: 44px;
     display: grid;
     place-items: center;
-    color: #6848e7;
+    border-radius: 11px;
+    color: #9d89ff;
+    background: rgba(88, 66, 185, .18);
   }
 
   #root .desktop-layout[data-offline="false"] .account-sessions-v2__security-icon svg {
-    width: 26px;
-    height: 26px;
+    width: 25px;
+    height: 25px;
     stroke-width: 1.9;
   }
 
@@ -144,13 +161,13 @@
   }
 
   #root .desktop-layout[data-offline="false"] .account-sessions-v2__security strong {
-    color: #20222b;
-    font-size: 13px;
+    color: #f0f2f7;
+    font-size: 14px;
     font-weight: 740;
   }
 
   #root .desktop-layout[data-offline="false"] .account-sessions-v2__security small {
-    color: #666f80;
+    color: #9ca8b8;
     font-size: 11px;
     line-height: 1.4;
   }
@@ -158,45 +175,61 @@
   #root .desktop-layout[data-offline="false"] .account-sessions-v2__sessions {
     display: grid;
     gap: 12px;
+    min-width: 0;
   }
 
   #root .desktop-layout[data-offline="false"] .account-sessions-v2__sessions h2 {
-    margin: 0 0 1px;
-    color: #1b1f28;
-    font-size: 14px;
+    margin: 0;
+    color: #f2f4f7;
+    font-size: 15px;
     font-weight: 760;
   }
 
   #root .desktop-layout[data-offline="false"] .account-sessions-v2__cards {
     display: grid;
-    gap: 9px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
   }
 
   #root .desktop-layout[data-offline="false"] .account-sessions-v2__card {
     position: relative;
-    min-height: 108px;
+    min-width: 0;
+    min-height: 118px;
     display: grid;
-    grid-template-columns: 58px minmax(0, 1fr) 48px;
+    grid-template-columns: 60px minmax(0, 1fr) 48px;
     align-items: center;
-    gap: 15px;
-    padding: 17px 18px;
-    border: 1px solid #e5e6ea;
-    border-radius: 11px;
-    background: rgba(255,255,255,.98);
+    gap: 16px;
+    padding: 18px 19px;
+    border: 1px solid rgba(72, 94, 118, .36);
+    border-radius: 12px;
+    background:
+      linear-gradient(180deg, rgba(17, 31, 46, .94), rgba(13, 26, 40, .96));
     box-shadow:
-      0 8px 24px rgba(29, 31, 42, .055),
-      inset 0 1px 0 rgba(255,255,255,.88);
+      inset 0 1px 0 rgba(255,255,255,.018),
+      0 8px 22px rgba(0,0,0,.08);
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2__card.is-current {
+    grid-column: 1 / -1;
+    min-height: 126px;
+    border-color: rgba(89, 106, 216, .62);
+    background:
+      radial-gradient(circle at 7% 50%, rgba(75, 75, 192, .18), transparent 26%),
+      linear-gradient(180deg, rgba(21, 35, 55, .98), rgba(15, 28, 44, .98));
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.022),
+      0 10px 28px rgba(0,0,0,.10);
   }
 
   #root .desktop-layout[data-offline="false"] .account-sessions-v2__device {
-    width: 54px;
-    height: 54px;
+    width: 56px;
+    height: 56px;
     display: grid;
     place-items: center;
     border-radius: 50%;
-    color: #6445e0;
+    color: #b2a5ff;
     background:
-      radial-gradient(circle at 35% 30%, #f2efff, #e9e4ff);
+      radial-gradient(circle at 35% 30%, rgba(111, 91, 232, .30), rgba(56, 47, 130, .38));
   }
 
   #root .desktop-layout[data-offline="false"] .account-sessions-v2__device svg {
@@ -220,8 +253,8 @@
 
   #root .desktop-layout[data-offline="false"] .account-sessions-v2__title-row strong {
     overflow: hidden;
-    color: #1e222c;
-    font-size: 13px;
+    color: #f3f5f8;
+    font-size: 14px;
     font-weight: 750;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -230,9 +263,10 @@
   #root .desktop-layout[data-offline="false"] .account-sessions-v2__title-row em {
     flex: 0 0 auto;
     padding: 4px 8px;
+    border: 1px solid rgba(136, 115, 255, .18);
     border-radius: 999px;
-    background: #e9e2ff;
-    color: #6245d8;
+    background: rgba(98, 70, 214, .34);
+    color: #c5bbff;
     font-size: 9px;
     font-style: normal;
     font-weight: 760;
@@ -241,33 +275,33 @@
   #root .desktop-layout[data-offline="false"] .account-sessions-v2__card-copy > span:not(.account-sessions-v2__title-row),
   #root .desktop-layout[data-offline="false"] .account-sessions-v2__card-copy small {
     overflow: hidden;
-    color: #667083;
+    color: #8d9caf;
     font-size: 10px;
-    line-height: 1.35;
+    line-height: 1.38;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   #root .desktop-layout[data-offline="false"] .account-sessions-v2__card-copy small.is-active {
-    color: #27a458;
-    font-weight: 650;
+    color: #55d992;
+    font-weight: 670;
   }
 
   #root .desktop-layout[data-offline="false"] .account-sessions-v2__verified {
-    width: 42px;
-    height: 42px;
+    width: 44px;
+    height: 44px;
     display: grid;
     place-items: center;
     justify-self: end;
-    border-radius: 10px;
-    color: #25a45a;
-    background: #f2faf5;
+    border-radius: 11px;
+    color: #54d88e;
+    background: rgba(22, 105, 70, .22);
   }
 
   #root .desktop-layout[data-offline="false"] .account-sessions-v2__verified svg {
-    width: 21px;
-    height: 21px;
-    fill: rgba(37,164,90,.09);
+    width: 22px;
+    height: 22px;
+    fill: rgba(84,216,142,.08);
   }
 
   #root .desktop-layout[data-offline="false"] .account-sessions-v2__menu {
@@ -276,22 +310,22 @@
   }
 
   #root .desktop-layout[data-offline="false"] .account-sessions-v2__menu > button {
-    width: 42px;
-    height: 42px;
+    width: 44px;
+    height: 44px;
     display: grid;
     place-items: center;
     padding: 0;
-    border: 1px solid #e6e8ec;
+    border: 1px solid rgba(87, 107, 128, .38);
     border-radius: 10px;
-    background: #fff;
-    color: #1d222c;
+    background: rgba(20, 32, 46, .82);
+    color: #d3dbe5;
     cursor: pointer;
   }
 
   #root .desktop-layout[data-offline="false"] .account-sessions-v2__menu > button:hover {
-    border-color: #cfc9eb;
-    background: #faf9ff;
-    color: #5e43d1;
+    border-color: rgba(126, 105, 232, .58);
+    background: rgba(38, 39, 72, .72);
+    color: #fff;
   }
 
   #root .desktop-layout[data-offline="false"] .account-sessions-v2__menu > button svg {
@@ -301,20 +335,20 @@
 
   #root .desktop-layout[data-offline="false"] .account-sessions-v2__menu-popover {
     position: absolute;
-    z-index: 20;
+    z-index: 30;
     top: calc(100% + 7px);
     right: 0;
-    min-width: 166px;
+    min-width: 172px;
     padding: 6px;
-    border: 1px solid #e3e4e8;
+    border: 1px solid rgba(83, 103, 124, .44);
     border-radius: 10px;
-    background: #fff;
-    box-shadow: 0 14px 32px rgba(28, 27, 37, .14);
+    background: #111d2b;
+    box-shadow: 0 16px 36px rgba(0,0,0,.34);
   }
 
   #root .desktop-layout[data-offline="false"] .account-sessions-v2__menu-popover button {
     width: 100%;
-    min-height: 38px;
+    min-height: 40px;
     display: flex;
     align-items: center;
     gap: 9px;
@@ -322,16 +356,16 @@
     border: 0;
     border-radius: 7px;
     background: transparent;
-    color: #e54855;
+    color: #ff6b78;
     font: inherit;
     font-size: 10px;
-    font-weight: 680;
+    font-weight: 690;
     text-align: left;
     cursor: pointer;
   }
 
   #root .desktop-layout[data-offline="false"] .account-sessions-v2__menu-popover button:hover:not(:disabled) {
-    background: #fff3f4;
+    background: rgba(117, 38, 49, .22);
   }
 
   #root .desktop-layout[data-offline="false"] .account-sessions-v2__menu-popover button:disabled {
@@ -345,14 +379,14 @@
   }
 
   #root .desktop-layout[data-offline="false"] .account-sessions-v2__state {
-    min-height: 116px;
+    min-height: 130px;
     display: grid;
     place-items: center;
     padding: 20px;
-    border: 1px solid #e5e6ea;
-    border-radius: 11px;
-    background: #fff;
-    color: #7a8494;
+    border: 1px solid rgba(72, 94, 118, .34);
+    border-radius: 12px;
+    background: rgba(14, 27, 41, .86);
+    color: #8d9caf;
     font-size: 11px;
     text-align: center;
   }
@@ -360,29 +394,29 @@
   #root .desktop-layout[data-offline="false"] .account-sessions-v2__footer {
     display: grid;
     gap: 14px;
-    margin-top: 31px;
+    margin-top: 2px;
   }
 
   #root .desktop-layout[data-offline="false"] .account-sessions-v2__revoke-all {
-    min-height: 52px;
+    min-height: 54px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 10px;
     width: 100%;
     padding: 0 18px;
-    border: 1px solid #ff5161;
-    border-radius: 9px;
-    background: transparent;
-    color: #f33c4e;
+    border: 1px solid rgba(255, 80, 96, .84);
+    border-radius: 10px;
+    background: rgba(79, 24, 33, .20);
+    color: #ff6675;
     font: inherit;
     font-size: 12px;
-    font-weight: 720;
+    font-weight: 730;
     cursor: pointer;
   }
 
   #root .desktop-layout[data-offline="false"] .account-sessions-v2__revoke-all:hover:not(:disabled) {
-    background: #fff3f4;
+    background: rgba(111, 31, 43, .30);
   }
 
   #root .desktop-layout[data-offline="false"] .account-sessions-v2__revoke-all:disabled {
@@ -400,7 +434,7 @@
     align-items: center;
     justify-content: center;
     gap: 9px;
-    color: #6f7888;
+    color: #7f8fa2;
     font-size: 10px;
   }
 
@@ -410,8 +444,21 @@
   }
 }
 
-@media (min-width: 1024px) and (max-width: 1240px) {
+@media (min-width: 1024px) and (max-width: 1260px) {
   #root .desktop-layout[data-offline="false"] .account-sessions-v2 {
-    width: min(calc(100% - 40px), 700px);
+    padding-inline: 22px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2__topbar {
+    margin-inline: -22px;
+    padding-inline: 22px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2__cards {
+    grid-template-columns: 1fr;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2__card.is-current {
+    grid-column: auto;
   }
 }
