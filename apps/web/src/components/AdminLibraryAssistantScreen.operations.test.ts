@@ -87,6 +87,17 @@ describe('AdminLibraryAssistantScreen operational workflow', () => {
     expect(screen).toMatch(/<button autoFocus/);
   });
 
+  it('diferencia o total da biblioteca do escopo elegível da execução', () => {
+    const screen = source();
+
+    expect(screen).toMatch(/listAdminTracks/);
+    expect(screen).toContain('músicas na biblioteca');
+    expect(screen).toContain('nesta análise');
+    expect(screen).toContain('<dt>Biblioteca</dt>');
+    expect(screen).toContain('<dt>Nesta análise</dt>');
+    expect(screen).toContain('faixas elegíveis nesta execução concluídas');
+  });
+
   it('não mostra 100% enquanto ainda existem faixas por concluir', () => {
     const screen = source();
 
