@@ -1784,34 +1784,59 @@
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__cover-play {
     position: absolute;
     z-index: 8;
-    right: 16px;
-    bottom: 16px;
-    width: 58px;
-    height: 58px;
-    padding: 0;
-    display: grid;
-    place-items: center;
-    border: 2px solid rgba(255, 220, 166, .92);
-    border-radius: 50%;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    padding: 16px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-end;
+    border: 0;
+    border-radius: 13px;
     color: #fff2df;
-    background: rgba(8, 13, 21, .82);
-    box-shadow:
-      0 0 0 4px rgba(7, 11, 18, .64),
-      0 12px 28px rgba(0, 0, 0, .32);
-    backdrop-filter: blur(12px);
+    background: transparent;
     cursor: pointer;
-    transition: transform 140ms ease, background 140ms ease, border-color 140ms ease;
   }
 
-  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__cover-play:hover {
-    transform: translateY(-1px) scale(1.03);
-    border-color: #ffd79c;
-    background: rgba(18, 22, 30, .92);
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__cover-play::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: rgba(0, 0, 0, 0);
+    transition: background 140ms ease;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__cover-play:hover::before {
+    background: rgba(0, 0, 0, .035);
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__cover-play:focus-visible {
     outline: 2px solid rgba(255, 216, 158, .72);
     outline-offset: 4px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__cover-play-icon {
+    position: relative;
+    z-index: 1;
+    width: 58px;
+    height: 58px;
+    display: grid;
+    place-items: center;
+    border: 2px solid rgba(255, 220, 166, .92);
+    border-radius: 50%;
+    background: rgba(8, 13, 21, .82);
+    box-shadow:
+      0 0 0 4px rgba(7, 11, 18, .64),
+      0 12px 28px rgba(0, 0, 0, .32);
+    backdrop-filter: blur(12px);
+    transition: transform 140ms ease, background 140ms ease, border-color 140ms ease;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__cover-play:hover .desktop-now-playing-screen__cover-play-icon {
+    transform: translateY(-1px) scale(1.03);
+    border-color: #ffd79c;
+    background: rgba(18, 22, 30, .92);
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__cover-play svg {
