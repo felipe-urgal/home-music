@@ -68,16 +68,19 @@ test('mobile segue o protótipo 3 na biblioteca, detalhe e player', async ({ pag
   await expect(page.locator('.player-mobile-playlist-action')).toHaveCount(0);
   await expect(page.getByLabel('Progresso da música')).toBeEnabled();
   await expect(nextTrackCard).toBeVisible();
-  await expect(nextTrackCard).toHaveAttribute('aria-label', /Próxima música:/);
+  await expect(nextTrackCard).toHaveAttribute('aria-label', /Tocar próxima música:/);
 
+  const viewport = page.viewportSize()!;
   const boxes = await Promise.all([artwork, heading, progress, nextTrackCard].map(locator => locator.boundingBox()));
   const [artworkBox, headingBox, progressBox, nextCardBox] = boxes;
   expect(artworkBox && headingBox && progressBox && nextCardBox).toBeTruthy();
   expect(artworkBox!.x).toBeLessThanOrEqual(1);
-  expect(artworkBox!.width).toBeGreaterThanOrEqual(page.viewportSize()!.width - 1);
+  expect(artworkBox!.width).toBeGreaterThanOrEqual(viewport.width - 1);
+  expect(artworkBox!.height).toBeGreaterThanOrEqual(viewport.height * 0.6);
   expect(headingBox!.y).toBeGreaterThan(artworkBox!.y + artworkBox!.height - 16);
   expect(progressBox!.y).toBeGreaterThan(headingBox!.y);
   expect(nextCardBox!.y).toBeGreaterThan(progressBox!.y);
+  expect(viewport.height - (nextCardBox!.y + nextCardBox!.height)).toBeLessThanOrEqual(32);
 
   if (await heroPlay.getAttribute('aria-label') === 'Tocar pela capa') {
     await heroPlay.click();
@@ -85,10 +88,13 @@ test('mobile segue o protótipo 3 na biblioteca, detalhe e player', async ({ pag
   await expect(heroPlay).toHaveAttribute('aria-label', 'Pausar pela capa');
   await expect(heroControl).toHaveClass(/is-hidden/, { timeout: 3_000 });
 
+  const nextTrackLabel = await nextTrackCard.getAttribute('aria-label');
+  const nextTrackTitle = nextTrackLabel?.replace('Tocar próxima música: ', '');
+  expect(nextTrackTitle).toBeTruthy();
+
   await nextTrackCard.click();
-  await expect(page.getByRole('dialog', { name: 'Fila de reprodução' })).toBeVisible();
-  await page.getByRole('button', { name: 'Fechar fila' }).last().click();
-  await expect(page.getByRole('dialog', { name: 'Fila de reprodução' })).toBeHidden();
+  await expect(page.getByRole('dialog', { name: 'Fila de reprodução' })).toHaveCount(0);
+  await expect(heading.locator('h1')).toHaveText(nextTrackTitle!);
 
   await topbar.getByRole('button', { name: 'Mais opções da faixa' }).click();
   await expect(page.getByRole('menu', { name: 'Mais opções da faixa' }).getByText('Adicionar à playlist')).toBeVisible();
