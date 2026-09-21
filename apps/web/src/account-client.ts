@@ -5,7 +5,7 @@ import type {
 } from '@home-music/shared/open-subsonic';
 import { apiFetch } from './api-client';
 
-export const MIN_ACCOUNT_PASSWORD_CHARACTERS = 12;
+export const MIN_ACCOUNT_PASSWORD_CHARACTERS = 6;
 const MAX_ACCOUNT_PASSWORD_BYTES = 1024;
 
 export type AccountSession = {
