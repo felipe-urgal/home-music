@@ -79,6 +79,8 @@
     display: inline-flex;
     align-items: center;
     gap: 3px;
+    visibility: visible !important;
+    pointer-events: auto !important;
     color: #f7f9fc;
     background: transparent;
     font-size: 13px;
@@ -406,7 +408,6 @@
   }
 
   #root .desktop-layout[data-offline="false"] .phone-surface:has(.mobile-library-home) .library-tabs,
-  #root .desktop-layout[data-offline="false"] .phone-surface:has(.mobile-library-home) .library-smart-view-tools,
   #root .desktop-layout[data-offline="false"] .phone-surface:has(.mobile-library-home) .library-status {
     display: none !important;
   }
