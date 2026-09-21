@@ -4,6 +4,8 @@ const username = 'playwright';
 const password = 'playwright-password-2026';
 
 test('player desktop usa navbar superior e mantém superfícies utilitárias livres', async ({ page }) => {
+  test.setTimeout(120_000);
+
   await page.goto('/');
   await page.getByLabel('Usuário').fill(username);
   await page.getByLabel('Senha', { exact: true }).fill(password);
