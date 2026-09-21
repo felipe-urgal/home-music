@@ -1447,7 +1447,7 @@
 @media (min-width: 1024px) {
   #root .desktop-layout[data-offline="false"] {
     grid-template-columns: minmax(0, 1fr) !important;
-    grid-template-rows: 62px minmax(0, 1fr) !important;
+    grid-template-rows: 72px minmax(0, 1fr) !important;
     width: 100%;
     height: 100vh;
     min-height: 0;
@@ -1464,9 +1464,9 @@
     position: relative;
     z-index: 40;
     width: 100%;
-    height: 62px;
-    min-height: 62px;
-    padding: 0 31px;
+    height: 72px;
+    min-height: 72px;
+    padding: 0 34px;
     display: flex;
     flex-direction: row;
     align-items: center;
@@ -1484,15 +1484,15 @@
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-brand {
-    min-height: 62px;
+    min-height: 72px;
     padding: 0;
     flex: 0 0 auto;
-    gap: 8px;
+    gap: 10px;
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-brand__icon {
-    width: 26px;
-    height: 26px;
+    width: 30px;
+    height: 30px;
     display: grid;
     place-items: center;
     border: 0;
@@ -1502,8 +1502,8 @@
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-brand__icon svg {
-    width: 21px;
-    height: 21px;
+    width: 23px;
+    height: 23px;
     stroke-width: 2;
   }
 
@@ -1513,7 +1513,7 @@
 
   #root .desktop-layout[data-offline="false"] .desktop-brand strong {
     color: #f5eee7;
-    font-size: 11px;
+    font-size: 13px;
     font-weight: 690;
     letter-spacing: -.015em;
   }
@@ -1524,7 +1524,7 @@
 
   #root .desktop-layout[data-offline="false"] .desktop-nav {
     min-width: 0;
-    height: 62px;
+    height: 72px;
     display: flex;
     flex: 1 1 auto;
     align-items: stretch;
@@ -1533,7 +1533,7 @@
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-nav__group {
-    height: 62px;
+    height: 72px;
     display: flex;
     align-items: stretch;
     gap: 25px;
@@ -1544,7 +1544,7 @@
     position: relative;
     width: auto;
     min-width: 0;
-    min-height: 62px;
+    min-height: 72px;
     padding: 0;
     display: flex;
     align-items: center;
@@ -1598,8 +1598,8 @@
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-topbar__search {
-    width: 31px;
-    height: 31px;
+    width: 38px;
+    height: 38px;
     padding: 0;
     display: grid;
     place-items: center;
@@ -1610,8 +1610,8 @@
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-topbar__search svg {
-    width: 15px;
-    height: 15px;
+    width: 19px;
+    height: 19px;
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-topbar__search:hover {
@@ -1627,9 +1627,9 @@
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-player-sidebar-tools__account {
-    width: 31px;
-    height: 31px;
-    min-height: 31px;
+    width: 38px;
+    height: 38px;
+    min-height: 38px;
     padding: 0;
     display: grid;
     place-items: center;
@@ -1642,7 +1642,7 @@
 
   #root .desktop-layout[data-offline="false"] .desktop-player-sidebar-tools__initial {
     display: block;
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 760;
     line-height: 1;
   }

@@ -9,10 +9,10 @@
 
 @media (min-width: 1024px) {
   /* The library group still inherited sidebar-era spacing from desktop-navigation.css.
-     Reset it so Tocando Agora, Pastas and Playlists share the same 62px baseline. */
+     Reset it so the remaining top navigation shares the same 72px baseline. */
   #root .desktop-layout[data-offline="false"] .desktop-nav,
   #root .desktop-layout[data-offline="false"] .desktop-nav__group {
-    height: 62px;
+    height: 72px;
     margin: 0;
     padding: 0;
     border: 0;
@@ -26,8 +26,8 @@
 
   #root .desktop-layout[data-offline="false"] .desktop-nav__item,
   #root .desktop-layout[data-offline="false"] .desktop-nav__item--nested {
-    height: 62px;
-    min-height: 62px;
+    height: 72px;
+    min-height: 72px;
     margin: 0;
     padding: 0;
     display: flex;
@@ -39,7 +39,7 @@
   #root .desktop-layout[data-offline="false"] .desktop-nav__item--nested span {
     display: inline-flex;
     align-items: center;
-    height: 62px;
+    height: 72px;
     line-height: 1;
   }
 
@@ -244,6 +244,39 @@
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__waveform-time {
     margin-top: 5px;
     font-size: 10px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__waveform-hover-time {
+    position: absolute;
+    z-index: 4;
+    top: 4px;
+    min-width: 44px;
+    padding: 5px 7px;
+    border: 1px solid rgba(231, 209, 187, .16);
+    border-radius: 7px;
+    color: #f4ece6;
+    background: rgba(9, 14, 23, .94);
+    box-shadow: 0 8px 22px rgba(0,0,0,.28);
+    font-size: 10px;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    text-align: center;
+    pointer-events: none;
+    transform: translate(-50%, -100%);
+    backdrop-filter: blur(10px);
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__waveform-hover-time::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    width: 1px;
+    height: 14px;
+    background: var(--now-playing-wave-accent, #ff9f49);
+    transform: translateX(-50%);
+    opacity: .82;
   }
 
   /* Playlists desktop: remove the editorial split that squeezed the actual library.
@@ -1853,7 +1886,7 @@
     opacity: 1;
     background: linear-gradient(
       90deg,
-      #ff9f49 0 var(--wave-fill, 0%),
+      var(--now-playing-wave-accent, #ff9f49) 0 var(--wave-fill, 0%),
       rgba(85, 84, 95, .58) var(--wave-fill, 0%) 100%
     );
     box-shadow: none;
@@ -1999,13 +2032,13 @@
     z-index: 5;
     right: 25px;
     bottom: 20px;
-    width: min(410px, calc(100% - 50px));
-    min-height: 84px;
-    padding: 10px 14px 10px 10px;
+    width: min(460px, calc(100% - 50px));
+    min-height: 96px;
+    padding: 12px 16px 12px 12px;
     display: grid;
-    grid-template-columns: 62px minmax(0, 1fr) 24px;
+    grid-template-columns: 70px minmax(0, 1fr) 26px;
     align-items: center;
-    gap: 14px;
+    gap: 16px;
     overflow: hidden;
     border: 1px solid rgba(232, 211, 190, .16);
     border-radius: 10px;
@@ -2030,8 +2063,8 @@
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track > .artwork {
-    width: 62px;
-    height: 62px;
+    width: 70px;
+    height: 70px;
     max-width: none;
     overflow: hidden;
     border: 0;
@@ -2053,7 +2086,7 @@
 
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track-copy small {
     color: #c89a70;
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 700;
     letter-spacing: .14em;
     text-transform: uppercase;
@@ -2068,31 +2101,32 @@
 
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track-copy strong {
     color: #f3e9e1;
-    font-size: 15px;
+    font-size: 17px;
     font-weight: 650;
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track-copy > span {
     color: #9f9793;
-    font-size: 12px;
+    font-size: 13px;
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track > svg {
-    width: 21px;
-    height: 21px;
+    width: 23px;
+    height: 23px;
     color: #d7b17e;
     stroke-width: 1.8;
   }
 
   #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__quote {
-    font-size: 12px;
-    line-height: 1.5;
+    gap: 5px;
+    font-size: 14px;
+    line-height: 1.55;
     letter-spacing: .13em;
   }
 
   @media (max-width: 1180px) {
     #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track {
-      width: min(350px, calc(100% - 42px));
+      width: min(395px, calc(100% - 42px));
       right: 21px;
       bottom: 18px;
     }

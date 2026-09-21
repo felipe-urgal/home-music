@@ -43,7 +43,8 @@ async function openAssistant(page: Page) {
 
 async function playFixtureTrack(page: Page, title: string) {
   const sidebar = page.getByTestId('desktop-sidebar');
-  await sidebar.getByRole('button', { name: 'Pastas', exact: true }).click();
+  await sidebar.getByRole('button', { name: 'Buscar na biblioteca' }).click();
+  await expect(page.locator('.search-box--library input')).toBeFocused();
   const table = page.getByTestId('desktop-library-table');
   await expect(table).toBeVisible();
   await table.getByRole('button', { name: new RegExp(`^Tocar ${title},`) }).click();

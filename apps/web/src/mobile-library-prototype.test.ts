@@ -38,6 +38,18 @@ describe('mobile library prototype one contracts', () => {
     expect(shell).toMatch(/aria-label="Abrir Tocando Agora"/);
     expect(shell).toMatch(/onClick=\{onOpenPlayer\}/);
     expect(shell).not.toMatch(/label="Tocando Agora"/);
+    expect(shell).not.toMatch(/label="Pastas"/);
+    expect(shell).toMatch(/aria-label="Buscar na biblioteca"/);
+    expect(shell).toMatch(/onOpenLibraryTab\('folders'\)/);
+  });
+
+  it('amplia a navbar desktop sem perder a composição limpa', () => {
+    const css = source('prototype-one.css');
+
+    expect(css).toMatch(/Desktop shell[\s\S]*grid-template-rows: 72px minmax\(0, 1fr\)/);
+    expect(css).toMatch(/desktop-brand strong[\s\S]*font-size: 13px/);
+    expect(css).toMatch(/desktop-topbar__search svg[\s\S]*width: 19px/);
+    expect(css).toMatch(/desktop-player-sidebar-tools__account[\s\S]*width: 38px/);
   });
 
   it('unifica pastas e playlists na mesma grade e deixa só nova playlist no header desktop', () => {
@@ -80,6 +92,10 @@ describe('mobile library prototype one contracts', () => {
     expect(screen).toMatch(/desktop-now-playing-screen__art-frame/);
     expect(screen).toMatch(/desktop-now-playing-screen__cover-play/);
     expect(screen).toMatch(/--wave-fill/);
+    expect(screen).toMatch(/--now-playing-wave-accent/);
+    expect(screen).toMatch(/loadArtworkAccent/);
+    expect(screen).toMatch(/mixArtworkAccents/);
+    expect(screen).toMatch(/desktop-now-playing-screen__waveform-hover-time/);
     expect(screen).not.toMatch(/playedWaveBars/);
     expect(screen).toMatch(/nextTrack && nextTrack\.id !== current\.id/);
     expect(screen).toMatch(/desktop-now-playing-screen__next-track/);
@@ -103,9 +119,11 @@ describe('mobile library prototype one contracts', () => {
     expect(css).toMatch(/desktop-now-playing-screen__current-lyric[\s\S]*font-family: Georgia/);
     expect(css).toMatch(/desktop-now-playing-screen__current-lyric[\s\S]*color: #f2a25e/);
     expect(css).toMatch(/desktop-now-playing-screen__current-lyric::before[\s\S]*desktop-now-playing-screen__current-lyric::after/);
-    expect(css).toMatch(/desktop-now-playing-screen__waveform span[\s\S]*var\(--wave-fill, 0%\)/);
-    expect(css).toMatch(/desktop-now-playing-screen__quote[\s\S]*font-size: 12px/);
-    expect(css).toMatch(/desktop-now-playing-screen__next-track[\s\S]*width: min\(410px/);
+    expect(css).toMatch(/desktop-now-playing-screen__waveform span[\s\S]*var\(--now-playing-wave-accent, #ff9f49\)[\s\S]*var\(--wave-fill, 0%\)/);
+    expect(css).toMatch(/desktop-now-playing-screen__waveform-hover-time[\s\S]*font-variant-numeric: tabular-nums/);
+    expect(css).toMatch(/desktop-now-playing-screen__quote[\s\S]*font-size: 14px/);
+    expect(css).toMatch(/desktop-now-playing-screen__next-track[\s\S]*width: min\(460px/);
+    expect(css).toMatch(/desktop-now-playing-screen__next-track > \.artwork[\s\S]*width: 70px/);
     expect(css).toMatch(/desktop-now-playing-screen__art-frame[\s\S]*width: min\(100%, 500px\)/);
   });
 

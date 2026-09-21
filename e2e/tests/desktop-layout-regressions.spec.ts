@@ -25,8 +25,10 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   const nowPlayingArtworkSurface = page.locator('.desktop-now-playing-screen__art .now-playing-vinyl__disc');
   const nowPlayingArtFrame = page.locator('.desktop-now-playing-screen__art-frame');
   const nowPlayingContent = page.locator('.desktop-now-playing-screen__content');
+  const waveformProgress = page.locator('.desktop-now-playing-screen__waveform-progress');
   const waveformSeek = page.locator('.desktop-now-playing-screen__waveform-seek');
   const waveformBar = page.locator('.desktop-now-playing-screen__waveform span').first();
+  const waveformHoverTime = page.locator('.desktop-now-playing-screen__waveform-hover-time');
   const coverPlay = page.locator('.desktop-now-playing-screen__cover-play');
   const moreActions = nowPlaying.getByRole('button', { name: 'Mais opções da faixa' });
   const playerModeControls = page.locator('.desktop-now-playing-screen__controls');
@@ -39,6 +41,13 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   await expect(waveformSeek).toHaveAttribute('aria-label', 'Progresso da música');
   await expect(waveformSeek).toHaveAttribute('aria-valuetext', /\d+:\d{2} de \d+:\d{2}/);
   await expect(waveformBar).toHaveAttribute('style', /--wave-fill:/);
+  const waveformAccent = await nowPlaying.evaluate(element => (
+    getComputedStyle(element).getPropertyValue('--now-playing-wave-accent').trim()
+  ));
+  expect(waveformAccent).toMatch(/^#[0-9a-f]{6}$/i);
+  await waveformProgress.hover({ position: { x: 220, y: 48 } });
+  await expect(waveformHoverTime).toBeVisible();
+  await expect(waveformHoverTime).toHaveText(/^\d+:\d{2}$/);
   await expect(page.locator('.desktop-now-playing-screen__progress')).toHaveCount(0);
   await expect(coverPlay).toBeVisible();
   await expect(coverPlay).toHaveAttribute('aria-label', /Tocar|Pausar/);
@@ -103,11 +112,13 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   await expect(homeBrand).toHaveAttribute('aria-current', 'page');
   await expect(navigation.getByRole('button', { name: 'Tocando Agora', exact: true })).toHaveCount(0);
 
-  await expect(navigation.getByRole('button', { name: 'Pastas', exact: true })).toBeVisible();
+  await expect(navigation.getByRole('button', { name: 'Pastas', exact: true })).toHaveCount(0);
   await expect(navigation.getByRole('button', { name: 'Playlists', exact: true })).toHaveCount(0);
 
-  await navigation.getByRole('button', { name: 'Pastas', exact: true }).click();
-  await expect(navigation.getByRole('button', { name: 'Pastas', exact: true })).toHaveAttribute('aria-current', 'page');
+  const librarySearchTrigger = topbar.getByRole('button', { name: 'Buscar na biblioteca' });
+  await librarySearchTrigger.click();
+  const librarySearch = page.locator('.search-box--library input');
+  await expect(librarySearch).toBeFocused();
   await expect(page.locator('.library-header.is-root .library-header__title strong')).toBeHidden();
   await expect(page.locator('.library-header__folder-meta select')).toHaveCount(0);
   await expect(page.locator('.folder-order-control')).toBeHidden();
@@ -122,8 +133,6 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   expect(folderMainBox!.width).toBeGreaterThanOrEqual(viewport!.width * 0.9);
   expect(folderContentBox!.width).toBeGreaterThanOrEqual(folderMainBox!.width * 0.95);
 
-  await topbar.getByRole('button', { name: 'Buscar na biblioteca' }).click();
-  const librarySearch = page.locator('.search-box--library input');
   await expect(librarySearch).toBeFocused();
   await librarySearch.fill('E2E Track');
   const searchResultGrid = page.getByTestId('desktop-track-grid');
@@ -141,12 +150,22 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   await homeBrand.click();
   await expect(page.locator('.desktop-now-playing-screen')).toBeVisible();
   await expect(homeBrand).toHaveAttribute('aria-current', 'page');
-  await navigation.getByRole('button', { name: 'Pastas', exact: true }).click();
+  await librarySearchTrigger.click();
+  await expect(librarySearch).toBeFocused();
 
   const topbarBox = await topbar.boundingBox();
   expect(topbarBox).not.toBeNull();
   expect(topbarBox!.width).toBeGreaterThanOrEqual(viewport!.width - 1);
+  expect(topbarBox!.height).toBeGreaterThanOrEqual(70);
   expect(topbarBox!.height).toBeLessThan(100);
+  const brandTextSize = Number.parseFloat(
+    await homeBrand.locator('strong').evaluate(element => getComputedStyle(element).fontSize)
+  );
+  const searchIconWidth = Number.parseFloat(
+    await librarySearchTrigger.locator('svg').evaluate(element => getComputedStyle(element).width)
+  );
+  expect(brandTextSize).toBeGreaterThanOrEqual(13);
+  expect(searchIconWidth).toBeGreaterThanOrEqual(19);
 
   const rootHeading = page.locator('.section-heading--folders-root');
   const playlistCreate = rootHeading.getByRole('button', { name: 'Nova playlist' });
