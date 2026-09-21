@@ -162,6 +162,7 @@ export function LibraryTrackRows({
     <div className="library-track-list">
       {tracks.map(track => {
         const isCurrent = track.id === current?.id;
+        const trackDuration = typeof track.duration === 'number' ? track.duration : 0;
         const accessibleTrackLabel = `Tocar ${track.title}, ${track.artist || 'Artista desconhecido'}, ${track.album || 'Álbum desconhecido'}${isCurrent && playing ? ' — reproduzindo agora' : ''}`;
         return (
           <div className={`library-track ${isCurrent ? 'is-current' : ''}`} key={track.id}>
@@ -178,7 +179,7 @@ export function LibraryTrackRows({
                 <small>{track.artist} · {track.album}</small>
               </span>
               <span className="library-track__mobile-meta" aria-hidden="true">
-                <span className="library-track__duration">{formatPlayerTime(track.duration ?? 0)}</span>
+                <span className="library-track__duration">{formatPlayerTime(trackDuration)}</span>
                 <MoreHorizontal className="library-track__more" />
               </span>
               {isCurrent && playing
