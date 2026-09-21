@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { Copy, KeyRound, LoaderCircle, Trash2 } from 'lucide-react';
+import { ChevronLeft, CircleHelp, Copy, KeyRound, LoaderCircle, Plus, Trash2, UserRound, UsersRound } from 'lucide-react';
 import {
   createOpenSubsonicKey,
   listOpenSubsonicKeys,
@@ -22,7 +22,15 @@ type CreatedToken = {
   token: string;
 };
 
-export function AccountOpenSubsonicKeys() {
+type AccountOpenSubsonicKeysProps = {
+  prototypeTwo?: boolean;
+  onBack?: () => void;
+};
+
+export function AccountOpenSubsonicKeys({
+  prototypeTwo = false,
+  onBack
+}: AccountOpenSubsonicKeysProps = {}) {
   const [keys, setKeys] = useState<AccountOpenSubsonicKey[]>([]);
   const [name, setName] = useState('');
   const [createdToken, setCreatedToken] = useState<CreatedToken | null>(null);
@@ -107,6 +115,123 @@ export function AccountOpenSubsonicKeys() {
     } finally {
       setRevokingId(null);
     }
+  }
+
+  if (prototypeTwo) {
+    return (
+      <div className="account-apps-v2" data-testid="account-apps-prototype-two">
+        <header className="account-apps-v2__topbar">
+          <button type="button" onClick={onBack}>
+            <ChevronLeft />
+            <span>Minha conta</span>
+          </button>
+          <span className="account-apps-v2__help" aria-label="Ajuda">
+            <CircleHelp />
+            <span>Ajuda</span>
+          </span>
+        </header>
+
+        <section className="account-apps-v2__intro" aria-labelledby="account-apps-v2-title">
+          <h1 id="account-apps-v2-title">Apps e integrações</h1>
+          <p>Conecte seus apps e serviços favoritos ao Home Music.</p>
+        </section>
+
+        {error && <div className="my-account-message is-error account-apps-v2__message" role="alert">{error}</div>}
+
+        <section className="account-apps-v2__create" aria-labelledby="account-apps-v2-create-title">
+          <header className="account-apps-v2__section-heading">
+            <span className="account-apps-v2__section-icon is-violet"><KeyRound /></span>
+            <div>
+              <strong id="account-apps-v2-create-title">Nova chave de aplicativo</strong>
+              <small>Crie uma credencial separada para cada cliente OpenSubsonic.</small>
+            </div>
+          </header>
+
+          <form className="account-apps-v2__create-form" onSubmit={submit}>
+            <input
+              value={name}
+              maxLength={120}
+              autoComplete="off"
+              disabled={creating}
+              aria-label="Nome do aplicativo"
+              placeholder="Ex.: Symfonium no celular"
+              onChange={event => setName(event.target.value)}
+            />
+            <button type="submit" disabled={creating || !name.trim()}>
+              {creating ? <LoaderCircle className="my-account-spinner" /> : <Plus />}
+              <span>{creating ? 'Criando…' : 'Criar chave'}</span>
+            </button>
+          </form>
+        </section>
+
+        {createdToken && (
+          <section className="account-apps-v2__token" aria-labelledby="account-apps-v2-token-title">
+            <header className="account-apps-v2__section-heading">
+              <span className="account-apps-v2__section-icon is-violet"><KeyRound /></span>
+              <div>
+                <strong id="account-apps-v2-token-title">Copie esta chave agora</strong>
+                <small>Ela é exibida somente nesta criação e não pode ser recuperada depois.</small>
+              </div>
+            </header>
+            <div className="account-apps-v2__token-row">
+              <input
+                readOnly
+                value={createdToken.token}
+                aria-label="API key OpenSubsonic recém-criada"
+                onFocus={event => event.currentTarget.select()}
+              />
+              <button type="button" onClick={() => void copyToken()}>
+                <Copy />
+                <span>{copied ? 'Copiada' : 'Copiar chave'}</span>
+              </button>
+            </div>
+            <small>Servidor: <strong>{window.location.origin}</strong>. Configure o cliente para usar autenticação por API key.</small>
+          </section>
+        )}
+
+        <section className="account-apps-v2__authorized" aria-labelledby="account-apps-v2-authorized-title">
+          <header className="account-apps-v2__section-heading">
+            <span className="account-apps-v2__section-icon is-blue"><UsersRound /></span>
+            <div>
+              <strong id="account-apps-v2-authorized-title">Aplicativos autorizados</strong>
+              <small>Revogue acessos que você não usa mais.</small>
+            </div>
+          </header>
+
+          {loading ? (
+            <div className="account-apps-v2__state" role="status">
+              <LoaderCircle className="my-account-spinner" />
+              <span>Carregando chaves…</span>
+            </div>
+          ) : keys.length === 0 ? (
+            <div className="account-apps-v2__state">Nenhuma chave OpenSubsonic criada.</div>
+          ) : (
+            <div className="account-apps-v2__list">
+              {keys.map(key => (
+                <div className="account-apps-v2__row" key={key.id}>
+                  <span className="account-apps-v2__row-icon"><UserRound /></span>
+                  <div className="account-apps-v2__row-copy">
+                    <strong>{key.name}</strong>
+                    <small>{key.hint} · criada em {createdLabel(key.createdAt)}</small>
+                  </div>
+                  <span className="account-apps-v2__status"><i /> Ativo</span>
+                  <button
+                    className="account-apps-v2__revoke"
+                    type="button"
+                    disabled={Boolean(revokingId)}
+                    onClick={() => void revoke(key)}
+                    aria-label={`Revogar ${key.name}`}
+                  >
+                    {revokingId === key.id ? <LoaderCircle className="my-account-spinner" /> : <Trash2 />}
+                    <span>{revokingId === key.id ? 'Revogando…' : 'Revogar'}</span>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
+    );
   }
 
   return (
