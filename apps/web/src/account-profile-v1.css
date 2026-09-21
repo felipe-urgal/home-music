@@ -1,6 +1,5 @@
-/* Profile detail — prototype 1.
-   Desktop follows the approved full-width editorial composition.
-   Mobile and TV keep the existing profile detail. */
+/* Perfil — protótipo 1 aprovado.
+   O desktop reproduz a composição do mockup; mobile e TV preservam a tela anterior. */
 
 .my-account-profile-v1 {
   display: none;
@@ -15,7 +14,7 @@
     width: 100%;
     max-width: none;
     margin: 0;
-    padding: 0 0 36px;
+    padding: 0 0 30px;
   }
 
   #root .desktop-layout[data-offline="false"] .my-account-screen--profile > .my-account-header {
@@ -27,460 +26,460 @@
   }
 
   #root .desktop-layout[data-offline="false"] .my-account-profile-v1 {
+    --profile-v1-inline: clamp(48px, 7.15vw, 122px);
     display: grid;
     width: 100%;
     min-width: 0;
-    gap: 18px;
-    padding: 0 48px 36px;
-    color: #eef3fa;
+    gap: 11px;
+    padding: 0 var(--profile-v1-inline) 24px;
+    color: #edf2f8;
   }
 
   #root .desktop-layout[data-offline="false"] .my-account-profile-v1__hero {
     position: relative;
     isolation: isolate;
-    min-height: 292px;
-    margin-inline: -48px;
-    padding: 32px 80px 36px;
+    min-height: 205px;
+    margin-inline: calc(var(--profile-v1-inline) * -1);
+    padding: 39px var(--profile-v1-inline) 20px;
     overflow: hidden;
     background:
-      radial-gradient(ellipse at 58% 18%, rgba(139, 85, 54, .18), transparent 28%),
-      radial-gradient(ellipse at 23% 38%, rgba(29, 58, 96, .2), transparent 42%),
-      linear-gradient(180deg, rgba(7, 16, 29, .98), rgba(7, 15, 26, .95));
+      radial-gradient(ellipse at 69% 32%, rgba(180, 113, 72, .30), transparent 25%),
+      radial-gradient(ellipse at 26% 74%, rgba(28, 57, 91, .24), transparent 42%),
+      linear-gradient(96deg, #08111d 0%, #0b1523 39%, #171921 66%, #09121f 100%);
   }
 
-  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__hero::before {
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__hero::after {
     content: "";
     position: absolute;
-    z-index: -1;
+    z-index: 2;
     inset: 0;
     background:
-      linear-gradient(90deg, rgba(7, 16, 29, 1) 0%, rgba(7, 16, 29, .98) 34%, rgba(7, 16, 29, .55) 61%, rgba(7, 16, 29, .12) 80%, rgba(7, 16, 29, .34) 100%);
+      linear-gradient(90deg,
+        rgba(7, 16, 28, .98) 0%,
+        rgba(7, 16, 28, .90) 27%,
+        rgba(7, 16, 28, .30) 46%,
+        rgba(7, 16, 28, .03) 74%,
+        rgba(7, 16, 28, .55) 100%);
     pointer-events: none;
   }
 
   #root .desktop-layout[data-offline="false"] .my-account-profile-v1__back {
     position: relative;
     z-index: 5;
-    width: fit-content;
-    min-height: 32px;
+    min-height: 26px;
     display: inline-flex;
     align-items: center;
-    gap: 10px;
+    gap: 9px;
     padding: 0;
     border: 0;
     background: transparent;
-    color: #d9e0e9;
+    color: #e8edf4;
     font: inherit;
     font-size: 13px;
+    font-weight: 560;
     cursor: pointer;
   }
 
   #root .desktop-layout[data-offline="false"] .my-account-profile-v1__back svg {
-    width: 18px;
-    height: 18px;
-  }
-
-  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__back:hover {
-    color: #fff;
+    width: 17px;
+    height: 17px;
+    stroke-width: 1.8;
   }
 
   #root .desktop-layout[data-offline="false"] .my-account-profile-v1__intro {
     position: relative;
     z-index: 5;
-    width: 390px;
     display: grid;
     gap: 7px;
-    margin: 56px 0 0 34px;
+    width: 420px;
+    margin-top: 33px;
   }
 
   #root .desktop-layout[data-offline="false"] .my-account-profile-v1__intro h1 {
     margin: 0;
-    color: #f6f7fa;
-    font-size: 43px;
-    font-weight: 720;
+    color: #f7f7f7;
+    font-size: 39px;
+    font-weight: 760;
     line-height: 1;
-    letter-spacing: -.04em;
-  }
-
-  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__intro > strong {
-    color: #9cb3d0;
-    font-size: 28px;
-    font-weight: 450;
-    letter-spacing: -.025em;
+    letter-spacing: -.035em;
   }
 
   #root .desktop-layout[data-offline="false"] .my-account-profile-v1__intro p {
-    width: 390px;
-    margin: 6px 0 0;
-    color: #a7b5c7;
-    font-size: 15px;
-    line-height: 1.55;
-  }
-
-  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__quote {
-    position: absolute;
-    z-index: 5;
-    left: 49%;
-    top: 132px;
-    display: grid;
-    gap: 14px;
-    color: #e8edf5;
-    transform: translateX(-50%) rotate(-2deg);
-  }
-
-  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__quote em {
-    font-family: Georgia, 'Times New Roman', serif;
-    font-size: 24px;
-    font-style: italic;
-    line-height: 1.2;
-  }
-
-  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__quote i {
-    width: 54px;
-    height: 3px;
-    margin-left: 50px;
-    background: #d8a559;
-    border-radius: 999px;
+    margin: 0;
+    color: #9cacbf;
+    font-size: 20px;
+    font-weight: 430;
+    line-height: 1.25;
   }
 
   #root .desktop-layout[data-offline="false"] .my-account-profile-v1__headphones {
     position: absolute;
     z-index: 1;
-    right: -8px;
-    top: -12px;
-    width: 600px;
-    height: 350px;
-    background: url('/account-v3-headphones.webp') right center / 600px auto no-repeat;
+    top: 0;
+    left: 40.2%;
+    width: min(690px, 42vw);
+    height: 210px;
+    background: url('/profile-v1-headphones.webp') center / cover no-repeat;
     pointer-events: none;
-    opacity: .96;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__quote {
+    position: absolute;
+    z-index: 5;
+    top: 112px;
+    right: var(--profile-v1-inline);
+    display: grid;
+    gap: 2px;
+    color: #b3bdca;
+    font-size: 18px;
+    font-weight: 620;
+    line-height: 1.3;
+    letter-spacing: -.01em;
+    pointer-events: none;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__quote strong {
+    color: inherit;
+    font: inherit;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__identity,
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__details,
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__security-section {
+    border: 1px solid rgba(64, 91, 116, .38);
+    border-radius: 15px;
+    background:
+      linear-gradient(180deg, rgba(9, 27, 42, .96), rgba(8, 24, 38, .96));
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.018),
+      0 12px 32px rgba(0,0,0,.08);
   }
 
   #root .desktop-layout[data-offline="false"] .my-account-profile-v1__identity {
-    position: relative;
-    z-index: 8;
-    min-height: 150px;
+    min-height: 118px;
     display: grid;
-    grid-template-columns: 110px minmax(0, 1fr) auto;
+    grid-template-columns: 82px minmax(0, 1fr) auto;
     align-items: center;
     gap: 20px;
-    margin-top: -74px;
-    padding: 24px 28px;
-    border: 1px solid rgba(70, 154, 222, .36);
-    border-radius: 15px;
-    background:
-      radial-gradient(circle at 8% 50%, rgba(31, 119, 189, .13), transparent 28%),
-      linear-gradient(105deg, rgba(7, 32, 55, .94), rgba(10, 24, 39, .96) 48%, rgba(9, 22, 36, .94));
-    box-shadow:
-      inset 0 1px 0 rgba(255,255,255,.025),
-      0 20px 55px rgba(0,0,0,.16);
+    padding: 18px 22px;
   }
 
   #root .desktop-layout[data-offline="false"] .my-account-profile-v1__avatar {
-    width: 96px;
-    height: 96px;
-    display: block;
-    overflow: hidden;
-    border: 1px solid rgba(74, 160, 234, .5);
+    width: 78px;
+    height: 78px;
+    display: grid;
+    place-items: center;
+    border: 1px solid rgba(49, 137, 207, .52);
     border-radius: 50%;
-    background: #0b2843;
-    box-shadow: 0 0 0 8px rgba(26, 113, 181, .07);
+    color: #78c5ff;
+    background:
+      radial-gradient(circle at 50% 45%, rgba(35, 119, 184, .17), rgba(10, 38, 61, .86));
   }
 
-  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__avatar img {
-    width: 100%;
-    height: 100%;
-    display: block;
-    object-fit: cover;
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__avatar svg {
+    width: 38px;
+    height: 38px;
+    stroke-width: 1.7;
   }
 
   #root .desktop-layout[data-offline="false"] .my-account-profile-v1__identity-copy {
     min-width: 0;
     display: grid;
-    justify-items: start;
-    gap: 5px;
+    gap: 8px;
   }
 
   #root .desktop-layout[data-offline="false"] .my-account-profile-v1__identity-copy strong {
-    max-width: 100%;
     overflow: hidden;
-    color: #f4f7fb;
-    font-size: 28px;
-    font-weight: 720;
-    letter-spacing: -.025em;
+    color: #f7f7f8;
+    font-size: 22px;
+    font-weight: 760;
+    letter-spacing: -.02em;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__identity-copy > span {
-    color: #73b9f2;
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__identity-copy span {
+    color: #a9b5c3;
     font-size: 15px;
-    font-weight: 600;
+    font-weight: 450;
   }
 
-  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__identity-copy small {
-    margin-top: 3px;
-    color: #9eafc3;
-    font-size: 12px;
-  }
-
-  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__session {
-    min-width: 170px;
-    display: grid;
-    justify-items: end;
-    gap: 11px;
-  }
-
-  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__session > span {
-    min-height: 40px;
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__status {
+    min-height: 42px;
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    padding: 0 14px;
-    border: 1px solid rgba(35, 217, 137, .22);
-    border-radius: 13px;
-    color: #5ee7ae;
-    background: rgba(24, 129, 87, .2);
+    padding: 0 15px;
+    border: 1px solid rgba(46, 204, 132, .10);
+    border-radius: 999px;
+    color: #65e6aa;
+    background: rgba(21, 116, 78, .20);
     font-size: 12px;
-    font-weight: 720;
+    font-weight: 760;
   }
 
-  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__session > span svg {
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__status svg {
     width: 16px;
     height: 16px;
-  }
-
-  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__session small {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    color: #94a5b8;
-    font-size: 11px;
-  }
-
-  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__session small i {
-    width: 9px;
-    height: 9px;
-    border-radius: 50%;
-    background: #39dc99;
-    box-shadow: 0 0 10px rgba(57, 220, 153, .7);
   }
 
   #root .desktop-layout[data-offline="false"] .my-account-profile-v1__details {
     display: grid;
     gap: 16px;
-    padding: 22px;
-    border: 1px solid rgba(113, 134, 157, .24);
-    border-radius: 15px;
-    background:
-      linear-gradient(180deg, rgba(14, 29, 44, .92), rgba(11, 24, 37, .94));
-    box-shadow: inset 0 1px 0 rgba(255,255,255,.02);
+    padding: 18px 20px 16px;
   }
 
   #root .desktop-layout[data-offline="false"] .my-account-profile-v1__section-heading {
+    min-height: 45px;
     display: grid;
-    grid-template-columns: 44px minmax(0, 1fr) auto;
+    grid-template-columns: 34px minmax(0, 1fr);
     align-items: center;
-    gap: 14px;
-  }
-
-  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__section-icon,
-  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__info-icon {
-    display: grid;
-    place-items: center;
-    color: #6eb8ee;
-    background: rgba(29, 104, 170, .18);
+    gap: 12px;
   }
 
   #root .desktop-layout[data-offline="false"] .my-account-profile-v1__section-icon {
-    width: 42px;
-    height: 42px;
-    border-radius: 11px;
+    width: 32px;
+    height: 32px;
+    display: grid;
+    place-items: center;
+    color: #a5d6f7;
   }
 
   #root .desktop-layout[data-offline="false"] .my-account-profile-v1__section-icon svg {
-    width: 21px;
-    height: 21px;
+    width: 22px;
+    height: 22px;
+    stroke-width: 1.8;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__section-icon--security {
+    color: #b5cedf;
   }
 
   #root .desktop-layout[data-offline="false"] .my-account-profile-v1__section-heading > div {
     display: grid;
-    gap: 3px;
+    gap: 4px;
   }
 
   #root .desktop-layout[data-offline="false"] .my-account-profile-v1__section-heading strong {
-    color: #f0f4f9;
-    font-size: 16px;
+    color: #f2f4f7;
+    font-size: 15px;
+    font-weight: 730;
   }
 
   #root .desktop-layout[data-offline="false"] .my-account-profile-v1__section-heading small {
-    color: #8396aa;
+    color: #8799ac;
+    font-size: 12px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__rows {
+    overflow: hidden;
+    border: 1px solid rgba(64, 91, 116, .36);
+    border-radius: 12px;
+    background: rgba(10, 28, 43, .64);
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__row {
+    min-height: 72px;
+    display: grid;
+    grid-template-columns: 48px minmax(260px, 1fr) minmax(120px, auto) 110px;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 16px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__row + .my-account-profile-v1__row {
+    border-top: 1px solid rgba(75, 100, 122, .30);
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__row-icon {
+    width: 42px;
+    height: 42px;
+    display: grid;
+    place-items: center;
+    border-radius: 8px;
+    color: #6fc1f7;
+    background:
+      linear-gradient(145deg, rgba(27, 104, 170, .58), rgba(17, 69, 112, .48));
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__row-icon svg {
+    width: 21px;
+    height: 21px;
+    stroke-width: 1.8;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__row-copy {
+    min-width: 0;
+    display: grid;
+    gap: 4px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__row-copy strong {
+    color: #f0f3f6;
+    font-size: 12px;
+    font-weight: 720;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__row-copy small {
+    color: #8295a8;
     font-size: 11px;
   }
 
-  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__edit {
-    min-height: 40px;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 0 13px;
-    border: 1px solid rgba(111, 132, 153, .26);
-    border-radius: 10px;
-    background: rgba(71, 91, 112, .38);
-    color: #e2e8ef;
-    font: inherit;
-    font-size: 12px;
-    font-weight: 650;
-    cursor: pointer;
-  }
-
-  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__edit:hover {
-    border-color: rgba(117, 174, 226, .42);
-    background: rgba(78, 103, 128, .5);
-  }
-
-  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__edit svg {
-    width: 16px;
-    height: 16px;
-  }
-
-  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__info-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 14px;
-    margin: 0;
-  }
-
-  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__info-grid > div {
-    min-width: 0;
-    min-height: 84px;
-    display: grid;
-    grid-template-columns: 46px minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 13px;
-    padding: 13px 16px;
-    border: 1px solid rgba(90, 117, 142, .24);
-    border-radius: 10px;
-    background: rgba(14, 30, 45, .72);
-  }
-
-  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__info-icon {
-    width: 42px;
-    height: 42px;
-    border-radius: 9px;
-  }
-
-  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__info-icon svg {
-    width: 20px;
-    height: 20px;
-  }
-
-  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__info-copy {
-    min-width: 0;
-    display: grid;
-    gap: 3px;
-  }
-
-  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__info-copy strong {
-    color: #e7edf5;
-    font-size: 12px;
-    font-weight: 680;
-  }
-
-  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__info-copy small {
-    color: #8699ad;
-    font-size: 10px;
-  }
-
-  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__info-value {
-    max-width: 220px;
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__row-value {
+    max-width: 250px;
     overflow: hidden;
-    color: #f3f6fa;
+    justify-self: end;
+    color: #f3f5f8;
     font-size: 12px;
     font-weight: 720;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__security {
-    min-height: 88px;
-    display: grid;
-    grid-template-columns: 52px minmax(0, 1fr) 22px;
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__row-action {
+    min-width: 94px;
+    min-height: 42px;
+    display: inline-flex;
     align-items: center;
-    gap: 14px;
-    padding: 14px 20px;
-    border: 1px solid rgba(79, 112, 137, .26);
-    border-radius: 15px;
-    background:
-      linear-gradient(90deg, rgba(17, 45, 52, .28), rgba(13, 27, 40, .94) 18%, rgba(12, 24, 37, .94));
-    color: inherit;
-    text-align: left;
-    cursor: pointer;
+    justify-content: center;
+    gap: 8px;
+    justify-self: end;
+    border: 1px solid rgba(105, 128, 151, .20);
+    border-radius: 9px;
+    color: #e7ebf0;
+    background: rgba(70, 91, 113, .46);
+    font-size: 11px;
+    font-weight: 690;
   }
 
-  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__security:hover {
-    border-color: rgba(60, 197, 137, .36);
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__row-action svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__security-section {
+    display: grid;
+    gap: 12px;
+    padding: 18px 20px 16px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__security {
+    min-height: 78px;
+    display: grid;
+    grid-template-columns: 46px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 16px;
+    border: 1px solid rgba(31, 198, 122, .48);
+    border-radius: 12px;
+    background:
+      linear-gradient(90deg, rgba(13, 65, 52, .29), rgba(10, 31, 42, .80) 26%, rgba(9, 28, 41, .82));
   }
 
   #root .desktop-layout[data-offline="false"] .my-account-profile-v1__security-icon {
-    width: 48px;
-    height: 48px;
+    width: 43px;
+    height: 43px;
     display: grid;
     place-items: center;
-    border-radius: 12px;
-    color: #64e7b2;
-    background: rgba(25, 139, 96, .19);
+    border-radius: 8px;
+    color: #f0fff8;
+    background: linear-gradient(145deg, #23bd7b, #15965f);
+    box-shadow: 0 0 22px rgba(28, 198, 123, .15);
   }
 
   #root .desktop-layout[data-offline="false"] .my-account-profile-v1__security-icon svg {
-    width: 22px;
-    height: 22px;
+    width: 21px;
+    height: 21px;
+    stroke-width: 2;
   }
 
   #root .desktop-layout[data-offline="false"] .my-account-profile-v1__security-copy {
+    min-width: 0;
     display: grid;
-    gap: 3px;
+    gap: 4px;
   }
 
   #root .desktop-layout[data-offline="false"] .my-account-profile-v1__security-copy strong {
-    color: #f1f5f8;
+    color: #f0f4f6;
     font-size: 13px;
+    font-weight: 730;
   }
 
   #root .desktop-layout[data-offline="false"] .my-account-profile-v1__security-copy small {
-    color: #8fa3b7;
+    color: #8799a8;
     font-size: 11px;
   }
 
-  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__security > svg {
-    width: 19px;
-    height: 19px;
-    justify-self: end;
-    color: #c8d3df;
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__security-action {
+    min-height: 43px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 14px;
+    border: 1px solid rgba(103, 128, 150, .22);
+    border-radius: 9px;
+    background: rgba(67, 88, 108, .50);
+    color: #f0f2f5;
+    font: inherit;
+    font-size: 11px;
+    font-weight: 690;
+    cursor: pointer;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__security-action:hover {
+    border-color: rgba(64, 202, 135, .38);
+    background: rgba(73, 98, 119, .62);
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__security-action svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__footer {
+    min-height: 72px;
+    display: grid;
+    place-items: center;
+    align-content: center;
+    gap: 5px;
+    color: #596c7f;
+    text-align: center;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__footer-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: #f0f2f4;
+    font-size: 13px;
+    font-weight: 740;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__footer-title svg {
+    width: 20px;
+    height: 20px;
+    color: #f0f2f4;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__footer small {
+    color: #52677a;
+    font-size: 10px;
   }
 }
 
 @media (min-width: 1024px) and (max-width: 1240px) {
   #root .desktop-layout[data-offline="false"] .my-account-profile-v1 {
-    padding-inline: 34px;
-  }
-
-  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__hero {
-    margin-inline: -34px;
-    padding-inline: 52px;
-  }
-
-  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__intro {
-    margin-left: 18px;
+    --profile-v1-inline: 42px;
   }
 
   #root .desktop-layout[data-offline="false"] .my-account-profile-v1__headphones {
-    right: -80px;
-    width: 500px;
-    background-size: 500px auto;
+    left: 43%;
+    width: 520px;
+    background-size: cover;
   }
 
   #root .desktop-layout[data-offline="false"] .my-account-profile-v1__quote {
-    left: 52%;
+    right: 44px;
   }
 }
 
