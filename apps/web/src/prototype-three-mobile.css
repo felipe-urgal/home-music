@@ -780,18 +780,7 @@
   }
 
   #root .desktop-layout[data-offline="false"] .mobile-collection-detail .section-heading {
-    min-height: 24px;
-    margin: 4px 0 5px;
-    color: #8f9cad;
-    font-size: 10px;
-    font-weight: 650;
-    letter-spacing: .04em;
-    text-transform: uppercase;
-  }
-
-  #root .desktop-layout[data-offline="false"] .mobile-collection-detail .section-heading small {
-    color: #6f7d90;
-    font-size: 9px;
+    display: none !important;
   }
 
   #root .desktop-layout[data-offline="false"] .mobile-collection-detail .library-track {
@@ -801,7 +790,7 @@
   }
 
   #root .desktop-layout[data-offline="false"] .mobile-collection-detail .library-track__main {
-    grid-template-columns: 44px minmax(0, 1fr) 30px;
+    grid-template-columns: 44px minmax(0, 1fr) auto;
     gap: 10px;
   }
 
@@ -817,6 +806,36 @@
 
   #root .desktop-layout[data-offline="false"] .mobile-collection-detail .library-track__text small {
     font-size: 10px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .library-track__mobile-meta {
+    display: none;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-collection-detail .library-track__mobile-meta {
+    min-width: 52px;
+    display: inline-grid;
+    grid-template-columns: auto 16px;
+    align-items: center;
+    justify-content: end;
+    gap: 7px;
+    color: #a7b1bf;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-collection-detail .library-track__duration {
+    font-size: 9px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-collection-detail .library-track__more {
+    width: 15px;
+    height: 15px;
+    color: #8c98a9;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-collection-detail .library-track__action,
+  #root .desktop-layout[data-offline="false"] .mobile-collection-detail .playing-indicator {
+    display: none !important;
   }
 
   #root .desktop-layout[data-offline="false"] .mobile-collection-detail .folder-visual-grid {
