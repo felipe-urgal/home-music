@@ -38,6 +38,9 @@ describe('AccountOpenSubsonicKeys prototype 2', () => {
 
     expect(css).toContain('width: 100%;');
     expect(css).toContain('grid-template-columns: minmax(0, 1fr) 212px;');
+    expect(css).toContain('min-height: 84px;');
+    expect(css).toContain('clip-path: polygon(48% 0, 100% 0, 100% 100%, 0 100%);');
+    expect(css).toContain('gap: 28px;');
     expect(css).toContain('.account-apps-v2__create');
     expect(css).toContain('.account-apps-v2__authorized');
     expect(css).toContain('.account-apps-v2__status');
