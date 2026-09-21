@@ -527,24 +527,24 @@ export function MyAccountScreen({
                 </button>
               </header>
 
-              <dl className="my-account-profile-v1__info-grid">
+              <div className="my-account-profile-v1__info-grid">
                 <div>
                   <span className="my-account-profile-v1__info-icon"><UserRound /></span>
-                  <span>
-                    <dt>Nome de usuário</dt>
+                  <span className="my-account-profile-v1__info-copy">
+                    <strong>Nome de usuário</strong>
                     <small>Identificação da sua conta no Home Music.</small>
                   </span>
-                  <dd>{currentUser.username}</dd>
+                  <span className="my-account-profile-v1__info-value">{currentUser.username}</span>
                 </div>
                 <div>
                   <span className="my-account-profile-v1__info-icon"><ShieldCheck /></span>
-                  <span>
-                    <dt>Tipo de conta</dt>
+                  <span className="my-account-profile-v1__info-copy">
+                    <strong>Tipo de conta</strong>
                     <small>Define suas permissões e acessos.</small>
                   </span>
-                  <dd>{roleLabel}</dd>
+                  <span className="my-account-profile-v1__info-value">{roleLabel}</span>
                 </div>
-              </dl>
+              </div>
             </section>
 
             <button
