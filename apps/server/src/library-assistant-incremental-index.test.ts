@@ -150,7 +150,7 @@ test('índice incremental reutiliza uma premissa concluída sem depender da fila
   }
 });
 
-test('triagem limita fila e progresso às faixas que precisam de reparo', async () => {
+test('triagem limita o incremental, mas a reanálise completa inclui todas as faixas', async () => {
   const calls: string[] = [];
   const analyzer: LibraryAssistantAnalyzer = {
     id: 'metadata-eligibility-test',
@@ -175,8 +175,8 @@ test('triagem limita fila e progresso às faixas que precisam de reparo', async 
 
       const full = service.startRun('metadata', 'admin-1', { full: true });
       await waitFor(() => service.getRun(full.id)?.status === 'completed');
-      assert.deepEqual(calls, ['needs-repair', 'needs-repair']);
-      assert.equal(workQueue.summary(full.id).total, 1);
+      assert.deepEqual(calls, ['needs-repair', 'healthy', 'needs-repair']);
+      assert.equal(workQueue.summary(full.id).total, 2);
     },
     (capability, item) => capability !== 'metadata' || item.artist === 'Artista desconhecido'
   );

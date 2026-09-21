@@ -4,6 +4,8 @@ const username = 'playwright';
 const password = 'playwright-password-2026';
 
 test('player desktop usa navbar superior e mantém superfícies utilitárias livres', async ({ page }) => {
+  test.setTimeout(120_000);
+
   await page.goto('/');
   await page.getByLabel('Usuário').fill(username);
   await page.getByLabel('Senha', { exact: true }).fill(password);
@@ -257,10 +259,21 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   const sessionsBackground = await page.locator('.my-account-screen--sessions').evaluate(
     element => getComputedStyle(element).backgroundColor
   );
+  const sessionsGrid = sessionsV2.locator('.account-sessions-v2__cards');
+  const sessionsColumns = await sessionsGrid.evaluate(element => (
+    getComputedStyle(element).gridTemplateColumns.split(' ').filter(Boolean).length
+  ));
+  const sessionsGridBox = await sessionsGrid.boundingBox();
+  const currentSessionBox = await currentSessionCard.boundingBox();
+
   expect(sessionsBox).not.toBeNull();
-  expect(sessionsBox!.width).toBeLessThanOrEqual(765);
-  expect(sessionsBox!.width).toBeGreaterThanOrEqual(600);
-  expect(sessionsBackground).toBe('rgb(247, 247, 249)');
+  expect(sessionsGridBox).not.toBeNull();
+  expect(currentSessionBox).not.toBeNull();
+  expect(sessionsBox!.width).toBeGreaterThanOrEqual(viewport!.width * 0.95);
+  expect(sessionsBackground).not.toBe('rgb(247, 247, 249)');
+  expect(sessionsBackground).not.toBe('rgb(255, 255, 255)');
+  expect(sessionsColumns).toBe(2);
+  expect(currentSessionBox!.width).toBeGreaterThanOrEqual(sessionsGridBox!.width * 0.98);
 
   await sessionsV2.getByRole('button', { name: 'Minha conta', exact: true }).click();
   await expect(accountV3).toBeVisible();
@@ -310,6 +323,39 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   expect(profileHeadphones).toContain('profile-v1-headphones.webp');
 
   await profileV1.getByRole('button', { name: /Minha conta/ }).click();
+  await expect(accountV3).toBeVisible();
+
+  await accountV3.getByRole('button', { name: /Apps e integrações/ }).click();
+  const appsV2 = page.getByTestId('account-apps-prototype-two');
+  const appsCreate = appsV2.locator('.account-apps-v2__create');
+  const appsAuthorized = appsV2.locator('.account-apps-v2__authorized');
+  const appsCreateForm = appsV2.locator('.account-apps-v2__create-form');
+
+  await expect(appsV2).toBeVisible();
+  await expect(appsV2.getByRole('button', { name: 'Minha conta', exact: true })).toBeVisible();
+  await expect(appsV2.getByRole('heading', { name: 'Apps e integrações', exact: true })).toBeVisible();
+  await expect(appsV2.getByText('Conecte seus apps e serviços favoritos ao Home Music.', { exact: true })).toBeVisible();
+  await expect(appsV2.getByText('Nova chave de aplicativo', { exact: true })).toBeVisible();
+  await expect(appsV2.getByText('Aplicativos autorizados', { exact: true })).toBeVisible();
+  await expect(appsV2.getByLabel('Nome do aplicativo')).toBeVisible();
+  await expect(appsV2.getByRole('button', { name: 'Criar chave', exact: true })).toBeDisabled();
+
+  const appsBox = await appsV2.boundingBox();
+  const createBox = await appsCreate.boundingBox();
+  const authorizedBox = await appsAuthorized.boundingBox();
+  const createFormColumns = await appsCreateForm.evaluate(element => (
+    getComputedStyle(element).gridTemplateColumns.split(' ').filter(Boolean).length
+  ));
+
+  expect(appsBox).not.toBeNull();
+  expect(createBox).not.toBeNull();
+  expect(authorizedBox).not.toBeNull();
+  expect(appsBox!.width).toBeGreaterThanOrEqual(viewport!.width * 0.95);
+  expect(createBox!.width).toBeGreaterThanOrEqual(appsBox!.width * 0.9);
+  expect(authorizedBox!.width).toBeGreaterThanOrEqual(appsBox!.width * 0.9);
+  expect(createFormColumns).toBe(2);
+
+  await appsV2.getByRole('button', { name: 'Minha conta', exact: true }).click();
   await expect(accountV3).toBeVisible();
 
   await accountV3.getByRole('button', { name: /Administração/ }).click();

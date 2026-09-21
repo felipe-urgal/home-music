@@ -72,6 +72,7 @@ import './account-overview-v3.css';
 import './account-profile-v1.css';
 import './account-password-v3.css';
 import './account-sessions-v2.css';
+import './account-apps-v2.css';
 import './tv.css';
 import './tv-login.css';
 import './tv-v2.css';

@@ -45,15 +45,20 @@ describe('MyAccountScreen password prototype 3', () => {
     expect(component).toContain('Evite informações pessoais óbvias');
   });
 
-  it('usa uma coluna central, roxo como destaque e card de dicas separado', () => {
+  it('escala o protótipo para ocupar a largura da tela sem perder a composição', () => {
     const css = cssSource();
 
-    expect(css).toContain('width: min(100% - 48px, 570px);');
+    expect(css).toContain('width: calc(100% - 36px);');
+    expect(css).toContain('width: calc(100% - 64px);');
+    expect(css).toContain('border-radius: 16px;');
     expect(css).toContain('.my-account-password-v3__lock');
     expect(css).toContain('linear-gradient(145deg, #7653ea, #5a32cf)');
     expect(css).toContain('.my-account-password-v3__form-card');
     expect(css).toContain('.my-account-password-v3__tips');
     expect(css).toContain('.my-account-password-v3__submit');
-    expect(css).not.toContain('grid-template-columns: minmax(0, 1.66fr) minmax(330px, .95fr);');
+    expect(css).toContain('.my-account-password-v3__strength.is-weak');
+    expect(css).toContain('.my-account-password-v3__strength.is-medium');
+    expect(css).toContain('.my-account-password-v3__strength.is-strong');
+    expect(css).not.toContain('width: min(100% - 48px, 570px);');
   });
 });

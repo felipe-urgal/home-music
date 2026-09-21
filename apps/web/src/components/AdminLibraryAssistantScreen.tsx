@@ -619,7 +619,7 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
       setSelected(new Set());
       setFeedback({
         kind: 'success',
-        message: `${invalidated.toLocaleString('pt-BR')} sugestão${invalidated === 1 ? '' : 'ões'} aberta${invalidated === 1 ? '' : 's'} descartada${invalidated === 1 ? '' : 's'}. Nova análise completa iniciada.`
+        message: `${invalidated.toLocaleString('pt-BR')} sugestão${invalidated === 1 ? '' : 'ões'} aberta${invalidated === 1 ? '' : 's'} descartada${invalidated === 1 ? '' : 's'}. Reanálise completa de toda a biblioteca iniciada.`
       });
       await load(true);
     } catch (error) {
@@ -1002,7 +1002,7 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
               {latestRun?.status === 'queued' ? (
                 <>{totalTracks.toLocaleString('pt-BR')}<span> faixas aguardando processamento</span></>
               ) : (
-                <>{processedTracks.toLocaleString('pt-BR')}<span> de {totalTracks.toLocaleString('pt-BR')} faixas com pendências analisadas</span></>
+                <>{processedTracks.toLocaleString('pt-BR')}<span> de {totalTracks.toLocaleString('pt-BR')} faixas desta análise processadas</span></>
               )}
             </strong>
             <strong>{progressPercent}%</strong>
@@ -1306,7 +1306,7 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
               <p className="assistant-admin__operations-copy">Ainda não há uma análise para acompanhar.</p>
             ) : (
               <p className="assistant-admin__operations-copy">
-                {processedTracks.toLocaleString('pt-BR')} de {totalTracks.toLocaleString('pt-BR')} faixas elegíveis nesta execução concluídas.
+                {processedTracks.toLocaleString('pt-BR')} de {totalTracks.toLocaleString('pt-BR')} faixas desta execução concluídas.
                 {observed?.etaMs != null && runActive ? ` Estimativa restante: ${formatDuration(observed.etaMs)}.` : ''}
               </p>
             )}
@@ -1453,7 +1453,7 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
           )}
           <div className="assistant-admin__settings">
             <strong>Comportamento da análise</strong>
-            <p className="assistant-admin__settings-note">Use “Analisar mudanças” no dia a dia: itens com falha anterior, faixas novas e alterações voltam para a fila. “Limpar e reanalisar tudo” invalida somente sugestões abertas de metadados, capas e letras; Aplicadas e Rejeitadas permanecem no histórico. Alterar a política não força uma nova análise.</p>
+            <p className="assistant-admin__settings-note">Use “Analisar mudanças” no dia a dia: itens com falha anterior, faixas novas e alterações voltam para a fila. “Limpar e reanalisar tudo” invalida as sugestões abertas e força uma nova análise de todas as faixas da biblioteca, inclusive as que hoje parecem completas; Aplicadas e Rejeitadas permanecem no histórico. Alterar a política não força uma nova análise.</p>
           </div>
         </section>
       )}
@@ -1477,7 +1477,7 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
         <div className="assistant-admin__confirm-backdrop">
           <section className="assistant-admin__confirm" role="dialog" aria-modal="true" aria-labelledby="assistant-confirm-reset-title">
             <h2 id="assistant-confirm-reset-title">Limpar e reanalisar tudo?</h2>
-            <p>As sugestões abertas de metadados, capas e letras serão marcadas como desatualizadas e uma nova análise completa será iniciada. Aplicadas, Rejeitadas e o histórico das execuções serão preservados.</p>
+            <p>As sugestões abertas de metadados, capas e letras serão marcadas como desatualizadas e todas as faixas da biblioteca serão analisadas novamente, inclusive as que hoje parecem completas. Aplicadas, Rejeitadas e o histórico das execuções serão preservados.</p>
             <div className="assistant-admin__confirm-actions">
               <button autoFocus className="assistant-admin__secondary-button" type="button" onClick={() => setConfirmReset(false)}>Cancelar</button>
               <button className="assistant-admin__danger-button" type="button" onClick={() => void resetAndAnalyze()}><RefreshCw /> Limpar e reanalisar</button>

@@ -1,0 +1,427 @@
+/* Apps e integrações — protótipo 2 aprovado.
+   Desktop ocupa toda a superfície e preserva o fluxo legado no mobile/TV. */
+
+@media (min-width: 1024px) {
+  #root .desktop-layout[data-offline="false"] .my-account-screen--apps {
+    width: 100%;
+    max-width: none;
+    min-height: calc(100vh - 56px);
+    margin: 0;
+    padding: 0;
+    position: relative;
+    overflow: hidden;
+    color: #edf3fb;
+    background:
+      radial-gradient(ellipse at 31% 17%, rgba(15, 62, 118, .22), transparent 34%),
+      radial-gradient(ellipse at 78% 10%, rgba(47, 38, 144, .18), transparent 32%),
+      linear-gradient(150deg, #07111e 0%, #071528 48%, #050b14 100%);
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-screen--apps::before {
+    content: "";
+    position: absolute;
+    z-index: 0;
+    top: 0;
+    right: 0;
+    width: 54%;
+    height: 126px;
+    pointer-events: none;
+    background:
+      linear-gradient(155deg, rgba(34, 31, 112, .04) 0 26%, rgba(48, 36, 166, .42) 100%);
+    clip-path: polygon(48% 0, 100% 0, 100% 100%, 0 100%);
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-screen--apps > .my-account-header {
+    display: none;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-screen--apps > .my-account-message {
+    width: calc(100% - 72px);
+    margin: 0 36px 12px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-apps-v2 {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    min-width: 0;
+    display: grid;
+    align-content: start;
+    gap: 24px;
+    padding: 0 36px 42px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__page-header {
+    min-height: 84px;
+    display: grid;
+    grid-template-columns: minmax(190px, 1fr) minmax(460px, 1.4fr) minmax(190px, 1fr);
+    align-items: center;
+    gap: 20px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__page-header > button {
+    min-height: 38px;
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    justify-self: start;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: #cdd8e7;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 580;
+    cursor: pointer;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__page-header > button:hover {
+    color: #fff;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__page-header > button svg {
+    width: 18px;
+    height: 18px;
+    stroke-width: 1.9;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__intro {
+    display: grid;
+    justify-items: center;
+    gap: 8px;
+    text-align: center;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__intro h1 {
+    margin: 0;
+    color: #f5f6fa;
+    font-size: 29px;
+    font-weight: 790;
+    line-height: 1.05;
+    letter-spacing: -.025em;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__intro p {
+    margin: 0;
+    color: #92a4bf;
+    font-size: 14px;
+    line-height: 1.4;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__create,
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__authorized,
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__token {
+    border: 1px solid rgba(43, 99, 157, .50);
+    border-radius: 16px;
+    background:
+      radial-gradient(circle at 82% 18%, rgba(22, 70, 135, .14), transparent 31%),
+      linear-gradient(180deg, rgba(8, 30, 54, .92), rgba(7, 26, 47, .96));
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.018),
+      0 18px 40px rgba(0,0,0,.10);
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__create {
+    min-height: 188px;
+    display: grid;
+    align-content: center;
+    gap: 18px;
+    padding: 24px 27px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__authorized {
+    min-height: 306px;
+    display: grid;
+    align-content: start;
+    gap: 10px;
+    padding: 24px 27px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__token {
+    display: grid;
+    gap: 16px;
+    padding: 22px 27px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__section-heading {
+    display: grid;
+    grid-template-columns: 64px minmax(0, 1fr);
+    align-items: center;
+    gap: 28px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__section-icon {
+    width: 64px;
+    height: 64px;
+    display: grid;
+    place-items: center;
+    border-radius: 16px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__section-icon.is-violet {
+    color: #e7e2ff;
+    background:
+      linear-gradient(145deg, rgba(87, 49, 188, .94), rgba(50, 32, 131, .94));
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__section-icon.is-blue {
+    color: #edf7ff;
+    background:
+      linear-gradient(145deg, rgba(28, 79, 164, .92), rgba(16, 61, 123, .94));
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__section-icon svg {
+    width: 30px;
+    height: 30px;
+    stroke-width: 1.8;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__section-heading > div {
+    min-width: 0;
+    display: grid;
+    gap: 6px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__section-heading strong {
+    color: #f3f5f8;
+    font-size: 20px;
+    font-weight: 760;
+    letter-spacing: -.015em;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__section-heading small {
+    color: #91a5c2;
+    font-size: 13px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__create-form,
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__token-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 212px;
+    align-items: center;
+    gap: 22px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__create-form input,
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__token-row input {
+    width: 100%;
+    min-width: 0;
+    height: 58px;
+    padding: 0 20px;
+    border: 1px solid rgba(65, 101, 142, .62);
+    border-radius: 10px;
+    outline: 0;
+    background: rgba(5, 20, 39, .76);
+    color: #eef4fb;
+    font: inherit;
+    font-size: 15px;
+    transition: border-color 140ms ease, box-shadow 140ms ease;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__create-form input:focus,
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__token-row input:focus {
+    border-color: rgba(104, 81, 241, .86);
+    box-shadow: 0 0 0 2px rgba(95, 71, 225, .12);
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__create-form input::placeholder {
+    color: #7084a3;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__create-form button,
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__token-row button {
+    min-height: 58px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 0 20px;
+    border: 1px solid rgba(119, 86, 255, .85);
+    border-radius: 11px;
+    background:
+      linear-gradient(180deg, #714cff, #562fe0);
+    color: #fff;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.16),
+      0 10px 24px rgba(85, 46, 215, .24);
+    font: inherit;
+    font-size: 15px;
+    font-weight: 750;
+    cursor: pointer;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__create-form button:hover:not(:disabled),
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__token-row button:hover:not(:disabled) {
+    background: linear-gradient(180deg, #7b58ff, #6238e8);
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__create-form button:disabled,
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__token-row button:disabled {
+    opacity: .82;
+    cursor: not-allowed;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__create-form button svg,
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__token-row button svg {
+    width: 23px;
+    height: 23px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__token > small {
+    color: #7f91aa;
+    font-size: 10px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__token > small strong {
+    color: #b8c6d8;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__list {
+    display: grid;
+    gap: 10px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__row {
+    min-width: 0;
+    min-height: 86px;
+    display: grid;
+    grid-template-columns: 58px minmax(0, 1fr) auto 130px;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 16px;
+    border: 1px solid rgba(49, 91, 139, .55);
+    border-radius: 12px;
+    background:
+      linear-gradient(180deg, rgba(8, 29, 53, .92), rgba(7, 26, 48, .96));
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__row-icon {
+    width: 56px;
+    height: 56px;
+    display: grid;
+    place-items: center;
+    border-radius: 13px;
+    color: #eef7ff;
+    background:
+      linear-gradient(145deg, #2384ef, #0d57c4);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.10);
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__row-icon svg {
+    width: 29px;
+    height: 29px;
+    stroke-width: 1.8;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__row-copy {
+    min-width: 0;
+    display: grid;
+    gap: 6px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__row-copy strong {
+    overflow: hidden;
+    color: #f4f6f9;
+    font-size: 16px;
+    font-weight: 750;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__row-copy small {
+    overflow: hidden;
+    color: #91a4c0;
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__status {
+    min-height: 38px;
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    padding: 0 15px;
+    border-radius: 999px;
+    background: rgba(13, 108, 74, .62);
+    color: #36e596;
+    font-size: 12px;
+    font-weight: 760;
+    white-space: nowrap;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__status i {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #27e78f;
+    box-shadow: 0 0 12px rgba(39, 231, 143, .55);
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__revoke {
+    min-height: 48px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    padding: 0 15px;
+    border: 1px solid rgba(67, 110, 160, .62);
+    border-radius: 10px;
+    background: rgba(12, 35, 63, .82);
+    color: #dbe8f8;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 650;
+    cursor: pointer;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__revoke:hover:not(:disabled) {
+    border-color: rgba(120, 97, 236, .66);
+    background: rgba(31, 42, 79, .76);
+    color: #fff;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__revoke:disabled {
+    opacity: .48;
+    cursor: default;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__revoke svg {
+    width: 19px;
+    height: 19px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__state {
+    min-height: 112px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    color: #8ea0bb;
+    font-size: 12px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__message {
+    margin: 0;
+  }
+}
+
+@media (min-width: 1024px) and (max-width: 1260px) {
+  #root .desktop-layout[data-offline="false"] .account-apps-v2 {
+    padding-inline: 24px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__page-header {
+    grid-template-columns: minmax(150px, 1fr) minmax(400px, 1.35fr) minmax(150px, 1fr);
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__create-form,
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__token-row {
+    grid-template-columns: minmax(0, 1fr) 190px;
+    gap: 14px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-apps-v2__row {
+    grid-template-columns: 54px minmax(0, 1fr) auto 118px;
+  }
+}

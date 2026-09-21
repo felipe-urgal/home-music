@@ -90,6 +90,7 @@ test('Alterar senha permite mostrar e ocultar os três campos juntos', async ({ 
   if (viewport && viewport.width >= 1024) {
     const passwordV3 = page.getByTestId('my-account-password-prototype-three');
     const content = passwordV3.locator('.my-account-password-v3__content');
+    const formCard = passwordV3.locator('.my-account-password-v3__form-card');
 
     await expect(passwordV3).toBeVisible();
     await expect(passwordV3.getByRole('heading', { name: 'Alterar senha', exact: true })).toBeVisible();
@@ -99,9 +100,15 @@ test('Alterar senha permite mostrar e ocultar os três campos juntos', async ({ 
     await expect(passwordV3.getByText('Use pelo menos 6 caracteres', { exact: true })).toBeVisible();
     await expect(passwordV3.getByText('Suas informações estão protegidas', { exact: true })).toBeVisible();
 
+    const passwordV3Box = await passwordV3.boundingBox();
     const contentBox = await content.boundingBox();
+    const formCardBox = await formCard.boundingBox();
+    expect(passwordV3Box).not.toBeNull();
     expect(contentBox).not.toBeNull();
-    expect(contentBox!.width).toBeLessThanOrEqual(575);
+    expect(formCardBox).not.toBeNull();
+    expect(passwordV3Box!.width).toBeGreaterThanOrEqual(viewport.width * 0.95);
+    expect(contentBox!.width).toBeGreaterThanOrEqual(viewport.width * 0.9);
+    expect(formCardBox!.width).toBeGreaterThanOrEqual(contentBox!.width * 0.99);
 
     await page.getByRole('button', { name: 'Mostrar senha atual' }).click();
     await expect(current).toHaveAttribute('type', 'text');

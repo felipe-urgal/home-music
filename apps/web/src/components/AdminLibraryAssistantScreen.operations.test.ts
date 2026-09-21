@@ -87,7 +87,7 @@ describe('AdminLibraryAssistantScreen operational workflow', () => {
     expect(screen).toMatch(/<button autoFocus/);
   });
 
-  it('diferencia o total da biblioteca do escopo elegível da execução', () => {
+  it('diferencia o total da biblioteca do escopo da execução', () => {
     const screen = source();
 
     expect(screen).toMatch(/listAdminTracks/);
@@ -95,7 +95,15 @@ describe('AdminLibraryAssistantScreen operational workflow', () => {
     expect(screen).toContain('nesta análise');
     expect(screen).toContain('<dt>Biblioteca</dt>');
     expect(screen).toContain('<dt>Nesta análise</dt>');
-    expect(screen).toContain('faixas elegíveis nesta execução concluídas');
+    expect(screen).toContain('faixas desta execução concluídas');
+  });
+
+  it('explica que a reanálise completa percorre toda a biblioteca', () => {
+    const screen = source();
+
+    expect(screen).toContain('todas as faixas da biblioteca serão analisadas novamente');
+    expect(screen).toContain('força uma nova análise de todas as faixas da biblioteca');
+    expect(screen).toContain('Reanálise completa de toda a biblioteca iniciada.');
   });
 
   it('não mostra 100% enquanto ainda existem faixas por concluir', () => {
