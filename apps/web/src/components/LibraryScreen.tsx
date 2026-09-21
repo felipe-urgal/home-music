@@ -95,8 +95,7 @@ export function LibraryScreen({
     currentViewDefinition,
     libraryTracks,
     selectTab,
-    leaveFolder,
-    leavePlaylist
+    leaveFolder
   } = navigation;
 
   const isDetail = Boolean(selectedPlaylist || folderPath);
@@ -142,8 +141,7 @@ export function LibraryScreen({
     setViewControlsOpen(false);
     setMobileCollectionMenuOpen(false);
     if (selectedPlaylist) {
-      if (desktopLayout) selectTab('folders');
-      else leavePlaylist();
+      selectTab('folders');
     } else if (folderPath) leaveFolder();
   }
 
