@@ -57,7 +57,7 @@ test('mobile segue o protótipo 3 na biblioteca, detalhe e player', async ({ pag
   const progress = page.locator('.progress-wrap');
   const heroPlay = page.locator('.player-hero-play');
   const heroControl = page.locator('.player-hero-play__control');
-  const nextTrackCard = page.locator('.queue-panel__toggle');
+  const nextTrackCard = page.locator('.queue-panel__toggle-mobile');
 
   await expect(player).toBeVisible();
   await expect(topbar.getByRole('button', { name: 'Biblioteca' })).toBeVisible();
