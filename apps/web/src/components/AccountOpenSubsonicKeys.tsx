@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { ChevronLeft, CircleHelp, Copy, KeyRound, LoaderCircle, Plus, Trash2, UserRound, UsersRound } from 'lucide-react';
+import { ChevronLeft, Copy, KeyRound, LoaderCircle, Plus, Trash2, UserRound, UsersRound } from 'lucide-react';
 import {
   createOpenSubsonicKey,
   listOpenSubsonicKeys,
@@ -120,21 +120,17 @@ export function AccountOpenSubsonicKeys({
   if (prototypeTwo) {
     return (
       <div className="account-apps-v2" data-testid="account-apps-prototype-two">
-        <header className="account-apps-v2__topbar">
+        <header className="account-apps-v2__page-header">
           <button type="button" onClick={onBack}>
             <ChevronLeft />
             <span>Minha conta</span>
           </button>
-          <span className="account-apps-v2__help" aria-label="Ajuda">
-            <CircleHelp />
-            <span>Ajuda</span>
-          </span>
+          <div className="account-apps-v2__intro">
+            <h1 id="account-apps-v2-title">Apps e integrações</h1>
+            <p>Conecte seus apps e serviços favoritos ao Home Music.</p>
+          </div>
+          <span aria-hidden="true" />
         </header>
-
-        <section className="account-apps-v2__intro" aria-labelledby="account-apps-v2-title">
-          <h1 id="account-apps-v2-title">Apps e integrações</h1>
-          <p>Conecte seus apps e serviços favoritos ao Home Music.</p>
-        </section>
 
         {error && <div className="my-account-message is-error account-apps-v2__message" role="alert">{error}</div>}
 
