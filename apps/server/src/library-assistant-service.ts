@@ -678,12 +678,18 @@ export class LibraryAssistantService {
       return;
     }
 
+    const records = (['pending', 'review'] as const).flatMap(status =>
+      this.options.store.listSuggestionRecords(runId, {
+        status,
+        limit: MAX_SUGGESTIONS_PER_LEGACY_RUN
+      })
+    );
+    if (records.length === 0) return;
+
     const tracks = new Map(this.options.library.listTracks().map(track => [track.id, track]));
-    const records = this.options.store.listSuggestionRecords(runId, { limit: MAX_SUGGESTIONS_PER_LEGACY_RUN });
     let stale = false;
     const updatedAt = this.now().toISOString();
     for (const record of records) {
-      if (record.suggestion.status !== 'pending' && record.suggestion.status !== 'review') continue;
       const track = tracks.get(record.suggestion.target.trackId);
       const currentSignature = track
         ? this.suggestionPremiseSignature(record.suggestion.capability, track, record.suggestion.target)
