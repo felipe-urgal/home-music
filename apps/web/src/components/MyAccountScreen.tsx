@@ -641,7 +641,7 @@ export function MyAccountScreen({
                 <p>Escolha uma nova senha forte e segura.</p>
               </section>
 
-              <form className="my-account-password-v3__form-card" onSubmit={submitPassword}>
+              <form id="my-account-password-v3-form" className="my-account-password-v3__form-card" onSubmit={submitPassword}>
                 <label>
                   <span>Senha atual</span>
                   <span className="my-account-password-v3__field">
@@ -743,12 +743,9 @@ export function MyAccountScreen({
 
               <button
                 className="my-account-password-v3__submit"
-                type="button"
+                type="submit"
+                form="my-account-password-v3-form"
                 disabled={changingPassword || Boolean(validationError)}
-                onClick={() => {
-                  const form = document.querySelector<HTMLFormElement>('.my-account-password-v3__form-card');
-                  form?.requestSubmit();
-                }}
               >
                 {changingPassword ? <LoaderCircle className="my-account-spinner" /> : <LockKeyhole />}
                 <span>{changingPassword ? 'Alterando…' : 'Alterar senha'}</span>
