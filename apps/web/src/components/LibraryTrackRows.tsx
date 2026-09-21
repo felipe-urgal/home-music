@@ -178,7 +178,7 @@ export function LibraryTrackRows({
                 <small>{track.artist} · {track.album}</small>
               </span>
               <span className="library-track__mobile-meta" aria-hidden="true">
-                <span className="library-track__duration">{formatPlayerTime(track.duration)}</span>
+                <span className="library-track__duration">{formatPlayerTime(track.duration ?? 0)}</span>
                 <MoreHorizontal className="library-track__more" />
               </span>
               {isCurrent && playing
