@@ -391,7 +391,8 @@
       33% 65%, 30% 90%, 27% 72%, 24% 58%, 21% 79%, 18% 66%, 15% 93%, 12% 75%,
       9% 61%, 6% 82%, 3% 70%, 0 56%
     );
-    clip-path: inset(0 calc(100% - var(--progress)) 0 0);
+    -webkit-mask-image: linear-gradient(90deg, #000 0 var(--progress), transparent var(--progress) 100%);
+    mask-image: linear-gradient(90deg, #000 0 var(--progress), transparent var(--progress) 100%);
   }
 
   #root .desktop-layout[data-offline="false"] .progress-wrap input[type="range"] {
