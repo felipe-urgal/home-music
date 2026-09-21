@@ -49,8 +49,11 @@ test('mobile segue o protótipo 3 na biblioteca, detalhe e player', async ({ pag
   await miniPlayer.getByRole('button', { name: 'Abrir Tocando Agora' }).click();
   await expect(page.locator('.player-screen-immersive')).toBeVisible();
   await expect(page.locator('.player-hero-play')).toBeVisible();
+  await expect(page.locator('.player-hero-play__control')).toBeHidden();
   await expect(page.locator('.controls').getByRole('button', { name: 'Anterior' })).toBeVisible();
+  await expect(page.locator('.controls').getByRole('button', { name: 'Pausar' })).toBeVisible();
   await expect(page.locator('.controls').getByRole('button', { name: 'Próxima' })).toBeVisible();
-  await expect(page.locator('.controls').getByRole('button', { name: 'Aleatório' })).toBeHidden();
-  await expect(page.locator('.controls').getByRole('button', { name: /Repet/ })).toBeHidden();
+  await expect(page.locator('.controls').getByRole('button', { name: 'Aleatório' })).toBeVisible();
+  await expect(page.locator('.player-mobile-playlist-action')).toBeVisible();
+  await expect(page.locator('.controls').getByRole('button', { name: /Repet/ })).toBeVisible();
 });
