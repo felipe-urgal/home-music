@@ -8,7 +8,8 @@ import {
 } from '@home-music/shared/library-assistant';
 import {
   COVER_ART_ARCHIVE_PROVIDER_VERSION,
-  findCoverArtArchiveFrontCover
+  findCoverArtArchiveFrontCover,
+  findCoverArtArchiveReleaseGroupFrontCover
 } from './cover-art-archive.js';
 import {
   LibraryAssistantProviderResponseError,
@@ -513,6 +514,38 @@ function confidenceFor(
   return 'low';
 }
 
+function textMatch(
+  match: RankedCandidate,
+  field: LibraryAssistantMetadataField
+) {
+  return match.evidence.find(item => item.type === 'text-match' && item.field === field)?.match ?? null;
+}
+
+function artworkConfidenceFor(
+  match: RankedCandidate,
+  margin: number,
+  usedFileContext: boolean
+): LibraryAssistantConfidenceBand | null {
+  if (match.blockingConflict || usedFileContext || !match.release || margin < HIGH_MARGIN) return null;
+
+  const titleMatch = textMatch(match, 'title');
+  const artistMatch = textMatch(match, 'artist');
+  const strongIdentity = titleMatch !== 'different'
+    && titleMatch != null
+    && artistMatch !== 'different'
+    && artistMatch != null;
+  if (!strongIdentity) return null;
+
+  const albumMatch = textMatch(match, 'album');
+  const albumCompatible = albumMatch == null || albumMatch !== 'different';
+  const durationCorroborates = match.reasonCodes.includes('duration-close');
+
+  // Para artwork, título + artista únicos identificam a gravação. Se o álbum
+  // local estiver errado, uma duração compatível ainda permite usar com
+  // segurança a release encontrada pelo MusicBrainz sem bloquear a capa.
+  return albumCompatible || durationCorroborates ? 'high' : null;
+}
+
 type QueryTerms = { title: string; artist: string };
 
 function queryText(terms: QueryTerms) {
@@ -611,6 +644,28 @@ function artworkLabel(values: Record<LibraryAssistantMetadataField, string>, rel
   return album ? `Capa frontal — ${album}` : 'Capa frontal do álbum';
 }
 
+async function findArtworkForRelease(
+  release: MusicBrainzRelease,
+  options: {
+    providers: LibraryAssistantProviderGateway;
+    fetchImpl: FetchLike;
+    userAgent: string;
+    signal?: AbortSignal;
+  }
+) {
+  const releaseArtwork = await findCoverArtArchiveFrontCover({
+    releaseId: release.id,
+    ...options
+  });
+  if (releaseArtwork) return releaseArtwork;
+
+  if (!release.releaseGroupId) return null;
+  return findCoverArtArchiveReleaseGroupFrontCover({
+    releaseGroupId: release.releaseGroupId,
+    ...options
+  });
+}
+
 export function createMusicBrainzMetadataAnalyzer(options: AnalyzerOptions = {}): LibraryAssistantAnalyzer {
   const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
   const userAgent = options.userAgent ?? MUSICBRAINZ_USER_AGENT;
@@ -700,11 +755,10 @@ export function createMusicBrainzMetadataAnalyzer(options: AnalyzerOptions = {})
 
         const values = metadataValues(best);
         const humanFields = new Set(options.getHumanOverrideFields?.(match.track.id) ?? []);
-        const artworkConfidence = confidenceFor(best, margin, false, match.usedFileContext);
+        const artworkConfidence = artworkConfidenceFor(best, margin, match.usedFileContext);
         if (!match.track.hasCover && artworkConfidence === 'high' && best.release) {
           try {
-            const artwork = await findCoverArtArchiveFrontCover({
-              releaseId: best.release.id,
+            const artwork = await findArtworkForRelease(best.release, {
               providers,
               fetchImpl,
               userAgent,
