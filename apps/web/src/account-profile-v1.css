@@ -1,0 +1,510 @@
+/* Profile detail — prototype 1.
+   Desktop follows the approved full-width editorial composition.
+   Mobile and TV keep the existing profile detail. */
+
+.my-account-profile-v1 {
+  display: none;
+}
+
+.my-account-profile-page--legacy {
+  display: grid;
+}
+
+@media (min-width: 1024px) {
+  #root .desktop-layout[data-offline="false"] .my-account-screen--profile {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 0 0 36px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-screen--profile > .my-account-header {
+    display: none;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-page--legacy {
+    display: none;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1 {
+    display: grid;
+    width: 100%;
+    min-width: 0;
+    gap: 18px;
+    padding: 0 48px 36px;
+    color: #eef3fa;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__hero {
+    position: relative;
+    isolation: isolate;
+    min-height: 292px;
+    margin-inline: -48px;
+    padding: 32px 80px 36px;
+    overflow: hidden;
+    background:
+      radial-gradient(ellipse at 58% 18%, rgba(139, 85, 54, .18), transparent 28%),
+      radial-gradient(ellipse at 23% 38%, rgba(29, 58, 96, .2), transparent 42%),
+      linear-gradient(180deg, rgba(7, 16, 29, .98), rgba(7, 15, 26, .95));
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__hero::before {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    inset: 0;
+    background:
+      linear-gradient(90deg, rgba(7, 16, 29, 1) 0%, rgba(7, 16, 29, .98) 34%, rgba(7, 16, 29, .55) 61%, rgba(7, 16, 29, .12) 80%, rgba(7, 16, 29, .34) 100%);
+    pointer-events: none;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__back {
+    position: relative;
+    z-index: 5;
+    width: fit-content;
+    min-height: 32px;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: #d9e0e9;
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__back svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__back:hover {
+    color: #fff;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__intro {
+    position: relative;
+    z-index: 5;
+    width: 390px;
+    display: grid;
+    gap: 7px;
+    margin: 56px 0 0 34px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__intro h1 {
+    margin: 0;
+    color: #f6f7fa;
+    font-size: 43px;
+    font-weight: 720;
+    line-height: 1;
+    letter-spacing: -.04em;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__intro > strong {
+    color: #9cb3d0;
+    font-size: 28px;
+    font-weight: 450;
+    letter-spacing: -.025em;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__intro p {
+    width: 390px;
+    margin: 6px 0 0;
+    color: #a7b5c7;
+    font-size: 15px;
+    line-height: 1.55;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__quote {
+    position: absolute;
+    z-index: 5;
+    left: 49%;
+    top: 132px;
+    display: grid;
+    gap: 14px;
+    color: #e8edf5;
+    transform: translateX(-50%) rotate(-2deg);
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__quote em {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 24px;
+    font-style: italic;
+    line-height: 1.2;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__quote i {
+    width: 54px;
+    height: 3px;
+    margin-left: 50px;
+    background: #d8a559;
+    border-radius: 999px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__headphones {
+    position: absolute;
+    z-index: 1;
+    right: -8px;
+    top: -12px;
+    width: 600px;
+    height: 350px;
+    background: url('/account-v3-headphones.webp') right center / 600px auto no-repeat;
+    pointer-events: none;
+    opacity: .96;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__identity {
+    position: relative;
+    z-index: 8;
+    min-height: 150px;
+    display: grid;
+    grid-template-columns: 110px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 20px;
+    margin-top: -74px;
+    padding: 24px 28px;
+    border: 1px solid rgba(70, 154, 222, .36);
+    border-radius: 15px;
+    background:
+      radial-gradient(circle at 8% 50%, rgba(31, 119, 189, .13), transparent 28%),
+      linear-gradient(105deg, rgba(7, 32, 55, .94), rgba(10, 24, 39, .96) 48%, rgba(9, 22, 36, .94));
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.025),
+      0 20px 55px rgba(0,0,0,.16);
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__avatar {
+    width: 96px;
+    height: 96px;
+    display: block;
+    overflow: hidden;
+    border: 1px solid rgba(74, 160, 234, .5);
+    border-radius: 50%;
+    background: #0b2843;
+    box-shadow: 0 0 0 8px rgba(26, 113, 181, .07);
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__avatar img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__identity-copy {
+    min-width: 0;
+    display: grid;
+    justify-items: start;
+    gap: 5px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__identity-copy strong {
+    max-width: 100%;
+    overflow: hidden;
+    color: #f4f7fb;
+    font-size: 28px;
+    font-weight: 720;
+    letter-spacing: -.025em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__identity-copy > span {
+    color: #73b9f2;
+    font-size: 15px;
+    font-weight: 600;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__identity-copy small {
+    margin-top: 3px;
+    color: #9eafc3;
+    font-size: 12px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__session {
+    min-width: 170px;
+    display: grid;
+    justify-items: end;
+    gap: 11px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__session > span {
+    min-height: 40px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 14px;
+    border: 1px solid rgba(35, 217, 137, .22);
+    border-radius: 13px;
+    color: #5ee7ae;
+    background: rgba(24, 129, 87, .2);
+    font-size: 12px;
+    font-weight: 720;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__session > span svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__session small {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: #94a5b8;
+    font-size: 11px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__session small i {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #39dc99;
+    box-shadow: 0 0 10px rgba(57, 220, 153, .7);
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__details {
+    display: grid;
+    gap: 16px;
+    padding: 22px;
+    border: 1px solid rgba(113, 134, 157, .24);
+    border-radius: 15px;
+    background:
+      linear-gradient(180deg, rgba(14, 29, 44, .92), rgba(11, 24, 37, .94));
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.02);
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__section-heading {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 14px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__section-icon,
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__info-icon {
+    display: grid;
+    place-items: center;
+    color: #6eb8ee;
+    background: rgba(29, 104, 170, .18);
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__section-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 11px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__section-icon svg {
+    width: 21px;
+    height: 21px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__section-heading > div {
+    display: grid;
+    gap: 3px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__section-heading strong {
+    color: #f0f4f9;
+    font-size: 16px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__section-heading small {
+    color: #8396aa;
+    font-size: 11px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__edit {
+    min-height: 40px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 13px;
+    border: 1px solid rgba(111, 132, 153, .26);
+    border-radius: 10px;
+    background: rgba(71, 91, 112, .38);
+    color: #e2e8ef;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 650;
+    cursor: pointer;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__edit:hover {
+    border-color: rgba(117, 174, 226, .42);
+    background: rgba(78, 103, 128, .5);
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__edit svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__info-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+    margin: 0;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__info-grid > div {
+    min-width: 0;
+    min-height: 84px;
+    display: grid;
+    grid-template-columns: 46px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 13px;
+    padding: 13px 16px;
+    border: 1px solid rgba(90, 117, 142, .24);
+    border-radius: 10px;
+    background: rgba(14, 30, 45, .72);
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__info-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 9px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__info-icon svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__info-grid > div > span:nth-child(2) {
+    min-width: 0;
+    display: grid;
+    gap: 3px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__info-grid dt {
+    color: #e7edf5;
+    font-size: 12px;
+    font-weight: 680;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__info-grid small {
+    color: #8699ad;
+    font-size: 10px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__info-grid dd {
+    max-width: 220px;
+    margin: 0;
+    overflow: hidden;
+    color: #f3f6fa;
+    font-size: 12px;
+    font-weight: 720;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__security {
+    min-height: 88px;
+    display: grid;
+    grid-template-columns: 52px minmax(0, 1fr) 22px;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 20px;
+    border: 1px solid rgba(79, 112, 137, .26);
+    border-radius: 15px;
+    background:
+      linear-gradient(90deg, rgba(17, 45, 52, .28), rgba(13, 27, 40, .94) 18%, rgba(12, 24, 37, .94));
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__security:hover {
+    border-color: rgba(60, 197, 137, .36);
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__security-icon {
+    width: 48px;
+    height: 48px;
+    display: grid;
+    place-items: center;
+    border-radius: 12px;
+    color: #64e7b2;
+    background: rgba(25, 139, 96, .19);
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__security-icon svg {
+    width: 22px;
+    height: 22px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__security-copy {
+    display: grid;
+    gap: 3px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__security-copy strong {
+    color: #f1f5f8;
+    font-size: 13px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__security-copy small {
+    color: #8fa3b7;
+    font-size: 11px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__security > svg {
+    width: 19px;
+    height: 19px;
+    justify-self: end;
+    color: #c8d3df;
+  }
+}
+
+@media (min-width: 1024px) and (max-width: 1240px) {
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1 {
+    padding-inline: 34px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__hero {
+    margin-inline: -34px;
+    padding-inline: 52px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__intro {
+    margin-left: 18px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__headphones {
+    right: -80px;
+    width: 500px;
+    background-size: 500px auto;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__quote {
+    left: 52%;
+  }
+}
+
+@media (max-width: 1023px) {
+  .my-account-profile-v1 {
+    display: none;
+  }
+
+  .my-account-profile-page--legacy {
+    display: grid;
+  }
+}
+
+html[data-tv-mode="true"] .my-account-profile-v1 {
+  display: none !important;
+}
+
+html[data-tv-mode="true"] .my-account-profile-page--legacy {
+  display: grid !important;
+}
+
+@media (min-width: 1024px) {
+  html[data-tv-mode="true"] .my-account-screen--profile > .my-account-header {
+    display: grid !important;
+  }
+}
