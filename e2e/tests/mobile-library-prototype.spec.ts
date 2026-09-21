@@ -47,13 +47,23 @@ test('mobile segue o protótipo 3 na biblioteca, detalhe e player', async ({ pag
   await expect(libraryHome).toBeVisible();
 
   await miniPlayer.getByRole('button', { name: 'Abrir Tocando Agora' }).click();
-  await expect(page.locator('.player-screen-immersive')).toBeVisible();
+  const player = page.locator('.player-screen-immersive');
+  const controls = page.locator('.controls');
+  const playerSurface = page.locator('.desktop-layout[data-desktop-active="player"] > .phone-surface');
+
+  await expect(player).toBeVisible();
+  await expect(page.locator('.player-topbar').getByRole('button', { name: 'Biblioteca' })).toBeVisible();
+  await expect(page.locator('.player-topbar').getByRole('button', { name: 'Mais opções da faixa' })).toBeVisible();
   await expect(page.locator('.player-hero-play')).toBeVisible();
-  await expect(page.locator('.player-hero-play__control')).toBeHidden();
-  await expect(page.locator('.controls').getByRole('button', { name: 'Anterior' })).toBeVisible();
-  await expect(page.locator('.controls').getByRole('button', { name: 'Pausar' })).toBeVisible();
-  await expect(page.locator('.controls').getByRole('button', { name: 'Próxima' })).toBeVisible();
-  await expect(page.locator('.controls').getByRole('button', { name: 'Aleatório' })).toBeVisible();
+  await expect(page.locator('.player-hero-play__control')).toBeVisible();
+  await expect(controls.getByRole('button', { name: 'Anterior' })).toBeVisible();
+  await expect(controls.getByRole('button', { name: 'Pausar' })).toBeHidden();
+  await expect(controls.getByRole('button', { name: 'Próxima' })).toBeVisible();
+  await expect(controls.getByRole('button', { name: 'Aleatório' })).toBeHidden();
   await expect(page.locator('.player-mobile-playlist-action')).toBeVisible();
-  await expect(page.locator('.controls').getByRole('button', { name: /Repet/ })).toBeVisible();
+  await expect(controls.getByRole('button', { name: /Repet/ })).toBeHidden();
+  await expect(page.getByLabel('Progresso da música')).toBeEnabled();
+
+  const overflow = await playerSurface.evaluate(element => element.scrollHeight - element.clientHeight);
+  expect(overflow).toBeLessThanOrEqual(1);
 });
