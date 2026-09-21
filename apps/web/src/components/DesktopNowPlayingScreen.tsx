@@ -199,7 +199,9 @@ export function DesktopNowPlayingScreen({
               title={playing ? 'Pausar' : 'Tocar'}
               onClick={onTogglePlay}
             >
-              {playing ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
+              <span className="desktop-now-playing-screen__cover-play-icon" aria-hidden="true">
+                {playing ? <Pause /> : <Play />}
+              </span>
             </button>
           </div>
         </div>
