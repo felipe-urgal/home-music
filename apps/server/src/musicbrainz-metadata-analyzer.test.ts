@@ -161,7 +161,7 @@ test('analyzer produz sugestão explicável, ids externos tipados e preserva ove
   });
 
   assert.equal(musicBrainzCalls, 1);
-  assert.equal(coverArtArchiveCalls, 1);
+  assert.equal(coverArtArchiveCalls, 2);
   assert.equal(drafts.length, 1);
   assert.equal(drafts[0].target.capability, 'metadata');
   assert.equal(drafts[0].target.field, 'title');
@@ -211,6 +211,85 @@ test('analyzer propõe capa CAA somente depois de identificação MusicBrainz co
     providers: gateway()
   });
   assert.equal(withPhysicalCover.some(draft => draft.target.capability === 'artwork'), false);
+});
+
+test('usa release-group quando a edição identificada não tem capa própria', async () => {
+  const caaPaths: string[] = [];
+  const analyzer = createMusicBrainzMetadataAnalyzer({
+    fetchImpl: async input => {
+      const url = new URL(String(input));
+      if (isCaaRequest(input)) {
+        caaPaths.push(url.pathname);
+        if (url.pathname.startsWith('/release-group/')) {
+          return caaResponse([{
+            id: 'cover-group-1',
+            front: true,
+            image: 'https://coverartarchive.org/release-group/release-group-1/front',
+            thumbnails: { 500: 'https://coverartarchive.org/release-group/release-group-1/500' }
+          }]);
+        }
+        return caaResponse();
+      }
+      return response([recording()]);
+    }
+  });
+
+  const drafts = await analyzer.analyze({
+    runId: 'run-artwork-release-group',
+    tracks: [track()],
+    providers: gateway()
+  });
+
+  assert.deepEqual(caaPaths, [
+    '/release/release-1',
+    '/release-group/release-group-1'
+  ]);
+  const artwork = drafts.find(draft => draft.target.capability === 'artwork');
+  assert.ok(artwork && artwork.target.capability === 'artwork');
+  assert.equal(
+    artwork.target.sourceUrl,
+    'https://coverartarchive.org/release-group/release-group-1/front'
+  );
+});
+
+test('aceita capa quando título, artista e duração confirmam a faixa apesar do álbum local incorreto', async () => {
+  let coverArtArchiveCalls = 0;
+  const analyzer = createMusicBrainzMetadataAnalyzer({
+    fetchImpl: async input => {
+      if (isCaaRequest(input)) {
+        coverArtArchiveCalls += 1;
+        return caaResponse([{
+          id: 'cover-original',
+          front: true,
+          image: 'https://coverartarchive.org/release/release-original/front',
+          thumbnails: { 500: 'https://coverartarchive.org/release/release-original/500' }
+        }]);
+      }
+      return response([recording({
+        id: 'recording-original',
+        title: 'Cancao',
+        length: 180_200,
+        releases: [{
+          id: 'release-original',
+          title: 'Album Original',
+          'release-group': { id: 'release-group-original' },
+          'artist-credit': [{ name: 'Artista', artist: { id: 'artist-1', name: 'Artista' } }]
+        }]
+      })]);
+    }
+  });
+
+  const drafts = await analyzer.analyze({
+    runId: 'run-artwork-wrong-album',
+    tracks: [track({ title: 'Cancao', album: 'Coletânea local' })],
+    providers: gateway()
+  });
+
+  assert.equal(coverArtArchiveCalls, 1);
+  const artwork = drafts.find(draft => draft.target.capability === 'artwork');
+  assert.ok(artwork && artwork.target.capability === 'artwork');
+  assert.equal(artwork.confidence, 'high');
+  assert.equal(artwork.target.musicBrainzReleaseId, 'release-original');
 });
 
 test('duas opções plausíveis permanecem ambíguas e não viram escolha de alta confiança', async () => {
