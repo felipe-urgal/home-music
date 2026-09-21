@@ -4,11 +4,14 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  CloudUpload,
   Eye,
   EyeOff,
   KeyRound,
+  Link2,
   LoaderCircle,
   LogOut,
+  Monitor,
   MonitorOff,
   ShieldCheck,
   SlidersHorizontal,
@@ -221,7 +224,153 @@ export function MyAccountScreen({
       {notice && <div className="my-account-message" role="status">{notice}</div>}
 
       {view === 'overview' && (
-        <div className="my-account-overview">
+        <>
+          <div className="my-account-overview my-account-overview--v3" data-testid="my-account-prototype-three">
+            <section className="my-account-v3__hero" aria-labelledby="my-account-v3-title">
+              <div className="my-account-v3__intro">
+                <span className="my-account-v3__eyebrow">Minha conta</span>
+                <h1 id="my-account-v3-title">Seu som,<br />suas escolhas.</h1>
+                <p>Gerencie sua conta, defina suas preferências e mantenha tudo do seu jeito no Home Music.</p>
+              </div>
+
+              <button
+                className="my-account-v3__profile-card"
+                type="button"
+                onClick={() => setView('profile')}
+                aria-label={`Abrir perfil de ${currentUser.username}`}
+              >
+                <span className="my-account-v3__avatar" aria-hidden="true">
+                  <img src="/account-v3-avatar.webp" alt="" />
+                </span>
+                <span className="my-account-v3__profile-copy">
+                  <strong>{currentUser.username}</strong>
+                  <small>{roleLabel}</small>
+                  <span className="my-account-v3__active"><span /> Sessão ativa</span>
+                </span>
+                <span className="my-account-v3__quote" aria-hidden="true">
+                  <em>“Música organiza<br />o caos.”</em>
+                  <small>— Home Music</small>
+                </span>
+              </button>
+
+              <div className="my-account-v3__headphones" aria-hidden="true" />
+            </section>
+
+            <section className="my-account-v3__settings" aria-labelledby="my-account-v3-settings-title">
+              <header className="my-account-v3__settings-heading">
+                <span className="my-account-v3__eyebrow">Configurações</span>
+                <h2 id="my-account-v3-settings-title">O controle é seu</h2>
+                <p>Tudo o que você precisa, em um só lugar.</p>
+              </header>
+
+              <span className="my-account-v3__aside-quote" aria-hidden="true">
+                <em>Boa música<br />vai mais longe.</em>
+                <i />
+              </span>
+
+              <div className="my-account-v3__grid">
+                <button className="my-account-v3__card is-amber" type="button" onClick={() => setView('password')}>
+                  <span className="my-account-v3__card-icon"><KeyRound /></span>
+                  <span className="my-account-v3__card-copy">
+                    <strong>Alterar senha</strong>
+                    <small>Use sua senha atual para confirmar a mudança.</small>
+                  </span>
+                  <ChevronRight />
+                </button>
+
+                <button className="my-account-v3__card is-blue" type="button" onClick={() => setView('sessions')}>
+                  <span className="my-account-v3__card-icon"><Monitor /></span>
+                  <span className="my-account-v3__card-copy">
+                    <strong>Outros dispositivos</strong>
+                    <small>Encerre acessos antigos sem sair deste dispositivo.</small>
+                  </span>
+                  <ChevronRight />
+                </button>
+
+                <button className="my-account-v3__card is-violet" type="button" onClick={() => setView('apps')}>
+                  <span className="my-account-v3__card-icon"><Link2 /></span>
+                  <span className="my-account-v3__card-copy">
+                    <strong>Apps e integrações</strong>
+                    <small>Crie chaves separadas para clientes OpenSubsonic.</small>
+                  </span>
+                  <ChevronRight />
+                </button>
+
+                <button className="my-account-v3__card is-green" type="button" onClick={() => setView('data-import')}>
+                  <span className="my-account-v3__card-icon"><CloudUpload /></span>
+                  <span className="my-account-v3__card-copy">
+                    <strong>Importar dados pessoais</strong>
+                    <small>Revise um bundle exportado antes de restaurar dados na sua conta.</small>
+                  </span>
+                  <ChevronRight />
+                </button>
+
+                {playbackPreferences ? (
+                  <button className="my-account-v3__card is-pink" type="button" onClick={() => setView('playback')}>
+                    <span className="my-account-v3__card-icon"><SlidersHorizontal /></span>
+                    <span className="my-account-v3__card-copy">
+                      <strong>Reprodução</strong>
+                      <small>Qualidade, conexão e normalização.</small>
+                    </span>
+                    <ChevronRight />
+                  </button>
+                ) : <span className="my-account-v3__card-spacer" aria-hidden="true" />}
+
+                {offlineMode ? (
+                  <button
+                    className="my-account-v3__card is-cyan"
+                    type="button"
+                    disabled={!offlineModeAvailable}
+                    aria-disabled={!offlineModeAvailable}
+                    onClick={offlineModeAvailable ? offlineMode.onOpen : undefined}
+                  >
+                    <span className="my-account-v3__card-icon"><WifiOff /></span>
+                    <span className="my-account-v3__card-copy">
+                      <strong>Modo offline</strong>
+                      <small>{offlineModeDetail}</small>
+                    </span>
+                    <ChevronRight />
+                  </button>
+                ) : <span className="my-account-v3__card-spacer" aria-hidden="true" />}
+              </div>
+
+              <div className="my-account-v3__bottom-grid">
+                {currentUser.role === 'admin' && (
+                  <button className="my-account-v3__card my-account-v3__card--wide is-indigo" type="button" onClick={onOpenAdministration}>
+                    <span className="my-account-v3__card-icon"><ShieldCheck /></span>
+                    <span className="my-account-v3__card-copy">
+                      <strong>Administração</strong>
+                      <small>Usuários e controles do Home Music.</small>
+                    </span>
+                    <ChevronRight />
+                  </button>
+                )}
+
+                <button
+                  className="my-account-v3__card my-account-v3__card--wide my-account-v3__card--danger is-red"
+                  type="button"
+                  disabled={signingOut}
+                  onClick={() => void signOut()}
+                >
+                  <span className="my-account-v3__card-icon">
+                    {signingOut ? <LoaderCircle className="my-account-spinner" /> : <LogOut />}
+                  </span>
+                  <span className="my-account-v3__card-copy">
+                    <strong>{signingOut ? 'Saindo…' : 'Sair da conta'}</strong>
+                    <small>Encerre sua sessão neste dispositivo.</small>
+                  </span>
+                  <ChevronRight />
+                </button>
+              </div>
+
+              <footer className="my-account-v3__footer" aria-hidden="true">
+                <span>Home Music&nbsp;&nbsp;•&nbsp;&nbsp;Música para uma vida mais sua.</span>
+                <span>Ouça&nbsp;&nbsp;•&nbsp;&nbsp;Organize&nbsp;&nbsp;•&nbsp;&nbsp;Viva melhor <i /></span>
+              </footer>
+            </section>
+          </div>
+
+          <div className="my-account-overview my-account-overview--legacy">
           <button
             className="my-account-profile my-account-profile--link"
             type="button"
@@ -324,7 +473,8 @@ export function MyAccountScreen({
               {signingOut ? 'Saindo…' : 'Sair da conta'}
             </button>
           </section>
-        </div>
+          </div>
+        </>
       )}
 
       {view === 'profile' && (
