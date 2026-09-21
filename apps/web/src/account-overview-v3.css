@@ -647,3 +647,18 @@
     display: block;
   }
 }
+
+
+html[data-tv-mode="true"] .my-account-overview--v3 {
+  display: none !important;
+}
+
+html[data-tv-mode="true"] .my-account-overview--legacy {
+  display: block !important;
+}
+
+@media (min-width: 1024px) {
+  html[data-tv-mode="true"] .my-account-screen--overview > .my-account-header {
+    display: grid !important;
+  }
+}
