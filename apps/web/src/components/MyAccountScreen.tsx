@@ -37,6 +37,7 @@ import {
   type AccountPlaybackPreferencesValue
 } from './AccountPlaybackPreferences';
 import { AccountSessionsScreen } from './AccountSessionsScreen';
+import { useDesktopLayout } from '../useDesktopLayout';
 
 type AccountView = 'overview' | 'profile' | 'password' | 'sessions' | 'apps' | 'playback' | 'data-import';
 
@@ -70,6 +71,9 @@ export function MyAccountScreen({
   onSessionEnded,
   onLogout
 }: MyAccountScreenProps) {
+  const desktopLayout = useDesktopLayout();
+  const tvMode = typeof document !== 'undefined' && document.documentElement.dataset.tvMode === 'true';
+  const usePasswordPrototypeThree = desktopLayout && !tvMode;
   const [view, setView] = useState<AccountView>('overview');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
