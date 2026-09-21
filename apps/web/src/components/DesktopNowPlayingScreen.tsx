@@ -18,7 +18,11 @@ import {
 import { useCrossfadeVisualState } from '../crossfade-visual';
 import { Artwork } from './Artwork';
 import { CurrentLyricsLine } from './LyricsPanel';
-import { NowPlayingCrossfadeIdentity, NowPlayingCrossfadeVinyl } from './NowPlayingCrossfade';
+import {
+  crossfadePresentationProgress,
+  NowPlayingCrossfadeIdentity,
+  NowPlayingCrossfadeVinyl
+} from './NowPlayingCrossfade';
 
 function formatTime(value: number) {
   if (!Number.isFinite(value) || value < 0) return '0:00';
@@ -27,8 +31,19 @@ function formatTime(value: number) {
   return `${minutes}:${seconds}`;
 }
 
+function trackCoverUrl(track?: Track) {
+  if (!track?.hasCover) return null;
+  const version = track.coverVersion ? `?v=${encodeURIComponent(track.coverVersion)}` : '';
+  return `/api/tracks/${encodeURIComponent(track.id)}/cover${version}`;
+}
+
 type ImmersiveStyle = CSSProperties & {
   '--now-playing-artwork'?: string;
+};
+
+type BackdropStyle = CSSProperties & {
+  '--now-playing-artwork'?: string;
+  '--now-playing-backdrop-incoming-opacity'?: string;
 };
 
 type WaveStyle = CSSProperties & {
@@ -40,6 +55,10 @@ const WAVEFORM_HEIGHTS = [
   14, 22, 34, 48, 61, 72, 82, 68, 51, 38, 57, 76, 92, 69, 45, 31, 54, 73, 87, 65,
   50, 34, 24, 18, 30, 42, 55, 46, 36, 27, 21, 16, 12, 9, 7, 5, 4, 3
 ];
+
+const DESKTOP_ART_TRANSITION_SECONDS = 0.52;
+const DESKTOP_COPY_TRANSITION_SECONDS = 0.42;
+const DESKTOP_BACKDROP_TRANSITION_SECONDS = 0.85;
 
 type DesktopNowPlayingScreenProps = {
   current: Track;
@@ -169,10 +188,21 @@ export function DesktopNowPlayingScreen({
       : availableViaCollection
         ? 'Manter também como download individual'
         : 'Baixar para uso offline';
-  const coverVersion = current.coverVersion ? `?v=${encodeURIComponent(current.coverVersion)}` : '';
-  const coverUrl = current.hasCover ? `/api/tracks/${encodeURIComponent(current.id)}/cover${coverVersion}` : null;
+  const coverUrl = trackCoverUrl(current);
+  const activeDesktopCrossfade = crossfadeVisual?.originTrackId === current.id ? crossfadeVisual : null;
+  const incomingCoverUrl = trackCoverUrl(activeDesktopCrossfade?.incomingTrack);
+  const backdropProgress = crossfadePresentationProgress(
+    activeDesktopCrossfade,
+    DESKTOP_BACKDROP_TRANSITION_SECONDS
+  );
   const immersiveStyle: ImmersiveStyle | undefined = coverUrl
     ? { '--now-playing-artwork': `url("${coverUrl}")` }
+    : undefined;
+  const incomingBackdropStyle: BackdropStyle | undefined = activeDesktopCrossfade
+    ? {
+        ...(incomingCoverUrl ? { '--now-playing-artwork': `url("${incomingCoverUrl}")` } : {}),
+        '--now-playing-backdrop-incoming-opacity': String(backdropProgress ?? 0)
+      }
     : undefined;
 
   return (
@@ -182,7 +212,14 @@ export function DesktopNowPlayingScreen({
       style={immersiveStyle}
       data-has-artwork={coverUrl ? 'true' : 'false'}
     >
-      <div className="desktop-now-playing-screen__backdrop" aria-hidden="true" />
+      <div className="desktop-now-playing-screen__backdrop" aria-hidden="true">
+        {incomingBackdropStyle && (
+          <div
+            className="desktop-now-playing-screen__backdrop-incoming"
+            style={incomingBackdropStyle}
+          />
+        )}
+      </div>
 
       <div className="desktop-now-playing-screen__stage">
         <div className="desktop-now-playing-screen__art">
@@ -190,6 +227,7 @@ export function DesktopNowPlayingScreen({
             <NowPlayingCrossfadeVinyl
               current={current}
               crossfade={crossfadeVisual}
+              transitionWindowSeconds={DESKTOP_ART_TRANSITION_SECONDS}
               playing={playing}
             />
             <button
@@ -212,6 +250,7 @@ export function DesktopNowPlayingScreen({
               <NowPlayingCrossfadeIdentity
                 current={current}
                 crossfade={crossfadeVisual}
+                transitionWindowSeconds={DESKTOP_COPY_TRANSITION_SECONDS}
                 titleId="desktop-now-playing-title"
               />
             </div>
