@@ -68,6 +68,7 @@ import './now-playing-crossfade.css';
 import './prototype-one.css';
 import './prototype-one-mobile-library.css';
 import './prototype-one-desktop-polish.css';
+import './prototype-three-mobile.css';
 import './account-overview-v3.css';
 import './account-profile-v1.css';
 import './account-password-v3.css';
