@@ -4,7 +4,7 @@ import { hashPassword, PASSWORD_MAX_BYTES, verifyPassword } from './password.js'
 import { normalizeUsername } from './user-identity.js';
 
 const MAX_USER_ID_LENGTH = 128;
-export const ACCOUNT_PASSWORD_MIN_LENGTH = 12;
+export const ACCOUNT_PASSWORD_MIN_LENGTH = 6;
 
 type Row = Record<string, unknown>;
 type SessionRevoker = Pick<SessionManager, 'revokeUserSessions'>;
