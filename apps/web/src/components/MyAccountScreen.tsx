@@ -3,14 +3,17 @@ import type { AuthenticatedUser } from '@home-music/shared';
 import {
   AudioLines,
   CheckCircle2,
+  CircleHelp,
   ChevronLeft,
   ChevronRight,
   CloudUpload,
   Eye,
   EyeOff,
   KeyRound,
+  Lightbulb,
   Link2,
   LoaderCircle,
+  LockKeyhole,
   LogOut,
   Monitor,
   MonitorOff,
@@ -88,6 +91,13 @@ export function MyAccountScreen({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const validationError = passwordChangeValidation(currentPassword, newPassword, confirmation);
+  const passwordStrengthScore = [
+    Array.from(newPassword).length >= MIN_ACCOUNT_PASSWORD_CHARACTERS,
+    /[a-z]/.test(newPassword) && /[A-Z]/.test(newPassword),
+    /\d/.test(newPassword),
+    /[^A-Za-z0-9\s]/.test(newPassword)
+  ].filter(Boolean).length;
+  const passwordStrengthLabel = passwordStrengthScore >= 3 ? 'Forte' : passwordStrengthScore >= 2 ? 'Média' : 'Fraca';
   const roleLabel = currentUser.role === 'admin' ? 'Administrador' : 'Usuário';
   const offlineModeAvailable = Boolean(
     offlineMode?.supported
@@ -613,146 +623,145 @@ export function MyAccountScreen({
       {view === 'password' && (
         usePasswordPrototypeThree ? (
           <div className="my-account-password-v3" data-testid="my-account-password-prototype-three">
-            <section className="my-account-password-v3__hero" aria-labelledby="my-account-password-v3-title">
+            <header className="my-account-password-v3__topbar">
               <button className="my-account-password-v3__back" type="button" onClick={goBack}>
                 <ChevronLeft />
-                <span>Voltar para configurações</span>
+                <span>Minha conta</span>
               </button>
-
-              <span className="my-account-password-v3__side-copy my-account-password-v3__side-copy--left" aria-hidden="true">
-                <strong>Sua música<br />sempre segura</strong>
-                <i />
-                <small>Mais do que música,<br />uma experiência sua.</small>
+              <span className="my-account-password-v3__help" aria-label="Ajuda">
+                <CircleHelp />
+                <span>Ajuda</span>
               </span>
+            </header>
 
-              <div className="my-account-password-v3__title">
-                <span>Segurança da conta</span>
+            <main className="my-account-password-v3__content">
+              <section className="my-account-password-v3__intro" aria-labelledby="my-account-password-v3-title">
+                <span className="my-account-password-v3__lock" aria-hidden="true"><LockKeyhole /></span>
                 <h1 id="my-account-password-v3-title">Alterar senha</h1>
-                <strong>Atualize sua senha de acesso</strong>
-                <p>Mantenha sua conta segura com uma senha forte e única.</p>
-                <i />
-              </div>
-
-              <div className="my-account-password-v3__headphones" aria-hidden="true" />
-
-              <span className="my-account-password-v3__side-copy my-account-password-v3__side-copy--right" aria-hidden="true">
-                <strong>Good<br />music<br />safer<br />people</strong>
-              </span>
-            </section>
-
-            <div className="my-account-password-v3__layout">
-              <section className="my-account-password-v3__form-card" aria-labelledby="my-account-password-v3-form-title">
-                <header className="my-account-password-v3__form-heading">
-                  <span className="my-account-password-v3__form-icon"><KeyRound /></span>
-                  <div>
-                    <strong id="my-account-password-v3-form-title">Nova senha</strong>
-                    <small>Informe sua senha atual e defina uma nova senha para sua conta.</small>
-                  </div>
-                  <button
-                    className="my-account-password-v3__visibility"
-                    type="button"
-                    aria-pressed={showPasswords}
-                    disabled={changingPassword}
-                    onClick={() => setShowPasswords(value => !value)}
-                  >
-                    {showPasswords ? <EyeOff /> : <Eye />}
-                    {showPasswords ? 'Ocultar senhas' : 'Mostrar senhas'}
-                  </button>
-                </header>
-
-                <form className="my-account-password-v3__form" onSubmit={submitPassword}>
-                  <label>
-                    <span>Senha atual</span>
-                    <span className="my-account-password-v3__input">
-                      <KeyRound aria-hidden="true" />
-                      <input
-                        type={showPasswords ? 'text' : 'password'}
-                        autoComplete="current-password"
-                        placeholder="Digite sua senha atual"
-                        value={currentPassword}
-                        disabled={changingPassword}
-                        onChange={event => setCurrentPassword(event.target.value)}
-                      />
-                    </span>
-                  </label>
-
-                  <label>
-                    <span>Nova senha</span>
-                    <span className="my-account-password-v3__input">
-                      <KeyRound aria-hidden="true" />
-                      <input
-                        type={showPasswords ? 'text' : 'password'}
-                        autoComplete="new-password"
-                        placeholder="Digite sua nova senha"
-                        value={newPassword}
-                        disabled={changingPassword}
-                        onChange={event => setNewPassword(event.target.value)}
-                      />
-                    </span>
-                  </label>
-
-                  <label>
-                    <span>Confirmar nova senha</span>
-                    <span className="my-account-password-v3__input">
-                      <KeyRound aria-hidden="true" />
-                      <input
-                        type={showPasswords ? 'text' : 'password'}
-                        autoComplete="new-password"
-                        placeholder="Digite novamente sua nova senha"
-                        value={confirmation}
-                        disabled={changingPassword}
-                        onChange={event => setConfirmation(event.target.value)}
-                      />
-                    </span>
-                  </label>
-
-                  {(currentPassword || newPassword || confirmation) && validationError && (
-                    <small className="my-account-password-v3__hint">{validationError}</small>
-                  )}
-
-                  <button
-                    className="my-account-password-v3__submit"
-                    type="submit"
-                    disabled={changingPassword || Boolean(validationError)}
-                  >
-                    {changingPassword ? <LoaderCircle className="my-account-spinner" /> : <LogOut />}
-                    <span>{changingPassword ? 'Alterando…' : 'Alterar senha e sair'}</span>
-                  </button>
-                </form>
+                <p>Escolha uma nova senha forte e segura.</p>
               </section>
 
-              <aside className="my-account-password-v3__aside">
-                <section className="my-account-password-v3__requirements" aria-labelledby="my-account-password-v3-requirements-title">
-                  <header>
-                    <span><ShieldCheck /></span>
-                    <div>
-                      <strong id="my-account-password-v3-requirements-title">Requisitos da senha</strong>
-                      <small>Sua nova senha deve atender a todos os requisitos.</small>
-                    </div>
-                  </header>
-                  <div className="my-account-password-v3__requirements-list">
-                    <span className={Array.from(newPassword).length >= MIN_ACCOUNT_PASSWORD_CHARACTERS ? 'is-valid' : ''}><CheckCircle2 /> Pelo menos {MIN_ACCOUNT_PASSWORD_CHARACTERS} caracteres</span>
-                    <span className={Boolean(newPassword.trim()) ? 'is-valid' : ''}><CheckCircle2 /> Não conter somente espaços</span>
-                    <span className={Boolean(currentPassword && newPassword && currentPassword !== newPassword) ? 'is-valid' : ''}><CheckCircle2 /> Ser diferente da senha atual</span>
-                    <span className={Boolean(newPassword && confirmation && newPassword === confirmation) ? 'is-valid' : ''}><CheckCircle2 /> Confirmar a nova senha corretamente</span>
-                  </div>
-                </section>
+              <form className="my-account-password-v3__form-card" onSubmit={submitPassword}>
+                <label>
+                  <span>Senha atual</span>
+                  <span className="my-account-password-v3__field">
+                    <input
+                      type={showPasswords ? 'text' : 'password'}
+                      autoComplete="current-password"
+                      placeholder="Digite sua senha atual"
+                      value={currentPassword}
+                      disabled={changingPassword}
+                      onChange={event => setCurrentPassword(event.target.value)}
+                    />
+                    <button
+                      type="button"
+                      aria-label={showPasswords ? 'Ocultar senha atual' : 'Mostrar senha atual'}
+                      aria-pressed={showPasswords}
+                      disabled={changingPassword}
+                      onClick={() => setShowPasswords(value => !value)}
+                    >
+                      {showPasswords ? <EyeOff /> : <Eye />}
+                    </button>
+                  </span>
+                </label>
 
-                <section className="my-account-password-v3__warning" aria-labelledby="my-account-password-v3-warning-title">
-                  <span className="my-account-password-v3__warning-icon"><Monitor /></span>
-                  <div>
-                    <strong id="my-account-password-v3-warning-title">Você será desconectado</strong>
-                    <p>Ao alterar a senha, todas as sessões da sua conta serão encerradas por segurança. Você precisará entrar novamente em todos os dispositivos.</p>
-                  </div>
-                  <small><ShieldCheck /> Essa medida ajuda a proteger sua conta caso sua senha tenha sido comprometida.</small>
-                </section>
-              </aside>
-            </div>
+                <label>
+                  <span>Nova senha</span>
+                  <span className="my-account-password-v3__field">
+                    <input
+                      type={showPasswords ? 'text' : 'password'}
+                      autoComplete="new-password"
+                      placeholder="Digite sua nova senha"
+                      value={newPassword}
+                      disabled={changingPassword}
+                      onChange={event => setNewPassword(event.target.value)}
+                    />
+                    <button
+                      type="button"
+                      aria-label={showPasswords ? 'Ocultar nova senha' : 'Mostrar nova senha'}
+                      aria-pressed={showPasswords}
+                      disabled={changingPassword}
+                      onClick={() => setShowPasswords(value => !value)}
+                    >
+                      {showPasswords ? <EyeOff /> : <Eye />}
+                    </button>
+                  </span>
+                </label>
 
-            <footer className="my-account-password-v3__footer" aria-hidden="true">
-              <span>Sempre com você<br />em cada play <i /></span>
-              <span>Música conecta<br />segurança mantém</span>
-            </footer>
+                <div className="my-account-password-v3__strength" aria-live="polite">
+                  <span>Força da senha</span>
+                  <strong>{passwordStrengthLabel}</strong>
+                  <div className="my-account-password-v3__strength-bars" aria-hidden="true">
+                    {[1, 2, 3, 4].map(level => (
+                      <i key={level} className={passwordStrengthScore >= level ? 'is-active' : ''} />
+                    ))}
+                  </div>
+                  <small>
+                    {passwordStrengthScore >= 3
+                      ? 'Ótimo! Sua senha está forte.'
+                      : 'Combine letras, números e símbolos para fortalecer sua senha.'}
+                  </small>
+                </div>
+
+                <label>
+                  <span>Confirmar nova senha</span>
+                  <span className="my-account-password-v3__field">
+                    <input
+                      type={showPasswords ? 'text' : 'password'}
+                      autoComplete="new-password"
+                      placeholder="Digite novamente sua nova senha"
+                      value={confirmation}
+                      disabled={changingPassword}
+                      onChange={event => setConfirmation(event.target.value)}
+                    />
+                    <button
+                      type="button"
+                      aria-label={showPasswords ? 'Ocultar confirmação da senha' : 'Mostrar confirmação da senha'}
+                      aria-pressed={showPasswords}
+                      disabled={changingPassword}
+                      onClick={() => setShowPasswords(value => !value)}
+                    >
+                      {showPasswords ? <EyeOff /> : <Eye />}
+                    </button>
+                  </span>
+                </label>
+
+                {(currentPassword || newPassword || confirmation) && validationError && (
+                  <small className="my-account-password-v3__hint">{validationError}</small>
+                )}
+              </form>
+
+              <section className="my-account-password-v3__tips" aria-labelledby="my-account-password-v3-tips-title">
+                <span className="my-account-password-v3__tips-icon" aria-hidden="true"><Lightbulb /></span>
+                <div>
+                  <strong id="my-account-password-v3-tips-title">Dicas para uma senha segura</strong>
+                  <span><CheckCircle2 /> Use pelo menos {MIN_ACCOUNT_PASSWORD_CHARACTERS} caracteres</span>
+                  <span><CheckCircle2 /> Combine letras, números e símbolos</span>
+                  <span><CheckCircle2 /> Evite informações pessoais óbvias</span>
+                </div>
+              </section>
+
+              <button
+                className="my-account-password-v3__submit"
+                type="button"
+                disabled={changingPassword || Boolean(validationError)}
+                onClick={() => {
+                  const form = document.querySelector<HTMLFormElement>('.my-account-password-v3__form-card');
+                  form?.requestSubmit();
+                }}
+              >
+                {changingPassword ? <LoaderCircle className="my-account-spinner" /> : <LockKeyhole />}
+                <span>{changingPassword ? 'Alterando…' : 'Alterar senha'}</span>
+              </button>
+
+              <footer className="my-account-password-v3__protected">
+                <ShieldCheck />
+                <span>
+                  <strong>Suas informações estão protegidas</strong>
+                  <small>Usamos criptografia para manter sua conta segura.</small>
+                </span>
+              </footer>
+            </main>
           </div>
         ) : (
           <section className="my-account-card my-account-password-card">
