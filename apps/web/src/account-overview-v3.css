@@ -20,7 +20,7 @@
       linear-gradient(154deg, #07101b 0%, #08111e 48%, #080b13 76%, #0b0a0f 100%);
   }
 
-  #root .desktop-layout[data-offline="false"] .desktop-main-content--account {
+  #root .desktop-layout[data-offline="false"]:has(.desktop-account-surface) .desktop-main-content--library {
     width: 100%;
     max-width: none;
     margin: 0;
