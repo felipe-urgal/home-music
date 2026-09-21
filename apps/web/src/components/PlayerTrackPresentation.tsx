@@ -185,7 +185,7 @@ export function PlayerTrackPresentation({
           <button
             className="player-hero-play"
             type="button"
-            aria-label={playing ? 'Pausar' : 'Tocar'}
+            aria-label={playing ? 'Pausar pela capa' : 'Tocar pela capa'}
             onClick={onTogglePlay}
           >
             <NowPlayingCrossfadeVinyl
