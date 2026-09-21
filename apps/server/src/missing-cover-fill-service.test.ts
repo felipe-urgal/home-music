@@ -138,7 +138,7 @@ test('memoiza identificação de fallback gerado enquanto faixa e override não 
   assert.equal(detector({ ...source }, version), true);
   assert.equal(renders, 1);
 
-  assert.equal(detector({ ...source, title: 'Faixa alterada' }, version), false);
+  assert.equal(detector({ ...source, album: 'Outro álbum' }, version), false);
   assert.equal(renders, 2);
 });
 
