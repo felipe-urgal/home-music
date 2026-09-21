@@ -374,26 +374,25 @@
     height: 20px;
   }
 
-  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__info-grid > div > span:nth-child(2) {
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__info-copy {
     min-width: 0;
     display: grid;
     gap: 3px;
   }
 
-  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__info-grid dt {
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__info-copy strong {
     color: #e7edf5;
     font-size: 12px;
     font-weight: 680;
   }
 
-  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__info-grid small {
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__info-copy small {
     color: #8699ad;
     font-size: 10px;
   }
 
-  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__info-grid dd {
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__info-value {
     max-width: 220px;
-    margin: 0;
     overflow: hidden;
     color: #f3f6fa;
     font-size: 12px;
