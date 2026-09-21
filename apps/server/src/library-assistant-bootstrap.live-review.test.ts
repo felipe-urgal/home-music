@@ -23,7 +23,7 @@ test('library assistant live review revision boundary keeps assistant apply from
   );
   assert.match(
     bootstrap,
-    /const listAnalysisTracks = \(\) => listCoverFillTracks\(\)\.map[\s\S]*isGeneratedCoverOverride[\s\S]*hasCover: false[\s\S]*coverVersion: undefined/
+    /const isGeneratedCover = createGeneratedCoverOverrideDetector\(\);[\s\S]*const listAnalysisTracks = \(\) => listCoverFillTracks\(\)\.map[\s\S]*isGeneratedCover[\s\S]*hasCover: false[\s\S]*coverVersion: undefined/
   );
   assert.match(bootstrap, /new LibraryAssistantService\(\{[\s\S]*library: analysisLibrary/);
   assert.match(bootstrap, /new LibraryAssistantReviewService\(\{[\s\S]*library: projectedLibrary/);
