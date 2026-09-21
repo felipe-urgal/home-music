@@ -109,7 +109,7 @@ export function PlayerScreen({
           onExitOffline={onExitOffline}
         />
 
-        <CurrentLyricsLine track={current} currentTime={currentTime} offlineMode={offlineMode} />
+        {!offlineMode && <CurrentLyricsLine track={current} currentTime={currentTime} offlineMode={false} />}
 
         <PlayerPlaybackControls
           queueLength={queue.length}
