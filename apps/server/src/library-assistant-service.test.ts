@@ -202,6 +202,21 @@ test('listing settled historical runs does not rebuild the library snapshot', as
   });
 });
 
+test('listing stale runs shares one library snapshot across open reviews', async () => {
+  await withService([metadataAnalyzer], async ({ service, setRevision, getListTracksCalls }) => {
+    const first = service.startRun('metadata', 'admin-1');
+    const second = service.startRun('metadata', 'admin-1');
+    await waitFor(() => service.getRun(first.id)?.status === 'completed');
+    await waitFor(() => service.getRun(second.id)?.status === 'completed');
+    const before = getListTracksCalls();
+
+    setRevision(2);
+    service.listRuns();
+
+    assert.equal(getListTracksCalls(), before + 1);
+  });
+});
+
 test('cancelling a run aborts new work and invalidates already persisted partial suggestions', async () => {
   let blockingStarted = false;
   const blockingAnalyzer: LibraryAssistantAnalyzer = {
