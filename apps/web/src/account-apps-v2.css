@@ -8,11 +8,27 @@
     min-height: calc(100vh - 56px);
     margin: 0;
     padding: 0;
+    position: relative;
+    overflow: hidden;
     color: #edf3fb;
     background:
-      radial-gradient(ellipse at 73% 4%, rgba(59, 47, 170, .22), transparent 35%),
-      radial-gradient(ellipse at 15% 45%, rgba(14, 63, 116, .14), transparent 35%),
+      radial-gradient(ellipse at 31% 17%, rgba(15, 62, 118, .22), transparent 34%),
+      radial-gradient(ellipse at 78% 10%, rgba(47, 38, 144, .18), transparent 32%),
       linear-gradient(150deg, #07111e 0%, #071528 48%, #050b14 100%);
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-screen--apps::before {
+    content: "";
+    position: absolute;
+    z-index: 0;
+    top: 0;
+    right: 0;
+    width: 54%;
+    height: 126px;
+    pointer-events: none;
+    background:
+      linear-gradient(155deg, rgba(34, 31, 112, .04) 0 26%, rgba(48, 36, 166, .42) 100%);
+    clip-path: polygon(48% 0, 100% 0, 100% 100%, 0 100%);
   }
 
   #root .desktop-layout[data-offline="false"] .my-account-screen--apps > .my-account-header {
@@ -25,6 +41,8 @@
   }
 
   #root .desktop-layout[data-offline="false"] .account-apps-v2 {
+    position: relative;
+    z-index: 1;
     width: 100%;
     min-width: 0;
     display: grid;
@@ -34,7 +52,7 @@
   }
 
   #root .desktop-layout[data-offline="false"] .account-apps-v2__page-header {
-    min-height: 108px;
+    min-height: 84px;
     display: grid;
     grid-template-columns: minmax(190px, 1fr) minmax(460px, 1.4fr) minmax(190px, 1fr);
     align-items: center;
@@ -129,7 +147,7 @@
     display: grid;
     grid-template-columns: 64px minmax(0, 1fr);
     align-items: center;
-    gap: 18px;
+    gap: 28px;
   }
 
   #root .desktop-layout[data-offline="false"] .account-apps-v2__section-icon {
@@ -239,8 +257,8 @@
 
   #root .desktop-layout[data-offline="false"] .account-apps-v2__create-form button:disabled,
   #root .desktop-layout[data-offline="false"] .account-apps-v2__token-row button:disabled {
-    opacity: .48;
-    cursor: default;
+    opacity: .82;
+    cursor: not-allowed;
   }
 
   #root .desktop-layout[data-offline="false"] .account-apps-v2__create-form button svg,
