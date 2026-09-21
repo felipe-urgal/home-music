@@ -200,7 +200,9 @@ export function DesktopNowPlayingScreen({
     : undefined;
   const incomingBackdropStyle: BackdropStyle | undefined = activeDesktopCrossfade
     ? {
-        ...(incomingCoverUrl ? { '--now-playing-artwork': `url("${incomingCoverUrl}")` } : {}),
+        '--now-playing-artwork': incomingCoverUrl
+          ? `url("${incomingCoverUrl}")`
+          : 'radial-gradient(circle at 42% 38%, rgba(198, 85, 45, .18), transparent 42rem)',
         '--now-playing-backdrop-incoming-opacity': String(backdropProgress ?? 0)
       }
     : undefined;
