@@ -10,41 +10,50 @@ function cssSource() {
 }
 
 describe('MyAccountScreen profile prototype 1', () => {
-  it('usa a composição aprovada no detalhe desktop do perfil', () => {
+  it('reproduz os textos e blocos do protótipo 1 aprovado', () => {
     const component = componentSource();
 
-    expect(component).toContain('my-account-profile-v1');
     expect(component).toContain('data-testid="my-account-profile-prototype-one"');
-    expect(component).toContain('Seus dados, do seu jeito.');
+    expect(component).toContain('Seu perfil');
+    expect(component).toContain('Suas informações, do seu jeito.');
     expect(component).toContain('Boa música');
     expect(component).toContain('vai mais longe.');
     expect(component).toContain('Informações da conta');
+    expect(component).toContain('Seus dados básicos no Home Music.');
+    expect(component).toContain('Nome de usuário');
+    expect(component).toContain('Seu identificador na aplicação.');
+    expect(component).toContain('Tipo de conta');
+    expect(component).toContain('Seu nível de acesso e permissões.');
+    expect(component).toContain('Segurança da conta');
+    expect(component).toContain('Mantenha sua conta segura.');
     expect(component).toContain('Sua conta está protegida');
-    expect(component).toContain('/account-v3-avatar.webp');
+    expect(component).toContain('O controle é seu.');
   });
 
-  it('mantém ações reais no lugar de controles decorativos', () => {
+  it('mantém as ações reais existentes e não inventa edição de dados', () => {
     const component = componentSource();
 
-    expect(component).toMatch(/onClick={() => setView('password')}/);
-    expect(component).toMatch(/onClick={() => setView('sessions')}/);
     expect(component).toMatch(/onClick={goBack}/);
+    expect(component).toMatch(/my-account-profile-v1__security-action[sS]*onClick={() => setView('password')}/);
+    expect(component).toContain('<Pencil /> Editar');
+    expect(component).toContain('<ShieldCheck /> Detalhes');
   });
 
-  it('usa largura total, identidade sobre o hero e informações em duas colunas', () => {
+  it('usa a geometria do mockup: hero curto, conteúdo amplo e linhas empilhadas', () => {
     const css = cssSource();
 
-    expect(css).toMatch(/my-account-screen--profile[\s\S]*width: 100%/);
-    expect(css).toMatch(/my-account-profile-v1__identity[\s\S]*margin-top: -74px/);
-    expect(css).toMatch(/my-account-profile-v1__info-grid[\s\S]*repeat\(2, minmax\(0, 1fr\)\)/);
-    expect(css).toContain("url('/account-v3-headphones.webp')");
-    expect(css).toMatch(/my-account-profile-page--legacy[\s\S]*display: none/);
+    expect(css).toMatch(/my-account-screen--profile[sS]*width: 100%/);
+    expect(css).toMatch(/my-account-profile-v1__hero[sS]*min-height: 205px/);
+    expect(css).toMatch(/my-account-profile-v1__identity[sS]*min-height: 118px/);
+    expect(css).toMatch(/my-account-profile-v1__row {[sS]*grid-template-columns: 48px minmax(260px, 1fr) minmax(120px, auto) 110px/);
+    expect(css).toContain("url('/profile-v1-headphones.webp')");
+    expect(css).toMatch(/my-account-profile-page--legacy[sS]*display: none/);
   });
 
   it('preserva o perfil anterior no mobile e na TV', () => {
     const css = cssSource();
 
-    expect(css).toMatch(/@media \(max-width: 1023px\)[\s\S]*my-account-profile-page--legacy[\s\S]*display: grid/);
-    expect(css).toMatch(/html\[data-tv-mode="true"\][\s\S]*my-account-profile-page--legacy[\s\S]*display: grid/);
+    expect(css).toMatch(/@media (max-width: 1023px)[sS]*my-account-profile-page--legacy[sS]*display: grid/);
+    expect(css).toMatch(/html[data-tv-mode="true"][sS]*my-account-profile-page--legacy[sS]*display: grid/);
   });
 });
