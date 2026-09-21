@@ -518,7 +518,10 @@ function textMatch(
   match: RankedCandidate,
   field: LibraryAssistantMetadataField
 ) {
-  return match.evidence.find(item => item.type === 'text-match' && item.field === field)?.match ?? null;
+  for (const item of match.evidence) {
+    if (item.type === 'text-match' && item.field === field) return item.match;
+  }
+  return null;
 }
 
 function artworkConfidenceFor(
