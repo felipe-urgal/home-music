@@ -42,7 +42,7 @@ import type { LongJobObservability } from './long-job-observability.js';
 import { createMusicBrainzSimpleSearchFetch } from './musicbrainz-simple-search-fetch.js';
 import { registerMissingCoverFillRoutes } from './missing-cover-fill-routes.js';
 import {
-  isGeneratedCoverOverride,
+  createGeneratedCoverOverrideDetector,
   MissingCoverFillService
 } from './missing-cover-fill-service.js';
 import { TrackCoverOverrideStore } from './track-cover-overrides.js';
@@ -101,6 +101,7 @@ export function registerLibraryAssistant(
   const incrementalIndex = new LibraryAssistantIncrementalIndex(options.databasePath);
   const metadataOverrides = new TrackMetadataOverrideStore(options.databasePath);
   const coverOverrides = new TrackCoverOverrideStore(options.databasePath);
+  const isGeneratedCover = createGeneratedCoverOverrideDetector();
   const lyricsOverrides = new TrackLyricsOverrideStore(options.databasePath);
   const localLyricsCandidates = new LocalLyricsCandidateStore(options.databasePath);
   setActiveTrackLyricsOverrideStore(lyricsOverrides);
@@ -133,7 +134,7 @@ export function registerLibraryAssistant(
       !cover
       || cover.physicalHasCover
       || !cover.override
-      || !isGeneratedCoverOverride(track, cover.override.version)
+      || !isGeneratedCover(track, cover.override.version)
     ) return track;
 
     // A capa gerada é apenas um fallback visual. Para a Assistente ela continua
