@@ -8,9 +8,13 @@
   display: none;
 }
 
+.player-mobile-playlist-action {
+  display: none;
+}
+
 @media (max-width: 699px) {
   /* -----------------------------------------------------------------------
-   * Now Playing — full-bleed artwork, centered identity and blue waveform.
+   * Now Playing — Prototype 3: artwork, waveform and stable bottom controls.
    * --------------------------------------------------------------------- */
   #root .desktop-layout[data-offline="false"][data-desktop-active="player"] > .phone-surface {
     height: 100dvh;
@@ -25,18 +29,12 @@
     height: 100dvh;
     min-height: 100dvh;
     overflow: hidden;
+    isolation: isolate;
     background: #05080d;
   }
 
   #root .desktop-layout[data-offline="false"] .player-screen-immersive::after {
-    content: "";
-    position: absolute;
-    z-index: 1;
-    inset: 0;
-    pointer-events: none;
-    background:
-      linear-gradient(180deg, rgba(2, 5, 9, .18) 0%, rgba(2, 5, 9, .08) 28%, rgba(3, 7, 12, .42) 58%, rgba(3, 7, 12, .92) 100%),
-      linear-gradient(90deg, rgba(2, 5, 9, .18), transparent 34%, transparent 66%, rgba(2, 5, 9, .18));
+    display: none;
   }
 
   #root .desktop-layout[data-offline="false"] .player-screen-immersive__backdrop {
@@ -50,6 +48,28 @@
     height: 100dvh;
     min-height: 100dvh;
     padding: 0;
+    overflow: hidden;
+    background: #05080d;
+  }
+
+  #root .desktop-layout[data-offline="false"] .player-screen-immersive__content::after {
+    content: "";
+    position: absolute;
+    z-index: 1;
+    inset: 0;
+    pointer-events: none;
+    background:
+      linear-gradient(
+        180deg,
+        rgba(3, 6, 10, .08) 0%,
+        rgba(3, 6, 10, .03) 39%,
+        rgba(4, 8, 13, .12) 47%,
+        rgba(4, 8, 13, .58) 57%,
+        rgba(5, 8, 13, .94) 68%,
+        #05080d 76%,
+        #05080d 100%
+      ),
+      linear-gradient(90deg, rgba(2, 5, 9, .12), transparent 35%, transparent 65%, rgba(2, 5, 9, .12));
   }
 
   #root .desktop-layout[data-offline="false"] .player-topbar {
@@ -81,10 +101,11 @@
     gap: 3px;
     visibility: visible !important;
     pointer-events: auto !important;
-    color: #f7f9fc;
+    color: #f8fafc;
     background: transparent;
     font-size: 13px;
     font-weight: 630;
+    text-shadow: 0 1px 12px rgba(0, 0, 0, .5);
   }
 
   #root .desktop-layout[data-offline="false"] .player-topbar .topbar__back-to-library svg {
@@ -101,7 +122,8 @@
     width: 40px !important;
     height: 40px !important;
     justify-self: end;
-    color: #f7f9fc !important;
+    color: #f8fafc !important;
+    filter: drop-shadow(0 1px 8px rgba(0, 0, 0, .45));
   }
 
   #root .desktop-layout[data-offline="false"] .player-track-menu {
@@ -129,12 +151,16 @@
   #root .desktop-layout[data-offline="false"] .hero-art {
     position: absolute;
     z-index: 0;
-    inset: 0;
+    top: 0;
+    left: 0;
+    right: 0;
     width: 100%;
     max-width: none !important;
-    height: 100%;
+    height: min(68dvh, 620px);
+    min-height: 430px;
     margin: 0 !important;
     padding: 0;
+    overflow: hidden;
   }
 
   #root .desktop-layout[data-offline="false"] .player-hero-play {
@@ -175,6 +201,7 @@
     border: 0 !important;
     border-radius: 0 !important;
     object-fit: cover;
+    object-position: center center;
   }
 
   #root .desktop-layout[data-offline="false"] .hero-art .artwork--fallback {
@@ -184,27 +211,7 @@
   }
 
   #root .desktop-layout[data-offline="false"] .player-hero-play__control {
-    position: absolute;
-    z-index: 8;
-    top: 34%;
-    left: 50%;
-    width: 58px;
-    height: 58px;
-    transform: translate(-50%, -50%);
-    display: grid;
-    place-items: center;
-    border: 2px solid rgba(255, 255, 255, .82);
-    border-radius: 50%;
-    color: #fff;
-    background: rgba(6, 10, 16, .4);
-    box-shadow: 0 12px 34px rgba(0, 0, 0, .34);
-    backdrop-filter: blur(8px);
-  }
-
-  #root .desktop-layout[data-offline="false"] .player-hero-play__control svg {
-    width: 25px;
-    height: 25px;
-    fill: currentColor;
+    display: none !important;
   }
 
   #root .desktop-layout[data-offline="false"] .player-track-heading {
@@ -212,68 +219,66 @@
     z-index: 12;
     left: 24px;
     right: 24px;
-    bottom: 29%;
+    bottom: calc(clamp(258px, 32.5dvh, 302px) + env(safe-area-inset-bottom));
     margin: 0 !important;
     padding: 0 !important;
     display: block !important;
     text-align: center !important;
+    pointer-events: none;
   }
 
   #root .desktop-layout[data-offline="false"] .player-track-heading h1 {
+    max-width: 100%;
     margin: 0;
+    overflow: hidden;
     color: #fff;
-    font-size: clamp(20px, 5.7vw, 25px);
+    font-size: clamp(22px, 6vw, 27px);
     font-weight: 720;
-    line-height: 1.1;
+    line-height: 1.08;
     letter-spacing: -.035em;
     text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-shadow: 0 2px 18px rgba(0, 0, 0, .45);
   }
 
   #root .desktop-layout[data-offline="false"] .player-track-heading p {
+    max-width: 100%;
     margin: 7px 0 0;
-    color: rgba(255, 255, 255, .82);
-    font-size: 12px;
-    font-weight: 560;
+    overflow: hidden;
+    color: rgba(255, 255, 255, .76);
+    font-size: 15px;
+    font-weight: 480;
+    line-height: 1.2;
     text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-shadow: 0 2px 14px rgba(0, 0, 0, .42);
   }
 
   #root .desktop-layout[data-offline="false"] .player-screen-immersive .desktop-now-playing-screen__current-lyric {
-    position: absolute;
-    z-index: 12;
-    left: 30px;
-    right: 30px;
-    bottom: 22.8%;
-    min-height: 24px;
-    display: grid;
-    place-items: center;
-    color: rgba(255, 255, 255, .78);
-    font-family: Georgia, 'Times New Roman', serif;
-    font-size: 13px;
-    font-style: italic;
-    line-height: 1.35;
-    text-align: center;
-    text-shadow: 0 2px 12px rgba(0, 0, 0, .5);
+    display: none !important;
   }
 
   #root .desktop-layout[data-offline="false"] .player-playlist-picker {
     z-index: 41;
     left: 14px;
     right: 14px;
-    bottom: calc(92px + env(safe-area-inset-bottom));
+    bottom: calc(74px + env(safe-area-inset-bottom));
     margin: 0;
     max-height: 42vh;
     overflow-y: auto;
   }
 
   #root .desktop-layout[data-offline="false"] .progress-wrap {
-    --waveform-muted: rgba(188, 199, 215, .34);
-    --waveform-played: #458dff;
+    --waveform-muted: rgba(190, 199, 211, .34);
+    --waveform-played: #fff;
     position: absolute;
     z-index: 14;
     left: 24px;
     right: 24px;
-    bottom: 13.2%;
-    height: 52px;
+    bottom: calc(clamp(164px, 22.5dvh, 202px) + env(safe-area-inset-bottom));
+    height: 58px;
     margin: 0 !important;
   }
 
@@ -281,49 +286,82 @@
   #root .desktop-layout[data-offline="false"] .progress-wrap::after {
     content: "";
     position: absolute;
-    top: 1px;
+    top: 0;
     left: 0;
-    height: 28px;
+    width: 100%;
+    height: 38px;
     pointer-events: none;
     background: repeating-linear-gradient(
       90deg,
       currentColor 0 2px,
-      transparent 2px 4px
+      transparent 2px 5px
     );
     clip-path: polygon(
-      0 47%, 3% 31%, 6% 65%, 9% 20%, 12% 75%, 15% 37%, 18% 58%, 21% 18%,
-      24% 69%, 27% 42%, 30% 61%, 33% 26%, 36% 73%, 39% 36%, 42% 55%, 45% 15%,
-      48% 66%, 51% 31%, 54% 59%, 57% 21%, 60% 72%, 63% 39%, 66% 57%, 69% 27%,
-      72% 64%, 75% 35%, 78% 52%, 81% 24%, 84% 61%, 87% 42%, 90% 55%, 93% 34%,
-      96% 51%, 100% 45%, 100% 58%, 96% 61%, 93% 68%, 90% 63%, 87% 76%, 84% 69%,
-      81% 82%, 78% 71%, 75% 78%, 72% 67%, 69% 75%, 66% 64%, 63% 81%, 60% 71%,
-      57% 86%, 54% 70%, 51% 80%, 48% 67%, 45% 85%, 42% 72%, 39% 79%, 36% 66%,
-      33% 81%, 30% 69%, 27% 75%, 24% 64%, 21% 82%, 18% 70%, 15% 77%, 12% 68%,
-      9% 80%, 6% 69%, 3% 73%, 0 65%
+      0 44%, 3% 30%, 6% 18%, 9% 39%, 12% 25%, 15% 7%, 18% 34%, 21% 21%,
+      24% 42%, 27% 28%, 30% 10%, 33% 35%, 36% 22%, 39% 41%, 42% 30%, 45% 15%,
+      48% 33%, 51% 24%, 54% 40%, 57% 29%, 60% 18%, 63% 37%, 66% 25%, 69% 43%,
+      72% 31%, 75% 20%, 78% 38%, 81% 27%, 84% 42%, 87% 32%, 90% 22%, 93% 39%,
+      96% 30%, 100% 45%, 100% 55%, 96% 70%, 93% 61%, 90% 78%, 87% 68%, 84% 58%,
+      81% 73%, 78% 62%, 75% 80%, 72% 69%, 69% 57%, 66% 75%, 63% 63%, 60% 82%,
+      57% 71%, 54% 60%, 51% 76%, 48% 67%, 45% 85%, 42% 70%, 39% 59%, 36% 78%,
+      33% 65%, 30% 90%, 27% 72%, 24% 58%, 21% 79%, 18% 66%, 15% 93%, 12% 75%,
+      9% 61%, 6% 82%, 3% 70%, 0 56%
     );
   }
 
   #root .desktop-layout[data-offline="false"] .progress-wrap::before {
-    width: 100%;
     color: var(--waveform-muted);
   }
 
   #root .desktop-layout[data-offline="false"] .progress-wrap::after {
-    width: var(--progress);
     color: var(--waveform-played);
-    overflow: hidden;
+    -webkit-mask-image: linear-gradient(90deg, #000 0 var(--progress), transparent var(--progress) 100%);
+    mask-image: linear-gradient(90deg, #000 0 var(--progress), transparent var(--progress) 100%);
   }
 
   #root .desktop-layout[data-offline="false"] .progress-wrap input[type="range"] {
     position: absolute;
     z-index: 4;
-    top: -7px;
+    top: -4px;
     left: 0;
     width: 100%;
-    height: 43px;
+    height: 46px;
     margin: 0;
-    opacity: 0;
+    appearance: none;
+    -webkit-appearance: none;
+    background: transparent;
     cursor: pointer;
+  }
+
+  #root .desktop-layout[data-offline="false"] .progress-wrap input[type="range"]::-webkit-slider-runnable-track {
+    height: 46px;
+    background: transparent;
+  }
+
+  #root .desktop-layout[data-offline="false"] .progress-wrap input[type="range"]::-webkit-slider-thumb {
+    width: 2px;
+    height: 42px;
+    margin-top: 2px;
+    appearance: none;
+    -webkit-appearance: none;
+    border: 0;
+    border-radius: 999px;
+    background: #fff;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, .08), 0 2px 10px rgba(0, 0, 0, .32);
+  }
+
+  #root .desktop-layout[data-offline="false"] .progress-wrap input[type="range"]::-moz-range-track {
+    height: 46px;
+    border: 0;
+    background: transparent;
+  }
+
+  #root .desktop-layout[data-offline="false"] .progress-wrap input[type="range"]::-moz-range-thumb {
+    width: 2px;
+    height: 42px;
+    border: 0;
+    border-radius: 999px;
+    background: #fff;
   }
 
   #root .desktop-layout[data-offline="false"] .progress-wrap .time-row {
@@ -332,36 +370,74 @@
     right: 0;
     bottom: 0;
     margin: 0;
-    color: rgba(255, 255, 255, .72);
-    font-size: 9px;
+    color: rgba(255, 255, 255, .78);
+    font-size: 10px;
     font-variant-numeric: tabular-nums;
   }
 
   #root .desktop-layout[data-offline="false"] .controls {
     position: absolute;
     z-index: 14;
-    left: 50%;
-    bottom: calc(3.3% + env(safe-area-inset-bottom));
-    width: 196px;
-    height: 64px;
+    left: 24px;
+    right: 24px;
+    bottom: calc(20px + env(safe-area-inset-bottom));
+    width: auto;
+    height: 134px;
     margin: 0;
-    transform: translateX(-50%);
-    display: grid;
-    grid-template-columns: 50px 64px 50px;
-    justify-content: center;
-    align-items: center;
-    gap: 16px;
+    display: block;
   }
 
-  #root .desktop-layout[data-offline="false"] .controls > .icon-button:first-child,
+  #root .desktop-layout[data-offline="false"] .controls > button {
+    position: absolute;
+    margin: 0;
+  }
+
+  #root .desktop-layout[data-offline="false"] .controls > .icon-button:first-child {
+    left: 12px;
+    bottom: 0;
+    width: 42px;
+    height: 42px;
+    display: grid !important;
+    place-items: center;
+    color: #fff;
+    background: transparent;
+  }
+
   #root .desktop-layout[data-offline="false"] .controls > .icon-button:last-child {
-    display: none !important;
+    right: 12px;
+    bottom: 0;
+    width: 42px;
+    height: 42px;
+    display: grid !important;
+    place-items: center;
+    color: #fff;
+    background: transparent;
+  }
+
+  #root .desktop-layout[data-offline="false"] .controls > .icon-button:first-child svg,
+  #root .desktop-layout[data-offline="false"] .controls > .icon-button:last-child svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .controls > .icon-button.is-active {
+    color: #fff;
   }
 
   #root .desktop-layout[data-offline="false"] .controls .icon-button--control {
-    width: 48px;
-    height: 48px;
+    top: 5px;
+    width: 50px;
+    height: 50px;
     color: #fff;
+    transform: translateX(-50%);
+  }
+
+  #root .desktop-layout[data-offline="false"] .controls .icon-button--control:nth-child(2) {
+    left: calc(50% - 76px);
+  }
+
+  #root .desktop-layout[data-offline="false"] .controls .icon-button--control:nth-child(4) {
+    left: calc(50% + 76px);
   }
 
   #root .desktop-layout[data-offline="false"] .controls .icon-button--control svg {
@@ -371,24 +447,73 @@
   }
 
   #root .desktop-layout[data-offline="false"] .controls .play-button {
-    width: 58px;
-    height: 58px;
+    top: 0;
+    left: 50%;
+    width: 64px;
+    height: 64px;
+    transform: translateX(-50%);
     border: 0;
-    color: #07101b;
+    border-radius: 50%;
+    color: #070b11;
     background: #fff;
-    box-shadow: 0 12px 30px rgba(0, 0, 0, .3);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, .32);
   }
 
   #root .desktop-layout[data-offline="false"] .controls .play-button svg {
-    width: 24px;
-    height: 24px;
+    width: 25px;
+    height: 25px;
     fill: currentColor;
+  }
+
+  #root .desktop-layout[data-offline="false"] .player-mobile-playlist-action {
+    position: absolute;
+    z-index: 15;
+    left: 50%;
+    bottom: calc(20px + env(safe-area-inset-bottom));
+    width: 42px;
+    height: 42px;
+    transform: translateX(-50%);
+    display: grid;
+    place-items: center;
+    border: 0;
+    border-radius: 50%;
+    color: #fff;
+    background: transparent;
+  }
+
+  #root .desktop-layout[data-offline="false"] .player-mobile-playlist-action svg {
+    width: 22px;
+    height: 22px;
   }
 
   #root .desktop-layout[data-offline="false"] .volume-control,
   #root .desktop-layout[data-offline="false"] .player-screen-immersive .lyrics-panel,
   #root .desktop-layout[data-offline="false"] .player-screen-immersive .queue-panel--player {
     display: none !important;
+  }
+
+  @media (max-height: 720px) {
+    #root .desktop-layout[data-offline="false"] .hero-art {
+      height: 66dvh;
+      min-height: 390px;
+    }
+
+    #root .desktop-layout[data-offline="false"] .player-track-heading {
+      bottom: calc(244px + env(safe-area-inset-bottom));
+    }
+
+    #root .desktop-layout[data-offline="false"] .progress-wrap {
+      bottom: calc(154px + env(safe-area-inset-bottom));
+    }
+
+    #root .desktop-layout[data-offline="false"] .controls {
+      height: 118px;
+      bottom: calc(12px + env(safe-area-inset-bottom));
+    }
+
+    #root .desktop-layout[data-offline="false"] .player-mobile-playlist-action {
+      bottom: calc(12px + env(safe-area-inset-bottom));
+    }
   }
 
   /* -----------------------------------------------------------------------

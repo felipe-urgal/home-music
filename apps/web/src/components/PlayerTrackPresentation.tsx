@@ -205,6 +205,18 @@ export function PlayerTrackPresentation({
         <NowPlayingCrossfadeIdentity current={current} crossfade={crossfadeVisual} />
       </div>
 
+      {!offlineMode && (
+        <button
+          className={`icon-button player-mobile-playlist-action ${showPlaylistPicker ? 'is-active' : ''}`}
+          type="button"
+          aria-label="Adicionar à playlist"
+          aria-expanded={showPlaylistPicker}
+          onClick={togglePlaylistPicker}
+        >
+          <Heart aria-hidden="true" />
+        </button>
+      )}
+
       {showPlaylistPicker && !offlineMode && (
         <section className="player-playlist-picker" aria-label="Escolher playlist">
           <strong>Adicionar à playlist</strong>
