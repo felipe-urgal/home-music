@@ -99,6 +99,11 @@ export function MyAccountScreen({
     /[^A-Za-z0-9\s]/.test(newPassword)
   ].filter(Boolean).length;
   const passwordStrengthLabel = passwordStrengthScore >= 3 ? 'Forte' : passwordStrengthScore >= 2 ? 'Média' : 'Fraca';
+  const passwordStrengthTone = passwordStrengthScore >= 3
+    ? 'is-strong'
+    : passwordStrengthScore >= 2
+      ? 'is-medium'
+      : 'is-weak';
   const roleLabel = currentUser.role === 'admin' ? 'Administrador' : 'Usuário';
   const offlineModeAvailable = Boolean(
     offlineMode?.supported
@@ -689,7 +694,7 @@ export function MyAccountScreen({
                   </span>
                 </label>
 
-                <div className="my-account-password-v3__strength" aria-live="polite">
+                <div className={`my-account-password-v3__strength ${passwordStrengthTone}`} aria-live="polite">
                   <span>Força da senha</span>
                   <strong>{passwordStrengthLabel}</strong>
                   <div className="my-account-password-v3__strength-bars" aria-hidden="true">
