@@ -1,0 +1,895 @@
+/*
+ * Prototype 3 — mobile immersive redesign
+ * Final mobile-only layer for the selected visual direction.
+ * Desktop, tablet, TV and offline surfaces are intentionally untouched.
+ */
+
+.library-header__back-label {
+  display: none;
+}
+
+@media (max-width: 699px) {
+  /* -----------------------------------------------------------------------
+   * Now Playing — full-bleed artwork, centered identity and blue waveform.
+   * --------------------------------------------------------------------- */
+  #root .desktop-layout[data-offline="false"][data-desktop-active="player"] > .phone-surface {
+    height: 100dvh;
+    padding: 0 !important;
+    overflow: hidden !important;
+    background: #05080d;
+  }
+
+  #root .desktop-layout[data-offline="false"] .player-screen-immersive {
+    position: relative;
+    width: 100%;
+    height: 100dvh;
+    min-height: 100dvh;
+    overflow: hidden;
+    background: #05080d;
+  }
+
+  #root .desktop-layout[data-offline="false"] .player-screen-immersive::after {
+    content: "";
+    position: absolute;
+    z-index: 1;
+    inset: 0;
+    pointer-events: none;
+    background:
+      linear-gradient(180deg, rgba(2, 5, 9, .18) 0%, rgba(2, 5, 9, .08) 28%, rgba(3, 7, 12, .42) 58%, rgba(3, 7, 12, .92) 100%),
+      linear-gradient(90deg, rgba(2, 5, 9, .18), transparent 34%, transparent 66%, rgba(2, 5, 9, .18));
+  }
+
+  #root .desktop-layout[data-offline="false"] .player-screen-immersive__backdrop {
+    display: none;
+  }
+
+  #root .desktop-layout[data-offline="false"] .player-screen-immersive__content {
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    height: 100dvh;
+    min-height: 100dvh;
+    padding: 0;
+  }
+
+  #root .desktop-layout[data-offline="false"] .player-topbar {
+    position: absolute;
+    z-index: 30;
+    top: env(safe-area-inset-top);
+    left: 14px;
+    right: 14px;
+    height: 56px;
+    min-height: 56px;
+    padding: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 42px;
+    align-items: center;
+    background: transparent;
+  }
+
+  #root .desktop-layout[data-offline="false"] .player-topbar .topbar__title {
+    display: none;
+  }
+
+  #root .desktop-layout[data-offline="false"] .player-topbar .topbar__back-to-library {
+    width: max-content !important;
+    min-width: 0;
+    height: 40px;
+    padding: 0 8px 0 0 !important;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    visibility: visible !important;
+    pointer-events: auto !important;
+    color: #f7f9fc;
+    background: transparent;
+    font-size: 13px;
+    font-weight: 630;
+  }
+
+  #root .desktop-layout[data-offline="false"] .player-topbar .topbar__back-to-library svg {
+    width: 19px;
+    height: 19px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .player-topbar .topbar__back-label {
+    display: inline;
+  }
+
+  #root .desktop-layout[data-offline="false"] .player-topbar__menu {
+    grid-column: 2;
+    width: 40px !important;
+    height: 40px !important;
+    justify-self: end;
+    color: #f7f9fc !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .player-track-menu {
+    position: absolute;
+    z-index: 40;
+    top: calc(52px + env(safe-area-inset-top));
+    right: 12px;
+    width: min(248px, calc(100% - 24px));
+    padding: 7px;
+    border: 1px solid rgba(255, 255, 255, .12);
+    border-radius: 12px;
+    background: rgba(7, 12, 20, .97);
+    box-shadow: 0 20px 54px rgba(0, 0, 0, .45);
+    backdrop-filter: blur(20px);
+  }
+
+  #root .desktop-layout[data-offline="false"] .player-track-menu button {
+    min-height: 42px;
+    padding: 9px 10px;
+    border-radius: 9px;
+    color: #eef3fa;
+    font-size: 12px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .hero-art {
+    position: absolute;
+    z-index: 0;
+    inset: 0;
+    width: 100%;
+    max-width: none !important;
+    height: 100%;
+    margin: 0 !important;
+    padding: 0;
+  }
+
+  #root .desktop-layout[data-offline="false"] .player-hero-play {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    overflow: hidden;
+    border: 0;
+    border-radius: 0;
+    background: #080c12;
+  }
+
+  #root .desktop-layout[data-offline="false"] .hero-art .now-playing-transition-art,
+  #root .desktop-layout[data-offline="false"] .hero-art .now-playing-vinyl {
+    width: 100% !important;
+    max-width: none !important;
+    height: 100% !important;
+    aspect-ratio: auto !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .hero-art .now-playing-vinyl__disc {
+    width: 100% !important;
+    height: 100% !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: #080c12;
+  }
+
+  #root .desktop-layout[data-offline="false"] .hero-art .now-playing-vinyl__label,
+  #root .desktop-layout[data-offline="false"] .hero-art .now-playing-vinyl__label .artwork,
+  #root .desktop-layout[data-offline="false"] .hero-art .now-playing-vinyl__label .artwork img {
+    inset: 0;
+    width: 100% !important;
+    height: 100% !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    object-fit: cover;
+  }
+
+  #root .desktop-layout[data-offline="false"] .hero-art .artwork--fallback {
+    width: 100% !important;
+    height: 100% !important;
+    border-radius: 0 !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .player-hero-play__control {
+    position: absolute;
+    z-index: 8;
+    top: 34%;
+    left: 50%;
+    width: 58px;
+    height: 58px;
+    transform: translate(-50%, -50%);
+    display: grid;
+    place-items: center;
+    border: 2px solid rgba(255, 255, 255, .82);
+    border-radius: 50%;
+    color: #fff;
+    background: rgba(6, 10, 16, .4);
+    box-shadow: 0 12px 34px rgba(0, 0, 0, .34);
+    backdrop-filter: blur(8px);
+  }
+
+  #root .desktop-layout[data-offline="false"] .player-hero-play__control svg {
+    width: 25px;
+    height: 25px;
+    fill: currentColor;
+  }
+
+  #root .desktop-layout[data-offline="false"] .player-track-heading {
+    position: absolute;
+    z-index: 12;
+    left: 24px;
+    right: 24px;
+    bottom: 29%;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: block !important;
+    text-align: center !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .player-track-heading h1 {
+    margin: 0;
+    color: #fff;
+    font-size: clamp(20px, 5.7vw, 25px);
+    font-weight: 720;
+    line-height: 1.1;
+    letter-spacing: -.035em;
+    text-align: center;
+  }
+
+  #root .desktop-layout[data-offline="false"] .player-track-heading p {
+    margin: 7px 0 0;
+    color: rgba(255, 255, 255, .82);
+    font-size: 12px;
+    font-weight: 560;
+    text-align: center;
+  }
+
+  #root .desktop-layout[data-offline="false"] .player-screen-immersive .desktop-now-playing-screen__current-lyric {
+    position: absolute;
+    z-index: 12;
+    left: 30px;
+    right: 30px;
+    bottom: 22.8%;
+    min-height: 24px;
+    display: grid;
+    place-items: center;
+    color: rgba(255, 255, 255, .78);
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 13px;
+    font-style: italic;
+    line-height: 1.35;
+    text-align: center;
+    text-shadow: 0 2px 12px rgba(0, 0, 0, .5);
+  }
+
+  #root .desktop-layout[data-offline="false"] .player-playlist-picker {
+    z-index: 41;
+    left: 14px;
+    right: 14px;
+    bottom: calc(92px + env(safe-area-inset-bottom));
+    margin: 0;
+    max-height: 42vh;
+    overflow-y: auto;
+  }
+
+  #root .desktop-layout[data-offline="false"] .progress-wrap {
+    --waveform-muted: rgba(188, 199, 215, .34);
+    --waveform-played: #458dff;
+    position: absolute;
+    z-index: 14;
+    left: 24px;
+    right: 24px;
+    bottom: 13.2%;
+    height: 52px;
+    margin: 0 !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .progress-wrap::before,
+  #root .desktop-layout[data-offline="false"] .progress-wrap::after {
+    content: "";
+    position: absolute;
+    top: 1px;
+    left: 0;
+    height: 28px;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+      90deg,
+      currentColor 0 2px,
+      transparent 2px 4px
+    );
+    clip-path: polygon(
+      0 47%, 3% 31%, 6% 65%, 9% 20%, 12% 75%, 15% 37%, 18% 58%, 21% 18%,
+      24% 69%, 27% 42%, 30% 61%, 33% 26%, 36% 73%, 39% 36%, 42% 55%, 45% 15%,
+      48% 66%, 51% 31%, 54% 59%, 57% 21%, 60% 72%, 63% 39%, 66% 57%, 69% 27%,
+      72% 64%, 75% 35%, 78% 52%, 81% 24%, 84% 61%, 87% 42%, 90% 55%, 93% 34%,
+      96% 51%, 100% 45%, 100% 58%, 96% 61%, 93% 68%, 90% 63%, 87% 76%, 84% 69%,
+      81% 82%, 78% 71%, 75% 78%, 72% 67%, 69% 75%, 66% 64%, 63% 81%, 60% 71%,
+      57% 86%, 54% 70%, 51% 80%, 48% 67%, 45% 85%, 42% 72%, 39% 79%, 36% 66%,
+      33% 81%, 30% 69%, 27% 75%, 24% 64%, 21% 82%, 18% 70%, 15% 77%, 12% 68%,
+      9% 80%, 6% 69%, 3% 73%, 0 65%
+    );
+  }
+
+  #root .desktop-layout[data-offline="false"] .progress-wrap::before {
+    width: 100%;
+    color: var(--waveform-muted);
+  }
+
+  #root .desktop-layout[data-offline="false"] .progress-wrap::after {
+    width: var(--progress);
+    color: var(--waveform-played);
+    overflow: hidden;
+  }
+
+  #root .desktop-layout[data-offline="false"] .progress-wrap input[type="range"] {
+    position: absolute;
+    z-index: 4;
+    top: -7px;
+    left: 0;
+    width: 100%;
+    height: 43px;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+
+  #root .desktop-layout[data-offline="false"] .progress-wrap .time-row {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    margin: 0;
+    color: rgba(255, 255, 255, .72);
+    font-size: 9px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  #root .desktop-layout[data-offline="false"] .controls {
+    position: absolute;
+    z-index: 14;
+    left: 50%;
+    bottom: calc(3.3% + env(safe-area-inset-bottom));
+    width: 196px;
+    height: 64px;
+    margin: 0;
+    transform: translateX(-50%);
+    display: grid;
+    grid-template-columns: 50px 64px 50px;
+    justify-content: center;
+    align-items: center;
+    gap: 16px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .controls > .icon-button:first-child,
+  #root .desktop-layout[data-offline="false"] .controls > .icon-button:last-child {
+    display: none !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .controls .icon-button--control {
+    width: 48px;
+    height: 48px;
+    color: #fff;
+  }
+
+  #root .desktop-layout[data-offline="false"] .controls .icon-button--control svg {
+    width: 22px;
+    height: 22px;
+    fill: currentColor;
+  }
+
+  #root .desktop-layout[data-offline="false"] .controls .play-button {
+    width: 58px;
+    height: 58px;
+    border: 0;
+    color: #07101b;
+    background: #fff;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, .3);
+  }
+
+  #root .desktop-layout[data-offline="false"] .controls .play-button svg {
+    width: 24px;
+    height: 24px;
+    fill: currentColor;
+  }
+
+  #root .desktop-layout[data-offline="false"] .volume-control,
+  #root .desktop-layout[data-offline="false"] .player-screen-immersive .lyrics-panel,
+  #root .desktop-layout[data-offline="false"] .player-screen-immersive .queue-panel--player {
+    display: none !important;
+  }
+
+  /* -----------------------------------------------------------------------
+   * Library home — visual folders + playlists on one surface.
+   * --------------------------------------------------------------------- */
+  #root .desktop-layout[data-offline="false"][data-desktop-active="library"] > .phone-surface {
+    background:
+      radial-gradient(circle at 52% -12%, rgba(46, 91, 169, .14), transparent 22rem),
+      linear-gradient(180deg, #07101c 0%, #070d17 58%, #050a12 100%);
+  }
+
+  #root .desktop-layout[data-offline="false"] .phone-surface:has(.mobile-library-home) {
+    padding:
+      calc(72px + env(safe-area-inset-top))
+      16px
+      calc(96px + env(safe-area-inset-bottom)) !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .phone-surface:has(.mobile-library-home) .library-tabs,
+  #root .desktop-layout[data-offline="false"] .phone-surface:has(.mobile-library-home) .library-status {
+    display: none !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-library-home {
+    display: grid;
+    gap: 30px;
+    padding: 10px 0 20px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-library-home__section {
+    min-width: 0;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-library-home__heading {
+    min-height: 28px;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-library-home__heading > strong {
+    margin-right: auto;
+    color: #f6f8fc;
+    font-size: 16px;
+    font-weight: 710;
+    letter-spacing: -.02em;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-library-home__heading > button {
+    min-height: 28px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    border: 0;
+    color: #b8c4d5;
+    background: transparent;
+    font-size: 10px;
+    font-weight: 570;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-library-home__heading > button svg {
+    width: 13px;
+    height: 13px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-library-home__folders,
+  #root .desktop-layout[data-offline="false"] .mobile-library-home__playlists {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-library-home__folder {
+    min-width: 0;
+    padding: 0;
+    display: grid;
+    gap: 7px;
+    border: 0;
+    color: inherit;
+    background: transparent;
+    text-align: left;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-library-home__folder .artwork {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1 / 1.12;
+    border-radius: 10px;
+    box-shadow: 0 12px 26px rgba(0, 0, 0, .22);
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-library-home__folder > span {
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-library-home__folder strong,
+  #root .desktop-layout[data-offline="false"] .mobile-library-home__playlists .group-item__text strong {
+    overflow: hidden;
+    color: #f4f7fb;
+    font-size: 11px;
+    font-weight: 650;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-library-home__folder small,
+  #root .desktop-layout[data-offline="false"] .mobile-library-home__playlists .group-item__text small {
+    overflow: hidden;
+    color: #8997aa;
+    font-size: 9px;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-library-home__playlists .group-item {
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    display: block;
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-library-home__playlists .group-item__main {
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 7px;
+    color: inherit;
+    background: transparent;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-library-home__playlists .group-item__main .artwork {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1 / 1.12;
+    border-radius: 10px;
+    box-shadow: 0 12px 26px rgba(0, 0, 0, .22);
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-library-home__playlists .group-item__text {
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+    text-align: left;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-library-home__playlists .group-item__chevron,
+  #root .desktop-layout[data-offline="false"] .mobile-library-home__playlists .group-item__more,
+  #root .desktop-layout[data-offline="false"] .mobile-library-home__playlists .group-item__play,
+  #root .desktop-layout[data-offline="false"] .mobile-library-home__playlists .group-item__updated {
+    display: none !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-library-home__empty-playlist {
+    min-height: 96px;
+    width: 100%;
+    display: grid;
+    place-items: center;
+    align-content: center;
+    gap: 6px;
+    border: 1px dashed rgba(117, 151, 201, .28);
+    border-radius: 12px;
+    color: #a9bddb;
+    background: rgba(17, 32, 52, .56);
+    font-size: 11px;
+  }
+
+  /* -----------------------------------------------------------------------
+   * Folder / playlist detail — artwork hero + compact tracks.
+   * --------------------------------------------------------------------- */
+  #root .app-shell:has(.mobile-collection-detail) > .mobile-library-brand-bar {
+    display: none !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .phone-surface:has(.mobile-collection-detail) {
+    padding: 0 0 calc(94px + env(safe-area-inset-bottom)) !important;
+    overflow-y: auto;
+    background: #060b13;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-collection-detail {
+    position: relative;
+    min-height: 100%;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-collection-detail .library-header.is-detail {
+    position: absolute;
+    z-index: 30;
+    top: env(safe-area-inset-top);
+    left: 12px;
+    right: 12px;
+    height: 56px;
+    min-height: 56px;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 42px;
+    align-items: center;
+    background: transparent;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-collection-detail .library-header__title,
+  #root .desktop-layout[data-offline="false"] .mobile-collection-detail .library-header__player-button,
+  #root .desktop-layout[data-offline="false"] .mobile-collection-detail .library-header.is-detail > .icon-button[aria-label="Atualizar biblioteca"] {
+    display: none !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-collection-detail .library-header__back {
+    width: max-content !important;
+    height: 40px;
+    padding: 0 8px 0 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    color: #fff;
+    background: transparent;
+    font-size: 13px;
+    font-weight: 630;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-collection-detail .library-header__back svg {
+    width: 19px;
+    height: 19px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-collection-detail .library-header__back-label {
+    display: inline;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-collection-detail .library-header__more {
+    grid-column: 2;
+    width: 40px;
+    height: 40px;
+    justify-self: end;
+    color: #fff;
+    background: transparent;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-collection-detail .breadcrumbs {
+    display: none !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-collection-hero {
+    position: relative;
+    width: 100%;
+    height: min(58dvh, 500px);
+    min-height: 400px;
+    overflow: hidden;
+    background: #0a1019;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-collection-hero > .artwork {
+    width: 100%;
+    height: 100%;
+    border-radius: 0;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-collection-hero > .artwork img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-collection-hero__scrim {
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(180deg, rgba(4, 8, 13, .12) 0%, rgba(4, 8, 13, .14) 38%, rgba(4, 8, 13, .82) 82%, #060b13 100%),
+      linear-gradient(90deg, rgba(4, 8, 13, .15), transparent 50%, rgba(4, 8, 13, .15));
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-collection-hero__content {
+    position: absolute;
+    z-index: 3;
+    left: 24px;
+    right: 24px;
+    bottom: 28px;
+    display: grid;
+    place-items: center;
+    text-align: center;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-collection-hero__content > strong {
+    max-width: 100%;
+    overflow: hidden;
+    color: #fff;
+    font-size: 23px;
+    font-weight: 720;
+    line-height: 1.08;
+    letter-spacing: -.035em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-collection-hero__content > small {
+    margin-top: 6px;
+    color: rgba(255, 255, 255, .76);
+    font-size: 11px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-collection-hero__play {
+    width: 54px;
+    height: 54px;
+    margin-top: 16px;
+    display: grid;
+    place-items: center;
+    border: 0;
+    border-radius: 50%;
+    color: #08101a;
+    background: #fff;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, .34);
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-collection-hero__play svg {
+    width: 23px;
+    height: 23px;
+    fill: currentColor;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-collection-menu {
+    position: absolute;
+    z-index: 42;
+    top: calc(54px + env(safe-area-inset-top));
+    right: 12px;
+    width: min(270px, calc(100% - 24px));
+    padding: 7px;
+    display: grid;
+    gap: 3px;
+    border: 1px solid rgba(255, 255, 255, .12);
+    border-radius: 12px;
+    background: rgba(7, 13, 22, .98);
+    box-shadow: 0 20px 54px rgba(0, 0, 0, .46);
+    backdrop-filter: blur(20px);
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-collection-menu > button {
+    min-height: 42px;
+    padding: 9px 10px;
+    border: 0;
+    border-radius: 8px;
+    color: #eef3fa;
+    background: transparent;
+    font-size: 12px;
+    text-align: left;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-collection-menu > button:active {
+    background: rgba(255, 255, 255, .06);
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-collection-menu > button.is-danger {
+    color: #ff9d9d;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-collection-menu__empty {
+    padding: 10px;
+    color: #8f9caf;
+    font-size: 11px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-collection-menu .offline-collection-control {
+    margin: 0 0 4px;
+    border-color: rgba(103, 151, 225, .18);
+    background: rgba(15, 29, 49, .72);
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-collection-detail .library-smart-view-tools {
+    display: none !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-collection-detail .library-content {
+    padding: 10px 16px 22px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-collection-detail .play-all,
+  #root .desktop-layout[data-offline="false"] .mobile-collection-detail .collection-actions {
+    display: none !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-collection-detail .section-heading {
+    display: none !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-collection-detail .library-track {
+    min-height: 62px;
+    padding: 7px 0;
+    border-bottom-color: rgba(117, 145, 184, .10);
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-collection-detail .library-track__main {
+    grid-template-columns: 44px minmax(0, 1fr) auto;
+    gap: 10px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-collection-detail .library-track__main .artwork {
+    width: 44px;
+    height: 44px;
+    border-radius: 8px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-collection-detail .library-track__text strong {
+    font-size: 12px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-collection-detail .library-track__text small {
+    font-size: 10px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .library-track__mobile-meta {
+    display: none;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-collection-detail .library-track__mobile-meta {
+    min-width: 52px;
+    display: inline-grid;
+    grid-template-columns: auto 16px;
+    align-items: center;
+    justify-content: end;
+    gap: 7px;
+    color: #a7b1bf;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-collection-detail .library-track__duration {
+    font-size: 9px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-collection-detail .library-track__more {
+    width: 15px;
+    height: 15px;
+    color: #8c98a9;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-collection-detail .library-track__action,
+  #root .desktop-layout[data-offline="false"] .mobile-collection-detail .playing-indicator {
+    display: none !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-collection-detail .folder-visual-grid {
+    padding: 0;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-collection-detail .library-status {
+    display: none !important;
+  }
+
+  /* Mini player: flatter and closer to the selected mock. */
+  #root .desktop-layout[data-offline="false"] .mini-player {
+    width: min(calc(100% - 24px), 456px);
+    min-height: 64px;
+    padding: 7px 8px;
+    border-radius: 10px;
+    background: rgba(13, 23, 37, .97);
+  }
+
+  #root .desktop-layout[data-offline="false"] .mini-player__main {
+    grid-template-columns: 46px minmax(0, 1fr);
+    gap: 9px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mini-player__main .artwork {
+    width: 46px;
+    height: 46px;
+    border-radius: 8px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mini-player__playlist {
+    display: none !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mini-player__toggle {
+    width: 38px !important;
+    height: 38px !important;
+    border-radius: 50%;
+    color: #07101b !important;
+    background: #fff !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mini-player__toggle svg {
+    width: 18px !important;
+    height: 18px !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mini-player__progress span {
+    background: #4b8fff;
+  }
+}
+
+@media (min-width: 700px) {
+  .library-header__back-label {
+    display: none !important;
+  }
+}

@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Folder, ListMusic, Music2, RefreshCw } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Folder, ListMusic, MoreVertical, Music2, RefreshCw } from 'lucide-react';
 import type { LibraryNavigation, LibraryTab } from '../useLibraryNavigation';
 
 const tabs: Array<{ id: LibraryTab; label: string; icon: typeof Folder }> = [
@@ -17,6 +17,8 @@ type LibraryNavigationChromeProps = {
   onChangeTab: (tab: LibraryTab) => void;
   onScan: () => void;
   onOpenPlayer: () => void;
+  detailMenuOpen?: boolean;
+  onToggleDetailMenu?: () => void;
 };
 
 export function LibraryNavigationChrome({
@@ -29,7 +31,9 @@ export function LibraryNavigationChrome({
   onBack,
   onChangeTab,
   onScan,
-  onOpenPlayer
+  onOpenPlayer,
+  detailMenuOpen = false,
+  onToggleDetailMenu
 }: LibraryNavigationChromeProps) {
   const { libraryTab, folderView, visibleFolders, enterFolder } = navigation;
 
@@ -37,7 +41,10 @@ export function LibraryNavigationChrome({
     <>
       <header className={`library-header ${isDetail ? 'is-detail' : 'is-root'}`}>
         {isDetail ? (
-          <button className="icon-button" type="button" aria-label="Voltar" onClick={onBack}><ChevronLeft aria-hidden="true" /></button>
+          <button className="icon-button library-header__back" type="button" aria-label="Biblioteca" onClick={onBack}>
+            <ChevronLeft aria-hidden="true" />
+            <span className="library-header__back-label">Biblioteca</span>
+          </button>
         ) : (
           <span className="library-header__spacer" />
         )}
@@ -52,6 +59,18 @@ export function LibraryNavigationChrome({
         )}
         {canManageSharedLibrary && (
           <button className={`icon-button ${scanning ? 'is-loading' : ''}`} type="button" aria-label="Atualizar biblioteca" disabled={scanning} onClick={onScan}><RefreshCw aria-hidden="true" /></button>
+        )}
+        {isDetail && onToggleDetailMenu && (
+          <button
+            className="icon-button library-header__more"
+            type="button"
+            aria-label="Mais opções da coleção"
+            aria-haspopup="menu"
+            aria-expanded={detailMenuOpen}
+            onClick={onToggleDetailMenu}
+          >
+            <MoreVertical aria-hidden="true" />
+          </button>
         )}
         <button className="icon-button library-header__player-button" type="button" aria-label="Voltar ao player" onClick={onOpenPlayer}><Music2 aria-hidden="true" /></button>
       </header>

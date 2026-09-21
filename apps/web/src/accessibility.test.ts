@@ -59,10 +59,13 @@ describe('accessibility contracts', () => {
 
   it('mantém navegação mobile identificável e foco contido nos overlays do player', () => {
     const navigation = source('components/MobileBottomNav.tsx');
+    const presentation = source('components/PlayerTrackPresentation.tsx');
     const queue = source('components/PlayerQueuePanel.tsx');
 
-    expect(navigation).toMatch(/mobile-now-playing-footer/);
-    expect(navigation).toMatch(/aria-label="Abrir biblioteca"/);
+    expect(presentation).toMatch(/aria-label="Biblioteca"/);
+    expect(presentation).toMatch(/aria-label="Mais opções da faixa"/);
+    expect(presentation).toMatch(/className="player-hero-play"/);
+    expect(presentation).toMatch(/aria-label=\{playing \? 'Pausar pela capa' : 'Tocar pela capa'\}/);
     expect(navigation).toMatch(/aria-label="Navegação principal"/);
     expect(navigation).toMatch(/aria-current=\{foldersActive \? 'page'/);
     expect(navigation).toMatch(/aria-current=\{playlistsActive \? 'page'/);

@@ -1,4 +1,4 @@
-import { AudioLines, Folder, ListMusic, Menu, Music2, Search, UserRound } from 'lucide-react';
+import { AudioLines, Folder, ListMusic, Music2, Search, UserRound } from 'lucide-react';
 import { navigateAppPath } from '../browser-navigation';
 import type { LibraryTab } from '../useLibraryNavigation';
 
@@ -42,17 +42,7 @@ export function MobileBottomNav({
     });
   }
 
-  if (active === 'player') {
-    return (
-      <div className="mobile-now-playing-footer">
-        <span className="mobile-now-playing-footer__mark"><AudioLines aria-hidden="true" /></span>
-        <span className="mobile-now-playing-footer__copy">Música boa em<br />qualquer lugar.</span>
-        <button type="button" aria-label="Abrir biblioteca" onClick={() => openLibraryRoute('/library', onOpenFolders)}>
-          <Menu aria-hidden="true" />
-        </button>
-      </div>
-    );
-  }
+  if (active === 'player') return null;
 
   const foldersActive = active === 'library' && libraryTab !== 'playlists';
   const playlistsActive = active === 'library' && libraryTab === 'playlists';

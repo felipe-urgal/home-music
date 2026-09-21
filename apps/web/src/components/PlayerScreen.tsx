@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 import type { Playlist, RepeatMode, Track } from '@home-music/shared';
-import { LyricsPanel } from './LyricsPanel';
+import { CurrentLyricsLine, LyricsPanel } from './LyricsPanel';
 import { PlayerPlaybackControls } from './PlayerPlaybackControls';
 import { PlayerQueuePanel } from './PlayerQueuePanel';
 import { PlayerTrackPresentation } from './PlayerTrackPresentation';
@@ -98,11 +98,18 @@ export function PlayerScreen({
           isDownloaded={isDownloaded}
           availableViaCollection={availableViaCollection}
           downloading={downloading}
+          shuffle={shuffle}
+          repeatMode={repeatMode}
           onOpenLibrary={onOpenLibrary}
+          onTogglePlay={onTogglePlay}
+          onShuffle={onShuffle}
+          onRepeat={onRepeat}
           onToggleDownload={onToggleDownload}
           onAddToPlaylist={onAddToPlaylist}
           onExitOffline={onExitOffline}
         />
+
+        {!offlineMode && <CurrentLyricsLine track={current} currentTime={currentTime} offlineMode={false} />}
 
         <PlayerPlaybackControls
           queueLength={queue.length}

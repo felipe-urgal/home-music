@@ -1,7 +1,8 @@
-import { CheckCircle2, Download, LoaderCircle, Pause, Play, Trash2 } from 'lucide-react';
+import { CheckCircle2, Download, LoaderCircle, MoreHorizontal, Pause, Play, Trash2 } from 'lucide-react';
 import type { Track } from '@home-music/shared';
 import type { TrackSort } from '../library-utils';
 import { useDesktopLayout } from '../useDesktopLayout';
+import { formatPlayerTime } from '../player-presentation';
 import { Artwork } from './Artwork';
 import { DesktopTrackTable } from './DesktopTrackTable';
 
@@ -161,6 +162,7 @@ export function LibraryTrackRows({
     <div className="library-track-list">
       {tracks.map(track => {
         const isCurrent = track.id === current?.id;
+        const trackDuration = typeof track.duration === 'number' ? track.duration : 0;
         const accessibleTrackLabel = `Tocar ${track.title}, ${track.artist || 'Artista desconhecido'}, ${track.album || 'Álbum desconhecido'}${isCurrent && playing ? ' — reproduzindo agora' : ''}`;
         return (
           <div className={`library-track ${isCurrent ? 'is-current' : ''}`} key={track.id}>
@@ -175,6 +177,10 @@ export function LibraryTrackRows({
               <span className="library-track__text">
                 <strong>{track.title}</strong>
                 <small>{track.artist} · {track.album}</small>
+              </span>
+              <span className="library-track__mobile-meta" aria-hidden="true">
+                <span className="library-track__duration">{formatPlayerTime(trackDuration)}</span>
+                <MoreHorizontal className="library-track__more" />
               </span>
               {isCurrent && playing
                 ? <span className="playing-indicator" aria-hidden="true">▶</span>

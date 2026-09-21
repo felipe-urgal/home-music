@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Pause, Play } from 'lucide-react';
 import type { AuthenticatedUser, Playlist, Track } from '@home-music/shared';
 import { canUseAdminLibraryActions } from '../frontend-access';
 import type { OfflineCollectionDownloadInput, OfflineDownloads } from '../offline-downloads';
@@ -14,6 +15,7 @@ import { LibraryViewTools } from './LibraryViewTools';
 import { MiniPlayer } from './MiniPlayer';
 import { OfflineCollectionControl, offlineCollectionTracksByIds } from './OfflineCollectionControl';
 import { SmartPlaylistDialog } from './SmartPlaylistDialog';
+import { Artwork } from './Artwork';
 
 type LibraryOfflineDownloads = Pick<OfflineDownloads,
   | 'supported'
@@ -64,6 +66,7 @@ export function LibraryScreen({
   const desktopLayout = useDesktopLayout();
   const [smartPlaylistEditor, setSmartPlaylistEditor] = useState<{ playlist: Playlist | null } | null>(null);
   const [viewControlsOpen, setViewControlsOpen] = useState(false);
+  const [mobileCollectionMenuOpen, setMobileCollectionMenuOpen] = useState(false);
   const {
     tracks,
     playlists,
@@ -92,8 +95,7 @@ export function LibraryScreen({
     currentViewDefinition,
     libraryTracks,
     selectTab,
-    leaveFolder,
-    leavePlaylist
+    leaveFolder
   } = navigation;
 
   const isDetail = Boolean(selectedPlaylist || folderPath);
@@ -137,14 +139,15 @@ export function LibraryScreen({
 
   function goBack() {
     setViewControlsOpen(false);
+    setMobileCollectionMenuOpen(false);
     if (selectedPlaylist) {
-      if (desktopLayout) selectTab('folders');
-      else leavePlaylist();
+      selectTab('folders');
     } else if (folderPath) leaveFolder();
   }
 
   function changeTab(tab: LibraryTab) {
     setViewControlsOpen(false);
+    setMobileCollectionMenuOpen(false);
     selectTab(tab);
   }
 
@@ -177,7 +180,7 @@ export function LibraryScreen({
 
     if (playlist.source === 'smart') await deleteSmartPlaylist(playlist.id);
     else await deletePlaylist(playlist.id);
-    leavePlaylist();
+    selectTab('folders');
   }
 
   async function saveCurrentView() {
@@ -259,6 +262,8 @@ export function LibraryScreen({
       onChangeTab={changeTab}
       onScan={() => void scanNow()}
       onOpenPlayer={onOpenPlayer}
+      detailMenuOpen={mobileCollectionMenuOpen}
+      onToggleDetailMenu={!desktopLayout && isDetail ? () => setMobileCollectionMenuOpen(open => !open) : undefined}
     />
   );
 
@@ -323,6 +328,14 @@ export function LibraryScreen({
     && current
     && playlistSummaryTracks.some(track => track.id === current.id)
   );
+  const mobileCollectionTracks = selectedPlaylist ? playlistSummaryTracks : folderView.allTracks;
+  const mobileCollectionName = selectedPlaylist?.name ?? folderView.name;
+  const mobileCollectionArtwork = mobileCollectionTracks.find(track => track.hasCover) ?? mobileCollectionTracks[0];
+  const mobileCollectionPlaying = selectedPlaylist ? playlistPlaying : folderPlaying;
+
+  useEffect(() => {
+    setMobileCollectionMenuOpen(false);
+  }, [folderPath, selectedPlaylist?.id]);
 
   return (
     <>
@@ -363,10 +376,93 @@ export function LibraryScreen({
           {libraryContent}
           {libraryStatus}
         </>
+      ) : isDetail ? (
+        <div className="mobile-collection-detail" data-testid="mobile-collection-detail">
+          {navigationChrome}
+          <section className="mobile-collection-hero" aria-label={mobileCollectionName}>
+            <Artwork track={mobileCollectionArtwork} large />
+            <span className="mobile-collection-hero__scrim" aria-hidden="true" />
+            <div className="mobile-collection-hero__content">
+              <strong>{mobileCollectionName}</strong>
+              <small>{mobileCollectionTracks.length} músicas</small>
+              <button
+                className="mobile-collection-hero__play"
+                type="button"
+                aria-label={mobileCollectionPlaying ? `Pausar ${mobileCollectionName}` : `Tocar ${mobileCollectionName}`}
+                disabled={!mobileCollectionTracks.length}
+                onClick={() => toggleCollectionPlayback(mobileCollectionTracks)}
+              >
+                {mobileCollectionPlaying ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
+              </button>
+            </div>
+          </section>
+
+          {mobileCollectionMenuOpen && (
+            <section className="mobile-collection-menu" role="menu" aria-label="Mais opções da coleção">
+              {offlineControl}
+              {selectedPlaylist?.source === 'manual' && (
+                <>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setMobileCollectionMenuOpen(false);
+                      void editPlaylist(selectedPlaylist);
+                    }}
+                  >
+                    Renomear playlist
+                  </button>
+                  <button
+                    className="is-danger"
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setMobileCollectionMenuOpen(false);
+                      void removePlaylist(selectedPlaylist);
+                    }}
+                  >
+                    Excluir playlist
+                  </button>
+                </>
+              )}
+              {selectedPlaylist?.source === 'smart' && (
+                <>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setMobileCollectionMenuOpen(false);
+                      setSmartPlaylistEditor({ playlist: selectedPlaylist });
+                    }}
+                  >
+                    Editar regra
+                  </button>
+                  <button
+                    className="is-danger"
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setMobileCollectionMenuOpen(false);
+                      void removePlaylist(selectedPlaylist);
+                    }}
+                  >
+                    Excluir playlist
+                  </button>
+                </>
+              )}
+              {!offlineControl && !selectedPlaylist && (
+                <span className="mobile-collection-menu__empty">Nenhuma ação adicional.</span>
+              )}
+            </section>
+          )}
+
+          {viewTools}
+          {libraryContent}
+          {libraryStatus}
+        </div>
       ) : (
         <>
           {navigationChrome}
-          {offlineControl}
           {viewTools}
           {libraryContent}
           {libraryStatus}

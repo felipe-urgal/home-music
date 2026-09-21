@@ -13,30 +13,44 @@ async function login(page: Page) {
   await expect(page.locator('.player-track-heading h1')).toBeVisible();
 }
 
-test('biblioteca mobile usa abas no topo e mini-player persistente', async ({ page }, testInfo) => {
+test('mobile segue o protótipo 3 na biblioteca, detalhe e player', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'mobile-chromium');
 
   await login(page);
 
-  const openLibrary = page.getByRole('button', { name: 'Abrir biblioteca' });
-  await expect(openLibrary).toBeVisible();
-  await openLibrary.click();
+  await page.getByRole('button', { name: 'Biblioteca' }).click();
 
-  const libraryTabs = page.getByRole('navigation', { name: 'Navegação da biblioteca' });
-  await expect(libraryTabs).toBeVisible();
-  await expect(libraryTabs.getByRole('button', { name: 'Pastas', exact: true })).toHaveAttribute('aria-current', 'page');
+  const libraryHome = page.getByTestId('mobile-library-home');
+  await expect(libraryHome).toBeVisible();
+  await expect(libraryHome.getByText('Pastas', { exact: true })).toBeVisible();
+  await expect(libraryHome.getByText('Playlists', { exact: true })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Navegação da biblioteca' })).toBeHidden();
   await expect(page.locator('.mobile-bottom-nav')).toBeHidden();
 
   const miniPlayer = page.getByTestId('mini-player');
   await expect(miniPlayer).toBeVisible();
   await expect(miniPlayer.getByRole('button', { name: 'Abrir Tocando Agora' })).toBeVisible();
-  await expect(miniPlayer.getByRole('button', { name: 'Adicionar à playlist' })).toBeVisible();
+  await expect(miniPlayer.getByRole('button', { name: 'Adicionar à playlist' })).toBeHidden();
 
-  await libraryTabs.getByRole('button', { name: 'Playlists', exact: true }).click();
-  await expect(libraryTabs.getByRole('button', { name: 'Playlists', exact: true })).toHaveAttribute('aria-current', 'page');
-  await expect(page).toHaveURL(/\/library\/playlists$/);
+  const fixturePlaylist = libraryHome.getByText('E2E Rekordbox', { exact: true });
+  await expect(fixturePlaylist).toBeVisible();
+  await fixturePlaylist.click();
+
+  const detail = page.getByTestId('mobile-collection-detail');
+  await expect(detail).toBeVisible();
+  await expect(detail.getByRole('button', { name: 'Biblioteca' })).toBeVisible();
+  const collectionHero = detail.getByRole('region', { name: 'E2E Rekordbox' });
+  await expect(collectionHero.getByText('E2E Rekordbox', { exact: true })).toBeVisible();
+  await expect(page.locator('.mobile-library-brand-bar')).toBeHidden();
+
+  await detail.getByRole('button', { name: 'Biblioteca' }).click();
+  await expect(libraryHome).toBeVisible();
 
   await miniPlayer.getByRole('button', { name: 'Abrir Tocando Agora' }).click();
   await expect(page.locator('.player-screen-immersive')).toBeVisible();
-  await expect(page.locator('.player-track-heading h1')).toBeVisible();
+  await expect(page.locator('.player-hero-play')).toBeVisible();
+  await expect(page.locator('.controls').getByRole('button', { name: 'Anterior' })).toBeVisible();
+  await expect(page.locator('.controls').getByRole('button', { name: 'Próxima' })).toBeVisible();
+  await expect(page.locator('.controls').getByRole('button', { name: 'Aleatório' })).toBeHidden();
+  await expect(page.locator('.controls').getByRole('button', { name: /Repet/ })).toBeHidden();
 });
