@@ -66,6 +66,7 @@ type SearchIdentity = {
   title: string;
   artist: string;
   album: string;
+  useAlbumFilter: boolean;
   usedFileContext: boolean;
   usedTitleIdentity: boolean;
   fileContext: SafeFileContext | null;
@@ -438,6 +439,7 @@ function searchIdentity(track: Track, fileContext: SafeFileContext | null): Sear
       title: exactValue(track.title),
       artist: exactValue(track.artist),
       album: albumReliable ? exactValue(track.album) : '',
+      useAlbumFilter: albumReliable,
       usedFileContext: false,
       usedTitleIdentity: false,
       fileContext
@@ -473,6 +475,7 @@ function searchIdentity(track: Track, fileContext: SafeFileContext | null): Sear
     title,
     artist,
     album: albumReliable ? exactValue(track.album) : folderAlbum,
+    useAlbumFilter: albumReliable,
     usedFileContext: !parsedTitle && Boolean(parsedFile),
     usedTitleIdentity: Boolean(parsedTitle),
     fileContext
@@ -549,19 +552,22 @@ function artworkConfidenceFor(
   return albumCompatible || durationCorroborates ? 'high' : null;
 }
 
-type QueryTerms = { title: string; artist: string };
+type QueryTerms = { title: string; artist: string; album?: string };
 
 function queryText(terms: QueryTerms) {
-  return [
+  const query = [
     `recording:${JSON.stringify(exactValue(terms.title))}`,
     `artist:${JSON.stringify(exactValue(terms.artist))}`
-  ].join(' AND ');
+  ];
+  if (terms.album) query.push(`release:${JSON.stringify(exactValue(terms.album))}`);
+  return query.join(' AND ');
 }
 
 function cacheKey(terms: QueryTerms) {
   return JSON.stringify({
     title: normalizedValue(terms.title),
-    artist: normalizedValue(terms.artist)
+    artist: normalizedValue(terms.artist),
+    album: terms.album ? normalizedValue(terms.album) : null
   });
 }
 
@@ -684,13 +690,21 @@ export function createMusicBrainzMetadataAnalyzer(options: AnalyzerOptions = {})
         const identity = searchIdentity(track, fileContext);
         if (!identity) continue;
         const matchTrack = matchingTrack(track, identity);
-        const candidates = await fetchCandidates(
-          { title: identity.title, artist: identity.artist },
-          providers,
-          fetchImpl,
-          userAgent,
-          signal
-        );
+        const scopedTerms = identity.useAlbumFilter
+          ? { title: identity.title, artist: identity.artist, album: identity.album }
+          : null;
+        let candidates = scopedTerms
+          ? await fetchCandidates(scopedTerms, providers, fetchImpl, userAgent, signal)
+          : [];
+        if (!scopedTerms || candidates.length === 0) {
+          candidates = await fetchCandidates(
+            { title: identity.title, artist: identity.artist },
+            providers,
+            fetchImpl,
+            userAgent,
+            signal
+          );
+        }
         matches.push({
           track,
           matchTrack,
