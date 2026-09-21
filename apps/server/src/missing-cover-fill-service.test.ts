@@ -4,7 +4,10 @@ import type { Track, AdminTrackCoverResponse } from '@home-music/shared';
 import type { LibraryAssistantAnalyzer } from './library-assistant-service.js';
 import type { LibraryAssistantProviderGateway } from './library-assistant-provider.js';
 import { renderGeneratedArtworkPng } from './generated-artwork.js';
-import { MissingCoverFillService } from './missing-cover-fill-service.js';
+import {
+  createGeneratedCoverOverrideDetector,
+  MissingCoverFillService
+} from './missing-cover-fill-service.js';
 import {
   inspectCoverOverride,
   type TrackCoverOverrideStore
@@ -120,6 +123,24 @@ function artworkAnalyzer(sourceUrl: string): LibraryAssistantAnalyzer {
     }
   };
 }
+
+test('memoiza identificação de fallback gerado enquanto faixa e override não mudam', () => {
+  const source = track('generated-cache');
+  const generated = renderGeneratedArtworkPng(source);
+  const version = inspectCoverOverride(generated.data, generated.contentType).version;
+  let renders = 0;
+  const detector = createGeneratedCoverOverrideDetector((input, requestedSize) => {
+    renders += 1;
+    return renderGeneratedArtworkPng(input, requestedSize);
+  });
+
+  assert.equal(detector(source, version), true);
+  assert.equal(detector({ ...source }, version), true);
+  assert.equal(renders, 1);
+
+  assert.equal(detector({ ...source, album: 'Outro álbum' }, version), false);
+  assert.equal(renders, 2);
+});
 
 test('baixa uma capa uma vez e reutiliza para faixas do mesmo lançamento', async () => {
   const plain = track('plain');

@@ -75,11 +75,34 @@ export function isGeneratedCoverOverride(
   }
 }
 
+export function createGeneratedCoverOverrideDetector(
+  renderArtwork: typeof renderGeneratedArtworkPng = renderGeneratedArtworkPng
+) {
+  const cache = new Map<string, { identity: string; generated: boolean }>();
+
+  return (track: Track, version: string) => {
+    const identity = JSON.stringify({
+      version,
+      title: track.title,
+      artist: track.artist,
+      album: track.album,
+      albumArtist: track.albumArtist
+    });
+    const cached = cache.get(track.id);
+    if (cached?.identity === identity) return cached.generated;
+
+    const generated = isGeneratedCoverOverride(track, version, renderArtwork);
+    cache.set(track.id, { identity, generated });
+    return generated;
+  };
+}
+
 export class MissingCoverFillService {
   private readonly now: () => Date;
   private readonly createId: () => string;
   private readonly downloadArtwork: NonNullable<MissingCoverFillServiceOptions['downloadArtwork']>;
   private readonly renderArtwork: typeof renderGeneratedArtworkPng;
+  private readonly isGeneratedOverride: ReturnType<typeof createGeneratedCoverOverrideDetector>;
   private job: MissingCoverFillJob | null = null;
   private controller: AbortController | null = null;
   private active: Promise<void> | null = null;
@@ -90,6 +113,7 @@ export class MissingCoverFillService {
     this.downloadArtwork = options.downloadArtwork
       ?? ((sourceUrl, downloadOptions) => downloadCoverArtArchiveImage(sourceUrl, downloadOptions));
     this.renderArtwork = options.renderArtwork ?? renderGeneratedArtworkPng;
+    this.isGeneratedOverride = createGeneratedCoverOverrideDetector(this.renderArtwork);
   }
 
   getJob() {
@@ -134,7 +158,7 @@ export class MissingCoverFillService {
     return this.options.library.listTracks().flatMap(track => {
       const cover = this.options.coverOverrides.getStatus(track.id);
       if (!cover || cover.physicalHasCover) return [];
-      const eligible = !cover.override || isGeneratedCoverOverride(track, cover.override.version, this.renderArtwork);
+      const eligible = !cover.override || this.isGeneratedOverride(track, cover.override.version);
       if (!eligible) return [];
 
       // Overrides gerados contam como capa efetiva na projeção. Para tentar
@@ -193,7 +217,7 @@ export class MissingCoverFillService {
           if (!track) continue;
           const status = this.options.coverOverrides.getStatus(track.id);
           if (!status || status.physicalHasCover) continue;
-          if (status.override && !isGeneratedCoverOverride(track, status.override.version, this.renderArtwork)) continue;
+          if (status.override && !this.isGeneratedOverride(track, status.override.version)) continue;
 
           try {
             const saved = this.options.coverOverrides.save(
@@ -219,7 +243,7 @@ export class MissingCoverFillService {
         const status = this.options.coverOverrides.getStatus(track.id);
         if (!status || status.physicalHasCover) continue;
         if (status.override) {
-          if (isGeneratedCoverOverride(track, status.override.version, this.renderArtwork) && this.job) {
+          if (this.isGeneratedOverride(track, status.override.version) && this.job) {
             this.job.generated += 1;
           }
           continue;

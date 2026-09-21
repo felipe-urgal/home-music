@@ -297,7 +297,12 @@ export class LibraryAssistantService {
 
   listRuns(limit = 50) {
     const runs = this.options.store.listRuns(limit);
-    for (const run of runs) this.refreshStaleRun(run.id);
+    let trackSnapshot: ReadonlyMap<string, Track> | null = null;
+    const currentTracks = () => {
+      trackSnapshot ??= new Map(this.options.library.listTracks().map(track => [track.id, track]));
+      return trackSnapshot;
+    };
+    for (const run of runs) this.refreshStaleRun(run.id, currentTracks);
     return this.options.store.listRuns(limit);
   }
 
@@ -662,7 +667,10 @@ export class LibraryAssistantService {
       : this.premiseSignature(capability, track);
   }
 
-  private refreshStaleRun(runId: string) {
+  private refreshStaleRun(
+    runId: string,
+    currentTracks?: () => ReadonlyMap<string, Track>
+  ) {
     const run = this.options.store.getRun(runId);
     if (!run || run.status === 'failed' || run.status === 'cancelled') return;
     const currentRevision = this.options.library.revision();
@@ -678,12 +686,19 @@ export class LibraryAssistantService {
       return;
     }
 
-    const tracks = new Map(this.options.library.listTracks().map(track => [track.id, track]));
-    const records = this.options.store.listSuggestionRecords(runId, { limit: MAX_SUGGESTIONS_PER_LEGACY_RUN });
+    const records = (['pending', 'review'] as const).flatMap(status =>
+      this.options.store.listSuggestionRecords(runId, {
+        status,
+        limit: MAX_SUGGESTIONS_PER_LEGACY_RUN
+      })
+    );
+    if (records.length === 0) return;
+
+    const tracks = currentTracks?.()
+      ?? new Map(this.options.library.listTracks().map(track => [track.id, track]));
     let stale = false;
     const updatedAt = this.now().toISOString();
     for (const record of records) {
-      if (record.suggestion.status !== 'pending' && record.suggestion.status !== 'review') continue;
       const track = tracks.get(record.suggestion.target.trackId);
       const currentSignature = track
         ? this.suggestionPremiseSignature(record.suggestion.capability, track, record.suggestion.target)
