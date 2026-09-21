@@ -80,6 +80,20 @@ test('Alterar senha permite mostrar e ocultar os três campos juntos', async ({ 
   await page.getByRole('button', { name: /Alterar senha/ }).click();
   await expect(page.locator('#my-account-title')).toHaveText('Alterar senha');
 
+  if (viewport && viewport.width >= 1024) {
+    const passwordV3 = page.getByTestId('my-account-password-prototype-three');
+    await expect(passwordV3).toBeVisible();
+    await expect(passwordV3.getByRole('heading', { name: 'Alterar senha', exact: true })).toBeVisible();
+    await expect(passwordV3.getByText('Requisitos da senha', { exact: true })).toBeVisible();
+    await expect(passwordV3.getByText('Você será desconectado', { exact: true })).toBeVisible();
+    await expect(passwordV3.getByText('Pelo menos 6 caracteres', { exact: true })).toBeVisible();
+
+    const columns = await passwordV3.locator('.my-account-password-v3__layout').evaluate(element => (
+      getComputedStyle(element).gridTemplateColumns.split(' ').filter(Boolean).length
+    ));
+    expect(columns).toBe(2);
+  }
+
   const current = page.getByLabel('Senha atual');
   const next = page.getByLabel('Nova senha', { exact: true });
   const confirmation = page.getByLabel('Confirmar nova senha');
@@ -96,4 +110,9 @@ test('Alterar senha permite mostrar e ocultar os três campos juntos', async ({ 
   await expect(current).toHaveAttribute('type', 'password');
   await expect(next).toHaveAttribute('type', 'password');
   await expect(confirmation).toHaveAttribute('type', 'password');
+
+  await current.fill(password);
+  await next.fill('abc123');
+  await confirmation.fill('abc123');
+  await expect(page.getByRole('button', { name: 'Alterar senha e sair', exact: true })).toBeEnabled();
 });
