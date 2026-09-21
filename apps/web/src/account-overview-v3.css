@@ -12,6 +12,24 @@
 }
 
 @media (min-width: 1024px) {
+  #root .desktop-layout[data-offline="false"]:has(.desktop-account-surface) {
+    grid-template-rows: 56px minmax(0, 1fr);
+  }
+
+  #root .desktop-layout[data-offline="false"]:has(.desktop-account-surface) > .desktop-topbar,
+  #root .desktop-layout[data-offline="false"]:has(.desktop-account-surface) .desktop-brand,
+  #root .desktop-layout[data-offline="false"]:has(.desktop-account-surface) .desktop-nav,
+  #root .desktop-layout[data-offline="false"]:has(.desktop-account-surface) .desktop-nav__item,
+  #root .desktop-layout[data-offline="false"]:has(.desktop-account-surface) .desktop-nav__item--nested {
+    height: 56px;
+    min-height: 56px;
+  }
+
+  #root .desktop-layout[data-offline="false"]:has(.desktop-account-surface) > .desktop-topbar {
+    padding-inline: 42px;
+    gap: 30px;
+  }
+
   #root .desktop-layout[data-offline="false"] > .desktop-account-surface {
     padding: 0 0 28px;
     background:
@@ -53,7 +71,7 @@
     isolation: isolate;
     min-height: 318px;
     display: grid;
-    grid-template-columns: minmax(280px, .8fr) minmax(560px, 1.82fr) minmax(180px, .55fr);
+    grid-template-columns: 350px minmax(620px, 850px) minmax(180px, 1fr);
     align-items: start;
     gap: 34px;
     padding: 38px 48px 32px;
@@ -135,14 +153,15 @@
     position: relative;
     z-index: 5;
     width: 100%;
+    max-width: 850px;
     min-width: 0;
-    min-height: 224px;
+    min-height: 234px;
     display: grid;
-    grid-template-columns: 116px minmax(190px, 1fr) minmax(190px, .9fr);
+    grid-template-columns: 132px minmax(280px, 1fr) 235px;
     align-items: center;
-    gap: 22px;
-    margin: 4px 0 0;
-    padding: 28px 34px;
+    gap: 34px;
+    margin: 0;
+    padding: 30px 48px;
     overflow: hidden;
     border: 1px solid rgba(115, 132, 177, .26);
     border-radius: 34px;
@@ -167,27 +186,22 @@
   }
 
   #root .desktop-layout[data-offline="false"] .my-account-v3__avatar {
-    width: 112px;
-    height: 112px;
-    display: grid;
-    place-items: center;
-    border: 2px solid rgba(214, 223, 242, .82);
+    width: 132px;
+    height: 132px;
+    display: block;
+    overflow: hidden;
+    border: 0;
     border-radius: 50%;
-    background:
-      radial-gradient(circle at 67% 28%, rgba(255, 141, 71, .86), transparent 16%),
-      radial-gradient(circle at 43% 35%, rgba(169, 70, 189, .82), transparent 34%),
-      radial-gradient(circle at 72% 72%, rgba(34, 72, 151, .9), transparent 38%),
-      linear-gradient(145deg, #32224f, #0e1833 72%);
-    box-shadow:
-      0 0 0 10px rgba(46, 76, 127, .11),
-      inset 0 0 34px rgba(255,255,255,.05);
+    background: #141a29;
+    box-shadow: 0 0 0 8px rgba(57, 79, 126, .08);
   }
 
-  #root .desktop-layout[data-offline="false"] .my-account-v3__avatar span {
-    color: rgba(255,255,255,.88);
-    font-size: 34px;
-    font-weight: 620;
-    text-shadow: 0 2px 12px rgba(0,0,0,.38);
+  #root .desktop-layout[data-offline="false"] .my-account-v3__avatar img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+    border-radius: 50%;
   }
 
   #root .desktop-layout[data-offline="false"] .my-account-v3__profile-copy {
@@ -201,7 +215,7 @@
     max-width: 100%;
     overflow: hidden;
     color: #f6f4f4;
-    font-size: clamp(23px, 2vw, 30px);
+    font-size: 27px;
     font-weight: 690;
     letter-spacing: -.025em;
     text-overflow: ellipsis;
@@ -210,7 +224,7 @@
 
   #root .desktop-layout[data-offline="false"] .my-account-v3__profile-copy > small {
     color: #a8b4c6;
-    font-size: 17px;
+    font-size: 18px;
   }
 
   #root .desktop-layout[data-offline="false"] .my-account-v3__active {
@@ -262,106 +276,35 @@
     text-transform: uppercase;
   }
 
-  /* Stylized headset built in CSS so the screen keeps the prototype composition
-     without introducing a decorative image dependency. */
   #root .desktop-layout[data-offline="false"] .my-account-v3__headphones {
     position: absolute;
-    z-index: 1;
-    right: -92px;
-    top: -74px;
-    width: 430px;
-    height: 430px;
+    z-index: 2;
+    top: -1px;
+    right: 0;
+    width: 384px;
+    height: 330px;
     pointer-events: none;
-    transform: rotate(-13deg);
-    filter: drop-shadow(-24px 22px 36px rgba(0,0,0,.4));
-    opacity: .92;
-  }
-
-  #root .desktop-layout[data-offline="false"] .my-account-v3__headphones-band {
-    position: absolute;
-    inset: 18px;
-    border: 48px solid rgba(16, 20, 29, .96);
-    border-left-color: rgba(32, 38, 51, .88);
-    border-bottom-color: rgba(13, 17, 26, .98);
-    border-radius: 50%;
-    box-shadow:
-      inset 0 0 0 3px rgba(181, 105, 61, .15),
-      inset 12px -8px 30px rgba(186, 101, 53, .17),
-      0 0 0 2px rgba(255,255,255,.018);
-  }
-
-  #root .desktop-layout[data-offline="false"] .my-account-v3__headphones-band::before {
-    content: "";
-    position: absolute;
-    left: 18px;
-    top: 40px;
-    width: 60px;
-    height: 205px;
-    border-radius: 50px;
-    background:
-      linear-gradient(90deg, #090d14, #1b202b 55%, #0a0d13);
-    box-shadow:
-      inset -5px 0 12px rgba(209, 128, 74, .12),
-      0 10px 24px rgba(0,0,0,.3);
-  }
-
-  #root .desktop-layout[data-offline="false"] .my-account-v3__headphones-cup {
-    position: absolute;
-    right: 18px;
-    bottom: 62px;
-    width: 102px;
-    height: 170px;
-    border: 2px solid rgba(150, 92, 59, .28);
-    border-radius: 44px 54px 58px 38px;
-    background:
-      linear-gradient(105deg, #0a0d13, #232832 48%, #11141c 76%);
-    box-shadow:
-      inset 9px -8px 20px rgba(192, 110, 59, .16),
-      0 20px 34px rgba(0,0,0,.34);
-  }
-
-  #root .desktop-layout[data-offline="false"] .my-account-v3__vertical-copy {
-    position: relative;
-    z-index: 4;
-    justify-self: end;
-    align-self: start;
-    display: grid;
-    gap: 5px;
-    margin: 76px 4px 0 0;
-    color: #98a1b7;
-    font-size: 10px;
-    font-weight: 650;
-    letter-spacing: .43em;
-    line-height: 1.2;
-    text-transform: uppercase;
-  }
-
-  #root .desktop-layout[data-offline="false"] .my-account-v3__vertical-copy::after {
-    content: "";
-    width: 30px;
-    height: 2px;
-    margin-top: 14px;
-    background: linear-gradient(90deg, #c79a59, transparent);
+    background: url('/account-v3-headphones.webp') right top / 384px 330px no-repeat;
   }
 
   #root .desktop-layout[data-offline="false"] .my-account-v3__settings {
     position: relative;
     z-index: 6;
     display: grid;
-    gap: 18px;
+    gap: 14px;
     padding: 8px 48px 0;
   }
 
   #root .desktop-layout[data-offline="false"] .my-account-v3__settings-heading {
     display: grid;
-    gap: 5px;
-    margin-bottom: 2px;
+    gap: 4px;
+    margin: 0 0 4px 12px;
   }
 
   #root .desktop-layout[data-offline="false"] .my-account-v3__settings-heading h2 {
     margin: 0;
     color: #f7f4f1;
-    font-size: clamp(31px, 2.5vw, 42px);
+    font-size: 40px;
     font-weight: 690;
     letter-spacing: -.035em;
     line-height: 1.05;
@@ -371,6 +314,32 @@
     margin: 0;
     color: #8e9bad;
     font-size: 14px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-v3__aside-quote {
+    position: absolute;
+    z-index: 2;
+    top: 10px;
+    right: 76px;
+    display: grid;
+    gap: 8px;
+    color: #d9a156;
+    pointer-events: none;
+    transform: rotate(-2deg);
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-v3__aside-quote em {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 19px;
+    font-style: italic;
+    line-height: 1.35;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-v3__aside-quote i {
+    width: 48px;
+    height: 2px;
+    margin-left: auto;
+    background: #d9a156;
   }
 
   #root .desktop-layout[data-offline="false"] .my-account-v3__grid {
@@ -394,9 +363,9 @@
     --account-v3-bright: #64b9ff;
     position: relative;
     min-width: 0;
-    min-height: 112px;
+    min-height: 118px;
     display: grid;
-    grid-template-columns: 78px minmax(0, 1fr) 24px;
+    grid-template-columns: 82px minmax(0, 1fr) 24px;
     align-items: center;
     gap: 16px;
     padding: 16px 18px;
@@ -487,8 +456,8 @@
   #root .desktop-layout[data-offline="false"] .my-account-v3__card-icon {
     position: relative;
     z-index: 2;
-    width: 72px;
-    height: 72px;
+    width: 76px;
+    height: 76px;
     display: grid;
     place-items: center;
     border: 1px solid rgba(var(--account-v3-rgb), .72);
@@ -592,32 +561,38 @@
 
 @media (min-width: 1024px) and (max-width: 1240px) {
   #root .desktop-layout[data-offline="false"] .my-account-v3__hero {
-    grid-template-columns: minmax(245px, .72fr) minmax(500px, 1.65fr) 100px;
+    grid-template-columns: 280px minmax(500px, 1fr) 70px;
     gap: 24px;
     padding-inline: 34px;
   }
 
   #root .desktop-layout[data-offline="false"] .my-account-v3__profile-card {
-    grid-template-columns: 92px minmax(170px, 1fr) minmax(150px, .82fr);
+    grid-template-columns: 96px minmax(180px, 1fr) minmax(150px, .82fr);
     min-height: 196px;
-    padding: 24px 26px;
+    padding: 24px 28px;
   }
 
   #root .desktop-layout[data-offline="false"] .my-account-v3__avatar {
-    width: 90px;
-    height: 90px;
+    width: 96px;
+    height: 96px;
   }
 
   #root .desktop-layout[data-offline="false"] .my-account-v3__quote {
     padding-left: 24px;
   }
 
-  #root .desktop-layout[data-offline="false"] .my-account-v3__vertical-copy {
-    display: none;
-  }
-
   #root .desktop-layout[data-offline="false"] .my-account-v3__settings {
     padding-inline: 34px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-v3__headphones {
+    width: 310px;
+    height: 266px;
+    background-size: 310px 266px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-v3__aside-quote {
+    right: 46px;
   }
 
   #root .desktop-layout[data-offline="false"] .my-account-v3__card {
