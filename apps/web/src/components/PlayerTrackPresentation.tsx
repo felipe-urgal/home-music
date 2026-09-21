@@ -1,16 +1,21 @@
 import { useEffect, useState } from 'react';
 import {
   CheckCircle2,
-  ChevronDown,
+  ChevronLeft,
   ChevronRight,
   Download,
   Heart,
   ListMusic,
   LoaderCircle,
   MoreVertical,
+  Pause,
+  Play,
+  Repeat1,
+  Repeat2,
+  Shuffle,
   Wifi
 } from 'lucide-react';
-import type { Playlist, Track } from '@home-music/shared';
+import type { Playlist, RepeatMode, Track } from '@home-music/shared';
 import { useCrossfadeVisualState } from '../crossfade-visual';
 import { NowPlayingCrossfadeIdentity, NowPlayingCrossfadeVinyl } from './NowPlayingCrossfade';
 
@@ -24,7 +29,12 @@ type PlayerTrackPresentationProps = {
   isDownloaded: boolean;
   availableViaCollection: boolean;
   downloading: boolean;
+  shuffle: boolean;
+  repeatMode: RepeatMode;
   onOpenLibrary: () => void;
+  onTogglePlay: () => void;
+  onShuffle: () => void;
+  onRepeat: () => void;
   onToggleDownload?: () => void;
   onAddToPlaylist: (playlist: Playlist) => void;
   onExitOffline?: () => void;
@@ -40,7 +50,12 @@ export function PlayerTrackPresentation({
   isDownloaded,
   availableViaCollection,
   downloading,
+  shuffle,
+  repeatMode,
   onOpenLibrary,
+  onTogglePlay,
+  onShuffle,
+  onRepeat,
   onToggleDownload,
   onAddToPlaylist,
   onExitOffline
@@ -71,8 +86,15 @@ export function PlayerTrackPresentation({
   return (
     <>
       <header className="topbar player-topbar">
-        <button className="icon-button topbar__back-to-library" type="button" aria-label={libraryReturnLabel} title={libraryReturnLabel} onClick={onOpenLibrary}>
-          <ChevronDown aria-hidden="true" />
+        <button
+          className="icon-button topbar__back-to-library"
+          type="button"
+          aria-label="Biblioteca"
+          title={libraryReturnLabel}
+          onClick={onOpenLibrary}
+        >
+          <ChevronLeft aria-hidden="true" />
+          <span className="topbar__back-label">Biblioteca</span>
         </button>
         <span className="topbar__title">{offlineMode ? 'Tocando offline' : 'Tocando Agora'}</span>
         {offlineMode && onExitOffline ? (
@@ -100,6 +122,35 @@ export function PlayerTrackPresentation({
             <Heart aria-hidden="true" />
             <span>Adicionar à playlist</span>
           </button>
+          <button
+            type="button"
+            role="menuitemcheckbox"
+            aria-checked={shuffle}
+            onClick={() => {
+              onShuffle();
+              setShowTrackMenu(false);
+            }}
+          >
+            <Shuffle aria-hidden="true" />
+            <span>{shuffle ? 'Desativar aleatório' : 'Ativar aleatório'}</span>
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              onRepeat();
+              setShowTrackMenu(false);
+            }}
+          >
+            {repeatMode === 'one' ? <Repeat1 aria-hidden="true" /> : <Repeat2 aria-hidden="true" />}
+            <span>
+              {repeatMode === 'one'
+                ? 'Repetir uma'
+                : repeatMode === 'all'
+                  ? 'Repetir fila'
+                  : 'Ativar repetição'}
+            </span>
+          </button>
           {onToggleDownload && (
             <button
               type="button"
@@ -122,27 +173,26 @@ export function PlayerTrackPresentation({
       )}
 
       <div className="hero-art">
-        <NowPlayingCrossfadeVinyl
-          current={current}
-          crossfade={crossfadeVisual}
-          playing={playing}
-          offlineMode={offlineMode}
-        />
+        <button
+          className="player-hero-play"
+          type="button"
+          aria-label={playing ? 'Pausar' : 'Tocar'}
+          onClick={onTogglePlay}
+        >
+          <NowPlayingCrossfadeVinyl
+            current={current}
+            crossfade={crossfadeVisual}
+            playing={playing}
+            offlineMode={offlineMode}
+          />
+          <span className="player-hero-play__control" aria-hidden="true">
+            {playing ? <Pause /> : <Play />}
+          </span>
+        </button>
       </div>
 
       <div className="track-heading player-track-heading">
         <NowPlayingCrossfadeIdentity current={current} crossfade={crossfadeVisual} />
-        {!offlineMode && (
-          <button
-            className={`player-track-heading__favorite ${showPlaylistPicker ? 'is-active' : ''}`}
-            type="button"
-            aria-label="Adicionar à playlist"
-            aria-expanded={showPlaylistPicker}
-            onClick={togglePlaylistPicker}
-          >
-            <Heart aria-hidden="true" />
-          </button>
-        )}
       </div>
 
       {showPlaylistPicker && !offlineMode && (
