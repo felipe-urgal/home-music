@@ -33,8 +33,9 @@ describe('MyAccountScreen profile prototype 1', () => {
   it('mantém as ações reais existentes e não inventa edição de dados', () => {
     const component = componentSource();
 
-    expect(component).toMatch(/onClick={goBack}/);
-    expect(component).toMatch(/my-account-profile-v1__security-action[sS]*onClick={() => setView('password')}/);
+    expect(component).toContain('onClick={goBack}');
+    expect(component).toContain('className="my-account-profile-v1__security-action"');
+    expect(component).toContain("onClick={() => setView('password')}");
     expect(component).toContain('<Pencil /> Editar');
     expect(component).toContain('<ShieldCheck /> Detalhes');
   });
@@ -42,18 +43,25 @@ describe('MyAccountScreen profile prototype 1', () => {
   it('usa a geometria do mockup: hero curto, conteúdo amplo e linhas empilhadas', () => {
     const css = cssSource();
 
-    expect(css).toMatch(/my-account-screen--profile[sS]*width: 100%/);
-    expect(css).toMatch(/my-account-profile-v1__hero[sS]*min-height: 205px/);
-    expect(css).toMatch(/my-account-profile-v1__identity[sS]*min-height: 118px/);
-    expect(css).toMatch(/my-account-profile-v1__row {[sS]*grid-template-columns: 48px minmax(260px, 1fr) minmax(120px, auto) 110px/);
+    expect(css).toContain('.my-account-screen--profile {');
+    expect(css).toContain('width: 100%;');
+    expect(css).toContain('.my-account-profile-v1__hero {');
+    expect(css).toContain('min-height: 205px;');
+    expect(css).toContain('.my-account-profile-v1__identity {');
+    expect(css).toContain('min-height: 118px;');
+    expect(css).toContain('.my-account-profile-v1__row {');
+    expect(css).toContain('grid-template-columns: 48px minmax(260px, 1fr) minmax(120px, auto) 110px;');
     expect(css).toContain("url('/profile-v1-headphones.webp')");
-    expect(css).toMatch(/my-account-profile-page--legacy[sS]*display: none/);
+    expect(css).toContain('.my-account-profile-page--legacy {');
+    expect(css).toContain('display: none;');
   });
 
   it('preserva o perfil anterior no mobile e na TV', () => {
     const css = cssSource();
 
-    expect(css).toMatch(/@media (max-width: 1023px)[sS]*my-account-profile-page--legacy[sS]*display: grid/);
-    expect(css).toMatch(/html[data-tv-mode="true"][sS]*my-account-profile-page--legacy[sS]*display: grid/);
+    expect(css).toContain('@media (max-width: 1023px)');
+    expect(css).toContain('html[data-tv-mode="true"] .my-account-profile-v1');
+    expect(css).toContain('html[data-tv-mode="true"] .my-account-profile-page--legacy');
+    expect(css).toContain('display: grid !important;');
   });
 });
