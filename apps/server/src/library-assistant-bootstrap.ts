@@ -1,5 +1,6 @@
 import path from 'node:path';
 import type { FastifyInstance } from 'fastify';
+import type { Track } from '@home-music/shared';
 import type { LibraryAssistantMetadataField } from '@home-music/shared/library-assistant';
 import type { HeavyWorkQueue } from './heavy-work-queue.js';
 import type { LibraryRouteProjection } from './library-routes.js';
@@ -40,7 +41,10 @@ import { fingerprintEffectiveLyrics, LocalLyricsWhisperService } from './local-l
 import type { LongJobObservability } from './long-job-observability.js';
 import { createMusicBrainzSimpleSearchFetch } from './musicbrainz-simple-search-fetch.js';
 import { registerMissingCoverFillRoutes } from './missing-cover-fill-routes.js';
-import { MissingCoverFillService } from './missing-cover-fill-service.js';
+import {
+  isGeneratedCoverOverride,
+  MissingCoverFillService
+} from './missing-cover-fill-service.js';
 import { TrackCoverOverrideStore } from './track-cover-overrides.js';
 import {
   setActiveTrackLyricsOverrideStore,
@@ -123,8 +127,25 @@ export function registerLibraryAssistant(
       );
     return [...projectedPublicTracks, ...inactiveTracks];
   };
+  const listAnalysisTracks = () => listCoverFillTracks().map((track: Track) => {
+    const cover = coverOverrides.getStatus(track.id);
+    if (
+      !cover
+      || cover.physicalHasCover
+      || !cover.override
+      || !isGeneratedCoverOverride(track, cover.override.version)
+    ) return track;
+
+    // A capa gerada é apenas um fallback visual. Para a Assistente ela continua
+    // sendo artwork ausente e pode ser substituída por uma capa externa confiável.
+    return {
+      ...track,
+      hasCover: false,
+      coverVersion: undefined
+    };
+  });
   const analysisLibrary = {
-    listTracks: listCoverFillTracks,
+    listTracks: listAnalysisTracks,
     revision: () => projectRevision(options.library.status().revision)
   };
   const projectedLibrary = {

@@ -6,7 +6,7 @@ import {
   parseRetryAfterMs
 } from './musicbrainz-simple-search-fetch.js';
 
-test('remove filtro de release apenas da busca de recording do MusicBrainz', async () => {
+test('preserva filtro de release da busca de recording do MusicBrainz', async () => {
   const seen: URL[] = [];
   const fetchImpl = createMusicBrainzSimpleSearchFetch(async input => {
     seen.push(new URL(String(input)));
@@ -25,12 +25,12 @@ test('remove filtro de release apenas da busca de recording do MusicBrainz', asy
   assert.equal(seen.length, 1);
   assert.equal(
     seen[0].searchParams.get('query'),
-    'recording:"Como Nossos Pais" AND artist:"Elis Regina"'
+    'recording:"Como Nossos Pais" AND artist:"Elis Regina" AND release:"Falso Brilhante"'
   );
   assert.equal(seen[0].searchParams.get('fmt'), 'json');
 });
 
-test('preserva outros endpoints e buscas que já são simples', async () => {
+test('preserva outros endpoints e buscas simples sem reescrever a query', async () => {
   const seen: string[] = [];
   const fetchImpl = createMusicBrainzSimpleSearchFetch(async input => {
     seen.push(String(input));

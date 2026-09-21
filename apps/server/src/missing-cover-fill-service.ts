@@ -62,6 +62,19 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : 'Não foi possível preencher as capas ausentes.';
 }
 
+export function isGeneratedCoverOverride(
+  track: Track,
+  version: string,
+  renderArtwork: typeof renderGeneratedArtworkPng = renderGeneratedArtworkPng
+) {
+  try {
+    const generated = renderArtwork(track);
+    return inspectCoverOverride(generated.data, generated.contentType).version === version;
+  } catch {
+    return false;
+  }
+}
+
 export class MissingCoverFillService {
   private readonly now: () => Date;
   private readonly createId: () => string;
@@ -121,7 +134,7 @@ export class MissingCoverFillService {
     return this.options.library.listTracks().flatMap(track => {
       const cover = this.options.coverOverrides.getStatus(track.id);
       if (!cover || cover.physicalHasCover) return [];
-      const eligible = !cover.override || this.isGeneratedOverride(track, cover.override.version);
+      const eligible = !cover.override || isGeneratedCoverOverride(track, cover.override.version, this.renderArtwork);
       if (!eligible) return [];
 
       // Overrides gerados contam como capa efetiva na projeção. Para tentar
@@ -133,15 +146,6 @@ export class MissingCoverFillService {
         coverVersion: undefined
       }];
     });
-  }
-
-  private isGeneratedOverride(track: Track, version: string) {
-    try {
-      const generated = this.renderArtwork(track);
-      return inspectCoverOverride(generated.data, generated.contentType).version === version;
-    } catch {
-      return false;
-    }
   }
 
   private async execute(tracks: Track[], signal: AbortSignal) {
@@ -189,7 +193,7 @@ export class MissingCoverFillService {
           if (!track) continue;
           const status = this.options.coverOverrides.getStatus(track.id);
           if (!status || status.physicalHasCover) continue;
-          if (status.override && !this.isGeneratedOverride(track, status.override.version)) continue;
+          if (status.override && !isGeneratedCoverOverride(track, status.override.version, this.renderArtwork)) continue;
 
           try {
             const saved = this.options.coverOverrides.save(
@@ -215,7 +219,7 @@ export class MissingCoverFillService {
         const status = this.options.coverOverrides.getStatus(track.id);
         if (!status || status.physicalHasCover) continue;
         if (status.override) {
-          if (this.isGeneratedOverride(track, status.override.version) && this.job) {
+          if (isGeneratedCoverOverride(track, status.override.version, this.renderArtwork) && this.job) {
             this.job.generated += 1;
           }
           continue;

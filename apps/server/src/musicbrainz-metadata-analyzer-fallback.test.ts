@@ -31,7 +31,7 @@ function gateway() {
   }, { minIntervalMs: 0 });
 }
 
-function track(): Track {
+function track(overrides: Partial<Track> = {}): Track {
   return {
     id: 'track-1',
     title: 'Cancao',
@@ -42,7 +42,8 @@ function track(): Track {
     folderPath: 'Artista/Album Antigo',
     duration: 180,
     format: 'flac',
-    hasCover: false
+    hasCover: false,
+    ...overrides
   };
 }
 
@@ -72,7 +73,7 @@ test('timeout com album nao dispara segunda consulta ao provider', async () => {
   assert.equal(queries.length, 1);
   assert.match(queries[0], /recording:/);
   assert.match(queries[0], /artist:/);
-  assert.doesNotMatch(queries[0], /release:/);
+  assert.match(queries[0], /release:\"Album Antigo\"/);
 });
 
 test('timeout na busca ampla continua sendo reportado ao isolamento por faixa', async () => {
@@ -85,7 +86,7 @@ test('timeout na busca ampla continua sendo reportado ao isolamento por faixa', 
   await assert.rejects(
     analyzer.analyze({
       runId: 'run-timeout-propagation',
-      tracks: [track()],
+      tracks: [track({ album: 'Álbum desconhecido' })],
       providers: gateway()
     }),
     error => Boolean(

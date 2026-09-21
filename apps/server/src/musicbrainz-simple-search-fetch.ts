@@ -2,7 +2,6 @@ type FetchLike = (input: string | URL, init?: RequestInit) => Promise<Response>;
 
 const MUSICBRAINZ_ORIGIN = 'https://musicbrainz.org';
 const MUSICBRAINZ_RECORDING_PATH = '/ws/2/recording';
-const RELEASE_FILTER = /\s+AND\s+release:"(?:\\.|[^"\\])*"/gi;
 const MAX_RETRY_AFTER_MS = 2 * 60 * 60 * 1_000;
 
 type MusicBrainzRetryableCode = 'provider-rate-limited' | 'provider-unavailable';
@@ -18,18 +17,6 @@ export class MusicBrainzRetryableRequestError extends Error {
       : 'MusicBrainz está temporariamente indisponível.');
     this.name = 'MusicBrainzRetryableRequestError';
   }
-}
-
-function simplifiedMusicBrainzUrl(input: string | URL) {
-  const url = new URL(String(input));
-  if (url.origin !== MUSICBRAINZ_ORIGIN || url.pathname !== MUSICBRAINZ_RECORDING_PATH) return url;
-
-  const query = url.searchParams.get('query');
-  if (!query || !/\brelease:/i.test(query)) return url;
-
-  const simplified = query.replace(RELEASE_FILTER, '').trim();
-  if (simplified) url.searchParams.set('query', simplified);
-  return url;
 }
 
 function isMusicBrainzRecordingUrl(url: URL) {
@@ -56,7 +43,7 @@ export function createMusicBrainzSimpleSearchFetch(
   now: () => number = Date.now
 ): FetchLike {
   return async (input, init) => {
-    const url = simplifiedMusicBrainzUrl(input);
+    const url = new URL(String(input));
     const response = await fetchImpl(url, init);
     if (!isMusicBrainzRecordingUrl(url)) return response;
 
