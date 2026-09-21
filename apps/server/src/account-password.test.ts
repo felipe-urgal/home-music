@@ -50,12 +50,12 @@ async function withPendingUser(
   }
 }
 
-test('política de senha de conta exige comprimento forte sem alterar semanticamente a senha', () => {
-  assert.equal(ACCOUNT_PASSWORD_MIN_LENGTH, 12);
-  assert.equal(accountPasswordIsStrong('curta-demai'), false);
-  assert.equal(accountPasswordIsStrong('curta-demais'), true);
+test('política de senha de conta exige mínimo de 6 caracteres sem alterar semanticamente a senha', () => {
+  assert.equal(ACCOUNT_PASSWORD_MIN_LENGTH, 6);
+  assert.equal(accountPasswordIsStrong('curta'), false);
+  assert.equal(accountPasswordIsStrong('segura'), true);
   assert.equal(accountPasswordIsStrong('senha-segura-2026'), true);
-  assert.equal(accountPasswordIsStrong(' '.repeat(12)), false);
+  assert.equal(accountPasswordIsStrong(' '.repeat(6)), false);
 });
 
 test('login transitório aceita somente credencial correta de conta ativa com troca pendente', async () => {

@@ -87,13 +87,50 @@ test('Alterar senha permite mostrar e ocultar os três campos juntos', async ({ 
   await expect(next).toHaveAttribute('type', 'password');
   await expect(confirmation).toHaveAttribute('type', 'password');
 
-  await page.getByRole('button', { name: 'Mostrar senhas' }).click();
-  await expect(current).toHaveAttribute('type', 'text');
-  await expect(next).toHaveAttribute('type', 'text');
-  await expect(confirmation).toHaveAttribute('type', 'text');
+  if (viewport && viewport.width >= 1024) {
+    const passwordV3 = page.getByTestId('my-account-password-prototype-three');
+    const content = passwordV3.locator('.my-account-password-v3__content');
 
-  await page.getByRole('button', { name: 'Ocultar senhas' }).click();
-  await expect(current).toHaveAttribute('type', 'password');
-  await expect(next).toHaveAttribute('type', 'password');
-  await expect(confirmation).toHaveAttribute('type', 'password');
+    await expect(passwordV3).toBeVisible();
+    await expect(passwordV3.getByRole('heading', { name: 'Alterar senha', exact: true })).toBeVisible();
+    await expect(passwordV3.getByText('Escolha uma nova senha forte e segura.', { exact: true })).toBeVisible();
+    await expect(passwordV3.getByText('Força da senha', { exact: true })).toBeVisible();
+    await expect(passwordV3.getByText('Dicas para uma senha segura', { exact: true })).toBeVisible();
+    await expect(passwordV3.getByText('Use pelo menos 6 caracteres', { exact: true })).toBeVisible();
+    await expect(passwordV3.getByText('Suas informações estão protegidas', { exact: true })).toBeVisible();
+
+    const contentBox = await content.boundingBox();
+    expect(contentBox).not.toBeNull();
+    expect(contentBox!.width).toBeLessThanOrEqual(575);
+
+    await page.getByRole('button', { name: 'Mostrar senha atual' }).click();
+    await expect(current).toHaveAttribute('type', 'text');
+    await expect(next).toHaveAttribute('type', 'text');
+    await expect(confirmation).toHaveAttribute('type', 'text');
+
+    await page.getByRole('button', { name: 'Ocultar senha atual' }).click();
+    await expect(current).toHaveAttribute('type', 'password');
+    await expect(next).toHaveAttribute('type', 'password');
+    await expect(confirmation).toHaveAttribute('type', 'password');
+
+    await current.fill(password);
+    await next.fill('abc123');
+    await confirmation.fill('abc123');
+    await expect(passwordV3.getByRole('button', { name: 'Alterar senha', exact: true })).toBeEnabled();
+  } else {
+    await page.getByRole('button', { name: 'Mostrar senhas' }).click();
+    await expect(current).toHaveAttribute('type', 'text');
+    await expect(next).toHaveAttribute('type', 'text');
+    await expect(confirmation).toHaveAttribute('type', 'text');
+
+    await page.getByRole('button', { name: 'Ocultar senhas' }).click();
+    await expect(current).toHaveAttribute('type', 'password');
+    await expect(next).toHaveAttribute('type', 'password');
+    await expect(confirmation).toHaveAttribute('type', 'password');
+
+    await current.fill(password);
+    await next.fill('abc123');
+    await confirmation.fill('abc123');
+    await expect(page.getByRole('button', { name: 'Alterar senha e sair', exact: true })).toBeEnabled();
+  }
 });

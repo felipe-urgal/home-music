@@ -230,6 +230,88 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   expect(accountGridColumns).toBe(3);
   expect(accountProfileRadius).toBeGreaterThanOrEqual(30);
 
+  await accountV3.getByRole('button', { name: 'Outros dispositivos' }).click();
+  const sessionsV2 = page.getByTestId('account-sessions-prototype-two');
+  const sessionsCards = sessionsV2.locator('.account-sessions-v2__card');
+  const currentSessionCard = sessionsV2.locator('.account-sessions-v2__card.is-current');
+
+  await expect(sessionsV2).toBeVisible();
+  await expect(sessionsV2.getByRole('button', { name: 'Minha conta', exact: true })).toBeVisible();
+  await expect(sessionsV2.getByLabel('Ajuda')).toBeVisible();
+  await expect(sessionsV2.getByRole('heading', { name: 'Outros dispositivos', exact: true })).toBeVisible();
+  await expect(sessionsV2.getByText('Gerencie as sessões ativas da sua conta.', { exact: true })).toBeVisible();
+  await expect(sessionsV2.getByText('Mantenha sua conta segura', { exact: true })).toBeVisible();
+  await expect(sessionsV2.getByText('Se não reconhecer um dispositivo, encerre a sessão.', { exact: true })).toBeVisible();
+  await expect(sessionsV2.getByRole('heading', { name: 'Sessões ativas', exact: true })).toBeVisible();
+  await expect(sessionsCards.first()).toBeVisible();
+  await expect(currentSessionCard).toContainText('Este dispositivo');
+  await expect(currentSessionCard).toContainText('Atual');
+  await expect(currentSessionCard).toContainText('Ativo agora');
+  await expect(sessionsV2.getByRole('button', { name: 'Encerrar todas as outras sessões', exact: true })).toBeVisible();
+  await expect(sessionsV2.getByText('Isso não afetará este dispositivo.', { exact: true })).toBeVisible();
+  await expect(sessionsV2.locator('.account-sessions-v2__workspace')).toHaveCount(0);
+  await expect(sessionsV2.locator('.account-sessions-v2__sidebar')).toHaveCount(0);
+  await expect(sessionsV2.locator('.account-sessions-v2__detail')).toHaveCount(0);
+
+  const sessionsBox = await sessionsV2.boundingBox();
+  const sessionsBackground = await page.locator('.my-account-screen--sessions').evaluate(
+    element => getComputedStyle(element).backgroundColor
+  );
+  expect(sessionsBox).not.toBeNull();
+  expect(sessionsBox!.width).toBeLessThanOrEqual(765);
+  expect(sessionsBox!.width).toBeGreaterThanOrEqual(600);
+  expect(sessionsBackground).toBe('rgb(247, 247, 249)');
+
+  await sessionsV2.getByRole('button', { name: 'Minha conta', exact: true }).click();
+  await expect(accountV3).toBeVisible();
+
+  await accountProfile.click();
+  const profileV1 = page.getByTestId('my-account-profile-prototype-one');
+  const profileIdentity = profileV1.locator('.my-account-profile-v1__identity');
+  const profileRows = profileV1.locator('.my-account-profile-v1__row');
+  const profileSecurity = profileV1.locator('.my-account-profile-v1__security');
+
+  await expect(profileV1).toBeVisible();
+  await expect(page.locator('.my-account-profile-page--legacy')).toBeHidden();
+  await expect(profileV1.getByRole('heading', { name: 'Seu perfil', exact: true })).toBeVisible();
+  await expect(profileV1.getByText('Suas informações, do seu jeito.', { exact: true })).toBeVisible();
+  await expect(profileV1.getByText('Boa música', { exact: true })).toBeVisible();
+  await expect(profileV1.getByText('vai mais longe.', { exact: true })).toBeVisible();
+  await expect(profileV1.locator('.my-account-profile-v1__avatar svg')).toBeVisible();
+  await expect(profileV1.getByText('Sessão ativa', { exact: true })).toBeVisible();
+  await expect(profileV1.getByText('Informações da conta', { exact: true })).toBeVisible();
+  await expect(profileRows).toHaveCount(2);
+  await expect(profileRows.nth(0)).toContainText('Nome de usuário');
+  await expect(profileRows.nth(1)).toContainText('Tipo de conta');
+  await expect(profileV1.getByText('Segurança da conta', { exact: true })).toBeVisible();
+  await expect(profileSecurity).toContainText('Sua conta está protegida');
+  await expect(profileV1.getByRole('button', { name: 'Alterar senha', exact: true })).toBeVisible();
+  await expect(profileV1.getByText('O controle é seu.', { exact: true })).toBeVisible();
+
+  const profileBox = await profileV1.boundingBox();
+  const profileIdentityBox = await profileIdentity.boundingBox();
+  const profileHeroBox = await profileV1.locator('.my-account-profile-v1__hero').boundingBox();
+  const firstProfileRowBox = await profileRows.nth(0).boundingBox();
+  const secondProfileRowBox = await profileRows.nth(1).boundingBox();
+  const profileHeadphones = await profileV1.locator('.my-account-profile-v1__headphones').evaluate(
+    element => getComputedStyle(element).backgroundImage
+  );
+
+  expect(profileBox).not.toBeNull();
+  expect(profileIdentityBox).not.toBeNull();
+  expect(profileHeroBox).not.toBeNull();
+  expect(firstProfileRowBox).not.toBeNull();
+  expect(secondProfileRowBox).not.toBeNull();
+  expect(profileBox!.width).toBeGreaterThanOrEqual(viewport!.width * 0.95);
+  expect(profileIdentityBox!.width).toBeGreaterThanOrEqual(profileBox!.width * 0.8);
+  expect(profileHeroBox!.height).toBeGreaterThanOrEqual(200);
+  expect(profileHeroBox!.height).toBeLessThanOrEqual(240);
+  expect(secondProfileRowBox!.y).toBeGreaterThan(firstProfileRowBox!.y + firstProfileRowBox!.height - 1);
+  expect(profileHeadphones).toContain('profile-v1-headphones.webp');
+
+  await profileV1.getByRole('button', { name: /Minha conta/ }).click();
+  await expect(accountV3).toBeVisible();
+
   await accountV3.getByRole('button', { name: /Administração/ }).click();
   await expect(page.locator('#administration-title')).toHaveText('Administração');
   await expect(playerBar).toBeHidden();

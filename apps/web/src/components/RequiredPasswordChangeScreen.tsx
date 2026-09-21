@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { KeyRound, LockKeyhole } from 'lucide-react';
+import { MIN_ACCOUNT_PASSWORD_CHARACTERS } from '../account-client';
 
 type RequiredPasswordChangeScreenProps = {
   username: string;
@@ -25,7 +26,7 @@ export function RequiredPasswordChangeScreen({
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!currentPassword || newPasswordCharacters < 12 || confirmationMismatch) return;
+    if (!currentPassword || newPasswordCharacters < MIN_ACCOUNT_PASSWORD_CHARACTERS || confirmationMismatch) return;
 
     setSubmitting(true);
     setFormError(null);
@@ -86,7 +87,7 @@ export function RequiredPasswordChangeScreen({
               name="new-password"
               type="password"
               autoComplete="new-password"
-              minLength={12}
+              minLength={MIN_ACCOUNT_PASSWORD_CHARACTERS}
               value={newPassword}
               aria-describedby="password-change-requirements"
               onChange={event => setNewPassword(event.target.value)}
@@ -101,7 +102,7 @@ export function RequiredPasswordChangeScreen({
               name="new-password-confirmation"
               type="password"
               autoComplete="new-password"
-              minLength={12}
+              minLength={MIN_ACCOUNT_PASSWORD_CHARACTERS}
               value={confirmation}
               aria-invalid={confirmationMismatch}
               aria-describedby={confirmationMismatch
@@ -124,7 +125,7 @@ export function RequiredPasswordChangeScreen({
           <button
             className="login-submit"
             type="submit"
-            disabled={submitting || !currentPassword || newPasswordCharacters < 12 || newPassword !== confirmation}
+            disabled={submitting || !currentPassword || newPasswordCharacters < MIN_ACCOUNT_PASSWORD_CHARACTERS || newPassword !== confirmation}
           >
             {submitting ? 'Alterando…' : 'Alterar senha'}
           </button>
@@ -140,7 +141,7 @@ export function RequiredPasswordChangeScreen({
         </button>
 
         <p className="login-footnote" id="password-change-requirements">
-          <LockKeyhole aria-hidden="true" /> A nova senha deve ter pelo menos 12 caracteres e não é enviada para nenhum serviço externo.
+          <LockKeyhole aria-hidden="true" /> A nova senha deve ter pelo menos {MIN_ACCOUNT_PASSWORD_CHARACTERS} caracteres e não é enviada para nenhum serviço externo.
         </p>
       </section>
     </main>

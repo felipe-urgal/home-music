@@ -1,0 +1,417 @@
+/* Outros dispositivos — protótipo 2 aprovado.
+   Desktop reproduz a tela clara com cards detalhados.
+   Mobile e TV continuam usando o fluxo legado. */
+
+@media (min-width: 1024px) {
+  #root .desktop-layout[data-offline="false"] .my-account-screen--sessions {
+    width: 100%;
+    max-width: none;
+    min-height: calc(100vh - 56px);
+    margin: 0;
+    padding: 0;
+    background:
+      radial-gradient(circle at 50% 0%, rgba(111, 82, 214, .035), transparent 24%),
+      #f7f7f9;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-screen--sessions > .my-account-header {
+    display: none;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-screen--sessions > .my-account-message {
+    width: min(calc(100% - 48px), 760px);
+    margin: 12px auto 0;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2 {
+    width: min(calc(100% - 48px), 760px);
+    min-width: 0;
+    display: grid;
+    align-content: start;
+    gap: 0;
+    margin: 0 auto;
+    padding: 24px 0 46px;
+    color: #171b25;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2__topbar {
+    min-height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 25px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2__topbar > button {
+    min-height: 34px;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: #171b25;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2__topbar > button:hover {
+    color: #5639ce;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2__topbar > button svg {
+    width: 17px;
+    height: 17px;
+    stroke-width: 1.9;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2__help {
+    min-height: 36px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 12px;
+    border: 1px solid #e4e5ea;
+    border-radius: 10px;
+    background: #fff;
+    color: #5a41cf;
+    box-shadow: 0 4px 14px rgba(30, 29, 45, .045);
+    font-size: 11px;
+    font-weight: 650;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2__help svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2__intro {
+    display: grid;
+    gap: 8px;
+    margin-bottom: 27px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2__intro h1 {
+    margin: 0;
+    color: #171b25;
+    font-size: 31px;
+    font-weight: 790;
+    line-height: 1.08;
+    letter-spacing: -.035em;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2__intro p {
+    margin: 0;
+    color: #727b8d;
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2__security {
+    min-height: 78px;
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr);
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 26px;
+    padding: 15px 18px;
+    border: 1px solid #eeeafb;
+    border-radius: 11px;
+    background:
+      linear-gradient(90deg, #f4f1ff, #f8f6ff);
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2__security-icon {
+    width: 40px;
+    height: 40px;
+    display: grid;
+    place-items: center;
+    color: #6848e7;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2__security-icon svg {
+    width: 26px;
+    height: 26px;
+    stroke-width: 1.9;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2__security > div {
+    min-width: 0;
+    display: grid;
+    gap: 5px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2__security strong {
+    color: #20222b;
+    font-size: 13px;
+    font-weight: 740;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2__security small {
+    color: #666f80;
+    font-size: 11px;
+    line-height: 1.4;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2__sessions {
+    display: grid;
+    gap: 12px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2__sessions h2 {
+    margin: 0 0 1px;
+    color: #1b1f28;
+    font-size: 14px;
+    font-weight: 760;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2__cards {
+    display: grid;
+    gap: 9px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2__card {
+    position: relative;
+    min-height: 108px;
+    display: grid;
+    grid-template-columns: 58px minmax(0, 1fr) 48px;
+    align-items: center;
+    gap: 15px;
+    padding: 17px 18px;
+    border: 1px solid #e5e6ea;
+    border-radius: 11px;
+    background: rgba(255,255,255,.98);
+    box-shadow:
+      0 8px 24px rgba(29, 31, 42, .055),
+      inset 0 1px 0 rgba(255,255,255,.88);
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2__device {
+    width: 54px;
+    height: 54px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    color: #6445e0;
+    background:
+      radial-gradient(circle at 35% 30%, #f2efff, #e9e4ff);
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2__device svg {
+    width: 27px;
+    height: 27px;
+    stroke-width: 1.8;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2__card-copy {
+    min-width: 0;
+    display: grid;
+    gap: 5px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2__title-row {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2__title-row strong {
+    overflow: hidden;
+    color: #1e222c;
+    font-size: 13px;
+    font-weight: 750;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2__title-row em {
+    flex: 0 0 auto;
+    padding: 4px 8px;
+    border-radius: 999px;
+    background: #e9e2ff;
+    color: #6245d8;
+    font-size: 9px;
+    font-style: normal;
+    font-weight: 760;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2__card-copy > span:not(.account-sessions-v2__title-row),
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2__card-copy small {
+    overflow: hidden;
+    color: #667083;
+    font-size: 10px;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2__card-copy small.is-active {
+    color: #27a458;
+    font-weight: 650;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2__verified {
+    width: 42px;
+    height: 42px;
+    display: grid;
+    place-items: center;
+    justify-self: end;
+    border-radius: 10px;
+    color: #25a45a;
+    background: #f2faf5;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2__verified svg {
+    width: 21px;
+    height: 21px;
+    fill: rgba(37,164,90,.09);
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2__menu {
+    position: relative;
+    justify-self: end;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2__menu > button {
+    width: 42px;
+    height: 42px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 1px solid #e6e8ec;
+    border-radius: 10px;
+    background: #fff;
+    color: #1d222c;
+    cursor: pointer;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2__menu > button:hover {
+    border-color: #cfc9eb;
+    background: #faf9ff;
+    color: #5e43d1;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2__menu > button svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2__menu-popover {
+    position: absolute;
+    z-index: 20;
+    top: calc(100% + 7px);
+    right: 0;
+    min-width: 166px;
+    padding: 6px;
+    border: 1px solid #e3e4e8;
+    border-radius: 10px;
+    background: #fff;
+    box-shadow: 0 14px 32px rgba(28, 27, 37, .14);
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2__menu-popover button {
+    width: 100%;
+    min-height: 38px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: #e54855;
+    font: inherit;
+    font-size: 10px;
+    font-weight: 680;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2__menu-popover button:hover:not(:disabled) {
+    background: #fff3f4;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2__menu-popover button:disabled {
+    opacity: .48;
+    cursor: default;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2__menu-popover svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2__state {
+    min-height: 116px;
+    display: grid;
+    place-items: center;
+    padding: 20px;
+    border: 1px solid #e5e6ea;
+    border-radius: 11px;
+    background: #fff;
+    color: #7a8494;
+    font-size: 11px;
+    text-align: center;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2__footer {
+    display: grid;
+    gap: 14px;
+    margin-top: 31px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2__revoke-all {
+    min-height: 52px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    padding: 0 18px;
+    border: 1px solid #ff5161;
+    border-radius: 9px;
+    background: transparent;
+    color: #f33c4e;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 720;
+    cursor: pointer;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2__revoke-all:hover:not(:disabled) {
+    background: #fff3f4;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2__revoke-all:disabled {
+    opacity: .42;
+    cursor: default;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2__revoke-all svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2__footer > small {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    color: #6f7888;
+    font-size: 10px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2__footer > small svg {
+    width: 15px;
+    height: 15px;
+  }
+}
+
+@media (min-width: 1024px) and (max-width: 1240px) {
+  #root .desktop-layout[data-offline="false"] .account-sessions-v2 {
+    width: min(calc(100% - 40px), 700px);
+  }
+}
