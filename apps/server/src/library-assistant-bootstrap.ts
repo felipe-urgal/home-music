@@ -124,11 +124,11 @@ export function registerLibraryAssistant(
     return [...projectedPublicTracks, ...inactiveTracks];
   };
   const analysisLibrary = {
-    listTracks: listProjectedTracks,
+    listTracks: listCoverFillTracks,
     revision: () => projectRevision(options.library.status().revision)
   };
   const projectedLibrary = {
-    listTracks: listProjectedTracks,
+    listTracks: listCoverFillTracks,
     revision: () => options.projection.projectRevision(options.library.status().revision)
   };
   const hasSidecarLyrics = async (trackId: string) => {
