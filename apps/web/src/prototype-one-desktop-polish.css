@@ -9,7 +9,7 @@
 
 @media (min-width: 1024px) {
   /* The library group still inherited sidebar-era spacing from desktop-navigation.css.
-     Reset it so Tocando Agora, Pastas and Playlists share the same 72px baseline. */
+     Reset it so the remaining top navigation shares the same 72px baseline. */
   #root .desktop-layout[data-offline="false"] .desktop-nav,
   #root .desktop-layout[data-offline="false"] .desktop-nav__group {
     height: 72px;
