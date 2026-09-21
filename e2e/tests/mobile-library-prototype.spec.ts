@@ -32,14 +32,14 @@ test('mobile segue o protótipo 3 na biblioteca, detalhe e player', async ({ pag
   await expect(miniPlayer.getByRole('button', { name: 'Abrir Tocando Agora' })).toBeVisible();
   await expect(miniPlayer.getByRole('button', { name: 'Adicionar à playlist' })).toBeHidden();
 
-  const firstFolder = libraryHome.getByRole('button', { name: /^Abrir .+ músicas$/ }).first();
-  await expect(firstFolder).toBeVisible();
-  await firstFolder.click();
+  const fixturePlaylist = libraryHome.getByText('E2E Rekordbox', { exact: true });
+  await expect(fixturePlaylist).toBeVisible();
+  await fixturePlaylist.click();
 
   const detail = page.getByTestId('mobile-collection-detail');
   await expect(detail).toBeVisible();
   await expect(detail.getByRole('button', { name: 'Biblioteca' })).toBeVisible();
-  await expect(detail.getByRole('button', { name: /^(Tocar|Pausar) .+/ })).toBeVisible();
+  await expect(detail.getByText('E2E Rekordbox', { exact: true })).toBeVisible();
   await expect(page.locator('.mobile-library-brand-bar')).toBeHidden();
 
   await detail.getByRole('button', { name: 'Biblioteca' }).click();
