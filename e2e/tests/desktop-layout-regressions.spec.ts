@@ -89,10 +89,12 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   expect(artworkSurfaceBox!.width).toBeGreaterThanOrEqual(300);
   expect(artworkSurfaceBox!.height).toBeGreaterThanOrEqual(300);
   expect(artFrameBox!.width).toBeGreaterThanOrEqual(artworkSurfaceBox!.width - 1);
-  expect(coverPlayBox!.x).toBeGreaterThanOrEqual(artworkSurfaceBox!.x);
-  expect(coverPlayBox!.y).toBeGreaterThanOrEqual(artworkSurfaceBox!.y);
-  expect(coverPlayBox!.x + coverPlayBox!.width).toBeLessThanOrEqual(artworkSurfaceBox!.x + artworkSurfaceBox!.width + 1);
-  expect(coverPlayBox!.y + coverPlayBox!.height).toBeLessThanOrEqual(artworkSurfaceBox!.y + artworkSurfaceBox!.height + 1);
+  expect(Math.abs(coverPlayBox!.x - artFrameBox!.x)).toBeLessThanOrEqual(1);
+  expect(Math.abs(coverPlayBox!.y - artFrameBox!.y)).toBeLessThanOrEqual(1);
+  expect(Math.abs(coverPlayBox!.width - artFrameBox!.width)).toBeLessThanOrEqual(1);
+  expect(Math.abs(coverPlayBox!.height - artFrameBox!.height)).toBeLessThanOrEqual(1);
+  expect(coverPlayBox!.width).toBeGreaterThanOrEqual(artworkSurfaceBox!.width - 1);
+  expect(coverPlayBox!.height).toBeGreaterThanOrEqual(artworkSurfaceBox!.height - 1);
   expect(artworkBox!.y).toBeGreaterThanOrEqual(nowPlayingBox!.y - 1);
   expect(contentBox!.y).toBeGreaterThanOrEqual(nowPlayingBox!.y - 1);
   expect(artworkBox!.y + artworkBox!.height).toBeLessThanOrEqual(nowPlayingBox!.y + nowPlayingBox!.height + 1);
