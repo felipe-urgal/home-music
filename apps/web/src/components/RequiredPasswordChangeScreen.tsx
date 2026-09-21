@@ -87,7 +87,7 @@ export function RequiredPasswordChangeScreen({
               name="new-password"
               type="password"
               autoComplete="new-password"
-              minLength={12}
+              minLength={MIN_ACCOUNT_PASSWORD_CHARACTERS}
               value={newPassword}
               aria-describedby="password-change-requirements"
               onChange={event => setNewPassword(event.target.value)}
@@ -102,7 +102,7 @@ export function RequiredPasswordChangeScreen({
               name="new-password-confirmation"
               type="password"
               autoComplete="new-password"
-              minLength={12}
+              minLength={MIN_ACCOUNT_PASSWORD_CHARACTERS}
               value={confirmation}
               aria-invalid={confirmationMismatch}
               aria-describedby={confirmationMismatch
