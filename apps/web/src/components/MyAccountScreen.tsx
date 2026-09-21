@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import type { AuthenticatedUser } from '@home-music/shared';
 import {
+  AudioLines,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
@@ -13,6 +14,7 @@ import {
   LogOut,
   Monitor,
   MonitorOff,
+  Pencil,
   ShieldCheck,
   SlidersHorizontal,
   Upload,
@@ -487,31 +489,24 @@ export function MyAccountScreen({
               </button>
 
               <div className="my-account-profile-v1__intro">
-                <h1 id="my-account-profile-v1-title">Perfil</h1>
-                <strong>Seus dados, do seu jeito.</strong>
-                <p>Gerencie as informações da sua conta e mantenha seu acesso sempre seguro.</p>
+                <h1 id="my-account-profile-v1-title">Seu perfil</h1>
+                <p>Suas informações, do seu jeito.</p>
               </div>
 
-              <span className="my-account-profile-v1__quote" aria-hidden="true">
-                <em>Boa música<br />vai mais longe.</em>
-                <i />
-              </span>
               <div className="my-account-profile-v1__headphones" aria-hidden="true" />
+              <span className="my-account-profile-v1__quote" aria-hidden="true">
+                <strong>Boa música</strong>
+                <span>vai mais longe.</span>
+              </span>
             </section>
 
             <section className="my-account-profile-v1__identity" aria-labelledby="my-account-profile-v1-name">
-              <span className="my-account-profile-v1__avatar" aria-hidden="true">
-                <img src="/account-v3-avatar.webp" alt="" />
-              </span>
+              <span className="my-account-profile-v1__avatar" aria-hidden="true"><UserRound /></span>
               <div className="my-account-profile-v1__identity-copy">
                 <strong id="my-account-profile-v1-name">{currentUser.username}</strong>
                 <span>{roleLabel}</span>
-                <small>Sua conta está ativa e tudo funcionando normalmente.</small>
               </div>
-              <div className="my-account-profile-v1__session">
-                <span><ShieldCheck /> Sessão ativa</span>
-                <small><i /> Conectado agora</small>
-              </div>
+              <span className="my-account-profile-v1__status"><ShieldCheck /> Sessão ativa</span>
             </section>
 
             <section className="my-account-profile-v1__details" aria-labelledby="my-account-profile-v1-details-title">
@@ -519,47 +514,59 @@ export function MyAccountScreen({
                 <span className="my-account-profile-v1__section-icon"><UserRound /></span>
                 <div>
                   <strong id="my-account-profile-v1-details-title">Informações da conta</strong>
-                  <small>Seus dados básicos e tipo de acesso.</small>
+                  <small>Seus dados básicos no Home Music.</small>
                 </div>
-                <button className="my-account-profile-v1__edit" type="button" onClick={() => setView('password')}>
-                  <KeyRound />
-                  <span>Alterar senha</span>
-                </button>
               </header>
 
-              <div className="my-account-profile-v1__info-grid">
-                <div>
-                  <span className="my-account-profile-v1__info-icon"><UserRound /></span>
-                  <span className="my-account-profile-v1__info-copy">
+              <div className="my-account-profile-v1__rows">
+                <div className="my-account-profile-v1__row">
+                  <span className="my-account-profile-v1__row-icon"><UserRound /></span>
+                  <span className="my-account-profile-v1__row-copy">
                     <strong>Nome de usuário</strong>
-                    <small>Identificação da sua conta no Home Music.</small>
+                    <small>Seu identificador na aplicação.</small>
                   </span>
-                  <span className="my-account-profile-v1__info-value">{currentUser.username}</span>
+                  <span className="my-account-profile-v1__row-value">{currentUser.username}</span>
+                  <span className="my-account-profile-v1__row-action" aria-hidden="true"><Pencil /> Editar</span>
                 </div>
-                <div>
-                  <span className="my-account-profile-v1__info-icon"><ShieldCheck /></span>
-                  <span className="my-account-profile-v1__info-copy">
+
+                <div className="my-account-profile-v1__row">
+                  <span className="my-account-profile-v1__row-icon"><UserRound /></span>
+                  <span className="my-account-profile-v1__row-copy">
                     <strong>Tipo de conta</strong>
-                    <small>Define suas permissões e acessos.</small>
+                    <small>Seu nível de acesso e permissões.</small>
                   </span>
-                  <span className="my-account-profile-v1__info-value">{roleLabel}</span>
+                  <span className="my-account-profile-v1__row-value">{roleLabel}</span>
+                  <span className="my-account-profile-v1__row-action" aria-hidden="true"><ShieldCheck /> Detalhes</span>
                 </div>
               </div>
             </section>
 
-            <button
-              className="my-account-profile-v1__security"
-              type="button"
-              onClick={() => setView('sessions')}
-              aria-labelledby="my-account-profile-v1-security-title"
-            >
-              <span className="my-account-profile-v1__security-icon"><ShieldCheck /></span>
-              <span className="my-account-profile-v1__security-copy">
-                <strong id="my-account-profile-v1-security-title">Sua conta está protegida</strong>
-                <small>Use uma senha exclusiva e encerre sessões que você não reconhecer.</small>
-              </span>
-              <ChevronRight />
-            </button>
+            <section className="my-account-profile-v1__security-section" aria-labelledby="my-account-profile-v1-security-title">
+              <header className="my-account-profile-v1__section-heading">
+                <span className="my-account-profile-v1__section-icon my-account-profile-v1__section-icon--security"><ShieldCheck /></span>
+                <div>
+                  <strong id="my-account-profile-v1-security-title">Segurança da conta</strong>
+                  <small>Mantenha sua conta segura.</small>
+                </div>
+              </header>
+
+              <div className="my-account-profile-v1__security">
+                <span className="my-account-profile-v1__security-icon"><ShieldCheck /></span>
+                <span className="my-account-profile-v1__security-copy">
+                  <strong>Sua conta está protegida</strong>
+                  <small>Use uma senha exclusiva e encerre sessões que você não reconhecer.</small>
+                </span>
+                <button className="my-account-profile-v1__security-action" type="button" onClick={() => setView('password')}>
+                  <KeyRound />
+                  <span>Alterar senha</span>
+                </button>
+              </div>
+            </section>
+
+            <footer className="my-account-profile-v1__footer">
+              <span className="my-account-profile-v1__footer-title"><AudioLines /> O controle é seu.</span>
+              <small>Gerencie suas informações com segurança e continue curtindo sua música.</small>
+            </footer>
           </div>
 
           <div className="my-account-profile-page my-account-profile-page--legacy">
