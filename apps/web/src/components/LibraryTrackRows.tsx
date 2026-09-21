@@ -1,7 +1,8 @@
-import { CheckCircle2, Download, LoaderCircle, Pause, Play, Trash2 } from 'lucide-react';
+import { CheckCircle2, Download, LoaderCircle, MoreHorizontal, Pause, Play, Trash2 } from 'lucide-react';
 import type { Track } from '@home-music/shared';
 import type { TrackSort } from '../library-utils';
 import { useDesktopLayout } from '../useDesktopLayout';
+import { formatPlayerTime } from '../player-presentation';
 import { Artwork } from './Artwork';
 import { DesktopTrackTable } from './DesktopTrackTable';
 
@@ -175,6 +176,10 @@ export function LibraryTrackRows({
               <span className="library-track__text">
                 <strong>{track.title}</strong>
                 <small>{track.artist} · {track.album}</small>
+              </span>
+              <span className="library-track__mobile-meta" aria-hidden="true">
+                <span className="library-track__duration">{formatPlayerTime(track.duration)}</span>
+                <MoreHorizontal className="library-track__more" />
               </span>
               {isCurrent && playing
                 ? <span className="playing-indicator" aria-hidden="true">▶</span>
