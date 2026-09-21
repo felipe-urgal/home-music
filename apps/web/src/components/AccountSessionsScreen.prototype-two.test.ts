@@ -41,16 +41,19 @@ describe('AccountSessionsScreen prototype 2', () => {
     expect(component).not.toContain('Windows PC');
   });
 
-  it('usa uma coluna clara com cards detalhados e acento roxo', () => {
+  it('usa largura ampla, tema escuro e cards distribuídos no desktop', () => {
     const css = cssSource();
 
-    expect(css).toContain('width: min(calc(100% - 48px), 760px);');
-    expect(css).toContain('#f7f7f9');
-    expect(css).toContain('.account-sessions-v2__card');
+    expect(css).toContain('width: calc(100% - 36px);');
+    expect(css).toContain('min-height: calc(100vh - 92px);');
+    expect(css).toContain('linear-gradient(145deg, #08111d 0%, #091522 52%, #070d16 100%)');
+    expect(css).toContain('grid-template-columns: repeat(2, minmax(0, 1fr));');
+    expect(css).toContain('.account-sessions-v2__card.is-current');
+    expect(css).toContain('grid-column: 1 / -1;');
     expect(css).toContain('.account-sessions-v2__device');
-    expect(css).toContain('background: #e9e2ff;');
     expect(css).toContain('.account-sessions-v2__revoke-all');
-    expect(css).not.toContain('grid-template-columns: minmax(320px, .72fr) minmax(0, 1.58fr);');
+    expect(css).not.toContain('#f7f7f9');
+    expect(css).not.toContain('width: min(calc(100% - 48px), 760px);');
   });
 
   it('mantém o layout expansível anterior disponível fora do desktop', () => {
