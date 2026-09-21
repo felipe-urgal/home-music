@@ -39,7 +39,8 @@ test('mobile segue o protótipo 3 na biblioteca, detalhe e player', async ({ pag
   const detail = page.getByTestId('mobile-collection-detail');
   await expect(detail).toBeVisible();
   await expect(detail.getByRole('button', { name: 'Biblioteca' })).toBeVisible();
-  await expect(detail.getByText('E2E Rekordbox', { exact: true })).toBeVisible();
+  const collectionHero = detail.getByRole('region', { name: 'E2E Rekordbox' });
+  await expect(collectionHero.getByText('E2E Rekordbox', { exact: true })).toBeVisible();
   await expect(page.locator('.mobile-library-brand-bar')).toBeHidden();
 
   await detail.getByRole('button', { name: 'Biblioteca' }).click();
