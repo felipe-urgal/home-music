@@ -232,7 +232,7 @@ export class LibraryAssistantService {
       throw new Error('Revision atual da biblioteca é inválida.');
     }
     const tracks = this.options.library.listTracks()
-      .filter(track => this.isTrackEligible(capability, track))
+      .filter(track => options.full === true || this.isTrackEligible(capability, track))
       .map(track => ({ ...track }));
     const runId = `assistant-${this.createId()}`;
     const createdAt = this.now().toISOString();
