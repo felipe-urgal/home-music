@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Download,
@@ -93,8 +94,8 @@ export function PlayerTrackPresentation({
           title={libraryReturnLabel}
           onClick={onOpenLibrary}
         >
-          <ChevronLeft aria-hidden="true" />
-          <span className="topbar__back-label">Biblioteca</span>
+          {offlineMode ? <ChevronDown aria-hidden="true" /> : <ChevronLeft aria-hidden="true" />}
+          {!offlineMode && <span className="topbar__back-label">Biblioteca</span>}
         </button>
         <span className="topbar__title">{offlineMode ? 'Tocando offline' : 'Tocando Agora'}</span>
         {offlineMode && onExitOffline ? (
@@ -173,22 +174,31 @@ export function PlayerTrackPresentation({
       )}
 
       <div className="hero-art">
-        <button
-          className="player-hero-play"
-          type="button"
-          aria-label={playing ? 'Pausar' : 'Tocar'}
-          onClick={onTogglePlay}
-        >
+        {offlineMode ? (
           <NowPlayingCrossfadeVinyl
             current={current}
             crossfade={crossfadeVisual}
             playing={playing}
-            offlineMode={offlineMode}
+            offlineMode
           />
-          <span className="player-hero-play__control" aria-hidden="true">
-            {playing ? <Pause /> : <Play />}
-          </span>
-        </button>
+        ) : (
+          <button
+            className="player-hero-play"
+            type="button"
+            aria-label={playing ? 'Pausar' : 'Tocar'}
+            onClick={onTogglePlay}
+          >
+            <NowPlayingCrossfadeVinyl
+              current={current}
+              crossfade={crossfadeVisual}
+              playing={playing}
+              offlineMode={false}
+            />
+            <span className="player-hero-play__control" aria-hidden="true">
+              {playing ? <Pause /> : <Play />}
+            </span>
+          </button>
+        )}
       </div>
 
       <div className="track-heading player-track-heading">
