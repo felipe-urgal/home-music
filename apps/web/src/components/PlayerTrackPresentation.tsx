@@ -63,6 +63,7 @@ export function PlayerTrackPresentation({
 }: PlayerTrackPresentationProps) {
   const [showPlaylistPicker, setShowPlaylistPicker] = useState(false);
   const [showTrackMenu, setShowTrackMenu] = useState(false);
+  const [showHeroControl, setShowHeroControl] = useState(true);
   const crossfadeVisual = useCrossfadeVisualState();
   const offlineActionLabel = downloading
     ? 'Baixando para uso offline'
@@ -77,7 +78,19 @@ export function PlayerTrackPresentation({
   useEffect(() => {
     setShowPlaylistPicker(false);
     setShowTrackMenu(false);
+    setShowHeroControl(true);
   }, [current.id, queueLength]);
+
+  useEffect(() => {
+    if (!playing) {
+      setShowHeroControl(true);
+      return;
+    }
+
+    setShowHeroControl(true);
+    const timeout = window.setTimeout(() => setShowHeroControl(false), 1800);
+    return () => window.clearTimeout(timeout);
+  }, [playing, current.id]);
 
   function togglePlaylistPicker() {
     setShowPlaylistPicker(value => !value);
@@ -186,7 +199,11 @@ export function PlayerTrackPresentation({
             className="player-hero-play"
             type="button"
             aria-label={playing ? 'Pausar pela capa' : 'Tocar pela capa'}
-            onClick={onTogglePlay}
+            onPointerDown={() => setShowHeroControl(true)}
+            onClick={() => {
+              setShowHeroControl(true);
+              onTogglePlay();
+            }}
           >
             <NowPlayingCrossfadeVinyl
               current={current}
@@ -194,7 +211,10 @@ export function PlayerTrackPresentation({
               playing={playing}
               offlineMode={false}
             />
-            <span className="player-hero-play__control" aria-hidden="true">
+            <span
+              className={`player-hero-play__control ${showHeroControl ? 'is-visible' : 'is-hidden'}`}
+              aria-hidden="true"
+            >
               {playing ? <Pause /> : <Play />}
             </span>
           </button>
