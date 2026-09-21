@@ -66,7 +66,7 @@ export function PlayerPlaybackControls({
 
       {playbackError && <div className="autoplay-notice" role="alert">{playbackError}</div>}
 
-      <div className="progress-wrap">
+      <div className="progress-wrap" style={{ '--progress': `${progress}%` } as CSSProperties}>
         <input
           aria-label="Progresso da música"
           type="range"
@@ -74,7 +74,6 @@ export function PlayerPlaybackControls({
           max={duration || 0}
           step="0.1"
           value={Math.min(currentTime, duration || 0)}
-          style={{ '--progress': `${progress}%` } as CSSProperties}
           onChange={event => onSeek(Number(event.target.value))}
         />
         <div className="time-row"><span>{formatPlayerTime(currentTime)}</span><span>{formatPlayerTime(duration)}</span></div>
