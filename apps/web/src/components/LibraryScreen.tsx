@@ -180,7 +180,7 @@ export function LibraryScreen({
 
     if (playlist.source === 'smart') await deleteSmartPlaylist(playlist.id);
     else await deletePlaylist(playlist.id);
-    leavePlaylist();
+    selectTab('folders');
   }
 
   async function saveCurrentView() {
