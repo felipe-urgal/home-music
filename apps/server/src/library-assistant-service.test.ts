@@ -64,6 +64,7 @@ async function withService(
     database: HomeMusicDatabase;
     tracks: Track[];
     setRevision: (value: number) => void;
+    getListTracksCalls: () => number;
   }) => Promise<void>,
   options: {
     isTrackEligible?: (capability: LibraryAssistantCapability, track: Track) => boolean;
@@ -89,6 +90,7 @@ async function withService(
   const tracks = [publicTrack(indexedTrack())];
   let revision = 1;
   let id = 0;
+  let listTracksCalls = 0;
   const service = new LibraryAssistantService({
     store,
     queue,
@@ -97,14 +99,24 @@ async function withService(
     analyzers,
     createId: () => String(++id),
     library: {
-      listTracks: () => tracks.map(track => ({ ...track })),
+      listTracks: () => {
+        listTracksCalls += 1;
+        return tracks.map(track => ({ ...track }));
+      },
       revision: () => revision
     },
     isTrackEligible: options.isTrackEligible
   });
 
   try {
-    await run({ service, store, database, tracks, setRevision: value => { revision = value; } });
+    await run({
+      service,
+      store,
+      database,
+      tracks,
+      setRevision: value => { revision = value; },
+      getListTracksCalls: () => listTracksCalls
+    });
   } finally {
     await service.close();
     store.close();
@@ -173,6 +185,20 @@ test('completed suggestion becomes stale when the effective premise changes', as
     const refreshed = service.getRun(started.id);
     assert.equal(refreshed?.status, 'stale');
     assert.equal(service.listSuggestions(started.id)?.[0].status, 'stale');
+  });
+});
+
+test('listing settled historical runs does not rebuild the library snapshot', async () => {
+  await withService([], async ({ service, setRevision, getListTracksCalls }) => {
+    const started = service.startRun('metadata', 'admin-1');
+    await waitFor(() => service.getRun(started.id)?.status === 'completed');
+    const before = getListTracksCalls();
+
+    setRevision(2);
+    const runs = service.listRuns();
+
+    assert.equal(runs.find(run => run.id === started.id)?.status, 'completed');
+    assert.equal(getListTracksCalls(), before);
   });
 });
 
