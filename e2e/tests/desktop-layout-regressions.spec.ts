@@ -25,8 +25,10 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   const nowPlayingArtworkSurface = page.locator('.desktop-now-playing-screen__art .now-playing-vinyl__disc');
   const nowPlayingArtFrame = page.locator('.desktop-now-playing-screen__art-frame');
   const nowPlayingContent = page.locator('.desktop-now-playing-screen__content');
+  const waveformProgress = page.locator('.desktop-now-playing-screen__waveform-progress');
   const waveformSeek = page.locator('.desktop-now-playing-screen__waveform-seek');
   const waveformBar = page.locator('.desktop-now-playing-screen__waveform span').first();
+  const waveformHoverTime = page.locator('.desktop-now-playing-screen__waveform-hover-time');
   const coverPlay = page.locator('.desktop-now-playing-screen__cover-play');
   const moreActions = nowPlaying.getByRole('button', { name: 'Mais opções da faixa' });
   const playerModeControls = page.locator('.desktop-now-playing-screen__controls');
@@ -39,6 +41,13 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   await expect(waveformSeek).toHaveAttribute('aria-label', 'Progresso da música');
   await expect(waveformSeek).toHaveAttribute('aria-valuetext', /\d+:\d{2} de \d+:\d{2}/);
   await expect(waveformBar).toHaveAttribute('style', /--wave-fill:/);
+  const waveformAccent = await nowPlaying.evaluate(element => (
+    getComputedStyle(element).getPropertyValue('--now-playing-wave-accent').trim()
+  ));
+  expect(waveformAccent).toMatch(/^#[0-9a-f]{6}$/i);
+  await waveformProgress.hover({ position: { x: 220, y: 48 } });
+  await expect(waveformHoverTime).toBeVisible();
+  await expect(waveformHoverTime).toHaveText(/^\d+:\d{2}$/);
   await expect(page.locator('.desktop-now-playing-screen__progress')).toHaveCount(0);
   await expect(coverPlay).toBeVisible();
   await expect(coverPlay).toHaveAttribute('aria-label', /Tocar|Pausar/);
