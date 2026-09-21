@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { useCrossfadeVisualState } from '../crossfade-visual';
 import { Artwork } from './Artwork';
-import { LyricsPanel } from './LyricsPanel';
+import { CurrentLyricsLine } from './LyricsPanel';
 import { NowPlayingCrossfadeIdentity, NowPlayingCrossfadeVinyl } from './NowPlayingCrossfade';
 
 function formatTime(value: number) {
@@ -327,6 +327,8 @@ export function DesktopNowPlayingScreen({
             </div>
           </div>
 
+          <CurrentLyricsLine track={current} currentTime={currentTime} offlineMode={false} />
+
           <div className="desktop-now-playing-screen__waveform-progress">
             <div className="desktop-now-playing-screen__waveform" aria-hidden="true">
               {WAVEFORM_HEIGHTS.map((height, index) => {
@@ -383,7 +385,6 @@ export function DesktopNowPlayingScreen({
             </div>
           )}
 
-          <LyricsPanel track={current} currentTime={currentTime} offlineMode={false} />
         </div>
       </div>
 
