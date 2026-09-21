@@ -78,6 +78,7 @@ export function MyAccountScreen({
   const tvMode = typeof document !== 'undefined' && document.documentElement.dataset.tvMode === 'true';
   const usePasswordPrototypeThree = desktopLayout && !tvMode;
   const useSessionsPrototypeTwo = desktopLayout && !tvMode;
+  const useAppsPrototypeTwo = desktopLayout && !tvMode;
   const [view, setView] = useState<AccountView>('overview');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -812,7 +813,12 @@ export function MyAccountScreen({
         />
       )}
 
-      {view === 'apps' && <AccountOpenSubsonicKeys />}
+      {view === 'apps' && (
+        <AccountOpenSubsonicKeys
+          prototypeTwo={useAppsPrototypeTwo}
+          onBack={goBack}
+        />
+      )}
 
       {view === 'playback' && playbackPreferences && (
         <AccountPlaybackPreferences value={playbackPreferences} />
