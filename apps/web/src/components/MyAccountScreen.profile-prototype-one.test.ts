@@ -56,6 +56,19 @@ describe('MyAccountScreen profile prototype 1', () => {
     expect(css).toContain('display: none;');
   });
 
+  it('escala o mockup em desktops largos para manter a proporção visual', () => {
+    const css = cssSource();
+
+    expect(css).toContain('@media (min-width: 1700px)');
+    expect(css).toContain('--profile-v1-inline: clamp(122px, 7.15vw, 150px);');
+    expect(css).toContain('min-height: 230px;');
+    expect(css).toContain('width: min(780px, 42vw);');
+    expect(css).toContain('min-height: 132px;');
+    expect(css).toContain('grid-template-columns: 54px minmax(290px, 1fr) minmax(135px, auto) 123px;');
+    expect(css).toContain('min-height: 87px;');
+    expect(css).toContain('min-height: 81px;');
+  });
+
   it('preserva o perfil anterior no mobile e na TV', () => {
     const css = cssSource();
 
