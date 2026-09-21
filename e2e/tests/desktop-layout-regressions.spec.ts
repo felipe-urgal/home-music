@@ -195,10 +195,38 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   expect(collectionScrollWidth).toBeLessThanOrEqual(viewport!.width + 1);
 
   await topbar.getByRole('button', { name: /Minha conta/ }).click();
-  await expect(page.locator('#my-account-title')).toHaveText('Minha conta');
+  const accountV3 = page.getByTestId('my-account-prototype-three');
+  const accountGrid = accountV3.locator('.my-account-v3__grid');
+  const accountProfile = accountV3.locator('.my-account-v3__profile-card');
+
+  await expect(accountV3).toBeVisible();
+  await expect(page.locator('.my-account-overview--legacy')).toBeHidden();
+  await expect(accountV3.getByRole('heading', { name: /Seu som,\s*suas escolhas\./ })).toBeVisible();
+  await expect(accountV3.getByRole('heading', { name: 'O controle é seu' })).toBeVisible();
+  await expect(accountProfile).toBeVisible();
+  await expect(accountV3.getByRole('button', { name: 'Alterar senha' })).toBeVisible();
+  await expect(accountV3.getByRole('button', { name: 'Outros dispositivos' })).toBeVisible();
+  await expect(accountV3.getByRole('button', { name: 'Apps e integrações' })).toBeVisible();
+  await expect(accountV3.getByRole('button', { name: 'Importar dados pessoais' })).toBeVisible();
+  await expect(accountV3.getByRole('button', { name: 'Reprodução' })).toBeVisible();
+  await expect(accountV3.getByRole('button', { name: 'Administração' })).toBeVisible();
+  await expect(accountV3.getByRole('button', { name: 'Sair da conta' })).toBeVisible();
   await expect(playerBar).toBeHidden();
 
-  await page.getByRole('button', { name: /Administração/ }).click();
+  const accountV3Box = await accountV3.boundingBox();
+  const accountGridColumns = await accountGrid.evaluate(element => (
+    getComputedStyle(element).gridTemplateColumns.split(' ').filter(Boolean).length
+  ));
+  const accountProfileRadius = Number.parseFloat(
+    await accountProfile.evaluate(element => getComputedStyle(element).borderRadius)
+  );
+
+  expect(accountV3Box).not.toBeNull();
+  expect(accountV3Box!.width).toBeGreaterThanOrEqual(viewport!.width * 0.95);
+  expect(accountGridColumns).toBe(3);
+  expect(accountProfileRadius).toBeGreaterThanOrEqual(30);
+
+  await accountV3.getByRole('button', { name: /Administração/ }).click();
   await expect(page.locator('#administration-title')).toHaveText('Administração');
   await expect(playerBar).toBeHidden();
 
