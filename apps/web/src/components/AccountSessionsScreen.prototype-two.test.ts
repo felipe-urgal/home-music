@@ -10,39 +10,47 @@ function cssSource() {
 }
 
 describe('AccountSessionsScreen prototype 2', () => {
-  it('reproduz a estrutura aprovada de lista e detalhe', () => {
+  it('reproduz a estrutura do protótipo 2 aprovado', () => {
     const component = componentSource();
 
     expect(component).toContain('data-testid="account-sessions-prototype-two"');
-    expect(component).toContain('Sessões em dispositivos');
-    expect(component).toContain('Mantenha sua conta protegida');
-    expect(component).toContain('Todas (');
-    expect(component).toContain('Outras (');
-    expect(component).toContain('Este dispositivo (');
-    expect(component).toContain('Informações da sessão');
-    expect(component).toContain('Esta é a sua sessão atual');
-    expect(component).toContain('Detalhes do dispositivo');
+    expect(component).toContain('Minha conta');
+    expect(component).toContain('Ajuda');
+    expect(component).toContain('Outros dispositivos');
+    expect(component).toContain('Gerencie as sessões ativas da sua conta.');
+    expect(component).toContain('Mantenha sua conta segura');
+    expect(component).toContain('Se não reconhecer um dispositivo, encerre a sessão.');
+    expect(component).toContain('Sessões ativas');
+    expect(component).toContain('Este dispositivo');
+    expect(component).toContain('Atual');
+    expect(component).toContain('Ativo agora');
+    expect(component).toContain('Encerrar todas as outras sessões');
+    expect(component).toContain('Isso não afetará este dispositivo.');
   });
 
-  it('mantém as ações reais do fluxo de sessões', () => {
+  it('mantém as ações reais sem inventar metadados de dispositivo', () => {
     const component = componentSource();
 
-    expect(component).toContain('onClick={onRefresh}');
+    expect(component).toContain('onClick={onBack}');
     expect(component).toContain('onClick={onRevokeOthers}');
-    expect(component).toContain('onClick={() => onRevokeOne(selectedSession)}');
-    expect(component).toContain('Encerrar outras sessões');
-    expect(component).toContain('Encerrar esta sessão');
+    expect(component).toContain('onRevokeOne(session)');
+    expect(component).toContain('Dispositivo conectado');
+    expect(component).toContain('ID {session.id.slice(0, 8)}');
+    expect(component).not.toContain('Ubuntu Desktop');
+    expect(component).not.toContain('Galaxy S23');
+    expect(component).not.toContain('Windows PC');
   });
 
-  it('usa duas colunas e detalhe persistente como no protótipo', () => {
+  it('usa uma coluna clara com cards detalhados e acento roxo', () => {
     const css = cssSource();
 
-    expect(css).toContain('grid-template-columns: minmax(320px, .72fr) minmax(0, 1.58fr);');
-    expect(css).toContain('.account-sessions-v2__sidebar');
-    expect(css).toContain('.account-sessions-v2__detail');
-    expect(css).toContain('.account-sessions-v2__metrics');
-    expect(css).toContain('grid-template-columns: repeat(4, minmax(0, 1fr));');
-    expect(css).toContain('.account-sessions-v2__laptop');
+    expect(css).toContain('width: min(calc(100% - 48px), 760px);');
+    expect(css).toContain('#f7f7f9');
+    expect(css).toContain('.account-sessions-v2__card');
+    expect(css).toContain('.account-sessions-v2__device');
+    expect(css).toContain('background: #e9e2ff;');
+    expect(css).toContain('.account-sessions-v2__revoke-all');
+    expect(css).not.toContain('grid-template-columns: minmax(320px, .72fr) minmax(0, 1.58fr);');
   });
 
   it('mantém o layout expansível anterior disponível fora do desktop', () => {
