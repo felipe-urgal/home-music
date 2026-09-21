@@ -252,8 +252,9 @@ test('usa release-group quando a edição identificada não tem capa própria', 
   );
 });
 
-test('aceita capa quando título, artista e duração confirmam a faixa apesar do álbum local incorreto', async () => {
+test('cai para busca ampla quando o álbum local não encontra gravação e duração confirma a faixa', async () => {
   let coverArtArchiveCalls = 0;
+  const queries: string[] = [];
   const analyzer = createMusicBrainzMetadataAnalyzer({
     fetchImpl: async input => {
       if (isCaaRequest(input)) {
@@ -265,6 +266,9 @@ test('aceita capa quando título, artista e duração confirmam a faixa apesar d
           thumbnails: { 500: 'https://coverartarchive.org/release/release-original/500' }
         }]);
       }
+      const query = new URL(String(input)).searchParams.get('query') ?? '';
+      queries.push(query);
+      if (/release:/.test(query)) return response([]);
       return response([recording({
         id: 'recording-original',
         title: 'Cancao',
@@ -285,6 +289,9 @@ test('aceita capa quando título, artista e duração confirmam a faixa apesar d
     providers: gateway()
   });
 
+  assert.equal(queries.length, 2);
+  assert.match(queries[0], /release:"Coletânea local"/);
+  assert.doesNotMatch(queries[1], /release:/);
   assert.equal(coverArtArchiveCalls, 1);
   const artwork = drafts.find(draft => draft.target.capability === 'artwork');
   assert.ok(artwork && artwork.target.capability === 'artwork');
@@ -350,49 +357,65 @@ test('contexto de álbum converge entre faixas e consultas equivalentes reutiliz
   )));
 });
 
-test('busca faz uma única consulta por título + artista e usa álbum apenas no ranking local', async () => {
+test('busca usa álbum confiável no MusicBrainz antes do ranking e encontra artwork da edição correta', async () => {
   const queries: string[] = [];
   const analyzer = createMusicBrainzMetadataAnalyzer({
     fetchImpl: async input => {
-      if (isCaaRequest(input)) return caaResponse();
+      if (isCaaRequest(input)) {
+        return caaResponse([{
+          id: 'cover-right',
+          front: true,
+          image: 'https://coverartarchive.org/release/release-right/front',
+          thumbnails: { 500: 'https://coverartarchive.org/release/release-right/500' }
+        }]);
+      }
       const url = new URL(String(input));
       queries.push(url.searchParams.get('query') ?? '');
       return response([recording({
         title: 'Cancao',
-        releases: [{ id: 'release-right', title: 'Album Correto' }]
+        releases: [{
+          id: 'release-right',
+          title: 'Album Correto',
+          'release-group': { id: 'release-group-right' }
+        }]
       })]);
     }
   });
 
   const drafts = await analyzer.analyze({
-    runId: 'run-single-search',
-    tracks: [track({ album: 'Album Errado' })],
+    runId: 'run-album-aware-search',
+    tracks: [track({ album: 'Album Correto' })],
     providers: gateway()
   });
 
   assert.equal(queries.length, 1);
-  assert.match(queries[0], /recording:/);
-  assert.match(queries[0], /artist:/);
-  assert.doesNotMatch(queries[0], /release:/);
-  assert.ok(drafts.some(draft => draft.target.capability === 'metadata' && draft.target.field === 'album'));
+  assert.match(queries[0], /recording:"Cancao"/);
+  assert.match(queries[0], /artist:"Artista"/);
+  assert.match(queries[0], /release:"Album Correto"/);
+  const artwork = drafts.find(draft => draft.target.capability === 'artwork');
+  assert.ok(artwork && artwork.target.capability === 'artwork');
+  assert.equal(artwork.target.musicBrainzReleaseId, 'release-right');
 });
 
-test('resposta vazia com álbum não repete a mesma consulta externa', async () => {
-  let calls = 0;
+test('busca ampla vira fallback quando a consulta com álbum não retorna gravações', async () => {
+  const queries: string[] = [];
   const analyzer = createMusicBrainzMetadataAnalyzer({
-    fetchImpl: async () => {
-      calls += 1;
+    fetchImpl: async input => {
+      const query = new URL(String(input)).searchParams.get('query') ?? '';
+      queries.push(query);
       return response([]);
     }
   });
 
   const drafts = await analyzer.analyze({
-    runId: 'run-empty-single-search',
+    runId: 'run-empty-scoped-search',
     tracks: [track({ album: 'Album conhecido' })],
     providers: gateway()
   });
 
-  assert.equal(calls, 1);
+  assert.equal(queries.length, 2);
+  assert.match(queries[0], /release:"Album conhecido"/);
+  assert.doesNotMatch(queries[1], /release:/);
   assert.deepEqual(drafts, []);
 });
 
@@ -422,6 +445,7 @@ test('metadata ausente pode usar filename seguro como apoio sem enviar path ou e
   assert.ok(requests.every(url => url.origin === 'https://musicbrainz.org'));
   assert.ok(requests.every(url => !url.toString().includes('.flac')));
   assert.ok(requests.every(url => !url.toString().includes('Artista%20-%20Cancao')));
+  assert.ok(requests.every(url => !/\brelease:/.test(url.searchParams.get('query') ?? '')));
   assert.ok(drafts.length >= 3);
   assert.ok(drafts.every(draft => draft.confidence === 'low'));
   assert.ok(drafts.every(draft => draft.reasonCodes.includes('metadata-missing')));
