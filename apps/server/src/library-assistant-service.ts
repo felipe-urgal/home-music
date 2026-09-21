@@ -297,7 +297,12 @@ export class LibraryAssistantService {
 
   listRuns(limit = 50) {
     const runs = this.options.store.listRuns(limit);
-    for (const run of runs) this.refreshStaleRun(run.id);
+    let trackSnapshot: ReadonlyMap<string, Track> | null = null;
+    const currentTracks = () => {
+      trackSnapshot ??= new Map(this.options.library.listTracks().map(track => [track.id, track]));
+      return trackSnapshot;
+    };
+    for (const run of runs) this.refreshStaleRun(run.id, currentTracks);
     return this.options.store.listRuns(limit);
   }
 
@@ -662,7 +667,10 @@ export class LibraryAssistantService {
       : this.premiseSignature(capability, track);
   }
 
-  private refreshStaleRun(runId: string) {
+  private refreshStaleRun(
+    runId: string,
+    currentTracks?: () => ReadonlyMap<string, Track>
+  ) {
     const run = this.options.store.getRun(runId);
     if (!run || run.status === 'failed' || run.status === 'cancelled') return;
     const currentRevision = this.options.library.revision();
@@ -686,7 +694,8 @@ export class LibraryAssistantService {
     );
     if (records.length === 0) return;
 
-    const tracks = new Map(this.options.library.listTracks().map(track => [track.id, track]));
+    const tracks = currentTracks?.()
+      ?? new Map(this.options.library.listTracks().map(track => [track.id, track]));
     let stale = false;
     const updatedAt = this.now().toISOString();
     for (const record of records) {
