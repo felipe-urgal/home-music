@@ -220,36 +220,44 @@ export function PlayerQueuePanel({ current, queue, currentIndex, offlineMode, on
       <button
         ref={queueToggleRef}
         type="button"
-        className="queue-panel__toggle"
+        className="queue-panel__toggle queue-panel__toggle--default"
         aria-expanded={showQueue}
         aria-controls="mobile-queue-sheet"
-        aria-label={nextTrack ? `Próxima música: ${nextTrack.title}. ${showQueue ? 'Recolher fila' : 'Abrir fila'}` : showQueue ? 'Recolher fila' : 'Abrir fila'}
+        aria-label={showQueue ? 'Recolher fila' : 'Abrir fila'}
         onClick={() => setShowQueue(value => !value)}
       >
         <span className="queue-panel__toggle-default">
           <span><ListMusic aria-hidden="true" /> A seguir <small>· {remainingQueueCount} músicas</small></span>
           {showQueue ? <ChevronDown aria-hidden="true" /> : <ChevronRight aria-hidden="true" />}
         </span>
+      </button>
 
-        <span className="queue-panel__toggle-mobile">
-          {nextTrack ? (
-            <>
-              <Artwork track={playerArtworkTrack(nextTrack, offlineMode)} />
-              <span className="queue-panel__next-copy">
-                <small>PRÓXIMA MÚSICA</small>
-                <strong>{nextTrack.title}</strong>
-                <span>{nextTrack.artist || 'Artista desconhecido'}</span>
-              </span>
-            </>
-          ) : (
-            <span className="queue-panel__next-copy queue-panel__next-copy--empty">
-              <small>FILA</small>
-              <strong>Fim da fila</strong>
-              <span>Nenhuma música depois desta.</span>
+      <button
+        type="button"
+        className="queue-panel__toggle-mobile"
+        aria-label={nextTrack ? `Tocar próxima música: ${nextTrack.title}` : 'Fim da fila'}
+        disabled={!nextTrack}
+        onClick={() => {
+          if (nextTrack) onPlayTrack(nextTrack, queue);
+        }}
+      >
+        {nextTrack ? (
+          <>
+            <Artwork track={playerArtworkTrack(nextTrack, offlineMode)} />
+            <span className="queue-panel__next-copy">
+              <small>PRÓXIMA MÚSICA</small>
+              <strong>{nextTrack.title}</strong>
+              <span>{nextTrack.artist || 'Artista desconhecido'}</span>
             </span>
-          )}
-          {showQueue ? <ChevronDown className="queue-panel__next-chevron" aria-hidden="true" /> : <ChevronRight className="queue-panel__next-chevron" aria-hidden="true" />}
-        </span>
+          </>
+        ) : (
+          <span className="queue-panel__next-copy queue-panel__next-copy--empty">
+            <small>FILA</small>
+            <strong>Fim da fila</strong>
+            <span>Nenhuma música depois desta.</span>
+          </span>
+        )}
+        <ChevronRight className="queue-panel__next-chevron" aria-hidden="true" />
       </button>
       {showQueue && <button className="queue-sheet-backdrop" type="button" aria-label="Fechar fila" onClick={closeQueue} />}
       <div
