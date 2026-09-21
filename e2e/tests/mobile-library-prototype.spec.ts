@@ -55,29 +55,40 @@ test('mobile segue o protótipo 3 na biblioteca, detalhe e player', async ({ pag
   const artwork = page.locator('.hero-art');
   const heading = page.locator('.player-track-heading');
   const progress = page.locator('.progress-wrap');
+  const heroPlay = page.locator('.player-hero-play');
+  const heroControl = page.locator('.player-hero-play__control');
+  const nextTrackCard = page.locator('.queue-panel__toggle');
 
   await expect(player).toBeVisible();
   await expect(topbar.getByRole('button', { name: 'Biblioteca' })).toBeVisible();
   await expect(topbar.getByRole('button', { name: 'Mais opções da faixa' })).toBeVisible();
-  await expect(page.locator('.player-hero-play')).toBeVisible();
-  await expect(page.locator('.player-hero-play__control')).toBeVisible();
-  await expect(controls.getByRole('button', { name: 'Anterior' })).toBeVisible();
-  await expect(controls.getByRole('button', { name: 'Pausar' })).toBeHidden();
-  await expect(controls.getByRole('button', { name: 'Próxima' })).toBeVisible();
-  await expect(controls.getByRole('button', { name: 'Aleatório' })).toBeHidden();
-  await expect(controls.getByRole('button', { name: /Repet/ })).toBeHidden();
+  await expect(heroPlay).toBeVisible();
+  await expect(heroControl).toBeVisible();
+  await expect(controls).toBeHidden();
   await expect(page.locator('.player-mobile-playlist-action')).toHaveCount(0);
   await expect(page.getByLabel('Progresso da música')).toBeEnabled();
+  await expect(nextTrackCard).toBeVisible();
+  await expect(nextTrackCard).toHaveAttribute('aria-label', /Próxima música:/);
 
-  const boxes = await Promise.all([topbar, artwork, heading, progress, controls].map(locator => locator.boundingBox()));
-  const [topbarBox, artworkBox, headingBox, progressBox, controlsBox] = boxes;
-  expect(topbarBox && artworkBox && headingBox && progressBox && controlsBox).toBeTruthy();
-  expect(artworkBox!.y).toBeGreaterThanOrEqual(topbarBox!.y + topbarBox!.height);
-  expect(artworkBox!.x).toBeGreaterThanOrEqual(20);
-  expect(artworkBox!.width).toBeLessThan(page.viewportSize()!.width - 40);
-  expect(headingBox!.y).toBeGreaterThan(artworkBox!.y + artworkBox!.height);
+  const boxes = await Promise.all([artwork, heading, progress, nextTrackCard].map(locator => locator.boundingBox()));
+  const [artworkBox, headingBox, progressBox, nextCardBox] = boxes;
+  expect(artworkBox && headingBox && progressBox && nextCardBox).toBeTruthy();
+  expect(artworkBox!.x).toBeLessThanOrEqual(1);
+  expect(artworkBox!.width).toBeGreaterThanOrEqual(page.viewportSize()!.width - 1);
+  expect(headingBox!.y).toBeGreaterThan(artworkBox!.y + artworkBox!.height - 16);
   expect(progressBox!.y).toBeGreaterThan(headingBox!.y);
-  expect(controlsBox!.y).toBeGreaterThan(progressBox!.y);
+  expect(nextCardBox!.y).toBeGreaterThan(progressBox!.y);
+
+  if (await heroPlay.getAttribute('aria-label') === 'Tocar pela capa') {
+    await heroPlay.click();
+  }
+  await expect(heroPlay).toHaveAttribute('aria-label', 'Pausar pela capa');
+  await expect(heroControl).toHaveClass(/is-hidden/, { timeout: 3_000 });
+
+  await nextTrackCard.click();
+  await expect(page.getByRole('dialog', { name: 'Fila de reprodução' })).toBeVisible();
+  await page.getByRole('button', { name: 'Fechar fila' }).last().click();
+  await expect(page.getByRole('dialog', { name: 'Fila de reprodução' })).toBeHidden();
 
   await topbar.getByRole('button', { name: 'Mais opções da faixa' }).click();
   await expect(page.getByRole('menu', { name: 'Mais opções da faixa' }).getByText('Adicionar à playlist')).toBeVisible();
