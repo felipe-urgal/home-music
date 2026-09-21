@@ -13,7 +13,6 @@ import {
   AudioLines,
   ChevronDown,
   ChevronUp,
-  Folder,
   GripVertical,
   ListMusic,
   LocateFixed,
@@ -291,7 +290,6 @@ export function DesktopShell({
                   </button>
                 )}
               </div>
-              <NavigationButton nested active={active === 'library'} label="Pastas" icon={<Folder />} onClick={() => onOpenLibraryTab('folders')} />
             </div>
           )}
         </nav>
