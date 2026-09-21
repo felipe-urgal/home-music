@@ -240,7 +240,7 @@ export function MyAccountScreen({
                 aria-label={`Abrir perfil de ${currentUser.username}`}
               >
                 <span className="my-account-v3__avatar" aria-hidden="true">
-                  <span>{currentUser.username.slice(0, 1).toUpperCase()}</span>
+                  <img src="/account-v3-avatar.webp" alt="" />
                 </span>
                 <span className="my-account-v3__profile-copy">
                   <strong>{currentUser.username}</strong>
@@ -253,14 +253,7 @@ export function MyAccountScreen({
                 </span>
               </button>
 
-              <div className="my-account-v3__headphones" aria-hidden="true">
-                <span className="my-account-v3__headphones-band" />
-                <span className="my-account-v3__headphones-cup" />
-              </div>
-
-              <span className="my-account-v3__vertical-copy" aria-hidden="true">
-                <span>Mais</span><span>música</span><span>para</span><span>dias</span><span>reais</span>
-              </span>
+              <div className="my-account-v3__headphones" aria-hidden="true" />
             </section>
 
             <section className="my-account-v3__settings" aria-labelledby="my-account-v3-settings-title">
@@ -269,6 +262,11 @@ export function MyAccountScreen({
                 <h2 id="my-account-v3-settings-title">O controle é seu</h2>
                 <p>Tudo o que você precisa, em um só lugar.</p>
               </header>
+
+              <span className="my-account-v3__aside-quote" aria-hidden="true">
+                <em>Boa música<br />vai mais longe.</em>
+                <i />
+              </span>
 
               <div className="my-account-v3__grid">
                 <button className="my-account-v3__card is-amber" type="button" onClick={() => setView('password')}>
