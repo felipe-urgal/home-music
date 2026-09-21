@@ -467,6 +467,237 @@
   }
 }
 
+@media (min-width: 1700px) {
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1 {
+    --profile-v1-inline: clamp(122px, 7.15vw, 150px);
+    gap: 12px;
+    padding-bottom: 27px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__hero {
+    min-height: 230px;
+    padding-top: 44px;
+    padding-bottom: 22px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__back {
+    min-height: 29px;
+    gap: 10px;
+    font-size: 14px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__back svg {
+    width: 19px;
+    height: 19px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__intro {
+    width: 470px;
+    gap: 8px;
+    margin-top: 37px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__intro h1 {
+    font-size: 44px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__intro p {
+    font-size: 22px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__headphones {
+    width: min(780px, 42vw);
+    height: 236px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__quote {
+    top: 126px;
+    gap: 3px;
+    font-size: 20px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__identity {
+    min-height: 132px;
+    grid-template-columns: 92px minmax(0, 1fr) auto;
+    gap: 22px;
+    padding: 20px 25px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__avatar {
+    width: 87px;
+    height: 87px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__avatar svg {
+    width: 43px;
+    height: 43px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__identity-copy {
+    gap: 9px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__identity-copy strong {
+    font-size: 25px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__identity-copy span {
+    font-size: 17px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__status {
+    min-height: 47px;
+    gap: 9px;
+    padding-inline: 17px;
+    font-size: 13px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__status svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__details {
+    gap: 18px;
+    padding: 20px 22px 18px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__section-heading {
+    min-height: 50px;
+    grid-template-columns: 38px minmax(0, 1fr);
+    gap: 13px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__section-icon {
+    width: 36px;
+    height: 36px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__section-icon svg {
+    width: 25px;
+    height: 25px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__section-heading > div {
+    gap: 5px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__section-heading strong {
+    font-size: 17px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__section-heading small {
+    font-size: 13px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__row {
+    min-height: 81px;
+    grid-template-columns: 54px minmax(290px, 1fr) minmax(135px, auto) 123px;
+    gap: 14px;
+    padding: 12px 18px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__row-icon {
+    width: 47px;
+    height: 47px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__row-icon svg {
+    width: 23px;
+    height: 23px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__row-copy {
+    gap: 5px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__row-copy strong,
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__row-value {
+    font-size: 13px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__row-copy small {
+    font-size: 12px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__row-action {
+    min-width: 105px;
+    min-height: 47px;
+    gap: 9px;
+    font-size: 12px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__row-action svg {
+    width: 17px;
+    height: 17px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__security-section {
+    gap: 13px;
+    padding: 20px 22px 18px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__security {
+    min-height: 87px;
+    grid-template-columns: 52px minmax(0, 1fr) auto;
+    gap: 16px;
+    padding: 14px 18px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__security-icon {
+    width: 48px;
+    height: 48px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__security-icon svg {
+    width: 23px;
+    height: 23px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__security-copy {
+    gap: 5px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__security-copy strong {
+    font-size: 14px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__security-copy small {
+    font-size: 12px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__security-action {
+    min-height: 48px;
+    gap: 9px;
+    padding-inline: 16px;
+    font-size: 12px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__security-action svg {
+    width: 17px;
+    height: 17px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__footer {
+    min-height: 81px;
+    gap: 6px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__footer-title {
+    gap: 9px;
+    font-size: 14px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__footer-title svg {
+    width: 22px;
+    height: 22px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__footer small {
+    font-size: 11px;
+  }
+}
+
 @media (min-width: 1024px) and (max-width: 1240px) {
   #root .desktop-layout[data-offline="false"] .my-account-profile-v1 {
     --profile-v1-inline: 42px;
