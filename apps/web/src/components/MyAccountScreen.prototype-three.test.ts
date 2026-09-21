@@ -19,6 +19,9 @@ describe('MyAccountScreen prototype 3', () => {
     expect(component).toContain('O controle é seu');
     expect(component).toContain('my-account-v3__profile-card');
     expect(component).toContain('my-account-v3__headphones');
+    expect(component).toContain('/account-v3-avatar.webp');
+    expect(component).toContain('Boa música');
+    expect(component).toContain('vai mais longe.');
     expect(component).toContain('my-account-v3__grid');
     expect(component).toContain('my-account-v3__bottom-grid');
     expect(component).toContain('Ouça&nbsp;&nbsp;•&nbsp;&nbsp;Organize');
@@ -47,14 +50,16 @@ describe('MyAccountScreen prototype 3', () => {
     expect(css).toMatch(/@media \(max-width: 1023px\)[\s\S]*my-account-overview--legacy[\s\S]*display: block/);
   });
 
-  it('reproduz as cores individuais e a decoração musical do conceito', () => {
+  it('reproduz as cores individuais e usa os visuais do protótipo aprovado', () => {
     const css = cssSource();
 
     for (const tone of ['is-amber', 'is-blue', 'is-violet', 'is-green', 'is-pink', 'is-cyan', 'is-indigo', 'is-red']) {
       expect(css).toContain(`.my-account-v3__card.${tone}`);
     }
-    expect(css).toContain('.my-account-v3__headphones-band');
-    expect(css).toContain('.my-account-v3__headphones-cup');
-    expect(css).toContain('.my-account-v3__vertical-copy');
+    expect(css).toContain("url('/account-v3-headphones.webp')");
+    expect(css).toContain('.my-account-v3__aside-quote');
+    expect(css).toMatch(/grid-template-columns: 350px minmax\(620px, 850px\)/);
+    expect(css).toMatch(/max-width: 850px/);
+    expect(css).toMatch(/min-height: 234px/);
   });
 });
