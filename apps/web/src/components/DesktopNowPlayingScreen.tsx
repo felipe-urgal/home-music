@@ -16,6 +16,11 @@ import {
   Volume2
 } from 'lucide-react';
 import { useCrossfadeVisualState } from '../crossfade-visual';
+import {
+  DEFAULT_ARTWORK_ACCENT,
+  loadArtworkAccent,
+  mixArtworkAccents
+} from '../artwork-accent';
 import { Artwork } from './Artwork';
 import { CurrentLyricsLine } from './LyricsPanel';
 import {
@@ -37,8 +42,32 @@ function trackCoverUrl(track?: Track) {
   return `/api/tracks/${encodeURIComponent(track.id)}/cover${version}`;
 }
 
+function useTrackArtworkAccent(track?: Track) {
+  const coverUrl = trackCoverUrl(track);
+  const [accent, setAccent] = useState(DEFAULT_ARTWORK_ACCENT);
+
+  useEffect(() => {
+    let cancelled = false;
+    setAccent(DEFAULT_ARTWORK_ACCENT);
+    if (!coverUrl) return () => {
+      cancelled = true;
+    };
+
+    void loadArtworkAccent(coverUrl).then(nextAccent => {
+      if (!cancelled && nextAccent) setAccent(nextAccent);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [coverUrl]);
+
+  return accent;
+}
+
 type ImmersiveStyle = CSSProperties & {
   '--now-playing-artwork'?: string;
+  '--now-playing-wave-accent'?: string;
 };
 
 type BackdropStyle = CSSProperties & {
@@ -114,9 +143,13 @@ export function DesktopNowPlayingScreen({
   const [playlistOpen, setPlaylistOpen] = useState(false);
   const [actionsOpen, setActionsOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
+  const [waveformHover, setWaveformHover] = useState<{ leftPercent: number; time: number } | null>(null);
   const actionsRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const crossfadeVisual = useCrossfadeVisualState();
+  const activeDesktopCrossfade = crossfadeVisual?.originTrackId === current.id ? crossfadeVisual : null;
+  const currentWaveAccent = useTrackArtworkAccent(current);
+  const incomingWaveAccent = useTrackArtworkAccent(activeDesktopCrossfade?.incomingTrack);
 
   function positionActionsMenu() {
     const trigger = actionsRef.current?.querySelector<HTMLButtonElement>('.desktop-now-playing-screen__more');
@@ -189,15 +222,18 @@ export function DesktopNowPlayingScreen({
         ? 'Manter também como download individual'
         : 'Baixar para uso offline';
   const coverUrl = trackCoverUrl(current);
-  const activeDesktopCrossfade = crossfadeVisual?.originTrackId === current.id ? crossfadeVisual : null;
   const incomingCoverUrl = trackCoverUrl(activeDesktopCrossfade?.incomingTrack);
   const backdropProgress = crossfadePresentationProgress(
     activeDesktopCrossfade,
     DESKTOP_BACKDROP_TRANSITION_SECONDS
   );
-  const immersiveStyle: ImmersiveStyle | undefined = coverUrl
-    ? { '--now-playing-artwork': `url("${coverUrl}")` }
-    : undefined;
+  const waveAccent = activeDesktopCrossfade && backdropProgress !== null
+    ? mixArtworkAccents(currentWaveAccent, incomingWaveAccent, backdropProgress)
+    : currentWaveAccent;
+  const immersiveStyle: ImmersiveStyle = {
+    '--now-playing-wave-accent': waveAccent,
+    ...(coverUrl ? { '--now-playing-artwork': `url("${coverUrl}")` } : {})
+  };
   const incomingBackdropStyle: BackdropStyle | undefined = activeDesktopCrossfade
     ? {
         '--now-playing-artwork': incomingCoverUrl
@@ -372,7 +408,29 @@ export function DesktopNowPlayingScreen({
 
           <CurrentLyricsLine track={current} currentTime={currentTime} offlineMode={false} />
 
-          <div className="desktop-now-playing-screen__waveform-progress">
+          <div
+            className="desktop-now-playing-screen__waveform-progress"
+            onPointerMove={event => {
+              if (event.pointerType === 'touch' || duration <= 0) return;
+              const rect = event.currentTarget.getBoundingClientRect();
+              if (rect.width <= 0) return;
+              const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+              setWaveformHover({
+                leftPercent: Math.max(4, Math.min(96, ratio * 100)),
+                time: duration * ratio
+              });
+            }}
+            onPointerLeave={() => setWaveformHover(null)}
+          >
+            {waveformHover && (
+              <span
+                className="desktop-now-playing-screen__waveform-hover-time"
+                style={{ left: `${waveformHover.leftPercent}%` }}
+                aria-hidden="true"
+              >
+                {formatTime(waveformHover.time)}
+              </span>
+            )}
             <div className="desktop-now-playing-screen__waveform" aria-hidden="true">
               {WAVEFORM_HEIGHTS.map((height, index) => {
                 const fill = Math.max(0, Math.min(100, (waveformPosition - index) * 100));
