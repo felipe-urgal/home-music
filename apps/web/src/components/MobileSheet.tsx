@@ -44,7 +44,8 @@ export function MobileSheet({ open, title, onClose, children, className = '' }: 
 
     const frame = window.requestAnimationFrame(() => {
       const sheet = sheetRef.current;
-      const initial = sheet?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
+      const initial = sheet?.querySelector<HTMLElement>('[data-autofocus]')
+        ?? sheet?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
       initial?.focus();
     });
 
