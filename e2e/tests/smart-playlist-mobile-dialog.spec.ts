@@ -16,11 +16,11 @@ test('modal de playlist inteligente rola internamente e trava o fundo no mobile'
   test.skip(testInfo.project.name !== 'mobile-chromium');
 
   await login(page);
-  const mainNavigation = page.getByRole('navigation', { name: 'Navegação principal' });
-  await mainNavigation.getByRole('button', { name: 'Biblioteca', exact: true }).click();
-
-  const libraryNavigation = page.getByRole('navigation', { name: 'Navegação da biblioteca' });
-  await libraryNavigation.getByRole('button', { name: 'Playlists', exact: true }).click();
+  await page.getByRole('button', { name: 'Biblioteca', exact: true }).click();
+  const libraryHome = page.getByTestId('mobile-library-home');
+  await expect(libraryHome).toBeVisible();
+  await libraryHome.getByRole('button', { name: /Abrir playlists/ }).click();
+  await expect(page).toHaveURL(/\/library\/playlists$/);
   await page.getByRole('button', { name: 'Inteligente', exact: true }).click();
 
   const dialog = page.getByRole('dialog', { name: 'Nova playlist inteligente' });
