@@ -747,9 +747,9 @@
   #root .desktop-layout[data-offline="false"] .mobile-collection-detail .library-header.is-detail {
     position: absolute;
     z-index: 30;
-    top: env(safe-area-inset-top);
-    left: 12px;
-    right: 12px;
+    top: calc(env(safe-area-inset-top) + 8px);
+    left: 16px;
+    right: 16px;
     height: 56px;
     min-height: 56px;
     margin: 0;
@@ -881,12 +881,13 @@
   #root .desktop-layout[data-offline="false"] .mobile-collection-menu {
     position: absolute;
     z-index: 42;
-    top: calc(54px + env(safe-area-inset-top));
-    right: 12px;
-    width: min(270px, calc(100% - 24px));
-    padding: 7px;
+    top: calc(68px + env(safe-area-inset-top));
+    right: 16px;
+    width: min(300px, calc(100% - 32px));
+    padding: 8px;
     display: grid;
-    gap: 3px;
+    gap: 4px;
+    overflow: hidden;
     border: 1px solid rgba(255, 255, 255, .12);
     border-radius: 12px;
     background: rgba(7, 13, 22, .98);
@@ -920,9 +921,42 @@
   }
 
   #root .desktop-layout[data-offline="false"] .mobile-collection-menu .offline-collection-control {
+    width: 100%;
+    min-width: 0;
     margin: 0 0 4px;
+    padding: 12px;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    gap: 10px;
     border-color: rgba(103, 151, 225, .18);
     background: rgba(15, 29, 49, .72);
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-collection-menu .offline-collection-control__copy {
+    min-width: 0;
+    gap: 3px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-collection-menu .offline-collection-control__copy strong,
+  #root .desktop-layout[data-offline="false"] .mobile-collection-menu .offline-collection-control__copy small {
+    white-space: normal;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-collection-menu .offline-collection-control__actions {
+    width: 100%;
+    min-width: 0;
+    gap: 6px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-collection-menu .offline-collection-control__actions .primary-action,
+  #root .desktop-layout[data-offline="false"] .mobile-collection-menu .offline-collection-control__actions .secondary-action {
+    min-width: 0;
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-collection-menu .offline-collection-control__remove {
+    flex: 0 0 36px;
   }
 
   #root .desktop-layout[data-offline="false"] .mobile-collection-detail .library-smart-view-tools {
@@ -943,28 +977,34 @@
   }
 
   #root .desktop-layout[data-offline="false"] .mobile-collection-detail .library-track {
-    min-height: 62px;
-    padding: 7px 0;
+    min-height: 72px;
+    padding: 9px 0;
     border-bottom-color: rgba(117, 145, 184, .10);
   }
 
   #root .desktop-layout[data-offline="false"] .mobile-collection-detail .library-track__main {
-    grid-template-columns: 44px minmax(0, 1fr) auto;
-    gap: 10px;
+    grid-template-columns: 52px minmax(0, 1fr) auto;
+    gap: 12px;
   }
 
   #root .desktop-layout[data-offline="false"] .mobile-collection-detail .library-track__main .artwork {
-    width: 44px;
-    height: 44px;
-    border-radius: 8px;
+    width: 52px;
+    height: 52px;
+    border-radius: 9px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-collection-detail .library-track__text {
+    gap: 5px;
   }
 
   #root .desktop-layout[data-offline="false"] .mobile-collection-detail .library-track__text strong {
-    font-size: 12px;
+    font-size: 14px;
+    line-height: 1.2;
   }
 
   #root .desktop-layout[data-offline="false"] .mobile-collection-detail .library-track__text small {
-    font-size: 10px;
+    font-size: 12px;
+    line-height: 1.25;
   }
 
   #root .desktop-layout[data-offline="false"] .library-track__mobile-meta {
@@ -972,23 +1012,23 @@
   }
 
   #root .desktop-layout[data-offline="false"] .mobile-collection-detail .library-track__mobile-meta {
-    min-width: 52px;
+    min-width: 58px;
     display: inline-grid;
-    grid-template-columns: auto 16px;
+    grid-template-columns: auto 17px;
     align-items: center;
     justify-content: end;
-    gap: 7px;
+    gap: 8px;
     color: #a7b1bf;
   }
 
   #root .desktop-layout[data-offline="false"] .mobile-collection-detail .library-track__duration {
-    font-size: 9px;
+    font-size: 10px;
     font-variant-numeric: tabular-nums;
   }
 
   #root .desktop-layout[data-offline="false"] .mobile-collection-detail .library-track__more {
-    width: 15px;
-    height: 15px;
+    width: 17px;
+    height: 17px;
     color: #8c98a9;
   }
 
