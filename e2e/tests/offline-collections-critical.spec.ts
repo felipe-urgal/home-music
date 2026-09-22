@@ -164,9 +164,11 @@ test('controle de coleção offline funciona no layout mobile', async ({ page },
   const { playlist } = await createCollection(page, testInfo, 2);
 
   await page.goto(`/library/playlists/${encodeURIComponent(playlist.id)}`);
-  await expect(page.getByText(playlist.name, { exact: true })).toBeVisible();
+  const detail = page.getByTestId('mobile-collection-detail');
+  await expect(detail).toBeVisible();
+  await expect(detail.getByRole('region', { name: playlist.name })).toBeVisible();
 
-  await page.getByRole('button', { name: 'Mais opções da coleção' }).click();
+  await detail.getByRole('button', { name: 'Mais opções da coleção' }).click();
   const collectionSheet = page.getByRole('dialog', { name: `Opções de ${playlist.name}` });
   await expect(collectionSheet).toBeVisible();
 
