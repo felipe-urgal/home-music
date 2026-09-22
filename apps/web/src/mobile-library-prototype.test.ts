@@ -121,9 +121,9 @@ describe('mobile library prototype one contracts', () => {
     expect(css).toMatch(/desktop-now-playing-screen__current-lyric::before[\s\S]*desktop-now-playing-screen__current-lyric::after/);
     expect(css).toMatch(/desktop-now-playing-screen__waveform span[\s\S]*var\(--now-playing-wave-accent, #ff9f49\)[\s\S]*var\(--wave-fill, 0%\)/);
     expect(css).toMatch(/desktop-now-playing-screen__waveform-hover-time[\s\S]*font-variant-numeric: tabular-nums/);
-    expect(css).toMatch(/desktop-now-playing-screen__quote[\s\S]*font-size: 14px/);
-    expect(css).toMatch(/desktop-now-playing-screen__next-track[\s\S]*width: min\(460px/);
-    expect(css).toMatch(/desktop-now-playing-screen__next-track > \.artwork[\s\S]*width: 70px/);
+    expect(css).toMatch(/desktop-now-playing-screen__quote[\s\S]*font-size: clamp\(16px, 1\.05vw, 18px\)/);
+    expect(css).toMatch(/desktop-now-playing-screen__next-track[\s\S]*width: min\(480px/);
+    expect(css).toMatch(/desktop-now-playing-screen__next-track > \.artwork[\s\S]*width: 76px/);
     expect(css).toMatch(/desktop-now-playing-screen__art-frame[\s\S]*width: min\(100%, 500px\)/);
   });
 
