@@ -2,6 +2,8 @@ import { BookmarkPlus, Pencil, Search, SlidersHorizontal, Sparkles, Trash2 } fro
 import type { CoverFilter, TrackSort } from '../library-utils';
 import type { LibraryNavigation } from '../useLibraryNavigation';
 import type { LibraryViews } from '../useLibraryViews';
+import { useDesktopLayout } from '../useDesktopLayout';
+import { MobileSheet } from './MobileSheet';
 
 type LibraryViewToolsProps = {
   navigation: LibraryNavigation;
@@ -40,6 +42,7 @@ export function LibraryViewTools({
     changeCoverFilter,
     resetViewOptions
   } = navigation;
+  const desktopLayout = useDesktopLayout();
   const run = (operation: Promise<unknown>) => void operation.catch(() => undefined);
   const searchPlaceholder = libraryTab === 'folders'
     ? 'Buscar em Pastas'
@@ -52,6 +55,74 @@ export function LibraryViewTools({
     : playlistDetail
       ? 'Buscar nesta playlist…'
       : searchPlaceholder;
+
+  const viewControls = (
+    <div className="library-view-controls">
+      {canSortTracks && (
+        <label>
+          <span>Ordenar</span>
+          <select value={sort} onChange={event => changeSort(event.target.value as TrackSort)}>
+            <option value="current">Ordem atual</option>
+            <option value="title-asc">Título A–Z</option>
+            <option value="title-desc">Título Z–A</option>
+            <option value="artist-asc">Artista A–Z</option>
+            <option value="artist-desc">Artista Z–A</option>
+            <option value="album-asc">Álbum A–Z</option>
+            <option value="album-desc">Álbum Z–A</option>
+          </select>
+        </label>
+      )}
+
+      <label>
+        <span>Formato</span>
+        <select value={formatFilter} onChange={event => changeFormatFilter(event.target.value)}>
+          <option value="all">Todos</option>
+          {availableFormats.map(format => <option key={format} value={format}>{format}</option>)}
+        </select>
+      </label>
+
+      <label>
+        <span>Capa</span>
+        <select value={coverFilter} onChange={event => changeCoverFilter(event.target.value as CoverFilter)}>
+          <option value="all">Todas</option>
+          <option value="with-cover">Com capa</option>
+          <option value="without-cover">Sem capa</option>
+        </select>
+      </label>
+
+      <div className="library-view-controls__actions">
+        <button type="button" onClick={() => run(onSaveCurrentView())}><BookmarkPlus />Salvar view</button>
+        {(query || activeViewOptionCount > 0) && (
+          <button type="button" onClick={() => { changeQuery(''); resetViewOptions(); }}>Limpar</button>
+        )}
+      </div>
+
+      {savedViews.loading ? (
+        <div className="library-saved-view-status">Carregando views…</div>
+      ) : savedViews.error ? (
+        <div className="library-saved-view-status is-error" role="alert">
+          <span>{savedViews.error}</span>
+          <button type="button" onClick={() => void savedViews.refresh().catch(reportError)}>Tentar novamente</button>
+        </div>
+      ) : savedViews.views.length > 0 ? (
+        <div className="library-saved-view-manager">
+          <span className="library-saved-view-manager__title">Views salvas</span>
+          {savedViews.views.map(view => (
+            <div className="library-saved-view-row" key={view.id}>
+              <button className="library-saved-view-row__open" type="button" onClick={() => applyLibraryView(view.definition)}>
+                <Sparkles aria-hidden="true" />
+                <span>{view.name}</span>
+              </button>
+              <button type="button" aria-label={`Renomear view ${view.name}`} onClick={() => run(onRenameSavedView(view.id, view.name))}><Pencil /></button>
+              <button className="is-danger" type="button" aria-label={`Excluir view ${view.name}`} onClick={() => run(onRemoveSavedView(view.id, view.name))}><Trash2 /></button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="library-saved-view-status">Salve a busca e os filtros atuais para reutilizar depois.</div>
+      )}
+    </div>
+  );
 
   return (
     <section className="library-smart-view-tools" aria-label="Busca, filtros e views inteligentes">
@@ -139,73 +210,11 @@ export function LibraryViewTools({
         </div>
       )}
 
-      {open && (
-        <div className="library-view-controls">
-          {canSortTracks && (
-            <label>
-              <span>Ordenar</span>
-              <select value={sort} onChange={event => changeSort(event.target.value as TrackSort)}>
-                <option value="current">Ordem atual</option>
-                <option value="title-asc">Título A–Z</option>
-                <option value="title-desc">Título Z–A</option>
-                <option value="artist-asc">Artista A–Z</option>
-                <option value="artist-desc">Artista Z–A</option>
-                <option value="album-asc">Álbum A–Z</option>
-                <option value="album-desc">Álbum Z–A</option>
-              </select>
-            </label>
-          )}
-
-          <label>
-            <span>Formato</span>
-            <select value={formatFilter} onChange={event => changeFormatFilter(event.target.value)}>
-              <option value="all">Todos</option>
-              {availableFormats.map(format => <option key={format} value={format}>{format}</option>)}
-            </select>
-          </label>
-
-          <label>
-            <span>Capa</span>
-            <select value={coverFilter} onChange={event => changeCoverFilter(event.target.value as CoverFilter)}>
-              <option value="all">Todas</option>
-              <option value="with-cover">Com capa</option>
-              <option value="without-cover">Sem capa</option>
-            </select>
-          </label>
-
-          <div className="library-view-controls__actions">
-            <button type="button" onClick={() => run(onSaveCurrentView())}><BookmarkPlus />Salvar view</button>
-            {(query || activeViewOptionCount > 0) && (
-              <button type="button" onClick={() => { changeQuery(''); resetViewOptions(); }}>Limpar</button>
-            )}
-          </div>
-
-          {savedViews.loading ? (
-            <div className="library-saved-view-status">Carregando views…</div>
-          ) : savedViews.error ? (
-            <div className="library-saved-view-status is-error" role="alert">
-              <span>{savedViews.error}</span>
-              <button type="button" onClick={() => void savedViews.refresh().catch(reportError)}>Tentar novamente</button>
-            </div>
-          ) : savedViews.views.length > 0 ? (
-            <div className="library-saved-view-manager">
-              <span className="library-saved-view-manager__title">Views salvas</span>
-              {savedViews.views.map(view => (
-                <div className="library-saved-view-row" key={view.id}>
-                  <button className="library-saved-view-row__open" type="button" onClick={() => applyLibraryView(view.definition)}>
-                    <Sparkles aria-hidden="true" />
-                    <span>{view.name}</span>
-                  </button>
-                  <button type="button" aria-label={`Renomear view ${view.name}`} onClick={() => run(onRenameSavedView(view.id, view.name))}><Pencil /></button>
-                  <button className="is-danger" type="button" aria-label={`Excluir view ${view.name}`} onClick={() => run(onRemoveSavedView(view.id, view.name))}><Trash2 /></button>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="library-saved-view-status">Salve a busca e os filtros atuais para reutilizar depois.</div>
-          )}
-        </div>
-      )}
+      {open && (desktopLayout ? viewControls : (
+        <MobileSheet open title="Filtros e ordenação" onClose={onToggleOpen} className="library-filters-sheet">
+          {viewControls}
+        </MobileSheet>
+      ))}
     </section>
   );
 }
