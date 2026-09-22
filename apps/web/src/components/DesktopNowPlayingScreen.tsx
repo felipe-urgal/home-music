@@ -89,6 +89,26 @@ const DESKTOP_ART_TRANSITION_SECONDS = 0.52;
 const DESKTOP_COPY_TRANSITION_SECONDS = 0.42;
 const DESKTOP_BACKDROP_TRANSITION_SECONDS = 0.85;
 
+const TRACK_QUOTES = [
+  { lead: 'Boa música', emphasis: 'torna tudo mais leve.' },
+  { lead: 'Algumas músicas', emphasis: 'mudam o clima por inteiro.' },
+  { lead: 'Tem som que', emphasis: 'faz o tempo desacelerar.' },
+  { lead: 'Uma boa faixa', emphasis: 'merece ser ouvida sem pressa.' },
+  { lead: 'Quando a música bate', emphasis: 'o resto encontra o ritmo.' },
+  { lead: 'Certas canções', emphasis: 'ficam com a gente.' }
+] as const;
+
+function quoteForTrack(track: Track) {
+  const key = `${track.id}:${track.title}:${track.artist ?? ''}`;
+  let hash = 0;
+
+  for (let index = 0; index < key.length; index += 1) {
+    hash = ((hash * 31) + key.charCodeAt(index)) >>> 0;
+  }
+
+  return TRACK_QUOTES[hash % TRACK_QUOTES.length];
+}
+
 type DesktopNowPlayingScreenProps = {
   current: Track;
   playing: boolean;
@@ -206,6 +226,7 @@ export function DesktopNowPlayingScreen({
     setPlaylistOpen(false);
   }, [current.id]);
   const progress = duration > 0 ? Math.max(0, Math.min(100, (currentTime / duration) * 100)) : 0;
+  const quote = quoteForTrack(current);
   const waveformPosition = (progress / 100) * WAVEFORM_HEIGHTS.length;
   const repeatLabel = repeatMode === 'one'
     ? 'Repetir uma'
@@ -490,8 +511,8 @@ export function DesktopNowPlayingScreen({
       </div>
 
       <div className="desktop-now-playing-screen__quote" aria-hidden="true">
-        <span>Boa música</span>
-        <strong>torna tudo mais leve.</strong>
+        <span>{quote.lead}</span>
+        <strong>{quote.emphasis}</strong>
       </div>
       {nextTrack && nextTrack.id !== current.id && (
         <button
