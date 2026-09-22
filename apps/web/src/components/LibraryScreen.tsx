@@ -222,6 +222,7 @@ export function LibraryScreen({
 
   async function saveCurrentView() {
     if (!desktopLayout) {
+      setViewControlsOpen(false);
       setMobileTextEditor({ kind: 'save-view', value: '' });
       return;
     }
@@ -232,6 +233,7 @@ export function LibraryScreen({
 
   async function renameSavedView(id: string, currentName: string) {
     if (!desktopLayout) {
+      setViewControlsOpen(false);
       setMobileTextEditor({ kind: 'rename-view', id, currentName, value: currentName });
       return;
     }
@@ -241,6 +243,7 @@ export function LibraryScreen({
 
   async function removeSavedView(id: string, name: string) {
     if (!desktopLayout) {
+      setViewControlsOpen(false);
       setMobileConfirm({ kind: 'delete-view', id, name });
       return;
     }
