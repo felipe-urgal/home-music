@@ -9,7 +9,8 @@ async function login(page: Page) {
   await page.getByLabel('Usuário', { exact: true }).fill(username);
   await page.getByLabel('Senha', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'E2E Track' })).toBeVisible();
+  await expect(page.locator('.player-screen-immersive')).toBeVisible();
+  await expect(page.locator('.player-track-heading h1')).toBeVisible();
 }
 
 test('modal de playlist inteligente rola internamente e trava o fundo no mobile', async ({ page }, testInfo) => {
