@@ -532,6 +532,31 @@
     min-height: 68px;
   }
 
+  #root .desktop-layout[data-offline="false"] .my-account-profile,
+  #root .desktop-layout[data-offline="false"] .my-account-links,
+  #root .desktop-layout[data-offline="false"] .my-account-card,
+  #root .desktop-layout[data-offline="false"] .my-account-danger {
+    border-color: rgba(111, 148, 202, .13);
+    border-radius: 14px;
+    background: rgba(11, 22, 36, .9);
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-link-group__label {
+    padding-inline: 4px;
+    color: #8797ad;
+    letter-spacing: .08em;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-password-form input,
+  #root .desktop-layout[data-offline="false"] .my-account-playback-network select {
+    min-height: 48px;
+    font-size: 16px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-action {
+    min-height: 46px;
+  }
+
   #root .desktop-layout[data-offline="false"] .administration-cockpit-actions button {
     min-height: 72px;
   }
