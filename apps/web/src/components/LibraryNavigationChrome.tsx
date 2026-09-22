@@ -65,7 +65,7 @@ export function LibraryNavigationChrome({
             className="icon-button library-header__more"
             type="button"
             aria-label="Mais opções da coleção"
-            aria-haspopup="menu"
+            aria-haspopup="dialog"
             aria-expanded={detailMenuOpen}
             onClick={onToggleDetailMenu}
           >

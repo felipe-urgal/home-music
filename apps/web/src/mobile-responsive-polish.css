@@ -1,0 +1,623 @@
+/*
+ * Canonical phone interaction layer.
+ * Keep mobile behavioral polish here so late cascade fixes do not spread
+ * across prototype stylesheets.
+ */
+
+.mobile-sheet-layer {
+  position: fixed;
+  z-index: 120;
+  inset: 0;
+  pointer-events: none;
+}
+
+.mobile-sheet-backdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: rgba(0, 0, 0, .58);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  pointer-events: auto;
+}
+
+.mobile-sheet {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: min(100%, 480px);
+  max-height: min(82dvh, 760px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, .12);
+  border-bottom: 0;
+  border-radius: 22px 22px 0 0;
+  color: #eef3fa;
+  background: rgba(7, 13, 22, .99);
+  box-shadow: 0 -28px 72px rgba(0, 0, 0, .5);
+  transform: translateX(-50%);
+  pointer-events: auto;
+}
+
+.mobile-sheet__grabber-hitbox {
+  min-height: 22px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+.mobile-sheet__grabber {
+  width: 42px;
+  height: 4px;
+  display: block;
+  margin: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .22);
+}
+
+.mobile-sheet__header {
+  min-height: 54px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px 0 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, .07);
+}
+
+.mobile-sheet__header strong {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 16px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-sheet__close {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  color: #c6d0dc;
+  background: transparent;
+}
+
+.mobile-sheet__close svg {
+  width: 20px;
+  height: 20px;
+}
+
+.mobile-sheet__content {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 10px 12px max(16px, env(safe-area-inset-bottom));
+}
+
+.mobile-sheet-actions {
+  display: grid;
+  gap: 4px;
+}
+
+.mobile-sheet-actions > button {
+  width: 100%;
+  min-height: 48px;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) 20px;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 11px;
+  color: #edf3fb;
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+}
+
+.mobile-sheet-actions > button:active {
+  background: rgba(255, 255, 255, .06);
+}
+
+.mobile-sheet-actions > button > svg {
+  width: 20px;
+  height: 20px;
+  color: #aab9cb;
+}
+
+.mobile-sheet-actions > button > svg:last-child:not(:first-child) {
+  justify-self: end;
+  width: 18px;
+  height: 18px;
+}
+
+.mobile-sheet-actions > button.is-danger,
+.mobile-sheet-actions > button.is-danger > svg {
+  color: #ff9b9b;
+}
+
+.mobile-sheet-actions > button:disabled {
+  opacity: .48;
+}
+
+.mobile-sheet-empty {
+  display: block;
+  padding: 18px 12px;
+  color: #8e9bab;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.mobile-sheet-form,
+.mobile-sheet-confirm {
+  display: grid;
+  gap: 14px;
+  padding: 4px 2px 2px;
+}
+
+.mobile-sheet-field {
+  display: grid;
+  gap: 7px;
+}
+
+.mobile-sheet-field > span {
+  color: #a9b5c4;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.mobile-sheet-field input {
+  width: 100%;
+  min-width: 0;
+  height: 48px;
+  padding: 0 13px;
+  border: 1px solid rgba(255, 255, 255, .12);
+  border-radius: 11px;
+  outline: 0;
+  color: #f5f8fb;
+  background: #0d1724;
+  font: inherit;
+  font-size: 16px;
+}
+
+.mobile-sheet-field input:focus {
+  border-color: rgba(80, 157, 255, .62);
+  box-shadow: 0 0 0 3px rgba(72, 144, 255, .11);
+}
+
+.mobile-sheet-confirm p {
+  margin: 0;
+  color: #bac5d2;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.mobile-sheet-form__actions,
+.mobile-sheet-confirm__actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.mobile-sheet-form__actions button,
+.mobile-sheet-confirm__actions button {
+  min-height: 46px;
+  border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: 11px;
+  color: #dce5ef;
+  background: #111c29;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.mobile-sheet-form__actions .is-primary,
+.mobile-sheet-confirm__actions .is-primary {
+  border-color: rgba(71, 143, 255, .54);
+  color: #fff;
+  background: #3279e8;
+}
+
+.mobile-sheet-confirm__actions .is-danger {
+  border-color: rgba(255, 104, 104, .32);
+  color: #ffaaaa;
+  background: rgba(126, 36, 46, .24);
+}
+
+.mobile-feedback-toast {
+  position: fixed;
+  z-index: 118;
+  left: 50%;
+  bottom: max(18px, env(safe-area-inset-bottom));
+  width: min(calc(100% - 32px), 448px);
+  padding: 11px 14px;
+  border: 1px solid rgba(91, 181, 255, .2);
+  border-radius: 12px;
+  color: #dceeff;
+  background: rgba(12, 28, 44, .97);
+  box-shadow: 0 14px 38px rgba(0, 0, 0, .34);
+  transform: translateX(-50%);
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: center;
+}
+
+@media (max-width: 699px) {
+  /* Player must adapt to the real viewport instead of clipping to one exact height. */
+  html:has(#root .desktop-layout[data-offline="false"][data-desktop-active="player"]),
+  body:has(#root .desktop-layout[data-offline="false"][data-desktop-active="player"]),
+  #root:has(.desktop-layout[data-offline="false"][data-desktop-active="player"]) {
+    height: auto !important;
+    min-height: 100% !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior-y: auto !important;
+  }
+
+  #root .app-shell:has(.desktop-layout[data-offline="false"][data-desktop-active="player"]),
+  #root .desktop-layout[data-offline="false"][data-desktop-active="player"],
+  #root .desktop-layout[data-offline="false"][data-desktop-active="player"] > .phone-surface,
+  #root .desktop-layout[data-offline="false"] .player-screen-immersive,
+  #root .desktop-layout[data-offline="false"] .player-screen-immersive__content {
+    height: auto !important;
+    min-height: 100dvh !important;
+    overflow-x: hidden !important;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-desktop-active="player"] > .phone-surface,
+  #root .desktop-layout[data-offline="false"] .player-screen-immersive__content {
+    overflow-y: visible !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .player-screen-immersive__content {
+    padding-bottom: calc(env(safe-area-inset-bottom) + 18px) !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .hero-art {
+    height: clamp(300px, 52dvh, 520px) !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .player-screen-immersive[data-has-artwork="false"] .hero-art {
+    height: clamp(250px, 38dvh, 360px) !important;
+    background:
+      radial-gradient(circle at 50% 48%, rgba(67, 91, 124, .22), transparent 34%),
+      #080c12 !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .player-screen-immersive[data-has-artwork="false"] .hero-art .artwork--fallback {
+    font-size: clamp(22px, 7vw, 30px);
+  }
+
+  #root .desktop-layout[data-offline="false"] .player-track-heading {
+    margin-top: 10px !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .progress-wrap {
+    margin-top: 18px !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .progress-wrap {
+    height: 56px !important;
+    flex-basis: 56px !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .progress-wrap input[type="range"] {
+    height: 44px !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .player-screen-immersive .queue-panel--player {
+    margin-top: 18px !important;
+    padding-bottom: 2px;
+  }
+
+  /* Restore the existing accessible queue sheet; prototype 3 had hidden it. */
+  #root .desktop-layout[data-offline="false"] .player-screen-immersive .queue-panel--player .queue-panel__content:not(.is-open) {
+    display: none !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .player-screen-immersive .queue-panel--player .queue-panel__content.is-open {
+    display: flex !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .player-screen-immersive .queue-sheet-backdrop {
+    display: block !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .player-screen-immersive .queue-sheet__header {
+    display: grid !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .queue-panel__toggle-mobile {
+    min-height: 88px;
+  }
+
+  /* Detail pages expose search/filter instead of silently dropping functionality. */
+  #root .desktop-layout[data-offline="false"] .mobile-collection-detail .library-smart-view-tools {
+    position: relative !important;
+    z-index: 12 !important;
+    width: auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    display: block !important;
+    margin: 6px 16px 8px !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-collection-detail .library-smart-view-tools .library-tools {
+    position: static !important;
+    top: auto !important;
+    width: 100% !important;
+    display: grid !important;
+    margin: 0 !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-collection-detail .library-folder-quick-filters,
+  #root .desktop-layout[data-offline="false"] .mobile-collection-detail .library-saved-view-strip {
+    display: none !important;
+  }
+
+  .mobile-sheet .library-view-controls {
+    width: 100%;
+    margin: 0;
+    padding: 4px 2px;
+    border: 0;
+    background: transparent;
+  }
+
+  .mobile-sheet .library-view-controls select {
+    min-height: 44px;
+  }
+
+  .mobile-sheet .library-saved-view-row > button {
+    min-height: 44px;
+  }
+
+  .mobile-sheet-collection-offline .offline-collection-control {
+    width: 100%;
+    min-width: 0;
+    margin: 0 0 8px;
+    padding: 12px;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    gap: 10px;
+    border-color: rgba(103, 151, 225, .18);
+    background: rgba(15, 29, 49, .72);
+  }
+
+  .mobile-sheet-collection-offline .offline-collection-control__actions {
+    width: 100%;
+    min-width: 0;
+    display: flex;
+    gap: 6px;
+  }
+
+  .mobile-sheet-collection-offline .offline-collection-control__actions .primary-action,
+  .mobile-sheet-collection-offline .offline-collection-control__actions .secondary-action {
+    min-width: 0;
+    min-height: 44px;
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+
+  .mobile-sheet-collection-offline .offline-collection-control__remove {
+    flex: 0 0 44px;
+    width: 44px;
+    height: 44px;
+  }
+
+  /* Mobile playlist root keeps advanced playlist features reachable. */
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"] .playlist-smart-action {
+    min-height: 36px;
+    display: inline-flex !important;
+    align-items: center;
+    gap: 5px;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"] .playlist-order-control {
+    min-height: 36px;
+    display: flex !important;
+    align-items: center;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"] .section-heading--playlists-root,
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"] .section-heading__actions {
+    flex-wrap: wrap;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"] .section-heading__actions {
+    width: 100%;
+    margin: 8px 0 0;
+    justify-content: flex-start;
+  }
+
+  /* Track overflow is a real action, not a decorative icon inside Play. */
+  #root .desktop-layout[data-offline="false"] .library-track {
+    position: relative;
+  }
+
+  #root .desktop-layout[data-offline="false"] .library-track__main {
+    padding-right: 46px !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .library-track__more-button {
+    position: absolute;
+    z-index: 3;
+    top: 50%;
+    right: 0;
+    width: 44px;
+    height: 44px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 10px;
+    color: #98a6b8;
+    background: transparent;
+    transform: translateY(-50%);
+  }
+
+  #root .desktop-layout[data-offline="false"] .library-track__more-button:active {
+    background: rgba(255, 255, 255, .05);
+  }
+
+  #root .desktop-layout[data-offline="false"] .library-track__more-button svg {
+    width: 19px;
+    height: 19px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-collection-detail .library-track__mobile-meta {
+    min-width: 36px;
+    grid-template-columns: auto;
+  }
+
+  /* Comfortable touch targets without visually inflating every icon. */
+  #root .desktop-layout[data-offline="false"] .mobile-library-brand-bar__actions > button,
+  #root .desktop-layout[data-offline="false"] .player-topbar .icon-button,
+  #root .desktop-layout[data-offline="false"] .mobile-collection-detail .library-header__more,
+  #root .desktop-layout[data-offline="false"] .mobile-collection-detail .library-header__back {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mini-player__toggle {
+    width: 44px !important;
+    height: 44px !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mini-player {
+    min-height: 70px !important;
+  }
+
+  /* Account/admin no longer reserve space for a hidden bottom navigation. */
+  #root .desktop-layout[data-offline="false"] .my-account-screen {
+    padding-bottom: calc(30px + env(safe-area-inset-bottom)) !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-header {
+    min-height: 58px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-screen:not(.administration-screen) > .my-account-header {
+    position: sticky;
+    z-index: 24;
+    top: 0;
+    margin-inline: -2px;
+    background: linear-gradient(180deg, rgba(6, 11, 18, .98), rgba(6, 11, 18, .9) 78%, transparent);
+    backdrop-filter: blur(14px);
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-link-group {
+    gap: 9px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-link-group__label {
+    font-size: 10px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .administration-cockpit__header {
+    position: sticky;
+    z-index: 24;
+    top: 0;
+    background: rgba(7, 13, 20, .96);
+    backdrop-filter: blur(14px);
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-header > .icon-button {
+    width: 44px;
+    height: 44px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-links > button {
+    min-height: 68px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-profile,
+  #root .desktop-layout[data-offline="false"] .my-account-links,
+  #root .desktop-layout[data-offline="false"] .my-account-card,
+  #root .desktop-layout[data-offline="false"] .my-account-danger {
+    border-color: rgba(111, 148, 202, .13);
+    border-radius: 14px;
+    background: rgba(11, 22, 36, .9);
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-link-group__label {
+    padding-inline: 4px;
+    color: #8797ad;
+    letter-spacing: .08em;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-password-form input,
+  #root .desktop-layout[data-offline="false"] .my-account-playback-network select {
+    min-height: 48px;
+    font-size: 16px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-action {
+    min-height: 46px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .administration-cockpit-actions button {
+    min-height: 72px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .offline-header .icon-button,
+  #root .desktop-layout[data-offline="false"] .offline-collection-card .track-action {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 380px) {
+  #root .desktop-layout[data-offline="false"] .mobile-library-home__folders,
+  #root .desktop-layout[data-offline="false"] .mobile-library-home__playlists {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-library-home__folder strong,
+  #root .desktop-layout[data-offline="false"] .mobile-library-home__playlists .group-item__text strong {
+    font-size: 12px !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-library-home__folder small,
+  #root .desktop-layout[data-offline="false"] .mobile-library-home__playlists .group-item__text small {
+    font-size: 10px !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .administration-cockpit-actions {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 699px) and (max-height: 720px) {
+  #root .desktop-layout[data-offline="false"] .hero-art {
+    height: clamp(240px, 44dvh, 330px) !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .player-screen-immersive[data-has-artwork="false"] .hero-art {
+    height: clamp(210px, 34dvh, 270px) !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .queue-panel__toggle-mobile {
+    min-height: 76px;
+  }
+}
+
+@media (max-width: 699px) and (orientation: landscape) {
+  #root .desktop-layout[data-offline="false"] .hero-art {
+    height: min(58dvh, 280px) !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .player-screen-immersive[data-has-artwork="false"] .hero-art {
+    height: min(46dvh, 220px) !important;
+  }
+}

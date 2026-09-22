@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import type { Playlist, RepeatMode, Track } from '@home-music/shared';
 import { useCrossfadeVisualState } from '../crossfade-visual';
+import { MobileSheet } from './MobileSheet';
 import { NowPlayingCrossfadeIdentity, NowPlayingCrossfadeVinyl } from './NowPlayingCrossfade';
 
 type PlayerTrackPresentationProps = {
@@ -92,9 +93,9 @@ export function PlayerTrackPresentation({
     return () => window.clearTimeout(timeout);
   }, [playing, current.id]);
 
-  function togglePlaylistPicker() {
-    setShowPlaylistPicker(value => !value);
+  function openPlaylistPicker() {
     setShowTrackMenu(false);
+    setShowPlaylistPicker(true);
   }
 
   return (
@@ -118,7 +119,7 @@ export function PlayerTrackPresentation({
             className="icon-button player-topbar__menu"
             type="button"
             aria-label="Mais opções da faixa"
-            aria-haspopup="menu"
+            aria-haspopup="dialog"
             aria-expanded={showTrackMenu}
             onClick={() => {
               setShowTrackMenu(value => !value);
@@ -130,16 +131,21 @@ export function PlayerTrackPresentation({
         )}
       </header>
 
-      {showTrackMenu && !offlineMode && (
-        <div className="player-track-menu" role="menu" aria-label="Mais opções da faixa">
-          <button type="button" role="menuitem" onClick={togglePlaylistPicker}>
+      <MobileSheet
+        open={showTrackMenu && !offlineMode}
+        title="Opções da faixa"
+        onClose={() => setShowTrackMenu(false)}
+        className="player-actions-sheet"
+      >
+        <div className="mobile-sheet-actions">
+          <button type="button" onClick={openPlaylistPicker}>
             <Heart aria-hidden="true" />
             <span>Adicionar à playlist</span>
+            <ChevronRight aria-hidden="true" />
           </button>
           <button
             type="button"
-            role="menuitemcheckbox"
-            aria-checked={shuffle}
+            aria-pressed={shuffle}
             onClick={() => {
               onShuffle();
               setShowTrackMenu(false);
@@ -147,10 +153,10 @@ export function PlayerTrackPresentation({
           >
             <Shuffle aria-hidden="true" />
             <span>{shuffle ? 'Desativar aleatório' : 'Ativar aleatório'}</span>
+            <span aria-hidden="true" />
           </button>
           <button
             type="button"
-            role="menuitem"
             onClick={() => {
               onRepeat();
               setShowTrackMenu(false);
@@ -164,15 +170,15 @@ export function PlayerTrackPresentation({
                   ? 'Repetir fila'
                   : 'Ativar repetição'}
             </span>
+            <span aria-hidden="true" />
           </button>
           {onToggleDownload && (
             <button
               type="button"
-              role="menuitem"
               disabled={downloading}
               onClick={() => {
-                onToggleDownload();
                 setShowTrackMenu(false);
+                onToggleDownload();
               }}
             >
               {downloading
@@ -181,10 +187,11 @@ export function PlayerTrackPresentation({
                   ? <CheckCircle2 aria-hidden="true" />
                   : <Download aria-hidden="true" />}
               <span>{offlineActionLabel}</span>
+              <span aria-hidden="true" />
             </button>
           )}
         </div>
-      )}
+      </MobileSheet>
 
       <div className="hero-art">
         {offlineMode ? (
@@ -225,25 +232,31 @@ export function PlayerTrackPresentation({
         <NowPlayingCrossfadeIdentity current={current} crossfade={crossfadeVisual} />
       </div>
 
-      {showPlaylistPicker && !offlineMode && (
-        <section className="player-playlist-picker" aria-label="Escolher playlist">
-          <strong>Adicionar à playlist</strong>
-          {playlists.length ? playlists.map(playlist => (
-            <button
-              type="button"
-              key={playlist.id}
-              onClick={() => {
-                onAddToPlaylist(playlist);
-                setShowPlaylistPicker(false);
-              }}
-            >
-              <ListMusic aria-hidden="true" />
-              <span>{playlist.name}</span>
-              <ChevronRight aria-hidden="true" />
-            </button>
-          )) : <small>Nenhuma playlist criada ainda.</small>}
-        </section>
-      )}
+      <MobileSheet
+        open={showPlaylistPicker && !offlineMode}
+        title="Adicionar à playlist"
+        onClose={() => setShowPlaylistPicker(false)}
+        className="player-playlist-sheet"
+      >
+        {playlists.length ? (
+          <div className="mobile-sheet-actions">
+            {playlists.map(playlist => (
+              <button
+                type="button"
+                key={playlist.id}
+                onClick={() => {
+                  onAddToPlaylist(playlist);
+                  setShowPlaylistPicker(false);
+                }}
+              >
+                <ListMusic aria-hidden="true" />
+                <span>{playlist.name}</span>
+                <ChevronRight aria-hidden="true" />
+              </button>
+            ))}
+          </div>
+        ) : <small className="mobile-sheet-empty">Nenhuma playlist criada ainda.</small>}
+      </MobileSheet>
 
       {offlineMode && <div className="player-offline-status"><Download aria-hidden="true" /> Reproduzindo o arquivo salvo neste dispositivo.</div>}
     </>

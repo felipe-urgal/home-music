@@ -152,7 +152,7 @@ export function LibraryContent({
               <strong>Pastas</strong>
               {!showAllMobileFolders && visibleFolders.length > 3 && (
                 <button type="button" onClick={() => setShowAllMobileFolders(true)}>
-                  Ver todas <ChevronRight aria-hidden="true" />
+                  Mostrar todas <ChevronRight aria-hidden="true" />
                 </button>
               )}
             </header>
@@ -180,7 +180,7 @@ export function LibraryContent({
               <strong>Playlists</strong>
               {orderedPlaylists.length > 0 && (
                 <button type="button" onClick={() => selectTab('playlists')}>
-                  Ver todas <ChevronRight aria-hidden="true" />
+                  Abrir playlists <ChevronRight aria-hidden="true" />
                 </button>
               )}
             </header>

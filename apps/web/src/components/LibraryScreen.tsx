@@ -13,6 +13,7 @@ import { LibraryContent } from './LibraryContent';
 import { LibraryNavigationChrome } from './LibraryNavigationChrome';
 import { LibraryViewTools } from './LibraryViewTools';
 import { MiniPlayer } from './MiniPlayer';
+import { MobileSheet } from './MobileSheet';
 import { OfflineCollectionControl, offlineCollectionTracksByIds } from './OfflineCollectionControl';
 import { SmartPlaylistDialog } from './SmartPlaylistDialog';
 import { Artwork } from './Artwork';
@@ -30,6 +31,17 @@ type LibraryOfflineDownloads = Pick<OfflineDownloads,
   | 'removeCollection'
   | 'getCollectionState'
 >;
+
+type MobileTextEditor =
+  | { kind: 'create-playlist'; value: string }
+  | { kind: 'rename-playlist'; playlist: Playlist; value: string }
+  | { kind: 'save-view'; value: string }
+  | { kind: 'rename-view'; id: string; currentName: string; value: string };
+
+type MobileConfirm =
+  | { kind: 'delete-playlist'; playlist: Playlist }
+  | { kind: 'delete-view'; id: string; name: string }
+  | { kind: 'remove-download'; track: Track; message: string };
 
 type LibraryScreenProps = {
   currentUser: AuthenticatedUser;
@@ -67,6 +79,9 @@ export function LibraryScreen({
   const [smartPlaylistEditor, setSmartPlaylistEditor] = useState<{ playlist: Playlist | null } | null>(null);
   const [viewControlsOpen, setViewControlsOpen] = useState(false);
   const [mobileCollectionMenuOpen, setMobileCollectionMenuOpen] = useState(false);
+  const [mobileTextEditor, setMobileTextEditor] = useState<MobileTextEditor | null>(null);
+  const [mobileConfirm, setMobileConfirm] = useState<MobileConfirm | null>(null);
+  const [mobileNotice, setMobileNotice] = useState<string | null>(null);
   const {
     tracks,
     playlists,
@@ -95,7 +110,8 @@ export function LibraryScreen({
     currentViewDefinition,
     libraryTracks,
     selectTab,
-    leaveFolder
+    leaveFolder,
+    leavePlaylist
   } = navigation;
 
   const isDetail = Boolean(selectedPlaylist || folderPath);
@@ -137,11 +153,17 @@ export function LibraryScreen({
     void refreshPlaylists().catch(reportError);
   }, [refreshPlaylists, reportError]);
 
+  useEffect(() => {
+    if (!mobileNotice) return;
+    const timeout = window.setTimeout(() => setMobileNotice(null), 3200);
+    return () => window.clearTimeout(timeout);
+  }, [mobileNotice]);
+
   function goBack() {
     setViewControlsOpen(false);
     setMobileCollectionMenuOpen(false);
     if (selectedPlaylist) {
-      selectTab('folders');
+      leavePlaylist();
     } else if (folderPath) leaveFolder();
   }
 
@@ -166,43 +188,114 @@ export function LibraryScreen({
   }
 
   async function makePlaylist() {
+    if (!desktopLayout) {
+      setMobileTextEditor({ kind: 'create-playlist', value: '' });
+      return;
+    }
     const name = window.prompt('Nome da nova playlist:')?.trim();
     if (name) await createPlaylist(name);
   }
 
   async function editPlaylist(playlist: Playlist) {
+    if (!desktopLayout) {
+      setMobileTextEditor({ kind: 'rename-playlist', playlist, value: playlist.name });
+      return;
+    }
     const name = window.prompt('Novo nome da playlist:', playlist.name)?.trim();
     if (name && name !== playlist.name) await renamePlaylist(playlist.id, name);
   }
 
-  async function removePlaylist(playlist: Playlist) {
-    if (!window.confirm(`Excluir a playlist “${playlist.name}”?`)) return;
-
+  async function deletePlaylistNow(playlist: Playlist) {
     if (playlist.source === 'smart') await deleteSmartPlaylist(playlist.id);
     else await deletePlaylist(playlist.id);
-    selectTab('folders');
+    if (desktopLayout) selectTab('folders');
+    else leavePlaylist();
+  }
+
+  async function removePlaylist(playlist: Playlist) {
+    if (!desktopLayout) {
+      setMobileConfirm({ kind: 'delete-playlist', playlist });
+      return;
+    }
+    if (!window.confirm(`Excluir a playlist “${playlist.name}”?`)) return;
+    await deletePlaylistNow(playlist);
   }
 
   async function saveCurrentView() {
+    if (!desktopLayout) {
+      setViewControlsOpen(false);
+      setMobileTextEditor({ kind: 'save-view', value: '' });
+      return;
+    }
     const name = window.prompt('Nome da nova view inteligente:')?.trim();
     if (!name) return;
     await savedViews.createView(name, currentViewDefinition);
   }
 
   async function renameSavedView(id: string, currentName: string) {
+    if (!desktopLayout) {
+      setViewControlsOpen(false);
+      setMobileTextEditor({ kind: 'rename-view', id, currentName, value: currentName });
+      return;
+    }
     const name = window.prompt('Novo nome da view:', currentName)?.trim();
     if (name && name !== currentName) await savedViews.renameView(id, name);
   }
 
   async function removeSavedView(id: string, name: string) {
+    if (!desktopLayout) {
+      setViewControlsOpen(false);
+      setMobileConfirm({ kind: 'delete-view', id, name });
+      return;
+    }
     if (!window.confirm(`Excluir a view “${name}”?`)) return;
     await savedViews.deleteView(id);
+  }
+
+  async function submitMobileTextEditor() {
+    const editor = mobileTextEditor;
+    const name = editor?.value.trim() ?? '';
+    if (!editor || !name) return;
+
+    if (editor.kind === 'create-playlist') await createPlaylist(name);
+    else if (editor.kind === 'rename-playlist' && name !== editor.playlist.name) {
+      await renamePlaylist(editor.playlist.id, name);
+    } else if (editor.kind === 'save-view') {
+      await savedViews.createView(name, currentViewDefinition);
+    } else if (editor.kind === 'rename-view' && name !== editor.currentName) {
+      await savedViews.renameView(editor.id, name);
+    }
+
+    setMobileTextEditor(null);
+  }
+
+  async function confirmMobileAction() {
+    const action = mobileConfirm;
+    if (!action) return;
+    setMobileConfirm(null);
+
+    if (action.kind === 'delete-playlist') {
+      await deletePlaylistNow(action.playlist);
+      return;
+    }
+    if (action.kind === 'delete-view') {
+      await savedViews.deleteView(action.id);
+      return;
+    }
+
+    try {
+      await offline.remove(action.track.id);
+    } catch (error) {
+      reportError(error);
+    }
   }
 
   async function scanNow() {
     try {
       const result = await rescan();
-      window.alert(`Biblioteca atualizada: +${result.added} novas, ${result.updated} alteradas, ${result.removed} removidas.`);
+      const message = `Biblioteca atualizada: +${result.added} novas, ${result.updated} alteradas, ${result.removed} removidas.`;
+      if (desktopLayout) window.alert(message);
+      else setMobileNotice(message);
     } catch {
       // useLibraryData já exibe o erro globalmente.
     }
@@ -221,6 +314,12 @@ export function LibraryScreen({
     const message = sharedByCollection
       ? `Remover o download individual de “${track.title}”? A música continuará disponível porque uma coleção offline também depende dela.`
       : `Remover “${track.title}” dos downloads offline?`;
+
+    if (!desktopLayout) {
+      setMobileConfirm({ kind: 'remove-download', track, message });
+      return;
+    }
+
     if (!window.confirm(message)) return;
     try {
       await offline.remove(track.id);
@@ -397,31 +496,38 @@ export function LibraryScreen({
             </div>
           </section>
 
-          {mobileCollectionMenuOpen && (
-            <section className="mobile-collection-menu" role="menu" aria-label="Mais opções da coleção">
-              {offlineControl}
+          <MobileSheet
+            open={mobileCollectionMenuOpen}
+            title={`Opções de ${mobileCollectionName}`}
+            onClose={() => setMobileCollectionMenuOpen(false)}
+            className="mobile-collection-actions-sheet"
+          >
+            {offlineControl && <div className="mobile-sheet-collection-offline">{offlineControl}</div>}
+            <div className="mobile-sheet-actions">
               {selectedPlaylist?.source === 'manual' && (
                 <>
                   <button
                     type="button"
-                    role="menuitem"
                     onClick={() => {
                       setMobileCollectionMenuOpen(false);
                       void editPlaylist(selectedPlaylist);
                     }}
                   >
-                    Renomear playlist
+                    <span aria-hidden="true" />
+                    <span>Renomear playlist</span>
+                    <span aria-hidden="true" />
                   </button>
                   <button
                     className="is-danger"
                     type="button"
-                    role="menuitem"
                     onClick={() => {
                       setMobileCollectionMenuOpen(false);
                       void removePlaylist(selectedPlaylist);
                     }}
                   >
-                    Excluir playlist
+                    <span aria-hidden="true" />
+                    <span>Excluir playlist</span>
+                    <span aria-hidden="true" />
                   </button>
                 </>
               )}
@@ -429,32 +535,34 @@ export function LibraryScreen({
                 <>
                   <button
                     type="button"
-                    role="menuitem"
                     onClick={() => {
                       setMobileCollectionMenuOpen(false);
                       setSmartPlaylistEditor({ playlist: selectedPlaylist });
                     }}
                   >
-                    Editar regra
+                    <span aria-hidden="true" />
+                    <span>Editar regra</span>
+                    <span aria-hidden="true" />
                   </button>
                   <button
                     className="is-danger"
                     type="button"
-                    role="menuitem"
                     onClick={() => {
                       setMobileCollectionMenuOpen(false);
                       void removePlaylist(selectedPlaylist);
                     }}
                   >
-                    Excluir playlist
+                    <span aria-hidden="true" />
+                    <span>Excluir playlist</span>
+                    <span aria-hidden="true" />
                   </button>
                 </>
               )}
-              {!offlineControl && !selectedPlaylist && (
-                <span className="mobile-collection-menu__empty">Nenhuma ação adicional.</span>
-              )}
-            </section>
-          )}
+            </div>
+            {!offlineControl && !selectedPlaylist && (
+              <span className="mobile-sheet-empty">Nenhuma ação adicional.</span>
+            )}
+          </MobileSheet>
 
           {viewTools}
           {libraryContent}
@@ -485,6 +593,78 @@ export function LibraryScreen({
           }}
         />
       )}
+
+      <MobileSheet
+        open={Boolean(mobileTextEditor)}
+        title={mobileTextEditor?.kind === 'create-playlist'
+          ? 'Nova playlist'
+          : mobileTextEditor?.kind === 'rename-playlist'
+            ? 'Renomear playlist'
+            : mobileTextEditor?.kind === 'save-view'
+              ? 'Salvar view'
+              : 'Renomear view'}
+        onClose={() => setMobileTextEditor(null)}
+        className="library-text-editor-sheet"
+      >
+        {mobileTextEditor && (
+          <form
+            className="mobile-sheet-form"
+            onSubmit={event => {
+              event.preventDefault();
+              void submitMobileTextEditor().catch(reportError);
+            }}
+          >
+            <label className="mobile-sheet-field">
+              <span>Nome</span>
+              <input
+                data-autofocus
+                value={mobileTextEditor.value}
+                onChange={event => setMobileTextEditor(editor => editor ? { ...editor, value: event.target.value } : editor)}
+                autoComplete="off"
+              />
+            </label>
+            <div className="mobile-sheet-form__actions">
+              <button type="button" onClick={() => setMobileTextEditor(null)}>Cancelar</button>
+              <button className="is-primary" type="submit" disabled={!mobileTextEditor.value.trim()}>Salvar</button>
+            </div>
+          </form>
+        )}
+      </MobileSheet>
+
+      <MobileSheet
+        open={Boolean(mobileConfirm)}
+        title={mobileConfirm?.kind === 'delete-playlist'
+          ? 'Excluir playlist'
+          : mobileConfirm?.kind === 'delete-view'
+            ? 'Excluir view'
+            : 'Remover download'}
+        onClose={() => setMobileConfirm(null)}
+        className="library-confirm-sheet"
+      >
+        {mobileConfirm && (
+          <div className="mobile-sheet-confirm">
+            <p>
+              {mobileConfirm.kind === 'delete-playlist'
+                ? `Excluir a playlist “${mobileConfirm.playlist.name}”?`
+                : mobileConfirm.kind === 'delete-view'
+                  ? `Excluir a view “${mobileConfirm.name}”?`
+                  : mobileConfirm.message}
+            </p>
+            <div className="mobile-sheet-confirm__actions">
+              <button type="button" onClick={() => setMobileConfirm(null)}>Cancelar</button>
+              <button
+                className="is-danger"
+                type="button"
+                onClick={() => void confirmMobileAction().catch(reportError)}
+              >
+                Confirmar
+              </button>
+            </div>
+          </div>
+        )}
+      </MobileSheet>
+
+      {mobileNotice && <div className="mobile-feedback-toast" role="status">{mobileNotice}</div>}
 
       <SmartPlaylistDialog
         open={Boolean(smartPlaylistEditor)}

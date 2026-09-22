@@ -164,9 +164,19 @@ test('controle de coleção offline funciona no layout mobile', async ({ page },
   const { playlist } = await createCollection(page, testInfo, 2);
 
   await page.goto(`/library/playlists/${encodeURIComponent(playlist.id)}`);
-  await expect(page.getByText(playlist.name, { exact: true })).toBeVisible();
-  const action = page.getByRole('button', { name: 'Disponibilizar offline', exact: true });
+  const detail = page.getByTestId('mobile-collection-detail');
+  await expect(detail).toBeVisible();
+  await expect(detail.getByRole('region', { name: playlist.name })).toBeVisible();
+
+  await detail.getByRole('button', { name: 'Mais opções da coleção' }).click();
+  const collectionSheet = page.getByRole('dialog', { name: `Opções de ${playlist.name}` });
+  await expect(collectionSheet).toBeVisible();
+
+  const action = collectionSheet.getByRole('button', { name: 'Disponibilizar offline', exact: true });
   await expect(action).toBeVisible();
   await action.click();
-  await expect(page.getByText('2/2 · disponível offline', { exact: true })).toBeVisible();
+  await expect(collectionSheet.getByText('2/2 · disponível offline', { exact: true })).toBeVisible();
+
+  const horizontalOverflow = await page.locator('.phone-surface').evaluate(element => element.scrollWidth - element.clientWidth);
+  expect(horizontalOverflow).toBeLessThanOrEqual(1);
 });

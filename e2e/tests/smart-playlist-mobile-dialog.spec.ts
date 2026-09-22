@@ -9,18 +9,19 @@ async function login(page: Page) {
   await page.getByLabel('Usuário', { exact: true }).fill(username);
   await page.getByLabel('Senha', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'E2E Track' })).toBeVisible();
+  await expect(page.locator('.player-screen-immersive')).toBeVisible();
+  await expect(page.locator('.player-track-heading h1')).toBeVisible();
 }
 
 test('modal de playlist inteligente rola internamente e trava o fundo no mobile', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'mobile-chromium');
 
   await login(page);
-  const mainNavigation = page.getByRole('navigation', { name: 'Navegação principal' });
-  await mainNavigation.getByRole('button', { name: 'Biblioteca', exact: true }).click();
-
-  const libraryNavigation = page.getByRole('navigation', { name: 'Navegação da biblioteca' });
-  await libraryNavigation.getByRole('button', { name: 'Playlists', exact: true }).click();
+  await page.getByRole('button', { name: 'Biblioteca', exact: true }).click();
+  const libraryHome = page.getByTestId('mobile-library-home');
+  await expect(libraryHome).toBeVisible();
+  await libraryHome.getByRole('button', { name: /Abrir playlists/ }).click();
+  await expect(page).toHaveURL(/\/library\/playlists$/);
   await page.getByRole('button', { name: 'Inteligente', exact: true }).click();
 
   const dialog = page.getByRole('dialog', { name: 'Nova playlist inteligente' });

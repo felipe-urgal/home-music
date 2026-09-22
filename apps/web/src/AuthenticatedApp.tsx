@@ -7,6 +7,7 @@ import { DesktopShell } from './components/DesktopShell';
 import { LazySurfaceBoundary } from './components/LazySurfaceBoundary';
 import { LibraryScreen } from './components/LibraryScreen';
 import { MobileBottomNav } from './components/MobileBottomNav';
+import { MobileSheet } from './components/MobileSheet';
 import { PlayerScreen } from './components/PlayerScreen';
 import { ResponsiveState } from './components/ResponsiveState';
 import { TvExperience } from './components/TvExperience';
@@ -50,6 +51,11 @@ type AuthenticatedAppProps = {
 
 export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenOffline, offline }: AuthenticatedAppProps) {
   const [administrationReturnScreen, setAdministrationReturnScreen] = useState<AdministrationReturnScreen>('account');
+  const [mobileDownloadRemoval, setMobileDownloadRemoval] = useState<{
+    id: string;
+    title: string;
+    availableViaCollection: boolean;
+  } | null>(null);
   const library = useLibraryData();
   const libraryReady = !library.loading && !library.error;
   const navigation = useLibraryNavigation(library.tracks, library.playlists, libraryReady, library.revision);
@@ -137,17 +143,30 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     }
   }
 
+  function removeDownload(trackId: string) {
+    run(offline.remove(trackId).catch(error => {
+      library.reportError(error);
+      throw error;
+    }));
+  }
+
   function toggleDownload() {
     if (!current) return;
     if (currentHasIndividualDownload) {
+      if (!desktopLayout) {
+        setMobileDownloadRemoval({
+          id: current.id,
+          title: current.title,
+          availableViaCollection: currentAvailableViaCollection
+        });
+        return;
+      }
+
       const message = currentAvailableViaCollection
         ? `Remover o download individual de “${current.title}”? A música continuará disponível porque uma coleção offline também depende dela.`
         : `Remover “${current.title}” dos downloads offline?`;
       if (!window.confirm(message)) return;
-      run(offline.remove(current.id).catch(error => {
-        library.reportError(error);
-        throw error;
-      }));
+      removeDownload(current.id);
       return;
     }
 
@@ -488,6 +507,36 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
         onSeek={player.seek}
         onVolume={player.setVolume}
       />
+
+      <MobileSheet
+        open={Boolean(mobileDownloadRemoval)}
+        title="Remover download"
+        onClose={() => setMobileDownloadRemoval(null)}
+        className="player-download-confirm-sheet"
+      >
+        {mobileDownloadRemoval && (
+          <div className="mobile-sheet-confirm">
+            <p>
+              {mobileDownloadRemoval.availableViaCollection
+                ? `Remover o download individual de “${mobileDownloadRemoval.title}”? A música continuará disponível porque uma coleção offline também depende dela.`
+                : `Remover “${mobileDownloadRemoval.title}” dos downloads offline?`}
+            </p>
+            <div className="mobile-sheet-confirm__actions">
+              <button type="button" onClick={() => setMobileDownloadRemoval(null)}>Cancelar</button>
+              <button
+                className="is-danger"
+                type="button"
+                onClick={() => {
+                  removeDownload(mobileDownloadRemoval.id);
+                  setMobileDownloadRemoval(null);
+                }}
+              >
+                Remover
+              </button>
+            </div>
+          </div>
+        )}
+      </MobileSheet>
 
       {library.actionError && (
         <button className="app-toast" role="status" onClick={library.clearActionError}>
