@@ -298,6 +298,15 @@
     margin-top: 18px !important;
   }
 
+  #root .desktop-layout[data-offline="false"] .progress-wrap {
+    height: 56px !important;
+    flex-basis: 56px !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .progress-wrap input[type="range"] {
+    height: 40px !important;
+  }
+
   #root .desktop-layout[data-offline="false"] .player-screen-immersive .queue-panel--player {
     margin-top: 18px !important;
     padding-bottom: 2px;
@@ -346,6 +355,55 @@
   #root .desktop-layout[data-offline="false"] .mobile-collection-detail .library-folder-quick-filters,
   #root .desktop-layout[data-offline="false"] .mobile-collection-detail .library-saved-view-strip {
     display: none !important;
+  }
+
+  .mobile-sheet .library-view-controls {
+    width: 100%;
+    margin: 0;
+    padding: 4px 2px;
+    border: 0;
+    background: transparent;
+  }
+
+  .mobile-sheet .library-view-controls select {
+    min-height: 44px;
+  }
+
+  .mobile-sheet .library-saved-view-row > button {
+    min-height: 44px;
+  }
+
+  .mobile-sheet-collection-offline .offline-collection-control {
+    width: 100%;
+    min-width: 0;
+    margin: 0 0 8px;
+    padding: 12px;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    gap: 10px;
+    border-color: rgba(103, 151, 225, .18);
+    background: rgba(15, 29, 49, .72);
+  }
+
+  .mobile-sheet-collection-offline .offline-collection-control__actions {
+    width: 100%;
+    min-width: 0;
+    display: flex;
+    gap: 6px;
+  }
+
+  .mobile-sheet-collection-offline .offline-collection-control__actions .primary-action,
+  .mobile-sheet-collection-offline .offline-collection-control__actions .secondary-action {
+    min-width: 0;
+    min-height: 44px;
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+
+  .mobile-sheet-collection-offline .offline-collection-control__remove {
+    flex: 0 0 44px;
+    width: 44px;
+    height: 44px;
   }
 
   /* Mobile playlist root keeps advanced playlist features reachable. */
@@ -438,6 +496,31 @@
 
   #root .desktop-layout[data-offline="false"] .my-account-header {
     min-height: 58px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-screen:not(.administration-screen) > .my-account-header {
+    position: sticky;
+    z-index: 24;
+    top: 0;
+    margin-inline: -2px;
+    background: linear-gradient(180deg, rgba(6, 11, 18, .98), rgba(6, 11, 18, .9) 78%, transparent);
+    backdrop-filter: blur(14px);
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-link-group {
+    gap: 9px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-link-group__label {
+    font-size: 10px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .administration-cockpit__header {
+    position: sticky;
+    z-index: 24;
+    top: 0;
+    background: rgba(7, 13, 20, .96);
+    backdrop-filter: blur(14px);
   }
 
   #root .desktop-layout[data-offline="false"] .my-account-header > .icon-button {
