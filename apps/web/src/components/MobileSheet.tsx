@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, type ReactNode } from 'react';
+import { useEffect, useId, useRef, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
@@ -89,19 +89,19 @@ export function MobileSheet({ open, title, onClose, children, className = '' }: 
     };
   }, [open]);
 
-  function beginDrag(event: React.PointerEvent<HTMLDivElement>) {
+  function beginDrag(event: ReactPointerEvent<HTMLDivElement>) {
     dragStartRef.current = { y: event.clientY, pointerId: event.pointerId };
     event.currentTarget.setPointerCapture(event.pointerId);
   }
 
-  function moveDrag(event: React.PointerEvent<HTMLDivElement>) {
+  function moveDrag(event: ReactPointerEvent<HTMLDivElement>) {
     const start = dragStartRef.current;
     if (!start || start.pointerId !== event.pointerId) return;
     const offset = Math.max(0, event.clientY - start.y);
     if (sheetRef.current) sheetRef.current.style.transform = `translate(-50%, ${offset}px)`;
   }
 
-  function finishDrag(event: React.PointerEvent<HTMLDivElement>) {
+  function finishDrag(event: ReactPointerEvent<HTMLDivElement>) {
     const start = dragStartRef.current;
     if (!start || start.pointerId !== event.pointerId) return;
     const offset = Math.max(0, event.clientY - start.y);
