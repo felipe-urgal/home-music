@@ -24,6 +24,7 @@ export function MobileSheet({ open, title, onClose, children, className = '' }: 
   const titleId = useId();
   const sheetRef = useRef<HTMLElement | null>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  const dragStartRef = useRef<{ y: number; pointerId: number } | null>(null);
   const onCloseRef = useRef(onClose);
 
   useEffect(() => {
@@ -88,6 +89,31 @@ export function MobileSheet({ open, title, onClose, children, className = '' }: 
     };
   }, [open]);
 
+  function beginDrag(event: React.PointerEvent<HTMLDivElement>) {
+    dragStartRef.current = { y: event.clientY, pointerId: event.pointerId };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function moveDrag(event: React.PointerEvent<HTMLDivElement>) {
+    const start = dragStartRef.current;
+    if (!start || start.pointerId !== event.pointerId) return;
+    const offset = Math.max(0, event.clientY - start.y);
+    if (sheetRef.current) sheetRef.current.style.transform = `translate(-50%, ${offset}px)`;
+  }
+
+  function finishDrag(event: React.PointerEvent<HTMLDivElement>) {
+    const start = dragStartRef.current;
+    if (!start || start.pointerId !== event.pointerId) return;
+    const offset = Math.max(0, event.clientY - start.y);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    dragStartRef.current = null;
+
+    if (sheetRef.current) sheetRef.current.style.transform = '';
+    if (offset >= 80) onCloseRef.current();
+  }
+
   if (!open || typeof document === 'undefined') return null;
 
   return createPortal(
@@ -105,7 +131,16 @@ export function MobileSheet({ open, title, onClose, children, className = '' }: 
         aria-modal="true"
         aria-labelledby={titleId}
       >
-        <span className="mobile-sheet__grabber" aria-hidden="true" />
+        <div
+          className="mobile-sheet__grabber-hitbox"
+          aria-hidden="true"
+          onPointerDown={beginDrag}
+          onPointerMove={moveDrag}
+          onPointerUp={finishDrag}
+          onPointerCancel={finishDrag}
+        >
+          <span className="mobile-sheet__grabber" />
+        </div>
         <header className="mobile-sheet__header">
           <strong id={titleId}>{title}</strong>
           <button className="mobile-sheet__close" type="button" aria-label="Fechar" onClick={onClose}>
