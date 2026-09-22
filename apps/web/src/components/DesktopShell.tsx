@@ -128,6 +128,7 @@ export function DesktopShell({
   const [queueMenuIndex, setQueueMenuIndex] = useState<number | null>(null);
   const [queueVisibleCount, setQueueVisibleCount] = useState(DESKTOP_QUEUE_PREVIEW_SIZE);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [topbarCollapsed, setTopbarCollapsed] = useState(true);
   const [contextWidth, setContextWidth] = useState(DESKTOP_CONTEXT_DEFAULT_WIDTH);
   const queueListRef = useRef<HTMLDivElement>(null);
   const queueLoadMoreRef = useRef<HTMLDivElement>(null);
@@ -239,11 +240,18 @@ export function DesktopShell({
       className="desktop-layout"
       data-desktop-active={active}
       data-sidebar-collapsed={sidebarCollapsed ? 'true' : 'false'}
+      data-topbar-collapsed={topbarCollapsed ? 'true' : 'false'}
       data-library-tab={activeLibraryTab}
       data-offline={offlineMode ? 'true' : 'false'}
       style={layoutStyle}
     >
-      <header className={`desktop-sidebar desktop-topbar ${sidebarUtilities ? 'has-utilities' : ''}`} data-testid="desktop-sidebar">
+      <header
+        id="desktop-topbar"
+        className={`desktop-sidebar desktop-topbar ${sidebarUtilities ? 'has-utilities' : ''}`}
+        data-testid="desktop-sidebar"
+        aria-hidden={topbarCollapsed && !offlineMode ? true : undefined}
+        inert={topbarCollapsed && !offlineMode ? true : undefined}
+      >
         <button
           className="desktop-sidebar__collapse"
           type="button"
@@ -313,6 +321,20 @@ export function DesktopShell({
           {sidebarUtilities && <div className="desktop-sidebar__utilities">{sidebarUtilities}</div>}
         </div>
       </header>
+
+      {!offlineMode && (
+        <button
+          className="desktop-topbar__collapse-toggle"
+          type="button"
+          aria-controls="desktop-topbar"
+          aria-expanded={!topbarCollapsed}
+          aria-label={topbarCollapsed ? 'Expandir barra superior' : 'Recolher barra superior'}
+          title={topbarCollapsed ? 'Expandir barra superior' : 'Recolher barra superior'}
+          onClick={() => setTopbarCollapsed(value => !value)}
+        >
+          <span aria-hidden="true" />
+        </button>
+      )}
 
       <section className={surfaceClassName} data-desktop-section={active}>
         <div className={`desktop-main-content desktop-main-content--${active}`}>{children}</div>

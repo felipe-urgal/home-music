@@ -27,7 +27,16 @@ async function login(page: Page) {
   await expect(page.locator('main.app-shell')).toBeVisible();
 }
 
+async function expandDesktopTopbar(page: Page) {
+  const expandTopbar = page.getByRole('button', { name: 'Expandir barra superior' });
+  if (await expandTopbar.isVisible().catch(() => false)) {
+    await expandTopbar.click();
+  }
+  await expect(page.getByTestId('desktop-sidebar')).not.toHaveAttribute('aria-hidden', 'true');
+}
+
 async function openAdministration(page: Page) {
+  await expandDesktopTopbar(page);
   const sidebar = page.getByTestId('desktop-sidebar');
   await sidebar.getByRole('button', { name: /Minha conta/ }).click();
   await expect(page.locator('#my-account-title')).toHaveText('Minha conta');
@@ -42,6 +51,7 @@ async function openAssistant(page: Page) {
 }
 
 async function playFixtureTrack(page: Page, title: string) {
+  await expandDesktopTopbar(page);
   const sidebar = page.getByTestId('desktop-sidebar');
   await sidebar.getByRole('button', { name: 'Buscar na biblioteca' }).click();
   await expect(page.locator('.search-box--library input')).toBeFocused();
