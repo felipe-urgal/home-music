@@ -403,12 +403,22 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
   const metadataRuns = useMemo(() => runs.filter(run => run.capability === 'metadata'), [runs]);
   const runActive = Boolean(latestRun && !TERMINAL_RUNS.has(latestRun.status));
   const reviewMap = useMemo(() => new Map(reviewItems.map(item => [item.suggestion.id, item])), [reviewItems]);
-  const safeSuggestions = useMemo(() => suggestions.filter(isSafe), [suggestions]);
-  const reviewSuggestions = useMemo(() => suggestions.filter(item => isOpen(item) && !isSafe(item)), [suggestions]);
+  const reviewableSuggestions = useMemo(
+    () => suggestions.filter(item => isOpen(item) || item.status === 'failed'),
+    [suggestions]
+  );
+  const safeSuggestions = useMemo(
+    () => reviewableSuggestions.filter(item => isOpen(item) && isSafe(item)),
+    [reviewableSuggestions]
+  );
+  const reviewSuggestions = useMemo(
+    () => reviewableSuggestions.filter(item => isOpen(item) && !isSafe(item)),
+    [reviewableSuggestions]
+  );
   const normalizedSearch = search.trim().toLocaleLowerCase('pt-BR');
 
   const visibleSuggestions = useMemo(() => {
-    const filtered = suggestions.filter(suggestion => {
+    const filtered = reviewableSuggestions.filter(suggestion => {
       if (isOpen(suggestion) && policyModeForSuggestion(policy, suggestion) === 'ignore') return false;
       if (filter !== 'all') {
         if (filter === 'metadata' && suggestion.target.capability !== 'metadata') return false;
@@ -425,7 +435,7 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
       const stable = created || left.id.localeCompare(right.id);
       return sort === 'recent' ? -stable : stable;
     });
-  }, [filter, normalizedSearch, policy, reviewMap, sort, suggestions]);
+  }, [filter, normalizedSearch, policy, reviewMap, reviewableSuggestions, sort]);
 
   const visibleSafeSuggestions = useMemo(
     () => visibleSuggestions.filter(item => canApplyInBatch(item) && isSafe(item) && reviewMap.has(item.id)),
@@ -1081,7 +1091,7 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
       {section === 'suggestions' && (
         <>
           <dl className="assistant-admin__metrics" aria-label="Resumo das sugestões">
-            <div className="is-suggestions"><Music2 /><dt>Sugestões</dt><dd>{suggestions.length}</dd></div>
+            <div className="is-suggestions"><Music2 /><dt>Sugestões</dt><dd>{reviewableSuggestions.length}</dd></div>
             <div className="is-safe"><ShieldCheck /><dt>Seguras</dt><dd>{safeSuggestions.length}</dd></div>
             <div className="is-review"><AlertTriangle /><dt>Revisão</dt><dd>{reviewSuggestions.length}</dd></div>
             <div className="is-failed"><XCircle /><dt>Falhas</dt><dd>{failedCount}</dd></div>

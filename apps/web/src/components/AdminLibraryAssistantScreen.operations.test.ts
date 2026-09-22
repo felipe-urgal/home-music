@@ -61,6 +61,15 @@ describe('AdminLibraryAssistantScreen operational workflow', () => {
     expect(screen).toMatch(/filter === 'lyrics'.*capability !== 'lyrics'/s);
   });
 
+  it('remove sugestões resolvidas da lista operacional após recarregar', () => {
+    const screen = source();
+
+    expect(screen).toMatch(/reviewableSuggestions = useMemo/);
+    expect(screen).toMatch(/suggestions\.filter\(item => isOpen\(item\) \|\| item\.status === 'failed'\)/);
+    expect(screen).toMatch(/const filtered = reviewableSuggestions\.filter/);
+    expect(screen).toContain('<dd>{reviewableSuggestions.length}</dd>');
+  });
+
   it('mantém lyrics local dentro das Configurações em vez de launcher flutuante', () => {
     const screen = source();
 

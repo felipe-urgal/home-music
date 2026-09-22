@@ -348,9 +348,7 @@ export class LibraryAssistantReviewService {
   }
 
   private findSuggestionRecord(runId: string, suggestionId: string) {
-    return this.options.store
-      .listSuggestionRecords(runId, { limit: MAX_REVIEW_ITEMS })
-      .find(item => item.suggestion.id === suggestionId) ?? null;
+    return this.options.store.getSuggestionRecord(runId, suggestionId);
   }
 
   private toReviewItem(
