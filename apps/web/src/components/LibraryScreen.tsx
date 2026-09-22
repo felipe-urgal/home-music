@@ -208,7 +208,8 @@ export function LibraryScreen({
   async function deletePlaylistNow(playlist: Playlist) {
     if (playlist.source === 'smart') await deleteSmartPlaylist(playlist.id);
     else await deletePlaylist(playlist.id);
-    leavePlaylist();
+    if (desktopLayout) selectTab('folders');
+    else leavePlaylist();
   }
 
   async function removePlaylist(playlist: Playlist) {
