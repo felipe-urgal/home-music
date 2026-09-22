@@ -55,6 +55,7 @@ export function PlayerQueuePanel({ current, queue, currentIndex, offlineMode, on
   const touchPointerIdRef = useRef<number | null>(null);
   const sheetResizeRef = useRef<{ y: number; height: number } | null>(null);
   const queueToggleRef = useRef<HTMLButtonElement | null>(null);
+  const mobileQueueToggleRef = useRef<HTMLButtonElement | null>(null);
   const queueSheetRef = useRef<HTMLDivElement | null>(null);
   const queueSheetCloseRef = useRef<HTMLButtonElement | null>(null);
   const visibleStart = Math.max(0, currentIndex);
@@ -98,8 +99,7 @@ export function PlayerQueuePanel({ current, queue, currentIndex, offlineMode, on
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
-        setShowQueue(false);
-        window.requestAnimationFrame(() => queueToggleRef.current?.focus());
+        closeQueue();
         return;
       }
 
@@ -130,7 +130,14 @@ export function PlayerQueuePanel({ current, queue, currentIndex, offlineMode, on
 
   function closeQueue() {
     setShowQueue(false);
-    window.requestAnimationFrame(() => queueToggleRef.current?.focus());
+    window.requestAnimationFrame(() => {
+      const mobileToggle = mobileQueueToggleRef.current;
+      if (mobileToggle && mobileToggle.offsetParent !== null) {
+        mobileToggle.focus();
+        return;
+      }
+      queueToggleRef.current?.focus();
+    });
   }
 
   function reorderQueue(from: number, to: number) {
@@ -233,13 +240,14 @@ export function PlayerQueuePanel({ current, queue, currentIndex, offlineMode, on
       </button>
 
       <button
+        ref={mobileQueueToggleRef}
         type="button"
         className="queue-panel__toggle-mobile"
-        aria-label={nextTrack ? `Tocar próxima música: ${nextTrack.title}` : 'Fim da fila'}
-        disabled={!nextTrack}
-        onClick={() => {
-          if (nextTrack) onPlayTrack(nextTrack, queue);
-        }}
+        aria-label={nextTrack ? `Abrir fila. Próxima música: ${nextTrack.title}` : 'Abrir fila. Fim da fila'}
+        aria-expanded={showQueue}
+        aria-controls="mobile-queue-sheet"
+        disabled={!queue.length}
+        onClick={() => setShowQueue(true)}
       >
         {nextTrack ? (
           <>
