@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { CheckCircle2, Download, LoaderCircle, MoreHorizontal, Pause, Play, Trash2 } from 'lucide-react';
 import type { Track } from '@home-music/shared';
 import type { TrackSort } from '../library-utils';
@@ -5,6 +6,7 @@ import { useDesktopLayout } from '../useDesktopLayout';
 import { formatPlayerTime } from '../player-presentation';
 import { Artwork } from './Artwork';
 import { DesktopTrackTable } from './DesktopTrackTable';
+import { MobileSheet } from './MobileSheet';
 
 export type LibraryTrackOfflineProps = {
   offlineSupported: boolean;
@@ -49,6 +51,7 @@ export function LibraryTrackRows({
   onRemoveDownload
 }: LibraryTrackRowsProps) {
   const isDesktop = useDesktopLayout();
+  const [menuTrackId, setMenuTrackId] = useState<string | null>(null);
 
   if (isDesktop && desktopVariant === 'grid') {
     const offlineActionsAvailable = offlineSupported && Boolean(onDownload) && Boolean(onRemoveDownload);
@@ -158,8 +161,15 @@ export function LibraryTrackRows({
     );
   }
 
+  const menuTrack = tracks.find(track => track.id === menuTrackId);
+  const menuTrackDownloading = Boolean(menuTrack && downloadingIds.has(menuTrack.id));
+  const menuTrackDownloaded = Boolean(menuTrack && downloadedIds.has(menuTrack.id));
+  const menuTrackHasIndividual = Boolean(menuTrack && individualDownloadedIds.has(menuTrack.id));
+  const menuTrackIsCurrent = Boolean(menuTrack && menuTrack.id === current?.id);
+
   return (
-    <div className="library-track-list">
+    <>
+      <div className="library-track-list">
       {tracks.map(track => {
         const isCurrent = track.id === current?.id;
         const trackDuration = typeof track.duration === 'number' ? track.duration : 0;
@@ -180,18 +190,94 @@ export function LibraryTrackRows({
               </span>
               <span className="library-track__mobile-meta" aria-hidden="true">
                 <span className="library-track__duration">{formatPlayerTime(trackDuration)}</span>
-                <MoreHorizontal className="library-track__more" />
               </span>
               {isCurrent && playing
                 ? <span className="playing-indicator" aria-hidden="true">▶</span>
                 : <Play className="library-track__action" aria-hidden="true" />}
             </button>
-            {onRemove && (
-              <button className="track-action" type="button" aria-label={`Remover ${track.title} da playlist`} onClick={() => onRemove(track.id)}><Trash2 aria-hidden="true" /></button>
-            )}
+            <button
+              className="library-track__more-button"
+              type="button"
+              aria-label={`Opções de ${track.title}`}
+              aria-haspopup="dialog"
+              aria-expanded={menuTrackId === track.id}
+              onClick={() => setMenuTrackId(track.id)}
+            >
+              <MoreHorizontal aria-hidden="true" />
+            </button>
           </div>
         );
       })}
-    </div>
+      </div>
+
+      <MobileSheet
+        open={Boolean(menuTrack)}
+        title={menuTrack ? `Opções de ${menuTrack.title}` : 'Opções da música'}
+        onClose={() => setMenuTrackId(null)}
+        className="library-track-actions-sheet"
+      >
+        {menuTrack && (
+          <div className="mobile-sheet-actions">
+            <button
+              type="button"
+              onClick={() => {
+                if (menuTrackIsCurrent && playing) onTogglePlay();
+                else onPlayTrack(menuTrack, context);
+                setMenuTrackId(null);
+              }}
+            >
+              {menuTrackIsCurrent && playing ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
+              <span>{menuTrackIsCurrent && playing ? 'Pausar' : 'Tocar agora'}</span>
+              <span aria-hidden="true" />
+            </button>
+
+            {offlineSupported && (
+              <button
+                type="button"
+                disabled={menuTrackDownloading}
+                onClick={() => {
+                  const operation = menuTrackDownloaded && menuTrackHasIndividual
+                    ? onRemoveDownload(menuTrack)
+                    : onDownload(menuTrack);
+                  setMenuTrackId(null);
+                  void operation.catch(() => undefined);
+                }}
+              >
+                {menuTrackDownloading
+                  ? <LoaderCircle className="download-spinner" aria-hidden="true" />
+                  : menuTrackDownloaded && menuTrackHasIndividual
+                    ? <CheckCircle2 aria-hidden="true" />
+                    : <Download aria-hidden="true" />}
+                <span>
+                  {menuTrackDownloading
+                    ? 'Baixando…'
+                    : menuTrackDownloaded && menuTrackHasIndividual
+                      ? 'Remover download'
+                      : menuTrackDownloaded
+                        ? 'Manter como download individual'
+                        : 'Salvar offline'}
+                </span>
+                <span aria-hidden="true" />
+              </button>
+            )}
+
+            {onRemove && (
+              <button
+                className="is-danger"
+                type="button"
+                onClick={() => {
+                  onRemove(menuTrack.id);
+                  setMenuTrackId(null);
+                }}
+              >
+                <Trash2 aria-hidden="true" />
+                <span>Remover da playlist</span>
+                <span aria-hidden="true" />
+              </button>
+            )}
+          </div>
+        )}
+      </MobileSheet>
+    </>
   );
 }
