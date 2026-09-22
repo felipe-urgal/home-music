@@ -79,6 +79,7 @@ import './tv-login.css';
 import './tv-v2.css';
 import './tv-remote.css';
 import './tv-photo-background.css';
+import './mobile-responsive-polish.css';
 
 installPlaybackHistoryTracking();
 
