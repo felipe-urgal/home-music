@@ -506,6 +506,15 @@ export class LibraryAssistantStore {
     return rows.map(suggestionFromRow);
   }
 
+  getSuggestionRecord(runId: string, suggestionId: string) {
+    const row = this.db.prepare(`
+      SELECT * FROM library_assistant_suggestions
+      WHERE run_id = ? AND id = ?
+      LIMIT 1;
+    `).get(runId, suggestionId) as Row | undefined;
+    return row ? suggestionFromRow(row) : null;
+  }
+
   markSuggestionStale(id: string, updatedAt: string) {
     const result = this.db.prepare(`
       UPDATE library_assistant_suggestions

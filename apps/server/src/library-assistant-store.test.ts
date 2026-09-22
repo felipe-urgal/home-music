@@ -110,6 +110,29 @@ test('runs and typed suggestions survive reopen without duplicating the track ca
   });
 });
 
+test('direct suggestion lookup is not limited by paginated run history', async () => {
+  await withDatabase(databasePath => {
+    const store = new LibraryAssistantStore(databasePath);
+    store.createRun({
+      id: 'run-1',
+      capability: 'metadata',
+      libraryRevision: 1,
+      createdAt: '2026-09-06T12:00:00.000Z'
+    });
+    store.startRun('run-1', '2026-09-06T12:00:00.500Z');
+
+    store.insertSuggestions(Array.from({ length: 501 }, (_, index) => ({
+      ...suggestion,
+      id: `suggestion-${String(index + 1).padStart(3, '0')}`,
+      createdAt: `2026-09-06T12:00:${String(Math.floor(index / 100)).padStart(2, '0')}.${String(index % 100).padStart(3, '0')}Z`
+    })));
+
+    assert.equal(store.listSuggestionRecords('run-1', { limit: 500 }).length, 500);
+    assert.equal(store.getSuggestionRecord('run-1', 'suggestion-501')?.suggestion.id, 'suggestion-501');
+    store.close();
+  });
+});
+
 test('running analysis is marked failed safely after restart', async () => {
   await withDatabase(databasePath => {
     const first = new LibraryAssistantStore(databasePath);
