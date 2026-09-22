@@ -32,6 +32,30 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   const coverPlay = page.locator('.desktop-now-playing-screen__cover-play');
   const moreActions = nowPlaying.getByRole('button', { name: 'Mais opções da faixa' });
   const playerModeControls = page.locator('.desktop-now-playing-screen__controls');
+  const desktopLayout = page.locator('.desktop-layout');
+  const expandTopbar = page.getByRole('button', { name: 'Expandir barra superior' });
+
+  await expect(desktopLayout).toHaveAttribute('data-topbar-collapsed', 'true');
+  await expect(topbar).toHaveAttribute('aria-hidden', 'true');
+  await expect(expandTopbar).toBeVisible();
+
+  const collapsedTopbarBox = await topbar.boundingBox();
+  const collapsedSurfaceBox = await nowPlayingSurface.boundingBox();
+  expect(collapsedTopbarBox).not.toBeNull();
+  expect(collapsedSurfaceBox).not.toBeNull();
+  expect(collapsedTopbarBox!.y).toBeLessThan(0);
+  expect(collapsedSurfaceBox!.y).toBeLessThanOrEqual(18);
+
+  await expandTopbar.click();
+  await expect(desktopLayout).toHaveAttribute('data-topbar-collapsed', 'false');
+  await expect(topbar).not.toHaveAttribute('aria-hidden', 'true');
+  const collapseTopbar = page.getByRole('button', { name: 'Recolher barra superior' });
+  await expect(collapseTopbar).toBeVisible();
+
+  await collapseTopbar.click();
+  await expect(desktopLayout).toHaveAttribute('data-topbar-collapsed', 'true');
+  await expandTopbar.click();
+  await expect(desktopLayout).toHaveAttribute('data-topbar-collapsed', 'false');
 
   await expect(nowPlayingArt).toBeVisible();
   await expect(nowPlayingArtworkSurface).toBeVisible();
