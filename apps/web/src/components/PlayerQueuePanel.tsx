@@ -95,6 +95,11 @@ export function PlayerQueuePanel({ current, queue, currentIndex, offlineMode, on
   useEffect(() => {
     if (!showQueue) return;
 
+    const previousRootOverflow = document.documentElement.style.overflow;
+    const previousBodyOverflow = document.body.style.overflow;
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+
     const frame = window.requestAnimationFrame(() => queueSheetCloseRef.current?.focus());
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -125,6 +130,8 @@ export function PlayerQueuePanel({ current, queue, currentIndex, offlineMode, on
     return () => {
       window.cancelAnimationFrame(frame);
       window.removeEventListener('keydown', onKeyDown);
+      document.documentElement.style.overflow = previousRootOverflow;
+      document.body.style.overflow = previousBodyOverflow;
     };
   }, [showQueue]);
 
