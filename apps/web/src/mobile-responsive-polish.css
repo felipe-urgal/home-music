@@ -43,11 +43,20 @@
   pointer-events: auto;
 }
 
+.mobile-sheet__grabber-hitbox {
+  min-height: 22px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  cursor: ns-resize;
+  touch-action: none;
+}
+
 .mobile-sheet__grabber {
   width: 42px;
   height: 4px;
-  flex: 0 0 auto;
-  margin: 8px auto 2px;
+  display: block;
+  margin: 0;
   border-radius: 999px;
   background: rgba(255, 255, 255, .22);
 }
@@ -304,7 +313,7 @@
   }
 
   #root .desktop-layout[data-offline="false"] .progress-wrap input[type="range"] {
-    height: 40px !important;
+    height: 44px !important;
   }
 
   #root .desktop-layout[data-offline="false"] .player-screen-immersive .queue-panel--player {
