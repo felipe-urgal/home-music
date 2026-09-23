@@ -301,7 +301,7 @@ test('provider e URL direta atravessam o workbench crítico sem internet públic
   await page.locator('.admin-import-provider').getByRole('button', { name: 'Cancelar', exact: true }).click();
   await expect(page.getByText('Operação encerrada.', { exact: true })).toBeVisible();
 
-  await page.getByRole('tab', { name: /Arquivo ou URL direta/ }).click();
+  await page.getByRole('tab', { name: /Arquivo ou URL/ }).click();
   const directUrl = 'https://fixtures.invalid/audio/e2e.wav';
   await page.getByLabel('URL direta do arquivo').fill(directUrl);
   await page.getByRole('button', { name: 'Analisar URL', exact: true }).click();
