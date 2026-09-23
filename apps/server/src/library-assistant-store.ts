@@ -489,7 +489,7 @@ export class LibraryAssistantStore {
   ) {
     const status = filters.status;
     if (status && !suggestionStatuses.includes(status)) throw new TypeError('Status de sugestão inválido.');
-    const limit = Math.max(1, Math.min(500, Math.trunc(filters.limit ?? 200)));
+    const limit = Math.max(1, Math.min(5_000, Math.trunc(filters.limit ?? 200)));
     const rows = status
       ? this.db.prepare(`
           SELECT * FROM library_assistant_suggestions
