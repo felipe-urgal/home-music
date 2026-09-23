@@ -491,6 +491,17 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
         </section>
       ) : currentStep === 2 ? (
         <section className="admin-import-v4__stage">
+          {(activeUpload?.jobId && ['uploading', 'queued'].includes(activeUpload.stage)) || (activeUrlJob && ['processing', 'pending'].includes(activeUrlJob.status)) ? (
+            <div className="admin-import-v4__stage-actions">
+              <span>Você pode cancelar antes da importação ser adicionada à biblioteca.</span>
+              {activeUpload?.jobId && ['uploading', 'queued'].includes(activeUpload.stage) ? (
+                <button type="button" onClick={() => void cancelUpload()}><X /> Cancelar</button>
+              ) : (
+                <button type="button" disabled={urlCancelling} onClick={() => void cancelUrl()}><X /> Cancelar</button>
+              )}
+            </div>
+          ) : null}
+
           {validationJobs.length > 0 ? (
             mediaValidationConfig ? (
               <AdminImportMediaValidationPanel
@@ -505,6 +516,15 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
                 <div><strong>Validação indisponível</strong><small>Não foi possível carregar os perfis de saída.</small></div>
               </article>
             )
+          ) : activeProcessingJob?.source.type === 'provider' ? (
+            <div className="admin-import-v4__provider-progress">
+              <AdminExternalProviderPanel
+                compact
+                jobs={jobs}
+                onJobUpdated={handleUpdatedJob}
+                onRefresh={() => loadJobs(true)}
+              />
+            </div>
           ) : activeProcessingJob ? (
             <article className="admin-import-v4__preparing" role="status">
               <span className="admin-import-v4__preparing-icon"><FileAudio /></span>
