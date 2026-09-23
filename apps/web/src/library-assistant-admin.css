@@ -1515,9 +1515,56 @@
 }
 
 .assistant-v2__analyze {
+  width: 100%;
   border: 1px solid #269df2;
   background: linear-gradient(180deg,#209fff,#1085e3);
   color: #fff;
+}
+
+.assistant-v2__analyze-menu {
+  position: relative;
+}
+
+.assistant-v2__analyze-options {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  right: 0;
+  left: 0;
+  display: grid;
+  gap: 2px;
+  padding: 6px;
+  border: 1px solid rgba(91,121,145,.42);
+  border-radius: 9px;
+  background: #101d27;
+  box-shadow: 0 14px 32px rgba(0,0,0,.35);
+}
+
+.assistant-v2__analyze-options button {
+  display: grid;
+  gap: 2px;
+  padding: 8px 9px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #dce8f0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.assistant-v2__analyze-options button:hover,
+.assistant-v2__analyze-options button:focus-visible {
+  background: rgba(43,151,229,.12);
+  outline: none;
+}
+
+.assistant-v2__analyze-options strong {
+  font-size: .69rem;
+}
+
+.assistant-v2__analyze-options small {
+  color: #7f96a8;
+  font-size: .59rem;
 }
 
 .assistant-v2__analyze svg {
