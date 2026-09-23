@@ -1,8 +1,3 @@
-import type {
-  OpenSubsonicAccountKey,
-  OpenSubsonicKeyCreateResponse,
-  OpenSubsonicKeysResponse
-} from '@home-music/shared/open-subsonic';
 import { apiFetch } from './api-client';
 
 export const MIN_ACCOUNT_PASSWORD_CHARACTERS = 6;
@@ -16,7 +11,6 @@ export type AccountSession = {
   expiresAt: number;
 };
 
-export type AccountOpenSubsonicKey = OpenSubsonicAccountKey;
 
 type RevokeOtherSessionsResponse = {
   revoked: number;
@@ -43,15 +37,6 @@ function isAccountSession(value: unknown): value is AccountSession {
     && Number.isFinite(session.createdAt)
     && Number.isFinite(session.lastSeenAt)
     && Number.isFinite(session.expiresAt);
-}
-
-function isOpenSubsonicKey(value: unknown): value is OpenSubsonicAccountKey {
-  if (!value || typeof value !== 'object') return false;
-  const key = value as Partial<OpenSubsonicAccountKey>;
-  return typeof key.id === 'string'
-    && typeof key.name === 'string'
-    && typeof key.hint === 'string'
-    && typeof key.createdAt === 'string';
 }
 
 export function passwordChangeValidation(
@@ -116,38 +101,3 @@ export async function revokeOtherSessions() {
   return Number(body.revoked);
 }
 
-export async function listOpenSubsonicKeys() {
-  const response = await apiFetch('/api/auth/open-subsonic/keys', { cache: 'no-store' });
-  if (!response.ok) throw new Error(await responseError(response));
-  const body = await response.json() as Partial<OpenSubsonicKeysResponse> & { keys?: unknown[] };
-  if (!Array.isArray(body.keys) || !body.keys.every(isOpenSubsonicKey)) {
-    throw new Error('Resposta inválida ao carregar chaves de aplicativos.');
-  }
-  return body.keys;
-}
-
-export async function createOpenSubsonicKey(name: string) {
-  const response = await apiFetch('/api/auth/open-subsonic/keys', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Home-Music-Request': '1'
-    },
-    body: JSON.stringify({ name })
-  });
-  if (!response.ok) throw new Error(await responseError(response));
-
-  const body = await response.json() as Partial<OpenSubsonicKeyCreateResponse>;
-  if (!isOpenSubsonicKey(body.key) || typeof body.token !== 'string' || !body.token.startsWith('hm_os_')) {
-    throw new Error('Resposta inválida ao criar chave de aplicativo.');
-  }
-  return { key: body.key, token: body.token } satisfies OpenSubsonicKeyCreateResponse;
-}
-
-export async function revokeOpenSubsonicKey(id: string) {
-  const response = await apiFetch(`/api/auth/open-subsonic/keys/${encodeURIComponent(id)}`, {
-    method: 'DELETE',
-    headers: { 'X-Home-Music-Request': '1' }
-  });
-  if (!response.ok) throw new Error(await responseError(response));
-}
