@@ -257,8 +257,8 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   expect(headphonesBackground).toContain('account-v3-headphones.webp');
   await expect(accountV3.getByRole('button', { name: 'Alterar senha' })).toBeVisible();
   await expect(accountV3.getByRole('button', { name: 'Outros dispositivos' })).toBeVisible();
-  await expect(accountV3.getByRole('button', { name: 'Apps e integrações' })).toBeVisible();
-  await expect(accountV3.getByRole('button', { name: 'Importar dados pessoais' })).toBeVisible();
+  await expect(accountV3.getByRole('button', { name: 'Apps e integrações' })).toHaveCount(0);
+  await expect(accountV3.getByRole('button', { name: 'Importar dados pessoais' })).toHaveCount(0);
   await expect(accountV3.getByRole('button', { name: 'Reprodução' })).toBeVisible();
   await expect(accountV3.getByRole('button', { name: 'Administração' })).toBeVisible();
   await expect(accountV3.getByRole('button', { name: 'Sair da conta' })).toBeVisible();
