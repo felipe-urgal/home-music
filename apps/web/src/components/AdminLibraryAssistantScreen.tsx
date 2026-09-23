@@ -426,6 +426,7 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
   const [filter, setFilter] = useState<Filter>('all');
   const [sort, setSort] = useState<Sort>('recent');
   const [search, setSearch] = useState('');
+  const [suggestionPage, setSuggestionPage] = useState(1);
   const [showHelp, setShowHelp] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [activeSuggestionId, setActiveSuggestionId] = useState<string | null>(null);
@@ -532,6 +533,11 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
   const activeTrackSelectedCount = useMemo(
     () => activeTrackSuggestions.filter(item => selected.has(item.id)).length,
     [activeTrackSuggestions, selected]
+  );
+  const suggestionPageCount = Math.max(1, Math.ceil(visibleSuggestions.length / 50));
+  const pagedVisibleSuggestions = useMemo(
+    () => visibleSuggestions.slice((suggestionPage - 1) * 50, suggestionPage * 50),
+    [suggestionPage, visibleSuggestions]
   );
 
   const load = useCallback(async (quiet = false) => {
@@ -677,7 +683,12 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
   useEffect(() => {
     setSelected(new Set());
     setActiveSuggestionId(null);
+    setSuggestionPage(1);
   }, [filter, latestRun?.id, policy, search]);
+
+  useEffect(() => {
+    if (suggestionPage > suggestionPageCount) setSuggestionPage(suggestionPageCount);
+  }, [suggestionPage, suggestionPageCount]);
 
   useEffect(() => {
     if (confirmReviewCount === 0 && !confirmReset) return;
@@ -1063,7 +1074,6 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
     ? Math.round((observed.cacheHits / cacheQueries) * 100)
     : 0;
   const completedChecks = progress.matched;
-  const unchangedChecks = progress.noMatch;
   const activeTypeCounts = {
     metadata: reviewableSuggestions.filter(item => item.target.capability === 'metadata').length,
     artwork: reviewableSuggestions.filter(item => item.target.capability === 'artwork').length,
@@ -1338,7 +1348,7 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
                   <div className="assistant-v2__empty"><Search /><span>Nenhuma sugestão neste filtro.</span></div>
                 ) : (
                   <div className="assistant-v2__table-body">
-                    {visibleSuggestions.map(suggestion => {
+                    {pagedVisibleSuggestions.map(suggestion => {
                       const item = reviewMap.get(suggestion.id);
                       const safe = isSafe(suggestion);
                       const selectedRow = activeSuggestion?.id === suggestion.id;
@@ -1389,7 +1399,13 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
 
                 <footer className="assistant-v2__table-footer">
                   <span>{visibleSuggestions.length.toLocaleString('pt-BR')} sugestões</span>
-                  <div><span>50 por página</span><button type="button" disabled><ChevronLeft /></button><button type="button" className="is-active">1</button><button type="button" disabled><ChevronRight /></button></div>
+                  <div>
+                    <span>50 por página</span>
+                    <button type="button" aria-label="Página anterior" disabled={suggestionPage <= 1} onClick={() => setSuggestionPage(value => Math.max(1, value - 1))}><ChevronLeft /></button>
+                    <button type="button" className="is-active">{suggestionPage}</button>
+                    {suggestionPageCount > 1 && <span>de {suggestionPageCount}</span>}
+                    <button type="button" aria-label="Próxima página" disabled={suggestionPage >= suggestionPageCount} onClick={() => setSuggestionPage(value => Math.min(suggestionPageCount, value + 1))}><ChevronRight /></button>
+                  </div>
                 </footer>
               </div>
 
