@@ -13,6 +13,9 @@ const MAX_ISSUE_MESSAGE_LENGTH = 240;
 type ActiveIntegrityCheck = {
   libraryRoot: string;
   issues: AdminLibraryIntegrityIssue[];
+  mediaProbe: AdminLibraryIntegrityStatus['mediaProbe'];
+  mediaProbeObserved: boolean;
+  mediaProbeUnavailableMessage: string | null;
 };
 
 type FfprobeRunResult = {
@@ -43,6 +46,7 @@ let activeCheck: ActiveIntegrityCheck | null = null;
 let lastLibraryRoot: string | null = null;
 let lastStatus: AdminLibraryIntegrityStatus = {
   checkedAt: null,
+  mediaProbe: { available: null, message: null },
   counts: { ...EMPTY_COUNTS },
   issues: []
 };
@@ -157,14 +161,28 @@ export async function probeMediaFile(
 }
 
 export function beginLibraryIntegrityCheck(libraryRoot: string) {
+  const sameRoot = lastLibraryRoot === libraryRoot;
   activeCheck = {
     libraryRoot,
-    issues: lastLibraryRoot === libraryRoot
+    issues: sameRoot
       ? lastStatus.issues
         .filter(issue => issue.kind !== 'unindexed-file')
         .map(issue => ({ ...issue }))
-      : []
+      : [],
+    mediaProbe: sameRoot
+      ? { ...lastStatus.mediaProbe }
+      : { available: null, message: null },
+    mediaProbeObserved: false,
+    mediaProbeUnavailableMessage: null
   };
+}
+
+export function recordLibraryMediaProbeResult(result: MediaFileProbeResult) {
+  if (!activeCheck) return;
+  activeCheck.mediaProbeObserved = true;
+  if (result.status === 'unavailable') {
+    activeCheck.mediaProbeUnavailableMessage = result.message || 'ffprobe não está disponível no ambiente.';
+  }
 }
 
 export function hasLibraryIntegrityFileFailure(filePath: string) {
@@ -220,8 +238,14 @@ export function finishLibraryIntegrityCheck(checkedAt = new Date().toISOString()
     left.relativePath.localeCompare(right.relativePath, 'pt-BR') || left.kind.localeCompare(right.kind)
   );
   lastLibraryRoot = activeCheck.libraryRoot;
+  const mediaProbe = activeCheck.mediaProbeObserved
+    ? activeCheck.mediaProbeUnavailableMessage
+      ? { available: false, message: activeCheck.mediaProbeUnavailableMessage }
+      : { available: true, message: null }
+    : activeCheck.mediaProbe;
   lastStatus = {
     checkedAt,
+    mediaProbe,
     counts: countsFor(issues),
     issues
   };
@@ -236,8 +260,22 @@ export function abortLibraryIntegrityCheck() {
 export function getLibraryIntegrityStatus(): AdminLibraryIntegrityStatus {
   return {
     checkedAt: lastStatus.checkedAt,
+    mediaProbe: { ...lastStatus.mediaProbe },
     counts: { ...lastStatus.counts },
     issues: lastStatus.issues.map(issue => ({ ...issue }))
+  };
+}
+
+export function hydrateLibraryIntegrityStatus(
+  libraryRoot: string,
+  status: AdminLibraryIntegrityStatus
+) {
+  lastLibraryRoot = libraryRoot;
+  lastStatus = {
+    checkedAt: status.checkedAt,
+    mediaProbe: { ...status.mediaProbe },
+    counts: { ...status.counts },
+    issues: status.issues.map(issue => ({ ...issue }))
   };
 }
 
@@ -246,6 +284,7 @@ export function resetLibraryIntegrityStatusForTests() {
   lastLibraryRoot = null;
   lastStatus = {
     checkedAt: null,
+    mediaProbe: { available: null, message: null },
     counts: { ...EMPTY_COUNTS },
     issues: []
   };
