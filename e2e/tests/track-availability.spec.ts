@@ -86,9 +86,12 @@ test('admin desativa e reativa faixa preservando relações e estado após resca
     const row = page.locator('.admin-track-row').filter({ hasText: track.title }).first();
     await expect(row).toBeVisible();
     await expect(row).toContainText('Ativa');
-    await row.getByRole('button', { name: 'Desativar', exact: true }).click();
+    await row.getByRole('button', { name: `Abrir detalhes de ${track.title}` }).click();
+    const inspector = page.locator('.admin-tracks-v4__inspector');
+    await expect(inspector).toContainText(track.title);
+    await inspector.getByRole('button', { name: 'Desativar', exact: true }).click();
     await expect(row).toContainText('Desativada');
-    await expect(row.getByRole('button', { name: 'Reativar', exact: true })).toBeVisible();
+    await expect(inspector.getByRole('button', { name: 'Reativar', exact: true })).toBeVisible();
 
     const hiddenLibrary = await request.get('/api/library');
     const hiddenPayload = await hiddenLibrary.json() as { tracks: Array<{ id: string }> };
@@ -111,9 +114,8 @@ test('admin desativa e reativa faixa preservando relações e estado após resca
     const adminPayload = await adminTracksAfterScan.json() as { tracks: Array<{ id: string; enabled: boolean }> };
     expect(adminPayload.tracks.find(item => item.id === track.id)?.enabled).toBe(false);
 
-    await page.getByRole('button', { name: 'Atualizar músicas', exact: true }).click();
     await expect(row).toContainText('Desativada');
-    await row.getByRole('button', { name: 'Reativar', exact: true }).click();
+    await inspector.getByRole('button', { name: 'Reativar', exact: true }).click();
     await expect(row).toContainText('Ativa');
 
     const restoredLibrary = await request.get('/api/library');

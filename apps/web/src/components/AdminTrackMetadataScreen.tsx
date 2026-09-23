@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
+  AdminLibraryOverviewResponse,
   AdminTrack,
   AdminTrackCoverResponse,
   AdminTrackMetadataResponse,
@@ -7,13 +8,15 @@ import type {
 } from '@home-music/shared';
 import type { MissingCoverFillJob } from '@home-music/shared/library-assistant';
 import {
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
-  Database,
+  Circle,
+  Image as ImageIcon,
+  Info,
   LoaderCircle,
   Music2,
   Pencil,
-  RefreshCw,
   RotateCcw,
   Save,
   Search,
@@ -22,6 +25,7 @@ import {
   X
 } from 'lucide-react';
 import { adminCoverUrl, validateAdminCoverFile } from '../admin-track-cover';
+import { getAdminLibraryOverview } from '../admin-library-client';
 import { buildTrackMetadataOverridePatch } from '../admin-track-metadata';
 import {
   generateAdminTrackCover,
@@ -57,8 +61,17 @@ type EditorFeedback = {
 };
 
 type SavingAction = 'text-save' | 'text-reset' | 'cover-save' | 'cover-reset' | 'cover-generate' | null;
+type MetadataFilter = 'all' | 'missingTitle' | 'missingCover' | 'unknownArtist' | 'unknownAlbum';
 
 const PAGE_SIZE = 50;
+
+const FILTER_LABELS: Record<MetadataFilter, string> = {
+  all: 'Todas',
+  missingTitle: 'Sem título',
+  missingCover: 'Sem capa',
+  unknownArtist: 'Artista desconhecido',
+  unknownAlbum: 'Álbum desconhecido'
+};
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : 'Não foi possível concluir a operação.';
@@ -74,7 +87,7 @@ function formatBytes(bytes: number) {
 
 function applyEffectiveMetadata(track: AdminTrack, metadata: AdminTrackMetadataResponse): AdminTrack {
   if (track.id !== metadata.trackId) return track;
-  return { ...track, ...metadata.effective };
+  return { ...track, ...metadata.effective, metadataOverrideActive: Boolean(metadata.override.updatedAt) };
 }
 
 function applyEffectiveCover(track: AdminTrack, cover: AdminTrackCoverResponse): AdminTrack {
@@ -82,7 +95,8 @@ function applyEffectiveCover(track: AdminTrack, cover: AdminTrackCoverResponse):
   return {
     ...track,
     hasCover: cover.effectiveHasCover,
-    coverVersion: cover.override?.version
+    coverVersion: cover.override?.version,
+    coverOverrideActive: Boolean(cover.override)
   };
 }
 
@@ -100,16 +114,40 @@ function metadataChanged(metadata: AdminTrackMetadataResponse | null, draft: Edi
   );
 }
 
+function filterFromLabel(label: string | null | undefined): MetadataFilter | null {
+  const normalized = label?.trim().toLocaleLowerCase('pt-BR') ?? '';
+  if (normalized.includes('sem título')) return 'missingTitle';
+  if (normalized.includes('sem capa')) return 'missingCover';
+  if (normalized.includes('artista desconhecido')) return 'unknownArtist';
+  if (normalized.includes('álbum desconhecido')) return 'unknownAlbum';
+  return null;
+}
+
+function trackCoverUrl(track: AdminTrack) {
+  if (!track.hasCover) return null;
+  const version = track.coverVersion ? `?v=${encodeURIComponent(track.coverVersion)}` : '';
+  return `/api/tracks/${encodeURIComponent(track.id)}/cover${version}`;
+}
+
+function pageNumbers(current: number, total: number) {
+  if (total <= 7) return Array.from({ length: total }, (_, index) => index + 1);
+  const values = new Set([1, total, current - 1, current, current + 1]);
+  return [...values].filter(value => value >= 1 && value <= total).sort((a, b) => a - b);
+}
+
 export function AdminTrackMetadataScreen({
   onBack,
   initialHealthFilter = null,
   onHealthFilterCleared
 }: AdminTrackMetadataScreenProps) {
   const [tracks, setTracks] = useState<AdminTrack[]>([]);
+  const [overview, setOverview] = useState<AdminLibraryOverviewResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState('');
-  const [healthFilter, setHealthFilter] = useState<AdminMetadataHealthFilter | null>(initialHealthFilter);
+  const [filter, setFilter] = useState<MetadataFilter>(filterFromLabel(initialHealthFilter?.label) ?? 'all');
+  const [fallbackHealthFilter, setFallbackHealthFilter] = useState<AdminMetadataHealthFilter | null>(
+    filterFromLabel(initialHealthFilter?.label) ? null : initialHealthFilter
+  );
   const [page, setPage] = useState(1);
   const [editingTrackId, setEditingTrackId] = useState<string | null>(null);
   const [metadata, setMetadata] = useState<AdminTrackMetadataResponse | null>(null);
@@ -129,20 +167,28 @@ export function AdminTrackMetadataScreen({
   const operationBusy = savingAction !== null;
   const editorDirty = Boolean(coverFile) || metadataChanged(metadata, draft);
 
-  const healthTrackIds = useMemo(
-    () => healthFilter ? new Set(healthFilter.trackIds) : null,
-    [healthFilter]
-  );
+  const problemTrackIds = useMemo(() => {
+    const result: Partial<Record<MetadataFilter, Set<string>>> = {};
+    if (overview) {
+      result.missingTitle = new Set(overview.problems.trackIds.missingTitle);
+      result.missingCover = new Set(overview.problems.trackIds.missingCover);
+      result.unknownArtist = new Set(overview.problems.trackIds.unknownArtist);
+      result.unknownAlbum = new Set(overview.problems.trackIds.unknownAlbum);
+    }
+    if (fallbackHealthFilter) result.all = new Set(fallbackHealthFilter.trackIds);
+    return result;
+  }, [fallbackHealthFilter, overview]);
 
   const filteredTracks = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase('pt-BR');
     return tracks.filter(track => {
-      if (healthTrackIds && !healthTrackIds.has(track.id)) return false;
+      if (fallbackHealthFilter && !problemTrackIds.all?.has(track.id)) return false;
+      if (!fallbackHealthFilter && filter !== 'all' && !problemTrackIds[filter]?.has(track.id)) return false;
       if (!normalized) return true;
       return [track.title, track.artist, track.album, track.folder]
         .some(value => value.toLocaleLowerCase('pt-BR').includes(normalized));
     });
-  }, [healthTrackIds, query, tracks]);
+  }, [fallbackHealthFilter, filter, problemTrackIds, query, tracks]);
 
   const pageCount = Math.max(1, Math.ceil(filteredTracks.length / PAGE_SIZE));
   const visibleTracks = useMemo(
@@ -153,14 +199,19 @@ export function AdminTrackMetadataScreen({
     () => tracks.find(track => track.id === editingTrackId) ?? null,
     [editingTrackId, tracks]
   );
-  const missingCoverCount = useMemo(
-    () => tracks.filter(track => !track.hasCover).length,
-    [tracks]
-  );
+  const missingCoverCount = overview?.problems.missingCover ?? tracks.filter(track => !track.hasCover).length;
   const coverFillRunning = coverFillJob?.status === 'running';
+  const pagination = pageNumbers(page, pageCount);
 
   useEffect(() => {
-    setHealthFilter(initialHealthFilter);
+    const mapped = filterFromLabel(initialHealthFilter?.label);
+    if (mapped) {
+      setFilter(mapped);
+      setFallbackHealthFilter(null);
+    } else {
+      setFallbackHealthFilter(initialHealthFilter);
+      if (initialHealthFilter) setFilter('all');
+    }
   }, [initialHealthFilter]);
 
   useEffect(() => {
@@ -169,7 +220,7 @@ export function AdminTrackMetadataScreen({
 
   useEffect(() => {
     setPage(1);
-  }, [healthFilter, query]);
+  }, [filter, fallbackHealthFilter, query]);
 
   useEffect(() => {
     if (!coverFile) {
@@ -192,15 +243,19 @@ export function AdminTrackMetadataScreen({
   }, [editingTrackId, editorDirty, operationBusy]);
 
   async function loadTracks(background = false) {
-    if (background) setRefreshing(true); else setLoading(true);
+    if (!background) setLoading(true);
     setError(null);
     try {
-      const response = await listAdminTracks();
-      setTracks(response.tracks);
-    } catch (error) {
-      setError(errorMessage(error));
+      const [tracksResponse, overviewResponse] = await Promise.all([
+        listAdminTracks(),
+        getAdminLibraryOverview()
+      ]);
+      setTracks(tracksResponse.tracks);
+      setOverview(overviewResponse);
+    } catch (caught) {
+      setError(errorMessage(caught));
     } finally {
-      if (background) setRefreshing(false); else setLoading(false);
+      if (!background) setLoading(false);
     }
   }
 
@@ -214,8 +269,8 @@ export function AdminTrackMetadataScreen({
       .then(response => {
         if (!cancelled) setCoverFillJob(response.job);
       })
-      .catch(error => {
-        if (!cancelled) setCoverFillError(errorMessage(error));
+      .catch(caught => {
+        if (!cancelled) setCoverFillError(errorMessage(caught));
       });
     return () => { cancelled = true; };
   }, []);
@@ -228,7 +283,7 @@ export function AdminTrackMetadataScreen({
           setCoverFillJob(response.job);
           setCoverFillError(null);
         })
-        .catch(error => setCoverFillError(errorMessage(error)));
+        .catch(caught => setCoverFillError(errorMessage(caught)));
     }, 1500);
     return () => window.clearInterval(timer);
   }, [coverFillRunning]);
@@ -250,8 +305,8 @@ export function AdminTrackMetadataScreen({
     try {
       const response = await startMissingCoverFillJob();
       setCoverFillJob(response.job);
-    } catch (error) {
-      setCoverFillError(errorMessage(error));
+    } catch (caught) {
+      setCoverFillError(errorMessage(caught));
     }
   }
 
@@ -306,9 +361,9 @@ export function AdminTrackMetadataScreen({
       setMetadata(loadedMetadata);
       setCover(loadedCover);
       setDraft(loadedMetadata.effective);
-    } catch (error) {
+    } catch (caught) {
       if (editorRequestRef.current !== requestId) return;
-      setError(errorMessage(error));
+      setError(errorMessage(caught));
       clearEditor();
     } finally {
       if (editorRequestRef.current === requestId) setEditorLoading(false);
@@ -336,9 +391,9 @@ export function AdminTrackMetadataScreen({
       validateAdminCoverFile(file);
       setCoverFile(file);
       setEditorFeedback(null);
-    } catch (error) {
+    } catch (caught) {
       setCoverFile(null);
-      setEditorFeedback({ message: errorMessage(error), error: true });
+      setEditorFeedback({ message: errorMessage(caught), error: true });
     }
   }
 
@@ -368,8 +423,9 @@ export function AdminTrackMetadataScreen({
       const patch = buildTrackMetadataOverridePatch(metadata.physical, draft);
       const updated = await updateAdminTrackMetadata(metadata.trackId, patch);
       commitMetadata(updated, 'Metadados salvos como override. O arquivo original não foi alterado.');
-    } catch (error) {
-      setEditorFeedback({ message: errorMessage(error), error: true });
+      void loadTracks(true);
+    } catch (caught) {
+      setEditorFeedback({ message: errorMessage(caught), error: true });
     } finally {
       setSavingAction(null);
     }
@@ -383,8 +439,9 @@ export function AdminTrackMetadataScreen({
     try {
       const updated = await resetAdminTrackMetadata(metadata.trackId);
       commitMetadata(updated, 'Overrides de texto removidos. A biblioteca voltou a exibir os metadados do arquivo.');
-    } catch (error) {
-      setEditorFeedback({ message: errorMessage(error), error: true });
+      void loadTracks(true);
+    } catch (caught) {
+      setEditorFeedback({ message: errorMessage(caught), error: true });
     } finally {
       setSavingAction(null);
     }
@@ -397,8 +454,9 @@ export function AdminTrackMetadataScreen({
     try {
       const updated = await generateAdminTrackCover(editingTrackId);
       commitCover(updated, 'Capa gerada materializada como override local. O arquivo de áudio original não foi alterado.');
-    } catch (error) {
-      setEditorFeedback({ message: errorMessage(error), error: true });
+      void loadTracks(true);
+    } catch (caught) {
+      setEditorFeedback({ message: errorMessage(caught), error: true });
     } finally {
       setSavingAction(null);
     }
@@ -412,8 +470,9 @@ export function AdminTrackMetadataScreen({
       validateAdminCoverFile(coverFile);
       const updated = await updateAdminTrackCover(editingTrackId, coverFile);
       commitCover(updated, 'Capa salva como override. O arquivo de áudio original não foi alterado.');
-    } catch (error) {
-      setEditorFeedback({ message: errorMessage(error), error: true });
+      void loadTracks(true);
+    } catch (caught) {
+      setEditorFeedback({ message: errorMessage(caught), error: true });
     } finally {
       setSavingAction(null);
     }
@@ -432,8 +491,9 @@ export function AdminTrackMetadataScreen({
           ? 'Override de capa removido. A capa do arquivo voltou a ser exibida.'
           : 'Override de capa removido. O arquivo original não possui capa.'
       );
-    } catch (error) {
-      setEditorFeedback({ message: errorMessage(error), error: true });
+      void loadTracks(true);
+    } catch (caught) {
+      setEditorFeedback({ message: errorMessage(caught), error: true });
     } finally {
       setSavingAction(null);
     }
@@ -441,263 +501,330 @@ export function AdminTrackMetadataScreen({
 
   const persistedCoverUrl = editingTrackId && cover ? adminCoverUrl(editingTrackId, cover) : null;
   const displayedCoverUrl = coverPreviewUrl ?? persistedCoverUrl;
+  const selectedHasOverride = Boolean(metadata?.override.updatedAt || cover?.override);
+
+  const selectFilter = (next: MetadataFilter) => {
+    if (operationBusy || (editorDirty && !confirmEditorDiscard())) return;
+    clearEditor();
+    setFallbackHealthFilter(null);
+    onHealthFilterCleared?.();
+    setFilter(next);
+  };
+
+  const clearFallbackFilter = () => {
+    if (operationBusy || (editorDirty && !confirmEditorDiscard())) return;
+    clearEditor();
+    setFallbackHealthFilter(null);
+    onHealthFilterCleared?.();
+    setFilter('all');
+  };
 
   return (
-    <section className="my-account-screen admin-metadata-screen admin-metadata-screen--v1" aria-labelledby="admin-metadata-title">
-      <header className="my-account-header">
-        <button className="icon-button" type="button" aria-label="Voltar" disabled={operationBusy} onClick={leaveScreen}><ChevronLeft /></button>
+    <section className="my-account-screen admin-metadata-screen admin-metadata-screen--v2" aria-labelledby="admin-metadata-title">
+      <header className="admin-metadata-v2__page-header">
+        <button className="admin-metadata-v2__back" type="button" aria-label="Voltar" disabled={operationBusy} onClick={leaveScreen}><ChevronLeft /></button>
         <div>
           <strong id="admin-metadata-title">Metadados</strong>
-          <small>Correções reversíveis de texto e capa</small>
+          <small>Correções reversíveis de texto e capa. Os arquivos originais permanecem intactos.</small>
         </div>
-        <span className="my-account-header__spacer" />
+        <div className="admin-metadata-v2__summary">
+          <span><Music2 /></span>
+          <div>
+            <strong>{tracks.length.toLocaleString('pt-BR')} faixas</strong>
+            <small>{missingCoverCount.toLocaleString('pt-BR')} sem capa</small>
+          </div>
+        </div>
       </header>
 
-      <div className="admin-metadata-overview admin-metadata-overview--v1">
-        <div className="admin-metadata-safety-note" role="note">
-          <Database />
-          <span><strong>Overrides no SQLite</strong><small>O arquivo de áudio original permanece intacto.</small></span>
-        </div>
-
-        {healthFilter && (
-          <div className="admin-metadata-health-filter admin-metadata-health-filter--v1" role="status">
-            <div>
-              <strong>{healthFilter.label}</strong>
-              <small>{healthFilter.trackIds.length.toLocaleString('pt-BR')} {healthFilter.trackIds.length === 1 ? 'faixa sinalizada' : 'faixas sinalizadas'}</small>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                setHealthFilter(null);
-                onHealthFilterCleared?.();
-              }}
-            ><X /> Mostrar todas</button>
-          </div>
-        )}
-
-        <section className="admin-tracks-toolbar admin-metadata-toolbar--v1" aria-label="Buscar metadados de músicas">
-          <label className="admin-tracks-search">
+      <div className="admin-metadata-v2">
+        <div className="admin-metadata-v2__top">
+          <label className="admin-metadata-v2__search">
             <Search />
             <input
               type="search"
               value={query}
+              disabled={operationBusy}
               onChange={event => setQuery(event.target.value)}
-              placeholder="Buscar título, artista, álbum ou pasta"
+              placeholder="Buscar título, artista, álbum ou pasta..."
               aria-label="Buscar músicas para editar metadados"
             />
           </label>
-          <button
-            className="admin-cover-fill-action"
-            type="button"
-            disabled={loading || coverFillRunning}
-            onClick={() => void startCoverFill()}
-          >
-            {coverFillRunning ? <LoaderCircle className="is-spinning" /> : <Sparkles />}
-            <span>Preencher capas ausentes</span>
-            {!coverFillRunning && missingCoverCount > 0 && <small>{missingCoverCount.toLocaleString('pt-BR')}</small>}
-          </button>
-          <button
-            className="admin-tracks-refresh"
-            type="button"
-            aria-label="Atualizar músicas"
-            disabled={loading || refreshing || operationBusy}
-            onClick={() => void loadTracks(true)}
-          >
-            <RefreshCw className={refreshing ? 'is-spinning' : ''} />
-          </button>
-        </section>
+
+          <section className="admin-metadata-v2__cover-fill-card">
+            <div>
+              <strong>Capas</strong>
+              <span>{missingCoverCount.toLocaleString('pt-BR')} músicas ainda não possuem uma capa física.</span>
+            </div>
+            <button
+              type="button"
+              disabled={loading || coverFillRunning}
+              onClick={() => void startCoverFill()}
+            >
+              {coverFillRunning ? <LoaderCircle className="is-spinning" /> : <Sparkles />}
+              Preencher capas ausentes
+            </button>
+          </section>
+        </div>
+
+        <nav className="admin-metadata-v2__filters" aria-label="Filtrar problemas de metadados">
+          {(Object.keys(FILTER_LABELS) as MetadataFilter[]).map(key => {
+            const count = key === 'all'
+              ? tracks.length
+              : key === 'missingTitle'
+                ? overview?.problems.missingTitle ?? 0
+                : key === 'missingCover'
+                  ? overview?.problems.missingCover ?? missingCoverCount
+                  : key === 'unknownArtist'
+                    ? overview?.problems.unknownArtist ?? 0
+                    : overview?.problems.unknownAlbum ?? 0;
+            const active = !fallbackHealthFilter && filter === key;
+            return (
+              <button type="button" key={key} className={active ? 'is-active' : ''} disabled={operationBusy} onClick={() => selectFilter(key)}>
+                {FILTER_LABELS[key]} <span>{count.toLocaleString('pt-BR')}</span>
+              </button>
+            );
+          })}
+          {fallbackHealthFilter && (
+            <button type="button" className="is-active is-custom" onClick={clearFallbackFilter}>
+              {fallbackHealthFilter.label} <span>{fallbackHealthFilter.trackIds.length.toLocaleString('pt-BR')}</span> <X />
+            </button>
+          )}
+        </nav>
 
         {coverFillJob && (
-          <div
-            className={`admin-cover-fill-status ${coverFillJob.status === 'failed' ? 'is-error' : coverFillJob.status === 'completed' ? 'is-success' : ''}`}
-            role="status"
-          >
-            <span>
-              {coverFillRunning ? <LoaderCircle className="is-spinning" /> : <Sparkles />}
-              <strong>{coverFillRunning ? 'Preenchendo capas' : coverFillJob.status === 'completed' ? 'Capas preenchidas' : 'Preenchimento interrompido'}</strong>
-            </span>
-            <small>{coverFillStatusText(coverFillJob)}</small>
+          <div className={`admin-metadata-v2__cover-progress ${coverFillJob.status === 'failed' ? 'is-error' : coverFillJob.status === 'completed' ? 'is-success' : ''}`} role="status">
+            <div>
+              {coverFillRunning ? <LoaderCircle className="is-spinning" /> : coverFillJob.status === 'completed' ? <CheckCircle2 /> : <Sparkles />}
+              <span>
+                <strong>{coverFillRunning ? 'Preenchendo capas' : coverFillJob.status === 'completed' ? 'Capas atualizadas' : 'Preenchimento interrompido'}</strong>
+                <small>{coverFillStatusText(coverFillJob)}</small>
+              </span>
+            </div>
+            {coverFillRunning && coverFillJob.total > 0 && (
+              <progress max={coverFillJob.total} value={coverFillJob.searched} />
+            )}
           </div>
         )}
+
         {coverFillError && <div className="admin-tracks-message is-error" role="alert">{coverFillError}</div>}
         {error && <div className="admin-tracks-message is-error" role="alert">{error}</div>}
         {feedback && <div className="admin-tracks-message is-success" role="status">{feedback}</div>}
 
-        <div className={`admin-metadata-workspace ${editingTrackId ? 'has-editor' : ''}`}>
-          <section className="admin-metadata-browser" aria-label="Músicas com metadados editáveis">
+        <div className="admin-metadata-v2__workspace">
+          <section className="admin-metadata-v2__list" aria-label="Músicas com metadados editáveis">
             {loading ? (
-              <div className="admin-tracks-state" role="status"><LoaderCircle className="is-spinning" /> Carregando músicas…</div>
+              <div className="admin-metadata-v2__state" role="status"><LoaderCircle className="is-spinning" /> Carregando músicas…</div>
             ) : filteredTracks.length === 0 ? (
-              <div className="admin-tracks-state"><Music2 /> {healthFilter ? 'Nenhuma música neste filtro.' : 'Nenhuma música encontrada.'}</div>
+              <div className="admin-metadata-v2__state"><Music2 /> Nenhuma música encontrada neste filtro.</div>
             ) : (
               <>
-                <header className="admin-metadata-browser__header">
-                  <div>
-                    <strong>Músicas</strong>
-                    <small>{filteredTracks.length.toLocaleString('pt-BR')} {filteredTracks.length === 1 ? 'resultado' : 'resultados'}</small>
-                  </div>
-                  {pageCount > 1 && <span>Página {page} de {pageCount}</span>}
-                </header>
-
-                <div className="admin-metadata-browser__rows">
+                <div className="admin-metadata-v2__rows">
                   {visibleTracks.map(track => {
                     const selected = editingTrackId === track.id;
+                    const coverUrl = trackCoverUrl(track);
+                    const overrideActive = Boolean(track.metadataOverrideActive || track.coverOverrideActive);
                     return (
                       <button
-                        className={`admin-metadata-row admin-metadata-row--v1 ${selected ? 'is-selected' : ''}`}
+                        className={`admin-metadata-v2__row ${selected ? 'is-selected' : ''}`}
                         type="button"
                         key={track.id}
                         aria-pressed={selected}
                         disabled={operationBusy || editorLoading}
                         onClick={() => void openEditor(track)}
                       >
-                        <span className="admin-track-row__icon is-active"><Music2 /></span>
-                        <span className="admin-track-row__body">
+                        <span className="admin-metadata-v2__thumb">
+                          {coverUrl
+                            ? <img src={coverUrl} alt="" onError={event => { event.currentTarget.style.display = 'none'; }} />
+                            : <ArtworkFallback track={track} />}
+                        </span>
+                        <span className="admin-metadata-v2__row-copy">
                           <strong>{track.title}</strong>
                           <small>{track.artist} · {track.album}</small>
-                          <small className="admin-track-row__folder">{track.folder}</small>
+                          <small>{track.folder}</small>
                         </span>
-                        <span className="admin-metadata-row__open" aria-hidden="true"><Pencil /></span>
+                        <span className={`admin-metadata-v2__row-state ${overrideActive ? 'is-override' : !track.hasCover ? 'is-missing' : 'is-clean'}`}>
+                          <i />
+                          {overrideActive ? 'Override ativo' : !track.hasCover ? 'Sem capa' : 'Sem overrides'}
+                        </span>
+                        <span className="admin-metadata-v2__row-open"><Pencil /></span>
                       </button>
                     );
                   })}
                 </div>
 
-                {pageCount > 1 && (
-                  <footer className="admin-tracks-pagination admin-metadata-pagination--v1">
-                    <span>Página {page} de {pageCount}</span>
-                    <div>
-                      <button type="button" aria-label="Página anterior" disabled={page <= 1 || operationBusy} onClick={() => setPage(value => value - 1)}><ChevronLeft /></button>
-                      <button type="button" aria-label="Próxima página" disabled={page >= pageCount || operationBusy} onClick={() => setPage(value => value + 1)}><ChevronRight /></button>
-                    </div>
-                  </footer>
-                )}
+                <footer className="admin-metadata-v2__pagination">
+                  <span>{filteredTracks.length.toLocaleString('pt-BR')} músicas</span>
+                  <div>
+                    <span className="admin-metadata-v2__page-size">50 por página</span>
+                    <button type="button" aria-label="Página anterior" disabled={page <= 1 || operationBusy} onClick={() => setPage(value => value - 1)}><ChevronLeft /></button>
+                    {pagination.map((value, index) => {
+                      const previous = pagination[index - 1];
+                      return (
+                        <span className="admin-metadata-v2__page-slot" key={value}>
+                          {previous && value - previous > 1 && <i>…</i>}
+                          <button type="button" className={value === page ? 'is-active' : ''} onClick={() => setPage(value)}>{value}</button>
+                        </span>
+                      );
+                    })}
+                    <button type="button" aria-label="Próxima página" disabled={page >= pageCount || operationBusy} onClick={() => setPage(value => value + 1)}><ChevronRight /></button>
+                  </div>
+                </footer>
               </>
             )}
           </section>
 
-          <aside className={`admin-metadata-side-editor ${editingTrackId ? 'is-open' : ''}`} aria-labelledby="admin-metadata-editor-title">
+          <aside className="admin-metadata-v2__inspector" aria-labelledby="admin-metadata-editor-title">
             {!editingTrackId ? (
-              <div className="admin-metadata-side-editor__empty">
+              <div className="admin-metadata-v2__inspector-empty">
                 <span><Pencil /></span>
                 <strong id="admin-metadata-editor-title">Selecione uma música</strong>
-                <small>Os campos e a capa aparecem aqui sem tirar você da lista.</small>
+                <small>Veja e corrija texto e capa sem alterar o arquivo original.</small>
               </div>
             ) : editorLoading || !metadata || !draft || !cover ? (
-              <div className="admin-metadata-side-editor__loading" role="status">
+              <div className="admin-metadata-v2__inspector-loading" role="status">
                 <LoaderCircle className="is-spinning" />
                 <span><strong id="admin-metadata-editor-title">Carregando metadados</strong><small>{editingTrack?.title ?? 'Música selecionada'}</small></span>
               </div>
             ) : (
-              <form className="admin-metadata-side-editor__form" onSubmit={event => { event.preventDefault(); void saveMetadata(); }}>
-                <header className="admin-metadata-side-editor__header">
-                  <div>
-                    <small>Editando</small>
-                    <strong id="admin-metadata-editor-title">{draft.title}</strong>
-                    <span>{draft.artist} · {draft.album}</span>
-                  </div>
+              <form className="admin-metadata-v2__editor" onSubmit={event => { event.preventDefault(); void saveMetadata(); }}>
+                <header className="admin-metadata-v2__inspector-header">
+                  <strong>Detalhes da música</strong>
                   <button type="button" aria-label="Fechar edição de metadados" disabled={operationBusy} onClick={closeEditor}><X /></button>
                 </header>
 
+                <section className="admin-metadata-v2__identity">
+                  <span className="admin-metadata-v2__identity-cover">
+                    {displayedCoverUrl
+                      ? <img src={displayedCoverUrl} alt="" />
+                      : <ArtworkFallback track={editingTrack ?? undefined} />}
+                  </span>
+                  <div>
+                    <strong id="admin-metadata-editor-title">{draft.title}</strong>
+                    <span>{draft.artist}</span>
+                    <small>{draft.album}</small>
+                    <span className={`admin-metadata-v2__override-badge ${selectedHasOverride ? 'is-override' : ''}`}>
+                      {selectedHasOverride ? <Circle /> : <CheckCircle2 />}
+                      {selectedHasOverride ? 'Override ativo' : 'Sem overrides'}
+                    </span>
+                    {!selectedHasOverride && <small>Os metadados exibidos são os mesmos do arquivo original.</small>}
+                  </div>
+                </section>
+
                 {editorFeedback && (
-                  <div
-                    className={`admin-metadata-dialog__message admin-metadata-side-editor__message ${editorFeedback.error ? 'is-error' : 'is-success'}`}
-                    role={editorFeedback.error ? 'alert' : 'status'}
-                  >
+                  <div className={`admin-metadata-v2__editor-message ${editorFeedback.error ? 'is-error' : 'is-success'}`} role={editorFeedback.error ? 'alert' : 'status'}>
                     {editorFeedback.message}
                   </div>
                 )}
 
-                <div className="admin-metadata-fields admin-metadata-fields--side">
-                  <label>
-                    <span>Título</span>
-                    <input aria-label="Título" autoFocus required maxLength={240} value={draft.title} disabled={operationBusy} onChange={event => setField('title', event.target.value)} />
-                    <small>Arquivo original: {metadata.physical.title}</small>
-                  </label>
-                  <label>
-                    <span>Artista</span>
-                    <input aria-label="Artista" required maxLength={240} value={draft.artist} disabled={operationBusy} onChange={event => setField('artist', event.target.value)} />
-                    <small>Arquivo original: {metadata.physical.artist}</small>
-                  </label>
-                  <label>
-                    <span>Álbum</span>
-                    <input aria-label="Álbum" required maxLength={240} value={draft.album} disabled={operationBusy} onChange={event => setField('album', event.target.value)} />
-                    <small>Arquivo original: {metadata.physical.album}</small>
-                  </label>
-                  <label>
-                    <span>Artista do álbum</span>
-                    <input aria-label="Artista do álbum" required maxLength={240} value={draft.albumArtist} disabled={operationBusy} onChange={event => setField('albumArtist', event.target.value)} />
-                    <small>Arquivo original: {metadata.physical.albumArtist}</small>
-                  </label>
-                </div>
-
-                <section className="admin-cover-editor admin-cover-editor--side" aria-labelledby="admin-cover-editor-title">
-                  <div className={`admin-cover-editor__preview ${displayedCoverUrl ? '' : 'is-fallback'}`}>
-                    {displayedCoverUrl
-                      ? <img src={displayedCoverUrl} alt={`Preview da capa de ${draft.title}`} />
-                      : <ArtworkFallback track={editingTrack ?? undefined} />}
+                <section className="admin-metadata-v2__metadata-section">
+                  <div className="admin-metadata-v2__section-title">
+                    <strong>Metadados</strong>
+                    <span className={metadataChanged(metadata, draft) ? 'is-changed' : ''}>
+                      <CheckCircle2 /> {metadataChanged(metadata, draft) ? 'Alterações pendentes' : 'Igual ao original'}
+                    </span>
                   </div>
-                  <div className="admin-cover-editor__body">
-                    <div className="admin-cover-editor__heading">
-                      <div>
-                        <strong id="admin-cover-editor-title">Capa</strong>
-                        <small>
-                          {coverFile
-                            ? 'Preview local — ainda não enviado.'
-                            : cover.override
-                              ? `Override ativo · ${cover.override.width}×${cover.override.height} · ${formatBytes(cover.override.sizeBytes)}`
-                              : cover.physicalHasCover
-                                ? 'Usando a capa embutida no arquivo.'
-                                : 'O arquivo original não possui capa. Você pode materializar a capa gerada exibida ao lado.'}
-                        </small>
-                      </div>
-                      {cover.override && <span>Override</span>}
-                    </div>
 
-                    {coverFile && (
-                      <div className="admin-cover-editor__file">
-                        <strong>{coverFile.name}</strong>
-                        <small>{formatBytes(coverFile.size)} · {coverFile.type}</small>
-                      </div>
-                    )}
+                  <div className="admin-metadata-v2__fields">
+                    <label className="is-wide">
+                      <span>Título</span>
+                      <input aria-label="Título" autoFocus required maxLength={240} value={draft.title} disabled={operationBusy} onChange={event => setField('title', event.target.value)} />
+                      <small>Original: {metadata.physical.title}</small>
+                    </label>
+                    <label>
+                      <span>Artista</span>
+                      <input aria-label="Artista" required maxLength={240} value={draft.artist} disabled={operationBusy} onChange={event => setField('artist', event.target.value)} />
+                      <small>Original: {metadata.physical.artist}</small>
+                    </label>
+                    <label>
+                      <span>Álbum</span>
+                      <input aria-label="Álbum" required maxLength={240} value={draft.album} disabled={operationBusy} onChange={event => setField('album', event.target.value)} />
+                      <small>Original: {metadata.physical.album}</small>
+                    </label>
+                    <label className="is-wide">
+                      <span>Artista do álbum</span>
+                      <input aria-label="Artista do álbum" required maxLength={240} value={draft.albumArtist} disabled={operationBusy} onChange={event => setField('albumArtist', event.target.value)} />
+                      <small>Original: {metadata.physical.albumArtist}</small>
+                    </label>
+                  </div>
 
-                    <div className="admin-cover-editor__actions">
-                      {!cover.effectiveHasCover && !coverFile && (
-                        <button className="admin-cover-save" type="button" disabled={operationBusy} onClick={() => void generateCover()}>
-                          {savingAction === 'cover-generate' ? <LoaderCircle className="is-spinning" /> : <Sparkles />} Usar capa gerada
-                        </button>
-                      )}
-                      <label className={`admin-cover-upload ${operationBusy ? 'is-disabled' : ''}`}>
-                        <Upload /> {coverFile ? 'Trocar imagem' : 'Selecionar imagem'}
-                        <input
-                          type="file"
-                          accept="image/jpeg,image/png,image/webp"
-                          disabled={operationBusy}
-                          onChange={event => {
-                            const file = event.currentTarget.files?.[0] ?? null;
-                            event.currentTarget.value = '';
-                            selectCoverFile(file);
-                          }}
-                        />
-                      </label>
-                      <button className="admin-cover-save" type="button" disabled={operationBusy || !coverFile} onClick={() => void saveCover()}>
-                        {savingAction === 'cover-save' ? <LoaderCircle className="is-spinning" /> : <Save />} Salvar capa
-                      </button>
-                      <button className="admin-cover-reset" type="button" disabled={operationBusy || !cover.override} onClick={() => void resetCover()}>
-                        {savingAction === 'cover-reset' ? <LoaderCircle className="is-spinning" /> : <RotateCcw />} Restaurar capa
-                      </button>
-                    </div>
+                  <div className="admin-metadata-v2__text-actions">
+                    <button className="admin-metadata-reset" type="button" disabled={operationBusy || !hasOverride(metadata)} onClick={() => void resetMetadata()}>
+                      {savingAction === 'text-reset' ? <LoaderCircle className="is-spinning" /> : <RotateCcw />} Restaurar valores originais
+                    </button>
+                    <button className="admin-metadata-save" type="submit" disabled={operationBusy || !metadataChanged(metadata, draft)}>
+                      {savingAction === 'text-save' ? <LoaderCircle className="is-spinning" /> : <Save />} Salvar alterações
+                    </button>
                   </div>
                 </section>
 
-                <footer className="admin-metadata-side-editor__actions">
-                  <button className="admin-metadata-reset" type="button" disabled={operationBusy || !hasOverride(metadata)} onClick={() => void resetMetadata()}>
-                    {savingAction === 'text-reset' ? <LoaderCircle className="is-spinning" /> : <RotateCcw />} Restaurar texto
-                  </button>
-                  <button className="admin-metadata-save" type="submit" disabled={operationBusy || !metadataChanged(metadata, draft)}>
-                    {savingAction === 'text-save' ? <LoaderCircle className="is-spinning" /> : <Save />} Salvar texto
-                  </button>
-                </footer>
+                <section className="admin-metadata-v2__cover-section">
+                  <strong>Capa</strong>
+                  <div className="admin-metadata-v2__cover-content">
+                    <div className={`admin-metadata-v2__cover-preview ${displayedCoverUrl ? '' : 'is-fallback'}`}>
+                      {displayedCoverUrl
+                        ? <img src={displayedCoverUrl} alt={`Preview da capa de ${draft.title}`} />
+                        : <ArtworkFallback track={editingTrack ?? undefined} />}
+                    </div>
+                    <div className="admin-metadata-v2__cover-body">
+                      <div className="admin-metadata-v2__cover-description">
+                        <strong>
+                          {coverFile
+                            ? 'Nova imagem selecionada'
+                            : cover.override
+                              ? 'Override de capa ativo'
+                              : cover.physicalHasCover
+                                ? 'Usando a capa embutida no arquivo.'
+                                : 'O arquivo original não possui capa.'}
+                        </strong>
+                        <small>
+                          {coverFile
+                            ? `${coverFile.name} · ${formatBytes(coverFile.size)}`
+                            : cover.override
+                              ? `${cover.override.width}×${cover.override.height} · ${formatBytes(cover.override.sizeBytes)}`
+                              : cover.physicalHasCover
+                                ? 'Esta é a capa original da música.'
+                                : 'Você pode usar a capa gerada ou selecionar uma imagem.'}
+                        </small>
+                      </div>
+
+                      <div className="admin-metadata-v2__cover-actions">
+                        <label className={`admin-cover-upload ${operationBusy ? 'is-disabled' : ''}`}>
+                          <ImageIcon /> {coverFile ? 'Trocar imagem' : 'Selecionar nova imagem'}
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp"
+                            disabled={operationBusy}
+                            onChange={event => {
+                              const file = event.currentTarget.files?.[0] ?? null;
+                              event.currentTarget.value = '';
+                              selectCoverFile(file);
+                            }}
+                          />
+                        </label>
+                        {!cover.effectiveHasCover && !coverFile && (
+                          <button className="admin-cover-save" type="button" disabled={operationBusy} onClick={() => void generateCover()}>
+                            {savingAction === 'cover-generate' ? <LoaderCircle className="is-spinning" /> : <Sparkles />} Usar capa gerada
+                          </button>
+                        )}
+                        {coverFile && (
+                          <button className="admin-cover-save" type="button" disabled={operationBusy} onClick={() => void saveCover()}>
+                            {savingAction === 'cover-save' ? <LoaderCircle className="is-spinning" /> : <Upload />} Salvar capa
+                          </button>
+                        )}
+                        {cover.override && (
+                          <button className="admin-cover-reset" type="button" disabled={operationBusy} onClick={() => void resetCover()}>
+                            {savingAction === 'cover-reset' ? <LoaderCircle className="is-spinning" /> : <RotateCcw />} Restaurar capa original
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="admin-metadata-v2__cover-hint">
+                        <Info />
+                        <span>Imagens em JPEG, PNG ou WebP. Máximo de 8 MiB (até 4096×4096).</span>
+                      </div>
+                    </div>
+                  </div>
+                </section>
               </form>
             )}
           </aside>

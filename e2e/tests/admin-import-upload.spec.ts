@@ -118,6 +118,7 @@ test('admin envia por seletor e drag-and-drop, vê progresso e pode cancelar', a
   await login(page);
   await openImport(page);
 
+  await page.getByRole('tab', { name: /Arquivo ou URL/ }).click();
   await expect(page.getByText('Até 1 KB')).toBeVisible();
   await expect(page.getByText('MP3 · FLAC · WAV · M4A · AAC · OGG · OPUS')).toBeVisible();
 
@@ -127,28 +128,21 @@ test('admin envia por seletor e drag-and-drop, vê progresso e pode cancelar', a
     mimeType: 'audio/flac',
     buffer: Buffer.from('abcd')
   });
-  const status = page.locator('.admin-import-upload-status');
-  await expect(status).toContainText('selecao.flac');
-  await expect(status).toContainText('Aguardando validação');
-  await expect(status).toContainText('100%');
-  await expect(status).toContainText('ainda não entrou na biblioteca');
   expect(uploadedBodies).toContain('abcd');
 
-  await status.getByRole('button', { name: 'Cancelar selecao.flac' }).click();
-  await expect(status).toContainText('Cancelado');
+  const stageActions = page.locator('.admin-import-v4__stage-actions');
+  await expect(stageActions.getByRole('button', { name: 'Cancelar', exact: true })).toBeVisible();
+  await stageActions.getByRole('button', { name: 'Cancelar', exact: true }).click();
   expect(cancelledId).toBe('upload-1');
 
+  await expect(page.getByRole('tab', { name: /Arquivo ou URL/ })).toBeVisible();
   const dataTransfer = await page.evaluateHandle(() => {
     const value = new DataTransfer();
     value.items.add(new File(['drop'], 'arrastada.mp3', { type: 'audio/mpeg' }));
     return value;
   });
-  await page.locator('.admin-import-dropzone').dispatchEvent('drop', { dataTransfer });
-  await expect(status).toContainText('arrastada.mp3');
-  await expect(status).toContainText('100%');
+  await page.locator('.admin-import-v4__dropzone').dispatchEvent('drop', { dataTransfer });
+  await expect(page.locator('.admin-import-v4__stage-actions')).toBeVisible();
   expect(uploadedBodies).toContain('drop');
-
-  const queue = page.locator('.admin-import-job-list');
-  await expect(queue).toContainText('arrastada.mp3');
-  await expect(queue).toContainText('selecao.flac');
+  await expect(page.getByText('Histórico de importações')).toHaveCount(0);
 });
