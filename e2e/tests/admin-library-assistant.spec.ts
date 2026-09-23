@@ -107,7 +107,7 @@ test('Library Assistant revisa, aplica via override, atualiza player e sobrevive
     const suggestionCard = inspector.locator('.assistant-v2__suggestion-cards article').first();
     await suggestionCard.getByRole('checkbox').check();
     await inspector.getByRole('button', { name: /Aplicar 1 sugestões/ }).click();
-    await expect(page.locator('.assistant-admin__feedback')).toContainText('Sugestão aplicada');
+    await expect(page.locator('.assistant-admin__feedback')).toContainText('Lote concluído: 1 aplicada.');
     await expect(playerBar).toContainText('E2E Assistant Title');
 
     const effectiveResponse = await request.get('/api/library');
