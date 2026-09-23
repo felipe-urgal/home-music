@@ -278,6 +278,16 @@ export function registerAdminTrackRoutes(
     return response;
   });
 
+  app.get('/api/admin/library/duplicates', async (_request, reply) => {
+    reply.header('Cache-Control', 'private, no-store');
+    mutations.pruneResolvedTombstones();
+    try {
+      return { review: await duplicateReview.latest() };
+    } catch (error) {
+      return sendDuplicateReviewError(reply, error);
+    }
+  });
+
   app.post('/api/admin/library/duplicates/check', async (_request, reply) => {
     reply.header('Cache-Control', 'private, no-store');
     mutations.pruneResolvedTombstones();
