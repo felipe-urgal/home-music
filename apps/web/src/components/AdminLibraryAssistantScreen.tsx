@@ -84,19 +84,6 @@ type PolicyRow = {
 const TERMINAL_RUNS = new Set(['completed', 'failed', 'cancelled', 'stale']);
 const BATCH_SIZE = 100;
 const METADATA_FIELDS: readonly LibraryAssistantMetadataField[] = ['title', 'artist', 'album', 'albumArtist'];
-const FILTERS: readonly [Filter, string][] = [
-  ['all', 'Todas'],
-  ['metadata', 'Metadados'],
-  ['artwork', 'Capas'],
-  ['lyrics', 'Letras'],
-  ['review', 'Revisão'],
-  ['failed', 'Falhas']
-];
-const SECTIONS: readonly [Section, string][] = [
-  ['suggestions', 'Sugestões'],
-  ['processing', 'Processamento'],
-  ['settings', 'Configurações']
-];
 const FIELD_LABELS: Record<LibraryAssistantMetadataField, string> = {
   title: 'Título',
   artist: 'Artista',
@@ -203,36 +190,6 @@ function runTitle(run: LibraryAssistantRun | null) {
   return 'Análise concluída';
 }
 
-function runDescription(run: LibraryAssistantRun | null): readonly [string, string?] {
-  if (!run) {
-    return ['Enriqueça metadados, capas e letras com fontes externas confiáveis.', 'Nada é aplicado sem sua confirmação.'];
-  }
-  if (run.status === 'queued') {
-    return [
-      'A análise está aguardando o processamento começar.',
-      'As sugestões aparecerão automaticamente assim que a primeira faixa for processada.'
-    ];
-  }
-  if (run.status === 'running') {
-    return [
-      'Enriquecendo metadados e procurando capas e letras confiáveis.',
-      'Você já pode revisar e aplicar resultados prontos enquanto o restante da biblioteca continua sendo analisado.'
-    ];
-  }
-  if (run.status === 'failed') {
-    return [run.error?.message ?? 'O processamento foi interrompido.', 'Você pode iniciar uma nova análise.'];
-  }
-  if (run.status === 'cancelled') {
-    return ['O processamento foi cancelado.', 'Sugestões abertas desse processamento foram invalidadas.'];
-  }
-  if (run.status === 'stale') {
-    return ['A biblioteca mudou desde esta análise.', 'Execute uma nova análise para trabalhar com dados atuais.'];
-  }
-  return run.summary.total === 0
-    ? ['A análise terminou sem sugestões de metadata, capa ou letra.']
-    : [`${run.summary.total} sugestão${run.summary.total === 1 ? '' : 'ões'} encontrada${run.summary.total === 1 ? '' : 's'} para revisão.`];
-}
-
 function runStatusLabel(run: LibraryAssistantRun | null) {
   if (!run) return 'Aguardando';
   if (run.status === 'queued') return 'Na fila';
@@ -241,15 +198,6 @@ function runStatusLabel(run: LibraryAssistantRun | null) {
   if (run.status === 'failed') return 'Interrompida';
   if (run.status === 'cancelled') return 'Cancelada';
   return 'Desatualizada';
-}
-
-function formatDuration(durationMs: number) {
-  const minutes = Math.max(0, Math.round(durationMs / 60_000));
-  if (minutes < 1) return '<1 min';
-  if (minutes < 60) return `${minutes} min`;
-  const hours = Math.floor(minutes / 60);
-  const remainder = minutes % 60;
-  return remainder ? `${hours}h ${remainder}min` : `${hours}h`;
 }
 
 function formatRunDate(value: string) {
@@ -265,26 +213,6 @@ function mergeSuggestions(
   const byId = new Map(history.map(suggestion => [suggestion.id, suggestion]));
   for (const item of reviewItems) byId.set(item.suggestion.id, item.suggestion);
   return [...byId.values()];
-}
-
-function statusTone(suggestion: LibraryAssistantSuggestion) {
-  if (suggestion.status === 'failed') return 'is-error';
-  if (suggestion.status === 'applied') return 'is-safe';
-  if (suggestion.status === 'rejected' || suggestion.status === 'stale') return 'is-muted';
-  return isSafe(suggestion) ? 'is-safe' : 'is-review';
-}
-
-function rowStatusLabel(suggestion: LibraryAssistantSuggestion) {
-  if (suggestion.status === 'pending' || suggestion.status === 'review') {
-    if (suggestion.target.capability === 'artwork') return 'Capa para revisar';
-    if (suggestion.target.capability === 'lyrics') {
-      return isSafe(suggestion)
-        ? suggestion.target.synchronized ? 'Letra sincronizada' : 'Letra encontrada'
-        : 'Letra para revisar';
-    }
-    return isSafe(suggestion) ? 'Confiança alta' : 'Revisão';
-  }
-  return statusLabel(suggestion.status);
 }
 
 function artworkExpectedValue(target: LibraryAssistantArtworkTarget) {
@@ -464,7 +392,6 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
     () => analysisRuns.find(run => run.status === 'failed') ?? activeRuns[0] ?? latestRun,
     [activeRuns, analysisRuns, latestRun]
   );
-  const metadataRuns = useMemo(() => runs.filter(run => run.capability === 'metadata'), [runs]);
   const runActive = activeRuns.length > 0;
   const reviewMap = useMemo(() => new Map(reviewItems.map(item => [item.suggestion.id, item])), [reviewItems]);
   const reviewableSuggestions = useMemo(
@@ -509,15 +436,7 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
     () => visibleSuggestions.filter(item => canApplyInBatch(item) && reviewMap.has(item.id)),
     [reviewMap, visibleSuggestions]
   );
-  const configuredBulkSuggestions = useMemo(
-    () => suggestions.filter(item => (
-      policyModeForSuggestion(policy, item) === 'bulk'
-      && canApplyInBatch(item)
-      && isSafe(item)
-      && reviewMap.has(item.id)
-    )),
-    [policy, reviewMap, suggestions]
-  );
+
 
   const activeSuggestion = useMemo(
     () => visibleSuggestions.find(item => item.id === activeSuggestionId) ?? visibleSuggestions[0] ?? null,
@@ -993,9 +912,6 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
     await applySuggestions(chosen, reviewConfirmed);
   }
 
-  async function applyConfiguredBulk() {
-    await applySuggestions(configuredBulkSuggestions);
-  }
 
   async function updatePolicyMode(key: LibraryAssistantReviewPolicyKey, mode: LibraryAssistantReviewMode) {
     if (!policyReady || savingPolicy || mutating || (key === 'artwork' && mode === 'bulk')) return;
@@ -1061,18 +977,6 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
   const failedCount = Math.max(queueFailureCount, suggestionFailureCount);
   const failedRun = analysisRuns.some(run => run.status === 'failed');
   const allCurrentRunsCompleted = analysisRuns.length > 0 && analysisRuns.every(run => run.status === 'completed');
-  const noIncrementalChanges = allCurrentRunsCompleted && totalTracks === 0 && runs.length > analysisRuns.length;
-  const description = noIncrementalChanges
-    ? [
-        'Nenhuma faixa nova ou alterada precisou ser analisada.',
-        'Use “Limpar e reanalisar tudo” somente quando quiser descartar as sugestões abertas e refazer a análise completa.'
-      ] as const
-    : runDescription(statusRun);
-  const observed = progress.metrics;
-  const cacheQueries = observed ? observed.cacheHits + observed.cacheMisses : 0;
-  const cachePercent = observed && cacheQueries > 0
-    ? Math.round((observed.cacheHits / cacheQueries) * 100)
-    : 0;
   const completedChecks = progress.matched;
   const activeTypeCounts = {
     metadata: reviewableSuggestions.filter(item => item.target.capability === 'metadata').length,
