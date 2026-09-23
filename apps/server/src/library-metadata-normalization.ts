@@ -372,8 +372,15 @@ export class LibraryMetadataNormalizationStore {
 
   private loadEffectiveTracksBeforeAliases(): EffectiveMetadataTrack[] {
     const hasOverrides = this.hasMetadataOverrides();
+    const hasQuarantine = this.hasTable('media_quarantine');
     const overrideJoin = hasOverrides
       ? 'LEFT JOIN track_metadata_overrides o ON o.track_id = t.id'
+      : '';
+    const quarantineJoin = hasQuarantine
+      ? 'LEFT JOIN media_quarantine q ON q.track_id = t.id'
+      : '';
+    const quarantineWhere = hasQuarantine
+      ? 'WHERE q.track_id IS NULL'
       : '';
     const titleTitle = hasOverrides ? 'COALESCE(o.title, t.title)' : 't.title';
     const titleArtist = hasOverrides ? 'COALESCE(o.artist, t.artist)' : 't.artist';
@@ -386,7 +393,9 @@ export class LibraryMetadataNormalizationStore {
              ${titleAlbum} AS album,
              ${titleAlbumArtist} AS album_artist
       FROM tracks t
-      ${overrideJoin};
+      ${overrideJoin}
+      ${quarantineJoin}
+      ${quarantineWhere};
     `).all() as Row[];
     return rows.map(row => ({
       id: stringValue(row.id),
