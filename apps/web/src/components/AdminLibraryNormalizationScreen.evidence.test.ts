@@ -19,6 +19,6 @@ describe('AdminLibraryNormalizationScreen assistant evidence', () => {
 
     expect(screen).toContain('Grafia canônica');
     expect(screen).toContain('Associar variações');
-    expect(screen).toContain('nenhuma grafia é sugerida automaticamente');
+    expect(screen).toContain('Nenhuma grafia é sugerida automaticamente');
   });
 });
