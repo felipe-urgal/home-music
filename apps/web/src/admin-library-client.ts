@@ -60,6 +60,13 @@ export async function checkAdminLibraryIntegrity() {
   return response.json() as Promise<AdminLibraryOverviewResponse>;
 }
 
+export async function getAdminLibraryDuplicates() {
+  const response = await apiFetch('/api/admin/library/duplicates', { cache: 'no-store' });
+  if (!response.ok) throw new Error(await responseError(response));
+  const payload = await response.json() as { review: AdminLibraryDuplicateReviewResponse | null };
+  return payload.review;
+}
+
 export async function checkAdminLibraryDuplicates() {
   const response = await apiFetch('/api/admin/library/duplicates/check', {
     method: 'POST',
