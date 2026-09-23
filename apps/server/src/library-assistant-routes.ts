@@ -5,6 +5,7 @@ import type {
   AdminLibraryAssistantRunsResponse,
   AdminLibraryAssistantSuggestionsResponse,
   LibraryAssistantCapability,
+  LibraryAssistantMetadataField,
   LibraryAssistantRun,
   LibraryAssistantSuggestionStatus
 } from '@home-music/shared/library-assistant';
@@ -17,6 +18,7 @@ const SUGGESTION_STATUSES = new Set<LibraryAssistantSuggestionStatus>([
   'pending', 'review', 'applied', 'rejected', 'stale', 'failed'
 ]);
 const RUN_ID = /^[A-Za-z0-9._:-]{1,192}$/;
+const METADATA_FIELDS = new Set<LibraryAssistantMetadataField>(['title', 'artist', 'album', 'albumArtist']);
 
 function parseCapability(value: unknown): LibraryAssistantCapability | null {
   return typeof value === 'string' && CAPABILITIES.has(value as LibraryAssistantCapability)
@@ -34,6 +36,16 @@ function parseSuggestionStatus(value: unknown): LibraryAssistantSuggestionStatus
 function parseOptionalBoolean(value: unknown) {
   if (value == null) return false;
   return typeof value === 'boolean' ? value : null;
+}
+
+function parseMetadataFields(value: unknown) {
+  if (value == null) return undefined;
+  if (!Array.isArray(value) || value.length === 0 || value.length > METADATA_FIELDS.size) return null;
+  const fields = value.filter((field): field is LibraryAssistantMetadataField => (
+    typeof field === 'string' && METADATA_FIELDS.has(field as LibraryAssistantMetadataField)
+  ));
+  if (fields.length !== value.length || new Set(fields).size !== fields.length) return null;
+  return fields;
 }
 
 function parseLimit(value: unknown, fallback: number, maximum: number) {
@@ -61,7 +73,7 @@ export function registerLibraryAssistantRoutes(
   workQueue?: LibraryAssistantPersistentQueue,
   runMetrics?: LibraryAssistantRunMetrics
 ) {
-  app.post<{ Body: { capability?: unknown; full?: unknown } }>(
+  app.post<{ Body: { capability?: unknown; full?: unknown; fields?: unknown } }>(
     '/api/admin/library-assistant/runs',
     async (request, reply) => {
       reply.header('Cache-Control', 'private, no-store');
@@ -69,9 +81,14 @@ export function registerLibraryAssistantRoutes(
       if (!capability) return reply.code(400).send({ error: 'Capability do assistente inválida.' });
       const full = parseOptionalBoolean(request.body?.full);
       if (full == null) return reply.code(400).send({ error: 'Modo de reanálise inválido.' });
+      const fields = parseMetadataFields(request.body?.fields);
+      if (fields === null) return reply.code(400).send({ error: 'Campos de metadata inválidos.' });
+      if (fields && capability !== 'metadata') {
+        return reply.code(400).send({ error: 'Campos específicos só podem ser usados em análise de metadata.' });
+      }
 
       const response: AdminLibraryAssistantRunResponse = {
-        run: assistant.startRun(capability, request.user?.id, { full })
+        run: assistant.startRun(capability, request.user?.id, { full, fields })
       };
       return reply.code(202).send(response);
     }
