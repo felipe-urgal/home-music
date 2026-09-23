@@ -391,6 +391,63 @@
   padding: 18px;
 }
 
+
+.admin-import-v4__stage-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255,255,255,.06);
+  border-radius: 9px;
+  background: rgba(255,255,255,.018);
+}
+
+.admin-import-v4__stage-actions span {
+  color: #7f8fa0;
+  font-size: .73rem;
+}
+
+.admin-import-v4__stage-actions button {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 8px;
+  background: rgba(255,255,255,.02);
+  color: #d4dee7;
+  cursor: pointer;
+  font: inherit;
+  font-size: .73rem;
+}
+
+.admin-import-v4__stage-actions button svg {
+  width: 15px;
+  height: 15px;
+}
+
+.admin-import-v4__provider-progress .admin-import-provider {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.admin-import-v4__provider-progress .admin-import-provider__heading,
+.admin-import-v4__provider-progress .admin-import-provider__form {
+  display: none;
+}
+
+.admin-import-v4__provider-progress .admin-import-url-status,
+.admin-import-v4__provider-progress .admin-provider-batch {
+  margin: 0;
+}
+
 .admin-import-v4__preparing {
   min-height: 300px;
   display: grid;
