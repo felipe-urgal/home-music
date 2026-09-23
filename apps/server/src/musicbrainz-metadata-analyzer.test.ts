@@ -472,6 +472,7 @@ test('busca ampla vira fallback quando a consulta com álbum não retorna grava�
 test('metadata ausente pode usar filename seguro como apoio sem enviar path ou elevar confiança', async () => {
   const requests: URL[] = [];
   const analyzer = createMusicBrainzMetadataAnalyzer({
+    includeArtwork: false,
     getFileContext: () => ({ fileName: 'Artista - Cancao.flac', folderName: 'Album' }),
     fetchImpl: async input => {
       const url = new URL(String(input));
