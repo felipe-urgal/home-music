@@ -67,11 +67,14 @@ export async function startLibraryAssistantRun(
 }
 
 export async function startLibraryAssistantMetadataRun(options: { full?: boolean } = {}) {
-  const [metadata] = await Promise.all([
+  const [metadata, lyrics] = await Promise.all([
     startLibraryAssistantRun('metadata', options),
     startLibraryAssistantRun('lyrics', options)
   ]);
-  return metadata;
+  return {
+    run: metadata.run,
+    runs: [metadata.run, lyrics.run]
+  };
 }
 
 export async function startLibraryAssistantLyricsRun(options: { full?: boolean } = {}) {
@@ -91,6 +94,44 @@ export async function startMissingCoverFillJob() {
   });
   if (!response.ok) throw new Error(await responseError(response));
   return response.json() as Promise<AdminMissingCoverFillResponse>;
+}
+
+
+export type LibraryAssistantAutonomyState = {
+  config: {
+    enabled: boolean;
+    metadata: boolean;
+    fillMissingOnly: true;
+  };
+  activeRunId: string | null;
+  pendingRevision: number | null;
+  lastSummary: {
+    runId: string;
+    applied: number;
+    review: number;
+    stale: number;
+    failed: number;
+    finishedAt: string;
+  } | null;
+};
+
+export async function getLibraryAssistantAutonomy() {
+  const response = await apiFetch('/api/admin/library-assistant/autonomy', { cache: 'no-store' });
+  if (!response.ok) throw new Error(await responseError(response));
+  return response.json() as Promise<LibraryAssistantAutonomyState>;
+}
+
+export async function updateLibraryAssistantAutonomy(enabled: boolean) {
+  const response = await apiFetch('/api/admin/library-assistant/autonomy', {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Home-Music-Request': '1'
+    },
+    body: JSON.stringify({ enabled, metadata: true })
+  });
+  if (!response.ok) throw new Error(await responseError(response));
+  return response.json() as Promise<LibraryAssistantAutonomyState>;
 }
 
 export async function getLibraryAssistantRuns(limit = 30) {
@@ -118,7 +159,7 @@ export async function getLibraryAssistantSuggestions(
   runId: string,
   status?: LibraryAssistantSuggestionStatus
 ) {
-  const query = new URLSearchParams({ limit: '500' });
+  const query = new URLSearchParams({ limit: '5000' });
   if (status) query.set('status', status);
   const response = await apiFetch(
     `/api/admin/library-assistant/runs/${encodeURIComponent(runId)}/suggestions?${query}`,
@@ -128,7 +169,7 @@ export async function getLibraryAssistantSuggestions(
   return response.json() as Promise<AdminLibraryAssistantSuggestionsResponse>;
 }
 
-export async function getLibraryAssistantReview(limit = 500) {
+export async function getLibraryAssistantReview(limit = 5000) {
   const response = await apiFetch(`/api/admin/library-assistant/review?limit=${limit}`, { cache: 'no-store' });
   if (!response.ok) throw new Error(await responseError(response));
   return response.json() as Promise<AdminLibraryAssistantReviewResponse>;
