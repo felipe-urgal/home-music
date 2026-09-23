@@ -264,11 +264,11 @@ test('Library Assistant API validates capability, identifiers, filters and revie
       '/api/admin/library-assistant/runs?limit=0',
       '/api/admin/library-assistant/runs?limit=201',
       '/api/admin/library-assistant/runs/assistant-run-1/suggestions?status=unknown',
-      '/api/admin/library-assistant/runs/assistant-run-1/suggestions?limit=501',
+      '/api/admin/library-assistant/runs/assistant-run-1/suggestions?limit=5001',
       '/api/admin/library-assistant/runs/%2Fsecret',
       '/api/admin/library-assistant/runs/%2Fsecret/progress',
       '/api/admin/library-assistant/review?limit=0',
-      '/api/admin/library-assistant/review?limit=501'
+      '/api/admin/library-assistant/review?limit=5001'
     ]) {
       const response = await app.inject({ method: 'GET', url, headers: { cookie: cookie(adminToken) } });
       assert.equal(response.statusCode, 400, url);
