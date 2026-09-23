@@ -70,9 +70,6 @@ test('resolve capa uma vez por álbum e sugere para todas as faixas do grupo', a
         }]
       }), { status: 200 });
     }
-    if (url.hostname === 'coverartarchive.org' && url.pathname === '/release/release-1') {
-      return new Response(JSON.stringify({ images: [] }), { status: 404 });
-    }
     if (url.hostname === 'coverartarchive.org' && url.pathname === '/release-group/group-1') {
       return new Response(JSON.stringify({
         images: [{
@@ -111,7 +108,56 @@ test('resolve capa uma vez por álbum e sugere para todas as faixas do grupo', a
   );
 });
 
-test('não propaga capa quando o álbum é ambíguo', async () => {
+test('aceita uma capa coerente mesmo quando existem múltiplas edições do álbum', async () => {
+  const requests: string[] = [];
+  const fetchImpl = async (input: string | URL) => {
+    const url = new URL(String(input));
+    requests.push(url.pathname);
+    if (url.hostname === 'musicbrainz.org') {
+      return new Response(JSON.stringify({
+        releases: [
+          {
+            id: 'release-1',
+            title: 'As Quatro Estações',
+            'release-group': { id: 'group-1' },
+            'artist-credit': [{ name: 'Legião Urbana' }]
+          },
+          {
+            id: 'release-2',
+            title: 'As Quatro Estações',
+            'release-group': { id: 'group-2' },
+            'artist-credit': [{ name: 'Legião Urbana' }]
+          }
+        ]
+      }), { status: 200 });
+    }
+    if (url.pathname === '/release-group/group-1') {
+      return new Response(JSON.stringify({
+        images: [{
+          id: 'image-1',
+          front: true,
+          image: 'https://archive.org/download/cover/image.jpg',
+          thumbnails: {}
+        }]
+      }), { status: 200 });
+    }
+    throw new Error(`unexpected request: ${url}`);
+  };
+
+  const analyzer = createMusicBrainzAlbumArtworkAnalyzer({ fetchImpl });
+  const drafts = await analyzer.analyze({
+    runId: 'run-multiple-editions',
+    tracks: [track('one', 'Pais e Filhos')],
+    providers: providers()
+  });
+
+  assert.equal(drafts.length, 1);
+  assert.equal(drafts[0].capability, 'artwork');
+  assert.ok(requests.includes('/release-group/group-1'));
+  assert.ok(!requests.includes('/release/release-1'));
+});
+
+test('tenta outra edição coerente quando a primeira não tem artwork', async () => {
   const fetchImpl = async (input: string | URL) => {
     const url = new URL(String(input));
     if (url.hostname === 'musicbrainz.org') {
@@ -132,15 +178,32 @@ test('não propaga capa quando o álbum é ambíguo', async () => {
         ]
       }), { status: 200 });
     }
-    throw new Error('Cover Art Archive não deve ser consultado para resultado ambíguo.');
+    if (url.pathname === '/release-group/group-1' || url.pathname === '/release/release-1') {
+      return new Response(JSON.stringify({ images: [] }), { status: 404 });
+    }
+    if (url.pathname === '/release-group/group-2') {
+      return new Response(JSON.stringify({
+        images: [{
+          id: 'image-2',
+          front: true,
+          image: 'https://archive.org/download/cover/image-2.jpg',
+          thumbnails: {}
+        }]
+      }), { status: 200 });
+    }
+    throw new Error(`unexpected request: ${url}`);
   };
 
   const analyzer = createMusicBrainzAlbumArtworkAnalyzer({ fetchImpl });
   const drafts = await analyzer.analyze({
-    runId: 'run-ambiguous',
+    runId: 'run-second-edition',
     tracks: [track('one', 'Pais e Filhos')],
     providers: providers()
   });
 
-  assert.deepEqual(drafts, []);
+  assert.equal(drafts.length, 1);
+  assert.equal(
+    drafts[0].target.capability === 'artwork' ? drafts[0].target.musicBrainzReleaseId : null,
+    'release-2'
+  );
 });
