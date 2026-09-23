@@ -269,7 +269,15 @@ export function registerAdminTrackRoutes(
     syncPublicTrackIds(physicalTracks);
     const tracks = physicalTracks
       .filter(track => !mutations.hasHidden(track.id))
-      .map(track => coverOverrides.resolveTrack(metadataOverrides.resolveTrack(track)));
+      .map(track => {
+        const metadataOverrideActive = Boolean(metadataOverrides.read(track.id)?.updatedAt);
+        const coverOverrideActive = Boolean(coverOverrides.read(track.id));
+        return {
+          ...coverOverrides.resolveTrack(metadataOverrides.resolveTrack(track)),
+          metadataOverrideActive,
+          coverOverrideActive
+        };
+      });
     const response: AdminTracksResponse = {
       tracks,
       active: tracks.filter(track => track.enabled).length,
