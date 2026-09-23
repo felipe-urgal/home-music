@@ -270,7 +270,7 @@ export function registerAdminTrackRoutes(
     const tracks = physicalTracks
       .filter(track => !mutations.hasHidden(track.id))
       .map(track => {
-        const metadataOverrideActive = Boolean(metadataOverrides.read(track.id)?.updatedAt);
+        const metadataOverrideActive = metadataOverrides.hasOverride(track.id);
         const coverOverrideActive = Boolean(coverOverrides.read(track.id));
         return {
           ...coverOverrides.resolveTrack(metadataOverrides.resolveTrack(track)),
