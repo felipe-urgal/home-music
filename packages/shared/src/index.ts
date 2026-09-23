@@ -419,6 +419,8 @@ export type AdminTrackCoverResponse = {
 
 export type AdminTrack = Track & {
   enabled: boolean;
+  metadataOverrideActive?: boolean;
+  coverOverrideActive?: boolean;
 };
 
 export type AdminTracksResponse = {
