@@ -270,6 +270,7 @@ export type LibraryAssistantRunProgress = {
 export type AdminLibraryAssistantStartRunRequest = {
   capability: LibraryAssistantCapability;
   full?: boolean;
+  fields?: LibraryAssistantMetadataField[];
 };
 
 export type AdminLibraryAssistantRunResponse = {
