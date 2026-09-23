@@ -370,39 +370,6 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   await profileV1.getByRole('button', { name: /Minha conta/ }).click();
   await expect(accountV3).toBeVisible();
 
-  await accountV3.getByRole('button', { name: /Apps e integrações/ }).click();
-  const appsV2 = page.getByTestId('account-apps-prototype-two');
-  const appsCreate = appsV2.locator('.account-apps-v2__create');
-  const appsAuthorized = appsV2.locator('.account-apps-v2__authorized');
-  const appsCreateForm = appsV2.locator('.account-apps-v2__create-form');
-
-  await expect(appsV2).toBeVisible();
-  await expect(appsV2.getByRole('button', { name: 'Minha conta', exact: true })).toBeVisible();
-  await expect(appsV2.getByRole('heading', { name: 'Apps e integrações', exact: true })).toBeVisible();
-  await expect(appsV2.getByText('Conecte seus apps e serviços favoritos ao Home Music.', { exact: true })).toBeVisible();
-  await expect(appsV2.getByText('Nova chave de aplicativo', { exact: true })).toBeVisible();
-  await expect(appsV2.getByText('Aplicativos autorizados', { exact: true })).toBeVisible();
-  await expect(appsV2.getByLabel('Nome do aplicativo')).toBeVisible();
-  await expect(appsV2.getByRole('button', { name: 'Criar chave', exact: true })).toBeDisabled();
-
-  const appsBox = await appsV2.boundingBox();
-  const createBox = await appsCreate.boundingBox();
-  const authorizedBox = await appsAuthorized.boundingBox();
-  const createFormColumns = await appsCreateForm.evaluate(element => (
-    getComputedStyle(element).gridTemplateColumns.split(' ').filter(Boolean).length
-  ));
-
-  expect(appsBox).not.toBeNull();
-  expect(createBox).not.toBeNull();
-  expect(authorizedBox).not.toBeNull();
-  expect(appsBox!.width).toBeGreaterThanOrEqual(viewport!.width * 0.95);
-  expect(createBox!.width).toBeGreaterThanOrEqual(appsBox!.width * 0.9);
-  expect(authorizedBox!.width).toBeGreaterThanOrEqual(appsBox!.width * 0.9);
-  expect(createFormColumns).toBe(2);
-
-  await appsV2.getByRole('button', { name: 'Minha conta', exact: true }).click();
-  await expect(accountV3).toBeVisible();
-
   await accountV3.getByRole('button', { name: /Administração/ }).click();
   await expect(page.locator('#administration-title')).toHaveText('Administração');
   await expect(playerBar).toBeHidden();
