@@ -17,7 +17,7 @@ import type { LibraryAssistantStore, LibraryAssistantStoredSuggestion } from './
 import type { TrackLyricsOverrideStore, ManagedLyricsOrigin } from './track-lyrics-overrides.js';
 import type { TrackMetadataOverrideStore } from './track-metadata-overrides.js';
 
-const MAX_REVIEW_ITEMS = 500;
+const MAX_REVIEW_ITEMS = 5_000;
 const MAX_REVIEW_RUNS = 100;
 const MAX_BATCH_DECISIONS = 100;
 const OPEN_STATUSES = new Set<LibraryAssistantSuggestionStatus>(['pending', 'review']);

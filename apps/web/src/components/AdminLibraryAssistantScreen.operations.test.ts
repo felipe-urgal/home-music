@@ -32,18 +32,17 @@ describe('AdminLibraryAssistantScreen operational workflow', () => {
 
     expect(screen).toMatch(/suggestion\.target\.capability === 'artwork'/);
     expect(screen).toMatch(/expectedCurrentValue\(suggestion\)/);
-    expect(screen).toContain('capas continuam com aplicação individual');
+    expect(screen).toMatch(/Capas continuam individuais\./);
   });
 
-  it('mantém reset forte separado e simplifica a navegação principal', () => {
+  it('mantém reanálise forte separada e move configurações para o cabeçalho', () => {
     const screen = source();
 
     expect(screen).toMatch(/resetLibraryAssistantReview\(\)/);
     expect(screen).toMatch(/startLibraryAssistantMetadataRun\(\{ full: true \}\)/);
-    expect(screen).toMatch(/Limpar e reanalisar tudo/);
-    for (const label of ['Sugestões', 'Processamento', 'Configurações']) {
-      expect(screen).toContain(label);
-    }
+    expect(screen).toContain('Reanalisar toda a biblioteca');
+    expect(screen).toContain('Configurações');
+    expect(screen).toContain('assistant-v2__header-actions');
     expect(screen).not.toContain("['queue', 'Fila']");
     expect(screen).not.toContain("['statistics', 'Estatísticas']");
   });
@@ -52,7 +51,7 @@ describe('AdminLibraryAssistantScreen operational workflow', () => {
     const screen = source();
 
     expect(screen).toMatch(/run\.status === 'queued'\) return 'Análise na fila'/);
-    expect(screen).toMatch(/faixas aguardando processamento/);
+    expect(screen).toContain('Processamento em andamento');
     for (const label of ['Metadados', 'Capas', 'Letras', 'Revisão', 'Falhas']) {
       expect(screen).toContain(label);
     }
@@ -67,7 +66,7 @@ describe('AdminLibraryAssistantScreen operational workflow', () => {
     expect(screen).toMatch(/reviewableSuggestions = useMemo/);
     expect(screen).toMatch(/suggestions\.filter\(item => isOpen\(item\) \|\| item\.status === 'failed'\)/);
     expect(screen).toMatch(/const filtered = reviewableSuggestions\.filter/);
-    expect(screen).toContain('<dd>{reviewableSuggestions.length}</dd>');
+    expect(screen).toContain('{reviewableSuggestions.length.toLocaleString(\'pt-BR\')}');
   });
 
   it('mantém lyrics local dentro das Configurações em vez de launcher flutuante', () => {
@@ -96,22 +95,69 @@ describe('AdminLibraryAssistantScreen operational workflow', () => {
     expect(screen).toMatch(/<button autoFocus/);
   });
 
-  it('diferencia o total da biblioteca do escopo da execução', () => {
+  it('diferencia biblioteca, sugestões e processamento no novo hero', () => {
     const screen = source();
 
     expect(screen).toMatch(/listAdminTracks/);
-    expect(screen).toContain('músicas na biblioteca');
-    expect(screen).toContain('nesta análise');
-    expect(screen).toContain('<dt>Biblioteca</dt>');
-    expect(screen).toContain('<dt>Nesta análise</dt>');
-    expect(screen).toContain('faixas desta execução concluídas');
+    expect(screen).toContain('faixas analisadas');
+    expect(screen).toContain('com sugestões');
+    expect(screen).toContain('sem alterações');
+    expect(screen).toContain('Processamento finalizado');
+  });
+
+
+
+  it('implementa lista com inspetor lateral e paginação de 50 itens', () => {
+    const screen = source();
+
+    expect(screen).toContain('assistant-v2__workspace');
+    expect(screen).toContain('assistant-v2__table');
+    expect(screen).toContain('assistant-v2__inspector');
+    expect(screen).toMatch(/visibleSuggestions\.slice\(\(suggestionPage - 1\) \* 50, suggestionPage \* 50\)/);
+    expect(screen).toContain('50 por página');
+  });
+
+  it('mantém aplicação segura em lote separada da revisão manual', () => {
+    const screen = source();
+
+    expect(screen).toContain('Aplicar sugestões seguras');
+    expect(screen).toMatch(/applySuggestions\(safeSuggestions\)/);
+    expect(screen).toContain('precisam de revisão');
+    expect(screen).toContain('Exigem sua decisão');
+  });
+
+  it('coordena metadata e letras até ambos concluírem', () => {
+    const screen = source();
+
+    expect(screen).toMatch(/const latestLyricsRun = useMemo/);
+    expect(screen).toMatch(/const analysisRuns = useMemo/);
+    expect(screen).toMatch(/const runActive = activeRuns\.length > 0/);
+    expect(screen).toMatch(/Promise\.all\(currentRuns\.map\(run => getLibraryAssistantRunProgress\(run\.id\)\)\)/);
+    expect(screen).toMatch(/suggestionResponses\.flatMap/);
+  });
+
+  it('expõe automação segura em vez de manter comportamento de fundo oculto', () => {
+    const screen = source();
+
+    expect(screen).toContain('Automação segura');
+    expect(screen).toMatch(/somente campos de metadata vazios/i);
+    expect(screen).toMatch(/getLibraryAssistantAutonomy/);
+    expect(screen).toMatch(/updateLibraryAssistantAutonomy/);
+  });
+
+  it('usa nomes de política que descrevem o comportamento real', () => {
+    const screen = source();
+
+    expect(screen).toContain('Ocultar');
+    expect(screen).toContain('Revisar individualmente');
+    expect(screen).toContain('Permitir lote seguro');
   });
 
   it('explica que a reanálise completa percorre toda a biblioteca', () => {
     const screen = source();
 
-    expect(screen).toContain('todas as faixas da biblioteca serão analisadas novamente');
-    expect(screen).toContain('força uma nova análise de todas as faixas da biblioteca');
+    expect(screen).toContain('refazer a análise de toda a biblioteca');
+    expect(screen).toContain('Força uma nova análise de toda a biblioteca.');
     expect(screen).toContain('Reanálise completa de toda a biblioteca iniciada.');
   });
 

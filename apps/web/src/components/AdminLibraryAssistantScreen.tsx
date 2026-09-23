@@ -22,14 +22,18 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronLeft,
+  ChevronRight,
   Clock3,
+  FileText,
   Fingerprint,
+  HelpCircle,
+  Image as ImageIcon,
   Info,
   LoaderCircle,
-  MoreVertical,
   Music2,
   RefreshCw,
   Search,
+  Settings,
   ShieldCheck,
   Sparkles,
   X,
@@ -38,10 +42,10 @@ import {
 import { listAdminTracks } from '../admin-tracks-client';
 import {
   cancelLibraryAssistantRun,
-  clearLibraryAssistantManagedLyrics,
   decideLibraryAssistantBatch,
   decideLibraryAssistantSuggestion,
   fingerprintLibraryAssistantSuggestion,
+  getLibraryAssistantAutonomy,
   getLibraryAssistantFingerprintStatus,
   getLibraryAssistantReview,
   getLibraryAssistantReviewPolicy,
@@ -51,7 +55,9 @@ import {
   getLocalLyricsCapability,
   resetLibraryAssistantReview,
   startLibraryAssistantMetadataRun,
+  updateLibraryAssistantAutonomy,
   updateLibraryAssistantReviewPolicy,
+  type LibraryAssistantAutonomyState,
   type LibraryAssistantFingerprintStatus
 } from '../library-assistant-client';
 import { notifyLibraryChanged } from '../library-events';
@@ -75,20 +81,6 @@ type PolicyRow = {
 
 const TERMINAL_RUNS = new Set(['completed', 'failed', 'cancelled', 'stale']);
 const BATCH_SIZE = 100;
-const METADATA_FIELDS: readonly LibraryAssistantMetadataField[] = ['title', 'artist', 'album', 'albumArtist'];
-const FILTERS: readonly [Filter, string][] = [
-  ['all', 'Todas'],
-  ['metadata', 'Metadados'],
-  ['artwork', 'Capas'],
-  ['lyrics', 'Letras'],
-  ['review', 'Revisão'],
-  ['failed', 'Falhas']
-];
-const SECTIONS: readonly [Section, string][] = [
-  ['suggestions', 'Sugestões'],
-  ['processing', 'Processamento'],
-  ['settings', 'Configurações']
-];
 const FIELD_LABELS: Record<LibraryAssistantMetadataField, string> = {
   title: 'Título',
   artist: 'Artista',
@@ -96,9 +88,9 @@ const FIELD_LABELS: Record<LibraryAssistantMetadataField, string> = {
   albumArtist: 'Artista do álbum'
 };
 const POLICY_MODES: readonly [LibraryAssistantReviewMode, string][] = [
-  ['ignore', 'Ignorar'],
-  ['review', 'Revisar'],
-  ['bulk', 'Lote']
+  ['ignore', 'Ocultar'],
+  ['review', 'Revisar individualmente'],
+  ['bulk', 'Permitir lote seguro']
 ];
 const POLICY_ROWS: readonly PolicyRow[] = [
   {
@@ -174,17 +166,6 @@ function policyModeForSuggestion(
   return policy.lyrics;
 }
 
-function statusLabel(status: LibraryAssistantSuggestionStatus) {
-  return ({
-    pending: 'Pendente',
-    review: 'Revisão',
-    applied: 'Aplicada',
-    rejected: 'Rejeitada',
-    stale: 'Desatualizada',
-    failed: 'Falhou'
-  } satisfies Record<LibraryAssistantSuggestionStatus, string>)[status];
-}
-
 function runTitle(run: LibraryAssistantRun | null) {
   if (!run) return 'Pronto para analisar sua biblioteca';
   if (run.status === 'queued') return 'Análise na fila';
@@ -195,36 +176,6 @@ function runTitle(run: LibraryAssistantRun | null) {
   return 'Análise concluída';
 }
 
-function runDescription(run: LibraryAssistantRun | null): readonly [string, string?] {
-  if (!run) {
-    return ['Enriqueça metadados, capas e letras com fontes externas confiáveis.', 'Nada é aplicado sem sua confirmação.'];
-  }
-  if (run.status === 'queued') {
-    return [
-      'A análise está aguardando o processamento começar.',
-      'As sugestões aparecerão automaticamente assim que a primeira faixa for processada.'
-    ];
-  }
-  if (run.status === 'running') {
-    return [
-      'Enriquecendo metadados e procurando capas e letras confiáveis.',
-      'Você já pode revisar e aplicar resultados prontos enquanto o restante da biblioteca continua sendo analisado.'
-    ];
-  }
-  if (run.status === 'failed') {
-    return [run.error?.message ?? 'O processamento foi interrompido.', 'Você pode iniciar uma nova análise.'];
-  }
-  if (run.status === 'cancelled') {
-    return ['O processamento foi cancelado.', 'Sugestões abertas desse processamento foram invalidadas.'];
-  }
-  if (run.status === 'stale') {
-    return ['A biblioteca mudou desde esta análise.', 'Execute uma nova análise para trabalhar com dados atuais.'];
-  }
-  return run.summary.total === 0
-    ? ['A análise terminou sem sugestões de metadata, capa ou letra.']
-    : [`${run.summary.total} sugestão${run.summary.total === 1 ? '' : 'ões'} encontrada${run.summary.total === 1 ? '' : 's'} para revisão.`];
-}
-
 function runStatusLabel(run: LibraryAssistantRun | null) {
   if (!run) return 'Aguardando';
   if (run.status === 'queued') return 'Na fila';
@@ -233,15 +184,6 @@ function runStatusLabel(run: LibraryAssistantRun | null) {
   if (run.status === 'failed') return 'Interrompida';
   if (run.status === 'cancelled') return 'Cancelada';
   return 'Desatualizada';
-}
-
-function formatDuration(durationMs: number) {
-  const minutes = Math.max(0, Math.round(durationMs / 60_000));
-  if (minutes < 1) return '<1 min';
-  if (minutes < 60) return `${minutes} min`;
-  const hours = Math.floor(minutes / 60);
-  const remainder = minutes % 60;
-  return remainder ? `${hours}h ${remainder}min` : `${hours}h`;
 }
 
 function formatRunDate(value: string) {
@@ -259,26 +201,6 @@ function mergeSuggestions(
   return [...byId.values()];
 }
 
-function statusTone(suggestion: LibraryAssistantSuggestion) {
-  if (suggestion.status === 'failed') return 'is-error';
-  if (suggestion.status === 'applied') return 'is-safe';
-  if (suggestion.status === 'rejected' || suggestion.status === 'stale') return 'is-muted';
-  return isSafe(suggestion) ? 'is-safe' : 'is-review';
-}
-
-function rowStatusLabel(suggestion: LibraryAssistantSuggestion) {
-  if (suggestion.status === 'pending' || suggestion.status === 'review') {
-    if (suggestion.target.capability === 'artwork') return 'Capa para revisar';
-    if (suggestion.target.capability === 'lyrics') {
-      return isSafe(suggestion)
-        ? suggestion.target.synchronized ? 'Letra sincronizada' : 'Letra encontrada'
-        : 'Letra para revisar';
-    }
-    return isSafe(suggestion) ? 'Confiança alta' : 'Revisão';
-  }
-  return statusLabel(suggestion.status);
-}
-
 function artworkExpectedValue(target: LibraryAssistantArtworkTarget) {
   return target.currentHasCover ? target.currentCoverVersion ?? 'physical' : '';
 }
@@ -293,6 +215,19 @@ function capabilityLabel(suggestion: LibraryAssistantSuggestion) {
   if (suggestion.target.capability === 'artwork') return 'Capa';
   if (suggestion.target.capability === 'metadata') return FIELD_LABELS[suggestion.target.field];
   return 'Letra';
+}
+
+function provenanceLabel(source: LibraryAssistantSuggestion['provenance']['source']) {
+  return ({
+    local: 'Local',
+    musicbrainz: 'MusicBrainz',
+    'cover-art-archive': 'Cover Art Archive',
+    lrclib: 'LRCLIB',
+    acoustid: 'AcoustID',
+    generated: 'Gerada',
+    'local-transcription': 'Transcrição local',
+    'local-alignment': 'Alinhamento local'
+  } satisfies Record<LibraryAssistantSuggestion['provenance']['source'], string>)[source];
 }
 
 function rowDetail(suggestion: LibraryAssistantSuggestion, item?: LibraryAssistantReviewItem) {
@@ -340,6 +275,43 @@ function fingerprintIssueLabel(issue: LibraryAssistantFingerprintStatus['fpcalc'
   return 'Chromaprint indisponível';
 }
 
+function aggregateProgress(values: LibraryAssistantRunProgress[]) {
+  if (values.length === 0) return EMPTY_PROGRESS;
+  const metrics = values.map(value => value.metrics).filter((value): value is NonNullable<LibraryAssistantRunProgress['metrics']> => Boolean(value));
+  const aggregate: LibraryAssistantRunProgress = {
+    total: values.reduce((sum, value) => sum + value.total, 0),
+    processed: values.reduce((sum, value) => sum + value.processed, 0),
+    pending: values.reduce((sum, value) => sum + value.pending, 0),
+    processing: values.reduce((sum, value) => sum + value.processing, 0),
+    matched: values.reduce((sum, value) => sum + value.matched, 0),
+    noMatch: values.reduce((sum, value) => sum + value.noMatch, 0),
+    retry: values.reduce((sum, value) => sum + value.retry, 0),
+    failed: values.reduce((sum, value) => sum + value.failed, 0)
+  };
+  if (metrics.length > 0) {
+    aggregate.metrics = {
+      elapsedMs: Math.max(...metrics.map(value => value.elapsedMs)),
+      tracksPerSecond: metrics.reduce((sum, value) => sum + value.tracksPerSecond, 0),
+      etaMs: metrics.some(value => value.etaMs == null) ? null : Math.max(...metrics.map(value => value.etaMs ?? 0)),
+      searchAttempts: metrics.reduce((sum, value) => sum + value.searchAttempts, 0),
+      externalRequests: metrics.reduce((sum, value) => sum + value.externalRequests, 0),
+      cacheHits: metrics.reduce((sum, value) => sum + value.cacheHits, 0),
+      cacheMisses: metrics.reduce((sum, value) => sum + value.cacheMisses, 0),
+      rateLimitWaitMs: metrics.reduce((sum, value) => sum + value.rateLimitWaitMs, 0),
+      retriesTotal: metrics.reduce((sum, value) => sum + value.retriesTotal, 0),
+      retriesByReason: Object.assign({}, ...metrics.map(value => value.retriesByReason))
+    };
+  }
+  return aggregate;
+}
+
+function runsBelongTogether(left: LibraryAssistantRun | null, right: LibraryAssistantRun | null) {
+  if (!left || !right) return false;
+  const leftAt = Date.parse(left.createdAt);
+  const rightAt = Date.parse(right.createdAt);
+  return Number.isFinite(leftAt) && Number.isFinite(rightAt) && Math.abs(leftAt - rightAt) <= 10_000;
+}
+
 function AssistantTrackArtwork({ trackId }: { trackId: string }) {
   const [failed, setFailed] = useState(false);
   const url = `/api/tracks/${encodeURIComponent(trackId)}/cover`;
@@ -381,13 +353,18 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
   const [filter, setFilter] = useState<Filter>('all');
   const [sort, setSort] = useState<Sort>('recent');
   const [search, setSearch] = useState('');
+  const [suggestionPage, setSuggestionPage] = useState(1);
   const [showHelp, setShowHelp] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [activeSuggestionId, setActiveSuggestionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingPolicy, setLoadingPolicy] = useState(true);
   const [loadingFingerprintStatus, setLoadingFingerprintStatus] = useState(true);
   const [localLyricsCapability, setLocalLyricsCapability] = useState<LocalLyricsCapabilityResponse | null>(null);
   const [localLyricsCapabilityError, setLocalLyricsCapabilityError] = useState<string | null>(null);
+  const [autonomy, setAutonomy] = useState<LibraryAssistantAutonomyState | null>(null);
+  const [autonomyError, setAutonomyError] = useState<string | null>(null);
+  const [savingAutonomy, setSavingAutonomy] = useState(false);
   const [savingPolicy, setSavingPolicy] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [mutating, setMutating] = useState(false);
@@ -400,8 +377,21 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
   const fingerprintRequestVersion = useRef(0);
 
   const latestRun = useMemo(() => runs.find(run => run.capability === 'metadata') ?? null, [runs]);
-  const metadataRuns = useMemo(() => runs.filter(run => run.capability === 'metadata'), [runs]);
-  const runActive = Boolean(latestRun && !TERMINAL_RUNS.has(latestRun.status));
+  const latestLyricsRun = useMemo(() => runs.find(run => run.capability === 'lyrics') ?? null, [runs]);
+  const pairedLyricsRun = useMemo(
+    () => runsBelongTogether(latestRun, latestLyricsRun) ? latestLyricsRun : null,
+    [latestLyricsRun, latestRun]
+  );
+  const analysisRuns = useMemo(
+    () => [latestRun, pairedLyricsRun].filter((run): run is LibraryAssistantRun => Boolean(run)),
+    [latestRun, pairedLyricsRun]
+  );
+  const activeRuns = useMemo(() => analysisRuns.filter(run => !TERMINAL_RUNS.has(run.status)), [analysisRuns]);
+  const statusRun = useMemo(
+    () => analysisRuns.find(run => run.status === 'failed') ?? activeRuns[0] ?? latestRun,
+    [activeRuns, analysisRuns, latestRun]
+  );
+  const runActive = activeRuns.length > 0;
   const reviewMap = useMemo(() => new Map(reviewItems.map(item => [item.suggestion.id, item])), [reviewItems]);
   const reviewableSuggestions = useMemo(
     () => suggestions.filter(item => isOpen(item) || item.status === 'failed'),
@@ -445,14 +435,27 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
     () => visibleSuggestions.filter(item => canApplyInBatch(item) && reviewMap.has(item.id)),
     [reviewMap, visibleSuggestions]
   );
-  const configuredBulkSuggestions = useMemo(
-    () => suggestions.filter(item => (
-      policyModeForSuggestion(policy, item) === 'bulk'
-      && canApplyInBatch(item)
-      && isSafe(item)
-      && reviewMap.has(item.id)
-    )),
-    [policy, reviewMap, suggestions]
+
+
+  const activeSuggestion = useMemo(
+    () => visibleSuggestions.find(item => item.id === activeSuggestionId) ?? visibleSuggestions[0] ?? null,
+    [activeSuggestionId, visibleSuggestions]
+  );
+  const activeReviewItem = activeSuggestion ? reviewMap.get(activeSuggestion.id) ?? null : null;
+  const activeTrackSuggestions = useMemo(
+    () => activeSuggestion
+      ? visibleSuggestions.filter(item => item.target.trackId === activeSuggestion.target.trackId)
+      : [],
+    [activeSuggestion, visibleSuggestions]
+  );
+  const activeTrackSelectedCount = useMemo(
+    () => activeTrackSuggestions.filter(item => selected.has(item.id)).length,
+    [activeTrackSuggestions, selected]
+  );
+  const suggestionPageCount = Math.max(1, Math.ceil(visibleSuggestions.length / 50));
+  const pagedVisibleSuggestions = useMemo(
+    () => visibleSuggestions.slice((suggestionPage - 1) * 50, suggestionPage * 50),
+    [suggestionPage, visibleSuggestions]
   );
 
   const load = useCallback(async (quiet = false) => {
@@ -462,16 +465,22 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
       const runsResponse = await getLibraryAssistantRuns();
       if (version !== requestVersion.current) return;
       const metadataRun = runsResponse.runs.find(run => run.capability === 'metadata') ?? null;
-      const [reviewResponse, suggestionResponse, progressResponse] = await Promise.all([
-        getLibraryAssistantReview(),
-        metadataRun ? getLibraryAssistantSuggestions(metadataRun.id) : Promise.resolve({ suggestions: [] }),
-        metadataRun ? getLibraryAssistantRunProgress(metadataRun.id) : Promise.resolve({ progress: EMPTY_PROGRESS })
+      const lyricsRun = runsResponse.runs.find(run => run.capability === 'lyrics') ?? null;
+      const pairedLyrics = runsBelongTogether(metadataRun, lyricsRun) ? lyricsRun : null;
+      const currentRuns = [metadataRun, pairedLyrics].filter((run): run is LibraryAssistantRun => Boolean(run));
+      const [reviewResponse, suggestionResponses, progressResponses] = await Promise.all([
+        getLibraryAssistantReview(5_000),
+        Promise.all(currentRuns.map(run => getLibraryAssistantSuggestions(run.id))),
+        Promise.all(currentRuns.map(run => getLibraryAssistantRunProgress(run.id)))
       ]);
       if (version !== requestVersion.current) return;
       setRuns(runsResponse.runs);
       setReviewItems(reviewResponse.items);
-      setSuggestions(mergeSuggestions(suggestionResponse.suggestions, reviewResponse.items));
-      setProgress(progressResponse.progress);
+      setSuggestions(mergeSuggestions(
+        suggestionResponses.flatMap(response => response.suggestions),
+        reviewResponse.items
+      ));
+      setProgress(aggregateProgress(progressResponses.map(response => response.progress)));
     } catch (error) {
       if (version === requestVersion.current) {
         setFeedback({
@@ -532,6 +541,17 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
     }
   }, []);
 
+  const loadAutonomy = useCallback(async () => {
+    try {
+      const response = await getLibraryAssistantAutonomy();
+      setAutonomy(response);
+      setAutonomyError(null);
+    } catch (error) {
+      setAutonomy(null);
+      setAutonomyError(error instanceof Error ? error.message : 'Não foi possível carregar a automação segura.');
+    }
+  }, []);
+
   const loadFingerprintStatus = useCallback(async () => {
     const version = ++fingerprintRequestVersion.current;
     setLoadingFingerprintStatus(true);
@@ -555,12 +575,13 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
     void loadPolicy();
     void loadFingerprintStatus();
     void loadLocalLyricsCapability();
+    void loadAutonomy();
     return () => {
       requestVersion.current += 1;
       policyRequestVersion.current += 1;
       fingerprintRequestVersion.current += 1;
     };
-  }, [load, loadFingerprintStatus, loadLibraryCounts, loadLocalLyricsCapability, loadPolicy]);
+  }, [load, loadAutonomy, loadFingerprintStatus, loadLibraryCounts, loadLocalLyricsCapability, loadPolicy]);
 
   useEffect(() => {
     if (!runActive) return;
@@ -577,7 +598,15 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
     };
   }, [latestRun?.id, runActive, load]);
 
-  useEffect(() => setSelected(new Set()), [filter, latestRun?.id, policy, search]);
+  useEffect(() => {
+    setSelected(new Set());
+    setActiveSuggestionId(null);
+    setSuggestionPage(1);
+  }, [filter, latestRun?.id, policy, search]);
+
+  useEffect(() => {
+    if (suggestionPage > suggestionPageCount) setSuggestionPage(suggestionPageCount);
+  }, [suggestionPage, suggestionPageCount]);
 
   useEffect(() => {
     if (confirmReviewCount === 0 && !confirmReset) return;
@@ -595,8 +624,11 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
     setAnalyzing(true);
     setFeedback(null);
     try {
-      const run = (await startLibraryAssistantMetadataRun({ full })).run;
-      setRuns(current => [run, ...current.filter(item => item.id !== run.id)]);
+      const started = await startLibraryAssistantMetadataRun({ full });
+      setRuns(current => [
+        ...started.runs,
+        ...current.filter(item => !started.runs.some(run => run.id === item.id))
+      ]);
       setProgress(EMPTY_PROGRESS);
       setSuggestions([]);
       setReviewItems([]);
@@ -621,8 +653,11 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
     let invalidated: number | null = null;
     try {
       invalidated = (await resetLibraryAssistantReview()).invalidated;
-      const run = (await startLibraryAssistantMetadataRun({ full: true })).run;
-      setRuns(current => [run, ...current.filter(item => item.id !== run.id)]);
+      const started = await startLibraryAssistantMetadataRun({ full: true });
+      setRuns(current => [
+        ...started.runs,
+        ...current.filter(item => !started.runs.some(run => run.id === item.id))
+      ]);
       setProgress(EMPTY_PROGRESS);
       setSuggestions([]);
       setReviewItems([]);
@@ -648,14 +683,13 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
   }
 
   async function cancelAnalysis() {
-    const run = runs.find(item => item.capability === 'metadata' && !TERMINAL_RUNS.has(item.status));
-    if (!run) return;
+    if (activeRuns.length === 0) return;
     setMutating(true);
     try {
-      await cancelLibraryAssistantRun(run.id);
+      await cancelLibraryAssistantRun(activeRuns[0].id);
       setFeedback({
         kind: 'warning',
-        message: 'Análise cancelada. Sugestões abertas desse processamento foram invalidadas.'
+        message: 'Análise cancelada. Sugestões abertas desses processamentos foram invalidadas.'
       });
       await load(true);
     } catch (error) {
@@ -715,30 +749,6 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
       setFeedback({
         kind: 'error',
         message: error instanceof Error ? error.message : 'A decisão não pôde ser concluída.'
-      });
-    } finally {
-      setMutating(false);
-    }
-  }
-
-  async function clearLyrics(suggestion: LibraryAssistantSuggestion) {
-    if (suggestion.target.capability !== 'lyrics' || mutating) return;
-    setMutating(true);
-    setFeedback(null);
-    try {
-      const response = await clearLibraryAssistantManagedLyrics(suggestion.target.trackId);
-      notifyLibraryChanged();
-      setFeedback({
-        kind: 'success',
-        message: response.removed
-          ? 'Letra gerenciada removida. O sidecar local volta a ser usado automaticamente quando existir.'
-          : 'Não havia letra gerenciada para remover.'
-      });
-      await load(true);
-    } catch (error) {
-      setFeedback({
-        kind: 'error',
-        message: error instanceof Error ? error.message : 'Não foi possível remover a letra gerenciada.'
       });
     } finally {
       setMutating(false);
@@ -877,9 +887,6 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
     await applySuggestions(chosen, reviewConfirmed);
   }
 
-  async function applyConfiguredBulk() {
-    await applySuggestions(configuredBulkSuggestions);
-  }
 
   async function updatePolicyMode(key: LibraryAssistantReviewPolicyKey, mode: LibraryAssistantReviewMode) {
     if (!policyReady || savingPolicy || mutating || (key === 'artwork' && mode === 'bulk')) return;
@@ -906,6 +913,34 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
     }
   }
 
+  async function toggleAutonomy() {
+    if (savingAutonomy || !autonomy) return;
+    const nextEnabled = !autonomy.config.enabled;
+    if (
+      nextEnabled
+      && !window.confirm(
+        'Ativar automação segura?\n\nO Home Music poderá analisar mudanças em segundo plano e preencher automaticamente apenas campos de metadata vazios quando a sugestão tiver alta confiança. Capas, letras e campos já preenchidos continuam fora da aplicação automática.'
+      )
+    ) return;
+
+    setSavingAutonomy(true);
+    setAutonomyError(null);
+    try {
+      const response = await updateLibraryAssistantAutonomy(nextEnabled);
+      setAutonomy(response);
+      setFeedback({
+        kind: 'success',
+        message: nextEnabled
+          ? 'Automação segura ativada para campos de metadata vazios.'
+          : 'Automação segura desativada.'
+      });
+    } catch (error) {
+      setAutonomyError(error instanceof Error ? error.message : 'Não foi possível atualizar a automação segura.');
+    } finally {
+      setSavingAutonomy(false);
+    }
+  }
+
   const totalTracks = progress.total;
   const processedTracks = Math.min(progress.processed, totalTracks);
   const progressPercent = totalTracks > 0
@@ -913,64 +948,60 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
     : 0;
   const pendingTracks = progress.pending + progress.processing;
   const queueFailureCount = progress.failed;
-  const suggestionFailureCount = latestRun?.summary.failed ?? 0;
+  const suggestionFailureCount = analysisRuns.reduce((sum, run) => sum + run.summary.failed, 0);
   const failedCount = Math.max(queueFailureCount, suggestionFailureCount);
-  const failedRun = latestRun?.status === 'failed';
-  const noIncrementalChanges = latestRun?.status === 'completed' && totalTracks === 0 && runs.length > 1;
-  const description = noIncrementalChanges
-    ? [
-        'Nenhuma faixa nova ou alterada precisou ser analisada.',
-        'Use “Limpar e reanalisar tudo” somente quando quiser descartar as sugestões abertas e refazer a análise completa.'
-      ] as const
-    : runDescription(latestRun);
-  const observed = progress.metrics;
-  const cacheQueries = observed ? observed.cacheHits + observed.cacheMisses : 0;
-  const cachePercent = observed && cacheQueries > 0
-    ? Math.round((observed.cacheHits / cacheQueries) * 100)
-    : 0;
+  const failedRun = analysisRuns.some(run => run.status === 'failed');
+  const allCurrentRunsCompleted = analysisRuns.length > 0 && analysisRuns.every(run => run.status === 'completed');
+  const completedChecks = progress.matched;
+  const activeTypeCounts = {
+    metadata: reviewableSuggestions.filter(item => item.target.capability === 'metadata').length,
+    artwork: reviewableSuggestions.filter(item => item.target.capability === 'artwork').length,
+    lyrics: reviewableSuggestions.filter(item => item.target.capability === 'lyrics').length
+  };
+
+  const applyActiveTrackSuggestions = async () => {
+    const chosen = activeTrackSuggestions.filter(item => (
+      selected.has(item.id) && canApplyInBatch(item) && reviewMap.has(item.id)
+    ));
+    await applySuggestions(chosen);
+  };
+
   return (
-    <section className="assistant-admin" aria-labelledby="library-assistant-title">
-      <header className="assistant-admin__header">
-        <button className="assistant-admin__back" type="button" aria-label="Voltar" onClick={onBack}>
+    <section className="assistant-admin assistant-admin--prototype" aria-labelledby="library-assistant-title">
+      <header className="assistant-v2__header">
+        <button className="assistant-v2__back" type="button" aria-label="Voltar" onClick={onBack}>
           <ChevronLeft />
         </button>
-        <strong id="library-assistant-title" className="assistant-admin__title">Assistente da Biblioteca</strong>
-        <div className="assistant-admin__header-actions">
+        <div className="assistant-v2__heading">
+          <strong id="library-assistant-title">Assistente da Biblioteca</strong>
+          <span>Encontre e corrija metadados, capas e letras de forma segura.</span>
+        </div>
+        <div className="assistant-v2__header-actions">
           <button
             type="button"
-            className="assistant-admin__header-button assistant-admin__header-button--icon"
-            aria-label="Como funciona o Assistente"
-            title="Como funciona"
-            aria-pressed={showHelp}
-            onClick={() => setShowHelp(value => !value)}
+            className={section === 'settings' ? 'is-active' : undefined}
+            onClick={() => setSection(value => value === 'settings' ? 'suggestions' : 'settings')}
           >
-            <Info />
+            <Settings /> Configurações
           </button>
           <button
             type="button"
-            className="assistant-admin__header-button"
-            aria-label="Atualizar Assistente da Biblioteca"
-            disabled={loading || loadingPolicy || mutating || savingPolicy}
-            onClick={() => {
-              void load();
-              void loadLibraryCounts();
-              void loadPolicy();
-              void loadFingerprintStatus();
-              void loadLocalLyricsCapability();
-            }}
+            className="assistant-v2__icon-button"
+            aria-label="Como funciona o Assistente"
+            aria-pressed={showHelp}
+            onClick={() => setShowHelp(value => !value)}
           >
-            <RefreshCw className={loading || loadingPolicy ? 'is-spinning' : ''} />
-            Atualizar
+            <HelpCircle />
           </button>
         </div>
       </header>
 
       {showHelp && (
-        <aside className="assistant-admin__help" role="note">
+        <aside className="assistant-v2__help" role="note">
           <Info />
           <div>
-            <strong>O assistente analisa tudo e respeita sua política de revisão</strong>
-            <span>Ignorar esconde sugestões abertas, Revisar mantém a decisão manual e Lote reúne apenas sugestões seguras para uma confirmação conjunta. Nada é aplicado em segundo plano e capas continuam com aplicação individual.</span>
+            <strong>Correções reversíveis e protegidas</strong>
+            <span>O Assistente compara sua biblioteca com fontes confiáveis, separa sugestões seguras das que exigem revisão e aplica mudanças como overrides. Os arquivos originais permanecem intactos.</span>
           </div>
         </aside>
       )}
@@ -982,417 +1013,30 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
           {feedback.details && (
             <details>
               <summary>Ver detalhes</summary>
-              <ul>
-                {feedback.details.map(detail => <li key={detail}>{detail}</li>)}
-              </ul>
+              <ul>{feedback.details.map(detail => <li key={detail}>{detail}</li>)}</ul>
             </details>
           )}
         </div>
       )}
 
-      <section className={`assistant-admin__hero${failedRun ? ' is-error' : ''}`} aria-label="Estado da análise">
-        <div className="assistant-admin__hero-main">
-          <div className="assistant-admin__hero-icon" aria-hidden="true"><Music2 /></div>
-          <div className="assistant-admin__hero-copy">
-            <strong>{runTitle(latestRun)}</strong>
-            <span>{description[0]}</span>
-            {description[1] && <span>{description[1]}</span>}
-          </div>
-          <span className={`assistant-admin__run-badge is-${latestRun?.status ?? 'idle'}`}>
-            {(runActive || latestRun?.status === 'completed') && <CheckCircle2 />}
-            {latestRun?.status === 'failed' && <XCircle />}
-            {latestRun?.status === 'cancelled' && <X />}
-            {runStatusLabel(latestRun)}
-          </span>
-        </div>
-
-        <div className="assistant-admin__progress-block">
-          <div className="assistant-admin__progress-heading">
-            <strong>
-              {latestRun?.status === 'queued' ? (
-                <>{totalTracks.toLocaleString('pt-BR')}<span> faixas aguardando processamento</span></>
-              ) : (
-                <>{processedTracks.toLocaleString('pt-BR')}<span> de {totalTracks.toLocaleString('pt-BR')} faixas desta análise processadas</span></>
-              )}
-            </strong>
-            <strong>{progressPercent}%</strong>
-          </div>
-          {libraryCounts.total > 0 && (
-            <div className="assistant-admin__library-scope" aria-label="Escopo da biblioteca">
-              <span><strong>{libraryCounts.total.toLocaleString('pt-BR')}</strong> músicas na biblioteca</span>
-              <span>{libraryCounts.active.toLocaleString('pt-BR')} ativas</span>
-              {libraryCounts.inactive > 0 && <span>{libraryCounts.inactive.toLocaleString('pt-BR')} inativas</span>}
-              <span><strong>{totalTracks.toLocaleString('pt-BR')}</strong> nesta análise</span>
-            </div>
-          )}
-          <div
-            className="assistant-admin__progress-track"
-            role="progressbar"
-            aria-label="Progresso da análise"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={progressPercent}
-          >
-            <i style={{ width: `${progressPercent}%` }} />
-          </div>
-        </div>
-
-        <div className="assistant-admin__hero-footer">
-          <dl className="assistant-admin__queue-metrics">
-            <div className="is-found"><CheckCircle2 /><dd>{progress.matched.toLocaleString('pt-BR')}</dd><dt>Encontradas</dt></div>
-            <div className="is-pending"><Clock3 /><dd>{pendingTracks.toLocaleString('pt-BR')}</dd><dt>Pendentes</dt></div>
-            <div className="is-retry"><AlertTriangle /><dd>{progress.retry.toLocaleString('pt-BR')}</dd><dt>Em retry</dt></div>
-            <div className="is-empty"><XCircle /><dd>{progress.noMatch.toLocaleString('pt-BR')}</dd><dt>Sem resultado</dt></div>
-          </dl>
-          {runActive ? (
-            <button className="assistant-admin__danger-button" type="button" disabled={mutating} onClick={() => void cancelAnalysis()}>
-              <X /> Cancelar análise
-            </button>
-          ) : (
-            <div className="assistant-admin__hero-actions">
-              {latestRun && (
-                <button
-                  className="assistant-admin__secondary-button"
-                  type="button"
-                  disabled={analyzing || mutating}
-                  onClick={() => setConfirmReset(true)}
-                >
-                  <RefreshCw /> Limpar e reanalisar tudo
-                </button>
-              )}
-              <button
-                className="assistant-admin__primary-button"
-                type="button"
-                disabled={analyzing || mutating}
-                onClick={() => void analyze(false)}
-              >
-                {analyzing ? <LoaderCircle className="is-spinning" /> : <Sparkles />}
-                {latestRun ? 'Analisar mudanças' : 'Analisar biblioteca'}
-              </button>
-            </div>
-          )}
-        </div>
-      </section>
-
-      <nav className="assistant-admin__sections" aria-label="Seções do Assistente da Biblioteca">
-        {SECTIONS.map(([value, label]) => (
-          <button
-            key={value}
-            type="button"
-            className={section === value ? 'is-active' : undefined}
-            aria-current={section === value ? 'page' : undefined}
-            onClick={() => setSection(value)}
-          >
-            {label}
-          </button>
-        ))}
-      </nav>
-
-      {section === 'suggestions' && (
-        <>
-          <dl className="assistant-admin__metrics" aria-label="Resumo das sugestões">
-            <div className="is-suggestions"><Music2 /><dt>Sugestões</dt><dd>{reviewableSuggestions.length}</dd></div>
-            <div className="is-safe"><ShieldCheck /><dt>Seguras</dt><dd>{safeSuggestions.length}</dd></div>
-            <div className="is-review"><AlertTriangle /><dt>Revisão</dt><dd>{reviewSuggestions.length}</dd></div>
-            <div className="is-failed"><XCircle /><dt>Falhas</dt><dd>{failedCount}</dd></div>
-          </dl>
-
-          <section className="assistant-admin__review" aria-labelledby="assistant-review-title">
-            <header className="assistant-admin__review-heading">
-              <div>
-                <strong id="assistant-review-title">Sugestões de metadados, capas e letras</strong>
-                <small>A política de revisão controla o que fica visível e quais sugestões seguras entram no lote; capas externas continuam individuais.</small>
-              </div>
-              <div className="assistant-admin__selection-actions">
-                <button
-                  type="button"
-                  className="assistant-admin__secondary-button"
-                  disabled={mutating || visibleSafeSuggestions.length === 0}
-                  onClick={() => setSelected(new Set(visibleSafeSuggestions.map(item => item.id)))}
-                >
-                  Selecionar seguras
-                </button>
-                <button
-                  type="button"
-                  className="assistant-admin__secondary-button"
-                  disabled={mutating || visibleActionableSuggestions.length === 0}
-                  onClick={() => setSelected(new Set(visibleActionableSuggestions.map(item => item.id)))}
-                >
-                  Selecionar visíveis
-                </button>
-                <button
-                  type="button"
-                  className="assistant-admin__primary-button assistant-admin__apply-button"
-                  disabled={mutating || selected.size === 0}
-                  onClick={() => void applySelected()}
-                >
-                  {batching ? <LoaderCircle className="is-spinning" /> : <Check />}
-                  {batching ? 'Aplicando…' : `Aplicar selecionadas (${selected.size})`}
-                </button>
-              </div>
-            </header>
-
-            {policyReady && configuredBulkSuggestions.length > 0 && (
-              <aside className="assistant-admin__bulk-policy" role="status">
-                <ShieldCheck aria-hidden="true" />
-                <div>
-                  <strong>Prontas para aplicar em lote</strong>
-                  <span>{configuredBulkSuggestions.length.toLocaleString('pt-BR')} sugestão{configuredBulkSuggestions.length === 1 ? '' : 'ões'} segura{configuredBulkSuggestions.length === 1 ? '' : 's'} segue{configuredBulkSuggestions.length === 1 ? '' : 'm'} a política configurada. Itens que exigem revisão ficam fora deste lote.</span>
-                </div>
-                <button
-                  type="button"
-                  className="assistant-admin__primary-button"
-                  disabled={mutating || savingPolicy || configuredBulkSuggestions.length === 0}
-                  onClick={() => void applyConfiguredBulk()}
-                >
-                  {batching ? <LoaderCircle className="is-spinning" /> : <Check />}
-                  {batching ? 'Aplicando…' : `Aplicar lote (${configuredBulkSuggestions.length})`}
-                </button>
-              </aside>
-            )}
-
-            <div className="assistant-admin__toolbar">
-              <nav className="assistant-admin__filters" aria-label="Filtros das sugestões">
-                {FILTERS.map(([value, label]) => (
-                  <button key={value} type="button" aria-pressed={filter === value} onClick={() => setFilter(value)}>
-                    {label}
-                  </button>
-                ))}
-              </nav>
-              <div className="assistant-admin__controls">
-                <label className="assistant-admin__search">
-                  <Search aria-hidden="true" />
-                  <input
-                    type="search"
-                    value={search}
-                    onChange={event => setSearch(event.target.value)}
-                    placeholder="Buscar por artista, álbum, faixa, capa ou letra…"
-                    aria-label="Buscar sugestões"
-                  />
-                </label>
-                <label className="assistant-admin__sort">
-                  <select value={sort} onChange={event => setSort(event.target.value as Sort)} aria-label="Ordenar sugestões">
-                    <option value="recent">Mais recentes</option>
-                    <option value="oldest">Mais antigas</option>
-                  </select>
-                  <ChevronDown aria-hidden="true" />
-                </label>
-              </div>
-            </div>
-
-            <div className="assistant-admin__review-content">
-              {loading && suggestions.length === 0 ? (
-                <div className="assistant-admin__empty" role="status">
-                  <LoaderCircle className="is-spinning" />
-                  <div><strong>Carregando sugestões</strong><span>Buscando o estado mais recente do assistente.</span></div>
-                </div>
-              ) : failedRun && suggestions.length === 0 ? (
-                <div className="assistant-admin__empty">
-                  <AlertTriangle />
-                  <div><strong>Nenhuma sugestão disponível</strong><span>Inicie uma nova análise para tentar novamente.</span></div>
-                </div>
-              ) : !latestRun ? (
-                <div className="assistant-admin__empty">
-                  <Sparkles />
-                  <div><strong>Ainda não há sugestões para revisar</strong><span>Inicie uma análise para comparar sua biblioteca com MusicBrainz, Cover Art Archive e LRCLIB.</span></div>
-                </div>
-              ) : latestRun.status === 'completed' && latestRun.summary.total === 0 && suggestions.length === 0 ? (
-                <div className="assistant-admin__empty">
-                  <Check />
-                  <div>
-                    <strong>{totalTracks === 0 ? 'Biblioteca já está em dia' : 'Nenhuma sugestão encontrada'}</strong>
-                    <span>{totalTracks === 0 ? 'Nenhuma faixa nova, alterada ou pendente precisou ser reanalisada.' : 'A análise terminou sem candidatos de metadata, capa ou letra.'}</span>
-                  </div>
-                </div>
-              ) : visibleSuggestions.length === 0 ? (
-                <div className="assistant-admin__empty">
-                  {runActive ? <LoaderCircle className="is-spinning" /> : <Search />}
-                  <div>
-                    <strong>{runActive ? 'Nenhum resultado pronto ainda' : 'Nenhum resultado neste filtro'}</strong>
-                    <span>{runActive ? 'Metadados, capas e letras aparecem aqui conforme cada faixa termina de ser processada.' : 'Ajuste filtros, busca ou a política de revisão nas Configurações.'}</span>
-                  </div>
-                </div>
-              ) : (
-                <div className="assistant-admin__list" aria-live="polite">
-                  {visibleSuggestions.map(suggestion => {
-                    const item = reviewMap.get(suggestion.id);
-                    const safe = isSafe(suggestion);
-                    const canDecide = Boolean(item && expectedCurrentValue(suggestion) != null && isOpen(suggestion));
-                    const selectable = Boolean(item && canApplyInBatch(suggestion));
-                    const canClearLyrics = suggestion.target.capability === 'lyrics' && suggestion.status === 'applied';
-                    const canFingerprint = canTryFingerprint(suggestion);
-                    const fingerprintUnavailable = !fingerprintStatus?.fpcalc.available;
-                    return (
-                      <article key={suggestion.id} className="assistant-admin-row">
-                        <label className="assistant-admin-row__select" aria-label={`Selecionar ${item?.track.title ?? suggestion.target.trackId}`}>
-                          <input
-                            type="checkbox"
-                            checked={selected.has(suggestion.id)}
-                            disabled={!selectable}
-                            onChange={event => setSelected(current => {
-                              const next = new Set(current);
-                              if (event.target.checked) next.add(suggestion.id);
-                              else next.delete(suggestion.id);
-                              return next;
-                            })}
-                          />
-                        </label>
-                        <AssistantTrackArtwork trackId={suggestion.target.trackId} />
-                        <div className="assistant-admin-row__identity">
-                          <strong>{item?.track.artist ?? 'Faixa da biblioteca'}</strong>
-                          <span className="assistant-admin-row__title">{item?.track.title ?? `Faixa ${suggestion.target.trackId}`}</span>
-                          <span className="assistant-admin-row__album">{rowDetail(suggestion, item)}</span>
-                          <span className="assistant-admin__sr-only">
-                            {capabilityLabel(suggestion)} {rowDetail(suggestion, item)}
-                          </span>
-                        </div>
-                        <span className={`assistant-admin-row__status ${statusTone(suggestion)}`}>
-                          {safe && isOpen(suggestion) ? <CheckCircle2 /> : suggestion.status === 'failed' ? <XCircle /> : <AlertTriangle />}
-                          {rowStatusLabel(suggestion)}
-                        </span>
-                        {canDecide || canClearLyrics || canFingerprint ? (
-                          <details className="assistant-admin-row__menu">
-                            <summary aria-label={`Ações para ${item?.track.title ?? suggestion.target.trackId}`}><MoreVertical /></summary>
-                            <div>
-                              {canFingerprint && (
-                                <button
-                                  type="button"
-                                  disabled={mutating || Boolean(fingerprintingId) || fingerprintUnavailable}
-                                  title={fingerprintUnavailable
-                                    ? loadingFingerprintStatus
-                                      ? 'Verificando disponibilidade do Chromaprint.'
-                                      : fingerprintStatus
-                                        ? fingerprintIssueLabel(fingerprintStatus.fpcalc.issue)
-                                        : fingerprintStatusError ?? 'Chromaprint indisponível.'
-                                    : 'Gera fingerprint local e consulta AcoustID somente quando habilitado no servidor.'}
-                                  onClick={() => void identifyByAudio(suggestion)}
-                                >
-                                  {fingerprintingId === suggestion.id ? <LoaderCircle className="is-spinning" /> : <Fingerprint />}
-                                  {fingerprintingId === suggestion.id ? 'Identificando…' : 'Tentar identificar pelo áudio'}
-                                </button>
-                              )}
-                              {canDecide && <button type="button" disabled={mutating} onClick={() => void decideOne(suggestion, 'apply')}><Check /> Aplicar</button>}
-                              {canDecide && <button type="button" disabled={mutating} onClick={() => void decideOne(suggestion, 'reject')}><X /> Rejeitar</button>}
-                              {canClearLyrics && <button type="button" disabled={mutating} onClick={() => void clearLyrics(suggestion)}><RefreshCw /> Voltar ao sidecar</button>}
-                            </div>
-                          </details>
-                        ) : (
-                          <button className="assistant-admin-row__menu-disabled" type="button" disabled aria-label="Ações indisponíveis"><MoreVertical /></button>
-                        )}
-                      </article>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-          </section>
-        </>
-      )}
-
-      {section === 'processing' && (
-        <section className="assistant-admin__operations-panel" aria-labelledby="assistant-processing-title">
-          <header className="assistant-admin__operations-heading">
-            <div>
-              <strong id="assistant-processing-title">Processamento</strong>
-              <small>Fila atual, desempenho da análise e histórico das execuções recentes.</small>
-            </div>
-            <span className={`assistant-admin__run-badge is-${latestRun?.status ?? 'idle'}`}>{runStatusLabel(latestRun)}</span>
-          </header>
-
-          <div className="assistant-admin__operations-section">
-            <strong>Agora</strong>
-            <dl className="assistant-admin__operations-grid">
-              <div><dt>Biblioteca</dt><dd>{libraryCounts.total > 0 ? libraryCounts.total.toLocaleString('pt-BR') : '—'}</dd></div>
-              <div><dt>Nesta análise</dt><dd>{totalTracks.toLocaleString('pt-BR')}</dd></div>
-              <div><dt>Processando</dt><dd>{progress.processing.toLocaleString('pt-BR')}</dd></div>
-              <div><dt>Pendentes</dt><dd>{progress.pending.toLocaleString('pt-BR')}</dd></div>
-              <div><dt>Em retry</dt><dd>{progress.retry.toLocaleString('pt-BR')}</dd></div>
-              <div><dt>Encontradas</dt><dd>{progress.matched.toLocaleString('pt-BR')}</dd></div>
-              <div><dt>Sem resultado</dt><dd>{progress.noMatch.toLocaleString('pt-BR')}</dd></div>
-              <div><dt>Falhas</dt><dd>{progress.failed.toLocaleString('pt-BR')}</dd></div>
-            </dl>
-            {!latestRun ? (
-              <p className="assistant-admin__operations-copy">Ainda não há uma análise para acompanhar.</p>
-            ) : (
-              <p className="assistant-admin__operations-copy">
-                {processedTracks.toLocaleString('pt-BR')} de {totalTracks.toLocaleString('pt-BR')} faixas desta execução concluídas.
-                {observed?.etaMs != null && runActive ? ` Estimativa restante: ${formatDuration(observed.etaMs)}.` : ''}
-              </p>
-            )}
-          </div>
-
-          <div className="assistant-admin__operations-section">
-            <strong>Desempenho</strong>
-            <dl className="assistant-admin__operations-grid assistant-admin__operations-grid--secondary">
-              <div><dt>Tempo</dt><dd>{observed ? formatDuration(observed.elapsedMs) : '—'}</dd></div>
-              <div><dt>Velocidade</dt><dd>{observed ? observed.tracksPerSecond.toLocaleString('pt-BR', { maximumFractionDigits: 2 }) : '—'}</dd></div>
-              <div><dt>Consultas externas</dt><dd>{observed ? observed.externalRequests.toLocaleString('pt-BR') : '—'}</dd></div>
-              <div><dt>Cache</dt><dd>{cacheQueries > 0 ? `${cachePercent}%` : '—'}</dd></div>
-              <div><dt>Retries</dt><dd>{observed ? observed.retriesTotal.toLocaleString('pt-BR') : '—'}</dd></div>
-              <div><dt>Espera por limite</dt><dd>{observed ? formatDuration(observed.rateLimitWaitMs) : '—'}</dd></div>
-            </dl>
-          </div>
-
-          <div className="assistant-admin__operations-section">
-            <strong>Últimas análises</strong>
-            {metadataRuns.length === 0 ? (
-              <p className="assistant-admin__operations-copy">Nenhuma execução registrada.</p>
-            ) : (
-              <ul className="assistant-admin__history">
-                {metadataRuns.slice(0, 8).map(run => (
-                  <li key={run.id}>
-                    <span>{formatRunDate(run.createdAt)}</span>
-                    <span className="assistant-admin__history-status">{runStatusLabel(run)}</span>
-                    <span>{run.summary.total.toLocaleString('pt-BR')} sugestões</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-
-          <div className="assistant-admin__operations-actions">
-            {runActive ? (
-              <button className="assistant-admin__danger-button" type="button" disabled={mutating} onClick={() => void cancelAnalysis()}>
-                <X /> Cancelar análise
-              </button>
-            ) : (
-              <button
-                className="assistant-admin__primary-button"
-                type="button"
-                disabled={mutating || analyzing}
-                onClick={() => void analyze(false)}
-              >
-                <RefreshCw /> {progress.failed > 0 ? 'Tentar falhas novamente' : 'Analisar mudanças'}
-              </button>
-            )}
-          </div>
-        </section>
-      )}
-
-      {section === 'settings' && (
-        <section className="assistant-admin__operations-panel" aria-labelledby="assistant-settings-title">
+      {section === 'settings' ? (
+        <section className="assistant-admin__operations-panel assistant-v2__settings-panel" aria-labelledby="assistant-settings-title">
           <header className="assistant-admin__operations-heading">
             <div>
               <strong id="assistant-settings-title">Configurações</strong>
-              <small>A política fica salva no servidor. Segurança, stale protection e confirmação de itens em Revisão não podem ser desativadas.</small>
+              <small>Controle o que aparece para revisão e quais sugestões seguras podem entrar em lote.</small>
             </div>
-            {(loadingPolicy || savingPolicy) && <LoaderCircle className="is-spinning assistant-admin__settings-loader" aria-label={savingPolicy ? 'Salvando política' : 'Carregando política'} />}
+            <button className="assistant-v2__close-settings" type="button" onClick={() => setSection('suggestions')}><X /> Fechar</button>
           </header>
+
           <div className="assistant-admin__settings">
             <strong>Política de revisão</strong>
-            <p className="assistant-admin__settings-note">A política controla a revisão, não a análise. Ignorar esconde sugestões abertas; Revisar mantém a decisão manual; Lote reúne apenas sugestões seguras para você confirmar juntas. Sugestões que exigem revisão continuam manuais, mesmo quando o tipo está em Lote.</p>
+            <p className="assistant-admin__settings-note">Ocultar apenas tira sugestões abertas da lista visível; Revisar individualmente mantém a decisão manual; Permitir lote seguro reúne somente sugestões de alta confiança. Capas continuam individuais.</p>
             <div className="assistant-admin__policy-list">
               {POLICY_ROWS.map(row => {
-                const modes = row.allowBulk
-                  ? POLICY_MODES
-                  : POLICY_MODES.filter(([mode]) => mode !== 'bulk');
+                const modes = row.allowBulk ? POLICY_MODES : POLICY_MODES.filter(([mode]) => mode !== 'bulk');
                 return (
-                  <fieldset
-                    key={row.key}
-                    className="assistant-admin__policy-field"
-                    disabled={!policyReady || savingPolicy || mutating}
-                  >
+                  <fieldset key={row.key} className="assistant-admin__policy-field" disabled={!policyReady || savingPolicy || mutating}>
                     <legend>{row.label}</legend>
                     <p>{row.description}</p>
                     <div className="assistant-admin__policy-options">
@@ -1413,68 +1057,345 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
                 );
               })}
             </div>
-            {!policyReady && !loadingPolicy && (
-              <p className="assistant-admin__settings-note" role="alert">Não foi possível carregar a política. Use Atualizar para tentar novamente.</p>
-            )}
           </div>
+
+          <div className="assistant-admin__settings assistant-admin__settings--action">
+            <div>
+              <strong>Automação segura</strong>
+              <p className="assistant-admin__settings-note">Quando ativada, mudanças na biblioteca podem iniciar uma análise em segundo plano. Somente campos de metadata vazios e sugestões de alta confiança podem ser preenchidos automaticamente.</p>
+              <span className={`assistant-admin__settings-status ${autonomy?.config.enabled ? 'is-ready' : ''}`}>
+                {autonomyError
+                  ? autonomyError
+                  : autonomy == null
+                    ? 'Carregando estado…'
+                    : autonomy.config.enabled
+                      ? 'Ativada · somente metadata ausente'
+                      : 'Desativada'}
+              </span>
+            </div>
+            <button className="assistant-admin__secondary-button" type="button" disabled={!autonomy || savingAutonomy} onClick={() => void toggleAutonomy()}>
+              {savingAutonomy ? <LoaderCircle className="is-spinning" /> : <ShieldCheck />}
+              {autonomy?.config.enabled ? 'Desativar' : 'Ativar'}
+            </button>
+          </div>
+
           <div className="assistant-admin__settings">
             <strong>Identificação por áudio</strong>
-            {loadingFingerprintStatus ? (
-              <p className="assistant-admin__settings-note">Verificando Chromaprint e AcoustID…</p>
-            ) : fingerprintStatus ? (
-              <p className="assistant-admin__settings-note">
-                Chromaprint: {fingerprintStatus.fpcalc.available
-                  ? `disponível${fingerprintStatus.fpcalc.version ? ` (${fingerprintStatus.fpcalc.version})` : ''}`
-                  : fingerprintIssueLabel(fingerprintStatus.fpcalc.issue)}.
-                {' '}AcoustID: {fingerprintStatus.acoustIdEnabled
-                  ? fingerprintStatus.acoustIdConfigured ? 'habilitado' : 'habilitado, mas sem chave configurada'
-                  : 'desativado'}.
-                {' '}A ação “Tentar identificar pelo áudio” aparece somente em sugestões de metadata que ainda exigem revisão; o fingerprint fica local e só fingerprint + duração são enviados ao AcoustID quando o opt-in server-side está habilitado.
-              </p>
-            ) : (
-              <p className="assistant-admin__settings-note" role="alert">{fingerprintStatusError ?? 'Não foi possível verificar a identificação por áudio.'}</p>
-            )}
+            <p className="assistant-admin__settings-note">
+              {loadingFingerprintStatus
+                ? 'Verificando Chromaprint e AcoustID…'
+                : fingerprintStatus
+                  ? `Chromaprint: ${fingerprintStatus.fpcalc.available ? 'disponível' : fingerprintIssueLabel(fingerprintStatus.fpcalc.issue)}. AcoustID: ${fingerprintStatus.acoustIdEnabled ? fingerprintStatus.acoustIdConfigured ? 'habilitado' : 'sem chave configurada' : 'desativado'}.`
+                  : fingerprintStatusError ?? 'Não foi possível verificar a identificação por áudio.'}
+            </p>
           </div>
+
           {onOpenLocalLyrics && (
             <div className="assistant-admin__settings assistant-admin__settings--action">
               <div>
                 <strong>Lyrics local</strong>
-                <p className="assistant-admin__settings-note">Fallback opcional com Whisper. O áudio permanece neste servidor e qualquer resultado sempre volta para revisão antes de ser aplicado.</p>
-                <span className={`assistant-admin__settings-status ${localLyricsCapability?.available ? 'is-ready' : 'is-warning'}`}>
-                  {localLyricsCapabilityError
-                    ? localLyricsCapabilityError
-                    : localLyricsCapability == null
-                      ? 'Verificando disponibilidade…'
-                      : localLyricsCapability.available
-                        ? `Disponível${localLyricsCapability.whisperVersion ? ` · ${localLyricsCapability.whisperVersion}` : ''}`
-                        : localLyricsCapability.action ?? 'Whisper local não configurado.'}
-                </span>
+                <p className="assistant-admin__settings-note">Fallback opcional com Whisper. O áudio permanece neste servidor e o resultado sempre volta para revisão.</p>
               </div>
-              <button
-                className="assistant-admin__secondary-button"
-                type="button"
-                disabled={!localLyricsCapability?.available}
-                title={!localLyricsCapability?.available ? localLyricsCapability?.action ?? localLyricsCapabilityError ?? 'Whisper local não configurado.' : undefined}
-                onClick={onOpenLocalLyrics}
-              >
+              <button className="assistant-admin__secondary-button" type="button" disabled={!localLyricsCapability?.available} onClick={onOpenLocalLyrics}>
                 <Music2 /> Abrir lyrics local
               </button>
             </div>
           )}
+
           <div className="assistant-admin__settings">
-            <strong>Comportamento da análise</strong>
-            <p className="assistant-admin__settings-note">Use “Analisar mudanças” no dia a dia: itens com falha anterior, faixas novas e alterações voltam para a fila. “Limpar e reanalisar tudo” invalida as sugestões abertas e força uma nova análise de todas as faixas da biblioteca, inclusive as que hoje parecem completas; Aplicadas e Rejeitadas permanecem no histórico. Alterar a política não força uma nova análise.</p>
+            <strong>Reanálise completa</strong>
+            <p className="assistant-admin__settings-note">Use apenas quando quiser descartar sugestões abertas e refazer a análise de toda a biblioteca.</p>
+            <button className="assistant-admin__danger-button assistant-v2__reanalyze" type="button" disabled={runActive || analyzing || mutating} onClick={() => setConfirmReset(true)}>
+              <RefreshCw /> Reanalisar toda a biblioteca
+            </button>
           </div>
         </section>
+      ) : (
+        <>
+          <section className={`assistant-v2__hero ${failedRun ? 'is-error' : ''}`} aria-label="Estado da análise">
+            <div className="assistant-v2__hero-summary">
+              <div className="assistant-v2__hero-title">
+                <span className="assistant-v2__hero-icon"><Music2 /></span>
+                <div>
+                  <strong>{runTitle(statusRun)}</strong>
+                  <small>{runActive ? 'A biblioteca está sendo analisada. Você já pode revisar resultados prontos.' : 'A biblioteca foi analisada. Revise as sugestões abaixo.'}</small>
+                </div>
+              </div>
+
+              <div className="assistant-v2__hero-numbers">
+                <div><strong>{libraryCounts.total.toLocaleString('pt-BR')}</strong><span>faixas analisadas</span></div>
+                <div className="is-success"><strong>{progress.matched.toLocaleString('pt-BR')}</strong><span>com sugestões</span></div>
+                <div><strong>{progress.noMatch.toLocaleString('pt-BR')}</strong><span>sem alterações</span></div>
+              </div>
+
+              <div className="assistant-v2__progress">
+                <div><span style={{ width: `${progressPercent}%` }} /></div>
+                <strong>{progressPercent}%</strong>
+              </div>
+
+              <div className="assistant-v2__micro-status">
+                <span className="is-success"><CheckCircle2 /> {completedChecks.toLocaleString('pt-BR')} concluídas</span>
+                <span><Clock3 /> {pendingTracks.toLocaleString('pt-BR')} pendentes</span>
+                <span className="is-warning"><AlertTriangle /> {progress.retry.toLocaleString('pt-BR')} em retry</span>
+                <span className="is-error"><XCircle /> {failedCount.toLocaleString('pt-BR')} falhas</span>
+              </div>
+            </div>
+
+            <div className="assistant-v2__process-card">
+              <strong><CheckCircle2 /> {runActive ? 'Processamento em andamento' : 'Processamento finalizado'}</strong>
+              <div><span><Music2 /> Metadados</span><small>{latestRun ? runStatusLabel(latestRun) : 'Aguardando'}</small><CheckCircle2 /></div>
+              <div><span><ImageIcon /> Capas</span><small>{latestRun ? runStatusLabel(latestRun) : 'Aguardando'}</small><CheckCircle2 /></div>
+              <div><span><FileText /> Letras</span><small>{pairedLyricsRun ? runStatusLabel(pairedLyricsRun) : latestLyricsRun ? runStatusLabel(latestLyricsRun) : 'Aguardando'}</small><CheckCircle2 /></div>
+            </div>
+
+            <div className="assistant-v2__analysis-actions">
+              {runActive ? (
+                <button className="assistant-admin__danger-button" type="button" disabled={mutating} onClick={() => void cancelAnalysis()}>
+                  <X /> Cancelar análise
+                </button>
+              ) : (
+                <button className="assistant-v2__analyze" type="button" disabled={analyzing || mutating} onClick={() => void analyze(false)}>
+                  {analyzing ? <LoaderCircle className="is-spinning" /> : <Sparkles />} Analisar mudanças <ChevronDown />
+                </button>
+              )}
+              <small>Analisa apenas o que mudou desde a última execução.</small>
+              <span>Última execução</span>
+              <strong>{statusRun ? formatRunDate(statusRun.createdAt) : 'Ainda não executada'}</strong>
+              <button className="assistant-v2__reanalyze-inline" type="button" disabled={runActive || analyzing || mutating} onClick={() => setConfirmReset(true)}>
+                <RefreshCw /> Reanalisar tudo
+              </button>
+              <small>Força uma nova análise de toda a biblioteca.</small>
+            </div>
+          </section>
+
+          <section className="assistant-v2__summary-grid" aria-label="Resumo das sugestões">
+            <div><Music2 /><span><strong>{reviewableSuggestions.length.toLocaleString('pt-BR')}</strong><small>sugestões encontradas</small><em>{visibleSuggestions.length.toLocaleString('pt-BR')} visíveis pela política</em></span></div>
+            <div className="is-safe"><ShieldCheck /><span><strong>{safeSuggestions.length.toLocaleString('pt-BR')}</strong><small>sugestões seguras</small><em>Podem ser aplicadas em lote</em></span></div>
+            <div className="is-review"><AlertTriangle /><span><strong>{reviewSuggestions.length.toLocaleString('pt-BR')}</strong><small>precisam de revisão</small><em>Exigem sua decisão</em></span></div>
+            <div className="is-error"><XCircle /><span><strong>{failedCount.toLocaleString('pt-BR')}</strong><small>falhas</small><em>Nenhuma alteração aplicada</em></span></div>
+            <div className="assistant-v2__safe-apply">
+              <span>Aplicar sugestões seguras</span>
+              <button type="button" disabled={mutating || safeSuggestions.length === 0} onClick={() => void applySuggestions(safeSuggestions)}>
+                {batching ? <LoaderCircle className="is-spinning" /> : <CheckCircle2 />} Aplicar {safeSuggestions.length.toLocaleString('pt-BR')} sugestões
+              </button>
+            </div>
+          </section>
+
+          <section className="assistant-v2__suggestions">
+            <nav className="assistant-v2__filters" aria-label="Filtros das sugestões">
+              {([
+                ['all', `Sugestões (${reviewableSuggestions.length})`],
+                ['metadata', `Metadados (${activeTypeCounts.metadata})`],
+                ['artwork', `Capas (${activeTypeCounts.artwork})`],
+                ['lyrics', `Letras (${activeTypeCounts.lyrics})`],
+                ['review', `Revisão (${reviewSuggestions.length})`],
+                ['failed', `Falhas (${failedCount})`]
+              ] as const).map(([value, label]) => (
+                <button key={value} type="button" className={filter === value ? 'is-active' : undefined} onClick={() => setFilter(value)}>{label}</button>
+              ))}
+            </nav>
+
+            <div className="assistant-v2__toolbar">
+              <label>
+                <Search />
+                <input
+                  type="search"
+                  value={search}
+                  onChange={event => setSearch(event.target.value)}
+                  placeholder="Buscar por título, artista, álbum, faixa, capa ou letra..."
+                  aria-label="Buscar sugestões"
+                />
+              </label>
+              <label className="assistant-v2__sort">
+                <select value={sort} onChange={event => setSort(event.target.value as Sort)} aria-label="Ordenar sugestões">
+                  <option value="recent">Mais recentes</option>
+                  <option value="oldest">Mais antigas</option>
+                </select>
+                <ChevronDown />
+              </label>
+            </div>
+
+            <div className="assistant-v2__workspace">
+              <div className="assistant-v2__table">
+                <div className="assistant-v2__table-head">
+                  <span></span><span>Música</span><span>Tipo</span><span>Sugestão</span><span>Confiança</span><span>Status</span><span></span>
+                </div>
+
+                {loading && visibleSuggestions.length === 0 ? (
+                  <div className="assistant-v2__empty"><LoaderCircle className="is-spinning" /><span>Carregando sugestões…</span></div>
+                ) : visibleSuggestions.length === 0 ? (
+                  <div className="assistant-v2__empty"><Search /><span>Nenhuma sugestão neste filtro.</span></div>
+                ) : (
+                  <div className="assistant-v2__table-body">
+                    {pagedVisibleSuggestions.map(suggestion => {
+                      const item = reviewMap.get(suggestion.id);
+                      const safe = isSafe(suggestion);
+                      const selectedRow = activeSuggestion?.id === suggestion.id;
+                      const type = suggestion.target.capability === 'metadata' ? 'Metadados' : suggestion.target.capability === 'artwork' ? 'Capa' : 'Letra';
+                      const suggestionText = suggestion.target.capability === 'metadata'
+                        ? FIELD_LABELS[suggestion.target.field]
+                        : suggestion.target.capability === 'artwork'
+                          ? 'Nova capa'
+                          : suggestion.target.synchronized ? 'Letra sincronizada' : 'Letra';
+                      const confidence = suggestion.confidence === 'high' ? 'Alta' : suggestion.confidence === 'medium' ? 'Média' : 'Baixa';
+                      return (
+                        <button
+                          type="button"
+                          key={suggestion.id}
+                          className={`assistant-v2__table-row ${selectedRow ? 'is-selected' : ''}`}
+                          onClick={() => setActiveSuggestionId(suggestion.id)}
+                        >
+                          <span className="assistant-v2__checkbox" onClick={event => event.stopPropagation()}>
+                            <input
+                              type="checkbox"
+                              checked={selected.has(suggestion.id)}
+                              disabled={!canApplyInBatch(suggestion)}
+                              aria-label={`Selecionar ${item?.track.title ?? suggestion.target.trackId}`}
+                              onChange={event => setSelected(current => {
+                                const next = new Set(current);
+                                if (event.target.checked) next.add(suggestion.id); else next.delete(suggestion.id);
+                                return next;
+                              })}
+                            />
+                          </span>
+                          <span className="assistant-v2__song">
+                            <AssistantTrackArtwork trackId={suggestion.target.trackId} />
+                            <span><strong>{item?.track.title ?? 'Faixa da biblioteca'}</strong><small>{item?.track.artist ?? '—'} · {item?.track.album ?? '—'}</small></span>
+                          </span>
+                          <span><i className={`assistant-v2__type is-${suggestion.target.capability}`}>{type}</i></span>
+                          <span className="assistant-v2__suggestion-kind">{suggestionText}</span>
+                          <span><i className={`assistant-v2__confidence is-${suggestion.confidence}`}>{confidence}</i></span>
+                          <span><i className={`assistant-v2__status ${safe ? 'is-safe' : suggestion.status === 'failed' ? 'is-error' : 'is-review'}`}>
+                            {safe ? <CheckCircle2 /> : suggestion.status === 'failed' ? <XCircle /> : <AlertTriangle />}
+                            {safe ? 'Segura' : suggestion.status === 'failed' ? 'Falha' : 'Revisão'}
+                          </i></span>
+                          <ChevronRight />
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <footer className="assistant-v2__table-footer">
+                  <span>{visibleSuggestions.length.toLocaleString('pt-BR')} sugestões</span>
+                  <div>
+                    <span>50 por página</span>
+                    <button type="button" aria-label="Página anterior" disabled={suggestionPage <= 1} onClick={() => setSuggestionPage(value => Math.max(1, value - 1))}><ChevronLeft /></button>
+                    <button type="button" className="is-active">{suggestionPage}</button>
+                    {suggestionPageCount > 1 && <span>de {suggestionPageCount}</span>}
+                    <button type="button" aria-label="Próxima página" disabled={suggestionPage >= suggestionPageCount} onClick={() => setSuggestionPage(value => Math.min(suggestionPageCount, value + 1))}><ChevronRight /></button>
+                  </div>
+                </footer>
+              </div>
+
+              <aside className="assistant-v2__inspector">
+                {!activeSuggestion || !activeReviewItem ? (
+                  <div className="assistant-v2__inspector-empty">
+                    <Sparkles />
+                    <strong>Selecione uma sugestão</strong>
+                    <span>Veja a mudança proposta e decida o que deve ser aplicado.</span>
+                  </div>
+                ) : (
+                  <>
+                    <header className="assistant-v2__track-header">
+                      <AssistantTrackArtwork trackId={activeSuggestion.target.trackId} />
+                      <div>
+                        <strong>{activeReviewItem.track.title}</strong>
+                        <span>{activeReviewItem.track.artist}</span>
+                        <small>{activeReviewItem.track.album}</small>
+                      </div>
+                    </header>
+
+                    <nav className="assistant-v2__inspector-tabs">
+                      <button type="button" className="is-active">Sugestões ({activeTrackSuggestions.length})</button>
+                      <button type="button">Informações</button>
+                    </nav>
+
+                    <div className="assistant-v2__suggestion-cards">
+                      {activeTrackSuggestions.map(suggestion => {
+                        const canDecide = Boolean(reviewMap.has(suggestion.id) && expectedCurrentValue(suggestion) != null && isOpen(suggestion));
+                        const canFingerprint = canTryFingerprint(suggestion);
+                        return (
+                          <article key={suggestion.id}>
+                            <header>
+                              <label>
+                                <input
+                                  type="checkbox"
+                                  checked={selected.has(suggestion.id)}
+                                  disabled={!canApplyInBatch(suggestion)}
+                                  onChange={event => setSelected(current => {
+                                    const next = new Set(current);
+                                    if (event.target.checked) next.add(suggestion.id); else next.delete(suggestion.id);
+                                    return next;
+                                  })}
+                                />
+                                <strong>{capabilityLabel(suggestion)}</strong>
+                              </label>
+                              {canDecide && <button type="button" disabled={mutating} onClick={() => void decideOne(suggestion, 'reject')}>Rejeitar</button>}
+                            </header>
+
+                            {suggestion.target.capability === 'metadata' ? (
+                              <div className="assistant-v2__change">
+                                <div><span>{suggestion.target.currentValue || '—'}</span><small>Valor atual</small></div>
+                                <ChevronRight />
+                                <div><span>{suggestion.target.suggestedValue}</span><small>Sugestão ({provenanceLabel(suggestion.provenance.source)})</small></div>
+                              </div>
+                            ) : (
+                              <p className="assistant-v2__candidate">{rowDetail(suggestion, reviewMap.get(suggestion.id))}</p>
+                            )}
+
+                            <footer>
+                              <span className={`assistant-v2__confidence is-${suggestion.confidence}`}>
+                                Confiança: {suggestion.confidence === 'high' ? 'Alta' : suggestion.confidence === 'medium' ? 'Média' : 'Baixa'}
+                              </span>
+                              {canFingerprint && (
+                                <button
+                                  type="button"
+                                  className="assistant-v2__fingerprint"
+                                  disabled={mutating || Boolean(fingerprintingId) || !fingerprintStatus?.fpcalc.available}
+                                  onClick={() => void identifyByAudio(suggestion)}
+                                >
+                                  <Fingerprint /> {fingerprintingId === suggestion.id ? 'Identificando…' : 'Identificar pelo áudio'}
+                                </button>
+                              )}
+                            </footer>
+                          </article>
+                        );
+                      })}
+                    </div>
+
+                    <div className="assistant-v2__inspector-actions">
+                      <button
+                        className="assistant-v2__apply-track"
+                        type="button"
+                        disabled={mutating || activeTrackSelectedCount === 0}
+                        onClick={() => void applyActiveTrackSuggestions()}
+                      >
+                        <Check /> Aplicar {activeTrackSelectedCount || activeTrackSuggestions.filter(canApplyInBatch).length} sugestões
+                      </button>
+                      <button
+                        type="button"
+                        disabled={mutating || activeTrackSelectedCount === 0}
+                        onClick={() => void Promise.all(activeTrackSuggestions.filter(item => selected.has(item.id)).map(item => decideOne(item, 'reject')))}
+                      >
+                        <X /> Rejeitar selecionadas
+                      </button>
+                    </div>
+
+                    <p className="assistant-v2__override-note"><Info /> As alterações são aplicadas como overrides e não modificam os arquivos originais.</p>
+                  </>
+                )}
+              </aside>
+            </div>
+          </section>
+        </>
       )}
 
       {confirmReviewCount > 0 && (
         <div className="assistant-admin__confirm-backdrop">
           <section className="assistant-admin__confirm" role="dialog" aria-modal="true" aria-labelledby="assistant-confirm-review-title">
             <h2 id="assistant-confirm-review-title">Aplicar sugestões em Revisão?</h2>
-            <p>
-              A seleção contém {confirmReviewCount.toLocaleString('pt-BR')} sugestão{confirmReviewCount === 1 ? '' : 'ões'} que exige{confirmReviewCount === 1 ? '' : 'm'} revisão humana. O servidor continuará validando a revisão da biblioteca, o estado atual e os overrides antes de aplicar cada item.
-            </p>
+            <p>A seleção contém {confirmReviewCount.toLocaleString('pt-BR')} sugestão{confirmReviewCount === 1 ? '' : 'ões'} que exige{confirmReviewCount === 1 ? '' : 'm'} revisão humana. O servidor continuará validando o estado atual antes de aplicar cada item.</p>
             <div className="assistant-admin__confirm-actions">
               <button autoFocus className="assistant-admin__secondary-button" type="button" onClick={() => setConfirmReviewCount(0)}>Cancelar</button>
               <button className="assistant-admin__primary-button" type="button" onClick={() => void applySelected(true)}><Check /> Confirmar lote</button>
@@ -1486,11 +1407,11 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
       {confirmReset && (
         <div className="assistant-admin__confirm-backdrop">
           <section className="assistant-admin__confirm" role="dialog" aria-modal="true" aria-labelledby="assistant-confirm-reset-title">
-            <h2 id="assistant-confirm-reset-title">Limpar e reanalisar tudo?</h2>
-            <p>As sugestões abertas de metadados, capas e letras serão marcadas como desatualizadas e todas as faixas da biblioteca serão analisadas novamente, inclusive as que hoje parecem completas. Aplicadas, Rejeitadas e o histórico das execuções serão preservados.</p>
+            <h2 id="assistant-confirm-reset-title">Reanalisar toda a biblioteca?</h2>
+            <p>As sugestões abertas serão marcadas como desatualizadas e todas as faixas serão analisadas novamente. Aplicadas, rejeitadas e o histórico serão preservados.</p>
             <div className="assistant-admin__confirm-actions">
               <button autoFocus className="assistant-admin__secondary-button" type="button" onClick={() => setConfirmReset(false)}>Cancelar</button>
-              <button className="assistant-admin__danger-button" type="button" onClick={() => void resetAndAnalyze()}><RefreshCw /> Limpar e reanalisar</button>
+              <button className="assistant-admin__danger-button" type="button" onClick={() => void resetAndAnalyze()}><RefreshCw /> Reanalisar tudo</button>
             </div>
           </section>
         </div>

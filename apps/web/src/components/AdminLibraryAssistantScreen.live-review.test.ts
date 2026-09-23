@@ -11,10 +11,10 @@ describe('AdminLibraryAssistantScreen live review', () => {
 
     expect(screen).toMatch(/if \(!decision \|\| mutating\) return;/);
     expect(screen).toMatch(/async function applySelected\(reviewConfirmed = false\) \{[\s\S]*await applySuggestions\(chosen, reviewConfirmed\);/);
-    expect(screen).toMatch(/disabled=\{mutating \|\| selected\.size === 0\}/);
-    expect(screen).toMatch(/const canDecide = Boolean\(item && expectedCurrentValue\(suggestion\) != null && isOpen\(suggestion\)\);/);
-    expect(screen).toMatch(/const selectable = Boolean\(item && canApplyInBatch\(suggestion\)\);/);
-    expect(screen).not.toMatch(/disabled=\{mutating \|\| runActive \|\| selected\.size === 0\}/);
+    expect(screen).toMatch(/disabled=\{mutating \|\| activeTrackSelectedCount === 0\}/);
+    expect(screen).toMatch(/const canDecide = Boolean\(reviewMap\.has\(suggestion\.id\) && expectedCurrentValue\(suggestion\) != null && isOpen\(suggestion\)\);/);
+    expect(screen).toMatch(/disabled=\{!canApplyInBatch\(suggestion\)\}/);
+    expect(screen).not.toMatch(/disabled=\{mutating \|\| runActive \|\| activeTrackSelectedCount === 0\}/);
   });
 
   it('mantém reanálise e reset bloqueados durante um run ativo', () => {

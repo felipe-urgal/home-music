@@ -5,13 +5,15 @@ import {
   decideLibraryAssistantBatch,
   decideLibraryAssistantSuggestion,
   fingerprintLibraryAssistantSuggestion,
+  getLibraryAssistantAutonomy,
   getLibraryAssistantFingerprintStatus,
   getLibraryAssistantReview,
   getLibraryAssistantRunProgress,
   getMissingCoverFillJob,
   resetLibraryAssistantReview,
   startLibraryAssistantMetadataRun,
-  startMissingCoverFillJob
+  startMissingCoverFillJob,
+  updateLibraryAssistantAutonomy
 } from './library-assistant-client';
 
 vi.mock('./api-client', () => ({
@@ -40,6 +42,7 @@ describe('library assistant admin client', () => {
     const result = await startLibraryAssistantMetadataRun();
 
     expect(result.run.id).toBe('run-metadata');
+    expect(result.runs.map(run => run.id)).toEqual(['run-metadata', 'run-lyrics']);
     expect(apiFetchMock).toHaveBeenCalledTimes(2);
     for (const call of apiFetchMock.mock.calls) {
       expect(call[0]).toBe('/api/admin/library-assistant/runs');
@@ -87,6 +90,37 @@ describe('library assistant admin client', () => {
     expect(apiFetchMock).toHaveBeenCalledTimes(3);
     expect(apiFetchMock.mock.calls[1]?.[0]).toBe('/api/admin/library-assistant/runs/run-metadata/cancel');
     expect(apiFetchMock.mock.calls[2]?.[0]).toBe('/api/admin/library-assistant/runs/run-lyrics/cancel');
+  });
+
+
+  it('lê e atualiza explicitamente a automação segura', async () => {
+    apiFetchMock
+      .mockResolvedValueOnce(response({
+        config: { enabled: false, metadata: true, fillMissingOnly: true },
+        activeRunId: null,
+        pendingRevision: null,
+        lastSummary: null
+      }))
+      .mockResolvedValueOnce(response({
+        config: { enabled: true, metadata: true, fillMissingOnly: true },
+        activeRunId: null,
+        pendingRevision: null,
+        lastSummary: null
+      }));
+
+    const current = await getLibraryAssistantAutonomy();
+    expect(current.config.enabled).toBe(false);
+
+    const updated = await updateLibraryAssistantAutonomy(true);
+    expect(updated.config.enabled).toBe(true);
+    expect(apiFetchMock).toHaveBeenNthCalledWith(2, '/api/admin/library-assistant/autonomy', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Home-Music-Request': '1'
+      },
+      body: JSON.stringify({ enabled: true, metadata: true })
+    });
   });
 
   it('inicia e consulta o preenchimento de capas ausentes', async () => {

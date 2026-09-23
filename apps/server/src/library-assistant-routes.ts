@@ -170,7 +170,7 @@ export function registerLibraryAssistantRoutes(
       if (!validRunId(request.params.id)) return reply.code(400).send({ error: 'Run inválido.' });
       const status = parseSuggestionStatus(request.query.status);
       if (status === null) return reply.code(400).send({ error: 'Status de sugestão inválido.' });
-      const limit = parseLimit(request.query.limit, 200, 500);
+      const limit = parseLimit(request.query.limit, 200, 5_000);
       if (limit == null) return reply.code(400).send({ error: 'Limite de sugestões inválido.' });
 
       const suggestions = assistant.listSuggestions(request.params.id, { status, limit });

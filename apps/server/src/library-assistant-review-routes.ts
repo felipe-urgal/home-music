@@ -24,7 +24,7 @@ type LibraryAssistantReviewPort = {
 function parseLimit(value: unknown) {
   if (value == null || value === '') return 200;
   const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed >= 1 && parsed <= 500 ? parsed : null;
+  return Number.isInteger(parsed) && parsed >= 1 && parsed <= 5_000 ? parsed : null;
 }
 
 function sendValidationError(reply: FastifyReply, error: unknown) {

@@ -24,7 +24,7 @@ import {
   type TrackMetadataOverrideStore
 } from './track-metadata-overrides.js';
 
-const MAX_REVIEW_ITEMS = 500;
+const MAX_REVIEW_ITEMS = 5_000;
 const MAX_REVIEW_RUNS = 100;
 const MAX_BATCH_DECISIONS = 100;
 const OPEN_STATUSES = new Set<LibraryAssistantSuggestionStatus>(['pending', 'review']);

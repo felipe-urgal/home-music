@@ -89,25 +89,25 @@ test('Library Assistant revisa, aplica via override, atualiza player e sobrevive
     await expect(playerBar).toContainText('E2E Track');
 
     await openAssistant(page);
-    const assistantSections = page.locator('.assistant-admin__sections');
-    await expect(assistantSections.getByRole('button', { name: 'Sugestões', exact: true })).toHaveClass(/is-active/);
-    await expect(assistantSections.getByRole('button', { name: 'Processamento', exact: true })).toBeVisible();
-    await expect(assistantSections.getByRole('button', { name: 'Configurações', exact: true })).toBeVisible();
-    await expect(page.locator('.assistant-admin__info')).toHaveCount(0);
-    await expect(page.locator('.assistant-admin__filters').getByRole('button', { name: 'Metadados', exact: true })).toBeVisible();
-    await expect(page.locator('.assistant-admin__filters').getByRole('button', { name: 'Capas', exact: true })).toBeVisible();
-    await expect(page.locator('.assistant-admin__filters').getByRole('button', { name: 'Letras', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Configurações', exact: true })).toBeVisible();
+    await expect(page.locator('.assistant-v2__filters').getByRole('button', { name: /Metadados/ })).toBeVisible();
+    await expect(page.locator('.assistant-v2__filters').getByRole('button', { name: /Capas/ })).toBeVisible();
+    await expect(page.locator('.assistant-v2__filters').getByRole('button', { name: /Letras/ })).toBeVisible();
 
-    const row = page.locator('.assistant-admin-row').filter({ hasText: 'E2E Track' }).first();
+    const row = page.locator('.assistant-v2__table-row').filter({ hasText: 'E2E Track' }).first();
     await expect(row).toBeVisible();
-    await expect(row).toContainText('Confiança alta');
     await expect(row).toContainText('E2E Track');
-    await expect(row).toContainText('Título');
-    await expect(row).toContainText('E2E Assistant Title');
+    await expect(row).toContainText('Metadados');
+    await expect(row).toContainText('Alta');
 
-    await row.locator('summary[aria-label="Ações para E2E Track"]').click();
-    await row.getByRole('button', { name: 'Aplicar', exact: true }).click();
-    await expect(page.locator('.assistant-admin__feedback')).toContainText('Sugestão aplicada');
+    await row.click();
+    const inspector = page.locator('.assistant-v2__inspector');
+    await expect(inspector).toContainText('E2E Track');
+    await expect(inspector).toContainText('E2E Assistant Title');
+    const suggestionCard = inspector.locator('.assistant-v2__suggestion-cards article').first();
+    await suggestionCard.getByRole('checkbox').check();
+    await inspector.getByRole('button', { name: /Aplicar 1 sugestões/ }).click();
+    await expect(page.locator('.assistant-admin__feedback')).toContainText('Lote concluído: 1 aplicada.');
     await expect(playerBar).toContainText('E2E Assistant Title');
 
     const effectiveResponse = await request.get('/api/library');
@@ -244,7 +244,7 @@ test('Library Assistant executa o fluxo visual de lyrics local com job fake', as
   });
 
   await openAssistant(page);
-  await page.locator('.assistant-admin__sections').getByRole('button', { name: 'Configurações', exact: true }).click();
+  await page.getByRole('button', { name: 'Configurações', exact: true }).click();
   await page.getByRole('button', { name: 'Abrir lyrics local', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Lyrics local' });
   await expect(dialog).toBeVisible();
