@@ -111,8 +111,9 @@ describe('AdminLibraryAssistantScreen operational workflow', () => {
   it('separa progresso por processo e mostra quando haverá nova tentativa', () => {
     const screen = source();
 
-    expect(screen).toMatch(/const metadataProgress = latestRun/);
-    expect(screen).toMatch(/const lyricsProgress = pairedLyricsRun/);
+    expect(screen).toMatch(/const metadataProgress = metadataRun/);
+    expect(screen).toMatch(/const artworkProgress = artworkRun/);
+    expect(screen).toMatch(/const lyricsProgress = lyricsRun/);
     expect(screen).toContain('aguardando nova tentativa');
     expect(screen).toContain('próxima tentativa em');
     expect(screen).toContain('falhas definitivas');
@@ -146,7 +147,7 @@ describe('AdminLibraryAssistantScreen operational workflow', () => {
     expect(screen).toContain('Exigem sua decisão');
   });
 
-  it('coordena metadata e letras até ambos concluírem', () => {
+  it('coordena capabilities ativas até todas concluírem', () => {
     const screen = source();
 
     expect(screen).toMatch(/const analysisRuns = useMemo/);
