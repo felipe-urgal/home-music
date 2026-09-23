@@ -39,7 +39,7 @@ describe('AdminLibraryAssistantScreen operational workflow', () => {
     const screen = source();
 
     expect(screen).toMatch(/resetLibraryAssistantReview\(\)/);
-    expect(screen).toMatch(/startLibraryAssistantMetadataRun\(\{ full: true \}\)/);
+    expect(screen).toMatch(/startLibraryAssistantAnalysis\('all', \{ full: true \}\)/);
     expect(screen).toContain('Reanalisar toda a biblioteca');
     expect(screen).toContain('Configurações');
     expect(screen).toContain('assistant-v2__header-actions');
@@ -116,7 +116,7 @@ describe('AdminLibraryAssistantScreen operational workflow', () => {
     expect(screen).toContain('aguardando nova tentativa');
     expect(screen).toContain('próxima tentativa em');
     expect(screen).toContain('falhas definitivas');
-    expect(screen).toContain('Incluídas na análise de metadados');
+    expect(screen).toMatch(/progressLabel\(artworkProgress, artworkRun\)/);
   });
 
   it('não usa falhas de processamento como contador do filtro de sugestões', () => {
@@ -149,7 +149,6 @@ describe('AdminLibraryAssistantScreen operational workflow', () => {
   it('coordena metadata e letras até ambos concluírem', () => {
     const screen = source();
 
-    expect(screen).toMatch(/const latestLyricsRun = useMemo/);
     expect(screen).toMatch(/const analysisRuns = useMemo/);
     expect(screen).toMatch(/const runActive = activeRuns\.length > 0/);
     expect(screen).toMatch(/Promise\.all\(currentRuns\.map\(run => getLibraryAssistantRunProgress\(run\.id\)\)\)/);
@@ -186,4 +185,16 @@ describe('AdminLibraryAssistantScreen operational workflow', () => {
 
     expect(screen).toMatch(/Math\.min\(processedChecks < totalChecks \? 99 : 100, Math\.round/);
   });
+
+  it('oferece ações separadas para cada tipo de análise', () => {
+    const screen = source();
+
+    for (const label of ['Título', 'Artista', 'Álbum', 'Artista do álbum', 'Capas', 'Letras', 'Tudo']) {
+      expect(screen).toContain(label);
+    }
+    expect(screen).toContain('Escolher análise');
+    expect(screen).toMatch(/startLibraryAssistantAnalysis\(target, \{ full \}\)/);
+    expect(screen).toContain('Busca somente capas ausentes');
+  });
+
 });
