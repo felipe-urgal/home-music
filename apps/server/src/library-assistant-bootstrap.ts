@@ -7,6 +7,7 @@ import type { LibraryRouteProjection } from './library-routes.js';
 import type { LibraryService } from './library-service.js';
 import { createLrclibLyricsAnalyzer, resolveLrclibLyricsCandidate } from './lrclib-lyrics-analyzer.js';
 import { readSidecarLyrics, readTrackLyrics } from './lyrics.js';
+import { createMusicBrainzAlbumArtworkAnalyzer } from './musicbrainz-artwork-analyzer.js';
 import {
   createMusicBrainzMetadataAnalyzer,
   needsMusicBrainzEnrichment
@@ -181,12 +182,30 @@ export function registerLibraryAssistant(
       };
     }
   });
+  const albumArtworkAnalyzer = createMusicBrainzAlbumArtworkAnalyzer({
+    fetchImpl: musicBrainzFetch
+  });
   const artworkAnalyzer = {
-    id: `${metadataAnalyzer.id}-artwork`,
+    id: `${albumArtworkAnalyzer.id}-with-track-fallback`,
     capability: 'artwork' as const,
     async analyze(context) {
-      const drafts = await metadataAnalyzer.analyze(context);
-      return drafts.filter(draft => draft.capability === 'artwork');
+      const albumDrafts = await albumArtworkAnalyzer.analyze(context);
+      const resolvedTrackIds = new Set(
+        albumDrafts.flatMap(draft =>
+          draft.target.capability === 'artwork' ? [draft.target.trackId] : []
+        )
+      );
+      const remainingTracks = context.tracks.filter(track => !resolvedTrackIds.has(track.id));
+      if (remainingTracks.length === 0) return albumDrafts;
+
+      const fallbackDrafts = await metadataAnalyzer.analyze({
+        ...context,
+        tracks: remainingTracks
+      });
+      return [
+        ...albumDrafts,
+        ...fallbackDrafts.filter(draft => draft.capability === 'artwork')
+      ];
     }
   } satisfies LibraryAssistantAnalyzer;
   const lyricsAnalyzer = {
