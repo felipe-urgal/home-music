@@ -15,7 +15,6 @@ import {
   RefreshCw,
   RotateCcw,
   Search,
-  ShieldCheck,
   Sparkles,
   Users
 } from 'lucide-react';
