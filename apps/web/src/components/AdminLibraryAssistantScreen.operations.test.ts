@@ -99,13 +99,33 @@ describe('AdminLibraryAssistantScreen operational workflow', () => {
     const screen = source();
 
     expect(screen).toMatch(/listAdminTracks/);
-    expect(screen).toContain('faixas analisadas');
-    expect(screen).toContain('com sugestões');
-    expect(screen).toContain('sem alterações');
+    expect(screen).toContain('faixas na biblioteca');
+    expect(screen).toContain('sugestões abertas');
+    expect(screen).toContain('falhas de processamento');
     expect(screen).toContain('Processamento finalizado');
   });
 
 
+
+
+  it('separa progresso por processo e mostra quando haverá nova tentativa', () => {
+    const screen = source();
+
+    expect(screen).toMatch(/const metadataProgress = latestRun/);
+    expect(screen).toMatch(/const lyricsProgress = pairedLyricsRun/);
+    expect(screen).toContain('aguardando nova tentativa');
+    expect(screen).toContain('próxima tentativa em');
+    expect(screen).toContain('falhas definitivas');
+    expect(screen).toContain('Incluídas na análise de metadados');
+  });
+
+  it('não usa falhas de processamento como contador do filtro de sugestões', () => {
+    const screen = source();
+
+    expect(screen).toMatch(/const failedSuggestionCount = reviewableSuggestions\.filter\(item => item\.status === 'failed'\)\.length/);
+    expect(screen).toContain('Falhas de sugestão');
+    expect(screen).toContain('Não entram na fila de sugestões');
+  });
 
   it('implementa lista com inspetor lateral e paginação de 50 itens', () => {
     const screen = source();
