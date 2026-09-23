@@ -11,6 +11,7 @@ import {
   getLibraryAssistantRunProgress,
   getMissingCoverFillJob,
   resetLibraryAssistantReview,
+  startLibraryAssistantAnalysis,
   startLibraryAssistantMetadataRun,
   startMissingCoverFillJob,
   updateLibraryAssistantAutonomy
@@ -34,16 +35,17 @@ afterEach(() => {
 });
 
 describe('library assistant admin client', () => {
-  it('inicia metadata e lyrics como capabilities independentes em uma análise administrativa', async () => {
+  it('inicia metadata, capas e lyrics como capabilities independentes em uma análise completa', async () => {
     apiFetchMock
       .mockResolvedValueOnce(response({ run: { id: 'run-metadata' } }))
+      .mockResolvedValueOnce(response({ run: { id: 'run-artwork' } }))
       .mockResolvedValueOnce(response({ run: { id: 'run-lyrics' } }));
 
     const result = await startLibraryAssistantMetadataRun();
 
     expect(result.run.id).toBe('run-metadata');
-    expect(result.runs.map(run => run.id)).toEqual(['run-metadata', 'run-lyrics']);
-    expect(apiFetchMock).toHaveBeenCalledTimes(2);
+    expect(result.runs.map(run => run.id)).toEqual(['run-metadata', 'run-artwork', 'run-lyrics']);
+    expect(apiFetchMock).toHaveBeenCalledTimes(3);
     for (const call of apiFetchMock.mock.calls) {
       expect(call[0]).toBe('/api/admin/library-assistant/runs');
       expect(call[1]).toMatchObject({
@@ -56,21 +58,51 @@ describe('library assistant admin client', () => {
     }
     expect(apiFetchMock.mock.calls.map(([, init]) => JSON.parse(String(init?.body)))).toEqual([
       { capability: 'metadata', full: false },
+      { capability: 'artwork', full: false },
       { capability: 'lyrics', full: false }
     ]);
   });
 
-  it('propaga reanálise completa para metadata e lyrics', async () => {
+  it('propaga reanálise completa para metadata, capas e lyrics', async () => {
     apiFetchMock
       .mockResolvedValueOnce(response({ run: { id: 'run-metadata' } }))
+      .mockResolvedValueOnce(response({ run: { id: 'run-artwork' } }))
       .mockResolvedValueOnce(response({ run: { id: 'run-lyrics' } }));
 
     await startLibraryAssistantMetadataRun({ full: true });
 
     expect(apiFetchMock.mock.calls.map(([, init]) => JSON.parse(String(init?.body)))).toEqual([
       { capability: 'metadata', full: true },
+      { capability: 'artwork', full: true },
       { capability: 'lyrics', full: true }
     ]);
+  });
+
+  it('inicia uma análise somente do campo escolhido', async () => {
+    apiFetchMock.mockResolvedValueOnce(response({ run: { id: 'run-title' } }));
+
+    const result = await startLibraryAssistantAnalysis('title');
+
+    expect(result.runs.map(run => run.id)).toEqual(['run-title']);
+    const [, init] = apiFetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toEqual({
+      capability: 'metadata',
+      full: false,
+      fields: ['title']
+    });
+  });
+
+  it('inicia capas sem disparar metadata ou letras', async () => {
+    apiFetchMock.mockResolvedValueOnce(response({ run: { id: 'run-artwork' } }));
+
+    await startLibraryAssistantAnalysis('artwork');
+
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+    const [, init] = apiFetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toEqual({
+      capability: 'artwork',
+      full: false
+    });
   });
 
   it('cancela metadata e lyrics ativos como uma única análise da Administração', async () => {
