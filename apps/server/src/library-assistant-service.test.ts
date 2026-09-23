@@ -291,3 +291,46 @@ test('full reanalysis bypasses incremental eligibility and sends every library t
     }
   );
 });
+
+
+test('field-scoped metadata run executes only the matching analyzer and bypasses generic eligibility', async () => {
+  const calls: string[] = [];
+  const generic: LibraryAssistantAnalyzer = {
+    id: 'metadata-generic',
+    capability: 'metadata',
+    async analyze() {
+      calls.push('generic');
+      return [];
+    }
+  };
+  const titleOnly: LibraryAssistantAnalyzer = {
+    id: 'metadata-title',
+    capability: 'metadata',
+    metadataFields: ['title'],
+    async analyze() {
+      calls.push('title');
+      return [];
+    }
+  };
+  const artistOnly: LibraryAssistantAnalyzer = {
+    id: 'metadata-artist',
+    capability: 'metadata',
+    metadataFields: ['artist'],
+    async analyze() {
+      calls.push('artist');
+      return [];
+    }
+  };
+
+  await withService(
+    [generic, titleOnly, artistOnly],
+    async ({ service }) => {
+      const scoped = service.startRun('metadata', 'admin-1', { fields: ['title'] });
+      await waitFor(() => service.getRun(scoped.id)?.status === 'completed');
+      assert.deepEqual(calls, ['title']);
+    },
+    {
+      isTrackEligible: () => false
+    }
+  );
+});

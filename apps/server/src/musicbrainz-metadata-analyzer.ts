@@ -84,6 +84,7 @@ type TrackMatch = {
 type AnalyzerOptions = {
   fetchImpl?: FetchLike;
   userAgent?: string;
+  includeArtwork?: boolean;
   getHumanOverrideFields?: (trackId: string) => readonly LibraryAssistantMetadataField[];
   getFileContext?: (trackId: string) => SafeFileContext | null;
 };
@@ -528,28 +529,20 @@ function textMatch(
 }
 
 function artworkConfidenceFor(
-  match: RankedCandidate,
-  margin: number,
-  usedFileContext: boolean
+  match: RankedCandidate
 ): LibraryAssistantConfidenceBand | null {
-  if (match.blockingConflict || usedFileContext || !match.release || margin < HIGH_MARGIN) return null;
+  if (!match.release) return null;
 
   const titleMatch = textMatch(match, 'title');
   const artistMatch = textMatch(match, 'artist');
-  const strongIdentity = titleMatch !== 'different'
-    && titleMatch != null
-    && artistMatch !== 'different'
-    && artistMatch != null;
-  if (!strongIdentity) return null;
 
-  const albumMatch = textMatch(match, 'album');
-  const albumCompatible = albumMatch == null || albumMatch !== 'different';
-  const durationCorroborates = match.reasonCodes.includes('duration-close');
-
-  // Para artwork, título + artista únicos identificam a gravação. Se o álbum
-  // local estiver errado, uma duração compatível ainda permite usar com
-  // segurança a release encontrada pelo MusicBrainz sem bloquear a capa.
-  return albumCompatible || durationCorroborates ? 'high' : null;
+  // Artwork é best-effort: se título + artista batem de forma exata ou
+  // normalizada, qualquer release oficial dessa gravação já é uma capa
+  // coerente o bastante. Álbum, duração, edição e margem entre candidatos
+  // continuam úteis para metadata, mas não bloqueiam a capa.
+  const titleMatches = titleMatch != null && titleMatch !== 'different';
+  const artistMatches = artistMatch != null && artistMatch !== 'different';
+  return titleMatches && artistMatches ? 'high' : null;
 }
 
 type QueryTerms = { title: string; artist: string; album?: string };
@@ -772,8 +765,8 @@ export function createMusicBrainzMetadataAnalyzer(options: AnalyzerOptions = {})
 
         const values = metadataValues(best);
         const humanFields = new Set(options.getHumanOverrideFields?.(match.track.id) ?? []);
-        const artworkConfidence = artworkConfidenceFor(best, margin, match.usedFileContext);
-        if (!match.track.hasCover && artworkConfidence === 'high' && best.release) {
+        const artworkConfidence = artworkConfidenceFor(best);
+        if (options.includeArtwork !== false && !match.track.hasCover && artworkConfidence === 'high' && best.release) {
           try {
             const artwork = await findArtworkForRelease(best.release, {
               providers,

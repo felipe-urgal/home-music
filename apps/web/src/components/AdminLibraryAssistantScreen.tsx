@@ -54,9 +54,10 @@ import {
   getLibraryAssistantSuggestions,
   getLocalLyricsCapability,
   resetLibraryAssistantReview,
-  startLibraryAssistantMetadataRun,
+  startLibraryAssistantAnalysis,
   updateLibraryAssistantAutonomy,
   updateLibraryAssistantReviewPolicy,
+  type LibraryAssistantAnalysisTarget,
   type LibraryAssistantAutonomyState,
   type LibraryAssistantFingerprintStatus
 } from '../library-assistant-client';
@@ -81,6 +82,15 @@ type PolicyRow = {
 
 const TERMINAL_RUNS = new Set(['completed', 'failed', 'cancelled', 'stale']);
 const BATCH_SIZE = 100;
+const ANALYSIS_ACTIONS: readonly [LibraryAssistantAnalysisTarget, string, string][] = [
+  ['title', 'Título', 'Busca somente correções de título'],
+  ['artist', 'Artista', 'Busca somente correções de artista'],
+  ['album', 'Álbum', 'Busca somente correções de álbum'],
+  ['albumArtist', 'Artista do álbum', 'Busca somente correções do artista do álbum'],
+  ['artwork', 'Capas', 'Busca somente capas ausentes'],
+  ['lyrics', 'Letras', 'Busca somente letras ausentes'],
+  ['all', 'Tudo', 'Analisa metadados, capas e letras']
+];
 const FIELD_LABELS: Record<LibraryAssistantMetadataField, string> = {
   title: 'Título',
   artist: 'Artista',
@@ -386,6 +396,7 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
   const [search, setSearch] = useState('');
   const [suggestionPage, setSuggestionPage] = useState(1);
   const [showHelp, setShowHelp] = useState(false);
+  const [analysisMenuOpen, setAnalysisMenuOpen] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [activeSuggestionId, setActiveSuggestionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -408,21 +419,21 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
   const policyRequestVersion = useRef(0);
   const fingerprintRequestVersion = useRef(0);
 
-  const latestRun = useMemo(() => runs.find(run => run.capability === 'metadata') ?? null, [runs]);
-  const latestLyricsRun = useMemo(() => runs.find(run => run.capability === 'lyrics') ?? null, [runs]);
-  const pairedLyricsRun = useMemo(
-    () => runsBelongTogether(latestRun, latestLyricsRun) ? latestLyricsRun : null,
-    [latestLyricsRun, latestRun]
-  );
-  const analysisRuns = useMemo(
-    () => [latestRun, pairedLyricsRun].filter((run): run is LibraryAssistantRun => Boolean(run)),
-    [latestRun, pairedLyricsRun]
-  );
+  const latestRun = runs[0] ?? null;
+  const analysisRuns = useMemo(() => {
+    const active = runs.filter(run => !TERMINAL_RUNS.has(run.status));
+    if (active.length > 0) return active;
+    const newest = runs[0] ?? null;
+    return newest ? runs.filter(run => runsBelongTogether(newest, run)) : [];
+  }, [runs]);
   const activeRuns = useMemo(() => analysisRuns.filter(run => !TERMINAL_RUNS.has(run.status)), [analysisRuns]);
   const statusRun = useMemo(
     () => analysisRuns.find(run => run.status === 'failed') ?? activeRuns[0] ?? latestRun,
     [activeRuns, analysisRuns, latestRun]
   );
+  const metadataRun = analysisRuns.find(run => run.capability === 'metadata') ?? null;
+  const artworkRun = analysisRuns.find(run => run.capability === 'artwork') ?? null;
+  const lyricsRun = analysisRuns.find(run => run.capability === 'lyrics') ?? null;
   const runActive = activeRuns.length > 0;
   const reviewMap = useMemo(() => new Map(reviewItems.map(item => [item.suggestion.id, item])), [reviewItems]);
   const reviewableSuggestions = useMemo(
@@ -496,10 +507,13 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
     try {
       const runsResponse = await getLibraryAssistantRuns();
       if (version !== requestVersion.current) return;
-      const metadataRun = runsResponse.runs.find(run => run.capability === 'metadata') ?? null;
-      const lyricsRun = runsResponse.runs.find(run => run.capability === 'lyrics') ?? null;
-      const pairedLyrics = runsBelongTogether(metadataRun, lyricsRun) ? lyricsRun : null;
-      const currentRuns = [metadataRun, pairedLyrics].filter((run): run is LibraryAssistantRun => Boolean(run));
+      const active = runsResponse.runs.filter(run => !TERMINAL_RUNS.has(run.status));
+      const newest = runsResponse.runs[0] ?? null;
+      const currentRuns = active.length > 0
+        ? active
+        : newest
+          ? runsResponse.runs.filter(run => runsBelongTogether(newest, run))
+          : [];
       const [reviewResponse, suggestionResponses, progressResponses] = await Promise.all([
         getLibraryAssistantReview(5_000),
         Promise.all(currentRuns.map(run => getLibraryAssistantSuggestions(run.id))),
@@ -655,12 +669,13 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
     return () => window.removeEventListener('keydown', closeOnEscape);
   }, [confirmReset, confirmReviewCount]);
 
-  async function analyze(full = false) {
+  async function analyze(target: LibraryAssistantAnalysisTarget, full = false) {
     if (analyzing || mutating || runActive) return;
+    setAnalysisMenuOpen(false);
     setAnalyzing(true);
     setFeedback(null);
     try {
-      const started = await startLibraryAssistantMetadataRun({ full });
+      const started = await startLibraryAssistantAnalysis(target, { full });
       setRuns(current => [
         ...started.runs,
         ...current.filter(item => !started.runs.some(run => run.id === item.id))
@@ -689,7 +704,7 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
     let invalidated: number | null = null;
     try {
       invalidated = (await resetLibraryAssistantReview()).invalidated;
-      const started = await startLibraryAssistantMetadataRun({ full: true });
+      const started = await startLibraryAssistantAnalysis('all', { full: true });
       setRuns(current => [
         ...started.runs,
         ...current.filter(item => !started.runs.some(run => run.id === item.id))
@@ -985,9 +1000,10 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
   const pendingChecks = progress.pending + progress.processing;
   const processingFailureCount = progress.failed;
   const failedRun = analysisRuns.some(run => run.status === 'failed');
-  const metadataProgress = latestRun ? runProgress[latestRun.id] ?? null : null;
-  const lyricsProgress = pairedLyricsRun ? runProgress[pairedLyricsRun.id] ?? null : null;
-  const retryStatus = retryLabel(lyricsProgress) ?? retryLabel(metadataProgress);
+  const metadataProgress = metadataRun ? runProgress[metadataRun.id] ?? null : null;
+  const artworkProgress = artworkRun ? runProgress[artworkRun.id] ?? null : null;
+  const lyricsProgress = lyricsRun ? runProgress[lyricsRun.id] ?? null : null;
+  const retryStatus = retryLabel(lyricsProgress) ?? retryLabel(artworkProgress) ?? retryLabel(metadataProgress);
   const failedSuggestionCount = reviewableSuggestions.filter(item => item.status === 'failed').length;
   const activeTypeCounts = {
     metadata: reviewableSuggestions.filter(item => item.target.capability === 'metadata').length,
@@ -1182,18 +1198,18 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
               <strong><CheckCircle2 /> {runActive ? 'Processamento em andamento' : 'Processamento finalizado'}</strong>
               <div className="assistant-v2__process-row">
                 <span><Music2 /> Metadados</span>
-                <small>{progressLabel(metadataProgress, latestRun)}</small>
-                {latestRun?.status === 'completed' ? <CheckCircle2 /> : latestRun?.status === 'failed' ? <XCircle /> : <Clock3 />}
+                <small>{progressLabel(metadataProgress, metadataRun)}</small>
+                {metadataRun?.status === 'completed' ? <CheckCircle2 /> : metadataRun?.status === 'failed' ? <XCircle /> : <Clock3 />}
               </div>
               <div className="assistant-v2__process-row">
                 <span><ImageIcon /> Capas</span>
-                <small>Incluídas na análise de metadados · {latestRun ? runStatusLabel(latestRun) : 'Aguardando'}</small>
-                {latestRun?.status === 'completed' ? <CheckCircle2 /> : latestRun?.status === 'failed' ? <XCircle /> : <Clock3 />}
+                <small>{progressLabel(artworkProgress, artworkRun)}</small>
+                {artworkRun?.status === 'completed' ? <CheckCircle2 /> : artworkRun?.status === 'failed' ? <XCircle /> : <Clock3 />}
               </div>
               <div className="assistant-v2__process-row assistant-v2__process-row--lyrics">
                 <span><FileText /> Letras</span>
-                <small>{progressLabel(lyricsProgress, pairedLyricsRun ?? latestLyricsRun)}</small>
-                {(pairedLyricsRun ?? latestLyricsRun)?.status === 'completed' ? <CheckCircle2 /> : (pairedLyricsRun ?? latestLyricsRun)?.status === 'failed' ? <XCircle /> : <Clock3 />}
+                <small>{progressLabel(lyricsProgress, lyricsRun)}</small>
+                {lyricsRun?.status === 'completed' ? <CheckCircle2 /> : lyricsRun?.status === 'failed' ? <XCircle /> : <Clock3 />}
                 {lyricsProgress && lyricsProgress.retry > 0 && (
                   <em>{lyricsProgress.retry.toLocaleString('pt-BR')} aguardando nova tentativa{retryLabel(lyricsProgress) ? ` · ${retryLabel(lyricsProgress)}` : ''}</em>
                 )}
@@ -1209,11 +1225,29 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
                   <X /> Cancelar análise
                 </button>
               ) : (
-                <button className="assistant-v2__analyze" type="button" disabled={analyzing || mutating} onClick={() => void analyze(false)}>
-                  {analyzing ? <LoaderCircle className="is-spinning" /> : <Sparkles />} Analisar mudanças <ChevronDown />
-                </button>
+                <div className="assistant-v2__analyze-menu">
+                  <button
+                    className="assistant-v2__analyze"
+                    type="button"
+                    disabled={analyzing || mutating}
+                    aria-expanded={analysisMenuOpen}
+                    onClick={() => setAnalysisMenuOpen(value => !value)}
+                  >
+                    {analyzing ? <LoaderCircle className="is-spinning" /> : <Sparkles />} Escolher análise <ChevronDown />
+                  </button>
+                  {analysisMenuOpen && (
+                    <div className="assistant-v2__analyze-options" role="menu">
+                      {ANALYSIS_ACTIONS.map(([target, label, description]) => (
+                        <button key={target} type="button" role="menuitem" onClick={() => void analyze(target, false)}>
+                          <strong>{label}</strong>
+                          <small>{description}</small>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
-              <small>Analisa apenas o que mudou desde a última execução.</small>
+              <small>Execute apenas o tipo de correção que você quer revisar.</small>
               <span>Última execução</span>
               <strong>{statusRun ? formatRunDate(statusRun.createdAt) : 'Ainda não executada'}</strong>
               <button className="assistant-v2__reanalyze-inline" type="button" disabled={runActive || analyzing || mutating} onClick={() => setConfirmReset(true)}>

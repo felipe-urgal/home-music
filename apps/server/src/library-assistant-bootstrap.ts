@@ -7,6 +7,7 @@ import type { LibraryRouteProjection } from './library-routes.js';
 import type { LibraryService } from './library-service.js';
 import { createLrclibLyricsAnalyzer, resolveLrclibLyricsCandidate } from './lrclib-lyrics-analyzer.js';
 import { readSidecarLyrics, readTrackLyrics } from './lyrics.js';
+import { createMusicBrainzAlbumArtworkAnalyzer } from './musicbrainz-artwork-analyzer.js';
 import {
   createMusicBrainzMetadataAnalyzer,
   needsMusicBrainzEnrichment
@@ -167,6 +168,7 @@ export function registerLibraryAssistant(
   };
   const metadataAnalyzer = createMusicBrainzMetadataAnalyzer({
     fetchImpl: musicBrainzFetch,
+    includeArtwork: false,
     getHumanOverrideFields(trackId) {
       const override = metadataOverrides.get(trackId)?.override;
       if (!override) return [];
@@ -181,12 +183,52 @@ export function registerLibraryAssistant(
       };
     }
   });
-  const artworkAnalyzer = {
-    id: `${metadataAnalyzer.id}-artwork`,
-    capability: 'artwork' as const,
+  const metadataFieldAnalyzers = METADATA_FIELDS.map(field => ({
+    id: `${metadataAnalyzer.id}-${field}`,
+    capability: 'metadata' as const,
+    metadataFields: [field] as const,
     async analyze(context) {
       const drafts = await metadataAnalyzer.analyze(context);
-      return drafts.filter(draft => draft.capability === 'artwork');
+      return drafts.filter(draft => (
+        draft.target.capability === 'metadata' && draft.target.field === field
+      ));
+    }
+  } satisfies LibraryAssistantAnalyzer));
+  const albumArtworkAnalyzer = createMusicBrainzAlbumArtworkAnalyzer({
+    fetchImpl: musicBrainzFetch
+  });
+  const artworkFallbackAnalyzer = createMusicBrainzMetadataAnalyzer({
+    fetchImpl: musicBrainzFetch,
+    getFileContext(trackId) {
+      const indexed = options.library.getTrack(trackId);
+      if (!indexed) return null;
+      return {
+        fileName: path.basename(indexed.filePath),
+        folderName: indexed.folder || null
+      };
+    }
+  });
+  const artworkAnalyzer = {
+    id: `${albumArtworkAnalyzer.id}-with-track-fallback`,
+    capability: 'artwork' as const,
+    async analyze(context) {
+      const albumDrafts = await albumArtworkAnalyzer.analyze(context);
+      const resolvedTrackIds = new Set(
+        albumDrafts.flatMap(draft =>
+          draft.target.capability === 'artwork' ? [draft.target.trackId] : []
+        )
+      );
+      const remainingTracks = context.tracks.filter(track => !resolvedTrackIds.has(track.id));
+      if (remainingTracks.length === 0) return albumDrafts;
+
+      const fallbackDrafts = await artworkFallbackAnalyzer.analyze({
+        ...context,
+        tracks: remainingTracks
+      });
+      return [
+        ...albumDrafts,
+        ...fallbackDrafts.filter(draft => draft.capability === 'artwork')
+      ];
     }
   } satisfies LibraryAssistantAnalyzer;
   const lyricsAnalyzer = {
@@ -195,8 +237,10 @@ export function registerLibraryAssistant(
     }),
     capability: 'lyrics' as const
   } satisfies LibraryAssistantAnalyzer;
-  const analyzers = (options.analyzers ?? [metadataAnalyzer, artworkAnalyzer, lyricsAnalyzer])
-    .map(analyzer => instrumentAnalyzer(analyzer, metrics));
+  const analyzers = (
+    options.analyzers
+    ?? [metadataAnalyzer, ...metadataFieldAnalyzers, artworkAnalyzer, lyricsAnalyzer]
+  ).map(analyzer => instrumentAnalyzer(analyzer, metrics));
   const service = new LibraryAssistantService({
     store,
     workQueue,

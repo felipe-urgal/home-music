@@ -20,7 +20,7 @@ describe('AdminLibraryAssistantScreen live review', () => {
   it('mantém reanálise e reset bloqueados durante um run ativo', () => {
     const screen = source();
 
-    expect(screen).toMatch(/async function analyze\(full = false\) \{\s*if \(analyzing \|\| mutating \|\| runActive\) return;/);
+    expect(screen).toMatch(/async function analyze\(target: LibraryAssistantAnalysisTarget, full = false\) \{\s*if \(analyzing \|\| mutating \|\| runActive\) return;/);
     expect(screen).toMatch(/async function resetAndAnalyze\(\) \{\s*if \(analyzing \|\| mutating \|\| runActive\) return;/);
   });
 });

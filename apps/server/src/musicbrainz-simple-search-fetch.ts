@@ -1,7 +1,7 @@
 type FetchLike = (input: string | URL, init?: RequestInit) => Promise<Response>;
 
 const MUSICBRAINZ_ORIGIN = 'https://musicbrainz.org';
-const MUSICBRAINZ_RECORDING_PATH = '/ws/2/recording';
+const MUSICBRAINZ_SEARCH_PATHS = new Set(['/ws/2/recording', '/ws/2/release']);
 const MAX_RETRY_AFTER_MS = 2 * 60 * 60 * 1_000;
 
 type MusicBrainzRetryableCode = 'provider-rate-limited' | 'provider-unavailable';
@@ -19,8 +19,8 @@ export class MusicBrainzRetryableRequestError extends Error {
   }
 }
 
-function isMusicBrainzRecordingUrl(url: URL) {
-  return url.origin === MUSICBRAINZ_ORIGIN && url.pathname === MUSICBRAINZ_RECORDING_PATH;
+function isMusicBrainzSearchUrl(url: URL) {
+  return url.origin === MUSICBRAINZ_ORIGIN && MUSICBRAINZ_SEARCH_PATHS.has(url.pathname);
 }
 
 export function parseRetryAfterMs(value: string | null, nowMs = Date.now()) {
@@ -45,7 +45,7 @@ export function createMusicBrainzSimpleSearchFetch(
   return async (input, init) => {
     const url = new URL(String(input));
     const response = await fetchImpl(url, init);
-    if (!isMusicBrainzRecordingUrl(url)) return response;
+    if (!isMusicBrainzSearchUrl(url)) return response;
 
     if (response.status === 429 || response.status === 503) {
       throw new MusicBrainzRetryableRequestError(

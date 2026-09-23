@@ -12,6 +12,7 @@ import type {
   AdminLibraryAssistantSuggestionsResponse,
   LibraryAssistantCapability,
   LibraryAssistantDecision,
+  LibraryAssistantMetadataField,
   LibraryAssistantReviewPolicy,
   LibraryAssistantSuggestionStatus,
   LocalLyricsCapabilityResponse,
@@ -52,7 +53,7 @@ async function responseError(response: Response) {
 
 export async function startLibraryAssistantRun(
   capability: LibraryAssistantCapability,
-  options: { full?: boolean } = {}
+  options: { full?: boolean; fields?: LibraryAssistantMetadataField[] } = {}
 ) {
   const response = await apiFetch('/api/admin/library-assistant/runs', {
     method: 'POST',
@@ -60,21 +61,52 @@ export async function startLibraryAssistantRun(
       'Content-Type': 'application/json',
       'X-Home-Music-Request': '1'
     },
-    body: JSON.stringify({ capability, full: options.full === true })
+    body: JSON.stringify({
+      capability,
+      full: options.full === true,
+      ...(options.fields?.length ? { fields: options.fields } : {})
+    })
   });
   if (!response.ok) throw new Error(await responseError(response));
   return response.json() as Promise<AdminLibraryAssistantRunResponse>;
 }
 
+export type LibraryAssistantAnalysisTarget =
+  | LibraryAssistantMetadataField
+  | 'artwork'
+  | 'lyrics'
+  | 'all';
+
+export async function startLibraryAssistantAnalysis(
+  target: LibraryAssistantAnalysisTarget,
+  options: { full?: boolean } = {}
+) {
+  if (target === 'all') {
+    const [metadata, artwork, lyrics] = await Promise.all([
+      startLibraryAssistantRun('metadata', options),
+      startLibraryAssistantRun('artwork', options),
+      startLibraryAssistantRun('lyrics', options)
+    ]);
+    return {
+      run: metadata.run,
+      runs: [metadata.run, artwork.run, lyrics.run]
+    };
+  }
+
+  if (target === 'artwork' || target === 'lyrics') {
+    const result = await startLibraryAssistantRun(target, options);
+    return { run: result.run, runs: [result.run] };
+  }
+
+  const result = await startLibraryAssistantRun('metadata', {
+    ...options,
+    fields: [target]
+  });
+  return { run: result.run, runs: [result.run] };
+}
+
 export async function startLibraryAssistantMetadataRun(options: { full?: boolean } = {}) {
-  const [metadata, lyrics] = await Promise.all([
-    startLibraryAssistantRun('metadata', options),
-    startLibraryAssistantRun('lyrics', options)
-  ]);
-  return {
-    run: metadata.run,
-    runs: [metadata.run, lyrics.run]
-  };
+  return startLibraryAssistantAnalysis('all', options);
 }
 
 export async function startLibraryAssistantLyricsRun(options: { full?: boolean } = {}) {
