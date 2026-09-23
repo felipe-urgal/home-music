@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import {
   checkAdminLibraryDuplicates,
+  getAdminLibraryDuplicates,
   setAdminLibraryDuplicateIgnored,
   type AdminLibraryDuplicateCandidate,
   type AdminLibraryDuplicateConfidence,
@@ -112,6 +113,7 @@ function TrackComparison({ track, label }: { track: AdminLibraryDuplicateTrack; 
 
 export function AdminLibraryDuplicateReviewScreen({ onBack }: AdminLibraryDuplicateReviewScreenProps) {
   const [review, setReview] = useState<AdminLibraryDuplicateReviewResponse | null>(null);
+  const [loadingReview, setLoadingReview] = useState(true);
   const [filter, setFilter] = useState<DuplicateFilter>('all');
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
@@ -133,6 +135,24 @@ export function AdminLibraryDuplicateReviewScreen({ onBack }: AdminLibraryDuplic
     () => review?.candidates.find(candidate => candidate.key === selectedKey) ?? null,
     [review, selectedKey]
   );
+
+  useEffect(() => {
+    let active = true;
+    void getAdminLibraryDuplicates()
+      .then(next => {
+        if (!active) return;
+        setReview(next);
+        setSelectedKey(next?.candidates.find(candidate => !candidate.ignored)?.key ?? null);
+      })
+      .catch(caught => {
+        if (!active) return;
+        setError(caught instanceof Error ? caught.message : 'Não foi possível carregar a última análise de duplicatas.');
+      })
+      .finally(() => {
+        if (active) setLoadingReview(false);
+      });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     if (visibleCandidates.length === 0) {
@@ -211,20 +231,29 @@ export function AdminLibraryDuplicateReviewScreen({ onBack }: AdminLibraryDuplic
 
   const hasReview = Boolean(review);
   const hasCandidates = Boolean(review && review.counts.reviewable > 0);
+  const staleReview = Boolean(review?.stale);
   const statusTitle = checking
     ? 'Analisando biblioteca…'
-    : !review
-      ? 'Análise ainda não executada'
-      : hasCandidates
-        ? 'Há pares para revisar'
-        : 'Nenhuma duplicata pendente';
+    : loadingReview
+      ? 'Carregando última análise…'
+      : !review
+        ? 'Análise ainda não executada'
+        : staleReview
+          ? 'Análise desatualizada'
+          : hasCandidates
+            ? 'Há pares para revisar'
+            : 'Nenhuma duplicata pendente';
   const statusDetail = checking
     ? 'Comparando metadata, duração e candidatos de mesmo tamanho; hashes são lidos somente quando necessários.'
-    : !review
-      ? 'A verificação é explícita e não altera nenhum arquivo.'
-      : hasCandidates
-        ? `${review.counts.reviewable.toLocaleString('pt-BR')} ${review.counts.reviewable === 1 ? 'par aguarda' : 'pares aguardam'} decisão humana.`
-        : 'Nenhum par ativo foi classificado como duplicata exata, provável ou possível.';
+    : loadingReview
+      ? 'Recuperando o último diagnóstico salvo.'
+      : !review
+        ? 'A verificação é explícita e não altera nenhum arquivo.'
+        : staleReview
+          ? 'A biblioteca mudou desde esta análise. Execute novamente antes de decidir sobre os pares.'
+          : hasCandidates
+            ? `${review.counts.reviewable.toLocaleString('pt-BR')} ${review.counts.reviewable === 1 ? 'par aguarda' : 'pares aguardam'} decisão humana.`
+            : 'Nenhum par ativo foi classificado como duplicata exata, provável ou possível.';
 
   return (
     <section className="my-account-screen admin-duplicates-screen" aria-labelledby="admin-duplicates-title">
@@ -249,7 +278,8 @@ export function AdminLibraryDuplicateReviewScreen({ onBack }: AdminLibraryDuplic
             {review && (
               <div className="admin-duplicates__hero-meta">
                 <span>Última análise: {formatDate(review.checkedAt)}</span>
-                <span>{review.hashComplete ? 'Hashes comparáveis verificados' : 'Hash parcial — revise com cautela'}</span>
+                <span>{staleReview ? 'Biblioteca alterada desde a análise' : 'Análise atual'}</span>
+                <span>{review.hashComplete ? 'Hash completo — comparação byte a byte concluída' : 'Hash parcial — alguns arquivos não puderam ser validados'}</span>
               </div>
             )}
           </div>
@@ -262,7 +292,13 @@ export function AdminLibraryDuplicateReviewScreen({ onBack }: AdminLibraryDuplic
         {error && <div className="my-account-message is-error" role="alert">{error}</div>}
         {feedback && <div className="my-account-message is-success" role="status">{feedback}</div>}
 
-        {!review ? (
+        {loadingReview && !review ? (
+          <section className="admin-duplicates__empty">
+            <LoaderCircle className="is-spinning" />
+            <strong>Carregando última análise</strong>
+            <span>Recuperando o diagnóstico salvo desta biblioteca.</span>
+          </section>
+        ) : !review ? (
           <section className="admin-duplicates__empty">
             <Search />
             <strong>Comece com uma análise explícita</strong>
