@@ -22,7 +22,7 @@ type AdminLibraryIntegrityScreenProps = {
 type IntegrityFilter = AdminLibraryIntegrityIssueKind | '';
 
 const ISSUE_LABELS: Record<AdminLibraryIntegrityIssueKind, string> = {
-  'scanner-failed': 'Falha do scanner',
+  'scanner-failed': 'Falha de leitura',
   'media-probe-failed': 'Falha no ffprobe',
   'missing-file': 'Registro sem arquivo',
   'unindexed-file': 'Arquivo fora do índice'
@@ -64,6 +64,11 @@ export function AdminLibraryIntegrityScreen({ onBack }: AdminLibraryIntegrityScr
   const hasVerification = Boolean(integrity?.checkedAt);
   const totalIssues = integrity?.counts.total ?? 0;
   const hasIssues = hasVerification && totalIssues > 0;
+  const mediaProbeLabel = integrity?.mediaProbe.available === true
+    ? 'FFprobe disponível'
+    : integrity?.mediaProbe.available === false
+      ? 'FFprobe indisponível'
+      : 'FFprobe não verificado';
   const visibleIssues = useMemo(
     () => integrity?.issues.filter(issue => !filter || issue.kind === filter) ?? [],
     [filter, integrity]
@@ -138,6 +143,7 @@ export function AdminLibraryIntegrityScreen({ onBack }: AdminLibraryIntegrityScr
             <div className="admin-integrity-v3__hero-meta">
               <span>Última verificação: {formatDate(integrity?.checkedAt ?? null)}</span>
               <span>Somente leitura</span>
+              <span title={integrity?.mediaProbe.message ?? undefined}>{mediaProbeLabel}</span>
             </div>
           </div>
           <button
@@ -167,7 +173,7 @@ export function AdminLibraryIntegrityScreen({ onBack }: AdminLibraryIntegrityScr
               </button>
               <button type="button" className={filter === 'scanner-failed' ? 'is-active' : ''} aria-pressed={filter === 'scanner-failed'} disabled={!hasVerification} onClick={() => setFilter('scanner-failed')}>
                 <ScanLine />
-                <span><small>Scanner</small><strong>{hasVerification ? integrity.counts.scannerFailures.toLocaleString('pt-BR') : '—'}</strong></span>
+                <span><small>Falha de leitura</small><strong>{hasVerification ? integrity.counts.scannerFailures.toLocaleString('pt-BR') : '—'}</strong></span>
               </button>
               <button type="button" className={filter === 'media-probe-failed' ? 'is-active' : ''} aria-pressed={filter === 'media-probe-failed'} disabled={!hasVerification} onClick={() => setFilter('media-probe-failed')}>
                 <ScanLine />
@@ -211,7 +217,12 @@ export function AdminLibraryIntegrityScreen({ onBack }: AdminLibraryIntegrityScr
                 )}
               </header>
 
-              {!hasVerification ? (
+              {checking ? (
+                <div className="admin-integrity-v3__state">
+                  <LoaderCircle className="is-spinning" />
+                  <span>Analisando arquivos e comparando com o índice atual…</span>
+                </div>
+              ) : !hasVerification ? (
                 <div className="admin-integrity-v3__state">
                   <ScanLine />
                   <span>Clique em <strong>Verificar agora</strong> para analisar a biblioteca.</span>
