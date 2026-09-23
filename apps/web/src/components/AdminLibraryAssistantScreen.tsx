@@ -138,7 +138,8 @@ const EMPTY_PROGRESS: LibraryAssistantRunProgress = {
   matched: 0,
   noMatch: 0,
   retry: 0,
-  failed: 0
+  failed: 0,
+  nextRetryAt: null
 };
 
 function isOpen(suggestion: LibraryAssistantSuggestion) {
@@ -286,7 +287,11 @@ function aggregateProgress(values: LibraryAssistantRunProgress[]) {
     matched: values.reduce((sum, value) => sum + value.matched, 0),
     noMatch: values.reduce((sum, value) => sum + value.noMatch, 0),
     retry: values.reduce((sum, value) => sum + value.retry, 0),
-    failed: values.reduce((sum, value) => sum + value.failed, 0)
+    failed: values.reduce((sum, value) => sum + value.failed, 0),
+    nextRetryAt: values
+      .map(value => value.nextRetryAt)
+      .filter((value): value is string => Boolean(value))
+      .sort()[0] ?? null
   };
   if (metrics.length > 0) {
     aggregate.metrics = {
@@ -303,6 +308,32 @@ function aggregateProgress(values: LibraryAssistantRunProgress[]) {
     };
   }
   return aggregate;
+}
+
+function progressLabel(progress: LibraryAssistantRunProgress | null, run: LibraryAssistantRun | null) {
+  if (!run) return 'Aguardando';
+  if (!progress || progress.total === 0) return runStatusLabel(run);
+  const completed = Math.min(progress.processed, progress.total);
+  if (run.status === 'completed') return `${completed.toLocaleString('pt-BR')} / ${progress.total.toLocaleString('pt-BR')} verificações`;
+  const parts = [`${completed.toLocaleString('pt-BR')} / ${progress.total.toLocaleString('pt-BR')} verificações`];
+  if (progress.retry > 0) parts.push(`${progress.retry.toLocaleString('pt-BR')} em retry`);
+  if (progress.failed > 0) parts.push(`${progress.failed.toLocaleString('pt-BR')} falha${progress.failed === 1 ? '' : 's'}`);
+  return parts.join(' · ');
+}
+
+function retryLabel(progress: LibraryAssistantRunProgress | null) {
+  if (!progress || progress.retry === 0 || !progress.nextRetryAt) return null;
+  const retryAt = Date.parse(progress.nextRetryAt);
+  if (!Number.isFinite(retryAt)) return null;
+  const remainingMs = Math.max(0, retryAt - Date.now());
+  if (remainingMs < 1_000) return 'nova tentativa a qualquer momento';
+  const totalSeconds = Math.ceil(remainingMs / 1_000);
+  if (totalSeconds < 60) return `próxima tentativa em ${totalSeconds}s`;
+  const minutes = Math.ceil(totalSeconds / 60);
+  if (minutes < 60) return `próxima tentativa em ${minutes}min`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return `próxima tentativa em ${hours}h${rest ? ` ${rest}min` : ''}`;
 }
 
 function runsBelongTogether(left: LibraryAssistantRun | null, right: LibraryAssistantRun | null) {
@@ -372,6 +403,7 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
   const [confirmReviewCount, setConfirmReviewCount] = useState(0);
   const [confirmReset, setConfirmReset] = useState(false);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
+  const [runProgress, setRunProgress] = useState<Record<string, LibraryAssistantRunProgress>>({});
   const requestVersion = useRef(0);
   const policyRequestVersion = useRef(0);
   const fingerprintRequestVersion = useRef(0);
@@ -474,12 +506,16 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
         Promise.all(currentRuns.map(run => getLibraryAssistantRunProgress(run.id)))
       ]);
       if (version !== requestVersion.current) return;
+      const progressByRun = Object.fromEntries(
+        currentRuns.map((run, index) => [run.id, progressResponses[index]?.progress ?? EMPTY_PROGRESS])
+      );
       setRuns(runsResponse.runs);
       setReviewItems(reviewResponse.items);
       setSuggestions(mergeSuggestions(
         suggestionResponses.flatMap(response => response.suggestions),
         reviewResponse.items
       ));
+      setRunProgress(progressByRun);
       setProgress(aggregateProgress(progressResponses.map(response => response.progress)));
     } catch (error) {
       if (version === requestVersion.current) {
@@ -941,18 +977,18 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
     }
   }
 
-  const totalTracks = progress.total;
-  const processedTracks = Math.min(progress.processed, totalTracks);
-  const progressPercent = totalTracks > 0
-    ? Math.min(processedTracks < totalTracks ? 99 : 100, Math.round((processedTracks / totalTracks) * 100))
+  const totalChecks = progress.total;
+  const processedChecks = Math.min(progress.processed, totalChecks);
+  const progressPercent = totalChecks > 0
+    ? Math.min(processedChecks < totalChecks ? 99 : 100, Math.round((processedChecks / totalChecks) * 100))
     : 0;
-  const pendingTracks = progress.pending + progress.processing;
-  const queueFailureCount = progress.failed;
-  const suggestionFailureCount = analysisRuns.reduce((sum, run) => sum + run.summary.failed, 0);
-  const failedCount = Math.max(queueFailureCount, suggestionFailureCount);
+  const pendingChecks = progress.pending + progress.processing;
+  const processingFailureCount = progress.failed;
   const failedRun = analysisRuns.some(run => run.status === 'failed');
-  const allCurrentRunsCompleted = analysisRuns.length > 0 && analysisRuns.every(run => run.status === 'completed');
-  const completedChecks = progress.matched;
+  const metadataProgress = latestRun ? runProgress[latestRun.id] ?? null : null;
+  const lyricsProgress = pairedLyricsRun ? runProgress[pairedLyricsRun.id] ?? null : null;
+  const retryStatus = retryLabel(lyricsProgress) ?? retryLabel(metadataProgress);
+  const failedSuggestionCount = reviewableSuggestions.filter(item => item.status === 'failed').length;
   const activeTypeCounts = {
     metadata: reviewableSuggestions.filter(item => item.target.capability === 'metadata').length,
     artwork: reviewableSuggestions.filter(item => item.target.capability === 'artwork').length,
@@ -1123,9 +1159,9 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
               </div>
 
               <div className="assistant-v2__hero-numbers">
-                <div><strong>{libraryCounts.total.toLocaleString('pt-BR')}</strong><span>faixas analisadas</span></div>
-                <div className="is-success"><strong>{progress.matched.toLocaleString('pt-BR')}</strong><span>com sugestões</span></div>
-                <div><strong>{progress.noMatch.toLocaleString('pt-BR')}</strong><span>sem alterações</span></div>
+                <div><strong>{libraryCounts.total.toLocaleString('pt-BR')}</strong><span>faixas na biblioteca</span></div>
+                <div className="is-success"><strong>{reviewableSuggestions.length.toLocaleString('pt-BR')}</strong><span>sugestões abertas</span></div>
+                <div><strong>{processingFailureCount.toLocaleString('pt-BR')}</strong><span>falhas de processamento</span></div>
               </div>
 
               <div className="assistant-v2__progress">
@@ -1134,18 +1170,37 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
               </div>
 
               <div className="assistant-v2__micro-status">
-                <span className="is-success"><CheckCircle2 /> {completedChecks.toLocaleString('pt-BR')} concluídas</span>
-                <span><Clock3 /> {pendingTracks.toLocaleString('pt-BR')} pendentes</span>
-                <span className="is-warning"><AlertTriangle /> {progress.retry.toLocaleString('pt-BR')} em retry</span>
-                <span className="is-error"><XCircle /> {failedCount.toLocaleString('pt-BR')} falhas</span>
+                <span className="is-success"><CheckCircle2 /> {processedChecks.toLocaleString('pt-BR')} verificações concluídas</span>
+                <span><Clock3 /> {pendingChecks.toLocaleString('pt-BR')} aguardando processamento</span>
+                <span className="is-warning"><AlertTriangle /> {progress.retry.toLocaleString('pt-BR')} aguardando nova tentativa</span>
+                <span className="is-error"><XCircle /> {processingFailureCount.toLocaleString('pt-BR')} falhas definitivas</span>
+                {retryStatus && <span className="is-warning"><Clock3 /> {retryStatus}</span>}
               </div>
             </div>
 
             <div className="assistant-v2__process-card">
               <strong><CheckCircle2 /> {runActive ? 'Processamento em andamento' : 'Processamento finalizado'}</strong>
-              <div><span><Music2 /> Metadados</span><small>{latestRun ? runStatusLabel(latestRun) : 'Aguardando'}</small><CheckCircle2 /></div>
-              <div><span><ImageIcon /> Capas</span><small>{latestRun ? runStatusLabel(latestRun) : 'Aguardando'}</small><CheckCircle2 /></div>
-              <div><span><FileText /> Letras</span><small>{pairedLyricsRun ? runStatusLabel(pairedLyricsRun) : latestLyricsRun ? runStatusLabel(latestLyricsRun) : 'Aguardando'}</small><CheckCircle2 /></div>
+              <div className="assistant-v2__process-row">
+                <span><Music2 /> Metadados</span>
+                <small>{progressLabel(metadataProgress, latestRun)}</small>
+                {latestRun?.status === 'completed' ? <CheckCircle2 /> : latestRun?.status === 'failed' ? <XCircle /> : <Clock3 />}
+              </div>
+              <div className="assistant-v2__process-row">
+                <span><ImageIcon /> Capas</span>
+                <small>Incluídas na análise de metadados · {latestRun ? runStatusLabel(latestRun) : 'Aguardando'}</small>
+                {latestRun?.status === 'completed' ? <CheckCircle2 /> : latestRun?.status === 'failed' ? <XCircle /> : <Clock3 />}
+              </div>
+              <div className="assistant-v2__process-row assistant-v2__process-row--lyrics">
+                <span><FileText /> Letras</span>
+                <small>{progressLabel(lyricsProgress, pairedLyricsRun ?? latestLyricsRun)}</small>
+                {(pairedLyricsRun ?? latestLyricsRun)?.status === 'completed' ? <CheckCircle2 /> : (pairedLyricsRun ?? latestLyricsRun)?.status === 'failed' ? <XCircle /> : <Clock3 />}
+                {lyricsProgress && lyricsProgress.retry > 0 && (
+                  <em>{lyricsProgress.retry.toLocaleString('pt-BR')} aguardando nova tentativa{retryLabel(lyricsProgress) ? ` · ${retryLabel(lyricsProgress)}` : ''}</em>
+                )}
+                {lyricsProgress && lyricsProgress.failed > 0 && (
+                  <em className="is-error">{lyricsProgress.failed.toLocaleString('pt-BR')} falha{lyricsProgress.failed === 1 ? '' : 's'} definitiva{lyricsProgress.failed === 1 ? '' : 's'}</em>
+                )}
+              </div>
             </div>
 
             <div className="assistant-v2__analysis-actions">
@@ -1172,7 +1227,7 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
             <div><Music2 /><span><strong>{reviewableSuggestions.length.toLocaleString('pt-BR')}</strong><small>sugestões encontradas</small><em>{visibleSuggestions.length.toLocaleString('pt-BR')} visíveis pela política</em></span></div>
             <div className="is-safe"><ShieldCheck /><span><strong>{safeSuggestions.length.toLocaleString('pt-BR')}</strong><small>sugestões seguras</small><em>Podem ser aplicadas em lote</em></span></div>
             <div className="is-review"><AlertTriangle /><span><strong>{reviewSuggestions.length.toLocaleString('pt-BR')}</strong><small>precisam de revisão</small><em>Exigem sua decisão</em></span></div>
-            <div className="is-error"><XCircle /><span><strong>{failedCount.toLocaleString('pt-BR')}</strong><small>falhas</small><em>Nenhuma alteração aplicada</em></span></div>
+            <div className="is-error"><XCircle /><span><strong>{processingFailureCount.toLocaleString('pt-BR')}</strong><small>falhas de processamento</small><em>Não entram na fila de sugestões</em></span></div>
             <div className="assistant-v2__safe-apply">
               <span>Aplicar sugestões seguras</span>
               <button type="button" disabled={mutating || safeSuggestions.length === 0} onClick={() => void applySuggestions(safeSuggestions)}>
@@ -1189,7 +1244,7 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
                 ['artwork', `Capas (${activeTypeCounts.artwork})`],
                 ['lyrics', `Letras (${activeTypeCounts.lyrics})`],
                 ['review', `Revisão (${reviewSuggestions.length})`],
-                ['failed', `Falhas (${failedCount})`]
+                ['failed', `Falhas de sugestão (${failedSuggestionCount})`]
               ] as const).map(([value, label]) => (
                 <button key={value} type="button" className={filter === value ? 'is-active' : undefined} onClick={() => setFilter(value)}>{label}</button>
               ))}
