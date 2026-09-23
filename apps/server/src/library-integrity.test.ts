@@ -7,8 +7,10 @@ import {
   finishLibraryIntegrityCheck,
   getLibraryIntegrityStatus,
   hasLibraryIntegrityFileFailure,
+  hydrateLibraryIntegrityStatus,
   probeMediaFile,
   recordLibraryIntegrityIssue,
+  recordLibraryMediaProbeResult,
   resetLibraryIntegrityStatusForTests,
   resolveFfprobeCommand
 } from './library-integrity.js';
@@ -101,4 +103,25 @@ test('falha persistente é reaproveitada apenas na mesma raiz e pode ser reavali
   beginLibraryIntegrityCheck('/outra');
   assert.equal(hasLibraryIntegrityFileFailure('/outra/Quebrada.mp3'), false);
   finishLibraryIntegrityCheck('2026-08-30T11:32:00.000Z');
+});
+
+
+test('snapshot registra disponibilidade do ffprobe e pode ser restaurado', () => {
+  resetLibraryIntegrityStatusForTests();
+  beginLibraryIntegrityCheck('/music');
+  recordLibraryMediaProbeResult({ status: 'unavailable', message: 'ffprobe não está disponível no ambiente.' });
+  const status = finishLibraryIntegrityCheck('2026-09-23T12:00:00.000Z');
+  assert.deepEqual(status.mediaProbe, {
+    available: false,
+    message: 'ffprobe não está disponível no ambiente.'
+  });
+
+  resetLibraryIntegrityStatusForTests();
+  hydrateLibraryIntegrityStatus('/music', status);
+  assert.deepEqual(getLibraryIntegrityStatus(), status);
+
+  beginLibraryIntegrityCheck('/music');
+  recordLibraryMediaProbeResult({ status: 'ok', message: null });
+  const recovered = finishLibraryIntegrityCheck('2026-09-23T12:05:00.000Z');
+  assert.deepEqual(recovered.mediaProbe, { available: true, message: null });
 });
