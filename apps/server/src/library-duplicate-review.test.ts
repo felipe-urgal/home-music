@@ -61,6 +61,7 @@ test('classifica metadata e duração equivalentes como duplicata provável', as
   const item = await fixture(items);
   try {
     const review = await item.store.check();
+    assert.equal(review.stale, false);
     assert.equal(review.counts.reviewable, 1);
     assert.equal(review.counts.probable, 1);
     assert.equal(review.candidates[0].confidence, 'probable');
@@ -166,6 +167,63 @@ test('ignorar falso positivo persiste sem alterar as faixas', async () => {
     const third = await item.store.check();
     assert.equal(third.counts.reviewable, 1);
     assert.equal(third.counts.ignored, 0);
+  } finally {
+    item.store.close();
+    await rm(item.root, { recursive: true, force: true });
+  }
+});
+
+
+test('persiste a última análise e marca como desatualizada quando a biblioteca muda', async () => {
+  const items = [
+    track('a', { fileSize: 1_000 }),
+    track('b', { fileSize: 2_000 })
+  ];
+  const item = await fixture(items);
+  try {
+    const first = await item.store.check();
+    assert.equal(first.stale, false);
+
+    const restored = await item.store.latest();
+    assert.ok(restored);
+    assert.equal(restored?.stale, false);
+    assert.equal(restored?.checkedAt, '2026-08-30T18:00:00.000Z');
+    assert.equal(restored?.counts.reviewable, 1);
+
+    items.push(track('c', {
+      title: 'Outra faixa',
+      artist: 'Outro artista',
+      album: 'Outro álbum',
+      duration: 240,
+      fileSize: 3_000
+    }));
+
+    const stale = await item.store.latest();
+    assert.ok(stale);
+    assert.equal(stale?.stale, true);
+    assert.equal(stale?.counts.reviewable, 1);
+  } finally {
+    item.store.close();
+    await rm(item.root, { recursive: true, force: true });
+  }
+});
+
+test('última análise reaplica decisões de falso positivo persistidas', async () => {
+  const items = [
+    track('a', { fileSize: 1_000 }),
+    track('b', { fileSize: 2_000 })
+  ];
+  const item = await fixture(items);
+  try {
+    await item.store.check();
+    item.store.setIgnored(['a', 'b'], true);
+
+    const restored = await item.store.latest();
+    assert.ok(restored);
+    assert.equal(restored?.stale, false);
+    assert.equal(restored?.counts.reviewable, 0);
+    assert.equal(restored?.counts.ignored, 1);
+    assert.equal(restored?.candidates[0].ignored, true);
   } finally {
     item.store.close();
     await rm(item.root, { recursive: true, force: true });
