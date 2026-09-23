@@ -732,7 +732,7 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
     if (activeRuns.length === 0) return;
     setMutating(true);
     try {
-      await Promise.all(activeRuns.map(run => cancelLibraryAssistantRun(run.id)));
+      await cancelLibraryAssistantRun(activeRuns[0].id);
       setFeedback({
         kind: 'warning',
         message: 'Análise cancelada. Sugestões abertas desses processamentos foram invalidadas.'
@@ -1407,7 +1407,7 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
               <strong id="assistant-processing-title">Processamento</strong>
               <small>Fila atual, desempenho da análise e histórico das execuções recentes.</small>
             </div>
-            <span className={`assistant-admin__run-badge is-${latestRun?.status ?? 'idle'}`}>{runStatusLabel(latestRun)}</span>
+            <span className={`assistant-admin__run-badge is-${statusRun?.status ?? 'idle'}`}>{runStatusLabel(statusRun)}</span>
           </header>
 
           <div className="assistant-admin__operations-section">
