@@ -2,15 +2,19 @@ import { useEffect, useMemo, useState } from 'react';
 import type { AdminLibraryDuplicateReviewResponse } from '@home-music/shared';
 import {
   AlertTriangle,
+  CalendarDays,
+  Check,
   CheckCircle2,
   ChevronLeft,
   Copy,
   EyeOff,
+  Info,
+  Link2,
   LoaderCircle,
+  Music2,
   RefreshCw,
   RotateCcw,
   Search,
-  ShieldCheck,
   Trash2
 } from 'lucide-react';
 import {
@@ -38,12 +42,12 @@ const CONFIDENCE_LABELS: Record<AdminLibraryDuplicateConfidence, string> = {
 };
 
 const REASON_LABELS: Record<AdminLibraryDuplicateReason, string> = {
-  hash: 'Mesmo arquivo',
-  title: 'Título',
-  artist: 'Artista',
-  album: 'Álbum',
-  duration: 'Duração',
-  filename: 'Nome do arquivo'
+  hash: 'Mesmo hash SHA-256',
+  title: 'Mesmo título',
+  artist: 'Mesmo artista',
+  album: 'Mesmo álbum',
+  duration: 'Mesma duração',
+  filename: 'Mesmo nome de arquivo'
 };
 
 function formatDate(value: string) {
@@ -95,14 +99,32 @@ function updateIgnoredState(
   return { ...review, candidates, counts: rebuildCounts(candidates) };
 }
 
-function TrackComparison({ track, label }: { track: AdminLibraryDuplicateTrack; label: string }) {
+function TrackCover({ track }: { track: AdminLibraryDuplicateTrack }) {
+  return (
+    <div className="admin-duplicates__cover" aria-hidden="true">
+      <Music2 />
+      <img
+        src={`/api/tracks/${encodeURIComponent(track.id)}/cover`}
+        alt=""
+        onError={event => { event.currentTarget.style.display = 'none'; }}
+      />
+    </div>
+  );
+}
+
+function TrackComparison({ track }: { track: AdminLibraryDuplicateTrack }) {
   return (
     <article className="admin-duplicates__track">
-      <span className="admin-duplicates__track-label">{label}</span>
-      <strong>{track.title || 'Sem título'}</strong>
-      <small>{track.artist || 'Artista desconhecido'}{track.album ? ` · ${track.album}` : ''}</small>
+      <div className="admin-duplicates__track-head">
+        <TrackCover track={track} />
+        <div>
+          <strong>{track.title || 'Sem título'}</strong>
+          <small>{track.artist || 'Artista desconhecido'}</small>
+        </div>
+      </div>
       <dl>
         <div><dt>Duração</dt><dd>{formatDuration(track.durationSeconds)}</dd></div>
+        <div><dt>Álbum</dt><dd>{track.album || '(não informado)'}</dd></div>
         <div><dt>Formato</dt><dd>{track.format || '—'}</dd></div>
         <div><dt>Tamanho</dt><dd>{formatBytes(track.sizeBytes)}</dd></div>
         <div><dt>Caminho</dt><dd title={track.relativePath}>{track.relativePath}</dd></div>
@@ -115,6 +137,7 @@ export function AdminLibraryDuplicateReviewScreen({ onBack }: AdminLibraryDuplic
   const [review, setReview] = useState<AdminLibraryDuplicateReviewResponse | null>(null);
   const [loadingReview, setLoadingReview] = useState(true);
   const [filter, setFilter] = useState<DuplicateFilter>('all');
+  const [query, setQuery] = useState('');
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   const [mutating, setMutating] = useState(false);
@@ -123,13 +146,21 @@ export function AdminLibraryDuplicateReviewScreen({ onBack }: AdminLibraryDuplic
 
   const visibleCandidates = useMemo(() => {
     if (!review) return [];
+    const normalizedQuery = query.trim().toLocaleLowerCase('pt-BR');
     return review.candidates.filter(candidate => {
-      if (filter === 'ignored') return candidate.ignored;
-      if (candidate.ignored) return false;
-      if (filter === 'all') return true;
-      return candidate.confidence === filter;
+      if (filter === 'ignored') {
+        if (!candidate.ignored) return false;
+      } else {
+        if (candidate.ignored) return false;
+        if (filter !== 'all' && candidate.confidence !== filter) return false;
+      }
+      if (!normalizedQuery) return true;
+      return candidate.tracks.some(track =>
+        [track.title, track.artist, track.album, track.relativePath, track.format]
+          .some(value => value.toLocaleLowerCase('pt-BR').includes(normalizedQuery))
+      );
     });
-  }, [filter, review]);
+  }, [filter, query, review]);
 
   const selectedCandidate = useMemo(
     () => review?.candidates.find(candidate => candidate.key === selectedKey) ?? null,
@@ -142,7 +173,7 @@ export function AdminLibraryDuplicateReviewScreen({ onBack }: AdminLibraryDuplic
       .then(next => {
         if (!active) return;
         setReview(next);
-        setSelectedKey(next?.candidates.find(candidate => !candidate.ignored)?.key ?? null);
+        setSelectedKey(next?.candidates.find(candidate => !candidate.ignored)?.key ?? next?.candidates[0]?.key ?? null);
       })
       .catch(caught => {
         if (!active) return;
@@ -173,7 +204,8 @@ export function AdminLibraryDuplicateReviewScreen({ onBack }: AdminLibraryDuplic
       const next = await checkAdminLibraryDuplicates();
       setReview(next);
       setFilter('all');
-      setSelectedKey(next.candidates.find(candidate => !candidate.ignored)?.key ?? null);
+      setQuery('');
+      setSelectedKey(next.candidates.find(candidate => !candidate.ignored)?.key ?? next.candidates[0]?.key ?? null);
       if (!options.preserveFeedback) {
         setFeedback(
           next.counts.reviewable === 0
@@ -232,6 +264,7 @@ export function AdminLibraryDuplicateReviewScreen({ onBack }: AdminLibraryDuplic
   const hasReview = Boolean(review);
   const hasCandidates = Boolean(review && review.counts.reviewable > 0);
   const staleReview = Boolean(review?.stale);
+
   const statusTitle = checking
     ? 'Analisando biblioteca…'
     : loadingReview
@@ -241,56 +274,73 @@ export function AdminLibraryDuplicateReviewScreen({ onBack }: AdminLibraryDuplic
         : staleReview
           ? 'Análise desatualizada'
           : hasCandidates
-            ? 'Há pares para revisar'
+            ? `${review.counts.reviewable.toLocaleString('pt-BR')} ${review.counts.reviewable === 1 ? 'par precisa' : 'pares precisam'} de revisão`
             : 'Nenhuma duplicata pendente';
+
   const statusDetail = checking
-    ? 'Comparando metadata, duração e candidatos de mesmo tamanho; hashes são lidos somente quando necessários.'
+    ? 'Comparando metadados, duração e conteúdo dos arquivos.'
     : loadingReview
       ? 'Recuperando o último diagnóstico salvo.'
       : !review
-        ? 'A verificação é explícita e não altera nenhum arquivo.'
+        ? 'A análise é somente leitura e não altera nenhum arquivo.'
         : staleReview
           ? 'A biblioteca mudou desde esta análise. Execute novamente antes de decidir sobre os pares.'
           : hasCandidates
-            ? `${review.counts.reviewable.toLocaleString('pt-BR')} ${review.counts.reviewable === 1 ? 'par aguarda' : 'pares aguardam'} decisão humana.`
-            : 'Nenhum par ativo foi classificado como duplicata exata, provável ou possível.';
+            ? 'Nada será removido sem sua confirmação. Revise os candidatos e decida o que fazer.'
+            : 'A última análise não encontrou pares que precisem de revisão.';
+
+  const tabs: Array<{ id: DuplicateFilter; label: string; count: number }> = review ? [
+    { id: 'all', label: 'Todos', count: review.counts.reviewable },
+    { id: 'exact', label: 'Exatas', count: review.counts.exact },
+    { id: 'probable', label: 'Prováveis', count: review.counts.probable },
+    { id: 'possible', label: 'Possíveis', count: review.counts.possible },
+    { id: 'ignored', label: 'Ignoradas', count: review.counts.ignored }
+  ] : [];
 
   return (
-    <section className="my-account-screen admin-duplicates-screen" aria-labelledby="admin-duplicates-title">
-      <header className="my-account-header">
-        <button className="icon-button" type="button" aria-label="Voltar" onClick={onBack}><ChevronLeft /></button>
+    <section className="my-account-screen admin-duplicates-screen admin-duplicates-screen--v2" aria-labelledby="admin-duplicates-title">
+      <header className="admin-duplicates__page-header">
+        <button className="admin-duplicates__back" type="button" aria-label="Voltar" onClick={onBack}><ChevronLeft /></button>
         <div>
           <strong id="admin-duplicates-title">Duplicatas da biblioteca</strong>
-          <small>Compare candidatos antes de qualquer ação</small>
+          <small>Compare músicas semelhantes antes de qualquer ação</small>
         </div>
-        <span className="my-account-header__spacer" />
+        <div className={`admin-duplicates__analysis-state ${review && !staleReview ? 'is-current' : staleReview ? 'is-stale' : ''}`}>
+          <span />
+          <div>
+            <strong>{staleReview ? 'Análise desatualizada' : review ? 'Análise atual' : 'Aguardando análise'}</strong>
+            <small>{review ? (review.hashComplete ? 'Hash completo' : 'Hash parcial') : 'Sem diagnóstico salvo'}</small>
+          </div>
+        </div>
       </header>
 
       <div className="admin-duplicates">
-        <section className={`admin-duplicates__hero${hasCandidates ? ' is-warning' : hasReview ? ' is-success' : ''}`}>
+        {error && <div className="my-account-message is-error" role="alert">{error}</div>}
+        {feedback && <div className="my-account-message is-success" role="status">{feedback}</div>}
+
+        <section className={`admin-duplicates__hero${hasCandidates || staleReview ? ' is-warning' : hasReview ? ' is-success' : ''}`}>
           <div className="admin-duplicates__hero-icon" aria-hidden="true">
-            {checking ? <LoaderCircle className="is-spinning" /> : hasCandidates ? <AlertTriangle /> : hasReview ? <ShieldCheck /> : <Search />}
+            {checking ? <LoaderCircle className="is-spinning" /> : hasCandidates || staleReview ? <AlertTriangle /> : hasReview ? <Check /> : <Search />}
           </div>
           <div className="admin-duplicates__hero-copy">
-            <span>Revisão humana</span>
             <strong>{statusTitle}</strong>
             <small>{statusDetail}</small>
-            {review && (
-              <div className="admin-duplicates__hero-meta">
-                <span>Última análise: {formatDate(review.checkedAt)}</span>
-                <span>{staleReview ? 'Biblioteca alterada desde a análise' : 'Análise atual'}</span>
-                <span>{review.hashComplete ? 'Hash completo — comparação byte a byte concluída' : 'Hash parcial — alguns arquivos não puderam ser validados'}</span>
-              </div>
-            )}
           </div>
+          {review && (
+            <div className="admin-duplicates__hero-meta">
+              <CalendarDays />
+              <div>
+                <small>Última análise</small>
+                <strong>{formatDate(review.checkedAt)}</strong>
+                <span>{staleReview ? 'Biblioteca alterada' : 'Biblioteca atual'}</span>
+              </div>
+            </div>
+          )}
           <button type="button" className="admin-duplicates__check" disabled={checking || mutating} onClick={() => void runCheck()}>
             {checking ? <LoaderCircle className="is-spinning" /> : <RefreshCw />}
             {checking ? 'Analisando…' : review ? 'Analisar novamente' : 'Analisar agora'}
           </button>
         </section>
-
-        {error && <div className="my-account-message is-error" role="alert">{error}</div>}
-        {feedback && <div className="my-account-message is-success" role="status">{feedback}</div>}
 
         {loadingReview && !review ? (
           <section className="admin-duplicates__empty">
@@ -302,25 +352,26 @@ export function AdminLibraryDuplicateReviewScreen({ onBack }: AdminLibraryDuplic
           <section className="admin-duplicates__empty">
             <Search />
             <strong>Comece com uma análise explícita</strong>
-            <span>Nenhum arquivo é alterado durante a detecção. Ações de lixeira só aparecem depois que você seleciona um par.</span>
+            <span>Nenhum arquivo é alterado durante a detecção.</span>
           </section>
         ) : (
           <>
-            <section className="admin-duplicates__metrics" aria-label="Filtrar candidatos por confiança">
-              <button type="button" className={filter === 'all' ? 'is-active' : ''} onClick={() => setFilter('all')}>
-                <Copy /><span><small>Para revisar</small><strong>{review.counts.reviewable.toLocaleString('pt-BR')}</strong></span>
+            <section className="admin-duplicates__metrics" aria-label="Resumo da análise de duplicatas">
+              <button type="button" className={filter === 'exact' ? 'is-active is-exact' : 'is-exact'} onClick={() => setFilter('exact')}>
+                <span className="admin-duplicates__metric-icon"><Link2 /></span>
+                <span><strong>{review.counts.exact.toLocaleString('pt-BR')}</strong><b>Exatas</b><small>Mesmo arquivo (SHA-256).</small></span>
               </button>
-              <button type="button" className={filter === 'exact' ? 'is-active' : ''} onClick={() => setFilter('exact')}>
-                <CheckCircle2 /><span><small>Exatas</small><strong>{review.counts.exact.toLocaleString('pt-BR')}</strong></span>
+              <button type="button" className={filter === 'probable' ? 'is-active is-probable' : 'is-probable'} onClick={() => setFilter('probable')}>
+                <span className="admin-duplicates__metric-icon"><Search /></span>
+                <span><strong>{review.counts.probable.toLocaleString('pt-BR')}</strong><b>Prováveis</b><small>Alta similaridade.</small></span>
               </button>
-              <button type="button" className={filter === 'probable' ? 'is-active' : ''} onClick={() => setFilter('probable')}>
-                <AlertTriangle /><span><small>Prováveis</small><strong>{review.counts.probable.toLocaleString('pt-BR')}</strong></span>
+              <button type="button" className={filter === 'possible' ? 'is-active is-possible' : 'is-possible'} onClick={() => setFilter('possible')}>
+                <span className="admin-duplicates__metric-icon"><Copy /></span>
+                <span><strong>{review.counts.possible.toLocaleString('pt-BR')}</strong><b>Possíveis</b><small>Pode ser a mesma música.</small></span>
               </button>
-              <button type="button" className={filter === 'possible' ? 'is-active' : ''} onClick={() => setFilter('possible')}>
-                <Search /><span><small>Possíveis</small><strong>{review.counts.possible.toLocaleString('pt-BR')}</strong></span>
-              </button>
-              <button type="button" className={filter === 'ignored' ? 'is-active' : ''} onClick={() => setFilter('ignored')}>
-                <EyeOff /><span><small>Ignorados</small><strong>{review.counts.ignored.toLocaleString('pt-BR')}</strong></span>
+              <button type="button" className={filter === 'ignored' ? 'is-active is-ignored' : 'is-ignored'} onClick={() => setFilter('ignored')}>
+                <span className="admin-duplicates__metric-icon"><EyeOff /></span>
+                <span><strong>{review.counts.ignored.toLocaleString('pt-BR')}</strong><b>Ignoradas</b><small>Pares descartados por você.</small></span>
               </button>
             </section>
 
@@ -328,10 +379,27 @@ export function AdminLibraryDuplicateReviewScreen({ onBack }: AdminLibraryDuplic
               <section className="admin-duplicates__list" aria-label="Pares candidatos">
                 <header>
                   <div>
-                    <span>Candidatos</span>
-                    <strong>{visibleCandidates.length.toLocaleString('pt-BR')} {visibleCandidates.length === 1 ? 'par' : 'pares'}</strong>
+                    <strong>Candidatos ({review.counts.reviewable.toLocaleString('pt-BR')})</strong>
+                    <small>Selecione um par para ver os detalhes e decidir o que fazer.</small>
                   </div>
+                  <label className="admin-duplicates__search">
+                    <Search />
+                    <input
+                      value={query}
+                      onChange={event => setQuery(event.target.value)}
+                      placeholder="Buscar candidatos…"
+                      aria-label="Buscar candidatos"
+                    />
+                  </label>
                 </header>
+
+                <nav className="admin-duplicates__tabs" aria-label="Filtrar candidatos">
+                  {tabs.map(tab => (
+                    <button key={tab.id} type="button" className={filter === tab.id ? 'is-active' : ''} onClick={() => setFilter(tab.id)}>
+                      {tab.label} ({tab.count.toLocaleString('pt-BR')})
+                    </button>
+                  ))}
+                </nav>
 
                 {visibleCandidates.length === 0 ? (
                   <div className="admin-duplicates__list-empty">
@@ -348,14 +416,15 @@ export function AdminLibraryDuplicateReviewScreen({ onBack }: AdminLibraryDuplic
                         aria-pressed={candidate.key === selectedKey}
                         onClick={() => setSelectedKey(candidate.key)}
                       >
-                        <span className={`admin-duplicates__confidence is-${candidate.confidence}`}>
-                          {candidate.ignored ? 'Ignorado' : CONFIDENCE_LABELS[candidate.confidence]}
+                        <span className="admin-duplicates__row-check" aria-hidden="true" />
+                        <span className={`admin-duplicates__confidence is-${candidate.ignored ? 'ignored' : candidate.confidence}`}>
+                          {candidate.ignored ? 'Ignorada' : CONFIDENCE_LABELS[candidate.confidence]}
                         </span>
-                        <strong>{candidate.tracks[0].title || 'Sem título'}</strong>
-                        <small>{candidate.tracks[0].artist || 'Artista desconhecido'} · {candidate.tracks[1].title || 'Sem título'}</small>
-                        <span className="admin-duplicates__reason-summary">
-                          {candidate.reasons.map(reason => REASON_LABELS[reason]).join(' · ')}
+                        <span className="admin-duplicates__row-copy">
+                          <strong>{candidate.tracks[0].title || 'Sem título'}</strong>
+                          <small>{candidate.tracks[0].artist || 'Artista desconhecido'} · 2 arquivos</small>
                         </span>
+                        <span className="admin-duplicates__row-duration">{formatDuration(candidate.tracks[0].durationSeconds)}</span>
                       </button>
                     ))}
                   </div>
@@ -372,22 +441,27 @@ export function AdminLibraryDuplicateReviewScreen({ onBack }: AdminLibraryDuplic
                   <>
                     <header className="admin-duplicates__inspector-header">
                       <div>
-                        <span>Comparação</span>
-                        <strong>{selectedCandidate.ignored ? 'Falso positivo ignorado' : `${CONFIDENCE_LABELS[selectedCandidate.confidence]} duplicata`}</strong>
+                        <strong>Comparação</strong>
+                        <small>Analise as informações das duas músicas antes de decidir.</small>
                       </div>
-                      <span className={`admin-duplicates__confidence is-${selectedCandidate.confidence}`}>
-                        {CONFIDENCE_LABELS[selectedCandidate.confidence]}
+                      <span className={`admin-duplicates__confidence is-${selectedCandidate.ignored ? 'ignored' : selectedCandidate.confidence}`}>
+                        {selectedCandidate.ignored ? 'Ignorada' : CONFIDENCE_LABELS[selectedCandidate.confidence]}
                       </span>
                     </header>
 
-                    <div className="admin-duplicates__reasons">
-                      <span>Por que apareceu</span>
-                      <div>{selectedCandidate.reasons.map(reason => <strong key={reason}>{REASON_LABELS[reason]}</strong>)}</div>
+                    <div className="admin-duplicates__comparison">
+                      <TrackComparison track={selectedCandidate.tracks[0]} />
+                      <span className="admin-duplicates__swap" aria-hidden="true">↔</span>
+                      <TrackComparison track={selectedCandidate.tracks[1]} />
                     </div>
 
-                    <div className="admin-duplicates__comparison">
-                      <TrackComparison track={selectedCandidate.tracks[0]} label="Música A" />
-                      <TrackComparison track={selectedCandidate.tracks[1]} label="Música B" />
+                    <div className="admin-duplicates__reasons">
+                      <strong>Por que foram consideradas duplicatas?</strong>
+                      <div>
+                        {selectedCandidate.reasons.map(reason => (
+                          <span key={reason}><Check />{REASON_LABELS[reason]}</span>
+                        ))}
+                      </div>
                     </div>
 
                     <div className="admin-duplicates__actions">
@@ -398,30 +472,48 @@ export function AdminLibraryDuplicateReviewScreen({ onBack }: AdminLibraryDuplic
                         onClick={() => void toggleIgnored(selectedCandidate)}
                       >
                         {selectedCandidate.ignored ? <RotateCcw /> : <EyeOff />}
-                        {selectedCandidate.ignored ? 'Reabrir revisão' : 'Ignorar falso positivo'}
+                        {selectedCandidate.ignored ? 'Reabrir revisão' : 'Não são duplicatas'}
                       </button>
 
                       {!selectedCandidate.ignored && (
-                        <div className="admin-duplicates__quarantine">
-                          <span>Nenhuma exclusão é feita aqui. Se você decidir remover uma cópia, ela vai primeiro para a lixeira.</span>
-                          {selectedCandidate.tracks.map((track, index) => (
-                            <button
-                              type="button"
-                              key={track.id}
-                              disabled={mutating || checking}
-                              onClick={() => void moveToQuarantine(track)}
-                            >
-                              {mutating ? <LoaderCircle className="is-spinning" /> : <Trash2 />}
-                              Mover música {index === 0 ? 'A' : 'B'} para lixeira
-                            </button>
-                          ))}
-                        </div>
+                        <>
+                          <button
+                            type="button"
+                            className="admin-duplicates__trash"
+                            disabled={mutating || checking}
+                            onClick={() => void moveToQuarantine(selectedCandidate.tracks[0])}
+                          >
+                            {mutating ? <LoaderCircle className="is-spinning" /> : <Trash2 />}
+                            Enviar à lixeira (esq.)
+                          </button>
+                          <button
+                            type="button"
+                            className="admin-duplicates__trash"
+                            disabled={mutating || checking}
+                            onClick={() => void moveToQuarantine(selectedCandidate.tracks[1])}
+                          >
+                            {mutating ? <LoaderCircle className="is-spinning" /> : <Trash2 />}
+                            Enviar à lixeira (dir.)
+                          </button>
+                        </>
                       )}
                     </div>
+                    {!selectedCandidate.ignored && (
+                      <div className="admin-duplicates__action-notes" aria-hidden="true">
+                        <span>Ignora este par nas próximas análises.</span>
+                        <span>Move a música da esquerda para a lixeira.</span>
+                        <span>Move a música da direita para a lixeira.</span>
+                      </div>
+                    )}
                   </>
                 )}
               </aside>
             </div>
+
+            <aside className="admin-duplicates__footer-note">
+              <Info />
+              <span>Nenhum arquivo é excluído diretamente. A cópia escolhida é movida para a Lixeira e pode ser restaurada.</span>
+            </aside>
           </>
         )}
       </div>
