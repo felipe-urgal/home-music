@@ -13,7 +13,8 @@ import {
   getLibraryIntegrityStatus,
   hasLibraryIntegrityFileFailure,
   probeMediaFile,
-  recordLibraryIntegrityIssue
+  recordLibraryIntegrityIssue,
+  recordLibraryMediaProbeResult
 } from './library-integrity.js';
 import { isQuarantinedTrackFilePresent, withMediaQuarantineLock } from './media-quarantine.js';
 import { replayGainDb } from './replay-gain.js';
@@ -248,6 +249,7 @@ async function recordScannerAndProbeFailure(
     message: `Scanner não conseguiu ler os metadados: ${scannerErrorMessage(scannerError)}`
   });
   const probe = await probeMediaFile(file.path);
+  recordLibraryMediaProbeResult(probe);
   if (probe.status === 'failed') {
     recordLibraryIntegrityIssue({
       kind: 'media-probe-failed',
@@ -277,6 +279,7 @@ async function verifyMediaIntegrity(
   }
 
   const probe = await probeMediaFile(file.path);
+  recordLibraryMediaProbeResult(probe);
   if (probe.status === 'failed') {
     recordLibraryIntegrityIssue({
       kind: 'media-probe-failed',
