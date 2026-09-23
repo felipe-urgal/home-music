@@ -32,8 +32,8 @@ describe('MyAccountScreen prototype 3', () => {
 
     expect(component).toMatch(/setView\('password'\)/);
     expect(component).toMatch(/setView\('sessions'\)/);
-    expect(component).toMatch(/setView\('apps'\)/);
-    expect(component).toMatch(/setView\('data-import'\)/);
+    expect(component).not.toContain('Apps e integrações');
+    expect(component).not.toContain('Importar dados pessoais');
     expect(component).toMatch(/setView\('playback'\)/);
     expect(component).toMatch(/offlineMode\.onOpen/);
     expect(component).toMatch(/onOpenAdministration/);
@@ -53,7 +53,7 @@ describe('MyAccountScreen prototype 3', () => {
   it('reproduz as cores individuais e usa os visuais do protótipo aprovado', () => {
     const css = cssSource();
 
-    for (const tone of ['is-amber', 'is-blue', 'is-violet', 'is-green', 'is-pink', 'is-cyan', 'is-indigo', 'is-red']) {
+    for (const tone of ['is-amber', 'is-blue', 'is-pink', 'is-cyan', 'is-indigo', 'is-red']) {
       expect(css).toContain(`.my-account-v3__card.${tone}`);
     }
     expect(css).toContain("url('/account-v3-headphones.webp')");

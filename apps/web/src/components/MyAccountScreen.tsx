@@ -6,12 +6,10 @@ import {
   CircleHelp,
   ChevronLeft,
   ChevronRight,
-  CloudUpload,
   Eye,
   EyeOff,
   KeyRound,
   Lightbulb,
-  Link2,
   LoaderCircle,
   LockKeyhole,
   LogOut,
@@ -20,7 +18,6 @@ import {
   Pencil,
   ShieldCheck,
   SlidersHorizontal,
-  Upload,
   UserRound,
   WifiOff
 } from 'lucide-react';
@@ -33,8 +30,6 @@ import {
   revokeOwnSession,
   type AccountSession
 } from '../account-client';
-import { AccountOpenSubsonicKeys } from './AccountOpenSubsonicKeys';
-import { AccountPersonalDataImport } from './AccountPersonalDataImport';
 import {
   AccountPlaybackPreferences,
   type AccountPlaybackPreferencesValue
@@ -42,7 +37,7 @@ import {
 import { AccountSessionsScreen } from './AccountSessionsScreen';
 import { useDesktopLayout } from '../useDesktopLayout';
 
-type AccountView = 'overview' | 'profile' | 'password' | 'sessions' | 'apps' | 'playback' | 'data-import';
+type AccountView = 'overview' | 'profile' | 'password' | 'sessions' | 'playback';
 
 type OfflineModeControl = {
   supported: boolean;
@@ -78,7 +73,6 @@ export function MyAccountScreen({
   const tvMode = typeof document !== 'undefined' && document.documentElement.dataset.tvMode === 'true';
   const usePasswordPrototypeThree = desktopLayout && !tvMode;
   const useSessionsPrototypeTwo = desktopLayout && !tvMode;
-  const useAppsPrototypeTwo = desktopLayout && !tvMode;
   const [view, setView] = useState<AccountView>('overview');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -211,26 +205,26 @@ export function MyAccountScreen({
       ? 'Alterar senha'
       : view === 'sessions'
         ? 'Outros dispositivos'
-        : view === 'apps'
-          ? 'Apps e integrações'
-          : view === 'playback'
-            ? 'Reprodução'
-            : view === 'data-import'
-              ? 'Importar dados pessoais'
-              : 'Minha conta';
+        : view === 'playback'
+          ? 'Reprodução'
+          : 'Minha conta';
   const subtitle = view === 'profile'
     ? 'Informações da conta'
     : view === 'password'
       ? 'Atualize sua senha de acesso'
       : view === 'sessions'
         ? 'Gerencie sessões em dispositivos'
-        : view === 'apps'
-          ? 'Chaves OpenSubsonic revogáveis'
-          : view === 'playback'
-            ? 'Qualidade e normalização'
-            : view === 'data-import'
-              ? 'Preview seguro antes de aplicar'
-              : 'Segurança e sessões';
+        : view === 'playback'
+          ? 'Qualidade e normalização'
+          : 'Segurança e sessões';
+
+  if (view === 'playback' && playbackPreferences) {
+    return (
+      <section className="my-account-screen my-account-screen--playback">
+        <AccountPlaybackPreferences value={playbackPreferences} onBack={goBack} />
+      </section>
+    );
+  }
 
   return (
     <section className={`my-account-screen my-account-screen--${view}`} aria-labelledby="my-account-title">
@@ -306,24 +300,6 @@ export function MyAccountScreen({
                   <span className="my-account-v3__card-copy">
                     <strong>Outros dispositivos</strong>
                     <small>Encerre acessos antigos sem sair deste dispositivo.</small>
-                  </span>
-                  <ChevronRight />
-                </button>
-
-                <button className="my-account-v3__card is-violet" type="button" onClick={() => setView('apps')}>
-                  <span className="my-account-v3__card-icon"><Link2 /></span>
-                  <span className="my-account-v3__card-copy">
-                    <strong>Apps e integrações</strong>
-                    <small>Crie chaves separadas para clientes OpenSubsonic.</small>
-                  </span>
-                  <ChevronRight />
-                </button>
-
-                <button className="my-account-v3__card is-green" type="button" onClick={() => setView('data-import')}>
-                  <span className="my-account-v3__card-icon"><CloudUpload /></span>
-                  <span className="my-account-v3__card-copy">
-                    <strong>Importar dados pessoais</strong>
-                    <small>Revise um bundle exportado antes de restaurar dados na sua conta.</small>
                   </span>
                   <ChevronRight />
                 </button>
@@ -422,22 +398,6 @@ export function MyAccountScreen({
               <button type="button" onClick={() => setView('sessions')}>
                 <span className="my-account-card__icon"><MonitorOff /></span>
                 <span><strong>Outros dispositivos</strong><small>Encerre acessos antigos sem sair deste dispositivo.</small></span>
-                <ChevronRight />
-              </button>
-              <button type="button" onClick={() => setView('apps')}>
-                <span className="my-account-card__icon"><KeyRound /></span>
-                <span><strong>Apps e integrações</strong><small>Crie chaves separadas para clientes OpenSubsonic.</small></span>
-                <ChevronRight />
-              </button>
-            </div>
-          </section>
-
-          <section className="my-account-link-group" aria-labelledby="my-account-group-data">
-            <span className="my-account-link-group__label" id="my-account-group-data">Dados</span>
-            <div className="my-account-links">
-              <button type="button" onClick={() => setView('data-import')}>
-                <span className="my-account-card__icon"><Upload /></span>
-                <span><strong>Importar dados pessoais</strong><small>Revise um bundle exportado antes de restaurar dados na sua conta.</small></span>
                 <ChevronRight />
               </button>
             </div>
@@ -812,19 +772,6 @@ export function MyAccountScreen({
           onRevokeOthers={() => void revokeOthers()}
         />
       )}
-
-      {view === 'apps' && (
-        <AccountOpenSubsonicKeys
-          prototypeTwo={useAppsPrototypeTwo}
-          onBack={goBack}
-        />
-      )}
-
-      {view === 'playback' && playbackPreferences && (
-        <AccountPlaybackPreferences value={playbackPreferences} />
-      )}
-
-      {view === 'data-import' && <AccountPersonalDataImport />}
     </section>
   );
 }

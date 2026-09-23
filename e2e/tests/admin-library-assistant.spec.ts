@@ -46,7 +46,7 @@ async function openAdministration(page: Page) {
 
 async function openAssistant(page: Page) {
   await openAdministration(page);
-  await page.getByRole('button', { name: 'Assistente da Biblioteca', exact: true }).click();
+  await page.getByRole('button', { name: /^Assistente da Biblioteca\b/ }).click();
   await expect(page.locator('#library-assistant-title')).toHaveText('Assistente da Biblioteca');
 }
 

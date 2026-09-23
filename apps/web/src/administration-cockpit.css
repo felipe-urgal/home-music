@@ -1,47 +1,102 @@
 .administration-cockpit {
-  max-width: 920px;
+  width: min(100%, 1540px);
+  max-width: none;
+  margin-inline: auto;
+  padding: 22px 30px 30px;
 }
 
 .administration-cockpit__header {
-  grid-template-columns: 44px minmax(0, 1fr) auto;
-  margin-bottom: 18px;
+  display: grid;
+  grid-template-columns: 50px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
 }
 
-.administration-cockpit__refresh {
-  min-height: 38px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  padding: 0 12px;
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.025);
-  color: #c9d2da;
-  font: inherit;
-  font-size: 0.82rem;
-  font-weight: 650;
+.administration-cockpit__back {
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #b8c4d1;
   cursor: pointer;
 }
 
-.administration-cockpit__refresh:hover:not(:disabled) {
-  border-color: rgba(124, 191, 255, 0.24);
-  background: rgba(255, 255, 255, 0.045);
+.administration-cockpit__back:hover {
+  background: rgba(255, 255, 255, 0.035);
+  color: #f1f5f9;
 }
 
-.administration-cockpit__refresh:disabled {
-  opacity: 0.55;
-  cursor: default;
+.administration-cockpit__back svg {
+  width: 24px;
+  height: 24px;
 }
 
-.administration-cockpit__refresh svg {
-  width: 16px;
-  height: 16px;
+.administration-cockpit__title {
+  display: grid;
+  gap: 4px;
+}
+
+.administration-cockpit__title strong {
+  color: #f6f8fb;
+  font-size: clamp(1.6rem, 2vw, 2rem);
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+}
+
+.administration-cockpit__title small {
+  color: #8a98aa;
+  font-size: 0.86rem;
+}
+
+.administration-cockpit__header-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-self: end;
+  min-width: 250px;
+}
+
+.administration-cockpit__header-status > span {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #6e7d8e;
+  box-shadow: 0 0 0 12px rgba(90, 105, 122, 0.08);
+}
+
+.administration-cockpit__header-status.is-healthy > span {
+  background: #35d48d;
+  box-shadow: 0 0 0 12px rgba(53, 212, 141, 0.075), 0 0 20px rgba(53, 212, 141, 0.26);
+}
+
+.administration-cockpit__header-status.has-warning > span {
+  background: #f0ae4f;
+  box-shadow: 0 0 0 12px rgba(240, 174, 79, 0.075), 0 0 20px rgba(240, 174, 79, 0.2);
+}
+
+.administration-cockpit__header-status > div {
+  display: grid;
+  gap: 3px;
+}
+
+.administration-cockpit__header-status strong {
+  color: #e7ecf2;
+  font-size: 0.88rem;
+}
+
+.administration-cockpit__header-status small {
+  color: #758399;
+  font-size: 0.76rem;
 }
 
 .administration-cockpit__content {
   display: grid;
-  gap: 16px;
+  gap: 20px;
 }
 
 .administration-cockpit__message {
@@ -55,9 +110,9 @@
 .administration-cockpit__message button {
   min-height: 34px;
   flex: 0 0 auto;
-  padding: 0 10px;
+  padding: 0 12px;
   border: 1px solid currentColor;
-  border-radius: 8px;
+  border-radius: 9px;
   background: transparent;
   color: inherit;
   font: inherit;
@@ -65,136 +120,145 @@
   cursor: pointer;
 }
 
-.administration-cockpit-status {
-  position: relative;
-  min-height: 150px;
-  display: grid;
-  grid-template-columns: 64px minmax(0, 1fr) auto;
+.administration-cockpit-loading {
+  min-height: 260px;
+  display: flex;
   align-items: center;
-  gap: 18px;
-  overflow: hidden;
-  padding: 22px 24px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 17px;
-  background: #0d151b;
+  justify-content: center;
+  gap: 10px;
+  color: #7f8b9b;
 }
 
-.administration-cockpit-status::after {
-  content: '';
-  position: absolute;
-  width: 250px;
-  height: 250px;
-  right: -100px;
-  top: -125px;
-  border-radius: 50%;
-  pointer-events: none;
-}
-
-.administration-cockpit-status.is-healthy {
-  border-color: rgba(70, 195, 119, 0.2);
-  background: linear-gradient(115deg, rgba(19, 65, 42, 0.48), #0d151b 52%);
-}
-
-.administration-cockpit-status.is-healthy::after {
-  background: radial-gradient(circle, rgba(69, 198, 117, 0.14), transparent 66%);
+.administration-cockpit-status {
+  min-height: 136px;
+  display: grid;
+  grid-template-columns: 92px minmax(280px, 1.25fr) minmax(620px, 1.75fr);
+  align-items: center;
+  gap: 22px;
+  padding: 24px 28px;
+  border: 1px solid rgba(74, 210, 150, 0.23);
+  border-radius: 18px;
+  background:
+    linear-gradient(100deg, rgba(16, 75, 57, 0.48), rgba(10, 24, 30, 0.9) 47%, rgba(9, 22, 29, 0.96));
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.025),
+    0 16px 44px rgba(0,0,0,0.14);
 }
 
 .administration-cockpit-status.has-warning {
-  border-color: rgba(226, 157, 67, 0.19);
-  background: linear-gradient(115deg, rgba(74, 49, 20, 0.42), #0d151b 54%);
-}
-
-.administration-cockpit-status.has-warning::after {
-  background: radial-gradient(circle, rgba(225, 148, 51, 0.12), transparent 66%);
+  border-color: rgba(226, 157, 67, 0.22);
+  background:
+    linear-gradient(100deg, rgba(91, 53, 22, 0.42), rgba(15, 24, 31, 0.92) 47%, rgba(10, 22, 29, 0.96));
 }
 
 .administration-cockpit-status__icon {
-  position: relative;
-  z-index: 1;
-  width: 58px;
-  height: 58px;
+  width: 72px;
+  height: 72px;
   display: grid;
   place-items: center;
+  border: 2px solid #40db91;
   border-radius: 50%;
-}
-
-.administration-cockpit-status.is-healthy .administration-cockpit-status__icon {
-  color: #65d78d;
-  background: rgba(61, 189, 107, 0.12);
-  box-shadow: inset 0 0 0 1px rgba(92, 217, 137, 0.17), 0 0 30px rgba(61, 189, 107, 0.08);
+  color: #47dc94;
+  background: radial-gradient(circle, rgba(59, 213, 142, 0.14), rgba(23, 64, 51, 0.1));
+  box-shadow: 0 0 24px rgba(58, 207, 139, 0.16);
 }
 
 .administration-cockpit-status.has-warning .administration-cockpit-status__icon {
-  color: #e9a64d;
-  background: rgba(220, 145, 47, 0.11);
-  box-shadow: inset 0 0 0 1px rgba(234, 166, 78, 0.17), 0 0 30px rgba(220, 145, 47, 0.07);
+  border-color: #e9a64d;
+  color: #f0af55;
+  background: radial-gradient(circle, rgba(233, 166, 77, 0.13), rgba(82, 50, 19, 0.08));
+  box-shadow: 0 0 24px rgba(233, 166, 77, 0.12);
 }
 
 .administration-cockpit-status__icon svg {
-  width: 31px;
-  height: 31px;
+  width: 38px;
+  height: 38px;
 }
 
 .administration-cockpit-status__copy {
-  position: relative;
-  z-index: 1;
   min-width: 0;
   display: grid;
-  gap: 4px;
-}
-
-.administration-cockpit-status__copy small {
-  color: #84919b;
-  font-size: 0.8rem;
-  font-weight: 650;
+  gap: 6px;
 }
 
 .administration-cockpit-status__copy strong {
-  color: #f4f7fa;
-  font-size: clamp(1.25rem, 2.5vw, 1.55rem);
-  line-height: 1.15;
+  color: #f6f8fa;
+  font-size: clamp(1.35rem, 1.8vw, 1.8rem);
+  letter-spacing: -0.025em;
 }
 
 .administration-cockpit-status__copy span {
-  max-width: 500px;
-  color: #9aa7b1;
-  font-size: 0.88rem;
-  line-height: 1.45;
+  color: #95a3b5;
+  font-size: 0.91rem;
 }
 
-.administration-cockpit-status__meta {
-  position: relative;
-  z-index: 1;
-  min-width: 170px;
+.administration-cockpit-status__metrics {
   display: grid;
-  gap: 10px;
-  margin: 0;
+  grid-template-columns: 0.9fr 0.9fr 1.2fr;
+  min-width: 0;
 }
 
-.administration-cockpit-status__meta div {
+.administration-cockpit-status__metrics article {
+  min-width: 0;
+  min-height: 64px;
   display: grid;
-  gap: 2px;
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 4px 22px;
+  border-left: 1px solid rgba(255,255,255,0.08);
 }
 
-.administration-cockpit-status__meta dt {
-  color: #6f7d87;
-  font-size: 0.76rem;
+.administration-cockpit-status__metrics article > svg {
+  width: 28px;
+  height: 28px;
+  color: #57a8ff;
 }
 
-.administration-cockpit-status__meta dd {
-  margin: 0;
-  color: #d9e0e6;
-  font-size: 0.86rem;
-  font-weight: 650;
+.administration-cockpit-status__metrics article:last-child > svg {
+  color: #43d797;
 }
 
+.administration-cockpit-status.has-warning .administration-cockpit-status__metrics article:last-child > svg {
+  color: #eab05a;
+}
+
+.administration-cockpit-status__metrics article > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.administration-cockpit-status__metrics strong {
+  color: #eef2f7;
+  font-size: 1.05rem;
+}
+
+.administration-cockpit-status__metrics small {
+  color: #8190a2;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.administration-cockpit-attention,
 .administration-cockpit-section {
   display: grid;
-  gap: 12px;
-  padding: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 15px;
-  background: #0d141b;
+  gap: 16px;
+  padding: 20px 24px;
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(14, 25, 34, 0.98), rgba(11, 21, 29, 0.98));
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.018),
+    0 14px 38px rgba(0,0,0,0.12);
+}
+
+.administration-cockpit-attention {
+  border-color: rgba(227, 147, 77, 0.18);
+  background:
+    radial-gradient(circle at 8% 45%, rgba(140, 56, 51, 0.14), transparent 24%),
+    linear-gradient(180deg, rgba(20, 25, 34, 0.98), rgba(13, 23, 31, 0.98));
 }
 
 .administration-cockpit-section__heading {
@@ -202,429 +266,460 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
+  gap: 16px;
 }
 
 .administration-cockpit-section__heading > div {
   min-width: 0;
   display: grid;
-  gap: 3px;
+  gap: 4px;
 }
 
 .administration-cockpit-section__heading strong {
-  color: #ecf1f5;
-  font-size: 0.94rem;
+  color: #f0f4f8;
+  font-size: 1.02rem;
 }
 
 .administration-cockpit-section__heading small {
-  color: #74818b;
+  color: #7f8da0;
   font-size: 0.8rem;
-  line-height: 1.4;
+}
+
+.administration-cockpit-attention__heading-copy {
+  display: flex !important;
+  align-items: center;
+  gap: 14px;
+}
+
+.administration-cockpit-attention__heading-copy > svg {
+  width: 29px;
+  height: 29px;
+  color: #f0a24c;
+}
+
+.administration-cockpit-attention__heading-copy > div {
+  display: grid;
+  gap: 4px;
 }
 
 .administration-cockpit-section__link {
-  min-height: 32px;
-  padding: 0 4px;
-  border: 0;
-  background: transparent;
-  color: #76bfff;
+  min-height: 38px;
+  padding: 0 18px;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  background: rgba(255,255,255,0.02);
+  color: #b9c7d6;
   font: inherit;
-  font-size: 0.78rem;
+  font-size: 0.79rem;
   font-weight: 650;
   cursor: pointer;
 }
 
-.administration-cockpit-actions {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.administration-cockpit-actions button {
-  min-width: 0;
-  min-height: 88px;
-  display: grid;
-  place-items: center;
-  align-content: center;
-  gap: 9px;
-  padding: 10px 7px;
-  border: 1px solid rgba(255, 255, 255, 0.065);
-  border-radius: 11px;
-  background: #111922;
-  color: #cbd5dc;
-  font: inherit;
-  cursor: pointer;
-}
-
-.administration-cockpit-actions button:hover {
-  border-color: rgba(113, 184, 244, 0.2);
-  background: #141e28;
-  color: #eff6fb;
-}
-
-.administration-cockpit-actions button:focus-visible,
-.administration-cockpit-attention__items button:focus-visible,
-.administration-cockpit-clear-cache:focus-visible,
-.administration-cockpit__refresh:focus-visible,
-.administration-cockpit-section__link:focus-visible {
-  outline: 2px solid rgba(91, 181, 255, 0.72);
-  outline-offset: 2px;
-}
-
-.administration-cockpit-actions svg {
-  width: 22px;
-  height: 22px;
-  color: #75baff;
-}
-
-.administration-cockpit-actions button:nth-child(2) svg { color: #69d49a; }
-.administration-cockpit-actions button:nth-child(3) svg { color: #aa8cff; }
-.administration-cockpit-actions button:nth-child(4) svg { color: #eba755; }
-.administration-cockpit-actions button:nth-child(5) svg { color: #8bb5ff; }
-.administration-cockpit-actions button:nth-child(6) svg { color: #e97d7d; }
-.administration-cockpit-actions button:nth-child(7) svg { color: #9daab4; }
-
-.administration-cockpit-actions span {
-  max-width: 100%;
-  color: inherit;
-  font-size: 0.76rem;
-  font-weight: 650;
-  line-height: 1.25;
-  text-align: center;
-  overflow-wrap: anywhere;
-}
-
-.administration-cockpit-loading {
-  min-height: 170px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 9px;
-  color: #7e8a94;
-  font-size: 0.88rem;
-}
-
-.administration-cockpit-loading svg {
-  width: 18px;
-  height: 18px;
-}
-
-.administration-cockpit-metrics {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.administration-cockpit-metrics article {
-  min-width: 0;
-  min-height: 82px;
-  display: grid;
-  grid-template-columns: 34px minmax(0, 1fr);
-  align-items: center;
-  gap: 10px;
-  padding: 11px;
-  border: 1px solid rgba(255, 255, 255, 0.055);
-  border-radius: 11px;
-  background: #101820;
-}
-
-.administration-cockpit-metrics article > span {
-  width: 34px;
-  height: 34px;
-  display: grid;
-  place-items: center;
-  border-radius: 9px;
-  background: rgba(73, 163, 237, 0.1);
-  color: #76bfff;
-}
-
-.administration-cockpit-metrics article.has-warning > span {
-  background: rgba(222, 148, 54, 0.11);
-  color: #e8a653;
-}
-
-.administration-cockpit-metrics article > span svg {
-  width: 17px;
-  height: 17px;
-}
-
-.administration-cockpit-metrics article > div {
-  min-width: 0;
-  display: grid;
-  gap: 2px;
-}
-
-.administration-cockpit-metrics small {
-  color: #75828d;
-  font-size: 0.75rem;
-}
-
-.administration-cockpit-metrics strong {
-  color: #edf2f6;
-  font-size: 1rem;
-  overflow-wrap: anywhere;
-}
-
-.administration-cockpit-attention {
-  border-color: rgba(223, 149, 56, 0.16);
-  background: linear-gradient(115deg, rgba(76, 49, 18, 0.18), #0d141b 42%);
+.administration-cockpit-section__link:hover {
+  border-color: rgba(100, 176, 255, 0.24);
+  color: #eef5fb;
 }
 
 .administration-cockpit-attention__items {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
 }
 
 .administration-cockpit-attention__items button {
-  min-height: 36px;
-  display: inline-flex;
+  min-width: 0;
+  min-height: 100px;
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr) 22px;
   align-items: center;
-  gap: 9px;
-  padding: 0 10px;
-  border: 1px solid rgba(232, 166, 81, 0.15);
-  border-radius: 9px;
-  background: rgba(225, 149, 52, 0.065);
-  color: #c9d2d9;
+  gap: 12px;
+  padding: 15px 16px;
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 13px;
+  background: rgba(255,255,255,0.018);
+  color: #cbd5df;
   font: inherit;
+  text-align: left;
   cursor: pointer;
 }
 
 .administration-cockpit-attention__items button:hover {
-  border-color: rgba(232, 166, 81, 0.28);
-  background: rgba(225, 149, 52, 0.1);
+  border-color: rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.03);
 }
 
-.administration-cockpit-attention__items span {
+.administration-cockpit-attention__items button > span:nth-child(2) {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.administration-cockpit-attention__items button > span:nth-child(2) strong {
+  font-size: 1.22rem;
+}
+
+.administration-cockpit-attention__items button > span:nth-child(2) small {
+  color: #8592a4;
   font-size: 0.8rem;
 }
 
-.administration-cockpit-attention__items strong {
-  color: #efb15f;
-  font-size: 0.82rem;
+.administration-cockpit-attention__items button > svg {
+  width: 18px;
+  height: 18px;
+  color: #8593a7;
 }
 
-.administration-cockpit-lower-grid {
+.administration-cockpit-attention__icon {
+  width: 50px;
+  height: 50px;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  place-items: center;
+  border-radius: 50%;
 }
 
-.administration-cockpit-activity,
-.administration-cockpit-storage {
-  display: grid;
-  margin: 0;
+.administration-cockpit-attention__icon svg {
+  width: 25px;
+  height: 25px;
 }
 
-.administration-cockpit-activity > div,
-.administration-cockpit-storage > div {
-  min-height: 42px;
+.administration-cockpit-attention__items .is-cover {
+  border-color: rgba(232, 81, 111, 0.2);
+  background: linear-gradient(110deg, rgba(118, 33, 54, 0.22), rgba(255,255,255,0.012));
+}
+.administration-cockpit-attention__items .is-cover strong,
+.administration-cockpit-attention__items .is-cover .administration-cockpit-attention__icon { color: #ff6688; }
+.administration-cockpit-attention__items .is-cover .administration-cockpit-attention__icon { background: rgba(222, 73, 105, 0.1); }
+
+.administration-cockpit-attention__items .is-album {
+  border-color: rgba(222, 165, 65, 0.2);
+  background: linear-gradient(110deg, rgba(111, 77, 28, 0.22), rgba(255,255,255,0.012));
+}
+.administration-cockpit-attention__items .is-album strong,
+.administration-cockpit-attention__items .is-album .administration-cockpit-attention__icon { color: #f2b94f; }
+.administration-cockpit-attention__items .is-album .administration-cockpit-attention__icon { background: rgba(222, 165, 65, 0.1); }
+
+.administration-cockpit-attention__items .is-artist {
+  border-color: rgba(166, 100, 235, 0.2);
+  background: linear-gradient(110deg, rgba(88, 43, 132, 0.22), rgba(255,255,255,0.012));
+}
+.administration-cockpit-attention__items .is-artist strong,
+.administration-cockpit-attention__items .is-artist .administration-cockpit-attention__icon { color: #b874ff; }
+.administration-cockpit-attention__items .is-artist .administration-cockpit-attention__icon { background: rgba(166, 100, 235, 0.1); }
+
+.administration-cockpit-attention__items .is-title,
+.administration-cockpit-attention__items .is-duration,
+.administration-cockpit-attention__items .is-integrity {
+  border-color: rgba(73, 147, 222, 0.2);
+  background: linear-gradient(110deg, rgba(35, 78, 124, 0.22), rgba(255,255,255,0.012));
+}
+.administration-cockpit-attention__items .is-title strong,
+.administration-cockpit-attention__items .is-title .administration-cockpit-attention__icon,
+.administration-cockpit-attention__items .is-duration strong,
+.administration-cockpit-attention__items .is-duration .administration-cockpit-attention__icon,
+.administration-cockpit-attention__items .is-integrity strong,
+.administration-cockpit-attention__items .is-integrity .administration-cockpit-attention__icon { color: #69afff; }
+.administration-cockpit-attention__items .is-title .administration-cockpit-attention__icon,
+.administration-cockpit-attention__items .is-duration .administration-cockpit-attention__icon,
+.administration-cockpit-attention__items .is-integrity .administration-cockpit-attention__icon { background: rgba(73, 147, 222, 0.1); }
+
+.administration-cockpit-primary__grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.administration-cockpit-primary__grid > button,
+.administration-cockpit-users > button,
+.administration-cockpit-maintenance__grid > button {
+  min-width: 0;
+  display: grid;
   align-items: center;
-  gap: 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.administration-cockpit-activity > div:first-child,
-.administration-cockpit-storage > div:first-child {
-  border-top: 0;
-}
-
-.administration-cockpit-activity dt,
-.administration-cockpit-storage dt {
-  color: #7c8993;
-  font-size: 0.79rem;
-}
-
-.administration-cockpit-activity dd,
-.administration-cockpit-storage dd {
-  margin: 0;
-  color: #d2dae0;
-  font-size: 0.79rem;
-  font-weight: 620;
-  text-align: right;
-}
-
-.administration-cockpit-cache-message {
-  padding: 9px 10px;
-  border: 1px solid rgba(98, 202, 135, 0.14);
-  border-radius: 9px;
-  background: rgba(57, 170, 98, 0.07);
-  color: #9ed7b2;
-  font-size: 0.78rem;
-  line-height: 1.4;
-}
-
-.administration-cockpit-cache-message.is-error {
-  border-color: rgba(240, 104, 104, 0.16);
-  background: rgba(184, 58, 58, 0.08);
-  color: #efaaaa;
-}
-
-.administration-cockpit-clear-cache {
-  min-height: 38px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 9px;
-  background: #111a22;
-  color: #b8c4cc;
+  border: 1px solid rgba(255,255,255,0.075);
+  border-radius: 13px;
+  background: rgba(255,255,255,0.018);
+  color: #cbd5df;
   font: inherit;
-  font-size: 0.8rem;
-  font-weight: 650;
+  text-align: left;
   cursor: pointer;
 }
 
-.administration-cockpit-clear-cache:hover:not(:disabled) {
-  border-color: rgba(238, 117, 117, 0.18);
-  color: #e0a1a1;
+.administration-cockpit-primary__grid > button {
+  min-height: 114px;
+  grid-template-columns: 58px minmax(0, 1fr) 20px;
+  gap: 13px;
+  padding: 17px 18px;
 }
 
-.administration-cockpit-clear-cache:disabled {
-  opacity: 0.45;
-  cursor: default;
+.administration-cockpit-primary__grid > button > svg:first-child,
+.administration-cockpit-users > button > svg:first-child,
+.administration-cockpit-maintenance__grid > button > svg:first-child {
+  width: 31px;
+  height: 31px;
+  justify-self: center;
 }
 
-.administration-cockpit-clear-cache svg {
-  width: 16px;
-  height: 16px;
+.administration-cockpit-primary__grid > button > svg:last-child,
+.administration-cockpit-users > button > svg:last-child,
+.administration-cockpit-maintenance__grid > button > svg:last-child {
+  width: 18px;
+  height: 18px;
+  color: #8190a2;
 }
 
-@media (min-width: 1024px) {
-  .administration-cockpit {
-    max-width: 900px;
-    padding-top: 2px;
-  }
+.administration-cockpit-primary__grid > button > span,
+.administration-cockpit-users > button > span,
+.administration-cockpit-maintenance__grid > button > span {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
 }
 
-@media (max-width: 840px) {
-  .administration-cockpit-actions {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
+.administration-cockpit-primary__grid strong,
+.administration-cockpit-users strong,
+.administration-cockpit-maintenance__grid strong {
+  color: #e8edf3;
+  font-size: 0.88rem;
+}
 
+.administration-cockpit-primary__grid small,
+.administration-cockpit-users small,
+.administration-cockpit-maintenance__grid small {
+  color: #7f8da0;
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.administration-cockpit-primary__grid .is-tracks {
+  border-color: rgba(54, 203, 138, 0.17);
+  background: linear-gradient(110deg, rgba(30, 100, 73, 0.16), rgba(255,255,255,0.01));
+}
+.administration-cockpit-primary__grid .is-tracks > svg:first-child { color: #45d594; }
+
+.administration-cockpit-primary__grid .is-import {
+  border-color: rgba(151, 105, 244, 0.18);
+  background: linear-gradient(110deg, rgba(82, 52, 138, 0.17), rgba(255,255,255,0.01));
+}
+.administration-cockpit-primary__grid .is-import > svg:first-child { color: #a675ff; }
+
+.administration-cockpit-primary__grid .is-metadata {
+  border-color: rgba(72, 158, 236, 0.18);
+  background: linear-gradient(110deg, rgba(37, 79, 130, 0.17), rgba(255,255,255,0.01));
+}
+.administration-cockpit-primary__grid .is-metadata > svg:first-child { color: #5ba7ff; }
+
+.administration-cockpit-primary__grid .is-assistant {
+  border-color: rgba(218, 151, 62, 0.18);
+  background: linear-gradient(110deg, rgba(111, 73, 28, 0.17), rgba(255,255,255,0.01));
+}
+.administration-cockpit-primary__grid .is-assistant > svg:first-child { color: #f0a24b; }
+
+.administration-cockpit-bottom {
+  display: grid;
+  grid-template-columns: 340px minmax(0, 1fr);
+  gap: 18px;
+}
+
+.administration-cockpit-users > button {
+  min-height: 112px;
+  grid-template-columns: 56px minmax(0, 1fr) 20px;
+  gap: 12px;
+  padding: 16px;
+  border-color: rgba(67, 144, 229, 0.18);
+  background: linear-gradient(110deg, rgba(32, 69, 110, 0.17), rgba(255,255,255,0.01));
+}
+
+.administration-cockpit-users > button > svg:first-child {
+  color: #5ba7ff;
+}
+
+.administration-cockpit-maintenance__grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.administration-cockpit-maintenance__grid > button {
+  min-height: 112px;
+  grid-template-columns: 38px minmax(0, 1fr) 18px;
+  gap: 8px;
+  padding: 14px 12px;
+}
+
+.administration-cockpit-maintenance__grid .is-integrity > svg:first-child { color: #ff5d75; }
+.administration-cockpit-maintenance__grid .is-duplicates > svg:first-child { color: #5ca9ff; }
+.administration-cockpit-maintenance__grid .is-normalization > svg:first-child { color: #ef6877; }
+.administration-cockpit-maintenance__grid .is-trash > svg:first-child { color: #ff6274; }
+.administration-cockpit-maintenance__grid .is-history > svg:first-child { color: #69afff; }
+
+.administration-cockpit-primary__grid > button:hover,
+.administration-cockpit-users > button:hover,
+.administration-cockpit-maintenance__grid > button:hover {
+  border-color: rgba(126, 181, 236, 0.28);
+  background-color: rgba(255,255,255,0.028);
+}
+
+.administration-cockpit__footer {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 4px 0 0;
+  color: #596a80;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+}
+
+.administration-cockpit__footer span:last-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.administration-cockpit__footer i {
+  width: 52px;
+  height: 1px;
+  display: inline-block;
+  background: #d69d43;
+}
+
+.administration-cockpit__back:focus-visible,
+.administration-cockpit-section__link:focus-visible,
+.administration-cockpit-attention__items button:focus-visible,
+.administration-cockpit-primary__grid > button:focus-visible,
+.administration-cockpit-users > button:focus-visible,
+.administration-cockpit-maintenance__grid > button:focus-visible {
+  outline: 2px solid rgba(93, 173, 255, 0.8);
+  outline-offset: 2px;
+}
+
+@media (max-width: 1260px) {
   .administration-cockpit-status {
-    grid-template-columns: 58px minmax(0, 1fr);
+    grid-template-columns: 78px minmax(240px, 1fr);
   }
 
-  .administration-cockpit-status__meta {
-    grid-column: 2;
-    min-width: 0;
+  .administration-cockpit-status__metrics {
+    grid-column: 1 / -1;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    padding-top: 14px;
+  }
+
+  .administration-cockpit-status__metrics article:first-child {
+    border-left: 0;
+  }
+
+  .administration-cockpit-attention__items,
+  .administration-cockpit-primary__grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .administration-cockpit-bottom {
+    grid-template-columns: 1fr;
+  }
+
+  .administration-cockpit-maintenance__grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
-@media (max-width: 680px) {
+@media (max-width: 760px) {
+  .administration-cockpit {
+    padding: 14px;
+  }
+
   .administration-cockpit__header {
-    grid-template-columns: 42px minmax(0, 1fr) 42px;
+    grid-template-columns: 44px minmax(0, 1fr);
+    gap: 10px;
+    margin-bottom: 16px;
   }
 
-  .administration-cockpit__refresh {
-    width: 42px;
-    padding: 0;
-  }
-
-  .administration-cockpit__refresh span {
-    display: none;
+  .administration-cockpit__header-status {
+    grid-column: 1 / -1;
+    justify-self: stretch;
+    padding: 12px 16px;
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 12px;
+    background: rgba(255,255,255,0.018);
   }
 
   .administration-cockpit-status {
     min-height: 0;
-    grid-template-columns: 50px minmax(0, 1fr);
-    gap: 13px;
+    grid-template-columns: 60px minmax(0, 1fr);
+    gap: 14px;
     padding: 18px;
   }
 
   .administration-cockpit-status__icon {
-    width: 48px;
-    height: 48px;
+    width: 58px;
+    height: 58px;
   }
 
   .administration-cockpit-status__icon svg {
-    width: 25px;
-    height: 25px;
+    width: 30px;
+    height: 30px;
   }
 
-  .administration-cockpit-status__meta {
-    grid-column: 1 / -1;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    padding-top: 11px;
-    border-top: 1px solid rgba(255, 255, 255, 0.055);
-  }
-
-  .administration-cockpit-actions {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .administration-cockpit-actions button {
-    min-height: 72px;
-    grid-template-columns: 26px minmax(0, 1fr);
-    place-items: center start;
-    align-content: center;
-    padding: 10px 12px;
-    text-align: left;
-  }
-
-  .administration-cockpit-actions span {
-    text-align: left;
-  }
-
-  .administration-cockpit-metrics {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .administration-cockpit-lower-grid {
+  .administration-cockpit-status__metrics {
     grid-template-columns: 1fr;
+  }
+
+  .administration-cockpit-status__metrics article {
+    min-height: 52px;
+    border-left: 0;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    padding: 10px 0;
+  }
+
+  .administration-cockpit-status__metrics article:first-child {
+    border-top: 0;
+  }
+
+  .administration-cockpit-attention,
+  .administration-cockpit-section {
+    padding: 16px;
+    border-radius: 15px;
+  }
+
+  .administration-cockpit-attention__items,
+  .administration-cockpit-primary__grid,
+  .administration-cockpit-maintenance__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .administration-cockpit-primary__grid > button,
+  .administration-cockpit-users > button,
+  .administration-cockpit-maintenance__grid > button {
+    min-height: 88px;
+  }
+
+  .administration-cockpit__footer {
+    flex-direction: column;
+    align-items: flex-start;
+    font-size: 0.56rem;
+    letter-spacing: 0.18em;
   }
 }
 
 @media (max-width: 430px) {
   .administration-cockpit__content {
-    gap: 12px;
+    gap: 14px;
   }
 
-  .administration-cockpit-section {
-    padding: 13px;
-    border-radius: 13px;
+  .administration-cockpit-section__heading {
+    align-items: flex-start;
   }
 
-  .administration-cockpit-status {
-    padding: 15px;
-    border-radius: 14px;
+  .administration-cockpit-attention__heading-copy {
+    align-items: flex-start;
   }
 
-  .administration-cockpit-status__copy > strong {
-    font-size: 1.15rem;
+  .administration-cockpit-section__link {
+    padding: 0 11px;
   }
 
-  .administration-cockpit-status__copy span {
-    font-size: 0.82rem;
-  }
-
-  .administration-cockpit-metrics {
-    grid-template-columns: 1fr;
-  }
-
-  .administration-cockpit-metrics article {
-    min-height: 68px;
-  }
-
-  .administration-cockpit-activity > div,
-  .administration-cockpit-storage > div {
-    grid-template-columns: 1fr;
-    gap: 3px;
-    padding: 8px 0;
-  }
-
-  .administration-cockpit-activity dd,
-  .administration-cockpit-storage dd {
-    text-align: left;
-  }
-
-  .administration-cockpit__message {
-    align-items: stretch;
-    flex-direction: column;
+  .administration-cockpit-attention__items button {
+    min-height: 88px;
   }
 }

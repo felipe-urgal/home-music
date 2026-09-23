@@ -4,28 +4,28 @@ import {
   AlertTriangle,
   CheckCircle2,
   ChevronLeft,
+  ChevronRight,
   Copy,
   Database,
   FileInput,
   HardDrive,
+  History,
   Link2,
   ListMusic,
   LoaderCircle,
   Music2,
   RefreshCw,
   ScanLine,
-  ShieldCheck,
   Sparkles,
+  Tag,
   Trash2,
+  UserRound,
   Users
 } from 'lucide-react';
 import {
-  clearAdminTranscodeCache,
   getAdminLibraryOverview,
-  getAdminTranscodeCache,
   type AdminLibraryHealthOverview,
-  type AdminLibraryProblemKey,
-  type AdminTranscodeCacheStatus
+  type AdminLibraryProblemKey
 } from '../admin-library-client';
 import '../administration-health.css';
 import { LIBRARY_CHANGED_EVENT } from '../library-events';
@@ -45,11 +45,6 @@ type AdministrationView = 'overview' | 'assistant' | 'tracks' | 'metadata' | 'no
 type AdministrationScreenProps = {
   currentUser: AuthenticatedUser;
   onBack: () => void;
-};
-
-type CacheFeedback = {
-  message: string;
-  error: boolean;
 };
 
 type MetadataHealthFilter = {
@@ -77,31 +72,12 @@ function formatScanDate(value: string | null) {
   }).format(date);
 }
 
-function formatAutoRescan(scanner: AdminLibraryHealthOverview['scanner']) {
-  if (!scanner.autoRescan.enabled || !scanner.autoRescan.intervalSeconds) return 'Automático desativado';
-  const minutes = scanner.autoRescan.intervalSeconds / 60;
-  return `A cada ${new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 }).format(minutes)} min`;
-}
-
-function formatCacheActivity(cache: AdminTranscodeCacheStatus) {
-  if (cache.active === 0 && cache.pending === 0) return 'Ocioso';
-  const parts: string[] = [];
-  if (cache.active > 0) parts.push(`${cache.active} ${cache.active === 1 ? 'ativo' : 'ativos'}`);
-  if (cache.pending > 0) parts.push(`${cache.pending} ${cache.pending === 1 ? 'pendente' : 'pendentes'}`);
-  return parts.join(' · ');
-}
-
 export function AdministrationScreen({ currentUser, onBack }: AdministrationScreenProps) {
   const [view, setView] = useState<AdministrationView>('overview');
   const [overview, setOverview] = useState<AdminLibraryHealthOverview | null>(null);
   const [metadataHealthFilter, setMetadataHealthFilter] = useState<MetadataHealthFilter | null>(null);
-  const [cache, setCache] = useState<AdminTranscodeCacheStatus | null>(null);
   const [loadingOverview, setLoadingOverview] = useState(true);
-  const [loadingCache, setLoadingCache] = useState(true);
-  const [clearingCache, setClearingCache] = useState(false);
   const [overviewError, setOverviewError] = useState<string | null>(null);
-  const [cacheError, setCacheError] = useState<string | null>(null);
-  const [cacheFeedback, setCacheFeedback] = useState<CacheFeedback | null>(null);
 
   const loadOverview = useCallback(async () => {
     setLoadingOverview(true);
@@ -115,26 +91,10 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
     }
   }, []);
 
-  const loadCache = useCallback(async () => {
-    setLoadingCache(true);
-    setCacheError(null);
-    try {
-      setCache(await getAdminTranscodeCache());
-    } catch (error) {
-      setCacheError(error instanceof Error ? error.message : 'Não foi possível carregar o cache de transcoding.');
-    } finally {
-      setLoadingCache(false);
-    }
-  }, []);
-
-  const refreshOverview = useCallback(async () => {
-    await Promise.all([loadOverview(), loadCache()]);
-  }, [loadCache, loadOverview]);
-
   useEffect(() => {
     if (currentUser.role !== 'admin') return;
-    void refreshOverview();
-  }, [currentUser.role, refreshOverview]);
+    void loadOverview();
+  }, [currentUser.role, loadOverview]);
 
   useEffect(() => {
     if (currentUser.role !== 'admin') return;
@@ -166,45 +126,6 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
     setView('metadata');
   }
 
-  async function clearTranscodeCache() {
-    if (clearingCache) return;
-    const confirmed = window.confirm(
-      'Limpar o cache de transcoding?\n\nSomente arquivos derivados serão removidos. As músicas originais não serão alteradas.'
-    );
-    if (!confirmed) return;
-
-    setClearingCache(true);
-    setCacheError(null);
-    setCacheFeedback(null);
-    try {
-      const result = await clearAdminTranscodeCache();
-      setCache(result.cache);
-      if (result.failedEntries > 0) {
-        setCacheFeedback({
-          message: `Cache limpo parcialmente: ${formatBytes(result.freedBytes)} liberados e ${result.failedEntries} ${result.failedEntries === 1 ? 'arquivo não pôde' : 'arquivos não puderam'} ser removido${result.failedEntries === 1 ? '' : 's'}.`,
-          error: true
-        });
-      } else if (result.freedBytes > 0) {
-        setCacheFeedback({
-          message: `Cache limpo: ${formatBytes(result.freedBytes)} liberados. Nenhuma música original foi alterada.`,
-          error: false
-        });
-      } else {
-        setCacheFeedback({ message: 'O cache já estava vazio.', error: false });
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Não foi possível limpar o cache de transcoding.';
-      try {
-        setCache(await getAdminTranscodeCache());
-      } catch {
-        // Mantém o último estado conhecido do cache quando o refresh também falhar.
-      }
-      setCacheError(message);
-    } finally {
-      setClearingCache(false);
-    }
-  }
-
   if (currentUser.role !== 'admin') return null;
 
   if (view === 'assistant') return <AdminLibraryAssistantWithLocalLyricsScreen onBack={() => setView('overview')} />;
@@ -230,59 +151,52 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
   const integrityCount = overview?.integrity.counts.total ?? 0;
   const integrityVerified = Boolean(overview?.integrity.checkedAt);
   const attentionCount = problemCount + integrityCount;
-  const scannerLabel = overview?.scanner.scanning
-    ? 'Atualizando'
-    : overview?.scanner.ready
-      ? 'Pronto'
-      : 'Atenção';
-  const cacheBusy = Boolean(cache && (cache.active > 0 || cache.pending > 0));
-  const healthy = Boolean(overview && !overviewError && overview.scanner.ready && integrityVerified && attentionCount === 0);
-  const statusTone = overviewError ? 'has-warning' : !overview ? 'is-loading' : healthy ? 'is-healthy' : 'has-warning';
-  const statusTitle = overviewError
-    ? overview ? 'Visão geral desatualizada' : 'Estado da biblioteca indisponível'
-    : !overview
-      ? 'Carregando estado da biblioteca'
+  const scannerReady = Boolean(overview?.scanner.ready && !overview?.scanner.scanning);
+  const healthy = Boolean(
+    overview
+    && !overviewError
+    && scannerReady
+    && integrityVerified
+    && attentionCount === 0
+  );
+  const statusTitle = !overview
+    ? 'Carregando biblioteca'
+    : healthy
+      ? 'Biblioteca em dia'
       : overview.scanner.scanning
         ? 'Biblioteca sendo atualizada'
-        : !overview.scanner.ready
-          ? 'Biblioteca requer atenção'
+        : attentionCount > 0
+          ? 'Há itens para revisar'
           : !integrityVerified
             ? 'Integridade ainda não verificada'
-            : attentionCount > 0
-              ? 'Há itens para revisar'
-              : 'Biblioteca pronta';
-  const statusDetail = overviewError
-    ? overview
-      ? 'Não foi possível confirmar o estado atual. Os dados abaixo são o último snapshot conhecido.'
-      : 'Tente atualizar novamente para carregar scanner, índice e integridade.'
-    : !overview
-      ? 'Consultando índice, scanner e integridade.'
-      : !overview.scanner.ready
-        ? 'O scanner ainda não marcou a biblioteca como pronta para uso.'
+            : 'Biblioteca requer atenção';
+  const statusDetail = !overview
+    ? 'Consultando o estado atual.'
+    : healthy
+      ? 'Sua biblioteca está pronta para uso.'
+      : attentionCount > 0
+        ? `${attentionCount.toLocaleString('pt-BR')} ${attentionCount === 1 ? 'música precisa' : 'músicas precisam'} de revisão.`
         : !integrityVerified
-          ? 'Execute Verificar agora em Integridade para concluir o diagnóstico.'
-          : attentionCount > 0
-            ? `${attentionCount.toLocaleString('pt-BR')} ${attentionCount === 1 ? 'item precisa' : 'itens precisam'} de revisão.`
-            : 'Scanner pronto e última verificação de integridade sem inconsistências conhecidas.';
+          ? 'Execute a verificação de integridade para concluir o diagnóstico.'
+          : 'O scanner ainda não marcou a biblioteca como pronta para uso.';
 
   return (
     <section className="my-account-screen administration-screen administration-cockpit" aria-labelledby="administration-title">
-      <header className="my-account-header administration-cockpit__header">
-        <button className="icon-button" type="button" aria-label="Voltar" onClick={onBack}><ChevronLeft /></button>
-        <div>
+      <header className="administration-cockpit__header">
+        <button className="administration-cockpit__back" type="button" aria-label="Voltar" onClick={onBack}>
+          <ChevronLeft />
+        </button>
+        <div className="administration-cockpit__title">
           <strong id="administration-title">Administração</strong>
           <small>Foque no que precisa ser feito</small>
         </div>
-        <button
-          className="administration-cockpit__refresh"
-          type="button"
-          aria-label="Atualizar visão geral"
-          disabled={loadingOverview || loadingCache || clearingCache}
-          onClick={() => void refreshOverview()}
-        >
-          <RefreshCw className={loadingOverview || loadingCache ? 'is-spinning' : ''} />
-          <span>Atualizar</span>
-        </button>
+        <div className={`administration-cockpit__header-status ${healthy ? 'is-healthy' : attentionCount > 0 ? 'has-warning' : ''}`}>
+          <span />
+          <div>
+            <strong>{healthy ? 'Biblioteca pronta' : attentionCount > 0 ? 'Revisão necessária' : scannerReady ? 'Scanner pronto' : 'Biblioteca carregando'}</strong>
+            <small>Último scan em {formatScanDate(overview?.scanner.scannedAt ?? null)}</small>
+          </div>
+        </div>
       </header>
 
       <div className="administration-cockpit__content">
@@ -293,116 +207,187 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
           </div>
         )}
 
-        <section className={`administration-cockpit-status ${statusTone}`} aria-labelledby="administration-status-title">
-          <span className="administration-cockpit-status__icon">
-            {!overview && !overviewError ? <LoaderCircle className="is-spinning" /> : healthy ? <CheckCircle2 /> : <AlertTriangle />}
-          </span>
-          <div className="administration-cockpit-status__copy">
-            <small>Status da biblioteca</small>
-            <strong id="administration-status-title">{statusTitle}</strong>
-            <span>{statusDetail}</span>
-          </div>
-          {overview && (
-            <dl className="administration-cockpit-status__meta">
-              <div><dt>Scanner</dt><dd>{scannerLabel}</dd></div>
-              <div><dt>Último scan</dt><dd>{formatScanDate(overview.scanner.scannedAt)}</dd></div>
-            </dl>
-          )}
-        </section>
-
-        <section className="administration-cockpit-section" aria-labelledby="administration-actions-title">
-          <div className="administration-cockpit-section__heading">
-            <div><strong id="administration-actions-title">Ações rápidas</strong><small>Acesse diretamente as ferramentas mais usadas.</small></div>
-          </div>
-          <div className="administration-cockpit-actions">
-            <button type="button" onClick={() => setView('assistant')}><Sparkles /><span>Assistente da Biblioteca</span></button>
-            <button type="button" onClick={() => setView('tracks')}><ListMusic /><span>Gerenciar músicas</span></button>
-            <button type="button" onClick={() => setView('import')}><FileInput /><span>Importar mídia</span></button>
-            <button type="button" onClick={() => setView('integrity')}><ScanLine /><span>Integridade</span></button>
-            <button type="button" onClick={() => setView('duplicates')}><Copy /><span>Duplicatas</span></button>
-            <button type="button" onClick={() => setView('normalization')}><Link2 /><span>Normalização</span></button>
-            <button type="button" onClick={() => setView('users')}><Users /><span>Usuários</span></button>
-            <button type="button" onClick={openAllMetadata}><Database /><span>Metadados</span></button>
-            <button type="button" onClick={() => setView('quarantine')}><Trash2 /><span>Lixeira</span></button>
-            <button type="button" onClick={() => setView('operations')}><ShieldCheck /><span>Histórico</span></button>
-          </div>
-        </section>
-
         {loadingOverview && !overview ? (
           <div className="administration-cockpit-loading" role="status">
             <LoaderCircle className="is-spinning" /> Carregando visão geral…
           </div>
         ) : overview ? (
           <>
-            <section className="administration-cockpit-section" aria-labelledby="administration-library-title">
-              <div className="administration-cockpit-section__heading">
-                <div><strong id="administration-library-title">Biblioteca</strong><small>Os indicadores essenciais em um único lugar.</small></div>
+            <section className={`administration-cockpit-status ${healthy ? 'is-healthy' : 'has-warning'}`} aria-labelledby="administration-status-title">
+              <span className="administration-cockpit-status__icon">
+                {healthy ? <CheckCircle2 /> : <AlertTriangle />}
+              </span>
+              <div className="administration-cockpit-status__copy">
+                <strong id="administration-status-title">{statusTitle}</strong>
+                <span>{statusDetail}</span>
               </div>
-              <div className="administration-cockpit-metrics">
-                <article><span><Music2 /></span><div><small>Faixas</small><strong>{overview.tracks.total.toLocaleString('pt-BR')}</strong></div></article>
-                <article><span><HardDrive /></span><div><small>Biblioteca física</small><strong>{formatBytes(overview.storage.libraryBytes)}</strong></div></article>
-                <article className={problemCount > 0 ? 'has-warning' : ''}><span><AlertTriangle /></span><div><small>Metadados</small><strong>{problemCount.toLocaleString('pt-BR')}</strong></div></article>
-                <article className={integrityCount > 0 ? 'has-warning' : ''}><span><ScanLine /></span><div><small>Integridade</small><strong>{integrityVerified ? integrityCount.toLocaleString('pt-BR') : '—'}</strong></div></article>
+
+              <div className="administration-cockpit-status__metrics">
+                <article>
+                  <Music2 />
+                  <div><strong>{overview.tracks.total.toLocaleString('pt-BR')}</strong><small>faixas</small></div>
+                </article>
+                <article>
+                  <HardDrive />
+                  <div><strong>{formatBytes(overview.storage.libraryBytes)}</strong><small>biblioteca</small></div>
+                </article>
+                <article>
+                  <RefreshCw className={overview.scanner.scanning ? 'is-spinning' : ''} />
+                  <div>
+                    <strong>{overview.scanner.scanning ? 'Scanner atualizando' : overview.scanner.ready ? 'Scanner pronto' : 'Scanner requer atenção'}</strong>
+                    <small>Último scan em<br />{formatScanDate(overview.scanner.scannedAt)}</small>
+                  </div>
+                </article>
               </div>
             </section>
 
             {attentionCount > 0 && (
-              <section className="administration-cockpit-section administration-cockpit-attention" aria-labelledby="administration-attention-title">
+              <section className="administration-cockpit-attention" aria-labelledby="administration-attention-title">
                 <div className="administration-cockpit-section__heading">
-                  <div><strong id="administration-attention-title">Atenção necessária</strong><small>Mostramos apenas o que precisa de ação.</small></div>
+                  <div className="administration-cockpit-attention__heading-copy">
+                    <AlertTriangle />
+                    <div>
+                      <strong id="administration-attention-title">Atenção necessária</strong>
+                      <small>{problemCount.toLocaleString('pt-BR')} {problemCount === 1 ? 'música precisa' : 'músicas precisam'} de revisão.</small>
+                    </div>
+                  </div>
+                  <button className="administration-cockpit-section__link" type="button" onClick={openAllMetadata}>Ver todas</button>
                 </div>
+
                 <div className="administration-cockpit-attention__items">
-                  {overview.problems.missingTitle > 0 && <button type="button" onClick={() => openHealthProblem('missingTitle', 'Sem título')}><span>Sem título</span><strong>{overview.problems.missingTitle.toLocaleString('pt-BR')}</strong></button>}
-                  {overview.problems.missingCover > 0 && <button type="button" onClick={() => openHealthProblem('missingCover', 'Sem capa')}><span>Sem capa</span><strong>{overview.problems.missingCover.toLocaleString('pt-BR')}</strong></button>}
-                  {overview.problems.unknownArtist > 0 && <button type="button" onClick={() => openHealthProblem('unknownArtist', 'Artista desconhecido')}><span>Artista desconhecido</span><strong>{overview.problems.unknownArtist.toLocaleString('pt-BR')}</strong></button>}
-                  {overview.problems.unknownAlbum > 0 && <button type="button" onClick={() => openHealthProblem('unknownAlbum', 'Álbum desconhecido')}><span>Álbum desconhecido</span><strong>{overview.problems.unknownAlbum.toLocaleString('pt-BR')}</strong></button>}
-                  {overview.problems.missingDuration > 0 && <button type="button" onClick={() => openHealthProblem('missingDuration', 'Duração indisponível')}><span>Duração indisponível</span><strong>{overview.problems.missingDuration.toLocaleString('pt-BR')}</strong></button>}
-                  {integrityCount > 0 && <button type="button" onClick={() => setView('integrity')}><span>Inconsistências de integridade</span><strong>{integrityCount.toLocaleString('pt-BR')}</strong></button>}
+                  {overview.problems.missingCover > 0 && (
+                    <button className="is-cover" type="button" onClick={() => openHealthProblem('missingCover', 'Sem capa')}>
+                      <span className="administration-cockpit-attention__icon"><Database /></span>
+                      <span><strong>{overview.problems.missingCover.toLocaleString('pt-BR')}</strong><small>Sem capa</small></span>
+                      <ChevronRight />
+                    </button>
+                  )}
+                  {overview.problems.unknownAlbum > 0 && (
+                    <button className="is-album" type="button" onClick={() => openHealthProblem('unknownAlbum', 'Álbum desconhecido')}>
+                      <span className="administration-cockpit-attention__icon"><Tag /></span>
+                      <span><strong>{overview.problems.unknownAlbum.toLocaleString('pt-BR')}</strong><small>Álbum desconhecido</small></span>
+                      <ChevronRight />
+                    </button>
+                  )}
+                  {overview.problems.unknownArtist > 0 && (
+                    <button className="is-artist" type="button" onClick={() => openHealthProblem('unknownArtist', 'Artista desconhecido')}>
+                      <span className="administration-cockpit-attention__icon"><UserRound /></span>
+                      <span><strong>{overview.problems.unknownArtist.toLocaleString('pt-BR')}</strong><small>Artista desconhecido</small></span>
+                      <ChevronRight />
+                    </button>
+                  )}
+                  {overview.problems.missingTitle > 0 && (
+                    <button className="is-title" type="button" onClick={() => openHealthProblem('missingTitle', 'Sem título')}>
+                      <span className="administration-cockpit-attention__icon"><Music2 /></span>
+                      <span><strong>{overview.problems.missingTitle.toLocaleString('pt-BR')}</strong><small>Sem título</small></span>
+                      <ChevronRight />
+                    </button>
+                  )}
+                  {overview.problems.missingDuration > 0 && (
+                    <button className="is-duration" type="button" onClick={() => openHealthProblem('missingDuration', 'Duração indisponível')}>
+                      <span className="administration-cockpit-attention__icon"><History /></span>
+                      <span><strong>{overview.problems.missingDuration.toLocaleString('pt-BR')}</strong><small>Duração indisponível</small></span>
+                      <ChevronRight />
+                    </button>
+                  )}
+                  {integrityCount > 0 && (
+                    <button className="is-integrity" type="button" onClick={() => setView('integrity')}>
+                      <span className="administration-cockpit-attention__icon"><ScanLine /></span>
+                      <span><strong>{integrityCount.toLocaleString('pt-BR')}</strong><small>Integridade</small></span>
+                      <ChevronRight />
+                    </button>
+                  )}
                 </div>
               </section>
             )}
 
-            <div className="administration-cockpit-lower-grid">
-              <section className="administration-cockpit-section" aria-labelledby="administration-activity-title">
-                <div className="administration-cockpit-section__heading">
-                  <div><strong id="administration-activity-title">Atividade e diagnóstico</strong><small>Últimos estados conhecidos.</small></div>
-                  <button className="administration-cockpit-section__link" type="button" onClick={() => setView('operations')}>Ver histórico</button>
+            <section className="administration-cockpit-section administration-cockpit-primary" aria-labelledby="administration-primary-title">
+              <div className="administration-cockpit-section__heading">
+                <div>
+                  <strong id="administration-primary-title">Ações principais</strong>
+                  <small>Gerencie e mantenha sua biblioteca.</small>
                 </div>
-                <dl className="administration-cockpit-activity">
-                  <div><dt>Último scan</dt><dd>{formatScanDate(overview.scanner.scannedAt)}</dd></div>
-                  <div><dt>Rescan automático</dt><dd>{formatAutoRescan(overview.scanner)}</dd></div>
-                  <div><dt>Integridade</dt><dd>{integrityVerified ? formatScanDate(overview.integrity.checkedAt) : 'Ainda não verificada'}</dd></div>
-                  <div><dt>Scanner</dt><dd>{scannerLabel}</dd></div>
-                </dl>
-              </section>
+              </div>
+              <div className="administration-cockpit-primary__grid">
+                <button className="is-tracks" type="button" onClick={() => setView('tracks')}>
+                  <ListMusic />
+                  <span><strong>Gerenciar músicas</strong><small>Visualize, edite e organize sua biblioteca.</small></span>
+                  <ChevronRight />
+                </button>
+                <button className="is-import" type="button" onClick={() => setView('import')}>
+                  <FileInput />
+                  <span><strong>Importar mídia</strong><small>Adicione novas músicas à sua biblioteca.</small></span>
+                  <ChevronRight />
+                </button>
+                <button className="is-metadata" type="button" onClick={openAllMetadata}>
+                  <Sparkles />
+                  <span><strong>Metadados</strong><small>Corrija e edite informações das músicas.</small></span>
+                  <ChevronRight />
+                </button>
+                <button className="is-assistant" type="button" onClick={() => setView('assistant')}>
+                  <Sparkles />
+                  <span><strong>Assistente da Biblioteca</strong><small>Correções automáticas, capas e sugestões.</small></span>
+                  <ChevronRight />
+                </button>
+              </div>
+            </section>
 
-              <section className="administration-cockpit-section" aria-labelledby="administration-storage-title">
+            <div className="administration-cockpit-bottom">
+              <section className="administration-cockpit-section administration-cockpit-users" aria-labelledby="administration-users-title">
                 <div className="administration-cockpit-section__heading">
-                  <div><strong id="administration-storage-title">Armazenamento e cache</strong><small>Dados persistidos e arquivos derivados.</small></div>
+                  <div>
+                    <strong id="administration-users-title">Administração</strong>
+                    <small>Usuários e acessos.</small>
+                  </div>
                 </div>
-
-                {cacheError && <div className="administration-cockpit-cache-message is-error" role="alert">{cacheError}</div>}
-                {cacheFeedback && <div className={`administration-cockpit-cache-message ${cacheFeedback.error ? 'is-error' : 'is-success'}`} role={cacheFeedback.error ? 'alert' : 'status'}>{cacheFeedback.message}</div>}
-
-                <dl className="administration-cockpit-storage">
-                  <div><dt>SQLite</dt><dd>{overview.storage.databaseBytes == null ? 'Indisponível' : formatBytes(overview.storage.databaseBytes)}</dd></div>
-                  <div><dt>Cache</dt><dd>{cache ? formatBytes(cache.bytes) : loadingCache ? 'Carregando…' : 'Indisponível'}</dd></div>
-                  <div><dt>Limite</dt><dd>{cache ? formatBytes(cache.limitBytes) : '—'}</dd></div>
-                  <div><dt>Transcoding</dt><dd>{cache ? formatCacheActivity(cache) : '—'}</dd></div>
-                </dl>
-
-                <button
-                  className="administration-cockpit-clear-cache"
-                  type="button"
-                  disabled={!cache || cache.bytes === 0 || cacheBusy || clearingCache}
-                  title={cacheBusy ? 'Aguarde o transcoding em andamento terminar.' : undefined}
-                  onClick={() => void clearTranscodeCache()}
-                >
-                  {clearingCache ? <LoaderCircle className="is-spinning" /> : <Trash2 />}
-                  {clearingCache ? 'Limpando…' : 'Limpar cache derivado'}
+                <button type="button" onClick={() => setView('users')}>
+                  <Users />
+                  <span><strong>Usuários</strong><small>Gerencie os usuários do Home Music.</small></span>
+                  <ChevronRight />
                 </button>
               </section>
+
+              <section className="administration-cockpit-section administration-cockpit-maintenance" aria-labelledby="administration-maintenance-title">
+                <div className="administration-cockpit-section__heading">
+                  <div>
+                    <strong id="administration-maintenance-title">Manutenção</strong>
+                    <small>Ferramentas para manter sua biblioteca saudável.</small>
+                  </div>
+                </div>
+                <div className="administration-cockpit-maintenance__grid">
+                  <button className="is-integrity" type="button" onClick={() => setView('integrity')}>
+                    <ScanLine />
+                    <span><strong>Integridade</strong><small>Verifique problemas na biblioteca.</small></span>
+                    <ChevronRight />
+                  </button>
+                  <button className="is-duplicates" type="button" onClick={() => setView('duplicates')}>
+                    <Copy />
+                    <span><strong>Duplicatas</strong><small>Encontre músicas duplicadas.</small></span>
+                    <ChevronRight />
+                  </button>
+                  <button className="is-normalization" type="button" onClick={() => setView('normalization')}>
+                    <Link2 />
+                    <span><strong>Normalização</strong><small>Padronize informações da sua biblioteca.</small></span>
+                    <ChevronRight />
+                  </button>
+                  <button className="is-trash" type="button" onClick={() => setView('quarantine')}>
+                    <Trash2 />
+                    <span><strong>Lixeira</strong><small>Gerencie itens removidos.</small></span>
+                    <ChevronRight />
+                  </button>
+                  <button className="is-history" type="button" onClick={() => setView('operations')}>
+                    <History />
+                    <span><strong>Histórico</strong><small>Veja as últimas ações realizadas.</small></span>
+                    <ChevronRight />
+                  </button>
+                </div>
+              </section>
             </div>
+
+            <footer className="administration-cockpit__footer" aria-hidden="true">
+              <span>Home Music&nbsp;&nbsp;•&nbsp;&nbsp;Música para uma vida mais sua.</span>
+              <span>Ouça&nbsp;&nbsp;•&nbsp;&nbsp;Organize&nbsp;&nbsp;•&nbsp;&nbsp;Viva melhor <i /></span>
+            </footer>
           </>
         ) : null}
       </div>

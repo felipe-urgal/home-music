@@ -73,9 +73,6 @@ jobs:
       - name: TV iOS LAN bridge E2E
         run: npm run test --prefix e2e -- tests/tv-offline-lan-bridge.spec.ts tests/tv-ios-lan-bridge-ui.spec.ts --project=desktop-chromium
 
-      - name: Personal data import E2E
-        run: npm run test --prefix e2e -- tests/personal-data-import.spec.ts
-
       - name: Library Assistant E2E
         env:
           HOME_MUSIC_E2E_LIBRARY_ASSISTANT: '1'
