@@ -117,7 +117,6 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
   const [urlConfig, setUrlConfig] = useState<AdminImportUrlConfig | null>(null);
   const [mediaValidationConfig, setMediaValidationConfig] = useState<AdminImportMediaValidationConfig | null>(null);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [activeUpload, setActiveUpload] = useState<ActiveUpload | null>(null);
@@ -132,7 +131,7 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
   const cancelRequestedRef = useRef(false);
 
   const loadJobs = useCallback(async (background = false) => {
-    if (background) setRefreshing(true); else setLoading(true);
+    if (!background) setLoading(true);
     setError(null);
     try {
       const response = await getAdminImportJobs();
@@ -143,7 +142,7 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Não foi possível carregar as importações.');
     } finally {
-      if (background) setRefreshing(false); else setLoading(false);
+      if (!background) setLoading(false);
     }
   }, []);
 
