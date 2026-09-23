@@ -294,9 +294,16 @@ export function createMusicBrainzAlbumArtworkAnalyzer(
           .map(candidate => rankRelease(group.album, group.artist, candidate))
           .filter(item => item.albumMatch !== 'different' && item.artistMatch !== 'different')
           .sort((left, right) => right.score - left.score);
-        const best = ranked[0];
+        const seenReleaseGroups = new Set<string>();
+        const distinct = ranked.filter(item => {
+          const key = item.candidate.releaseGroupId ?? item.candidate.id;
+          if (seenReleaseGroups.has(key)) return false;
+          seenReleaseGroups.add(key);
+          return true;
+        });
+        const best = distinct[0];
         if (!best || best.score < 80) continue;
-        const second = ranked[1];
+        const second = distinct[1];
         const margin = second ? best.score - second.score : 100;
         if (margin < AMBIGUOUS_MARGIN) continue;
 
