@@ -86,3 +86,21 @@ test('separa indisponibilidade 503 de rate limit e aceita Retry-After HTTP-date'
   );
   assert.equal(parseRetryAfterMs('invalid', nowMs), null);
 });
+
+
+test('aplica retry classificado também à busca de release por álbum', async () => {
+  const fetchImpl = createMusicBrainzSimpleSearchFetch(async () => new Response('{}', {
+    status: 429,
+    headers: { 'Retry-After': '5' }
+  }));
+
+  await assert.rejects(
+    fetchImpl('https://musicbrainz.org/ws/2/release?query=release%3A%22Album%22'),
+    error => {
+      assert.ok(error instanceof MusicBrainzRetryableRequestError);
+      assert.equal(error.code, 'provider-rate-limited');
+      assert.equal(error.retryAfterMs, 5_000);
+      return true;
+    }
+  );
+});
