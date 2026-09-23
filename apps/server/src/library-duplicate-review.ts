@@ -188,6 +188,14 @@ export class LibraryDuplicateReviewStore {
         PRIMARY KEY (track_a_id, track_b_id),
         CHECK (track_a_id < track_b_id)
       );
+
+      CREATE TABLE IF NOT EXISTS library_duplicate_review_snapshot (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        checked_at TEXT NOT NULL,
+        library_fingerprint TEXT NOT NULL,
+        hash_complete INTEGER NOT NULL CHECK(hash_complete IN (0, 1)),
+        candidates_json TEXT NOT NULL
+      );
     `);
   }
 
@@ -195,13 +203,114 @@ export class LibraryDuplicateReviewStore {
     this.db.close();
   }
 
+  private async visibleTracks() {
+    const allTracks = await this.readTracks();
+    return allTracks
+      .filter(track => track.id && track.filePath && !this.isHidden(track.id))
+      .sort((left, right) => left.id.localeCompare(right.id));
+  }
+
+  private tracksFingerprint(tracks: readonly LibraryDuplicateTrack[]) {
+    const hash = createHash('sha256');
+    for (const track of tracks) {
+      hash.update(JSON.stringify([
+        track.id,
+        track.filePath,
+        track.title,
+        track.artist,
+        track.album,
+        track.duration,
+        track.format,
+        track.fileSize,
+        track.mtimeMs
+      ]));
+      hash.update('\n');
+    }
+    return hash.digest('hex');
+  }
+
+  private responseFromCandidates(
+    checkedAt: string,
+    hashComplete: boolean,
+    candidates: AdminLibraryDuplicateCandidate[],
+    stale: boolean
+  ): AdminLibraryDuplicateReviewResponse {
+    const ignored = this.ignoredPairKeys();
+    const nextCandidates = candidates.map(candidate => ({
+      ...candidate,
+      ignored: ignored.has(candidate.key)
+    })).sort(candidateSort);
+    const active = nextCandidates.filter(candidate => !candidate.ignored);
+    return {
+      checkedAt,
+      hashComplete,
+      stale,
+      counts: {
+        reviewable: active.length,
+        exact: active.filter(candidate => candidate.confidence === 'exact').length,
+        probable: active.filter(candidate => candidate.confidence === 'probable').length,
+        possible: active.filter(candidate => candidate.confidence === 'possible').length,
+        ignored: nextCandidates.length - active.length
+      },
+      candidates: nextCandidates
+    };
+  }
+
+  private persistSnapshot(
+    fingerprint: string,
+    response: AdminLibraryDuplicateReviewResponse
+  ) {
+    this.db.prepare(`
+      INSERT INTO library_duplicate_review_snapshot(
+        id, checked_at, library_fingerprint, hash_complete, candidates_json
+      ) VALUES (1, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        checked_at = excluded.checked_at,
+        library_fingerprint = excluded.library_fingerprint,
+        hash_complete = excluded.hash_complete,
+        candidates_json = excluded.candidates_json;
+    `).run(
+      response.checkedAt,
+      fingerprint,
+      response.hashComplete ? 1 : 0,
+      JSON.stringify(response.candidates)
+    );
+  }
+
+  async latest(): Promise<AdminLibraryDuplicateReviewResponse | null> {
+    const row = this.db.prepare(`
+      SELECT checked_at, library_fingerprint, hash_complete, candidates_json
+      FROM library_duplicate_review_snapshot
+      WHERE id = 1;
+    `).get() as Row | undefined;
+    if (!row) return null;
+
+    let candidates: AdminLibraryDuplicateCandidate[];
+    try {
+      const parsed = JSON.parse(cleanString(row.candidates_json));
+      if (!Array.isArray(parsed)) return null;
+      candidates = parsed as AdminLibraryDuplicateCandidate[];
+    } catch {
+      return null;
+    }
+
+    const tracks = await this.visibleTracks();
+    const stale = cleanString(row.library_fingerprint) !== this.tracksFingerprint(tracks);
+    return this.responseFromCandidates(
+      cleanString(row.checked_at),
+      Boolean(row.hash_complete),
+      candidates,
+      stale
+    );
+  }
+
   async check(): Promise<AdminLibraryDuplicateReviewResponse> {
     if (!this.musicDir.trim() && !this.libraryTracks) {
       throw new LibraryDuplicateReviewError(409, 'Biblioteca não está configurada para revisão de duplicatas.');
     }
 
-    const allTracks = await this.readTracks();
-    const tracks = allTracks.filter(track => track.id && track.filePath && !this.isHidden(track.id));
+    const tracks = await this.visibleTracks();
+    const fingerprint = this.tracksFingerprint(tracks);
     const candidates = new Map<string, CandidateDraft>();
 
     const addHeuristicPair = (left: LibraryDuplicateTrack, right: LibraryDuplicateTrack) => {
@@ -315,7 +424,6 @@ export class LibraryDuplicateReviewStore {
       }
     }
 
-    const ignored = this.ignoredPairKeys();
     const publicCandidates = [...candidates.entries()].map(([key, candidate]): AdminLibraryDuplicateCandidate => ({
       key,
       confidence: candidate.confidence,
@@ -324,23 +432,17 @@ export class LibraryDuplicateReviewStore {
         publicTrack(candidate.left, this.musicDir),
         publicTrack(candidate.right, this.musicDir)
       ],
-      ignored: ignored.has(key)
+      ignored: false
     }));
-    publicCandidates.sort(candidateSort);
 
-    const active = publicCandidates.filter(candidate => !candidate.ignored);
-    return {
-      checkedAt: this.now().toISOString(),
+    const response = this.responseFromCandidates(
+      this.now().toISOString(),
       hashComplete,
-      counts: {
-        reviewable: active.length,
-        exact: active.filter(candidate => candidate.confidence === 'exact').length,
-        probable: active.filter(candidate => candidate.confidence === 'probable').length,
-        possible: active.filter(candidate => candidate.confidence === 'possible').length,
-        ignored: publicCandidates.length - active.length
-      },
-      candidates: publicCandidates
-    };
+      publicCandidates,
+      false
+    );
+    this.persistSnapshot(fingerprint, response);
+    return response;
   }
 
   setIgnored(trackIds: readonly [string, string], ignored: boolean): AdminLibraryDuplicateIgnoreResponse {
