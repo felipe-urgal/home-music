@@ -182,6 +182,7 @@ export type AdminLibraryDuplicateCandidate = {
 export type AdminLibraryDuplicateReviewResponse = {
   checkedAt: string;
   hashComplete: boolean;
+  stale: boolean;
   counts: {
     reviewable: number;
     exact: number;
