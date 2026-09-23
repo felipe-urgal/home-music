@@ -4,6 +4,7 @@ import {
   type LibraryAssistantCapability,
   type LibraryAssistantConfidenceBand,
   type LibraryAssistantEvidence,
+  type LibraryAssistantMetadataField,
   type LibraryAssistantProvenance,
   type LibraryAssistantReasonCode,
   type LibraryAssistantRun,
@@ -69,6 +70,7 @@ export type LibraryAssistantSuggestionDraft = {
 export type LibraryAssistantAnalyzer = {
   id: string;
   capability: LibraryAssistantCapability;
+  metadataFields?: readonly LibraryAssistantMetadataField[];
   analyze: (context: {
     runId: string;
     tracks: readonly Track[];
@@ -95,6 +97,7 @@ type LibraryAssistantServiceOptions = {
 
 type LibraryAssistantStartRunOptions = {
   full?: boolean;
+  fields?: readonly LibraryAssistantMetadataField[];
 };
 
 function safeOwnerId(value: string | null | undefined) {
@@ -232,7 +235,11 @@ export class LibraryAssistantService {
       throw new Error('Revision atual da biblioteca é inválida.');
     }
     const tracks = this.options.library.listTracks()
-      .filter(track => options.full === true || this.isTrackEligible(capability, track))
+      .filter(track => (
+        options.full === true
+        || (capability === 'metadata' && Boolean(options.fields?.length))
+        || this.isTrackEligible(capability, track)
+      ))
       .map(track => ({ ...track }));
     const runId = `assistant-${this.createId()}`;
     const createdAt = this.now().toISOString();
@@ -243,8 +250,17 @@ export class LibraryAssistantService {
       createdAt
     });
 
+    const availableAnalyzers = this.analyzersByCapability.get(capability) ?? [];
+    const requestedFields = capability === 'metadata' && options.fields?.length
+      ? new Set(options.fields)
+      : null;
+    const analyzers = requestedFields
+      ? availableAnalyzers.filter(analyzer => (
+          analyzer.metadataFields?.some(field => requestedFields.has(field))
+        ))
+      : availableAnalyzers.filter(analyzer => !analyzer.metadataFields?.length);
+
     if (this.options.workQueue) {
-      const analyzers = this.analyzersByCapability.get(capability) ?? [];
       let trackIds = tracks.map(track => track.id);
       if (this.options.incrementalIndex) {
         try {
@@ -286,7 +302,14 @@ export class LibraryAssistantService {
       return run;
     }
 
-    this.scheduleLegacyRun(runId, capability, libraryRevision, tracks, safeOwnerId(ownerId));
+    this.scheduleLegacyRun(
+      runId,
+      capability,
+      libraryRevision,
+      tracks,
+      analyzers.map(analyzer => analyzer.id),
+      safeOwnerId(ownerId)
+    );
     return run;
   }
 
@@ -343,6 +366,7 @@ export class LibraryAssistantService {
     capability: LibraryAssistantCapability,
     libraryRevision: number,
     tracks: readonly Track[],
+    analyzerIds: readonly string[],
     ownerId: string
   ) {
     const controller = new AbortController();
@@ -350,7 +374,7 @@ export class LibraryAssistantService {
     let scheduled!: Promise<void>;
     scheduled = this.options.queue.runWithContext(
       { ownerId, signal: controller.signal },
-      signal => this.executeLegacyRun(runId, capability, libraryRevision, tracks, signal)
+      signal => this.executeLegacyRun(runId, capability, libraryRevision, tracks, analyzerIds, signal)
     ).catch(error => {
       this.handleScheduledFailure(runId, error, controller.signal);
     }).finally(() => {
@@ -558,6 +582,7 @@ export class LibraryAssistantService {
     capability: LibraryAssistantCapability,
     libraryRevision: number,
     tracks: readonly Track[],
+    analyzerIds: readonly string[],
     signal?: AbortSignal
   ) {
     if (!this.options.store.startRun(runId, this.now().toISOString())) return;
@@ -575,7 +600,11 @@ export class LibraryAssistantService {
         return;
       }
 
-      const analyzers = this.analyzersByCapability.get(capability) ?? [];
+      const analyzers = analyzerIds
+        .map(id => this.analyzersById.get(id))
+        .filter((analyzer): analyzer is LibraryAssistantAnalyzer => (
+          Boolean(analyzer) && analyzer?.capability === capability
+        ));
       let suggestionCount = 0;
       for (const analyzer of analyzers) {
         if (signal?.aborted) throw new HeavyWorkQueueAbortedError('library-assistant');
