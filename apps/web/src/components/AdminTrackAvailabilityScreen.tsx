@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { AdminTrack, AdminTrackFileLocation, AdminTrackMoveResponse } from '@home-music/shared';
 import {
-  CheckSquare2,
   ChevronLeft,
   ChevronRight,
   CircleOff,
@@ -11,7 +10,6 @@ import {
   FileAudio2,
   Folder,
   FolderOpen,
-  Gauge,
   Info,
   LoaderCircle,
   MoreHorizontal,
