@@ -17,7 +17,7 @@ describe('AdminLibraryNormalizationScreen assistant evidence', () => {
   it('mantém associação explícita e explica que MusicBrainz é apenas evidência', () => {
     const screen = source();
 
-    expect(screen).toContain('Escolha qual grafia será exibida como canônica.');
+    expect(screen).toContain('Grafia canônica');
     expect(screen).toContain('Associar variações');
     expect(screen).toContain('nenhuma grafia é sugerida automaticamente');
   });
