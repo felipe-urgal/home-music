@@ -52,7 +52,7 @@ describe('AdminLibraryAssistantScreen operational workflow', () => {
     const screen = source();
 
     expect(screen).toMatch(/run\.status === 'queued'\) return 'Análise na fila'/);
-    expect(screen).toMatch(/faixas aguardando processamento/);
+    expect(screen).toMatch(/verificações aguardando processamento/);
     for (const label of ['Metadados', 'Capas', 'Letras', 'Revisão', 'Falhas']) {
       expect(screen).toContain(label);
     }
@@ -101,10 +101,38 @@ describe('AdminLibraryAssistantScreen operational workflow', () => {
 
     expect(screen).toMatch(/listAdminTracks/);
     expect(screen).toContain('músicas na biblioteca');
-    expect(screen).toContain('nesta análise');
+    expect(screen).toContain('processos coordenados');
     expect(screen).toContain('<dt>Biblioteca</dt>');
-    expect(screen).toContain('<dt>Nesta análise</dt>');
-    expect(screen).toContain('faixas desta execução concluídas');
+    expect(screen).toContain('<dt>Verificações</dt>');
+    expect(screen).toContain('verificações desta execução concluídas');
+  });
+
+
+  it('coordena metadata e letras até ambos concluírem', () => {
+    const screen = source();
+
+    expect(screen).toMatch(/const latestLyricsRun = useMemo/);
+    expect(screen).toMatch(/const analysisRuns = useMemo/);
+    expect(screen).toMatch(/const runActive = activeRuns\.length > 0/);
+    expect(screen).toMatch(/Promise\.all\(currentRuns\.map\(run => getLibraryAssistantRunProgress\(run\.id\)\)\)/);
+    expect(screen).toMatch(/suggestionResponses\.flatMap/);
+  });
+
+  it('expõe automação segura em vez de manter comportamento de fundo oculto', () => {
+    const screen = source();
+
+    expect(screen).toContain('Automação segura');
+    expect(screen).toContain('somente campos de metadata vazios');
+    expect(screen).toMatch(/getLibraryAssistantAutonomy/);
+    expect(screen).toMatch(/updateLibraryAssistantAutonomy/);
+  });
+
+  it('usa nomes de política que descrevem o comportamento real', () => {
+    const screen = source();
+
+    expect(screen).toContain('Ocultar');
+    expect(screen).toContain('Revisar individualmente');
+    expect(screen).toContain('Permitir lote seguro');
   });
 
   it('explica que a reanálise completa percorre toda a biblioteca', () => {
