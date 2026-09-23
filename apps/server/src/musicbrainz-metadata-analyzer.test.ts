@@ -252,6 +252,45 @@ test('usa release-group quando a edição identificada não tem capa própria', 
   );
 });
 
+test('artwork não exige álbum nem duração compatíveis quando título e artista batem', async () => {
+  const analyzer = createMusicBrainzMetadataAnalyzer({
+    fetchImpl: async input => {
+      if (isCaaRequest(input)) {
+        return caaResponse([{
+          id: 'cover-title-artist',
+          front: true,
+          image: 'https://coverartarchive.org/release/release-title-artist/front',
+          thumbnails: {}
+        }]);
+      }
+      const query = new URL(String(input)).searchParams.get('query') ?? '';
+      if (/release:/.test(query)) return response([]);
+      return response([recording({
+        id: 'recording-title-artist',
+        title: 'Cancao',
+        length: 260_000,
+        releases: [{
+          id: 'release-title-artist',
+          title: 'Outro Album',
+          'release-group': { id: 'group-title-artist' },
+          'artist-credit': [{ name: 'Artista', artist: { id: 'artist-1', name: 'Artista' } }]
+        }]
+      })]);
+    }
+  });
+
+  const drafts = await analyzer.analyze({
+    runId: 'run-title-artist-only',
+    tracks: [track({ title: 'Cancao', album: 'Album local', duration: 180 })],
+    providers: gateway()
+  });
+
+  const artwork = drafts.find(draft => draft.target.capability === 'artwork');
+  assert.ok(artwork && artwork.target.capability === 'artwork');
+  assert.equal(artwork.confidence, 'high');
+  assert.equal(artwork.target.musicBrainzReleaseId, 'release-title-artist');
+});
+
 test('cai para busca ampla quando o álbum local não encontra gravação e duração confirma a faixa', async () => {
   let coverArtArchiveCalls = 0;
   const queries: string[] = [];
@@ -299,31 +338,42 @@ test('cai para busca ampla quando o álbum local não encontra gravação e dura
   assert.equal(artwork.target.musicBrainzReleaseId, 'release-original');
 });
 
-test('duas opções plausíveis permanecem ambíguas e não viram escolha de alta confiança', async () => {
+test('artwork aceita o primeiro release coerente quando título e artista batem mesmo com edições ambíguas', async () => {
   const analyzer = createMusicBrainzMetadataAnalyzer({
-    fetchImpl: async () => response([
-      recording({
-        id: 'recording-a',
-        title: 'Cancao',
-        releases: [{ id: 'release-a', title: 'Album Deluxe' }]
-      }),
-      recording({
-        id: 'recording-b',
-        title: 'Cancao',
-        releases: [{ id: 'release-b', title: 'Album Remaster' }]
-      })
-    ])
+    fetchImpl: async input => {
+      if (isCaaRequest(input)) {
+        return caaResponse([{
+          id: 'cover-a',
+          front: true,
+          image: 'https://coverartarchive.org/release/release-a/front',
+          thumbnails: {}
+        }]);
+      }
+      return response([
+        recording({
+          id: 'recording-a',
+          title: 'Cancao',
+          releases: [{ id: 'release-a', title: 'Album Deluxe' }]
+        }),
+        recording({
+          id: 'recording-b',
+          title: 'Cancao',
+          releases: [{ id: 'release-b', title: 'Album Remaster' }]
+        })
+      ]);
+    }
   });
 
   const drafts = await analyzer.analyze({
-    runId: 'run-ambiguous',
+    runId: 'run-ambiguous-artwork',
     tracks: [track()],
     providers: gateway()
   });
 
-  assert.ok(drafts.length > 0);
-  assert.ok(drafts.every(draft => draft.confidence === 'low'));
-  assert.ok(drafts.every(draft => draft.reasonCodes.includes('ambiguous-candidates')));
+  const artwork = drafts.find(draft => draft.target.capability === 'artwork');
+  assert.ok(artwork && artwork.target.capability === 'artwork');
+  assert.equal(artwork.confidence, 'high');
+  assert.ok(artwork.reasonCodes.includes('ambiguous-candidates'));
 });
 
 test('contexto de álbum converge entre faixas e consultas equivalentes reutilizam cache normalizado', async () => {
