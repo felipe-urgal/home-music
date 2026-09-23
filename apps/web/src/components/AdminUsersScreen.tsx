@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import type { AdminUser, AuthenticatedUser, UserRole } from '@home-music/shared';
 import {
   CalendarDays,
+  Check,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
@@ -9,9 +10,7 @@ import {
   KeyRound,
   LoaderCircle,
   LogOut,
-  MoreHorizontal,
   Plus,
-  RefreshCw,
   Search,
   ShieldCheck,
   Trash2,
@@ -68,7 +67,6 @@ export function AdminUsersScreen({ currentUser, onBack }: AdminUsersScreenProps)
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [inspectorDismissed, setInspectorDismissed] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -95,8 +93,11 @@ export function AdminUsersScreen({ currentUser, onBack }: AdminUsersScreenProps)
 
   const pageCount = Math.max(1, Math.ceil(filteredUsers.length / PAGE_SIZE));
   const visibleUsers = filteredUsers.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const activeUsers = users.filter(user => user.enabled).length;
 
-  useEffect(() => { if (page > pageCount) setPage(pageCount); }, [page, pageCount]);
+  useEffect(() => {
+    if (page > pageCount) setPage(pageCount);
+  }, [page, pageCount]);
 
   useEffect(() => {
     if (selectedId && !users.some(user => user.id === selectedId)) setSelectedId(null);
@@ -107,22 +108,24 @@ export function AdminUsersScreen({ currentUser, onBack }: AdminUsersScreenProps)
     setSelectedId(users.find(user => user.id === currentUser.id)?.id ?? users[0]?.id ?? null);
   }, [currentUser.id, inspectorDismissed, selectedId, users, view]);
 
-  async function refresh(background = false) {
-    if (background) setRefreshing(true); else setLoading(true);
+  async function loadUsers() {
+    setLoading(true);
     try {
       setUsers(await listAdminUsers());
       setError(null);
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {
-      if (background) setRefreshing(false); else setLoading(false);
+      setLoading(false);
     }
   }
 
-  useEffect(() => { void refresh(); }, []);
+  useEffect(() => { void loadUsers(); }, []);
 
   function canDiscardCredential() {
-    return !credential || copied || window.confirm('A senha temporária ainda não foi copiada. Continuar fará com que ela deixe de ser exibida. Deseja continuar?');
+    return !credential || copied || window.confirm(
+      'A senha temporária ainda não foi copiada. Continuar fará com que ela deixe de ser exibida. Deseja continuar?'
+    );
   }
 
   function resetTransientState() {
@@ -211,6 +214,7 @@ export function AdminUsersScreen({ currentUser, onBack }: AdminUsersScreenProps)
       const updated = await updateAdminUser(selected.id, username.trim(), role, enabled);
       setUsers(items => replaceUser(items, updated));
       setNotice('Alterações salvas. As sessões anteriores deste usuário foram encerradas.');
+      setSelectedId(updated.id);
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {
@@ -252,7 +256,7 @@ export function AdminUsersScreen({ currentUser, onBack }: AdminUsersScreenProps)
 
   async function removeUser() {
     if (!selected || !canManageSelected || busy) return;
-    if (!window.confirm(`Remover ${selected.username}? A conta e os dados pessoais associados serão excluídos.`)) return;
+    if (!window.confirm(`Remover ${selected.username}? A conta será removida e suas sessões serão encerradas. Esta ação não pode ser desfeita.`)) return;
     setBusy(true);
     setError(null);
     try {
@@ -264,9 +268,9 @@ export function AdminUsersScreen({ currentUser, onBack }: AdminUsersScreenProps)
       setCopied(false);
       setNotice(null);
       setView('list');
-      setBusy(false);
     } catch (caught) {
       setError(errorMessage(caught));
+    } finally {
       setBusy(false);
     }
   }
@@ -283,187 +287,303 @@ export function AdminUsersScreen({ currentUser, onBack }: AdminUsersScreenProps)
 
   const title = view === 'create' ? 'Novo usuário' : view === 'edit' ? 'Editar usuário' : 'Usuários';
   const subtitle = view === 'create'
-    ? 'Crie uma conta e compartilhe a senha temporária com segurança'
+    ? 'Crie uma conta para acessar o Home Music'
     : view === 'edit'
-      ? 'Gerencie acesso, segurança e estado da conta'
-      : 'Gerencie usuários e permissões';
+      ? 'Altere as informações e permissões'
+      : 'Gerencie quem pode acessar o Home Music';
 
-  const credentialCard = credential ? (
-    <div className="admin-users-v1__credential" role="status">
-      <div className="admin-users-v1__credential-heading">
-        <span className="admin-users-v1__credential-icon"><KeyRound /></span>
-        <div>
-          <strong>{credential.reason === 'created' ? `Conta criada · ${credential.username}` : `Senha redefinida · ${credential.username}`}</strong>
-          <span>Copie a senha temporária agora. Ela não poderá ser recuperada depois.</span>
+  if (view === 'create' && credential?.reason === 'created') {
+    return (
+      <section className="admin-users-screen admin-users-screen--v2 admin-users-screen--credential" aria-labelledby="admin-users-title">
+        <header className="admin-users-v2__page-header">
+          <button className="admin-users-v2__back" type="button" aria-label="Voltar" onClick={returnToList}><ChevronLeft /></button>
+          <div>
+            <strong id="admin-users-title">Conta criada</strong>
+            <small>A conta foi criada com sucesso</small>
+          </div>
+          <span />
+        </header>
+
+        <div className="admin-users-v2__credential-screen admin-users-credential" role="status">
+          <div className="admin-users-v2__credential-success"><Check /></div>
+          <strong>Conta criada</strong>
+          <small>{credential.username}</small>
+
+          <div className="admin-users-v2__credential-block">
+            <span>Senha temporária</span>
+            <div>
+              <code>{credential.password}</code>
+              <button type="button" onClick={() => void copyCredential()}><Copy /> {copied ? 'Copiada' : 'Copiar'}</button>
+            </div>
+          </div>
+
+          <div className="admin-users-v2__credential-note">
+            <InfoIcon />
+            <span>Esta senha será exibida apenas agora. Ela não poderá ser recuperada depois. O usuário deverá alterá-la no primeiro acesso.</span>
+          </div>
+
+          <button className="admin-users-v2__credential-done" type="button" onClick={returnToList}>Concluir</button>
         </div>
-      </div>
-      <code>{credential.password}</code>
-      <div className="admin-users-v1__credential-actions">
-        <button type="button" onClick={() => void copyCredential()}><Copy /> {copied ? 'Copiada' : 'Copiar senha'}</button>
-        <button type="button" onClick={() => { setCredential(null); setCopied(false); }}>Dispensar</button>
-      </div>
-    </div>
-  ) : null;
+      </section>
+    );
+  }
 
   return (
-    <section className={`admin-users-screen admin-users-screen--v1 admin-users-screen--${view}`} aria-labelledby="admin-users-title">
-      <header className="admin-users-header admin-users-v1__header">
-        <button className="icon-button" type="button" aria-label="Voltar" onClick={view === 'list' ? onBack : returnToList}><ChevronLeft /></button>
-        <div><strong id="admin-users-title">{title}</strong><small>{subtitle}</small></div>
+    <section className={`admin-users-screen admin-users-screen--v2 admin-users-screen--${view}`} aria-labelledby="admin-users-title">
+      <header className="admin-users-v2__page-header">
+        <button className="admin-users-v2__back" type="button" aria-label="Voltar" onClick={view === 'list' ? onBack : returnToList}><ChevronLeft /></button>
+        <div>
+          <strong id="admin-users-title">{title}</strong>
+          <small>{subtitle}</small>
+        </div>
         {view === 'list' ? (
-          <button className={`icon-button ${refreshing ? 'is-loading' : ''}`} type="button" aria-label="Atualizar usuários" disabled={loading || refreshing} onClick={() => void refresh(true)}><RefreshCw /></button>
-        ) : <span className="admin-users-header__spacer" />}
+          <div className="admin-users-v2__summary">
+            <span />
+            <div>
+              <strong>{users.length.toLocaleString('pt-BR')} {users.length === 1 ? 'usuário' : 'usuários'}</strong>
+              <small>{activeUsers.toLocaleString('pt-BR')} ativos</small>
+            </div>
+          </div>
+        ) : <span />}
       </header>
 
-      {view !== 'list' && credentialCard}
       {error && <div className="admin-users-message is-error" role="alert">{error}</div>}
       {view !== 'list' && notice && <div className="admin-users-message" role="status">{notice}</div>}
 
       {view === 'list' && (
-        <div className={`admin-users-v1__workspace${selected ? ' has-inspector' : ''}`}>
-          <div className="admin-users-v1__list-column">
-            <div className="admin-users-toolbar admin-users-v1__toolbar">
-              <button className="admin-users-new" type="button" onClick={openCreate}><Plus /> Novo usuário</button>
-              <label className="admin-users-search"><Search /><input aria-label="Buscar usuário" placeholder="Buscar usuário..." value={query} onChange={event => { setQuery(event.target.value); setPage(1); }} /></label>
-              <select aria-label="Filtrar por papel" value={roleFilter} onChange={event => { setRoleFilter(event.target.value as RoleFilter); setPage(1); }}><option value="all">Papel: Todos</option><option value="admin">Administradores</option><option value="user">Usuários</option></select>
-            </div>
+        <div className="admin-users-v2">
+          <section className="admin-users-v2__controls">
+            <button className="admin-users-v2__new" type="button" onClick={openCreate}><Plus /> Novo usuário</button>
+            <label className="admin-users-v2__search">
+              <Search />
+              <input
+                aria-label="Buscar usuário"
+                placeholder="Buscar usuário..."
+                value={query}
+                onChange={event => { setQuery(event.target.value); setPage(1); }}
+              />
+            </label>
+          </section>
 
-            {loading ? <div className="admin-users-loading"><LoaderCircle className="admin-users-spinner" /> Carregando usuários…</div> : (
-              <div className="admin-users-table-shell admin-users-v1__table-shell">
-                <div className="admin-users-table-count">{filteredUsers.length} {filteredUsers.length === 1 ? 'usuário' : 'usuários'}</div>
-                <table className="admin-users-table">
-                  <thead><tr><th>Usuário</th><th>Papel</th><th>Status</th><th>Criado em</th><th>Ações</th></tr></thead>
-                  <tbody>{visibleUsers.map(user => {
-                    const self = user.id === currentUser.id;
-                    const isSelected = selectedId === user.id;
-                    return (
-                      <tr key={user.id} className={`${!user.enabled ? 'is-disabled ' : ''}${isSelected ? 'is-selected' : ''}`}>
-                        <td><span className="admin-users-user"><span className="admin-users-avatar"><UserRound /></span><strong>{user.username}{self ? ' (você)' : ''}</strong></span></td>
-                        <td>{roleLabel(user.role)}</td>
-                        <td><span className={`admin-user-status ${user.enabled ? 'is-active' : ''}`}>{user.enabled ? 'Ativo' : 'Inativo'}</span></td>
-                        <td>{formatDate(user.createdAt)}</td>
-                        <td><button className="admin-users-row-action" type="button" aria-label={`Ver detalhes de ${user.username}`} aria-pressed={isSelected} onClick={() => inspectUser(user)}><MoreHorizontal /></button></td>
-                      </tr>
-                    );
-                  })}</tbody>
-                </table>
-                {!visibleUsers.length && <div className="admin-users-empty">Nenhum usuário encontrado.</div>}
-                <div className="admin-users-pagination"><span>Mostrando {visibleUsers.length} de {filteredUsers.length} usuários</span><div><button type="button" disabled={page <= 1} onClick={() => setPage(value => value - 1)}><ChevronLeft /></button><span>{page}</span><button type="button" disabled={page >= pageCount} onClick={() => setPage(value => value + 1)}><ChevronRight /></button></div></div>
-              </div>
-            )}
-          </div>
+          <nav className="admin-users-v2__filters" aria-label="Filtrar usuários por papel">
+            <button type="button" className={roleFilter === 'all' ? 'is-active' : ''} onClick={() => { setRoleFilter('all'); setPage(1); }}>Todos</button>
+            <button type="button" className={roleFilter === 'admin' ? 'is-active' : ''} onClick={() => { setRoleFilter('admin'); setPage(1); }}>Administradores</button>
+            <button type="button" className={roleFilter === 'user' ? 'is-active' : ''} onClick={() => { setRoleFilter('user'); setPage(1); }}>Usuários</button>
+          </nav>
 
-          {selected && (
-            <aside className="admin-users-v1__inspector" aria-label={`Detalhes de ${selected.username}`}>
-              <header className="admin-users-v1__inspector-header">
-                <div><strong>Detalhes do usuário</strong><small>Conta selecionada</small></div>
-                <button type="button" aria-label="Fechar detalhes" onClick={closeInspector}><X /></button>
-              </header>
-
-              <div className="admin-users-v1__identity">
-                <span className="admin-users-v1__identity-avatar"><UserRound /></span>
-                <div>
-                  <strong>{selected.username}{selectedIsSelf ? ' (você)' : ''}</strong>
-                  <div className="admin-users-v1__badges">
-                    <span>{roleLabel(selected.role)}</span>
-                    <span className={selected.enabled ? 'is-active' : ''}>{selected.enabled ? 'Ativo' : 'Inativo'}</span>
+          {loading ? (
+            <div className="admin-users-v2__loading"><LoaderCircle className="is-spinning" /> Carregando usuários…</div>
+          ) : (
+            <div className={`admin-users-v2__workspace${selected ? ' has-inspector' : ''}`}>
+              <section className="admin-users-v2__list" aria-label="Usuários">
+                {visibleUsers.length === 0 ? (
+                  <div className="admin-users-v2__empty">
+                    <UserRound />
+                    <strong>Nenhum usuário encontrado</strong>
+                    <span>Ajuste a busca ou o filtro.</span>
                   </div>
-                </div>
-              </div>
+                ) : (
+                  <div className="admin-users-v2__rows">
+                    {visibleUsers.map(user => {
+                      const self = user.id === currentUser.id;
+                      const isSelected = selectedId === user.id;
+                      return (
+                        <button
+                          key={user.id}
+                          type="button"
+                          className={`admin-users-v2__row${isSelected ? ' is-selected' : ''}${!user.enabled ? ' is-disabled' : ''}`}
+                          aria-pressed={isSelected}
+                          onClick={() => inspectUser(user)}
+                        >
+                          <span className="admin-users-v2__avatar"><UserRound /></span>
+                          <span className="admin-users-v2__row-copy">
+                            <strong>{user.username}{self ? ' (você)' : ''}</strong>
+                            <small>{roleLabel(user.role)}</small>
+                          </span>
+                          <span className={`admin-users-v2__status${user.enabled ? ' is-active' : ''}`}>
+                            <i /> {user.enabled ? 'Ativo' : 'Inativo'}
+                          </span>
+                          <ChevronRight />
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
 
-              {credential && credential.username === selected.username && credentialCard}
-              {notice && <div className="admin-users-v1__inline-notice" role="status"><CheckCircle2 /> {notice}</div>}
+                {pageCount > 1 && (
+                  <footer className="admin-users-v2__pagination">
+                    <span>Mostrando {visibleUsers.length} de {filteredUsers.length} usuários</span>
+                    <div>
+                      <button type="button" aria-label="Página anterior" disabled={page <= 1} onClick={() => setPage(value => value - 1)}><ChevronLeft /></button>
+                      <span>{page}</span>
+                      <button type="button" aria-label="Próxima página" disabled={page >= pageCount} onClick={() => setPage(value => value + 1)}><ChevronRight /></button>
+                    </div>
+                  </footer>
+                )}
+              </section>
 
-              <dl className="admin-users-v1__facts">
-                <div><dt><ShieldCheck /> Papel</dt><dd>{roleLabel(selected.role)}</dd></div>
-                <div><dt><CalendarDays /> Criado em</dt><dd>{formatDate(selected.createdAt)}</dd></div>
-                <div><dt><RefreshCw /> Atualizado em</dt><dd>{formatDate(selected.updatedAt)}</dd></div>
-                <div><dt><KeyRound /> Senha</dt><dd>{selected.passwordMustChange ? 'Troca obrigatória no próximo acesso' : selected.passwordChangedAt ? `Alterada em ${formatDate(selected.passwordChangedAt)}` : 'Ainda não alterada'}</dd></div>
-              </dl>
+              {selected && (
+                <aside className="admin-users-v2__inspector" aria-label={`Detalhes de ${selected.username}`}>
+                  <header>
+                    <div><strong>Detalhes do usuário</strong><small>Conta selecionada</small></div>
+                    <button type="button" aria-label="Fechar detalhes" onClick={closeInspector}><X /></button>
+                  </header>
 
-              {selectedIsSelf ? (
-                <div className="admin-users-v1__self-note">
-                  <UserRound />
-                  <span>Esta é sua conta atual. Use <strong>Minha conta</strong> para ajustes pessoais.</span>
-                </div>
-              ) : (
-                <section className="admin-users-v1__quick-actions" aria-label="Ações rápidas do usuário">
-                  <strong>Ações rápidas</strong>
-                  <button type="button" disabled={busy} onClick={() => openEdit(selected)}><UserRound /><span><strong>Editar usuário</strong><small>Alterar nome, papel e status.</small></span></button>
-                  <button type="button" disabled={busy} onClick={() => void resetPassword()}><KeyRound /><span><strong>Redefinir senha</strong><small>Gerar uma nova senha temporária.</small></span></button>
-                  <button type="button" disabled={busy} onClick={() => void revokeSessions()}><LogOut /><span><strong>Revogar sessões</strong><small>Encerrar todos os acessos atuais.</small></span></button>
-                </section>
+                  <section className="admin-users-v2__identity">
+                    <span className="admin-users-v2__identity-avatar"><UserRound /></span>
+                    <div>
+                      <strong>{selected.username}{selectedIsSelf ? ' (você)' : ''}</strong>
+                      <div>
+                        <span>{roleLabel(selected.role)}</span>
+                        <span className={selected.enabled ? 'is-active' : ''}>{selected.enabled ? 'Ativo' : 'Inativo'}</span>
+                      </div>
+                    </div>
+                  </section>
+
+                  {credential && credential.username === selected.username && (
+                    <div className="admin-users-v2__inline-credential admin-users-credential" role="status">
+                      <strong>Nova senha temporária</strong>
+                      <code>{credential.password}</code>
+                      <button type="button" onClick={() => void copyCredential()}><Copy /> {copied ? 'Copiada' : 'Copiar senha'}</button>
+                    </div>
+                  )}
+
+                  {notice && <div className="admin-users-v2__notice" role="status"><CheckCircle2 /> {notice}</div>}
+
+                  <dl className="admin-users-v2__facts">
+                    <div><dt><ShieldCheck /> Papel</dt><dd>{roleLabel(selected.role)}</dd></div>
+                    <div><dt><CalendarDays /> Criado em</dt><dd>{formatDate(selected.createdAt)}</dd></div>
+                    <div><dt><CalendarDays /> Atualizado em</dt><dd>{formatDate(selected.updatedAt)}</dd></div>
+                    <div><dt><KeyRound /> Senha</dt><dd>{selected.passwordMustChange ? 'Troca obrigatória no próximo acesso' : selected.passwordChangedAt ? `Alterada em ${formatDate(selected.passwordChangedAt)}` : 'Ainda não alterada'}</dd></div>
+                  </dl>
+
+                  {selectedIsSelf ? (
+                    <div className="admin-users-v2__self-note">
+                      <UserRound />
+                      <span>Esta é sua conta atual. Senha, sessões e ajustes pessoais devem ser gerenciados em <strong>Minha conta</strong>.</span>
+                    </div>
+                  ) : (
+                    <>
+                      <section className="admin-users-v2__inspector-section">
+                        <strong>Acesso</strong>
+                        <button type="button" disabled={busy} onClick={() => openEdit(selected)}><UserRound /> Editar usuário</button>
+                      </section>
+
+                      <section className="admin-users-v2__inspector-section">
+                        <strong>Segurança</strong>
+                        <button type="button" disabled={busy} onClick={() => void resetPassword()}><KeyRound /> Redefinir senha</button>
+                        <button type="button" disabled={busy} onClick={() => void revokeSessions()}><LogOut /> Revogar sessões</button>
+                      </section>
+
+                      <section className="admin-users-v2__danger-zone">
+                        <strong>Zona de risco</strong>
+                        <small>A remoção da conta não pode ser desfeita.</small>
+                        <button type="button" disabled={busy} onClick={() => void removeUser()}><Trash2 /> Remover usuário</button>
+                      </section>
+                    </>
+                  )}
+                </aside>
               )}
-            </aside>
+            </div>
           )}
         </div>
       )}
 
       {view === 'create' && (
-        <form className="admin-users-v1__focus admin-users-v1__create" onSubmit={createUser}>
-          <section className="admin-users-v1__form-card">
-            <div className="admin-users-v1__section-heading">
-              <span className="admin-users-v1__section-icon"><UserRound /></span>
-              <div><strong>Informações do usuário</strong><small>Defina a identificação e o nível de acesso da nova conta.</small></div>
+        <form className="admin-users-v2__focus" onSubmit={createUser}>
+          <section className="admin-users-v2__form-card">
+            <div className="admin-users-v2__section-heading">
+              <span><UserRound /></span>
+              <div><strong>Informações da conta</strong><small>Defina quem vai acessar e com qual nível de permissão.</small></div>
             </div>
-            <label><span>Nome de usuário</span><input autoFocus value={username} maxLength={120} placeholder="ex.: maria" onChange={event => setUsername(event.target.value)} /></label>
-            <label><span>Papel</span><select value={role} onChange={event => setRole(event.target.value as UserRole)}><option value="user">Usuário</option><option value="admin">Administrador</option></select><small>Administradores podem gerenciar biblioteca, usuários e configurações administrativas.</small></label>
+
+            <label>
+              <span>Nome de usuário</span>
+              <input autoFocus aria-label="Nome de usuário" value={username} maxLength={120} placeholder="ex.: maria" onChange={event => setUsername(event.target.value)} />
+            </label>
+
+            <label>
+              <span>Papel</span>
+              <select value={role} onChange={event => setRole(event.target.value as UserRole)}>
+                <option value="user">Usuário</option>
+                <option value="admin">Administrador</option>
+              </select>
+              <small>Usuários acessam a biblioteca e os próprios dados. Administradores também gerenciam biblioteca e sistema.</small>
+            </label>
+
+            <div className="admin-users-v2__temporary-password">
+              <KeyRound />
+              <div>
+                <strong>Senha temporária</strong>
+                <p>Uma senha segura será criada automaticamente e exibida apenas uma vez.</p>
+                <small>O usuário deverá alterá-la no primeiro acesso.</small>
+              </div>
+            </div>
           </section>
 
-          <aside className="admin-users-v1__create-security">
-            <span className="admin-users-v1__section-icon"><KeyRound /></span>
-            <div><strong>Senha temporária automática</strong><p>Uma senha segura será gerada ao criar a conta e exibida uma única vez para você copiar.</p></div>
-            <div className="admin-users-v1__security-note"><ShieldCheck /><span>O usuário deverá trocar essa senha conforme as regras de segurança da conta.</span></div>
-          </aside>
-
-          <div className="admin-users-v1__focus-footer">
+          <footer className="admin-users-v2__form-actions">
             <button type="button" onClick={returnToList}>Cancelar</button>
-            <button className="primary-action" type="submit" disabled={busy || !username.trim()}>{busy ? 'Criando…' : 'Criar usuário'}</button>
-          </div>
+            <button className="is-primary" type="submit" disabled={busy || !username.trim()}>{busy ? 'Criando…' : 'Criar usuário'}</button>
+          </footer>
         </form>
       )}
 
       {view === 'edit' && selected && (
-        <form className="admin-users-v1__focus admin-users-v1__edit" onSubmit={saveUser}>
-          <section className="admin-users-v1__edit-summary">
-            <span className="admin-users-v1__identity-avatar"><UserRound /></span>
-            <div>
-              <strong>{selected.username}</strong>
-              <span>{roleLabel(selected.role)} · {selected.enabled ? 'Ativo' : 'Inativo'}</span>
-              <small>Criado em {formatDate(selected.createdAt)}</small>
+        <form className="admin-users-v2__focus" onSubmit={saveUser}>
+          <section className="admin-users-v2__form-card">
+            <div className="admin-users-v2__section-heading">
+              <span><UserRound /></span>
+              <div><strong>Informações da conta</strong><small>{selected.username} · {roleLabel(selected.role)} · {selected.enabled ? 'Ativo' : 'Inativo'}</small></div>
             </div>
-          </section>
 
-          <section className="admin-users-v1__form-card">
-            <div className="admin-users-v1__section-heading">
-              <span className="admin-users-v1__section-icon"><UserRound /></span>
-              <div><strong>Informações da conta</strong><small>Alterações salvas encerram as sessões anteriores deste usuário.</small></div>
-            </div>
-            <label><span>Nome de usuário</span><input value={username} maxLength={120} onChange={event => setUsername(event.target.value)} /></label>
-            <div className="admin-users-v1__field-grid">
-              <label><span>Papel</span><select value={role} onChange={event => setRole(event.target.value as UserRole)}><option value="user">Usuário</option><option value="admin">Administrador</option></select><small>Define o nível de acesso.</small></label>
-              <label><span>Status</span><select value={enabled ? 'active' : 'inactive'} onChange={event => setEnabled(event.target.value === 'active')}><option value="active">Ativo</option><option value="inactive">Inativo</option></select><small>Contas inativas não conseguem entrar.</small></label>
-            </div>
-          </section>
+            <label>
+              <span>Nome de usuário</span>
+              <input autoFocus value={username} maxLength={120} onChange={event => setUsername(event.target.value)} />
+            </label>
 
-          <aside className="admin-users-v1__edit-actions">
-            <section>
-              <div className="admin-users-v1__section-heading compact"><span className="admin-users-v1__section-icon"><ShieldCheck /></span><div><strong>Segurança</strong><small>Ações imediatas sobre o acesso desta conta.</small></div></div>
-              <button type="button" disabled={busy} onClick={() => void resetPassword()}><KeyRound /><span><strong>Redefinir senha</strong><small>Gerar uma nova senha temporária.</small></span></button>
-              <button type="button" disabled={busy} onClick={() => void revokeSessions()}><LogOut /><span><strong>Revogar sessões</strong><small>Encerrar todos os acessos atuais.</small></span></button>
+            <div className="admin-users-v2__field-grid">
+              <label>
+                <span>Papel</span>
+                <select value={role} onChange={event => setRole(event.target.value as UserRole)}>
+                  <option value="user">Usuário</option>
+                  <option value="admin">Administrador</option>
+                </select>
+              </label>
+              <label>
+                <span>Status</span>
+                <select value={enabled ? 'active' : 'inactive'} onChange={event => setEnabled(event.target.value === 'active')}>
+                  <option value="active">Ativo</option>
+                  <option value="inactive">Inativo</option>
+                </select>
+              </label>
+            </div>
+
+            <small className="admin-users-v2__access-note">Alterações de acesso encerram as sessões atuais do usuário.</small>
+
+            <section className="admin-users-v2__edit-security">
+              <strong>Segurança</strong>
+              <div>
+                <button type="button" disabled={busy} onClick={() => void resetPassword()}><KeyRound /> Redefinir senha</button>
+                <button type="button" disabled={busy} onClick={() => void revokeSessions()}><LogOut /> Revogar sessões</button>
+              </div>
             </section>
-            <section className="admin-users-v1__danger-zone">
-              <div><strong>Zona de perigo</strong><small>A remoção da conta não pode ser desfeita.</small></div>
+
+            <section className="admin-users-v2__edit-danger">
+              <strong>Zona de risco</strong>
               <button type="button" disabled={busy} onClick={() => void removeUser()}><Trash2 /> Remover usuário</button>
             </section>
-          </aside>
+          </section>
 
-          <div className="admin-users-v1__focus-footer">
+          <footer className="admin-users-v2__form-actions">
             <button type="button" onClick={returnToList}>Cancelar</button>
-            <button className="primary-action" type="submit" disabled={busy || !username.trim()}>{busy ? 'Salvando…' : 'Salvar alterações'}</button>
-          </div>
+            <button className="is-primary" type="submit" disabled={busy || !username.trim()}>{busy ? 'Salvando…' : 'Salvar alterações'}</button>
+          </footer>
         </form>
       )}
     </section>
   );
+}
+
+function InfoIcon() {
+  return <ShieldCheck aria-hidden="true" />;
 }

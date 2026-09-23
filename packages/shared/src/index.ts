@@ -114,6 +114,10 @@ export type AdminLibraryIntegrityIssue = {
 
 export type AdminLibraryIntegrityStatus = {
   checkedAt: string | null;
+  mediaProbe: {
+    available: boolean | null;
+    message: string | null;
+  };
   counts: {
     total: number;
     scannerFailures: number;
@@ -178,6 +182,7 @@ export type AdminLibraryDuplicateCandidate = {
 export type AdminLibraryDuplicateReviewResponse = {
   checkedAt: string;
   hashComplete: boolean;
+  stale: boolean;
   counts: {
     reviewable: number;
     exact: number;

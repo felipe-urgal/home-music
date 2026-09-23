@@ -11,6 +11,10 @@ import {
   scanLibrary,
   type IndexedTrack
 } from './library.js';
+import {
+  getLibraryIntegrityStatus,
+  hydrateLibraryIntegrityStatus
+} from './library-integrity.js';
 import { LibraryMutationLock } from './library-mutation-lock.js';
 import { toPublicTrack } from './library-public-track.js';
 import type { LongJobObservability } from './long-job-observability.js';
@@ -122,6 +126,7 @@ export class LibraryService {
     const integrity = await auditLibraryIntegrity(resolvedRoot, this.tracks, (message, error) => {
       this.options.logger.warn({ err: error }, message);
     });
+    this.options.database.saveLibraryIntegrityStatus(resolvedRoot, integrity);
     return this.overview(integrity);
   }
 
@@ -184,6 +189,8 @@ export class LibraryService {
       this.scannedAt = storedScannedAt;
       this.setTracks(this.options.database.loadTracks());
       this.libraryReady = true;
+      const storedIntegrity = this.options.database.loadLibraryIntegrityStatus(resolvedRoot);
+      if (storedIntegrity) hydrateLibraryIntegrityStatus(resolvedRoot, storedIntegrity);
       return;
     }
 
@@ -378,6 +385,7 @@ export class LibraryService {
       : this.options.database.applyTrackDelta(result.delta, resolvedRoot, nextScannedAt);
 
     this.applySnapshot(result.tracks, resolvedRoot, nextScannedAt, changed);
+    this.options.database.saveLibraryIntegrityStatus(resolvedRoot, getLibraryIntegrityStatus());
     this.options.logger.info(
       {
         persistenceMode: persistence.mode,

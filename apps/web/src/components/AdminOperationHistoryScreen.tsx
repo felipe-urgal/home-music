@@ -10,6 +10,7 @@ import {
   CircleAlert,
   Clock3,
   FileInput,
+  Info,
   Link2,
   LoaderCircle,
   RefreshCw,
@@ -128,9 +129,9 @@ export function AdminOperationHistoryScreen({ onBack }: AdminOperationHistoryScr
       if (requestId !== requestSequence.current) return;
       setItems(response.items);
       setSelectedId(current => current && response.items.some(item => item.id === current) ? current : null);
-    } catch (error) {
+    } catch (caught) {
       if (requestId !== requestSequence.current) return;
-      setError(error instanceof Error ? error.message : 'Não foi possível carregar o histórico operacional.');
+      setError(caught instanceof Error ? caught.message : 'Não foi possível carregar o histórico operacional.');
     } finally {
       if (requestId !== requestSequence.current) return;
       if (background) setRefreshing(false); else setLoading(false);
@@ -138,6 +139,16 @@ export function AdminOperationHistoryScreen({ onBack }: AdminOperationHistoryScr
   }, [kind, status]);
 
   useEffect(() => { void loadHistory(); }, [loadHistory]);
+
+  const hasActiveOperations = items.some(item => item.status === 'pending' || item.status === 'running');
+  useEffect(() => {
+    if (!hasActiveOperations) return;
+    const intervalId = window.setInterval(() => {
+      void loadHistory(true);
+    }, 2_000);
+    return () => window.clearInterval(intervalId);
+  }, [hasActiveOperations, loadHistory]);
+
   useEffect(() => {
     setRetryError(null);
     setRetryNotice(null);
@@ -151,6 +162,7 @@ export function AdminOperationHistoryScreen({ onBack }: AdminOperationHistoryScr
   );
   const selectedCounts = selected ? scanCounts(selected) : null;
   const selectedAttempt = selected?.importRetry?.attempt ?? 1;
+  const hasFilters = Boolean(kind || status);
 
   const retryUpload = async (file: File) => {
     if (!selected?.canRetry || selected.importSource?.type !== 'upload' || retrying) return;
@@ -194,201 +206,252 @@ export function AdminOperationHistoryScreen({ onBack }: AdminOperationHistoryScr
   };
 
   return (
-    <section className="my-account-screen admin-operation-history-screen" aria-labelledby="admin-operation-history-title">
-      <header className="my-account-header">
-        <button className="icon-button" type="button" aria-label="Voltar" onClick={onBack}><ChevronLeft /></button>
+    <section className="my-account-screen admin-operation-history-screen admin-operation-history-screen--v2" aria-labelledby="admin-operation-history-title">
+      <header className="admin-operation-history-v2__page-header">
+        <button className="admin-operation-history-v2__back" type="button" aria-label="Voltar" onClick={onBack}><ChevronLeft /></button>
         <div>
           <strong id="admin-operation-history-title">Histórico operacional</strong>
           <small>Scans e importações da biblioteca</small>
         </div>
-        <span className="my-account-header__spacer" />
+        <div className="admin-operation-history-v2__header-status">
+          <span className={hasActiveOperations ? 'is-active' : ''} />
+          <div>
+            <strong>{items.length.toLocaleString('pt-BR')} {items.length === 1 ? 'operação' : 'operações'}</strong>
+            <small>{hasActiveOperations ? 'Atualização automática ativa' : 'Histórico persistido'}</small>
+          </div>
+        </div>
       </header>
 
-      <div className="my-account-overview admin-operation-history">
-        <section className="admin-operation-history__toolbar" aria-label="Filtros do histórico operacional">
-          <label>
-            <span>Tipo</span>
-            <select value={kind} onChange={event => setKind(event.target.value as KindFilter)}>
-              <option value="">Todos</option>
-              <option value="scan">Scans</option>
-              <option value="import">Importações</option>
-            </select>
-          </label>
-          <label>
-            <span>Status</span>
-            <select value={status} onChange={event => setStatus(event.target.value as StatusFilter)}>
-              <option value="">Todos</option>
-              <option value="pending">Pendente</option>
-              <option value="running">Em andamento</option>
-              <option value="completed">Concluída</option>
-              <option value="failed">Falhou</option>
-              <option value="cancelled">Cancelada</option>
-            </select>
-          </label>
-          <button
-            type="button"
-            aria-label="Atualizar histórico operacional"
-            disabled={loading || refreshing}
-            onClick={() => void loadHistory(true)}
-          >
-            <RefreshCw className={refreshing ? 'is-spinning' : ''} />
-          </button>
-        </section>
-
+      <div className="admin-operation-history-v2">
         {error && (
-          <div className="my-account-message is-error admin-operation-history__message" role="alert">
+          <div className="my-account-message is-error admin-operation-history-v2__message" role="alert">
             <span>{error}</span>
             <button type="button" onClick={() => void loadHistory()}>Tentar novamente</button>
           </div>
         )}
 
         {loading ? (
-          <div className="admin-operation-history__empty" role="status">
-            <LoaderCircle className="is-spinning" /> Carregando histórico…
+          <div className="admin-operation-history-v2__loading" role="status">
+            <LoaderCircle className="is-spinning" />
+            <strong>Carregando histórico…</strong>
           </div>
-        ) : items.length === 0 ? (
-          <div className="admin-operation-history__empty">
-            <Clock3 />
+        ) : items.length === 0 && !hasFilters ? (
+          <section className="admin-operation-history-v2__empty">
+            <span className="admin-operation-history-v2__empty-icon"><Clock3 /></span>
+            <strong>Nenhuma atividade registrada</strong>
+            <p>Os próximos scans e importações aparecerão aqui.</p>
             <div>
-              <strong>Nenhuma operação encontrada</strong>
-              <small>Os próximos scans manuais/automáticos e jobs de importação aparecerão aqui.</small>
+              <Info />
+              <span>O histórico é mantido para diagnóstico e acompanhamento das operações da biblioteca.</span>
             </div>
-          </div>
+          </section>
         ) : (
-          <div className="admin-operation-history__layout">
-            <div className="admin-operation-history__list" aria-label="Operações recentes">
-              {items.map(item => (
+          <>
+            <section className="admin-operation-history-v2__filters" aria-label="Filtros do histórico operacional">
+              <nav aria-label="Tipo">
+                <button type="button" className={kind === '' ? 'is-active' : ''} onClick={() => setKind('')}>Todos</button>
+                <button type="button" className={kind === 'scan' ? 'is-active' : ''} onClick={() => setKind('scan')}>Scans</button>
+                <button type="button" className={kind === 'import' ? 'is-active' : ''} onClick={() => setKind('import')}>Importações</button>
+              </nav>
+
+              <div className="admin-operation-history-v2__filter-actions">
+                <label>
+                  <span>Status</span>
+                  <select aria-label="Status" value={status} onChange={event => setStatus(event.target.value as StatusFilter)}>
+                    <option value="">Todos</option>
+                    <option value="pending">Pendente</option>
+                    <option value="running">Em andamento</option>
+                    <option value="completed">Concluída</option>
+                    <option value="failed">Falhou</option>
+                    <option value="cancelled">Cancelada</option>
+                  </select>
+                </label>
                 <button
-                  className={`admin-operation-row is-${item.status} ${selectedId === item.id ? 'is-selected' : ''}`}
                   type="button"
-                  key={item.id}
-                  aria-pressed={selectedId === item.id}
-                  onClick={() => setSelectedId(current => current === item.id ? null : item.id)}
+                  aria-label="Atualizar histórico operacional"
+                  disabled={loading || refreshing}
+                  onClick={() => void loadHistory(true)}
                 >
-                  <span className="admin-operation-row__icon">
-                    {item.kind === 'scan' ? <ScanLine /> : <FileInput />}
-                  </span>
-                  <span className="admin-operation-row__body">
-                    <strong>{item.label}</strong>
-                    <small>
-                      {operationSource(item)}
-                      {item.importRetry && item.importRetry.attempt > 1 ? ` · tentativa #${item.importRetry.attempt}` : ''}
-                      {' · '}{formatDate(item.createdAt)}
-                    </small>
-                  </span>
-                  <span className="admin-operation-row__status">
-                    {statusIcon(item.status)} {STATUS_LABELS[item.status]}
-                  </span>
+                  <RefreshCw className={refreshing ? 'is-spinning' : ''} />
                 </button>
-              ))}
-            </div>
+              </div>
+            </section>
 
-            {selected && (
-              <article className="admin-operation-detail" aria-live="polite">
-                <div className="admin-operation-detail__heading">
-                  <span>{selected.kind === 'scan' ? <ScanLine /> : <FileInput />}</span>
-                  <div>
-                    <strong>{selected.label}</strong>
-                    <small>{operationSource(selected)} · {STATUS_LABELS[selected.status]}</small>
+            {items.length === 0 ? (
+              <section className="admin-operation-history-v2__filtered-empty">
+                <SearchPlaceholder />
+                <strong>Nenhuma operação neste filtro</strong>
+                <span>Escolha outro tipo ou status para ver o restante do histórico.</span>
+              </section>
+            ) : (
+              <div className="admin-operation-history-v2__workspace">
+                <section className="admin-operation-history-v2__list" aria-label="Operações recentes">
+                  <header>
+                    <div>
+                      <strong>Operações recentes</strong>
+                      <small>Selecione uma operação para ver os detalhes.</small>
+                    </div>
+                    {refreshing && <LoaderCircle className="is-spinning" aria-label="Atualizando" />}
+                  </header>
+
+                  <div className="admin-operation-history-v2__rows">
+                    {items.map(item => (
+                      <button
+                        className={`admin-operation-row is-${item.status} ${selectedId === item.id ? 'is-selected' : ''}`}
+                        type="button"
+                        key={item.id}
+                        aria-pressed={selectedId === item.id}
+                        onClick={() => setSelectedId(item.id)}
+                      >
+                        <span className="admin-operation-row__icon">
+                          {item.kind === 'scan' ? <ScanLine /> : <FileInput />}
+                        </span>
+                        <span className="admin-operation-row__body">
+                          <strong>{item.label}</strong>
+                          <small>
+                            {operationSource(item)}
+                            {item.importRetry && item.importRetry.attempt > 1 ? ` · tentativa #${item.importRetry.attempt}` : ''}
+                            {' · '}{formatDate(item.createdAt)}
+                          </small>
+                        </span>
+                        <span className="admin-operation-row__status">
+                          {statusIcon(item.status)} {STATUS_LABELS[item.status]}
+                        </span>
+                      </button>
+                    ))}
                   </div>
-                </div>
+                </section>
 
-                <dl className="admin-operation-detail__facts">
-                  <div><dt>Início</dt><dd>{formatDate(selected.startedAt || selected.createdAt)}</dd></div>
-                  <div><dt>Fim</dt><dd>{formatDate(selected.finishedAt)}</dd></div>
-                  <div><dt>Duração</dt><dd>{formatDuration(selected.durationMs, selected.status)}</dd></div>
-                  {selected.importRetry && (
+                <aside className="admin-operation-detail" aria-live="polite">
+                  {!selected ? (
+                    <div className="admin-operation-detail__empty">
+                      <Clock3 />
+                      <strong>Selecione uma operação</strong>
+                      <span>Os detalhes, resultados e possíveis ações aparecerão aqui.</span>
+                    </div>
+                  ) : (
                     <>
-                      <div><dt>Tentativa</dt><dd>#{selected.importRetry.attempt}</dd></div>
-                      <div><dt>Diagnóstico</dt><dd>{FAILURE_LABELS[selected.importRetry.failureDisposition]}</dd></div>
-                      <div><dt>Nova tentativa</dt><dd>{selected.canRetry ? 'Disponível' : 'Não disponível'}</dd></div>
+                      <div className="admin-operation-detail__heading">
+                        <span>{selected.kind === 'scan' ? <ScanLine /> : <FileInput />}</span>
+                        <div>
+                          <strong>{selected.label}</strong>
+                          <small>{operationSource(selected)} · {STATUS_LABELS[selected.status]}</small>
+                        </div>
+                        <span className={`admin-operation-detail__status is-${selected.status}`}>
+                          {statusIcon(selected.status)} {STATUS_LABELS[selected.status]}
+                        </span>
+                      </div>
+
+                      <dl className="admin-operation-detail__facts">
+                        <div><dt>Início</dt><dd>{formatDate(selected.startedAt || selected.createdAt)}</dd></div>
+                        <div><dt>Fim</dt><dd>{formatDate(selected.finishedAt)}</dd></div>
+                        <div><dt>Duração</dt><dd>{formatDuration(selected.durationMs, selected.status)}</dd></div>
+                        {selected.importRetry && (
+                          <>
+                            <div><dt>Tentativa</dt><dd>#{selected.importRetry.attempt}</dd></div>
+                            <div><dt>Diagnóstico</dt><dd>{FAILURE_LABELS[selected.importRetry.failureDisposition]}</dd></div>
+                            <div><dt>Nova tentativa</dt><dd>{selected.canRetry ? 'Disponível' : 'Não disponível'}</dd></div>
+                          </>
+                        )}
+                      </dl>
+
+                      {selectedCounts && (
+                        <section className="admin-operation-detail__result">
+                          <strong>Resultado</strong>
+                          <dl className="admin-operation-detail__counts">
+                            {selectedCounts.map(([label, value]) => (
+                              <div key={label}><dt>{label}</dt><dd>{value?.toLocaleString('pt-BR') ?? '—'}</dd></div>
+                            ))}
+                          </dl>
+                        </section>
+                      )}
+
+                      {selected.error && (
+                        <section className="admin-operation-detail__error" role="alert">
+                          <CircleAlert />
+                          <div>
+                            <strong>{selected.error.message}</strong>
+                            <span>O que fazer</span>
+                            <p>{selected.error.action}</p>
+                          </div>
+                        </section>
+                      )}
+
+                      {selected.kind === 'import' && selected.importRetry?.failureDisposition === 'definitive' && (
+                        <div className="admin-operation-detail__retry-note">
+                          <CircleAlert />
+                          <span>Falha definitiva. Corrija a origem e inicie uma nova importação em vez de repetir este job.</span>
+                        </div>
+                      )}
+
+                      {selected.canRetry && selected.importSource?.type === 'upload' && (
+                        <section className="admin-operation-detail__retry">
+                          <div>
+                            <Upload />
+                            <span>
+                              <strong>Nova tentativa com arquivo novo</strong>
+                              <small>O arquivo anterior não é reutilizado. Um staging vazio será criado.</small>
+                            </span>
+                          </div>
+                          <input
+                            ref={retryFileInput}
+                            className="admin-operation-detail__retry-file"
+                            type="file"
+                            accept=".mp3,.flac,.wav,.m4a,.aac,.ogg,.opus"
+                            disabled={retrying}
+                            onChange={event => {
+                              const file = event.currentTarget.files?.[0];
+                              event.currentTarget.value = '';
+                              if (file) void retryUpload(file);
+                            }}
+                          />
+                          <button type="button" disabled={retrying} onClick={() => retryFileInput.current?.click()}>
+                            {retrying ? <LoaderCircle className="is-spinning" /> : <RotateCcw />}
+                            {retrying ? `Enviando${retryProgress != null ? ` ${retryProgress}%` : '…'}` : 'Selecionar novo arquivo'}
+                          </button>
+                        </section>
+                      )}
+
+                      {selected.canRetry && selected.importSource?.type === 'url' && (
+                        <form className="admin-operation-detail__retry" onSubmit={event => { event.preventDefault(); void retryFromUrl(); }}>
+                          <div>
+                            <Link2 />
+                            <span>
+                              <strong>Nova tentativa com URL</strong>
+                              <small>A URL anterior não é armazenada nem reaproveitada pelo histórico.</small>
+                            </span>
+                          </div>
+                          <label htmlFor={`admin-operation-retry-url-${selected.id}`}>URL</label>
+                          <input
+                            id={`admin-operation-retry-url-${selected.id}`}
+                            type="url"
+                            value={retryUrl}
+                            disabled={retrying}
+                            maxLength={4096}
+                            placeholder="https://…"
+                            onChange={event => setRetryUrl(event.target.value)}
+                          />
+                          <button type="submit" disabled={retrying || !retryUrl.trim()}>
+                            {retrying ? <LoaderCircle className="is-spinning" /> : <RotateCcw />}
+                            {retrying ? 'Criando tentativa…' : 'Tentar novamente'}
+                          </button>
+                        </form>
+                      )}
+
+                      {retryError && <div className="admin-operation-detail__retry-message is-error" role="alert">{retryError}</div>}
+                      {retryNotice && <div className="admin-operation-detail__retry-message is-success" role="status">{retryNotice}</div>}
                     </>
                   )}
-                </dl>
-
-                {selectedCounts && (
-                  <dl className="admin-operation-detail__counts">
-                    {selectedCounts.map(([label, value]) => (
-                      <div key={label}><dt>{label}</dt><dd>{value?.toLocaleString('pt-BR') ?? '—'}</dd></div>
-                    ))}
-                  </dl>
-                )}
-
-                {selected.error && (
-                  <div className="admin-operation-detail__error" role="alert">
-                    <strong>{selected.error.message}</strong>
-                    <span>O que fazer: {selected.error.action}</span>
-                  </div>
-                )}
-
-                {selected.kind === 'import' && selected.importRetry?.failureDisposition === 'definitive' && (
-                  <div className="admin-operation-detail__retry-note">
-                    <CircleAlert />
-                    <span>Falha definitiva. Corrija a origem e inicie uma nova importação em vez de repetir este job.</span>
-                  </div>
-                )}
-
-                {selected.canRetry && selected.importSource?.type === 'upload' && (
-                  <div className="admin-operation-detail__retry">
-                    <div>
-                      <Upload />
-                      <span>
-                        <strong>Nova tentativa com arquivo novo</strong>
-                        <small>O arquivo anterior não é reutilizado. Um staging vazio será criado.</small>
-                      </span>
-                    </div>
-                    <input
-                      ref={retryFileInput}
-                      className="admin-operation-detail__retry-file"
-                      type="file"
-                      accept=".mp3,.flac,.wav,.m4a,.aac,.ogg,.opus"
-                      disabled={retrying}
-                      onChange={event => {
-                        const file = event.currentTarget.files?.[0];
-                        event.currentTarget.value = '';
-                        if (file) void retryUpload(file);
-                      }}
-                    />
-                    <button type="button" disabled={retrying} onClick={() => retryFileInput.current?.click()}>
-                      {retrying ? <LoaderCircle className="is-spinning" /> : <RotateCcw />}
-                      {retrying ? `Enviando${retryProgress != null ? ` ${retryProgress}%` : '…'}` : 'Selecionar arquivo e tentar novamente'}
-                    </button>
-                  </div>
-                )}
-
-                {selected.canRetry && selected.importSource?.type === 'url' && (
-                  <form className="admin-operation-detail__retry" onSubmit={event => { event.preventDefault(); void retryFromUrl(); }}>
-                    <div>
-                      <Link2 />
-                      <span>
-                        <strong>Nova tentativa com URL informada novamente</strong>
-                        <small>A URL anterior não é persistida nem reaproveitada pelo histórico.</small>
-                      </span>
-                    </div>
-                    <label htmlFor={`admin-operation-retry-url-${selected.id}`}>URL</label>
-                    <input
-                      id={`admin-operation-retry-url-${selected.id}`}
-                      type="url"
-                      value={retryUrl}
-                      disabled={retrying}
-                      maxLength={4096}
-                      placeholder="https://…"
-                      onChange={event => setRetryUrl(event.target.value)}
-                    />
-                    <button type="submit" disabled={retrying || !retryUrl.trim()}>
-                      {retrying ? <LoaderCircle className="is-spinning" /> : <RotateCcw />}
-                      {retrying ? 'Criando tentativa…' : 'Tentar novamente'}
-                    </button>
-                  </form>
-                )}
-
-                {retryError && <div className="admin-operation-detail__retry-message is-error" role="alert">{retryError}</div>}
-                {retryNotice && <div className="admin-operation-detail__retry-message is-success" role="status">{retryNotice}</div>}
-              </article>
+                </aside>
+              </div>
             )}
-          </div>
+          </>
         )}
       </div>
     </section>
   );
+}
+
+function SearchPlaceholder() {
+  return <Clock3 aria-hidden="true" />;
 }

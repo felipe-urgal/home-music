@@ -1,12 +1,22 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import type { AdminLibraryNormalizationReviewResponse } from '@home-music/shared';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type {
+  AdminLibraryNormalizationReviewResponse,
+  LibraryMetadataAlias
+} from '@home-music/shared';
 import {
+  Check,
   ChevronLeft,
+  ChevronRight,
+  FileText,
+  Info,
+  Lightbulb,
   Link2,
   LoaderCircle,
   RefreshCw,
   RotateCcw,
-  ShieldCheck
+  Search,
+  Sparkles,
+  Users
 } from 'lucide-react';
 import {
   associateAdminLibraryNormalization,
@@ -21,6 +31,8 @@ type AdminLibraryNormalizationScreenProps = {
   onBack: () => void;
 };
 
+type AliasFilter = 'all' | 'artist' | 'album';
+
 type NormalizationExternalEvidence = {
   source: 'musicbrainz';
   providerCanonical: string | null;
@@ -33,6 +45,8 @@ type NormalizationExternalEvidence = {
 type EnrichedNormalizationCandidate = LibraryMetadataNormalizationCandidate & {
   externalEvidence?: NormalizationExternalEvidence;
 };
+
+const ALIASES_PER_PAGE = 6;
 
 function evidenceFor(candidate: LibraryMetadataNormalizationCandidate) {
   return (candidate as EnrichedNormalizationCandidate).externalEvidence;
@@ -51,7 +65,7 @@ function evidenceDescription(candidate: LibraryMetadataNormalizationCandidate) {
   const evidence = evidenceFor(candidate);
   if (!evidence) return null;
   if (evidence.conflict) {
-    return 'MusicBrainz encontrou IDs externos conflitantes. A heurística local continua visível, mas nenhuma grafia é sugerida automaticamente.';
+    return 'MusicBrainz encontrou IDs externos conflitantes. Nenhuma grafia é sugerida automaticamente.';
   }
   if (evidence.suggestedCanonical) {
     return `MusicBrainz corrobora “${evidence.suggestedCanonical}” como grafia canônica provável.`;
@@ -59,12 +73,26 @@ function evidenceDescription(candidate: LibraryMetadataNormalizationCandidate) {
   if (evidence.providerCanonical) {
     return `MusicBrainz identificou “${evidence.providerCanonical}”, mas essa grafia não está presente exatamente entre as variantes locais.`;
   }
-  return 'MusicBrainz forneceu evidência externa para este grupo sem determinar uma grafia canônica local.';
+  return 'MusicBrainz forneceu evidência externa sem determinar uma grafia canônica local.';
+}
+
+function aliasMatchesQuery(alias: LibraryMetadataAlias, query: string) {
+  const normalized = query.trim().toLocaleLowerCase('pt-BR');
+  if (!normalized) return true;
+  return [
+    alias.sourceValue,
+    alias.canonicalValue,
+    alias.scope ?? '',
+    alias.kind === 'artist' ? 'artista' : 'álbum'
+  ].some(value => value.toLocaleLowerCase('pt-BR').includes(normalized));
 }
 
 export function AdminLibraryNormalizationScreen({ onBack }: AdminLibraryNormalizationScreenProps) {
   const [review, setReview] = useState<AdminLibraryNormalizationReviewResponse | null>(null);
   const [selectedCanonical, setSelectedCanonical] = useState<Record<string, string>>({});
+  const [aliasFilter, setAliasFilter] = useState<AliasFilter>('all');
+  const [aliasQuery, setAliasQuery] = useState('');
+  const [aliasPage, setAliasPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [mutatingKey, setMutatingKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -185,7 +213,7 @@ export function AdminLibraryNormalizationScreen({ onBack }: AdminLibraryNormaliz
       if (mounted.current) setReview(next);
     } catch {
       if (mounted.current) {
-        setError('A associação foi desfeita, mas não foi possível atualizar a revisão agora. Use Atualizar para reconciliar a tela.');
+        setError('A associação foi desfeita, mas não foi possível atualizar a revisão agora. Atualize a análise para reconciliar a tela.');
       }
     } finally {
       if (mounted.current) setMutatingKey(null);
@@ -194,48 +222,59 @@ export function AdminLibraryNormalizationScreen({ onBack }: AdminLibraryNormaliz
 
   const candidates = review?.candidates ?? [];
   const aliases = review?.aliases ?? [];
+  const artistAliases = aliases.filter(alias => alias.kind === 'artist').length;
+  const albumAliases = aliases.filter(alias => alias.kind === 'album').length;
+
+  const filteredAliases = useMemo(() => aliases.filter(alias => {
+    if (aliasFilter !== 'all' && alias.kind !== aliasFilter) return false;
+    return aliasMatchesQuery(alias, aliasQuery);
+  }), [aliasFilter, aliasQuery, aliases]);
+
+  const aliasPageCount = Math.max(1, Math.ceil(filteredAliases.length / ALIASES_PER_PAGE));
+  const visibleAliases = filteredAliases.slice(
+    (aliasPage - 1) * ALIASES_PER_PAGE,
+    aliasPage * ALIASES_PER_PAGE
+  );
+
+  useEffect(() => {
+    setAliasPage(1);
+  }, [aliasFilter, aliasQuery]);
+
+  useEffect(() => {
+    if (aliasPage > aliasPageCount) setAliasPage(aliasPageCount);
+  }, [aliasPage, aliasPageCount]);
+
+  const libraryNormalized = Boolean(review && candidates.length === 0);
 
   return (
-    <section className="my-account-screen admin-normalization-screen" aria-labelledby="admin-normalization-title">
-      <header className="my-account-header">
-        <button className="icon-button" type="button" aria-label="Voltar" onClick={onBack}><ChevronLeft /></button>
+    <section className="my-account-screen admin-normalization-screen admin-normalization-screen--v2" aria-labelledby="admin-normalization-title">
+      <header className="admin-normalization__page-header">
+        <button className="admin-normalization__back" type="button" aria-label="Voltar" onClick={onBack}><ChevronLeft /></button>
         <div>
           <strong id="admin-normalization-title">Normalização lógica</strong>
-          <small>Una grafias sem alterar os arquivos</small>
+          <small>Unifique grafias sem alterar seus arquivos</small>
         </div>
         <button
           className="admin-normalization__refresh"
           type="button"
-          aria-label="Atualizar normalização lógica"
+          aria-label="Atualizar análise de normalização lógica"
           disabled={loading || Boolean(mutatingKey)}
           onClick={() => void loadReview()}
         >
           {loading ? <LoaderCircle className="is-spinning" /> : <RefreshCw />}
-          <span>Atualizar</span>
+          <span>Atualizar análise</span>
         </button>
       </header>
 
       <div className="admin-normalization">
-        <section className="admin-normalization__hero" aria-labelledby="admin-normalization-status-title">
-          <span className="admin-normalization__hero-icon" aria-hidden="true"><ShieldCheck /></span>
-          <div>
-            <small>Camada reversível</small>
-            <strong id="admin-normalization-status-title">Arquivo físico → override → alias lógico</strong>
-            <p>Somente a organização exibida pelo Home Music muda. Nenhum arquivo é renomeado e nenhuma tag embutida é regravada.</p>
-          </div>
-          {review && (
-            <dl>
-              <div><dt>Candidatos</dt><dd>{review.candidates.length.toLocaleString('pt-BR')}</dd></div>
-              <div><dt>Aliases</dt><dd>{review.counts.aliases.toLocaleString('pt-BR')}</dd></div>
-            </dl>
-          )}
-        </section>
-
         {error && <div className="my-account-message is-error" role="alert">{error}</div>}
         {feedback && <div className="my-account-message is-success" role="status">{feedback}</div>}
 
         {loading && !review ? (
-          <div className="admin-normalization__state" role="status"><LoaderCircle className="is-spinning" /> Analisando grafias da biblioteca…</div>
+          <div className="admin-normalization__state" role="status">
+            <LoaderCircle className="is-spinning" />
+            <strong>Analisando grafias da biblioteca…</strong>
+          </div>
         ) : !review ? (
           <div className="admin-normalization__state">
             <RefreshCw aria-hidden="true" />
@@ -245,118 +284,236 @@ export function AdminLibraryNormalizationScreen({ onBack }: AdminLibraryNormaliz
           </div>
         ) : (
           <>
-            <section className="admin-normalization__section" aria-labelledby="admin-normalization-candidates-title">
-              <div className="admin-normalization__heading">
+            <section className={`admin-normalization__hero ${libraryNormalized ? 'is-success' : 'has-review'}`}>
+              <span className="admin-normalization__hero-icon" aria-hidden="true">
+                {libraryNormalized ? <Check /> : <Sparkles />}
+              </span>
+              <div className="admin-normalization__hero-copy">
+                <strong>{libraryNormalized ? 'Biblioteca normalizada' : 'Há variações para revisar'}</strong>
+                <small>
+                  {libraryNormalized
+                    ? 'Nenhuma variação pendente para revisar. Suas músicas já estão consistentes.'
+                    : `${candidates.length.toLocaleString('pt-BR')} ${candidates.length === 1 ? 'variação precisa' : 'variações precisam'} da sua decisão.`}
+                </small>
+              </div>
+              <div className="admin-normalization__hero-metrics">
+                <article>
+                  <Users />
+                  <div>
+                    <small>Candidatos</small>
+                    <strong>{candidates.length.toLocaleString('pt-BR')}</strong>
+                    <span>variações para revisar</span>
+                  </div>
+                </article>
+                <article>
+                  <FileText />
+                  <div>
+                    <small>Aliases ativos</small>
+                    <strong>{review.counts.aliases.toLocaleString('pt-BR')}</strong>
+                    <span>regras em uso</span>
+                  </div>
+                </article>
+              </div>
+            </section>
+
+            <section className="admin-normalization__explainer">
+              <div className="admin-normalization__explainer-copy">
+                <span className="admin-normalization__explainer-icon"><Info /></span>
                 <div>
-                  <strong id="admin-normalization-candidates-title">Variações para revisar</strong>
-                  <small>A heurística considera apenas acentos, caixa e espaços. Pontuação e artigos continuam distintos.</small>
+                  <strong>O que é normalização lógica?</strong>
+                  <p>Associa grafias diferentes à mesma entidade (artista ou álbum), sem alterar seus arquivos.</p>
+                  <p>Isso mantém sua biblioteca organizada e melhora a busca e as Smart Playlists. Nenhum arquivo é renomeado e nenhuma tag embutida é regravada.</p>
                 </div>
               </div>
-
-              {candidates.length === 0 ? (
-                <div className="admin-normalization__empty">
-                  <ShieldCheck />
-                  <strong>Nenhuma variação provável pendente</strong>
-                  <span>A biblioteca já está consistente para a heurística conservadora atual.</span>
+              <div className="admin-normalization__example" aria-label="Exemplo de normalização de artista">
+                <small>Exemplo (Artista)</small>
+                <div className="admin-normalization__example-flow">
+                  <div className="admin-normalization__example-variants">
+                    <span>RITA LEE</span>
+                    <span>Rita Lee</span>
+                    <span>rita lee</span>
+                  </div>
+                  <span className="admin-normalization__example-arrow">→</span>
+                  <strong>Rita Lee</strong>
                 </div>
-              ) : (
-                <div className="admin-normalization__candidates">
-                  {candidates.map(candidate => {
-                    const selected = selectedCanonical[candidate.key] || candidate.variants[0]?.value || '';
-                    const busy = mutatingKey === candidate.key;
-                    const evidence = evidenceFor(candidate);
-                    const evidenceCopy = evidenceDescription(candidate);
-                    return (
-                      <article className="admin-normalization__candidate" key={candidate.key}>
-                        <div className="admin-normalization__candidate-copy">
-                          <span>{kindLabel(candidate.kind)}</span>
-                          <strong>{candidateDescription(candidate)}</strong>
-                          <small>Escolha qual grafia será exibida como canônica.</small>
-                          {evidenceCopy && (
-                            <small role={evidence?.conflict ? 'alert' : 'note'}>
-                              {evidenceCopy}
-                              {evidence?.externalIds.length ? ` MBID: ${evidence.externalIds.slice(0, 2).join(', ')}${evidence.externalIds.length > 2 ? '…' : ''}` : ''}
-                            </small>
-                          )}
-                        </div>
+              </div>
+            </section>
 
-                        <fieldset disabled={Boolean(mutatingKey)}>
-                          <legend>Grafia canônica</legend>
-                          {candidate.variants.map(variant => (
-                            <label key={variant.value}>
-                              <input
-                                type="radio"
-                                name={`canonical-${candidate.key}`}
-                                value={variant.value}
-                                checked={selected === variant.value}
-                                onChange={() => setSelectedCanonical(current => ({
-                                  ...current,
-                                  [candidate.key]: variant.value
-                                }))}
-                              />
-                              <span>{variant.value}</span>
-                              <small>{variant.trackCount.toLocaleString('pt-BR')} {variant.trackCount === 1 ? 'faixa' : 'faixas'}</small>
-                            </label>
+            <div className="admin-normalization__workspace">
+              <section className="admin-normalization__panel admin-normalization__review" aria-labelledby="admin-normalization-candidates-title">
+                <header>
+                  <div className="admin-normalization__panel-heading">
+                    <span className="is-purple"><Search /></span>
+                    <div>
+                      <strong id="admin-normalization-candidates-title">Variações para revisar</strong>
+                      <small>A heurística encontrou grafias que podem ser a mesma entidade.</small>
+                    </div>
+                  </div>
+                  <span className="admin-normalization__count">{candidates.length.toLocaleString('pt-BR')}</span>
+                </header>
+
+                {candidates.length === 0 ? (
+                  <div className="admin-normalization__empty">
+                    <span className="admin-normalization__empty-check"><Check /></span>
+                    <strong>Nenhuma variação pendente</strong>
+                    <span>A biblioteca já está consistente para a heurística conservadora atual.</span>
+                  </div>
+                ) : (
+                  <div className="admin-normalization__candidates">
+                    {candidates.map(candidate => {
+                      const selected = selectedCanonical[candidate.key] || candidate.variants[0]?.value || '';
+                      const busy = mutatingKey === candidate.key;
+                      const evidence = evidenceFor(candidate);
+                      const evidenceCopy = evidenceDescription(candidate);
+                      return (
+                        <article className="admin-normalization__candidate" key={candidate.key}>
+                          <div className="admin-normalization__candidate-copy">
+                            <span>{kindLabel(candidate.kind)}</span>
+                            <strong>{candidateDescription(candidate)}</strong>
+                            {evidenceCopy && (
+                              <small role={evidence?.conflict ? 'alert' : 'note'}>{evidenceCopy}</small>
+                            )}
+                          </div>
+                          <fieldset disabled={Boolean(mutatingKey)}>
+                            <legend>Grafia canônica</legend>
+                            {candidate.variants.map(variant => (
+                              <label key={variant.value}>
+                                <input
+                                  type="radio"
+                                  name={`canonical-${candidate.key}`}
+                                  value={variant.value}
+                                  checked={selected === variant.value}
+                                  onChange={() => setSelectedCanonical(current => ({
+                                    ...current,
+                                    [candidate.key]: variant.value
+                                  }))}
+                                />
+                                <span>{variant.value}</span>
+                                <small>{variant.trackCount.toLocaleString('pt-BR')} {variant.trackCount === 1 ? 'faixa' : 'faixas'}</small>
+                              </label>
+                            ))}
+                          </fieldset>
+                          <button
+                            className="admin-normalization__associate"
+                            type="button"
+                            disabled={Boolean(mutatingKey) || candidate.variants.length < 2}
+                            onClick={() => void associate(candidate)}
+                          >
+                            {busy ? <LoaderCircle className="is-spinning" /> : <Link2 />}
+                            {busy ? 'Associando…' : 'Associar variações'}
+                          </button>
+                        </article>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
+
+              <section className="admin-normalization__panel admin-normalization__aliases-panel" aria-labelledby="admin-normalization-aliases-title">
+                <header>
+                  <div className="admin-normalization__panel-heading">
+                    <span className="is-green"><FileText /></span>
+                    <div>
+                      <strong id="admin-normalization-aliases-title">Aliases ativos ({aliases.length.toLocaleString('pt-BR')})</strong>
+                      <small>Regras de normalização aplicadas na biblioteca.</small>
+                    </div>
+                  </div>
+                  <label className="admin-normalization__search">
+                    <Search />
+                    <input
+                      value={aliasQuery}
+                      onChange={event => setAliasQuery(event.target.value)}
+                      placeholder="Buscar aliases…"
+                      aria-label="Buscar aliases"
+                    />
+                  </label>
+                </header>
+
+                <nav className="admin-normalization__filters" aria-label="Filtrar aliases">
+                  <button type="button" className={aliasFilter === 'all' ? 'is-active' : ''} onClick={() => setAliasFilter('all')}>
+                    Todos ({aliases.length.toLocaleString('pt-BR')})
+                  </button>
+                  <button type="button" className={aliasFilter === 'artist' ? 'is-active' : ''} onClick={() => setAliasFilter('artist')}>
+                    Artistas ({artistAliases.toLocaleString('pt-BR')})
+                  </button>
+                  <button type="button" className={aliasFilter === 'album' ? 'is-active' : ''} onClick={() => setAliasFilter('album')}>
+                    Álbuns ({albumAliases.toLocaleString('pt-BR')})
+                  </button>
+                </nav>
+
+                {filteredAliases.length === 0 ? (
+                  <div className="admin-normalization__empty is-compact">
+                    <Link2 />
+                    <strong>{aliases.length === 0 ? 'Nenhum alias ativo' : 'Nenhum alias encontrado'}</strong>
+                    <span>{aliases.length === 0 ? 'As grafias ainda são exibidas exatamente como chegam da metadata efetiva.' : 'Ajuste a busca ou o filtro.'}</span>
+                  </div>
+                ) : (
+                  <>
+                    <div className="admin-normalization__aliases">
+                      {visibleAliases.map(alias => {
+                        const busy = mutatingKey === alias.id;
+                        const label = `${alias.sourceValue} → ${alias.canonicalValue}`;
+                        return (
+                          <article key={alias.id}>
+                            <span className={`admin-normalization__alias-kind is-${alias.kind}`}>
+                              {alias.kind === 'artist' ? 'Artista' : 'Álbum'}
+                            </span>
+                            <div>
+                              <strong>{label}</strong>
+                              {alias.scope && <small>Artista do álbum: {alias.scope}</small>}
+                            </div>
+                            <button
+                              type="button"
+                              disabled={Boolean(mutatingKey)}
+                              aria-label={`Desfazer associação ${label}`}
+                              onClick={() => void undoAlias(alias.id, label)}
+                            >
+                              {busy ? <LoaderCircle className="is-spinning" /> : <RotateCcw />}
+                              {busy ? 'Desfazendo…' : 'Desfazer'}
+                            </button>
+                          </article>
+                        );
+                      })}
+                    </div>
+
+                    <footer className="admin-normalization__pagination">
+                      <span>
+                        Mostrando {visibleAliases.length.toLocaleString('pt-BR')} de {filteredAliases.length.toLocaleString('pt-BR')} aliases
+                      </span>
+                      <div>
+                        <button
+                          type="button"
+                          aria-label="Página anterior"
+                          disabled={aliasPage === 1}
+                          onClick={() => setAliasPage(page => Math.max(1, page - 1))}
+                        ><ChevronLeft /></button>
+                        {Array.from({ length: aliasPageCount }, (_, index) => index + 1)
+                          .filter(page => aliasPageCount <= 7 || page === 1 || page === aliasPageCount || Math.abs(page - aliasPage) <= 1)
+                          .map(page => (
+                            <button key={page} type="button" className={aliasPage === page ? 'is-active' : ''} onClick={() => setAliasPage(page)}>
+                              {page}
+                            </button>
                           ))}
-                        </fieldset>
-
                         <button
-                          className="admin-normalization__associate"
                           type="button"
-                          disabled={Boolean(mutatingKey) || candidate.variants.length < 2}
-                          onClick={() => void associate(candidate)}
-                        >
-                          {busy ? <LoaderCircle className="is-spinning" /> : <Link2 />}
-                          {busy ? 'Associando…' : 'Associar variações'}
-                        </button>
-                      </article>
-                    );
-                  })}
-                </div>
-              )}
-            </section>
+                          aria-label="Próxima página"
+                          disabled={aliasPage === aliasPageCount}
+                          onClick={() => setAliasPage(page => Math.min(aliasPageCount, page + 1))}
+                        ><ChevronRight /></button>
+                      </div>
+                    </footer>
+                  </>
+                )}
+              </section>
+            </div>
 
-            <section className="admin-normalization__section" aria-labelledby="admin-normalization-aliases-title">
-              <div className="admin-normalization__heading">
-                <div>
-                  <strong id="admin-normalization-aliases-title">Aliases ativos</strong>
-                  <small>Cada associação é explícita, persistida no SQLite e pode ser desfeita individualmente.</small>
-                </div>
+            <aside className="admin-normalization__tip">
+              <Lightbulb />
+              <div>
+                <strong>Dica</strong>
+                <span>A análise ignora músicas na Lixeira e considera apenas arquivos visíveis. Quando novas músicas forem adicionadas ou metadados forem alterados, execute a análise novamente.</span>
               </div>
-
-              {aliases.length === 0 ? (
-                <div className="admin-normalization__empty is-compact">
-                  <Link2 />
-                  <strong>Nenhum alias ativo</strong>
-                  <span>As grafias ainda são exibidas exatamente como chegam da metadata efetiva.</span>
-                </div>
-              ) : (
-                <div className="admin-normalization__aliases">
-                  {aliases.map(alias => {
-                    const busy = mutatingKey === alias.id;
-                    const label = `${alias.sourceValue} → ${alias.canonicalValue}`;
-                    return (
-                      <article key={alias.id}>
-                        <div>
-                          <span>{alias.kind === 'artist' ? 'Artista' : 'Álbum'}</span>
-                          <strong>{label}</strong>
-                          {alias.scope && <small>Artista do álbum: {alias.scope}</small>}
-                        </div>
-                        <button
-                          type="button"
-                          disabled={Boolean(mutatingKey)}
-                          aria-label={`Desfazer associação ${label}`}
-                          onClick={() => void undoAlias(alias.id, label)}
-                        >
-                          {busy ? <LoaderCircle className="is-spinning" /> : <RotateCcw />}
-                          {busy ? 'Desfazendo…' : 'Desfazer'}
-                        </button>
-                      </article>
-                    );
-                  })}
-                </div>
-              )}
-            </section>
+            </aside>
           </>
         )}
       </div>

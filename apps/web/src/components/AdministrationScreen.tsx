@@ -140,7 +140,16 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
     );
   }
   if (view === 'normalization') return <AdminLibraryNormalizationScreen onBack={() => setView('overview')} />;
-  if (view === 'integrity') return <AdminLibraryIntegrityScreen onBack={() => setView('overview')} />;
+  if (view === 'integrity') {
+    return (
+      <AdminLibraryIntegrityScreen
+        onBack={() => setView('overview')}
+        onOpenTracks={() => setView('tracks')}
+        onOpenMetadata={openAllMetadata}
+        onOpenDuplicates={() => setView('duplicates')}
+      />
+    );
+  }
   if (view === 'duplicates') return <AdminLibraryDuplicateReviewScreen onBack={() => setView('overview')} />;
   if (view === 'quarantine') return <AdminMediaQuarantineScreen onBack={() => setView('overview')} />;
   if (view === 'import') return <AdminImportMediaScreen onBack={() => setView('overview')} />;

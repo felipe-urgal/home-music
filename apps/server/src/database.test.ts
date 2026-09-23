@@ -56,6 +56,23 @@ test('SQLite persiste biblioteca, favoritos, histórico, playlists e estado do p
     ];
 
     first.syncTracks(tracks, '/music', '2026-08-24T12:00:00.000Z');
+    first.saveLibraryIntegrityStatus('/music', {
+      checkedAt: '2026-09-23T12:00:00.000Z',
+      mediaProbe: { available: true, message: null },
+      counts: {
+        total: 1,
+        scannerFailures: 0,
+        mediaProbeFailures: 0,
+        missingFiles: 0,
+        unindexedFiles: 1
+      },
+      issues: [{
+        kind: 'unindexed-file',
+        trackId: 'c',
+        relativePath: 'Nova.mp3',
+        message: 'Arquivo fora do índice.'
+      }]
+    });
     first.setFavorite('user-1', 'a', true);
     first.recordHistory('user-1', 'a');
     const playlistId = first.createPlaylist('user-1', 'Minha playlist');
@@ -75,6 +92,24 @@ test('SQLite persiste biblioteca, favoritos, histórico, playlists e estado do p
     const second = new HomeMusicDatabase(dbPath);
     assert.equal(second.getSchemaVersion(), 12);
     assert.equal(second.getMetadata('libraryRoot'), '/music');
+    assert.equal(second.loadLibraryIntegrityStatus('/other'), null);
+    assert.deepEqual(second.loadLibraryIntegrityStatus('/music'), {
+      checkedAt: '2026-09-23T12:00:00.000Z',
+      mediaProbe: { available: true, message: null },
+      counts: {
+        total: 1,
+        scannerFailures: 0,
+        mediaProbeFailures: 0,
+        missingFiles: 0,
+        unindexedFiles: 1
+      },
+      issues: [{
+        kind: 'unindexed-file',
+        trackId: 'c',
+        relativePath: 'Nova.mp3',
+        message: 'Arquivo fora do índice.'
+      }]
+    });
     assert.equal(second.loadTracks().length, 2);
     assert.equal(second.loadTracks()[0].replayGainTrackDb, -7.2);
     assert.equal(second.loadTracks()[0].replayGainAlbumDb, -5.8);

@@ -219,3 +219,33 @@ test('chaves de candidatos não colidem quando scope e comparação contêm dois
     await rm(temp, { recursive: true, force: true });
   }
 });
+
+
+test('review ignora faixas que estão na lixeira', async () => {
+  const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-normalization-'));
+  const databasePath = path.join(temp, 'home-music.db');
+  try {
+    seedDatabase(databasePath);
+    const db = new DatabaseSync(databasePath);
+    db.exec(`
+      CREATE TABLE media_quarantine (
+        track_id TEXT PRIMARY KEY
+      );
+    `);
+    const quarantine = db.prepare('INSERT INTO media_quarantine(track_id) VALUES (?);');
+    quarantine.run('b');
+    quarantine.run('c');
+    db.close();
+
+    const store = new LibraryMetadataNormalizationStore(databasePath);
+    const review = store.review();
+    const beyonceCandidate = review.candidates.find(candidate =>
+      candidate.kind === 'artist'
+      && candidate.variants.some(variant => variant.value === 'Beyoncé')
+    );
+    assert.equal(beyonceCandidate, undefined);
+    store.close();
+  } finally {
+    await rm(temp, { recursive: true, force: true });
+  }
+});
