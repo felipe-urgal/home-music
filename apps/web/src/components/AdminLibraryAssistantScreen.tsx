@@ -30,7 +30,6 @@ import {
   Image as ImageIcon,
   Info,
   LoaderCircle,
-  MoreVertical,
   Music2,
   RefreshCw,
   Search,
@@ -43,7 +42,6 @@ import {
 import { listAdminTracks } from '../admin-tracks-client';
 import {
   cancelLibraryAssistantRun,
-  clearLibraryAssistantManagedLyrics,
   decideLibraryAssistantBatch,
   decideLibraryAssistantSuggestion,
   fingerprintLibraryAssistantSuggestion,
@@ -83,7 +81,6 @@ type PolicyRow = {
 
 const TERMINAL_RUNS = new Set(['completed', 'failed', 'cancelled', 'stale']);
 const BATCH_SIZE = 100;
-const METADATA_FIELDS: readonly LibraryAssistantMetadataField[] = ['title', 'artist', 'album', 'albumArtist'];
 const FIELD_LABELS: Record<LibraryAssistantMetadataField, string> = {
   title: 'Título',
   artist: 'Artista',
@@ -167,17 +164,6 @@ function policyModeForSuggestion(
   if (suggestion.target.capability === 'metadata') return policy[suggestion.target.field];
   if (suggestion.target.capability === 'artwork') return policy.artwork;
   return policy.lyrics;
-}
-
-function statusLabel(status: LibraryAssistantSuggestionStatus) {
-  return ({
-    pending: 'Pendente',
-    review: 'Revisão',
-    applied: 'Aplicada',
-    rejected: 'Rejeitada',
-    stale: 'Desatualizada',
-    failed: 'Falhou'
-  } satisfies Record<LibraryAssistantSuggestionStatus, string>)[status];
 }
 
 function runTitle(run: LibraryAssistantRun | null) {
@@ -750,30 +736,6 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
       setFeedback({
         kind: 'error',
         message: error instanceof Error ? error.message : 'A decisão não pôde ser concluída.'
-      });
-    } finally {
-      setMutating(false);
-    }
-  }
-
-  async function clearLyrics(suggestion: LibraryAssistantSuggestion) {
-    if (suggestion.target.capability !== 'lyrics' || mutating) return;
-    setMutating(true);
-    setFeedback(null);
-    try {
-      const response = await clearLibraryAssistantManagedLyrics(suggestion.target.trackId);
-      notifyLibraryChanged();
-      setFeedback({
-        kind: 'success',
-        message: response.removed
-          ? 'Letra gerenciada removida. O sidecar local volta a ser usado automaticamente quando existir.'
-          : 'Não havia letra gerenciada para remover.'
-      });
-      await load(true);
-    } catch (error) {
-      setFeedback({
-        kind: 'error',
-        message: error instanceof Error ? error.message : 'Não foi possível remover a letra gerenciada.'
       });
     } finally {
       setMutating(false);
