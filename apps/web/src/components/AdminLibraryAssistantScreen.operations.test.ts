@@ -32,7 +32,7 @@ describe('AdminLibraryAssistantScreen operational workflow', () => {
 
     expect(screen).toMatch(/suggestion\.target\.capability === 'artwork'/);
     expect(screen).toMatch(/expectedCurrentValue\(suggestion\)/);
-    expect(screen).toContain('capas continuam com aplicação individual');
+    expect(screen).toMatch(/Capas continuam individuais\./);
   });
 
   it('mantém reanálise forte separada e move configurações para o cabeçalho', () => {
@@ -140,7 +140,7 @@ describe('AdminLibraryAssistantScreen operational workflow', () => {
     const screen = source();
 
     expect(screen).toContain('Automação segura');
-    expect(screen).toContain('somente campos de metadata vazios');
+    expect(screen).toMatch(/somente campos de metadata vazios/i);
     expect(screen).toMatch(/getLibraryAssistantAutonomy/);
     expect(screen).toMatch(/updateLibraryAssistantAutonomy/);
   });
@@ -156,8 +156,8 @@ describe('AdminLibraryAssistantScreen operational workflow', () => {
   it('explica que a reanálise completa percorre toda a biblioteca', () => {
     const screen = source();
 
-    expect(screen).toContain('todas as faixas da biblioteca serão analisadas novamente');
-    expect(screen).toContain('força uma nova análise de todas as faixas da biblioteca');
+    expect(screen).toContain('refazer a análise de toda a biblioteca');
+    expect(screen).toContain('Força uma nova análise de toda a biblioteca.');
     expect(screen).toContain('Reanálise completa de toda a biblioteca iniciada.');
   });
 
