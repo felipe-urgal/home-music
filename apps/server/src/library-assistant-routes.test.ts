@@ -55,11 +55,17 @@ function createApp() {
     ['admin-1', { id: 'admin-1', username: 'felipe', role: 'admin', passwordMustChange: false }]
   ]);
   const startedBy: Array<string | null | undefined> = [];
+  const startOptions: unknown[] = [];
   const batchConfirmations: boolean[] = [];
   let resetCalls = 0;
   const assistant = {
-    startRun(_capability: 'metadata' | 'artwork' | 'lyrics', ownerId?: string | null) {
+    startRun(
+      _capability: 'metadata' | 'artwork' | 'lyrics',
+      ownerId?: string | null,
+      options?: unknown
+    ) {
       startedBy.push(ownerId);
+      startOptions.push(options);
       return run('queued');
     },
     listRuns() { return [run()]; },
@@ -110,6 +116,7 @@ function createApp() {
     app,
     sessions,
     startedBy,
+    startOptions,
     batchConfirmations,
     resetCalls: () => resetCalls
   };
@@ -313,6 +320,45 @@ test('Library Assistant API validates capability, identifiers, filters and revie
     });
     assert.equal(invalidConfirmation.statusCode, 400);
     assert.match(invalidConfirmation.json().error, /Confirmação de revisão inválida/);
+  } finally {
+    await app.close();
+  }
+});
+
+
+test('Library Assistant aceita escopo por campo apenas para metadata', async () => {
+  const { app, sessions, startOptions } = createApp();
+  const adminToken = sessions.createSessionForUser('admin-1');
+  const headers = {
+    cookie: cookie(adminToken),
+    'content-type': 'application/json',
+    'x-home-music-request': '1'
+  };
+  try {
+    const scoped = await app.inject({
+      method: 'POST',
+      url: '/api/admin/library-assistant/runs',
+      headers,
+      payload: { capability: 'metadata', fields: ['title'] }
+    });
+    assert.equal(scoped.statusCode, 202);
+    assert.deepEqual(startOptions.at(-1), { full: false, fields: ['title'] });
+
+    const invalidField = await app.inject({
+      method: 'POST',
+      url: '/api/admin/library-assistant/runs',
+      headers,
+      payload: { capability: 'metadata', fields: ['genre'] }
+    });
+    assert.equal(invalidField.statusCode, 400);
+
+    const invalidCapability = await app.inject({
+      method: 'POST',
+      url: '/api/admin/library-assistant/runs',
+      headers,
+      payload: { capability: 'artwork', fields: ['title'] }
+    });
+    assert.equal(invalidCapability.statusCode, 400);
   } finally {
     await app.close();
   }
