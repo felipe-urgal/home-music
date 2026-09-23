@@ -217,6 +217,19 @@ function capabilityLabel(suggestion: LibraryAssistantSuggestion) {
   return 'Letra';
 }
 
+function provenanceLabel(source: LibraryAssistantSuggestion['provenance']['source']) {
+  return ({
+    local: 'Local',
+    musicbrainz: 'MusicBrainz',
+    'cover-art-archive': 'Cover Art Archive',
+    lrclib: 'LRCLIB',
+    acoustid: 'AcoustID',
+    generated: 'Gerada',
+    'local-transcription': 'Transcrição local',
+    'local-alignment': 'Alinhamento local'
+  } satisfies Record<LibraryAssistantSuggestion['provenance']['source'], string>)[source];
+}
+
 function rowDetail(suggestion: LibraryAssistantSuggestion, item?: LibraryAssistantReviewItem) {
   if (suggestion.target.capability === 'artwork') {
     const album = item?.track.album || 'álbum identificado';
@@ -1325,7 +1338,7 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
                               <div className="assistant-v2__change">
                                 <div><span>{suggestion.target.currentValue || '—'}</span><small>Valor atual</small></div>
                                 <ChevronRight />
-                                <div><span>{suggestion.target.suggestedValue}</span><small>Sugestão ({suggestion.provenance.provider})</small></div>
+                                <div><span>{suggestion.target.suggestedValue}</span><small>Sugestão ({provenanceLabel(suggestion.provenance.source)})</small></div>
                               </div>
                             ) : (
                               <p className="assistant-v2__candidate">{rowDetail(suggestion, reviewMap.get(suggestion.id))}</p>
