@@ -3,7 +3,7 @@ import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { DatabaseSync } from 'node:sqlite';
-import type { PlaybackState, Playlist, PlaylistSource, RepeatMode, StatisticsPeriod, Track } from '@home-music/shared';
+import type { AdminLibraryIntegrityStatus, PlaybackState, Playlist, PlaylistSource, RepeatMode, StatisticsPeriod, Track } from '@home-music/shared';
 import type { IndexedTrack, LibraryTrackDelta } from './library.js';
 
 const CURRENT_SCHEMA_VERSION = 12;
@@ -741,6 +741,39 @@ export class HomeMusicDatabase {
       INSERT INTO metadata(key, value) VALUES (?, ?)
       ON CONFLICT(key) DO UPDATE SET value = excluded.value
     `).run(key, value);
+  }
+
+  loadLibraryIntegrityStatus(libraryRoot: string): AdminLibraryIntegrityStatus | null {
+    const raw = this.getMetadata('libraryIntegrityStatus');
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw) as {
+        libraryRoot?: unknown;
+        status?: Partial<AdminLibraryIntegrityStatus>;
+      };
+      const status = parsed.status;
+      if (
+        parsed.libraryRoot !== libraryRoot ||
+        !status ||
+        (status.checkedAt !== null && typeof status.checkedAt !== 'string') ||
+        !status.counts ||
+        !Array.isArray(status.issues) ||
+        !status.mediaProbe ||
+        !(
+          status.mediaProbe.available === null ||
+          typeof status.mediaProbe.available === 'boolean'
+        )
+      ) {
+        return null;
+      }
+      return status as AdminLibraryIntegrityStatus;
+    } catch {
+      return null;
+    }
+  }
+
+  saveLibraryIntegrityStatus(libraryRoot: string, status: AdminLibraryIntegrityStatus) {
+    this.setMetadata('libraryIntegrityStatus', JSON.stringify({ libraryRoot, status }));
   }
 
   private upsertTracks(tracks: readonly IndexedTrack[]) {
