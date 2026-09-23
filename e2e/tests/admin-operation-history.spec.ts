@@ -106,7 +106,7 @@ test('admin filtra histórico e vê erro acionável sem dados sensíveis', async
   await expect(detail).not.toContainText('token=');
   await expect(detail).not.toContainText('/srv/');
 
-  await page.getByLabel('Tipo').selectOption('scan');
+  await page.getByRole('navigation', { name: 'Tipo' }).getByRole('button', { name: 'Scans', exact: true }).click();
   await expect(list.getByRole('button')).toHaveCount(1);
   await expect(list).toContainText('Scan manual');
   await expect(list).not.toContainText('Importação por URL');
@@ -117,7 +117,7 @@ test('admin filtra histórico e vê erro acionável sem dados sensíveis', async
   await expect(page.locator('.admin-operation-detail')).toContainText('Adicionadas');
   await expect(page.locator('.admin-operation-detail')).toContainText('3,3 s');
 
-  await page.getByLabel('Tipo').selectOption('');
+  await page.getByRole('navigation', { name: 'Tipo' }).getByRole('button', { name: 'Todos', exact: true }).click();
   await expect(list.getByRole('button')).toHaveCount(2);
   await page.getByLabel('Status').selectOption('failed');
   await expect(list.getByRole('button')).toHaveCount(1);
