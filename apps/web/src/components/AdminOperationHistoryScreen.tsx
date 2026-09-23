@@ -138,6 +138,16 @@ export function AdminOperationHistoryScreen({ onBack }: AdminOperationHistoryScr
   }, [kind, status]);
 
   useEffect(() => { void loadHistory(); }, [loadHistory]);
+
+  const hasActiveOperations = items.some(item => item.status === 'pending' || item.status === 'running');
+  useEffect(() => {
+    if (!hasActiveOperations) return;
+    const intervalId = window.setInterval(() => {
+      void loadHistory(true);
+    }, 2_000);
+    return () => window.clearInterval(intervalId);
+  }, [hasActiveOperations, loadHistory]);
+
   useEffect(() => {
     setRetryError(null);
     setRetryNotice(null);
