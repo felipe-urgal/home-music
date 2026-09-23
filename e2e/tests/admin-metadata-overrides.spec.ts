@@ -96,22 +96,22 @@ test('override de metadata atualiza player e saúde sem alterar o arquivo e sobr
     await artistAttention.click();
 
     await expect(page.locator('#admin-metadata-title')).toHaveText('Metadados');
-    const healthFilter = page.locator('.admin-metadata-health-filter');
+    const healthFilter = page.locator('.admin-metadata-v2__filters button.is-active').filter({ hasText: 'Artista desconhecido' });
     await expect(healthFilter).toContainText('Artista desconhecido');
-    await expect(healthFilter).toContainText(`${initialOverview.problems.unknownArtist.toLocaleString('pt-BR')} faixas sinalizadas`);
+    await expect(healthFilter).toContainText(initialOverview.problems.unknownArtist.toLocaleString('pt-BR'));
 
-    const row = page.locator('.admin-metadata-row').filter({ hasText: track!.title }).first();
+    const row = page.locator('.admin-metadata-v2__row').filter({ hasText: track!.title }).first();
     await expect(row).toBeVisible();
     await row.click();
 
-    const editor = page.locator('.admin-metadata-side-editor__form');
+    const editor = page.locator('.admin-metadata-v2__editor');
     await expect(editor).toBeVisible();
     const titleInput = editor.getByLabel('Título');
     const artistInput = editor.getByLabel('Artista', { exact: true });
     const albumInput = editor.getByLabel('Álbum', { exact: true });
     const albumArtistInput = editor.getByLabel('Artista do álbum');
     await expect(titleInput).toHaveValue(track!.title);
-    await expect(editor).toContainText(`Arquivo original: ${track!.title}`);
+    await expect(editor).toContainText(`Original: ${track!.title}`);
 
     const editedTitle = `E2E Track Override ${testInfo.retry}`;
     const editedArtist = 'Artista E2E corrigido';
@@ -120,17 +120,15 @@ test('override de metadata atualiza player e saúde sem alterar o arquivo e sobr
     await artistInput.fill(editedArtist);
     await albumInput.fill(editedAlbum);
     await albumArtistInput.fill(editedArtist);
-    await editor.getByRole('button', { name: 'Salvar texto', exact: true }).click();
+    await editor.getByRole('button', { name: 'Salvar alterações', exact: true }).click();
     await expect(editor.getByRole('status')).toContainText('arquivo original não foi alterado');
 
     await expect(playerBar).toContainText(editedTitle);
     await expect(playerBar).toContainText(editedArtist);
 
     const expectedFilteredCount = initialOverview.problems.unknownArtist - 1;
-    await expect(healthFilter).toContainText(
-      `${expectedFilteredCount.toLocaleString('pt-BR')} ${expectedFilteredCount === 1 ? 'faixa sinalizada' : 'faixas sinalizadas'}`
-    );
-    await expect(page.locator('.admin-metadata-row').filter({ hasText: track!.title })).toHaveCount(0);
+    await expect(healthFilter).toContainText(expectedFilteredCount.toLocaleString('pt-BR'));
+    await expect(page.locator('.admin-metadata-v2__row').filter({ hasText: track!.title })).toHaveCount(0);
 
     const effectiveResponse = await request.get('/api/library');
     expect(effectiveResponse.ok()).toBeTruthy();
@@ -179,13 +177,13 @@ test('override de metadata atualiza player e saúde sem alterar o arquivo e sobr
     expect(afterScanTrack?.album).toBe(editedAlbum);
 
     page.once('dialog', confirmation => confirmation.accept());
-    await editor.getByRole('button', { name: 'Restaurar texto', exact: true }).click();
+    await editor.getByRole('button', { name: 'Restaurar valores originais', exact: true }).click();
     await expect(titleInput).toHaveValue(track!.title);
     await expect(editor.getByRole('status')).toContainText('voltou a exibir os metadados do arquivo');
     await expect(playerBar).toContainText(track!.title);
     await expect(playerBar).toContainText(track!.artist);
-    await expect(healthFilter).toContainText(`${initialOverview.problems.unknownArtist.toLocaleString('pt-BR')} faixas sinalizadas`);
-    await expect(page.locator('.admin-metadata-row').filter({ hasText: track!.title }).first()).toBeVisible();
+    await expect(healthFilter).toContainText(initialOverview.problems.unknownArtist.toLocaleString('pt-BR'));
+    await expect(page.locator('.admin-metadata-v2__row').filter({ hasText: track!.title }).first()).toBeVisible();
 
     await page.locator('.admin-metadata-screen').getByRole('button', { name: 'Voltar', exact: true }).click();
     await expect(page.locator('#administration-title')).toHaveText('Administração');
