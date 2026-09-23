@@ -24,7 +24,6 @@ const MUSICBRAINZ_USER_AGENT = 'HomeMusic/0.1 (+https://github.com/felipe-urgal/
 const MUSICBRAINZ_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1_000;
 const MAX_RESPONSE_CHARS = 1_000_000;
 const MAX_CANDIDATES = 5;
-const AMBIGUOUS_MARGIN = 8;
 
 type FetchLike = (input: string | URL, init?: RequestInit) => Promise<Response>;
 
@@ -243,14 +242,19 @@ async function findArtwork(
     signal?: AbortSignal;
   }
 ) {
-  const release = await findCoverArtArchiveFrontCover({
+  // Para preenchimento automático importa mais uma capa coerente com o álbum
+  // do que acertar a edição física exata. O release-group tende a representar
+  // melhor essa identidade compartilhada entre reedições/remasters.
+  if (candidate.releaseGroupId) {
+    const releaseGroup = await findCoverArtArchiveReleaseGroupFrontCover({
+      releaseGroupId: candidate.releaseGroupId,
+      ...options
+    });
+    if (releaseGroup) return releaseGroup;
+  }
+
+  return findCoverArtArchiveFrontCover({
     releaseId: candidate.id,
-    ...options
-  });
-  if (release) return release;
-  if (!candidate.releaseGroupId) return null;
-  return findCoverArtArchiveReleaseGroupFrontCover({
-    releaseGroupId: candidate.releaseGroupId,
     ...options
   });
 }
@@ -301,24 +305,32 @@ export function createMusicBrainzAlbumArtworkAnalyzer(
           seenReleaseGroups.add(key);
           return true;
         });
-        const best = distinct[0];
-        if (!best || best.score < 80) continue;
-        const second = distinct[1];
-        const margin = second ? best.score - second.score : 100;
-        if (margin < AMBIGUOUS_MARGIN) continue;
+        const plausible = distinct.filter(item => item.score >= 80);
+        if (plausible.length === 0) continue;
 
-        let artwork;
-        try {
-          artwork = await findArtwork(best.candidate, {
-            providers,
-            fetchImpl,
-            userAgent,
-            signal
-          });
-        } catch {
-          continue;
+        let resolved: {
+          match: (typeof plausible)[number];
+          artwork: NonNullable<Awaited<ReturnType<typeof findArtwork>>>;
+        } | null = null;
+        for (const match of plausible) {
+          try {
+            const artwork = await findArtwork(match.candidate, {
+              providers,
+              fetchImpl,
+              userAgent,
+              signal
+            });
+            if (artwork) {
+              resolved = { match, artwork };
+              break;
+            }
+          } catch {
+            // Outra edição coerente do mesmo álbum ainda pode ter artwork.
+          }
         }
-        if (!artwork) continue;
+        if (!resolved) continue;
+        const best = resolved.match;
+        const artwork = resolved.artwork;
 
         for (const track of group.tracks) {
           const albumMatch = compareText(track.album, best.candidate.title);
