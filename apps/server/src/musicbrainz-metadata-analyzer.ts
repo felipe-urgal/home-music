@@ -84,6 +84,7 @@ type TrackMatch = {
 type AnalyzerOptions = {
   fetchImpl?: FetchLike;
   userAgent?: string;
+  includeArtwork?: boolean;
   getHumanOverrideFields?: (trackId: string) => readonly LibraryAssistantMetadataField[];
   getFileContext?: (trackId: string) => SafeFileContext | null;
 };
@@ -765,7 +766,7 @@ export function createMusicBrainzMetadataAnalyzer(options: AnalyzerOptions = {})
         const values = metadataValues(best);
         const humanFields = new Set(options.getHumanOverrideFields?.(match.track.id) ?? []);
         const artworkConfidence = artworkConfidenceFor(best);
-        if (!match.track.hasCover && artworkConfidence === 'high' && best.release) {
+        if (options.includeArtwork !== false && !match.track.hasCover && artworkConfidence === 'high' && best.release) {
           try {
             const artwork = await findArtworkForRelease(best.release, {
               providers,
