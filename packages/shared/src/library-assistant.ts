@@ -263,6 +263,7 @@ export type LibraryAssistantRunProgress = {
   noMatch: number;
   retry: number;
   failed: number;
+  nextRetryAt: string | null;
   metrics?: LibraryAssistantRunProgressMetrics;
 };
 

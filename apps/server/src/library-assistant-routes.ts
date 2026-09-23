@@ -146,6 +146,7 @@ export function registerLibraryAssistantRoutes(
           noMatch: summary.no_match,
           retry: summary.retry,
           failed: summary.failed,
+          nextRetryAt: nextRetryAtMs == null ? null : new Date(nextRetryAtMs).toISOString(),
           ...(observed ? {
             metrics: {
               elapsedMs,

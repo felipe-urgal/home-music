@@ -2307,3 +2307,20 @@
     justify-self: center;
   }
 }
+
+
+.assistant-v2__process-row--lyrics {
+  grid-template-columns: minmax(0,1fr) auto 16px;
+}
+
+.assistant-v2__process-row--lyrics em {
+  grid-column: 1 / -1;
+  margin: -5px 0 0 19px;
+  color: #d8aa45;
+  font-size: .59rem;
+  font-style: normal;
+}
+
+.assistant-v2__process-row--lyrics em.is-error {
+  color: #e66a73;
+}

@@ -194,7 +194,8 @@ test('Library Assistant API is admin-only and lifecycle/review mutations require
       matched: 0,
       noMatch: 0,
       retry: 0,
-      failed: 0
+      failed: 0,
+      nextRetryAt: null
     });
     assert.equal(progress.headers['cache-control'], 'private, no-store');
 

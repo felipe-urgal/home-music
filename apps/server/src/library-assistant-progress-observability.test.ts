@@ -73,6 +73,7 @@ test('progress endpoint exposes throughput, ETA and provider/retry observations'
       noMatch: 2,
       retry: 0,
       failed: 0,
+      nextRetryAt: null,
       metrics: {
         elapsedMs: 10_000,
         tracksPerSecond: 0.8,
@@ -131,8 +132,10 @@ test('progress ETA does not finish before the next retry is eligible', async () 
     });
 
     assert.equal(response.statusCode, 200);
-    const etaMs = response.json().progress.metrics.etaMs as number;
+    const payload = response.json().progress;
+    const etaMs = payload.metrics.etaMs as number;
     assert.ok(etaMs >= 9 * 60_000, `ETA deveria respeitar o backoff do retry, recebido: ${etaMs}`);
+    assert.equal(payload.nextRetryAt, new Date(now + 10 * 60_000).toISOString());
   } finally {
     await app.close();
   }
