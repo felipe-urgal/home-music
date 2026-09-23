@@ -181,9 +181,9 @@ describe('AdminLibraryAssistantScreen operational workflow', () => {
     expect(screen).toContain('Reanálise completa de toda a biblioteca iniciada.');
   });
 
-  it('não mostra 100% enquanto ainda existem faixas por concluir', () => {
+  it('não mostra 100% enquanto ainda existem verificações por concluir', () => {
     const screen = source();
 
-    expect(screen).toMatch(/Math\.min\(processedTracks < totalTracks \? 99 : 100, Math\.round/);
+    expect(screen).toMatch(/Math\.min\(processedChecks < totalChecks \? 99 : 100, Math\.round/);
   });
 });
