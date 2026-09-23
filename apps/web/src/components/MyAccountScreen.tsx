@@ -218,6 +218,14 @@ export function MyAccountScreen({
           ? 'Qualidade e normalização'
           : 'Segurança e sessões';
 
+  if (view === 'playback' && playbackPreferences) {
+    return (
+      <section className="my-account-screen my-account-screen--playback">
+        <AccountPlaybackPreferences value={playbackPreferences} onBack={goBack} />
+      </section>
+    );
+  }
+
   return (
     <section className={`my-account-screen my-account-screen--${view}`} aria-labelledby="my-account-title">
       <header className="my-account-header">
@@ -763,10 +771,6 @@ export function MyAccountScreen({
           onRevokeOne={session => void revokeOne(session)}
           onRevokeOthers={() => void revokeOthers()}
         />
-      )}
-
-      {view === 'playback' && playbackPreferences && (
-        <AccountPlaybackPreferences value={playbackPreferences} />
       )}
     </section>
   );
