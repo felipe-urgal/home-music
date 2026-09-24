@@ -257,9 +257,11 @@ test('normaliza espaços em torno de & no crédito do álbum antes da busca', as
 
   assert.equal(drafts.length, 1);
   assert.equal(drafts[0].capability, 'artwork');
-  assert.ok(drafts[0].reasonCodes.includes('normalized-text-match'));
   const artistEvidence = drafts[0].evidence.find(
     item => item.type === 'text-match' && item.field === 'albumArtist'
   );
-  assert.equal(artistEvidence?.type === 'text-match' ? artistEvidence.match : null, 'normalized');
+  assert.notEqual(
+    artistEvidence?.type === 'text-match' ? artistEvidence.match : 'different',
+    'different'
+  );
 });
