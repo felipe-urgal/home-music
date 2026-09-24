@@ -61,6 +61,7 @@ type LibraryAssistantBootstrapOptions = {
   queue: HeavyWorkQueue;
   observability: LongJobObservability;
   analyzers?: readonly LibraryAssistantAnalyzer[];
+  onProviderGatewayReady?: (providers: LibraryAssistantProviderGateway) => void;
   fingerprint?: {
     fpcalcCommand?: string;
     acoustIdEnabled?: boolean;
@@ -110,6 +111,7 @@ export function registerLibraryAssistant(
   const providers = new LibraryAssistantProviderGateway(store, {
     onObservation: observation => metrics.observeProvider(observation)
   });
+  options.onProviderGatewayReady?.(providers);
   const musicBrainzFetch = createMusicBrainzSimpleSearchFetch();
   let assistantReviewRevision = 0;
   const projectRevision = options.projection.projectRevision;
