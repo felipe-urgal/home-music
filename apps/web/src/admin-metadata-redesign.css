@@ -929,7 +929,8 @@
   cursor: pointer;
 }
 
-.admin-metadata-v2__cover-actions .admin-cover-upload {
+.admin-metadata-v2__cover-actions .admin-cover-upload,
+.admin-metadata-v2__cover-actions .admin-cover-search {
   border: 1px solid rgba(88,164,224,.3);
   background: rgba(34,116,180,.08);
   color: #b8dcf6;
@@ -982,6 +983,211 @@
 .admin-metadata-v2__search:focus-within {
   outline: 2px solid rgba(94,175,245,.78);
   outline-offset: 2px;
+}
+
+.admin-metadata-v2__cover-search-backdrop {
+  position: fixed;
+  z-index: 80;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(2, 8, 14, .72);
+  backdrop-filter: blur(4px);
+}
+
+.admin-metadata-v2__cover-search-dialog {
+  width: min(860px, 100%);
+  max-height: min(760px, calc(100vh - 48px));
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid rgba(88, 164, 224, .25);
+  border-radius: 12px;
+  background: #101a23;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, .5);
+}
+
+.admin-metadata-v2__cover-search-dialog > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 15px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, .07);
+}
+
+.admin-metadata-v2__cover-search-dialog > header > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.admin-metadata-v2__cover-search-dialog > header strong {
+  color: #f1f6fa;
+  font-size: .9rem;
+}
+
+.admin-metadata-v2__cover-search-dialog > header small {
+  overflow: hidden;
+  color: #8296a7;
+  font-size: .7rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-metadata-v2__cover-search-dialog > header button {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 7px;
+  background: rgba(255,255,255,.02);
+  color: #aab9c4;
+  cursor: pointer;
+}
+
+.admin-metadata-v2__cover-search-dialog > header button svg {
+  width: 15px;
+  height: 15px;
+}
+
+.admin-metadata-v2__cover-search-state {
+  min-height: 230px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 10px;
+  padding: 28px;
+  color: #8fa1b0;
+  font-size: .75rem;
+  text-align: center;
+}
+
+.admin-metadata-v2__cover-search-state > svg {
+  width: 28px;
+  height: 28px;
+  color: #58a8e2;
+}
+
+.admin-metadata-v2__cover-search-state.is-error {
+  color: #dda0a4;
+}
+
+.admin-metadata-v2__cover-search-state.is-error > svg {
+  color: #dda0a4;
+}
+
+.admin-metadata-v2__cover-search-state button {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid rgba(88,164,224,.3);
+  border-radius: 7px;
+  background: rgba(34,116,180,.08);
+  color: #b8dcf6;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.admin-metadata-v2__cover-candidate-grid {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  overflow: auto;
+  padding: 16px;
+}
+
+.admin-metadata-v2__cover-candidate {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 9px;
+  background: rgba(6, 17, 26, .48);
+}
+
+.admin-metadata-v2__cover-candidate-image {
+  width: 100%;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 7px;
+  background: rgba(45,68,89,.3);
+  color: #678399;
+}
+
+.admin-metadata-v2__cover-candidate-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.admin-metadata-v2__cover-candidate-image svg {
+  width: 28px;
+  height: 28px;
+}
+
+.admin-metadata-v2__cover-candidate > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.admin-metadata-v2__cover-candidate > div strong,
+.admin-metadata-v2__cover-candidate > div span,
+.admin-metadata-v2__cover-candidate > div small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-metadata-v2__cover-candidate > div strong {
+  color: #e7eef4;
+  font-size: .72rem;
+}
+
+.admin-metadata-v2__cover-candidate > div span {
+  color: #9aabba;
+  font-size: .67rem;
+}
+
+.admin-metadata-v2__cover-candidate > div small {
+  color: #6f8394;
+  font-size: .61rem;
+}
+
+.admin-metadata-v2__cover-candidate > button {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid #258bdb;
+  border-radius: 7px;
+  background: #258bdb;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: .67rem;
+  font-weight: 700;
+}
+
+.admin-metadata-v2__cover-candidate > button:disabled,
+.admin-metadata-v2__cover-search-dialog > header button:disabled {
+  opacity: .4;
+  cursor: default;
+}
+
+.admin-metadata-v2__cover-candidate > button svg {
+  width: 13px;
+  height: 13px;
 }
 
 @media (max-width: 1120px) {
@@ -1074,6 +1280,18 @@
 
   .admin-metadata-v2__cover-content {
     grid-template-columns: 92px minmax(0,1fr);
+  }
+
+  .admin-metadata-v2__cover-search-backdrop {
+    padding: 12px;
+  }
+
+  .admin-metadata-v2__cover-search-dialog {
+    max-height: calc(100vh - 24px);
+  }
+
+  .admin-metadata-v2__cover-candidate-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .admin-metadata-v2__cover-preview {

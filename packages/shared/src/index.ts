@@ -53,6 +53,8 @@ export type TvRemoteEvent =
 
 export const PERMANENT_DELETE_CONFIRMATION = 'EXCLUIR PERMANENTEMENTE' as const;
 
+export const MAX_TRACK_COVER_BYTES = 8 * 1024 * 1024;
+
 export type AuthenticatedUser = {
   id: string;
   username: string;
@@ -416,6 +418,22 @@ export type AdminTrackCoverResponse = {
   effectiveHasCover: boolean;
   override: TrackCoverOverride | null;
 };
+
+export type AdminTrackCoverCandidate = {
+  id: string;
+  label: string;
+  album: string;
+  artist: string;
+  sourceUrl: string;
+  thumbnailUrl: string | null;
+  musicBrainzReleaseId: string;
+  musicBrainzReleaseGroupId: string | null;
+};
+
+export type AdminTrackCoverCandidatesResponse = {
+  candidates: AdminTrackCoverCandidate[];
+};
+
 
 export type AdminTrack = Track & {
   enabled: boolean;

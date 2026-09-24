@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { apiFetch } from './api-client';
 import {
+  applyTrackArtworkCandidate,
   cancelLibraryAssistantRun,
   decideLibraryAssistantBatch,
   decideLibraryAssistantSuggestion,
@@ -11,9 +12,11 @@ import {
   getLibraryAssistantRunProgress,
   getMissingCoverFillJob,
   resetLibraryAssistantReview,
+  searchTrackArtworkCandidates,
   startLibraryAssistantAnalysis,
   startLibraryAssistantMetadataRun,
   startMissingCoverFillJob,
+  trackArtworkCandidatePreviewUrl,
   updateLibraryAssistantAutonomy
 } from './library-assistant-client';
 
@@ -35,6 +38,62 @@ afterEach(() => {
 });
 
 describe('library assistant admin client', () => {
+  it('busca, pré-visualiza e aplica capas para uma faixa específica', async () => {
+    const candidate = {
+      id: 'cover-art-archive:release-1:cover-1',
+      label: 'Capa frontal — Album',
+      album: 'Album',
+      artist: 'Artista',
+      sourceUrl: 'https://coverartarchive.org/release/release-1/front',
+      thumbnailUrl: 'https://coverartarchive.org/release/release-1/500',
+      musicBrainzReleaseId: 'release-1',
+      musicBrainzReleaseGroupId: 'group-1'
+    };
+    apiFetchMock
+      .mockResolvedValueOnce(response({ candidates: [candidate] }))
+      .mockResolvedValueOnce(response({
+        trackId: 'track a',
+        physicalHasCover: false,
+        effectiveHasCover: true,
+        override: {
+          contentType: 'image/jpeg',
+          width: 500,
+          height: 500,
+          sizeBytes: 1024,
+          updatedAt: '2026-09-24T14:00:00.000Z',
+          version: 'cover-v1'
+        }
+      }));
+
+    const metadata = {
+      title: 'Faixa',
+      artist: 'Artista',
+      album: 'Album',
+      albumArtist: 'Artista'
+    };
+    const found = await searchTrackArtworkCandidates('track a', metadata);
+    expect(found.candidates).toEqual([candidate]);
+    expect(apiFetchMock.mock.calls[0]?.[0]).toBe(
+      '/api/admin/library-assistant/tracks/track%20a/artwork-candidates'
+    );
+    expect(JSON.parse(String(apiFetchMock.mock.calls[0]?.[1]?.body))).toEqual(metadata);
+
+    const preview = trackArtworkCandidatePreviewUrl(candidate);
+    expect(preview).toContain('/api/admin/library-assistant/artwork-candidates/preview?');
+    expect(preview).toContain('sourceUrl=');
+    expect(preview).toContain('thumbnailUrl=');
+
+    const applied = await applyTrackArtworkCandidate('track a', candidate);
+    expect(applied.override?.version).toBe('cover-v1');
+    expect(apiFetchMock.mock.calls[1]?.[0]).toBe(
+      '/api/admin/library-assistant/tracks/track%20a/artwork-candidates/apply'
+    );
+    expect(JSON.parse(String(apiFetchMock.mock.calls[1]?.[1]?.body))).toEqual({
+      sourceUrl: candidate.sourceUrl,
+      thumbnailUrl: candidate.thumbnailUrl
+    });
+  });
+
   it('inicia metadata, capas e lyrics como capabilities independentes em uma análise completa', async () => {
     apiFetchMock
       .mockResolvedValueOnce(response({ run: { id: 'run-metadata' } }))

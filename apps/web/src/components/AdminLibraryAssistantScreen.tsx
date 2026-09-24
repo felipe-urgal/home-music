@@ -448,6 +448,7 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
   const [confirmReviewCount, setConfirmReviewCount] = useState(0);
   const [confirmReset, setConfirmReset] = useState(false);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
+  const [suggestionErrors, setSuggestionErrors] = useState<Record<string, string>>({});
   const [runProgress, setRunProgress] = useState<Record<string, LibraryAssistantRunProgress>>({});
   const requestVersion = useRef(0);
   const policyRequestVersion = useRef(0);
@@ -806,8 +807,17 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
   async function decideOne(suggestion: LibraryAssistantSuggestion, action: 'apply' | 'reject') {
     const decision = decisionFor(suggestion, action);
     if (!decision || mutating) return;
+    const artworkDecision = suggestion.target.capability === 'artwork';
     setMutating(true);
     setFeedback(null);
+    if (artworkDecision) {
+      setSuggestionErrors(current => {
+        if (!(suggestion.id in current)) return current;
+        const next = { ...current };
+        delete next[suggestion.id];
+        return next;
+      });
+    }
     try {
       const { result } = await decideLibraryAssistantSuggestion(decision);
       if (result.outcome === 'applied') {
@@ -827,14 +837,21 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
       } else if (result.outcome === 'stale') {
         setFeedback({ kind: 'warning', message: result.message ?? 'A sugestão ficou desatualizada. Analise novamente.' });
       } else {
-        setFeedback({ kind: 'error', message: result.message ?? 'A decisão não pôde ser concluída.' });
+        const message = result.message ?? 'A decisão não pôde ser concluída.';
+        if (artworkDecision) {
+          setSuggestionErrors(current => ({ ...current, [suggestion.id]: message }));
+        } else {
+          setFeedback({ kind: 'error', message });
+        }
       }
       await load(true);
     } catch (error) {
-      setFeedback({
-        kind: 'error',
-        message: error instanceof Error ? error.message : 'A decisão não pôde ser concluída.'
-      });
+      const message = error instanceof Error ? error.message : 'A decisão não pôde ser concluída.';
+      if (artworkDecision) {
+        setSuggestionErrors(current => ({ ...current, [suggestion.id]: message }));
+      } else {
+        setFeedback({ kind: 'error', message });
+      }
     } finally {
       setMutating(false);
     }
@@ -1492,6 +1509,12 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
                                     <small>Capa sugerida</small>
                                   </div>
                                 </div>
+                                {suggestionErrors[suggestion.id] && (
+                                  <p className="assistant-v2__suggestion-error" role="alert">
+                                    <AlertTriangle />
+                                    <span>{suggestionErrors[suggestion.id]}</span>
+                                  </p>
+                                )}
                                 <p className="assistant-v2__candidate">{rowDetail(suggestion, reviewMap.get(suggestion.id))}</p>
                               </>
                             ) : (

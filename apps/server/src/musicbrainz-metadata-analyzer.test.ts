@@ -8,6 +8,7 @@ import type {
 } from './library-assistant-store.js';
 import {
   createMusicBrainzMetadataAnalyzer,
+  findMusicBrainzArtworkCandidates,
   needsMusicBrainzEnrichment,
   normalizeMusicBrainzRecordingSearch,
   rankMusicBrainzCandidate
@@ -170,6 +171,51 @@ test('analyzer produz sugestão explicável, ids externos tipados e preserva ove
   assert.ok(drafts[0].evidence.some(item => item.type === 'human-override'));
   assert.ok(drafts[0].evidence.some(item => item.type === 'external-id' && item.kind === 'recording'));
   assert.ok(drafts[0].evidence.some(item => item.type === 'external-id' && item.kind === 'release-group'));
+});
+
+test('busca manual retorna uma lista de capas para a faixa selecionada', async () => {
+  const fetchImpl = async (input: string | URL) => {
+    const url = new URL(String(input));
+    if (isCaaRequest(input)) {
+      const releaseId = url.pathname.split('/').filter(Boolean).at(-1) ?? 'release';
+      return caaResponse([{
+        id: `cover-${releaseId}`,
+        front: true,
+        image: `https://coverartarchive.org/release/${releaseId}/front`,
+        thumbnails: { 500: `https://coverartarchive.org/release/${releaseId}/500` }
+      }]);
+    }
+    return response([recording({
+      releases: [
+        {
+          id: 'release-1',
+          title: 'Album',
+          'release-group': { id: 'release-group-1' },
+          'artist-credit': [{ name: 'Artista', artist: { id: 'artist-1', name: 'Artista' } }]
+        },
+        {
+          id: 'release-2',
+          title: 'Album',
+          'release-group': { id: 'release-group-2' },
+          'artist-credit': [{ name: 'Artista', artist: { id: 'artist-1', name: 'Artista' } }]
+        }
+      ]
+    })]);
+  };
+
+  const candidates = await findMusicBrainzArtworkCandidates(
+    track(),
+    gateway(),
+    { fetchImpl }
+  );
+
+  assert.equal(candidates.length, 2);
+  assert.deepEqual(
+    candidates.map(candidate => candidate.musicBrainzReleaseId),
+    ['release-1', 'release-2']
+  );
+  assert.ok(candidates.every(candidate => candidate.thumbnailUrl?.endsWith('/500')));
+  assert.ok(candidates.every(candidate => candidate.album === 'Album'));
 });
 
 test('analyzer propõe capa CAA somente depois de identificação MusicBrainz confiável', async () => {

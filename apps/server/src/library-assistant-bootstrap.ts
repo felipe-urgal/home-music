@@ -47,6 +47,7 @@ import {
   MissingCoverFillService
 } from './missing-cover-fill-service.js';
 import { TrackCoverOverrideStore } from './track-cover-overrides.js';
+import { registerTrackArtworkSearchRoutes } from './track-artwork-search-routes.js';
 import {
   setActiveTrackLyricsOverrideStore,
   TrackLyricsOverrideStore
@@ -357,6 +358,14 @@ export function registerLibraryAssistant(
   autonomy.resume();
 
   registerLibraryAssistantRoutes(app, service, workQueue, metrics);
+  registerTrackArtworkSearchRoutes(app, {
+    providers,
+    coverOverrides,
+    listTracks: listCoverFillTracks,
+    resolveTrackFile: trackId => options.library.getTrack(trackId)?.filePath ?? null,
+    fetchImpl: musicBrainzFetch,
+    onArtworkChanged: () => { assistantReviewRevision += 1; }
+  });
   registerMissingCoverFillRoutes(app, coverFill);
   registerLibraryAssistantFingerprintRoutes(app, fingerprints);
   registerLibraryAssistantReviewRoutes(app, review);

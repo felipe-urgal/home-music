@@ -43,6 +43,9 @@ describe('AdminLibraryAssistantScreen operational workflow', () => {
     expect(screen).not.toMatch(/src=\{target\.(thumbnailUrl|sourceUrl)\}/);
     expect(screen).toContain('Capas são aplicadas individualmente depois de conferir a imagem sugerida.');
     expect(screen).toMatch(/Capas continuam individuais\./);
+    expect(screen).toMatch(/suggestionErrors/);
+    expect(screen).toContain('assistant-v2__suggestion-error');
+    expect(screen).toMatch(/if \(artworkDecision\)[\s\S]*setSuggestionErrors/);
   });
 
   it('mantém reanálise forte separada e move configurações para o cabeçalho', () => {

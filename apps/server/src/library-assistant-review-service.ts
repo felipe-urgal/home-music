@@ -283,28 +283,7 @@ export class LibraryAssistantReviewService {
       || record.suggestion.target.capability !== 'artwork'
     ) return null;
 
-    const target = record.suggestion.target;
-    const urls = target.thumbnailUrl && target.thumbnailUrl !== target.sourceUrl
-      ? [target.thumbnailUrl, target.sourceUrl]
-      : [target.sourceUrl];
-    let lastError: unknown = null;
-
-    for (const url of urls) {
-      try {
-        const downloaded = await this.downloadArtwork(url);
-        const inspected = inspectCoverOverride(downloaded.data, downloaded.contentType);
-        return {
-          ...downloaded,
-          contentType: inspected.contentType
-        };
-      } catch (error) {
-        lastError = error;
-      }
-    }
-
-    throw lastError instanceof Error
-      ? lastError
-      : new Error('Não foi possível carregar a prévia da capa.');
+    return this.downloadValidatedArtwork(record.suggestion.target);
   }
 
   resetOpenSuggestions() {
@@ -497,6 +476,32 @@ export class LibraryAssistantReviewService {
     }
   }
 
+  private async downloadValidatedArtwork(
+    target: LibraryAssistantArtworkTarget
+  ): Promise<DownloadedCoverArtArchiveImage> {
+    const urls = target.thumbnailUrl && target.thumbnailUrl !== target.sourceUrl
+      ? [target.thumbnailUrl, target.sourceUrl]
+      : [target.sourceUrl];
+    let lastError: unknown = null;
+
+    for (const url of urls) {
+      try {
+        const downloaded = await this.downloadArtwork(url);
+        const inspected = inspectCoverOverride(downloaded.data, downloaded.contentType);
+        return {
+          ...downloaded,
+          contentType: inspected.contentType
+        };
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    throw lastError instanceof Error
+      ? lastError
+      : new Error('Não foi possível carregar uma capa válida para esta sugestão.');
+  }
+
   private async decideArtwork(
     decision: LibraryAssistantDecision,
     run: ReviewRun,
@@ -526,7 +531,7 @@ export class LibraryAssistantReviewService {
           'Já existe capa manual para esta faixa. Confirme a substituição antes de aplicar a capa do Cover Art Archive.'
         );
       }
-      const downloaded = await this.downloadArtwork(target.sourceUrl);
+      const downloaded = await this.downloadValidatedArtwork(target);
       const saved = this.options.coverOverrides.save(target.trackId, downloaded.data, downloaded.contentType);
       if (!saved) return this.markStale(decision, run, null, 'A música não existe mais na biblioteca.');
       const changed = this.decisions.transitionSuggestion(decision.suggestionId, 'applied', updatedAt);

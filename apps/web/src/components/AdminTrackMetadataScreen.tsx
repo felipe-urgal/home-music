@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
   AdminLibraryOverviewResponse,
   AdminTrack,
+  AdminTrackCoverCandidate,
   AdminTrackCoverResponse,
   AdminTrackMetadataResponse,
   EditableTrackMetadata
@@ -38,8 +39,11 @@ import {
   updateAdminTrackMetadata
 } from '../admin-tracks-client';
 import {
+  applyTrackArtworkCandidate,
   getMissingCoverFillJob,
-  startMissingCoverFillJob
+  searchTrackArtworkCandidates,
+  startMissingCoverFillJob,
+  trackArtworkCandidatePreviewUrl
 } from '../library-assistant-client';
 import { notifyLibraryChanged } from '../library-events';
 import { ArtworkFallback } from './Artwork';
@@ -60,7 +64,7 @@ type EditorFeedback = {
   error: boolean;
 };
 
-type SavingAction = 'text-save' | 'text-reset' | 'cover-save' | 'cover-reset' | 'cover-generate' | null;
+type SavingAction = 'text-save' | 'text-reset' | 'cover-save' | 'cover-reset' | 'cover-generate' | 'cover-external' | null;
 type MetadataFilter = 'all' | 'missingTitle' | 'missingCover' | 'unknownArtist' | 'unknownAlbum';
 
 const PAGE_SIZE = 50;
@@ -135,6 +139,30 @@ function pageNumbers(current: number, total: number) {
   return [...values].filter(value => value >= 1 && value <= total).sort((a, b) => a - b);
 }
 
+function CoverCandidateArtwork({ candidate }: { candidate: AdminTrackCoverCandidate }) {
+  const [failed, setFailed] = useState(false);
+  const src = trackArtworkCandidatePreviewUrl(candidate);
+
+  useEffect(() => setFailed(false), [src]);
+
+  return (
+    <span className="admin-metadata-v2__cover-candidate-image" aria-hidden="true">
+      {failed ? (
+        <ImageIcon />
+      ) : (
+        <img
+          src={src}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          draggable={false}
+          onError={() => setFailed(true)}
+        />
+      )}
+    </span>
+  );
+}
+
 export function AdminTrackMetadataScreen({
   onBack,
   initialHealthFilter = null,
@@ -162,6 +190,11 @@ export function AdminTrackMetadataScreen({
   const [feedback, setFeedback] = useState<string | null>(null);
   const [coverFillJob, setCoverFillJob] = useState<MissingCoverFillJob | null>(null);
   const [coverFillError, setCoverFillError] = useState<string | null>(null);
+  const [coverSearchOpen, setCoverSearchOpen] = useState(false);
+  const [coverSearchLoading, setCoverSearchLoading] = useState(false);
+  const [coverSearchCandidates, setCoverSearchCandidates] = useState<AdminTrackCoverCandidate[]>([]);
+  const [coverSearchError, setCoverSearchError] = useState<string | null>(null);
+  const [applyingCoverCandidateId, setApplyingCoverCandidateId] = useState<string | null>(null);
   const editorRequestRef = useRef(0);
   const handledCoverFillJobRef = useRef<string | null>(null);
   const operationBusy = savingAction !== null;
@@ -236,11 +269,15 @@ export function AdminTrackMetadataScreen({
     if (!editingTrackId) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' || operationBusy) return;
+      if (coverSearchOpen) {
+        setCoverSearchOpen(false);
+        return;
+      }
       closeEditor();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [editingTrackId, editorDirty, operationBusy]);
+  }, [coverSearchOpen, editingTrackId, editorDirty, operationBusy]);
 
   async function loadTracks(background = false) {
     if (!background) setLoading(true);
@@ -334,6 +371,11 @@ export function AdminTrackMetadataScreen({
     setCoverFile(null);
     setDraft(null);
     setEditorFeedback(null);
+    setCoverSearchOpen(false);
+    setCoverSearchLoading(false);
+    setCoverSearchCandidates([]);
+    setCoverSearchError(null);
+    setApplyingCoverCandidateId(null);
     setEditorLoading(false);
   }
 
@@ -349,6 +391,9 @@ export function AdminTrackMetadataScreen({
     setCoverFile(null);
     setDraft(null);
     setEditorFeedback(null);
+    setCoverSearchOpen(false);
+    setCoverSearchCandidates([]);
+    setCoverSearchError(null);
     setEditorLoading(true);
     setError(null);
     setFeedback(null);
@@ -443,6 +488,44 @@ export function AdminTrackMetadataScreen({
     } catch (caught) {
       setEditorFeedback({ message: errorMessage(caught), error: true });
     } finally {
+      setSavingAction(null);
+    }
+  }
+
+  async function searchCovers() {
+    if (!editingTrackId || !draft || operationBusy || coverSearchLoading) return;
+    const requestId = editorRequestRef.current;
+    setCoverSearchOpen(true);
+    setCoverSearchLoading(true);
+    setCoverSearchError(null);
+    setCoverSearchCandidates([]);
+    try {
+      const response = await searchTrackArtworkCandidates(editingTrackId, draft);
+      if (editorRequestRef.current !== requestId) return;
+      setCoverSearchCandidates(response.candidates);
+    } catch (caught) {
+      if (editorRequestRef.current !== requestId) return;
+      setCoverSearchError(errorMessage(caught));
+    } finally {
+      if (editorRequestRef.current === requestId) setCoverSearchLoading(false);
+    }
+  }
+
+  async function applyCoverCandidate(candidate: AdminTrackCoverCandidate) {
+    if (!editingTrackId || operationBusy) return;
+    setSavingAction('cover-external');
+    setApplyingCoverCandidateId(candidate.id);
+    setCoverSearchError(null);
+    setEditorFeedback(null);
+    try {
+      const updated = await applyTrackArtworkCandidate(editingTrackId, candidate);
+      commitCover(updated, 'Capa escolhida salva como override. O arquivo de áudio original não foi alterado.');
+      setCoverSearchOpen(false);
+      void loadTracks(true);
+    } catch (caught) {
+      setCoverSearchError(errorMessage(caught));
+    } finally {
+      setApplyingCoverCandidateId(null);
       setSavingAction(null);
     }
   }
@@ -788,6 +871,9 @@ export function AdminTrackMetadataScreen({
                       </div>
 
                       <div className="admin-metadata-v2__cover-actions">
+                        <button className="admin-cover-search" type="button" disabled={operationBusy || coverSearchLoading} onClick={() => void searchCovers()}>
+                          {coverSearchLoading ? <LoaderCircle className="is-spinning" /> : <Search />} Buscar capas
+                        </button>
                         <label className={`admin-cover-upload ${operationBusy ? 'is-disabled' : ''}`}>
                           <ImageIcon /> {coverFile ? 'Trocar imagem' : 'Selecionar nova imagem'}
                           <input
@@ -830,6 +916,64 @@ export function AdminTrackMetadataScreen({
           </aside>
         </div>
       </div>
+
+      {coverSearchOpen && draft && (
+        <div className="admin-metadata-v2__cover-search-backdrop">
+          <section
+            className="admin-metadata-v2__cover-search-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="admin-cover-search-title"
+          >
+            <header>
+              <div>
+                <strong id="admin-cover-search-title">Escolher capa</strong>
+                <small>{draft.title} · {draft.artist}</small>
+              </div>
+              <button type="button" aria-label="Fechar busca de capas" disabled={operationBusy} onClick={() => setCoverSearchOpen(false)}><X /></button>
+            </header>
+
+            {coverSearchLoading ? (
+              <div className="admin-metadata-v2__cover-search-state" role="status">
+                <LoaderCircle className="is-spinning" />
+                <span>Buscando capas no MusicBrainz e Cover Art Archive…</span>
+              </div>
+            ) : coverSearchError ? (
+              <div className="admin-metadata-v2__cover-search-state is-error" role="alert">
+                <Info />
+                <span>{coverSearchError}</span>
+                <button type="button" onClick={() => void searchCovers()}>Tentar novamente</button>
+              </div>
+            ) : coverSearchCandidates.length === 0 ? (
+              <div className="admin-metadata-v2__cover-search-state">
+                <ImageIcon />
+                <span>Nenhuma capa encontrada para estes metadados.</span>
+              </div>
+            ) : (
+              <div className="admin-metadata-v2__cover-candidate-grid">
+                {coverSearchCandidates.map(candidate => (
+                  <article className="admin-metadata-v2__cover-candidate" key={candidate.id}>
+                    <CoverCandidateArtwork candidate={candidate} />
+                    <div>
+                      <strong>{candidate.album}</strong>
+                      <span>{candidate.artist}</span>
+                      <small>Cover Art Archive</small>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={operationBusy}
+                      onClick={() => void applyCoverCandidate(candidate)}
+                    >
+                      {applyingCoverCandidateId === candidate.id ? <LoaderCircle className="is-spinning" /> : <CheckCircle2 />}
+                      Usar esta capa
+                    </button>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
+      )}
     </section>
   );
 }
