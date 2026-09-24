@@ -18,7 +18,10 @@ import {
   type DownloadedCoverArtArchiveImage
 } from './cover-art-archive.js';
 import type { LibraryAssistantStore, LibraryAssistantStoredSuggestion } from './library-assistant-store.js';
-import type { TrackCoverOverrideStore } from './track-cover-overrides.js';
+import {
+  inspectCoverOverride,
+  type TrackCoverOverrideStore
+} from './track-cover-overrides.js';
 import {
   normalizeMetadataOverridePatch,
   type TrackMetadataOverrideStore
@@ -267,6 +270,26 @@ export class LibraryAssistantReviewService {
       return created || left.suggestion.id.localeCompare(right.suggestion.id);
     });
     return { libraryRevision: this.options.library.revision(), items };
+  }
+
+  async getArtworkPreview(
+    runId: string,
+    suggestionId: string
+  ): Promise<DownloadedCoverArtArchiveImage | null> {
+    const record = this.findSuggestionRecord(runId, suggestionId);
+    if (
+      !record
+      || !OPEN_STATUSES.has(record.suggestion.status)
+      || record.suggestion.target.capability !== 'artwork'
+    ) return null;
+
+    const target = record.suggestion.target;
+    const downloaded = await this.downloadArtwork(target.thumbnailUrl ?? target.sourceUrl);
+    const inspected = inspectCoverOverride(downloaded.data, downloaded.contentType);
+    return {
+      ...downloaded,
+      contentType: inspected.contentType
+    };
   }
 
   resetOpenSuggestions() {
