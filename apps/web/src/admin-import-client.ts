@@ -1,6 +1,8 @@
 import type {
   AdminImportJobsResponse,
+  AdminTrackCoverCandidate,
   ImportJob,
+  ImportMetadataEnrichment,
   ImportMediaDecision,
   ImportMetadataPreview,
   ImportMetadataPreviewPatch,
@@ -215,6 +217,45 @@ export async function updateAdminImportMetadata(jobId: string, patch: ImportMeta
 export function adminImportPreviewCoverUrl(job: ImportJob) {
   const version = job.metadataPreview?.generatedAt ?? job.updatedAt;
   return `/api/admin/imports/${encodeURIComponent(job.id)}/cover?v=${encodeURIComponent(version)}`;
+}
+
+export async function enrichAdminImportMetadata(jobId: string) {
+  const response = await apiFetch(
+    `/api/admin/imports/${encodeURIComponent(jobId)}/metadata-enrichment`,
+    {
+      method: 'POST',
+      headers: { 'X-Home-Music-Request': '1' }
+    }
+  );
+  const payload = await response.json().catch(() => null) as {
+    enrichment?: ImportMetadataEnrichment;
+    error?: string;
+  } | null;
+  if (!response.ok || !payload?.enrichment) {
+    throw new Error(payload?.error || `Falha HTTP ${response.status}`);
+  }
+  return payload.enrichment;
+}
+
+export async function applyAdminImportCoverCandidate(
+  jobId: string,
+  candidate: AdminTrackCoverCandidate
+) {
+  const response = await apiFetch(
+    `/api/admin/imports/${encodeURIComponent(jobId)}/metadata-enrichment/cover`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Home-Music-Request': '1'
+      },
+      body: JSON.stringify({
+        sourceUrl: candidate.sourceUrl,
+        thumbnailUrl: candidate.thumbnailUrl
+      })
+    }
+  );
+  return readMetadataPreviewResponse(response);
 }
 
 export async function getAdminImportDuplicateCheck(jobId: string) {
