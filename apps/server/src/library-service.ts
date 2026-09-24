@@ -239,7 +239,7 @@ export class LibraryService {
   }
 
   async updateForPromotedImport(promoted: PromotedImportFile, jobId: string) {
-    await this.mutations.run(async () => {
+    return this.mutations.run(async () => {
       try {
         if (!this.options.musicDir) {
           throw new Error('MUSIC_DIR não está configurado para indexação incremental.');
@@ -275,6 +275,7 @@ export class LibraryService {
           },
           'Importação adicionada à biblioteca incrementalmente.'
         );
+        return indexed;
       } catch (incrementalError) {
         this.options.logger.warn(
           { err: incrementalError, importJobId: jobId, relativePath: promoted.relativePath },
@@ -292,6 +293,7 @@ export class LibraryService {
             },
             'Biblioteca reconciliada após fallback da importação.'
           );
+          return this.tracks.find(track => track.filePath === promoted.absolutePath) ?? null;
         } catch (fallbackError) {
           this.libraryReady = false;
           this.options.logger.error(
@@ -303,6 +305,7 @@ export class LibraryService {
             },
             'Arquivo importado foi promovido, mas a biblioteca não pôde ser reconciliada; o próximo rescan tentará recuperá-lo.'
           );
+          return null;
         }
       }
     });
