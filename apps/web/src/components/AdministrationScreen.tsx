@@ -209,11 +209,13 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
     ? 'Consultando o estado atual.'
     : healthy
       ? 'Sua biblioteca está pronta para uso.'
-      : attentionCount > 0
-        ? `${attentionCount.toLocaleString('pt-BR')} ${attentionCount === 1 ? 'música precisa' : 'músicas precisam'} de revisão.`
-        : !integrityVerified
-          ? 'Execute a verificação de integridade para concluir o diagnóstico.'
-          : 'O scanner ainda não marcou a biblioteca como pronta para uso.';
+      : scannerActive
+        ? 'Procurando arquivos novos, alterados ou removidos na biblioteca.'
+        : attentionCount > 0
+          ? `${attentionCount.toLocaleString('pt-BR')} ${attentionCount === 1 ? 'música precisa' : 'músicas precisam'} de revisão.`
+          : !integrityVerified
+            ? 'Execute a verificação de integridade para concluir o diagnóstico.'
+            : 'O scanner ainda não marcou a biblioteca como pronta para uso.';
 
   return (
     <section className="my-account-screen administration-screen administration-cockpit" aria-labelledby="administration-title">
