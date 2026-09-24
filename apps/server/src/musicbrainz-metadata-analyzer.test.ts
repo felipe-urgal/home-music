@@ -322,6 +322,207 @@ test('busca manual cai para outras edições da mesma gravação quando o álbum
 });
 
 
+test('busca manual aceita versão ao vivo com duração diferente sem relaxar artista', async () => {
+  let caaCalls = 0;
+  const fetchImpl = async (input: string | URL) => {
+    const url = new URL(String(input));
+    if (isCaaRequest(input)) {
+      caaCalls += 1;
+      return caaResponse([{
+        id: 'cover-skank',
+        front: true,
+        image: 'https://coverartarchive.org/release/release-skank/front',
+        thumbnails: { 500: 'https://coverartarchive.org/release/release-skank/500' }
+      }]);
+    }
+
+    const query = url.searchParams.get('query') ?? '';
+    if (/release:/.test(query)) return response([]);
+    return response([recording({
+      id: 'recording-vou-deixar',
+      title: 'Vou Deixar',
+      length: 260_000,
+      'artist-credit': [{
+        name: 'Skank',
+        artist: { id: 'artist-skank', name: 'Skank' }
+      }],
+      releases: [{
+        id: 'release-skank',
+        title: 'Cosmotron',
+        'release-group': { id: 'group-skank' },
+        'artist-credit': [{
+          name: 'Skank',
+          artist: { id: 'artist-skank', name: 'Skank' }
+        }]
+      }]
+    })]);
+  };
+
+  const candidates = await findMusicBrainzArtworkCandidates(
+    track({
+      title: 'Vou Deixar',
+      artist: 'Skank',
+      album: 'Luau MTV',
+      albumArtist: 'Skank',
+      duration: 180
+    }),
+    gateway(),
+    { fetchImpl }
+  );
+
+  assert.equal(candidates.length, 1);
+  assert.equal(candidates[0].musicBrainzReleaseId, 'release-skank');
+  assert.equal(caaCalls, 1);
+});
+
+test('busca manual aceita título estendido da mesma música', async () => {
+  const fetchImpl = async (input: string | URL) => {
+    if (isCaaRequest(input)) {
+      return caaResponse([{
+        id: 'cover-kid-abelha',
+        front: true,
+        image: 'https://coverartarchive.org/release/release-kid-abelha/front',
+        thumbnails: { 500: 'https://coverartarchive.org/release/release-kid-abelha/500' }
+      }]);
+    }
+
+    const query = new URL(String(input)).searchParams.get('query') ?? '';
+    if (/release:/.test(query)) return response([]);
+    return response([recording({
+      id: 'recording-como-eu-quero',
+      title: 'Como eu quero / Os outros',
+      length: 245_000,
+      'artist-credit': [{
+        name: 'Kid Abelha',
+        artist: { id: 'artist-kid-abelha', name: 'Kid Abelha' }
+      }],
+      releases: [{
+        id: 'release-kid-abelha',
+        title: 'Ao vivo 86',
+        'release-group': { id: 'group-kid-abelha' },
+        'artist-credit': [{
+          name: 'Kid Abelha',
+          artist: { id: 'artist-kid-abelha', name: 'Kid Abelha' }
+        }]
+      }]
+    })]);
+  };
+
+  const candidates = await findMusicBrainzArtworkCandidates(
+    track({
+      title: 'Como Eu Quero',
+      artist: 'Kid Abelha',
+      album: 'Ao Vivo',
+      albumArtist: 'Kid Abelha'
+    }),
+    gateway(),
+    { fetchImpl }
+  );
+
+  assert.equal(candidates.length, 1);
+  assert.equal(candidates[0].album, 'Ao vivo 86');
+});
+
+test('busca manual tenta segmentos de título composto quando o medley inteiro não existe', async () => {
+  const queries: string[] = [];
+  const fetchImpl = async (input: string | URL) => {
+    if (isCaaRequest(input)) {
+      return caaResponse([{
+        id: 'cover-lulu',
+        front: true,
+        image: 'https://coverartarchive.org/release/release-lulu/front',
+        thumbnails: { 500: 'https://coverartarchive.org/release/release-lulu/500' }
+      }]);
+    }
+
+    const query = new URL(String(input)).searchParams.get('query') ?? '';
+    queries.push(query);
+    if (!query.includes('Toda Forma de Amor') || query.includes('Um Certo Alguém')) {
+      return response([]);
+    }
+    return response([recording({
+      id: 'recording-toda-forma',
+      title: 'Toda Forma de Amor',
+      'artist-credit': [{
+        name: 'Lulu Santos',
+        artist: { id: 'artist-lulu', name: 'Lulu Santos' }
+      }],
+      releases: [{
+        id: 'release-lulu',
+        title: 'Toda Forma de Amor',
+        'release-group': { id: 'group-lulu' },
+        'artist-credit': [{
+          name: 'Lulu Santos',
+          artist: { id: 'artist-lulu', name: 'Lulu Santos' }
+        }]
+      }]
+    })]);
+  };
+
+  const candidates = await findMusicBrainzArtworkCandidates(
+    track({
+      title: 'Toda Forma de Amor, Um Certo Alguém, O Último Romântico',
+      artist: 'Lulu Santos',
+      album: 'Álbum desconhecido',
+      albumArtist: 'Artista desconhecido'
+    }),
+    gateway(),
+    { fetchImpl }
+  );
+
+  assert.ok(queries.some(query => /recording:"Toda Forma de Amor"/.test(query)));
+  assert.equal(candidates.length, 1);
+  assert.equal(candidates[0].musicBrainzReleaseId, 'release-lulu');
+});
+
+test('busca manual não oferece capa quando o artista retornado é diferente', async () => {
+  let caaCalls = 0;
+  const fetchImpl = async (input: string | URL) => {
+    if (isCaaRequest(input)) {
+      caaCalls += 1;
+      return caaResponse([{
+        id: 'cover-wrong-artist',
+        front: true,
+        image: 'https://coverartarchive.org/release/release-wrong-artist/front',
+        thumbnails: {}
+      }]);
+    }
+
+    return response([recording({
+      id: 'recording-menina-veneno',
+      title: 'Menina Veneno',
+      'artist-credit': [{
+        name: 'Ritchie',
+        artist: { id: 'artist-ritchie', name: 'Ritchie' }
+      }],
+      releases: [{
+        id: 'release-menina-veneno',
+        title: 'Vôo de Coração',
+        'release-group': { id: 'group-menina-veneno' },
+        'artist-credit': [{
+          name: 'Ritchie',
+          artist: { id: 'artist-ritchie', name: 'Ritchie' }
+        }]
+      }]
+    })]);
+  };
+
+  const candidates = await findMusicBrainzArtworkCandidates(
+    track({
+      title: 'Menina Veneno',
+      artist: 'Rita Lee',
+      album: 'Álbum desconhecido',
+      albumArtist: 'Artista desconhecido'
+    }),
+    gateway(),
+    { fetchImpl }
+  );
+
+  assert.deepEqual(candidates, []);
+  assert.equal(caaCalls, 0);
+});
+
+
 test('analyzer propõe capa CAA somente depois de identificação MusicBrainz confiável', async () => {
   const analyzer = createMusicBrainzMetadataAnalyzer({
     fetchImpl: async input => {
