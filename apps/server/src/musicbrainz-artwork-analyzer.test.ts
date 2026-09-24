@@ -207,3 +207,61 @@ test('tenta outra edição coerente quando a primeira não tem artwork', async (
     'release-2'
   );
 });
+
+test('normaliza espaços em torno de & no crédito do álbum antes da busca', async () => {
+  const source: Track = {
+    ...track('tedio', 'Tédio'),
+    artist: 'Biquini Cavadão',
+    album: 'O melhor de 2',
+    albumArtist: 'Biquini Cavadão&Capital Inicial'
+  };
+
+  const fetchImpl = async (input: string | URL) => {
+    const url = new URL(String(input));
+    if (url.hostname === 'musicbrainz.org') {
+      assert.equal(
+        url.searchParams.get('query'),
+        'release:"O melhor de 2" AND artist:"Biquini Cavadão & Capital Inicial"'
+      );
+      return new Response(JSON.stringify({
+        releases: [{
+          id: 'release-biquini',
+          title: 'O melhor de 2',
+          'release-group': { id: 'group-biquini' },
+          'artist-credit': [
+            { name: 'Biquini Cavadão', joinphrase: ' & ' },
+            { name: 'Capital Inicial' }
+          ]
+        }]
+      }), { status: 200 });
+    }
+    if (url.pathname === '/release-group/group-biquini') {
+      return new Response(JSON.stringify({
+        images: [{
+          id: 'image-biquini',
+          front: true,
+          image: 'https://archive.org/download/cover/biquini.jpg',
+          thumbnails: {}
+        }]
+      }), { status: 200 });
+    }
+    throw new Error(`unexpected request: ${url}`);
+  };
+
+  const analyzer = createMusicBrainzAlbumArtworkAnalyzer({ fetchImpl });
+  const drafts = await analyzer.analyze({
+    runId: 'run-artist-spacing',
+    tracks: [source],
+    providers: providers()
+  });
+
+  assert.equal(drafts.length, 1);
+  assert.equal(drafts[0].capability, 'artwork');
+  const artistEvidence = drafts[0].evidence.find(
+    item => item.type === 'text-match' && item.field === 'albumArtist'
+  );
+  assert.notEqual(
+    artistEvidence?.type === 'text-match' ? artistEvidence.match : 'different',
+    'different'
+  );
+});

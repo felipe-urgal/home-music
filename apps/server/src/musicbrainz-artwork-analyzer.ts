@@ -86,6 +86,19 @@ function compareText(source: string, candidate: string): 'exact' | 'normalized' 
   return normalizedValue(left) === normalizedValue(right) ? 'normalized' : 'different';
 }
 
+function artistSearchValue(value: string) {
+  return exactValue(value).replace(/\s*&\s*/g, ' & ');
+}
+
+function compareArtistText(source: string, candidate: string): 'exact' | 'normalized' | 'different' {
+  const left = exactValue(source);
+  const right = exactValue(candidate);
+  if (left === right) return 'exact';
+  return normalizedValue(artistSearchValue(left)) === normalizedValue(artistSearchValue(right))
+    ? 'normalized'
+    : 'different';
+}
+
 function artistCredit(value: unknown) {
   if (!Array.isArray(value) || value.length === 0 || value.length > 20) return null;
   const parts: string[] = [];
@@ -137,9 +150,9 @@ export function normalizeMusicBrainzReleaseSearch(payload: unknown): MusicBrainz
 function albumIdentity(track: Track) {
   if (!reliable(track.album)) return null;
   const artist = reliable(track.albumArtist)
-    ? exactValue(track.albumArtist)
+    ? artistSearchValue(track.albumArtist)
     : reliable(track.artist)
-      ? exactValue(track.artist)
+      ? artistSearchValue(track.artist)
       : '';
   if (!artist) return null;
   return {
@@ -224,7 +237,7 @@ function rankRelease(
   candidate: MusicBrainzReleaseCandidate
 ) {
   const albumMatch = compareText(album, candidate.title);
-  const artistMatch = compareText(artist, candidate.albumArtist);
+  const artistMatch = compareArtistText(artist, candidate.albumArtist);
   let score = 0;
   if (albumMatch === 'exact') score += 50;
   else if (albumMatch === 'normalized') score += 45;
@@ -335,7 +348,7 @@ export function createMusicBrainzAlbumArtworkAnalyzer(
         for (const track of group.tracks) {
           const albumMatch = compareText(track.album, best.candidate.title);
           const artistSource = reliable(track.albumArtist) ? track.albumArtist : track.artist;
-          const artistMatch = compareText(artistSource, best.candidate.albumArtist);
+          const artistMatch = compareArtistText(artistSource, best.candidate.albumArtist);
           const evidence: LibraryAssistantEvidence[] = [
             {
               type: 'text-match',

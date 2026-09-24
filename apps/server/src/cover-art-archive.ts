@@ -124,38 +124,61 @@ async function findCoverArtArchiveFrontCoverByEntity(
     ttlMs: COVER_ART_ARCHIVE_CACHE_TTL_MS,
     signal: options.signal,
     execute: async ({ signal: providerSignal, userAgent: providerUserAgent }) => {
-      const response = await fetchImpl(url, {
-        signal: providerSignal,
-        redirect: 'error',
-        headers: {
-          Accept: 'application/json',
-          'User-Agent': providerUserAgent
-        }
-      });
-      if (response.status === 404) return { images: [] };
-      if (!response.ok) {
-        const error = new Error(response.status === 429 || response.status === 503
-          ? 'Cover Art Archive temporariamente indisponível. Tente novamente mais tarde.'
-          : 'Falha ao consultar Cover Art Archive.');
-        Object.assign(error, {
-          code: response.status === 429 || response.status === 503
-            ? 'provider-rate-limited'
-            : 'provider-request-failed',
-          statusCode: response.status
+      let currentUrl = url;
+
+      for (let redirect = 0; redirect <= COVER_ART_ARCHIVE_MAX_REDIRECTS; redirect += 1) {
+        const response = await fetchImpl(currentUrl, {
+          signal: providerSignal,
+          redirect: 'manual',
+          headers: {
+            Accept: 'application/json',
+            'User-Agent': providerUserAgent
+          }
         });
-        throw error;
+
+        if (REDIRECT_STATUSES.has(response.status)) {
+          const next = normalizeRedirectLocation(currentUrl, response.headers.get('location'));
+          if (!next) {
+            const error = new Error('Redirect do Cover Art Archive não permitido.');
+            Object.assign(error, {
+              code: 'provider-request-failed',
+              statusCode: response.status
+            });
+            throw error;
+          }
+          currentUrl = new URL(next);
+          continue;
+        }
+
+        if (response.status === 404) return { images: [] };
+        if (!response.ok) {
+          const error = new Error(response.status === 429 || response.status === 503
+            ? 'Cover Art Archive temporariamente indisponível. Tente novamente mais tarde.'
+            : 'Falha ao consultar Cover Art Archive.');
+          Object.assign(error, {
+            code: response.status === 429 || response.status === 503
+              ? 'provider-rate-limited'
+              : 'provider-request-failed',
+            statusCode: response.status
+          });
+          throw error;
+        }
+        const declaredLength = Number(response.headers.get('content-length'));
+        if (Number.isFinite(declaredLength) && declaredLength > COVER_ART_ARCHIVE_MAX_RESPONSE_CHARS) {
+          throw new LibraryAssistantProviderResponseError();
+        }
+        const text = await response.text();
+        if (text.length > COVER_ART_ARCHIVE_MAX_RESPONSE_CHARS) throw new LibraryAssistantProviderResponseError();
+        try {
+          return JSON.parse(text) as unknown;
+        } catch {
+          throw new LibraryAssistantProviderResponseError();
+        }
       }
-      const declaredLength = Number(response.headers.get('content-length'));
-      if (Number.isFinite(declaredLength) && declaredLength > COVER_ART_ARCHIVE_MAX_RESPONSE_CHARS) {
-        throw new LibraryAssistantProviderResponseError();
-      }
-      const text = await response.text();
-      if (text.length > COVER_ART_ARCHIVE_MAX_RESPONSE_CHARS) throw new LibraryAssistantProviderResponseError();
-      try {
-        return JSON.parse(text) as unknown;
-      } catch {
-        throw new LibraryAssistantProviderResponseError();
-      }
+
+      const error = new Error('Cover Art Archive excedeu o limite de redirects.');
+      Object.assign(error, { code: 'provider-request-failed' });
+      throw error;
     },
     normalize: normalizeCoverArtArchiveRelease
   });
