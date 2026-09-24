@@ -583,6 +583,50 @@ test('enriquecimento da importação resolve contexto ao vivo e retorna álbum, 
 });
 
 
+test('enriquecimento recupera artista de título combinado do provider antes do aceite manual', async () => {
+  const queries: string[] = [];
+  const fetchImpl = async (input: string | URL) => {
+    if (isCaaRequest(input)) return caaResponse();
+    const query = new URL(String(input)).searchParams.get('query') ?? '';
+    queries.push(query);
+    if (query.includes('Oceano (Ao Vivo)')) return response([]);
+    return response([recording({
+      id: 'recording-provider-oceano',
+      title: 'Oceano',
+      'artist-credit': [{
+        name: 'Djavan',
+        artist: { id: 'artist-djavan', name: 'Djavan' }
+      }],
+      releases: [{
+        id: 'release-provider-oceano',
+        title: 'Ao Vivo',
+        'release-group': { id: 'group-provider-oceano' },
+        'artist-credit': [{
+          name: 'Djavan',
+          artist: { id: 'artist-djavan', name: 'Djavan' }
+        }]
+      }]
+    })]);
+  };
+
+  const enrichment = await findMusicBrainzImportMetadataEnrichment(
+    track({
+      title: 'Djavan - Oceano (Ao Vivo)',
+      artist: 'Artista desconhecido',
+      album: '',
+      albumArtist: 'Artista desconhecido'
+    }),
+    gateway(),
+    { fetchImpl }
+  );
+
+  assert.ok(queries.some(query => /artist:"Djavan"/.test(query)));
+  assert.ok(queries.some(query => /recording:"Oceano"/.test(query)));
+  assert.equal(enrichment.album, 'Ao Vivo');
+  assert.equal(enrichment.albumArtist, 'Djavan');
+});
+
+
 test('analyzer propõe capa CAA somente depois de identificação MusicBrainz confiável', async () => {
   const analyzer = createMusicBrainzMetadataAnalyzer({
     fetchImpl: async input => {
