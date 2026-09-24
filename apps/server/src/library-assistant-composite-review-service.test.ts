@@ -74,6 +74,7 @@ async function fixture(options: { sidecar?: boolean } = {}) {
   let lyricsChanges = 0;
   const base = {
     getReviewQueue: () => ({ libraryRevision: 7, items: [] }),
+    async getArtworkPreview() { return null; },
     resetOpenSuggestions: () => 0,
     async decide(decision: LibraryAssistantDecision) {
       return {
