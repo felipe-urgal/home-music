@@ -9,6 +9,7 @@ import type {
 import {
   createMusicBrainzMetadataAnalyzer,
   findMusicBrainzArtworkCandidates,
+  findMusicBrainzImportMetadataEnrichment,
   needsMusicBrainzEnrichment,
   normalizeMusicBrainzRecordingSearch,
   rankMusicBrainzCandidate
@@ -520,6 +521,65 @@ test('busca manual não oferece capa quando o artista retornado é diferente', a
 
   assert.deepEqual(candidates, []);
   assert.equal(caaCalls, 0);
+});
+
+
+test('enriquecimento da importação resolve contexto ao vivo e retorna álbum, artista do álbum e capa', async () => {
+  const queries: string[] = [];
+  const fetchImpl = async (input: string | URL) => {
+    const url = new URL(String(input));
+    if (isCaaRequest(input)) {
+      if (url.pathname === '/release/release-oceano') {
+        return caaResponse([{
+          id: 'cover-oceano',
+          front: true,
+          image: 'https://coverartarchive.org/release/release-oceano/front',
+          thumbnails: { 500: 'https://coverartarchive.org/release/release-oceano/500' }
+        }]);
+      }
+      return caaResponse();
+    }
+
+    const query = url.searchParams.get('query') ?? '';
+    queries.push(query);
+    if (query.includes('Oceano (Ao Vivo)')) return response([]);
+    return response([recording({
+      id: 'recording-oceano',
+      title: 'Oceano',
+      length: 250_000,
+      'artist-credit': [{
+        name: 'Djavan',
+        artist: { id: 'artist-djavan', name: 'Djavan' }
+      }],
+      releases: [{
+        id: 'release-oceano',
+        title: 'Ao Vivo',
+        'release-group': { id: 'group-oceano' },
+        'artist-credit': [{
+          name: 'Djavan',
+          artist: { id: 'artist-djavan', name: 'Djavan' }
+        }]
+      }]
+    })]);
+  };
+
+  const enrichment = await findMusicBrainzImportMetadataEnrichment(
+    track({
+      title: 'Oceano (Ao Vivo)',
+      artist: 'Djavan',
+      album: '',
+      albumArtist: 'Djavan',
+      duration: 245
+    }),
+    gateway(),
+    { fetchImpl }
+  );
+
+  assert.ok(queries.some(query => /recording:"Oceano"/.test(query)));
+  assert.equal(enrichment.album, 'Ao Vivo');
+  assert.equal(enrichment.albumArtist, 'Djavan');
+  assert.equal(enrichment.coverCandidates.length, 1);
+  assert.equal(enrichment.coverCandidates[0].musicBrainzReleaseId, 'release-oceano');
 });
 
 
