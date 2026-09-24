@@ -747,6 +747,60 @@
   gap: 12px;
 }
 
+.admin-metadata-v2__metadata-tools {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 9px;
+  min-width: 0;
+}
+
+.admin-metadata-v2__metadata-tools > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #61d899;
+  font-size: .69rem;
+  white-space: nowrap;
+}
+
+.admin-metadata-v2__metadata-tools > span.is-changed {
+  color: #e1b15c;
+}
+
+.admin-metadata-v2__metadata-tools > span svg {
+  width: 14px;
+  height: 14px;
+}
+
+.admin-metadata-improve {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 9px;
+  border: 1px solid rgba(88,164,224,.3);
+  border-radius: 7px;
+  background: rgba(34,116,180,.08);
+  color: #b8dcf6;
+  cursor: pointer;
+  font: inherit;
+  font-size: .69rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.admin-metadata-improve:disabled {
+  opacity: .38;
+  cursor: default;
+}
+
+.admin-metadata-improve svg {
+  width: 13px;
+  height: 13px;
+}
+
 .admin-metadata-v2__section-title > strong,
 .admin-metadata-v2__cover-section > strong {
   color: #eef3f7;
@@ -814,6 +868,57 @@
 .admin-metadata-v2__fields small {
   color: #6f7e8d;
   font-size: .68rem;
+}
+
+.admin-metadata-v2__field-suggestion {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 7px;
+  padding: 6px 7px;
+  border: 1px solid rgba(88,164,224,.16);
+  border-radius: 7px;
+  background: rgba(34,116,180,.055);
+}
+
+.admin-metadata-v2__field-suggestion small {
+  min-width: 0;
+  overflow: hidden;
+  color: #8fb6cf;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-metadata-v2__field-suggestion button {
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  color: #9fd1f3;
+  cursor: pointer;
+  font: inherit;
+  font-size: .66rem;
+  font-weight: 700;
+}
+
+.admin-metadata-v2__field-suggestion button:disabled {
+  opacity: .38;
+  cursor: default;
+}
+
+.admin-metadata-v2__suggestion-message {
+  display: grid;
+  grid-template-columns: 14px minmax(0,1fr);
+  align-items: start;
+  gap: 6px;
+  color: #7f92a1;
+  font-size: .68rem;
+  line-height: 1.4;
+}
+
+.admin-metadata-v2__suggestion-message svg {
+  width: 13px;
+  height: 13px;
 }
 
 .admin-metadata-v2__text-actions {
