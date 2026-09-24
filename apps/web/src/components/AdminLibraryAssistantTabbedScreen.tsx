@@ -334,12 +334,13 @@ export function AdminLibraryAssistantTabbedScreen({ onBack, onOpenLocalLyrics }:
     const map = new Map<string, LibraryAssistantSuggestion[]>();
     for (const suggestion of openSuggestions) {
       if (suggestion.target.capability !== activeTab) continue;
+      if (activeRun && suggestion.runId !== activeRun.id) continue;
       const current = map.get(suggestion.target.trackId) ?? [];
       current.push(suggestion);
       map.set(suggestion.target.trackId, current);
     }
     return map;
-  }, [activeTab, openSuggestions]);
+  }, [activeRun, activeTab, openSuggestions]);
 
   const trackRows = useMemo(() => tracks.map(track => {
     const work = activeRunStates.get(track.id) ?? null;
@@ -392,8 +393,11 @@ export function AdminLibraryAssistantTabbedScreen({ onBack, onOpenLocalLyrics }:
   );
 
   const activeTabSuggestions = useMemo(
-    () => openSuggestions.filter(item => item.target.capability === activeTab),
-    [activeTab, openSuggestions]
+    () => openSuggestions.filter(item => (
+      item.target.capability === activeTab
+      && (!activeRun || item.runId === activeRun.id)
+    )),
+    [activeRun, activeTab, openSuggestions]
   );
 
   const safeBatchSuggestions = useMemo(
