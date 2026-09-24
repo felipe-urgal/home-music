@@ -62,7 +62,7 @@ type Props = {
 
 type CapabilityTab = LibraryAssistantCapability;
 type TrackVisualStatus = 'review' | 'suggestion' | 'ok' | 'pending' | 'failed' | 'not-analyzed';
-type TrackStatusFilter = 'all' | Exclude<TrackVisualStatus, 'not-analyzed'>;
+type TrackStatusFilter = 'all' | TrackVisualStatus;
 type Feedback = { kind: 'success' | 'error' | 'warning'; message: string };
 type PolicyRow = {
   key: LibraryAssistantReviewPolicyKey;
@@ -870,6 +870,9 @@ export function AdminLibraryAssistantTabbedScreen({ onBack, onOpenLocalLyrics }:
             </button>
             <button type="button" className={statusFilter === 'failed' ? 'is-active is-failed' : 'is-failed'} onClick={() => setStatusFilter('failed')}>
               <strong>{statusCounts.failed.toLocaleString('pt-BR')}</strong><span>Falhas</span>
+            </button>
+            <button type="button" className={statusFilter === 'not-analyzed' ? 'is-active is-not-analyzed' : 'is-not-analyzed'} onClick={() => setStatusFilter('not-analyzed')}>
+              <strong>{statusCounts['not-analyzed'].toLocaleString('pt-BR')}</strong><span>Não analisadas</span>
             </button>
             {safeBatchSuggestions.length > 0 && (
               <div className="assistant-tabs__safe-apply">
