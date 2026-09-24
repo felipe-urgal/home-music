@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import {
   getAdminLibraryOverview,
+  runAdminLibraryScan,
   type AdminLibraryHealthOverview,
   type AdminLibraryProblemKey
 } from '../admin-library-client';
@@ -78,6 +79,9 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
   const [metadataHealthFilter, setMetadataHealthFilter] = useState<MetadataHealthFilter | null>(null);
   const [loadingOverview, setLoadingOverview] = useState(true);
   const [overviewError, setOverviewError] = useState<string | null>(null);
+  const [runningScan, setRunningScan] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const [scanFeedback, setScanFeedback] = useState<string | null>(null);
 
   const loadOverview = useCallback(async () => {
     setLoadingOverview(true);
@@ -126,6 +130,27 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
     setView('metadata');
   }
 
+  async function runScan() {
+    if (runningScan || overview?.scanner.scanning) return;
+    setRunningScan(true);
+    setScanError(null);
+    setScanFeedback(null);
+    try {
+      const result = await runAdminLibraryScan();
+      await loadOverview();
+      const changed = result.added + result.updated + result.removed;
+      setScanFeedback(
+        changed === 0
+          ? `Scan concluído: ${result.tracks.toLocaleString('pt-BR')} faixas verificadas, sem alterações.`
+          : `Scan concluído: ${result.added.toLocaleString('pt-BR')} adicionadas, ${result.updated.toLocaleString('pt-BR')} atualizadas e ${result.removed.toLocaleString('pt-BR')} removidas.`
+      );
+    } catch (error) {
+      setScanError(error instanceof Error ? error.message : 'Não foi possível executar o scan da biblioteca.');
+    } finally {
+      setRunningScan(false);
+    }
+  }
+
   if (currentUser.role !== 'admin') return null;
 
   if (view === 'assistant') return <AdminLibraryAssistantWithLocalLyricsScreen onBack={() => setView('overview')} />;
@@ -160,7 +185,8 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
   const integrityCount = overview?.integrity.counts.total ?? 0;
   const integrityVerified = Boolean(overview?.integrity.checkedAt);
   const attentionCount = problemCount + integrityCount;
-  const scannerReady = Boolean(overview?.scanner.ready && !overview?.scanner.scanning);
+  const scannerActive = Boolean(runningScan || overview?.scanner.scanning);
+  const scannerReady = Boolean(overview?.scanner.ready && !scannerActive);
   const healthy = Boolean(
     overview
     && !overviewError
@@ -172,7 +198,7 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
     ? 'Carregando biblioteca'
     : healthy
       ? 'Biblioteca em dia'
-      : overview.scanner.scanning
+      : scannerActive
         ? 'Biblioteca sendo atualizada'
         : attentionCount > 0
           ? 'Há itens para revisar'
@@ -202,7 +228,7 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
         <div className={`administration-cockpit__header-status ${healthy ? 'is-healthy' : attentionCount > 0 ? 'has-warning' : ''}`}>
           <span />
           <div>
-            <strong>{healthy ? 'Biblioteca pronta' : attentionCount > 0 ? 'Revisão necessária' : scannerReady ? 'Scanner pronto' : 'Biblioteca carregando'}</strong>
+            <strong>{scannerActive ? 'Scanner atualizando' : healthy ? 'Biblioteca pronta' : attentionCount > 0 ? 'Revisão necessária' : scannerReady ? 'Scanner pronto' : 'Biblioteca carregando'}</strong>
             <small>Último scan em {formatScanDate(overview?.scanner.scannedAt ?? null)}</small>
           </div>
         </div>
@@ -213,6 +239,18 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
           <div className="my-account-message is-error administration-cockpit__message" role="alert">
             <span>{overviewError}</span>
             <button type="button" onClick={() => void loadOverview()}>Tentar novamente</button>
+          </div>
+        )}
+
+        {scanError && (
+          <div className="my-account-message is-error administration-cockpit__message" role="alert">
+            <span>{scanError}</span>
+            <button type="button" onClick={() => void runScan()}>Tentar novamente</button>
+          </div>
+        )}
+        {scanFeedback && (
+          <div className="my-account-message is-success administration-cockpit__message" role="status">
+            <span>{scanFeedback}</span>
           </div>
         )}
 
@@ -240,12 +278,21 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
                   <HardDrive />
                   <div><strong>{formatBytes(overview.storage.libraryBytes)}</strong><small>biblioteca</small></div>
                 </article>
-                <article>
-                  <RefreshCw className={overview.scanner.scanning ? 'is-spinning' : ''} />
+                <article className="is-scanner">
+                  <RefreshCw className={scannerActive ? 'is-spinning' : ''} />
                   <div>
-                    <strong>{overview.scanner.scanning ? 'Scanner atualizando' : overview.scanner.ready ? 'Scanner pronto' : 'Scanner requer atenção'}</strong>
+                    <strong>{scannerActive ? 'Scanner atualizando' : overview.scanner.ready ? 'Scanner pronto' : 'Scanner requer atenção'}</strong>
                     <small>Último scan em<br />{formatScanDate(overview.scanner.scannedAt)}</small>
                   </div>
+                  <button
+                    type="button"
+                    className="administration-cockpit-status__scan"
+                    disabled={scannerActive}
+                    onClick={() => void runScan()}
+                  >
+                    {scannerActive ? <LoaderCircle className="is-spinning" /> : <RefreshCw />}
+                    {scannerActive ? 'Executando…' : 'Executar scan'}
+                  </button>
                 </article>
               </div>
             </section>
