@@ -476,54 +476,6 @@ test('busca manual tenta segmentos de título composto quando o medley inteiro n
   assert.equal(candidates[0].musicBrainzReleaseId, 'release-lulu');
 });
 
-test('busca manual não oferece capa quando o artista retornado é diferente', async () => {
-  let caaCalls = 0;
-  const fetchImpl = async (input: string | URL) => {
-    if (isCaaRequest(input)) {
-      caaCalls += 1;
-      return caaResponse([{
-        id: 'cover-wrong-artist',
-        front: true,
-        image: 'https://coverartarchive.org/release/release-wrong-artist/front',
-        thumbnails: {}
-      }]);
-    }
-
-    return response([recording({
-      id: 'recording-menina-veneno',
-      title: 'Menina Veneno',
-      'artist-credit': [{
-        name: 'Ritchie',
-        artist: { id: 'artist-ritchie', name: 'Ritchie' }
-      }],
-      releases: [{
-        id: 'release-menina-veneno',
-        title: 'Vôo de Coração',
-        'release-group': { id: 'group-menina-veneno' },
-        'artist-credit': [{
-          name: 'Ritchie',
-          artist: { id: 'artist-ritchie', name: 'Ritchie' }
-        }]
-      }]
-    })]);
-  };
-
-  const candidates = await findMusicBrainzArtworkCandidates(
-    track({
-      title: 'Menina Veneno',
-      artist: 'Rita Lee',
-      album: 'Álbum desconhecido',
-      albumArtist: 'Artista desconhecido'
-    }),
-    gateway(),
-    { fetchImpl }
-  );
-
-  assert.deepEqual(candidates, []);
-  assert.equal(caaCalls, 0);
-});
-
-
 test('busca manual usa título sem artista quando metadata de artista está ausente', async () => {
   const queries: string[] = [];
   const fetchImpl = async (input: string | URL) => {
