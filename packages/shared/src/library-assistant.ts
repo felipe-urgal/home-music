@@ -286,6 +286,27 @@ export type AdminLibraryAssistantRunProgressResponse = {
   progress: LibraryAssistantRunProgress;
 };
 
+export type LibraryAssistantTrackAnalysisStatus =
+  | 'pending'
+  | 'processing'
+  | 'matched'
+  | 'no_match'
+  | 'retry'
+  | 'failed';
+
+export type LibraryAssistantTrackAnalysisState = {
+  trackId: string;
+  status: LibraryAssistantTrackAnalysisStatus;
+  attempts: number;
+  retryAt: string | null;
+  error: LibraryAssistantRunError | null;
+  updatedAt: string;
+};
+
+export type AdminLibraryAssistantRunTracksResponse = {
+  tracks: LibraryAssistantTrackAnalysisState[];
+};
+
 export type AdminLibraryAssistantSuggestionsResponse = {
   suggestions: LibraryAssistantSuggestion[];
 };
