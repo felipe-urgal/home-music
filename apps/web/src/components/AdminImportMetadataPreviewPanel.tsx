@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type {
+  AdminTrackCoverCandidate,
   ImportJob,
+  ImportMetadataEnrichment,
   ImportMetadataFieldName,
   ImportMetadataFieldState,
   ImportMetadataPreview,
@@ -14,13 +16,17 @@ import {
   Pencil,
   RotateCcw,
   ShieldCheck,
+  Sparkles,
   X
 } from 'lucide-react';
 import {
   adminImportPreviewCoverUrl,
+  applyAdminImportCoverCandidate,
+  enrichAdminImportMetadata,
   extractAdminImportMetadata,
   updateAdminImportMetadata
 } from '../admin-import-client';
+import { trackArtworkCandidatePreviewUrl } from '../library-assistant-client';
 import { AdminImportDuplicateCheckPanel } from './AdminImportDuplicateCheck';
 
 type AdminImportMetadataPreviewPanelProps = {
@@ -105,9 +111,84 @@ function MetadataPreviewCard({
   const [editing, setEditing] = useState(() => compact && mustReview);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [enrichment, setEnrichment] = useState<ImportMetadataEnrichment | null>(null);
+  const [enriching, setEnriching] = useState(false);
+  const [enrichmentError, setEnrichmentError] = useState<string | null>(null);
+  const [applyingCoverCandidateId, setApplyingCoverCandidateId] = useState<string | null>(null);
   const uncertain = uncertainFieldCount(preview);
   const hasOverrides = FIELDS.some(field => Boolean(preview.overrides[field]));
-  const hasExternalHints = FIELDS.some(field => ['suggested', 'conflict'].includes(preview.fieldStates[field]));
+  const providerHints = FIELDS.some(field => ['suggested', 'conflict'].includes(preview.fieldStates[field]));
+  const hasEnrichmentHints = Boolean(
+    enrichment?.album
+    || enrichment?.albumArtist
+    || enrichment?.coverCandidates.length
+  );
+  const hasExternalHints = providerHints || hasEnrichmentHints;
+
+  useEffect(() => {
+    const title = preview.effective.title?.trim() || preview.provider?.title?.trim() || '';
+    const hasIdentityHint = Boolean(
+      preview.effective.artist?.trim()
+      || preview.provider?.artist?.trim()
+      || preview.provider?.title?.match(/\s[-–—]\s/)
+    );
+    const shouldEnrich = Boolean(
+      title
+      && hasIdentityHint
+      && (
+        !preview.effective.album?.trim()
+        || ['missing', 'fallback', 'suggested'].includes(preview.fieldStates.albumArtist)
+        || !preview.cover.available
+      )
+    );
+    if (!shouldEnrich) {
+      setEnrichment(null);
+      setEnrichmentError(null);
+      setEnriching(false);
+      return;
+    }
+
+    let cancelled = false;
+    setEnriching(true);
+    setEnrichmentError(null);
+    void enrichAdminImportMetadata(job.id)
+      .then(result => {
+        if (!cancelled) setEnrichment(result);
+      })
+      .catch(caught => {
+        if (!cancelled) {
+          setEnrichment(null);
+          setEnrichmentError(caught instanceof Error ? caught.message : 'Não foi possível buscar sugestões no MusicBrainz.');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setEnriching(false);
+      });
+    return () => { cancelled = true; };
+  }, [
+    job.id,
+    preview.cover.available,
+    preview.effective.album,
+    preview.effective.artist,
+    preview.effective.title,
+    preview.fieldStates.albumArtist,
+    preview.provider?.artist,
+    preview.provider?.title
+  ]);
+
+  const applyCoverCandidate = async (candidate: AdminTrackCoverCandidate) => {
+    if (saving || applyingCoverCandidateId) return;
+    setApplyingCoverCandidateId(candidate.id);
+    setEnrichmentError(null);
+    try {
+      const result = await applyAdminImportCoverCandidate(job.id, candidate);
+      onJobUpdated(result.job);
+    } catch (caught) {
+      setEnrichmentError(caught instanceof Error ? caught.message : 'Não foi possível usar a capa sugerida.');
+    } finally {
+      setApplyingCoverCandidateId(null);
+    }
+  };
 
   const save = async () => {
     if (saving) return;
@@ -209,10 +290,14 @@ function MetadataPreviewCard({
         )}
       </div>
 
-      {(!compact || editing) && hasExternalHints && (
+      {(!compact || editing) && (hasExternalHints || enriching) && (
         <div className="admin-import-metadata-notice">
-          <ShieldCheck />
-          <span>Sugestões externas só entram após validação ou ajuste explícito.</span>
+          {enriching ? <LoaderCircle className="is-spinning" /> : <ShieldCheck />}
+          <span>
+            {enriching
+              ? 'Buscando álbum, artista do álbum e capa no MusicBrainz…'
+              : 'Sugestões externas só entram após validação ou ajuste explícito.'}
+          </span>
         </div>
       )}
 
@@ -223,6 +308,16 @@ function MetadataPreviewCard({
               const state = preview.fieldStates[field];
               const providerValue = preview.provider?.[field] ?? null;
               const showProvider = Boolean(providerValue && ['suggested', 'conflict'].includes(state));
+              const musicBrainzValue = field === 'album'
+                ? enrichment?.album ?? null
+                : field === 'albumArtist'
+                  ? enrichment?.albumArtist ?? null
+                  : null;
+              const showMusicBrainz = Boolean(
+                musicBrainzValue
+                && musicBrainzValue.trim()
+                && musicBrainzValue.trim() !== draft[field].trim()
+              );
               const inputId = `admin-import-metadata-${job.id}-${field}`;
               return (
                 <div className={`admin-import-metadata-field is-${state}`} key={field}>
@@ -257,10 +352,61 @@ function MetadataPreviewCard({
                       </button>
                     </div>
                   )}
+                  {showMusicBrainz && musicBrainzValue && (
+                    <div className="admin-import-metadata-field__hint is-musicbrainz">
+                      <small>MusicBrainz sugeriu: {musicBrainzValue}</small>
+                      <button
+                        type="button"
+                        disabled={saving}
+                        onClick={() => {
+                          setDraft(current => ({ ...current, [field]: musicBrainzValue }));
+                          if (error) setError(null);
+                        }}
+                      >
+                        Usar sugestão
+                      </button>
+                    </div>
+                  )}
                 </div>
               );
             })}
           </div>
+
+          {!preview.cover.available && Boolean(enrichment?.coverCandidates.length) && (
+            <div className="admin-import-metadata-artwork">
+              <div className="admin-import-metadata-artwork__heading">
+                <span><Sparkles /> Capas encontradas</span>
+                <small>MusicBrainz · Cover Art Archive</small>
+              </div>
+              <div className="admin-import-metadata-artwork__candidates">
+                {enrichment!.coverCandidates.slice(0, 4).map(candidate => {
+                  const applying = applyingCoverCandidateId === candidate.id;
+                  return (
+                    <button
+                      type="button"
+                      key={candidate.id}
+                      disabled={saving || Boolean(applyingCoverCandidateId)}
+                      onClick={() => void applyCoverCandidate(candidate)}
+                    >
+                      <span className="admin-import-metadata-artwork__image">
+                        <img
+                          src={trackArtworkCandidatePreviewUrl(candidate)}
+                          alt=""
+                          loading="lazy"
+                          decoding="async"
+                        />
+                      </span>
+                      <span className="admin-import-metadata-artwork__text">
+                        <strong>{candidate.album}</strong>
+                        <small>{candidate.artist}</small>
+                        <em>{applying ? 'Aplicando…' : 'Usar capa'}</em>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <div className="admin-import-metadata-card__actions">
             <button type="button" disabled={saving || !hasOverrides} onClick={() => void restore()}>
@@ -277,6 +423,11 @@ function MetadataPreviewCard({
       <AdminImportDuplicateCheckPanel job={job} onJobUpdated={onJobUpdated} />
 
       {error && <div className="my-account-message is-error admin-import-message" role="alert">{error}</div>}
+      {enrichmentError && (
+        <div className="admin-import-metadata-enrichment-error" role="status">
+          {enrichmentError}
+        </div>
+      )}
       {!mustReview && compact && !editing && uncertain > 0 && (
         <small className="admin-import-metadata-card__optional-hint">Campos opcionais podem ser ajustados em “Alterar”.</small>
       )}

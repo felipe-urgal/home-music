@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Readable } from 'node:stream';
 import type { FastifyInstance, FastifyReply } from 'fastify';
-import type { AdminImportJobsResponse } from '@home-music/shared';
+import type { AdminImportJobsResponse, AdminTrackCoverCandidate, Track } from '@home-music/shared';
 import { createAdminExternalProviderBatchManager } from './admin-external-provider-batch-bootstrap.js';
 import { registerAdminExternalProviderBatchRoutes } from './admin-external-provider-batch-routes.js';
 import { AdminImportService } from './admin-import-service.js';
@@ -45,6 +45,7 @@ import {
 import {
   ImportMetadataPreviewError,
   ImportMetadataPreviewManager,
+  type ImportPromotionReview,
   type ImportProviderMetadataHint
 } from './import-metadata-preview.js';
 import {
@@ -61,6 +62,14 @@ import {
   YtDlpProvider
 } from './yt-dlp-provider.js';
 import { YtDlpSearch } from './yt-dlp-search.js';
+import { downloadCoverArtArchiveImage } from './cover-art-archive.js';
+import type { LibraryAssistantProviderGateway } from './library-assistant-provider.js';
+import { findMusicBrainzImportMetadataEnrichment } from './musicbrainz-metadata-analyzer.js';
+import { createMusicBrainzSimpleSearchFetch } from './musicbrainz-simple-search-fetch.js';
+import {
+  CoverOverrideValidationError,
+  inspectCoverOverride
+} from './track-cover-overrides.js';
 
 const defaultImportStagingPath = fileURLToPath(new URL('../../../data/import-staging/', import.meta.url));
 const defaultExternalProviderScratchPath = fileURLToPath(new URL('../../../data/provider-scratch/', import.meta.url));
@@ -76,7 +85,13 @@ type RegisterAdminImportRoutesOptions = {
   automaticFlow?: ImportAutomaticFlowManager | null;
   stagingCleanup?: ImportStagingCleanupManager | null;
   providerMetadata?: (jobId: string) => ImportProviderMetadataHint | null;
-  onPromoted?: (file: PromotedImportFile, jobId: string) => Promise<void>;
+  getProviderGateway?: () => LibraryAssistantProviderGateway | null;
+  fetchImpl?: (input: string | URL, init?: RequestInit) => Promise<Response>;
+  onPromoted?: (
+    file: PromotedImportFile,
+    jobId: string,
+    review: ImportPromotionReview | null
+  ) => Promise<void>;
 };
 
 function sendImportError(reply: FastifyReply, error: unknown) {
@@ -88,6 +103,7 @@ function sendImportError(reply: FastifyReply, error: unknown) {
     || error instanceof ImportMetadataPreviewError
     || error instanceof ImportDuplicateDetectionError
     || error instanceof ImportSafeDestinationError
+    || error instanceof CoverOverrideValidationError
   ) {
     return reply.code(error.statusCode).send({ error: error.message });
   }
@@ -95,6 +111,69 @@ function sendImportError(reply: FastifyReply, error: unknown) {
     return reply.code(409).send({ error: 'Upload cancelado.' });
   }
   throw error;
+}
+
+type ImportArtworkApplyBody = Pick<AdminTrackCoverCandidate, 'sourceUrl' | 'thumbnailUrl'>;
+
+function importCandidateUrls(body: ImportArtworkApplyBody | undefined) {
+  if (!body || typeof body.sourceUrl !== 'string') return null;
+  const sourceUrl = body.sourceUrl.trim();
+  const thumbnailUrl = typeof body.thumbnailUrl === 'string' ? body.thumbnailUrl.trim() : null;
+  if (!sourceUrl || sourceUrl.length > 2_048 || (thumbnailUrl && thumbnailUrl.length > 2_048)) return null;
+  return thumbnailUrl && thumbnailUrl !== sourceUrl ? [thumbnailUrl, sourceUrl] : [sourceUrl];
+}
+
+async function downloadImportArtwork(
+  urls: readonly string[],
+  fetchImpl?: (input: string | URL, init?: RequestInit) => Promise<Response>
+) {
+  let lastError: unknown = null;
+  for (const url of urls) {
+    try {
+      const downloaded = await downloadCoverArtArchiveImage(url, { fetchImpl });
+      const inspected = inspectCoverOverride(downloaded.data, downloaded.contentType);
+      return { data: downloaded.data, contentType: inspected.contentType };
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error('Não foi possível carregar uma capa válida.');
+}
+
+function importTrackForEnrichment(job: ReturnType<ImportJobQueue['get']>): Track | null {
+  const preview = job?.metadataPreview;
+  if (!job || !preview) return null;
+
+  const effectiveTitle = preview.effective.title?.trim() ?? '';
+  const effectiveArtist = preview.effective.artist?.trim() ?? '';
+  const providerTitle = preview.provider?.title?.trim() ?? '';
+  const providerArtist = preview.provider?.artist?.trim() ?? '';
+
+  // Quando o provider entrega algo como "Djavan - Oceano (Ao Vivo)" mas não
+  // separa o artista, mantemos o título combinado para o parser conservador
+  // conseguir recuperar artista + faixa sem exigir que o usuário salve antes.
+  const artist = effectiveArtist || providerArtist || 'Artista desconhecido';
+  const title = effectiveArtist || providerArtist
+    ? effectiveTitle || providerTitle
+    : providerTitle || effectiveTitle;
+  if (!title) return null;
+
+  const album = preview.effective.album?.trim() || preview.provider?.album?.trim() || '';
+  const albumArtist = preview.effective.albumArtist?.trim()
+    || (artist !== 'Artista desconhecido' ? artist : '');
+
+  return {
+    id: job.id,
+    title,
+    artist,
+    album,
+    albumArtist,
+    folder: '',
+    folderPath: '',
+    duration: preview.durationSeconds > 0 ? preview.durationSeconds : null,
+    format: job.mediaDecision?.output.codec ?? '',
+    hasCover: preview.cover.available
+  };
 }
 
 function createDefaultStagingManager() {
@@ -312,6 +391,8 @@ export function registerAdminImportRoutes(
     validatedLookup: jobId => mediaValidation.getValidated(jobId),
     duplicateReady: jobId => duplicateDetection.isReady(jobId),
     afterPromote: options.onPromoted
+      ? (file, jobId) => options.onPromoted!(file, jobId, metadataPreview.getPromotionReview(jobId))
+      : undefined
   });
   const automaticFlow = options.automaticFlow === undefined
     ? new ImportAutomaticFlowManager({
@@ -573,6 +654,59 @@ export function registerAdminImportRoutes(
         return imports.updateMetadataPreview(request.params.id, request.body);
       } catch (error) {
         return sendImportError(reply, error);
+      }
+    }
+  );
+
+  app.post<{ Params: { id: string } }>(
+    '/api/admin/imports/:id/metadata-enrichment',
+    async (request, reply) => {
+      reply.header('Cache-Control', 'private, no-store');
+      const job = queue.get(request.params.id);
+      if (!job) return reply.code(404).send({ error: 'Job de importação não encontrado.' });
+      if (job.status !== 'pending' || !job.metadataPreview) {
+        return reply.code(409).send({ error: 'Gere o preview antes de buscar sugestões externas.' });
+      }
+
+      const track = importTrackForEnrichment(job);
+      if (!track) {
+        return reply.code(409).send({ error: 'Não há informações suficientes para buscar sugestões externas.' });
+      }
+      const providers = options.getProviderGateway?.() ?? null;
+      if (!providers) {
+        return reply.code(503).send({ error: 'Busca externa de metadata ainda não está disponível.' });
+      }
+
+      try {
+        const enrichment = await findMusicBrainzImportMetadataEnrichment(
+          track,
+          providers,
+          { fetchImpl: createMusicBrainzSimpleSearchFetch(options.fetchImpl) }
+        );
+        return { enrichment };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Não foi possível buscar sugestões externas agora.';
+        return reply.code(502).send({ error: message });
+      }
+    }
+  );
+
+  app.post<{ Params: { id: string }; Body: ImportArtworkApplyBody }>(
+    '/api/admin/imports/:id/metadata-enrichment/cover',
+    async (request, reply) => {
+      reply.header('Cache-Control', 'private, no-store');
+      const urls = importCandidateUrls(request.body);
+      if (!urls) return reply.code(400).send({ error: 'Capa externa inválida.' });
+
+      try {
+        const downloaded = await downloadImportArtwork(urls, options.fetchImpl);
+        return metadataPreview.setExternalCover(request.params.id, downloaded);
+      } catch (error) {
+        if (error instanceof ImportMetadataPreviewError || error instanceof CoverOverrideValidationError) {
+          return reply.code(error.statusCode).send({ error: error.message });
+        }
+        const message = error instanceof Error ? error.message : 'Não foi possível carregar a capa externa.';
+        return reply.code(502).send({ error: message });
       }
     }
   );

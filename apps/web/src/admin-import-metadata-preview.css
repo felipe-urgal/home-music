@@ -295,6 +295,128 @@
   opacity: .5;
 }
 
+.admin-import-metadata-field__hint.is-musicbrainz small,
+.admin-import-metadata-field__hint.is-musicbrainz button {
+  color: #8db9d4;
+}
+
+.admin-import-metadata-artwork {
+  display: grid;
+  gap: 8px;
+  padding: 9px;
+  border: 1px solid rgba(101,190,255,.12);
+  border-radius: 9px;
+  background: rgba(36,132,194,.045);
+}
+
+.admin-import-metadata-artwork__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.admin-import-metadata-artwork__heading span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #a9cce1;
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.admin-import-metadata-artwork__heading span svg {
+  width: 11px;
+  height: 11px;
+}
+
+.admin-import-metadata-artwork__heading small {
+  color: #647986;
+  font-size: 7px;
+}
+
+.admin-import-metadata-artwork__candidates {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.admin-import-metadata-artwork__candidates > button {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 7px;
+  padding: 6px;
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 8px;
+  background: rgba(8,16,22,.7);
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.admin-import-metadata-artwork__candidates > button:hover:not(:disabled) {
+  border-color: rgba(101,190,255,.24);
+  background: rgba(36,132,194,.08);
+}
+
+.admin-import-metadata-artwork__candidates > button:disabled {
+  cursor: default;
+  opacity: .55;
+}
+
+.admin-import-metadata-artwork__image {
+  width: 44px;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: 6px;
+  background: #0a1117;
+}
+
+.admin-import-metadata-artwork__image img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.admin-import-metadata-artwork__text {
+  min-width: 0;
+  display: grid;
+  align-content: center;
+  gap: 2px;
+}
+
+.admin-import-metadata-artwork__text strong,
+.admin-import-metadata-artwork__text small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-import-metadata-artwork__text strong {
+  color: #c6d5de;
+  font-size: 8px;
+}
+
+.admin-import-metadata-artwork__text small {
+  color: #738590;
+  font-size: 7px;
+}
+
+.admin-import-metadata-artwork__text em {
+  color: #8db9d4;
+  font-size: 7px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.admin-import-metadata-enrichment-error {
+  color: #9d8585;
+  font-size: 8px;
+  line-height: 1.4;
+}
+
 .admin-import-metadata-card__actions {
   display: flex;
   justify-content: flex-end;
@@ -355,6 +477,10 @@
   .admin-import-metadata-fields {
     grid-template-columns: 1fr;
   }
+
+  .admin-import-metadata-artwork__candidates {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 520px) {
@@ -369,6 +495,10 @@
 
   .admin-import-metadata-cover {
     width: 64px;
+  }
+
+  .admin-import-metadata-artwork__candidates {
+    grid-template-columns: 1fr;
   }
 
   .admin-import-metadata-card__actions {

@@ -307,6 +307,13 @@ export type ImportMetadataPreview = {
 
 export type ImportMetadataPreviewPatch = Partial<ImportMetadataValues>;
 
+export type ImportMetadataEnrichment = {
+  source: 'musicbrainz';
+  album: string | null;
+  albumArtist: string | null;
+  coverCandidates: AdminTrackCoverCandidate[];
+};
+
 export type ImportJob = {
   id: string;
   source: ImportJobSource;
