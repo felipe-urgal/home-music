@@ -18,7 +18,6 @@ import {
   AlertTriangle,
   Check,
   CheckCircle2,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   FileText,
