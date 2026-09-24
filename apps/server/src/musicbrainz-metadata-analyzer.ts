@@ -1,4 +1,4 @@
-import type { AdminTrackCoverCandidate, Track } from '@home-music/shared';
+import type { AdminTrackCoverCandidate, ImportMetadataEnrichment, Track } from '@home-music/shared';
 import {
   LIBRARY_ASSISTANT_CONTRACT_VERSION,
   type LibraryAssistantConfidenceBand,
@@ -696,10 +696,19 @@ function manualTitleAffinity(sourceTitle: string, candidateTitle: string) {
   return null;
 }
 
+const MANUAL_TITLE_CONTEXT_SUFFIX = /\s*[\[(](?:ao\s+vivo|live|ac[uú]stico|unplugged|remaster(?:ed)?|radio\s+edit|edit|vers[aã]o\s+ao\s+vivo)[\])]\s*$/i;
+
 function manualArtworkSearchTitles(title: string) {
   const primary = exactValue(title);
   const values = [primary];
   const seen = new Set([manualComparable(primary)]);
+
+  const withoutContext = exactValue(primary.replace(MANUAL_TITLE_CONTEXT_SUFFIX, ''));
+  const contextKey = manualComparable(withoutContext);
+  if (contextKey && contextKey.length >= 4 && !seen.has(contextKey)) {
+    seen.add(contextKey);
+    values.push(withoutContext);
+  }
 
   for (const rawPart of primary.split(/\s*(?:,|\/|;|\|)\s*|\s+\+\s+/)) {
     const part = exactValue(rawPart);
@@ -707,7 +716,7 @@ function manualArtworkSearchTitles(title: string) {
     if (!key || key.length < 4 || seen.has(key)) continue;
     seen.add(key);
     values.push(part);
-    if (values.length >= 5) break;
+    if (values.length >= 6) break;
   }
 
   return values;
@@ -744,6 +753,82 @@ function rankManualArtworkCandidates(
     })
     .sort((left, right) => right.score - left.score)
     .slice(0, MAX_CANDIDATES);
+}
+
+export async function findMusicBrainzImportMetadataEnrichment(
+  track: Track,
+  providers: LibraryAssistantProviderGateway,
+  options: Pick<AnalyzerOptions, 'fetchImpl' | 'userAgent' | 'getFileContext'> = {}
+): Promise<ImportMetadataEnrichment> {
+  const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
+  const userAgent = options.userAgent ?? MUSICBRAINZ_USER_AGENT;
+  const fileContext = safeFileContext(options.getFileContext?.(track.id));
+  const identity = searchIdentity(track, fileContext);
+  if (!identity) {
+    return { source: 'musicbrainz', album: null, albumArtist: null, coverCandidates: [] };
+  }
+
+  const matchTrack = matchingTrack(track, identity);
+  const searchTitles = manualArtworkSearchTitles(identity.title);
+  let selected: {
+    searchTitle: string;
+    candidate: MusicBrainzRecordingCandidate;
+    release: MusicBrainzRelease;
+  } | null = null;
+
+  for (let index = 0; index < searchTitles.length && !selected; index += 1) {
+    const searchTitle = searchTitles[index];
+    const scopedTerms = index === 0 && identity.useAlbumFilter
+      ? { title: searchTitle, artist: identity.artist, album: identity.album }
+      : null;
+    let recordings = scopedTerms
+      ? await fetchCandidates(scopedTerms, providers, fetchImpl, userAgent)
+      : [];
+    if (!scopedTerms || recordings.length === 0) {
+      recordings = await fetchCandidates(
+        { title: searchTitle, artist: identity.artist },
+        providers,
+        fetchImpl,
+        userAgent
+      );
+    }
+
+    const ranked = rankManualArtworkCandidates(matchTrack, recordings, searchTitle);
+    for (const rankedCandidate of ranked) {
+      const release = bestRelease(matchTrack, rankedCandidate.candidate)
+        ?? rankedCandidate.candidate.releases[0]
+        ?? null;
+      if (!release) continue;
+      selected = {
+        searchTitle,
+        candidate: rankedCandidate.candidate,
+        release
+      };
+      break;
+    }
+  }
+
+  if (!selected) {
+    return { source: 'musicbrainz', album: null, albumArtist: null, coverCandidates: [] };
+  }
+
+  const albumArtist = selected.release.albumArtist ?? selected.candidate.artist;
+  const artworkTrack: Track = {
+    ...matchTrack,
+    title: selected.searchTitle,
+    album: selected.release.title,
+    albumArtist
+  };
+  const coverCandidates = track.hasCover
+    ? []
+    : await findMusicBrainzArtworkCandidates(artworkTrack, providers, options);
+
+  return {
+    source: 'musicbrainz',
+    album: selected.release.title,
+    albumArtist,
+    coverCandidates
+  };
 }
 
 export async function findMusicBrainzArtworkCandidates(
