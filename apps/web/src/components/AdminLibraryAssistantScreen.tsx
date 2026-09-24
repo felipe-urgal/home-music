@@ -237,6 +237,7 @@ function provenanceLabel(source: LibraryAssistantSuggestion['provenance']['sourc
     local: 'Local',
     musicbrainz: 'MusicBrainz',
     'cover-art-archive': 'Cover Art Archive',
+    'itunes-search': 'iTunes',
     lrclib: 'LRCLIB',
     acoustid: 'AcoustID',
     generated: 'Gerada',
