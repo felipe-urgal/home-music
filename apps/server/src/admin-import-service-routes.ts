@@ -142,15 +142,32 @@ async function downloadImportArtwork(
 
 function importTrackForEnrichment(job: ReturnType<ImportJobQueue['get']>): Track | null {
   const preview = job?.metadataPreview;
-  const title = preview?.effective.title?.trim() ?? '';
-  const artist = preview?.effective.artist?.trim() ?? '';
-  if (!job || !preview || !title || !artist) return null;
+  if (!job || !preview) return null;
+
+  const effectiveTitle = preview.effective.title?.trim() ?? '';
+  const effectiveArtist = preview.effective.artist?.trim() ?? '';
+  const providerTitle = preview.provider?.title?.trim() ?? '';
+  const providerArtist = preview.provider?.artist?.trim() ?? '';
+
+  // Quando o provider entrega algo como "Djavan - Oceano (Ao Vivo)" mas não
+  // separa o artista, mantemos o título combinado para o parser conservador
+  // conseguir recuperar artista + faixa sem exigir que o usuário salve antes.
+  const artist = effectiveArtist || providerArtist || 'Artista desconhecido';
+  const title = effectiveArtist || providerArtist
+    ? effectiveTitle || providerTitle
+    : providerTitle || effectiveTitle;
+  if (!title) return null;
+
+  const album = preview.effective.album?.trim() || preview.provider?.album?.trim() || '';
+  const albumArtist = preview.effective.albumArtist?.trim()
+    || (artist !== 'Artista desconhecido' ? artist : '');
+
   return {
     id: job.id,
     title,
     artist,
-    album: preview.effective.album?.trim() ?? '',
-    albumArtist: preview.effective.albumArtist?.trim() || artist,
+    album,
+    albumArtist,
     folder: '',
     folderPath: '',
     duration: preview.durationSeconds > 0 ? preview.durationSeconds : null,
@@ -653,7 +670,7 @@ export function registerAdminImportRoutes(
 
       const track = importTrackForEnrichment(job);
       if (!track) {
-        return reply.code(409).send({ error: 'Título e artista são necessários para buscar sugestões externas.' });
+        return reply.code(409).send({ error: 'Não há informações suficientes para buscar sugestões externas.' });
       }
       const providers = options.getProviderGateway?.() ?? null;
       if (!providers) {
