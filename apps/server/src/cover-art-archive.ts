@@ -49,12 +49,22 @@ function isAllowedArchiveHost(hostname: string) {
     || host.endsWith('.archive.org');
 }
 
-export function normalizeCoverArtArchiveImageUrl(value: unknown) {
+function isAllowedTrustedArtworkHost(hostname: string) {
+  const host = hostname.toLowerCase();
+  return isAllowedArchiveHost(host)
+    || host === 'mzstatic.com'
+    || host.endsWith('.mzstatic.com');
+}
+
+function normalizeArtworkImageUrl(
+  value: unknown,
+  allowedHost: (hostname: string) => boolean
+) {
   if (typeof value !== 'string') return null;
   try {
     const url = new URL(value.trim());
     if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
-    if (!isAllowedArchiveHost(url.hostname)) return null;
+    if (!allowedHost(url.hostname)) return null;
     url.protocol = 'https:';
     url.username = '';
     url.password = '';
@@ -63,6 +73,14 @@ export function normalizeCoverArtArchiveImageUrl(value: unknown) {
   } catch {
     return null;
   }
+}
+
+export function normalizeCoverArtArchiveImageUrl(value: unknown) {
+  return normalizeArtworkImageUrl(value, isAllowedArchiveHost);
+}
+
+export function normalizeTrustedArtworkImageUrl(value: unknown) {
+  return normalizeArtworkImageUrl(value, isAllowedTrustedArtworkHost);
 }
 
 function bestThumbnail(thumbnails: unknown) {
@@ -211,13 +229,14 @@ function normalizeDownloadedContentType(value: string | null) {
   return (value ?? '').split(';', 1)[0].trim().toLowerCase();
 }
 
-export async function downloadCoverArtArchiveImage(
+async function downloadArtworkImage(
   sourceUrl: string,
+  normalizeUrl: (value: unknown) => string | null,
   options: { fetchImpl?: FetchLike; userAgent?: string; signal?: AbortSignal } = {}
 ): Promise<DownloadedCoverArtArchiveImage> {
-  const firstUrl = normalizeCoverArtArchiveImageUrl(sourceUrl);
+  const firstUrl = normalizeUrl(sourceUrl);
   if (!firstUrl) {
-    throw new CoverOverrideValidationError(400, 'URL de capa do Cover Art Archive inválida.');
+    throw new CoverOverrideValidationError(400, 'URL de capa externa inválida.');
   }
 
   const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
@@ -235,7 +254,10 @@ export async function downloadCoverArtArchiveImage(
     });
 
     if (REDIRECT_STATUSES.has(response.status)) {
-      const next = normalizeRedirectLocation(currentUrl, response.headers.get('location'));
+      const location = response.headers.get('location');
+      const next = location
+        ? normalizeUrl(new URL(location, currentUrl).toString())
+        : null;
       if (!next) {
         throw new CoverOverrideValidationError(400, 'Redirect de capa externa não permitido.');
       }
@@ -265,4 +287,18 @@ export async function downloadCoverArtArchiveImage(
   }
 
   throw new CoverOverrideValidationError(400, 'A capa externa excedeu o limite de redirects.');
+}
+
+export function downloadCoverArtArchiveImage(
+  sourceUrl: string,
+  options: { fetchImpl?: FetchLike; userAgent?: string; signal?: AbortSignal } = {}
+) {
+  return downloadArtworkImage(sourceUrl, normalizeCoverArtArchiveImageUrl, options);
+}
+
+export function downloadTrustedArtworkImage(
+  sourceUrl: string,
+  options: { fetchImpl?: FetchLike; userAgent?: string; signal?: AbortSignal } = {}
+) {
+  return downloadArtworkImage(sourceUrl, normalizeTrustedArtworkImageUrl, options);
 }
