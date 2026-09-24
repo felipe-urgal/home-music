@@ -672,9 +672,11 @@ export function AdminLibraryAssistantTabbedScreen({ onBack, onOpenLocalLyrics }:
     }
   }
 
-  const activePercent = activeProgress?.total
-    ? Math.min(100, Math.round((activeProgress.processed / activeProgress.total) * 100))
-    : runIsActive(activeRun) ? 0 : 100;
+  const activePercent = !activeRun
+    ? 0
+    : activeProgress?.total
+      ? Math.min(100, Math.round((activeProgress.processed / activeProgress.total) * 100))
+      : runIsActive(activeRun) ? 0 : 100;
   const selectedSuggestions = selectedRow?.suggestions ?? [];
 
   return (
