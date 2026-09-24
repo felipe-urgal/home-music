@@ -27,11 +27,20 @@ describe('AdminLibraryAssistantScreen operational workflow', () => {
     expect(screen).toMatch(/Aplicar sugestões em Revisão\?/);
   });
 
-  it('preserva capas como decisão individual mesmo quando o lote é confirmado', () => {
+  it('preserva capas como decisão individual e não as anuncia como lote seguro', () => {
     const screen = source();
 
+    expect(screen).toMatch(/function isBatchSafe\(suggestion: LibraryAssistantSuggestion\)/);
+    expect(screen).toMatch(/return canApplyInBatch\(suggestion\) && isSafe\(suggestion\)/);
+    expect(screen).toMatch(/safeSuggestions = useMemo\([\s\S]*isBatchSafe\(item\)/);
+    expect(screen).toMatch(/reviewSuggestions = useMemo\([\s\S]*!isBatchSafe\(item\)/);
     expect(screen).toMatch(/suggestion\.target\.capability === 'artwork'/);
     expect(screen).toMatch(/expectedCurrentValue\(suggestion\)/);
+    expect(screen).toMatch(/decideOne\(suggestion, 'apply'\)/);
+    expect(screen).toContain('Aplicar capa');
+    expect(screen).toMatch(/AssistantSuggestedArtwork/);
+    expect(screen).toMatch(/target\.thumbnailUrl/);
+    expect(screen).toContain('Capas são aplicadas individualmente depois de conferir a imagem sugerida.');
     expect(screen).toMatch(/Capas continuam individuais\./);
   });
 
