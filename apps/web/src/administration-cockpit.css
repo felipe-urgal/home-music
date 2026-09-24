@@ -240,6 +240,44 @@
   line-height: 1.35;
 }
 
+.administration-cockpit-status__metrics article.is-scanner {
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+}
+
+.administration-cockpit-status__scan {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 11px;
+  border: 1px solid rgba(91, 170, 236, 0.26);
+  border-radius: 9px;
+  background: rgba(54, 133, 196, 0.08);
+  color: #b8d9f1;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.administration-cockpit-status__scan:hover:not(:disabled) {
+  border-color: rgba(91, 170, 236, 0.42);
+  background: rgba(54, 133, 196, 0.13);
+  color: #e7f3fb;
+}
+
+.administration-cockpit-status__scan:disabled {
+  opacity: 0.48;
+  cursor: default;
+}
+
+.administration-cockpit-status__scan svg {
+  width: 14px;
+  height: 14px;
+}
+
 .administration-cockpit-attention,
 .administration-cockpit-section {
   display: grid;
@@ -586,6 +624,7 @@
 }
 
 .administration-cockpit__back:focus-visible,
+.administration-cockpit-status__scan:focus-visible,
 .administration-cockpit-section__link:focus-visible,
 .administration-cockpit-attention__items button:focus-visible,
 .administration-cockpit-primary__grid > button:focus-visible,
@@ -670,6 +709,16 @@
     border-left: 0;
     border-top: 1px solid rgba(255,255,255,0.06);
     padding: 10px 0;
+  }
+
+  .administration-cockpit-status__metrics article.is-scanner {
+    grid-template-columns: 42px minmax(0, 1fr);
+  }
+
+  .administration-cockpit-status__scan {
+    grid-column: 2;
+    justify-self: start;
+    margin-top: 4px;
   }
 
   .administration-cockpit-status__metrics article:first-child {
