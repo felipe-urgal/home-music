@@ -1,4 +1,4 @@
-import type { AdminTrackCoverCandidate, ImportMetadataEnrichment, Track } from '@home-music/shared';
+import type { AdminTrackCoverCandidate, AdminTrackMetadataSuggestion, ImportMetadataEnrichment, Track } from '@home-music/shared';
 import {
   LIBRARY_ASSISTANT_CONTRACT_VERSION,
   type LibraryAssistantConfidenceBand,
@@ -955,7 +955,8 @@ async function fetchItunesArtworkCandidates(
 function rankItunesArtworkCandidates(
   track: Track,
   candidates: ITunesArtworkCandidate[],
-  searchTitle: string
+  searchTitle: string,
+  options: { allowDifferentArtist?: boolean } = {}
 ) {
   return candidates
     .flatMap(candidate => {
@@ -965,7 +966,7 @@ function rankItunesArtworkCandidates(
       const artistAffinity = manualArtistAffinity(
         track.artist,
         candidate.artist,
-        !reliableMetadata(track.artist)
+        options.allowDifferentArtist === true || !reliableMetadata(track.artist)
       );
       if (!artistAffinity) return [];
       let score = titleAffinity + artistAffinity.score;
@@ -1036,6 +1037,114 @@ async function findItunesArtworkFallback(
   }
 
   return results;
+}
+
+export async function findTrackMetadataSuggestion(
+  track: Track,
+  providers: LibraryAssistantProviderGateway,
+  options: Pick<AnalyzerOptions, 'fetchImpl' | 'userAgent' | 'getFileContext'> = {}
+): Promise<AdminTrackMetadataSuggestion | null> {
+  const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
+  const userAgent = options.userAgent ?? MUSICBRAINZ_USER_AGENT;
+  const fileContext = safeFileContext(options.getFileContext?.(track.id));
+  const identity = searchIdentity(track, fileContext);
+  const parsedFile = fileContext ? parseArtistTitleFromFile(fileContext.fileName) : null;
+
+  const searchTitle = identity?.title
+    ?? (reliableMetadata(track.title) ? exactValue(track.title) : parsedFile?.title ?? '');
+  const searchArtist = identity?.artist
+    ?? (reliableMetadata(track.artist) ? exactValue(track.artist) : parsedFile?.artist ?? '');
+  if (!searchTitle) return null;
+
+  const matchTrack = identity
+    ? matchingTrack(track, identity)
+    : {
+        ...track,
+        title: searchTitle,
+        artist: searchArtist || track.artist
+      };
+  const searchTitles = manualArtworkSearchTitles(searchTitle);
+
+  const fromMusicBrainz = async (
+    title: string,
+    artist: string | null,
+    allowDifferentArtist: boolean
+  ): Promise<AdminTrackMetadataSuggestion | null> => {
+    const recordings = await fetchCandidates(
+      artist ? { title, artist } : { title },
+      providers,
+      fetchImpl,
+      userAgent
+    );
+    const ranked = rankManualArtworkCandidates(matchTrack, recordings, title, {
+      allowDifferentArtist
+    });
+    for (const rankedCandidate of ranked) {
+      const release = bestRelease(matchTrack, rankedCandidate.candidate)
+        ?? rankedCandidate.candidate.releases[0]
+        ?? null;
+      if (!release) continue;
+      return {
+        source: 'musicbrainz',
+        artist: rankedCandidate.candidate.artist,
+        album: release.title,
+        albumArtist: release.albumArtist ?? rankedCandidate.candidate.artist
+      };
+    }
+    return null;
+  };
+
+  if (searchArtist) {
+    for (const title of searchTitles) {
+      const suggestion = await fromMusicBrainz(title, searchArtist, false);
+      if (suggestion) return suggestion;
+    }
+  }
+
+  for (const title of searchTitles) {
+    const suggestion = await fromMusicBrainz(title, null, true);
+    if (suggestion) return suggestion;
+  }
+
+  for (const title of searchTitles.slice(0, 4)) {
+    for (const country of ITUNES_SEARCH_COUNTRIES) {
+      const attempts = searchArtist
+        ? [
+            { artist: searchArtist, allowDifferentArtist: false },
+            { artist: undefined, allowDifferentArtist: true }
+          ]
+        : [{ artist: undefined, allowDifferentArtist: true }];
+
+      for (const attempt of attempts) {
+        let candidates: ITunesArtworkCandidate[];
+        try {
+          candidates = await fetchItunesArtworkCandidates(
+            attempt.artist
+              ? { title, artist: attempt.artist, country }
+              : { title, country },
+            providers,
+            fetchImpl,
+            userAgent
+          );
+        } catch {
+          continue;
+        }
+
+        const best = rankItunesArtworkCandidates(matchTrack, candidates, title, {
+          allowDifferentArtist: attempt.allowDifferentArtist
+        })[0];
+        if (!best) continue;
+        return {
+          source: 'itunes-search',
+          artist: best.candidate.artist,
+          album: best.candidate.album,
+          albumArtist: best.candidate.albumArtist
+        };
+      }
+    }
+  }
+
+  return null;
 }
 
 export async function findMusicBrainzImportMetadataEnrichment(
