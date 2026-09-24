@@ -284,12 +284,27 @@ export class LibraryAssistantReviewService {
     ) return null;
 
     const target = record.suggestion.target;
-    const downloaded = await this.downloadArtwork(target.thumbnailUrl ?? target.sourceUrl);
-    const inspected = inspectCoverOverride(downloaded.data, downloaded.contentType);
-    return {
-      ...downloaded,
-      contentType: inspected.contentType
-    };
+    const urls = target.thumbnailUrl && target.thumbnailUrl !== target.sourceUrl
+      ? [target.thumbnailUrl, target.sourceUrl]
+      : [target.sourceUrl];
+    let lastError: unknown = null;
+
+    for (const url of urls) {
+      try {
+        const downloaded = await this.downloadArtwork(url);
+        const inspected = inspectCoverOverride(downloaded.data, downloaded.contentType);
+        return {
+          ...downloaded,
+          contentType: inspected.contentType
+        };
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    throw lastError instanceof Error
+      ? lastError
+      : new Error('Não foi possível carregar a prévia da capa.');
   }
 
   resetOpenSuggestions() {
