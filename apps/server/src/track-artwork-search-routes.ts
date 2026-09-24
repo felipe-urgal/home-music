@@ -7,7 +7,7 @@ import type {
   Track
 } from '@home-music/shared';
 import {
-  downloadCoverArtArchiveImage,
+  downloadTrustedArtworkImage,
   type DownloadedCoverArtArchiveImage
 } from './cover-art-archive.js';
 import type { LibraryAssistantProviderGateway } from './library-assistant-provider.js';
@@ -73,7 +73,7 @@ async function downloadValidatedArtwork(
   let lastError: unknown = null;
   for (const url of urls) {
     try {
-      const downloaded = await downloadCoverArtArchiveImage(url, { fetchImpl });
+      const downloaded = await downloadTrustedArtworkImage(url, { fetchImpl });
       const inspected = inspectCoverOverride(downloaded.data, downloaded.contentType);
       return { ...downloaded, contentType: inspected.contentType };
     } catch (error) {
