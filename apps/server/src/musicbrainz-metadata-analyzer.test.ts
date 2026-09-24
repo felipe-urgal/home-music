@@ -10,6 +10,7 @@ import {
   createMusicBrainzMetadataAnalyzer,
   findMusicBrainzArtworkCandidates,
   findMusicBrainzImportMetadataEnrichment,
+  findTrackMetadataSuggestion,
   needsMusicBrainzEnrichment,
   normalizeMusicBrainzRecordingSearch,
   rankMusicBrainzCandidate
@@ -677,6 +678,135 @@ test('busca manual remove contexto de mashup e usa iTunes quando MusicBrainz nã
   assert.match(candidates[0].sourceUrl, /1200x1200bb\.jpg$/);
 });
 
+
+test('melhorar metadados sugere crédito completo, álbum e artista do álbum', async () => {
+  const fetchImpl = async (input: string | URL) => {
+    const url = new URL(String(input));
+    assert.equal(url.origin, 'https://musicbrainz.org');
+    return response([recording({
+      id: 'recording-maracatu-metadata',
+      title: 'Maracatu Atômico',
+      'artist-credit': [{
+        name: 'Chico Science & Nação Zumbi',
+        artist: { id: 'artist-csnz', name: 'Chico Science & Nação Zumbi' }
+      }],
+      releases: [{
+        id: 'release-afrociberdelia',
+        title: 'Afrociberdelia',
+        'release-group': { id: 'group-afrociberdelia' },
+        'artist-credit': [{
+          name: 'Chico Science & Nação Zumbi',
+          artist: { id: 'artist-csnz', name: 'Chico Science & Nação Zumbi' }
+        }]
+      }]
+    })]);
+  };
+
+  const suggestion = await findTrackMetadataSuggestion(
+    track({
+      title: 'Maracatu Atômico',
+      artist: 'Chico Science',
+      album: 'Saraiva Mega Music Hall',
+      albumArtist: 'Various Artists'
+    }),
+    gateway(),
+    { fetchImpl }
+  );
+
+  assert.deepEqual(suggestion, {
+    source: 'musicbrainz',
+    artist: 'Chico Science & Nação Zumbi',
+    album: 'Afrociberdelia',
+    albumArtist: 'Chico Science & Nação Zumbi'
+  });
+});
+
+test('melhorar metadados corrige artista divergente via busca manual por título', async () => {
+  const queries: string[] = [];
+  const fetchImpl = async (input: string | URL) => {
+    const url = new URL(String(input));
+    assert.equal(url.origin, 'https://musicbrainz.org');
+    const query = url.searchParams.get('query') ?? '';
+    queries.push(query);
+    if (/artist:"Rita Lee"/.test(query)) return response([]);
+    return response([recording({
+      id: 'recording-menina-metadata',
+      title: 'Menina Veneno',
+      'artist-credit': [{
+        name: 'Ritchie',
+        artist: { id: 'artist-ritchie', name: 'Ritchie' }
+      }],
+      releases: [{
+        id: 'release-voo-coracao',
+        title: 'Vôo de Coração',
+        'release-group': { id: 'group-voo-coracao' },
+        'artist-credit': [{
+          name: 'Ritchie',
+          artist: { id: 'artist-ritchie', name: 'Ritchie' }
+        }]
+      }]
+    })]);
+  };
+
+  const suggestion = await findTrackMetadataSuggestion(
+    track({
+      title: 'Menina Veneno',
+      artist: 'Rita Lee',
+      album: 'Álbum desconhecido',
+      albumArtist: 'Artista desconhecido'
+    }),
+    gateway(),
+    { fetchImpl }
+  );
+
+  assert.ok(queries.some(query => /artist:"Rita Lee"/.test(query)));
+  assert.ok(queries.some(query => !/artist:/.test(query)));
+  assert.equal(suggestion?.artist, 'Ritchie');
+  assert.equal(suggestion?.album, 'Vôo de Coração');
+  assert.equal(suggestion?.albumArtist, 'Ritchie');
+});
+
+test('melhorar metadados usa iTunes como fallback quando MusicBrainz não encontra release', async () => {
+  const fetchImpl = async (input: string | URL) => {
+    const url = new URL(String(input));
+    if (url.origin === 'https://musicbrainz.org') return response([]);
+    assert.equal(url.origin, 'https://itunes.apple.com');
+    return new Response(JSON.stringify({
+      resultCount: 1,
+      results: [{
+        trackId: 777,
+        trackName: 'O Mar pro Sonhador',
+        artistName: 'Maskavo',
+        collectionName: 'O Mar pro Sonhador - Single',
+        collectionArtistName: 'Maskavo',
+        trackTimeMillis: 220000,
+        artworkUrl100: 'https://is1-ssl.mzstatic.com/image/thumb/Music/test/100x100bb.jpg'
+      }]
+    }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' }
+    });
+  };
+
+  const suggestion = await findTrackMetadataSuggestion(
+    track({
+      title: 'O Mar pro Sonhador',
+      artist: 'Maskavo',
+      album: 'Álbum desconhecido',
+      albumArtist: 'Artista desconhecido',
+      duration: 220
+    }),
+    gateway(),
+    { fetchImpl }
+  );
+
+  assert.deepEqual(suggestion, {
+    source: 'itunes-search',
+    artist: 'Maskavo',
+    album: 'O Mar pro Sonhador - Single',
+    albumArtist: 'Maskavo'
+  });
+});
 
 test('enriquecimento da importação resolve contexto ao vivo e retorna álbum, artista do álbum e capa', async () => {
   const queries: string[] = [];
