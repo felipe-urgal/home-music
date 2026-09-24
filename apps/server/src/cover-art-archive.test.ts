@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import type { LibraryAssistantProviderGateway } from './library-assistant-provider.js';
 import {
   downloadCoverArtArchiveImage,
+  findCoverArtArchiveFrontCover,
+  findCoverArtArchiveReleaseGroupFrontCover,
   normalizeCoverArtArchiveImageUrl,
   normalizeCoverArtArchiveRelease
 } from './cover-art-archive.js';
@@ -11,6 +14,18 @@ const PNG_1X1 = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
   'base64'
 );
+
+function providers() {
+  return {
+    async query(query: any) {
+      const raw = await query.execute({
+        signal: new AbortController().signal,
+        userAgent: 'HomeMusic/Test'
+      });
+      return { value: query.normalize(raw), cache: 'miss' };
+    }
+  } as unknown as LibraryAssistantProviderGateway;
+}
 
 test('normaliza somente URLs do Cover Art Archive/Archive.org', () => {
   assert.equal(
@@ -44,6 +59,115 @@ test('extrai a primeira capa frontal válida do payload do CAA', () => {
   assert.equal(cover?.id, 'front-1');
   assert.equal(cover?.imageUrl, 'https://coverartarchive.org/release/a/front');
   assert.equal(cover?.thumbnailUrl, 'https://coverartarchive.org/release/a/500');
+});
+
+test('lookup de release-group segue redirect permitido até o JSON do Archive.org', async () => {
+  const calls: string[] = [];
+  const fetchImpl = async (input: string | URL, init?: RequestInit) => {
+    const url = input.toString();
+    calls.push(url);
+    assert.equal(init?.redirect, 'manual');
+
+    if (calls.length === 1) {
+      return new Response(null, {
+        status: 307,
+        headers: { location: 'https://archive.org/download/mbid-release/index.json' }
+      });
+    }
+    return new Response(JSON.stringify({
+      images: [{
+        id: 'front-1',
+        front: true,
+        image: 'https://coverartarchive.org/release/release-1/front.jpg',
+        thumbnails: {}
+      }]
+    }), { status: 200 });
+  };
+
+  const cover = await findCoverArtArchiveReleaseGroupFrontCover({
+    releaseGroupId: 'group-1',
+    providers: providers(),
+    fetchImpl
+  });
+
+  assert.equal(cover?.id, 'front-1');
+  assert.deepEqual(calls, [
+    'https://coverartarchive.org/release-group/group-1',
+    'https://archive.org/download/mbid-release/index.json'
+  ]);
+});
+
+test('lookup de release segue redirect permitido até o JSON do Archive.org', async () => {
+  const calls: string[] = [];
+  const fetchImpl = async (input: string | URL) => {
+    const url = input.toString();
+    calls.push(url);
+    if (calls.length === 1) {
+      return new Response(null, {
+        status: 307,
+        headers: { location: 'https://dn.example.archive.org/0/items/mbid-release/index.json' }
+      });
+    }
+    return new Response(JSON.stringify({
+      images: [{
+        id: 'front-2',
+        front: true,
+        image: 'https://coverartarchive.org/release/release-1/front.jpg',
+        thumbnails: {}
+      }]
+    }), { status: 200 });
+  };
+
+  const cover = await findCoverArtArchiveFrontCover({
+    releaseId: 'release-1',
+    providers: providers(),
+    fetchImpl
+  });
+
+  assert.equal(cover?.id, 'front-2');
+  assert.equal(calls.length, 2);
+});
+
+test('lookup de artwork bloqueia redirect externo ou sem Location', async () => {
+  for (const location of ['https://example.com/index.json', null]) {
+    const fetchImpl = async () => new Response(null, {
+      status: 307,
+      headers: location ? { location } : undefined
+    });
+
+    await assert.rejects(
+      findCoverArtArchiveReleaseGroupFrontCover({
+        releaseGroupId: 'group-1',
+        providers: providers(),
+        fetchImpl
+      }),
+      (error: unknown) => (
+        error instanceof Error
+        && (error as Error & { code?: string }).code === 'provider-request-failed'
+      )
+    );
+  }
+});
+
+test('lookup de artwork limita cadeias de redirects', async () => {
+  let calls = 0;
+  const fetchImpl = async () => {
+    calls += 1;
+    return new Response(null, {
+      status: 307,
+      headers: { location: 'https://archive.org/download/mbid-release/index.json' }
+    });
+  };
+
+  await assert.rejects(
+    findCoverArtArchiveReleaseGroupFrontCover({
+      releaseGroupId: 'group-1',
+      providers: providers(),
+      fetchImpl
+    }),
+    /excedeu o limite de redirects/
+  );
+  assert.equal(calls, 5);
 });
 
 test('download de capa segue apenas redirects permitidos e preserva bytes para validação central', async () => {
