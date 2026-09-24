@@ -2,6 +2,7 @@ import type {
   AdminTrackCoverCandidate,
   AdminTrackCoverCandidatesResponse,
   AdminTrackCoverResponse,
+  AdminTrackMetadataSuggestionResponse,
   EditableTrackMetadata
 } from '@home-music/shared';
 import type {
@@ -55,6 +56,25 @@ export type LibraryAssistantFingerprintResult = {
 async function responseError(response: Response) {
   const payload = await response.json().catch(() => null) as { error?: string } | null;
   return payload?.error || `Falha HTTP ${response.status}`;
+}
+
+export async function searchTrackMetadataSuggestion(
+  trackId: string,
+  metadata: EditableTrackMetadata
+) {
+  const response = await apiFetch(
+    `/api/admin/library-assistant/tracks/${encodeURIComponent(trackId)}/metadata-suggestion`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Home-Music-Request': '1'
+      },
+      body: JSON.stringify(metadata)
+    }
+  );
+  if (!response.ok) throw new Error(await responseError(response));
+  return response.json() as Promise<AdminTrackMetadataSuggestionResponse>;
 }
 
 export async function searchTrackArtworkCandidates(
