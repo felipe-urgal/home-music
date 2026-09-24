@@ -53,6 +53,8 @@ export type TvRemoteEvent =
 
 export const PERMANENT_DELETE_CONFIRMATION = 'EXCLUIR PERMANENTEMENTE' as const;
 
+export const MAX_TRACK_COVER_BYTES = 8 * 1024 * 1024;
+
 export type AuthenticatedUser = {
   id: string;
   username: string;
