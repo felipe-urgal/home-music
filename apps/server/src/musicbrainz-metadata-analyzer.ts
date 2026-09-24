@@ -1,4 +1,4 @@
-import type { Track } from '@home-music/shared';
+import type { AdminTrackCoverCandidate, Track } from '@home-music/shared';
 import {
   LIBRARY_ASSISTANT_CONTRACT_VERSION,
   type LibraryAssistantConfidenceBand,
@@ -666,6 +666,100 @@ async function findArtworkForRelease(
     releaseGroupId: release.releaseGroupId,
     ...options
   });
+}
+
+export async function findMusicBrainzArtworkCandidates(
+  track: Track,
+  providers: LibraryAssistantProviderGateway,
+  options: Pick<AnalyzerOptions, 'fetchImpl' | 'userAgent' | 'getFileContext'> = {}
+): Promise<AdminTrackCoverCandidate[]> {
+  const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
+  const userAgent = options.userAgent ?? MUSICBRAINZ_USER_AGENT;
+  const fileContext = safeFileContext(options.getFileContext?.(track.id));
+  const identity = searchIdentity(track, fileContext);
+  if (!identity) return [];
+
+  const matchTrack = matchingTrack(track, identity);
+  const scopedTerms = identity.useAlbumFilter
+    ? { title: identity.title, artist: identity.artist, album: identity.album }
+    : null;
+  let recordings = scopedTerms
+    ? await fetchCandidates(scopedTerms, providers, fetchImpl, userAgent)
+    : [];
+  if (!scopedTerms || recordings.length === 0) {
+    recordings = await fetchCandidates(
+      { title: identity.title, artist: identity.artist },
+      providers,
+      fetchImpl,
+      userAgent
+    );
+  }
+
+  const ranked = rankCandidates(matchTrack, recordings)
+    .filter(candidate => !candidate.blockingConflict);
+  if (ranked.length === 0) return [];
+
+  const releaseCandidates: Array<{
+    release: MusicBrainzRelease;
+    artist: string;
+    score: number;
+  }> = [];
+  for (const candidate of ranked) {
+    const matchingReleases = identity.useAlbumFilter
+      ? candidate.candidate.releases.filter(release => compareText(identity.album, release.title) !== 'different')
+      : candidate.candidate.releases;
+    const releases = matchingReleases.length > 0
+      ? matchingReleases
+      : candidate.release
+        ? [candidate.release]
+        : [];
+    for (const release of releases) {
+      releaseCandidates.push({
+        release,
+        artist: release.albumArtist ?? candidate.candidate.artist,
+        score: candidate.score
+      });
+    }
+  }
+
+  releaseCandidates.sort((left, right) => right.score - left.score);
+  const seenReleases = new Set<string>();
+  const seenArtwork = new Set<string>();
+  const results: AdminTrackCoverCandidate[] = [];
+  let attempts = 0;
+
+  for (const candidate of releaseCandidates) {
+    if (results.length >= 8 || attempts >= 12) break;
+    if (seenReleases.has(candidate.release.id)) continue;
+    seenReleases.add(candidate.release.id);
+    attempts += 1;
+
+    try {
+      const artwork = await findArtworkForRelease(candidate.release, {
+        providers,
+        fetchImpl,
+        userAgent
+      });
+      if (!artwork) continue;
+      const artworkKey = artwork.id || artwork.imageUrl;
+      if (seenArtwork.has(artworkKey)) continue;
+      seenArtwork.add(artworkKey);
+      results.push({
+        id: `cover-art-archive:${candidate.release.id}:${artwork.id}`,
+        label: `Capa frontal — ${candidate.release.title}`,
+        album: candidate.release.title,
+        artist: candidate.artist,
+        sourceUrl: artwork.imageUrl,
+        thumbnailUrl: artwork.thumbnailUrl,
+        musicBrainzReleaseId: candidate.release.id,
+        musicBrainzReleaseGroupId: candidate.release.releaseGroupId
+      });
+    } catch {
+      // Uma edição sem artwork válido não impede mostrar outras capas encontradas.
+    }
+  }
+
+  return results;
 }
 
 export function createMusicBrainzMetadataAnalyzer(options: AnalyzerOptions = {}): LibraryAssistantAnalyzer {
