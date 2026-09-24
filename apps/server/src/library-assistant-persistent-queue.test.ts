@@ -134,6 +134,73 @@ test('processing item and run resume after service restart', async () => {
   });
 });
 
+test('fila expõe estado agregado por faixa para a interface do assistente', async () => {
+  await withDatabase([indexedTrack('track-1'), indexedTrack('track-2')], databasePath => {
+    const store = new LibraryAssistantStore(databasePath);
+    const workQueue = new LibraryAssistantPersistentQueue(databasePath);
+    store.createRun({
+      id: 'run-track-states',
+      capability: 'metadata',
+      libraryRevision: 1,
+      createdAt: '2026-09-24T10:00:00.000Z'
+    });
+    store.startRun('run-track-states', '2026-09-24T10:00:01.000Z');
+    workQueue.enqueue(
+      'run-track-states',
+      ['metadata-test'],
+      ['track-1', 'track-2'],
+      '2026-09-24T10:00:01.000Z'
+    );
+
+    const first = workQueue.claimNext(
+      'run-track-states',
+      Date.parse('2026-09-24T10:00:02.000Z'),
+      '2026-09-24T10:00:02.000Z'
+    );
+    assert.equal(first?.trackId, 'track-1');
+    workQueue.markNoMatch(first!, '2026-09-24T10:00:03.000Z');
+
+    const second = workQueue.claimNext(
+      'run-track-states',
+      Date.parse('2026-09-24T10:00:04.000Z'),
+      '2026-09-24T10:00:04.000Z'
+    );
+    assert.equal(second?.trackId, 'track-2');
+    workQueue.markFailed(second!, {
+      code: 'provider-request-failed',
+      message: 'Provider indisponível.',
+      action: 'Tente novamente.'
+    }, '2026-09-24T10:00:05.000Z');
+
+    assert.deepEqual(workQueue.listTrackStates('run-track-states'), [
+      {
+        trackId: 'track-1',
+        status: 'no_match',
+        attempts: 1,
+        retryAt: null,
+        error: null,
+        updatedAt: '2026-09-24T10:00:03.000Z'
+      },
+      {
+        trackId: 'track-2',
+        status: 'failed',
+        attempts: 1,
+        retryAt: null,
+        error: {
+          code: 'provider-request-failed',
+          message: 'Provider indisponível.',
+          action: 'Tente novamente.'
+        },
+        updatedAt: '2026-09-24T10:00:05.000Z'
+      }
+    ]);
+
+    workQueue.close();
+    store.close();
+  });
+});
+
+
 test('transient failure defers one track while the worker processes the next one', async () => {
   const indexed = [indexedTrack('track-1'), indexedTrack('track-2')];
   await withDatabase(indexed, async databasePath => {
