@@ -448,7 +448,7 @@ export type AdminTrackCoverCandidate = {
   artist: string;
   sourceUrl: string;
   thumbnailUrl: string | null;
-  musicBrainzReleaseId: string;
+  musicBrainzReleaseId: string | null;
   musicBrainzReleaseGroupId: string | null;
 };
 
