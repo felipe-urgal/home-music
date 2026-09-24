@@ -451,9 +451,18 @@ export function AdminTrackMetadataScreen({
     try {
       const response = await searchTrackMetadataSuggestion(editingTrackId, draft);
       if (editorRequestRef.current !== requestId) return;
-      setMetadataSuggestion(response.suggestion);
+      const suggestion = response.suggestion;
+      const hasImprovement = Boolean(
+        suggestion
+        && (
+          suggestion.artist !== draft.artist
+          || suggestion.album !== draft.album
+          || suggestion.albumArtist !== draft.albumArtist
+        )
+      );
+      setMetadataSuggestion(hasImprovement ? suggestion : null);
       setMetadataSuggestionMessage(
-        response.suggestion
+        hasImprovement
           ? null
           : 'Nenhuma melhoria de metadados encontrada para esta faixa.'
       );
@@ -485,6 +494,8 @@ export function AdminTrackMetadataScreen({
   function commitMetadata(updated: AdminTrackMetadataResponse, message: string) {
     setMetadata(updated);
     setDraft(updated.effective);
+    setMetadataSuggestion(null);
+    setMetadataSuggestionMessage(null);
     setTracks(items => items.map(track => applyEffectiveMetadata(track, updated)));
     setFeedback(message);
     setEditorFeedback({ message, error: false });
