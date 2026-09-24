@@ -206,6 +206,15 @@ test('Library Assistant API is admin-only and lifecycle/review mutations require
     });
     assert.equal(progress.headers['cache-control'], 'private, no-store');
 
+    const trackStates = await app.inject({
+      method: 'GET',
+      url: '/api/admin/library-assistant/runs/assistant-run-1/tracks',
+      headers: { cookie: cookie(adminToken) }
+    });
+    assert.equal(trackStates.statusCode, 200);
+    assert.deepEqual(trackStates.json(), { tracks: [] });
+    assert.equal(trackStates.headers['cache-control'], 'private, no-store');
+
     const decided = await app.inject({
       method: 'POST',
       url: '/api/admin/library-assistant/suggestions/suggestion-1/decision',
@@ -273,6 +282,7 @@ test('Library Assistant API validates capability, identifiers, filters and revie
       '/api/admin/library-assistant/runs?limit=201',
       '/api/admin/library-assistant/runs/assistant-run-1/suggestions?status=unknown',
       '/api/admin/library-assistant/runs/assistant-run-1/suggestions?limit=5001',
+      '/api/admin/library-assistant/runs/assistant-run-1/tracks?limit=10001',
       '/api/admin/library-assistant/runs/%2Fsecret',
       '/api/admin/library-assistant/runs/%2Fsecret/progress',
       '/api/admin/library-assistant/review?limit=0',
