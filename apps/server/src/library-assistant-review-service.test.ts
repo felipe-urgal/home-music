@@ -433,6 +433,39 @@ test('artwork preview uses the same-origin proxy source and validates downloaded
   });
 });
 
+test('artwork apply prefers the validated thumbnail instead of downloading an oversized original', async () => {
+  const thumbnailUrl = 'https://coverartarchive.org/release/release-1/500';
+  const sourceUrl = 'https://coverartarchive.org/release/release-1/front';
+  const requested: string[] = [];
+
+  await withReview(async ({ assistant, cover, review, revisionChanges }) => {
+    seedArtworkSuggestion(assistant, { thumbnailUrl, sourceUrl });
+
+    const applied = await review.decide(decision({
+      runId: 'run-artwork',
+      suggestionId: 'suggestion-artwork',
+      expectedCurrentValue: ''
+    }));
+
+    assert.equal(applied.outcome, 'applied');
+    assert.deepEqual(requested, [thumbnailUrl]);
+    assert.equal(cover.getStatus('track-2')?.override?.contentType, 'image/png');
+    assert.equal(revisionChanges(), 1);
+  }, {
+    async downloadArtwork(url) {
+      requested.push(url);
+      if (url === sourceUrl) {
+        throw Object.assign(new Error('A capa deve ter no máximo 8 MiB.'), { statusCode: 413 });
+      }
+      return {
+        data: PNG_1X1,
+        contentType: 'image/png',
+        finalUrl: url
+      };
+    }
+  });
+});
+
 test('confirmed review batch still keeps artwork apply individual-only', async () => {
   await withReview(async ({ assistant, review }) => {
     seedArtworkSuggestion(assistant);
