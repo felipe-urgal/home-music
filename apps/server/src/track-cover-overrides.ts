@@ -2,14 +2,14 @@ import { createHash } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import type { AdminTrackCoverResponse, Track } from '@home-music/shared';
+import { MAX_TRACK_COVER_BYTES, type AdminTrackCoverResponse, type Track } from '@home-music/shared';
 
 export const COVER_OVERRIDE_CONTENT_TYPES = [
   'image/jpeg',
   'image/png',
   'image/webp'
 ] as const;
-export const MAX_COVER_OVERRIDE_BYTES = 8 * 1024 * 1024;
+export const MAX_COVER_OVERRIDE_BYTES = MAX_TRACK_COVER_BYTES;
 export const MAX_COVER_DIMENSION = 4096;
 export const MAX_COVER_PIXELS = 16 * 1024 * 1024;
 
