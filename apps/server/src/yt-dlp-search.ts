@@ -60,9 +60,19 @@ function cleanText(value: unknown, maxLength = 500) {
 }
 
 export function normalizeYtDlpSearchQuery(value: unknown) {
-  const clean = cleanText(value, MAX_QUERY_LENGTH);
-  if (!clean || clean.length < 2) {
+  if (typeof value !== 'string') {
     throw new ExternalProviderError('invalid_input', 'Digite pelo menos 2 caracteres para buscar.', 400);
+  }
+  const clean = value
+    .normalize('NFKC')
+    .replace(/[\u0000-\u001f\u007f]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (clean.length < 2) {
+    throw new ExternalProviderError('invalid_input', 'Digite pelo menos 2 caracteres para buscar.', 400);
+  }
+  if (clean.length > MAX_QUERY_LENGTH) {
+    throw new ExternalProviderError('invalid_input', 'A busca deve ter no máximo 200 caracteres.', 400);
   }
   return clean;
 }
