@@ -3,6 +3,7 @@ import type {
   AdminLibraryAssistantRunProgressResponse,
   AdminLibraryAssistantRunResponse,
   AdminLibraryAssistantRunsResponse,
+  AdminLibraryAssistantRunTracksResponse,
   AdminLibraryAssistantSuggestionsResponse,
   LibraryAssistantCapability,
   LibraryAssistantMetadataField,
@@ -173,6 +174,26 @@ export function registerLibraryAssistantRoutes(
             }
           } : {})
         }
+      };
+      return response;
+    }
+  );
+
+  app.get<{
+    Params: { id: string };
+    Querystring: { limit?: string };
+  }>(
+    '/api/admin/library-assistant/runs/:id/tracks',
+    async (request, reply) => {
+      reply.header('Cache-Control', 'private, no-store');
+      if (!validRunId(request.params.id)) return reply.code(400).send({ error: 'Run inválido.' });
+      const run = assistant.getRun(request.params.id);
+      if (!run) return reply.code(404).send({ error: 'Run não encontrado.' });
+      const limit = parseLimit(request.query.limit, 5_000, 10_000);
+      if (limit == null) return reply.code(400).send({ error: 'Limite de faixas inválido.' });
+
+      const response: AdminLibraryAssistantRunTracksResponse = {
+        tracks: workQueue?.listTrackStates(request.params.id, limit) ?? []
       };
       return response;
     }

@@ -90,24 +90,23 @@ test('Library Assistant revisa, aplica via override, atualiza player e sobrevive
 
     await openAssistant(page);
     await expect(page.getByRole('button', { name: 'Configurações', exact: true })).toBeVisible();
-    await expect(page.locator('.assistant-v2__filters').getByRole('button', { name: /Metadados/ })).toBeVisible();
-    await expect(page.locator('.assistant-v2__filters').getByRole('button', { name: /Capas/ })).toBeVisible();
-    await expect(page.locator('.assistant-v2__filters').getByRole('button', { name: /Letras/ })).toBeVisible();
+    const capabilityTabs = page.locator('.assistant-tabs__capabilities');
+    await expect(capabilityTabs.getByRole('button', { name: /^Metadados/ })).toBeVisible();
+    await expect(capabilityTabs.getByRole('button', { name: /^Capas/ })).toBeVisible();
+    await expect(capabilityTabs.getByRole('button', { name: /^Letras/ })).toBeVisible();
 
-    const row = page.locator('.assistant-v2__table-row').filter({ hasText: 'E2E Track' }).first();
+    const row = page.locator('.assistant-tabs__rows > button').filter({ hasText: 'E2E Track' }).first();
     await expect(row).toBeVisible();
     await expect(row).toContainText('E2E Track');
-    await expect(row).toContainText('Metadados');
-    await expect(row).toContainText('Alta');
+    await expect(row).toContainText('Sugestão');
 
     await row.click();
-    const inspector = page.locator('.assistant-v2__inspector');
+    const inspector = page.locator('.assistant-tabs__inspector');
     await expect(inspector).toContainText('E2E Track');
     await expect(inspector).toContainText('E2E Assistant Title');
-    const suggestionCard = inspector.locator('.assistant-v2__suggestion-cards article').first();
-    await suggestionCard.getByRole('checkbox').check();
-    await inspector.getByRole('button', { name: /Aplicar 1 sugestões/ }).click();
-    await expect(page.locator('.assistant-admin__feedback')).toContainText('Lote concluído: 1 aplicada.');
+    const suggestionCard = inspector.locator('.assistant-tabs__suggestion-list article').first();
+    await suggestionCard.getByRole('button', { name: 'Aplicar', exact: true }).click();
+    await expect(page.locator('.assistant-tabs__feedback')).toContainText('Sugestão aplicada.');
     await expect(playerBar).toContainText('E2E Assistant Title');
 
     const effectiveResponse = await request.get('/api/library');
@@ -244,8 +243,8 @@ test('Library Assistant executa o fluxo visual de lyrics local com job fake', as
   });
 
   await openAssistant(page);
-  await page.getByRole('button', { name: 'Configurações', exact: true }).click();
-  await page.getByRole('button', { name: 'Abrir lyrics local', exact: true }).click();
+  await page.locator('.assistant-tabs__capabilities').getByRole('button', { name: /^Letras/ }).click();
+  await page.getByRole('button', { name: 'Lyrics local', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Lyrics local' });
   await expect(dialog).toBeVisible();
   await expect(dialog).toContainText('O áudio não sai deste servidor');
