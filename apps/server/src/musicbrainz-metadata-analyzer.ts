@@ -1092,13 +1092,33 @@ export async function findMusicBrainzArtworkCandidates(
   const userAgent = options.userAgent ?? MUSICBRAINZ_USER_AGENT;
   const fileContext = safeFileContext(options.getFileContext?.(track.id));
   const identity = searchIdentity(track, fileContext);
-  if (!identity) return [];
+  const parsedFile = fileContext ? parseArtistTitleFromFile(fileContext.fileName) : null;
 
-  const matchTrack = matchingTrack(track, identity);
-  const searchTitles = manualArtworkSearchTitles(identity.title);
-  const primaryTitle = searchTitles[0] ?? identity.title;
-  const scopedTerms = identity.useAlbumFilter
-    ? { title: primaryTitle, artist: identity.artist, album: identity.album }
+  const searchTitle = identity?.title
+    ?? (reliableMetadata(track.title) ? exactValue(track.title) : parsedFile?.title ?? '');
+  const searchArtist = identity?.artist
+    ?? (reliableMetadata(track.artist) ? exactValue(track.artist) : parsedFile?.artist ?? '');
+  if (!searchTitle) return [];
+
+  const album = identity?.album
+    ?? (reliableMetadata(track.album) ? exactValue(track.album) : '');
+  const useAlbumFilter = Boolean(searchArtist && album && (identity?.useAlbumFilter ?? false));
+  const matchTrack = identity
+    ? matchingTrack(track, identity)
+    : {
+        ...track,
+        title: searchTitle,
+        artist: searchArtist || track.artist,
+        album,
+        albumArtist: reliableMetadata(track.albumArtist)
+          ? track.albumArtist
+          : searchArtist || track.albumArtist
+      };
+
+  const searchTitles = manualArtworkSearchTitles(searchTitle);
+  const primaryTitle = searchTitles[0] ?? searchTitle;
+  const scopedTerms = useAlbumFilter
+    ? { title: primaryTitle, artist: searchArtist, album }
     : null;
 
   const seenReleases = new Set<string>();
@@ -1114,12 +1134,13 @@ export async function findMusicBrainzArtworkCandidates(
       release: MusicBrainzRelease;
       artist: string;
       score: number;
+      artistDifferent: boolean;
     }> = [];
 
     for (const rankedCandidate of ranked) {
       const releases = albumOnly
         ? rankedCandidate.candidate.releases.filter(
-            release => compareText(identity.album, release.title) !== 'different'
+            release => album && compareText(album, release.title) !== 'different'
           )
         : rankedCandidate.candidate.releases;
 
@@ -1128,7 +1149,8 @@ export async function findMusicBrainzArtworkCandidates(
           release,
           artist: release.albumArtist ?? rankedCandidate.candidate.artist,
           score: rankedCandidate.score
-            + (identity.useAlbumFilter && compareText(identity.album, release.title) !== 'different' ? 18 : 0)
+            + (album && compareText(album, release.title) !== 'different' ? 18 : 0),
+          artistDifferent: rankedCandidate.artistDifferent
         });
       }
     }
@@ -1136,7 +1158,7 @@ export async function findMusicBrainzArtworkCandidates(
     releaseCandidates.sort((left, right) => right.score - left.score);
 
     for (const candidate of releaseCandidates) {
-      if (results.length >= 8 || artworkAttempts >= 20) break;
+      if (results.length >= 8 || artworkAttempts >= 32) break;
       if (seenReleases.has(candidate.release.id)) continue;
       seenReleases.add(candidate.release.id);
       artworkAttempts += 1;
@@ -1154,7 +1176,9 @@ export async function findMusicBrainzArtworkCandidates(
         seenArtwork.add(artworkKey);
         results.push({
           id: `cover-art-archive:${candidate.release.id}:${artwork.id}`,
-          label: `Capa frontal — ${candidate.release.title}`,
+          label: candidate.artistDifferent
+            ? `Alternativa — ${candidate.artist} · ${candidate.release.title}`
+            : `Capa frontal — ${candidate.release.title}`,
           album: candidate.release.title,
           artist: candidate.artist,
           sourceUrl: artwork.imageUrl,
@@ -1177,46 +1201,72 @@ export async function findMusicBrainzArtworkCandidates(
       userAgent
     );
     scopedRanked = rankManualArtworkCandidates(matchTrack, scopedRecordings, primaryTitle);
-
     await collectArtwork(scopedRanked, true);
     if (results.length > 0) return results;
   }
 
-  const broadRecordings = await fetchCandidates(
-    { title: primaryTitle, artist: identity.artist },
-    providers,
-    fetchImpl,
-    userAgent
-  );
-  const preferredRecordingIds = new Set(
-    scopedRanked.map(candidate => candidate.candidate.recordingId)
-  );
-  const broadRanked = rankManualArtworkCandidates(matchTrack, broadRecordings, primaryTitle)
-    .sort((left, right) => {
-      const leftPreferred = preferredRecordingIds.has(left.candidate.recordingId) ? 1 : 0;
-      const rightPreferred = preferredRecordingIds.has(right.candidate.recordingId) ? 1 : 0;
-      return rightPreferred - leftPreferred || right.score - left.score;
-    });
-
-  await collectArtwork(broadRanked, false);
-  if (results.length > 0) return results;
-
-  // Medleys e nomes compostos podem não existir no MusicBrainz como uma única
-  // gravação. Nesse caso tentamos, de forma conservadora, os segmentos do título,
-  // sempre mantendo o artista como filtro obrigatório.
-  for (const alternateTitle of searchTitles.slice(1)) {
-    if (results.length >= 8 || artworkAttempts >= 20) break;
-    const recordings = await fetchCandidates(
-      { title: alternateTitle, artist: identity.artist },
+  if (searchArtist) {
+    const broadRecordings = await fetchCandidates(
+      { title: primaryTitle, artist: searchArtist },
       providers,
       fetchImpl,
       userAgent
     );
-    const ranked = rankManualArtworkCandidates(matchTrack, recordings, alternateTitle);
-    await collectArtwork(ranked, false);
+    const preferredRecordingIds = new Set(
+      scopedRanked.map(candidate => candidate.candidate.recordingId)
+    );
+    const broadRanked = rankManualArtworkCandidates(matchTrack, broadRecordings, primaryTitle)
+      .sort((left, right) => {
+        const leftPreferred = preferredRecordingIds.has(left.candidate.recordingId) ? 1 : 0;
+        const rightPreferred = preferredRecordingIds.has(right.candidate.recordingId) ? 1 : 0;
+        return rightPreferred - leftPreferred || right.score - left.score;
+      });
+
+    await collectArtwork(broadRanked, false);
+    if (results.length > 0) return results;
+
+    for (const alternateTitle of searchTitles.slice(1)) {
+      if (results.length >= 8 || artworkAttempts >= 32) break;
+      const recordings = await fetchCandidates(
+        { title: alternateTitle, artist: searchArtist },
+        providers,
+        fetchImpl,
+        userAgent
+      );
+      const ranked = rankManualArtworkCandidates(matchTrack, recordings, alternateTitle);
+      await collectArtwork(ranked, false);
+      if (results.length > 0) return results;
+    }
   }
 
-  return results;
+  // Último fallback do MusicBrainz para uso estritamente manual: título sem
+  // artista. Isso cobre arquivos sem artista e também permite mostrar uma
+  // alternativa claramente rotulada quando o artista local estiver incorreto.
+  for (const title of searchTitles) {
+    if (results.length >= 8 || artworkAttempts >= 32) break;
+    const recordings = await fetchCandidates(
+      { title },
+      providers,
+      fetchImpl,
+      userAgent
+    );
+    const ranked = rankManualArtworkCandidates(matchTrack, recordings, title, {
+      allowDifferentArtist: true
+    });
+    await collectArtwork(ranked, false);
+    if (results.length > 0) return results;
+  }
+
+  // Há catálogos legítimos sem artwork no MusicBrainz/CAA. Como último recurso
+  // da busca manual, usamos o catálogo público do iTunes. Nada aqui entra no
+  // fluxo automático da Assistente; o usuário ainda precisa escolher a capa.
+  return findItunesArtworkFallback(
+    matchTrack,
+    searchTitles,
+    providers,
+    fetchImpl,
+    userAgent
+  );
 }
 
 export function createMusicBrainzMetadataAnalyzer(options: AnalyzerOptions = {}): LibraryAssistantAnalyzer {
