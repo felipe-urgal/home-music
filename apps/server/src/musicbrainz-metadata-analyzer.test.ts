@@ -676,6 +676,7 @@ test('busca manual remove contexto de mashup e usa iTunes quando MusicBrainz nã
   assert.equal(candidates[0].artist, 'John Travolta & Olivia Newton-John');
   assert.equal(candidates[0].musicBrainzReleaseId, null);
   assert.match(candidates[0].sourceUrl, /1200x1200bb\.jpg$/);
+  assert.match(candidates[0].thumbnailUrl ?? '', /600x600bb\.jpg$/);
 });
 
 
