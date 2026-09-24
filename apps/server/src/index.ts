@@ -24,6 +24,7 @@ import {
   withHeavyWorkRequestContext
 } from './heavy-work-queue.js';
 import { registerLibraryAssistant } from './library-assistant-bootstrap.js';
+import type { LibraryAssistantProviderGateway } from './library-assistant-provider.js';
 import { registerLibraryRoutes } from './library-routes.js';
 import { LibraryService } from './library-service.js';
 import { registerMediaRoutes } from './media-routes.js';
@@ -238,11 +239,6 @@ registerAuthRoutes(app, {
 });
 registerOpenSubsonicAccountRoutes(app, infrastructure.openSubsonicCredentials);
 registerAdminUserRoutes(app, infrastructure.adminUsers);
-registerAdminImportRoutes(app, infrastructure.importJobs, {
-  onPromoted: (promoted, jobId) => library.updateForPromotedImport(promoted, jobId)
-});
-registerAdminOperationHistoryRoutes(app, infrastructure.operationHistory);
-registerAdminTranscodeCacheRoutes(app, infrastructure.transcodeCacheMaintenance);
 const adminLibraryProjection = registerAdminTrackRoutes(app, {
   listTracks: () => library.listAdminTracks(),
   setEnabled: (trackId, enabled) => library.setTrackEnabled(trackId, enabled),
@@ -252,12 +248,23 @@ const adminLibraryProjection = registerAdminTrackRoutes(app, {
   musicDir,
   libraryProjectionHandledByRoutes: true
 });
+let importProviderGateway: LibraryAssistantProviderGateway | null = null;
+registerAdminImportRoutes(app, infrastructure.importJobs, {
+  getProviderGateway: () => importProviderGateway,
+  async onPromoted(promoted, jobId, review) {
+    const indexed = await library.updateForPromotedImport(promoted, jobId);
+    if (indexed) adminLibraryProjection.applyImportedReview(indexed.id, review);
+  }
+});
+registerAdminOperationHistoryRoutes(app, infrastructure.operationHistory);
+registerAdminTranscodeCacheRoutes(app, infrastructure.transcodeCacheMaintenance);
 registerLibraryAssistant(app, {
   databasePath,
   library,
   projection: adminLibraryProjection,
   queue: integrityQueue,
-  observability: infrastructure.longJobObservability
+  observability: infrastructure.longJobObservability,
+  onProviderGatewayReady: providers => { importProviderGateway = providers; }
 });
 registerLibraryRoutes(app, library, integrityQueue, adminLibraryProjection);
 registerPersonalRoutes(app, personal, { databasePath, library });
