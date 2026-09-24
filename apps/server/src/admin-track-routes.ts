@@ -7,7 +7,7 @@ import type {
   AdminTrackMoveRequest,
   AdminTracksResponse,
   Track,
-  type TrackMetadataOverridePatch
+  TrackMetadataOverridePatch
 } from '@home-music/shared';
 import { registerAdminLibraryNormalizationRoutes } from './admin-library-normalization-routes.js';
 import {
