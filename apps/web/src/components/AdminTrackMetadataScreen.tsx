@@ -194,6 +194,7 @@ export function AdminTrackMetadataScreen({
   const [coverSearchLoading, setCoverSearchLoading] = useState(false);
   const [coverSearchCandidates, setCoverSearchCandidates] = useState<AdminTrackCoverCandidate[]>([]);
   const [coverSearchError, setCoverSearchError] = useState<string | null>(null);
+  const [applyingCoverCandidateId, setApplyingCoverCandidateId] = useState<string | null>(null);
   const editorRequestRef = useRef(0);
   const handledCoverFillJobRef = useRef<string | null>(null);
   const operationBusy = savingAction !== null;
@@ -374,6 +375,7 @@ export function AdminTrackMetadataScreen({
     setCoverSearchLoading(false);
     setCoverSearchCandidates([]);
     setCoverSearchError(null);
+    setApplyingCoverCandidateId(null);
     setEditorLoading(false);
   }
 
@@ -492,23 +494,27 @@ export function AdminTrackMetadataScreen({
 
   async function searchCovers() {
     if (!editingTrackId || !draft || operationBusy || coverSearchLoading) return;
+    const requestId = editorRequestRef.current;
     setCoverSearchOpen(true);
     setCoverSearchLoading(true);
     setCoverSearchError(null);
     setCoverSearchCandidates([]);
     try {
       const response = await searchTrackArtworkCandidates(editingTrackId, draft);
+      if (editorRequestRef.current !== requestId) return;
       setCoverSearchCandidates(response.candidates);
     } catch (caught) {
+      if (editorRequestRef.current !== requestId) return;
       setCoverSearchError(errorMessage(caught));
     } finally {
-      setCoverSearchLoading(false);
+      if (editorRequestRef.current === requestId) setCoverSearchLoading(false);
     }
   }
 
   async function applyCoverCandidate(candidate: AdminTrackCoverCandidate) {
     if (!editingTrackId || operationBusy) return;
     setSavingAction('cover-external');
+    setApplyingCoverCandidateId(candidate.id);
     setCoverSearchError(null);
     setEditorFeedback(null);
     try {
@@ -519,6 +525,7 @@ export function AdminTrackMetadataScreen({
     } catch (caught) {
       setCoverSearchError(errorMessage(caught));
     } finally {
+      setApplyingCoverCandidateId(null);
       setSavingAction(null);
     }
   }
@@ -957,7 +964,7 @@ export function AdminTrackMetadataScreen({
                       disabled={operationBusy}
                       onClick={() => void applyCoverCandidate(candidate)}
                     >
-                      {savingAction === 'cover-external' ? <LoaderCircle className="is-spinning" /> : <CheckCircle2 />}
+                      {applyingCoverCandidateId === candidate.id ? <LoaderCircle className="is-spinning" /> : <CheckCircle2 />}
                       Usar esta capa
                     </button>
                   </article>
