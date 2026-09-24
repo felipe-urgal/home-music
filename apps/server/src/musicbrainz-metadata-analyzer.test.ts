@@ -524,6 +524,208 @@ test('busca manual não oferece capa quando o artista retornado é diferente', a
 });
 
 
+test('busca manual usa título sem artista quando metadata de artista está ausente', async () => {
+  const queries: string[] = [];
+  const fetchImpl = async (input: string | URL) => {
+    const url = new URL(String(input));
+    if (isCaaRequest(input)) {
+      return caaResponse([{
+        id: 'cover-deixa',
+        front: true,
+        image: 'https://coverartarchive.org/release/release-deixa/front',
+        thumbnails: { 500: 'https://coverartarchive.org/release/release-deixa/500' }
+      }]);
+    }
+    assert.equal(url.origin, 'https://musicbrainz.org');
+    const query = url.searchParams.get('query') ?? '';
+    queries.push(query);
+    return response([recording({
+      id: 'recording-deixa',
+      title: 'Deixa Eu Te Amar',
+      'artist-credit': [{
+        name: 'Alexandre Pires',
+        artist: { id: 'artist-alexandre', name: 'Alexandre Pires' }
+      }],
+      releases: [{
+        id: 'release-deixa',
+        title: 'Em Casa',
+        'release-group': { id: 'group-deixa' },
+        'artist-credit': [{
+          name: 'Alexandre Pires',
+          artist: { id: 'artist-alexandre', name: 'Alexandre Pires' }
+        }]
+      }]
+    })]);
+  };
+
+  const candidates = await findMusicBrainzArtworkCandidates(
+    track({
+      title: 'Deixa Eu Te Amar',
+      artist: 'Artista desconhecido',
+      album: 'Álbum desconhecido',
+      albumArtist: 'Artista desconhecido'
+    }),
+    gateway(),
+    { fetchImpl }
+  );
+
+  assert.ok(queries.some(query => /recording:"Deixa Eu Te Amar"/.test(query)));
+  assert.ok(queries.every(query => !/artist:/.test(query)));
+  assert.equal(candidates.length, 1);
+  assert.equal(candidates[0].artist, 'Alexandre Pires');
+});
+
+test('busca manual aceita artista como parte de um crédito maior', async () => {
+  const fetchImpl = async (input: string | URL) => {
+    if (isCaaRequest(input)) {
+      return caaResponse([{
+        id: 'cover-maracatu',
+        front: true,
+        image: 'https://coverartarchive.org/release/release-maracatu/front',
+        thumbnails: {}
+      }]);
+    }
+    return response([recording({
+      id: 'recording-maracatu',
+      title: 'Maracatu Atômico',
+      'artist-credit': [{
+        name: 'Chico Science & Nação Zumbi',
+        artist: { id: 'artist-chico-science', name: 'Chico Science & Nação Zumbi' }
+      }],
+      releases: [{
+        id: 'release-maracatu',
+        title: 'Afrociberdelia',
+        'release-group': { id: 'group-maracatu' },
+        'artist-credit': [{
+          name: 'Chico Science & Nação Zumbi',
+          artist: { id: 'artist-chico-science', name: 'Chico Science & Nação Zumbi' }
+        }]
+      }]
+    })]);
+  };
+
+  const candidates = await findMusicBrainzArtworkCandidates(
+    track({
+      title: 'Maracatu Atômico',
+      artist: 'Chico Science',
+      album: 'Saraiva Mega Music Hall',
+      albumArtist: 'Various Artists'
+    }),
+    gateway(),
+    { fetchImpl }
+  );
+
+  assert.equal(candidates.length, 1);
+  assert.equal(candidates[0].artist, 'Chico Science & Nação Zumbi');
+  assert.doesNotMatch(candidates[0].label, /^Alternativa/);
+});
+
+test('busca manual mostra artista divergente como alternativa somente no fallback por título', async () => {
+  const queries: string[] = [];
+  const fetchImpl = async (input: string | URL) => {
+    if (isCaaRequest(input)) {
+      return caaResponse([{
+        id: 'cover-menina',
+        front: true,
+        image: 'https://coverartarchive.org/release/release-menina/front',
+        thumbnails: {}
+      }]);
+    }
+    const query = new URL(String(input)).searchParams.get('query') ?? '';
+    queries.push(query);
+    if (/artist:"Rita Lee"/.test(query)) return response([]);
+    return response([recording({
+      id: 'recording-menina',
+      title: 'Menina Veneno',
+      'artist-credit': [{
+        name: 'Ritchie',
+        artist: { id: 'artist-ritchie', name: 'Ritchie' }
+      }],
+      releases: [{
+        id: 'release-menina',
+        title: 'Vôo de Coração',
+        'release-group': { id: 'group-menina' },
+        'artist-credit': [{
+          name: 'Ritchie',
+          artist: { id: 'artist-ritchie', name: 'Ritchie' }
+        }]
+      }]
+    })]);
+  };
+
+  const candidates = await findMusicBrainzArtworkCandidates(
+    track({
+      title: 'Menina Veneno',
+      artist: 'Rita Lee',
+      album: 'Álbum desconhecido',
+      albumArtist: 'Artista desconhecido'
+    }),
+    gateway(),
+    { fetchImpl }
+  );
+
+  assert.ok(queries.some(query => /artist:"Rita Lee"/.test(query)));
+  assert.ok(queries.some(query => !/artist:/.test(query)));
+  assert.equal(candidates.length, 1);
+  assert.equal(candidates[0].artist, 'Ritchie');
+  assert.match(candidates[0].label, /^Alternativa/);
+});
+
+test('busca manual remove contexto de mashup e usa iTunes quando MusicBrainz não oferece artwork', async () => {
+  const musicBrainzQueries: string[] = [];
+  const itunesTerms: string[] = [];
+  const fetchImpl = async (input: string | URL) => {
+    const url = new URL(String(input));
+    if (isCaaRequest(input)) return caaResponse();
+
+    if (url.origin === 'https://musicbrainz.org') {
+      musicBrainzQueries.push(url.searchParams.get('query') ?? '');
+      return response([]);
+    }
+
+    assert.equal(url.origin, 'https://itunes.apple.com');
+    itunesTerms.push(url.searchParams.get('term') ?? '');
+    return new Response(JSON.stringify({
+      resultCount: 1,
+      results: [{
+        wrapperType: 'track',
+        kind: 'song',
+        trackId: 123,
+        trackName: 'The Grease Megamix',
+        artistName: 'John Travolta & Olivia Newton-John',
+        collectionName: 'Grease',
+        collectionArtistName: 'Various Artists',
+        trackTimeMillis: 290000,
+        artworkUrl100: 'https://is1-ssl.mzstatic.com/image/thumb/Music/test/100x100bb.jpg'
+      }]
+    }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' }
+    });
+  };
+
+  const candidates = await findMusicBrainzArtworkCandidates(
+    track({
+      title: 'Grease Megamix (Movie Mashup)',
+      artist: 'Artista desconhecido',
+      album: 'Álbum desconhecido',
+      albumArtist: 'Artista desconhecido',
+      duration: 288
+    }),
+    gateway(),
+    { fetchImpl }
+  );
+
+  assert.ok(musicBrainzQueries.some(query => /recording:"Grease Megamix"/.test(query)));
+  assert.ok(itunesTerms.some(term => term === 'Grease Megamix'));
+  assert.equal(candidates.length, 1);
+  assert.equal(candidates[0].album, 'Grease');
+  assert.equal(candidates[0].artist, 'John Travolta & Olivia Newton-John');
+  assert.equal(candidates[0].musicBrainzReleaseId, null);
+  assert.match(candidates[0].sourceUrl, /1200x1200bb\.jpg$/);
+});
+
+
 test('enriquecimento da importação resolve contexto ao vivo e retorna álbum, artista do álbum e capa', async () => {
   const queries: string[] = [];
   const fetchImpl = async (input: string | URL) => {
