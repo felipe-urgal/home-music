@@ -22,6 +22,7 @@ import {
   ChevronLeft,
   ChevronRight,
   FileText,
+  Fingerprint,
   HelpCircle,
   Image as ImageIcon,
   Info,
@@ -40,7 +41,9 @@ import {
   cancelSingleLibraryAssistantRun,
   decideLibraryAssistantBatch,
   decideLibraryAssistantSuggestion,
+  fingerprintLibraryAssistantSuggestion,
   getLibraryAssistantAutonomy,
+  getLibraryAssistantFingerprintStatus,
   getLibraryAssistantReview,
   getLibraryAssistantReviewPolicy,
   getLibraryAssistantRunProgress,
@@ -50,7 +53,8 @@ import {
   startLibraryAssistantRun,
   updateLibraryAssistantAutonomy,
   updateLibraryAssistantReviewPolicy,
-  type LibraryAssistantAutonomyState
+  type LibraryAssistantAutonomyState,
+  type LibraryAssistantFingerprintStatus
 } from '../library-assistant-client';
 import { notifyLibraryChanged } from '../library-events';
 import '../library-assistant-tabs.css';
@@ -303,6 +307,8 @@ export function AdminLibraryAssistantTabbedScreen({ onBack, onOpenLocalLyrics }:
   const [savingPolicy, setSavingPolicy] = useState(false);
   const [autonomy, setAutonomy] = useState<LibraryAssistantAutonomyState | null>(null);
   const [savingAutonomy, setSavingAutonomy] = useState(false);
+  const [fingerprintStatus, setFingerprintStatus] = useState<LibraryAssistantFingerprintStatus | null>(null);
+  const [fingerprintingId, setFingerprintingId] = useState<string | null>(null);
   const requestVersion = useRef(0);
 
   const runByCapability = useMemo(() => Object.fromEntries(
@@ -468,11 +474,21 @@ export function AdminLibraryAssistantTabbedScreen({ onBack, onOpenLocalLyrics }:
     }
   }, []);
 
+  const loadFingerprintStatus = useCallback(async () => {
+    try {
+      const response = await getLibraryAssistantFingerprintStatus();
+      setFingerprintStatus(response);
+    } catch {
+      setFingerprintStatus(null);
+    }
+  }, []);
+
   useEffect(() => {
     void load();
     void loadSettings();
+    void loadFingerprintStatus();
     return () => { requestVersion.current += 1; };
-  }, [load, loadSettings]);
+  }, [load, loadFingerprintStatus, loadSettings]);
 
   const anyRunActive = runs.some(run => !TERMINAL_RUNS.has(run.status));
   useEffect(() => {
@@ -594,6 +610,53 @@ export function AdminLibraryAssistantTabbedScreen({ onBack, onOpenLocalLyrics }:
       });
     } finally {
       setMutating(false);
+    }
+  }
+
+  async function identifyByAudio(suggestion: LibraryAssistantSuggestion) {
+    if (
+      suggestion.target.capability !== 'metadata'
+      || !isOpen(suggestion)
+      || isLibraryAssistantAutoApplicable(suggestion)
+      || fingerprintingId
+      || !fingerprintStatus?.fpcalc.available
+    ) return;
+
+    setFingerprintingId(suggestion.id);
+    setFeedback(null);
+    try {
+      const result = await fingerprintLibraryAssistantSuggestion(suggestion.runId, suggestion.id);
+      if (!result.externalLookup) {
+        setFeedback({
+          kind: 'success',
+          message: result.cacheHit
+            ? 'Fingerprint local reutilizado. Nenhum áudio foi enviado externamente.'
+            : 'Fingerprint local gerado. Nenhum áudio foi enviado externamente.'
+        });
+      } else if (!result.identified) {
+        setFeedback({
+          kind: 'warning',
+          message: 'O áudio foi analisado, mas não foi encontrada uma identificação confiável.'
+        });
+      } else if (result.ambiguous || result.conflict) {
+        setFeedback({
+          kind: 'warning',
+          message: 'A identificação pelo áudio encontrou evidência adicional, mas o resultado continua exigindo revisão.'
+        });
+      } else {
+        setFeedback({
+          kind: 'success',
+          message: 'A identificação pelo áudio reforçou a sugestão. Revise o resultado atualizado.'
+        });
+      }
+      await load(true);
+    } catch (error) {
+      setFeedback({
+        kind: 'error',
+        message: error instanceof Error ? error.message : 'Não foi possível identificar esta faixa pelo áudio.'
+      });
+    } finally {
+      setFingerprintingId(null);
     }
   }
 
@@ -1045,6 +1108,20 @@ export function AdminLibraryAssistantTabbedScreen({ onBack, onOpenLocalLyrics }:
 
                               <footer>
                                 <span>Confiança: {suggestion.confidence === 'high' ? 'Alta' : suggestion.confidence === 'medium' ? 'Média' : 'Baixa'}</span>
+                                {suggestion.target.capability === 'metadata' && !safe && (
+                                  <button
+                                    type="button"
+                                    className="assistant-tabs__fingerprint"
+                                    disabled={mutating || Boolean(fingerprintingId) || !fingerprintStatus?.fpcalc.available}
+                                    title={fingerprintStatus?.fpcalc.available ? undefined : 'Chromaprint indisponível neste servidor'}
+                                    onClick={() => void identifyByAudio(suggestion)}
+                                  >
+                                    {fingerprintingId === suggestion.id
+                                      ? <LoaderCircle className="is-spinning" />
+                                      : <Fingerprint />}
+                                    {fingerprintingId === suggestion.id ? 'Identificando…' : 'Identificar pelo áudio'}
+                                  </button>
+                                )}
                               </footer>
                             </article>
                           );
