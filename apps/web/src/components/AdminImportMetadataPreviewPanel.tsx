@@ -126,11 +126,15 @@ function MetadataPreviewCard({
   const hasExternalHints = providerHints || hasEnrichmentHints;
 
   useEffect(() => {
-    const title = preview.effective.title?.trim() ?? '';
-    const artist = preview.effective.artist?.trim() ?? '';
+    const title = preview.effective.title?.trim() || preview.provider?.title?.trim() || '';
+    const hasIdentityHint = Boolean(
+      preview.effective.artist?.trim()
+      || preview.provider?.artist?.trim()
+      || preview.provider?.title?.match(/\s[-–—]\s/)
+    );
     const shouldEnrich = Boolean(
       title
-      && artist
+      && hasIdentityHint
       && (
         !preview.effective.album?.trim()
         || ['missing', 'fallback', 'suggested'].includes(preview.fieldStates.albumArtist)
@@ -167,7 +171,9 @@ function MetadataPreviewCard({
     preview.effective.album,
     preview.effective.artist,
     preview.effective.title,
-    preview.fieldStates.albumArtist
+    preview.fieldStates.albumArtist,
+    preview.provider?.artist,
+    preview.provider?.title
   ]);
 
   const applyCoverCandidate = async (candidate: AdminTrackCoverCandidate) => {
