@@ -57,7 +57,16 @@ type SourceSnapshot = {
 type CachedCover = {
   data: Buffer;
   contentType: string;
+  source: 'embedded' | 'external';
 };
+
+export type ImportPromotionReview = Readonly<{
+  metadata: ImportMetadataValues;
+  cover: Readonly<{
+    data: Buffer;
+    contentType: string;
+  }> | null;
+}>;
 
 export type ImportMetadataPreviewErrorCode =
   | 'job_not_found'
@@ -272,7 +281,7 @@ export class ImportMetadataPreviewManager {
         : null
     };
     this.snapshots.set(jobId, snapshot);
-    this.cacheCover(jobId, read.cover);
+    this.cacheCover(jobId, read.cover, 'embedded');
     return { embedded: { ...snapshot.embedded }, durationSeconds: snapshot.durationSeconds };
   }
 
@@ -366,6 +375,46 @@ export class ImportMetadataPreviewManager {
     return { data: Buffer.from(cover.data), contentType: cover.contentType };
   }
 
+  setExternalCover(jobId: string, value: ImportMetadataReadResult['cover']) {
+    const job = this.queue.get(jobId);
+    if (!job) throw new ImportMetadataPreviewError('job_not_found', 'Job de importação não encontrado.', 404);
+    if (job.status !== 'pending') {
+      throw new ImportMetadataPreviewError('job_not_ready', 'O job precisa estar pendente para ajustar a capa.', 409);
+    }
+    if (!job.metadataPreview) {
+      throw new ImportMetadataPreviewError('preview_not_ready', 'Gere o preview antes de ajustar a capa.', 409);
+    }
+    if (!value) throw new ImportMetadataPreviewError('invalid_metadata', 'Capa externa inválida.', 400);
+
+    this.cacheCover(jobId, value, 'external');
+    const snapshot = this.snapshots.get(jobId) ?? {
+      embedded: { ...job.metadataPreview.embedded },
+      durationSeconds: job.metadataPreview.durationSeconds
+    };
+    const preview = buildPreview(
+      job,
+      snapshot,
+      job.metadataPreview.provider ? { ...job.metadataPreview.provider } : null,
+      { ...job.metadataPreview.overrides },
+      this.covers.get(jobId) ?? null,
+      this.now().toISOString()
+    );
+    const updated = this.queue.setMetadataPreview(jobId, preview)!;
+    return { job: updated, preview };
+  }
+
+  getPromotionReview(jobId: string): ImportPromotionReview | null {
+    const job = this.queue.get(jobId);
+    if (!job?.metadataPreview) return null;
+    const selectedCover = this.covers.get(jobId);
+    return {
+      metadata: { ...job.metadataPreview.effective },
+      cover: selectedCover?.source === 'external'
+        ? { data: Buffer.from(selectedCover.data), contentType: selectedCover.contentType }
+        : null
+    };
+  }
+
   forget(jobId: string) {
     this.snapshots.delete(jobId);
     const cover = this.covers.get(jobId);
@@ -396,10 +445,14 @@ export class ImportMetadataPreviewManager {
       },
       durationSeconds: read.durationSeconds
     });
-    this.cacheCover(jobId, read.cover);
+    this.cacheCover(jobId, read.cover, 'embedded');
   }
 
-  private cacheCover(jobId: string, value: ImportMetadataReadResult['cover']) {
+  private cacheCover(
+    jobId: string,
+    value: ImportMetadataReadResult['cover'],
+    source: CachedCover['source']
+  ) {
     const previous = this.covers.get(jobId);
     if (previous) this.coverCacheBytes -= previous.data.byteLength;
     this.covers.delete(jobId);
@@ -408,7 +461,7 @@ export class ImportMetadataPreviewManager {
       return;
     }
 
-    const cover = { data: Buffer.from(value.data), contentType: value.contentType };
+    const cover = { data: Buffer.from(value.data), contentType: value.contentType, source };
     this.covers.set(jobId, cover);
     this.coverCacheBytes += cover.data.byteLength;
 
