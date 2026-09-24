@@ -419,6 +419,22 @@ export type AdminTrackCoverResponse = {
   override: TrackCoverOverride | null;
 };
 
+export type AdminTrackCoverCandidate = {
+  id: string;
+  label: string;
+  album: string;
+  artist: string;
+  sourceUrl: string;
+  thumbnailUrl: string | null;
+  musicBrainzReleaseId: string;
+  musicBrainzReleaseGroupId: string | null;
+};
+
+export type AdminTrackCoverCandidatesResponse = {
+  candidates: AdminTrackCoverCandidate[];
+};
+
+
 export type AdminTrack = Track & {
   enabled: boolean;
   metadataOverrideActive?: boolean;
