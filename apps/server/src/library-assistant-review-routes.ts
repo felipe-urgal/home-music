@@ -6,12 +6,18 @@ import type {
   AdminLibraryAssistantDecisionResponse,
   AdminLibraryAssistantReviewResponse
 } from '@home-music/shared/library-assistant';
+import type { DownloadedCoverArtArchiveImage } from './cover-art-archive.js';
 
+const RUN_ID = /^[A-Za-z0-9._:-]{1,192}$/;
 const SUGGESTION_ID = /^[A-Za-z0-9._:-]{1,192}$/;
 const TRACK_ID = /^[A-Za-z0-9._:-]{1,128}$/;
 
 type LibraryAssistantReviewPort = {
   getReviewQueue: (limit?: number) => AdminLibraryAssistantReviewResponse;
+  getArtworkPreview: (
+    runId: string,
+    suggestionId: string
+  ) => Promise<DownloadedCoverArtArchiveImage | null>;
   resetOpenSuggestions: () => number;
   decide: (decision: AdminLibraryAssistantDecisionRequest) => Promise<AdminLibraryAssistantDecisionResponse['result']>;
   decideBatch: (
@@ -57,6 +63,24 @@ export function registerLibraryAssistantReviewRoutes(
       if (limit == null) return reply.code(400).send({ error: 'Limite de revisão inválido.' });
       const response: AdminLibraryAssistantReviewResponse = review.getReviewQueue(limit);
       return response;
+    }
+  );
+
+  app.get<{ Params: { runId: string; id: string } }>(
+    '/api/admin/library-assistant/runs/:runId/suggestions/:id/artwork-preview',
+    async (request, reply) => {
+      if (!RUN_ID.test(request.params.runId) || !SUGGESTION_ID.test(request.params.id)) {
+        return reply.code(400).send({ error: 'Sugestão inválida.' });
+      }
+      try {
+        const preview = await review.getArtworkPreview(request.params.runId, request.params.id);
+        if (!preview) return reply.code(404).send({ error: 'Prévia de capa não encontrada.' });
+        reply.header('Cache-Control', 'private, max-age=3600');
+        reply.type(preview.contentType);
+        return reply.send(preview.data);
+      } catch {
+        return reply.code(502).send({ error: 'Não foi possível carregar a prévia da capa.' });
+      }
     }
   );
 
