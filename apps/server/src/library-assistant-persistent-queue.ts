@@ -1,6 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import type { LibraryAssistantTrackAnalysisState } from '@home-music/shared/library-assistant';
 
 const QUEUE_INSTALLATION_KEY = 'installed_at';
 const INTERRUPTED_ERROR_CODE = 'interrupted';
@@ -321,6 +322,67 @@ export class LibraryAssistantPersistentQueue {
       summary.total += count;
     }
     return summary;
+  }
+
+  listTrackStates(runId: string, limit = 5_000): LibraryAssistantTrackAnalysisState[] {
+    requireIdentifier(runId, 'runId');
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 10_000) {
+      throw new RangeError('Limite de faixas da análise inválido.');
+    }
+
+    const rows = this.db.prepare(`
+      SELECT *
+      FROM library_assistant_work_items
+      WHERE run_id = ?
+      ORDER BY track_id ASC, analyzer_id ASC;
+    `).all(runId) as Row[];
+
+    const grouped = new Map<string, LibraryAssistantWorkItem[]>();
+    for (const row of rows) {
+      const item = itemFromRow(row);
+      const current = grouped.get(item.trackId) ?? [];
+      current.push(item);
+      grouped.set(item.trackId, current);
+    }
+
+    const statusFor = (items: readonly LibraryAssistantWorkItem[]): LibraryAssistantWorkStatus => {
+      for (const status of ['processing', 'retry', 'pending', 'failed', 'matched', 'no_match'] as const) {
+        if (items.some(item => item.status === status)) return status;
+      }
+      return 'no_match';
+    };
+
+    return [...grouped.entries()]
+      .slice(0, limit)
+      .map(([trackId, items]) => {
+        const status = statusFor(items);
+        const errorItem = items.find(item => (
+          item.status === 'failed' || item.status === 'retry'
+        ));
+        const retryAtMs = items
+          .map(item => item.retryAtMs)
+          .filter((value): value is number => value != null)
+          .sort((left, right) => left - right)[0] ?? null;
+        const updatedAt = items
+          .map(item => item.updatedAt)
+          .sort()
+          .at(-1) ?? '';
+
+        return {
+          trackId,
+          status,
+          attempts: Math.max(0, ...items.map(item => item.attempts)),
+          retryAt: retryAtMs == null ? null : new Date(retryAtMs).toISOString(),
+          error: errorItem?.lastErrorMessage
+            ? {
+                code: errorItem.lastErrorCode ?? 'analysis-failed',
+                message: errorItem.lastErrorMessage,
+                action: errorItem.lastErrorAction ?? 'Tente analisar esta categoria novamente.'
+              }
+            : null,
+          updatedAt
+        };
+      });
   }
 
   nextRetryAt(runId: string) {
