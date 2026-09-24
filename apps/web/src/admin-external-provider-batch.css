@@ -22,6 +22,27 @@
   font-size: .69rem;
 }
 
+.admin-import-provider__search-empty {
+  min-height: 88px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 7px;
+  margin-top: 10px;
+  padding: 14px;
+  border: 1px dashed rgba(255,255,255,.08);
+  border-radius: 9px;
+  color: var(--text-muted, #7f8fa0);
+  font-size: .7rem;
+  text-align: center;
+}
+
+.admin-import-provider__search-empty svg {
+  width: 21px;
+  height: 21px;
+  color: #6d899f;
+}
+
 .admin-import-provider__search-list {
   display: grid;
   gap: 7px;
