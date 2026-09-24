@@ -450,6 +450,7 @@
 .assistant-tabs__summary > button.is-ok strong { color: #59d89d; }
 .assistant-tabs__summary > button.is-pending strong { color: #b78bf0; }
 .assistant-tabs__summary > button.is-failed strong { color: #ec7788; }
+.assistant-tabs__summary > button.is-not-analyzed strong { color: #8999a8; }
 
 .assistant-tabs__safe-apply {
   min-width: 190px;
