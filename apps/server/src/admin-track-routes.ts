@@ -6,7 +6,8 @@ import type {
   AdminTrack,
   AdminTrackMoveRequest,
   AdminTracksResponse,
-  Track
+  Track,
+  type TrackMetadataOverridePatch
 } from '@home-music/shared';
 import { registerAdminLibraryNormalizationRoutes } from './admin-library-normalization-routes.js';
 import {
@@ -19,6 +20,7 @@ import { LibraryDuplicateReviewError, LibraryDuplicateReviewStore } from './libr
 import type { LibraryRouteProjection } from './library-routes.js';
 import { LibraryMetadataNormalizationStore } from './library-metadata-normalization.js';
 import type { AppliedTrackLocation } from './media-file-move.js';
+import type { ImportPromotionReview } from './import-metadata-preview.js';
 import {
   COVER_OVERRIDE_CONTENT_TYPES,
   CoverOverrideValidationError,
@@ -172,6 +174,26 @@ export function registerAdminTrackRoutes(
     projectTracks: projectPublicTracks,
     projectRevision: revision => revision + currentAdminRevision()
   };
+
+  function applyImportedReview(trackId: string, review: ImportPromotionReview | null) {
+    if (!review) return;
+
+    const metadataPatch: TrackMetadataOverridePatch = {};
+    for (const field of ['title', 'artist', 'album', 'albumArtist'] as const) {
+      const value = review.metadata[field]?.trim();
+      if (value) metadataPatch[field] = value;
+    }
+    if (Object.keys(metadataPatch).length > 0) {
+      const metadata = metadataOverrides.patch(trackId, metadataPatch);
+      if (metadata) metadataRevision += 1;
+    }
+
+    if (review.cover) {
+      const before = coverOverrides.getStatus(trackId);
+      const cover = coverOverrides.save(trackId, review.cover.data, review.cover.contentType);
+      if (cover && before?.override?.version !== cover.override?.version) coverRevision += 1;
+    }
+  }
 
   const mutations = new AdminTrackMutationService({
     databasePath,
@@ -535,5 +557,5 @@ export function registerAdminTrackRoutes(
     }
   );
 
-  return libraryProjection;
+  return Object.assign(libraryProjection, { applyImportedReview });
 }
