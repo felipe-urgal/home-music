@@ -412,9 +412,16 @@ export function AdminExternalProviderPanel({
               {searchResults.map(item => (
                 <article className="admin-import-provider__search-item" key={item.id}>
                   <span className="admin-import-provider__search-thumb">
-                    {item.thumbnailUrl
-                      ? <img src={item.thumbnailUrl} alt="" loading="lazy" referrerPolicy="no-referrer" onError={event => { event.currentTarget.style.display = 'none'; }} />
-                      : <Music2 />}
+                    <Music2 />
+                    {item.thumbnailUrl && (
+                      <img
+                        src={item.thumbnailUrl}
+                        alt=""
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                        onError={event => { event.currentTarget.style.display = 'none'; }}
+                      />
+                    )}
                   </span>
                   <div className="admin-import-provider__search-copy">
                     <strong>{item.title}</strong>
