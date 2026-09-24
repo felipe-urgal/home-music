@@ -456,6 +456,17 @@ export type AdminTrackCoverCandidatesResponse = {
   candidates: AdminTrackCoverCandidate[];
 };
 
+export type AdminTrackMetadataSuggestion = {
+  source: 'musicbrainz' | 'itunes-search';
+  artist: string;
+  album: string;
+  albumArtist: string;
+};
+
+export type AdminTrackMetadataSuggestionResponse = {
+  suggestion: AdminTrackMetadataSuggestion | null;
+};
+
 
 export type AdminTrack = Track & {
   enabled: boolean;
