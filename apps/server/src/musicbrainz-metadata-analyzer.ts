@@ -846,12 +846,39 @@ function normalizeItunesCandidate(value: unknown): ITunesArtworkCandidate | null
   };
 }
 
+function normalizeCachedItunesCandidate(value: unknown): ITunesArtworkCandidate | null {
+  const item = record(value);
+  if (!item) return null;
+  const id = safeText(item.id, 64);
+  const title = safeText(item.title);
+  const artist = safeText(item.artist);
+  const album = safeText(item.album);
+  const albumArtist = safeText(item.albumArtist);
+  const sourceUrl = normalizeItunesArtworkUrl(item.sourceUrl, 'source');
+  const thumbnailUrl = normalizeItunesArtworkUrl(item.thumbnailUrl, 'thumbnail');
+  if (!id || !title || !artist || !album || !albumArtist || !sourceUrl || !thumbnailUrl) return null;
+
+  let durationSeconds: number | null = null;
+  if (item.durationSeconds != null) {
+    if (
+      typeof item.durationSeconds !== 'number'
+      || !Number.isFinite(item.durationSeconds)
+      || item.durationSeconds < 0
+      || item.durationSeconds > 24 * 60 * 60
+    ) return null;
+    durationSeconds = item.durationSeconds;
+  }
+
+  return { id, title, artist, album, albumArtist, durationSeconds, sourceUrl, thumbnailUrl };
+}
+
 function normalizeItunesSearch(payload: unknown): ITunesArtworkCandidate[] {
   if (Array.isArray(payload)) {
-    return payload
+    const cached = payload
       .slice(0, 20)
-      .map(normalizeItunesCandidate)
-      .filter((value): value is ITunesArtworkCandidate => Boolean(value));
+      .map(normalizeCachedItunesCandidate);
+    if (cached.some(candidate => candidate == null)) throw new LibraryAssistantProviderResponseError();
+    return cached as ITunesArtworkCandidate[];
   }
 
   const root = record(payload);
@@ -935,7 +962,12 @@ function rankItunesArtworkCandidates(
       const titleAffinity = manualTitleAffinity(searchTitle, candidate.title);
       if (titleAffinity == null) return [];
 
-      const artistAffinity = manualArtistAffinity(track.artist, candidate.artist, true)!;
+      const artistAffinity = manualArtistAffinity(
+        track.artist,
+        candidate.artist,
+        !reliableMetadata(track.artist)
+      );
+      if (!artistAffinity) return [];
       let score = titleAffinity + artistAffinity.score;
 
       if (reliableMetadata(track.album) && compareText(track.album, candidate.album) !== 'different') {
@@ -966,41 +998,40 @@ async function findItunesArtworkFallback(
   const results: AdminTrackCoverCandidate[] = [];
   const artist = reliableMetadata(track.artist) ? exactValue(track.artist) : '';
 
-  for (const title of searchTitles) {
+  for (const title of searchTitles.slice(0, 4)) {
     for (const country of ITUNES_SEARCH_COUNTRIES) {
-      const queries = artist
-        ? [{ title, artist, country }, { title, country }]
-        : [{ title, country }];
-
-      for (const query of queries) {
-        let candidates: ITunesArtworkCandidate[];
-        try {
-          candidates = await fetchItunesArtworkCandidates(query, providers, fetchImpl, userAgent);
-        } catch {
-          continue;
-        }
-        const ranked = rankItunesArtworkCandidates(track, candidates, title);
-        for (const rankedCandidate of ranked) {
-          const candidate = rankedCandidate.candidate;
-          const key = candidate.sourceUrl;
-          if (seen.has(key)) continue;
-          seen.add(key);
-          results.push({
-            id: `itunes-search:${candidate.id}`,
-            label: rankedCandidate.artistDifferent
-              ? `Alternativa — ${candidate.artist} · ${candidate.album}`
-              : `Capa — ${candidate.album}`,
-            album: candidate.album,
-            artist: candidate.artist,
-            sourceUrl: candidate.sourceUrl,
-            thumbnailUrl: candidate.thumbnailUrl,
-            musicBrainzReleaseId: null,
-            musicBrainzReleaseGroupId: null
-          });
-          if (results.length >= 8) return results;
-        }
-        if (results.length > 0) return results;
+      let candidates: ITunesArtworkCandidate[];
+      try {
+        candidates = await fetchItunesArtworkCandidates(
+          artist ? { title, artist, country } : { title, country },
+          providers,
+          fetchImpl,
+          userAgent
+        );
+      } catch {
+        continue;
       }
+      const ranked = rankItunesArtworkCandidates(track, candidates, title);
+      for (const rankedCandidate of ranked) {
+        const candidate = rankedCandidate.candidate;
+        const key = candidate.sourceUrl;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        results.push({
+          id: `itunes-search:${candidate.id}`,
+          label: rankedCandidate.artistDifferent
+            ? `Alternativa — ${candidate.artist} · ${candidate.album}`
+            : `Capa — ${candidate.album}`,
+          album: candidate.album,
+          artist: candidate.artist,
+          sourceUrl: candidate.sourceUrl,
+          thumbnailUrl: candidate.thumbnailUrl,
+          musicBrainzReleaseId: null,
+          musicBrainzReleaseGroupId: null
+        });
+        if (results.length >= 8) return results;
+      }
+      if (results.length > 0) return results;
     }
   }
 
