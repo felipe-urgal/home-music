@@ -668,6 +668,84 @@ async function findArtworkForRelease(
   });
 }
 
+type ManualArtworkRankedCandidate = {
+  candidate: MusicBrainzRecordingCandidate;
+  score: number;
+};
+
+function manualComparable(value: string) {
+  return normalizedValue(value)
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
+function manualTitleAffinity(sourceTitle: string, candidateTitle: string) {
+  const source = manualComparable(sourceTitle);
+  const candidate = manualComparable(candidateTitle);
+  if (!source || !candidate) return null;
+  if (source === candidate) return 100;
+
+  // A busca manual pode aceitar versões como "Como Eu Quero / Os Outros"
+  // e títulos compostos, desde que uma frase completa esteja contida na outra.
+  const shorter = source.length <= candidate.length ? source : candidate;
+  const longer = source.length <= candidate.length ? candidate : source;
+  if (shorter.length < 5) return null;
+  const phrase = ` ${longer} `;
+  if (phrase.includes(` ${shorter} `)) return 76;
+  return null;
+}
+
+function manualArtworkSearchTitles(title: string) {
+  const primary = exactValue(title);
+  const values = [primary];
+  const seen = new Set([manualComparable(primary)]);
+
+  for (const rawPart of primary.split(/\s*(?:,|\/|;|\|)\s*|\s+\+\s+/)) {
+    const part = exactValue(rawPart);
+    const key = manualComparable(part);
+    if (!key || key.length < 4 || seen.has(key)) continue;
+    seen.add(key);
+    values.push(part);
+    if (values.length >= 5) break;
+  }
+
+  return values;
+}
+
+function rankManualArtworkCandidates(
+  track: Track,
+  candidates: MusicBrainzRecordingCandidate[],
+  searchTitle: string
+): ManualArtworkRankedCandidate[] {
+  return candidates
+    .flatMap(candidate => {
+      const artistMatch = compareText(track.artist, candidate.artist);
+      if (artistMatch === 'different') return [];
+
+      const titleAffinity = manualTitleAffinity(searchTitle, candidate.title);
+      if (titleAffinity == null) return [];
+
+      let score = titleAffinity + (artistMatch === 'exact' ? 40 : 34);
+
+      if (track.album.trim() && candidate.releases.some(
+        release => compareText(track.album, release.title) !== 'different'
+      )) score += 18;
+
+      if (track.duration != null && candidate.durationSeconds != null) {
+        const delta = Math.abs(track.duration - candidate.durationSeconds);
+        if (delta <= 2) score += 10;
+        else if (delta <= 5) score += 6;
+        else if (delta <= 15) score += 2;
+        else score -= Math.min(12, Math.round(delta / 10));
+      }
+
+      return [{ candidate, score }];
+    })
+    .sort((left, right) => right.score - left.score)
+    .slice(0, MAX_CANDIDATES);
+}
+
 export async function findMusicBrainzArtworkCandidates(
   track: Track,
   providers: LibraryAssistantProviderGateway,
@@ -680,16 +758,19 @@ export async function findMusicBrainzArtworkCandidates(
   if (!identity) return [];
 
   const matchTrack = matchingTrack(track, identity);
+  const searchTitles = manualArtworkSearchTitles(identity.title);
+  const primaryTitle = searchTitles[0] ?? identity.title;
   const scopedTerms = identity.useAlbumFilter
-    ? { title: identity.title, artist: identity.artist, album: identity.album }
+    ? { title: primaryTitle, artist: identity.artist, album: identity.album }
     : null;
 
   const seenReleases = new Set<string>();
   const seenArtwork = new Set<string>();
   const results: AdminTrackCoverCandidate[] = [];
+  let artworkAttempts = 0;
 
   const collectArtwork = async (
-    ranked: RankedCandidate[],
+    ranked: ManualArtworkRankedCandidate[],
     albumOnly: boolean
   ) => {
     const releaseCandidates: Array<{
@@ -698,30 +779,30 @@ export async function findMusicBrainzArtworkCandidates(
       score: number;
     }> = [];
 
-    for (const candidate of ranked) {
+    for (const rankedCandidate of ranked) {
       const releases = albumOnly
-        ? candidate.candidate.releases.filter(
+        ? rankedCandidate.candidate.releases.filter(
             release => compareText(identity.album, release.title) !== 'different'
           )
-        : candidate.candidate.releases;
+        : rankedCandidate.candidate.releases;
 
       for (const release of releases) {
         releaseCandidates.push({
           release,
-          artist: release.albumArtist ?? candidate.candidate.artist,
-          score: candidate.score
+          artist: release.albumArtist ?? rankedCandidate.candidate.artist,
+          score: rankedCandidate.score
+            + (identity.useAlbumFilter && compareText(identity.album, release.title) !== 'different' ? 18 : 0)
         });
       }
     }
 
     releaseCandidates.sort((left, right) => right.score - left.score);
-    let attempts = 0;
 
     for (const candidate of releaseCandidates) {
-      if (results.length >= 8 || attempts >= 12) break;
+      if (results.length >= 8 || artworkAttempts >= 20) break;
       if (seenReleases.has(candidate.release.id)) continue;
       seenReleases.add(candidate.release.id);
-      attempts += 1;
+      artworkAttempts += 1;
 
       try {
         const artwork = await findArtworkForRelease(candidate.release, {
@@ -750,7 +831,7 @@ export async function findMusicBrainzArtworkCandidates(
     }
   };
 
-  let scopedRanked: RankedCandidate[] = [];
+  let scopedRanked: ManualArtworkRankedCandidate[] = [];
   if (scopedTerms) {
     const scopedRecordings = await fetchCandidates(
       scopedTerms,
@@ -758,15 +839,14 @@ export async function findMusicBrainzArtworkCandidates(
       fetchImpl,
       userAgent
     );
-    scopedRanked = rankCandidates(matchTrack, scopedRecordings)
-      .filter(candidate => !candidate.blockingConflict);
+    scopedRanked = rankManualArtworkCandidates(matchTrack, scopedRecordings, primaryTitle);
 
     await collectArtwork(scopedRanked, true);
     if (results.length > 0) return results;
   }
 
   const broadRecordings = await fetchCandidates(
-    { title: identity.title, artist: identity.artist },
+    { title: primaryTitle, artist: identity.artist },
     providers,
     fetchImpl,
     userAgent
@@ -774,8 +854,7 @@ export async function findMusicBrainzArtworkCandidates(
   const preferredRecordingIds = new Set(
     scopedRanked.map(candidate => candidate.candidate.recordingId)
   );
-  const broadRanked = rankCandidates(matchTrack, broadRecordings)
-    .filter(candidate => !candidate.blockingConflict)
+  const broadRanked = rankManualArtworkCandidates(matchTrack, broadRecordings, primaryTitle)
     .sort((left, right) => {
       const leftPreferred = preferredRecordingIds.has(left.candidate.recordingId) ? 1 : 0;
       const rightPreferred = preferredRecordingIds.has(right.candidate.recordingId) ? 1 : 0;
@@ -783,6 +862,23 @@ export async function findMusicBrainzArtworkCandidates(
     });
 
   await collectArtwork(broadRanked, false);
+  if (results.length > 0) return results;
+
+  // Medleys e nomes compostos podem não existir no MusicBrainz como uma única
+  // gravação. Nesse caso tentamos, de forma conservadora, os segmentos do título,
+  // sempre mantendo o artista como filtro obrigatório.
+  for (const alternateTitle of searchTitles.slice(1)) {
+    if (results.length >= 8 || artworkAttempts >= 20) break;
+    const recordings = await fetchCandidates(
+      { title: alternateTitle, artist: identity.artist },
+      providers,
+      fetchImpl,
+      userAgent
+    );
+    const ranked = rankManualArtworkCandidates(matchTrack, recordings, alternateTitle);
+    await collectArtwork(ranked, false);
+  }
+
   return results;
 }
 
