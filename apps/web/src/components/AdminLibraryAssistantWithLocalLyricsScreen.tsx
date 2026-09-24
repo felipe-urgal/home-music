@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
-import { AdminLibraryAssistantScreen } from './AdminLibraryAssistantScreen';
+import { AdminLibraryAssistantTabbedScreen } from './AdminLibraryAssistantTabbedScreen';
 import { AdminLocalLyricsPanel } from './AdminLocalLyricsPanel';
 import './admin-library-assistant-local-lyrics.css';
 
@@ -12,7 +12,7 @@ export function AdminLibraryAssistantWithLocalLyricsScreen({ onBack }: Props) {
 
   return (
     <div className="assistant-local-lyrics-shell">
-      <AdminLibraryAssistantScreen
+      <AdminLibraryAssistantTabbedScreen
         key={assistantRevision}
         onBack={onBack}
         onOpenLocalLyrics={() => setLocalLyricsOpen(true)}
