@@ -675,6 +675,18 @@ async function findArtworkForRelease(
 type ManualArtworkRankedCandidate = {
   candidate: MusicBrainzRecordingCandidate;
   score: number;
+  artistDifferent: boolean;
+};
+
+type ITunesArtworkCandidate = {
+  id: string;
+  title: string;
+  artist: string;
+  album: string;
+  albumArtist: string;
+  durationSeconds: number | null;
+  sourceUrl: string;
+  thumbnailUrl: string;
 };
 
 function manualComparable(value: string) {
@@ -690,8 +702,6 @@ function manualTitleAffinity(sourceTitle: string, candidateTitle: string) {
   if (!source || !candidate) return null;
   if (source === candidate) return 100;
 
-  // A busca manual pode aceitar versões como "Como Eu Quero / Os Outros"
-  // e títulos compostos, desde que uma frase completa esteja contida na outra.
   const shorter = source.length <= candidate.length ? source : candidate;
   const longer = source.length <= candidate.length ? candidate : source;
   if (shorter.length < 5) return null;
@@ -700,7 +710,28 @@ function manualTitleAffinity(sourceTitle: string, candidateTitle: string) {
   return null;
 }
 
-const MANUAL_TITLE_CONTEXT_SUFFIX = /\s*[\[(](?:ao\s+vivo|live|ac[uú]stico|unplugged|remaster(?:ed)?|radio\s+edit|edit|vers[aã]o\s+ao\s+vivo)[\])]\s*$/i;
+function manualArtistAffinity(
+  sourceArtist: string,
+  candidateArtist: string,
+  allowDifferent: boolean
+) {
+  if (!reliableMetadata(sourceArtist)) return { score: 0, different: false };
+
+  const source = manualComparable(sourceArtist);
+  const candidate = manualComparable(candidateArtist);
+  if (!source || !candidate) return allowDifferent ? { score: -32, different: true } : null;
+  if (source === candidate) return { score: 40, different: false };
+
+  const shorter = source.length <= candidate.length ? source : candidate;
+  const longer = source.length <= candidate.length ? candidate : source;
+  if (shorter.length >= 4 && ` ${longer} `.includes(` ${shorter} `)) {
+    return { score: 28, different: false };
+  }
+
+  return allowDifferent ? { score: -32, different: true } : null;
+}
+
+const MANUAL_TITLE_CONTEXT_SUFFIX = /\s*[\[(](?=[^\])]{1,80}[\])]\s*$)[^\])]*(?:ao\s+vivo|live|ac[uú]stico|unplugged|remaster(?:ed)?|radio\s+edit|edit|vers[aã]o|mix|remix|mashup)[^\])]*[\])]\s*$/i;
 
 function manualArtworkSearchTitles(title: string) {
   const primary = exactValue(title);
@@ -729,19 +760,24 @@ function manualArtworkSearchTitles(title: string) {
 function rankManualArtworkCandidates(
   track: Track,
   candidates: MusicBrainzRecordingCandidate[],
-  searchTitle: string
+  searchTitle: string,
+  options: { allowDifferentArtist?: boolean } = {}
 ): ManualArtworkRankedCandidate[] {
   return candidates
     .flatMap(candidate => {
-      const artistMatch = compareText(track.artist, candidate.artist);
-      if (artistMatch === 'different') return [];
+      const artistAffinity = manualArtistAffinity(
+        track.artist,
+        candidate.artist,
+        options.allowDifferentArtist === true
+      );
+      if (!artistAffinity) return [];
 
       const titleAffinity = manualTitleAffinity(searchTitle, candidate.title);
       if (titleAffinity == null) return [];
 
-      let score = titleAffinity + (artistMatch === 'exact' ? 40 : 34);
+      let score = titleAffinity + artistAffinity.score;
 
-      if (track.album.trim() && candidate.releases.some(
+      if (track.album.trim() && reliableMetadata(track.album) && candidate.releases.some(
         release => compareText(track.album, release.title) !== 'different'
       )) score += 18;
 
@@ -753,10 +789,222 @@ function rankManualArtworkCandidates(
         else score -= Math.min(12, Math.round(delta / 10));
       }
 
-      return [{ candidate, score }];
+      return [{
+        candidate,
+        score,
+        artistDifferent: artistAffinity.different
+      }];
     })
     .sort((left, right) => right.score - left.score)
     .slice(0, MAX_CANDIDATES);
+}
+
+function normalizeItunesArtworkUrl(value: unknown, size: 'source' | 'thumbnail') {
+  const normalized = normalizeTrustedArtworkImageUrl(value);
+  if (!normalized) return null;
+  const url = new URL(normalized);
+  const host = url.hostname.toLowerCase();
+  if (host !== 'mzstatic.com' && !host.endsWith('.mzstatic.com')) return null;
+  if (size === 'source') {
+    url.pathname = url.pathname.replace(
+      /\/\d+x\d+(?:bb)?(?=\.[A-Za-z0-9]+$)/,
+      '/1200x1200bb'
+    );
+  }
+  return url.toString();
+}
+
+function normalizeItunesCandidate(value: unknown): ITunesArtworkCandidate | null {
+  const item = record(value);
+  if (!item) return null;
+
+  const rawId = item.trackId;
+  const id = typeof rawId === 'number' && Number.isSafeInteger(rawId)
+    ? String(rawId)
+    : safeText(rawId, 64);
+  const title = safeText(item.trackName);
+  const artist = safeText(item.artistName);
+  const album = safeText(item.collectionName);
+  const albumArtist = safeText(item.collectionArtistName) ?? artist;
+  const thumbnailUrl = normalizeItunesArtworkUrl(item.artworkUrl100, 'thumbnail');
+  const sourceUrl = normalizeItunesArtworkUrl(item.artworkUrl100, 'source');
+  if (!id || !title || !artist || !album || !albumArtist || !thumbnailUrl || !sourceUrl) return null;
+
+  const millis = typeof item.trackTimeMillis === 'number' && Number.isFinite(item.trackTimeMillis)
+    ? item.trackTimeMillis
+    : null;
+
+  return {
+    id,
+    title,
+    artist,
+    album,
+    albumArtist,
+    durationSeconds: millis == null ? null : Math.round(millis / 100) / 10,
+    sourceUrl,
+    thumbnailUrl
+  };
+}
+
+function normalizeItunesSearch(payload: unknown): ITunesArtworkCandidate[] {
+  if (Array.isArray(payload)) {
+    return payload
+      .slice(0, 20)
+      .map(normalizeItunesCandidate)
+      .filter((value): value is ITunesArtworkCandidate => Boolean(value));
+  }
+
+  const root = record(payload);
+  if (!root || !Array.isArray(root.results) || root.results.length > 200) {
+    throw new LibraryAssistantProviderResponseError();
+  }
+  return root.results
+    .slice(0, 20)
+    .map(normalizeItunesCandidate)
+    .filter((value): value is ITunesArtworkCandidate => Boolean(value));
+}
+
+async function fetchItunesArtworkCandidates(
+  terms: { title: string; artist?: string; country: string },
+  providers: LibraryAssistantProviderGateway,
+  fetchImpl: FetchLike,
+  userAgent: string
+) {
+  const url = new URL(ITUNES_SEARCH_BASE_URL);
+  url.searchParams.set('term', [terms.title, terms.artist].filter(Boolean).join(' '));
+  url.searchParams.set('media', 'music');
+  url.searchParams.set('entity', 'song');
+  url.searchParams.set('limit', '20');
+  url.searchParams.set('country', terms.country);
+
+  const result = await providers.query({
+    provider: { source: 'itunes-search', version: ITUNES_SEARCH_PROVIDER_VERSION, userAgent },
+    cacheKey: JSON.stringify({
+      title: normalizedValue(terms.title),
+      artist: terms.artist ? normalizedValue(terms.artist) : null,
+      country: terms.country
+    }),
+    ttlMs: ITUNES_SEARCH_CACHE_TTL_MS,
+    execute: async ({ signal, userAgent: providerUserAgent }) => {
+      const response = await fetchImpl(url, {
+        signal,
+        redirect: 'error',
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': providerUserAgent
+        }
+      });
+      if (!response.ok) {
+        const error = new Error(response.status === 429 || response.status === 503
+          ? 'Catálogo iTunes temporariamente indisponível.'
+          : 'Falha ao consultar catálogo iTunes.');
+        Object.assign(error, {
+          code: response.status === 429 || response.status === 503
+            ? 'provider-rate-limited'
+            : 'provider-request-failed',
+          statusCode: response.status
+        });
+        throw error;
+      }
+      const declaredLength = Number(response.headers.get('content-length'));
+      if (Number.isFinite(declaredLength) && declaredLength > ITUNES_SEARCH_MAX_RESPONSE_CHARS) {
+        throw new LibraryAssistantProviderResponseError();
+      }
+      const text = await response.text();
+      if (text.length > ITUNES_SEARCH_MAX_RESPONSE_CHARS) {
+        throw new LibraryAssistantProviderResponseError();
+      }
+      try {
+        return JSON.parse(text) as unknown;
+      } catch {
+        throw new LibraryAssistantProviderResponseError();
+      }
+    },
+    normalize: normalizeItunesSearch
+  });
+  return result.value;
+}
+
+function rankItunesArtworkCandidates(
+  track: Track,
+  candidates: ITunesArtworkCandidate[],
+  searchTitle: string
+) {
+  return candidates
+    .flatMap(candidate => {
+      const titleAffinity = manualTitleAffinity(searchTitle, candidate.title);
+      if (titleAffinity == null) return [];
+
+      const artistAffinity = manualArtistAffinity(track.artist, candidate.artist, true)!;
+      let score = titleAffinity + artistAffinity.score;
+
+      if (reliableMetadata(track.album) && compareText(track.album, candidate.album) !== 'different') {
+        score += 18;
+      }
+      if (track.duration != null && candidate.durationSeconds != null) {
+        const delta = Math.abs(track.duration - candidate.durationSeconds);
+        if (delta <= 2) score += 10;
+        else if (delta <= 5) score += 6;
+        else if (delta <= 15) score += 2;
+        else score -= Math.min(12, Math.round(delta / 10));
+      }
+
+      return [{ candidate, score, artistDifferent: artistAffinity.different }];
+    })
+    .sort((left, right) => right.score - left.score)
+    .slice(0, 8);
+}
+
+async function findItunesArtworkFallback(
+  track: Track,
+  searchTitles: readonly string[],
+  providers: LibraryAssistantProviderGateway,
+  fetchImpl: FetchLike,
+  userAgent: string
+): Promise<AdminTrackCoverCandidate[]> {
+  const seen = new Set<string>();
+  const results: AdminTrackCoverCandidate[] = [];
+  const artist = reliableMetadata(track.artist) ? exactValue(track.artist) : '';
+
+  for (const title of searchTitles) {
+    for (const country of ITUNES_SEARCH_COUNTRIES) {
+      const queries = artist
+        ? [{ title, artist, country }, { title, country }]
+        : [{ title, country }];
+
+      for (const query of queries) {
+        let candidates: ITunesArtworkCandidate[];
+        try {
+          candidates = await fetchItunesArtworkCandidates(query, providers, fetchImpl, userAgent);
+        } catch {
+          continue;
+        }
+        const ranked = rankItunesArtworkCandidates(track, candidates, title);
+        for (const rankedCandidate of ranked) {
+          const candidate = rankedCandidate.candidate;
+          const key = candidate.sourceUrl;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          results.push({
+            id: `itunes-search:${candidate.id}`,
+            label: rankedCandidate.artistDifferent
+              ? `Alternativa — ${candidate.artist} · ${candidate.album}`
+              : `Capa — ${candidate.album}`,
+            album: candidate.album,
+            artist: candidate.artist,
+            sourceUrl: candidate.sourceUrl,
+            thumbnailUrl: candidate.thumbnailUrl,
+            musicBrainzReleaseId: null,
+            musicBrainzReleaseGroupId: null
+          });
+          if (results.length >= 8) return results;
+        }
+        if (results.length > 0) return results;
+      }
+    }
+  }
+
+  return results;
 }
 
 export async function findMusicBrainzImportMetadataEnrichment(
