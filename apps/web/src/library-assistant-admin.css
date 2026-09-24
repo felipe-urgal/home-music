@@ -2159,6 +2159,27 @@
   line-height: 1.45;
 }
 
+.assistant-v2__suggestion-error {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  align-items: start;
+  gap: 6px;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid rgba(220, 171, 23, .28);
+  border-radius: 7px;
+  background: rgba(111, 84, 9, .14);
+  color: #e9bd43;
+  font-size: .62rem;
+  line-height: 1.4;
+}
+
+.assistant-v2__suggestion-error svg {
+  width: 12px;
+  height: 12px;
+  margin-top: 1px;
+}
+
 .assistant-v2__card-actions {
   display: flex;
   flex-wrap: wrap;
