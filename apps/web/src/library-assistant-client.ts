@@ -16,6 +16,7 @@ import type {
   AdminLibraryAssistantRunProgressResponse,
   AdminLibraryAssistantRunResponse,
   AdminLibraryAssistantRunsResponse,
+  AdminLibraryAssistantRunTracksResponse,
   AdminLibraryAssistantSuggestionsResponse,
   LibraryAssistantCapability,
   LibraryAssistantDecision,
@@ -258,6 +259,15 @@ export async function getLibraryAssistantRunProgress(id: string) {
   );
   if (!response.ok) throw new Error(await responseError(response));
   return response.json() as Promise<AdminLibraryAssistantRunProgressResponse>;
+}
+
+export async function getLibraryAssistantRunTracks(id: string) {
+  const response = await apiFetch(
+    `/api/admin/library-assistant/runs/${encodeURIComponent(id)}/tracks?limit=5000`,
+    { cache: 'no-store' }
+  );
+  if (!response.ok) throw new Error(await responseError(response));
+  return response.json() as Promise<AdminLibraryAssistantRunTracksResponse>;
 }
 
 export async function getLibraryAssistantSuggestions(
