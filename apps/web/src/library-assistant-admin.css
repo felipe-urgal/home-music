@@ -793,6 +793,13 @@
   height: 1.55rem;
 }
 
+.assistant-admin-row__artwork img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
 .assistant-admin-row__identity {
   display: grid;
   gap: .06rem;
@@ -2150,6 +2157,74 @@
   color: #9cadba;
   font-size: .64rem;
   line-height: 1.45;
+}
+
+.assistant-v2__card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.assistant-v2__suggestion-cards article > header .assistant-v2__apply-individual {
+  border-color: rgba(32,153,237,.55);
+  background: rgba(32,153,237,.12);
+  color: #8ed0ff;
+}
+
+.assistant-v2__suggestion-cards article > header .assistant-v2__apply-individual svg {
+  width: 12px;
+  height: 12px;
+}
+
+.assistant-v2__artwork-change {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) 18px minmax(0,1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.assistant-v2__artwork-change > div {
+  min-width: 0;
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+}
+
+.assistant-v2__artwork-change > div .assistant-admin-row__artwork {
+  width: min(100%, 108px);
+  aspect-ratio: 1;
+  height: auto;
+  border-radius: 7px;
+}
+
+.assistant-v2__artwork-change > div small {
+  color: #7890a2;
+  font-size: .58rem;
+}
+
+.assistant-v2__artwork-change > svg {
+  width: 13px;
+  height: 13px;
+  color: #5d849f;
+}
+
+.assistant-v2__individual-note {
+  display: grid;
+  grid-template-columns: 14px minmax(0,1fr);
+  gap: 6px;
+  margin: 0;
+  padding: 10px 12px;
+  border-top: 1px solid rgba(76,104,124,.22);
+  color: #7890a2;
+  font-size: .6rem;
+  line-height: 1.4;
+}
+
+.assistant-v2__individual-note svg {
+  width: 12px;
+  height: 12px;
+  margin-top: 1px;
 }
 
 .assistant-v2__suggestion-cards article > footer {
