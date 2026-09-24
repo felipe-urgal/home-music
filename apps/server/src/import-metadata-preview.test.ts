@@ -194,6 +194,42 @@ test('capa embutida segura fica disponível somente pelo endpoint dedicado do ma
   }
 });
 
+test('capa externa e ajustes aceitos seguem juntos para a promoção', async () => {
+  const item = await fixture({
+    metadata: { album: null, albumArtist: null, cover: null },
+    provider: { artist: 'Artista local' }
+  });
+  try {
+    await item.manager.captureSource(item.job.id);
+    await item.manager.extract(item.job.id);
+    item.manager.update(item.job.id, {
+      album: 'Álbum identificado',
+      albumArtist: 'Artista do álbum'
+    });
+    const externalCover = Buffer.from('external-cover');
+    const selected = item.manager.setExternalCover(item.job.id, {
+      data: externalCover,
+      contentType: 'image/jpeg'
+    });
+
+    assert.equal(selected.preview.cover.available, true);
+    assert.equal(selected.preview.cover.contentType, 'image/jpeg');
+
+    const review = item.manager.getPromotionReview(item.job.id);
+    assert.ok(review);
+    assert.equal(review.metadata.album, 'Álbum identificado');
+    assert.equal(review.metadata.albumArtist, 'Artista do álbum');
+    assert.deepEqual(review.cover?.data, externalCover);
+    assert.equal(review.cover?.contentType, 'image/jpeg');
+
+    review.cover!.data[0] = 0;
+    assert.deepEqual(item.manager.getPromotionReview(item.job.id)?.cover?.data, externalCover);
+  } finally {
+    await rm(item.root, { recursive: true, force: true });
+  }
+});
+
+
 test('preview exige validação técnica concluída', async () => {
   const item = await fixture();
   try {
