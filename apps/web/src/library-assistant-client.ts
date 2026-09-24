@@ -1,4 +1,10 @@
 import type {
+  AdminTrackCoverCandidate,
+  AdminTrackCoverCandidatesResponse,
+  AdminTrackCoverResponse,
+  EditableTrackMetadata
+} from '@home-music/shared';
+import type {
   AdminLibraryAssistantBatchDecisionRequest,
   AdminLibraryAssistantBatchDecisionResponse,
   AdminLibraryAssistantDecisionResponse,
@@ -49,6 +55,53 @@ export type LibraryAssistantFingerprintResult = {
 async function responseError(response: Response) {
   const payload = await response.json().catch(() => null) as { error?: string } | null;
   return payload?.error || `Falha HTTP ${response.status}`;
+}
+
+export async function searchTrackArtworkCandidates(
+  trackId: string,
+  metadata: EditableTrackMetadata
+) {
+  const response = await apiFetch(
+    `/api/admin/library-assistant/tracks/${encodeURIComponent(trackId)}/artwork-candidates`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Home-Music-Request': '1'
+      },
+      body: JSON.stringify(metadata)
+    }
+  );
+  if (!response.ok) throw new Error(await responseError(response));
+  return response.json() as Promise<AdminTrackCoverCandidatesResponse>;
+}
+
+export function trackArtworkCandidatePreviewUrl(candidate: AdminTrackCoverCandidate) {
+  const query = new URLSearchParams({ sourceUrl: candidate.sourceUrl });
+  if (candidate.thumbnailUrl) query.set('thumbnailUrl', candidate.thumbnailUrl);
+  return `/api/admin/library-assistant/artwork-candidates/preview?${query}`;
+}
+
+export async function applyTrackArtworkCandidate(
+  trackId: string,
+  candidate: AdminTrackCoverCandidate
+) {
+  const response = await apiFetch(
+    `/api/admin/library-assistant/tracks/${encodeURIComponent(trackId)}/artwork-candidates/apply`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Home-Music-Request': '1'
+      },
+      body: JSON.stringify({
+        sourceUrl: candidate.sourceUrl,
+        thumbnailUrl: candidate.thumbnailUrl
+      })
+    }
+  );
+  if (!response.ok) throw new Error(await responseError(response));
+  return response.json() as Promise<AdminTrackCoverResponse>;
 }
 
 export async function startLibraryAssistantRun(
