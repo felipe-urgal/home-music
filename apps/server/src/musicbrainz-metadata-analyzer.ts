@@ -805,12 +805,10 @@ function normalizeItunesArtworkUrl(value: unknown, size: 'source' | 'thumbnail')
   const url = new URL(normalized);
   const host = url.hostname.toLowerCase();
   if (host !== 'mzstatic.com' && !host.endsWith('.mzstatic.com')) return null;
-  if (size === 'source') {
-    url.pathname = url.pathname.replace(
-      /\/\d+x\d+(?:bb)?(?=\.[A-Za-z0-9]+$)/,
-      '/1200x1200bb'
-    );
-  }
+  url.pathname = url.pathname.replace(
+    /\/\d+x\d+(?:bb)?(?=\.[A-Za-z0-9]+$)/,
+    size === 'source' ? '/1200x1200bb' : '/600x600bb'
+  );
   return url.toString();
 }
 
