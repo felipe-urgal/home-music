@@ -683,82 +683,106 @@ export async function findMusicBrainzArtworkCandidates(
   const scopedTerms = identity.useAlbumFilter
     ? { title: identity.title, artist: identity.artist, album: identity.album }
     : null;
-  let recordings = scopedTerms
-    ? await fetchCandidates(scopedTerms, providers, fetchImpl, userAgent)
-    : [];
-  if (!scopedTerms || recordings.length === 0) {
-    recordings = await fetchCandidates(
-      { title: identity.title, artist: identity.artist },
+
+  const seenReleases = new Set<string>();
+  const seenArtwork = new Set<string>();
+  const results: AdminTrackCoverCandidate[] = [];
+
+  const collectArtwork = async (
+    ranked: RankedCandidate[],
+    albumOnly: boolean
+  ) => {
+    const releaseCandidates: Array<{
+      release: MusicBrainzRelease;
+      artist: string;
+      score: number;
+    }> = [];
+
+    for (const candidate of ranked) {
+      const releases = albumOnly
+        ? candidate.candidate.releases.filter(
+            release => compareText(identity.album, release.title) !== 'different'
+          )
+        : candidate.candidate.releases;
+
+      for (const release of releases) {
+        releaseCandidates.push({
+          release,
+          artist: release.albumArtist ?? candidate.candidate.artist,
+          score: candidate.score
+        });
+      }
+    }
+
+    releaseCandidates.sort((left, right) => right.score - left.score);
+    let attempts = 0;
+
+    for (const candidate of releaseCandidates) {
+      if (results.length >= 8 || attempts >= 12) break;
+      if (seenReleases.has(candidate.release.id)) continue;
+      seenReleases.add(candidate.release.id);
+      attempts += 1;
+
+      try {
+        const artwork = await findArtworkForRelease(candidate.release, {
+          providers,
+          fetchImpl,
+          userAgent
+        });
+        if (!artwork) continue;
+
+        const artworkKey = artwork.id || artwork.imageUrl;
+        if (seenArtwork.has(artworkKey)) continue;
+        seenArtwork.add(artworkKey);
+        results.push({
+          id: `cover-art-archive:${candidate.release.id}:${artwork.id}`,
+          label: `Capa frontal — ${candidate.release.title}`,
+          album: candidate.release.title,
+          artist: candidate.artist,
+          sourceUrl: artwork.imageUrl,
+          thumbnailUrl: artwork.thumbnailUrl,
+          musicBrainzReleaseId: candidate.release.id,
+          musicBrainzReleaseGroupId: candidate.release.releaseGroupId
+        });
+      } catch {
+        // Uma edição sem artwork válido não impede mostrar outras capas encontradas.
+      }
+    }
+  };
+
+  let scopedRanked: RankedCandidate[] = [];
+  if (scopedTerms) {
+    const scopedRecordings = await fetchCandidates(
+      scopedTerms,
       providers,
       fetchImpl,
       userAgent
     );
+    scopedRanked = rankCandidates(matchTrack, scopedRecordings)
+      .filter(candidate => !candidate.blockingConflict);
+
+    await collectArtwork(scopedRanked, true);
+    if (results.length > 0) return results;
   }
 
-  const ranked = rankCandidates(matchTrack, recordings)
-    .filter(candidate => !candidate.blockingConflict);
-  if (ranked.length === 0) return [];
+  const broadRecordings = await fetchCandidates(
+    { title: identity.title, artist: identity.artist },
+    providers,
+    fetchImpl,
+    userAgent
+  );
+  const preferredRecordingIds = new Set(
+    scopedRanked.map(candidate => candidate.candidate.recordingId)
+  );
+  const broadRanked = rankCandidates(matchTrack, broadRecordings)
+    .filter(candidate => !candidate.blockingConflict)
+    .sort((left, right) => {
+      const leftPreferred = preferredRecordingIds.has(left.candidate.recordingId) ? 1 : 0;
+      const rightPreferred = preferredRecordingIds.has(right.candidate.recordingId) ? 1 : 0;
+      return rightPreferred - leftPreferred || right.score - left.score;
+    });
 
-  const releaseCandidates: Array<{
-    release: MusicBrainzRelease;
-    artist: string;
-    score: number;
-  }> = [];
-  for (const candidate of ranked) {
-    const matchingReleases = identity.useAlbumFilter
-      ? candidate.candidate.releases.filter(release => compareText(identity.album, release.title) !== 'different')
-      : candidate.candidate.releases;
-    const releases = matchingReleases.length > 0
-      ? matchingReleases
-      : candidate.release
-        ? [candidate.release]
-        : [];
-    for (const release of releases) {
-      releaseCandidates.push({
-        release,
-        artist: release.albumArtist ?? candidate.candidate.artist,
-        score: candidate.score
-      });
-    }
-  }
-
-  releaseCandidates.sort((left, right) => right.score - left.score);
-  const seenReleases = new Set<string>();
-  const seenArtwork = new Set<string>();
-  const results: AdminTrackCoverCandidate[] = [];
-  let attempts = 0;
-
-  for (const candidate of releaseCandidates) {
-    if (results.length >= 8 || attempts >= 12) break;
-    if (seenReleases.has(candidate.release.id)) continue;
-    seenReleases.add(candidate.release.id);
-    attempts += 1;
-
-    try {
-      const artwork = await findArtworkForRelease(candidate.release, {
-        providers,
-        fetchImpl,
-        userAgent
-      });
-      if (!artwork) continue;
-      const artworkKey = artwork.id || artwork.imageUrl;
-      if (seenArtwork.has(artworkKey)) continue;
-      seenArtwork.add(artworkKey);
-      results.push({
-        id: `cover-art-archive:${candidate.release.id}:${artwork.id}`,
-        label: `Capa frontal — ${candidate.release.title}`,
-        album: candidate.release.title,
-        artist: candidate.artist,
-        sourceUrl: artwork.imageUrl,
-        thumbnailUrl: artwork.thumbnailUrl,
-        musicBrainzReleaseId: candidate.release.id,
-        musicBrainzReleaseGroupId: candidate.release.releaseGroupId
-      });
-    } catch {
-      // Uma edição sem artwork válido não impede mostrar outras capas encontradas.
-    }
-  }
-
+  await collectArtwork(broadRanked, false);
   return results;
 }
 

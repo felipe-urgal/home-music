@@ -218,6 +218,110 @@ test('busca manual retorna uma lista de capas para a faixa selecionada', async (
   assert.ok(candidates.every(candidate => candidate.album === 'Album'));
 });
 
+test('busca manual cai para outras edições da mesma gravação quando o álbum exato não tem capa', async () => {
+  const queries: string[] = [];
+  const caaPaths: string[] = [];
+
+  const fetchImpl = async (input: string | URL) => {
+    const url = new URL(String(input));
+    if (isCaaRequest(input)) {
+      caaPaths.push(url.pathname);
+      if (url.pathname === '/release/release-original') {
+        return caaResponse([{
+          id: 'cover-original',
+          front: true,
+          image: 'https://coverartarchive.org/release/release-original/front',
+          thumbnails: { 500: 'https://coverartarchive.org/release/release-original/500' }
+        }]);
+      }
+      return caaResponse();
+    }
+
+    const query = url.searchParams.get('query') ?? '';
+    queries.push(query);
+
+    const baseRecording = {
+      id: 'recording-construcao',
+      title: 'Construção',
+      length: 180_500,
+      'artist-credit': [{
+        name: 'Chico Buarque',
+        artist: { id: 'artist-chico', name: 'Chico Buarque' }
+      }]
+    };
+
+    if (/release:/.test(query)) {
+      return response([recording({
+        ...baseRecording,
+        releases: [{
+          id: 'release-aquarela',
+          title: 'Aquarela do Brasil',
+          'release-group': { id: 'group-aquarela' },
+          'artist-credit': [{
+            name: 'Chico Buarque',
+            artist: { id: 'artist-chico', name: 'Chico Buarque' }
+          }]
+        }]
+      })]);
+    }
+
+    return response([recording({
+      ...baseRecording,
+      releases: [
+        {
+          id: 'release-aquarela',
+          title: 'Aquarela do Brasil',
+          'release-group': { id: 'group-aquarela' },
+          'artist-credit': [{
+            name: 'Chico Buarque',
+            artist: { id: 'artist-chico', name: 'Chico Buarque' }
+          }]
+        },
+        {
+          id: 'release-original',
+          title: 'Construção',
+          'release-group': { id: 'group-original' },
+          'artist-credit': [{
+            name: 'Chico Buarque',
+            artist: { id: 'artist-chico', name: 'Chico Buarque' }
+          }]
+        }
+      ]
+    })]);
+  };
+
+  const candidates = await findMusicBrainzArtworkCandidates(
+    track({
+      title: 'Construção',
+      artist: 'Chico Buarque',
+      album: 'Aquarela do Brasil',
+      albumArtist: 'Chico Buarque'
+    }),
+    gateway(),
+    { fetchImpl }
+  );
+
+  assert.equal(queries.length, 2);
+  assert.match(queries[0], /release:"Aquarela do Brasil"/);
+  assert.doesNotMatch(queries[1], /release:/);
+  assert.deepEqual(
+    candidates.map(candidate => ({
+      releaseId: candidate.musicBrainzReleaseId,
+      album: candidate.album,
+      artist: candidate.artist
+    })),
+    [{
+      releaseId: 'release-original',
+      album: 'Construção',
+      artist: 'Chico Buarque'
+    }]
+  );
+  assert.equal(caaPaths.filter(path => path === '/release/release-aquarela').length, 1);
+  assert.ok(caaPaths.includes('/release-group/group-aquarela'));
+  assert.ok(caaPaths.includes('/release/release-original'));
+});
+
+
 test('analyzer propõe capa CAA somente depois de identificação MusicBrainz confiável', async () => {
   const analyzer = createMusicBrainzMetadataAnalyzer({
     fetchImpl: async input => {
