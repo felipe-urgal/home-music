@@ -83,7 +83,7 @@ test('artwork preview validates route identifiers before fetching', async () => 
   try {
     const response = await app.inject({
       method: 'GET',
-      url: '/api/admin/library-assistant/runs/%2Fbad/suggestions/suggestion-1/artwork-preview'
+      url: '/api/admin/library-assistant/runs/bad!/suggestions/suggestion-1/artwork-preview'
     });
     assert.equal(response.statusCode, 400);
     assert.equal(fetched, false);
