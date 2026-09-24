@@ -680,13 +680,13 @@ export function AdminLibraryAssistantTabbedScreen({ onBack, onOpenLocalLyrics }:
   const selectedSuggestions = selectedRow?.suggestions ?? [];
 
   return (
-    <section className="assistant-tabs" aria-labelledby="library-assistant-tabs-title">
+    <section className="assistant-tabs" aria-labelledby="library-assistant-title">
       <header className="assistant-tabs__header">
         <button type="button" className="assistant-tabs__back" aria-label="Voltar" onClick={onBack}>
           <ChevronLeft />
         </button>
         <div className="assistant-tabs__heading">
-          <strong id="library-assistant-tabs-title">Assistente da Biblioteca</strong>
+          <strong id="library-assistant-title">Assistente da Biblioteca</strong>
           <small>Analise cada tipo de correção separadamente e revise somente o que precisa da sua decisão.</small>
         </div>
         <div className="assistant-tabs__header-actions">
