@@ -9,7 +9,8 @@ import {
 import {
   COVER_ART_ARCHIVE_PROVIDER_VERSION,
   findCoverArtArchiveFrontCover,
-  findCoverArtArchiveReleaseGroupFrontCover
+  findCoverArtArchiveReleaseGroupFrontCover,
+  normalizeTrustedArtworkImageUrl
 } from './cover-art-archive.js';
 import {
   LibraryAssistantProviderResponseError,
@@ -24,6 +25,11 @@ const MUSICBRAINZ_BASE_URL = 'https://musicbrainz.org/ws/2';
 const MUSICBRAINZ_PROVIDER_VERSION = 'ws2-recording-search-v2';
 const MUSICBRAINZ_USER_AGENT = 'HomeMusic/0.1 (+https://github.com/felipe-urgal/home-music)';
 const MUSICBRAINZ_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1_000;
+const ITUNES_SEARCH_BASE_URL = 'https://itunes.apple.com/search';
+const ITUNES_SEARCH_PROVIDER_VERSION = 'itunes-song-artwork-v1';
+const ITUNES_SEARCH_CACHE_TTL_MS = 24 * 60 * 60 * 1_000;
+const ITUNES_SEARCH_MAX_RESPONSE_CHARS = 1_000_000;
+const ITUNES_SEARCH_COUNTRIES = ['BR', 'US'] as const;
 const MAX_RESPONSE_CHARS = 1_000_000;
 const MAX_CANDIDATES = 5;
 const AMBIGUOUS_MARGIN = 15;
@@ -545,13 +551,11 @@ function artworkConfidenceFor(
   return titleMatches && artistMatches ? 'high' : null;
 }
 
-type QueryTerms = { title: string; artist: string; album?: string };
+type QueryTerms = { title: string; artist?: string; album?: string };
 
 function queryText(terms: QueryTerms) {
-  const query = [
-    `recording:${JSON.stringify(exactValue(terms.title))}`,
-    `artist:${JSON.stringify(exactValue(terms.artist))}`
-  ];
+  const query = [`recording:${JSON.stringify(exactValue(terms.title))}`];
+  if (terms.artist) query.push(`artist:${JSON.stringify(exactValue(terms.artist))}`);
   if (terms.album) query.push(`release:${JSON.stringify(exactValue(terms.album))}`);
   return query.join(' AND ');
 }
@@ -559,7 +563,7 @@ function queryText(terms: QueryTerms) {
 function cacheKey(terms: QueryTerms) {
   return JSON.stringify({
     title: normalizedValue(terms.title),
-    artist: normalizedValue(terms.artist),
+    artist: terms.artist ? normalizedValue(terms.artist) : null,
     album: terms.album ? normalizedValue(terms.album) : null
   });
 }
