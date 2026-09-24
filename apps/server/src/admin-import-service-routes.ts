@@ -60,6 +60,7 @@ import {
   YT_DLP_PROVIDER_ID,
   YtDlpProvider
 } from './yt-dlp-provider.js';
+import { YtDlpSearch } from './yt-dlp-search.js';
 
 const defaultImportStagingPath = fileURLToPath(new URL('../../../data/import-staging/', import.meta.url));
 const defaultExternalProviderScratchPath = fileURLToPath(new URL('../../../data/provider-scratch/', import.meta.url));
@@ -336,6 +337,9 @@ export function registerAdminImportRoutes(
     && ytDlpCommand
     && externalProviders.listProviders().some(provider => provider.id === YT_DLP_PROVIDER_ID && provider.configured)
   );
+  const providerSearch = ytDlpCommand
+    ? new YtDlpSearch({ commandPath: ytDlpCommand, maxResults: 10 })
+    : null;
   const providerBatches = ytDlpAvailable && automaticFlow
     ? createAdminExternalProviderBatchManager({
         app,
@@ -475,6 +479,34 @@ export function registerAdminImportRoutes(
         return await imports.cancelUrl(request.params.id);
       } catch (error) {
         return sendImportError(reply, error);
+      }
+    }
+  );
+
+  app.post<{ Params: { providerId: string }; Body: { query?: unknown } }>(
+    '/api/admin/imports/providers/:providerId/search',
+    async (request, reply) => {
+      reply.header('Cache-Control', 'private, no-store');
+      if (request.params.providerId !== YT_DLP_PROVIDER_ID || !providerSearch) {
+        return reply.code(503).send({ error: 'A busca no YouTube / YouTube Music não está disponível no servidor.' });
+      }
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => {
+        controller.abort(new ExternalProviderError(
+          'provider_timeout',
+          'A busca no provider externo excedeu o tempo limite.',
+          504
+        ));
+      }, 30_000);
+      timeout.unref?.();
+
+      try {
+        return await providerSearch.search(request.body?.query, controller.signal);
+      } catch (error) {
+        return sendImportError(reply, error);
+      } finally {
+        clearTimeout(timeout);
       }
     }
   );

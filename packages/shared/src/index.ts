@@ -325,6 +325,21 @@ export type AdminImportJobsResponse = {
   jobs: ImportJob[];
 };
 
+export type AdminExternalProviderSearchItem = {
+  id: string;
+  title: string;
+  artist: string | null;
+  durationSeconds: number | null;
+  thumbnailUrl: string | null;
+  sourceUrl: string;
+  provider: string;
+};
+
+export type AdminExternalProviderSearchResponse = {
+  query: string;
+  items: AdminExternalProviderSearchItem[];
+};
+
 export type AdminOperationCounts = {
   tracks: number | null;
   added: number | null;

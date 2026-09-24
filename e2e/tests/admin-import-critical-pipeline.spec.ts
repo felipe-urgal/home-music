@@ -293,7 +293,7 @@ test('provider e URL direta atravessam o workbench crítico sem internet públic
   await openImport(page);
 
   const providerUrl = 'https://music.youtube.com/watch?v=e2e-fixture';
-  await page.getByLabel('Link do YouTube ou YouTube Music').fill(providerUrl);
+  await page.getByLabel('Buscar ou colar link do YouTube ou YouTube Music').fill(providerUrl);
   await page.getByRole('button', { name: 'Analisar link', exact: true }).click();
   await expect(page.getByText('Provider E2E', { exact: true })).toBeVisible();
   expect(providerInspectBody).toEqual({ url: providerUrl });
@@ -320,4 +320,109 @@ test('provider e URL direta atravessam o workbench crítico sem internet públic
   await page.getByRole('button', { name: 'Importar para biblioteca', exact: true }).click();
   expect(promotionBody).toEqual({ folderPath: 'Importados' });
   await expect(page.getByText('Importação concluída', { exact: true })).toBeVisible();
+});
+
+
+test('busca por texto seleciona resultado e reutiliza o pipeline do provider', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop-chromium');
+
+  const jobs: Job[] = [];
+  let searchBody: unknown = null;
+  let inspectBody: unknown = null;
+  let startBody: unknown = null;
+
+  await page.route('**/api/admin/imports', async route => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        jobs: [...jobs].reverse(),
+        upload: {
+          maxBytes: 1024 * 1024,
+          acceptedExtensions: ['.mp3', '.flac', '.wav', '.m4a', '.aac', '.ogg', '.opus']
+        },
+        url: {
+          maxBytes: 1024 * 1024,
+          timeoutMs: 5000,
+          maxRedirects: 3,
+          acceptedProtocols: ['http:', 'https:']
+        },
+        mediaValidation: {
+          profiles: [{ id: 'original', label: 'Original', description: 'Preserva a mídia quando compatível.' }]
+        },
+        providers: [{
+          id: 'yt-dlp',
+          label: 'yt-dlp',
+          configured: true,
+          capabilities: { audio: true, metadata: true, thumbnail: true, playlists: true }
+        }]
+      })
+    });
+  });
+
+  await page.route('**/api/admin/imports/providers/yt-dlp/search', async route => {
+    const request = route.request();
+    expect(request.method()).toBe('POST');
+    expect(request.headers()['x-home-music-request']).toBe('1');
+    searchBody = request.postDataJSON();
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        query: 'Djavan Samurai',
+        items: [{
+          id: 'abcDEF_1234',
+          title: 'Samurai',
+          artist: 'Djavan',
+          durationSeconds: 312,
+          thumbnailUrl: null,
+          sourceUrl: 'https://www.youtube.com/watch?v=abcDEF_1234',
+          provider: 'yt-dlp'
+        }]
+      })
+    });
+  });
+
+  await page.route('**/api/admin/imports/providers/yt-dlp/batches/inspect', async route => {
+    inspectBody = route.request().postDataJSON();
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ batch: null, limits: null })
+    });
+  });
+
+  await page.route('**/api/admin/imports/providers/yt-dlp', async route => {
+    startBody = route.request().postDataJSON();
+    const job = baseJob(
+      'provider-search-e2e',
+      'Samurai · Djavan',
+      { type: 'provider', provider: 'yt-dlp' },
+      'processing'
+    );
+    jobs.push(job);
+    await route.fulfill({
+      status: 201,
+      contentType: 'application/json',
+      body: JSON.stringify({ job })
+    });
+  });
+
+  await login(page);
+  await openImport(page);
+
+  const input = page.getByLabel('Buscar ou colar link do YouTube ou YouTube Music');
+  await input.fill('Djavan Samurai');
+  await page.getByRole('button', { name: 'Buscar', exact: true }).click();
+
+  expect(searchBody).toEqual({ query: 'Djavan Samurai' });
+  const result = page.locator('.admin-import-provider__search-item').filter({ hasText: 'Samurai' });
+  await expect(result.getByText('Djavan', { exact: false })).toBeVisible();
+  await result.getByRole('button', { name: 'Selecionar', exact: true }).click();
+
+  const selectedUrl = 'https://www.youtube.com/watch?v=abcDEF_1234';
+  expect(inspectBody).toEqual({ url: selectedUrl });
+  expect(startBody).toEqual({ url: selectedUrl });
+  await expect(page.getByText('Samurai · Djavan', { exact: true })).toBeVisible();
 });

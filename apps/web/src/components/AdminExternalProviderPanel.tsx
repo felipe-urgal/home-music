@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import type { ImportJob } from '@home-music/shared';
+import type { AdminExternalProviderSearchItem, ImportJob } from '@home-music/shared';
 import {
   Boxes,
   CheckCircle2,
@@ -9,7 +9,9 @@ import {
   Link2,
   ListMusic,
   LoaderCircle,
+  Music2,
   Plus,
+  Search,
   ShieldCheck,
   X
 } from 'lucide-react';
@@ -19,6 +21,7 @@ import {
   getAdminExternalProviderBatch,
   getAdminExternalProviders,
   inspectAdminExternalProviderBatch,
+  searchAdminExternalProvider,
   startAdminExternalProvider,
   startAdminExternalProviderBatch,
   type AdminExternalProviderBatch,
@@ -73,6 +76,17 @@ function formatDuration(seconds: number | null) {
   return `${Math.max(1, minutes)} min`;
 }
 
+function searchDuration(seconds: number | null) {
+  if (!seconds || !Number.isFinite(seconds) || seconds <= 0) return null;
+  const total = Math.round(seconds);
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const remaining = total % 60;
+  return hours > 0
+    ? `${hours}:${String(minutes).padStart(2, '0')}:${String(remaining).padStart(2, '0')}`
+    : `${minutes}:${String(remaining).padStart(2, '0')}`;
+}
+
 function batchDuration(batch: AdminExternalProviderBatch) {
   const known = batch.items.reduce((total, item) => total + (item.durationSeconds ?? 0), 0);
   return formatDuration(known);
@@ -117,6 +131,10 @@ export function AdminExternalProviderPanel({
   const [creatingFolder, setCreatingFolder] = useState(false);
   const [newFolderPath, setNewFolderPath] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState<AdminExternalProviderSearchItem[]>([]);
+  const [searchCompleted, setSearchCompleted] = useState(false);
+  const [selectedResultId, setSelectedResultId] = useState<string | null>(null);
   const [startingBatch, setStartingBatch] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -168,22 +186,13 @@ export function AdminExternalProviderPanel({
     };
   }, [activeBatch?.id, batchRunning, onRefresh]);
 
-  const submit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!providerId) {
-      setError('Nenhum provider externo está configurado.');
-      return;
-    }
-    if (!validHttpUrl(url)) {
-      setError('Informe uma URL HTTP ou HTTPS válida.');
-      return;
-    }
-
+  const startProviderUrl = async (sourceUrl: string, selectedId: string | null = null) => {
     setSubmitting(true);
+    setSelectedResultId(selectedId);
     setError(null);
     setActiveBatch(null);
+    setSearchCompleted(false);
     try {
-      const sourceUrl = url.trim();
       const inspected = await inspectAdminExternalProviderBatch(providerId, sourceUrl);
       if (inspected.batch) {
         const [availableFolders] = await Promise.all([
@@ -196,18 +205,64 @@ export function AdminExternalProviderPanel({
         setNewFolderPath('');
         setActiveJobId(null);
         setActiveBatch(inspected.batch);
+        setSearchResults([]);
         setUrl('');
         return;
       }
 
       const job = await startAdminExternalProvider(providerId, sourceUrl);
       setActiveJobId(job.id);
+      setSearchResults([]);
       onJobUpdated(job);
       setUrl('');
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Não foi possível analisar esse link.');
+      setError(caught instanceof Error ? caught.message : 'Não foi possível analisar esse conteúdo.');
     } finally {
+      setSelectedResultId(null);
       setSubmitting(false);
+    }
+  };
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!providerId) {
+      setError('Nenhum provider externo está configurado.');
+      return;
+    }
+
+    const value = url.trim();
+    if (!value) {
+      setError('Digite uma música, artista, álbum ou cole um link.');
+      return;
+    }
+
+    if (validHttpUrl(value)) {
+      setSearchResults([]);
+      await startProviderUrl(value);
+      return;
+    }
+
+    if (value.length < 2) {
+      setError('Digite pelo menos 2 caracteres para buscar.');
+      return;
+    }
+    if (value.length > 200) {
+      setError('A busca deve ter no máximo 200 caracteres.');
+      return;
+    }
+
+    setSearching(true);
+    setError(null);
+    setActiveBatch(null);
+    setSearchResults([]);
+    try {
+      const response = await searchAdminExternalProvider(providerId, value);
+      setSearchResults(response.items);
+      setSearchCompleted(true);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Não foi possível buscar no YouTube / YouTube Music.');
+    } finally {
+      setSearching(false);
     }
   };
 
@@ -264,7 +319,8 @@ export function AdminExternalProviderPanel({
     ? Math.round((activeBatch.summary.processed / activeBatch.summary.total) * 100)
     : 0;
   const batchOpen = Boolean(activeBatch && !TERMINAL_BATCH_STATUSES.has(activeBatch.status));
-  const formBusy = submitting || activeJobRunning || batchOpen || startingBatch;
+  const formBusy = submitting || searching || activeJobRunning || batchOpen || startingBatch;
+  const inputIsUrl = validHttpUrl(url);
 
   return (
     <section className={`admin-import-provider${compact ? ' is-compact' : ''}`} aria-labelledby="admin-import-provider-title">
@@ -287,12 +343,13 @@ export function AdminExternalProviderPanel({
           </div>
         </div>
       ) : available.length > 0 ? (
+        <>
         <form className="admin-import-provider__form" onSubmit={event => void submit(event)}>
           {compact && (
             <div className="admin-import-provider__compact-heading">
               <div>
-                <strong id="admin-import-provider-title">Cole o link</strong>
-                <small>Faixa individual ou playlist do YouTube / YouTube Music</small>
+                <strong id="admin-import-provider-title">Busque ou cole um link</strong>
+                <small>Artista, música, álbum, faixa individual ou playlist</small>
               </div>
               <Link2 />
             </div>
@@ -313,21 +370,38 @@ export function AdminExternalProviderPanel({
             <label className="admin-import-provider__url">
               {!compact && <span>Link do conteúdo</span>}
               <input
-                aria-label={compact ? 'Link do YouTube ou YouTube Music' : undefined}
-                type="url"
-                inputMode="url"
+                aria-label={compact ? 'Buscar ou colar link do YouTube ou YouTube Music' : undefined}
+                type="text"
+                inputMode="search"
                 autoCapitalize="none"
                 autoCorrect="off"
                 spellCheck={false}
-                placeholder="https://music.youtube.com/watch?v=..."
+                placeholder="Artista, música, álbum ou URL..."
                 value={url}
                 disabled={formBusy}
-                onChange={event => { setUrl(event.target.value); if (error) setError(null); }}
+                onChange={event => {
+                  setUrl(event.target.value);
+                  setSearchResults([]);
+                  setSearchCompleted(false);
+                  if (error) setError(null);
+                }}
               />
             </label>
             <button className={compact ? 'is-primary' : undefined} type="submit" disabled={formBusy || !providerId || !url.trim()}>
-              {submitting || pipelineRunning ? <LoaderCircle className="is-spinning" /> : compact ? <Link2 /> : <Boxes />}
-              {submitting ? 'Analisando…' : compact ? 'Analisar link' : 'Importar'}
+              {submitting || searching || pipelineRunning
+                ? <LoaderCircle className="is-spinning" />
+                : inputIsUrl
+                  ? <Link2 />
+                  : compact
+                    ? <Search />
+                    : <Boxes />}
+              {submitting
+                ? 'Analisando…'
+                : searching
+                  ? 'Buscando…'
+                  : inputIsUrl
+                    ? compact ? 'Analisar link' : 'Importar'
+                    : 'Buscar'}
             </button>
           </div>
           {!compact && (
@@ -336,6 +410,57 @@ export function AdminExternalProviderPanel({
             </small>
           )}
         </form>
+
+        {searchResults.length > 0 && (
+          <div className="admin-import-provider__search-results" aria-live="polite">
+            <div className="admin-import-provider__search-results-heading">
+              <strong>Resultados</strong>
+              <small>{searchResults.length} {searchResults.length === 1 ? 'resultado' : 'resultados'}</small>
+            </div>
+            <div className="admin-import-provider__search-list">
+              {searchResults.map(item => (
+                <article className="admin-import-provider__search-item" key={item.id}>
+                  <span className="admin-import-provider__search-thumb">
+                    <Music2 />
+                    {item.thumbnailUrl && (
+                      <img
+                        src={item.thumbnailUrl}
+                        alt=""
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                        onError={event => { event.currentTarget.style.display = 'none'; }}
+                      />
+                    )}
+                  </span>
+                  <div className="admin-import-provider__search-copy">
+                    <strong>{item.title}</strong>
+                    <small>
+                      {item.artist ?? 'YouTube'}
+                      {searchDuration(item.durationSeconds) ? ` · ${searchDuration(item.durationSeconds)}` : ''}
+                    </small>
+                    <span>YouTube / YouTube Music</span>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={formBusy}
+                    onClick={() => void startProviderUrl(item.sourceUrl, item.id)}
+                  >
+                    {submitting && selectedResultId === item.id ? <LoaderCircle className="is-spinning" /> : <Link2 />}
+                    Selecionar
+                  </button>
+                </article>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {!searching && searchCompleted && searchResults.length === 0 && !error && (
+          <div className="admin-import-provider__search-empty" role="status">
+            <Music2 />
+            <span>Nenhum resultado encontrado. Tente outros termos.</span>
+          </div>
+        )}
+        </>
       ) : (
         <div className="admin-import-empty"><LoaderCircle className="is-spinning" /> Verificando providers…</div>
       )}

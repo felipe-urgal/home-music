@@ -1,4 +1,4 @@
-import type { ImportJob } from '@home-music/shared';
+import type { AdminExternalProviderSearchResponse, ImportJob } from '@home-music/shared';
 import { apiFetch } from './api-client';
 
 export type AdminExternalProviderDescriptor = {
@@ -82,6 +82,25 @@ export async function getAdminExternalProviders() {
     throw new Error(payload?.error || `Falha HTTP ${response.status}`);
   }
   return payload.providers;
+}
+
+export async function searchAdminExternalProvider(providerId: string, query: string) {
+  const response = await apiFetch(
+    `/api/admin/imports/providers/${encodeURIComponent(providerId)}/search`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Home-Music-Request': '1'
+      },
+      body: JSON.stringify({ query })
+    }
+  );
+  const payload = await response.json().catch(() => null) as (AdminExternalProviderSearchResponse & { error?: string }) | null;
+  if (!response.ok || !payload || !Array.isArray(payload.items)) {
+    throw new Error(payload?.error || `Falha HTTP ${response.status}`);
+  }
+  return payload;
 }
 
 export async function inspectAdminExternalProviderBatch(providerId: string, url: string) {
