@@ -381,36 +381,31 @@ function AssistantTrackArtwork({ trackId }: { trackId: string }) {
   );
 }
 
-function AssistantSuggestedArtwork({ target }: { target: LibraryAssistantArtworkTarget }) {
-  const hasThumbnail = Boolean(target.thumbnailUrl && target.thumbnailUrl !== target.sourceUrl);
-  const [source, setSource] = useState<'thumbnail' | 'original' | 'failed'>(
-    hasThumbnail ? 'thumbnail' : 'original'
-  );
+function AssistantSuggestedArtwork({
+  runId,
+  suggestionId
+}: {
+  runId: string;
+  suggestionId: string;
+}) {
+  const [failed, setFailed] = useState(false);
+  const url = `/api/admin/library-assistant/runs/${encodeURIComponent(runId)}/suggestions/${encodeURIComponent(suggestionId)}/artwork-preview`;
 
-  useEffect(() => {
-    setSource(hasThumbnail ? 'thumbnail' : 'original');
-  }, [hasThumbnail, target.sourceUrl, target.thumbnailUrl]);
-
-  const url = source === 'thumbnail'
-    ? target.thumbnailUrl
-    : source === 'original'
-      ? target.sourceUrl
-      : null;
+  useEffect(() => setFailed(false), [runId, suggestionId]);
 
   return (
     <span className="assistant-admin-row__artwork assistant-v2__suggested-artwork" aria-hidden="true">
-      {url ? (
+      {failed ? (
+        <ImageIcon />
+      ) : (
         <img
           src={url}
           alt=""
           loading="lazy"
           decoding="async"
           draggable={false}
-          referrerPolicy="no-referrer"
-          onError={() => setSource(value => value === 'thumbnail' ? 'original' : 'failed')}
+          onError={() => setFailed(true)}
         />
-      ) : (
-        <ImageIcon />
       )}
     </span>
   );
@@ -1388,7 +1383,7 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
                           </span>
                           <span className="assistant-v2__song">
                             {suggestion.target.capability === 'artwork'
-                              ? <AssistantSuggestedArtwork target={suggestion.target} />
+                              ? <AssistantSuggestedArtwork runId={suggestion.runId} suggestionId={suggestion.id} />
                               : <AssistantTrackArtwork trackId={suggestion.target.trackId} />}
                             <span><strong>{item?.track.title ?? 'Faixa da biblioteca'}</strong><small>{item?.track.artist ?? '—'} · {item?.track.album ?? '—'}</small></span>
                           </span>
@@ -1493,7 +1488,7 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
                                   </div>
                                   <ChevronRight />
                                   <div>
-                                    <AssistantSuggestedArtwork target={suggestion.target} />
+                                    <AssistantSuggestedArtwork runId={suggestion.runId} suggestionId={suggestion.id} />
                                     <small>Capa sugerida</small>
                                   </div>
                                 </div>

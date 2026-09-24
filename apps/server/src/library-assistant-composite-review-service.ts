@@ -24,7 +24,7 @@ const OPEN_STATUSES = new Set<LibraryAssistantSuggestionStatus>(['pending', 'rev
 
 type BaseReviewPort = Pick<
   LibraryAssistantReviewService,
-  'getReviewQueue' | 'resetOpenSuggestions' | 'decide' | 'decideBatch' | 'close'
+  'getReviewQueue' | 'getArtworkPreview' | 'resetOpenSuggestions' | 'decide' | 'decideBatch' | 'close'
 >;
 
 type ReviewLibrary = {
@@ -207,6 +207,10 @@ export class LibraryAssistantCompositeReviewService {
       return created || left.suggestion.id.localeCompare(right.suggestion.id);
     });
     return { libraryRevision: this.options.library.revision(), items: items.slice(0, safeLimit) };
+  }
+
+  getArtworkPreview(runId: string, suggestionId: string) {
+    return this.options.base.getArtworkPreview(runId, suggestionId);
   }
 
   resetOpenSuggestions() {

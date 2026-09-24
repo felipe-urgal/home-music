@@ -18,7 +18,10 @@ import {
   type DownloadedCoverArtArchiveImage
 } from './cover-art-archive.js';
 import type { LibraryAssistantStore, LibraryAssistantStoredSuggestion } from './library-assistant-store.js';
-import type { TrackCoverOverrideStore } from './track-cover-overrides.js';
+import {
+  inspectCoverOverride,
+  type TrackCoverOverrideStore
+} from './track-cover-overrides.js';
 import {
   normalizeMetadataOverridePatch,
   type TrackMetadataOverrideStore
@@ -267,6 +270,41 @@ export class LibraryAssistantReviewService {
       return created || left.suggestion.id.localeCompare(right.suggestion.id);
     });
     return { libraryRevision: this.options.library.revision(), items };
+  }
+
+  async getArtworkPreview(
+    runId: string,
+    suggestionId: string
+  ): Promise<DownloadedCoverArtArchiveImage | null> {
+    const record = this.findSuggestionRecord(runId, suggestionId);
+    if (
+      !record
+      || !OPEN_STATUSES.has(record.suggestion.status)
+      || record.suggestion.target.capability !== 'artwork'
+    ) return null;
+
+    const target = record.suggestion.target;
+    const urls = target.thumbnailUrl && target.thumbnailUrl !== target.sourceUrl
+      ? [target.thumbnailUrl, target.sourceUrl]
+      : [target.sourceUrl];
+    let lastError: unknown = null;
+
+    for (const url of urls) {
+      try {
+        const downloaded = await this.downloadArtwork(url);
+        const inspected = inspectCoverOverride(downloaded.data, downloaded.contentType);
+        return {
+          ...downloaded,
+          contentType: inspected.contentType
+        };
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    throw lastError instanceof Error
+      ? lastError
+      : new Error('Não foi possível carregar a prévia da capa.');
   }
 
   resetOpenSuggestions() {
