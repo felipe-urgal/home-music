@@ -133,6 +133,7 @@ export function AdminExternalProviderPanel({
   const [submitting, setSubmitting] = useState(false);
   const [searching, setSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<AdminExternalProviderSearchItem[]>([]);
+  const [searchCompleted, setSearchCompleted] = useState(false);
   const [selectedResultId, setSelectedResultId] = useState<string | null>(null);
   const [startingBatch, setStartingBatch] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -190,6 +191,7 @@ export function AdminExternalProviderPanel({
     setSelectedResultId(selectedId);
     setError(null);
     setActiveBatch(null);
+    setSearchCompleted(false);
     try {
       const inspected = await inspectAdminExternalProviderBatch(providerId, sourceUrl);
       if (inspected.batch) {
@@ -244,6 +246,10 @@ export function AdminExternalProviderPanel({
       setError('Digite pelo menos 2 caracteres para buscar.');
       return;
     }
+    if (value.length > 200) {
+      setError('A busca deve ter no máximo 200 caracteres.');
+      return;
+    }
 
     setSearching(true);
     setError(null);
@@ -252,6 +258,7 @@ export function AdminExternalProviderPanel({
     try {
       const response = await searchAdminExternalProvider(providerId, value);
       setSearchResults(response.items);
+      setSearchCompleted(true);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Não foi possível buscar no YouTube / YouTube Music.');
     } finally {
@@ -374,6 +381,7 @@ export function AdminExternalProviderPanel({
                 onChange={event => {
                   setUrl(event.target.value);
                   setSearchResults([]);
+                  setSearchCompleted(false);
                   if (error) setError(null);
                 }}
               />
@@ -445,8 +453,11 @@ export function AdminExternalProviderPanel({
           </div>
         )}
 
-        {!searching && searchResults.length === 0 && url.trim().length >= 2 && !inputIsUrl && !error && (
-          <small className="admin-import-provider__search-hint">Digite o que procura e pressione Buscar.</small>
+        {!searching && searchCompleted && searchResults.length === 0 && !error && (
+          <div className="admin-import-provider__search-empty" role="status">
+            <Music2 />
+            <span>Nenhum resultado encontrado. Tente outros termos.</span>
+          </div>
         )}
       ) : (
         <div className="admin-import-empty"><LoaderCircle className="is-spinning" /> Verificando providers…</div>
