@@ -1,6 +1,6 @@
-import type { AdminTrackCoverResponse } from '@home-music/shared';
+import { MAX_TRACK_COVER_BYTES, type AdminTrackCoverResponse } from '@home-music/shared';
 
-export const MAX_ADMIN_COVER_BYTES = 8 * 1024 * 1024;
+export const MAX_ADMIN_COVER_BYTES = MAX_TRACK_COVER_BYTES;
 export const ADMIN_COVER_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
 
 export function validateAdminCoverFile(file: Pick<File, 'size' | 'type'>) {
