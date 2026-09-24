@@ -343,6 +343,7 @@ export function AdminExternalProviderPanel({
           </div>
         </div>
       ) : available.length > 0 ? (
+        <>
         <form className="admin-import-provider__form" onSubmit={event => void submit(event)}>
           {compact && (
             <div className="admin-import-provider__compact-heading">
@@ -459,6 +460,7 @@ export function AdminExternalProviderPanel({
             <span>Nenhum resultado encontrado. Tente outros termos.</span>
           </div>
         )}
+        </>
       ) : (
         <div className="admin-import-empty"><LoaderCircle className="is-spinning" /> Verificando providers…</div>
       )}
