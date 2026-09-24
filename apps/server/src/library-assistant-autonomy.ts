@@ -215,8 +215,9 @@ export function attachLibraryAssistantAutonomyLifecycle(library: LibraryService,
   const originalImport = library.updateForPromotedImport.bind(library);
   library.updateForPromotedImport = (async (...args: Parameters<LibraryService['updateForPromotedImport']>) => {
     const before = library.status().revision;
-    await originalImport(...args);
+    const result = await originalImport(...args);
     const after = library.status().revision;
     if (after !== before) controller.notifyLibraryChanged(after, 1);
+    return result;
   }) as LibraryService['updateForPromotedImport'];
 }
