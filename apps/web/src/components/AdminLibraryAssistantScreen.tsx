@@ -168,6 +168,10 @@ function canApplyInBatch(suggestion: LibraryAssistantSuggestion) {
   return suggestion.target.capability !== 'artwork' && isOpen(suggestion);
 }
 
+function isBatchSafe(suggestion: LibraryAssistantSuggestion) {
+  return canApplyInBatch(suggestion) && isSafe(suggestion);
+}
+
 function policyModeForSuggestion(
   policy: LibraryAssistantReviewPolicy,
   suggestion: LibraryAssistantSuggestion
@@ -377,6 +381,41 @@ function AssistantTrackArtwork({ trackId }: { trackId: string }) {
   );
 }
 
+function AssistantSuggestedArtwork({ target }: { target: LibraryAssistantArtworkTarget }) {
+  const hasThumbnail = Boolean(target.thumbnailUrl && target.thumbnailUrl !== target.sourceUrl);
+  const [source, setSource] = useState<'thumbnail' | 'original' | 'failed'>(
+    hasThumbnail ? 'thumbnail' : 'original'
+  );
+
+  useEffect(() => {
+    setSource(hasThumbnail ? 'thumbnail' : 'original');
+  }, [hasThumbnail, target.sourceUrl, target.thumbnailUrl]);
+
+  const url = source === 'thumbnail'
+    ? target.thumbnailUrl
+    : source === 'original'
+      ? target.sourceUrl
+      : null;
+
+  return (
+    <span className="assistant-admin-row__artwork assistant-v2__suggested-artwork" aria-hidden="true">
+      {url ? (
+        <img
+          src={url}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          draggable={false}
+          referrerPolicy="no-referrer"
+          onError={() => setSource(value => value === 'thumbnail' ? 'original' : 'failed')}
+        />
+      ) : (
+        <ImageIcon />
+      )}
+    </span>
+  );
+}
+
 export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props) {
   const [runs, setRuns] = useState<LibraryAssistantRun[]>([]);
   const [suggestions, setSuggestions] = useState<LibraryAssistantSuggestion[]>([]);
@@ -441,11 +480,11 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
     [suggestions]
   );
   const safeSuggestions = useMemo(
-    () => reviewableSuggestions.filter(item => isOpen(item) && isSafe(item)),
+    () => reviewableSuggestions.filter(item => isBatchSafe(item)),
     [reviewableSuggestions]
   );
   const reviewSuggestions = useMemo(
-    () => reviewableSuggestions.filter(item => isOpen(item) && !isSafe(item)),
+    () => reviewableSuggestions.filter(item => isOpen(item) && !isBatchSafe(item)),
     [reviewableSuggestions]
   );
   const normalizedSearch = search.trim().toLocaleLowerCase('pt-BR');
@@ -457,7 +496,7 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
         if (filter === 'metadata' && suggestion.target.capability !== 'metadata') return false;
         if (filter === 'artwork' && suggestion.target.capability !== 'artwork') return false;
         if (filter === 'lyrics' && suggestion.target.capability !== 'lyrics') return false;
-        if (filter === 'review' && (!isOpen(suggestion) || isSafe(suggestion))) return false;
+        if (filter === 'review' && (!isOpen(suggestion) || isBatchSafe(suggestion))) return false;
         if (filter === 'failed' && suggestion.status !== 'failed') return false;
       }
       if (!normalizedSearch) return true;
@@ -471,7 +510,7 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
   }, [filter, normalizedSearch, policy, reviewMap, reviewableSuggestions, sort]);
 
   const visibleSafeSuggestions = useMemo(
-    () => visibleSuggestions.filter(item => canApplyInBatch(item) && isSafe(item) && reviewMap.has(item.id)),
+    () => visibleSuggestions.filter(item => isBatchSafe(item) && reviewMap.has(item.id)),
     [reviewMap, visibleSuggestions]
   );
   const visibleActionableSuggestions = useMemo(
@@ -1318,7 +1357,7 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
                   <div className="assistant-v2__table-body">
                     {pagedVisibleSuggestions.map(suggestion => {
                       const item = reviewMap.get(suggestion.id);
-                      const safe = isSafe(suggestion);
+                      const safe = isBatchSafe(suggestion);
                       const selectedRow = activeSuggestion?.id === suggestion.id;
                       const type = suggestion.target.capability === 'metadata' ? 'Metadados' : suggestion.target.capability === 'artwork' ? 'Capa' : 'Letra';
                       const suggestionText = suggestion.target.capability === 'metadata'
@@ -1348,7 +1387,9 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
                             />
                           </span>
                           <span className="assistant-v2__song">
-                            <AssistantTrackArtwork trackId={suggestion.target.trackId} />
+                            {suggestion.target.capability === 'artwork'
+                              ? <AssistantSuggestedArtwork target={suggestion.target} />
+                              : <AssistantTrackArtwork trackId={suggestion.target.trackId} />}
                             <span><strong>{item?.track.title ?? 'Faixa da biblioteca'}</strong><small>{item?.track.artist ?? '—'} · {item?.track.album ?? '—'}</small></span>
                           </span>
                           <span><i className={`assistant-v2__type is-${suggestion.target.capability}`}>{type}</i></span>
@@ -1420,7 +1461,21 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
                                 />
                                 <strong>{capabilityLabel(suggestion)}</strong>
                               </label>
-                              {canDecide && <button type="button" disabled={mutating} onClick={() => void decideOne(suggestion, 'reject')}>Rejeitar</button>}
+                              {canDecide && (
+                                <div className="assistant-v2__card-actions">
+                                  {suggestion.target.capability === 'artwork' && (
+                                    <button
+                                      className="assistant-v2__apply-individual"
+                                      type="button"
+                                      disabled={mutating}
+                                      onClick={() => void decideOne(suggestion, 'apply')}
+                                    >
+                                      <Check /> Aplicar capa
+                                    </button>
+                                  )}
+                                  <button type="button" disabled={mutating} onClick={() => void decideOne(suggestion, 'reject')}>Rejeitar</button>
+                                </div>
+                              )}
                             </header>
 
                             {suggestion.target.capability === 'metadata' ? (
@@ -1429,6 +1484,21 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
                                 <ChevronRight />
                                 <div><span>{suggestion.target.suggestedValue}</span><small>Sugestão ({provenanceLabel(suggestion.provenance.source)})</small></div>
                               </div>
+                            ) : suggestion.target.capability === 'artwork' ? (
+                              <>
+                                <div className="assistant-v2__artwork-change">
+                                  <div>
+                                    <AssistantTrackArtwork trackId={suggestion.target.trackId} />
+                                    <small>Capa atual</small>
+                                  </div>
+                                  <ChevronRight />
+                                  <div>
+                                    <AssistantSuggestedArtwork target={suggestion.target} />
+                                    <small>Capa sugerida</small>
+                                  </div>
+                                </div>
+                                <p className="assistant-v2__candidate">{rowDetail(suggestion, reviewMap.get(suggestion.id))}</p>
+                              </>
                             ) : (
                               <p className="assistant-v2__candidate">{rowDetail(suggestion, reviewMap.get(suggestion.id))}</p>
                             )}
@@ -1453,23 +1523,29 @@ export function AdminLibraryAssistantScreen({ onBack, onOpenLocalLyrics }: Props
                       })}
                     </div>
 
-                    <div className="assistant-v2__inspector-actions">
-                      <button
-                        className="assistant-v2__apply-track"
-                        type="button"
-                        disabled={mutating || activeTrackSelectedCount === 0}
-                        onClick={() => void applyActiveTrackSuggestions()}
-                      >
-                        <Check /> Aplicar {activeTrackSelectedCount || activeTrackSuggestions.filter(canApplyInBatch).length} sugestões
-                      </button>
-                      <button
-                        type="button"
-                        disabled={mutating || activeTrackSelectedCount === 0}
-                        onClick={() => void Promise.all(activeTrackSuggestions.filter(item => selected.has(item.id)).map(item => decideOne(item, 'reject')))}
-                      >
-                        <X /> Rejeitar selecionadas
-                      </button>
-                    </div>
+                    {activeTrackSuggestions.some(canApplyInBatch) ? (
+                      <div className="assistant-v2__inspector-actions">
+                        <button
+                          className="assistant-v2__apply-track"
+                          type="button"
+                          disabled={mutating || activeTrackSelectedCount === 0}
+                          onClick={() => void applyActiveTrackSuggestions()}
+                        >
+                          <Check /> Aplicar {activeTrackSelectedCount || activeTrackSuggestions.filter(canApplyInBatch).length} sugestões
+                        </button>
+                        <button
+                          type="button"
+                          disabled={mutating || activeTrackSelectedCount === 0}
+                          onClick={() => void Promise.all(activeTrackSuggestions.filter(item => selected.has(item.id)).map(item => decideOne(item, 'reject')))}
+                        >
+                          <X /> Rejeitar selecionadas
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="assistant-v2__individual-note">
+                        <Info /> Capas são aplicadas individualmente depois de conferir a imagem sugerida.
+                      </p>
+                    )}
 
                     <p className="assistant-v2__override-note"><Info /> As alterações são aplicadas como overrides e não modificam os arquivos originais.</p>
                   </>
