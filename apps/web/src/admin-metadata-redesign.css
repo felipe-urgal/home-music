@@ -1377,6 +1377,16 @@
     height: 86px;
   }
 
+  .admin-metadata-v2__section-title {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .admin-metadata-v2__metadata-tools {
+    width: 100%;
+    justify-content: space-between;
+  }
+
   .admin-metadata-v2__fields,
   .admin-metadata-v2__text-actions,
   .admin-metadata-v2__cover-actions {
