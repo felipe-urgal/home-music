@@ -445,6 +445,10 @@ async function cancelRunRequest(id: string) {
   return response.json() as Promise<AdminLibraryAssistantRunResponse>;
 }
 
+export async function cancelSingleLibraryAssistantRun(id: string) {
+  return cancelRunRequest(id);
+}
+
 export async function cancelLibraryAssistantRun(id: string) {
   const listed = await getLibraryAssistantRuns();
   const active = listed.runs.filter(run => (
