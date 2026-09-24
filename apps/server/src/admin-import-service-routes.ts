@@ -62,7 +62,7 @@ import {
   YtDlpProvider
 } from './yt-dlp-provider.js';
 import { YtDlpSearch } from './yt-dlp-search.js';
-import { downloadCoverArtArchiveImage } from './cover-art-archive.js';
+import { downloadTrustedArtworkImage } from './cover-art-archive.js';
 import type { LibraryAssistantProviderGateway } from './library-assistant-provider.js';
 import { findMusicBrainzImportMetadataEnrichment } from './musicbrainz-metadata-analyzer.js';
 import { createMusicBrainzSimpleSearchFetch } from './musicbrainz-simple-search-fetch.js';
@@ -130,7 +130,7 @@ async function downloadImportArtwork(
   let lastError: unknown = null;
   for (const url of urls) {
     try {
-      const downloaded = await downloadCoverArtArchiveImage(url, { fetchImpl });
+      const downloaded = await downloadTrustedArtworkImage(url, { fetchImpl });
       const inspected = inspectCoverOverride(downloaded.data, downloaded.contentType);
       return { data: downloaded.data, contentType: inspected.contentType };
     } catch (error) {

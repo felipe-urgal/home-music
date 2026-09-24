@@ -21,6 +21,7 @@ export type LibraryAssistantProvenanceSource =
   | 'local'
   | 'musicbrainz'
   | 'cover-art-archive'
+  | 'itunes-search'
   | 'lrclib'
   | 'acoustid'
   | 'generated'

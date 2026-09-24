@@ -4,7 +4,8 @@ import type {
   AdminLibraryDuplicateReviewResponse,
   AdminLibraryNormalizationAssociateRequest,
   AdminLibraryNormalizationReviewResponse,
-  AdminLibraryOverviewResponse
+  AdminLibraryOverviewResponse,
+  ScanResponse
 } from '@home-music/shared';
 import { apiFetch } from './api-client';
 
@@ -49,6 +50,15 @@ export async function getAdminLibraryOverview() {
   const response = await apiFetch('/api/admin/library/overview', { cache: 'no-store' });
   if (!response.ok) throw new Error(await responseError(response));
   return response.json() as Promise<AdminLibraryOverviewResponse>;
+}
+
+export async function runAdminLibraryScan() {
+  const response = await apiFetch('/api/library/scan', {
+    method: 'POST',
+    headers: { 'X-Home-Music-Request': '1' }
+  });
+  if (!response.ok) throw new Error(await responseError(response));
+  return response.json() as Promise<ScanResponse>;
 }
 
 export async function checkAdminLibraryIntegrity() {

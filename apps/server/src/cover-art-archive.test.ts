@@ -3,9 +3,11 @@ import test from 'node:test';
 import type { LibraryAssistantProviderGateway } from './library-assistant-provider.js';
 import {
   downloadCoverArtArchiveImage,
+  downloadTrustedArtworkImage,
   findCoverArtArchiveFrontCover,
   findCoverArtArchiveReleaseGroupFrontCover,
   normalizeCoverArtArchiveImageUrl,
+  normalizeTrustedArtworkImageUrl,
   normalizeCoverArtArchiveRelease
 } from './cover-art-archive.js';
 import { CoverOverrideValidationError } from './track-cover-overrides.js';
@@ -39,6 +41,45 @@ test('normaliza somente URLs do Cover Art Archive/Archive.org', () => {
   assert.equal(normalizeCoverArtArchiveImageUrl('https://example.com/front.jpg'), null);
   assert.equal(normalizeCoverArtArchiveImageUrl('file:///etc/passwd'), null);
 });
+
+test('normaliza artwork externo somente de CDN confiável', () => {
+  assert.equal(
+    normalizeTrustedArtworkImageUrl('http://is1-ssl.mzstatic.com/image/thumb/Music/test/100x100bb.jpg#x'),
+    'https://is1-ssl.mzstatic.com/image/thumb/Music/test/100x100bb.jpg'
+  );
+  assert.equal(normalizeTrustedArtworkImageUrl('https://evil.example/front.jpg'), null);
+});
+
+test('download confiável aceita mzstatic e bloqueia redirect para host arbitrário', async () => {
+  const downloaded = await downloadTrustedArtworkImage(
+    'https://is1-ssl.mzstatic.com/image/thumb/Music/test/1200x1200bb.jpg',
+    {
+      fetchImpl: async () => new Response(new Uint8Array(PNG_1X1), {
+        status: 200,
+        headers: {
+          'content-type': 'image/png',
+          'content-length': String(PNG_1X1.byteLength)
+        }
+      })
+    }
+  );
+  assert.equal(downloaded.contentType, 'image/png');
+  assert.deepEqual(downloaded.data, PNG_1X1);
+
+  await assert.rejects(
+    downloadTrustedArtworkImage(
+      'https://is1-ssl.mzstatic.com/image/thumb/Music/test/1200x1200bb.jpg',
+      {
+        fetchImpl: async () => new Response(null, {
+          status: 302,
+          headers: { location: 'https://example.com/front.png' }
+        })
+      }
+    ),
+    (error: unknown) => error instanceof CoverOverrideValidationError && error.statusCode === 400
+  );
+});
+
 
 test('extrai a primeira capa frontal válida do payload do CAA', () => {
   const cover = normalizeCoverArtArchiveRelease({

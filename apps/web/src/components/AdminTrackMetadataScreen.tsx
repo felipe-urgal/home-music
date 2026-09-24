@@ -5,6 +5,7 @@ import type {
   AdminTrackCoverCandidate,
   AdminTrackCoverResponse,
   AdminTrackMetadataResponse,
+  AdminTrackMetadataSuggestion,
   EditableTrackMetadata
 } from '@home-music/shared';
 import type { MissingCoverFillJob } from '@home-music/shared/library-assistant';
@@ -42,6 +43,7 @@ import {
   applyTrackArtworkCandidate,
   getMissingCoverFillJob,
   searchTrackArtworkCandidates,
+  searchTrackMetadataSuggestion,
   startMissingCoverFillJob,
   trackArtworkCandidatePreviewUrl
 } from '../library-assistant-client';
@@ -195,6 +197,9 @@ export function AdminTrackMetadataScreen({
   const [coverSearchCandidates, setCoverSearchCandidates] = useState<AdminTrackCoverCandidate[]>([]);
   const [coverSearchError, setCoverSearchError] = useState<string | null>(null);
   const [applyingCoverCandidateId, setApplyingCoverCandidateId] = useState<string | null>(null);
+  const [metadataSuggestion, setMetadataSuggestion] = useState<AdminTrackMetadataSuggestion | null>(null);
+  const [metadataSuggestionLoading, setMetadataSuggestionLoading] = useState(false);
+  const [metadataSuggestionMessage, setMetadataSuggestionMessage] = useState<string | null>(null);
   const editorRequestRef = useRef(0);
   const handledCoverFillJobRef = useRef<string | null>(null);
   const operationBusy = savingAction !== null;
@@ -376,6 +381,9 @@ export function AdminTrackMetadataScreen({
     setCoverSearchCandidates([]);
     setCoverSearchError(null);
     setApplyingCoverCandidateId(null);
+    setMetadataSuggestion(null);
+    setMetadataSuggestionLoading(false);
+    setMetadataSuggestionMessage(null);
     setEditorLoading(false);
   }
 
@@ -394,6 +402,9 @@ export function AdminTrackMetadataScreen({
     setCoverSearchOpen(false);
     setCoverSearchCandidates([]);
     setCoverSearchError(null);
+    setMetadataSuggestion(null);
+    setMetadataSuggestionLoading(false);
+    setMetadataSuggestionMessage(null);
     setEditorLoading(true);
     setError(null);
     setFeedback(null);
@@ -430,6 +441,44 @@ export function AdminTrackMetadataScreen({
     setEditorFeedback(null);
   }
 
+  async function improveMetadata() {
+    if (!editingTrackId || !draft || operationBusy || metadataSuggestionLoading) return;
+    const requestId = editorRequestRef.current;
+    setMetadataSuggestionLoading(true);
+    setMetadataSuggestion(null);
+    setMetadataSuggestionMessage(null);
+    setEditorFeedback(null);
+    try {
+      const response = await searchTrackMetadataSuggestion(editingTrackId, draft);
+      if (editorRequestRef.current !== requestId) return;
+      const suggestion = response.suggestion;
+      const hasImprovement = Boolean(
+        suggestion
+        && (
+          suggestion.artist !== draft.artist
+          || suggestion.album !== draft.album
+          || suggestion.albumArtist !== draft.albumArtist
+        )
+      );
+      setMetadataSuggestion(hasImprovement ? suggestion : null);
+      setMetadataSuggestionMessage(
+        hasImprovement
+          ? null
+          : 'Nenhuma melhoria de metadados encontrada para esta faixa.'
+      );
+    } catch (caught) {
+      if (editorRequestRef.current !== requestId) return;
+      setMetadataSuggestionMessage(errorMessage(caught));
+    } finally {
+      if (editorRequestRef.current === requestId) setMetadataSuggestionLoading(false);
+    }
+  }
+
+  function useMetadataSuggestion(field: 'artist' | 'album' | 'albumArtist') {
+    if (!metadataSuggestion) return;
+    setField(field, metadataSuggestion[field]);
+  }
+
   function selectCoverFile(file: File | null) {
     if (!file || operationBusy) return;
     try {
@@ -445,6 +494,8 @@ export function AdminTrackMetadataScreen({
   function commitMetadata(updated: AdminTrackMetadataResponse, message: string) {
     setMetadata(updated);
     setDraft(updated.effective);
+    setMetadataSuggestion(null);
+    setMetadataSuggestionMessage(null);
     setTracks(items => items.map(track => applyEffectiveMetadata(track, updated)));
     setFeedback(message);
     setEditorFeedback({ message, error: false });
@@ -802,9 +853,20 @@ export function AdminTrackMetadataScreen({
                 <section className="admin-metadata-v2__metadata-section">
                   <div className="admin-metadata-v2__section-title">
                     <strong>Metadados</strong>
-                    <span className={metadataChanged(metadata, draft) ? 'is-changed' : ''}>
-                      <CheckCircle2 /> {metadataChanged(metadata, draft) ? 'Alterações pendentes' : 'Igual ao original'}
-                    </span>
+                    <div className="admin-metadata-v2__metadata-tools">
+                      <button
+                        className="admin-metadata-improve"
+                        type="button"
+                        disabled={operationBusy || metadataSuggestionLoading}
+                        onClick={() => void improveMetadata()}
+                      >
+                        {metadataSuggestionLoading ? <LoaderCircle className="is-spinning" /> : <Sparkles />}
+                        Melhorar metadados
+                      </button>
+                      <span className={metadataChanged(metadata, draft) ? 'is-changed' : ''}>
+                        <CheckCircle2 /> {metadataChanged(metadata, draft) ? 'Alterações pendentes' : 'Igual ao original'}
+                      </span>
+                    </div>
                   </div>
 
                   <div className="admin-metadata-v2__fields">
@@ -817,18 +879,42 @@ export function AdminTrackMetadataScreen({
                       <span>Artista</span>
                       <input aria-label="Artista" required maxLength={240} value={draft.artist} disabled={operationBusy} onChange={event => setField('artist', event.target.value)} />
                       <small>Original: {metadata.physical.artist}</small>
+                      {metadataSuggestion && metadataSuggestion.artist !== draft.artist && (
+                        <div className="admin-metadata-v2__field-suggestion">
+                          <small>{metadataSuggestion.source === 'musicbrainz' ? 'MusicBrainz' : 'iTunes'}: {metadataSuggestion.artist}</small>
+                          <button type="button" disabled={operationBusy} onClick={() => useMetadataSuggestion('artist')}>Usar sugestão</button>
+                        </div>
+                      )}
                     </label>
                     <label>
                       <span>Álbum</span>
                       <input aria-label="Álbum" required maxLength={240} value={draft.album} disabled={operationBusy} onChange={event => setField('album', event.target.value)} />
                       <small>Original: {metadata.physical.album}</small>
+                      {metadataSuggestion && metadataSuggestion.album !== draft.album && (
+                        <div className="admin-metadata-v2__field-suggestion">
+                          <small>{metadataSuggestion.source === 'musicbrainz' ? 'MusicBrainz' : 'iTunes'}: {metadataSuggestion.album}</small>
+                          <button type="button" disabled={operationBusy} onClick={() => useMetadataSuggestion('album')}>Usar sugestão</button>
+                        </div>
+                      )}
                     </label>
                     <label className="is-wide">
                       <span>Artista do álbum</span>
                       <input aria-label="Artista do álbum" required maxLength={240} value={draft.albumArtist} disabled={operationBusy} onChange={event => setField('albumArtist', event.target.value)} />
                       <small>Original: {metadata.physical.albumArtist}</small>
+                      {metadataSuggestion && metadataSuggestion.albumArtist !== draft.albumArtist && (
+                        <div className="admin-metadata-v2__field-suggestion">
+                          <small>{metadataSuggestion.source === 'musicbrainz' ? 'MusicBrainz' : 'iTunes'}: {metadataSuggestion.albumArtist}</small>
+                          <button type="button" disabled={operationBusy} onClick={() => useMetadataSuggestion('albumArtist')}>Usar sugestão</button>
+                        </div>
+                      )}
                     </label>
                   </div>
+
+                  {metadataSuggestionMessage && (
+                    <div className="admin-metadata-v2__suggestion-message" role="status">
+                      <Info /> <span>{metadataSuggestionMessage}</span>
+                    </div>
+                  )}
 
                   <div className="admin-metadata-v2__text-actions">
                     <button className="admin-metadata-reset" type="button" disabled={operationBusy || !hasOverride(metadata)} onClick={() => void resetMetadata()}>

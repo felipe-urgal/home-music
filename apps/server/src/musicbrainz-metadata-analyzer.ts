@@ -1,4 +1,4 @@
-import type { AdminTrackCoverCandidate, ImportMetadataEnrichment, Track } from '@home-music/shared';
+import type { AdminTrackCoverCandidate, AdminTrackMetadataSuggestion, ImportMetadataEnrichment, Track } from '@home-music/shared';
 import {
   LIBRARY_ASSISTANT_CONTRACT_VERSION,
   type LibraryAssistantConfidenceBand,
@@ -9,7 +9,8 @@ import {
 import {
   COVER_ART_ARCHIVE_PROVIDER_VERSION,
   findCoverArtArchiveFrontCover,
-  findCoverArtArchiveReleaseGroupFrontCover
+  findCoverArtArchiveReleaseGroupFrontCover,
+  normalizeTrustedArtworkImageUrl
 } from './cover-art-archive.js';
 import {
   LibraryAssistantProviderResponseError,
@@ -24,6 +25,11 @@ const MUSICBRAINZ_BASE_URL = 'https://musicbrainz.org/ws/2';
 const MUSICBRAINZ_PROVIDER_VERSION = 'ws2-recording-search-v2';
 const MUSICBRAINZ_USER_AGENT = 'HomeMusic/0.1 (+https://github.com/felipe-urgal/home-music)';
 const MUSICBRAINZ_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1_000;
+const ITUNES_SEARCH_BASE_URL = 'https://itunes.apple.com/search';
+const ITUNES_SEARCH_PROVIDER_VERSION = 'itunes-song-artwork-v1';
+const ITUNES_SEARCH_CACHE_TTL_MS = 24 * 60 * 60 * 1_000;
+const ITUNES_SEARCH_MAX_RESPONSE_CHARS = 1_000_000;
+const ITUNES_SEARCH_COUNTRIES = ['BR', 'US'] as const;
 const MAX_RESPONSE_CHARS = 1_000_000;
 const MAX_CANDIDATES = 5;
 const AMBIGUOUS_MARGIN = 15;
@@ -545,13 +551,11 @@ function artworkConfidenceFor(
   return titleMatches && artistMatches ? 'high' : null;
 }
 
-type QueryTerms = { title: string; artist: string; album?: string };
+type QueryTerms = { title: string; artist?: string; album?: string };
 
 function queryText(terms: QueryTerms) {
-  const query = [
-    `recording:${JSON.stringify(exactValue(terms.title))}`,
-    `artist:${JSON.stringify(exactValue(terms.artist))}`
-  ];
+  const query = [`recording:${JSON.stringify(exactValue(terms.title))}`];
+  if (terms.artist) query.push(`artist:${JSON.stringify(exactValue(terms.artist))}`);
   if (terms.album) query.push(`release:${JSON.stringify(exactValue(terms.album))}`);
   return query.join(' AND ');
 }
@@ -559,7 +563,7 @@ function queryText(terms: QueryTerms) {
 function cacheKey(terms: QueryTerms) {
   return JSON.stringify({
     title: normalizedValue(terms.title),
-    artist: normalizedValue(terms.artist),
+    artist: terms.artist ? normalizedValue(terms.artist) : null,
     album: terms.album ? normalizedValue(terms.album) : null
   });
 }
@@ -671,6 +675,18 @@ async function findArtworkForRelease(
 type ManualArtworkRankedCandidate = {
   candidate: MusicBrainzRecordingCandidate;
   score: number;
+  artistDifferent: boolean;
+};
+
+type ITunesArtworkCandidate = {
+  id: string;
+  title: string;
+  artist: string;
+  album: string;
+  albumArtist: string;
+  durationSeconds: number | null;
+  sourceUrl: string;
+  thumbnailUrl: string;
 };
 
 function manualComparable(value: string) {
@@ -686,8 +702,6 @@ function manualTitleAffinity(sourceTitle: string, candidateTitle: string) {
   if (!source || !candidate) return null;
   if (source === candidate) return 100;
 
-  // A busca manual pode aceitar versões como "Como Eu Quero / Os Outros"
-  // e títulos compostos, desde que uma frase completa esteja contida na outra.
   const shorter = source.length <= candidate.length ? source : candidate;
   const longer = source.length <= candidate.length ? candidate : source;
   if (shorter.length < 5) return null;
@@ -696,7 +710,28 @@ function manualTitleAffinity(sourceTitle: string, candidateTitle: string) {
   return null;
 }
 
-const MANUAL_TITLE_CONTEXT_SUFFIX = /\s*[\[(](?:ao\s+vivo|live|ac[uú]stico|unplugged|remaster(?:ed)?|radio\s+edit|edit|vers[aã]o\s+ao\s+vivo)[\])]\s*$/i;
+function manualArtistAffinity(
+  sourceArtist: string,
+  candidateArtist: string,
+  allowDifferent: boolean
+) {
+  if (!reliableMetadata(sourceArtist)) return { score: 0, different: false };
+
+  const source = manualComparable(sourceArtist);
+  const candidate = manualComparable(candidateArtist);
+  if (!source || !candidate) return allowDifferent ? { score: -32, different: true } : null;
+  if (source === candidate) return { score: 40, different: false };
+
+  const shorter = source.length <= candidate.length ? source : candidate;
+  const longer = source.length <= candidate.length ? candidate : source;
+  if (shorter.length >= 4 && ` ${longer} `.includes(` ${shorter} `)) {
+    return { score: 28, different: false };
+  }
+
+  return allowDifferent ? { score: -32, different: true } : null;
+}
+
+const MANUAL_TITLE_CONTEXT_SUFFIX = /\s*[\[(](?=[^\])]{1,80}[\])]\s*$)[^\])]*(?:ao\s+vivo|live|ac[uú]stico|unplugged|remaster(?:ed)?|radio\s+edit|edit|vers[aã]o|mix|remix|mashup)[^\])]*[\])]\s*$/i;
 
 function manualArtworkSearchTitles(title: string) {
   const primary = exactValue(title);
@@ -725,19 +760,24 @@ function manualArtworkSearchTitles(title: string) {
 function rankManualArtworkCandidates(
   track: Track,
   candidates: MusicBrainzRecordingCandidate[],
-  searchTitle: string
+  searchTitle: string,
+  options: { allowDifferentArtist?: boolean } = {}
 ): ManualArtworkRankedCandidate[] {
   return candidates
     .flatMap(candidate => {
-      const artistMatch = compareText(track.artist, candidate.artist);
-      if (artistMatch === 'different') return [];
+      const artistAffinity = manualArtistAffinity(
+        track.artist,
+        candidate.artist,
+        options.allowDifferentArtist === true
+      );
+      if (!artistAffinity) return [];
 
       const titleAffinity = manualTitleAffinity(searchTitle, candidate.title);
       if (titleAffinity == null) return [];
 
-      let score = titleAffinity + (artistMatch === 'exact' ? 40 : 34);
+      let score = titleAffinity + artistAffinity.score;
 
-      if (track.album.trim() && candidate.releases.some(
+      if (track.album.trim() && reliableMetadata(track.album) && candidate.releases.some(
         release => compareText(track.album, release.title) !== 'different'
       )) score += 18;
 
@@ -749,10 +789,360 @@ function rankManualArtworkCandidates(
         else score -= Math.min(12, Math.round(delta / 10));
       }
 
-      return [{ candidate, score }];
+      return [{
+        candidate,
+        score,
+        artistDifferent: artistAffinity.different
+      }];
     })
     .sort((left, right) => right.score - left.score)
     .slice(0, MAX_CANDIDATES);
+}
+
+function normalizeItunesArtworkUrl(value: unknown, size: 'source' | 'thumbnail') {
+  const normalized = normalizeTrustedArtworkImageUrl(value);
+  if (!normalized) return null;
+  const url = new URL(normalized);
+  const host = url.hostname.toLowerCase();
+  if (host !== 'mzstatic.com' && !host.endsWith('.mzstatic.com')) return null;
+  url.pathname = url.pathname.replace(
+    /\/\d+x\d+(?:bb)?(?=\.[A-Za-z0-9]+$)/,
+    size === 'source' ? '/1200x1200bb' : '/600x600bb'
+  );
+  return url.toString();
+}
+
+function normalizeItunesCandidate(value: unknown): ITunesArtworkCandidate | null {
+  const item = record(value);
+  if (!item) return null;
+
+  const rawId = item.trackId;
+  const id = typeof rawId === 'number' && Number.isSafeInteger(rawId)
+    ? String(rawId)
+    : safeText(rawId, 64);
+  const title = safeText(item.trackName);
+  const artist = safeText(item.artistName);
+  const album = safeText(item.collectionName);
+  const albumArtist = safeText(item.collectionArtistName) ?? artist;
+  const thumbnailUrl = normalizeItunesArtworkUrl(item.artworkUrl100, 'thumbnail');
+  const sourceUrl = normalizeItunesArtworkUrl(item.artworkUrl100, 'source');
+  if (!id || !title || !artist || !album || !albumArtist || !thumbnailUrl || !sourceUrl) return null;
+
+  const millis = typeof item.trackTimeMillis === 'number' && Number.isFinite(item.trackTimeMillis)
+    ? item.trackTimeMillis
+    : null;
+
+  return {
+    id,
+    title,
+    artist,
+    album,
+    albumArtist,
+    durationSeconds: millis == null ? null : Math.round(millis / 100) / 10,
+    sourceUrl,
+    thumbnailUrl
+  };
+}
+
+function normalizeCachedItunesCandidate(value: unknown): ITunesArtworkCandidate | null {
+  const item = record(value);
+  if (!item) return null;
+  const id = safeText(item.id, 64);
+  const title = safeText(item.title);
+  const artist = safeText(item.artist);
+  const album = safeText(item.album);
+  const albumArtist = safeText(item.albumArtist);
+  const sourceUrl = normalizeItunesArtworkUrl(item.sourceUrl, 'source');
+  const thumbnailUrl = normalizeItunesArtworkUrl(item.thumbnailUrl, 'thumbnail');
+  if (!id || !title || !artist || !album || !albumArtist || !sourceUrl || !thumbnailUrl) return null;
+
+  let durationSeconds: number | null = null;
+  if (item.durationSeconds != null) {
+    if (
+      typeof item.durationSeconds !== 'number'
+      || !Number.isFinite(item.durationSeconds)
+      || item.durationSeconds < 0
+      || item.durationSeconds > 24 * 60 * 60
+    ) return null;
+    durationSeconds = item.durationSeconds;
+  }
+
+  return { id, title, artist, album, albumArtist, durationSeconds, sourceUrl, thumbnailUrl };
+}
+
+function normalizeItunesSearch(payload: unknown): ITunesArtworkCandidate[] {
+  if (Array.isArray(payload)) {
+    const cached = payload
+      .slice(0, 20)
+      .map(normalizeCachedItunesCandidate);
+    if (cached.some(candidate => candidate == null)) throw new LibraryAssistantProviderResponseError();
+    return cached as ITunesArtworkCandidate[];
+  }
+
+  const root = record(payload);
+  if (!root || !Array.isArray(root.results) || root.results.length > 200) {
+    throw new LibraryAssistantProviderResponseError();
+  }
+  return root.results
+    .slice(0, 20)
+    .map(normalizeItunesCandidate)
+    .filter((value): value is ITunesArtworkCandidate => Boolean(value));
+}
+
+async function fetchItunesArtworkCandidates(
+  terms: { title: string; artist?: string; country: string },
+  providers: LibraryAssistantProviderGateway,
+  fetchImpl: FetchLike,
+  userAgent: string
+) {
+  const url = new URL(ITUNES_SEARCH_BASE_URL);
+  url.searchParams.set('term', [terms.title, terms.artist].filter(Boolean).join(' '));
+  url.searchParams.set('media', 'music');
+  url.searchParams.set('entity', 'song');
+  url.searchParams.set('limit', '20');
+  url.searchParams.set('country', terms.country);
+
+  const result = await providers.query({
+    provider: { source: 'itunes-search', version: ITUNES_SEARCH_PROVIDER_VERSION, userAgent },
+    cacheKey: JSON.stringify({
+      title: normalizedValue(terms.title),
+      artist: terms.artist ? normalizedValue(terms.artist) : null,
+      country: terms.country
+    }),
+    ttlMs: ITUNES_SEARCH_CACHE_TTL_MS,
+    execute: async ({ signal, userAgent: providerUserAgent }) => {
+      const response = await fetchImpl(url, {
+        signal,
+        redirect: 'error',
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': providerUserAgent
+        }
+      });
+      if (!response.ok) {
+        const error = new Error(response.status === 429 || response.status === 503
+          ? 'Catálogo iTunes temporariamente indisponível.'
+          : 'Falha ao consultar catálogo iTunes.');
+        Object.assign(error, {
+          code: response.status === 429 || response.status === 503
+            ? 'provider-rate-limited'
+            : 'provider-request-failed',
+          statusCode: response.status
+        });
+        throw error;
+      }
+      const declaredLength = Number(response.headers.get('content-length'));
+      if (Number.isFinite(declaredLength) && declaredLength > ITUNES_SEARCH_MAX_RESPONSE_CHARS) {
+        throw new LibraryAssistantProviderResponseError();
+      }
+      const text = await response.text();
+      if (text.length > ITUNES_SEARCH_MAX_RESPONSE_CHARS) {
+        throw new LibraryAssistantProviderResponseError();
+      }
+      try {
+        return JSON.parse(text) as unknown;
+      } catch {
+        throw new LibraryAssistantProviderResponseError();
+      }
+    },
+    normalize: normalizeItunesSearch
+  });
+  return result.value;
+}
+
+function rankItunesArtworkCandidates(
+  track: Track,
+  candidates: ITunesArtworkCandidate[],
+  searchTitle: string,
+  options: { allowDifferentArtist?: boolean } = {}
+) {
+  return candidates
+    .flatMap(candidate => {
+      const titleAffinity = manualTitleAffinity(searchTitle, candidate.title);
+      if (titleAffinity == null) return [];
+
+      const artistAffinity = manualArtistAffinity(
+        track.artist,
+        candidate.artist,
+        options.allowDifferentArtist === true || !reliableMetadata(track.artist)
+      );
+      if (!artistAffinity) return [];
+      let score = titleAffinity + artistAffinity.score;
+
+      if (reliableMetadata(track.album) && compareText(track.album, candidate.album) !== 'different') {
+        score += 18;
+      }
+      if (track.duration != null && candidate.durationSeconds != null) {
+        const delta = Math.abs(track.duration - candidate.durationSeconds);
+        if (delta <= 2) score += 10;
+        else if (delta <= 5) score += 6;
+        else if (delta <= 15) score += 2;
+        else score -= Math.min(12, Math.round(delta / 10));
+      }
+
+      return [{ candidate, score, artistDifferent: artistAffinity.different }];
+    })
+    .sort((left, right) => right.score - left.score)
+    .slice(0, 8);
+}
+
+async function findItunesArtworkFallback(
+  track: Track,
+  searchTitles: readonly string[],
+  providers: LibraryAssistantProviderGateway,
+  fetchImpl: FetchLike,
+  userAgent: string
+): Promise<AdminTrackCoverCandidate[]> {
+  const seen = new Set<string>();
+  const results: AdminTrackCoverCandidate[] = [];
+  const artist = reliableMetadata(track.artist) ? exactValue(track.artist) : '';
+
+  for (const title of searchTitles.slice(0, 4)) {
+    for (const country of ITUNES_SEARCH_COUNTRIES) {
+      let candidates: ITunesArtworkCandidate[];
+      try {
+        candidates = await fetchItunesArtworkCandidates(
+          artist ? { title, artist, country } : { title, country },
+          providers,
+          fetchImpl,
+          userAgent
+        );
+      } catch {
+        continue;
+      }
+      const ranked = rankItunesArtworkCandidates(track, candidates, title);
+      for (const rankedCandidate of ranked) {
+        const candidate = rankedCandidate.candidate;
+        const key = candidate.sourceUrl;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        results.push({
+          id: `itunes-search:${candidate.id}`,
+          label: rankedCandidate.artistDifferent
+            ? `Alternativa — ${candidate.artist} · ${candidate.album}`
+            : `Capa — ${candidate.album}`,
+          album: candidate.album,
+          artist: candidate.artist,
+          sourceUrl: candidate.sourceUrl,
+          thumbnailUrl: candidate.thumbnailUrl,
+          musicBrainzReleaseId: null,
+          musicBrainzReleaseGroupId: null
+        });
+        if (results.length >= 8) return results;
+      }
+      if (results.length > 0) return results;
+    }
+  }
+
+  return results;
+}
+
+export async function findTrackMetadataSuggestion(
+  track: Track,
+  providers: LibraryAssistantProviderGateway,
+  options: Pick<AnalyzerOptions, 'fetchImpl' | 'userAgent' | 'getFileContext'> = {}
+): Promise<AdminTrackMetadataSuggestion | null> {
+  const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
+  const userAgent = options.userAgent ?? MUSICBRAINZ_USER_AGENT;
+  const fileContext = safeFileContext(options.getFileContext?.(track.id));
+  const identity = searchIdentity(track, fileContext);
+  const parsedFile = fileContext ? parseArtistTitleFromFile(fileContext.fileName) : null;
+
+  const searchTitle = identity?.title
+    ?? (reliableMetadata(track.title) ? exactValue(track.title) : parsedFile?.title ?? '');
+  const searchArtist = identity?.artist
+    ?? (reliableMetadata(track.artist) ? exactValue(track.artist) : parsedFile?.artist ?? '');
+  if (!searchTitle) return null;
+
+  const matchTrack = identity
+    ? matchingTrack(track, identity)
+    : {
+        ...track,
+        title: searchTitle,
+        artist: searchArtist || track.artist
+      };
+  const searchTitles = manualArtworkSearchTitles(searchTitle);
+
+  const fromMusicBrainz = async (
+    title: string,
+    artist: string | null,
+    allowDifferentArtist: boolean
+  ): Promise<AdminTrackMetadataSuggestion | null> => {
+    const recordings = await fetchCandidates(
+      artist ? { title, artist } : { title },
+      providers,
+      fetchImpl,
+      userAgent
+    );
+    const ranked = rankManualArtworkCandidates(matchTrack, recordings, title, {
+      allowDifferentArtist
+    });
+    for (const rankedCandidate of ranked) {
+      const release = bestRelease(matchTrack, rankedCandidate.candidate)
+        ?? rankedCandidate.candidate.releases[0]
+        ?? null;
+      if (!release) continue;
+      return {
+        source: 'musicbrainz',
+        artist: rankedCandidate.candidate.artist,
+        album: release.title,
+        albumArtist: release.albumArtist ?? rankedCandidate.candidate.artist
+      };
+    }
+    return null;
+  };
+
+  if (searchArtist) {
+    for (const title of searchTitles) {
+      const suggestion = await fromMusicBrainz(title, searchArtist, false);
+      if (suggestion) return suggestion;
+    }
+  }
+
+  for (const title of searchTitles) {
+    const suggestion = await fromMusicBrainz(title, null, true);
+    if (suggestion) return suggestion;
+  }
+
+  for (const title of searchTitles.slice(0, 4)) {
+    for (const country of ITUNES_SEARCH_COUNTRIES) {
+      const attempts = searchArtist
+        ? [
+            { artist: searchArtist, allowDifferentArtist: false },
+            { artist: undefined, allowDifferentArtist: true }
+          ]
+        : [{ artist: undefined, allowDifferentArtist: true }];
+
+      for (const attempt of attempts) {
+        let candidates: ITunesArtworkCandidate[];
+        try {
+          candidates = await fetchItunesArtworkCandidates(
+            attempt.artist
+              ? { title, artist: attempt.artist, country }
+              : { title, country },
+            providers,
+            fetchImpl,
+            userAgent
+          );
+        } catch {
+          continue;
+        }
+
+        const best = rankItunesArtworkCandidates(matchTrack, candidates, title, {
+          allowDifferentArtist: attempt.allowDifferentArtist
+        })[0];
+        if (!best) continue;
+        return {
+          source: 'itunes-search',
+          artist: best.candidate.artist,
+          album: best.candidate.album,
+          albumArtist: best.candidate.albumArtist
+        };
+      }
+    }
+  }
+
+  return null;
 }
 
 export async function findMusicBrainzImportMetadataEnrichment(
@@ -840,13 +1230,33 @@ export async function findMusicBrainzArtworkCandidates(
   const userAgent = options.userAgent ?? MUSICBRAINZ_USER_AGENT;
   const fileContext = safeFileContext(options.getFileContext?.(track.id));
   const identity = searchIdentity(track, fileContext);
-  if (!identity) return [];
+  const parsedFile = fileContext ? parseArtistTitleFromFile(fileContext.fileName) : null;
 
-  const matchTrack = matchingTrack(track, identity);
-  const searchTitles = manualArtworkSearchTitles(identity.title);
-  const primaryTitle = searchTitles[0] ?? identity.title;
-  const scopedTerms = identity.useAlbumFilter
-    ? { title: primaryTitle, artist: identity.artist, album: identity.album }
+  const searchTitle = identity?.title
+    ?? (reliableMetadata(track.title) ? exactValue(track.title) : parsedFile?.title ?? '');
+  const searchArtist = identity?.artist
+    ?? (reliableMetadata(track.artist) ? exactValue(track.artist) : parsedFile?.artist ?? '');
+  if (!searchTitle) return [];
+
+  const album = identity?.album
+    ?? (reliableMetadata(track.album) ? exactValue(track.album) : '');
+  const useAlbumFilter = Boolean(searchArtist && album && (identity?.useAlbumFilter ?? false));
+  const matchTrack = identity
+    ? matchingTrack(track, identity)
+    : {
+        ...track,
+        title: searchTitle,
+        artist: searchArtist || track.artist,
+        album,
+        albumArtist: reliableMetadata(track.albumArtist)
+          ? track.albumArtist
+          : searchArtist || track.albumArtist
+      };
+
+  const searchTitles = manualArtworkSearchTitles(searchTitle);
+  const primaryTitle = searchTitles[0] ?? searchTitle;
+  const scopedTerms = useAlbumFilter
+    ? { title: primaryTitle, artist: searchArtist, album }
     : null;
 
   const seenReleases = new Set<string>();
@@ -862,12 +1272,13 @@ export async function findMusicBrainzArtworkCandidates(
       release: MusicBrainzRelease;
       artist: string;
       score: number;
+      artistDifferent: boolean;
     }> = [];
 
     for (const rankedCandidate of ranked) {
       const releases = albumOnly
         ? rankedCandidate.candidate.releases.filter(
-            release => compareText(identity.album, release.title) !== 'different'
+            release => album && compareText(album, release.title) !== 'different'
           )
         : rankedCandidate.candidate.releases;
 
@@ -876,7 +1287,8 @@ export async function findMusicBrainzArtworkCandidates(
           release,
           artist: release.albumArtist ?? rankedCandidate.candidate.artist,
           score: rankedCandidate.score
-            + (identity.useAlbumFilter && compareText(identity.album, release.title) !== 'different' ? 18 : 0)
+            + (album && compareText(album, release.title) !== 'different' ? 18 : 0),
+          artistDifferent: rankedCandidate.artistDifferent
         });
       }
     }
@@ -884,7 +1296,7 @@ export async function findMusicBrainzArtworkCandidates(
     releaseCandidates.sort((left, right) => right.score - left.score);
 
     for (const candidate of releaseCandidates) {
-      if (results.length >= 8 || artworkAttempts >= 20) break;
+      if (results.length >= 8 || artworkAttempts >= 32) break;
       if (seenReleases.has(candidate.release.id)) continue;
       seenReleases.add(candidate.release.id);
       artworkAttempts += 1;
@@ -902,7 +1314,9 @@ export async function findMusicBrainzArtworkCandidates(
         seenArtwork.add(artworkKey);
         results.push({
           id: `cover-art-archive:${candidate.release.id}:${artwork.id}`,
-          label: `Capa frontal — ${candidate.release.title}`,
+          label: candidate.artistDifferent
+            ? `Alternativa — ${candidate.artist} · ${candidate.release.title}`
+            : `Capa frontal — ${candidate.release.title}`,
           album: candidate.release.title,
           artist: candidate.artist,
           sourceUrl: artwork.imageUrl,
@@ -925,46 +1339,72 @@ export async function findMusicBrainzArtworkCandidates(
       userAgent
     );
     scopedRanked = rankManualArtworkCandidates(matchTrack, scopedRecordings, primaryTitle);
-
     await collectArtwork(scopedRanked, true);
     if (results.length > 0) return results;
   }
 
-  const broadRecordings = await fetchCandidates(
-    { title: primaryTitle, artist: identity.artist },
-    providers,
-    fetchImpl,
-    userAgent
-  );
-  const preferredRecordingIds = new Set(
-    scopedRanked.map(candidate => candidate.candidate.recordingId)
-  );
-  const broadRanked = rankManualArtworkCandidates(matchTrack, broadRecordings, primaryTitle)
-    .sort((left, right) => {
-      const leftPreferred = preferredRecordingIds.has(left.candidate.recordingId) ? 1 : 0;
-      const rightPreferred = preferredRecordingIds.has(right.candidate.recordingId) ? 1 : 0;
-      return rightPreferred - leftPreferred || right.score - left.score;
-    });
-
-  await collectArtwork(broadRanked, false);
-  if (results.length > 0) return results;
-
-  // Medleys e nomes compostos podem não existir no MusicBrainz como uma única
-  // gravação. Nesse caso tentamos, de forma conservadora, os segmentos do título,
-  // sempre mantendo o artista como filtro obrigatório.
-  for (const alternateTitle of searchTitles.slice(1)) {
-    if (results.length >= 8 || artworkAttempts >= 20) break;
-    const recordings = await fetchCandidates(
-      { title: alternateTitle, artist: identity.artist },
+  if (searchArtist) {
+    const broadRecordings = await fetchCandidates(
+      { title: primaryTitle, artist: searchArtist },
       providers,
       fetchImpl,
       userAgent
     );
-    const ranked = rankManualArtworkCandidates(matchTrack, recordings, alternateTitle);
-    await collectArtwork(ranked, false);
+    const preferredRecordingIds = new Set(
+      scopedRanked.map(candidate => candidate.candidate.recordingId)
+    );
+    const broadRanked = rankManualArtworkCandidates(matchTrack, broadRecordings, primaryTitle)
+      .sort((left, right) => {
+        const leftPreferred = preferredRecordingIds.has(left.candidate.recordingId) ? 1 : 0;
+        const rightPreferred = preferredRecordingIds.has(right.candidate.recordingId) ? 1 : 0;
+        return rightPreferred - leftPreferred || right.score - left.score;
+      });
+
+    await collectArtwork(broadRanked, false);
+    if (results.length > 0) return results;
+
+    for (const alternateTitle of searchTitles.slice(1)) {
+      if (results.length >= 8 || artworkAttempts >= 32) break;
+      const recordings = await fetchCandidates(
+        { title: alternateTitle, artist: searchArtist },
+        providers,
+        fetchImpl,
+        userAgent
+      );
+      const ranked = rankManualArtworkCandidates(matchTrack, recordings, alternateTitle);
+      await collectArtwork(ranked, false);
+      if (results.length > 0) return results;
+    }
   }
 
-  return results;
+  // Último fallback do MusicBrainz para uso estritamente manual: título sem
+  // artista. Isso cobre arquivos sem artista e também permite mostrar uma
+  // alternativa claramente rotulada quando o artista local estiver incorreto.
+  for (const title of searchTitles) {
+    if (results.length >= 8 || artworkAttempts >= 32) break;
+    const recordings = await fetchCandidates(
+      { title },
+      providers,
+      fetchImpl,
+      userAgent
+    );
+    const ranked = rankManualArtworkCandidates(matchTrack, recordings, title, {
+      allowDifferentArtist: true
+    });
+    await collectArtwork(ranked, false);
+    if (results.length > 0) return results;
+  }
+
+  // Há catálogos legítimos sem artwork no MusicBrainz/CAA. Como último recurso
+  // da busca manual, usamos o catálogo público do iTunes. Nada aqui entra no
+  // fluxo automático da Assistente; o usuário ainda precisa escolher a capa.
+  return findItunesArtworkFallback(
+    matchTrack,
+    searchTitles,
+    providers,
+    fetchImpl,
+    userAgent
+  );
 }
 
 export function createMusicBrainzMetadataAnalyzer(options: AnalyzerOptions = {}): LibraryAssistantAnalyzer {
