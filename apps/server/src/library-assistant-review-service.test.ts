@@ -11,6 +11,19 @@ import { LibraryAssistantStore } from './library-assistant-store.js';
 import { TrackCoverOverrideStore } from './track-cover-overrides.js';
 import { TrackMetadataOverrideStore } from './track-metadata-overrides.js';
 
+const PNG_1X1 = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+  'base64'
+);
+
+type ReviewFixtureOptions = {
+  downloadArtwork?: (sourceUrl: string) => Promise<{
+    data: Buffer;
+    contentType: string;
+    finalUrl: string;
+  }>;
+};
+
 function track(id: string, title: string): IndexedTrack {
   return {
     id,
@@ -37,7 +50,7 @@ async function withReview(run: (context: {
   review: LibraryAssistantReviewService;
   tracks: IndexedTrack[];
   revisionChanges: () => number;
-}) => Promise<void> | void) {
+}) => Promise<void> | void, options: ReviewFixtureOptions = {}) {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'home-music-assistant-review-'));
   const databasePath = path.join(directory, 'home-music.db');
   const physicalTracks = [track('track-1', 'Faixa antiga'), track('track-2', 'Outra faixa')];
@@ -58,6 +71,7 @@ async function withReview(run: (context: {
     },
     onMetadataChanged: () => { revision += 1; },
     onArtworkChanged: () => { revision += 1; },
+    downloadArtwork: options.downloadArtwork,
     now: () => new Date('2026-09-07T12:10:00.000Z')
   });
   try {
@@ -135,6 +149,8 @@ function seedArtworkSuggestion(
     runId?: string;
     suggestionId?: string;
     trackId?: string;
+    sourceUrl?: string;
+    thumbnailUrl?: string | null;
   } = {}
 ) {
   const runId = input.runId ?? 'run-artwork';
@@ -169,8 +185,8 @@ function seedArtworkSuggestion(
       trackId,
       candidateId: 'release-1:front',
       label: 'Capa frontal',
-      sourceUrl: 'https://coverartarchive.org/release/release-1/front',
-      thumbnailUrl: null,
+      sourceUrl: input.sourceUrl ?? 'https://coverartarchive.org/release/release-1/front',
+      thumbnailUrl: input.thumbnailUrl ?? null,
       currentHasCover: false,
       currentCoverVersion: null,
       musicBrainzReleaseId: 'release-1',
@@ -389,6 +405,31 @@ test('confirmed review batch keeps human override stale protection', async () =>
     const confirmed = await review.decideBatch([decision()], { confirmReview: true });
     assert.equal(confirmed.results[0].outcome, 'stale');
     assert.equal(metadata.get('track-1')?.effective.title, 'Faixa antiga');
+  });
+});
+
+test('artwork preview uses the same-origin proxy source and validates downloaded image bytes', async () => {
+  const requested: string[] = [];
+  await withReview(async ({ assistant, review }) => {
+    seedArtworkSuggestion(assistant, {
+      thumbnailUrl: 'https://coverartarchive.org/release/release-1/250'
+    });
+
+    const preview = await review.getArtworkPreview('run-artwork', 'suggestion-artwork');
+    assert.ok(preview);
+    assert.equal(preview.contentType, 'image/png');
+    assert.deepEqual(preview.data, PNG_1X1);
+    assert.deepEqual(requested, ['https://coverartarchive.org/release/release-1/250']);
+    assert.equal(await review.getArtworkPreview('run-artwork', 'missing'), null);
+  }, {
+    async downloadArtwork(sourceUrl) {
+      requested.push(sourceUrl);
+      return {
+        data: PNG_1X1,
+        contentType: 'image/png',
+        finalUrl: sourceUrl
+      };
+    }
   });
 });
 
