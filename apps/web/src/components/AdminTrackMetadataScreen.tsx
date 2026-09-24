@@ -869,10 +869,10 @@ export function AdminTrackMetadataScreen({
                       <input aria-label="Artista" required maxLength={240} value={draft.artist} disabled={operationBusy} onChange={event => setField('artist', event.target.value)} />
                       <small>Original: {metadata.physical.artist}</small>
                       {metadataSuggestion && metadataSuggestion.artist !== draft.artist && (
-                        <span className="admin-metadata-v2__field-suggestion">
+                        <div className="admin-metadata-v2__field-suggestion">
                           <small>{metadataSuggestion.source === 'musicbrainz' ? 'MusicBrainz' : 'iTunes'}: {metadataSuggestion.artist}</small>
                           <button type="button" disabled={operationBusy} onClick={() => useMetadataSuggestion('artist')}>Usar sugestão</button>
-                        </span>
+                        </div>
                       )}
                     </label>
                     <label>
@@ -880,10 +880,10 @@ export function AdminTrackMetadataScreen({
                       <input aria-label="Álbum" required maxLength={240} value={draft.album} disabled={operationBusy} onChange={event => setField('album', event.target.value)} />
                       <small>Original: {metadata.physical.album}</small>
                       {metadataSuggestion && metadataSuggestion.album !== draft.album && (
-                        <span className="admin-metadata-v2__field-suggestion">
+                        <div className="admin-metadata-v2__field-suggestion">
                           <small>{metadataSuggestion.source === 'musicbrainz' ? 'MusicBrainz' : 'iTunes'}: {metadataSuggestion.album}</small>
                           <button type="button" disabled={operationBusy} onClick={() => useMetadataSuggestion('album')}>Usar sugestão</button>
-                        </span>
+                        </div>
                       )}
                     </label>
                     <label className="is-wide">
@@ -891,10 +891,10 @@ export function AdminTrackMetadataScreen({
                       <input aria-label="Artista do álbum" required maxLength={240} value={draft.albumArtist} disabled={operationBusy} onChange={event => setField('albumArtist', event.target.value)} />
                       <small>Original: {metadata.physical.albumArtist}</small>
                       {metadataSuggestion && metadataSuggestion.albumArtist !== draft.albumArtist && (
-                        <span className="admin-metadata-v2__field-suggestion">
+                        <div className="admin-metadata-v2__field-suggestion">
                           <small>{metadataSuggestion.source === 'musicbrainz' ? 'MusicBrainz' : 'iTunes'}: {metadataSuggestion.albumArtist}</small>
                           <button type="button" disabled={operationBusy} onClick={() => useMetadataSuggestion('albumArtist')}>Usar sugestão</button>
-                        </span>
+                        </div>
                       )}
                     </label>
                   </div>
