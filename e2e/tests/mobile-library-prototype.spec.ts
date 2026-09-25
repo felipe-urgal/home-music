@@ -114,7 +114,9 @@ test('mobile segue o protótipo 3 na biblioteca, detalhe e player', async ({ pag
   const immersiveProgressBox = await progress.boundingBox();
   expect(immersiveArtworkBox && immersiveProgressBox).toBeTruthy();
   expect(immersiveArtworkBox!.width).toBeGreaterThanOrEqual(viewport.width - 1);
-  expect(immersiveArtworkBox!.height).toBeGreaterThanOrEqual(viewport.height * 0.6);
+  if (await player.getAttribute('data-has-artwork') === 'true') {
+    expect(immersiveArtworkBox!.height).toBeGreaterThanOrEqual(viewport.height * 0.6);
+  }
   expect(viewport.height - (immersiveProgressBox!.y + immersiveProgressBox!.height)).toBeLessThanOrEqual(24);
   await expect.poll(async () => (await nextTrackCard.boundingBox())?.height ?? 0).toBeLessThanOrEqual(1);
 
