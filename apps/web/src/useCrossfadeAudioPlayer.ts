@@ -2,12 +2,18 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import type { NormalizationMode, Track } from '@home-music/shared';
 import { isAppleMobileWebKit } from './background-playback';
 import {
+  QUANTIZED_CROSSFADE_ARM_SECONDS,
+  QUANTIZED_CROSSFADE_EARLY_TOLERANCE_SECONDS,
+  resolveQuantizedCrossfadePlan
+} from './beat-clock';
+import {
   isCrossfadeCompletionPause,
   normalizeCrossfadeSeconds,
   otherCrossfadeDeck,
   readCrossfadeSeconds,
   resolveCrossfadeCandidate,
   writeCrossfadeSeconds,
+  type CrossfadeCandidate,
   type CrossfadeDeck
 } from './crossfade';
 import {
@@ -66,6 +72,7 @@ export function useCrossfadeAudioPlayer(
   const deckBRef = useRef<HTMLAudioElement>(null);
   const activeDeckRef = useRef<CrossfadeDeck>('a');
   const animationFrameRef = useRef<number | null>(null);
+  const quantizedScheduleFrameRef = useRef<number | null>(null);
   const attemptRef = useRef(0);
   const originTrackIdRef = useRef<string | null>(null);
   const startingTrackIdRef = useRef<string | null>(null);
