@@ -846,11 +846,13 @@ export class HomeMusicDatabase {
     removedIds: readonly string[],
     libraryRoot: string,
     scannedAt: string,
-    mode: TrackPersistenceMetrics['mode']
+    mode: TrackPersistenceMetrics['mode'],
+    clearRhythmAnalysis = false
   ): TrackPersistenceMetrics {
     const startedAt = performance.now();
     this.db.exec('BEGIN IMMEDIATE;');
     try {
+      if (clearRhythmAnalysis) this.db.exec('DELETE FROM track_rhythm_analysis;');
       this.upsertTracks(upserts);
       const removed = this.removeTrackIds(removedIds);
       this.setMetadata('libraryRoot', libraryRoot);
@@ -897,11 +899,13 @@ export class HomeMusicDatabase {
   }
 
   syncTracks(tracks: IndexedTrack[], libraryRoot: string, scannedAt: string) {
+    const storedRoot = this.getMetadata('libraryRoot');
+    const rootChanged = storedRoot != null && storedRoot !== libraryRoot;
     const incomingIds = new Set(tracks.map(track => track.id));
     const staleIds = (this.db.prepare('SELECT id FROM tracks').all() as Row[])
       .map(row => stringValue(row.id))
       .filter(id => !incomingIds.has(id));
-    return this.persistTrackChanges(tracks, staleIds, libraryRoot, scannedAt, 'full');
+    return this.persistTrackChanges(tracks, staleIds, libraryRoot, scannedAt, 'full', rootChanged);
   }
 
   applyTrackDelta(delta: LibraryTrackDelta, libraryRoot: string, scannedAt: string) {
