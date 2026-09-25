@@ -117,6 +117,33 @@ test('persiste análise concluída sem ritmo para não repetir trabalho até o a
   }
 });
 
+test('troca da raiz da biblioteca invalida análise mesmo com assinatura de arquivo igual', async () => {
+  const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-rhythm-db-'));
+  const dbPath = path.join(temp, 'home-music.db');
+  const db = new HomeMusicDatabase(dbPath);
+
+  try {
+    const original = indexedTrack('same-id', '/music-a/album/a.mp3');
+    db.syncTracks([original], '/music-a', '2026-09-25T12:00:00.000Z');
+    assert.equal(db.saveTrackRhythmAnalysis(
+      original.id,
+      original.fileSize,
+      original.mtimeMs,
+      { bpm: 120, firstBeatSeconds: 0.2, confidence: 0.9 }
+    ), true);
+
+    const replacement = indexedTrack('same-id', '/music-b/album/a.mp3');
+    db.syncTracks([replacement], '/music-b', '2026-09-25T12:04:00.000Z');
+
+    const loaded = db.loadTracks()[0];
+    assert.equal(loaded?.rhythm, undefined);
+    assert.equal(loaded?.rhythmAnalysisCurrent, undefined);
+  } finally {
+    db.close();
+    await rm(temp, { recursive: true, force: true });
+  }
+});
+
 test('remoção da faixa remove análise rítmica derivada por cascade', async () => {
   const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-rhythm-db-'));
   const dbPath = path.join(temp, 'home-music.db');
