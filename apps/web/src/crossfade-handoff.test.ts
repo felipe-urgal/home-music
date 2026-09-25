@@ -54,7 +54,20 @@ describe('crossfade handoff', () => {
 
     expect(crossfade).toContain("import { offlineAudioUrl } from './offline-downloads';");
     expect(crossfade).toContain('const offlineMode = Boolean(options.offlineMode);');
-    expect(crossfade).toContain('? offlineAudioUrl(nextTrack.id)');
+    expect(crossfade).toContain('const incomingTrackSource = useCallback');
+    expect(crossfade).toContain('? offlineAudioUrl(track.id)');
+  });
+
+  it('aplica beatmatch somente com fase curta e restaura playbackRate após o handoff', () => {
+    const crossfade = source('useCrossfadeAudioPlayer.ts');
+
+    expect(crossfade).toContain('resolveBeatmatchPlan({');
+    expect(crossfade).toContain('canPhaseAlignBeatmatch(beatmatchPlan)');
+    expect(crossfade).toContain('incomingAudio.readyState >= 1');
+    expect(crossfade).toContain('incomingAudio.currentTime = nextTrack.rhythm.firstBeatSeconds');
+    expect(crossfade).toContain('incomingAudio.playbackRate = beatmatchPlan.playbackRate');
+    expect(crossfade).toContain('restorePlaybackRate(incomingAudio);');
+    expect(crossfade).toContain('audio.playbackRate = 1;');
   });
 
   it('mantém Apple mobile WebKit fora do fluxo de dois decks', () => {
