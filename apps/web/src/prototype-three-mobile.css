@@ -618,41 +618,93 @@
   #root .desktop-layout[data-offline="false"] .mobile-library-home__folders,
   #root .desktop-layout[data-offline="false"] .mobile-library-home__playlists {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 10px;
+    grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
+    gap: 16px;
   }
 
-  #root .desktop-layout[data-offline="false"] .mobile-library-home__folder {
+  #root .desktop-layout[data-offline="false"] .mobile-library-home__folder,
+  #root .desktop-layout[data-offline="false"] .mobile-library-home__playlists .group-item {
+    position: relative;
     min-width: 0;
+    min-height: 0;
     padding: 0;
-    display: grid;
-    gap: 7px;
-    border: 0;
+    display: block;
+    overflow: hidden;
+    border: 1px solid rgba(231, 209, 187, .11);
+    border-radius: 9px;
     color: inherit;
-    background: transparent;
+    background: #101827;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, .16);
     text-align: left;
   }
 
-  #root .desktop-layout[data-offline="false"] .mobile-library-home__folder .artwork {
-    width: 100%;
-    height: auto;
-    aspect-ratio: 1 / 1.12;
-    border-radius: 10px;
-    box-shadow: 0 12px 26px rgba(0, 0, 0, .22);
+  #root .desktop-layout[data-offline="false"] .mobile-library-home__folder:active,
+  #root .desktop-layout[data-offline="false"] .mobile-library-home__playlists .group-item:active {
+    border-color: rgba(244, 196, 126, .28);
+    background: #121c2d;
   }
 
-  #root .desktop-layout[data-offline="false"] .mobile-library-home__folder > span {
-    min-width: 0;
+  #root .desktop-layout[data-offline="false"] .mobile-library-home__folder > .folder-visual-card__artwork-mosaic,
+  #root .desktop-layout[data-offline="false"] .mobile-library-home__playlists .playlist-visual-card__artwork-mosaic {
+    width: 100%;
+    aspect-ratio: 1.36 / 1;
     display: grid;
-    gap: 2px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+    overflow: hidden;
+    background: #0d1522;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-library-home .folder-visual-card__artwork-mosaic.is-count-1 {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-library-home .folder-visual-card__artwork-mosaic.is-count-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: 1fr;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-library-home .folder-visual-card__artwork-mosaic.is-count-3 > .artwork:last-child {
+    grid-column: 1 / -1;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-library-home .folder-visual-card__artwork-mosaic > .artwork,
+  #root .desktop-layout[data-offline="false"] .mobile-library-home .folder-visual-card__artwork-mosaic > .artwork img {
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    min-width: 0;
+    min-height: 0;
+    border: 0;
+    border-radius: 0;
+    object-fit: cover;
+    box-shadow: none;
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-library-home .folder-visual-card__artwork-mosaic > .artwork {
+    overflow: hidden;
+    border-right: 1px solid rgba(9, 14, 23, .72);
+    border-bottom: 1px solid rgba(9, 14, 23, .72);
+  }
+
+  #root .desktop-layout[data-offline="false"] .mobile-library-home__folder > span:last-child,
+  #root .desktop-layout[data-offline="false"] .mobile-library-home__playlists .group-item__text {
+    min-width: 0;
+    min-height: 48px;
+    padding: 9px 10px;
+    display: grid;
+    align-content: center;
+    gap: 3px;
+    text-align: left;
   }
 
   #root .desktop-layout[data-offline="false"] .mobile-library-home__folder strong,
   #root .desktop-layout[data-offline="false"] .mobile-library-home__playlists .group-item__text strong {
     overflow: hidden;
-    color: #f4f7fb;
-    font-size: 11px;
-    font-weight: 650;
+    color: #f1e8e1;
+    font-size: 14px;
+    font-weight: 620;
     line-height: 1.2;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -661,47 +713,22 @@
   #root .desktop-layout[data-offline="false"] .mobile-library-home__folder small,
   #root .desktop-layout[data-offline="false"] .mobile-library-home__playlists .group-item__text small {
     overflow: hidden;
-    color: #8997aa;
-    font-size: 9px;
+    color: #928a87;
+    font-size: 11px;
     line-height: 1.2;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  #root .desktop-layout[data-offline="false"] .mobile-library-home__playlists .group-item {
+  #root .desktop-layout[data-offline="false"] .mobile-library-home__playlists .group-item__main {
+    width: 100%;
     min-width: 0;
     min-height: 0;
     padding: 0;
     display: block;
-    overflow: visible;
     border: 0;
-    border-radius: 0;
-    background: transparent;
-  }
-
-  #root .desktop-layout[data-offline="false"] .mobile-library-home__playlists .group-item__main {
-    min-width: 0;
-    min-height: 0;
-    padding: 0;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    gap: 7px;
     color: inherit;
     background: transparent;
-  }
-
-  #root .desktop-layout[data-offline="false"] .mobile-library-home__playlists .group-item__main .artwork {
-    width: 100%;
-    height: auto;
-    aspect-ratio: 1 / 1.12;
-    border-radius: 10px;
-    box-shadow: 0 12px 26px rgba(0, 0, 0, .22);
-  }
-
-  #root .desktop-layout[data-offline="false"] .mobile-library-home__playlists .group-item__text {
-    min-width: 0;
-    display: grid;
-    gap: 2px;
     text-align: left;
   }
 

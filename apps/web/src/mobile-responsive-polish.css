@@ -578,21 +578,6 @@
 }
 
 @media (max-width: 380px) {
-  #root .desktop-layout[data-offline="false"] .mobile-library-home__folders,
-  #root .desktop-layout[data-offline="false"] .mobile-library-home__playlists {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-  }
-
-  #root .desktop-layout[data-offline="false"] .mobile-library-home__folder strong,
-  #root .desktop-layout[data-offline="false"] .mobile-library-home__playlists .group-item__text strong {
-    font-size: 12px !important;
-  }
-
-  #root .desktop-layout[data-offline="false"] .mobile-library-home__folder small,
-  #root .desktop-layout[data-offline="false"] .mobile-library-home__playlists .group-item__text small {
-    font-size: 10px !important;
-  }
-
   #root .desktop-layout[data-offline="false"] .administration-cockpit-actions {
     grid-template-columns: 1fr !important;
   }

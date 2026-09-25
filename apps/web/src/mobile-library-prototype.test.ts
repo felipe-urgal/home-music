@@ -43,6 +43,19 @@ describe('mobile library prototype one contracts', () => {
     expect(content).toMatch(/aria-label="Ordenar pastas da biblioteca"/);
   });
 
+  it('mantém no home mobile o padrão visual dos cards desktop', () => {
+    const content = source('components/LibraryContent.tsx');
+    const css = source('prototype-three-mobile.css');
+    const responsiveCss = source('mobile-responsive-polish.css');
+
+    expect(content).toMatch(/renderPlaylistCards\(mobileHomePlaylists, true\)/);
+    expect(content).toMatch(/mobile-library-home__folder[\s\S]*folder-visual-card__artwork-mosaic/);
+    expect(css).toMatch(/mobile-library-home__folders,[\s\S]*repeat\(auto-fit, minmax\(min\(300px, 100%\), 1fr\)\)/);
+    expect(css).toMatch(/mobile-library-home[\s\S]*folder-visual-card__artwork-mosaic[\s\S]*aspect-ratio: 1\.36 \/ 1/);
+    expect(css).toMatch(/mobile-library-home__folder strong,[\s\S]*font-size: 14px/);
+    expect(responsiveCss).not.toMatch(/mobile-library-home__folders,[\s\S]{0,180}repeat\(2,/);
+  });
+
   it('usa a marca Home Music como acesso ao player no desktop', () => {
     const shell = source('components/DesktopShell.tsx');
 
