@@ -226,16 +226,20 @@ export function PlayerTrackPresentation({
               playing={playing}
               offlineMode={false}
             />
-            <button
-              className={`player-hero-reveal ${showHeroControl ? 'is-hidden' : 'is-visible'}`}
-              type="button"
-              aria-label="Mostrar controles de reprodução"
-              onClick={revealHeroControl}
-            />
+            {!showHeroControl && (
+              <button
+                className="player-hero-reveal"
+                type="button"
+                aria-label="Mostrar controles de reprodução"
+                onClick={revealHeroControl}
+              />
+            )}
             <button
               className={`player-hero-play__control ${showHeroControl ? 'is-visible' : 'is-hidden'}`}
               type="button"
               aria-label={playing ? 'Pausar' : 'Tocar'}
+              aria-hidden={!showHeroControl}
+              tabIndex={showHeroControl ? 0 : -1}
               onClick={() => {
                 revealHeroControl();
                 onTogglePlay();
