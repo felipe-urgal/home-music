@@ -244,7 +244,7 @@ export function useCrossfadeAudioPlayer(
           originTrackId,
           incomingTrack: nextTrack,
           durationSeconds: candidate.durationSeconds,
-          elapsedSeconds: Math.max(0, Math.min(candidate.durationSeconds, incomingAudio.currentTime))
+          elapsedSeconds: 0
         });
 
         const animate = () => {
@@ -272,11 +272,15 @@ export function useCrossfadeAudioPlayer(
             return;
           }
 
+          const elapsedSeconds = Math.max(
+            0,
+            Math.min(candidate.durationSeconds, candidate.durationSeconds - remainingSeconds)
+          );
           const progress = Math.max(
             0,
-            Math.min(1, incomingAudio.currentTime / candidate.durationSeconds)
+            Math.min(1, elapsedSeconds / candidate.durationSeconds)
           );
-          syncCrossfadeVisualElapsed(attempt, incomingAudio.currentTime);
+          syncCrossfadeVisualElapsed(attempt, elapsedSeconds);
           const outputVolume = outputVolumeRef.current;
           const angle = progress * Math.PI * 0.5;
           activeAudio.volume = outputVolume * Math.cos(angle);
