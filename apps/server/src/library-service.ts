@@ -152,6 +152,7 @@ export class LibraryService {
       this.setTracks(this.tracks);
       this.libraryRevision += 1;
       if (!enabled) this.invalidateMediaCache();
+      this.tracksChangedListener(this.tracks);
     }
 
     return { ...this.publicTrack(track), enabled };
@@ -376,8 +377,8 @@ export class LibraryService {
     if (changed) {
       this.libraryRevision += 1;
       this.invalidateMediaCache();
-      this.tracksChangedListener(this.tracks);
     }
+    this.tracksChangedListener(this.tracks);
   }
 
   private performRescan() {
