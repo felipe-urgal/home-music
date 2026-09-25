@@ -7,6 +7,12 @@ import {
   resolveQuantizedCrossfadePlan
 } from './beat-clock';
 import {
+  BEATMATCH_RATE_RESTORE_SECONDS,
+  canPhaseAlignBeatmatch,
+  interpolatePlaybackRate,
+  resolveBeatmatchPlan
+} from './beatmatch';
+import {
   isCrossfadeCompletionPause,
   normalizeCrossfadeSeconds,
   otherCrossfadeDeck,
@@ -73,6 +79,8 @@ export function useCrossfadeAudioPlayer(
   const activeDeckRef = useRef<CrossfadeDeck>('a');
   const animationFrameRef = useRef<number | null>(null);
   const quantizedScheduleFrameRef = useRef<number | null>(null);
+  const playbackRateRestoreFrameRef = useRef<number | null>(null);
+  const preparedIncomingTrackIdRef = useRef<string | null>(null);
   const attemptRef = useRef(0);
   const originTrackIdRef = useRef<string | null>(null);
   const startingTrackIdRef = useRef<string | null>(null);
@@ -98,6 +106,8 @@ export function useCrossfadeAudioPlayer(
     if (!audio) return;
     audio.pause();
     audio.volume = 0;
+    audio.playbackRate = 1;
+    audio.preservesPitch = true;
     audio.removeAttribute('src');
     audio.load();
   }, []);
@@ -114,10 +124,52 @@ export function useCrossfadeAudioPlayer(
     quantizedScheduleFrameRef.current = null;
   }, []);
 
+  const cancelPlaybackRateRestore = useCallback(() => {
+    if (playbackRateRestoreFrameRef.current == null) return;
+    window.cancelAnimationFrame(playbackRateRestoreFrameRef.current);
+    playbackRateRestoreFrameRef.current = null;
+  }, []);
+
+  const restorePlaybackRate = useCallback((audio: HTMLAudioElement) => {
+    cancelPlaybackRateRestore();
+    const initialRate = audio.playbackRate;
+    if (!Number.isFinite(initialRate) || Math.abs(initialRate - 1) < 1e-4) {
+      audio.playbackRate = 1;
+      return;
+    }
+
+    const startedAt = performance.now();
+    const restore = (now: number) => {
+      if (audio !== getActiveAudio() || audio.paused || audio.ended) {
+        audio.playbackRate = 1;
+        playbackRateRestoreFrameRef.current = null;
+        return;
+      }
+
+      const elapsedSeconds = Math.max(0, (now - startedAt) / 1_000);
+      audio.playbackRate = interpolatePlaybackRate(
+        initialRate,
+        elapsedSeconds,
+        BEATMATCH_RATE_RESTORE_SECONDS
+      );
+      if (elapsedSeconds >= BEATMATCH_RATE_RESTORE_SECONDS) {
+        audio.playbackRate = 1;
+        playbackRateRestoreFrameRef.current = null;
+        return;
+      }
+
+      playbackRateRestoreFrameRef.current = window.requestAnimationFrame(restore);
+    };
+
+    playbackRateRestoreFrameRef.current = window.requestAnimationFrame(restore);
+  }, [cancelPlaybackRateRestore, getActiveAudio]);
+
   const cancelCrossfade = useCallback(() => {
     attemptRef.current += 1;
     cancelAnimation();
     cancelQuantizedSchedule();
+    cancelPlaybackRateRestore();
+    preparedIncomingTrackIdRef.current = null;
     originTrackIdRef.current = null;
     startingTrackIdRef.current = null;
     incomingTrackIdRef.current = null;
@@ -128,9 +180,10 @@ export function useCrossfadeAudioPlayer(
     if (activeAudio) {
       player.audioRef.current = activeAudio;
       activeAudio.volume = outputVolumeRef.current;
+      activeAudio.playbackRate = 1;
     }
     if (inactiveAudio && inactiveAudio !== activeAudio) clearAudio(inactiveAudio);
-  }, [cancelAnimation, cancelQuantizedSchedule, clearAudio, getActiveAudio, getInactiveAudio, player.audioRef]);
+  }, [cancelAnimation, cancelPlaybackRateRestore, cancelQuantizedSchedule, clearAudio, getActiveAudio, getInactiveAudio, player.audioRef]);
 
   useLayoutEffect(() => {
     cancelRef.current = cancelCrossfade;
@@ -180,10 +233,11 @@ export function useCrossfadeAudioPlayer(
     attemptRef.current += 1;
     cancelAnimation();
     cancelQuantizedSchedule();
+    cancelPlaybackRateRestore();
     clearCrossfadeVisualState();
     clearAudio(deckARef.current);
     clearAudio(deckBRef.current);
-  }, [cancelAnimation, cancelQuantizedSchedule, clearAudio]);
+  }, [cancelAnimation, cancelPlaybackRateRestore, cancelQuantizedSchedule, clearAudio]);
 
   const setCrossfadeSeconds = useCallback((seconds: number) => {
     const normalizedSeconds = normalizeCrossfadeSeconds(seconds);
@@ -191,6 +245,33 @@ export function useCrossfadeAudioPlayer(
     persistCrossfadeSeconds(normalizedSeconds);
     setCrossfadeSecondsState(normalizedSeconds);
   }, [cancelCrossfade]);
+
+  const incomingTrackSource = useCallback((track: Track) => (
+    getTvRemoteMediaSource(track.id) ?? (offlineMode
+      ? offlineAudioUrl(track.id)
+      : onlineAudioUrl(
+          track.id,
+          player.streamingMode,
+          false,
+          effectiveNormalizationMode(track, player.normalizationMode)
+        ))
+  ), [offlineMode, player.normalizationMode, player.streamingMode]);
+
+  const prepareIncomingAudio = useCallback((track: Track) => {
+    const incomingAudio = getInactiveAudio();
+    if (!incomingAudio) return null;
+    if (
+      preparedIncomingTrackIdRef.current === track.id
+      && incomingAudio.getAttribute('src')
+    ) return incomingAudio;
+
+    clearAudio(incomingAudio);
+    incomingAudio.volume = 0;
+    incomingAudio.src = incomingTrackSource(track);
+    incomingAudio.load();
+    preparedIncomingTrackIdRef.current = track.id;
+    return incomingAudio;
+  }, [clearAudio, getInactiveAudio, incomingTrackSource]);
 
   const startCrossfade = useCallback((
     activeAudio: HTMLAudioElement,
@@ -203,27 +284,45 @@ export function useCrossfadeAudioPlayer(
     cancelQuantizedSchedule();
 
     const nextTrack = player.queue.find(track => track.id === candidate.trackId);
-    const incomingAudio = getInactiveAudio();
     const originTrackId = player.current?.id ?? null;
-    if (!nextTrack || !incomingAudio || !originTrackId) return;
+    if (!nextTrack || !originTrackId) return;
+
+    const incomingAudio = prepareIncomingAudio(nextTrack);
+    if (!incomingAudio) return;
+
+    const beatmatchPlan = resolveBeatmatchPlan({
+      outgoing: player.current?.rhythm,
+      incoming: nextTrack.rhythm
+    });
+    const shouldBeatmatch = Boolean(
+      beatmatchPlan
+      && canPhaseAlignBeatmatch(beatmatchPlan)
+      && nextTrack.rhythm
+      && incomingAudio.readyState >= 1
+    );
+
+    incomingAudio.playbackRate = 1;
+    incomingAudio.preservesPitch = true;
+    if (shouldBeatmatch && beatmatchPlan && nextTrack.rhythm) {
+      try {
+        incomingAudio.playbackRate = beatmatchPlan.playbackRate;
+        incomingAudio.currentTime = nextTrack.rhythm.firstBeatSeconds;
+      } catch {
+        incomingAudio.playbackRate = 1;
+        try {
+          incomingAudio.currentTime = 0;
+        } catch {
+          // O deck continua no ponto aceito pelo browser; o handoff ainda é seguro.
+        }
+      }
+    }
+    preparedIncomingTrackIdRef.current = null;
 
     const attempt = attemptRef.current + 1;
     attemptRef.current = attempt;
     originTrackIdRef.current = originTrackId;
     startingTrackIdRef.current = candidate.trackId;
     incomingTrackIdRef.current = null;
-
-    clearAudio(incomingAudio);
-    incomingAudio.volume = 0;
-    incomingAudio.src = getTvRemoteMediaSource(nextTrack.id) ?? (offlineMode
-      ? offlineAudioUrl(nextTrack.id)
-      : onlineAudioUrl(
-          nextTrack.id,
-          player.streamingMode,
-          false,
-          effectiveNormalizationMode(nextTrack, player.normalizationMode)
-        ));
-    incomingAudio.load();
 
     void incomingAudio.play()
       .then(() => {
@@ -296,15 +395,12 @@ export function useCrossfadeAudioPlayer(
   }, [
     cancelCrossfade,
     cancelQuantizedSchedule,
-    clearAudio,
     getActiveAudio,
-    getInactiveAudio,
-    offlineMode,
     player.current?.id,
-    player.normalizationMode,
+    player.current?.rhythm,
     player.playing,
     player.queue,
-    player.streamingMode
+    prepareIncomingAudio
   ]);
 
   const maybeStartCrossfade = useCallback((activeAudio: HTMLAudioElement) => {
@@ -340,6 +436,22 @@ export function useCrossfadeAudioPlayer(
     if (timeUntilStart > QUANTIZED_CROSSFADE_ARM_SECONDS) {
       cancelQuantizedSchedule();
       return;
+    }
+
+    if (timeUntilStart > QUANTIZED_CROSSFADE_EARLY_TOLERANCE_SECONDS) {
+      const preloadCandidate = resolveCrossfadeCandidate({
+        queue: player.queue,
+        currentIndex: player.currentIndex,
+        currentTrackId: player.current?.id ?? null,
+        repeatMode: player.repeatMode,
+        durationSeconds: quantizedPlan.durationSeconds,
+        visibilityState: document.visibilityState,
+        remainingSeconds: Math.min(remainingSeconds, quantizedPlan.durationSeconds)
+      });
+      const preloadTrack = preloadCandidate
+        ? player.queue.find(track => track.id === preloadCandidate.trackId)
+        : undefined;
+      if (preloadTrack) prepareIncomingAudio(preloadTrack);
     }
 
     const resolveQuantizedCandidate = (audio: HTMLAudioElement) => {
@@ -413,6 +525,7 @@ export function useCrossfadeAudioPlayer(
     player.playing,
     player.queue,
     player.repeatMode,
+    prepareIncomingAudio,
     startCrossfade
   ]);
 
@@ -454,6 +567,7 @@ export function useCrossfadeAudioPlayer(
     activeDeckRef.current = otherCrossfadeDeck(activeDeckRef.current);
     incomingAudio.volume = outputVolumeRef.current;
     audio.volume = 0;
+    restorePlaybackRate(incomingAudio);
 
     // A próxima faixa já está carregada e avançou durante o crossfade. Registra a
     // adoção antes de avançar o estado para que o player canônico não faça src/load
@@ -463,7 +577,7 @@ export function useCrossfadeAudioPlayer(
     player.audioHandlers.onPlay();
     player.audioHandlers.onEnded();
     window.requestAnimationFrame(() => clearCrossfadeVisualState(visualAttempt));
-  }, [cancelAnimation, cancelCrossfade, clearAudio, crossfadeSeconds, getActiveAudio, getInactiveAudio, player.adoptAudioSource, player.audioHandlers, player.current?.id, player.currentIndex, player.queue, player.repeatMode]);
+  }, [cancelAnimation, cancelCrossfade, clearAudio, crossfadeSeconds, getActiveAudio, getInactiveAudio, player.adoptAudioSource, player.audioHandlers, player.current?.id, player.currentIndex, player.queue, player.repeatMode, restorePlaybackRate]);
 
   const handleDeckLoadedMetadata = useCallback((audio: HTMLAudioElement) => {
     if (audio === getActiveAudio()) player.audioHandlers.onLoadedMetadata(audio);
