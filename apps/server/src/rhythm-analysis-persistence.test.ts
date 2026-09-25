@@ -81,6 +81,42 @@ test('persiste análise rítmica somente para a assinatura atual do arquivo', as
   }
 });
 
+test('persiste análise concluída sem ritmo para não repetir trabalho até o arquivo mudar', async () => {
+  const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-rhythm-db-'));
+  const dbPath = path.join(temp, 'home-music.db');
+  const db = new HomeMusicDatabase(dbPath);
+
+  try {
+    const original = indexedTrack('ambient', '/music/ambient.mp3');
+    db.syncTracks([original], '/music', '2026-09-25T12:00:00.000Z');
+
+    assert.equal(db.saveTrackRhythmAnalysis(
+      original.id,
+      original.fileSize,
+      original.mtimeMs,
+      null
+    ), true);
+
+    const analyzed = db.loadTracks()[0];
+    assert.equal(analyzed?.rhythm, undefined);
+    assert.equal(analyzed?.rhythmAnalysisCurrent, true);
+
+    const changed = indexedTrack('ambient', '/music/ambient.mp3', 999, 1000);
+    db.applyTrackDelta(
+      { added: [], updated: [changed], removedIds: [] },
+      '/music',
+      '2026-09-25T12:03:00.000Z'
+    );
+
+    const invalidated = db.loadTracks()[0];
+    assert.equal(invalidated?.rhythm, undefined);
+    assert.equal(invalidated?.rhythmAnalysisCurrent, undefined);
+  } finally {
+    db.close();
+    await rm(temp, { recursive: true, force: true });
+  }
+});
+
 test('remoção da faixa remove análise rítmica derivada por cascade', async () => {
   const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-rhythm-db-'));
   const dbPath = path.join(temp, 'home-music.db');
