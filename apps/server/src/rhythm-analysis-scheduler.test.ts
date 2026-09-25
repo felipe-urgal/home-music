@@ -205,3 +205,82 @@ test('resultado sem ritmo é marcado como concluído e não entra novamente na f
 
   assert.equal(analyzeCalls, 1);
 });
+
+
+test('runtime agrega fila, resultados, baixa confiança, falhas e timeout sem expor paths', async () => {
+  const tracks = new Map<string, IndexedTrack>([
+    ['detected', { ...track(), id: 'detected' }],
+    ['low-confidence', { ...track(), id: 'low-confidence' }],
+    ['unavailable', { ...track(), id: 'unavailable' }],
+    ['timeout', { ...track(), id: 'timeout' }]
+  ]);
+
+  const library = {
+    allTracks: Array.from(tracks.values()),
+    getTrack: (trackId: string) => tracks.get(trackId),
+    applyRhythmAnalysis: (
+      trackId: string,
+      _sourceFileSize: number,
+      _sourceMtimeMs: number,
+      rhythm: IndexedTrack['rhythm'] | null
+    ) => {
+      const current = tracks.get(trackId);
+      if (!current) return false;
+      tracks.set(trackId, { ...current, rhythm: rhythm ?? undefined, rhythmAnalysisCurrent: true });
+      return true;
+    }
+  } as unknown as LibraryService;
+
+  const database = {
+    saveTrackRhythmAnalysis: () => true
+  } as unknown as HomeMusicDatabase;
+
+  const scheduler = new RhythmAnalysisScheduler({
+    library,
+    database,
+    logger,
+    analyze: async current => {
+      if (current.id === 'timeout') throw new Error('FFmpeg excedeu o timeout da análise rítmica.');
+      if (current.id === 'unavailable') return null;
+      if (current.id === 'low-confidence') {
+        return { bpm: 120, firstBeatSeconds: 0.2, confidence: 0.4 };
+      }
+      return { bpm: 128, firstBeatSeconds: 0.3, confidence: 0.9 };
+    }
+  });
+
+  scheduler.sync();
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const runtime = scheduler.runtime;
+    if (runtime.completed + runtime.failed === 4) break;
+    await new Promise<void>(resolve => setImmediate(resolve));
+  }
+  await scheduler.stop();
+
+  assert.deepEqual(
+    {
+      pending: scheduler.runtime.pending,
+      active: scheduler.runtime.active,
+      completed: scheduler.runtime.completed,
+      detected: scheduler.runtime.detected,
+      unavailable: scheduler.runtime.unavailable,
+      failed: scheduler.runtime.failed,
+      timeouts: scheduler.runtime.timeouts,
+      lowConfidence: scheduler.runtime.lowConfidence,
+      analyzerVersion: scheduler.runtime.analyzerVersion
+    },
+    {
+      pending: 0,
+      active: 0,
+      completed: 3,
+      detected: 2,
+      unavailable: 1,
+      failed: 1,
+      timeouts: 1,
+      lowConfidence: 1,
+      analyzerVersion: 1
+    }
+  );
+  assert.ok(scheduler.runtime.averageDurationMs != null);
+  assert.ok(scheduler.runtime.lastDurationMs != null);
+});

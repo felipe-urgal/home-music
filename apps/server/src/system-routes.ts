@@ -2,6 +2,8 @@ import type { FastifyInstance } from 'fastify';
 import type { FfmpegStatus } from './ffmpeg.js';
 import type { HeavyWorkQueueRuntime } from './heavy-work-queue.js';
 import type { LibraryService } from './library-service.js';
+import { RHYTHM_ANALYZER_VERSION } from './rhythm-analysis.js';
+import type { RhythmAnalysisRuntime } from './rhythm-analysis-scheduler.js';
 import {
   requestPathname,
   sendWebRequest,
@@ -25,6 +27,7 @@ type SystemRouteDependencies = {
   getFfmpegStatus: () => FfmpegStatus;
   getSchemaVersion: () => number;
   getTranscodingRuntime: () => { active: number; pending: number };
+  getRhythmAnalysisRuntime?: () => RhythmAnalysisRuntime | null;
   getHeavyWorkRuntime?: () => HeavyWorkRuntime;
   isWebReady: () => boolean;
 };
@@ -42,6 +45,7 @@ export function registerSystemRoutes(
     getFfmpegStatus,
     getSchemaVersion,
     getTranscodingRuntime,
+    getRhythmAnalysisRuntime,
     getHeavyWorkRuntime,
     isWebReady
   } = dependencies;
@@ -70,6 +74,7 @@ export function registerSystemRoutes(
     const { ready, webReady } = readinessState();
     const ffmpegStatus = getFfmpegStatus();
     const transcoding = getTranscodingRuntime();
+    const rhythmRuntime = getRhythmAnalysisRuntime?.() ?? null;
     const workQueues = getHeavyWorkRuntime?.();
     return {
       ready,
@@ -93,6 +98,20 @@ export function registerSystemRoutes(
         cacheLimitMegabytes: transcodeCacheMegabytes,
         active: transcoding.active,
         pending: transcoding.pending
+      },
+      rhythmAnalysis: {
+        enabled: rhythmRuntime != null,
+        analyzerVersion: rhythmRuntime?.analyzerVersion ?? RHYTHM_ANALYZER_VERSION,
+        pending: rhythmRuntime?.pending ?? 0,
+        active: rhythmRuntime?.active ?? 0,
+        completed: rhythmRuntime?.completed ?? 0,
+        detected: rhythmRuntime?.detected ?? 0,
+        unavailable: rhythmRuntime?.unavailable ?? 0,
+        failed: rhythmRuntime?.failed ?? 0,
+        timeouts: rhythmRuntime?.timeouts ?? 0,
+        lowConfidence: rhythmRuntime?.lowConfidence ?? 0,
+        averageDurationMs: rhythmRuntime?.averageDurationMs ?? null,
+        lastDurationMs: rhythmRuntime?.lastDurationMs ?? null
       },
       ...(workQueues ? { workQueues } : {}),
       schemaVersion: getSchemaVersion()

@@ -293,6 +293,7 @@ registerSystemRoutes(app, {
     active: infrastructure.transcodeManager.activeCount,
     pending: infrastructure.transcodeManager.pendingCount
   }),
+  getRhythmAnalysisRuntime: () => rhythmScheduler?.runtime ?? null,
   getHeavyWorkRuntime: () => ({
     transcode: infrastructure.transcodeManager.queueRuntime,
     cover: media.coverQueueRuntime,
