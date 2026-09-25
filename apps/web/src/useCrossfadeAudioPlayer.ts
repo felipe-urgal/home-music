@@ -433,6 +433,22 @@ export function useCrossfadeAudioPlayer(
       return;
     }
 
+    if (timeUntilStart > QUANTIZED_CROSSFADE_EARLY_TOLERANCE_SECONDS) {
+      const preloadCandidate = resolveCrossfadeCandidate({
+        queue: player.queue,
+        currentIndex: player.currentIndex,
+        currentTrackId: player.current?.id ?? null,
+        repeatMode: player.repeatMode,
+        durationSeconds: quantizedPlan.durationSeconds,
+        visibilityState: document.visibilityState,
+        remainingSeconds: Math.min(remainingSeconds, quantizedPlan.durationSeconds)
+      });
+      const preloadTrack = preloadCandidate
+        ? player.queue.find(track => track.id === preloadCandidate.trackId)
+        : undefined;
+      if (preloadTrack) prepareIncomingAudio(preloadTrack);
+    }
+
     const resolveQuantizedCandidate = (audio: HTMLAudioElement) => {
       const latestRemainingSeconds = Math.max(0, audio.duration - audio.currentTime);
       const effectiveDurationSeconds = Math.max(
@@ -504,6 +520,7 @@ export function useCrossfadeAudioPlayer(
     player.playing,
     player.queue,
     player.repeatMode,
+    prepareIncomingAudio,
     startCrossfade
   ]);
 
