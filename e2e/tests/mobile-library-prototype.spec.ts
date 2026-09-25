@@ -65,6 +65,7 @@ test('mobile segue o protótipo 3 na biblioteca, detalhe e player', async ({ pag
   const progress = page.locator('.progress-wrap');
   const heroPlay = page.locator('.player-hero-play');
   const heroControl = page.locator('.player-hero-play__control');
+  const heroReveal = page.getByRole('button', { name: 'Mostrar controles de reprodução' });
   const nextTrackCard = page.locator('.queue-panel__toggle-mobile');
 
   await expect(player).toBeVisible();
@@ -102,15 +103,33 @@ test('mobile segue o protótipo 3 na biblioteca, detalhe e player', async ({ pag
   expect(Math.abs((playlistSheetBox!.y + playlistSheetBox!.height) - sheetViewport.height)).toBeLessThanOrEqual(2);
   await playlistSheet.getByRole('button', { name: 'Fechar' }).click();
 
-  if (await heroPlay.getAttribute('aria-label') === 'Tocar pela capa') {
-    await heroPlay.click();
+  if (await heroControl.getAttribute('aria-label') === 'Tocar') {
+    await heroControl.click();
   }
-  await expect(heroPlay).toHaveAttribute('aria-label', 'Pausar pela capa');
+  await expect(heroControl).toHaveAttribute('aria-label', 'Pausar');
   await expect(heroControl).toHaveClass(/is-hidden/, { timeout: 3_000 });
   await expect(player).toHaveAttribute('data-mobile-chrome-visible', 'false', { timeout: 3_000 });
 
-  await player.dispatchEvent('pointerdown', { pointerType: 'touch' });
+  const immersiveArtworkBox = await artwork.boundingBox();
+  const immersiveProgressBox = await progress.boundingBox();
+  expect(immersiveArtworkBox && immersiveProgressBox).toBeTruthy();
+  expect(immersiveArtworkBox!.width).toBeGreaterThanOrEqual(viewport.width - 1);
+  expect(immersiveArtworkBox!.height).toBeGreaterThanOrEqual(viewport.height * 0.6);
+  expect(viewport.height - (immersiveProgressBox!.y + immersiveProgressBox!.height)).toBeLessThanOrEqual(24);
+  await expect.poll(async () => (await nextTrackCard.boundingBox())?.height ?? 0).toBeLessThanOrEqual(1);
+
+  const immersiveCenter = {
+    x: immersiveArtworkBox!.x + immersiveArtworkBox!.width / 2,
+    y: immersiveArtworkBox!.y + immersiveArtworkBox!.height / 2
+  };
+  await page.mouse.move(immersiveCenter.x, immersiveCenter.y);
+  await expect(heroControl).toHaveClass(/is-hidden/);
+
+  await heroReveal.click();
+  await expect(heroControl).toHaveClass(/is-visible/);
+  await expect(heroControl).toHaveAttribute('aria-label', 'Pausar');
   await expect(player).toHaveAttribute('data-mobile-chrome-visible', 'true');
+  await expect(nextTrackCard).toBeVisible();
 
   const nextTrackLabel = await nextTrackCard.getAttribute('aria-label');
   const nextTrackTitle = nextTrackLabel?.replace('Tocar próxima música: ', '');
