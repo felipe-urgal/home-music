@@ -380,6 +380,12 @@ export type AdminOperationHistoryResponse = {
   items: AdminOperationHistoryItem[];
 };
 
+export type TrackRhythm = {
+  bpm: number;
+  firstBeatSeconds: number;
+  confidence: number;
+};
+
 export type Track = {
   id: string;
   title: string;
@@ -394,6 +400,7 @@ export type Track = {
   coverVersion?: string;
   replayGainTrackDb?: number | null;
   replayGainAlbumDb?: number | null;
+  rhythm?: TrackRhythm | null;
 };
 
 export type EditableTrackMetadata = {
