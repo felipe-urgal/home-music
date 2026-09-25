@@ -104,15 +104,19 @@ function publicTrackFromRow(row: Row): Track {
     hasCover: Boolean(row.has_cover),
     replayGainTrackDb: row.replaygain_track_db == null ? null : numberValue(row.replaygain_track_db),
     replayGainAlbumDb: row.replaygain_album_db == null ? null : numberValue(row.replaygain_album_db),
-    rhythm: (
+    ...(
       row.rhythm_bpm == null
       || row.rhythm_first_beat_seconds == null
       || row.rhythm_confidence == null
-    ) ? null : {
-      bpm: numberValue(row.rhythm_bpm),
-      firstBeatSeconds: numberValue(row.rhythm_first_beat_seconds),
-      confidence: numberValue(row.rhythm_confidence)
-    }
+        ? {}
+        : {
+            rhythm: {
+              bpm: numberValue(row.rhythm_bpm),
+              firstBeatSeconds: numberValue(row.rhythm_first_beat_seconds),
+              confidence: numberValue(row.rhythm_confidence)
+            }
+          }
+    )
   };
 }
 
