@@ -68,6 +68,8 @@ test('mobile segue o protótipo 3 na biblioteca, detalhe e player', async ({ pag
   const nextTrackCard = page.locator('.queue-panel__toggle-mobile');
 
   await expect(player).toBeVisible();
+  await player.dispatchEvent('pointerdown', { pointerType: 'touch' });
+  await expect(player).toHaveAttribute('data-mobile-chrome-visible', 'true');
   await expect(topbar.getByRole('button', { name: 'Biblioteca' })).toBeVisible();
   await expect(topbar.getByRole('button', { name: 'Adicionar à playlist' })).toBeVisible();
   await expect(topbar.getByRole('button', { name: 'Mais opções da faixa' })).toBeVisible();
@@ -90,6 +92,7 @@ test('mobile segue o protótipo 3 na biblioteca, detalhe e player', async ({ pag
   expect(headingBox!.y).toBeGreaterThan(artworkBox!.y + artworkBox!.height - 16);
   expect(progressBox!.y).toBeGreaterThan(headingBox!.y);
 
+  await player.dispatchEvent('pointerdown', { pointerType: 'touch' });
   await topbar.getByRole('button', { name: 'Adicionar à playlist' }).click();
   const playlistSheet = page.getByRole('dialog', { name: 'Adicionar à playlist' });
   await expect(playlistSheet).toBeVisible();
