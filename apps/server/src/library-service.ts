@@ -183,7 +183,7 @@ export class LibraryService {
     trackId: string,
     sourceFileSize: number,
     sourceMtimeMs: number,
-    rhythm: TrackRhythm
+    rhythm: TrackRhythm | null
   ) {
     const index = this.tracks.findIndex(track => track.id === trackId);
     if (index < 0) return false;
@@ -191,18 +191,24 @@ export class LibraryService {
     const current = this.tracks[index];
     if (current.fileSize !== sourceFileSize || current.mtimeMs !== sourceMtimeMs) return false;
 
-    if (
-      current.rhythm?.bpm === rhythm.bpm
-      && current.rhythm.firstBeatSeconds === rhythm.firstBeatSeconds
-      && current.rhythm.confidence === rhythm.confidence
-    ) {
-      return true;
-    }
+    const samePublicRhythm = rhythm === null
+      ? current.rhythm == null
+      : (
+          current.rhythm?.bpm === rhythm.bpm
+          && current.rhythm.firstBeatSeconds === rhythm.firstBeatSeconds
+          && current.rhythm.confidence === rhythm.confidence
+        );
+    if (current.rhythmAnalysisCurrent && samePublicRhythm) return true;
 
     const nextTracks = [...this.tracks];
-    nextTracks[index] = { ...current, rhythm };
+    if (rhythm) {
+      nextTracks[index] = { ...current, rhythm, rhythmAnalysisCurrent: true };
+    } else {
+      const { rhythm: _rhythm, ...withoutRhythm } = current;
+      nextTracks[index] = { ...withoutRhythm, rhythmAnalysisCurrent: true };
+    }
     this.setTracks(nextTracks);
-    this.libraryRevision += 1;
+    if (!samePublicRhythm) this.libraryRevision += 1;
     return true;
   }
 
