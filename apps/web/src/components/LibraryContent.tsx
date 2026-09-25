@@ -61,13 +61,11 @@ export function LibraryContent({
     pagedFolders,
     enterFolder,
     selectPlaylist,
-    selectTab,
     changeSort,
     showMore
   } = navigation;
   const desktopLayout = useDesktopLayout();
   const [playlistOrder, setPlaylistOrder] = useState<PlaylistOrder>('recent');
-  const [showAllMobileFolders, setShowAllMobileFolders] = useState(false);
   const folderSort = sort === 'title-desc' ? 'title-desc' : 'title-asc';
   const run = (operation: Promise<unknown>) => void operation.catch(() => undefined);
   const tracksById = useMemo(() => new Map(tracks.map(track => [track.id, track])), [tracks]);
@@ -140,68 +138,43 @@ export function LibraryContent({
   }
 
   const mobileLibraryHome = !desktopLayout && libraryTab === 'folders' && !folderPath && !query;
-  const mobileHomeFolders = (showAllMobileFolders ? visibleFolders : visibleFolders.slice(0, 3));
-  const mobileHomePlaylists = orderedPlaylists.slice(0, 3);
 
   return (
     <section className="library-content">
       {mobileLibraryHome ? (
         <div className="mobile-library-home" data-testid="mobile-library-home">
-          <section className="mobile-library-home__section">
-            <header className="mobile-library-home__heading">
-              <strong>Pastas</strong>
-              {!showAllMobileFolders && visibleFolders.length > 3 && (
-                <button type="button" onClick={() => setShowAllMobileFolders(true)}>
-                  Mostrar todas <ChevronRight aria-hidden="true" />
-                </button>
-              )}
-            </header>
-            <div className="mobile-library-home__folders">
-              {mobileHomeFolders.map(folder => (
-                <button
-                  className="mobile-library-home__folder"
-                  key={folder.path}
-                  type="button"
-                  aria-label={`Abrir ${folder.name}, ${folder.matchingTrackCount} músicas`}
-                  onClick={() => enterFolder(folder.path)}
+          <div className="mobile-library-home__folders mobile-library-home__playlists">
+            {visibleFolders.map(folder => (
+              <button
+                className="mobile-library-home__folder"
+                key={folder.path}
+                type="button"
+                aria-label={`Abrir ${folder.name}, ${folder.matchingTrackCount} músicas`}
+                onClick={() => enterFolder(folder.path)}
+              >
+                <span
+                  className={`folder-visual-card__artwork-mosaic is-count-${Math.max(1, Math.min(4, folder.artworks.length))}`}
+                  aria-hidden="true"
                 >
-                  <span
-                    className={`folder-visual-card__artwork-mosaic is-count-${Math.max(1, Math.min(4, folder.artworks.length))}`}
-                    aria-hidden="true"
-                  >
-                    {(folder.artworks.length ? folder.artworks : [folder.artwork]).map((artworkTrack, index) => (
-                      <Artwork key={artworkTrack?.id ?? `${folder.path}-mobile-artwork-${index}`} track={artworkTrack} />
-                    ))}
-                  </span>
-                  <span>
-                    <strong>{folder.name}</strong>
-                    <small>Pasta · {folder.matchingTrackCount} músicas</small>
-                  </span>
-                </button>
-              ))}
-            </div>
-          </section>
-
-          <section className="mobile-library-home__section">
-            <header className="mobile-library-home__heading">
-              <strong>Playlists</strong>
-              {orderedPlaylists.length > 0 && (
-                <button type="button" onClick={() => selectTab('playlists')}>
-                  Abrir playlists <ChevronRight aria-hidden="true" />
-                </button>
-              )}
-            </header>
-            {mobileHomePlaylists.length ? (
-              <div className="mobile-library-home__playlists">
-                {renderPlaylistCards(mobileHomePlaylists, true)}
-              </div>
+                  {(folder.artworks.length ? folder.artworks : [folder.artwork]).map((artworkTrack, index) => (
+                    <Artwork key={artworkTrack?.id ?? `${folder.path}-mobile-artwork-${index}`} track={artworkTrack} />
+                  ))}
+                </span>
+                <span>
+                  <strong>{folder.name}</strong>
+                  <small>Pasta · {folder.matchingTrackCount} músicas</small>
+                </span>
+              </button>
+            ))}
+            {orderedPlaylists.length ? (
+              renderPlaylistCards(orderedPlaylists, true)
             ) : (
               <button className="mobile-library-home__empty-playlist" type="button" onClick={() => run(onCreatePlaylist())}>
                 <Plus aria-hidden="true" />
                 <span>Criar playlist</span>
               </button>
             )}
-          </section>
+          </div>
         </div>
       ) : libraryTab === 'folders' ? (
         <>

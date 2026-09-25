@@ -43,12 +43,17 @@ describe('mobile library prototype one contracts', () => {
     expect(content).toMatch(/aria-label="Ordenar pastas da biblioteca"/);
   });
 
-  it('mantém no home mobile o padrão visual dos cards desktop', () => {
+  it('unifica pastas e playlists no home mobile e exibe todas as coleções', () => {
     const content = source('components/LibraryContent.tsx');
     const css = source('prototype-three-mobile.css');
     const responsiveCss = source('mobile-responsive-polish.css');
 
-    expect(content).toMatch(/renderPlaylistCards\(mobileHomePlaylists, true\)/);
+    expect(content).toMatch(/mobile-library-home__folders mobile-library-home__playlists/);
+    expect(content).toMatch(/visibleFolders\.map/);
+    expect(content).toMatch(/renderPlaylistCards\(orderedPlaylists, true\)/);
+    expect(content).not.toMatch(/Mostrar todas/);
+    expect(content).not.toMatch(/Abrir playlists/);
+    expect(content).not.toMatch(/\.slice\(0, 3\)/);
     expect(content).toMatch(/mobile-library-home__folder[\s\S]*folder-visual-card__artwork-mosaic/);
     expect(css).toMatch(/mobile-library-home__folders,[\s\S]*repeat\(auto-fit, minmax\(min\(300px, 100%\), 1fr\)\)/);
     expect(css).toMatch(/mobile-library-home[\s\S]*folder-visual-card__artwork-mosaic[\s\S]*aspect-ratio: 1\.36 \/ 1/);

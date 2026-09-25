@@ -20,7 +20,7 @@ test('modal de playlist inteligente rola internamente e trava o fundo no mobile'
   await page.getByRole('button', { name: 'Biblioteca', exact: true }).click();
   const libraryHome = page.getByTestId('mobile-library-home');
   await expect(libraryHome).toBeVisible();
-  await libraryHome.getByRole('button', { name: /Abrir playlists/ }).click();
+  await page.goto('/library/playlists');
   await expect(page).toHaveURL(/\/library\/playlists$/);
   await page.getByRole('button', { name: 'Inteligente', exact: true }).click();
 
