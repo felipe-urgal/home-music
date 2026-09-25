@@ -34,6 +34,8 @@ import { registerOpenSubsonicProtocolGuard } from './open-subsonic-protocol.js';
 import { registerOpenSubsonicRoutes } from './open-subsonic-routes.js';
 import { PersonalLibraryService } from './personal-library-service.js';
 import { registerPersonalRoutes } from './personal-routes.js';
+import { analyzeTrackRhythm } from './rhythm-analysis.js';
+import { RhythmAnalysisScheduler } from './rhythm-analysis-scheduler.js';
 import { sanitizeRequestUrl } from './request-log.js';
 import { createServerInfrastructure } from './server-infrastructure.js';
 import { prepareWebApp, type PreparedWebApp } from './static-web.js';
@@ -171,6 +173,7 @@ let ffmpegStatus: FfmpegStatus = {
   issue: null,
   customCommand: Boolean(ffmpegPathConfig?.trim())
 };
+let rhythmScheduler: RhythmAnalysisScheduler | null = null;
 const media = new TrackMediaInfrastructure({
   library,
   transcodeManager: infrastructure.transcodeManager,
@@ -305,6 +308,7 @@ app.addHook('onClose', async () => {
 
 app.addHook('onClose', async () => {
   stopAutomaticRescan();
+  await rhythmScheduler?.stop();
   infrastructure.close();
 });
 
@@ -389,13 +393,27 @@ try {
 
 ffmpegStatus = await probeFfmpeg(ffmpegPathConfig);
 if (ffmpegStatus.available) {
+  rhythmScheduler = new RhythmAnalysisScheduler({
+    library,
+    database: infrastructure.database,
+    analyze: (track, signal) => analyzeTrackRhythm(
+      library.root,
+      track,
+      ffmpegCommand,
+      signal
+    ),
+    logger: app.log
+  });
+  library.setTracksChangedListener(tracks => rhythmScheduler?.sync(tracks));
+  rhythmScheduler.sync();
+
   app.log.info(
     {
       version: ffmpegStatus.version,
       customPath: ffmpegStatus.customCommand,
       transcodeCacheMegabytes
     },
-    'FFmpeg disponível para transcoding adaptativo.'
+    'FFmpeg disponível para transcoding adaptativo e análise rítmica.'
   );
 } else {
   app.log.warn(

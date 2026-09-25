@@ -1,4 +1,4 @@
-import type { AdminScanTrigger, ScanResponse } from '@home-music/shared';
+import type { AdminScanTrigger, ScanResponse, TrackRhythm } from '@home-music/shared';
 import { buildAdminLibraryOverview } from './admin-library-overview.js';
 import { runScanWithHistory } from './admin-operation-history-scan.js';
 import type { AdminOperationHistoryStore } from './admin-operation-history.js';
@@ -47,11 +47,16 @@ export class LibraryService {
   private scanPromise: Promise<ScanResponse> | null = null;
   private readonly mutations = new LibraryMutationLock();
   private invalidateMediaCache: () => void = () => undefined;
+  private tracksChangedListener: (tracks: readonly IndexedTrack[]) => void = () => undefined;
 
   constructor(private readonly options: LibraryServiceOptions) {}
 
   setMediaCacheInvalidator(invalidate: () => void) {
     this.invalidateMediaCache = invalidate;
+  }
+
+  setTracksChangedListener(listener: (tracks: readonly IndexedTrack[]) => void) {
+    this.tracksChangedListener = listener;
   }
 
   get ready() {
@@ -147,6 +152,7 @@ export class LibraryService {
       this.setTracks(this.tracks);
       this.libraryRevision += 1;
       if (!enabled) this.invalidateMediaCache();
+      this.tracksChangedListener(this.tracks);
     }
 
     return { ...this.publicTrack(track), enabled };
@@ -171,6 +177,39 @@ export class LibraryService {
       ...this.publicTrack(updated),
       enabled: this.options.trackAvailability.isEnabled(trackId)
     };
+  }
+
+  applyRhythmAnalysis(
+    trackId: string,
+    sourceFileSize: number,
+    sourceMtimeMs: number,
+    rhythm: TrackRhythm | null
+  ) {
+    const index = this.tracks.findIndex(track => track.id === trackId);
+    if (index < 0) return false;
+
+    const current = this.tracks[index];
+    if (current.fileSize !== sourceFileSize || current.mtimeMs !== sourceMtimeMs) return false;
+
+    const samePublicRhythm = rhythm === null
+      ? current.rhythm == null
+      : (
+          current.rhythm?.bpm === rhythm.bpm
+          && current.rhythm.firstBeatSeconds === rhythm.firstBeatSeconds
+          && current.rhythm.confidence === rhythm.confidence
+        );
+    if (current.rhythmAnalysisCurrent && samePublicRhythm) return true;
+
+    const nextTracks = [...this.tracks];
+    if (rhythm) {
+      nextTracks[index] = { ...current, rhythm, rhythmAnalysisCurrent: true };
+    } else {
+      const { rhythm: _rhythm, ...withoutRhythm } = current;
+      nextTracks[index] = { ...withoutRhythm, rhythmAnalysisCurrent: true };
+    }
+    this.setTracks(nextTracks);
+    if (!samePublicRhythm) this.libraryRevision += 1;
+    return true;
   }
 
   async initialize() {
@@ -345,6 +384,7 @@ export class LibraryService {
       this.libraryRevision += 1;
       this.invalidateMediaCache();
     }
+    this.tracksChangedListener(this.tracks);
   }
 
   private performRescan() {

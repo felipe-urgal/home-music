@@ -3,10 +3,11 @@ import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { DatabaseSync } from 'node:sqlite';
-import type { AdminLibraryIntegrityStatus, PlaybackState, Playlist, PlaylistSource, RepeatMode, StatisticsPeriod, Track } from '@home-music/shared';
+import type { AdminLibraryIntegrityStatus, PlaybackState, Playlist, PlaylistSource, RepeatMode, StatisticsPeriod, Track, TrackRhythm } from '@home-music/shared';
 import type { IndexedTrack, LibraryTrackDelta } from './library.js';
+import { RHYTHM_ANALYZER_VERSION } from './rhythm-analysis.js';
 
-const CURRENT_SCHEMA_VERSION = 12;
+const CURRENT_SCHEMA_VERSION = 13;
 const HISTORY_CAPACITY = 2_000;
 const TRACK_UPSERT_SQL = `
   INSERT INTO tracks(
@@ -102,7 +103,20 @@ function publicTrackFromRow(row: Row): Track {
     format: stringValue(row.format),
     hasCover: Boolean(row.has_cover),
     replayGainTrackDb: row.replaygain_track_db == null ? null : numberValue(row.replaygain_track_db),
-    replayGainAlbumDb: row.replaygain_album_db == null ? null : numberValue(row.replaygain_album_db)
+    replayGainAlbumDb: row.replaygain_album_db == null ? null : numberValue(row.replaygain_album_db),
+    ...(
+      row.rhythm_bpm == null
+      || row.rhythm_first_beat_seconds == null
+      || row.rhythm_confidence == null
+        ? {}
+        : {
+            rhythm: {
+              bpm: numberValue(row.rhythm_bpm),
+              firstBeatSeconds: numberValue(row.rhythm_first_beat_seconds),
+              confidence: numberValue(row.rhythm_confidence)
+            }
+          }
+    )
   };
 }
 
@@ -718,6 +732,41 @@ export class HomeMusicDatabase {
       }
     }
 
+    if (version < 13) {
+      this.db.exec('BEGIN IMMEDIATE;');
+      try {
+        this.db.exec(`
+          CREATE TABLE IF NOT EXISTS track_rhythm_analysis (
+            track_id TEXT PRIMARY KEY NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+            status TEXT NOT NULL CHECK(status IN ('ready', 'unavailable')),
+            bpm REAL CHECK(bpm IS NULL OR (bpm >= 20 AND bpm <= 300)),
+            first_beat_seconds REAL CHECK(first_beat_seconds IS NULL OR first_beat_seconds >= 0),
+            confidence REAL CHECK(confidence IS NULL OR (confidence >= 0 AND confidence <= 1)),
+            source TEXT NOT NULL CHECK(length(source) BETWEEN 1 AND 32),
+            analyzer_version INTEGER NOT NULL CHECK(analyzer_version >= 1),
+            source_file_size INTEGER NOT NULL CHECK(source_file_size >= 0),
+            source_mtime_ms REAL NOT NULL,
+            analyzed_at TEXT NOT NULL,
+            CHECK (
+              (status = 'ready' AND bpm IS NOT NULL AND first_beat_seconds IS NOT NULL AND confidence IS NOT NULL)
+              OR (status = 'unavailable' AND bpm IS NULL AND first_beat_seconds IS NULL AND confidence IS NULL)
+            )
+          );
+
+          PRAGMA user_version = 13;
+        `);
+        this.db.exec('COMMIT;');
+        version = 13;
+      } catch (error) {
+        try {
+          this.db.exec('ROLLBACK;');
+        } catch {
+          // Preserva o erro original se a transação já tiver sido encerrada.
+        }
+        throw error;
+      }
+    }
+
     if (version !== CURRENT_SCHEMA_VERSION) {
       throw new Error(`Versão de schema SQLite não suportada: ${version}`);
     }
@@ -797,11 +846,13 @@ export class HomeMusicDatabase {
     removedIds: readonly string[],
     libraryRoot: string,
     scannedAt: string,
-    mode: TrackPersistenceMetrics['mode']
+    mode: TrackPersistenceMetrics['mode'],
+    clearRhythmAnalysis = false
   ): TrackPersistenceMetrics {
     const startedAt = performance.now();
     this.db.exec('BEGIN IMMEDIATE;');
     try {
+      if (clearRhythmAnalysis) this.db.exec('DELETE FROM track_rhythm_analysis;');
       this.upsertTracks(upserts);
       const removed = this.removeTrackIds(removedIds);
       this.setMetadata('libraryRoot', libraryRoot);
@@ -821,28 +872,40 @@ export class HomeMusicDatabase {
 
   loadTracks(): IndexedTrack[] {
     const rows = this.db.prepare(`
-      SELECT id, file_path, title, artist, album, album_artist, folder, folder_path,
-             duration, format, has_cover, replaygain_track_db, replaygain_album_db,
-             mime_type, file_size, mtime_ms
-      FROM tracks
-      ORDER BY artist COLLATE NOCASE, title COLLATE NOCASE
-    `).all() as Row[];
+      SELECT t.id, t.file_path, t.title, t.artist, t.album, t.album_artist, t.folder, t.folder_path,
+             t.duration, t.format, t.has_cover, t.replaygain_track_db, t.replaygain_album_db,
+             t.mime_type, t.file_size, t.mtime_ms,
+             r.status AS rhythm_analysis_status,
+             r.bpm AS rhythm_bpm,
+             r.first_beat_seconds AS rhythm_first_beat_seconds,
+             r.confidence AS rhythm_confidence
+      FROM tracks t
+      LEFT JOIN track_rhythm_analysis r
+        ON r.track_id = t.id
+       AND r.analyzer_version = ?
+       AND r.source_file_size = t.file_size
+       AND r.source_mtime_ms = t.mtime_ms
+      ORDER BY t.artist COLLATE NOCASE, t.title COLLATE NOCASE
+    `).all(RHYTHM_ANALYZER_VERSION) as Row[];
 
     return rows.map(row => ({
       ...publicTrackFromRow(row),
       filePath: stringValue(row.file_path),
       mimeType: stringValue(row.mime_type, 'application/octet-stream'),
       fileSize: numberValue(row.file_size),
-      mtimeMs: numberValue(row.mtime_ms)
+      mtimeMs: numberValue(row.mtime_ms),
+      ...(row.rhythm_analysis_status == null ? {} : { rhythmAnalysisCurrent: true })
     }));
   }
 
   syncTracks(tracks: IndexedTrack[], libraryRoot: string, scannedAt: string) {
+    const storedRoot = this.getMetadata('libraryRoot');
+    const rootChanged = storedRoot != null && storedRoot !== libraryRoot;
     const incomingIds = new Set(tracks.map(track => track.id));
     const staleIds = (this.db.prepare('SELECT id FROM tracks').all() as Row[])
       .map(row => stringValue(row.id))
       .filter(id => !incomingIds.has(id));
-    return this.persistTrackChanges(tracks, staleIds, libraryRoot, scannedAt, 'full');
+    return this.persistTrackChanges(tracks, staleIds, libraryRoot, scannedAt, 'full', rootChanged);
   }
 
   applyTrackDelta(delta: LibraryTrackDelta, libraryRoot: string, scannedAt: string) {
@@ -858,6 +921,90 @@ export class HomeMusicDatabase {
     }
 
     return this.persistTrackChanges(upserts, removedIds, libraryRoot, scannedAt, 'delta');
+  }
+
+  saveTrackRhythmAnalysis(
+    trackId: string,
+    sourceFileSize: number,
+    sourceMtimeMs: number,
+    rhythm: TrackRhythm | null,
+    source = 'audio'
+  ) {
+    if (
+      (rhythm !== null && (
+        !Number.isFinite(rhythm.bpm)
+        || rhythm.bpm < 20
+        || rhythm.bpm > 300
+        || !Number.isFinite(rhythm.firstBeatSeconds)
+        || rhythm.firstBeatSeconds < 0
+        || !Number.isFinite(rhythm.confidence)
+        || rhythm.confidence < 0
+        || rhythm.confidence > 1
+      ))
+      || !Number.isSafeInteger(sourceFileSize)
+      || sourceFileSize < 0
+      || !Number.isFinite(sourceMtimeMs)
+      || !source.trim()
+      || source.length > 32
+    ) {
+      throw new Error('Análise rítmica inválida.');
+    }
+
+    this.db.exec('BEGIN IMMEDIATE;');
+    try {
+      const current = this.db.prepare(`
+        SELECT file_size, mtime_ms
+        FROM tracks
+        WHERE id = ?
+      `).get(trackId) as Row | undefined;
+
+      if (
+        !current
+        || numberValue(current.file_size, -1) !== sourceFileSize
+        || numberValue(current.mtime_ms, -1) !== sourceMtimeMs
+      ) {
+        this.db.exec('ROLLBACK;');
+        return false;
+      }
+
+      this.db.prepare(`
+        INSERT INTO track_rhythm_analysis(
+          track_id, status, bpm, first_beat_seconds, confidence, source, analyzer_version,
+          source_file_size, source_mtime_ms, analyzed_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(track_id) DO UPDATE SET
+          status = excluded.status,
+          bpm = excluded.bpm,
+          first_beat_seconds = excluded.first_beat_seconds,
+          confidence = excluded.confidence,
+          source = excluded.source,
+          analyzer_version = excluded.analyzer_version,
+          source_file_size = excluded.source_file_size,
+          source_mtime_ms = excluded.source_mtime_ms,
+          analyzed_at = excluded.analyzed_at
+      `).run(
+        trackId,
+        rhythm ? 'ready' : 'unavailable',
+        rhythm?.bpm ?? null,
+        rhythm?.firstBeatSeconds ?? null,
+        rhythm?.confidence ?? null,
+        source.trim(),
+        RHYTHM_ANALYZER_VERSION,
+        sourceFileSize,
+        sourceMtimeMs,
+        new Date().toISOString()
+      );
+
+      this.db.exec('COMMIT;');
+      return true;
+    } catch (error) {
+      try {
+        this.db.exec('ROLLBACK;');
+      } catch {
+        // Preserva o erro original.
+      }
+      throw error;
+    }
   }
 
   getFavoriteIds(userId: string) {
