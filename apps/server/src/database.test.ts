@@ -90,7 +90,7 @@ test('SQLite persiste biblioteca, favoritos, histórico, playlists e estado do p
     first.close();
 
     const second = new HomeMusicDatabase(dbPath);
-    assert.equal(second.getSchemaVersion(), 12);
+    assert.equal(second.getSchemaVersion(), 13);
     assert.equal(second.getMetadata('libraryRoot'), '/music');
     assert.equal(second.loadLibraryIntegrityStatus('/other'), null);
     assert.deepEqual(second.loadLibraryIntegrityStatus('/music'), {
@@ -158,7 +158,7 @@ test('remoção de faixa limpa relacionamentos por foreign key', async () => {
   }
 });
 
-test('migra schema v1 para v12 sem perder estado existente', async () => {
+test('migra schema v1 para v13 sem perder estado existente', async () => {
   const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-db-'));
   const dbPath = path.join(temp, 'legacy.db');
 
@@ -229,7 +229,7 @@ test('migra schema v1 para v12 sem perder estado existente', async () => {
     legacy.close();
 
     const migrated = new HomeMusicDatabase(dbPath);
-    assert.equal(migrated.getSchemaVersion(), 12);
+    assert.equal(migrated.getSchemaVersion(), 13);
     const state = migrated.loadPlaybackState('user-1');
     assert.equal(state.currentTrackId, null);
     assert.equal(state.position, 0);
@@ -288,13 +288,13 @@ test('migra schema v1 para v12 sem perder estado existente', async () => {
   }
 });
 
-test('schema v12 preserva identidade única, papéis e flags válidos de users', async () => {
+test('schema v13 preserva identidade única, papéis e flags válidos de users', async () => {
   const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-db-'));
   const dbPath = path.join(temp, 'users.db');
 
   try {
     const db = new HomeMusicDatabase(dbPath);
-    assert.equal(db.getSchemaVersion(), 12);
+    assert.equal(db.getSchemaVersion(), 13);
     db.close();
 
     const raw = new DatabaseSync(dbPath);
