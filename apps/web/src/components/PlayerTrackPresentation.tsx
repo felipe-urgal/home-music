@@ -99,6 +99,10 @@ export function PlayerTrackPresentation({
     setShowPlaylistPicker(true);
   }
 
+  function revealHeroControl() {
+    setShowHeroControl(true);
+  }
+
   return (
     <>
       <header className="topbar player-topbar">
@@ -215,29 +219,31 @@ export function PlayerTrackPresentation({
             offlineMode
           />
         ) : (
-          <button
-            className="player-hero-play"
-            type="button"
-            aria-label={playing ? 'Pausar pela capa' : 'Tocar pela capa'}
-            onPointerDown={() => setShowHeroControl(true)}
-            onClick={() => {
-              setShowHeroControl(true);
-              onTogglePlay();
-            }}
-          >
+          <div className="player-hero-play">
             <NowPlayingCrossfadeVinyl
               current={current}
               crossfade={crossfadeVisual}
               playing={playing}
               offlineMode={false}
             />
-            <span
+            <button
+              className={`player-hero-reveal ${showHeroControl ? 'is-hidden' : 'is-visible'}`}
+              type="button"
+              aria-label="Mostrar controles de reprodução"
+              onClick={revealHeroControl}
+            />
+            <button
               className={`player-hero-play__control ${showHeroControl ? 'is-visible' : 'is-hidden'}`}
-              aria-hidden="true"
+              type="button"
+              aria-label={playing ? 'Pausar' : 'Tocar'}
+              onClick={() => {
+                revealHeroControl();
+                onTogglePlay();
+              }}
             >
-              {playing ? <Pause /> : <Play />}
-            </span>
-          </button>
+              {playing ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
+            </button>
+          </div>
         )}
       </div>
 
