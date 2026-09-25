@@ -40,6 +40,7 @@ export type IndexedTrack = Track & {
   mimeType: string;
   fileSize: number;
   mtimeMs: number;
+  rhythmAnalysisCurrent?: boolean;
 };
 
 export type LibraryScanStats = {
