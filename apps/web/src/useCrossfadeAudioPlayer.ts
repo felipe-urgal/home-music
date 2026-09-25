@@ -562,6 +562,7 @@ export function useCrossfadeAudioPlayer(
     activeDeckRef.current = otherCrossfadeDeck(activeDeckRef.current);
     incomingAudio.volume = outputVolumeRef.current;
     audio.volume = 0;
+    restorePlaybackRate(incomingAudio);
 
     // A próxima faixa já está carregada e avançou durante o crossfade. Registra a
     // adoção antes de avançar o estado para que o player canônico não faça src/load
@@ -571,7 +572,7 @@ export function useCrossfadeAudioPlayer(
     player.audioHandlers.onPlay();
     player.audioHandlers.onEnded();
     window.requestAnimationFrame(() => clearCrossfadeVisualState(visualAttempt));
-  }, [cancelAnimation, cancelCrossfade, clearAudio, crossfadeSeconds, getActiveAudio, getInactiveAudio, player.adoptAudioSource, player.audioHandlers, player.current?.id, player.currentIndex, player.queue, player.repeatMode]);
+  }, [cancelAnimation, cancelCrossfade, clearAudio, crossfadeSeconds, getActiveAudio, getInactiveAudio, player.adoptAudioSource, player.audioHandlers, player.current?.id, player.currentIndex, player.queue, player.repeatMode, restorePlaybackRate]);
 
   const handleDeckLoadedMetadata = useCallback((audio: HTMLAudioElement) => {
     if (audio === getActiveAudio()) player.audioHandlers.onLoadedMetadata(audio);
