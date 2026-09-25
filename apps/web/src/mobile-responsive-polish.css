@@ -621,3 +621,110 @@
     height: min(46dvh, 220px) !important;
   }
 }
+
+/* Mobile Now Playing transient chrome and explicit progress fill. */
+.player-topbar__playlist,
+.player-progress-track {
+  display: none;
+}
+
+@media (max-width: 699px) {
+  #root .desktop-layout[data-offline="false"] .player-topbar {
+    grid-template-columns: minmax(0, 1fr) 44px 44px !important;
+    gap: 4px;
+    transition: opacity .22s ease, transform .22s ease;
+  }
+
+  #root .desktop-layout[data-offline="false"] .player-topbar__playlist {
+    grid-column: 2;
+    width: 44px !important;
+    height: 44px !important;
+    display: grid;
+    place-items: center;
+    justify-self: end;
+    color: #fff;
+    filter: drop-shadow(0 2px 8px rgba(0, 0, 0, .65));
+  }
+
+  #root .desktop-layout[data-offline="false"] .player-topbar__playlist svg {
+    width: 21px;
+    height: 21px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .player-topbar__menu {
+    grid-column: 3 !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .player-screen-immersive[data-mobile-chrome-visible="false"] .player-topbar {
+    opacity: 0;
+    transform: translateY(-22px);
+    pointer-events: none;
+  }
+
+  #root .desktop-layout[data-offline="false"] .player-progress-track {
+    position: absolute;
+    z-index: 3;
+    top: 20.5px;
+    left: 0;
+    right: 0;
+    height: 3px;
+    display: block;
+    overflow: hidden;
+    border-radius: 999px;
+    background: rgba(126, 139, 157, .38);
+    pointer-events: none;
+  }
+
+  #root .desktop-layout[data-offline="false"] .player-progress-track__fill {
+    width: var(--progress);
+    height: 100%;
+    display: block;
+    border-radius: inherit;
+    background: #4b8fff;
+  }
+
+  #root .desktop-layout[data-offline="false"] .progress-wrap input[type="range"]::-webkit-slider-runnable-track {
+    background: transparent !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .progress-wrap input[type="range"]::-moz-range-track,
+  #root .desktop-layout[data-offline="false"] .progress-wrap input[type="range"]::-moz-range-progress {
+    background: transparent !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .queue-panel__toggle-mobile {
+    max-height: 110px;
+    overflow: hidden;
+    transition:
+      max-height .22s ease,
+      min-height .22s ease,
+      padding .22s ease,
+      border-width .22s ease,
+      opacity .18s ease,
+      transform .22s ease;
+  }
+
+  #root .desktop-layout[data-offline="false"] .player-screen-immersive[data-mobile-chrome-visible="false"] .queue-panel--player {
+    margin-top: 0 !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] .player-screen-immersive[data-mobile-chrome-visible="false"] .queue-panel__toggle-mobile {
+    max-height: 0;
+    min-height: 0 !important;
+    padding-top: 0;
+    padding-bottom: 0;
+    border-top-width: 0;
+    border-bottom-width: 0;
+    opacity: 0;
+    transform: translateY(14px);
+    pointer-events: none;
+  }
+}
+
+@media (max-width: 699px) and (prefers-reduced-motion: reduce) {
+  #root .desktop-layout[data-offline="false"] .player-topbar,
+  #root .desktop-layout[data-offline="false"] .queue-panel__toggle-mobile {
+    transition: none !important;
+  }
+}
+
