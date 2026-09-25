@@ -380,6 +380,8 @@ export type AdminOperationHistoryResponse = {
   items: AdminOperationHistoryItem[];
 };
 
+export const MIN_RHYTHM_CONFIDENCE = 0.55;
+
 export type TrackRhythm = {
   bpm: number;
   firstBeatSeconds: number;

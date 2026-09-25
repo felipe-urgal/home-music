@@ -1,6 +1,9 @@
-import type { TrackRhythm } from '@home-music/shared';
+import {
+  MIN_RHYTHM_CONFIDENCE,
+  type TrackRhythm
+} from '@home-music/shared';
 
-export const MIN_RHYTHM_CONFIDENCE = 0.55;
+export { MIN_RHYTHM_CONFIDENCE };
 export const QUANTIZED_CROSSFADE_ARM_SECONDS = 1.25;
 export const QUANTIZED_CROSSFADE_EARLY_TOLERANCE_SECONDS = 0.025;
 export const MIN_QUANTIZED_CROSSFADE_SECONDS = 0.75;
