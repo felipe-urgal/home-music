@@ -124,6 +124,18 @@ describe('crossfade', () => {
     })).toBeNull();
   });
 
+  it('preserva duração fracionária calculada internamente para fechar o fade no fim da faixa', () => {
+    expect(resolveCrossfadeCandidate({
+      queue,
+      currentIndex: 0,
+      currentTrackId: 'a',
+      repeatMode: 'off',
+      durationSeconds: 4.75,
+      visibilityState: 'visible',
+      remainingSeconds: 4.7
+    })).toEqual({ trackId: 'b', durationSeconds: 4.75 });
+  });
+
   it('desativa a transição com duração zero', () => {
     expect(resolveCrossfadeCandidate({
       queue,
