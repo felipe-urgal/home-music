@@ -67,6 +67,9 @@ export function PlayerPlaybackControls({
       {playbackError && <div className="autoplay-notice" role="alert">{playbackError}</div>}
 
       <div className="progress-wrap" style={{ '--progress': `${progress}%` } as CSSProperties}>
+        <span className="player-progress-track" aria-hidden="true">
+          <span className="player-progress-track__fill" />
+        </span>
         <input
           aria-label="Progresso da música"
           type="range"
