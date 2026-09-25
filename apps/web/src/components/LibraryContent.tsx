@@ -80,7 +80,7 @@ export function LibraryContent({
     return result;
   }, [playlistOrder, playlists]);
 
-  function renderPlaylistCards(items: Playlist[] = orderedPlaylists) {
+  function renderPlaylistCards(items: Playlist[] = orderedPlaylists, useArtworkMosaic = desktopLayout) {
     return items.map(playlist => {
       const contextTracks = playlist.trackIds
         .map(trackId => tracksById.get(trackId))
@@ -95,7 +95,7 @@ export function LibraryContent({
       return (
         <div className="group-item playlist-visual-card library-collection-card" key={playlist.id}>
           <button className="group-item__main playlist-visual-card__main" type="button" onClick={() => selectPlaylist(playlist.id)}>
-            {desktopLayout && playlistArtworkTracks.length ? (
+            {useArtworkMosaic && playlistArtworkTracks.length ? (
               <span
                 className={`folder-visual-card__artwork-mosaic playlist-visual-card__artwork-mosaic is-count-${playlistArtworkTracks.length}`}
                 aria-hidden="true"
@@ -165,10 +165,17 @@ export function LibraryContent({
                   aria-label={`Abrir ${folder.name}, ${folder.matchingTrackCount} músicas`}
                   onClick={() => enterFolder(folder.path)}
                 >
-                  <Artwork track={folder.artwork} />
+                  <span
+                    className={`folder-visual-card__artwork-mosaic is-count-${Math.max(1, Math.min(4, folder.artworks.length))}`}
+                    aria-hidden="true"
+                  >
+                    {(folder.artworks.length ? folder.artworks : [folder.artwork]).map((artworkTrack, index) => (
+                      <Artwork key={artworkTrack?.id ?? `${folder.path}-mobile-artwork-${index}`} track={artworkTrack} />
+                    ))}
+                  </span>
                   <span>
                     <strong>{folder.name}</strong>
-                    <small>{folder.matchingTrackCount} músicas</small>
+                    <small>Pasta · {folder.matchingTrackCount} músicas</small>
                   </span>
                 </button>
               ))}
@@ -186,7 +193,7 @@ export function LibraryContent({
             </header>
             {mobileHomePlaylists.length ? (
               <div className="mobile-library-home__playlists">
-                {renderPlaylistCards(mobileHomePlaylists)}
+                {renderPlaylistCards(mobileHomePlaylists, true)}
               </div>
             ) : (
               <button className="mobile-library-home__empty-playlist" type="button" onClick={() => run(onCreatePlaylist())}>
