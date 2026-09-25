@@ -7,6 +7,12 @@ import {
   resolveQuantizedCrossfadePlan
 } from './beat-clock';
 import {
+  BEATMATCH_RATE_RESTORE_SECONDS,
+  canPhaseAlignBeatmatch,
+  interpolatePlaybackRate,
+  resolveBeatmatchPlan
+} from './beatmatch';
+import {
   isCrossfadeCompletionPause,
   normalizeCrossfadeSeconds,
   otherCrossfadeDeck,
@@ -73,6 +79,8 @@ export function useCrossfadeAudioPlayer(
   const activeDeckRef = useRef<CrossfadeDeck>('a');
   const animationFrameRef = useRef<number | null>(null);
   const quantizedScheduleFrameRef = useRef<number | null>(null);
+  const playbackRateRestoreFrameRef = useRef<number | null>(null);
+  const preparedIncomingTrackIdRef = useRef<string | null>(null);
   const attemptRef = useRef(0);
   const originTrackIdRef = useRef<string | null>(null);
   const startingTrackIdRef = useRef<string | null>(null);
@@ -98,6 +106,8 @@ export function useCrossfadeAudioPlayer(
     if (!audio) return;
     audio.pause();
     audio.volume = 0;
+    audio.playbackRate = 1;
+    audio.preservesPitch = true;
     audio.removeAttribute('src');
     audio.load();
   }, []);
