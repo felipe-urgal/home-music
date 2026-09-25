@@ -31,7 +31,7 @@ export class RhythmAnalysisScheduler {
     if (this.stopped) return;
     for (const track of tracks) {
       const enabledTrack = this.options.library.getTrack(track.id);
-      if (enabledTrack && !enabledTrack.rhythm) this.pending.add(track.id);
+      if (enabledTrack && !enabledTrack.rhythmAnalysisCurrent) this.pending.add(track.id);
     }
     this.ensureDrain();
   }
@@ -39,7 +39,7 @@ export class RhythmAnalysisScheduler {
   enqueue(trackId: string) {
     if (this.stopped) return;
     const track = this.options.library.getTrack(trackId);
-    if (!track || track.rhythm) return;
+    if (!track || track.rhythmAnalysisCurrent) return;
     this.pending.add(trackId);
     this.ensureDrain();
   }
@@ -70,14 +70,14 @@ export class RhythmAnalysisScheduler {
       this.pending.delete(trackId);
 
       const track = this.options.library.getTrack(trackId);
-      if (!track || track.rhythm) continue;
+      if (!track || track.rhythmAnalysisCurrent) continue;
 
       const sourceFileSize = track.fileSize;
       const sourceMtimeMs = track.mtimeMs;
 
       try {
         const rhythm = await this.options.analyze(track, this.controller.signal);
-        if (!rhythm || this.stopped) continue;
+        if (this.stopped) continue;
 
         const persisted = this.options.database.saveTrackRhythmAnalysis(
           track.id,
