@@ -2,7 +2,7 @@ import type { TrackRhythm } from '@home-music/shared';
 import { MIN_RHYTHM_CONFIDENCE } from './beat-clock';
 
 export const MAX_BEATMATCH_RATE_DELTA = 0.04;
-export const MAX_BEATMATCH_PHASE_LEAD_SECONDS = 0.75;
+export const MAX_BEATMATCH_PHASE_LEAD_SECONDS = 0.5;
 export const BEATMATCH_RATE_RESTORE_SECONDS = 4;
 
 export type BeatmatchPlan = {
