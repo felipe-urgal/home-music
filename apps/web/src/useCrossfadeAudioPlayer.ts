@@ -124,10 +124,52 @@ export function useCrossfadeAudioPlayer(
     quantizedScheduleFrameRef.current = null;
   }, []);
 
+  const cancelPlaybackRateRestore = useCallback(() => {
+    if (playbackRateRestoreFrameRef.current == null) return;
+    window.cancelAnimationFrame(playbackRateRestoreFrameRef.current);
+    playbackRateRestoreFrameRef.current = null;
+  }, []);
+
+  const restorePlaybackRate = useCallback((audio: HTMLAudioElement) => {
+    cancelPlaybackRateRestore();
+    const initialRate = audio.playbackRate;
+    if (!Number.isFinite(initialRate) || Math.abs(initialRate - 1) < 1e-4) {
+      audio.playbackRate = 1;
+      return;
+    }
+
+    const startedAt = performance.now();
+    const restore = (now: number) => {
+      if (audio !== getActiveAudio() || audio.paused || audio.ended) {
+        audio.playbackRate = 1;
+        playbackRateRestoreFrameRef.current = null;
+        return;
+      }
+
+      const elapsedSeconds = Math.max(0, (now - startedAt) / 1_000);
+      audio.playbackRate = interpolatePlaybackRate(
+        initialRate,
+        elapsedSeconds,
+        BEATMATCH_RATE_RESTORE_SECONDS
+      );
+      if (elapsedSeconds >= BEATMATCH_RATE_RESTORE_SECONDS) {
+        audio.playbackRate = 1;
+        playbackRateRestoreFrameRef.current = null;
+        return;
+      }
+
+      playbackRateRestoreFrameRef.current = window.requestAnimationFrame(restore);
+    };
+
+    playbackRateRestoreFrameRef.current = window.requestAnimationFrame(restore);
+  }, [cancelPlaybackRateRestore, getActiveAudio]);
+
   const cancelCrossfade = useCallback(() => {
     attemptRef.current += 1;
     cancelAnimation();
     cancelQuantizedSchedule();
+    cancelPlaybackRateRestore();
+    preparedIncomingTrackIdRef.current = null;
     originTrackIdRef.current = null;
     startingTrackIdRef.current = null;
     incomingTrackIdRef.current = null;
@@ -138,9 +180,10 @@ export function useCrossfadeAudioPlayer(
     if (activeAudio) {
       player.audioRef.current = activeAudio;
       activeAudio.volume = outputVolumeRef.current;
+      activeAudio.playbackRate = 1;
     }
     if (inactiveAudio && inactiveAudio !== activeAudio) clearAudio(inactiveAudio);
-  }, [cancelAnimation, cancelQuantizedSchedule, clearAudio, getActiveAudio, getInactiveAudio, player.audioRef]);
+  }, [cancelAnimation, cancelPlaybackRateRestore, cancelQuantizedSchedule, clearAudio, getActiveAudio, getInactiveAudio, player.audioRef]);
 
   useLayoutEffect(() => {
     cancelRef.current = cancelCrossfade;
@@ -190,10 +233,11 @@ export function useCrossfadeAudioPlayer(
     attemptRef.current += 1;
     cancelAnimation();
     cancelQuantizedSchedule();
+    cancelPlaybackRateRestore();
     clearCrossfadeVisualState();
     clearAudio(deckARef.current);
     clearAudio(deckBRef.current);
-  }, [cancelAnimation, cancelQuantizedSchedule, clearAudio]);
+  }, [cancelAnimation, cancelPlaybackRateRestore, cancelQuantizedSchedule, clearAudio]);
 
   const setCrossfadeSeconds = useCallback((seconds: number) => {
     const normalizedSeconds = normalizeCrossfadeSeconds(seconds);
