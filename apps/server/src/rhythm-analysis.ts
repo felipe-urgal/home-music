@@ -167,6 +167,11 @@ export const decodeTrackToPcm: RhythmAnalysisRunner = (
   filePath,
   signal
 ) => new Promise((resolve, reject) => {
+  if (signal?.aborted) {
+    reject(new Error('Análise rítmica cancelada.'));
+    return;
+  }
+
   const child = spawn(command, [
     '-v', 'error',
     '-nostdin',
@@ -183,6 +188,7 @@ export const decodeTrackToPcm: RhythmAnalysisRunner = (
   });
 
   let settled = false;
+  let timeout: NodeJS.Timeout | null = null;
   let stdoutBytes = 0;
   let stderrBytes = 0;
   const stdout: Buffer[] = [];
@@ -191,7 +197,7 @@ export const decodeTrackToPcm: RhythmAnalysisRunner = (
   const finish = (error?: Error, samples?: Int16Array) => {
     if (settled) return;
     settled = true;
-    clearTimeout(timeout);
+    if (timeout) clearTimeout(timeout);
     signal?.removeEventListener('abort', onAbort);
     if (error) reject(error);
     else resolve(samples ?? new Int16Array());
@@ -203,13 +209,9 @@ export const decodeTrackToPcm: RhythmAnalysisRunner = (
   };
 
   const onAbort = () => failAndKill('Análise rítmica cancelada.');
-  if (signal?.aborted) {
-    onAbort();
-    return;
-  }
   signal?.addEventListener('abort', onAbort, { once: true });
 
-  const timeout = setTimeout(() => {
+  timeout = setTimeout(() => {
     failAndKill('FFmpeg excedeu o timeout da análise rítmica.');
   }, RHYTHM_ANALYSIS_TIMEOUT_MS);
   timeout.unref();
