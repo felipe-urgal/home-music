@@ -305,10 +305,15 @@ export function useCrossfadeAudioPlayer(
     incomingAudio.preservesPitch = true;
     if (shouldBeatmatch && beatmatchPlan && nextTrack.rhythm) {
       try {
-        incomingAudio.currentTime = nextTrack.rhythm.firstBeatSeconds;
         incomingAudio.playbackRate = beatmatchPlan.playbackRate;
+        incomingAudio.currentTime = nextTrack.rhythm.firstBeatSeconds;
       } catch {
         incomingAudio.playbackRate = 1;
+        try {
+          incomingAudio.currentTime = 0;
+        } catch {
+          // O deck continua no ponto aceito pelo browser; o handoff ainda é seguro.
+        }
       }
     }
     preparedIncomingTrackIdRef.current = null;
