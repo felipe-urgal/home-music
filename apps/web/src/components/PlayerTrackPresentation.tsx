@@ -7,6 +7,7 @@ import {
   Download,
   Heart,
   ListMusic,
+  ListPlus,
   LoaderCircle,
   MoreVertical,
   Pause,
@@ -115,19 +116,31 @@ export function PlayerTrackPresentation({
         {offlineMode && onExitOffline ? (
           <button className="icon-button" type="button" aria-label="Tentar conectar ao servidor" onClick={onExitOffline}><Wifi aria-hidden="true" /></button>
         ) : (
-          <button
-            className="icon-button player-topbar__menu"
-            type="button"
-            aria-label="Mais opções da faixa"
-            aria-haspopup="dialog"
-            aria-expanded={showTrackMenu}
-            onClick={() => {
-              setShowTrackMenu(value => !value);
-              setShowPlaylistPicker(false);
-            }}
-          >
-            <MoreVertical aria-hidden="true" />
-          </button>
+          <>
+            <button
+              className="icon-button player-topbar__playlist"
+              type="button"
+              aria-label="Adicionar à playlist"
+              aria-haspopup="dialog"
+              aria-expanded={showPlaylistPicker}
+              onClick={openPlaylistPicker}
+            >
+              <ListPlus aria-hidden="true" />
+            </button>
+            <button
+              className="icon-button player-topbar__menu"
+              type="button"
+              aria-label="Mais opções da faixa"
+              aria-haspopup="dialog"
+              aria-expanded={showTrackMenu}
+              onClick={() => {
+                setShowTrackMenu(value => !value);
+                setShowPlaylistPicker(false);
+              }}
+            >
+              <MoreVertical aria-hidden="true" />
+            </button>
+          </>
         )}
       </header>
 

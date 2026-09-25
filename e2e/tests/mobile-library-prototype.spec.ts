@@ -68,15 +68,19 @@ test('mobile segue o protótipo 3 na biblioteca, detalhe e player', async ({ pag
   const nextTrackCard = page.locator('.queue-panel__toggle-mobile');
 
   await expect(player).toBeVisible();
+  await player.dispatchEvent('pointerdown', { pointerType: 'touch' });
+  await expect(player).toHaveAttribute('data-mobile-chrome-visible', 'true');
   await expect(topbar.getByRole('button', { name: 'Biblioteca' })).toBeVisible();
+  await expect(topbar.getByRole('button', { name: 'Adicionar à playlist' })).toBeVisible();
   await expect(topbar.getByRole('button', { name: 'Mais opções da faixa' })).toBeVisible();
   await expect(heroPlay).toBeVisible();
   await expect(heroControl).toBeVisible();
   await expect(controls).toBeHidden();
   await expect(page.locator('.player-mobile-playlist-action')).toHaveCount(0);
   await expect(page.getByLabel('Progresso da música')).toBeEnabled();
+  await expect(page.locator('.player-progress-track')).toBeVisible();
   await expect(nextTrackCard).toBeVisible();
-  await expect(nextTrackCard).toHaveAttribute('aria-label', /Abrir fila/);
+  await expect(nextTrackCard).toHaveAttribute('aria-label', /Tocar próxima música:/);
 
   const viewport = page.viewportSize()!;
   const boxes = await Promise.all([artwork, heading, progress].map(locator => locator.boundingBox()));
@@ -88,22 +92,8 @@ test('mobile segue o protótipo 3 na biblioteca, detalhe e player', async ({ pag
   expect(headingBox!.y).toBeGreaterThan(artworkBox!.y + artworkBox!.height - 16);
   expect(progressBox!.y).toBeGreaterThan(headingBox!.y);
 
-  if (await heroPlay.getAttribute('aria-label') === 'Tocar pela capa') {
-    await heroPlay.click();
-  }
-  await expect(heroPlay).toHaveAttribute('aria-label', 'Pausar pela capa');
-  await expect(heroControl).toHaveClass(/is-hidden/, { timeout: 3_000 });
-
-  await nextTrackCard.click();
-  const queueSheet = page.getByRole('dialog', { name: 'Fila de reprodução' });
-  await expect(queueSheet).toBeVisible();
-  await queueSheet.getByRole('button', { name: 'Fechar fila' }).click();
-
-  await topbar.getByRole('button', { name: 'Mais opções da faixa' }).click();
-  const trackActions = page.getByRole('dialog', { name: 'Opções da faixa' });
-  await expect(trackActions).toBeVisible();
-  await trackActions.getByRole('button', { name: 'Adicionar à playlist' }).click();
-
+  await player.dispatchEvent('pointerdown', { pointerType: 'touch' });
+  await topbar.getByRole('button', { name: 'Adicionar à playlist' }).click();
   const playlistSheet = page.getByRole('dialog', { name: 'Adicionar à playlist' });
   await expect(playlistSheet).toBeVisible();
   const playlistSheetBox = await playlistSheet.boundingBox();
@@ -112,10 +102,29 @@ test('mobile segue o protótipo 3 na biblioteca, detalhe e player', async ({ pag
   expect(Math.abs((playlistSheetBox!.y + playlistSheetBox!.height) - sheetViewport.height)).toBeLessThanOrEqual(2);
   await playlistSheet.getByRole('button', { name: 'Fechar' }).click();
 
+  if (await heroPlay.getAttribute('aria-label') === 'Tocar pela capa') {
+    await heroPlay.click();
+  }
+  await expect(heroPlay).toHaveAttribute('aria-label', 'Pausar pela capa');
+  await expect(heroControl).toHaveClass(/is-hidden/, { timeout: 3_000 });
+  await expect(player).toHaveAttribute('data-mobile-chrome-visible', 'false', { timeout: 3_000 });
+
+  await player.dispatchEvent('pointerdown', { pointerType: 'touch' });
+  await expect(player).toHaveAttribute('data-mobile-chrome-visible', 'true');
+
+  const nextTrackLabel = await nextTrackCard.getAttribute('aria-label');
+  const nextTrackTitle = nextTrackLabel?.replace('Tocar próxima música: ', '');
+  expect(nextTrackTitle).toBeTruthy();
+
+  await nextTrackCard.click();
+  await expect(page.getByRole('dialog', { name: 'Fila de reprodução' })).toHaveCount(0);
+  await expect(heading.locator('h1')).toHaveText(nextTrackTitle!);
+
   const horizontalOverflow = await playerSurface.evaluate(element => element.scrollWidth - element.clientWidth);
   expect(horizontalOverflow).toBeLessThanOrEqual(1);
 
   await page.setViewportSize({ width: 360, height: 740 });
+  await player.dispatchEvent('pointerdown', { pointerType: 'touch' });
   await nextTrackCard.scrollIntoViewIfNeeded();
   await expect(nextTrackCard).toBeVisible();
   expect(await playerSurface.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);

@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import type { Playlist, RepeatMode, Track } from '@home-music/shared';
 import { CurrentLyricsLine, LyricsPanel } from './LyricsPanel';
+import { PlayerMobileChrome } from './PlayerMobileChrome';
 import { PlayerPlaybackControls } from './PlayerPlaybackControls';
 import { PlayerQueuePanel } from './PlayerQueuePanel';
 import { PlayerTrackPresentation } from './PlayerTrackPresentation';
@@ -85,7 +86,12 @@ export function PlayerScreen({
     : undefined;
 
   return (
-    <div className="player-screen-immersive" style={immersiveStyle} data-has-artwork={coverUrl ? 'true' : 'false'}>
+    <PlayerMobileChrome
+      playing={playing}
+      trackId={current.id}
+      style={immersiveStyle}
+      hasArtwork={Boolean(coverUrl)}
+    >
       <div className="player-screen-immersive__backdrop" aria-hidden="true" />
       <div className="player-screen-immersive__content">
         <PlayerTrackPresentation
@@ -143,6 +149,6 @@ export function PlayerScreen({
           onReorderQueue={onReorderQueue}
         />
       </div>
-    </div>
+    </PlayerMobileChrome>
   );
 }

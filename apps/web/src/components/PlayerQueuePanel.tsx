@@ -250,11 +250,11 @@ export function PlayerQueuePanel({ current, queue, currentIndex, offlineMode, on
         ref={mobileQueueToggleRef}
         type="button"
         className="queue-panel__toggle-mobile"
-        aria-label={nextTrack ? `Abrir fila. Próxima música: ${nextTrack.title}` : 'Abrir fila. Fim da fila'}
-        aria-expanded={showQueue}
-        aria-controls="mobile-queue-sheet"
-        disabled={!queue.length}
-        onClick={() => setShowQueue(true)}
+        aria-label={nextTrack ? `Tocar próxima música: ${nextTrack.title}` : 'Fim da fila'}
+        disabled={!nextTrack}
+        onClick={() => {
+          if (nextTrack) onPlayTrack(nextTrack, queue);
+        }}
       >
         {nextTrack ? (
           <>
