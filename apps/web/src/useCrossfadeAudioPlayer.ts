@@ -108,9 +108,16 @@ export function useCrossfadeAudioPlayer(
     animationFrameRef.current = null;
   }, []);
 
+  const cancelQuantizedSchedule = useCallback(() => {
+    if (quantizedScheduleFrameRef.current == null) return;
+    window.cancelAnimationFrame(quantizedScheduleFrameRef.current);
+    quantizedScheduleFrameRef.current = null;
+  }, []);
+
   const cancelCrossfade = useCallback(() => {
     attemptRef.current += 1;
     cancelAnimation();
+    cancelQuantizedSchedule();
     originTrackIdRef.current = null;
     startingTrackIdRef.current = null;
     incomingTrackIdRef.current = null;
@@ -123,7 +130,7 @@ export function useCrossfadeAudioPlayer(
       activeAudio.volume = outputVolumeRef.current;
     }
     if (inactiveAudio && inactiveAudio !== activeAudio) clearAudio(inactiveAudio);
-  }, [cancelAnimation, clearAudio, getActiveAudio, getInactiveAudio, player.audioRef]);
+  }, [cancelAnimation, cancelQuantizedSchedule, clearAudio, getActiveAudio, getInactiveAudio, player.audioRef]);
 
   useLayoutEffect(() => {
     cancelRef.current = cancelCrossfade;
@@ -157,7 +164,14 @@ export function useCrossfadeAudioPlayer(
   }, [cancelCrossfade, player.current?.id]);
 
   useEffect(() => {
-    if (!player.playing && (startingTrackIdRef.current || incomingTrackIdRef.current)) {
+    if (
+      !player.playing
+      && (
+        startingTrackIdRef.current
+        || incomingTrackIdRef.current
+        || quantizedScheduleFrameRef.current != null
+      )
+    ) {
       cancelCrossfade();
     }
   }, [cancelCrossfade, player.playing]);
@@ -165,10 +179,11 @@ export function useCrossfadeAudioPlayer(
   useEffect(() => () => {
     attemptRef.current += 1;
     cancelAnimation();
+    cancelQuantizedSchedule();
     clearCrossfadeVisualState();
     clearAudio(deckARef.current);
     clearAudio(deckBRef.current);
-  }, [cancelAnimation, clearAudio]);
+  }, [cancelAnimation, cancelQuantizedSchedule, clearAudio]);
 
   const setCrossfadeSeconds = useCallback((seconds: number) => {
     const normalizedSeconds = normalizeCrossfadeSeconds(seconds);
