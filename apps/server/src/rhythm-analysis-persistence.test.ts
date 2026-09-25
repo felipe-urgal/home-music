@@ -37,7 +37,7 @@ test('persiste análise rítmica somente para a assinatura atual do arquivo', as
     const original = indexedTrack('a', '/music/a.mp3');
     db.syncTracks([original], '/music', '2026-09-25T12:00:00.000Z');
 
-    assert.equal(db.loadTracks()[0]?.rhythm, null);
+    assert.equal(db.loadTracks()[0]?.rhythm, undefined)
     assert.equal(db.saveTrackRhythmAnalysis(
       original.id,
       original.fileSize,
@@ -57,7 +57,7 @@ test('persiste análise rítmica somente para a assinatura atual do arquivo', as
       '2026-09-25T12:01:00.000Z'
     );
 
-    assert.equal(db.loadTracks()[0]?.rhythm, null);
+    assert.equal(db.loadTracks()[0]?.rhythm, undefined)
     assert.equal(db.saveTrackRhythmAnalysis(
       original.id,
       original.fileSize,
