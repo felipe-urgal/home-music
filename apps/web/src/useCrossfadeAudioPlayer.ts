@@ -246,6 +246,33 @@ export function useCrossfadeAudioPlayer(
     setCrossfadeSecondsState(normalizedSeconds);
   }, [cancelCrossfade]);
 
+  const incomingTrackSource = useCallback((track: Track) => (
+    getTvRemoteMediaSource(track.id) ?? (offlineMode
+      ? offlineAudioUrl(track.id)
+      : onlineAudioUrl(
+          track.id,
+          player.streamingMode,
+          false,
+          effectiveNormalizationMode(track, player.normalizationMode)
+        ))
+  ), [offlineMode, player.normalizationMode, player.streamingMode]);
+
+  const prepareIncomingAudio = useCallback((track: Track) => {
+    const incomingAudio = getInactiveAudio();
+    if (!incomingAudio) return null;
+    if (
+      preparedIncomingTrackIdRef.current === track.id
+      && incomingAudio.getAttribute('src')
+    ) return incomingAudio;
+
+    clearAudio(incomingAudio);
+    incomingAudio.volume = 0;
+    incomingAudio.src = incomingTrackSource(track);
+    incomingAudio.load();
+    preparedIncomingTrackIdRef.current = track.id;
+    return incomingAudio;
+  }, [clearAudio, getInactiveAudio, incomingTrackSource]);
+
   const startCrossfade = useCallback((
     activeAudio: HTMLAudioElement,
     candidate: CrossfadeCandidate
