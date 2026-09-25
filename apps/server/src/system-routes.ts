@@ -27,6 +27,7 @@ type SystemRouteDependencies = {
   getFfmpegStatus: () => FfmpegStatus;
   getSchemaVersion: () => number;
   getTranscodingRuntime: () => { active: number; pending: number };
+  rhythmAnalysisConfigured?: boolean;
   getRhythmAnalysisRuntime?: () => RhythmAnalysisRuntime | null;
   getHeavyWorkRuntime?: () => HeavyWorkRuntime;
   isWebReady: () => boolean;
@@ -45,6 +46,7 @@ export function registerSystemRoutes(
     getFfmpegStatus,
     getSchemaVersion,
     getTranscodingRuntime,
+    rhythmAnalysisConfigured = true,
     getRhythmAnalysisRuntime,
     getHeavyWorkRuntime,
     isWebReady
@@ -100,6 +102,7 @@ export function registerSystemRoutes(
         pending: transcoding.pending
       },
       rhythmAnalysis: {
+        configured: rhythmAnalysisConfigured,
         enabled: rhythmRuntime != null,
         analyzerVersion: rhythmRuntime?.analyzerVersion ?? RHYTHM_ANALYZER_VERSION,
         pending: rhythmRuntime?.pending ?? 0,

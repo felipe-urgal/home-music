@@ -34,6 +34,10 @@ import { registerOpenSubsonicProtocolGuard } from './open-subsonic-protocol.js';
 import { registerOpenSubsonicRoutes } from './open-subsonic-routes.js';
 import { PersonalLibraryService } from './personal-library-service.js';
 import { registerPersonalRoutes } from './personal-routes.js';
+import {
+  DEFAULT_RHYTHM_ANALYSIS_ENABLED,
+  parseRhythmAnalysisEnabled
+} from './rhythm-analysis-config.js';
 import { analyzeTrackRhythm } from './rhythm-analysis.js';
 import { RhythmAnalysisScheduler } from './rhythm-analysis-scheduler.js';
 import { sanitizeRequestUrl } from './request-log.js';
@@ -127,6 +131,19 @@ try {
   app.log.warn(
     { err: error, fallback: DEFAULT_HEAVY_WORK_LIMITS },
     'Limites das filas de trabalho pesado inválidos; usando valores seguros padrão.'
+  );
+}
+
+let rhythmAnalysisEnabled = DEFAULT_RHYTHM_ANALYSIS_ENABLED;
+try {
+  rhythmAnalysisEnabled = parseRhythmAnalysisEnabled(
+    process.env.HOME_MUSIC_RHYTHM_ANALYSIS_ENABLED
+  );
+} catch (error) {
+  rhythmAnalysisEnabled = false;
+  app.log.warn(
+    { err: error },
+    'Configuração da análise rítmica inválida; enriquecimento DSP foi desabilitado por segurança.'
   );
 }
 
@@ -293,6 +310,7 @@ registerSystemRoutes(app, {
     active: infrastructure.transcodeManager.activeCount,
     pending: infrastructure.transcodeManager.pendingCount
   }),
+  rhythmAnalysisConfigured: rhythmAnalysisEnabled,
   getRhythmAnalysisRuntime: () => rhythmScheduler?.runtime ?? null,
   getHeavyWorkRuntime: () => ({
     transcode: infrastructure.transcodeManager.queueRuntime,
@@ -393,7 +411,7 @@ try {
 }
 
 ffmpegStatus = await probeFfmpeg(ffmpegPathConfig);
-if (ffmpegStatus.available) {
+if (ffmpegStatus.available && rhythmAnalysisEnabled) {
   rhythmScheduler = new RhythmAnalysisScheduler({
     library,
     database: infrastructure.database,
@@ -415,6 +433,15 @@ if (ffmpegStatus.available) {
       transcodeCacheMegabytes
     },
     'FFmpeg disponível para transcoding adaptativo e análise rítmica.'
+  );
+} else if (ffmpegStatus.available) {
+  app.log.info(
+    {
+      version: ffmpegStatus.version,
+      customPath: ffmpegStatus.customCommand,
+      transcodeCacheMegabytes
+    },
+    'FFmpeg disponível para transcoding; análise rítmica desabilitada por configuração.'
   );
 } else {
   app.log.warn(
