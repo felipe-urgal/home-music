@@ -22,6 +22,17 @@ describe('mobile library prototype one contracts', () => {
     expect(miniPlayer).toMatch(/aria-label="Abrir Tocando Agora"/);
   });
 
+  it('mantém o player mobile imersivo sem misturar gesto da capa com play/pause', () => {
+    const presentation = source('components/PlayerTrackPresentation.tsx');
+    const css = source('mobile-responsive-polish.css');
+
+    expect(presentation).toMatch(/aria-label="Mostrar controles de reprodução"/);
+    expect(presentation).toMatch(/aria-label=\{playing \? 'Pausar' : 'Tocar'\}/);
+    expect(css).toMatch(/data-mobile-chrome-visible="false"\]\[data-has-artwork="true"\][\s\S]*height: min\(66dvh, 620px\)/);
+    expect(css).toMatch(/data-mobile-chrome-visible="false"[\s\S]*\.progress-wrap[\s\S]*bottom: calc\(14px \+ env\(safe-area-inset-bottom\)\)/);
+    expect(css).toMatch(/\.player-hero-play__control\.is-hidden[\s\S]*pointer-events: none/);
+  });
+
   it('mantém pastas e playlists como listas compactas navegáveis no mobile', () => {
     const content = source('components/LibraryContent.tsx');
 
