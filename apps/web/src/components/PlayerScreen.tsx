@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import type { Playlist, RepeatMode, Track } from '@home-music/shared';
 import { CurrentLyricsLine, LyricsPanel } from './LyricsPanel';
 import { PlayerPlaybackControls } from './PlayerPlaybackControls';
@@ -76,6 +76,8 @@ export function PlayerScreen({
   onAddToPlaylist,
   onExitOffline
 }: PlayerScreenProps) {
+  const [showMobileChrome, setShowMobileChrome] = useState(true);
+  const [mobileChromeActivity, setMobileChromeActivity] = useState(0);
   const coverVersion = current.coverVersion ? `?v=${encodeURIComponent(current.coverVersion)}` : '';
   const coverUrl = !offlineMode && current.hasCover
     ? `/api/tracks/${encodeURIComponent(current.id)}/cover${coverVersion}`
@@ -84,8 +86,27 @@ export function PlayerScreen({
     ? { '--player-artwork': `url("${coverUrl}")` }
     : undefined;
 
+  useEffect(() => {
+    setShowMobileChrome(true);
+    if (!playing) return;
+
+    const timeout = window.setTimeout(() => setShowMobileChrome(false), 1800);
+    return () => window.clearTimeout(timeout);
+  }, [playing, current.id, mobileChromeActivity]);
+
+  function revealMobileChrome() {
+    setMobileChromeActivity(value => value + 1);
+  }
+
   return (
-    <div className="player-screen-immersive" style={immersiveStyle} data-has-artwork={coverUrl ? 'true' : 'false'}>
+    <div
+      className="player-screen-immersive"
+      style={immersiveStyle}
+      data-has-artwork={coverUrl ? 'true' : 'false'}
+      data-mobile-chrome-visible={showMobileChrome ? 'true' : 'false'}
+      onPointerDownCapture={revealMobileChrome}
+      onFocusCapture={revealMobileChrome}
+    >
       <div className="player-screen-immersive__backdrop" aria-hidden="true" />
       <div className="player-screen-immersive__content">
         <PlayerTrackPresentation
