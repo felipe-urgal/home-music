@@ -22,8 +22,10 @@ test('mobile segue o protótipo 3 na biblioteca, detalhe e player', async ({ pag
 
   const libraryHome = page.getByTestId('mobile-library-home');
   await expect(libraryHome).toBeVisible();
-  await expect(libraryHome.getByText('Pastas', { exact: true })).toBeVisible();
-  await expect(libraryHome.getByText('Playlists', { exact: true })).toBeVisible();
+  await expect(libraryHome.getByText('Pastas', { exact: true })).toHaveCount(0);
+  await expect(libraryHome.getByText('Playlists', { exact: true })).toHaveCount(0);
+  await expect(libraryHome.getByRole('button', { name: /Mostrar todas/ })).toHaveCount(0);
+  await expect(libraryHome.getByRole('button', { name: /Abrir playlists/ })).toHaveCount(0);
   await expect(page.getByRole('navigation', { name: 'Navegação da biblioteca' })).toBeHidden();
   await expect(page.locator('.mobile-bottom-nav')).toBeHidden();
 
