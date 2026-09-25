@@ -284,27 +284,40 @@ export function useCrossfadeAudioPlayer(
     cancelQuantizedSchedule();
 
     const nextTrack = player.queue.find(track => track.id === candidate.trackId);
-    const incomingAudio = getInactiveAudio();
     const originTrackId = player.current?.id ?? null;
-    if (!nextTrack || !incomingAudio || !originTrackId) return;
+    if (!nextTrack || !originTrackId) return;
+
+    const incomingAudio = prepareIncomingAudio(nextTrack);
+    if (!incomingAudio) return;
+
+    const beatmatchPlan = resolveBeatmatchPlan({
+      outgoing: player.current?.rhythm,
+      incoming: nextTrack.rhythm
+    });
+    const shouldBeatmatch = Boolean(
+      beatmatchPlan
+      && canPhaseAlignBeatmatch(beatmatchPlan)
+      && nextTrack.rhythm
+      && incomingAudio.readyState >= 1
+    );
+
+    incomingAudio.playbackRate = 1;
+    incomingAudio.preservesPitch = true;
+    if (shouldBeatmatch && beatmatchPlan && nextTrack.rhythm) {
+      try {
+        incomingAudio.currentTime = nextTrack.rhythm.firstBeatSeconds;
+        incomingAudio.playbackRate = beatmatchPlan.playbackRate;
+      } catch {
+        incomingAudio.playbackRate = 1;
+      }
+    }
+    preparedIncomingTrackIdRef.current = null;
 
     const attempt = attemptRef.current + 1;
     attemptRef.current = attempt;
     originTrackIdRef.current = originTrackId;
     startingTrackIdRef.current = candidate.trackId;
     incomingTrackIdRef.current = null;
-
-    clearAudio(incomingAudio);
-    incomingAudio.volume = 0;
-    incomingAudio.src = getTvRemoteMediaSource(nextTrack.id) ?? (offlineMode
-      ? offlineAudioUrl(nextTrack.id)
-      : onlineAudioUrl(
-          nextTrack.id,
-          player.streamingMode,
-          false,
-          effectiveNormalizationMode(nextTrack, player.normalizationMode)
-        ));
-    incomingAudio.load();
 
     void incomingAudio.play()
       .then(() => {
@@ -377,15 +390,12 @@ export function useCrossfadeAudioPlayer(
   }, [
     cancelCrossfade,
     cancelQuantizedSchedule,
-    clearAudio,
     getActiveAudio,
-    getInactiveAudio,
-    offlineMode,
     player.current?.id,
-    player.normalizationMode,
+    player.current?.rhythm,
     player.playing,
     player.queue,
-    player.streamingMode
+    prepareIncomingAudio
   ]);
 
   const maybeStartCrossfade = useCallback((activeAudio: HTMLAudioElement) => {
