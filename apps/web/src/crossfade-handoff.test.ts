@@ -42,6 +42,13 @@ describe('crossfade handoff', () => {
     expect(canonicalPause).toBeGreaterThan(completionGuard);
   });
 
+  it('mantém o envelope do fade preso à timeline de saída para suportar playbackRate no deck de entrada', () => {
+    const crossfade = source('useCrossfadeAudioPlayer.ts');
+
+    expect(crossfade).toContain('candidate.durationSeconds - remainingSeconds');
+    expect(crossfade).not.toContain('incomingAudio.currentTime / candidate.durationSeconds');
+  });
+
   it('usa a rota offline no deck de entrada quando o player está em offlineMode', () => {
     const crossfade = source('useCrossfadeAudioPlayer.ts');
 
