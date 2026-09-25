@@ -155,3 +155,53 @@ test('faixa desabilitada não entra no processamento rítmico', async () => {
 
   assert.equal(analyzeCalls, 0);
 });
+
+
+test('resultado sem ritmo é marcado como concluído e não entra novamente na fila', async () => {
+  let current = track();
+  let analyzeCalls = 0;
+  let resolveApplied!: () => void;
+  const applied = new Promise<void>(resolve => {
+    resolveApplied = resolve;
+  });
+
+  const library = {
+    allTracks: [current],
+    getTrack: (trackId: string) => trackId === current.id ? current : undefined,
+    applyRhythmAnalysis: () => {
+      current = { ...current, rhythmAnalysisCurrent: true };
+      resolveApplied();
+      return true;
+    }
+  } as unknown as LibraryService;
+
+  const database = {
+    saveTrackRhythmAnalysis: (
+      _trackId: string,
+      _size: number,
+      _mtime: number,
+      rhythm: null
+    ) => {
+      assert.equal(rhythm, null);
+      return true;
+    }
+  } as unknown as HomeMusicDatabase;
+
+  const scheduler = new RhythmAnalysisScheduler({
+    library,
+    database,
+    logger,
+    analyze: async () => {
+      analyzeCalls += 1;
+      return null;
+    }
+  });
+
+  scheduler.sync();
+  await applied;
+  scheduler.sync();
+  await new Promise<void>(resolve => setImmediate(resolve));
+  await scheduler.stop();
+
+  assert.equal(analyzeCalls, 1);
+});
