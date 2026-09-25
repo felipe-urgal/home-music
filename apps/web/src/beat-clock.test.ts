@@ -1,0 +1,74 @@
+import { describe, expect, it } from 'vitest';
+import type { TrackRhythm } from '@home-music/shared';
+import {
+  beatDurationSeconds,
+  beatIndexAt,
+  nextBeatAtOrAfter,
+  resolveQuantizedCrossfadePlan
+} from './beat-clock';
+
+const rhythm: TrackRhythm = {
+  bpm: 120,
+  firstBeatSeconds: 0.25,
+  confidence: 0.9
+};
+
+describe('beat clock', () => {
+  it('calcula duração e índice do beat a partir da fase analisada', () => {
+    expect(beatDurationSeconds(rhythm)).toBeCloseTo(0.5, 6);
+    expect(beatIndexAt(rhythm, 0.25)).toBe(0);
+    expect(beatIndexAt(rhythm, 1.24)).toBe(1);
+    expect(beatIndexAt(rhythm, 1.25)).toBe(2);
+  });
+
+  it('resolve a próxima batida sem pular quando já está na grade', () => {
+    expect(nextBeatAtOrAfter(rhythm, 0.1)).toBeCloseTo(0.25, 6);
+    expect(nextBeatAtOrAfter(rhythm, 0.25)).toBeCloseTo(0.25, 6);
+    expect(nextBeatAtOrAfter(rhythm, 0.26)).toBeCloseTo(0.75, 6);
+    expect(nextBeatAtOrAfter(rhythm, 1.25)).toBeCloseTo(1.25, 6);
+  });
+
+  it('recusa ritmo de baixa confiança ou valores inválidos', () => {
+    expect(beatDurationSeconds({ ...rhythm, confidence: 0.2 })).toBeNull();
+    expect(nextBeatAtOrAfter({ ...rhythm, bpm: 0 }, 10)).toBeNull();
+    expect(beatIndexAt(rhythm, -1)).toBeNull();
+  });
+
+  it('move o início do crossfade para a próxima batida e preserva o fim da faixa', () => {
+    const plan = resolveQuantizedCrossfadePlan({
+      rhythm,
+      trackDurationSeconds: 60,
+      preferredDurationSeconds: 5
+    });
+
+    expect(plan).not.toBeNull();
+    expect(plan?.startTimeSeconds).toBeCloseTo(55.25, 6);
+    expect(plan?.durationSeconds).toBeCloseTo(4.75, 6);
+  });
+
+  it('faz fallback quando quantizar deixaria o crossfade curto demais', () => {
+    const slowRhythm: TrackRhythm = {
+      bpm: 60,
+      firstBeatSeconds: 0.95,
+      confidence: 0.9
+    };
+    expect(resolveQuantizedCrossfadePlan({
+      rhythm: slowRhythm,
+      trackDurationSeconds: 10,
+      preferredDurationSeconds: 1
+    })).toBeNull();
+  });
+
+  it('faz fallback sem análise confiável', () => {
+    expect(resolveQuantizedCrossfadePlan({
+      rhythm: undefined,
+      trackDurationSeconds: 60,
+      preferredDurationSeconds: 5
+    })).toBeNull();
+    expect(resolveQuantizedCrossfadePlan({
+      rhythm: { ...rhythm, confidence: 0.3 },
+      trackDurationSeconds: 60,
+      preferredDurationSeconds: 5
+    })).toBeNull();
+  });
+});
