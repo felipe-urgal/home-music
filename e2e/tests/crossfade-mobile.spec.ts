@@ -23,9 +23,10 @@ test('crossfade mistura dois decks reais no Chromium mobile e faz handoff sem re
   await login(page);
   await expect(page.locator('audio')).toHaveCount(2);
 
-  const artworkPlay = page.getByRole('button', { name: 'Tocar pela capa', exact: true });
+  const artworkPlay = page.locator('.player-hero-play__control');
+  await expect(artworkPlay).toHaveAttribute('aria-label', 'Tocar');
   await artworkPlay.click();
-  await expect(page.getByRole('button', { name: 'Pausar pela capa', exact: true })).toBeVisible();
+  await expect(artworkPlay).toHaveAttribute('aria-label', 'Pausar');
 
   await expect.poll(async () => page.evaluate(() => {
     const playingDecks = Array.from(document.querySelectorAll('audio'))
