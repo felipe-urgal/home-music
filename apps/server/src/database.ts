@@ -738,14 +738,19 @@ export class HomeMusicDatabase {
         this.db.exec(`
           CREATE TABLE IF NOT EXISTS track_rhythm_analysis (
             track_id TEXT PRIMARY KEY NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
-            bpm REAL NOT NULL CHECK(bpm >= 20 AND bpm <= 300),
-            first_beat_seconds REAL NOT NULL CHECK(first_beat_seconds >= 0),
-            confidence REAL NOT NULL CHECK(confidence >= 0 AND confidence <= 1),
+            status TEXT NOT NULL CHECK(status IN ('ready', 'unavailable')),
+            bpm REAL CHECK(bpm IS NULL OR (bpm >= 20 AND bpm <= 300)),
+            first_beat_seconds REAL CHECK(first_beat_seconds IS NULL OR first_beat_seconds >= 0),
+            confidence REAL CHECK(confidence IS NULL OR (confidence >= 0 AND confidence <= 1)),
             source TEXT NOT NULL CHECK(length(source) BETWEEN 1 AND 32),
             analyzer_version INTEGER NOT NULL CHECK(analyzer_version >= 1),
             source_file_size INTEGER NOT NULL CHECK(source_file_size >= 0),
             source_mtime_ms REAL NOT NULL,
-            analyzed_at TEXT NOT NULL
+            analyzed_at TEXT NOT NULL,
+            CHECK (
+              (status = 'ready' AND bpm IS NOT NULL AND first_beat_seconds IS NOT NULL AND confidence IS NOT NULL)
+              OR (status = 'unavailable' AND bpm IS NULL AND first_beat_seconds IS NULL AND confidence IS NULL)
+            )
           );
 
           PRAGMA user_version = 13;
@@ -868,6 +873,7 @@ export class HomeMusicDatabase {
       SELECT t.id, t.file_path, t.title, t.artist, t.album, t.album_artist, t.folder, t.folder_path,
              t.duration, t.format, t.has_cover, t.replaygain_track_db, t.replaygain_album_db,
              t.mime_type, t.file_size, t.mtime_ms,
+             r.status AS rhythm_analysis_status,
              r.bpm AS rhythm_bpm,
              r.first_beat_seconds AS rhythm_first_beat_seconds,
              r.confidence AS rhythm_confidence
@@ -885,7 +891,8 @@ export class HomeMusicDatabase {
       filePath: stringValue(row.file_path),
       mimeType: stringValue(row.mime_type, 'application/octet-stream'),
       fileSize: numberValue(row.file_size),
-      mtimeMs: numberValue(row.mtime_ms)
+      mtimeMs: numberValue(row.mtime_ms),
+      ...(row.rhythm_analysis_status == null ? {} : { rhythmAnalysisCurrent: true })
     }));
   }
 
@@ -916,18 +923,20 @@ export class HomeMusicDatabase {
     trackId: string,
     sourceFileSize: number,
     sourceMtimeMs: number,
-    rhythm: TrackRhythm,
+    rhythm: TrackRhythm | null,
     source = 'audio'
   ) {
     if (
-      !Number.isFinite(rhythm.bpm)
-      || rhythm.bpm < 20
-      || rhythm.bpm > 300
-      || !Number.isFinite(rhythm.firstBeatSeconds)
-      || rhythm.firstBeatSeconds < 0
-      || !Number.isFinite(rhythm.confidence)
-      || rhythm.confidence < 0
-      || rhythm.confidence > 1
+      (rhythm !== null && (
+        !Number.isFinite(rhythm.bpm)
+        || rhythm.bpm < 20
+        || rhythm.bpm > 300
+        || !Number.isFinite(rhythm.firstBeatSeconds)
+        || rhythm.firstBeatSeconds < 0
+        || !Number.isFinite(rhythm.confidence)
+        || rhythm.confidence < 0
+        || rhythm.confidence > 1
+      ))
       || !Number.isSafeInteger(sourceFileSize)
       || sourceFileSize < 0
       || !Number.isFinite(sourceMtimeMs)
@@ -956,10 +965,11 @@ export class HomeMusicDatabase {
 
       this.db.prepare(`
         INSERT INTO track_rhythm_analysis(
-          track_id, bpm, first_beat_seconds, confidence, source, analyzer_version,
+          track_id, status, bpm, first_beat_seconds, confidence, source, analyzer_version,
           source_file_size, source_mtime_ms, analyzed_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(track_id) DO UPDATE SET
+          status = excluded.status,
           bpm = excluded.bpm,
           first_beat_seconds = excluded.first_beat_seconds,
           confidence = excluded.confidence,
@@ -970,9 +980,10 @@ export class HomeMusicDatabase {
           analyzed_at = excluded.analyzed_at
       `).run(
         trackId,
-        rhythm.bpm,
-        rhythm.firstBeatSeconds,
-        rhythm.confidence,
+        rhythm ? 'ready' : 'unavailable',
+        rhythm?.bpm ?? null,
+        rhythm?.firstBeatSeconds ?? null,
+        rhythm?.confidence ?? null,
         source.trim(),
         RHYTHM_ANALYZER_VERSION,
         sourceFileSize,
