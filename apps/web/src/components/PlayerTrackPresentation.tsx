@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   CheckCircle2,
   ChevronDown,
@@ -66,6 +66,7 @@ export function PlayerTrackPresentation({
   const [showPlaylistPicker, setShowPlaylistPicker] = useState(false);
   const [showTrackMenu, setShowTrackMenu] = useState(false);
   const [showHeroControl, setShowHeroControl] = useState(true);
+  const heroControlTimeoutRef = useRef<number | null>(null);
   const crossfadeVisual = useCrossfadeVisualState();
   const offlineActionLabel = downloading
     ? 'Baixando para uso offline'
@@ -77,30 +78,30 @@ export function PlayerTrackPresentation({
         ? 'Manter também como download individual'
         : 'Baixar para uso offline';
 
+  function clearHeroControlTimeout() {
+    if (heroControlTimeoutRef.current == null) return;
+    window.clearTimeout(heroControlTimeoutRef.current);
+    heroControlTimeoutRef.current = null;
+  }
+
+  function revealHeroControl() {
+    clearHeroControlTimeout();
+    setShowHeroControl(true);
+    if (playing) {
+      heroControlTimeoutRef.current = window.setTimeout(() => setShowHeroControl(false), 1800);
+    }
+  }
+
   useEffect(() => {
     setShowPlaylistPicker(false);
     setShowTrackMenu(false);
-    setShowHeroControl(true);
-  }, [current.id, queueLength]);
-
-  useEffect(() => {
-    if (!playing) {
-      setShowHeroControl(true);
-      return;
-    }
-
-    setShowHeroControl(true);
-    const timeout = window.setTimeout(() => setShowHeroControl(false), 1800);
-    return () => window.clearTimeout(timeout);
-  }, [playing, current.id]);
+    revealHeroControl();
+    return clearHeroControlTimeout;
+  }, [current.id, queueLength, playing]);
 
   function openPlaylistPicker() {
     setShowTrackMenu(false);
     setShowPlaylistPicker(true);
-  }
-
-  function revealHeroControl() {
-    setShowHeroControl(true);
   }
 
   return (
