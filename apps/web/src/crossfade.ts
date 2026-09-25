@@ -11,10 +11,14 @@ export function otherCrossfadeDeck(deck: CrossfadeDeck): CrossfadeDeck {
   return deck === 'a' ? 'b' : 'a';
 }
 
-export function normalizeCrossfadeSeconds(value: unknown) {
+function clampCrossfadeSeconds(value: unknown) {
   const numericValue = typeof value === 'number' ? value : Number(value);
   if (!Number.isFinite(numericValue)) return 0;
-  return Math.max(0, Math.min(MAX_CROSSFADE_SECONDS, Math.round(numericValue)));
+  return Math.max(0, Math.min(MAX_CROSSFADE_SECONDS, numericValue));
+}
+
+export function normalizeCrossfadeSeconds(value: unknown) {
+  return Math.round(clampCrossfadeSeconds(value));
 }
 
 export function readCrossfadeSeconds(storage: Pick<Storage, 'getItem'>) {
@@ -105,7 +109,7 @@ export function resolveCrossfadeCandidate({
   visibilityState,
   remainingSeconds
 }: CrossfadeCandidateOptions): CrossfadeCandidate | null {
-  const normalizedDurationSeconds = normalizeCrossfadeSeconds(durationSeconds);
+  const normalizedDurationSeconds = clampCrossfadeSeconds(durationSeconds);
   if (!normalizedDurationSeconds || visibilityState !== 'visible') return null;
   if (
     !Number.isFinite(remainingSeconds)
