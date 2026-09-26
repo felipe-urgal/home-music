@@ -1045,6 +1045,11 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
           onTogglePlay={toggleDjDeckPlay}
           onCue={cueDjDeck}
           onSync={syncDjDeck}
+          mixMode={djMixMode}
+          onMixModeChange={mode => {
+            if (mode === 'automix') enableDjAutomix();
+            else disableDjAutomix();
+          }}
           onExit={closeDjMode}
         />
         {library.actionError && (
