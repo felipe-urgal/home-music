@@ -119,6 +119,8 @@ os campos principais são:
 - `completed`: análises concluídas nesta execução;
 - `detected`: análises com ritmo detectado;
 - `unavailable`: faixa válida para playback, mas sem análise rítmica utilizável;
+- `decodeUnavailable`: subconjunto de `unavailable` causado por falha
+  determinística de decode do FFmpeg;
 - `lowConfidence`: ritmo detectado abaixo do limite confiável do player;
 - `failed`: falhas operacionais que não foram classificadas como mídia
   deterministicamente indecodificável;
