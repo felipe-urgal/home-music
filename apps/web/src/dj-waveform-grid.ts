@@ -1,8 +1,5 @@
-import {
-  MIN_DOWNBEAT_CONFIDENCE,
-  MIN_RHYTHM_CONFIDENCE,
-  type TrackRhythm
-} from '@home-music/shared';
+import type { TrackRhythm } from '@home-music/shared';
+import { hasUsableBarGrid, hasUsableBeatGrid } from './dj-beat-grid';
 
 export type DjWaveformMarker = {
   position: number;
@@ -18,26 +15,13 @@ export function buildDjWaveformMarkers(
     !rhythm
     || !Number.isFinite(durationSeconds)
     || durationSeconds <= 0
-    || !Number.isFinite(rhythm.bpm)
-    || rhythm.bpm <= 0
-    || !Number.isFinite(rhythm.firstBeatSeconds)
-    || rhythm.firstBeatSeconds < 0
-    || !Number.isFinite(rhythm.confidence)
-    || rhythm.confidence < MIN_RHYTHM_CONFIDENCE
+    || !hasUsableBeatGrid(rhythm)
     || !Number.isInteger(maxMarkers)
     || maxMarkers <= 0
   ) return [];
 
   const beatSeconds = 60 / rhythm.bpm;
-  const hasDownbeat = (
-    typeof rhythm.downbeatSeconds === 'number'
-    && Number.isFinite(rhythm.downbeatSeconds)
-    && rhythm.downbeatSeconds >= 0
-    && (rhythm.beatsPerBar === 3 || rhythm.beatsPerBar === 4)
-    && typeof rhythm.downbeatConfidence === 'number'
-    && Number.isFinite(rhythm.downbeatConfidence)
-    && rhythm.downbeatConfidence >= MIN_DOWNBEAT_CONFIDENCE
-  );
+  const hasDownbeat = hasUsableBarGrid(rhythm);
 
   const markers: DjWaveformMarker[] = [];
   const epsilon = beatSeconds * 0.15;
