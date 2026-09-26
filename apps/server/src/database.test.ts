@@ -90,7 +90,7 @@ test('SQLite persiste biblioteca, favoritos, histórico, playlists e estado do p
     first.close();
 
     const second = new HomeMusicDatabase(dbPath);
-    assert.equal(second.getSchemaVersion(), 14);
+    assert.equal(second.getSchemaVersion(), 15);
     assert.equal(second.getMetadata('libraryRoot'), '/music');
     assert.equal(second.loadLibraryIntegrityStatus('/other'), null);
     assert.deepEqual(second.loadLibraryIntegrityStatus('/music'), {
@@ -229,7 +229,7 @@ test('migra schema v1 para v14 sem perder estado existente', async () => {
     legacy.close();
 
     const migrated = new HomeMusicDatabase(dbPath);
-    assert.equal(migrated.getSchemaVersion(), 14);
+    assert.equal(migrated.getSchemaVersion(), 15);
     const state = migrated.loadPlaybackState('user-1');
     assert.equal(state.currentTrackId, null);
     assert.equal(state.position, 0);
@@ -294,7 +294,7 @@ test('schema v14 preserva identidade única, papéis e flags válidos de users',
 
   try {
     const db = new HomeMusicDatabase(dbPath);
-    assert.equal(db.getSchemaVersion(), 14);
+    assert.equal(db.getSchemaVersion(), 15);
     db.close();
 
     const raw = new DatabaseSync(dbPath);
