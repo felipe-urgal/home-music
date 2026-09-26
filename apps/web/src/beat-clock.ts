@@ -11,6 +11,14 @@ export const MIN_QUANTIZED_CROSSFADE_SECONDS = 0.75;
 export const MAX_BAR_QUANTIZATION_SHIFT_SECONDS = 1.25;
 export const MAX_BAR_QUANTIZATION_SHIFT_RATIO = 0.35;
 
+export function quantizedCrossfadeWakeDelayMs(timeUntilStartSeconds: number) {
+  if (!Number.isFinite(timeUntilStartSeconds)) return 0;
+  return Math.max(
+    0,
+    (timeUntilStartSeconds - QUANTIZED_CROSSFADE_ARM_SECONDS) * 1_000
+  );
+}
+
 function validRhythm(rhythm: TrackRhythm | null | undefined): rhythm is TrackRhythm {
   return Boolean(
     rhythm
