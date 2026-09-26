@@ -82,7 +82,7 @@ test('migration v12 cria schema OpenSubsonic em banco v11 sem tabela', async () 
     seedVersion11(databasePath, false);
 
     const database = new HomeMusicDatabase(databasePath);
-    assert.equal(database.getSchemaVersion(), 14);
+    assert.equal(database.getSchemaVersion(), 15);
     database.close();
 
     const db = new DatabaseSync(databasePath);
@@ -105,7 +105,7 @@ test('migration v12 preserva tabela e credenciais já criadas pelo store legado'
     seedVersion11(databasePath, true);
 
     let database = new HomeMusicDatabase(databasePath);
-    assert.equal(database.getSchemaVersion(), 14);
+    assert.equal(database.getSchemaVersion(), 15);
     database.close();
 
     let db = new DatabaseSync(databasePath);
@@ -121,7 +121,7 @@ test('migration v12 preserva tabela e credenciais já criadas pelo store legado'
     db.close();
 
     database = new HomeMusicDatabase(databasePath);
-    assert.equal(database.getSchemaVersion(), 14);
+    assert.equal(database.getSchemaVersion(), 15);
     database.close();
 
     db = new DatabaseSync(databasePath);
