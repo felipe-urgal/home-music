@@ -144,16 +144,18 @@ function DjWaveform({
     const load = async () => {
       const result = await fetchTrackWaveform(track.id);
       if (!active) return;
-      if (result) {
-        setWaveform(result);
+      if (result.status === 'ready') {
+        setWaveform(result.waveform);
         setStatus('ready');
         return;
       }
       setWaveform(null);
       setStatus('unavailable');
-      retryTimer = window.setTimeout(() => {
-        if (active) void load();
-      }, 3_000);
+      if (result.status === 'pending') {
+        retryTimer = window.setTimeout(() => {
+          if (active) void load();
+        }, 3_000);
+      }
     };
 
     void load();
