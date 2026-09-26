@@ -4,6 +4,7 @@ import {
   barAtIndex,
   barGridPositionAt,
   beatAtIndex,
+  beatGridBpmAt,
   beatGridPositionAt,
   hasUsableBarGrid,
   hasUsableBeatGrid,
@@ -105,6 +106,26 @@ describe('DJ beat grid', () => {
     expect(error?.slavePhase).toBeCloseTo(0.25, 6);
     expect(error?.phaseDelta).toBeCloseTo(0.25, 6);
     expect(error?.secondsDelta).toBeCloseTo(0.5, 6);
+  });
+
+  it('resolve BPM e fase pelo segmento variável ativo', () => {
+    const variable: TrackRhythm = {
+      ...rhythm,
+      beatGrid: {
+        version: 1,
+        segments: [
+          { startSeconds: 0, bpm: 118, firstBeatSeconds: 0.25, confidence: 0.92 },
+          { startSeconds: 20, bpm: 122, firstBeatSeconds: 20.25, confidence: 0.91 }
+        ]
+      }
+    };
+
+    expect(beatGridBpmAt(variable, 10)).toBe(118);
+    expect(beatGridBpmAt(variable, 25)).toBe(122);
+    expect(beatGridPositionAt(variable, 10)?.segmentIndex).toBe(0);
+    expect(beatGridPositionAt(variable, 25)?.segmentIndex).toBe(1);
+    expect(beatGridPositionAt(variable, 25)?.beatDurationSeconds).toBeCloseTo(60 / 122, 6);
+    expect(hasUsableBarGrid(variable)).toBe(false);
   });
 
   it('rejeita análise/rate inválidos e downbeat de baixa confiança', () => {
