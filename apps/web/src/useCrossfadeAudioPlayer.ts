@@ -4,6 +4,7 @@ import { isAppleMobileWebKit } from './background-playback';
 import {
   QUANTIZED_CROSSFADE_ARM_SECONDS,
   QUANTIZED_CROSSFADE_EARLY_TOLERANCE_SECONDS,
+  quantizedCrossfadeWakeDelayMs,
   resolveQuantizedCrossfadePlan
 } from './beat-clock';
 import {
@@ -451,10 +452,7 @@ export function useCrossfadeAudioPlayer(
       if (quantizedWakeTimeoutRef.current == null) {
         const scheduledAttempt = attemptRef.current;
         const scheduledTrackId = player.current?.id ?? null;
-        const delayMs = Math.max(
-          0,
-          (timeUntilStart - QUANTIZED_CROSSFADE_ARM_SECONDS) * 1_000
-        );
+        const delayMs = quantizedCrossfadeWakeDelayMs(timeUntilStart);
         quantizedWakeTimeoutRef.current = window.setTimeout(() => {
           quantizedWakeTimeoutRef.current = null;
           if (attemptRef.current !== scheduledAttempt) return;
