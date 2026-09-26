@@ -1,15 +1,17 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, open, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, open, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import Fastify from 'fastify';
+import type { AdminOperationHistoryStore } from './admin-operation-history.js';
 import type { HomeMusicDatabase } from './database.js';
 import type { IndexedTrack } from './library.js';
-import type { LibraryService } from './library-service.js';
+import { LibraryService } from './library-service.js';
 import { registerMediaRoutes } from './media-routes.js';
 import { RhythmAnalysisScheduler } from './rhythm-analysis-scheduler.js';
 import { registerSystemRoutes } from './system-routes.js';
+import type { TrackAvailabilityStore } from './track-availability-store.js';
 import type { TrackMediaInfrastructure } from './track-media-infrastructure.js';
 
 test('falha da análise rítmica não afeta readiness nem streaming direto', async () => {
@@ -148,4 +150,93 @@ test('falha da análise rítmica não afeta readiness nem streaming direto', asy
     await app.close();
     await rm(root, { recursive: true, force: true });
   }
+});
+
+
+test('scan conclui sem aguardar análise rítmica assíncrona', async () => {
+  const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-rhythm-scan-'));
+  const root = path.join(temp, 'library');
+  await mkdir(root, { recursive: true });
+  await writeFile(path.join(root, 'Faixa.mp3'), 'fixture de scan');
+
+  let analysisStarted = false;
+  let analysisSettled = false;
+
+  const database = {
+    syncTracks: (tracks: IndexedTrack[]) => ({
+      mode: 'full' as const,
+      upserted: tracks.length,
+      removed: 0,
+      durationMs: 0
+    }),
+    applyTrackDelta: () => ({
+      mode: 'delta' as const,
+      upserted: 0,
+      removed: 0,
+      durationMs: 0
+    }),
+    saveLibraryIntegrityStatus: () => undefined,
+    saveTrackRhythmAnalysis: () => {
+      throw new Error('Análise bloqueada não deve chegar à persistência durante o scan.');
+    }
+  } as unknown as HomeMusicDatabase;
+
+  const trackAvailability = {
+    refresh: () => undefined,
+    isEnabled: () => true
+  } as unknown as TrackAvailabilityStore;
+
+  const logger = {
+    warn: () => undefined,
+    info: () => undefined,
+    error: () => undefined
+  };
+
+  const library = new LibraryService({
+    musicDir: root,
+    autoRescanIntervalSeconds: 0,
+    database,
+    trackAvailability,
+    operationHistory: {} as AdminOperationHistoryStore,
+    logger
+  });
+
+  const scheduler = new RhythmAnalysisScheduler({
+    library,
+    database,
+    logger: { warn: () => undefined },
+    analyze: async (_track, signal) => {
+      analysisStarted = true;
+      try {
+        await new Promise<void>((_resolve, reject) => {
+          const abort = () => reject(new Error('análise cancelada pelo teste'));
+          if (signal.aborted) {
+            abort();
+            return;
+          }
+          signal.addEventListener('abort', abort, { once: true });
+        });
+      } finally {
+        analysisSettled = true;
+      }
+      return null;
+    }
+  });
+  library.setTracksChangedListener(tracks => scheduler.sync(tracks));
+
+  try {
+    const result = await library.rescan();
+
+    assert.equal(result.tracks, 1);
+    assert.equal(analysisStarted, true);
+    assert.equal(analysisSettled, false);
+    assert.equal(scheduler.runtime.active, 1);
+    assert.equal(scheduler.runtime.completed, 0);
+    assert.equal(scheduler.runtime.failed, 0);
+  } finally {
+    await scheduler.stop();
+    await rm(temp, { recursive: true, force: true });
+  }
+
+  assert.equal(analysisSettled, true);
 });
