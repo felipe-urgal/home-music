@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import type { Track } from '@home-music/shared';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { Track, TrackWaveform } from '@home-music/shared';
 import {
   ArrowLeft,
   Cable,
@@ -14,6 +14,8 @@ import {
   Zap,
 } from 'lucide-react';
 import type { DjDeckId } from '../dj-controller-contract';
+import { buildDjWaveformMarkers } from '../dj-waveform-grid';
+import { fetchTrackWaveform } from '../track-waveform-client';
 import type { DualDeckAudioSnapshot } from '../dual-deck-audio';
 import type { DualDeckMixerState } from '../dual-deck-mixer';
 import type { WebMidiController } from '../useWebMidiController';
@@ -50,12 +52,6 @@ type DjModeScreenProps = {
   onExit: () => void;
 };
 
-const WAVEFORM = [
-  0.32, 0.48, 0.68, 0.84, 0.57, 0.74, 0.96, 0.71, 0.52, 0.88, 0.64, 0.43,
-  0.76, 0.92, 0.61, 0.38, 0.73, 0.87, 0.56, 0.42, 0.67, 0.81, 0.58, 0.46,
-  0.62, 0.49, 0.36, 0.28, 0.22, 0.18, 0.14, 0.11
-];
-
 function formatTime(seconds: number) {
   if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
   const whole = Math.floor(seconds);
@@ -66,15 +62,118 @@ function pitchPercent(playbackRate: number) {
   return (playbackRate - 1) * 100;
 }
 
-function DjWaveform({ progress }: { progress: number }) {
+function drawDjWaveform(
+  canvas: HTMLCanvasElement,
+  waveform: TrackWaveform | null,
+  rhythm: Track['rhythm'],
+  deck: DjDeckId
+) {
+  const rect = canvas.getBoundingClientRect();
+  const width = Math.max(1, Math.round(rect.width));
+  const height = Math.max(1, Math.round(rect.height));
+  const dpr = Math.max(1, window.devicePixelRatio || 1);
+  canvas.width = Math.round(width * dpr);
+  canvas.height = Math.round(height * dpr);
+
+  const context = canvas.getContext('2d');
+  if (!context) return;
+  context.setTransform(dpr, 0, 0, dpr, 0, 0);
+  context.clearRect(0, 0, width, height);
+
+  const accent = deck === 'a' ? '#1498ff' : '#ffd51f';
+  const centerY = height / 2;
+
+  if (waveform?.peaks.length) {
+    const pixelsPerPeak = width / waveform.peaks.length;
+    context.fillStyle = accent;
+    context.globalAlpha = 0.9;
+
+    for (let index = 0; index < waveform.peaks.length; index += 1) {
+      const peak = waveform.peaks[index] ?? 0;
+      const barHeight = Math.max(1, peak * (height * 0.78));
+      const x = index * pixelsPerPeak;
+      const barWidth = Math.max(1, pixelsPerPeak * 0.72);
+      context.fillRect(x, centerY - (barHeight / 2), barWidth, barHeight);
+    }
+  } else {
+    context.strokeStyle = 'rgba(190, 205, 226, 0.18)';
+    context.lineWidth = 1;
+    context.beginPath();
+    context.moveTo(0, centerY);
+    context.lineTo(width, centerY);
+    context.stroke();
+  }
+
+  const duration = waveform?.durationSeconds ?? 0;
+  const markers = buildDjWaveformMarkers(rhythm, duration);
+  for (const marker of markers) {
+    const x = marker.position * width;
+    context.strokeStyle = marker.kind === 'downbeat'
+      ? 'rgba(255, 255, 255, 0.58)'
+      : 'rgba(255, 255, 255, 0.18)';
+    context.lineWidth = marker.kind === 'downbeat' ? 1.4 : 0.7;
+    context.beginPath();
+    context.moveTo(x, marker.kind === 'downbeat' ? 3 : height * 0.28);
+    context.lineTo(x, marker.kind === 'downbeat' ? height - 3 : height * 0.72);
+    context.stroke();
+  }
+
+  context.globalAlpha = 1;
+}
+
+function DjWaveform({
+  deck,
+  track,
+  progress
+}: {
+  deck: DjDeckId;
+  track: Track;
+  progress: number;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [waveform, setWaveform] = useState<TrackWaveform | null>(null);
+  const [status, setStatus] = useState<'loading' | 'ready' | 'unavailable'>('loading');
+
+  useEffect(() => {
+    let active = true;
+    setWaveform(null);
+    setStatus('loading');
+
+    void fetchTrackWaveform(track.id).then(result => {
+      if (!active) return;
+      setWaveform(result);
+      setStatus(result ? 'ready' : 'unavailable');
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [track.id]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const render = () => drawDjWaveform(canvas, waveform, track.rhythm, deck);
+    render();
+
+    const observer = typeof ResizeObserver === 'undefined'
+      ? null
+      : new ResizeObserver(render);
+    observer?.observe(canvas);
+    return () => observer?.disconnect();
+  }, [deck, track.rhythm, waveform]);
+
   return (
-    <div className="dj-waveform" aria-hidden="true">
-      <div className="dj-waveform__bars">
-        {WAVEFORM.map((height, index) => (
-          <span key={index} style={{ height: `${Math.round(height * 100)}%` }} />
-        ))}
-      </div>
-      <span className="dj-waveform__playhead" style={{ left: `${progress}%` }} />
+    <div className="dj-waveform" data-status={status} aria-label="Waveform real da faixa">
+      <canvas ref={canvasRef} className="dj-waveform__canvas" aria-hidden="true" />
+      <span className="dj-waveform__remaining" style={{ left: `${progress}%` }} aria-hidden="true" />
+      <span className="dj-waveform__playhead" style={{ left: `${progress}%` }} aria-hidden="true" />
+      {status !== 'ready' && (
+        <span className="dj-waveform__status">
+          {status === 'loading' ? 'Carregando waveform…' : 'Waveform em análise'}
+        </span>
+      )}
     </div>
   );
 }
@@ -126,7 +225,7 @@ function DeckPanel({
             </div>
           </div>
 
-          <DjWaveform progress={progress} />
+          <DjWaveform deck={deck} track={state.track!} progress={progress} />
 
           <div className="dj-pro-deck__timeline">
             <span>{formatTime(snapshot?.currentTimeSeconds ?? 0)}</span>
