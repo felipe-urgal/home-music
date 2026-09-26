@@ -357,6 +357,11 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
   const syncDjDeck = useCallback((deck: DjDeckId) => {
     switchDjToManual();
     player.dualDeck.setMode(true);
+
+    if (djSyncStateRef.current.synced[deck]) {
+      disableDjSync(deck);
+      return;
+    }
     const masterDeck: DjDeckId = deck === 'a' ? 'b' : 'a';
     const targetSnapshot = player.dualDeck.getSnapshot(deck);
     const masterSnapshot = player.dualDeck.getSnapshot(masterDeck);
@@ -926,8 +931,11 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
       return;
     }
     if (djMixModeRef.current === 'automix') disableDjAutomix();
+    if (djSyncStateRef.current !== EMPTY_DJ_SYNC_STATE) {
+      commitDjSyncState(EMPTY_DJ_SYNC_STATE);
+    }
     if (player.djSession.active()) player.djSession.exit();
-  }, [disableDjAutomix, player.djSession.enter, player.djSession.exit, player.hydrated, screen]);
+  }, [commitDjSyncState, disableDjAutomix, player.djSession.enter, player.djSession.exit, player.hydrated, screen]);
 
   const qualityProfile = useNetworkQualityProfile(player.streamingMode, player.setStreamingMode);
   useBackgroundPlaybackContinuity({
@@ -975,6 +983,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
 
   function openDjMode() {
     setDjPlayedTrackIds(new Set());
+    commitDjSyncState(EMPTY_DJ_SYNC_STATE);
     player.djSession.enter();
     setScreen('dj');
   }
