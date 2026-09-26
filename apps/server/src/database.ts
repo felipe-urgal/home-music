@@ -3,11 +3,12 @@ import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { DatabaseSync } from 'node:sqlite';
-import type { AdminLibraryIntegrityStatus, PlaybackState, Playlist, PlaylistSource, RepeatMode, StatisticsPeriod, Track, TrackRhythm } from '@home-music/shared';
+import type { AdminLibraryIntegrityStatus, PlaybackState, Playlist, PlaylistSource, RepeatMode, StatisticsPeriod, Track, TrackRhythm, TrackWaveform } from '@home-music/shared';
 import type { IndexedTrack, LibraryTrackDelta } from './library.js';
 import { RHYTHM_ANALYZER_VERSION } from './rhythm-analysis.js';
+import { WAVEFORM_ANALYZER_VERSION } from './waveform-analysis.js';
 
-const CURRENT_SCHEMA_VERSION = 14;
+const CURRENT_SCHEMA_VERSION = 15;
 const HISTORY_CAPACITY = 2_000;
 const TRACK_UPSERT_SQL = `
   INSERT INTO tracks(
@@ -814,6 +815,40 @@ export class HomeMusicDatabase {
       }
     }
 
+    if (version < 15) {
+      this.db.exec('BEGIN IMMEDIATE;');
+      try {
+        this.db.exec(`
+          CREATE TABLE IF NOT EXISTS track_waveform_analysis (
+            track_id TEXT PRIMARY KEY NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+            status TEXT NOT NULL CHECK(status IN ('ready', 'unavailable')),
+            duration_seconds REAL CHECK(duration_seconds IS NULL OR duration_seconds >= 0),
+            peaks BLOB,
+            source TEXT NOT NULL CHECK(length(source) BETWEEN 1 AND 32),
+            analyzer_version INTEGER NOT NULL CHECK(analyzer_version >= 1),
+            source_file_size INTEGER NOT NULL CHECK(source_file_size >= 0),
+            source_mtime_ms REAL NOT NULL,
+            analyzed_at TEXT NOT NULL,
+            CHECK (
+              (status = 'ready' AND duration_seconds IS NOT NULL AND peaks IS NOT NULL)
+              OR (status = 'unavailable' AND duration_seconds IS NULL AND peaks IS NULL)
+            )
+          );
+
+          PRAGMA user_version = 15;
+        `);
+        this.db.exec('COMMIT;');
+        version = 15;
+      } catch (error) {
+        try {
+          this.db.exec('ROLLBACK;');
+        } catch {
+          // Preserva o erro original se a transação já tiver sido encerrada.
+        }
+        throw error;
+      }
+    }
+
     if (version !== CURRENT_SCHEMA_VERSION) {
       throw new Error(`Versão de schema SQLite não suportada: ${version}`);
     }
@@ -899,7 +934,10 @@ export class HomeMusicDatabase {
     const startedAt = performance.now();
     this.db.exec('BEGIN IMMEDIATE;');
     try {
-      if (clearRhythmAnalysis) this.db.exec('DELETE FROM track_rhythm_analysis;');
+      if (clearRhythmAnalysis) {
+        this.db.exec('DELETE FROM track_rhythm_analysis;');
+        this.db.exec('DELETE FROM track_waveform_analysis;');
+      }
       this.upsertTracks(upserts);
       const removed = this.removeTrackIds(removedIds);
       this.setMetadata('libraryRoot', libraryRoot);
@@ -928,15 +966,21 @@ export class HomeMusicDatabase {
              r.confidence AS rhythm_confidence,
              r.downbeat_seconds AS rhythm_downbeat_seconds,
              r.beats_per_bar AS rhythm_beats_per_bar,
-             r.downbeat_confidence AS rhythm_downbeat_confidence
+             r.downbeat_confidence AS rhythm_downbeat_confidence,
+             w.status AS waveform_analysis_status
       FROM tracks t
       LEFT JOIN track_rhythm_analysis r
         ON r.track_id = t.id
        AND r.analyzer_version = ?
        AND r.source_file_size = t.file_size
        AND r.source_mtime_ms = t.mtime_ms
+      LEFT JOIN track_waveform_analysis w
+        ON w.track_id = t.id
+       AND w.analyzer_version = ?
+       AND w.source_file_size = t.file_size
+       AND w.source_mtime_ms = t.mtime_ms
       ORDER BY t.artist COLLATE NOCASE, t.title COLLATE NOCASE
-    `).all(RHYTHM_ANALYZER_VERSION) as Row[];
+    `).all(RHYTHM_ANALYZER_VERSION, WAVEFORM_ANALYZER_VERSION) as Row[];
 
     return rows.map(row => ({
       ...publicTrackFromRow(row),
@@ -944,7 +988,8 @@ export class HomeMusicDatabase {
       mimeType: stringValue(row.mime_type, 'application/octet-stream'),
       fileSize: numberValue(row.file_size),
       mtimeMs: numberValue(row.mtime_ms),
-      ...(row.rhythm_analysis_status == null ? {} : { rhythmAnalysisCurrent: true })
+      ...(row.rhythm_analysis_status == null ? {} : { rhythmAnalysisCurrent: true }),
+      ...(row.waveform_analysis_status == null ? {} : { waveformAnalysisCurrent: true })
     }));
   }
 
@@ -1082,6 +1127,113 @@ export class HomeMusicDatabase {
       }
       throw error;
     }
+  }
+
+  saveTrackWaveformAnalysis(
+    trackId: string,
+    sourceFileSize: number,
+    sourceMtimeMs: number,
+    waveform: TrackWaveform | null,
+    source = 'audio'
+  ) {
+    const validWaveform = waveform === null || (
+      waveform.version === WAVEFORM_ANALYZER_VERSION
+      && Number.isFinite(waveform.durationSeconds)
+      && waveform.durationSeconds >= 0
+      && waveform.peaks.length > 0
+      && waveform.peaks.length <= 16_384
+      && waveform.peaks.every(value => Number.isFinite(value) && value >= 0 && value <= 1)
+    );
+    if (
+      !validWaveform
+      || !Number.isSafeInteger(sourceFileSize)
+      || sourceFileSize < 0
+      || !Number.isFinite(sourceMtimeMs)
+      || !source.trim()
+      || source.length > 32
+    ) {
+      throw new Error('Waveform derivado inválido.');
+    }
+
+    const encodedPeaks = waveform
+      ? Buffer.from(waveform.peaks.map(value => Math.round(value * 255)))
+      : null;
+
+    this.db.exec('BEGIN IMMEDIATE;');
+    try {
+      const current = this.db.prepare(`
+        SELECT file_size, mtime_ms
+        FROM tracks
+        WHERE id = ?
+      `).get(trackId) as Row | undefined;
+
+      if (
+        !current
+        || numberValue(current.file_size, -1) !== sourceFileSize
+        || numberValue(current.mtime_ms, -1) !== sourceMtimeMs
+      ) {
+        this.db.exec('ROLLBACK;');
+        return false;
+      }
+
+      this.db.prepare(`
+        INSERT INTO track_waveform_analysis(
+          track_id, status, duration_seconds, peaks,
+          source, analyzer_version, source_file_size, source_mtime_ms, analyzed_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(track_id) DO UPDATE SET
+          status = excluded.status,
+          duration_seconds = excluded.duration_seconds,
+          peaks = excluded.peaks,
+          source = excluded.source,
+          analyzer_version = excluded.analyzer_version,
+          source_file_size = excluded.source_file_size,
+          source_mtime_ms = excluded.source_mtime_ms,
+          analyzed_at = excluded.analyzed_at
+      `).run(
+        trackId,
+        waveform ? 'ready' : 'unavailable',
+        waveform?.durationSeconds ?? null,
+        encodedPeaks,
+        source.trim(),
+        WAVEFORM_ANALYZER_VERSION,
+        sourceFileSize,
+        sourceMtimeMs,
+        new Date().toISOString()
+      );
+
+      this.db.exec('COMMIT;');
+      return true;
+    } catch (error) {
+      try {
+        this.db.exec('ROLLBACK;');
+      } catch {
+        // Preserva o erro original.
+      }
+      throw error;
+    }
+  }
+
+  loadTrackWaveform(trackId: string): TrackWaveform | null {
+    const row = this.db.prepare(`
+      SELECT w.status, w.duration_seconds, w.peaks
+      FROM track_waveform_analysis w
+      JOIN tracks t ON t.id = w.track_id
+      WHERE w.track_id = ?
+        AND w.analyzer_version = ?
+        AND w.source_file_size = t.file_size
+        AND w.source_mtime_ms = t.mtime_ms
+    `).get(trackId, WAVEFORM_ANALYZER_VERSION) as Row | undefined;
+
+    if (!row || stringValue(row.status) !== 'ready' || row.peaks == null) return null;
+    const bytes = row.peaks instanceof Uint8Array ? row.peaks : null;
+    if (!bytes?.length) return null;
+
+    return {
+      version: WAVEFORM_ANALYZER_VERSION,
+      durationSeconds: numberValue(row.duration_seconds),
+      peaks: Array.from(bytes, value => Number((value / 255).toFixed(4)))
+    };
   }
 
   getFavoriteIds(userId: string) {

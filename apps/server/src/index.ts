@@ -39,6 +39,7 @@ import {
   parseRhythmAnalysisEnabled
 } from './rhythm-analysis-config.js';
 import { analyzeTrackRhythm } from './rhythm-analysis.js';
+import { analyzeTrackWaveform } from './waveform-analysis.js';
 import { RhythmAnalysisScheduler } from './rhythm-analysis-scheduler.js';
 import { sanitizeRequestUrl } from './request-log.js';
 import { createServerInfrastructure } from './server-infrastructure.js';
@@ -421,6 +422,12 @@ if (ffmpegStatus.available && rhythmAnalysisEnabled) {
       ffmpegCommand,
       signal
     ),
+    analyzeWaveform: (track, signal) => analyzeTrackWaveform(
+      library.root,
+      track,
+      ffmpegCommand,
+      signal
+    ),
     logger: app.log
   });
   library.setTracksChangedListener(tracks => rhythmScheduler?.sync(tracks));
@@ -432,7 +439,7 @@ if (ffmpegStatus.available && rhythmAnalysisEnabled) {
       customPath: ffmpegStatus.customCommand,
       transcodeCacheMegabytes
     },
-    'FFmpeg disponível para transcoding adaptativo e análise rítmica.'
+    'FFmpeg disponível para transcoding adaptativo, análise rítmica e waveform.'
   );
 } else if (ffmpegStatus.available) {
   app.log.info(

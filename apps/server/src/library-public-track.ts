@@ -1,6 +1,6 @@
 import type { IndexedTrack } from './library.js';
 
-export type PublicIndexedTrack = Omit<IndexedTrack, 'filePath' | 'mimeType' | 'fileSize' | 'mtimeMs' | 'rhythmAnalysisCurrent'>;
+export type PublicIndexedTrack = Omit<IndexedTrack, 'filePath' | 'mimeType' | 'fileSize' | 'mtimeMs' | 'rhythmAnalysisCurrent' | 'waveformAnalysisCurrent'>;
 
 export function toPublicTrack(track: IndexedTrack): PublicIndexedTrack {
   const {
@@ -9,6 +9,7 @@ export function toPublicTrack(track: IndexedTrack): PublicIndexedTrack {
     fileSize: _fileSize,
     mtimeMs: _mtimeMs,
     rhythmAnalysisCurrent: _rhythmAnalysisCurrent,
+    waveformAnalysisCurrent: _waveformAnalysisCurrent,
     ...safe
   } = track;
   return safe;

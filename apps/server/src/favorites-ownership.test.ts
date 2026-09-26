@@ -147,7 +147,7 @@ test('migration v6 atribui favoritos globais ao primeiro usuário criado sem alt
     }]);
 
     const migrated = new HomeMusicDatabase(databasePath);
-    assert.equal(migrated.getSchemaVersion(), 14);
+    assert.equal(migrated.getSchemaVersion(), 15);
     assert.deepEqual(migrated.getFavoriteIds(FIRST_USER_ID), ['a']);
     assert.deepEqual(migrated.getFavoriteIds(SECOND_USER_ID), []);
     migrated.close();
@@ -184,7 +184,7 @@ test('migration pré-bootstrap guarda favoritos fora da tabela ativa e bootstrap
     }]);
 
     const migrated = new HomeMusicDatabase(databasePath);
-    assert.equal(migrated.getSchemaVersion(), 14);
+    assert.equal(migrated.getSchemaVersion(), 15);
     assert.deepEqual(migrated.getFavoriteIds(FIRST_USER_ID), []);
     migrated.close();
 

@@ -362,3 +362,67 @@ test('runtime agrega fila, resultados, baixa confiança, falhas e timeout sem ex
   assert.ok(scheduler.runtime.averageDurationMs != null);
   assert.ok(scheduler.runtime.lastDurationMs != null);
 });
+
+
+test('scheduler reutilizado gera waveform sem refazer ritmo já atual', async () => {
+  let current: IndexedTrack = {
+    ...track(),
+    rhythm: { bpm: 120, firstBeatSeconds: 0.2, confidence: 0.9 },
+    rhythmAnalysisCurrent: true
+  };
+  let rhythmCalls = 0;
+  let waveformCalls = 0;
+  let saveWaveformCalls = 0;
+  let resolveApplied!: () => void;
+  const applied = new Promise<void>(resolve => { resolveApplied = resolve; });
+
+  const library = {
+    allTracks: [current],
+    getTrack: (trackId: string) => trackId === current.id ? current : undefined,
+    applyRhythmAnalysis: () => {
+      throw new Error('ritmo não deveria ser recalculado');
+    },
+    applyWaveformAnalysis: () => {
+      current = { ...current, waveformAnalysisCurrent: true };
+      resolveApplied();
+      return true;
+    }
+  } as unknown as LibraryService;
+
+  const database = {
+    saveTrackRhythmAnalysis: () => {
+      throw new Error('ritmo não deveria ser persistido novamente');
+    },
+    saveTrackWaveformAnalysis: () => {
+      saveWaveformCalls += 1;
+      return true;
+    }
+  } as unknown as HomeMusicDatabase;
+
+  const scheduler = new RhythmAnalysisScheduler({
+    library,
+    database,
+    logger,
+    analyze: async () => {
+      rhythmCalls += 1;
+      return { bpm: 120, firstBeatSeconds: 0.2, confidence: 0.9 };
+    },
+    analyzeWaveform: async () => {
+      waveformCalls += 1;
+      return { version: 1, durationSeconds: 180, peaks: [0, 0.5, 1] };
+    }
+  });
+
+  scheduler.sync();
+  await applied;
+  scheduler.sync();
+  await new Promise<void>(resolve => setImmediate(resolve));
+  await scheduler.stop();
+
+  assert.equal(rhythmCalls, 0);
+  assert.equal(waveformCalls, 1);
+  assert.equal(saveWaveformCalls, 1);
+  assert.equal(scheduler.runtime.waveformCompleted, 1);
+  assert.equal(scheduler.runtime.waveformAvailable, 1);
+  assert.equal(scheduler.runtime.waveformFailed, 0);
+});

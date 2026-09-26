@@ -1,4 +1,4 @@
-import type { AdminScanTrigger, ScanResponse, TrackRhythm } from '@home-music/shared';
+import type { AdminScanTrigger, ScanResponse, TrackRhythm, TrackWaveform } from '@home-music/shared';
 import { buildAdminLibraryOverview } from './admin-library-overview.js';
 import { runScanWithHistory } from './admin-operation-history-scan.js';
 import type { AdminOperationHistoryStore } from './admin-operation-history.js';
@@ -213,6 +213,30 @@ export class LibraryService {
     this.setTracks(nextTracks);
     if (!samePublicRhythm) this.libraryRevision += 1;
     return true;
+  }
+
+  applyWaveformAnalysis(
+    trackId: string,
+    sourceFileSize: number,
+    sourceMtimeMs: number,
+    _waveform: TrackWaveform | null
+  ) {
+    const index = this.tracks.findIndex(track => track.id === trackId);
+    if (index < 0) return false;
+
+    const current = this.tracks[index];
+    if (current.fileSize !== sourceFileSize || current.mtimeMs !== sourceMtimeMs) return false;
+    if (current.waveformAnalysisCurrent) return true;
+
+    const nextTracks = [...this.tracks];
+    nextTracks[index] = { ...current, waveformAnalysisCurrent: true };
+    this.setTracks(nextTracks);
+    return true;
+  }
+
+  waveform(trackId: string) {
+    if (!this.getTrack(trackId)) return null;
+    return this.options.database.loadTrackWaveform(trackId);
   }
 
   async initialize() {

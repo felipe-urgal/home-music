@@ -13,6 +13,21 @@ export function registerMediaRoutes(
   library: LibraryService,
   media: TrackMediaInfrastructure
 ) {
+  app.get<{ Params: { id: string } }>('/api/tracks/:id/waveform', async (request, reply) => {
+    if (!library.getTrack(request.params.id)) {
+      return reply.code(404).send({ error: 'Música não encontrada.' });
+    }
+
+    const waveform = library.waveform(request.params.id);
+    if (!waveform) {
+      reply.header('Cache-Control', 'private, no-store');
+      return reply.code(404).send({ error: 'Waveform ainda não disponível.' });
+    }
+
+    reply.header('Cache-Control', 'private, no-cache');
+    return reply.send(waveform);
+  });
+
   app.get<{ Params: { id: string } }>('/api/tracks/:id/lyrics', async (request, reply) => {
     if (!library.getTrack(request.params.id) || !library.root) {
       return reply.code(404).send({ error: 'Música não encontrada.' });

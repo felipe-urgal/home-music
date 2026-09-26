@@ -76,7 +76,7 @@ test('schema v4 preserva playlist manual antiga até o primeiro bootstrap', asyn
     legacy.close();
 
     const migrated = new HomeMusicDatabase(dbPath);
-    assert.equal(migrated.getSchemaVersion(), 14);
+    assert.equal(migrated.getSchemaVersion(), 15);
     assert.deepEqual(migrated.getPlaylists(FIRST_USER_ID), []);
     migrated.close();
 

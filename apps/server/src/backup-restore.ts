@@ -15,7 +15,7 @@ import path from 'node:path';
 import { backup, DatabaseSync } from 'node:sqlite';
 
 export const BACKUP_FORMAT_VERSION = 1;
-export const MAX_SUPPORTED_SCHEMA_VERSION = 14;
+export const MAX_SUPPORTED_SCHEMA_VERSION = 15;
 export const BACKUP_DATABASE_FILE = 'home-music.db';
 export const BACKUP_MANIFEST_FILE = 'manifest.json';
 

@@ -392,6 +392,12 @@ export type TrackRhythm = {
   downbeatConfidence?: number | null;
 };
 
+export type TrackWaveform = {
+  version: number;
+  durationSeconds: number;
+  peaks: number[];
+};
+
 export type Track = {
   id: string;
   title: string;
