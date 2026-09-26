@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   clearDeckAudio,
   loadDeckAudio,
+  pauseDeckAudio,
+  playDeckAudio,
   readDeckAudioSnapshot,
   seekDeckAudio,
   setDeckPlaybackRate,
@@ -59,6 +61,19 @@ describe('dual deck audio primitives', () => {
     expect(b.volume).toBe(1);
   });
 
+  it('mantém play/pause independentes por elemento', async () => {
+    const a = fakeAudio();
+    const b = fakeAudio();
+
+    expect(await playDeckAudio(a)).toBe(true);
+    expect(a.paused).toBe(false);
+    expect(b.paused).toBe(true);
+
+    pauseDeckAudio(a);
+    expect(a.paused).toBe(true);
+    expect(b.paused).toBe(true);
+  });
+
   it('mantém seek, rate e volume independentes por elemento', () => {
     const a = fakeAudio();
     const b = fakeAudio();
@@ -101,6 +116,18 @@ describe('dual deck audio primitives', () => {
     expect(a.volume).toBe(0);
     expect(a.playbackRate).toBe(1);
     expect(b.getAttribute('src')).toBe('/track-b.mp3');
+  });
+
+  it('mantém erro isolado no snapshot do deck afetado', () => {
+    const a = fakeAudio();
+    const b = fakeAudio();
+    Object.defineProperty(a, 'error', {
+      value: { code: 3 },
+      configurable: true
+    });
+
+    expect(readDeckAudioSnapshot('a', 'track-a', a).errorCode).toBe(3);
+    expect(readDeckAudioSnapshot('b', 'track-b', b).errorCode).toBeNull();
   });
 
   it('gera snapshot isolado e serializável', async () => {
