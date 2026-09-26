@@ -79,6 +79,83 @@ describe('crossfade handoff', () => {
     expect(candidate).toBeGreaterThan(platformGuard);
   });
 
+  it('cancela timers, estado visual e playbackRate quando a transição é invalidada', () => {
+    const crossfade = source('useCrossfadeAudioPlayer.ts');
+    const cancel = crossfade.slice(
+      crossfade.indexOf('const cancelCrossfade = useCallback'),
+      crossfade.indexOf('useLayoutEffect(() => {', crossfade.indexOf('const cancelCrossfade = useCallback'))
+    );
+
+    expect(cancel).toContain('attemptRef.current += 1;');
+    expect(cancel).toContain('cancelAnimation();');
+    expect(cancel).toContain('cancelQuantizedSchedule();');
+    expect(cancel).toContain('cancelPlaybackRateRestore();');
+    expect(cancel).toContain('preparedIncomingTrackIdRef.current = null;');
+    expect(cancel).toContain('originTrackIdRef.current = null;');
+    expect(cancel).toContain('startingTrackIdRef.current = null;');
+    expect(cancel).toContain('incomingTrackIdRef.current = null;');
+    expect(cancel).toContain('clearCrossfadeVisualState();');
+    expect(cancel).toContain('activeAudio.playbackRate = 1;');
+    expect(cancel).toContain('clearAudio(inactiveAudio);');
+  });
+
+  it('faz pause, seek, next, previous e playTrack passarem pelo cancelamento manual', () => {
+    const player = source('useAudioPlayer.ts');
+
+    for (const [startMarker, endMarker] of [
+      ['const pause = useCallback', 'const togglePlay = useCallback'],
+      ['const next = useCallback', 'const previous = useCallback'],
+      ['const previous = useCallback', 'const seek = useCallback'],
+      ['const seek = useCallback', 'const setVolume = useCallback'],
+      ['const playTrack = useCallback', 'const toggleShuffle = useCallback']
+    ]) {
+      const block = player.slice(player.indexOf(startMarker), player.indexOf(endMarker));
+      expect(block).toContain('beforeManualChange();');
+    }
+  });
+
+  it('cancela a transição antes de alterar controles que invalidam o plano rítmico', () => {
+    const crossfade = source('useCrossfadeAudioPlayer.ts');
+
+    for (const [startMarker, endMarker] of [
+      ['const togglePlay = useCallback', 'const setStreamingMode = useCallback'],
+      ['const setStreamingMode = useCallback', 'const setNormalizationMode = useCallback'],
+      ['const setNormalizationMode = useCallback', 'const toggleShuffle = useCallback'],
+      ['const toggleShuffle = useCallback', 'const cycleRepeat = useCallback'],
+      ['const cycleRepeat = useCallback', 'const reorderQueue = useCallback'],
+      ['const reorderQueue = useCallback', 'return {']
+    ]) {
+      const block = crossfade.slice(crossfade.indexOf(startMarker), crossfade.indexOf(endMarker));
+      expect(block).toContain('cancelCrossfade();');
+    }
+  });
+
+  it('invalida transição ao ir para background, trocar faixa ou pausar', () => {
+    const crossfade = source('useCrossfadeAudioPlayer.ts');
+
+    expect(crossfade).toContain("if (document.visibilityState !== 'visible') cancelCrossfade();");
+    expect(crossfade).toContain('if (originTrackId && originTrackId !== currentTrackId) cancelCrossfade();');
+    expect(crossfade).toContain('!player.playing');
+    expect(crossfade).toContain('quantizedScheduleFrameRef.current != null');
+    expect(crossfade).toContain('cancelCrossfade();');
+  });
+
+  it('limpa frames, estado visual e os dois decks no unmount', () => {
+    const crossfade = source('useCrossfadeAudioPlayer.ts');
+    const cleanupStart = crossfade.indexOf('useEffect(() => () => {');
+    const cleanupEnd = crossfade.indexOf('const setCrossfadeSeconds', cleanupStart);
+    const cleanup = crossfade.slice(cleanupStart, cleanupEnd);
+
+    expect(cleanupStart).toBeGreaterThanOrEqual(0);
+    expect(cleanup).toContain('attemptRef.current += 1;');
+    expect(cleanup).toContain('cancelAnimation();');
+    expect(cleanup).toContain('cancelQuantizedSchedule();');
+    expect(cleanup).toContain('cancelPlaybackRateRestore();');
+    expect(cleanup).toContain('clearCrossfadeVisualState();');
+    expect(cleanup).toContain('clearAudio(deckARef.current);');
+    expect(cleanup).toContain('clearAudio(deckBRef.current);');
+  });
+
   it('monta os mesmos dois decks no OfflineApp sem criar outro player canônico', () => {
     const offlineApp = source('OfflineApp.tsx');
 
