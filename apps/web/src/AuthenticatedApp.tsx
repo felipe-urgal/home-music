@@ -15,6 +15,7 @@ import { TvRemoteEntryButton } from './components/TvRemoteEntryButton';
 import { TvRemotePairingDialog } from './components/TvRemotePairingDialog';
 import { useRoutedScreen } from './browser-navigation';
 import { decodeDdj400Message } from './ddj400-mapping';
+import { Ddj400MixerMapper } from './ddj400-mixer-mapping';
 import {
   DDJ400_NUDGE_RATE_DELTA,
   DDJ400_SCRUB_SECONDS,
@@ -87,12 +88,24 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
   const ddjBrowserIndexRef = useRef(0);
   const ddjCuePointsRef = useRef<Record<DjDeckId, number | null>>({ a: null, b: null });
   const ddjPerformanceMapperRef = useRef(new Ddj400PerformanceMapper());
+  const ddjMixerMapperRef = useRef(new Ddj400MixerMapper());
   const ddjBaseRateRef = useRef<Record<DjDeckId, number>>({ a: 1, b: 1 });
+  const mixerUiFrameRef = useRef<number | null>(null);
+  const [djMixerState, setDjMixerState] = useState(() => player.dualDeck.getMixerSnapshot());
+
+  const scheduleMixerUiSync = useCallback(() => {
+    if (mixerUiFrameRef.current != null) return;
+    mixerUiFrameRef.current = window.requestAnimationFrame(() => {
+      mixerUiFrameRef.current = null;
+      setDjMixerState(player.dualDeck.getMixerSnapshot());
+    });
+  }, [player.dualDeck]);
   const ddjNudgeTimerRef = useRef<Record<DjDeckId, number | null>>({ a: null, b: null });
 
   const handleDdj400Message = useCallback((message: Parameters<typeof decodeDdj400Message>[0]) => {
     const command = decodeDdj400Message(message)
-      ?? ddjPerformanceMapperRef.current.decode(message);
+      ?? ddjPerformanceMapperRef.current.decode(message)
+      ?? ddjMixerMapperRef.current.decode(message);
     if (!command) return;
 
     const browserTracks = navigation.libraryTracks.length
@@ -201,8 +214,22 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
 
       ddjBaseRateRef.current[command.deck] = plan.playbackRate;
       player.dualDeck.setPlaybackRate(command.deck, plan.playbackRate);
+      return;
     }
-  }, [library.tracks, navigation.libraryTracks, player.dualDeck, setScreen]);
+
+    if (command.type === 'mixer.set-channel-volume') {
+      player.dualDeck.setMode(true);
+      player.dualDeck.setVolume(command.deck, command.value);
+      scheduleMixerUiSync();
+      return;
+    }
+
+    if (command.type === 'mixer.set-crossfader') {
+      player.dualDeck.setMode(true);
+      player.dualDeck.setCrossfader(command.value);
+      scheduleMixerUiSync();
+    }
+  }, [library.tracks, navigation.libraryTracks, player.dualDeck, scheduleMixerUiSync, setScreen]);
 
   const midiController = useWebMidiController({ onMessage: handleDdj400Message });
 
@@ -215,6 +242,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
       ddjBaseRateRef.current[deck] = 1;
     }
     player.dualDeck.setMode(false);
+    setDjMixerState(player.dualDeck.getMixerSnapshot());
   }, [midiController.status, player.dualDeck]);
 
   useEffect(() => () => {
@@ -222,6 +250,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
       const timer = ddjNudgeTimerRef.current[deck];
       if (timer != null) window.clearTimeout(timer);
     }
+    if (mixerUiFrameRef.current != null) window.cancelAnimationFrame(mixerUiFrameRef.current);
   }, []);
 
   const qualityProfile = useNetworkQualityProfile(player.streamingMode, player.setStreamingMode);
@@ -504,6 +533,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
                 onNormalizationMode: player.setNormalizationMode
               }}
               midiController={midiController}
+              djMixerState={djMixerState}
               offlineMode={{
                 supported: offline.supported,
                 loading: offline.loading,
