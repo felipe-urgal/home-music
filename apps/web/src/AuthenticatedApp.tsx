@@ -22,6 +22,15 @@ import {
 } from './dj-automix-policy';
 import { nextDjAutomixIndex, shuffleDjTrackList } from './dj-automix-sequence';
 import { isDjKeyboardEditableTarget, mapDjKeyboardCode } from './dj-keyboard-mapping';
+import {
+  EMPTY_DJ_SYNC_STATE,
+  activateDjSync,
+  disableDjSyncForDeck,
+  isDjSyncMaster,
+  resetDjSyncForLoad,
+  resolveDjSyncAfterDeckUnavailable,
+  type DjSyncState
+} from './dj-sync-state';
 import { Ddj400MixerMapper } from './ddj400-mixer-mapping';
 import {
   Ddj400LedRenderer,
@@ -104,7 +113,8 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
   const [djBrowserIndex, setDjBrowserIndex] = useState(0);
   const [djLibrarySource, setDjLibrarySource] = useState('all');
   const ddjCuePointsRef = useRef<Record<DjDeckId, number | null>>({ a: null, b: null });
-  const ddjSyncActiveRef = useRef<Record<DjDeckId, boolean>>({ a: false, b: false });
+  const [djSyncState, setDjSyncState] = useState<DjSyncState>(EMPTY_DJ_SYNC_STATE);
+  const djSyncStateRef = useRef<DjSyncState>(EMPTY_DJ_SYNC_STATE);
   const ddjLedRendererRef = useRef<Ddj400LedRenderer | null>(null);
   const ddjLedFrameRef = useRef<number | null>(null);
   const renderDdjLedsRef = useRef<(() => void) | null>(null);
@@ -130,6 +140,17 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     });
   }, [player.dualDeck.getMixerSnapshot]);
   const ddjNudgeTimerRef = useRef<Record<DjDeckId, number | null>>({ a: null, b: null });
+
+  const commitDjSyncState = useCallback((next: DjSyncState) => {
+    djSyncStateRef.current = next;
+    setDjSyncState(next);
+    renderDdjLedsRef.current?.();
+  }, []);
+
+  const disableDjSync = useCallback((deck: DjDeckId) => {
+    const next = disableDjSyncForDeck(djSyncStateRef.current, deck);
+    if (next !== djSyncStateRef.current) commitDjSyncState(next);
+  }, [commitDjSyncState]);
 
   const setDjModeState = useCallback((mode: 'manual' | 'automix') => {
     djMixModeRef.current = mode;
@@ -241,8 +262,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     ddjNudgeTimerRef.current[deck] = null;
     ddjBaseRateRef.current[deck] = 1;
     ddjCuePointsRef.current[deck] = null;
-    ddjSyncActiveRef.current[deck] = false;
-    renderDdjLedsRef.current?.();
+    commitDjSyncState(resetDjSyncForLoad(djSyncStateRef.current, deck));
     return true;
   }, [djListedTracks, player.dualDeck, switchDjToManual]);
 
@@ -309,7 +329,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     const snapshot = player.dualDeck.getSnapshot(deck);
     if (!snapshot?.trackId) return;
 
-    ddjSyncActiveRef.current[deck] = false;
+    disableDjSync(deck);
     if (!snapshot.playing) {
       player.dualDeck.seek(
         deck,
@@ -349,12 +369,8 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     if (!plan) return;
 
     ddjBaseRateRef.current[deck] = plan.playbackRate;
-    ddjSyncActiveRef.current = {
-      a: deck === 'a',
-      b: deck === 'b'
-    };
+    commitDjSyncState(activateDjSync(djSyncStateRef.current, deck, 'tempo'));
     player.dualDeck.setPlaybackRate(deck, plan.playbackRate);
-    renderDdjLedsRef.current?.();
   }, [library.tracks, player.dualDeck, switchDjToManual]);
 
 
@@ -370,7 +386,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
       player.dualDeck.loadTrack(incomingDeck, nextTrack);
       ddjBaseRateRef.current[incomingDeck] = 1;
       ddjCuePointsRef.current[incomingDeck] = null;
-      ddjSyncActiveRef.current[incomingDeck] = false;
+      commitDjSyncState(resetDjSyncForLoad(djSyncStateRef.current, incomingDeck));
     }
     return { track: nextTrack, index: nextIndex };
   }, [djListedTracks, player.dualDeck]);
@@ -445,6 +461,10 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
         djAutomixFrameRef.current = null;
         player.dualDeck.pause(options.activeDeck);
         player.dualDeck.unload(options.activeDeck);
+        commitDjSyncState(resolveDjSyncAfterDeckUnavailable(
+          djSyncStateRef.current,
+          options.activeDeck
+        ));
         player.dualDeck.setPlaybackRate(incomingDeck, 1);
         ddjBaseRateRef.current[incomingDeck] = 1;
         djAutomixActiveDeckRef.current = incomingDeck;
@@ -602,7 +622,9 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
         ? library.tracks.find(track => track.id === snapshot.trackId) ?? null
         : null,
       cuePointSeconds: ddjCuePointsRef.current[deck],
-      syncActive: ddjSyncActiveRef.current[deck],
+      syncActive: djSyncState.synced[deck],
+      syncMaster: isDjSyncMaster(djSyncState, deck),
+      syncMode: djSyncState.mode,
       channelVolume: mixer.channelVolumes[deck]
     };
   }, [library.tracks, player.dualDeck.getMixerSnapshot, player.dualDeck.getSnapshot]);
@@ -677,7 +699,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
       switchDjToManual();
       player.dualDeck.setMode(true);
       ddjBaseRateRef.current[command.deck] = command.playbackRate;
-      ddjSyncActiveRef.current[command.deck] = false;
+      disableDjSync(command.deck);
       player.dualDeck.setPlaybackRate(command.deck, command.playbackRate);
       renderDdjLedsRef.current?.();
       return;
@@ -787,7 +809,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
         a: ddjCuePointsRef.current.a != null,
         b: ddjCuePointsRef.current.b != null
       },
-      sync: { ...ddjSyncActiveRef.current }
+      sync: { ...djSyncStateRef.current.synced }
     };
   }, [player.dualDeck.getSnapshot]);
 
@@ -934,6 +956,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
   }
 
   function closeDjMode() {
+    commitDjSyncState(EMPTY_DJ_SYNC_STATE);
     player.djSession.exit();
     player.syncVisibleProgress();
     setScreen('player');
