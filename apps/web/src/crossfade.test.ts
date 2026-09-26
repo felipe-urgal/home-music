@@ -7,6 +7,7 @@ import {
   otherCrossfadeDeck,
   readCrossfadeSeconds,
   resolveCrossfadeCandidate,
+  resolveCrossfadePreloadTrackId,
   writeCrossfadeSeconds
 } from './crossfade';
 
@@ -28,6 +29,35 @@ function track(id: string): Track {
 }
 
 describe('crossfade', () => {
+  it('resolve a próxima faixa para preload sem depender da janela temporal', () => {
+    const queue = [track('a'), track('b')];
+
+    expect(resolveCrossfadePreloadTrackId({
+      queue,
+      currentIndex: 0,
+      currentTrackId: 'a',
+      repeatMode: 'off',
+      visibilityState: 'visible'
+    })).toBe('b');
+
+    expect(resolveCrossfadePreloadTrackId({
+      queue,
+      currentIndex: 0,
+      currentTrackId: 'a',
+      repeatMode: 'off',
+      visibilityState: 'hidden'
+    })).toBeNull();
+
+    expect(resolveCrossfadePreloadTrackId({
+      queue,
+      currentIndex: 1,
+      currentTrackId: 'b',
+      repeatMode: 'off',
+      visibilityState: 'visible'
+    })).toBeNull();
+  });
+
+
   it('preserva o deck de entrada quando pause antecede ended no fim natural', () => {
     expect(isCrossfadeCompletionPause({
       hasIncomingTrack: true,
