@@ -472,19 +472,52 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
         }
 
         djAutomixFrameRef.current = null;
+
+        const adoptedSnapshot = player.dualDeck.getSnapshot(incomingDeck);
+        if (
+          !adoptedSnapshot?.trackId
+          || adoptedSnapshot.trackId !== options.nextTrack.id
+          || !adoptedSnapshot.playing
+        ) {
+          djAutomixTransitionRef.current = false;
+          return;
+        }
+
+        // O deck de entrada passa a ser o deck ativo antes de qualquer mutação no
+        // deck que ficou livre. Preserva também o rate aplicado pelo beatmatch:
+        // resetar para 1 aqui causava um salto exatamente no fim do crossfade.
+        djAutomixActiveDeckRef.current = incomingDeck;
+        djAutomixQueueIndexRef.current = options.nextQueueIndex;
+        ddjBaseRateRef.current[incomingDeck] = adoptedSnapshot.playbackRate || 1;
+
         player.dualDeck.pause(options.activeDeck);
-        player.dualDeck.unload(options.activeDeck);
         commitDjSyncState(resolveDjSyncAfterDeckUnavailable(
           djSyncStateRef.current,
           options.activeDeck
         ));
-        player.dualDeck.setPlaybackRate(incomingDeck, 1);
-        ddjBaseRateRef.current[incomingDeck] = 1;
-        djAutomixActiveDeckRef.current = incomingDeck;
-        djAutomixQueueIndexRef.current = options.nextQueueIndex;
         djAutomixTransitionRef.current = false;
-        prepareDjAutomixNext(incomingDeck, options.nextQueueIndex);
         renderDdjLedsRef.current?.();
+
+        // Prepara a próxima faixa somente no frame seguinte e somente se o deck
+        // adotado ainda for o ativo esperado. Assim LOAD/preload nunca encosta no
+        // deck que acabou de assumir o áudio.
+        window.requestAnimationFrame(() => {
+          if (
+            djMixModeRef.current !== 'automix'
+            || djAutomixTransitionRef.current
+            || djAutomixActiveDeckRef.current !== incomingDeck
+            || djAutomixQueueIndexRef.current !== options.nextQueueIndex
+          ) return;
+
+          const current = player.dualDeck.getSnapshot(incomingDeck);
+          if (
+            !current?.trackId
+            || current.trackId !== options.nextTrack.id
+            || !current.playing
+          ) return;
+
+          prepareDjAutomixNext(incomingDeck, options.nextQueueIndex);
+        });
       };
 
       djAutomixFrameRef.current = window.requestAnimationFrame(animate);
