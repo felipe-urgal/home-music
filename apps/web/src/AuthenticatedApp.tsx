@@ -499,16 +499,15 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
       const timer = ddjNudgeTimerRef.current[deck];
       if (timer != null) window.clearTimeout(timer);
       ddjNudgeTimerRef.current[deck] = null;
-      ddjBaseRateRef.current[deck] = 1;
-      ddjCuePointsRef.current[deck] = null;
-      ddjSyncActiveRef.current[deck] = false;
+      const snapshot = player.dualDeck.getSnapshot(deck);
+      if (snapshot?.trackId) {
+        player.dualDeck.setPlaybackRate(deck, ddjBaseRateRef.current[deck] || 1);
+      }
     }
-    player.dualDeck.setMode(false);
-    setDjMixerState(player.dualDeck.getMixerSnapshot());
   }, [
     midiController.status,
-    player.dualDeck.getMixerSnapshot,
-    player.dualDeck.setMode
+    player.dualDeck.getSnapshot,
+    player.dualDeck.setPlaybackRate
   ]);
 
   useEffect(() => () => {
@@ -520,6 +519,15 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     if (ddjLedFrameRef.current != null) window.cancelAnimationFrame(ddjLedFrameRef.current);
   }, []);
 
+  useEffect(() => {
+    if (screen === 'dj') {
+      if (!player.hydrated) return;
+      if (!player.djSession.active()) player.djSession.enter();
+      return;
+    }
+    if (player.djSession.active()) player.djSession.exit();
+  }, [player.djSession.enter, player.djSession.exit, player.hydrated, screen]);
+
   const qualityProfile = useNetworkQualityProfile(player.streamingMode, player.setStreamingMode);
   useBackgroundPlaybackContinuity({
     audioRef: player.audioRef,
@@ -527,7 +535,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     currentIndex: player.currentIndex,
     currentTrackId: player.current?.id ?? null,
     repeatMode: player.repeatMode,
-    playing: player.playing,
+    playing: screen === 'dj' ? false : player.playing,
     onNext: player.advanceNaturally
   });
   useNextTrackPreload({
@@ -538,7 +546,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     streamingMode: player.streamingMode,
     normalizationMode: player.normalizationMode,
     manualPlaybackRevision: player.manualPlaybackRevision,
-    playing: player.playing
+    playing: screen === 'dj' ? false : player.playing
   });
   const current = player.current;
   const nextDecision = nextTrackDecision(player.queue, player.currentIndex, player.repeatMode, false);
@@ -560,6 +568,17 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
   });
 
   function openPlayer() {
+    player.syncVisibleProgress();
+    setScreen('player');
+  }
+
+  function openDjMode() {
+    player.djSession.enter();
+    setScreen('dj');
+  }
+
+  function closeDjMode() {
+    player.djSession.exit();
     player.syncVisibleProgress();
     setScreen('player');
   }
@@ -758,7 +777,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
           onTogglePlay={toggleDjDeckPlay}
           onCue={cueDjDeck}
           onSync={syncDjDeck}
-          onExit={openPlayer}
+          onExit={closeDjMode}
         />
         {library.actionError && (
           <button className="app-toast" role="status" onClick={library.clearActionError}>
@@ -787,7 +806,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
         onRefreshLibrary={() => { void refreshLibrary(); }}
         onOpenPlayer={openPlayer}
         onOpenLibrary={() => setScreen('library')}
-        onOpenDjMode={desktopLayout ? () => setScreen('dj') : undefined}
+        onOpenDjMode={desktopLayout ? openDjMode : undefined}
         onOpenLibraryTab={openLibraryTab}
         onPlayTrack={player.playTrack}
         onReorderQueue={player.reorderQueue}
