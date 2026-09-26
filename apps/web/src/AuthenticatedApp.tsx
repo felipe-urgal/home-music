@@ -26,6 +26,7 @@ import {
   shuffleDjTrackList
 } from './dj-automix-sequence';
 import { isDjKeyboardEditableTarget, mapDjKeyboardCode } from './dj-keyboard-mapping';
+import { resolveInitialDjSyncPlan } from './dj-sync-phase-lock';
 import {
   EMPTY_DJ_SYNC_STATE,
   activateDjSync,
@@ -145,6 +146,15 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
   }, [player.dualDeck.getMixerSnapshot]);
   const ddjNudgeTimerRef = useRef<Record<DjDeckId, number | null>>({ a: null, b: null });
 
+  const cancelDjNudge = useCallback((deck: DjDeckId, restoreBaseRate = true) => {
+    const timer = ddjNudgeTimerRef.current[deck];
+    if (timer != null) window.clearTimeout(timer);
+    ddjNudgeTimerRef.current[deck] = null;
+    if (restoreBaseRate) {
+      player.dualDeck.setPlaybackRate(deck, ddjBaseRateRef.current[deck] || 1);
+    }
+  }, [player.dualDeck]);
+
   const commitDjSyncState = useCallback((next: DjSyncState) => {
     djSyncStateRef.current = next;
     setDjSyncState(next);
@@ -152,9 +162,10 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
   }, []);
 
   const disableDjSync = useCallback((deck: DjDeckId) => {
+    cancelDjNudge(deck);
     const next = disableDjSyncForDeck(djSyncStateRef.current, deck);
     if (next !== djSyncStateRef.current) commitDjSyncState(next);
-  }, [commitDjSyncState]);
+  }, [cancelDjNudge, commitDjSyncState]);
 
   const setDjModeState = useCallback((mode: 'manual' | 'automix') => {
     djMixModeRef.current = mode;
@@ -261,14 +272,12 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     player.dualDeck.setMode(true);
     if (!player.dualDeck.loadTrack(deck, track)) return false;
 
-    const timer = ddjNudgeTimerRef.current[deck];
-    if (timer != null) window.clearTimeout(timer);
-    ddjNudgeTimerRef.current[deck] = null;
+    cancelDjNudge(deck, false);
     ddjBaseRateRef.current[deck] = 1;
     ddjCuePointsRef.current[deck] = null;
     commitDjSyncState(resetDjSyncForLoad(djSyncStateRef.current, deck));
     return true;
-  }, [commitDjSyncState, djListedTracks, player.dualDeck, switchDjToManual]);
+  }, [cancelDjNudge, commitDjSyncState, djListedTracks, player.dualDeck, switchDjToManual]);
 
   useEffect(() => {
     if (!djListedTracks.length) {
@@ -385,10 +394,49 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
       return;
     }
 
-    ddjBaseRateRef.current[deck] = plan.playbackRate;
-    commitDjSyncState(activateDjSync(djSyncStateRef.current, deck, 'tempo'));
-    player.dualDeck.setPlaybackRate(deck, plan.playbackRate);
-  }, [commitDjSyncState, disableDjSync, library.tracks, player.dualDeck, switchDjToManual]);
+    const phasePlan = resolveInitialDjSyncPlan({
+      masterRhythm: masterTrack?.rhythm,
+      masterPositionSeconds: masterSnapshot.currentTimeSeconds,
+      masterPlaybackRate: masterSnapshot.playbackRate,
+      slaveRhythm: targetTrack?.rhythm,
+      slavePositionSeconds: targetSnapshot.currentTimeSeconds,
+      beatmatch: plan
+    });
+
+    cancelDjNudge(deck, false);
+    ddjBaseRateRef.current[deck] = phasePlan.playbackRate;
+    player.dualDeck.setPlaybackRate(deck, phasePlan.playbackRate);
+
+    if (phasePlan.correction.kind === 'seek') {
+      player.dualDeck.seek(
+        deck,
+        targetSnapshot.currentTimeSeconds + phasePlan.correction.offsetMediaSeconds
+      );
+    } else if (phasePlan.correction.kind === 'nudge') {
+      if (targetSnapshot.playing) {
+        player.dualDeck.setPlaybackRate(
+          deck,
+          phasePlan.playbackRate * phasePlan.correction.rateMultiplier
+        );
+        ddjNudgeTimerRef.current[deck] = window.setTimeout(() => {
+          player.dualDeck.setPlaybackRate(deck, ddjBaseRateRef.current[deck]);
+          ddjNudgeTimerRef.current[deck] = null;
+        }, phasePlan.correction.durationMs);
+      } else {
+        player.dualDeck.seek(
+          deck,
+          targetSnapshot.currentTimeSeconds
+            - (phasePlan.correction.phaseErrorSeconds * phasePlan.playbackRate)
+        );
+      }
+    }
+
+    commitDjSyncState(activateDjSync(
+      djSyncStateRef.current,
+      deck,
+      phasePlan.mode
+    ));
+  }, [cancelDjNudge, commitDjSyncState, disableDjSync, library.tracks, player.dualDeck, switchDjToManual]);
 
 
   const prepareDjAutomixNext = useCallback((activeDeck: DjDeckId, queueIndex: number) => {
@@ -532,6 +580,8 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
 
   const enableDjAutomix = useCallback(() => {
     cancelDjAutomixTransition();
+    cancelDjNudge('a');
+    cancelDjNudge('b');
     commitDjSyncState(EMPTY_DJ_SYNC_STATE);
     player.dualDeck.setMode(true);
 
@@ -567,6 +617,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     }
   }, [
     cancelDjAutomixTransition,
+    cancelDjNudge,
     commitDjSyncState,
     djListedTracks,
     markDjTrackPlayed,
@@ -971,10 +1022,12 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     }
     if (djMixModeRef.current === 'automix') disableDjAutomix();
     if (djSyncStateRef.current !== EMPTY_DJ_SYNC_STATE) {
+      cancelDjNudge('a');
+      cancelDjNudge('b');
       commitDjSyncState(EMPTY_DJ_SYNC_STATE);
     }
     if (player.djSession.active()) player.djSession.exit();
-  }, [commitDjSyncState, disableDjAutomix, player.djSession.enter, player.djSession.exit, player.hydrated, screen]);
+  }, [cancelDjNudge, commitDjSyncState, disableDjAutomix, player.djSession.enter, player.djSession.exit, player.hydrated, screen]);
 
   const qualityProfile = useNetworkQualityProfile(player.streamingMode, player.setStreamingMode);
   useBackgroundPlaybackContinuity({
@@ -1022,12 +1075,16 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
 
   function openDjMode() {
     setDjPlayedTrackIds(new Set());
+    cancelDjNudge('a');
+    cancelDjNudge('b');
     commitDjSyncState(EMPTY_DJ_SYNC_STATE);
     player.djSession.enter();
     setScreen('dj');
   }
 
   function closeDjMode() {
+    cancelDjNudge('a');
+    cancelDjNudge('b');
     commitDjSyncState(EMPTY_DJ_SYNC_STATE);
     player.djSession.exit();
     player.syncVisibleProgress();
