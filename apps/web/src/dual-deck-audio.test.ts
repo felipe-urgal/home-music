@@ -31,7 +31,6 @@ function fakeAudio() {
     load: vi.fn(),
     removeAttribute: vi.fn((name: string) => {
       attributes.delete(name);
-      if (name === 'src') audio.src = '';
     }),
     getAttribute: vi.fn((name: string) => {
       if (name === 'src') return attributes.get(name) ?? (audio.src || null);
