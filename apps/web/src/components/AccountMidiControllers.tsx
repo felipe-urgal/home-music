@@ -1,11 +1,12 @@
 import { Cable, ChevronLeft, LoaderCircle } from 'lucide-react';
-import { useWebMidiController } from '../useWebMidiController';
+import type { WebMidiController } from '../useWebMidiController';
 
 type AccountMidiControllersProps = {
+  midi: WebMidiController;
   onBack: () => void;
 };
 
-function statusText(status: ReturnType<typeof useWebMidiController>['status']) {
+function statusText(status: WebMidiController['status']) {
   switch (status) {
     case 'connecting': return 'Conectando…';
     case 'connected': return 'Conectado';
@@ -15,9 +16,7 @@ function statusText(status: ReturnType<typeof useWebMidiController>['status']) {
   }
 }
 
-export function AccountMidiControllers({ onBack }: AccountMidiControllersProps) {
-  const midi = useWebMidiController();
-
+export function AccountMidiControllers({ midi, onBack }: AccountMidiControllersProps) {
   return (
     <section className="my-account-card" aria-labelledby="midi-controller-title">
       <button className="icon-button" type="button" aria-label="Voltar" onClick={onBack}>

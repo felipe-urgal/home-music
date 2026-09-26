@@ -1,4 +1,4 @@
-import { lazy, useCallback, useRef, useState } from 'react';
+import { lazy, useCallback, useEffect, useRef, useState } from 'react';
 import type { AuthenticatedUser } from '@home-music/shared';
 import { DesktopNowPlayingScreen } from './components/DesktopNowPlayingScreen';
 import { DesktopPlayerBar } from './components/DesktopPlayerBar';
@@ -14,6 +14,8 @@ import { TvExperience } from './components/TvExperience';
 import { TvRemoteEntryButton } from './components/TvRemoteEntryButton';
 import { TvRemotePairingDialog } from './components/TvRemotePairingDialog';
 import { useRoutedScreen } from './browser-navigation';
+import { decodeDdj400Message } from './ddj400-mapping';
+import type { DjDeckId } from './dj-controller-contract';
 import { canUseAdminLibraryActions } from './frontend-access';
 import { buildLibraryReturnLabel } from './library-utils';
 import type { OfflineDownloads } from './offline-downloads';
@@ -28,6 +30,7 @@ import { useNetworkQualityProfile } from './useNetworkQualityProfile';
 import { useNextTrackPreload } from './useNextTrackPreload';
 import { useSystemVolumePreference } from './useSystemVolume';
 import { useTvRemoteSession } from './useTvRemoteSession';
+import { useWebMidiController } from './useWebMidiController';
 
 const AdministrationScreen = lazy(async () => {
   const module = await import('./components/AdministrationScreen');
@@ -75,6 +78,76 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     usesSystemVolume,
     { beforeManualPlaybackChange: cancelPreload }
   );
+  const ddjBrowserIndexRef = useRef(0);
+  const ddjCuePointsRef = useRef<Record<DjDeckId, number | null>>({ a: null, b: null });
+
+  const handleDdj400Message = useCallback((message: Parameters<typeof decodeDdj400Message>[0]) => {
+    const command = decodeDdj400Message(message);
+    if (!command) return;
+
+    const browserTracks = navigation.libraryTracks.length
+      ? navigation.libraryTracks
+      : library.tracks;
+
+    if (command.type === 'browser.move') {
+      setScreen('library');
+      if (!browserTracks.length) {
+        ddjBrowserIndexRef.current = 0;
+        return;
+      }
+      ddjBrowserIndexRef.current = Math.max(
+        0,
+        Math.min(browserTracks.length - 1, ddjBrowserIndexRef.current + command.delta)
+      );
+      return;
+    }
+
+    if (command.type === 'browser.select') {
+      setScreen('library');
+      return;
+    }
+
+    if (command.type === 'browser.load') {
+      const track = browserTracks[ddjBrowserIndexRef.current] ?? browserTracks[0];
+      if (!track) return;
+      player.dualDeck.setMode(true);
+      if (player.dualDeck.loadTrack(command.deck, track)) {
+        player.dualDeck.setVolume(command.deck, 1);
+        ddjCuePointsRef.current[command.deck] = null;
+      }
+      return;
+    }
+
+    if (command.type === 'deck.toggle-play') {
+      player.dualDeck.setMode(true);
+      const snapshot = player.dualDeck.getSnapshot(command.deck);
+      if (!snapshot?.trackId) return;
+      if (snapshot.playing) player.dualDeck.pause(command.deck);
+      else void player.dualDeck.play(command.deck);
+      return;
+    }
+
+    if (command.type === 'deck.set-cue') {
+      player.dualDeck.setMode(true);
+      const snapshot = player.dualDeck.getSnapshot(command.deck);
+      if (!snapshot?.trackId) return;
+
+      if (snapshot.playing) {
+        player.dualDeck.pause(command.deck);
+        player.dualDeck.seek(command.deck, ddjCuePointsRef.current[command.deck] ?? 0);
+      } else {
+        ddjCuePointsRef.current[command.deck] = snapshot.currentTimeSeconds;
+      }
+    }
+  }, [library.tracks, navigation.libraryTracks, player.dualDeck, setScreen]);
+
+  const midiController = useWebMidiController({ onMessage: handleDdj400Message });
+
+  useEffect(() => {
+    if (midiController.status === 'connected') return;
+    player.dualDeck.setMode(false);
+  }, [midiController.status, player.dualDeck]);
+
   const qualityProfile = useNetworkQualityProfile(player.streamingMode, player.setStreamingMode);
   useBackgroundPlaybackContinuity({
     audioRef: player.audioRef,
@@ -354,6 +427,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
                 onCrossfadeSeconds: player.setCrossfadeSeconds,
                 onNormalizationMode: player.setNormalizationMode
               }}
+              midiController={midiController}
               offlineMode={{
                 supported: offline.supported,
                 loading: offline.loading,

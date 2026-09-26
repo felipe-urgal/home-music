@@ -38,6 +38,7 @@ import {
 import { AccountMidiControllers } from './AccountMidiControllers';
 import { AccountSessionsScreen } from './AccountSessionsScreen';
 import { useDesktopLayout } from '../useDesktopLayout';
+import type { WebMidiController } from '../useWebMidiController';
 
 type AccountView = 'overview' | 'profile' | 'password' | 'sessions' | 'playback' | 'midi';
 
@@ -52,6 +53,7 @@ type MyAccountScreenProps = {
   currentUser: AuthenticatedUser;
   playbackPreferences?: AccountPlaybackPreferencesValue;
   offlineMode?: OfflineModeControl;
+  midiController: WebMidiController;
   onBack: () => void;
   onOpenAdministration: () => void;
   onSessionEnded: () => Promise<void>;
@@ -66,6 +68,7 @@ export function MyAccountScreen({
   currentUser,
   playbackPreferences,
   offlineMode,
+  midiController,
   onBack,
   onOpenAdministration,
   onSessionEnded,
@@ -235,7 +238,7 @@ export function MyAccountScreen({
   if (view === 'midi') {
     return (
       <section className="my-account-screen my-account-screen--midi">
-        <AccountMidiControllers onBack={goBack} />
+        <AccountMidiControllers midi={midiController} onBack={goBack} />
       </section>
     );
   }
