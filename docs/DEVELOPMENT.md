@@ -109,8 +109,7 @@ Antes de avaliar crossfade/beatmatching, confirme a capability no host:
 
     npm run ffmpeg:status
 
-Com sessão administrativa, consulte `/api/health`. Para a análise rítmica,
-os campos principais são:
+Com sessão administrativa, consulte `/api/health`. Os contadores de runtime são da execução atual do servidor; resultados derivados persistidos continuam no SQLite entre restarts. Para a análise rítmica, os campos principais são:
 
 - `configured`: configuração da feature foi aceita;
 - `enabled`: scheduler efetivamente ativo (feature + FFmpeg disponíveis);
