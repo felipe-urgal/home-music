@@ -1,8 +1,10 @@
 import { Cable, ChevronLeft, LoaderCircle } from 'lucide-react';
 import type { WebMidiController } from '../useWebMidiController';
+import type { DualDeckMixerState } from '../dual-deck-mixer';
 
 type AccountMidiControllersProps = {
   midi: WebMidiController;
+  mixerState: DualDeckMixerState;
   onBack: () => void;
 };
 
@@ -16,7 +18,7 @@ function statusText(status: WebMidiController['status']) {
   }
 }
 
-export function AccountMidiControllers({ midi, onBack }: AccountMidiControllersProps) {
+export function AccountMidiControllers({ midi, mixerState, onBack }: AccountMidiControllersProps) {
   return (
     <section className="my-account-card" aria-labelledby="midi-controller-title">
       <button className="icon-button" type="button" aria-label="Voltar" onClick={onBack}>
@@ -87,6 +89,12 @@ export function AccountMidiControllers({ midi, onBack }: AccountMidiControllersP
                   ))}
                 </select>
               </label>
+
+              <p className="my-account-card__note" aria-live="polite">
+                Mixer DJ: A {Math.round(mixerState.channelVolumes.a * 100)}% ·
+                {' '}B {Math.round(mixerState.channelVolumes.b * 100)}% ·
+                {' '}Crossfader {Math.round(mixerState.crossfader * 100)}
+              </p>
 
               <label>
                 <input
