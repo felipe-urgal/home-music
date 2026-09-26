@@ -38,6 +38,8 @@ import { getTvRemoteMediaSource } from './tv-remote-media-source';
 import {
   clearDeckAudio,
   loadDeckAudio,
+  pauseDeckAudio,
+  playDeckAudio,
   readDeckAudioSnapshot,
   seekDeckAudio,
   setDeckPlaybackRate,
@@ -729,19 +731,14 @@ export function useCrossfadeAudioPlayer(
     if (!dualDeckModeRef.current) return false;
     const audio = getDeckAudio(deck);
     if (!audio || !deckTrackIdsRef.current[deck]) return false;
-    try {
-      await audio.play();
-      return true;
-    } catch {
-      return false;
-    }
+    return playDeckAudio(audio);
   }, [getDeckAudio]);
 
   const pauseDualDeck = useCallback((deck: DjDeckId) => {
     if (!dualDeckModeRef.current) return false;
     const audio = getDeckAudio(deck);
     if (!audio) return false;
-    audio.pause();
+    pauseDeckAudio(audio);
     return true;
   }, [getDeckAudio]);
 
