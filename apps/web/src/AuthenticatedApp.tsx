@@ -143,6 +143,10 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
       if (!track) return;
       player.dualDeck.setMode(true);
       if (player.dualDeck.loadTrack(command.deck, track)) {
+        const timer = ddjNudgeTimerRef.current[command.deck];
+        if (timer != null) window.clearTimeout(timer);
+        ddjNudgeTimerRef.current[command.deck] = null;
+        ddjBaseRateRef.current[command.deck] = 1;
         ddjCuePointsRef.current[command.deck] = null;
         ddjSyncActiveRef.current[command.deck] = false;
         renderDdjLedsRef.current?.();

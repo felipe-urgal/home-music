@@ -226,9 +226,12 @@ export function useCrossfadeAudioPlayer(
     const inactiveAudio = getInactiveAudio();
     if (activeAudio) {
       player.audioRef.current = activeAudio;
-      activeAudio.volume = outputVolumeRef.current;
-      activeAudio.playbackRate = 1;
+      if (!dualDeckModeRef.current) {
+        activeAudio.volume = outputVolumeRef.current;
+        activeAudio.playbackRate = 1;
+      }
     }
+    if (dualDeckModeRef.current) applyDualDeckMixer();
     if (
       !dualDeckModeRef.current
       && inactiveAudio
@@ -238,7 +241,7 @@ export function useCrossfadeAudioPlayer(
       clearAudio(inactiveAudio);
       deckTrackIdsRef.current[inactiveDeck] = null;
     }
-  }, [cancelAnimation, cancelPlaybackRateRestore, cancelQuantizedSchedule, cancelQuantizedWake, clearAudio, getActiveAudio, getInactiveAudio, player.audioRef]);
+  }, [applyDualDeckMixer, cancelAnimation, cancelPlaybackRateRestore, cancelQuantizedSchedule, cancelQuantizedWake, clearAudio, getActiveAudio, getInactiveAudio, player.audioRef]);
 
   useLayoutEffect(() => {
     cancelRef.current = cancelCrossfade;
