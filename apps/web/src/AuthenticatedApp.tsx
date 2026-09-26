@@ -165,16 +165,13 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
   }, [library.tracks]);
 
   const djBrowserTracks = useMemo(() => {
-    const source = navigation.libraryTracks.length
-      ? navigation.libraryTracks
-      : library.tracks;
-    if (!djFolderPath) return source;
+    if (!djFolderPath) return library.tracks;
     const prefix = `${djFolderPath}/`;
-    return source.filter(track => (
+    return library.tracks.filter(track => (
       track.folderPath === djFolderPath
       || track.folderPath.startsWith(prefix)
     ));
-  }, [djFolderPath, library.tracks, navigation.libraryTracks]);
+  }, [djFolderPath, library.tracks]);
 
   const selectDjFolder = useCallback((path: string) => {
     setDjFolderPath(path);
