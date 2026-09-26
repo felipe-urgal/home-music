@@ -157,6 +157,14 @@ export class WebMidiSession {
     return true;
   }
 
+  sendToSelectedOutput(data: number[] | Uint8Array) {
+    if (!this.access || !this.selectedOutputId) return false;
+    const output = this.access.outputs.get(this.selectedOutputId);
+    if (!output || output.state !== 'connected') return false;
+    output.send(data);
+    return true;
+  }
+
   getSelection() {
     return {
       inputId: this.selectedInputId,
