@@ -219,7 +219,7 @@ export class LibraryService {
     trackId: string,
     sourceFileSize: number,
     sourceMtimeMs: number,
-    waveform: TrackWaveform | null
+    _waveform: TrackWaveform | null
   ) {
     const index = this.tracks.findIndex(track => track.id === trackId);
     if (index < 0) return false;
