@@ -14,14 +14,19 @@ export function registerMediaRoutes(
   media: TrackMediaInfrastructure
 ) {
   app.get<{ Params: { id: string } }>('/api/tracks/:id/waveform', async (request, reply) => {
-    if (!library.getTrack(request.params.id)) {
+    const track = library.getTrack(request.params.id);
+    if (!track) {
       return reply.code(404).send({ error: 'Música não encontrada.' });
     }
 
     const waveform = library.waveform(request.params.id);
     if (!waveform) {
       reply.header('Cache-Control', 'private, no-store');
-      return reply.code(404).send({ error: 'Waveform ainda não disponível.' });
+      if (!track.waveformAnalysisCurrent) {
+        reply.header('Retry-After', '3');
+        return reply.code(202).send({ status: 'pending' });
+      }
+      return reply.code(404).send({ error: 'Waveform indisponível para esta faixa.' });
     }
 
     reply.header('Cache-Control', 'private, no-cache');

@@ -231,40 +231,56 @@
 
 .dj-waveform {
   position: relative;
-  height: 100px;
+  height: 108px;
   overflow: hidden;
-  display: flex;
-  align-items: center;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.018);
 }
 
-.dj-waveform__bars {
+.dj-waveform__canvas {
+  position: absolute;
+  inset: 0;
   width: 100%;
-  height: 74px;
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  opacity: 0.92;
+  height: 100%;
+  display: block;
 }
 
-.dj-waveform__bars span {
-  flex: 1 1 0;
-  min-width: 2px;
-  max-width: 8px;
-  border-radius: 999px;
-  background: linear-gradient(180deg, var(--deck-accent), color-mix(in srgb, var(--deck-accent) 55%, transparent));
-}
-
-.dj-waveform__bars span:nth-child(n+24) {
-  opacity: 0.24;
+.dj-waveform__remaining {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(4, 11, 20, 0.56);
+  pointer-events: none;
 }
 
 .dj-waveform__playhead {
   position: absolute;
-  top: 8px;
-  bottom: 8px;
+  z-index: 3;
+  top: 5px;
+  bottom: 5px;
   width: 1px;
-  background: rgba(255,255,255,0.86);
-  box-shadow: 0 0 9px rgba(255,255,255,0.45);
+  transform: translateX(-0.5px);
+  background: rgba(255,255,255,0.94);
+  box-shadow: 0 0 9px rgba(255,255,255,0.5);
+  pointer-events: none;
+}
+
+.dj-waveform__status {
+  position: absolute;
+  z-index: 4;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: rgba(224, 234, 248, 0.48);
+  font-size: 0.68rem;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+}
+
+.dj-waveform[data-status='ready'] .dj-waveform__status {
+  display: none;
 }
 
 .dj-pro-deck__timeline {
@@ -914,10 +930,6 @@
   height: 108px;
 }
 
-.dj-waveform__bars {
-  height: 82px;
-  gap: 2px;
-}
 
 .dj-pro-deck__metrics > div {
   min-height: 64px;
