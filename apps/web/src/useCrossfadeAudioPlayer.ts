@@ -143,6 +143,10 @@ export function useCrossfadeAudioPlayer(
     }
   }, [getDeckAudio]);
 
+  useEffect(() => {
+    if (dualDeckModeRef.current) applyDualDeckMixer();
+  }, [applyDualDeckMixer, player.volume, usesSystemVolume]);
+
   const clearAudio = useCallback((audio: HTMLAudioElement | null) => {
     if (!audio) return;
     clearDeckAudio(audio);
