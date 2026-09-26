@@ -39,7 +39,18 @@ export function rhythmWithTempoFactor(
   if (!rhythm || factor === 1) return rhythm;
   return {
     ...rhythm,
-    bpm: rhythm.bpm * factor
+    bpm: rhythm.bpm * factor,
+    ...(rhythm.beatGrid
+      ? {
+          beatGrid: {
+            ...rhythm.beatGrid,
+            segments: rhythm.beatGrid.segments.map(segment => ({
+              ...segment,
+              bpm: segment.bpm * factor
+            }))
+          }
+        }
+      : {})
   };
 }
 
