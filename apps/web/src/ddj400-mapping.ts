@@ -14,9 +14,15 @@ export const DDJ400_MIDI = {
   cueB: { status: 0x90, channel: 1, data1: 0x0c }
 } as const;
 
+type MidiBinding = {
+  status: number;
+  channel: number;
+  data1: number;
+};
+
 function matches(
   message: NormalizedMidiMessage,
-  mapping: { status: number; channel: number; data1: number }
+  mapping: MidiBinding
 ) {
   return message.status === mapping.status
     && message.channel === mapping.channel
@@ -25,8 +31,8 @@ function matches(
 
 function deckCommand(
   message: NormalizedMidiMessage,
-  a: typeof DDJ400_MIDI.playA,
-  b: typeof DDJ400_MIDI.playB,
+  a: MidiBinding,
+  b: MidiBinding,
   type: 'deck.toggle-play' | 'deck.set-cue'
 ): DjControllerCommand | null {
   if (message.data2 === 0) return null;
