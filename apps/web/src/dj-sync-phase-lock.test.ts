@@ -56,6 +56,24 @@ describe('initial DJ phase lock', () => {
     }
   });
 
+  it('usa nudge no sentido oposto quando o slave está atrasado', () => {
+    const plan = resolveInitialDjSyncPlan({
+      masterRhythm: { ...master, downbeatConfidence: 0.1 },
+      masterPositionSeconds: 8.04,
+      masterPlaybackRate: 1,
+      slaveRhythm: { ...master, downbeatConfidence: 0.1 },
+      slavePositionSeconds: 8,
+      beatmatch
+    });
+
+    expect(plan.mode).toBe('beat');
+    expect(plan.correction.kind).toBe('nudge');
+    if (plan.correction.kind === 'nudge') {
+      expect(plan.correction.direction).toBe(1);
+      expect(plan.correction.phaseErrorSeconds).toBeLessThan(0);
+    }
+  });
+
   it('usa seek limitado para erro moderado', () => {
     const plan = resolveInitialDjSyncPlan({
       masterRhythm: { ...master, downbeatConfidence: 0.1 },
@@ -128,3 +146,27 @@ describe('initial DJ phase lock', () => {
     }
   });
 });
+
+
+  it('degrada para tempo-only quando a correção inicial seria destrutiva', () => {
+    const slowMaster: TrackRhythm = {
+      ...master,
+      bpm: 30,
+      downbeatConfidence: 0.1
+    };
+    const plan = resolveInitialDjSyncPlan({
+      masterRhythm: slowMaster,
+      masterPositionSeconds: 8,
+      masterPlaybackRate: 1,
+      slaveRhythm: slowMaster,
+      slavePositionSeconds: 9,
+      beatmatch: {
+        playbackRate: 1,
+        tempoFactor: 1,
+        phaseLeadSeconds: 0
+      }
+    });
+
+    expect(plan.mode).toBe('tempo');
+    expect(plan.correction).toEqual({ kind: 'none' });
+  });
