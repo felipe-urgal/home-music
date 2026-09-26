@@ -12,10 +12,12 @@ function validWaveform(value: unknown): value is TrackWaveform {
   if (!value || typeof value !== 'object') return false;
   const candidate = value as Partial<TrackWaveform>;
   return (
-    Number.isInteger(candidate.version)
-    && Number(candidate.version) > 0
+    typeof candidate.version === 'number'
+    && Number.isInteger(candidate.version)
+    && candidate.version > 0
+    && typeof candidate.durationSeconds === 'number'
     && Number.isFinite(candidate.durationSeconds)
-    && Number(candidate.durationSeconds) >= 0
+    && candidate.durationSeconds >= 0
     && Array.isArray(candidate.peaks)
     && candidate.peaks.length > 0
     && candidate.peaks.length <= 16_384
