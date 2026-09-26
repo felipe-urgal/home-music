@@ -499,16 +499,15 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
       const timer = ddjNudgeTimerRef.current[deck];
       if (timer != null) window.clearTimeout(timer);
       ddjNudgeTimerRef.current[deck] = null;
-      ddjBaseRateRef.current[deck] = 1;
-      ddjCuePointsRef.current[deck] = null;
-      ddjSyncActiveRef.current[deck] = false;
+      const snapshot = player.dualDeck.getSnapshot(deck);
+      if (snapshot?.trackId) {
+        player.dualDeck.setPlaybackRate(deck, ddjBaseRateRef.current[deck] || 1);
+      }
     }
-    player.dualDeck.setMode(false);
-    setDjMixerState(player.dualDeck.getMixerSnapshot());
   }, [
     midiController.status,
-    player.dualDeck.getMixerSnapshot,
-    player.dualDeck.setMode
+    player.dualDeck.getSnapshot,
+    player.dualDeck.setPlaybackRate
   ]);
 
   useEffect(() => () => {
@@ -560,6 +559,17 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
   });
 
   function openPlayer() {
+    player.syncVisibleProgress();
+    setScreen('player');
+  }
+
+  function openDjMode() {
+    player.djSession.enter();
+    setScreen('dj');
+  }
+
+  function closeDjMode() {
+    player.djSession.exit();
     player.syncVisibleProgress();
     setScreen('player');
   }
@@ -758,7 +768,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
           onTogglePlay={toggleDjDeckPlay}
           onCue={cueDjDeck}
           onSync={syncDjDeck}
-          onExit={openPlayer}
+          onExit={closeDjMode}
         />
         {library.actionError && (
           <button className="app-toast" role="status" onClick={library.clearActionError}>
@@ -787,7 +797,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
         onRefreshLibrary={() => { void refreshLibrary(); }}
         onOpenPlayer={openPlayer}
         onOpenLibrary={() => setScreen('library')}
-        onOpenDjMode={desktopLayout ? () => setScreen('dj') : undefined}
+        onOpenDjMode={desktopLayout ? openDjMode : undefined}
         onOpenLibraryTab={openLibraryTab}
         onPlayTrack={player.playTrack}
         onReorderQueue={player.reorderQueue}
