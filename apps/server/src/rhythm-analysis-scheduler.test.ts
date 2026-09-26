@@ -278,7 +278,7 @@ test('runtime agrega fila, resultados, baixa confiança, falhas e timeout sem ex
       failed: 1,
       timeouts: 1,
       lowConfidence: 1,
-      analyzerVersion: 1
+      analyzerVersion: 2
     }
   );
   assert.ok(scheduler.runtime.averageDurationMs != null);
