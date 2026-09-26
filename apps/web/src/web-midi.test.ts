@@ -125,6 +125,27 @@ describe('Web MIDI foundation', () => {
     expect(device.onmidimessage).toBeNull();
   });
 
+  it('envia somente para output selecionado e conectado', async () => {
+    const first = output('first');
+    const second = output('second');
+    const session = new WebMidiSession({
+      requestMIDIAccess: async () => access([], [first, second])
+    });
+    await session.connect();
+
+    expect(session.sendToSelectedOutput([0x90, 0x0b, 0x7f])).toBe(false);
+    expect(first.send).not.toHaveBeenCalled();
+    expect(second.send).not.toHaveBeenCalled();
+
+    expect(session.selectOutput('second')).toBe(true);
+    expect(session.sendToSelectedOutput([0x91, 0x0b, 0x7f])).toBe(true);
+    expect(first.send).not.toHaveBeenCalled();
+    expect(second.send).toHaveBeenCalledWith([0x91, 0x0b, 0x7f]);
+
+    second.state = 'disconnected';
+    expect(session.sendToSelectedOutput([0x91, 0x0b, 0])).toBe(false);
+  });
+
   it('recusa porta desconectada', async () => {
     const device = input('controller');
     device.state = 'disconnected';
