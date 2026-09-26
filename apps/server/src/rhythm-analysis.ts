@@ -34,6 +34,7 @@ export function isFfmpegDecodeFailure(stderr: string) {
     || /error submitting packet to decoder/i.test(stderr)
     || /error while decoding stream/i.test(stderr)
     || /corrupt(?:ed)? (?:input )?packet/i.test(stderr)
+    || /packet corrupt(?:ed)?/i.test(stderr)
   );
 }
 
