@@ -79,19 +79,6 @@ test('crossfade quantizado inicia próximo da batida planejada no Chromium mobil
     window.localStorage.setItem(storageKey, '2');
   }, { storageKey: crossfadeStorageKey });
 
-  let suppressPlayerStateWrites = false;
-  await page.route('**/api/player/state', async route => {
-    if (route.request().method() === 'PUT' && suppressPlayerStateWrites) {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: '{}'
-      });
-      return;
-    }
-    await route.continue();
-  });
-
   await page.route('**/api/library', async route => {
     const response = await route.fetch();
     const body = await response.json() as {
@@ -119,42 +106,42 @@ test('crossfade quantizado inicia próximo da batida planejada no Chromium mobil
     });
   });
 
-  await login(page, null);
-
-  const resetOk = await page.evaluate(async () => {
-    const libraryResponse = await fetch('/api/library');
-    const library = await libraryResponse.json() as {
-      tracks: Array<{ id: string; title: string }>;
-    };
-    const current = library.tracks.find(track => track.title === 'E2E Track');
-    if (!current) return false;
-    const queueIds = library.tracks.map(track => track.id);
-
-    const response = await fetch('/api/player/state', {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Home-Music-Request': '1'
-      },
-      body: JSON.stringify({
-        currentTrackId: current.id,
-        position: 0,
-        volume: 1,
-        shuffle: false,
-        repeatMode: 'off',
-        wasPlaying: false,
-        baseQueueIds: queueIds,
-        queueIds
-      })
-    });
-    return response.ok;
+  const loginResponse = await page.context().request.post('/api/auth/login', {
+    data: { username, password }
   });
-  expect(resetOk).toBe(true);
+  expect(loginResponse.ok()).toBe(true);
 
-  suppressPlayerStateWrites = true;
-  await page.reload();
+  const libraryResponse = await page.context().request.get('/api/library');
+  expect(libraryResponse.ok()).toBe(true);
+  const library = await libraryResponse.json() as {
+    tracks: Array<{ id: string; title: string }>;
+  };
+  const trackId = library.tracks.find(track => track.title === 'E2E Track')?.id;
+  const zetaId = library.tracks.find(track => track.title === 'E2E Zeta')?.id;
+  const zuluId = library.tracks.find(track => track.title === 'E2E Zulu')?.id;
+  expect(trackId).toBeTruthy();
+  expect(zetaId).toBeTruthy();
+  expect(zuluId).toBeTruthy();
+  const queueIds = [trackId!, zetaId!, zuluId!];
+
+  const resetResponse = await page.context().request.put('/api/player/state', {
+    headers: { 'X-Home-Music-Request': '1' },
+    data: {
+      currentTrackId: trackId,
+      position: 0,
+      volume: 1,
+      shuffle: false,
+      repeatMode: 'off',
+      wasPlaying: false,
+      baseQueueIds: queueIds,
+      queueIds
+    }
+  });
+  expect(resetResponse.ok()).toBe(true);
+
+  await page.goto('/');
+  await expect(page.locator('.player-screen-immersive')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'E2E Track' })).toBeVisible();
-  suppressPlayerStateWrites = false;
 
   await page.evaluate(() => {
     const state = window as Window & { __e2eRhythmCrossfadeStart?: number };
@@ -200,8 +187,7 @@ test('crossfade quantizado inicia próximo da batida planejada no Chromium mobil
 
   // Faixa de 10 s, crossfade preferido de 2 s => alvo bruto em 8,00 s.
   // Com 60 BPM e primeira batida em 0,75 s, a próxima fronteira é 8,75 s.
-  // A tolerância inclui somente latência de polling/browser; um início não
-  // quantizado em ~8,00 s fica claramente fora deste intervalo.
+  // Um início não quantizado em ~8,00 s ou atrasado para ~9,70 s fica fora.
   expect(outgoingTimeAtMix).toBeGreaterThanOrEqual(8.65);
   expect(outgoingTimeAtMix).toBeLessThan(9.10);
 
