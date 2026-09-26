@@ -580,6 +580,8 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
 
   const enableDjAutomix = useCallback(() => {
     cancelDjAutomixTransition();
+    cancelDjNudge('a');
+    cancelDjNudge('b');
     commitDjSyncState(EMPTY_DJ_SYNC_STATE);
     player.dualDeck.setMode(true);
 
@@ -615,6 +617,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     }
   }, [
     cancelDjAutomixTransition,
+    cancelDjNudge,
     commitDjSyncState,
     djListedTracks,
     markDjTrackPlayed,
@@ -1019,10 +1022,12 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     }
     if (djMixModeRef.current === 'automix') disableDjAutomix();
     if (djSyncStateRef.current !== EMPTY_DJ_SYNC_STATE) {
+      cancelDjNudge('a');
+      cancelDjNudge('b');
       commitDjSyncState(EMPTY_DJ_SYNC_STATE);
     }
     if (player.djSession.active()) player.djSession.exit();
-  }, [commitDjSyncState, disableDjAutomix, player.djSession.enter, player.djSession.exit, player.hydrated, screen]);
+  }, [cancelDjNudge, commitDjSyncState, disableDjAutomix, player.djSession.enter, player.djSession.exit, player.hydrated, screen]);
 
   const qualityProfile = useNetworkQualityProfile(player.streamingMode, player.setStreamingMode);
   useBackgroundPlaybackContinuity({
