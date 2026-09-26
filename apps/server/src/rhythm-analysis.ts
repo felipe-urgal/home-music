@@ -1,14 +1,20 @@
 import { spawn } from 'node:child_process';
 import { MIN_DOWNBEAT_CONFIDENCE, type TrackRhythm } from '@home-music/shared';
+import {
+  deriveVariableBeatGrid,
+  type RhythmWindowEstimate
+} from './variable-beat-grid-analysis.js';
 import type { IndexedTrack } from './library.js';
 import { resolveRegularFileInside } from './security.js';
 
-export const RHYTHM_ANALYZER_VERSION = 2;
+export const RHYTHM_ANALYZER_VERSION = 3;
 export const RHYTHM_ANALYSIS_SAMPLE_RATE = 8_000;
-export const RHYTHM_ANALYSIS_SECONDS = 90;
+export const RHYTHM_ANALYSIS_SECONDS = 360;
 export const RHYTHM_ANALYSIS_TIMEOUT_MS = 20_000;
 
 const MIN_ANALYSIS_SECONDS = 4;
+const VARIABLE_GRID_WINDOW_SECONDS = 24;
+const VARIABLE_GRID_STEP_SECONDS = 18;
 const MIN_BPM = 55;
 const MAX_BPM = 200;
 const MIN_CORRELATION = 0.08;
@@ -149,7 +155,7 @@ function estimateDownbeat(
   };
 }
 
-export function analyzePcmRhythm(
+function analyzePcmRhythmBase(
   samples: Int16Array,
   sampleRate = RHYTHM_ANALYSIS_SAMPLE_RATE
 ): TrackRhythm | null {
@@ -271,6 +277,44 @@ export function analyzePcmRhythm(
     confidence: Number(confidence.toFixed(4)),
     ...(downbeat ?? {})
   };
+}
+
+export function analyzePcmRhythm(
+  samples: Int16Array,
+  sampleRate = RHYTHM_ANALYSIS_SAMPLE_RATE
+): TrackRhythm | null {
+  const rhythm = analyzePcmRhythmBase(samples, sampleRate);
+  if (!rhythm) return null;
+
+  const windowSamples = Math.round(VARIABLE_GRID_WINDOW_SECONDS * sampleRate);
+  const stepSamples = Math.round(VARIABLE_GRID_STEP_SECONDS * sampleRate);
+  if (
+    windowSamples <= 0
+    || stepSamples <= 0
+    || samples.length < windowSamples * 2
+  ) return rhythm;
+
+  const windows: RhythmWindowEstimate[] = [];
+  for (
+    let startSample = 0;
+    startSample + windowSamples <= samples.length;
+    startSample += stepSamples
+  ) {
+    const window = samples.subarray(startSample, startSample + windowSamples);
+    const local = analyzePcmRhythmBase(window, sampleRate);
+    if (!local) continue;
+
+    const startSeconds = startSample / sampleRate;
+    windows.push({
+      startSeconds,
+      bpm: local.bpm,
+      firstBeatSeconds: startSeconds + local.firstBeatSeconds,
+      confidence: local.confidence
+    });
+  }
+
+  const beatGrid = deriveVariableBeatGrid(rhythm, windows);
+  return beatGrid ? { ...rhythm, beatGrid } : rhythm;
 }
 
 export const decodeTrackToPcm: RhythmAnalysisRunner = (
