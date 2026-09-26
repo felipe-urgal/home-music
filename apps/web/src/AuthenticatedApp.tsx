@@ -168,10 +168,28 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
   }, [player.dualDeck]);
 
   const commitDjSyncState = useCallback((next: DjSyncState) => {
+    const previous = djSyncStateRef.current;
+    if (previous.masterDeck) {
+      const previousSlave: DjDeckId = previous.masterDeck === 'a' ? 'b' : 'a';
+      const relationEnded = (
+        !next.synced[previousSlave]
+        || next.masterDeck !== previous.masterDeck
+        || next.mode === 'off'
+        || next.mode === 'tempo'
+      );
+      if (previous.synced[previousSlave] && relationEnded) {
+        player.dualDeck.setPlaybackRate(
+          previousSlave,
+          ddjBaseRateRef.current[previousSlave] || 1
+        );
+        djSyncLastRelockAtRef.current[previousSlave] = null;
+      }
+    }
+
     djSyncStateRef.current = next;
     setDjSyncState(next);
     renderDdjLedsRef.current?.();
-  }, []);
+  }, [player.dualDeck]);
 
   const disableDjSync = useCallback((deck: DjDeckId) => {
     cancelDjNudge(deck);
