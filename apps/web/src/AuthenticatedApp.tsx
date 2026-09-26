@@ -1,4 +1,4 @@
-import { lazy, useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AuthenticatedUser } from '@home-music/shared';
 import { DesktopNowPlayingScreen } from './components/DesktopNowPlayingScreen';
 import { DesktopPlayerBar } from './components/DesktopPlayerBar';
@@ -102,6 +102,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
   );
   const ddjBrowserIndexRef = useRef(0);
   const [djBrowserIndex, setDjBrowserIndex] = useState(0);
+  const [djFolderPath, setDjFolderPath] = useState('');
   const ddjCuePointsRef = useRef<Record<DjDeckId, number | null>>({ a: null, b: null });
   const ddjSyncActiveRef = useRef<Record<DjDeckId, boolean>>({ a: false, b: false });
   const ddjLedRendererRef = useRef<Ddj400LedRenderer | null>(null);
@@ -147,9 +148,39 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     setDjModeState('manual');
   }, [cancelDjAutomixTransition, setDjModeState]);
 
-  const djBrowserTracks = navigation.libraryTracks.length
-    ? navigation.libraryTracks
-    : library.tracks;
+  const djFolderOptions = useMemo(() => {
+    const paths = new Set<string>(['']);
+    for (const track of library.tracks) {
+      const parts = track.folderPath.split('/').filter(Boolean);
+      for (let index = 1; index <= parts.length; index += 1) {
+        paths.add(parts.slice(0, index).join('/'));
+      }
+    }
+    return [...paths]
+      .sort((left, right) => left.localeCompare(right, 'pt-BR'))
+      .map(path => ({
+        path,
+        label: path || 'Todas as pastas'
+      }));
+  }, [library.tracks]);
+
+  const djBrowserTracks = useMemo(() => {
+    const source = navigation.libraryTracks.length
+      ? navigation.libraryTracks
+      : library.tracks;
+    if (!djFolderPath) return source;
+    const prefix = `${djFolderPath}/`;
+    return source.filter(track => (
+      track.folderPath === djFolderPath
+      || track.folderPath.startsWith(prefix)
+    ));
+  }, [djFolderPath, library.tracks, navigation.libraryTracks]);
+
+  const selectDjFolder = useCallback((path: string) => {
+    setDjFolderPath(path);
+    ddjBrowserIndexRef.current = 0;
+    setDjBrowserIndex(0);
+  }, []);
 
   const selectDjBrowserIndex = useCallback((index: number) => {
     const max = Math.max(0, djBrowserTracks.length - 1);
@@ -1055,6 +1086,9 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
           decks={djDeckPanels}
           mixer={djMixerState}
           libraryTracks={djBrowserTracks}
+          libraryFolders={djFolderOptions}
+          selectedFolderPath={djFolderPath}
+          onSelectFolderPath={selectDjFolder}
           selectedLibraryIndex={djBrowserIndex}
           onSelectLibraryIndex={selectDjBrowserIndex}
           onLoadSelectedTrack={loadDjBrowserTrack}
