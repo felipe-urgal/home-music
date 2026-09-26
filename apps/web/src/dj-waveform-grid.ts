@@ -20,6 +20,38 @@ export function buildDjWaveformMarkers(
     || maxMarkers <= 0
   ) return [];
 
+  const variableSegments = rhythm.beatGrid?.segments ?? [];
+  if (variableSegments.length) {
+    const markers: DjWaveformMarker[] = [];
+    for (let segmentIndex = 0; segmentIndex < variableSegments.length; segmentIndex += 1) {
+      const segment = variableSegments[segmentIndex]!;
+      const endSeconds = variableSegments[segmentIndex + 1]?.startSeconds ?? durationSeconds;
+      const beatSeconds = 60 / segment.bpm;
+      if (!Number.isFinite(beatSeconds) || beatSeconds <= 0) continue;
+
+      let beatAt = segment.firstBeatSeconds;
+      if (beatAt < segment.startSeconds) {
+        const jumps = Math.ceil((segment.startSeconds - beatAt) / beatSeconds);
+        beatAt += jumps * beatSeconds;
+      }
+
+      for (
+        ;
+        beatAt < endSeconds - 1e-9
+          && beatAt <= durationSeconds + 1e-9
+          && markers.length < maxMarkers;
+        beatAt += beatSeconds
+      ) {
+        markers.push({
+          position: Math.max(0, Math.min(1, beatAt / durationSeconds)),
+          kind: 'beat'
+        });
+      }
+      if (markers.length >= maxMarkers) break;
+    }
+    return markers;
+  }
+
   const beatSeconds = 60 / rhythm.bpm;
   const hasDownbeat = hasUsableBarGrid(rhythm);
 
