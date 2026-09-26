@@ -145,8 +145,6 @@ describe('initial DJ phase lock', () => {
       expect(['nudge', 'none']).toContain(plan.correction.kind);
     }
   });
-});
-
 
   it('degrada para tempo-only quando a correção inicial seria destrutiva', () => {
     const slowMaster: TrackRhythm = {
@@ -170,3 +168,5 @@ describe('initial DJ phase lock', () => {
     expect(plan.mode).toBe('tempo');
     expect(plan.correction).toEqual({ kind: 'none' });
   });
+
+});
