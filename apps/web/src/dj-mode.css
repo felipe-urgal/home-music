@@ -930,10 +930,6 @@
   height: 108px;
 }
 
-.dj-waveform__bars {
-  height: 82px;
-  gap: 2px;
-}
 
 .dj-pro-deck__metrics > div {
   min-height: 64px;
