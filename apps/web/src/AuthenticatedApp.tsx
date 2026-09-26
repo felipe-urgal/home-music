@@ -16,6 +16,7 @@ import { TvRemoteEntryButton } from './components/TvRemoteEntryButton';
 import { TvRemotePairingDialog } from './components/TvRemotePairingDialog';
 import { useRoutedScreen } from './browser-navigation';
 import { decodeDdj400Message } from './ddj400-mapping';
+import { isDjKeyboardEditableTarget, mapDjKeyboardCode } from './dj-keyboard-mapping';
 import { Ddj400MixerMapper } from './ddj400-mixer-mapping';
 import {
   Ddj400LedRenderer,
@@ -190,6 +191,34 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     scheduleMixerUiSync();
   }, [player.dualDeck, scheduleMixerUiSync]);
 
+  const nudgeDjDeck = useCallback((deck: DjDeckId, delta: -1 | 1) => {
+    player.dualDeck.setMode(true);
+    const snapshot = player.dualDeck.getSnapshot(deck);
+    if (!snapshot?.trackId) return;
+
+    ddjSyncActiveRef.current[deck] = false;
+    if (!snapshot.playing) {
+      player.dualDeck.seek(
+        deck,
+        snapshot.currentTimeSeconds + (delta * DDJ400_SCRUB_SECONDS)
+      );
+      renderDdjLedsRef.current?.();
+      return;
+    }
+
+    const baseRate = ddjBaseRateRef.current[deck] || snapshot.playbackRate || 1;
+    const nudgedRate = baseRate * (1 + (delta * DDJ400_NUDGE_RATE_DELTA));
+    player.dualDeck.setPlaybackRate(deck, nudgedRate);
+
+    const existingTimer = ddjNudgeTimerRef.current[deck];
+    if (existingTimer != null) window.clearTimeout(existingTimer);
+    ddjNudgeTimerRef.current[deck] = window.setTimeout(() => {
+      player.dualDeck.setPlaybackRate(deck, ddjBaseRateRef.current[deck]);
+      ddjNudgeTimerRef.current[deck] = null;
+    }, 80);
+    renderDdjLedsRef.current?.();
+  }, [player.dualDeck]);
+
   const syncDjDeck = useCallback((deck: DjDeckId) => {
     player.dualDeck.setMode(true);
     const masterDeck: DjDeckId = deck === 'a' ? 'b' : 'a';
@@ -304,31 +333,9 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     }
 
     if (command.type === 'deck.nudge') {
-      player.dualDeck.setMode(true);
-      const snapshot = player.dualDeck.getSnapshot(command.deck);
-      if (!snapshot?.trackId) return;
-
-      ddjSyncActiveRef.current[command.deck] = false;
-      if (!snapshot.playing) {
-        player.dualDeck.seek(
-          command.deck,
-          snapshot.currentTimeSeconds + (command.delta * DDJ400_SCRUB_SECONDS)
-        );
-        renderDdjLedsRef.current?.();
-        return;
-      }
-
-      const baseRate = ddjBaseRateRef.current[command.deck] || snapshot.playbackRate || 1;
-      const nudgedRate = baseRate * (1 + (command.delta * DDJ400_NUDGE_RATE_DELTA));
-      player.dualDeck.setPlaybackRate(command.deck, nudgedRate);
-
-      const existingTimer = ddjNudgeTimerRef.current[command.deck];
-      if (existingTimer != null) window.clearTimeout(existingTimer);
-      ddjNudgeTimerRef.current[command.deck] = window.setTimeout(() => {
-        player.dualDeck.setPlaybackRate(command.deck, ddjBaseRateRef.current[command.deck]);
-        ddjNudgeTimerRef.current[command.deck] = null;
-      }, 80);
-      renderDdjLedsRef.current?.();
+      const direction = command.delta < 0 ? -1 : command.delta > 0 ? 1 : 0;
+      if (direction === 0) return;
+      nudgeDjDeck(command.deck, direction);
       return;
     }
 
@@ -349,7 +356,69 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
       player.dualDeck.setCrossfader(command.value);
       scheduleMixerUiSync();
     }
-  }, [cueDjDeck, djBrowserTracks, loadDjBrowserTrack, player.dualDeck, scheduleMixerUiSync, screen, selectDjBrowserIndex, setScreen, syncDjDeck, toggleDjDeckPlay]);
+  }, [cueDjDeck, djBrowserTracks, loadDjBrowserTrack, nudgeDjDeck, player.dualDeck, scheduleMixerUiSync, screen, selectDjBrowserIndex, setScreen, syncDjDeck, toggleDjDeckPlay]);
+
+  useEffect(() => {
+    if (screen !== 'dj') return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.altKey || event.ctrlKey || event.metaKey || isDjKeyboardEditableTarget(event.target)) return;
+      const command = mapDjKeyboardCode(event.code);
+      if (!command || (event.repeat && !command.repeatable)) return;
+
+      event.preventDefault();
+
+      if (command.type === 'deck.toggle-play') {
+        toggleDjDeckPlay(command.deck);
+        return;
+      }
+      if (command.type === 'deck.cue') {
+        cueDjDeck(command.deck);
+        return;
+      }
+      if (command.type === 'deck.sync') {
+        syncDjDeck(command.deck);
+        return;
+      }
+      if (command.type === 'browser.move') {
+        selectDjBrowserIndex(ddjBrowserIndexRef.current + command.delta);
+        return;
+      }
+      if (command.type === 'browser.load') {
+        loadDjBrowserTrack(command.deck);
+        return;
+      }
+      if (command.type === 'deck.nudge') {
+        nudgeDjDeck(command.deck, command.delta);
+        return;
+      }
+      if (command.type === 'mixer.channel') {
+        const mixer = player.dualDeck.getMixerSnapshot();
+        setDjChannelVolume(
+          command.deck,
+          mixer.channelVolumes[command.deck] + (command.delta * 0.05)
+        );
+        return;
+      }
+
+      const mixer = player.dualDeck.getMixerSnapshot();
+      setDjCrossfader(mixer.crossfader + (command.delta * 0.1));
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [
+    cueDjDeck,
+    loadDjBrowserTrack,
+    nudgeDjDeck,
+    player.dualDeck.getMixerSnapshot,
+    screen,
+    selectDjBrowserIndex,
+    setDjChannelVolume,
+    setDjCrossfader,
+    syncDjDeck,
+    toggleDjDeckPlay
+  ]);
 
   const midiController = useWebMidiController({ onMessage: handleDdj400Message });
 
