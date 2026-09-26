@@ -26,6 +26,7 @@ export type RhythmAnalysisRuntime = {
   completed: number;
   detected: number;
   unavailable: number;
+  decodeUnavailable: number;
   failed: number;
   timeouts: number;
   lowConfidence: number;
@@ -47,6 +48,7 @@ export class RhythmAnalysisScheduler {
   private completed = 0;
   private detected = 0;
   private unavailable = 0;
+  private decodeUnavailable = 0;
   private failed = 0;
   private timeouts = 0;
   private lowConfidence = 0;
@@ -63,6 +65,7 @@ export class RhythmAnalysisScheduler {
       completed: this.completed,
       detected: this.detected,
       unavailable: this.unavailable,
+      decodeUnavailable: this.decodeUnavailable,
       failed: this.failed,
       timeouts: this.timeouts,
       lowConfidence: this.lowConfidence,
@@ -133,6 +136,7 @@ export class RhythmAnalysisScheduler {
         } catch (error) {
           if (!(error instanceof RhythmAnalysisUnavailableError)) throw error;
           rhythm = null;
+          this.decodeUnavailable += 1;
           this.options.logger.warn(
             {
               trackId,
