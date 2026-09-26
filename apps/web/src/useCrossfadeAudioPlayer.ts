@@ -795,9 +795,11 @@ export function useCrossfadeAudioPlayer(
     setDualDeckMode(true);
     for (const deck of ['a', 'b'] as const) {
       const audio = getDeckAudio(deck);
-      if (audio) pauseDeckAudio(audio);
+      if (audio) clearDeckAudio(audio);
+      deckTrackIdsRef.current[deck] = null;
     }
   }, [
+    clearDeckAudio,
     getActiveAudio,
     getDeckAudio,
     player.current?.id,
