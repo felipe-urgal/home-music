@@ -105,20 +105,46 @@ test('crossfade quantizado inicia próximo da batida planejada no Chromium mobil
 
   await login(page);
 
+  await page.evaluate(() => {
+    const state = window as Window & { __e2eRhythmCrossfadeStart?: number };
+    state.__e2eRhythmCrossfadeStart = undefined;
+
+    const captureStart = () => {
+      const visual = document.querySelector('.now-playing-transition-art');
+      if (visual?.getAttribute('data-crossfading') !== 'true') return false;
+
+      const playingTimes = Array.from(document.querySelectorAll('audio'))
+        .filter(audio => !audio.paused && !audio.ended)
+        .map(audio => audio.currentTime);
+      if (playingTimes.length < 2) return false;
+
+      state.__e2eRhythmCrossfadeStart = Math.max(...playingTimes);
+      return true;
+    };
+
+    const observer = new MutationObserver(() => {
+      if (captureStart()) observer.disconnect();
+    });
+    observer.observe(document.body, {
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['data-crossfading', 'data-crossfade-progress']
+    });
+    captureStart();
+  });
+
   const artworkPlay = page.locator('.player-hero-play__control');
-  await artworkPlay.click();
+  if (await artworkPlay.getAttribute('aria-label') === 'Tocar') {
+    await artworkPlay.click();
+  }
   await expect(artworkPlay).toHaveAttribute('aria-label', 'Pausar');
 
-  await page.waitForFunction(() => (
-    Array.from(document.querySelectorAll('audio'))
-      .filter(audio => !audio.paused && !audio.ended && audio.currentTime > 0)
-      .length === 2
-  ), undefined, { timeout: 12_000, polling: 25 });
+  await page.waitForFunction(() => Number.isFinite(
+    (window as Window & { __e2eRhythmCrossfadeStart?: number }).__e2eRhythmCrossfadeStart
+  ), undefined, { timeout: 12_000, polling: 50 });
 
   const outgoingTimeAtMix = await page.evaluate(() => (
-    Math.max(...Array.from(document.querySelectorAll('audio'))
-      .filter(audio => !audio.paused && !audio.ended && audio.currentTime > 0)
-      .map(audio => audio.currentTime))
+    (window as Window & { __e2eRhythmCrossfadeStart?: number }).__e2eRhythmCrossfadeStart ?? 0
   ));
 
   // Faixa de 10 s, crossfade preferido de 2 s => alvo bruto em 8,00 s.
