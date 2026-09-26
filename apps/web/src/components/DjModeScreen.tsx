@@ -15,6 +15,10 @@ export type DjDeckPanelState = {
 type DjModeScreenProps = {
   decks: Record<DjDeckId, DjDeckPanelState>;
   mixer: DualDeckMixerState;
+  libraryTracks: Track[];
+  selectedLibraryIndex: number;
+  onSelectLibraryIndex: (index: number) => void;
+  onLoadSelectedTrack: (deck: DjDeckId) => void;
   onChannelVolume: (deck: DjDeckId, value: number) => void;
   onCrossfader: (value: number) => void;
   onTogglePlay: (deck: DjDeckId) => void;
@@ -137,9 +141,82 @@ function DeckPanel({
   );
 }
 
+
+function DjLibrary({
+  tracks,
+  selectedIndex,
+  onSelect,
+  onLoad
+}: {
+  tracks: Track[];
+  selectedIndex: number;
+  onSelect: (index: number) => void;
+  onLoad: (deck: DjDeckId) => void;
+}) {
+  if (!tracks.length) {
+    return (
+      <section className="dj-library" aria-label="Biblioteca DJ">
+        <div className="dj-library__heading">
+          <div><strong>Biblioteca</strong><span>Nenhuma faixa disponível.</span></div>
+        </div>
+      </section>
+    );
+  }
+
+  const safeIndex = Math.max(0, Math.min(tracks.length - 1, selectedIndex));
+  const windowSize = 18;
+  const before = 6;
+  const start = Math.max(0, Math.min(safeIndex - before, tracks.length - windowSize));
+  const visibleTracks = tracks.slice(start, start + windowSize);
+  const selected = tracks[safeIndex];
+
+  return (
+    <section className="dj-library" aria-label="Biblioteca DJ">
+      <div className="dj-library__heading">
+        <div>
+          <strong>Biblioteca</strong>
+          <span>{tracks.length} {tracks.length === 1 ? 'faixa' : 'faixas'} · seleção {safeIndex + 1}</span>
+        </div>
+        <div className="dj-library__load-actions">
+          <button type="button" disabled={!selected} onClick={() => onLoad('a')}>LOAD A</button>
+          <button type="button" disabled={!selected} onClick={() => onLoad('b')}>LOAD B</button>
+        </div>
+      </div>
+
+      <div className="dj-library__list" role="listbox" aria-label="Faixas">
+        {visibleTracks.map((track, offset) => {
+          const index = start + offset;
+          const selectedRow = index === safeIndex;
+          return (
+            <button
+              key={track.id}
+              type="button"
+              role="option"
+              aria-selected={selectedRow}
+              className={selectedRow ? 'is-selected' : ''}
+              onClick={() => onSelect(index)}
+            >
+              <span className="dj-library__index">{String(index + 1).padStart(2, '0')}</span>
+              <span className="dj-library__track">
+                <strong>{track.title}</strong>
+                <small>{track.artist || 'Artista desconhecido'}</small>
+              </span>
+              <span className="dj-library__bpm">{track.rhythm?.bpm ? track.rhythm.bpm.toFixed(1) : '—'} BPM</span>
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 export function DjModeScreen({
   decks,
   mixer,
+  libraryTracks,
+  selectedLibraryIndex,
+  onSelectLibraryIndex,
+  onLoadSelectedTrack,
   onChannelVolume,
   onCrossfader,
   onTogglePlay,
@@ -234,7 +311,12 @@ export function DjModeScreen({
       </div>
 
       <footer className="dj-mode__bottom-panel">
-        <div><strong>Biblioteca</strong><span>Seleção e LOAD A/B entram na etapa dedicada.</span></div>
+        <DjLibrary
+          tracks={libraryTracks}
+          selectedIndex={selectedLibraryIndex}
+          onSelect={onSelectLibraryIndex}
+          onLoad={onLoadSelectedTrack}
+        />
         <div><strong>Controlador MIDI</strong><span>Status e diagnóstico entram na etapa dedicada.</span></div>
       </footer>
     </section>
