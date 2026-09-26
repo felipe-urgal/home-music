@@ -264,7 +264,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     ddjCuePointsRef.current[deck] = null;
     commitDjSyncState(resetDjSyncForLoad(djSyncStateRef.current, deck));
     return true;
-  }, [djListedTracks, player.dualDeck, switchDjToManual]);
+  }, [commitDjSyncState, djListedTracks, player.dualDeck, switchDjToManual]);
 
   useEffect(() => {
     if (!djListedTracks.length) {
@@ -662,11 +662,17 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
         const syncState = djSyncStateRef.current;
         if (syncState.masterDeck) {
           const masterSnapshot = player.dualDeck.getSnapshot(syncState.masterDeck);
-          if (!masterSnapshot?.trackId || !masterSnapshot.playing) {
-            const next = resolveDjSyncAfterDeckUnavailable(
-              syncState,
-              syncState.masterDeck
-            );
+          const slaveDeck: DjDeckId = syncState.masterDeck === 'a' ? 'b' : 'a';
+          const slaveSnapshot = player.dualDeck.getSnapshot(slaveDeck);
+          const unavailableDeck = (
+            !masterSnapshot?.trackId || !masterSnapshot.playing
+              ? syncState.masterDeck
+              : syncState.synced[slaveDeck] && (!slaveSnapshot?.trackId || !slaveSnapshot.playing)
+                ? slaveDeck
+                : null
+          );
+          if (unavailableDeck) {
+            const next = resolveDjSyncAfterDeckUnavailable(syncState, unavailableDeck);
             if (next !== syncState) commitDjSyncState(next);
           }
         }
