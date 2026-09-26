@@ -66,6 +66,7 @@ function drawDjWaveform(
   canvas: HTMLCanvasElement,
   waveform: TrackWaveform | null,
   rhythm: Track['rhythm'],
+  durationSeconds: number,
   deck: DjDeckId
 ) {
   const rect = canvas.getBoundingClientRect();
@@ -104,7 +105,7 @@ function drawDjWaveform(
     context.stroke();
   }
 
-  const duration = waveform?.durationSeconds ?? 0;
+  const duration = waveform?.durationSeconds ?? durationSeconds;
   const markers = buildDjWaveformMarkers(rhythm, duration);
   for (const marker of markers) {
     const x = marker.position * width;
@@ -136,17 +137,29 @@ function DjWaveform({
 
   useEffect(() => {
     let active = true;
+    let retryTimer: number | null = null;
     setWaveform(null);
     setStatus('loading');
 
-    void fetchTrackWaveform(track.id).then(result => {
+    const load = async () => {
+      const result = await fetchTrackWaveform(track.id);
       if (!active) return;
-      setWaveform(result);
-      setStatus(result ? 'ready' : 'unavailable');
-    });
+      if (result) {
+        setWaveform(result);
+        setStatus('ready');
+        return;
+      }
+      setWaveform(null);
+      setStatus('unavailable');
+      retryTimer = window.setTimeout(() => {
+        if (active) void load();
+      }, 3_000);
+    };
 
+    void load();
     return () => {
       active = false;
+      if (retryTimer != null) window.clearTimeout(retryTimer);
     };
   }, [track.id]);
 
@@ -154,7 +167,13 @@ function DjWaveform({
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const render = () => drawDjWaveform(canvas, waveform, track.rhythm, deck);
+    const render = () => drawDjWaveform(
+      canvas,
+      waveform,
+      track.rhythm,
+      track.duration ?? 0,
+      deck
+    );
     render();
 
     const observer = typeof ResizeObserver === 'undefined'
@@ -162,7 +181,7 @@ function DjWaveform({
       : new ResizeObserver(render);
     observer?.observe(canvas);
     return () => observer?.disconnect();
-  }, [deck, track.rhythm, waveform]);
+  }, [deck, track.duration, track.rhythm, waveform]);
 
   return (
     <div className="dj-waveform" data-status={status} aria-label="Waveform real da faixa">
