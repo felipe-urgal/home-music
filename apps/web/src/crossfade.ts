@@ -45,6 +45,14 @@ type CrossfadeCandidateOptions = {
   remainingSeconds: number;
 };
 
+type CrossfadePreloadOptions = {
+  queue: Track[];
+  currentIndex: number;
+  currentTrackId: string | null;
+  repeatMode: RepeatMode;
+  visibilityState: DocumentVisibilityState;
+};
+
 type ManualCrossfadeCandidateOptions = {
   currentTrackId: string | null;
   targetTrackId: string | null;
@@ -98,6 +106,19 @@ export function resolveManualCrossfadeCandidate({
     trackId: targetTrackId,
     durationSeconds: normalizedDurationSeconds
   };
+}
+
+export function resolveCrossfadePreloadTrackId({
+  queue,
+  currentIndex,
+  currentTrackId,
+  repeatMode,
+  visibilityState
+}: CrossfadePreloadOptions) {
+  if (visibilityState !== 'visible') return null;
+  const decision = nextTrackDecision(queue, currentIndex, repeatMode, true);
+  if (decision.type !== 'track' || decision.id === currentTrackId) return null;
+  return decision.id;
 }
 
 export function resolveCrossfadeCandidate({
