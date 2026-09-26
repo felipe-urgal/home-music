@@ -39,6 +39,19 @@ export function loadDeckAudio(
   audio.load();
 }
 
+export async function playDeckAudio(audio: HTMLAudioElement) {
+  try {
+    await audio.play();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function pauseDeckAudio(audio: HTMLAudioElement) {
+  audio.pause();
+}
+
 export function seekDeckAudio(audio: HTMLAudioElement, seconds: number) {
   if (!Number.isFinite(seconds)) return audio.currentTime;
   const upperBound = Number.isFinite(audio.duration) && audio.duration >= 0
