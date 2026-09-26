@@ -20,7 +20,11 @@ import {
   effectiveDjAutomixDuration,
   shouldStartDjAutomixTransition
 } from './dj-automix-policy';
-import { nextDjAutomixIndex, shuffleDjTrackList } from './dj-automix-sequence';
+import {
+  canPrepareDjAutomixNext,
+  nextDjAutomixIndex,
+  shuffleDjTrackList
+} from './dj-automix-sequence';
 import { isDjKeyboardEditableTarget, mapDjKeyboardCode } from './dj-keyboard-mapping';
 import {
   EMPTY_DJ_SYNC_STATE,
@@ -502,19 +506,15 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
         // adotado ainda for o ativo esperado. Assim LOAD/preload nunca encosta no
         // deck que acabou de assumir o áudio.
         window.requestAnimationFrame(() => {
-          if (
-            djMixModeRef.current !== 'automix'
-            || djAutomixTransitionRef.current
-            || djAutomixActiveDeckRef.current !== incomingDeck
-            || djAutomixQueueIndexRef.current !== options.nextQueueIndex
-          ) return;
-
           const current = player.dualDeck.getSnapshot(incomingDeck);
-          if (
-            !current?.trackId
-            || current.trackId !== options.nextTrack.id
-            || !current.playing
-          ) return;
+          if (!canPrepareDjAutomixNext({
+            automixActive: djMixModeRef.current === 'automix',
+            transitionActive: djAutomixTransitionRef.current,
+            activeDeckMatches: djAutomixActiveDeckRef.current === incomingDeck,
+            queueIndexMatches: djAutomixQueueIndexRef.current === options.nextQueueIndex,
+            activeTrackMatches: current?.trackId === options.nextTrack.id,
+            activeDeckPlaying: Boolean(current?.playing)
+          })) return;
 
           prepareDjAutomixNext(incomingDeck, options.nextQueueIndex);
         });
