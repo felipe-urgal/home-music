@@ -1246,15 +1246,6 @@
   color: #73d5a5;
 }
 
-.dj-pro-library__list > button.is-played:not(.is-selected)::after {
-  content: 'tocada';
-  justify-self: end;
-  color: rgba(115, 213, 165, 0.72);
-  font-size: 0.58rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
 @media (max-width: 1350px) {
   .dj-pro-library__header {
     grid-template-columns: minmax(150px, auto) minmax(200px, 1fr) minmax(230px, 1.2fr);
@@ -1293,4 +1284,9 @@
     grid-column: 1;
     width: 100%;
   }
+}
+
+
+.dj-pro-library__search-wrap .dj-pro-library__search {
+  min-height: 38px;
 }
