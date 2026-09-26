@@ -48,6 +48,10 @@ import {
   setDeckVolume
 } from './dual-deck-audio';
 import type { DjDeckId } from './dj-controller-contract';
+import {
+  createDefaultDualDeckMixerState,
+  resolveDualDeckOutputGain
+} from './dual-deck-mixer';
 import { useAudioPlayer } from './useAudioPlayer';
 
 function initialCrossfadeSeconds() {
@@ -91,6 +95,7 @@ export function useCrossfadeAudioPlayer(
   const deckBRef = useRef<HTMLAudioElement>(null);
   const activeDeckRef = useRef<CrossfadeDeck>('a');
   const dualDeckModeRef = useRef(false);
+  const dualDeckMixerRef = useRef(createDefaultDualDeckMixerState());
   const deckTrackIdsRef = useRef<Record<DjDeckId, string | null>>({
     a: player.current?.id ?? null,
     b: null
@@ -123,6 +128,20 @@ export function useCrossfadeAudioPlayer(
   const getInactiveAudio = useCallback(() => (
     getDeckAudio(otherCrossfadeDeck(activeDeckRef.current))
   ), [getDeckAudio]);
+
+  const applyDualDeckMixer = useCallback(() => {
+    const mixer = dualDeckMixerRef.current;
+    for (const deck of ['a', 'b'] as const) {
+      const audio = getDeckAudio(deck);
+      if (!audio) continue;
+      setDeckVolume(audio, resolveDualDeckOutputGain({
+        deck,
+        masterVolume: outputVolumeRef.current,
+        channelVolume: mixer.channelVolumes[deck],
+        crossfader: mixer.crossfader
+      }));
+    }
+  }, [getDeckAudio]);
 
   const clearAudio = useCallback((audio: HTMLAudioElement | null) => {
     if (!audio) return;
@@ -731,13 +750,16 @@ export function useCrossfadeAudioPlayer(
     if (active) {
       cancelCrossfade();
       dualDeckModeRef.current = true;
+      dualDeckMixerRef.current = createDefaultDualDeckMixerState();
       deckTrackIdsRef.current[activeDeckRef.current] = player.current?.id ?? null;
+      applyDualDeckMixer();
       return;
     }
 
     dualDeckModeRef.current = false;
+    dualDeckMixerRef.current = createDefaultDualDeckMixerState();
     cancelCrossfade();
-  }, [cancelCrossfade, player.current?.id]);
+  }, [applyDualDeckMixer, cancelCrossfade, player.current?.id]);
 
   const loadDualDeckTrack = useCallback((deck: DjDeckId, track: Track) => {
     if (!dualDeckModeRef.current) return false;
@@ -749,7 +771,12 @@ export function useCrossfadeAudioPlayer(
     cancelQuantizedWake();
     cancelPlaybackRateRestore();
     loadDeckAudio(audio, incomingTrackSource(track), {
-      volume: deck === activeDeckRef.current ? outputVolumeRef.current : 0
+      volume: resolveDualDeckOutputGain({
+        deck,
+        masterVolume: outputVolumeRef.current,
+        channelVolume: dualDeckMixerRef.current.channelVolumes[deck],
+        crossfader: dualDeckMixerRef.current.crossfader
+      })
     });
     deckTrackIdsRef.current[deck] = track.id;
     return true;
@@ -800,9 +827,22 @@ export function useCrossfadeAudioPlayer(
 
   const setDualDeckVolume = useCallback((deck: DjDeckId, volume: number) => {
     if (!dualDeckModeRef.current) return null;
-    const audio = getDeckAudio(deck);
-    return audio ? setDeckVolume(audio, volume) : null;
-  }, [getDeckAudio]);
+    dualDeckMixerRef.current.channelVolumes[deck] = Math.max(0, Math.min(1, volume));
+    applyDualDeckMixer();
+    return dualDeckMixerRef.current.channelVolumes[deck];
+  }, [applyDualDeckMixer]);
+
+  const setDualDeckCrossfader = useCallback((value: number) => {
+    if (!dualDeckModeRef.current) return null;
+    dualDeckMixerRef.current.crossfader = Math.max(-1, Math.min(1, value));
+    applyDualDeckMixer();
+    return dualDeckMixerRef.current.crossfader;
+  }, [applyDualDeckMixer]);
+
+  const getDualDeckMixerSnapshot = useCallback(() => ({
+    channelVolumes: { ...dualDeckMixerRef.current.channelVolumes },
+    crossfader: dualDeckMixerRef.current.crossfader
+  }), []);
 
   const getDualDeckSnapshot = useCallback((deck: DjDeckId) => {
     const audio = getDeckAudio(deck);
@@ -824,6 +864,8 @@ export function useCrossfadeAudioPlayer(
       seek: seekDualDeck,
       setPlaybackRate: setDualDeckPlaybackRate,
       setVolume: setDualDeckVolume,
+      setCrossfader: setDualDeckCrossfader,
+      getMixerSnapshot: getDualDeckMixerSnapshot,
       getSnapshot: getDualDeckSnapshot
     },
     crossfadeSeconds,
