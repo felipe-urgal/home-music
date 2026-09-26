@@ -151,7 +151,7 @@ describe('initial DJ phase lock', () => {
   it('degrada para tempo-only quando a correção inicial seria destrutiva', () => {
     const slowMaster: TrackRhythm = {
       ...master,
-      bpm: 30,
+      bpm: 15,
       downbeatConfidence: 0.1
     };
     const plan = resolveInitialDjSyncPlan({
@@ -159,7 +159,7 @@ describe('initial DJ phase lock', () => {
       masterPositionSeconds: 8,
       masterPlaybackRate: 1,
       slaveRhythm: slowMaster,
-      slavePositionSeconds: 9,
+      slavePositionSeconds: 10,
       beatmatch: {
         playbackRate: 1,
         tempoFactor: 1,
