@@ -4,6 +4,7 @@ import {
   ddj400LedMessage,
   type Ddj400LedState
 } from './ddj400-led-feedback';
+import { DDJ400_MIDI_FIXTURES } from './ddj400-midi-fixtures';
 
 function state(overrides: Partial<Ddj400LedState> = {}): Ddj400LedState {
   return {
@@ -16,9 +17,9 @@ function state(overrides: Partial<Ddj400LedState> = {}): Ddj400LedState {
 
 describe('DDJ-400 LED feedback', () => {
   it('gera bytes corretos para PLAY CUE e SYNC', () => {
-    expect(ddj400LedMessage('a', 'play', true)).toEqual([0x90, 0x0b, 0x7f]);
-    expect(ddj400LedMessage('b', 'cue', false)).toEqual([0x91, 0x0c, 0x00]);
-    expect(ddj400LedMessage('b', 'sync', true)).toEqual([0x91, 0x58, 0x7f]);
+    expect(ddj400LedMessage('a', 'play', true)).toEqual([0x90, DDJ400_MIDI_FIXTURES.led.play, DDJ400_MIDI_FIXTURES.led.on]);
+    expect(ddj400LedMessage('b', 'cue', false)).toEqual([0x91, DDJ400_MIDI_FIXTURES.led.cue, DDJ400_MIDI_FIXTURES.led.off]);
+    expect(ddj400LedMessage('b', 'sync', true)).toEqual([0x91, DDJ400_MIDI_FIXTURES.led.sync, DDJ400_MIDI_FIXTURES.led.on]);
   });
 
   it('deduplica renders sem mudança', () => {
@@ -39,7 +40,7 @@ describe('DDJ-400 LED feedback', () => {
     send.mockClear();
 
     expect(renderer.render(state({ cue: { a: true, b: false } }))).toBe(1);
-    expect(send).toHaveBeenCalledWith([0x90, 0x0c, 0x7f]);
+    expect(send).toHaveBeenCalledWith([0x90, DDJ400_MIDI_FIXTURES.led.cue, DDJ400_MIDI_FIXTURES.led.on]);
   });
 
   it('reset força reidratação completa no reconnect', () => {
@@ -72,7 +73,7 @@ describe('DDJ-400 LED feedback', () => {
     send.mockClear();
 
     expect(renderer.clear()).toBe(6);
-    expect(send).toHaveBeenCalledWith([0x90, 0x0b, 0x00]);
-    expect(send).toHaveBeenCalledWith([0x91, 0x58, 0x00]);
+    expect(send).toHaveBeenCalledWith([0x90, DDJ400_MIDI_FIXTURES.led.play, DDJ400_MIDI_FIXTURES.led.off]);
+    expect(send).toHaveBeenCalledWith([0x91, DDJ400_MIDI_FIXTURES.led.sync, DDJ400_MIDI_FIXTURES.led.off]);
   });
 });
