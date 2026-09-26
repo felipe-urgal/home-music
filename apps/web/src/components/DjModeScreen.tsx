@@ -2,6 +2,7 @@ import type { Track } from '@home-music/shared';
 import { ArrowLeft, Disc3, Pause, Play, RotateCcw, SlidersHorizontal, Zap } from 'lucide-react';
 import type { DjDeckId } from '../dj-controller-contract';
 import type { DualDeckAudioSnapshot } from '../dual-deck-audio';
+import type { DualDeckMixerState } from '../dual-deck-mixer';
 
 export type DjDeckPanelState = {
   snapshot: DualDeckAudioSnapshot | null;
@@ -13,6 +14,9 @@ export type DjDeckPanelState = {
 
 type DjModeScreenProps = {
   decks: Record<DjDeckId, DjDeckPanelState>;
+  mixer: DualDeckMixerState;
+  onChannelVolume: (deck: DjDeckId, value: number) => void;
+  onCrossfader: (value: number) => void;
   onTogglePlay: (deck: DjDeckId) => void;
   onCue: (deck: DjDeckId) => void;
   onSync: (deck: DjDeckId) => void;
@@ -133,7 +137,16 @@ function DeckPanel({
   );
 }
 
-export function DjModeScreen({ decks, onTogglePlay, onCue, onSync, onExit }: DjModeScreenProps) {
+export function DjModeScreen({
+  decks,
+  mixer,
+  onChannelVolume,
+  onCrossfader,
+  onTogglePlay,
+  onCue,
+  onSync,
+  onExit
+}: DjModeScreenProps) {
   return (
     <section className="dj-mode" aria-label="Modo DJ">
       <header className="dj-mode__header">
@@ -153,10 +166,67 @@ export function DjModeScreen({ decks, onTogglePlay, onCue, onSync, onExit }: DjM
           <div className="dj-mode__mixer-heading">
             <SlidersHorizontal aria-hidden="true" /><span>Mixer</span>
           </div>
-          <div className="dj-mode__mixer-placeholder">
-            <span>Channel A</span><div aria-hidden="true" />
-            <span>Crossfader</span><div aria-hidden="true" />
-            <span>Channel B</span>
+
+          <div className="dj-mixer">
+            <label className="dj-mixer__channel">
+              <span>Channel A</span>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value={mixer.channelVolumes.a}
+                aria-label="Volume do Channel A"
+                aria-valuetext={`${Math.round(mixer.channelVolumes.a * 100)}%`}
+                onChange={event => onChannelVolume('a', Number(event.currentTarget.value))}
+              />
+              <strong>{Math.round(mixer.channelVolumes.a * 100)}%</strong>
+            </label>
+
+            <div className="dj-mixer__center">
+              <span className="dj-mixer__mode">Manual</span>
+              <div className="dj-mixer__crossfader">
+                <div className="dj-mixer__crossfader-labels" aria-hidden="true">
+                  <span>A</span><span>Crossfader</span><span>B</span>
+                </div>
+                <input
+                  type="range"
+                  min="-1"
+                  max="1"
+                  step="0.01"
+                  value={mixer.crossfader}
+                  aria-label="Crossfader"
+                  aria-valuetext={mixer.crossfader === 0
+                    ? 'Centro'
+                    : mixer.crossfader < 0
+                      ? `${Math.round(Math.abs(mixer.crossfader) * 100)}% para Deck A`
+                      : `${Math.round(mixer.crossfader * 100)}% para Deck B`}
+                  onChange={event => onCrossfader(Number(event.currentTarget.value))}
+                />
+              </div>
+              <strong className="dj-mixer__crossfader-value">
+                {mixer.crossfader === 0
+                  ? 'Centro'
+                  : mixer.crossfader < 0
+                    ? `A ${Math.round(Math.abs(mixer.crossfader) * 100)}%`
+                    : `B ${Math.round(mixer.crossfader * 100)}%`}
+              </strong>
+            </div>
+
+            <label className="dj-mixer__channel">
+              <span>Channel B</span>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value={mixer.channelVolumes.b}
+                aria-label="Volume do Channel B"
+                aria-valuetext={`${Math.round(mixer.channelVolumes.b * 100)}%`}
+                onChange={event => onChannelVolume('b', Number(event.currentTarget.value))}
+              />
+              <strong>{Math.round(mixer.channelVolumes.b * 100)}%</strong>
+            </label>
           </div>
         </section>
 
