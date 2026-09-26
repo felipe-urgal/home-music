@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import type { TrackWaveform } from '@home-music/shared';
 import type { IndexedTrack } from './library.js';
+import { isFfmpegDecodeFailure } from './rhythm-analysis.js';
 import { resolveRegularFileInside } from './security.js';
 
 export const WAVEFORM_ANALYZER_VERSION = 1;
@@ -140,7 +141,12 @@ export const decodeTrackToWaveformPcm: WaveformAnalysisRunner = (
   child.once('close', code => {
     if (settled) return;
     if (code !== 0) {
-      finish(new WaveformAnalysisUnavailableError(code));
+      const details = Buffer.concat(stderr).toString('utf8');
+      if (isFfmpegDecodeFailure(details)) {
+        finish(new WaveformAnalysisUnavailableError(code));
+      } else {
+        finish(new Error(`FFmpeg encerrou a análise de waveform com código ${code ?? 'desconhecido'}.`));
+      }
       return;
     }
 
