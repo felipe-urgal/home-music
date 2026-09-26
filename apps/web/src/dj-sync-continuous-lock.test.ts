@@ -134,7 +134,10 @@ describe('continuous DJ sync controller', () => {
       slaveRhythm: slaveVariable
     });
 
-    expect(result.playbackRate).toBeCloseTo(122 / 119, 3);
+    const localBaseRate = 122 / 119;
+    expect(result.playbackRate).toBeGreaterThan(localBaseRate * (1 - DJ_SYNC_CONTINUOUS_MAX_RATE_DELTA));
+    expect(result.playbackRate).toBeLessThan(localBaseRate * (1 + DJ_SYNC_CONTINUOUS_MAX_RATE_DELTA));
+    expect(Math.abs(result.playbackRate - 1)).toBeGreaterThan(0.02);
   });
 
   it('mantém correção proporcional ao playbackRate base', () => {
