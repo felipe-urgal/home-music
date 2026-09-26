@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 
-export type RoutedScreen = 'player' | 'library' | 'account' | 'admin';
+export type RoutedScreen = 'player' | 'library' | 'dj' | 'account' | 'admin';
 
 export type LibraryRouteState = {
   libraryTab: 'folders' | 'playlists';
@@ -69,6 +69,7 @@ export function parseAppPath(pathname: string): AppRoute {
   if (!canonical) return invalidRoute();
 
   if (canonical === '/') return { screen: 'player', path: '/', valid: true };
+  if (canonical === '/dj') return { screen: 'dj', path: '/dj', valid: true };
   if (canonical === '/account') return { screen: 'account', path: '/account', valid: true };
   if (canonical === '/admin') return { screen: 'admin', path: '/admin', valid: true };
 
@@ -158,6 +159,7 @@ export function navigateAppPath(path: string, options: { replace?: boolean } = {
 function pathForScreen(screen: RoutedScreen, libraryPath: string) {
   if (screen === 'player') return '/';
   if (screen === 'library') return libraryPath;
+  if (screen === 'dj') return '/dj';
   if (screen === 'account') return '/account';
   return '/admin';
 }
