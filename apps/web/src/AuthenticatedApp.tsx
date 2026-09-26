@@ -519,6 +519,14 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     if (ddjLedFrameRef.current != null) window.cancelAnimationFrame(ddjLedFrameRef.current);
   }, []);
 
+  useEffect(() => {
+    if (screen === 'dj') {
+      if (!player.djSession.active()) player.djSession.enter();
+      return;
+    }
+    if (player.djSession.active()) player.djSession.exit();
+  }, [player.djSession.enter, player.djSession.exit, screen]);
+
   const qualityProfile = useNetworkQualityProfile(player.streamingMode, player.setStreamingMode);
   useBackgroundPlaybackContinuity({
     audioRef: player.audioRef,
