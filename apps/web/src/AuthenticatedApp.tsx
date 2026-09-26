@@ -23,6 +23,7 @@ import {
 import {
   canPrepareDjAutomixNext,
   nextDjAutomixIndex,
+  shouldRecoverDjAutomixAfterEnded,
   shuffleDjTrackList
 } from './dj-automix-sequence';
 import { isDjKeyboardEditableTarget, mapDjKeyboardCode } from './dj-keyboard-mapping';
@@ -685,24 +686,17 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
         lastCheck = timestamp;
         const activeDeck = djAutomixActiveDeckRef.current;
         const snapshot = player.dualDeck.getSnapshot(activeDeck);
-        if (snapshot?.trackId && snapshot.playing && snapshot.durationSeconds > 0) {
+        if (snapshot?.trackId && snapshot.durationSeconds > 0) {
           const currentTrack = library.tracks.find(track => track.id === snapshot.trackId);
           if (currentTrack) {
-            const remainingSeconds = Math.max(0, snapshot.durationSeconds - snapshot.currentTimeSeconds);
-            const quantized = resolveQuantizedCrossfadePlan({
-              rhythm: currentTrack.rhythm,
-              trackDurationSeconds: snapshot.durationSeconds,
-              preferredDurationSeconds: player.crossfadeSeconds
-            });
-            const shouldStart = shouldStartDjAutomixTransition({
+            if (shouldRecoverDjAutomixAfterEnded({
+              automixActive: djMixModeRef.current === 'automix',
+              transitionActive: djAutomixTransitionRef.current,
+              hasTrack: true,
+              playing: snapshot.playing,
               currentTimeSeconds: snapshot.currentTimeSeconds,
-              durationSeconds: snapshot.durationSeconds,
-              crossfadeSeconds: player.crossfadeSeconds,
-              quantizedStartTimeSeconds: quantized?.startTimeSeconds,
-              earlyToleranceSeconds: QUANTIZED_CROSSFADE_EARLY_TOLERANCE_SECONDS
-            });
-
-            if (shouldStart) {
+              durationSeconds: snapshot.durationSeconds
+            })) {
               const prepared = prepareDjAutomixNext(
                 activeDeck,
                 djAutomixQueueIndexRef.current
@@ -713,10 +707,39 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
                   currentTrack,
                   nextTrack: prepared.track,
                   nextQueueIndex: prepared.index,
-                  durationSeconds: effectiveDjAutomixDuration(
-                    quantized?.durationSeconds ?? player.crossfadeSeconds
-                  )
+                  durationSeconds: 0.25
                 });
+              }
+            } else if (snapshot.playing) {
+              const quantized = resolveQuantizedCrossfadePlan({
+                rhythm: currentTrack.rhythm,
+                trackDurationSeconds: snapshot.durationSeconds,
+                preferredDurationSeconds: player.crossfadeSeconds
+              });
+              const shouldStart = shouldStartDjAutomixTransition({
+                currentTimeSeconds: snapshot.currentTimeSeconds,
+                durationSeconds: snapshot.durationSeconds,
+                crossfadeSeconds: player.crossfadeSeconds,
+                quantizedStartTimeSeconds: quantized?.startTimeSeconds,
+                earlyToleranceSeconds: QUANTIZED_CROSSFADE_EARLY_TOLERANCE_SECONDS
+              });
+
+              if (shouldStart) {
+                const prepared = prepareDjAutomixNext(
+                  activeDeck,
+                  djAutomixQueueIndexRef.current
+                );
+                if (prepared) {
+                  startDjAutomixTransition({
+                    activeDeck,
+                    currentTrack,
+                    nextTrack: prepared.track,
+                    nextQueueIndex: prepared.index,
+                    durationSeconds: effectiveDjAutomixDuration(
+                      quantized?.durationSeconds ?? player.crossfadeSeconds
+                    )
+                  });
+                }
               }
             }
           }
