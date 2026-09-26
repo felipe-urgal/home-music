@@ -306,7 +306,25 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
   }, [
     player.current?.id,
     player.playing,
-    player.currentTime,
+    scheduleDdjLedRender
+  ]);
+
+  const disconnectMidiController = useCallback(() => {
+    ddjLedRendererRef.current?.clear();
+    midiController.disconnect();
+  }, [midiController.disconnect]);
+
+  const selectMidiOutput = useCallback((id: string | null) => {
+    if (id !== midiController.selectedOutputId) ddjLedRendererRef.current?.clear();
+    const selected = midiController.selectOutput(id);
+    if (selected) {
+      ddjLedRendererRef.current?.reset();
+      scheduleDdjLedRender();
+    }
+    return selected;
+  }, [
+    midiController.selectOutput,
+    midiController.selectedOutputId,
     scheduleDdjLedRender
   ]);
 
@@ -616,7 +634,11 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
                 onCrossfadeSeconds: player.setCrossfadeSeconds,
                 onNormalizationMode: player.setNormalizationMode
               }}
-              midiController={midiController}
+              midiController={{
+                ...midiController,
+                disconnect: disconnectMidiController,
+                selectOutput: selectMidiOutput
+              }}
               djMixerState={djMixerState}
               offlineMode={{
                 supported: offline.supported,
