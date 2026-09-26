@@ -1,4 +1,5 @@
 import type { DjControllerCommand, DjDeckId } from './dj-controller-contract';
+import { DDJ400_MIDI_FIXTURES } from './ddj400-midi-fixtures';
 import type { NormalizedMidiMessage } from './web-midi';
 
 type FourteenBitState = {
@@ -17,22 +18,26 @@ export class Ddj400MixerMapper {
   decode(message: NormalizedMidiMessage): DjControllerCommand | null {
     const deck = message.channel === 0 ? 'a' : message.channel === 1 ? 'b' : null;
 
-    if (deck && message.status === 0xb0 && message.data1 === 0x33) {
+    if (deck && message.status === 0xb0 && message.data1 === DDJ400_MIDI_FIXTURES.mixer.channelLsb) {
       this.channel[deck].lsb = message.data2;
       return this.channelCommand(deck);
     }
 
-    if (deck && message.status === 0xb0 && message.data1 === 0x13) {
+    if (deck && message.status === 0xb0 && message.data1 === DDJ400_MIDI_FIXTURES.mixer.channelMsb) {
       this.channel[deck].msb = message.data2;
       return this.channelCommand(deck);
     }
 
-    if (message.channel === 6 && message.status === 0xb0 && message.data1 === 0x3f) {
+    if (message.channel === DDJ400_MIDI_FIXTURES.mixer.crossfaderChannel
+      && message.status === 0xb0
+      && message.data1 === DDJ400_MIDI_FIXTURES.mixer.crossfaderLsb) {
       this.crossfader.lsb = message.data2;
       return this.crossfaderCommand();
     }
 
-    if (message.channel === 6 && message.status === 0xb0 && message.data1 === 0x1f) {
+    if (message.channel === DDJ400_MIDI_FIXTURES.mixer.crossfaderChannel
+      && message.status === 0xb0
+      && message.data1 === DDJ400_MIDI_FIXTURES.mixer.crossfaderMsb) {
       this.crossfader.msb = message.data2;
       return this.crossfaderCommand();
     }
