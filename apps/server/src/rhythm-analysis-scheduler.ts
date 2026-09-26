@@ -1,5 +1,5 @@
 import { MIN_RHYTHM_CONFIDENCE, type TrackRhythm } from '@home-music/shared';
-import { RHYTHM_ANALYZER_VERSION } from './rhythm-analysis.js';
+import { RHYTHM_ANALYZER_VERSION, RhythmAnalysisUnavailableError } from './rhythm-analysis.js';
 import type { HomeMusicDatabase } from './database.js';
 import type { IndexedTrack } from './library.js';
 import type { LibraryService } from './library-service.js';
@@ -26,6 +26,7 @@ export type RhythmAnalysisRuntime = {
   completed: number;
   detected: number;
   unavailable: number;
+  decodeUnavailable: number;
   failed: number;
   timeouts: number;
   lowConfidence: number;
@@ -47,6 +48,7 @@ export class RhythmAnalysisScheduler {
   private completed = 0;
   private detected = 0;
   private unavailable = 0;
+  private decodeUnavailable = 0;
   private failed = 0;
   private timeouts = 0;
   private lowConfidence = 0;
@@ -63,6 +65,7 @@ export class RhythmAnalysisScheduler {
       completed: this.completed,
       detected: this.detected,
       unavailable: this.unavailable,
+      decodeUnavailable: this.decodeUnavailable,
       failed: this.failed,
       timeouts: this.timeouts,
       lowConfidence: this.lowConfidence,
@@ -127,7 +130,23 @@ export class RhythmAnalysisScheduler {
       const startedAt = performance.now();
       this.active += 1;
       try {
-        const rhythm = await this.options.analyze(track, this.controller.signal);
+        let rhythm: TrackRhythm | null;
+        try {
+          rhythm = await this.options.analyze(track, this.controller.signal);
+        } catch (error) {
+          if (!(error instanceof RhythmAnalysisUnavailableError)) throw error;
+          rhythm = null;
+          this.decodeUnavailable += 1;
+          this.options.logger.warn(
+            {
+              trackId,
+              reason: error.reason,
+              exitCode: error.exitCode
+            },
+            'FFmpeg não conseguiu decodificar a faixa; análise rítmica marcada como indisponível para a assinatura atual.'
+          );
+        }
+
         this.completed += 1;
         if (rhythm) {
           this.detected += 1;

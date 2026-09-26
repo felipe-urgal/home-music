@@ -132,6 +132,7 @@ test('falha da análise rítmica não afeta readiness nem streaming direto', asy
     const healthBody = health.json();
     assert.equal(healthBody.ready, true);
     assert.equal(healthBody.rhythmAnalysis.enabled, true);
+    assert.equal(healthBody.rhythmAnalysis.decodeUnavailable, 0);
     assert.equal(healthBody.rhythmAnalysis.failed, 1);
     assert.equal(healthBody.rhythmAnalysis.timeouts, 1);
 

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   analyzePcmRhythm,
+  isFfmpegDecodeFailure,
   RHYTHM_ANALYSIS_SAMPLE_RATE
 } from './rhythm-analysis.js';
 
@@ -87,4 +88,24 @@ test('silêncio não produz análise rítmica falsa', () => {
 test('áudio muito curto não é analisado', () => {
   const samples = pulseTrack(120, 0.2, 2);
   assert.equal(analyzePcmRhythm(samples), null);
+});
+
+
+test('classifica somente stderr compatível com falha determinística de decode', () => {
+  assert.equal(
+    isFfmpegDecodeFailure(
+      '[dec:aac] Error submitting packet to decoder: Invalid data found when processing input'
+    ),
+    true
+  );
+  assert.equal(
+    isFfmpegDecodeFailure('Error while decoding stream #0:0: Invalid data found when processing input'),
+    true
+  );
+  assert.equal(isFfmpegDecodeFailure('Packet corrupt (stream = 0, dts = 123).'), true);
+
+  assert.equal(isFfmpegDecodeFailure('/music/faixa.mp3: Permission denied'), false);
+  assert.equal(isFfmpegDecodeFailure('/music/faixa.mp3: No such file or directory'), false);
+  assert.equal(isFfmpegDecodeFailure('Cannot allocate memory'), false);
+  assert.equal(isFfmpegDecodeFailure('Decoder not found'), false);
 });

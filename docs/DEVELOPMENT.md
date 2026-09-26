@@ -103,6 +103,50 @@ bateria, streaming HTTP concorrente ou escuta em browser/PWA/mobile. Esses
 critérios continuam pendentes em #505; não habilite rollout amplo apenas
 porque o benchmark passou.
 
+### Validação do rollout rítmico em produção
+
+Antes de avaliar crossfade/beatmatching, confirme a capability no host:
+
+    npm run ffmpeg:status
+
+Com sessão administrativa, consulte `/api/health`. Os contadores de runtime são da execução atual do servidor; resultados derivados persistidos continuam no SQLite entre restarts. Para a análise rítmica, os campos principais são:
+
+- `configured`: configuração da feature foi aceita;
+- `enabled`: scheduler efetivamente ativo (feature + FFmpeg disponíveis);
+- `analyzerVersion`: versão que invalida resultados derivados antigos;
+- `pending` / `active`: backlog e trabalho atual;
+- `completed`: análises concluídas nesta execução;
+- `detected`: análises com ritmo detectado;
+- `unavailable`: análise rítmica indisponível para a assinatura atual; o player usa fallback quando a mídia for reproduzível;
+- `decodeUnavailable`: subconjunto de `unavailable` causado por falha
+  determinística de decode do FFmpeg;
+- `lowConfidence`: ritmo detectado abaixo do limite confiável do player;
+- `failed`: falhas operacionais que não foram classificadas como mídia
+  deterministicamente indecodificável;
+- `timeouts`: subconjunto de `failed` causado por timeout.
+
+Mídia cujo FFmpeg termina com assinatura clara de erro de decode é persistida
+como `unavailable` para a assinatura atual do arquivo. Isso evita retry em
+cada sync/scan. Alterar tamanho/mtime do arquivo ou incrementar
+`RHYTHM_ANALYZER_VERSION` torna a faixa elegível novamente. Erros de
+permissão, arquivo ausente, timeout, ausência de decoder e outras falhas de
+infraestrutura permanecem como `failed`.
+
+O journal não deve receber stderr bruto do decoder nem path físico no warning
+da análise rítmica. Para observar apenas eventos relevantes:
+
+    journalctl -u home-music -n 500 --no-pager | grep -Ei 'análise rítmica|rhythm|ffmpeg'
+
+Depois que `pending=0` e `active=0`, repita a observação após um rescan ou
+restart. Sem arquivos alterados nem mudança do analisador, faixas já
+`ready`/`unavailable` não devem voltar ao backlog.
+
+A etapa final continua manual/perceptual: validar crossfade desligado, fallback
+sem análise confiável, transição quantizada, beatmatching dentro do limite,
+seek/pause/troca manual durante a janela de transição e background/foreground
+em PWA/mobile. Nenhum desses testes deve comprometer playback quando a análise
+estiver ausente ou indisponível.
+
 ## Segurança e operação
 
 - Não commite credenciais, chaves ou tokens.

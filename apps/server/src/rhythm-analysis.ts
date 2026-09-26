@@ -16,8 +16,27 @@ const MIN_DOWNBEAT_BARS = 4;
 const MIN_DOWNBEAT_ACCENT_CONTRAST = 0.18;
 const MIN_DOWNBEAT_CONSISTENCY = 0.75;
 const MIN_DOWNBEAT_CANDIDATE_MARGIN = 0.08;
-const MAX_STDERR_BYTES = 64 * 1024;
+const MAX_FFMPEG_STDERR_BYTES = 16 * 1024;
 const MAX_PCM_BYTES = RHYTHM_ANALYSIS_SAMPLE_RATE * RHYTHM_ANALYSIS_SECONDS * 2 + 64 * 1024;
+
+export class RhythmAnalysisUnavailableError extends Error {
+  readonly reason = 'ffmpeg-decode-failed';
+
+  constructor(readonly exitCode: number | null) {
+    super(`FFmpeg não conseguiu decodificar a faixa para análise rítmica (código ${exitCode ?? 'desconhecido'}).`);
+    this.name = 'RhythmAnalysisUnavailableError';
+  }
+}
+
+export function isFfmpegDecodeFailure(stderr: string) {
+  return (
+    /invalid data found when processing input/i.test(stderr)
+    || /error submitting packet to decoder/i.test(stderr)
+    || /error while decoding stream/i.test(stderr)
+    || /corrupt(?:ed)? (?:input )?packet/i.test(stderr)
+    || /packet corrupt(?:ed)?/i.test(stderr)
+  );
+}
 
 export type RhythmAnalysisRunner = (
   command: string,
@@ -319,8 +338,8 @@ export const decodeTrackToPcm: RhythmAnalysisRunner = (
   });
 
   child.stderr.on('data', (chunk: Buffer) => {
-    if (settled || stderrBytes >= MAX_STDERR_BYTES) return;
-    const remaining = MAX_STDERR_BYTES - stderrBytes;
+    if (settled || stderrBytes >= MAX_FFMPEG_STDERR_BYTES) return;
+    const remaining = MAX_FFMPEG_STDERR_BYTES - stderrBytes;
     const accepted = chunk.subarray(0, remaining);
     stderr.push(Buffer.from(accepted));
     stderrBytes += accepted.byteLength;
@@ -330,8 +349,12 @@ export const decodeTrackToPcm: RhythmAnalysisRunner = (
   child.once('close', code => {
     if (settled) return;
     if (code !== 0) {
-      const details = Buffer.concat(stderr).toString('utf8').trim();
-      finish(new Error(details || `FFmpeg encerrou a análise rítmica com código ${code ?? 'desconhecido'}.`));
+      const details = Buffer.concat(stderr).toString('utf8');
+      if (isFfmpegDecodeFailure(details)) {
+        finish(new RhythmAnalysisUnavailableError(code));
+      } else {
+        finish(new Error(`FFmpeg encerrou a análise rítmica com código ${code ?? 'desconhecido'}.`));
+      }
       return;
     }
 
