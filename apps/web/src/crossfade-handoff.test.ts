@@ -131,6 +131,16 @@ describe('crossfade handoff', () => {
     }
   });
 
+  it('pré-carrega a faixa de entrada antes de entrar na janela fina do beat', () => {
+    const crossfade = source('useCrossfadeAudioPlayer.ts');
+    const preloadIndex = crossfade.indexOf('const preloadTrackId = resolveCrossfadePreloadTrackId');
+    const armIndex = crossfade.indexOf('if (timeUntilStart > QUANTIZED_CROSSFADE_ARM_SECONDS)');
+
+    expect(preloadIndex).toBeGreaterThanOrEqual(0);
+    expect(armIndex).toBeGreaterThan(preloadIndex);
+    expect(crossfade).toContain('if (preloadTrack) prepareIncomingAudio(preloadTrack);');
+  });
+
   it('arma a fronteira rítmica por timeout e usa rAF somente perto do beat', () => {
     const crossfade = source('useCrossfadeAudioPlayer.ts');
 
