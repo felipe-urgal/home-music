@@ -219,6 +219,7 @@ test('falha determinística de decode é persistida como indisponível e não en
   assert.equal(saveCalls, 1);
   assert.equal(scheduler.runtime.completed, 1);
   assert.equal(scheduler.runtime.unavailable, 1);
+  assert.equal(scheduler.runtime.decodeUnavailable, 1);
   assert.equal(scheduler.runtime.failed, 0);
   assert.equal(warnings.length, 1);
   assert.deepEqual(
@@ -339,6 +340,7 @@ test('runtime agrega fila, resultados, baixa confiança, falhas e timeout sem ex
       completed: scheduler.runtime.completed,
       detected: scheduler.runtime.detected,
       unavailable: scheduler.runtime.unavailable,
+      decodeUnavailable: scheduler.runtime.decodeUnavailable,
       failed: scheduler.runtime.failed,
       timeouts: scheduler.runtime.timeouts,
       lowConfidence: scheduler.runtime.lowConfidence,
@@ -350,6 +352,7 @@ test('runtime agrega fila, resultados, baixa confiança, falhas e timeout sem ex
       completed: 3,
       detected: 2,
       unavailable: 1,
+      decodeUnavailable: 0,
       failed: 1,
       timeouts: 1,
       lowConfidence: 1,
