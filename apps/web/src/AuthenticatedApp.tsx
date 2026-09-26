@@ -521,11 +521,12 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
 
   useEffect(() => {
     if (screen === 'dj') {
+      if (!player.hydrated) return;
       if (!player.djSession.active()) player.djSession.enter();
       return;
     }
     if (player.djSession.active()) player.djSession.exit();
-  }, [player.djSession.enter, player.djSession.exit, screen]);
+  }, [player.djSession.enter, player.djSession.exit, player.hydrated, screen]);
 
   const qualityProfile = useNetworkQualityProfile(player.streamingMode, player.setStreamingMode);
   useBackgroundPlaybackContinuity({
