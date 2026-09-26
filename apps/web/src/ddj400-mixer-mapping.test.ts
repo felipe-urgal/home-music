@@ -1,19 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { Ddj400MixerMapper } from './ddj400-mixer-mapping';
-import type { NormalizedMidiMessage } from './web-midi';
-
-function msg(status: number, channel: number, data1: number, data2: number): NormalizedMidiMessage {
-  return { timestamp: 0, status, channel, data1, data2, sourceId: 'ddj-400' };
-}
+import { DDJ400_MIDI_FIXTURES, ddj400Cc, ddj400Message } from './ddj400-midi-fixtures';
 
 describe('DDJ-400 mixer mapping', () => {
   it('mapeia channel fader A e B de forma independente', () => {
     const mapper = new Ddj400MixerMapper();
 
-    expect(mapper.decode(msg(0xb0, 0, 0x33, 0))).toBeNull();
-    const a = mapper.decode(msg(0xb0, 0, 0x13, 127));
-    mapper.decode(msg(0xb0, 1, 0x33, 127));
-    const b = mapper.decode(msg(0xb0, 1, 0x13, 0));
+    expect(mapper.decode(ddj400Cc('a', DDJ400_MIDI_FIXTURES.mixer.channelLsb, 0))).toBeNull();
+    const a = mapper.decode(ddj400Cc('a', DDJ400_MIDI_FIXTURES.mixer.channelMsb, 127));
+    mapper.decode(ddj400Cc('b', DDJ400_MIDI_FIXTURES.mixer.channelLsb, 127));
+    const b = mapper.decode(ddj400Cc('b', DDJ400_MIDI_FIXTURES.mixer.channelMsb, 0));
 
     expect(a).toMatchObject({ type: 'mixer.set-channel-volume', deck: 'a' });
     expect(b).toMatchObject({ type: 'mixer.set-channel-volume', deck: 'b' });
@@ -23,12 +19,12 @@ describe('DDJ-400 mixer mapping', () => {
 
   it('mapeia crossfader para -1..1', () => {
     const left = new Ddj400MixerMapper();
-    left.decode(msg(0xb0, 6, 0x3f, 0));
-    const leftCommand = left.decode(msg(0xb0, 6, 0x1f, 0));
+    left.decode(ddj400Message({ status: 0xb0, channel: DDJ400_MIDI_FIXTURES.mixer.crossfaderChannel, data1: DDJ400_MIDI_FIXTURES.mixer.crossfaderLsb }, 0));
+    const leftCommand = left.decode(ddj400Message({ status: 0xb0, channel: DDJ400_MIDI_FIXTURES.mixer.crossfaderChannel, data1: DDJ400_MIDI_FIXTURES.mixer.crossfaderMsb }, 0));
 
     const right = new Ddj400MixerMapper();
-    right.decode(msg(0xb0, 6, 0x3f, 127));
-    const rightCommand = right.decode(msg(0xb0, 6, 0x1f, 127));
+    right.decode(ddj400Message({ status: 0xb0, channel: DDJ400_MIDI_FIXTURES.mixer.crossfaderChannel, data1: DDJ400_MIDI_FIXTURES.mixer.crossfaderLsb }, 127));
+    const rightCommand = right.decode(ddj400Message({ status: 0xb0, channel: DDJ400_MIDI_FIXTURES.mixer.crossfaderChannel, data1: DDJ400_MIDI_FIXTURES.mixer.crossfaderMsb }, 127));
 
     expect(leftCommand).toEqual({ type: 'mixer.set-crossfader', value: -1 });
     expect(rightCommand?.type).toBe('mixer.set-crossfader');
@@ -41,14 +37,14 @@ describe('DDJ-400 mixer mapping', () => {
     const mapper = new Ddj400MixerMapper();
 
     for (let value = 0; value < 128; value += 1) {
-      mapper.decode(msg(0xb0, 0, 0x33, value));
-      mapper.decode(msg(0xb0, 1, 0x33, 127 - value));
-      mapper.decode(msg(0xb0, 6, 0x3f, value));
+      mapper.decode(ddj400Cc('a', DDJ400_MIDI_FIXTURES.mixer.channelLsb, value));
+      mapper.decode(ddj400Cc('b', DDJ400_MIDI_FIXTURES.mixer.channelLsb, 127 - value));
+      mapper.decode(ddj400Message({ status: 0xb0, channel: DDJ400_MIDI_FIXTURES.mixer.crossfaderChannel, data1: DDJ400_MIDI_FIXTURES.mixer.crossfaderLsb }, value));
     }
 
-    const a = mapper.decode(msg(0xb0, 0, 0x13, 127));
-    const b = mapper.decode(msg(0xb0, 1, 0x13, 0));
-    const crossfader = mapper.decode(msg(0xb0, 6, 0x1f, 64));
+    const a = mapper.decode(ddj400Cc('a', DDJ400_MIDI_FIXTURES.mixer.channelMsb, 127));
+    const b = mapper.decode(ddj400Cc('b', DDJ400_MIDI_FIXTURES.mixer.channelMsb, 0));
+    const crossfader = mapper.decode(ddj400Message({ status: 0xb0, channel: DDJ400_MIDI_FIXTURES.mixer.crossfaderChannel, data1: DDJ400_MIDI_FIXTURES.mixer.crossfaderMsb }, 64));
 
     expect(a).toMatchObject({ type: 'mixer.set-channel-volume', deck: 'a' });
     expect(b).toMatchObject({ type: 'mixer.set-channel-volume', deck: 'b' });
@@ -57,6 +53,6 @@ describe('DDJ-400 mixer mapping', () => {
 
   it('ignora mensagens fora do mixer', () => {
     const mapper = new Ddj400MixerMapper();
-    expect(mapper.decode(msg(0x90, 0, 0x0b, 127))).toBeNull();
+    expect(mapper.decode(ddj400Message(DDJ400_MIDI_FIXTURES.transport.playA, 127))).toBeNull();
   });
 });

@@ -1,17 +1,18 @@
 import type { DjControllerCommand, DjDeckId } from './dj-controller-contract';
+import { DDJ400_MIDI_FIXTURES } from './ddj400-midi-fixtures';
 import type { NormalizedMidiMessage } from './web-midi';
 
 export const DDJ400_MAPPING_VERSION = 1;
 
 export const DDJ400_MIDI = {
-  browserRotate: { status: 0xb0, channel: 6, data1: 0x40 },
-  browserPress: { status: 0x90, channel: 6, data1: 0x41 },
-  loadA: { status: 0x90, channel: 6, data1: 0x46 },
-  loadB: { status: 0x90, channel: 6, data1: 0x47 },
-  playA: { status: 0x90, channel: 0, data1: 0x0b },
-  playB: { status: 0x90, channel: 1, data1: 0x0b },
-  cueA: { status: 0x90, channel: 0, data1: 0x0c },
-  cueB: { status: 0x90, channel: 1, data1: 0x0c }
+  browserRotate: DDJ400_MIDI_FIXTURES.browser.rotate,
+  browserPress: DDJ400_MIDI_FIXTURES.browser.press,
+  loadA: DDJ400_MIDI_FIXTURES.browser.loadA,
+  loadB: DDJ400_MIDI_FIXTURES.browser.loadB,
+  playA: DDJ400_MIDI_FIXTURES.transport.playA,
+  playB: DDJ400_MIDI_FIXTURES.transport.playB,
+  cueA: DDJ400_MIDI_FIXTURES.transport.cueA,
+  cueB: DDJ400_MIDI_FIXTURES.transport.cueB
 } as const;
 
 type MidiBinding = {
