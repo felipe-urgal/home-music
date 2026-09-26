@@ -165,7 +165,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     if (restoreBaseRate) {
       player.dualDeck.setPlaybackRate(deck, ddjBaseRateRef.current[deck] || 1);
     }
-  }, [player.dualDeck]);
+  }, [player.dualDeck.setPlaybackRate]);
 
   const commitDjSyncState = useCallback((next: DjSyncState) => {
     const previous = djSyncStateRef.current;
@@ -189,7 +189,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     djSyncStateRef.current = next;
     setDjSyncState(next);
     renderDdjLedsRef.current?.();
-  }, [player.dualDeck]);
+  }, [player.dualDeck.setPlaybackRate]);
 
   const disableDjSync = useCallback((deck: DjDeckId) => {
     cancelDjNudge(deck);
@@ -215,6 +215,11 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     cancelDjAutomixTransition();
     setDjModeState('manual');
   }, [cancelDjAutomixTransition, setDjModeState]);
+
+  const djTracksById = useMemo(
+    () => new Map(library.tracks.map(track => [track.id, track])),
+    [library.tracks]
+  );
 
   const djLibrarySources = useMemo(() => {
     const paths = new Set<string>();
@@ -258,14 +263,13 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
       const playlistId = djLibrarySource.slice('playlist:'.length);
       const playlist = library.playlists.find(item => item.id === playlistId);
       if (!playlist) return [];
-      const tracksById = new Map(library.tracks.map(track => [track.id, track]));
       return playlist.trackIds
-        .map(trackId => tracksById.get(trackId))
+        .map(trackId => djTracksById.get(trackId))
         .filter((track): track is (typeof library.tracks)[number] => Boolean(track));
     }
 
     return library.tracks;
-  }, [djLibrarySource, library.playlists, library.tracks]);
+  }, [djLibrarySource, djTracksById, library.playlists, library.tracks]);
 
   const djListedTracks = useMemo(
     () => djAutomixShuffle ? shuffleDjTrackList(djBrowserTracks) : djBrowserTracks,
@@ -795,12 +799,8 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
             && slaveSnapshot.playing
             && ddjNudgeTimerRef.current[slaveDeck] == null
           ) {
-            const masterTrack = library.tracks.find(
-              track => track.id === masterSnapshot.trackId
-            );
-            const slaveTrack = library.tracks.find(
-              track => track.id === slaveSnapshot.trackId
-            );
+            const masterTrack = djTracksById.get(masterSnapshot.trackId);
+            const slaveTrack = djTracksById.get(slaveSnapshot.trackId);
             const beatmatch = resolveBeatmatchPlan({
               outgoing: masterTrack?.rhythm,
               incoming: slaveTrack?.rhythm
@@ -874,7 +874,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     };
   }, [
     commitDjSyncState,
-    library.tracks,
+    djTracksById,
     player.dualDeck.getSnapshot,
     player.dualDeck.seek,
     player.dualDeck.setPlaybackRate,
