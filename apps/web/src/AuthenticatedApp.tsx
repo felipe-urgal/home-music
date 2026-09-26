@@ -16,6 +16,10 @@ import { TvRemoteEntryButton } from './components/TvRemoteEntryButton';
 import { TvRemotePairingDialog } from './components/TvRemotePairingDialog';
 import { useRoutedScreen } from './browser-navigation';
 import { decodeDdj400Message } from './ddj400-mapping';
+import {
+  effectiveDjAutomixDuration,
+  shouldStartDjAutomixTransition
+} from './dj-automix-policy';
 import { isDjKeyboardEditableTarget, mapDjKeyboardCode } from './dj-keyboard-mapping';
 import { Ddj400MixerMapper } from './ddj400-mixer-mapping';
 import {
@@ -312,7 +316,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
 
     const incomingDeck: DjDeckId = options.activeDeck === 'a' ? 'b' : 'a';
     const activeSnapshot = player.dualDeck.getSnapshot(options.activeDeck);
-    if (!activeSnapshot?.trackId || !activeSnapshot.playing) return;
+    if (!activeSnapshot?.trackId) return;
 
     const incomingSnapshot = player.dualDeck.getSnapshot(incomingDeck);
     if (incomingSnapshot?.trackId !== options.nextTrack.id) {
@@ -455,9 +459,13 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
               trackDurationSeconds: snapshot.durationSeconds,
               preferredDurationSeconds: player.crossfadeSeconds
             });
-            const shouldStart = quantized
-              ? snapshot.currentTimeSeconds >= quantized.startTimeSeconds - QUANTIZED_CROSSFADE_EARLY_TOLERANCE_SECONDS
-              : remainingSeconds <= player.crossfadeSeconds;
+            const shouldStart = shouldStartDjAutomixTransition({
+              currentTimeSeconds: snapshot.currentTimeSeconds,
+              durationSeconds: snapshot.durationSeconds,
+              crossfadeSeconds: player.crossfadeSeconds,
+              quantizedStartTimeSeconds: quantized?.startTimeSeconds,
+              earlyToleranceSeconds: QUANTIZED_CROSSFADE_EARLY_TOLERANCE_SECONDS
+            });
 
             if (shouldStart) {
               const candidate = resolveCrossfadeCandidate({
@@ -481,7 +489,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
                   currentTrack,
                   nextTrack,
                   nextQueueIndex,
-                  durationSeconds: candidate.durationSeconds
+                  durationSeconds: effectiveDjAutomixDuration(candidate.durationSeconds)
                 });
               }
             }
