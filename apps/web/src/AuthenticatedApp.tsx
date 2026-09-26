@@ -535,7 +535,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     currentIndex: player.currentIndex,
     currentTrackId: player.current?.id ?? null,
     repeatMode: player.repeatMode,
-    playing: player.playing,
+    playing: screen === 'dj' ? false : player.playing,
     onNext: player.advanceNaturally
   });
   useNextTrackPreload({
@@ -546,7 +546,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     streamingMode: player.streamingMode,
     normalizationMode: player.normalizationMode,
     manualPlaybackRevision: player.manualPlaybackRevision,
-    playing: player.playing
+    playing: screen === 'dj' ? false : player.playing
   });
   const current = player.current;
   const nextDecision = nextTrackDecision(player.queue, player.currentIndex, player.repeatMode, false);
