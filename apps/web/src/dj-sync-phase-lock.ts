@@ -32,7 +32,7 @@ export type InitialDjSyncPlan = {
   correction: InitialDjSyncCorrection;
 };
 
-function rhythmWithTempoFactor(
+export function rhythmWithTempoFactor(
   rhythm: TrackRhythm | null | undefined,
   factor: BeatmatchPlan['tempoFactor']
 ): TrackRhythm | null | undefined {
