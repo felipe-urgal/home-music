@@ -1,4 +1,5 @@
 import type { DjDeckId } from './dj-controller-contract';
+import { DDJ400_MIDI_FIXTURES, ddj400DeckStatus } from './ddj400-midi-fixtures';
 
 export type Ddj400LedState = {
   play: Record<DjDeckId, boolean>;
@@ -8,22 +9,18 @@ export type Ddj400LedState = {
 
 type SendMidi = (data: number[]) => boolean;
 
-const LED_NOTE = {
-  play: 0x0b,
-  cue: 0x0c,
-  sync: 0x58
-} as const;
-
-function statusForDeck(deck: DjDeckId) {
-  return deck === 'a' ? 0x90 : 0x91;
-}
+const LED_NOTE = DDJ400_MIDI_FIXTURES.led;
 
 export function ddj400LedMessage(
   deck: DjDeckId,
   kind: keyof typeof LED_NOTE,
   enabled: boolean
 ) {
-  return [statusForDeck(deck), LED_NOTE[kind], enabled ? 0x7f : 0x00];
+  return [
+    ddj400DeckStatus(deck),
+    LED_NOTE[kind],
+    enabled ? DDJ400_MIDI_FIXTURES.led.on : DDJ400_MIDI_FIXTURES.led.off
+  ];
 }
 
 export class Ddj400LedRenderer {
