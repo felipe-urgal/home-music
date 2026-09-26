@@ -22,7 +22,8 @@ import {
   PanelLeftOpen,
   Radio,
   RefreshCw,
-  Search
+  Search,
+  Disc3
 } from 'lucide-react';
 import { useDesktopLayout } from '../useDesktopLayout';
 import type { LibraryTab } from '../useLibraryNavigation';
@@ -61,6 +62,7 @@ type DesktopShellProps = {
   onRefreshLibrary?: () => void;
   onOpenPlayer: () => void;
   onOpenLibrary: () => void;
+  onOpenDjMode?: () => void;
   onOpenLibraryTab?: (tab: LibraryTab) => void;
   onPlayTrack?: (track: Track, context: Track[]) => void;
   onReorderQueue?: (from: number, to: number) => void;
@@ -115,6 +117,7 @@ export function DesktopShell({
   onRefreshLibrary,
   onOpenPlayer,
   onOpenLibrary,
+  onOpenDjMode,
   onOpenLibraryTab,
   onPlayTrack,
   onReorderQueue,
@@ -303,6 +306,17 @@ export function DesktopShell({
         </nav>
 
         <div className="desktop-topbar__actions">
+          {onOpenDjMode && (
+            <button
+              className="desktop-topbar__search"
+              type="button"
+              aria-label="Abrir Modo DJ"
+              title="Modo DJ"
+              onClick={onOpenDjMode}
+            >
+              <Disc3 aria-hidden="true" />
+            </button>
+          )}
           <button
             className="desktop-topbar__search"
             type="button"
