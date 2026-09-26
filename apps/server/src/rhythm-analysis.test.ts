@@ -33,6 +33,30 @@ function pulseTrack(
   return samples;
 }
 
+function driftingPulseTrack(
+  startBpm: number,
+  endBpm: number,
+  durationSeconds = 120,
+  sampleRate = RHYTHM_ANALYSIS_SAMPLE_RATE
+) {
+  const samples = new Int16Array(Math.round(durationSeconds * sampleRate));
+  const pulseSamples = Math.max(1, Math.round(sampleRate * 0.03));
+  let beatAt = 0.3;
+
+  while (beatAt < durationSeconds) {
+    const progress = Math.max(0, Math.min(1, beatAt / durationSeconds));
+    const bpm = startBpm + ((endBpm - startBpm) * progress);
+    const start = Math.round(beatAt * sampleRate);
+    for (let offset = 0; offset < pulseSamples && start + offset < samples.length; offset += 1) {
+      const amplitude = Math.round(28_000 * Math.exp(-offset / (sampleRate * 0.006)));
+      if (amplitude > samples[start + offset]) samples[start + offset] = amplitude;
+    }
+    beatAt += 60 / bpm;
+  }
+
+  return samples;
+}
+
 for (const bpm of [60, 90, 120, 128, 150]) {
   test(`detecta BPM estável próximo de ${bpm}`, () => {
     const result = analyzePcmRhythm(pulseTrack(bpm, 0.3));
@@ -78,6 +102,16 @@ test('não promove compasso quando os beats têm acentuação uniforme', () => {
   assert.equal(result.downbeatSeconds, undefined);
   assert.equal(result.beatsPerBar, undefined);
   assert.equal(result.downbeatConfidence, undefined);
+});
+
+test('promove drift gradual conhecido para beat grid variável', () => {
+  const result = analyzePcmRhythm(driftingPulseTrack(116, 124));
+  assert.ok(result);
+  assert.ok(result.beatGrid);
+  assert.ok(result.beatGrid.segments.length >= 2);
+  const first = result.beatGrid.segments[0]?.bpm ?? 0;
+  const last = result.beatGrid.segments.at(-1)?.bpm ?? 0;
+  assert.ok(last > first, `grid variável esperado crescente: ${first} -> ${last}`);
 });
 
 test('silêncio não produz análise rítmica falsa', () => {
