@@ -3,6 +3,7 @@ import { ArrowLeft, Disc3, Pause, Play, RotateCcw, SlidersHorizontal, Zap } from
 import type { DjDeckId } from '../dj-controller-contract';
 import type { DualDeckAudioSnapshot } from '../dual-deck-audio';
 import type { DualDeckMixerState } from '../dual-deck-mixer';
+import type { WebMidiController } from '../useWebMidiController';
 
 export type DjDeckPanelState = {
   snapshot: DualDeckAudioSnapshot | null;
@@ -19,6 +20,9 @@ type DjModeScreenProps = {
   selectedLibraryIndex: number;
   onSelectLibraryIndex: (index: number) => void;
   onLoadSelectedTrack: (deck: DjDeckId) => void;
+  midi: WebMidiController;
+  onDisconnectMidi: () => void;
+  onSelectMidiOutput: (id: string | null) => boolean;
   onChannelVolume: (deck: DjDeckId, value: number) => void;
   onCrossfader: (value: number) => void;
   onTogglePlay: (deck: DjDeckId) => void;
@@ -210,6 +214,113 @@ function DjLibrary({
   );
 }
 
+
+function midiStatusText(status: WebMidiController['status']) {
+  switch (status) {
+    case 'connecting': return 'Conectando…';
+    case 'connected': return 'Conectado';
+    case 'denied': return 'Permissão negada';
+    case 'error': return 'Falha ao conectar';
+    default: return 'Desconectado';
+  }
+}
+
+function DjMidiPanel({
+  midi,
+  onDisconnect,
+  onSelectOutput
+}: {
+  midi: WebMidiController;
+  onDisconnect: () => void;
+  onSelectOutput: (id: string | null) => boolean;
+}) {
+  const input = midi.inputs.find(port => port.id === midi.selectedInputId) ?? null;
+  const output = midi.outputs.find(port => port.id === midi.selectedOutputId) ?? null;
+
+  return (
+    <section className="dj-midi" aria-label="Controlador MIDI">
+      <div className="dj-midi__heading">
+        <div>
+          <strong>Controlador MIDI</strong>
+          <span>{midi.supported ? midiStatusText(midi.status) : 'Web MIDI indisponível'}</span>
+        </div>
+        <span className={`dj-midi__status ${midi.status === 'connected' ? 'is-connected' : ''}`} aria-hidden="true" />
+      </div>
+
+      {!midi.supported ? (
+        <p className="dj-midi__note">Use um navegador compatível em contexto seguro.</p>
+      ) : midi.status !== 'connected' ? (
+        <button
+          className="dj-midi__action"
+          type="button"
+          disabled={midi.status === 'connecting'}
+          onClick={() => void midi.connect()}
+        >
+          {midi.status === 'connecting' ? 'Conectando…' : 'Conectar controlador'}
+        </button>
+      ) : (
+        <>
+          <label className="dj-midi__field">
+            <span>Entrada</span>
+            <select
+              value={midi.selectedInputId ?? ''}
+              onChange={event => midi.selectInput(event.currentTarget.value || null)}
+            >
+              <option value="">Nenhuma</option>
+              {midi.inputs.map(port => (
+                <option key={port.id} value={port.id} disabled={port.state !== 'connected'}>
+                  {port.name}{port.manufacturer ? ` — ${port.manufacturer}` : ''}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="dj-midi__field">
+            <span>Saída</span>
+            <select
+              value={midi.selectedOutputId ?? ''}
+              onChange={event => onSelectOutput(event.currentTarget.value || null)}
+            >
+              <option value="">Nenhuma</option>
+              {midi.outputs.map(port => (
+                <option key={port.id} value={port.id} disabled={port.state !== 'connected'}>
+                  {port.name}{port.manufacturer ? ` — ${port.manufacturer}` : ''}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <div className="dj-midi__ports">
+            <span>IN: {input?.name ?? 'nenhuma'}</span>
+            <span>OUT: {output?.name ?? 'nenhuma'}</span>
+          </div>
+
+          <label className="dj-midi__diagnostics">
+            <input
+              type="checkbox"
+              checked={midi.diagnosticsEnabled}
+              onChange={event => midi.setDiagnosticsEnabled(event.currentTarget.checked)}
+            />
+            <span>Diagnóstico local</span>
+          </label>
+
+          {midi.diagnosticsEnabled && (
+            <div className="dj-midi__event" aria-live="polite">
+              {midi.lastMessage
+                ? <>status {midi.lastMessage.status} · canal {midi.lastMessage.channel + 1} · data1 {midi.lastMessage.data1} · data2 {midi.lastMessage.data2}</>
+                : 'Aguardando evento MIDI…'}
+            </div>
+          )}
+
+          <button className="dj-midi__action is-secondary" type="button" onClick={onDisconnect}>
+            Desconectar
+          </button>
+        </>
+      )}
+    </section>
+  );
+}
+
 export function DjModeScreen({
   decks,
   mixer,
@@ -217,6 +328,9 @@ export function DjModeScreen({
   selectedLibraryIndex,
   onSelectLibraryIndex,
   onLoadSelectedTrack,
+  midi,
+  onDisconnectMidi,
+  onSelectMidiOutput,
   onChannelVolume,
   onCrossfader,
   onTogglePlay,
@@ -317,7 +431,7 @@ export function DjModeScreen({
           onSelect={onSelectLibraryIndex}
           onLoad={onLoadSelectedTrack}
         />
-        <div><strong>Controlador MIDI</strong><span>Status e diagnóstico entram na etapa dedicada.</span></div>
+        <DjMidiPanel midi={midi} onDisconnect={onDisconnectMidi} onSelectOutput={onSelectMidiOutput} />
       </footer>
     </section>
   );

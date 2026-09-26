@@ -584,3 +584,110 @@
 .dj-mode__bottom-panel > .dj-library {
   padding: 16px 18px;
 }
+
+
+.dj-midi {
+  min-height: 0;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+
+.dj-midi__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.dj-midi__heading > div {
+  display: grid;
+  gap: 4px;
+}
+
+.dj-midi__heading span,
+.dj-midi__note,
+.dj-midi__ports,
+.dj-midi__event,
+.dj-midi__diagnostics {
+  color: rgba(245, 247, 251, 0.54);
+  font-size: 0.7rem;
+}
+
+.dj-midi__status {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.22);
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.04);
+}
+
+.dj-midi__status.is-connected {
+  background: currentColor;
+  opacity: 0.9;
+}
+
+.dj-midi__field {
+  display: grid;
+  gap: 5px;
+}
+
+.dj-midi__field > span {
+  color: rgba(245, 247, 251, 0.5);
+  font-size: 0.66rem;
+}
+
+.dj-midi__field select {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.045);
+  color: inherit;
+  padding: 0 8px;
+}
+
+.dj-midi__ports {
+  display: grid;
+  gap: 3px;
+}
+
+.dj-midi__diagnostics {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.dj-midi__event {
+  padding: 8px 9px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.04);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.dj-midi__action {
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.09);
+  color: inherit;
+  font-size: 0.72rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.dj-midi__action.is-secondary {
+  background: transparent;
+}
+
+.dj-midi__action:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.dj-mode__bottom-panel > .dj-midi {
+  padding: 16px 18px;
+}

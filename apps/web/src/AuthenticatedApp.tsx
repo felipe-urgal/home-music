@@ -681,6 +681,9 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
           selectedLibraryIndex={djBrowserIndex}
           onSelectLibraryIndex={selectDjBrowserIndex}
           onLoadSelectedTrack={loadDjBrowserTrack}
+          midi={midiController}
+          onDisconnectMidi={disconnectMidiController}
+          onSelectMidiOutput={selectMidiOutput}
           onChannelVolume={setDjChannelVolume}
           onCrossfader={setDjCrossfader}
           onTogglePlay={toggleDjDeckPlay}
