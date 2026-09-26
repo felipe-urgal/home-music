@@ -927,6 +927,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
   }
 
   function openDjMode() {
+    setDjPlayedTrackIds(new Set());
     player.djSession.enter();
     setScreen('dj');
   }
