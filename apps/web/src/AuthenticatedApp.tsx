@@ -99,7 +99,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
       mixerUiFrameRef.current = null;
       setDjMixerState(player.dualDeck.getMixerSnapshot());
     });
-  }, [player.dualDeck]);
+  }, [player.dualDeck.getMixerSnapshot]);
   const ddjNudgeTimerRef = useRef<Record<DjDeckId, number | null>>({ a: null, b: null });
 
   const handleDdj400Message = useCallback((message: Parameters<typeof decodeDdj400Message>[0]) => {
@@ -242,7 +242,11 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     }
     player.dualDeck.setMode(false);
     setDjMixerState(player.dualDeck.getMixerSnapshot());
-  }, [midiController.status, player.dualDeck]);
+  }, [
+    midiController.status,
+    player.dualDeck.getMixerSnapshot,
+    player.dualDeck.setMode
+  ]);
 
   useEffect(() => () => {
     for (const deck of ['a', 'b'] as const) {
