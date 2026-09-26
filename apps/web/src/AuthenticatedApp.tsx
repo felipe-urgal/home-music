@@ -20,6 +20,7 @@ import {
   effectiveDjAutomixDuration,
   shouldStartDjAutomixTransition
 } from './dj-automix-policy';
+import { nextDjAutomixIndex, shuffleDjTrackList } from './dj-automix-sequence';
 import { isDjKeyboardEditableTarget, mapDjKeyboardCode } from './dj-keyboard-mapping';
 import { Ddj400MixerMapper } from './ddj400-mixer-mapping';
 import {
@@ -199,15 +200,10 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     return library.tracks;
   }, [djLibrarySource, library.playlists, library.tracks]);
 
-  const djListedTracks = useMemo(() => {
-    if (!djAutomixShuffle) return djBrowserTracks;
-    const shuffled = [...djBrowserTracks];
-    for (let index = shuffled.length - 1; index > 0; index -= 1) {
-      const swapIndex = Math.floor(Math.random() * (index + 1));
-      [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex]!, shuffled[index]!];
-    }
-    return shuffled;
-  }, [djAutomixShuffle, djBrowserTracks]);
+  const djListedTracks = useMemo(
+    () => djAutomixShuffle ? shuffleDjTrackList(djBrowserTracks) : djBrowserTracks,
+    [djAutomixShuffle, djBrowserTracks]
+  );
 
   const markDjTrackPlayed = useCallback((trackId: string | null | undefined) => {
     if (!trackId) return;
@@ -362,7 +358,8 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
 
 
   const prepareDjAutomixNext = useCallback((activeDeck: DjDeckId, queueIndex: number) => {
-    const nextIndex = queueIndex + 1;
+    const nextIndex = nextDjAutomixIndex(djListedTracks.length, queueIndex);
+    if (nextIndex == null) return null;
     const nextTrack = djListedTracks[nextIndex] ?? null;
     if (!nextTrack) return null;
 
