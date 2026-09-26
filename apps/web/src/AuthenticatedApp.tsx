@@ -137,6 +137,18 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     renderDdjLedsRef.current?.();
   }, [player.dualDeck]);
 
+  const setDjChannelVolume = useCallback((deck: DjDeckId, value: number) => {
+    player.dualDeck.setMode(true);
+    player.dualDeck.setVolume(deck, value);
+    scheduleMixerUiSync();
+  }, [player.dualDeck, scheduleMixerUiSync]);
+
+  const setDjCrossfader = useCallback((value: number) => {
+    player.dualDeck.setMode(true);
+    player.dualDeck.setCrossfader(value);
+    scheduleMixerUiSync();
+  }, [player.dualDeck, scheduleMixerUiSync]);
+
   const syncDjDeck = useCallback((deck: DjDeckId) => {
     player.dualDeck.setMode(true);
     const masterDeck: DjDeckId = deck === 'a' ? 'b' : 'a';
@@ -192,6 +204,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
           a: readDjDeckPanel('a'),
           b: readDjDeckPanel('b')
         });
+        setDjMixerState(player.dualDeck.getMixerSnapshot());
       }
       frame = window.requestAnimationFrame(syncPanels);
     };
@@ -200,7 +213,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     return () => {
       if (frame != null) window.cancelAnimationFrame(frame);
     };
-  }, [readDjDeckPanel, screen]);
+  }, [player.dualDeck.getMixerSnapshot, readDjDeckPanel, screen]);
 
   const handleDdj400Message = useCallback((message: Parameters<typeof decodeDdj400Message>[0]) => {
     const command = decodeDdj400Message(message)
@@ -638,6 +651,9 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
         {audioDecks}
         <DjModeScreen
           decks={djDeckPanels}
+          mixer={djMixerState}
+          onChannelVolume={setDjChannelVolume}
+          onCrossfader={setDjCrossfader}
           onTogglePlay={toggleDjDeckPlay}
           onCue={cueDjDeck}
           onSync={syncDjDeck}
