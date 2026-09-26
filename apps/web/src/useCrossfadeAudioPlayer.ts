@@ -49,6 +49,10 @@ import {
 } from './dual-deck-audio';
 import type { DjDeckId } from './dj-controller-contract';
 import {
+  createNormalPlaybackSessionSnapshot,
+  type NormalPlaybackSessionSnapshot
+} from './dj-session-policy';
+import {
   createDefaultDualDeckMixerState,
   resolveDualDeckOutputGain
 } from './dual-deck-mixer';
@@ -96,12 +100,7 @@ export function useCrossfadeAudioPlayer(
   const activeDeckRef = useRef<CrossfadeDeck>('a');
   const dualDeckModeRef = useRef(false);
   const dualDeckMixerRef = useRef(createDefaultDualDeckMixerState());
-  const normalSessionRef = useRef<{
-    trackId: string | null;
-    positionSeconds: number;
-    wasPlaying: boolean;
-    activeDeck: CrossfadeDeck;
-  } | null>(null);
+  const normalSessionRef = useRef<NormalPlaybackSessionSnapshot | null>(null);
   const deckTrackIdsRef = useRef<Record<DjDeckId, string | null>>({
     a: player.current?.id ?? null,
     b: null
@@ -783,14 +782,14 @@ export function useCrossfadeAudioPlayer(
     if (normalSessionRef.current) return;
 
     const activeAudio = getActiveAudio();
-    normalSessionRef.current = {
+    normalSessionRef.current = createNormalPlaybackSessionSnapshot({
       trackId: player.current?.id ?? null,
-      positionSeconds: activeAudio && Number.isFinite(activeAudio.currentTime)
+      currentTimeSeconds: activeAudio && Number.isFinite(activeAudio.currentTime)
         ? activeAudio.currentTime
         : player.currentTime,
-      wasPlaying: Boolean(activeAudio && !activeAudio.paused && !activeAudio.ended && player.playing),
+      playing: Boolean(activeAudio && !activeAudio.paused && !activeAudio.ended && player.playing),
       activeDeck: activeDeckRef.current
-    };
+    });
 
     setDualDeckMode(true);
     for (const deck of ['a', 'b'] as const) {
