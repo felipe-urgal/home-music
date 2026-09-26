@@ -360,7 +360,10 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     const masterDeck: DjDeckId = deck === 'a' ? 'b' : 'a';
     const targetSnapshot = player.dualDeck.getSnapshot(deck);
     const masterSnapshot = player.dualDeck.getSnapshot(masterDeck);
-    if (!targetSnapshot?.trackId || !masterSnapshot?.trackId) return;
+    if (!targetSnapshot?.trackId || !masterSnapshot?.trackId || !masterSnapshot.playing) {
+      disableDjSync(deck);
+      return;
+    }
 
     const targetTrack = library.tracks.find(track => track.id === targetSnapshot.trackId);
     const masterTrack = library.tracks.find(track => track.id === masterSnapshot.trackId);
@@ -394,7 +397,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
       commitDjSyncState(resetDjSyncForLoad(djSyncStateRef.current, incomingDeck));
     }
     return { track: nextTrack, index: nextIndex };
-  }, [djListedTracks, player.dualDeck]);
+  }, [commitDjSyncState, djListedTracks, player.dualDeck]);
 
   const startDjAutomixTransition = useCallback((options: {
     activeDeck: DjDeckId;
@@ -482,6 +485,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
       djAutomixFrameRef.current = window.requestAnimationFrame(animate);
     });
   }, [
+    commitDjSyncState,
     markDjTrackPlayed,
     player.dualDeck,
     prepareDjAutomixNext,
@@ -490,6 +494,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
 
   const enableDjAutomix = useCallback(() => {
     cancelDjAutomixTransition();
+    commitDjSyncState(EMPTY_DJ_SYNC_STATE);
     player.dualDeck.setMode(true);
 
     const a = player.dualDeck.getSnapshot('a');
@@ -524,6 +529,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     }
   }, [
     cancelDjAutomixTransition,
+    commitDjSyncState,
     djListedTracks,
     markDjTrackPlayed,
     player.dualDeck,
@@ -647,6 +653,19 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     const syncPanels = (timestamp: number) => {
       if (timestamp - lastUpdate >= 100 || lastUpdate === 0) {
         lastUpdate = timestamp;
+
+        const syncState = djSyncStateRef.current;
+        if (syncState.masterDeck) {
+          const masterSnapshot = player.dualDeck.getSnapshot(syncState.masterDeck);
+          if (!masterSnapshot?.trackId || !masterSnapshot.playing) {
+            const next = resolveDjSyncAfterDeckUnavailable(
+              syncState,
+              syncState.masterDeck
+            );
+            if (next !== syncState) commitDjSyncState(next);
+          }
+        }
+
         setDjDeckPanels({
           a: readDjDeckPanel('a'),
           b: readDjDeckPanel('b')
@@ -660,7 +679,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     return () => {
       if (frame != null) window.cancelAnimationFrame(frame);
     };
-  }, [player.dualDeck.getMixerSnapshot, readDjDeckPanel, screen]);
+  }, [commitDjSyncState, player.dualDeck.getMixerSnapshot, player.dualDeck.getSnapshot, readDjDeckPanel, screen]);
 
   const handleDdj400Message = useCallback((message: Parameters<typeof decodeDdj400Message>[0]) => {
     const command = decodeDdj400Message(message)
