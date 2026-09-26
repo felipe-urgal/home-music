@@ -60,6 +60,16 @@ describe('DDJ-400 performance mapping', () => {
     expect(mapper.decode(msg(0x90, 1, 0x58, 0))).toBeNull();
   });
 
+  it('processa burst de jog sem acumular estado inválido', () => {
+    const mapper = new Ddj400PerformanceMapper();
+    const commands = Array.from({ length: 500 }, (_, index) => (
+      mapper.decode(msg(0xb0, index % 2, 0x21, index % 2 === 0 ? 1 : 127))
+    ));
+
+    expect(commands).toHaveLength(500);
+    expect(commands.every(command => command?.type === 'deck.nudge')).toBe(true);
+  });
+
   it('ignora mensagens fora do mapping de performance', () => {
     const mapper = new Ddj400PerformanceMapper();
     expect(mapper.decode(msg(0xb0, 0, 0x7f, 10))).toBeNull();
