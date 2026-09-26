@@ -286,7 +286,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
 
 
   const prepareDjAutomixNext = useCallback((activeDeck: DjDeckId, queueIndex: number) => {
-    const decision = nextTrackDecision(player.queue, queueIndex, player.repeatMode, false);
+    const decision = nextTrackDecision(player.queue, queueIndex, player.repeatMode, true);
     const nextTrack = decision.type === 'restart'
       ? player.queue[queueIndex] ?? null
       : decision.type === 'track'
@@ -477,19 +477,32 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
                 visibilityState: document.visibilityState,
                 remainingSeconds
               });
+              const fallbackDecision = nextTrackDecision(
+                player.queue,
+                djAutomixQueueIndexRef.current,
+                player.repeatMode,
+                true
+              );
+              const fallbackTrack = fallbackDecision.type === 'restart'
+                ? currentTrack
+                : fallbackDecision.type === 'track'
+                  ? player.queue.find(track => track.id === fallbackDecision.id) ?? null
+                  : null;
               const nextTrack = candidate
-                ? player.queue.find(track => track.id === candidate.trackId)
-                : null;
+                ? player.queue.find(track => track.id === candidate.trackId) ?? null
+                : fallbackTrack;
               const nextQueueIndex = nextTrack
                 ? player.queue.findIndex(track => track.id === nextTrack.id)
                 : -1;
-              if (candidate && nextTrack && nextQueueIndex >= 0) {
+              if (nextTrack && nextQueueIndex >= 0) {
                 startDjAutomixTransition({
                   activeDeck,
                   currentTrack,
                   nextTrack,
                   nextQueueIndex,
-                  durationSeconds: effectiveDjAutomixDuration(candidate.durationSeconds)
+                  durationSeconds: effectiveDjAutomixDuration(
+                    candidate?.durationSeconds ?? player.crossfadeSeconds
+                  )
                 });
               }
             }
