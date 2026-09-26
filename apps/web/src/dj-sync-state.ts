@@ -44,14 +44,7 @@ export function disableDjSyncForDeck(
     return EMPTY_DJ_SYNC_STATE;
   }
 
-  return {
-    masterDeck: state.masterDeck,
-    synced: {
-      ...state.synced,
-      [deck]: false
-    },
-    mode: 'off'
-  };
+  return EMPTY_DJ_SYNC_STATE;
 }
 
 export function resetDjSyncForLoad(
