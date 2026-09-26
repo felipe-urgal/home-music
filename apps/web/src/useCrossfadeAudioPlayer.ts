@@ -35,6 +35,15 @@ import {
   type StreamingMode
 } from './streaming-quality';
 import { getTvRemoteMediaSource } from './tv-remote-media-source';
+import {
+  clearDeckAudio,
+  loadDeckAudio,
+  readDeckAudioSnapshot,
+  seekDeckAudio,
+  setDeckPlaybackRate,
+  setDeckVolume
+} from './dual-deck-audio';
+import type { DjDeckId } from './dj-controller-contract';
 import { useAudioPlayer } from './useAudioPlayer';
 
 function initialCrossfadeSeconds() {
@@ -77,6 +86,11 @@ export function useCrossfadeAudioPlayer(
   const deckARef = useRef<HTMLAudioElement>(null);
   const deckBRef = useRef<HTMLAudioElement>(null);
   const activeDeckRef = useRef<CrossfadeDeck>('a');
+  const dualDeckModeRef = useRef(false);
+  const deckTrackIdsRef = useRef<Record<DjDeckId, string | null>>({
+    a: player.current?.id ?? null,
+    b: null
+  });
   const animationFrameRef = useRef<number | null>(null);
   const quantizedScheduleFrameRef = useRef<number | null>(null);
   const playbackRateRestoreFrameRef = useRef<number | null>(null);
@@ -91,6 +105,9 @@ export function useCrossfadeAudioPlayer(
 
   currentTrackIdRef.current = player.current?.id ?? null;
   outputVolumeRef.current = resolveOutputVolume(player.volume, usesSystemVolume);
+  if (!dualDeckModeRef.current) {
+    deckTrackIdsRef.current[activeDeckRef.current] = player.current?.id ?? null;
+  }
 
   const getDeckAudio = useCallback((deck: CrossfadeDeck) => (
     deck === 'a' ? deckARef.current : deckBRef.current
@@ -104,12 +121,7 @@ export function useCrossfadeAudioPlayer(
 
   const clearAudio = useCallback((audio: HTMLAudioElement | null) => {
     if (!audio) return;
-    audio.pause();
-    audio.volume = 0;
-    audio.playbackRate = 1;
-    audio.preservesPitch = true;
-    audio.removeAttribute('src');
-    audio.load();
+    clearDeckAudio(audio);
   }, []);
 
   const cancelAnimation = useCallback(() => {
@@ -182,7 +194,15 @@ export function useCrossfadeAudioPlayer(
       activeAudio.volume = outputVolumeRef.current;
       activeAudio.playbackRate = 1;
     }
-    if (inactiveAudio && inactiveAudio !== activeAudio) clearAudio(inactiveAudio);
+    if (
+      !dualDeckModeRef.current
+      && inactiveAudio
+      && inactiveAudio !== activeAudio
+    ) {
+      const inactiveDeck = otherCrossfadeDeck(activeDeckRef.current);
+      clearAudio(inactiveAudio);
+      deckTrackIdsRef.current[inactiveDeck] = null;
+    }
   }, [cancelAnimation, cancelPlaybackRateRestore, cancelQuantizedSchedule, clearAudio, getActiveAudio, getInactiveAudio, player.audioRef]);
 
   useLayoutEffect(() => {
@@ -258,6 +278,7 @@ export function useCrossfadeAudioPlayer(
   ), [offlineMode, player.normalizationMode, player.streamingMode]);
 
   const prepareIncomingAudio = useCallback((track: Track) => {
+    const incomingDeck = otherCrossfadeDeck(activeDeckRef.current);
     const incomingAudio = getInactiveAudio();
     if (!incomingAudio) return null;
     if (
@@ -266,9 +287,8 @@ export function useCrossfadeAudioPlayer(
     ) return incomingAudio;
 
     clearAudio(incomingAudio);
-    incomingAudio.volume = 0;
-    incomingAudio.src = incomingTrackSource(track);
-    incomingAudio.load();
+    loadDeckAudio(incomingAudio, incomingTrackSource(track), { volume: 0 });
+    deckTrackIdsRef.current[incomingDeck] = track.id;
     preparedIncomingTrackIdRef.current = track.id;
     return incomingAudio;
   }, [clearAudio, getInactiveAudio, incomingTrackSource]);
@@ -404,6 +424,7 @@ export function useCrossfadeAudioPlayer(
   ]);
 
   const maybeStartCrossfade = useCallback((activeAudio: HTMLAudioElement) => {
+    if (dualDeckModeRef.current) return;
     if (isAppleMobileWebKit(navigator)) return;
     if (activeAudio !== getActiveAudio()) return;
     if (!player.playing || activeAudio.paused || activeAudio.ended) return;
@@ -564,7 +585,9 @@ export function useCrossfadeAudioPlayer(
     startingTrackIdRef.current = null;
     incomingTrackIdRef.current = null;
 
+    const outgoingDeck = activeDeckRef.current;
     activeDeckRef.current = otherCrossfadeDeck(activeDeckRef.current);
+    deckTrackIdsRef.current[activeDeckRef.current] = candidate.trackId;
     incomingAudio.volume = outputVolumeRef.current;
     audio.volume = 0;
     restorePlaybackRate(incomingAudio);
@@ -574,6 +597,7 @@ export function useCrossfadeAudioPlayer(
     // novamente e não devolva a faixa para 0s.
     player.adoptAudioSource(candidate.trackId, incomingAudio);
     clearAudio(audio);
+    deckTrackIdsRef.current[outgoingDeck] = null;
     player.audioHandlers.onPlay();
     player.audioHandlers.onEnded();
     window.requestAnimationFrame(() => clearCrossfadeVisualState(visualAttempt));
@@ -613,6 +637,7 @@ export function useCrossfadeAudioPlayer(
   }, [getActiveAudio, player.audioHandlers]);
 
   const playTrack = useCallback((track: Track, contextTracks: Track[]) => {
+    dualDeckModeRef.current = false;
     cancelCrossfade();
     const source = getTvRemoteMediaSource(track.id);
     const audio = getActiveAudio();
@@ -657,10 +682,109 @@ export function useCrossfadeAudioPlayer(
     player.reorderQueue(from, to);
   }, [cancelCrossfade, player.reorderQueue]);
 
+  const setDualDeckMode = useCallback((active: boolean) => {
+    if (dualDeckModeRef.current === active) return;
+    if (active) {
+      cancelCrossfade();
+      dualDeckModeRef.current = true;
+      deckTrackIdsRef.current[activeDeckRef.current] = player.current?.id ?? null;
+      return;
+    }
+
+    dualDeckModeRef.current = false;
+    cancelCrossfade();
+  }, [cancelCrossfade, player.current?.id]);
+
+  const loadDualDeckTrack = useCallback((deck: DjDeckId, track: Track) => {
+    if (!dualDeckModeRef.current) return false;
+    const audio = getDeckAudio(deck);
+    if (!audio) return false;
+
+    cancelAnimation();
+    cancelQuantizedSchedule();
+    cancelPlaybackRateRestore();
+    loadDeckAudio(audio, incomingTrackSource(track), {
+      volume: deck === activeDeckRef.current ? outputVolumeRef.current : 0
+    });
+    deckTrackIdsRef.current[deck] = track.id;
+    return true;
+  }, [
+    cancelAnimation,
+    cancelPlaybackRateRestore,
+    cancelQuantizedSchedule,
+    getDeckAudio,
+    incomingTrackSource
+  ]);
+
+  const unloadDualDeck = useCallback((deck: DjDeckId) => {
+    if (!dualDeckModeRef.current) return false;
+    const audio = getDeckAudio(deck);
+    if (!audio) return false;
+    clearDeckAudio(audio);
+    deckTrackIdsRef.current[deck] = null;
+    return true;
+  }, [getDeckAudio]);
+
+  const playDualDeck = useCallback(async (deck: DjDeckId) => {
+    if (!dualDeckModeRef.current) return false;
+    const audio = getDeckAudio(deck);
+    if (!audio || !deckTrackIdsRef.current[deck]) return false;
+    try {
+      await audio.play();
+      return true;
+    } catch {
+      return false;
+    }
+  }, [getDeckAudio]);
+
+  const pauseDualDeck = useCallback((deck: DjDeckId) => {
+    if (!dualDeckModeRef.current) return false;
+    const audio = getDeckAudio(deck);
+    if (!audio) return false;
+    audio.pause();
+    return true;
+  }, [getDeckAudio]);
+
+  const seekDualDeck = useCallback((deck: DjDeckId, seconds: number) => {
+    if (!dualDeckModeRef.current) return null;
+    const audio = getDeckAudio(deck);
+    return audio ? seekDeckAudio(audio, seconds) : null;
+  }, [getDeckAudio]);
+
+  const setDualDeckPlaybackRate = useCallback((deck: DjDeckId, playbackRate: number) => {
+    if (!dualDeckModeRef.current) return null;
+    const audio = getDeckAudio(deck);
+    return audio ? setDeckPlaybackRate(audio, playbackRate) : null;
+  }, [getDeckAudio]);
+
+  const setDualDeckVolume = useCallback((deck: DjDeckId, volume: number) => {
+    if (!dualDeckModeRef.current) return null;
+    const audio = getDeckAudio(deck);
+    return audio ? setDeckVolume(audio, volume) : null;
+  }, [getDeckAudio]);
+
+  const getDualDeckSnapshot = useCallback((deck: DjDeckId) => {
+    const audio = getDeckAudio(deck);
+    return audio
+      ? readDeckAudioSnapshot(deck, deckTrackIdsRef.current[deck], audio)
+      : null;
+  }, [getDeckAudio]);
+
   return {
     ...player,
     deckARef,
     deckBRef,
+    dualDeck: {
+      setMode: setDualDeckMode,
+      loadTrack: loadDualDeckTrack,
+      unload: unloadDualDeck,
+      play: playDualDeck,
+      pause: pauseDualDeck,
+      seek: seekDualDeck,
+      setPlaybackRate: setDualDeckPlaybackRate,
+      setVolume: setDualDeckVolume,
+      getSnapshot: getDualDeckSnapshot
+    },
     crossfadeSeconds,
     setCrossfadeSeconds,
     playTrack,
