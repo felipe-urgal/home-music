@@ -28,6 +28,10 @@ import {
 import { isDjKeyboardEditableTarget, mapDjKeyboardCode } from './dj-keyboard-mapping';
 import { resolveInitialDjSyncPlan } from './dj-sync-phase-lock';
 import {
+  DJ_SYNC_CONTROL_INTERVAL_MS,
+  resolveContinuousDjSyncCorrection
+} from './dj-sync-continuous-lock';
+import {
   EMPTY_DJ_SYNC_STATE,
   activateDjSync,
   disableDjSyncForDeck,
@@ -120,6 +124,14 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
   const ddjCuePointsRef = useRef<Record<DjDeckId, number | null>>({ a: null, b: null });
   const [djSyncState, setDjSyncState] = useState<DjSyncState>(EMPTY_DJ_SYNC_STATE);
   const djSyncStateRef = useRef<DjSyncState>(EMPTY_DJ_SYNC_STATE);
+  const djSyncLastRelockAtRef = useRef<Record<DjDeckId, number | null>>({ a: null, b: null });
+  const djSyncRuntimeRef = useRef({
+    samples: 0,
+    corrections: 0,
+    relocks: 0,
+    lastPhaseErrorSeconds: null as number | null,
+    maxAbsPhaseErrorSeconds: 0
+  });
   const ddjLedRendererRef = useRef<Ddj400LedRenderer | null>(null);
   const ddjLedFrameRef = useRef<number | null>(null);
   const renderDdjLedsRef = useRef<(() => void) | null>(null);
@@ -153,13 +165,31 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     if (restoreBaseRate) {
       player.dualDeck.setPlaybackRate(deck, ddjBaseRateRef.current[deck] || 1);
     }
-  }, [player.dualDeck]);
+  }, [player.dualDeck.setPlaybackRate]);
 
   const commitDjSyncState = useCallback((next: DjSyncState) => {
+    const previous = djSyncStateRef.current;
+    if (previous.masterDeck) {
+      const previousSlave: DjDeckId = previous.masterDeck === 'a' ? 'b' : 'a';
+      const relationEnded = (
+        !next.synced[previousSlave]
+        || next.masterDeck !== previous.masterDeck
+        || next.mode === 'off'
+        || next.mode === 'tempo'
+      );
+      if (previous.synced[previousSlave] && relationEnded) {
+        player.dualDeck.setPlaybackRate(
+          previousSlave,
+          ddjBaseRateRef.current[previousSlave] || 1
+        );
+        djSyncLastRelockAtRef.current[previousSlave] = null;
+      }
+    }
+
     djSyncStateRef.current = next;
     setDjSyncState(next);
     renderDdjLedsRef.current?.();
-  }, []);
+  }, [player.dualDeck.setPlaybackRate]);
 
   const disableDjSync = useCallback((deck: DjDeckId) => {
     cancelDjNudge(deck);
@@ -185,6 +215,11 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     cancelDjAutomixTransition();
     setDjModeState('manual');
   }, [cancelDjAutomixTransition, setDjModeState]);
+
+  const djTracksById = useMemo(
+    () => new Map(library.tracks.map(track => [track.id, track])),
+    [library.tracks]
+  );
 
   const djLibrarySources = useMemo(() => {
     const paths = new Set<string>();
@@ -228,14 +263,13 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
       const playlistId = djLibrarySource.slice('playlist:'.length);
       const playlist = library.playlists.find(item => item.id === playlistId);
       if (!playlist) return [];
-      const tracksById = new Map(library.tracks.map(track => [track.id, track]));
       return playlist.trackIds
-        .map(trackId => tracksById.get(trackId))
+        .map(trackId => djTracksById.get(trackId))
         .filter((track): track is (typeof library.tracks)[number] => Boolean(track));
     }
 
     return library.tracks;
-  }, [djLibrarySource, library.playlists, library.tracks]);
+  }, [djLibrarySource, djTracksById, library.playlists, library.tracks]);
 
   const djListedTracks = useMemo(
     () => djAutomixShuffle ? shuffleDjTrackList(djBrowserTracks) : djBrowserTracks,
@@ -431,6 +465,14 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
       }
     }
 
+    djSyncLastRelockAtRef.current[deck] = null;
+    djSyncRuntimeRef.current = {
+      samples: 0,
+      corrections: 0,
+      relocks: 0,
+      lastPhaseErrorSeconds: null,
+      maxAbsPhaseErrorSeconds: 0
+    };
     commitDjSyncState(activateDjSync(
       djSyncStateRef.current,
       deck,
@@ -711,6 +753,132 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     djMixMode,
     player.dualDeck.getSnapshot,
     prepareDjAutomixNext
+  ]);
+
+  useEffect(() => {
+    if (screen !== 'dj') return;
+
+    let frame: number | null = null;
+    let lastCheckAt = 0;
+
+    const restoreSyncedDeckBaseRate = () => {
+      const state = djSyncStateRef.current;
+      if (!state.masterDeck) return;
+      const slaveDeck: DjDeckId = state.masterDeck === 'a' ? 'b' : 'a';
+      if (!state.synced[slaveDeck]) return;
+      player.dualDeck.setPlaybackRate(
+        slaveDeck,
+        ddjBaseRateRef.current[slaveDeck] || 1
+      );
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') restoreSyncedDeckBaseRate();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    const tick = (timestamp: number) => {
+      if (
+        document.visibilityState === 'visible'
+        && timestamp - lastCheckAt >= DJ_SYNC_CONTROL_INTERVAL_MS
+      ) {
+        lastCheckAt = timestamp;
+        const state = djSyncStateRef.current;
+
+        if (state.masterDeck && (state.mode === 'beat' || state.mode === 'bar')) {
+          const masterDeck = state.masterDeck;
+          const slaveDeck: DjDeckId = masterDeck === 'a' ? 'b' : 'a';
+          const masterSnapshot = player.dualDeck.getSnapshot(masterDeck);
+          const slaveSnapshot = player.dualDeck.getSnapshot(slaveDeck);
+
+          if (
+            state.synced[slaveDeck]
+            && masterSnapshot?.trackId
+            && masterSnapshot.playing
+            && slaveSnapshot?.trackId
+            && slaveSnapshot.playing
+            && ddjNudgeTimerRef.current[slaveDeck] == null
+          ) {
+            const masterTrack = djTracksById.get(masterSnapshot.trackId);
+            const slaveTrack = djTracksById.get(slaveSnapshot.trackId);
+            const beatmatch = resolveBeatmatchPlan({
+              outgoing: masterTrack?.rhythm,
+              incoming: slaveTrack?.rhythm
+            });
+
+            if (!beatmatch) {
+              player.dualDeck.setPlaybackRate(
+                slaveDeck,
+                ddjBaseRateRef.current[slaveDeck] || 1
+              );
+              commitDjSyncState({
+                ...state,
+                mode: 'tempo'
+              });
+            } else {
+              const correction = resolveContinuousDjSyncCorrection({
+                masterRhythm: masterTrack?.rhythm,
+                masterPositionSeconds: masterSnapshot.currentTimeSeconds,
+                masterPlaybackRate: masterSnapshot.playbackRate,
+                slaveRhythm: slaveTrack?.rhythm,
+                slavePositionSeconds: slaveSnapshot.currentTimeSeconds,
+                beatmatch,
+                nowMs: timestamp,
+                lastRelockAtMs: djSyncLastRelockAtRef.current[slaveDeck]
+              });
+
+              if ('phaseErrorSeconds' in correction) {
+                const magnitude = Math.abs(correction.phaseErrorSeconds);
+                djSyncRuntimeRef.current.samples += 1;
+                djSyncRuntimeRef.current.lastPhaseErrorSeconds = correction.phaseErrorSeconds;
+                djSyncRuntimeRef.current.maxAbsPhaseErrorSeconds = Math.max(
+                  djSyncRuntimeRef.current.maxAbsPhaseErrorSeconds,
+                  magnitude
+                );
+              }
+
+              if (correction.kind === 'hold') {
+                player.dualDeck.setPlaybackRate(slaveDeck, correction.playbackRate);
+              } else if (correction.kind === 'nudge') {
+                djSyncRuntimeRef.current.corrections += 1;
+                player.dualDeck.setPlaybackRate(slaveDeck, correction.playbackRate);
+              } else if (correction.kind === 'relock') {
+                djSyncRuntimeRef.current.corrections += 1;
+                djSyncRuntimeRef.current.relocks += 1;
+                djSyncLastRelockAtRef.current[slaveDeck] = timestamp;
+                player.dualDeck.setPlaybackRate(slaveDeck, correction.playbackRate);
+                player.dualDeck.seek(
+                  slaveDeck,
+                  slaveSnapshot.currentTimeSeconds + correction.offsetMediaSeconds
+                );
+              } else {
+                player.dualDeck.setPlaybackRate(slaveDeck, correction.playbackRate);
+                commitDjSyncState({
+                  ...state,
+                  mode: 'tempo'
+                });
+              }
+            }
+          }
+        }
+      }
+
+      frame = window.requestAnimationFrame(tick);
+    };
+
+    frame = window.requestAnimationFrame(tick);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      if (frame != null) window.cancelAnimationFrame(frame);
+      restoreSyncedDeckBaseRate();
+    };
+  }, [
+    commitDjSyncState,
+    djTracksById,
+    player.dualDeck.getSnapshot,
+    player.dualDeck.seek,
+    player.dualDeck.setPlaybackRate,
+    screen
   ]);
 
   const readDjDeckPanel = useCallback((deck: DjDeckId): DjDeckPanelState => {
