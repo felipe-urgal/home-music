@@ -4,6 +4,7 @@ import { isAppleMobileWebKit } from './background-playback';
 import {
   QUANTIZED_CROSSFADE_ARM_SECONDS,
   QUANTIZED_CROSSFADE_EARLY_TOLERANCE_SECONDS,
+  quantizedCrossfadeWakeDelayMs,
   resolveQuantizedCrossfadePlan
 } from './beat-clock';
 import {
@@ -18,6 +19,7 @@ import {
   otherCrossfadeDeck,
   readCrossfadeSeconds,
   resolveCrossfadeCandidate,
+  resolveCrossfadePreloadTrackId,
   writeCrossfadeSeconds,
   type CrossfadeCandidate,
   type CrossfadeDeck
@@ -95,6 +97,7 @@ export function useCrossfadeAudioPlayer(
   });
   const animationFrameRef = useRef<number | null>(null);
   const quantizedScheduleFrameRef = useRef<number | null>(null);
+  const quantizedWakeTimeoutRef = useRef<number | null>(null);
   const playbackRateRestoreFrameRef = useRef<number | null>(null);
   const preparedIncomingTrackIdRef = useRef<string | null>(null);
   const attemptRef = useRef(0);
@@ -136,6 +139,12 @@ export function useCrossfadeAudioPlayer(
     if (quantizedScheduleFrameRef.current == null) return;
     window.cancelAnimationFrame(quantizedScheduleFrameRef.current);
     quantizedScheduleFrameRef.current = null;
+  }, []);
+
+  const cancelQuantizedWake = useCallback(() => {
+    if (quantizedWakeTimeoutRef.current == null) return;
+    window.clearTimeout(quantizedWakeTimeoutRef.current);
+    quantizedWakeTimeoutRef.current = null;
   }, []);
 
   const cancelPlaybackRateRestore = useCallback(() => {
@@ -182,6 +191,7 @@ export function useCrossfadeAudioPlayer(
     attemptRef.current += 1;
     cancelAnimation();
     cancelQuantizedSchedule();
+    cancelQuantizedWake();
     cancelPlaybackRateRestore();
     preparedIncomingTrackIdRef.current = null;
     originTrackIdRef.current = null;
@@ -205,7 +215,7 @@ export function useCrossfadeAudioPlayer(
       clearAudio(inactiveAudio);
       deckTrackIdsRef.current[inactiveDeck] = null;
     }
-  }, [cancelAnimation, cancelPlaybackRateRestore, cancelQuantizedSchedule, clearAudio, getActiveAudio, getInactiveAudio, player.audioRef]);
+  }, [cancelAnimation, cancelPlaybackRateRestore, cancelQuantizedSchedule, cancelQuantizedWake, clearAudio, getActiveAudio, getInactiveAudio, player.audioRef]);
 
   useLayoutEffect(() => {
     cancelRef.current = cancelCrossfade;
@@ -245,6 +255,7 @@ export function useCrossfadeAudioPlayer(
         startingTrackIdRef.current
         || incomingTrackIdRef.current
         || quantizedScheduleFrameRef.current != null
+        || quantizedWakeTimeoutRef.current != null
       )
     ) {
       cancelCrossfade();
@@ -255,11 +266,12 @@ export function useCrossfadeAudioPlayer(
     attemptRef.current += 1;
     cancelAnimation();
     cancelQuantizedSchedule();
+    cancelQuantizedWake();
     cancelPlaybackRateRestore();
     clearCrossfadeVisualState();
     clearAudio(deckARef.current);
     clearAudio(deckBRef.current);
-  }, [cancelAnimation, cancelPlaybackRateRestore, cancelQuantizedSchedule, clearAudio]);
+  }, [cancelAnimation, cancelPlaybackRateRestore, cancelQuantizedSchedule, cancelQuantizedWake, clearAudio]);
 
   const setCrossfadeSeconds = useCallback((seconds: number) => {
     const normalizedSeconds = normalizeCrossfadeSeconds(seconds);
@@ -304,6 +316,7 @@ export function useCrossfadeAudioPlayer(
     if (startingTrackIdRef.current || incomingTrackIdRef.current) return;
 
     cancelQuantizedSchedule();
+    cancelQuantizedWake();
 
     const nextTrack = player.queue.find(track => track.id === candidate.trackId);
     const originTrackId = player.current?.id ?? null;
@@ -417,6 +430,7 @@ export function useCrossfadeAudioPlayer(
   }, [
     cancelCrossfade,
     cancelQuantizedSchedule,
+    cancelQuantizedWake,
     getActiveAudio,
     player.current?.id,
     player.current?.rhythm,
@@ -442,6 +456,7 @@ export function useCrossfadeAudioPlayer(
 
     if (!quantizedPlan) {
       cancelQuantizedSchedule();
+      cancelQuantizedWake();
       const candidate = resolveCrossfadeCandidate({
         queue: player.queue,
         currentIndex: player.currentIndex,
@@ -455,27 +470,46 @@ export function useCrossfadeAudioPlayer(
       return;
     }
 
+    const preloadTrackId = resolveCrossfadePreloadTrackId({
+      queue: player.queue,
+      currentIndex: player.currentIndex,
+      currentTrackId: player.current?.id ?? null,
+      repeatMode: player.repeatMode,
+      visibilityState: document.visibilityState
+    });
+    const preloadTrack = preloadTrackId
+      ? player.queue.find(track => track.id === preloadTrackId)
+      : undefined;
+    if (preloadTrack) prepareIncomingAudio(preloadTrack);
+
     const timeUntilStart = quantizedPlan.startTimeSeconds - activeAudio.currentTime;
     if (timeUntilStart > QUANTIZED_CROSSFADE_ARM_SECONDS) {
       cancelQuantizedSchedule();
+      if (quantizedWakeTimeoutRef.current == null) {
+        const scheduledAttempt = attemptRef.current;
+        const scheduledTrackId = player.current?.id ?? null;
+        const delayMs = quantizedCrossfadeWakeDelayMs(timeUntilStart);
+        quantizedWakeTimeoutRef.current = window.setTimeout(() => {
+          quantizedWakeTimeoutRef.current = null;
+          if (attemptRef.current !== scheduledAttempt) return;
+
+          const latestAudio = getActiveAudio();
+          if (
+            !latestAudio
+            || latestAudio !== activeAudio
+            || currentTrackIdRef.current !== scheduledTrackId
+            || document.visibilityState !== 'visible'
+            || latestAudio.paused
+            || latestAudio.ended
+          ) return;
+
+          maybeStartCrossfade(latestAudio);
+        }, delayMs);
+      }
       return;
     }
 
-    if (timeUntilStart > QUANTIZED_CROSSFADE_EARLY_TOLERANCE_SECONDS) {
-      const preloadCandidate = resolveCrossfadeCandidate({
-        queue: player.queue,
-        currentIndex: player.currentIndex,
-        currentTrackId: player.current?.id ?? null,
-        repeatMode: player.repeatMode,
-        durationSeconds: quantizedPlan.durationSeconds,
-        visibilityState: document.visibilityState,
-        remainingSeconds: Math.min(remainingSeconds, quantizedPlan.durationSeconds)
-      });
-      const preloadTrack = preloadCandidate
-        ? player.queue.find(track => track.id === preloadCandidate.trackId)
-        : undefined;
-      if (preloadTrack) prepareIncomingAudio(preloadTrack);
-    }
+    cancelQuantizedWake();
 
     const resolveQuantizedCandidate = (audio: HTMLAudioElement) => {
       const latestRemainingSeconds = Math.max(0, audio.duration - audio.currentTime);
@@ -540,6 +574,7 @@ export function useCrossfadeAudioPlayer(
     quantizedScheduleFrameRef.current = window.requestAnimationFrame(watchBeatBoundary);
   }, [
     cancelQuantizedSchedule,
+    cancelQuantizedWake,
     crossfadeSeconds,
     getActiveAudio,
     player.current?.id,
@@ -551,6 +586,13 @@ export function useCrossfadeAudioPlayer(
     prepareIncomingAudio,
     startCrossfade
   ]);
+
+  useEffect(() => {
+    if (!player.playing) return;
+    const activeAudio = getActiveAudio();
+    if (!activeAudio || activeAudio.paused || activeAudio.ended) return;
+    maybeStartCrossfade(activeAudio);
+  }, [getActiveAudio, maybeStartCrossfade, player.playing]);
 
   const handleDeckEnded = useCallback((audio: HTMLAudioElement) => {
     if (audio !== getActiveAudio() || !audio.ended) return;
@@ -704,6 +746,7 @@ export function useCrossfadeAudioPlayer(
 
     cancelAnimation();
     cancelQuantizedSchedule();
+    cancelQuantizedWake();
     cancelPlaybackRateRestore();
     loadDeckAudio(audio, incomingTrackSource(track), {
       volume: deck === activeDeckRef.current ? outputVolumeRef.current : 0
@@ -714,6 +757,7 @@ export function useCrossfadeAudioPlayer(
     cancelAnimation,
     cancelPlaybackRateRestore,
     cancelQuantizedSchedule,
+    cancelQuantizedWake,
     getDeckAudio,
     incomingTrackSource
   ]);

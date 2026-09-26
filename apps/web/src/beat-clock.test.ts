@@ -5,6 +5,7 @@ import {
   beatIndexAt,
   nextBarAtOrAfter,
   nextBeatAtOrAfter,
+  quantizedCrossfadeWakeDelayMs,
   resolveQuantizedCrossfadePlan
 } from './beat-clock';
 
@@ -15,6 +16,15 @@ const rhythm: TrackRhythm = {
 };
 
 describe('beat clock', () => {
+  it('calcula wake-up antecipado antes da janela fina do crossfade', () => {
+    expect(quantizedCrossfadeWakeDelayMs(8.75)).toBe(7_500);
+    expect(quantizedCrossfadeWakeDelayMs(2)).toBe(750);
+    expect(quantizedCrossfadeWakeDelayMs(1.26)).toBeCloseTo(10, 6);
+    expect(quantizedCrossfadeWakeDelayMs(1.25)).toBe(0);
+    expect(quantizedCrossfadeWakeDelayMs(0.5)).toBe(0);
+    expect(quantizedCrossfadeWakeDelayMs(Number.NaN)).toBe(0);
+  });
+
   it('calcula duração e índice do beat a partir da fase analisada', () => {
     expect(beatDurationSeconds(rhythm)).toBeCloseTo(0.5, 6);
     expect(beatIndexAt(rhythm, 0.25)).toBe(0);

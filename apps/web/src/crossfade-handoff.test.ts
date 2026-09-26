@@ -89,6 +89,7 @@ describe('crossfade handoff', () => {
     expect(cancel).toContain('attemptRef.current += 1;');
     expect(cancel).toContain('cancelAnimation();');
     expect(cancel).toContain('cancelQuantizedSchedule();');
+    expect(cancel).toContain('cancelQuantizedWake();');
     expect(cancel).toContain('cancelPlaybackRateRestore();');
     expect(cancel).toContain('preparedIncomingTrackIdRef.current = null;');
     expect(cancel).toContain('originTrackIdRef.current = null;');
@@ -128,6 +129,28 @@ describe('crossfade handoff', () => {
       const block = crossfade.slice(crossfade.indexOf(startMarker), crossfade.indexOf(endMarker));
       expect(block).toContain('cancelCrossfade();');
     }
+  });
+
+  it('pré-carrega a faixa de entrada antes de entrar na janela fina do beat', () => {
+    const crossfade = source('useCrossfadeAudioPlayer.ts');
+    const preloadIndex = crossfade.indexOf('const preloadTrackId = resolveCrossfadePreloadTrackId');
+    const armIndex = crossfade.indexOf('if (timeUntilStart > QUANTIZED_CROSSFADE_ARM_SECONDS)');
+
+    expect(preloadIndex).toBeGreaterThanOrEqual(0);
+    expect(armIndex).toBeGreaterThan(preloadIndex);
+    expect(crossfade).toContain('if (preloadTrack) prepareIncomingAudio(preloadTrack);');
+  });
+
+  it('arma a fronteira rítmica por timeout e usa rAF somente perto do beat', () => {
+    const crossfade = source('useCrossfadeAudioPlayer.ts');
+
+    expect(crossfade).toContain('quantizedWakeTimeoutRef');
+    expect(crossfade).toContain('quantizedCrossfadeWakeDelayMs(timeUntilStart)');
+    expect(crossfade).toContain('quantizedWakeTimeoutRef.current = window.setTimeout');
+    expect(crossfade).toContain('maybeStartCrossfade(latestAudio);');
+    expect(crossfade).toContain('quantizedScheduleFrameRef.current = window.requestAnimationFrame(watchBeatBoundary);');
+    expect(crossfade).toContain('if (!player.playing) return;');
+    expect(crossfade).toContain('maybeStartCrossfade(activeAudio);');
   });
 
   it('invalida transição ao ir para background, trocar faixa ou pausar', () => {
