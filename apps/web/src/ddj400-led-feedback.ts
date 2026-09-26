@@ -9,7 +9,11 @@ export type Ddj400LedState = {
 
 type SendMidi = (data: number[]) => boolean;
 
-const LED_NOTE = DDJ400_MIDI_FIXTURES.led;
+const LED_NOTE = {
+  play: DDJ400_MIDI_FIXTURES.led.play,
+  cue: DDJ400_MIDI_FIXTURES.led.cue,
+  sync: DDJ400_MIDI_FIXTURES.led.sync
+} as const;
 
 export function ddj400LedMessage(
   deck: DjDeckId,
