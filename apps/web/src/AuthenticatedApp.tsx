@@ -15,6 +15,12 @@ import { TvRemoteEntryButton } from './components/TvRemoteEntryButton';
 import { TvRemotePairingDialog } from './components/TvRemotePairingDialog';
 import { useRoutedScreen } from './browser-navigation';
 import { decodeDdj400Message } from './ddj400-mapping';
+import {
+  DDJ400_NUDGE_RATE_DELTA,
+  DDJ400_SCRUB_SECONDS,
+  Ddj400PerformanceMapper
+} from './ddj400-performance-mapping';
+import { resolveBeatmatchPlan } from './beatmatch';
 import type { DjDeckId } from './dj-controller-contract';
 import { canUseAdminLibraryActions } from './frontend-access';
 import { buildLibraryReturnLabel } from './library-utils';
@@ -80,9 +86,13 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
   );
   const ddjBrowserIndexRef = useRef(0);
   const ddjCuePointsRef = useRef<Record<DjDeckId, number | null>>({ a: null, b: null });
+  const ddjPerformanceMapperRef = useRef(new Ddj400PerformanceMapper());
+  const ddjBaseRateRef = useRef<Record<DjDeckId, number>>({ a: 1, b: 1 });
+  const ddjNudgeTimerRef = useRef<Record<DjDeckId, number | null>>({ a: null, b: null });
 
   const handleDdj400Message = useCallback((message: Parameters<typeof decodeDdj400Message>[0]) => {
-    const command = decodeDdj400Message(message);
+    const command = decodeDdj400Message(message)
+      ?? ddjPerformanceMapperRef.current.decode(message);
     if (!command) return;
 
     const browserTracks = navigation.libraryTracks.length
@@ -138,6 +148,59 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
       } else {
         ddjCuePointsRef.current[command.deck] = snapshot.currentTimeSeconds;
       }
+      return;
+    }
+
+    if (command.type === 'deck.set-tempo') {
+      player.dualDeck.setMode(true);
+      ddjBaseRateRef.current[command.deck] = command.playbackRate;
+      player.dualDeck.setPlaybackRate(command.deck, command.playbackRate);
+      return;
+    }
+
+    if (command.type === 'deck.nudge') {
+      player.dualDeck.setMode(true);
+      const snapshot = player.dualDeck.getSnapshot(command.deck);
+      if (!snapshot?.trackId) return;
+
+      if (!snapshot.playing) {
+        player.dualDeck.seek(
+          command.deck,
+          snapshot.currentTimeSeconds + (command.delta * DDJ400_SCRUB_SECONDS)
+        );
+        return;
+      }
+
+      const baseRate = ddjBaseRateRef.current[command.deck] || snapshot.playbackRate || 1;
+      const nudgedRate = baseRate * (1 + (command.delta * DDJ400_NUDGE_RATE_DELTA));
+      player.dualDeck.setPlaybackRate(command.deck, nudgedRate);
+
+      const existingTimer = ddjNudgeTimerRef.current[command.deck];
+      if (existingTimer != null) window.clearTimeout(existingTimer);
+      ddjNudgeTimerRef.current[command.deck] = window.setTimeout(() => {
+        player.dualDeck.setPlaybackRate(command.deck, ddjBaseRateRef.current[command.deck]);
+        ddjNudgeTimerRef.current[command.deck] = null;
+      }, 80);
+      return;
+    }
+
+    if (command.type === 'deck.sync') {
+      player.dualDeck.setMode(true);
+      const masterDeck: DjDeckId = command.deck === 'a' ? 'b' : 'a';
+      const targetSnapshot = player.dualDeck.getSnapshot(command.deck);
+      const masterSnapshot = player.dualDeck.getSnapshot(masterDeck);
+      if (!targetSnapshot?.trackId || !masterSnapshot?.trackId) return;
+
+      const targetTrack = library.tracks.find(track => track.id === targetSnapshot.trackId);
+      const masterTrack = library.tracks.find(track => track.id === masterSnapshot.trackId);
+      const plan = resolveBeatmatchPlan({
+        outgoing: masterTrack?.rhythm,
+        incoming: targetTrack?.rhythm
+      });
+      if (!plan) return;
+
+      ddjBaseRateRef.current[command.deck] = plan.playbackRate;
+      player.dualDeck.setPlaybackRate(command.deck, plan.playbackRate);
     }
   }, [library.tracks, navigation.libraryTracks, player.dualDeck, setScreen]);
 
@@ -145,8 +208,21 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
 
   useEffect(() => {
     if (midiController.status === 'connected') return;
+    for (const deck of ['a', 'b'] as const) {
+      const timer = ddjNudgeTimerRef.current[deck];
+      if (timer != null) window.clearTimeout(timer);
+      ddjNudgeTimerRef.current[deck] = null;
+      ddjBaseRateRef.current[deck] = 1;
+    }
     player.dualDeck.setMode(false);
   }, [midiController.status, player.dualDeck]);
+
+  useEffect(() => () => {
+    for (const deck of ['a', 'b'] as const) {
+      const timer = ddjNudgeTimerRef.current[deck];
+      if (timer != null) window.clearTimeout(timer);
+    }
+  }, []);
 
   const qualityProfile = useNetworkQualityProfile(player.streamingMode, player.setStreamingMode);
   useBackgroundPlaybackContinuity({
