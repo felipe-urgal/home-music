@@ -9,6 +9,7 @@ import {
   Play,
   RotateCcw,
   Search,
+  Shuffle,
   SlidersHorizontal,
   Upload,
   Zap,
@@ -38,6 +39,9 @@ type DjModeScreenProps = {
   onSelectLibrarySource: (value: string) => void;
   selectedLibraryIndex: number;
   onSelectLibraryIndex: (index: number) => void;
+  automixShuffle: boolean;
+  onAutomixShuffleChange: (value: boolean) => void;
+  playedTrackIds: Set<string>;
   onLoadSelectedTrack: (deck: DjDeckId) => void;
   midi: WebMidiController;
   onDisconnectMidi: () => void;
@@ -308,6 +312,9 @@ function DjLibrary({
   onSelectLibrarySource,
   selectedIndex,
   onSelect,
+  shuffle,
+  onShuffleChange,
+  playedTrackIds,
   onLoad
 }: {
   tracks: Track[];
@@ -316,6 +323,9 @@ function DjLibrary({
   onSelectLibrarySource: (value: string) => void;
   selectedIndex: number;
   onSelect: (index: number) => void;
+  shuffle: boolean;
+  onShuffleChange: (value: boolean) => void;
+  playedTrackIds: Set<string>;
   onLoad: (deck: DjDeckId) => void;
 }) {
   const [query, setQuery] = useState('');
@@ -331,32 +341,35 @@ function DjLibrary({
   return (
     <section className="dj-pro-library" aria-label="Biblioteca DJ">
       <header className="dj-pro-library__header">
-        <div>
-          <strong>Biblioteca</strong>
-          <span>{tracks.length} faixas</span>
+        <div className="dj-pro-library__identity">
+          <span className="dj-pro-library__control-label">Biblioteca</span>
+          <div><strong>Biblioteca</strong><span>{tracks.length} faixas</span></div>
         </div>
-        <div className="dj-pro-library__tools">
-          <label className="dj-pro-library__source">
-            <span>Origem</span>
-            <select
-              value={selectedLibrarySource}
-              onChange={event => onSelectLibrarySource(event.currentTarget.value)}
-              aria-label="Selecionar pasta ou playlist"
-            >
-              <option value="all">Todas as faixas</option>
-              <optgroup label="Pastas">
-                {sources.filter(source => source.group === 'folder').map(source => (
-                  <option key={source.value} value={source.value}>{source.label}</option>
-                ))}
-              </optgroup>
-              <optgroup label="Playlists">
-                {sources.filter(source => source.group === 'playlist').map(source => (
-                  <option key={source.value} value={source.value}>{source.label}</option>
-                ))}
-              </optgroup>
-            </select>
-          </label>
-          <label className="dj-pro-library__search">
+
+        <label className="dj-pro-library__source">
+          <span className="dj-pro-library__control-label">Origem</span>
+          <select
+            value={selectedLibrarySource}
+            onChange={event => onSelectLibrarySource(event.currentTarget.value)}
+            aria-label="Selecionar pasta ou playlist"
+          >
+            <option value="all">Todas as faixas</option>
+            <optgroup label="Pastas">
+              {sources.filter(source => source.group === 'folder').map(source => (
+                <option key={source.value} value={source.value}>{source.label}</option>
+              ))}
+            </optgroup>
+            <optgroup label="Playlists">
+              {sources.filter(source => source.group === 'playlist').map(source => (
+                <option key={source.value} value={source.value}>{source.label}</option>
+              ))}
+            </optgroup>
+          </select>
+        </label>
+
+        <label className="dj-pro-library__search-wrap">
+          <span className="dj-pro-library__control-label">Buscar</span>
+          <span className="dj-pro-library__search">
             <Search aria-hidden="true" />
             <input
               value={query}
@@ -364,8 +377,19 @@ function DjLibrary({
               placeholder="Buscar na biblioteca..."
               aria-label="Buscar na biblioteca"
             />
-          </label>
-        </div>
+          </span>
+        </label>
+
+        <button
+          className={shuffle ? 'dj-pro-library__shuffle is-active' : 'dj-pro-library__shuffle'}
+          type="button"
+          aria-pressed={shuffle}
+          onClick={() => onShuffleChange(!shuffle)}
+          title="Embaralhar apenas a origem selecionada"
+        >
+          <Shuffle aria-hidden="true" />
+          <span>Aleatório</span>
+        </button>
       </header>
 
       <div className="dj-pro-library__columns" aria-hidden="true">
@@ -379,7 +403,10 @@ function DjLibrary({
             type="button"
             role="option"
             aria-selected={index === safeIndex}
-            className={index === safeIndex ? 'is-selected' : ''}
+            className={[
+              index === safeIndex ? 'is-selected' : '',
+              playedTrackIds.has(track.id) ? 'is-played' : ''
+            ].filter(Boolean).join(' ')}
             onClick={() => onSelect(index)}
           >
             <span>{String(index + 1).padStart(2, '0')}</span>
@@ -498,6 +525,9 @@ export function DjModeScreen({
   onSelectLibrarySource,
   selectedLibraryIndex,
   onSelectLibraryIndex,
+  automixShuffle,
+  onAutomixShuffleChange,
+  playedTrackIds,
   onLoadSelectedTrack,
   midi,
   onDisconnectMidi,
@@ -563,6 +593,9 @@ export function DjModeScreen({
           onSelectLibrarySource={onSelectLibrarySource}
           selectedIndex={selectedLibraryIndex}
           onSelect={onSelectLibraryIndex}
+          shuffle={automixShuffle}
+          onShuffleChange={onAutomixShuffleChange}
+          playedTrackIds={playedTrackIds}
           onLoad={onLoadSelectedTrack}
         />
         <DeckPanel deck="b" state={decks.b} onTogglePlay={onTogglePlay} onCue={onCue} onSync={onSync} />
