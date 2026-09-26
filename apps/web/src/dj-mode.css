@@ -1290,3 +1290,27 @@
 .dj-pro-library__search-wrap .dj-pro-library__search {
   min-height: 38px;
 }
+
+
+.dj-pro-deck__heading {
+  justify-content: space-between;
+  align-items: center;
+}
+
+.dj-pro-deck__heading > div {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  min-width: 0;
+}
+
+.dj-sync-master-badge {
+  padding: 4px 8px;
+  border: 1px solid color-mix(in srgb, var(--deck-accent) 62%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--deck-accent) 12%, transparent);
+  color: var(--deck-accent);
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}

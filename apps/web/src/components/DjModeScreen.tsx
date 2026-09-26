@@ -27,6 +27,8 @@ export type DjDeckPanelState = {
   track: Track | null;
   cuePointSeconds: number | null;
   syncActive: boolean;
+  syncMaster: boolean;
+  syncMode: 'off' | 'tempo' | 'beat' | 'bar';
   channelVolume: number;
 };
 
@@ -244,8 +246,11 @@ function DeckPanel({
   return (
     <article className="dj-pro-deck" aria-label={label} data-deck={deck} data-playing={playing ? 'true' : 'false'}>
       <div className="dj-pro-deck__heading">
-        <strong>{label}</strong>
-        <span>{side}</span>
+        <div>
+          <strong>{label}</strong>
+          <span>{side}</span>
+        </div>
+        {state.syncMaster && <span className="dj-sync-master-badge">MASTER</span>}
       </div>
 
       {!loaded ? (
@@ -295,8 +300,15 @@ function DeckPanel({
             <button type="button" onClick={() => onCue(deck)}>
               <RotateCcw aria-hidden="true" /><span>CUE</span>
             </button>
-            <button type="button" className={state.syncActive ? 'is-active' : ''} onClick={() => onSync(deck)}>
-              <Zap aria-hidden="true" /><span>SYNC</span>
+            <button
+              type="button"
+              className={state.syncActive ? 'is-active' : ''}
+              onClick={() => onSync(deck)}
+              aria-pressed={state.syncActive}
+              title={state.syncActive ? `SYNC ativo (${state.syncMode})` : 'Ativar SYNC'}
+            >
+              <Zap aria-hidden="true" />
+              <span>{state.syncActive ? `SYNC · ${state.syncMode.toUpperCase()}` : 'SYNC'}</span>
             </button>
           </div>
         </>
