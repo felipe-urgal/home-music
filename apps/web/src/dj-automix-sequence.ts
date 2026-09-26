@@ -16,3 +16,22 @@ export function nextDjAutomixIndex(length: number, currentIndex: number) {
   const nextIndex = currentIndex + 1;
   return nextIndex >= 0 && nextIndex < length ? nextIndex : null;
 }
+
+
+export function canPrepareDjAutomixNext(input: {
+  automixActive: boolean;
+  transitionActive: boolean;
+  activeDeckMatches: boolean;
+  queueIndexMatches: boolean;
+  activeTrackMatches: boolean;
+  activeDeckPlaying: boolean;
+}) {
+  return (
+    input.automixActive
+    && !input.transitionActive
+    && input.activeDeckMatches
+    && input.queueIndexMatches
+    && input.activeTrackMatches
+    && input.activeDeckPlaying
+  );
+}
