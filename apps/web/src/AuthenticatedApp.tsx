@@ -17,6 +17,10 @@ import { useRoutedScreen } from './browser-navigation';
 import { decodeDdj400Message } from './ddj400-mapping';
 import { Ddj400MixerMapper } from './ddj400-mixer-mapping';
 import {
+  Ddj400LedRenderer,
+  type Ddj400LedState
+} from './ddj400-led-feedback';
+import {
   DDJ400_NUDGE_RATE_DELTA,
   DDJ400_SCRUB_SECONDS,
   Ddj400PerformanceMapper
@@ -87,6 +91,10 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
   );
   const ddjBrowserIndexRef = useRef(0);
   const ddjCuePointsRef = useRef<Record<DjDeckId, number | null>>({ a: null, b: null });
+  const ddjSyncActiveRef = useRef<Record<DjDeckId, boolean>>({ a: false, b: false });
+  const ddjLedRendererRef = useRef<Ddj400LedRenderer | null>(null);
+  const ddjLedFrameRef = useRef<number | null>(null);
+  const renderDdjLedsRef = useRef<(() => void) | null>(null);
   const ddjPerformanceMapperRef = useRef(new Ddj400PerformanceMapper());
   const ddjMixerMapperRef = useRef(new Ddj400MixerMapper());
   const ddjBaseRateRef = useRef<Record<DjDeckId, number>>({ a: 1, b: 1 });
@@ -136,6 +144,8 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
       player.dualDeck.setMode(true);
       if (player.dualDeck.loadTrack(command.deck, track)) {
         ddjCuePointsRef.current[command.deck] = null;
+        ddjSyncActiveRef.current[command.deck] = false;
+        renderDdjLedsRef.current?.();
       }
       return;
     }
@@ -144,8 +154,12 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
       player.dualDeck.setMode(true);
       const snapshot = player.dualDeck.getSnapshot(command.deck);
       if (!snapshot?.trackId) return;
-      if (snapshot.playing) player.dualDeck.pause(command.deck);
-      else void player.dualDeck.play(command.deck);
+      if (snapshot.playing) {
+        player.dualDeck.pause(command.deck);
+        renderDdjLedsRef.current?.();
+      } else {
+        void player.dualDeck.play(command.deck).finally(() => renderDdjLedsRef.current?.());
+      }
       return;
     }
 
@@ -160,13 +174,16 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
       } else {
         ddjCuePointsRef.current[command.deck] = snapshot.currentTimeSeconds;
       }
+      renderDdjLedsRef.current?.();
       return;
     }
 
     if (command.type === 'deck.set-tempo') {
       player.dualDeck.setMode(true);
       ddjBaseRateRef.current[command.deck] = command.playbackRate;
+      ddjSyncActiveRef.current[command.deck] = false;
       player.dualDeck.setPlaybackRate(command.deck, command.playbackRate);
+      renderDdjLedsRef.current?.();
       return;
     }
 
@@ -175,11 +192,13 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
       const snapshot = player.dualDeck.getSnapshot(command.deck);
       if (!snapshot?.trackId) return;
 
+      ddjSyncActiveRef.current[command.deck] = false;
       if (!snapshot.playing) {
         player.dualDeck.seek(
           command.deck,
           snapshot.currentTimeSeconds + (command.delta * DDJ400_SCRUB_SECONDS)
         );
+        renderDdjLedsRef.current?.();
         return;
       }
 
@@ -193,6 +212,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
         player.dualDeck.setPlaybackRate(command.deck, ddjBaseRateRef.current[command.deck]);
         ddjNudgeTimerRef.current[command.deck] = null;
       }, 80);
+      renderDdjLedsRef.current?.();
       return;
     }
 
@@ -212,7 +232,12 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
       if (!plan) return;
 
       ddjBaseRateRef.current[command.deck] = plan.playbackRate;
+      ddjSyncActiveRef.current = {
+        a: command.deck === 'a',
+        b: command.deck === 'b'
+      };
       player.dualDeck.setPlaybackRate(command.deck, plan.playbackRate);
+      renderDdjLedsRef.current?.();
       return;
     }
 
@@ -232,6 +257,59 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
 
   const midiController = useWebMidiController({ onMessage: handleDdj400Message });
 
+  const readDdjLedState = useCallback((): Ddj400LedState => {
+    const a = player.dualDeck.getSnapshot('a');
+    const b = player.dualDeck.getSnapshot('b');
+    return {
+      play: {
+        a: Boolean(a?.trackId && a.playing),
+        b: Boolean(b?.trackId && b.playing)
+      },
+      cue: {
+        a: ddjCuePointsRef.current.a != null,
+        b: ddjCuePointsRef.current.b != null
+      },
+      sync: { ...ddjSyncActiveRef.current }
+    };
+  }, [player.dualDeck.getSnapshot]);
+
+  const scheduleDdjLedRender = useCallback(() => {
+    if (ddjLedFrameRef.current != null) return;
+    ddjLedFrameRef.current = window.requestAnimationFrame(() => {
+      ddjLedFrameRef.current = null;
+      ddjLedRendererRef.current?.render(readDdjLedState());
+    });
+  }, [readDdjLedState]);
+  renderDdjLedsRef.current = scheduleDdjLedRender;
+
+  useEffect(() => {
+    ddjLedRendererRef.current = new Ddj400LedRenderer(data => midiController.send(data));
+    return () => {
+      ddjLedRendererRef.current?.clear();
+      ddjLedRendererRef.current = null;
+    };
+  }, [midiController.send]);
+
+  useEffect(() => {
+    const renderer = ddjLedRendererRef.current;
+    if (!renderer || midiController.status !== 'connected' || !midiController.selectedOutputId) return;
+    renderer.reset();
+    scheduleDdjLedRender();
+  }, [
+    midiController.selectedOutputId,
+    midiController.status,
+    scheduleDdjLedRender
+  ]);
+
+  useEffect(() => {
+    scheduleDdjLedRender();
+  }, [
+    player.current?.id,
+    player.playing,
+    player.currentTime,
+    scheduleDdjLedRender
+  ]);
+
   useEffect(() => {
     if (midiController.status === 'connected') return;
     for (const deck of ['a', 'b'] as const) {
@@ -239,6 +317,8 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
       if (timer != null) window.clearTimeout(timer);
       ddjNudgeTimerRef.current[deck] = null;
       ddjBaseRateRef.current[deck] = 1;
+      ddjCuePointsRef.current[deck] = null;
+      ddjSyncActiveRef.current[deck] = false;
     }
     player.dualDeck.setMode(false);
     setDjMixerState(player.dualDeck.getMixerSnapshot());
@@ -254,6 +334,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
       if (timer != null) window.clearTimeout(timer);
     }
     if (mixerUiFrameRef.current != null) window.cancelAnimationFrame(mixerUiFrameRef.current);
+    if (ddjLedFrameRef.current != null) window.cancelAnimationFrame(ddjLedFrameRef.current);
   }, []);
 
   const qualityProfile = useNetworkQualityProfile(player.streamingMode, player.setStreamingMode);
