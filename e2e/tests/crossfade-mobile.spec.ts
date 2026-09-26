@@ -67,3 +67,67 @@ test('crossfade mistura dois decks reais no Chromium mobile e faz handoff sem re
   ));
   expect(adoptedPosition).toBeGreaterThan(0.25);
 });
+
+
+test('crossfade quantizado inicia próximo da batida planejada no Chromium mobile', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-chromium');
+
+  await page.addInitScript(({ storageKey }) => {
+    window.localStorage.setItem(storageKey, '2');
+  }, { storageKey: crossfadeStorageKey });
+
+  await page.route('**/api/library', async route => {
+    const response = await route.fetch();
+    const body = await response.json() as {
+      tracks: Array<Record<string, unknown> & { title?: string }>;
+      [key: string]: unknown;
+    };
+
+    await route.fulfill({
+      response,
+      json: {
+        ...body,
+        tracks: body.tracks.map(track => (
+          track.title === 'E2E Track'
+            ? {
+                ...track,
+                rhythm: {
+                  bpm: 60,
+                  firstBeatSeconds: 0.75,
+                  confidence: 0.95
+                }
+              }
+            : track
+        ))
+      }
+    });
+  });
+
+  await login(page);
+
+  const artworkPlay = page.locator('.player-hero-play__control');
+  await artworkPlay.click();
+  await expect(artworkPlay).toHaveAttribute('aria-label', 'Pausar');
+
+  await page.waitForFunction(() => (
+    Array.from(document.querySelectorAll('audio'))
+      .filter(audio => !audio.paused && !audio.ended && audio.currentTime > 0)
+      .length === 2
+  ), undefined, { timeout: 12_000, polling: 25 });
+
+  const outgoingTimeAtMix = await page.evaluate(() => (
+    Math.max(...Array.from(document.querySelectorAll('audio'))
+      .filter(audio => !audio.paused && !audio.ended && audio.currentTime > 0)
+      .map(audio => audio.currentTime))
+  ));
+
+  // Faixa de 10 s, crossfade preferido de 2 s => alvo bruto em 8,00 s.
+  // Com 60 BPM e primeira batida em 0,75 s, a próxima fronteira é 8,75 s.
+  // A tolerância inclui somente latência de polling/browser; um início não
+  // quantizado em ~8,00 s fica claramente fora deste intervalo.
+  expect(outgoingTimeAtMix).toBeGreaterThanOrEqual(8.65);
+  expect(outgoingTimeAtMix).toBeLessThan(9.10);
+
+  await expect(page.locator('.now-playing-transition-art[data-crossfading="true"]'))
+    .toHaveAttribute('data-crossfade-incoming-title', 'E2E Zeta');
+});
