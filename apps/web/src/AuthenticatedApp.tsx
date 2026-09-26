@@ -3,6 +3,7 @@ import type { AuthenticatedUser } from '@home-music/shared';
 import { DesktopNowPlayingScreen } from './components/DesktopNowPlayingScreen';
 import { DesktopPlayerBar } from './components/DesktopPlayerBar';
 import { DesktopPlayerSidebarTools } from './components/DesktopPlayerSidebarTools';
+import { DjModeScreen } from './components/DjModeScreen';
 import { DesktopShell } from './components/DesktopShell';
 import { LazySurfaceBoundary } from './components/LazySurfaceBoundary';
 import { LibraryScreen } from './components/LibraryScreen';
@@ -578,6 +579,20 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     );
   }
 
+  if (screen === 'dj') {
+    return (
+      <main className="app-shell app-shell--dj">
+        {audioDecks}
+        <DjModeScreen onExit={openPlayer} />
+        {library.actionError && (
+          <button className="app-toast" role="status" onClick={library.clearActionError}>
+            {library.actionError}
+          </button>
+        )}
+      </main>
+    );
+  }
+
   return (
     <main className="app-shell">
       {audioDecks}
@@ -603,6 +618,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
           <DesktopPlayerSidebarTools
             username={currentUser.username}
             accountActive={accountArea}
+            onOpenDjMode={() => setScreen('dj')}
             onOpenAccount={() => setScreen('account')}
           />
         ) : undefined}

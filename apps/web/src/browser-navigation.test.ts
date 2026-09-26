@@ -24,6 +24,7 @@ describe('browser navigation routes', () => {
       valid: true,
       library: { libraryTab: 'playlists', selectedPlaylistId: null }
     });
+    expect(parseAppPath('/dj/')).toMatchObject({ screen: 'dj', path: '/dj', valid: true });
     expect(parseAppPath('/account/')).toMatchObject({ screen: 'account', path: '/account', valid: true });
     expect(parseAppPath('/admin')).toMatchObject({ screen: 'admin', path: '/admin', valid: true });
   });
