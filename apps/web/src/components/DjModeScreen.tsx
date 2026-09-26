@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react';
 import type { Track } from '@home-music/shared';
 import {
   ArrowLeft,
-  Bell,
   Cable,
   Disc3,
   Keyboard,
@@ -10,12 +9,9 @@ import {
   Play,
   RotateCcw,
   Search,
-  Settings,
   SlidersHorizontal,
   Upload,
   Zap,
-  ListMusic,
-  Music2
 } from 'lucide-react';
 import type { DjDeckId } from '../dj-controller-contract';
 import type { DualDeckAudioSnapshot } from '../dual-deck-audio';
@@ -35,6 +31,9 @@ type DjModeScreenProps = {
   decks: Record<DjDeckId, DjDeckPanelState>;
   mixer: DualDeckMixerState;
   libraryTracks: Track[];
+  libraryFolders: Array<{ path: string; label: string }>;
+  selectedFolderPath: string;
+  onSelectFolderPath: (path: string) => void;
   selectedLibraryIndex: number;
   onSelectLibraryIndex: (index: number) => void;
   onLoadSelectedTrack: (deck: DjDeckId) => void;
@@ -46,6 +45,8 @@ type DjModeScreenProps = {
   onTogglePlay: (deck: DjDeckId) => void;
   onCue: (deck: DjDeckId) => void;
   onSync: (deck: DjDeckId) => void;
+  mixMode: 'manual' | 'automix';
+  onMixModeChange: (mode: 'manual' | 'automix') => void;
   onExit: () => void;
 };
 
@@ -168,11 +169,17 @@ function DeckPanel({
 
 function DjLibrary({
   tracks,
+  folders,
+  selectedFolderPath,
+  onSelectFolderPath,
   selectedIndex,
   onSelect,
   onLoad
 }: {
   tracks: Track[];
+  folders: Array<{ path: string; label: string }>;
+  selectedFolderPath: string;
+  onSelectFolderPath: (path: string) => void;
   selectedIndex: number;
   onSelect: (index: number) => void;
   onLoad: (deck: DjDeckId) => void;
@@ -194,15 +201,29 @@ function DjLibrary({
           <strong>Biblioteca</strong>
           <span>{tracks.length} faixas</span>
         </div>
-        <label className="dj-pro-library__search">
-          <Search aria-hidden="true" />
-          <input
-            value={query}
-            onChange={event => setQuery(event.currentTarget.value)}
-            placeholder="Buscar na biblioteca..."
-            aria-label="Buscar na biblioteca"
-          />
-        </label>
+        <div className="dj-pro-library__tools">
+          <label className="dj-pro-library__folder">
+            <span>Pasta</span>
+            <select
+              value={selectedFolderPath}
+              onChange={event => onSelectFolderPath(event.currentTarget.value)}
+              aria-label="Selecionar pasta da biblioteca"
+            >
+              {folders.map(folder => (
+                <option key={folder.path || '__root__'} value={folder.path}>{folder.label}</option>
+              ))}
+            </select>
+          </label>
+          <label className="dj-pro-library__search">
+            <Search aria-hidden="true" />
+            <input
+              value={query}
+              onChange={event => setQuery(event.currentTarget.value)}
+              placeholder="Buscar na biblioteca..."
+              aria-label="Buscar na biblioteca"
+            />
+          </label>
+        </div>
       </header>
 
       <div className="dj-pro-library__columns" aria-hidden="true">
@@ -330,6 +351,9 @@ export function DjModeScreen({
   decks,
   mixer,
   libraryTracks,
+  libraryFolders,
+  selectedFolderPath,
+  onSelectFolderPath,
   selectedLibraryIndex,
   onSelectLibraryIndex,
   onLoadSelectedTrack,
@@ -341,31 +365,12 @@ export function DjModeScreen({
   onTogglePlay,
   onCue,
   onSync,
+  mixMode,
+  onMixModeChange,
   onExit
 }: DjModeScreenProps) {
   return (
     <section className="dj-mode dj-mode--prototype-three" aria-label="Modo DJ">
-      <div className="dj-appbar" aria-label="Navegação do Home Music">
-        <div className="dj-appbar__brand">
-          <span className="dj-appbar__logo" aria-hidden="true"><Disc3 /></span>
-          <strong>Home Music</strong>
-        </div>
-        <div className="dj-appbar__nav" aria-hidden="true">
-          <span><Music2 />Músicas</span>
-          <span><ListMusic />Playlists</span>
-          <span><Disc3 />Biblioteca</span>
-        </div>
-        <div className="dj-appbar__search" aria-hidden="true">
-          <Search />
-          <span>Buscar músicas, artistas, playlists...</span>
-        </div>
-        <div className="dj-appbar__tools" aria-hidden="true">
-          <Bell />
-          <Settings />
-          <span className="dj-appbar__dj-badge">DJ</span>
-        </div>
-      </div>
-
       <header className="dj-mode__header">
         <div className="dj-mode__brand">
           <span className="dj-mode__brand-icon" aria-hidden="true"><Disc3 /></span>
@@ -383,8 +388,22 @@ export function DjModeScreen({
           </details>
 
           <div className="dj-mode__mode-switch" aria-label="Modo de mixagem">
-            <button type="button" className="is-active" aria-pressed="true">Manual</button>
-            <button type="button" disabled title="AutoMix será habilitado na atividade #559">AutoMix</button>
+            <button
+              type="button"
+              className={mixMode === 'manual' ? 'is-active' : ''}
+              aria-pressed={mixMode === 'manual'}
+              onClick={() => onMixModeChange('manual')}
+            >
+              Manual
+            </button>
+            <button
+              type="button"
+              className={mixMode === 'automix' ? 'is-active' : ''}
+              aria-pressed={mixMode === 'automix'}
+              onClick={() => onMixModeChange('automix')}
+            >
+              AutoMix
+            </button>
           </div>
 
           <button className="dj-mode__exit" type="button" onClick={onExit}>
@@ -395,7 +414,15 @@ export function DjModeScreen({
 
       <main className="dj-pro-layout">
         <DeckPanel deck="a" state={decks.a} onTogglePlay={onTogglePlay} onCue={onCue} onSync={onSync} />
-        <DjLibrary tracks={libraryTracks} selectedIndex={selectedLibraryIndex} onSelect={onSelectLibraryIndex} onLoad={onLoadSelectedTrack} />
+        <DjLibrary
+          tracks={libraryTracks}
+          folders={libraryFolders}
+          selectedFolderPath={selectedFolderPath}
+          onSelectFolderPath={onSelectFolderPath}
+          selectedIndex={selectedLibraryIndex}
+          onSelect={onSelectLibraryIndex}
+          onLoad={onLoadSelectedTrack}
+        />
         <DeckPanel deck="b" state={decks.b} onTogglePlay={onTogglePlay} onCue={onCue} onSync={onSync} />
         <DjMixer mixer={mixer} onChannelVolume={onChannelVolume} onCrossfader={onCrossfader} />
         <DjMidiPanel midi={midi} onDisconnect={onDisconnectMidi} onSelectOutput={onSelectMidiOutput} />

@@ -1,4 +1,4 @@
-import { lazy, useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AuthenticatedUser } from '@home-music/shared';
 import { DesktopNowPlayingScreen } from './components/DesktopNowPlayingScreen';
 import { DesktopPlayerBar } from './components/DesktopPlayerBar';
@@ -16,6 +16,10 @@ import { TvRemoteEntryButton } from './components/TvRemoteEntryButton';
 import { TvRemotePairingDialog } from './components/TvRemotePairingDialog';
 import { useRoutedScreen } from './browser-navigation';
 import { decodeDdj400Message } from './ddj400-mapping';
+import {
+  effectiveDjAutomixDuration,
+  shouldStartDjAutomixTransition
+} from './dj-automix-policy';
 import { isDjKeyboardEditableTarget, mapDjKeyboardCode } from './dj-keyboard-mapping';
 import { Ddj400MixerMapper } from './ddj400-mixer-mapping';
 import {
@@ -27,8 +31,13 @@ import {
   DDJ400_SCRUB_SECONDS,
   Ddj400PerformanceMapper
 } from './ddj400-performance-mapping';
+import {
+  QUANTIZED_CROSSFADE_EARLY_TOLERANCE_SECONDS,
+  resolveQuantizedCrossfadePlan
+} from './beat-clock';
 import { resolveBeatmatchPlan } from './beatmatch';
 import type { DjDeckId } from './dj-controller-contract';
+import { resolveCrossfadeCandidate } from './crossfade';
 import { canUseAdminLibraryActions } from './frontend-access';
 import { buildLibraryReturnLabel } from './library-utils';
 import type { OfflineDownloads } from './offline-downloads';
@@ -93,6 +102,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
   );
   const ddjBrowserIndexRef = useRef(0);
   const [djBrowserIndex, setDjBrowserIndex] = useState(0);
+  const [djFolderPath, setDjFolderPath] = useState('');
   const ddjCuePointsRef = useRef<Record<DjDeckId, number | null>>({ a: null, b: null });
   const ddjSyncActiveRef = useRef<Record<DjDeckId, boolean>>({ a: false, b: false });
   const ddjLedRendererRef = useRef<Ddj400LedRenderer | null>(null);
@@ -103,6 +113,12 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
   const ddjBaseRateRef = useRef<Record<DjDeckId, number>>({ a: 1, b: 1 });
   const mixerUiFrameRef = useRef<number | null>(null);
   const [djMixerState, setDjMixerState] = useState(() => player.dualDeck.getMixerSnapshot());
+  const [djMixMode, setDjMixMode] = useState<'manual' | 'automix'>('manual');
+  const djMixModeRef = useRef<'manual' | 'automix'>('manual');
+  const djAutomixActiveDeckRef = useRef<DjDeckId>('a');
+  const djAutomixQueueIndexRef = useRef(player.currentIndex);
+  const djAutomixFrameRef = useRef<number | null>(null);
+  const djAutomixTransitionRef = useRef(false);
 
   const scheduleMixerUiSync = useCallback(() => {
     if (mixerUiFrameRef.current != null) return;
@@ -113,9 +129,55 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
   }, [player.dualDeck.getMixerSnapshot]);
   const ddjNudgeTimerRef = useRef<Record<DjDeckId, number | null>>({ a: null, b: null });
 
-  const djBrowserTracks = navigation.libraryTracks.length
-    ? navigation.libraryTracks
-    : library.tracks;
+  const setDjModeState = useCallback((mode: 'manual' | 'automix') => {
+    djMixModeRef.current = mode;
+    setDjMixMode(mode);
+  }, []);
+
+  const cancelDjAutomixTransition = useCallback(() => {
+    if (djAutomixFrameRef.current != null) {
+      window.cancelAnimationFrame(djAutomixFrameRef.current);
+      djAutomixFrameRef.current = null;
+    }
+    djAutomixTransitionRef.current = false;
+  }, []);
+
+  const switchDjToManual = useCallback(() => {
+    if (djMixModeRef.current === 'manual') return;
+    cancelDjAutomixTransition();
+    setDjModeState('manual');
+  }, [cancelDjAutomixTransition, setDjModeState]);
+
+  const djFolderOptions = useMemo(() => {
+    const paths = new Set<string>(['']);
+    for (const track of library.tracks) {
+      const parts = track.folderPath.split('/').filter(Boolean);
+      for (let index = 1; index <= parts.length; index += 1) {
+        paths.add(parts.slice(0, index).join('/'));
+      }
+    }
+    return [...paths]
+      .sort((left, right) => left.localeCompare(right, 'pt-BR'))
+      .map(path => ({
+        path,
+        label: path || 'Todas as pastas'
+      }));
+  }, [library.tracks]);
+
+  const djBrowserTracks = useMemo(() => {
+    if (!djFolderPath) return library.tracks;
+    const prefix = `${djFolderPath}/`;
+    return library.tracks.filter(track => (
+      track.folderPath === djFolderPath
+      || track.folderPath.startsWith(prefix)
+    ));
+  }, [djFolderPath, library.tracks]);
+
+  const selectDjFolder = useCallback((path: string) => {
+    setDjFolderPath(path);
+    ddjBrowserIndexRef.current = 0;
+    setDjBrowserIndex(0);
+  }, []);
 
   const selectDjBrowserIndex = useCallback((index: number) => {
     const max = Math.max(0, djBrowserTracks.length - 1);
@@ -125,6 +187,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
   }, [djBrowserTracks.length]);
 
   const loadDjBrowserTrack = useCallback((deck: DjDeckId) => {
+    switchDjToManual();
     const track = djBrowserTracks[ddjBrowserIndexRef.current] ?? djBrowserTracks[0];
     if (!track) return false;
     player.dualDeck.setMode(true);
@@ -138,7 +201,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     ddjSyncActiveRef.current[deck] = false;
     renderDdjLedsRef.current?.();
     return true;
-  }, [djBrowserTracks, player.dualDeck]);
+  }, [djBrowserTracks, player.dualDeck, switchDjToManual]);
 
   useEffect(() => {
     if (!djBrowserTracks.length) {
@@ -154,6 +217,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
   }, [djBrowserTracks.length]);
 
   const toggleDjDeckPlay = useCallback((deck: DjDeckId) => {
+    switchDjToManual();
     player.dualDeck.setMode(true);
     const snapshot = player.dualDeck.getSnapshot(deck);
     if (!snapshot?.trackId) return;
@@ -163,9 +227,10 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
       return;
     }
     void player.dualDeck.play(deck).finally(() => renderDdjLedsRef.current?.());
-  }, [player.dualDeck]);
+  }, [player.dualDeck, switchDjToManual]);
 
   const cueDjDeck = useCallback((deck: DjDeckId) => {
+    switchDjToManual();
     player.dualDeck.setMode(true);
     const snapshot = player.dualDeck.getSnapshot(deck);
     if (!snapshot?.trackId) return;
@@ -177,21 +242,24 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
       ddjCuePointsRef.current[deck] = snapshot.currentTimeSeconds;
     }
     renderDdjLedsRef.current?.();
-  }, [player.dualDeck]);
+  }, [player.dualDeck, switchDjToManual]);
 
   const setDjChannelVolume = useCallback((deck: DjDeckId, value: number) => {
+    switchDjToManual();
     player.dualDeck.setMode(true);
     player.dualDeck.setVolume(deck, value);
     scheduleMixerUiSync();
-  }, [player.dualDeck, scheduleMixerUiSync]);
+  }, [player.dualDeck, scheduleMixerUiSync, switchDjToManual]);
 
   const setDjCrossfader = useCallback((value: number) => {
+    switchDjToManual();
     player.dualDeck.setMode(true);
     player.dualDeck.setCrossfader(value);
     scheduleMixerUiSync();
-  }, [player.dualDeck, scheduleMixerUiSync]);
+  }, [player.dualDeck, scheduleMixerUiSync, switchDjToManual]);
 
   const nudgeDjDeck = useCallback((deck: DjDeckId, delta: -1 | 1) => {
+    switchDjToManual();
     player.dualDeck.setMode(true);
     const snapshot = player.dualDeck.getSnapshot(deck);
     if (!snapshot?.trackId) return;
@@ -217,9 +285,10 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
       ddjNudgeTimerRef.current[deck] = null;
     }, 80);
     renderDdjLedsRef.current?.();
-  }, [player.dualDeck]);
+  }, [player.dualDeck, switchDjToManual]);
 
   const syncDjDeck = useCallback((deck: DjDeckId) => {
+    switchDjToManual();
     player.dualDeck.setMode(true);
     const masterDeck: DjDeckId = deck === 'a' ? 'b' : 'a';
     const targetSnapshot = player.dualDeck.getSnapshot(deck);
@@ -241,7 +310,250 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     };
     player.dualDeck.setPlaybackRate(deck, plan.playbackRate);
     renderDdjLedsRef.current?.();
-  }, [library.tracks, player.dualDeck]);
+  }, [library.tracks, player.dualDeck, switchDjToManual]);
+
+
+  const prepareDjAutomixNext = useCallback((activeDeck: DjDeckId, queueIndex: number) => {
+    const decision = nextTrackDecision(player.queue, queueIndex, player.repeatMode, true);
+    const nextTrack = decision.type === 'restart'
+      ? player.queue[queueIndex] ?? null
+      : decision.type === 'track'
+        ? player.queue.find(track => track.id === decision.id) ?? null
+        : null;
+    if (!nextTrack) return null;
+
+    const incomingDeck: DjDeckId = activeDeck === 'a' ? 'b' : 'a';
+    const incomingSnapshot = player.dualDeck.getSnapshot(incomingDeck);
+    if (incomingSnapshot?.trackId !== nextTrack.id) {
+      player.dualDeck.loadTrack(incomingDeck, nextTrack);
+      ddjBaseRateRef.current[incomingDeck] = 1;
+      ddjCuePointsRef.current[incomingDeck] = null;
+      ddjSyncActiveRef.current[incomingDeck] = false;
+    }
+    return nextTrack;
+  }, [player.dualDeck, player.queue, player.repeatMode]);
+
+  const startDjAutomixTransition = useCallback((options: {
+    activeDeck: DjDeckId;
+    currentTrack: (typeof library.tracks)[number];
+    nextTrack: (typeof library.tracks)[number];
+    nextQueueIndex: number;
+    durationSeconds: number;
+  }) => {
+    if (djAutomixTransitionRef.current || djMixModeRef.current !== 'automix') return;
+
+    const incomingDeck: DjDeckId = options.activeDeck === 'a' ? 'b' : 'a';
+    const activeSnapshot = player.dualDeck.getSnapshot(options.activeDeck);
+    if (!activeSnapshot?.trackId) return;
+
+    const incomingSnapshot = player.dualDeck.getSnapshot(incomingDeck);
+    if (incomingSnapshot?.trackId !== options.nextTrack.id) {
+      if (!player.dualDeck.loadTrack(incomingDeck, options.nextTrack)) return;
+    }
+
+    const beatmatch = resolveBeatmatchPlan({
+      outgoing: options.currentTrack.rhythm,
+      incoming: options.nextTrack.rhythm
+    });
+    if (beatmatch) {
+      ddjBaseRateRef.current[incomingDeck] = beatmatch.playbackRate;
+      player.dualDeck.setPlaybackRate(incomingDeck, beatmatch.playbackRate);
+      if (options.nextTrack.rhythm?.firstBeatSeconds != null) {
+        player.dualDeck.seek(incomingDeck, options.nextTrack.rhythm.firstBeatSeconds);
+      }
+    } else {
+      ddjBaseRateRef.current[incomingDeck] = 1;
+      player.dualDeck.setPlaybackRate(incomingDeck, 1);
+    }
+
+    player.dualDeck.setVolume(options.activeDeck, 1);
+    player.dualDeck.setVolume(incomingDeck, 1);
+    player.dualDeck.setCrossfader(options.activeDeck === 'a' ? -1 : 1);
+    scheduleMixerUiSync();
+
+    djAutomixTransitionRef.current = true;
+    void player.dualDeck.play(incomingDeck).then(started => {
+      if (!started || djMixModeRef.current !== 'automix') {
+        djAutomixTransitionRef.current = false;
+        return;
+      }
+
+      const startedAt = performance.now();
+      const durationMs = Math.max(250, options.durationSeconds * 1000);
+      const from = options.activeDeck === 'a' ? -1 : 1;
+      const to = -from;
+
+      const animate = (now: number) => {
+        if (djMixModeRef.current !== 'automix') {
+          djAutomixTransitionRef.current = false;
+          djAutomixFrameRef.current = null;
+          return;
+        }
+
+        const progress = Math.max(0, Math.min(1, (now - startedAt) / durationMs));
+        player.dualDeck.setCrossfader(from + ((to - from) * progress));
+        scheduleMixerUiSync();
+
+        if (progress < 1) {
+          djAutomixFrameRef.current = window.requestAnimationFrame(animate);
+          return;
+        }
+
+        djAutomixFrameRef.current = null;
+        player.dualDeck.pause(options.activeDeck);
+        player.dualDeck.unload(options.activeDeck);
+        player.dualDeck.setPlaybackRate(incomingDeck, 1);
+        ddjBaseRateRef.current[incomingDeck] = 1;
+        djAutomixActiveDeckRef.current = incomingDeck;
+        djAutomixQueueIndexRef.current = options.nextQueueIndex;
+        djAutomixTransitionRef.current = false;
+        prepareDjAutomixNext(incomingDeck, options.nextQueueIndex);
+        renderDdjLedsRef.current?.();
+      };
+
+      djAutomixFrameRef.current = window.requestAnimationFrame(animate);
+    });
+  }, [
+    library.tracks,
+    player.dualDeck,
+    prepareDjAutomixNext,
+    scheduleMixerUiSync
+  ]);
+
+  const enableDjAutomix = useCallback(() => {
+    cancelDjAutomixTransition();
+    player.dualDeck.setMode(true);
+
+    const a = player.dualDeck.getSnapshot('a');
+    const b = player.dualDeck.getSnapshot('b');
+    let activeDeck: DjDeckId = a?.playing ? 'a' : b?.playing ? 'b' : a?.trackId ? 'a' : b?.trackId ? 'b' : 'a';
+    let activeSnapshot = player.dualDeck.getSnapshot(activeDeck);
+
+    if (!activeSnapshot?.trackId && player.current) {
+      if (!player.dualDeck.loadTrack(activeDeck, player.current)) return;
+      player.dualDeck.seek(activeDeck, player.currentTime);
+      activeSnapshot = player.dualDeck.getSnapshot(activeDeck);
+    }
+    if (!activeSnapshot?.trackId) return;
+
+    const queueIndex = player.queue.findIndex(track => track.id === activeSnapshot?.trackId);
+    djAutomixQueueIndexRef.current = queueIndex >= 0 ? queueIndex : Math.max(0, player.currentIndex);
+    djAutomixActiveDeckRef.current = activeDeck;
+    player.dualDeck.setVolume('a', 1);
+    player.dualDeck.setVolume('b', 1);
+    player.dualDeck.setCrossfader(activeDeck === 'a' ? -1 : 1);
+    scheduleMixerUiSync();
+    setDjModeState('automix');
+    prepareDjAutomixNext(activeDeck, djAutomixQueueIndexRef.current);
+
+    const latest = player.dualDeck.getSnapshot(activeDeck);
+    if (latest?.trackId && !latest.playing) {
+      void player.dualDeck.play(activeDeck).finally(() => renderDdjLedsRef.current?.());
+    }
+  }, [
+    cancelDjAutomixTransition,
+    player.current,
+    player.currentIndex,
+    player.currentTime,
+    player.dualDeck,
+    player.queue,
+    prepareDjAutomixNext,
+    scheduleMixerUiSync,
+    setDjModeState
+  ]);
+
+  const disableDjAutomix = useCallback(() => {
+    cancelDjAutomixTransition();
+    setDjModeState('manual');
+  }, [cancelDjAutomixTransition, setDjModeState]);
+
+  useEffect(() => {
+    if (screen !== 'dj' || djMixMode !== 'automix') return;
+
+    let frame: number | null = null;
+    let lastCheck = 0;
+
+    const check = (timestamp: number) => {
+      if (timestamp - lastCheck >= 100 && !djAutomixTransitionRef.current) {
+        lastCheck = timestamp;
+        const activeDeck = djAutomixActiveDeckRef.current;
+        const snapshot = player.dualDeck.getSnapshot(activeDeck);
+        if (snapshot?.trackId && snapshot.playing && snapshot.durationSeconds > 0) {
+          const currentTrack = library.tracks.find(track => track.id === snapshot.trackId);
+          if (currentTrack) {
+            const remainingSeconds = Math.max(0, snapshot.durationSeconds - snapshot.currentTimeSeconds);
+            const quantized = resolveQuantizedCrossfadePlan({
+              rhythm: currentTrack.rhythm,
+              trackDurationSeconds: snapshot.durationSeconds,
+              preferredDurationSeconds: player.crossfadeSeconds
+            });
+            const shouldStart = shouldStartDjAutomixTransition({
+              currentTimeSeconds: snapshot.currentTimeSeconds,
+              durationSeconds: snapshot.durationSeconds,
+              crossfadeSeconds: player.crossfadeSeconds,
+              quantizedStartTimeSeconds: quantized?.startTimeSeconds,
+              earlyToleranceSeconds: QUANTIZED_CROSSFADE_EARLY_TOLERANCE_SECONDS
+            });
+
+            if (shouldStart) {
+              const candidate = resolveCrossfadeCandidate({
+                queue: player.queue,
+                currentIndex: djAutomixQueueIndexRef.current,
+                currentTrackId: snapshot.trackId,
+                repeatMode: player.repeatMode,
+                durationSeconds: quantized?.durationSeconds ?? player.crossfadeSeconds,
+                visibilityState: document.visibilityState,
+                remainingSeconds
+              });
+              const fallbackDecision = nextTrackDecision(
+                player.queue,
+                djAutomixQueueIndexRef.current,
+                player.repeatMode,
+                true
+              );
+              const fallbackTrack = fallbackDecision.type === 'restart'
+                ? currentTrack
+                : fallbackDecision.type === 'track'
+                  ? player.queue.find(track => track.id === fallbackDecision.id) ?? null
+                  : null;
+              const nextTrack = candidate
+                ? player.queue.find(track => track.id === candidate.trackId) ?? null
+                : fallbackTrack;
+              const nextQueueIndex = nextTrack
+                ? player.queue.findIndex(track => track.id === nextTrack.id)
+                : -1;
+              if (nextTrack && nextQueueIndex >= 0) {
+                startDjAutomixTransition({
+                  activeDeck,
+                  currentTrack,
+                  nextTrack,
+                  nextQueueIndex,
+                  durationSeconds: effectiveDjAutomixDuration(
+                    candidate?.durationSeconds ?? player.crossfadeSeconds
+                  )
+                });
+              }
+            }
+          }
+        }
+      }
+      frame = window.requestAnimationFrame(check);
+    };
+
+    frame = window.requestAnimationFrame(check);
+    return () => {
+      if (frame != null) window.cancelAnimationFrame(frame);
+    };
+  }, [
+    djMixMode,
+    library.tracks,
+    player.crossfadeSeconds,
+    player.dualDeck.getSnapshot,
+    player.queue,
+    player.repeatMode,
+    screen,
+    startDjAutomixTransition
+  ]);
 
   const readDjDeckPanel = useCallback((deck: DjDeckId): DjDeckPanelState => {
     const snapshot = player.dualDeck.getSnapshot(deck);
@@ -324,6 +636,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     }
 
     if (command.type === 'deck.set-tempo') {
+      switchDjToManual();
       player.dualDeck.setMode(true);
       ddjBaseRateRef.current[command.deck] = command.playbackRate;
       ddjSyncActiveRef.current[command.deck] = false;
@@ -345,6 +658,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     }
 
     if (command.type === 'mixer.set-channel-volume') {
+      switchDjToManual();
       player.dualDeck.setMode(true);
       player.dualDeck.setVolume(command.deck, command.value);
       scheduleMixerUiSync();
@@ -352,11 +666,12 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     }
 
     if (command.type === 'mixer.set-crossfader') {
+      switchDjToManual();
       player.dualDeck.setMode(true);
       player.dualDeck.setCrossfader(command.value);
       scheduleMixerUiSync();
     }
-  }, [cueDjDeck, djBrowserTracks, loadDjBrowserTrack, nudgeDjDeck, player.dualDeck, scheduleMixerUiSync, screen, selectDjBrowserIndex, setScreen, syncDjDeck, toggleDjDeckPlay]);
+  }, [cueDjDeck, djBrowserTracks, loadDjBrowserTrack, nudgeDjDeck, player.dualDeck, scheduleMixerUiSync, screen, selectDjBrowserIndex, setScreen, switchDjToManual, syncDjDeck, toggleDjDeckPlay]);
 
   useEffect(() => {
     if (screen !== 'dj') return;
@@ -517,6 +832,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     }
     if (mixerUiFrameRef.current != null) window.cancelAnimationFrame(mixerUiFrameRef.current);
     if (ddjLedFrameRef.current != null) window.cancelAnimationFrame(ddjLedFrameRef.current);
+    if (djAutomixFrameRef.current != null) window.cancelAnimationFrame(djAutomixFrameRef.current);
   }, []);
 
   useEffect(() => {
@@ -525,8 +841,9 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
       if (!player.djSession.active()) player.djSession.enter();
       return;
     }
+    if (djMixModeRef.current === 'automix') disableDjAutomix();
     if (player.djSession.active()) player.djSession.exit();
-  }, [player.djSession.enter, player.djSession.exit, player.hydrated, screen]);
+  }, [disableDjAutomix, player.djSession.enter, player.djSession.exit, player.hydrated, screen]);
 
   const qualityProfile = useNetworkQualityProfile(player.streamingMode, player.setStreamingMode);
   useBackgroundPlaybackContinuity({
@@ -766,6 +1083,9 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
           decks={djDeckPanels}
           mixer={djMixerState}
           libraryTracks={djBrowserTracks}
+          libraryFolders={djFolderOptions}
+          selectedFolderPath={djFolderPath}
+          onSelectFolderPath={selectDjFolder}
           selectedLibraryIndex={djBrowserIndex}
           onSelectLibraryIndex={selectDjBrowserIndex}
           onLoadSelectedTrack={loadDjBrowserTrack}
@@ -777,6 +1097,11 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
           onTogglePlay={toggleDjDeckPlay}
           onCue={cueDjDeck}
           onSync={syncDjDeck}
+          mixMode={djMixMode}
+          onMixModeChange={mode => {
+            if (mode === 'automix') enableDjAutomix();
+            else disableDjAutomix();
+          }}
           onExit={closeDjMode}
         />
         {library.actionError && (
