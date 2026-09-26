@@ -333,7 +333,9 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     }
 
     if (command.type === 'deck.nudge') {
-      nudgeDjDeck(command.deck, command.delta);
+      const direction = command.delta < 0 ? -1 : command.delta > 0 ? 1 : 0;
+      if (direction === 0) return;
+      nudgeDjDeck(command.deck, direction);
       return;
     }
 
