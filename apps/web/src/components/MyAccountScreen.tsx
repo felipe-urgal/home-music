@@ -15,6 +15,7 @@ import {
   LogOut,
   Monitor,
   MonitorOff,
+  Music2,
   Pencil,
   ShieldCheck,
   SlidersHorizontal,
@@ -34,10 +35,11 @@ import {
   AccountPlaybackPreferences,
   type AccountPlaybackPreferencesValue
 } from './AccountPlaybackPreferences';
+import { AccountMidiControllers } from './AccountMidiControllers';
 import { AccountSessionsScreen } from './AccountSessionsScreen';
 import { useDesktopLayout } from '../useDesktopLayout';
 
-type AccountView = 'overview' | 'profile' | 'password' | 'sessions' | 'playback';
+type AccountView = 'overview' | 'profile' | 'password' | 'sessions' | 'playback' | 'midi';
 
 type OfflineModeControl = {
   supported: boolean;
@@ -207,7 +209,9 @@ export function MyAccountScreen({
         ? 'Outros dispositivos'
         : view === 'playback'
           ? 'Reprodução'
-          : 'Minha conta';
+          : view === 'midi'
+            ? 'Controlador MIDI'
+            : 'Minha conta';
   const subtitle = view === 'profile'
     ? 'Informações da conta'
     : view === 'password'
@@ -216,12 +220,22 @@ export function MyAccountScreen({
         ? 'Gerencie sessões em dispositivos'
         : view === 'playback'
           ? 'Qualidade e normalização'
-          : 'Segurança e sessões';
+          : view === 'midi'
+            ? 'Conexão e diagnóstico local'
+            : 'Segurança e sessões';
 
   if (view === 'playback' && playbackPreferences) {
     return (
       <section className="my-account-screen my-account-screen--playback">
         <AccountPlaybackPreferences value={playbackPreferences} onBack={goBack} />
+      </section>
+    );
+  }
+
+  if (view === 'midi') {
+    return (
+      <section className="my-account-screen my-account-screen--midi">
+        <AccountMidiControllers onBack={goBack} />
       </section>
     );
   }
@@ -314,6 +328,15 @@ export function MyAccountScreen({
                     <ChevronRight />
                   </button>
                 ) : <span className="my-account-v3__card-spacer" aria-hidden="true" />}
+
+                <button className="my-account-v3__card is-cyan" type="button" onClick={() => setView('midi')}>
+                  <span className="my-account-v3__card-icon"><Music2 /></span>
+                  <span className="my-account-v3__card-copy">
+                    <strong>Controlador MIDI</strong>
+                    <small>Conecte hardware compatível pelo navegador.</small>
+                  </span>
+                  <ChevronRight />
+                </button>
 
                 {offlineMode ? (
                   <button
@@ -414,6 +437,11 @@ export function MyAccountScreen({
                     <ChevronRight />
                   </button>
                 )}
+                <button type="button" onClick={() => setView('midi')}>
+                  <span className="my-account-card__icon"><Music2 /></span>
+                  <span><strong>Controlador MIDI</strong><small>Conecte hardware compatível pelo navegador.</small></span>
+                  <ChevronRight />
+                </button>
                 {offlineMode && (
                   <button
                     type="button"
