@@ -46,6 +46,8 @@ type DjModeScreenProps = {
   onTogglePlay: (deck: DjDeckId) => void;
   onCue: (deck: DjDeckId) => void;
   onSync: (deck: DjDeckId) => void;
+  mixMode: 'manual' | 'automix';
+  onMixModeChange: (mode: 'manual' | 'automix') => void;
   onExit: () => void;
 };
 
@@ -341,6 +343,8 @@ export function DjModeScreen({
   onTogglePlay,
   onCue,
   onSync,
+  mixMode,
+  onMixModeChange,
   onExit
 }: DjModeScreenProps) {
   return (
@@ -383,8 +387,22 @@ export function DjModeScreen({
           </details>
 
           <div className="dj-mode__mode-switch" aria-label="Modo de mixagem">
-            <button type="button" className="is-active" aria-pressed="true">Manual</button>
-            <button type="button" disabled title="AutoMix será habilitado na atividade #559">AutoMix</button>
+            <button
+              type="button"
+              className={mixMode === 'manual' ? 'is-active' : ''}
+              aria-pressed={mixMode === 'manual'}
+              onClick={() => onMixModeChange('manual')}
+            >
+              Manual
+            </button>
+            <button
+              type="button"
+              className={mixMode === 'automix' ? 'is-active' : ''}
+              aria-pressed={mixMode === 'automix'}
+              onClick={() => onMixModeChange('automix')}
+            >
+              AutoMix
+            </button>
           </div>
 
           <button className="dj-mode__exit" type="button" onClick={onExit}>
