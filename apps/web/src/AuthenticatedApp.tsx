@@ -41,6 +41,7 @@ import type { DjDeckId } from './dj-controller-contract';
 import { canUseAdminLibraryActions } from './frontend-access';
 import { buildLibraryReturnLabel } from './library-utils';
 import type { OfflineDownloads } from './offline-downloads';
+import { nextTrackDecision } from './player-state';
 import { isTvMode } from './tv-mode';
 import { useBackgroundPlaybackContinuity } from './useBackgroundPlaybackContinuity';
 import { useCrossfadeAudioPlayer } from './useCrossfadeAudioPlayer';
