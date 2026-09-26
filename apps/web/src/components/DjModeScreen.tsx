@@ -133,7 +133,7 @@ function DjWaveform({
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [waveform, setWaveform] = useState<TrackWaveform | null>(null);
-  const [status, setStatus] = useState<'loading' | 'ready' | 'unavailable'>('loading');
+  const [status, setStatus] = useState<'loading' | 'pending' | 'ready' | 'unavailable'>('loading');
 
   useEffect(() => {
     let active = true;
@@ -150,7 +150,7 @@ function DjWaveform({
         return;
       }
       setWaveform(null);
-      setStatus('unavailable');
+      setStatus(result.status);
       if (result.status === 'pending') {
         retryTimer = window.setTimeout(() => {
           if (active) void load();
@@ -192,7 +192,11 @@ function DjWaveform({
       <span className="dj-waveform__playhead" style={{ left: `${progress}%` }} aria-hidden="true" />
       {status !== 'ready' && (
         <span className="dj-waveform__status">
-          {status === 'loading' ? 'Carregando waveform…' : 'Waveform em análise'}
+          {status === 'loading'
+            ? 'Carregando waveform…'
+            : status === 'pending'
+              ? 'Waveform em análise'
+              : 'Waveform indisponível'}
         </span>
       )}
     </div>
