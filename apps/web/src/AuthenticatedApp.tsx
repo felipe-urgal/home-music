@@ -20,6 +20,7 @@ import {
   effectiveDjAutomixDuration,
   shouldStartDjAutomixTransition
 } from './dj-automix-policy';
+import { nextDjAutomixIndex, shuffleDjTrackList } from './dj-automix-sequence';
 import { isDjKeyboardEditableTarget, mapDjKeyboardCode } from './dj-keyboard-mapping';
 import { Ddj400MixerMapper } from './ddj400-mixer-mapping';
 import {
@@ -37,7 +38,6 @@ import {
 } from './beat-clock';
 import { resolveBeatmatchPlan } from './beatmatch';
 import type { DjDeckId } from './dj-controller-contract';
-import { resolveCrossfadeCandidate } from './crossfade';
 import { canUseAdminLibraryActions } from './frontend-access';
 import { buildLibraryReturnLabel } from './library-utils';
 import type { OfflineDownloads } from './offline-downloads';
@@ -116,7 +116,9 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
   const [djMixMode, setDjMixMode] = useState<'manual' | 'automix'>('manual');
   const djMixModeRef = useRef<'manual' | 'automix'>('manual');
   const djAutomixActiveDeckRef = useRef<DjDeckId>('a');
-  const djAutomixQueueIndexRef = useRef(player.currentIndex);
+  const djAutomixQueueIndexRef = useRef(0);
+  const [djAutomixShuffle, setDjAutomixShuffle] = useState(false);
+  const [djPlayedTrackIds, setDjPlayedTrackIds] = useState<Set<string>>(() => new Set());
   const djAutomixFrameRef = useRef<number | null>(null);
   const djAutomixTransitionRef = useRef(false);
 
@@ -199,6 +201,21 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     return library.tracks;
   }, [djLibrarySource, library.playlists, library.tracks]);
 
+  const djListedTracks = useMemo(
+    () => djAutomixShuffle ? shuffleDjTrackList(djBrowserTracks) : djBrowserTracks,
+    [djAutomixShuffle, djBrowserTracks]
+  );
+
+  const markDjTrackPlayed = useCallback((trackId: string | null | undefined) => {
+    if (!trackId) return;
+    setDjPlayedTrackIds(previous => {
+      if (previous.has(trackId)) return previous;
+      const next = new Set(previous);
+      next.add(trackId);
+      return next;
+    });
+  }, []);
+
   const selectDjLibrarySource = useCallback((value: string) => {
     setDjLibrarySource(value);
     ddjBrowserIndexRef.current = 0;
@@ -206,15 +223,15 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
   }, []);
 
   const selectDjBrowserIndex = useCallback((index: number) => {
-    const max = Math.max(0, djBrowserTracks.length - 1);
+    const max = Math.max(0, djListedTracks.length - 1);
     const next = Math.max(0, Math.min(max, index));
     ddjBrowserIndexRef.current = next;
     setDjBrowserIndex(next);
-  }, [djBrowserTracks.length]);
+  }, [djListedTracks.length]);
 
   const loadDjBrowserTrack = useCallback((deck: DjDeckId) => {
     switchDjToManual();
-    const track = djBrowserTracks[ddjBrowserIndexRef.current] ?? djBrowserTracks[0];
+    const track = djListedTracks[ddjBrowserIndexRef.current] ?? djListedTracks[0];
     if (!track) return false;
     player.dualDeck.setMode(true);
     if (!player.dualDeck.loadTrack(deck, track)) return false;
@@ -227,20 +244,20 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     ddjSyncActiveRef.current[deck] = false;
     renderDdjLedsRef.current?.();
     return true;
-  }, [djBrowserTracks, player.dualDeck, switchDjToManual]);
+  }, [djListedTracks, player.dualDeck, switchDjToManual]);
 
   useEffect(() => {
-    if (!djBrowserTracks.length) {
+    if (!djListedTracks.length) {
       ddjBrowserIndexRef.current = 0;
       setDjBrowserIndex(0);
       return;
     }
-    if (ddjBrowserIndexRef.current >= djBrowserTracks.length) {
-      const next = djBrowserTracks.length - 1;
+    if (ddjBrowserIndexRef.current >= djListedTracks.length) {
+      const next = djListedTracks.length - 1;
       ddjBrowserIndexRef.current = next;
       setDjBrowserIndex(next);
     }
-  }, [djBrowserTracks.length]);
+  }, [djListedTracks.length]);
 
   const toggleDjDeckPlay = useCallback((deck: DjDeckId) => {
     switchDjToManual();
@@ -252,8 +269,10 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
       renderDdjLedsRef.current?.();
       return;
     }
-    void player.dualDeck.play(deck).finally(() => renderDdjLedsRef.current?.());
-  }, [player.dualDeck, switchDjToManual]);
+    void player.dualDeck.play(deck).then(started => {
+      if (started) markDjTrackPlayed(snapshot.trackId);
+    }).finally(() => renderDdjLedsRef.current?.());
+  }, [markDjTrackPlayed, player.dualDeck, switchDjToManual]);
 
   const cueDjDeck = useCallback((deck: DjDeckId) => {
     switchDjToManual();
@@ -340,12 +359,9 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
 
 
   const prepareDjAutomixNext = useCallback((activeDeck: DjDeckId, queueIndex: number) => {
-    const decision = nextTrackDecision(player.queue, queueIndex, player.repeatMode, true);
-    const nextTrack = decision.type === 'restart'
-      ? player.queue[queueIndex] ?? null
-      : decision.type === 'track'
-        ? player.queue.find(track => track.id === decision.id) ?? null
-        : null;
+    const nextIndex = nextDjAutomixIndex(djListedTracks.length, queueIndex);
+    if (nextIndex == null) return null;
+    const nextTrack = djListedTracks[nextIndex] ?? null;
     if (!nextTrack) return null;
 
     const incomingDeck: DjDeckId = activeDeck === 'a' ? 'b' : 'a';
@@ -356,8 +372,8 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
       ddjCuePointsRef.current[incomingDeck] = null;
       ddjSyncActiveRef.current[incomingDeck] = false;
     }
-    return nextTrack;
-  }, [player.dualDeck, player.queue, player.repeatMode]);
+    return { track: nextTrack, index: nextIndex };
+  }, [djListedTracks, player.dualDeck]);
 
   const startDjAutomixTransition = useCallback((options: {
     activeDeck: DjDeckId;
@@ -404,6 +420,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
         return;
       }
 
+      markDjTrackPlayed(options.nextTrack.id);
       const startedAt = performance.now();
       const durationMs = Math.max(250, options.durationSeconds * 1000);
       const from = options.activeDeck === 'a' ? -1 : 1;
@@ -440,7 +457,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
       djAutomixFrameRef.current = window.requestAnimationFrame(animate);
     });
   }, [
-    library.tracks,
+    markDjTrackPlayed,
     player.dualDeck,
     prepareDjAutomixNext,
     scheduleMixerUiSync
@@ -452,18 +469,18 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
 
     const a = player.dualDeck.getSnapshot('a');
     const b = player.dualDeck.getSnapshot('b');
-    let activeDeck: DjDeckId = a?.playing ? 'a' : b?.playing ? 'b' : a?.trackId ? 'a' : b?.trackId ? 'b' : 'a';
+    const activeDeck: DjDeckId = a?.playing ? 'a' : b?.playing ? 'b' : a?.trackId ? 'a' : b?.trackId ? 'b' : 'a';
     let activeSnapshot = player.dualDeck.getSnapshot(activeDeck);
 
-    if (!activeSnapshot?.trackId && player.current) {
-      if (!player.dualDeck.loadTrack(activeDeck, player.current)) return;
-      player.dualDeck.seek(activeDeck, player.currentTime);
+    if (!activeSnapshot?.trackId) {
+      const firstTrack = djListedTracks[0];
+      if (!firstTrack || !player.dualDeck.loadTrack(activeDeck, firstTrack)) return;
       activeSnapshot = player.dualDeck.getSnapshot(activeDeck);
     }
     if (!activeSnapshot?.trackId) return;
 
-    const queueIndex = player.queue.findIndex(track => track.id === activeSnapshot?.trackId);
-    djAutomixQueueIndexRef.current = queueIndex >= 0 ? queueIndex : Math.max(0, player.currentIndex);
+    const queueIndex = djListedTracks.findIndex(track => track.id === activeSnapshot.trackId);
+    djAutomixQueueIndexRef.current = queueIndex >= 0 ? queueIndex : -1;
     djAutomixActiveDeckRef.current = activeDeck;
     player.dualDeck.setVolume('a', 1);
     player.dualDeck.setVolume('b', 1);
@@ -474,15 +491,17 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
 
     const latest = player.dualDeck.getSnapshot(activeDeck);
     if (latest?.trackId && !latest.playing) {
-      void player.dualDeck.play(activeDeck).finally(() => renderDdjLedsRef.current?.());
+      void player.dualDeck.play(activeDeck).then(started => {
+        if (started) markDjTrackPlayed(latest.trackId);
+      }).finally(() => renderDdjLedsRef.current?.());
+    } else if (latest?.trackId && latest.playing) {
+      markDjTrackPlayed(latest.trackId);
     }
   }, [
     cancelDjAutomixTransition,
-    player.current,
-    player.currentIndex,
-    player.currentTime,
+    djListedTracks,
+    markDjTrackPlayed,
     player.dualDeck,
-    player.queue,
     prepareDjAutomixNext,
     scheduleMixerUiSync,
     setDjModeState
@@ -522,40 +541,18 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
             });
 
             if (shouldStart) {
-              const candidate = resolveCrossfadeCandidate({
-                queue: player.queue,
-                currentIndex: djAutomixQueueIndexRef.current,
-                currentTrackId: snapshot.trackId,
-                repeatMode: player.repeatMode,
-                durationSeconds: quantized?.durationSeconds ?? player.crossfadeSeconds,
-                visibilityState: document.visibilityState,
-                remainingSeconds
-              });
-              const fallbackDecision = nextTrackDecision(
-                player.queue,
-                djAutomixQueueIndexRef.current,
-                player.repeatMode,
-                true
+              const prepared = prepareDjAutomixNext(
+                activeDeck,
+                djAutomixQueueIndexRef.current
               );
-              const fallbackTrack = fallbackDecision.type === 'restart'
-                ? currentTrack
-                : fallbackDecision.type === 'track'
-                  ? player.queue.find(track => track.id === fallbackDecision.id) ?? null
-                  : null;
-              const nextTrack = candidate
-                ? player.queue.find(track => track.id === candidate.trackId) ?? null
-                : fallbackTrack;
-              const nextQueueIndex = nextTrack
-                ? player.queue.findIndex(track => track.id === nextTrack.id)
-                : -1;
-              if (nextTrack && nextQueueIndex >= 0) {
+              if (prepared) {
                 startDjAutomixTransition({
                   activeDeck,
                   currentTrack,
-                  nextTrack,
-                  nextQueueIndex,
+                  nextTrack: prepared.track,
+                  nextQueueIndex: prepared.index,
                   durationSeconds: effectiveDjAutomixDuration(
-                    candidate?.durationSeconds ?? player.crossfadeSeconds
+                    quantized?.durationSeconds ?? player.crossfadeSeconds
                   )
                 });
               }
@@ -575,10 +572,25 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     library.tracks,
     player.crossfadeSeconds,
     player.dualDeck.getSnapshot,
-    player.queue,
-    player.repeatMode,
+    prepareDjAutomixNext,
     screen,
     startDjAutomixTransition
+  ]);
+
+  useEffect(() => {
+    if (djMixMode !== 'automix') return;
+    const activeDeck = djAutomixActiveDeckRef.current;
+    const activeSnapshot = player.dualDeck.getSnapshot(activeDeck);
+    const currentIndex = activeSnapshot?.trackId
+      ? djListedTracks.findIndex(track => track.id === activeSnapshot.trackId)
+      : -1;
+    djAutomixQueueIndexRef.current = currentIndex;
+    prepareDjAutomixNext(activeDeck, currentIndex);
+  }, [
+    djListedTracks,
+    djMixMode,
+    player.dualDeck.getSnapshot,
+    prepareDjAutomixNext
   ]);
 
   const readDjDeckPanel = useCallback((deck: DjDeckId): DjDeckPanelState => {
@@ -916,6 +928,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
   }
 
   function openDjMode() {
+    setDjPlayedTrackIds(new Set());
     player.djSession.enter();
     setScreen('dj');
   }
@@ -1108,12 +1121,15 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
         <DjModeScreen
           decks={djDeckPanels}
           mixer={djMixerState}
-          libraryTracks={djBrowserTracks}
+          libraryTracks={djListedTracks}
           librarySources={djLibrarySources}
           selectedLibrarySource={djLibrarySource}
           onSelectLibrarySource={selectDjLibrarySource}
           selectedLibraryIndex={djBrowserIndex}
           onSelectLibraryIndex={selectDjBrowserIndex}
+          automixShuffle={djAutomixShuffle}
+          onAutomixShuffleChange={setDjAutomixShuffle}
+          playedTrackIds={djPlayedTrackIds}
           onLoadSelectedTrack={loadDjBrowserTrack}
           midi={midiController}
           onDisconnectMidi={disconnectMidiController}
