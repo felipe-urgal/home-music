@@ -26,6 +26,7 @@ import {
   shuffleDjTrackList
 } from './dj-automix-sequence';
 import { isDjKeyboardEditableTarget, mapDjKeyboardCode } from './dj-keyboard-mapping';
+import { resolveInitialDjSyncPlan } from './dj-sync-phase-lock';
 import {
   EMPTY_DJ_SYNC_STATE,
   activateDjSync,
@@ -385,9 +386,51 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
       return;
     }
 
-    ddjBaseRateRef.current[deck] = plan.playbackRate;
-    commitDjSyncState(activateDjSync(djSyncStateRef.current, deck, 'tempo'));
-    player.dualDeck.setPlaybackRate(deck, plan.playbackRate);
+    const phasePlan = resolveInitialDjSyncPlan({
+      masterRhythm: masterTrack?.rhythm,
+      masterPositionSeconds: masterSnapshot.currentTimeSeconds,
+      masterPlaybackRate: masterSnapshot.playbackRate,
+      slaveRhythm: targetTrack?.rhythm,
+      slavePositionSeconds: targetSnapshot.currentTimeSeconds,
+      beatmatch: plan
+    });
+
+    const existingTimer = ddjNudgeTimerRef.current[deck];
+    if (existingTimer != null) window.clearTimeout(existingTimer);
+    ddjNudgeTimerRef.current[deck] = null;
+
+    ddjBaseRateRef.current[deck] = phasePlan.playbackRate;
+    player.dualDeck.setPlaybackRate(deck, phasePlan.playbackRate);
+
+    if (phasePlan.correction.kind === 'seek') {
+      player.dualDeck.seek(
+        deck,
+        targetSnapshot.currentTimeSeconds + phasePlan.correction.offsetMediaSeconds
+      );
+    } else if (phasePlan.correction.kind === 'nudge') {
+      if (targetSnapshot.playing) {
+        player.dualDeck.setPlaybackRate(
+          deck,
+          phasePlan.playbackRate * phasePlan.correction.rateMultiplier
+        );
+        ddjNudgeTimerRef.current[deck] = window.setTimeout(() => {
+          player.dualDeck.setPlaybackRate(deck, ddjBaseRateRef.current[deck]);
+          ddjNudgeTimerRef.current[deck] = null;
+        }, phasePlan.correction.durationMs);
+      } else {
+        player.dualDeck.seek(
+          deck,
+          targetSnapshot.currentTimeSeconds
+            - (phasePlan.correction.phaseErrorSeconds * phasePlan.playbackRate)
+        );
+      }
+    }
+
+    commitDjSyncState(activateDjSync(
+      djSyncStateRef.current,
+      deck,
+      phasePlan.mode
+    ));
   }, [commitDjSyncState, disableDjSync, library.tracks, player.dualDeck, switchDjToManual]);
 
 
