@@ -1,5 +1,5 @@
 import type { Track } from '@home-music/shared';
-import { ArrowLeft, Disc3, Pause, Play, RotateCcw, SlidersHorizontal, Zap } from 'lucide-react';
+import { ArrowLeft, Disc3, Keyboard, Pause, Play, RotateCcw, SlidersHorizontal, Zap } from 'lucide-react';
 import type { DjDeckId } from '../dj-controller-contract';
 import type { DualDeckAudioSnapshot } from '../dual-deck-audio';
 import type { DualDeckMixerState } from '../dual-deck-mixer';
@@ -345,9 +345,23 @@ export function DjModeScreen({
           <span className="dj-mode__brand-icon" aria-hidden="true"><Disc3 /></span>
           <div><strong>Modo DJ</strong><small>Dual-deck</small></div>
         </div>
-        <button className="dj-mode__exit" type="button" onClick={onExit}>
-          <ArrowLeft aria-hidden="true" /><span>Sair do modo DJ</span>
-        </button>
+        <div className="dj-mode__header-actions">
+          <details className="dj-shortcuts">
+            <summary>
+              <Keyboard aria-hidden="true" />
+              <span>Atalhos</span>
+            </summary>
+            <div className="dj-shortcuts__panel">
+              <div><strong>Decks</strong><span><kbd>1</kbd>/<kbd>2</kbd> Play · <kbd>Q</kbd>/<kbd>W</kbd> Cue · <kbd>A</kbd>/<kbd>S</kbd> Sync</span></div>
+              <div><strong>Biblioteca</strong><span><kbd>←</kbd>/<kbd>→</kbd> Seleção · <kbd>Z</kbd>/<kbd>X</kbd> Load A/B</span></div>
+              <div><strong>Nudge</strong><span><kbd>R</kbd>/<kbd>T</kbd> Deck A · <kbd>Y</kbd>/<kbd>U</kbd> Deck B</span></div>
+              <div><strong>Mixer</strong><span><kbd>F</kbd>/<kbd>G</kbd> Canal A · <kbd>H</kbd>/<kbd>J</kbd> Canal B · <kbd>,</kbd>/<kbd>.</kbd> Crossfader</span></div>
+            </div>
+          </details>
+          <button className="dj-mode__exit" type="button" onClick={onExit}>
+            <ArrowLeft aria-hidden="true" /><span>Sair do modo DJ</span>
+          </button>
+        </div>
       </header>
 
       <div className="dj-mode__workspace">
