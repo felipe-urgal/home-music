@@ -31,9 +31,9 @@ type DjModeScreenProps = {
   decks: Record<DjDeckId, DjDeckPanelState>;
   mixer: DualDeckMixerState;
   libraryTracks: Track[];
-  libraryFolders: Array<{ path: string; label: string }>;
-  selectedFolderPath: string;
-  onSelectFolderPath: (path: string) => void;
+  librarySources: Array<{ value: string; label: string; group: 'all' | 'folder' | 'playlist' }>;
+  selectedLibrarySource: string;
+  onSelectLibrarySource: (value: string) => void;
   selectedLibraryIndex: number;
   onSelectLibraryIndex: (index: number) => void;
   onLoadSelectedTrack: (deck: DjDeckId) => void;
@@ -169,17 +169,17 @@ function DeckPanel({
 
 function DjLibrary({
   tracks,
-  folders,
-  selectedFolderPath,
-  onSelectFolderPath,
+  sources,
+  selectedLibrarySource,
+  onSelectLibrarySource,
   selectedIndex,
   onSelect,
   onLoad
 }: {
   tracks: Track[];
-  folders: Array<{ path: string; label: string }>;
-  selectedFolderPath: string;
-  onSelectFolderPath: (path: string) => void;
+  sources: Array<{ value: string; label: string; group: 'all' | 'folder' | 'playlist' }>;
+  selectedLibrarySource: string;
+  onSelectLibrarySource: (value: string) => void;
   selectedIndex: number;
   onSelect: (index: number) => void;
   onLoad: (deck: DjDeckId) => void;
@@ -202,16 +202,24 @@ function DjLibrary({
           <span>{tracks.length} faixas</span>
         </div>
         <div className="dj-pro-library__tools">
-          <label className="dj-pro-library__folder">
-            <span>Pasta</span>
+          <label className="dj-pro-library__source">
+            <span>Origem</span>
             <select
-              value={selectedFolderPath}
-              onChange={event => onSelectFolderPath(event.currentTarget.value)}
-              aria-label="Selecionar pasta da biblioteca"
+              value={selectedLibrarySource}
+              onChange={event => onSelectLibrarySource(event.currentTarget.value)}
+              aria-label="Selecionar pasta ou playlist"
             >
-              {folders.map(folder => (
-                <option key={folder.path || '__root__'} value={folder.path}>{folder.label}</option>
-              ))}
+              <option value="all">Todas as faixas</option>
+              <optgroup label="Pastas">
+                {sources.filter(source => source.group === 'folder').map(source => (
+                  <option key={source.value} value={source.value}>{source.label}</option>
+                ))}
+              </optgroup>
+              <optgroup label="Playlists">
+                {sources.filter(source => source.group === 'playlist').map(source => (
+                  <option key={source.value} value={source.value}>{source.label}</option>
+                ))}
+              </optgroup>
             </select>
           </label>
           <label className="dj-pro-library__search">
@@ -351,9 +359,9 @@ export function DjModeScreen({
   decks,
   mixer,
   libraryTracks,
-  libraryFolders,
-  selectedFolderPath,
-  onSelectFolderPath,
+  librarySources,
+  selectedLibrarySource,
+  onSelectLibrarySource,
   selectedLibraryIndex,
   onSelectLibraryIndex,
   onLoadSelectedTrack,
@@ -416,9 +424,9 @@ export function DjModeScreen({
         <DeckPanel deck="a" state={decks.a} onTogglePlay={onTogglePlay} onCue={onCue} onSync={onSync} />
         <DjLibrary
           tracks={libraryTracks}
-          folders={libraryFolders}
-          selectedFolderPath={selectedFolderPath}
-          onSelectFolderPath={onSelectFolderPath}
+          sources={librarySources}
+          selectedLibrarySource={selectedLibrarySource}
+          onSelectLibrarySource={onSelectLibrarySource}
           selectedIndex={selectedLibraryIndex}
           onSelect={onSelectLibraryIndex}
           onLoad={onLoadSelectedTrack}
