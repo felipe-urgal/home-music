@@ -154,6 +154,10 @@ export function useWebMidiController(options: WebMidiControllerOptions = {}) {
     return true;
   }, [ports, selectedOutputId]);
 
+  const send = useCallback((data: number[] | Uint8Array) => {
+    return sessionRef.current?.sendToSelectedOutput(data) ?? false;
+  }, []);
+
   const selectOutput = useCallback((id: string | null) => {
     const session = sessionRef.current;
     if (!session || !session.selectOutput(id)) return false;
@@ -193,6 +197,7 @@ export function useWebMidiController(options: WebMidiControllerOptions = {}) {
     disconnect,
     selectInput,
     selectOutput,
+    send,
     setDiagnosticsEnabled
   };
 }
