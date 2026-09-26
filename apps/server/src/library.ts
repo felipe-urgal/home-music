@@ -41,6 +41,7 @@ export type IndexedTrack = Track & {
   fileSize: number;
   mtimeMs: number;
   rhythmAnalysisCurrent?: boolean;
+  waveformAnalysisCurrent?: boolean;
 };
 
 export type LibraryScanStats = {
