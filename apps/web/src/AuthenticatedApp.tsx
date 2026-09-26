@@ -146,6 +146,15 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
   }, [player.dualDeck.getMixerSnapshot]);
   const ddjNudgeTimerRef = useRef<Record<DjDeckId, number | null>>({ a: null, b: null });
 
+  const cancelDjNudge = useCallback((deck: DjDeckId, restoreBaseRate = true) => {
+    const timer = ddjNudgeTimerRef.current[deck];
+    if (timer != null) window.clearTimeout(timer);
+    ddjNudgeTimerRef.current[deck] = null;
+    if (restoreBaseRate) {
+      player.dualDeck.setPlaybackRate(deck, ddjBaseRateRef.current[deck] || 1);
+    }
+  }, [player.dualDeck]);
+
   const commitDjSyncState = useCallback((next: DjSyncState) => {
     djSyncStateRef.current = next;
     setDjSyncState(next);
@@ -153,9 +162,10 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
   }, []);
 
   const disableDjSync = useCallback((deck: DjDeckId) => {
+    cancelDjNudge(deck);
     const next = disableDjSyncForDeck(djSyncStateRef.current, deck);
     if (next !== djSyncStateRef.current) commitDjSyncState(next);
-  }, [commitDjSyncState]);
+  }, [cancelDjNudge, commitDjSyncState]);
 
   const setDjModeState = useCallback((mode: 'manual' | 'automix') => {
     djMixModeRef.current = mode;
@@ -262,14 +272,12 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     player.dualDeck.setMode(true);
     if (!player.dualDeck.loadTrack(deck, track)) return false;
 
-    const timer = ddjNudgeTimerRef.current[deck];
-    if (timer != null) window.clearTimeout(timer);
-    ddjNudgeTimerRef.current[deck] = null;
+    cancelDjNudge(deck, false);
     ddjBaseRateRef.current[deck] = 1;
     ddjCuePointsRef.current[deck] = null;
     commitDjSyncState(resetDjSyncForLoad(djSyncStateRef.current, deck));
     return true;
-  }, [commitDjSyncState, djListedTracks, player.dualDeck, switchDjToManual]);
+  }, [cancelDjNudge, commitDjSyncState, djListedTracks, player.dualDeck, switchDjToManual]);
 
   useEffect(() => {
     if (!djListedTracks.length) {
@@ -395,10 +403,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
       beatmatch: plan
     });
 
-    const existingTimer = ddjNudgeTimerRef.current[deck];
-    if (existingTimer != null) window.clearTimeout(existingTimer);
-    ddjNudgeTimerRef.current[deck] = null;
-
+    cancelDjNudge(deck, false);
     ddjBaseRateRef.current[deck] = phasePlan.playbackRate;
     player.dualDeck.setPlaybackRate(deck, phasePlan.playbackRate);
 
@@ -431,7 +436,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
       deck,
       phasePlan.mode
     ));
-  }, [commitDjSyncState, disableDjSync, library.tracks, player.dualDeck, switchDjToManual]);
+  }, [cancelDjNudge, commitDjSyncState, disableDjSync, library.tracks, player.dualDeck, switchDjToManual]);
 
 
   const prepareDjAutomixNext = useCallback((activeDeck: DjDeckId, queueIndex: number) => {
@@ -1065,12 +1070,16 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
 
   function openDjMode() {
     setDjPlayedTrackIds(new Set());
+    cancelDjNudge('a');
+    cancelDjNudge('b');
     commitDjSyncState(EMPTY_DJ_SYNC_STATE);
     player.djSession.enter();
     setScreen('dj');
   }
 
   function closeDjMode() {
+    cancelDjNudge('a');
+    cancelDjNudge('b');
     commitDjSyncState(EMPTY_DJ_SYNC_STATE);
     player.djSession.exit();
     player.syncVisibleProgress();
