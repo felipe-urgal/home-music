@@ -135,7 +135,7 @@ describe('crossfade handoff', () => {
     const crossfade = source('useCrossfadeAudioPlayer.ts');
 
     expect(crossfade).toContain('quantizedWakeTimeoutRef');
-    expect(crossfade).toContain('(timeUntilStart - QUANTIZED_CROSSFADE_ARM_SECONDS) * 1_000');
+    expect(crossfade).toContain('quantizedCrossfadeWakeDelayMs(timeUntilStart)');
     expect(crossfade).toContain('quantizedWakeTimeoutRef.current = window.setTimeout');
     expect(crossfade).toContain('maybeStartCrossfade(latestAudio);');
     expect(crossfade).toContain('quantizedScheduleFrameRef.current = window.requestAnimationFrame(watchBeatBoundary);');
