@@ -33,7 +33,9 @@ export async function fetchTrackWaveform(trackId: string): Promise<TrackWaveform
     .catch(() => null);
 
   waveformCache.set(trackId, request);
-  return request;
+  const result = await request;
+  if (!result) waveformCache.delete(trackId);
+  return result;
 }
 
 export function clearTrackWaveformCache(trackId?: string) {
