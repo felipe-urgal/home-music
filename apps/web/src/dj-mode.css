@@ -859,3 +859,255 @@
     display: none;
   }
 }
+
+
+/* Prototype 3 fidelity pass */
+.dj-mode--prototype-three {
+  padding: 0;
+  background: #06101c;
+}
+
+.dj-appbar {
+  min-height: 70px;
+  padding: 0 22px;
+  border-bottom: 1px solid rgba(44, 105, 183, 0.42);
+  background: linear-gradient(180deg, #071526 0%, #06111f 100%);
+  display: grid;
+  grid-template-columns: auto auto minmax(280px, 1fr) auto;
+  align-items: center;
+  gap: 26px;
+}
+
+.dj-appbar__brand,
+.dj-appbar__nav,
+.dj-appbar__tools {
+  display: flex;
+  align-items: center;
+}
+
+.dj-appbar__brand {
+  gap: 10px;
+  white-space: nowrap;
+}
+
+.dj-appbar__logo {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 50%, #3ea6ff 0 28%, #1262d0 29% 62%, #0d2f67 63% 100%);
+  display: grid;
+  place-items: center;
+  box-shadow: 0 0 18px rgba(20, 152, 255, 0.26);
+}
+
+.dj-appbar__logo svg {
+  width: 18px;
+  height: 18px;
+}
+
+.dj-appbar__brand strong {
+  font-size: 1rem;
+}
+
+.dj-appbar__nav {
+  gap: 22px;
+  color: rgba(231, 239, 252, 0.72);
+  font-size: 0.78rem;
+}
+
+.dj-appbar__nav span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.dj-appbar__nav svg,
+.dj-appbar__tools svg {
+  width: 16px;
+  height: 16px;
+}
+
+.dj-appbar__search {
+  min-width: 0;
+  max-width: 420px;
+  justify-self: center;
+  width: 100%;
+  min-height: 38px;
+  padding: 0 13px;
+  border: 1px solid rgba(91, 140, 207, 0.36);
+  border-radius: 9px;
+  background: rgba(9, 24, 42, 0.92);
+  color: rgba(224, 234, 248, 0.48);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 0.76rem;
+}
+
+.dj-appbar__search svg {
+  width: 16px;
+  height: 16px;
+}
+
+.dj-appbar__tools {
+  gap: 16px;
+  color: rgba(236, 243, 255, 0.78);
+}
+
+.dj-appbar__dj-badge {
+  width: 38px;
+  height: 38px;
+  border: 1px solid rgba(77, 127, 255, 0.52);
+  border-radius: 50%;
+  background: linear-gradient(180deg, #173987, #0c2258);
+  display: grid;
+  place-items: center;
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.dj-mode__header {
+  margin: 10px 20px 0;
+}
+
+.dj-pro-layout {
+  margin: 12px 20px 20px;
+}
+
+.dj-pro-deck,
+.dj-pro-library,
+.dj-pro-mixer,
+.dj-pro-midi,
+.dj-mode__header {
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.015),
+    0 0 0 1px rgba(15, 89, 180, 0.08);
+}
+
+.dj-pro-layout {
+  grid-template-columns: minmax(330px, 0.98fr) minmax(520px, 1.28fr) minmax(330px, 0.98fr);
+  grid-template-rows: minmax(540px, auto) minmax(170px, auto);
+}
+
+.dj-pro-deck,
+.dj-pro-library {
+  min-height: 540px;
+}
+
+.dj-pro-deck {
+  padding: 18px 20px;
+  gap: 13px;
+}
+
+.dj-pro-deck__artwork {
+  width: 92px;
+  height: 92px;
+  flex-basis: 92px;
+}
+
+.dj-pro-deck__track strong {
+  font-size: 1.12rem;
+}
+
+.dj-waveform {
+  height: 108px;
+}
+
+.dj-waveform__bars {
+  height: 82px;
+  gap: 2px;
+}
+
+.dj-pro-deck__metrics > div {
+  min-height: 64px;
+  align-content: center;
+}
+
+.dj-pro-deck__controls button {
+  min-height: 58px;
+  font-size: 0.84rem;
+}
+
+.dj-pro-library {
+  padding-top: 14px;
+}
+
+.dj-pro-library__header {
+  padding: 0 14px 12px;
+}
+
+.dj-pro-library__list {
+  max-height: 390px;
+}
+
+.dj-pro-library__list > button {
+  min-height: 38px;
+}
+
+.dj-pro-library__loads {
+  padding: 13px 14px 0;
+}
+
+.dj-pro-library__loads button {
+  min-height: 48px;
+}
+
+.dj-pro-mixer {
+  min-height: 176px;
+  grid-template-columns: 115px minmax(250px, 1fr) minmax(300px, 0.9fr) minmax(250px, 1fr);
+  gap: 28px;
+  padding: 20px 22px;
+}
+
+.dj-pro-midi {
+  min-height: 176px;
+}
+
+.dj-pro-mixer__title strong,
+.dj-pro-midi__heading strong {
+  font-size: 0.95rem;
+}
+
+.dj-pro-mixer input[type='range'] {
+  height: 8px;
+}
+
+@media (min-width: 1600px) {
+  .dj-pro-layout {
+    grid-template-columns: minmax(360px, 0.95fr) minmax(600px, 1.28fr) minmax(360px, 0.95fr);
+  }
+
+  .dj-pro-deck,
+  .dj-pro-library {
+    min-height: 560px;
+  }
+}
+
+@media (max-width: 1350px) {
+  .dj-appbar {
+    grid-template-columns: auto minmax(240px, 1fr) auto;
+  }
+
+  .dj-appbar__nav {
+    display: none;
+  }
+
+  .dj-mode__header {
+    margin-inline: 12px;
+  }
+
+  .dj-pro-layout {
+    margin-inline: 12px;
+  }
+}
+
+@media (max-width: 900px) {
+  .dj-appbar__search {
+    display: none;
+  }
+
+  .dj-appbar {
+    grid-template-columns: 1fr auto;
+  }
+}
