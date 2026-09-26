@@ -7,6 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
+import { MAX_SUPPORTED_SCHEMA_VERSION } from '../apps/server/dist/backup-restore.js';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const tempDir = await mkdtemp(path.join(os.tmpdir(), 'home-music-production-'));
@@ -296,7 +297,7 @@ try {
     active: 0,
     pending: 0
   });
-  assert.equal(internalHealthBody.schemaVersion, 12);
+  assert.equal(internalHealthBody.schemaVersion, MAX_SUPPORTED_SCHEMA_VERSION);
 
   const favorites = await fetch(`${baseUrl}/api/favorites`, {
     headers: { Cookie: cookie }
