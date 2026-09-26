@@ -102,7 +102,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
   );
   const ddjBrowserIndexRef = useRef(0);
   const [djBrowserIndex, setDjBrowserIndex] = useState(0);
-  const [djFolderPath, setDjFolderPath] = useState('');
+  const [djLibrarySource, setDjLibrarySource] = useState('all');
   const ddjCuePointsRef = useRef<Record<DjDeckId, number | null>>({ a: null, b: null });
   const ddjSyncActiveRef = useRef<Record<DjDeckId, boolean>>({ a: false, b: false });
   const ddjLedRendererRef = useRef<Ddj400LedRenderer | null>(null);
@@ -148,33 +148,59 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     setDjModeState('manual');
   }, [cancelDjAutomixTransition, setDjModeState]);
 
-  const djFolderOptions = useMemo(() => {
-    const paths = new Set<string>(['']);
+  const djLibrarySources = useMemo(() => {
+    const paths = new Set<string>();
     for (const track of library.tracks) {
       const parts = track.folderPath.split('/').filter(Boolean);
       for (let index = 1; index <= parts.length; index += 1) {
         paths.add(parts.slice(0, index).join('/'));
       }
     }
-    return [...paths]
-      .sort((left, right) => left.localeCompare(right, 'pt-BR'))
-      .map(path => ({
-        path,
-        label: path || 'Todas as pastas'
-      }));
-  }, [library.tracks]);
+
+    return [
+      { value: 'all', label: 'Todas as faixas', group: 'all' as const },
+      ...[...paths]
+        .sort((left, right) => left.localeCompare(right, 'pt-BR'))
+        .map(path => ({
+          value: `folder:${path}`,
+          label: path,
+          group: 'folder' as const
+        })),
+      ...library.playlists.map(playlist => ({
+        value: `playlist:${playlist.id}`,
+        label: playlist.name,
+        group: 'playlist' as const
+      }))
+    ];
+  }, [library.playlists, library.tracks]);
 
   const djBrowserTracks = useMemo(() => {
-    if (!djFolderPath) return library.tracks;
-    const prefix = `${djFolderPath}/`;
-    return library.tracks.filter(track => (
-      track.folderPath === djFolderPath
-      || track.folderPath.startsWith(prefix)
-    ));
-  }, [djFolderPath, library.tracks]);
+    if (djLibrarySource === 'all') return library.tracks;
 
-  const selectDjFolder = useCallback((path: string) => {
-    setDjFolderPath(path);
+    if (djLibrarySource.startsWith('folder:')) {
+      const folderPath = djLibrarySource.slice('folder:'.length);
+      const prefix = `${folderPath}/`;
+      return library.tracks.filter(track => (
+        track.folderPath === folderPath
+        || track.folderPath.startsWith(prefix)
+      ));
+    }
+
+    if (djLibrarySource.startsWith('playlist:')) {
+      const playlistId = djLibrarySource.slice('playlist:'.length);
+      const playlist = library.playlists.find(item => item.id === playlistId);
+      if (!playlist) return [];
+      const tracksById = new Map(library.tracks.map(track => [track.id, track]));
+      return playlist.trackIds
+        .map(trackId => tracksById.get(trackId))
+        .filter((track): track is (typeof library.tracks)[number] => Boolean(track));
+    }
+
+    return library.tracks;
+  }, [djLibrarySource, library.playlists, library.tracks]);
+
+  const selectDjLibrarySource = useCallback((value: string) => {
+    setDjLibrarySource(value);
     ddjBrowserIndexRef.current = 0;
     setDjBrowserIndex(0);
   }, []);
@@ -1083,9 +1109,9 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
           decks={djDeckPanels}
           mixer={djMixerState}
           libraryTracks={djBrowserTracks}
-          libraryFolders={djFolderOptions}
-          selectedFolderPath={djFolderPath}
-          onSelectFolderPath={selectDjFolder}
+          librarySources={djLibrarySources}
+          selectedLibrarySource={djLibrarySource}
+          onSelectLibrarySource={selectDjLibrarySource}
           selectedLibraryIndex={djBrowserIndex}
           onSelectLibraryIndex={selectDjBrowserIndex}
           onLoadSelectedTrack={loadDjBrowserTrack}
