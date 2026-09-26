@@ -30,7 +30,7 @@ type RhythmAnalysisSchedulerOptions = {
   library: LibraryService;
   database: HomeMusicDatabase;
   analyze: RhythmTrackAnalyzer;
-  analyzeWaveform: WaveformTrackAnalyzer;
+  analyzeWaveform?: WaveformTrackAnalyzer;
   logger: SchedulerLogger;
 };
 
@@ -119,7 +119,10 @@ export class RhythmAnalysisScheduler {
       const enabledTrack = this.options.library.getTrack(track.id);
       if (
         enabledTrack
-        && (!enabledTrack.rhythmAnalysisCurrent || !enabledTrack.waveformAnalysisCurrent)
+        && (
+          !enabledTrack.rhythmAnalysisCurrent
+          || (this.options.analyzeWaveform && !enabledTrack.waveformAnalysisCurrent)
+        )
       ) {
         this.pending.add(track.id);
       }
@@ -132,7 +135,10 @@ export class RhythmAnalysisScheduler {
     const track = this.options.library.getTrack(trackId);
     if (
       !track
-      || (track.rhythmAnalysisCurrent && track.waveformAnalysisCurrent)
+      || (
+        track.rhythmAnalysisCurrent
+        && (!this.options.analyzeWaveform || track.waveformAnalysisCurrent)
+      )
     ) return;
     this.pending.add(trackId);
     this.ensureDrain();
@@ -207,7 +213,9 @@ export class RhythmAnalysisScheduler {
     let waveform: TrackWaveform | null;
 
     try {
-      waveform = await this.options.analyzeWaveform(track, this.controller.signal);
+      const analyzeWaveform = this.options.analyzeWaveform;
+      if (!analyzeWaveform) return;
+      waveform = await analyzeWaveform(track, this.controller.signal);
     } catch (error) {
       if (!(error instanceof WaveformAnalysisUnavailableError)) throw error;
       waveform = null;
@@ -248,7 +256,10 @@ export class RhythmAnalysisScheduler {
       const track = this.options.library.getTrack(trackId);
       if (
         !track
-        || (track.rhythmAnalysisCurrent && track.waveformAnalysisCurrent)
+        || (
+          track.rhythmAnalysisCurrent
+          && (!this.options.analyzeWaveform || track.waveformAnalysisCurrent)
+        )
       ) continue;
 
       const startedAt = performance.now();
@@ -269,7 +280,7 @@ export class RhythmAnalysisScheduler {
         }
       }
 
-      if (!track.waveformAnalysisCurrent && !this.stopped) {
+      if (this.options.analyzeWaveform && !track.waveformAnalysisCurrent && !this.stopped) {
         try {
           await this.analyzeWaveform(track);
         } catch (error) {
