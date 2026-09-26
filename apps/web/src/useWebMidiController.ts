@@ -6,15 +6,16 @@ import {
   type MidiPortInfo,
   type NormalizedMidiMessage
 } from './web-midi';
+import {
+  midiPortStillConnected,
+  preferredMidiInput,
+  preferredMidiOutput,
+  type StoredMidiSelection
+} from './midi-port-selection';
 
 const STORAGE_KEY = 'home-music:midi-controller:v1';
 
-type StoredSelection = {
-  inputId?: string | null;
-  outputId?: string | null;
-  inputName?: string | null;
-  outputName?: string | null;
-};
+type StoredSelection = StoredMidiSelection;
 
 function readStoredSelection(): StoredSelection {
   try {
@@ -74,18 +75,12 @@ export function useWebMidiController(options: WebMidiControllerOptions = {}) {
     const selection = session.getSelection();
     let inputId = selection.inputId;
     let outputId = selection.outputId;
-    if (
-      inputId
-      && !nextPorts.some(port => port.type === 'input' && port.id === inputId && port.state === 'connected')
-    ) {
+    if (inputId && !midiPortStillConnected(nextPorts, 'input', inputId)) {
       session.selectInput(null);
       inputId = null;
       setSelectedInputIdState(null);
     }
-    if (
-      outputId
-      && !nextPorts.some(port => port.type === 'output' && port.id === outputId && port.state === 'connected')
-    ) {
+    if (outputId && !midiPortStillConnected(nextPorts, 'output', outputId)) {
       session.selectOutput(null);
       outputId = null;
       setSelectedOutputIdState(null);
@@ -93,19 +88,11 @@ export function useWebMidiController(options: WebMidiControllerOptions = {}) {
 
     const stored = readStoredSelection();
     if (!inputId) {
-      const input = nextPorts.find(port => (
-        port.type === 'input'
-        && port.state === 'connected'
-        && (port.id === stored.inputId || port.name === stored.inputName)
-      ));
+      const input = preferredMidiInput(nextPorts, stored, false);
       if (input && session.selectInput(input.id)) setSelectedInputIdState(input.id);
     }
     if (!outputId) {
-      const output = nextPorts.find(port => (
-        port.type === 'output'
-        && port.state === 'connected'
-        && (port.id === stored.outputId || port.name === stored.outputName)
-      ));
+      const output = preferredMidiOutput(nextPorts, stored);
       if (output && session.selectOutput(output.id)) setSelectedOutputIdState(output.id);
     }
   }, []);
@@ -128,15 +115,8 @@ export function useWebMidiController(options: WebMidiControllerOptions = {}) {
       setPorts(nextPorts);
 
       const stored = readStoredSelection();
-      const connectedInputs = nextPorts.filter(port => port.type === 'input' && port.state === 'connected');
-      const connectedOutputs = nextPorts.filter(port => port.type === 'output' && port.state === 'connected');
-      const input = connectedInputs.find(port => port.id === stored.inputId)
-        ?? connectedInputs.find(port => port.name === stored.inputName)
-        ?? connectedInputs[0]
-        ?? null;
-      const output = connectedOutputs.find(port => port.id === stored.outputId)
-        ?? connectedOutputs.find(port => port.name === stored.outputName)
-        ?? null;
+      const input = preferredMidiInput(nextPorts, stored);
+      const output = preferredMidiOutput(nextPorts, stored);
 
       if (input && session.selectInput(input.id)) setSelectedInputIdState(input.id);
       if (output && session.selectOutput(output.id)) setSelectedOutputIdState(output.id);
