@@ -19,6 +19,7 @@ import {
   otherCrossfadeDeck,
   readCrossfadeSeconds,
   resolveCrossfadeCandidate,
+  resolveCrossfadePreloadTrackId,
   writeCrossfadeSeconds,
   type CrossfadeCandidate,
   type CrossfadeDeck
@@ -469,6 +470,18 @@ export function useCrossfadeAudioPlayer(
       return;
     }
 
+    const preloadTrackId = resolveCrossfadePreloadTrackId({
+      queue: player.queue,
+      currentIndex: player.currentIndex,
+      currentTrackId: player.current?.id ?? null,
+      repeatMode: player.repeatMode,
+      visibilityState: document.visibilityState
+    });
+    const preloadTrack = preloadTrackId
+      ? player.queue.find(track => track.id === preloadTrackId)
+      : undefined;
+    if (preloadTrack) prepareIncomingAudio(preloadTrack);
+
     const timeUntilStart = quantizedPlan.startTimeSeconds - activeAudio.currentTime;
     if (timeUntilStart > QUANTIZED_CROSSFADE_ARM_SECONDS) {
       cancelQuantizedSchedule();
@@ -497,22 +510,6 @@ export function useCrossfadeAudioPlayer(
     }
 
     cancelQuantizedWake();
-
-    if (timeUntilStart > QUANTIZED_CROSSFADE_EARLY_TOLERANCE_SECONDS) {
-      const preloadCandidate = resolveCrossfadeCandidate({
-        queue: player.queue,
-        currentIndex: player.currentIndex,
-        currentTrackId: player.current?.id ?? null,
-        repeatMode: player.repeatMode,
-        durationSeconds: quantizedPlan.durationSeconds,
-        visibilityState: document.visibilityState,
-        remainingSeconds: Math.min(remainingSeconds, quantizedPlan.durationSeconds)
-      });
-      const preloadTrack = preloadCandidate
-        ? player.queue.find(track => track.id === preloadCandidate.trackId)
-        : undefined;
-      if (preloadTrack) prepareIncomingAudio(preloadTrack);
-    }
 
     const resolveQuantizedCandidate = (audio: HTMLAudioElement) => {
       const latestRemainingSeconds = Math.max(0, audio.duration - audio.currentTime);
