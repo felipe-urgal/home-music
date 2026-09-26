@@ -107,6 +107,7 @@ test('crossfade quantizado inicia próximo da batida planejada no Chromium mobil
   });
 
   const loginResponse = await page.context().request.post('/api/auth/login', {
+    headers: { 'X-Home-Music-Request': '1' },
     data: { username, password }
   });
   expect(loginResponse.ok()).toBe(true);
