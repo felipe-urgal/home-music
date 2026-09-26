@@ -107,6 +107,36 @@ describe('continuous DJ sync controller', () => {
     expect(result.kind).toBe('hold');
   });
 
+  it('acompanha BPM local quando o grid variável muda de segmento', () => {
+    const masterVariable: TrackRhythm = {
+      ...rhythm,
+      beatGrid: {
+        version: 1,
+        segments: [
+          { startSeconds: 0, bpm: 120, firstBeatSeconds: 0, confidence: 0.95 },
+          { startSeconds: 8, bpm: 122, firstBeatSeconds: 8, confidence: 0.95 }
+        ]
+      }
+    };
+    const slaveVariable: TrackRhythm = {
+      ...rhythm,
+      beatGrid: {
+        version: 1,
+        segments: [
+          { startSeconds: 0, bpm: 120, firstBeatSeconds: 0, confidence: 0.95 },
+          { startSeconds: 8, bpm: 119, firstBeatSeconds: 8, confidence: 0.95 }
+        ]
+      }
+    };
+
+    const result = correction(10, {
+      masterRhythm: masterVariable,
+      slaveRhythm: slaveVariable
+    });
+
+    expect(result.playbackRate).toBeCloseTo(122 / 119, 3);
+  });
+
   it('mantém correção proporcional ao playbackRate base', () => {
     const result = correction(10.04, {
       slaveRhythm: { ...rhythm, bpm: 125 },
