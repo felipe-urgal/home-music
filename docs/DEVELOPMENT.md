@@ -118,7 +118,7 @@ os campos principais são:
 - `pending` / `active`: backlog e trabalho atual;
 - `completed`: análises concluídas nesta execução;
 - `detected`: análises com ritmo detectado;
-- `unavailable`: faixa válida para playback, mas sem análise rítmica utilizável;
+- `unavailable`: análise rítmica indisponível para a assinatura atual; o player usa fallback quando a mídia for reproduzível;
 - `decodeUnavailable`: subconjunto de `unavailable` causado por falha
   determinística de decode do FFmpeg;
 - `lowConfidence`: ritmo detectado abaixo do limite confiável do player;
