@@ -110,6 +110,7 @@ export function registerSystemRoutes(
         completed: rhythmRuntime?.completed ?? 0,
         detected: rhythmRuntime?.detected ?? 0,
         unavailable: rhythmRuntime?.unavailable ?? 0,
+        decodeUnavailable: rhythmRuntime?.decodeUnavailable ?? 0,
         failed: rhythmRuntime?.failed ?? 0,
         timeouts: rhythmRuntime?.timeouts ?? 0,
         lowConfidence: rhythmRuntime?.lowConfidence ?? 0,
