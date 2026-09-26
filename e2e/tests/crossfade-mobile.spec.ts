@@ -4,13 +4,16 @@ const username = 'playwright';
 const password = 'playwright-password-2026';
 const crossfadeStorageKey = 'home-music:crossfade-seconds:v2';
 
-async function login(page: Page) {
+async function login(page: Page, expectedTrack: string | null = 'E2E Track') {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Entrar' })).toBeVisible();
   await page.getByLabel('Usuário').fill(username);
   await page.getByLabel('Senha', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'E2E Track' })).toBeVisible();
+  await expect(page.locator('.player-screen-immersive')).toBeVisible();
+  if (expectedTrack) {
+    await expect(page.getByRole('heading', { name: expectedTrack })).toBeVisible();
+  }
 }
 
 test('crossfade mistura dois decks reais no Chromium mobile e faz handoff sem reiniciar a próxima faixa', async ({ page }, testInfo) => {
@@ -103,7 +106,40 @@ test('crossfade quantizado inicia próximo da batida planejada no Chromium mobil
     });
   });
 
-  await login(page);
+  await login(page, null);
+
+  const resetOk = await page.evaluate(async () => {
+    const libraryResponse = await fetch('/api/library');
+    const library = await libraryResponse.json() as {
+      tracks: Array<{ id: string; title: string }>;
+    };
+    const current = library.tracks.find(track => track.title === 'E2E Track');
+    if (!current) return false;
+    const queueIds = library.tracks.map(track => track.id);
+
+    const response = await fetch('/api/player/state', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Home-Music-Request': '1'
+      },
+      body: JSON.stringify({
+        currentTrackId: current.id,
+        position: 0,
+        volume: 1,
+        shuffle: false,
+        repeatMode: 'off',
+        wasPlaying: false,
+        baseQueueIds: queueIds,
+        queueIds
+      })
+    });
+    return response.ok;
+  });
+  expect(resetOk).toBe(true);
+
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'E2E Track' })).toBeVisible();
 
   await page.evaluate(() => {
     const state = window as Window & { __e2eRhythmCrossfadeStart?: number };
