@@ -3,7 +3,7 @@ import type { AuthenticatedUser } from '@home-music/shared';
 import { DesktopNowPlayingScreen } from './components/DesktopNowPlayingScreen';
 import { DesktopPlayerBar } from './components/DesktopPlayerBar';
 import { DesktopPlayerSidebarTools } from './components/DesktopPlayerSidebarTools';
-import { DjModeScreen } from './components/DjModeScreen';
+import { DjModeScreen, type DjDeckPanelState } from './components/DjModeScreen';
 import { DesktopShell } from './components/DesktopShell';
 import { LazySurfaceBoundary } from './components/LazySurfaceBoundary';
 import { LibraryScreen } from './components/LibraryScreen';
@@ -111,6 +111,97 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
   }, [player.dualDeck.getMixerSnapshot]);
   const ddjNudgeTimerRef = useRef<Record<DjDeckId, number | null>>({ a: null, b: null });
 
+  const toggleDjDeckPlay = useCallback((deck: DjDeckId) => {
+    player.dualDeck.setMode(true);
+    const snapshot = player.dualDeck.getSnapshot(deck);
+    if (!snapshot?.trackId) return;
+    if (snapshot.playing) {
+      player.dualDeck.pause(deck);
+      renderDdjLedsRef.current?.();
+      return;
+    }
+    void player.dualDeck.play(deck).finally(() => renderDdjLedsRef.current?.());
+  }, [player.dualDeck]);
+
+  const cueDjDeck = useCallback((deck: DjDeckId) => {
+    player.dualDeck.setMode(true);
+    const snapshot = player.dualDeck.getSnapshot(deck);
+    if (!snapshot?.trackId) return;
+
+    if (snapshot.playing) {
+      player.dualDeck.pause(deck);
+      player.dualDeck.seek(deck, ddjCuePointsRef.current[deck] ?? 0);
+    } else {
+      ddjCuePointsRef.current[deck] = snapshot.currentTimeSeconds;
+    }
+    renderDdjLedsRef.current?.();
+  }, [player.dualDeck]);
+
+  const syncDjDeck = useCallback((deck: DjDeckId) => {
+    player.dualDeck.setMode(true);
+    const masterDeck: DjDeckId = deck === 'a' ? 'b' : 'a';
+    const targetSnapshot = player.dualDeck.getSnapshot(deck);
+    const masterSnapshot = player.dualDeck.getSnapshot(masterDeck);
+    if (!targetSnapshot?.trackId || !masterSnapshot?.trackId) return;
+
+    const targetTrack = library.tracks.find(track => track.id === targetSnapshot.trackId);
+    const masterTrack = library.tracks.find(track => track.id === masterSnapshot.trackId);
+    const plan = resolveBeatmatchPlan({
+      outgoing: masterTrack?.rhythm,
+      incoming: targetTrack?.rhythm
+    });
+    if (!plan) return;
+
+    ddjBaseRateRef.current[deck] = plan.playbackRate;
+    ddjSyncActiveRef.current = {
+      a: deck === 'a',
+      b: deck === 'b'
+    };
+    player.dualDeck.setPlaybackRate(deck, plan.playbackRate);
+    renderDdjLedsRef.current?.();
+  }, [library.tracks, player.dualDeck]);
+
+  const readDjDeckPanel = useCallback((deck: DjDeckId): DjDeckPanelState => {
+    const snapshot = player.dualDeck.getSnapshot(deck);
+    const mixer = player.dualDeck.getMixerSnapshot();
+    return {
+      snapshot,
+      track: snapshot?.trackId
+        ? library.tracks.find(track => track.id === snapshot.trackId) ?? null
+        : null,
+      cuePointSeconds: ddjCuePointsRef.current[deck],
+      syncActive: ddjSyncActiveRef.current[deck],
+      channelVolume: mixer.channelVolumes[deck]
+    };
+  }, [library.tracks, player.dualDeck.getMixerSnapshot, player.dualDeck.getSnapshot]);
+
+  const [djDeckPanels, setDjDeckPanels] = useState<Record<DjDeckId, DjDeckPanelState>>(() => ({
+    a: readDjDeckPanel('a'),
+    b: readDjDeckPanel('b')
+  }));
+
+  useEffect(() => {
+    if (screen !== 'dj') return;
+    let frame: number | null = null;
+    let lastUpdate = 0;
+
+    const syncPanels = (timestamp: number) => {
+      if (timestamp - lastUpdate >= 100 || lastUpdate === 0) {
+        lastUpdate = timestamp;
+        setDjDeckPanels({
+          a: readDjDeckPanel('a'),
+          b: readDjDeckPanel('b')
+        });
+      }
+      frame = window.requestAnimationFrame(syncPanels);
+    };
+
+    frame = window.requestAnimationFrame(syncPanels);
+    return () => {
+      if (frame != null) window.cancelAnimationFrame(frame);
+    };
+  }, [readDjDeckPanel, screen]);
+
   const handleDdj400Message = useCallback((message: Parameters<typeof decodeDdj400Message>[0]) => {
     const command = decodeDdj400Message(message)
       ?? ddjPerformanceMapperRef.current.decode(message)
@@ -156,30 +247,12 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     }
 
     if (command.type === 'deck.toggle-play') {
-      player.dualDeck.setMode(true);
-      const snapshot = player.dualDeck.getSnapshot(command.deck);
-      if (!snapshot?.trackId) return;
-      if (snapshot.playing) {
-        player.dualDeck.pause(command.deck);
-        renderDdjLedsRef.current?.();
-      } else {
-        void player.dualDeck.play(command.deck).finally(() => renderDdjLedsRef.current?.());
-      }
+      toggleDjDeckPlay(command.deck);
       return;
     }
 
     if (command.type === 'deck.set-cue') {
-      player.dualDeck.setMode(true);
-      const snapshot = player.dualDeck.getSnapshot(command.deck);
-      if (!snapshot?.trackId) return;
-
-      if (snapshot.playing) {
-        player.dualDeck.pause(command.deck);
-        player.dualDeck.seek(command.deck, ddjCuePointsRef.current[command.deck] ?? 0);
-      } else {
-        ddjCuePointsRef.current[command.deck] = snapshot.currentTimeSeconds;
-      }
-      renderDdjLedsRef.current?.();
+      cueDjDeck(command.deck);
       return;
     }
 
@@ -222,27 +295,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     }
 
     if (command.type === 'deck.sync') {
-      player.dualDeck.setMode(true);
-      const masterDeck: DjDeckId = command.deck === 'a' ? 'b' : 'a';
-      const targetSnapshot = player.dualDeck.getSnapshot(command.deck);
-      const masterSnapshot = player.dualDeck.getSnapshot(masterDeck);
-      if (!targetSnapshot?.trackId || !masterSnapshot?.trackId) return;
-
-      const targetTrack = library.tracks.find(track => track.id === targetSnapshot.trackId);
-      const masterTrack = library.tracks.find(track => track.id === masterSnapshot.trackId);
-      const plan = resolveBeatmatchPlan({
-        outgoing: masterTrack?.rhythm,
-        incoming: targetTrack?.rhythm
-      });
-      if (!plan) return;
-
-      ddjBaseRateRef.current[command.deck] = plan.playbackRate;
-      ddjSyncActiveRef.current = {
-        a: command.deck === 'a',
-        b: command.deck === 'b'
-      };
-      player.dualDeck.setPlaybackRate(command.deck, plan.playbackRate);
-      renderDdjLedsRef.current?.();
+      syncDjDeck(command.deck);
       return;
     }
 
@@ -258,7 +311,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
       player.dualDeck.setCrossfader(command.value);
       scheduleMixerUiSync();
     }
-  }, [library.tracks, navigation.libraryTracks, player.dualDeck, scheduleMixerUiSync, setScreen]);
+  }, [cueDjDeck, library.tracks, navigation.libraryTracks, player.dualDeck, scheduleMixerUiSync, setScreen, syncDjDeck, toggleDjDeckPlay]);
 
   const midiController = useWebMidiController({ onMessage: handleDdj400Message });
 
@@ -583,7 +636,13 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     return (
       <main className="app-shell app-shell--dj">
         {audioDecks}
-        <DjModeScreen onExit={openPlayer} />
+        <DjModeScreen
+          decks={djDeckPanels}
+          onTogglePlay={toggleDjDeckPlay}
+          onCue={cueDjDeck}
+          onSync={syncDjDeck}
+          onExit={openPlayer}
+        />
         {library.actionError && (
           <button className="app-toast" role="status" onClick={library.clearActionError}>
             {library.actionError}
