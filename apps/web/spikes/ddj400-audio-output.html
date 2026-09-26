@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DDJ-400 Audio Output Spike</title>
+  <style>
+    :root { font-family: Inter, system-ui, sans-serif; color-scheme: light dark; }
+    body { max-width: 980px; margin: 0 auto; padding: 24px; line-height: 1.45; }
+    h1 { margin-bottom: 8px; }
+    section { border: 1px solid color-mix(in srgb, currentColor 22%, transparent); border-radius: 12px; padding: 16px; margin: 16px 0; }
+    button, select, input, textarea { font: inherit; }
+    button { padding: 8px 12px; margin: 4px 8px 4px 0; }
+    code, pre, textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    textarea { width: 100%; min-height: 280px; box-sizing: border-box; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+    .status { padding: 8px 10px; border-radius: 8px; background: color-mix(in srgb, currentColor 8%, transparent); }
+    .ok { font-weight: 700; }
+    .warn { font-weight: 700; }
+  </style>
+</head>
+<body>
+  <h1>DDJ-400 Audio Output Spike</h1>
+  <p>Spike isolado da issue #526. Não faz parte do player de produção.</p>
+
+  <section>
+    <h2>1. Ambiente</h2>
+    <div id="environment" class="status"></div>
+    <button id="enumerate">Enumerar outputs</button>
+    <pre id="devices"></pre>
+  </section>
+
+  <section>
+    <h2>2. Seleção de saídas</h2>
+    <p>Cada botão usa <code>selectAudioOutput()</code> quando disponível. Se o browser não suportar a API, o teste registra a limitação.</p>
+    <div class="grid">
+      <div>
+        <h3>Master</h3>
+        <button id="select-master">Selecionar saída master</button>
+        <div id="master-device" class="status">Não selecionada</div>
+      </div>
+      <div>
+        <h3>Cue / headphones</h3>
+        <button id="select-cue">Selecionar saída cue</button>
+        <div id="cue-device" class="status">Não selecionada</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>3. Teste de isolamento</h2>
+    <p>Master toca 440 Hz; cue toca 660 Hz. Use volumes baixos.</p>
+    <div class="grid">
+      <div>
+        <h3>Master</h3>
+        <button id="master-start">Tocar 440 Hz</button>
+        <button id="master-stop">Parar</button>
+      </div>
+      <div>
+        <h3>Cue</h3>
+        <button id="cue-start">Tocar 660 Hz</button>
+        <button id="cue-stop">Parar</button>
+      </div>
+    </div>
+    <p id="isolation" class="status">Aguardando teste físico.</p>
+    <button id="mark-isolated">Marcar: saídas realmente isoladas</button>
+    <button id="mark-not-isolated">Marcar: não houve isolamento</button>
+  </section>
+
+  <section>
+    <h2>4. Observações</h2>
+    <label>
+      Latência percebida / comportamento / nomes de canais / limitações
+      <textarea id="notes" placeholder="Ex.: DDJ-400 aparece como ..., master saiu em ..., headphones ..."></textarea>
+    </label>
+  </section>
+
+  <section>
+    <h2>5. Relatório</h2>
+    <button id="refresh-report">Atualizar relatório</button>
+    <button id="copy-report">Copiar JSON</button>
+    <textarea id="report" readonly></textarea>
+  </section>
+
+  <audio id="master-audio"></audio>
+  <audio id="cue-audio"></audio>
+
+  <script type="module">
+    const masterAudio = document.querySelector('#master-audio');
+    const cueAudio = document.querySelector('#cue-audio');
+    const reportField = document.querySelector('#report');
+    const state = {
+      startedAt: new Date().toISOString(),
+      masterDevice: null,
+      cueDevice: null,
+      isolation: null,
+      devices: [],
+      errors: []
+    };
+
+    function support() {
+      return {
+        secureContext: window.isSecureContext,
+        mediaDevices: Boolean(navigator.mediaDevices),
+        enumerateDevices: typeof navigator.mediaDevices?.enumerateDevices === 'function',
+        selectAudioOutput: typeof navigator.mediaDevices?.selectAudioOutput === 'function',
+        htmlMediaSetSinkId: typeof HTMLMediaElement.prototype.setSinkId === 'function',
+        audioContextSetSinkId: typeof AudioContext !== 'undefined' && typeof AudioContext.prototype.setSinkId === 'function'
+      };
+    }
+
+    document.querySelector('#environment').textContent = JSON.stringify({
+      userAgent: navigator.userAgent,
+      platform: navigator.platform,
+      language: navigator.language,
+      support: support()
+    }, null, 2);
+
+    async function enumerateOutputs() {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        state.devices = devices
+          .filter(device => device.kind === 'audiooutput')
+          .map(device => ({
+            deviceId: device.deviceId,
+            groupId: device.groupId,
+            label: device.label,
+            kind: device.kind
+          }));
+        document.querySelector('#devices').textContent = JSON.stringify(state.devices, null, 2);
+      } catch (error) {
+        state.errors.push({ step: 'enumerateDevices', message: String(error) });
+        document.querySelector('#devices').textContent = String(error);
+      }
+      refreshReport();
+    }
+
+    async function chooseOutput(target, label) {
+      try {
+        if (typeof navigator.mediaDevices?.selectAudioOutput !== 'function') {
+          throw new Error('selectAudioOutput() não suportado neste browser/contexto.');
+        }
+        const device = await navigator.mediaDevices.selectAudioOutput();
+        if (typeof target.setSinkId !== 'function') {
+          throw new Error('HTMLMediaElement.setSinkId() não suportado.');
+        }
+        await target.setSinkId(device.deviceId);
+        const info = {
+          deviceId: device.deviceId,
+          groupId: device.groupId,
+          label: device.label,
+          sinkId: target.sinkId
+        };
+        state[label] = info;
+        document.querySelector(label === 'masterDevice' ? '#master-device' : '#cue-device').textContent =
+          JSON.stringify(info, null, 2);
+        await enumerateOutputs();
+      } catch (error) {
+        state.errors.push({ step: label, message: error instanceof Error ? error.message : String(error) });
+        document.querySelector(label === 'masterDevice' ? '#master-device' : '#cue-device').textContent =
+          error instanceof Error ? error.message : String(error);
+        refreshReport();
+      }
+    }
+
+    function createTone(audio, frequency) {
+      const context = new AudioContext();
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      const destination = context.createMediaStreamDestination();
+      oscillator.frequency.value = frequency;
+      gain.gain.value = 0.04;
+      oscillator.connect(gain).connect(destination);
+      audio.srcObject = destination.stream;
+      oscillator.start();
+      void audio.play();
+      return () => {
+        try { oscillator.stop(); } catch {}
+        audio.pause();
+        audio.srcObject = null;
+        void context.close();
+      };
+    }
+
+    let stopMaster = null;
+    let stopCue = null;
+
+    document.querySelector('#enumerate').addEventListener('click', enumerateOutputs);
+    document.querySelector('#select-master').addEventListener('click', () => chooseOutput(masterAudio, 'masterDevice'));
+    document.querySelector('#select-cue').addEventListener('click', () => chooseOutput(cueAudio, 'cueDevice'));
+
+    document.querySelector('#master-start').addEventListener('click', () => {
+      stopMaster?.();
+      stopMaster = createTone(masterAudio, 440);
+    });
+    document.querySelector('#master-stop').addEventListener('click', () => {
+      stopMaster?.();
+      stopMaster = null;
+    });
+    document.querySelector('#cue-start').addEventListener('click', () => {
+      stopCue?.();
+      stopCue = createTone(cueAudio, 660);
+    });
+    document.querySelector('#cue-stop').addEventListener('click', () => {
+      stopCue?.();
+      stopCue = null;
+    });
+
+    document.querySelector('#mark-isolated').addEventListener('click', () => {
+      state.isolation = true;
+      document.querySelector('#isolation').textContent = 'Marcado: master e cue ficaram realmente isolados.';
+      refreshReport();
+    });
+    document.querySelector('#mark-not-isolated').addEventListener('click', () => {
+      state.isolation = false;
+      document.querySelector('#isolation').textContent = 'Marcado: não houve isolamento real.';
+      refreshReport();
+    });
+
+    function refreshReport() {
+      const report = {
+        issue: 526,
+        capturedAt: new Date().toISOString(),
+        environment: {
+          userAgent: navigator.userAgent,
+          platform: navigator.platform,
+          language: navigator.language,
+          secureContext: window.isSecureContext
+        },
+        support: support(),
+        outputs: state.devices,
+        masterDevice: state.masterDevice,
+        cueDevice: state.cueDevice,
+        isolationObserved: state.isolation,
+        notes: document.querySelector('#notes').value,
+        errors: state.errors
+      };
+      reportField.value = JSON.stringify(report, null, 2);
+    }
+
+    document.querySelector('#refresh-report').addEventListener('click', refreshReport);
+    document.querySelector('#copy-report').addEventListener('click', async () => {
+      refreshReport();
+      await navigator.clipboard.writeText(reportField.value);
+    });
+    document.querySelector('#notes').addEventListener('input', refreshReport);
+    navigator.mediaDevices?.addEventListener?.('devicechange', () => { void enumerateOutputs(); });
+
+    refreshReport();
+  </script>
+</body>
+</html>
