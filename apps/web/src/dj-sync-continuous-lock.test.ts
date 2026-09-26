@@ -117,3 +117,62 @@ describe('continuous DJ sync controller', () => {
     expect(result.playbackRate).toBeLessThan(1);
   });
 });
+
+
+describe('continuous DJ sync drift simulation', () => {
+  function simulate(initialOffsetSeconds: number) {
+    const stepSeconds = 0.08;
+    let masterPosition = 20;
+    let slavePosition = 20 + initialOffsetSeconds;
+    let slaveRate = 1;
+    let lastRelockAtMs: number | null = null;
+    let signChanges = 0;
+    let previousSign = Math.sign(initialOffsetSeconds);
+
+    for (let step = 0; step < 160; step += 1) {
+      const nowMs = step * stepSeconds * 1_000;
+      const action = resolveContinuousDjSyncCorrection({
+        masterRhythm: rhythm,
+        masterPositionSeconds: masterPosition,
+        masterPlaybackRate: 1,
+        slaveRhythm: rhythm,
+        slavePositionSeconds: slavePosition,
+        beatmatch,
+        nowMs,
+        lastRelockAtMs
+      });
+
+      if (action.kind === 'relock') {
+        slavePosition += action.offsetMediaSeconds;
+        slaveRate = action.playbackRate;
+        lastRelockAtMs = nowMs;
+      } else if (action.kind === 'nudge' || action.kind === 'hold') {
+        slaveRate = action.playbackRate;
+      } else {
+        slaveRate = action.playbackRate;
+      }
+
+      masterPosition += stepSeconds;
+      slavePosition += stepSeconds * slaveRate;
+
+      const error = slavePosition - masterPosition;
+      const sign = Math.abs(error) < 0.012 ? 0 : Math.sign(error);
+      if (sign !== 0 && previousSign !== 0 && sign !== previousSign) signChanges += 1;
+      if (sign !== 0) previousSign = sign;
+    }
+
+    return {
+      errorSeconds: slavePosition - masterPosition,
+      signChanges
+    };
+  }
+
+  it.each([0.06, -0.06])(
+    'converge drift artificial de %ss para a deadband sem hunting',
+    initialOffsetSeconds => {
+      const result = simulate(initialOffsetSeconds);
+      expect(Math.abs(result.errorSeconds)).toBeLessThanOrEqual(0.015);
+      expect(result.signChanges).toBeLessThanOrEqual(1);
+    }
+  );
+});
