@@ -39,6 +39,7 @@ import { AccountMidiControllers } from './AccountMidiControllers';
 import { AccountSessionsScreen } from './AccountSessionsScreen';
 import { useDesktopLayout } from '../useDesktopLayout';
 import type { WebMidiController } from '../useWebMidiController';
+import type { DualDeckMixerState } from '../dual-deck-mixer';
 
 type AccountView = 'overview' | 'profile' | 'password' | 'sessions' | 'playback' | 'midi';
 
@@ -54,6 +55,7 @@ type MyAccountScreenProps = {
   playbackPreferences?: AccountPlaybackPreferencesValue;
   offlineMode?: OfflineModeControl;
   midiController: WebMidiController;
+  djMixerState: DualDeckMixerState;
   onBack: () => void;
   onOpenAdministration: () => void;
   onSessionEnded: () => Promise<void>;
@@ -69,6 +71,7 @@ export function MyAccountScreen({
   playbackPreferences,
   offlineMode,
   midiController,
+  djMixerState,
   onBack,
   onOpenAdministration,
   onSessionEnded,
@@ -238,7 +241,7 @@ export function MyAccountScreen({
   if (view === 'midi') {
     return (
       <section className="my-account-screen my-account-screen--midi">
-        <AccountMidiControllers midi={midiController} onBack={goBack} />
+        <AccountMidiControllers midi={midiController} mixerState={djMixerState} onBack={goBack} />
       </section>
     );
   }
