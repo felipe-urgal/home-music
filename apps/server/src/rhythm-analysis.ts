@@ -1,9 +1,9 @@
 import { spawn } from 'node:child_process';
-import type { TrackRhythm } from '@home-music/shared';
+import { MIN_DOWNBEAT_CONFIDENCE, type TrackRhythm } from '@home-music/shared';
 import type { IndexedTrack } from './library.js';
 import { resolveRegularFileInside } from './security.js';
 
-export const RHYTHM_ANALYZER_VERSION = 1;
+export const RHYTHM_ANALYZER_VERSION = 2;
 export const RHYTHM_ANALYSIS_SAMPLE_RATE = 8_000;
 export const RHYTHM_ANALYSIS_SECONDS = 90;
 export const RHYTHM_ANALYSIS_TIMEOUT_MS = 20_000;
@@ -12,6 +12,10 @@ const MIN_ANALYSIS_SECONDS = 4;
 const MIN_BPM = 55;
 const MAX_BPM = 200;
 const MIN_CORRELATION = 0.08;
+const MIN_DOWNBEAT_BARS = 4;
+const MIN_DOWNBEAT_ACCENT_CONTRAST = 0.18;
+const MIN_DOWNBEAT_CONSISTENCY = 0.75;
+const MIN_DOWNBEAT_CANDIDATE_MARGIN = 0.08;
 const MAX_STDERR_BYTES = 64 * 1024;
 const MAX_PCM_BYTES = RHYTHM_ANALYSIS_SAMPLE_RATE * RHYTHM_ANALYSIS_SECONDS * 2 + 64 * 1024;
 
@@ -45,6 +49,85 @@ function correlationAt(values: Float64Array, lag: number) {
 
 function clamp(value: number, minimum: number, maximum: number) {
   return Math.max(minimum, Math.min(maximum, value));
+}
+
+type DownbeatCandidate = {
+  beatsPerBar: 3 | 4;
+  phase: number;
+  contrast: number;
+  consistency: number;
+  score: number;
+};
+
+function estimateDownbeat(
+  onset: Float64Array,
+  firstBeatFrame: number,
+  beatLagFrames: number,
+  hopSeconds: number,
+  firstBeatSeconds: number
+): Pick<TrackRhythm, 'downbeatSeconds' | 'beatsPerBar' | 'downbeatConfidence'> | null {
+  if (!Number.isFinite(beatLagFrames) || beatLagFrames <= 0) return null;
+
+  const strengths: number[] = [];
+  for (let beatIndex = 0; ; beatIndex += 1) {
+    const center = Math.round(firstBeatFrame + (beatIndex * beatLagFrames));
+    if (center >= onset.length) break;
+
+    let peak = 0;
+    for (let offset = -2; offset <= 2; offset += 1) {
+      const index = center + offset;
+      if (index >= 0 && index < onset.length) peak = Math.max(peak, onset[index] ?? 0);
+    }
+    strengths.push(peak);
+  }
+
+  const candidates: DownbeatCandidate[] = [];
+  for (const beatsPerBar of [3, 4] as const) {
+    if (strengths.length < beatsPerBar * MIN_DOWNBEAT_BARS) continue;
+
+    for (let phase = 0; phase < beatsPerBar; phase += 1) {
+      const accented = strengths.filter((_, index) => index % beatsPerBar === phase);
+      const others = strengths.filter((_, index) => index % beatsPerBar !== phase);
+      if (!accented.length || !others.length) continue;
+
+      const accentedMean = accented.reduce((sum, value) => sum + value, 0) / accented.length;
+      const otherMean = others.reduce((sum, value) => sum + value, 0) / others.length;
+      if (accentedMean <= otherMean || accentedMean <= 0) continue;
+
+      const contrast = (accentedMean - otherMean) / accentedMean;
+      const consistency = accented.filter(value => value > otherMean).length / accented.length;
+      const score = contrast * (0.7 + (consistency * 0.3));
+      candidates.push({ beatsPerBar, phase, contrast, consistency, score });
+    }
+  }
+
+  candidates.sort((left, right) => right.score - left.score);
+  const best = candidates[0];
+  if (!best) return null;
+
+  const runnerUp = candidates[1];
+  const margin = best.score - (runnerUp?.score ?? 0);
+  if (
+    best.contrast < MIN_DOWNBEAT_ACCENT_CONTRAST
+    || best.consistency < MIN_DOWNBEAT_CONSISTENCY
+    || margin < MIN_DOWNBEAT_CANDIDATE_MARGIN
+  ) return null;
+
+  const confidence = clamp(
+    (clamp(best.contrast / 0.5, 0, 1) * 0.55)
+      + (best.consistency * 0.25)
+      + (clamp(margin / 0.25, 0, 1) * 0.2),
+    0,
+    1
+  );
+  if (confidence < MIN_DOWNBEAT_CONFIDENCE) return null;
+
+  const downbeatSeconds = firstBeatSeconds + (best.phase * beatLagFrames * hopSeconds);
+  return {
+    downbeatSeconds: Number(downbeatSeconds.toFixed(4)),
+    beatsPerBar: best.beatsPerBar,
+    downbeatConfidence: Number(confidence.toFixed(4))
+  };
 }
 
 export function analyzePcmRhythm(
@@ -155,10 +238,19 @@ export function analyzePcmRhythm(
     1
   );
 
+  const downbeat = estimateDownbeat(
+    onset,
+    firstBeatFrame,
+    refinedLag,
+    hopSeconds,
+    firstBeatSeconds
+  );
+
   return {
     bpm: Number(bpm.toFixed(3)),
     firstBeatSeconds: Number(firstBeatSeconds.toFixed(4)),
-    confidence: Number(confidence.toFixed(4))
+    confidence: Number(confidence.toFixed(4)),
+    ...(downbeat ?? {})
   };
 }
 

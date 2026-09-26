@@ -197,6 +197,9 @@ export class LibraryService {
           current.rhythm?.bpm === rhythm.bpm
           && current.rhythm.firstBeatSeconds === rhythm.firstBeatSeconds
           && current.rhythm.confidence === rhythm.confidence
+          && current.rhythm.downbeatSeconds === rhythm.downbeatSeconds
+          && current.rhythm.beatsPerBar === rhythm.beatsPerBar
+          && current.rhythm.downbeatConfidence === rhythm.downbeatConfidence
         );
     if (current.rhythmAnalysisCurrent && samePublicRhythm) return true;
 

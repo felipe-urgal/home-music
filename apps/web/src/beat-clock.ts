@@ -1,12 +1,15 @@
 import {
+  MIN_DOWNBEAT_CONFIDENCE,
   MIN_RHYTHM_CONFIDENCE,
   type TrackRhythm
 } from '@home-music/shared';
 
-export { MIN_RHYTHM_CONFIDENCE };
+export { MIN_DOWNBEAT_CONFIDENCE, MIN_RHYTHM_CONFIDENCE };
 export const QUANTIZED_CROSSFADE_ARM_SECONDS = 1.25;
 export const QUANTIZED_CROSSFADE_EARLY_TOLERANCE_SECONDS = 0.025;
 export const MIN_QUANTIZED_CROSSFADE_SECONDS = 0.75;
+export const MAX_BAR_QUANTIZATION_SHIFT_SECONDS = 1.25;
+export const MAX_BAR_QUANTIZATION_SHIFT_RATIO = 0.35;
 
 function validRhythm(rhythm: TrackRhythm | null | undefined): rhythm is TrackRhythm {
   return Boolean(
@@ -17,6 +20,23 @@ function validRhythm(rhythm: TrackRhythm | null | undefined): rhythm is TrackRhy
     && rhythm.firstBeatSeconds >= 0
     && Number.isFinite(rhythm.confidence)
     && rhythm.confidence >= MIN_RHYTHM_CONFIDENCE
+  );
+}
+
+function validDownbeat(rhythm: TrackRhythm | null | undefined): rhythm is TrackRhythm & {
+  downbeatSeconds: number;
+  beatsPerBar: 3 | 4;
+  downbeatConfidence: number;
+} {
+  return Boolean(
+    validRhythm(rhythm)
+    && typeof rhythm.downbeatSeconds === 'number'
+    && Number.isFinite(rhythm.downbeatSeconds)
+    && rhythm.downbeatSeconds >= 0
+    && (rhythm.beatsPerBar === 3 || rhythm.beatsPerBar === 4)
+    && typeof rhythm.downbeatConfidence === 'number'
+    && Number.isFinite(rhythm.downbeatConfidence)
+    && rhythm.downbeatConfidence >= MIN_DOWNBEAT_CONFIDENCE
   );
 }
 
@@ -57,6 +77,27 @@ export function nextBeatAtOrAfter(
   return firstBeat + (Math.max(0, beatsFromFirst) * beatDuration);
 }
 
+export function nextBarAtOrAfter(
+  rhythm: TrackRhythm | null | undefined,
+  positionSeconds: number
+) {
+  const beatDuration = beatDurationSeconds(rhythm);
+  if (
+    beatDuration == null
+    || !validDownbeat(rhythm)
+    || !Number.isFinite(positionSeconds)
+    || positionSeconds < 0
+  ) return null;
+
+  const barDuration = beatDuration * rhythm.beatsPerBar;
+  if (positionSeconds <= rhythm.downbeatSeconds) return rhythm.downbeatSeconds;
+
+  const barsFromDownbeat = Math.ceil(
+    ((positionSeconds - rhythm.downbeatSeconds) / barDuration) - 1e-9
+  );
+  return rhythm.downbeatSeconds + (Math.max(0, barsFromDownbeat) * barDuration);
+}
+
 export type QuantizedCrossfadePlan = {
   startTimeSeconds: number;
   durationSeconds: number;
@@ -78,18 +119,31 @@ export function resolveQuantizedCrossfadePlan(options: {
   ) return null;
 
   const preferredStart = trackDurationSeconds - preferredDurationSeconds;
-  const quantizedStart = nextBeatAtOrAfter(rhythm, preferredStart);
-  if (quantizedStart == null || quantizedStart >= trackDurationSeconds) return null;
+  const beatStart = nextBeatAtOrAfter(rhythm, preferredStart);
+  if (beatStart == null || beatStart >= trackDurationSeconds) return null;
 
-  const durationSeconds = trackDurationSeconds - quantizedStart;
   const minimumUsefulDuration = Math.max(
     MIN_QUANTIZED_CROSSFADE_SECONDS,
     preferredDurationSeconds * 0.5
   );
-  if (durationSeconds < minimumUsefulDuration) return null;
-
-  return {
-    startTimeSeconds: quantizedStart,
-    durationSeconds
+  const usefulPlan = (startTimeSeconds: number) => {
+    if (startTimeSeconds >= trackDurationSeconds) return null;
+    const durationSeconds = trackDurationSeconds - startTimeSeconds;
+    if (durationSeconds < minimumUsefulDuration) return null;
+    return { startTimeSeconds, durationSeconds };
   };
+
+  const barStart = nextBarAtOrAfter(rhythm, preferredStart);
+  if (barStart != null) {
+    const maximumBarShift = Math.min(
+      MAX_BAR_QUANTIZATION_SHIFT_SECONDS,
+      preferredDurationSeconds * MAX_BAR_QUANTIZATION_SHIFT_RATIO
+    );
+    if (barStart - preferredStart <= maximumBarShift + 1e-9) {
+      const barPlan = usefulPlan(barStart);
+      if (barPlan) return barPlan;
+    }
+  }
+
+  return usefulPlan(beatStart);
 }

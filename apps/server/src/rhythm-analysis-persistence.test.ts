@@ -42,12 +42,22 @@ test('persiste análise rítmica somente para a assinatura atual do arquivo', as
       original.id,
       original.fileSize,
       original.mtimeMs,
-      { bpm: 128, firstBeatSeconds: 0.31, confidence: 0.92 }
+      {
+        bpm: 128,
+        firstBeatSeconds: 0.31,
+        confidence: 0.92,
+        downbeatSeconds: 0.31,
+        beatsPerBar: 4,
+        downbeatConfidence: 0.81
+      }
     ), true);
     assert.deepEqual(db.loadTracks()[0]?.rhythm, {
       bpm: 128,
       firstBeatSeconds: 0.31,
-      confidence: 0.92
+      confidence: 0.92,
+      downbeatSeconds: 0.31,
+      beatsPerBar: 4,
+      downbeatConfidence: 0.81
     });
 
     const changed = indexedTrack('a', '/music/a.mp3', 456, 789);
@@ -180,7 +190,7 @@ test('schema novo contém tabela derivada de análise rítmica', async () => {
   const db = new HomeMusicDatabase(dbPath);
 
   try {
-    assert.equal(db.getSchemaVersion(), 13);
+    assert.equal(db.getSchemaVersion(), 14);
     const raw = new DatabaseSync(dbPath);
     try {
       const row = raw.prepare(`
@@ -189,6 +199,51 @@ test('schema novo contém tabela derivada de análise rítmica', async () => {
         WHERE type = 'table' AND name = 'track_rhythm_analysis'
       `).get() as { name?: string } | undefined;
       assert.equal(row?.name, 'track_rhythm_analysis');
+    } finally {
+      raw.close();
+    }
+  } finally {
+    db.close();
+    await rm(temp, { recursive: true, force: true });
+  }
+});
+
+
+test('migra schema rítmico v13 adicionando campos opcionais de downbeat', async () => {
+  const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-rhythm-db-'));
+  const dbPath = path.join(temp, 'home-music.db');
+  const legacy = new DatabaseSync(dbPath);
+
+  try {
+    legacy.exec(`
+      CREATE TABLE track_rhythm_analysis (
+        track_id TEXT PRIMARY KEY NOT NULL,
+        status TEXT NOT NULL CHECK(status IN ('ready', 'unavailable')),
+        bpm REAL,
+        first_beat_seconds REAL,
+        confidence REAL,
+        source TEXT NOT NULL,
+        analyzer_version INTEGER NOT NULL,
+        source_file_size INTEGER NOT NULL,
+        source_mtime_ms REAL NOT NULL,
+        analyzed_at TEXT NOT NULL
+      );
+      PRAGMA user_version = 13;
+    `);
+  } finally {
+    legacy.close();
+  }
+
+  const db = new HomeMusicDatabase(dbPath);
+  try {
+    assert.equal(db.getSchemaVersion(), 14);
+    const raw = new DatabaseSync(dbPath);
+    try {
+      const columns = raw.prepare('PRAGMA table_info(track_rhythm_analysis)').all() as Array<{ name?: string }>;
+      const names = columns.map(column => column.name);
+      assert.ok(names.includes('downbeat_seconds'));
+      assert.ok(names.includes('beats_per_bar'));
+      assert.ok(names.includes('downbeat_confidence'));
     } finally {
       raw.close();
     }

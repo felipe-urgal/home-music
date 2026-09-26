@@ -381,11 +381,15 @@ export type AdminOperationHistoryResponse = {
 };
 
 export const MIN_RHYTHM_CONFIDENCE = 0.55;
+export const MIN_DOWNBEAT_CONFIDENCE = 0.6;
 
 export type TrackRhythm = {
   bpm: number;
   firstBeatSeconds: number;
   confidence: number;
+  downbeatSeconds?: number | null;
+  beatsPerBar?: 3 | 4 | null;
+  downbeatConfidence?: number | null;
 };
 
 export type Track = {

@@ -3,6 +3,7 @@ import type { TrackRhythm } from '@home-music/shared';
 import {
   beatDurationSeconds,
   beatIndexAt,
+  nextBarAtOrAfter,
   nextBeatAtOrAfter,
   resolveQuantizedCrossfadePlan
 } from './beat-clock';
@@ -32,6 +33,53 @@ describe('beat clock', () => {
     expect(beatDurationSeconds({ ...rhythm, confidence: 0.2 })).toBeNull();
     expect(nextBeatAtOrAfter({ ...rhythm, bpm: 0 }, 10)).toBeNull();
     expect(beatIndexAt(rhythm, -1)).toBeNull();
+  });
+
+  it('calcula o próximo início de compasso somente com downbeat confiável', () => {
+    const barRhythm: TrackRhythm = {
+      ...rhythm,
+      downbeatSeconds: 0.25,
+      beatsPerBar: 4,
+      downbeatConfidence: 0.9
+    };
+    expect(nextBarAtOrAfter(barRhythm, 0.1)).toBeCloseTo(0.25, 6);
+    expect(nextBarAtOrAfter(barRhythm, 0.26)).toBeCloseTo(2.25, 6);
+    expect(nextBarAtOrAfter(barRhythm, 2.25)).toBeCloseTo(2.25, 6);
+    expect(nextBarAtOrAfter({ ...barRhythm, downbeatConfidence: 0.3 }, 1)).toBeNull();
+  });
+
+  it('prefere downbeat quando o início de compasso fica perto da janela alvo', () => {
+    const plan = resolveQuantizedCrossfadePlan({
+      rhythm: {
+        ...rhythm,
+        downbeatSeconds: 0.25,
+        beatsPerBar: 4,
+        downbeatConfidence: 0.9
+      },
+      trackDurationSeconds: 60,
+      preferredDurationSeconds: 5
+    });
+
+    expect(plan).not.toBeNull();
+    expect(plan?.startTimeSeconds).toBeCloseTo(56.25, 6);
+    expect(plan?.durationSeconds).toBeCloseTo(3.75, 6);
+  });
+
+  it('cai para beat quando o próximo compasso deslocaria demais o crossfade', () => {
+    const plan = resolveQuantizedCrossfadePlan({
+      rhythm: {
+        ...rhythm,
+        downbeatSeconds: 0.25,
+        beatsPerBar: 4,
+        downbeatConfidence: 0.9
+      },
+      trackDurationSeconds: 59.6,
+      preferredDurationSeconds: 5
+    });
+
+    expect(plan).not.toBeNull();
+    expect(plan?.startTimeSeconds).toBeCloseTo(54.75, 6);
+    expect(plan?.durationSeconds).toBeCloseTo(4.85, 6);
   });
 
   it('move o início do crossfade para a próxima batida e preserva o fim da faixa', () => {

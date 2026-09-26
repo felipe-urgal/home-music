@@ -7,7 +7,7 @@ import type { AdminLibraryIntegrityStatus, PlaybackState, Playlist, PlaylistSour
 import type { IndexedTrack, LibraryTrackDelta } from './library.js';
 import { RHYTHM_ANALYZER_VERSION } from './rhythm-analysis.js';
 
-const CURRENT_SCHEMA_VERSION = 13;
+const CURRENT_SCHEMA_VERSION = 14;
 const HISTORY_CAPACITY = 2_000;
 const TRACK_UPSERT_SQL = `
   INSERT INTO tracks(
@@ -90,7 +90,35 @@ function stringArrayValue(value: unknown) {
   }
 }
 
+function publicRhythmFromRow(row: Row): TrackRhythm | null {
+  if (
+    row.rhythm_bpm == null
+    || row.rhythm_first_beat_seconds == null
+    || row.rhythm_confidence == null
+  ) return null;
+
+  const rhythm: TrackRhythm = {
+    bpm: numberValue(row.rhythm_bpm),
+    firstBeatSeconds: numberValue(row.rhythm_first_beat_seconds),
+    confidence: numberValue(row.rhythm_confidence)
+  };
+  if (
+    row.rhythm_downbeat_seconds != null
+    && row.rhythm_beats_per_bar != null
+    && row.rhythm_downbeat_confidence != null
+  ) {
+    const beatsPerBar = numberValue(row.rhythm_beats_per_bar);
+    if (beatsPerBar === 3 || beatsPerBar === 4) {
+      rhythm.downbeatSeconds = numberValue(row.rhythm_downbeat_seconds);
+      rhythm.beatsPerBar = beatsPerBar;
+      rhythm.downbeatConfidence = numberValue(row.rhythm_downbeat_confidence);
+    }
+  }
+  return rhythm;
+}
+
 function publicTrackFromRow(row: Row): Track {
+  const rhythm = publicRhythmFromRow(row);
   return {
     id: stringValue(row.id),
     title: stringValue(row.title),
@@ -104,19 +132,7 @@ function publicTrackFromRow(row: Row): Track {
     hasCover: Boolean(row.has_cover),
     replayGainTrackDb: row.replaygain_track_db == null ? null : numberValue(row.replaygain_track_db),
     replayGainAlbumDb: row.replaygain_album_db == null ? null : numberValue(row.replaygain_album_db),
-    ...(
-      row.rhythm_bpm == null
-      || row.rhythm_first_beat_seconds == null
-      || row.rhythm_confidence == null
-        ? {}
-        : {
-            rhythm: {
-              bpm: numberValue(row.rhythm_bpm),
-              firstBeatSeconds: numberValue(row.rhythm_first_beat_seconds),
-              confidence: numberValue(row.rhythm_confidence)
-            }
-          }
-    )
+    ...(rhythm ? { rhythm } : {})
   };
 }
 
@@ -767,6 +783,37 @@ export class HomeMusicDatabase {
       }
     }
 
+    if (version < 14) {
+      this.db.exec('BEGIN IMMEDIATE;');
+      try {
+        if (!this.hasColumn('track_rhythm_analysis', 'downbeat_seconds')) {
+          this.db.exec(
+            'ALTER TABLE track_rhythm_analysis ADD COLUMN downbeat_seconds REAL CHECK(downbeat_seconds IS NULL OR downbeat_seconds >= 0);'
+          );
+        }
+        if (!this.hasColumn('track_rhythm_analysis', 'beats_per_bar')) {
+          this.db.exec(
+            'ALTER TABLE track_rhythm_analysis ADD COLUMN beats_per_bar INTEGER CHECK(beats_per_bar IS NULL OR beats_per_bar IN (3, 4));'
+          );
+        }
+        if (!this.hasColumn('track_rhythm_analysis', 'downbeat_confidence')) {
+          this.db.exec(
+            'ALTER TABLE track_rhythm_analysis ADD COLUMN downbeat_confidence REAL CHECK(downbeat_confidence IS NULL OR (downbeat_confidence >= 0 AND downbeat_confidence <= 1));'
+          );
+        }
+        this.db.exec('PRAGMA user_version = 14;');
+        this.db.exec('COMMIT;');
+        version = 14;
+      } catch (error) {
+        try {
+          this.db.exec('ROLLBACK;');
+        } catch {
+          // Preserva o erro original se a transação já tiver sido encerrada.
+        }
+        throw error;
+      }
+    }
+
     if (version !== CURRENT_SCHEMA_VERSION) {
       throw new Error(`Versão de schema SQLite não suportada: ${version}`);
     }
@@ -878,7 +925,10 @@ export class HomeMusicDatabase {
              r.status AS rhythm_analysis_status,
              r.bpm AS rhythm_bpm,
              r.first_beat_seconds AS rhythm_first_beat_seconds,
-             r.confidence AS rhythm_confidence
+             r.confidence AS rhythm_confidence,
+             r.downbeat_seconds AS rhythm_downbeat_seconds,
+             r.beats_per_bar AS rhythm_beats_per_bar,
+             r.downbeat_confidence AS rhythm_downbeat_confidence
       FROM tracks t
       LEFT JOIN track_rhythm_analysis r
         ON r.track_id = t.id
@@ -930,6 +980,25 @@ export class HomeMusicDatabase {
     rhythm: TrackRhythm | null,
     source = 'audio'
   ) {
+    const downbeatSeconds = rhythm?.downbeatSeconds;
+    const beatsPerBar = rhythm?.beatsPerBar;
+    const downbeatConfidence = rhythm?.downbeatConfidence;
+    const hasAnyDownbeat = (
+      downbeatSeconds != null
+      || beatsPerBar != null
+      || downbeatConfidence != null
+    );
+    const hasValidDownbeat = !hasAnyDownbeat || (
+      typeof downbeatSeconds === 'number'
+      && Number.isFinite(downbeatSeconds)
+      && downbeatSeconds >= 0
+      && (beatsPerBar === 3 || beatsPerBar === 4)
+      && typeof downbeatConfidence === 'number'
+      && Number.isFinite(downbeatConfidence)
+      && downbeatConfidence >= 0
+      && downbeatConfidence <= 1
+    );
+
     if (
       (rhythm !== null && (
         !Number.isFinite(rhythm.bpm)
@@ -940,6 +1009,7 @@ export class HomeMusicDatabase {
         || !Number.isFinite(rhythm.confidence)
         || rhythm.confidence < 0
         || rhythm.confidence > 1
+        || !hasValidDownbeat
       ))
       || !Number.isSafeInteger(sourceFileSize)
       || sourceFileSize < 0
@@ -969,14 +1039,18 @@ export class HomeMusicDatabase {
 
       this.db.prepare(`
         INSERT INTO track_rhythm_analysis(
-          track_id, status, bpm, first_beat_seconds, confidence, source, analyzer_version,
-          source_file_size, source_mtime_ms, analyzed_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          track_id, status, bpm, first_beat_seconds, confidence,
+          downbeat_seconds, beats_per_bar, downbeat_confidence,
+          source, analyzer_version, source_file_size, source_mtime_ms, analyzed_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(track_id) DO UPDATE SET
           status = excluded.status,
           bpm = excluded.bpm,
           first_beat_seconds = excluded.first_beat_seconds,
           confidence = excluded.confidence,
+          downbeat_seconds = excluded.downbeat_seconds,
+          beats_per_bar = excluded.beats_per_bar,
+          downbeat_confidence = excluded.downbeat_confidence,
           source = excluded.source,
           analyzer_version = excluded.analyzer_version,
           source_file_size = excluded.source_file_size,
@@ -988,6 +1062,9 @@ export class HomeMusicDatabase {
         rhythm?.bpm ?? null,
         rhythm?.firstBeatSeconds ?? null,
         rhythm?.confidence ?? null,
+        downbeatSeconds ?? null,
+        beatsPerBar ?? null,
+        downbeatConfidence ?? null,
         source.trim(),
         RHYTHM_ANALYZER_VERSION,
         sourceFileSize,
