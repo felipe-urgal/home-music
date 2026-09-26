@@ -72,19 +72,41 @@ export function useWebMidiController(options: WebMidiControllerOptions = {}) {
     setPorts(nextPorts);
 
     const selection = session.getSelection();
+    let inputId = selection.inputId;
+    let outputId = selection.outputId;
     if (
-      selection.inputId
-      && !nextPorts.some(port => port.type === 'input' && port.id === selection.inputId && port.state === 'connected')
+      inputId
+      && !nextPorts.some(port => port.type === 'input' && port.id === inputId && port.state === 'connected')
     ) {
       session.selectInput(null);
+      inputId = null;
       setSelectedInputIdState(null);
     }
     if (
-      selection.outputId
-      && !nextPorts.some(port => port.type === 'output' && port.id === selection.outputId && port.state === 'connected')
+      outputId
+      && !nextPorts.some(port => port.type === 'output' && port.id === outputId && port.state === 'connected')
     ) {
       session.selectOutput(null);
+      outputId = null;
       setSelectedOutputIdState(null);
+    }
+
+    const stored = readStoredSelection();
+    if (!inputId) {
+      const input = nextPorts.find(port => (
+        port.type === 'input'
+        && port.state === 'connected'
+        && (port.id === stored.inputId || port.name === stored.inputName)
+      ));
+      if (input && session.selectInput(input.id)) setSelectedInputIdState(input.id);
+    }
+    if (!outputId) {
+      const output = nextPorts.find(port => (
+        port.type === 'output'
+        && port.state === 'connected'
+        && (port.id === stored.outputId || port.name === stored.outputName)
+      ));
+      if (output && session.selectOutput(output.id)) setSelectedOutputIdState(output.id);
     }
   }, []);
 
@@ -154,6 +176,10 @@ export function useWebMidiController(options: WebMidiControllerOptions = {}) {
     return true;
   }, [ports, selectedOutputId]);
 
+  const send = useCallback((data: number[] | Uint8Array) => {
+    return sessionRef.current?.sendToSelectedOutput(data) ?? false;
+  }, []);
+
   const selectOutput = useCallback((id: string | null) => {
     const session = sessionRef.current;
     if (!session || !session.selectOutput(id)) return false;
@@ -193,6 +219,7 @@ export function useWebMidiController(options: WebMidiControllerOptions = {}) {
     disconnect,
     selectInput,
     selectOutput,
+    send,
     setDiagnosticsEnabled
   };
 }
