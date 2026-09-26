@@ -12,7 +12,7 @@ export type DjWaveformMarker = {
 export function buildDjWaveformMarkers(
   rhythm: TrackRhythm | null | undefined,
   durationSeconds: number,
-  maxMarkers = 512
+  maxMarkers = 4_096
 ): DjWaveformMarker[] {
   if (
     !rhythm
