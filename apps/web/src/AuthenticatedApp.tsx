@@ -91,6 +91,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     { beforeManualPlaybackChange: cancelPreload }
   );
   const ddjBrowserIndexRef = useRef(0);
+  const [djBrowserIndex, setDjBrowserIndex] = useState(0);
   const ddjCuePointsRef = useRef<Record<DjDeckId, number | null>>({ a: null, b: null });
   const ddjSyncActiveRef = useRef<Record<DjDeckId, boolean>>({ a: false, b: false });
   const ddjLedRendererRef = useRef<Ddj400LedRenderer | null>(null);
@@ -110,6 +111,46 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     });
   }, [player.dualDeck.getMixerSnapshot]);
   const ddjNudgeTimerRef = useRef<Record<DjDeckId, number | null>>({ a: null, b: null });
+
+  const djBrowserTracks = navigation.libraryTracks.length
+    ? navigation.libraryTracks
+    : library.tracks;
+
+  const selectDjBrowserIndex = useCallback((index: number) => {
+    const max = Math.max(0, djBrowserTracks.length - 1);
+    const next = Math.max(0, Math.min(max, index));
+    ddjBrowserIndexRef.current = next;
+    setDjBrowserIndex(next);
+  }, [djBrowserTracks.length]);
+
+  const loadDjBrowserTrack = useCallback((deck: DjDeckId) => {
+    const track = djBrowserTracks[ddjBrowserIndexRef.current] ?? djBrowserTracks[0];
+    if (!track) return false;
+    player.dualDeck.setMode(true);
+    if (!player.dualDeck.loadTrack(deck, track)) return false;
+
+    const timer = ddjNudgeTimerRef.current[deck];
+    if (timer != null) window.clearTimeout(timer);
+    ddjNudgeTimerRef.current[deck] = null;
+    ddjBaseRateRef.current[deck] = 1;
+    ddjCuePointsRef.current[deck] = null;
+    ddjSyncActiveRef.current[deck] = false;
+    renderDdjLedsRef.current?.();
+    return true;
+  }, [djBrowserTracks, player.dualDeck]);
+
+  useEffect(() => {
+    if (!djBrowserTracks.length) {
+      ddjBrowserIndexRef.current = 0;
+      setDjBrowserIndex(0);
+      return;
+    }
+    if (ddjBrowserIndexRef.current >= djBrowserTracks.length) {
+      const next = djBrowserTracks.length - 1;
+      ddjBrowserIndexRef.current = next;
+      setDjBrowserIndex(next);
+    }
+  }, [djBrowserTracks.length]);
 
   const toggleDjDeckPlay = useCallback((deck: DjDeckId) => {
     player.dualDeck.setMode(true);
@@ -221,41 +262,25 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
       ?? ddjMixerMapperRef.current.decode(message);
     if (!command) return;
 
-    const browserTracks = navigation.libraryTracks.length
-      ? navigation.libraryTracks
-      : library.tracks;
+    const browserTracks = djBrowserTracks;
 
     if (command.type === 'browser.move') {
-      setScreen('library');
       if (!browserTracks.length) {
-        ddjBrowserIndexRef.current = 0;
+        selectDjBrowserIndex(0);
         return;
       }
-      ddjBrowserIndexRef.current = Math.max(
-        0,
-        Math.min(browserTracks.length - 1, ddjBrowserIndexRef.current + command.delta)
-      );
+      selectDjBrowserIndex(ddjBrowserIndexRef.current + command.delta);
+      if (screen !== 'dj') setScreen('library');
       return;
     }
 
     if (command.type === 'browser.select') {
-      setScreen('library');
+      if (screen !== 'dj') setScreen('library');
       return;
     }
 
     if (command.type === 'browser.load') {
-      const track = browserTracks[ddjBrowserIndexRef.current] ?? browserTracks[0];
-      if (!track) return;
-      player.dualDeck.setMode(true);
-      if (player.dualDeck.loadTrack(command.deck, track)) {
-        const timer = ddjNudgeTimerRef.current[command.deck];
-        if (timer != null) window.clearTimeout(timer);
-        ddjNudgeTimerRef.current[command.deck] = null;
-        ddjBaseRateRef.current[command.deck] = 1;
-        ddjCuePointsRef.current[command.deck] = null;
-        ddjSyncActiveRef.current[command.deck] = false;
-        renderDdjLedsRef.current?.();
-      }
+      loadDjBrowserTrack(command.deck);
       return;
     }
 
@@ -324,7 +349,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
       player.dualDeck.setCrossfader(command.value);
       scheduleMixerUiSync();
     }
-  }, [cueDjDeck, library.tracks, navigation.libraryTracks, player.dualDeck, scheduleMixerUiSync, setScreen, syncDjDeck, toggleDjDeckPlay]);
+  }, [cueDjDeck, djBrowserTracks, loadDjBrowserTrack, player.dualDeck, scheduleMixerUiSync, screen, selectDjBrowserIndex, setScreen, syncDjDeck, toggleDjDeckPlay]);
 
   const midiController = useWebMidiController({ onMessage: handleDdj400Message });
 
@@ -652,6 +677,10 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
         <DjModeScreen
           decks={djDeckPanels}
           mixer={djMixerState}
+          libraryTracks={djBrowserTracks}
+          selectedLibraryIndex={djBrowserIndex}
+          onSelectLibraryIndex={selectDjBrowserIndex}
+          onLoadSelectedTrack={loadDjBrowserTrack}
           onChannelVolume={setDjChannelVolume}
           onCrossfader={setDjCrossfader}
           onTogglePlay={toggleDjDeckPlay}
