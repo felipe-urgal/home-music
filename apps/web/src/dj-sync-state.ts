@@ -19,7 +19,7 @@ function otherDeck(deck: DjDeckId): DjDeckId {
 }
 
 export function activateDjSync(
-  state: DjSyncState,
+  _state: DjSyncState,
   slaveDeck: DjDeckId,
   mode: Exclude<DjSyncMode, 'off'> = 'tempo'
 ): DjSyncState {
@@ -39,11 +39,6 @@ export function disableDjSyncForDeck(
   deck: DjDeckId
 ): DjSyncState {
   if (!state.synced[deck] && state.masterDeck !== deck) return state;
-
-  if (state.masterDeck === deck) {
-    return EMPTY_DJ_SYNC_STATE;
-  }
-
   return EMPTY_DJ_SYNC_STATE;
 }
 
