@@ -146,6 +146,41 @@ describe('initial DJ phase lock', () => {
     }
   });
 
+  it('usa BPM local do segmento variável no rate inicial', () => {
+    const variableMaster: TrackRhythm = {
+      ...master,
+      beatGrid: {
+        version: 1,
+        segments: [
+          { startSeconds: 0, bpm: 120, firstBeatSeconds: 0, confidence: 0.95 },
+          { startSeconds: 20, bpm: 122, firstBeatSeconds: 20, confidence: 0.95 }
+        ]
+      }
+    };
+    const variableSlave: TrackRhythm = {
+      ...master,
+      beatGrid: {
+        version: 1,
+        segments: [
+          { startSeconds: 0, bpm: 120, firstBeatSeconds: 0, confidence: 0.95 },
+          { startSeconds: 20, bpm: 119, firstBeatSeconds: 20, confidence: 0.95 }
+        ]
+      }
+    };
+
+    const plan = resolveInitialDjSyncPlan({
+      masterRhythm: variableMaster,
+      masterPositionSeconds: 25,
+      masterPlaybackRate: 1,
+      slaveRhythm: variableSlave,
+      slavePositionSeconds: 25,
+      beatmatch
+    });
+
+    expect(plan.playbackRate).toBeCloseTo(122 / 119, 6);
+    expect(plan.mode).toBe('beat');
+  });
+
   it('degrada para tempo-only quando a correção inicial seria destrutiva', () => {
     const slowMaster: TrackRhythm = {
       ...master,

@@ -8,6 +8,7 @@ const EPSILON = 1e-9;
 
 export type BeatGridPosition = {
   beatIndex: number;
+  segmentIndex: number | null;
   phase: number;
   beatDurationSeconds: number;
   effectiveBeatDurationSeconds: number;
@@ -44,6 +45,56 @@ function validPlaybackRate(playbackRate: number) {
   return Number.isFinite(playbackRate) && playbackRate > 0;
 }
 
+export function beatGridSegmentAt(
+  rhythm: TrackRhythm | null | undefined,
+  positionSeconds: number
+) {
+  const segments = rhythm?.beatGrid?.segments;
+  if (!segments?.length || !Number.isFinite(positionSeconds) || positionSeconds < 0) {
+    return null;
+  }
+
+  let selectedIndex = 0;
+  for (let index = 1; index < segments.length; index += 1) {
+    if (segments[index]!.startSeconds > positionSeconds) break;
+    selectedIndex = index;
+  }
+  return {
+    segment: segments[selectedIndex]!,
+    index: selectedIndex
+  };
+}
+
+export function beatGridBpmAt(
+  rhythm: TrackRhythm | null | undefined,
+  positionSeconds: number
+) {
+  const selected = beatGridSegmentAt(rhythm, positionSeconds);
+  return selected?.segment.bpm ?? rhythm?.bpm ?? null;
+}
+
+function beatSpecAt(
+  rhythm: TrackRhythm,
+  positionSeconds: number
+) {
+  const selected = beatGridSegmentAt(rhythm, positionSeconds);
+  if (!selected) {
+    return {
+      bpm: rhythm.bpm,
+      firstBeatSeconds: rhythm.firstBeatSeconds,
+      confidence: rhythm.confidence,
+      segmentIndex: null as number | null
+    };
+  }
+
+  return {
+    bpm: selected.segment.bpm,
+    firstBeatSeconds: selected.segment.firstBeatSeconds,
+    confidence: selected.segment.confidence,
+    segmentIndex: selected.index
+  };
+}
+
 export function hasUsableBeatGrid(
   rhythm: TrackRhythm | null | undefined
 ): rhythm is TrackRhythm {
@@ -67,6 +118,7 @@ export function hasUsableBarGrid(
 } {
   return Boolean(
     hasUsableBeatGrid(rhythm)
+    && !rhythm.beatGrid?.segments?.length
     && typeof rhythm.downbeatSeconds === 'number'
     && Number.isFinite(rhythm.downbeatSeconds)
     && rhythm.downbeatSeconds >= 0
@@ -89,8 +141,18 @@ export function beatGridPositionAt(
     || !validPlaybackRate(playbackRate)
   ) return null;
 
-  const beatDurationSeconds = 60 / rhythm.bpm;
-  const relativeBeats = (positionSeconds - rhythm.firstBeatSeconds) / beatDurationSeconds;
+  const spec = beatSpecAt(rhythm, positionSeconds);
+  if (
+    !Number.isFinite(spec.bpm)
+    || spec.bpm <= 0
+    || !Number.isFinite(spec.firstBeatSeconds)
+    || spec.firstBeatSeconds < 0
+    || !Number.isFinite(spec.confidence)
+    || spec.confidence < MIN_RHYTHM_CONFIDENCE
+  ) return null;
+
+  const beatDurationSeconds = 60 / spec.bpm;
+  const relativeBeats = (positionSeconds - spec.firstBeatSeconds) / beatDurationSeconds;
   const rounded = Math.round(relativeBeats);
   const stableRelative = Math.abs(relativeBeats - rounded) <= EPSILON
     ? rounded
@@ -98,6 +160,7 @@ export function beatGridPositionAt(
 
   return {
     beatIndex: Math.floor(stableRelative),
+    segmentIndex: spec.segmentIndex,
     phase: normalizeUnitPhase(stableRelative),
     beatDurationSeconds,
     effectiveBeatDurationSeconds: beatDurationSeconds / playbackRate
@@ -127,10 +190,12 @@ export function nearestBeatAt(
     || positionSeconds < 0
   ) return null;
 
-  const beatDurationSeconds = 60 / rhythm.bpm;
-  const relativeBeats = (positionSeconds - rhythm.firstBeatSeconds) / beatDurationSeconds;
-  const beatIndex = Math.max(0, Math.round(relativeBeats));
-  return beatAtIndex(rhythm, beatIndex);
+  const spec = beatSpecAt(rhythm, positionSeconds);
+  if (spec.confidence < MIN_RHYTHM_CONFIDENCE) return null;
+  const beatDurationSeconds = 60 / spec.bpm;
+  const relativeBeats = (positionSeconds - spec.firstBeatSeconds) / beatDurationSeconds;
+  const beatIndex = Math.round(relativeBeats);
+  return Math.max(0, spec.firstBeatSeconds + (beatIndex * beatDurationSeconds));
 }
 
 export function nextBeatAfter(
@@ -143,14 +208,16 @@ export function nextBeatAfter(
     || positionSeconds < 0
   ) return null;
 
-  const beatDurationSeconds = 60 / rhythm.bpm;
-  if (positionSeconds < rhythm.firstBeatSeconds - EPSILON) {
-    return rhythm.firstBeatSeconds;
+  const spec = beatSpecAt(rhythm, positionSeconds);
+  if (spec.confidence < MIN_RHYTHM_CONFIDENCE) return null;
+  const beatDurationSeconds = 60 / spec.bpm;
+  if (positionSeconds < spec.firstBeatSeconds - EPSILON) {
+    return spec.firstBeatSeconds;
   }
 
-  const relativeBeats = (positionSeconds - rhythm.firstBeatSeconds) / beatDurationSeconds;
-  const beatIndex = Math.max(0, Math.floor(relativeBeats + EPSILON) + 1);
-  return beatAtIndex(rhythm, beatIndex);
+  const relativeBeats = (positionSeconds - spec.firstBeatSeconds) / beatDurationSeconds;
+  const beatIndex = Math.floor(relativeBeats + EPSILON) + 1;
+  return Math.max(0, spec.firstBeatSeconds + (beatIndex * beatDurationSeconds));
 }
 
 export function barGridPositionAt(

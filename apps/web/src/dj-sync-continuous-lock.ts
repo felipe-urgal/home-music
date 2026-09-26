@@ -1,6 +1,7 @@
 import type { TrackRhythm } from '@home-music/shared';
 import type { BeatmatchPlan } from './beatmatch';
-import { resolveGridPhaseError } from './dj-beat-grid';
+import { MAX_BEATMATCH_RATE_DELTA } from './beatmatch';
+import { beatGridBpmAt, resolveGridPhaseError } from './dj-beat-grid';
 import {
   DJ_SYNC_PHASE_DEADBAND_SECONDS,
   rhythmWithTempoFactor
@@ -50,11 +51,38 @@ export function resolveContinuousDjSyncCorrection(options: {
   nowMs: number;
   lastRelockAtMs: number | null;
 }): ContinuousDjSyncCorrection {
-  const baseRate = options.beatmatch.playbackRate;
   const slaveRhythm = rhythmWithTempoFactor(
     options.slaveRhythm,
     options.beatmatch.tempoFactor
   );
+
+  const masterLocalBpm = beatGridBpmAt(
+    options.masterRhythm,
+    options.masterPositionSeconds
+  );
+  const slaveLocalBpm = beatGridBpmAt(
+    slaveRhythm,
+    options.slavePositionSeconds
+  );
+
+  let baseRate = options.beatmatch.playbackRate;
+  if (
+    typeof masterLocalBpm === 'number'
+    && Number.isFinite(masterLocalBpm)
+    && masterLocalBpm > 0
+    && typeof slaveLocalBpm === 'number'
+    && Number.isFinite(slaveLocalBpm)
+    && slaveLocalBpm > 0
+  ) {
+    const localRate = masterLocalBpm / slaveLocalBpm;
+    if (
+      Number.isFinite(localRate)
+      && localRate > 0
+      && Math.abs(localRate - 1) <= MAX_BEATMATCH_RATE_DELTA
+    ) {
+      baseRate = localRate;
+    }
+  }
   const error = resolveGridPhaseError({
     mode: 'beat',
     masterRhythm: options.masterRhythm,

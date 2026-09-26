@@ -1,6 +1,7 @@
 import type { TrackRhythm } from '@home-music/shared';
-import type { BeatmatchPlan } from './beatmatch';
+import { MAX_BEATMATCH_RATE_DELTA, type BeatmatchPlan } from './beatmatch';
 import {
+  beatGridBpmAt,
   hasUsableBarGrid,
   resolveGridPhaseError
 } from './dj-beat-grid';
@@ -39,7 +40,18 @@ export function rhythmWithTempoFactor(
   if (!rhythm || factor === 1) return rhythm;
   return {
     ...rhythm,
-    bpm: rhythm.bpm * factor
+    bpm: rhythm.bpm * factor,
+    ...(rhythm.beatGrid
+      ? {
+          beatGrid: {
+            ...rhythm.beatGrid,
+            segments: rhythm.beatGrid.segments.map(segment => ({
+              ...segment,
+              bpm: segment.bpm * factor
+            }))
+          }
+        }
+      : {})
   };
 }
 
@@ -89,6 +101,33 @@ export function resolveInitialDjSyncPlan(options: {
     options.beatmatch.tempoFactor
   );
 
+  let playbackRate = options.beatmatch.playbackRate;
+  const masterLocalBpm = beatGridBpmAt(
+    options.masterRhythm,
+    options.masterPositionSeconds
+  );
+  const slaveLocalBpm = beatGridBpmAt(
+    slaveRhythm,
+    options.slavePositionSeconds
+  );
+  if (
+    typeof masterLocalBpm === 'number'
+    && Number.isFinite(masterLocalBpm)
+    && masterLocalBpm > 0
+    && typeof slaveLocalBpm === 'number'
+    && Number.isFinite(slaveLocalBpm)
+    && slaveLocalBpm > 0
+  ) {
+    const localRate = masterLocalBpm / slaveLocalBpm;
+    if (
+      Number.isFinite(localRate)
+      && localRate > 0
+      && Math.abs(localRate - 1) <= MAX_BEATMATCH_RATE_DELTA
+    ) {
+      playbackRate = localRate;
+    }
+  }
+
   const canUseBar = (
     options.beatmatch.tempoFactor === 1
     && hasUsableBarGrid(options.masterRhythm)
@@ -104,13 +143,13 @@ export function resolveInitialDjSyncPlan(options: {
       masterPlaybackRate: options.masterPlaybackRate,
       slaveRhythm,
       slavePositionSeconds: options.slavePositionSeconds,
-      slavePlaybackRate: options.beatmatch.playbackRate
+      slavePlaybackRate: playbackRate
     });
 
     if (error) {
       const correction = resolveCorrection({
         phaseErrorSeconds: error.secondsDelta,
-        slavePlaybackRate: options.beatmatch.playbackRate
+        slavePlaybackRate: playbackRate
       });
       if (
         correction.kind !== 'none'
@@ -118,7 +157,7 @@ export function resolveInitialDjSyncPlan(options: {
       ) {
         return {
           mode: 'bar',
-          playbackRate: options.beatmatch.playbackRate,
+          playbackRate,
           correction
         };
       }
@@ -132,20 +171,20 @@ export function resolveInitialDjSyncPlan(options: {
     masterPlaybackRate: options.masterPlaybackRate,
     slaveRhythm,
     slavePositionSeconds: options.slavePositionSeconds,
-    slavePlaybackRate: options.beatmatch.playbackRate
+    slavePlaybackRate: playbackRate
   });
 
   if (!beatError) {
     return {
       mode: 'tempo',
-      playbackRate: options.beatmatch.playbackRate,
+      playbackRate,
       correction: { kind: 'none' }
     };
   }
 
   const correction = resolveCorrection({
     phaseErrorSeconds: beatError.secondsDelta,
-    slavePlaybackRate: options.beatmatch.playbackRate
+    slavePlaybackRate: playbackRate
   });
 
   if (
@@ -154,14 +193,14 @@ export function resolveInitialDjSyncPlan(options: {
   ) {
     return {
       mode: 'tempo',
-      playbackRate: options.beatmatch.playbackRate,
+      playbackRate,
       correction: { kind: 'none' }
     };
   }
 
   return {
     mode: 'beat',
-    playbackRate: options.beatmatch.playbackRate,
+    playbackRate,
     correction
   };
 }

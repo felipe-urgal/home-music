@@ -3,12 +3,12 @@ import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { DatabaseSync } from 'node:sqlite';
-import type { AdminLibraryIntegrityStatus, PlaybackState, Playlist, PlaylistSource, RepeatMode, StatisticsPeriod, Track, TrackRhythm, TrackWaveform } from '@home-music/shared';
+import type { AdminLibraryIntegrityStatus, PlaybackState, Playlist, PlaylistSource, RepeatMode, StatisticsPeriod, Track, TrackBeatGrid, TrackRhythm, TrackWaveform } from '@home-music/shared';
 import type { IndexedTrack, LibraryTrackDelta } from './library.js';
 import { RHYTHM_ANALYZER_VERSION } from './rhythm-analysis.js';
 import { WAVEFORM_ANALYZER_VERSION } from './waveform-analysis.js';
 
-const CURRENT_SCHEMA_VERSION = 15;
+const CURRENT_SCHEMA_VERSION = 16;
 const HISTORY_CAPACITY = 2_000;
 const TRACK_UPSERT_SQL = `
   INSERT INTO tracks(
@@ -91,6 +91,43 @@ function stringArrayValue(value: unknown) {
   }
 }
 
+function trackBeatGridValue(value: unknown): TrackBeatGrid | null {
+  if (typeof value !== 'string' || !value) return null;
+  try {
+    const parsed = JSON.parse(value) as Partial<TrackBeatGrid>;
+    if (
+      parsed.version !== 1
+      || !Array.isArray(parsed.segments)
+      || parsed.segments.length < 2
+      || parsed.segments.length > 24
+    ) return null;
+
+    let previousStart = -1;
+    for (const segment of parsed.segments) {
+      if (
+        !segment
+        || typeof segment !== 'object'
+        || !Number.isFinite(segment.startSeconds)
+        || segment.startSeconds < 0
+        || segment.startSeconds <= previousStart
+        || !Number.isFinite(segment.bpm)
+        || segment.bpm < 20
+        || segment.bpm > 300
+        || !Number.isFinite(segment.firstBeatSeconds)
+        || segment.firstBeatSeconds < 0
+        || !Number.isFinite(segment.confidence)
+        || segment.confidence < 0
+        || segment.confidence > 1
+      ) return null;
+      previousStart = segment.startSeconds;
+    }
+
+    return parsed as TrackBeatGrid;
+  } catch {
+    return null;
+  }
+}
+
 function publicRhythmFromRow(row: Row): TrackRhythm | null {
   if (
     row.rhythm_bpm == null
@@ -103,6 +140,9 @@ function publicRhythmFromRow(row: Row): TrackRhythm | null {
     firstBeatSeconds: numberValue(row.rhythm_first_beat_seconds),
     confidence: numberValue(row.rhythm_confidence)
   };
+  const beatGrid = trackBeatGridValue(row.rhythm_beat_grid_json);
+  if (beatGrid) rhythm.beatGrid = beatGrid;
+
   if (
     row.rhythm_downbeat_seconds != null
     && row.rhythm_beats_per_bar != null
@@ -849,6 +889,27 @@ export class HomeMusicDatabase {
       }
     }
 
+    if (version < 16) {
+      this.db.exec('BEGIN IMMEDIATE;');
+      try {
+        if (!this.hasColumn('track_rhythm_analysis', 'beat_grid_json')) {
+          this.db.exec(
+            'ALTER TABLE track_rhythm_analysis ADD COLUMN beat_grid_json TEXT;'
+          );
+        }
+        this.db.exec('PRAGMA user_version = 16;');
+        this.db.exec('COMMIT;');
+        version = 16;
+      } catch (error) {
+        try {
+          this.db.exec('ROLLBACK;');
+        } catch {
+          // Preserva o erro original se a transação já tiver sido encerrada.
+        }
+        throw error;
+      }
+    }
+
     if (version !== CURRENT_SCHEMA_VERSION) {
       throw new Error(`Versão de schema SQLite não suportada: ${version}`);
     }
@@ -967,6 +1028,7 @@ export class HomeMusicDatabase {
              r.downbeat_seconds AS rhythm_downbeat_seconds,
              r.beats_per_bar AS rhythm_beats_per_bar,
              r.downbeat_confidence AS rhythm_downbeat_confidence,
+             r.beat_grid_json AS rhythm_beat_grid_json,
              w.status AS waveform_analysis_status
       FROM tracks t
       LEFT JOIN track_rhythm_analysis r
@@ -1028,6 +1090,8 @@ export class HomeMusicDatabase {
     const downbeatSeconds = rhythm?.downbeatSeconds;
     const beatsPerBar = rhythm?.beatsPerBar;
     const downbeatConfidence = rhythm?.downbeatConfidence;
+    const beatGrid = rhythm?.beatGrid ?? null;
+    const hasValidBeatGrid = beatGrid == null || trackBeatGridValue(JSON.stringify(beatGrid)) != null;
     const hasAnyDownbeat = (
       downbeatSeconds != null
       || beatsPerBar != null
@@ -1055,6 +1119,7 @@ export class HomeMusicDatabase {
         || rhythm.confidence < 0
         || rhythm.confidence > 1
         || !hasValidDownbeat
+        || !hasValidBeatGrid
       ))
       || !Number.isSafeInteger(sourceFileSize)
       || sourceFileSize < 0
@@ -1085,9 +1150,9 @@ export class HomeMusicDatabase {
       this.db.prepare(`
         INSERT INTO track_rhythm_analysis(
           track_id, status, bpm, first_beat_seconds, confidence,
-          downbeat_seconds, beats_per_bar, downbeat_confidence,
+          downbeat_seconds, beats_per_bar, downbeat_confidence, beat_grid_json,
           source, analyzer_version, source_file_size, source_mtime_ms, analyzed_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(track_id) DO UPDATE SET
           status = excluded.status,
           bpm = excluded.bpm,
@@ -1096,6 +1161,7 @@ export class HomeMusicDatabase {
           downbeat_seconds = excluded.downbeat_seconds,
           beats_per_bar = excluded.beats_per_bar,
           downbeat_confidence = excluded.downbeat_confidence,
+          beat_grid_json = excluded.beat_grid_json,
           source = excluded.source,
           analyzer_version = excluded.analyzer_version,
           source_file_size = excluded.source_file_size,
@@ -1110,6 +1176,7 @@ export class HomeMusicDatabase {
         downbeatSeconds ?? null,
         beatsPerBar ?? null,
         downbeatConfidence ?? null,
+        beatGrid ? JSON.stringify(beatGrid) : null,
         source.trim(),
         RHYTHM_ANALYZER_VERSION,
         sourceFileSize,

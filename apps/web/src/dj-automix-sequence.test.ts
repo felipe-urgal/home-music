@@ -2,15 +2,20 @@ import { describe, expect, it } from 'vitest';
 import {
   canPrepareDjAutomixNext,
   nextDjAutomixIndex,
+  shouldRecoverDjAutomixAfterEnded,
   shuffleDjTrackList
 } from './dj-automix-sequence';
 
 describe('DJ AutoMix sequence', () => {
-  it('segue a ordem atual da origem até o fim', () => {
+  it('segue a ordem atual e reinicia no começo para manter AutoMix contínuo', () => {
     expect(nextDjAutomixIndex(3, -1)).toBe(0);
     expect(nextDjAutomixIndex(3, 0)).toBe(1);
     expect(nextDjAutomixIndex(3, 1)).toBe(2);
-    expect(nextDjAutomixIndex(3, 2)).toBeNull();
+    expect(nextDjAutomixIndex(3, 2)).toBe(0);
+  });
+
+  it('repete a única faixa quando a origem possui apenas uma música', () => {
+    expect(nextDjAutomixIndex(1, 0)).toBe(0);
   });
 
   it('embaralha somente os itens recebidos sem mutar a origem', () => {
@@ -27,6 +32,31 @@ describe('DJ AutoMix sequence', () => {
 
   it('não cria próxima faixa para origem vazia', () => {
     expect(nextDjAutomixIndex(0, -1)).toBeNull();
+  });
+
+  it('recupera AutoMix quando o deck termina sem handoff', () => {
+    expect(shouldRecoverDjAutomixAfterEnded({
+      automixActive: true,
+      transitionActive: false,
+      hasTrack: true,
+      playing: false,
+      currentTimeSeconds: 179.95,
+      durationSeconds: 180
+    })).toBe(true);
+  });
+
+  it('não dispara recovery durante reprodução ou transição normal', () => {
+    const base = {
+      automixActive: true,
+      transitionActive: false,
+      hasTrack: true,
+      playing: false,
+      currentTimeSeconds: 179.95,
+      durationSeconds: 180
+    };
+    expect(shouldRecoverDjAutomixAfterEnded({ ...base, playing: true })).toBe(false);
+    expect(shouldRecoverDjAutomixAfterEnded({ ...base, transitionActive: true })).toBe(false);
+    expect(shouldRecoverDjAutomixAfterEnded({ ...base, currentTimeSeconds: 120 })).toBe(false);
   });
 });
 

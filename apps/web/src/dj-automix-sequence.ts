@@ -13,8 +13,29 @@ export function shuffleDjTrackList<T>(
 
 export function nextDjAutomixIndex(length: number, currentIndex: number) {
   if (!Number.isInteger(length) || length <= 0) return null;
-  const nextIndex = currentIndex + 1;
-  return nextIndex >= 0 && nextIndex < length ? nextIndex : null;
+  if (!Number.isInteger(currentIndex) || currentIndex < 0) return 0;
+  return (currentIndex + 1) % length;
+}
+
+export function shouldRecoverDjAutomixAfterEnded(input: {
+  automixActive: boolean;
+  transitionActive: boolean;
+  hasTrack: boolean;
+  playing: boolean;
+  currentTimeSeconds: number;
+  durationSeconds: number;
+}) {
+  if (
+    !input.automixActive
+    || input.transitionActive
+    || !input.hasTrack
+    || input.playing
+    || !Number.isFinite(input.currentTimeSeconds)
+    || !Number.isFinite(input.durationSeconds)
+    || input.durationSeconds <= 0
+  ) return false;
+
+  return input.currentTimeSeconds >= Math.max(0, input.durationSeconds - 0.15);
 }
 
 

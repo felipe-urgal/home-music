@@ -383,6 +383,18 @@ export type AdminOperationHistoryResponse = {
 export const MIN_RHYTHM_CONFIDENCE = 0.55;
 export const MIN_DOWNBEAT_CONFIDENCE = 0.6;
 
+export type TrackBeatGridSegment = {
+  startSeconds: number;
+  bpm: number;
+  firstBeatSeconds: number;
+  confidence: number;
+};
+
+export type TrackBeatGrid = {
+  version: 1;
+  segments: TrackBeatGridSegment[];
+};
+
 export type TrackRhythm = {
   bpm: number;
   firstBeatSeconds: number;
@@ -390,6 +402,7 @@ export type TrackRhythm = {
   downbeatSeconds?: number | null;
   beatsPerBar?: 3 | 4 | null;
   downbeatConfidence?: number | null;
+  beatGrid?: TrackBeatGrid | null;
 };
 
 export type TrackWaveform = {

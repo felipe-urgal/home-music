@@ -33,6 +33,26 @@ describe('DJ waveform beat grid', () => {
     expect(markers.every(marker => marker.kind === 'beat')).toBe(true);
   });
 
+  it('desenha espaçamento diferente depois da troca de segmento', () => {
+    const markers = buildDjWaveformMarkers({
+      bpm: 120,
+      firstBeatSeconds: 0,
+      confidence: 0.95,
+      beatGrid: {
+        version: 1,
+        segments: [
+          { startSeconds: 0, bpm: 120, firstBeatSeconds: 0, confidence: 0.95 },
+          { startSeconds: 2, bpm: 60, firstBeatSeconds: 2, confidence: 0.95 }
+        ]
+      }
+    }, 4);
+
+    const seconds = markers.map(marker => marker.position * 4);
+    expect(seconds.slice(0, 4)).toEqual([0, 0.5, 1, 1.5]);
+    expect(seconds.slice(4)).toEqual([2, 3]);
+    expect(markers.every(marker => marker.kind === 'beat')).toBe(true);
+  });
+
   it('não inventa grid para análise de baixa confiança', () => {
     expect(buildDjWaveformMarkers({
       bpm: 128,
