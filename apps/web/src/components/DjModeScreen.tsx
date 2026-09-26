@@ -85,15 +85,25 @@ function drawDjWaveform(
   const centerY = height / 2;
 
   if (waveform?.peaks.length) {
-    const pixelsPerPeak = width / waveform.peaks.length;
+    const columns = Math.max(1, Math.min(Math.floor(width), waveform.peaks.length));
+    const columnWidth = width / columns;
     context.fillStyle = accent;
     context.globalAlpha = 0.9;
 
-    for (let index = 0; index < waveform.peaks.length; index += 1) {
-      const peak = waveform.peaks[index] ?? 0;
+    for (let column = 0; column < columns; column += 1) {
+      const start = Math.floor((column * waveform.peaks.length) / columns);
+      const end = Math.max(
+        start + 1,
+        Math.floor(((column + 1) * waveform.peaks.length) / columns)
+      );
+      let peak = 0;
+      for (let index = start; index < end && index < waveform.peaks.length; index += 1) {
+        peak = Math.max(peak, waveform.peaks[index] ?? 0);
+      }
+
       const barHeight = Math.max(1, peak * (height * 0.78));
-      const x = index * pixelsPerPeak;
-      const barWidth = Math.max(1, pixelsPerPeak * 0.72);
+      const x = column * columnWidth;
+      const barWidth = Math.max(1, columnWidth * 0.72);
       context.fillRect(x, centerY - (barHeight / 2), barWidth, barHeight);
     }
   } else {
