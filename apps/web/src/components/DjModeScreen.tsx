@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import type { Track } from '@home-music/shared';
 import {
   ArrowLeft,
+  Bell,
   Cable,
   Disc3,
   Keyboard,
@@ -9,9 +10,12 @@ import {
   Play,
   RotateCcw,
   Search,
+  Settings,
   SlidersHorizontal,
   Upload,
-  Zap
+  Zap,
+  ListMusic,
+  Music2
 } from 'lucide-react';
 import type { DjDeckId } from '../dj-controller-contract';
 import type { DualDeckAudioSnapshot } from '../dual-deck-audio';
@@ -341,6 +345,27 @@ export function DjModeScreen({
 }: DjModeScreenProps) {
   return (
     <section className="dj-mode dj-mode--prototype-three" aria-label="Modo DJ">
+      <div className="dj-appbar" aria-label="Navegação do Home Music">
+        <div className="dj-appbar__brand">
+          <span className="dj-appbar__logo" aria-hidden="true"><Disc3 /></span>
+          <strong>Home Music</strong>
+        </div>
+        <div className="dj-appbar__nav" aria-hidden="true">
+          <span><Music2 />Músicas</span>
+          <span><ListMusic />Playlists</span>
+          <span><Disc3 />Biblioteca</span>
+        </div>
+        <div className="dj-appbar__search" aria-hidden="true">
+          <Search />
+          <span>Buscar músicas, artistas, playlists...</span>
+        </div>
+        <div className="dj-appbar__tools" aria-hidden="true">
+          <Bell />
+          <Settings />
+          <span className="dj-appbar__dj-badge">DJ</span>
+        </div>
+      </div>
+
       <header className="dj-mode__header">
         <div className="dj-mode__brand">
           <span className="dj-mode__brand-icon" aria-hidden="true"><Disc3 /></span>
