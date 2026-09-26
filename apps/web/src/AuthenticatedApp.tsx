@@ -135,7 +135,6 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
       if (!track) return;
       player.dualDeck.setMode(true);
       if (player.dualDeck.loadTrack(command.deck, track)) {
-        player.dualDeck.setVolume(command.deck, 1);
         ddjCuePointsRef.current[command.deck] = null;
       }
       return;
