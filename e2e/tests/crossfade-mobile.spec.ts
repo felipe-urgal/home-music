@@ -79,6 +79,19 @@ test('crossfade quantizado inicia próximo da batida planejada no Chromium mobil
     window.localStorage.setItem(storageKey, '2');
   }, { storageKey: crossfadeStorageKey });
 
+  let suppressPlayerStateWrites = false;
+  await page.route('**/api/player/state', async route => {
+    if (route.request().method() === 'PUT' && suppressPlayerStateWrites) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: '{}'
+      });
+      return;
+    }
+    await route.continue();
+  });
+
   await page.route('**/api/library', async route => {
     const response = await route.fetch();
     const body = await response.json() as {
@@ -138,8 +151,10 @@ test('crossfade quantizado inicia próximo da batida planejada no Chromium mobil
   });
   expect(resetOk).toBe(true);
 
+  suppressPlayerStateWrites = true;
   await page.reload();
   await expect(page.getByRole('heading', { name: 'E2E Track' })).toBeVisible();
+  suppressPlayerStateWrites = false;
 
   await page.evaluate(() => {
     const state = window as Window & { __e2eRhythmCrossfadeStart?: number };
