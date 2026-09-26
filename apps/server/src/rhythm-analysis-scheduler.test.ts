@@ -4,6 +4,7 @@ import type { HomeMusicDatabase } from './database.js';
 import type { IndexedTrack } from './library.js';
 import type { LibraryService } from './library-service.js';
 import { RhythmAnalysisScheduler } from './rhythm-analysis-scheduler.js';
+import { RhythmAnalysisUnavailableError } from './rhythm-analysis.js';
 
 function track(): IndexedTrack {
   return {
@@ -156,6 +157,80 @@ test('faixa desabilitada não entra no processamento rítmico', async () => {
   assert.equal(analyzeCalls, 0);
 });
 
+
+test('falha determinística de decode é persistida como indisponível e não entra novamente na fila', async () => {
+  let current = track();
+  let analyzeCalls = 0;
+  let saveCalls = 0;
+  const warnings: Array<{ bindings: object; message: string }> = [];
+  let resolveApplied!: () => void;
+  const applied = new Promise<void>(resolve => {
+    resolveApplied = resolve;
+  });
+
+  const library = {
+    allTracks: [current],
+    getTrack: (trackId: string) => trackId === current.id ? current : undefined,
+    applyRhythmAnalysis: (
+      _trackId: string,
+      _sourceFileSize: number,
+      _sourceMtimeMs: number,
+      rhythm: IndexedTrack['rhythm'] | null
+    ) => {
+      assert.equal(rhythm, null);
+      current = { ...current, rhythmAnalysisCurrent: true };
+      resolveApplied();
+      return true;
+    }
+  } as unknown as LibraryService;
+
+  const database = {
+    saveTrackRhythmAnalysis: (
+      _trackId: string,
+      _size: number,
+      _mtime: number,
+      rhythm: null
+    ) => {
+      saveCalls += 1;
+      assert.equal(rhythm, null);
+      return true;
+    }
+  } as unknown as HomeMusicDatabase;
+
+  const scheduler = new RhythmAnalysisScheduler({
+    library,
+    database,
+    logger: {
+      warn: (bindings, message) => warnings.push({ bindings, message })
+    },
+    analyze: async () => {
+      analyzeCalls += 1;
+      throw new RhythmAnalysisUnavailableError(1);
+    }
+  });
+
+  scheduler.sync();
+  await applied;
+  scheduler.sync();
+  await new Promise<void>(resolve => setImmediate(resolve));
+  await scheduler.stop();
+
+  assert.equal(analyzeCalls, 1);
+  assert.equal(saveCalls, 1);
+  assert.equal(scheduler.runtime.completed, 1);
+  assert.equal(scheduler.runtime.unavailable, 1);
+  assert.equal(scheduler.runtime.failed, 0);
+  assert.equal(warnings.length, 1);
+  assert.deepEqual(
+    Object.keys(warnings[0]?.bindings ?? {}).sort(),
+    ['exitCode', 'reason', 'trackId']
+  );
+  assert.deepEqual(warnings[0]?.bindings, {
+    trackId: current.id,
+    reason: 'ffmpeg-decode-failed',
+    exitCode: 1
+  });
+});
 
 test('resultado sem ritmo é marcado como concluído e não entra novamente na fila', async () => {
   let current = track();
