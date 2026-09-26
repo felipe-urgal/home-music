@@ -39,7 +39,14 @@ function navigatorMidi(): MidiNavigatorLike {
   return navigator as Navigator & MidiNavigatorLike;
 }
 
-export function useWebMidiController() {
+type WebMidiControllerOptions = {
+  onMessage?: (message: NormalizedMidiMessage) => void;
+};
+
+export function useWebMidiController(options: WebMidiControllerOptions = {}) {
+  const onMessageRef = useRef(options.onMessage);
+  const diagnosticsEnabledRef = useRef(false);
+  onMessageRef.current = options.onMessage;
   const supported = webMidiSupported(
     typeof navigator === 'undefined' ? {} : navigatorMidi(),
     typeof window !== 'undefined' && window.isSecureContext
@@ -49,8 +56,14 @@ export function useWebMidiController() {
   const [ports, setPorts] = useState<MidiPortInfo[]>([]);
   const [selectedInputId, setSelectedInputIdState] = useState<string | null>(null);
   const [selectedOutputId, setSelectedOutputIdState] = useState<string | null>(null);
-  const [diagnosticsEnabled, setDiagnosticsEnabled] = useState(false);
+  const [diagnosticsEnabled, setDiagnosticsEnabledState] = useState(false);
   const [lastMessage, setLastMessage] = useState<NormalizedMidiMessage | null>(null);
+
+  const setDiagnosticsEnabled = useCallback((enabled: boolean) => {
+    diagnosticsEnabledRef.current = enabled;
+    setDiagnosticsEnabledState(enabled);
+    if (!enabled) setLastMessage(null);
+  }, []);
 
   const refreshPorts = useCallback(() => {
     const session = sessionRef.current;
@@ -84,7 +97,8 @@ export function useWebMidiController() {
     sessionRef.current = session;
     session.onStateChange(refreshPorts);
     session.onMessage(message => {
-      if (diagnosticsEnabled) setLastMessage(message);
+      onMessageRef.current?.(message);
+      if (diagnosticsEnabledRef.current) setLastMessage(message);
     });
 
     try {
@@ -113,7 +127,7 @@ export function useWebMidiController() {
       setStatus(name === 'NotAllowedError' || name === 'SecurityError' ? 'denied' : 'error');
       return false;
     }
-  }, [diagnosticsEnabled, refreshPorts, status, supported]);
+  }, [refreshPorts, status, supported]);
 
   const disconnect = useCallback(() => {
     sessionRef.current?.disconnect();
@@ -155,14 +169,6 @@ export function useWebMidiController() {
     return true;
   }, [ports, selectedInputId]);
 
-  useEffect(() => {
-    const session = sessionRef.current;
-    if (!session) return;
-    session.onMessage(message => {
-      if (diagnosticsEnabled) setLastMessage(message);
-    });
-  }, [diagnosticsEnabled]);
-
   useEffect(() => () => sessionRef.current?.disconnect(), []);
 
   const inputs = useMemo(
@@ -190,3 +196,5 @@ export function useWebMidiController() {
     setDiagnosticsEnabled
   };
 }
+
+export type WebMidiController = ReturnType<typeof useWebMidiController>;
