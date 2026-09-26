@@ -44,7 +44,8 @@
     "benchmark:large-library": "npm run benchmark:large-library -w @home-music/server && npm run benchmark:large-library -w @home-music/web",
     "benchmark:large-library:browser": "npm --prefix e2e run benchmark:large-library",
     "benchmark:backpressure": "npm run benchmark:backpressure -w @home-music/server",
-    "benchmark:rhythm-analysis": "npm run benchmark:rhythm-analysis -w @home-music/server"
+    "benchmark:rhythm-analysis": "npm run benchmark:rhythm-analysis -w @home-music/server",
+    "benchmark:rhythm-analysis:ffmpeg": "npm run benchmark:rhythm-analysis:ffmpeg -w @home-music/server"
   },
   "devDependencies": {
     "concurrently": "9.2.4"
