@@ -31,11 +31,7 @@ describe('DJ sync state', () => {
 
   it('ação manual no slave desliga apenas o sync', () => {
     const state = activateDjSync(EMPTY_DJ_SYNC_STATE, 'b', 'tempo');
-    expect(disableDjSyncForDeck(state, 'b')).toEqual({
-      masterDeck: 'a',
-      synced: { a: false, b: false },
-      mode: 'off'
-    });
+    expect(disableDjSyncForDeck(state, 'b')).toEqual(EMPTY_DJ_SYNC_STATE);
   });
 
   it('indisponibilidade do master limpa o estado inteiro', () => {
