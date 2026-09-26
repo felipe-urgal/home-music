@@ -611,6 +611,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
         onRefreshLibrary={() => { void refreshLibrary(); }}
         onOpenPlayer={openPlayer}
         onOpenLibrary={() => setScreen('library')}
+        onOpenDjMode={desktopLayout ? () => setScreen('dj') : undefined}
         onOpenLibraryTab={openLibraryTab}
         onPlayTrack={player.playTrack}
         onReorderQueue={player.reorderQueue}
@@ -618,7 +619,6 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
           <DesktopPlayerSidebarTools
             username={currentUser.username}
             accountActive={accountArea}
-            onOpenDjMode={() => setScreen('dj')}
             onOpenAccount={() => setScreen('account')}
           />
         ) : undefined}
