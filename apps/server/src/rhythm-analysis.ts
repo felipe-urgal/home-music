@@ -16,8 +16,16 @@ const MIN_DOWNBEAT_BARS = 4;
 const MIN_DOWNBEAT_ACCENT_CONTRAST = 0.18;
 const MIN_DOWNBEAT_CONSISTENCY = 0.75;
 const MIN_DOWNBEAT_CANDIDATE_MARGIN = 0.08;
-const MAX_STDERR_BYTES = 64 * 1024;
 const MAX_PCM_BYTES = RHYTHM_ANALYSIS_SAMPLE_RATE * RHYTHM_ANALYSIS_SECONDS * 2 + 64 * 1024;
+
+export class RhythmAnalysisUnavailableError extends Error {
+  readonly reason = 'ffmpeg-decode-failed';
+
+  constructor(readonly exitCode: number | null) {
+    super(`FFmpeg não conseguiu decodificar a faixa para análise rítmica (código ${exitCode ?? 'desconhecido'}).`);
+    this.name = 'RhythmAnalysisUnavailableError';
+  }
+}
 
 export type RhythmAnalysisRunner = (
   command: string,
@@ -282,9 +290,7 @@ export const decodeTrackToPcm: RhythmAnalysisRunner = (
   let settled = false;
   let timeout: NodeJS.Timeout | null = null;
   let stdoutBytes = 0;
-  let stderrBytes = 0;
   const stdout: Buffer[] = [];
-  const stderr: Buffer[] = [];
 
   const finish = (error?: Error, samples?: Int16Array) => {
     if (settled) return;
@@ -318,20 +324,13 @@ export const decodeTrackToPcm: RhythmAnalysisRunner = (
     stdout.push(Buffer.from(chunk));
   });
 
-  child.stderr.on('data', (chunk: Buffer) => {
-    if (settled || stderrBytes >= MAX_STDERR_BYTES) return;
-    const remaining = MAX_STDERR_BYTES - stderrBytes;
-    const accepted = chunk.subarray(0, remaining);
-    stderr.push(Buffer.from(accepted));
-    stderrBytes += accepted.byteLength;
-  });
+  child.stderr.resume();
 
   child.once('error', error => finish(error));
   child.once('close', code => {
     if (settled) return;
     if (code !== 0) {
-      const details = Buffer.concat(stderr).toString('utf8').trim();
-      finish(new Error(details || `FFmpeg encerrou a análise rítmica com código ${code ?? 'desconhecido'}.`));
+      finish(new RhythmAnalysisUnavailableError(code));
       return;
     }
 
