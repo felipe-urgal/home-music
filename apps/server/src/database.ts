@@ -1054,6 +1054,7 @@ export class HomeMusicDatabase {
       if (clearRhythmAnalysis) {
         this.db.exec('DELETE FROM track_rhythm_analysis;');
         this.db.exec('DELETE FROM track_waveform_analysis;');
+        this.db.exec('DELETE FROM track_rhythm_overrides;');
       }
       this.upsertTracks(upserts);
       const removed = this.removeTrackIds(removedIds);
