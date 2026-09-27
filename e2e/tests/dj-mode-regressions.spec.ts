@@ -97,8 +97,8 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   await tempoA.fill('1');
   await expect(deckA).toContainText('Rate1.000×');
   await expect(deckA.getByRole('button', { name: 'Jog wheel Deck A' })).toBeVisible();
-  await expect(deckA.getByRole('button', { name: 'IN' })).toBeVisible();
-  await expect(deckA.getByRole('button', { name: 'OUT' })).toBeDisabled();
+  await expect(deckA.getByRole('button', { name: 'IN', exact: true })).toBeVisible();
+  await expect(deckA.getByRole('button', { name: 'OUT', exact: true })).toBeDisabled();
 
   await library.getByRole('option').filter({ hasText: 'E2E Zeta' }).click();
   await dj.getByRole('button', { name: 'LOAD B' }).click();
