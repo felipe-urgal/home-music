@@ -395,6 +395,14 @@ export type TrackBeatGrid = {
   segments: TrackBeatGridSegment[];
 };
 
+export type TrackRhythmOverride = {
+  version: 1;
+  bpm: number;
+  firstBeatSeconds: number;
+  downbeatSeconds?: number | null;
+  beatsPerBar?: 3 | 4 | null;
+};
+
 export type TrackRhythm = {
   bpm: number;
   firstBeatSeconds: number;
@@ -403,6 +411,7 @@ export type TrackRhythm = {
   beatsPerBar?: 3 | 4 | null;
   downbeatConfidence?: number | null;
   beatGrid?: TrackBeatGrid | null;
+  manualOverride?: boolean;
 };
 
 export type TrackWaveform = {
