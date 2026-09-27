@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { Track, TrackWaveform } from '@home-music/shared';
+import type { Track, TrackRhythmOverride, TrackWaveform } from '@home-music/shared';
 import {
   ArrowLeft,
   Cable,
@@ -14,8 +14,10 @@ import {
   Upload,
   Zap,
 } from 'lucide-react';
+import { apiFetch } from '../api-client';
 import type { DjDeckId } from '../dj-controller-contract';
 import { buildDjWaveformMarkers } from '../dj-waveform-grid';
+import { notifyLibraryChanged } from '../library-events';
 import { fetchTrackWaveform } from '../track-waveform-client';
 import type { DualDeckAudioSnapshot } from '../dual-deck-audio';
 import type { DualDeckMixerState } from '../dual-deck-mixer';
@@ -317,6 +319,176 @@ function DeckPanel({
   );
 }
 
+function RhythmGridEditor({
+  track,
+  onClose
+}: {
+  track: Track;
+  onClose: () => void;
+}) {
+  const [bpm, setBpm] = useState(String(track.rhythm?.bpm ?? 120));
+  const [firstBeatSeconds, setFirstBeatSeconds] = useState(String(track.rhythm?.firstBeatSeconds ?? 0));
+  const [downbeatSeconds, setDownbeatSeconds] = useState(
+    track.rhythm?.downbeatSeconds == null ? '' : String(track.rhythm.downbeatSeconds)
+  );
+  const [beatsPerBar, setBeatsPerBar] = useState<3 | 4>(track.rhythm?.beatsPerBar === 3 ? 3 : 4);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const bpmValue = Number(bpm);
+  const firstBeatValue = Number(firstBeatSeconds);
+  const downbeatValue = downbeatSeconds.trim() === '' ? null : Number(downbeatSeconds);
+  const valid = (
+    Number.isFinite(bpmValue)
+    && bpmValue >= 20
+    && bpmValue <= 300
+    && Number.isFinite(firstBeatValue)
+    && firstBeatValue >= 0
+    && (downbeatValue == null || (Number.isFinite(downbeatValue) && downbeatValue >= 0))
+  );
+  const previewTrack: Track = {
+    ...track,
+    rhythm: valid
+      ? {
+          bpm: bpmValue,
+          firstBeatSeconds: firstBeatValue,
+          confidence: 1,
+          manualOverride: true,
+          ...(downbeatValue == null
+            ? {}
+            : {
+                downbeatSeconds: downbeatValue,
+                beatsPerBar,
+                downbeatConfidence: 1
+              })
+        }
+      : track.rhythm
+  };
+
+  const mutate = async (method: 'PUT' | 'DELETE') => {
+    if (method === 'PUT' && !valid) {
+      setError('Revise BPM e posições do grid.');
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      const override: TrackRhythmOverride = {
+        version: 1,
+        bpm: bpmValue,
+        firstBeatSeconds: firstBeatValue,
+        ...(downbeatValue == null
+          ? {}
+          : { downbeatSeconds: downbeatValue, beatsPerBar })
+      };
+      const response = await apiFetch(`/api/tracks/${encodeURIComponent(track.id)}/rhythm-override`, {
+        method,
+        headers: {
+          'X-Home-Music-Request': '1',
+          ...(method === 'PUT' ? { 'Content-Type': 'application/json' } : {})
+        },
+        ...(method === 'PUT' ? { body: JSON.stringify(override) } : {})
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null) as { error?: string } | null;
+        throw new Error(body?.error || `Falha HTTP ${response.status}`);
+      }
+      notifyLibraryChanged();
+      onClose();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Não foi possível atualizar o beat grid.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const shift = (delta: number) => {
+    const current = Number(firstBeatSeconds);
+    if (!Number.isFinite(current)) return;
+    setFirstBeatSeconds(String(Math.max(0, Number((current + delta).toFixed(3)))));
+    if (downbeatSeconds.trim() !== '') {
+      const downbeat = Number(downbeatSeconds);
+      if (Number.isFinite(downbeat)) {
+        setDownbeatSeconds(String(Math.max(0, Number((downbeat + delta).toFixed(3)))));
+      }
+    }
+  };
+
+  return (
+    <section className="dj-grid-editor" aria-label={`Editar beat grid de ${track.title}`}>
+      <div className="dj-grid-editor__heading">
+        <div>
+          <strong>Beat grid</strong>
+          <span>{track.rhythm?.manualOverride ? 'Correção manual ativa' : 'Análise automática'}</span>
+        </div>
+        <button type="button" onClick={onClose} disabled={saving}>Fechar</button>
+      </div>
+
+      <DjWaveform deck="a" track={previewTrack} progress={0} />
+
+      <div className="dj-grid-editor__fields">
+        <label>
+          <span>BPM</span>
+          <input
+            type="number"
+            min="20"
+            max="300"
+            step="0.01"
+            value={bpm}
+            onChange={event => setBpm(event.currentTarget.value)}
+          />
+        </label>
+        <label>
+          <span>Primeiro beat (s)</span>
+          <input
+            type="number"
+            min="0"
+            step="0.001"
+            value={firstBeatSeconds}
+            onChange={event => setFirstBeatSeconds(event.currentTarget.value)}
+          />
+        </label>
+        <label>
+          <span>Downbeat (s)</span>
+          <input
+            type="number"
+            min="0"
+            step="0.001"
+            value={downbeatSeconds}
+            placeholder="Sem downbeat"
+            onChange={event => setDownbeatSeconds(event.currentTarget.value)}
+          />
+        </label>
+        <label>
+          <span>Compasso</span>
+          <select value={beatsPerBar} onChange={event => setBeatsPerBar(Number(event.currentTarget.value) === 3 ? 3 : 4)}>
+            <option value="4">4/4</option>
+            <option value="3">3/4</option>
+          </select>
+        </label>
+      </div>
+
+      <div className="dj-grid-editor__actions">
+        <div>
+          <button type="button" onClick={() => shift(-0.01)} disabled={saving}>← 10 ms</button>
+          <button type="button" onClick={() => shift(0.01)} disabled={saving}>10 ms →</button>
+        </div>
+        <div>
+          {track.rhythm?.manualOverride && (
+            <button type="button" onClick={() => void mutate('DELETE')} disabled={saving}>
+              Restaurar automático
+            </button>
+          )}
+          <button type="button" className="is-primary" onClick={() => void mutate('PUT')} disabled={saving || !valid}>
+            {saving ? 'Salvando…' : 'Salvar grid'}
+          </button>
+        </div>
+      </div>
+      {error && <p className="dj-grid-editor__error" role="alert">{error}</p>}
+    </section>
+  );
+}
+
 function DjLibrary({
   tracks,
   sources,
@@ -341,8 +513,10 @@ function DjLibrary({
   onLoad: (deck: DjDeckId) => void;
 }) {
   const [query, setQuery] = useState('');
+  const [editingTrackId, setEditingTrackId] = useState<string | null>(null);
   const safeIndex = tracks.length ? Math.max(0, Math.min(tracks.length - 1, selectedIndex)) : 0;
   const selectedTrack = tracks[safeIndex] ?? null;
+  const editingTrack = editingTrackId ? tracks.find(track => track.id === editingTrackId) ?? null : null;
   const normalized = query.trim().toLocaleLowerCase();
   const filtered = useMemo(() => tracks
     .map((track, index) => ({ track, index }))
@@ -424,7 +598,10 @@ function DjLibrary({
             <span>{String(index + 1).padStart(2, '0')}</span>
             <strong>{track.title}</strong>
             <span>{track.artist || 'Artista desconhecido'}</span>
-            <span>{track.rhythm?.bpm ? track.rhythm.bpm.toFixed(1) : '—'}</span>
+            <span>
+              {track.rhythm?.bpm ? track.rhythm.bpm.toFixed(1) : '—'}
+              {track.rhythm?.manualOverride ? <small className="dj-grid-manual-badge">M</small> : null}
+            </span>
             <span>{formatTime(track.duration ?? 0)}</span>
           </button>
         ))}
@@ -434,7 +611,18 @@ function DjLibrary({
       <div className="dj-pro-library__loads">
         <button type="button" disabled={!selectedTrack} onClick={() => onLoad('a')}><Upload aria-hidden="true" />LOAD A</button>
         <button type="button" disabled={!selectedTrack} onClick={() => onLoad('b')}><Upload aria-hidden="true" />LOAD B</button>
+        <button type="button" disabled={!selectedTrack} onClick={() => setEditingTrackId(selectedTrack?.id ?? null)}>
+          <SlidersHorizontal aria-hidden="true" />Ajustar grid
+        </button>
       </div>
+
+      {editingTrack && (
+        <RhythmGridEditor
+          key={editingTrack.id}
+          track={editingTrack}
+          onClose={() => setEditingTrackId(null)}
+        />
+      )}
     </section>
   );
 }
