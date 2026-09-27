@@ -184,6 +184,43 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
       };
     }).__homeMusicE2eMidiInput;
     input?.onmidimessage?.({
+      data: [0xb0, 0x20, 0x00],
+      receivedTime: performance.now()
+    });
+    input?.onmidimessage?.({
+      data: [0xb0, 0x00, 0x00],
+      receivedTime: performance.now()
+    });
+  });
+
+  await expect(deckA).toContainText('Rate1.060×');
+  await expect(deckA).toContainText('Pitch+6.00%');
+
+  await page.evaluate(() => {
+    const input = (globalThis as typeof globalThis & {
+      __homeMusicE2eMidiInput?: {
+        onmidimessage: ((event: { data: number[]; receivedTime: number }) => void) | null;
+      };
+    }).__homeMusicE2eMidiInput;
+    input?.onmidimessage?.({
+      data: [0xb0, 0x20, 0x00],
+      receivedTime: performance.now()
+    });
+    input?.onmidimessage?.({
+      data: [0xb0, 0x00, 0x40],
+      receivedTime: performance.now()
+    });
+  });
+
+  await expect(deckA).toContainText('Rate1.000×');
+
+  await page.evaluate(() => {
+    const input = (globalThis as typeof globalThis & {
+      __homeMusicE2eMidiInput?: {
+        onmidimessage: ((event: { data: number[]; receivedTime: number }) => void) | null;
+      };
+    }).__homeMusicE2eMidiInput;
+    input?.onmidimessage?.({
       data: [0x90, 0x0b, 0x7f],
       receivedTime: performance.now()
     });
