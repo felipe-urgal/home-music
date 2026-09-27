@@ -14,6 +14,7 @@ import {
   Play,
   RotateCcw,
   Search,
+  Settings,
   Shuffle,
   SlidersHorizontal,
   Upload,
@@ -647,7 +648,8 @@ function DjLibrary({
   shuffle,
   onShuffleChange,
   playedTrackIds,
-  onLoad
+  onLoad,
+  loadedTrackIds
 }: {
   tracks: Track[];
   sources: Array<{ value: string; label: string; group: 'all' | 'folder' | 'playlist' }>;
@@ -659,6 +661,7 @@ function DjLibrary({
   onShuffleChange: (value: boolean) => void;
   playedTrackIds: Set<string>;
   onLoad: (deck: DjDeckId) => void;
+  loadedTrackIds: Record<DjDeckId, string | null>;
 }) {
   const [query, setQuery] = useState('');
   const [editingTrackId, setEditingTrackId] = useState<string | null>(null);
@@ -744,10 +747,7 @@ function DjLibrary({
             onClick={() => onSelect(index)}
           >
             <span>{String(index + 1).padStart(2, '0')}</span>
-            <strong className="dj-library-track-title">
-              <span className="dj-library-track-art"><Artwork track={track} /></span>
-              <span>{track.title}</span>
-            </strong>
+            <strong>{track.title}</strong>
             <span>{track.artist || 'Artista desconhecido'}</span>
             <span>
               {track.rhythm?.bpm ? track.rhythm.bpm.toFixed(1) : '—'}
@@ -760,8 +760,20 @@ function DjLibrary({
       </div>
 
       <div className="dj-pro-library__loads">
-        <button type="button" disabled={!selectedTrack} onClick={() => onLoad('a')}><Upload aria-hidden="true" />LOAD A</button>
-        <button type="button" disabled={!selectedTrack} onClick={() => onLoad('b')}><Upload aria-hidden="true" />LOAD B</button>
+        <button
+          type="button"
+          disabled={!selectedTrack || loadedTrackIds.a === selectedTrack.id}
+          onClick={() => onLoad('a')}
+        >
+          <Upload aria-hidden="true" />LOAD A
+        </button>
+        <button
+          type="button"
+          disabled={!selectedTrack || loadedTrackIds.b === selectedTrack.id}
+          onClick={() => onLoad('b')}
+        >
+          <Upload aria-hidden="true" />LOAD B
+        </button>
         <button type="button" disabled={!selectedTrack} onClick={() => setEditingTrackId(selectedTrack?.id ?? null)}>
           <SlidersHorizontal aria-hidden="true" />Ajustar grid
         </button>
@@ -800,8 +812,8 @@ function DjMidiPanel({
   return (
     <section className="dj-pro-midi" aria-label="Controlador MIDI">
       <div className="dj-pro-midi__heading">
-        <Cable aria-hidden="true" />
-        <strong>Controlador MIDI</strong>
+        <div><Cable aria-hidden="true" /><strong>Controlador MIDI</strong></div>
+        <span className="dj-pro-midi__settings" title="Configurações MIDI"><Settings aria-hidden="true" /></span>
       </div>
       <div className="dj-pro-midi__status">
         <span data-connected={midi.status === 'connected' ? 'true' : 'false'} />
@@ -857,7 +869,15 @@ function DjMixer({
     <section className="dj-pro-mixer dj-pro-mixer--console" aria-label="Mixer">
       <div className="dj-pro-mixer__title"><SlidersHorizontal aria-hidden="true" /><strong>Mixer</strong></div>
       <label className="dj-pro-mixer__channel" data-deck="a">
-        <span>Channel A</span>
+        <span className="dj-mixer-channel-title">Channel A</span>
+        <div className="dj-eq-strip" aria-label="EQ Channel A aguardando validação da interface de áudio">
+          {['LOW', 'MID', 'HIGH', 'FILTER'].map((label, index) => (
+            <span className="dj-eq-control" key={label}>
+              <i className="dj-eq-knob" style={{ '--knob-angle': (index === 3 ? '18deg' : '0deg') } as React.CSSProperties} />
+              <small>{label}</small>
+            </span>
+          ))}
+        </div>
         <div className="dj-mixer-channel-row">
           <Gauge aria-hidden="true" />
           <input type="range" min="0" max="1" step="0.01" value={mixer.channelVolumes.a} onChange={event => onChannelVolume('a', Number(event.currentTarget.value))} />
@@ -871,7 +891,15 @@ function DjMixer({
         <strong>{mixer.crossfader === 0 ? 'Centro' : mixer.crossfader < 0 ? 'A ' + Math.round(Math.abs(mixer.crossfader) * 100) + '%' : 'B ' + Math.round(mixer.crossfader * 100) + '%'}</strong>
       </label>
       <label className="dj-pro-mixer__channel" data-deck="b">
-        <span>Channel B</span>
+        <span className="dj-mixer-channel-title">Channel B</span>
+        <div className="dj-eq-strip" aria-label="EQ Channel B aguardando validação da interface de áudio">
+          {['LOW', 'MID', 'HIGH', 'FILTER'].map((label, index) => (
+            <span className="dj-eq-control" key={label}>
+              <i className="dj-eq-knob" style={{ '--knob-angle': (index === 3 ? '-18deg' : '0deg') } as React.CSSProperties} />
+              <small>{label}</small>
+            </span>
+          ))}
+        </div>
         <div className="dj-mixer-channel-row">
           <Gauge aria-hidden="true" />
           <input type="range" min="0" max="1" step="0.01" value={mixer.channelVolumes.b} onChange={event => onChannelVolume('b', Number(event.currentTarget.value))} />
@@ -967,6 +995,10 @@ export function DjModeScreen({
           onShuffleChange={onAutomixShuffleChange}
           playedTrackIds={playedTrackIds}
           onLoad={onLoadSelectedTrack}
+          loadedTrackIds={{
+            a: decks.a.snapshot?.trackId ?? null,
+            b: decks.b.snapshot?.trackId ?? null
+          }}
         />
         <DeckPanel deck="b" state={decks.b} onTogglePlay={onTogglePlay} onCue={onCue} onSync={onSync} onTempo={onTempo} onNudge={onNudge} onSeek={onSeek} />
         <DjMixer mixer={mixer} onChannelVolume={onChannelVolume} onCrossfader={onCrossfader} />
