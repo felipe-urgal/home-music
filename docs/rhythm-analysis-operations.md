@@ -166,6 +166,18 @@ Sequência recomendada:
 
 Não há migração destrutiva para desligar/religar a feature. A análise continua derivada e versionada.
 
+## Validação final de playback por superfície
+
+A regressão final da epic #500 combina:
+
+- **mobile**: `rhythm-playback-regression.spec.ts` roda em `mobile-chromium`, remove toda metadata `rhythm` da biblioteca e valida play, seek, pause e resume;
+- **desktop**: o mesmo cenário roda em `desktop-chromium`, usando o player normal desktop;
+- **PWA/offline**: as suítes existentes de service worker, cold start e coleções offline continuam cobrindo shell/cache/downloads sem depender de análise rítmica nova;
+- **crossfade mobile real**: `crossfade-mobile.spec.ts` continua validando dois decks e handoff no Chromium mobile;
+- **falha de DSP**: `rhythm-analysis-resilience.test.ts` garante readiness e streaming mesmo quando a análise falha.
+
+O caso novo é deliberadamente executado **sem qualquer `Track.rhythm`**, provando o contrato de fallback da epic em vez de apenas testar o caminho enriquecido.
+
 ## Gate
 
 ```bash
