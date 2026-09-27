@@ -3,8 +3,12 @@ import type { Track, TrackRhythmOverride, TrackWaveform } from '@home-music/shar
 import {
   ArrowLeft,
   Cable,
+  ChevronLeft,
+  ChevronRight,
   Disc3,
+  Gauge,
   Keyboard,
+  MoreVertical,
   Pause,
   Play,
   RotateCcw,
@@ -55,6 +59,9 @@ type DjModeScreenProps = {
   onTogglePlay: (deck: DjDeckId) => void;
   onCue: (deck: DjDeckId) => void;
   onSync: (deck: DjDeckId) => void;
+  onTempo: (deck: DjDeckId, playbackRate: number) => void;
+  onNudge: (deck: DjDeckId, delta: -1 | 1) => void;
+  onSeek: (deck: DjDeckId, seconds: number) => void;
   mixMode: 'manual' | 'automix';
   onMixModeChange: (mode: 'manual' | 'automix') => void;
   onExit: () => void;
@@ -226,13 +233,19 @@ function DeckPanel({
   state,
   onTogglePlay,
   onCue,
-  onSync
+  onSync,
+  onTempo,
+  onNudge,
+  onSeek
 }: {
   deck: DjDeckId;
   state: DjDeckPanelState;
   onTogglePlay: (deck: DjDeckId) => void;
   onCue: (deck: DjDeckId) => void;
   onSync: (deck: DjDeckId) => void;
+  onTempo: (deck: DjDeckId, playbackRate: number) => void;
+  onNudge: (deck: DjDeckId, delta: -1 | 1) => void;
+  onSeek: (deck: DjDeckId, seconds: number) => void;
 }) {
   const label = deck === 'a' ? 'Deck A' : 'Deck B';
   const side = deck === 'a' ? 'Esquerdo' : 'Direito';
@@ -244,15 +257,80 @@ function DeckPanel({
     : 0;
   const bpm = state.track?.rhythm?.bpm ?? null;
   const rate = snapshot?.playbackRate ?? 1;
+  const [jogMode, setJogMode] = useState<'vinyl' | 'slip'>('vinyl');
+  const [loopIn, setLoopIn] = useState<number | null>(null);
+  const [loopOut, setLoopOut] = useState<number | null>(null);
+  const [loopActive, setLoopActive] = useState(false);
+  const [loopBeats, setLoopBeats] = useState(4);
+
+  useEffect(() => {
+    setLoopIn(null);
+    setLoopOut(null);
+    setLoopActive(false);
+    setLoopBeats(4);
+  }, [snapshot?.trackId]);
+
+  useEffect(() => {
+    if (!loopActive || loopIn == null || loopOut == null || !snapshot?.trackId) return;
+    if (snapshot.currentTimeSeconds >= loopOut) onSeek(deck, loopIn);
+  }, [deck, loopActive, loopIn, loopOut, onSeek, snapshot?.currentTimeSeconds, snapshot?.trackId]);
+
+  const changeLoopBeats = (direction: -1 | 1) => {
+    const sizes = [1, 2, 4, 8, 16];
+    const current = sizes.indexOf(loopBeats);
+    const next = sizes[Math.max(0, Math.min(sizes.length - 1, current + direction))] ?? 4;
+    setLoopBeats(next);
+    if (loopIn != null && bpm) {
+      setLoopOut(loopIn + ((60 / bpm) * next));
+      setLoopActive(true);
+    }
+  };
+
+  const setLoopStart = () => {
+    if (!snapshot?.trackId) return;
+    const startSeconds = snapshot.currentTimeSeconds;
+    setLoopIn(startSeconds);
+    if (bpm) {
+      setLoopOut(startSeconds + ((60 / bpm) * loopBeats));
+      setLoopActive(true);
+    } else {
+      setLoopOut(null);
+      setLoopActive(false);
+    }
+  };
+
+  const setLoopEnd = () => {
+    if (!snapshot?.trackId || loopIn == null) return;
+    const endSeconds = snapshot.currentTimeSeconds;
+    if (endSeconds <= loopIn + 0.05) return;
+    setLoopOut(endSeconds);
+    setLoopActive(true);
+  };
+
+  const handleJog = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (!snapshot?.trackId) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const direction: -1 | 1 = event.clientX < rect.left + (rect.width / 2) ? -1 : 1;
+    if (jogMode === 'vinyl') {
+      onSeek(deck, Math.max(0, snapshot.currentTimeSeconds + (direction * 0.5)));
+    } else {
+      onNudge(deck, direction);
+    }
+  };
 
   return (
-    <article className="dj-pro-deck" aria-label={label} data-deck={deck} data-playing={playing ? 'true' : 'false'}>
+    <article className="dj-pro-deck dj-pro-deck--console" aria-label={label} data-deck={deck} data-playing={playing ? 'true' : 'false'}>
       <div className="dj-pro-deck__heading">
         <div>
+          <span className="dj-pro-deck__accent" aria-hidden="true" />
           <strong>{label}</strong>
           <span>{side}</span>
         </div>
-        {state.syncMaster && <span className="dj-sync-master-badge">MASTER</span>}
+        <div className="dj-pro-deck__heading-actions">
+          {state.syncMaster && <span className="dj-sync-master-badge">MASTER</span>}
+          <span className="dj-deck-letter" aria-hidden="true">{deck.toUpperCase()}</span>
+          <MoreVertical aria-hidden="true" />
+        </div>
       </div>
 
       {!loaded ? (
@@ -265,9 +343,14 @@ function DeckPanel({
         <>
           <div className="dj-pro-deck__track">
             <div className="dj-pro-deck__artwork"><Artwork track={state.track ?? undefined} /></div>
-            <div>
+            <div className="dj-pro-deck__track-copy">
               <strong>{state.track?.title}</strong>
               <span>{state.track?.artist || 'Artista desconhecido'}</span>
+              <div className="dj-pro-deck__track-tags">
+                <small>{bpm ? bpm.toFixed(1) + ' BPM' : 'BPM —'}</small>
+                <small>{formatTime(snapshot?.durationSeconds ?? state.track?.duration ?? 0)}</small>
+                {state.track?.rhythm?.manualOverride ? <small>GRID M</small> : null}
+              </div>
             </div>
           </div>
 
@@ -278,9 +361,18 @@ function DeckPanel({
             <span>{formatTime(snapshot?.durationSeconds ?? state.track?.duration ?? 0)}</span>
           </div>
 
-          <div className="dj-pro-deck__progress" aria-label="Progresso da faixa">
-            <span style={{ width: `${progress}%` }} />
-          </div>
+          <button
+            type="button"
+            className="dj-pro-deck__progress"
+            aria-label={'Buscar posição no ' + label}
+            onClick={event => {
+              const rect = event.currentTarget.getBoundingClientRect();
+              const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / Math.max(1, rect.width)));
+              onSeek(deck, ratio * (snapshot?.durationSeconds ?? state.track?.duration ?? 0));
+            }}
+          >
+            <span style={{ width: progress + '%' }} />
+          </button>
 
           <div className="dj-pro-deck__metrics">
             <div><span>BPM</span><strong>{bpm ? bpm.toFixed(1) : '—'}</strong></div>
@@ -289,12 +381,67 @@ function DeckPanel({
             <div><span>Canal</span><strong>{Math.round(state.channelVolume * 100)}%</strong></div>
           </div>
 
+          <div className="dj-deck-performance">
+            <label className="dj-tempo-fader">
+              <span>TEMPO</span>
+              <strong>{pitchPercent(rate) >= 0 ? '+' : ''}{pitchPercent(rate).toFixed(2)}%</strong>
+              <input
+                aria-label={'Tempo ' + label}
+                type="range"
+                min="0.94"
+                max="1.06"
+                step="0.001"
+                value={Math.max(0.94, Math.min(1.06, rate))}
+                onChange={event => onTempo(deck, Number(event.currentTarget.value))}
+              />
+              <small>-6</small><small>+6</small>
+            </label>
+
+            <button
+              type="button"
+              className="dj-jog-wheel"
+              aria-label={'Jog wheel ' + label}
+              onPointerDown={handleJog}
+              title={jogMode === 'vinyl' ? 'VINYL: toque à esquerda/direita para scrub' : 'SLIP: toque à esquerda/direita para nudge'}
+            >
+              <span className="dj-jog-wheel__ring" />
+              <span className="dj-jog-wheel__disc">
+                <span>{bpm ? bpm.toFixed(1) : '—'}</span>
+                <small>BPM</small>
+              </span>
+            </button>
+
+            <div className="dj-deck-tools">
+              <div className="dj-jog-mode" aria-label={'Modo do jog ' + label}>
+                <button type="button" className={jogMode === 'vinyl' ? 'is-active' : ''} onClick={() => setJogMode('vinyl')}>VINYL</button>
+                <button type="button" className={jogMode === 'slip' ? 'is-active' : ''} onClick={() => setJogMode('slip')}>SLIP</button>
+              </div>
+              <div className="dj-loop-points">
+                <button type="button" className={loopIn != null ? 'is-active' : ''} onClick={setLoopStart}>IN</button>
+                <button type="button" className={loopOut != null ? 'is-active' : ''} onClick={setLoopEnd} disabled={loopIn == null}>OUT</button>
+              </div>
+              <div className="dj-loop-size">
+                <button type="button" aria-label={'Diminuir loop ' + label} onClick={() => changeLoopBeats(-1)}><ChevronLeft aria-hidden="true" /></button>
+                <button
+                  type="button"
+                  className={loopActive ? 'is-active' : ''}
+                  onClick={() => loopOut != null && setLoopActive(value => !value)}
+                  aria-pressed={loopActive}
+                  title="Ativar/desativar loop"
+                >
+                  {loopBeats}
+                </button>
+                <button type="button" aria-label={'Aumentar loop ' + label} onClick={() => changeLoopBeats(1)}><ChevronRight aria-hidden="true" /></button>
+              </div>
+            </div>
+          </div>
+
           <div className="dj-pro-deck__controls">
             <button
               type="button"
               className={playing ? 'is-primary' : ''}
               onClick={() => onTogglePlay(deck)}
-              aria-label={playing ? `Pausar ${label}` : `Reproduzir ${label}`}
+              aria-label={playing ? 'Pausar ' + label : 'Reproduzir ' + label}
             >
               {playing ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
               <span>{playing ? 'Pause' : 'Play'}</span>
@@ -307,10 +454,10 @@ function DeckPanel({
               className={state.syncActive ? 'is-active' : ''}
               onClick={() => onSync(deck)}
               aria-pressed={state.syncActive}
-              title={state.syncActive ? `SYNC ativo (${state.syncMode})` : 'Ativar SYNC'}
+              title={state.syncActive ? 'SYNC ativo (' + state.syncMode + ')' : 'Ativar SYNC'}
             >
               <Zap aria-hidden="true" />
-              <span>{state.syncActive ? `SYNC · ${state.syncMode.toUpperCase()}` : 'SYNC'}</span>
+              <span>{state.syncActive ? 'SYNC · ' + state.syncMode.toUpperCase() : 'SYNC'}</span>
             </button>
           </div>
         </>
@@ -596,7 +743,10 @@ function DjLibrary({
             onClick={() => onSelect(index)}
           >
             <span>{String(index + 1).padStart(2, '0')}</span>
-            <strong>{track.title}</strong>
+            <strong className="dj-library-track-title">
+              <span className="dj-library-track-art"><Artwork track={track} /></span>
+              <span>{track.title}</span>
+            </strong>
             <span>{track.artist || 'Artista desconhecido'}</span>
             <span>
               {track.rhythm?.bpm ? track.rhythm.bpm.toFixed(1) : '—'}
@@ -694,23 +844,39 @@ function DjMixer({
   onChannelVolume: (deck: DjDeckId, value: number) => void;
   onCrossfader: (value: number) => void;
 }) {
+  const channelMeter = (value: number) => (
+    <span className="dj-channel-meter" aria-hidden="true">
+      {Array.from({ length: 12 }, (_, index) => (
+        <i key={index} data-on={index < Math.round(value * 12) ? 'true' : 'false'} />
+      ))}
+    </span>
+  );
+
   return (
-    <section className="dj-pro-mixer" aria-label="Mixer">
+    <section className="dj-pro-mixer dj-pro-mixer--console" aria-label="Mixer">
       <div className="dj-pro-mixer__title"><SlidersHorizontal aria-hidden="true" /><strong>Mixer</strong></div>
       <label className="dj-pro-mixer__channel" data-deck="a">
         <span>Channel A</span>
-        <input type="range" min="0" max="1" step="0.01" value={mixer.channelVolumes.a} onChange={event => onChannelVolume('a', Number(event.currentTarget.value))} />
+        <div className="dj-mixer-channel-row">
+          <Gauge aria-hidden="true" />
+          <input type="range" min="0" max="1" step="0.01" value={mixer.channelVolumes.a} onChange={event => onChannelVolume('a', Number(event.currentTarget.value))} />
+        </div>
         <strong>{Math.round(mixer.channelVolumes.a * 100)}%</strong>
+        {channelMeter(mixer.channelVolumes.a)}
       </label>
       <label className="dj-pro-mixer__crossfader">
         <span>Crossfader</span>
         <div><small>A</small><input type="range" min="-1" max="1" step="0.01" value={mixer.crossfader} onChange={event => onCrossfader(Number(event.currentTarget.value))} /><small>B</small></div>
-        <strong>{mixer.crossfader === 0 ? 'Centro' : mixer.crossfader < 0 ? `A ${Math.round(Math.abs(mixer.crossfader) * 100)}%` : `B ${Math.round(mixer.crossfader * 100)}%`}</strong>
+        <strong>{mixer.crossfader === 0 ? 'Centro' : mixer.crossfader < 0 ? 'A ' + Math.round(Math.abs(mixer.crossfader) * 100) + '%' : 'B ' + Math.round(mixer.crossfader * 100) + '%'}</strong>
       </label>
       <label className="dj-pro-mixer__channel" data-deck="b">
         <span>Channel B</span>
-        <input type="range" min="0" max="1" step="0.01" value={mixer.channelVolumes.b} onChange={event => onChannelVolume('b', Number(event.currentTarget.value))} />
+        <div className="dj-mixer-channel-row">
+          <Gauge aria-hidden="true" />
+          <input type="range" min="0" max="1" step="0.01" value={mixer.channelVolumes.b} onChange={event => onChannelVolume('b', Number(event.currentTarget.value))} />
+        </div>
         <strong>{Math.round(mixer.channelVolumes.b * 100)}%</strong>
+        {channelMeter(mixer.channelVolumes.b)}
       </label>
     </section>
   );
@@ -737,6 +903,9 @@ export function DjModeScreen({
   onTogglePlay,
   onCue,
   onSync,
+  onTempo,
+  onNudge,
+  onSeek,
   mixMode,
   onMixModeChange,
   onExit
@@ -746,7 +915,7 @@ export function DjModeScreen({
       <header className="dj-mode__header">
         <div className="dj-mode__brand">
           <span className="dj-mode__brand-icon" aria-hidden="true"><Disc3 /></span>
-          <div><strong>Modo DJ</strong><small>Dual-deck</small></div>
+          <div><strong>Modo DJ</strong><small>Dual-deck · Misture, crie e mantenha o flow</small></div>
         </div>
         <div className="dj-mode__header-actions">
           <details className="dj-shortcuts">
@@ -785,7 +954,7 @@ export function DjModeScreen({
       </header>
 
       <main className="dj-pro-layout">
-        <DeckPanel deck="a" state={decks.a} onTogglePlay={onTogglePlay} onCue={onCue} onSync={onSync} />
+        <DeckPanel deck="a" state={decks.a} onTogglePlay={onTogglePlay} onCue={onCue} onSync={onSync} onTempo={onTempo} onNudge={onNudge} onSeek={onSeek} />
         <DjLibrary
           tracks={libraryTracks}
           sources={librarySources}
@@ -798,7 +967,7 @@ export function DjModeScreen({
           playedTrackIds={playedTrackIds}
           onLoad={onLoadSelectedTrack}
         />
-        <DeckPanel deck="b" state={decks.b} onTogglePlay={onTogglePlay} onCue={onCue} onSync={onSync} />
+        <DeckPanel deck="b" state={decks.b} onTogglePlay={onTogglePlay} onCue={onCue} onSync={onSync} onTempo={onTempo} onNudge={onNudge} onSeek={onSeek} />
         <DjMixer mixer={mixer} onChannelVolume={onChannelVolume} onCrossfader={onCrossfader} />
         <DjMidiPanel midi={midi} onDisconnect={onDisconnectMidi} onSelectOutput={onSelectMidiOutput} />
       </main>
