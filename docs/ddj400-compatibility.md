@@ -30,6 +30,20 @@ A issue #524 fica coberta sem depender de hardware físico:
 
 A validação física da DDJ-400 continua relevante para compatibilidade de hardware da epic #518/#528, mas não é critério de fechamento da #524.
 
+## Evidência automatizada de feedback MIDI (#525)
+
+A cobertura sem hardware físico agora inclui:
+
+- bytes PLAY/CUE/SYNC e estados ON/OFF: `ddj400-led-feedback.test.ts`;
+- deduplicação de renders idênticos: `ddj400-led-feedback.test.ts`;
+- reidratação após reset/reconnect: `ddj400-led-feedback.test.ts`;
+- ausência de output sem quebrar o player: `ddj400-led-feedback.test.ts`;
+- transição PLAY iniciada pela UI gerando bytes no `MIDIOutput` simulado: `dj-mode-regressions.spec.ts`;
+- reconnect da sessão MIDI gerando nova hidratação no output simulado: `dj-mode-regressions.spec.ts`;
+- playback continua funcional durante disconnect/reconnect: `dj-mode-regressions.spec.ts`.
+
+A homologação física dos LEDs permanece pendente na DDJ-400 real e continua sendo critério de #525/#528.
+
 ## Matriz de homologação física
 
 Preencher somente quando a controladora estiver disponível.
