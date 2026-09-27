@@ -78,6 +78,18 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   await expect(deckB).toContainText('E2E Zeta');
   await expect(deckB.getByRole('button', { name: 'Reproduzir Deck B' })).toBeVisible();
 
+  await deckA.getByRole('button', { name: 'Reproduzir Deck A' }).click();
+  await expect(deckA.getByRole('button', { name: 'Pausar Deck A' })).toBeVisible();
+  await expect(deckB.getByRole('button', { name: 'Reproduzir Deck B' })).toBeVisible();
+  await deckA.getByRole('button', { name: 'Pausar Deck A' }).click();
+  await expect(deckA.getByRole('button', { name: 'Reproduzir Deck A' })).toBeVisible();
+
+  await deckB.getByRole('button', { name: 'Reproduzir Deck B' }).click();
+  await expect(deckB.getByRole('button', { name: 'Pausar Deck B' })).toBeVisible();
+  await expect(deckA.getByRole('button', { name: 'Reproduzir Deck A' })).toBeVisible();
+  await deckB.getByRole('button', { name: 'Pausar Deck B' }).click();
+  await expect(deckB.getByRole('button', { name: 'Reproduzir Deck B' })).toBeVisible();
+
   const channelA = mixer.locator('.dj-pro-mixer__channel[data-deck="a"] input');
   const channelB = mixer.locator('.dj-pro-mixer__channel[data-deck="b"] input');
   const crossfader = mixer.locator('.dj-pro-mixer__crossfader input');
