@@ -40,10 +40,14 @@ test('playback normal permanece funcional sem metadata rítmica em mobile e desk
     : page.locator('.desktop-now-playing-screen');
 
   await expect(player).toBeVisible();
-  await expect(player.getByRole('heading', { name: 'E2E Track' })).toBeVisible();
+  if (isMobile) {
+    await expect(page.getByRole('heading', { name: 'E2E Track' })).toBeVisible();
+  } else {
+    await expect(player.getByRole('heading', { name: 'E2E Track' })).toBeVisible();
+  }
 
   const playButton = isMobile
-    ? page.locator('.player-hero-play__control')
+    ? page.locator('.controls .play-button')
     : page.locator('.desktop-now-playing-screen__cover-play');
 
   await expect(playButton).toHaveAttribute('aria-label', 'Tocar');
@@ -67,7 +71,8 @@ test('playback normal permanece funcional sem metadata rítmica em mobile e desk
 
   await seekTarget.evaluate((element) => {
     const input = element as HTMLInputElement;
-    input.value = '50';
+    const max = Number(input.max);
+    input.value = String(Number.isFinite(max) && max > 0 ? max / 2 : 5);
     input.dispatchEvent(new Event('input', { bubbles: true }));
     input.dispatchEvent(new Event('change', { bubbles: true }));
   });
