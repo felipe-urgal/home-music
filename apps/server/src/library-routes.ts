@@ -1,3 +1,4 @@
+import type { TrackRhythmOverride } from '@home-music/shared';
 import type { FastifyInstance } from 'fastify';
 import type { HeavyWorkQueue } from './heavy-work-queue.js';
 import {
@@ -6,6 +7,41 @@ import {
   selectLibraryContentEncoding
 } from './library-http-cache.js';
 import type { LibraryService } from './library-service.js';
+
+
+function parseTrackRhythmOverride(value: unknown): TrackRhythmOverride | null {
+  if (!value || typeof value !== 'object') return null;
+  const candidate = value as Partial<TrackRhythmOverride>;
+  const downbeatSeconds = candidate.downbeatSeconds ?? null;
+  const beatsPerBar = candidate.beatsPerBar ?? null;
+  const hasDownbeat = downbeatSeconds != null || beatsPerBar != null;
+  if (
+    candidate.version !== 1
+    || typeof candidate.bpm !== 'number'
+    || !Number.isFinite(candidate.bpm)
+    || candidate.bpm < 20
+    || candidate.bpm > 300
+    || typeof candidate.firstBeatSeconds !== 'number'
+    || !Number.isFinite(candidate.firstBeatSeconds)
+    || candidate.firstBeatSeconds < 0
+    || (
+      hasDownbeat
+      && (
+        typeof downbeatSeconds !== 'number'
+        || !Number.isFinite(downbeatSeconds)
+        || downbeatSeconds < 0
+        || (beatsPerBar !== 3 && beatsPerBar !== 4)
+      )
+    )
+  ) return null;
+
+  return {
+    version: 1,
+    bpm: candidate.bpm,
+    firstBeatSeconds: candidate.firstBeatSeconds,
+    ...(hasDownbeat ? { downbeatSeconds, beatsPerBar } : {})
+  };
+}
 
 export type LibraryRouteProjection = {
   projectTracks: (
@@ -63,6 +99,24 @@ export function registerLibraryRoutes(
     const result = await library.rescan('manual');
     reply.header('Cache-Control', 'no-store');
     return result;
+  });
+
+  app.put<{ Params: { id: string }; Body: unknown }>('/api/tracks/:id/rhythm-override', async (request, reply) => {
+    const override = parseTrackRhythmOverride(request.body);
+    if (!override) {
+      return reply.code(400).send({ error: 'Correção manual do beat grid inválida.' });
+    }
+    const track = library.setRhythmOverride(request.params.id, override);
+    if (!track) return reply.code(404).send({ error: 'Faixa não encontrada.' });
+    reply.header('Cache-Control', 'private, no-store');
+    return { track };
+  });
+
+  app.delete<{ Params: { id: string } }>('/api/tracks/:id/rhythm-override', async (request, reply) => {
+    const track = library.resetRhythmOverride(request.params.id);
+    if (!track) return reply.code(404).send({ error: 'Faixa não encontrada.' });
+    reply.header('Cache-Control', 'private, no-store');
+    return { track };
   });
 
   app.get('/api/admin/library/overview', async (_request, reply) => {

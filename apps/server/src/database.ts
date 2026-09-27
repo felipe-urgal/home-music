@@ -3,12 +3,12 @@ import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { DatabaseSync } from 'node:sqlite';
-import type { AdminLibraryIntegrityStatus, PlaybackState, Playlist, PlaylistSource, RepeatMode, StatisticsPeriod, Track, TrackBeatGrid, TrackRhythm, TrackWaveform } from '@home-music/shared';
+import type { AdminLibraryIntegrityStatus, PlaybackState, Playlist, PlaylistSource, RepeatMode, StatisticsPeriod, Track, TrackBeatGrid, TrackRhythm, TrackRhythmOverride, TrackWaveform } from '@home-music/shared';
 import type { IndexedTrack, LibraryTrackDelta } from './library.js';
 import { RHYTHM_ANALYZER_VERSION } from './rhythm-analysis.js';
 import { WAVEFORM_ANALYZER_VERSION } from './waveform-analysis.js';
 
-const CURRENT_SCHEMA_VERSION = 16;
+const CURRENT_SCHEMA_VERSION = 17;
 const HISTORY_CAPACITY = 2_000;
 const TRACK_UPSERT_SQL = `
   INSERT INTO tracks(
@@ -129,6 +129,30 @@ function trackBeatGridValue(value: unknown): TrackBeatGrid | null {
 }
 
 function publicRhythmFromRow(row: Row): TrackRhythm | null {
+  if (
+    row.rhythm_override_bpm != null
+    && row.rhythm_override_first_beat_seconds != null
+  ) {
+    const rhythm: TrackRhythm = {
+      bpm: numberValue(row.rhythm_override_bpm),
+      firstBeatSeconds: numberValue(row.rhythm_override_first_beat_seconds),
+      confidence: 1,
+      manualOverride: true
+    };
+    if (
+      row.rhythm_override_downbeat_seconds != null
+      && row.rhythm_override_beats_per_bar != null
+    ) {
+      const beatsPerBar = numberValue(row.rhythm_override_beats_per_bar);
+      if (beatsPerBar === 3 || beatsPerBar === 4) {
+        rhythm.downbeatSeconds = numberValue(row.rhythm_override_downbeat_seconds);
+        rhythm.beatsPerBar = beatsPerBar;
+        rhythm.downbeatConfidence = 1;
+      }
+    }
+    return rhythm;
+  }
+
   if (
     row.rhythm_bpm == null
     || row.rhythm_first_beat_seconds == null
@@ -910,6 +934,38 @@ export class HomeMusicDatabase {
       }
     }
 
+    if (version < 17) {
+      this.db.exec('BEGIN IMMEDIATE;');
+      try {
+        this.db.exec(`
+          CREATE TABLE IF NOT EXISTS track_rhythm_overrides (
+            track_id TEXT PRIMARY KEY NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+            version INTEGER NOT NULL CHECK(version = 1),
+            bpm REAL NOT NULL CHECK(bpm >= 20 AND bpm <= 300),
+            first_beat_seconds REAL NOT NULL CHECK(first_beat_seconds >= 0),
+            downbeat_seconds REAL CHECK(downbeat_seconds IS NULL OR downbeat_seconds >= 0),
+            beats_per_bar INTEGER CHECK(beats_per_bar IS NULL OR beats_per_bar IN (3, 4)),
+            updated_at TEXT NOT NULL,
+            CHECK (
+              (downbeat_seconds IS NULL AND beats_per_bar IS NULL)
+              OR (downbeat_seconds IS NOT NULL AND beats_per_bar IS NOT NULL)
+            )
+          );
+
+          PRAGMA user_version = 17;
+        `);
+        this.db.exec('COMMIT;');
+        version = 17;
+      } catch (error) {
+        try {
+          this.db.exec('ROLLBACK;');
+        } catch {
+          // Preserva o erro original se a transação já tiver sido encerrada.
+        }
+        throw error;
+      }
+    }
+
     if (version !== CURRENT_SCHEMA_VERSION) {
       throw new Error(`Versão de schema SQLite não suportada: ${version}`);
     }
@@ -998,6 +1054,7 @@ export class HomeMusicDatabase {
       if (clearRhythmAnalysis) {
         this.db.exec('DELETE FROM track_rhythm_analysis;');
         this.db.exec('DELETE FROM track_waveform_analysis;');
+        this.db.exec('DELETE FROM track_rhythm_overrides;');
       }
       this.upsertTracks(upserts);
       const removed = this.removeTrackIds(removedIds);
@@ -1029,6 +1086,10 @@ export class HomeMusicDatabase {
              r.beats_per_bar AS rhythm_beats_per_bar,
              r.downbeat_confidence AS rhythm_downbeat_confidence,
              r.beat_grid_json AS rhythm_beat_grid_json,
+             o.bpm AS rhythm_override_bpm,
+             o.first_beat_seconds AS rhythm_override_first_beat_seconds,
+             o.downbeat_seconds AS rhythm_override_downbeat_seconds,
+             o.beats_per_bar AS rhythm_override_beats_per_bar,
              w.status AS waveform_analysis_status
       FROM tracks t
       LEFT JOIN track_rhythm_analysis r
@@ -1036,6 +1097,8 @@ export class HomeMusicDatabase {
        AND r.analyzer_version = ?
        AND r.source_file_size = t.file_size
        AND r.source_mtime_ms = t.mtime_ms
+      LEFT JOIN track_rhythm_overrides o
+        ON o.track_id = t.id
       LEFT JOIN track_waveform_analysis w
         ON w.track_id = t.id
        AND w.analyzer_version = ?
@@ -1078,6 +1141,58 @@ export class HomeMusicDatabase {
     }
 
     return this.persistTrackChanges(upserts, removedIds, libraryRoot, scannedAt, 'delta');
+  }
+
+  saveTrackRhythmOverride(trackId: string, override: TrackRhythmOverride) {
+    const hasDownbeat = override.downbeatSeconds != null || override.beatsPerBar != null;
+    const validDownbeat = !hasDownbeat || (
+      typeof override.downbeatSeconds === 'number'
+      && Number.isFinite(override.downbeatSeconds)
+      && override.downbeatSeconds >= 0
+      && (override.beatsPerBar === 3 || override.beatsPerBar === 4)
+    );
+    if (
+      override.version !== 1
+      || !Number.isFinite(override.bpm)
+      || override.bpm < 20
+      || override.bpm > 300
+      || !Number.isFinite(override.firstBeatSeconds)
+      || override.firstBeatSeconds < 0
+      || !validDownbeat
+    ) {
+      throw new Error('Override rítmico inválido.');
+    }
+
+    const track = this.db.prepare('SELECT id FROM tracks WHERE id = ?').get(trackId) as Row | undefined;
+    if (!track) return false;
+
+    this.db.prepare(`
+      INSERT INTO track_rhythm_overrides(
+        track_id, version, bpm, first_beat_seconds, downbeat_seconds, beats_per_bar, updated_at
+      ) VALUES (?, 1, ?, ?, ?, ?, ?)
+      ON CONFLICT(track_id) DO UPDATE SET
+        version = excluded.version,
+        bpm = excluded.bpm,
+        first_beat_seconds = excluded.first_beat_seconds,
+        downbeat_seconds = excluded.downbeat_seconds,
+        beats_per_bar = excluded.beats_per_bar,
+        updated_at = excluded.updated_at
+    `).run(
+      trackId,
+      override.bpm,
+      override.firstBeatSeconds,
+      override.downbeatSeconds ?? null,
+      override.beatsPerBar ?? null,
+      new Date().toISOString()
+    );
+    return true;
+  }
+
+  deleteTrackRhythmOverride(trackId: string) {
+    const track = this.db.prepare('SELECT id FROM tracks WHERE id = ?').get(trackId) as Row | undefined;
+    if (!track) return false;
+    this.db.prepare('DELETE FROM track_rhythm_overrides WHERE track_id = ?').run(trackId);
+    return true;
   }
 
   saveTrackRhythmAnalysis(
