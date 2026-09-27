@@ -38,7 +38,9 @@ A cobertura sem hardware físico agora inclui:
 - deduplicação de renders idênticos: `ddj400-led-feedback.test.ts`;
 - reidratação após reset/reconnect: `ddj400-led-feedback.test.ts`;
 - ausência de output sem quebrar o player: `ddj400-led-feedback.test.ts`;
-- transição PLAY iniciada pela UI gerando bytes no `MIDIOutput` simulado: `dj-mode-regressions.spec.ts`;
+- transições PLAY/PAUSE iniciadas pela UI gerando bytes no `MIDIOutput` simulado: `dj-mode-regressions.spec.ts`;
+- CUE iniciado pela UI gerando feedback LED no output simulado: `dj-mode-regressions.spec.ts`;
+- troca de output limpando a porta anterior e reidratando a nova: `dj-mode-regressions.spec.ts`;
 - reconnect da sessão MIDI gerando nova hidratação no output simulado: `dj-mode-regressions.spec.ts`;
 - playback continua funcional durante disconnect/reconnect: `dj-mode-regressions.spec.ts`.
 
