@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
+import type { PointerEvent as ReactPointerEvent } from 'react';
 import type { Track, TrackRhythmOverride, TrackWaveform } from '@home-music/shared';
 import {
   ArrowLeft,
@@ -868,7 +868,7 @@ function DjMixer({
         <div className="dj-eq-strip" aria-label="EQ Channel A aguardando validação da interface de áudio">
           {['LOW', 'MID', 'HIGH', 'FILTER'].map((label, index) => (
             <span className="dj-eq-control" key={label}>
-              <i className="dj-eq-knob" style={{ '--knob-angle': (index === 3 ? '18deg' : '0deg') } as CSSProperties} />
+              <i className="dj-eq-knob" data-angle={index === 3 ? 'right' : 'center'} />
               <small>{label}</small>
             </span>
           ))}
@@ -890,7 +890,7 @@ function DjMixer({
         <div className="dj-eq-strip" aria-label="EQ Channel B aguardando validação da interface de áudio">
           {['LOW', 'MID', 'HIGH', 'FILTER'].map((label, index) => (
             <span className="dj-eq-control" key={label}>
-              <i className="dj-eq-knob" style={{ '--knob-angle': (index === 3 ? '-18deg' : '0deg') } as CSSProperties} />
+              <i className="dj-eq-knob" data-angle={index === 3 ? 'left' : 'center'} />
               <small>{label}</small>
             </span>
           ))}
