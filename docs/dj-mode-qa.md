@@ -63,6 +63,22 @@ npm run test --prefix e2e -- \
   --project=desktop-chromium
 ```
 
+## Matriz de fechamento da epic #543
+
+A interface dedicada fica coberta pelos seguintes contratos:
+
+- alternância Player normal ↔ Modo DJ: E2E browser-real;
+- Deck A/B ligados à mesma engine dual-deck: E2E + `dual-deck-audio.test.ts`;
+- transporte manual A/B pela UI: E2E de PLAY/PAUSE independente por deck;
+- ações DDJ refletidas imediatamente na UI: Web MIDI simulado no mesmo E2E;
+- mixer visual ↔ engine: channel faders A/B e crossfader no E2E + `dual-deck-mixer.test.ts`;
+- biblioteca compacta com LOAD A/B: E2E;
+- status MIDI, input/output e disconnect: E2E;
+- regressão do player normal: retorno ao player normal no mesmo cenário + gate desktop;
+- qualidade: `npm run check` permanece gate obrigatório.
+
+A homologação física da DDJ-400 continua pertencendo a #518/#528. Ela complementa a compatibilidade de hardware, mas não altera o contrato funcional da interface dedicada definido na #543.
+
 ## Roteiro visual
 
 Executar em desktop com largura >= 1280 px:
