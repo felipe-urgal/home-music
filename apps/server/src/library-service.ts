@@ -1,4 +1,4 @@
-import type { AdminScanTrigger, ScanResponse, TrackRhythm, TrackWaveform } from '@home-music/shared';
+import type { AdminScanTrigger, ScanResponse, TrackRhythm, TrackRhythmOverride, TrackWaveform } from '@home-music/shared';
 import { buildAdminLibraryOverview } from './admin-library-overview.js';
 import { runScanWithHistory } from './admin-operation-history-scan.js';
 import type { AdminOperationHistoryStore } from './admin-operation-history.js';
@@ -179,6 +179,34 @@ export class LibraryService {
     };
   }
 
+  setRhythmOverride(trackId: string, override: TrackRhythmOverride) {
+    const index = this.tracks.findIndex(track => track.id === trackId);
+    if (index < 0) return null;
+    if (!this.options.database.saveTrackRhythmOverride(trackId, override)) return null;
+
+    const persisted = this.options.database.loadTracks().find(track => track.id === trackId);
+    if (!persisted) return null;
+    const nextTracks = [...this.tracks];
+    nextTracks[index] = persisted;
+    this.setTracks(nextTracks);
+    this.libraryRevision += 1;
+    return this.publicTrack(persisted);
+  }
+
+  resetRhythmOverride(trackId: string) {
+    const index = this.tracks.findIndex(track => track.id === trackId);
+    if (index < 0) return null;
+    if (!this.options.database.deleteTrackRhythmOverride(trackId)) return null;
+
+    const persisted = this.options.database.loadTracks().find(track => track.id === trackId);
+    if (!persisted) return null;
+    const nextTracks = [...this.tracks];
+    nextTracks[index] = persisted;
+    this.setTracks(nextTracks);
+    this.libraryRevision += 1;
+    return this.publicTrack(persisted);
+  }
+
   applyRhythmAnalysis(
     trackId: string,
     sourceFileSize: number,
@@ -190,6 +218,14 @@ export class LibraryService {
 
     const current = this.tracks[index];
     if (current.fileSize !== sourceFileSize || current.mtimeMs !== sourceMtimeMs) return false;
+
+    if (current.rhythm?.manualOverride) {
+      if (current.rhythmAnalysisCurrent) return true;
+      const nextTracks = [...this.tracks];
+      nextTracks[index] = { ...current, rhythmAnalysisCurrent: true };
+      this.setTracks(nextTracks);
+      return true;
+    }
 
     const samePublicRhythm = rhythm === null
       ? current.rhythm == null
