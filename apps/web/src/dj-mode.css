@@ -1314,3 +1314,126 @@
   font-weight: 800;
   letter-spacing: 0.08em;
 }
+
+
+/* Manual beat-grid editor */
+.dj-grid-manual-badge {
+  margin-left: 5px;
+  padding: 1px 4px;
+  border: 1px solid rgba(20, 152, 255, 0.55);
+  border-radius: 999px;
+  color: #8bcaff;
+  font-size: 0.52rem;
+  font-weight: 800;
+  vertical-align: middle;
+}
+
+.dj-grid-editor {
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid rgba(126, 164, 219, 0.24);
+  border-radius: 10px;
+  background: rgba(7, 17, 29, 0.92);
+  display: grid;
+  gap: 10px;
+}
+
+.dj-grid-editor__heading,
+.dj-grid-editor__actions,
+.dj-grid-editor__actions > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.dj-grid-editor__heading > div {
+  display: grid;
+  gap: 2px;
+}
+
+.dj-grid-editor__heading span {
+  color: var(--dj-muted);
+  font-size: 0.66rem;
+}
+
+.dj-grid-editor .dj-waveform {
+  min-height: 72px;
+}
+
+.dj-grid-editor__fields {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.dj-grid-editor__fields label {
+  display: grid;
+  gap: 4px;
+  color: var(--dj-muted);
+  font-size: 0.64rem;
+}
+
+.dj-grid-editor__fields input,
+.dj-grid-editor__fields select {
+  min-width: 0;
+  height: 34px;
+  border: 1px solid rgba(126, 164, 219, 0.25);
+  border-radius: 7px;
+  background: rgba(255,255,255,0.035);
+  color: #f5f9ff;
+  padding: 0 8px;
+  font: inherit;
+}
+
+.dj-grid-editor__actions button,
+.dj-grid-editor__heading button {
+  min-height: 32px;
+  border: 1px solid rgba(126, 164, 219, 0.25);
+  border-radius: 7px;
+  background: rgba(255,255,255,0.035);
+  color: #f5f9ff;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 0.68rem;
+  cursor: pointer;
+}
+
+.dj-grid-editor__actions button.is-primary {
+  border-color: rgba(20, 152, 255, 0.72);
+  background: rgba(20, 152, 255, 0.16);
+  color: #8bcaff;
+}
+
+.dj-grid-editor__actions button:disabled,
+.dj-grid-editor__heading button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.dj-grid-editor__error {
+  margin: 0;
+  color: #ff9b9b;
+  font-size: 0.68rem;
+}
+
+@media (max-width: 900px) {
+  .dj-grid-editor__fields {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 620px) {
+  .dj-grid-editor__fields {
+    grid-template-columns: 1fr;
+  }
+
+  .dj-grid-editor__actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .dj-grid-editor__actions > div {
+    width: 100%;
+  }
+}
