@@ -2158,3 +2158,414 @@
     width: 180px;
   }
 }
+
+
+/* Pixel-fit adjustments for approved professional prototype */
+
+.dj-mode--prototype-three {
+  padding: 8px 10px 12px;
+}
+
+.dj-mode--prototype-three .dj-mode__header {
+  min-height: 66px;
+  border-radius: 10px;
+  background:
+    linear-gradient(180deg, rgba(31, 39, 48, .99), rgba(16, 22, 29, .99));
+}
+
+.dj-mode--prototype-three .dj-mode__brand {
+  gap: 10px;
+}
+
+.dj-mode--prototype-three .dj-mode__brand strong {
+  font-size: 1.08rem;
+}
+
+.dj-mode--prototype-three .dj-mode__brand small {
+  margin-top: 2px;
+  font-size: .7rem;
+  color: #9aa5b2;
+}
+
+.dj-pro-layout {
+  grid-template-columns: minmax(360px, 30%) minmax(500px, 40%) minmax(360px, 30%);
+  grid-template-rows: minmax(642px, auto) 164px;
+  gap: 9px;
+}
+
+.dj-pro-deck--console {
+  padding: 10px 11px 12px;
+}
+
+.dj-pro-deck__heading {
+  min-height: 30px;
+  margin-bottom: 6px;
+}
+
+.dj-pro-deck__heading strong {
+  font-size: 1rem;
+}
+
+.dj-pro-deck__track {
+  min-height: 94px;
+  margin-bottom: 6px;
+  border-radius: 6px;
+  background: rgba(5, 9, 13, .2);
+}
+
+.dj-pro-deck__artwork {
+  width: 78px;
+  height: 78px;
+}
+
+.dj-pro-deck__track-copy > strong {
+  font-size: .86rem;
+}
+
+.dj-pro-deck__track-copy > span {
+  font-size: .73rem;
+}
+
+.dj-waveform {
+  height: 100px;
+}
+
+.dj-pro-deck__timeline {
+  font-size: .68rem;
+  color: #d5dbe2;
+}
+
+.dj-pro-deck__metrics {
+  margin-bottom: 2px;
+}
+
+.dj-pro-deck__metrics > div {
+  min-height: 56px;
+  padding: 8px 10px;
+}
+
+.dj-deck-performance {
+  min-height: 218px;
+  padding: 6px 0 8px;
+  grid-template-columns: 50px minmax(175px, 1fr) 112px;
+}
+
+.dj-jog-wheel {
+  width: min(198px, 17vw);
+  border: 1px solid rgba(122, 137, 153, .35);
+  background:
+    repeating-radial-gradient(circle, rgba(255,255,255,.024) 0 1px, rgba(0,0,0,.11) 2px 4px),
+    radial-gradient(circle at 48% 43%, #252d36 0%, #141a21 47%, #080b0f 72%);
+  box-shadow:
+    inset 0 0 0 4px #0e141a,
+    inset 0 0 0 8px #2b333b,
+    0 10px 22px rgba(0,0,0,.48);
+}
+
+.dj-jog-wheel__ring {
+  inset: 5px;
+  border-width: 3px;
+}
+
+.dj-jog-wheel__disc {
+  inset: 35%;
+}
+
+.dj-tempo-fader {
+  height: 184px;
+}
+
+.dj-deck-tools {
+  gap: 10px;
+}
+
+.dj-jog-mode,
+.dj-loop-points {
+  gap: 4px;
+}
+
+.dj-jog-mode button,
+.dj-loop-points button,
+.dj-loop-size button {
+  min-height: 36px;
+  border-radius: 5px;
+}
+
+.dj-pro-deck__controls button {
+  min-height: 56px;
+  border-radius: 6px;
+  font-size: .78rem;
+}
+
+.dj-pro-deck[data-deck="a"] .dj-pro-deck__controls button:first-child {
+  border-color: #178ef8;
+}
+
+.dj-pro-deck[data-deck="b"] .dj-pro-deck__controls button:first-child {
+  border-color: #e84141;
+}
+
+.dj-pro-library {
+  min-height: 642px;
+}
+
+.dj-pro-library__header {
+  grid-template-columns: 118px minmax(150px, 1fr) minmax(180px, 1.08fr) auto;
+  align-items: end;
+  min-height: 72px;
+  padding: 9px 10px;
+}
+
+.dj-pro-library__identity {
+  align-self: center;
+}
+
+.dj-pro-library__identity > .dj-pro-library__control-label {
+  display: none;
+}
+
+.dj-pro-library__identity > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dj-pro-library__identity > div::before {
+  content: "◉";
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  color: #e5ebf2;
+  font-size: .8rem;
+}
+
+.dj-pro-library__identity > div strong {
+  font-size: 1rem;
+}
+
+.dj-pro-library__control-label {
+  margin-bottom: 4px;
+  font-size: .62rem;
+}
+
+.dj-pro-library select,
+.dj-pro-library input,
+.dj-pro-library__shuffle {
+  min-height: 36px;
+}
+
+.dj-pro-library__columns,
+.dj-pro-library__list button {
+  grid-template-columns: 38px minmax(205px, 1.45fr) minmax(175px, 1fr) 64px 64px;
+}
+
+.dj-pro-library__columns {
+  min-height: 32px;
+  font-size: .6rem;
+}
+
+.dj-pro-library__list button {
+  min-height: 35px;
+  font-size: .7rem;
+}
+
+.dj-pro-library__list button > strong {
+  font-size: .72rem;
+}
+
+.dj-pro-library__loads {
+  gap: 6px;
+  padding: 8px 9px 9px;
+}
+
+.dj-pro-library__loads button {
+  min-height: 44px;
+  font-size: .78rem;
+}
+
+.dj-pro-library__loads button:disabled {
+  filter: grayscale(.5);
+  opacity: .52;
+}
+
+.dj-pro-mixer--console {
+  min-height: 164px;
+  grid-template-columns: 102px minmax(290px, 1fr) minmax(230px, .75fr) minmax(290px, 1fr);
+  gap: 12px;
+  padding: 10px 14px;
+}
+
+.dj-pro-mixer__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  align-self: start;
+  margin-top: 6px;
+}
+
+.dj-pro-mixer__channel {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    "title meter"
+    "eq meter"
+    "fader meter"
+    "value meter";
+  align-items: center;
+  gap: 5px 10px;
+  padding: 8px 9px;
+  min-height: 136px;
+}
+
+.dj-mixer-channel-title {
+  grid-area: title;
+  font-size: .66rem;
+  font-weight: 800;
+}
+
+.dj-eq-strip {
+  grid-area: eq;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 7px;
+  align-items: end;
+  opacity: .95;
+}
+
+.dj-eq-control {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+}
+
+.dj-eq-control small {
+  color: #aab4bf;
+  font-size: .52rem;
+  font-weight: 700;
+}
+
+.dj-eq-knob {
+  --knob-angle: 0deg;
+  position: relative;
+  display: block;
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(146, 163, 181, .34);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 48% 42%, #2c3640 0 38%, #11171d 40% 69%, #05080b 71%);
+  box-shadow:
+    inset 0 1px rgba(255,255,255,.06),
+    0 4px 9px rgba(0,0,0,.38);
+}
+
+.dj-eq-knob::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 4px;
+  width: 2px;
+  height: 10px;
+  border-radius: 2px;
+  background: #aab5c0;
+  transform-origin: 50% 13px;
+  transform: translateX(-50%) rotate(var(--knob-angle));
+}
+
+.dj-pro-mixer__channel[data-deck="a"] .dj-eq-knob {
+  box-shadow:
+    inset 0 0 0 1px rgba(30,145,255,.22),
+    inset 0 1px rgba(255,255,255,.06),
+    0 4px 9px rgba(0,0,0,.38);
+}
+
+.dj-pro-mixer__channel[data-deck="b"] .dj-eq-knob {
+  box-shadow:
+    inset 0 0 0 1px rgba(255,67,67,.2),
+    inset 0 1px rgba(255,255,255,.06),
+    0 4px 9px rgba(0,0,0,.38);
+}
+
+.dj-mixer-channel-row {
+  grid-area: fader;
+}
+
+.dj-pro-mixer__channel > strong {
+  grid-area: value;
+  font-size: .65rem;
+}
+
+.dj-pro-mixer__channel .dj-channel-meter {
+  grid-area: meter;
+  align-self: stretch;
+  width: 20px;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 2px;
+  margin: 0;
+}
+
+.dj-pro-mixer__channel .dj-channel-meter i {
+  flex: 1;
+  min-height: 5px;
+  width: 100%;
+}
+
+.dj-pro-mixer__crossfader {
+  min-height: 92px;
+  align-self: center;
+  justify-self: stretch;
+}
+
+.dj-pro-mixer__crossfader > span {
+  font-size: .66rem;
+}
+
+.dj-pro-midi {
+  min-height: 164px;
+  padding: 10px 12px;
+}
+
+.dj-pro-midi__heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 7px;
+}
+
+.dj-pro-midi__heading > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dj-pro-midi__settings {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(145,162,181,.23);
+  border-radius: 5px;
+  background: #1a222b;
+  color: #d6dde4;
+}
+
+.dj-pro-midi__settings svg {
+  width: 15px;
+}
+
+.dj-pro-midi__status {
+  margin: 9px 0;
+  min-height: 34px;
+}
+
+@media (min-width: 1500px) {
+  .dj-mode--prototype-three {
+    max-width: none;
+  }
+
+  .dj-pro-layout {
+    grid-template-columns: 30% 40% 30%;
+  }
+}
