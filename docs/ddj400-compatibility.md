@@ -46,6 +46,19 @@ A cobertura sem hardware físico agora inclui:
 
 A homologação física dos LEDs permanece pendente na DDJ-400 real e continua sendo critério de #525/#528.
 
+## Evidência automatizada de performance DDJ (#523)
+
+A cobertura sem hardware físico agora inclui também:
+
+- pitch 14-bit independente por deck e faixa documentada de ±6%: `ddj400-performance-mapping.test.ts`;
+- extremos convertidos para aproximadamente `1.06x` e `0.94x`: `ddj400-performance-mapping.test.ts`;
+- pitch vindo do input MIDI simulado alterando o rate real do Deck A e refletindo imediatamente na UI: `dj-mode-regressions.spec.ts`;
+- centralização do pitch retornando o deck para `1.000x`: `dj-mode-regressions.spec.ts`;
+- burst de jog sem acumular estado inválido: `ddj400-performance-mapping.test.ts`;
+- SYNC continua reutilizando a fundação rítmica existente, sem algoritmo paralelo.
+
+O QA físico de pitch, jog e SYNC continua pendente na #523/#528.
+
 ## Matriz de homologação física
 
 Preencher somente quando a controladora estiver disponível.
