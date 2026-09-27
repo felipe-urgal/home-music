@@ -2446,7 +2446,6 @@
 }
 
 .dj-eq-knob {
-  --knob-angle: 0deg;
   position: relative;
   display: block;
   width: 34px;
@@ -2470,7 +2469,7 @@
   border-radius: 2px;
   background: #aab5c0;
   transform-origin: 50% 13px;
-  transform: translateX(-50%) rotate(var(--knob-angle));
+  transform: translateX(-50%) rotate(0deg);
 }
 
 .dj-pro-mixer__channel[data-deck="a"] .dj-eq-knob {
@@ -2568,4 +2567,13 @@
   .dj-pro-layout {
     grid-template-columns: 30% 40% 30%;
   }
+}
+
+
+.dj-eq-knob[data-angle="right"]::after {
+  transform: translateX(-50%) rotate(18deg);
+}
+
+.dj-eq-knob[data-angle="left"]::after {
+  transform: translateX(-50%) rotate(-18deg);
 }
