@@ -153,15 +153,19 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
 
   await dj.getByRole('button', { name: 'AutoMix' }).click();
   await expect(dj.getByRole('button', { name: 'AutoMix' })).toHaveAttribute('aria-pressed', 'true');
-  await expect(mixer.locator('.dj-pro-mixer__channel[data-deck="a"] strong')).toHaveText('42%');
-  await expect(mixer.locator('.dj-pro-mixer__channel[data-deck="b"] strong')).toHaveText('73%');
-  await expect(mixer.locator('.dj-pro-mixer__crossfader strong')).toHaveText('A 100%');
+  await expect(mixer.locator('.dj-pro-mixer__channel[data-deck="a"] strong')).toHaveText('100%');
+  await expect(mixer.locator('.dj-pro-mixer__channel[data-deck="b"] strong')).toHaveText('100%');
+  await expect(mixer.locator('.dj-pro-mixer__crossfader strong')).toHaveText('Centro');
 
   await dj.getByRole('button', { name: 'Manual' }).click();
   await expect(dj.getByRole('button', { name: 'Manual' })).toHaveAttribute('aria-pressed', 'true');
-  await expect(mixer.locator('.dj-pro-mixer__channel[data-deck="a"] strong')).toHaveText('42%');
-  await expect(mixer.locator('.dj-pro-mixer__channel[data-deck="b"] strong')).toHaveText('73%');
-  await expect(mixer.locator('.dj-pro-mixer__crossfader strong')).toHaveText('A 100%');
+
+  await channelA.fill('0.31');
+  await channelB.fill('0.64');
+  await crossfader.fill('1');
+  await expect(mixer.locator('.dj-pro-mixer__channel[data-deck="a"] strong')).toHaveText('31%');
+  await expect(mixer.locator('.dj-pro-mixer__channel[data-deck="b"] strong')).toHaveText('64%');
+  await expect(mixer.locator('.dj-pro-mixer__crossfader strong')).toHaveText('B 100%');
 
   await dj.getByRole('button', { name: 'Sair do modo DJ' }).click();
   await expect(page.locator('.desktop-now-playing-screen')).toBeVisible();
