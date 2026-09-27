@@ -274,6 +274,13 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
 
   await expect(deckA.getByRole('button', { name: 'Pausar Deck A' })).toBeVisible();
 
+  const cueBMessagesBefore = await page.evaluate(() => (
+    (globalThis as typeof globalThis & { __homeMusicE2eMidiSecondaryOutputMessages?: number[][] })
+      .__homeMusicE2eMidiSecondaryOutputMessages?.filter(message => (
+        message[0] === 0x91 && message[1] === 0x0c && message[2] === 0x7f
+      )).length ?? 0
+  ));
+
   await page.evaluate(() => {
     const input = (globalThis as typeof globalThis & {
       __homeMusicE2eMidiInput?: {
@@ -283,7 +290,13 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
     input?.onmidimessage?.({ data: [0x91, 0x0c, 0x7f], receivedTime: performance.now() });
     input?.onmidimessage?.({ data: [0x91, 0x0c, 0x00], receivedTime: performance.now() });
   });
-  await expect(deckB).toContainText('Cue');
+
+  await expect.poll(async () => page.evaluate(() => (
+    (globalThis as typeof globalThis & { __homeMusicE2eMidiSecondaryOutputMessages?: number[][] })
+      .__homeMusicE2eMidiSecondaryOutputMessages?.filter(message => (
+        message[0] === 0x91 && message[1] === 0x0c && message[2] === 0x7f
+      )).length ?? 0
+  ))).toBe(cueBMessagesBefore + 1);
   await expect(deckA.getByRole('button', { name: 'Pausar Deck A' })).toBeVisible();
 
   await page.evaluate(() => {
