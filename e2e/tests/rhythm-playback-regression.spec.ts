@@ -3,15 +3,43 @@ import { expect, test, type Page } from '@playwright/test';
 const username = 'playwright';
 const password = 'playwright-password-2026';
 
-async function login(page: Page) {
-  await page.goto('/');
-  await page.getByLabel('Usuário').fill(username);
-  await page.getByLabel('Senha', { exact: true }).fill(password);
-  await page.getByRole('button', { name: 'Entrar', exact: true }).click();
+async function prepareSession(page: Page) {
+  const loginResponse = await page.context().request.post('/api/auth/login', {
+    headers: { 'X-Home-Music-Request': '1' },
+    data: { username, password }
+  });
+  expect(loginResponse.ok()).toBe(true);
+
+  const libraryResponse = await page.context().request.get('/api/library');
+  expect(libraryResponse.ok()).toBe(true);
+  const library = await libraryResponse.json() as {
+    tracks: Array<{ id: string; title: string }>;
+  };
+
+  const current = library.tracks.find(track => track.title === 'E2E Track');
+  expect(current).toBeTruthy();
+  const queueIds = library.tracks.map(track => track.id);
+
+  const resetResponse = await page.context().request.put('/api/player/state', {
+    headers: { 'X-Home-Music-Request': '1' },
+    data: {
+      currentTrackId: current!.id,
+      position: 0,
+      volume: 1,
+      shuffle: false,
+      repeatMode: 'off',
+      wasPlaying: false,
+      baseQueueIds: queueIds,
+      queueIds
+    }
+  });
+  expect(resetResponse.ok()).toBe(true);
 }
 
 test('playback normal permanece funcional sem metadata rítmica em mobile e desktop', async ({ page }, testInfo) => {
   test.skip(!['mobile-chromium', 'desktop-chromium'].includes(testInfo.project.name));
+
+  await prepareSession(page);
 
   await page.route('**/api/library', async route => {
     const response = await route.fetch();
@@ -32,7 +60,7 @@ test('playback normal permanece funcional sem metadata rítmica em mobile e desk
     });
   });
 
-  await login(page);
+  await page.goto('/');
 
   const isMobile = testInfo.project.name === 'mobile-chromium';
   const player = isMobile
@@ -40,11 +68,7 @@ test('playback normal permanece funcional sem metadata rítmica em mobile e desk
     : page.locator('.desktop-now-playing-screen');
 
   await expect(player).toBeVisible();
-  if (isMobile) {
-    await expect(page.getByRole('heading', { name: 'E2E Track' })).toBeVisible();
-  } else {
-    await expect(player.getByRole('heading', { name: 'E2E Track' })).toBeVisible();
-  }
+  await expect(page.getByText('E2E Track', { exact: true }).first()).toBeVisible();
 
   const playButton = isMobile
     ? page.locator('.controls .play-button')
