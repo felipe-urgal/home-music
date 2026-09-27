@@ -155,7 +155,7 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   await expect(dj.getByRole('button', { name: 'AutoMix' })).toHaveAttribute('aria-pressed', 'true');
   await expect(mixer.locator('.dj-pro-mixer__channel[data-deck="a"] strong')).toHaveText('100%');
   await expect(mixer.locator('.dj-pro-mixer__channel[data-deck="b"] strong')).toHaveText('100%');
-  await expect(mixer.locator('.dj-pro-mixer__crossfader strong')).toHaveText('Centro');
+  await expect(mixer.locator('.dj-pro-mixer__crossfader strong')).toHaveText('A 100%');
 
   await dj.getByRole('button', { name: 'Manual' }).click();
   await expect(dj.getByRole('button', { name: 'Manual' })).toHaveAttribute('aria-pressed', 'true');
