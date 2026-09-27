@@ -40,6 +40,10 @@ A DDJ-400 como interface de áudio ainda depende do spike físico #526. O Home M
 
 O spike manual está documentado em `docs/ddj400-audio-spike.md`.
 
+## Calibração do SYNC
+
+Para validar phase lock, beat grid variável, override manual e comportamento de longo prazo, use o roteiro em `docs/dj-sync-calibration.md`. Ele separa o que é comprovado por testes do que ainda exige DDJ-400 real.
+
 ## Diagnóstico
 
 Em **Minha conta → Controlador MIDI**, ative **Diagnóstico local** para ver somente o último evento MIDI normalizado.
