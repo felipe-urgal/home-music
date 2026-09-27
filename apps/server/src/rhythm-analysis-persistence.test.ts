@@ -184,7 +184,95 @@ test('remoção da faixa remove análise rítmica derivada por cascade', async (
   }
 });
 
-test('schema novo contém tabela derivada de análise rítmica', async () => {
+test('override manual do beat grid sobrevive à reanálise e pode ser resetado', async () => {
+  const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-rhythm-db-'));
+  const dbPath = path.join(temp, 'home-music.db');
+  const db = new HomeMusicDatabase(dbPath);
+
+  try {
+    const track = indexedTrack('manual-grid', '/music/manual-grid.mp3');
+    db.syncTracks([track], '/music', '2026-09-25T12:00:00.000Z');
+
+    assert.equal(db.saveTrackRhythmAnalysis(
+      track.id,
+      track.fileSize,
+      track.mtimeMs,
+      {
+        bpm: 128,
+        firstBeatSeconds: 0.2,
+        confidence: 0.9,
+        downbeatSeconds: 0.2,
+        beatsPerBar: 4,
+        downbeatConfidence: 0.8
+      }
+    ), true);
+
+    assert.equal(db.saveTrackRhythmOverride(track.id, {
+      version: 1,
+      bpm: 126.5,
+      firstBeatSeconds: 0.34,
+      downbeatSeconds: 0.34,
+      beatsPerBar: 4
+    }), true);
+
+    assert.deepEqual(db.loadTracks()[0]?.rhythm, {
+      bpm: 126.5,
+      firstBeatSeconds: 0.34,
+      confidence: 1,
+      downbeatSeconds: 0.34,
+      beatsPerBar: 4,
+      downbeatConfidence: 1,
+      manualOverride: true
+    });
+
+    assert.equal(db.saveTrackRhythmAnalysis(
+      track.id,
+      track.fileSize,
+      track.mtimeMs,
+      { bpm: 129.2, firstBeatSeconds: 0.18, confidence: 0.94 }
+    ), true);
+
+    assert.equal(db.loadTracks()[0]?.rhythm?.bpm, 126.5);
+    assert.equal(db.loadTracks()[0]?.rhythm?.manualOverride, true);
+
+    assert.equal(db.deleteTrackRhythmOverride(track.id), true);
+    assert.deepEqual(db.loadTracks()[0]?.rhythm, {
+      bpm: 129.2,
+      firstBeatSeconds: 0.18,
+      confidence: 0.94
+    });
+  } finally {
+    db.close();
+    await rm(temp, { recursive: true, force: true });
+  }
+});
+
+test('troca da raiz da biblioteca invalida override manual de ritmo', async () => {
+  const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-rhythm-db-'));
+  const dbPath = path.join(temp, 'home-music.db');
+  const db = new HomeMusicDatabase(dbPath);
+
+  try {
+    const original = indexedTrack('same-id', '/music-a/a.mp3');
+    db.syncTracks([original], '/music-a', '2026-09-25T12:00:00.000Z');
+    db.saveTrackRhythmOverride(original.id, {
+      version: 1,
+      bpm: 122,
+      firstBeatSeconds: 0.25
+    });
+    assert.equal(db.loadTracks()[0]?.rhythm?.manualOverride, true);
+
+    const replacement = indexedTrack('same-id', '/music-b/a.mp3');
+    db.syncTracks([replacement], '/music-b', '2026-09-25T12:10:00.000Z');
+
+    assert.equal(db.loadTracks()[0]?.rhythm, undefined);
+  } finally {
+    db.close();
+    await rm(temp, { recursive: true, force: true });
+  }
+});
+
+test('schema novo contém análise derivada e override manual de ritmo', async () => {
   const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-rhythm-db-'));
   const dbPath = path.join(temp, 'home-music.db');
   const db = new HomeMusicDatabase(dbPath);
@@ -193,12 +281,13 @@ test('schema novo contém tabela derivada de análise rítmica', async () => {
     assert.equal(db.getSchemaVersion(), 17);
     const raw = new DatabaseSync(dbPath);
     try {
-      const row = raw.prepare(`
+      const rows = raw.prepare(`
         SELECT name
         FROM sqlite_master
-        WHERE type = 'table' AND name = 'track_rhythm_analysis'
-      `).get() as { name?: string } | undefined;
-      assert.equal(row?.name, 'track_rhythm_analysis');
+        WHERE type = 'table' AND name IN ('track_rhythm_analysis', 'track_rhythm_overrides')
+        ORDER BY name
+      `).all() as Array<{ name?: string }>;
+      assert.deepEqual(rows.map(row => row.name), ['track_rhythm_analysis', 'track_rhythm_overrides']);
     } finally {
       raw.close();
     }
