@@ -373,6 +373,26 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     scheduleMixerUiSync();
   }, [player.dualDeck, scheduleMixerUiSync, switchDjToManual]);
 
+  const setDjTempo = useCallback((deck: DjDeckId, playbackRate: number) => {
+    switchDjToManual();
+    player.dualDeck.setMode(true);
+    const nextRate = Math.max(0.94, Math.min(1.06, playbackRate));
+    ddjBaseRateRef.current[deck] = nextRate;
+    disableDjSync(deck);
+    player.dualDeck.setPlaybackRate(deck, nextRate);
+    renderDdjLedsRef.current?.();
+  }, [disableDjSync, player.dualDeck, switchDjToManual]);
+
+  const seekDjDeck = useCallback((deck: DjDeckId, seconds: number) => {
+    switchDjToManual();
+    player.dualDeck.setMode(true);
+    const snapshot = player.dualDeck.getSnapshot(deck);
+    if (!snapshot?.trackId) return;
+    disableDjSync(deck);
+    player.dualDeck.seek(deck, seconds);
+    renderDdjLedsRef.current?.();
+  }, [disableDjSync, player.dualDeck, switchDjToManual]);
+
   const nudgeDjDeck = useCallback((deck: DjDeckId, delta: -1 | 1) => {
     switchDjToManual();
     player.dualDeck.setMode(true);
@@ -1482,6 +1502,9 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
           onTogglePlay={toggleDjDeckPlay}
           onCue={cueDjDeck}
           onSync={syncDjDeck}
+          onTempo={setDjTempo}
+          onNudge={nudgeDjDeck}
+          onSeek={seekDjDeck}
           mixMode={djMixMode}
           onMixModeChange={mode => {
             if (mode === 'automix') enableDjAutomix();
