@@ -15,13 +15,16 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
       type: 'input',
       onmidimessage: null
     };
+    const sentMidi: number[][] = [];
     const output = {
       id: 'e2e-ddj-output',
       name: 'E2E DDJ-400 OUT',
       manufacturer: 'E2E',
       state: 'connected',
       type: 'output',
-      send: () => undefined
+      send: (data: number[] | Uint8Array) => {
+        sentMidi.push(Array.from(data));
+      }
     };
     const access = {
       inputs: new Map([[input.id, input]]),
@@ -35,7 +38,8 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
     });
     Object.assign(globalThis, {
       __homeMusicE2eMidiInput: input,
-      __homeMusicE2eMidiAccess: access
+      __homeMusicE2eMidiAccess: access,
+      __homeMusicE2eMidiOutputMessages: sentMidi
     });
   });
 
@@ -106,6 +110,29 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   await midi.getByLabel('Entrada').selectOption('e2e-ddj-input');
   await midi.getByLabel('Saída').selectOption('e2e-ddj-output');
 
+  await expect.poll(async () => page.evaluate(() => (
+    (globalThis as typeof globalThis & { __homeMusicE2eMidiOutputMessages?: number[][] })
+      .__homeMusicE2eMidiOutputMessages?.length ?? 0
+  ))).toBeGreaterThanOrEqual(6);
+
+  await deckA.getByRole('button', { name: 'Reproduzir Deck A' }).click();
+  await expect(deckA.getByRole('button', { name: 'Pausar Deck A' })).toBeVisible();
+  await expect.poll(async () => page.evaluate(() => (
+    (globalThis as typeof globalThis & { __homeMusicE2eMidiOutputMessages?: number[][] })
+      .__homeMusicE2eMidiOutputMessages?.some(message => (
+        message[0] === 0x90 && message[1] === 0x0b && message[2] === 0x7f
+      )) ?? false
+  ))).toBe(true);
+
+  await deckA.getByRole('button', { name: 'Pausar Deck A' }).click();
+  await expect(deckA.getByRole('button', { name: 'Reproduzir Deck A' })).toBeVisible();
+  await expect.poll(async () => page.evaluate(() => (
+    (globalThis as typeof globalThis & { __homeMusicE2eMidiOutputMessages?: number[][] })
+      .__homeMusicE2eMidiOutputMessages?.some(message => (
+        message[0] === 0x90 && message[1] === 0x0b && message[2] === 0x00
+      )) ?? false
+  ))).toBe(true);
+
   await page.evaluate(() => {
     const input = (globalThis as typeof globalThis & {
       __homeMusicE2eMidiInput?: {
@@ -146,8 +173,23 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   });
   await expect(deckA.getByRole('button', { name: 'Reproduzir Deck A' })).toBeVisible();
 
+  const messagesBeforeReconnect = await page.evaluate(() => (
+    (globalThis as typeof globalThis & { __homeMusicE2eMidiOutputMessages?: number[][] })
+      .__homeMusicE2eMidiOutputMessages?.length ?? 0
+  ));
+
   await midi.getByRole('button', { name: 'Desconectar' }).click();
   await expect(midi).toContainText('Desconectado');
+
+  await midi.getByRole('button', { name: 'Conectar' }).click();
+  await expect(midi).toContainText('Conectado');
+  await midi.getByLabel('Entrada').selectOption('e2e-ddj-input');
+  await midi.getByLabel('Saída').selectOption('e2e-ddj-output');
+
+  await expect.poll(async () => page.evaluate(() => (
+    (globalThis as typeof globalThis & { __homeMusicE2eMidiOutputMessages?: number[][] })
+      .__homeMusicE2eMidiOutputMessages?.length ?? 0
+  ))).toBeGreaterThan(messagesBeforeReconnect);
   await expect(deckA).toContainText('E2E Track');
   await expect(deckB).toContainText('E2E Zeta');
 
