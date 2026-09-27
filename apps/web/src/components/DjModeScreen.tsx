@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { PointerEvent as ReactPointerEvent } from 'react';
 import type { Track, TrackRhythmOverride, TrackWaveform } from '@home-music/shared';
 import {
   ArrowLeft,
@@ -307,7 +308,7 @@ function DeckPanel({
     setLoopActive(true);
   };
 
-  const handleJog = (event: React.PointerEvent<HTMLButtonElement>) => {
+  const handleJog = (event: ReactPointerEvent<HTMLButtonElement>) => {
     if (!snapshot?.trackId) return;
     const rect = event.currentTarget.getBoundingClientRect();
     const direction: -1 | 1 = event.clientX < rect.left + (rect.width / 2) ? -1 : 1;
