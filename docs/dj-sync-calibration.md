@@ -9,7 +9,7 @@ Este documento concentra os limites de tolerância, a cobertura automatizada e o
 
 | Métrica | Limite atual | Evidência |
 | --- | ---: | --- |
-| BPM sintético estável | erro absoluto <= 1 BPM | `rhythm-analysis.test.ts` |
+| BPM sintético estável | erro absoluto <= 1 BPM; 174 BPM aceita half-time 87 BPM como ambiguidade explícita | `rhythm-analysis.test.ts` |
 | primeiro beat sintético | erro absoluto <= 40 ms | `rhythm-analysis.test.ts` |
 | downbeat 3/4 e 4/4 | erro absoluto <= 40 ms | `rhythm-analysis.test.ts` |
 | deadband de phase lock | 12 ms | `DJ_SYNC_PHASE_DEADBAND_SECONDS` |
@@ -32,7 +32,7 @@ A suíte automatizada cobre:
 - 120 BPM;
 - 128 BPM;
 - 140 BPM;
-- 174 BPM;
+- 174 BPM com ambiguidade half-time explicitamente aceita/medida;
 - offsets conhecidos de fase;
 - compassos 3/4 e 4/4;
 - downbeat conhecido;
