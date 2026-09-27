@@ -159,7 +159,12 @@ test('TranscodeManager mantém job deduplicado quando apenas um consumidor abort
       { ownerId: 'user-b', signal: secondController.signal },
       () => manager.prepare(source)
     );
-    await new Promise(resolve => setTimeout(resolve, 5));
+    await waitFor(() => {
+      const pending = (manager as unknown as {
+        pending: Map<string, { consumers: number }>;
+      }).pending;
+      return [...pending.values()].some(entry => entry.consumers === 2);
+    });
 
     firstController.abort();
     await assert.rejects(first, HeavyWorkQueueAbortedError);
