@@ -71,10 +71,18 @@ test('playback normal permanece funcional sem metadata rítmica em mobile e desk
   await expect(page.getByText('E2E Track', { exact: true }).first()).toBeVisible();
 
   const playButton = isMobile
-    ? page.locator('.controls .play-button')
+    ? page.locator('.player-hero-play__control')
     : page.locator('.desktop-now-playing-screen__cover-play');
 
+  if (isMobile && !(await playButton.isVisible())) {
+    await page.getByRole('button', { name: 'Mostrar controles de reprodução' }).click();
+  }
+
+  await expect(playButton).toBeVisible();
   await expect(playButton).toHaveAttribute('aria-label', 'Tocar');
+  if (isMobile && !(await playButton.isVisible())) {
+    await page.getByRole('button', { name: 'Mostrar controles de reprodução' }).click();
+  }
   await playButton.click();
   await expect(playButton).toHaveAttribute('aria-label', 'Pausar');
 
@@ -106,6 +114,9 @@ test('playback normal permanece funcional sem metadata rítmica em mobile e desk
       .find(audio => !audio.paused && !audio.ended)?.currentTime ?? 0
   )), { timeout: 5_000 }).toBeGreaterThan(3);
 
+  if (isMobile && !(await playButton.isVisible())) {
+    await page.getByRole('button', { name: 'Mostrar controles de reprodução' }).click();
+  }
   await playButton.click();
   await expect(playButton).toHaveAttribute('aria-label', 'Tocar');
 
