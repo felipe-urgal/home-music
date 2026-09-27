@@ -2577,3 +2577,24 @@
 .dj-eq-knob[data-angle="left"]::after {
   transform: translateX(-50%) rotate(-18deg);
 }
+
+
+.dj-mixer-channel-title {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 26px;
+  padding: 0 8px;
+  border: 1px solid rgba(145, 163, 183, .18);
+  border-radius: 5px;
+  background: linear-gradient(180deg, rgba(29,37,46,.95), rgba(17,23,30,.95));
+}
+
+.dj-pro-mixer__channel[data-deck="a"] .dj-mixer-channel-title {
+  color: #1f98ff;
+}
+
+.dj-pro-mixer__channel[data-deck="b"] .dj-mixer-channel-title {
+  color: #ff4b45;
+}
