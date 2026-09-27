@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { PointerEvent as ReactPointerEvent } from 'react';
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
 import type { Track, TrackRhythmOverride, TrackWaveform } from '@home-music/shared';
 import {
   ArrowLeft,
@@ -348,11 +348,6 @@ function DeckPanel({
             <div className="dj-pro-deck__track-copy">
               <strong>{state.track?.title}</strong>
               <span>{state.track?.artist || 'Artista desconhecido'}</span>
-              <div className="dj-pro-deck__track-tags">
-                <small>{bpm ? bpm.toFixed(1) + ' BPM' : 'BPM —'}</small>
-                <small>{formatTime(snapshot?.durationSeconds ?? state.track?.duration ?? 0)}</small>
-                {state.track?.rhythm?.manualOverride ? <small>GRID M</small> : null}
-              </div>
             </div>
           </div>
 
@@ -873,7 +868,7 @@ function DjMixer({
         <div className="dj-eq-strip" aria-label="EQ Channel A aguardando validação da interface de áudio">
           {['LOW', 'MID', 'HIGH', 'FILTER'].map((label, index) => (
             <span className="dj-eq-control" key={label}>
-              <i className="dj-eq-knob" style={{ '--knob-angle': (index === 3 ? '18deg' : '0deg') } as React.CSSProperties} />
+              <i className="dj-eq-knob" style={{ '--knob-angle': (index === 3 ? '18deg' : '0deg') } as CSSProperties} />
               <small>{label}</small>
             </span>
           ))}
@@ -895,7 +890,7 @@ function DjMixer({
         <div className="dj-eq-strip" aria-label="EQ Channel B aguardando validação da interface de áudio">
           {['LOW', 'MID', 'HIGH', 'FILTER'].map((label, index) => (
             <span className="dj-eq-control" key={label}>
-              <i className="dj-eq-knob" style={{ '--knob-angle': (index === 3 ? '-18deg' : '0deg') } as React.CSSProperties} />
+              <i className="dj-eq-knob" style={{ '--knob-angle': (index === 3 ? '-18deg' : '0deg') } as CSSProperties} />
               <small>{label}</small>
             </span>
           ))}
@@ -944,7 +939,7 @@ export function DjModeScreen({
       <header className="dj-mode__header">
         <div className="dj-mode__brand">
           <span className="dj-mode__brand-icon" aria-hidden="true"><Disc3 /></span>
-          <div><strong>Modo DJ</strong><small>Dual-deck · Misture, crie e mantenha o flow</small></div>
+          <div><strong>Modo DJ</strong><small>Dual-deck • Misture, crie e mantenha o flow</small></div>
         </div>
         <div className="dj-mode__header-actions">
           <details className="dj-shortcuts">
