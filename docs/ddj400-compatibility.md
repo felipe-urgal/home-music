@@ -24,7 +24,7 @@ A issue #524 fica coberta sem depender de hardware físico:
 - curva equal-power, centro e extremos: `dual-deck-mixer.test.ts`;
 - composição master × channel × crossfader sem clipping: `dual-deck-mixer.test.ts`;
 - mudanças rápidas sem misturar estado entre controles: `ddj400-mixer-mapping.test.ts`;
-- ao entrar em AutoMix, o mixer manual volta ao neutro; ao retornar para Manual, os controles A/B e crossfader voltam a responder: `dj-mode-regressions.spec.ts`;
+- ao entrar em AutoMix, os channel faders voltam a 100% e o crossfader mantém a posição atual; ao retornar para Manual, A/B e crossfader voltam a responder: `dj-mode-regressions.spec.ts`;
 - saída do Modo DJ remove a superfície do mixer e retorna ao player normal: `dj-mode-regressions.spec.ts`;
 - player comum continua coberto pelo gate desktop.
 
