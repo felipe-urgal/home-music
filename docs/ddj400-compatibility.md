@@ -15,6 +15,21 @@ Esta matriz acompanha a epic #518. Resultados físicos só devem ser preenchidos
 | Headphones/cue separado | Pendente de teste físico | #526 |
 | EQ / headphone cue avançado | Bloqueado pela decisão do spike | #527 |
 
+## Evidência automatizada do mixer (#524)
+
+A issue #524 fica coberta sem depender de hardware físico:
+
+- channel faders A/B independentes: `ddj400-mixer-mapping.test.ts` + E2E do Modo DJ;
+- crossfader normalizado em `-1..1`: `ddj400-mixer-mapping.test.ts`;
+- curva equal-power, centro e extremos: `dual-deck-mixer.test.ts`;
+- composição master × channel × crossfader sem clipping: `dual-deck-mixer.test.ts`;
+- mudanças rápidas sem misturar estado entre controles: `ddj400-mixer-mapping.test.ts`;
+- ao entrar em AutoMix, os channel faders voltam a 100% e o crossfader mantém a posição atual; ao retornar para Manual, A/B e crossfader voltam a responder: `dj-mode-regressions.spec.ts`;
+- saída do Modo DJ remove a superfície do mixer e retorna ao player normal: `dj-mode-regressions.spec.ts`;
+- player comum continua coberto pelo gate desktop.
+
+A validação física da DDJ-400 continua relevante para compatibilidade de hardware da epic #518/#528, mas não é critério de fechamento da #524.
+
 ## Matriz de homologação física
 
 Preencher somente quando a controladora estiver disponível.
