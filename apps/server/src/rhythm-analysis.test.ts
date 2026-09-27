@@ -57,7 +57,7 @@ function driftingPulseTrack(
   return samples;
 }
 
-for (const bpm of [60, 90, 120, 128, 150]) {
+for (const bpm of [60, 90, 120, 128, 140, 150, 174]) {
   test(`detecta BPM estável próximo de ${bpm}`, () => {
     const result = analyzePcmRhythm(pulseTrack(bpm, 0.3));
     assert.ok(result);
@@ -75,6 +75,17 @@ test('respeita offset diferente de zero na primeira batida', () => {
   assert.ok(result);
   assert.ok(Math.abs(result.firstBeatSeconds - 1.17) <= 0.04);
 });
+
+test('preserva fase quando existe intro longa sem bateria', () => {
+  const result = analyzePcmRhythm(pulseTrack(128, 6.2, 24));
+  assert.ok(result);
+  assert.ok(Math.abs(result.bpm - 128) <= 1, `BPM detectado: ${result.bpm}`);
+  assert.ok(
+    Math.abs(result.firstBeatSeconds - 6.2) <= 0.04,
+    `Primeira batida detectada: ${result.firstBeatSeconds}`
+  );
+});
+
 
 test('detecta downbeat 4/4 quando há acentuação periódica suficiente', () => {
   const result = analyzePcmRhythm(
