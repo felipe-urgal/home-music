@@ -21,6 +21,22 @@ describe('DDJ-400 performance mapping', () => {
     }
   });
 
+  it('limita os extremos do pitch à faixa documentada de ±6%', () => {
+    const low = new Ddj400PerformanceMapper();
+    low.decode(ddj400Cc('a', DDJ400_MIDI_FIXTURES.tempo.lsb, 0));
+    const lowCommand = low.decode(ddj400Cc('a', DDJ400_MIDI_FIXTURES.tempo.msb, 0));
+
+    const high = new Ddj400PerformanceMapper();
+    high.decode(ddj400Cc('a', DDJ400_MIDI_FIXTURES.tempo.lsb, 127));
+    const highCommand = high.decode(ddj400Cc('a', DDJ400_MIDI_FIXTURES.tempo.msb, 127));
+
+    expect(lowCommand).toEqual({ type: 'deck.set-tempo', deck: 'a', playbackRate: 1.06 });
+    expect(highCommand?.type).toBe('deck.set-tempo');
+    if (highCommand?.type === 'deck.set-tempo') {
+      expect(highCommand.playbackRate).toBeCloseTo(0.94, 3);
+    }
+  });
+
   it('mantém estado 14-bit independente por deck', () => {
     const mapper = new Ddj400PerformanceMapper();
 
