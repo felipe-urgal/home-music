@@ -16,6 +16,7 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
       onmidimessage: null
     };
     const sentMidi: number[][] = [];
+    const sentMidiSecondary: number[][] = [];
     const output = {
       id: 'e2e-ddj-output',
       name: 'E2E DDJ-400 OUT',
@@ -26,9 +27,19 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
         sentMidi.push(Array.from(data));
       }
     };
+    const secondaryOutput = {
+      id: 'e2e-ddj-output-secondary',
+      name: 'E2E DDJ-400 OUT 2',
+      manufacturer: 'E2E',
+      state: 'connected',
+      type: 'output',
+      send: (data: number[] | Uint8Array) => {
+        sentMidiSecondary.push(Array.from(data));
+      }
+    };
     const access = {
       inputs: new Map([[input.id, input]]),
-      outputs: new Map([[output.id, output]]),
+      outputs: new Map([[output.id, output], [secondaryOutput.id, secondaryOutput]]),
       onstatechange: null
     };
 
@@ -39,7 +50,8 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
     Object.assign(globalThis, {
       __homeMusicE2eMidiInput: input,
       __homeMusicE2eMidiAccess: access,
-      __homeMusicE2eMidiOutputMessages: sentMidi
+      __homeMusicE2eMidiOutputMessages: sentMidi,
+      __homeMusicE2eMidiSecondaryOutputMessages: sentMidiSecondary
     });
   });
 
@@ -130,6 +142,38 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
     (globalThis as typeof globalThis & { __homeMusicE2eMidiOutputMessages?: number[][] })
       .__homeMusicE2eMidiOutputMessages?.some(message => (
         message[0] === 0x90 && message[1] === 0x0b && message[2] === 0x00
+      )) ?? false
+  ))).toBe(true);
+
+  await deckA.getByRole('button', { name: 'CUE' }).click();
+  await expect.poll(async () => page.evaluate(() => (
+    (globalThis as typeof globalThis & { __homeMusicE2eMidiOutputMessages?: number[][] })
+      .__homeMusicE2eMidiOutputMessages?.some(message => (
+        message[0] === 0x90 && message[1] === 0x0c && message[2] === 0x7f
+      )) ?? false
+  ))).toBe(true);
+
+  const primaryMessagesBeforeOutputSwitch = await page.evaluate(() => (
+    (globalThis as typeof globalThis & { __homeMusicE2eMidiOutputMessages?: number[][] })
+      .__homeMusicE2eMidiOutputMessages?.length ?? 0
+  ));
+
+  await midi.getByLabel('Saída').selectOption('e2e-ddj-output-secondary');
+
+  await expect.poll(async () => page.evaluate(() => (
+    (globalThis as typeof globalThis & { __homeMusicE2eMidiOutputMessages?: number[][] })
+      .__homeMusicE2eMidiOutputMessages?.length ?? 0
+  ))).toBeGreaterThanOrEqual(primaryMessagesBeforeOutputSwitch + 6);
+
+  await expect.poll(async () => page.evaluate(() => (
+    (globalThis as typeof globalThis & { __homeMusicE2eMidiSecondaryOutputMessages?: number[][] })
+      .__homeMusicE2eMidiSecondaryOutputMessages?.length ?? 0
+  ))).toBeGreaterThanOrEqual(6);
+
+  await expect.poll(async () => page.evaluate(() => (
+    (globalThis as typeof globalThis & { __homeMusicE2eMidiSecondaryOutputMessages?: number[][] })
+      .__homeMusicE2eMidiSecondaryOutputMessages?.some(message => (
+        message[0] === 0x90 && message[1] === 0x0c && message[2] === 0x7f
       )) ?? false
   ))).toBe(true);
 
