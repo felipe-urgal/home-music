@@ -59,6 +59,21 @@ A cobertura sem hardware físico agora inclui também:
 
 O QA físico de pitch, jog e SYNC continua pendente na #523/#528.
 
+## Evidência automatizada do mapping básico (#522)
+
+A cobertura sem hardware físico agora inclui:
+
+- browser rotary alterando a seleção da biblioteca via input MIDI simulado: `dj-mode-regressions.spec.ts`;
+- LOAD esquerdo e direito carregando Deck A/B a partir da seleção feita pelo browser MIDI: `dj-mode-regressions.spec.ts`;
+- PLAY/PAUSE independente por deck: `dj-mode-regressions.spec.ts` + `ddj400-mapping.test.ts`;
+- CUE via MIDI no Deck B sem alterar o playback do Deck A: `dj-mode-regressions.spec.ts`;
+- note-off/velocity zero não duplica LOAD, PLAY ou CUE: `dj-mode-regressions.spec.ts` + `ddj400-mapping.test.ts`;
+- fixtures nomeadas e bytes do MVP: `ddj400-midi-fixtures.test.ts`;
+- eventos desconhecidos ignorados: `ddj400-mapping.test.ts`;
+- player normal continua coberto pelo gate desktop.
+
+A homologação física da DDJ-400 continua pendente e permanece critério da #522/#528.
+
 ## Matriz de homologação física
 
 Preencher somente quando a controladora estiver disponível.
