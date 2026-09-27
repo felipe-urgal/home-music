@@ -330,7 +330,6 @@ function DeckPanel({
         </div>
         <div className="dj-pro-deck__heading-actions">
           {state.syncMaster && <span className="dj-sync-master-badge">MASTER</span>}
-          <span className="dj-deck-letter" aria-hidden="true">{deck.toUpperCase()}</span>
           <MoreVertical aria-hidden="true" />
         </div>
       </div>
