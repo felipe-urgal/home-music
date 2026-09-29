@@ -704,7 +704,13 @@ function RhythmGridEditor({
         <button type="button" onClick={onClose} disabled={saving}>Fechar</button>
       </div>
 
-      <DjWaveform deck="a" track={previewTrack} progress={0} />
+      <DjWaveform
+        deck="a"
+        track={previewTrack}
+        progress={0}
+        hotCues={[null, null, null, null]}
+        onHotCueSeek={() => undefined}
+      />
 
       <div className="dj-grid-editor__fields">
         <label>
