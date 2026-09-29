@@ -497,6 +497,10 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   });
   await expect(deckA.getByRole('button', { name: 'Reproduzir Deck A' })).toBeVisible();
 
+  await library.getByRole('option').filter({ hasText: 'E2E Zeta' }).click();
+  await dj.getByRole('button', { name: 'LOAD B' }).click();
+  await expect(deckB).toContainText('E2E Zeta');
+
   const messagesBeforeReconnect = await page.evaluate(() => (
     (globalThis as typeof globalThis & { __homeMusicE2eMidiOutputMessages?: number[][] })
       .__homeMusicE2eMidiOutputMessages?.length ?? 0
