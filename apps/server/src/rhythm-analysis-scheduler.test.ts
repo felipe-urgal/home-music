@@ -426,3 +426,83 @@ test('scheduler reutilizado gera waveform sem refazer ritmo já atual', async ()
   assert.equal(scheduler.runtime.waveformAvailable, 1);
   assert.equal(scheduler.runtime.waveformFailed, 0);
 });
+
+
+test('scheduler gera tonalidade sem refazer ritmo e waveform atuais', async () => {
+  let current: IndexedTrack = {
+    ...track(),
+    rhythm: { bpm: 120, firstBeatSeconds: 0.2, confidence: 0.9 },
+    rhythmAnalysisCurrent: true,
+    waveformAnalysisCurrent: true
+  };
+  let rhythmCalls = 0;
+  let keyCalls = 0;
+  let saveKeyCalls = 0;
+  let resolveApplied!: () => void;
+  const applied = new Promise<void>(resolve => { resolveApplied = resolve; });
+
+  const library = {
+    allTracks: [current],
+    getTrack: (trackId: string) => trackId === current.id ? current : undefined,
+    applyRhythmAnalysis: () => {
+      throw new Error('ritmo não deveria ser recalculado');
+    },
+    applyWaveformAnalysis: () => {
+      throw new Error('waveform não deveria ser recalculado');
+    },
+    applyKeyAnalysis: (
+      _trackId: string,
+      _sourceFileSize: number,
+      _sourceMtimeMs: number,
+      key: NonNullable<IndexedTrack['key']>
+    ) => {
+      current = { ...current, key, keyAnalysisCurrent: true };
+      resolveApplied();
+      return true;
+    }
+  } as unknown as LibraryService;
+
+  const database = {
+    saveTrackRhythmAnalysis: () => {
+      throw new Error('ritmo não deveria ser persistido novamente');
+    },
+    saveTrackKeyAnalysis: () => {
+      saveKeyCalls += 1;
+      return true;
+    }
+  } as unknown as HomeMusicDatabase;
+
+  const scheduler = new RhythmAnalysisScheduler({
+    library,
+    database,
+    logger,
+    analyze: async () => {
+      rhythmCalls += 1;
+      return { bpm: 120, firstBeatSeconds: 0.2, confidence: 0.9 };
+    },
+    analyzeKey: async () => {
+      keyCalls += 1;
+      return {
+        version: 1,
+        tonic: 'C',
+        mode: 'major',
+        notation: 'C Maj',
+        camelot: '8B',
+        confidence: 0.81
+      };
+    }
+  });
+
+  scheduler.sync();
+  await applied;
+  scheduler.sync();
+  await new Promise<void>(resolve => setImmediate(resolve));
+  await scheduler.stop();
+
+  assert.equal(rhythmCalls, 0);
+  assert.equal(keyCalls, 1);
+  assert.equal(saveKeyCalls, 1);
+  assert.equal(scheduler.runtime.keyCompleted, 1);
+  assert.equal(scheduler.runtime.keyAvailable, 1);
+  assert.equal(scheduler.runtime.keyFailed, 0);
+});
