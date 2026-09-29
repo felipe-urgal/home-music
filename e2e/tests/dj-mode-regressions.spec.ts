@@ -76,6 +76,7 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   const deckB = page.getByRole('article', { name: 'Deck B' });
   const mixer = page.getByRole('region', { name: 'Mixer' });
   const midi = page.getByRole('region', { name: 'Controlador MIDI' });
+  const midiDrawer = page.locator('details.dj-midi-drawer');
   const library = page.getByRole('listbox', { name: 'Faixas' });
 
   await expect(deckA).toContainText('Nenhuma faixa carregada');
@@ -270,6 +271,9 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   await expect(mixer.locator('.dj-pro-mixer__channel[data-deck="a"] strong')).toHaveText('42%');
   await expect(mixer.locator('.dj-pro-mixer__channel[data-deck="b"] strong')).toHaveText('73%');
   await expect(mixer.locator('.dj-pro-mixer__crossfader strong')).toHaveText('A 100%');
+
+  await midiDrawer.locator('summary').click();
+  await expect(midiDrawer).toHaveAttribute('open', '');
 
   await midi.getByRole('button', { name: 'Conectar' }).click();
   await expect(midi).toContainText('Conectado');
