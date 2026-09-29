@@ -157,21 +157,25 @@ function DjWaveform({
   deck,
   track,
   progress,
+  currentTimeSeconds,
   hotCues,
   loopIn,
   loopOut,
   loopActive,
   hotLoopCueIndex,
+  onSeek,
   onHotCueSeek
 }: {
   deck: DjDeckId;
   track: Track;
   progress: number;
+  currentTimeSeconds: number;
   hotCues: TrackHotCues['positions'];
   loopIn: number | null;
   loopOut: number | null;
   loopActive: boolean;
   hotLoopCueIndex: number | null;
+  onSeek: (seconds: number) => void;
   onHotCueSeek: (seconds: number) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -237,8 +241,46 @@ function DjWaveform({
     return () => observer?.disconnect();
   }, [deck, track.duration, track.rhythm, waveform]);
 
+  const seekFromPointer = (event: React.MouseEvent<HTMLDivElement>) => {
+    if ((event.target as HTMLElement).closest('button')) return;
+    if (durationSeconds <= 0) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / Math.max(1, rect.width)));
+    onSeek(ratio * durationSeconds);
+  };
+
+  const seekFromKeyboard = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (durationSeconds <= 0) return;
+    const step = event.shiftKey ? 10 : 5;
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault();
+      onSeek(Math.max(0, currentTimeSeconds - step));
+    } else if (event.key === 'ArrowRight') {
+      event.preventDefault();
+      onSeek(Math.min(durationSeconds, currentTimeSeconds + step));
+    } else if (event.key === 'Home') {
+      event.preventDefault();
+      onSeek(0);
+    } else if (event.key === 'End') {
+      event.preventDefault();
+      onSeek(durationSeconds);
+    }
+  };
+
   return (
-    <div className="dj-waveform" data-status={status} aria-label="Waveform real da faixa">
+    <div
+      className="dj-waveform"
+      data-status={status}
+      role="slider"
+      tabIndex={0}
+      aria-label={'Buscar posição no waveform ' + (deck === 'a' ? 'Deck A' : 'Deck B')}
+      aria-valuemin={0}
+      aria-valuemax={Math.max(0, durationSeconds)}
+      aria-valuenow={Math.max(0, Math.min(durationSeconds, currentTimeSeconds))}
+      aria-valuetext={formatTime(currentTimeSeconds) + ' de ' + formatTime(durationSeconds)}
+      onClick={seekFromPointer}
+      onKeyDown={seekFromKeyboard}
+    >
       <canvas ref={canvasRef} className="dj-waveform__canvas" aria-hidden="true" />
       <span className="dj-waveform__remaining" style={{ left: `${progress}%` }} aria-hidden="true" />
       {loopRange && (
@@ -267,6 +309,12 @@ function DjWaveform({
         </button>
       ))}
       <span className="dj-waveform__playhead" style={{ left: `${progress}%` }} aria-hidden="true" />
+      <span className="dj-waveform__time dj-waveform__time--elapsed" aria-hidden="true">
+        {formatTime(currentTimeSeconds)}
+      </span>
+      <span className="dj-waveform__time dj-waveform__time--remaining" aria-hidden="true">
+        {durationSeconds > 0 ? '-' + formatTime(Math.max(0, durationSeconds - currentTimeSeconds)) : '0:00'}
+      </span>
       {status !== 'ready' && (
         <span className="dj-waveform__status">
           {status === 'loading'
@@ -516,31 +564,15 @@ function DeckPanel({
             deck={deck}
             track={state.track!}
             progress={progress}
+            currentTimeSeconds={snapshot?.currentTimeSeconds ?? 0}
             hotCues={hotCues}
             loopIn={loopIn}
             loopOut={loopOut}
             loopActive={loopActive}
             hotLoopCueIndex={hotLoopCueIndex}
+            onSeek={seconds => onSeek(deck, seconds)}
             onHotCueSeek={seconds => onSeek(deck, seconds)}
           />
-
-          <div className="dj-pro-deck__timeline">
-            <span>{formatTime(snapshot?.currentTimeSeconds ?? 0)}</span>
-            <span>{formatTime(snapshot?.durationSeconds ?? state.track?.duration ?? 0)}</span>
-          </div>
-
-          <button
-            type="button"
-            className="dj-pro-deck__progress"
-            aria-label={'Buscar posição no ' + label}
-            onClick={event => {
-              const rect = event.currentTarget.getBoundingClientRect();
-              const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / Math.max(1, rect.width)));
-              onSeek(deck, ratio * (snapshot?.durationSeconds ?? state.track?.duration ?? 0));
-            }}
-          >
-            <span style={{ width: progress + '%' }} />
-          </button>
 
           <div className="dj-pro-deck__metrics">
             <div><span>BPM</span><strong>{bpm ? bpm.toFixed(1) : '—'}</strong></div>
@@ -914,8 +946,7 @@ function DjLibrary({
   const filtered = useMemo(() => tracks
     .map((track, index) => ({ track, index }))
     .filter(({ track }) => !normalized || [track.title, track.artist, track.album]
-      .some(value => value.toLocaleLowerCase().includes(normalized)))
-    .slice(0, 40), [normalized, tracks]);
+      .some(value => value.toLocaleLowerCase().includes(normalized))), [normalized, tracks]);
 
   return (
     <section className="dj-pro-library" aria-label="Biblioteca DJ">
@@ -1155,7 +1186,10 @@ function DjMixer({
         <strong>{Math.round(mixer.channelVolumes.a * 100)}%</strong>
         {channelMeter(mixer.channelVolumes.a)}
       </label>
-      <label className="dj-pro-mixer__crossfader">
+      <label
+        className="dj-pro-mixer__crossfader"
+        data-side={Math.abs(mixer.crossfader) < 0.005 ? 'center' : mixer.crossfader < 0 ? 'a' : 'b'}
+      >
         <span>Crossfader</span>
         <div><small>A</small><input type="range" min="-1" max="1" step="0.01" value={mixer.crossfader} onChange={event => onCrossfader(Number(event.currentTarget.value))} /><small>B</small></div>
         <strong>{mixer.crossfader === 0 ? 'Centro' : mixer.crossfader < 0 ? 'A ' + Math.round(Math.abs(mixer.crossfader) * 100) + '%' : 'B ' + Math.round(mixer.crossfader * 100) + '%'}</strong>
