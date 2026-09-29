@@ -233,12 +233,12 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   await deckB.getByRole('button', { name: 'Pausar Deck B' }).click();
   await expect(deckB.getByRole('button', { name: 'Reproduzir Deck B' })).toBeVisible();
 
-  const channelA = mixer.locator('.dj-pro-mixer__channel[data-deck="a"] .dj-mixer-channel-row input');
-  const channelB = mixer.locator('.dj-pro-mixer__channel[data-deck="b"] .dj-mixer-channel-row input');
-  const lowA = mixer.getByRole('slider', { name: 'LOW Channel A' });
-  const midA = mixer.getByRole('slider', { name: 'MID Channel A' });
-  const highB = mixer.getByRole('slider', { name: 'HIGH Channel B' });
-  const filterB = mixer.getByRole('slider', { name: 'FILTER Channel B' });
+  const channelA = mixer.locator('.dj-pro-mixer__channel[data-deck="a"] .dj-mixer-channel-volume input');
+  const channelB = mixer.locator('.dj-pro-mixer__channel[data-deck="b"] .dj-mixer-channel-volume input');
+  const lowA = mixer.getByRole('slider', { name: 'GRAVES Channel A' });
+  const midA = mixer.getByRole('slider', { name: 'MÉDIOS Channel A' });
+  const highB = mixer.getByRole('slider', { name: 'AGUDOS Channel B' });
+  const filterB = mixer.getByRole('slider', { name: 'FILTRO Channel B' });
   const crossfader = mixer.locator('.dj-pro-mixer__crossfader input');
 
   await expect(mixer.locator('.dj-pro-mixer__crossfader')).toHaveAttribute('data-side', 'center');
@@ -246,6 +246,27 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   await midA.fill('-0.25');
   await highB.fill('0.75');
   await filterB.fill('-0.5');
+
+  const echoA = mixer.getByRole('button', { name: 'Echo Channel A' });
+  const echoWetA = mixer.getByRole('slider', { name: 'Echo Wet Channel A' });
+  const echoFeedbackA = mixer.getByRole('slider', { name: 'Echo Feedback Channel A' });
+  const echoDelayA = mixer.getByRole('slider', { name: 'Echo Delay Channel A' });
+  const reverbB = mixer.getByRole('button', { name: 'Reverb Channel B' });
+  const reverbWetB = mixer.getByRole('slider', { name: 'Reverb Wet Channel B' });
+
+  await expect(echoA).toHaveAttribute('aria-pressed', 'false');
+  await echoA.click();
+  await echoWetA.fill('0.44');
+  await echoFeedbackA.fill('0.35');
+  await echoDelayA.fill('0.5');
+  await reverbB.click();
+  await reverbWetB.fill('0.3');
+  await expect(echoA).toHaveAttribute('aria-pressed', 'true');
+  await expect(echoWetA).toHaveValue('0.44');
+  await expect(echoFeedbackA).toHaveValue('0.35');
+  await expect(echoDelayA).toHaveValue('0.5');
+  await expect(reverbB).toHaveAttribute('aria-pressed', 'true');
+  await expect(reverbWetB).toHaveValue('0.3');
   await expect(lowA).toHaveAttribute('aria-valuetext', '9.0 dB');
   await expect(midA).toHaveAttribute('aria-valuetext', '-4.5 dB');
   await expect(highB).toHaveAttribute('aria-valuetext', '13.5 dB');
@@ -587,10 +608,10 @@ test('Modo DJ restaura EQ neutro ao sair e reentrar', async ({ page }) => {
   const mixer = page.getByRole('region', { name: 'Mixer' });
   await expect(dj).toBeVisible();
 
-  await mixer.getByRole('slider', { name: 'LOW Channel A' }).fill('0.5');
-  await mixer.getByRole('slider', { name: 'MID Channel A' }).fill('-0.25');
-  await mixer.getByRole('slider', { name: 'HIGH Channel B' }).fill('0.75');
-  await mixer.getByRole('slider', { name: 'FILTER Channel B' }).fill('-0.5');
+  await mixer.getByRole('slider', { name: 'GRAVES Channel A' }).fill('0.5');
+  await mixer.getByRole('slider', { name: 'MÉDIOS Channel A' }).fill('-0.25');
+  await mixer.getByRole('slider', { name: 'AGUDOS Channel B' }).fill('0.75');
+  await mixer.getByRole('slider', { name: 'FILTRO Channel B' }).fill('-0.5');
 
   await dj.getByRole('button', { name: 'Sair do modo DJ' }).click();
   await expect(page.locator('.desktop-now-playing-screen')).toBeVisible();
@@ -605,8 +626,10 @@ test('Modo DJ restaura EQ neutro ao sair e reentrar', async ({ page }) => {
   const reopenedDj = page.getByRole('region', { name: 'Modo DJ' });
   const reopenedMixer = page.getByRole('region', { name: 'Mixer' });
   await expect(reopenedDj).toBeVisible();
-  await expect(reopenedMixer.getByRole('slider', { name: 'LOW Channel A' })).toHaveValue('0');
-  await expect(reopenedMixer.getByRole('slider', { name: 'MID Channel A' })).toHaveValue('0');
-  await expect(reopenedMixer.getByRole('slider', { name: 'HIGH Channel B' })).toHaveValue('0');
-  await expect(reopenedMixer.getByRole('slider', { name: 'FILTER Channel B' })).toHaveValue('0');
+  await expect(reopenedMixer.getByRole('slider', { name: 'GRAVES Channel A' })).toHaveValue('0');
+  await expect(reopenedMixer.getByRole('slider', { name: 'MÉDIOS Channel A' })).toHaveValue('0');
+  await expect(reopenedMixer.getByRole('slider', { name: 'AGUDOS Channel B' })).toHaveValue('0');
+  await expect(reopenedMixer.getByRole('slider', { name: 'FILTRO Channel B' })).toHaveValue('0');
+  await expect(reopenedMixer.getByRole('button', { name: 'Echo Channel A' })).toHaveAttribute('aria-pressed', 'false');
+  await expect(reopenedMixer.getByRole('button', { name: 'Reverb Channel B' })).toHaveAttribute('aria-pressed', 'false');
 });

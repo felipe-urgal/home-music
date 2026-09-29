@@ -50,6 +50,16 @@ describe('dual deck mixer', () => {
       eq: {
         a: { low: 0, mid: 0, high: 0, filter: 0 },
         b: { low: 0, mid: 0, high: 0, filter: 0 }
+      },
+      fx: {
+        a: {
+          echo: { enabled: false, wet: 0.25, feedback: 0.28, delaySeconds: 0.25 },
+          reverb: { enabled: false, wet: 0.22 }
+        },
+        b: {
+          echo: { enabled: false, wet: 0.25, feedback: 0.28, delaySeconds: 0.25 },
+          reverb: { enabled: false, wet: 0.22 }
+        }
       }
     });
   });

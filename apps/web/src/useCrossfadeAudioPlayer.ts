@@ -49,8 +49,10 @@ import {
 } from './dual-deck-audio';
 import type { DjDeckId } from './dj-controller-contract';
 import { clampDjEqValue, type DjEqControl } from './dj-eq';
+import { clampDjDelaySeconds, clampDjFxUnit, type DjFxKind } from './dj-fx';
 import {
   applyDjEqStateToGraph,
+  applyDjFxStateToGraph,
   createDjEqAudioGraph,
   disposeDjEqAudioGraph,
   readDjEqMeterLevel,
@@ -151,6 +153,12 @@ export function useCrossfadeAudioPlayer(
     applyDjEqStateToGraph(graph, deck, dualDeckMixerRef.current.eq[deck]);
   }, []);
 
+  const applyDjFxToGraph = useCallback((deck: DjDeckId) => {
+    const graph = djEqGraphRef.current;
+    if (!graph) return;
+    applyDjFxStateToGraph(graph, deck, dualDeckMixerRef.current.fx[deck]);
+  }, []);
+
   const ensureDjEqGraph = useCallback(() => {
     if (djEqGraphRef.current) return djEqGraphRef.current;
     if (djEqGraphUnavailableRef.current) return null;
@@ -174,9 +182,11 @@ export function useCrossfadeAudioPlayer(
     djEqGraphRef.current = graph;
     applyDjEqToGraph('a');
     applyDjEqToGraph('b');
+    applyDjFxToGraph('a');
+    applyDjFxToGraph('b');
     void resumeDjEqAudioGraph(graph);
     return graph;
-  }, [applyDjEqToGraph, getDeckAudio]);
+  }, [applyDjEqToGraph, applyDjFxToGraph, getDeckAudio]);
 
   const applyDualDeckMixer = useCallback(() => {
     const mixer = dualDeckMixerRef.current;
@@ -819,6 +829,8 @@ export function useCrossfadeAudioPlayer(
       ensureDjEqGraph();
       applyDjEqToGraph('a');
       applyDjEqToGraph('b');
+      applyDjFxToGraph('a');
+      applyDjFxToGraph('b');
       applyDualDeckMixer();
       return;
     }
@@ -827,8 +839,10 @@ export function useCrossfadeAudioPlayer(
     dualDeckMixerRef.current = createDefaultDualDeckMixerState();
     applyDjEqToGraph('a');
     applyDjEqToGraph('b');
+    applyDjFxToGraph('a');
+    applyDjFxToGraph('b');
     cancelCrossfade();
-  }, [applyDjEqToGraph, applyDualDeckMixer, cancelCrossfade, ensureDjEqGraph, player.current?.id]);
+  }, [applyDjEqToGraph, applyDjFxToGraph, applyDualDeckMixer, cancelCrossfade, ensureDjEqGraph, player.current?.id]);
 
   const enterDjSession = useCallback(() => {
     if (normalSessionRef.current) return;
@@ -1005,6 +1019,59 @@ export function useCrossfadeAudioPlayer(
     return dualDeckMixerRef.current.eq[deck][control];
   }, [applyDjEqToGraph, ensureDjEqGraph]);
 
+  const setDualDeckFxEnabled = useCallback((deck: DjDeckId, kind: DjFxKind, enabled: boolean) => {
+    if (!dualDeckModeRef.current) return null;
+    const current = dualDeckMixerRef.current.fx[deck];
+    dualDeckMixerRef.current.fx[deck] = kind === 'echo'
+      ? { ...current, echo: { ...current.echo, enabled } }
+      : { ...current, reverb: { ...current.reverb, enabled } };
+    ensureDjEqGraph();
+    applyDjFxToGraph(deck);
+    return kind === 'echo'
+      ? dualDeckMixerRef.current.fx[deck].echo.enabled
+      : dualDeckMixerRef.current.fx[deck].reverb.enabled;
+  }, [applyDjFxToGraph, ensureDjEqGraph]);
+
+  const setDualDeckFxWet = useCallback((deck: DjDeckId, kind: DjFxKind, wet: number) => {
+    if (!dualDeckModeRef.current) return null;
+    const normalized = clampDjFxUnit(wet);
+    const current = dualDeckMixerRef.current.fx[deck];
+    dualDeckMixerRef.current.fx[deck] = kind === 'echo'
+      ? { ...current, echo: { ...current.echo, wet: normalized } }
+      : { ...current, reverb: { ...current.reverb, wet: normalized } };
+    ensureDjEqGraph();
+    applyDjFxToGraph(deck);
+    return normalized;
+  }, [applyDjFxToGraph, ensureDjEqGraph]);
+
+  const setDualDeckEchoFeedback = useCallback((deck: DjDeckId, feedback: number) => {
+    if (!dualDeckModeRef.current) return null;
+    dualDeckMixerRef.current.fx[deck] = {
+      ...dualDeckMixerRef.current.fx[deck],
+      echo: {
+        ...dualDeckMixerRef.current.fx[deck].echo,
+        feedback: Math.min(0.82, clampDjFxUnit(feedback))
+      }
+    };
+    ensureDjEqGraph();
+    applyDjFxToGraph(deck);
+    return dualDeckMixerRef.current.fx[deck].echo.feedback;
+  }, [applyDjFxToGraph, ensureDjEqGraph]);
+
+  const setDualDeckEchoDelay = useCallback((deck: DjDeckId, delaySeconds: number) => {
+    if (!dualDeckModeRef.current) return null;
+    dualDeckMixerRef.current.fx[deck] = {
+      ...dualDeckMixerRef.current.fx[deck],
+      echo: {
+        ...dualDeckMixerRef.current.fx[deck].echo,
+        delaySeconds: clampDjDelaySeconds(delaySeconds)
+      }
+    };
+    ensureDjEqGraph();
+    applyDjFxToGraph(deck);
+    return dualDeckMixerRef.current.fx[deck].echo.delaySeconds;
+  }, [applyDjFxToGraph, ensureDjEqGraph]);
+
   const getDualDeckMeterLevel = useCallback((deck: DjDeckId) => {
     const graph = djEqGraphRef.current;
     if (!dualDeckModeRef.current || !graph) return 0;
@@ -1017,6 +1084,16 @@ export function useCrossfadeAudioPlayer(
     eq: {
       a: { ...dualDeckMixerRef.current.eq.a },
       b: { ...dualDeckMixerRef.current.eq.b }
+    },
+    fx: {
+      a: {
+        echo: { ...dualDeckMixerRef.current.fx.a.echo },
+        reverb: { ...dualDeckMixerRef.current.fx.a.reverb }
+      },
+      b: {
+        echo: { ...dualDeckMixerRef.current.fx.b.echo },
+        reverb: { ...dualDeckMixerRef.current.fx.b.reverb }
+      }
     }
   }), []);
 
@@ -1047,6 +1124,10 @@ export function useCrossfadeAudioPlayer(
       setVolume: setDualDeckVolume,
       setCrossfader: setDualDeckCrossfader,
       setEq: setDualDeckEq,
+      setFxEnabled: setDualDeckFxEnabled,
+      setFxWet: setDualDeckFxWet,
+      setEchoFeedback: setDualDeckEchoFeedback,
+      setEchoDelay: setDualDeckEchoDelay,
       getMeterLevel: getDualDeckMeterLevel,
       getMixerSnapshot: getDualDeckMixerSnapshot,
       getSnapshot: getDualDeckSnapshot

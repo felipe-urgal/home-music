@@ -4,6 +4,7 @@ import {
   djEqGainDb,
   type DjChannelEqState
 } from './dj-eq';
+import { resolveDjFxDryGain, type DjDeckFxState } from './dj-fx';
 
 type DjEqDeckNodes = {
   source: MediaElementAudioSourceNode;
@@ -11,6 +12,12 @@ type DjEqDeckNodes = {
   mid: BiquadFilterNode;
   high: BiquadFilterNode;
   filter: BiquadFilterNode;
+  dry: GainNode;
+  echoDelay: DelayNode;
+  echoWet: GainNode;
+  echoFeedback: GainNode;
+  reverb: ConvolverNode;
+  reverbWet: GainNode;
   analyser: AnalyserNode;
   meterData: Uint8Array<ArrayBuffer>;
 };
@@ -21,6 +28,22 @@ export type DjEqAudioGraph = {
 };
 
 type AudioContextConstructor = new () => AudioContext;
+
+function createReverbImpulse(context: AudioContext) {
+  const seconds = 1.35;
+  const frameCount = Math.max(1, Math.floor(context.sampleRate * seconds));
+  const impulse = context.createBuffer(2, frameCount, context.sampleRate);
+
+  for (let channel = 0; channel < impulse.numberOfChannels; channel += 1) {
+    const data = impulse.getChannelData(channel);
+    for (let index = 0; index < frameCount; index += 1) {
+      const progress = index / frameCount;
+      data[index] = ((Math.random() * 2) - 1) * Math.pow(1 - progress, 2.6);
+    }
+  }
+
+  return impulse;
+}
 
 export function createDjEqAudioGraph(options: {
   deckA: HTMLAudioElement;
@@ -33,6 +56,7 @@ export function createDjEqAudioGraph(options: {
   let context: AudioContext | null = null;
   try {
     context = new AudioContextCtor();
+    const reverbImpulse = createReverbImpulse(context);
 
     const createDeckNodes = (audio: HTMLAudioElement): DjEqDeckNodes => {
       const source = context!.createMediaElementSource(audio);
@@ -40,6 +64,12 @@ export function createDjEqAudioGraph(options: {
       const mid = context!.createBiquadFilter();
       const high = context!.createBiquadFilter();
       const filter = context!.createBiquadFilter();
+      const dry = context!.createGain();
+      const echoDelay = context!.createDelay(1.5);
+      const echoWet = context!.createGain();
+      const echoFeedback = context!.createGain();
+      const reverb = context!.createConvolver();
+      const reverbWet = context!.createGain();
       const analyser = context!.createAnalyser();
 
       low.type = 'lowshelf';
@@ -59,12 +89,42 @@ export function createDjEqAudioGraph(options: {
       filter.frequency.value = 1_000;
       filter.Q.value = 0.0001;
 
+      dry.gain.value = 1;
+      echoDelay.delayTime.value = 0.25;
+      echoWet.gain.value = 0;
+      echoFeedback.gain.value = 0;
+      reverb.buffer = reverbImpulse;
+      reverbWet.gain.value = 0;
+
       analyser.fftSize = 256;
       analyser.smoothingTimeConstant = 0.72;
       const meterData = new Uint8Array(new ArrayBuffer(analyser.fftSize));
 
-      source.connect(low).connect(mid).connect(high).connect(filter).connect(analyser).connect(context!.destination);
-      return { source, low, mid, high, filter, analyser, meterData };
+      source.connect(low).connect(mid).connect(high).connect(filter);
+      filter.connect(dry).connect(analyser);
+
+      filter.connect(echoDelay);
+      echoDelay.connect(echoWet).connect(analyser);
+      echoDelay.connect(echoFeedback).connect(echoDelay);
+
+      filter.connect(reverb).connect(reverbWet).connect(analyser);
+      analyser.connect(context!.destination);
+
+      return {
+        source,
+        low,
+        mid,
+        high,
+        filter,
+        dry,
+        echoDelay,
+        echoWet,
+        echoFeedback,
+        reverb,
+        reverbWet,
+        analyser,
+        meterData
+      };
     };
 
     return {
@@ -96,6 +156,33 @@ export function applyDjEqStateToGraph(
   nodes.filter.type = filter.type;
   nodes.filter.frequency.setTargetAtTime(filter.frequency, now, 0.015);
   nodes.filter.Q.setTargetAtTime(filter.q, now, 0.015);
+}
+
+export function applyDjFxStateToGraph(
+  graph: DjEqAudioGraph,
+  deck: DjDeckId,
+  state: DjDeckFxState
+) {
+  const nodes = graph.decks[deck];
+  const now = graph.context.currentTime;
+
+  nodes.dry.gain.setTargetAtTime(resolveDjFxDryGain(state), now, 0.015);
+  nodes.echoDelay.delayTime.setTargetAtTime(state.echo.delaySeconds, now, 0.015);
+  nodes.echoFeedback.gain.setTargetAtTime(
+    state.echo.enabled ? state.echo.feedback : 0,
+    now,
+    0.015
+  );
+  nodes.echoWet.gain.setTargetAtTime(
+    state.echo.enabled ? state.echo.wet : 0,
+    now,
+    0.015
+  );
+  nodes.reverbWet.gain.setTargetAtTime(
+    state.reverb.enabled ? state.reverb.wet : 0,
+    now,
+    0.015
+  );
 }
 
 export function readDjEqMeterLevel(graph: DjEqAudioGraph, deck: DjDeckId) {

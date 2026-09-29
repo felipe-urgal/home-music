@@ -8,8 +8,14 @@ import {
   ChevronRight,
   Disc3,
   Gauge,
+  Folder,
   Keyboard,
+  LayoutGrid,
+  Library,
+  List,
+  ListMusic,
   MoreVertical,
+  Music,
   Pause,
   Play,
   RotateCcw,
@@ -23,6 +29,7 @@ import {
 import { apiFetch } from '../api-client';
 import type { DjDeckId } from '../dj-controller-contract';
 import { DJ_EQ_GAIN_DB, type DjEqControl } from '../dj-eq';
+import type { DjFxKind } from '../dj-fx';
 import { buildDjWaveformMarkers } from '../dj-waveform-grid';
 import { resolveHotCuePosition } from '../dj-hot-cue-quantize';
 import { buildDjHotCueWaveformMarkers } from '../dj-hot-cue-waveform';
@@ -66,6 +73,10 @@ type DjModeScreenProps = {
   onSelectMidiOutput: (id: string | null) => boolean;
   onChannelVolume: (deck: DjDeckId, value: number) => void;
   onEq: (deck: DjDeckId, control: DjEqControl, value: number) => void;
+  onFxEnabled: (deck: DjDeckId, kind: DjFxKind, enabled: boolean) => void;
+  onFxWet: (deck: DjDeckId, kind: DjFxKind, wet: number) => void;
+  onEchoFeedback: (deck: DjDeckId, feedback: number) => void;
+  onEchoDelay: (deck: DjDeckId, delaySeconds: number) => void;
   onCrossfader: (value: number) => void;
   onTogglePlay: (deck: DjDeckId) => void;
   onCue: (deck: DjDeckId) => void;
@@ -953,6 +964,8 @@ function DjLibrary({
   const selectedTrack = tracks[safeIndex] ?? null;
   const editingTrack = editingTrackId ? tracks.find(track => track.id === editingTrackId) ?? null : null;
   const normalized = query.trim().toLocaleLowerCase();
+  const playlists = sources.filter(source => source.group === 'playlist');
+  const folders = sources.filter(source => source.group === 'folder');
   const filtered = useMemo(() => tracks
     .map((track, index) => ({ track, index }))
     .filter(({ track }) => !normalized || [track.title, track.artist, track.album]
@@ -960,129 +973,196 @@ function DjLibrary({
 
   return (
     <section className="dj-pro-library" aria-label="Biblioteca DJ">
-      <header className="dj-pro-library__header">
-        <div className="dj-pro-library__identity">
-          <span className="dj-pro-library__control-label">Biblioteca</span>
-          <div><strong>Biblioteca</strong><span>{tracks.length} faixas</span></div>
+      <aside className="dj-library-sidebar" aria-label="Origens da biblioteca DJ">
+        <div className="dj-library-sidebar__title">
+          <Library aria-hidden="true" />
+          <strong>Biblioteca</strong>
         </div>
 
-        <label className="dj-pro-library__source">
-          <span className="dj-pro-library__control-label">Origem</span>
-          <select
-            value={selectedLibrarySource}
-            onChange={event => onSelectLibrarySource(event.currentTarget.value)}
-            aria-label="Selecionar pasta ou playlist"
-          >
-            <option value="all">Todas as faixas</option>
-            <optgroup label="Pastas">
-              {sources.filter(source => source.group === 'folder').map(source => (
-                <option key={source.value} value={source.value}>{source.label}</option>
-              ))}
-            </optgroup>
-            <optgroup label="Playlists">
-              {sources.filter(source => source.group === 'playlist').map(source => (
-                <option key={source.value} value={source.value}>{source.label}</option>
-              ))}
-            </optgroup>
-          </select>
-        </label>
-
-        <label className="dj-pro-library__search-wrap">
-          <span className="dj-pro-library__control-label">Buscar</span>
-          <span className="dj-pro-library__search">
-            <Search aria-hidden="true" />
-            <input
-              value={query}
-              onChange={event => setQuery(event.currentTarget.value)}
-              placeholder="Buscar na biblioteca..."
-              aria-label="Buscar na biblioteca"
-            />
-          </span>
-        </label>
-
         <button
-          className={shuffle ? 'dj-pro-library__shuffle is-active' : 'dj-pro-library__shuffle'}
           type="button"
-          aria-pressed={shuffle}
-          onClick={() => onShuffleChange(!shuffle)}
-          title="Embaralhar apenas a origem selecionada"
+          className={selectedLibrarySource === 'all' ? 'is-active' : ''}
+          onClick={() => onSelectLibrarySource('all')}
         >
-          <Shuffle aria-hidden="true" />
-          <span>Aleatório</span>
+          <Music aria-hidden="true" />
+          <span>Todas as faixas</span>
+          <small>{tracks.length}</small>
         </button>
-      </header>
 
-      <div className="dj-pro-library__columns" aria-hidden="true">
-        <span>#</span><span>Título</span><span>Artista</span><span>BPM</span><span>Duração</span>
-      </div>
+        {playlists.length > 0 && (
+          <div className="dj-library-sidebar__group">
+            <span><ListMusic aria-hidden="true" />Playlists</span>
+            {playlists.map(source => (
+              <button
+                key={source.value}
+                type="button"
+                className={selectedLibrarySource === source.value ? 'is-active' : ''}
+                onClick={() => onSelectLibrarySource(source.value)}
+              >
+                <span>{source.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
 
-      <div className="dj-pro-library__list" role="listbox" aria-label="Faixas">
-        {filtered.map(({ track, index }) => {
-          const loadedA = loadedTrackIds.a === track.id;
-          const loadedB = loadedTrackIds.b === track.id;
-          const automixCurrent = automixCurrentTrackId === track.id;
-          const automixNext = automixNextTrackId === track.id && !automixCurrent;
-          return (
-            <button
-              key={track.id}
-              type="button"
-              role="option"
-              aria-selected={index === safeIndex}
-              className={[
-                index === safeIndex ? 'is-selected' : '',
-                playedTrackIds.has(track.id) ? 'is-played' : '',
-                automixCurrent ? 'is-automix-current' : '',
-                automixNext ? 'is-automix-next' : ''
-              ].filter(Boolean).join(' ')}
-              onClick={() => onSelect(index)}
+        {folders.length > 0 && (
+          <div className="dj-library-sidebar__group">
+            <span><Folder aria-hidden="true" />Pastas</span>
+            {folders.map(source => (
+              <button
+                key={source.value}
+                type="button"
+                className={selectedLibrarySource === source.value ? 'is-active' : ''}
+                onClick={() => onSelectLibrarySource(source.value)}
+              >
+                <span>{source.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </aside>
+
+      <div className="dj-library-workspace">
+        <header className="dj-pro-library__header">
+          <label className="dj-pro-library__search-wrap">
+            <span className="dj-pro-library__search">
+              <Search aria-hidden="true" />
+              <input
+                value={query}
+                onChange={event => setQuery(event.currentTarget.value)}
+                placeholder="Buscar na biblioteca..."
+                aria-label="Buscar na biblioteca"
+              />
+            </span>
+          </label>
+
+          <label className="dj-pro-library__source">
+            <span className="dj-pro-library__control-label">Origem</span>
+            <select
+              value={selectedLibrarySource}
+              onChange={event => onSelectLibrarySource(event.currentTarget.value)}
+              aria-label="Selecionar pasta ou playlist"
             >
-              <span>{String(index + 1).padStart(2, '0')}</span>
-              <span className="dj-library-track-title">
-                <strong>{track.title}</strong>
-                {loadedA ? <small className="dj-library-deck-badge" data-deck="a">A</small> : null}
-                {loadedB ? <small className="dj-library-deck-badge" data-deck="b">B</small> : null}
-                {automixCurrent ? <small className="dj-library-status-badge">AGORA</small> : null}
-                {automixNext ? <small className="dj-library-status-badge">PRÓXIMA</small> : null}
-              </span>
-              <span>{track.artist || 'Artista desconhecido'}</span>
-              <span>
-                {track.rhythm?.bpm ? track.rhythm.bpm.toFixed(1) : '—'}
-                {track.rhythm?.manualOverride ? <small className="dj-grid-manual-badge">M</small> : null}
-              </span>
-              <span>{formatTime(track.duration ?? 0)}</span>
+              <option value="all">Todas as faixas</option>
+              {folders.length > 0 && (
+                <optgroup label="Pastas">
+                  {folders.map(source => (
+                    <option key={source.value} value={source.value}>{source.label}</option>
+                  ))}
+                </optgroup>
+              )}
+              {playlists.length > 0 && (
+                <optgroup label="Playlists">
+                  {playlists.map(source => (
+                    <option key={source.value} value={source.value}>{source.label}</option>
+                  ))}
+                </optgroup>
+              )}
+            </select>
+          </label>
+
+          <button
+            className={shuffle ? 'dj-pro-library__shuffle is-active' : 'dj-pro-library__shuffle'}
+            type="button"
+            aria-pressed={shuffle}
+            onClick={() => onShuffleChange(!shuffle)}
+            title="Embaralhar apenas a origem selecionada"
+          >
+            <Shuffle aria-hidden="true" />
+            <span>Aleatório</span>
+          </button>
+
+          <div className="dj-library-view-toggle" aria-label="Visualização da biblioteca">
+            <button type="button" className="is-active" aria-label="Visualização em lista" aria-pressed="true">
+              <List aria-hidden="true" />
             </button>
-          );
-        })}
-        {!filtered.length && <div className="dj-pro-library__empty">Nenhuma faixa encontrada.</div>}
-      </div>
+            <button type="button" aria-label="Visualização em grade" aria-pressed="false" disabled title="Visualização em grade ainda não disponível">
+              <LayoutGrid aria-hidden="true" />
+            </button>
+          </div>
+        </header>
 
-      <div className="dj-pro-library__loads">
-        <button
-          type="button"
-          disabled={!selectedTrack || loadedTrackIds.a === selectedTrack.id}
-          onClick={() => onLoad('a')}
-        >
-          <Upload aria-hidden="true" />LOAD A
-        </button>
-        <button
-          type="button"
-          disabled={!selectedTrack || loadedTrackIds.b === selectedTrack.id}
-          onClick={() => onLoad('b')}
-        >
-          <Upload aria-hidden="true" />LOAD B
-        </button>
-        <button type="button" disabled={!selectedTrack} onClick={() => setEditingTrackId(selectedTrack?.id ?? null)}>
-          <SlidersHorizontal aria-hidden="true" />Ajustar grid
-        </button>
-      </div>
+        <div className="dj-pro-library__columns" aria-hidden="true">
+          <span>#</span><span>Título</span><span>Artista</span><span>Álbum</span><span>BPM</span><span>Duração</span>
+        </div>
 
-      {editingTrack && (
-        <RhythmGridEditor
-          key={editingTrack.id}
-          track={editingTrack}
-          onClose={() => setEditingTrackId(null)}
-        />
-      )}
+        <div className="dj-pro-library__list" role="listbox" aria-label="Faixas">
+          {filtered.map(({ track, index }) => {
+            const loadedA = loadedTrackIds.a === track.id;
+            const loadedB = loadedTrackIds.b === track.id;
+            const automixCurrent = automixCurrentTrackId === track.id;
+            const automixNext = automixNextTrackId === track.id && !automixCurrent;
+            return (
+              <button
+                key={track.id}
+                type="button"
+                role="option"
+                aria-selected={index === safeIndex}
+                className={[
+                  index === safeIndex ? 'is-selected' : '',
+                  playedTrackIds.has(track.id) ? 'is-played' : '',
+                  automixCurrent ? 'is-automix-current' : '',
+                  automixNext ? 'is-automix-next' : ''
+                ].filter(Boolean).join(' ')}
+                onClick={() => onSelect(index)}
+              >
+                <span>{index + 1}</span>
+                <span className="dj-library-track-title">
+                  <span className="dj-library-track-art"><Artwork track={track} /></span>
+                  <span className="dj-library-track-copy">
+                    <strong>{track.title}</strong>
+                    <span className="dj-library-track-badges">
+                      {loadedA ? <small className="dj-library-deck-badge" data-deck="a">A</small> : null}
+                      {loadedB ? <small className="dj-library-deck-badge" data-deck="b">B</small> : null}
+                      {automixCurrent ? <small className="dj-library-status-badge">AGORA</small> : null}
+                      {automixNext ? <small className="dj-library-status-badge">PRÓXIMA</small> : null}
+                    </span>
+                  </span>
+                </span>
+                <span>{track.artist || 'Artista desconhecido'}</span>
+                <span>{track.album || '—'}</span>
+                <span>
+                  {track.rhythm?.bpm ? track.rhythm.bpm.toFixed(1) : '—'}
+                  {track.rhythm?.manualOverride ? <small className="dj-grid-manual-badge">M</small> : null}
+                </span>
+                <span>{formatTime(track.duration ?? 0)}</span>
+              </button>
+            );
+          })}
+          {!filtered.length && <div className="dj-pro-library__empty">Nenhuma faixa encontrada.</div>}
+        </div>
+
+        <footer className="dj-pro-library__footer">
+          <span>{filtered.length} faixas</span>
+          <div className="dj-pro-library__loads">
+            <button
+              type="button"
+              disabled={!selectedTrack || loadedTrackIds.a === selectedTrack.id}
+              onClick={() => onLoad('a')}
+            >
+              <Upload aria-hidden="true" />LOAD A
+            </button>
+            <button
+              type="button"
+              disabled={!selectedTrack || loadedTrackIds.b === selectedTrack.id}
+              onClick={() => onLoad('b')}
+            >
+              <Upload aria-hidden="true" />LOAD B
+            </button>
+            <button type="button" disabled={!selectedTrack} onClick={() => setEditingTrackId(selectedTrack?.id ?? null)}>
+              <SlidersHorizontal aria-hidden="true" />Ajustar grid
+            </button>
+          </div>
+        </footer>
+
+        {editingTrack && (
+          <RhythmGridEditor
+            key={editingTrack.id}
+            track={editingTrack}
+            onClose={() => setEditingTrackId(null)}
+          />
+        )}
+      </div>
     </section>
   );
 }
@@ -1178,16 +1258,24 @@ function DjMixer({
   meterLevels,
   onChannelVolume,
   onEq,
+  onFxEnabled,
+  onFxWet,
+  onEchoFeedback,
+  onEchoDelay,
   onCrossfader
 }: {
   mixer: DualDeckMixerState;
   meterLevels: Record<DjDeckId, number>;
   onChannelVolume: (deck: DjDeckId, value: number) => void;
   onEq: (deck: DjDeckId, control: DjEqControl, value: number) => void;
+  onFxEnabled: (deck: DjDeckId, kind: DjFxKind, enabled: boolean) => void;
+  onFxWet: (deck: DjDeckId, kind: DjFxKind, wet: number) => void;
+  onEchoFeedback: (deck: DjDeckId, feedback: number) => void;
+  onEchoDelay: (deck: DjDeckId, delaySeconds: number) => void;
   onCrossfader: (value: number) => void;
 }) {
-  const channelMeter = (value: number) => (
-    <span className="dj-channel-meter" aria-hidden="true">
+  const channelMeter = (deck: DjDeckId, value: number) => (
+    <span className="dj-channel-meter" data-deck={deck} aria-hidden="true">
       {Array.from({ length: 12 }, (_, index) => (
         <i key={index} data-on={index < Math.round(value * 12) ? 'true' : 'false'} />
       ))}
@@ -1195,10 +1283,10 @@ function DjMixer({
   );
 
   const eqControls: Array<{ control: DjEqControl; label: string }> = [
-    { control: 'low', label: 'LOW' },
-    { control: 'mid', label: 'MID' },
-    { control: 'high', label: 'HIGH' },
-    { control: 'filter', label: 'FILTER' }
+    { control: 'high', label: 'AGUDOS' },
+    { control: 'mid', label: 'MÉDIOS' },
+    { control: 'low', label: 'GRAVES' },
+    { control: 'filter', label: 'FILTRO' }
   ];
 
   const renderEq = (deck: DjDeckId) => (
@@ -1235,37 +1323,148 @@ function DjMixer({
     </div>
   );
 
+  const renderChannel = (deck: DjDeckId) => {
+    const fx = mixer.fx[deck];
+    const channel = deck.toUpperCase();
+    return (
+      <div className="dj-pro-mixer__channel" data-deck={deck}>
+        <span className="dj-mixer-channel-title">{channel}</span>
+        {renderEq(deck)}
+
+        <div className="dj-mixer-fx" aria-label={'FX Channel ' + channel}>
+          <div className="dj-mixer-fx__row" data-enabled={fx.echo.enabled ? 'true' : 'false'}>
+            <button
+              type="button"
+              className={fx.echo.enabled ? 'is-active' : ''}
+              aria-pressed={fx.echo.enabled}
+              aria-label={'Echo Channel ' + channel}
+              onClick={() => onFxEnabled(deck, 'echo', !fx.echo.enabled)}
+            >
+              ECHO
+            </button>
+            <label title={'Echo mix ' + Math.round(fx.echo.wet * 100) + '%'}>
+              <span>MIX</span>
+              <input
+                aria-label={'Echo Wet Channel ' + channel}
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value={fx.echo.wet}
+                onChange={event => onFxWet(deck, 'echo', Number(event.currentTarget.value))}
+              />
+            </label>
+            <label title={'Feedback ' + Math.round(fx.echo.feedback * 100) + '%'}>
+              <span>FDBK</span>
+              <input
+                aria-label={'Echo Feedback Channel ' + channel}
+                type="range"
+                min="0"
+                max="0.82"
+                step="0.01"
+                value={fx.echo.feedback}
+                onChange={event => onEchoFeedback(deck, Number(event.currentTarget.value))}
+              />
+            </label>
+            <label title={'Delay ' + Math.round(fx.echo.delaySeconds * 1000) + ' ms'}>
+              <span>TIME</span>
+              <input
+                aria-label={'Echo Delay Channel ' + channel}
+                type="range"
+                min="0.06"
+                max="1.5"
+                step="0.01"
+                value={fx.echo.delaySeconds}
+                onChange={event => onEchoDelay(deck, Number(event.currentTarget.value))}
+              />
+            </label>
+          </div>
+
+          <div className="dj-mixer-fx__row" data-enabled={fx.reverb.enabled ? 'true' : 'false'}>
+            <button
+              type="button"
+              className={fx.reverb.enabled ? 'is-active' : ''}
+              aria-pressed={fx.reverb.enabled}
+              aria-label={'Reverb Channel ' + channel}
+              onClick={() => onFxEnabled(deck, 'reverb', !fx.reverb.enabled)}
+            >
+              REVERB
+            </button>
+            <label className="dj-mixer-fx__wide" title={'Reverb mix ' + Math.round(fx.reverb.wet * 100) + '%'}>
+              <span>MIX</span>
+              <input
+                aria-label={'Reverb Wet Channel ' + channel}
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value={fx.reverb.wet}
+                onChange={event => onFxWet(deck, 'reverb', Number(event.currentTarget.value))}
+              />
+            </label>
+          </div>
+        </div>
+
+        <label className="dj-mixer-channel-volume">
+          <Gauge aria-hidden="true" />
+          <span className="sr-only">{'Volume Channel ' + channel}</span>
+          <input
+            aria-label={'Volume Channel ' + channel}
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            value={mixer.channelVolumes[deck]}
+            onChange={event => onChannelVolume(deck, Number(event.currentTarget.value))}
+          />
+          <strong>{Math.round(mixer.channelVolumes[deck] * 100)}%</strong>
+        </label>
+      </div>
+    );
+  };
+
   return (
     <section className="dj-pro-mixer dj-pro-mixer--console" aria-label="Mixer">
-      <div className="dj-pro-mixer__title"><SlidersHorizontal aria-hidden="true" /><strong>Mixer</strong></div>
-      <div className="dj-pro-mixer__channel" data-deck="a">
-        <span className="dj-mixer-channel-title">Channel A</span>
-        {renderEq('a')}
-        <div className="dj-mixer-channel-row">
-          <Gauge aria-hidden="true" />
-          <input type="range" min="0" max="1" step="0.01" value={mixer.channelVolumes.a} onChange={event => onChannelVolume('a', Number(event.currentTarget.value))} />
-        </div>
-        <strong>{Math.round(mixer.channelVolumes.a * 100)}%</strong>
-        {channelMeter(meterLevels.a)}
+      <div className="dj-pro-mixer__title">
+        <SlidersHorizontal aria-hidden="true" />
+        <strong>Mixer</strong>
       </div>
+
+      <div className="dj-mixer-bank">
+        {renderChannel('a')}
+        <div className="dj-mixer-meter-pair" aria-label="Medidores de nível">
+          {channelMeter('a', meterLevels.a)}
+          {channelMeter('b', meterLevels.b)}
+        </div>
+        {renderChannel('b')}
+      </div>
+
       <label
         className="dj-pro-mixer__crossfader"
         data-side={Math.abs(mixer.crossfader) < 0.005 ? 'center' : mixer.crossfader < 0 ? 'a' : 'b'}
       >
-        <span>Crossfader</span>
-        <div><small>A</small><input type="range" min="-1" max="1" step="0.01" value={mixer.crossfader} onChange={event => onCrossfader(Number(event.currentTarget.value))} /><small>B</small></div>
-        <strong>{mixer.crossfader === 0 ? 'Centro' : mixer.crossfader < 0 ? 'A ' + Math.round(Math.abs(mixer.crossfader) * 100) + '%' : 'B ' + Math.round(mixer.crossfader * 100) + '%'}</strong>
-      </label>
-      <div className="dj-pro-mixer__channel" data-deck="b">
-        <span className="dj-mixer-channel-title">Channel B</span>
-        {renderEq('b')}
-        <div className="dj-mixer-channel-row">
-          <Gauge aria-hidden="true" />
-          <input type="range" min="0" max="1" step="0.01" value={mixer.channelVolumes.b} onChange={event => onChannelVolume('b', Number(event.currentTarget.value))} />
+        <span>CROSSFADER</span>
+        <div>
+          <small>A</small>
+          <input
+            aria-label="Crossfader"
+            type="range"
+            min="-1"
+            max="1"
+            step="0.01"
+            value={mixer.crossfader}
+            onChange={event => onCrossfader(Number(event.currentTarget.value))}
+          />
+          <small>B</small>
         </div>
-        <strong>{Math.round(mixer.channelVolumes.b * 100)}%</strong>
-        {channelMeter(meterLevels.b)}
-      </div>
+        <strong>
+          {mixer.crossfader === 0
+            ? 'Centro'
+            : mixer.crossfader < 0
+              ? 'A ' + Math.round(Math.abs(mixer.crossfader) * 100) + '%'
+              : 'B ' + Math.round(mixer.crossfader * 100) + '%'}
+        </strong>
+      </label>
     </section>
   );
 }
@@ -1290,6 +1489,10 @@ export function DjModeScreen({
   onSelectMidiOutput,
   onChannelVolume,
   onEq,
+  onFxEnabled,
+  onFxWet,
+  onEchoFeedback,
+  onEchoDelay,
   onCrossfader,
   onTogglePlay,
   onCue,
@@ -1308,9 +1511,23 @@ export function DjModeScreen({
       <header className="dj-mode__header">
         <div className="dj-mode__brand">
           <span className="dj-mode__brand-icon" aria-hidden="true"><Disc3 /></span>
-          <div><strong>Modo DJ</strong><small>Dual-deck • Misture, crie e mantenha o flow</small></div>
+          <strong>Home Music</strong>
         </div>
+
+        <div className="dj-mode__nav" aria-label="Área atual">
+          <span className="is-active">DJ</span>
+          <span>Biblioteca</span>
+          <span>Playlists</span>
+          <span>Explorar</span>
+          <span>Configurações</span>
+        </div>
+
         <div className="dj-mode__header-actions">
+          <span className="dj-mode__status">
+            <strong>Modo DJ</strong>
+            <small>Dual-deck + Mixer</small>
+          </span>
+
           <details className="dj-shortcuts">
             <summary><Keyboard aria-hidden="true" /><span>Atalhos</span></summary>
             <div className="dj-shortcuts__panel">
@@ -1373,6 +1590,10 @@ export function DjModeScreen({
           meterLevels={{ a: decks.a.meterLevel, b: decks.b.meterLevel }}
           onChannelVolume={onChannelVolume}
           onEq={onEq}
+          onFxEnabled={onFxEnabled}
+          onFxWet={onFxWet}
+          onEchoFeedback={onEchoFeedback}
+          onEchoDelay={onEchoDelay}
           onCrossfader={onCrossfader}
         />
 
