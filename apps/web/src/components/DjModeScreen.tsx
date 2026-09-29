@@ -242,7 +242,6 @@ function DjWaveform({
   }, [deck, track.duration, track.rhythm, waveform]);
 
   const seekFromPointer = (event: ReactMouseEvent<HTMLDivElement>) => {
-    if ((event.target as HTMLElement).closest('button')) return;
     if (durationSeconds <= 0) return;
     const rect = event.currentTarget.getBoundingClientRect();
     const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / Math.max(1, rect.width)));
@@ -268,20 +267,20 @@ function DjWaveform({
   };
 
   return (
-    <div
-      className="dj-waveform"
-      data-status={status}
-      role="slider"
-      tabIndex={0}
-      aria-label={'Buscar posição no waveform ' + (deck === 'a' ? 'Deck A' : 'Deck B')}
-      aria-valuemin={0}
-      aria-valuemax={Math.max(0, durationSeconds)}
-      aria-valuenow={Math.max(0, Math.min(durationSeconds, currentTimeSeconds))}
-      aria-valuetext={formatTime(currentTimeSeconds) + ' de ' + formatTime(durationSeconds)}
-      onClick={seekFromPointer}
-      onKeyDown={seekFromKeyboard}
-    >
+    <div className="dj-waveform" data-status={status} aria-label="Waveform real da faixa">
       <canvas ref={canvasRef} className="dj-waveform__canvas" aria-hidden="true" />
+      <div
+        className="dj-waveform__seek-surface"
+        role="slider"
+        tabIndex={0}
+        aria-label={'Buscar posição no waveform ' + (deck === 'a' ? 'Deck A' : 'Deck B')}
+        aria-valuemin={0}
+        aria-valuemax={Math.max(0, durationSeconds)}
+        aria-valuenow={Math.max(0, Math.min(durationSeconds, currentTimeSeconds))}
+        aria-valuetext={formatTime(currentTimeSeconds) + ' de ' + formatTime(durationSeconds)}
+        onClick={seekFromPointer}
+        onKeyDown={seekFromKeyboard}
+      />
       <span className="dj-waveform__remaining" style={{ left: `${progress}%` }} aria-hidden="true" />
       {loopRange && (
         <span
