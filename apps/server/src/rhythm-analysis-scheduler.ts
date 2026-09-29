@@ -1,9 +1,11 @@
 import {
   MIN_RHYTHM_CONFIDENCE,
+  type TrackMusicalKey,
   type TrackRhythm,
   type TrackWaveform
 } from '@home-music/shared';
 import { RHYTHM_ANALYZER_VERSION, RhythmAnalysisUnavailableError } from './rhythm-analysis.js';
+import { KEY_ANALYZER_VERSION, KeyAnalysisUnavailableError } from './key-analysis.js';
 import {
   WAVEFORM_ANALYZER_VERSION,
   WaveformAnalysisUnavailableError
@@ -26,11 +28,17 @@ export type WaveformTrackAnalyzer = (
   signal: AbortSignal
 ) => Promise<TrackWaveform | null>;
 
+export type KeyTrackAnalyzer = (
+  track: IndexedTrack,
+  signal: AbortSignal
+) => Promise<TrackMusicalKey | null>;
+
 type RhythmAnalysisSchedulerOptions = {
   library: LibraryService;
   database: HomeMusicDatabase;
   analyze: RhythmTrackAnalyzer;
   analyzeWaveform?: WaveformTrackAnalyzer;
+  analyzeKey?: KeyTrackAnalyzer;
   logger: SchedulerLogger;
 };
 
@@ -54,6 +62,13 @@ export type RhythmAnalysisRuntime = {
   waveformFailed: number;
   waveformTimeouts: number;
   waveformAnalyzerVersion: number;
+  keyCompleted: number;
+  keyAvailable: number;
+  keyUnavailable: number;
+  keyDecodeUnavailable: number;
+  keyFailed: number;
+  keyTimeouts: number;
+  keyAnalyzerVersion: number;
 };
 
 function isTimeoutError(error: unknown) {
@@ -79,13 +94,21 @@ export class RhythmAnalysisScheduler {
   private waveformDecodeUnavailable = 0;
   private waveformFailed = 0;
   private waveformTimeouts = 0;
+  private keyCompleted = 0;
+  private keyAvailable = 0;
+  private keyUnavailable = 0;
+  private keyDecodeUnavailable = 0;
+  private keyFailed = 0;
+  private keyTimeouts = 0;
   private totalDurationMs = 0;
   private lastDurationMs: number | null = null;
 
   constructor(private readonly options: RhythmAnalysisSchedulerOptions) {}
 
   get runtime(): RhythmAnalysisRuntime {
-    const attempts = this.completed + this.failed + this.waveformCompleted + this.waveformFailed;
+    const attempts = this.completed + this.failed
+      + this.waveformCompleted + this.waveformFailed
+      + this.keyCompleted + this.keyFailed;
     return {
       pending: this.pending.size,
       active: this.active,
@@ -109,7 +132,14 @@ export class RhythmAnalysisScheduler {
       waveformDecodeUnavailable: this.waveformDecodeUnavailable,
       waveformFailed: this.waveformFailed,
       waveformTimeouts: this.waveformTimeouts,
-      waveformAnalyzerVersion: WAVEFORM_ANALYZER_VERSION
+      waveformAnalyzerVersion: WAVEFORM_ANALYZER_VERSION,
+      keyCompleted: this.keyCompleted,
+      keyAvailable: this.keyAvailable,
+      keyUnavailable: this.keyUnavailable,
+      keyDecodeUnavailable: this.keyDecodeUnavailable,
+      keyFailed: this.keyFailed,
+      keyTimeouts: this.keyTimeouts,
+      keyAnalyzerVersion: KEY_ANALYZER_VERSION
     };
   }
 
@@ -122,6 +152,7 @@ export class RhythmAnalysisScheduler {
         && (
           !enabledTrack.rhythmAnalysisCurrent
           || (this.options.analyzeWaveform && !enabledTrack.waveformAnalysisCurrent)
+          || (this.options.analyzeKey && !enabledTrack.keyAnalysisCurrent)
         )
       ) {
         this.pending.add(track.id);
@@ -138,6 +169,7 @@ export class RhythmAnalysisScheduler {
       || (
         track.rhythmAnalysisCurrent
         && (!this.options.analyzeWaveform || track.waveformAnalysisCurrent)
+        && (!this.options.analyzeKey || track.keyAnalysisCurrent)
       )
     ) return;
     this.pending.add(trackId);
@@ -247,6 +279,47 @@ export class RhythmAnalysisScheduler {
     );
   }
 
+  private async analyzeKey(track: IndexedTrack) {
+    const trackId = track.id;
+    const sourceFileSize = track.fileSize;
+    const sourceMtimeMs = track.mtimeMs;
+    let key: TrackMusicalKey | null;
+
+    try {
+      const analyzeKey = this.options.analyzeKey;
+      if (!analyzeKey) return;
+      key = await analyzeKey(track, this.controller.signal);
+    } catch (error) {
+      if (!(error instanceof KeyAnalysisUnavailableError)) throw error;
+      key = null;
+      this.keyDecodeUnavailable += 1;
+      this.options.logger.warn(
+        { trackId, reason: error.reason, exitCode: error.exitCode },
+        'FFmpeg não conseguiu decodificar a faixa; tonalidade marcada como indisponível para a assinatura atual.'
+      );
+    }
+
+    this.keyCompleted += 1;
+    if (key) this.keyAvailable += 1;
+    else this.keyUnavailable += 1;
+    if (this.stopped) return;
+
+    const persisted = this.options.database.saveTrackKeyAnalysis(
+      trackId,
+      sourceFileSize,
+      sourceMtimeMs,
+      key
+    );
+    if (!persisted) return;
+
+    this.options.library.applyKeyAnalysis(
+      trackId,
+      sourceFileSize,
+      sourceMtimeMs,
+      key
+    );
+  }
+
   private async drain() {
     while (!this.stopped && this.pending.size > 0) {
       const trackId = this.pending.values().next().value as string | undefined;
@@ -259,6 +332,7 @@ export class RhythmAnalysisScheduler {
         || (
           track.rhythmAnalysisCurrent
           && (!this.options.analyzeWaveform || track.waveformAnalysisCurrent)
+          && (!this.options.analyzeKey || track.keyAnalysisCurrent)
         )
       ) continue;
 
@@ -290,6 +364,21 @@ export class RhythmAnalysisScheduler {
             this.options.logger.warn(
               { err: error, trackId },
               'Análise de waveform da faixa falhou; reprodução continuará sem waveform real.'
+            );
+          }
+        }
+      }
+
+      if (this.options.analyzeKey && !track.keyAnalysisCurrent && !this.stopped) {
+        try {
+          await this.analyzeKey(track);
+        } catch (error) {
+          if (!this.controller.signal.aborted) {
+            this.keyFailed += 1;
+            if (isTimeoutError(error)) this.keyTimeouts += 1;
+            this.options.logger.warn(
+              { err: error, trackId },
+              'Análise tonal da faixa falhou; reprodução continuará sem informação de key.'
             );
           }
         }
