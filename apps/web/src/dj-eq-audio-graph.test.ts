@@ -3,6 +3,7 @@ import {
   applyDjEqStateToGraph,
   createDjEqAudioGraph,
   disposeDjEqAudioGraph,
+  readDjEqMeterLevel,
   resumeDjEqAudioGraph
 } from './dj-eq-audio-graph';
 
@@ -35,6 +36,16 @@ class FakeBiquadNode extends FakeNode {
   gain = new FakeAudioParam();
 }
 
+class FakeAnalyserNode extends FakeNode {
+  fftSize = 2048;
+  smoothingTimeConstant = 0.8;
+  level = 128;
+
+  getByteTimeDomainData(data: Uint8Array) {
+    data.fill(this.level);
+  }
+}
+
 class FakeAudioContext {
   static instances: FakeAudioContext[] = [];
   currentTime = 12.5;
@@ -42,6 +53,7 @@ class FakeAudioContext {
   state: AudioContextState = 'suspended';
   sources: FakeSourceNode[] = [];
   filters: FakeBiquadNode[] = [];
+  analysers: FakeAnalyserNode[] = [];
   close = vi.fn(async () => {
     this.state = 'closed';
   });
@@ -64,6 +76,12 @@ class FakeAudioContext {
     this.filters.push(node);
     return node as unknown as BiquadFilterNode;
   }
+
+  createAnalyser() {
+    const node = new FakeAnalyserNode();
+    this.analysers.push(node);
+    return node as unknown as AnalyserNode;
+  }
 }
 
 function fakeAudio() {
@@ -84,6 +102,7 @@ describe('DJ EQ audio graph', () => {
     expect(FakeAudioContext.instances).toHaveLength(1);
     expect(context.sources).toHaveLength(2);
     expect(context.filters).toHaveLength(8);
+    expect(context.analysers).toHaveLength(2);
 
     expect(context.filters[0]?.type).toBe('lowshelf');
     expect(context.filters[0]?.frequency.value).toBe(220);
@@ -98,7 +117,8 @@ describe('DJ EQ audio graph', () => {
     expect(context.filters[0]?.connections).toHaveLength(1);
     expect(context.filters[1]?.connections).toHaveLength(1);
     expect(context.filters[2]?.connections).toHaveLength(1);
-    expect(context.filters[3]?.connections[0]).toBe(context.destination);
+    expect(context.filters[3]?.connections[0]).toBe(context.analysers[0]);
+    expect(context.analysers[0]?.connections[0]).toBe(context.destination);
   });
 
   it('atualiza parâmetros sem reconstruir o graph', () => {
@@ -151,6 +171,24 @@ describe('DJ EQ audio graph', () => {
 
     expect((graph.decks.a.low.gain as unknown as FakeAudioParam).value).toBe(18);
     expect((graph.decks.b.low.gain as unknown as FakeAudioParam).value).toBe(0);
+  });
+
+  it('mede nível RMS sem alocar outro graph', () => {
+    FakeAudioContext.instances = [];
+    const graph = createDjEqAudioGraph({
+      deckA: fakeAudio(),
+      deckB: fakeAudio(),
+      AudioContextConstructor: FakeAudioContext as unknown as new () => AudioContext
+    })!;
+    const context = FakeAudioContext.instances[0]!;
+    const sourceCount = context.sources.length;
+    const filterCount = context.filters.length;
+
+    expect(readDjEqMeterLevel(graph, 'a')).toBe(0);
+    context.analysers[0]!.level = 160;
+    expect(readDjEqMeterLevel(graph, 'a')).toBeGreaterThan(0);
+    expect(context.sources).toHaveLength(sourceCount);
+    expect(context.filters).toHaveLength(filterCount);
   });
 
   it('faz resume somente quando o contexto está suspenso', async () => {
