@@ -571,7 +571,14 @@ function DeckPanel({
                   }}
                   aria-pressed={loopActive}
                   aria-label={'Auto Loop ' + loopBeats + ' beats ' + label}
-                  title={loopIn != null && loopOut != null ? 'Ativar/desativar loop' : 'Criar Auto Loop quantizado'}
+                  disabled={bpm == null && (loopIn == null || loopOut == null)}
+                  title={
+                    loopIn != null && loopOut != null
+                      ? 'Ativar/desativar loop'
+                      : bpm == null
+                        ? 'Auto Loop requer BPM analisado'
+                        : 'Criar Auto Loop quantizado'
+                  }
                 >
                   {loopBeats}
                 </button>
