@@ -12,7 +12,7 @@ type DjEqDeckNodes = {
   high: BiquadFilterNode;
   filter: BiquadFilterNode;
   analyser: AnalyserNode;
-  meterData: Uint8Array;
+  meterData: Uint8Array<ArrayBuffer>;
 };
 
 export type DjEqAudioGraph = {
@@ -61,7 +61,7 @@ export function createDjEqAudioGraph(options: {
 
       analyser.fftSize = 256;
       analyser.smoothingTimeConstant = 0.72;
-      const meterData = new Uint8Array(analyser.fftSize);
+      const meterData = new Uint8Array(new ArrayBuffer(analyser.fftSize));
 
       source.connect(low).connect(mid).connect(high).connect(filter).connect(analyser).connect(context!.destination);
       return { source, low, mid, high, filter, analyser, meterData };
