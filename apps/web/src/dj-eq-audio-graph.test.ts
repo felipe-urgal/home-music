@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   applyDjEqStateToGraph,
+  applyDjFxStateToGraph,
   createDjEqAudioGraph,
   disposeDjEqAudioGraph,
   readDjEqMeterLevel,
@@ -36,6 +37,18 @@ class FakeBiquadNode extends FakeNode {
   gain = new FakeAudioParam();
 }
 
+class FakeGainNode extends FakeNode {
+  gain = new FakeAudioParam();
+}
+
+class FakeDelayNode extends FakeNode {
+  delayTime = new FakeAudioParam();
+}
+
+class FakeConvolverNode extends FakeNode {
+  buffer: AudioBuffer | null = null;
+}
+
 class FakeAnalyserNode extends FakeNode {
   fftSize = 2048;
   smoothingTimeConstant = 0.8;
@@ -46,13 +59,31 @@ class FakeAnalyserNode extends FakeNode {
   }
 }
 
+class FakeAudioBuffer {
+  readonly numberOfChannels: number;
+  private readonly channels: Float32Array[];
+
+  constructor(numberOfChannels: number, length: number) {
+    this.numberOfChannels = numberOfChannels;
+    this.channels = Array.from({ length: numberOfChannels }, () => new Float32Array(length));
+  }
+
+  getChannelData(channel: number) {
+    return this.channels[channel]!;
+  }
+}
+
 class FakeAudioContext {
   static instances: FakeAudioContext[] = [];
   currentTime = 12.5;
+  sampleRate = 48_000;
   destination = new FakeNode();
   state: AudioContextState = 'suspended';
   sources: FakeSourceNode[] = [];
   filters: FakeBiquadNode[] = [];
+  gains: FakeGainNode[] = [];
+  delays: FakeDelayNode[] = [];
+  convolvers: FakeConvolverNode[] = [];
   analysers: FakeAnalyserNode[] = [];
   close = vi.fn(async () => {
     this.state = 'closed';
@@ -77,10 +108,32 @@ class FakeAudioContext {
     return node as unknown as BiquadFilterNode;
   }
 
+  createGain() {
+    const node = new FakeGainNode();
+    this.gains.push(node);
+    return node as unknown as GainNode;
+  }
+
+  createDelay() {
+    const node = new FakeDelayNode();
+    this.delays.push(node);
+    return node as unknown as DelayNode;
+  }
+
+  createConvolver() {
+    const node = new FakeConvolverNode();
+    this.convolvers.push(node);
+    return node as unknown as ConvolverNode;
+  }
+
   createAnalyser() {
     const node = new FakeAnalyserNode();
     this.analysers.push(node);
     return node as unknown as AnalyserNode;
+  }
+
+  createBuffer(numberOfChannels: number, length: number) {
+    return new FakeAudioBuffer(numberOfChannels, length) as unknown as AudioBuffer;
   }
 }
 
@@ -88,8 +141,8 @@ function fakeAudio() {
   return {} as HTMLAudioElement;
 }
 
-describe('DJ EQ audio graph', () => {
-  it('cria uma única cadeia por deck com configuração neutra', () => {
+describe('DJ EQ/FX audio graph', () => {
+  it('cria uma única cadeia por deck com EQ e FX neutros', () => {
     FakeAudioContext.instances = [];
     const graph = createDjEqAudioGraph({
       deckA: fakeAudio(),
@@ -102,6 +155,9 @@ describe('DJ EQ audio graph', () => {
     expect(FakeAudioContext.instances).toHaveLength(1);
     expect(context.sources).toHaveLength(2);
     expect(context.filters).toHaveLength(8);
+    expect(context.gains).toHaveLength(8);
+    expect(context.delays).toHaveLength(2);
+    expect(context.convolvers).toHaveLength(2);
     expect(context.analysers).toHaveLength(2);
 
     expect(context.filters[0]?.type).toBe('lowshelf');
@@ -113,15 +169,19 @@ describe('DJ EQ audio graph', () => {
     expect(context.filters[2]?.frequency.value).toBe(4_000);
     expect(context.filters[3]?.type).toBe('allpass');
 
-    expect(context.sources[0]?.connections).toHaveLength(1);
-    expect(context.filters[0]?.connections).toHaveLength(1);
-    expect(context.filters[1]?.connections).toHaveLength(1);
-    expect(context.filters[2]?.connections).toHaveLength(1);
-    expect(context.filters[3]?.connections[0]).toBe(context.analysers[0]);
-    expect(context.analysers[0]?.connections[0]).toBe(context.destination);
+    expect(graph!.decks.a.dry.gain.value).toBe(1);
+    expect(graph!.decks.a.echoWet.gain.value).toBe(0);
+    expect(graph!.decks.a.echoFeedback.gain.value).toBe(0);
+    expect(graph!.decks.a.reverbWet.gain.value).toBe(0);
+    expect(graph!.decks.a.echoDelay.delayTime.value).toBe(0.25);
+    expect(graph!.decks.a.reverb.buffer).not.toBeNull();
+
+    expect(context.sources[0]?.connections).toContain(context.filters[0]!);
+    expect(context.filters[3]?.connections).toHaveLength(3);
+    expect(graph!.decks.a.analyser.connections[0]).toBe(context.destination);
   });
 
-  it('atualiza parâmetros sem reconstruir o graph', () => {
+  it('atualiza EQ sem reconstruir o graph', () => {
     FakeAudioContext.instances = [];
     const graph = createDjEqAudioGraph({
       deckA: fakeAudio(),
@@ -152,6 +212,61 @@ describe('DJ EQ audio graph', () => {
     expect(context.filters[2]?.gain.value).toBe(0);
     expect(context.filters[3]?.type).toBe('allpass');
     expect(context.filters[3]?.frequency.value).toBe(1_000);
+  });
+
+  it('aplica Echo e Reverb sem rebuild e faz bypass real por ganho', () => {
+    FakeAudioContext.instances = [];
+    const graph = createDjEqAudioGraph({
+      deckA: fakeAudio(),
+      deckB: fakeAudio(),
+      AudioContextConstructor: FakeAudioContext as unknown as new () => AudioContext
+    })!;
+    const context = FakeAudioContext.instances[0]!;
+    const sourceCount = context.sources.length;
+    const gainCount = context.gains.length;
+    const delayCount = context.delays.length;
+    const convolverCount = context.convolvers.length;
+
+    applyDjFxStateToGraph(graph, 'a', {
+      echo: {
+        enabled: true,
+        wet: 0.44,
+        feedback: 0.35,
+        delaySeconds: 0.5
+      },
+      reverb: {
+        enabled: true,
+        wet: 0.3
+      }
+    });
+
+    expect(graph.decks.a.echoDelay.delayTime.value).toBe(0.5);
+    expect(graph.decks.a.echoWet.gain.value).toBe(0.44);
+    expect(graph.decks.a.echoFeedback.gain.value).toBe(0.35);
+    expect(graph.decks.a.reverbWet.gain.value).toBe(0.3);
+    expect(graph.decks.b.echoWet.gain.value).toBe(0);
+    expect(graph.decks.b.reverbWet.gain.value).toBe(0);
+
+    applyDjFxStateToGraph(graph, 'a', {
+      echo: {
+        enabled: false,
+        wet: 0.44,
+        feedback: 0.35,
+        delaySeconds: 0.5
+      },
+      reverb: {
+        enabled: false,
+        wet: 0.3
+      }
+    });
+
+    expect(graph.decks.a.echoWet.gain.value).toBe(0);
+    expect(graph.decks.a.echoFeedback.gain.value).toBe(0);
+    expect(graph.decks.a.reverbWet.gain.value).toBe(0);
+    expect(context.sources).toHaveLength(sourceCount);
+    expect(context.gains).toHaveLength(gainCount);
+    expect(context.delays).toHaveLength(delayCount);
+    expect(context.convolvers).toHaveLength(convolverCount);
   });
 
   it('mantém decks independentes', () => {
@@ -214,23 +329,44 @@ describe('DJ EQ audio graph', () => {
       AudioContextConstructor: FakeAudioContext as unknown as new () => AudioContext
     })!;
     const context = FakeAudioContext.instances[0]!;
-    const sourceCount = context.sources.length;
-    const filterCount = context.filters.length;
+    const counts = {
+      sources: context.sources.length,
+      filters: context.filters.length,
+      gains: context.gains.length,
+      delays: context.delays.length,
+      convolvers: context.convolvers.length
+    };
 
     const startedAt = performance.now();
     for (let index = 0; index < 10_000; index += 1) {
       const direction = index % 2 === 0 ? 1 : -1;
-      applyDjEqStateToGraph(graph, index % 2 === 0 ? 'a' : 'b', {
+      const deck = index % 2 === 0 ? 'a' : 'b';
+      applyDjEqStateToGraph(graph, deck, {
         low: direction * 0.5,
         mid: direction * 0.25,
         high: direction * 0.75,
         filter: direction * 0.5
       });
+      applyDjFxStateToGraph(graph, deck, {
+        echo: {
+          enabled: index % 3 !== 0,
+          wet: 0.4,
+          feedback: 0.3,
+          delaySeconds: 0.25
+        },
+        reverb: {
+          enabled: index % 5 !== 0,
+          wet: 0.25
+        }
+      });
     }
     const durationMs = performance.now() - startedAt;
 
-    expect(context.sources).toHaveLength(sourceCount);
-    expect(context.filters).toHaveLength(filterCount);
+    expect(context.sources).toHaveLength(counts.sources);
+    expect(context.filters).toHaveLength(counts.filters);
+    expect(context.gains).toHaveLength(counts.gains);
+    expect(context.delays).toHaveLength(counts.delays);
+    expect(context.convolvers).toHaveLength(counts.convolvers);
     expect(durationMs).toBeLessThan(1_000);
   });
 
