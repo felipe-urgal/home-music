@@ -23,6 +23,7 @@ import {
 import { apiFetch } from '../api-client';
 import type { DjDeckId } from '../dj-controller-contract';
 import { buildDjWaveformMarkers } from '../dj-waveform-grid';
+import { resolveHotCuePosition } from '../dj-hot-cue-quantize';
 import { notifyLibraryChanged } from '../library-events';
 import { fetchTrackWaveform } from '../track-waveform-client';
 import type { DualDeckAudioSnapshot } from '../dual-deck-audio';
@@ -265,6 +266,7 @@ function DeckPanel({
   const [loopActive, setLoopActive] = useState(false);
   const [loopBeats, setLoopBeats] = useState(4);
   const [hotCues, setHotCues] = useState<TrackHotCues['positions']>([null, null, null, null]);
+  const [hotCueQuantize, setHotCueQuantize] = useState(false);
   const [hotCueError, setHotCueError] = useState<string | null>(null);
   const hotCueSaveChainRef = useRef<Promise<void>>(Promise.resolve());
   const persistedHotCuesKey = JSON.stringify(state.track?.hotCues?.positions ?? [null, null, null, null]);
@@ -368,10 +370,12 @@ function DeckPanel({
     if (!snapshot?.trackId) return;
     const cue = hotCues[index];
     if (cue == null) {
-      const position = Math.max(
-        0,
-        Math.min(snapshot.durationSeconds || Number.POSITIVE_INFINITY, snapshot.currentTimeSeconds)
-      );
+      const position = resolveHotCuePosition({
+        positionSeconds: snapshot.currentTimeSeconds,
+        durationSeconds: snapshot.durationSeconds || state.track?.duration,
+        rhythm: state.track?.rhythm,
+        quantize: hotCueQuantize
+      });
       replaceHotCue(index, position);
       return;
     }
@@ -496,6 +500,19 @@ function DeckPanel({
           </div>
 
           <div className="dj-hot-cues" aria-label={'Hot Cues ' + label}>
+            <div className="dj-hot-cues__toolbar">
+              <span>HOT CUES</span>
+              <button
+                type="button"
+                className={hotCueQuantize ? 'is-active' : ''}
+                aria-pressed={hotCueQuantize}
+                aria-label={'QUANTIZE Hot Cues ' + label}
+                onClick={() => setHotCueQuantize(value => !value)}
+                title="Encaixar novos Hot Cues na batida mais próxima"
+              >
+                QUANTIZE
+              </button>
+            </div>
             {hotCues.map((cue, index) => (
               <div className="dj-hot-cue" key={index} data-set={cue == null ? 'false' : 'true'}>
                 <button
