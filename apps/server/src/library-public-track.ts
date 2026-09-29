@@ -10,6 +10,7 @@ export function toPublicTrack(track: IndexedTrack): PublicIndexedTrack {
     mtimeMs: _mtimeMs,
     rhythmAnalysisCurrent: _rhythmAnalysisCurrent,
     waveformAnalysisCurrent: _waveformAnalysisCurrent,
+    keyAnalysisCurrent: _keyAnalysisCurrent,
     ...safe
   } = track;
   return safe;
