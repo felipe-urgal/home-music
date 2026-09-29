@@ -98,6 +98,14 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   await expect(deckA).toContainText('E2E Track');
   await expect(deckA.getByRole('button', { name: 'Reproduzir Deck A' })).toBeVisible();
 
+  const waveformA = deckA.getByRole('slider', { name: 'Buscar posição no waveform Deck A' });
+  await expect(waveformA).toBeVisible();
+  await waveformA.focus();
+  await page.keyboard.press('End');
+  await expect.poll(async () => Number(await waveformA.getAttribute('aria-valuenow'))).toBeGreaterThan(0);
+  await page.keyboard.press('Home');
+  await expect.poll(async () => Number(await waveformA.getAttribute('aria-valuenow'))).toBeLessThan(0.1);
+
   await page.keyboard.press('1');
   await expect(deckA.getByRole('button', { name: 'Pausar Deck A' })).toBeVisible();
   await page.keyboard.press('1');
@@ -220,9 +228,11 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   const channelB = mixer.locator('.dj-pro-mixer__channel[data-deck="b"] input');
   const crossfader = mixer.locator('.dj-pro-mixer__crossfader input');
 
+  await expect(mixer.locator('.dj-pro-mixer__crossfader')).toHaveAttribute('data-side', 'center');
   await channelA.fill('0.42');
   await channelB.fill('0.73');
   await crossfader.fill('-1');
+  await expect(mixer.locator('.dj-pro-mixer__crossfader')).toHaveAttribute('data-side', 'a');
   await expect(mixer.locator('.dj-pro-mixer__channel[data-deck="a"] strong')).toHaveText('42%');
   await expect(mixer.locator('.dj-pro-mixer__channel[data-deck="b"] strong')).toHaveText('73%');
   await expect(mixer.locator('.dj-pro-mixer__crossfader strong')).toHaveText('A 100%');
