@@ -956,7 +956,9 @@ function DjLibrary({
   automixCurrentTrackId,
   automixNextTrackId,
   onLoad,
-  loadedTrackIds
+  loadedTrackIds,
+  workspacePanel,
+  onWorkspacePanelChange
 }: {
   tracks: Track[];
   sources: Array<{ value: string; label: string; group: 'all' | 'folder' | 'playlist' }>;
@@ -971,6 +973,8 @@ function DjLibrary({
   automixNextTrackId: string | null;
   onLoad: (deck: DjDeckId) => void;
   loadedTrackIds: Record<DjDeckId, string | null>;
+  workspacePanel: 'library' | 'mixer';
+  onWorkspacePanelChange: (panel: 'library' | 'mixer') => void;
 }) {
   const [query, setQuery] = useState('');
   const [editingTrackId, setEditingTrackId] = useState<string | null>(null);
@@ -1038,6 +1042,27 @@ function DjLibrary({
 
       <div className="dj-library-workspace">
         <header className="dj-pro-library__header">
+          <div className="dj-library-workspace-tabs" role="group" aria-label="Painel inferior DJ">
+            <button
+              type="button"
+              className={workspacePanel === 'library' ? 'is-active' : ''}
+              aria-pressed={workspacePanel === 'library'}
+              onClick={() => onWorkspacePanelChange('library')}
+            >
+              <Library aria-hidden="true" />
+              Biblioteca
+            </button>
+            <button
+              type="button"
+              className={workspacePanel === 'mixer' ? 'is-active' : ''}
+              aria-pressed={workspacePanel === 'mixer'}
+              onClick={() => onWorkspacePanelChange('mixer')}
+            >
+              <SlidersHorizontal aria-hidden="true" />
+              Mixer
+            </button>
+          </div>
+
           <label className="dj-pro-library__search-wrap">
             <span className="dj-pro-library__search">
               <Search aria-hidden="true" />
@@ -1346,87 +1371,94 @@ function DjMixer({
     </div>
   );
 
-  const renderChannel = (deck: DjDeckId) => {
+  const renderFxPanel = (deck: DjDeckId) => {
     const fx = mixer.fx[deck];
+    const channel = deck.toUpperCase();
+    return (
+      <div className="dj-mixer-fx-panel__channel" data-deck={deck}>
+        <strong>Channel {channel}</strong>
+
+        <div className="dj-mixer-fx-panel__effect">
+          <button
+            type="button"
+            className={fx.echo.enabled ? 'is-active' : ''}
+            aria-pressed={fx.echo.enabled}
+            aria-label={'Echo Channel ' + channel}
+            onClick={() => onFxEnabled(deck, 'echo', !fx.echo.enabled)}
+          >
+            ECHO
+          </button>
+          <label>
+            <span>Mix</span>
+            <input
+              aria-label={'Echo Wet Channel ' + channel}
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              value={fx.echo.wet}
+              onChange={event => onFxWet(deck, 'echo', Number(event.currentTarget.value))}
+            />
+          </label>
+          <label>
+            <span>Feedback</span>
+            <input
+              aria-label={'Echo Feedback Channel ' + channel}
+              type="range"
+              min="0"
+              max="0.82"
+              step="0.01"
+              value={fx.echo.feedback}
+              onChange={event => onEchoFeedback(deck, Number(event.currentTarget.value))}
+            />
+          </label>
+          <label>
+            <span>Tempo</span>
+            <input
+              aria-label={'Echo Delay Channel ' + channel}
+              type="range"
+              min="0.06"
+              max="1.5"
+              step="0.01"
+              value={fx.echo.delaySeconds}
+              onChange={event => onEchoDelay(deck, Number(event.currentTarget.value))}
+            />
+          </label>
+        </div>
+
+        <div className="dj-mixer-fx-panel__effect">
+          <button
+            type="button"
+            className={fx.reverb.enabled ? 'is-active' : ''}
+            aria-pressed={fx.reverb.enabled}
+            aria-label={'Reverb Channel ' + channel}
+            onClick={() => onFxEnabled(deck, 'reverb', !fx.reverb.enabled)}
+          >
+            REVERB
+          </button>
+          <label>
+            <span>Mix</span>
+            <input
+              aria-label={'Reverb Wet Channel ' + channel}
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              value={fx.reverb.wet}
+              onChange={event => onFxWet(deck, 'reverb', Number(event.currentTarget.value))}
+            />
+          </label>
+        </div>
+      </div>
+    );
+  };
+
+  const renderChannel = (deck: DjDeckId) => {
     const channel = deck.toUpperCase();
     return (
       <div className="dj-pro-mixer__channel" data-deck={deck}>
         <span className="dj-mixer-channel-title">{channel}</span>
         {renderEq(deck)}
-
-        <div className="dj-mixer-fx" aria-label={'FX Channel ' + channel}>
-          <div className="dj-mixer-fx__row" data-enabled={fx.echo.enabled ? 'true' : 'false'}>
-            <button
-              type="button"
-              className={fx.echo.enabled ? 'is-active' : ''}
-              aria-pressed={fx.echo.enabled}
-              aria-label={'Echo Channel ' + channel}
-              onClick={() => onFxEnabled(deck, 'echo', !fx.echo.enabled)}
-            >
-              ECHO
-            </button>
-            <label title={'Echo mix ' + Math.round(fx.echo.wet * 100) + '%'}>
-              <span>MIX</span>
-              <input
-                aria-label={'Echo Wet Channel ' + channel}
-                type="range"
-                min="0"
-                max="1"
-                step="0.01"
-                value={fx.echo.wet}
-                onChange={event => onFxWet(deck, 'echo', Number(event.currentTarget.value))}
-              />
-            </label>
-            <label title={'Feedback ' + Math.round(fx.echo.feedback * 100) + '%'}>
-              <span>FDBK</span>
-              <input
-                aria-label={'Echo Feedback Channel ' + channel}
-                type="range"
-                min="0"
-                max="0.82"
-                step="0.01"
-                value={fx.echo.feedback}
-                onChange={event => onEchoFeedback(deck, Number(event.currentTarget.value))}
-              />
-            </label>
-            <label title={'Delay ' + Math.round(fx.echo.delaySeconds * 1000) + ' ms'}>
-              <span>TIME</span>
-              <input
-                aria-label={'Echo Delay Channel ' + channel}
-                type="range"
-                min="0.06"
-                max="1.5"
-                step="0.01"
-                value={fx.echo.delaySeconds}
-                onChange={event => onEchoDelay(deck, Number(event.currentTarget.value))}
-              />
-            </label>
-          </div>
-
-          <div className="dj-mixer-fx__row" data-enabled={fx.reverb.enabled ? 'true' : 'false'}>
-            <button
-              type="button"
-              className={fx.reverb.enabled ? 'is-active' : ''}
-              aria-pressed={fx.reverb.enabled}
-              aria-label={'Reverb Channel ' + channel}
-              onClick={() => onFxEnabled(deck, 'reverb', !fx.reverb.enabled)}
-            >
-              REVERB
-            </button>
-            <label className="dj-mixer-fx__wide" title={'Reverb mix ' + Math.round(fx.reverb.wet * 100) + '%'}>
-              <span>MIX</span>
-              <input
-                aria-label={'Reverb Wet Channel ' + channel}
-                type="range"
-                min="0"
-                max="1"
-                step="0.01"
-                value={fx.reverb.wet}
-                onChange={event => onFxWet(deck, 'reverb', Number(event.currentTarget.value))}
-              />
-            </label>
-          </div>
-        </div>
 
         <label className="dj-mixer-channel-volume">
           <Gauge aria-hidden="true" />
@@ -1451,6 +1483,21 @@ function DjMixer({
       <div className="dj-pro-mixer__title">
         <SlidersHorizontal aria-hidden="true" />
         <strong>Mixer</strong>
+        <details className="dj-mixer-fx-settings">
+          <summary aria-label="Configurar efeitos do mixer" title="Efeitos do mixer">
+            <Settings aria-hidden="true" />
+          </summary>
+          <div className="dj-mixer-fx-panel">
+            <div className="dj-mixer-fx-panel__heading">
+              <strong>FX</strong>
+              <span>Echo + Reverb</span>
+            </div>
+            <div className="dj-mixer-fx-panel__channels">
+              {renderFxPanel('a')}
+              {renderFxPanel('b')}
+            </div>
+          </div>
+        </details>
       </div>
 
       <div className="dj-mixer-bank">
@@ -1690,6 +1737,8 @@ export function DjModeScreen({
             a: decks.a.snapshot?.trackId ?? null,
             b: decks.b.snapshot?.trackId ?? null
           }}
+          workspacePanel={workspacePanel}
+          onWorkspacePanelChange={setWorkspacePanel}
         />
 
         <details className="dj-midi-drawer">
