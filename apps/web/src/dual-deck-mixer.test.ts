@@ -46,7 +46,11 @@ describe('dual deck mixer', () => {
   it('cria estado neutro previsível', () => {
     expect(createDefaultDualDeckMixerState()).toEqual({
       channelVolumes: { a: 1, b: 1 },
-      crossfader: 0
+      crossfader: 0,
+      eq: {
+        a: { low: 0, mid: 0, high: 0, filter: 0 },
+        b: { low: 0, mid: 0, high: 0, filter: 0 }
+      }
     });
   });
 });
