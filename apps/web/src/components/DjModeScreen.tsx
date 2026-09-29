@@ -840,11 +840,13 @@ function RhythmGridEditor({
         deck="a"
         track={previewTrack}
         progress={0}
+        currentTimeSeconds={0}
         hotCues={[null, null, null, null]}
         loopIn={null}
         loopOut={null}
         loopActive={false}
         hotLoopCueIndex={null}
+        onSeek={() => undefined}
         onHotCueSeek={() => undefined}
       />
 
