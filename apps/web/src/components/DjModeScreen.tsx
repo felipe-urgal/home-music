@@ -1261,8 +1261,8 @@ function DjMixer({
   onEq: (deck: DjDeckId, control: DjEqControl, value: number) => void;
   onCrossfader: (value: number) => void;
 }) {
-  const channelMeter = (value: number) => (
-    <span className="dj-channel-meter" aria-hidden="true">
+  const channelMeter = (deck: DjDeckId, value: number) => (
+    <span className="dj-channel-meter" data-deck={deck} aria-hidden="true">
       {Array.from({ length: 12 }, (_, index) => (
         <i key={index} data-on={index < Math.round(value * 12) ? 'true' : 'false'} />
       ))}
@@ -1270,10 +1270,10 @@ function DjMixer({
   );
 
   const eqControls: Array<{ control: DjEqControl; label: string }> = [
-    { control: 'low', label: 'LOW' },
-    { control: 'mid', label: 'MID' },
-    { control: 'high', label: 'HIGH' },
-    { control: 'filter', label: 'FILTER' }
+    { control: 'high', label: 'AGUDOS' },
+    { control: 'mid', label: 'MÉDIOS' },
+    { control: 'low', label: 'GRAVES' },
+    { control: 'filter', label: 'FILTRO' }
   ];
 
   const renderEq = (deck: DjDeckId) => (
@@ -1310,37 +1310,69 @@ function DjMixer({
     </div>
   );
 
+  const renderChannel = (deck: DjDeckId) => (
+    <div className="dj-pro-mixer__channel" data-deck={deck}>
+      <span className="dj-mixer-channel-title">{deck.toUpperCase()}</span>
+      {renderEq(deck)}
+      <label className="dj-mixer-channel-volume">
+        <Gauge aria-hidden="true" />
+        <span className="sr-only">{'Volume Channel ' + deck.toUpperCase()}</span>
+        <input
+          aria-label={'Volume Channel ' + deck.toUpperCase()}
+          type="range"
+          min="0"
+          max="1"
+          step="0.01"
+          value={mixer.channelVolumes[deck]}
+          onChange={event => onChannelVolume(deck, Number(event.currentTarget.value))}
+        />
+        <strong>{Math.round(mixer.channelVolumes[deck] * 100)}%</strong>
+      </label>
+    </div>
+  );
+
   return (
     <section className="dj-pro-mixer dj-pro-mixer--console" aria-label="Mixer">
-      <div className="dj-pro-mixer__title"><SlidersHorizontal aria-hidden="true" /><strong>Mixer</strong></div>
-      <div className="dj-pro-mixer__channel" data-deck="a">
-        <span className="dj-mixer-channel-title">Channel A</span>
-        {renderEq('a')}
-        <div className="dj-mixer-channel-row">
-          <Gauge aria-hidden="true" />
-          <input type="range" min="0" max="1" step="0.01" value={mixer.channelVolumes.a} onChange={event => onChannelVolume('a', Number(event.currentTarget.value))} />
-        </div>
-        <strong>{Math.round(mixer.channelVolumes.a * 100)}%</strong>
-        {channelMeter(meterLevels.a)}
+      <div className="dj-pro-mixer__title">
+        <SlidersHorizontal aria-hidden="true" />
+        <strong>Mixer</strong>
       </div>
+
+      <div className="dj-mixer-bank">
+        {renderChannel('a')}
+        <div className="dj-mixer-meter-pair" aria-label="Medidores de nível">
+          {channelMeter('a', meterLevels.a)}
+          {channelMeter('b', meterLevels.b)}
+        </div>
+        {renderChannel('b')}
+      </div>
+
       <label
         className="dj-pro-mixer__crossfader"
         data-side={Math.abs(mixer.crossfader) < 0.005 ? 'center' : mixer.crossfader < 0 ? 'a' : 'b'}
       >
-        <span>Crossfader</span>
-        <div><small>A</small><input type="range" min="-1" max="1" step="0.01" value={mixer.crossfader} onChange={event => onCrossfader(Number(event.currentTarget.value))} /><small>B</small></div>
-        <strong>{mixer.crossfader === 0 ? 'Centro' : mixer.crossfader < 0 ? 'A ' + Math.round(Math.abs(mixer.crossfader) * 100) + '%' : 'B ' + Math.round(mixer.crossfader * 100) + '%'}</strong>
-      </label>
-      <div className="dj-pro-mixer__channel" data-deck="b">
-        <span className="dj-mixer-channel-title">Channel B</span>
-        {renderEq('b')}
-        <div className="dj-mixer-channel-row">
-          <Gauge aria-hidden="true" />
-          <input type="range" min="0" max="1" step="0.01" value={mixer.channelVolumes.b} onChange={event => onChannelVolume('b', Number(event.currentTarget.value))} />
+        <span>CROSSFADER</span>
+        <div>
+          <small>A</small>
+          <input
+            aria-label="Crossfader"
+            type="range"
+            min="-1"
+            max="1"
+            step="0.01"
+            value={mixer.crossfader}
+            onChange={event => onCrossfader(Number(event.currentTarget.value))}
+          />
+          <small>B</small>
         </div>
-        <strong>{Math.round(mixer.channelVolumes.b * 100)}%</strong>
-        {channelMeter(meterLevels.b)}
-      </div>
+        <strong>
+          {mixer.crossfader === 0
+            ? 'Centro'
+            : mixer.crossfader < 0
+              ? 'A ' + Math.round(Math.abs(mixer.crossfader) * 100) + '%'
+              : 'B ' + Math.round(mixer.crossfader * 100) + '%'}
+        </strong>
+      </label>
     </section>
   );
 }
