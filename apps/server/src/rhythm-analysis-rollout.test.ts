@@ -110,7 +110,14 @@ test('health expõe runtime agregado da análise sem paths ou dados de faixa', a
       waveformDecodeUnavailable: 1,
       waveformFailed: 0,
       waveformTimeouts: 0,
-      waveformAnalyzerVersion: 1
+      waveformAnalyzerVersion: 1,
+      keyCompleted: 0,
+      keyAvailable: 0,
+      keyUnavailable: 0,
+      keyDecodeUnavailable: 0,
+      keyFailed: 0,
+      keyTimeouts: 0,
+      keyAnalyzerVersion: 1
     }),
     isWebReady: () => true
   });

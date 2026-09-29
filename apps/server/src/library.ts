@@ -42,6 +42,7 @@ export type IndexedTrack = Track & {
   mtimeMs: number;
   rhythmAnalysisCurrent?: boolean;
   waveformAnalysisCurrent?: boolean;
+  keyAnalysisCurrent?: boolean;
 };
 
 export type LibraryScanStats = {

@@ -3,6 +3,7 @@ import {
   applyDjEqStateToGraph,
   applyDjFxStateToGraph,
   createDjEqAudioGraph,
+  createDjMasterRecordingOutput,
   disposeDjEqAudioGraph,
   readDjEqMeterLevel,
   resumeDjEqAudioGraph
@@ -25,6 +26,14 @@ class FakeNode {
   connect(node: FakeNode) {
     this.connections.push(node);
     return node;
+  }
+
+  disconnect(node?: FakeNode) {
+    if (!node) {
+      this.connections = [];
+      return;
+    }
+    this.connections = this.connections.filter(connection => connection !== node);
   }
 }
 
@@ -59,6 +68,24 @@ class FakeAnalyserNode extends FakeNode {
   }
 }
 
+class FakeMediaStreamTrack {
+  stopped = false;
+  stop() {
+    this.stopped = true;
+  }
+}
+
+class FakeMediaStream {
+  readonly track = new FakeMediaStreamTrack();
+  getTracks() {
+    return [this.track] as unknown as MediaStreamTrack[];
+  }
+}
+
+class FakeMediaStreamDestinationNode extends FakeNode {
+  stream = new FakeMediaStream() as unknown as MediaStream;
+}
+
 class FakeAudioBuffer {
   readonly numberOfChannels: number;
   private readonly channels: Float32Array[];
@@ -85,6 +112,7 @@ class FakeAudioContext {
   delays: FakeDelayNode[] = [];
   convolvers: FakeConvolverNode[] = [];
   analysers: FakeAnalyserNode[] = [];
+  mediaStreamDestinations: FakeMediaStreamDestinationNode[] = [];
   close = vi.fn(async () => {
     this.state = 'closed';
   });
@@ -132,6 +160,12 @@ class FakeAudioContext {
     return node as unknown as AnalyserNode;
   }
 
+  createMediaStreamDestination() {
+    const node = new FakeMediaStreamDestinationNode();
+    this.mediaStreamDestinations.push(node);
+    return node as unknown as MediaStreamAudioDestinationNode;
+  }
+
   createBuffer(numberOfChannels: number, length: number) {
     return new FakeAudioBuffer(numberOfChannels, length) as unknown as AudioBuffer;
   }
@@ -155,7 +189,7 @@ describe('DJ EQ/FX audio graph', () => {
     expect(FakeAudioContext.instances).toHaveLength(1);
     expect(context.sources).toHaveLength(2);
     expect(context.filters).toHaveLength(8);
-    expect(context.gains).toHaveLength(8);
+    expect(context.gains).toHaveLength(11);
     expect(context.delays).toHaveLength(2);
     expect(context.convolvers).toHaveLength(2);
     expect(context.analysers).toHaveLength(2);
@@ -178,7 +212,9 @@ describe('DJ EQ/FX audio graph', () => {
 
     expect(context.sources[0]?.connections).toContain(context.filters[0]!);
     expect(context.filters[3]?.connections).toHaveLength(3);
-    expect((graph!.decks.a.analyser as unknown as FakeAnalyserNode).connections[0]).toBe(context.destination);
+    expect((graph!.decks.a.analyser as unknown as FakeAnalyserNode).connections[0]).toBe(graph!.decks.a.output);
+    expect((graph!.decks.a.output as unknown as FakeGainNode).connections[0]).toBe(graph!.master);
+    expect((graph!.master as unknown as FakeGainNode).connections[0]).toBe(context.destination);
   });
 
   it('atualiza EQ sem reconstruir o graph', () => {
@@ -370,6 +406,29 @@ describe('DJ EQ/FX audio graph', () => {
     expect(context.delays).toHaveLength(counts.delays);
     expect(context.convolvers).toHaveLength(counts.convolvers);
     expect(durationMs).toBeLessThan(1_000);
+  });
+
+  it('captura o master somente durante a sessão de gravação e limpa o stream', () => {
+    FakeAudioContext.instances = [];
+    const graph = createDjEqAudioGraph({
+      deckA: fakeAudio(),
+      deckB: fakeAudio(),
+      AudioContextConstructor: FakeAudioContext as unknown as new () => AudioContext
+    })!;
+    const context = FakeAudioContext.instances[0]!;
+    const master = graph.master as unknown as FakeGainNode;
+
+    expect(master.connections).toHaveLength(1);
+    const output = createDjMasterRecordingOutput(graph);
+    expect(output).not.toBeNull();
+    expect(context.mediaStreamDestinations).toHaveLength(1);
+    expect(master.connections).toHaveLength(2);
+
+    const destination = context.mediaStreamDestinations[0]!;
+    output!.dispose();
+
+    expect(master.connections).toEqual([context.destination]);
+    expect((destination.stream as unknown as FakeMediaStream).track.stopped).toBe(true);
   });
 
   it('fecha o contexto no cleanup', () => {

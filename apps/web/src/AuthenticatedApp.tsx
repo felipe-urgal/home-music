@@ -60,6 +60,7 @@ import { resolveBeatmatchPlan } from './beatmatch';
 import type { DjDeckId } from './dj-controller-contract';
 import type { DjEqControl } from './dj-eq';
 import type { DjFxKind } from './dj-fx';
+import { downloadDjRecording } from './dj-recording';
 import { canUseAdminLibraryActions } from './frontend-access';
 import { buildLibraryReturnLabel } from './library-utils';
 import type { OfflineDownloads } from './offline-downloads';
@@ -1385,13 +1386,26 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     setScreen('dj');
   }
 
-  function closeDjMode() {
+  async function closeDjMode() {
+    if (player.dualDeck.recording.active) {
+      const result = await player.dualDeck.stopRecording(true);
+      if (result) downloadDjRecording(result.blob, result.filename);
+    }
     cancelDjNudge('a');
     cancelDjNudge('b');
     commitDjSyncState(EMPTY_DJ_SYNC_STATE);
     player.djSession.exit();
     player.syncVisibleProgress();
     setScreen('player');
+  }
+
+  function startDjRecording() {
+    player.dualDeck.startRecording();
+  }
+
+  async function stopDjRecording() {
+    const result = await player.dualDeck.stopRecording(true);
+    if (result) downloadDjRecording(result.blob, result.filename);
   }
 
   function openLibraryTab(tab: LibraryTab) {
@@ -1613,11 +1627,14 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
           onNudge={nudgeDjDeck}
           onSeek={seekDjDeck}
           mixMode={djMixMode}
+          recording={player.dualDeck.recording}
+          onStartRecording={startDjRecording}
+          onStopRecording={() => { void stopDjRecording(); }}
           onMixModeChange={mode => {
             if (mode === 'automix') enableDjAutomix();
             else disableDjAutomix();
           }}
-          onExit={closeDjMode}
+          onExit={() => { void closeDjMode(); }}
         />
         {library.actionError && (
           <button className="app-toast" role="status" onClick={library.clearActionError}>

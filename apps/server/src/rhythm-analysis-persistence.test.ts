@@ -278,7 +278,7 @@ test('schema novo contém análise derivada e override manual de ritmo', async (
   const db = new HomeMusicDatabase(dbPath);
 
   try {
-    assert.equal(db.getSchemaVersion(), 18);
+    assert.equal(db.getSchemaVersion(), 19);
     const raw = new DatabaseSync(dbPath);
     try {
       const rows = raw.prepare(`
@@ -325,7 +325,7 @@ test('migra schema rítmico v13 adicionando campos opcionais de downbeat', async
 
   const db = new HomeMusicDatabase(dbPath);
   try {
-    assert.equal(db.getSchemaVersion(), 18);
+    assert.equal(db.getSchemaVersion(), 19);
     const raw = new DatabaseSync(dbPath);
     try {
       const columns = raw.prepare('PRAGMA table_info(track_rhythm_analysis)').all() as Array<{ name?: string }>;

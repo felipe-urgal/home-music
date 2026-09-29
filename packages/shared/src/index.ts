@@ -1,3 +1,4 @@
+export * from './dj-key.js';
 export type RepeatMode = 'off' | 'all' | 'one';
 export type NormalizationMode = 'off' | 'track' | 'album';
 export type StatisticsPeriod = '7d' | '30d' | 'all';
@@ -440,6 +441,7 @@ export type Track = {
   replayGainTrackDb?: number | null;
   replayGainAlbumDb?: number | null;
   rhythm?: TrackRhythm | null;
+  key?: import('./dj-key.js').TrackMusicalKey | null;
   hotCues?: TrackHotCues | null;
 };
 
