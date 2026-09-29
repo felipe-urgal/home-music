@@ -100,6 +100,17 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   await expect(deckA.getByRole('button', { name: 'IN', exact: true })).toBeVisible();
   await expect(deckA.getByRole('button', { name: 'OUT', exact: true })).toBeDisabled();
 
+  const existingHotCueClear = deckA.getByRole('button', { name: 'Limpar Hot Cue 1 Deck A' });
+  if (await existingHotCueClear.isEnabled().catch(() => false)) {
+    const resetHotCue = page.waitForResponse(response => (
+      response.url().includes('/api/tracks/')
+      && response.url().endsWith('/hot-cues')
+      && response.request().method() === 'PUT'
+    ));
+    await existingHotCueClear.click();
+    expect((await resetHotCue).ok()).toBe(true);
+  }
+
   await expect(deckA.getByRole('button', { name: 'Definir Hot Cue 1 Deck A' })).toBeVisible();
   const quantizeA = deckA.getByRole('button', { name: 'QUANTIZE Hot Cues Deck A' });
   await expect(quantizeA).toHaveAttribute('aria-pressed', 'false');
@@ -126,11 +137,15 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   expect(typeof persistedHotCue.positions[0]).toBe('number');
   expect((await saveHotCue).ok()).toBe(true);
   await expect(deckA.getByRole('button', { name: 'Ir para Hot Cue 1 Deck A' })).toBeVisible();
+  const waveformHotCueA = deckA.getByRole('button', { name: 'Hot Cue 1 no waveform Deck A' });
+  await expect(waveformHotCueA).toBeVisible();
+  await waveformHotCueA.click();
   await deckA.getByRole('button', { name: 'Ir para Hot Cue 1 Deck A' }).click();
 
   await dj.getByRole('button', { name: 'LOAD B' }).click();
   await expect(deckB).toContainText('E2E Track');
   await expect(deckB.getByRole('button', { name: 'Ir para Hot Cue 1 Deck B' })).toBeVisible();
+  await expect(deckB.getByRole('button', { name: 'Hot Cue 1 no waveform Deck B' })).toBeVisible();
 
   const clearHotCue = page.waitForResponse(response => (
     response.url().includes('/api/tracks/')
@@ -141,6 +156,8 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   expect((await clearHotCue).ok()).toBe(true);
   await expect(deckA.getByRole('button', { name: 'Definir Hot Cue 1 Deck A' })).toBeVisible();
   await expect(deckB.getByRole('button', { name: 'Definir Hot Cue 1 Deck B' })).toBeVisible();
+  await expect(deckA.getByRole('button', { name: 'Hot Cue 1 no waveform Deck A' })).toHaveCount(0);
+  await expect(deckB.getByRole('button', { name: 'Hot Cue 1 no waveform Deck B' })).toHaveCount(0);
 
   await library.getByRole('option').filter({ hasText: 'E2E Zeta' }).click();
   await dj.getByRole('button', { name: 'LOAD B' }).click();
