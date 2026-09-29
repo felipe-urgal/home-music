@@ -4,7 +4,7 @@ const username = 'playwright';
 const password = 'playwright-password-2026';
 
 test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regredir player normal', async ({ page }) => {
-  test.setTimeout(120_000);
+  test.setTimeout(180_000);
 
   await page.addInitScript(() => {
     const input = {
@@ -305,6 +305,10 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   await diagnostics.click();
   await expect(diagnostics).toHaveAttribute('aria-pressed', 'false');
   await expect(midi.getByLabel('Diagnóstico MIDI ativo')).toHaveCount(0);
+
+  const e2eZetaOption = library.getByRole('option').filter({ hasText: 'E2E Zeta' });
+  await e2eZetaOption.click();
+  await expect(e2eZetaOption).toHaveAttribute('aria-selected', 'true');
 
   await page.evaluate(() => {
     const input = (globalThis as typeof globalThis & {
