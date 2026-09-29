@@ -420,6 +420,11 @@ export type TrackWaveform = {
   peaks: number[];
 };
 
+export type TrackHotCues = {
+  version: 1;
+  positions: [number | null, number | null, number | null, number | null];
+};
+
 export type Track = {
   id: string;
   title: string;
@@ -435,6 +440,7 @@ export type Track = {
   replayGainTrackDb?: number | null;
   replayGainAlbumDb?: number | null;
   rhythm?: TrackRhythm | null;
+  hotCues?: TrackHotCues | null;
 };
 
 export type EditableTrackMetadata = {
