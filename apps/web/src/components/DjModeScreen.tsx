@@ -43,6 +43,7 @@ export type DjDeckPanelState = {
   syncMaster: boolean;
   syncMode: 'off' | 'tempo' | 'beat' | 'bar';
   channelVolume: number;
+  meterLevel: number;
 };
 
 type DjModeScreenProps = {
@@ -57,6 +58,8 @@ type DjModeScreenProps = {
   automixShuffle: boolean;
   onAutomixShuffleChange: (value: boolean) => void;
   playedTrackIds: Set<string>;
+  automixCurrentTrackId: string | null;
+  automixNextTrackId: string | null;
   onLoadSelectedTrack: (deck: DjDeckId) => void;
   midi: WebMidiController;
   onDisconnectMidi: () => void;
@@ -925,6 +928,8 @@ function DjLibrary({
   shuffle,
   onShuffleChange,
   playedTrackIds,
+  automixCurrentTrackId,
+  automixNextTrackId,
   onLoad,
   loadedTrackIds
 }: {
@@ -937,6 +942,8 @@ function DjLibrary({
   shuffle: boolean;
   onShuffleChange: (value: boolean) => void;
   playedTrackIds: Set<string>;
+  automixCurrentTrackId: string | null;
+  automixNextTrackId: string | null;
   onLoad: (deck: DjDeckId) => void;
   loadedTrackIds: Record<DjDeckId, string | null>;
 }) {
@@ -1010,28 +1017,42 @@ function DjLibrary({
       </div>
 
       <div className="dj-pro-library__list" role="listbox" aria-label="Faixas">
-        {filtered.map(({ track, index }) => (
-          <button
-            key={track.id}
-            type="button"
-            role="option"
-            aria-selected={index === safeIndex}
-            className={[
-              index === safeIndex ? 'is-selected' : '',
-              playedTrackIds.has(track.id) ? 'is-played' : ''
-            ].filter(Boolean).join(' ')}
-            onClick={() => onSelect(index)}
-          >
-            <span>{String(index + 1).padStart(2, '0')}</span>
-            <strong>{track.title}</strong>
-            <span>{track.artist || 'Artista desconhecido'}</span>
-            <span>
-              {track.rhythm?.bpm ? track.rhythm.bpm.toFixed(1) : '—'}
-              {track.rhythm?.manualOverride ? <small className="dj-grid-manual-badge">M</small> : null}
-            </span>
-            <span>{formatTime(track.duration ?? 0)}</span>
-          </button>
-        ))}
+        {filtered.map(({ track, index }) => {
+          const loadedA = loadedTrackIds.a === track.id;
+          const loadedB = loadedTrackIds.b === track.id;
+          const automixCurrent = automixCurrentTrackId === track.id;
+          const automixNext = automixNextTrackId === track.id && !automixCurrent;
+          return (
+            <button
+              key={track.id}
+              type="button"
+              role="option"
+              aria-selected={index === safeIndex}
+              className={[
+                index === safeIndex ? 'is-selected' : '',
+                playedTrackIds.has(track.id) ? 'is-played' : '',
+                automixCurrent ? 'is-automix-current' : '',
+                automixNext ? 'is-automix-next' : ''
+              ].filter(Boolean).join(' ')}
+              onClick={() => onSelect(index)}
+            >
+              <span>{String(index + 1).padStart(2, '0')}</span>
+              <span className="dj-library-track-title">
+                <strong>{track.title}</strong>
+                {loadedA ? <small className="dj-library-deck-badge" data-deck="a">A</small> : null}
+                {loadedB ? <small className="dj-library-deck-badge" data-deck="b">B</small> : null}
+                {automixCurrent ? <small className="dj-library-status-badge">AGORA</small> : null}
+                {automixNext ? <small className="dj-library-status-badge">PRÓXIMA</small> : null}
+              </span>
+              <span>{track.artist || 'Artista desconhecido'}</span>
+              <span>
+                {track.rhythm?.bpm ? track.rhythm.bpm.toFixed(1) : '—'}
+                {track.rhythm?.manualOverride ? <small className="dj-grid-manual-badge">M</small> : null}
+              </span>
+              <span>{formatTime(track.duration ?? 0)}</span>
+            </button>
+          );
+        })}
         {!filtered.length && <div className="dj-pro-library__empty">Nenhuma faixa encontrada.</div>}
       </div>
 
@@ -1154,11 +1175,13 @@ function DjMidiPanel({
 
 function DjMixer({
   mixer,
+  meterLevels,
   onChannelVolume,
   onEq,
   onCrossfader
 }: {
   mixer: DualDeckMixerState;
+  meterLevels: Record<DjDeckId, number>;
   onChannelVolume: (deck: DjDeckId, value: number) => void;
   onEq: (deck: DjDeckId, control: DjEqControl, value: number) => void;
   onCrossfader: (value: number) => void;
@@ -1205,6 +1228,7 @@ function DjMixer({
               />
             </span>
             <small>{label}</small>
+            <output className="dj-eq-value" aria-hidden="true">{valueText}</output>
           </label>
         );
       })}
@@ -1222,7 +1246,7 @@ function DjMixer({
           <input type="range" min="0" max="1" step="0.01" value={mixer.channelVolumes.a} onChange={event => onChannelVolume('a', Number(event.currentTarget.value))} />
         </div>
         <strong>{Math.round(mixer.channelVolumes.a * 100)}%</strong>
-        {channelMeter(mixer.channelVolumes.a)}
+        {channelMeter(meterLevels.a)}
       </div>
       <label
         className="dj-pro-mixer__crossfader"
@@ -1240,7 +1264,7 @@ function DjMixer({
           <input type="range" min="0" max="1" step="0.01" value={mixer.channelVolumes.b} onChange={event => onChannelVolume('b', Number(event.currentTarget.value))} />
         </div>
         <strong>{Math.round(mixer.channelVolumes.b * 100)}%</strong>
-        {channelMeter(mixer.channelVolumes.b)}
+        {channelMeter(meterLevels.b)}
       </div>
     </section>
   );
@@ -1258,6 +1282,8 @@ export function DjModeScreen({
   automixShuffle,
   onAutomixShuffleChange,
   playedTrackIds,
+  automixCurrentTrackId,
+  automixNextTrackId,
   onLoadSelectedTrack,
   midi,
   onDisconnectMidi,
@@ -1330,6 +1356,8 @@ export function DjModeScreen({
           shuffle={automixShuffle}
           onShuffleChange={onAutomixShuffleChange}
           playedTrackIds={playedTrackIds}
+          automixCurrentTrackId={automixCurrentTrackId}
+          automixNextTrackId={automixNextTrackId}
           onLoad={onLoadSelectedTrack}
           loadedTrackIds={{
             a: decks.a.snapshot?.trackId ?? null,
@@ -1337,7 +1365,13 @@ export function DjModeScreen({
           }}
         />
         <DeckPanel deck="b" state={decks.b} onTogglePlay={onTogglePlay} onCue={onCue} onSync={onSync} onTempo={onTempo} onNudge={onNudge} onSeek={onSeek} />
-        <DjMixer mixer={mixer} onChannelVolume={onChannelVolume} onEq={onEq} onCrossfader={onCrossfader} />
+        <DjMixer
+          mixer={mixer}
+          meterLevels={{ a: decks.a.meterLevel, b: decks.b.meterLevel }}
+          onChannelVolume={onChannelVolume}
+          onEq={onEq}
+          onCrossfader={onCrossfader}
+        />
         <DjMidiPanel midi={midi} onDisconnect={onDisconnectMidi} onSelectOutput={onSelectMidiOutput} />
       </main>
     </section>
