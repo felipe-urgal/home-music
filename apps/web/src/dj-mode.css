@@ -337,6 +337,44 @@
   margin: 2px 0 8px;
 }
 
+.dj-hot-cues__toolbar {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 24px;
+}
+
+.dj-hot-cues__toolbar > span {
+  color: #7f8c99;
+  font-size: .6rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+}
+
+.dj-hot-cues__toolbar button {
+  min-height: 22px;
+  padding: 0 7px;
+  border: 1px solid rgba(145,163,183,.24);
+  border-radius: 4px;
+  background: rgba(255,255,255,.035);
+  color: #8794a1;
+  font: inherit;
+  font-size: .58rem;
+  font-weight: 700;
+  letter-spacing: .05em;
+}
+
+.dj-hot-cues__toolbar button.is-active {
+  border-color: var(--deck-accent);
+  color: #fff;
+  box-shadow: inset 0 0 8px rgba(30,142,255,.13);
+}
+
+.dj-pro-deck[data-deck="b"] .dj-hot-cues__toolbar button.is-active {
+  color: #ffd51f;
+}
+
 .dj-hot-cue {
   position: relative;
   min-width: 0;
