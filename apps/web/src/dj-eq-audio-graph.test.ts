@@ -217,7 +217,7 @@ describe('DJ EQ audio graph', () => {
     })).toBeNull();
 
     class FailingAudioContext extends FakeAudioContext {
-      createMediaElementSource() {
+      createMediaElementSource(): MediaElementAudioSourceNode {
         throw new Error('unsupported');
       }
     }
