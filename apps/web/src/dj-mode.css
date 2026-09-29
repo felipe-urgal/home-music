@@ -5390,3 +5390,23 @@
     grid-template-columns: 1fr;
   }
 }
+
+
+/* Prototype row-state cleanup */
+.dj-mode--prototype-three .dj-pro-library__list > button.is-automix-current:not(.is-selected),
+.dj-mode--prototype-three .dj-pro-library__list > button.is-automix-next:not(.is-selected) {
+  background: transparent;
+  box-shadow: none;
+}
+
+.dj-mode--prototype-three .dj-pro-library__list > button.is-automix-current .dj-library-status-badge {
+  border-color: rgba(31, 140, 255, .48);
+  background: rgba(31, 140, 255, .12);
+  color: #8dcbff;
+}
+
+.dj-mode--prototype-three .dj-pro-library__list > button.is-automix-next .dj-library-status-badge {
+  border-color: rgba(255, 193, 33, .52);
+  background: rgba(255, 193, 33, .10);
+  color: #ffd45e;
+}
