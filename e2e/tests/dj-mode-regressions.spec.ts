@@ -633,3 +633,70 @@ test('Modo DJ restaura EQ neutro ao sair e reentrar', async ({ page }) => {
   await expect(reopenedMixer.getByRole('button', { name: 'Echo Channel A' })).toHaveAttribute('aria-pressed', 'false');
   await expect(reopenedMixer.getByRole('button', { name: 'Reverb Channel B' })).toHaveAttribute('aria-pressed', 'false');
 });
+
+
+test('Modo DJ finaliza gravação ao sair e restaura player normal', async ({ page }) => {
+  test.setTimeout(60_000);
+
+  await page.addInitScript(() => {
+    class E2eMediaRecorder {
+      static isTypeSupported(mimeType: string) {
+        return mimeType.startsWith('audio/webm');
+      }
+
+      readonly mimeType = 'audio/webm;codecs=opus';
+      state: RecordingState = 'inactive';
+      ondataavailable: ((event: BlobEvent) => void) | null = null;
+      onerror: ((event: Event) => void) | null = null;
+      onstop: ((event: Event) => void) | null = null;
+
+      constructor(_stream: MediaStream, _options?: MediaRecorderOptions) {}
+
+      start() {
+        this.state = 'recording';
+      }
+
+      requestData() {
+        if (this.state !== 'recording') return;
+        this.ondataavailable?.({
+          data: new Blob(['home-music-dj-e2e'], { type: this.mimeType })
+        } as BlobEvent);
+      }
+
+      stop() {
+        if (this.state === 'inactive') return;
+        this.state = 'inactive';
+        queueMicrotask(() => this.onstop?.(new Event('stop')));
+      }
+    }
+
+    Object.defineProperty(globalThis, 'MediaRecorder', {
+      configurable: true,
+      value: E2eMediaRecorder
+    });
+  });
+
+  await page.goto('/');
+  await page.getByLabel('Usuário').fill(username);
+  await page.getByLabel('Senha', { exact: true }).fill(password);
+  await page.getByRole('button', { name: 'Entrar' }).click();
+
+  await expect(page.locator('.desktop-now-playing-screen')).toBeVisible();
+  const expandTopbar = page.getByRole('button', { name: 'Expandir barra superior' });
+  if (await expandTopbar.isVisible()) await expandTopbar.click();
+  await page.getByRole('button', { name: 'Abrir Modo DJ' }).click();
+
+  const dj = page.getByRole('region', { name: 'Modo DJ' });
+  const rec = dj.getByRole('button', { name: /REC/ });
+  await expect(rec).toBeEnabled();
+  await rec.click();
+  await expect(rec).toHaveAttribute('aria-pressed', 'true');
+
+  const downloadPromise = page.waitForEvent('download');
+  await dj.getByRole('button', { name: 'Sair do modo DJ' }).click();
+  const download = await downloadPromise;
+
+  expect(download.suggestedFilename()).toMatch(/^home-music-dj-\d{8}-\d{6}\.webm$/);
+  await expect(page.locator('.desktop-now-playing-screen')).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Modo DJ' })).toHaveCount(0);
+});
