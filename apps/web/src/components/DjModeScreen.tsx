@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { PointerEvent as ReactPointerEvent } from 'react';
+import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react';
 import type { Track, TrackHotCues, TrackRhythmOverride, TrackWaveform } from '@home-music/shared';
 import {
   ArrowLeft,
@@ -241,7 +241,7 @@ function DjWaveform({
     return () => observer?.disconnect();
   }, [deck, track.duration, track.rhythm, waveform]);
 
-  const seekFromPointer = (event: React.MouseEvent<HTMLDivElement>) => {
+  const seekFromPointer = (event: ReactMouseEvent<HTMLDivElement>) => {
     if ((event.target as HTMLElement).closest('button')) return;
     if (durationSeconds <= 0) return;
     const rect = event.currentTarget.getBoundingClientRect();
@@ -249,7 +249,7 @@ function DjWaveform({
     onSeek(ratio * durationSeconds);
   };
 
-  const seekFromKeyboard = (event: React.KeyboardEvent<HTMLDivElement>) => {
+  const seekFromKeyboard = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (durationSeconds <= 0) return;
     const step = event.shiftKey ? 10 : 5;
     if (event.key === 'ArrowLeft') {
