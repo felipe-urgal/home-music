@@ -211,7 +211,7 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
       )) ?? false
   ))).toBe(true);
 
-  await deckA.getByRole('button', { name: 'CUE' }).click();
+  await deckA.getByRole('button', { name: 'CUE', exact: true }).click();
   await expect.poll(async () => page.evaluate(() => (
     (globalThis as typeof globalThis & { __homeMusicE2eMidiOutputMessages?: number[][] })
       .__homeMusicE2eMidiOutputMessages?.some(message => (
