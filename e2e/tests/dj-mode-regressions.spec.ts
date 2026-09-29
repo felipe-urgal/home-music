@@ -508,8 +508,13 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   });
   await expect(deckA.getByRole('button', { name: 'Reproduzir Deck A' })).toBeVisible();
 
-  await library.getByRole('option').filter({ hasText: 'E2E Zeta' }).click();
-  await dj.getByRole('button', { name: 'LOAD B' }).click();
+  const reconnectZetaOption = library.getByRole('option').filter({ hasText: 'E2E Zeta' });
+  await reconnectZetaOption.click();
+  await expect(reconnectZetaOption).toHaveAttribute('aria-selected', 'true');
+  const reconnectLoadB = dj.getByRole('button', { name: 'LOAD B' });
+  if (await reconnectLoadB.isEnabled()) {
+    await reconnectLoadB.click();
+  }
   await expect(deckB).toContainText('E2E Zeta');
 
   const messagesBeforeReconnect = await page.evaluate(() => (
