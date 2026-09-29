@@ -23,7 +23,7 @@ type AudioContextConstructor = new () => AudioContext;
 export function createDjEqAudioGraph(options: {
   deckA: HTMLAudioElement;
   deckB: HTMLAudioElement;
-  AudioContextConstructor?: AudioContextConstructor;
+  AudioContextConstructor?: AudioContextConstructor | undefined;
 }) {
   const AudioContextCtor = options.AudioContextConstructor;
   if (!AudioContextCtor) return null;
