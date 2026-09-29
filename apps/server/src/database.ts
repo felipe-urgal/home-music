@@ -3,12 +3,13 @@ import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { DatabaseSync } from 'node:sqlite';
-import type { AdminLibraryIntegrityStatus, PlaybackState, Playlist, PlaylistSource, RepeatMode, StatisticsPeriod, Track, TrackBeatGrid, TrackHotCues, TrackRhythm, TrackRhythmOverride, TrackWaveform } from '@home-music/shared';
+import { djKeyFromPitchClass, type AdminLibraryIntegrityStatus, type PlaybackState, type Playlist, type PlaylistSource, type RepeatMode, type StatisticsPeriod, type Track, type TrackBeatGrid, type TrackHotCues, type TrackMusicalKey, type TrackRhythm, type TrackRhythmOverride, type TrackWaveform } from '@home-music/shared';
 import type { IndexedTrack, LibraryTrackDelta } from './library.js';
 import { RHYTHM_ANALYZER_VERSION } from './rhythm-analysis.js';
+import { KEY_ANALYZER_VERSION } from './key-analysis.js';
 import { WAVEFORM_ANALYZER_VERSION } from './waveform-analysis.js';
 
-const CURRENT_SCHEMA_VERSION = 18;
+const CURRENT_SCHEMA_VERSION = 19;
 const HISTORY_CAPACITY = 2_000;
 const TRACK_UPSERT_SQL = `
   INSERT INTO tracks(
@@ -197,8 +198,26 @@ function publicHotCuesFromRow(row: Row): TrackHotCues | null {
   };
 }
 
+function publicKeyFromRow(row: Row): TrackMusicalKey | null {
+  if (
+    row.key_pitch_class == null
+    || row.key_mode == null
+    || row.key_confidence == null
+  ) return null;
+  const pitchClass = numberValue(row.key_pitch_class, -1);
+  const mode = stringValue(row.key_mode);
+  if (
+    !Number.isInteger(pitchClass)
+    || pitchClass < 0
+    || pitchClass > 11
+    || (mode !== 'major' && mode !== 'minor')
+  ) return null;
+  return djKeyFromPitchClass(pitchClass, mode, numberValue(row.key_confidence));
+}
+
 function publicTrackFromRow(row: Row): Track {
   const rhythm = publicRhythmFromRow(row);
+  const key = publicKeyFromRow(row);
   const hotCues = publicHotCuesFromRow(row);
   return {
     id: stringValue(row.id),
@@ -214,6 +233,7 @@ function publicTrackFromRow(row: Row): Track {
     replayGainTrackDb: row.replaygain_track_db == null ? null : numberValue(row.replaygain_track_db),
     replayGainAlbumDb: row.replaygain_album_db == null ? null : numberValue(row.replaygain_album_db),
     ...(rhythm ? { rhythm } : {}),
+    ...(key ? { key } : {}),
     ...(hotCues ? { hotCues } : {})
   };
 }
@@ -1011,6 +1031,41 @@ export class HomeMusicDatabase {
       }
     }
 
+    if (version < 19) {
+      this.db.exec('BEGIN IMMEDIATE;');
+      try {
+        this.db.exec(`
+          CREATE TABLE IF NOT EXISTS track_key_analysis (
+            track_id TEXT PRIMARY KEY NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+            status TEXT NOT NULL CHECK(status IN ('ready', 'unavailable')),
+            pitch_class INTEGER CHECK(pitch_class IS NULL OR (pitch_class >= 0 AND pitch_class <= 11)),
+            mode TEXT CHECK(mode IS NULL OR mode IN ('major', 'minor')),
+            confidence REAL CHECK(confidence IS NULL OR (confidence >= 0 AND confidence <= 1)),
+            source TEXT NOT NULL CHECK(length(source) BETWEEN 1 AND 32),
+            analyzer_version INTEGER NOT NULL CHECK(analyzer_version >= 1),
+            source_file_size INTEGER NOT NULL CHECK(source_file_size >= 0),
+            source_mtime_ms REAL NOT NULL,
+            analyzed_at TEXT NOT NULL,
+            CHECK (
+              (status = 'ready' AND pitch_class IS NOT NULL AND mode IS NOT NULL AND confidence IS NOT NULL)
+              OR (status = 'unavailable' AND pitch_class IS NULL AND mode IS NULL AND confidence IS NULL)
+            )
+          );
+
+          PRAGMA user_version = 19;
+        `);
+        this.db.exec('COMMIT;');
+        version = 19;
+      } catch (error) {
+        try {
+          this.db.exec('ROLLBACK;');
+        } catch {
+          // Preserva o erro original se a transação já tiver sido encerrada.
+        }
+        throw error;
+      }
+    }
+
     if (version !== CURRENT_SCHEMA_VERSION) {
       throw new Error(`Versão de schema SQLite não suportada: ${version}`);
     }
@@ -1099,6 +1154,7 @@ export class HomeMusicDatabase {
       if (clearRhythmAnalysis) {
         this.db.exec('DELETE FROM track_rhythm_analysis;');
         this.db.exec('DELETE FROM track_waveform_analysis;');
+        this.db.exec('DELETE FROM track_key_analysis;');
         this.db.exec('DELETE FROM track_rhythm_overrides;');
         this.db.exec('DELETE FROM track_hot_cues;');
       }
@@ -1140,7 +1196,11 @@ export class HomeMusicDatabase {
              h.cue_2_seconds AS hot_cue_2_seconds,
              h.cue_3_seconds AS hot_cue_3_seconds,
              h.cue_4_seconds AS hot_cue_4_seconds,
-             w.status AS waveform_analysis_status
+             w.status AS waveform_analysis_status,
+             k.status AS key_analysis_status,
+             k.pitch_class AS key_pitch_class,
+             k.mode AS key_mode,
+             k.confidence AS key_confidence
       FROM tracks t
       LEFT JOIN track_rhythm_analysis r
         ON r.track_id = t.id
@@ -1156,8 +1216,13 @@ export class HomeMusicDatabase {
        AND w.analyzer_version = ?
        AND w.source_file_size = t.file_size
        AND w.source_mtime_ms = t.mtime_ms
+      LEFT JOIN track_key_analysis k
+        ON k.track_id = t.id
+       AND k.analyzer_version = ?
+       AND k.source_file_size = t.file_size
+       AND k.source_mtime_ms = t.mtime_ms
       ORDER BY t.artist COLLATE NOCASE, t.title COLLATE NOCASE
-    `).all(RHYTHM_ANALYZER_VERSION, WAVEFORM_ANALYZER_VERSION) as Row[];
+    `).all(RHYTHM_ANALYZER_VERSION, WAVEFORM_ANALYZER_VERSION, KEY_ANALYZER_VERSION) as Row[];
 
     return rows.map(row => ({
       ...publicTrackFromRow(row),
@@ -1166,7 +1231,8 @@ export class HomeMusicDatabase {
       fileSize: numberValue(row.file_size),
       mtimeMs: numberValue(row.mtime_ms),
       ...(row.rhythm_analysis_status == null ? {} : { rhythmAnalysisCurrent: true }),
-      ...(row.waveform_analysis_status == null ? {} : { waveformAnalysisCurrent: true })
+      ...(row.waveform_analysis_status == null ? {} : { waveformAnalysisCurrent: true }),
+      ...(row.key_analysis_status == null ? {} : { keyAnalysisCurrent: true })
     }));
   }
 
@@ -1409,7 +1475,92 @@ export class HomeMusicDatabase {
     }
   }
 
-  saveTrackWaveformAnalysis(
+    saveTrackKeyAnalysis(
+    trackId: string,
+    sourceFileSize: number,
+    sourceMtimeMs: number,
+    key: TrackMusicalKey | null,
+    source = 'audio'
+  ) {
+    const tonicOrder = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const;
+    const pitchClass = key ? tonicOrder.indexOf(key.tonic) : -1;
+    const validKey = key === null || (
+      key.version === KEY_ANALYZER_VERSION
+      && pitchClass >= 0
+      && (key.mode === 'major' || key.mode === 'minor')
+      && Number.isFinite(key.confidence)
+      && key.confidence >= 0
+      && key.confidence <= 1
+    );
+    if (
+      !validKey
+      || !Number.isSafeInteger(sourceFileSize)
+      || sourceFileSize < 0
+      || !Number.isFinite(sourceMtimeMs)
+      || !source.trim()
+      || source.length > 32
+    ) {
+      throw new Error('Análise tonal inválida.');
+    }
+
+    this.db.exec('BEGIN IMMEDIATE;');
+    try {
+      const current = this.db.prepare(`
+        SELECT file_size, mtime_ms
+        FROM tracks
+        WHERE id = ?
+      `).get(trackId) as Row | undefined;
+
+      if (
+        !current
+        || numberValue(current.file_size, -1) !== sourceFileSize
+        || numberValue(current.mtime_ms, -1) !== sourceMtimeMs
+      ) {
+        this.db.exec('ROLLBACK;');
+        return false;
+      }
+
+      this.db.prepare(`
+        INSERT INTO track_key_analysis(
+          track_id, status, pitch_class, mode, confidence,
+          source, analyzer_version, source_file_size, source_mtime_ms, analyzed_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(track_id) DO UPDATE SET
+          status = excluded.status,
+          pitch_class = excluded.pitch_class,
+          mode = excluded.mode,
+          confidence = excluded.confidence,
+          source = excluded.source,
+          analyzer_version = excluded.analyzer_version,
+          source_file_size = excluded.source_file_size,
+          source_mtime_ms = excluded.source_mtime_ms,
+          analyzed_at = excluded.analyzed_at
+      `).run(
+        trackId,
+        key ? 'ready' : 'unavailable',
+        key ? pitchClass : null,
+        key?.mode ?? null,
+        key?.confidence ?? null,
+        source.trim(),
+        KEY_ANALYZER_VERSION,
+        sourceFileSize,
+        sourceMtimeMs,
+        new Date().toISOString()
+      );
+
+      this.db.exec('COMMIT;');
+      return true;
+    } catch (error) {
+      try {
+        this.db.exec('ROLLBACK;');
+      } catch {
+        // Preserva o erro original.
+      }
+      throw error;
+    }
+  }
+
+saveTrackWaveformAnalysis(
     trackId: string,
     sourceFileSize: number,
     sourceMtimeMs: number,
