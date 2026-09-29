@@ -4,7 +4,7 @@ import {
   djEqGainDb,
   type DjChannelEqState
 } from './dj-eq';
-import type { DjDeckFxState } from './dj-fx';
+import { resolveDjFxDryGain, type DjDeckFxState } from './dj-fx';
 
 type DjEqDeckNodes = {
   source: MediaElementAudioSourceNode;
@@ -166,6 +166,7 @@ export function applyDjFxStateToGraph(
   const nodes = graph.decks[deck];
   const now = graph.context.currentTime;
 
+  nodes.dry.gain.setTargetAtTime(resolveDjFxDryGain(state), now, 0.015);
   nodes.echoDelay.delayTime.setTargetAtTime(state.echo.delaySeconds, now, 0.015);
   nodes.echoFeedback.gain.setTargetAtTime(
     state.echo.enabled ? state.echo.feedback : 0,
