@@ -84,7 +84,16 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   await expect(midi).toBeVisible();
   await expect(library.getByRole('option')).toHaveCount(3);
 
-  await library.getByRole('option').filter({ hasText: 'E2E Track' }).click();
+  const selectedE2eTrack = library.getByRole('option').filter({ hasText: 'E2E Track' });
+  await selectedE2eTrack.click();
+  const shuffleButton = dj.getByRole('button', { name: 'Aleatório' });
+  await shuffleButton.click();
+  await expect(shuffleButton).toHaveAttribute('aria-pressed', 'true');
+  await expect(selectedE2eTrack).toHaveAttribute('aria-selected', 'true');
+  await shuffleButton.click();
+  await expect(shuffleButton).toHaveAttribute('aria-pressed', 'false');
+  await expect(selectedE2eTrack).toHaveAttribute('aria-selected', 'true');
+
   await dj.getByRole('button', { name: 'LOAD A' }).click();
   await expect(deckA).toContainText('E2E Track');
   await expect(deckA.getByRole('button', { name: 'Reproduzir Deck A' })).toBeVisible();
@@ -223,6 +232,12 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   await midi.getByLabel('Entrada').selectOption('e2e-ddj-input');
   await midi.getByLabel('Saída').selectOption('e2e-ddj-output');
 
+  const diagnostics = midi.getByRole('button', { name: 'Diagnóstico MIDI' });
+  await expect(diagnostics).toHaveAttribute('aria-pressed', 'false');
+  await diagnostics.click();
+  await expect(diagnostics).toHaveAttribute('aria-pressed', 'true');
+  await expect(midi.getByLabel('Diagnóstico MIDI ativo')).toContainText('Mova um controle');
+
   const options = library.getByRole('option');
   await options.nth(0).click();
   await expect(options.nth(0)).toHaveAttribute('aria-selected', 'true');
@@ -236,6 +251,16 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
     input?.onmidimessage?.({ data: [0xb6, 0x40, 0x01], receivedTime: performance.now() });
   });
   await expect(options.nth(1)).toHaveAttribute('aria-selected', 'true');
+  const diagnosticPanel = midi.getByLabel('Diagnóstico MIDI ativo');
+  await expect(diagnosticPanel).toContainText('E2E DDJ-400');
+  await expect(diagnosticPanel).toContainText('Status0xB0');
+  await expect(diagnosticPanel).toContainText('Canal7');
+  await expect(diagnosticPanel).toContainText('Data 164 · 0x40');
+  await expect(diagnosticPanel).toContainText('Data 21 · 0x01');
+
+  await diagnostics.click();
+  await expect(diagnostics).toHaveAttribute('aria-pressed', 'false');
+  await expect(midi.getByLabel('Diagnóstico MIDI ativo')).toHaveCount(0);
 
   await page.evaluate(() => {
     const input = (globalThis as typeof globalThis & {

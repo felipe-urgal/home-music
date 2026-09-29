@@ -1055,7 +1055,16 @@ function DjMidiPanel({
     <section className="dj-pro-midi" aria-label="Controlador MIDI">
       <div className="dj-pro-midi__heading">
         <div><Cable aria-hidden="true" /><strong>Controlador MIDI</strong></div>
-        <span className="dj-pro-midi__settings" title="Configurações MIDI"><Settings aria-hidden="true" /></span>
+        <button
+          type="button"
+          className="dj-pro-midi__settings"
+          aria-pressed={midi.diagnosticsEnabled}
+          aria-label="Diagnóstico MIDI"
+          title={midi.diagnosticsEnabled ? 'Ocultar diagnóstico MIDI' : 'Mostrar diagnóstico MIDI'}
+          onClick={() => midi.setDiagnosticsEnabled(!midi.diagnosticsEnabled)}
+        >
+          <Settings aria-hidden="true" />
+        </button>
       </div>
       <div className="dj-pro-midi__status">
         <span data-connected={midi.status === 'connected' ? 'true' : 'false'} />
@@ -1077,12 +1086,31 @@ function DjMidiPanel({
             </select>
           </label>
           <label>
-            <span>Saída</span>
+            <span>Saída <small>(opcional)</small></span>
             <select value={midi.selectedOutputId ?? ''} onChange={event => onSelectOutput(event.currentTarget.value || null)}>
               <option value="">Nenhuma</option>
               {midi.outputs.map(port => <option key={port.id} value={port.id}>{port.name}</option>)}
             </select>
           </label>
+          {midi.diagnosticsEnabled && (
+            <div className="dj-pro-midi__diagnostics" aria-label="Diagnóstico MIDI ativo">
+              <div className="dj-pro-midi__diagnostics-heading">
+                <strong>Diagnóstico local</strong>
+                <span>Não persistido</span>
+              </div>
+              {midi.lastMessage ? (
+                <dl>
+                  <div><dt>Origem</dt><dd>{midi.inputs.find(port => port.id === midi.lastMessage?.sourceId)?.name ?? midi.lastMessage.sourceId}</dd></div>
+                  <div><dt>Status</dt><dd>{'0x' + midi.lastMessage.status.toString(16).padStart(2, '0').toUpperCase()}</dd></div>
+                  <div><dt>Canal</dt><dd>{midi.lastMessage.channel + 1}</dd></div>
+                  <div><dt>Data 1</dt><dd>{midi.lastMessage.data1} · {'0x' + midi.lastMessage.data1.toString(16).padStart(2, '0').toUpperCase()}</dd></div>
+                  <div><dt>Data 2</dt><dd>{midi.lastMessage.data2} · {'0x' + midi.lastMessage.data2.toString(16).padStart(2, '0').toUpperCase()}</dd></div>
+                </dl>
+              ) : (
+                <span className="dj-pro-midi__diagnostics-empty">Mova um controle para capturar o último evento.</span>
+              )}
+            </div>
+          )}
           <button type="button" onClick={onDisconnect}>Desconectar</button>
         </>
       )}

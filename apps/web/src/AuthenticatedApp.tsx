@@ -23,8 +23,8 @@ import {
 import {
   canPrepareDjAutomixNext,
   nextDjAutomixIndex,
-  shouldRecoverDjAutomixAfterEnded,
-  shuffleDjTrackList
+  reconcileDjShuffleOrder,
+  shouldRecoverDjAutomixAfterEnded
 } from './dj-automix-sequence';
 import { isDjKeyboardEditableTarget, mapDjKeyboardCode } from './dj-keyboard-mapping';
 import { resolveInitialDjSyncPlan } from './dj-sync-phase-lock';
@@ -146,6 +146,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
   const djAutomixActiveDeckRef = useRef<DjDeckId>('a');
   const djAutomixQueueIndexRef = useRef(0);
   const [djAutomixShuffle, setDjAutomixShuffle] = useState(false);
+  const [djShuffleOrder, setDjShuffleOrder] = useState<string[]>([]);
   const [djPlayedTrackIds, setDjPlayedTrackIds] = useState<Set<string>>(() => new Set());
   const djAutomixTimerRef = useRef<number | null>(null);
   const djAutomixTransitionRef = useRef(false);
@@ -248,11 +249,11 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     ];
   }, [library.playlists, library.tracks]);
 
-  const djBrowserTracks = useMemo(() => {
-    if (djLibrarySource === 'all') return library.tracks;
+  const tracksForDjLibrarySource = useCallback((source: string) => {
+    if (source === 'all') return library.tracks;
 
-    if (djLibrarySource.startsWith('folder:')) {
-      const folderPath = djLibrarySource.slice('folder:'.length);
+    if (source.startsWith('folder:')) {
+      const folderPath = source.slice('folder:'.length);
       const prefix = `${folderPath}/`;
       return library.tracks.filter(track => (
         track.folderPath === folderPath
@@ -260,8 +261,8 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
       ));
     }
 
-    if (djLibrarySource.startsWith('playlist:')) {
-      const playlistId = djLibrarySource.slice('playlist:'.length);
+    if (source.startsWith('playlist:')) {
+      const playlistId = source.slice('playlist:'.length);
       const playlist = library.playlists.find(item => item.id === playlistId);
       if (!playlist) return [];
       return playlist.trackIds
@@ -270,12 +271,38 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     }
 
     return library.tracks;
-  }, [djLibrarySource, djTracksById, library.playlists, library.tracks]);
+  }, [djTracksById, library.playlists, library.tracks]);
 
-  const djListedTracks = useMemo(
-    () => djAutomixShuffle ? shuffleDjTrackList(djBrowserTracks) : djBrowserTracks,
-    [djAutomixShuffle, djBrowserTracks]
+  const djBrowserTracks = useMemo(
+    () => tracksForDjLibrarySource(djLibrarySource),
+    [djLibrarySource, tracksForDjLibrarySource]
   );
+
+  const djBrowserTrackIds = useMemo(
+    () => djBrowserTracks.map(track => track.id),
+    [djBrowserTracks]
+  );
+  const djBrowserTrackIdSignature = djBrowserTrackIds.join('\u0000');
+
+  useEffect(() => {
+    if (!djAutomixShuffle) return;
+    setDjShuffleOrder(previous => {
+      const next = reconcileDjShuffleOrder(djBrowserTrackIds, previous);
+      if (
+        next.length === previous.length
+        && next.every((trackId, index) => trackId === previous[index])
+      ) return previous;
+      return next;
+    });
+  }, [djAutomixShuffle, djBrowserTrackIdSignature, djBrowserTrackIds]);
+
+  const djListedTracks = useMemo(() => {
+    if (!djAutomixShuffle) return djBrowserTracks;
+    const byId = new Map(djBrowserTracks.map(track => [track.id, track]));
+    return djShuffleOrder
+      .map(trackId => byId.get(trackId))
+      .filter((track): track is (typeof djBrowserTracks)[number] => Boolean(track));
+  }, [djAutomixShuffle, djBrowserTracks, djShuffleOrder]);
 
   const markDjTrackPlayed = useCallback((trackId: string | null | undefined) => {
     if (!trackId) return;
@@ -288,10 +315,32 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
   }, []);
 
   const selectDjLibrarySource = useCallback((value: string) => {
+    const nextTracks = tracksForDjLibrarySource(value);
+    setDjShuffleOrder(
+      djAutomixShuffle
+        ? reconcileDjShuffleOrder(nextTracks.map(track => track.id), [])
+        : []
+    );
     setDjLibrarySource(value);
     ddjBrowserIndexRef.current = 0;
     setDjBrowserIndex(0);
-  }, []);
+  }, [djAutomixShuffle, tracksForDjLibrarySource]);
+
+  const changeDjAutomixShuffle = useCallback((enabled: boolean) => {
+    const selectedTrackId = djListedTracks[ddjBrowserIndexRef.current]?.id ?? null;
+    const naturalOrder = djBrowserTracks.map(track => track.id);
+    const nextOrder = enabled
+      ? reconcileDjShuffleOrder(naturalOrder, [])
+      : naturalOrder;
+
+    setDjShuffleOrder(enabled ? nextOrder : []);
+    setDjAutomixShuffle(enabled);
+
+    const selectedIndex = selectedTrackId == null ? 0 : nextOrder.indexOf(selectedTrackId);
+    const nextIndex = selectedIndex >= 0 ? selectedIndex : 0;
+    ddjBrowserIndexRef.current = nextIndex;
+    setDjBrowserIndex(nextIndex);
+  }, [djBrowserTracks, djListedTracks]);
 
   const selectDjBrowserIndex = useCallback((index: number) => {
     const max = Math.max(0, djListedTracks.length - 1);
@@ -1484,7 +1533,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
           selectedLibraryIndex={djBrowserIndex}
           onSelectLibraryIndex={selectDjBrowserIndex}
           automixShuffle={djAutomixShuffle}
-          onAutomixShuffleChange={setDjAutomixShuffle}
+          onAutomixShuffleChange={changeDjAutomixShuffle}
           playedTrackIds={djPlayedTrackIds}
           onLoadSelectedTrack={loadDjBrowserTrack}
           midi={midiController}

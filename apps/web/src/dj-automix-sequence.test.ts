@@ -3,7 +3,8 @@ import {
   canPrepareDjAutomixNext,
   nextDjAutomixIndex,
   shouldRecoverDjAutomixAfterEnded,
-  shuffleDjTrackList
+  shuffleDjTrackList,
+  reconcileDjShuffleOrder
 } from './dj-automix-sequence';
 
 describe('DJ AutoMix sequence', () => {
@@ -84,5 +85,29 @@ describe('DJ AutoMix handoff guard', () => {
     ['deck ativo parou', { activeDeckPlaying: false }]
   ])('bloqueia preload quando %s', (_label, override) => {
     expect(canPrepareDjAutomixNext({ ...valid, ...override })).toBe(false);
+  });
+});
+
+
+describe('DJ AutoMix shuffle estável', () => {
+  it('preserva a ordem aleatória quando apenas objetos da biblioteca mudam', () => {
+    const previous = ['c', 'a', 'b'];
+    expect(reconcileDjShuffleOrder(['a', 'b', 'c'], previous, () => 0)).toEqual(previous);
+  });
+
+  it('remove IDs ausentes sem reembaralhar os sobreviventes', () => {
+    expect(reconcileDjShuffleOrder(['a', 'c'], ['c', 'a', 'b'], () => 0)).toEqual(['c', 'a']);
+  });
+
+  it('mantém sobreviventes e adiciona apenas faixas novas', () => {
+    const next = reconcileDjShuffleOrder(['a', 'b', 'c', 'd'], ['c', 'a', 'b'], () => 0);
+    expect(next.slice(0, 3)).toEqual(['c', 'a', 'b']);
+    expect(next[3]).toBe('d');
+  });
+
+  it('gera uma ordem inicial quando não existe sessão aleatória', () => {
+    const next = reconcileDjShuffleOrder(['a', 'b', 'c'], [], () => 0);
+    expect(next).toHaveLength(3);
+    expect(new Set(next)).toEqual(new Set(['a', 'b', 'c']));
   });
 });

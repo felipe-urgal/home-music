@@ -929,6 +929,93 @@
   padding: 0 8px;
 }
 
+.dj-pro-midi__settings {
+  margin-left: auto;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid rgba(135, 164, 205, 0.18);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--dj-muted);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.dj-pro-midi__settings[aria-pressed='true'] {
+  border-color: rgba(56, 217, 150, 0.55);
+  color: #dff9ee;
+  background: rgba(56, 217, 150, 0.08);
+}
+
+.dj-pro-midi__settings svg {
+  width: 16px;
+  height: 16px;
+}
+
+.dj-pro-midi label small {
+  color: rgba(163, 178, 196, 0.72);
+  font-size: 0.58rem;
+  font-weight: 500;
+}
+
+.dj-pro-midi__diagnostics {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(135, 164, 205, 0.16);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.025);
+}
+
+.dj-pro-midi__diagnostics-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.dj-pro-midi__diagnostics-heading strong {
+  font-size: 0.68rem;
+}
+
+.dj-pro-midi__diagnostics-heading span,
+.dj-pro-midi__diagnostics-empty {
+  color: var(--dj-muted);
+  font-size: 0.61rem;
+}
+
+.dj-pro-midi__diagnostics dl {
+  margin: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.dj-pro-midi__diagnostics dl > div {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: 8px;
+  align-items: baseline;
+}
+
+.dj-pro-midi__diagnostics dt {
+  color: var(--dj-muted);
+  font-size: 0.6rem;
+}
+
+.dj-pro-midi__diagnostics dd {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: #e3edf8;
+  font-size: 0.65rem;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+
 .dj-shortcuts {
   position: relative;
 }
