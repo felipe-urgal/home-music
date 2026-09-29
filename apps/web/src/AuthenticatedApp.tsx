@@ -999,7 +999,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
       syncMaster: isDjSyncMaster(djSyncState, deck),
       syncMode: djSyncState.mode,
       channelVolume: mixer.channelVolumes[deck],
-      meterLevel: player.dualDeck.getMeterLevel(deck)
+      meterLevel: snapshot?.playing ? player.dualDeck.getMeterLevel(deck) : 0
     };
   }, [djSyncState, library.tracks, player.dualDeck.getMeterLevel, player.dualDeck.getMixerSnapshot, player.dualDeck.getSnapshot]);
 
