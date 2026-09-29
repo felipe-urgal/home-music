@@ -1415,9 +1415,23 @@ export function DjModeScreen({
       <header className="dj-mode__header">
         <div className="dj-mode__brand">
           <span className="dj-mode__brand-icon" aria-hidden="true"><Disc3 /></span>
-          <div><strong>Modo DJ</strong><small>Dual-deck • Misture, crie e mantenha o flow</small></div>
+          <strong>Home Music</strong>
         </div>
+
+        <div className="dj-mode__nav" aria-label="Área atual">
+          <span className="is-active">DJ</span>
+          <span>Biblioteca</span>
+          <span>Playlists</span>
+          <span>Explorar</span>
+          <span>Configurações</span>
+        </div>
+
         <div className="dj-mode__header-actions">
+          <span className="dj-mode__status">
+            <strong>Modo DJ</strong>
+            <small>Dual-deck + Mixer</small>
+          </span>
+
           <details className="dj-shortcuts">
             <summary><Keyboard aria-hidden="true" /><span>Atalhos</span></summary>
             <div className="dj-shortcuts__panel">
