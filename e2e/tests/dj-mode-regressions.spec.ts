@@ -247,6 +247,10 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   await highB.fill('0.75');
   await filterB.fill('-0.5');
 
+  const fxSettings = mixer.locator('details.dj-mixer-fx-settings');
+  await fxSettings.locator('summary').click();
+  await expect(fxSettings).toHaveAttribute('open', '');
+
   const echoA = mixer.getByRole('button', { name: 'Echo Channel A' });
   const echoWetA = mixer.getByRole('slider', { name: 'Echo Wet Channel A' });
   const echoFeedbackA = mixer.getByRole('slider', { name: 'Echo Feedback Channel A' });
@@ -630,6 +634,9 @@ test('Modo DJ restaura EQ neutro ao sair e reentrar', async ({ page }) => {
   await expect(reopenedMixer.getByRole('slider', { name: 'MÉDIOS Channel A' })).toHaveValue('0');
   await expect(reopenedMixer.getByRole('slider', { name: 'AGUDOS Channel B' })).toHaveValue('0');
   await expect(reopenedMixer.getByRole('slider', { name: 'FILTRO Channel B' })).toHaveValue('0');
+  const reopenedFxSettings = reopenedMixer.locator('details.dj-mixer-fx-settings');
+  await reopenedFxSettings.locator('summary').click();
+  await expect(reopenedFxSettings).toHaveAttribute('open', '');
   await expect(reopenedMixer.getByRole('button', { name: 'Echo Channel A' })).toHaveAttribute('aria-pressed', 'false');
   await expect(reopenedMixer.getByRole('button', { name: 'Reverb Channel B' })).toHaveAttribute('aria-pressed', 'false');
 });
