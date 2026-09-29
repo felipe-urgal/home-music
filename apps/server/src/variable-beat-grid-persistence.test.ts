@@ -61,7 +61,7 @@ test('persiste e recarrega beat grid variável no schema v16', async () => {
       loaded.rhythm.beatGrid.segments.map(segment => segment.bpm),
       [118, 120, 122]
     );
-    assert.equal(db.getSchemaVersion(), 17);
+    assert.equal(db.getSchemaVersion(), 18);
   } finally {
     db.close();
     await rm(temp, { recursive: true, force: true });
