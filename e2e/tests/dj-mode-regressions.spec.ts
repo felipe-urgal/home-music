@@ -590,7 +590,13 @@ test('Modo DJ restaura EQ neutro ao sair e reentrar', async ({ page }) => {
   await dj.getByRole('button', { name: 'Sair do modo DJ' }).click();
   await expect(page.locator('.desktop-now-playing-screen')).toBeVisible();
 
-  await page.getByRole('button', { name: 'Abrir Modo DJ' }).click();
+  const reopenTopbar = page.getByRole('button', { name: 'Expandir barra superior' });
+  await expect(reopenTopbar).toBeVisible();
+  await reopenTopbar.click();
+
+  const reopenDjMode = page.getByRole('button', { name: 'Abrir Modo DJ' });
+  await expect(reopenDjMode).toBeVisible();
+  await reopenDjMode.click();
   const reopenedDj = page.getByRole('region', { name: 'Modo DJ' });
   const reopenedMixer = page.getByRole('region', { name: 'Mixer' });
   await expect(reopenedDj).toBeVisible();
