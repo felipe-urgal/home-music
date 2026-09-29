@@ -438,18 +438,24 @@
 }
 
 .dj-hot-cue {
-  position: relative;
   min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px;
+  grid-template-rows: 1fr 1fr;
+  gap: 3px;
 }
 
 .dj-hot-cue__pad {
+  grid-column: 1;
+  grid-row: 1 / -1;
   width: 100%;
+  min-width: 0;
   min-height: 48px;
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: 7px;
-  padding: 7px 42px 7px 9px;
+  padding: 7px 8px;
   border: 1px solid rgba(145,163,183,.28);
   border-radius: 6px;
   background: linear-gradient(180deg, #222c36, #11171e);
@@ -490,18 +496,19 @@
 }
 
 .dj-hot-cue__loop {
-  position: absolute;
-  right: 4px;
-  bottom: 4px;
-  min-width: 32px;
-  height: 17px;
-  padding: 0 4px;
+  grid-column: 2;
+  grid-row: 2;
+  width: 34px;
+  min-width: 0;
+  height: 100%;
+  min-height: 20px;
+  padding: 0 3px;
   border: 1px solid rgba(145,163,183,.2);
   border-radius: 3px;
   background: rgba(255,255,255,.035);
   color: #8794a1;
   font: inherit;
-  font-size: .5rem;
+  font-size: .48rem;
   font-weight: 700;
   line-height: 1;
 }
@@ -514,16 +521,17 @@
 
 .dj-hot-cue__loop:disabled {
   opacity: .28;
+  pointer-events: none;
 }
 
 .dj-hot-cue__clear {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 18px;
-  height: 18px;
+  grid-column: 2;
+  grid-row: 1;
+  width: 34px;
+  height: 100%;
+  min-height: 20px;
   padding: 0;
-  border: 0;
+  border: 1px solid rgba(145,163,183,.12);
   border-radius: 3px;
   background: transparent;
   color: #8794a1;
@@ -2996,6 +3004,11 @@
 
 .dj-hot-cue__pad {
   min-height: 43px;
+}
+
+.dj-hot-cue__loop,
+.dj-hot-cue__clear {
+  min-height: 20px;
 }
 
 .dj-pro-deck__controls button {
