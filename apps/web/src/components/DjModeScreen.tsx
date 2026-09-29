@@ -25,6 +25,7 @@ import type { DjDeckId } from '../dj-controller-contract';
 import { buildDjWaveformMarkers } from '../dj-waveform-grid';
 import { resolveHotCuePosition } from '../dj-hot-cue-quantize';
 import { buildDjHotCueWaveformMarkers } from '../dj-hot-cue-waveform';
+import { djLoopWaveformRange, resolveDjAutoLoopPlan } from '../dj-auto-loop';
 import { notifyLibraryChanged } from '../library-events';
 import { fetchTrackWaveform } from '../track-waveform-client';
 import type { DualDeckAudioSnapshot } from '../dual-deck-audio';
@@ -156,12 +157,18 @@ function DjWaveform({
   track,
   progress,
   hotCues,
+  loopIn,
+  loopOut,
+  loopActive,
   onHotCueSeek
 }: {
   deck: DjDeckId;
   track: Track;
   progress: number;
   hotCues: TrackHotCues['positions'];
+  loopIn: number | null;
+  loopOut: number | null;
+  loopActive: boolean;
   onHotCueSeek: (seconds: number) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -171,6 +178,10 @@ function DjWaveform({
   const hotCueMarkers = useMemo(
     () => buildDjHotCueWaveformMarkers(hotCues, durationSeconds),
     [durationSeconds, hotCues]
+  );
+  const loopRange = useMemo(
+    () => djLoopWaveformRange({ loopIn, loopOut, durationSeconds }),
+    [durationSeconds, loopIn, loopOut]
   );
 
   useEffect(() => {
@@ -227,6 +238,17 @@ function DjWaveform({
     <div className="dj-waveform" data-status={status} aria-label="Waveform real da faixa">
       <canvas ref={canvasRef} className="dj-waveform__canvas" aria-hidden="true" />
       <span className="dj-waveform__remaining" style={{ left: `${progress}%` }} aria-hidden="true" />
+      {loopRange && (
+        <span
+          className="dj-waveform__loop-range"
+          data-active={loopActive ? 'true' : 'false'}
+          style={{
+            left: `${loopRange.start * 100}%`,
+            width: `${(loopRange.end - loopRange.start) * 100}%`
+          }}
+          aria-label={loopActive ? 'Loop ativo no waveform' : 'Loop salvo no waveform'}
+        />
+      )}
       {hotCueMarkers.map(marker => (
         <button
           key={marker.index}
@@ -311,14 +333,33 @@ function DeckPanel({
     if (snapshot.currentTimeSeconds >= loopOut) onSeek(deck, loopIn);
   }, [deck, loopActive, loopIn, loopOut, onSeek, snapshot?.currentTimeSeconds, snapshot?.trackId]);
 
+  const applyAutoLoop = (beats = loopBeats) => {
+    if (!snapshot?.trackId) return;
+    const plan = resolveDjAutoLoopPlan({
+      positionSeconds: snapshot.currentTimeSeconds,
+      durationSeconds: snapshot.durationSeconds || state.track?.duration,
+      rhythm: state.track?.rhythm,
+      beats
+    });
+    if (!plan) return;
+    setLoopIn(plan.startSeconds);
+    setLoopOut(plan.endSeconds);
+    setLoopActive(true);
+  };
+
   const changeLoopBeats = (direction: -1 | 1) => {
     const sizes = [1, 2, 4, 8, 16];
     const current = sizes.indexOf(loopBeats);
     const next = sizes[Math.max(0, Math.min(sizes.length - 1, current + direction))] ?? 4;
     setLoopBeats(next);
-    if (loopIn != null && bpm) {
-      setLoopOut(loopIn + ((60 / bpm) * next));
-      setLoopActive(true);
+    if (loopIn != null && loopOut != null) {
+      const bpmAtLoop = state.track?.rhythm
+        ? (60 / Math.max(0.001, (loopOut - loopIn) / loopBeats))
+        : bpm;
+      if (bpmAtLoop) {
+        const duration = snapshot?.durationSeconds || state.track?.duration || Number.POSITIVE_INFINITY;
+        setLoopOut(Math.min(duration, loopIn + ((60 / bpmAtLoop) * next)));
+      }
     }
   };
 
@@ -327,7 +368,8 @@ function DeckPanel({
     const startSeconds = snapshot.currentTimeSeconds;
     setLoopIn(startSeconds);
     if (bpm) {
-      setLoopOut(startSeconds + ((60 / bpm) * loopBeats));
+      const duration = snapshot.durationSeconds || state.track?.duration || Number.POSITIVE_INFINITY;
+      setLoopOut(Math.min(duration, startSeconds + ((60 / bpm) * loopBeats)));
       setLoopActive(true);
     } else {
       setLoopOut(null);
@@ -445,6 +487,9 @@ function DeckPanel({
             track={state.track!}
             progress={progress}
             hotCues={hotCues}
+            loopIn={loopIn}
+            loopOut={loopOut}
+            loopActive={loopActive}
             onHotCueSeek={seconds => onSeek(deck, seconds)}
           />
 
@@ -517,9 +562,23 @@ function DeckPanel({
                 <button
                   type="button"
                   className={loopActive ? 'is-active' : ''}
-                  onClick={() => loopOut != null && setLoopActive(value => !value)}
+                  onClick={() => {
+                    if (loopIn != null && loopOut != null) {
+                      setLoopActive(value => !value);
+                    } else {
+                      applyAutoLoop();
+                    }
+                  }}
                   aria-pressed={loopActive}
-                  title="Ativar/desativar loop"
+                  aria-label={'Auto Loop ' + loopBeats + ' beats ' + label}
+                  disabled={bpm == null && (loopIn == null || loopOut == null)}
+                  title={
+                    loopIn != null && loopOut != null
+                      ? 'Ativar/desativar loop'
+                      : bpm == null
+                        ? 'Auto Loop requer BPM analisado'
+                        : 'Criar Auto Loop quantizado'
+                  }
                 >
                   {loopBeats}
                 </button>
@@ -709,6 +768,9 @@ function RhythmGridEditor({
         track={previewTrack}
         progress={0}
         hotCues={[null, null, null, null]}
+        loopIn={null}
+        loopOut={null}
+        loopActive={false}
         onHotCueSeek={() => undefined}
       />
 
