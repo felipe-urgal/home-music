@@ -1,4 +1,4 @@
-import type { TrackRhythmOverride } from '@home-music/shared';
+import type { TrackHotCues, TrackRhythmOverride } from '@home-music/shared';
 import type { FastifyInstance } from 'fastify';
 import type { HeavyWorkQueue } from './heavy-work-queue.js';
 import {
@@ -8,6 +8,26 @@ import {
 } from './library-http-cache.js';
 import type { LibraryService } from './library-service.js';
 
+
+function parseTrackHotCues(value: unknown): TrackHotCues | null {
+  if (!value || typeof value !== 'object') return null;
+  const candidate = value as Partial<TrackHotCues>;
+  if (
+    candidate.version !== 1
+    || !Array.isArray(candidate.positions)
+    || candidate.positions.length !== 4
+    || candidate.positions.some(position => position != null && (
+      typeof position !== 'number'
+      || !Number.isFinite(position)
+      || position < 0
+    ))
+  ) return null;
+
+  return {
+    version: 1,
+    positions: [...candidate.positions] as TrackHotCues['positions']
+  };
+}
 
 function parseTrackRhythmOverride(value: unknown): TrackRhythmOverride | null {
   if (!value || typeof value !== 'object') return null;
@@ -114,6 +134,27 @@ export function registerLibraryRoutes(
 
   app.delete<{ Params: { id: string } }>('/api/tracks/:id/rhythm-override', async (request, reply) => {
     const track = library.resetRhythmOverride(request.params.id);
+    if (!track) return reply.code(404).send({ error: 'Faixa não encontrada.' });
+    reply.header('Cache-Control', 'private, no-store');
+    return { track };
+  });
+
+  app.put<{ Params: { id: string }; Body: unknown }>('/api/tracks/:id/hot-cues', async (request, reply) => {
+    const hotCues = parseTrackHotCues(request.body);
+    if (!hotCues) {
+      return reply.code(400).send({ error: 'Hot Cues inválidos.' });
+    }
+
+    const current = library.getTrack(request.params.id);
+    if (!current) return reply.code(404).send({ error: 'Faixa não encontrada.' });
+    if (
+      current.duration != null
+      && hotCues.positions.some(position => position != null && position > current.duration!)
+    ) {
+      return reply.code(400).send({ error: 'Hot Cue fora da duração da faixa.' });
+    }
+
+    const track = library.setHotCues(request.params.id, hotCues);
     if (!track) return reply.code(404).send({ error: 'Faixa não encontrada.' });
     reply.header('Cache-Control', 'private, no-store');
     return { track };
