@@ -48,7 +48,14 @@ import {
   setDeckVolume
 } from './dual-deck-audio';
 import type { DjDeckId } from './dj-controller-contract';
-import { clampDjEqValue, djEqFilterParameters, djEqGainDb, type DjEqControl } from './dj-eq';
+import { clampDjEqValue, type DjEqControl } from './dj-eq';
+import {
+  applyDjEqStateToGraph,
+  createDjEqAudioGraph,
+  disposeDjEqAudioGraph,
+  resumeDjEqAudioGraph,
+  type DjEqAudioGraph
+} from './dj-eq-audio-graph';
 import {
   createNormalPlaybackSessionSnapshot,
   type NormalPlaybackSessionSnapshot
@@ -101,16 +108,7 @@ export function useCrossfadeAudioPlayer(
   const activeDeckRef = useRef<CrossfadeDeck>('a');
   const dualDeckModeRef = useRef(false);
   const dualDeckMixerRef = useRef(createDefaultDualDeckMixerState());
-  const djEqGraphRef = useRef<{
-    context: AudioContext;
-    decks: Record<DjDeckId, {
-      source: MediaElementAudioSourceNode;
-      low: BiquadFilterNode;
-      mid: BiquadFilterNode;
-      high: BiquadFilterNode;
-      filter: BiquadFilterNode;
-    }>;
-  } | null>(null);
+  const djEqGraphRef = useRef<DjEqAudioGraph | null>(null);
   const djEqGraphUnavailableRef = useRef(false);
   const normalSessionRef = useRef<NormalPlaybackSessionSnapshot | null>(null);
   const deckTrackIdsRef = useRef<Record<DjDeckId, string | null>>({
@@ -149,18 +147,7 @@ export function useCrossfadeAudioPlayer(
   const applyDjEqToGraph = useCallback((deck: DjDeckId) => {
     const graph = djEqGraphRef.current;
     if (!graph) return;
-    const state = dualDeckMixerRef.current.eq[deck];
-    const nodes = graph.decks[deck];
-    const now = graph.context.currentTime;
-
-    nodes.low.gain.setTargetAtTime(djEqGainDb(state.low), now, 0.015);
-    nodes.mid.gain.setTargetAtTime(djEqGainDb(state.mid), now, 0.015);
-    nodes.high.gain.setTargetAtTime(djEqGainDb(state.high), now, 0.015);
-
-    const filter = djEqFilterParameters(state.filter);
-    nodes.filter.type = filter.type;
-    nodes.filter.frequency.setTargetAtTime(filter.frequency, now, 0.015);
-    nodes.filter.Q.setTargetAtTime(filter.q, now, 0.015);
+    applyDjEqStateToGraph(graph, deck, dualDeckMixerRef.current.eq[deck]);
   }, []);
 
   const ensureDjEqGraph = useCallback(() => {
@@ -173,60 +160,21 @@ export function useCrossfadeAudioPlayer(
 
     const AudioContextConstructor = window.AudioContext
       ?? (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!AudioContextConstructor) {
+    const graph = createDjEqAudioGraph({
+      deckA,
+      deckB,
+      AudioContextConstructor
+    });
+    if (!graph) {
       djEqGraphUnavailableRef.current = true;
       return null;
     }
 
-    let context: AudioContext | null = null;
-    try {
-      context = new AudioContextConstructor();
-
-      const createDeckNodes = (audio: HTMLAudioElement) => {
-        const source = context!.createMediaElementSource(audio);
-        const low = context!.createBiquadFilter();
-        const mid = context!.createBiquadFilter();
-        const high = context!.createBiquadFilter();
-        const filter = context!.createBiquadFilter();
-
-        low.type = 'lowshelf';
-        low.frequency.value = 220;
-        low.gain.value = 0;
-
-        mid.type = 'peaking';
-        mid.frequency.value = 1_000;
-        mid.Q.value = 0.9;
-        mid.gain.value = 0;
-
-        high.type = 'highshelf';
-        high.frequency.value = 4_000;
-        high.gain.value = 0;
-
-        filter.type = 'allpass';
-        filter.frequency.value = 1_000;
-        filter.Q.value = 0.0001;
-
-        source.connect(low).connect(mid).connect(high).connect(filter).connect(context!.destination);
-        const nodes = { source, low, mid, high, filter };
-        return nodes;
-      };
-
-      djEqGraphRef.current = {
-        context,
-        decks: {
-          a: createDeckNodes(deckA),
-          b: createDeckNodes(deckB)
-        }
-      };
-      applyDjEqToGraph('a');
-      applyDjEqToGraph('b');
-      void context.resume().catch(() => undefined);
-      return djEqGraphRef.current;
-    } catch {
-      if (context) void context.close().catch(() => undefined);
-      djEqGraphUnavailableRef.current = true;
-      return null;
-    }
+    djEqGraphRef.current = graph;
+    applyDjEqToGraph('a');
+    applyDjEqToGraph('b');
+    void resumeDjEqAudioGraph(graph);
+    return graph;
   }, [applyDjEqToGraph, getDeckAudio]);
 
   const applyDualDeckMixer = useCallback(() => {
@@ -399,7 +347,7 @@ export function useCrossfadeAudioPlayer(
     clearAudio(deckBRef.current);
     const graph = djEqGraphRef.current;
     djEqGraphRef.current = null;
-    if (graph) void graph.context.close().catch(() => undefined);
+    disposeDjEqAudioGraph(graph);
   }, [cancelAnimation, cancelPlaybackRateRestore, cancelQuantizedSchedule, cancelQuantizedWake, clearAudio]);
 
   const setCrossfadeSeconds = useCallback((seconds: number) => {
@@ -1007,9 +955,7 @@ export function useCrossfadeAudioPlayer(
     const audio = getDeckAudio(deck);
     if (!audio || !deckTrackIdsRef.current[deck]) return false;
     const graph = ensureDjEqGraph();
-    if (graph?.context.state === 'suspended') {
-      await graph.context.resume().catch(() => undefined);
-    }
+    if (graph) await resumeDjEqAudioGraph(graph);
     return playDeckAudio(audio);
   }, [ensureDjEqGraph, getDeckAudio]);
 
