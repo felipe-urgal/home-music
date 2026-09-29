@@ -998,9 +998,10 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
       syncActive: djSyncState.synced[deck],
       syncMaster: isDjSyncMaster(djSyncState, deck),
       syncMode: djSyncState.mode,
-      channelVolume: mixer.channelVolumes[deck]
+      channelVolume: mixer.channelVolumes[deck],
+      meterLevel: player.dualDeck.getMeterLevel(deck)
     };
-  }, [djSyncState, library.tracks, player.dualDeck.getMixerSnapshot, player.dualDeck.getSnapshot]);
+  }, [djSyncState, library.tracks, player.dualDeck.getMeterLevel, player.dualDeck.getMixerSnapshot, player.dualDeck.getSnapshot]);
 
   const [djDeckPanels, setDjDeckPanels] = useState<Record<DjDeckId, DjDeckPanelState>>(() => ({
     a: readDjDeckPanel('a'),
@@ -1539,6 +1540,14 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     );
   }
 
+  const djAutomixCurrentTrackId = djMixMode === 'automix'
+    ? djDeckPanels[djAutomixActiveDeckRef.current].snapshot?.trackId ?? null
+    : null;
+  const djAutomixNextDeck: DjDeckId = djAutomixActiveDeckRef.current === 'a' ? 'b' : 'a';
+  const djAutomixNextTrackId = djMixMode === 'automix'
+    ? djDeckPanels[djAutomixNextDeck].snapshot?.trackId ?? null
+    : null;
+
   if (screen === 'dj') {
     return (
       <main className="app-shell app-shell--dj">
@@ -1555,6 +1564,8 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
           automixShuffle={djAutomixShuffle}
           onAutomixShuffleChange={changeDjAutomixShuffle}
           playedTrackIds={djPlayedTrackIds}
+          automixCurrentTrackId={djAutomixCurrentTrackId}
+          automixNextTrackId={djAutomixNextTrackId}
           onLoadSelectedTrack={loadDjBrowserTrack}
           midi={midiController}
           onDisconnectMidi={disconnectMidiController}
