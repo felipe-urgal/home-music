@@ -53,6 +53,7 @@ import {
   applyDjEqStateToGraph,
   createDjEqAudioGraph,
   disposeDjEqAudioGraph,
+  readDjEqMeterLevel,
   resumeDjEqAudioGraph,
   type DjEqAudioGraph
 } from './dj-eq-audio-graph';
@@ -1004,6 +1005,12 @@ export function useCrossfadeAudioPlayer(
     return dualDeckMixerRef.current.eq[deck][control];
   }, [applyDjEqToGraph, ensureDjEqGraph]);
 
+  const getDualDeckMeterLevel = useCallback((deck: DjDeckId) => {
+    const graph = djEqGraphRef.current;
+    if (!dualDeckModeRef.current || !graph) return 0;
+    return readDjEqMeterLevel(graph, deck);
+  }, []);
+
   const getDualDeckMixerSnapshot = useCallback(() => ({
     channelVolumes: { ...dualDeckMixerRef.current.channelVolumes },
     crossfader: dualDeckMixerRef.current.crossfader,
@@ -1040,6 +1047,7 @@ export function useCrossfadeAudioPlayer(
       setVolume: setDualDeckVolume,
       setCrossfader: setDualDeckCrossfader,
       setEq: setDualDeckEq,
+      getMeterLevel: getDualDeckMeterLevel,
       getMixerSnapshot: getDualDeckMixerSnapshot,
       getSnapshot: getDualDeckSnapshot
     },
