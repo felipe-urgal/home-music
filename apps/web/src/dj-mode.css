@@ -2902,3 +2902,145 @@
 .dj-pro-mixer__channel[data-deck="b"] .dj-mixer-channel-title {
   color: #ff4b45;
 }
+
+
+/* Waveform-driven layout refinement */
+
+.dj-pro-layout {
+  grid-template-columns: minmax(340px, 30%) minmax(520px, 40%) minmax(340px, 30%);
+  grid-template-rows: minmax(610px, auto) 150px;
+}
+
+.dj-pro-deck--console {
+  padding: 10px 11px;
+}
+
+.dj-pro-deck__track {
+  min-height: 82px;
+  margin-bottom: 4px;
+}
+
+.dj-pro-deck__artwork {
+  width: 66px;
+  height: 66px;
+  flex-basis: 66px;
+}
+
+.dj-waveform {
+  height: 126px;
+  border: 1px solid rgba(139, 160, 186, 0.12);
+  border-radius: 7px;
+  cursor: crosshair;
+  outline: none;
+}
+
+.dj-waveform:hover {
+  border-color: rgba(166, 187, 215, 0.22);
+}
+
+.dj-waveform:focus-visible {
+  border-color: var(--deck-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--deck-accent) 24%, transparent);
+}
+
+.dj-waveform__time {
+  position: absolute;
+  z-index: 5;
+  bottom: 5px;
+  min-width: 42px;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: rgba(4, 9, 15, 0.68);
+  color: rgba(245, 249, 255, 0.9);
+  font-size: 0.66rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+  pointer-events: none;
+}
+
+.dj-waveform__time--elapsed {
+  left: 6px;
+}
+
+.dj-waveform__time--remaining {
+  right: 6px;
+  text-align: right;
+}
+
+.dj-waveform__playhead {
+  top: 2px;
+  bottom: 2px;
+  width: 2px;
+  background: rgba(255, 255, 255, 0.98);
+}
+
+.dj-pro-deck__metrics {
+  margin-top: 1px;
+  gap: 6px;
+}
+
+.dj-pro-deck__metrics > div {
+  min-height: 52px;
+  padding: 7px 9px;
+}
+
+.dj-deck-performance {
+  min-height: 202px;
+  padding-top: 4px;
+  padding-bottom: 5px;
+}
+
+.dj-hot-cues {
+  margin-bottom: 4px;
+}
+
+.dj-hot-cue__pad {
+  min-height: 43px;
+}
+
+.dj-pro-deck__controls button {
+  min-height: 50px;
+}
+
+.dj-pro-library {
+  min-height: 610px;
+}
+
+.dj-pro-library__list {
+  max-height: 438px;
+}
+
+.dj-pro-mixer--console,
+.dj-pro-midi {
+  min-height: 150px;
+}
+
+.dj-pro-mixer__crossfader[data-side='center'] input {
+  accent-color: #a7b1bd;
+}
+
+.dj-pro-mixer__crossfader[data-side='a'] input {
+  accent-color: var(--dj-blue-bright);
+}
+
+.dj-pro-mixer__crossfader[data-side='b'] input {
+  accent-color: var(--dj-red);
+}
+
+.dj-pro-mixer__crossfader[data-side='center'] strong {
+  color: #a7b1bd;
+}
+
+@media (max-width: 1360px) {
+  .dj-pro-layout {
+    grid-template-columns: minmax(305px, .92fr) minmax(450px, 1.16fr) minmax(305px, .92fr);
+  }
+
+  .dj-waveform {
+    height: 116px;
+  }
+
+  .dj-pro-library__list {
+    max-height: 420px;
+  }
+}
