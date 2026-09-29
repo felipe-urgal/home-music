@@ -101,7 +101,7 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   await expect(deckA.getByRole('button', { name: 'OUT', exact: true })).toBeDisabled();
 
   const existingHotCueClear = deckA.getByRole('button', { name: 'Limpar Hot Cue 1 Deck A' });
-  if (await existingHotCueClear.isVisible().catch(() => false)) {
+  if (await existingHotCueClear.isEnabled().catch(() => false)) {
     const resetHotCue = page.waitForResponse(response => (
       response.url().includes('/api/tracks/')
       && response.url().endsWith('/hot-cues')
