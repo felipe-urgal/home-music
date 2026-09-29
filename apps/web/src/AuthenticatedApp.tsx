@@ -249,11 +249,11 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     ];
   }, [library.playlists, library.tracks]);
 
-  const djBrowserTracks = useMemo(() => {
-    if (djLibrarySource === 'all') return library.tracks;
+  const tracksForDjLibrarySource = useCallback((source: string) => {
+    if (source === 'all') return library.tracks;
 
-    if (djLibrarySource.startsWith('folder:')) {
-      const folderPath = djLibrarySource.slice('folder:'.length);
+    if (source.startsWith('folder:')) {
+      const folderPath = source.slice('folder:'.length);
       const prefix = `${folderPath}/`;
       return library.tracks.filter(track => (
         track.folderPath === folderPath
@@ -261,8 +261,8 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
       ));
     }
 
-    if (djLibrarySource.startsWith('playlist:')) {
-      const playlistId = djLibrarySource.slice('playlist:'.length);
+    if (source.startsWith('playlist:')) {
+      const playlistId = source.slice('playlist:'.length);
       const playlist = library.playlists.find(item => item.id === playlistId);
       if (!playlist) return [];
       return playlist.trackIds
@@ -271,7 +271,12 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     }
 
     return library.tracks;
-  }, [djLibrarySource, djTracksById, library.playlists, library.tracks]);
+  }, [djTracksById, library.playlists, library.tracks]);
+
+  const djBrowserTracks = useMemo(
+    () => tracksForDjLibrarySource(djLibrarySource),
+    [djLibrarySource, tracksForDjLibrarySource]
+  );
 
   const djBrowserTrackIds = useMemo(
     () => djBrowserTracks.map(track => track.id),
@@ -281,11 +286,15 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
 
   useEffect(() => {
     if (!djAutomixShuffle) return;
-    setDjShuffleOrder(previous => reconcileDjShuffleOrder(
-      djBrowserTrackIds,
-      previous
-    ));
-  }, [djAutomixShuffle, djBrowserTrackIdSignature]);
+    setDjShuffleOrder(previous => {
+      const next = reconcileDjShuffleOrder(djBrowserTrackIds, previous);
+      if (
+        next.length === previous.length
+        && next.every((trackId, index) => trackId === previous[index])
+      ) return previous;
+      return next;
+    });
+  }, [djAutomixShuffle, djBrowserTrackIdSignature, djBrowserTrackIds]);
 
   const djListedTracks = useMemo(() => {
     if (!djAutomixShuffle) return djBrowserTracks;
@@ -306,11 +315,16 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
   }, []);
 
   const selectDjLibrarySource = useCallback((value: string) => {
+    const nextTracks = tracksForDjLibrarySource(value);
+    setDjShuffleOrder(
+      djAutomixShuffle
+        ? reconcileDjShuffleOrder(nextTracks.map(track => track.id), [])
+        : []
+    );
     setDjLibrarySource(value);
-    setDjShuffleOrder([]);
     ddjBrowserIndexRef.current = 0;
     setDjBrowserIndex(0);
-  }, []);
+  }, [djAutomixShuffle, tracksForDjLibrarySource]);
 
   const changeDjAutomixShuffle = useCallback((enabled: boolean) => {
     const selectedTrackId = djListedTracks[ddjBrowserIndexRef.current]?.id ?? null;
