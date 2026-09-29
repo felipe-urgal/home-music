@@ -146,8 +146,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
   const djAutomixActiveDeckRef = useRef<DjDeckId>('a');
   const djAutomixQueueIndexRef = useRef(0);
   const [djAutomixShuffle, setDjAutomixShuffle] = useState(false);
-  const djShuffleOrderRef = useRef<string[]>([]);
-  const [djShuffleRevision, setDjShuffleRevision] = useState(0);
+  const [djShuffleOrder, setDjShuffleOrder] = useState<string[]>([]);
   const [djPlayedTrackIds, setDjPlayedTrackIds] = useState<Set<string>>(() => new Set());
   const djAutomixTimerRef = useRef<number | null>(null);
   const djAutomixTransitionRef = useRef(false);
@@ -280,25 +279,21 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
   );
   const djBrowserTrackIdSignature = djBrowserTrackIds.join('\u0000');
 
+  useEffect(() => {
+    if (!djAutomixShuffle) return;
+    setDjShuffleOrder(previous => reconcileDjShuffleOrder(
+      djBrowserTrackIds,
+      previous
+    ));
+  }, [djAutomixShuffle, djBrowserTrackIdSignature]);
+
   const djListedTracks = useMemo(() => {
     if (!djAutomixShuffle) return djBrowserTracks;
-
-    const nextOrder = reconcileDjShuffleOrder(
-      djBrowserTrackIds,
-      djShuffleOrderRef.current
-    );
-    djShuffleOrderRef.current = nextOrder;
     const byId = new Map(djBrowserTracks.map(track => [track.id, track]));
-    return nextOrder
+    return djShuffleOrder
       .map(trackId => byId.get(trackId))
       .filter((track): track is (typeof djBrowserTracks)[number] => Boolean(track));
-  }, [
-    djAutomixShuffle,
-    djBrowserTrackIdSignature,
-    djBrowserTracks,
-    djBrowserTrackIds,
-    djShuffleRevision
-  ]);
+  }, [djAutomixShuffle, djBrowserTracks, djShuffleOrder]);
 
   const markDjTrackPlayed = useCallback((trackId: string | null | undefined) => {
     if (!trackId) return;
@@ -312,34 +307,25 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
 
   const selectDjLibrarySource = useCallback((value: string) => {
     setDjLibrarySource(value);
-    djShuffleOrderRef.current = [];
-    setDjShuffleRevision(value => value + 1);
+    setDjShuffleOrder([]);
     ddjBrowserIndexRef.current = 0;
     setDjBrowserIndex(0);
   }, []);
 
   const changeDjAutomixShuffle = useCallback((enabled: boolean) => {
     const selectedTrackId = djListedTracks[ddjBrowserIndexRef.current]?.id ?? null;
+    const naturalOrder = djBrowserTracks.map(track => track.id);
+    const nextOrder = enabled
+      ? reconcileDjShuffleOrder(naturalOrder, [])
+      : naturalOrder;
 
-    djShuffleOrderRef.current = [];
+    setDjShuffleOrder(enabled ? nextOrder : []);
     setDjAutomixShuffle(enabled);
-    setDjShuffleRevision(value => value + 1);
 
-    queueMicrotask(() => {
-      if (!selectedTrackId) {
-        ddjBrowserIndexRef.current = 0;
-        setDjBrowserIndex(0);
-        return;
-      }
-
-      const source = enabled
-        ? reconcileDjShuffleOrder(djBrowserTracks.map(track => track.id), [])
-        : djBrowserTracks.map(track => track.id);
-      if (enabled) djShuffleOrderRef.current = source;
-      const nextIndex = Math.max(0, source.indexOf(selectedTrackId));
-      ddjBrowserIndexRef.current = nextIndex;
-      setDjBrowserIndex(nextIndex);
-    });
+    const selectedIndex = selectedTrackId == null ? 0 : nextOrder.indexOf(selectedTrackId);
+    const nextIndex = selectedIndex >= 0 ? selectedIndex : 0;
+    ddjBrowserIndexRef.current = nextIndex;
+    setDjBrowserIndex(nextIndex);
   }, [djBrowserTracks, djListedTracks]);
 
   const selectDjBrowserIndex = useCallback((index: number) => {
