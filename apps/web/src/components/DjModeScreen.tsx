@@ -1301,6 +1301,8 @@ export function DjModeScreen({
   onMixModeChange,
   onExit
 }: DjModeScreenProps) {
+  const [workspacePanel, setWorkspacePanel] = useState<'library' | 'mixer'>('library');
+
   return (
     <section className="dj-mode dj-mode--prototype-three" aria-label="Modo DJ">
       <header className="dj-mode__header">
@@ -1344,8 +1346,38 @@ export function DjModeScreen({
         </div>
       </header>
 
-      <main className="dj-pro-layout">
+      <main className="dj-pro-layout" data-workspace-panel={workspacePanel}>
         <DeckPanel deck="a" state={decks.a} onTogglePlay={onTogglePlay} onCue={onCue} onSync={onSync} onTempo={onTempo} onNudge={onNudge} onSeek={onSeek} />
+
+        <div className="dj-workspace-switch" role="group" aria-label="Painel do workspace DJ">
+          <button
+            type="button"
+            className={workspacePanel === 'library' ? 'is-active' : ''}
+            aria-pressed={workspacePanel === 'library'}
+            onClick={() => setWorkspacePanel('library')}
+          >
+            Biblioteca
+          </button>
+          <button
+            type="button"
+            className={workspacePanel === 'mixer' ? 'is-active' : ''}
+            aria-pressed={workspacePanel === 'mixer'}
+            onClick={() => setWorkspacePanel('mixer')}
+          >
+            Mixer
+          </button>
+        </div>
+
+        <DjMixer
+          mixer={mixer}
+          meterLevels={{ a: decks.a.meterLevel, b: decks.b.meterLevel }}
+          onChannelVolume={onChannelVolume}
+          onEq={onEq}
+          onCrossfader={onCrossfader}
+        />
+
+        <DeckPanel deck="b" state={decks.b} onTogglePlay={onTogglePlay} onCue={onCue} onSync={onSync} onTempo={onTempo} onNudge={onNudge} onSeek={onSeek} />
+
         <DjLibrary
           tracks={libraryTracks}
           sources={librarySources}
@@ -1364,15 +1396,14 @@ export function DjModeScreen({
             b: decks.b.snapshot?.trackId ?? null
           }}
         />
-        <DeckPanel deck="b" state={decks.b} onTogglePlay={onTogglePlay} onCue={onCue} onSync={onSync} onTempo={onTempo} onNudge={onNudge} onSeek={onSeek} />
-        <DjMixer
-          mixer={mixer}
-          meterLevels={{ a: decks.a.meterLevel, b: decks.b.meterLevel }}
-          onChannelVolume={onChannelVolume}
-          onEq={onEq}
-          onCrossfader={onCrossfader}
-        />
-        <DjMidiPanel midi={midi} onDisconnect={onDisconnectMidi} onSelectOutput={onSelectMidiOutput} />
+
+        <details className="dj-midi-drawer">
+          <summary>
+            <span>Controlador MIDI</span>
+            <small>{midi.supported ? midiStatusText(midi.status) : 'Web MIDI indisponível'}</small>
+          </summary>
+          <DjMidiPanel midi={midi} onDisconnect={onDisconnectMidi} onSelectOutput={onSelectMidiOutput} />
+        </details>
       </main>
     </section>
   );
