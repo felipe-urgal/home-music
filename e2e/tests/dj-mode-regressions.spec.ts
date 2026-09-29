@@ -244,7 +244,7 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   await expect(options.nth(1)).toHaveAttribute('aria-selected', 'true');
   const diagnosticPanel = midi.getByLabel('Diagnóstico MIDI ativo');
   await expect(diagnosticPanel).toContainText('E2E DDJ-400');
-  await expect(diagnosticPanel).toContainText('0xB6');
+  await expect(diagnosticPanel).toContainText('Status0xB0');
   await expect(diagnosticPanel).toContainText('Canal7');
   await expect(diagnosticPanel).toContainText('Data 164 · 0x40');
   await expect(diagnosticPanel).toContainText('Data 21 · 0x01');
