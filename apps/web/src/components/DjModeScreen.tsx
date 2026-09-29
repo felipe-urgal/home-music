@@ -27,7 +27,6 @@ import { resolveHotCuePosition } from '../dj-hot-cue-quantize';
 import { buildDjHotCueWaveformMarkers } from '../dj-hot-cue-waveform';
 import { djLoopWaveformRange, resolveDjAutoLoopPlan } from '../dj-auto-loop';
 import { resolveDjHotLoopPlan } from '../dj-hot-loop';
-import { clampDjKeyboardValue, isDjKeyboardEditableTarget, resolveDjKeyboardCommand } from '../dj-keyboard-controls';
 import { notifyLibraryChanged } from '../library-events';
 import { fetchTrackWaveform } from '../track-waveform-client';
 import type { DualDeckAudioSnapshot } from '../dual-deck-audio';
@@ -1182,75 +1181,6 @@ export function DjModeScreen({
   onMixModeChange,
   onExit
 }: DjModeScreenProps) {
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.repeat || event.altKey || event.ctrlKey || event.metaKey || isDjKeyboardEditableTarget(event.target)) {
-        return;
-      }
-
-      const command = resolveDjKeyboardCommand(event.key);
-      if (!command) return;
-      event.preventDefault();
-
-      switch (command.type) {
-        case 'toggle-play':
-          onTogglePlay(command.deck);
-          break;
-        case 'cue':
-          onCue(command.deck);
-          break;
-        case 'sync':
-          onSync(command.deck);
-          break;
-        case 'library-move': {
-          if (!libraryTracks.length) break;
-          const nextIndex = clampDjKeyboardValue(
-            selectedLibraryIndex + command.delta,
-            0,
-            libraryTracks.length - 1
-          );
-          onSelectLibraryIndex(nextIndex);
-          break;
-        }
-        case 'load':
-          if (libraryTracks.length) onLoadSelectedTrack(command.deck);
-          break;
-        case 'nudge':
-          onNudge(command.deck, command.delta);
-          break;
-        case 'channel-volume':
-          onChannelVolume(
-            command.deck,
-            clampDjKeyboardValue(
-              mixer.channelVolumes[command.deck] + command.delta,
-              0,
-              1
-            )
-          );
-          break;
-        case 'crossfader':
-          onCrossfader(clampDjKeyboardValue(mixer.crossfader + command.delta, -1, 1));
-          break;
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown, { capture: true });
-    return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
-  }, [
-    libraryTracks.length,
-    mixer.channelVolumes,
-    mixer.crossfader,
-    onChannelVolume,
-    onCrossfader,
-    onCue,
-    onLoadSelectedTrack,
-    onNudge,
-    onSelectLibraryIndex,
-    onSync,
-    onTogglePlay,
-    selectedLibraryIndex
-  ]);
-
   return (
     <section className="dj-mode dj-mode--prototype-three" aria-label="Modo DJ">
       <header className="dj-mode__header">
