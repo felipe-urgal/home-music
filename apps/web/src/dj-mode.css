@@ -303,6 +303,13 @@
   color: #ffd51f;
 }
 
+.dj-waveform__hot-cue[data-hot-loop="true"] {
+  background: var(--deck-accent);
+  color: #fff;
+  box-shadow: 0 0 12px rgba(30,142,255,.32);
+}
+
+
 .dj-waveform__hot-cue:hover,
 .dj-waveform__hot-cue:focus-visible {
   background: var(--deck-accent);
@@ -442,7 +449,7 @@
   grid-template-columns: auto 1fr;
   align-items: center;
   gap: 7px;
-  padding: 7px 22px 7px 9px;
+  padding: 7px 42px 7px 9px;
   border: 1px solid rgba(145,163,183,.28);
   border-radius: 6px;
   background: linear-gradient(180deg, #222c36, #11171e);
@@ -480,6 +487,33 @@
 
 .dj-hot-cue[data-set="true"] .dj-hot-cue__pad span {
   color: #fff;
+}
+
+.dj-hot-cue__loop {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  min-width: 32px;
+  height: 17px;
+  padding: 0 4px;
+  border: 1px solid rgba(145,163,183,.2);
+  border-radius: 3px;
+  background: rgba(255,255,255,.035);
+  color: #8794a1;
+  font: inherit;
+  font-size: .5rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.dj-hot-cue__loop[aria-pressed="true"] {
+  border-color: var(--deck-accent);
+  background: var(--deck-accent);
+  color: #fff;
+}
+
+.dj-hot-cue__loop:disabled {
+  opacity: .28;
 }
 
 .dj-hot-cue__clear {
