@@ -97,6 +97,7 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   await dj.getByRole('button', { name: 'LOAD A' }).click();
   await expect(deckA).toContainText('E2E Track');
   await expect(deckA.getByRole('button', { name: 'Reproduzir Deck A' })).toBeVisible();
+  await expect(selectedE2eTrack.locator('.dj-library-deck-badge[data-deck="a"]')).toHaveText('A');
 
   const waveformA = deckA.getByRole('slider', { name: 'Buscar posição no waveform Deck A' });
   await expect(waveformA).toBeVisible();
@@ -212,6 +213,7 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   await dj.getByRole('button', { name: 'LOAD B' }).click();
   await expect(deckB).toContainText('E2E Zeta');
   await expect(deckB.getByRole('button', { name: 'Reproduzir Deck B' })).toBeVisible();
+  await expect(library.getByRole('option').filter({ hasText: 'E2E Zeta' }).locator('.dj-library-deck-badge[data-deck="b"]')).toHaveText('B');
   await expect(deckB.getByRole('button', { name: 'Definir Hot Cue 1 Deck B' })).toBeVisible();
   await expect(deckA.getByRole('button', { name: 'Definir Hot Cue 1 Deck A' })).toBeVisible();
 
@@ -515,6 +517,8 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
 
   await dj.getByRole('button', { name: 'AutoMix' }).click();
   await expect(dj.getByRole('button', { name: 'AutoMix' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(library.locator('.dj-library-status-badge').filter({ hasText: 'AGORA' })).toHaveCount(1);
+  await expect(library.locator('.dj-library-status-badge').filter({ hasText: 'PRÓXIMA' })).toHaveCount(1);
   await expect(mixer.locator('.dj-pro-mixer__channel[data-deck="a"] strong')).toHaveText('100%');
   await expect(mixer.locator('.dj-pro-mixer__channel[data-deck="b"] strong')).toHaveText('100%');
   await expect(mixer.locator('.dj-pro-mixer__crossfader strong')).toHaveText('A 100%');
