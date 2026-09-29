@@ -77,34 +77,30 @@ function rotatedProfile(profile: number[], tonic: number) {
   ));
 }
 
-export function analyzePcmKey(
+function addKeyFrame(
   samples: Int16Array,
-  sampleRate = KEY_ANALYSIS_SAMPLE_RATE
-): TrackMusicalKey | null {
-  if (!Number.isFinite(sampleRate) || sampleRate <= 0) return null;
-  if (samples.length < sampleRate * MIN_ANALYSIS_SECONDS) return null;
-
-  const chroma = new Array<number>(12).fill(0);
-  let frames = 0;
-  let totalEnergy = 0;
-
-  for (let start = 0; start + FRAME_SIZE <= samples.length; start += FRAME_STEP) {
-    let frameEnergy = 0;
-    for (let index = 0; index < FRAME_SIZE; index += 1) {
-      const sample = (samples[start + index] ?? 0) / 32_768;
-      frameEnergy += sample * sample;
-    }
-    if (frameEnergy / FRAME_SIZE < 1e-7) continue;
-
-    frames += 1;
-    totalEnergy += frameEnergy;
-    for (let midi = 36; midi <= 95; midi += 1) {
-      const frequency = 440 * Math.pow(2, (midi - 69) / 12);
-      const pitchClass = midi % 12;
-      chroma[pitchClass] += Math.sqrt(goertzelPower(samples, start, FRAME_SIZE, frequency, sampleRate));
-    }
+  start: number,
+  sampleRate: number,
+  chroma: number[]
+) {
+  let frameEnergy = 0;
+  for (let index = 0; index < FRAME_SIZE; index += 1) {
+    const sample = (samples[start + index] ?? 0) / 32_768;
+    frameEnergy += sample * sample;
   }
+  if (frameEnergy / FRAME_SIZE < 1e-7) return 0;
 
+  for (let midi = 36; midi <= 95; midi += 1) {
+    const frequency = 440 * Math.pow(2, (midi - 69) / 12);
+    const pitchClass = midi % 12;
+    chroma[pitchClass] += Math.sqrt(
+      goertzelPower(samples, start, FRAME_SIZE, frequency, sampleRate)
+    );
+  }
+  return frameEnergy;
+}
+
+function keyFromChroma(chroma: number[], frames: number, totalEnergy: number) {
   if (frames === 0 || totalEnergy <= 1e-4) return null;
 
   const maxChroma = Math.max(...chroma);
@@ -133,6 +129,56 @@ export function analyzePcmKey(
   const margin = Math.max(0, best.score - second.score);
   const confidence = Math.max(0, Math.min(1, (margin * 5) + ((best.score - 0.45) * 0.45)));
   return djKeyFromPitchClass(best.tonic, best.mode, confidence);
+}
+
+export function analyzePcmKey(
+  samples: Int16Array,
+  sampleRate = KEY_ANALYSIS_SAMPLE_RATE
+): TrackMusicalKey | null {
+  if (!Number.isFinite(sampleRate) || sampleRate <= 0) return null;
+  if (samples.length < sampleRate * MIN_ANALYSIS_SECONDS) return null;
+
+  const chroma = new Array<number>(12).fill(0);
+  let frames = 0;
+  let totalEnergy = 0;
+
+  for (let start = 0; start + FRAME_SIZE <= samples.length; start += FRAME_STEP) {
+    const energy = addKeyFrame(samples, start, sampleRate, chroma);
+    if (energy <= 0) continue;
+    frames += 1;
+    totalEnergy += energy;
+  }
+
+  return keyFromChroma(chroma, frames, totalEnergy);
+}
+
+export async function analyzePcmKeyAsync(
+  samples: Int16Array,
+  sampleRate = KEY_ANALYSIS_SAMPLE_RATE,
+  signal?: AbortSignal
+): Promise<TrackMusicalKey | null> {
+  if (!Number.isFinite(sampleRate) || sampleRate <= 0) return null;
+  if (samples.length < sampleRate * MIN_ANALYSIS_SECONDS) return null;
+
+  const chroma = new Array<number>(12).fill(0);
+  let frames = 0;
+  let totalEnergy = 0;
+  let processedFrames = 0;
+
+  for (let start = 0; start + FRAME_SIZE <= samples.length; start += FRAME_STEP) {
+    if (signal?.aborted) throw new Error('Análise tonal cancelada.');
+    const energy = addKeyFrame(samples, start, sampleRate, chroma);
+    if (energy > 0) {
+      frames += 1;
+      totalEnergy += energy;
+    }
+    processedFrames += 1;
+    if (processedFrames % 6 === 0) {
+      await new Promise<void>(resolve => setImmediate(resolve));
+    }
+  }
+
+  return keyFromChroma(chroma, frames, totalEnergy);
 }
 
 export const decodeTrackToKeyPcm: KeyAnalysisRunner = (
@@ -242,7 +288,7 @@ export async function analyzeTrackKey(
   if (!signatureMatches(track, before.stat)) return null;
 
   const samples = await runner(ffmpegCommand, before.path, signal);
-  const key = analyzePcmKey(samples);
+  const key = await analyzePcmKeyAsync(samples, KEY_ANALYSIS_SAMPLE_RATE, signal);
   if (!key) return null;
 
   const after = await resolveRegularFileInside(libraryRoot, track.filePath);
