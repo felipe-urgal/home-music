@@ -11,6 +11,8 @@ type DjEqDeckNodes = {
   mid: BiquadFilterNode;
   high: BiquadFilterNode;
   filter: BiquadFilterNode;
+  analyser: AnalyserNode;
+  meterData: Uint8Array;
 };
 
 export type DjEqAudioGraph = {
@@ -38,6 +40,7 @@ export function createDjEqAudioGraph(options: {
       const mid = context!.createBiquadFilter();
       const high = context!.createBiquadFilter();
       const filter = context!.createBiquadFilter();
+      const analyser = context!.createAnalyser();
 
       low.type = 'lowshelf';
       low.frequency.value = 220;
@@ -56,8 +59,12 @@ export function createDjEqAudioGraph(options: {
       filter.frequency.value = 1_000;
       filter.Q.value = 0.0001;
 
-      source.connect(low).connect(mid).connect(high).connect(filter).connect(context!.destination);
-      return { source, low, mid, high, filter };
+      analyser.fftSize = 256;
+      analyser.smoothingTimeConstant = 0.72;
+      const meterData = new Uint8Array(analyser.fftSize);
+
+      source.connect(low).connect(mid).connect(high).connect(filter).connect(analyser).connect(context!.destination);
+      return { source, low, mid, high, filter, analyser, meterData };
     };
 
     return {
@@ -89,6 +96,18 @@ export function applyDjEqStateToGraph(
   nodes.filter.type = filter.type;
   nodes.filter.frequency.setTargetAtTime(filter.frequency, now, 0.015);
   nodes.filter.Q.setTargetAtTime(filter.q, now, 0.015);
+}
+
+export function readDjEqMeterLevel(graph: DjEqAudioGraph, deck: DjDeckId) {
+  const nodes = graph.decks[deck];
+  nodes.analyser.getByteTimeDomainData(nodes.meterData);
+  let sumSquares = 0;
+  for (const sample of nodes.meterData) {
+    const normalized = (sample - 128) / 128;
+    sumSquares += normalized * normalized;
+  }
+  const rms = Math.sqrt(sumSquares / Math.max(1, nodes.meterData.length));
+  return Math.max(0, Math.min(1, rms * 3.2));
 }
 
 export async function resumeDjEqAudioGraph(graph: DjEqAudioGraph) {
