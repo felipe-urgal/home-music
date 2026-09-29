@@ -30,9 +30,10 @@ A ausência de saída MIDI não deve impedir playback nem controles de entrada.
 - beat sync;
 - channel faders;
 - crossfader;
-- LEDs de PLAY, CUE e SYNC.
+- LEDs de PLAY, CUE e SYNC;
+- EQ LOW / MID / HIGH / FILTER pela interface do Modo DJ.
 
-Scratch real não faz parte do MVP atual.
+Scratch real não faz parte do MVP atual. O EQ já funciona por software; o mapping físico dos quatro knobs da DDJ-400 continua pendente de homologação e bytes confirmados no hardware real.
 
 ## Áudio, master e headphones
 
