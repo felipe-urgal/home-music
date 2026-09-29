@@ -1214,7 +1214,7 @@ function DjMixer({
   return (
     <section className="dj-pro-mixer dj-pro-mixer--console" aria-label="Mixer">
       <div className="dj-pro-mixer__title"><SlidersHorizontal aria-hidden="true" /><strong>Mixer</strong></div>
-      <label className="dj-pro-mixer__channel" data-deck="a">
+      <div className="dj-pro-mixer__channel" data-deck="a">
         <span className="dj-mixer-channel-title">Channel A</span>
         {renderEq('a')}
         <div className="dj-mixer-channel-row">
@@ -1223,7 +1223,7 @@ function DjMixer({
         </div>
         <strong>{Math.round(mixer.channelVolumes.a * 100)}%</strong>
         {channelMeter(mixer.channelVolumes.a)}
-      </label>
+      </div>
       <label
         className="dj-pro-mixer__crossfader"
         data-side={Math.abs(mixer.crossfader) < 0.005 ? 'center' : mixer.crossfader < 0 ? 'a' : 'b'}
@@ -1232,7 +1232,7 @@ function DjMixer({
         <div><small>A</small><input type="range" min="-1" max="1" step="0.01" value={mixer.crossfader} onChange={event => onCrossfader(Number(event.currentTarget.value))} /><small>B</small></div>
         <strong>{mixer.crossfader === 0 ? 'Centro' : mixer.crossfader < 0 ? 'A ' + Math.round(Math.abs(mixer.crossfader) * 100) + '%' : 'B ' + Math.round(mixer.crossfader * 100) + '%'}</strong>
       </label>
-      <label className="dj-pro-mixer__channel" data-deck="b">
+      <div className="dj-pro-mixer__channel" data-deck="b">
         <span className="dj-mixer-channel-title">Channel B</span>
         {renderEq('b')}
         <div className="dj-mixer-channel-row">
@@ -1241,7 +1241,7 @@ function DjMixer({
         </div>
         <strong>{Math.round(mixer.channelVolumes.b * 100)}%</strong>
         {channelMeter(mixer.channelVolumes.b)}
-      </label>
+      </div>
     </section>
   );
 }
