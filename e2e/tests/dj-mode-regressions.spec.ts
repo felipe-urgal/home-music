@@ -192,6 +192,8 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   await waveformHotCueA.click();
   await deckA.getByRole('button', { name: 'Ir para Hot Cue 1 Deck A' }).click();
 
+  await selectedE2eTrack.click();
+  await expect(selectedE2eTrack).toHaveAttribute('aria-selected', 'true');
   await dj.getByRole('button', { name: 'LOAD B' }).click();
   await expect(deckB).toContainText('E2E Track');
   await expect(deckB.getByRole('button', { name: 'Ir para Hot Cue 1 Deck B' })).toBeVisible();
