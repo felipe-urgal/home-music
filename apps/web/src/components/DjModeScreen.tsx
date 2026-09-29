@@ -24,6 +24,7 @@ import { apiFetch } from '../api-client';
 import type { DjDeckId } from '../dj-controller-contract';
 import { buildDjWaveformMarkers } from '../dj-waveform-grid';
 import { resolveHotCuePosition } from '../dj-hot-cue-quantize';
+import { buildDjHotCueWaveformMarkers } from '../dj-hot-cue-waveform';
 import { notifyLibraryChanged } from '../library-events';
 import { fetchTrackWaveform } from '../track-waveform-client';
 import type { DualDeckAudioSnapshot } from '../dual-deck-audio';
@@ -153,15 +154,24 @@ function drawDjWaveform(
 function DjWaveform({
   deck,
   track,
-  progress
+  progress,
+  hotCues,
+  onHotCueSeek
 }: {
   deck: DjDeckId;
   track: Track;
   progress: number;
+  hotCues: TrackHotCues['positions'];
+  onHotCueSeek: (seconds: number) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [waveform, setWaveform] = useState<TrackWaveform | null>(null);
   const [status, setStatus] = useState<'loading' | 'pending' | 'ready' | 'unavailable'>('loading');
+  const durationSeconds = waveform?.durationSeconds ?? track.duration ?? 0;
+  const hotCueMarkers = useMemo(
+    () => buildDjHotCueWaveformMarkers(hotCues, durationSeconds),
+    [durationSeconds, hotCues]
+  );
 
   useEffect(() => {
     let active = true;
@@ -217,6 +227,19 @@ function DjWaveform({
     <div className="dj-waveform" data-status={status} aria-label="Waveform real da faixa">
       <canvas ref={canvasRef} className="dj-waveform__canvas" aria-hidden="true" />
       <span className="dj-waveform__remaining" style={{ left: `${progress}%` }} aria-hidden="true" />
+      {hotCueMarkers.map(marker => (
+        <button
+          key={marker.index}
+          type="button"
+          className="dj-waveform__hot-cue"
+          style={{ left: `${marker.position * 100}%` }}
+          aria-label={'Hot Cue ' + (marker.index + 1) + ' no waveform ' + (deck === 'a' ? 'Deck A' : 'Deck B')}
+          title={'Hot Cue ' + (marker.index + 1) + ' · ' + formatTime(marker.seconds)}
+          onClick={() => onHotCueSeek(marker.seconds)}
+        >
+          {marker.index + 1}
+        </button>
+      ))}
       <span className="dj-waveform__playhead" style={{ left: `${progress}%` }} aria-hidden="true" />
       {status !== 'ready' && (
         <span className="dj-waveform__status">
@@ -417,7 +440,13 @@ function DeckPanel({
             </div>
           </div>
 
-          <DjWaveform deck={deck} track={state.track!} progress={progress} />
+          <DjWaveform
+            deck={deck}
+            track={state.track!}
+            progress={progress}
+            hotCues={hotCues}
+            onHotCueSeek={seconds => onSeek(deck, seconds)}
+          />
 
           <div className="dj-pro-deck__timeline">
             <span>{formatTime(snapshot?.currentTimeSeconds ?? 0)}</span>
