@@ -1021,30 +1021,27 @@ export function useCrossfadeAudioPlayer(
 
   const setDualDeckFxEnabled = useCallback((deck: DjDeckId, kind: DjFxKind, enabled: boolean) => {
     if (!dualDeckModeRef.current) return null;
-    dualDeckMixerRef.current.fx[deck] = {
-      ...dualDeckMixerRef.current.fx[deck],
-      [kind]: {
-        ...dualDeckMixerRef.current.fx[deck][kind],
-        enabled
-      }
-    };
+    const current = dualDeckMixerRef.current.fx[deck];
+    dualDeckMixerRef.current.fx[deck] = kind === 'echo'
+      ? { ...current, echo: { ...current.echo, enabled } }
+      : { ...current, reverb: { ...current.reverb, enabled } };
     ensureDjEqGraph();
     applyDjFxToGraph(deck);
-    return dualDeckMixerRef.current.fx[deck][kind].enabled;
+    return kind === 'echo'
+      ? dualDeckMixerRef.current.fx[deck].echo.enabled
+      : dualDeckMixerRef.current.fx[deck].reverb.enabled;
   }, [applyDjFxToGraph, ensureDjEqGraph]);
 
   const setDualDeckFxWet = useCallback((deck: DjDeckId, kind: DjFxKind, wet: number) => {
     if (!dualDeckModeRef.current) return null;
-    dualDeckMixerRef.current.fx[deck] = {
-      ...dualDeckMixerRef.current.fx[deck],
-      [kind]: {
-        ...dualDeckMixerRef.current.fx[deck][kind],
-        wet: clampDjFxUnit(wet)
-      }
-    };
+    const normalized = clampDjFxUnit(wet);
+    const current = dualDeckMixerRef.current.fx[deck];
+    dualDeckMixerRef.current.fx[deck] = kind === 'echo'
+      ? { ...current, echo: { ...current.echo, wet: normalized } }
+      : { ...current, reverb: { ...current.reverb, wet: normalized } };
     ensureDjEqGraph();
     applyDjFxToGraph(deck);
-    return dualDeckMixerRef.current.fx[deck][kind].wet;
+    return normalized;
   }, [applyDjFxToGraph, ensureDjEqGraph]);
 
   const setDualDeckEchoFeedback = useCallback((deck: DjDeckId, feedback: number) => {
