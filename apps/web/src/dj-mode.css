@@ -5325,8 +5325,8 @@
     display: none;
   }
 
-  .dj-mode--prototype-three[data-workspace-panel="library"] .dj-pro-mixer,
-  .dj-mode--prototype-three[data-workspace-panel="mixer"] .dj-pro-library {
+  .dj-mode--prototype-three .dj-pro-layout[data-workspace-panel="library"] .dj-pro-mixer,
+  .dj-mode--prototype-three .dj-pro-layout[data-workspace-panel="mixer"] .dj-pro-library {
     display: none;
   }
 
