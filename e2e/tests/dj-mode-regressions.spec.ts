@@ -143,6 +143,10 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   expect(typeof persistedHotCue.positions[0]).toBe('number');
   expect((await saveHotCue).ok()).toBe(true);
   await expect(deckA.getByRole('button', { name: 'Ir para Hot Cue 1 Deck A' })).toBeVisible();
+  const hotLoopA = deckA.getByRole('button', { name: 'Hot Loop Hot Cue 1 Deck A' });
+  await expect(hotLoopA).toBeDisabled();
+  await expect(hotLoopA).toHaveAttribute('title', 'Hot Loop requer BPM analisado');
+
   const waveformHotCueA = deckA.getByRole('button', { name: 'Hot Cue 1 no waveform Deck A' });
   await expect(waveformHotCueA).toBeVisible();
   await waveformHotCueA.click();
