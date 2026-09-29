@@ -57,6 +57,7 @@ import {
 } from './beat-clock';
 import { resolveBeatmatchPlan } from './beatmatch';
 import type { DjDeckId } from './dj-controller-contract';
+import type { DjEqControl } from './dj-eq';
 import { canUseAdminLibraryActions } from './frontend-access';
 import { buildLibraryReturnLabel } from './library-utils';
 import type { OfflineDownloads } from './offline-downloads';
@@ -412,6 +413,13 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     switchDjToManual();
     player.dualDeck.setMode(true);
     player.dualDeck.setVolume(deck, value);
+    scheduleMixerUiSync();
+  }, [player.dualDeck, scheduleMixerUiSync, switchDjToManual]);
+
+  const setDjEq = useCallback((deck: DjDeckId, control: DjEqControl, value: number) => {
+    switchDjToManual();
+    player.dualDeck.setMode(true);
+    player.dualDeck.setEq(deck, control, value);
     scheduleMixerUiSync();
   }, [player.dualDeck, scheduleMixerUiSync, switchDjToManual]);
 
@@ -1540,6 +1548,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
           onDisconnectMidi={disconnectMidiController}
           onSelectMidiOutput={selectMidiOutput}
           onChannelVolume={setDjChannelVolume}
+          onEq={setDjEq}
           onCrossfader={setDjCrossfader}
           onTogglePlay={toggleDjDeckPlay}
           onCue={cueDjDeck}

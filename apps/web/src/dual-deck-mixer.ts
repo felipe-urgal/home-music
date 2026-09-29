@@ -1,8 +1,10 @@
 import type { DjDeckId } from './dj-controller-contract';
+import { createNeutralDjEqState, type DjChannelEqState } from './dj-eq';
 
 export type DualDeckMixerState = {
   channelVolumes: Record<DjDeckId, number>;
   crossfader: number;
+  eq: Record<DjDeckId, DjChannelEqState>;
 };
 
 function clampUnit(value: number) {
@@ -39,6 +41,7 @@ export function resolveDualDeckOutputGain(options: {
 export function createDefaultDualDeckMixerState(): DualDeckMixerState {
   return {
     channelVolumes: { a: 1, b: 1 },
-    crossfader: 0
+    crossfader: 0,
+    eq: createNeutralDjEqState()
   };
 }

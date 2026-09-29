@@ -2781,7 +2781,27 @@
   border-radius: 2px;
   background: #aab5c0;
   transform-origin: 50% 13px;
-  transform: translateX(-50%) rotate(0deg);
+  transform: translateX(-50%) rotate(var(--dj-eq-angle, 0deg));
+  pointer-events: none;
+}
+
+.dj-eq-knob input {
+  position: absolute;
+  inset: -5px;
+  width: 44px;
+  height: 44px;
+  margin: 0;
+  opacity: 0;
+  cursor: ew-resize;
+}
+
+.dj-eq-knob:focus-within {
+  outline: 2px solid rgba(217, 230, 245, .8);
+  outline-offset: 2px;
+}
+
+.dj-eq-knob:active {
+  transform: translateY(1px);
 }
 
 .dj-pro-mixer__channel[data-deck="a"] .dj-eq-knob {
@@ -2881,14 +2901,6 @@
   }
 }
 
-
-.dj-eq-knob[data-angle="right"]::after {
-  transform: translateX(-50%) rotate(18deg);
-}
-
-.dj-eq-knob[data-angle="left"]::after {
-  transform: translateX(-50%) rotate(-18deg);
-}
 
 
 .dj-mixer-channel-title {

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react';
+import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react';
 import type { Track, TrackHotCues, TrackRhythmOverride, TrackWaveform } from '@home-music/shared';
 import {
   ArrowLeft,
@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { apiFetch } from '../api-client';
 import type { DjDeckId } from '../dj-controller-contract';
+import { DJ_EQ_GAIN_DB, type DjEqControl } from '../dj-eq';
 import { buildDjWaveformMarkers } from '../dj-waveform-grid';
 import { resolveHotCuePosition } from '../dj-hot-cue-quantize';
 import { buildDjHotCueWaveformMarkers } from '../dj-hot-cue-waveform';
@@ -61,6 +62,7 @@ type DjModeScreenProps = {
   onDisconnectMidi: () => void;
   onSelectMidiOutput: (id: string | null) => boolean;
   onChannelVolume: (deck: DjDeckId, value: number) => void;
+  onEq: (deck: DjDeckId, control: DjEqControl, value: number) => void;
   onCrossfader: (value: number) => void;
   onTogglePlay: (deck: DjDeckId) => void;
   onCue: (deck: DjDeckId) => void;
@@ -1153,10 +1155,12 @@ function DjMidiPanel({
 function DjMixer({
   mixer,
   onChannelVolume,
+  onEq,
   onCrossfader
 }: {
   mixer: DualDeckMixerState;
   onChannelVolume: (deck: DjDeckId, value: number) => void;
+  onEq: (deck: DjDeckId, control: DjEqControl, value: number) => void;
   onCrossfader: (value: number) => void;
 }) {
   const channelMeter = (value: number) => (
@@ -1167,26 +1171,59 @@ function DjMixer({
     </span>
   );
 
+  const eqControls: Array<{ control: DjEqControl; label: string }> = [
+    { control: 'low', label: 'LOW' },
+    { control: 'mid', label: 'MID' },
+    { control: 'high', label: 'HIGH' },
+    { control: 'filter', label: 'FILTER' }
+  ];
+
+  const renderEq = (deck: DjDeckId) => (
+    <div className="dj-eq-strip" aria-label={'EQ Channel ' + deck.toUpperCase()}>
+      {eqControls.map(({ control, label }) => {
+        const value = mixer.eq[deck][control];
+        const valueText = control === 'filter'
+          ? (Math.round(value * 100) + '%')
+          : ((value * DJ_EQ_GAIN_DB).toFixed(1) + ' dB');
+        return (
+          <label className="dj-eq-control" key={control}>
+            <span
+              className="dj-eq-knob"
+              style={{ '--dj-eq-angle': `${value * 135}deg` } as CSSProperties}
+              title={label + ' · ' + valueText + ' · duplo clique para zerar'}
+            >
+              <input
+                type="range"
+                min="-1"
+                max="1"
+                step="0.01"
+                value={value}
+                aria-label={label + ' Channel ' + deck.toUpperCase()}
+                aria-valuetext={valueText}
+                onChange={event => onEq(deck, control, Number(event.currentTarget.value))}
+                onDoubleClick={() => onEq(deck, control, 0)}
+              />
+            </span>
+            <small>{label}</small>
+          </label>
+        );
+      })}
+    </div>
+  );
+
   return (
     <section className="dj-pro-mixer dj-pro-mixer--console" aria-label="Mixer">
       <div className="dj-pro-mixer__title"><SlidersHorizontal aria-hidden="true" /><strong>Mixer</strong></div>
-      <label className="dj-pro-mixer__channel" data-deck="a">
+      <div className="dj-pro-mixer__channel" data-deck="a">
         <span className="dj-mixer-channel-title">Channel A</span>
-        <div className="dj-eq-strip" aria-label="EQ Channel A aguardando validação da interface de áudio">
-          {['LOW', 'MID', 'HIGH', 'FILTER'].map((label, index) => (
-            <span className="dj-eq-control" key={label}>
-              <i className="dj-eq-knob" data-angle={index === 3 ? 'right' : 'center'} />
-              <small>{label}</small>
-            </span>
-          ))}
-        </div>
+        {renderEq('a')}
         <div className="dj-mixer-channel-row">
           <Gauge aria-hidden="true" />
           <input type="range" min="0" max="1" step="0.01" value={mixer.channelVolumes.a} onChange={event => onChannelVolume('a', Number(event.currentTarget.value))} />
         </div>
         <strong>{Math.round(mixer.channelVolumes.a * 100)}%</strong>
         {channelMeter(mixer.channelVolumes.a)}
-      </label>
+      </div>
       <label
         className="dj-pro-mixer__crossfader"
         data-side={Math.abs(mixer.crossfader) < 0.005 ? 'center' : mixer.crossfader < 0 ? 'a' : 'b'}
@@ -1195,23 +1232,16 @@ function DjMixer({
         <div><small>A</small><input type="range" min="-1" max="1" step="0.01" value={mixer.crossfader} onChange={event => onCrossfader(Number(event.currentTarget.value))} /><small>B</small></div>
         <strong>{mixer.crossfader === 0 ? 'Centro' : mixer.crossfader < 0 ? 'A ' + Math.round(Math.abs(mixer.crossfader) * 100) + '%' : 'B ' + Math.round(mixer.crossfader * 100) + '%'}</strong>
       </label>
-      <label className="dj-pro-mixer__channel" data-deck="b">
+      <div className="dj-pro-mixer__channel" data-deck="b">
         <span className="dj-mixer-channel-title">Channel B</span>
-        <div className="dj-eq-strip" aria-label="EQ Channel B aguardando validação da interface de áudio">
-          {['LOW', 'MID', 'HIGH', 'FILTER'].map((label, index) => (
-            <span className="dj-eq-control" key={label}>
-              <i className="dj-eq-knob" data-angle={index === 3 ? 'left' : 'center'} />
-              <small>{label}</small>
-            </span>
-          ))}
-        </div>
+        {renderEq('b')}
         <div className="dj-mixer-channel-row">
           <Gauge aria-hidden="true" />
           <input type="range" min="0" max="1" step="0.01" value={mixer.channelVolumes.b} onChange={event => onChannelVolume('b', Number(event.currentTarget.value))} />
         </div>
         <strong>{Math.round(mixer.channelVolumes.b * 100)}%</strong>
         {channelMeter(mixer.channelVolumes.b)}
-      </label>
+      </div>
     </section>
   );
 }
@@ -1233,6 +1263,7 @@ export function DjModeScreen({
   onDisconnectMidi,
   onSelectMidiOutput,
   onChannelVolume,
+  onEq,
   onCrossfader,
   onTogglePlay,
   onCue,
@@ -1306,7 +1337,7 @@ export function DjModeScreen({
           }}
         />
         <DeckPanel deck="b" state={decks.b} onTogglePlay={onTogglePlay} onCue={onCue} onSync={onSync} onTempo={onTempo} onNudge={onNudge} onSeek={onSeek} />
-        <DjMixer mixer={mixer} onChannelVolume={onChannelVolume} onCrossfader={onCrossfader} />
+        <DjMixer mixer={mixer} onChannelVolume={onChannelVolume} onEq={onEq} onCrossfader={onCrossfader} />
         <DjMidiPanel midi={midi} onDisconnect={onDisconnectMidi} onSelectOutput={onSelectMidiOutput} />
       </main>
     </section>

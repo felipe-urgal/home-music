@@ -224,11 +224,25 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   await deckB.getByRole('button', { name: 'Pausar Deck B' }).click();
   await expect(deckB.getByRole('button', { name: 'Reproduzir Deck B' })).toBeVisible();
 
-  const channelA = mixer.locator('.dj-pro-mixer__channel[data-deck="a"] input');
-  const channelB = mixer.locator('.dj-pro-mixer__channel[data-deck="b"] input');
+  const channelA = mixer.locator('.dj-pro-mixer__channel[data-deck="a"] .dj-mixer-channel-row input');
+  const channelB = mixer.locator('.dj-pro-mixer__channel[data-deck="b"] .dj-mixer-channel-row input');
+  const lowA = mixer.getByRole('slider', { name: 'LOW Channel A' });
+  const midA = mixer.getByRole('slider', { name: 'MID Channel A' });
+  const highB = mixer.getByRole('slider', { name: 'HIGH Channel B' });
+  const filterB = mixer.getByRole('slider', { name: 'FILTER Channel B' });
   const crossfader = mixer.locator('.dj-pro-mixer__crossfader input');
 
   await expect(mixer.locator('.dj-pro-mixer__crossfader')).toHaveAttribute('data-side', 'center');
+  await lowA.fill('0.5');
+  await midA.fill('-0.25');
+  await highB.fill('0.75');
+  await filterB.fill('-0.5');
+  await expect(lowA).toHaveAttribute('aria-valuetext', '9.0 dB');
+  await expect(midA).toHaveAttribute('aria-valuetext', '-4.5 dB');
+  await expect(highB).toHaveAttribute('aria-valuetext', '13.5 dB');
+  await expect(filterB).toHaveAttribute('aria-valuetext', '-50%');
+  await lowA.dblclick();
+  await expect(lowA).toHaveValue('0');
   await channelA.fill('0.42');
   await channelB.fill('0.73');
   await crossfader.fill('-1');
