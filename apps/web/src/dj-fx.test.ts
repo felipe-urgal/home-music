@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   clampDjDelaySeconds,
   clampDjFxUnit,
-  createNeutralDjFxState
+  createNeutralDjFxState,
+  resolveDjFxDryGain
 } from './dj-fx';
 
 describe('DJ FX', () => {
@@ -32,5 +33,18 @@ describe('DJ FX', () => {
     const state = createNeutralDjFxState();
     state.a.echo.wet = 0.9;
     expect(state.b.echo.wet).toBe(0.25);
+  });
+
+  it('mantém dry em 100% no bypass e reduz pelo maior mix ativo', () => {
+    const state = createNeutralDjFxState().a;
+    expect(resolveDjFxDryGain(state)).toBe(1);
+
+    state.echo.enabled = true;
+    state.echo.wet = 0.4;
+    expect(resolveDjFxDryGain(state)).toBeCloseTo(0.6);
+
+    state.reverb.enabled = true;
+    state.reverb.wet = 0.7;
+    expect(resolveDjFxDryGain(state)).toBeCloseTo(0.3);
   });
 });
