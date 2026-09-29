@@ -255,6 +255,37 @@
   pointer-events: none;
 }
 
+.dj-waveform__hot-cue {
+  position: absolute;
+  z-index: 4;
+  top: 4px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  transform: translateX(-50%);
+  border: 1px solid var(--deck-accent);
+  border-radius: 4px;
+  background: rgba(7, 13, 21, 0.9);
+  color: #fff;
+  font: inherit;
+  font-size: .62rem;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 0 8px rgba(30,142,255,.18);
+}
+
+.dj-pro-deck[data-deck="b"] .dj-waveform__hot-cue {
+  color: #ffd51f;
+}
+
+.dj-waveform__hot-cue:hover,
+.dj-waveform__hot-cue:focus-visible {
+  background: var(--deck-accent);
+  color: #fff;
+  outline: none;
+}
+
 .dj-waveform__playhead {
   position: absolute;
   z-index: 3;
