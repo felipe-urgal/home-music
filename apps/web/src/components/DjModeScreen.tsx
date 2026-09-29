@@ -26,6 +26,7 @@ import { buildDjWaveformMarkers } from '../dj-waveform-grid';
 import { resolveHotCuePosition } from '../dj-hot-cue-quantize';
 import { buildDjHotCueWaveformMarkers } from '../dj-hot-cue-waveform';
 import { djLoopWaveformRange, resolveDjAutoLoopPlan } from '../dj-auto-loop';
+import { resolveDjHotLoopPlan } from '../dj-hot-loop';
 import { notifyLibraryChanged } from '../library-events';
 import { fetchTrackWaveform } from '../track-waveform-client';
 import type { DualDeckAudioSnapshot } from '../dual-deck-audio';
@@ -160,6 +161,7 @@ function DjWaveform({
   loopIn,
   loopOut,
   loopActive,
+  hotLoopCueIndex,
   onHotCueSeek
 }: {
   deck: DjDeckId;
@@ -169,6 +171,7 @@ function DjWaveform({
   loopIn: number | null;
   loopOut: number | null;
   loopActive: boolean;
+  hotLoopCueIndex: number | null;
   onHotCueSeek: (seconds: number) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -254,6 +257,7 @@ function DjWaveform({
           key={marker.index}
           type="button"
           className="dj-waveform__hot-cue"
+          data-hot-loop={hotLoopCueIndex === marker.index && loopActive ? 'true' : 'false'}
           style={{ left: `clamp(11px, ${marker.position * 100}%, calc(100% - 11px))` }}
           aria-label={'Hot Cue ' + (marker.index + 1) + ' no waveform ' + (deck === 'a' ? 'Deck A' : 'Deck B')}
           title={'Hot Cue ' + (marker.index + 1) + ' · ' + formatTime(marker.seconds)}
@@ -310,6 +314,7 @@ function DeckPanel({
   const [loopOut, setLoopOut] = useState<number | null>(null);
   const [loopActive, setLoopActive] = useState(false);
   const [loopBeats, setLoopBeats] = useState(4);
+  const [hotLoopCueIndex, setHotLoopCueIndex] = useState<number | null>(null);
   const [hotCues, setHotCues] = useState<TrackHotCues['positions']>([null, null, null, null]);
   const [hotCueQuantize, setHotCueQuantize] = useState(false);
   const [hotCueError, setHotCueError] = useState<string | null>(null);
@@ -321,6 +326,7 @@ function DeckPanel({
     setLoopOut(null);
     setLoopActive(false);
     setLoopBeats(4);
+    setHotLoopCueIndex(null);
   }, [snapshot?.trackId]);
 
   useEffect(() => {
@@ -345,6 +351,7 @@ function DeckPanel({
     setLoopIn(plan.startSeconds);
     setLoopOut(plan.endSeconds);
     setLoopActive(true);
+    setHotLoopCueIndex(null);
   };
 
   const changeLoopBeats = (direction: -1 | 1) => {
@@ -367,6 +374,7 @@ function DeckPanel({
     if (!snapshot?.trackId) return;
     const startSeconds = snapshot.currentTimeSeconds;
     setLoopIn(startSeconds);
+    setHotLoopCueIndex(null);
     if (bpm) {
       const duration = snapshot.durationSeconds || state.track?.duration || Number.POSITIVE_INFINITY;
       setLoopOut(Math.min(duration, startSeconds + ((60 / bpm) * loopBeats)));
@@ -383,6 +391,7 @@ function DeckPanel({
     if (endSeconds <= loopIn + 0.05) return;
     setLoopOut(endSeconds);
     setLoopActive(true);
+    setHotLoopCueIndex(null);
   };
 
   const handleJog = (event: ReactPointerEvent<HTMLButtonElement>) => {
@@ -447,8 +456,29 @@ function DeckPanel({
     onSeek(deck, cue);
   };
 
+  const startHotLoop = (index: number) => {
+    const cue = hotCues[index];
+    if (cue == null || !snapshot?.trackId) return;
+    const plan = resolveDjHotLoopPlan({
+      cueSeconds: cue,
+      durationSeconds: snapshot.durationSeconds || state.track?.duration,
+      rhythm: state.track?.rhythm,
+      beats: loopBeats
+    });
+    if (!plan) return;
+    setLoopIn(plan.startSeconds);
+    setLoopOut(plan.endSeconds);
+    setLoopActive(true);
+    setHotLoopCueIndex(index);
+    onSeek(deck, cue);
+  };
+
   const clearHotCue = (index: number) => {
     if (!snapshot?.trackId) return;
+    if (hotLoopCueIndex === index) {
+      setLoopActive(false);
+      setHotLoopCueIndex(null);
+    }
     replaceHotCue(index, null);
   };
 
@@ -490,6 +520,7 @@ function DeckPanel({
             loopIn={loopIn}
             loopOut={loopOut}
             loopActive={loopActive}
+            hotLoopCueIndex={hotLoopCueIndex}
             onHotCueSeek={seconds => onSeek(deck, seconds)}
           />
 
@@ -612,6 +643,17 @@ function DeckPanel({
                 >
                   <strong>{index + 1}</strong>
                   <span>{cue == null ? 'SET' : formatTime(cue)}</span>
+                </button>
+                <button
+                  type="button"
+                  className="dj-hot-cue__loop"
+                  onClick={() => startHotLoop(index)}
+                  disabled={cue == null || bpm == null}
+                  aria-pressed={hotLoopCueIndex === index && loopActive}
+                  aria-label={'Hot Loop Hot Cue ' + (index + 1) + ' ' + label}
+                  title={bpm == null ? 'Hot Loop requer BPM analisado' : 'Criar Hot Loop com ' + loopBeats + ' beats'}
+                >
+                  LOOP
                 </button>
                 <button
                   type="button"
@@ -771,6 +813,7 @@ function RhythmGridEditor({
         loopIn={null}
         loopOut={null}
         loopActive={false}
+        hotLoopCueIndex={null}
         onHotCueSeek={() => undefined}
       />
 
