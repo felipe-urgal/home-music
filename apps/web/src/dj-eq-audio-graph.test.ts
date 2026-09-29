@@ -240,6 +240,7 @@ describe('DJ EQ/FX audio graph', () => {
       }
     });
 
+    expect(graph.decks.a.dry.gain.value).toBeCloseTo(0.56);
     expect(graph.decks.a.echoDelay.delayTime.value).toBe(0.5);
     expect(graph.decks.a.echoWet.gain.value).toBe(0.44);
     expect(graph.decks.a.echoFeedback.gain.value).toBe(0.35);
@@ -260,6 +261,7 @@ describe('DJ EQ/FX audio graph', () => {
       }
     });
 
+    expect(graph.decks.a.dry.gain.value).toBe(1);
     expect(graph.decks.a.echoWet.gain.value).toBe(0);
     expect(graph.decks.a.echoFeedback.gain.value).toBe(0);
     expect(graph.decks.a.reverbWet.gain.value).toBe(0);
