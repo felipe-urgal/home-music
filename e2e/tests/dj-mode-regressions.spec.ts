@@ -100,6 +100,20 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   await expect(deckA.getByRole('button', { name: 'IN', exact: true })).toBeVisible();
   await expect(deckA.getByRole('button', { name: 'OUT', exact: true })).toBeDisabled();
 
+  const autoLoopA = deckA.getByRole('button', { name: 'Auto Loop 4 beats Deck A' });
+  await expect(autoLoopA).toHaveAttribute('aria-pressed', 'false');
+  await autoLoopA.click();
+  await expect(autoLoopA).toHaveAttribute('aria-pressed', 'true');
+  const loopRangeA = deckA.locator('.dj-waveform__loop-range');
+  await expect(loopRangeA).toHaveCount(1);
+  await expect(loopRangeA).toHaveAttribute('data-active', 'true');
+  await expect(deckA.getByRole('button', { name: 'OUT', exact: true })).toBeEnabled();
+  await autoLoopA.click();
+  await expect(autoLoopA).toHaveAttribute('aria-pressed', 'false');
+  await expect(loopRangeA).toHaveAttribute('data-active', 'false');
+  await autoLoopA.click();
+  await expect(autoLoopA).toHaveAttribute('aria-pressed', 'true');
+
   const existingHotCueClear = deckA.getByRole('button', { name: 'Limpar Hot Cue 1 Deck A' });
   if (await existingHotCueClear.isEnabled().catch(() => false)) {
     const resetHotCue = page.waitForResponse(response => (
