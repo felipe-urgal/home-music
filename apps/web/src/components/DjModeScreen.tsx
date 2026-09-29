@@ -29,6 +29,7 @@ import {
 import { apiFetch } from '../api-client';
 import type { DjDeckId } from '../dj-controller-contract';
 import { DJ_EQ_GAIN_DB, type DjEqControl } from '../dj-eq';
+import type { DjFxKind } from '../dj-fx';
 import { buildDjWaveformMarkers } from '../dj-waveform-grid';
 import { resolveHotCuePosition } from '../dj-hot-cue-quantize';
 import { buildDjHotCueWaveformMarkers } from '../dj-hot-cue-waveform';
@@ -72,6 +73,10 @@ type DjModeScreenProps = {
   onSelectMidiOutput: (id: string | null) => boolean;
   onChannelVolume: (deck: DjDeckId, value: number) => void;
   onEq: (deck: DjDeckId, control: DjEqControl, value: number) => void;
+  onFxEnabled: (deck: DjDeckId, kind: DjFxKind, enabled: boolean) => void;
+  onFxWet: (deck: DjDeckId, kind: DjFxKind, wet: number) => void;
+  onEchoFeedback: (deck: DjDeckId, feedback: number) => void;
+  onEchoDelay: (deck: DjDeckId, delaySeconds: number) => void;
   onCrossfader: (value: number) => void;
   onTogglePlay: (deck: DjDeckId) => void;
   onCue: (deck: DjDeckId) => void;
@@ -1253,12 +1258,20 @@ function DjMixer({
   meterLevels,
   onChannelVolume,
   onEq,
+  onFxEnabled,
+  onFxWet,
+  onEchoFeedback,
+  onEchoDelay,
   onCrossfader
 }: {
   mixer: DualDeckMixerState;
   meterLevels: Record<DjDeckId, number>;
   onChannelVolume: (deck: DjDeckId, value: number) => void;
   onEq: (deck: DjDeckId, control: DjEqControl, value: number) => void;
+  onFxEnabled: (deck: DjDeckId, kind: DjFxKind, enabled: boolean) => void;
+  onFxWet: (deck: DjDeckId, kind: DjFxKind, wet: number) => void;
+  onEchoFeedback: (deck: DjDeckId, feedback: number) => void;
+  onEchoDelay: (deck: DjDeckId, delaySeconds: number) => void;
   onCrossfader: (value: number) => void;
 }) {
   const channelMeter = (deck: DjDeckId, value: number) => (
@@ -1310,26 +1323,105 @@ function DjMixer({
     </div>
   );
 
-  const renderChannel = (deck: DjDeckId) => (
-    <div className="dj-pro-mixer__channel" data-deck={deck}>
-      <span className="dj-mixer-channel-title">{deck.toUpperCase()}</span>
-      {renderEq(deck)}
-      <label className="dj-mixer-channel-volume">
-        <Gauge aria-hidden="true" />
-        <span className="sr-only">{'Volume Channel ' + deck.toUpperCase()}</span>
-        <input
-          aria-label={'Volume Channel ' + deck.toUpperCase()}
-          type="range"
-          min="0"
-          max="1"
-          step="0.01"
-          value={mixer.channelVolumes[deck]}
-          onChange={event => onChannelVolume(deck, Number(event.currentTarget.value))}
-        />
-        <strong>{Math.round(mixer.channelVolumes[deck] * 100)}%</strong>
-      </label>
-    </div>
-  );
+  const renderChannel = (deck: DjDeckId) => {
+    const fx = mixer.fx[deck];
+    const channel = deck.toUpperCase();
+    return (
+      <div className="dj-pro-mixer__channel" data-deck={deck}>
+        <span className="dj-mixer-channel-title">{channel}</span>
+        {renderEq(deck)}
+
+        <div className="dj-mixer-fx" aria-label={'FX Channel ' + channel}>
+          <div className="dj-mixer-fx__row" data-enabled={fx.echo.enabled ? 'true' : 'false'}>
+            <button
+              type="button"
+              className={fx.echo.enabled ? 'is-active' : ''}
+              aria-pressed={fx.echo.enabled}
+              aria-label={'Echo Channel ' + channel}
+              onClick={() => onFxEnabled(deck, 'echo', !fx.echo.enabled)}
+            >
+              ECHO
+            </button>
+            <label title={'Echo mix ' + Math.round(fx.echo.wet * 100) + '%'}>
+              <span>MIX</span>
+              <input
+                aria-label={'Echo Wet Channel ' + channel}
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value={fx.echo.wet}
+                onChange={event => onFxWet(deck, 'echo', Number(event.currentTarget.value))}
+              />
+            </label>
+            <label title={'Feedback ' + Math.round(fx.echo.feedback * 100) + '%'}>
+              <span>FDBK</span>
+              <input
+                aria-label={'Echo Feedback Channel ' + channel}
+                type="range"
+                min="0"
+                max="0.82"
+                step="0.01"
+                value={fx.echo.feedback}
+                onChange={event => onEchoFeedback(deck, Number(event.currentTarget.value))}
+              />
+            </label>
+            <label title={'Delay ' + Math.round(fx.echo.delaySeconds * 1000) + ' ms'}>
+              <span>TIME</span>
+              <input
+                aria-label={'Echo Delay Channel ' + channel}
+                type="range"
+                min="0.06"
+                max="1.5"
+                step="0.01"
+                value={fx.echo.delaySeconds}
+                onChange={event => onEchoDelay(deck, Number(event.currentTarget.value))}
+              />
+            </label>
+          </div>
+
+          <div className="dj-mixer-fx__row" data-enabled={fx.reverb.enabled ? 'true' : 'false'}>
+            <button
+              type="button"
+              className={fx.reverb.enabled ? 'is-active' : ''}
+              aria-pressed={fx.reverb.enabled}
+              aria-label={'Reverb Channel ' + channel}
+              onClick={() => onFxEnabled(deck, 'reverb', !fx.reverb.enabled)}
+            >
+              REVERB
+            </button>
+            <label className="dj-mixer-fx__wide" title={'Reverb mix ' + Math.round(fx.reverb.wet * 100) + '%'}>
+              <span>MIX</span>
+              <input
+                aria-label={'Reverb Wet Channel ' + channel}
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value={fx.reverb.wet}
+                onChange={event => onFxWet(deck, 'reverb', Number(event.currentTarget.value))}
+              />
+            </label>
+          </div>
+        </div>
+
+        <label className="dj-mixer-channel-volume">
+          <Gauge aria-hidden="true" />
+          <span className="sr-only">{'Volume Channel ' + channel}</span>
+          <input
+            aria-label={'Volume Channel ' + channel}
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            value={mixer.channelVolumes[deck]}
+            onChange={event => onChannelVolume(deck, Number(event.currentTarget.value))}
+          />
+          <strong>{Math.round(mixer.channelVolumes[deck] * 100)}%</strong>
+        </label>
+      </div>
+    );
+  };
 
   return (
     <section className="dj-pro-mixer dj-pro-mixer--console" aria-label="Mixer">
@@ -1397,6 +1489,10 @@ export function DjModeScreen({
   onSelectMidiOutput,
   onChannelVolume,
   onEq,
+  onFxEnabled,
+  onFxWet,
+  onEchoFeedback,
+  onEchoDelay,
   onCrossfader,
   onTogglePlay,
   onCue,
@@ -1494,6 +1590,10 @@ export function DjModeScreen({
           meterLevels={{ a: decks.a.meterLevel, b: decks.b.meterLevel }}
           onChannelVolume={onChannelVolume}
           onEq={onEq}
+          onFxEnabled={onFxEnabled}
+          onFxWet={onFxWet}
+          onEchoFeedback={onEchoFeedback}
+          onEchoDelay={onEchoDelay}
           onCrossfader={onCrossfader}
         />
 
