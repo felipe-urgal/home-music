@@ -207,7 +207,8 @@ export function useCrossfadeAudioPlayer(
         filter.Q.value = 0.0001;
 
         source.connect(low).connect(mid).connect(high).connect(filter).connect(context!.destination);
-        return { source, low, mid, high, filter };
+        const nodes = { source, low, mid, high, filter };
+        return nodes;
       };
 
       djEqGraphRef.current = {
