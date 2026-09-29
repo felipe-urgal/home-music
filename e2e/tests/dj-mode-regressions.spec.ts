@@ -560,6 +560,31 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   await expect(page.locator('.desktop-now-playing-screen').getByRole('heading', { name: 'E2E Track' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Modo DJ' })).toHaveCount(0);
   await expect(page.getByRole('region', { name: 'Mixer' })).toHaveCount(0);
+});
+
+test('Modo DJ restaura EQ neutro ao sair e reentrar', async ({ page }) => {
+  test.setTimeout(60_000);
+
+  await page.goto('/');
+  await page.getByLabel('Usuário').fill(username);
+  await page.getByLabel('Senha', { exact: true }).fill(password);
+  await page.getByRole('button', { name: 'Entrar' }).click();
+
+  const expandTopbar = page.getByRole('button', { name: 'Expandir barra superior' });
+  if (await expandTopbar.isVisible()) await expandTopbar.click();
+
+  await page.getByRole('button', { name: 'Abrir Modo DJ' }).click();
+  const dj = page.getByRole('region', { name: 'Modo DJ' });
+  const mixer = page.getByRole('region', { name: 'Mixer' });
+  await expect(dj).toBeVisible();
+
+  await mixer.getByRole('slider', { name: 'LOW Channel A' }).fill('0.5');
+  await mixer.getByRole('slider', { name: 'MID Channel A' }).fill('-0.25');
+  await mixer.getByRole('slider', { name: 'HIGH Channel B' }).fill('0.75');
+  await mixer.getByRole('slider', { name: 'FILTER Channel B' }).fill('-0.5');
+
+  await dj.getByRole('button', { name: 'Sair do modo DJ' }).click();
+  await expect(page.locator('.desktop-now-playing-screen')).toBeVisible();
 
   await page.getByRole('button', { name: 'Abrir Modo DJ' }).click();
   const reopenedDj = page.getByRole('region', { name: 'Modo DJ' });
@@ -569,6 +594,4 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   await expect(reopenedMixer.getByRole('slider', { name: 'MID Channel A' })).toHaveValue('0');
   await expect(reopenedMixer.getByRole('slider', { name: 'HIGH Channel B' })).toHaveValue('0');
   await expect(reopenedMixer.getByRole('slider', { name: 'FILTER Channel B' })).toHaveValue('0');
-  await reopenedDj.getByRole('button', { name: 'Sair do modo DJ' }).click();
-  await expect(page.locator('.desktop-now-playing-screen')).toBeVisible();
 });
