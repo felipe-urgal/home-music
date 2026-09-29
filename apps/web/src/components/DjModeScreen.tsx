@@ -232,7 +232,7 @@ function DjWaveform({
           key={marker.index}
           type="button"
           className="dj-waveform__hot-cue"
-          style={{ left: `${marker.position * 100}%` }}
+          style={{ left: `clamp(11px, ${marker.position * 100}%, calc(100% - 11px))` }}
           aria-label={'Hot Cue ' + (marker.index + 1) + ' no waveform ' + (deck === 'a' ? 'Deck A' : 'Deck B')}
           title={'Hot Cue ' + (marker.index + 1) + ' · ' + formatTime(marker.seconds)}
           onClick={() => onHotCueSeek(marker.seconds)}
