@@ -1475,7 +1475,7 @@ export class HomeMusicDatabase {
     }
   }
 
-    saveTrackKeyAnalysis(
+  saveTrackKeyAnalysis(
     trackId: string,
     sourceFileSize: number,
     sourceMtimeMs: number,
@@ -1560,7 +1560,7 @@ export class HomeMusicDatabase {
     }
   }
 
-saveTrackWaveformAnalysis(
+  saveTrackWaveformAnalysis(
     trackId: string,
     sourceFileSize: number,
     sourceMtimeMs: number,
