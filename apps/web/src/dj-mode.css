@@ -414,6 +414,12 @@
   pointer-events: none;
 }
 
+.dj-hot-cues__error {
+  grid-column: 1 / -1;
+  color: #ff9d9d;
+  font-size: .64rem;
+}
+
 .dj-pro-deck__controls {
   align-self: end;
   display: grid;
