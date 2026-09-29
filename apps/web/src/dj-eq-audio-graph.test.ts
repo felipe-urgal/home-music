@@ -41,7 +41,7 @@ class FakeAnalyserNode extends FakeNode {
   smoothingTimeConstant = 0.8;
   level = 128;
 
-  getByteTimeDomainData(data: Uint8Array) {
+  getByteTimeDomainData(data: Uint8Array<ArrayBuffer>) {
     data.fill(this.level);
   }
 }
