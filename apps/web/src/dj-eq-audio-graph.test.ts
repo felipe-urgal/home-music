@@ -168,6 +168,34 @@ describe('DJ EQ audio graph', () => {
     expect(context.resume).toHaveBeenCalledTimes(1);
   });
 
+  it('mantém custo de atualização previsível sem alocar novos nodes', () => {
+    FakeAudioContext.instances = [];
+    const graph = createDjEqAudioGraph({
+      deckA: fakeAudio(),
+      deckB: fakeAudio(),
+      AudioContextConstructor: FakeAudioContext as unknown as new () => AudioContext
+    })!;
+    const context = FakeAudioContext.instances[0]!;
+    const sourceCount = context.sources.length;
+    const filterCount = context.filters.length;
+
+    const startedAt = performance.now();
+    for (let index = 0; index < 10_000; index += 1) {
+      const direction = index % 2 === 0 ? 1 : -1;
+      applyDjEqStateToGraph(graph, index % 2 === 0 ? 'a' : 'b', {
+        low: direction * 0.5,
+        mid: direction * 0.25,
+        high: direction * 0.75,
+        filter: direction * 0.5
+      });
+    }
+    const durationMs = performance.now() - startedAt;
+
+    expect(context.sources).toHaveLength(sourceCount);
+    expect(context.filters).toHaveLength(filterCount);
+    expect(durationMs).toBeLessThan(1_000);
+  });
+
   it('fecha o contexto no cleanup', () => {
     FakeAudioContext.instances = [];
     const graph = createDjEqAudioGraph({
