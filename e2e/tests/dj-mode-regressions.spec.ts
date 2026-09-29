@@ -241,6 +241,15 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   await expect(midA).toHaveAttribute('aria-valuetext', '-4.5 dB');
   await expect(highB).toHaveAttribute('aria-valuetext', '13.5 dB');
   await expect(filterB).toHaveAttribute('aria-valuetext', '-50%');
+
+  await library.getByRole('option').filter({ hasText: 'E2E Zeta' }).click();
+  await dj.getByRole('button', { name: 'LOAD A' }).click();
+  await expect(deckA).toContainText('E2E Zeta');
+  await expect(lowA).toHaveValue('0.5');
+  await expect(midA).toHaveValue('-0.25');
+  await expect(highB).toHaveValue('0.75');
+  await expect(filterB).toHaveValue('-0.5');
+
   await lowA.dblclick();
   await expect(lowA).toHaveValue('0');
   await channelA.fill('0.42');
@@ -516,4 +525,15 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   await expect(page.locator('.desktop-now-playing-screen').getByRole('heading', { name: 'E2E Track' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Modo DJ' })).toHaveCount(0);
   await expect(page.getByRole('region', { name: 'Mixer' })).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Abrir Modo DJ' }).click();
+  const reopenedDj = page.getByRole('region', { name: 'Modo DJ' });
+  const reopenedMixer = page.getByRole('region', { name: 'Mixer' });
+  await expect(reopenedDj).toBeVisible();
+  await expect(reopenedMixer.getByRole('slider', { name: 'LOW Channel A' })).toHaveValue('0');
+  await expect(reopenedMixer.getByRole('slider', { name: 'MID Channel A' })).toHaveValue('0');
+  await expect(reopenedMixer.getByRole('slider', { name: 'HIGH Channel B' })).toHaveValue('0');
+  await expect(reopenedMixer.getByRole('slider', { name: 'FILTER Channel B' })).toHaveValue('0');
+  await reopenedDj.getByRole('button', { name: 'Sair do modo DJ' }).click();
+  await expect(page.locator('.desktop-now-playing-screen')).toBeVisible();
 });
