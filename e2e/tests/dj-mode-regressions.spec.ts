@@ -84,7 +84,16 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   await expect(midi).toBeVisible();
   await expect(library.getByRole('option')).toHaveCount(3);
 
-  await library.getByRole('option').filter({ hasText: 'E2E Track' }).click();
+  const selectedE2eTrack = library.getByRole('option').filter({ hasText: 'E2E Track' });
+  await selectedE2eTrack.click();
+  const shuffleButton = dj.getByRole('button', { name: 'Aleatório' });
+  await shuffleButton.click();
+  await expect(shuffleButton).toHaveAttribute('aria-pressed', 'true');
+  await expect(selectedE2eTrack).toHaveAttribute('aria-selected', 'true');
+  await shuffleButton.click();
+  await expect(shuffleButton).toHaveAttribute('aria-pressed', 'false');
+  await expect(selectedE2eTrack).toHaveAttribute('aria-selected', 'true');
+
   await dj.getByRole('button', { name: 'LOAD A' }).click();
   await expect(deckA).toContainText('E2E Track');
   await expect(deckA.getByRole('button', { name: 'Reproduzir Deck A' })).toBeVisible();
