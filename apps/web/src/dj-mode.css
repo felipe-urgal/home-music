@@ -3044,3 +3044,16 @@
     max-height: 420px;
   }
 }
+
+
+.dj-waveform__seek-surface {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  cursor: crosshair;
+  outline: none;
+}
+
+.dj-waveform__seek-surface:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--deck-accent);
+}
