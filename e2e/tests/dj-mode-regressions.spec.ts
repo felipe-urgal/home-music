@@ -108,10 +108,13 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
 
   await page.keyboard.press('1');
   await expect(deckA.getByRole('button', { name: 'Pausar Deck A' })).toBeVisible();
+  await expect(selectedE2eTrack).toHaveAttribute('aria-selected', 'true');
+  await expect(library.getByRole('option').last()).toContainText('E2E Track');
   await page.keyboard.press('1');
   await expect(deckA.getByRole('button', { name: 'Reproduzir Deck A' })).toBeVisible();
 
   const keyboardOptions = library.getByRole('option');
+  await keyboardOptions.nth(0).click();
   await expect(keyboardOptions.nth(0)).toHaveAttribute('aria-selected', 'true');
   await page.keyboard.press('ArrowRight');
   await expect(keyboardOptions.nth(1)).toHaveAttribute('aria-selected', 'true');
@@ -250,6 +253,10 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   await expect(highB).toHaveValue('0.75');
   await expect(filterB).toHaveValue('-0.5');
 
+  await selectedE2eTrack.click();
+  await dj.getByRole('button', { name: 'LOAD A' }).click();
+  await expect(deckA).toContainText('E2E Track');
+
   await lowA.dblclick();
   await expect(lowA).toHaveValue('0');
   await channelA.fill('0.42');
@@ -315,6 +322,8 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
     input?.onmidimessage?.({ data: [0xb6, 0x40, 0x7f], receivedTime: performance.now() });
   });
   await expect(options.nth(0)).toHaveAttribute('aria-selected', 'true');
+  await selectedE2eTrack.click();
+  await expect(selectedE2eTrack).toHaveAttribute('aria-selected', 'true');
 
   await page.evaluate(() => {
     const input = (globalThis as typeof globalThis & {
