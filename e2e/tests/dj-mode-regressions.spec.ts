@@ -101,12 +101,29 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   await expect(deckA.getByRole('button', { name: 'OUT', exact: true })).toBeDisabled();
 
   await expect(deckA.getByRole('button', { name: 'Definir Hot Cue 1 Deck A' })).toBeVisible();
+  const quantizeA = deckA.getByRole('button', { name: 'QUANTIZE Hot Cues Deck A' });
+  await expect(quantizeA).toHaveAttribute('aria-pressed', 'false');
+  await quantizeA.click();
+  await expect(quantizeA).toHaveAttribute('aria-pressed', 'true');
+
+  const saveHotCueRequest = page.waitForRequest(request => (
+    request.url().includes('/api/tracks/')
+    && request.url().endsWith('/hot-cues')
+    && request.method() === 'PUT'
+  ));
   const saveHotCue = page.waitForResponse(response => (
     response.url().includes('/api/tracks/')
     && response.url().endsWith('/hot-cues')
     && response.request().method() === 'PUT'
   ));
   await deckA.getByRole('button', { name: 'Definir Hot Cue 1 Deck A' }).click();
+  const persistedHotCue = (await saveHotCueRequest).postDataJSON() as {
+    version: number;
+    positions: Array<number | null>;
+  };
+  expect(persistedHotCue.version).toBe(1);
+  expect(persistedHotCue.positions).toHaveLength(4);
+  expect(typeof persistedHotCue.positions[0]).toBe('number');
   expect((await saveHotCue).ok()).toBe(true);
   await expect(deckA.getByRole('button', { name: 'Ir para Hot Cue 1 Deck A' })).toBeVisible();
   await deckA.getByRole('button', { name: 'Ir para Hot Cue 1 Deck A' }).click();
