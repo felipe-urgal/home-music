@@ -48,3 +48,10 @@ export function createNeutralDjFxState(): DjFxState {
     b: createNeutralDjFxDeckState()
   };
 }
+
+
+export function resolveDjFxDryGain(state: DjDeckFxState) {
+  const echoWet = state.echo.enabled ? clampDjFxUnit(state.echo.wet) : 0;
+  const reverbWet = state.reverb.enabled ? clampDjFxUnit(state.reverb.wet) : 0;
+  return 1 - Math.max(echoWet, reverbWet);
+}
