@@ -4583,8 +4583,7 @@
 
 @media (max-width: 1120px) {
   .dj-harmonic-status {
-    grid-area: workspace-switch;
-    margin-right: 7px;
+    display: none;
   }
 }
 
