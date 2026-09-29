@@ -89,6 +89,25 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   await expect(deckA).toContainText('E2E Track');
   await expect(deckA.getByRole('button', { name: 'Reproduzir Deck A' })).toBeVisible();
 
+  await page.keyboard.press('1');
+  await expect(deckA.getByRole('button', { name: 'Pausar Deck A' })).toBeVisible();
+  await page.keyboard.press('1');
+  await expect(deckA.getByRole('button', { name: 'Reproduzir Deck A' })).toBeVisible();
+
+  const options = library.getByRole('option');
+  await expect(options.nth(0)).toHaveAttribute('aria-selected', 'true');
+  await page.keyboard.press('ArrowRight');
+  await expect(options.nth(1)).toHaveAttribute('aria-selected', 'true');
+  await page.keyboard.press('ArrowLeft');
+  await expect(options.nth(0)).toHaveAttribute('aria-selected', 'true');
+
+  const librarySearch = dj.getByRole('textbox', { name: 'Buscar na biblioteca' });
+  await librarySearch.focus();
+  await page.keyboard.press('2');
+  await expect(deckB).toContainText('Nenhuma faixa carregada');
+  await librarySearch.fill('');
+  await page.locator('body').click({ position: { x: 1, y: 1 } });
+
   const tempoA = deckA.getByLabel('Tempo Deck A');
   await expect(tempoA).toBeVisible();
   await tempoA.fill('1.03');
