@@ -8,8 +8,14 @@ import {
   ChevronRight,
   Disc3,
   Gauge,
+  Folder,
   Keyboard,
+  LayoutGrid,
+  Library,
+  List,
+  ListMusic,
   MoreVertical,
+  Music,
   Pause,
   Play,
   RotateCcw,
@@ -953,6 +959,8 @@ function DjLibrary({
   const selectedTrack = tracks[safeIndex] ?? null;
   const editingTrack = editingTrackId ? tracks.find(track => track.id === editingTrackId) ?? null : null;
   const normalized = query.trim().toLocaleLowerCase();
+  const playlists = sources.filter(source => source.group === 'playlist');
+  const folders = sources.filter(source => source.group === 'folder');
   const filtered = useMemo(() => tracks
     .map((track, index) => ({ track, index }))
     .filter(({ track }) => !normalized || [track.title, track.artist, track.album]
@@ -960,129 +968,196 @@ function DjLibrary({
 
   return (
     <section className="dj-pro-library" aria-label="Biblioteca DJ">
-      <header className="dj-pro-library__header">
-        <div className="dj-pro-library__identity">
-          <span className="dj-pro-library__control-label">Biblioteca</span>
-          <div><strong>Biblioteca</strong><span>{tracks.length} faixas</span></div>
+      <aside className="dj-library-sidebar" aria-label="Origens da biblioteca DJ">
+        <div className="dj-library-sidebar__title">
+          <Library aria-hidden="true" />
+          <strong>Biblioteca</strong>
         </div>
 
-        <label className="dj-pro-library__source">
-          <span className="dj-pro-library__control-label">Origem</span>
-          <select
-            value={selectedLibrarySource}
-            onChange={event => onSelectLibrarySource(event.currentTarget.value)}
-            aria-label="Selecionar pasta ou playlist"
-          >
-            <option value="all">Todas as faixas</option>
-            <optgroup label="Pastas">
-              {sources.filter(source => source.group === 'folder').map(source => (
-                <option key={source.value} value={source.value}>{source.label}</option>
-              ))}
-            </optgroup>
-            <optgroup label="Playlists">
-              {sources.filter(source => source.group === 'playlist').map(source => (
-                <option key={source.value} value={source.value}>{source.label}</option>
-              ))}
-            </optgroup>
-          </select>
-        </label>
-
-        <label className="dj-pro-library__search-wrap">
-          <span className="dj-pro-library__control-label">Buscar</span>
-          <span className="dj-pro-library__search">
-            <Search aria-hidden="true" />
-            <input
-              value={query}
-              onChange={event => setQuery(event.currentTarget.value)}
-              placeholder="Buscar na biblioteca..."
-              aria-label="Buscar na biblioteca"
-            />
-          </span>
-        </label>
-
         <button
-          className={shuffle ? 'dj-pro-library__shuffle is-active' : 'dj-pro-library__shuffle'}
           type="button"
-          aria-pressed={shuffle}
-          onClick={() => onShuffleChange(!shuffle)}
-          title="Embaralhar apenas a origem selecionada"
+          className={selectedLibrarySource === 'all' ? 'is-active' : ''}
+          onClick={() => onSelectLibrarySource('all')}
         >
-          <Shuffle aria-hidden="true" />
-          <span>Aleatório</span>
+          <Music aria-hidden="true" />
+          <span>Todas as faixas</span>
+          <small>{tracks.length}</small>
         </button>
-      </header>
 
-      <div className="dj-pro-library__columns" aria-hidden="true">
-        <span>#</span><span>Título</span><span>Artista</span><span>BPM</span><span>Duração</span>
-      </div>
+        {playlists.length > 0 && (
+          <div className="dj-library-sidebar__group">
+            <span><ListMusic aria-hidden="true" />Playlists</span>
+            {playlists.map(source => (
+              <button
+                key={source.value}
+                type="button"
+                className={selectedLibrarySource === source.value ? 'is-active' : ''}
+                onClick={() => onSelectLibrarySource(source.value)}
+              >
+                <span>{source.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
 
-      <div className="dj-pro-library__list" role="listbox" aria-label="Faixas">
-        {filtered.map(({ track, index }) => {
-          const loadedA = loadedTrackIds.a === track.id;
-          const loadedB = loadedTrackIds.b === track.id;
-          const automixCurrent = automixCurrentTrackId === track.id;
-          const automixNext = automixNextTrackId === track.id && !automixCurrent;
-          return (
-            <button
-              key={track.id}
-              type="button"
-              role="option"
-              aria-selected={index === safeIndex}
-              className={[
-                index === safeIndex ? 'is-selected' : '',
-                playedTrackIds.has(track.id) ? 'is-played' : '',
-                automixCurrent ? 'is-automix-current' : '',
-                automixNext ? 'is-automix-next' : ''
-              ].filter(Boolean).join(' ')}
-              onClick={() => onSelect(index)}
+        {folders.length > 0 && (
+          <div className="dj-library-sidebar__group">
+            <span><Folder aria-hidden="true" />Pastas</span>
+            {folders.map(source => (
+              <button
+                key={source.value}
+                type="button"
+                className={selectedLibrarySource === source.value ? 'is-active' : ''}
+                onClick={() => onSelectLibrarySource(source.value)}
+              >
+                <span>{source.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </aside>
+
+      <div className="dj-library-workspace">
+        <header className="dj-pro-library__header">
+          <label className="dj-pro-library__search-wrap">
+            <span className="dj-pro-library__search">
+              <Search aria-hidden="true" />
+              <input
+                value={query}
+                onChange={event => setQuery(event.currentTarget.value)}
+                placeholder="Buscar na biblioteca..."
+                aria-label="Buscar na biblioteca"
+              />
+            </span>
+          </label>
+
+          <label className="dj-pro-library__source">
+            <span className="dj-pro-library__control-label">Origem</span>
+            <select
+              value={selectedLibrarySource}
+              onChange={event => onSelectLibrarySource(event.currentTarget.value)}
+              aria-label="Selecionar pasta ou playlist"
             >
-              <span>{String(index + 1).padStart(2, '0')}</span>
-              <span className="dj-library-track-title">
-                <strong>{track.title}</strong>
-                {loadedA ? <small className="dj-library-deck-badge" data-deck="a">A</small> : null}
-                {loadedB ? <small className="dj-library-deck-badge" data-deck="b">B</small> : null}
-                {automixCurrent ? <small className="dj-library-status-badge">AGORA</small> : null}
-                {automixNext ? <small className="dj-library-status-badge">PRÓXIMA</small> : null}
-              </span>
-              <span>{track.artist || 'Artista desconhecido'}</span>
-              <span>
-                {track.rhythm?.bpm ? track.rhythm.bpm.toFixed(1) : '—'}
-                {track.rhythm?.manualOverride ? <small className="dj-grid-manual-badge">M</small> : null}
-              </span>
-              <span>{formatTime(track.duration ?? 0)}</span>
+              <option value="all">Todas as faixas</option>
+              {folders.length > 0 && (
+                <optgroup label="Pastas">
+                  {folders.map(source => (
+                    <option key={source.value} value={source.value}>{source.label}</option>
+                  ))}
+                </optgroup>
+              )}
+              {playlists.length > 0 && (
+                <optgroup label="Playlists">
+                  {playlists.map(source => (
+                    <option key={source.value} value={source.value}>{source.label}</option>
+                  ))}
+                </optgroup>
+              )}
+            </select>
+          </label>
+
+          <button
+            className={shuffle ? 'dj-pro-library__shuffle is-active' : 'dj-pro-library__shuffle'}
+            type="button"
+            aria-pressed={shuffle}
+            onClick={() => onShuffleChange(!shuffle)}
+            title="Embaralhar apenas a origem selecionada"
+          >
+            <Shuffle aria-hidden="true" />
+            <span>Aleatório</span>
+          </button>
+
+          <div className="dj-library-view-toggle" aria-label="Visualização da biblioteca">
+            <button type="button" className="is-active" aria-label="Visualização em lista" aria-pressed="true">
+              <List aria-hidden="true" />
             </button>
-          );
-        })}
-        {!filtered.length && <div className="dj-pro-library__empty">Nenhuma faixa encontrada.</div>}
-      </div>
+            <button type="button" aria-label="Visualização em grade" aria-pressed="false" disabled title="Visualização em grade ainda não disponível">
+              <LayoutGrid aria-hidden="true" />
+            </button>
+          </div>
+        </header>
 
-      <div className="dj-pro-library__loads">
-        <button
-          type="button"
-          disabled={!selectedTrack || loadedTrackIds.a === selectedTrack.id}
-          onClick={() => onLoad('a')}
-        >
-          <Upload aria-hidden="true" />LOAD A
-        </button>
-        <button
-          type="button"
-          disabled={!selectedTrack || loadedTrackIds.b === selectedTrack.id}
-          onClick={() => onLoad('b')}
-        >
-          <Upload aria-hidden="true" />LOAD B
-        </button>
-        <button type="button" disabled={!selectedTrack} onClick={() => setEditingTrackId(selectedTrack?.id ?? null)}>
-          <SlidersHorizontal aria-hidden="true" />Ajustar grid
-        </button>
-      </div>
+        <div className="dj-pro-library__columns" aria-hidden="true">
+          <span>#</span><span>Título</span><span>Artista</span><span>Álbum</span><span>BPM</span><span>Duração</span>
+        </div>
 
-      {editingTrack && (
-        <RhythmGridEditor
-          key={editingTrack.id}
-          track={editingTrack}
-          onClose={() => setEditingTrackId(null)}
-        />
-      )}
+        <div className="dj-pro-library__list" role="listbox" aria-label="Faixas">
+          {filtered.map(({ track, index }) => {
+            const loadedA = loadedTrackIds.a === track.id;
+            const loadedB = loadedTrackIds.b === track.id;
+            const automixCurrent = automixCurrentTrackId === track.id;
+            const automixNext = automixNextTrackId === track.id && !automixCurrent;
+            return (
+              <button
+                key={track.id}
+                type="button"
+                role="option"
+                aria-selected={index === safeIndex}
+                className={[
+                  index === safeIndex ? 'is-selected' : '',
+                  playedTrackIds.has(track.id) ? 'is-played' : '',
+                  automixCurrent ? 'is-automix-current' : '',
+                  automixNext ? 'is-automix-next' : ''
+                ].filter(Boolean).join(' ')}
+                onClick={() => onSelect(index)}
+              >
+                <span>{index + 1}</span>
+                <span className="dj-library-track-title">
+                  <span className="dj-library-track-art"><Artwork track={track} /></span>
+                  <span className="dj-library-track-copy">
+                    <strong>{track.title}</strong>
+                    <span className="dj-library-track-badges">
+                      {loadedA ? <small className="dj-library-deck-badge" data-deck="a">A</small> : null}
+                      {loadedB ? <small className="dj-library-deck-badge" data-deck="b">B</small> : null}
+                      {automixCurrent ? <small className="dj-library-status-badge">AGORA</small> : null}
+                      {automixNext ? <small className="dj-library-status-badge">PRÓXIMA</small> : null}
+                    </span>
+                  </span>
+                </span>
+                <span>{track.artist || 'Artista desconhecido'}</span>
+                <span>{track.album || '—'}</span>
+                <span>
+                  {track.rhythm?.bpm ? track.rhythm.bpm.toFixed(1) : '—'}
+                  {track.rhythm?.manualOverride ? <small className="dj-grid-manual-badge">M</small> : null}
+                </span>
+                <span>{formatTime(track.duration ?? 0)}</span>
+              </button>
+            );
+          })}
+          {!filtered.length && <div className="dj-pro-library__empty">Nenhuma faixa encontrada.</div>}
+        </div>
+
+        <footer className="dj-pro-library__footer">
+          <span>{filtered.length} faixas</span>
+          <div className="dj-pro-library__loads">
+            <button
+              type="button"
+              disabled={!selectedTrack || loadedTrackIds.a === selectedTrack.id}
+              onClick={() => onLoad('a')}
+            >
+              <Upload aria-hidden="true" />LOAD A
+            </button>
+            <button
+              type="button"
+              disabled={!selectedTrack || loadedTrackIds.b === selectedTrack.id}
+              onClick={() => onLoad('b')}
+            >
+              <Upload aria-hidden="true" />LOAD B
+            </button>
+            <button type="button" disabled={!selectedTrack} onClick={() => setEditingTrackId(selectedTrack?.id ?? null)}>
+              <SlidersHorizontal aria-hidden="true" />Ajustar grid
+            </button>
+          </div>
+        </footer>
+
+        {editingTrack && (
+          <RhythmGridEditor
+            key={editingTrack.id}
+            track={editingTrack}
+            onClose={() => setEditingTrackId(null)}
+          />
+        )}
+      </div>
     </section>
   );
 }
