@@ -178,7 +178,7 @@ describe('DJ EQ/FX audio graph', () => {
 
     expect(context.sources[0]?.connections).toContain(context.filters[0]!);
     expect(context.filters[3]?.connections).toHaveLength(3);
-    expect(graph!.decks.a.analyser.connections[0]).toBe(context.destination);
+    expect((graph!.decks.a.analyser as unknown as FakeAnalyserNode).connections[0]).toBe(context.destination);
   });
 
   it('atualiza EQ sem reconstruir o graph', () => {
