@@ -19,11 +19,13 @@ type DjEqDeckNodes = {
   reverb: ConvolverNode;
   reverbWet: GainNode;
   analyser: AnalyserNode;
+  output: GainNode;
   meterData: Uint8Array<ArrayBuffer>;
 };
 
 export type DjEqAudioGraph = {
   context: AudioContext;
+  master: GainNode;
   decks: Record<DjDeckId, DjEqDeckNodes>;
 };
 
@@ -57,6 +59,9 @@ export function createDjEqAudioGraph(options: {
   try {
     context = new AudioContextCtor();
     const reverbImpulse = createReverbImpulse(context);
+    const master = context.createGain();
+    master.gain.value = 1;
+    master.connect(context.destination);
 
     const createDeckNodes = (audio: HTMLAudioElement): DjEqDeckNodes => {
       const source = context!.createMediaElementSource(audio);
@@ -71,6 +76,7 @@ export function createDjEqAudioGraph(options: {
       const reverb = context!.createConvolver();
       const reverbWet = context!.createGain();
       const analyser = context!.createAnalyser();
+      const output = context!.createGain();
 
       low.type = 'lowshelf';
       low.frequency.value = 220;
@@ -96,6 +102,7 @@ export function createDjEqAudioGraph(options: {
       reverb.buffer = reverbImpulse;
       reverbWet.gain.value = 0;
 
+      output.gain.value = 1;
       analyser.fftSize = 256;
       analyser.smoothingTimeConstant = 0.72;
       const meterData = new Uint8Array(new ArrayBuffer(analyser.fftSize));
@@ -108,7 +115,7 @@ export function createDjEqAudioGraph(options: {
       echoDelay.connect(echoFeedback).connect(echoDelay);
 
       filter.connect(reverb).connect(reverbWet).connect(analyser);
-      analyser.connect(context!.destination);
+      analyser.connect(output).connect(master);
 
       return {
         source,
@@ -123,12 +130,14 @@ export function createDjEqAudioGraph(options: {
         reverb,
         reverbWet,
         analyser,
+        output,
         meterData
       };
     };
 
     return {
       context,
+      master,
       decks: {
         a: createDeckNodes(options.deckA),
         b: createDeckNodes(options.deckB)
@@ -183,6 +192,48 @@ export function applyDjFxStateToGraph(
     now,
     0.015
   );
+}
+
+export function applyDjOutputGainToGraph(
+  graph: DjEqAudioGraph,
+  deck: DjDeckId,
+  gain: number
+) {
+  const normalized = Number.isFinite(gain) ? Math.max(0, Math.min(1, gain)) : 0;
+  graph.decks[deck].output.gain.setTargetAtTime(normalized, graph.context.currentTime, 0.01);
+}
+
+export type DjMasterRecordingOutput = {
+  stream: MediaStream;
+  dispose: () => void;
+};
+
+export function createDjMasterRecordingOutput(graph: DjEqAudioGraph): DjMasterRecordingOutput | null {
+  const factory = graph.context.createMediaStreamDestination;
+  if (typeof factory !== 'function') return null;
+
+  let destination: MediaStreamAudioDestinationNode;
+  try {
+    destination = factory.call(graph.context);
+    graph.master.connect(destination);
+  } catch {
+    return null;
+  }
+
+  let disposed = false;
+  return {
+    stream: destination.stream,
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      try {
+        graph.master.disconnect(destination);
+      } catch {
+        // Já desconectado pelo browser.
+      }
+      for (const track of destination.stream.getTracks()) track.stop();
+    }
+  };
 }
 
 export function readDjEqMeterLevel(graph: DjEqAudioGraph, deck: DjDeckId) {
