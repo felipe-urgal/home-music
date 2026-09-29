@@ -23,8 +23,8 @@ import {
 import {
   canPrepareDjAutomixNext,
   nextDjAutomixIndex,
-  shouldRecoverDjAutomixAfterEnded,
-  shuffleDjTrackList
+  reconcileDjShuffleOrder,
+  shouldRecoverDjAutomixAfterEnded
 } from './dj-automix-sequence';
 import { isDjKeyboardEditableTarget, mapDjKeyboardCode } from './dj-keyboard-mapping';
 import { resolveInitialDjSyncPlan } from './dj-sync-phase-lock';
@@ -146,6 +146,8 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
   const djAutomixActiveDeckRef = useRef<DjDeckId>('a');
   const djAutomixQueueIndexRef = useRef(0);
   const [djAutomixShuffle, setDjAutomixShuffle] = useState(false);
+  const djShuffleOrderRef = useRef<string[]>([]);
+  const [djShuffleRevision, setDjShuffleRevision] = useState(0);
   const [djPlayedTrackIds, setDjPlayedTrackIds] = useState<Set<string>>(() => new Set());
   const djAutomixTimerRef = useRef<number | null>(null);
   const djAutomixTransitionRef = useRef(false);
@@ -272,10 +274,31 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     return library.tracks;
   }, [djLibrarySource, djTracksById, library.playlists, library.tracks]);
 
-  const djListedTracks = useMemo(
-    () => djAutomixShuffle ? shuffleDjTrackList(djBrowserTracks) : djBrowserTracks,
-    [djAutomixShuffle, djBrowserTracks]
+  const djBrowserTrackIds = useMemo(
+    () => djBrowserTracks.map(track => track.id),
+    [djBrowserTracks]
   );
+  const djBrowserTrackIdSignature = djBrowserTrackIds.join('\u0000');
+
+  const djListedTracks = useMemo(() => {
+    if (!djAutomixShuffle) return djBrowserTracks;
+
+    const nextOrder = reconcileDjShuffleOrder(
+      djBrowserTrackIds,
+      djShuffleOrderRef.current
+    );
+    djShuffleOrderRef.current = nextOrder;
+    const byId = new Map(djBrowserTracks.map(track => [track.id, track]));
+    return nextOrder
+      .map(trackId => byId.get(trackId))
+      .filter((track): track is (typeof djBrowserTracks)[number] => Boolean(track));
+  }, [
+    djAutomixShuffle,
+    djBrowserTrackIdSignature,
+    djBrowserTracks,
+    djBrowserTrackIds,
+    djShuffleRevision
+  ]);
 
   const markDjTrackPlayed = useCallback((trackId: string | null | undefined) => {
     if (!trackId) return;
@@ -289,9 +312,35 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
 
   const selectDjLibrarySource = useCallback((value: string) => {
     setDjLibrarySource(value);
+    djShuffleOrderRef.current = [];
+    setDjShuffleRevision(value => value + 1);
     ddjBrowserIndexRef.current = 0;
     setDjBrowserIndex(0);
   }, []);
+
+  const changeDjAutomixShuffle = useCallback((enabled: boolean) => {
+    const selectedTrackId = djListedTracks[ddjBrowserIndexRef.current]?.id ?? null;
+
+    djShuffleOrderRef.current = [];
+    setDjAutomixShuffle(enabled);
+    setDjShuffleRevision(value => value + 1);
+
+    queueMicrotask(() => {
+      if (!selectedTrackId) {
+        ddjBrowserIndexRef.current = 0;
+        setDjBrowserIndex(0);
+        return;
+      }
+
+      const source = enabled
+        ? reconcileDjShuffleOrder(djBrowserTracks.map(track => track.id), [])
+        : djBrowserTracks.map(track => track.id);
+      if (enabled) djShuffleOrderRef.current = source;
+      const nextIndex = Math.max(0, source.indexOf(selectedTrackId));
+      ddjBrowserIndexRef.current = nextIndex;
+      setDjBrowserIndex(nextIndex);
+    });
+  }, [djBrowserTracks, djListedTracks]);
 
   const selectDjBrowserIndex = useCallback((index: number) => {
     const max = Math.max(0, djListedTracks.length - 1);
@@ -1484,7 +1533,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
           selectedLibraryIndex={djBrowserIndex}
           onSelectLibraryIndex={selectDjBrowserIndex}
           automixShuffle={djAutomixShuffle}
-          onAutomixShuffleChange={setDjAutomixShuffle}
+          onAutomixShuffleChange={changeDjAutomixShuffle}
           playedTrackIds={djPlayedTrackIds}
           onLoadSelectedTrack={loadDjBrowserTrack}
           midi={midiController}
