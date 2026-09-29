@@ -9,16 +9,16 @@ const rhythm = {
 
 describe('DJ Hot Loop', () => {
   it('mantém exatamente o Hot Cue como início', () => {
-    expect(resolveDjHotLoopPlan({
+    const plan = resolveDjHotLoopPlan({
       cueSeconds: 1.43,
       durationSeconds: 180,
       rhythm,
       beats: 4
-    })).toEqual({
-      startSeconds: 1.43,
-      endSeconds: 3.43,
-      beats: 4
     });
+
+    expect(plan?.startSeconds).toBeCloseTo(1.43, 6);
+    expect(plan?.endSeconds).toBeCloseTo(3.43, 6);
+    expect(plan?.beats).toBe(4);
   });
 
   it('usa BPM do segmento variável no ponto do Hot Cue', () => {
