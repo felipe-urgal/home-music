@@ -100,6 +100,14 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   await expect(deckA.getByRole('button', { name: 'IN', exact: true })).toBeVisible();
   await expect(deckA.getByRole('button', { name: 'OUT', exact: true })).toBeDisabled();
 
+  await expect(deckA.getByRole('button', { name: 'Definir Hot Cue 1 Deck A' })).toBeVisible();
+  await deckA.getByRole('button', { name: 'Definir Hot Cue 1 Deck A' }).click();
+  await expect(deckA.getByRole('button', { name: 'Ir para Hot Cue 1 Deck A' })).toBeVisible();
+  await deckA.getByRole('button', { name: 'Ir para Hot Cue 1 Deck A' }).click();
+  await deckA.getByRole('button', { name: 'Limpar Hot Cue 1 Deck A' }).click();
+  await expect(deckA.getByRole('button', { name: 'Definir Hot Cue 1 Deck A' })).toBeVisible();
+  await expect(deckB.getByRole('button', { name: 'Definir Hot Cue 1 Deck B' })).toBeVisible();
+
   await library.getByRole('option').filter({ hasText: 'E2E Zeta' }).click();
   await dj.getByRole('button', { name: 'LOAD B' }).click();
   await expect(deckB).toContainText('E2E Zeta');
