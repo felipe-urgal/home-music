@@ -4502,6 +4502,7 @@
 }
 
 .dj-mode--prototype-three .dj-pro-deck__track {
+  display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
 }
 
