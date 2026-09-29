@@ -82,6 +82,7 @@ A parte de software que não depende da DDJ-400 física agora inclui:
 - LOW / MID / HIGH e FILTER independentes por deck;
 - faixa normalizada e neutralidade central testadas;
 - graph Web Audio único por deck, sem rebuild a cada movimento;
+- guard sintético de 10.000 atualizações confirma ausência de novas alocações de source/filter nodes e protege contra regressão grosseira de custo do caminho de update;
 - atualização direta de parâmetros;
 - cleanup do `AudioContext`;
 - fallback quando Web Audio não existe ou a criação do graph falha;
@@ -92,7 +93,7 @@ A parte de software que não depende da DDJ-400 física agora inclui:
 Continuam dependentes de hardware real:
 
 - bytes/mapping MIDI dos knobs LOW/MID/HIGH/FILTER;
-- CPU/latência percebida no ambiente alvo;
+- CPU/latência percebida no ambiente alvo (o guard sintético não substitui medição real de áudio);
 - saída master/headphones e headphone CUE separados.
 
 ## Matriz de homologação física
