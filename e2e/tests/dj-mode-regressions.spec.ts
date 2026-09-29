@@ -100,6 +100,17 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   await expect(deckA.getByRole('button', { name: 'IN', exact: true })).toBeVisible();
   await expect(deckA.getByRole('button', { name: 'OUT', exact: true })).toBeDisabled();
 
+  const existingHotCueClear = deckA.getByRole('button', { name: 'Limpar Hot Cue 1 Deck A' });
+  if (await existingHotCueClear.isVisible().catch(() => false)) {
+    const resetHotCue = page.waitForResponse(response => (
+      response.url().includes('/api/tracks/')
+      && response.url().endsWith('/hot-cues')
+      && response.request().method() === 'PUT'
+    ));
+    await existingHotCueClear.click();
+    expect((await resetHotCue).ok()).toBe(true);
+  }
+
   await expect(deckA.getByRole('button', { name: 'Definir Hot Cue 1 Deck A' })).toBeVisible();
   const quantizeA = deckA.getByRole('button', { name: 'QUANTIZE Hot Cues Deck A' });
   await expect(quantizeA).toHaveAttribute('aria-pressed', 'false');
