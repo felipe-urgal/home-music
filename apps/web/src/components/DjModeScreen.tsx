@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
-import type { Track, TrackRhythmOverride, TrackWaveform } from '@home-music/shared';
+import type { Track, TrackHotCues, TrackRhythmOverride, TrackWaveform } from '@home-music/shared';
 import {
   ArrowLeft,
   Cable,
@@ -264,15 +264,22 @@ function DeckPanel({
   const [loopOut, setLoopOut] = useState<number | null>(null);
   const [loopActive, setLoopActive] = useState(false);
   const [loopBeats, setLoopBeats] = useState(4);
-  const [hotCues, setHotCues] = useState<Array<number | null>>([null, null, null, null]);
+  const [hotCues, setHotCues] = useState<TrackHotCues['positions']>([null, null, null, null]);
+  const [hotCueError, setHotCueError] = useState<string | null>(null);
+  const hotCueSaveChainRef = useRef<Promise<void>>(Promise.resolve());
+  const persistedHotCuesKey = JSON.stringify(state.track?.hotCues?.positions ?? [null, null, null, null]);
 
   useEffect(() => {
     setLoopIn(null);
     setLoopOut(null);
     setLoopActive(false);
     setLoopBeats(4);
-    setHotCues([null, null, null, null]);
   }, [snapshot?.trackId]);
+
+  useEffect(() => {
+    setHotCues([...(state.track?.hotCues?.positions ?? [null, null, null, null])] as TrackHotCues['positions']);
+    setHotCueError(null);
+  }, [snapshot?.trackId, persistedHotCuesKey]);
 
   useEffect(() => {
     if (!loopActive || loopIn == null || loopOut == null || !snapshot?.trackId) return;
@@ -322,6 +329,41 @@ function DeckPanel({
     }
   };
 
+  const persistHotCues = (positions: TrackHotCues['positions']) => {
+    if (!snapshot?.trackId) return;
+    const trackId = snapshot.trackId;
+    const payload: TrackHotCues = { version: 1, positions };
+    setHotCueError(null);
+
+    hotCueSaveChainRef.current = hotCueSaveChainRef.current
+      .catch(() => undefined)
+      .then(async () => {
+        const response = await apiFetch(`/api/tracks/${encodeURIComponent(trackId)}/hot-cues`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Home-Music-Request': '1'
+          },
+          body: JSON.stringify(payload)
+        });
+        if (!response.ok) {
+          const body = await response.json().catch(() => null) as { error?: string } | null;
+          throw new Error(body?.error || `Falha HTTP ${response.status}`);
+        }
+        notifyLibraryChanged();
+      })
+      .catch(error => {
+        setHotCueError(error instanceof Error ? error.message : 'Não foi possível salvar os Hot Cues.');
+        notifyLibraryChanged();
+      });
+  };
+
+  const replaceHotCue = (index: number, value: number | null) => {
+    const next = hotCues.map((current, cueIndex) => cueIndex === index ? value : current) as TrackHotCues['positions'];
+    setHotCues(next);
+    persistHotCues(next);
+  };
+
   const triggerHotCue = (index: number) => {
     if (!snapshot?.trackId) return;
     const cue = hotCues[index];
@@ -330,14 +372,15 @@ function DeckPanel({
         0,
         Math.min(snapshot.durationSeconds || Number.POSITIVE_INFINITY, snapshot.currentTimeSeconds)
       );
-      setHotCues(current => current.map((value, cueIndex) => cueIndex === index ? position : value));
+      replaceHotCue(index, position);
       return;
     }
     onSeek(deck, cue);
   };
 
   const clearHotCue = (index: number) => {
-    setHotCues(current => current.map((value, cueIndex) => cueIndex === index ? null : value));
+    if (!snapshot?.trackId) return;
+    replaceHotCue(index, null);
   };
 
   return (
@@ -477,6 +520,7 @@ function DeckPanel({
                 </button>
               </div>
             ))}
+            {hotCueError && <span className="dj-hot-cues__error" role="status">{hotCueError}</span>}
           </div>
 
           <div className="dj-pro-deck__controls">

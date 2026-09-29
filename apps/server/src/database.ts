@@ -3,12 +3,12 @@ import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { DatabaseSync } from 'node:sqlite';
-import type { AdminLibraryIntegrityStatus, PlaybackState, Playlist, PlaylistSource, RepeatMode, StatisticsPeriod, Track, TrackBeatGrid, TrackRhythm, TrackRhythmOverride, TrackWaveform } from '@home-music/shared';
+import type { AdminLibraryIntegrityStatus, PlaybackState, Playlist, PlaylistSource, RepeatMode, StatisticsPeriod, Track, TrackBeatGrid, TrackHotCues, TrackRhythm, TrackRhythmOverride, TrackWaveform } from '@home-music/shared';
 import type { IndexedTrack, LibraryTrackDelta } from './library.js';
 import { RHYTHM_ANALYZER_VERSION } from './rhythm-analysis.js';
 import { WAVEFORM_ANALYZER_VERSION } from './waveform-analysis.js';
 
-const CURRENT_SCHEMA_VERSION = 17;
+const CURRENT_SCHEMA_VERSION = 18;
 const HISTORY_CAPACITY = 2_000;
 const TRACK_UPSERT_SQL = `
   INSERT INTO tracks(
@@ -182,8 +182,24 @@ function publicRhythmFromRow(row: Row): TrackRhythm | null {
   return rhythm;
 }
 
+function publicHotCuesFromRow(row: Row): TrackHotCues | null {
+  const raw = [
+    row.hot_cue_1_seconds,
+    row.hot_cue_2_seconds,
+    row.hot_cue_3_seconds,
+    row.hot_cue_4_seconds
+  ];
+  if (raw.every(value => value == null)) return null;
+
+  return {
+    version: 1,
+    positions: raw.map(value => value == null ? null : numberValue(value)) as TrackHotCues['positions']
+  };
+}
+
 function publicTrackFromRow(row: Row): Track {
   const rhythm = publicRhythmFromRow(row);
+  const hotCues = publicHotCuesFromRow(row);
   return {
     id: stringValue(row.id),
     title: stringValue(row.title),
@@ -197,7 +213,8 @@ function publicTrackFromRow(row: Row): Track {
     hasCover: Boolean(row.has_cover),
     replayGainTrackDb: row.replaygain_track_db == null ? null : numberValue(row.replaygain_track_db),
     replayGainAlbumDb: row.replaygain_album_db == null ? null : numberValue(row.replaygain_album_db),
-    ...(rhythm ? { rhythm } : {})
+    ...(rhythm ? { rhythm } : {}),
+    ...(hotCues ? { hotCues } : {})
   };
 }
 
@@ -966,6 +983,34 @@ export class HomeMusicDatabase {
       }
     }
 
+    if (version < 18) {
+      this.db.exec('BEGIN IMMEDIATE;');
+      try {
+        this.db.exec(`
+          CREATE TABLE IF NOT EXISTS track_hot_cues (
+            track_id TEXT PRIMARY KEY NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+            version INTEGER NOT NULL CHECK(version = 1),
+            cue_1_seconds REAL CHECK(cue_1_seconds IS NULL OR cue_1_seconds >= 0),
+            cue_2_seconds REAL CHECK(cue_2_seconds IS NULL OR cue_2_seconds >= 0),
+            cue_3_seconds REAL CHECK(cue_3_seconds IS NULL OR cue_3_seconds >= 0),
+            cue_4_seconds REAL CHECK(cue_4_seconds IS NULL OR cue_4_seconds >= 0),
+            updated_at TEXT NOT NULL
+          );
+
+          PRAGMA user_version = 18;
+        `);
+        this.db.exec('COMMIT;');
+        version = 18;
+      } catch (error) {
+        try {
+          this.db.exec('ROLLBACK;');
+        } catch {
+          // Preserva o erro original se a transação já tiver sido encerrada.
+        }
+        throw error;
+      }
+    }
+
     if (version !== CURRENT_SCHEMA_VERSION) {
       throw new Error(`Versão de schema SQLite não suportada: ${version}`);
     }
@@ -1055,6 +1100,7 @@ export class HomeMusicDatabase {
         this.db.exec('DELETE FROM track_rhythm_analysis;');
         this.db.exec('DELETE FROM track_waveform_analysis;');
         this.db.exec('DELETE FROM track_rhythm_overrides;');
+        this.db.exec('DELETE FROM track_hot_cues;');
       }
       this.upsertTracks(upserts);
       const removed = this.removeTrackIds(removedIds);
@@ -1090,6 +1136,10 @@ export class HomeMusicDatabase {
              o.first_beat_seconds AS rhythm_override_first_beat_seconds,
              o.downbeat_seconds AS rhythm_override_downbeat_seconds,
              o.beats_per_bar AS rhythm_override_beats_per_bar,
+             h.cue_1_seconds AS hot_cue_1_seconds,
+             h.cue_2_seconds AS hot_cue_2_seconds,
+             h.cue_3_seconds AS hot_cue_3_seconds,
+             h.cue_4_seconds AS hot_cue_4_seconds,
              w.status AS waveform_analysis_status
       FROM tracks t
       LEFT JOIN track_rhythm_analysis r
@@ -1099,6 +1149,8 @@ export class HomeMusicDatabase {
        AND r.source_mtime_ms = t.mtime_ms
       LEFT JOIN track_rhythm_overrides o
         ON o.track_id = t.id
+      LEFT JOIN track_hot_cues h
+        ON h.track_id = t.id
       LEFT JOIN track_waveform_analysis w
         ON w.track_id = t.id
        AND w.analyzer_version = ?
@@ -1192,6 +1244,52 @@ export class HomeMusicDatabase {
     const track = this.db.prepare('SELECT id FROM tracks WHERE id = ?').get(trackId) as Row | undefined;
     if (!track) return false;
     this.db.prepare('DELETE FROM track_rhythm_overrides WHERE track_id = ?').run(trackId);
+    return true;
+  }
+
+  saveTrackHotCues(trackId: string, hotCues: TrackHotCues) {
+    const positions = hotCues?.positions;
+    if (
+      hotCues?.version !== 1
+      || !Array.isArray(positions)
+      || positions.length !== 4
+      || positions.some(value => value != null && (
+        typeof value !== 'number'
+        || !Number.isFinite(value)
+        || value < 0
+      ))
+    ) {
+      throw new Error('Hot Cues inválidos.');
+    }
+
+    const track = this.db.prepare('SELECT id, duration FROM tracks WHERE id = ?').get(trackId) as Row | undefined;
+    if (!track) return false;
+
+    const duration = track.duration == null ? null : numberValue(track.duration);
+    if (
+      duration != null
+      && positions.some(value => value != null && value > duration)
+    ) {
+      throw new Error('Hot Cue fora da duração da faixa.');
+    }
+
+    if (positions.every(value => value == null)) {
+      this.db.prepare('DELETE FROM track_hot_cues WHERE track_id = ?').run(trackId);
+      return true;
+    }
+
+    this.db.prepare(`
+      INSERT INTO track_hot_cues(
+        track_id, version, cue_1_seconds, cue_2_seconds, cue_3_seconds, cue_4_seconds, updated_at
+      ) VALUES (?, 1, ?, ?, ?, ?, ?)
+      ON CONFLICT(track_id) DO UPDATE SET
+        version = excluded.version,
+        cue_1_seconds = excluded.cue_1_seconds,
+        cue_2_seconds = excluded.cue_2_seconds,
+        cue_3_seconds = excluded.cue_3_seconds,
+        cue_4_seconds = excluded.cue_4_seconds,
+        updated_at = excluded.updated_at
+    `).run(trackId, ...positions, new Date().toISOString());
     return true;
   }
 

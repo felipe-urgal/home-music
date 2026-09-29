@@ -101,11 +101,29 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   await expect(deckA.getByRole('button', { name: 'OUT', exact: true })).toBeDisabled();
 
   await expect(deckA.getByRole('button', { name: 'Definir Hot Cue 1 Deck A' })).toBeVisible();
+  const saveHotCue = page.waitForResponse(response => (
+    response.url().includes('/api/tracks/')
+    && response.url().endsWith('/hot-cues')
+    && response.request().method() === 'PUT'
+  ));
   await deckA.getByRole('button', { name: 'Definir Hot Cue 1 Deck A' }).click();
+  expect((await saveHotCue).ok()).toBe(true);
   await expect(deckA.getByRole('button', { name: 'Ir para Hot Cue 1 Deck A' })).toBeVisible();
   await deckA.getByRole('button', { name: 'Ir para Hot Cue 1 Deck A' }).click();
-  await deckA.getByRole('button', { name: 'Limpar Hot Cue 1 Deck A' }).click();
+
+  await dj.getByRole('button', { name: 'LOAD B' }).click();
+  await expect(deckB).toContainText('E2E Track');
+  await expect(deckB.getByRole('button', { name: 'Ir para Hot Cue 1 Deck B' })).toBeVisible();
+
+  const clearHotCue = page.waitForResponse(response => (
+    response.url().includes('/api/tracks/')
+    && response.url().endsWith('/hot-cues')
+    && response.request().method() === 'PUT'
+  ));
+  await deckB.getByRole('button', { name: 'Limpar Hot Cue 1 Deck B' }).click();
+  expect((await clearHotCue).ok()).toBe(true);
   await expect(deckA.getByRole('button', { name: 'Definir Hot Cue 1 Deck A' })).toBeVisible();
+  await expect(deckB.getByRole('button', { name: 'Definir Hot Cue 1 Deck B' })).toBeVisible();
 
   await library.getByRole('option').filter({ hasText: 'E2E Zeta' }).click();
   await dj.getByRole('button', { name: 'LOAD B' }).click();
