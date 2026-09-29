@@ -59,6 +59,7 @@ import {
 import { resolveBeatmatchPlan } from './beatmatch';
 import type { DjDeckId } from './dj-controller-contract';
 import type { DjEqControl } from './dj-eq';
+import type { DjFxKind } from './dj-fx';
 import { canUseAdminLibraryActions } from './frontend-access';
 import { buildLibraryReturnLabel } from './library-utils';
 import type { OfflineDownloads } from './offline-downloads';
@@ -432,6 +433,34 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     switchDjToManual();
     player.dualDeck.setMode(true);
     player.dualDeck.setEq(deck, control, value);
+    scheduleMixerUiSync();
+  }, [player.dualDeck, scheduleMixerUiSync, switchDjToManual]);
+
+  const setDjFxEnabled = useCallback((deck: DjDeckId, kind: DjFxKind, enabled: boolean) => {
+    switchDjToManual();
+    player.dualDeck.setMode(true);
+    player.dualDeck.setFxEnabled(deck, kind, enabled);
+    scheduleMixerUiSync();
+  }, [player.dualDeck, scheduleMixerUiSync, switchDjToManual]);
+
+  const setDjFxWet = useCallback((deck: DjDeckId, kind: DjFxKind, wet: number) => {
+    switchDjToManual();
+    player.dualDeck.setMode(true);
+    player.dualDeck.setFxWet(deck, kind, wet);
+    scheduleMixerUiSync();
+  }, [player.dualDeck, scheduleMixerUiSync, switchDjToManual]);
+
+  const setDjEchoFeedback = useCallback((deck: DjDeckId, feedback: number) => {
+    switchDjToManual();
+    player.dualDeck.setMode(true);
+    player.dualDeck.setEchoFeedback(deck, feedback);
+    scheduleMixerUiSync();
+  }, [player.dualDeck, scheduleMixerUiSync, switchDjToManual]);
+
+  const setDjEchoDelay = useCallback((deck: DjDeckId, delaySeconds: number) => {
+    switchDjToManual();
+    player.dualDeck.setMode(true);
+    player.dualDeck.setEchoDelay(deck, delaySeconds);
     scheduleMixerUiSync();
   }, [player.dualDeck, scheduleMixerUiSync, switchDjToManual]);
 
@@ -1572,6 +1601,10 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
           onSelectMidiOutput={selectMidiOutput}
           onChannelVolume={setDjChannelVolume}
           onEq={setDjEq}
+          onFxEnabled={setDjFxEnabled}
+          onFxWet={setDjFxWet}
+          onEchoFeedback={setDjEchoFeedback}
+          onEchoDelay={setDjEchoDelay}
           onCrossfader={setDjCrossfader}
           onTogglePlay={toggleDjDeckPlay}
           onCue={cueDjDeck}
