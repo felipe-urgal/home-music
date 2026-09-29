@@ -1,3 +1,16 @@
+export type DjRecordingState = {
+  supported: boolean;
+  active: boolean;
+  startedAt: number | null;
+  error: string | null;
+};
+
+export type DjRecordingResult = {
+  blob: Blob;
+  filename: string;
+  mimeType: string;
+};
+
 export const DJ_RECORDING_MIME_CANDIDATES = [
   'audio/webm;codecs=opus',
   'audio/webm',
