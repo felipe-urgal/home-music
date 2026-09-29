@@ -1012,6 +1012,11 @@ export function useCrossfadeAudioPlayer(
     applyDjEqToGraph('b');
     applyDjFxToGraph('a');
     applyDjFxToGraph('b');
+    const graph = djEqGraphRef.current;
+    if (graph) {
+      applyDjOutputGainToGraph(graph, 'a', 1);
+      applyDjOutputGainToGraph(graph, 'b', 1);
+    }
     cancelCrossfade();
   }, [applyDjEqToGraph, applyDjFxToGraph, applyDualDeckMixer, cancelCrossfade, discardDjRecording, ensureDjEqGraph, player.current?.id]);
 
