@@ -321,6 +321,11 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   });
   await expect(deckB).toContainText('E2E Zeta');
 
+  const selectedIndexBeforeMidiBack = await library.getByRole('option').evaluateAll(elements => (
+    elements.findIndex(element => element.getAttribute('aria-selected') === 'true')
+  ));
+  expect(selectedIndexBeforeMidiBack).toBeGreaterThanOrEqual(0);
+
   await page.evaluate(() => {
     const input = (globalThis as typeof globalThis & {
       __homeMusicE2eMidiInput?: {
@@ -329,7 +334,9 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
     }).__homeMusicE2eMidiInput;
     input?.onmidimessage?.({ data: [0xb6, 0x40, 0x7f], receivedTime: performance.now() });
   });
-  await expect(options.nth(0)).toHaveAttribute('aria-selected', 'true');
+  await expect(
+    library.getByRole('option').nth(Math.max(0, selectedIndexBeforeMidiBack - 1))
+  ).toHaveAttribute('aria-selected', 'true');
   await selectedE2eTrack.click();
   await expect(selectedE2eTrack).toHaveAttribute('aria-selected', 'true');
 
