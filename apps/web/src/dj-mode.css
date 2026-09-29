@@ -4454,3 +4454,156 @@
     grid-template-columns: 62px repeat(3, minmax(0, 1fr));
   }
 }
+
+
+/* DJ recording + harmonic key */
+.dj-recording-button {
+  min-width: 76px;
+  min-height: 36px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid rgba(255, 83, 83, .35);
+  border-radius: 7px;
+  background: rgba(74, 22, 27, .24);
+  color: #eeb5b8;
+  font: inherit;
+  font-size: .66rem;
+  font-weight: 850;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.dj-recording-button:disabled {
+  opacity: .42;
+  cursor: not-allowed;
+}
+
+.dj-recording-button.is-recording {
+  border-color: rgba(255, 66, 66, .88);
+  background: linear-gradient(180deg, rgba(190, 33, 40, .92), rgba(126, 21, 28, .92));
+  color: #fff;
+  box-shadow: 0 0 14px rgba(255, 54, 54, .18);
+}
+
+.dj-recording-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 50%;
+  background: #ff4a4a;
+  box-shadow: 0 0 7px rgba(255, 74, 74, .42);
+}
+
+.dj-recording-button.is-recording .dj-recording-dot {
+  background: #fff;
+}
+
+.dj-mode--prototype-three .dj-pro-deck__track {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.dj-pro-deck__key {
+  min-width: 58px;
+  align-self: center;
+  display: grid;
+  justify-items: end;
+  gap: 1px;
+  font-variant-numeric: tabular-nums;
+}
+
+.dj-pro-deck__key strong {
+  color: #e9f2fb;
+  font-size: .68rem;
+}
+
+.dj-pro-deck__key small {
+  padding: 2px 5px;
+  border: 1px solid rgba(112, 142, 174, .22);
+  border-radius: 4px;
+  background: rgba(12, 24, 36, .86);
+  color: #8fa6bd;
+  font-size: .5rem;
+  font-weight: 800;
+}
+
+.dj-pro-deck__key[data-confidence="low"] {
+  opacity: .55;
+}
+
+.dj-harmonic-status {
+  grid-area: workspace-switch;
+  align-self: center;
+  justify-self: end;
+  min-width: 138px;
+  min-height: 42px;
+  padding: 5px 9px;
+  display: grid;
+  align-content: center;
+  justify-items: end;
+  gap: 1px;
+  pointer-events: none;
+}
+
+.dj-harmonic-status span {
+  color: #73879b;
+  font-size: .49rem;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.dj-harmonic-status strong {
+  color: #9baabd;
+  font-size: .63rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.dj-harmonic-status[data-compatible="true"] strong {
+  color: #62d6a0;
+}
+
+.dj-library-key {
+  color: #a6bbd0;
+  font-size: .59rem;
+  font-weight: 800;
+}
+
+.dj-library-key[data-confidence="low"] {
+  opacity: .52;
+}
+
+.dj-mode--prototype-three .dj-pro-library__columns,
+.dj-mode--prototype-three .dj-pro-library__list > button {
+  grid-template-columns: 34px minmax(230px, 1.35fr) minmax(140px, .82fr) minmax(140px, .82fr) 62px 58px 68px;
+}
+
+@media (max-width: 1120px) {
+  .dj-harmonic-status {
+    grid-area: workspace-switch;
+    margin-right: 7px;
+  }
+}
+
+@media (max-width: 820px) {
+  .dj-recording-button {
+    min-width: 58px;
+    padding-inline: 7px;
+  }
+
+  .dj-harmonic-status {
+    display: none;
+  }
+
+  .dj-mode--prototype-three .dj-pro-library__columns,
+  .dj-mode--prototype-three .dj-pro-library__list > button {
+    grid-template-columns: 30px minmax(160px, 1fr) minmax(105px, .7fr) 54px 54px 62px;
+  }
+
+  .dj-mode--prototype-three .dj-pro-library__columns span:nth-child(4),
+  .dj-mode--prototype-three .dj-pro-library__list > button > span:nth-child(4) {
+    display: none;
+  }
+}
