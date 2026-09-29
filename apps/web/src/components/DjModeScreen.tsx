@@ -1573,10 +1573,18 @@ export function DjModeScreen({
             aria-pressed={recording.active}
             disabled={!recording.supported && !recording.active}
             onClick={recording.active ? onStopRecording : onStartRecording}
-            title={recording.error ?? (recording.active ? 'Parar e exportar gravação' : 'Gravar master mix')}
+            title={recording.error ?? (!recording.supported
+              ? 'Gravação não suportada neste navegador'
+              : recording.active
+                ? 'Parar e exportar gravação'
+                : 'Gravar master mix')}
           >
             <span className="dj-recording-dot" aria-hidden="true" />
-            <span>{recording.active ? `REC ${formatTime(recordingSeconds)}` : 'REC'}</span>
+            <span>{recording.active
+              ? `REC ${formatTime(recordingSeconds)}`
+              : recording.supported
+                ? 'REC'
+                : 'REC N/D'}</span>
           </button>
 
           <details className="dj-shortcuts">
