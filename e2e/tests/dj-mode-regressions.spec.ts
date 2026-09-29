@@ -82,7 +82,8 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   await expect(deckA).toContainText('Nenhuma faixa carregada');
   await expect(deckB).toContainText('Nenhuma faixa carregada');
   await expect(mixer).toBeVisible();
-  await expect(midi).toBeVisible();
+  await expect(midiDrawer).toBeVisible();
+  await expect(midiDrawer).not.toHaveAttribute('open', '');
   await expect(library.getByRole('option')).toHaveCount(3);
 
   const selectedE2eTrack = library.getByRole('option').filter({ hasText: 'E2E Track' });
