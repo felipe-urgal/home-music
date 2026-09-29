@@ -1,4 +1,4 @@
-import type { AdminScanTrigger, ScanResponse, TrackRhythm, TrackRhythmOverride, TrackWaveform } from '@home-music/shared';
+import type { AdminScanTrigger, ScanResponse, TrackHotCues, TrackRhythm, TrackRhythmOverride, TrackWaveform } from '@home-music/shared';
 import { buildAdminLibraryOverview } from './admin-library-overview.js';
 import { runScanWithHistory } from './admin-operation-history-scan.js';
 import type { AdminOperationHistoryStore } from './admin-operation-history.js';
@@ -197,6 +197,20 @@ export class LibraryService {
     const index = this.tracks.findIndex(track => track.id === trackId);
     if (index < 0) return null;
     if (!this.options.database.deleteTrackRhythmOverride(trackId)) return null;
+
+    const persisted = this.options.database.loadTracks().find(track => track.id === trackId);
+    if (!persisted) return null;
+    const nextTracks = [...this.tracks];
+    nextTracks[index] = persisted;
+    this.setTracks(nextTracks);
+    this.libraryRevision += 1;
+    return this.publicTrack(persisted);
+  }
+
+  setHotCues(trackId: string, hotCues: TrackHotCues) {
+    const index = this.tracks.findIndex(track => track.id === trackId);
+    if (index < 0) return null;
+    if (!this.options.database.saveTrackHotCues(trackId, hotCues)) return null;
 
     const persisted = this.options.database.loadTracks().find(track => track.id === trackId);
     if (!persisted) return null;
