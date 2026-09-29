@@ -271,6 +271,8 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   await expect(echoDelayA).toHaveValue('0.5');
   await expect(reverbB).toHaveAttribute('aria-pressed', 'true');
   await expect(reverbWetB).toHaveValue('0.3');
+  await fxSettings.locator('summary').click();
+  await expect(fxSettings).not.toHaveAttribute('open', '');
   await expect(lowA).toHaveAttribute('aria-valuetext', '9.0 dB');
   await expect(midA).toHaveAttribute('aria-valuetext', '-4.5 dB');
   await expect(highB).toHaveAttribute('aria-valuetext', '13.5 dB');
