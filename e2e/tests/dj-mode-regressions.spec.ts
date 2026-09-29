@@ -4,7 +4,7 @@ const username = 'playwright';
 const password = 'playwright-password-2026';
 
 test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regredir player normal', async ({ page }) => {
-  test.setTimeout(120_000);
+  test.setTimeout(180_000);
 
   await page.addInitScript(() => {
     const input = {
@@ -97,6 +97,7 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   await dj.getByRole('button', { name: 'LOAD A' }).click();
   await expect(deckA).toContainText('E2E Track');
   await expect(deckA.getByRole('button', { name: 'Reproduzir Deck A' })).toBeVisible();
+  await expect(selectedE2eTrack.locator('.dj-library-deck-badge[data-deck="a"]')).toHaveText('A');
 
   const waveformA = deckA.getByRole('slider', { name: 'Buscar posição no waveform Deck A' });
   await expect(waveformA).toBeVisible();
@@ -108,10 +109,13 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
 
   await page.keyboard.press('1');
   await expect(deckA.getByRole('button', { name: 'Pausar Deck A' })).toBeVisible();
+  await expect(selectedE2eTrack).toHaveAttribute('aria-selected', 'true');
+  await expect(library.getByRole('option').last()).toContainText('E2E Track');
   await page.keyboard.press('1');
   await expect(deckA.getByRole('button', { name: 'Reproduzir Deck A' })).toBeVisible();
 
   const keyboardOptions = library.getByRole('option');
+  await keyboardOptions.nth(0).click();
   await expect(keyboardOptions.nth(0)).toHaveAttribute('aria-selected', 'true');
   await page.keyboard.press('ArrowRight');
   await expect(keyboardOptions.nth(1)).toHaveAttribute('aria-selected', 'true');
@@ -188,6 +192,8 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   await waveformHotCueA.click();
   await deckA.getByRole('button', { name: 'Ir para Hot Cue 1 Deck A' }).click();
 
+  await selectedE2eTrack.click();
+  await expect(selectedE2eTrack).toHaveAttribute('aria-selected', 'true');
   await dj.getByRole('button', { name: 'LOAD B' }).click();
   await expect(deckB).toContainText('E2E Track');
   await expect(deckB.getByRole('button', { name: 'Ir para Hot Cue 1 Deck B' })).toBeVisible();
@@ -209,6 +215,7 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   await dj.getByRole('button', { name: 'LOAD B' }).click();
   await expect(deckB).toContainText('E2E Zeta');
   await expect(deckB.getByRole('button', { name: 'Reproduzir Deck B' })).toBeVisible();
+  await expect(library.getByRole('option').filter({ hasText: 'E2E Zeta' }).locator('.dj-library-deck-badge[data-deck="b"]')).toHaveText('B');
   await expect(deckB.getByRole('button', { name: 'Definir Hot Cue 1 Deck B' })).toBeVisible();
   await expect(deckA.getByRole('button', { name: 'Definir Hot Cue 1 Deck A' })).toBeVisible();
 
@@ -241,6 +248,19 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   await expect(midA).toHaveAttribute('aria-valuetext', '-4.5 dB');
   await expect(highB).toHaveAttribute('aria-valuetext', '13.5 dB');
   await expect(filterB).toHaveAttribute('aria-valuetext', '-50%');
+
+  await library.getByRole('option').filter({ hasText: 'E2E Zeta' }).click();
+  await dj.getByRole('button', { name: 'LOAD A' }).click();
+  await expect(deckA).toContainText('E2E Zeta');
+  await expect(lowA).toHaveValue('0.5');
+  await expect(midA).toHaveValue('-0.25');
+  await expect(highB).toHaveValue('0.75');
+  await expect(filterB).toHaveValue('-0.5');
+
+  await selectedE2eTrack.click();
+  await dj.getByRole('button', { name: 'LOAD A' }).click();
+  await expect(deckA).toContainText('E2E Track');
+
   await lowA.dblclick();
   await expect(lowA).toHaveValue('0');
   await channelA.fill('0.42');
@@ -286,6 +306,10 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   await expect(diagnostics).toHaveAttribute('aria-pressed', 'false');
   await expect(midi.getByLabel('Diagnóstico MIDI ativo')).toHaveCount(0);
 
+  const e2eZetaOption = library.getByRole('option').filter({ hasText: 'E2E Zeta' });
+  await e2eZetaOption.click();
+  await expect(e2eZetaOption).toHaveAttribute('aria-selected', 'true');
+
   await page.evaluate(() => {
     const input = (globalThis as typeof globalThis & {
       __homeMusicE2eMidiInput?: {
@@ -297,6 +321,11 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   });
   await expect(deckB).toContainText('E2E Zeta');
 
+  const selectedIndexBeforeMidiBack = await library.getByRole('option').evaluateAll(elements => (
+    elements.findIndex(element => element.getAttribute('aria-selected') === 'true')
+  ));
+  expect(selectedIndexBeforeMidiBack).toBeGreaterThanOrEqual(0);
+
   await page.evaluate(() => {
     const input = (globalThis as typeof globalThis & {
       __homeMusicE2eMidiInput?: {
@@ -305,7 +334,11 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
     }).__homeMusicE2eMidiInput;
     input?.onmidimessage?.({ data: [0xb6, 0x40, 0x7f], receivedTime: performance.now() });
   });
-  await expect(options.nth(0)).toHaveAttribute('aria-selected', 'true');
+  await expect(
+    library.getByRole('option').nth(Math.max(0, selectedIndexBeforeMidiBack - 1))
+  ).toHaveAttribute('aria-selected', 'true');
+  await selectedE2eTrack.click();
+  await expect(selectedE2eTrack).toHaveAttribute('aria-selected', 'true');
 
   await page.evaluate(() => {
     const input = (globalThis as typeof globalThis & {
@@ -475,6 +508,15 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   });
   await expect(deckA.getByRole('button', { name: 'Reproduzir Deck A' })).toBeVisible();
 
+  const reconnectZetaOption = library.getByRole('option').filter({ hasText: 'E2E Zeta' });
+  await reconnectZetaOption.click();
+  await expect(reconnectZetaOption).toHaveAttribute('aria-selected', 'true');
+  const reconnectLoadB = dj.getByRole('button', { name: 'LOAD B' });
+  if (await reconnectLoadB.isEnabled()) {
+    await reconnectLoadB.click();
+  }
+  await expect(deckB).toContainText('E2E Zeta');
+
   const messagesBeforeReconnect = await page.evaluate(() => (
     (globalThis as typeof globalThis & { __homeMusicE2eMidiOutputMessages?: number[][] })
       .__homeMusicE2eMidiOutputMessages?.length ?? 0
@@ -497,6 +539,8 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
 
   await dj.getByRole('button', { name: 'AutoMix' }).click();
   await expect(dj.getByRole('button', { name: 'AutoMix' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(library.locator('.dj-library-status-badge').filter({ hasText: 'AGORA' })).toHaveCount(1);
+  await expect(library.locator('.dj-library-status-badge').filter({ hasText: 'PRÓXIMA' })).toHaveCount(1);
   await expect(mixer.locator('.dj-pro-mixer__channel[data-deck="a"] strong')).toHaveText('100%');
   await expect(mixer.locator('.dj-pro-mixer__channel[data-deck="b"] strong')).toHaveText('100%');
   await expect(mixer.locator('.dj-pro-mixer__crossfader strong')).toHaveText('A 100%');
@@ -516,4 +560,48 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   await expect(page.locator('.desktop-now-playing-screen').getByRole('heading', { name: 'E2E Track' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Modo DJ' })).toHaveCount(0);
   await expect(page.getByRole('region', { name: 'Mixer' })).toHaveCount(0);
+});
+
+test('Modo DJ restaura EQ neutro ao sair e reentrar', async ({ page }) => {
+  test.setTimeout(60_000);
+
+  await page.goto('/');
+  await page.getByLabel('Usuário').fill(username);
+  await page.getByLabel('Senha', { exact: true }).fill(password);
+  await page.getByRole('button', { name: 'Entrar' }).click();
+
+  await expect(page.locator('.desktop-now-playing-screen')).toBeVisible();
+  const expandTopbar = page.getByRole('button', { name: 'Expandir barra superior' });
+  await expect(expandTopbar).toBeVisible();
+  await expandTopbar.click();
+
+  const openDjMode = page.getByRole('button', { name: 'Abrir Modo DJ' });
+  await expect(openDjMode).toBeVisible();
+  await openDjMode.click();
+  const dj = page.getByRole('region', { name: 'Modo DJ' });
+  const mixer = page.getByRole('region', { name: 'Mixer' });
+  await expect(dj).toBeVisible();
+
+  await mixer.getByRole('slider', { name: 'LOW Channel A' }).fill('0.5');
+  await mixer.getByRole('slider', { name: 'MID Channel A' }).fill('-0.25');
+  await mixer.getByRole('slider', { name: 'HIGH Channel B' }).fill('0.75');
+  await mixer.getByRole('slider', { name: 'FILTER Channel B' }).fill('-0.5');
+
+  await dj.getByRole('button', { name: 'Sair do modo DJ' }).click();
+  await expect(page.locator('.desktop-now-playing-screen')).toBeVisible();
+
+  const reopenTopbar = page.getByRole('button', { name: 'Expandir barra superior' });
+  await expect(reopenTopbar).toBeVisible();
+  await reopenTopbar.click();
+
+  const reopenDjMode = page.getByRole('button', { name: 'Abrir Modo DJ' });
+  await expect(reopenDjMode).toBeVisible();
+  await reopenDjMode.click();
+  const reopenedDj = page.getByRole('region', { name: 'Modo DJ' });
+  const reopenedMixer = page.getByRole('region', { name: 'Mixer' });
+  await expect(reopenedDj).toBeVisible();
+  await expect(reopenedMixer.getByRole('slider', { name: 'LOW Channel A' })).toHaveValue('0');
+  await expect(reopenedMixer.getByRole('slider', { name: 'MID Channel A' })).toHaveValue('0');
+  await expect(reopenedMixer.getByRole('slider', { name: 'HIGH Channel B' })).toHaveValue('0');
+  await expect(reopenedMixer.getByRole('slider', { name: 'FILTER Channel B' })).toHaveValue('0');
 });

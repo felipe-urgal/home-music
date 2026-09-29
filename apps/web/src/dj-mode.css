@@ -1549,13 +1549,66 @@
   color: #8bcaff;
 }
 
-.dj-pro-library__list > button.is-played:not(.is-selected) {
-  background: rgba(69, 201, 142, 0.07);
-  color: rgba(177, 231, 205, 0.78);
+.dj-pro-library__list > button.is-played:not(.is-selected):not(.is-automix-current):not(.is-automix-next) {
+  opacity: .58;
+  color: rgba(206, 216, 228, .72);
 }
 
-.dj-pro-library__list > button.is-played:not(.is-selected) strong {
-  color: #73d5a5;
+.dj-pro-library__list > button.is-played:not(.is-selected):not(.is-automix-current):not(.is-automix-next) strong {
+  color: rgba(224, 231, 239, .78);
+}
+
+.dj-library-track-title {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.dj-library-track-title > strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dj-library-deck-badge,
+.dj-library-status-badge {
+  flex: 0 0 auto;
+  padding: 1px 4px;
+  border-radius: 4px;
+  font-size: .48rem;
+  font-weight: 900;
+  line-height: 1.35;
+  letter-spacing: .04em;
+}
+
+.dj-library-deck-badge[data-deck="a"] {
+  border: 1px solid rgba(31, 140, 255, .68);
+  background: rgba(31, 140, 255, .14);
+  color: #69b9ff;
+}
+
+.dj-library-deck-badge[data-deck="b"] {
+  border: 1px solid rgba(255, 193, 33, .72);
+  background: rgba(255, 193, 33, .14);
+  color: #ffd45e;
+}
+
+.dj-library-status-badge {
+  border: 1px solid rgba(139, 202, 255, .35);
+  background: rgba(139, 202, 255, .09);
+  color: #a9d8ff;
+}
+
+.dj-pro-library__list > button.is-automix-current:not(.is-selected) {
+  background: rgba(31, 140, 255, .12);
+  box-shadow: inset 3px 0 #1f8cff;
+}
+
+.dj-pro-library__list > button.is-automix-next:not(.is-selected) {
+  background: rgba(255, 193, 33, .08);
+  box-shadow: inset 3px 0 rgba(255, 193, 33, .75);
 }
 
 @media (max-width: 1350px) {
@@ -2757,6 +2810,24 @@
   font-weight: 700;
 }
 
+.dj-eq-value {
+  min-height: 11px;
+  color: #dce7f2;
+  font-size: .46rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  opacity: 0;
+  transform: translateY(-2px);
+  transition: opacity .12s ease, transform .12s ease;
+  pointer-events: none;
+}
+
+.dj-eq-control:hover .dj-eq-value,
+.dj-eq-control:focus-within .dj-eq-value {
+  opacity: .9;
+  transform: translateY(0);
+}
+
 .dj-eq-knob {
   position: relative;
   display: block;
@@ -2841,6 +2912,10 @@
   flex: 1;
   min-height: 5px;
   width: 100%;
+}
+
+.dj-pro-mixer__channel .dj-channel-meter i:nth-child(n+10)[data-on="true"] {
+  filter: brightness(1.18);
 }
 
 .dj-pro-mixer__crossfader {

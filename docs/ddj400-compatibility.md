@@ -13,7 +13,8 @@ Esta matriz acompanha a epic #518. Resultados físicos só devem ser preenchidos
 | Áudio pela DDJ-400 | Pendente de teste físico | #526 |
 | Master separado | Pendente de teste físico | #526 |
 | Headphones/cue separado | Pendente de teste físico | #526 |
-| EQ / headphone cue avançado | Bloqueado pela decisão do spike | #527 |
+| EQ LOW/MID/HIGH/FILTER | Implementado em software; mapping físico pendente | #616, #617, #527 |
+| Headphone cue avançado | Bloqueado pela decisão do spike físico | #526, #527 |
 
 ## Evidência automatizada do mixer (#524)
 
@@ -73,6 +74,27 @@ A cobertura sem hardware físico agora inclui:
 - player normal continua coberto pelo gate desktop.
 
 A homologação física da DDJ-400 continua pendente e permanece critério da #522/#528.
+
+## Evidência automatizada do EQ (#527)
+
+A parte de software que não depende da DDJ-400 física agora inclui:
+
+- LOW / MID / HIGH e FILTER independentes por deck;
+- faixa normalizada e neutralidade central testadas;
+- graph Web Audio único por deck, sem rebuild a cada movimento;
+- guard sintético de 10.000 atualizações confirma ausência de novas alocações de source/filter nodes e protege contra regressão grosseira de custo do caminho de update;
+- atualização direta de parâmetros;
+- cleanup do `AudioContext`;
+- fallback quando Web Audio não existe ou a criação do graph falha;
+- troca de faixa preserva a posição dos knobs do mixer;
+- sair e reentrar no Modo DJ restaura o EQ neutro;
+- player normal continua coberto pela regressão E2E.
+
+Continuam dependentes de hardware real:
+
+- bytes/mapping MIDI dos knobs LOW/MID/HIGH/FILTER;
+- CPU/latência percebida no ambiente alvo (o guard sintético não substitui medição real de áudio);
+- saída master/headphones e headphone CUE separados.
 
 ## Matriz de homologação física
 
