@@ -255,6 +255,30 @@
   pointer-events: none;
 }
 
+.dj-waveform__loop-range {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  bottom: 0;
+  border-left: 1px solid var(--deck-accent);
+  border-right: 1px solid var(--deck-accent);
+  background: rgba(30, 142, 255, 0.08);
+  pointer-events: none;
+}
+
+.dj-waveform__loop-range[data-active="true"] {
+  background: rgba(30, 142, 255, 0.18);
+  box-shadow: inset 0 0 14px rgba(30, 142, 255, 0.12);
+}
+
+.dj-pro-deck[data-deck="b"] .dj-waveform__loop-range {
+  background: rgba(255, 213, 31, 0.08);
+}
+
+.dj-pro-deck[data-deck="b"] .dj-waveform__loop-range[data-active="true"] {
+  background: rgba(255, 213, 31, 0.16);
+}
+
 .dj-waveform__hot-cue {
   position: absolute;
   z-index: 4;
