@@ -147,7 +147,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
   const djAutomixQueueIndexRef = useRef(0);
   const [djAutomixShuffle, setDjAutomixShuffle] = useState(false);
   const [djPlayedTrackIds, setDjPlayedTrackIds] = useState<Set<string>>(() => new Set());
-  const djAutomixFrameRef = useRef<number | null>(null);
+  const djAutomixTimerRef = useRef<number | null>(null);
   const djAutomixTransitionRef = useRef(false);
 
   const scheduleMixerUiSync = useCallback(() => {
@@ -204,9 +204,9 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
   }, []);
 
   const cancelDjAutomixTransition = useCallback(() => {
-    if (djAutomixFrameRef.current != null) {
-      window.cancelAnimationFrame(djAutomixFrameRef.current);
-      djAutomixFrameRef.current = null;
+    if (djAutomixTimerRef.current != null) {
+      window.clearTimeout(djAutomixTimerRef.current);
+      djAutomixTimerRef.current = null;
     }
     djAutomixTransitionRef.current = false;
   }, []);
@@ -570,23 +570,23 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
       const from = options.activeDeck === 'a' ? -1 : 1;
       const to = -from;
 
-      const animate = (now: number) => {
+      const animate = () => {
         if (djMixModeRef.current !== 'automix') {
           djAutomixTransitionRef.current = false;
-          djAutomixFrameRef.current = null;
+          djAutomixTimerRef.current = null;
           return;
         }
 
-        const progress = Math.max(0, Math.min(1, (now - startedAt) / durationMs));
+        const progress = Math.max(0, Math.min(1, (performance.now() - startedAt) / durationMs));
         player.dualDeck.setCrossfader(from + ((to - from) * progress));
         scheduleMixerUiSync();
 
         if (progress < 1) {
-          djAutomixFrameRef.current = window.requestAnimationFrame(animate);
+          djAutomixTimerRef.current = window.setTimeout(animate, 50);
           return;
         }
 
-        djAutomixFrameRef.current = null;
+        djAutomixTimerRef.current = null;
 
         const adoptedSnapshot = player.dualDeck.getSnapshot(incomingDeck);
         if (
@@ -613,10 +613,9 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
         djAutomixTransitionRef.current = false;
         renderDdjLedsRef.current?.();
 
-        // Prepara a próxima faixa somente no frame seguinte e somente se o deck
-        // adotado ainda for o ativo esperado. Assim LOAD/preload nunca encosta no
-        // deck que acabou de assumir o áudio.
-        window.requestAnimationFrame(() => {
+        // Prepara a próxima faixa no próximo task, sem depender de renderização.
+        // Isso continua funcionando com a janela desfocada/minimizada.
+        window.setTimeout(() => {
           const current = player.dualDeck.getSnapshot(incomingDeck);
           if (!canPrepareDjAutomixNext({
             automixActive: djMixModeRef.current === 'automix',
@@ -628,10 +627,10 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
           })) return;
 
           prepareDjAutomixNext(incomingDeck, options.nextQueueIndex);
-        });
+        }, 0);
       };
 
-      djAutomixFrameRef.current = window.requestAnimationFrame(animate);
+      animate();
     });
   }, [
     commitDjSyncState,
@@ -698,12 +697,8 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
   useEffect(() => {
     if (screen !== 'dj' || djMixMode !== 'automix') return;
 
-    let frame: number | null = null;
-    let lastCheck = 0;
-
-    const check = (timestamp: number) => {
-      if (timestamp - lastCheck >= 100 && !djAutomixTransitionRef.current) {
-        lastCheck = timestamp;
+    const check = () => {
+      if (!djAutomixTransitionRef.current) {
         const activeDeck = djAutomixActiveDeckRef.current;
         const snapshot = player.dualDeck.getSnapshot(activeDeck);
         if (snapshot?.trackId && snapshot.durationSeconds > 0) {
@@ -765,13 +760,11 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
           }
         }
       }
-      frame = window.requestAnimationFrame(check);
     };
 
-    frame = window.requestAnimationFrame(check);
-    return () => {
-      if (frame != null) window.cancelAnimationFrame(frame);
-    };
+    check();
+    const timer = window.setInterval(check, 250);
+    return () => window.clearInterval(timer);
   }, [
     djMixMode,
     library.tracks,
@@ -1222,7 +1215,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     }
     if (mixerUiFrameRef.current != null) window.cancelAnimationFrame(mixerUiFrameRef.current);
     if (ddjLedFrameRef.current != null) window.cancelAnimationFrame(ddjLedFrameRef.current);
-    if (djAutomixFrameRef.current != null) window.cancelAnimationFrame(djAutomixFrameRef.current);
+    if (djAutomixTimerRef.current != null) window.clearTimeout(djAutomixTimerRef.current);
   }, []);
 
   useEffect(() => {
