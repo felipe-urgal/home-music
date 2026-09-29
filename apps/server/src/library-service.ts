@@ -1,4 +1,4 @@
-import type { AdminScanTrigger, ScanResponse, TrackHotCues, TrackRhythm, TrackRhythmOverride, TrackWaveform } from '@home-music/shared';
+import type { AdminScanTrigger, ScanResponse, TrackHotCues, TrackMusicalKey, TrackRhythm, TrackRhythmOverride, TrackWaveform } from '@home-music/shared';
 import { buildAdminLibraryOverview } from './admin-library-overview.js';
 import { runScanWithHistory } from './admin-operation-history-scan.js';
 import type { AdminOperationHistoryStore } from './admin-operation-history.js';
@@ -262,6 +262,40 @@ export class LibraryService {
     }
     this.setTracks(nextTracks);
     if (!samePublicRhythm) this.libraryRevision += 1;
+    return true;
+  }
+
+  applyKeyAnalysis(
+    trackId: string,
+    sourceFileSize: number,
+    sourceMtimeMs: number,
+    key: TrackMusicalKey | null
+  ) {
+    const index = this.tracks.findIndex(track => track.id === trackId);
+    if (index < 0) return false;
+
+    const current = this.tracks[index];
+    if (current.fileSize !== sourceFileSize || current.mtimeMs !== sourceMtimeMs) return false;
+
+    const samePublicKey = key === null
+      ? current.key == null
+      : (
+          current.key?.tonic === key.tonic
+          && current.key.mode === key.mode
+          && current.key.confidence === key.confidence
+          && current.key.camelot === key.camelot
+        );
+    if (current.keyAnalysisCurrent && samePublicKey) return true;
+
+    const nextTracks = [...this.tracks];
+    if (key) {
+      nextTracks[index] = { ...current, key, keyAnalysisCurrent: true };
+    } else {
+      const { key: _key, ...withoutKey } = current;
+      nextTracks[index] = { ...withoutKey, keyAnalysisCurrent: true };
+    }
+    this.setTracks(nextTracks);
+    if (!samePublicKey) this.libraryRevision += 1;
     return true;
   }
 
