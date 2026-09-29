@@ -56,3 +56,24 @@ export function canPrepareDjAutomixNext(input: {
     && input.activeDeckPlaying
   );
 }
+
+
+export function reconcileDjShuffleOrder(
+  sourceIds: readonly string[],
+  previousOrder: readonly string[],
+  random: () => number = Math.random
+) {
+  const sourceSet = new Set(sourceIds);
+  const surviving = previousOrder.filter(id => sourceSet.has(id));
+  const survivingSet = new Set(surviving);
+  const added = sourceIds.filter(id => !survivingSet.has(id));
+
+  if (!previousOrder.length) {
+    return shuffleDjTrackList(sourceIds, random);
+  }
+
+  return [
+    ...surviving,
+    ...shuffleDjTrackList(added, random)
+  ];
+}
