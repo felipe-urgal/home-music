@@ -75,6 +75,10 @@ test('SQLite persiste biblioteca, favoritos, histórico, playlists e estado do p
     });
     first.setFavorite('user-1', 'a', true);
     first.recordHistory('user-1', 'a');
+    assert.equal(first.saveTrackHotCues('a', {
+      version: 1,
+      positions: [12.5, null, 47, 179.9]
+    }), true);
     const playlistId = first.createPlaylist('user-1', 'Minha playlist');
     assert.equal(first.setPlaylistTracks('user-1', playlistId, ['a', 'b']), true);
     first.savePlaybackState('user-1', {
@@ -90,7 +94,7 @@ test('SQLite persiste biblioteca, favoritos, histórico, playlists e estado do p
     first.close();
 
     const second = new HomeMusicDatabase(dbPath);
-    assert.equal(second.getSchemaVersion(), 17);
+    assert.equal(second.getSchemaVersion(), 18);
     assert.equal(second.getMetadata('libraryRoot'), '/music');
     assert.equal(second.loadLibraryIntegrityStatus('/other'), null);
     assert.deepEqual(second.loadLibraryIntegrityStatus('/music'), {
@@ -113,6 +117,10 @@ test('SQLite persiste biblioteca, favoritos, histórico, playlists e estado do p
     assert.equal(second.loadTracks().length, 2);
     assert.equal(second.loadTracks()[0].replayGainTrackDb, -7.2);
     assert.equal(second.loadTracks()[0].replayGainAlbumDb, -5.8);
+    assert.deepEqual(
+      second.loadTracks().find(track => track.id === 'a')?.hotCues,
+      { version: 1, positions: [12.5, null, 47, 179.9] }
+    );
     assert.deepEqual(second.getFavoriteIds('user-1'), ['a']);
     assert.equal(second.getHistory('user-1')[0].track.id, 'a');
     assert.deepEqual(second.getPlaylists('user-1')[0].trackIds, ['a', 'b']);
@@ -144,6 +152,7 @@ test('remoção de faixa limpa relacionamentos por foreign key', async () => {
     db.syncTracks([track], '/music', '2026-08-24T12:00:00.000Z');
     db.setFavorite('user-1', 'a', true);
     db.recordHistory('user-1', 'a');
+    db.saveTrackHotCues('a', { version: 1, positions: [10, null, null, null] });
     const playlistId = db.createPlaylist('user-1', 'Teste');
     db.setPlaylistTracks('user-1', playlistId, ['a']);
 
@@ -152,6 +161,52 @@ test('remoção de faixa limpa relacionamentos por foreign key', async () => {
     assert.deepEqual(db.getFavoriteIds('user-1'), []);
     assert.deepEqual(db.getHistory('user-1'), []);
     assert.deepEqual(db.getPlaylists('user-1')[0].trackIds, []);
+
+    const raw = new DatabaseSync(dbPath);
+    const hotCueRows = raw.prepare('SELECT track_id FROM track_hot_cues').all();
+    assert.deepEqual(hotCueRows, []);
+    raw.close();
+  } finally {
+    db.close();
+    await rm(temp, { recursive: true, force: true });
+  }
+});
+
+test('Hot Cues validam duração e persistem separados da análise derivada', async () => {
+  const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-db-'));
+  const dbPath = path.join(temp, 'home-music.db');
+  const db = new HomeMusicDatabase(dbPath);
+
+  try {
+    const track = indexedTrack('a', '/music/a.mp3');
+    db.syncTracks([track], '/music', '2026-08-24T12:00:00.000Z');
+
+    assert.throws(() => db.saveTrackHotCues('a', {
+      version: 1,
+      positions: [181, null, null, null]
+    }), /duração/);
+
+    assert.equal(db.saveTrackHotCues('a', {
+      version: 1,
+      positions: [10, 20, null, 40]
+    }), true);
+
+    db.saveTrackRhythmAnalysis('a', track.fileSize, track.mtimeMs, {
+      bpm: 120,
+      firstBeatSeconds: 0,
+      confidence: 0.9
+    });
+
+    assert.deepEqual(
+      db.loadTracks().find(item => item.id === 'a')?.hotCues,
+      { version: 1, positions: [10, 20, null, 40] }
+    );
+
+    assert.equal(db.saveTrackHotCues('a', {
+      version: 1,
+      positions: [null, null, null, null]
+    }), true);
+    assert.equal(db.loadTracks().find(item => item.id === 'a')?.hotCues, undefined);
   } finally {
     db.close();
     await rm(temp, { recursive: true, force: true });
@@ -229,7 +284,7 @@ test('migra schema v1 para v14 sem perder estado existente', async () => {
     legacy.close();
 
     const migrated = new HomeMusicDatabase(dbPath);
-    assert.equal(migrated.getSchemaVersion(), 17);
+    assert.equal(migrated.getSchemaVersion(), 18);
     const state = migrated.loadPlaybackState('user-1');
     assert.equal(state.currentTrackId, null);
     assert.equal(state.position, 0);
@@ -294,7 +349,7 @@ test('schema v14 preserva identidade única, papéis e flags válidos de users',
 
   try {
     const db = new HomeMusicDatabase(dbPath);
-    assert.equal(db.getSchemaVersion(), 17);
+    assert.equal(db.getSchemaVersion(), 18);
     db.close();
 
     const raw = new DatabaseSync(dbPath);
