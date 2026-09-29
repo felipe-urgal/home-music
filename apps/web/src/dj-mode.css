@@ -4335,3 +4335,122 @@
     flex: 1;
   }
 }
+
+
+/* DJ FX controls */
+.dj-mode--prototype-three .dj-pro-mixer__channel {
+  grid-template-areas:
+    "title"
+    "eq"
+    "fx"
+    "volume";
+}
+
+.dj-mixer-fx {
+  grid-area: fx;
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(112, 142, 174, .10);
+}
+
+.dj-mixer-fx__row {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 50px repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  align-items: center;
+  opacity: .72;
+  transition: opacity .12s ease;
+}
+
+.dj-mixer-fx__row[data-enabled="true"] {
+  opacity: 1;
+}
+
+.dj-mixer-fx__row > button {
+  min-width: 0;
+  min-height: 24px;
+  padding: 0 5px;
+  border: 1px solid rgba(112, 142, 174, .22);
+  border-radius: 4px;
+  background: rgba(17, 28, 39, .95);
+  color: #9babbc;
+  font: inherit;
+  font-size: .46rem;
+  font-weight: 900;
+  letter-spacing: .03em;
+  cursor: pointer;
+}
+
+.dj-pro-mixer__channel[data-deck="a"] .dj-mixer-fx__row > button.is-active {
+  border-color: rgba(21, 152, 255, .72);
+  background: rgba(21, 152, 255, .16);
+  color: #69bdff;
+}
+
+.dj-pro-mixer__channel[data-deck="b"] .dj-mixer-fx__row > button.is-active {
+  border-color: rgba(255, 75, 69, .72);
+  background: rgba(255, 75, 69, .14);
+  color: #ff817d;
+}
+
+.dj-mixer-fx__row > label {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.dj-mixer-fx__row > label > span {
+  color: #75889b;
+  font-size: .38rem;
+  font-weight: 800;
+  letter-spacing: .03em;
+  text-align: center;
+}
+
+.dj-mixer-fx__row input[type="range"] {
+  width: 100%;
+  min-width: 0;
+  height: 10px;
+  margin: 0;
+}
+
+.dj-mixer-fx__row .dj-mixer-fx__wide {
+  grid-column: span 3;
+}
+
+@media (max-width: 1320px) and (min-width: 1121px) {
+  .dj-mixer-fx__row {
+    grid-template-columns: 44px repeat(3, minmax(0, 1fr));
+    gap: 2px;
+  }
+
+  .dj-mixer-fx__row > button {
+    padding-inline: 3px;
+    font-size: .42rem;
+  }
+}
+
+@media (max-width: 1120px) {
+  .dj-mode--prototype-three .dj-pro-mixer--console {
+    min-height: 470px;
+  }
+
+  .dj-mode--prototype-three .dj-eq-strip {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .dj-mode--prototype-three .dj-pro-mixer__channel {
+    grid-template-areas:
+      "title"
+      "eq"
+      "fx"
+      "volume";
+  }
+
+  .dj-mixer-fx__row {
+    grid-template-columns: 62px repeat(3, minmax(0, 1fr));
+  }
+}
