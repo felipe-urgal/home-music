@@ -264,12 +264,14 @@ function DeckPanel({
   const [loopOut, setLoopOut] = useState<number | null>(null);
   const [loopActive, setLoopActive] = useState(false);
   const [loopBeats, setLoopBeats] = useState(4);
+  const [hotCues, setHotCues] = useState<Array<number | null>>([null, null, null, null]);
 
   useEffect(() => {
     setLoopIn(null);
     setLoopOut(null);
     setLoopActive(false);
     setLoopBeats(4);
+    setHotCues([null, null, null, null]);
   }, [snapshot?.trackId]);
 
   useEffect(() => {
@@ -318,6 +320,24 @@ function DeckPanel({
     } else {
       onNudge(deck, direction);
     }
+  };
+
+  const triggerHotCue = (index: number) => {
+    if (!snapshot?.trackId) return;
+    const cue = hotCues[index];
+    if (cue == null) {
+      const position = Math.max(
+        0,
+        Math.min(snapshot.durationSeconds || Number.POSITIVE_INFINITY, snapshot.currentTimeSeconds)
+      );
+      setHotCues(current => current.map((value, cueIndex) => cueIndex === index ? position : value));
+      return;
+    }
+    onSeek(deck, cue);
+  };
+
+  const clearHotCue = (index: number) => {
+    setHotCues(current => current.map((value, cueIndex) => cueIndex === index ? null : value));
   };
 
   return (
@@ -430,6 +450,33 @@ function DeckPanel({
                 <button type="button" aria-label={'Aumentar loop ' + label} onClick={() => changeLoopBeats(1)}><ChevronRight aria-hidden="true" /></button>
               </div>
             </div>
+          </div>
+
+          <div className="dj-hot-cues" aria-label={'Hot Cues ' + label}>
+            {hotCues.map((cue, index) => (
+              <div className="dj-hot-cue" key={index} data-set={cue == null ? 'false' : 'true'}>
+                <button
+                  type="button"
+                  className="dj-hot-cue__pad"
+                  onClick={() => triggerHotCue(index)}
+                  aria-label={(cue == null ? 'Definir' : 'Ir para') + ' Hot Cue ' + (index + 1) + ' ' + label}
+                  title={cue == null ? 'Salvar posição atual' : 'Ir para ' + formatTime(cue)}
+                >
+                  <strong>{index + 1}</strong>
+                  <span>{cue == null ? 'SET' : formatTime(cue)}</span>
+                </button>
+                <button
+                  type="button"
+                  className="dj-hot-cue__clear"
+                  onClick={() => clearHotCue(index)}
+                  disabled={cue == null}
+                  aria-label={'Limpar Hot Cue ' + (index + 1) + ' ' + label}
+                  title="Limpar Hot Cue"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
           </div>
 
           <div className="dj-pro-deck__controls">
