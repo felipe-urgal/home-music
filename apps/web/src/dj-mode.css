@@ -330,6 +330,90 @@
   font-variant-numeric: tabular-nums;
 }
 
+.dj-hot-cues {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin: 2px 0 8px;
+}
+
+.dj-hot-cue {
+  position: relative;
+  min-width: 0;
+}
+
+.dj-hot-cue__pad {
+  width: 100%;
+  min-height: 48px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 22px 7px 9px;
+  border: 1px solid rgba(145,163,183,.28);
+  border-radius: 6px;
+  background: linear-gradient(180deg, #222c36, #11171e);
+  color: #dbe2e9;
+  text-align: left;
+}
+
+.dj-hot-cue__pad strong {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  background: rgba(255,255,255,.07);
+  font-size: .7rem;
+}
+
+.dj-hot-cue__pad span {
+  overflow: hidden;
+  color: #9aa7b4;
+  font-size: .64rem;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+}
+
+.dj-hot-cue[data-set="true"] .dj-hot-cue__pad {
+  border-color: var(--dj-blue);
+  box-shadow: inset 0 0 10px rgba(30,142,255,.17);
+}
+
+.dj-pro-deck[data-deck="b"] .dj-hot-cue[data-set="true"] .dj-hot-cue__pad {
+  border-color: var(--dj-red);
+  box-shadow: inset 0 0 10px rgba(255,67,67,.15);
+}
+
+.dj-hot-cue[data-set="true"] .dj-hot-cue__pad span {
+  color: #fff;
+}
+
+.dj-hot-cue__clear {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: #8794a1;
+  font-size: .85rem;
+  line-height: 1;
+}
+
+.dj-hot-cue__clear:not(:disabled):hover {
+  background: rgba(255,255,255,.08);
+  color: #fff;
+}
+
+.dj-hot-cue__clear:disabled {
+  opacity: 0;
+  pointer-events: none;
+}
+
 .dj-pro-deck__controls {
   align-self: end;
   display: grid;
