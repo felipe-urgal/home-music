@@ -335,7 +335,7 @@ export type ImportJob = {
   startedAt: string | null;
   finishedAt: string | null;
   error: string | null;
-  provenance: ImportProvenance | null;
+  provenance?: ImportProvenance | null;
   mediaDecision: ImportMediaDecision | null;
   metadataPreview: ImportMetadataPreview | null;
 };
