@@ -1,6 +1,6 @@
 # Pioneer DDJ-400 no Home Music
 
-Suporte em desenvolvimento ligado à epic #518.
+A camada de software do controlador está implementada; a homologação com uma DDJ-400 física continua pendente na epic #518.
 
 ## Pré-requisitos
 
@@ -34,6 +34,10 @@ A ausência de saída MIDI não deve impedir playback nem controles de entrada.
 - EQ LOW / MID / HIGH / FILTER pela interface do Modo DJ.
 
 Scratch real não faz parte do MVP atual. O EQ já funciona por software; o mapping físico dos quatro knobs da DDJ-400 continua pendente de homologação e bytes confirmados no hardware real.
+
+## Performance por software
+
+FX, gravação do master no browser, key, Hot Cues, loops, AutoMix e histórico/setlist são independentes da DDJ-400 física. A matriz atual desses recursos e seus fallbacks está em `docs/dj-performance.md`.
 
 ## Áudio, master e headphones
 
