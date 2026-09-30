@@ -55,7 +55,7 @@ export type AdminExternalProviderBatch = {
   id: string;
   providerId: string;
   label: string;
-  presentation: {
+  presentation?: {
     sourceLabel: string | null;
     subtitle: string | null;
     thumbnailUrl: string | null;
