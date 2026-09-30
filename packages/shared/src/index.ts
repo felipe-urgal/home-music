@@ -432,9 +432,13 @@ export type TrackWaveform = {
   peaks: number[];
 };
 
+export type TrackHotCueColor = 'blue' | 'red' | 'green' | 'amber' | 'purple' | 'cyan';
+
 export type TrackHotCues = {
   version: 1;
   positions: [number | null, number | null, number | null, number | null];
+  colors?: [TrackHotCueColor | null, TrackHotCueColor | null, TrackHotCueColor | null, TrackHotCueColor | null];
+  labels?: [string | null, string | null, string | null, string | null];
 };
 
 export type Track = {
