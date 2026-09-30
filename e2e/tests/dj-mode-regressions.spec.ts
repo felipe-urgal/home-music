@@ -150,8 +150,9 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   await expect(autoLoopA).toHaveAttribute('title', 'Auto Loop requer BPM analisado');
   await expect(deckA.locator('.dj-waveform__loop-range')).toHaveCount(0);
 
-  const hotCueOptionsA = deckA.locator('.dj-hot-cue').first().locator('summary');
-  const existingHotCueClear = deckA.getByRole('button', { name: 'Limpar Hot Cue 1 Deck A' });
+  const hotCueOneA = deckA.locator('.dj-hot-cue').first();
+  const hotCueOptionsA = hotCueOneA.locator('summary');
+  const existingHotCueClear = hotCueOneA.locator('.dj-hot-cue__clear');
   if (await existingHotCueClear.isEnabled().catch(() => false)) {
     await hotCueOptionsA.click();
     const resetHotCue = page.waitForResponse(response => (
