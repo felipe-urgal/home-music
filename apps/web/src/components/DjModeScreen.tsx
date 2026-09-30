@@ -1019,6 +1019,9 @@ function RhythmGridEditor({
         progress={0}
         currentTimeSeconds={0}
         hotCues={[null, null, null, null]}
+        hotCueColors={[null, null, null, null]}
+        hotCueLabels={[null, null, null, null]}
+        activeHotCueIndex={null}
         loopIn={null}
         loopOut={null}
         loopActive={false}
