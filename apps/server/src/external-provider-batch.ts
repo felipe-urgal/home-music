@@ -91,6 +91,7 @@ export type ExternalProviderBatchItem = Readonly<{
   sourceId: string | null;
   label: string;
   durationSeconds: number | null;
+  selectable: boolean;
   selected: boolean;
   candidates: readonly ExternalProviderBatchCandidate[];
   status: ExternalProviderBatchItemStatus;
@@ -365,6 +366,7 @@ function snapshot(batch: MutableBatch, limits: ExternalProviderBatchLimits): Ext
       sourceId: item.sourceId,
       label: item.label,
       durationSeconds: item.durationSeconds,
+      selectable: Boolean(item.request),
       selected: item.selected,
       candidates: item.candidates.map(candidate => ({
         id: candidate.id,
