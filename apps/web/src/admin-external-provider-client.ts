@@ -43,6 +43,7 @@ export type AdminExternalProviderBatchItem = {
   sourceId: string | null;
   label: string;
   durationSeconds: number | null;
+  selectable: boolean;
   selected: boolean;
   candidates: AdminExternalProviderBatchCandidate[];
   status: AdminExternalProviderBatchItemStatus;
