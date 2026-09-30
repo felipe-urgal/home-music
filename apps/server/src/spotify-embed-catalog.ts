@@ -100,7 +100,7 @@ function durationFromEmbed(value: unknown) {
       ? Number(value)
       : NaN;
   if (!Number.isFinite(parsed) || parsed <= 0) return null;
-  return parsed > 10_000 ? parsed / 1000 : parsed;
+  return parsed > 1_000 ? parsed / 1000 : parsed;
 }
 
 function firstImageUrl(value: unknown) {
