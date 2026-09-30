@@ -1804,6 +1804,21 @@ export function DjModeScreen({
 
           <DjSessionHistoryPanel decks={decks} mixer={mixer} />
 
+          <details className="dj-midi-drawer dj-midi-drawer--header">
+            <summary
+              aria-label={`Controlador MIDI: ${midi.supported ? midiStatusText(midi.status) : 'Web MIDI indisponível'}`}
+            >
+              <Cable aria-hidden="true" />
+              <span>MIDI</span>
+              <small data-connected={midi.status === 'connected' ? 'true' : 'false'}>
+                {midi.supported ? midiStatusText(midi.status) : 'N/D'}
+              </small>
+            </summary>
+            <div className="dj-midi-popover">
+              <DjMidiPanel midi={midi} onDisconnect={onDisconnectMidi} onSelectOutput={onSelectMidiOutput} />
+            </div>
+          </details>
+
           <details className="dj-shortcuts">
             <summary><Keyboard aria-hidden="true" /><span>Atalhos</span></summary>
             <div className="dj-shortcuts__panel">
@@ -1913,13 +1928,6 @@ export function DjModeScreen({
           onWorkspacePanelChange={setWorkspacePanel}
         />
 
-        <details className="dj-midi-drawer">
-          <summary>
-            <span>Controlador MIDI</span>
-            <small>{midi.supported ? midiStatusText(midi.status) : 'Web MIDI indisponível'}</small>
-          </summary>
-          <DjMidiPanel midi={midi} onDisconnect={onDisconnectMidi} onSelectOutput={onSelectMidiOutput} />
-        </details>
       </main>
     </section>
   );

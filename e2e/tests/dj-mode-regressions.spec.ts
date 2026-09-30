@@ -83,8 +83,10 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   await expect(deckB).toContainText('Nenhuma faixa carregada');
   await expect(mixer).toBeVisible();
   await expect(midiDrawer).toBeVisible();
+  await expect(dj.locator('.dj-mode__header details.dj-midi-drawer--header')).toHaveCount(1);
   await expect(midiDrawer).not.toHaveAttribute('open', '');
   await expect(library.getByRole('option')).toHaveCount(3);
+  await expect.poll(async () => library.evaluate(element => getComputedStyle(element).overflowY)).toBe('auto');
 
   const selectedE2eTrack = library.getByRole('option').filter({ hasText: 'E2E Track' });
   await selectedE2eTrack.click();
@@ -569,16 +571,20 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   await expect(deckA).toContainText('E2E Track');
   await expect(deckB).toContainText('E2E Zeta');
 
+  await crossfader.fill('0');
+  await expect(mixer.locator('.dj-pro-mixer__crossfader strong')).toHaveText('Centro');
+
   await dj.getByRole('button', { name: 'AutoMix' }).click();
   await expect(dj.getByRole('button', { name: 'AutoMix' })).toHaveAttribute('aria-pressed', 'true');
   await expect(library.locator('.dj-library-status-badge').filter({ hasText: 'AGORA' })).toHaveCount(1);
   await expect(library.locator('.dj-library-status-badge').filter({ hasText: 'PRÓXIMA' })).toHaveCount(1);
   await expect(mixer.locator('.dj-pro-mixer__channel[data-deck="a"] strong')).toHaveText('100%');
   await expect(mixer.locator('.dj-pro-mixer__channel[data-deck="b"] strong')).toHaveText('100%');
-  await expect(mixer.locator('.dj-pro-mixer__crossfader strong')).toHaveText('A 100%');
+  await expect(mixer.locator('.dj-pro-mixer__crossfader strong')).toHaveText('Centro');
 
   await dj.getByRole('button', { name: 'Manual' }).click();
   await expect(dj.getByRole('button', { name: 'Manual' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(mixer.locator('.dj-pro-mixer__crossfader strong')).toHaveText('A 100%');
 
   await channelA.fill('0.31');
   await channelB.fill('0.64');

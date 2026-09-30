@@ -9,6 +9,11 @@ export type DualDeckMixerState = {
   fx: DjFxState;
 };
 
+export type DualDeckAutomixTransition = {
+  fromDeck: DjDeckId;
+  progress: number;
+};
+
 function clampUnit(value: number) {
   if (!Number.isFinite(value)) return 0;
   return Math.max(0, Math.min(1, value));
@@ -28,13 +33,41 @@ export function crossfaderGains(value: number): Record<DjDeckId, number> {
   };
 }
 
+export function automixTransitionGains(
+  fromDeck: DjDeckId,
+  progress: number
+): Record<DjDeckId, number> {
+  const normalized = clampUnit(progress);
+  const outgoing = Math.cos(normalized * Math.PI / 2);
+  const incoming = Math.sin(normalized * Math.PI / 2);
+  return fromDeck === 'a'
+    ? { a: outgoing, b: incoming }
+    : { a: incoming, b: outgoing };
+}
+
+export function automixTransitionToCrossfader(
+  fromDeck: DjDeckId,
+  progress: number
+) {
+  const normalized = clampUnit(progress);
+  return fromDeck === 'a'
+    ? -1 + (normalized * 2)
+    : 1 - (normalized * 2);
+}
+
 export function resolveDualDeckOutputGain(options: {
   deck: DjDeckId;
   masterVolume: number;
   channelVolume: number;
   crossfader: number;
+  automixTransition?: DualDeckAutomixTransition | null;
 }) {
-  const gains = crossfaderGains(options.crossfader);
+  const gains = options.automixTransition
+    ? automixTransitionGains(
+        options.automixTransition.fromDeck,
+        options.automixTransition.progress
+      )
+    : crossfaderGains(options.crossfader);
   return clampUnit(options.masterVolume)
     * clampUnit(options.channelVolume)
     * gains[options.deck];

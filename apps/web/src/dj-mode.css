@@ -5787,3 +5787,249 @@
   border-color: var(--hot-cue-color, var(--deck-accent));
   color: #fff;
 }
+
+
+/* DJ workspace usability: viewport layout, scrollable library and MIDI popover */
+.dj-mode--prototype-three .dj-midi-drawer--header {
+  position: relative;
+  z-index: 80;
+  min-width: 0;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+
+.dj-mode--prototype-three .dj-midi-drawer--header > summary {
+  min-height: 39px;
+  padding: 0 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--dj-prototype-border);
+  border-radius: 7px;
+  background: linear-gradient(180deg, rgba(20, 34, 48, .96), rgba(11, 22, 33, .96));
+  color: #dce8f4;
+  font-size: .68rem;
+  font-weight: 750;
+}
+
+.dj-mode--prototype-three .dj-midi-drawer--header > summary::after {
+  display: none;
+}
+
+.dj-mode--prototype-three .dj-midi-drawer--header > summary svg {
+  width: 15px;
+  height: 15px;
+  color: #43adff;
+}
+
+.dj-mode--prototype-three .dj-midi-drawer--header > summary small {
+  min-width: 0;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .055);
+  color: #93a6b9;
+  font-size: .53rem;
+  font-weight: 750;
+}
+
+.dj-mode--prototype-three .dj-midi-drawer--header > summary small[data-connected="true"] {
+  background: rgba(44, 194, 126, .13);
+  color: #72d9a9;
+}
+
+.dj-mode--prototype-three .dj-midi-drawer--header[open] > summary {
+  border-color: rgba(67, 173, 255, .58);
+  box-shadow: 0 0 0 1px rgba(67, 173, 255, .12);
+}
+
+.dj-midi-popover {
+  position: absolute;
+  z-index: 120;
+  top: calc(100% + 8px);
+  right: 0;
+  width: min(370px, calc(100vw - 28px));
+  max-height: min(620px, calc(100vh - 92px));
+  overflow: auto;
+  border: 1px solid rgba(78, 111, 145, .46);
+  border-radius: 9px;
+  background: rgba(7, 16, 25, .99);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .54);
+}
+
+.dj-mode--prototype-three .dj-midi-popover .dj-pro-midi {
+  min-height: 0;
+  padding: 14px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.dj-mode--prototype-three .dj-mode__header-actions > button,
+.dj-mode--prototype-three .dj-mode__header-actions > details > summary,
+.dj-mode--prototype-three .dj-session-history > summary {
+  font-size: .68rem;
+}
+
+.dj-mode--prototype-three .dj-mode__mode-switch button {
+  min-height: 37px;
+  font-size: .7rem;
+  font-weight: 800;
+}
+
+.dj-mode--prototype-three .dj-pro-deck__controls button {
+  min-height: 44px;
+  font-size: .74rem;
+}
+
+.dj-mode--prototype-three .dj-jog-mode button,
+.dj-mode--prototype-three .dj-loop-points button,
+.dj-mode--prototype-three .dj-loop-size button {
+  min-height: 32px;
+  font-size: .57rem;
+}
+
+.dj-mode--prototype-three .dj-hot-cue__pad {
+  min-height: 36px;
+}
+
+.dj-mode--prototype-three .dj-hot-cue__pad span {
+  font-size: .57rem;
+}
+
+.dj-mode--prototype-three .dj-pro-mixer__crossfader input,
+.dj-mode--prototype-three .dj-mixer-channel-volume input {
+  min-height: 24px;
+}
+
+.dj-mode--prototype-three .dj-pro-library,
+.dj-mode--prototype-three .dj-library-sidebar,
+.dj-mode--prototype-three .dj-library-workspace,
+.dj-mode--prototype-three .dj-pro-library__list {
+  min-height: 0;
+}
+
+.dj-mode--prototype-three .dj-pro-library {
+  height: 100%;
+  overflow: hidden;
+}
+
+.dj-mode--prototype-three .dj-library-sidebar {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.dj-mode--prototype-three .dj-library-workspace {
+  height: 100%;
+  overflow: hidden;
+}
+
+.dj-mode--prototype-three .dj-pro-library__list {
+  max-height: none;
+  overflow-y: auto;
+  overflow-x: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.dj-mode--prototype-three .dj-pro-library__list > button {
+  min-height: 34px;
+  font-size: .67rem;
+}
+
+@media (min-width: 1181px) and (max-width: 1680px) {
+  .dj-mode--prototype-three .dj-mode__brand {
+    min-width: 154px;
+  }
+
+  .dj-mode--prototype-three .dj-mode__nav {
+    gap: 3px;
+  }
+
+  .dj-mode--prototype-three .dj-mode__nav > span {
+    min-width: 62px;
+    padding-inline: 8px;
+  }
+
+  .dj-mode--prototype-three .dj-mode__nav > span:nth-child(n+4),
+  .dj-mode--prototype-three .dj-mode__status {
+    display: none;
+  }
+}
+
+@media (min-width: 1181px) and (min-height: 801px) {
+  .dj-mode--prototype-three {
+    height: 100vh;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .dj-mode--prototype-three .dj-mode__header {
+    flex: 0 0 auto;
+  }
+
+  .dj-mode--prototype-three .dj-pro-layout {
+    flex: 1 1 auto;
+    min-height: 0;
+    grid-template-rows: minmax(460px, 1.55fr) minmax(285px, 1fr);
+    grid-template-areas:
+      "deck-a mixer deck-b"
+      "library library library";
+    overflow: hidden;
+  }
+
+  .dj-mode--prototype-three .dj-pro-deck--console,
+  .dj-mode--prototype-three .dj-pro-mixer--console {
+    height: 100%;
+    min-height: 0;
+  }
+
+  .dj-mode--prototype-three .dj-pro-deck--console {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+
+@media (max-width: 1180px) {
+  .dj-mode--prototype-three .dj-pro-layout {
+    grid-template-areas:
+      "deck-a deck-b"
+      "workspace-switch workspace-switch"
+      "library library"
+      "mixer mixer";
+  }
+
+  .dj-mode--prototype-three .dj-pro-library {
+    height: auto;
+  }
+}
+
+@media (max-width: 820px) {
+  .dj-mode--prototype-three .dj-pro-layout {
+    grid-template-areas:
+      "deck-a"
+      "deck-b"
+      "workspace-switch"
+      "library"
+      "mixer";
+  }
+
+  .dj-mode--prototype-three .dj-midi-drawer--header > summary small {
+    display: none;
+  }
+
+  .dj-midi-popover {
+    position: fixed;
+    top: 64px;
+    right: 8px;
+    left: 8px;
+    width: auto;
+    max-height: calc(100vh - 72px);
+  }
+}

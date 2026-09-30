@@ -60,6 +60,7 @@ import { resolveBeatmatchPlan } from './beatmatch';
 import type { DjDeckId } from './dj-controller-contract';
 import type { DjEqControl } from './dj-eq';
 import type { DjFxKind } from './dj-fx';
+import { automixTransitionToCrossfader } from './dual-deck-mixer';
 import { downloadDjRecording } from './dj-recording';
 import { canUseAdminLibraryActions } from './frontend-access';
 import { buildLibraryReturnLabel } from './library-utils';
@@ -211,7 +212,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     setDjMixMode(mode);
   }, []);
 
-  const cancelDjAutomixTransition = useCallback(() => {
+  const cancelDjAutomixAnimation = useCallback(() => {
     if (djAutomixTimerRef.current != null) {
       window.clearTimeout(djAutomixTimerRef.current);
       djAutomixTimerRef.current = null;
@@ -219,11 +220,33 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     djAutomixTransitionRef.current = false;
   }, []);
 
+  const cancelDjAutomixTransition = useCallback(() => {
+    cancelDjAutomixAnimation();
+    player.dualDeck.clearAutomixTransition();
+  }, [cancelDjAutomixAnimation, player.dualDeck.clearAutomixTransition]);
+
   const switchDjToManual = useCallback(() => {
     if (djMixModeRef.current === 'manual') return;
-    cancelDjAutomixTransition();
+    cancelDjAutomixAnimation();
+
+    const automixTransition = player.dualDeck.getAutomixTransition();
+    if (automixTransition) {
+      player.dualDeck.setCrossfader(automixTransitionToCrossfader(
+        automixTransition.fromDeck,
+        automixTransition.progress
+      ));
+    }
+    player.dualDeck.clearAutomixTransition();
+    scheduleMixerUiSync();
     setDjModeState('manual');
-  }, [cancelDjAutomixTransition, setDjModeState]);
+  }, [
+    cancelDjAutomixAnimation,
+    player.dualDeck.clearAutomixTransition,
+    player.dualDeck.getAutomixTransition,
+    player.dualDeck.setCrossfader,
+    scheduleMixerUiSync,
+    setDjModeState
+  ]);
 
   const djTracksById = useMemo(
     () => new Map(library.tracks.map(track => [track.id, track])),
@@ -669,21 +692,22 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
 
     player.dualDeck.setVolume(options.activeDeck, 1);
     player.dualDeck.setVolume(incomingDeck, 1);
-    player.dualDeck.setCrossfader(options.activeDeck === 'a' ? -1 : 1);
+    player.dualDeck.setAutomixTransition(options.activeDeck, 0);
     scheduleMixerUiSync();
 
     djAutomixTransitionRef.current = true;
     void player.dualDeck.play(incomingDeck).then(started => {
       if (!started || djMixModeRef.current !== 'automix') {
         djAutomixTransitionRef.current = false;
+        if (djMixModeRef.current === 'automix') {
+          player.dualDeck.setAutomixTransition(options.activeDeck, 0);
+        }
         return;
       }
 
       markDjTrackPlayed(options.nextTrack.id);
       const startedAt = performance.now();
       const durationMs = Math.max(250, options.durationSeconds * 1000);
-      const from = options.activeDeck === 'a' ? -1 : 1;
-      const to = -from;
 
       const animate = () => {
         if (djMixModeRef.current !== 'automix') {
@@ -693,7 +717,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
         }
 
         const progress = Math.max(0, Math.min(1, (performance.now() - startedAt) / durationMs));
-        player.dualDeck.setCrossfader(from + ((to - from) * progress));
+        player.dualDeck.setAutomixTransition(options.activeDeck, progress);
         scheduleMixerUiSync();
 
         if (progress < 1) {
@@ -709,6 +733,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
           || adoptedSnapshot.trackId !== options.nextTrack.id
           || !adoptedSnapshot.playing
         ) {
+          player.dualDeck.setAutomixTransition(options.activeDeck, 0);
           djAutomixTransitionRef.current = false;
           return;
         }
@@ -719,6 +744,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
         djAutomixActiveDeckRef.current = incomingDeck;
         djAutomixQueueIndexRef.current = options.nextQueueIndex;
         ddjBaseRateRef.current[incomingDeck] = adoptedSnapshot.playbackRate || 1;
+        player.dualDeck.setAutomixTransition(incomingDeck, 0);
 
         player.dualDeck.pause(options.activeDeck);
         commitDjSyncState(resolveDjSyncAfterDeckUnavailable(
@@ -781,7 +807,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     djAutomixActiveDeckRef.current = activeDeck;
     player.dualDeck.setVolume('a', 1);
     player.dualDeck.setVolume('b', 1);
-    player.dualDeck.setCrossfader(activeDeck === 'a' ? -1 : 1);
+    player.dualDeck.setAutomixTransition(activeDeck, 0);
     scheduleMixerUiSync();
     setDjModeState('automix');
     prepareDjAutomixNext(activeDeck, djAutomixQueueIndexRef.current);
@@ -821,9 +847,8 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
   }, [player.dualDeck, prepareDjAutomixNext]);
 
   const disableDjAutomix = useCallback(() => {
-    cancelDjAutomixTransition();
-    setDjModeState('manual');
-  }, [cancelDjAutomixTransition, setDjModeState]);
+    switchDjToManual();
+  }, [switchDjToManual]);
 
   useEffect(() => {
     if (screen !== 'dj' || djMixMode !== 'automix') return;
