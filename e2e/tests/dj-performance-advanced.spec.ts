@@ -23,6 +23,8 @@ test('Modo DJ mantém AutoMix, FX e gravação ativos no mesmo fluxo', async ({ 
   test.setTimeout(60_000);
 
   await page.addInitScript(() => {
+    localStorage.setItem('home-music:crossfade-seconds:v2', '3');
+
     class E2eMediaRecorder {
       static isTypeSupported(mimeType: string) {
         return mimeType.startsWith('audio/webm');
@@ -105,7 +107,7 @@ test('Modo DJ mantém AutoMix, FX e gravação ativos no mesmo fluxo', async ({ 
       && audio.duration > 0
     ));
     if (!active) return false;
-    active.currentTime = Math.max(0, active.duration - 0.2);
+    active.currentTime = Math.max(0, active.duration - 2);
     return true;
   })).toBe(true);
 
