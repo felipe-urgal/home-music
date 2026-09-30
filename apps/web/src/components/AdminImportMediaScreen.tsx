@@ -78,7 +78,7 @@ function statusIcon(status: ImportJobStatus) {
 }
 
 function sourceLabel(job: ImportJob) {
-  if (job.source.type === 'provider') return 'YouTube / YouTube Music';
+  if (job.source.type === 'provider') return 'YouTube / Spotify';
   if (job.source.type === 'url') return 'URL direta';
   return 'Arquivo local';
 }
@@ -372,7 +372,7 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
               onClick={() => setSourceMode('provider')}
             >
               <span className="admin-import-v4__source-tab-icon">▶</span>
-              <strong>YouTube / YouTube Music</strong>
+              <strong>YouTube / Spotify</strong>
             </button>
             <button
               id="admin-import-local-tab"
@@ -485,7 +485,7 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
           <aside className="admin-import-v4__source-note">
             <InfoIcon />
             <span>{sourceMode === 'provider'
-              ? 'Use apenas conteúdo que você tenha direito de baixar. O Home Music usa um provider externo (yt-dlp) para preparar mídias do YouTube.'
+              ? 'Use apenas conteúdo que você tenha direito de baixar. Links do Spotify usam o catálogo para identificar as faixas e o provider externo para preparar a mídia.'
               : 'O arquivo será validado antes de continuar. Tamanho e formatos permitidos são verificados pelo sistema.'}</span>
           </aside>
         </section>

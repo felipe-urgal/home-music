@@ -24,6 +24,8 @@ import {
   searchAdminExternalProvider,
   startAdminExternalProvider,
   startAdminExternalProviderBatch,
+  updateAdminExternalProviderBatchItem,
+  updateAdminExternalProviderBatchSelection,
   type AdminExternalProviderBatch,
   type AdminExternalProviderDescriptor
 } from '../admin-external-provider-client';
@@ -93,12 +95,12 @@ function batchDuration(batch: AdminExternalProviderBatch) {
 }
 
 function batchStatusLabel(batch: AdminExternalProviderBatch) {
-  if (batch.status === 'ready') return 'Playlist pronta para importar';
-  if (batch.status === 'running') return 'Importando playlist…';
-  if (batch.status === 'cancelling') return 'Cancelando playlist…';
-  if (batch.status === 'cancelled') return 'Playlist cancelada';
-  if (batch.status === 'failed') return 'Playlist encerrada com falha';
-  return 'Importação da playlist concluída';
+  if (batch.status === 'ready') return 'Lista pronta para importar';
+  if (batch.status === 'running') return 'Importando lista…';
+  if (batch.status === 'cancelling') return 'Cancelando lista…';
+  if (batch.status === 'cancelled') return 'Lista cancelada';
+  if (batch.status === 'failed') return 'Lista encerrada com falha';
+  return 'Importação da lista concluída';
 }
 
 function batchItemStatusLabel(status: AdminExternalProviderBatch['items'][number]['status']) {
@@ -136,6 +138,7 @@ export function AdminExternalProviderPanel({
   const [searchCompleted, setSearchCompleted] = useState(false);
   const [selectedResultId, setSelectedResultId] = useState<string | null>(null);
   const [startingBatch, setStartingBatch] = useState(false);
+  const [updatingBatch, setUpdatingBatch] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -176,7 +179,7 @@ export function AdminExternalProviderPanel({
         setActiveBatch(next);
         await onRefresh();
       } catch (caught) {
-        if (active) setError(caught instanceof Error ? caught.message : 'Não foi possível atualizar o progresso da playlist.');
+        if (active) setError(caught instanceof Error ? caught.message : 'Não foi possível atualizar o progresso da lista.');
       }
     };
     const timer = window.setInterval(() => { void refresh(); }, 900);
@@ -279,9 +282,41 @@ export function AdminExternalProviderPanel({
       const next = await startAdminExternalProviderBatch(activeBatch.id, destination);
       setActiveBatch(next);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Não foi possível iniciar a playlist.');
+      setError(caught instanceof Error ? caught.message : 'Não foi possível iniciar a lista.');
     } finally {
       setStartingBatch(false);
+    }
+  };
+
+  const updateBatchItem = async (
+    index: number,
+    input: { selected?: boolean; candidateId?: string }
+  ) => {
+    if (!activeBatch || activeBatch.status !== 'ready' || updatingBatch) return;
+    setUpdatingBatch(true);
+    setError(null);
+    try {
+      setActiveBatch(await updateAdminExternalProviderBatchItem(activeBatch.id, index, input));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Não foi possível atualizar a seleção.');
+    } finally {
+      setUpdatingBatch(false);
+    }
+  };
+
+  const selectBatchItems = async (selectAll: boolean) => {
+    if (!activeBatch || activeBatch.status !== 'ready' || updatingBatch) return;
+    setUpdatingBatch(true);
+    setError(null);
+    try {
+      const indexes = selectAll
+        ? activeBatch.items.filter(item => item.selectable).map(item => item.index)
+        : [];
+      setActiveBatch(await updateAdminExternalProviderBatchSelection(activeBatch.id, indexes));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Não foi possível atualizar a seleção.');
+    } finally {
+      setUpdatingBatch(false);
     }
   };
 
@@ -294,7 +329,7 @@ export function AdminExternalProviderPanel({
         setActiveBatch(next);
         await onRefresh();
       } catch (caught) {
-        setError(caught instanceof Error ? caught.message : 'Não foi possível cancelar a playlist.');
+        setError(caught instanceof Error ? caught.message : 'Não foi possível cancelar a lista.');
       } finally {
         setCancelling(false);
       }
@@ -315,6 +350,8 @@ export function AdminExternalProviderPanel({
   };
 
   const selectedFolder = folders.find(folder => folder.path === folderPath) ?? null;
+  const selectedBatchItems = activeBatch?.items.filter(item => item.selected).length ?? 0;
+  const reviewBatchItems = activeBatch?.items.filter(item => !item.selectable && item.candidates.length > 0).length ?? 0;
   const batchProgress = activeBatch?.summary.total
     ? Math.round((activeBatch.summary.processed / activeBatch.summary.total) * 100)
     : 0;
@@ -328,7 +365,7 @@ export function AdminExternalProviderPanel({
         <div className="admin-import-upload__heading">
           <div>
             <span className="my-account-link-group__label">Fontes externas</span>
-            <strong id="admin-import-provider-title">YouTube Music e sites compatíveis</strong>
+            <strong id="admin-import-provider-title">YouTube, Spotify e fontes compatíveis</strong>
           </div>
           <small>{!providersLoaded ? 'Verificando…' : available.length > 0 ? `${available.length} disponível` : 'yt-dlp não encontrado'}</small>
         </div>
@@ -349,7 +386,7 @@ export function AdminExternalProviderPanel({
             <div className="admin-import-provider__compact-heading">
               <div>
                 <strong id="admin-import-provider-title">Busque ou cole um link</strong>
-                <small>Artista, música, álbum, faixa individual ou playlist</small>
+                <small>Artista, música ou link do YouTube/Spotify</small>
               </div>
               <Link2 />
             </div>
@@ -370,13 +407,13 @@ export function AdminExternalProviderPanel({
             <label className="admin-import-provider__url">
               {!compact && <span>Link do conteúdo</span>}
               <input
-                aria-label={compact ? 'Buscar ou colar link do YouTube ou YouTube Music' : undefined}
+                aria-label={compact ? 'Buscar ou colar link do YouTube, YouTube Music ou Spotify' : undefined}
                 type="text"
                 inputMode="search"
                 autoCapitalize="none"
                 autoCorrect="off"
                 spellCheck={false}
-                placeholder="Artista, música, álbum ou URL..."
+                placeholder="Artista, música ou URL do YouTube/Spotify..."
                 value={url}
                 disabled={formBusy}
                 onChange={event => {
@@ -406,7 +443,7 @@ export function AdminExternalProviderPanel({
           </div>
           {!compact && (
             <small className="admin-import-provider__policy">
-              <ShieldCheck /> Links do YouTube e YouTube Music devem ser colados aqui, não em “URL direta”. Use apenas conteúdo que você tenha direito de baixar.
+              <ShieldCheck /> Links do YouTube, YouTube Music e Spotify devem ser colados aqui. No Spotify, o catálogo é usado para identificar as faixas e a mídia é resolvida pelo provider configurado. Use apenas conteúdo que você tenha direito de baixar.
             </small>
           )}
         </form>
@@ -468,12 +505,20 @@ export function AdminExternalProviderPanel({
       {activeBatch && (
         <article className={`admin-provider-batch is-${activeBatch.status}`} aria-live="polite">
           <div className="admin-provider-batch__heading">
-            <span className="admin-provider-batch__icon">
-              {batchRunning ? <LoaderCircle className="is-spinning" /> : activeBatch.status === 'completed' ? <CheckCircle2 /> : <ListMusic />}
+            <span className={`admin-provider-batch__icon${activeBatch.presentation?.thumbnailUrl ? ' has-artwork' : ''}`}>
+              {activeBatch.presentation?.thumbnailUrl ? (
+                <img
+                  src={activeBatch.presentation.thumbnailUrl}
+                  alt=""
+                  referrerPolicy="no-referrer"
+                />
+              ) : batchRunning ? <LoaderCircle className="is-spinning" /> : activeBatch.status === 'completed' ? <CheckCircle2 /> : <ListMusic />}
             </span>
             <div>
               <strong>{activeBatch.label}</strong>
               <small>
+                {activeBatch.presentation?.sourceLabel ? `${activeBatch.presentation.sourceLabel} · ` : ''}
+                {activeBatch.presentation?.subtitle ? `${activeBatch.presentation.subtitle} · ` : ''}
                 {activeBatch.summary.total} {activeBatch.summary.total === 1 ? 'música' : 'músicas'}
                 {batchDuration(activeBatch) ? ` · ${batchDuration(activeBatch)}` : ''}
                 {' · melhor qualidade disponível'}
@@ -484,10 +529,27 @@ export function AdminExternalProviderPanel({
 
           {activeBatch.status === 'ready' && (
             <div className="admin-provider-batch__destination">
+              <div className="admin-provider-batch__selection">
+                <div>
+                  <strong>{selectedBatchItems} selecionadas</strong>
+                  <small>
+                    {reviewBatchItems > 0 ? `${reviewBatchItems} precisam de revisão de origem` : 'Matches confiáveis prontos para importar'}
+                  </small>
+                </div>
+                <div>
+                  <button type="button" disabled={updatingBatch} onClick={() => void selectBatchItems(true)}>
+                    Selecionar resolvidas
+                  </button>
+                  <button type="button" disabled={updatingBatch} onClick={() => void selectBatchItems(false)}>
+                    Limpar seleção
+                  </button>
+                </div>
+              </div>
+
               <div className="admin-provider-batch__folder-row">
                 <Folder />
                 <div>
-                  <strong>Salvar playlist em</strong>
+                  <strong>Salvar lista em</strong>
                   <small>Todos os itens usam o mesmo destino, com nomes sem colisão.</small>
                 </div>
               </div>
@@ -496,7 +558,7 @@ export function AdminExternalProviderPanel({
                 <div className="admin-provider-batch__folder-picker">
                   <div className="admin-import-destination__select-wrap">
                     <select
-                      aria-label="Pasta de destino da playlist"
+                      aria-label="Pasta de destino da lista"
                       value={folderPath}
                       disabled={startingBatch}
                       onChange={event => setFolderPath(event.target.value)}
@@ -514,7 +576,7 @@ export function AdminExternalProviderPanel({
               ) : (
                 <div className="admin-provider-batch__new-folder">
                   <input
-                    aria-label="Nova pasta para a playlist"
+                    aria-label="Nova pasta para a lista"
                     type="text"
                     maxLength={1024}
                     value={newFolderPath}
@@ -531,9 +593,9 @@ export function AdminExternalProviderPanel({
                 <button type="button" disabled={cancelling || startingBatch} onClick={() => void cancel()}>
                   <X /> Cancelar
                 </button>
-                <button className="is-primary" type="button" disabled={startingBatch || (creatingFolder && !newFolderPath.trim())} onClick={() => void startBatch()}>
+                <button className="is-primary" type="button" disabled={startingBatch || updatingBatch || selectedBatchItems === 0 || (creatingFolder && !newFolderPath.trim())} onClick={() => void startBatch()}>
                   {startingBatch ? <LoaderCircle className="is-spinning" /> : <ListMusic />}
-                  {startingBatch ? 'Iniciando…' : `Importar ${activeBatch.summary.total} músicas`}
+                  {startingBatch ? 'Iniciando…' : `Importar ${selectedBatchItems} ${selectedBatchItems === 1 ? 'música' : 'músicas'}`}
                 </button>
               </div>
             </div>
@@ -558,17 +620,47 @@ export function AdminExternalProviderPanel({
             </div>
           )}
 
-          <details className="admin-provider-batch__items">
+          <details className="admin-provider-batch__items" open={activeBatch.status === 'ready'}>
             <summary>Ver itens <span>{activeBatch.summary.total}</span></summary>
             <div>
               {activeBatch.items.map(item => (
                 <div className={`admin-provider-batch__item is-${item.status}`} key={`${activeBatch.id}:${item.index}`}>
-                  <span>{item.index + 1}</span>
+                  {activeBatch.status === 'ready' ? (
+                    <input
+                      className="admin-provider-batch__item-check"
+                      type="checkbox"
+                      aria-label={`Selecionar ${item.label}`}
+                      checked={item.selected}
+                      disabled={updatingBatch || !item.selectable}
+                      onChange={event => void updateBatchItem(item.index, { selected: event.target.checked })}
+                    />
+                  ) : (
+                    <span>{item.index + 1}</span>
+                  )}
                   <div>
                     <strong>{item.label}</strong>
                     <small>{item.destination || item.error || batchItemStatusLabel(item.status)}</small>
+                    {activeBatch.status === 'ready' && item.candidates.length > 0 && (
+                      <div className="admin-provider-batch__candidates">
+                        {item.candidates.map(candidate => (
+                          <button
+                            type="button"
+                            key={candidate.id}
+                            disabled={updatingBatch}
+                            className={item.selectable && item.selected && item.error == null ? undefined : 'is-review'}
+                            onClick={() => void updateBatchItem(item.index, { candidateId: candidate.id })}
+                          >
+                            <span>{candidate.label}</span>
+                            <small>
+                              {searchDuration(candidate.durationSeconds) ?? 'duração desconhecida'}
+                              {candidate.confidence != null ? ` · ${Math.round(candidate.confidence * 100)}%` : ''}
+                            </small>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  <small>{batchItemStatusLabel(item.status)}</small>
+                  <small>{activeBatch.status === 'ready' ? (item.selected ? 'Selecionada' : item.selectable ? 'Disponível' : 'Revisar') : batchItemStatusLabel(item.status)}</small>
                 </div>
               ))}
             </div>

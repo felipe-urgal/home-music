@@ -41,17 +41,33 @@ export type ExternalProviderBatchItemStatus =
   | 'failed'
   | 'cancelled';
 
+export type ExternalProviderBatchInspectionCandidate = Readonly<{
+  id: string;
+  label: string;
+  durationSeconds: number | null;
+  confidence: number | null;
+  request: ExternalProviderRequest;
+}>;
+
 export type ExternalProviderBatchInspectionItem = Readonly<{
   sourceId: string | null;
   label: string;
   durationSeconds: number | null;
   request: ExternalProviderRequest | null;
   unavailableReason?: string | null;
+  candidates?: readonly ExternalProviderBatchInspectionCandidate[];
+}>;
+
+export type ExternalProviderBatchInspectionPresentation = Readonly<{
+  sourceLabel: string | null;
+  subtitle: string | null;
+  thumbnailUrl: string | null;
 }>;
 
 export type ExternalProviderBatchInspection = Readonly<{
   providerId: string;
   label: string;
+  presentation?: ExternalProviderBatchInspectionPresentation | null;
   items: readonly ExternalProviderBatchInspectionItem[];
 }>;
 
@@ -69,11 +85,21 @@ export type ExternalProviderBatchLimits = Readonly<{
   maxDurationSeconds: number;
 }>;
 
+export type ExternalProviderBatchCandidate = Readonly<{
+  id: string;
+  label: string;
+  durationSeconds: number | null;
+  confidence: number | null;
+}>;
+
 export type ExternalProviderBatchItem = Readonly<{
   index: number;
   sourceId: string | null;
   label: string;
   durationSeconds: number | null;
+  selectable: boolean;
+  selected: boolean;
+  candidates: readonly ExternalProviderBatchCandidate[];
   status: ExternalProviderBatchItemStatus;
   jobId: string | null;
   destination: string | null;
@@ -92,10 +118,17 @@ export type ExternalProviderBatchSummary = Readonly<{
   importedDurationSeconds: number;
 }>;
 
+export type ExternalProviderBatchPresentation = Readonly<{
+  sourceLabel: string | null;
+  subtitle: string | null;
+  thumbnailUrl: string | null;
+}>;
+
 export type ExternalProviderBatch = Readonly<{
   id: string;
   providerId: string;
   label: string;
+  presentation?: ExternalProviderBatchPresentation | null;
   status: ExternalProviderBatchStatus;
   folderPath: string | null;
   createdAt: string;
@@ -109,12 +142,22 @@ export type ExternalProviderBatch = Readonly<{
   items: readonly ExternalProviderBatchItem[];
 }>;
 
+type MutableBatchCandidate = {
+  id: string;
+  label: string;
+  durationSeconds: number | null;
+  confidence: number | null;
+  request: ExternalProviderRequest;
+};
+
 type MutableBatchItem = {
   sourceId: string | null;
   label: string;
   durationSeconds: number | null;
   request: ExternalProviderRequest | null;
   unavailableReason: string | null;
+  selected: boolean;
+  candidates: MutableBatchCandidate[];
   status: ExternalProviderBatchItemStatus;
   jobId: string | null;
   destination: string | null;
@@ -125,6 +168,7 @@ type MutableBatch = {
   id: string;
   providerId: string;
   label: string;
+  presentation: ExternalProviderBatchPresentation | null;
   status: ExternalProviderBatchStatus;
   folderPath: string | null;
   createdAt: string;
@@ -238,7 +282,37 @@ function normalizeRequest(request: ExternalProviderRequest) {
     throw new ExternalProviderBatchError('invalid_input', 'URL do lote inválida.');
   }
   url.hash = '';
-  return Object.freeze({ url: url.toString() }) satisfies ExternalProviderRequest;
+  const metadata = request.metadata
+    ? Object.freeze({
+        title: typeof request.metadata.title === 'string' ? request.metadata.title.trim().slice(0, 500) || null : null,
+        artist: typeof request.metadata.artist === 'string' ? request.metadata.artist.trim().slice(0, 500) || null : null,
+        album: typeof request.metadata.album === 'string' ? request.metadata.album.trim().slice(0, 500) || null : null,
+        thumbnailUrl: typeof request.metadata.thumbnailUrl === 'string' ? request.metadata.thumbnailUrl.trim().slice(0, 2_048) || null : null,
+        attribution: typeof request.metadata.attribution === 'string' ? request.metadata.attribution.trim().slice(0, 500) || null : null
+      })
+    : undefined;
+  const provenance = request.provenance
+    && request.provenance.catalog === 'spotify'
+    && typeof request.provenance.catalogId === 'string'
+    && /^[A-Za-z0-9]{22}$/.test(request.provenance.catalogId)
+    && typeof request.provenance.catalogUrl === 'string'
+    && request.provenance.catalogUrl.startsWith('https://open.spotify.com/track/')
+    && typeof request.provenance.matchConfidence === 'number'
+    && Number.isFinite(request.provenance.matchConfidence)
+    && request.provenance.matchConfidence >= 0
+    && request.provenance.matchConfidence <= 1
+      ? Object.freeze({
+          catalog: 'spotify' as const,
+          catalogId: request.provenance.catalogId,
+          catalogUrl: request.provenance.catalogUrl.slice(0, 2_048),
+          matchConfidence: request.provenance.matchConfidence
+        })
+      : undefined;
+  return Object.freeze({
+    url: url.toString(),
+    ...(metadata ? { metadata } : {}),
+    ...(provenance ? { provenance } : {})
+  }) satisfies ExternalProviderRequest;
 }
 
 function cleanLabel(value: unknown, fallback: string) {
@@ -249,6 +323,34 @@ function cleanLabel(value: unknown, fallback: string) {
 
 function safeDuration(value: unknown) {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function safeConfidence(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1
+    ? value
+    : null;
+}
+
+function cleanCandidateId(value: unknown, fallback: string) {
+  if (typeof value !== 'string') return fallback;
+  const clean = value.trim().slice(0, 128);
+  return clean && /^[A-Za-z0-9._:-]+$/.test(clean) ? clean : fallback;
+}
+
+function safePresentationUrl(value: unknown) {
+  if (typeof value !== 'string' || value.length > 2_048) return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' || url.username || url.password) return null;
+    const hostname = url.hostname.toLowerCase();
+    const allowed = hostname === 'scdn.co'
+      || hostname.endsWith('.scdn.co')
+      || hostname === 'spotifycdn.com'
+      || hostname.endsWith('.spotifycdn.com');
+    return allowed ? url.toString() : null;
+  } catch {
+    return null;
+  }
 }
 
 function publicError(error: unknown) {
@@ -297,6 +399,7 @@ function snapshot(batch: MutableBatch, limits: ExternalProviderBatchLimits): Ext
     id: batch.id,
     providerId: batch.providerId,
     label: batch.label,
+    ...(batch.presentation ? { presentation: { ...batch.presentation } } : {}),
     status: batch.status,
     folderPath: batch.folderPath,
     createdAt: batch.createdAt,
@@ -312,10 +415,18 @@ function snapshot(batch: MutableBatch, limits: ExternalProviderBatchLimits): Ext
       sourceId: item.sourceId,
       label: item.label,
       durationSeconds: item.durationSeconds,
+      selectable: Boolean(item.request),
+      selected: item.selected,
+      candidates: item.candidates.map(candidate => ({
+        id: candidate.id,
+        label: candidate.label,
+        durationSeconds: candidate.durationSeconds,
+        confidence: candidate.confidence
+      })),
       status: item.status,
       jobId: item.jobId,
       destination: item.destination,
-      error: item.error
+      error: item.error ?? (!item.request ? item.unavailableReason : null)
     }))
   };
 }
@@ -436,6 +547,14 @@ export class ExternalProviderBatchManager {
         durationSeconds,
         request: item.request ? normalizeRequest(item.request) : null,
         unavailableReason: item.unavailableReason ? cleanLabel(item.unavailableReason, 'Item indisponível.') : null,
+        selected: Boolean(item.request),
+        candidates: (item.candidates ?? []).slice(0, 10).map((candidate, candidateIndex) => ({
+          id: cleanCandidateId(candidate.id, `candidate-${candidateIndex + 1}`),
+          label: cleanLabel(candidate.label, `Candidato ${candidateIndex + 1}`),
+          durationSeconds: safeDuration(candidate.durationSeconds),
+          confidence: safeConfidence(candidate.confidence),
+          request: normalizeRequest(candidate.request)
+        })),
         status: 'queued',
         jobId: null,
         destination: null,
@@ -455,6 +574,17 @@ export class ExternalProviderBatchManager {
       id: this.createId(),
       providerId: id,
       label: cleanLabel(inspection.label, 'Lista externa'),
+      presentation: inspection.presentation
+        ? {
+            sourceLabel: inspection.presentation.sourceLabel
+              ? cleanLabel(inspection.presentation.sourceLabel, 'Origem externa')
+              : null,
+            subtitle: inspection.presentation.subtitle
+              ? cleanLabel(inspection.presentation.subtitle, 'Catálogo externo')
+              : null,
+            thumbnailUrl: safePresentationUrl(inspection.presentation.thumbnailUrl)
+          }
+        : null,
       status: 'ready',
       folderPath: null,
       createdAt: now.toISOString(),
@@ -472,11 +602,76 @@ export class ExternalProviderBatchManager {
     return snapshot(batch, this.limits);
   }
 
+  updateItem(
+    batchId: string,
+    index: number,
+    input: { selected?: unknown; candidateId?: unknown }
+  ) {
+    const batch = this.requireBatch(batchId);
+    this.assertFresh(batch);
+    if (batch.status !== 'ready') {
+      throw new ExternalProviderBatchError('batch_not_ready', 'Este lote já foi iniciado.', 409);
+    }
+    if (!Number.isSafeInteger(index) || index < 0 || index >= batch.items.length) {
+      throw new ExternalProviderBatchError('invalid_input', 'Item do lote inválido.', 404);
+    }
+    const item = batch.items[index];
+
+    if (input.candidateId !== undefined) {
+      const candidateId = typeof input.candidateId === 'string' ? input.candidateId.trim() : '';
+      const candidate = item.candidates.find(value => value.id === candidateId);
+      if (!candidate) {
+        throw new ExternalProviderBatchError('invalid_input', 'Candidato de mídia inválido.', 400);
+      }
+      item.request = candidate.request;
+      item.selected = true;
+      item.unavailableReason = null;
+      item.error = null;
+    }
+
+    if (input.selected !== undefined) {
+      if (typeof input.selected !== 'boolean') {
+        throw new ExternalProviderBatchError('invalid_input', 'Seleção do item inválida.', 400);
+      }
+      if (input.selected && !item.request) {
+        throw new ExternalProviderBatchError(
+          'invalid_input',
+          'Escolha um candidato de mídia antes de selecionar este item.',
+          409
+        );
+      }
+      item.selected = input.selected;
+    }
+
+    this.touch(batch);
+    return snapshot(batch, this.limits);
+  }
+
+  setSelection(batchId: string, indexes: unknown) {
+    const batch = this.requireBatch(batchId);
+    this.assertFresh(batch);
+    if (batch.status !== 'ready') {
+      throw new ExternalProviderBatchError('batch_not_ready', 'Este lote já foi iniciado.', 409);
+    }
+    if (!Array.isArray(indexes) || indexes.some(index => !Number.isSafeInteger(index) || index < 0 || index >= batch.items.length)) {
+      throw new ExternalProviderBatchError('invalid_input', 'Seleção do lote inválida.', 400);
+    }
+    const selected = new Set(indexes as number[]);
+    batch.items.forEach((item, index) => {
+      item.selected = selected.has(index) && Boolean(item.request);
+    });
+    this.touch(batch);
+    return snapshot(batch, this.limits);
+  }
+
   start(batchId: string, folderPath?: unknown) {
     const batch = this.requireBatch(batchId);
     this.assertFresh(batch);
     if (batch.status !== 'ready') {
       throw new ExternalProviderBatchError('batch_not_ready', 'Este lote já foi iniciado.', 409);
+    }
+    if (!batch.items.some(item => item.selected && item.request)) {
+      throw new ExternalProviderBatchError('invalid_input', 'Selecione pelo menos uma música importável.', 409);
     }
 
     batch.folderPath = normalizeImportFolderPath(folderPath).join('/');
@@ -539,6 +734,14 @@ export class ExternalProviderBatchManager {
     try {
       for (const item of batch.items) {
         if (session.cancelRequested) break;
+        if (!item.selected) {
+          item.status = 'ignored';
+          item.error = item.request
+            ? 'Item desmarcado antes do início do lote.'
+            : item.unavailableReason || 'Item sem candidato de mídia selecionado.';
+          this.touch(batch);
+          continue;
+        }
         if (!item.request) {
           item.status = 'ignored';
           item.error = item.unavailableReason || 'Item indisponível na origem.';

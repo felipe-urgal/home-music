@@ -35,8 +35,8 @@ function batch(status: ExternalProviderBatch['status'] = 'ready'): ExternalProvi
       importedDurationSeconds: 0
     },
     items: [
-      { index: 0, sourceId: 'video001', label: 'Faixa 1', durationSeconds: 120, status: 'queued', jobId: null, destination: null, error: null },
-      { index: 1, sourceId: 'video002', label: 'Faixa 2', durationSeconds: 180, status: 'queued', jobId: null, destination: null, error: null }
+      { index: 0, sourceId: 'video001', label: 'Faixa 1', durationSeconds: 120, selectable: true, selected: true, candidates: [], status: 'queued', jobId: null, destination: null, error: null },
+      { index: 1, sourceId: 'video002', label: 'Faixa 2', durationSeconds: 180, selectable: true, selected: true, candidates: [], status: 'queued', jobId: null, destination: null, error: null }
     ]
   };
 }
@@ -57,6 +57,14 @@ test('rotas de lote expõem preview, início, progresso e cancelamento', async (
     get: (id: string) => {
       calls.push({ operation: 'get', value: id });
       return running;
+    },
+    updateItem: (id: string, index: number, input: unknown) => {
+      calls.push({ operation: 'updateItem', value: { id, index, input } });
+      return ready;
+    },
+    setSelection: (id: string, indexes: unknown) => {
+      calls.push({ operation: 'setSelection', value: { id, indexes } });
+      return ready;
     },
     start: (id: string, folderPath?: unknown) => {
       calls.push({ operation: 'start', value: { id, folderPath } });
@@ -81,6 +89,20 @@ test('rotas de lote expõem preview, início, progresso e cancelamento', async (
     assert.equal(inspected.headers['cache-control'], 'no-store');
     assert.equal(inspected.json().batch.summary.total, 2);
 
+    const reviewed = await app.inject({
+      method: 'PATCH',
+      url: '/api/admin/imports/provider-batches/batch-1/items/1',
+      payload: { candidateId: 'candidate-1' }
+    });
+    assert.equal(reviewed.statusCode, 200);
+
+    const selected = await app.inject({
+      method: 'PATCH',
+      url: '/api/admin/imports/provider-batches/batch-1/selection',
+      payload: { indexes: [1] }
+    });
+    assert.equal(selected.statusCode, 200);
+
     const started = await app.inject({
       method: 'POST',
       url: '/api/admin/imports/provider-batches/batch-1/start',
@@ -97,7 +119,7 @@ test('rotas de lote expõem preview, início, progresso e cancelamento', async (
     assert.equal(stopped.statusCode, 200);
     assert.equal(stopped.json().batch.status, 'cancelled');
 
-    assert.deepEqual(calls.map(call => call.operation), ['inspect', 'start', 'get', 'cancel']);
+    assert.deepEqual(calls.map(call => call.operation), ['inspect', 'updateItem', 'setSelection', 'start', 'get', 'cancel']);
   } finally {
     await app.close();
   }
@@ -111,6 +133,8 @@ test('rota de lote preserva status HTTP de erro de domínio', async () => {
     },
     getLimits: () => ({ maxItems: 50, maxBytes: 100, maxDurationSeconds: 100 }),
     get: () => batch(),
+    updateItem: () => batch(),
+    setSelection: () => batch(),
     start: () => batch(),
     cancel: async () => batch('cancelled'),
     stop: () => undefined

@@ -54,6 +54,36 @@ export function registerAdminExternalProviderBatchRoutes(
     }
   );
 
+  app.patch<{ Params: { id: string; index: string }; Body: { selected?: unknown; candidateId?: unknown } }>(
+    '/api/admin/imports/provider-batches/:id/items/:index',
+    async (request, reply) => {
+      reply.header('Cache-Control', 'no-store');
+      try {
+        const index = Number(request.params.index);
+        return {
+          batch: batches.updateItem(request.params.id, index, {
+            selected: request.body?.selected,
+            candidateId: request.body?.candidateId
+          })
+        };
+      } catch (error) {
+        return sendBatchError(reply, error);
+      }
+    }
+  );
+
+  app.patch<{ Params: { id: string }; Body: { indexes?: unknown } }>(
+    '/api/admin/imports/provider-batches/:id/selection',
+    async (request, reply) => {
+      reply.header('Cache-Control', 'no-store');
+      try {
+        return { batch: batches.setSelection(request.params.id, request.body?.indexes) };
+      } catch (error) {
+        return sendBatchError(reply, error);
+      }
+    }
+  );
+
   app.post<{ Params: { id: string }; Body: { folderPath?: unknown } }>(
     '/api/admin/imports/provider-batches/:id/start',
     async (request, reply) => {

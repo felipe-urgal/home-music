@@ -30,11 +30,21 @@ export type AdminExternalProviderBatchItemStatus =
   | 'failed'
   | 'cancelled';
 
+export type AdminExternalProviderBatchCandidate = {
+  id: string;
+  label: string;
+  durationSeconds: number | null;
+  confidence: number | null;
+};
+
 export type AdminExternalProviderBatchItem = {
   index: number;
   sourceId: string | null;
   label: string;
   durationSeconds: number | null;
+  selectable: boolean;
+  selected: boolean;
+  candidates: AdminExternalProviderBatchCandidate[];
   status: AdminExternalProviderBatchItemStatus;
   jobId: string | null;
   destination: string | null;
@@ -45,6 +55,11 @@ export type AdminExternalProviderBatch = {
   id: string;
   providerId: string;
   label: string;
+  presentation?: {
+    sourceLabel: string | null;
+    subtitle: string | null;
+    thumbnailUrl: string | null;
+  } | null;
   status: AdminExternalProviderBatchStatus;
   folderPath: string | null;
   createdAt: string;
@@ -122,6 +137,44 @@ export async function inspectAdminExternalProviderBatch(providerId: string, url:
     batch: payload?.batch ?? null,
     limits: payload?.limits ?? null
   };
+}
+
+export async function updateAdminExternalProviderBatchItem(
+  batchId: string,
+  index: number,
+  input: { selected?: boolean; candidateId?: string }
+) {
+  const response = await apiFetch(
+    `/api/admin/imports/provider-batches/${encodeURIComponent(batchId)}/items/${index}`,
+    {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Home-Music-Request': '1'
+      },
+      body: JSON.stringify(input)
+    }
+  );
+  const payload = await response.json().catch(() => null) as { batch?: AdminExternalProviderBatch; error?: string } | null;
+  if (!response.ok || !payload?.batch) throw new Error(payload?.error || `Falha HTTP ${response.status}`);
+  return payload.batch;
+}
+
+export async function updateAdminExternalProviderBatchSelection(batchId: string, indexes: number[]) {
+  const response = await apiFetch(
+    `/api/admin/imports/provider-batches/${encodeURIComponent(batchId)}/selection`,
+    {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Home-Music-Request': '1'
+      },
+      body: JSON.stringify({ indexes })
+    }
+  );
+  const payload = await response.json().catch(() => null) as { batch?: AdminExternalProviderBatch; error?: string } | null;
+  if (!response.ok || !payload?.batch) throw new Error(payload?.error || `Falha HTTP ${response.status}`);
+  return payload.batch;
 }
 
 export async function startAdminExternalProviderBatch(batchId: string, folderPath: string) {

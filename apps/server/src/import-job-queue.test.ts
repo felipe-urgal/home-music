@@ -175,3 +175,26 @@ test('limita jobs não terminais globalmente e por usuário', () => {
   );
   assert.equal(replacement.status, 'pending');
 });
+
+
+test('proveniência é opcional e snapshots continuam compatíveis para jobs comuns', () => {
+  const queue = deterministicQueue();
+  const plain = queue.enqueue({ type: 'upload', provider: null }, 'Arquivo');
+  assert.equal(Object.hasOwn(plain, 'provenance'), false);
+
+  queue.setProvenance(plain.id, {
+    catalog: 'spotify',
+    catalogId: '4uLU6hMCjMI75M1A2tKUQC',
+    catalogUrl: 'https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC',
+    provider: 'yt-dlp',
+    providerSourceId: 'dQw4w9WgXcQ',
+    providerSourceUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+    matchConfidence: 0.97
+  });
+  const withProvenance = queue.get(plain.id);
+  assert.equal(withProvenance?.provenance?.catalog, 'spotify');
+  assert.equal(withProvenance?.provenance?.matchConfidence, 0.97);
+
+  if (withProvenance?.provenance) withProvenance.provenance.catalogId = 'mutated';
+  assert.equal(queue.get(plain.id)?.provenance?.catalogId, '4uLU6hMCjMI75M1A2tKUQC');
+});
