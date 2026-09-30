@@ -75,3 +75,25 @@ test('parseSpotifyEmbedDocument usa a própria entidade para faixa individual', 
   assert.equal(parsed.tracks.length, 1);
   assert.equal(parsed.tracks[0].artist, 'Rick Astley');
 });
+
+
+test('parseSpotifyEmbedDocument normaliza álbum e aplica o nome às faixas', () => {
+  const source = parseSpotifyCatalogUrl('https://open.spotify.com/album/6JWc4iAiJ9FjyK0B59ABb4')!;
+  const parsed = parseSpotifyEmbedDocument(html({
+    type: 'album',
+    name: 'Night Visions',
+    subtitle: 'Imagine Dragons',
+    trackList: [{
+      uri: 'spotify:track:0pqnGHJpmpxLKifKRmU6WP',
+      title: 'Believer',
+      subtitle: 'Imagine Dragons',
+      duration: 204347
+    }]
+  }), source);
+
+  assert.equal(parsed.type, 'album');
+  assert.equal(parsed.label, 'Night Visions');
+  assert.equal(parsed.tracks.length, 1);
+  assert.equal(parsed.tracks[0].album, 'Night Visions');
+  assert.equal(parsed.tracks[0].durationSeconds, 204.347);
+});
