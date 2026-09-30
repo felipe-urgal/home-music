@@ -28,9 +28,17 @@ export type ExternalProviderRequestMetadata = Readonly<{
   attribution?: string | null;
 }>;
 
+export type ExternalProviderRequestProvenance = Readonly<{
+  catalog: 'spotify';
+  catalogId: string;
+  catalogUrl: string;
+  matchConfidence: number;
+}>;
+
 export type ExternalProviderRequest = Readonly<{
   url: string;
   metadata?: ExternalProviderRequestMetadata | null;
+  provenance?: ExternalProviderRequestProvenance | null;
 }>;
 
 export type ExternalProviderConfig = Readonly<Record<string, string>>;
@@ -181,9 +189,27 @@ function normalizeRequest(request: ExternalProviderRequest) {
         attribution: cleanMetadataValue(request.metadata.attribution)
       })
     : undefined;
+  const provenance = request.provenance
+    && request.provenance.catalog === 'spotify'
+    && typeof request.provenance.catalogId === 'string'
+    && /^[A-Za-z0-9]{22}$/.test(request.provenance.catalogId)
+    && typeof request.provenance.catalogUrl === 'string'
+    && request.provenance.catalogUrl.startsWith('https://open.spotify.com/track/')
+    && typeof request.provenance.matchConfidence === 'number'
+    && Number.isFinite(request.provenance.matchConfidence)
+    && request.provenance.matchConfidence >= 0
+    && request.provenance.matchConfidence <= 1
+      ? Object.freeze({
+          catalog: 'spotify' as const,
+          catalogId: request.provenance.catalogId,
+          catalogUrl: request.provenance.catalogUrl.slice(0, 2_048),
+          matchConfidence: request.provenance.matchConfidence
+        })
+      : undefined;
   return Object.freeze({
     url: url.toString(),
-    ...(metadata ? { metadata } : {})
+    ...(metadata ? { metadata } : {}),
+    ...(provenance ? { provenance } : {})
   }) satisfies ExternalProviderRequest;
 }
 
@@ -381,6 +407,17 @@ export class ExternalProviderImportManager {
       { type: 'provider', provider: definition.id },
       `${definition.label} · importação externa`
     );
+    if (normalizedRequest.provenance) {
+      this.queue.setProvenance(job.id, {
+        catalog: normalizedRequest.provenance.catalog,
+        catalogId: normalizedRequest.provenance.catalogId,
+        catalogUrl: normalizedRequest.provenance.catalogUrl,
+        provider: definition.id,
+        providerSourceId: null,
+        providerSourceUrl: normalizedRequest.url,
+        matchConfidence: normalizedRequest.provenance.matchConfidence
+      });
+    }
 
     let scratchDir: string;
     try {
@@ -503,7 +540,7 @@ export class ExternalProviderImportManager {
 
       if (session.controller.signal.aborted) throw abortReason(session.controller.signal);
       const providerMetadata = sanitizeMetadata(media.metadata);
-      const requestMetadata = normalizedRequest.metadata;
+      const requestMetadata = request.metadata;
       const result: ExternalProviderPreparedResult = {
         jobId,
         provider: definition.id,
@@ -521,6 +558,15 @@ export class ExternalProviderImportManager {
         }
       };
       this.prepared.set(jobId, result);
+      const provenance = this.queue.get(jobId)?.provenance;
+      if (provenance) {
+        this.queue.setProvenance(jobId, {
+          ...provenance,
+          provider: definition.id,
+          providerSourceId: providerMetadata.sourceId,
+          providerSourceUrl: providerMetadata.sourceUrl ?? request.url
+        });
+      }
       await this.scratch.cleanupJob(jobId);
       const current = this.queue.get(jobId);
       if (current?.status === 'processing') this.queue.transition(jobId, 'pending');
