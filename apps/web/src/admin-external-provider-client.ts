@@ -35,7 +35,6 @@ export type AdminExternalProviderBatchCandidate = {
   label: string;
   durationSeconds: number | null;
   confidence: number | null;
-  sourceUrl: string;
 };
 
 export type AdminExternalProviderBatchItem = {
