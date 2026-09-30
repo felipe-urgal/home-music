@@ -96,7 +96,9 @@ test('Modo DJ mantém AutoMix, FX e gravação ativos no mesmo fluxo', async ({ 
   await expect(reverbB).toHaveAttribute('aria-pressed', 'true');
   await expect(rec).toHaveAttribute('aria-pressed', 'true');
 
+  const deckA = page.getByRole('article', { name: 'Deck A' });
   const deckB = page.getByRole('article', { name: 'Deck B' });
+  const outgoingTitle = await deckA.locator('.dj-pro-deck__track-copy strong').innerText();
   const incomingTitle = await deckB.locator('.dj-pro-deck__track-copy strong').innerText();
 
   await expect.poll(async () => page.evaluate(() => {
@@ -117,6 +119,16 @@ test('Modo DJ mantém AutoMix, FX e gravação ativos no mesmo fluxo', async ({ 
   ))).toBeGreaterThanOrEqual(2);
 
   await expect(deckB.locator('.dj-pro-deck__track-copy strong')).toHaveText(incomingTitle);
+
+  await expect(deckB).toHaveAttribute('data-playing', 'true');
+  await expect(deckA).toHaveAttribute('data-playing', 'false', { timeout: 10_000 });
+  await expect(deckB.locator('.dj-pro-deck__track-copy strong')).toHaveText(incomingTitle);
+  await expect.poll(async () => (
+    await deckA.locator('.dj-pro-deck__track-copy strong').innerText()
+  )).not.toBe(outgoingTitle);
+  await expect.poll(async () => (
+    await deckA.locator('.dj-pro-deck__track-copy strong').innerText()
+  )).not.toBe(incomingTitle);
 
   const downloadPromise = page.waitForEvent('download');
   await rec.click();
