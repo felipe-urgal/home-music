@@ -83,7 +83,6 @@ export type ExternalProviderBatchCandidate = Readonly<{
   label: string;
   durationSeconds: number | null;
   confidence: number | null;
-  sourceUrl: string;
 }>;
 
 export type ExternalProviderBatchItem = Readonly<{
@@ -390,8 +389,7 @@ function snapshot(batch: MutableBatch, limits: ExternalProviderBatchLimits): Ext
         id: candidate.id,
         label: candidate.label,
         durationSeconds: candidate.durationSeconds,
-        confidence: candidate.confidence,
-        sourceUrl: candidate.request.url
+        confidence: candidate.confidence
       })),
       status: item.status,
       jobId: item.jobId,
