@@ -150,8 +150,11 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   await expect(autoLoopA).toHaveAttribute('title', 'Auto Loop requer BPM analisado');
   await expect(deckA.locator('.dj-waveform__loop-range')).toHaveCount(0);
 
-  const existingHotCueClear = deckA.getByRole('button', { name: 'Limpar Hot Cue 1 Deck A' });
+  const hotCueOneA = deckA.locator('.dj-hot-cue').first();
+  const hotCueOptionsA = hotCueOneA.locator('summary');
+  const existingHotCueClear = hotCueOneA.locator('.dj-hot-cue__clear');
   if (await existingHotCueClear.isEnabled().catch(() => false)) {
+    await hotCueOptionsA.click();
     const resetHotCue = page.waitForResponse(response => (
       response.url().includes('/api/tracks/')
       && response.url().endsWith('/hot-cues')
@@ -159,6 +162,7 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
     ));
     await existingHotCueClear.click();
     expect((await resetHotCue).ok()).toBe(true);
+    await hotCueOptionsA.click();
   }
 
   await expect(deckA.getByRole('button', { name: 'Definir Hot Cue 1 Deck A' })).toBeVisible();
@@ -187,8 +191,9 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   expect(typeof persistedHotCue.positions[0]).toBe('number');
   expect((await saveHotCue).ok()).toBe(true);
   await expect(deckA.getByRole('button', { name: 'Ir para Hot Cue 1 Deck A' })).toBeVisible();
-  const hotLoopA = deckA.getByRole('button', { name: 'Hot Loop Hot Cue 1 Deck A' });
+  const hotLoopA = hotCueOneA.locator('.dj-hot-cue__loop');
   await expect(hotLoopA).toBeDisabled();
+  await expect(hotLoopA).toHaveAttribute('aria-label', 'Hot Loop Hot Cue 1 Deck A');
   await expect(hotLoopA).toHaveAttribute('title', 'Hot Loop requer BPM analisado');
 
   const waveformHotCueA = deckA.getByRole('button', { name: 'Hot Cue 1 no waveform Deck A' });
@@ -203,6 +208,7 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   await expect(deckB.getByRole('button', { name: 'Ir para Hot Cue 1 Deck B' })).toBeVisible();
   await expect(deckB.getByRole('button', { name: 'Hot Cue 1 no waveform Deck B' })).toBeVisible();
 
+  await deckB.locator('.dj-hot-cue').first().locator('summary').click();
   const clearHotCue = page.waitForResponse(response => (
     response.url().includes('/api/tracks/')
     && response.url().endsWith('/hot-cues')
@@ -210,6 +216,7 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   ));
   await deckB.getByRole('button', { name: 'Limpar Hot Cue 1 Deck B' }).click();
   expect((await clearHotCue).ok()).toBe(true);
+  await deckB.locator('.dj-hot-cue').first().locator('summary').click();
   await expect(deckA.getByRole('button', { name: 'Definir Hot Cue 1 Deck A' })).toBeVisible();
   await expect(deckB.getByRole('button', { name: 'Definir Hot Cue 1 Deck B' })).toBeVisible();
   await expect(deckA.getByRole('button', { name: 'Hot Cue 1 no waveform Deck A' })).toHaveCount(0);
@@ -222,6 +229,29 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   await expect(library.getByRole('option').filter({ hasText: 'E2E Zeta' }).locator('.dj-library-deck-badge[data-deck="b"]')).toHaveText('B');
   await expect(deckB.getByRole('button', { name: 'Definir Hot Cue 1 Deck B' })).toBeVisible();
   await expect(deckA.getByRole('button', { name: 'Definir Hot Cue 1 Deck A' })).toBeVisible();
+
+  await expect.poll(async () => deckA.evaluate(element => element.scrollHeight <= element.clientHeight + 1)).toBe(true);
+  await expect.poll(async () => deckB.evaluate(element => element.scrollHeight <= element.clientHeight + 1)).toBe(true);
+  await expect.poll(async () => mixer.evaluate(element => element.scrollHeight <= element.clientHeight + 1)).toBe(true);
+  await expect.poll(async () => deckA.evaluate(element => getComputedStyle(element).overflowY)).toBe('hidden');
+  await expect.poll(async () => deckB.evaluate(element => getComputedStyle(element).overflowY)).toBe('hidden');
+
+  const libraryPanel = dj.locator('.dj-pro-library');
+  const [deckABox, mixerBox, deckBBox, libraryBox] = await Promise.all([
+    deckA.boundingBox(),
+    mixer.boundingBox(),
+    deckB.boundingBox(),
+    libraryPanel.boundingBox()
+  ]);
+  expect(deckABox).not.toBeNull();
+  expect(mixerBox).not.toBeNull();
+  expect(deckBBox).not.toBeNull();
+  expect(libraryBox).not.toBeNull();
+  expect(Math.abs(deckABox!.y - mixerBox!.y)).toBeLessThanOrEqual(2);
+  expect(Math.abs(deckABox!.y - deckBBox!.y)).toBeLessThanOrEqual(2);
+  expect(Math.abs((deckABox!.y + deckABox!.height) - (mixerBox!.y + mixerBox!.height))).toBeLessThanOrEqual(2);
+  expect(Math.abs((deckABox!.y + deckABox!.height) - (deckBBox!.y + deckBBox!.height))).toBeLessThanOrEqual(2);
+  expect(libraryBox!.y).toBeGreaterThanOrEqual(deckABox!.y + deckABox!.height);
 
   await deckA.getByRole('button', { name: 'Reproduzir Deck A' }).click();
   await expect(deckA.getByRole('button', { name: 'Pausar Deck A' })).toBeVisible();
