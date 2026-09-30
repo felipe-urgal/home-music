@@ -253,6 +253,16 @@ export type ImportJobSource = {
   provider: string | null;
 };
 
+export type ImportProvenance = {
+  catalog: 'spotify' | null;
+  catalogId: string | null;
+  catalogUrl: string | null;
+  provider: string | null;
+  providerSourceId: string | null;
+  providerSourceUrl: string | null;
+  matchConfidence: number | null;
+};
+
 export type ImportMediaTechnicalInfo = {
   container: string;
   codec: string;
@@ -325,6 +335,7 @@ export type ImportJob = {
   startedAt: string | null;
   finishedAt: string | null;
   error: string | null;
+  provenance: ImportProvenance | null;
   mediaDecision: ImportMediaDecision | null;
   metadataPreview: ImportMetadataPreview | null;
 };
