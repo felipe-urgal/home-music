@@ -58,9 +58,16 @@ export type ExternalProviderBatchInspectionItem = Readonly<{
   candidates?: readonly ExternalProviderBatchInspectionCandidate[];
 }>;
 
+export type ExternalProviderBatchInspectionPresentation = Readonly<{
+  sourceLabel: string | null;
+  subtitle: string | null;
+  thumbnailUrl: string | null;
+}>;
+
 export type ExternalProviderBatchInspection = Readonly<{
   providerId: string;
   label: string;
+  presentation?: ExternalProviderBatchInspectionPresentation | null;
   items: readonly ExternalProviderBatchInspectionItem[];
 }>;
 
@@ -111,10 +118,17 @@ export type ExternalProviderBatchSummary = Readonly<{
   importedDurationSeconds: number;
 }>;
 
+export type ExternalProviderBatchPresentation = Readonly<{
+  sourceLabel: string | null;
+  subtitle: string | null;
+  thumbnailUrl: string | null;
+}>;
+
 export type ExternalProviderBatch = Readonly<{
   id: string;
   providerId: string;
   label: string;
+  presentation: ExternalProviderBatchPresentation | null;
   status: ExternalProviderBatchStatus;
   folderPath: string | null;
   createdAt: string;
@@ -154,6 +168,7 @@ type MutableBatch = {
   id: string;
   providerId: string;
   label: string;
+  presentation: ExternalProviderBatchPresentation | null;
   status: ExternalProviderBatchStatus;
   folderPath: string | null;
   createdAt: string;
@@ -322,6 +337,22 @@ function cleanCandidateId(value: unknown, fallback: string) {
   return clean && /^[A-Za-z0-9._:-]+$/.test(clean) ? clean : fallback;
 }
 
+function safePresentationUrl(value: unknown) {
+  if (typeof value !== 'string' || value.length > 2_048) return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' || url.username || url.password) return null;
+    const hostname = url.hostname.toLowerCase();
+    const allowed = hostname === 'scdn.co'
+      || hostname.endsWith('.scdn.co')
+      || hostname === 'spotifycdn.com'
+      || hostname.endsWith('.spotifycdn.com');
+    return allowed ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
 function publicError(error: unknown) {
   if (
     error instanceof ExternalProviderBatchError
@@ -368,6 +399,7 @@ function snapshot(batch: MutableBatch, limits: ExternalProviderBatchLimits): Ext
     id: batch.id,
     providerId: batch.providerId,
     label: batch.label,
+    presentation: batch.presentation ? { ...batch.presentation } : null,
     status: batch.status,
     folderPath: batch.folderPath,
     createdAt: batch.createdAt,
@@ -542,6 +574,17 @@ export class ExternalProviderBatchManager {
       id: this.createId(),
       providerId: id,
       label: cleanLabel(inspection.label, 'Lista externa'),
+      presentation: inspection.presentation
+        ? {
+            sourceLabel: inspection.presentation.sourceLabel
+              ? cleanLabel(inspection.presentation.sourceLabel, 'Origem externa')
+              : null,
+            subtitle: inspection.presentation.subtitle
+              ? cleanLabel(inspection.presentation.subtitle, 'Catálogo externo')
+              : null,
+            thumbnailUrl: safePresentationUrl(inspection.presentation.thumbnailUrl)
+          }
+        : null,
       status: 'ready',
       folderPath: null,
       createdAt: now.toISOString(),
