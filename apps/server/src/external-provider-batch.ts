@@ -277,9 +277,27 @@ function normalizeRequest(request: ExternalProviderRequest) {
         attribution: typeof request.metadata.attribution === 'string' ? request.metadata.attribution.trim().slice(0, 500) || null : null
       })
     : undefined;
+  const provenance = request.provenance
+    && request.provenance.catalog === 'spotify'
+    && typeof request.provenance.catalogId === 'string'
+    && /^[A-Za-z0-9]{22}$/.test(request.provenance.catalogId)
+    && typeof request.provenance.catalogUrl === 'string'
+    && request.provenance.catalogUrl.startsWith('https://open.spotify.com/track/')
+    && typeof request.provenance.matchConfidence === 'number'
+    && Number.isFinite(request.provenance.matchConfidence)
+    && request.provenance.matchConfidence >= 0
+    && request.provenance.matchConfidence <= 1
+      ? Object.freeze({
+          catalog: 'spotify' as const,
+          catalogId: request.provenance.catalogId,
+          catalogUrl: request.provenance.catalogUrl.slice(0, 2_048),
+          matchConfidence: request.provenance.matchConfidence
+        })
+      : undefined;
   return Object.freeze({
     url: url.toString(),
-    ...(metadata ? { metadata } : {})
+    ...(metadata ? { metadata } : {}),
+    ...(provenance ? { provenance } : {})
   }) satisfies ExternalProviderRequest;
 }
 
