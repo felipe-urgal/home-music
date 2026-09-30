@@ -72,7 +72,7 @@ describe('DJ Hot Loop', () => {
       cueSeconds: 1,
       durationSeconds: 10,
       rhythm,
-      beats: 3
+      beats: 3 as never
     })).toBeNull();
   });
 });
