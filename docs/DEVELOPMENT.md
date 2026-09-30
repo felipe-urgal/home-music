@@ -42,6 +42,19 @@ Comandos úteis:
 
 Use suites caras apenas quando o risco da mudança justificar.
 
+### Modo DJ
+
+Para mudanças na fase de performance por software, prefira primeiro os gates focados:
+
+    npm run test -w @home-music/web
+    npm run typecheck -w @home-music/web
+
+Use o E2E quando o comportamento depender da integração do browser, lifecycle do modo DJ ou capabilities:
+
+    npm run test:e2e
+
+A matriz viva de recursos, fallbacks, invariantes e cobertura está em [dj-performance.md](dj-performance.md). Testes sintéticos de custo não substituem validação física de controladora, latência ou saída separada de áudio.
+
 ## Benchmark da análise rítmica
 
 O benchmark sintético existente mede agendamento/drenagem da fila; permite
