@@ -729,14 +729,14 @@ function DeckPanel({
               <div className="dj-tempo-step">
                 <button
                   type="button"
-                  aria-label={'Diminuir tempo ' + label}
+                  aria-label={'Diminuir BPM ' + label}
                   onClick={() => onTempo(deck, Math.max(0.94, Number((rate - 0.001).toFixed(3))))}
                 >
                   −
                 </button>
                 <button
                   type="button"
-                  aria-label={'Aumentar tempo ' + label}
+                  aria-label={'Aumentar BPM ' + label}
                   onClick={() => onTempo(deck, Math.min(1.06, Number((rate + 0.001).toFixed(3))))}
                 >
                   +
