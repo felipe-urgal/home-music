@@ -238,7 +238,19 @@ function normalizeRequest(request: ExternalProviderRequest) {
     throw new ExternalProviderBatchError('invalid_input', 'URL do lote inválida.');
   }
   url.hash = '';
-  return Object.freeze({ url: url.toString() }) satisfies ExternalProviderRequest;
+  const metadata = request.metadata
+    ? Object.freeze({
+        title: typeof request.metadata.title === 'string' ? request.metadata.title.trim().slice(0, 500) || null : null,
+        artist: typeof request.metadata.artist === 'string' ? request.metadata.artist.trim().slice(0, 500) || null : null,
+        album: typeof request.metadata.album === 'string' ? request.metadata.album.trim().slice(0, 500) || null : null,
+        thumbnailUrl: typeof request.metadata.thumbnailUrl === 'string' ? request.metadata.thumbnailUrl.trim().slice(0, 2_048) || null : null,
+        attribution: typeof request.metadata.attribution === 'string' ? request.metadata.attribution.trim().slice(0, 500) || null : null
+      })
+    : undefined;
+  return Object.freeze({
+    url: url.toString(),
+    ...(metadata ? { metadata } : {})
+  }) satisfies ExternalProviderRequest;
 }
 
 function cleanLabel(value: unknown, fallback: string) {
@@ -315,7 +327,7 @@ function snapshot(batch: MutableBatch, limits: ExternalProviderBatchLimits): Ext
       status: item.status,
       jobId: item.jobId,
       destination: item.destination,
-      error: item.error
+      error: item.error ?? (!item.request ? item.unavailableReason : null)
     }))
   };
 }
