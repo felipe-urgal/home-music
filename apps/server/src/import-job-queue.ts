@@ -4,7 +4,8 @@ import type {
   ImportJobSource,
   ImportJobStatus,
   ImportMediaDecision,
-  ImportMetadataPreview
+  ImportMetadataPreview,
+  ImportProvenance
 } from '@home-music/shared';
 import {
   currentHeavyWorkRequestContext,
@@ -68,6 +69,7 @@ function copyJob(job: ImportJobWithRetry): ImportJobWithRetry {
   return {
     ...job,
     source: { ...job.source },
+    provenance: job.provenance ? { ...job.provenance } : null,
     mediaDecision: copyDecision(job.mediaDecision),
     metadataPreview: copyMetadataPreview(job.metadataPreview),
     retry: copyRetry(job.retry)
@@ -174,6 +176,7 @@ export class ImportJobQueue {
       startedAt: null,
       finishedAt: null,
       error: null,
+      provenance: null,
       mediaDecision: null,
       metadataPreview: null,
       retry: normalizeRetry(retry)
@@ -182,6 +185,19 @@ export class ImportJobQueue {
     this.jobs.push(job);
     this.owners.set(job.id, ownerId);
     this.trimRetainedJobs();
+    this.notify(job);
+    return copyJob(job);
+  }
+
+  setProvenance(id: string, provenance: ImportProvenance | null) {
+    const job = this.jobs.find(item => item.id === id);
+    if (!job) return null;
+    if (TERMINAL_STATUSES.has(job.status)) {
+      throw new Error('Job terminal não aceita proveniência.');
+    }
+
+    job.provenance = provenance ? { ...provenance } : null;
+    job.updatedAt = this.now().toISOString();
     this.notify(job);
     return copyJob(job);
   }
