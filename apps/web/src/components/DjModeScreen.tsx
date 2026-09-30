@@ -711,9 +711,9 @@ function DeckPanel({
           </div>
 
           <div className="dj-deck-performance">
-            <label className="dj-tempo-fader">
+            <div className="dj-tempo-fader">
               <span>TEMPO</span>
-              <strong>{pitchPercent(rate) >= 0 ? '+' : ''}{pitchPercent(rate).toFixed(2)}%</strong>
+              <small className="dj-tempo-range">±6%</small>
               <input
                 aria-label={'Tempo ' + label}
                 type="range"
@@ -723,8 +723,26 @@ function DeckPanel({
                 value={Math.max(0.94, Math.min(1.06, rate))}
                 onChange={event => onTempo(deck, Number(event.currentTarget.value))}
               />
-              <small>-6</small><small>+6</small>
-            </label>
+              <div className="dj-tempo-readout" aria-label={'BPM efetivo ' + label}>
+                {bpm ? (bpm * rate).toFixed(1) : '—'}
+              </div>
+              <div className="dj-tempo-step">
+                <button
+                  type="button"
+                  aria-label={'Diminuir tempo ' + label}
+                  onClick={() => onTempo(deck, Math.max(0.94, Number((rate - 0.001).toFixed(3))))}
+                >
+                  −
+                </button>
+                <button
+                  type="button"
+                  aria-label={'Aumentar tempo ' + label}
+                  onClick={() => onTempo(deck, Math.min(1.06, Number((rate + 0.001).toFixed(3))))}
+                >
+                  +
+                </button>
+              </div>
+            </div>
 
             <button
               type="button"
@@ -823,7 +841,7 @@ function DeckPanel({
                   <span>{cue == null ? 'SET' : (hotCueLabels[index] || formatTime(cue))}</span>
                 </button>
                 <details className="dj-hot-cue__edit">
-                  <summary aria-label={'Editar Hot Cue ' + (index + 1)} title="Editar cor e label">•••</summary>
+                  <summary aria-label={'Editar Hot Cue ' + (index + 1)} title="Opções do Hot Cue">•••</summary>
                   <div>
                     <label>
                       <span>Label</span>
@@ -850,29 +868,31 @@ function DeckPanel({
                         <option value="cyan">Ciano</option>
                       </select>
                     </label>
+                    <div className="dj-hot-cue__menu-actions">
+                      <button
+                        type="button"
+                        className="dj-hot-cue__loop"
+                        onClick={() => startHotLoop(index)}
+                        disabled={cue == null || bpm == null}
+                        aria-pressed={hotLoopCueIndex === index && loopActive}
+                        aria-label={'Hot Loop Hot Cue ' + (index + 1) + ' ' + label}
+                        title={bpm == null ? 'Hot Loop requer BPM analisado' : 'Criar Hot Loop com ' + loopBeats + ' beats'}
+                      >
+                        LOOP
+                      </button>
+                      <button
+                        type="button"
+                        className="dj-hot-cue__clear"
+                        onClick={() => clearHotCue(index)}
+                        disabled={cue == null}
+                        aria-label={'Limpar Hot Cue ' + (index + 1) + ' ' + label}
+                        title="Limpar Hot Cue"
+                      >
+                        Limpar
+                      </button>
+                    </div>
                   </div>
                 </details>
-                <button
-                  type="button"
-                  className="dj-hot-cue__loop"
-                  onClick={() => startHotLoop(index)}
-                  disabled={cue == null || bpm == null}
-                  aria-pressed={hotLoopCueIndex === index && loopActive}
-                  aria-label={'Hot Loop Hot Cue ' + (index + 1) + ' ' + label}
-                  title={bpm == null ? 'Hot Loop requer BPM analisado' : 'Criar Hot Loop com ' + loopBeats + ' beats'}
-                >
-                  LOOP
-                </button>
-                <button
-                  type="button"
-                  className="dj-hot-cue__clear"
-                  onClick={() => clearHotCue(index)}
-                  disabled={cue == null}
-                  aria-label={'Limpar Hot Cue ' + (index + 1) + ' ' + label}
-                  title="Limpar Hot Cue"
-                >
-                  ×
-                </button>
               </div>
             ))}
             {hotCueError && <span className="dj-hot-cues__error" role="status">{hotCueError}</span>}
@@ -1761,7 +1781,7 @@ export function DjModeScreen({
     : 0;
 
   return (
-    <section className="dj-mode dj-mode--prototype-three" aria-label="Modo DJ">
+    <section className="dj-mode dj-mode--prototype-three dj-mode--approved-prototype" aria-label="Modo DJ">
       <header className="dj-mode__header">
         <div className="dj-mode__brand">
           <span className="dj-mode__brand-icon" aria-hidden="true"><Disc3 /></span>
