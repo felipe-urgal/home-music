@@ -6331,7 +6331,7 @@
     height: 100%;
     padding: 0 12px 11px;
     display: grid;
-    grid-template-rows: 40px 56px 58px 44px minmax(145px, 1fr) 40px 47px;
+    grid-template-rows: 40px 56px 58px 44px minmax(138px, 1fr) 40px 47px;
     gap: 7px;
     overflow: hidden;
   }
