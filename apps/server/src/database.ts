@@ -213,11 +213,14 @@ function publicHotCuesFromRow(row: Row): TrackHotCues | null {
     (item): item is string => typeof item === 'string' && item.length <= 24
   );
 
+  const meaningfulColors = colors?.some(value => value != null) ? colors : null;
+  const meaningfulLabels = labels?.some(value => value != null) ? labels : null;
+
   return {
     version: 1,
     positions: raw.map(value => value == null ? null : numberValue(value)) as TrackHotCues['positions'],
-    ...(colors ? { colors } : {}),
-    ...(labels ? { labels } : {})
+    ...(meaningfulColors ? { colors: meaningfulColors } : {}),
+    ...(meaningfulLabels ? { labels: meaningfulLabels } : {})
   };
 }
 
