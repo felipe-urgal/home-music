@@ -97,3 +97,15 @@ test('parseSpotifyEmbedDocument normaliza álbum e aplica o nome às faixas', ()
   assert.equal(parsed.tracks[0].album, 'Night Visions');
   assert.equal(parsed.tracks[0].durationSeconds, 204.347);
 });
+
+
+test('parseSpotifyCatalogUrl rejeita Spotify inseguro e tipos não suportados', () => {
+  assert.throws(
+    () => parseSpotifyCatalogUrl('http://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC'),
+    /HTTPS/
+  );
+  assert.throws(
+    () => parseSpotifyCatalogUrl('https://open.spotify.com/show/4rOoJ6Egrf8K2IrywzwOMk'),
+    /faixa, álbum ou playlist/
+  );
+});
