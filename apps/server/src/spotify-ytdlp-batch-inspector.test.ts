@@ -51,9 +51,10 @@ test('Spotify vira lote yt-dlp somente para matches confiáveis', async () => {
     },
     search: {
       async search(query) {
-        searches.push(query);
-        if (query.includes('Rick Astley')) {
-          return result(query, [{
+        const normalizedQuery = String(query);
+        searches.push(normalizedQuery);
+        if (normalizedQuery.includes('Rick Astley')) {
+          return result(normalizedQuery, [{
             id: 'dQw4w9WgXcQ',
             title: 'Rick Astley - Never Gonna Give You Up (Official Audio)',
             artist: 'Rick Astley',
@@ -63,7 +64,7 @@ test('Spotify vira lote yt-dlp somente para matches confiáveis', async () => {
             provider: 'yt-dlp'
           }]);
         }
-        return result(query, [
+        return result(normalizedQuery, [
           {
             id: 'candidate01',
             title: 'Cut To The Feeling',
@@ -141,7 +142,7 @@ test('coleção Spotify acima do limite não dispara buscas por mídia', async (
     search: {
       async search(query) {
         searches += 1;
-        return result(query, []);
+        return result(String(query), []);
       }
     }
   });
