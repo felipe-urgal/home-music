@@ -5941,6 +5941,26 @@
   font-size: .67rem;
 }
 
+@media (min-width: 1181px) and (max-width: 1680px) {
+  .dj-mode--prototype-three .dj-mode__brand {
+    min-width: 154px;
+  }
+
+  .dj-mode--prototype-three .dj-mode__nav {
+    gap: 3px;
+  }
+
+  .dj-mode--prototype-three .dj-mode__nav > span {
+    min-width: 62px;
+    padding-inline: 8px;
+  }
+
+  .dj-mode--prototype-three .dj-mode__nav > span:nth-child(n+4),
+  .dj-mode--prototype-three .dj-mode__status {
+    display: none;
+  }
+}
+
 @media (min-width: 1181px) and (min-height: 801px) {
   .dj-mode--prototype-three {
     height: 100vh;
