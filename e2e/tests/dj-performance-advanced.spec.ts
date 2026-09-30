@@ -94,6 +94,28 @@ test('Modo DJ mantém AutoMix, FX e gravação ativos no mesmo fluxo', async ({ 
   await expect(reverbB).toHaveAttribute('aria-pressed', 'true');
   await expect(rec).toHaveAttribute('aria-pressed', 'true');
 
+  const deckB = page.getByRole('article', { name: 'Deck B' });
+  const incomingTitle = await deckB.locator('.dj-pro-deck__track-copy strong').innerText();
+
+  await expect.poll(async () => page.evaluate(() => {
+    const audios = Array.from(document.querySelectorAll('audio'));
+    const active = audios.find(audio => (
+      !audio.paused
+      && Number.isFinite(audio.duration)
+      && audio.duration > 0
+    ));
+    if (!active) return false;
+    active.currentTime = Math.max(0, active.duration - 0.2);
+    return true;
+  })).toBe(true);
+
+  await expect.poll(async () => page.evaluate(() => (
+    Array.from(document.querySelectorAll('audio'))
+      .filter(audio => !audio.paused).length
+  ))).toBeGreaterThanOrEqual(2);
+
+  await expect(deckB.locator('.dj-pro-deck__track-copy strong')).toHaveText(incomingTitle);
+
   const downloadPromise = page.waitForEvent('download');
   await rec.click();
   const download = await downloadPromise;
