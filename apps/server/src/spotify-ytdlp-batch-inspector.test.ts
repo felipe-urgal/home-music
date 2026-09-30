@@ -99,6 +99,12 @@ test('Spotify vira lote yt-dlp somente para matches confiáveis', async () => {
 
   assert.deepEqual(batch?.items[0].request, {
     url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+    provenance: {
+      catalog: 'spotify',
+      catalogId: '4uLU6hMCjMI75M1A2tKUQC',
+      catalogUrl: 'https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC',
+      matchConfidence: 1
+    },
     metadata: {
       title: 'Never Gonna Give You Up',
       artist: 'Rick Astley',
@@ -108,7 +114,9 @@ test('Spotify vira lote yt-dlp somente para matches confiáveis', async () => {
     }
   });
 
+  assert.equal(batch?.items[0].candidates?.length, 1);
   assert.equal(batch?.items[1].request, null);
+  assert.equal(batch?.items[1].candidates?.length, 2);
   assert.match(batch?.items[1].unavailableReason ?? '', /Correspondência ambígua/);
 });
 
