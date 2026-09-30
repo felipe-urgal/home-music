@@ -55,6 +55,11 @@ export type AdminExternalProviderBatch = {
   id: string;
   providerId: string;
   label: string;
+  presentation: {
+    sourceLabel: string | null;
+    subtitle: string | null;
+    thumbnailUrl: string | null;
+  } | null;
   status: AdminExternalProviderBatchStatus;
   folderPath: string | null;
   createdAt: string;
