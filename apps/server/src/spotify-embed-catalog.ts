@@ -124,7 +124,6 @@ function firstImageUrl(value: unknown) {
 
 function normalizeTrack(
   raw: unknown,
-  index: number,
   fallbackAlbum: string | null,
   fallbackThumbnail: string | null
 ): SpotifyCatalogTrack | null {
@@ -245,7 +244,7 @@ export function parseSpotifyEmbedDocument(
       : [];
 
   const tracks = rawTracks
-    .map((item, index) => normalizeTrack(item, index, fallbackAlbum, thumbnailUrl))
+    .map(item => normalizeTrack(item, fallbackAlbum, thumbnailUrl))
     .filter((item): item is SpotifyCatalogTrack => Boolean(item));
 
   if (tracks.length === 0) {
