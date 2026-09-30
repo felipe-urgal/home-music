@@ -37,11 +37,11 @@ function tokens(value: string) {
   return new Set(normalized(value).split(' ').filter(token => token.length > 1));
 }
 
-function overlap(left: Set<string>, right: Set<string>) {
-  if (left.size === 0 || right.size === 0) return 0;
+function coverage(expected: Set<string>, candidate: Set<string>) {
+  if (expected.size === 0 || candidate.size === 0) return 0;
   let common = 0;
-  for (const token of left) if (right.has(token)) common += 1;
-  return common / Math.max(left.size, right.size);
+  for (const token of expected) if (candidate.has(token)) common += 1;
+  return common / expected.size;
 }
 
 function durationScore(expected: number | null, actual: number | null) {
@@ -71,15 +71,14 @@ export function scoreSpotifyMediaCandidate(
   const expectedTitle = normalized(track.title);
   const expectedArtist = normalized(track.artist);
   const candidateTitle = normalized(item.title);
-  const candidateArtist = normalized(item.artist);
   const candidateCombined = normalized(`${item.artist ?? ''} ${item.title}`);
   const expectedCombined = normalized(`${track.artist} ${track.title}`);
 
-  const titleOverlap = overlap(tokens(track.title), tokens(item.title));
+  const titleOverlap = coverage(tokens(track.title), tokens(item.title));
   const artistTokens = tokens(track.artist);
   const artistOverlap = Math.max(
-    overlap(artistTokens, tokens(item.artist ?? '')),
-    overlap(artistTokens, tokens(item.title))
+    coverage(artistTokens, tokens(item.artist ?? '')),
+    coverage(artistTokens, tokens(item.title))
   );
   const exactTitle = expectedTitle === candidateTitle ? 1 : 0;
   const combinedContains = candidateCombined.includes(expectedTitle)
@@ -109,7 +108,7 @@ export function selectSpotifyMediaMatch(
   if (!best) return null;
   const runnerUp = ranked[1]?.confidence ?? 0;
   const automatic = best.confidence >= 0.78
-    && (best.confidence - runnerUp >= 0.06 || best.confidence >= 0.92);
+    && (ranked.length === 1 || best.confidence - runnerUp >= 0.06);
 
   return {
     item: best.item,
