@@ -178,8 +178,10 @@ export function parseSpotifyCatalogUrl(value: string): ParsedSpotifyCatalogUrl |
   } catch {
     return null;
   }
-  if (url.protocol !== 'https:' || url.username || url.password || url.hostname.toLowerCase() !== SPOTIFY_HOST) {
-    return null;
+  const hostname = url.hostname.toLowerCase();
+  if (hostname !== SPOTIFY_HOST) return null;
+  if (url.protocol !== 'https:' || url.username || url.password) {
+    throw new ExternalProviderError('invalid_input', 'Use um link HTTPS válido do Spotify.');
   }
 
   const segments = url.pathname.split('/').filter(Boolean);
