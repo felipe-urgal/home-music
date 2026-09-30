@@ -97,7 +97,7 @@ function batchDuration(batch: AdminExternalProviderBatch) {
 function batchStatusLabel(batch: AdminExternalProviderBatch) {
   if (batch.status === 'ready') return 'Lista pronta para importar';
   if (batch.status === 'running') return 'Importando lista…';
-  if (batch.status === 'cancelling') return 'Cancelando playlist…';
+  if (batch.status === 'cancelling') return 'Cancelando lista…';
   if (batch.status === 'cancelled') return 'Lista cancelada';
   if (batch.status === 'failed') return 'Lista encerrada com falha';
   return 'Importação da lista concluída';
@@ -523,9 +523,9 @@ export function AdminExternalProviderPanel({
             <div className="admin-provider-batch__destination">
               <div className="admin-provider-batch__selection">
                 <div>
-                  <strong>${selectedBatchItems} selecionadas</strong>
+                  <strong>{selectedBatchItems} selecionadas</strong>
                   <small>
-                    ${reviewBatchItems > 0 ? `${reviewBatchItems} precisam de revisão de origem` : 'Matches confiáveis prontos para importar'}
+                    {reviewBatchItems > 0 ? `${reviewBatchItems} precisam de revisão de origem` : 'Matches confiáveis prontos para importar'}
                   </small>
                 </div>
                 <div>
@@ -568,7 +568,7 @@ export function AdminExternalProviderPanel({
               ) : (
                 <div className="admin-provider-batch__new-folder">
                   <input
-                    aria-label="Nova pasta para a playlist"
+                    aria-label="Nova pasta para a lista"
                     type="text"
                     maxLength={1024}
                     value={newFolderPath}
