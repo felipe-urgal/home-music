@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react';
-import { djKeyCompatibility, type Track, type TrackHotCues, type TrackRhythmOverride, type TrackWaveform } from '@home-music/shared';
+import { djKeyCompatibility, type Track, type TrackHotCueColor, type TrackHotCues, type TrackRhythmOverride, type TrackWaveform } from '@home-music/shared';
 import {
   ArrowLeft,
   Cable,
@@ -190,6 +190,9 @@ function DjWaveform({
   progress,
   currentTimeSeconds,
   hotCues,
+  hotCueColors,
+  hotCueLabels,
+  activeHotCueIndex,
   loopIn,
   loopOut,
   loopActive,
@@ -202,6 +205,9 @@ function DjWaveform({
   progress: number;
   currentTimeSeconds: number;
   hotCues: TrackHotCues['positions'];
+  hotCueColors: NonNullable<TrackHotCues['colors']>;
+  hotCueLabels: NonNullable<TrackHotCues['labels']>;
+  activeHotCueIndex: number | null;
   loopIn: number | null;
   loopOut: number | null;
   loopActive: boolean;
@@ -214,8 +220,8 @@ function DjWaveform({
   const [status, setStatus] = useState<'loading' | 'pending' | 'ready' | 'unavailable'>('loading');
   const durationSeconds = waveform?.durationSeconds ?? track.duration ?? 0;
   const hotCueMarkers = useMemo(
-    () => buildDjHotCueWaveformMarkers(hotCues, durationSeconds),
-    [durationSeconds, hotCues]
+    () => buildDjHotCueWaveformMarkers(hotCues, durationSeconds, hotCueColors, hotCueLabels),
+    [durationSeconds, hotCueColors, hotCueLabels, hotCues]
   );
   const loopRange = useMemo(
     () => djLoopWaveformRange({ loopIn, loopOut, durationSeconds }),
@@ -330,9 +336,11 @@ function DjWaveform({
           type="button"
           className="dj-waveform__hot-cue"
           data-hot-loop={hotLoopCueIndex === marker.index && loopActive ? 'true' : 'false'}
+          data-active={activeHotCueIndex === marker.index ? 'true' : 'false'}
+          data-color={marker.color ?? 'blue'}
           style={{ left: `clamp(11px, ${marker.position * 100}%, calc(100% - 11px))` }}
-          aria-label={'Hot Cue ' + (marker.index + 1) + ' no waveform ' + (deck === 'a' ? 'Deck A' : 'Deck B')}
-          title={'Hot Cue ' + (marker.index + 1) + ' · ' + formatTime(marker.seconds)}
+          aria-label={(marker.label || 'Hot Cue ' + (marker.index + 1)) + ' no waveform ' + (deck === 'a' ? 'Deck A' : 'Deck B')}
+          title={(marker.label || 'Hot Cue ' + (marker.index + 1)) + ' · ' + formatTime(marker.seconds)}
           onClick={() => onHotCueSeek(marker.seconds)}
         >
           {marker.index + 1}
@@ -395,10 +403,13 @@ function DeckPanel({
   const [loopQuantize, setLoopQuantize] = useState(true);
   const [hotLoopCueIndex, setHotLoopCueIndex] = useState<number | null>(null);
   const [hotCues, setHotCues] = useState<TrackHotCues['positions']>([null, null, null, null]);
+  const [hotCueColors, setHotCueColors] = useState<NonNullable<TrackHotCues['colors']>>(['blue', 'red', 'green', 'amber']);
+  const [hotCueLabels, setHotCueLabels] = useState<NonNullable<TrackHotCues['labels']>>([null, null, null, null]);
+  const [activeHotCueIndex, setActiveHotCueIndex] = useState<number | null>(null);
   const [hotCueQuantize, setHotCueQuantize] = useState(false);
   const [hotCueError, setHotCueError] = useState<string | null>(null);
   const hotCueSaveChainRef = useRef<Promise<void>>(Promise.resolve());
-  const persistedHotCuesKey = JSON.stringify(state.track?.hotCues?.positions ?? [null, null, null, null]);
+  const persistedHotCuesKey = JSON.stringify(state.track?.hotCues ?? null);
 
   useEffect(() => {
     setLoopIn(null);
@@ -407,10 +418,13 @@ function DeckPanel({
     setLoopBeats(4);
     setLoopQuantize(true);
     setHotLoopCueIndex(null);
+    setActiveHotCueIndex(null);
   }, [snapshot?.trackId]);
 
   useEffect(() => {
     setHotCues([...(state.track?.hotCues?.positions ?? [null, null, null, null])] as TrackHotCues['positions']);
+    setHotCueColors([...(state.track?.hotCues?.colors ?? ['blue', 'red', 'green', 'amber'])] as NonNullable<TrackHotCues['colors']>);
+    setHotCueLabels([...(state.track?.hotCues?.labels ?? [null, null, null, null])] as NonNullable<TrackHotCues['labels']>);
     setHotCueError(null);
   }, [snapshot?.trackId, persistedHotCuesKey]);
 
@@ -530,10 +544,14 @@ function DeckPanel({
     }
   };
 
-  const persistHotCues = (positions: TrackHotCues['positions']) => {
+  const persistHotCues = (
+    positions: TrackHotCues['positions'],
+    colors: NonNullable<TrackHotCues['colors']> = hotCueColors,
+    labels: NonNullable<TrackHotCues['labels']> = hotCueLabels
+  ) => {
     if (!snapshot?.trackId) return;
     const trackId = snapshot.trackId;
-    const payload: TrackHotCues = { version: 1, positions };
+    const payload: TrackHotCues = { version: 1, positions, colors, labels };
     setHotCueError(null);
 
     hotCueSaveChainRef.current = hotCueSaveChainRef.current
@@ -565,6 +583,19 @@ function DeckPanel({
     persistHotCues(next);
   };
 
+  const updateHotCueColor = (index: number, color: TrackHotCueColor) => {
+    const next = hotCueColors.map((current, cueIndex) => cueIndex === index ? color : current) as NonNullable<TrackHotCues['colors']>;
+    setHotCueColors(next);
+    persistHotCues(hotCues, next, hotCueLabels);
+  };
+
+  const updateHotCueLabel = (index: number, label: string) => {
+    const normalized = label.trim().slice(0, 24) || null;
+    const next = hotCueLabels.map((current, cueIndex) => cueIndex === index ? normalized : current) as NonNullable<TrackHotCues['labels']>;
+    setHotCueLabels(next);
+    persistHotCues(hotCues, hotCueColors, next);
+  };
+
   const triggerHotCue = (index: number) => {
     if (!snapshot?.trackId) return;
     const cue = hotCues[index];
@@ -576,8 +607,10 @@ function DeckPanel({
         quantize: hotCueQuantize
       });
       replaceHotCue(index, position);
+      setActiveHotCueIndex(index);
       return;
     }
+    setActiveHotCueIndex(index);
     onSeek(deck, cue);
   };
 
@@ -595,6 +628,7 @@ function DeckPanel({
     setLoopOut(plan.endSeconds);
     setLoopActive(true);
     setHotLoopCueIndex(index);
+    setActiveHotCueIndex(index);
     onSeek(deck, cue);
   };
 
@@ -604,7 +638,12 @@ function DeckPanel({
       setLoopActive(false);
       setHotLoopCueIndex(null);
     }
-    replaceHotCue(index, null);
+    if (activeHotCueIndex === index) setActiveHotCueIndex(null);
+    const positions = hotCues.map((current, cueIndex) => cueIndex === index ? null : current) as TrackHotCues['positions'];
+    const labels = hotCueLabels.map((current, cueIndex) => cueIndex === index ? null : current) as NonNullable<TrackHotCues['labels']>;
+    setHotCues(positions);
+    setHotCueLabels(labels);
+    persistHotCues(positions, hotCueColors, labels);
   };
 
   return (
@@ -653,6 +692,9 @@ function DeckPanel({
             progress={progress}
             currentTimeSeconds={snapshot?.currentTimeSeconds ?? 0}
             hotCues={hotCues}
+            hotCueColors={hotCueColors}
+            hotCueLabels={hotCueLabels}
+            activeHotCueIndex={activeHotCueIndex}
             loopIn={loopIn}
             loopOut={loopOut}
             loopActive={loopActive}
@@ -763,7 +805,13 @@ function DeckPanel({
               </button>
             </div>
             {hotCues.map((cue, index) => (
-              <div className="dj-hot-cue" key={index} data-set={cue == null ? 'false' : 'true'}>
+              <div
+                className="dj-hot-cue"
+                key={index}
+                data-set={cue == null ? 'false' : 'true'}
+                data-active={activeHotCueIndex === index ? 'true' : 'false'}
+                data-color={hotCueColors[index] ?? 'blue'}
+              >
                 <button
                   type="button"
                   className="dj-hot-cue__pad"
@@ -772,8 +820,38 @@ function DeckPanel({
                   title={cue == null ? 'Salvar posição atual' : 'Ir para ' + formatTime(cue)}
                 >
                   <strong>{index + 1}</strong>
-                  <span>{cue == null ? 'SET' : formatTime(cue)}</span>
+                  <span>{cue == null ? 'SET' : (hotCueLabels[index] || formatTime(cue))}</span>
                 </button>
+                <details className="dj-hot-cue__edit">
+                  <summary aria-label={'Editar Hot Cue ' + (index + 1)} title="Editar cor e label">•••</summary>
+                  <div>
+                    <label>
+                      <span>Label</span>
+                      <input
+                        type="text"
+                        maxLength={24}
+                        defaultValue={hotCueLabels[index] ?? ''}
+                        disabled={cue == null}
+                        onBlur={event => updateHotCueLabel(index, event.currentTarget.value)}
+                      />
+                    </label>
+                    <label>
+                      <span>Cor</span>
+                      <select
+                        value={hotCueColors[index] ?? 'blue'}
+                        disabled={cue == null}
+                        onChange={event => updateHotCueColor(index, event.currentTarget.value as TrackHotCueColor)}
+                      >
+                        <option value="blue">Azul</option>
+                        <option value="red">Vermelho</option>
+                        <option value="green">Verde</option>
+                        <option value="amber">Âmbar</option>
+                        <option value="purple">Roxo</option>
+                        <option value="cyan">Ciano</option>
+                      </select>
+                    </label>
+                  </div>
+                </details>
                 <button
                   type="button"
                   className="dj-hot-cue__loop"
@@ -941,6 +1019,9 @@ function RhythmGridEditor({
         progress={0}
         currentTimeSeconds={0}
         hotCues={[null, null, null, null]}
+        hotCueColors={[null, null, null, null]}
+        hotCueLabels={[null, null, null, null]}
+        activeHotCueIndex={null}
         loopIn={null}
         loopOut={null}
         loopActive={false}

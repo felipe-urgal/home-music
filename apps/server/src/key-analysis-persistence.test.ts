@@ -149,7 +149,7 @@ test('schema inclui cache derivado de tonalidade', async () => {
   const db = new HomeMusicDatabase(dbPath);
 
   try {
-    assert.equal(db.getSchemaVersion(), 19);
+    assert.equal(db.getSchemaVersion(), 20);
     const raw = new DatabaseSync(dbPath);
     try {
       const row = raw.prepare(

@@ -4,11 +4,15 @@ export type DjHotCueWaveformMarker = {
   index: number;
   seconds: number;
   position: number;
+  color: NonNullable<TrackHotCues['colors']>[number];
+  label: string | null;
 };
 
 export function buildDjHotCueWaveformMarkers(
   hotCues: TrackHotCues['positions'] | null | undefined,
-  durationSeconds: number
+  durationSeconds: number,
+  colors: TrackHotCues['colors'] | null | undefined = undefined,
+  labels: TrackHotCues['labels'] | null | undefined = undefined
 ): DjHotCueWaveformMarker[] {
   if (
     !hotCues
@@ -27,7 +31,9 @@ export function buildDjHotCueWaveformMarkers(
     return [{
       index,
       seconds,
-      position: Math.max(0, Math.min(1, seconds / durationSeconds))
+      position: Math.max(0, Math.min(1, seconds / durationSeconds)),
+      color: colors?.[index] ?? null,
+      label: labels?.[index] ?? null
     }];
   });
 }

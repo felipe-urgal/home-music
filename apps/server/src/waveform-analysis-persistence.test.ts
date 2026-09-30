@@ -112,7 +112,7 @@ test('schema v15 contém tabela derivada de waveform', async () => {
   const db = new HomeMusicDatabase(dbPath);
 
   try {
-    assert.equal(db.getSchemaVersion(), 19);
+    assert.equal(db.getSchemaVersion(), 20);
   } finally {
     db.close();
     await rm(temp, { recursive: true, force: true });

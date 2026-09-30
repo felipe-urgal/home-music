@@ -9,7 +9,7 @@ import { RHYTHM_ANALYZER_VERSION } from './rhythm-analysis.js';
 import { KEY_ANALYZER_VERSION } from './key-analysis.js';
 import { WAVEFORM_ANALYZER_VERSION } from './waveform-analysis.js';
 
-const CURRENT_SCHEMA_VERSION = 19;
+const CURRENT_SCHEMA_VERSION = 20;
 const HISTORY_CAPACITY = 2_000;
 const TRACK_UPSERT_SQL = `
   INSERT INTO tracks(
@@ -192,9 +192,35 @@ function publicHotCuesFromRow(row: Row): TrackHotCues | null {
   ];
   if (raw.every(value => value == null)) return null;
 
+  const parseTuple = <T>(value: unknown, valid: (item: unknown) => item is T) => {
+    if (typeof value !== 'string' || !value) return null;
+    try {
+      const parsed = JSON.parse(value) as unknown[];
+      if (!Array.isArray(parsed) || parsed.length !== 4) return null;
+      if (parsed.some(item => item != null && !valid(item))) return null;
+      return parsed as [T | null, T | null, T | null, T | null];
+    } catch {
+      return null;
+    }
+  };
+  const colors = parseTuple(
+    row.hot_cue_colors_json,
+    (item): item is NonNullable<TrackHotCues['colors']>[number] =>
+      typeof item === 'string' && ['blue', 'red', 'green', 'amber', 'purple', 'cyan'].includes(item)
+  );
+  const labels = parseTuple(
+    row.hot_cue_labels_json,
+    (item): item is string => typeof item === 'string' && item.length <= 24
+  );
+
+  const meaningfulColors = colors?.some(value => value != null) ? colors : null;
+  const meaningfulLabels = labels?.some(value => value != null) ? labels : null;
+
   return {
     version: 1,
-    positions: raw.map(value => value == null ? null : numberValue(value)) as TrackHotCues['positions']
+    positions: raw.map(value => value == null ? null : numberValue(value)) as TrackHotCues['positions'],
+    ...(meaningfulColors ? { colors: meaningfulColors } : {}),
+    ...(meaningfulLabels ? { labels: meaningfulLabels } : {})
   };
 }
 
@@ -1066,6 +1092,28 @@ export class HomeMusicDatabase {
       }
     }
 
+    if (version < 20) {
+      this.db.exec('BEGIN IMMEDIATE;');
+      try {
+        if (!this.hasColumn('track_hot_cues', 'colors_json')) {
+          this.db.exec('ALTER TABLE track_hot_cues ADD COLUMN colors_json TEXT;');
+        }
+        if (!this.hasColumn('track_hot_cues', 'labels_json')) {
+          this.db.exec('ALTER TABLE track_hot_cues ADD COLUMN labels_json TEXT;');
+        }
+        this.db.exec('PRAGMA user_version = 20;');
+        this.db.exec('COMMIT;');
+        version = 20;
+      } catch (error) {
+        try {
+          this.db.exec('ROLLBACK;');
+        } catch {
+          // Preserva o erro original se a transação já tiver sido encerrada.
+        }
+        throw error;
+      }
+    }
+
     if (version !== CURRENT_SCHEMA_VERSION) {
       throw new Error(`Versão de schema SQLite não suportada: ${version}`);
     }
@@ -1196,6 +1244,8 @@ export class HomeMusicDatabase {
              h.cue_2_seconds AS hot_cue_2_seconds,
              h.cue_3_seconds AS hot_cue_3_seconds,
              h.cue_4_seconds AS hot_cue_4_seconds,
+             h.colors_json AS hot_cue_colors_json,
+             h.labels_json AS hot_cue_labels_json,
              w.status AS waveform_analysis_status,
              k.status AS key_analysis_status,
              k.pitch_class AS key_pitch_class,
@@ -1315,6 +1365,9 @@ export class HomeMusicDatabase {
 
   saveTrackHotCues(trackId: string, hotCues: TrackHotCues) {
     const positions = hotCues?.positions;
+    const colors = hotCues?.colors ?? [null, null, null, null];
+    const labels = hotCues?.labels ?? [null, null, null, null];
+    const validColors = ['blue', 'red', 'green', 'amber', 'purple', 'cyan'];
     if (
       hotCues?.version !== 1
       || !Array.isArray(positions)
@@ -1323,6 +1376,18 @@ export class HomeMusicDatabase {
         typeof value !== 'number'
         || !Number.isFinite(value)
         || value < 0
+      ))
+      || !Array.isArray(colors)
+      || colors.length !== 4
+      || colors.some(value => value != null && (
+        typeof value !== 'string'
+        || !validColors.includes(value)
+      ))
+      || !Array.isArray(labels)
+      || labels.length !== 4
+      || labels.some(value => value != null && (
+        typeof value !== 'string'
+        || value.length > 24
       ))
     ) {
       throw new Error('Hot Cues inválidos.');
@@ -1346,16 +1411,25 @@ export class HomeMusicDatabase {
 
     this.db.prepare(`
       INSERT INTO track_hot_cues(
-        track_id, version, cue_1_seconds, cue_2_seconds, cue_3_seconds, cue_4_seconds, updated_at
-      ) VALUES (?, 1, ?, ?, ?, ?, ?)
+        track_id, version, cue_1_seconds, cue_2_seconds, cue_3_seconds, cue_4_seconds,
+        colors_json, labels_json, updated_at
+      ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(track_id) DO UPDATE SET
         version = excluded.version,
         cue_1_seconds = excluded.cue_1_seconds,
         cue_2_seconds = excluded.cue_2_seconds,
         cue_3_seconds = excluded.cue_3_seconds,
         cue_4_seconds = excluded.cue_4_seconds,
+        colors_json = excluded.colors_json,
+        labels_json = excluded.labels_json,
         updated_at = excluded.updated_at
-    `).run(trackId, ...positions, new Date().toISOString());
+    `).run(
+      trackId,
+      ...positions,
+      JSON.stringify(colors),
+      JSON.stringify(labels),
+      new Date().toISOString()
+    );
     return true;
   }
 
