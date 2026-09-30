@@ -20,8 +20,17 @@ export type ExternalProviderCapabilities = Readonly<{
   playlists: boolean;
 }>;
 
+export type ExternalProviderRequestMetadata = Readonly<{
+  title?: string | null;
+  artist?: string | null;
+  album?: string | null;
+  thumbnailUrl?: string | null;
+  attribution?: string | null;
+}>;
+
 export type ExternalProviderRequest = Readonly<{
   url: string;
+  metadata?: ExternalProviderRequestMetadata | null;
 }>;
 
 export type ExternalProviderConfig = Readonly<Record<string, string>>;
@@ -163,7 +172,19 @@ function normalizeRequest(request: ExternalProviderRequest) {
     throw new ExternalProviderError('invalid_input', 'URLs com credenciais embutidas não são permitidas.');
   }
   url.hash = '';
-  return Object.freeze({ url: url.toString() }) satisfies ExternalProviderRequest;
+  const metadata = request.metadata
+    ? Object.freeze({
+        title: cleanMetadataValue(request.metadata.title),
+        artist: cleanMetadataValue(request.metadata.artist),
+        album: cleanMetadataValue(request.metadata.album),
+        thumbnailUrl: cleanMetadataValue(request.metadata.thumbnailUrl),
+        attribution: cleanMetadataValue(request.metadata.attribution)
+      })
+    : undefined;
+  return Object.freeze({
+    url: url.toString(),
+    ...(metadata ? { metadata } : {})
+  }) satisfies ExternalProviderRequest;
 }
 
 function cleanMetadataValue(value: unknown) {
@@ -481,10 +502,19 @@ export class ExternalProviderImportManager {
       }
 
       if (session.controller.signal.aborted) throw abortReason(session.controller.signal);
+      const providerMetadata = sanitizeMetadata(media.metadata);
+      const requestMetadata = normalizedRequest.metadata;
       const result: ExternalProviderPreparedResult = {
         jobId,
         provider: definition.id,
-        metadata: sanitizeMetadata(media.metadata),
+        metadata: sanitizeMetadata({
+          ...providerMetadata,
+          title: requestMetadata?.title ?? providerMetadata.title,
+          artist: requestMetadata?.artist ?? providerMetadata.artist,
+          album: requestMetadata?.album ?? providerMetadata.album,
+          thumbnailUrl: requestMetadata?.thumbnailUrl ?? providerMetadata.thumbnailUrl,
+          attribution: requestMetadata?.attribution ?? providerMetadata.attribution
+        }),
         payload: {
           sizeBytes: writtenSize,
           contentType: sanitizeContentType(media.contentType)
