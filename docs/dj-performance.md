@@ -39,6 +39,7 @@ Hardware DDJ-400, saída separada de headphones/master e calibração física pe
 - stop/saída encerra tracks de captura e remove a conexão extra do master;
 - timers/intervals/animation frames pertencem ao ciclo de vida que os criou e possuem cleanup;
 - AutoMix não deve depender de `requestAnimationFrame` para concluir transições em background.
+- enquanto um crossfade do AutoMix estiver ativo, mudanças em `playedTrackIds`/metadata não podem recalcular nem substituir a faixa já carregada no deck de entrada; o próximo preload só é preparado depois do handoff.
 
 ## Validação automatizada
 
