@@ -66,10 +66,11 @@ function copyRetry(retry: ImportJobRetryLineage | null): ImportJobRetryLineage |
 }
 
 function copyJob(job: ImportJobWithRetry): ImportJobWithRetry {
+  const { provenance, ...rest } = job;
   return {
-    ...job,
+    ...rest,
+    ...(provenance ? { provenance: { ...provenance } } : {}),
     source: { ...job.source },
-    provenance: job.provenance ? { ...job.provenance } : null,
     mediaDecision: copyDecision(job.mediaDecision),
     metadataPreview: copyMetadataPreview(job.metadataPreview),
     retry: copyRetry(job.retry)
@@ -176,7 +177,6 @@ export class ImportJobQueue {
       startedAt: null,
       finishedAt: null,
       error: null,
-      provenance: null,
       mediaDecision: null,
       metadataPreview: null,
       retry: normalizeRetry(retry)
