@@ -505,12 +505,20 @@ export function AdminExternalProviderPanel({
       {activeBatch && (
         <article className={`admin-provider-batch is-${activeBatch.status}`} aria-live="polite">
           <div className="admin-provider-batch__heading">
-            <span className="admin-provider-batch__icon">
-              {batchRunning ? <LoaderCircle className="is-spinning" /> : activeBatch.status === 'completed' ? <CheckCircle2 /> : <ListMusic />}
+            <span className={`admin-provider-batch__icon${activeBatch.presentation?.thumbnailUrl ? ' has-artwork' : ''}`}>
+              {activeBatch.presentation?.thumbnailUrl ? (
+                <img
+                  src={activeBatch.presentation.thumbnailUrl}
+                  alt=""
+                  referrerPolicy="no-referrer"
+                />
+              ) : batchRunning ? <LoaderCircle className="is-spinning" /> : activeBatch.status === 'completed' ? <CheckCircle2 /> : <ListMusic />}
             </span>
             <div>
               <strong>{activeBatch.label}</strong>
               <small>
+                {activeBatch.presentation?.sourceLabel ? `${activeBatch.presentation.sourceLabel} · ` : ''}
+                {activeBatch.presentation?.subtitle ? `${activeBatch.presentation.subtitle} · ` : ''}
                 {activeBatch.summary.total} {activeBatch.summary.total === 1 ? 'música' : 'músicas'}
                 {batchDuration(activeBatch) ? ` · ${batchDuration(activeBatch)}` : ''}
                 {' · melhor qualidade disponível'}
