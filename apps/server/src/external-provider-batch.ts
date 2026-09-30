@@ -41,12 +41,21 @@ export type ExternalProviderBatchItemStatus =
   | 'failed'
   | 'cancelled';
 
+export type ExternalProviderBatchInspectionCandidate = Readonly<{
+  id: string;
+  label: string;
+  durationSeconds: number | null;
+  confidence: number | null;
+  request: ExternalProviderRequest;
+}>;
+
 export type ExternalProviderBatchInspectionItem = Readonly<{
   sourceId: string | null;
   label: string;
   durationSeconds: number | null;
   request: ExternalProviderRequest | null;
   unavailableReason?: string | null;
+  candidates?: readonly ExternalProviderBatchInspectionCandidate[];
 }>;
 
 export type ExternalProviderBatchInspection = Readonly<{
@@ -69,11 +78,21 @@ export type ExternalProviderBatchLimits = Readonly<{
   maxDurationSeconds: number;
 }>;
 
+export type ExternalProviderBatchCandidate = Readonly<{
+  id: string;
+  label: string;
+  durationSeconds: number | null;
+  confidence: number | null;
+  sourceUrl: string;
+}>;
+
 export type ExternalProviderBatchItem = Readonly<{
   index: number;
   sourceId: string | null;
   label: string;
   durationSeconds: number | null;
+  selected: boolean;
+  candidates: readonly ExternalProviderBatchCandidate[];
   status: ExternalProviderBatchItemStatus;
   jobId: string | null;
   destination: string | null;
@@ -109,12 +128,22 @@ export type ExternalProviderBatch = Readonly<{
   items: readonly ExternalProviderBatchItem[];
 }>;
 
+type MutableBatchCandidate = {
+  id: string;
+  label: string;
+  durationSeconds: number | null;
+  confidence: number | null;
+  request: ExternalProviderRequest;
+};
+
 type MutableBatchItem = {
   sourceId: string | null;
   label: string;
   durationSeconds: number | null;
   request: ExternalProviderRequest | null;
   unavailableReason: string | null;
+  selected: boolean;
+  candidates: MutableBatchCandidate[];
   status: ExternalProviderBatchItemStatus;
   jobId: string | null;
   destination: string | null;
@@ -263,6 +292,18 @@ function safeDuration(value: unknown) {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
 }
 
+function safeConfidence(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1
+    ? value
+    : null;
+}
+
+function cleanCandidateId(value: unknown, fallback: string) {
+  if (typeof value !== 'string') return fallback;
+  const clean = value.trim().slice(0, 128);
+  return clean && /^[A-Za-z0-9._:-]+$/.test(clean) ? clean : fallback;
+}
+
 function publicError(error: unknown) {
   if (
     error instanceof ExternalProviderBatchError
@@ -324,6 +365,14 @@ function snapshot(batch: MutableBatch, limits: ExternalProviderBatchLimits): Ext
       sourceId: item.sourceId,
       label: item.label,
       durationSeconds: item.durationSeconds,
+      selected: item.selected,
+      candidates: item.candidates.map(candidate => ({
+        id: candidate.id,
+        label: candidate.label,
+        durationSeconds: candidate.durationSeconds,
+        confidence: candidate.confidence,
+        sourceUrl: candidate.request.url
+      })),
       status: item.status,
       jobId: item.jobId,
       destination: item.destination,
@@ -448,6 +497,14 @@ export class ExternalProviderBatchManager {
         durationSeconds,
         request: item.request ? normalizeRequest(item.request) : null,
         unavailableReason: item.unavailableReason ? cleanLabel(item.unavailableReason, 'Item indisponível.') : null,
+        selected: Boolean(item.request),
+        candidates: (item.candidates ?? []).slice(0, 10).map((candidate, candidateIndex) => ({
+          id: cleanCandidateId(candidate.id, `candidate-${candidateIndex + 1}`),
+          label: cleanLabel(candidate.label, `Candidato ${candidateIndex + 1}`),
+          durationSeconds: safeDuration(candidate.durationSeconds),
+          confidence: safeConfidence(candidate.confidence),
+          request: normalizeRequest(candidate.request)
+        })),
         status: 'queued',
         jobId: null,
         destination: null,
@@ -484,11 +541,76 @@ export class ExternalProviderBatchManager {
     return snapshot(batch, this.limits);
   }
 
+  updateItem(
+    batchId: string,
+    index: number,
+    input: { selected?: unknown; candidateId?: unknown }
+  ) {
+    const batch = this.requireBatch(batchId);
+    this.assertFresh(batch);
+    if (batch.status !== 'ready') {
+      throw new ExternalProviderBatchError('batch_not_ready', 'Este lote já foi iniciado.', 409);
+    }
+    if (!Number.isSafeInteger(index) || index < 0 || index >= batch.items.length) {
+      throw new ExternalProviderBatchError('invalid_input', 'Item do lote inválido.', 404);
+    }
+    const item = batch.items[index];
+
+    if (input.candidateId !== undefined) {
+      const candidateId = typeof input.candidateId === 'string' ? input.candidateId.trim() : '';
+      const candidate = item.candidates.find(value => value.id === candidateId);
+      if (!candidate) {
+        throw new ExternalProviderBatchError('invalid_input', 'Candidato de mídia inválido.', 400);
+      }
+      item.request = candidate.request;
+      item.selected = true;
+      item.unavailableReason = null;
+      item.error = null;
+    }
+
+    if (input.selected !== undefined) {
+      if (typeof input.selected !== 'boolean') {
+        throw new ExternalProviderBatchError('invalid_input', 'Seleção do item inválida.', 400);
+      }
+      if (input.selected && !item.request) {
+        throw new ExternalProviderBatchError(
+          'invalid_input',
+          'Escolha um candidato de mídia antes de selecionar este item.',
+          409
+        );
+      }
+      item.selected = input.selected;
+    }
+
+    this.touch(batch);
+    return snapshot(batch, this.limits);
+  }
+
+  setSelection(batchId: string, indexes: unknown) {
+    const batch = this.requireBatch(batchId);
+    this.assertFresh(batch);
+    if (batch.status !== 'ready') {
+      throw new ExternalProviderBatchError('batch_not_ready', 'Este lote já foi iniciado.', 409);
+    }
+    if (!Array.isArray(indexes) || indexes.some(index => !Number.isSafeInteger(index) || index < 0 || index >= batch.items.length)) {
+      throw new ExternalProviderBatchError('invalid_input', 'Seleção do lote inválida.', 400);
+    }
+    const selected = new Set(indexes as number[]);
+    batch.items.forEach((item, index) => {
+      item.selected = selected.has(index) && Boolean(item.request);
+    });
+    this.touch(batch);
+    return snapshot(batch, this.limits);
+  }
+
   start(batchId: string, folderPath?: unknown) {
     const batch = this.requireBatch(batchId);
     this.assertFresh(batch);
     if (batch.status !== 'ready') {
       throw new ExternalProviderBatchError('batch_not_ready', 'Este lote já foi iniciado.', 409);
+    }
+    if (!batch.items.some(item => item.selected && item.request)) {
+      throw new ExternalProviderBatchError('invalid_input', 'Selecione pelo menos uma música importável.', 409);
     }
 
     batch.folderPath = normalizeImportFolderPath(folderPath).join('/');
@@ -551,6 +673,14 @@ export class ExternalProviderBatchManager {
     try {
       for (const item of batch.items) {
         if (session.cancelRequested) break;
+        if (!item.selected) {
+          item.status = 'ignored';
+          item.error = item.request
+            ? 'Item desmarcado antes do início do lote.'
+            : item.unavailableReason || 'Item sem candidato de mídia selecionado.';
+          this.touch(batch);
+          continue;
+        }
         if (!item.request) {
           item.status = 'ignored';
           item.error = item.unavailableReason || 'Item indisponível na origem.';
