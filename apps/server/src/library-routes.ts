@@ -12,6 +12,9 @@ import type { LibraryService } from './library-service.js';
 function parseTrackHotCues(value: unknown): TrackHotCues | null {
   if (!value || typeof value !== 'object') return null;
   const candidate = value as Partial<TrackHotCues>;
+  const colors = candidate.colors ?? [null, null, null, null];
+  const labels = candidate.labels ?? [null, null, null, null];
+  const validColors = ['blue', 'red', 'green', 'amber', 'purple', 'cyan'];
   if (
     candidate.version !== 1
     || !Array.isArray(candidate.positions)
@@ -21,11 +24,25 @@ function parseTrackHotCues(value: unknown): TrackHotCues | null {
       || !Number.isFinite(position)
       || position < 0
     ))
+    || !Array.isArray(colors)
+    || colors.length !== 4
+    || colors.some(color => color != null && (
+      typeof color !== 'string'
+      || !validColors.includes(color)
+    ))
+    || !Array.isArray(labels)
+    || labels.length !== 4
+    || labels.some(label => label != null && (
+      typeof label !== 'string'
+      || label.length > 24
+    ))
   ) return null;
 
   return {
     version: 1,
-    positions: [...candidate.positions] as TrackHotCues['positions']
+    positions: [...candidate.positions] as TrackHotCues['positions'],
+    colors: [...colors] as NonNullable<TrackHotCues['colors']>,
+    labels: [...labels] as NonNullable<TrackHotCues['labels']>
   };
 }
 
