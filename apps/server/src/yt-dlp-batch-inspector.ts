@@ -13,7 +13,10 @@ import type {
 } from './external-provider-batch.js';
 import { isUnsafeImportAddress } from './import-url.js';
 import { SpotifyEmbedCatalog, type SpotifyCatalogTrack } from './spotify-embed-catalog.js';
-import { selectSpotifyMediaMatch } from './spotify-media-match.js';
+import {
+  scoreSpotifyMediaCandidate,
+  selectSpotifyMediaMatch
+} from './spotify-media-match.js';
 import {
   runYtDlpProcess,
   YT_DLP_PROVIDER_ID,
@@ -300,33 +303,58 @@ export class YtDlpBatchInspector implements ExternalProviderBatchInspector {
         }
         try {
           const response = await this.search.search(`${track.artist} ${track.title}`, signal);
+          const requestFor = (sourceUrl: string, confidence: number) => ({
+            url: sourceUrl,
+            metadata: {
+              title: track.title,
+              artist: track.artist,
+              album: track.album,
+              thumbnailUrl: track.thumbnailUrl,
+              attribution: `Spotify · catálogo · match ${Math.round(confidence * 100)}%`
+            }
+          });
+          const candidates = response.items
+            .map(item => ({
+              item,
+              confidence: scoreSpotifyMediaCandidate(track, item)
+            }))
+            .sort((left, right) => right.confidence - left.confidence)
+            .slice(0, 5)
+            .map(({ item, confidence }) => ({
+              id: item.id,
+              label: cleanText(
+                `${item.artist ?? 'YouTube'} — ${item.title}`,
+                MAX_ITEM_LABEL_LENGTH
+              ) ?? item.title,
+              durationSeconds: item.durationSeconds,
+              confidence,
+              request: requestFor(item.sourceUrl, confidence)
+            }));
           const match = selectSpotifyMediaMatch(track, response.items);
           if (!match) {
-            return spotifyUnavailable(track, 'Nenhum candidato de mídia foi encontrado.');
+            return {
+              ...spotifyUnavailable(track, 'Nenhum candidato de mídia foi encontrado.'),
+              candidates
+            };
           }
           if (!match.automatic) {
             const confidence = Math.round(match.confidence * 100);
-            return spotifyUnavailable(
-              track,
-              `Correspondência ambígua (${confidence}% de confiança). Busque esta faixa manualmente para revisar a origem.`
-            );
+            return {
+              ...spotifyUnavailable(
+                track,
+                `Correspondência ambígua (${confidence}% de confiança). Escolha um candidato antes de importar.`
+              ),
+              candidates
+            };
           }
 
           return {
             sourceId: track.id,
             label: spotifyLabel(track),
             durationSeconds: track.durationSeconds,
-            request: {
-              url: match.item.sourceUrl,
-              metadata: {
-                title: track.title,
-                artist: track.artist,
-                album: track.album,
-                thumbnailUrl: track.thumbnailUrl,
-                attribution: `Spotify · catálogo · match ${Math.round(match.confidence * 100)}%`
-              }
-            },
-            unavailableReason: null
+            request: requestFor(match.item.sourceUrl, match.confidence),
+            unavailableReason: null,
+            candidates
           } satisfies ExternalProviderBatchInspectionItem;
         } catch (error) {
           if (signal.aborted) return spotifyUnavailable(track, 'Resolução cancelada.');
