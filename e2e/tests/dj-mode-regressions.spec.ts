@@ -162,6 +162,7 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
     ));
     await existingHotCueClear.click();
     expect((await resetHotCue).ok()).toBe(true);
+    await hotCueOptionsA.click();
   }
 
   await expect(deckA.getByRole('button', { name: 'Definir Hot Cue 1 Deck A' })).toBeVisible();
@@ -215,6 +216,7 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   ));
   await deckB.getByRole('button', { name: 'Limpar Hot Cue 1 Deck B' }).click();
   expect((await clearHotCue).ok()).toBe(true);
+  await deckB.locator('.dj-hot-cue').first().locator('summary').click();
   await expect(deckA.getByRole('button', { name: 'Definir Hot Cue 1 Deck A' })).toBeVisible();
   await expect(deckB.getByRole('button', { name: 'Definir Hot Cue 1 Deck B' })).toBeVisible();
   await expect(deckA.getByRole('button', { name: 'Hot Cue 1 no waveform Deck A' })).toHaveCount(0);
