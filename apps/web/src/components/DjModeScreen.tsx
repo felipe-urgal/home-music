@@ -35,6 +35,13 @@ import { buildDjWaveformMarkers } from '../dj-waveform-grid';
 import { resolveHotCuePosition } from '../dj-hot-cue-quantize';
 import { buildDjHotCueWaveformMarkers } from '../dj-hot-cue-waveform';
 import { djLoopWaveformRange, resolveDjAutoLoopPlan } from '../dj-auto-loop';
+import {
+  DJ_LOOP_BEAT_SIZES,
+  moveDjLoop,
+  resizeDjLoop,
+  resolveDjLoopPoint,
+  type DjLoopBeatSize
+} from '../dj-loop-operations';
 import { resolveDjHotLoopPlan } from '../dj-hot-loop';
 import { notifyLibraryChanged } from '../library-events';
 import { fetchTrackWaveform } from '../track-waveform-client';
@@ -384,7 +391,8 @@ function DeckPanel({
   const [loopIn, setLoopIn] = useState<number | null>(null);
   const [loopOut, setLoopOut] = useState<number | null>(null);
   const [loopActive, setLoopActive] = useState(false);
-  const [loopBeats, setLoopBeats] = useState(4);
+  const [loopBeats, setLoopBeats] = useState<DjLoopBeatSize>(4);
+  const [loopQuantize, setLoopQuantize] = useState(true);
   const [hotLoopCueIndex, setHotLoopCueIndex] = useState<number | null>(null);
   const [hotCues, setHotCues] = useState<TrackHotCues['positions']>([null, null, null, null]);
   const [hotCueQuantize, setHotCueQuantize] = useState(false);
@@ -397,6 +405,7 @@ function DeckPanel({
     setLoopOut(null);
     setLoopActive(false);
     setLoopBeats(4);
+    setLoopQuantize(true);
     setHotLoopCueIndex(null);
   }, [snapshot?.trackId]);
 
@@ -426,29 +435,69 @@ function DeckPanel({
   };
 
   const changeLoopBeats = (direction: -1 | 1) => {
-    const sizes = [1, 2, 4, 8, 16];
-    const current = sizes.indexOf(loopBeats);
-    const next = sizes[Math.max(0, Math.min(sizes.length - 1, current + direction))] ?? 4;
+    const current = DJ_LOOP_BEAT_SIZES.indexOf(loopBeats);
+    const next = DJ_LOOP_BEAT_SIZES[
+      Math.max(0, Math.min(DJ_LOOP_BEAT_SIZES.length - 1, current + direction))
+    ] ?? 4;
     setLoopBeats(next);
+
     if (loopIn != null && loopOut != null) {
-      const bpmAtLoop = state.track?.rhythm
-        ? (60 / Math.max(0.001, (loopOut - loopIn) / loopBeats))
-        : bpm;
-      if (bpmAtLoop) {
-        const duration = snapshot?.durationSeconds || state.track?.duration || Number.POSITIVE_INFINITY;
-        setLoopOut(Math.min(duration, loopIn + ((60 / bpmAtLoop) * next)));
+      const resized = resizeDjLoop({
+        loopIn,
+        loopOut,
+        rhythm: state.track?.rhythm,
+        durationSeconds: snapshot?.durationSeconds || state.track?.duration,
+        beats: next
+      });
+      if (resized) {
+        setLoopOut(resized.endSeconds);
+        setLoopActive(true);
+        setHotLoopCueIndex(null);
       }
+    }
+  };
+
+  const moveLoop = (direction: -1 | 1) => {
+    if (loopIn == null || loopOut == null) return;
+    const moved = moveDjLoop({
+      loopIn,
+      loopOut,
+      rhythm: state.track?.rhythm,
+      durationSeconds: snapshot?.durationSeconds || state.track?.duration,
+      direction,
+      beats: 1
+    });
+    if (!moved) return;
+    setLoopIn(moved.startSeconds);
+    setLoopOut(moved.endSeconds);
+    setHotLoopCueIndex(null);
+    if (snapshot && (
+      snapshot.currentTimeSeconds < moved.startSeconds
+      || snapshot.currentTimeSeconds >= moved.endSeconds
+    )) {
+      onSeek(deck, moved.startSeconds);
     }
   };
 
   const setLoopStart = () => {
     if (!snapshot?.trackId) return;
-    const startSeconds = snapshot.currentTimeSeconds;
-    setLoopIn(startSeconds);
+    const point = resolveDjLoopPoint({
+      positionSeconds: snapshot.currentTimeSeconds,
+      durationSeconds: snapshot.durationSeconds || state.track?.duration,
+      rhythm: state.track?.rhythm,
+      quantize: loopQuantize
+    });
+    setLoopIn(point.seconds);
     setHotLoopCueIndex(null);
-    if (bpm) {
-      const duration = snapshot.durationSeconds || state.track?.duration || Number.POSITIVE_INFINITY;
-      setLoopOut(Math.min(duration, startSeconds + ((60 / bpm) * loopBeats)));
+
+    const automatic = resolveDjAutoLoopPlan({
+      positionSeconds: point.seconds,
+      durationSeconds: snapshot.durationSeconds || state.track?.duration,
+      rhythm: state.track?.rhythm,
+      beats: loopBeats
+    });
+    if (automatic) {
+      setLoopOut(automatic.endSeconds);
       setLoopActive(true);
     } else {
       setLoopOut(null);
@@ -458,9 +507,14 @@ function DeckPanel({
 
   const setLoopEnd = () => {
     if (!snapshot?.trackId || loopIn == null) return;
-    const endSeconds = snapshot.currentTimeSeconds;
-    if (endSeconds <= loopIn + 0.05) return;
-    setLoopOut(endSeconds);
+    const point = resolveDjLoopPoint({
+      positionSeconds: snapshot.currentTimeSeconds,
+      durationSeconds: snapshot.durationSeconds || state.track?.duration,
+      rhythm: state.track?.rhythm,
+      quantize: loopQuantize
+    });
+    if (point.seconds <= loopIn + 0.05) return;
+    setLoopOut(point.seconds);
     setLoopActive(true);
     setHotLoopCueIndex(null);
   };
@@ -652,8 +706,18 @@ function DeckPanel({
               <div className="dj-loop-points">
                 <button type="button" className={loopIn != null ? 'is-active' : ''} onClick={setLoopStart}>IN</button>
                 <button type="button" className={loopOut != null ? 'is-active' : ''} onClick={setLoopEnd} disabled={loopIn == null}>OUT</button>
+                <button
+                  type="button"
+                  className={loopQuantize ? 'is-active' : ''}
+                  aria-pressed={loopQuantize}
+                  onClick={() => setLoopQuantize(value => !value)}
+                  title="Quantizar IN/OUT na batida mais próxima quando o grid for confiável"
+                >
+                  Q
+                </button>
               </div>
               <div className="dj-loop-size">
+                <button type="button" aria-label={'Mover loop para trás ' + label} onClick={() => moveLoop(-1)} disabled={loopIn == null || loopOut == null}>←</button>
                 <button type="button" aria-label={'Diminuir loop ' + label} onClick={() => changeLoopBeats(-1)}><ChevronLeft aria-hidden="true" /></button>
                 <button
                   type="button"
@@ -676,9 +740,10 @@ function DeckPanel({
                         : 'Criar Auto Loop quantizado'
                   }
                 >
-                  {loopBeats}
+                  {loopBeats === 0.5 ? '1/2' : loopBeats}
                 </button>
                 <button type="button" aria-label={'Aumentar loop ' + label} onClick={() => changeLoopBeats(1)}><ChevronRight aria-hidden="true" /></button>
+                <button type="button" aria-label={'Mover loop para frente ' + label} onClick={() => moveLoop(1)} disabled={loopIn == null || loopOut == null}>→</button>
               </div>
             </div>
           </div>
