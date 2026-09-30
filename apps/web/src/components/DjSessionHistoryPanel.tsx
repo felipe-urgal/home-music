@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Clipboard, Download, History, RotateCcw } from 'lucide-react';
 import type { DualDeckMixerState } from '../dual-deck-mixer';
 import { crossfaderGains } from '../dual-deck-mixer';
@@ -7,6 +7,7 @@ import {
   createDjSessionHistoryState,
   DJ_SESSION_HISTORY_STORAGE_KEY,
   djSessionSetlistEntries,
+  finalizeDjSession,
   formatDjSessionDuration,
   observeDjSession,
   parseDjSessionHistory,
@@ -42,6 +43,7 @@ function downloadSetlist(content: string) {
 
 export function DjSessionHistoryPanel({ decks, mixer }: DjSessionHistoryPanelProps) {
   const [history, setHistory] = useState<DjSessionHistoryState>(readStoredHistory);
+  const historyRef = useRef(history);
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'error'>('idle');
 
   useEffect(() => {
@@ -61,20 +63,29 @@ export function DjSessionHistoryPanel({ decks, mixer }: DjSessionHistoryPanelPro
         playing: Boolean(decks[deck].snapshot?.playing),
         outputGain: mixer.channelVolumes[deck] * gains[deck]
       })));
+      historyRef.current = next;
       saveHistory(next);
       return next;
     });
   }, [
     decks.a.snapshot?.trackId,
     decks.a.snapshot?.playing,
+    decks.a.snapshot?.currentTimeSeconds,
     decks.a.track?.id,
     decks.b.snapshot?.trackId,
     decks.b.snapshot?.playing,
+    decks.b.snapshot?.currentTimeSeconds,
     decks.b.track?.id,
     mixer.channelVolumes.a,
     mixer.channelVolumes.b,
     mixer.crossfader
   ]);
+
+  useEffect(() => () => {
+    const finalized = finalizeDjSession(historyRef.current);
+    historyRef.current = finalized;
+    saveHistory(finalized);
+  }, []);
 
   const setlistEntries = useMemo(() => djSessionSetlistEntries(history), [history]);
   const setlist = useMemo(() => buildDjSessionSetlist(history), [history]);
@@ -92,6 +103,7 @@ export function DjSessionHistoryPanel({ decks, mixer }: DjSessionHistoryPanelPro
   const reset = () => {
     if (!window.confirm('Limpar o histórico desta sessão DJ?')) return;
     const next = createDjSessionHistoryState();
+    historyRef.current = next;
     saveHistory(next);
     setHistory(next);
     setCopyStatus('idle');
