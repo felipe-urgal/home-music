@@ -78,6 +78,16 @@ function updateEntry(
   };
 }
 
+function findActiveEntryIndex(
+  entries: DjSessionEntry[],
+  predicate: (entry: DjSessionEntry) => boolean
+) {
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    if (predicate(entries[index])) return index;
+  }
+  return -1;
+}
+
 export function observeDjSession(
   state: DjSessionHistoryState,
   observations: DjSessionDeckObservation[],
@@ -87,7 +97,8 @@ export function observeDjSession(
   let entries = state.entries.map(entry => ({ ...entry }));
 
   for (const observation of observations) {
-    const activeIndex = entries.findLastIndex(
+    const activeIndex = findActiveEntryIndex(
+      entries,
       entry => entry.deck === observation.deck && entry.endedAt == null
     );
     const active = activeIndex >= 0 ? entries[activeIndex] : null;
@@ -101,7 +112,8 @@ export function observeDjSession(
       entries[activeIndex] = finishEntry(active, now);
     }
 
-    const matchingIndex = entries.findLastIndex(
+    const matchingIndex = findActiveEntryIndex(
+      entries,
       entry => entry.deck === observation.deck
         && entry.trackId === observation.track?.id
         && entry.endedAt == null
