@@ -289,3 +289,80 @@ test('cancelamento durante aquisição cancela filho atual e não inicia próxim
   assert.equal(item.startedUrls.length, 1);
   assert.equal(done.summary.cancelled, 2);
 });
+
+
+test('preview permite escolher candidato ambíguo antes de iniciar', async () => {
+  const item = fixture({
+    inspected: {
+      providerId: 'fake',
+      label: 'Spotify · Favoritas',
+      items: [{
+        sourceId: 'spotify001',
+        label: 'Artista — Música',
+        durationSeconds: 200,
+        request: null,
+        unavailableReason: 'Correspondência ambígua.',
+        candidates: [{
+          id: 'youtube001',
+          label: 'Artista — Música (Official Audio)',
+          durationSeconds: 201,
+          confidence: 0.91,
+          request: {
+            url: 'https://example.com/youtube001',
+            metadata: {
+              title: 'Música',
+              artist: 'Artista',
+              album: 'Álbum',
+              attribution: 'Spotify · catálogo · match 91%'
+            }
+          }
+        }]
+      }]
+    }
+  });
+
+  const preview = await item.manager.inspect('fake', { url: 'https://open.spotify.com/playlist/3cEYpjA9oz9GiPac4AsH4n' });
+  assert.ok(preview);
+  assert.equal(preview.items[0].selectable, false);
+  assert.equal(preview.items[0].selected, false);
+  assert.equal(preview.items[0].candidates.length, 1);
+  assert.match(preview.items[0].error ?? '', /ambígua/);
+
+  const reviewed = item.manager.updateItem(preview.id, 0, { candidateId: 'youtube001' });
+  assert.equal(reviewed.items[0].selectable, true);
+  assert.equal(reviewed.items[0].selected, true);
+  assert.equal(reviewed.items[0].error, null);
+
+  item.manager.start(preview.id);
+  await waitUntil(() => item.manager.get(preview.id).status === 'completed');
+  assert.deepEqual(item.startedUrls, ['https://example.com/youtube001']);
+});
+
+test('seleção do lote importa somente itens marcados', async () => {
+  const item = fixture();
+  const preview = await item.manager.inspect('fake', { url: 'https://example.com/lista' });
+  assert.ok(preview);
+  assert.deepEqual(preview.items.map(value => value.selected), [true, true]);
+
+  const selected = item.manager.setSelection(preview.id, [1]);
+  assert.deepEqual(selected.items.map(value => value.selected), [false, true]);
+
+  item.manager.start(preview.id);
+  await waitUntil(() => item.manager.get(preview.id).status === 'completed');
+  const done = item.manager.get(preview.id);
+  assert.deepEqual(item.startedUrls, ['https://example.com/video002']);
+  assert.equal(done.items[0].status, 'ignored');
+  assert.equal(done.items[1].status, 'completed');
+});
+
+test('lote sem item selecionado não inicia', async () => {
+  const item = fixture();
+  const preview = await item.manager.inspect('fake', { url: 'https://example.com/lista' });
+  assert.ok(preview);
+  item.manager.setSelection(preview.id, []);
+  assert.throws(
+    () => item.manager.start(preview.id),
+    (error: unknown) => error instanceof ExternalProviderBatchError
+      && error.code === 'invalid_input'
+  );
+});
