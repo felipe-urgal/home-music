@@ -1,10 +1,11 @@
 import type { TrackRhythm } from '@home-music/shared';
 import { beatGridBpmAt, nearestBeatAt } from './dj-beat-grid';
+import { DJ_LOOP_BEAT_SIZES, type DjLoopBeatSize } from './dj-loop-operations';
 
 export type DjAutoLoopPlan = {
   startSeconds: number;
   endSeconds: number;
-  beats: number;
+  beats: DjLoopBeatSize;
   quantized: boolean;
 };
 
@@ -12,14 +13,13 @@ export function resolveDjAutoLoopPlan(options: {
   positionSeconds: number;
   durationSeconds: number | null | undefined;
   rhythm: TrackRhythm | null | undefined;
-  beats: number;
+  beats: DjLoopBeatSize;
 }) : DjAutoLoopPlan | null {
   const { rhythm } = options;
   if (
     !Number.isFinite(options.positionSeconds)
     || options.positionSeconds < 0
-    || !Number.isInteger(options.beats)
-    || ![1, 2, 4, 8, 16].includes(options.beats)
+    || !DJ_LOOP_BEAT_SIZES.includes(options.beats)
   ) return null;
 
   const duration = (

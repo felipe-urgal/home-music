@@ -1,23 +1,23 @@
 import type { TrackRhythm } from '@home-music/shared';
 import { beatGridBpmAt } from './dj-beat-grid';
+import { DJ_LOOP_BEAT_SIZES, type DjLoopBeatSize } from './dj-loop-operations';
 
 export type DjHotLoopPlan = {
   startSeconds: number;
   endSeconds: number;
-  beats: number;
+  beats: DjLoopBeatSize;
 };
 
 export function resolveDjHotLoopPlan(options: {
   cueSeconds: number;
   durationSeconds: number | null | undefined;
   rhythm: TrackRhythm | null | undefined;
-  beats: number;
+  beats: DjLoopBeatSize;
 }): DjHotLoopPlan | null {
   if (
     !Number.isFinite(options.cueSeconds)
     || options.cueSeconds < 0
-    || !Number.isInteger(options.beats)
-    || ![1, 2, 4, 8, 16].includes(options.beats)
+    || !DJ_LOOP_BEAT_SIZES.includes(options.beats)
   ) return null;
 
   const duration = (

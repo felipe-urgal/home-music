@@ -8,6 +8,20 @@ const rhythm = {
 };
 
 describe('DJ Auto Loop', () => {
+  it('suporta meio beat', () => {
+    expect(resolveDjAutoLoopPlan({
+      positionSeconds: 1.43,
+      durationSeconds: 180,
+      rhythm,
+      beats: 0.5
+    })).toEqual({
+      startSeconds: 1.25,
+      endSeconds: 1.5,
+      beats: 0.5,
+      quantized: true
+    });
+  });
+
   it('quantiza o início na batida mais próxima e cria 4 beats', () => {
     expect(resolveDjAutoLoopPlan({
       positionSeconds: 1.43,
@@ -71,7 +85,7 @@ describe('DJ Auto Loop', () => {
       positionSeconds: 1,
       durationSeconds: 10,
       rhythm: undefined,
-      beats: 3
+      beats: 3 as never
     })).toBeNull();
     expect(resolveDjAutoLoopPlan({
       positionSeconds: 1,
