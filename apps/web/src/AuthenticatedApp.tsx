@@ -733,6 +733,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
           || adoptedSnapshot.trackId !== options.nextTrack.id
           || !adoptedSnapshot.playing
         ) {
+          player.dualDeck.setAutomixTransition(options.activeDeck, 0);
           djAutomixTransitionRef.current = false;
           return;
         }
