@@ -93,12 +93,12 @@ function batchDuration(batch: AdminExternalProviderBatch) {
 }
 
 function batchStatusLabel(batch: AdminExternalProviderBatch) {
-  if (batch.status === 'ready') return 'Playlist pronta para importar';
-  if (batch.status === 'running') return 'Importando playlist…';
+  if (batch.status === 'ready') return 'Lista pronta para importar';
+  if (batch.status === 'running') return 'Importando lista…';
   if (batch.status === 'cancelling') return 'Cancelando playlist…';
-  if (batch.status === 'cancelled') return 'Playlist cancelada';
-  if (batch.status === 'failed') return 'Playlist encerrada com falha';
-  return 'Importação da playlist concluída';
+  if (batch.status === 'cancelled') return 'Lista cancelada';
+  if (batch.status === 'failed') return 'Lista encerrada com falha';
+  return 'Importação da lista concluída';
 }
 
 function batchItemStatusLabel(status: AdminExternalProviderBatch['items'][number]['status']) {
@@ -176,7 +176,7 @@ export function AdminExternalProviderPanel({
         setActiveBatch(next);
         await onRefresh();
       } catch (caught) {
-        if (active) setError(caught instanceof Error ? caught.message : 'Não foi possível atualizar o progresso da playlist.');
+        if (active) setError(caught instanceof Error ? caught.message : 'Não foi possível atualizar o progresso da lista.');
       }
     };
     const timer = window.setInterval(() => { void refresh(); }, 900);
@@ -279,7 +279,7 @@ export function AdminExternalProviderPanel({
       const next = await startAdminExternalProviderBatch(activeBatch.id, destination);
       setActiveBatch(next);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Não foi possível iniciar a playlist.');
+      setError(caught instanceof Error ? caught.message : 'Não foi possível iniciar a lista.');
     } finally {
       setStartingBatch(false);
     }
@@ -294,7 +294,7 @@ export function AdminExternalProviderPanel({
         setActiveBatch(next);
         await onRefresh();
       } catch (caught) {
-        setError(caught instanceof Error ? caught.message : 'Não foi possível cancelar a playlist.');
+        setError(caught instanceof Error ? caught.message : 'Não foi possível cancelar a lista.');
       } finally {
         setCancelling(false);
       }
@@ -328,7 +328,7 @@ export function AdminExternalProviderPanel({
         <div className="admin-import-upload__heading">
           <div>
             <span className="my-account-link-group__label">Fontes externas</span>
-            <strong id="admin-import-provider-title">YouTube Music e sites compatíveis</strong>
+            <strong id="admin-import-provider-title">YouTube, Spotify e fontes compatíveis</strong>
           </div>
           <small>{!providersLoaded ? 'Verificando…' : available.length > 0 ? `${available.length} disponível` : 'yt-dlp não encontrado'}</small>
         </div>
@@ -349,7 +349,7 @@ export function AdminExternalProviderPanel({
             <div className="admin-import-provider__compact-heading">
               <div>
                 <strong id="admin-import-provider-title">Busque ou cole um link</strong>
-                <small>Artista, música, álbum, faixa individual ou playlist</small>
+                <small>Artista, música ou link do YouTube/Spotify</small>
               </div>
               <Link2 />
             </div>
@@ -370,13 +370,13 @@ export function AdminExternalProviderPanel({
             <label className="admin-import-provider__url">
               {!compact && <span>Link do conteúdo</span>}
               <input
-                aria-label={compact ? 'Buscar ou colar link do YouTube ou YouTube Music' : undefined}
+                aria-label={compact ? 'Buscar ou colar link do YouTube, YouTube Music ou Spotify' : undefined}
                 type="text"
                 inputMode="search"
                 autoCapitalize="none"
                 autoCorrect="off"
                 spellCheck={false}
-                placeholder="Artista, música, álbum ou URL..."
+                placeholder="Artista, música ou URL do YouTube/Spotify..."
                 value={url}
                 disabled={formBusy}
                 onChange={event => {
@@ -406,7 +406,7 @@ export function AdminExternalProviderPanel({
           </div>
           {!compact && (
             <small className="admin-import-provider__policy">
-              <ShieldCheck /> Links do YouTube e YouTube Music devem ser colados aqui, não em “URL direta”. Use apenas conteúdo que você tenha direito de baixar.
+              <ShieldCheck /> Links do YouTube, YouTube Music e Spotify devem ser colados aqui. No Spotify, o catálogo é usado para identificar as faixas e a mídia é resolvida pelo provider configurado. Use apenas conteúdo que você tenha direito de baixar.
             </small>
           )}
         </form>
@@ -487,7 +487,7 @@ export function AdminExternalProviderPanel({
               <div className="admin-provider-batch__folder-row">
                 <Folder />
                 <div>
-                  <strong>Salvar playlist em</strong>
+                  <strong>Salvar lista em</strong>
                   <small>Todos os itens usam o mesmo destino, com nomes sem colisão.</small>
                 </div>
               </div>
@@ -496,7 +496,7 @@ export function AdminExternalProviderPanel({
                 <div className="admin-provider-batch__folder-picker">
                   <div className="admin-import-destination__select-wrap">
                     <select
-                      aria-label="Pasta de destino da playlist"
+                      aria-label="Pasta de destino da lista"
                       value={folderPath}
                       disabled={startingBatch}
                       onChange={event => setFolderPath(event.target.value)}
