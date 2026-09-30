@@ -104,14 +104,14 @@ test('Spotify vira lote yt-dlp somente para matches confiáveis', async () => {
       catalog: 'spotify',
       catalogId: '4uLU6hMCjMI75M1A2tKUQC',
       catalogUrl: 'https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC',
-      matchConfidence: 1
+      matchConfidence: 0.94
     },
     metadata: {
       title: 'Never Gonna Give You Up',
       artist: 'Rick Astley',
       album: 'Whenever You Need Somebody',
       thumbnailUrl: 'https://i.scdn.co/image/cover',
-      attribution: 'Spotify · catálogo · match 100%'
+      attribution: 'Spotify · catálogo · match 94%'
     }
   });
 
