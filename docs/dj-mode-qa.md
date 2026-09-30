@@ -22,6 +22,10 @@ O E2E `e2e/tests/dj-mode-regressions.spec.ts` executa em Chromium desktop e vali
 - note-off/velocity zero sem ação dupla;
 - desconexão MIDI sem interromper os decks;
 - alternância Manual/AutoMix;
+- AutoMix usa envelope de ganho próprio sem reposicionar o crossfader manual;
+- takeover Manual preserva a mixagem audível ao sair do AutoMix;
+- biblioteca mantém cabeçalho/ações e rolagem interna da listagem;
+- controlador MIDI permanece acessível pelo header sem ocupar uma linha fixa do workspace;
 - saída do Modo DJ;
 - retorno ao player normal mantendo a faixa principal.
 
@@ -94,9 +98,12 @@ Executar em desktop com largura >= 1280 px:
 9. usar busca;
 10. confirmar marcação visual de faixas já tocadas;
 11. abrir/fechar o editor de beat grid;
-12. conectar/desconectar MIDI quando disponível;
-13. sair do Modo DJ;
-14. confirmar retorno previsível ao player normal.
+12. confirmar que a lista da biblioteca rola sem mover o restante do workspace;
+13. abrir o MIDI pelo header, conectar/desconectar e fechar o popover;
+14. posicionar o crossfader manual fora de um extremo, ativar AutoMix e confirmar que o controle visual não é reposicionado;
+15. voltar para Manual e confirmar takeover sem salto perceptível de volume;
+16. sair do Modo DJ;
+17. confirmar retorno previsível ao player normal.
 
 ## Roteiro físico DDJ-400
 
