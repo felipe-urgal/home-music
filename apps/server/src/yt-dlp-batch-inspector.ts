@@ -287,6 +287,11 @@ export class YtDlpBatchInspector implements ExternalProviderBatchInspector {
       return {
         providerId: this.providerId,
         label: `Spotify · ${spotify.label}`,
+        presentation: {
+          sourceLabel: `Spotify · ${spotify.type === 'track' ? 'Faixa' : spotify.type === 'album' ? 'Álbum' : 'Playlist'}`,
+          subtitle: spotify.owner,
+          thumbnailUrl: spotify.thumbnailUrl
+        },
         items: spotify.tracks.map(track => spotifyUnavailable(
           track,
           `A coleção excede o limite de ${this.maxItems} itens por lote.`
@@ -375,6 +380,11 @@ export class YtDlpBatchInspector implements ExternalProviderBatchInspector {
     return {
       providerId: this.providerId,
       label: `Spotify · ${spotify.label}`,
+      presentation: {
+        sourceLabel: `Spotify · ${spotify.type === 'track' ? 'Faixa' : spotify.type === 'album' ? 'Álbum' : 'Playlist'}`,
+        subtitle: spotify.owner,
+        thumbnailUrl: spotify.thumbnailUrl
+      },
       items
     };
   }
