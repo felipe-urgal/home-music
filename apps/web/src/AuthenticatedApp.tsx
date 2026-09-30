@@ -22,10 +22,10 @@ import {
 } from './dj-automix-policy';
 import {
   canPrepareDjAutomixNext,
-  nextDjAutomixIndex,
   reconcileDjShuffleOrder,
   shouldRecoverDjAutomixAfterEnded
 } from './dj-automix-sequence';
+import { selectDjAutomixNext } from './dj-automix-selection';
 import { isDjKeyboardEditableTarget, mapDjKeyboardCode } from './dj-keyboard-mapping';
 import { movePlayedDjTracksToEnd } from './dj-library-order';
 import { resolveInitialDjSyncPlan } from './dj-sync-phase-lock';
@@ -153,6 +153,8 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
   const [djAutomixShuffle, setDjAutomixShuffle] = useState(false);
   const [djShuffleOrder, setDjShuffleOrder] = useState<string[]>([]);
   const [djPlayedTrackIds, setDjPlayedTrackIds] = useState<Set<string>>(() => new Set());
+  const [djAutomixNextReason, setDjAutomixNextReason] = useState<string | null>(null);
+  const djAutomixRejectedTrackIdsRef = useRef<Set<string>>(new Set());
   const djAutomixTimerRef = useRef<number | null>(null);
   const djAutomixTransitionRef = useRef(false);
 
@@ -346,6 +348,8 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
   }, []);
 
   const selectDjLibrarySource = useCallback((value: string) => {
+    djAutomixRejectedTrackIdsRef.current = new Set();
+    setDjAutomixNextReason(null);
     const nextTracks = tracksForDjLibrarySource(value);
     setDjShuffleOrder(
       djAutomixShuffle
@@ -602,21 +606,33 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
 
 
   const prepareDjAutomixNext = useCallback((activeDeck: DjDeckId, queueIndex: number) => {
-    const nextIndex = nextDjAutomixIndex(djListedTracks.length, queueIndex);
-    if (nextIndex == null) return null;
-    const nextTrack = djListedTracks[nextIndex] ?? null;
-    if (!nextTrack) return null;
+    const activeSnapshot = player.dualDeck.getSnapshot(activeDeck);
+    const currentTrack = activeSnapshot?.trackId
+      ? djListedTracks.find(track => track.id === activeSnapshot.trackId) ?? null
+      : null;
+    const selection = selectDjAutomixNext({
+      tracks: djListedTracks,
+      currentTrack,
+      currentIndex: queueIndex,
+      playedTrackIds: djPlayedTrackIds,
+      rejectedTrackIds: djAutomixRejectedTrackIdsRef.current
+    });
+    if (!selection) {
+      setDjAutomixNextReason(null);
+      return null;
+    }
 
     const incomingDeck: DjDeckId = activeDeck === 'a' ? 'b' : 'a';
     const incomingSnapshot = player.dualDeck.getSnapshot(incomingDeck);
-    if (incomingSnapshot?.trackId !== nextTrack.id) {
-      player.dualDeck.loadTrack(incomingDeck, nextTrack);
+    if (incomingSnapshot?.trackId !== selection.track.id) {
+      player.dualDeck.loadTrack(incomingDeck, selection.track);
       ddjBaseRateRef.current[incomingDeck] = 1;
       ddjCuePointsRef.current[incomingDeck] = null;
       commitDjSyncState(resetDjSyncForLoad(djSyncStateRef.current, incomingDeck));
     }
-    return { track: nextTrack, index: nextIndex };
-  }, [commitDjSyncState, djListedTracks, player.dualDeck]);
+    setDjAutomixNextReason(selection.reason);
+    return { track: selection.track, index: selection.index };
+  }, [commitDjSyncState, djListedTracks, djPlayedTrackIds, player.dualDeck]);
 
   const startDjAutomixTransition = useCallback((options: {
     activeDeck: DjDeckId;
@@ -741,6 +757,8 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
 
   const enableDjAutomix = useCallback(() => {
     cancelDjAutomixTransition();
+    djAutomixRejectedTrackIdsRef.current = new Set();
+    setDjAutomixNextReason(null);
     cancelDjNudge('a');
     cancelDjNudge('b');
     commitDjSyncState(EMPTY_DJ_SYNC_STATE);
@@ -787,6 +805,20 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     scheduleMixerUiSync,
     setDjModeState
   ]);
+
+  const skipDjAutomixNext = useCallback(() => {
+    if (djMixModeRef.current !== 'automix') return;
+    const activeDeck = djAutomixActiveDeckRef.current;
+    const incomingDeck: DjDeckId = activeDeck === 'a' ? 'b' : 'a';
+    const nextTrackId = player.dualDeck.getSnapshot(incomingDeck)?.trackId;
+    if (!nextTrackId) return;
+
+    djAutomixRejectedTrackIdsRef.current = new Set([
+      ...djAutomixRejectedTrackIdsRef.current,
+      nextTrackId
+    ]);
+    prepareDjAutomixNext(activeDeck, djAutomixQueueIndexRef.current);
+  }, [player.dualDeck, prepareDjAutomixNext]);
 
   const disableDjAutomix = useCallback(() => {
     cancelDjAutomixTransition();
@@ -1609,6 +1641,8 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
           playedTrackIds={djPlayedTrackIds}
           automixCurrentTrackId={djAutomixCurrentTrackId}
           automixNextTrackId={djAutomixNextTrackId}
+          automixNextReason={djAutomixNextReason}
+          onSkipAutomixNext={skipDjAutomixNext}
           onLoadSelectedTrack={loadDjBrowserTrack}
           midi={midiController}
           onDisconnectMidi={disconnectMidiController}

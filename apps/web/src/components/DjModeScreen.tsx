@@ -22,6 +22,7 @@ import {
   Search,
   Settings,
   Shuffle,
+  SkipForward,
   SlidersHorizontal,
   Upload,
   Zap,
@@ -69,6 +70,8 @@ type DjModeScreenProps = {
   playedTrackIds: Set<string>;
   automixCurrentTrackId: string | null;
   automixNextTrackId: string | null;
+  automixNextReason: string | null;
+  onSkipAutomixNext: () => void;
   onLoadSelectedTrack: (deck: DjDeckId) => void;
   midi: WebMidiController;
   onDisconnectMidi: () => void;
@@ -956,6 +959,8 @@ function DjLibrary({
   playedTrackIds,
   automixCurrentTrackId,
   automixNextTrackId,
+  automixNextReason,
+  onSkipAutomixNext,
   onLoad,
   loadedTrackIds,
   workspacePanel,
@@ -972,6 +977,8 @@ function DjLibrary({
   playedTrackIds: Set<string>;
   automixCurrentTrackId: string | null;
   automixNextTrackId: string | null;
+  automixNextReason: string | null;
+  onSkipAutomixNext: () => void;
   onLoad: (deck: DjDeckId) => void;
   loadedTrackIds: Record<DjDeckId, string | null>;
   workspacePanel: 'library' | 'mixer';
@@ -1183,6 +1190,18 @@ function DjLibrary({
 
         <footer className="dj-pro-library__footer">
           <span>{filtered.length} faixas</span>
+          {automixNextTrackId && (
+            <div className="dj-automix-next-summary" aria-label="Próxima faixa do AutoMix">
+              <span>
+                <strong>Próxima</strong>
+                <small>{automixNextReason ?? 'seleção automática'}</small>
+              </span>
+              <button type="button" onClick={onSkipAutomixNext} title="Rejeitar esta sugestão e escolher outra">
+                <SkipForward aria-hidden="true" />
+                Pular próxima
+              </button>
+            </div>
+          )}
           <div className="dj-pro-library__loads">
             <button
               type="button"
@@ -1554,6 +1573,8 @@ export function DjModeScreen({
   playedTrackIds,
   automixCurrentTrackId,
   automixNextTrackId,
+  automixNextReason,
+  onSkipAutomixNext,
   onLoadSelectedTrack,
   midi,
   onDisconnectMidi,
@@ -1735,6 +1756,8 @@ export function DjModeScreen({
           playedTrackIds={playedTrackIds}
           automixCurrentTrackId={automixCurrentTrackId}
           automixNextTrackId={automixNextTrackId}
+          automixNextReason={automixNextReason}
+          onSkipAutomixNext={onSkipAutomixNext}
           onLoad={onLoadSelectedTrack}
           loadedTrackIds={{
             a: decks.a.snapshot?.trackId ?? null,
