@@ -305,6 +305,12 @@ export class YtDlpBatchInspector implements ExternalProviderBatchInspector {
           const response = await this.search.search(`${track.artist} ${track.title}`, signal);
           const requestFor = (sourceUrl: string, confidence: number) => ({
             url: sourceUrl,
+            provenance: {
+              catalog: 'spotify' as const,
+              catalogId: track.id,
+              catalogUrl: track.spotifyUrl,
+              matchConfidence: confidence
+            },
             metadata: {
               title: track.title,
               artist: track.artist,
