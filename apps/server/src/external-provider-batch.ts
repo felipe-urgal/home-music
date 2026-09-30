@@ -128,7 +128,7 @@ export type ExternalProviderBatch = Readonly<{
   id: string;
   providerId: string;
   label: string;
-  presentation: ExternalProviderBatchPresentation | null;
+  presentation?: ExternalProviderBatchPresentation | null;
   status: ExternalProviderBatchStatus;
   folderPath: string | null;
   createdAt: string;
@@ -399,7 +399,7 @@ function snapshot(batch: MutableBatch, limits: ExternalProviderBatchLimits): Ext
     id: batch.id,
     providerId: batch.providerId,
     label: batch.label,
-    presentation: batch.presentation ? { ...batch.presentation } : null,
+    ...(batch.presentation ? { presentation: { ...batch.presentation } } : {}),
     status: batch.status,
     folderPath: batch.folderPath,
     createdAt: batch.createdAt,
