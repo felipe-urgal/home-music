@@ -907,7 +907,12 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
   ]);
 
   useEffect(() => {
-    if (djMixMode !== 'automix') return;
+    if (djMixMode !== 'automix' || djAutomixTransitionRef.current) return;
+
+    // A faixa de entrada é marcada como tocada assim que começa o crossfade.
+    // Isso altera djPlayedTrackIds e reexecuta este efeito. Recalcular o preload
+    // durante a transição substituiria a faixa que já está tocando no deck de
+    // entrada, abortando o handoff e iniciando um ciclo de trocas.
     const activeDeck = djAutomixActiveDeckRef.current;
     const activeSnapshot = player.dualDeck.getSnapshot(activeDeck);
     const currentIndex = activeSnapshot?.trackId

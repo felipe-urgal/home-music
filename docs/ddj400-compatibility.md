@@ -15,6 +15,7 @@ Esta matriz acompanha a epic #518. Resultados físicos só devem ser preenchidos
 | Headphones/cue separado | Pendente de teste físico | #526 |
 | EQ LOW/MID/HIGH/FILTER | Implementado em software; mapping físico pendente | #616, #617, #527 |
 | Headphone cue avançado | Bloqueado pela decisão do spike físico | #526, #527 |
+| Performance DJ sem hardware (FX/REC/key/pads/loops/AutoMix/setlist) | Implementado e coberto em software | `docs/dj-performance.md`, #618 |
 
 ## Evidência automatizada do mixer (#524)
 

@@ -467,4 +467,31 @@ describe('DJ EQ/FX audio graph', () => {
     expect(graph).toBeNull();
     expect(FakeAudioContext.instances[0]?.close).toHaveBeenCalledTimes(1);
   });
+
+  it('repete captura do master sem deixar streams ou conexões ativos', () => {
+    FakeAudioContext.instances = [];
+    const graph = createDjEqAudioGraph({
+      deckA: fakeAudio(),
+      deckB: fakeAudio(),
+      AudioContextConstructor: FakeAudioContext as unknown as new () => AudioContext
+    })!;
+    const context = FakeAudioContext.instances[0]!;
+    const master = graph.master as unknown as FakeGainNode;
+
+    for (let index = 0; index < 100; index += 1) {
+      const output = createDjMasterRecordingOutput(graph);
+      expect(output).not.toBeNull();
+      expect(master.connections).toHaveLength(2);
+
+      output!.dispose();
+
+      expect(master.connections).toEqual([context.destination]);
+    }
+
+    expect(context.mediaStreamDestinations).toHaveLength(100);
+    for (const destination of context.mediaStreamDestinations) {
+      expect((destination.stream as unknown as FakeMediaStream).track.stopped).toBe(true);
+    }
+  });
+
 });
