@@ -94,7 +94,7 @@ test('SQLite persiste biblioteca, favoritos, histórico, playlists e estado do p
     first.close();
 
     const second = new HomeMusicDatabase(dbPath);
-    assert.equal(second.getSchemaVersion(), 19);
+    assert.equal(second.getSchemaVersion(), 20);
     assert.equal(second.getMetadata('libraryRoot'), '/music');
     assert.equal(second.loadLibraryIntegrityStatus('/other'), null);
     assert.deepEqual(second.loadLibraryIntegrityStatus('/music'), {
@@ -188,7 +188,9 @@ test('Hot Cues validam duração e persistem separados da análise derivada', as
 
     assert.equal(db.saveTrackHotCues('a', {
       version: 1,
-      positions: [10, 20, null, 40]
+      positions: [10, 20, null, 40],
+      colors: ['purple', 'cyan', null, 'amber'],
+      labels: ['Intro', 'Drop', null, 'Outro']
     }), true);
 
     db.saveTrackRhythmAnalysis('a', track.fileSize, track.mtimeMs, {
@@ -199,7 +201,12 @@ test('Hot Cues validam duração e persistem separados da análise derivada', as
 
     assert.deepEqual(
       db.loadTracks().find(item => item.id === 'a')?.hotCues,
-      { version: 1, positions: [10, 20, null, 40] }
+      {
+        version: 1,
+        positions: [10, 20, null, 40],
+        colors: ['purple', 'cyan', null, 'amber'],
+        labels: ['Intro', 'Drop', null, 'Outro']
+      }
     );
 
     assert.equal(db.saveTrackHotCues('a', {
@@ -284,7 +291,7 @@ test('migra schema v1 para v14 sem perder estado existente', async () => {
     legacy.close();
 
     const migrated = new HomeMusicDatabase(dbPath);
-    assert.equal(migrated.getSchemaVersion(), 19);
+    assert.equal(migrated.getSchemaVersion(), 20);
     const state = migrated.loadPlaybackState('user-1');
     assert.equal(state.currentTrackId, null);
     assert.equal(state.position, 0);
@@ -349,7 +356,7 @@ test('schema v14 preserva identidade única, papéis e flags válidos de users',
 
   try {
     const db = new HomeMusicDatabase(dbPath);
-    assert.equal(db.getSchemaVersion(), 19);
+    assert.equal(db.getSchemaVersion(), 20);
     db.close();
 
     const raw = new DatabaseSync(dbPath);
