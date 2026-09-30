@@ -42,6 +42,7 @@ import type { DualDeckMixerState } from '../dual-deck-mixer';
 import type { WebMidiController } from '../useWebMidiController';
 import type { DjRecordingState } from '../dj-recording';
 import { Artwork } from './Artwork';
+import { DjSessionHistoryPanel } from './DjSessionHistoryPanel';
 
 export type DjDeckPanelState = {
   snapshot: DualDeckAudioSnapshot | null;
@@ -1633,6 +1634,8 @@ export function DjModeScreen({
                 ? 'REC'
                 : 'REC N/D'}</span>
           </button>
+
+          <DjSessionHistoryPanel decks={decks} mixer={mixer} />
 
           <details className="dj-shortcuts">
             <summary><Keyboard aria-hidden="true" /><span>Atalhos</span></summary>
