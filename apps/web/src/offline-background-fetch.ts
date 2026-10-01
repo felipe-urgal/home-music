@@ -6,6 +6,7 @@ const CAPABILITY_RESPONSE = 'HOME_MUSIC_CAPABILITIES';
 const BACKGROUND_FETCH_CAPABILITY_VERSION = 4;
 const BACKGROUND_FETCH_REGISTRATION_PREFIX = 'home-music-offline-v1:';
 const OFFLINE_AUDIO_CACHE_PREFIX = 'home-music-offline-audio-v2-';
+export const BACKGROUND_FETCH_WAIT_TIMEOUT_MS = 120_000;
 
 export type OfflineTrackTransfer = {
   response: Response;
@@ -93,17 +94,23 @@ async function activeWorkerSupportsBackgroundFetch(userId: string) {
 
   return new Promise<boolean>(resolve => {
     const channel = new MessageChannel();
-    const timeout = window.setTimeout(() => resolve(false), 800);
-    channel.port1.onmessage = event => {
+    let settled = false;
+    const finish = (value: boolean) => {
+      if (settled) return;
+      settled = true;
       window.clearTimeout(timeout);
-      resolve(supportsBackgroundFetchCapability(event.data));
+      channel.port1.onmessage = null;
+      channel.port1.close();
+      channel.port2.close();
+      resolve(value);
     };
+    const timeout = window.setTimeout(() => finish(false), 800);
+    channel.port1.onmessage = event => finish(supportsBackgroundFetchCapability(event.data));
 
     try {
       controller.postMessage({ type: CAPABILITY_REQUEST, userId }, [channel.port2]);
     } catch {
-      window.clearTimeout(timeout);
-      resolve(false);
+      finish(false);
     }
   });
 }
@@ -120,17 +127,43 @@ async function backgroundFetchManager(userId: string) {
   }
 }
 
-function waitForBackgroundFetch(registration: BackgroundFetchRegistrationLike) {
+export function waitForBackgroundFetch(
+  registration: BackgroundFetchRegistrationLike,
+  options: { signal?: AbortSignal; timeoutMs?: number } = {}
+) {
   if (registration.result) return Promise.resolve(registration);
 
-  return new Promise<BackgroundFetchRegistrationLike>(resolve => {
+  return new Promise<BackgroundFetchRegistrationLike>((resolve, reject) => {
+    let settled = false;
+    const timeoutMs = options.timeoutMs ?? BACKGROUND_FETCH_WAIT_TIMEOUT_MS;
+    const cleanup = () => {
+      clearInterval(interval);
+      clearTimeout(timeout);
+      registration.removeEventListener('progress', check);
+      options.signal?.removeEventListener('abort', onAbort);
+    };
+    const finish = (callback: () => void) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      callback();
+    };
     const check = () => {
       if (!registration.result) return;
-      window.clearInterval(interval);
-      registration.removeEventListener('progress', check);
-      resolve(registration);
+      finish(() => resolve(registration));
     };
-    const interval = window.setInterval(check, 500);
+    const onAbort = () => finish(() => reject(new DOMException('Background Fetch cancelado.', 'AbortError')));
+    const interval = setInterval(check, 500);
+    const timeout = setTimeout(
+      () => finish(() => reject(new DOMException('Background Fetch excedeu o tempo limite.', 'TimeoutError'))),
+      timeoutMs
+    );
+
+    if (options.signal?.aborted) {
+      onAbort();
+      return;
+    }
+    options.signal?.addEventListener('abort', onAbort, { once: true });
     registration.addEventListener('progress', check);
     check();
   });
@@ -184,7 +217,8 @@ async function finalizeOfflineTransfer(
 export async function fetchOfflineTrackResponse(
   trackId: string,
   userId: string,
-  url: string
+  url: string,
+  options: { signal?: AbortSignal } = {}
 ): Promise<OfflineTrackTransfer> {
   // Lyrics usa o mesmo endpoint canônico da reprodução online e é preparado junto
   // do áudio. Falha de lyrics nunca impede o download da faixa.
@@ -192,7 +226,7 @@ export async function fetchOfflineTrackResponse(
   const manager = await backgroundFetchManager(userId);
   if (!manager) {
     return finalizeOfflineTransfer(
-      { response: await apiFetch(url, { cache: 'no-store' }), storedByServiceWorker: false },
+      { response: await apiFetch(url, { cache: 'no-store', signal: options.signal }), storedByServiceWorker: false },
       preparedLyrics
     );
   }
@@ -214,7 +248,7 @@ export async function fetchOfflineTrackResponse(
     throw error;
   }
 
-  const settled = await waitForBackgroundFetch(registration);
+  const settled = await waitForBackgroundFetch(registration, { signal: options.signal });
   if (settled.result !== 'success') {
     throw new Error(backgroundFetchFailureMessage(settled.failureReason));
   }

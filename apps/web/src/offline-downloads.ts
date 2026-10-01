@@ -206,17 +206,25 @@ async function activeWorkerSupportsOfflineAudio(userId: string | null) {
 
   return new Promise<boolean>(resolve => {
     const channel = new MessageChannel();
-    const timeout = window.setTimeout(() => resolve(false), 800);
-    channel.port1.onmessage = event => {
+    let settled = false;
+    const finish = (value: boolean) => {
+      if (settled) return;
+      settled = true;
       window.clearTimeout(timeout);
+      channel.port1.onmessage = null;
+      channel.port1.close();
+      channel.port2.close();
+      resolve(value);
+    };
+    const timeout = window.setTimeout(() => finish(false), 800);
+    channel.port1.onmessage = event => {
       const data = event.data as { type?: unknown; offlineAudio?: unknown; version?: unknown } | null;
-      resolve(Boolean(data?.type === CAPABILITY_RESPONSE && data.offlineAudio === true && Number(data.version) >= 3));
+      finish(Boolean(data?.type === CAPABILITY_RESPONSE && data.offlineAudio === true && Number(data.version) >= 3));
     };
     try {
       controller.postMessage({ type: CAPABILITY_REQUEST, userId }, [channel.port2]);
     } catch {
-      window.clearTimeout(timeout);
-      resolve(false);
+      finish(false);
     }
   });
 }
@@ -333,6 +341,7 @@ export function useOfflineDownloads() {
   }));
   const collectionControlsRef = useRef(new Map<string, CollectionControl>());
   const collectionPromisesRef = useRef(new Map<string, Promise<void>>());
+  const transferControllersRef = useRef(new Map<string, AbortController>());
 
   const scopeReady = manifestState.userId === userId;
   const referencesReady = referenceState.userId === userId;
@@ -382,6 +391,12 @@ export function useOfflineDownloads() {
   }, []);
 
   useEffect(() => {
+    for (const [key, controller] of transferControllersRef.current) {
+      if (!userId || !key.startsWith(`${encodeURIComponent(userId)}:`)) {
+        controller.abort();
+        transferControllersRef.current.delete(key);
+      }
+    }
     setManifestState({ userId, records: readManifest(userId) });
     const references = readReferences(userId);
     if (userId) {
@@ -477,6 +492,11 @@ export function useOfflineDownloads() {
     return () => { disposed = true; };
   }, [replaceRecords, userId, workerScopeReady, workerSupported]);
 
+  useEffect(() => () => {
+    for (const controller of transferControllersRef.current.values()) controller.abort();
+    transferControllersRef.current.clear();
+  }, []);
+
   const downloadedIds = useMemo(() => new Set(records.map(record => record.track.id)), [records]);
   const individualDownloadedIds = useMemo(() => new Set(referenceManifest.individualTrackIds), [referenceManifest]);
   const collectionDownloadedIds = useMemo(() => collectionReferencedTrackIds(referenceManifest), [referenceManifest]);
@@ -509,13 +529,21 @@ export function useOfflineDownloads() {
     if (readManifest(ownerUserId).some(record => record.track.id === track.id)) return;
     if (!isOfflineTrackReferenced(readReferences(ownerUserId), track.id)) return;
 
-    await offlineDownloadScheduler.enqueue(downloadJobKey(ownerUserId, track.id), async () => {
+    const jobKey = downloadJobKey(ownerUserId, track.id);
+    await offlineDownloadScheduler.enqueue(jobKey, async () => {
       if (readManifest(ownerUserId).some(record => record.track.id === track.id)) return;
       if (!isOfflineTrackReferenced(readReferences(ownerUserId), track.id)) return;
       const url = streamUrl(track.id);
+      const controller = new AbortController();
+      transferControllersRef.current.set(jobKey, controller);
 
       try {
-        const { response, storedByServiceWorker } = await fetchOfflineTrackResponse(track.id, ownerUserId, url);
+        const { response, storedByServiceWorker } = await fetchOfflineTrackResponse(
+          track.id,
+          ownerUserId,
+          url,
+          { signal: controller.signal }
+        );
         if (!response.ok) throw new Error(`Não foi possível baixar a música (HTTP ${response.status}).`);
         if (response.status !== 200) throw new Error('O servidor não retornou o arquivo completo para download offline.');
 
@@ -552,6 +580,10 @@ export function useOfflineDownloads() {
         try { await navigator.storage?.persist?.(); } catch { /* persistência é best-effort */ }
       } catch (error) {
         throw downloadError(error);
+      } finally {
+        if (transferControllersRef.current.get(jobKey) === controller) {
+          transferControllersRef.current.delete(jobKey);
+        }
       }
     });
   }, [replaceRecords]);
