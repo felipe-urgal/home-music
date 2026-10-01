@@ -4,7 +4,7 @@ Estas regras complementam o `AGENTS.md` da raiz para mudanças em `apps/server`.
 
 ## Arquitetura do processo
 
-Para mudanças de composição, leia `docs/server-composition.md`.
+Para mudanças de composição, use este arquivo e o código atual como fonte canônica; documentação histórica de composição não é restaurada por padrão.
 
 A separação atual é pragmática:
 

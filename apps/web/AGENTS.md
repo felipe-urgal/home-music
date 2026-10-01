@@ -4,7 +4,7 @@ Estas regras complementam o `AGENTS.md` da raiz para mudanças em `apps/web`.
 
 ## Arquitetura e fontes de verdade
 
-Leia `docs/app-composition.md` quando a mudança tocar sessão, conectividade, navegação global ou modo offline.
+Para mudanças em sessão, conectividade, navegação global ou modo offline, use as fronteiras descritas neste arquivo e os owners atuais do código como fonte canônica.
 
 Fronteiras atuais:
 
@@ -57,11 +57,7 @@ Teste pelo comportamento observável, não por detalhe incidental de implementa�
 
 ## PWA e offline
 
-Mudanças em service worker, downloads, cache, Background Fetch ou entrada offline exigem leitura de:
-
-- `docs/pwa.md`;
-- `docs/offline-downloads.md`;
-- `docs/app-composition.md`.
+Mudanças em service worker, downloads, cache, Background Fetch ou entrada offline exigem revisão dos owners atuais em `App.tsx`, `OfflineApp.tsx`, `offline-downloads.ts`, service worker e das regressões em `e2e/AGENTS.md`.
 
 Invariantes importantes:
 
@@ -91,8 +87,6 @@ Ao alterar UI, considere conforme a superfície:
 - dialogs e confirmações destrutivas;
 - feedback que não dependa somente de cor.
 
-Consulte `docs/accessibility.md` para mudanças transversais de acessibilidade.
-
 Não mude CSS/markup de produção apenas para satisfazer um teste que ignorou a arquitetura responsiva real; corrija o teste quando o comportamento atual estiver correto.
 
 ## Administração
@@ -103,7 +97,7 @@ Não mude CSS/markup de produção apenas para satisfazer um teste que ignorou a
 - telas administrativas não reimplementam confinement, duplicate detection, promoção de importação ou outras regras pertencentes ao servidor;
 - depois de alteração de metadata/capa/arquivo, reconcilie as superfícies que consomem a projeção efetiva.
 
-Use os documentos `docs/admin-*.md`, `docs/administration-ui.md` e documentos de importação conforme o domínio tocado.
+Use os serviços/rotas administrativos atuais e seus testes próximos como fonte de verdade do domínio tocado.
 
 ## Performance
 
@@ -114,7 +108,7 @@ Para biblioteca grande:
 - índices devem ser derivados, limitados e reconstruíveis;
 - otimização precisa manter equivalência semântica com o caminho canônico.
 
-Mudança com risco de escala deve considerar os benchmarks documentados em `docs/large-library-benchmark.md` e `docs/library-navigation-performance.md`.
+Mudança com risco de escala deve executar os benchmarks disponíveis via `npm run benchmark:large-library` e, quando necessário, `npm run benchmark:large-library:browser`.
 
 ## Testes
 

@@ -6,15 +6,12 @@ Estas regras complementam o `AGENTS.md` da raiz para mudanças em `scripts`.
 
 ## Fontes canônicas
 
-Conforme o tema, leia:
+Fontes canônicas atuais:
 
-- `docs/PRODUCTION.md` — sequência operacional suportada;
-- `docs/production.md` — systemd/helper privilegiado;
-- `docs/production-contract.md` — contrato `prod:*` consumido por automação;
+- `docs/OPERATIONS.md` — runbook suportado de produção, backup, Tailscale e recovery;
 - `.dev-dashboard/production.json` — manifesto executável do Dev Dashboard;
-- `docs/tailscale.md`, `docs/public-access.md`, `docs/tailscale-hardening.md` — exposição/acesso;
-- `docs/backup-restore.md` — recovery;
-- `docs/testing-and-quality.md` — seleção de gates.
+- testes shell próximos aos scripts — contrato verificável de systemd/Tailscale;
+- `AGENTS.md` e este arquivo — seleção de gates e regras de execução segura.
 
 Se comando/semântica pública mudar, mantenha `package.json`, manifesto e documentação canônica coerentes na mesma entrega.
 

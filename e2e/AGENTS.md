@@ -2,7 +2,7 @@
 
 Estas regras complementam o `AGENTS.md` da raiz para mudanças em `e2e`.
 
-Leia também `e2e/README.md` e `docs/testing-and-quality.md`.
+Este arquivo é a referência canônica do runner Playwright e deve ser combinado com o gate raiz descrito em `AGENTS.md`.
 
 ## Papel da suíte
 
