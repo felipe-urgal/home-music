@@ -8438,7 +8438,7 @@
 
 @media (min-width: 1181px) {
   .dj-mode--deck-console-v2 {
-    height: auto;
+    height: 100vh;
     min-height: 100vh;
     overflow-y: auto;
   }
