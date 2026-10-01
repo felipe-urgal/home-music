@@ -118,9 +118,8 @@ async function login(page: Page) {
 }
 
 async function openImport(page: Page) {
-  // Este spec valida o pipeline de importação, não a navegação global. Use a
-  // rota canônica para evitar acoplamento ao estado colapsado da topbar desktop.
-  await page.goto('/account');
+  const sidebar = page.getByTestId('desktop-sidebar');
+  await sidebar.getByRole('button', { name: /Minha conta/ }).click();
   await expect(page.locator('#my-account-title')).toHaveText('Minha conta');
   await page.locator('.my-account-screen').getByRole('button', { name: /^Administração/ }).click();
   await expect(page.locator('#administration-title')).toHaveText('Administração');
@@ -294,11 +293,11 @@ test('provider e URL direta atravessam o workbench crítico sem internet públic
   await openImport(page);
 
   const providerUrl = 'https://music.youtube.com/watch?v=e2e-fixture';
-  await page.getByLabel('Buscar ou colar link do YouTube, YouTube Music ou Spotify').fill(providerUrl);
+  await page.getByLabel('Buscar ou colar link do YouTube ou YouTube Music').fill(providerUrl);
   await page.getByRole('button', { name: 'Analisar link', exact: true }).click();
+  await expect(page.getByText('Provider E2E', { exact: true })).toBeVisible();
   expect(providerInspectBody).toEqual({ url: providerUrl });
   expect(providerStartBody).toEqual({ url: providerUrl });
-  await expect(page.getByText('Preparação', { exact: true })).toBeVisible();
   await page.locator('.admin-import-provider').getByRole('button', { name: 'Cancelar', exact: true }).click();
   await expect(page.getByText('Operação encerrada.', { exact: true })).toBeVisible();
 
@@ -413,7 +412,7 @@ test('busca por texto seleciona resultado e reutiliza o pipeline do provider', a
   await login(page);
   await openImport(page);
 
-  const input = page.getByLabel('Buscar ou colar link do YouTube, YouTube Music ou Spotify');
+  const input = page.getByLabel('Buscar ou colar link do YouTube ou YouTube Music');
   await input.fill('Djavan Samurai');
   await page.getByRole('button', { name: 'Buscar', exact: true }).click();
 
@@ -425,5 +424,5 @@ test('busca por texto seleciona resultado e reutiliza o pipeline do provider', a
   const selectedUrl = 'https://www.youtube.com/watch?v=abcDEF_1234';
   expect(inspectBody).toEqual({ url: selectedUrl });
   expect(startBody).toEqual({ url: selectedUrl });
-  await expect(page.getByText('Preparação', { exact: true })).toBeVisible();
+  await expect(page.getByText('Samurai · Djavan', { exact: true })).toBeVisible();
 });
