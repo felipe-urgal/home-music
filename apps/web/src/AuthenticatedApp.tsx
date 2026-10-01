@@ -28,6 +28,8 @@ import {
 import { selectDjAutomixNext } from './dj-automix-selection';
 import { isDjKeyboardEditableTarget, mapDjKeyboardCode } from './dj-keyboard-mapping';
 import { movePlayedDjTracksToEnd } from './dj-library-order';
+import { buildDjLibrarySources, tracksForDjLibrarySource as resolveDjLibrarySourceTracks } from './dj-library-source';
+import { buildDjDeckPanelState } from './dj-deck-panel-state';
 import { resolveInitialDjSyncPlan } from './dj-sync-phase-lock';
 import {
   DJ_SYNC_CONTROL_INTERVAL_MS,
@@ -253,55 +255,20 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     [library.tracks]
   );
 
-  const djLibrarySources = useMemo(() => {
-    const paths = new Set<string>();
-    for (const track of library.tracks) {
-      const parts = track.folderPath.split('/').filter(Boolean);
-      for (let index = 1; index <= parts.length; index += 1) {
-        paths.add(parts.slice(0, index).join('/'));
-      }
-    }
+  const djLibrarySources = useMemo(
+    () => buildDjLibrarySources(library.tracks, library.playlists),
+    [library.playlists, library.tracks]
+  );
 
-    return [
-      { value: 'all', label: 'Todas as faixas', group: 'all' as const },
-      ...[...paths]
-        .sort((left, right) => left.localeCompare(right, 'pt-BR'))
-        .map(path => ({
-          value: `folder:${path}`,
-          label: path,
-          group: 'folder' as const
-        })),
-      ...library.playlists.map(playlist => ({
-        value: `playlist:${playlist.id}`,
-        label: playlist.name,
-        group: 'playlist' as const
-      }))
-    ];
-  }, [library.playlists, library.tracks]);
-
-  const tracksForDjLibrarySource = useCallback((source: string) => {
-    if (source === 'all') return library.tracks;
-
-    if (source.startsWith('folder:')) {
-      const folderPath = source.slice('folder:'.length);
-      const prefix = `${folderPath}/`;
-      return library.tracks.filter(track => (
-        track.folderPath === folderPath
-        || track.folderPath.startsWith(prefix)
-      ));
-    }
-
-    if (source.startsWith('playlist:')) {
-      const playlistId = source.slice('playlist:'.length);
-      const playlist = library.playlists.find(item => item.id === playlistId);
-      if (!playlist) return [];
-      return playlist.trackIds
-        .map(trackId => djTracksById.get(trackId))
-        .filter((track): track is (typeof library.tracks)[number] => Boolean(track));
-    }
-
-    return library.tracks;
-  }, [djTracksById, library.playlists, library.tracks]);
+  const tracksForDjLibrarySource = useCallback(
+    (source: string) => resolveDjLibrarySourceTracks(
+      source,
+      library.tracks,
+      library.playlists,
+      djTracksById
+    ),
+    [djTracksById, library.playlists, library.tracks]
+  );
 
   const djBrowserTracks = useMemo(
     () => tracksForDjLibrarySource(djLibrarySource),
@@ -1081,19 +1048,16 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
   const readDjDeckPanel = useCallback((deck: DjDeckId): DjDeckPanelState => {
     const snapshot = player.dualDeck.getSnapshot(deck);
     const mixer = player.dualDeck.getMixerSnapshot();
-    return {
+    return buildDjDeckPanelState({
+      deck,
       snapshot,
-      track: snapshot?.trackId
-        ? library.tracks.find(track => track.id === snapshot.trackId) ?? null
-        : null,
+      tracksById: djTracksById,
       cuePointSeconds: ddjCuePointsRef.current[deck],
-      syncActive: djSyncState.synced[deck],
-      syncMaster: isDjSyncMaster(djSyncState, deck),
-      syncMode: djSyncState.mode,
+      syncState: djSyncState,
       channelVolume: mixer.channelVolumes[deck],
       meterLevel: snapshot?.playing ? player.dualDeck.getMeterLevel(deck) : 0
-    };
-  }, [djSyncState, library.tracks, player.dualDeck.getMeterLevel, player.dualDeck.getMixerSnapshot, player.dualDeck.getSnapshot]);
+    });
+  }, [djSyncState, djTracksById, player.dualDeck.getMeterLevel, player.dualDeck.getMixerSnapshot, player.dualDeck.getSnapshot]);
 
   const [djDeckPanels, setDjDeckPanels] = useState<Record<DjDeckId, DjDeckPanelState>>(() => ({
     a: readDjDeckPanel('a'),
