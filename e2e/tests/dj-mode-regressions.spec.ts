@@ -136,10 +136,10 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   const tempoA = deckA.getByLabel('Tempo Deck A');
   await expect(tempoA).toBeVisible();
   await tempoA.fill('1.03');
-  await expect(deckA).toContainText('Rate1.030×');
+  await expect(deckA).toContainText('Speed1.030×');
   await expect(deckA).toContainText('Pitch+3.00%');
   await tempoA.fill('1');
-  await expect(deckA).toContainText('Rate1.000×');
+  await expect(deckA).toContainText('Speed1.000×');
   await expect(deckA.getByRole('button', { name: 'Jog wheel Deck A' })).toBeVisible();
   await expect(deckA.getByRole('button', { name: 'IN', exact: true })).toBeVisible();
   await expect(deckA.getByRole('button', { name: 'OUT', exact: true })).toBeDisabled();
@@ -486,7 +486,7 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
     });
   });
 
-  await expect(deckA).toContainText('Rate1.060×');
+  await expect(deckA).toContainText('Speed1.060×');
   await expect(deckA).toContainText('Pitch+6.00%');
 
   await page.evaluate(() => {
@@ -505,7 +505,7 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
     });
   });
 
-  await expect(deckA).toContainText('Rate1.000×');
+  await expect(deckA).toContainText('Speed1.000×');
 
   await page.evaluate(() => {
     const input = (globalThis as typeof globalThis & {
