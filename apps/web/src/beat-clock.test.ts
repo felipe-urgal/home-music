@@ -5,6 +5,7 @@ import {
   beatIndexAt,
   nextBarAtOrAfter,
   nextBeatAtOrAfter,
+  nextPhraseAtOrAfter,
   quantizedCrossfadeWakeDelayMs,
   resolveQuantizedCrossfadePlan
 } from './beat-clock';
@@ -58,7 +59,21 @@ describe('beat clock', () => {
     expect(nextBarAtOrAfter({ ...barRhythm, downbeatConfidence: 0.3 }, 1)).toBeNull();
   });
 
-  it('prefere downbeat quando o início de compasso fica perto da janela alvo', () => {
+  it('calcula fronteiras de frase de 8/16/32 beats a partir do downbeat', () => {
+    const phraseRhythm: TrackRhythm = {
+      ...rhythm,
+      downbeatSeconds: 0.25,
+      beatsPerBar: 4,
+      downbeatConfidence: 0.9
+    };
+
+    expect(nextPhraseAtOrAfter(phraseRhythm, 50, 8)).toBeCloseTo(52.25, 6);
+    expect(nextPhraseAtOrAfter(phraseRhythm, 50, 16)).toBeCloseTo(56.25, 6);
+    expect(nextPhraseAtOrAfter(phraseRhythm, 50, 32)).toBeCloseTo(64.25, 6);
+    expect(nextPhraseAtOrAfter({ ...phraseRhythm, beatsPerBar: 3 }, 50, 8)).toBeNull();
+  });
+
+  it('prefere uma fronteira de frase quando ela ainda preserva uma transição útil', () => {
     const plan = resolveQuantizedCrossfadePlan({
       rhythm: {
         ...rhythm,
@@ -66,16 +81,16 @@ describe('beat clock', () => {
         beatsPerBar: 4,
         downbeatConfidence: 0.9
       },
-      trackDurationSeconds: 60,
-      preferredDurationSeconds: 5
+      trackDurationSeconds: 60.5,
+      preferredDurationSeconds: 8
     });
 
     expect(plan).not.toBeNull();
     expect(plan?.startTimeSeconds).toBeCloseTo(56.25, 6);
-    expect(plan?.durationSeconds).toBeCloseTo(3.75, 6);
+    expect(plan?.durationSeconds).toBeCloseTo(4.25, 6);
   });
 
-  it('cai para beat quando o próximo compasso deslocaria demais o crossfade', () => {
+  it('mantém fallback para compasso quando a próxima frase deslocaria demais o crossfade', () => {
     const plan = resolveQuantizedCrossfadePlan({
       rhythm: {
         ...rhythm,
@@ -83,13 +98,30 @@ describe('beat clock', () => {
         beatsPerBar: 4,
         downbeatConfidence: 0.9
       },
-      trackDurationSeconds: 59.6,
+      trackDurationSeconds: 58,
       preferredDurationSeconds: 5
     });
 
     expect(plan).not.toBeNull();
-    expect(plan?.startTimeSeconds).toBeCloseTo(54.75, 6);
-    expect(plan?.durationSeconds).toBeCloseTo(4.85, 6);
+    expect(plan?.startTimeSeconds).toBeCloseTo(54.25, 6);
+    expect(plan?.durationSeconds).toBeCloseTo(3.75, 6);
+  });
+
+  it('cai para beat quando frase e compasso deslocariam demais o crossfade', () => {
+    const plan = resolveQuantizedCrossfadePlan({
+      rhythm: {
+        ...rhythm,
+        downbeatSeconds: 0.25,
+        beatsPerBar: 4,
+        downbeatConfidence: 0.9
+      },
+      trackDurationSeconds: 57.3,
+      preferredDurationSeconds: 5
+    });
+
+    expect(plan).not.toBeNull();
+    expect(plan?.startTimeSeconds).toBeCloseTo(52.75, 6);
+    expect(plan?.durationSeconds).toBeCloseTo(4.55, 6);
   });
 
   it('move o início do crossfade para a próxima batida e preserva o fim da faixa', () => {
