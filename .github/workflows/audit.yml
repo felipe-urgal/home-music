@@ -26,9 +26,13 @@ jobs:
           package-manager-cache: false
 
       - name: Validate dependency policies
+        id: policy
+        continue-on-error: true
         run: npm run test:policy
 
       - name: Audit dependencies
+        id: npm-audit
+        continue-on-error: true
         env:
           NPM_CONFIG_FETCH_RETRIES: '1'
           NPM_CONFIG_FETCH_RETRY_MINTIMEOUT: '1000'
@@ -44,5 +48,17 @@ jobs:
           wait "$root_pid" || root_status=$?
           wait "$e2e_pid" || e2e_status=$?
           if [[ "$root_status" -ne 0 || "$e2e_status" -ne 0 ]]; then
+            exit 1
+          fi
+
+      - name: Aggregate audit result
+        if: always()
+        env:
+          POLICY_OUTCOME: ${{ steps.policy.outcome }}
+          AUDIT_OUTCOME: ${{ steps.npm-audit.outcome }}
+        run: |
+          if [[ "$POLICY_OUTCOME" != "success" || "$AUDIT_OUTCOME" != "success" ]]; then
+            echo "Dependency policy: $POLICY_OUTCOME"
+            echo "npm audit: $AUDIT_OUTCOME"
             exit 1
           fi
