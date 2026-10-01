@@ -969,7 +969,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     };
 
     check();
-    const timer = window.setInterval(check, 250);
+    const timer = window.setInterval(check, 50);
     return () => window.clearInterval(timer);
   }, [
     djMixMode,
