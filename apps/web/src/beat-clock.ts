@@ -8,6 +8,9 @@ export { MIN_DOWNBEAT_CONFIDENCE, MIN_RHYTHM_CONFIDENCE };
 export const QUANTIZED_CROSSFADE_ARM_SECONDS = 1.25;
 export const QUANTIZED_CROSSFADE_EARLY_TOLERANCE_SECONDS = 0.025;
 export const MIN_QUANTIZED_CROSSFADE_SECONDS = 0.75;
+export const AUTOMIX_PHRASE_BEAT_COUNTS = [32, 16, 8] as const;
+export const MAX_PHRASE_QUANTIZATION_SHIFT_SECONDS = 4;
+export const MAX_PHRASE_QUANTIZATION_SHIFT_RATIO = 0.5;
 export const MAX_BAR_QUANTIZATION_SHIFT_SECONDS = 1.25;
 export const MAX_BAR_QUANTIZATION_SHIFT_RATIO = 0.35;
 
@@ -106,6 +109,32 @@ export function nextBarAtOrAfter(
   return rhythm.downbeatSeconds + (Math.max(0, barsFromDownbeat) * barDuration);
 }
 
+export function nextPhraseAtOrAfter(
+  rhythm: TrackRhythm | null | undefined,
+  positionSeconds: number,
+  phraseBeats: number
+) {
+  const beatDuration = beatDurationSeconds(rhythm);
+  if (
+    beatDuration == null
+    || !validDownbeat(rhythm)
+    || rhythm.beatsPerBar !== 4
+    || !Number.isInteger(phraseBeats)
+    || phraseBeats < rhythm.beatsPerBar
+    || phraseBeats % rhythm.beatsPerBar !== 0
+    || !Number.isFinite(positionSeconds)
+    || positionSeconds < 0
+  ) return null;
+
+  const phraseDuration = beatDuration * phraseBeats;
+  if (positionSeconds <= rhythm.downbeatSeconds) return rhythm.downbeatSeconds;
+
+  const phrasesFromDownbeat = Math.ceil(
+    ((positionSeconds - rhythm.downbeatSeconds) / phraseDuration) - 1e-9
+  );
+  return rhythm.downbeatSeconds + (Math.max(0, phrasesFromDownbeat) * phraseDuration);
+}
+
 export type QuantizedCrossfadePlan = {
   startTimeSeconds: number;
   durationSeconds: number;
@@ -140,6 +169,21 @@ export function resolveQuantizedCrossfadePlan(options: {
     if (durationSeconds < minimumUsefulDuration) return null;
     return { startTimeSeconds, durationSeconds };
   };
+
+  const maximumPhraseShift = Math.min(
+    MAX_PHRASE_QUANTIZATION_SHIFT_SECONDS,
+    preferredDurationSeconds * MAX_PHRASE_QUANTIZATION_SHIFT_RATIO
+  );
+  for (const phraseBeats of AUTOMIX_PHRASE_BEAT_COUNTS) {
+    const phraseStart = nextPhraseAtOrAfter(rhythm, preferredStart, phraseBeats);
+    if (
+      phraseStart != null
+      && phraseStart - preferredStart <= maximumPhraseShift + 1e-9
+    ) {
+      const phrasePlan = usefulPlan(phraseStart);
+      if (phrasePlan) return phrasePlan;
+    }
+  }
 
   const barStart = nextBarAtOrAfter(rhythm, preferredStart);
   if (barStart != null) {
