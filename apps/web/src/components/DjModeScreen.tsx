@@ -651,7 +651,7 @@ function DeckPanel({
       <div className="dj-pro-deck__heading">
         <div>
           <span className="dj-pro-deck__accent" aria-hidden="true" />
-          <strong>{label}</strong>
+          <strong>{label.toUpperCase()}</strong>
           <span>{side}</span>
         </div>
         <div className="dj-pro-deck__heading-actions">
@@ -706,8 +706,8 @@ function DeckPanel({
           <div className="dj-pro-deck__metrics">
             <div><span>BPM</span><strong>{bpm ? bpm.toFixed(1) : '—'}</strong></div>
             <div><span>Pitch</span><strong>{pitchPercent(rate) >= 0 ? '+' : ''}{pitchPercent(rate).toFixed(2)}%</strong></div>
-            <div><span>Rate</span><strong>{rate.toFixed(3)}×</strong></div>
-            <div><span>Canal</span><strong>{Math.round(state.channelVolume * 100)}%</strong></div>
+            <div><span>Speed</span><strong>{rate.toFixed(3)}×</strong></div>
+            <div><span>Volume</span><strong>{Math.round(state.channelVolume * 100)}%</strong></div>
           </div>
 
           <div className="dj-deck-performance">
