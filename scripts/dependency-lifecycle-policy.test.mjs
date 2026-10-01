@@ -8,7 +8,8 @@ const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 
 const REVIEWED_LIFECYCLE_PACKAGES = {
   'package-lock.json': [
-    'node_modules/esbuild'
+    'node_modules/esbuild',
+    'node_modules/fsevents'
   ],
   'e2e/package-lock.json': []
 };
