@@ -294,7 +294,7 @@ test('provider e URL direta atravessam o workbench crítico sem internet públic
   await openImport(page);
 
   const providerUrl = 'https://music.youtube.com/watch?v=e2e-fixture';
-  await page.getByLabel('Buscar ou colar link do YouTube ou YouTube Music').fill(providerUrl);
+  await page.getByLabel('Buscar ou colar link do YouTube, YouTube Music ou Spotify').fill(providerUrl);
   await page.getByRole('button', { name: 'Analisar link', exact: true }).click();
   await expect(page.getByText('Provider E2E', { exact: true })).toBeVisible();
   expect(providerInspectBody).toEqual({ url: providerUrl });
@@ -413,7 +413,7 @@ test('busca por texto seleciona resultado e reutiliza o pipeline do provider', a
   await login(page);
   await openImport(page);
 
-  const input = page.getByLabel('Buscar ou colar link do YouTube ou YouTube Music');
+  const input = page.getByLabel('Buscar ou colar link do YouTube, YouTube Music ou Spotify');
   await input.fill('Djavan Samurai');
   await page.getByRole('button', { name: 'Buscar', exact: true }).click();
 
