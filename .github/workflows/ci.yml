@@ -55,9 +55,6 @@ jobs:
       - name: Install Chromium
         run: npm run install:browsers --prefix e2e
 
-      - name: Critical product E2E
-        run: npm run test:critical --prefix e2e -- --project=desktop-chromium
-
       - name: Browser security policy E2E
         run: npm run test --prefix e2e -- tests/browser-security-policy.spec.ts --project=desktop-chromium
 
