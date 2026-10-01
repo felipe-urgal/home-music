@@ -137,8 +137,8 @@ export function waitForBackgroundFetch(
     let settled = false;
     const timeoutMs = options.timeoutMs ?? BACKGROUND_FETCH_WAIT_TIMEOUT_MS;
     const cleanup = () => {
-      window.clearInterval(interval);
-      window.clearTimeout(timeout);
+      clearInterval(interval);
+      clearTimeout(timeout);
       registration.removeEventListener('progress', check);
       options.signal?.removeEventListener('abort', onAbort);
     };
@@ -153,8 +153,8 @@ export function waitForBackgroundFetch(
       finish(() => resolve(registration));
     };
     const onAbort = () => finish(() => reject(new DOMException('Background Fetch cancelado.', 'AbortError')));
-    const interval = window.setInterval(check, 500);
-    const timeout = window.setTimeout(
+    const interval = setInterval(check, 500);
+    const timeout = setTimeout(
       () => finish(() => reject(new DOMException('Background Fetch excedeu o tempo limite.', 'TimeoutError'))),
       timeoutMs
     );
