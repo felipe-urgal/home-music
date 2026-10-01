@@ -40,6 +40,9 @@ jobs:
       - name: Quality gate
         run: npm run check
 
+      - name: Repository policy gate
+        run: npm run test:policy
+
       - name: Security regression gate
         run: npm run test:security
 
@@ -51,6 +54,9 @@ jobs:
 
       - name: Install Chromium
         run: npm run install:browsers --prefix e2e
+
+      - name: Browser security policy E2E
+        run: npm run test --prefix e2e -- tests/browser-security-policy.spec.ts --project=desktop-chromium
 
       - name: Mobile playback and library E2E
         run: npm run test --prefix e2e -- tests/crossfade-mobile.spec.ts tests/rhythm-playback-regression.spec.ts tests/mobile-library-prototype.spec.ts tests/smart-playlist-mobile-dialog.spec.ts tests/offline-collections-critical.spec.ts --project=mobile-chromium

@@ -11,9 +11,7 @@ const REVIEWED_LIFECYCLE_PACKAGES = {
     'node_modules/esbuild',
     'node_modules/fsevents'
   ],
-  'e2e/package-lock.json': [
-    'node_modules/fsevents'
-  ]
+  'e2e/package-lock.json': []
 };
 
 function loadJson(relativePath) {

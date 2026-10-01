@@ -69,7 +69,7 @@ const defaultTranscodeCachePath = fileURLToPath(new URL(
   import.meta.url
 ));
 const webDistPath = fileURLToPath(new URL('../../web/dist/', import.meta.url));
-const productionCsp = "default-src 'self'; img-src 'self' data: blob:; media-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
+const productionCsp = "default-src 'self'; img-src 'self' data: blob:; media-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' http:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
 
 const envResult = config({ path: envPath, override: !isProduction });
 if (envResult.error) {
@@ -238,7 +238,7 @@ app.addHook('onSend', async (_request, reply, payload) => {
   reply.header('X-Content-Type-Options', 'nosniff');
   reply.header('Referrer-Policy', 'no-referrer');
   reply.header('X-Frame-Options', 'DENY');
-  reply.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  reply.header('Permissions-Policy', 'camera=(self), microphone=(), geolocation=()');
   reply.header('Cross-Origin-Resource-Policy', 'same-origin');
   if (isProduction) reply.header('Content-Security-Policy', productionCsp);
   return payload;
