@@ -1,10 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
+  BACKGROUND_FETCH_WAIT_TIMEOUT_MS,
   backgroundFetchFailureMessage,
   backgroundFetchRegistrationId,
   isAndroidBackgroundFetchRuntime,
-  supportsBackgroundFetchCapability
+  supportsBackgroundFetchCapability,
+  waitForBackgroundFetch
 } from './offline-background-fetch';
 
 const serviceWorkerSource = () => readFileSync(new URL('../public/sw.js', import.meta.url), 'utf8');
@@ -54,6 +56,22 @@ describe('offline background fetch', () => {
     expect(sw).toContain('if (!await hasActiveOfflineUserClient(scope.userId)) return;');
     expect(sw).toContain("self.addEventListener('backgroundfetchsuccess'");
     expect(sw).toContain('version: 4');
+  });
+
+  it('limita espera de Background Fetch e aceita cancelamento', async () => {
+    expect(BACKGROUND_FETCH_WAIT_TIMEOUT_MS).toBeGreaterThan(0);
+    const registration = new EventTarget() as EventTarget & {
+      id: string; result: string; failureReason: string;
+    };
+    Object.assign(registration, { id: 'stuck', result: '', failureReason: '' });
+
+    await expect(waitForBackgroundFetch(registration, { timeoutMs: 1 }))
+      .rejects.toMatchObject({ name: 'TimeoutError' });
+
+    const controller = new AbortController();
+    const pending = waitForBackgroundFetch(registration, { signal: controller.signal, timeoutMs: 10_000 });
+    controller.abort();
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
   });
 
   it('traduz falha de quota sem anunciar sucesso', () => {
