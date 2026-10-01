@@ -35,13 +35,18 @@ async function assetPaths(page: Page) {
 }
 
 async function expectLibrary(page: Page) {
-  await expect(page.getByPlaceholder('Música, artista, álbum ou pasta')).toBeVisible();
+  await expect(page.locator('[data-desktop-section="library"]')).toBeVisible();
 }
 
 async function expectAccessibilityBaseline(page: Page) {
+  if (width >= 1024) {
+    const expandTopbar = page.getByRole('button', { name: 'Expandir barra superior' });
+    if (await expandTopbar.isVisible()) await expandTopbar.click();
+  }
+
   const search = page.getByLabel('Buscar na biblioteca');
 
-  // Anchor on the search field, move away and return using real keyboard input.
+  // Anchor on the search control, move away and return using real keyboard input.
   // The final focus therefore exercises :focus-visible instead of relying only
   // on programmatic element.focus(), whose modality differs between browsers.
   await search.focus();
