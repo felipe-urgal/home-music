@@ -39,7 +39,7 @@ async function expectLibrary(page: Page) {
 }
 
 async function expectAccessibilityBaseline(page: Page) {
-  if (width >= 1024) {
+  if ((page.viewportSize()?.width ?? 390) >= 1024) {
     const expandTopbar = page.getByRole('button', { name: 'Expandir barra superior' });
     if (await expandTopbar.isVisible()) await expandTopbar.click();
   }
