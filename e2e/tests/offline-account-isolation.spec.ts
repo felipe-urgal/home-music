@@ -43,8 +43,6 @@ async function ensureServiceWorker(page: Page) {
 }
 
 async function libraryTable(page: Page) {
-  const toggle = page.getByRole('button', { name: 'Expandir barra superior' });
-  if (await toggle.isVisible()) await toggle.click();
   await page.getByTestId('desktop-sidebar').getByRole('button', { name: 'Pastas', exact: true }).click();
   const table = page.getByTestId('desktop-library-table');
   await expect(table).toBeVisible();
