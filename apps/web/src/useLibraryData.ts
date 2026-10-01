@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
   LibraryResponse,
   Playlist,
@@ -59,6 +59,9 @@ export function useLibraryData() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const libraryRequestGeneration = useRef(0);
+  const playlistRequestGeneration = useRef(0);
+  const appliedLibraryRevision = useRef(0);
 
   const reportError = useCallback((error: unknown) => setActionError(errorMessage(error)), []);
   const clearActionError = useCallback(() => setActionError(null), []);
@@ -70,21 +73,33 @@ export function useLibraryData() {
   }, [actionError]);
 
   const refreshLibrary = useCallback(async () => {
+    const generation = ++libraryRequestGeneration.current;
     const data = await jsonRequest<LibraryPayload>('/api/library');
+    const incomingRevision = Number.isInteger(data.revision) ? Number(data.revision) : 0;
+
+    if (
+      generation !== libraryRequestGeneration.current
+      || incomingRevision < appliedLibraryRevision.current
+    ) {
+      return data;
+    }
+
+    appliedLibraryRevision.current = incomingRevision;
     setTracks(data.tracks);
     setScannedAt(data.scannedAt);
     setScanning(data.scanning);
-    setRevision(Number.isInteger(data.revision) ? Number(data.revision) : 0);
+    setRevision(incomingRevision);
     return data;
   }, []);
 
   const refreshPlaylists = useCallback(async () => {
+    const generation = ++playlistRequestGeneration.current;
     const [regular, smart] = await Promise.all([
       jsonRequest<PlaylistsResponse>('/api/playlists'),
       jsonRequest<PlaylistsResponse>('/api/smart-playlists')
     ]);
     const merged = sortPlaylists([...regular.playlists, ...smart.playlists]);
-    setPlaylists(merged);
+    if (generation === playlistRequestGeneration.current) setPlaylists(merged);
     return { playlists: merged } satisfies PlaylistsResponse;
   }, []);
 
