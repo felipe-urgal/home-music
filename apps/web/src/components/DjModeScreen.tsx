@@ -403,7 +403,7 @@ function DeckPanel({
   const [loopQuantize, setLoopQuantize] = useState(true);
   const [hotLoopCueIndex, setHotLoopCueIndex] = useState<number | null>(null);
   const [hotCues, setHotCues] = useState<TrackHotCues['positions']>([null, null, null, null]);
-  const [hotCueColors, setHotCueColors] = useState<NonNullable<TrackHotCues['colors']>>(['blue', 'red', 'green', 'amber']);
+  const [hotCueColors, setHotCueColors] = useState<NonNullable<TrackHotCues['colors']>>(['blue', 'green', 'amber', 'red']);
   const [hotCueLabels, setHotCueLabels] = useState<NonNullable<TrackHotCues['labels']>>([null, null, null, null]);
   const [activeHotCueIndex, setActiveHotCueIndex] = useState<number | null>(null);
   const [hotCueQuantize, setHotCueQuantize] = useState(false);
@@ -423,7 +423,7 @@ function DeckPanel({
 
   useEffect(() => {
     setHotCues([...(state.track?.hotCues?.positions ?? [null, null, null, null])] as TrackHotCues['positions']);
-    setHotCueColors([...(state.track?.hotCues?.colors ?? ['blue', 'red', 'green', 'amber'])] as NonNullable<TrackHotCues['colors']>);
+    setHotCueColors([...(state.track?.hotCues?.colors ?? ['blue', 'green', 'amber', 'red'])] as NonNullable<TrackHotCues['colors']>);
     setHotCueLabels([...(state.track?.hotCues?.labels ?? [null, null, null, null])] as NonNullable<TrackHotCues['labels']>);
     setHotCueError(null);
   }, [snapshot?.trackId, persistedHotCuesKey]);
@@ -1781,7 +1781,7 @@ export function DjModeScreen({
     : 0;
 
   return (
-    <section className="dj-mode dj-mode--prototype-three dj-mode--approved-prototype" aria-label="Modo DJ">
+    <section className="dj-mode dj-mode--prototype-three dj-mode--approved-prototype dj-mode--deck-console-v2" aria-label="Modo DJ">
       <header className="dj-mode__header">
         <div className="dj-mode__brand">
           <span className="dj-mode__brand-icon" aria-hidden="true"><Disc3 /></span>
