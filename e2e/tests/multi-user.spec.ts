@@ -19,12 +19,6 @@ function viewportWidth(page: Page) {
   return width;
 }
 
-async function expandDesktopTopbar(page: Page) {
-  if (viewportWidth(page) < 1024) return;
-  const toggle = page.getByRole('button', { name: 'Expandir barra superior' });
-  if (await toggle.isVisible()) await toggle.click();
-}
-
 async function submitLogin(page: Page, username: string, password: string) {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Entrar' })).toBeVisible();
@@ -48,7 +42,6 @@ async function openPlaylists(page: Page) {
   const width = viewportWidth(page);
 
   if (width >= 1024) {
-    await expandDesktopTopbar(page);
     const sidebar = page.getByTestId('desktop-sidebar');
     await expect(sidebar).toBeVisible();
     await sidebar.getByRole('button', { name: 'Playlists', exact: true }).click();
@@ -91,7 +84,6 @@ async function openAccountFromLibrary(page: Page) {
   const width = viewportWidth(page);
 
   if (width >= 1024) {
-    await expandDesktopTopbar(page);
     const sidebar = page.getByTestId('desktop-sidebar');
     await sidebar.getByRole('button', { name: /Minha conta/ }).click();
   } else if (width < 700) {
@@ -256,7 +248,6 @@ test('admin e user preservam role, sessões, playlists e isolamento em todos os 
 
 async function expectAdminLibrarySurface(page: Page, visible: boolean) {
   const width = viewportWidth(page);
-  if (width >= 1024) await expandDesktopTopbar(page);
   const refresh = width >= 1024
     ? page.getByTestId('desktop-sidebar').getByRole('button', { name: 'Atualizar biblioteca', exact: true })
     : page.getByRole('button', { name: 'Atualizar biblioteca', exact: true });
