@@ -105,6 +105,8 @@ async function openAccount(page: Page) {
   const width = page.viewportSize()?.width ?? 390;
 
   if (width >= 1024) {
+    const toggle = page.getByRole('button', { name: 'Expandir barra superior' });
+    if (await toggle.isVisible()) await toggle.click();
     await page.getByTestId('desktop-sidebar').getByRole('button', { name: /Minha conta/ }).click();
   } else if (width >= 700) {
     await page.getByRole('button', { name: /Minha conta ·/ }).click();
