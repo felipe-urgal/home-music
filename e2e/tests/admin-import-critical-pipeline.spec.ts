@@ -118,8 +118,9 @@ async function login(page: Page) {
 }
 
 async function openImport(page: Page) {
-  const sidebar = page.getByTestId('desktop-sidebar');
-  await sidebar.getByRole('button', { name: /Minha conta/ }).click();
+  // Este spec valida o pipeline de importação, não a navegação global. Use a
+  // rota canônica para evitar acoplamento ao estado colapsado da topbar desktop.
+  await page.goto('/account');
   await expect(page.locator('#my-account-title')).toHaveText('Minha conta');
   await page.locator('.my-account-screen').getByRole('button', { name: /^Administração/ }).click();
   await expect(page.locator('#administration-title')).toHaveText('Administração');
