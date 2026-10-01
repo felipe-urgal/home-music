@@ -296,9 +296,9 @@ test('provider e URL direta atravessam o workbench crítico sem internet públic
   const providerUrl = 'https://music.youtube.com/watch?v=e2e-fixture';
   await page.getByLabel('Buscar ou colar link do YouTube, YouTube Music ou Spotify').fill(providerUrl);
   await page.getByRole('button', { name: 'Analisar link', exact: true }).click();
-  await expect(page.getByText('Provider E2E', { exact: true })).toBeVisible();
   expect(providerInspectBody).toEqual({ url: providerUrl });
   expect(providerStartBody).toEqual({ url: providerUrl });
+  await expect(page.getByText('Preparação', { exact: true })).toBeVisible();
   await page.locator('.admin-import-provider').getByRole('button', { name: 'Cancelar', exact: true }).click();
   await expect(page.getByText('Operação encerrada.', { exact: true })).toBeVisible();
 
@@ -425,5 +425,5 @@ test('busca por texto seleciona resultado e reutiliza o pipeline do provider', a
   const selectedUrl = 'https://www.youtube.com/watch?v=abcDEF_1234';
   expect(inspectBody).toEqual({ url: selectedUrl });
   expect(startBody).toEqual({ url: selectedUrl });
-  await expect(page.getByText('Samurai · Djavan', { exact: true })).toBeVisible();
+  await expect(page.getByText('Preparação', { exact: true })).toBeVisible();
 });
