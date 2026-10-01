@@ -35,18 +35,13 @@ async function assetPaths(page: Page) {
 }
 
 async function expectLibrary(page: Page) {
-  await expect(page.locator('[data-desktop-section="library"]')).toBeVisible();
+  await expect(page.getByPlaceholder('Música, artista, álbum ou pasta')).toBeVisible();
 }
 
 async function expectAccessibilityBaseline(page: Page) {
-  if ((page.viewportSize()?.width ?? 390) >= 1024) {
-    const expandTopbar = page.getByRole('button', { name: 'Expandir barra superior' });
-    if (await expandTopbar.isVisible()) await expandTopbar.click();
-  }
-
   const search = page.getByLabel('Buscar na biblioteca');
 
-  // Anchor on the search control, move away and return using real keyboard input.
+  // Anchor on the search field, move away and return using real keyboard input.
   // The final focus therefore exercises :focus-visible instead of relying only
   // on programmatic element.focus(), whose modality differs between browsers.
   await search.focus();
@@ -110,8 +105,6 @@ async function openAccount(page: Page) {
   const width = page.viewportSize()?.width ?? 390;
 
   if (width >= 1024) {
-    const toggle = page.getByRole('button', { name: 'Expandir barra superior' });
-    if (await toggle.isVisible()) await toggle.click();
     await page.getByTestId('desktop-sidebar').getByRole('button', { name: /Minha conta/ }).click();
   } else if (width >= 700) {
     await page.getByRole('button', { name: /Minha conta ·/ }).click();
