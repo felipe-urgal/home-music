@@ -87,6 +87,9 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   await expect(midiDrawer).not.toHaveAttribute('open', '');
   await expect(library.getByRole('option')).toHaveCount(3);
   await expect.poll(async () => library.evaluate(element => getComputedStyle(element).overflowY)).toBe('auto');
+  await dj.evaluate(element => { element.scrollTop = element.scrollHeight; });
+  await expect(library).toBeInViewport();
+  await dj.evaluate(element => { element.scrollTop = 0; });
 
   const selectedE2eTrack = library.getByRole('option').filter({ hasText: 'E2E Track' });
   await selectedE2eTrack.click();
