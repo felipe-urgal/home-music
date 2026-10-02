@@ -145,11 +145,11 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   const librarySearch = dj.getByRole('textbox', { name: 'Buscar na biblioteca' });
   await librarySearch.focus();
   await page.keyboard.press('2');
-  await expect(deckB).toContainText('Nenhuma faixa carregada');
   await librarySearch.fill('');
   await page.locator('body').click({ position: { x: 1, y: 1 } });
 
   await showDjDecks(dj);
+  await expect(deckB).toContainText('Nenhuma faixa carregada');
   const tempoA = deckA.getByLabel('Tempo Deck A');
   await expect(tempoA).toBeVisible();
   await tempoA.fill('1.03');
