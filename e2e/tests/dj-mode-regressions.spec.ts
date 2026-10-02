@@ -280,7 +280,8 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   ]);
   expect(libraryBox).not.toBeNull();
   expect(layoutBox).not.toBeNull();
-  expect(Math.abs(libraryBox!.width - layoutBox!.width)).toBeLessThanOrEqual(2);
+  expect(Math.abs((layoutBox!.width - libraryBox!.width) - 32)).toBeLessThanOrEqual(2);
+  expect(Math.abs((libraryBox!.x - layoutBox!.x) - 16)).toBeLessThanOrEqual(2);
   await showDjDecks(dj);
 
   await deckA.getByRole('button', { name: 'Reproduzir Deck A' }).click();
