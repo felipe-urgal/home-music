@@ -107,6 +107,9 @@ test('Modo DJ mantém AutoMix, FX e gravação ativos no mesmo fluxo', async ({ 
   await expect(automixLibrary.locator('.dj-library-status-badge').filter({ hasText: 'AGORA' })).toHaveCount(1);
   await expect(automixLibrary.locator('.dj-library-status-badge').filter({ hasText: 'PRÓXIMA' })).toHaveCount(1);
   await openDjDecks(dj);
+  const remountedFxSettings = mixer.locator('details.dj-mixer-fx-settings');
+  await remountedFxSettings.locator('summary').click();
+  await expect(remountedFxSettings).toHaveAttribute('open', '');
   await expect(echoA).toHaveAttribute('aria-pressed', 'true');
   await expect(reverbB).toHaveAttribute('aria-pressed', 'true');
   await expect(rec).toHaveAttribute('aria-pressed', 'true');
@@ -180,6 +183,8 @@ test('Modo DJ degrada sem Web MIDI e sem MediaRecorder sem bloquear playback', a
   const midi = page.getByRole('region', { name: 'Controlador MIDI' });
   await expect(midi).toContainText('Web MIDI indisponível');
   await expect(midi.getByRole('button', { name: 'Conectar' })).toBeDisabled();
+  await midiDrawer.locator('summary').click();
+  await expect(midiDrawer).not.toHaveAttribute('open', '');
 
   const library = await openDjLibrary(dj);
   const track = library.getByRole('option').filter({ hasText: 'E2E Track' });
