@@ -19,6 +19,13 @@ async function showDjDecks(dj: Locator) {
   await expect(dj.getByRole('region', { name: 'Mixer' })).toBeVisible();
 }
 
+async function openMidiDrawer(midiDrawer: Locator) {
+  if (await midiDrawer.getAttribute('open') === null) {
+    await midiDrawer.locator('summary').click();
+  }
+  await expect(midiDrawer).toHaveAttribute('open', '');
+}
+
 test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regredir player normal', async ({ page }) => {
   test.setTimeout(180_000);
 
@@ -498,6 +505,7 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
       .__homeMusicE2eMidiOutputMessages?.length ?? 0
   ));
 
+  await openMidiDrawer(midiDrawer);
   await midi.getByLabel('Saída').selectOption('e2e-ddj-output-secondary');
 
   await expect.poll(async () => page.evaluate(() => (
@@ -635,6 +643,7 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
       .__homeMusicE2eMidiOutputMessages?.length ?? 0
   ));
 
+  await openMidiDrawer(midiDrawer);
   await midi.getByRole('button', { name: 'Desconectar' }).click();
   await expect(midi).toContainText('Desconectado');
 
