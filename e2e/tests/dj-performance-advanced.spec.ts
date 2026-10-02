@@ -19,6 +19,18 @@ async function loginAndOpenDjMode(page: Page) {
   return dj;
 }
 
+async function openDjLibrary(dj: ReturnType<Page['getByRole']>) {
+  await dj.getByRole('button', { name: 'Biblioteca', exact: true }).click();
+  const library = dj.getByRole('listbox', { name: 'Faixas' });
+  await expect(library).toBeVisible();
+  return library;
+}
+
+async function openDjDecks(dj: ReturnType<Page['getByRole']>) {
+  await dj.getByRole('button', { name: 'DJ', exact: true }).click();
+  await expect(dj.getByRole('region', { name: 'Mixer' })).toBeVisible();
+}
+
 test('Modo DJ mantém AutoMix, FX e gravação ativos no mesmo fluxo', async ({ page }) => {
   test.setTimeout(60_000);
 
@@ -63,8 +75,7 @@ test('Modo DJ mantém AutoMix, FX e gravação ativos no mesmo fluxo', async ({ 
   });
 
   const dj = await loginAndOpenDjMode(page);
-  const library = page.getByRole('listbox', { name: 'Faixas' });
-  const mixer = page.getByRole('region', { name: 'Mixer' });
+  const library = await openDjLibrary(dj);
 
   const trackA = library.getByRole('option').filter({ hasText: 'E2E Track' });
   await trackA.click();
@@ -74,6 +85,8 @@ test('Modo DJ mantém AutoMix, FX e gravação ativos no mesmo fluxo', async ({ 
   await trackB.click();
   await dj.getByRole('button', { name: 'LOAD B' }).click();
 
+  await openDjDecks(dj);
+  const mixer = page.getByRole('region', { name: 'Mixer' });
   const fxSettings = mixer.locator('details.dj-mixer-fx-settings');
   await fxSettings.locator('summary').click();
   const echoA = mixer.getByRole('button', { name: 'Echo Channel A' });
@@ -90,8 +103,13 @@ test('Modo DJ mantém AutoMix, FX e gravação ativos no mesmo fluxo', async ({ 
   const automix = dj.getByRole('button', { name: 'AutoMix' });
   await automix.click();
   await expect(automix).toHaveAttribute('aria-pressed', 'true');
-  await expect(library.locator('.dj-library-status-badge').filter({ hasText: 'AGORA' })).toHaveCount(1);
-  await expect(library.locator('.dj-library-status-badge').filter({ hasText: 'PRÓXIMA' })).toHaveCount(1);
+  const automixLibrary = await openDjLibrary(dj);
+  await expect(automixLibrary.locator('.dj-library-status-badge').filter({ hasText: 'AGORA' })).toHaveCount(1);
+  await expect(automixLibrary.locator('.dj-library-status-badge').filter({ hasText: 'PRÓXIMA' })).toHaveCount(1);
+  await openDjDecks(dj);
+  const remountedFxSettings = mixer.locator('details.dj-mixer-fx-settings');
+  await remountedFxSettings.locator('summary').click();
+  await expect(remountedFxSettings).toHaveAttribute('open', '');
   await expect(echoA).toHaveAttribute('aria-pressed', 'true');
   await expect(reverbB).toHaveAttribute('aria-pressed', 'true');
   await expect(rec).toHaveAttribute('aria-pressed', 'true');
@@ -165,12 +183,15 @@ test('Modo DJ degrada sem Web MIDI e sem MediaRecorder sem bloquear playback', a
   const midi = page.getByRole('region', { name: 'Controlador MIDI' });
   await expect(midi).toContainText('Web MIDI indisponível');
   await expect(midi.getByRole('button', { name: 'Conectar' })).toBeDisabled();
+  await midiDrawer.locator('summary').click();
+  await expect(midiDrawer).not.toHaveAttribute('open', '');
 
-  const library = page.getByRole('listbox', { name: 'Faixas' });
+  const library = await openDjLibrary(dj);
   const track = library.getByRole('option').filter({ hasText: 'E2E Track' });
   await track.click();
   await dj.getByRole('button', { name: 'LOAD A' }).click();
 
+  await openDjDecks(dj);
   const deckA = page.getByRole('article', { name: 'Deck A' });
   await expect(deckA).toContainText('E2E Track');
   await deckA.getByRole('button', { name: 'Reproduzir Deck A' }).click();

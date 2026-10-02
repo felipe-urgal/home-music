@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react';
-import { djKeyCompatibility, type Track, type TrackHotCueColor, type TrackHotCues, type TrackRhythmOverride, type TrackWaveform } from '@home-music/shared';
+import { type Track, type TrackHotCueColor, type TrackHotCues, type TrackRhythmOverride, type TrackWaveform } from '@home-music/shared';
 import {
   ArrowLeft,
   Cable,
@@ -1765,9 +1765,8 @@ export function DjModeScreen({
   onStopRecording,
   onExit
 }: DjModeScreenProps) {
-  const [workspacePanel, setWorkspacePanel] = useState<'library' | 'mixer'>('library');
+  const [activeArea, setActiveArea] = useState<'dj' | 'library'>('dj');
   const [recordingNow, setRecordingNow] = useState(() => Date.now());
-  const harmonic = djKeyCompatibility(decks.a.track?.key, decks.b.track?.key);
 
   useEffect(() => {
     if (!recording.active) return;
@@ -1788,13 +1787,31 @@ export function DjModeScreen({
           <strong>Home Music</strong>
         </div>
 
-        <div className="dj-mode__nav" aria-label="Área atual">
-          <span className="is-active">DJ</span>
-          <span>Biblioteca</span>
-          <span>Playlists</span>
-          <span>Explorar</span>
-          <span>Configurações</span>
-        </div>
+        <nav className="dj-mode__nav" aria-label="Navegação do modo DJ">
+          <button
+            type="button"
+            className={activeArea === 'dj' ? 'is-active' : ''}
+            aria-current={activeArea === 'dj' ? 'page' : undefined}
+            onClick={() => setActiveArea('dj')}
+          >
+            DJ
+          </button>
+          <button
+            type="button"
+            className={activeArea === 'library' ? 'is-active' : ''}
+            aria-current={activeArea === 'library' ? 'page' : undefined}
+            onClick={() => setActiveArea('library')}
+          >
+            Biblioteca
+          </button>
+          <button
+            type="button"
+            disabled
+            title="Conteúdo de Configurações será definido em uma próxima etapa"
+          >
+            Configurações
+          </button>
+        </nav>
 
         <div className="dj-mode__header-actions">
           <span className="dj-mode__status">
@@ -1874,80 +1891,49 @@ export function DjModeScreen({
         </div>
       </header>
 
-      <main className="dj-pro-layout" data-workspace-panel={workspacePanel}>
-        <DeckPanel deck="a" state={decks.a} onTogglePlay={onTogglePlay} onCue={onCue} onSync={onSync} onTempo={onTempo} onNudge={onNudge} onSeek={onSeek} />
+      <main className="dj-pro-layout" data-dj-section={activeArea}>
+        {activeArea === 'dj' ? (
+          <>
+            <DeckPanel deck="a" state={decks.a} onTogglePlay={onTogglePlay} onCue={onCue} onSync={onSync} onTempo={onTempo} onNudge={onNudge} onSeek={onSeek} />
 
-        <div
-          className="dj-harmonic-status"
-          data-compatible={harmonic.compatible ? 'true' : 'false'}
-          title={decks.a.track?.key && decks.b.track?.key
-            ? `Compatibilidade harmônica: ${harmonic.relation}`
-            : 'Carregue faixas com tonalidade analisada nos dois decks'}
-        >
-          <span>Harmonia</span>
-          <strong>
-            {decks.a.track?.key && decks.b.track?.key
-              ? `${decks.a.track.key.camelot} ↔ ${decks.b.track.key.camelot}`
-              : '—'}
-          </strong>
-        </div>
+            <DjMixer
+              mixer={mixer}
+              meterLevels={{ a: decks.a.meterLevel, b: decks.b.meterLevel }}
+              onChannelVolume={onChannelVolume}
+              onEq={onEq}
+              onFxEnabled={onFxEnabled}
+              onFxWet={onFxWet}
+              onEchoFeedback={onEchoFeedback}
+              onEchoDelay={onEchoDelay}
+              onCrossfader={onCrossfader}
+            />
 
-        <div className="dj-workspace-switch" role="group" aria-label="Painel do workspace DJ">
-          <button
-            type="button"
-            className={workspacePanel === 'library' ? 'is-active' : ''}
-            aria-pressed={workspacePanel === 'library'}
-            onClick={() => setWorkspacePanel('library')}
-          >
-            Biblioteca
-          </button>
-          <button
-            type="button"
-            className={workspacePanel === 'mixer' ? 'is-active' : ''}
-            aria-pressed={workspacePanel === 'mixer'}
-            onClick={() => setWorkspacePanel('mixer')}
-          >
-            Mixer
-          </button>
-        </div>
-
-        <DjMixer
-          mixer={mixer}
-          meterLevels={{ a: decks.a.meterLevel, b: decks.b.meterLevel }}
-          onChannelVolume={onChannelVolume}
-          onEq={onEq}
-          onFxEnabled={onFxEnabled}
-          onFxWet={onFxWet}
-          onEchoFeedback={onEchoFeedback}
-          onEchoDelay={onEchoDelay}
-          onCrossfader={onCrossfader}
-        />
-
-        <DeckPanel deck="b" state={decks.b} onTogglePlay={onTogglePlay} onCue={onCue} onSync={onSync} onTempo={onTempo} onNudge={onNudge} onSeek={onSeek} />
-
-        <DjLibrary
-          tracks={libraryTracks}
-          sources={librarySources}
-          selectedLibrarySource={selectedLibrarySource}
-          onSelectLibrarySource={onSelectLibrarySource}
-          selectedIndex={selectedLibraryIndex}
-          onSelect={onSelectLibraryIndex}
-          shuffle={automixShuffle}
-          onShuffleChange={onAutomixShuffleChange}
-          playedTrackIds={playedTrackIds}
-          automixCurrentTrackId={automixCurrentTrackId}
-          automixNextTrackId={automixNextTrackId}
-          automixNextReason={automixNextReason}
-          onSkipAutomixNext={onSkipAutomixNext}
-          onLoad={onLoadSelectedTrack}
-          loadedTrackIds={{
-            a: decks.a.snapshot?.trackId ?? null,
-            b: decks.b.snapshot?.trackId ?? null
-          }}
-          workspacePanel={workspacePanel}
-          onWorkspacePanelChange={setWorkspacePanel}
-        />
-
+            <DeckPanel deck="b" state={decks.b} onTogglePlay={onTogglePlay} onCue={onCue} onSync={onSync} onTempo={onTempo} onNudge={onNudge} onSeek={onSeek} />
+          </>
+        ) : (
+          <DjLibrary
+            tracks={libraryTracks}
+            sources={librarySources}
+            selectedLibrarySource={selectedLibrarySource}
+            onSelectLibrarySource={onSelectLibrarySource}
+            selectedIndex={selectedLibraryIndex}
+            onSelect={onSelectLibraryIndex}
+            shuffle={automixShuffle}
+            onShuffleChange={onAutomixShuffleChange}
+            playedTrackIds={playedTrackIds}
+            automixCurrentTrackId={automixCurrentTrackId}
+            automixNextTrackId={automixNextTrackId}
+            automixNextReason={automixNextReason}
+            onSkipAutomixNext={onSkipAutomixNext}
+            onLoad={onLoadSelectedTrack}
+            loadedTrackIds={{
+              a: decks.a.snapshot?.trackId ?? null,
+              b: decks.b.snapshot?.trackId ?? null
+            }}
+            workspacePanel="library"
+            onWorkspacePanelChange={() => undefined}
+          />
+        )}
       </main>
     </section>
   );

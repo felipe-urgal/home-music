@@ -8552,3 +8552,114 @@
     font-size: 14px;
   }
 }
+
+
+/* DJ top-level navigation: DJ / Biblioteca / Configurações */
+.dj-mode--approved-prototype .dj-mode__nav > button {
+  min-width: 0;
+  height: 56px;
+  padding: 0 24px;
+  display: inline-grid;
+  place-items: center;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: #8fa3b7;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.dj-mode--approved-prototype .dj-mode__nav > button.is-active {
+  color: #35aaff;
+  background: rgba(14, 91, 155, .22);
+  border-bottom-color: #1aa0ff;
+  font-weight: 800;
+}
+
+.dj-mode--approved-prototype .dj-mode__nav > button:focus-visible {
+  outline: 2px solid rgba(53, 170, 255, .78);
+  outline-offset: -2px;
+}
+
+.dj-mode--approved-prototype .dj-mode__nav > button:disabled {
+  color: #66798c;
+  cursor: default;
+  opacity: .62;
+}
+
+.dj-mode--approved-prototype .dj-pro-layout[data-dj-section="dj"] {
+  width: 100%;
+  max-width: none;
+  grid-template-columns: minmax(0, 1fr) 315px minmax(0, 1fr);
+  grid-template-rows: auto;
+  grid-template-areas: "deck-a mixer deck-b";
+  align-items: stretch;
+}
+
+.dj-mode--approved-prototype .dj-pro-layout[data-dj-section="library"] {
+  width: 100%;
+  max-width: none;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-areas: "library";
+  align-items: stretch;
+}
+
+.dj-mode--approved-prototype .dj-pro-layout[data-dj-section="library"] > .dj-pro-library {
+  width: 100%;
+  height: calc(100vh - 82px);
+  min-height: 560px;
+}
+
+.dj-mode--approved-prototype .dj-pro-layout[data-dj-section="library"] .dj-library-workspace-tabs {
+  display: none;
+}
+
+.dj-mode--approved-prototype .dj-pro-layout[data-dj-section="library"] .dj-pro-library__header {
+  grid-template-columns: minmax(260px, 1fr) minmax(180px, 240px) auto auto;
+}
+
+@media (max-width: 1350px) {
+  .dj-mode--approved-prototype .dj-mode__nav > button {
+    padding-inline: 15px;
+  }
+
+  .dj-mode--approved-prototype .dj-pro-layout[data-dj-section="dj"] {
+    grid-template-columns: minmax(0, 1fr) 285px minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 1180px) {
+  .dj-mode--approved-prototype .dj-pro-layout[data-dj-section="dj"] {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "deck-a"
+      "mixer"
+      "deck-b";
+  }
+
+  .dj-mode--approved-prototype .dj-pro-layout[data-dj-section="library"] > .dj-pro-library {
+    height: auto;
+    min-height: 560px;
+  }
+}
+
+@media (max-width: 820px) {
+  .dj-mode--approved-prototype .dj-mode__nav {
+    display: flex;
+    width: 100%;
+    order: 2;
+  }
+
+  .dj-mode--approved-prototype .dj-mode__nav > button {
+    flex: 1 1 0;
+    padding-inline: 8px;
+  }
+
+  .dj-mode--approved-prototype .dj-pro-layout[data-dj-section="library"] .dj-pro-library__header {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+}
