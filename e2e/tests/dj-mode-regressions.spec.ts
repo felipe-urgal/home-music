@@ -401,6 +401,9 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
     input?.onmidimessage?.({ data: [0xb6, 0x40, 0x01], receivedTime: performance.now() });
   });
   await expect(options.nth(1)).toHaveAttribute('aria-selected', 'true');
+
+  await midiDrawer.locator('summary').click();
+  await expect(midiDrawer).toHaveAttribute('open', '');
   const diagnosticPanel = midi.getByLabel('Diagnóstico MIDI ativo');
   await expect(diagnosticPanel).toContainText('E2E DDJ-400');
   await expect(diagnosticPanel).toContainText('Status0xB0');
@@ -411,6 +414,8 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   await diagnostics.click();
   await expect(diagnostics).toHaveAttribute('aria-pressed', 'false');
   await expect(midi.getByLabel('Diagnóstico MIDI ativo')).toHaveCount(0);
+  await midiDrawer.locator('summary').click();
+  await expect(midiDrawer).not.toHaveAttribute('open', '');
 
   const e2eZetaOption = library.getByRole('option').filter({ hasText: 'E2E Zeta' });
   await e2eZetaOption.click();
