@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react';
-import { djKeyCompatibility, type Track, type TrackHotCueColor, type TrackHotCues, type TrackRhythmOverride, type TrackWaveform } from '@home-music/shared';
+import { type Track, type TrackHotCueColor, type TrackHotCues, type TrackRhythmOverride, type TrackWaveform } from '@home-music/shared';
 import {
   ArrowLeft,
   Cable,
@@ -1767,7 +1767,6 @@ export function DjModeScreen({
 }: DjModeScreenProps) {
   const [activeArea, setActiveArea] = useState<'dj' | 'library'>('dj');
   const [recordingNow, setRecordingNow] = useState(() => Date.now());
-  const harmonic = djKeyCompatibility(decks.a.track?.key, decks.b.track?.key);
 
   useEffect(() => {
     if (!recording.active) return;
