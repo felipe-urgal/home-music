@@ -4,6 +4,12 @@ const username = 'playwright';
 const password = 'playwright-password-2026';
 
 async function showDjLibrary(dj: Locator) {
+  const openHeaderDetails = dj.locator('.dj-mode__header details[open]');
+  const count = await openHeaderDetails.count();
+  for (let index = 0; index < count; index += 1) {
+    await openHeaderDetails.nth(0).locator('summary').click();
+  }
+
   await dj.getByRole('button', { name: 'Biblioteca', exact: true }).click();
   await expect(dj.getByRole('listbox', { name: 'Faixas' })).toBeVisible();
 }
