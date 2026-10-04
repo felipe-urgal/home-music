@@ -20,7 +20,7 @@ type LibraryContentProps = {
   onRemovePlaylist: (playlist: Playlist) => Promise<void>;
   onCreateSmartPlaylist: () => void;
   onEditSmartPlaylist: (playlist: Playlist) => void;
-  onSetPlaylistTracks: (playlistId: string, trackIds: string[]) => Promise<unknown>;
+  onRemovePlaylistTrack: (playlistId: string, trackId: string) => Promise<unknown>;
 };
 
 type PlaylistOrder = 'recent' | 'name';
@@ -44,7 +44,7 @@ export function LibraryContent({
   onRemovePlaylist,
   onCreateSmartPlaylist,
   onEditSmartPlaylist,
-  onSetPlaylistTracks
+  onRemovePlaylistTrack
 }: LibraryContentProps) {
   const {
     libraryTab,
@@ -320,7 +320,7 @@ export function LibraryContent({
               onSort={changeSort}
               onPlayTrack={onPlayTrack}
               onTogglePlay={onTogglePlay}
-              onRemove={selectedPlaylist?.source === 'manual' ? trackId => run(onSetPlaylistTracks(selectedPlaylist.id, selectedPlaylist.trackIds.filter(id => id !== trackId))) : undefined}
+              onRemove={selectedPlaylist?.source === 'manual' ? trackId => run(onRemovePlaylistTrack(selectedPlaylist.id, trackId)) : undefined}
               desktopVariant={selectedPlaylist ? 'grid' : 'table'}
               {...offlineTrackProps}
             />
