@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  isLatestRequestGeneration,
+  shouldApplyLibrarySnapshot,
   shouldRefreshLibraryFromStatus
 } from './useLibraryData';
 
@@ -15,33 +15,60 @@ function deferred<T>() {
 describe('useLibraryData request ordering', () => {
   it('descarta a resposta anterior quando uma requisição mais nova termina primeiro', async () => {
     let currentGeneration = 0;
+    let appliedGeneration = 0;
+    let appliedRevision = 0;
+    let appliedInstanceId: string | null = null;
     let appliedValue = '';
-    const first = deferred<string>();
-    const second = deferred<string>();
+    const first = deferred<{ value: string; revision: number }>();
+    const second = deferred<{ value: string; revision: number }>();
 
-    const apply = async (promise: Promise<string>) => {
+    const apply = async (promise: Promise<{ value: string; revision: number }>) => {
       const generation = ++currentGeneration;
-      const value = await promise;
-      if (isLatestRequestGeneration(generation, currentGeneration)) {
-        appliedValue = value;
-      }
+      const result = await promise;
+      if (!shouldApplyLibrarySnapshot(
+        generation,
+        currentGeneration,
+        'server-a',
+        result.revision,
+        appliedInstanceId,
+        appliedRevision
+      )) return;
+
+      appliedGeneration = generation;
+      appliedInstanceId = 'server-a';
+      appliedRevision = result.revision;
+      appliedValue = result.value;
     };
 
     const firstRun = apply(first.promise);
     const secondRun = apply(second.promise);
 
-    second.resolve('snapshot novo');
+    second.resolve({ value: 'snapshot novo', revision: 9 });
     await secondRun;
-    expect(appliedValue).toBe('snapshot novo');
+    expect({ appliedGeneration, appliedRevision, appliedValue }).toEqual({
+      appliedGeneration: 2,
+      appliedRevision: 9,
+      appliedValue: 'snapshot novo'
+    });
 
-    first.resolve('snapshot antigo');
+    first.resolve({ value: 'snapshot antigo', revision: 8 });
     await firstRun;
-    expect(appliedValue).toBe('snapshot novo');
+    expect({ appliedGeneration, appliedRevision, appliedValue }).toEqual({
+      appliedGeneration: 2,
+      appliedRevision: 9,
+      appliedValue: 'snapshot novo'
+    });
   });
 
-  it('considera qualquer mudança de revision como sinal para reconciliar a biblioteca', () => {
-    expect(shouldRefreshLibraryFromStatus(8, 8)).toBe(false);
-    expect(shouldRefreshLibraryFromStatus(9, 8)).toBe(true);
-    expect(shouldRefreshLibraryFromStatus(1, 8)).toBe(true);
+  it('não aceita revision menor da mesma instância, mas aceita uma nova instância após restart', () => {
+    expect(shouldApplyLibrarySnapshot(4, 4, 'server-a', 7, 'server-a', 8)).toBe(false);
+    expect(shouldApplyLibrarySnapshot(4, 4, 'server-a', 8, 'server-a', 8)).toBe(true);
+    expect(shouldApplyLibrarySnapshot(4, 4, 'server-b', 1, 'server-a', 8)).toBe(true);
+  });
+
+  it('reconcilia status quando a revision ou a instância do servidor muda', () => {
+    expect(shouldRefreshLibraryFromStatus('server-a', 8, 'server-a', 8)).toBe(false);
+    expect(shouldRefreshLibraryFromStatus('server-a', 9, 'server-a', 8)).toBe(true);
+    expect(shouldRefreshLibraryFromStatus('server-b', 1, 'server-a', 8)).toBe(true);
   });
 });
