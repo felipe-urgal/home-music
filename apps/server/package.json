@@ -10,6 +10,7 @@
     "test": "npm run build -w @home-music/shared && tsx --test src/*.test.ts",
     "test:security": "npm run build -w @home-music/shared && tsx --test src/*security*.test.ts",
     "benchmark:large-library": "node --expose-gc --import tsx src/large-library.benchmark.ts && node --expose-gc --import tsx src/library-http-cache.benchmark.ts",
+    "benchmark:smart-playlists": "node --import tsx src/smart-playlists.benchmark.ts",
     "benchmark:backpressure": "node --expose-gc --import tsx src/heavy-work-queue.benchmark.ts",
     "benchmark:rhythm-analysis": "node --expose-gc --import tsx src/rhythm-analysis-scheduler.benchmark.ts",
     "benchmark:rhythm-analysis:ffmpeg": "npm run build -w @home-music/shared && node --import tsx src/rhythm-analysis-ffmpeg.benchmark.ts",
