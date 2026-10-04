@@ -7,6 +7,10 @@ import {
   type PointerEvent
 } from 'react';
 
+export function shouldScheduleAutoHide(playing: boolean, focusWithin: boolean) {
+  return playing && !focusWithin;
+}
+
 export function useAutoHideControls<T extends HTMLElement>(
   playing: boolean,
   resetKey: string,
@@ -24,9 +28,9 @@ export function useAutoHideControls<T extends HTMLElement>(
 
   const scheduleHide = useCallback(() => {
     clear();
-    if (!playing) return;
     const root = rootRef.current;
-    if (root?.contains(document.activeElement)) return;
+    const focusWithin = Boolean(root?.contains(document.activeElement));
+    if (!shouldScheduleAutoHide(playing, focusWithin)) return;
     timeoutRef.current = window.setTimeout(() => setVisible(false), delayMs);
   }, [clear, delayMs, playing]);
 
