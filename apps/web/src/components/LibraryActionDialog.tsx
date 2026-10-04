@@ -36,6 +36,8 @@ export function LibraryActionDialog({
   onClose
 }: LibraryActionDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const cancelButtonRef = useRef<HTMLButtonElement>(null);
   const titleId = useId();
   const descriptionId = useId();
   const hasInput = value !== undefined;
@@ -43,9 +45,20 @@ export function LibraryActionDialog({
   useEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;
-    if (open && !dialog.open) dialog.showModal();
-    if (!open && dialog.open) dialog.close();
-  }, [open]);
+
+    if (!open) {
+      if (dialog.open) dialog.close();
+      return;
+    }
+
+    if (!dialog.open) dialog.showModal();
+    const frame = window.requestAnimationFrame(() => {
+      if (hasInput) inputRef.current?.focus();
+      else cancelButtonRef.current?.focus();
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [hasInput, open]);
 
   useEffect(() => {
     if (!open) return;
@@ -110,8 +123,8 @@ export function LibraryActionDialog({
             <label className="library-action-dialog__field">
               <span>{inputLabel}</span>
               <input
+                ref={inputRef}
                 data-autofocus
-                autoFocus={open}
                 autoComplete="off"
                 value={value}
                 placeholder={placeholder}
@@ -130,6 +143,7 @@ export function LibraryActionDialog({
 
         <footer className="library-action-dialog__actions">
           <button
+            ref={cancelButtonRef}
             type="button"
             className="library-action-dialog__secondary"
             disabled={busy}
@@ -141,7 +155,6 @@ export function LibraryActionDialog({
             type="submit"
             className={danger ? 'library-action-dialog__danger' : 'library-action-dialog__primary'}
             disabled={busy || confirmDisabled}
-            autoFocus={open && !hasInput}
           >
             {busy && <LoaderCircle className="is-spinning" aria-hidden="true" />}
             {busy ? 'Aguarde…' : confirmLabel}
