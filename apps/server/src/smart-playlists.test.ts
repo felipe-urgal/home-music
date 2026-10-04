@@ -197,3 +197,75 @@ test('ordena favoritas antigas e isola definições e histórico entre usuários
     await rm(temp, { recursive: true, force: true });
   }
 });
+
+
+test('list reaproveita o mesmo snapshot sem alterar regras com períodos diferentes', async () => {
+  const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-smart-shared-snapshot-'));
+  const databasePath = path.join(temp, 'home-music.db');
+  const database = new HomeMusicDatabase(databasePath);
+  const now = new Date('2026-08-30T12:00:00.000Z');
+
+  try {
+    insertUser(databasePath, 'user-a');
+    database.syncTracks([
+      track('a'),
+      track('b', { artist: 'Artista B', album: 'Álbum B', albumArtist: 'Artista B' }),
+      track('c', { artist: 'Artista C', album: 'Álbum C', albumArtist: 'Artista C' }),
+      track('d', { folderPath: 'Rock/Artista A/Discografia' })
+    ], '/music', now.toISOString());
+
+    database.setFavorite('user-a', 'a', true);
+    database.setFavorite('user-a', 'd', true);
+    database.recordHistory('user-a', 'a', '2026-08-29T12:00:00.000Z');
+    database.recordHistory('user-a', 'a', '2026-08-20T12:00:00.000Z');
+    database.recordHistory('user-a', 'b', '2026-07-01T12:00:00.000Z');
+
+    const store = new SmartPlaylistStore(databasePath);
+    try {
+      const rules: Array<{ name: string; rule: SmartPlaylistRule }> = [
+        {
+          name: 'Recentes 7 dias',
+          rule: { ...baseRule, history: 'played', periodDays: 7, sort: 'recently-played' }
+        },
+        {
+          name: 'Tocadas 90 dias',
+          rule: { ...baseRule, history: 'played', periodDays: 90, sort: 'most-played' }
+        },
+        {
+          name: 'Nunca tocadas',
+          rule: { ...baseRule, history: 'never', sort: 'title' }
+        },
+        {
+          name: 'Favoritas da pasta',
+          rule: {
+            ...baseRule,
+            folderPath: 'Rock/Artista A',
+            favorite: true,
+            sort: 'title'
+          }
+        }
+      ];
+
+      const ids = rules.map(({ name, rule }) => store.create('user-a', name, rule));
+      const listed = store.list('user-a', undefined, now);
+      const byId = new Map(listed.map(playlist => [playlist.id, playlist]));
+
+      for (const [index, { rule }] of rules.entries()) {
+        assert.deepEqual(
+          byId.get(ids[index])?.trackIds,
+          store.evaluate('user-a', rule, undefined, now)
+        );
+      }
+
+      assert.deepEqual(byId.get(ids[0])?.trackIds, ['a']);
+      assert.deepEqual(byId.get(ids[1])?.trackIds, ['a', 'b']);
+      assert.deepEqual(byId.get(ids[2])?.trackIds, ['c', 'd']);
+      assert.deepEqual(byId.get(ids[3])?.trackIds, ['a', 'd']);
+    } finally {
+      store.close();
+    }
+  } finally {
+    database.close();
+    await rm(temp, { recursive: true, force: true });
+  }
+});
