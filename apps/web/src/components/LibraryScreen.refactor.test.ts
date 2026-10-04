@@ -30,3 +30,12 @@ describe('LibraryScreen responsibility boundaries', () => {
     expect(rows).toMatch(/className="library-track-list"/);
   });
 });
+
+
+  it('usa dialogs próprios no desktop sem APIs nativas bloqueantes', () => {
+    const screen = source('LibraryScreen.tsx');
+
+    expect(screen).toMatch(/<LibraryActionDialog\b/);
+    expect(screen).not.toMatch(/window\.(prompt|confirm|alert)\s*\(/);
+    expect(screen).toMatch(/className="library-feedback-toast"/);
+  });
