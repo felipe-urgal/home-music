@@ -21,7 +21,7 @@ function state(position: number, updatedAt: string): PlaybackState {
 
 describe('playback state write coordinator', () => {
   it('serializa writes para um estado antigo nunca terminar depois do mais novo', async () => {
-    let resolveFirst: ((value: { status: 'ok'; state: PlaybackState }) => void) | null = null;
+    let resolveFirst!: (value: { status: 'ok'; state: PlaybackState }) => void;
     const calls: PlaybackState[] = [];
     const save = vi.fn((value: PlaybackState) => {
       calls.push(value);
@@ -38,7 +38,7 @@ describe('playback state write coordinator', () => {
     await Promise.resolve();
     const second = coordinator.persist(snapshot(20), 'state-change');
 
-    resolveFirst?.({ status: 'ok', state: state(10, '2026-10-04T18:00:00.001Z') });
+    resolveFirst({ status: 'ok', state: state(10, '2026-10-04T18:00:00.001Z') });
     await Promise.all([first, second]);
 
     expect(calls.map(call => call.position)).toEqual([10, 20]);
