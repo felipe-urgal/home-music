@@ -111,7 +111,7 @@ export class PersonalLibraryService {
     const source = this.database.getPlaylistSource(userId, playlistId);
     if (!source) return { status: 'not-found' };
     if (source !== 'manual') return { status: 'read-only' };
-    if (typeof trackId !== 'string' || !this.library.getTrack(trackId)) {
+    if (typeof trackId !== 'string' || !trackId || trackId.length > 64) {
       return { status: 'invalid-track' };
     }
 
