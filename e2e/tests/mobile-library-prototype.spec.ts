@@ -109,6 +109,13 @@ test('mobile segue o protótipo 3 na biblioteca, detalhe e player', async ({ pag
     await heroControl.click();
   }
   await expect(heroControl).toHaveAttribute('aria-label', 'Pausar');
+
+  await heroControl.focus();
+  await expect(heroControl).toBeFocused();
+  await expect(heroControl).toHaveClass(/is-visible/);
+  await expect(player).toHaveAttribute('data-mobile-chrome-visible', 'true');
+
+  await page.waitForTimeout(2_000);
   await expect(heroControl).toBeFocused();
   await expect(heroControl).toHaveClass(/is-visible/);
   await expect(player).toHaveAttribute('data-mobile-chrome-visible', 'true');
