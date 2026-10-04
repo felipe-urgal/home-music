@@ -56,6 +56,15 @@ describe('PlayerScreen responsibility boundaries', () => {
     expect(presentation).toMatch(/useAutoHideControls/);
   });
 
+  it('separa a gravação DJ do owner de crossfade', () => {
+    const crossfade = webSource('useCrossfadeAudioPlayer.ts');
+    const recording = webSource('useDjMasterRecording.ts');
+
+    expect(crossfade).toMatch(/useDjMasterRecording/);
+    expect(crossfade).not.toMatch(/new MediaRecorder/);
+    expect(recording).toMatch(/new MediaRecorder/);
+  });
+
   it('remove confirmação nativa do fluxo de download do player', () => {
     const app = webSource('AuthenticatedApp.tsx');
 
