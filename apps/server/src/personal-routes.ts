@@ -266,7 +266,7 @@ export function registerPersonalRoutes(
 
     const result = personal.savePlaybackStateVersioned(request.user.id, request.body ?? {});
     if (result.status === 'invalid') {
-      return reply.code(400).send({ error: 'Estado do player inválido ou sem versão.' });
+      return reply.code(400).send({ error: 'Estado do player inválido.' });
     }
     if (result.status === 'conflict') {
       reply.header('Cache-Control', 'private, no-store');
