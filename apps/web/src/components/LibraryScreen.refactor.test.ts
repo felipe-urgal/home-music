@@ -33,7 +33,7 @@ describe('LibraryScreen responsibility boundaries', () => {
   it('usa dialogs próprios no desktop sem APIs nativas bloqueantes', () => {
     const screen = source('LibraryScreen.tsx');
 
-    expect(screen).toMatch(/<ActionDialog\\b/);
+    expect(screen).toMatch(/<ActionDialog\b/);
     expect(screen).not.toMatch(/window\.(prompt|confirm|alert)\s*\(/);
     expect(screen).toMatch(/className="library-feedback-toast"/);
   });
