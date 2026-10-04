@@ -718,7 +718,7 @@ export function LibraryScreen({
         </>
       )}
 
-      {notice && <div className="library-feedback-toast" role="status">{notice}</div>
+      {notice && <div className="library-feedback-toast" role="status">{notice}</div>}
 
       <SmartPlaylistDialog
         open={Boolean(smartPlaylistEditor)}
