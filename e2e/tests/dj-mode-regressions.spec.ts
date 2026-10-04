@@ -130,7 +130,7 @@ test('Modo DJ permanece sincronizado com engine, mixer e MIDI simulado sem regre
   await showDjDecks(dj);
   await expect(deckA).toContainText('E2E Track');
   await expect(deckA.getByRole('button', { name: 'Reproduzir Deck A' })).toBeVisible();
-  await expect(deckA.getByLabel('BPM efetivo Deck A')).toBeVisible();
+  await expect(deckA.getByLabel('BPM efetivo no cabeçalho Deck A')).toBeVisible();
 
   const waveformA = deckA.getByRole('slider', { name: 'Buscar posição no waveform Deck A' });
   await expect(waveformA).toBeVisible();
