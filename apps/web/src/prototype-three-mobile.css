@@ -459,8 +459,9 @@
   #root .desktop-layout[data-offline="false"] .queue-panel__open-mobile {
     position: absolute;
     z-index: 3;
-    top: 9px;
-    right: 9px;
+    top: 50%;
+    right: 12px;
+    transform: translateY(-50%);
     width: 42px;
     height: 42px;
     display: grid;
@@ -569,7 +570,7 @@
 
     #root .desktop-layout[data-offline="false"] .queue-panel__toggle-mobile {
       min-height: 82px;
-      padding: 8px 11px;
+      padding: 8px 58px 8px 11px;
     }
 
     #root .desktop-layout[data-offline="false"] .queue-panel__toggle-mobile {
