@@ -27,6 +27,7 @@ type DesktopTrackTableProps = {
   sort: TrackSort;
   onSort: (sort: TrackSort) => void;
   onPlayTrack: (track: Track, context: Track[]) => void;
+  onTogglePlay: () => void;
   onRemove?: (trackId: string) => void;
   offlineSupported?: boolean;
   downloadedIds?: ReadonlySet<string>;
@@ -106,6 +107,7 @@ export function DesktopTrackTable({
   sort,
   onSort,
   onPlayTrack,
+  onTogglePlay,
   onRemove,
   offlineSupported = false,
   downloadedIds = EMPTY_TRACK_IDS,
@@ -236,7 +238,7 @@ export function DesktopTrackTable({
             const collectionAvailable = downloaded && viaCollection;
             const trackArtist = track.albumArtist || track.artist || 'Artista desconhecido';
             const trackAlbum = track.album || 'Álbum desconhecido';
-            const accessibleTrackLabel = `Tocar ${track.title}, ${trackArtist}, ${trackAlbum}${isCurrent && playing ? ' — reproduzindo agora' : ''}`;
+            const accessibleTrackLabel = `${isCurrent && playing ? 'Pausar' : 'Tocar'} ${track.title}, ${trackArtist}, ${trackAlbum}${isCurrent && playing ? ' — reproduzindo agora' : ''}`;
             const offlineLabel = downloading
               ? `Baixando ${track.title} para uso offline`
               : individualAvailable
@@ -261,7 +263,10 @@ export function DesktopTrackTable({
                   <button
                     className="desktop-library-table__track"
                     type="button"
-                    onClick={() => onPlayTrack(track, context)}
+                    onClick={() => {
+                      if (isCurrent) onTogglePlay();
+                      else onPlayTrack(track, context);
+                    }}
                     aria-current={isCurrent ? 'true' : undefined}
                     aria-label={accessibleTrackLabel}
                   >

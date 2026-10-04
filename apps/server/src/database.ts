@@ -1896,23 +1896,28 @@ export class HomeMusicDatabase {
          OR (source = 'manual' AND owner_user_id = ?)
       ORDER BY updated_at DESC, name COLLATE NOCASE
     `).all(userId) as Row[];
-    const tracksStatement = this.db.prepare(`
-      SELECT pt.track_id
+    const trackRows = this.db.prepare(`
+      SELECT pt.playlist_id, pt.track_id
       FROM playlist_tracks pt
       JOIN playlists p ON p.id = pt.playlist_id
-      WHERE pt.playlist_id = ?
-        AND (
-          p.source = 'rekordbox'
-          OR (p.source = 'manual' AND p.owner_user_id = ?)
-        )
-      ORDER BY pt.position
-    `);
+      WHERE p.source = 'rekordbox'
+         OR (p.source = 'manual' AND p.owner_user_id = ?)
+      ORDER BY pt.playlist_id, pt.position
+    `).all(userId) as Row[];
+    const tracksByPlaylist = new Map<string, string[]>();
+
+    for (const row of trackRows) {
+      const playlistId = stringValue(row.playlist_id);
+      const trackId = stringValue(row.track_id);
+      const current = tracksByPlaylist.get(playlistId);
+      if (current) current.push(trackId);
+      else tracksByPlaylist.set(playlistId, [trackId]);
+    }
 
     return playlists.map(row => ({
       id: stringValue(row.id),
       name: stringValue(row.name),
-      trackIds: (tracksStatement.all(stringValue(row.id), userId) as Row[])
-        .map(item => stringValue(item.track_id)),
+      trackIds: tracksByPlaylist.get(stringValue(row.id)) ?? [],
       createdAt: stringValue(row.created_at),
       updatedAt: stringValue(row.updated_at),
       source: playlistSourceValue(row.source)
@@ -1958,6 +1963,108 @@ export class HomeMusicDatabase {
       WHERE id = ? AND source = 'manual' AND owner_user_id = ?
     `).run(id, userId);
     return result.changes > 0;
+  }
+
+  addPlaylistTrack(userId: string, id: string, trackId: string, maxTracks: number) {
+    requireUserId(userId);
+    this.db.exec('BEGIN IMMEDIATE;');
+    try {
+      const playlist = this.db.prepare(`
+        SELECT 1 AS found
+        FROM playlists
+        WHERE id = ? AND source = 'manual' AND owner_user_id = ?
+      `).get(id, userId) as Row | undefined;
+      if (!playlist) {
+        this.db.exec('ROLLBACK;');
+        return 'not-found' as const;
+      }
+
+      const existing = this.db.prepare(`
+        SELECT 1 AS found
+        FROM playlist_tracks
+        WHERE playlist_id = ? AND track_id = ?
+      `).get(id, trackId) as Row | undefined;
+      if (existing) {
+        this.db.exec('COMMIT;');
+        return 'ok' as const;
+      }
+
+      const countRow = this.db.prepare(`
+        SELECT COUNT(*) AS count
+        FROM playlist_tracks
+        WHERE playlist_id = ?
+      `).get(id) as Row;
+      if (numberValue(countRow.count) >= maxTracks) {
+        this.db.exec('ROLLBACK;');
+        return 'limit-reached' as const;
+      }
+
+      const positionRow = this.db.prepare(`
+        SELECT COALESCE(MAX(position), -1) + 1 AS position
+        FROM playlist_tracks
+        WHERE playlist_id = ?
+      `).get(id) as Row;
+      const inserted = this.db.prepare(`
+        INSERT INTO playlist_tracks(playlist_id, track_id, position)
+        VALUES (?, ?, ?)
+      `).run(id, trackId, numberValue(positionRow.position));
+      if (Number(inserted.changes) !== 1) {
+        throw new Error('Não foi possível adicionar a faixa à playlist manual.');
+      }
+
+      this.db.prepare(`
+        UPDATE playlists
+        SET updated_at = ?
+        WHERE id = ? AND source = 'manual' AND owner_user_id = ?
+      `).run(new Date().toISOString(), id, userId);
+      this.db.exec('COMMIT;');
+      return 'ok' as const;
+    } catch (error) {
+      try {
+        this.db.exec('ROLLBACK;');
+      } catch {
+        // Preserva o erro original se a transação já tiver sido encerrada.
+      }
+      throw error;
+    }
+  }
+
+  removePlaylistTrack(userId: string, id: string, trackId: string) {
+    requireUserId(userId);
+    this.db.exec('BEGIN IMMEDIATE;');
+    try {
+      const playlist = this.db.prepare(`
+        SELECT 1 AS found
+        FROM playlists
+        WHERE id = ? AND source = 'manual' AND owner_user_id = ?
+      `).get(id, userId) as Row | undefined;
+      if (!playlist) {
+        this.db.exec('ROLLBACK;');
+        return false;
+      }
+
+      const removed = this.db.prepare(`
+        DELETE FROM playlist_tracks
+        WHERE playlist_id = ? AND track_id = ?
+      `).run(id, trackId);
+      if (Number(removed.changes) > 0) {
+        this.db.prepare(`
+          UPDATE playlists
+          SET updated_at = ?
+          WHERE id = ? AND source = 'manual' AND owner_user_id = ?
+        `).run(new Date().toISOString(), id, userId);
+      }
+
+      this.db.exec('COMMIT;');
+      return true;
+    } catch (error) {
+      try {
+        this.db.exec('ROLLBACK;');
+      } catch {
+        // Preserva o erro original se a transação já tiver sido encerrada.
+      }
+      throw error;
+    }
   }
 
   setPlaylistTracks(userId: string, id: string, trackIds: string[]) {

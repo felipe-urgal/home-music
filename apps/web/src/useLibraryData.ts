@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
   LibraryResponse,
+  LibraryStatusResponse,
   Playlist,
   PlaylistsResponse,
   ScanResponse,
@@ -14,15 +15,6 @@ import { LIBRARY_CHANGED_EVENT, PLAYLISTS_CHANGED_EVENT } from './library-events
 
 const LIBRARY_STATUS_POLL_MS = 15_000;
 
-type LibraryPayload = LibraryResponse & {
-  revision?: number;
-};
-
-type LibraryStatusPayload = {
-  scannedAt: string;
-  scanning: boolean;
-  revision: number;
-};
 
 async function jsonRequest<T>(url: string, init?: RequestInit): Promise<T> {
   const method = (init?.method || 'GET').toUpperCase();
@@ -36,6 +28,32 @@ async function jsonRequest<T>(url: string, init?: RequestInit): Promise<T> {
   }
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
+}
+
+export function isLatestRequestGeneration(requestGeneration: number, currentGeneration: number) {
+  return requestGeneration === currentGeneration;
+}
+
+export function shouldApplyLibrarySnapshot(
+  requestGeneration: number,
+  currentGeneration: number,
+  incomingInstanceId: string,
+  incomingRevision: number,
+  appliedInstanceId: string | null,
+  appliedRevision: number
+) {
+  if (!isLatestRequestGeneration(requestGeneration, currentGeneration)) return false;
+  if (appliedInstanceId !== incomingInstanceId) return true;
+  return incomingRevision >= appliedRevision;
+}
+
+export function shouldRefreshLibraryFromStatus(
+  statusInstanceId: string,
+  statusRevision: number,
+  appliedInstanceId: string | null,
+  appliedRevision: number
+) {
+  return statusInstanceId !== appliedInstanceId || statusRevision !== appliedRevision;
 }
 
 function errorMessage(error: unknown) {
@@ -61,6 +79,8 @@ export function useLibraryData() {
   const [actionError, setActionError] = useState<string | null>(null);
   const libraryRequestGeneration = useRef(0);
   const playlistRequestGeneration = useRef(0);
+  const statusRequestGeneration = useRef(0);
+  const appliedLibraryInstanceId = useRef<string | null>(null);
   const appliedLibraryRevision = useRef(0);
 
   const reportError = useCallback((error: unknown) => setActionError(errorMessage(error)), []);
@@ -74,21 +94,23 @@ export function useLibraryData() {
 
   const refreshLibrary = useCallback(async () => {
     const generation = ++libraryRequestGeneration.current;
-    const data = await jsonRequest<LibraryPayload>('/api/library');
-    const incomingRevision = Number.isInteger(data.revision) ? Number(data.revision) : 0;
+    const data = await jsonRequest<LibraryResponse>('/api/library');
 
-    if (
-      generation !== libraryRequestGeneration.current
-      || incomingRevision < appliedLibraryRevision.current
-    ) {
-      return data;
-    }
+    if (!shouldApplyLibrarySnapshot(
+      generation,
+      libraryRequestGeneration.current,
+      data.instanceId,
+      data.revision,
+      appliedLibraryInstanceId.current,
+      appliedLibraryRevision.current
+    )) return data;
 
-    appliedLibraryRevision.current = incomingRevision;
+    appliedLibraryInstanceId.current = data.instanceId;
+    appliedLibraryRevision.current = data.revision;
     setTracks(data.tracks);
     setScannedAt(data.scannedAt);
     setScanning(data.scanning);
-    setRevision(incomingRevision);
+    setRevision(data.revision);
     return data;
   }, []);
 
@@ -99,7 +121,7 @@ export function useLibraryData() {
       jsonRequest<PlaylistsResponse>('/api/smart-playlists')
     ]);
     const merged = sortPlaylists([...regular.playlists, ...smart.playlists]);
-    if (generation === playlistRequestGeneration.current) setPlaylists(merged);
+    if (isLatestRequestGeneration(generation, playlistRequestGeneration.current)) setPlaylists(merged);
     return { playlists: merged } satisfies PlaylistsResponse;
   }, []);
 
@@ -149,21 +171,28 @@ export function useLibraryData() {
     const checkStatus = async () => {
       if (disposed || refreshing || document.visibilityState === 'hidden') return;
 
+      const generation = ++statusRequestGeneration.current;
       try {
-        const status = await jsonRequest<LibraryStatusPayload>('/api/library/status');
-        if (disposed) return;
+        const status = await jsonRequest<LibraryStatusResponse>('/api/library/status');
+        if (disposed || !isLatestRequestGeneration(generation, statusRequestGeneration.current)) return;
 
-        setScanning(status.scanning);
-        setScannedAt(status.scannedAt);
-
-        if (status.revision !== revision) {
+        if (shouldRefreshLibraryFromStatus(
+          status.instanceId,
+          status.revision,
+          appliedLibraryInstanceId.current,
+          appliedLibraryRevision.current
+        )) {
           refreshing = true;
           try {
             await refreshAll();
           } finally {
             refreshing = false;
           }
+          return;
         }
+
+        setScanning(status.scanning);
+        setScannedAt(status.scannedAt);
       } catch {
         // Polling em background é best-effort. 401 já é tratado globalmente por apiFetch.
       }
@@ -178,10 +207,11 @@ export function useLibraryData() {
 
     return () => {
       disposed = true;
+      statusRequestGeneration.current += 1;
       window.clearInterval(interval);
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };
-  }, [error, loading, refreshAll, revision]);
+  }, [error, loading, refreshAll]);
 
   const rescan = useCallback(async () => {
     setScanning(true);
@@ -302,7 +332,7 @@ export function useLibraryData() {
 
   const setPlaylistTracks = useCallback(async (id: string, trackIds: string[]) => {
     try {
-      await jsonRequest(`/api/playlists/${id}/tracks`, {
+      await jsonRequest(`/api/playlists/${encodeURIComponent(id)}/tracks`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ trackIds })
@@ -316,11 +346,34 @@ export function useLibraryData() {
   }, [refreshPlaylists, reportError]);
 
   const addTrackToPlaylist = useCallback(async (playlist: Playlist, trackId: string) => {
-    const trackIds = playlist.trackIds.includes(trackId)
-      ? playlist.trackIds
-      : [...playlist.trackIds, trackId];
-    await setPlaylistTracks(playlist.id, trackIds);
-  }, [setPlaylistTracks]);
+    if (playlist.trackIds.includes(trackId)) return;
+    try {
+      await jsonRequest(`/api/playlists/${encodeURIComponent(playlist.id)}/tracks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trackId })
+      });
+      await refreshPlaylists();
+      setActionError(null);
+    } catch (error) {
+      reportError(error);
+      throw error;
+    }
+  }, [refreshPlaylists, reportError]);
+
+  const removeTrackFromPlaylist = useCallback(async (playlistId: string, trackId: string) => {
+    try {
+      await jsonRequest(
+        `/api/playlists/${encodeURIComponent(playlistId)}/tracks/${encodeURIComponent(trackId)}`,
+        { method: 'DELETE' }
+      );
+      await refreshPlaylists();
+      setActionError(null);
+    } catch (error) {
+      reportError(error);
+      throw error;
+    }
+  }, [refreshPlaylists, reportError]);
 
   return {
     tracks,
@@ -344,7 +397,8 @@ export function useLibraryData() {
     updateSmartPlaylist,
     deleteSmartPlaylist,
     setPlaylistTracks,
-    addTrackToPlaylist
+    addTrackToPlaylist,
+    removeTrackFromPlaylist
   };
 }
 

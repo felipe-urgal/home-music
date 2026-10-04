@@ -1,11 +1,12 @@
 import path from 'node:path';
-import type { PlaybackState, RepeatMode } from '@home-music/shared';
+import { MAX_PLAYLIST_TRACKS, type PlaybackState, type RepeatMode } from '@home-music/shared';
 import type { PortableTrackReferenceV1 } from '@home-music/shared/personal-data';
 import type { HomeMusicDatabase } from './database.js';
 import type { LibraryService } from './library-service.js';
 
 type PlaylistMutationStatus = 'ok' | 'not-found' | 'read-only' | 'invalid-name';
-type PlaylistTracksStatus = 'ok' | 'not-found' | 'read-only' | 'invalid-tracks';
+type PlaylistTracksStatus = 'ok' | 'not-found' | 'read-only' | 'invalid-tracks' | 'limit-reached';
+type PlaylistTrackMutationStatus = 'ok' | 'not-found' | 'read-only' | 'invalid-track' | 'limit-reached';
 
 type FavoriteMutationResult =
   | { status: 'ok'; favorite: boolean }
@@ -74,12 +75,49 @@ export class PersonalLibraryService {
     if (!source) return { status: 'not-found' };
     if (source !== 'manual') return { status: 'read-only' };
     if (!Array.isArray(value)) return { status: 'invalid-tracks' };
+    if (value.length > MAX_PLAYLIST_TRACKS) return { status: 'limit-reached' };
 
     const trackIds = this.library.cleanTrackIds(value);
     if (!this.database.setPlaylistTracks(userId, playlistId, trackIds)) {
       return { status: 'not-found' };
     }
     return { status: 'ok', trackIds };
+  }
+
+  addPlaylistTrack(userId: string, playlistId: string, trackId: unknown): {
+    status: PlaylistTrackMutationStatus;
+  } {
+    const source = this.database.getPlaylistSource(userId, playlistId);
+    if (!source) return { status: 'not-found' };
+    if (source !== 'manual') return { status: 'read-only' };
+    if (typeof trackId !== 'string' || !this.library.getTrack(trackId)) {
+      return { status: 'invalid-track' };
+    }
+
+    const result = this.database.addPlaylistTrack(
+      userId,
+      playlistId,
+      trackId,
+      MAX_PLAYLIST_TRACKS
+    );
+    if (result === 'limit-reached') return { status: 'limit-reached' };
+    if (result === 'not-found') return { status: 'not-found' };
+    return { status: 'ok' };
+  }
+
+  removePlaylistTrack(userId: string, playlistId: string, trackId: unknown): {
+    status: Exclude<PlaylistTrackMutationStatus, 'limit-reached'>;
+  } {
+    const source = this.database.getPlaylistSource(userId, playlistId);
+    if (!source) return { status: 'not-found' };
+    if (source !== 'manual') return { status: 'read-only' };
+    if (typeof trackId !== 'string' || !trackId || trackId.length > 64) {
+      return { status: 'invalid-track' };
+    }
+
+    return this.database.removePlaylistTrack(userId, playlistId, trackId)
+      ? { status: 'ok' }
+      : { status: 'not-found' };
   }
 
   getHistory(userId: string, limit = 200) {

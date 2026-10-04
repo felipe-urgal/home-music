@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { AdminScanTrigger, ScanResponse, TrackHotCues, TrackMusicalKey, TrackRhythm, TrackRhythmOverride, TrackWaveform } from '@home-music/shared';
 import { buildAdminLibraryOverview } from './admin-library-overview.js';
 import { runScanWithHistory } from './admin-operation-history-scan.js';
@@ -43,6 +44,7 @@ export class LibraryService {
   private libraryRoot = '';
   private libraryReady = false;
   private libraryRevision = 0;
+  private readonly instanceId = randomUUID();
   private scannedAt = new Date(0).toISOString();
   private scanPromise: Promise<ScanResponse> | null = null;
   private readonly mutations = new LibraryMutationLock();
@@ -109,6 +111,7 @@ export class LibraryService {
 
   status() {
     return {
+      instanceId: this.instanceId,
       scannedAt: this.scannedAt,
       scanning: this.scanning,
       revision: this.libraryRevision,

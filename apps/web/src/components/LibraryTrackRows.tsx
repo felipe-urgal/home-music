@@ -149,6 +149,7 @@ export function LibraryTrackRows({
         sort={sort}
         onSort={onSort}
         onPlayTrack={onPlayTrack}
+        onTogglePlay={onTogglePlay}
         onRemove={onRemove}
         offlineSupported={offlineSupported}
         downloadedIds={downloadedIds}
@@ -173,7 +174,7 @@ export function LibraryTrackRows({
       {tracks.map(track => {
         const isCurrent = track.id === current?.id;
         const trackDuration = typeof track.duration === 'number' ? track.duration : 0;
-        const accessibleTrackLabel = `Tocar ${track.title}, ${track.artist || 'Artista desconhecido'}, ${track.album || 'Álbum desconhecido'}${isCurrent && playing ? ' — reproduzindo agora' : ''}`;
+        const accessibleTrackLabel = `${isCurrent && playing ? 'Pausar' : 'Tocar'} ${track.title}, ${track.artist || 'Artista desconhecido'}, ${track.album || 'Álbum desconhecido'}${isCurrent && playing ? ' — reproduzindo agora' : ''}`;
         return (
           <div className={`library-track ${isCurrent ? 'is-current' : ''}`} key={track.id}>
             <button
@@ -181,7 +182,10 @@ export function LibraryTrackRows({
               type="button"
               aria-current={isCurrent ? 'true' : undefined}
               aria-label={accessibleTrackLabel}
-              onClick={() => onPlayTrack(track, context)}
+              onClick={() => {
+                if (isCurrent) onTogglePlay();
+                else onPlayTrack(track, context);
+              }}
             >
               <Artwork track={track} />
               <span className="library-track__text">
