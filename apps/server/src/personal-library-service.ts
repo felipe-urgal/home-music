@@ -167,7 +167,10 @@ export class PersonalLibraryService {
 
   savePlaybackStateVersioned(userId: string, body: Partial<PlaybackState>) {
     if (typeof body.updatedAt !== 'string') {
-      return { status: 'invalid' as const };
+      const state = this.savePlaybackState(userId, body);
+      return state
+        ? { status: 'ok' as const, state }
+        : { status: 'invalid' as const };
     }
 
     const current = this.database.loadPlaybackState(userId);
