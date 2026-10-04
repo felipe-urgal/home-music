@@ -47,8 +47,6 @@ describe('PlayerScreen responsibility boundaries', () => {
     expect(queue).not.toMatch(/setShuffle/);
     expect(queue).not.toMatch(/setRepeatMode/);
   });
-});
-
 
   it('usa auto-hide compartilhado com foco seguro no chrome e na capa mobile', () => {
     const chrome = componentSource('PlayerMobileChrome.tsx');
@@ -64,3 +62,4 @@ describe('PlayerScreen responsibility boundaries', () => {
     expect(app).toMatch(/<ActionDialog\b/);
     expect(app).not.toMatch(/window\.confirm\s*\(/);
   });
+});
