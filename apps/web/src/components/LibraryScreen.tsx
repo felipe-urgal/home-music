@@ -87,7 +87,6 @@ export function LibraryScreen({
     playlists,
     scanning,
     scannedAt,
-    refreshPlaylists,
     rescan,
     createPlaylist,
     renamePlaylist,
@@ -96,8 +95,8 @@ export function LibraryScreen({
     createSmartPlaylist,
     updateSmartPlaylist,
     deleteSmartPlaylist,
-    setPlaylistTracks,
     addTrackToPlaylist,
+    removeTrackFromPlaylist,
     reportError
   } = data;
   const savedViews = useLibraryViews(reportError);
@@ -148,10 +147,6 @@ export function LibraryScreen({
         trackIds: offlineCollectionTarget.tracks.map(track => track.id)
       })
     : null;
-
-  useEffect(() => {
-    void refreshPlaylists().catch(reportError);
-  }, [refreshPlaylists, reportError]);
 
   useEffect(() => {
     if (!mobileNotice) return;
@@ -394,7 +389,7 @@ export function LibraryScreen({
       onRemovePlaylist={removePlaylist}
       onCreateSmartPlaylist={() => setSmartPlaylistEditor({ playlist: null })}
       onEditSmartPlaylist={playlist => setSmartPlaylistEditor({ playlist })}
-      onSetPlaylistTracks={setPlaylistTracks}
+      onRemovePlaylistTrack={removeTrackFromPlaylist}
     />
   );
 
