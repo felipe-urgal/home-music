@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent
+} from 'react';
 import { createPortal } from 'react-dom';
 import type { Playlist, RepeatMode, Track } from '@home-music/shared';
 import {
@@ -165,6 +171,7 @@ export function DesktopNowPlayingScreen({
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
   const [waveformHover, setWaveformHover] = useState<{ leftPercent: number; time: number } | null>(null);
   const actionsRef = useRef<HTMLDivElement>(null);
+  const actionsTriggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const crossfadeVisual = useCrossfadeVisualState();
   const activeDesktopCrossfade = crossfadeVisual?.originTrackId === current.id ? crossfadeVisual : null;
@@ -172,7 +179,7 @@ export function DesktopNowPlayingScreen({
   const incomingWaveAccent = useTrackArtworkAccent(activeDesktopCrossfade?.incomingTrack);
 
   function positionActionsMenu() {
-    const trigger = actionsRef.current?.querySelector<HTMLButtonElement>('.desktop-now-playing-screen__more');
+    const trigger = actionsTriggerRef.current;
     if (!trigger) return;
     const rect = trigger.getBoundingClientRect();
     const menuWidth = 270;
@@ -186,8 +193,48 @@ export function DesktopNowPlayingScreen({
     });
   }
 
+  function closeActionsMenu(restoreFocus = false) {
+    setActionsOpen(false);
+    setPlaylistOpen(false);
+    if (restoreFocus) {
+      window.requestAnimationFrame(() => actionsTriggerRef.current?.focus());
+    }
+  }
+
+  function handleActionsMenuKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      closeActionsMenu(true);
+      return;
+    }
+
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+    const items = Array.from(event.currentTarget.querySelectorAll<HTMLElement>(
+      '[role="menuitem"]:not([disabled]), [role="menuitemcheckbox"]:not([disabled])'
+    ));
+    if (!items.length) return;
+
+    event.preventDefault();
+    const activeIndex = items.indexOf(document.activeElement as HTMLElement);
+    const nextIndex = event.key === 'Home'
+      ? 0
+      : event.key === 'End'
+        ? items.length - 1
+        : event.key === 'ArrowDown'
+          ? (activeIndex + 1 + items.length) % items.length
+          : (activeIndex - 1 + items.length) % items.length;
+    items[nextIndex]?.focus();
+  }
+
   useEffect(() => {
     if (!actionsOpen) return;
+
+    const focusFrame = window.requestAnimationFrame(() => {
+      menuRef.current?.querySelector<HTMLElement>(
+        '[role="menuitem"]:not([disabled]), [role="menuitemcheckbox"]:not([disabled])'
+      )?.focus();
+    });
 
     function closeMenu() {
       setActionsOpen(false);
@@ -214,6 +261,7 @@ export function DesktopNowPlayingScreen({
     window.addEventListener('resize', handleViewportChange);
     window.addEventListener('scroll', handleViewportChange, true);
     return () => {
+      window.cancelAnimationFrame(focusFrame);
       document.removeEventListener('pointerdown', handlePointerDown);
       document.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('resize', handleViewportChange);
@@ -317,6 +365,7 @@ export function DesktopNowPlayingScreen({
             <div className="desktop-now-playing-screen__actions" aria-label="Ações da faixa">
               <div ref={actionsRef} className="desktop-now-playing-screen__more-wrap">
                 <button
+                  ref={actionsTriggerRef}
                   className="desktop-now-playing-screen__more"
                   type="button"
                   aria-label="Mais opções da faixa"
@@ -342,6 +391,7 @@ export function DesktopNowPlayingScreen({
                     role="menu"
                     aria-label="Mais opções da faixa"
                     style={{ top: menuPosition.top, left: menuPosition.left }}
+                    onKeyDown={handleActionsMenuKeyDown}
                   >
                     <button
                       type="button"
