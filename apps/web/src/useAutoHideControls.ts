@@ -7,13 +7,13 @@ import {
   type PointerEvent
 } from 'react';
 
-export function useAutoHideControls(
+export function useAutoHideControls<T extends HTMLElement>(
   playing: boolean,
   resetKey: string,
   delayMs = 1800
 ) {
   const [visible, setVisible] = useState(true);
-  const rootRef = useRef<HTMLElement | null>(null);
+  const rootRef = useRef<T | null>(null);
   const timeoutRef = useRef<number | null>(null);
 
   const clear = useCallback(() => {
@@ -41,12 +41,12 @@ export function useAutoHideControls(
     setVisible(true);
   }, [clear]);
 
-  const onBlurCapture = useCallback((event: FocusEvent<HTMLElement>) => {
+  const onBlurCapture = useCallback((event: FocusEvent<T>) => {
     if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
     scheduleHide();
   }, [scheduleHide]);
 
-  const onPointerDownCapture = useCallback((_event: PointerEvent<HTMLElement>) => {
+  const onPointerDownCapture = useCallback((_event: PointerEvent<T>) => {
     reveal();
   }, [reveal]);
 
