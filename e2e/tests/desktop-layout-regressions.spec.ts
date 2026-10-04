@@ -80,10 +80,17 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   await expect(nowPlaying.getByRole('button', { name: 'Adicionar à playlist' })).toHaveCount(0);
   await moreActions.click();
   const moreMenu = page.getByRole('menu', { name: 'Mais opções da faixa' });
+  const addToPlaylistMenuItem = moreMenu.getByRole('menuitem', { name: 'Adicionar à playlist' });
+  const shuffleMenuItem = moreMenu.getByRole('menuitemcheckbox', { name: /Aleatório/ });
   await expect(moreMenu).toBeVisible();
   await expect(moreMenu).toHaveClass(/desktop-now-playing-screen__more-menu--portal/);
-  await expect(moreMenu.getByRole('menuitem', { name: 'Adicionar à playlist' })).toBeVisible();
-  await expect(moreMenu.getByRole('menuitemcheckbox', { name: /Aleatório/ })).toBeVisible();
+  await expect(addToPlaylistMenuItem).toBeVisible();
+  await expect(addToPlaylistMenuItem).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(shuffleMenuItem).toBeFocused();
+  await page.keyboard.press('Home');
+  await expect(addToPlaylistMenuItem).toBeFocused();
+  await expect(shuffleMenuItem).toBeVisible();
   await expect(moreMenu.getByRole('menuitem', { name: /Repetição|Repetir/ })).toBeVisible();
   expect(await moreMenu.evaluate(element => getComputedStyle(element).position)).toBe('fixed');
   expect(await moreMenu.evaluate(element => getComputedStyle(element).overflowY)).toBe('visible');
@@ -100,6 +107,7 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   await expect(moreMenu).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(moreMenu).toHaveCount(0);
+  await expect(moreActions).toBeFocused();
 
   await expect(nowPlaying.getByRole('button', { name: 'Anterior', exact: true })).toHaveCount(0);
   await expect(nowPlaying.getByRole('button', { name: 'Próxima', exact: true })).toHaveCount(0);
