@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import type { FastifyInstance } from 'fastify';
-import type { PlaybackState, Track } from '@home-music/shared';
+import { MAX_PLAYLIST_TRACKS, type PlaybackState, type Track } from '@home-music/shared';
 import { registerLibraryViewRoutes } from './library-view-routes.js';
 import { registerPlaybackHistoryRoutes } from './playback-history-routes.js';
 import { PersonalDataExportService } from './personal-data-export.js';
@@ -178,7 +178,71 @@ export function registerPersonalRoutes(
       if (result.status === 'invalid-tracks') {
         return reply.code(400).send({ error: 'Lista de músicas inválida.' });
       }
+      if (result.status === 'limit-reached') {
+        return reply.code(400).send({
+          error: `Uma playlist pode ter no máximo ${MAX_PLAYLIST_TRACKS} músicas.`
+        });
+      }
       return { trackIds: result.trackIds };
+    }
+  );
+
+  app.post<{ Params: { id: string }; Body: { trackId?: unknown } }>(
+    '/api/playlists/:id/tracks',
+    async (request, reply) => {
+      if (!request.user) {
+        return reply.code(409).send({
+          error: 'Playlists pessoais exigem uma identidade persistida.'
+        });
+      }
+
+      const result = personal.addPlaylistTrack(
+        request.user.id,
+        request.params.id,
+        request.body?.trackId
+      );
+      if (result.status === 'not-found') {
+        return reply.code(404).send({ error: 'Playlist não encontrada.' });
+      }
+      if (result.status === 'read-only') {
+        return reply.code(409).send({ error: 'Playlist importada é somente leitura.' });
+      }
+      if (result.status === 'invalid-track') {
+        return reply.code(400).send({ error: 'Música inválida.' });
+      }
+      if (result.status === 'limit-reached') {
+        return reply.code(409).send({
+          error: `A playlist atingiu o limite de ${MAX_PLAYLIST_TRACKS} músicas.`
+        });
+      }
+      return { ok: true };
+    }
+  );
+
+  app.delete<{ Params: { id: string; trackId: string } }>(
+    '/api/playlists/:id/tracks/:trackId',
+    async (request, reply) => {
+      if (!request.user) {
+        return reply.code(409).send({
+          error: 'Playlists pessoais exigem uma identidade persistida.'
+        });
+      }
+
+      const result = personal.removePlaylistTrack(
+        request.user.id,
+        request.params.id,
+        request.params.trackId
+      );
+      if (result.status === 'not-found') {
+        return reply.code(404).send({ error: 'Playlist não encontrada.' });
+      }
+      if (result.status === 'read-only') {
+        return reply.code(409).send({ error: 'Playlist importada é somente leitura.' });
+      }
+      if (result.status === 'invalid-track') {
+        return reply.code(400).send({ error: 'Música inválida.' });
+      }
+      return reply.code(204).send();
     }
   );
 
