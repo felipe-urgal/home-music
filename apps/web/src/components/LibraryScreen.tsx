@@ -9,7 +9,7 @@ import { useDesktopLayout } from '../useDesktopLayout';
 import { useLibraryViews } from '../useLibraryViews';
 import { DesktopFolderSummary } from './DesktopFolderSummary';
 import { DesktopPlaylistSummary } from './DesktopPlaylistSummary';
-import { LibraryActionDialog } from './LibraryActionDialog';
+import { ActionDialog } from './ActionDialog';
 import { LibraryContent } from './LibraryContent';
 import { LibraryNavigationChrome } from './LibraryNavigationChrome';
 import { LibraryViewTools } from './LibraryViewTools';
@@ -684,7 +684,7 @@ export function LibraryScreen({
 
       {desktopLayout && (
         <>
-          <LibraryActionDialog
+          <ActionDialog
             open={Boolean(textEditor)}
             title={textEditorTitle}
             description={textEditorDescription}
@@ -701,7 +701,7 @@ export function LibraryScreen({
               setDialogError(null);
             }}
           />
-          <LibraryActionDialog
+          <ActionDialog
             open={Boolean(confirmAction)}
             title={confirmTitle}
             description={confirmMessage}
