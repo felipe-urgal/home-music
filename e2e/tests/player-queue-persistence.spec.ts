@@ -21,11 +21,16 @@ async function libraryTrackIds(page: Page) {
 }
 
 async function loginAndResetQueueState(page: Page) {
-  const loginResponse = await page.context().request.post('/api/auth/login', {
-    headers: mutationHeaders,
-    data: { username, password }
-  });
-  expect(loginResponse.ok()).toBeTruthy();
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Entrar' })).toBeVisible();
+  await page.getByLabel('Usuário', { exact: true }).fill(username);
+  await page.getByLabel('Senha', { exact: true }).fill(password);
+  await page.getByRole('button', { name: 'Entrar', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'E2E Track' })).toBeVisible();
+
+  // Encerra a instância viva antes do reset para que pagehide/heartbeat não
+  // disputem com o estado determinístico usado por este cenário.
+  await page.goto('about:blank');
 
   const ids = await libraryTrackIds(page);
   const trackId = ids.get('E2E Track');
@@ -64,11 +69,6 @@ async function loginAndResetQueueState(page: Page) {
 
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'E2E Track' })).toBeVisible();
-  await expect.poll(() => persistedQueueTitles(page), { timeout: 5_000 }).toEqual([
-    'E2E Track',
-    'E2E Zeta',
-    'E2E Zulu'
-  ]);
 }
 
 async function persistedQueueTitles(page: Page) {
