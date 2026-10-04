@@ -4,6 +4,7 @@ import {
   nextTrackAfterErrorDecision,
   nextTrackDecision,
   remapQueue,
+  reorderUpcomingQueue,
   resolveOutputVolume,
   restorePlayerState,
   uniqueTracksById
@@ -126,5 +127,26 @@ describe('nextTrackAfterErrorDecision', () => {
 
   it('para quando todas as alternativas do ciclo já falharam', () => {
     expect(nextTrackAfterErrorDecision(queue, 2, 'all', new Set(['a', 'b', 'c']))).toEqual({ type: 'stop' });
+  });
+});
+
+
+describe('reorderUpcomingQueue', () => {
+  const queue = [track('a'), track('b'), track('c'), track('d')];
+
+  it('permite reordenar apenas músicas que ainda estão a seguir', () => {
+    expect(reorderUpcomingQueue(queue, 1, 3, 2).map(item => item.id))
+      .toEqual(['a', 'b', 'd', 'c']);
+  });
+
+  it('não deixa uma faixa futura atravessar a faixa atual', () => {
+    const result = reorderUpcomingQueue(queue, 1, 2, 1);
+    expect(result).toBe(queue);
+    expect(result.map(item => item.id)).toEqual(['a', 'b', 'c', 'd']);
+  });
+
+  it('não permite mover a faixa atual nem parte já reproduzida', () => {
+    expect(reorderUpcomingQueue(queue, 1, 1, 2)).toBe(queue);
+    expect(reorderUpcomingQueue(queue, 1, 0, 3)).toBe(queue);
   });
 });
