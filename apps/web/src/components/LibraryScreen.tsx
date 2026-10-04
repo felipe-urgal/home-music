@@ -9,6 +9,7 @@ import { useDesktopLayout } from '../useDesktopLayout';
 import { useLibraryViews } from '../useLibraryViews';
 import { DesktopFolderSummary } from './DesktopFolderSummary';
 import { DesktopPlaylistSummary } from './DesktopPlaylistSummary';
+import { LibraryActionDialog } from './LibraryActionDialog';
 import { LibraryContent } from './LibraryContent';
 import { LibraryNavigationChrome } from './LibraryNavigationChrome';
 import { LibraryViewTools } from './LibraryViewTools';
@@ -32,16 +33,20 @@ type LibraryOfflineDownloads = Pick<OfflineDownloads,
   | 'getCollectionState'
 >;
 
-type MobileTextEditor =
+type LibraryTextEditor =
   | { kind: 'create-playlist'; value: string }
   | { kind: 'rename-playlist'; playlist: Playlist; value: string }
   | { kind: 'save-view'; value: string }
   | { kind: 'rename-view'; id: string; currentName: string; value: string };
 
-type MobileConfirm =
+type LibraryConfirm =
   | { kind: 'delete-playlist'; playlist: Playlist }
   | { kind: 'delete-view'; id: string; name: string }
   | { kind: 'remove-download'; track: Track; message: string };
+
+function actionErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : 'Não foi possível concluir a operação.';
+}
 
 type LibraryScreenProps = {
   currentUser: AuthenticatedUser;
@@ -79,9 +84,11 @@ export function LibraryScreen({
   const [smartPlaylistEditor, setSmartPlaylistEditor] = useState<{ playlist: Playlist | null } | null>(null);
   const [viewControlsOpen, setViewControlsOpen] = useState(false);
   const [mobileCollectionMenuOpen, setMobileCollectionMenuOpen] = useState(false);
-  const [mobileTextEditor, setMobileTextEditor] = useState<MobileTextEditor | null>(null);
-  const [mobileConfirm, setMobileConfirm] = useState<MobileConfirm | null>(null);
-  const [mobileNotice, setMobileNotice] = useState<string | null>(null);
+  const [textEditor, setTextEditor] = useState<LibraryTextEditor | null>(null);
+  const [confirmAction, setConfirmAction] = useState<LibraryConfirm | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [dialogBusy, setDialogBusy] = useState(false);
+  const [dialogError, setDialogError] = useState<string | null>(null);
   const {
     tracks,
     playlists,
@@ -149,10 +156,10 @@ export function LibraryScreen({
     : null;
 
   useEffect(() => {
-    if (!mobileNotice) return;
-    const timeout = window.setTimeout(() => setMobileNotice(null), 3200);
+    if (!notice) return;
+    const timeout = window.setTimeout(() => setNotice(null), 3200);
     return () => window.clearTimeout(timeout);
-  }, [mobileNotice]);
+  }, [notice]);
 
   function goBack() {
     setViewControlsOpen(false);
@@ -183,21 +190,13 @@ export function LibraryScreen({
   }
 
   async function makePlaylist() {
-    if (!desktopLayout) {
-      setMobileTextEditor({ kind: 'create-playlist', value: '' });
-      return;
-    }
-    const name = window.prompt('Nome da nova playlist:')?.trim();
-    if (name) await createPlaylist(name);
+    setDialogError(null);
+    setTextEditor({ kind: 'create-playlist', value: '' });
   }
 
   async function editPlaylist(playlist: Playlist) {
-    if (!desktopLayout) {
-      setMobileTextEditor({ kind: 'rename-playlist', playlist, value: playlist.name });
-      return;
-    }
-    const name = window.prompt('Novo nome da playlist:', playlist.name)?.trim();
-    if (name && name !== playlist.name) await renamePlaylist(playlist.id, name);
+    setDialogError(null);
+    setTextEditor({ kind: 'rename-playlist', playlist, value: playlist.name });
   }
 
   async function deletePlaylistNow(playlist: Playlist) {
@@ -208,89 +207,83 @@ export function LibraryScreen({
   }
 
   async function removePlaylist(playlist: Playlist) {
-    if (!desktopLayout) {
-      setMobileConfirm({ kind: 'delete-playlist', playlist });
-      return;
-    }
-    if (!window.confirm(`Excluir a playlist “${playlist.name}”?`)) return;
-    await deletePlaylistNow(playlist);
+    setDialogError(null);
+    setConfirmAction({ kind: 'delete-playlist', playlist });
   }
 
   async function saveCurrentView() {
-    if (!desktopLayout) {
-      setViewControlsOpen(false);
-      setMobileTextEditor({ kind: 'save-view', value: '' });
-      return;
-    }
-    const name = window.prompt('Nome da nova view inteligente:')?.trim();
-    if (!name) return;
-    await savedViews.createView(name, currentViewDefinition);
+    setViewControlsOpen(false);
+    setDialogError(null);
+    setTextEditor({ kind: 'save-view', value: '' });
   }
 
   async function renameSavedView(id: string, currentName: string) {
-    if (!desktopLayout) {
-      setViewControlsOpen(false);
-      setMobileTextEditor({ kind: 'rename-view', id, currentName, value: currentName });
-      return;
-    }
-    const name = window.prompt('Novo nome da view:', currentName)?.trim();
-    if (name && name !== currentName) await savedViews.renameView(id, name);
+    setViewControlsOpen(false);
+    setDialogError(null);
+    setTextEditor({ kind: 'rename-view', id, currentName, value: currentName });
   }
 
   async function removeSavedView(id: string, name: string) {
-    if (!desktopLayout) {
-      setViewControlsOpen(false);
-      setMobileConfirm({ kind: 'delete-view', id, name });
-      return;
-    }
-    if (!window.confirm(`Excluir a view “${name}”?`)) return;
-    await savedViews.deleteView(id);
+    setViewControlsOpen(false);
+    setDialogError(null);
+    setConfirmAction({ kind: 'delete-view', id, name });
   }
 
-  async function submitMobileTextEditor() {
-    const editor = mobileTextEditor;
+  async function submitTextEditor() {
+    const editor = textEditor;
     const name = editor?.value.trim() ?? '';
-    if (!editor || !name) return;
+    if (!editor || !name || dialogBusy) return;
 
-    if (editor.kind === 'create-playlist') await createPlaylist(name);
-    else if (editor.kind === 'rename-playlist' && name !== editor.playlist.name) {
-      await renamePlaylist(editor.playlist.id, name);
-    } else if (editor.kind === 'save-view') {
-      await savedViews.createView(name, currentViewDefinition);
-    } else if (editor.kind === 'rename-view' && name !== editor.currentName) {
-      await savedViews.renameView(editor.id, name);
+    const unchanged = editor.kind === 'rename-playlist'
+      ? name === editor.playlist.name
+      : editor.kind === 'rename-view'
+        ? name === editor.currentName
+        : false;
+    if (unchanged) {
+      setTextEditor(null);
+      return;
     }
 
-    setMobileTextEditor(null);
+    setDialogBusy(true);
+    setDialogError(null);
+    try {
+      if (editor.kind === 'create-playlist') await createPlaylist(name);
+      else if (editor.kind === 'rename-playlist') await renamePlaylist(editor.playlist.id, name);
+      else if (editor.kind === 'save-view') await savedViews.createView(name, currentViewDefinition);
+      else await savedViews.renameView(editor.id, name);
+      setTextEditor(null);
+    } catch (error) {
+      setDialogError(actionErrorMessage(error));
+    } finally {
+      setDialogBusy(false);
+    }
   }
 
-  async function confirmMobileAction() {
-    const action = mobileConfirm;
-    if (!action) return;
-    setMobileConfirm(null);
+  async function confirmActionNow() {
+    const action = confirmAction;
+    if (!action || dialogBusy) return;
 
-    if (action.kind === 'delete-playlist') {
-      await deletePlaylistNow(action.playlist);
-      return;
-    }
-    if (action.kind === 'delete-view') {
-      await savedViews.deleteView(action.id);
-      return;
-    }
-
+    setDialogBusy(true);
+    setDialogError(null);
     try {
-      await offline.remove(action.track.id);
+      if (action.kind === 'delete-playlist') await deletePlaylistNow(action.playlist);
+      else if (action.kind === 'delete-view') await savedViews.deleteView(action.id);
+      else await offline.remove(action.track.id);
+      setConfirmAction(null);
     } catch (error) {
-      reportError(error);
+      setDialogError(actionErrorMessage(error));
+      if (action.kind === 'remove-download') reportError(error);
+    } finally {
+      setDialogBusy(false);
     }
   }
 
   async function scanNow() {
     try {
       const result = await rescan();
-      const message = `Biblioteca atualizada: +${result.added} novas, ${result.updated} alteradas, ${result.removed} removidas.`;
-      if (desktopLayout) window.alert(message);
-      else setMobileNotice(message);
+      setNotice(
+        `Biblioteca atualizada: +${result.added} novas, ${result.updated} alteradas, ${result.removed} removidas.`
+      );
     } catch {
       // useLibraryData já exibe o erro globalmente.
     }
@@ -310,17 +303,8 @@ export function LibraryScreen({
       ? `Remover o download individual de “${track.title}”? A música continuará disponível porque uma coleção offline também depende dela.`
       : `Remover “${track.title}” dos downloads offline?`;
 
-    if (!desktopLayout) {
-      setMobileConfirm({ kind: 'remove-download', track, message });
-      return;
-    }
-
-    if (!window.confirm(message)) return;
-    try {
-      await offline.remove(track.id);
-    } catch (error) {
-      reportError(error);
-    }
+    setDialogError(null);
+    setConfirmAction({ kind: 'remove-download', track, message });
   }
 
   const offlineTrackProps = {
@@ -430,6 +414,41 @@ export function LibraryScreen({
   useEffect(() => {
     setMobileCollectionMenuOpen(false);
   }, [folderPath, selectedPlaylist?.id]);
+
+  const textEditorTitle = textEditor?.kind === 'create-playlist'
+    ? 'Nova playlist'
+    : textEditor?.kind === 'rename-playlist'
+      ? 'Renomear playlist'
+      : textEditor?.kind === 'save-view'
+        ? 'Salvar view'
+        : 'Renomear view';
+  const textEditorDescription = textEditor?.kind === 'create-playlist'
+    ? 'Crie uma playlist manual para organizar suas músicas.'
+    : textEditor?.kind === 'save-view'
+      ? 'Salve a combinação atual de filtros e ordenação.'
+      : 'Escolha um nome claro para encontrar este item rapidamente.';
+  const textEditorConfirmLabel = textEditor?.kind === 'create-playlist'
+    ? 'Criar playlist'
+    : textEditor?.kind === 'save-view'
+      ? 'Salvar view'
+      : 'Salvar';
+  const textEditorName = textEditor?.value.trim() ?? '';
+  const textEditorUnchanged = textEditor?.kind === 'rename-playlist'
+    ? textEditorName === textEditor.playlist.name
+    : textEditor?.kind === 'rename-view'
+      ? textEditorName === textEditor.currentName
+      : false;
+  const confirmTitle = confirmAction?.kind === 'delete-playlist'
+    ? 'Excluir playlist'
+    : confirmAction?.kind === 'delete-view'
+      ? 'Excluir view'
+      : 'Remover download';
+  const confirmMessage = confirmAction?.kind === 'delete-playlist'
+    ? `Excluir a playlist “${confirmAction.playlist.name}”? Esta ação não pode ser desfeita.`
+    : confirmAction?.kind === 'delete-view'
+      ? `Excluir a view “${confirmAction.name}”? Esta ação não pode ser desfeita.`
+      : confirmAction?.message ?? '';
+  const confirmLabel = confirmAction?.kind === 'remove-download' ? 'Remover download' : 'Excluir';
 
   return (
     <>
@@ -590,76 +609,116 @@ export function LibraryScreen({
       )}
 
       <MobileSheet
-        open={Boolean(mobileTextEditor)}
-        title={mobileTextEditor?.kind === 'create-playlist'
-          ? 'Nova playlist'
-          : mobileTextEditor?.kind === 'rename-playlist'
-            ? 'Renomear playlist'
-            : mobileTextEditor?.kind === 'save-view'
-              ? 'Salvar view'
-              : 'Renomear view'}
-        onClose={() => setMobileTextEditor(null)}
+        open={!desktopLayout && Boolean(textEditor)}
+        title={textEditorTitle}
+        onClose={() => {
+          if (!dialogBusy) {
+            setTextEditor(null);
+            setDialogError(null);
+          }
+        }}
         className="library-text-editor-sheet"
       >
-        {mobileTextEditor && (
+        {textEditor && (
           <form
             className="mobile-sheet-form"
             onSubmit={event => {
               event.preventDefault();
-              void submitMobileTextEditor().catch(reportError);
+              void submitTextEditor();
             }}
           >
             <label className="mobile-sheet-field">
               <span>Nome</span>
               <input
                 data-autofocus
-                value={mobileTextEditor.value}
-                onChange={event => setMobileTextEditor(editor => editor ? { ...editor, value: event.target.value } : editor)}
+                value={textEditor.value}
+                onChange={event => setTextEditor(editor => editor ? { ...editor, value: event.target.value } : editor)}
                 autoComplete="off"
+                disabled={dialogBusy}
               />
             </label>
             <div className="mobile-sheet-form__actions">
-              <button type="button" onClick={() => setMobileTextEditor(null)}>Cancelar</button>
-              <button className="is-primary" type="submit" disabled={!mobileTextEditor.value.trim()}>Salvar</button>
+              <button type="button" disabled={dialogBusy} onClick={() => setTextEditor(null)}>Cancelar</button>
+              <button
+                className="is-primary"
+                type="submit"
+                disabled={dialogBusy || !textEditor.value.trim() || textEditorUnchanged}
+              >
+                {dialogBusy ? 'Aguarde…' : textEditorConfirmLabel}
+              </button>
             </div>
           </form>
         )}
       </MobileSheet>
 
       <MobileSheet
-        open={Boolean(mobileConfirm)}
-        title={mobileConfirm?.kind === 'delete-playlist'
-          ? 'Excluir playlist'
-          : mobileConfirm?.kind === 'delete-view'
-            ? 'Excluir view'
-            : 'Remover download'}
-        onClose={() => setMobileConfirm(null)}
+        open={!desktopLayout && Boolean(confirmAction)}
+        title={confirmTitle}
+        onClose={() => {
+          if (!dialogBusy) {
+            setConfirmAction(null);
+            setDialogError(null);
+          }
+        }}
         className="library-confirm-sheet"
       >
-        {mobileConfirm && (
+        {confirmAction && (
           <div className="mobile-sheet-confirm">
             <p>
-              {mobileConfirm.kind === 'delete-playlist'
-                ? `Excluir a playlist “${mobileConfirm.playlist.name}”?`
-                : mobileConfirm.kind === 'delete-view'
-                  ? `Excluir a view “${mobileConfirm.name}”?`
-                  : mobileConfirm.message}
+              {confirmMessage}
             </p>
             <div className="mobile-sheet-confirm__actions">
-              <button type="button" onClick={() => setMobileConfirm(null)}>Cancelar</button>
+              <button type="button" disabled={dialogBusy} onClick={() => setConfirmAction(null)}>Cancelar</button>
               <button
                 className="is-danger"
                 type="button"
-                onClick={() => void confirmMobileAction().catch(reportError)}
+                disabled={dialogBusy}
+                onClick={() => void confirmActionNow()}
               >
-                Confirmar
+                {dialogBusy ? 'Aguarde…' : confirmLabel}
               </button>
             </div>
           </div>
         )}
       </MobileSheet>
 
-      {mobileNotice && <div className="mobile-feedback-toast" role="status">{mobileNotice}</div>}
+      {desktopLayout && (
+        <>
+          <LibraryActionDialog
+            open={Boolean(textEditor)}
+            title={textEditorTitle}
+            description={textEditorDescription}
+            value={textEditor?.value}
+            placeholder={textEditor?.kind === 'create-playlist' ? 'Ex.: Favoritas para trabalhar' : undefined}
+            confirmLabel={textEditorConfirmLabel}
+            busy={dialogBusy}
+            error={dialogError}
+            confirmDisabled={!textEditorName || textEditorUnchanged}
+            onValueChange={value => setTextEditor(editor => editor ? { ...editor, value } : editor)}
+            onConfirm={() => void submitTextEditor()}
+            onClose={() => {
+              setTextEditor(null);
+              setDialogError(null);
+            }}
+          />
+          <LibraryActionDialog
+            open={Boolean(confirmAction)}
+            title={confirmTitle}
+            description={confirmMessage}
+            confirmLabel={confirmLabel}
+            danger
+            busy={dialogBusy}
+            error={dialogError}
+            onConfirm={() => void confirmActionNow()}
+            onClose={() => {
+              setConfirmAction(null);
+              setDialogError(null);
+            }}
+          />
+        </>
+      )}
+
+      {notice && <div className="library-feedback-toast" role="status">{notice}</div>}
 
       <SmartPlaylistDialog
         open={Boolean(smartPlaylistEditor)}

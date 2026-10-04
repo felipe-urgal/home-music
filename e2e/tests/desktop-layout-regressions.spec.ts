@@ -198,6 +198,19 @@ test('player desktop usa navbar superior e mantém superfícies utilitárias liv
   const collectionGridBox = await collectionGrid.boundingBox();
 
   await expect(playlistCreate).toBeVisible();
+
+  await playlistCreate.click();
+  const createPlaylistDialog = page.getByRole('dialog', { name: 'Nova playlist' });
+  const createPlaylistName = createPlaylistDialog.getByLabel('Nome');
+  const createPlaylistSubmit = createPlaylistDialog.getByRole('button', { name: 'Criar playlist' });
+  await expect(createPlaylistDialog).toBeVisible();
+  await expect(createPlaylistName).toBeFocused();
+  await expect(createPlaylistSubmit).toBeDisabled();
+  await createPlaylistName.fill('Playlist temporária');
+  await expect(createPlaylistSubmit).toBeEnabled();
+  await page.keyboard.press('Escape');
+  await expect(createPlaylistDialog).toBeHidden();
+
   await expect(rootHeading.locator(':scope > span')).toHaveCount(0);
   await expect(rootHeading.locator(':scope > small')).toHaveCount(0);
   await expect(rootHeading.locator('.folder-order-control')).toHaveCount(0);
