@@ -2230,7 +2230,14 @@ export class HomeMusicDatabase {
 
   savePlaybackState(userId: string, state: Omit<PlaybackState, 'updatedAt'>) {
     requireUserId(userId);
-    const updatedAt = new Date().toISOString();
+    const previous = this.db.prepare(
+      'SELECT updated_at FROM playback_state WHERE user_id = ?'
+    ).get(userId) as Row | undefined;
+    const previousMs = Date.parse(stringValue(previous?.updated_at));
+    const updatedAt = new Date(Math.max(
+      Date.now(),
+      Number.isFinite(previousMs) ? previousMs + 1 : 0
+    )).toISOString();
     this.db.prepare(`
       INSERT INTO playback_state(
         user_id, current_track_id, position, volume, shuffle, repeat_mode, was_playing,
