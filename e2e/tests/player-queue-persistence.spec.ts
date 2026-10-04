@@ -97,3 +97,36 @@ test('reordenação da fila persiste no SQLite e sobrevive a reload', async ({ p
   await expect(restoredHandles.nth(0)).toHaveAccessibleName('Arrastar E2E Zulu');
   await expect(restoredHandles.nth(1)).toHaveAccessibleName('Arrastar E2E Zeta');
 });
+
+
+test('fila não deixa próxima faixa atravessar a atual e permanece aberta ao avançar', async ({ page }, testInfo) => {
+  await login(page);
+  await resetQueueState(page);
+
+  if (testInfo.project.name === 'desktop-chromium') {
+    const queue = page.getByTestId('desktop-queue');
+    const zetaMenuTrigger = queue.getByRole('button', { name: 'Mais opções para E2E Zeta' });
+    await zetaMenuTrigger.click();
+    const zetaMenu = queue.getByRole('menu', { name: 'Opções de E2E Zeta' });
+    await expect(zetaMenu.getByRole('menuitem', { name: 'Mover para cima' })).toBeDisabled();
+
+    await expect.poll(() => persistedQueueTitles(page)).toEqual([
+      'E2E Track',
+      'E2E Zeta',
+      'E2E Zulu'
+    ]);
+    return;
+  }
+
+  test.skip(testInfo.project.name !== 'mobile-chromium');
+
+  const openQueue = page.getByRole('button', { name: 'Abrir fila' });
+  await openQueue.click();
+  const queueDialog = page.getByRole('dialog', { name: 'Fila de reprodução' });
+  await expect(queueDialog).toBeVisible();
+
+  const next = page.getByRole('button', { name: 'Próxima', exact: true });
+  await next.click();
+  await expect(page.getByRole('heading', { name: 'E2E Zeta' })).toBeVisible();
+  await expect(queueDialog).toBeVisible();
+});
