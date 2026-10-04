@@ -580,6 +580,7 @@ export type LibraryAutoRescanStatus = {
 };
 
 export type LibraryStatusResponse = {
+  instanceId: string;
   scannedAt: string;
   scanning: boolean;
   revision: number;
