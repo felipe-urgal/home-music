@@ -111,7 +111,7 @@ export function LibraryActionDialog({
               <span>{inputLabel}</span>
               <input
                 data-autofocus
-                autoFocus
+                autoFocus={open}
                 autoComplete="off"
                 value={value}
                 placeholder={placeholder}
@@ -141,7 +141,7 @@ export function LibraryActionDialog({
             type="submit"
             className={danger ? 'library-action-dialog__danger' : 'library-action-dialog__primary'}
             disabled={busy || confirmDisabled}
-            autoFocus={!hasInput}
+            autoFocus={open && !hasInput}
           >
             {busy && <LoaderCircle className="is-spinning" aria-hidden="true" />}
             {busy ? 'Aguarde…' : confirmLabel}
