@@ -254,13 +254,13 @@ export function PlayerQueuePanel({ current, queue, currentIndex, offlineMode, on
       </button>
 
       <button
-        ref={mobileQueueToggleRef}
         type="button"
         className="queue-panel__toggle-mobile"
-        aria-label={nextTrack ? `Abrir fila. Próxima música: ${nextTrack.title}` : 'Abrir fila'}
-        aria-expanded={showQueue}
-        aria-controls="mobile-queue-sheet"
-        onClick={() => setShowQueue(true)}
+        aria-label={nextTrack ? `Tocar próxima música: ${nextTrack.title}` : 'Fim da fila'}
+        disabled={!nextTrack}
+        onClick={() => {
+          if (nextTrack) onPlayTrack(nextTrack, queue);
+        }}
       >
         {nextTrack ? (
           <>
@@ -279,6 +279,17 @@ export function PlayerQueuePanel({ current, queue, currentIndex, offlineMode, on
           </span>
         )}
         <ChevronRight className="queue-panel__next-chevron" aria-hidden="true" />
+      </button>
+      <button
+        ref={mobileQueueToggleRef}
+        type="button"
+        className="queue-panel__open-mobile"
+        aria-label={showQueue ? 'Fila aberta' : 'Abrir fila'}
+        aria-expanded={showQueue}
+        aria-controls="mobile-queue-sheet"
+        onClick={() => setShowQueue(true)}
+      >
+        <ListMusic aria-hidden="true" />
       </button>
       {showQueue && <button className="queue-sheet-backdrop" type="button" aria-label="Fechar fila" onClick={closeQueue} />}
       <div
