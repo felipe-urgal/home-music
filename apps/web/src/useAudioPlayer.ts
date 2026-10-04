@@ -9,6 +9,7 @@ import {
   nextTrackAfterErrorDecision,
   nextTrackDecision,
   remapQueue,
+  reorderUpcomingQueue,
   resolveOutputVolume,
   restorePlayerState
 } from './player-state';
@@ -127,14 +128,6 @@ function shuffledAroundCurrent(tracks: Track[], currentId: string) {
   }
   const current = tracks.find(track => track.id === currentId);
   return current ? [current, ...others] : others;
-}
-
-function moveItem<T>(items: T[], from: number, to: number) {
-  if (from === to || from < 0 || to < 0 || from >= items.length || to >= items.length) return items;
-  const next = [...items];
-  const [item] = next.splice(from, 1);
-  next.splice(to, 0, item);
-  return next;
 }
 
 export function useAudioPlayer(
@@ -576,11 +569,12 @@ export function useAudioPlayer(
     if (!current || from === to) return;
     setShuffle(false);
     setQueue(items => {
-      const nextQueue = moveItem(items, from, to);
+      const nextQueue = reorderUpcomingQueue(items, currentIndex, from, to);
+      if (nextQueue === items) return items;
       setOrderedQueue(nextQueue);
       return nextQueue;
     });
-  }, [current]);
+  }, [current, currentIndex]);
 
   useEffect(() => {
     if (!('mediaSession' in navigator) || !current) return;
