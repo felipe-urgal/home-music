@@ -661,7 +661,7 @@ function DeckPanel({
               </div>
             </div>
             <div className="dj-pro-deck__track-stats">
-              <div className="dj-pro-deck__bpm" aria-label={'BPM efetivo ' + label}>
+              <div className="dj-pro-deck__bpm" aria-label={'BPM efetivo no cabeçalho ' + label}>
                 <strong>{effectiveBpm == null ? '—' : effectiveBpm.toFixed(1)}</strong>
                 <small>BPM</small>
               </div>
