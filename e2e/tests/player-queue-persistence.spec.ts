@@ -26,7 +26,8 @@ async function loginAndResetQueueState(page: Page) {
   await page.getByLabel('Usuário', { exact: true }).fill(username);
   await page.getByLabel('Senha', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'E2E Track' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Entrar' })).toHaveCount(0);
+  await expect(page.locator('.desktop-layout')).toBeVisible();
 
   // Encerra a instância viva antes do reset para que pagehide/heartbeat não
   // disputem com o estado determinístico usado por este cenário.
