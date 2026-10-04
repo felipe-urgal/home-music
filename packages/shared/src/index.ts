@@ -572,10 +572,22 @@ export type AdminQuarantineResponse = {
   tracks: AdminQuarantinedTrack[];
 };
 
-export type LibraryResponse = {
-  tracks: Track[];
+export const MAX_PLAYLIST_TRACKS = 5000;
+
+export type LibraryAutoRescanStatus = {
+  enabled: boolean;
+  intervalSeconds: number | null;
+};
+
+export type LibraryStatusResponse = {
   scannedAt: string;
   scanning: boolean;
+  revision: number;
+  autoRescan: LibraryAutoRescanStatus;
+};
+
+export type LibraryResponse = LibraryStatusResponse & {
+  tracks: Track[];
 };
 
 export type ScanResponse = {
