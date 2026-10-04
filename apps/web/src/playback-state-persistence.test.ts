@@ -60,7 +60,27 @@ describe('playback state write coordinator', () => {
     await coordinator.persist(snapshot(11), 'heartbeat');
     await coordinator.persist(snapshot(40), 'state-change');
 
-    expect(calls.map(call => call.position)).toEqual([10, 40, 40]);
+    expect(calls.map(call => call.position)).toEqual([10, 40]);
     expect(calls[1].updatedAt).toBe('2026-10-04T18:00:00.005Z');
+  });
+});
+
+
+describe('playback state conflict retry', () => {
+  it('repete uma mudança explícita uma vez usando a versão devolvida no conflito', async () => {
+    const calls: PlaybackState[] = [];
+    const save = vi.fn(async (value: PlaybackState) => {
+      calls.push(value);
+      if (calls.length === 1) {
+        return { status: 'conflict' as const, state: state(25, '2026-10-04T18:00:00.010Z') };
+      }
+      return { status: 'ok' as const, state: state(value.position, '2026-10-04T18:00:00.011Z') };
+    });
+    const coordinator = createPlaybackStateWriteCoordinator('2026-10-04T18:00:00.000Z', save);
+
+    await coordinator.persist(snapshot(50), 'state-change');
+
+    expect(calls.map(call => call.position)).toEqual([50, 50]);
+    expect(calls[1].updatedAt).toBe('2026-10-04T18:00:00.010Z');
   });
 });
