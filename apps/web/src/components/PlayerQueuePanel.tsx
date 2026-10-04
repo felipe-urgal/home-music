@@ -72,7 +72,6 @@ export function PlayerQueuePanel({ current, queue, currentIndex, offlineMode, on
 
   useEffect(() => {
     setVisibleQueueCount(QUEUE_PAGE_SIZE);
-    setShowQueue(false);
     setReorderAnnouncement('');
   }, [current.id, queue.length]);
 
@@ -148,7 +147,15 @@ export function PlayerQueuePanel({ current, queue, currentIndex, offlineMode, on
   }
 
   function reorderQueue(from: number, to: number) {
-    if (from === to || from < 0 || to < 0 || from >= queue.length || to >= queue.length) return;
+    if (
+      from === to
+      || from <= currentIndex
+      || to <= currentIndex
+      || from < 0
+      || to < 0
+      || from >= queue.length
+      || to >= queue.length
+    ) return;
     const track = queue[from];
     if (!track) return;
     onReorderQueue(from, to);
@@ -180,7 +187,7 @@ export function PlayerQueuePanel({ current, queue, currentIndex, offlineMode, on
     if (!target) return;
     const to = Number(target.dataset.queueIndex);
     const from = touchDragIndexRef.current;
-    if (!Number.isInteger(to) || to < 0 || to >= queue.length || to === from) return;
+    if (!Number.isInteger(to) || to <= currentIndex || to >= queue.length || to === from) return;
     reorderQueue(from, to);
     touchDragIndexRef.current = to;
     setDragFrom(to);
@@ -320,7 +327,7 @@ export function PlayerQueuePanel({ current, queue, currentIndex, offlineMode, on
                   <span className="queue-item__text"><strong>{track.title}</strong><small>{track.artist || 'Artista desconhecido'}</small></span>
                 </button>
                 <div className="queue-reorder-buttons">
-                  <button type="button" aria-label={`Mover ${track.title} para cima`} disabled={queueIndex === 0} onClick={() => reorderQueue(queueIndex, queueIndex - 1)}><ChevronUp aria-hidden="true" /></button>
+                  <button type="button" aria-label={`Mover ${track.title} para cima`} disabled={queueIndex <= currentIndex + 1} onClick={() => reorderQueue(queueIndex, queueIndex - 1)}><ChevronUp aria-hidden="true" /></button>
                   <button type="button" aria-label={`Mover ${track.title} para baixo`} disabled={queueIndex === queue.length - 1} onClick={() => reorderQueue(queueIndex, queueIndex + 1)}><ChevronDown aria-hidden="true" /></button>
                 </div>
               </div>
