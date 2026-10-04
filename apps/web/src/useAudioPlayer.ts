@@ -600,7 +600,7 @@ export function useAudioPlayer(
   }, []);
 
   const reorderQueue = useCallback((from: number, to: number) => {
-    if (!current || from === to) return;
+    if (!current || from === to || from <= currentIndex || to <= currentIndex) return;
     setShuffle(false);
     setQueue(items => {
       const nextQueue = reorderUpcomingQueue(items, currentIndex, from, to);
