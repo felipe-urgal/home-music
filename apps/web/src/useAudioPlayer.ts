@@ -6,6 +6,11 @@ import { buildQueueContext } from './library-utils';
 import { publishMediaSessionMetadata } from './media-session-artwork';
 import { offlineAudioUrl } from './offline-downloads';
 import {
+  createPlaybackStateWriteCoordinator,
+  type PlaybackPersistReason,
+  type PlaybackStateSaveResult
+} from './playback-state-persistence';
+import {
   nextTrackAfterErrorDecision,
   nextTrackDecision,
   remapQueue,
@@ -52,6 +57,28 @@ function mutationFetch(url: string, init: RequestInit) {
   const headers = new Headers(init.headers);
   headers.set('X-Home-Music-Request', '1');
   return apiFetch(url, { ...init, headers });
+}
+
+async function saveOnlinePlaybackState(state: PlaybackState): Promise<PlaybackStateSaveResult> {
+  try {
+    const response = await mutationFetch('/api/player/state', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(state),
+      keepalive: true
+    });
+
+    if (response.ok) {
+      return { status: 'ok', state: await response.json() as PlaybackState };
+    }
+    if (response.status === 409) {
+      const payload = await response.json() as { state?: PlaybackState };
+      if (payload.state) return { status: 'conflict', state: payload.state };
+    }
+    return { status: 'error' };
+  } catch {
+    return { status: 'error' };
+  }
 }
 
 function isRepeatMode(value: unknown): value is RepeatMode {
@@ -157,6 +184,13 @@ export function useAudioPlayer(
   const appleBackgroundRecoveryTrackRef = useRef<string | null>(null);
   const hydratedRef = useRef(false);
   const resumeIntentRef = useRef(false);
+  const playbackPersistenceRef = useRef<ReturnType<typeof createPlaybackStateWriteCoordinator> | null>(null);
+  if (!playbackPersistenceRef.current) {
+    playbackPersistenceRef.current = createPlaybackStateWriteCoordinator(
+      EMPTY_STATE.updatedAt,
+      saveOnlinePlaybackState
+    );
+  }
   const [orderedQueue, setOrderedQueue] = useState<Track[]>([]);
   const [queue, setQueue] = useState<Track[]>([]);
   const [currentTrackId, setCurrentTrackId] = useState<string | null>(null);
@@ -240,6 +274,7 @@ export function useAudioPlayer(
         });
         const shouldResume = Boolean(!offlineMode && state.wasPlaying && restored.currentTrackId);
 
+        playbackPersistenceRef.current?.setVersion(state.updatedAt);
         setOrderedQueue(restored.baseQueue);
         setQueue(restored.queue);
         setCurrentTrackId(restored.currentTrackId);
@@ -253,6 +288,7 @@ export function useAudioPlayer(
         setCurrentTime(restored.position);
       })
       .catch(() => {
+        playbackPersistenceRef.current?.setVersion(EMPTY_STATE.updatedAt);
         setOrderedQueue(tracks);
         setQueue(tracks);
         setCurrentTrackId(tracks[0]?.id ?? null);
@@ -361,7 +397,7 @@ export function useAudioPlayer(
     if (audio) audio.volume = resolveOutputVolume(volume, usesSystemVolume);
   }, [usesSystemVolume, volume]);
 
-  const persistState = useCallback(() => {
+  const persistState = useCallback((reason: PlaybackPersistReason) => {
     if (!hydrated) return;
     const body = {
       currentTrackId: current?.id ?? null,
@@ -379,33 +415,31 @@ export function useAudioPlayer(
       return;
     }
 
-    mutationFetch('/api/player/state', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-      keepalive: true
-    }).catch(() => undefined);
+    void playbackPersistenceRef.current?.persist(body, reason);
   }, [current?.id, hydrated, offlineMode, orderedQueue, queue, repeatMode, resumeIntent, shuffle, volume]);
 
   useEffect(() => {
     if (!hydrated) return;
-    const timeout = window.setTimeout(persistState, 450);
+    const timeout = window.setTimeout(() => persistState('state-change'), 450);
     return () => window.clearTimeout(timeout);
-  }, [persistState, hydrated]);
+  }, [persistState, hydrated, manualPlaybackRevision]);
 
   useEffect(() => {
     if (!hydrated || !playing) return;
-    const interval = window.setInterval(persistState, 5000);
+    const interval = window.setInterval(() => persistState('heartbeat'), 5000);
     return () => window.clearInterval(interval);
   }, [hydrated, persistState, playing]);
 
   useEffect(() => {
-    const save = () => persistState();
+    const save = () => persistState('lifecycle');
+    const saveWhenHidden = () => {
+      if (document.visibilityState === 'hidden') save();
+    };
     window.addEventListener('pagehide', save);
-    document.addEventListener('visibilitychange', save);
+    document.addEventListener('visibilitychange', saveWhenHidden);
     return () => {
       window.removeEventListener('pagehide', save);
-      document.removeEventListener('visibilitychange', save);
+      document.removeEventListener('visibilitychange', saveWhenHidden);
     };
   }, [persistState]);
 
