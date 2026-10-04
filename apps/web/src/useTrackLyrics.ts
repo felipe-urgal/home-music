@@ -10,7 +10,8 @@ export function loadTrackLyrics(trackId: string) {
   const existing = inFlightLyricsRequests.get(trackId);
   if (existing) return existing;
 
-  const request = apiFetch(`/api/tracks/${trackId}/lyrics`, {
+  let request: Promise<LyricsResponse | null>;
+  request = apiFetch(`/api/tracks/${trackId}/lyrics`, {
     cache: 'no-store'
   })
     .then(async response => {
