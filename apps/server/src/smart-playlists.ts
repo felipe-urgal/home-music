@@ -13,15 +13,25 @@ const SMART_RULE_VERSION = 1;
 type Row = Record<string, unknown>;
 type CanonicalMetadataByTrackId = ReturnType<LibraryMetadataNormalizationStore['canonicalMetadataByTrackId']>;
 
-type EvaluatedTrack = {
+type SmartPlaylistTrackSnapshot = {
   id: string;
   title: string;
   artist: string;
   album: string;
   folderPath: string;
+  normalizedArtist: string;
+  normalizedAlbum: string;
+  normalizedFolderPath: string;
+  playedAt: string[];
+  favoriteCreatedAt: string | null;
+};
+
+type EvaluatedTrack = {
+  id: string;
+  title: string;
+  artist: string;
   plays: number;
   lastPlayedAt: string | null;
-  hasPlayedEver: boolean;
   favoriteCreatedAt: string | null;
 };
 
@@ -33,11 +43,6 @@ type StoredSmartRule = {
 
 function stringValue(value: unknown, fallback = '') {
   return typeof value === 'string' ? value : fallback;
-}
-
-function numberValue(value: unknown, fallback = 0) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
 }
 
 function requireUserId(userId: string) {
@@ -115,15 +120,27 @@ function normalizeComparable(value: string) {
   return value.trim().toLocaleLowerCase('pt-BR');
 }
 
-function matchesText(value: string, filter: string | null) {
-  return filter == null || normalizeComparable(value) === normalizeComparable(filter);
+function normalizeFolderPath(value: string) {
+  return value.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
 }
 
-function matchesFolder(value: string, filter: string | null) {
-  if (filter == null) return true;
-  const current = value.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
-  const requested = filter.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
-  return current === requested || current.startsWith(`${requested}/`);
+function scopedHistory(playedAt: readonly string[], since: string | null) {
+  if (since == null) {
+    return {
+      plays: playedAt.length,
+      lastPlayedAt: playedAt[0] ?? null
+    };
+  }
+
+  let plays = 0;
+  for (const value of playedAt) {
+    if (value < since) break;
+    plays += 1;
+  }
+  return {
+    plays,
+    lastPlayedAt: plays > 0 ? playedAt[0] : null
+  };
 }
 
 function compareNullableDateAsc(left: string | null, right: string | null) {
@@ -202,23 +219,12 @@ export class SmartPlaylistStore {
     this.db.close();
   }
 
-  private evaluateWithCanonicalMetadata(
+  private loadEvaluationSnapshot(
     userId: string,
-    rule: SmartPlaylistRule,
     canonicalMetadata: CanonicalMetadataByTrackId,
-    eligibleTrackIds?: ReadonlySet<string>,
-    now = new Date()
+    eligibleTrackIds?: ReadonlySet<string>
   ) {
     requireUserId(userId);
-    const normalizedRule = normalizeSmartPlaylistRule(rule);
-    if (!normalizedRule) throw new RangeError('Regra da playlist inteligente inválida.');
-    const since = normalizedRule.periodDays == null
-      ? null
-      : new Date(now.getTime() - normalizedRule.periodDays * 24 * 60 * 60 * 1_000).toISOString();
-    const scopedWhere = since ? 'AND played_at >= ?' : '';
-    const bindings: string[] = [userId];
-    if (since) bindings.push(since);
-    bindings.push(userId, userId);
     const availabilityJoin = this.hasTrackAvailability
       ? 'LEFT JOIN track_availability ta ON ta.track_id = t.id'
       : '';
@@ -227,65 +233,112 @@ export class SmartPlaylistStore {
       : '';
 
     const rows = this.db.prepare(`
-      WITH scoped_history AS (
-        SELECT track_id, COUNT(*) AS plays, MAX(played_at) AS last_played_at
-        FROM history
-        WHERE user_id = ? ${scopedWhere}
-        GROUP BY track_id
-      ),
-      all_history AS (
-        SELECT track_id, 1 AS has_played_ever
-        FROM history
-        WHERE user_id = ?
-        GROUP BY track_id
-      ),
-      user_favorites AS (
-        SELECT track_id, created_at AS favorite_created_at
-        FROM favorites
-        WHERE user_id = ?
-      )
       SELECT t.id, t.title, t.artist, t.album, t.folder_path,
-             COALESCE(sh.plays, 0) AS plays,
-             sh.last_played_at,
-             COALESCE(ah.has_played_ever, 0) AS has_played_ever,
-             uf.favorite_created_at
+             uf.created_at AS favorite_created_at
       FROM tracks t
-      LEFT JOIN scoped_history sh ON sh.track_id = t.id
-      LEFT JOIN all_history ah ON ah.track_id = t.id
-      LEFT JOIN user_favorites uf ON uf.track_id = t.id
+      LEFT JOIN favorites uf
+        ON uf.track_id = t.id AND uf.user_id = ?
       ${availabilityJoin}
       ${availabilityWhere}
-    `).all(...bindings) as Row[];
+    `).all(userId) as Row[];
 
-    return rows
-      .map(row => {
-        const id = stringValue(row.id);
-        const metadata = canonicalMetadata.get(id);
-        return {
-          id,
-          title: metadata?.title ?? stringValue(row.title),
-          artist: metadata?.artist ?? stringValue(row.artist),
-          album: metadata?.album ?? stringValue(row.album),
-          folderPath: stringValue(row.folder_path),
-          plays: numberValue(row.plays),
-          lastPlayedAt: typeof row.last_played_at === 'string' ? row.last_played_at : null,
-          hasPlayedEver: Boolean(row.has_played_ever),
-          favoriteCreatedAt: typeof row.favorite_created_at === 'string' ? row.favorite_created_at : null
-        };
-      })
-      .filter(track => !eligibleTrackIds || eligibleTrackIds.has(track.id))
-      .filter(track => matchesText(track.artist, normalizedRule.artist))
-      .filter(track => matchesText(track.album, normalizedRule.album))
-      .filter(track => matchesFolder(track.folderPath, normalizedRule.folderPath))
-      .filter(track => {
-        if (normalizedRule.favorite == null) return true;
-        return normalizedRule.favorite === Boolean(track.favoriteCreatedAt);
-      })
-      .filter(track => {
-        if (normalizedRule.history === 'any') return true;
-        if (normalizedRule.history === 'never') return !track.hasPlayedEver;
-        return track.plays > 0;
-      })
+    const historyByTrackId = new Map<string, string[]>();
+    const historyRows = this.db.prepare(`
+      SELECT track_id, played_at
+      FROM history
+      WHERE user_id = ?
+      ORDER BY played_at DESC, id DESC
+    `).all(userId) as Row[];
+
+    for (const row of historyRows) {
+      const trackId = stringValue(row.track_id);
+      const playedAt = stringValue(row.played_at);
+      if (!trackId || !playedAt) continue;
+      const current = historyByTrackId.get(trackId);
+      if (current) current.push(playedAt);
+      else historyByTrackId.set(trackId, [playedAt]);
+    }
+
+    const tracks: SmartPlaylistTrackSnapshot[] = [];
+    for (const row of rows) {
+      const id = stringValue(row.id);
+      if (eligibleTrackIds && !eligibleTrackIds.has(id)) continue;
+      const metadata = canonicalMetadata.get(id);
+      const title = metadata?.title ?? stringValue(row.title);
+      const artist = metadata?.artist ?? stringValue(row.artist);
+      const album = metadata?.album ?? stringValue(row.album);
+      const folderPath = stringValue(row.folder_path);
+      tracks.push({
+        id,
+        title,
+        artist,
+        album,
+        folderPath,
+        normalizedArtist: normalizeComparable(artist),
+        normalizedAlbum: normalizeComparable(album),
+        normalizedFolderPath: normalizeFolderPath(folderPath),
+        playedAt: historyByTrackId.get(id) ?? [],
+        favoriteCreatedAt: typeof row.favorite_created_at === 'string'
+          ? row.favorite_created_at
+          : null
+      });
+    }
+    return tracks;
+  }
+
+  private evaluateSnapshot(
+    rule: SmartPlaylistRule,
+    tracks: readonly SmartPlaylistTrackSnapshot[],
+    now = new Date()
+  ) {
+    const normalizedRule = normalizeSmartPlaylistRule(rule);
+    if (!normalizedRule) throw new RangeError('Regra da playlist inteligente inválida.');
+    const since = normalizedRule.periodDays == null
+      ? null
+      : new Date(now.getTime() - normalizedRule.periodDays * 24 * 60 * 60 * 1_000).toISOString();
+    const artistFilter = normalizedRule.artist == null
+      ? null
+      : normalizeComparable(normalizedRule.artist);
+    const albumFilter = normalizedRule.album == null
+      ? null
+      : normalizeComparable(normalizedRule.album);
+    const folderFilter = normalizedRule.folderPath == null
+      ? null
+      : normalizeFolderPath(normalizedRule.folderPath);
+
+    const evaluated: EvaluatedTrack[] = [];
+    for (const track of tracks) {
+      if (artistFilter != null && track.normalizedArtist !== artistFilter) continue;
+      if (albumFilter != null && track.normalizedAlbum !== albumFilter) continue;
+      if (
+        folderFilter != null
+        && track.normalizedFolderPath !== folderFilter
+        && !track.normalizedFolderPath.startsWith(`${folderFilter}/`)
+      ) {
+        continue;
+      }
+      if (
+        normalizedRule.favorite != null
+        && normalizedRule.favorite !== Boolean(track.favoriteCreatedAt)
+      ) {
+        continue;
+      }
+
+      const history = scopedHistory(track.playedAt, since);
+      if (normalizedRule.history === 'never' && track.playedAt.length > 0) continue;
+      if (normalizedRule.history === 'played' && history.plays === 0) continue;
+
+      evaluated.push({
+        id: track.id,
+        title: track.title,
+        artist: track.artist,
+        plays: history.plays,
+        lastPlayedAt: history.lastPlayedAt,
+        favoriteCreatedAt: track.favoriteCreatedAt
+      });
+    }
+
+    return evaluated
       .sort((left, right) => sortTracks(normalizedRule, left, right))
       .slice(0, normalizedRule.limit)
       .map(track => track.id);
@@ -297,13 +350,9 @@ export class SmartPlaylistStore {
     eligibleTrackIds?: ReadonlySet<string>,
     now = new Date()
   ) {
-    return this.evaluateWithCanonicalMetadata(
-      userId,
-      rule,
-      this.normalization.canonicalMetadataByTrackId(),
-      eligibleTrackIds,
-      now
-    );
+    const canonicalMetadata = this.normalization.canonicalMetadataByTrackId();
+    const snapshot = this.loadEvaluationSnapshot(userId, canonicalMetadata, eligibleTrackIds);
+    return this.evaluateSnapshot(rule, snapshot, now);
   }
 
   list(userId: string, eligibleTrackIds?: ReadonlySet<string>, now = new Date()): Playlist[] {
@@ -314,24 +363,26 @@ export class SmartPlaylistStore {
       WHERE source = ? AND owner_user_id = ?
       ORDER BY updated_at DESC, name COLLATE NOCASE, id ASC
     `).all(SMART_PLAYLIST_SOURCE, userId) as Row[];
-    const canonicalMetadata = this.normalization.canonicalMetadataByTrackId();
 
-    const playlists: Playlist[] = [];
-    for (const row of rows) {
+    const definitions = rows.flatMap(row => {
       const id = stringValue(row.id);
       const rule = parseStoredRule(row.source_key, id);
-      if (!rule) continue;
-      playlists.push({
-        id,
-        name: stringValue(row.name),
-        trackIds: this.evaluateWithCanonicalMetadata(userId, rule, canonicalMetadata, eligibleTrackIds, now),
-        createdAt: stringValue(row.created_at),
-        updatedAt: stringValue(row.updated_at),
-        source: 'smart',
-        rule
-      });
-    }
-    return playlists;
+      return rule ? [{ row, id, rule }] : [];
+    });
+    if (definitions.length === 0) return [];
+
+    const canonicalMetadata = this.normalization.canonicalMetadataByTrackId();
+    const snapshot = this.loadEvaluationSnapshot(userId, canonicalMetadata, eligibleTrackIds);
+
+    return definitions.map(({ row, id, rule }) => ({
+      id,
+      name: stringValue(row.name),
+      trackIds: this.evaluateSnapshot(rule, snapshot, now),
+      createdAt: stringValue(row.created_at),
+      updatedAt: stringValue(row.updated_at),
+      source: 'smart',
+      rule
+    }));
   }
 
   get(userId: string, id: string, eligibleTrackIds?: ReadonlySet<string>, now = new Date()) {
