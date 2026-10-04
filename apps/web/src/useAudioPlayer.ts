@@ -185,6 +185,7 @@ export function useAudioPlayer(
   const hydratedRef = useRef(false);
   const resumeIntentRef = useRef(false);
   const playbackPersistenceRef = useRef<ReturnType<typeof createPlaybackStateWriteCoordinator> | null>(null);
+  const persistenceHydratedRef = useRef(false);
   if (!playbackPersistenceRef.current) {
     playbackPersistenceRef.current = createPlaybackStateWriteCoordinator(
       EMPTY_STATE.updatedAt,
@@ -420,6 +421,10 @@ export function useAudioPlayer(
 
   useEffect(() => {
     if (!hydrated) return;
+    if (!persistenceHydratedRef.current) {
+      persistenceHydratedRef.current = true;
+      return;
+    }
     const timeout = window.setTimeout(() => persistState('state-change'), 450);
     return () => window.clearTimeout(timeout);
   }, [persistState, hydrated, manualPlaybackRevision]);
