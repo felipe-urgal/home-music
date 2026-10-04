@@ -7726,11 +7726,11 @@
   --console-accent: #078cff;
   --console-accent-rgb: 7, 140, 255;
   box-sizing: border-box;
-  height: 870px;
-  min-height: 870px;
-  padding: 0 18px 14px;
+  height: 710px;
+  min-height: 710px;
+  padding: 10px 18px 14px;
   display: grid;
-  grid-template-rows: 60px 78px 126px 72px 290px 112px 68px;
+  grid-template-rows: 78px 126px 290px 96px 60px;
   gap: 8px;
   border: 1px solid #384550;
   border-radius: 13px;
@@ -7810,8 +7810,8 @@
   height: 78px;
   padding: 3px 8px;
   display: grid;
-  grid-template-columns: 66px minmax(0, 1fr) 64px;
-  gap: 18px;
+  grid-template-columns: 66px minmax(0, 1fr) auto;
+  gap: 16px;
   align-items: center;
   border: 0;
   border-radius: 0;
@@ -7848,15 +7848,60 @@
   white-space: nowrap;
 }
 
-.dj-mode--deck-console-v2 .dj-pro-deck__track-copy > span {
-  display: block;
+.dj-mode--deck-console-v2 .dj-pro-deck__track-secondary {
+  min-width: 0;
   margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.dj-mode--deck-console-v2 .dj-pro-deck__track-secondary > span:first-child {
+  min-width: 0;
   color: #708798;
   font-size: 13px;
   line-height: 1.1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.dj-mode--deck-console-v2 .dj-pro-deck__track-secondary .dj-sync-master-badge {
+  flex: 0 0 auto;
+  padding: 2px 5px;
+  color: var(--console-accent);
+  font-size: 8px;
+}
+
+.dj-mode--deck-console-v2 .dj-pro-deck__track-stats {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+}
+
+.dj-mode--deck-console-v2 .dj-pro-deck__bpm {
+  min-width: 52px;
+  display: grid;
+  justify-items: end;
+  gap: 7px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.dj-mode--deck-console-v2 .dj-pro-deck__bpm strong {
+  color: #fff;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.dj-mode--deck-console-v2 .dj-pro-deck__bpm small {
+  color: #718695;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
 }
 
 .dj-mode--deck-console-v2 .dj-pro-deck__key {
@@ -7970,57 +8015,6 @@
   font-weight: 500;
   font-variant-numeric: tabular-nums;
   pointer-events: none;
-}
-
-.dj-mode--deck-console-v2 .dj-pro-deck__metrics {
-  min-width: 0;
-  height: 72px;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0;
-  align-items: stretch;
-  border: 0;
-  border-bottom: 1px solid #1b2a33;
-  background: transparent;
-}
-
-.dj-mode--deck-console-v2 .dj-pro-deck__metrics > div {
-  min-width: 0;
-  height: 72px;
-  padding: 10px 14px 8px;
-  display: flex;
-  flex-direction: column-reverse;
-  justify-content: center;
-  align-items: flex-start;
-  gap: 6px;
-  border: 0;
-  border-right: 1px solid #1c2b35;
-  border-radius: 0;
-  background: transparent;
-}
-
-.dj-mode--deck-console-v2 .dj-pro-deck__metrics > div:last-child {
-  border-right: 0;
-}
-
-.dj-mode--deck-console-v2 .dj-pro-deck__metrics strong {
-  margin: 0;
-  color: #fff;
-  font-size: 18px;
-  font-weight: 800;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-}
-
-.dj-mode--deck-console-v2 .dj-pro-deck__metrics span {
-  color: #687f90;
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 1;
-  letter-spacing: 0;
-  text-transform: uppercase;
 }
 
 .dj-mode--deck-console-v2 .dj-deck-performance {
@@ -8271,12 +8265,12 @@
   position: relative;
   min-width: 0;
   min-height: 0;
-  height: 112px;
+  height: 96px;
   margin: 0;
   padding: 0;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  grid-template-rows: 28px 68px;
+  grid-template-rows: 28px 60px;
   column-gap: 10px;
   row-gap: 8px;
   align-items: stretch;
@@ -8326,14 +8320,14 @@
 .dj-mode--deck-console-v2 .dj-hot-cue {
   position: relative;
   min-width: 0;
-  height: 68px;
+  height: 60px;
   display: block;
 }
 
 .dj-mode--deck-console-v2 .dj-hot-cue__pad {
   width: 100%;
-  height: 68px;
-  min-height: 68px;
+  height: 60px;
+  min-height: 60px;
   padding: 0;
   display: grid;
   place-items: center;
@@ -8393,15 +8387,15 @@
 
 .dj-mode--deck-console-v2 .dj-pro-deck__controls {
   align-self: stretch;
-  height: 68px;
+  height: 60px;
   display: grid;
   grid-template-columns: 1.14fr 1fr 1fr;
   gap: 10px;
 }
 
 .dj-mode--deck-console-v2 .dj-pro-deck__controls button {
-  height: 68px;
-  min-height: 68px;
+  height: 60px;
+  min-height: 60px;
   border: 1px solid #304451;
   border-radius: 7px;
   background: linear-gradient(180deg, #192630, #14212a);
@@ -8454,16 +8448,16 @@
 
 @media (max-width: 1450px) and (min-width: 821px) {
   .dj-mode--deck-console-v2 .dj-pro-deck--console {
-    height: 850px;
-    min-height: 850px;
-    grid-template-rows: 58px 74px 118px 68px 280px 108px 64px;
+    height: 680px;
+    min-height: 680px;
+    grid-template-rows: 74px 118px 280px 92px 58px;
     gap: 7px;
     padding-inline: 16px;
   }
 
   .dj-mode--deck-console-v2 .dj-pro-deck__track {
     height: 74px;
-    grid-template-columns: 60px minmax(0, 1fr) 58px;
+    grid-template-columns: 60px minmax(0, 1fr) auto;
     gap: 14px;
   }
 
@@ -8476,11 +8470,6 @@
     height: 118px;
     min-height: 118px;
     max-height: 118px;
-  }
-
-  .dj-mode--deck-console-v2 .dj-pro-deck__metrics,
-  .dj-mode--deck-console-v2 .dj-pro-deck__metrics > div {
-    height: 68px;
   }
 
   .dj-mode--deck-console-v2 .dj-deck-performance {
@@ -8503,28 +8492,28 @@
   }
 
   .dj-mode--deck-console-v2 .dj-hot-cues {
-    height: 108px;
-    grid-template-rows: 27px 65px;
+    height: 92px;
+    grid-template-rows: 26px 58px;
   }
 
   .dj-mode--deck-console-v2 .dj-hot-cue,
   .dj-mode--deck-console-v2 .dj-hot-cue__pad {
-    height: 65px;
-    min-height: 65px;
+    height: 58px;
+    min-height: 58px;
   }
 
   .dj-mode--deck-console-v2 .dj-pro-deck__controls,
   .dj-mode--deck-console-v2 .dj-pro-deck__controls button {
-    height: 64px;
-    min-height: 64px;
+    height: 58px;
+    min-height: 58px;
   }
 }
 
 @media (max-width: 820px) {
   .dj-mode--deck-console-v2 .dj-pro-deck--console {
     height: auto;
-    min-height: 790px;
-    grid-template-rows: 56px 72px 112px 64px 250px 102px 60px;
+    min-height: 650px;
+    grid-template-rows: 72px 112px 250px 96px 58px;
     gap: 7px;
     padding-inline: 14px;
   }
