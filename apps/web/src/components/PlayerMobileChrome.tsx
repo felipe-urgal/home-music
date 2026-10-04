@@ -18,11 +18,11 @@ export function PlayerMobileChrome({
   hasArtwork,
   children
 }: PlayerMobileChromeProps) {
-  const chrome = useAutoHideControls(playing, trackId, MOBILE_CHROME_HIDE_DELAY_MS);
+  const chrome = useAutoHideControls<HTMLDivElement>(playing, trackId, MOBILE_CHROME_HIDE_DELAY_MS);
 
   return (
     <div
-      ref={chrome.rootRef as React.RefObject<HTMLDivElement>}
+      ref={chrome.rootRef}
       className="player-screen-immersive"
       style={style}
       data-has-artwork={hasArtwork ? 'true' : 'false'}
