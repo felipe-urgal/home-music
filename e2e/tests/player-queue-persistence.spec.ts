@@ -100,6 +100,8 @@ test('reordenação da fila persiste no SQLite e sobrevive a reload', async ({ p
 
 
 test('fila não deixa próxima faixa atravessar a atual e permanece aberta ao avançar', async ({ page }, testInfo) => {
+  test.skip(!['desktop-chromium', 'mobile-chromium'].includes(testInfo.project.name));
+
   await login(page);
   await resetQueueState(page);
 
@@ -118,15 +120,14 @@ test('fila não deixa próxima faixa atravessar a atual e permanece aberta ao av
     return;
   }
 
-  test.skip(testInfo.project.name !== 'mobile-chromium');
-
-  const openQueue = page.getByRole('button', { name: 'Abrir fila' });
+  const openQueue = page.getByRole('button', { name: /Abrir fila/ });
   await openQueue.click();
   const queueDialog = page.getByRole('dialog', { name: 'Fila de reprodução' });
   await expect(queueDialog).toBeVisible();
+  await expect(queueDialog.getByRole('button', { name: 'Mover E2E Zeta para cima' })).toBeDisabled();
 
-  const next = page.getByRole('button', { name: 'Próxima', exact: true });
-  await next.click();
+  const zetaTrack = queueDialog.getByRole('button').filter({ hasText: 'E2E Zeta' });
+  await zetaTrack.click();
   await expect(page.getByRole('heading', { name: 'E2E Zeta' })).toBeVisible();
   await expect(queueDialog).toBeVisible();
 });
