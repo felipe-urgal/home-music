@@ -14,7 +14,6 @@ import {
   Library,
   List,
   ListMusic,
-  MoreVertical,
   Music,
   Pause,
   Play,
@@ -108,10 +107,6 @@ function formatTime(seconds: number) {
   if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
   const whole = Math.floor(seconds);
   return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`;
-}
-
-function pitchPercent(playbackRate: number) {
-  return (playbackRate - 1) * 100;
 }
 
 function drawDjWaveform(
@@ -386,7 +381,6 @@ function DeckPanel({
   onSeek: (deck: DjDeckId, seconds: number) => void;
 }) {
   const label = deck === 'a' ? 'Deck A' : 'Deck B';
-  const side = deck === 'a' ? 'Esquerdo' : 'Direito';
   const snapshot = state.snapshot;
   const loaded = Boolean(snapshot?.trackId && state.track);
   const playing = Boolean(snapshot?.playing);
@@ -395,6 +389,7 @@ function DeckPanel({
     : 0;
   const bpm = state.track?.rhythm?.bpm ?? null;
   const rate = snapshot?.playbackRate ?? 1;
+  const effectiveBpm = bpm == null ? null : bpm * rate;
   const [jogMode, setJogMode] = useState<'vinyl' | 'slip'>('vinyl');
   const [loopIn, setLoopIn] = useState<number | null>(null);
   const [loopOut, setLoopOut] = useState<number | null>(null);
@@ -648,18 +643,6 @@ function DeckPanel({
 
   return (
     <article className="dj-pro-deck dj-pro-deck--console" aria-label={label} data-deck={deck} data-playing={playing ? 'true' : 'false'}>
-      <div className="dj-pro-deck__heading">
-        <div>
-          <span className="dj-pro-deck__accent" aria-hidden="true" />
-          <strong>{label.toUpperCase()}</strong>
-          <span>{side}</span>
-        </div>
-        <div className="dj-pro-deck__heading-actions">
-          {state.syncMaster && <span className="dj-sync-master-badge">MASTER</span>}
-          <MoreVertical aria-hidden="true" />
-        </div>
-      </div>
-
       {!loaded ? (
         <div className="dj-pro-deck__empty">
           <Disc3 aria-hidden="true" />
@@ -672,17 +655,26 @@ function DeckPanel({
             <div className="dj-pro-deck__artwork"><Artwork track={state.track ?? undefined} /></div>
             <div className="dj-pro-deck__track-copy">
               <strong>{state.track?.title}</strong>
-              <span>{state.track?.artist || 'Artista desconhecido'}</span>
+              <div className="dj-pro-deck__track-secondary">
+                <span>{state.track?.artist || 'Artista desconhecido'}</span>
+                {state.syncMaster && <span className="dj-sync-master-badge">MASTER</span>}
+              </div>
             </div>
-            <div
-              className="dj-pro-deck__key"
-              data-confidence={state.track?.key && state.track.key.confidence < 0.25 ? 'low' : 'normal'}
-              title={state.track?.key
-                ? `Tonalidade ${state.track.key.notation} · Camelot ${state.track.key.camelot} · confiança ${Math.round(state.track.key.confidence * 100)}%`
-                : 'Tonalidade ainda não analisada'}
-            >
-              <strong>{state.track?.key?.notation ?? '—'}</strong>
-              <small>{state.track?.key?.camelot ?? 'KEY'}</small>
+            <div className="dj-pro-deck__track-stats">
+              <div className="dj-pro-deck__bpm" aria-label={'BPM efetivo ' + label}>
+                <strong>{effectiveBpm == null ? '—' : effectiveBpm.toFixed(1)}</strong>
+                <small>BPM</small>
+              </div>
+              <div
+                className="dj-pro-deck__key"
+                data-confidence={state.track?.key && state.track.key.confidence < 0.25 ? 'low' : 'normal'}
+                title={state.track?.key
+                  ? `Tonalidade ${state.track.key.notation} · Camelot ${state.track.key.camelot} · confiança ${Math.round(state.track.key.confidence * 100)}%`
+                  : 'Tonalidade ainda não analisada'}
+              >
+                <strong>{state.track?.key?.notation ?? '—'}</strong>
+                <small>{state.track?.key?.camelot ?? 'KEY'}</small>
+              </div>
             </div>
           </div>
 
@@ -702,13 +694,6 @@ function DeckPanel({
             onSeek={seconds => onSeek(deck, seconds)}
             onHotCueSeek={seconds => onSeek(deck, seconds)}
           />
-
-          <div className="dj-pro-deck__metrics">
-            <div><span>BPM</span><strong>{bpm ? bpm.toFixed(1) : '—'}</strong></div>
-            <div><span>Pitch</span><strong>{pitchPercent(rate) >= 0 ? '+' : ''}{pitchPercent(rate).toFixed(2)}%</strong></div>
-            <div><span>Speed</span><strong>{rate.toFixed(3)}×</strong></div>
-            <div><span>Volume</span><strong>{Math.round(state.channelVolume * 100)}%</strong></div>
-          </div>
 
           <div className="dj-deck-performance">
             <div className="dj-tempo-fader">
