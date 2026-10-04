@@ -383,3 +383,41 @@ test('bootstrap já inicializado recupera staging de playlist manual para o prim
     recovered.close();
   });
 });
+
+test('mutações atômicas de faixa preservam a playlist e respeitam ownership e limite', async () => {
+  await withDatabase(async databasePath => {
+    const database = new HomeMusicDatabase(databasePath);
+    insertUser(databasePath, FIRST_USER_ID, '2026-08-26T10:00:00.000Z', 'admin');
+    insertUser(databasePath, SECOND_USER_ID, '2026-08-26T11:00:00.000Z');
+    database.syncTracks(
+      [indexedTrack('a'), indexedTrack('b')],
+      '/music',
+      '2026-08-26T12:00:00.000Z'
+    );
+
+    try {
+      const playlistId = database.createPlaylist(FIRST_USER_ID, 'Atômica');
+
+      assert.equal(database.addPlaylistTrack(FIRST_USER_ID, playlistId, 'a', 2), 'ok');
+      assert.equal(database.addPlaylistTrack(FIRST_USER_ID, playlistId, 'b', 2), 'ok');
+      assert.equal(database.addPlaylistTrack(FIRST_USER_ID, playlistId, 'a', 2), 'ok');
+      assert.deepEqual(
+        database.getPlaylists(FIRST_USER_ID).find(item => item.id === playlistId)?.trackIds,
+        ['a', 'b']
+      );
+
+      assert.equal(database.addPlaylistTrack(FIRST_USER_ID, playlistId, 'c', 2), 'limit-reached');
+      assert.equal(database.addPlaylistTrack(SECOND_USER_ID, playlistId, 'a', 2), 'not-found');
+
+      assert.equal(database.removePlaylistTrack(FIRST_USER_ID, playlistId, 'a'), true);
+      assert.deepEqual(
+        database.getPlaylists(FIRST_USER_ID).find(item => item.id === playlistId)?.trackIds,
+        ['b']
+      );
+      assert.equal(database.removePlaylistTrack(FIRST_USER_ID, playlistId, 'a'), true);
+      assert.equal(database.removePlaylistTrack(SECOND_USER_ID, playlistId, 'b'), false);
+    } finally {
+      database.close();
+    }
+  });
+});
