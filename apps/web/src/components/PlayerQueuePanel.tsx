@@ -257,11 +257,8 @@ export function PlayerQueuePanel({ current, queue, currentIndex, offlineMode, on
         ref={mobileQueueToggleRef}
         type="button"
         className="queue-panel__toggle-mobile"
-        aria-label={nextTrack ? `Tocar próxima música: ${nextTrack.title}` : 'Fim da fila'}
-        disabled={!nextTrack}
-        onClick={() => {
-          if (nextTrack) onPlayTrack(nextTrack, queue);
-        }}
+        aria-label={nextTrack ? `Abrir fila. Próxima música: ${nextTrack.title}` : 'Abrir fila'}
+        onClick={() => setShowQueue(true)}
       >
         {nextTrack ? (
           <>
