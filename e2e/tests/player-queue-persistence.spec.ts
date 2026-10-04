@@ -13,15 +13,6 @@ type PlaybackStatePayload = {
   updatedAt: string;
 };
 
-async function login(page: Page) {
-  await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Entrar' })).toBeVisible();
-  await page.getByLabel('Usuário', { exact: true }).fill(username);
-  await page.getByLabel('Senha', { exact: true }).fill(password);
-  await page.getByRole('button', { name: 'Entrar', exact: true }).click();
-  await expect(page.getByRole('heading', { name: /^E2E (Track|Zeta|Zulu)$/ }).first()).toBeVisible();
-}
-
 async function libraryTrackIds(page: Page) {
   const response = await page.context().request.get('/api/library');
   expect(response.ok()).toBeTruthy();
@@ -29,7 +20,13 @@ async function libraryTrackIds(page: Page) {
   return new Map(library.tracks.map(track => [track.title, track.id]));
 }
 
-async function resetQueueState(page: Page) {
+async function loginAndResetQueueState(page: Page) {
+  const loginResponse = await page.context().request.post('/api/auth/login', {
+    headers: mutationHeaders,
+    data: { username, password }
+  });
+  expect(loginResponse.ok()).toBeTruthy();
+
   const ids = await libraryTrackIds(page);
   const trackId = ids.get('E2E Track');
   const zetaId = ids.get('E2E Zeta');
@@ -65,7 +62,7 @@ async function resetQueueState(page: Page) {
     'E2E Zulu'
   ]);
 
-  await page.reload();
+  await page.goto('/');
   await expect(page.getByRole('heading', { name: 'E2E Track' })).toBeVisible();
   await expect.poll(() => persistedQueueTitles(page), { timeout: 5_000 }).toEqual([
     'E2E Track',
@@ -91,8 +88,7 @@ async function persistedQueueTitles(page: Page) {
 test('reordenação da fila persiste no SQLite e sobrevive a reload', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'desktop-chromium');
 
-  await login(page);
-  await resetQueueState(page);
+  await loginAndResetQueueState(page);
 
   const queue = page.getByTestId('desktop-queue');
   const handles = queue.getByRole('button', { name: /^Arrastar E2E / });
@@ -120,8 +116,7 @@ test('reordenação da fila persiste no SQLite e sobrevive a reload', async ({ p
 test('fila não deixa próxima faixa atravessar a atual e permanece aberta ao avançar', async ({ page }, testInfo) => {
   test.skip(!['desktop-chromium', 'mobile-chromium'].includes(testInfo.project.name));
 
-  await login(page);
-  await resetQueueState(page);
+  await loginAndResetQueueState(page);
 
   if (testInfo.project.name === 'desktop-chromium') {
     const queue = page.getByTestId('desktop-queue');
