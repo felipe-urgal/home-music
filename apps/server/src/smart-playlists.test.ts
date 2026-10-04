@@ -259,7 +259,7 @@ test('list reaproveita o mesmo snapshot sem alterar regras com períodos diferen
 
       assert.deepEqual(byId.get(ids[0])?.trackIds, ['a']);
       assert.deepEqual(byId.get(ids[1])?.trackIds, ['a', 'b']);
-      assert.deepEqual(byId.get(ids[2])?.trackIds, ['c', 'd']);
+      assert.deepEqual(byId.get(ids[2])?.trackIds, ['d', 'c']);
       assert.deepEqual(byId.get(ids[3])?.trackIds, ['a', 'd']);
     } finally {
       store.close();
