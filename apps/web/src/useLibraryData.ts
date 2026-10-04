@@ -34,8 +34,26 @@ export function isLatestRequestGeneration(requestGeneration: number, currentGene
   return requestGeneration === currentGeneration;
 }
 
-export function shouldRefreshLibraryFromStatus(statusRevision: number, appliedRevision: number) {
-  return statusRevision !== appliedRevision;
+export function shouldApplyLibrarySnapshot(
+  requestGeneration: number,
+  currentGeneration: number,
+  incomingInstanceId: string,
+  incomingRevision: number,
+  appliedInstanceId: string | null,
+  appliedRevision: number
+) {
+  if (!isLatestRequestGeneration(requestGeneration, currentGeneration)) return false;
+  if (appliedInstanceId !== incomingInstanceId) return true;
+  return incomingRevision >= appliedRevision;
+}
+
+export function shouldRefreshLibraryFromStatus(
+  statusInstanceId: string,
+  statusRevision: number,
+  appliedInstanceId: string | null,
+  appliedRevision: number
+) {
+  return statusInstanceId !== appliedInstanceId || statusRevision !== appliedRevision;
 }
 
 function errorMessage(error: unknown) {
@@ -62,6 +80,7 @@ export function useLibraryData() {
   const libraryRequestGeneration = useRef(0);
   const playlistRequestGeneration = useRef(0);
   const statusRequestGeneration = useRef(0);
+  const appliedLibraryInstanceId = useRef<string | null>(null);
   const appliedLibraryRevision = useRef(0);
 
   const reportError = useCallback((error: unknown) => setActionError(errorMessage(error)), []);
@@ -77,8 +96,16 @@ export function useLibraryData() {
     const generation = ++libraryRequestGeneration.current;
     const data = await jsonRequest<LibraryResponse>('/api/library');
 
-    if (!isLatestRequestGeneration(generation, libraryRequestGeneration.current)) return data;
+    if (!shouldApplyLibrarySnapshot(
+      generation,
+      libraryRequestGeneration.current,
+      data.instanceId,
+      data.revision,
+      appliedLibraryInstanceId.current,
+      appliedLibraryRevision.current
+    )) return data;
 
+    appliedLibraryInstanceId.current = data.instanceId;
     appliedLibraryRevision.current = data.revision;
     setTracks(data.tracks);
     setScannedAt(data.scannedAt);
@@ -149,7 +176,12 @@ export function useLibraryData() {
         const status = await jsonRequest<LibraryStatusResponse>('/api/library/status');
         if (disposed || !isLatestRequestGeneration(generation, statusRequestGeneration.current)) return;
 
-        if (shouldRefreshLibraryFromStatus(status.revision, appliedLibraryRevision.current)) {
+        if (shouldRefreshLibraryFromStatus(
+          status.instanceId,
+          status.revision,
+          appliedLibraryInstanceId.current,
+          appliedLibraryRevision.current
+        )) {
           refreshing = true;
           try {
             await refreshAll();
