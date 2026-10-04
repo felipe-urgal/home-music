@@ -7749,6 +7749,10 @@
   --console-accent-rgb: 255, 66, 90;
 }
 
+.dj-mode--deck-console-v2 .dj-pro-deck__empty {
+  grid-row: 1 / -1;
+}
+
 .dj-mode--deck-console-v2 .dj-pro-deck__heading {
   min-height: 0;
   margin: 0;
