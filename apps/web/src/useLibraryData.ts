@@ -30,6 +30,14 @@ async function jsonRequest<T>(url: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+export function isLatestRequestGeneration(requestGeneration: number, currentGeneration: number) {
+  return requestGeneration === currentGeneration;
+}
+
+export function shouldRefreshLibraryFromStatus(statusRevision: number, appliedRevision: number) {
+  return statusRevision !== appliedRevision;
+}
+
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : 'Não foi possível concluir a operação.';
 }
@@ -69,7 +77,7 @@ export function useLibraryData() {
     const generation = ++libraryRequestGeneration.current;
     const data = await jsonRequest<LibraryResponse>('/api/library');
 
-    if (generation !== libraryRequestGeneration.current) return data;
+    if (!isLatestRequestGeneration(generation, libraryRequestGeneration.current)) return data;
 
     appliedLibraryRevision.current = data.revision;
     setTracks(data.tracks);
@@ -86,7 +94,7 @@ export function useLibraryData() {
       jsonRequest<PlaylistsResponse>('/api/smart-playlists')
     ]);
     const merged = sortPlaylists([...regular.playlists, ...smart.playlists]);
-    if (generation === playlistRequestGeneration.current) setPlaylists(merged);
+    if (isLatestRequestGeneration(generation, playlistRequestGeneration.current)) setPlaylists(merged);
     return { playlists: merged } satisfies PlaylistsResponse;
   }, []);
 
@@ -139,9 +147,9 @@ export function useLibraryData() {
       const generation = ++statusRequestGeneration.current;
       try {
         const status = await jsonRequest<LibraryStatusResponse>('/api/library/status');
-        if (disposed || generation !== statusRequestGeneration.current) return;
+        if (disposed || !isLatestRequestGeneration(generation, statusRequestGeneration.current)) return;
 
-        if (status.revision !== appliedLibraryRevision.current) {
+        if (shouldRefreshLibraryFromStatus(status.revision, appliedLibraryRevision.current)) {
           refreshing = true;
           try {
             await refreshAll();
