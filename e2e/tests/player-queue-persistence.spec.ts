@@ -10,6 +10,7 @@ type LibraryPayload = {
 
 type PlaybackStatePayload = {
   queueIds: string[];
+  updatedAt: string;
 };
 
 async function login(page: Page) {
@@ -38,6 +39,10 @@ async function resetQueueState(page: Page) {
   expect(zuluId).toBeTruthy();
   const orderedIds = [trackId!, zetaId!, zuluId!];
 
+  const currentStateResponse = await page.context().request.get('/api/player/state');
+  expect(currentStateResponse.ok()).toBeTruthy();
+  const currentState = await currentStateResponse.json() as PlaybackStatePayload;
+
   const response = await page.context().request.put('/api/player/state', {
     headers: mutationHeaders,
     data: {
@@ -48,12 +53,25 @@ async function resetQueueState(page: Page) {
       repeatMode: 'off',
       wasPlaying: false,
       baseQueueIds: orderedIds,
-      queueIds: orderedIds
+      queueIds: orderedIds,
+      updatedAt: currentState.updatedAt
     }
   });
   expect(response.ok()).toBeTruthy();
+
+  await expect.poll(() => persistedQueueTitles(page), { timeout: 5_000 }).toEqual([
+    'E2E Track',
+    'E2E Zeta',
+    'E2E Zulu'
+  ]);
+
   await page.reload();
   await expect(page.getByRole('heading', { name: 'E2E Track' })).toBeVisible();
+  await expect.poll(() => persistedQueueTitles(page), { timeout: 5_000 }).toEqual([
+    'E2E Track',
+    'E2E Zeta',
+    'E2E Zulu'
+  ]);
 }
 
 async function persistedQueueTitles(page: Page) {
