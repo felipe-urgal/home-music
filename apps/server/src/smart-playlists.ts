@@ -45,11 +45,6 @@ function stringValue(value: unknown, fallback = '') {
   return typeof value === 'string' ? value : fallback;
 }
 
-function numberValue(value: unknown, fallback = 0) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
-
 function requireUserId(userId: string) {
   if (!userId || userId.length > 128) throw new RangeError('userId pessoal inválido.');
 }
