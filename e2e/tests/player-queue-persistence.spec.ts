@@ -80,6 +80,48 @@ async function prepareQueueState(page: Page) {
   }
 }
 
+async function expectDesktopQueueSurfaceVisible(page: Page) {
+  const queue = page.getByTestId('desktop-queue');
+  const context = page.getByTestId('desktop-context');
+  const layout = page.locator('.desktop-layout');
+
+  const diagnostics = await page.evaluate(() => {
+    const selectors = [
+      '.desktop-layout',
+      '[data-testid="desktop-context"]',
+      '[data-testid="desktop-queue"]',
+      '.desktop-queue__row',
+      '.desktop-queue__drag-handle',
+      '.desktop-queue__more-trigger'
+    ];
+    return {
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      matchesDesktop: window.matchMedia('(min-width: 1024px)').matches,
+      nodes: selectors.map(selector => {
+        const element = document.querySelector<HTMLElement>(selector);
+        if (!element) return { selector, missing: true };
+        const style = getComputedStyle(element);
+        const rect = element.getBoundingClientRect();
+        return {
+          selector,
+          display: style.display,
+          visibility: style.visibility,
+          opacity: style.opacity,
+          overflow: style.overflow,
+          width: rect.width,
+          height: rect.height,
+          top: rect.top,
+          left: rect.left
+        };
+      })
+    };
+  });
+
+  expect(layout, JSON.stringify(diagnostics)).toBeVisible();
+  expect(context, JSON.stringify(diagnostics)).toBeVisible();
+  await expect(queue, JSON.stringify(diagnostics)).toBeVisible();
+}
+
 async function persistedQueueTitles(page: Page) {
   const [libraryResponse, stateResponse] = await Promise.all([
     page.context().request.get('/api/library'),
@@ -99,6 +141,7 @@ test('reordenação da fila persiste no SQLite e sobrevive a reload', async ({ p
 
   await prepareQueueState(page);
 
+  await expectDesktopQueueSurfaceVisible(page);
   const queue = page.getByTestId('desktop-queue');
   const rows = queue.locator('.desktop-queue__row');
   await expect(rows).toHaveCount(2);
@@ -142,6 +185,7 @@ test('fila não deixa próxima faixa atravessar a atual e permanece aberta ao av
 
   if (testInfo.project.name === 'desktop-chromium') {
     await prepareQueueState(page);
+    await expectDesktopQueueSurfaceVisible(page);
     const queue = page.getByTestId('desktop-queue');
     const zetaRow = queue.locator('.desktop-queue__row').filter({ hasText: 'E2E Zeta' });
     const zetaMenuTrigger = zetaRow.locator('.desktop-queue__more-trigger');
