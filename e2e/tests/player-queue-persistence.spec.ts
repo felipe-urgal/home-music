@@ -100,13 +100,23 @@ test('reordenação da fila persiste no SQLite e sobrevive a reload', async ({ p
   await prepareQueueState(page);
 
   const queue = page.getByTestId('desktop-queue');
-  const handles = queue.getByRole('button', { name: /^Arrastar E2E / });
-  await expect(handles.nth(0)).toHaveAccessibleName('Arrastar E2E Zeta');
-  await expect(handles.nth(1)).toHaveAccessibleName('Arrastar E2E Zulu');
+  const rows = queue.locator('.desktop-queue__row');
+  await expect(rows).toHaveCount(2);
 
-  const zuluHandle = queue.getByRole('button', { name: 'Arrastar E2E Zulu' });
-  await zuluHandle.dragTo(queue.getByText('E2E Zeta', { exact: true }));
-  await expect(handles.nth(0)).toHaveAccessibleName('Arrastar E2E Zulu');
+  const zetaRow = rows.filter({ hasText: 'E2E Zeta' });
+  const zuluRow = rows.filter({ hasText: 'E2E Zulu' });
+  const zetaHandle = zetaRow.locator('.desktop-queue__drag-handle');
+  const zuluHandle = zuluRow.locator('.desktop-queue__drag-handle');
+  await expect(zetaHandle).toBeVisible();
+  await expect(zetaHandle).toHaveAttribute('aria-label', 'Arrastar E2E Zeta');
+  await expect(zuluHandle).toBeVisible();
+  await expect(zuluHandle).toHaveAttribute('aria-label', 'Arrastar E2E Zulu');
+
+  await zuluHandle.dragTo(zetaRow);
+  const reorderedRows = queue.locator('.desktop-queue__row');
+  await expect(reorderedRows.nth(0)).toContainText('E2E Zulu');
+  await expect(reorderedRows.nth(0).locator('.desktop-queue__drag-handle'))
+    .toHaveAttribute('aria-label', 'Arrastar E2E Zulu');
 
   await expect.poll(() => persistedQueueTitles(page), { timeout: 5_000 }).toEqual([
     'E2E Track',
@@ -116,9 +126,14 @@ test('reordenação da fila persiste no SQLite e sobrevive a reload', async ({ p
 
   await page.reload();
   await expect(page.getByRole('heading', { name: 'E2E Track' })).toBeVisible();
-  const restoredHandles = page.getByTestId('desktop-queue').getByRole('button', { name: /^Arrastar E2E / });
-  await expect(restoredHandles.nth(0)).toHaveAccessibleName('Arrastar E2E Zulu');
-  await expect(restoredHandles.nth(1)).toHaveAccessibleName('Arrastar E2E Zeta');
+  const restoredRows = page.getByTestId('desktop-queue').locator('.desktop-queue__row');
+  await expect(restoredRows).toHaveCount(2);
+  await expect(restoredRows.nth(0)).toContainText('E2E Zulu');
+  await expect(restoredRows.nth(0).locator('.desktop-queue__drag-handle'))
+    .toHaveAttribute('aria-label', 'Arrastar E2E Zulu');
+  await expect(restoredRows.nth(1)).toContainText('E2E Zeta');
+  await expect(restoredRows.nth(1).locator('.desktop-queue__drag-handle'))
+    .toHaveAttribute('aria-label', 'Arrastar E2E Zeta');
 });
 
 
@@ -128,7 +143,10 @@ test('fila não deixa próxima faixa atravessar a atual e permanece aberta ao av
   if (testInfo.project.name === 'desktop-chromium') {
     await prepareQueueState(page);
     const queue = page.getByTestId('desktop-queue');
-    const zetaMenuTrigger = queue.getByRole('button', { name: 'Mais opções para E2E Zeta' });
+    const zetaRow = queue.locator('.desktop-queue__row').filter({ hasText: 'E2E Zeta' });
+    const zetaMenuTrigger = zetaRow.locator('.desktop-queue__more-trigger');
+    await expect(zetaMenuTrigger).toBeVisible();
+    await expect(zetaMenuTrigger).toHaveAttribute('aria-label', 'Mais opções para E2E Zeta');
     await zetaMenuTrigger.click();
     const zetaMenu = queue.getByRole('menu', { name: 'Opções de E2E Zeta' });
     await expect(zetaMenu.getByRole('menuitem', { name: 'Mover para cima' })).toBeDisabled();
