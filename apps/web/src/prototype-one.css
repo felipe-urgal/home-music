@@ -3391,6 +3391,10 @@
     box-shadow: -20px 0 46px rgba(0, 0, 0, .28);
   }
 
+  #root .desktop-layout[data-offline="false"][data-desktop-active="player"] > .desktop-now-playing-surface {
+    padding-right: calc(var(--desktop-context-width, 340px) + 34px) !important;
+  }
+
   #root .desktop-layout[data-offline="false"][data-desktop-active="player"][data-topbar-collapsed="true"] > .desktop-context {
     top: 16px;
   }
