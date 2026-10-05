@@ -9,6 +9,7 @@ type LibraryPayload = {
 };
 
 type PlaybackStatePayload = {
+  currentTrackId: string | null;
   queueIds: string[];
   updatedAt: string;
 };
@@ -64,6 +65,19 @@ async function prepareQueueState(page: Page) {
 
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'E2E Track' })).toBeVisible();
+
+  const hydratedStateResponse = await page.context().request.get('/api/player/state');
+  expect(hydratedStateResponse.ok()).toBeTruthy();
+  const hydratedState = await hydratedStateResponse.json() as PlaybackStatePayload;
+  expect(hydratedState.currentTrackId).toBe(trackId);
+  expect(hydratedState.queueIds).toEqual(orderedIds);
+
+  const queue = page.getByTestId('desktop-queue');
+  if (await queue.count()) {
+    await expect(queue.locator('.desktop-queue__header')).toContainText('2');
+    await expect(queue).toContainText('E2E Zeta');
+    await expect(queue).toContainText('E2E Zulu');
+  }
 }
 
 async function persistedQueueTitles(page: Page) {
