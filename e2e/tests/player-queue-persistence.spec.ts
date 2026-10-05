@@ -35,11 +35,11 @@ async function establishDesktopQueue(page: Page) {
   await page.goto('/library');
   await expect(page).toHaveURL(/\/library$/);
 
-  const grid = page.getByTestId('desktop-track-grid');
-  await expect(grid).toBeVisible();
+  const table = page.getByTestId('desktop-library-table');
+  await expect(table).toBeVisible();
 
-  const zeta = grid.locator('.desktop-track-card__main').filter({ hasText: 'E2E Zeta' });
-  const track = grid.locator('.desktop-track-card__main').filter({ hasText: 'E2E Track' });
+  const zeta = table.locator('.desktop-library-table__track').filter({ hasText: 'E2E Zeta' });
+  const track = table.locator('.desktop-library-table__track').filter({ hasText: 'E2E Track' });
   await expect(zeta).toBeVisible();
   await expect(track).toBeVisible();
 
