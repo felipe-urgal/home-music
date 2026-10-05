@@ -1,5 +1,6 @@
 import { lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AuthenticatedUser } from '@home-music/shared';
+import { ActionDialog } from './components/ActionDialog';
 import { DesktopNowPlayingScreen } from './components/DesktopNowPlayingScreen';
 import { DesktopPlayerBar } from './components/DesktopPlayerBar';
 import { DesktopPlayerSidebarTools } from './components/DesktopPlayerSidebarTools';
@@ -106,11 +107,13 @@ type AuthenticatedAppProps = {
 
 export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenOffline, offline }: AuthenticatedAppProps) {
   const [administrationReturnScreen, setAdministrationReturnScreen] = useState<AdministrationReturnScreen>('account');
-  const [mobileDownloadRemoval, setMobileDownloadRemoval] = useState<{
+  const [downloadRemoval, setDownloadRemoval] = useState<{
     id: string;
     title: string;
     availableViaCollection: boolean;
   } | null>(null);
+  const [downloadRemovalBusy, setDownloadRemovalBusy] = useState(false);
+  const [downloadRemovalError, setDownloadRemovalError] = useState<string | null>(null);
   const library = useLibraryData();
   const libraryReady = !library.loading && !library.error;
   const navigation = useLibraryNavigation(library.tracks, library.playlists, libraryReady, library.revision);
@@ -1543,30 +1546,34 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
     }
   }
 
-  function removeDownload(trackId: string) {
-    run(offline.remove(trackId).catch(error => {
+  async function confirmDownloadRemoval() {
+    const target = downloadRemoval;
+    if (!target || downloadRemovalBusy) return;
+
+    setDownloadRemovalBusy(true);
+    setDownloadRemovalError(null);
+    try {
+      await offline.remove(target.id);
+      setDownloadRemoval(null);
+    } catch (error) {
       library.reportError(error);
-      throw error;
-    }));
+      setDownloadRemovalError(
+        error instanceof Error ? error.message : 'Não foi possível remover o download.'
+      );
+    } finally {
+      setDownloadRemovalBusy(false);
+    }
   }
 
   function toggleDownload() {
     if (!current) return;
     if (currentHasIndividualDownload) {
-      if (!desktopLayout) {
-        setMobileDownloadRemoval({
-          id: current.id,
-          title: current.title,
-          availableViaCollection: currentAvailableViaCollection
-        });
-        return;
-      }
-
-      const message = currentAvailableViaCollection
-        ? `Remover o download individual de “${current.title}”? A música continuará disponível porque uma coleção offline também depende dela.`
-        : `Remover “${current.title}” dos downloads offline?`;
-      if (!window.confirm(message)) return;
-      removeDownload(current.id);
+      setDownloadRemovalError(null);
+      setDownloadRemoval({
+        id: current.id,
+        title: current.title,
+        availableViaCollection: currentAvailableViaCollection
+      });
       return;
     }
 
@@ -1980,34 +1987,57 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
       />
 
       <MobileSheet
-        open={Boolean(mobileDownloadRemoval)}
+        open={!desktopLayout && Boolean(downloadRemoval)}
         title="Remover download"
-        onClose={() => setMobileDownloadRemoval(null)}
+        onClose={() => {
+          if (!downloadRemovalBusy) {
+            setDownloadRemoval(null);
+            setDownloadRemovalError(null);
+          }
+        }}
         className="player-download-confirm-sheet"
       >
-        {mobileDownloadRemoval && (
+        {downloadRemoval && (
           <div className="mobile-sheet-confirm">
             <p>
-              {mobileDownloadRemoval.availableViaCollection
-                ? `Remover o download individual de “${mobileDownloadRemoval.title}”? A música continuará disponível porque uma coleção offline também depende dela.`
-                : `Remover “${mobileDownloadRemoval.title}” dos downloads offline?`}
+              {downloadRemoval.availableViaCollection
+                ? `Remover o download individual de “${downloadRemoval.title}”? A música continuará disponível porque uma coleção offline também depende dela.`
+                : `Remover “${downloadRemoval.title}” dos downloads offline?`}
             </p>
+            {downloadRemovalError && <p role="alert">{downloadRemovalError}</p>}
             <div className="mobile-sheet-confirm__actions">
-              <button type="button" onClick={() => setMobileDownloadRemoval(null)}>Cancelar</button>
+              <button type="button" disabled={downloadRemovalBusy} onClick={() => setDownloadRemoval(null)}>Cancelar</button>
               <button
                 className="is-danger"
                 type="button"
-                onClick={() => {
-                  removeDownload(mobileDownloadRemoval.id);
-                  setMobileDownloadRemoval(null);
-                }}
+                disabled={downloadRemovalBusy}
+                onClick={() => void confirmDownloadRemoval()}
               >
-                Remover
+                {downloadRemovalBusy ? 'Aguarde…' : 'Remover'}
               </button>
             </div>
           </div>
         )}
       </MobileSheet>
+
+      <ActionDialog
+        open={desktopLayout && Boolean(downloadRemoval)}
+        title="Remover download"
+        description={downloadRemoval
+          ? downloadRemoval.availableViaCollection
+            ? `Remover o download individual de “${downloadRemoval.title}”? A música continuará disponível porque uma coleção offline também depende dela.`
+            : `Remover “${downloadRemoval.title}” dos downloads offline?`
+          : undefined}
+        confirmLabel="Remover download"
+        danger
+        busy={downloadRemovalBusy}
+        error={downloadRemovalError}
+        onConfirm={() => void confirmDownloadRemoval()}
+        onClose={() => {
+          setDownloadRemoval(null);
+          setDownloadRemovalError(null);
+        }}
+      />
 
       {library.actionError && (
         <button className="app-toast" role="status" onClick={library.clearActionError}>

@@ -163,6 +163,27 @@ export class PersonalLibraryService {
     });
   }
 
+
+
+  savePlaybackStateVersioned(userId: string, body: Partial<PlaybackState>) {
+    if (typeof body.updatedAt !== 'string') {
+      const state = this.savePlaybackState(userId, body);
+      return state
+        ? { status: 'ok' as const, state }
+        : { status: 'invalid' as const };
+    }
+
+    const current = this.database.loadPlaybackState(userId);
+    if (current.updatedAt !== body.updatedAt) {
+      return { status: 'conflict' as const, state: current };
+    }
+
+    const state = this.savePlaybackState(userId, body);
+    return state
+      ? { status: 'ok' as const, state }
+      : { status: 'invalid' as const };
+  }
+
   portableTrackReferences(trackIds: readonly string[]) {
     const references = new Map<string, PortableTrackReferenceV1>();
     const libraryRoot = this.library.root;

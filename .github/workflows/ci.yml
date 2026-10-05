@@ -59,10 +59,10 @@ jobs:
         run: npm run test --prefix e2e -- tests/browser-security-policy.spec.ts --project=desktop-chromium
 
       - name: Mobile playback and library E2E
-        run: npm run test --prefix e2e -- tests/crossfade-mobile.spec.ts tests/rhythm-playback-regression.spec.ts tests/mobile-library-prototype.spec.ts tests/smart-playlist-mobile-dialog.spec.ts tests/offline-collections-critical.spec.ts --project=mobile-chromium
+        run: npm run test --prefix e2e -- tests/crossfade-mobile.spec.ts tests/player-queue-persistence.spec.ts tests/rhythm-playback-regression.spec.ts tests/mobile-library-prototype.spec.ts tests/smart-playlist-mobile-dialog.spec.ts tests/offline-collections-critical.spec.ts --project=mobile-chromium
 
       - name: Desktop prototype layout E2E
-        run: npm run test --prefix e2e -- tests/desktop-layout-regressions.spec.ts tests/dj-mode-regressions.spec.ts tests/dj-performance-advanced.spec.ts tests/rhythm-playback-regression.spec.ts --project=desktop-chromium
+        run: npm run test --prefix e2e -- tests/desktop-layout-regressions.spec.ts tests/player-queue-persistence.spec.ts tests/dj-mode-regressions.spec.ts tests/dj-performance-advanced.spec.ts tests/rhythm-playback-regression.spec.ts --project=desktop-chromium
 
       - name: TV device login E2E
         run: npm run test --prefix e2e -- tests/tv-device-login.spec.ts --project=desktop-chromium

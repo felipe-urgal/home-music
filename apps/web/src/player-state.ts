@@ -98,3 +98,29 @@ export function nextTrackAfterErrorDecision(
 
   return { type: 'stop' };
 }
+
+
+export function reorderUpcomingQueue<T>(
+  items: T[],
+  currentIndex: number,
+  from: number,
+  to: number
+) {
+  if (
+    currentIndex < 0
+    || from === to
+    || from <= currentIndex
+    || to <= currentIndex
+    || from < 0
+    || to < 0
+    || from >= items.length
+    || to >= items.length
+  ) {
+    return items;
+  }
+
+  const next = [...items];
+  const [item] = next.splice(from, 1);
+  next.splice(to, 0, item);
+  return next;
+}

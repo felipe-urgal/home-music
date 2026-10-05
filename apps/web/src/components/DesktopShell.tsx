@@ -490,7 +490,7 @@ export function DesktopShell({
                       {menuOpen && (
                         <div className="desktop-queue__more-menu" role="menu" aria-label={`Opções de ${track.title}`}>
                           <button type="button" role="menuitem" onClick={() => { setQueueMenuIndex(null); onPlayTrack?.(track, queue); }}><Radio aria-hidden="true" />Tocar agora</button>
-                          <button type="button" role="menuitem" disabled={!onReorderQueue || queueIndex <= 0} onClick={() => { onReorderQueue?.(queueIndex, queueIndex - 1); setQueueMenuIndex(null); }}><ChevronUp aria-hidden="true" />Mover para cima</button>
+                          <button type="button" role="menuitem" disabled={!onReorderQueue || queueIndex <= currentIndex + 1} onClick={() => { onReorderQueue?.(queueIndex, queueIndex - 1); setQueueMenuIndex(null); }}><ChevronUp aria-hidden="true" />Mover para cima</button>
                           <button type="button" role="menuitem" disabled={!onReorderQueue || queueIndex >= queue.length - 1} onClick={() => { onReorderQueue?.(queueIndex, queueIndex + 1); setQueueMenuIndex(null); }}><ChevronDown aria-hidden="true" />Mover para baixo</button>
                         </div>
                       )}

@@ -8,7 +8,8 @@
   display: none;
 }
 
-.queue-panel__toggle-mobile {
+.queue-panel__toggle-mobile,
+.queue-panel__open-mobile {
   display: none;
 }
 
@@ -418,6 +419,7 @@
   }
 
   #root .desktop-layout[data-offline="false"] .player-screen-immersive .queue-panel--player {
+    position: relative;
     width: auto;
     flex: 0 0 auto;
     margin: auto 20px 0;
@@ -452,6 +454,38 @@
   #root .desktop-layout[data-offline="false"] .queue-panel__toggle-mobile:disabled {
     opacity: 1;
     cursor: default;
+  }
+
+  #root .desktop-layout[data-offline="false"] .queue-panel__open-mobile {
+    position: absolute;
+    z-index: 3;
+    top: 50%;
+    right: 12px;
+    transform: translateY(-50%);
+    width: 42px;
+    height: 42px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, .14);
+    border-radius: 12px;
+    color: rgba(239, 243, 249, .9);
+    background: rgba(7, 11, 17, .72);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, .2);
+    backdrop-filter: blur(8px);
+  }
+
+  #root .desktop-layout[data-offline="false"] .queue-panel__open-mobile svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .queue-panel__toggle-mobile {
+    padding-right: 58px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .queue-panel__next-chevron {
+    display: none;
   }
 
   #root .desktop-layout[data-offline="false"] .queue-panel__toggle-mobile > .artwork {
@@ -536,7 +570,7 @@
 
     #root .desktop-layout[data-offline="false"] .queue-panel__toggle-mobile {
       min-height: 82px;
-      padding: 8px 11px;
+      padding: 8px 58px 8px 11px;
     }
 
     #root .desktop-layout[data-offline="false"] .queue-panel__toggle-mobile {

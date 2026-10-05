@@ -3374,3 +3374,28 @@
     transition: none;
   }
 }
+
+
+@media (min-width: 1024px) {
+  #root .desktop-layout[data-offline="false"][data-desktop-active="player"] > .desktop-context {
+    position: absolute;
+    z-index: 35;
+    top: 72px;
+    right: 0;
+    bottom: 0;
+    width: clamp(280px, var(--desktop-context-width, 340px), 520px);
+    height: auto;
+    min-height: 0;
+    display: flex !important;
+    border-left: 1px solid rgba(255, 255, 255, .07);
+    box-shadow: -20px 0 46px rgba(0, 0, 0, .28);
+  }
+
+  #root .desktop-layout[data-offline="false"][data-desktop-active="player"] > .desktop-now-playing-surface {
+    padding-right: calc(var(--desktop-context-width, 340px) + 34px) !important;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-desktop-active="player"][data-topbar-collapsed="true"] > .desktop-context {
+    top: 16px;
+  }
+}

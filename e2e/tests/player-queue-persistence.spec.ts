@@ -9,17 +9,10 @@ type LibraryPayload = {
 };
 
 type PlaybackStatePayload = {
+  currentTrackId: string | null;
   queueIds: string[];
+  updatedAt: string;
 };
-
-async function login(page: Page) {
-  await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Entrar' })).toBeVisible();
-  await page.getByLabel('Usuário', { exact: true }).fill(username);
-  await page.getByLabel('Senha', { exact: true }).fill(password);
-  await page.getByRole('button', { name: 'Entrar', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'E2E Track' })).toBeVisible();
-}
 
 async function libraryTrackIds(page: Page) {
   const response = await page.context().request.get('/api/library');
@@ -28,7 +21,13 @@ async function libraryTrackIds(page: Page) {
   return new Map(library.tracks.map(track => [track.title, track.id]));
 }
 
-async function resetQueueState(page: Page) {
+async function prepareQueueState(page: Page) {
+  const loginResponse = await page.context().request.post('/api/auth/login', {
+    headers: mutationHeaders,
+    data: { username, password }
+  });
+  expect(loginResponse.ok()).toBeTruthy();
+
   const ids = await libraryTrackIds(page);
   const trackId = ids.get('E2E Track');
   const zetaId = ids.get('E2E Zeta');
@@ -37,6 +36,10 @@ async function resetQueueState(page: Page) {
   expect(zetaId).toBeTruthy();
   expect(zuluId).toBeTruthy();
   const orderedIds = [trackId!, zetaId!, zuluId!];
+
+  const currentStateResponse = await page.context().request.get('/api/player/state');
+  expect(currentStateResponse.ok()).toBeTruthy();
+  const currentState = await currentStateResponse.json() as PlaybackStatePayload;
 
   const response = await page.context().request.put('/api/player/state', {
     headers: mutationHeaders,
@@ -48,12 +51,75 @@ async function resetQueueState(page: Page) {
       repeatMode: 'off',
       wasPlaying: false,
       baseQueueIds: orderedIds,
-      queueIds: orderedIds
+      queueIds: orderedIds,
+      updatedAt: currentState.updatedAt
     }
   });
   expect(response.ok()).toBeTruthy();
-  await page.reload();
+
+  await expect.poll(() => persistedQueueTitles(page), { timeout: 5_000 }).toEqual([
+    'E2E Track',
+    'E2E Zeta',
+    'E2E Zulu'
+  ]);
+
+  await page.goto('/');
   await expect(page.getByRole('heading', { name: 'E2E Track' })).toBeVisible();
+
+  const hydratedStateResponse = await page.context().request.get('/api/player/state');
+  expect(hydratedStateResponse.ok()).toBeTruthy();
+  const hydratedState = await hydratedStateResponse.json() as PlaybackStatePayload;
+  expect(hydratedState.currentTrackId).toBe(trackId);
+  expect(hydratedState.queueIds).toEqual(orderedIds);
+
+  const queue = page.getByTestId('desktop-queue');
+  if (await queue.count()) {
+    await expect(queue.locator('.desktop-queue__header')).toContainText('2');
+    await expect(queue).toContainText('E2E Zeta');
+    await expect(queue).toContainText('E2E Zulu');
+  }
+}
+
+async function expectDesktopQueueSurfaceVisible(page: Page) {
+  const queue = page.getByTestId('desktop-queue');
+  const context = page.getByTestId('desktop-context');
+  const layout = page.locator('.desktop-layout');
+
+  const diagnostics = await page.evaluate(() => {
+    const selectors = [
+      '.desktop-layout',
+      '[data-testid="desktop-context"]',
+      '[data-testid="desktop-queue"]',
+      '.desktop-queue__row',
+      '.desktop-queue__drag-handle',
+      '.desktop-queue__more-trigger'
+    ];
+    return {
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      matchesDesktop: window.matchMedia('(min-width: 1024px)').matches,
+      nodes: selectors.map(selector => {
+        const element = document.querySelector<HTMLElement>(selector);
+        if (!element) return { selector, missing: true };
+        const style = getComputedStyle(element);
+        const rect = element.getBoundingClientRect();
+        return {
+          selector,
+          display: style.display,
+          visibility: style.visibility,
+          opacity: style.opacity,
+          overflow: style.overflow,
+          width: rect.width,
+          height: rect.height,
+          top: rect.top,
+          left: rect.left
+        };
+      })
+    };
+  });
+
+  expect(layout, JSON.stringify(diagnostics)).toBeVisible();
+  expect(context, JSON.stringify(diagnostics)).toBeVisible();
+  await expect(queue, JSON.stringify(diagnostics)).toBeVisible();
 }
 
 async function persistedQueueTitles(page: Page) {
@@ -73,17 +139,27 @@ async function persistedQueueTitles(page: Page) {
 test('reordenação da fila persiste no SQLite e sobrevive a reload', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'desktop-chromium');
 
-  await login(page);
-  await resetQueueState(page);
+  await prepareQueueState(page);
 
+  await expectDesktopQueueSurfaceVisible(page);
   const queue = page.getByTestId('desktop-queue');
-  const handles = queue.getByRole('button', { name: /^Arrastar E2E / });
-  await expect(handles.nth(0)).toHaveAccessibleName('Arrastar E2E Zeta');
-  await expect(handles.nth(1)).toHaveAccessibleName('Arrastar E2E Zulu');
+  const rows = queue.locator('.desktop-queue__row');
+  await expect(rows).toHaveCount(2);
 
-  const zuluHandle = queue.getByRole('button', { name: 'Arrastar E2E Zulu' });
-  await zuluHandle.dragTo(queue.getByText('E2E Zeta', { exact: true }));
-  await expect(handles.nth(0)).toHaveAccessibleName('Arrastar E2E Zulu');
+  const zetaRow = rows.filter({ hasText: 'E2E Zeta' });
+  const zuluRow = rows.filter({ hasText: 'E2E Zulu' });
+  const zetaHandle = zetaRow.locator('.desktop-queue__drag-handle');
+  const zuluHandle = zuluRow.locator('.desktop-queue__drag-handle');
+  await expect(zetaHandle).toBeVisible();
+  await expect(zetaHandle).toHaveAttribute('aria-label', 'Arrastar E2E Zeta');
+  await expect(zuluHandle).toBeVisible();
+  await expect(zuluHandle).toHaveAttribute('aria-label', 'Arrastar E2E Zulu');
+
+  await zuluHandle.dragTo(zetaRow);
+  const reorderedRows = queue.locator('.desktop-queue__row');
+  await expect(reorderedRows.nth(0)).toContainText('E2E Zulu');
+  await expect(reorderedRows.nth(0).locator('.desktop-queue__drag-handle'))
+    .toHaveAttribute('aria-label', 'Arrastar E2E Zulu');
 
   await expect.poll(() => persistedQueueTitles(page), { timeout: 5_000 }).toEqual([
     'E2E Track',
@@ -93,7 +169,50 @@ test('reordenação da fila persiste no SQLite e sobrevive a reload', async ({ p
 
   await page.reload();
   await expect(page.getByRole('heading', { name: 'E2E Track' })).toBeVisible();
-  const restoredHandles = page.getByTestId('desktop-queue').getByRole('button', { name: /^Arrastar E2E / });
-  await expect(restoredHandles.nth(0)).toHaveAccessibleName('Arrastar E2E Zulu');
-  await expect(restoredHandles.nth(1)).toHaveAccessibleName('Arrastar E2E Zeta');
+  const restoredRows = page.getByTestId('desktop-queue').locator('.desktop-queue__row');
+  await expect(restoredRows).toHaveCount(2);
+  await expect(restoredRows.nth(0)).toContainText('E2E Zulu');
+  await expect(restoredRows.nth(0).locator('.desktop-queue__drag-handle'))
+    .toHaveAttribute('aria-label', 'Arrastar E2E Zulu');
+  await expect(restoredRows.nth(1)).toContainText('E2E Zeta');
+  await expect(restoredRows.nth(1).locator('.desktop-queue__drag-handle'))
+    .toHaveAttribute('aria-label', 'Arrastar E2E Zeta');
+});
+
+
+test('fila não deixa próxima faixa atravessar a atual e permanece aberta ao avançar', async ({ page }, testInfo) => {
+  test.skip(!['desktop-chromium', 'mobile-chromium'].includes(testInfo.project.name));
+
+  if (testInfo.project.name === 'desktop-chromium') {
+    await prepareQueueState(page);
+    await expectDesktopQueueSurfaceVisible(page);
+    const queue = page.getByTestId('desktop-queue');
+    const zetaRow = queue.locator('.desktop-queue__row').filter({ hasText: 'E2E Zeta' });
+    const zetaMenuTrigger = zetaRow.locator('.desktop-queue__more-trigger');
+    await expect(zetaMenuTrigger).toBeVisible();
+    await expect(zetaMenuTrigger).toHaveAttribute('aria-label', 'Mais opções para E2E Zeta');
+    await zetaMenuTrigger.click();
+    const zetaMenu = queue.getByRole('menu', { name: 'Opções de E2E Zeta' });
+    await expect(zetaMenu.getByRole('menuitem', { name: 'Mover para cima' })).toBeDisabled();
+
+    await expect.poll(() => persistedQueueTitles(page)).toEqual([
+      'E2E Track',
+      'E2E Zeta',
+      'E2E Zulu'
+    ]);
+    return;
+  }
+
+  await prepareQueueState(page);
+
+  const openQueue = page.getByRole('button', { name: /Abrir fila/ });
+  await openQueue.click();
+  const queueDialog = page.getByRole('dialog', { name: 'Fila de reprodução' });
+  await expect(queueDialog).toBeVisible();
+  await expect(queueDialog.getByRole('button', { name: 'Mover E2E Zeta para cima' })).toBeDisabled();
+
+  const zetaTrack = queueDialog.getByRole('button').filter({ hasText: 'E2E Zeta' });
+  await zetaTrack.click();
+  await expect(page.getByRole('heading', { name: 'E2E Zeta' })).toBeVisible();
+  await expect(queueDialog).toBeVisible();
 });

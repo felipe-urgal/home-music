@@ -1,8 +1,8 @@
 import { useEffect, useId, useRef } from 'react';
 import { AlertTriangle, LoaderCircle, X } from 'lucide-react';
-import './LibraryActionDialog.css';
+import './ActionDialog.css';
 
-type LibraryActionDialogProps = {
+type ActionDialogProps = {
   open: boolean;
   title: string;
   description?: string;
@@ -19,7 +19,7 @@ type LibraryActionDialogProps = {
   onClose: () => void;
 };
 
-export function LibraryActionDialog({
+export function ActionDialog({
   open,
   title,
   description,
@@ -34,7 +34,7 @@ export function LibraryActionDialog({
   onValueChange,
   onConfirm,
   onClose
-}: LibraryActionDialogProps) {
+}: ActionDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const cancelButtonRef = useRef<HTMLButtonElement>(null);
@@ -78,7 +78,7 @@ export function LibraryActionDialog({
   return (
     <dialog
       ref={dialogRef}
-      className={`library-action-dialog${danger ? ' is-danger' : ''}`}
+      className={`action-dialog${danger ? ' is-danger' : ''}`}
       aria-labelledby={titleId}
       aria-describedby={description ? descriptionId : undefined}
       onCancel={event => {
@@ -95,10 +95,10 @@ export function LibraryActionDialog({
           if (!busy && !confirmDisabled) onConfirm();
         }}
       >
-        <header className="library-action-dialog__header">
-          <div className="library-action-dialog__heading">
+        <header className="action-dialog__header">
+          <div className="action-dialog__heading">
             {danger && (
-              <span className="library-action-dialog__danger-icon" aria-hidden="true">
+              <span className="action-dialog__danger-icon" aria-hidden="true">
                 <AlertTriangle />
               </span>
             )}
@@ -109,7 +109,7 @@ export function LibraryActionDialog({
           </div>
           <button
             type="button"
-            className="library-action-dialog__close"
+            className="action-dialog__close"
             aria-label="Fechar"
             disabled={busy}
             onClick={onClose}
@@ -119,8 +119,8 @@ export function LibraryActionDialog({
         </header>
 
         {hasInput && (
-          <div className="library-action-dialog__body">
-            <label className="library-action-dialog__field">
+          <div className="action-dialog__body">
+            <label className="action-dialog__field">
               <span>{inputLabel}</span>
               <input
                 ref={inputRef}
@@ -136,16 +136,16 @@ export function LibraryActionDialog({
         )}
 
         {error && (
-          <p className="library-action-dialog__error" role="alert">
+          <p className="action-dialog__error" role="alert">
             {error}
           </p>
         )}
 
-        <footer className="library-action-dialog__actions">
+        <footer className="action-dialog__actions">
           <button
             ref={cancelButtonRef}
             type="button"
-            className="library-action-dialog__secondary"
+            className="action-dialog__secondary"
             disabled={busy}
             onClick={onClose}
           >
@@ -153,7 +153,7 @@ export function LibraryActionDialog({
           </button>
           <button
             type="submit"
-            className={danger ? 'library-action-dialog__danger' : 'library-action-dialog__primary'}
+            className={danger ? 'action-dialog__danger' : 'action-dialog__primary'}
             disabled={busy || confirmDisabled}
           >
             {busy && <LoaderCircle className="is-spinning" aria-hidden="true" />}

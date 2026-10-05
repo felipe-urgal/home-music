@@ -47,4 +47,28 @@ describe('PlayerScreen responsibility boundaries', () => {
     expect(queue).not.toMatch(/setShuffle/);
     expect(queue).not.toMatch(/setRepeatMode/);
   });
+
+  it('usa auto-hide compartilhado com foco seguro no chrome e na capa mobile', () => {
+    const chrome = componentSource('PlayerMobileChrome.tsx');
+    const presentation = componentSource('PlayerTrackPresentation.tsx');
+
+    expect(chrome).toMatch(/useAutoHideControls/);
+    expect(presentation).toMatch(/useAutoHideControls/);
+  });
+
+  it('separa a gravação DJ do owner de crossfade', () => {
+    const crossfade = webSource('useCrossfadeAudioPlayer.ts');
+    const recording = webSource('useDjMasterRecording.ts');
+
+    expect(crossfade).toMatch(/useDjMasterRecording/);
+    expect(crossfade).not.toMatch(/new MediaRecorder/);
+    expect(recording).toMatch(/new MediaRecorder/);
+  });
+
+  it('remove confirmação nativa do fluxo de download do player', () => {
+    const app = webSource('AuthenticatedApp.tsx');
+
+    expect(app).toMatch(/<ActionDialog\b/);
+    expect(app).not.toMatch(/window\.confirm\s*\(/);
+  });
 });

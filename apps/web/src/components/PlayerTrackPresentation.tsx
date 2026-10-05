@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   CheckCircle2,
   ChevronDown,
@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import type { Playlist, RepeatMode, Track } from '@home-music/shared';
 import { useCrossfadeVisualState } from '../crossfade-visual';
+import { useAutoHideControls } from '../useAutoHideControls';
 import { MobileSheet } from './MobileSheet';
 import { NowPlayingCrossfadeIdentity, NowPlayingCrossfadeVinyl } from './NowPlayingCrossfade';
 
@@ -65,9 +66,11 @@ export function PlayerTrackPresentation({
 }: PlayerTrackPresentationProps) {
   const [showPlaylistPicker, setShowPlaylistPicker] = useState(false);
   const [showTrackMenu, setShowTrackMenu] = useState(false);
-  const [showHeroControl, setShowHeroControl] = useState(true);
-  const heroControlTimeoutRef = useRef<number | null>(null);
   const crossfadeVisual = useCrossfadeVisualState();
+  const heroControl = useAutoHideControls<HTMLDivElement>(
+    playing,
+    `${current.id}:${queueLength}`
+  );
   const offlineActionLabel = downloading
     ? 'Baixando para uso offline'
     : isDownloaded
@@ -78,25 +81,9 @@ export function PlayerTrackPresentation({
         ? 'Manter também como download individual'
         : 'Baixar para uso offline';
 
-  function clearHeroControlTimeout() {
-    if (heroControlTimeoutRef.current == null) return;
-    window.clearTimeout(heroControlTimeoutRef.current);
-    heroControlTimeoutRef.current = null;
-  }
-
-  function revealHeroControl() {
-    clearHeroControlTimeout();
-    setShowHeroControl(true);
-    if (playing) {
-      heroControlTimeoutRef.current = window.setTimeout(() => setShowHeroControl(false), 1800);
-    }
-  }
-
   useEffect(() => {
     setShowPlaylistPicker(false);
     setShowTrackMenu(false);
-    revealHeroControl();
-    return clearHeroControlTimeout;
   }, [current.id, queueLength, playing]);
 
   function openPlaylistPicker() {
@@ -211,7 +198,13 @@ export function PlayerTrackPresentation({
         </div>
       </MobileSheet>
 
-      <div className="hero-art">
+      <div
+        ref={heroControl.rootRef}
+        className="hero-art"
+        onPointerDownCapture={heroControl.onPointerDownCapture}
+        onFocusCapture={heroControl.onFocusCapture}
+        onBlurCapture={heroControl.onBlurCapture}
+      >
         {offlineMode ? (
           <NowPlayingCrossfadeVinyl
             current={current}
@@ -227,22 +220,22 @@ export function PlayerTrackPresentation({
               playing={playing}
               offlineMode={false}
             />
-            {!showHeroControl && (
+            {!heroControl.visible && (
               <button
                 className="player-hero-reveal"
                 type="button"
                 aria-label="Mostrar controles de reprodução"
-                onClick={revealHeroControl}
+                onClick={heroControl.reveal}
               />
             )}
             <button
-              className={`player-hero-play__control ${showHeroControl ? 'is-visible' : 'is-hidden'}`}
+              className={`player-hero-play__control ${heroControl.visible ? 'is-visible' : 'is-hidden'}`}
               type="button"
               aria-label={playing ? 'Pausar' : 'Tocar'}
-              aria-hidden={!showHeroControl}
-              tabIndex={showHeroControl ? 0 : -1}
+              aria-hidden={!heroControl.visible}
+              tabIndex={heroControl.visible ? 0 : -1}
               onClick={() => {
-                revealHeroControl();
+                heroControl.reveal();
                 onTogglePlay();
               }}
             >

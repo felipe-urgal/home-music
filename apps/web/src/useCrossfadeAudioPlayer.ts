@@ -55,19 +55,11 @@ import {
   applyDjFxStateToGraph,
   applyDjOutputGainToGraph,
   createDjEqAudioGraph,
-  createDjMasterRecordingOutput,
   disposeDjEqAudioGraph,
   readDjEqMeterLevel,
   resumeDjEqAudioGraph,
-  type DjEqAudioGraph,
-  type DjMasterRecordingOutput
+  type DjEqAudioGraph
 } from './dj-eq-audio-graph';
-import {
-  djRecordingFilename,
-  selectDjRecordingMimeType,
-  type DjRecordingResult,
-  type DjRecordingState
-} from './dj-recording';
 import {
   createNormalPlaybackSessionSnapshot,
   type NormalPlaybackSessionSnapshot
@@ -78,6 +70,7 @@ import {
   type DualDeckAutomixTransition
 } from './dual-deck-mixer';
 import { useAudioPlayer } from './useAudioPlayer';
+import { useDjMasterRecording } from './useDjMasterRecording';
 
 function initialCrossfadeSeconds() {
   try {
@@ -120,24 +113,11 @@ export function useCrossfadeAudioPlayer(
   const deckBRef = useRef<HTMLAudioElement>(null);
   const activeDeckRef = useRef<CrossfadeDeck>('a');
   const dualDeckModeRef = useRef(false);
+  const isDualDeckModeActive = useCallback(() => dualDeckModeRef.current, []);
   const dualDeckMixerRef = useRef(createDefaultDualDeckMixerState());
   const dualDeckAutomixTransitionRef = useRef<DualDeckAutomixTransition | null>(null);
   const djEqGraphRef = useRef<DjEqAudioGraph | null>(null);
   const djEqGraphUnavailableRef = useRef(false);
-  const djRecordingRecorderRef = useRef<MediaRecorder | null>(null);
-  const djRecordingOutputRef = useRef<DjMasterRecordingOutput | null>(null);
-  const djRecordingChunksRef = useRef<Blob[]>([]);
-  const djRecordingMimeTypeRef = useRef('');
-  const djRecordingStopRef = useRef<{
-    resolve: (result: DjRecordingResult | null) => void;
-    exportResult: boolean;
-  } | null>(null);
-  const [djRecordingState, setDjRecordingState] = useState<DjRecordingState>(() => ({
-    supported: typeof MediaRecorder !== 'undefined',
-    active: false,
-    startedAt: null,
-    error: null
-  }));
   const normalSessionRef = useRef<NormalPlaybackSessionSnapshot | null>(null);
   const deckTrackIdsRef = useRef<Record<DjDeckId, string | null>>({
     a: player.current?.id ?? null,
@@ -213,144 +193,15 @@ export function useCrossfadeAudioPlayer(
     return graph;
   }, [applyDjEqToGraph, applyDjFxToGraph, getDeckAudio]);
 
-  const cleanupDjRecordingOutput = useCallback(() => {
-    djRecordingOutputRef.current?.dispose();
-    djRecordingOutputRef.current = null;
-  }, []);
-
-  const finishDjRecording = useCallback((recorder: MediaRecorder) => {
-    const pending = djRecordingStopRef.current;
-    djRecordingStopRef.current = null;
-    const mimeType = recorder.mimeType || djRecordingMimeTypeRef.current || 'audio/webm';
-    const chunks = djRecordingChunksRef.current;
-    djRecordingChunksRef.current = [];
-    djRecordingMimeTypeRef.current = '';
-    djRecordingRecorderRef.current = null;
-    cleanupDjRecordingOutput();
-    setDjRecordingState(current => ({
-      ...current,
-      active: false,
-      startedAt: null
-    }));
-
-    if (!pending) return;
-    if (!pending.exportResult || chunks.length === 0) {
-      pending.resolve(null);
-      return;
-    }
-    const blob = new Blob(chunks, { type: mimeType });
-    pending.resolve({
-      blob,
-      filename: djRecordingFilename(new Date(), mimeType),
-      mimeType
-    });
-  }, [cleanupDjRecordingOutput]);
-
-  const startDjRecording = useCallback(() => {
-    if (!dualDeckModeRef.current || djRecordingRecorderRef.current) return false;
-    if (typeof MediaRecorder === 'undefined') {
-      setDjRecordingState({
-        supported: false,
-        active: false,
-        startedAt: null,
-        error: 'Gravação não suportada neste navegador.'
-      });
-      return false;
-    }
-
-    const graph = ensureDjEqGraph();
-    if (!graph) {
-      setDjRecordingState(current => ({
-        ...current,
-        error: 'Web Audio indisponível para capturar o master.'
-      }));
-      return false;
-    }
-
-    const output = createDjMasterRecordingOutput(graph);
-    if (!output) {
-      setDjRecordingState(current => ({
-        ...current,
-        supported: false,
-        error: 'Captura do master indisponível neste navegador.'
-      }));
-      return false;
-    }
-
-    const mimeType = selectDjRecordingMimeType(MediaRecorder);
-    if (mimeType === null) {
-      output.dispose();
-      setDjRecordingState({
-        supported: false,
-        active: false,
-        startedAt: null,
-        error: 'Nenhum formato de gravação compatível foi encontrado.'
-      });
-      return false;
-    }
-
-    try {
-      const recorder = mimeType
-        ? new MediaRecorder(output.stream, { mimeType })
-        : new MediaRecorder(output.stream);
-      djRecordingOutputRef.current = output;
-      djRecordingRecorderRef.current = recorder;
-      djRecordingChunksRef.current = [];
-      djRecordingMimeTypeRef.current = recorder.mimeType || mimeType;
-
-      recorder.ondataavailable = event => {
-        if (event.data.size > 0) djRecordingChunksRef.current.push(event.data);
-      };
-      recorder.onerror = () => {
-        setDjRecordingState(current => ({
-          ...current,
-          error: 'A gravação do master foi interrompida pelo navegador.'
-        }));
-      };
-      recorder.onstop = () => finishDjRecording(recorder);
-      recorder.start(1_000);
-      setDjRecordingState({
-        supported: true,
-        active: true,
-        startedAt: Date.now(),
-        error: null
-      });
-      return true;
-    } catch {
-      output.dispose();
-      setDjRecordingState(current => ({
-        ...current,
-        error: 'Não foi possível iniciar a gravação do master.'
-      }));
-      return false;
-    }
-  }, [ensureDjEqGraph, finishDjRecording]);
-
-  const stopDjRecording = useCallback((exportResult = true): Promise<DjRecordingResult | null> => {
-    const recorder = djRecordingRecorderRef.current;
-    if (!recorder) return Promise.resolve(null);
-    if (djRecordingStopRef.current) {
-      return Promise.resolve(null);
-    }
-
-    return new Promise(resolve => {
-      djRecordingStopRef.current = { resolve, exportResult };
-      if (recorder.state === 'inactive') {
-        finishDjRecording(recorder);
-        return;
-      }
-      try {
-        recorder.requestData();
-      } catch {
-        // Alguns engines não aceitam requestData imediatamente antes de stop.
-      }
-      recorder.stop();
-    });
-  }, [finishDjRecording]);
-
-  const discardDjRecording = useCallback(() => {
-    void stopDjRecording(false);
-  }, [stopDjRecording]);
+  const {
+    state: djRecordingState,
+    start: startDjRecording,
+    stop: stopDjRecording,
+    discard: discardDjRecording
+  } = useDjMasterRecording({
+    active: isDualDeckModeActive,
+    ensureGraph: ensureDjEqGraph
+  });
 
   const applyDualDeckMixer = useCallback(() => {
     const mixer = dualDeckMixerRef.current;

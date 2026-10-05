@@ -2,21 +2,64 @@ import { expect, test, type Page } from '@playwright/test';
 
 const username = 'playwright';
 const password = 'playwright-password-2026';
+const mutationHeaders = { 'X-Home-Music-Request': '1' };
 
-async function login(page: Page) {
+type LibraryPayload = {
+  tracks: Array<{ id: string; title: string }>;
+};
+
+type PlaybackStatePayload = {
+  updatedAt: string;
+};
+
+async function loginWithDeterministicPlayerState(page: Page) {
+  const loginResponse = await page.context().request.post('/api/auth/login', {
+    headers: mutationHeaders,
+    data: { username, password }
+  });
+  expect(loginResponse.ok()).toBeTruthy();
+
+  const libraryResponse = await page.context().request.get('/api/library');
+  expect(libraryResponse.ok()).toBeTruthy();
+  const library = await libraryResponse.json() as LibraryPayload;
+  const ids = new Map(library.tracks.map(track => [track.title, track.id]));
+  const trackId = ids.get('E2E Track');
+  const zetaId = ids.get('E2E Zeta');
+  const zuluId = ids.get('E2E Zulu');
+  expect(trackId).toBeTruthy();
+  expect(zetaId).toBeTruthy();
+  expect(zuluId).toBeTruthy();
+
+  const stateResponse = await page.context().request.get('/api/player/state');
+  expect(stateResponse.ok()).toBeTruthy();
+  const state = await stateResponse.json() as PlaybackStatePayload;
+  const orderedIds = [trackId!, zetaId!, zuluId!];
+
+  const saveResponse = await page.context().request.put('/api/player/state', {
+    headers: mutationHeaders,
+    data: {
+      currentTrackId: trackId,
+      position: 0,
+      volume: 1,
+      shuffle: false,
+      repeatMode: 'off',
+      wasPlaying: false,
+      baseQueueIds: orderedIds,
+      queueIds: orderedIds,
+      updatedAt: state.updatedAt
+    }
+  });
+  expect(saveResponse.ok()).toBeTruthy();
+
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Entrar' })).toBeVisible();
-  await page.getByLabel('Usuário').fill(username);
-  await page.getByLabel('Senha', { exact: true }).fill(password);
-  await page.getByRole('button', { name: 'Entrar', exact: true }).click();
   await expect(page.locator('.player-screen-immersive')).toBeVisible();
-  await expect(page.locator('.player-track-heading h1')).toBeVisible();
+  await expect(page.locator('.player-track-heading h1')).toHaveText('E2E Track');
 }
 
 test('mobile segue o protótipo 3 na biblioteca, detalhe e player', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'mobile-chromium');
 
-  await login(page);
+  await loginWithDeterministicPlayerState(page);
 
   await page.getByRole('button', { name: 'Biblioteca' }).click();
 
@@ -109,6 +152,18 @@ test('mobile segue o protótipo 3 na biblioteca, detalhe e player', async ({ pag
     await heroControl.click();
   }
   await expect(heroControl).toHaveAttribute('aria-label', 'Pausar');
+
+  await heroControl.focus();
+  await expect(heroControl).toBeFocused();
+  await expect(heroControl).toHaveClass(/is-visible/);
+  await expect(player).toHaveAttribute('data-mobile-chrome-visible', 'true');
+
+  await page.waitForTimeout(2_000);
+  await expect(heroControl).toBeFocused();
+  await expect(heroControl).toHaveClass(/is-visible/);
+  await expect(player).toHaveAttribute('data-mobile-chrome-visible', 'true');
+
+  await heroControl.evaluate(element => (element as HTMLElement).blur());
   await expect(heroControl).toHaveClass(/is-hidden/, { timeout: 3_000 });
   await expect(player).toHaveAttribute('data-mobile-chrome-visible', 'false', { timeout: 3_000 });
 

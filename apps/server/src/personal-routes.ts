@@ -264,12 +264,19 @@ export function registerPersonalRoutes(
       });
     }
 
-    const state = personal.savePlaybackState(request.user.id, request.body ?? {});
-    if (!state) {
+    const result = personal.savePlaybackStateVersioned(request.user.id, request.body ?? {});
+    if (result.status === 'invalid') {
       return reply.code(400).send({ error: 'Estado do player inválido.' });
+    }
+    if (result.status === 'conflict') {
+      reply.header('Cache-Control', 'private, no-store');
+      return reply.code(409).send({
+        error: 'O estado do player mudou em outro contexto.',
+        state: result.state
+      });
     }
 
     reply.header('Cache-Control', 'private, no-store');
-    return state;
+    return result.state;
   });
 }

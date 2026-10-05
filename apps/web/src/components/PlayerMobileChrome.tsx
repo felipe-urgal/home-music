@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
+import { useAutoHideControls } from '../useAutoHideControls';
 
 const MOBILE_CHROME_HIDE_DELAY_MS = 1800;
 
@@ -17,36 +18,18 @@ export function PlayerMobileChrome({
   hasArtwork,
   children
 }: PlayerMobileChromeProps) {
-  const [visible, setVisible] = useState(true);
-  const hideTimeoutRef = useRef<number | null>(null);
-
-  function clearHideTimeout() {
-    if (hideTimeoutRef.current == null) return;
-    window.clearTimeout(hideTimeoutRef.current);
-    hideTimeoutRef.current = null;
-  }
-
-  function reveal() {
-    clearHideTimeout();
-    setVisible(true);
-    if (playing) {
-      hideTimeoutRef.current = window.setTimeout(() => setVisible(false), MOBILE_CHROME_HIDE_DELAY_MS);
-    }
-  }
-
-  useEffect(() => {
-    reveal();
-    return clearHideTimeout;
-  }, [playing, trackId]);
+  const chrome = useAutoHideControls<HTMLDivElement>(playing, trackId, MOBILE_CHROME_HIDE_DELAY_MS);
 
   return (
     <div
+      ref={chrome.rootRef}
       className="player-screen-immersive"
       style={style}
       data-has-artwork={hasArtwork ? 'true' : 'false'}
-      data-mobile-chrome-visible={visible ? 'true' : 'false'}
-      onPointerDownCapture={reveal}
-      onFocusCapture={reveal}
+      data-mobile-chrome-visible={chrome.visible ? 'true' : 'false'}
+      onPointerDownCapture={chrome.onPointerDownCapture}
+      onFocusCapture={chrome.onFocusCapture}
+      onBlurCapture={chrome.onBlurCapture}
     >
       {children}
     </div>
