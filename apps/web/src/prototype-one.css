@@ -3374,3 +3374,33 @@
     transition: none;
   }
 }
+
+
+@media (min-width: 1024px) {
+  #root .desktop-layout[data-offline="false"] {
+    grid-template-columns:
+      minmax(0, 1fr)
+      clamp(
+        280px,
+        var(--desktop-context-width, 340px),
+        min(520px, calc(100vw - 760px))
+      ) !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] > .desktop-topbar {
+    grid-column: 1 / -1 !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] > .phone-surface {
+    grid-column: 1 !important;
+    grid-row: 2 !important;
+  }
+
+  #root .desktop-layout[data-offline="false"] > .desktop-context {
+    grid-column: 2 !important;
+    grid-row: 2 !important;
+    display: flex !important;
+    height: 100%;
+    min-height: 0;
+  }
+}
