@@ -79,7 +79,7 @@
 
 .desktop-queue__row {
   display: grid;
-  grid-template-columns: 30px minmax(0, 1fr);
+  grid-template-columns: 30px minmax(0, 1fr) 30px;
   align-items: center;
   gap: 2px;
   border-radius: 10px;
@@ -132,6 +132,32 @@
   margin: 0;
   border: 0;
   background: transparent;
+}
+
+.desktop-queue__more {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+.desktop-queue__more-trigger {
+  width: 30px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.54);
+  cursor: pointer;
+}
+
+.desktop-queue__more-trigger:hover,
+.desktop-queue__more-trigger:focus-visible,
+.desktop-queue__more-trigger[aria-expanded="true"] {
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .responsive-state {
