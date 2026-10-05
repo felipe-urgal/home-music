@@ -32,12 +32,8 @@ async function login(page: Page) {
 
 async function establishDesktopQueue(page: Page) {
   await login(page);
-
-  const expandTopbar = page.getByRole('button', { name: 'Expandir barra superior' });
-  if (await expandTopbar.isVisible()) await expandTopbar.click();
-
-  const sidebar = page.getByTestId('desktop-sidebar');
-  await sidebar.getByRole('button', { name: 'Pastas', exact: true }).click();
+  await page.goto('/library');
+  await expect(page).toHaveURL(/\/library$/);
 
   const grid = page.getByTestId('desktop-track-grid');
   await expect(grid).toBeVisible();
