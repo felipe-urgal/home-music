@@ -20,57 +20,12 @@ async function libraryTrackIds(page: Page) {
   return new Map(library.tracks.map(track => [track.title, track.id]));
 }
 
-async function login(page: Page) {
-  await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Entrar' })).toBeVisible();
-  await page.getByLabel('Usuário', { exact: true }).fill(username);
-  await page.getByLabel('Senha', { exact: true }).fill(password);
-  await page.getByRole('button', { name: 'Entrar', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Entrar' })).toHaveCount(0);
-  await expect(page.locator('.desktop-layout')).toBeVisible();
-}
-
-async function establishDesktopQueue(page: Page) {
-  await login(page);
-  await page.goto('/library');
-  await expect(page).toHaveURL(/\/library$/);
-
-  const table = page.getByTestId('desktop-library-table');
-  await expect(table).toBeVisible();
-
-  const zeta = table.locator('.desktop-library-table__track').filter({ hasText: 'E2E Zeta' });
-  const track = table.locator('.desktop-library-table__track').filter({ hasText: 'E2E Track' });
-  await expect(zeta).toBeVisible();
-  await expect(track).toBeVisible();
-
-  await zeta.click();
-  await expect(zeta).toHaveAttribute('aria-current', 'true');
-
-  await track.click();
-  await expect(track).toHaveAttribute('aria-current', 'true');
-
-  const queue = page.getByTestId('desktop-queue');
-  await expect(queue).toContainText('E2E Zeta');
-  await expect(queue).toContainText('E2E Zulu');
-  await expect.poll(() => persistedQueueTitles(page), { timeout: 5_000 }).toEqual([
-    'E2E Track',
-    'E2E Zeta',
-    'E2E Zulu'
-  ]);
-}
-
-async function loginAndResetQueueState(page: Page) {
-  await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Entrar' })).toBeVisible();
-  await page.getByLabel('Usuário', { exact: true }).fill(username);
-  await page.getByLabel('Senha', { exact: true }).fill(password);
-  await page.getByRole('button', { name: 'Entrar', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Entrar' })).toHaveCount(0);
-  await expect(page.locator('.desktop-layout')).toBeVisible();
-
-  // Encerra a instância viva antes do reset para que pagehide/heartbeat não
-  // disputem com o estado determinístico usado por este cenário.
-  await page.goto('about:blank');
+async function prepareQueueState(page: Page) {
+  const loginResponse = await page.context().request.post('/api/auth/login', {
+    headers: mutationHeaders,
+    data: { username, password }
+  });
+  expect(loginResponse.ok()).toBeTruthy();
 
   const ids = await libraryTrackIds(page);
   const trackId = ids.get('E2E Track');
@@ -128,7 +83,7 @@ async function persistedQueueTitles(page: Page) {
 test('reordenação da fila persiste no SQLite e sobrevive a reload', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'desktop-chromium');
 
-  await establishDesktopQueue(page);
+  await prepareQueueState(page);
 
   const queue = page.getByTestId('desktop-queue');
   const handles = queue.getByRole('button', { name: /^Arrastar E2E / });
@@ -157,7 +112,7 @@ test('fila não deixa próxima faixa atravessar a atual e permanece aberta ao av
   test.skip(!['desktop-chromium', 'mobile-chromium'].includes(testInfo.project.name));
 
   if (testInfo.project.name === 'desktop-chromium') {
-    await establishDesktopQueue(page);
+    await prepareQueueState(page);
     const queue = page.getByTestId('desktop-queue');
     const zetaMenuTrigger = queue.getByRole('button', { name: 'Mais opções para E2E Zeta' });
     await zetaMenuTrigger.click();
@@ -172,7 +127,7 @@ test('fila não deixa próxima faixa atravessar a atual e permanece aberta ao av
     return;
   }
 
-  await loginAndResetQueueState(page);
+  await prepareQueueState(page);
 
   const openQueue = page.getByRole('button', { name: /Abrir fila/ });
   await openQueue.click();
