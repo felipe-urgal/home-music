@@ -44,10 +44,10 @@ async function establishDesktopQueue(page: Page) {
   await expect(track).toBeVisible();
 
   await zeta.click();
-  await expect(page.getByRole('region', { name: 'Em reprodução' })).toContainText('E2E Zeta');
+  await expect(zeta).toHaveAttribute('aria-current', 'true');
 
   await track.click();
-  await expect(page.getByRole('region', { name: 'Em reprodução' })).toContainText('E2E Track');
+  await expect(track).toHaveAttribute('aria-current', 'true');
 
   const queue = page.getByTestId('desktop-queue');
   await expect(queue).toContainText('E2E Zeta');
