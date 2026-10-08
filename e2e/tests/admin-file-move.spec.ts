@@ -16,6 +16,7 @@ async function login(page: Page) {
 }
 
 async function openAdministration(page: Page) {
+  await page.getByRole('button', { name: 'Expandir barra superior' }).click();
   const sidebar = page.getByTestId('desktop-sidebar');
   await sidebar.getByRole('button', { name: /Minha conta/ }).click();
   await expect(page.locator('#my-account-title')).toHaveText('Minha conta');
