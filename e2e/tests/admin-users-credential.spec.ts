@@ -14,7 +14,7 @@ async function openUsers(page: Page) {
   await expect(page.locator('#admin-users-title')).toHaveText('Usuários');
 }
 
-test('senha temporária exige confirmação acessível e mantém segredo no cancelamento', async ({ page }, testInfo) => {
+test('senha temporária exige confirmação acessível e mantém segredo no cancelamento', async ({ page, browser }, testInfo) => {
   test.skip(testInfo.project.name !== 'desktop-chromium');
   const nativeDialogs: string[] = [];
   page.on('dialog', async dialog => { nativeDialogs.push(dialog.type()); await dialog.dismiss(); });
@@ -32,6 +32,8 @@ test('senha temporária exige confirmação acessível e mantém segredo no canc
     expect(response.ok()).toBeTruthy();
     createdId = ((await response.json()) as { user: { id: string } }).user.id;
     await expect(page.locator('.admin-users-v2__credential-block')).toContainText('Senha temporária');
+    const temporaryPassword = (await page.locator('.admin-users-v2__credential-block code').textContent())?.trim();
+    expect(temporaryPassword).toBeTruthy();
 
     const finish = page.getByRole('button', { name: 'Concluir' });
     await finish.click();
@@ -54,6 +56,30 @@ test('senha temporária exige confirmação acessível e mantém segredo no canc
     await expect(page.locator('.admin-users-v2__credential-block')).toHaveCount(0);
     await expect(page.locator('#admin-users-title')).toHaveText('Usuários');
     expect(nativeDialogs).toEqual([]);
+
+    // Um usuário comum não pode receber os endpoints administrativos, nem por chamada direta.
+    const userPage = await browser.newPage();
+    try {
+      await userPage.goto('/');
+      await userPage.getByLabel('Usuário', { exact: true }).fill(username);
+      await userPage.getByLabel('Senha', { exact: true }).fill(temporaryPassword!);
+      await userPage.getByRole('button', { name: 'Entrar', exact: true }).click();
+      await expect(userPage.getByRole('heading', { name: 'Defina uma nova senha' })).toBeVisible();
+      const newPassword = 'E2E-659-New-Password-2026!';
+      await userPage.getByLabel('Senha temporária', { exact: true }).fill(temporaryPassword!);
+      await userPage.getByLabel('Nova senha', { exact: true }).fill(newPassword);
+      await userPage.getByLabel('Confirmar nova senha', { exact: true }).fill(newPassword);
+      await userPage.getByRole('button', { name: 'Alterar senha', exact: true }).click();
+      await expect(userPage.getByRole('heading', { name: 'Entrar' })).toBeVisible();
+      await userPage.getByLabel('Usuário', { exact: true }).fill(username);
+      await userPage.getByLabel('Senha', { exact: true }).fill(newPassword);
+      await userPage.getByRole('button', { name: 'Entrar', exact: true }).click();
+      await expect(userPage.getByRole('heading', { name: 'E2E Track' })).toBeVisible();
+      expect((await userPage.context().request.get('/api/admin/users')).status()).toBe(403);
+      expect((await userPage.context().request.get('/api/admin/imports')).status()).toBe(403);
+    } finally {
+      await userPage.close();
+    }
   } finally {
     if (createdId) {
       const deleted = await page.context().request.delete(

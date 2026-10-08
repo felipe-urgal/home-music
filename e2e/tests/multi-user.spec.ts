@@ -42,6 +42,8 @@ async function openPlaylists(page: Page) {
   const width = viewportWidth(page);
 
   if (width >= 1024) {
+    const expand = page.getByRole('button', { name: 'Expandir barra superior' });
+    if (await expand.isVisible().catch(() => false)) await expand.click();
     const sidebar = page.getByTestId('desktop-sidebar');
     await expect(sidebar).toBeVisible();
     await sidebar.getByRole('button', { name: 'Playlists', exact: true }).click();
@@ -84,6 +86,8 @@ async function openAccountFromLibrary(page: Page) {
   const width = viewportWidth(page);
 
   if (width >= 1024) {
+    const expand = page.getByRole('button', { name: 'Expandir barra superior' });
+    if (await expand.isVisible().catch(() => false)) await expand.click();
     const sidebar = page.getByTestId('desktop-sidebar');
     await sidebar.getByRole('button', { name: /Minha conta/ }).click();
   } else if (width < 700) {
@@ -107,7 +111,11 @@ async function expectCurrentSessionScreen(page: Page) {
   await expect(page.getByText('Este dispositivo', { exact: true })).toBeVisible();
   await expect(page.getByText('Sessão usada neste navegador', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Encerrar todas as outras sessões', exact: true })).toBeDisabled();
-  await page.getByRole('button', { name: 'Voltar', exact: true }).click();
+  if (viewportWidth(page) >= 1024) {
+    await page.locator('.account-sessions-v2__topbar button').click();
+  } else {
+    await page.getByRole('button', { name: 'Voltar', exact: true }).click();
+  }
   await expect(page.locator('#my-account-title')).toHaveText('Minha conta');
 }
 
@@ -168,13 +176,11 @@ test('admin e user preservam role, sessões, playlists e isolamento em todos os 
   await expectCurrentSessionScreen(page);
 
   await openAdministration(page);
-  await expect(page.getByLabel('Acesso administrativo')).toContainText(adminUsername);
-  await expect(page.getByLabel('Faixas indexadas').locator('strong')).toHaveText(String(libraryPayload.tracks.length));
-  await expect(page.getByLabel('Armazenamento da biblioteca')).toBeVisible();
-  await expect(page.getByLabel('Problemas da biblioteca')).toBeVisible();
-  await expect(page.getByLabel('Estado do scanner')).toContainText('Pronto');
-  await expect(page.locator('#administration-problems-title')).toHaveText('Qualidade da biblioteca');
-  await expect(page.locator('#administration-scanner-title')).toHaveText('Scanner');
+  await expect(page.locator('.administration-cockpit-status__metrics')).toContainText(
+    String(libraryPayload.tracks.length)
+  );
+  await expect(page.locator('.administration-cockpit-status__scan')).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Gerenciar músicas/ })).toBeVisible();
 
   const importQueueResponse = await page.context().request.get('/api/admin/imports');
   expect(importQueueResponse.ok()).toBeTruthy();
@@ -183,10 +189,8 @@ test('admin e user preservam role, sessões, playlists e isolamento em todos os 
 
   await page.getByRole('button', { name: /^Importar mídia/ }).click();
   await expect(page.locator('#admin-import-title')).toHaveText('Importar mídia');
-  await expect(page.getByLabel('Formas de importação planejadas')).toContainText('Upload de arquivo');
-  await expect(page.getByLabel('Formas de importação planejadas')).toContainText('URL direta');
-  await expect(page.getByLabel('Formas de importação planejadas')).toContainText('Fontes externas');
-  await expect(page.getByText('Nenhuma importação na fila', { exact: true })).toBeVisible();
+  await expect(page.getByRole('tab', { name: /Arquivo ou URL/ })).toBeVisible();
+  await expect(page.getByRole('tab', { name: /YouTube \/ Spotify/ })).toBeVisible();
   await page.getByRole('button', { name: 'Voltar', exact: true }).click();
   await expect(page.locator('#administration-title')).toHaveText('Administração');
 
@@ -198,7 +202,8 @@ test('admin e user preservam role, sessões, playlists e isolamento em todos os 
   await page.getByRole('button', { name: 'Criar usuário', exact: true }).click();
 
   const credential = page.locator('.admin-users-credential');
-  await expect(credential).toContainText(`Conta criada · ${userUsername}`);
+  await expect(credential).toContainText('Conta criada');
+  await expect(credential).toContainText(userUsername);
   const temporaryPassword = (await credential.locator('code').textContent())?.trim();
   expect(temporaryPassword).toBeTruthy();
 

@@ -90,8 +90,11 @@ test('admin move para lixeira, preserva relações após scan e restaura', async
 
     const row = page.locator('.admin-track-row').filter({ hasText: track.title }).first();
     await expect(row).toBeVisible();
+    await row.getByRole('button', { name: `Ver detalhes de ${track.title}` }).click();
+    const inspector = page.getByRole('complementary', { name: 'Detalhes da faixa' });
+    await expect(inspector).toContainText(track.title);
     page.once('dialog', dialog => dialog.accept());
-    await row.getByRole('button', { name: 'Mover para lixeira', exact: true }).click();
+    await inspector.getByRole('button', { name: 'Mover para a Lixeira', exact: true }).click();
     await expect(row).toHaveCount(0);
 
     const hiddenLibrary = await request.get('/api/library');
