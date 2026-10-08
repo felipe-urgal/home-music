@@ -506,23 +506,26 @@ export function useOfflineDownloads() {
 
   const removePhysicalDownload = useCallback(async (ownerUserId: string, trackId: string) => {
     const current = readManifest(ownerUserId);
-    if (!current.some(record => record.track.id === trackId)) return;
-    const next = current.filter(record => record.track.id !== trackId);
-
-    try {
-      replaceRecords(ownerUserId, next);
-    } catch {
-      // Sem persistir o manifesto físico não apagamos os bytes, evitando
-      // anunciar uma faixa que já não existe no cache.
+    if (!current.some(record => record.track.id === trackId)) {
+      if (!isOfflineTrackReferenced(readReferences(ownerUserId), trackId)) {
+        const cache = await caches.open(offlineAudioCacheName(ownerUserId));
+        await cache.delete(streamUrl(trackId));
+      }
       return;
     }
+    const next = current.filter(record => record.track.id !== trackId);
 
-    try {
-      const cache = await caches.open(offlineAudioCacheName(ownerUserId));
-      await cache.delete(streamUrl(trackId));
-    } catch {
-      // Blob órfão é removido pela reconciliação na próxima inicialização.
+    // Não apague o artefato enquanto ele ainda for utilizado por outra referência.
+    if (isOfflineTrackReferenced(readReferences(ownerUserId), trackId)) return;
+    // Remoção do cache antes do manifesto: uma falha de cache não pode ser
+    // apresentada como sucesso. Se o manifesto falhar, a reconciliação recupera
+    // o registro obsoleto sem misturar usuários.
+    const cache = await caches.open(offlineAudioCacheName(ownerUserId));
+    const deleted = await cache.delete(streamUrl(trackId));
+    if (!deleted && await cache.match(streamUrl(trackId))) {
+      throw new Error('Não foi possível remover o arquivo do armazenamento.');
     }
+    replaceRecords(ownerUserId, next);
   }, [replaceRecords]);
 
   const ensurePhysicalDownload = useCallback(async (track: Track, ownerUserId: string) => {
@@ -600,7 +603,7 @@ export function useOfflineDownloads() {
 
   const remove = useCallback(async (trackId: string) => {
     const ownerUserId = userId;
-    if (!ownerUserId || !browserHasOfflinePrimitives()) return;
+    if (!ownerUserId || !browserHasOfflinePrimitives()) throw new Error('Armazenamento offline indisponível.');
     const current = readReferences(ownerUserId);
     const hadIndividualReference = current.individualTrackIds.includes(trackId);
     const next = removeIndividualOfflineReference(current, trackId);
@@ -738,7 +741,7 @@ export function useOfflineDownloads() {
 
   const removeCollection = useCallback(async (kind: OfflineCollectionKind, sourceId: string) => {
     const ownerUserId = userId;
-    if (!ownerUserId || !browserHasOfflinePrimitives()) return;
+    if (!ownerUserId || !browserHasOfflinePrimitives()) throw new Error('Armazenamento offline indisponível.');
     const key = offlineCollectionKey(kind, sourceId);
     const runKey = collectionRunKey(ownerUserId, key);
     const control = collectionControlsRef.current.get(runKey);
