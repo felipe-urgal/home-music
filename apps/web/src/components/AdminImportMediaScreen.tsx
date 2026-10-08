@@ -185,6 +185,8 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
     return () => window.clearInterval(timer);
   }, [loadJobs, pipelineBusy]);
 
+  const refreshFromProvider = useCallback((background = false) => loadJobs(true, !background), [loadJobs]);
+
   const handleUpdatedJob = useCallback((job: ImportJob) => {
     // Um snapshot iniciado antes desta mutação não pode desfazer seu resultado.
     requestGeneration.current += 1;
@@ -432,7 +434,7 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
                   compact
                   jobs={jobs}
                   onJobUpdated={handleUpdatedJob}
-                  onRefresh={() => loadJobs(true, true)}
+                  onRefresh={refreshFromProvider}
                 />
               </div>
             ) : (
@@ -554,7 +556,7 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
                 compact
                 jobs={jobs}
                 onJobUpdated={handleUpdatedJob}
-                onRefresh={() => loadJobs(true, true)}
+                onRefresh={refreshFromProvider}
               />
             </div>
           ) : activeProcessingJob ? (
