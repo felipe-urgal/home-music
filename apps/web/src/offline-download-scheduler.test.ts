@@ -52,6 +52,36 @@ describe('OfflineDownloadScheduler', () => {
     expect(scheduler.pendingIds.size).toBe(0);
   });
 
+  it('mantém jobs de contas distintas isolados mesmo com o mesmo id de faixa', async () => {
+    const scheduler = new OfflineDownloadScheduler(3);
+    const gate = deferred();
+    const started: string[] = [];
+    const first = scheduler.enqueue('user-a:same-track', async () => {
+      started.push('user-a');
+      await gate.promise;
+    });
+    const second = scheduler.enqueue('user-b:same-track', async () => {
+      started.push('user-b');
+    });
+    expect(started).toEqual(['user-a', 'user-b']);
+    await second;
+    expect(scheduler.pendingIds).toEqual(new Set(['user-a:same-track']));
+    gate.resolve();
+    await first;
+    expect(scheduler.pendingIds.size).toBe(0);
+  });
+
+  it('permite tentar novamente após falha, sem manter job antigo preso', async () => {
+    const scheduler = new OfflineDownloadScheduler(1);
+    await expect(scheduler.enqueue('retry-track', async () => {
+      throw new Error('network failure');
+    })).rejects.toThrow('network failure');
+    let completed = false;
+    await scheduler.enqueue('retry-track', async () => { completed = true; });
+    expect(completed).toBe(true);
+    expect(scheduler.pendingIds.size).toBe(0);
+  });
+
   it('mantém o estado global observável enquanto o job continua ativo', async () => {
     const scheduler = new OfflineDownloadScheduler(2);
     const gate = deferred();
