@@ -195,6 +195,13 @@ export function OfflineLibraryScreen({
             </button>
           </div>
 
+          {selectedCollection.error && <p className="action-dialog__error" role="alert">Algumas músicas não foram salvas. Reconecte ao servidor e tente baixar as pendentes novamente.</p>}
+          {selectedCollection.status !== 'available' && selectedCollection.totalCount > selectedCollection.downloadedCount && (
+            <button className="secondary-action" type="button" onClick={onExitOffline}>
+              Tentar conectar para continuar downloads
+            </button>
+          )}
+
           {selectedCollectionRecords.length > 0 ? (
             <div className="library-track-list">
               {selectedCollectionRecords.map(record => {
@@ -278,6 +285,9 @@ export function OfflineLibraryScreen({
                       >
                         {busyKeys.has(`collection:${collection.key}`) ? <LoaderCircle className="is-spinning" aria-hidden="true" /> : <Trash2 aria-hidden="true" />}
                       </button>
+                      {collection.error && (
+                        <p className="action-dialog__error" role="alert">Algumas músicas não foram salvas. Abra a coleção para recuperar.</p>
+                      )}
                     </article>
                   );
                 })}
