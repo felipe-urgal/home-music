@@ -124,6 +124,7 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
   const [urlValue, setUrlValue] = useState('');
   const [urlError, setUrlError] = useState<string | null>(null);
   const [activeUrlJobId, setActiveUrlJobId] = useState<string | null>(null);
+  const [activeProviderJobId, setActiveProviderJobId] = useState<string | null>(null);
   const [urlSubmitting, setUrlSubmitting] = useState(false);
   const [urlCancelling, setUrlCancelling] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -194,6 +195,7 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
     pendingRefresh.current = null;
     setLoading(false);
     setSessionStarted(true);
+    if (job.source.type === 'provider') setActiveProviderJobId(job.id);
     setJobs(current => {
       const exists = current.some(item => item.id === job.id);
       return exists
@@ -352,6 +354,7 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
     setSessionStarted(false);
     setActiveUpload(null);
     setActiveUrlJobId(null);
+    setActiveProviderJobId(null);
     setUrlError(null);
     setUploadError(null);
     setError(null);
@@ -434,6 +437,7 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
                   compact
                   jobs={jobs}
                   onJobUpdated={handleUpdatedJob}
+                  initialActiveJobId={activeProviderJobId}
                   onRefresh={refreshFromProvider}
                 />
               </div>
@@ -556,6 +560,7 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
                 compact
                 jobs={jobs}
                 onJobUpdated={handleUpdatedJob}
+                initialActiveJobId={activeProviderJobId ?? activeProcessingJob?.id}
                 onRefresh={refreshFromProvider}
               />
             </div>
