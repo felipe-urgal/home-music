@@ -84,6 +84,7 @@ export function AdminUsersScreen({ currentUser, onBack }: AdminUsersScreenProps)
   const [copied, setCopied] = useState(false);
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const pendingDecision = useRef<((accepted: boolean) => void) | null>(null);
+  const focusAfterConfirmation = useRef(false);
   const [query, setQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
   const [page, setPage] = useState(1);
@@ -142,6 +143,7 @@ export function AdminUsersScreen({ currentUser, onBack }: AdminUsersScreenProps)
   }
 
   function decideConfirmation(accepted: boolean) {
+    if (accepted) focusAfterConfirmation.current = true;
     const resolve = pendingDecision.current;
     pendingDecision.current = null;
     setConfirmation(null);
@@ -166,6 +168,18 @@ export function AdminUsersScreen({ currentUser, onBack }: AdminUsersScreenProps)
     pendingDecision.current?.(false);
     pendingDecision.current = null;
   }, []);
+
+  // Se o botão que abriu o diálogo desaparecer, restaura foco no controle da tela atual.
+  useEffect(() => {
+    if (confirmation || !focusAfterConfirmation.current) return;
+    const frame = window.requestAnimationFrame(() => {
+      if (document.activeElement === document.body || !document.activeElement?.isConnected) {
+        document.querySelector<HTMLElement>('.admin-users-v2__new, .admin-users-v2__back')?.focus();
+      }
+      focusAfterConfirmation.current = false;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [confirmation, view]);
 
 
   function resetTransientState() {
@@ -311,6 +325,7 @@ export function AdminUsersScreen({ currentUser, onBack }: AdminUsersScreenProps)
       setCopied(false);
       setNotice(null);
       setView('list');
+      window.requestAnimationFrame(() => document.querySelector<HTMLElement>('.admin-users-v2__new')?.focus());
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {
