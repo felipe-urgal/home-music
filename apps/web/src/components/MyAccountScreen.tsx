@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { AuthenticatedUser } from '@home-music/shared';
 import {
   AudioLines,
@@ -16,7 +16,6 @@ import {
   Monitor,
   MonitorOff,
   Music2,
-  Pencil,
   ShieldCheck,
   SlidersHorizontal,
   UserRound,
@@ -37,11 +36,13 @@ import {
 } from './AccountPlaybackPreferences';
 import { AccountMidiControllers } from './AccountMidiControllers';
 import { AccountSessionsScreen } from './AccountSessionsScreen';
+import { ActionDialog } from './ActionDialog';
 import { useDesktopLayout } from '../useDesktopLayout';
 import type { WebMidiController } from '../useWebMidiController';
 import type { DualDeckMixerState } from '../dual-deck-mixer';
 
 type AccountView = 'overview' | 'profile' | 'password' | 'sessions' | 'playback' | 'midi';
+type PendingSensitiveAction = { kind: 'password' } | { kind: 'one'; session: AccountSession } | { kind: 'others' };
 
 type OfflineModeControl = {
   supported: boolean;
@@ -94,6 +95,9 @@ export function MyAccountScreen({
   const [signingOut, setSigningOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<PendingSensitiveAction | null>(null);
+  const [dialogError, setDialogError] = useState<string | null>(null);
+  const mutationInFlight = useRef(false);
   const validationError = passwordChangeValidation(currentPassword, newPassword, confirmation);
   const passwordStrengthScore = [
     Array.from(newPassword).length >= MIN_ACCOUNT_PASSWORD_CHARACTERS,
@@ -143,56 +147,76 @@ export function MyAccountScreen({
     else setView('overview');
   }
 
-  async function submitPassword(event: FormEvent<HTMLFormElement>) {
+  function openSensitiveAction(action: PendingSensitiveAction) {
+    if (mutationInFlight.current) return;
+    setDialogError(null);
+    setNotice(null);
+    setPendingAction(action);
+  }
+
+  function submitPassword(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (validationError || changingPassword) return;
-    if (!window.confirm('Alterar sua senha agora? Todas as suas sessões serão encerradas, inclusive esta, e será necessário entrar novamente.')) return;
+    if (validationError || mutationInFlight.current) return;
+    openSensitiveAction({ kind: 'password' });
+  }
 
-    setChangingPassword(true);
-    setError(null);
+  function revokeOthers() {
+    if (revokingSessions || busySessionId || mutationInFlight.current) return;
+    openSensitiveAction({ kind: 'others' });
+  }
+
+  function revokeOne(session: AccountSession) {
+    if (session.current || revokingSessions || busySessionId || mutationInFlight.current) return;
+    openSensitiveAction({ kind: 'one', session });
+  }
+
+  async function confirmSensitiveAction() {
+    const action = pendingAction;
+    if (!action || mutationInFlight.current) return;
+    if (action.kind === 'password' && validationError) return;
+
+    mutationInFlight.current = true;
+    setDialogError(null);
+    if (action.kind === 'password') setChangingPassword(true);
+    if (action.kind === 'others') setRevokingSessions(true);
+    if (action.kind === 'one') setBusySessionId(action.session.id);
+
     try {
-      await changeOwnPassword(currentPassword, newPassword);
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmation('');
-      setShowPasswords(false);
-      await onSessionEnded();
+      if (action.kind === 'password') {
+        // The server revokes every session, including the current one, after the password change.
+        await changeOwnPassword(currentPassword, newPassword);
+        await onSessionEnded();
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmation('');
+        setShowPasswords(false);
+      } else if (action.kind === 'others') {
+        const revoked = await revokeOtherSessions();
+        setSessions(items => items.filter(item => item.current));
+        setNotice(revoked === 0
+          ? 'Nenhuma outra sessão estava ativa.'
+          : `${revoked} ${revoked === 1 ? 'sessão foi encerrada' : 'sessões foram encerradas'}.`);
+      } else {
+        await revokeOwnSession(action.session.id);
+        setSessions(items => items.filter(item => item.id !== action.session.id));
+        setNotice('Sessão encerrada.');
+      }
+      setPendingAction(null);
     } catch (error) {
-      setError(errorMessage(error));
+      // Keep the dialog open so retry and error context remain available.
+      setDialogError(errorMessage(error));
     } finally {
+      mutationInFlight.current = false;
       setChangingPassword(false);
-    }
-  }
-
-  async function revokeOthers() {
-    if (revokingSessions) return;
-    if (!window.confirm('Encerrar todas as outras sessões desta conta? Este dispositivo continuará conectado.')) return;
-    setRevokingSessions(true);
-    setError(null);
-    try {
-      const revoked = await revokeOtherSessions();
-      setSessions(items => items.filter(item => item.current));
-      setNotice(revoked === 0 ? 'Nenhuma outra sessão estava ativa.' : `${revoked} ${revoked === 1 ? 'sessão foi encerrada' : 'sessões foram encerradas'}.`);
-    } catch (error) {
-      setError(errorMessage(error));
-    } finally {
       setRevokingSessions(false);
-    }
-  }
-
-  async function revokeOne(session: AccountSession) {
-    if (session.current || busySessionId) return;
-    if (!window.confirm('Encerrar esta sessão? O dispositivo precisará entrar novamente.')) return;
-    setBusySessionId(session.id);
-    setError(null);
-    try {
-      await revokeOwnSession(session.id);
-      setSessions(items => items.filter(item => item.id !== session.id));
-    } catch (error) {
-      setError(errorMessage(error));
-    } finally {
       setBusySessionId(null);
     }
+  }
+
+  function closeSensitiveAction() {
+    if (mutationInFlight.current) return;
+    setPendingAction(null);
+    setDialogError(null);
   }
 
   async function signOut() {
@@ -541,7 +565,6 @@ export function MyAccountScreen({
                     <small>Seu identificador na aplicação.</small>
                   </span>
                   <span className="my-account-profile-v1__row-value">{currentUser.username}</span>
-                  <span className="my-account-profile-v1__row-action" aria-hidden="true"><Pencil /> Editar</span>
                 </div>
 
                 <div className="my-account-profile-v1__row">
@@ -806,6 +829,26 @@ export function MyAccountScreen({
           onRevokeOthers={() => void revokeOthers()}
         />
       )}
+      <ActionDialog
+        open={pendingAction !== null}
+        title={pendingAction?.kind === 'password'
+          ? 'Confirmar alteração de senha'
+          : pendingAction?.kind === 'others'
+            ? 'Encerrar outras sessões'
+            : 'Encerrar sessão'}
+        description={pendingAction?.kind === 'password'
+          ? 'Todas as sessões, inclusive esta, serão encerradas. Você precisará entrar novamente.'
+          : pendingAction?.kind === 'others'
+            ? 'Todos os outros dispositivos precisarão entrar novamente. Esta sessão será mantida.'
+            : `O acesso de ${pendingAction?.kind === 'one' ? pendingAction.session.clientName || 'este dispositivo' : 'este dispositivo'} será encerrado.`}
+        danger
+        confirmLabel={pendingAction?.kind === 'password' ? 'Alterar senha e sair' : 'Encerrar sessão'}
+        confirmDisabled={pendingAction?.kind === 'password' && Boolean(validationError)}
+        busy={changingPassword || revokingSessions || Boolean(busySessionId)}
+        error={dialogError}
+        onConfirm={() => void confirmSensitiveAction()}
+        onClose={closeSensitiveAction}
+      />
     </section>
   );
 }
