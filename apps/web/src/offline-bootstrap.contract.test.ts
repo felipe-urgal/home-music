@@ -16,7 +16,7 @@ describe('offline bootstrap contract', () => {
     expect(app).toMatch(/readOfflineColdStartRecords\(offline\.records\)/);
     expect(app).toMatch(/navigator\.onLine !== false/);
     expect(app).toMatch(/automaticOfflineMode = auth\.unreachable && offline\.records\.length > 0/);
-    expect(app).toMatch(/offlineSnapshot\(offline, coldStartRecords \?\? offline\.records\)/);
+    expect(app).toMatch(/offlineSnapshot\(offline, coldStartSnapshot\?\.ownerUserId === offline\.ownerUserId \? coldStartSnapshot\.records : offline\.records\)/);
     expect(app).toMatch(/loading: false/);
     expect(app).toMatch(/showOfflineMode = offlineMode \|\| automaticOfflineMode/);
     expect(app).not.toMatch(/Verificando seus downloads offline/);
