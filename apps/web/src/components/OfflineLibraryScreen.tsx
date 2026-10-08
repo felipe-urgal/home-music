@@ -86,10 +86,22 @@ export function OfflineLibraryScreen({
   const [removalError, setRemovalError] = useState<string | null>(null);
   const [retryError, setRetryError] = useState<string | null>(null);
   const [retryingKey, setRetryingKey] = useState<string | null>(null);
+  const [storageEstimate, setStorageEstimate] = useState<{ usage: number; quota: number } | null>(null);
   const [busyKeys, setBusyKeys] = useState<ReadonlySet<string>>(new Set());
   const busyRef = useRef(new Set<string>());
   const removalRef = useRef(removal);
   removalRef.current = removal;
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!navigator.storage?.estimate) return;
+    void navigator.storage.estimate().then(result => {
+      if (!cancelled && result.usage !== undefined && result.quota && result.quota > 0) {
+        setStorageEstimate({ usage: result.usage, quota: result.quota });
+      }
+    }).catch(() => undefined); // A estimativa é apenas informativa.
+    return () => { cancelled = true; };
+  }, [totalBytes]);
 
   useEffect(() => {
     if (!removal || busyRef.current.has(removal.key) || removalError) return;
@@ -152,6 +164,7 @@ export function OfflineLibraryScreen({
         <div className="offline-header__title">
           <strong>Downloads offline</strong>
           <small>{records.length} músicas · {formatOfflineBytes(totalBytes)} armazenados</small>
+          {storageEstimate && <small>Armazenamento do navegador: {formatOfflineBytes(storageEstimate.usage)} de {formatOfflineBytes(storageEstimate.quota)} utilizados (estimativa)</small>}
         </div>
         <button className="icon-button" type="button" aria-label="Tentar conectar ao servidor" onClick={onExitOffline}><Wifi aria-hidden="true" /></button>
       </header>
