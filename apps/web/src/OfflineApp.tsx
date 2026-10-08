@@ -388,8 +388,9 @@ export function OfflineApp({ offline, onExit }: OfflineAppProps) {
             onTogglePlay={togglePlayback}
             onNext={() => adjacentTrack(1)}
             onPlayTrack={playTrack}
-            onRemove={trackId => { void offline.remove(trackId).catch(() => undefined); }}
-            onRemoveCollection={(kind, sourceId) => { void offline.removeCollection(kind, sourceId).catch(() => undefined); }}
+            onRemove={trackId => offline.remove(trackId)}
+            onRemoveCollection={(kind, sourceId) => offline.removeCollection(kind, sourceId)}
+            onRetryCollection={(kind, sourceId) => offline.retryCollection(kind, sourceId)}
             onExitOffline={onExit}
           />
         ) : displayCurrent ? (

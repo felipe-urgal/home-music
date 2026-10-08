@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { ChevronLeft, ChevronRight, Download, Folder, ListMusic, Play, Trash2, Wifi } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { ChevronLeft, ChevronRight, Download, Folder, ListMusic, LoaderCircle, Play, Trash2, Wifi } from 'lucide-react';
 import type { Track } from '@home-music/shared';
 import type { OfflineCollectionKind } from '../offline-collection-references';
 import {
@@ -8,6 +8,7 @@ import {
   type OfflineDownloadRecord
 } from '../offline-downloads';
 import { LIBRARY_PAGE_SIZE } from '../useLibraryNavigation';
+import { ActionDialog } from './ActionDialog';
 import { Artwork } from './Artwork';
 import { MiniPlayer } from './MiniPlayer';
 import { ResponsiveState } from './ResponsiveState';
@@ -30,8 +31,9 @@ type OfflineLibraryScreenProps = {
   onTogglePlay: () => void;
   onNext: () => void;
   onPlayTrack: (track: Track, context: Track[]) => void;
-  onRemove: (trackId: string) => void;
-  onRemoveCollection: (kind: OfflineCollectionKind, sourceId: string) => void;
+  onRemove: (trackId: string) => Promise<void>;
+  onRemoveCollection: (kind: OfflineCollectionKind, sourceId: string) => Promise<void>;
+  onRetryCollection?: (kind: OfflineCollectionKind, sourceId: string) => Promise<void>;
   onExitOffline: () => void;
 };
 
@@ -75,10 +77,69 @@ export function OfflineLibraryScreen({
   onPlayTrack,
   onRemove,
   onRemoveCollection,
+  onRetryCollection,
   onExitOffline
 }: OfflineLibraryScreenProps) {
   const [visibleIndividualCount, setVisibleIndividualCount] = useState(LIBRARY_PAGE_SIZE);
   const [selectedCollectionKey, setSelectedCollectionKey] = useState<string | null>(null);
+  const [removal, setRemoval] = useState<{ kind: 'track' | 'collection'; key: string; name: string; collectionKind?: OfflineCollectionKind; sourceId?: string } | null>(null);
+  const [removalError, setRemovalError] = useState<string | null>(null);
+  const [retryError, setRetryError] = useState<string | null>(null);
+  const [retryingKey, setRetryingKey] = useState<string | null>(null);
+  const [storageEstimate, setStorageEstimate] = useState<{ usage: number; quota: number } | null>(null);
+  const [busyKeys, setBusyKeys] = useState<ReadonlySet<string>>(new Set());
+  const busyRef = useRef(new Set<string>());
+  const removalRef = useRef(removal);
+  removalRef.current = removal;
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!navigator.storage?.estimate) return;
+    void navigator.storage.estimate().then(result => {
+      if (!cancelled && result.usage !== undefined && result.quota && result.quota > 0) {
+        setStorageEstimate({ usage: result.usage, quota: result.quota });
+      }
+    }).catch(() => undefined); // A estimativa é apenas informativa.
+    return () => { cancelled = true; };
+  }, [totalBytes]);
+
+  useEffect(() => {
+    if (!removal || busyRef.current.has(removal.key) || removalError) return;
+    const stillExists = removal.kind === 'track'
+      ? individualTrackIds.has(removal.key.slice('track:'.length))
+      : collections.some(collection => collection.key === removal.key.slice('collection:'.length));
+    if (!stillExists) {
+      setRemoval(null);
+      setRemovalError(null);
+    }
+  }, [collections, individualTrackIds, removal, removalError, busyKeys]);
+
+  const confirmRemoval = async () => {
+    const target = removalRef.current;
+    if (!target || busyRef.current.has(target.key)) return;
+    busyRef.current.add(target.key);
+    setBusyKeys(new Set(busyRef.current));
+    setRemovalError(null);
+    try {
+      if (target.kind === 'track') await onRemove(target.key.slice('track:'.length));
+      else await onRemoveCollection(target.collectionKind!, target.sourceId!);
+      if (removalRef.current?.key === target.key) setRemoval(null);
+    } catch (error) {
+      const stillReferenced = target.kind === 'track'
+        ? individualTrackIds.has(target.key.slice('track:'.length))
+        : collections.some(collection => collection.key === target.key.slice('collection:'.length));
+      if (removalRef.current?.key === target.key && !stillReferenced) {
+        setRemoval(null);
+      } else if (removalRef.current?.key === target.key) {
+        setRemovalError(error instanceof Error && error.name === 'QuotaExceededError'
+          ? 'O armazenamento está cheio. Libere espaço e tente novamente.'
+          : 'Não foi possível remover este download. Verifique o armazenamento do navegador e tente novamente.');
+      }
+    } finally {
+      busyRef.current.delete(target.key);
+      setBusyKeys(new Set(busyRef.current));
+    }
+  };
   const recordsById = new Map(records.map(record => [record.track.id, record]));
   const individualRecords = records.filter(record => individualTrackIds.has(record.track.id));
   const individualTracks = individualRecords.map(record => record.track);
@@ -102,14 +163,15 @@ export function OfflineLibraryScreen({
         <span className="offline-header__icon"><Download aria-hidden="true" /></span>
         <div className="offline-header__title">
           <strong>Downloads offline</strong>
-          <small>{records.length} músicas · {formatOfflineBytes(totalBytes)} físicos</small>
+          <small>{records.length} músicas · {formatOfflineBytes(totalBytes)} armazenados</small>
+          {storageEstimate && <small>Armazenamento do navegador: {formatOfflineBytes(storageEstimate.usage)} de {formatOfflineBytes(storageEstimate.quota)} utilizados (estimativa)</small>}
         </div>
         <button className="icon-button" type="button" aria-label="Tentar conectar ao servidor" onClick={onExitOffline}><Wifi aria-hidden="true" /></button>
       </header>
 
       <div className="offline-banner" role="status">
         <Download aria-hidden="true" />
-        <span>{tvMessage ?? 'Modo offline. O espaço acima conta cada música física uma única vez, mesmo quando ela pertence a várias coleções.'}</span>
+        <span>{tvMessage ?? 'Modo offline. O espaço utilizado considera cada arquivo apenas uma vez, mesmo quando está em várias coleções.'}</span>
         <button
           className="secondary-action"
           type="button"
@@ -140,7 +202,7 @@ export function OfflineLibraryScreen({
             <div className="offline-collection-detail__copy">
               <strong>{selectedCollection.reference.name}</strong>
               <small>
-                {selectedCollectionTracks.length}/{selectedCollection.totalCount} músicas disponíveis · {collectionStatusLabel(selectedCollection)}
+                {selectedCollectionTracks.length} disponíveis · {Math.max(0, selectedCollection.totalCount - selectedCollectionTracks.length)} pendentes · {collectionStatusLabel(selectedCollection)}
               </small>
             </div>
             <button
@@ -154,6 +216,23 @@ export function OfflineLibraryScreen({
               {tvConnected ? 'Enviar tudo' : 'Tocar tudo'}
             </button>
           </div>
+
+          {retryError && <p className="action-dialog__error" role="alert">{retryError}</p>}
+          {selectedCollection.error && <p className="action-dialog__error" role="alert">Algumas músicas não foram salvas. Reconecte ao servidor e tente baixar as pendentes novamente.</p>}
+          {selectedCollection.status !== 'available' && selectedCollection.totalCount > selectedCollection.downloadedCount && (
+            <button className="secondary-action" type="button"
+              disabled={Boolean(retryingKey) || selectedCollection.status === 'downloading'}
+              onClick={() => {
+                if (!onRetryCollection) { onExitOffline(); return; }
+                setRetryError(null);
+                setRetryingKey(selectedCollection.key);
+                void onRetryCollection(selectedCollection.reference.kind, selectedCollection.reference.sourceId)
+                  .catch(() => setRetryError('Não foi possível continuar os downloads. Verifique a conexão e tente novamente.'))
+                  .finally(() => setRetryingKey(null));
+              }}>
+              {retryingKey === selectedCollection.key ? 'Continuando downloads…' : 'Tentar conectar para continuar downloads'}
+            </button>
+          )}
 
           {selectedCollectionRecords.length > 0 ? (
             <div className="library-track-list">
@@ -213,7 +292,7 @@ export function OfflineLibraryScreen({
                         <span className="offline-collection-card__icon"><CollectionIcon aria-hidden="true" /></span>
                         <span className="offline-collection-card__copy">
                           <strong>{collection.reference.name}</strong>
-                          <small>{collection.downloadedCount}/{collection.totalCount} músicas · {collectionStatusLabel(collection)}</small>
+                          <small>{collection.downloadedCount} disponíveis · {Math.max(0, collection.totalCount - collection.downloadedCount)} pendentes · {collectionStatusLabel(collection)}</small>
                         </span>
                         <ChevronRight aria-hidden="true" />
                       </button>
@@ -230,13 +309,17 @@ export function OfflineLibraryScreen({
                         className="track-action"
                         type="button"
                         aria-label={`Remover coleção offline ${collection.reference.name}`}
+                        disabled={busyKeys.has(`collection:${collection.key}`)}
                         onClick={() => {
-                          if (!window.confirm(`Remover “${collection.reference.name}” das coleções offline? Músicas compartilhadas serão preservadas.`)) return;
-                          onRemoveCollection(collection.reference.kind, collection.reference.sourceId);
+                          setRemovalError(null);
+                          setRemoval({ kind: 'collection', key: `collection:${collection.key}`, name: collection.reference.name, collectionKind: collection.reference.kind, sourceId: collection.reference.sourceId });
                         }}
                       >
-                        <Trash2 aria-hidden="true" />
+                        {busyKeys.has(`collection:${collection.key}`) ? <LoaderCircle className="is-spinning" aria-hidden="true" /> : <Trash2 aria-hidden="true" />}
                       </button>
+                      {collection.error && (
+                        <p className="action-dialog__error" role="alert">Algumas músicas não foram salvas. Abra a coleção para recuperar.</p>
+                      )}
                     </article>
                   );
                 })}
@@ -271,11 +354,13 @@ export function OfflineLibraryScreen({
                         className="track-action"
                         type="button"
                         aria-label={`Remover download individual de ${track.title}`}
+                        disabled={busyKeys.has(`track:${track.id}`)}
                         onClick={() => {
-                          if (window.confirm(`Remover o download individual de “${track.title}”? Se uma coleção também usar esta música, o arquivo será preservado.`)) onRemove(track.id);
+                          setRemovalError(null);
+                          setRemoval({ kind: 'track', key: `track:${track.id}`, name: track.title });
                         }}
                       >
-                        <Trash2 aria-hidden="true" />
+                        {busyKeys.has(`track:${track.id}`) ? <LoaderCircle className="is-spinning" aria-hidden="true" /> : <Trash2 aria-hidden="true" />}
                       </button>
                     </div>
                   );
@@ -303,6 +388,17 @@ export function OfflineLibraryScreen({
         </>
       )}
 
+      <ActionDialog
+        open={Boolean(removal)}
+        title={removal?.kind === 'collection' ? 'Remover coleção offline?' : 'Remover download individual?'}
+        description={`Remover “${removal?.name ?? ''}” dos downloads offline? O arquivo será mantido se ainda for utilizado por outra coleção ou download.`}
+        confirmLabel="Remover"
+        danger
+        busy={Boolean(removal && busyKeys.has(removal.key))}
+        error={removalError}
+        onConfirm={() => { void confirmRemoval(); }}
+        onClose={() => { setRemoval(null); setRemovalError(null); }}
+      />
       {current && (
         <MiniPlayer
           current={fallbackTrack(current)}

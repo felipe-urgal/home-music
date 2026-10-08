@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Track } from '@home-music/shared';
 import { fetchOfflineTrackResponse } from './offline-background-fetch';
+import { apiFetch } from './api-client';
 import {
   addIndividualOfflineReference,
   collectionReferencedTrackIds,
@@ -506,23 +507,26 @@ export function useOfflineDownloads() {
 
   const removePhysicalDownload = useCallback(async (ownerUserId: string, trackId: string) => {
     const current = readManifest(ownerUserId);
-    if (!current.some(record => record.track.id === trackId)) return;
-    const next = current.filter(record => record.track.id !== trackId);
-
-    try {
-      replaceRecords(ownerUserId, next);
-    } catch {
-      // Sem persistir o manifesto físico não apagamos os bytes, evitando
-      // anunciar uma faixa que já não existe no cache.
+    if (!current.some(record => record.track.id === trackId)) {
+      if (!isOfflineTrackReferenced(readReferences(ownerUserId), trackId)) {
+        const cache = await caches.open(offlineAudioCacheName(ownerUserId));
+        await cache.delete(streamUrl(trackId));
+      }
       return;
     }
+    const next = current.filter(record => record.track.id !== trackId);
 
-    try {
-      const cache = await caches.open(offlineAudioCacheName(ownerUserId));
-      await cache.delete(streamUrl(trackId));
-    } catch {
-      // Blob órfão é removido pela reconciliação na próxima inicialização.
+    // Não apague o artefato enquanto ele ainda for utilizado por outra referência.
+    if (isOfflineTrackReferenced(readReferences(ownerUserId), trackId)) return;
+    // Remoção do cache antes do manifesto: uma falha de cache não pode ser
+    // apresentada como sucesso. Se o manifesto falhar, a reconciliação recupera
+    // o registro obsoleto sem misturar usuários.
+    const cache = await caches.open(offlineAudioCacheName(ownerUserId));
+    const deleted = await cache.delete(streamUrl(trackId));
+    if (!deleted && await cache.match(streamUrl(trackId))) {
+      throw new Error('Não foi possível remover o arquivo do armazenamento.');
     }
+    replaceRecords(ownerUserId, next);
   }, [replaceRecords]);
 
   const ensurePhysicalDownload = useCallback(async (track: Track, ownerUserId: string) => {
@@ -600,7 +604,7 @@ export function useOfflineDownloads() {
 
   const remove = useCallback(async (trackId: string) => {
     const ownerUserId = userId;
-    if (!ownerUserId || !browserHasOfflinePrimitives()) return;
+    if (!ownerUserId || !browserHasOfflinePrimitives()) throw new Error('Armazenamento offline indisponível.');
     const current = readReferences(ownerUserId);
     const hadIndividualReference = current.individualTrackIds.includes(trackId);
     const next = removeIndividualOfflineReference(current, trackId);
@@ -608,7 +612,14 @@ export function useOfflineDownloads() {
     if (hadIndividualReference) {
       replaceReferences(ownerUserId, next);
       if (isOfflineTrackReferenced(next, trackId)) return;
-      await removePhysicalDownload(ownerUserId, trackId);
+      try {
+        await removePhysicalDownload(ownerUserId, trackId);
+      } catch (error) {
+        // A remoção física falhou. Reponha a intenção individual para que
+        // a interface permita nova tentativa, sem sobrescrever coleções novas.
+        replaceReferences(ownerUserId, addIndividualOfflineReference(readReferences(ownerUserId), trackId));
+        throw error;
+      }
       return;
     }
 
@@ -721,6 +732,86 @@ export function useOfflineDownloads() {
     return operation;
   }, [ensurePhysicalDownload, loading, removePhysicalDownload, replaceReferences, setCollectionRuntimeError, updateCollectionRuntime, userId, workerSupported]);
 
+  const retryCollection = useCallback(async (kind: OfflineCollectionKind, sourceId: string) => {
+    const ownerUserId = userId;
+    if (!ownerUserId) throw new Error('Entre novamente para continuar o download.');
+    if (!workerSupported || loading) throw new Error('Downloads offline indisponíveis. Tente reconectar.');
+
+    const reference = findOfflineCollectionReference(readReferences(ownerUserId), kind, sourceId);
+    if (!reference) return;
+    const key = offlineCollectionKey(kind, sourceId);
+    const runKey = collectionRunKey(ownerUserId, key);
+    const existing = collectionPromisesRef.current.get(runKey);
+    if (existing) return existing;
+
+    const operation = (async () => {
+      const available = new Set(readManifest(ownerUserId).map(item => item.track.id));
+      const missingIds = reference.trackIds.filter(id => !available.has(id));
+      if (missingIds.length === 0) {
+        setCollectionRuntimeError(ownerUserId, key, null);
+        return;
+      }
+      // Metadados ausentes são obtidos da biblioteca atual, nunca de outra
+      // conta nem de um snapshot antigo. A referência não é sobrescrita.
+      const libraryResponse = await apiFetch('/api/library');
+      if (!libraryResponse.ok) throw new Error('Não foi possível consultar a biblioteca. Reconecte e tente novamente.');
+      const response = await libraryResponse.json() as { tracks: Track[] };
+      if (activeUserIdRef.current !== ownerUserId) throw new Error('A conta mudou durante o download.');
+      const byId = new Map(response.tracks.map(track => [track.id, track]));
+      const pending = missingIds.map(id => byId.get(id));
+      if (pending.some(track => !track)) {
+        throw new Error('Algumas músicas não estão mais na biblioteca. Atualize a coleção quando estiver online.');
+      }
+      const control: CollectionControl = { paused: false, cancelled: false };
+      collectionControlsRef.current.set(runKey, control);
+      setCollectionRuntimeError(ownerUserId, key, null);
+      updateCollectionRuntime(ownerUserId, current => {
+        const syncingKeys = new Set(current.syncingKeys);
+        const pausedKeys = new Set(current.pausedKeys);
+        syncingKeys.add(key);
+        pausedKeys.delete(key);
+        return { ...current, syncingKeys, pausedKeys };
+      });
+      try {
+        let failures = 0;
+        let cursor = 0;
+        const worker = async () => {
+          while (!control.cancelled && !control.paused && cursor < pending.length) {
+            const track = pending[cursor++];
+            if (!track) continue;
+            if (activeUserIdRef.current !== ownerUserId) return;
+            const latest = findOfflineCollectionReference(readReferences(ownerUserId), kind, sourceId);
+            if (!latest?.trackIds.includes(track.id)) continue;
+            try { await ensurePhysicalDownload(track, ownerUserId); } catch { failures++; }
+          }
+        };
+        await Promise.all(Array.from({ length: Math.min(3, pending.length) }, worker));
+        if (failures && !control.cancelled && !control.paused) {
+          throw new Error(`${failures} músicas não puderam ser salvas. Libere espaço ou verifique a conexão e tente novamente.`);
+        }
+      } finally {
+        updateCollectionRuntime(ownerUserId, current => {
+          const syncingKeys = new Set(current.syncingKeys);
+          syncingKeys.delete(key);
+          return { ...current, syncingKeys };
+        });
+        if (collectionControlsRef.current.get(runKey) === control) collectionControlsRef.current.delete(runKey);
+      }
+    })().catch(error => {
+      if (activeUserIdRef.current === ownerUserId) {
+        setCollectionRuntimeError(ownerUserId, key,
+          error instanceof Error ? error.message : 'Não foi possível continuar os downloads.');
+      }
+      throw error;
+    });
+    collectionPromisesRef.current.set(runKey, operation);
+    void operation.then(
+      () => { if (collectionPromisesRef.current.get(runKey) === operation) collectionPromisesRef.current.delete(runKey); },
+      () => { if (collectionPromisesRef.current.get(runKey) === operation) collectionPromisesRef.current.delete(runKey); }
+    );
+    return operation;
+  }, [ensurePhysicalDownload, loading, setCollectionRuntimeError, updateCollectionRuntime, userId, workerSupported]);
+
   const pauseCollection = useCallback((kind: OfflineCollectionKind, sourceId: string) => {
     const ownerUserId = userId;
     if (!ownerUserId) return;
@@ -738,7 +829,7 @@ export function useOfflineDownloads() {
 
   const removeCollection = useCallback(async (kind: OfflineCollectionKind, sourceId: string) => {
     const ownerUserId = userId;
-    if (!ownerUserId || !browserHasOfflinePrimitives()) return;
+    if (!ownerUserId || !browserHasOfflinePrimitives()) throw new Error('Armazenamento offline indisponível.');
     const key = offlineCollectionKey(kind, sourceId);
     const runKey = collectionRunKey(ownerUserId, key);
     const control = collectionControlsRef.current.get(runKey);
@@ -760,8 +851,19 @@ export function useOfflineDownloads() {
       return { ...state, syncingKeys, pausedKeys, errors };
     });
 
-    for (const trackId of unreferencedOfflineTrackIds(next, reference.trackIds)) {
-      await removePhysicalDownload(ownerUserId, trackId);
+    try {
+      for (const trackId of unreferencedOfflineTrackIds(next, reference.trackIds)) {
+        await removePhysicalDownload(ownerUserId, trackId);
+      }
+    } catch (error) {
+      // Mantém a coleção visível e recuperável após falha física. Preserve
+      // quaisquer referências adicionadas enquanto a operação aguardava I/O.
+      const latest = readReferences(ownerUserId);
+      replaceReferences(ownerUserId, upsertOfflineCollectionReference(latest, {
+        kind: reference.kind, sourceId: reference.sourceId,
+        name: reference.name, trackIds: reference.trackIds
+      }, reference.updatedAt));
+      throw error;
     }
   }, [removePhysicalDownload, replaceReferences, updateCollectionRuntime, userId]);
 
@@ -792,6 +894,7 @@ export function useOfflineDownloads() {
   }, [downloadedIds, downloadingIds, referenceManifest, runtime]);
 
   return {
+    ownerUserId: userId,
     records,
     tracks,
     downloadedIds,
@@ -805,6 +908,7 @@ export function useOfflineDownloads() {
     download,
     remove,
     syncCollection,
+    retryCollection,
     pauseCollection,
     removeCollection,
     getCollectionState
