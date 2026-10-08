@@ -38,6 +38,7 @@ export function ActionDialog({
   const dialogRef = useRef<HTMLDialogElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const cancelButtonRef = useRef<HTMLButtonElement>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
   const titleId = useId();
   const descriptionId = useId();
   const hasInput = value !== undefined;
@@ -48,9 +49,13 @@ export function ActionDialog({
 
     if (!open) {
       if (dialog.open) dialog.close();
+      const previous = returnFocusRef.current;
+      returnFocusRef.current = null;
+      if (previous?.isConnected) window.requestAnimationFrame(() => previous.focus());
       return;
     }
 
+    returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     if (!dialog.open) dialog.showModal();
     const frame = window.requestAnimationFrame(() => {
       if (hasInput) inputRef.current?.focus();
