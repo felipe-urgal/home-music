@@ -44,9 +44,8 @@ async function openPlaylists(page: Page) {
   if (width >= 1024) {
     const expand = page.getByRole('button', { name: 'Expandir barra superior' });
     if (await expand.isVisible().catch(() => false)) await expand.click();
-    const sidebar = page.getByTestId('desktop-sidebar');
-    await expect(sidebar).toBeVisible();
-    await sidebar.getByRole('button', { name: 'Playlists', exact: true }).click();
+    await page.goto('/library/playlists');
+    await expect(page.locator('.desktop-layout')).toHaveAttribute('data-library-tab', 'playlists');
   } else {
     if (width < 700) {
       const navigation = page.getByRole('navigation', { name: 'Navegação principal' });
@@ -62,7 +61,7 @@ async function openPlaylists(page: Page) {
     await libraryNavigation.getByRole('button', { name: 'Playlists', exact: true }).click();
   }
 
-  await expect(page.locator('.section-heading > span').filter({ hasText: /^Playlists$/ })).toBeVisible();
+  await expect(page.locator('.section-heading--playlists-root')).toHaveCount(1);
 }
 
 async function expectSharedRekordboxPlaylist(page: Page) {
@@ -77,8 +76,18 @@ async function expectSharedRekordboxPlaylist(page: Page) {
 
 async function createPlaylist(page: Page, name: string) {
   await openPlaylists(page);
-  page.once('dialog', dialog => dialog.accept(name));
-  await page.getByRole('button', { name: 'Nova', exact: true }).click();
+  await page.getByRole('button', { name: 'Nova playlist', exact: true }).first().click();
+  if (viewportWidth(page) >= 1024) {
+    const dialog = page.getByRole('dialog', { name: 'Nova playlist' });
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole('textbox').fill(name);
+    await dialog.getByRole('button', { name: 'Criar playlist' }).click();
+    await expect(dialog).toBeHidden();
+  } else {
+    const editor = page.locator('.library-text-editor-sheet');
+    await editor.getByRole('textbox', { name: 'Nome' }).fill(name);
+    await editor.getByRole('button', { name: 'Criar playlist' }).click();
+  }
   await expect(page.getByText(name, { exact: true })).toBeVisible();
 }
 
@@ -109,7 +118,7 @@ async function expectCurrentSessionScreen(page: Page) {
   await page.getByRole('button', { name: /Outros dispositivos/ }).click();
   await expect(page.locator('#my-account-title')).toHaveText('Outros dispositivos');
   await expect(page.getByText('Este dispositivo', { exact: true })).toBeVisible();
-  await expect(page.getByText('Sessão usada neste navegador', { exact: true })).toBeVisible();
+  await expect(page.getByText('Este dispositivo', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Encerrar todas as outras sessões', exact: true })).toBeDisabled();
   if (viewportWidth(page) >= 1024) {
     await page.locator('.account-sessions-v2__topbar button').click();
@@ -253,6 +262,10 @@ test('admin e user preservam role, sessões, playlists e isolamento em todos os 
 
 async function expectAdminLibrarySurface(page: Page, visible: boolean) {
   const width = viewportWidth(page);
+  if (width >= 1024 && visible) {
+    const expand = page.getByRole('button', { name: 'Expandir barra superior' });
+    if (await expand.isVisible().catch(() => false)) await expand.click();
+  }
   const refresh = width >= 1024
     ? page.getByTestId('desktop-sidebar').getByRole('button', { name: 'Atualizar biblioteca', exact: true })
     : page.getByRole('button', { name: 'Atualizar biblioteca', exact: true });
