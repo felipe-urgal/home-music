@@ -35,11 +35,12 @@ async function assetPaths(page: Page) {
 }
 
 async function expectLibrary(page: Page) {
-  await expect(page.getByPlaceholder('Música, artista, álbum ou pasta')).toBeVisible();
+  // O placeholder varia conforme a aba; o campo real é estável.
+  await expect(page.locator('.search-box--library input')).toBeVisible();
 }
 
 async function expectAccessibilityBaseline(page: Page) {
-  const search = page.getByLabel('Buscar na biblioteca');
+  const search = page.locator('.search-box--library input');
 
   // Anchor on the search field, move away and return using real keyboard input.
   // The final focus therefore exercises :focus-visible instead of relying only
@@ -72,16 +73,10 @@ async function expectAccessibilityBaseline(page: Page) {
 
   const width = page.viewportSize()?.width ?? 390;
   if (width >= 1024) {
-    const desktopNavigation = page.getByTestId('desktop-sidebar').getByRole('navigation', { name: 'Navegação principal' });
-    const foldersTab = desktopNavigation.getByRole('button', { name: 'Pastas', exact: true });
-    await expect(
-      foldersTab,
-      'a navegação desktop deve expor Pastas na rota raiz da Biblioteca'
-    ).toBeVisible();
-    await expect(
-      foldersTab,
-      'a rota /library deve expor Pastas como página corrente no desktop'
-    ).toHaveAttribute('aria-current', 'page');
+    // A navegação desktop foi simplificada: a barra superior inicia recolhida
+    // e a aba ativa é representada no próprio layout, não por um botão Pastas.
+    await expect(page.locator('.desktop-layout')).toHaveAttribute('data-library-tab', 'folders');
+    await expect(page.locator('.library-content')).toBeVisible();
     return;
   }
 
@@ -105,13 +100,12 @@ async function openAccount(page: Page) {
   const width = page.viewportSize()?.width ?? 390;
 
   if (width >= 1024) {
+    await page.getByRole('button', { name: 'Expandir barra superior' }).click();
     await page.getByTestId('desktop-sidebar').getByRole('button', { name: /Minha conta/ }).click();
   } else if (width >= 700) {
-    await page.getByRole('button', { name: /Minha conta ·/ }).click();
+    await page.locator('.my-account-mobile-entry').click();
   } else {
-    await page.getByRole('navigation', { name: 'Navegação principal' })
-      .getByRole('button', { name: 'Conta', exact: true })
-      .click();
+    await page.locator('.mobile-library-brand-bar').getByRole('button', { name: /Minha conta/ }).click();
   }
 
   await expect(page.locator('#my-account-title')).toHaveText('Minha conta');
