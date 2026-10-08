@@ -62,6 +62,19 @@ describe('offline library UX contract', () => {
     expect(html).toContain('Mostrar mais 100 músicas');
   });
 
+  it('usa confirmação acessível e não descarta erros em remoções', () => {
+    const screen = source('components/OfflineLibraryScreen.tsx');
+    const app = source('OfflineApp.tsx');
+    expect(screen).toContain('<ActionDialog');
+    expect(screen).toContain('danger');
+    expect(screen).toContain('setRemovalError(');
+    expect(screen).toContain('busyKeys.has(');
+    expect(screen).not.toContain('window.confirm(');
+    expect(app).toContain('onRemove={trackId => offline.remove(trackId)}');
+    expect(app).toContain('onRemoveCollection={(kind, sourceId) => offline.removeCollection(kind, sourceId)}');
+    expect(app).not.toContain('offline.remove(trackId).catch(() => undefined)');
+  });
+
   it('mantém o retorno aos downloads visível somente na superfície offline mobile', () => {
     const offlineApp = source('OfflineApp.tsx');
     const offlineCss = source('offline-mobile.css');
