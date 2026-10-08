@@ -24,6 +24,7 @@ export type PublicAuthSession = Readonly<{
   createdAt: number;
   lastSeenAt: number;
   expiresAt: number;
+  clientName: string | null;
 }>;
 
 export class SessionCapacityError extends Error {
@@ -87,6 +88,7 @@ export function loginRateLimitKey(
 export class SessionManager {
   private readonly sessions = new Map<string, AuthSession>();
   private readonly sessionActivity = new Map<string, number>();
+  private readonly sessionClients = new Map<string, string>();
 
   constructor(
     private readonly username: string,
@@ -129,9 +131,9 @@ export class SessionManager {
     return this.createSessionRecord(userId, now);
   }
 
-  createSessionForUser(userId: string, now = Date.now()) {
+  createSessionForUser(userId: string, now = Date.now(), clientName: string | null = null) {
     if (!userId || userId.length > 128) throw new RangeError('userId de sessão inválido.');
-    return this.createSessionRecord(userId, now);
+    return this.createSessionRecord(userId, now, clientName);
   }
 
   getSession(token: string | undefined, now = Date.now()): AuthSession | null {
@@ -194,7 +196,8 @@ export class SessionManager {
         current: token === currentToken,
         createdAt: session.createdAt,
         lastSeenAt: this.sessionActivity.get(token) ?? session.authenticatedAt,
-        expiresAt: session.expiresAt
+        expiresAt: session.expiresAt,
+        clientName: this.sessionClients.get(token) ?? null
       }))
       .sort((left, right) => Number(right.current) - Number(left.current) || right.lastSeenAt - left.lastSeenAt);
   }
@@ -214,7 +217,7 @@ export class SessionManager {
     return false;
   }
 
-  private createSessionRecord(userId: string | null, now: number) {
+  private createSessionRecord(userId: string | null, now: number, clientName: string | null = null) {
     this.clearExpired(now);
     this.evictOldestSessionsForUser(userId);
     if (this.sessions.size >= this.maxSessions) throw new SessionCapacityError();
@@ -232,6 +235,7 @@ export class SessionManager {
     });
     this.sessions.set(token, session);
     this.sessionActivity.set(token, now);
+    if (clientName) this.sessionClients.set(token, clientName);
     return token;
   }
 
@@ -250,6 +254,7 @@ export class SessionManager {
   private deleteSession(token: string) {
     this.sessions.delete(token);
     this.sessionActivity.delete(token);
+    this.sessionClients.delete(token);
   }
 
   private clearExpired(now: number) {
