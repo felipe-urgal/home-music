@@ -100,6 +100,37 @@ describe('offline collection references', () => {
     expect(offlineCollectionMatches(reference, { name: 'Renomeada', trackIds: ['one', 'two'] })).toBe(false);
   });
 
+  it('remoção repetida é idempotente e preserva arquivos compartilhados', () => {
+    let manifest = createOfflineReferenceManifest(['shared']);
+    manifest = upsertOfflineCollectionReference(manifest, {
+      kind: 'playlist', sourceId: 'a', name: 'A', trackIds: ['shared', 'unique']
+    });
+    manifest = upsertOfflineCollectionReference(manifest, {
+      kind: 'folder', sourceId: 'b', name: 'B', trackIds: ['shared']
+    });
+    const withoutA = removeOfflineCollectionReference(manifest, 'playlist', 'a');
+    expect(removeOfflineCollectionReference(withoutA, 'playlist', 'a')).toEqual(withoutA);
+    expect(unreferencedOfflineTrackIds(withoutA, ['shared', 'unique'])).toEqual(['unique']);
+    const withoutIndividual = removeIndividualOfflineReference(withoutA, 'shared');
+    expect(removeIndividualOfflineReference(withoutIndividual, 'shared')).toEqual(withoutIndividual);
+    expect(unreferencedOfflineTrackIds(withoutIndividual, ['shared'])).toEqual([]);
+    const withoutB = removeOfflineCollectionReference(withoutIndividual, 'folder', 'b');
+    expect(unreferencedOfflineTrackIds(withoutB, ['shared'])).toEqual(['shared']);
+  });
+
+  it('manifestos de contas diferentes nunca compartilham referências ou identificadores de storage', () => {
+    const a = upsertOfflineCollectionReference(createOfflineReferenceManifest(), {
+      kind: 'playlist', sourceId: 'same', name: 'A', trackIds: ['track-a']
+    });
+    const b = upsertOfflineCollectionReference(createOfflineReferenceManifest(), {
+      kind: 'playlist', sourceId: 'same', name: 'B', trackIds: ['track-b']
+    });
+    expect(offlineReferencesKey('account-a')).not.toBe(offlineReferencesKey('account-b'));
+    expect(isOfflineTrackReferenced(a, 'track-b')).toBe(false);
+    expect(isOfflineTrackReferenced(b, 'track-a')).toBe(false);
+    expect(findOfflineCollectionReference(a, 'playlist', 'same')?.name).toBe('A');
+  });
+
   it('descarta manifesto corrompido e sanitiza coleções inválidas', () => {
     expect(parseOfflineReferenceManifest('{')).toBeNull();
     expect(parseOfflineReferenceManifest(JSON.stringify({ version: 99, individualTrackIds: [], collections: [] }))).toBeNull();
