@@ -243,7 +243,12 @@ test('Library Assistant executa o fluxo visual de lyrics local com job fake', as
   });
 
   await openAssistant(page);
-  await page.locator('.assistant-tabs__capabilities').getByRole('button', { name: /^Letras/ }).click();
+  const lyricsTab = page.locator('.assistant-tabs__capabilities').getByRole('button', { name: /^Letras/ });
+  await lyricsTab.click();
+  const search = page.getByRole('searchbox', { name: 'Buscar faixas' });
+  await search.fill('E2E');
+  const notAnalyzedFilter = page.locator('.assistant-tabs__summary').getByRole('button', { name: /Não analisadas/ });
+  await notAnalyzedFilter.click();
   await page.getByRole('button', { name: 'Lyrics local', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Lyrics local' });
   await expect(dialog).toBeVisible();
@@ -256,4 +261,7 @@ test('Library Assistant executa o fluxo visual de lyrics local com job fake', as
   await expect.poll(() => jobPolls, { timeout: 6_000 }).toBeGreaterThan(0);
   await expect(dialog).toBeHidden({ timeout: 6_000 });
   await expect(page.locator('#library-assistant-title')).toHaveText('Assistente da Biblioteca');
+  await expect(lyricsTab).toHaveClass(/is-active/);
+  await expect(search).toHaveValue('E2E');
+  await expect(notAnalyzedFilter).toHaveClass(/is-active/);
 });

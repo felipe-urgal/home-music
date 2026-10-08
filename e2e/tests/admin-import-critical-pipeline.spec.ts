@@ -297,6 +297,9 @@ test('provider e URL direta atravessam o workbench crítico sem internet públic
   await page.getByLabel('Buscar ou colar link do YouTube, YouTube Music ou Spotify').fill(providerUrl);
   await page.getByRole('button', { name: 'Analisar link', exact: true }).click();
   await expect(page.getByText('Provider E2E', { exact: true })).toBeVisible();
+  const providerSubmit = page.locator('.admin-import-provider__form button[type="submit"]');
+  await expect(providerSubmit).toBeDisabled();
+  await expect(providerSubmit.locator('.is-spinning')).toHaveCount(0);
   expect(providerInspectBody).toEqual({ url: providerUrl });
   expect(providerStartBody).toEqual({ url: providerUrl });
   await page.locator('.admin-import-provider').getByRole('button', { name: 'Cancelar', exact: true }).click();

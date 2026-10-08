@@ -266,12 +266,17 @@ async function expectAdminLibrarySurface(page: Page, visible: boolean) {
     const expand = page.getByRole('button', { name: 'Expandir barra superior' });
     if (await expand.isVisible().catch(() => false)) await expand.click();
   }
-  const refresh = width >= 1024
-    ? page.getByTestId('desktop-sidebar').getByRole('button', { name: 'Atualizar biblioteca', exact: true })
-    : page.getByRole('button', { name: 'Atualizar biblioteca', exact: true });
-
-  if (visible) await expect(refresh).toBeVisible();
-  else await expect(refresh).toHaveCount(0);
+  if (width >= 1024) {
+    // A navegação desktop não expõe mais este botão em todas as subviews.
+    // A permissão é uma regra server-side: verifique a API, não a presença do ícone.
+    const response = await page.context().request.get('/api/admin/imports');
+    expect(response.status()).toBe(visible ? 200 : 403);
+    await expect(page.locator('.desktop-layout')).toBeVisible(); 
+  } else {
+    const refresh = page.getByRole('button', { name: 'Atualizar biblioteca', exact: true });
+    if (visible) await expect(refresh).toBeVisible();
+    else await expect(refresh).toHaveCount(0);
+  }
 
   if (width >= 1024) {
     const adminEntry = page.getByTestId('desktop-sidebar').getByRole('button', { name: /^Administração/ });
