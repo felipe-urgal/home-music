@@ -122,13 +122,22 @@ test('smoke crítico: deep link, acessibilidade, histórico, player, conta e adm
     'o fluxo normal da biblioteca não deve baixar o chunk administrativo'
   ).toBe(false);
 
-  const audio = page.locator('audio');
-  await expect(audio).toHaveCount(1);
-  await audio.evaluate(element => element.setAttribute('data-e2e-route-audio', 'preserved'));
+  // O player usa dois elementos de áudio para realizar crossfade sem remontá-los nas rotas.
+  const audio = page.locator('main.app-shell > audio');
+  await expect(audio).toHaveCount(2);
+  await audio.evaluateAll(elements => {
+    elements.forEach((element, index) => element.setAttribute('data-e2e-route-audio', `deck-${index}`));
+  });
+
+  async function expectAudioDecksPreserved() {
+    await expect(audio).toHaveCount(2);
+    await expect(audio.nth(0)).toHaveAttribute('data-e2e-route-audio', 'deck-0');
+    await expect(audio.nth(1)).toHaveAttribute('data-e2e-route-audio', 'deck-1');
+  }
 
   await openAccount(page);
   await expect(page).toHaveURL(/\/account$/);
-  await expect(audio).toHaveAttribute('data-e2e-route-audio', 'preserved');
+  await expectAudioDecksPreserved();
   await expect.poll(async () =>
     (await assetPaths(page)).some(pathname => /^\/assets\/MyAccountScreen-[^/]+\.js$/.test(pathname))
   ).toBe(true);
@@ -136,7 +145,7 @@ test('smoke crítico: deep link, acessibilidade, histórico, player, conta e adm
   await page.goBack();
   await expect(page).toHaveURL(/\/library$/);
   await expectLibrary(page);
-  await expect(audio).toHaveAttribute('data-e2e-route-audio', 'preserved');
+  await expectAudioDecksPreserved();
 
   await page.goForward();
   await expect(page).toHaveURL(/\/account$/);
@@ -145,7 +154,7 @@ test('smoke crítico: deep link, acessibilidade, histórico, player, conta e adm
   await page.locator('.my-account-screen').getByRole('button', { name: /^Administração/ }).click();
   await expect(page).toHaveURL(/\/admin$/);
   await expect(page.locator('#administration-title')).toHaveText('Administração');
-  await expect(audio).toHaveAttribute('data-e2e-route-audio', 'preserved');
+  await expectAudioDecksPreserved();
   await expect.poll(async () =>
     (await assetPaths(page)).some(pathname => /^\/assets\/AdministrationScreen-[^/]+\.js$/.test(pathname))
   ).toBe(true);
