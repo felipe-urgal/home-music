@@ -129,24 +129,48 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
   const inputRef = useRef<HTMLInputElement>(null);
   const currentXhrRef = useRef<XMLHttpRequest | null>(null);
   const cancelRequestedRef = useRef(false);
+  const requestGeneration = useRef(0);
+  const pendingRefresh = useRef<AbortController | null>(null);
+  const mounted = useRef(false);
 
-  const loadJobs = useCallback(async (background = false) => {
+  // Polling é single-flight; mutações e refresh explícito invalidam o snapshot anterior.
+  const loadJobs = useCallback(async (background = false, force = false) => {
+    if (background && !force && pendingRefresh.current) return;
+    pendingRefresh.current?.abort();
+    const controller = new AbortController();
+    const generation = ++requestGeneration.current;
+    pendingRefresh.current = controller;
     if (!background) setLoading(true);
-    setError(null);
+    if (!background || force) setError(null);
     try {
-      const response = await getAdminImportJobs();
+      const response = await getAdminImportJobs(controller.signal);
+      if (!mounted.current || controller.signal.aborted || generation !== requestGeneration.current) return;
       setJobs(response.jobs);
       setUploadConfig(response.upload);
       setUrlConfig(response.url);
       setMediaValidationConfig(response.mediaValidation);
+      setError(null);
     } catch (caught) {
+      if (!mounted.current || controller.signal.aborted || generation !== requestGeneration.current) return;
       setError(caught instanceof Error ? caught.message : 'Não foi possível carregar as importações.');
     } finally {
-      if (!background) setLoading(false);
+      if (generation === requestGeneration.current) {
+        pendingRefresh.current = null;
+        if (mounted.current && !background) setLoading(false);
+      }
     }
   }, []);
 
-  useEffect(() => { void loadJobs(); }, [loadJobs]);
+  useEffect(() => {
+    mounted.current = true;
+    void loadJobs();
+    return () => {
+      mounted.current = false;
+      requestGeneration.current += 1;
+      pendingRefresh.current?.abort();
+      pendingRefresh.current = null;
+    };
+  }, [loadJobs]);
 
   const activeUrlJob = activeUrlJobId ? jobs.find(job => job.id === activeUrlJobId) ?? null : null;
   const urlBusy = urlSubmitting || urlCancelling || activeUrlJob?.status === 'processing';
@@ -157,11 +181,16 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
 
   useEffect(() => {
     if (!pipelineBusy) return;
-    const timer = window.setInterval(() => { void loadJobs(true); }, 900);
+        const timer = window.setInterval(() => { void loadJobs(true); }, 900);
     return () => window.clearInterval(timer);
   }, [loadJobs, pipelineBusy]);
 
   const handleUpdatedJob = useCallback((job: ImportJob) => {
+    // Um snapshot iniciado antes desta mutação não pode desfazer seu resultado.
+    requestGeneration.current += 1;
+    pendingRefresh.current?.abort();
+    pendingRefresh.current = null;
+    setLoading(false);
     setSessionStarted(true);
     setJobs(current => {
       const exists = current.some(item => item.id === job.id);
@@ -213,12 +242,12 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
       setActiveUpload(current => current?.jobId === job.id
         ? { ...current, loaded: file.size, stage: 'queued', error: null }
         : current);
-      await loadJobs(true);
+      await loadJobs(true, true);
     } catch (caught) {
       if (cancelRequestedRef.current) return;
       if (createdJobId) {
         await cancelAdminImportUpload(createdJobId).catch(() => undefined);
-        await loadJobs(true);
+        await loadJobs(true, true);
       }
       const message = caught instanceof Error ? caught.message : 'Não foi possível enviar o arquivo.';
       setActiveUpload(current => current ? { ...current, stage: 'error', error: message } : current);
@@ -246,7 +275,7 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
       await cancelAdminImportUpload(jobId);
       currentXhrRef.current?.abort();
       setActiveUpload(current => current?.jobId === jobId ? { ...current, stage: 'cancelled', error: null } : current);
-      await loadJobs(true);
+      await loadJobs(true, true);
     } catch (caught) {
       cancelRequestedRef.current = false;
       const message = caught instanceof Error ? caught.message : 'Não foi possível cancelar o upload.';
@@ -268,14 +297,14 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
     try {
       const job = await createAdminImportUrl(urlValue.trim());
       setActiveUrlJobId(job.id);
-      setJobs(current => [job, ...current.filter(item => item.id !== job.id)]);
+      handleUpdatedJob(job);
       setUrlValue('');
     } catch (caught) {
       setUrlError(caught instanceof Error ? caught.message : 'Não foi possível iniciar a importação por URL.');
     } finally {
       setUrlSubmitting(false);
     }
-  }, [urlConfig, urlValue]);
+  }, [handleUpdatedJob, urlConfig, urlValue]);
 
   const cancelUrl = useCallback(async () => {
     if (!activeUrlJobId || !activeUrlJob || !['processing', 'pending'].includes(activeUrlJob.status)) return;
@@ -400,7 +429,7 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
                   compact
                   jobs={jobs}
                   onJobUpdated={handleUpdatedJob}
-                  onRefresh={() => loadJobs(true)}
+                  onRefresh={() => loadJobs(true, true)}
                 />
               </div>
             ) : (
@@ -508,7 +537,7 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
                 jobs={validationJobs}
                 config={mediaValidationConfig}
                 onJobUpdated={handleUpdatedJob}
-                onRefresh={() => loadJobs(true)}
+                onRefresh={() => loadJobs(true, true)}
               />
             ) : (
               <article className="admin-import-v4__live is-failed" role="alert">
@@ -522,7 +551,7 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
                 compact
                 jobs={jobs}
                 onJobUpdated={handleUpdatedJob}
-                onRefresh={() => loadJobs(true)}
+                onRefresh={() => loadJobs(true, true)}
               />
             </div>
           ) : activeProcessingJob ? (
@@ -566,7 +595,7 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
             compact
             jobs={reviewJobs}
             onJobUpdated={handleUpdatedJob}
-            onRefresh={() => loadJobs(true)}
+            onRefresh={() => loadJobs(true, true)}
           />
         </section>
       ) : (
