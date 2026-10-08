@@ -43,6 +43,7 @@ jobs:
           cache: npm
           package-manager-cache: false
       - run: npm ci --no-audit --no-fund
+      - run: npm run build
       - run: npm ci --prefix e2e --no-audit --no-fund
       - run: npm run install:browsers --prefix e2e
       - run: npm --prefix e2e test -- tests/account-security.spec.ts tests/account-navigation.spec.ts --project=${{ matrix.project }}
