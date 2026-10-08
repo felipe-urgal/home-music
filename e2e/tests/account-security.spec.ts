@@ -31,6 +31,17 @@ async function openAccount(page: Page) {
   await expect(page.locator('#my-account-title')).toHaveText('Minha conta');
 }
 
+async function backFromSensitiveView(page: Page, view: 'password' | 'sessions') {
+  if ((page.viewportSize()?.width ?? 0) >= 1024) {
+    await page.locator(view === 'password'
+      ? '.my-account-password-v3__back'
+      : '.account-sessions-v2__topbar button').click();
+  } else {
+    await page.getByRole('button', { name: 'Voltar', exact: true }).click();
+  }
+  await expect(page.locator('#my-account-title')).toHaveText('Minha conta');
+}
+
 async function createSecondarySession(userAgent: string) {
   const client = await request.newContext({
     baseURL: 'http://127.0.0.1:8791',
@@ -83,7 +94,7 @@ test('Minha Conta preserva navegação e confirmações de sessão em desktop e 
   await expect(page.getByText('Este dispositivo', { exact: true })).toBeVisible();
   await expect(page.getByText('Chrome · Linux', { exact: true })).toBeVisible();
   await expect(page.getByText('Dispositivo não identificado', { exact: true })).toBeVisible();
-  await expect(page.getByText(/Última atividade/).first()).toBeVisible();
+  await expect(otherSessionCard(page)).toContainText('Última atividade');
 
   const dialog = await requestRevokeOne(page);
   await expect(dialog).toBeVisible();
@@ -109,8 +120,7 @@ test('Minha Conta preserva navegação e confirmações de sessão em desktop e 
   await expect(page.locator('.account-sessions-v2__card:not(.is-current), .account-session-card:not(.is-current)')).toHaveCount(0);
   await expect(page.getByRole('status').filter({ hasText: /sessão foi encerrada/ })).toBeVisible();
 
-  await page.getByRole('button', { name: 'Voltar', exact: true }).click();
-  await expect(page.locator('#my-account-title')).toHaveText('Minha conta');
+  await backFromSensitiveView(page, 'sessions');
   expect(nativeDialogs).toEqual([]);
 });
 
@@ -119,9 +129,12 @@ test('erro da troca de senha mantém confirmação aberta e cancelar devolve o f
   await openAccount(page);
   await page.getByRole('button', { name: /Alterar senha/ }).first().click();
   await expect(page.locator('#my-account-title')).toHaveText('Alterar senha');
-  await page.getByLabel('Senha atual').fill('senha-atual-incorreta');
-  await page.getByLabel('Nova senha', { exact: true }).fill('abc123');
-  await page.getByLabel('Confirmar nova senha').fill('abc123');
+  const passwordForm = page.locator((page.viewportSize()?.width ?? 0) >= 1024
+    ? '#my-account-password-v3-form'
+    : '.my-account-password-form');
+  await passwordForm.getByLabel('Senha atual').fill('senha-atual-incorreta');
+  await passwordForm.getByLabel('Nova senha', { exact: true }).fill('abc123');
+  await passwordForm.getByLabel('Confirmar nova senha').fill('abc123');
 
   const trigger = page.getByRole('button', { name: /^(Alterar senha|Alterar senha e sair)$/ }).last();
   await trigger.click();
@@ -137,8 +150,7 @@ test('erro da troca de senha mantém confirmação aberta e cancelar devolve o f
   await expect(dialog.getByRole('alert')).toContainText('Senha atual inválida.');
   await expect(dialog.getByRole('button', { name: 'Alterar senha e sair' })).toBeEnabled();
   await dialog.getByRole('button', { name: 'Cancelar' }).click();
-  await page.getByRole('button', { name: 'Voltar', exact: true }).click();
-  await expect(page.locator('#my-account-title')).toHaveText('Minha conta');
+  await backFromSensitiveView(page, 'password');
 });
 
 test('erro ao revogar sessões continua no diálogo até o usuário decidir', async ({ page }) => {
