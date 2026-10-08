@@ -70,6 +70,8 @@ describe('offline library UX contract', () => {
     expect(screen).toContain('setRemovalError(');
     expect(screen).toContain('busyKeys.has(');
     expect(screen).not.toContain('window.confirm(');
+    expect(screen).toContain('Tentar conectar para continuar downloads');
+    expect(screen).toContain('disponíveis ·');
     expect(app).toContain('onRemove={trackId => offline.remove(trackId)}');
     expect(app).toContain('onRemoveCollection={(kind, sourceId) => offline.removeCollection(kind, sourceId)}');
     expect(app).not.toContain('offline.remove(trackId).catch(() => undefined)');
