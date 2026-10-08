@@ -9,9 +9,9 @@ permissions:
   contents: read
 
 jobs:
-  validate:
+  check:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -24,6 +24,25 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: npm run check
       - run: npm run test:security
+
+  e2e:
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [desktop-chromium, mobile-chromium, tablet-chromium]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+          package-manager-cache: false
+      - run: npm ci --no-audit --no-fund
       - run: npm ci --prefix e2e --no-audit --no-fund
       - run: npm run install:browsers --prefix e2e
-      - run: npm --prefix e2e test -- tests/account-security.spec.ts tests/account-navigation.spec.ts --project=tablet-chromium
+      - run: npm --prefix e2e test -- tests/account-security.spec.ts tests/account-navigation.spec.ts --project=${{ matrix.project }}
