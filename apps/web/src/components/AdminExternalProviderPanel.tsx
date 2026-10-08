@@ -38,7 +38,7 @@ import '../admin-external-provider-batch.css';
 type AdminExternalProviderPanelProps = {
   jobs: ImportJob[];
   onJobUpdated: (job: ImportJob) => void;
-  onRefresh: () => Promise<unknown> | unknown;
+  onRefresh: (background?: boolean) => Promise<unknown> | unknown;
   compact?: boolean;
 };
 
@@ -164,28 +164,25 @@ export function AdminExternalProviderPanel({
   const canCancelAcquisition = acquisitionRunning;
 
   useEffect(() => {
-    if (!activeJobId || !activeJobRunning) return;
-    const timer = window.setInterval(() => { void onRefresh(); }, 900);
-    return () => window.clearInterval(timer);
-  }, [activeJobId, activeJobRunning, onRefresh]);
-
-  useEffect(() => {
     if (!activeBatch || !batchRunning) return;
-    let active = true;
+    let cancelled = false;
+    let timer = 0;
     const refresh = async () => {
       try {
         const next = await getAdminExternalProviderBatch(activeBatch.id);
-        if (!active) return;
+        if (cancelled) return;
         setActiveBatch(next);
-        await onRefresh();
+        await onRefresh(true);
       } catch (caught) {
-        if (active) setError(caught instanceof Error ? caught.message : 'Não foi possível atualizar o progresso da lista.');
+        if (!cancelled) setError(caught instanceof Error ? caught.message : 'Não foi possível atualizar o progresso da lista.');
+      } finally {
+        if (!cancelled) timer = window.setTimeout(() => void refresh(), 900);
       }
     };
-    const timer = window.setInterval(() => { void refresh(); }, 900);
+    timer = window.setTimeout(() => void refresh(), 900);
     return () => {
-      active = false;
-      window.clearInterval(timer);
+      cancelled = true;
+      window.clearTimeout(timer);
     };
   }, [activeBatch?.id, batchRunning, onRefresh]);
 
