@@ -77,6 +77,16 @@ describe('offline library UX contract', () => {
     expect(app).not.toContain('offline.remove(trackId).catch(() => undefined)');
   });
 
+  it('retry de coleções usa a conta atual, apenas pendentes e checagem de referências', () => {
+    const downloads = source('offline-downloads.ts');
+    const app = source('OfflineApp.tsx');
+    expect(downloads).toContain('const retryCollection = useCallback(');
+    expect(downloads).toContain('const missingIds = reference.trackIds.filter(id => !available.has(id))');
+    expect(downloads).toContain('activeUserIdRef.current !== ownerUserId');
+    expect(downloads).toContain('latest?.trackIds.includes(track.id)');
+    expect(app).toContain('offline.retryCollection(kind, sourceId)');
+  });
+
   it('isola snapshots de cold start pela conta dona dos downloads', () => {
     const app = source('App.tsx');
     expect(app).toContain('coldStartSnapshot?.ownerUserId === offline.ownerUserId');
