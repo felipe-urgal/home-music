@@ -178,7 +178,7 @@ export function AdministrationScreen({ currentUser, onBack }: AdministrationScre
   if (view === 'duplicates') return <AdminLibraryDuplicateReviewScreen onBack={() => setView('overview')} />;
   if (view === 'quarantine') return <AdminMediaQuarantineScreen onBack={() => setView('overview')} />;
   if (view === 'import') return <AdminImportMediaScreen onBack={() => setView('overview')} />;
-  if (view === 'operations') return <AdminOperationHistoryScreen onBack={() => setView('overview')} />;
+  if (view === 'operations') return <AdminOperationHistoryScreen onBack={() => setView('overview')} onOpenImport={() => setView('import')} />;
   if (view === 'users') return <AdminUsersScreen currentUser={currentUser} onBack={() => setView('overview')} />;
 
   const problemCount = overview?.problems.affectedTracks ?? 0;
