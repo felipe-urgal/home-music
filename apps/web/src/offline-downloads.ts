@@ -795,6 +795,7 @@ export function useOfflineDownloads() {
   }, [downloadedIds, downloadingIds, referenceManifest, runtime]);
 
   return {
+    ownerUserId: userId,
     records,
     tracks,
     downloadedIds,
