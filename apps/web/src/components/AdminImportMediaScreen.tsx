@@ -9,6 +9,7 @@ import {
   FileAudio,
   Link2,
   LoaderCircle,
+  RefreshCw,
   UploadCloud,
   X
 } from 'lucide-react';
@@ -369,7 +370,14 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
           <strong id="admin-import-title">Importar mídia</strong>
           <small>{currentStep === 3 ? 'Revise antes de adicionar à sua biblioteca' : currentStep === 4 ? 'Música adicionada à sua biblioteca' : 'Adicione músicas à sua biblioteca'}</small>
         </div>
-        <span />
+        <button
+          className="admin-import-v4__refresh"
+          type="button"
+          aria-label="Atualizar importações"
+          title="Atualizar importações"
+          disabled={loading}
+          onClick={() => void loadJobs(false, true)}
+        ><RefreshCw /></button>
       </header>
 
       <nav className="admin-import-v4__progress" aria-label="Etapas da importação">

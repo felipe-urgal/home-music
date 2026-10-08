@@ -21,6 +21,7 @@ async function login(page: Page) {
 async function openAdministration(page: Page) {
   const width = viewportWidth(page);
   if (width >= 1024) {
+    await page.getByRole('button', { name: 'Expandir barra superior' }).click();
     const sidebar = page.getByTestId('desktop-sidebar');
     await expect(sidebar.getByRole('button', { name: /^Administração/ })).toHaveCount(0);
     await sidebar.getByRole('button', { name: /Minha conta/ }).click();

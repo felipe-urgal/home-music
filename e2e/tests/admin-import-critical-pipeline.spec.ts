@@ -521,3 +521,113 @@ test('unmount durante polling pendente não atualiza a tela anterior', async ({ 
   await expect(page.locator('#administration-title')).toHaveText('Administração');
   await expect(page.locator('#admin-import-title')).toHaveCount(0);
 });
+
+function snapshot659(jobs: Job[]) {
+  return JSON.stringify({
+    jobs,
+    upload: { maxBytes: 1048576, acceptedExtensions: ['.wav'] },
+    url: { maxBytes: 1048576, timeoutMs: 5000, maxRedirects: 3, acceptedProtocols: ['http:', 'https:'] },
+    mediaValidation: { profiles: [] },
+    providers: []
+  });
+}
+
+test('refresh explícito prevalece sobre duas respostas GET fora de ordem', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop-chromium');
+  const processing = baseJob('refresh-659', 'Atualização fora de ordem', { type: 'url', provider: null }, 'processing');
+  let current = processing;
+  let captureOld!: () => void;
+  const oldRequested = new Promise<void>(resolve => { captureOld = resolve; });
+  let releaseOld!: () => void;
+  const oldBlocked = new Promise<void>(resolve => { releaseOld = resolve; });
+  let held = false;
+  let freshSeen = false;
+
+  await page.route('**/api/admin/imports', async route => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    if (current.status === 'processing' && !held) {
+      held = true;
+      const oldSnapshot = snapshot659([processing]);
+      captureOld();
+      await oldBlocked;
+      try { await route.fulfill({ status: 200, contentType: 'application/json', body: oldSnapshot }); } catch { /* abort esperado */ }
+      return;
+    }
+    if (held && current.status === 'completed') freshSeen = true;
+    await route.fulfill({ status: 200, contentType: 'application/json', body: snapshot659(
+      current.status === 'processing' && !held ? [] : current.status === 'processing' ? [processing] : [current]
+    ) });
+  });
+  await page.route('**/api/admin/imports/urls', async route => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ job: processing }) });
+  });
+
+  // A primeira carga deve mostrar a seleção de origem; somente após POST inicia o polling.
+  current = baseJob('ready-659', 'Aguardando origem', { type: 'url', provider: null }, 'cancelled');
+  await login(page);
+  await openImport(page);
+  await page.getByRole('tab', { name: /Arquivo ou URL/ }).click();
+  await page.getByLabel('URL direta do arquivo').fill('https://fixtures.invalid/refresh-659.wav');
+  current = processing;
+  await page.getByRole('button', { name: 'Analisar URL', exact: true }).click();
+  await expect(page.getByText('Preparando mídia', { exact: true })).toBeVisible();
+  await oldRequested;
+
+  current = { ...processing, status: 'completed', finishedAt: now };
+  await page.getByRole('button', { name: 'Atualizar importações' }).click();
+  await expect(page.getByText('Importação concluída', { exact: true })).toBeVisible();
+  expect(freshSeen).toBe(true);
+  releaseOld();
+  await expect(page.getByText('Importação concluída', { exact: true })).toBeVisible();
+  await expect(page.locator('.admin-import-v4__preparing')).toHaveCount(0);
+});
+
+test('cancelamento de job durante poll pendente não restaura snapshot antigo', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop-chromium');
+  const processing = baseJob('cancel-659', 'Cancelamento controlado', { type: 'url', provider: null }, 'processing');
+  let created = false;
+  let held = false;
+  let cancelRequested = false;
+  let signalOld!: () => void;
+  const oldRequested = new Promise<void>(resolve => { signalOld = resolve; });
+  let releaseOld!: () => void;
+  const oldBlocked = new Promise<void>(resolve => { releaseOld = resolve; });
+
+  await page.route('**/api/admin/imports', async route => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    if (created && !held) {
+      held = true;
+      signalOld();
+      await oldBlocked;
+      try { await route.fulfill({ status: 200, contentType: 'application/json', body: snapshot659([processing]) }); } catch { /* abort esperado */ }
+      return;
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: snapshot659([]) });
+  });
+  await page.route('**/api/admin/imports/urls', async route => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    created = true;
+    await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ job: processing }) });
+  });
+  await page.route('**/api/admin/imports/urls/cancel-659', async route => {
+    expect(route.request().method()).toBe('DELETE');
+    cancelRequested = true;
+    const cancelled = { ...processing, status: 'cancelled', finishedAt: now };
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ job: cancelled }) });
+  });
+
+  await login(page);
+  await openImport(page);
+  await page.getByRole('tab', { name: /Arquivo ou URL/ }).click();
+  await page.getByLabel('URL direta do arquivo').fill('https://fixtures.invalid/cancel-659.wav');
+  await page.getByRole('button', { name: 'Analisar URL', exact: true }).click();
+  await expect(page.getByText('Preparando mídia', { exact: true })).toBeVisible();
+  await oldRequested;
+  await page.locator('.admin-import-v4__stage-actions').getByRole('button', { name: 'Cancelar' }).click();
+  await expect(page.getByRole('tab', { name: /Arquivo ou URL/ })).toBeVisible();
+  expect(cancelRequested).toBe(true);
+  releaseOld();
+  await expect(page.locator('.admin-import-v4__preparing')).toHaveCount(0);
+  await expect(page.getByRole('tab', { name: /Arquivo ou URL/ })).toBeVisible();
+});

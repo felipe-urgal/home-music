@@ -151,4 +151,11 @@ test('admin filtra histórico e vê erro acionável sem dados sensíveis', async
   await expect(list.getByRole('button')).toHaveCount(1);
   await expect(list).toContainText('Importação por URL');
   expect(requestedUrls.some(url => new URL(url).searchParams.get('status') === 'failed')).toBe(true);
+
+  await page.getByRole('navigation', { name: 'Tipo' }).getByRole('button', { name: 'Todos', exact: true }).click();
+  await list.getByRole('button', { name: /Importação por URL/ }).click();
+  await detail.getByLabel('URL', { exact: true }).fill('https://fixtures.invalid/another-retry.wav');
+  await detail.getByRole('button', { name: 'Tentar novamente', exact: true }).click();
+  await detail.getByRole('button', { name: 'Continuar em Importar mídia' }).click();
+  await expect(page.locator('#admin-import-title')).toHaveText('Importar mídia');
 });
