@@ -24,7 +24,7 @@ export type PublicAuthSession = Readonly<{
   createdAt: number;
   lastSeenAt: number;
   expiresAt: number;
-  clientName: string | null;
+  clientName?: string | null;
 }>;
 
 export class SessionCapacityError extends Error {
