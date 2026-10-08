@@ -537,7 +537,6 @@ export function MyAccountScreen({
                     <small>Seu nível de acesso e permissões.</small>
                   </span>
                   <span className="my-account-profile-v1__row-value">{roleLabel}</span>
-                  <span className="my-account-profile-v1__row-action" aria-hidden="true"><ShieldCheck /> Detalhes</span>
                 </div>
               </div>
             </section>
