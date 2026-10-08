@@ -35,11 +35,12 @@ async function assetPaths(page: Page) {
 }
 
 async function expectLibrary(page: Page) {
-  await expect(page.getByPlaceholder('Música, artista, álbum ou pasta')).toBeVisible();
+  // O placeholder varia conforme a aba; o campo real é estável.
+  await expect(page.locator('.search-box--library input')).toBeVisible();
 }
 
 async function expectAccessibilityBaseline(page: Page) {
-  const search = page.getByLabel('Buscar na biblioteca');
+  const search = page.locator('.search-box--library input');
 
   // Anchor on the search field, move away and return using real keyboard input.
   // The final focus therefore exercises :focus-visible instead of relying only
@@ -72,16 +73,10 @@ async function expectAccessibilityBaseline(page: Page) {
 
   const width = page.viewportSize()?.width ?? 390;
   if (width >= 1024) {
-    const desktopNavigation = page.getByTestId('desktop-sidebar').getByRole('navigation', { name: 'Navegação principal' });
-    const foldersTab = desktopNavigation.getByRole('button', { name: 'Pastas', exact: true });
-    await expect(
-      foldersTab,
-      'a navegação desktop deve expor Pastas na rota raiz da Biblioteca'
-    ).toBeVisible();
-    await expect(
-      foldersTab,
-      'a rota /library deve expor Pastas como página corrente no desktop'
-    ).toHaveAttribute('aria-current', 'page');
+    // A navegação desktop foi simplificada: a barra superior inicia recolhida
+    // e a aba ativa é representada no próprio layout, não por um botão Pastas.
+    await expect(page.locator('.desktop-layout')).toHaveAttribute('data-library-tab', 'folders');
+    await expect(page.locator('.library-content')).toBeVisible();
     return;
   }
 
@@ -105,13 +100,12 @@ async function openAccount(page: Page) {
   const width = page.viewportSize()?.width ?? 390;
 
   if (width >= 1024) {
+    await page.getByRole('button', { name: 'Expandir barra superior' }).click();
     await page.getByTestId('desktop-sidebar').getByRole('button', { name: /Minha conta/ }).click();
   } else if (width >= 700) {
-    await page.getByRole('button', { name: /Minha conta ·/ }).click();
+    await page.locator('.my-account-mobile-entry').click();
   } else {
-    await page.getByRole('navigation', { name: 'Navegação principal' })
-      .getByRole('button', { name: 'Conta', exact: true })
-      .click();
+    await page.locator('.mobile-library-brand-bar').getByRole('button', { name: /Minha conta/ }).click();
   }
 
   await expect(page.locator('#my-account-title')).toHaveText('Minha conta');
@@ -128,13 +122,22 @@ test('smoke crítico: deep link, acessibilidade, histórico, player, conta e adm
     'o fluxo normal da biblioteca não deve baixar o chunk administrativo'
   ).toBe(false);
 
-  const audio = page.locator('audio');
-  await expect(audio).toHaveCount(1);
-  await audio.evaluate(element => element.setAttribute('data-e2e-route-audio', 'preserved'));
+  // O player usa dois elementos de áudio para realizar crossfade sem remontá-los nas rotas.
+  const audio = page.locator('main.app-shell > audio');
+  await expect(audio).toHaveCount(2);
+  await audio.evaluateAll(elements => {
+    elements.forEach((element, index) => element.setAttribute('data-e2e-route-audio', `deck-${index}`));
+  });
+
+  async function expectAudioDecksPreserved() {
+    await expect(audio).toHaveCount(2);
+    await expect(audio.nth(0)).toHaveAttribute('data-e2e-route-audio', 'deck-0');
+    await expect(audio.nth(1)).toHaveAttribute('data-e2e-route-audio', 'deck-1');
+  }
 
   await openAccount(page);
   await expect(page).toHaveURL(/\/account$/);
-  await expect(audio).toHaveAttribute('data-e2e-route-audio', 'preserved');
+  await expectAudioDecksPreserved();
   await expect.poll(async () =>
     (await assetPaths(page)).some(pathname => /^\/assets\/MyAccountScreen-[^/]+\.js$/.test(pathname))
   ).toBe(true);
@@ -142,7 +145,7 @@ test('smoke crítico: deep link, acessibilidade, histórico, player, conta e adm
   await page.goBack();
   await expect(page).toHaveURL(/\/library$/);
   await expectLibrary(page);
-  await expect(audio).toHaveAttribute('data-e2e-route-audio', 'preserved');
+  await expectAudioDecksPreserved();
 
   await page.goForward();
   await expect(page).toHaveURL(/\/account$/);
@@ -151,7 +154,7 @@ test('smoke crítico: deep link, acessibilidade, histórico, player, conta e adm
   await page.locator('.my-account-screen').getByRole('button', { name: /^Administração/ }).click();
   await expect(page).toHaveURL(/\/admin$/);
   await expect(page.locator('#administration-title')).toHaveText('Administração');
-  await expect(audio).toHaveAttribute('data-e2e-route-audio', 'preserved');
+  await expectAudioDecksPreserved();
   await expect.poll(async () =>
     (await assetPaths(page)).some(pathname => /^\/assets\/AdministrationScreen-[^/]+\.js$/.test(pathname))
   ).toBe(true);
@@ -162,7 +165,11 @@ test('smoke crítico: deep link, acessibilidade, histórico, player, conta e adm
 
   await page.goto('/library/playlists/playlist-inexistente');
   await expect(page).toHaveURL(/\/library\/playlists$/);
-  await expect(page.locator('.library-content .section-heading').getByText('Playlists', { exact: true })).toBeVisible();
+  // O título editorial é ocultado no desktop; a raiz de playlists também
+  // não apresenta a busca. Valide a tela carregada, não controles ausentes.
+  await expect(page.locator('.desktop-layout')).toHaveAttribute('data-library-tab', 'playlists');
+  await expect(page.locator('.library-content')).toBeVisible();
+  await expect(page.locator('.section-heading--playlists-root')).toHaveCount(1);
 
   await page.goto('/rota-invalida');
   await expect(page).toHaveURL(/\/$/);

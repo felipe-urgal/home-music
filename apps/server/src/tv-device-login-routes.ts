@@ -159,7 +159,7 @@ export function registerTvDeviceLoginRoutes(
 
       let sessionToken: string;
       try {
-        sessionToken = sessions.createSessionForUser(reserved.lease.userId);
+        sessionToken = sessions.createSessionForUser(reserved.lease.userId, Date.now(), 'Home Music TV');
       } catch (error) {
         reserved.lease.rollback();
         if (!(error instanceof SessionCapacityError)) throw error;

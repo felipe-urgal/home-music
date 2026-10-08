@@ -36,8 +36,8 @@ describe('MyAccountScreen profile prototype 1', () => {
     expect(component).toContain('onClick={goBack}');
     expect(component).toContain('className="my-account-profile-v1__security-action"');
     expect(component).toContain("onClick={() => setView('password')}");
-    expect(component).toContain('<Pencil /> Editar');
-    expect(component).toContain('<ShieldCheck /> Detalhes');
+    expect(component).not.toContain('<Pencil /> Editar');
+    expect(component).not.toContain('<ShieldCheck /> Detalhes');
   });
 
   it('usa a geometria do mockup: hero curto, conteúdo amplo e linhas empilhadas', () => {
@@ -50,7 +50,7 @@ describe('MyAccountScreen profile prototype 1', () => {
     expect(css).toContain('.my-account-profile-v1__identity {');
     expect(css).toContain('min-height: 118px;');
     expect(css).toContain('.my-account-profile-v1__row {');
-    expect(css).toContain('grid-template-columns: 48px minmax(260px, 1fr) minmax(120px, auto) 110px;');
+    expect(css).toContain('grid-template-columns: 48px minmax(260px, 1fr) minmax(120px, auto);');
     expect(css).toContain("url('/profile-v1-headphones.webp')");
     expect(css).toContain('.my-account-profile-page--legacy {');
     expect(css).toContain('display: none;');
@@ -64,7 +64,7 @@ describe('MyAccountScreen profile prototype 1', () => {
     expect(css).toContain('min-height: 230px;');
     expect(css).toContain('width: min(780px, 42vw);');
     expect(css).toContain('min-height: 132px;');
-    expect(css).toContain('grid-template-columns: 54px minmax(290px, 1fr) minmax(135px, auto) 123px;');
+    expect(css).toContain('grid-template-columns: 54px minmax(290px, 1fr) minmax(135px, auto);');
     expect(css).toContain('min-height: 87px;');
     expect(css).toContain('min-height: 81px;');
   });

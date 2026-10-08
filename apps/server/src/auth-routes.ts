@@ -14,6 +14,7 @@ import {
   type SessionManager
 } from './auth.js';
 import { resolveAuthStatus } from './auth-status.js';
+import { describeSessionClient } from './session-client.js';
 import {
   loginIdentityRateLimitKey,
   type LoginAbuseProtection
@@ -108,7 +109,11 @@ export function registerAuthRoutes(app: FastifyInstance, dependencies: AuthRoute
       loginAbuseProtection.recordSuccess(ipKey, identityKey);
       let token: string;
       try {
-        token = sessions.createSessionForUser(authenticated.userId);
+        token = sessions.createSessionForUser(
+          authenticated.userId,
+          Date.now(),
+          describeSessionClient(request.headers['user-agent'])
+        );
       } catch (error) {
         if (!(error instanceof SessionCapacityError)) throw error;
         reply.header('Retry-After', String(SESSION_CAPACITY_RETRY_AFTER_SECONDS));

@@ -281,7 +281,7 @@
   #root .desktop-layout[data-offline="false"] .my-account-profile-v1__row {
     min-height: 72px;
     display: grid;
-    grid-template-columns: 48px minmax(260px, 1fr) minmax(120px, auto) 110px;
+    grid-template-columns: 48px minmax(260px, 1fr) minmax(120px, auto);
     align-items: center;
     gap: 12px;
     padding: 11px 16px;
@@ -334,27 +334,6 @@
     font-weight: 720;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-
-  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__row-action {
-    min-width: 94px;
-    min-height: 42px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    justify-self: end;
-    border: 1px solid rgba(105, 128, 151, .20);
-    border-radius: 9px;
-    color: #e7ebf0;
-    background: rgba(70, 91, 113, .46);
-    font-size: 11px;
-    font-weight: 690;
-  }
-
-  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__row-action svg {
-    width: 15px;
-    height: 15px;
   }
 
   #root .desktop-layout[data-offline="false"] .my-account-profile-v1__security-section {
@@ -592,7 +571,7 @@
 
   #root .desktop-layout[data-offline="false"] .my-account-profile-v1__row {
     min-height: 81px;
-    grid-template-columns: 54px minmax(290px, 1fr) minmax(135px, auto) 123px;
+    grid-template-columns: 54px minmax(290px, 1fr) minmax(135px, auto);
     gap: 14px;
     padding: 12px 18px;
   }
@@ -618,18 +597,6 @@
 
   #root .desktop-layout[data-offline="false"] .my-account-profile-v1__row-copy small {
     font-size: 12px;
-  }
-
-  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__row-action {
-    min-width: 105px;
-    min-height: 47px;
-    gap: 9px;
-    font-size: 12px;
-  }
-
-  #root .desktop-layout[data-offline="false"] .my-account-profile-v1__row-action svg {
-    width: 17px;
-    height: 17px;
   }
 
   #root .desktop-layout[data-offline="false"] .my-account-profile-v1__security-section {

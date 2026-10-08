@@ -197,8 +197,9 @@
 }
 
 @media (max-width: 699px) {
-  .action-dialog {
-    display: none;
+  .action-dialog__actions button,
+  .action-dialog__close {
+    min-height: 44px;
   }
 
   .library-feedback-toast {

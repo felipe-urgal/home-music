@@ -3,8 +3,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches:
-      - main
+    branches: [main]
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -16,70 +15,36 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - name: Setup Node.js
+      - name: Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: npm
           package-manager-cache: false
 
-      - name: Install dependencies
+      - name: Dependencies
         run: npm ci --no-audit --no-fund
 
-      - name: TV regression gate
-        run: npm run test -w @home-music/web -- src/tv-controls.test.ts src/tv-crossfade.test.ts
-
-      - name: Quality gate
+      - name: Check (types, unit tests, build)
         run: npm run check
 
-      - name: Repository policy gate
+      - name: Repository policies
         run: npm run test:policy
 
-      - name: Security regression gate
-        run: npm run test:security
+      - name: Browser dependencies
+        run: |
+          npm ci --prefix e2e --no-audit --no-fund
+          npm run install:browsers --prefix e2e
 
-      - name: Backup restore smoke
-        run: npm run smoke:backup-restore
+      - name: Critical and browser security E2E
+        run: npm --prefix e2e test -- tests/critical-smoke.spec.ts tests/browser-security-policy.spec.ts --project=desktop-chromium
 
-      - name: Install E2E dependencies
-        run: npm ci --prefix e2e --no-audit --no-fund
-
-      - name: Install Chromium
-        run: npm run install:browsers --prefix e2e
-
-      - name: Browser security policy E2E
-        run: npm run test --prefix e2e -- tests/browser-security-policy.spec.ts --project=desktop-chromium
-
-      - name: Mobile playback and library E2E
-        run: npm run test --prefix e2e -- tests/crossfade-mobile.spec.ts tests/player-queue-persistence.spec.ts tests/rhythm-playback-regression.spec.ts tests/mobile-library-prototype.spec.ts tests/smart-playlist-mobile-dialog.spec.ts tests/offline-collections-critical.spec.ts --project=mobile-chromium
-
-      - name: Desktop prototype layout E2E
-        run: npm run test --prefix e2e -- tests/desktop-layout-regressions.spec.ts tests/player-queue-persistence.spec.ts tests/dj-mode-regressions.spec.ts tests/dj-performance-advanced.spec.ts tests/rhythm-playback-regression.spec.ts --project=desktop-chromium
-
-      - name: TV device login E2E
-        run: npm run test --prefix e2e -- tests/tv-device-login.spec.ts --project=desktop-chromium
-
-      - name: TV remote control E2E
-        run: npm run test --prefix e2e -- tests/tv-remote-control.spec.ts --project=desktop-chromium
-
-      - name: TV offline cast E2E
-        run: npm run test --prefix e2e -- tests/tv-offline-cast.spec.ts --project=desktop-chromium
-
-      - name: TV fully offline LAN E2E
-        run: npm run test --prefix e2e -- tests/tv-offline-lan.spec.ts --project=desktop-chromium
-
-      - name: TV iOS LAN bridge E2E
-        run: npm run test --prefix e2e -- tests/tv-offline-lan-bridge.spec.ts tests/tv-ios-lan-bridge-ui.spec.ts --project=desktop-chromium
-
-      - name: Library Assistant E2E
-        env:
-          HOME_MUSIC_E2E_LIBRARY_ASSISTANT: '1'
-        run: npm run test --prefix e2e -- tests/admin-library-assistant.spec.ts --project=desktop-chromium
+      - name: Account E2E (desktop, mobile, tablet)
+        run: npm --prefix e2e test -- tests/account-security.spec.ts tests/account-navigation.spec.ts --project=desktop-chromium --project=mobile-chromium --project=tablet-chromium

@@ -18,6 +18,7 @@ type PersistedSessionRow = {
   created_at: number;
   authenticated_at: number;
   last_seen_at: number;
+  client_name: string | null;
 };
 
 function hashSessionToken(token: string) {
@@ -72,7 +73,7 @@ export class PersistentSessionManager extends SessionManager {
     throw new Error('Sessões legadas não são suportadas pelo armazenamento persistente.');
   }
 
-  override createSessionForUser(userId: string, now = Date.now()) {
+  override createSessionForUser(userId: string, now = Date.now(), clientName: string | null = null) {
     if (!userId || userId.length > 128) throw new RangeError('userId de sessão inválido.');
 
     this.evictOldestPersistentSessionsForUser(userId);
@@ -87,9 +88,9 @@ export class PersistentSessionManager extends SessionManager {
 
     this.db.prepare(`
       INSERT INTO auth_sessions(
-        token_hash, user_id, created_at, authenticated_at, last_seen_at
-      ) VALUES (?, ?, ?, ?, ?)
-    `).run(tokenHash, userId, now, now, now);
+        token_hash, user_id, created_at, authenticated_at, last_seen_at, client_name
+      ) VALUES (?, ?, ?, ?, ?, ?)
+    `).run(tokenHash, userId, now, now, now, clientName);
 
     return token;
   }
@@ -154,7 +155,7 @@ export class PersistentSessionManager extends SessionManager {
 
     this.touchSession(currentHash, now);
     const rows = this.db.prepare(`
-      SELECT token_hash, user_id, created_at, authenticated_at, last_seen_at
+      SELECT token_hash, user_id, created_at, authenticated_at, last_seen_at, client_name
       FROM auth_sessions
       WHERE user_id = ?
       ORDER BY last_seen_at DESC, created_at DESC, token_hash ASC
@@ -166,7 +167,8 @@ export class PersistentSessionManager extends SessionManager {
         current: row.token_hash === currentHash,
         createdAt: row.created_at,
         lastSeenAt: row.token_hash === currentHash ? now : row.last_seen_at,
-        expiresAt: PERSISTENT_SESSION_EXPIRES_AT
+        expiresAt: PERSISTENT_SESSION_EXPIRES_AT,
+        clientName: row.client_name
       }))
       .sort(
         (left, right) => Number(right.current) - Number(left.current)
@@ -187,7 +189,7 @@ export class PersistentSessionManager extends SessionManager {
     this.touchSession(currentHash, now);
 
     const rows = this.db.prepare(`
-      SELECT token_hash, user_id, created_at, authenticated_at, last_seen_at
+      SELECT token_hash, user_id, created_at, authenticated_at, last_seen_at, client_name
       FROM auth_sessions
       WHERE user_id = ?
     `).all(userId) as unknown as PersistedSessionRow[];
@@ -212,6 +214,11 @@ export class PersistentSessionManager extends SessionManager {
         CREATE INDEX IF NOT EXISTS idx_auth_sessions_user_last_seen
         ON auth_sessions(user_id, last_seen_at DESC, created_at DESC);
       `);
+      // Existing installations predate this display-only column. NULL means unknown device.
+      const columns = this.db.prepare('PRAGMA table_info(auth_sessions)').all() as Array<{ name: string }>;
+      if (!columns.some(column => column.name === 'client_name')) {
+        this.db.exec('ALTER TABLE auth_sessions ADD COLUMN client_name TEXT;');
+      }
       this.db.exec('COMMIT;');
     } catch (error) {
       try {
@@ -238,7 +245,7 @@ export class PersistentSessionManager extends SessionManager {
 
   private getSessionRow(tokenHash: string): PersistedSessionRow | null {
     const row = this.db.prepare(`
-      SELECT token_hash, user_id, created_at, authenticated_at, last_seen_at
+      SELECT token_hash, user_id, created_at, authenticated_at, last_seen_at, client_name
       FROM auth_sessions
       WHERE token_hash = ?
     `).get(tokenHash) as PersistedSessionRow | undefined;

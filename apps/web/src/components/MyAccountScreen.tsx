@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import type { AuthenticatedUser } from '@home-music/shared';
 import {
   AudioLines,
@@ -16,32 +16,26 @@ import {
   Monitor,
   MonitorOff,
   Music2,
-  Pencil,
   ShieldCheck,
   SlidersHorizontal,
   UserRound,
   WifiOff
 } from 'lucide-react';
-import {
-  changeOwnPassword,
-  listOwnSessions,
-  MIN_ACCOUNT_PASSWORD_CHARACTERS,
-  passwordChangeValidation,
-  revokeOtherSessions,
-  revokeOwnSession,
-  type AccountSession
-} from '../account-client';
+import { MIN_ACCOUNT_PASSWORD_CHARACTERS, type AccountSession } from '../account-client';
 import {
   AccountPlaybackPreferences,
   type AccountPlaybackPreferencesValue
 } from './AccountPlaybackPreferences';
 import { AccountMidiControllers } from './AccountMidiControllers';
 import { AccountSessionsScreen } from './AccountSessionsScreen';
+import { ActionDialog } from './ActionDialog';
+import { useAccountPassword, useAccountSessions } from './useAccountSecurity';
 import { useDesktopLayout } from '../useDesktopLayout';
 import type { WebMidiController } from '../useWebMidiController';
 import type { DualDeckMixerState } from '../dual-deck-mixer';
 
 type AccountView = 'overview' | 'profile' | 'password' | 'sessions' | 'playback' | 'midi';
+type PendingSensitiveAction = { kind: 'password' } | { kind: 'one'; session: AccountSession } | { kind: 'others' };
 
 type OfflineModeControl = {
   supported: boolean;
@@ -82,19 +76,23 @@ export function MyAccountScreen({
   const usePasswordPrototypeThree = desktopLayout && !tvMode;
   const useSessionsPrototypeTwo = desktopLayout && !tvMode;
   const [view, setView] = useState<AccountView>('overview');
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmation, setConfirmation] = useState('');
-  const [showPasswords, setShowPasswords] = useState(false);
-  const [changingPassword, setChangingPassword] = useState(false);
-  const [sessions, setSessions] = useState<AccountSession[]>([]);
-  const [loadingSessions, setLoadingSessions] = useState(false);
-  const [busySessionId, setBusySessionId] = useState<string | null>(null);
-  const [revokingSessions, setRevokingSessions] = useState(false);
+  const {
+    currentPassword, setCurrentPassword,
+    newPassword, setNewPassword,
+    confirmation, setConfirmation,
+    showPasswords, setShowPasswords,
+    changingPassword, validationError, confirmPassword
+  } = useAccountPassword(onSessionEnded);
+  const {
+    sessions, loadingSessions, busySessionId, revokingSessions,
+    sessionsError, sessionsNotice, clearSessionsNotice,
+    revokeOneSession, revokeAllOtherSessions
+  } = useAccountSessions(view === 'sessions');
   const [signingOut, setSigningOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-  const validationError = passwordChangeValidation(currentPassword, newPassword, confirmation);
+  const [pendingAction, setPendingAction] = useState<PendingSensitiveAction | null>(null);
+  const [dialogError, setDialogError] = useState<string | null>(null);
+  const mutationInFlight = useRef(false);
   const passwordStrengthScore = [
     Array.from(newPassword).length >= MIN_ACCOUNT_PASSWORD_CHARACTERS,
     /[a-z]/.test(newPassword) && /[A-Z]/.test(newPassword),
@@ -123,76 +121,61 @@ export function MyAccountScreen({
           ? `Usar somente ${offlineMode.availableCount} ${offlineMode.availableCount === 1 ? 'música salva' : 'músicas salvas'} neste dispositivo.`
           : 'Baixe músicas, playlists ou pastas para usar este modo.';
 
-  useEffect(() => {
-    if (view !== 'sessions') return;
-    let active = true;
-    setLoadingSessions(true);
-    setError(null);
-    void listOwnSessions()
-      .then(items => { if (active) setSessions(items); })
-      .catch(error => { if (active) setError(errorMessage(error)); })
-      .finally(() => { if (active) setLoadingSessions(false); });
-    return () => { active = false; };
-  }, [view]);
-
   function goBack() {
     setError(null);
-    setNotice(null);
+    clearSessionsNotice();
     setShowPasswords(false);
     if (view === 'overview') onBack();
     else setView('overview');
   }
 
-  async function submitPassword(event: FormEvent<HTMLFormElement>) {
+  function openSensitiveAction(action: PendingSensitiveAction) {
+    if (mutationInFlight.current) return;
+    setDialogError(null);
+    clearSessionsNotice();
+    setPendingAction(action);
+  }
+
+  function submitPassword(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (validationError || changingPassword) return;
-    if (!window.confirm('Alterar sua senha agora? Todas as suas sessões serão encerradas, inclusive esta, e será necessário entrar novamente.')) return;
+    if (validationError || mutationInFlight.current) return;
+    openSensitiveAction({ kind: 'password' });
+  }
 
-    setChangingPassword(true);
-    setError(null);
+  function revokeOthers() {
+    if (revokingSessions || busySessionId || mutationInFlight.current) return;
+    openSensitiveAction({ kind: 'others' });
+  }
+
+  function revokeOne(session: AccountSession) {
+    if (session.current || revokingSessions || busySessionId || mutationInFlight.current) return;
+    openSensitiveAction({ kind: 'one', session });
+  }
+
+  async function confirmSensitiveAction() {
+    const action = pendingAction;
+    if (!action || mutationInFlight.current) return;
+    if (action.kind === 'password' && validationError) return;
+
+    mutationInFlight.current = true;
+    setDialogError(null);
     try {
-      await changeOwnPassword(currentPassword, newPassword);
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmation('');
-      setShowPasswords(false);
-      await onSessionEnded();
+      if (action.kind === 'password') await confirmPassword();
+      else if (action.kind === 'others') await revokeAllOtherSessions();
+      else await revokeOneSession(action.session.id);
+      setPendingAction(null);
     } catch (error) {
-      setError(errorMessage(error));
+      // Preserve the failed action and its error until the user cancels or retries.
+      setDialogError(errorMessage(error));
     } finally {
-      setChangingPassword(false);
+      mutationInFlight.current = false;
     }
   }
 
-  async function revokeOthers() {
-    if (revokingSessions) return;
-    if (!window.confirm('Encerrar todas as outras sessões desta conta? Este dispositivo continuará conectado.')) return;
-    setRevokingSessions(true);
-    setError(null);
-    try {
-      const revoked = await revokeOtherSessions();
-      setSessions(items => items.filter(item => item.current));
-      setNotice(revoked === 0 ? 'Nenhuma outra sessão estava ativa.' : `${revoked} ${revoked === 1 ? 'sessão foi encerrada' : 'sessões foram encerradas'}.`);
-    } catch (error) {
-      setError(errorMessage(error));
-    } finally {
-      setRevokingSessions(false);
-    }
-  }
-
-  async function revokeOne(session: AccountSession) {
-    if (session.current || busySessionId) return;
-    if (!window.confirm('Encerrar esta sessão? O dispositivo precisará entrar novamente.')) return;
-    setBusySessionId(session.id);
-    setError(null);
-    try {
-      await revokeOwnSession(session.id);
-      setSessions(items => items.filter(item => item.id !== session.id));
-    } catch (error) {
-      setError(errorMessage(error));
-    } finally {
-      setBusySessionId(null);
-    }
+  function closeSensitiveAction() {
+    if (mutationInFlight.current) return;
+    setPendingAction(null);
+    setDialogError(null);
   }
 
   async function signOut() {
@@ -257,8 +240,12 @@ export function MyAccountScreen({
         <span className="my-account-header__spacer" />
       </header>
 
-      {error && <div className="my-account-message is-error" role="alert">{error}</div>}
-      {notice && <div className="my-account-message" role="status">{notice}</div>}
+      {(error || (view === 'sessions' && sessionsError)) && (
+        <div className="my-account-message is-error" role="alert">{error || sessionsError}</div>
+      )}
+      {view === 'sessions' && sessionsNotice && (
+        <div className="my-account-message" role="status">{sessionsNotice}</div>
+      )}
 
       {view === 'overview' && (
         <>
@@ -541,7 +528,6 @@ export function MyAccountScreen({
                     <small>Seu identificador na aplicação.</small>
                   </span>
                   <span className="my-account-profile-v1__row-value">{currentUser.username}</span>
-                  <span className="my-account-profile-v1__row-action" aria-hidden="true"><Pencil /> Editar</span>
                 </div>
 
                 <div className="my-account-profile-v1__row">
@@ -551,7 +537,6 @@ export function MyAccountScreen({
                     <small>Seu nível de acesso e permissões.</small>
                   </span>
                   <span className="my-account-profile-v1__row-value">{roleLabel}</span>
-                  <span className="my-account-profile-v1__row-action" aria-hidden="true"><ShieldCheck /> Detalhes</span>
                 </div>
               </div>
             </section>
@@ -806,6 +791,26 @@ export function MyAccountScreen({
           onRevokeOthers={() => void revokeOthers()}
         />
       )}
+      <ActionDialog
+        open={pendingAction !== null}
+        title={pendingAction?.kind === 'password'
+          ? 'Confirmar alteração de senha'
+          : pendingAction?.kind === 'others'
+            ? 'Encerrar outras sessões'
+            : 'Encerrar sessão'}
+        description={pendingAction?.kind === 'password'
+          ? 'Todas as sessões, inclusive esta, serão encerradas. Você precisará entrar novamente.'
+          : pendingAction?.kind === 'others'
+            ? 'Todos os outros dispositivos precisarão entrar novamente. Esta sessão será mantida.'
+            : `O acesso de ${pendingAction?.kind === 'one' ? pendingAction.session.clientName || 'este dispositivo' : 'este dispositivo'} será encerrado.`}
+        danger
+        confirmLabel={pendingAction?.kind === 'password' ? 'Alterar senha e sair' : 'Encerrar sessão'}
+        confirmDisabled={pendingAction?.kind === 'password' && Boolean(validationError)}
+        busy={changingPassword || revokingSessions || Boolean(busySessionId)}
+        error={dialogError}
+        onConfirm={() => void confirmSensitiveAction()}
+        onClose={closeSensitiveAction}
+      />
     </section>
   );
 }

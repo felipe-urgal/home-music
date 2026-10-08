@@ -6,6 +6,8 @@ import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
 import { HomeMusicDatabase } from './database.js';
+import { AccountPasswordService } from './account-password.js';
+import { hashPassword } from './password.js';
 import {
   PERSISTENT_SESSION_EXPIRES_AT,
   PersistentSessionManager
@@ -93,6 +95,116 @@ test('sessão persistente mantém limite por usuário e revogação das outras s
     assert.equal(sessions.validateSession(second), false);
     assert.equal(sessions.validateSession(third), true);
     sessions.close();
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('migration mantém sessões existentes e preenche metadado somente em novas sessões', async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'home-music-session-migration-'));
+  const databasePath = path.join(directory, 'home-music.db');
+  try {
+    const schema = new HomeMusicDatabase(databasePath);
+    schema.close();
+    insertUser(databasePath);
+
+    const oldToken = 'token-da-sessao-antes-da-migration';
+    const oldHash = createHash('sha256').update(oldToken).digest('hex');
+    const legacy = new DatabaseSync(databasePath);
+    legacy.exec(`
+      CREATE TABLE auth_sessions (
+        token_hash TEXT PRIMARY KEY NOT NULL CHECK(length(token_hash) = 64),
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at INTEGER NOT NULL,
+        authenticated_at INTEGER NOT NULL,
+        last_seen_at INTEGER NOT NULL
+      );
+    `);
+    legacy.prepare(`
+      INSERT INTO auth_sessions(token_hash, user_id, created_at, authenticated_at, last_seen_at)
+      VALUES (?, 'user-1', 1000, 1000, 1000)
+    `).run(oldHash);
+    legacy.close();
+
+    const migrated = new PersistentSessionManager(databasePath);
+    const oldSession = migrated.listUserSessions('user-1', oldToken, 2000);
+    assert.equal(oldSession?.[0]?.clientName, null);
+    assert.equal(oldSession?.[0]?.current, true);
+    const fresh = migrated.createSessionForUser('user-1', 3000, 'Chrome · Linux');
+    assert.equal(
+      migrated.listUserSessions('user-1', fresh, 4000)?.find(s => s.current)?.clientName,
+      'Chrome · Linux'
+    );
+    migrated.close();
+
+    const restarted = new PersistentSessionManager(databasePath);
+    assert.equal(restarted.validateSession(oldToken, 5000), true);
+    assert.equal(restarted.validateSession(fresh, 5000), true);
+    restarted.close();
+
+    const raw = new DatabaseSync(databasePath);
+    const rows = raw.prepare('SELECT token_hash, client_name FROM auth_sessions ORDER BY created_at').all() as
+      Array<{ token_hash: string; client_name: string | null }>;
+    assert.equal(rows[0]?.client_name, null);
+    assert.equal(rows[1]?.client_name, 'Chrome · Linux');
+    assert.ok(rows.every(row => row.token_hash.length === 64));
+    raw.close();
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('metadado de dispositivo não modifica ownership nem autorização das sessões', async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'home-music-session-owner-'));
+  const databasePath = path.join(directory, 'home-music.db');
+  try {
+    const schema = new HomeMusicDatabase(databasePath);
+    schema.close();
+    insertUser(databasePath);
+    insertUser(databasePath, 'user-2');
+
+    const manager = new PersistentSessionManager(databasePath);
+    const first = manager.createSessionForUser('user-1', 1000, 'Chrome · Linux');
+    const second = manager.createSessionForUser('user-2', 2000, 'Chrome · Linux');
+    const publicId = manager.listUserSessions('user-1', first)?.[0]?.id;
+    assert.ok(publicId);
+    assert.equal(manager.listUserSessions('user-1', second), null);
+    assert.equal(manager.revokeUserSession('user-2', publicId, second), false);
+    assert.equal(manager.revokeUserSession('user-1', publicId, second), null);
+    assert.equal(manager.validateSession(first), true);
+    assert.equal(manager.validateSession(second), true);
+    manager.close();
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('alterar senha revoga todas as sessões persistidas, inclusive atual', async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'home-music-session-password-'));
+  const databasePath = path.join(directory, 'home-music.db');
+  try {
+    const schema = new HomeMusicDatabase(databasePath);
+    schema.close();
+    insertUser(databasePath);
+    const raw = new DatabaseSync(databasePath);
+    raw.prepare('UPDATE users SET password_hash = ? WHERE id = ?')
+      .run(await hashPassword('senha-antiga-segura-2026'), 'user-1');
+    raw.close();
+
+    const manager = new PersistentSessionManager(databasePath);
+    const current = manager.createSessionForUser('user-1', 1000);
+    const other = manager.createSessionForUser('user-1', 2000);
+    const passwords = new AccountPasswordService(databasePath, manager);
+    assert.deepEqual(
+      await passwords.changeAuthenticatedPassword(
+        'user-1', 'senha-antiga-segura-2026', 'senha-nova-segura-2026'
+      ),
+      { ok: true }
+    );
+    assert.equal(manager.validateSession(current), false);
+    assert.equal(manager.validateSession(other), false);
+    passwords.close();
+    manager.close();
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
