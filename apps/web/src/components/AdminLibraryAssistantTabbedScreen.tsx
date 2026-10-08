@@ -309,6 +309,9 @@ export function AdminLibraryAssistantTabbedScreen({ onBack, onOpenLocalLyrics }:
   const [fingerprintStatus, setFingerprintStatus] = useState<LibraryAssistantFingerprintStatus | null>(null);
   const [fingerprintingId, setFingerprintingId] = useState<string | null>(null);
   const requestVersion = useRef(0);
+  const settingsVersion = useRef(0);
+  const fingerprintVersion = useRef(0);
+  const mounted = useRef(false);
 
   const runByCapability = useMemo(() => Object.fromEntries(
     CAPABILITY_TABS.map(capability => [capability, latestRunFor(runs, capability)])
@@ -461,15 +464,18 @@ export function AdminLibraryAssistantTabbedScreen({ onBack, onOpenLocalLyrics }:
   }, []);
 
   const loadSettings = useCallback(async () => {
+    const version = ++settingsVersion.current;
     try {
       const [policyResponse, autonomyResponse] = await Promise.all([
         getLibraryAssistantReviewPolicy(),
         getLibraryAssistantAutonomy()
       ]);
+      if (!mounted.current || version !== settingsVersion.current) return;
       setPolicy(policyResponse.policy);
       setPolicyReady(true);
       setAutonomy(autonomyResponse);
     } catch (error) {
+      if (!mounted.current || version !== settingsVersion.current) return;
       setFeedback({
         kind: 'error',
         message: error instanceof Error ? error.message : 'Não foi possível carregar as configurações.'
@@ -478,19 +484,26 @@ export function AdminLibraryAssistantTabbedScreen({ onBack, onOpenLocalLyrics }:
   }, []);
 
   const loadFingerprintStatus = useCallback(async () => {
+    const version = ++fingerprintVersion.current;
     try {
       const response = await getLibraryAssistantFingerprintStatus();
-      setFingerprintStatus(response);
+      if (mounted.current && version === fingerprintVersion.current) setFingerprintStatus(response);
     } catch {
-      setFingerprintStatus(null);
+      if (mounted.current && version === fingerprintVersion.current) setFingerprintStatus(null);
     }
   }, []);
 
   useEffect(() => {
+    mounted.current = true;
     void load();
     void loadSettings();
     void loadFingerprintStatus();
-    return () => { requestVersion.current += 1; };
+    return () => {
+      mounted.current = false;
+      requestVersion.current += 1;
+      settingsVersion.current += 1;
+      fingerprintVersion.current += 1;
+    };
   }, [load, loadFingerprintStatus, loadSettings]);
 
   const anyRunActive = runs.some(run => !TERMINAL_RUNS.has(run.status));
@@ -529,6 +542,7 @@ export function AdminLibraryAssistantTabbedScreen({ onBack, onOpenLocalLyrics }:
     setFeedback(null);
     try {
       const response = await startLibraryAssistantRun(capability, { full: true });
+      requestVersion.current += 1;
       setRuns(current => [
         response.run,
         ...current.filter(run => run.id !== response.run.id)
@@ -555,6 +569,7 @@ export function AdminLibraryAssistantTabbedScreen({ onBack, onOpenLocalLyrics }:
     setFeedback(null);
     try {
       await cancelSingleLibraryAssistantRun(run.id);
+      requestVersion.current += 1;
       setFeedback({
         kind: 'warning',
         message: `Análise de ${capabilityLabel(capability).toLocaleLowerCase('pt-BR')} cancelada.`
@@ -592,6 +607,7 @@ export function AdminLibraryAssistantTabbedScreen({ onBack, onOpenLocalLyrics }:
     setFeedback(null);
     try {
       const { result } = await decideLibraryAssistantSuggestion(decision);
+      requestVersion.current += 1;
       if (result.outcome === 'applied') {
         notifyLibraryChanged();
         setFeedback({ kind: 'success', message: 'Sugestão aplicada. O arquivo original não foi modificado.' });
@@ -629,6 +645,7 @@ export function AdminLibraryAssistantTabbedScreen({ onBack, onOpenLocalLyrics }:
     setFeedback(null);
     try {
       const result = await fingerprintLibraryAssistantSuggestion(suggestion.runId, suggestion.id);
+      requestVersion.current += 1;
       if (!result.externalLookup) {
         setFeedback({
           kind: 'success',
@@ -681,6 +698,7 @@ export function AdminLibraryAssistantTabbedScreen({ onBack, onOpenLocalLyrics }:
         applied += response.summary.applied;
         failed += response.summary.failed + response.summary.stale;
       }
+      requestVersion.current += 1;
       if (applied > 0) notifyLibraryChanged();
       setFeedback({
         kind: failed > 0 ? 'warning' : 'success',
@@ -698,6 +716,7 @@ export function AdminLibraryAssistantTabbedScreen({ onBack, onOpenLocalLyrics }:
   async function updatePolicyMode(key: LibraryAssistantReviewPolicyKey, mode: LibraryAssistantReviewMode) {
     if (!policyReady || savingPolicy || (key === 'artwork' && mode === 'bulk')) return;
     const previous = policy;
+    settingsVersion.current += 1;
     const next = { ...policy, [key]: mode } as LibraryAssistantReviewPolicy;
     setPolicy(next);
     setSavingPolicy(true);
@@ -718,6 +737,7 @@ export function AdminLibraryAssistantTabbedScreen({ onBack, onOpenLocalLyrics }:
 
   async function toggleAutonomy() {
     if (!autonomy || savingAutonomy) return;
+    settingsVersion.current += 1;
     setSavingAutonomy(true);
     try {
       const response = await updateLibraryAssistantAutonomy(!autonomy.config.enabled);
