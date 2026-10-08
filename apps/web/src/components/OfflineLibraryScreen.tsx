@@ -113,7 +113,12 @@ export function OfflineLibraryScreen({
       else await onRemoveCollection(target.collectionKind!, target.sourceId!);
       if (removalRef.current?.key === target.key) setRemoval(null);
     } catch (error) {
-      if (removalRef.current?.key === target.key) {
+      const stillReferenced = target.kind === 'track'
+        ? individualTrackIds.has(target.key.slice('track:'.length))
+        : collections.some(collection => collection.key === target.key.slice('collection:'.length));
+      if (removalRef.current?.key === target.key && !stillReferenced) {
+        setRemoval(null);
+      } else if (removalRef.current?.key === target.key) {
         setRemovalError(error instanceof Error && error.name === 'QuotaExceededError'
           ? 'O armazenamento está cheio. Libere espaço e tente novamente.'
           : 'Não foi possível remover este download. Verifique o armazenamento do navegador e tente novamente.');
