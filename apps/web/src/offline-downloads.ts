@@ -611,7 +611,14 @@ export function useOfflineDownloads() {
     if (hadIndividualReference) {
       replaceReferences(ownerUserId, next);
       if (isOfflineTrackReferenced(next, trackId)) return;
-      await removePhysicalDownload(ownerUserId, trackId);
+      try {
+        await removePhysicalDownload(ownerUserId, trackId);
+      } catch (error) {
+        // A remoção física falhou. Reponha a intenção individual para que
+        // a interface permita nova tentativa, sem sobrescrever coleções novas.
+        replaceReferences(ownerUserId, addIndividualOfflineReference(readReferences(ownerUserId), trackId));
+        throw error;
+      }
       return;
     }
 
@@ -763,8 +770,19 @@ export function useOfflineDownloads() {
       return { ...state, syncingKeys, pausedKeys, errors };
     });
 
-    for (const trackId of unreferencedOfflineTrackIds(next, reference.trackIds)) {
-      await removePhysicalDownload(ownerUserId, trackId);
+    try {
+      for (const trackId of unreferencedOfflineTrackIds(next, reference.trackIds)) {
+        await removePhysicalDownload(ownerUserId, trackId);
+      }
+    } catch (error) {
+      // Mantém a coleção visível e recuperável após falha física. Preserve
+      // quaisquer referências adicionadas enquanto a operação aguardava I/O.
+      const latest = readReferences(ownerUserId);
+      replaceReferences(ownerUserId, upsertOfflineCollectionReference(latest, {
+        kind: reference.kind, sourceId: reference.sourceId,
+        name: reference.name, trackIds: reference.trackIds
+      }, reference.updatedAt));
+      throw error;
     }
   }, [removePhysicalDownload, replaceReferences, updateCollectionRuntime, userId]);
 
