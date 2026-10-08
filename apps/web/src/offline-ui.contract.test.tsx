@@ -50,8 +50,8 @@ describe('offline library UX contract', () => {
         onTogglePlay={() => undefined}
         onNext={() => undefined}
         onPlayTrack={() => undefined}
-        onRemove={() => undefined}
-        onRemoveCollection={() => undefined}
+        onRemove={async () => undefined}
+        onRemoveCollection={async () => undefined}
         onExitOffline={() => undefined}
       />
     );
