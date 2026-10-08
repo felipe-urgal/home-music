@@ -341,7 +341,10 @@ export function AdminTrackAvailabilityScreen({ onBack }: AdminTrackAvailabilityS
           </div>
         </section>
 
-        {error && <div className="admin-tracks-message is-error" role="alert">{error}</div>}
+        {error && <div className="admin-tracks-message is-error" role="alert">
+          <span>{error}</span>
+          <button type="button" disabled={loading} onClick={() => void loadTracks()}>Tentar novamente</button>
+        </div>}
         {batchFeedback && (
           <div className={`admin-tracks-message ${batchFeedback.error ? 'is-error' : 'is-success'}`} role={batchFeedback.error ? 'alert' : 'status'}>
             {batchFeedback.message}

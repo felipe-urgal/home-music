@@ -21,6 +21,7 @@ async function login(page: Page) {
 async function openAdministration(page: Page) {
   const width = viewportWidth(page);
   if (width >= 1024) {
+    await page.getByRole('button', { name: 'Expandir barra superior' }).click();
     const sidebar = page.getByTestId('desktop-sidebar');
     await expect(sidebar.getByRole('button', { name: /^Administração/ })).toHaveCount(0);
     await sidebar.getByRole('button', { name: /Minha conta/ }).click();
@@ -89,8 +90,11 @@ test('admin move para lixeira, preserva relações após scan e restaura', async
 
     const row = page.locator('.admin-track-row').filter({ hasText: track.title }).first();
     await expect(row).toBeVisible();
+    await row.getByRole('button', { name: `Ver detalhes de ${track.title}` }).click();
+    const trackInspector = page.getByRole('complementary', { name: 'Detalhes da faixa' });
+    await expect(trackInspector).toContainText(track.title);
     page.once('dialog', dialog => dialog.accept());
-    await row.getByRole('button', { name: 'Mover para lixeira', exact: true }).click();
+    await trackInspector.getByRole('button', { name: 'Mover para a Lixeira', exact: true }).click();
     await expect(row).toHaveCount(0);
 
     const hiddenLibrary = await request.get('/api/library');

@@ -28,6 +28,7 @@ import { uploadAdminImportFile } from '../admin-import-client';
 
 type AdminOperationHistoryScreenProps = {
   onBack: () => void;
+  onOpenImport: () => void;
 };
 
 type KindFilter = AdminOperationKind | '';
@@ -96,7 +97,7 @@ function scanCounts(item: AdminOperationHistoryItemWithRetry) {
   ] as const;
 }
 
-export function AdminOperationHistoryScreen({ onBack }: AdminOperationHistoryScreenProps) {
+export function AdminOperationHistoryScreen({ onBack, onOpenImport }: AdminOperationHistoryScreenProps) {
   const [items, setItems] = useState<AdminOperationHistoryItemWithRetry[]>([]);
   const [kind, setKind] = useState<KindFilter>('');
   const [status, setStatus] = useState<StatusFilter>('');
@@ -381,6 +382,7 @@ export function AdminOperationHistoryScreen({ onBack }: AdminOperationHistoryScr
                         <div className="admin-operation-detail__retry-note">
                           <CircleAlert />
                           <span>Falha definitiva. Corrija a origem e inicie uma nova importação em vez de repetir este job.</span>
+                          <button type="button" onClick={onOpenImport}>Ir para Importar mídia</button>
                         </div>
                       )}
 
@@ -439,7 +441,10 @@ export function AdminOperationHistoryScreen({ onBack }: AdminOperationHistoryScr
                       )}
 
                       {retryError && <div className="admin-operation-detail__retry-message is-error" role="alert">{retryError}</div>}
-                      {retryNotice && <div className="admin-operation-detail__retry-message is-success" role="status">{retryNotice}</div>}
+                      {retryNotice && <div className="admin-operation-detail__retry-message is-success" role="status">
+                        <span>{retryNotice}</span>
+                        <button type="button" onClick={onOpenImport}>Continuar em Importar mídia</button>
+                      </div>}
                     </>
                   )}
                 </aside>

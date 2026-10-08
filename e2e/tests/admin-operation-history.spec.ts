@@ -47,7 +47,13 @@ const items = [
       message: 'A fonte não respondeu dentro do esperado.',
       action: 'Verifique a conectividade e a disponibilidade da fonte antes de tentar novamente.'
     },
-    canRetry: false
+    canRetry: true,
+    importRetry: {
+      attempt: 1,
+      parentOperationId: null,
+      rootOperationId: 'import-e2e',
+      failureDisposition: 'retryable'
+    }
   }
 ] as const;
 
@@ -60,6 +66,7 @@ async function login(page: Page) {
 }
 
 async function openAdministration(page: Page) {
+  await page.getByRole('button', { name: 'Expandir barra superior' }).click();
   const sidebar = page.getByTestId('desktop-sidebar');
   await sidebar.getByRole('button', { name: /Minha conta/ }).click();
   await expect(page.locator('#my-account-title')).toHaveText('Minha conta');
@@ -88,8 +95,20 @@ test('admin filtra histórico e vê erro acionável sem dados sensíveis', async
     });
   });
 
+  let retryBody: unknown = null;
+  await page.route('**/api/admin/operations/import-e2e/retry', async route => {
+    expect(route.request().method()).toBe('POST');
+    expect(route.request().headers()['x-home-music-request']).toBe('1');
+    retryBody = route.request().postDataJSON();
+    await route.fulfill({
+      status: 201,
+      contentType: 'application/json',
+      body: JSON.stringify({ job: { id: 'retry-e2e', status: 'pending' } })
+    });
+  });
+
   await openAdministration(page);
-  await page.getByRole('button', { name: /^Histórico operacional/ }).click();
+  await page.getByRole('button', { name: /^Histórico\b/ }).click();
   await expect(page.locator('#admin-operation-history-title')).toHaveText('Histórico operacional');
 
   const list = page.getByLabel('Operações recentes');
@@ -100,9 +119,18 @@ test('admin filtra histórico e vê erro acionável sem dados sensíveis', async
   await list.getByRole('button', { name: /Importação por URL/ }).click();
   const detail = page.locator('.admin-operation-detail');
   await expect(detail).toContainText('A fonte não respondeu dentro do esperado.');
-  await expect(detail).toContainText('O que fazer: Verifique a conectividade');
+  const errorDetails = detail.locator('.admin-operation-detail__error');
+  await expect(errorDetails).toContainText('O que fazer');
+  await expect(errorDetails).toContainText('Verifique a conectividade');
   await expect(detail).toContainText('Nova tentativa');
-  await expect(detail).toContainText('Não disponível');
+  await expect(detail).toContainText('Disponível');
+
+  const retryUrl = 'https://fixtures.invalid/retry-e2e.wav';
+  await detail.getByLabel('URL', { exact: true }).fill(retryUrl);
+  await detail.getByRole('button', { name: 'Tentar novamente', exact: true }).click();
+  await expect(detail.locator('.admin-operation-detail__retry-message')).toContainText('Tentativa #2 criada');
+  expect(retryBody).toEqual({ url: retryUrl });
+  await expect(detail.getByRole('button', { name: 'Continuar em Importar mídia' })).toBeVisible();
   await expect(detail).not.toContainText('token=');
   await expect(detail).not.toContainText('/srv/');
 
@@ -123,4 +151,11 @@ test('admin filtra histórico e vê erro acionável sem dados sensíveis', async
   await expect(list.getByRole('button')).toHaveCount(1);
   await expect(list).toContainText('Importação por URL');
   expect(requestedUrls.some(url => new URL(url).searchParams.get('status') === 'failed')).toBe(true);
+
+  await page.getByRole('navigation', { name: 'Tipo' }).getByRole('button', { name: 'Todos', exact: true }).click();
+  await list.getByRole('button', { name: /Importação por URL/ }).click();
+  await detail.getByLabel('URL', { exact: true }).fill('https://fixtures.invalid/another-retry.wav');
+  await detail.getByRole('button', { name: 'Tentar novamente', exact: true }).click();
+  await detail.getByRole('button', { name: 'Continuar em Importar mídia' }).click();
+  await expect(page.locator('#admin-import-title')).toHaveText('Importar mídia');
 });

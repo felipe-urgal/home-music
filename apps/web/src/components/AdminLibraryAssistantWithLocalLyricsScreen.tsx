@@ -13,7 +13,7 @@ export function AdminLibraryAssistantWithLocalLyricsScreen({ onBack }: Props) {
   return (
     <div className="assistant-local-lyrics-shell">
       <AdminLibraryAssistantTabbedScreen
-        key={assistantRevision}
+        refreshRevision={assistantRevision}
         onBack={onBack}
         onOpenLocalLyrics={() => setLocalLyricsOpen(true)}
       />

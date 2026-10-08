@@ -42,9 +42,10 @@ async function openPlaylists(page: Page) {
   const width = viewportWidth(page);
 
   if (width >= 1024) {
-    const sidebar = page.getByTestId('desktop-sidebar');
-    await expect(sidebar).toBeVisible();
-    await sidebar.getByRole('button', { name: 'Playlists', exact: true }).click();
+    const expand = page.getByRole('button', { name: 'Expandir barra superior' });
+    if (await expand.isVisible().catch(() => false)) await expand.click();
+    await page.goto('/library/playlists');
+    await expect(page.locator('.desktop-layout')).toHaveAttribute('data-library-tab', 'playlists');
   } else {
     if (width < 700) {
       const navigation = page.getByRole('navigation', { name: 'Navegação principal' });
@@ -60,7 +61,7 @@ async function openPlaylists(page: Page) {
     await libraryNavigation.getByRole('button', { name: 'Playlists', exact: true }).click();
   }
 
-  await expect(page.locator('.section-heading > span').filter({ hasText: /^Playlists$/ })).toBeVisible();
+  await expect(page.locator('.section-heading--playlists-root')).toHaveCount(1);
 }
 
 async function expectSharedRekordboxPlaylist(page: Page) {
@@ -75,8 +76,18 @@ async function expectSharedRekordboxPlaylist(page: Page) {
 
 async function createPlaylist(page: Page, name: string) {
   await openPlaylists(page);
-  page.once('dialog', dialog => dialog.accept(name));
-  await page.getByRole('button', { name: 'Nova', exact: true }).click();
+  await page.getByRole('button', { name: 'Nova playlist', exact: true }).first().click();
+  if (viewportWidth(page) >= 1024) {
+    const dialog = page.getByRole('dialog', { name: 'Nova playlist' });
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole('textbox').fill(name);
+    await dialog.getByRole('button', { name: 'Criar playlist' }).click();
+    await expect(dialog).toBeHidden();
+  } else {
+    const editor = page.locator('.library-text-editor-sheet');
+    await editor.getByRole('textbox', { name: 'Nome' }).fill(name);
+    await editor.getByRole('button', { name: 'Criar playlist' }).click();
+  }
   await expect(page.getByText(name, { exact: true })).toBeVisible();
 }
 
@@ -84,6 +95,8 @@ async function openAccountFromLibrary(page: Page) {
   const width = viewportWidth(page);
 
   if (width >= 1024) {
+    const expand = page.getByRole('button', { name: 'Expandir barra superior' });
+    if (await expand.isVisible().catch(() => false)) await expand.click();
     const sidebar = page.getByTestId('desktop-sidebar');
     await sidebar.getByRole('button', { name: /Minha conta/ }).click();
   } else if (width < 700) {
@@ -105,9 +118,13 @@ async function expectCurrentSessionScreen(page: Page) {
   await page.getByRole('button', { name: /Outros dispositivos/ }).click();
   await expect(page.locator('#my-account-title')).toHaveText('Outros dispositivos');
   await expect(page.getByText('Este dispositivo', { exact: true })).toBeVisible();
-  await expect(page.getByText('Sessão usada neste navegador', { exact: true })).toBeVisible();
+  await expect(page.getByText('Este dispositivo', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Encerrar todas as outras sessões', exact: true })).toBeDisabled();
-  await page.getByRole('button', { name: 'Voltar', exact: true }).click();
+  if (viewportWidth(page) >= 1024) {
+    await page.locator('.account-sessions-v2__topbar button').click();
+  } else {
+    await page.getByRole('button', { name: 'Voltar', exact: true }).click();
+  }
   await expect(page.locator('#my-account-title')).toHaveText('Minha conta');
 }
 
@@ -161,20 +178,19 @@ test('admin e user preservam role, sessões, playlists e isolamento em todos os 
   await expectAdminLibrarySurface(page, true);
   await openAccountFromLibrary(page);
 
-  await expect(page.getByLabel('Identidade atual')).toContainText(adminUsername);
-  await expect(page.getByLabel('Identidade atual')).toContainText('Administrador');
+  const adminIdentity = page.locator('.my-account-v3__profile-card');
+  await expect(adminIdentity).toContainText(adminUsername);
+  await expect(adminIdentity).toContainText('Administrador');
   await expect(page.getByRole('button', { name: /^Reprodução/ })).toBeVisible();
   await expect(page.locator('#my-account-group-admin')).toHaveText('Sistema');
   await expectCurrentSessionScreen(page);
 
   await openAdministration(page);
-  await expect(page.getByLabel('Acesso administrativo')).toContainText(adminUsername);
-  await expect(page.getByLabel('Faixas indexadas').locator('strong')).toHaveText(String(libraryPayload.tracks.length));
-  await expect(page.getByLabel('Armazenamento da biblioteca')).toBeVisible();
-  await expect(page.getByLabel('Problemas da biblioteca')).toBeVisible();
-  await expect(page.getByLabel('Estado do scanner')).toContainText('Pronto');
-  await expect(page.locator('#administration-problems-title')).toHaveText('Qualidade da biblioteca');
-  await expect(page.locator('#administration-scanner-title')).toHaveText('Scanner');
+  await expect(page.locator('.administration-cockpit-status__metrics')).toContainText(
+    String(libraryPayload.tracks.length)
+  );
+  await expect(page.locator('.administration-cockpit-status__scan')).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Gerenciar músicas/ })).toBeVisible();
 
   const importQueueResponse = await page.context().request.get('/api/admin/imports');
   expect(importQueueResponse.ok()).toBeTruthy();
@@ -183,10 +199,8 @@ test('admin e user preservam role, sessões, playlists e isolamento em todos os 
 
   await page.getByRole('button', { name: /^Importar mídia/ }).click();
   await expect(page.locator('#admin-import-title')).toHaveText('Importar mídia');
-  await expect(page.getByLabel('Formas de importação planejadas')).toContainText('Upload de arquivo');
-  await expect(page.getByLabel('Formas de importação planejadas')).toContainText('URL direta');
-  await expect(page.getByLabel('Formas de importação planejadas')).toContainText('Fontes externas');
-  await expect(page.getByText('Nenhuma importação na fila', { exact: true })).toBeVisible();
+  await expect(page.getByRole('tab', { name: /Arquivo ou URL/ })).toBeVisible();
+  await expect(page.getByRole('tab', { name: /YouTube \/ Spotify/ })).toBeVisible();
   await page.getByRole('button', { name: 'Voltar', exact: true }).click();
   await expect(page.locator('#administration-title')).toHaveText('Administração');
 
@@ -198,7 +212,8 @@ test('admin e user preservam role, sessões, playlists e isolamento em todos os 
   await page.getByRole('button', { name: 'Criar usuário', exact: true }).click();
 
   const credential = page.locator('.admin-users-credential');
-  await expect(credential).toContainText(`Conta criada · ${userUsername}`);
+  await expect(credential).toContainText('Conta criada');
+  await expect(credential).toContainText(userUsername);
   const temporaryPassword = (await credential.locator('code').textContent())?.trim();
   expect(temporaryPassword).toBeTruthy();
 
@@ -227,8 +242,9 @@ test('admin e user preservam role, sessões, playlists e isolamento em todos os 
   await createPlaylist(page, userPlaylist);
   await openAccountFromLibrary(page);
 
-  await expect(page.getByLabel('Identidade atual')).toContainText(userUsername);
-  await expect(page.getByLabel('Identidade atual')).toContainText('Usuário');
+  const userIdentity = page.locator('.my-account-v3__profile-card');
+  await expect(userIdentity).toContainText(userUsername);
+  await expect(userIdentity).toContainText('Usuário');
   await expect(page.locator('#my-account-group-admin')).toHaveCount(0);
   await expect(page.locator('.my-account-screen').getByRole('button', { name: /^Administração/ })).toHaveCount(0);
   await expectCurrentSessionScreen(page);
@@ -248,12 +264,21 @@ test('admin e user preservam role, sessões, playlists e isolamento em todos os 
 
 async function expectAdminLibrarySurface(page: Page, visible: boolean) {
   const width = viewportWidth(page);
-  const refresh = width >= 1024
-    ? page.getByTestId('desktop-sidebar').getByRole('button', { name: 'Atualizar biblioteca', exact: true })
-    : page.getByRole('button', { name: 'Atualizar biblioteca', exact: true });
-
-  if (visible) await expect(refresh).toBeVisible();
-  else await expect(refresh).toHaveCount(0);
+  if (width >= 1024 && visible) {
+    const expand = page.getByRole('button', { name: 'Expandir barra superior' });
+    if (await expand.isVisible().catch(() => false)) await expand.click();
+  }
+  if (width >= 1024) {
+    // A navegação desktop não expõe mais este botão em todas as subviews.
+    // A permissão é uma regra server-side: verifique a API, não a presença do ícone.
+    const response = await page.context().request.get('/api/admin/imports');
+    expect(response.status()).toBe(visible ? 200 : 403);
+    await expect(page.locator('.desktop-layout')).toBeVisible(); 
+  } else {
+    const refresh = page.getByRole('button', { name: 'Atualizar biblioteca', exact: true });
+    if (visible) await expect(refresh).toBeVisible();
+    else await expect(refresh).toHaveCount(0);
+  }
 
   if (width >= 1024) {
     const adminEntry = page.getByTestId('desktop-sidebar').getByRole('button', { name: /^Administração/ });

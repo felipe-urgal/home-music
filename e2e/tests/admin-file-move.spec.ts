@@ -16,6 +16,7 @@ async function login(page: Page) {
 }
 
 async function openAdministration(page: Page) {
+  await page.getByRole('button', { name: 'Expandir barra superior' }).click();
   const sidebar = page.getByTestId('desktop-sidebar');
   await sidebar.getByRole('button', { name: /Minha conta/ }).click();
   await expect(page.locator('#my-account-title')).toHaveText('Minha conta');
@@ -55,7 +56,10 @@ test('organização física preserva id, streaming e rescan e permite restaurar 
     await search.fill(track.title);
     const row = page.locator('.admin-track-row').filter({ hasText: track.title }).first();
     await expect(row).toBeVisible();
-    await row.getByRole('button', { name: 'Organizar', exact: true }).click();
+    await row.getByRole('button', { name: `Ver detalhes de ${track.title}` }).click();
+    const details = page.getByRole('complementary', { name: 'Detalhes da faixa' });
+    await expect(details).toContainText(track.title);
+    await details.getByRole('button', { name: 'Organizar arquivo' }).click();
 
     const dialog = page.getByRole('dialog', { name: 'Organizar arquivo' });
     await expect(dialog).toBeVisible();

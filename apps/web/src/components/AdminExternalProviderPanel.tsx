@@ -38,7 +38,8 @@ import '../admin-external-provider-batch.css';
 type AdminExternalProviderPanelProps = {
   jobs: ImportJob[];
   onJobUpdated: (job: ImportJob) => void;
-  onRefresh: () => Promise<unknown> | unknown;
+  initialActiveJobId?: string | null;
+  onRefresh: (background?: boolean) => Promise<unknown> | unknown;
   compact?: boolean;
 };
 
@@ -118,6 +119,7 @@ function batchItemStatusLabel(status: AdminExternalProviderBatch['items'][number
 export function AdminExternalProviderPanel({
   jobs,
   onJobUpdated,
+  initialActiveJobId = null,
   onRefresh,
   compact = false
 }: AdminExternalProviderPanelProps) {
@@ -126,7 +128,7 @@ export function AdminExternalProviderPanel({
   const available = providers.filter(provider => provider.configured && provider.capabilities.audio);
   const [providerId, setProviderId] = useState('');
   const [url, setUrl] = useState('');
-  const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [activeJobId, setActiveJobId] = useState<string | null>(initialActiveJobId);
   const [activeBatch, setActiveBatch] = useState<AdminExternalProviderBatch | null>(null);
   const [folders, setFolders] = useState<AdminImportDestinationFolder[]>([]);
   const [folderPath, setFolderPath] = useState('Importados');
@@ -158,34 +160,30 @@ export function AdminExternalProviderPanel({
 
   const activeJob = activeJobId ? jobs.find(job => job.id === activeJobId) ?? null : null;
   const acquisitionRunning = Boolean(activeJob?.status === 'processing' && !activeJob.mediaDecision);
-  const pipelineRunning = Boolean(activeJob?.status === 'processing');
   const activeJobRunning = Boolean(activeJob && !TERMINAL_STATUSES.has(activeJob.status) && !activeJob.metadataPreview);
   const batchRunning = Boolean(activeBatch && !TERMINAL_BATCH_STATUSES.has(activeBatch.status) && activeBatch.status !== 'ready');
   const canCancelAcquisition = acquisitionRunning;
 
   useEffect(() => {
-    if (!activeJobId || !activeJobRunning) return;
-    const timer = window.setInterval(() => { void onRefresh(); }, 900);
-    return () => window.clearInterval(timer);
-  }, [activeJobId, activeJobRunning, onRefresh]);
-
-  useEffect(() => {
     if (!activeBatch || !batchRunning) return;
-    let active = true;
+    let cancelled = false;
+    let timer = 0;
     const refresh = async () => {
       try {
         const next = await getAdminExternalProviderBatch(activeBatch.id);
-        if (!active) return;
+        if (cancelled) return;
         setActiveBatch(next);
-        await onRefresh();
+        await onRefresh(true);
       } catch (caught) {
-        if (active) setError(caught instanceof Error ? caught.message : 'Não foi possível atualizar o progresso da lista.');
+        if (!cancelled) setError(caught instanceof Error ? caught.message : 'Não foi possível atualizar o progresso da lista.');
+      } finally {
+        if (!cancelled) timer = window.setTimeout(() => void refresh(), 900);
       }
     };
-    const timer = window.setInterval(() => { void refresh(); }, 900);
+    timer = window.setTimeout(() => void refresh(), 900);
     return () => {
-      active = false;
-      window.clearInterval(timer);
+      cancelled = true;
+      window.clearTimeout(timer);
     };
   }, [activeBatch?.id, batchRunning, onRefresh]);
 
@@ -425,7 +423,7 @@ export function AdminExternalProviderPanel({
               />
             </label>
             <button className={compact ? 'is-primary' : undefined} type="submit" disabled={formBusy || !providerId || !url.trim()}>
-              {submitting || searching || pipelineRunning
+              {submitting || searching
                 ? <LoaderCircle className="is-spinning" />
                 : inputIsUrl
                   ? <Link2 />

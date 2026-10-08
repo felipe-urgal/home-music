@@ -25,6 +25,33 @@
   cursor: pointer;
 }
 
+.admin-import-v4__refresh {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #c4cfda;
+  cursor: pointer;
+}
+
+.admin-import-v4__refresh:hover:not(:disabled) {
+  background: rgba(255,255,255,.035);
+  color: #f4f7fb;
+}
+
+.admin-import-v4__refresh:disabled {
+  opacity: .45;
+  cursor: default;
+}
+
+.admin-import-v4__refresh svg {
+  width: 21px;
+  height: 21px;
+}
+
 .admin-import-v4__back:hover {
   background: rgba(255,255,255,.035);
   color: #f4f7fb;
