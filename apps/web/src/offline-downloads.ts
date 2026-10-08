@@ -781,7 +781,7 @@ export function useOfflineDownloads() {
             if (!track) continue;
             if (activeUserIdRef.current !== ownerUserId) return;
             const latest = findOfflineCollectionReference(readReferences(ownerUserId), kind, sourceId);
-            if (!latest?.trackIds.includes(track.id)) return;
+            if (!latest?.trackIds.includes(track.id)) continue;
             try { await ensurePhysicalDownload(track, ownerUserId); } catch { failures++; }
           }
         };
