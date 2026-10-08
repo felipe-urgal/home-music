@@ -26,6 +26,7 @@ import {
   revokeAdminUserSessions,
   updateAdminUser
 } from '../admin-users-client';
+import { ActionDialog } from './ActionDialog';
 
 type AdminView = 'list' | 'create' | 'edit';
 type RoleFilter = 'all' | UserRole;
@@ -69,46 +70,6 @@ type Confirmation = {
   destructive?: boolean;
   resolve: (accepted: boolean) => void;
 };
-
-function AdminConfirmationDialog({ pending, onDecision }: {
-  pending: Confirmation | null;
-  onDecision: (accepted: boolean) => void;
-}) {
-  const dialogRef = useRef<HTMLDialogElement>(null);
-  const previousFocus = useRef<HTMLElement | null>(null);
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    if (!dialog) return;
-    if (pending) {
-      previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-      if (!dialog.open) dialog.showModal();
-    } else if (dialog.open) {
-      dialog.close();
-      if (previousFocus.current?.isConnected) previousFocus.current.focus();
-      else document.querySelector<HTMLElement>('.admin-users-v2__back')?.focus();
-    }
-  }, [pending]);
-  return (
-    <dialog
-      ref={dialogRef}
-      className="admin-users-confirmation"
-      aria-labelledby="admin-users-confirm-title"
-      aria-describedby="admin-users-confirm-description"
-      onCancel={event => { event.preventDefault(); onDecision(false); }}
-    >
-      {pending && <div className="admin-users-confirmation__content">
-        <h2 id="admin-users-confirm-title">{pending.title}</h2>
-        <p id="admin-users-confirm-description">{pending.description}</p>
-        <div className="admin-users-confirmation__actions">
-          <button type="button" autoFocus onClick={() => onDecision(false)}>Cancelar</button>
-          <button type="button" className={pending.destructive ? 'is-danger' : 'is-primary'} onClick={() => onDecision(true)}>
-            {pending.confirmLabel}
-          </button>
-        </div>
-      </div>}
-    </dialog>
-  );
-}
 
 export function AdminUsersScreen({ currentUser, onBack }: AdminUsersScreenProps) {
   const [view, setView] = useState<AdminView>('list');
@@ -400,7 +361,15 @@ export function AdminUsersScreen({ currentUser, onBack }: AdminUsersScreenProps)
 
           <button className="admin-users-v2__credential-done" type="button" onClick={returnToList}>Concluir</button>
         </div>
-      <AdminConfirmationDialog pending={confirmation} onDecision={decideConfirmation} />
+      <ActionDialog
+        open={Boolean(confirmation)}
+        title={confirmation?.title ?? ''}
+        description={confirmation?.description}
+        confirmLabel={confirmation?.confirmLabel ?? 'Confirmar'}
+        danger={confirmation?.destructive}
+        onConfirm={() => decideConfirmation(true)}
+        onClose={() => decideConfirmation(false)}
+      />
       </section>
     );
   }
@@ -657,7 +626,15 @@ export function AdminUsersScreen({ currentUser, onBack }: AdminUsersScreenProps)
           </footer>
         </form>
       )}
-      <AdminConfirmationDialog pending={confirmation} onDecision={decideConfirmation} />
+      <ActionDialog
+        open={Boolean(confirmation)}
+        title={confirmation?.title ?? ''}
+        description={confirmation?.description}
+        confirmLabel={confirmation?.confirmLabel ?? 'Confirmar'}
+        danger={confirmation?.destructive}
+        onConfirm={() => decideConfirmation(true)}
+        onClose={() => decideConfirmation(false)}
+      />
     </section>
   );
 }
