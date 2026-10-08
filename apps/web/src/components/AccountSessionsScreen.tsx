@@ -55,7 +55,9 @@ export function AccountSessionsScreen({
     return right.lastSeenAt - left.lastSeenAt;
   });
   const otherSessions = orderedSessions.filter(session => !session.current);
-  const otherSessionPosition = new Map(otherSessions.map((session, index) => [session.id, index + 1]));
+  const sessionTitle = (session: AccountSession) => session.current
+    ? 'Este dispositivo'
+    : session.clientName || 'Dispositivo não identificado';
   const [openMenuSessionId, setOpenMenuSessionId] = useState<string | null>(null);
 
   if (prototypeTwo) {
@@ -95,8 +97,7 @@ export function AccountSessionsScreen({
           ) : (
             <div className="account-sessions-v2__cards">
               {orderedSessions.map(session => {
-                const sessionPosition = otherSessionPosition.get(session.id);
-                const title = session.current ? 'Este dispositivo' : `Outra sessão ${sessionPosition ?? ''}`.trim();
+                const title = sessionTitle(session);
                 const ending = busySessionId === session.id;
                 const menuOpen = openMenuSessionId === session.id;
 
@@ -120,6 +121,7 @@ export function AccountSessionsScreen({
                       ) : (
                         <>
                           <small>Última atividade · {formatSessionDate(session.lastSeenAt)}</small>
+                          <small>Iniciada · {formatSessionDate(session.createdAt)}</small>
                           <small>ID {session.id.slice(0, 8)}</small>
                         </>
                       )}
@@ -134,18 +136,33 @@ export function AccountSessionsScreen({
                         <button
                           type="button"
                           aria-label={`Opções de ${title}`}
+                          aria-haspopup="menu"
                           aria-expanded={menuOpen}
+                          onKeyDown={event => {
+                            if (event.key === 'ArrowDown') {
+                              event.preventDefault();
+                              setOpenMenuSessionId(session.id);
+                            }
+                          }}
                           onClick={() => setOpenMenuSessionId(menuOpen ? null : session.id)}
                         >
                           <EllipsisVertical />
                         </button>
                         {menuOpen && (
-                          <div className="account-sessions-v2__menu-popover" role="menu">
+                          <div className="account-sessions-v2__menu-popover" role="menu" onKeyDown={event => {
+                            if (event.key === 'Escape') {
+                              event.preventDefault();
+                              setOpenMenuSessionId(null);
+                              (event.currentTarget.previousElementSibling as HTMLButtonElement | null)?.focus();
+                            }
+                          }}>
                             <button
+                              autoFocus
                               type="button"
                               role="menuitem"
-                              disabled={Boolean(busySessionId)}
-                              onClick={() => {
+                              disabled={Boolean(busySessionId) || revokingAll}
+                              onClick={event => {
+                                (event.currentTarget.parentElement?.previousElementSibling as HTMLButtonElement | null)?.focus();
                                 setOpenMenuSessionId(null);
                                 onRevokeOne(session);
                               }}
@@ -168,7 +185,7 @@ export function AccountSessionsScreen({
           <button
             className="account-sessions-v2__revoke-all"
             type="button"
-            disabled={revokingAll || otherSessions.length === 0}
+            disabled={revokingAll || Boolean(busySessionId) || otherSessions.length === 0}
             onClick={onRevokeOthers}
           >
             <Trash2 />
@@ -203,8 +220,7 @@ export function AccountSessionsScreen({
         ) : (
           <div className="account-sessions-cards">
             {orderedSessions.map(session => {
-              const sessionPosition = otherSessionPosition.get(session.id);
-              const title = session.current ? 'Este dispositivo' : `Outra sessão ${sessionPosition ?? ''}`.trim();
+              const title = sessionTitle(session);
               const ending = busySessionId === session.id;
 
               return (
@@ -249,7 +265,7 @@ export function AccountSessionsScreen({
                       <button
                         className="account-session-card__revoke"
                         type="button"
-                        disabled={Boolean(busySessionId)}
+                        disabled={Boolean(busySessionId) || revokingAll}
                         onClick={() => onRevokeOne(session)}
                       >
                         <LogOut /> {ending ? 'Encerrando…' : 'Encerrar esta sessão'}
@@ -267,7 +283,7 @@ export function AccountSessionsScreen({
         <button
           className="account-sessions-revoke-all"
           type="button"
-          disabled={revokingAll || otherSessions.length === 0}
+          disabled={revokingAll || Boolean(busySessionId) || otherSessions.length === 0}
           onClick={onRevokeOthers}
         >
           <LogOut /> {revokingAll ? 'Encerrando…' : 'Encerrar todas as outras sessões'}
