@@ -1,16 +1,12 @@
-/* Keep advanced account operations off constrained mobile/TV surfaces. */
+/* Keep TV-only restrictions while allowing mobile users to manage their sessions. */
 
 @media (max-width: 699px) {
-  .my-account-overview section[aria-labelledby="my-account-group-account"] .my-account-links > button:nth-child(2),
   .my-account-overview section[aria-labelledby="my-account-group-account"] .my-account-links > button:nth-child(3),
   .my-account-overview section[aria-labelledby="my-account-group-data"],
   .my-account-overview section[aria-labelledby="my-account-group-admin"] {
     display: none !important;
   }
 
-  .my-account-overview section[aria-labelledby="my-account-group-account"] .my-account-links > button:first-child {
-    border-bottom: 0;
-  }
 }
 
 html[data-tv-mode="true"] .my-account-overview section[aria-labelledby="my-account-group-account"] .my-account-links > button:nth-child(2),
