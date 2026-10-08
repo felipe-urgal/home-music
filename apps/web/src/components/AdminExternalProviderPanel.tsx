@@ -160,7 +160,6 @@ export function AdminExternalProviderPanel({
 
   const activeJob = activeJobId ? jobs.find(job => job.id === activeJobId) ?? null : null;
   const acquisitionRunning = Boolean(activeJob?.status === 'processing' && !activeJob.mediaDecision);
-  const pipelineRunning = Boolean(activeJob?.status === 'processing');
   const activeJobRunning = Boolean(activeJob && !TERMINAL_STATUSES.has(activeJob.status) && !activeJob.metadataPreview);
   const batchRunning = Boolean(activeBatch && !TERMINAL_BATCH_STATUSES.has(activeBatch.status) && activeBatch.status !== 'ready');
   const canCancelAcquisition = acquisitionRunning;
@@ -424,7 +423,7 @@ export function AdminExternalProviderPanel({
               />
             </label>
             <button className={compact ? 'is-primary' : undefined} type="submit" disabled={formBusy || !providerId || !url.trim()}>
-              {submitting || searching || pipelineRunning
+              {submitting || searching
                 ? <LoaderCircle className="is-spinning" />
                 : inputIsUrl
                   ? <Link2 />

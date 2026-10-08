@@ -414,7 +414,10 @@ export function AdminUsersScreen({ currentUser, onBack }: AdminUsersScreenProps)
         ) : <span />}
       </header>
 
-      {error && <div className="admin-users-message is-error" role="alert">{error}</div>}
+      {error && <div className="admin-users-message is-error" role="alert">
+        <span>{error}</span>
+        {view === 'list' && <button type="button" disabled={loading} onClick={() => void loadUsers()}>Tentar novamente</button>}
+      </div>}
       {view !== 'list' && notice && <div className="admin-users-message" role="status">{notice}</div>}
 
       {view === 'list' && (

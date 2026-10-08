@@ -56,70 +56,22 @@ import {
   type LibraryAssistantFingerprintStatus
 } from '../library-assistant-client';
 import { notifyLibraryChanged } from '../library-events';
+import { AdminLibraryAssistantSettingsPanel } from './AdminLibraryAssistantSettingsPanel';
 import '../library-assistant-tabs.css';
 
 type Props = {
   onBack: () => void;
   onOpenLocalLyrics?: () => void;
+  refreshRevision?: number;
 };
 
 type CapabilityTab = LibraryAssistantCapability;
 type TrackVisualStatus = 'review' | 'suggestion' | 'ok' | 'pending' | 'failed' | 'not-analyzed';
 type TrackStatusFilter = 'all' | TrackVisualStatus;
 type Feedback = { kind: 'success' | 'error' | 'warning'; message: string };
-type PolicyRow = {
-  key: LibraryAssistantReviewPolicyKey;
-  label: string;
-  description: string;
-  allowBulk: boolean;
-};
-
 const TERMINAL_RUNS = new Set(['completed', 'failed', 'cancelled', 'stale']);
 const PAGE_SIZE = 50;
 const CAPABILITY_TABS: readonly CapabilityTab[] = ['metadata', 'artwork', 'lyrics'];
-const POLICY_MODES: readonly [LibraryAssistantReviewMode, string][] = [
-  ['ignore', 'Ocultar'],
-  ['review', 'Revisar individualmente'],
-  ['bulk', 'Permitir lote seguro']
-];
-const POLICY_ROWS: readonly PolicyRow[] = [
-  {
-    key: 'title',
-    label: 'Título',
-    description: 'Sugestões que alteram o título da faixa.',
-    allowBulk: true
-  },
-  {
-    key: 'artist',
-    label: 'Artista',
-    description: 'Sugestões que alteram o artista da faixa.',
-    allowBulk: true
-  },
-  {
-    key: 'album',
-    label: 'Álbum',
-    description: 'Sugestões que alteram o nome do álbum.',
-    allowBulk: true
-  },
-  {
-    key: 'albumArtist',
-    label: 'Artista do álbum',
-    description: 'Sugestões que alteram o artista do álbum.',
-    allowBulk: true
-  },
-  {
-    key: 'artwork',
-    label: 'Capas',
-    description: 'Capas continuam com aplicação individual após conferir a imagem.',
-    allowBulk: false
-  },
-  {
-    key: 'lyrics',
-    label: 'Letras',
-    description: 'Letras encontradas para faixas sem uma letra efetiva.',
-    allowBulk: true
-  }
-];
 
 function capabilityLabel(capability: CapabilityTab) {
   if (capability === 'metadata') return 'Metadados';
@@ -279,7 +231,7 @@ function SuggestedArtwork({ suggestion }: { suggestion: LibraryAssistantSuggesti
   );
 }
 
-export function AdminLibraryAssistantTabbedScreen({ onBack, onOpenLocalLyrics }: Props) {
+export function AdminLibraryAssistantTabbedScreen({ onBack, onOpenLocalLyrics, refreshRevision = 0 }: Props) {
   const [tracks, setTracks] = useState<AdminTrack[]>([]);
   const [runs, setRuns] = useState<LibraryAssistantRun[]>([]);
   const [suggestions, setSuggestions] = useState<LibraryAssistantSuggestion[]>([]);
@@ -505,6 +457,11 @@ export function AdminLibraryAssistantTabbedScreen({ onBack, onOpenLocalLyrics }:
       fingerprintVersion.current += 1;
     };
   }, [load, loadFingerprintStatus, loadSettings]);
+
+  // Revalida as sugestões após lyrics local sem remontar o Assistente e perder filtros.
+  useEffect(() => {
+    if (refreshRevision > 0) void load(true);
+  }, [load, refreshRevision]);
 
   const anyRunActive = runs.some(run => !TERMINAL_RUNS.has(run.status));
   useEffect(() => {
@@ -799,57 +756,28 @@ export function AdminLibraryAssistantTabbedScreen({ onBack, onOpenLocalLyrics }:
         <div className={`assistant-tabs__feedback is-${feedback.kind}`} role={feedback.kind === 'error' ? 'alert' : 'status'}>
           {feedback.kind === 'success' ? <Check /> : <AlertTriangle />}
           <span>{feedback.message}</span>
+          {feedback.kind === 'error' && (
+            <button type="button" onClick={() => {
+              void load();
+              void loadSettings();
+              void loadFingerprintStatus();
+            }}>Tentar novamente</button>
+          )}
           <button type="button" aria-label="Fechar mensagem" onClick={() => setFeedback(null)}><X /></button>
         </div>
       )}
 
       {showSettings ? (
-        <section className="assistant-tabs__settings">
-          <header>
-            <div>
-              <strong>Configurações</strong>
-              <small>Controle quais sugestões aparecem e o comportamento automático seguro.</small>
-            </div>
-            <button type="button" onClick={() => setShowSettings(false)}><X /> Fechar</button>
-          </header>
-
-          <div className="assistant-tabs__settings-grid">
-            <section>
-              <strong>Política de revisão</strong>
-              <p>“Ocultar” remove a sugestão da fila visual; “Revisar” mantém decisão individual; “Lote seguro” permite aplicar apenas resultados de alta confiança.</p>
-              <div className="assistant-tabs__policy-list">
-                {POLICY_ROWS.map(row => (
-                  <fieldset key={row.key} disabled={!policyReady || savingPolicy}>
-                    <legend>{row.label}</legend>
-                    <small>{row.description}</small>
-                    <div>
-                      {POLICY_MODES.filter(([mode]) => row.allowBulk || mode !== 'bulk').map(([mode, label]) => (
-                        <label key={mode}>
-                          <input
-                            type="radio"
-                            name={`assistant-tab-policy-${row.key}`}
-                            checked={policy[row.key] === mode}
-                            onChange={() => void updatePolicyMode(row.key, mode)}
-                          />
-                          <span>{label}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </fieldset>
-                ))}
-              </div>
-            </section>
-
-            <section className="assistant-tabs__automation">
-              <strong>Automação segura</strong>
-              <p>Quando ativa, somente campos de metadata vazios e sugestões de alta confiança podem ser preenchidos automaticamente. Capas, letras e campos já preenchidos continuam manuais.</p>
-              <button type="button" disabled={!autonomy || savingAutonomy} onClick={() => void toggleAutonomy()}>
-                {savingAutonomy ? <LoaderCircle className="is-spinning" /> : <ShieldCheck />}
-                {autonomy?.config.enabled ? 'Desativar automação' : 'Ativar automação segura'}
-              </button>
-            </section>
-          </div>
-        </section>
+        <AdminLibraryAssistantSettingsPanel
+          policy={policy}
+          policyReady={policyReady}
+          savingPolicy={savingPolicy}
+          autonomy={autonomy}
+          savingAutonomy={savingAutonomy}
+          onClose={() => setShowSettings(false)}
+          onPolicyMode={(key, mode) => { void updatePolicyMode(key, mode); }}
+          onToggleAutonomy={() => { void toggleAutonomy(); }}
+        />
       ) : (
         <>
           <nav className="assistant-tabs__capabilities" aria-label="Tipo de análise">
