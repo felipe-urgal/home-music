@@ -178,8 +178,9 @@ test('admin e user preservam role, sessões, playlists e isolamento em todos os 
   await expectAdminLibrarySurface(page, true);
   await openAccountFromLibrary(page);
 
-  await expect(page.getByLabel('Identidade atual')).toContainText(adminUsername);
-  await expect(page.getByLabel('Identidade atual')).toContainText('Administrador');
+  const adminIdentity = page.locator('.my-account-v3__profile-card');
+  await expect(adminIdentity).toContainText(adminUsername);
+  await expect(adminIdentity).toContainText('Administrador');
   await expect(page.getByRole('button', { name: /^Reprodução/ })).toBeVisible();
   await expect(page.locator('#my-account-group-admin')).toHaveText('Sistema');
   await expectCurrentSessionScreen(page);
@@ -241,8 +242,9 @@ test('admin e user preservam role, sessões, playlists e isolamento em todos os 
   await createPlaylist(page, userPlaylist);
   await openAccountFromLibrary(page);
 
-  await expect(page.getByLabel('Identidade atual')).toContainText(userUsername);
-  await expect(page.getByLabel('Identidade atual')).toContainText('Usuário');
+  const userIdentity = page.locator('.my-account-v3__profile-card');
+  await expect(userIdentity).toContainText(userUsername);
+  await expect(userIdentity).toContainText('Usuário');
   await expect(page.locator('#my-account-group-admin')).toHaveCount(0);
   await expect(page.locator('.my-account-screen').getByRole('button', { name: /^Administração/ })).toHaveCount(0);
   await expectCurrentSessionScreen(page);
