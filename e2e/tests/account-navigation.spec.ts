@@ -11,10 +11,12 @@ test('navegação de volta em todas as subviews de Minha Conta', async ({ page }
     await page.getByRole('button', { name: 'Expandir barra superior' }).click();
     await page.getByTestId('desktop-sidebar').getByRole('button', { name: /Minha conta/ }).click();
   } else {
-    await page.locator('.player-topbar').getByRole('button', { name: 'Biblioteca', exact: true }).click();
     if (viewport < 700) {
+      // No mobile a seta de retorno do player fica oculta por design.
+      await page.goto('/library');
       await page.locator('.mobile-library-brand-bar').getByRole('button', { name: /Minha conta/ }).click();
     } else {
+      await page.locator('.player-topbar').getByRole('button', { name: 'Biblioteca', exact: true }).click();
       await page.locator('.my-account-mobile-entry').click();
     }
   }
