@@ -426,3 +426,97 @@ test('busca por texto seleciona resultado e reutiliza o pipeline do provider', a
   expect(startBody).toEqual({ url: selectedUrl });
   await expect(page.getByText('Samurai · Djavan', { exact: true })).toBeVisible();
 });
+
+
+test('polling não sobrepõe snapshots e observa transição terminal sem novas consultas', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop-chromium');
+  let job = baseJob('poll-659', 'Polling E2E', { type: 'url', provider: null }, 'processing');
+  let activeRequests = 0;
+  let maxConcurrent = 0;
+  let getCount = 0;
+  let signalSecond!: () => void;
+  const secondRequested = new Promise<void>(resolve => { signalSecond = resolve; });
+  let releaseSecond!: () => void;
+  const secondBlocked = new Promise<void>(resolve => { releaseSecond = resolve; });
+
+  await page.route('**/api/admin/imports', async route => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    activeRequests += 1;
+    maxConcurrent = Math.max(maxConcurrent, activeRequests);
+    getCount += 1;
+    try {
+      if (getCount === 2) {
+        signalSecond();
+        await secondBlocked;
+      }
+      await route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({
+          jobs: [job],
+          upload: { maxBytes: 1048576, acceptedExtensions: ['.wav'] },
+          url: { maxBytes: 1048576, timeoutMs: 5000, maxRedirects: 3, acceptedProtocols: ['http:', 'https:'] },
+          mediaValidation: { profiles: [] },
+          providers: []
+        })
+      });
+    } catch {
+      // Uma resposta abortada no unmount pode ter sua rota encerrada pelo browser.
+    } finally {
+      activeRequests -= 1;
+    }
+  });
+
+  await login(page);
+  await openImport(page);
+  await expect(page.getByText('Preparando mídia', { exact: true })).toBeVisible();
+  await secondRequested;
+
+  job = { ...job, status: 'completed', finishedAt: now };
+  releaseSecond();
+  await expect(page.getByRole('tab', { name: /Arquivo ou URL/ })).toBeVisible();
+  const terminalCount = getCount;
+  expect(maxConcurrent).toBe(1);
+  expect(terminalCount).toBeGreaterThanOrEqual(3);
+});
+
+test('unmount durante polling pendente não atualiza a tela anterior', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop-chromium');
+  const job = baseJob('unmount-659', 'Unmount E2E', { type: 'url', provider: null }, 'processing');
+  let getCount = 0;
+  let signalPending!: () => void;
+  const pending = new Promise<void>(resolve => { signalPending = resolve; });
+  let releasePending!: () => void;
+  const blocked = new Promise<void>(resolve => { releasePending = resolve; });
+
+  await page.route('**/api/admin/imports', async route => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    getCount += 1;
+    if (getCount === 2) {
+      signalPending();
+      await blocked;
+    }
+    try {
+      await route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({
+          jobs: [job],
+          upload: { maxBytes: 1048576, acceptedExtensions: ['.wav'] },
+          url: { maxBytes: 1048576, timeoutMs: 5000, maxRedirects: 3, acceptedProtocols: ['http:', 'https:'] },
+          mediaValidation: { profiles: [] },
+          providers: []
+        })
+      });
+    } catch {
+      // O abort da requisição ao desmontar encerra a conexão.
+    }
+  });
+
+  await login(page);
+  await openImport(page);
+  await pending;
+  await page.locator('.admin-import-screen').getByRole('button', { name: 'Voltar' }).click();
+  await expect(page.locator('#administration-title')).toHaveText('Administração');
+  releasePending();
+  await expect(page.locator('#administration-title')).toHaveText('Administração');
+  await expect(page.locator('#admin-import-title')).toHaveCount(0);
+});
