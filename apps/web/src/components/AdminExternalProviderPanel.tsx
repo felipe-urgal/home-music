@@ -38,6 +38,7 @@ import '../admin-external-provider-batch.css';
 type AdminExternalProviderPanelProps = {
   jobs: ImportJob[];
   onJobUpdated: (job: ImportJob) => void;
+  initialActiveJobId?: string | null;
   onRefresh: (background?: boolean) => Promise<unknown> | unknown;
   compact?: boolean;
 };
@@ -118,6 +119,7 @@ function batchItemStatusLabel(status: AdminExternalProviderBatch['items'][number
 export function AdminExternalProviderPanel({
   jobs,
   onJobUpdated,
+  initialActiveJobId = null,
   onRefresh,
   compact = false
 }: AdminExternalProviderPanelProps) {
@@ -126,7 +128,7 @@ export function AdminExternalProviderPanel({
   const available = providers.filter(provider => provider.configured && provider.capabilities.audio);
   const [providerId, setProviderId] = useState('');
   const [url, setUrl] = useState('');
-  const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [activeJobId, setActiveJobId] = useState<string | null>(initialActiveJobId);
   const [activeBatch, setActiveBatch] = useState<AdminExternalProviderBatch | null>(null);
   const [folders, setFolders] = useState<AdminImportDestinationFolder[]>([]);
   const [folderPath, setFolderPath] = useState('Importados');
