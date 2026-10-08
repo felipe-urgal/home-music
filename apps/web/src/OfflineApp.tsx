@@ -390,6 +390,7 @@ export function OfflineApp({ offline, onExit }: OfflineAppProps) {
             onPlayTrack={playTrack}
             onRemove={trackId => offline.remove(trackId)}
             onRemoveCollection={(kind, sourceId) => offline.removeCollection(kind, sourceId)}
+            onRetryCollection={(kind, sourceId) => offline.retryCollection(kind, sourceId)}
             onExitOffline={onExit}
           />
         ) : displayCurrent ? (
