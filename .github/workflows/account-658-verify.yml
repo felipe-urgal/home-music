@@ -26,4 +26,4 @@ jobs:
       - run: npm run test:security
       - run: npm ci --prefix e2e --no-audit --no-fund
       - run: npm run install:browsers --prefix e2e
-      - run: npm --prefix e2e test -- tests/account-security.spec.ts tests/account-navigation.spec.ts --project=desktop-chromium --project=mobile-chromium
+      - run: npm --prefix e2e test -- tests/account-security.spec.ts tests/account-navigation.spec.ts --project=tablet-chromium
