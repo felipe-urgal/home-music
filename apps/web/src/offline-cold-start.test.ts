@@ -99,6 +99,28 @@ describe('offline cold start', () => {
     expect(empty[0]?.status).toBe('not-downloaded');
   });
 
+  it('cold start sem rede mantém apenas arquivos presentes no cache da conta atual', async () => {
+    const openedNames: string[] = [];
+    const cacheStorage = {
+      async open(name: string) {
+        openedNames.push(name);
+        return {
+          async keys() {
+            return [new Request('http://localhost/api/tracks/a/stream')];
+          }
+        };
+      }
+    } as unknown as CacheStorage;
+    const result = await readOfflineColdStartRecords([record('a'), record('b')], {
+      userId: 'user-a', cacheStorage
+    });
+    expect(result?.map(item => item.track.id)).toEqual(['a']);
+    expect(openedNames).toEqual(['home-music-offline-audio-v2-user-a']);
+    const collections = reconcileOfflineColdStartCollections([collection(['a', 'b'])], result ?? []);
+    expect(collections[0]?.status).toBe('partial');
+    expect(collections[0]?.downloadedCount).toBe(1);
+  });
+
   it('não reutiliza cache sem identidade offline conhecida', async () => {
     let opened = false;
     const cacheStorage = {
