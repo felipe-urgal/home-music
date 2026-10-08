@@ -77,6 +77,13 @@ describe('offline library UX contract', () => {
     expect(app).not.toContain('offline.remove(trackId).catch(() => undefined)');
   });
 
+  it('estimativa de armazenamento é opcional e não bloqueia a biblioteca', () => {
+    const screen = source('components/OfflineLibraryScreen.tsx');
+    expect(screen).toContain('navigator.storage?.estimate');
+    expect(screen).toContain('A estimativa é apenas informativa.');
+    expect(screen).toContain('Armazenamento do navegador:');
+  });
+
   it('retry de coleções usa a conta atual, apenas pendentes e checagem de referências', () => {
     const downloads = source('offline-downloads.ts');
     const app = source('OfflineApp.tsx');
