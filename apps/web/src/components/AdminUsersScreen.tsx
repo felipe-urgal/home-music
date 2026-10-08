@@ -149,11 +149,17 @@ export function AdminUsersScreen({ currentUser, onBack }: AdminUsersScreenProps)
   }
 
   async function canDiscardCredential() {
-    return !credential || copied || await requestConfirmation(
+    if (!credential || copied) return true;
+    const accepted = await requestConfirmation(
       'Descartar senha temporária?',
       'A senha ainda não foi copiada. Se você descartar agora, ela não poderá ser recuperada.',
       'Descartar senha', true
     );
+    if (accepted) {
+      setCredential(null);
+      setCopied(false);
+    }
+    return accepted;
   }
 
   useEffect(() => () => {
