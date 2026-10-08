@@ -423,9 +423,9 @@ test('busca por texto seleciona resultado e reutiliza o pipeline do provider', a
   await result.getByRole('button', { name: 'Selecionar', exact: true }).click();
 
   const selectedUrl = 'https://www.youtube.com/watch?v=abcDEF_1234';
+  await expect(page.locator('.admin-import-url-status').getByText('Samurai · Djavan', { exact: true })).toBeVisible();
   expect(inspectBody).toEqual({ url: selectedUrl });
   expect(startBody).toEqual({ url: selectedUrl });
-  await expect(page.getByText('Samurai · Djavan', { exact: true })).toBeVisible();
 });
 
 
