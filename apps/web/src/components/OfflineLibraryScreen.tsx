@@ -88,7 +88,7 @@ export function OfflineLibraryScreen({
   removalRef.current = removal;
 
   useEffect(() => {
-    if (!removal || busyRef.current.has(removal.key)) return;
+    if (!removal || busyRef.current.has(removal.key) || removalError) return;
     const stillExists = removal.kind === 'track'
       ? individualTrackIds.has(removal.key.slice('track:'.length))
       : collections.some(collection => collection.key === removal.key.slice('collection:'.length));
@@ -96,7 +96,7 @@ export function OfflineLibraryScreen({
       setRemoval(null);
       setRemovalError(null);
     }
-  }, [collections, individualTrackIds, removal]);
+  }, [collections, individualTrackIds, removal, removalError]);
 
   const confirmRemoval = async () => {
     const target = removalRef.current;
