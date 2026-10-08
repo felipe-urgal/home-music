@@ -165,7 +165,11 @@ test('smoke crítico: deep link, acessibilidade, histórico, player, conta e adm
 
   await page.goto('/library/playlists/playlist-inexistente');
   await expect(page).toHaveURL(/\/library\/playlists$/);
-  await expect(page.locator('.library-content .section-heading').getByText('Playlists', { exact: true })).toBeVisible();
+  // A tela de playlists pode ocultar o título editorial no desktop.
+  // Verifique o estado da rota e os controles efetivamente exibidos.
+  await expect(page.locator('.desktop-layout')).toHaveAttribute('data-library-tab', 'playlists');
+  await expect(page.locator('.library-content')).toBeVisible();
+  await expect(page.locator('.search-box--library input')).toHaveAttribute('placeholder', 'Música, artista ou álbum');
 
   await page.goto('/rota-invalida');
   await expect(page).toHaveURL(/\/$/);
