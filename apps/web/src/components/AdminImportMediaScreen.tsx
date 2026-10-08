@@ -181,7 +181,7 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
 
   useEffect(() => {
     if (!pipelineBusy) return;
-        const timer = window.setInterval(() => { void loadJobs(true); }, 900);
+    const timer = window.setInterval(() => { void loadJobs(true); }, 900);
     return () => window.clearInterval(timer);
   }, [loadJobs, pipelineBusy]);
 

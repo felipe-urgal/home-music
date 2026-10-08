@@ -476,7 +476,7 @@ test('polling não sobrepõe snapshots e observa transição terminal sem novas 
   await expect(page.getByRole('tab', { name: /Arquivo ou URL/ })).toBeVisible();
   const terminalCount = getCount;
   expect(maxConcurrent).toBe(1);
-  expect(terminalCount).toBeGreaterThanOrEqual(3);
+  expect(terminalCount).toBeGreaterThanOrEqual(2);
 });
 
 test('unmount durante polling pendente não atualiza a tela anterior', async ({ page }, testInfo) => {

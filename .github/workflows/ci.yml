@@ -46,5 +46,8 @@ jobs:
       - name: Critical and browser security E2E
         run: npm --prefix e2e test -- tests/critical-smoke.spec.ts tests/browser-security-policy.spec.ts --project=desktop-chromium
 
+      - name: Admin import critical pipeline and operational history E2E
+        run: npm --prefix e2e test -- tests/admin-import-critical-pipeline.spec.ts tests/admin-operation-history.spec.ts --project=desktop-chromium
+
       - name: Account E2E (desktop, mobile, tablet)
         run: npm --prefix e2e test -- tests/account-security.spec.ts tests/account-navigation.spec.ts --project=desktop-chromium --project=mobile-chromium --project=tablet-chromium
