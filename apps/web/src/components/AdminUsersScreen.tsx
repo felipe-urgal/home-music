@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import type { AdminUser, AuthenticatedUser, UserRole } from '@home-music/shared';
 import {
   CalendarDays,
@@ -61,6 +61,55 @@ function roleLabel(role: UserRole) {
   return role === 'admin' ? 'Administrador' : 'Usuário';
 }
 
+
+type Confirmation = {
+  title: string;
+  description: string;
+  confirmLabel: string;
+  destructive?: boolean;
+  resolve: (accepted: boolean) => void;
+};
+
+function AdminConfirmationDialog({ pending, onDecision }: {
+  pending: Confirmation | null;
+  onDecision: (accepted: boolean) => void;
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const previousFocus = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    if (pending) {
+      previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      if (!dialog.open) dialog.showModal();
+    } else if (dialog.open) {
+      dialog.close();
+      if (previousFocus.current?.isConnected) previousFocus.current.focus();
+      else document.querySelector<HTMLElement>('.admin-users-v2__back')?.focus();
+    }
+  }, [pending]);
+  return (
+    <dialog
+      ref={dialogRef}
+      className="admin-users-confirmation"
+      aria-labelledby="admin-users-confirm-title"
+      aria-describedby="admin-users-confirm-description"
+      onCancel={event => { event.preventDefault(); onDecision(false); }}
+    >
+      {pending && <div className="admin-users-confirmation__content">
+        <h2 id="admin-users-confirm-title">{pending.title}</h2>
+        <p id="admin-users-confirm-description">{pending.description}</p>
+        <div className="admin-users-confirmation__actions">
+          <button type="button" autoFocus onClick={() => onDecision(false)}>Cancelar</button>
+          <button type="button" className={pending.destructive ? 'is-danger' : 'is-primary'} onClick={() => onDecision(true)}>
+            {pending.confirmLabel}
+          </button>
+        </div>
+      </div>}
+    </dialog>
+  );
+}
+
 export function AdminUsersScreen({ currentUser, onBack }: AdminUsersScreenProps) {
   const [view, setView] = useState<AdminView>('list');
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -72,6 +121,8 @@ export function AdminUsersScreen({ currentUser, onBack }: AdminUsersScreenProps)
   const [notice, setNotice] = useState<string | null>(null);
   const [credential, setCredential] = useState<TemporaryCredential | null>(null);
   const [copied, setCopied] = useState(false);
+  const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
+  const pendingDecision = useRef<((accepted: boolean) => void) | null>(null);
   const [query, setQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
   const [page, setPage] = useState(1);
@@ -122,11 +173,33 @@ export function AdminUsersScreen({ currentUser, onBack }: AdminUsersScreenProps)
 
   useEffect(() => { void loadUsers(); }, []);
 
-  function canDiscardCredential() {
-    return !credential || copied || window.confirm(
-      'A senha temporária ainda não foi copiada. Continuar fará com que ela deixe de ser exibida. Deseja continuar?'
+  function requestConfirmation(title: string, description: string, confirmLabel: string, destructive = false) {
+    return new Promise<boolean>(resolve => {
+      pendingDecision.current = resolve;
+      setConfirmation({ title, description, confirmLabel, destructive, resolve });
+    });
+  }
+
+  function decideConfirmation(accepted: boolean) {
+    const resolve = pendingDecision.current;
+    pendingDecision.current = null;
+    setConfirmation(null);
+    resolve?.(accepted);
+  }
+
+  async function canDiscardCredential() {
+    return !credential || copied || await requestConfirmation(
+      'Descartar senha temporária?',
+      'A senha ainda não foi copiada. Se você descartar agora, ela não poderá ser recuperada.',
+      'Descartar senha', true
     );
   }
+
+  useEffect(() => () => {
+    pendingDecision.current?.(false);
+    pendingDecision.current = null;
+  }, []);
+
 
   function resetTransientState() {
     setCredential(null);
@@ -136,8 +209,8 @@ export function AdminUsersScreen({ currentUser, onBack }: AdminUsersScreenProps)
     setNotice(null);
   }
 
-  function openCreate() {
-    if (!canDiscardCredential()) return;
+  async function openCreate() {
+    if (!await canDiscardCredential()) return;
     setUsername('');
     setRole('user');
     setEnabled(true);
@@ -145,9 +218,9 @@ export function AdminUsersScreen({ currentUser, onBack }: AdminUsersScreenProps)
     setView('create');
   }
 
-  function inspectUser(user: AdminUser) {
+  async function inspectUser(user: AdminUser) {
     if (user.id === selectedId) return;
-    if (!canDiscardCredential()) return;
+    if (!await canDiscardCredential()) return;
     setInspectorDismissed(false);
     setSelectedId(user.id);
     setCredential(null);
@@ -156,8 +229,8 @@ export function AdminUsersScreen({ currentUser, onBack }: AdminUsersScreenProps)
     setNotice(null);
   }
 
-  function closeInspector() {
-    if (!canDiscardCredential()) return;
+  async function closeInspector() {
+    if (!await canDiscardCredential()) return;
     setInspectorDismissed(true);
     setSelectedId(null);
     setCredential(null);
@@ -165,8 +238,8 @@ export function AdminUsersScreen({ currentUser, onBack }: AdminUsersScreenProps)
     setNotice(null);
   }
 
-  function openEdit(user: AdminUser) {
-    if (!canManageAdminTarget(currentUser.id, user.id) || !canDiscardCredential()) return;
+  async function openEdit(user: AdminUser) {
+    if (!canManageAdminTarget(currentUser.id, user.id) || !await canDiscardCredential()) return;
     setSelectedId(user.id);
     setUsername(user.username);
     setRole(user.role);
@@ -175,8 +248,8 @@ export function AdminUsersScreen({ currentUser, onBack }: AdminUsersScreenProps)
     setView('edit');
   }
 
-  function returnToList() {
-    if (!canDiscardCredential()) return;
+  async function returnToList() {
+    if (!await canDiscardCredential()) return;
     setInspectorDismissed(false);
     setView('list');
     setCredential(null);
@@ -208,6 +281,7 @@ export function AdminUsersScreen({ currentUser, onBack }: AdminUsersScreenProps)
   async function saveUser(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selected || !username.trim() || busy) return;
+    if (selected.enabled && !enabled && !await requestConfirmation('Desativar usuário?', `Desativar ${selected.username} encerrará suas sessões atuais.`, 'Desativar usuário', true)) return;
     setBusy(true);
     setError(null);
     try {
@@ -224,7 +298,8 @@ export function AdminUsersScreen({ currentUser, onBack }: AdminUsersScreenProps)
 
   async function resetPassword() {
     if (!selected || !canManageSelected || busy) return;
-    if (!window.confirm(`Gerar uma nova senha temporária para ${selected.username}? As sessões atuais serão encerradas.`)) return;
+    if (!await canDiscardCredential()) return;
+    if (!await requestConfirmation('Redefinir senha?', `Uma nova senha temporária será gerada para ${selected.username} e as sessões atuais serão encerradas.`, 'Redefinir senha')) return;
     setBusy(true);
     setError(null);
     try {
@@ -241,7 +316,7 @@ export function AdminUsersScreen({ currentUser, onBack }: AdminUsersScreenProps)
 
   async function revokeSessions() {
     if (!selected || !canManageSelected || busy) return;
-    if (!window.confirm(`Revogar todas as sessões de ${selected.username}?`)) return;
+    if (!await requestConfirmation('Revogar sessões?', `Todas as sessões de ${selected.username} serão encerradas.`, 'Revogar sessões', true)) return;
     setBusy(true);
     setError(null);
     try {
@@ -256,7 +331,8 @@ export function AdminUsersScreen({ currentUser, onBack }: AdminUsersScreenProps)
 
   async function removeUser() {
     if (!selected || !canManageSelected || busy) return;
-    if (!window.confirm(`Remover ${selected.username}? A conta será removida e suas sessões serão encerradas. Esta ação não pode ser desfeita.`)) return;
+    if (!await canDiscardCredential()) return;
+    if (!await requestConfirmation('Remover usuário?', `A conta de ${selected.username} e suas sessões serão removidas permanentemente. Esta ação não pode ser desfeita.`, 'Remover usuário', true)) return;
     setBusy(true);
     setError(null);
     try {
@@ -324,6 +400,7 @@ export function AdminUsersScreen({ currentUser, onBack }: AdminUsersScreenProps)
 
           <button className="admin-users-v2__credential-done" type="button" onClick={returnToList}>Concluir</button>
         </div>
+      <AdminConfirmationDialog pending={confirmation} onDecision={decideConfirmation} />
       </section>
     );
   }
@@ -331,7 +408,7 @@ export function AdminUsersScreen({ currentUser, onBack }: AdminUsersScreenProps)
   return (
     <section className={`admin-users-screen admin-users-screen--v2 admin-users-screen--${view}`} aria-labelledby="admin-users-title">
       <header className="admin-users-v2__page-header">
-        <button className="admin-users-v2__back" type="button" aria-label="Voltar" onClick={view === 'list' ? onBack : returnToList}><ChevronLeft /></button>
+        <button className="admin-users-v2__back" type="button" aria-label="Voltar" onClick={view === 'list' ? () => { void (async () => { if (await canDiscardCredential()) onBack(); })(); } : returnToList}><ChevronLeft /></button>
         <div>
           <strong id="admin-users-title">{title}</strong>
           <small>{subtitle}</small>
@@ -580,6 +657,7 @@ export function AdminUsersScreen({ currentUser, onBack }: AdminUsersScreenProps)
           </footer>
         </form>
       )}
+      <AdminConfirmationDialog pending={confirmation} onDecision={decideConfirmation} />
     </section>
   );
 }

@@ -1035,3 +1035,30 @@
     height: 50px;
   }
 }
+
+.admin-users-confirmation {
+  width: min(440px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  padding: 0;
+  border: 1px solid rgba(255,255,255,.15);
+  border-radius: 16px;
+  background: #172333;
+  color: #f5f7fb;
+  box-shadow: 0 24px 80px rgba(0,0,0,.6);
+}
+.admin-users-confirmation::backdrop { background: rgba(0,0,0,.7); }
+.admin-users-confirmation__content { padding: 24px; }
+.admin-users-confirmation h2 { margin: 0 0 12px; font-size: 1.2rem; }
+.admin-users-confirmation p { color: #b9c5d3; line-height: 1.55; margin: 0 0 24px; }
+.admin-users-confirmation__actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; }
+.admin-users-confirmation__actions button {
+  min-height: 44px; padding: 10px 16px; border-radius: 10px;
+  border: 1px solid #74859b; background: #27374a; color: #f5f7fb;
+  font: inherit; font-weight: 650; cursor: pointer;
+}
+.admin-users-confirmation__actions .is-danger { background: #ab3039; border-color: #d75d62; }
+.admin-users-confirmation__actions .is-primary { background: #236bad; border-color: #499be8; }
+.admin-users-confirmation__actions button:focus-visible { outline: 3px solid #94caff; outline-offset: 3px; }
+@media (forced-colors: active) {
+  .admin-users-confirmation, .admin-users-confirmation__actions button { border: 1px solid CanvasText; }
+}
