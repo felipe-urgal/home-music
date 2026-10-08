@@ -100,7 +100,7 @@ export function OfflineLibraryScreen({
       setRemoval(null);
       setRemovalError(null);
     }
-  }, [collections, individualTrackIds, removal, removalError]);
+  }, [collections, individualTrackIds, removal, removalError, busyKeys]);
 
   const confirmRemoval = async () => {
     const target = removalRef.current;
