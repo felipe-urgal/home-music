@@ -15,14 +15,17 @@ async function login(page: Page) {
 async function openAccount(page: Page) {
   const width = page.viewportSize()?.width ?? 0;
   if (width >= 1024) {
+    // A barra superior desktop começa recolhida e com inert.
+    await page.getByRole('button', { name: 'Expandir barra superior' }).click();
     await page.getByTestId('desktop-sidebar').getByRole('button', { name: /Minha conta/ }).click();
-  } else if (width < 700) {
-    await page.getByRole('navigation', { name: 'Navegação principal' })
-      .getByRole('button', { name: 'Conta', exact: true }).click();
   } else {
-    const back = page.getByRole('button', { name: 'Voltar à biblioteca', exact: true });
-    if (await back.isVisible()) await back.click();
-    await page.getByRole('button', { name: /Minha conta ·/ }).click();
+    // O player inicia em /; a entrada de conta aparece apenas na biblioteca.
+    await page.locator('.player-topbar').getByRole('button', { name: 'Biblioteca', exact: true }).click();
+    if (width < 700) {
+      await page.locator('.mobile-library-brand-bar').getByRole('button', { name: /Minha conta/ }).click();
+    } else {
+      await page.locator('.my-account-mobile-entry').click();
+    }
   }
   await expect(page.locator('#my-account-title')).toHaveText('Minha conta');
 }
