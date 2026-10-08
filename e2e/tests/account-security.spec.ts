@@ -132,11 +132,19 @@ test('erro da troca de senha mantém confirmação aberta e cancelar devolve o f
   const passwordForm = page.locator((page.viewportSize()?.width ?? 0) >= 1024
     ? '#my-account-password-v3-form'
     : '.my-account-password-form');
-  await passwordForm.getByLabel('Senha atual').fill('senha-atual-incorreta');
-  await passwordForm.getByLabel('Nova senha', { exact: true }).fill('abc123');
-  await passwordForm.getByLabel('Confirmar nova senha').fill('abc123');
+  // Use os atributos dos inputs: os botões "Mostrar senha" compartilham
+  // o texto dos labels e tornam getByLabel ambíguo no protótipo desktop.
+  await passwordForm.locator('input[autocomplete="current-password"]').fill('senha-atual-incorreta');
+  const newPasswordInputs = passwordForm.locator('input[autocomplete="new-password"]');
+  await expect(newPasswordInputs).toHaveCount(2);
+  await newPasswordInputs.nth(0).fill('abc123');
+  await newPasswordInputs.nth(1).fill('abc123');
 
-  const trigger = page.getByRole('button', { name: /^(Alterar senha|Alterar senha e sair)$/ }).last();
+  // O formulário legado permanece no DOM (oculto) no desktop.
+  // Selecione apenas o submit do layout ativo.
+  const trigger = (page.viewportSize()?.width ?? 0) >= 1024
+    ? page.locator('.my-account-password-v3__submit')
+    : passwordForm.getByRole('button', { name: 'Alterar senha e sair' });
   await trigger.click();
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();
