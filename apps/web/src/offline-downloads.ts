@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Track } from '@home-music/shared';
 import { fetchOfflineTrackResponse } from './offline-background-fetch';
-import { jsonRequest } from './api-client';
+import { apiFetch } from './api-client';
 import {
   addIndividualOfflineReference,
   collectionReferencedTrackIds,
@@ -753,7 +753,9 @@ export function useOfflineDownloads() {
       }
       // Metadados ausentes são obtidos da biblioteca atual, nunca de outra
       // conta nem de um snapshot antigo. A referência não é sobrescrita.
-      const response = await jsonRequest<{ tracks: Track[] }>('/api/library');
+      const libraryResponse = await apiFetch('/api/library');
+      if (!libraryResponse.ok) throw new Error('Não foi possível consultar a biblioteca. Reconecte e tente novamente.');
+      const response = await libraryResponse.json() as { tracks: Track[] };
       if (activeUserIdRef.current !== ownerUserId) throw new Error('A conta mudou durante o download.');
       const byId = new Map(response.tracks.map(track => [track.id, track]));
       const pending = missingIds.map(id => byId.get(id));
