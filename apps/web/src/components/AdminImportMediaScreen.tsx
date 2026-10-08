@@ -380,7 +380,10 @@ export function AdminImportMediaScreen({ onBack }: AdminImportMediaScreenProps) 
         })}
       </nav>
 
-      {error && <div className="my-account-message is-error admin-import-message" role="alert">{error}</div>}
+      {error && <div className="my-account-message is-error admin-import-message" role="alert">
+        <span>{error}</span>
+        <button type="button" disabled={loading} onClick={() => void loadJobs(false, true)}>Tentar novamente</button>
+      </div>}
 
       {loading ? (
         <div className="admin-import-v4__state" role="status"><LoaderCircle className="is-spinning" /> Carregando importações…</div>
