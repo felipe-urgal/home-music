@@ -19,11 +19,12 @@ async function openAccount(page: Page) {
     await page.getByRole('button', { name: 'Expandir barra superior' }).click();
     await page.getByTestId('desktop-sidebar').getByRole('button', { name: /Minha conta/ }).click();
   } else {
-    // O player inicia em /; a entrada de conta aparece apenas na biblioteca.
-    await page.locator('.player-topbar').getByRole('button', { name: 'Biblioteca', exact: true }).click();
     if (width < 700) {
+      // O retorno do player está oculto no mobile; /library é uma rota pública do SPA.
+      await page.goto('/library');
       await page.locator('.mobile-library-brand-bar').getByRole('button', { name: /Minha conta/ }).click();
     } else {
+      await page.locator('.player-topbar').getByRole('button', { name: 'Biblioteca', exact: true }).click();
       await page.locator('.my-account-mobile-entry').click();
     }
   }
