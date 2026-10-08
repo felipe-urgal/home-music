@@ -39,7 +39,7 @@ export default function App() {
   const auth = useAuth();
   const offline = useOfflineDownloads();
   const [offlineMode, setOfflineMode] = useState(false);
-  const [coldStartRecords, setColdStartRecords] = useState<OfflineDownloadRecord[] | null>(null);
+  const [coldStartSnapshot, setColdStartSnapshot] = useState<{ ownerUserId: string; records: OfflineDownloadRecord[] } | null>(null);
   const [tvPasswordLogin, setTvPasswordLogin] = useState(false);
   const [approvalToken, setApprovalToken] = useState<string | null>(() => (
     readTvDeviceApprovalIntent(window.location)
@@ -61,19 +61,19 @@ export default function App() {
     // Com rede disponível, useOfflineDownloads já reconcilia o namespace físico.
     // App cobre somente o cold start realmente offline, sem duplicar cache.keys().
     if (!auth.unreachable || offline.records.length === 0 || navigator.onLine !== false) {
-      setColdStartRecords(null);
+      setColdStartSnapshot(null);
       return () => { disposed = true; };
     }
 
-    setColdStartRecords(null);
+    setColdStartSnapshot(null);
     void readOfflineColdStartRecords(offline.records)
       .then(records => {
-        if (!disposed && records !== null) setColdStartRecords(records);
+        if (!disposed && records !== null && offline.ownerUserId) setColdStartSnapshot({ ownerUserId: offline.ownerUserId, records });
       })
       .catch(() => undefined);
 
     return () => { disposed = true; };
-  }, [auth.unreachable, offline.records]);
+  }, [auth.unreachable, offline.ownerUserId, offline.records]);
 
   useEffect(() => {
     if (offlineMode && !offline.loading && offline.tracks.length === 0) setOfflineMode(false);
@@ -82,7 +82,7 @@ export default function App() {
   const automaticOfflineMode = auth.unreachable && offline.records.length > 0;
   const showOfflineMode = offlineMode || automaticOfflineMode;
   const offlineForMode = automaticOfflineMode
-    ? offlineSnapshot(offline, coldStartRecords ?? offline.records)
+    ? offlineSnapshot(offline, coldStartSnapshot?.ownerUserId === offline.ownerUserId ? coldStartSnapshot.records : offline.records)
     : offline;
 
   if (showOfflineMode) {
