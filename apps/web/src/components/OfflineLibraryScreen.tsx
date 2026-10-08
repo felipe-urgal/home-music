@@ -33,6 +33,7 @@ type OfflineLibraryScreenProps = {
   onPlayTrack: (track: Track, context: Track[]) => void;
   onRemove: (trackId: string) => Promise<void>;
   onRemoveCollection: (kind: OfflineCollectionKind, sourceId: string) => Promise<void>;
+  onRetryCollection?: (kind: OfflineCollectionKind, sourceId: string) => Promise<void>;
   onExitOffline: () => void;
 };
 
@@ -76,12 +77,15 @@ export function OfflineLibraryScreen({
   onPlayTrack,
   onRemove,
   onRemoveCollection,
+  onRetryCollection,
   onExitOffline
 }: OfflineLibraryScreenProps) {
   const [visibleIndividualCount, setVisibleIndividualCount] = useState(LIBRARY_PAGE_SIZE);
   const [selectedCollectionKey, setSelectedCollectionKey] = useState<string | null>(null);
   const [removal, setRemoval] = useState<{ kind: 'track' | 'collection'; key: string; name: string; collectionKind?: OfflineCollectionKind; sourceId?: string } | null>(null);
   const [removalError, setRemovalError] = useState<string | null>(null);
+  const [retryError, setRetryError] = useState<string | null>(null);
+  const [retryingKey, setRetryingKey] = useState<string | null>(null);
   const [busyKeys, setBusyKeys] = useState<ReadonlySet<string>>(new Set());
   const busyRef = useRef(new Set<string>());
   const removalRef = useRef(removal);
@@ -195,10 +199,20 @@ export function OfflineLibraryScreen({
             </button>
           </div>
 
+          {retryError && <p className="action-dialog__error" role="alert">{retryError}</p>}
           {selectedCollection.error && <p className="action-dialog__error" role="alert">Algumas músicas não foram salvas. Reconecte ao servidor e tente baixar as pendentes novamente.</p>}
           {selectedCollection.status !== 'available' && selectedCollection.totalCount > selectedCollection.downloadedCount && (
-            <button className="secondary-action" type="button" onClick={onExitOffline}>
-              Tentar conectar para continuar downloads
+            <button className="secondary-action" type="button"
+              disabled={Boolean(retryingKey) || selectedCollection.status === 'downloading'}
+              onClick={() => {
+                if (!onRetryCollection) { onExitOffline(); return; }
+                setRetryError(null);
+                setRetryingKey(selectedCollection.key);
+                void onRetryCollection(selectedCollection.reference.kind, selectedCollection.reference.sourceId)
+                  .catch(() => setRetryError('Não foi possível continuar os downloads. Verifique a conexão e tente novamente.'))
+                  .finally(() => setRetryingKey(null));
+              }}>
+              {retryingKey === selectedCollection.key ? 'Continuando downloads…' : 'Tentar conectar para continuar downloads'}
             </button>
           )}
 
