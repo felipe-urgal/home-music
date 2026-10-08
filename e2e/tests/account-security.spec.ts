@@ -14,18 +14,23 @@ async function login(page: Page) {
 
 async function openAccount(page: Page) {
   const width = page.viewportSize()?.width ?? 0;
-  if (width >= 700 && width < 1024) {
+  if (width >= 1024) {
+    await page.getByTestId('desktop-sidebar').getByRole('button', { name: /Minha conta/ }).click();
+  } else if (width < 700) {
+    await page.getByRole('navigation', { name: 'Navegação principal' })
+      .getByRole('button', { name: 'Conta', exact: true }).click();
+  } else {
     const back = page.getByRole('button', { name: 'Voltar à biblioteca', exact: true });
     if (await back.isVisible()) await back.click();
+    await page.getByRole('button', { name: /Minha conta ·/ }).click();
   }
-  await page.getByRole('button', { name: /^(Minha conta|Conta)/ }).first().click();
   await expect(page.locator('#my-account-title')).toHaveText('Minha conta');
 }
 
 async function createSecondarySession(userAgent: string) {
   const client = await request.newContext({
     baseURL: 'http://127.0.0.1:8791',
-    extraHTTPHeaders: { 'User-Agent': userAgent }
+    extraHTTPHeaders: { 'User-Agent': userAgent, 'X-Home-Music-Request': '1' }
   });
   try {
     const response = await client.post('/api/auth/login', { data: { username, password } });
