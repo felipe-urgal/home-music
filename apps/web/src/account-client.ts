@@ -9,6 +9,7 @@ export type AccountSession = {
   createdAt: number;
   lastSeenAt: number;
   expiresAt: number;
+  clientName?: string | null;
 };
 
 
@@ -36,7 +37,8 @@ function isAccountSession(value: unknown): value is AccountSession {
     && typeof session.current === 'boolean'
     && Number.isFinite(session.createdAt)
     && Number.isFinite(session.lastSeenAt)
-    && Number.isFinite(session.expiresAt);
+    && Number.isFinite(session.expiresAt)
+    && (session.clientName === undefined || session.clientName === null || (typeof session.clientName === 'string' && session.clientName.length <= 80));
 }
 
 export function passwordChangeValidation(
