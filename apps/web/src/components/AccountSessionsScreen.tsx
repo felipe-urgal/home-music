@@ -258,6 +258,7 @@ export function AccountSessionsScreen({
                       <ShieldCheck />
                       <span><small>Expira em</small><strong>{formatSessionExpiration(session.expiresAt)}</strong></span>
                     </div>
+                    <small className="account-session-card__diagnostic">ID {session.id.slice(0, 8)}</small>
 
                     {session.current ? (
                       <p className="account-session-card__current-note">Esta é a sessão que você está usando agora.</p>
