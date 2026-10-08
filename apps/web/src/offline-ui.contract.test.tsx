@@ -77,6 +77,12 @@ describe('offline library UX contract', () => {
     expect(app).not.toContain('offline.remove(trackId).catch(() => undefined)');
   });
 
+  it('isola snapshots de cold start pela conta dona dos downloads', () => {
+    const app = source('App.tsx');
+    expect(app).toContain('coldStartSnapshot?.ownerUserId === offline.ownerUserId');
+    expect(source('offline-downloads.ts')).toContain('ownerUserId: userId');
+  });
+
   it('mantém o retorno aos downloads visível somente na superfície offline mobile', () => {
     const offlineApp = source('OfflineApp.tsx');
     const offlineCss = source('offline-mobile.css');
