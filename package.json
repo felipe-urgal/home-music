@@ -48,6 +48,6 @@
     "benchmark:rhythm-analysis:ffmpeg": "npm run benchmark:rhythm-analysis:ffmpeg -w @home-music/server"
   },
   "devDependencies": {
-    "concurrently": "9.2.4"
+    "concurrently": "10.0.6"
   }
 }
