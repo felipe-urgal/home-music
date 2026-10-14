@@ -77,7 +77,7 @@ test('downloads offline individual e em lote usam o fluxo desktop', async ({ pag
   await expect(bulkToolbar.getByRole('button', { name: 'Todas as faixas selecionadas já possuem download individual disponível' })).toBeDisabled();
 
   await table.getByRole('button', { name: 'Remover download offline de E2E Track' }).click();
-  const confirmation = page.getByRole('dialog', { name: 'Remover download individual?' });
+  const confirmation = page.getByRole('dialog', { name: 'Remover download' });
   await expect(confirmation).toBeVisible();
   await confirmation.getByRole('button', { name: 'Remover' }).click();
   await expect(confirmation).not.toBeVisible();
