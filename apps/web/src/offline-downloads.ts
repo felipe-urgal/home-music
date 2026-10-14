@@ -514,19 +514,23 @@ export function useOfflineDownloads() {
       }
       return;
     }
-    const next = current.filter(record => record.track.id !== trackId);
-
     // Não apague o artefato enquanto ele ainda for utilizado por outra referência.
     if (isOfflineTrackReferenced(readReferences(ownerUserId), trackId)) return;
     // Remoção do cache antes do manifesto: uma falha de cache não pode ser
     // apresentada como sucesso. Se o manifesto falhar, a reconciliação recupera
     // o registro obsoleto sem misturar usuários.
     const cache = await caches.open(offlineAudioCacheName(ownerUserId));
+    // Opening Cache Storage yields to concurrent mutations. A new collection may
+    // have claimed this track while the removal was waiting.
+    if (isOfflineTrackReferenced(readReferences(ownerUserId), trackId)) return;
     const deleted = await cache.delete(streamUrl(trackId));
     if (!deleted && await cache.match(streamUrl(trackId))) {
       throw new Error('Não foi possível remover o arquivo do armazenamento.');
     }
-    replaceRecords(ownerUserId, next);
+    // Another download may have completed during deletion: do not publish the
+    // stale manifest snapshot and accidentally hide unrelated downloaded tracks.
+    const latestRecords = readManifest(ownerUserId);
+    replaceRecords(ownerUserId, latestRecords.filter(record => record.track.id !== trackId));
   }, [replaceRecords]);
 
   const ensurePhysicalDownload = useCallback(async (track: Track, ownerUserId: string) => {
@@ -556,8 +560,16 @@ export function useOfflineDownloads() {
         const mimeType = response.headers.get('content-type') || 'application/octet-stream';
         if (!storedByServiceWorker) await ensureStorageHeadroom(size);
 
+        // Account switches abort transfer controllers, but the fetch may already
+        // have resolved. Never publish a completed transfer under a stale session.
+        if (controller.signal.aborted || activeUserIdRef.current !== ownerUserId) return;
         const cache = await caches.open(offlineAudioCacheName(ownerUserId));
         if (!storedByServiceWorker) await cache.put(url, response);
+
+        if (controller.signal.aborted || activeUserIdRef.current !== ownerUserId) {
+          try { await cache.delete(url); } catch { /* orphan reconciled on next load */ }
+          return;
+        }
 
         // A referência pode ter sido removida enquanto o fetch estava em voo.
         // Nesse caso não publicamos o artefato físico e limpamos o blob.

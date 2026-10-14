@@ -39,8 +39,7 @@ async function ensureServiceWorkerControl(page: Page) {
 }
 
 async function openDesktopLibrary(page: Page) {
-  const sidebar = page.getByTestId('desktop-sidebar');
-  await sidebar.getByRole('button', { name: 'Pastas', exact: true }).click();
+  await page.goto('/library');
   const table = page.getByTestId('desktop-library-table');
   await expect(table).toBeVisible();
   return table;
@@ -77,11 +76,11 @@ test('downloads offline individual e em lote usam o fluxo desktop', async ({ pag
   await expect(table.getByRole('button', { name: 'Remover download offline de E2E Zulu' })).toBeVisible();
   await expect(bulkToolbar.getByRole('button', { name: 'Todas as faixas selecionadas já possuem download individual disponível' })).toBeDisabled();
 
-  page.once('dialog', async dialog => {
-    expect(dialog.message()).toContain('E2E Track');
-    await dialog.accept();
-  });
   await table.getByRole('button', { name: 'Remover download offline de E2E Track' }).click();
+  const confirmation = page.getByRole('dialog', { name: 'Remover download' });
+  await expect(confirmation).toBeVisible();
+  await confirmation.getByRole('button', { name: 'Remover download' }).click();
+  await expect(confirmation).not.toBeVisible();
   await expect(table.getByRole('button', { name: 'Baixar E2E Track para uso offline' })).toBeVisible();
 });
 
@@ -144,6 +143,80 @@ test('reload sem rede e sem downloads mostra indisponibilidade sem formulário d
     await expect(page.getByRole('button', { name: 'Tentar novamente' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Entrar' })).toHaveCount(0);
     await expect(page.locator('form.login-form')).toHaveCount(0);
+  } finally {
+    await context.setOffline(false);
+  }
+});
+
+
+test('backend inacessível com rede ativa preserva downloads e permite reconectar', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop-chromium');
+
+  await login(page);
+  await ensureServiceWorkerControl(page);
+  const table = await openDesktopLibrary(page);
+  await table.getByRole('button', { name: 'Baixar E2E Track para uso offline' }).click();
+  await expect(table.getByRole('button', { name: 'Remover download offline de E2E Track' })).toBeVisible();
+
+  await page.route('**/api/auth/status', route => route.abort('failed'));
+  try {
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(page.getByText('Downloads offline', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Tocar E2E Track, Artista' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Entrar' })).toHaveCount(0);
+  } finally {
+    await page.unroute('**/api/auth/status');
+  }
+
+  await page.getByRole('button', { name: 'Tentar conectar ao servidor' }).click();
+  await expect(page.locator('main.app-shell')).toBeVisible();
+  const recoveredTable = await openDesktopLibrary(page);
+  await expect(recoveredTable.getByRole('button', { name: 'Remover download offline de E2E Track' })).toBeVisible();
+});
+
+
+test('remoção offline usa diálogo com cancelamento, falha visível e retry', async ({ context, page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop-chromium');
+
+  await login(page);
+  await ensureServiceWorkerControl(page);
+  const table = await openDesktopLibrary(page);
+  await table.getByRole('button', { name: 'Baixar E2E Track para uso offline' }).click();
+  await expect(table.getByRole('button', { name: 'Remover download offline de E2E Track' })).toBeVisible();
+
+  try {
+    await reloadOffline(context, page);
+    const remove = page.getByRole('button', { name: 'Remover download individual de E2E Track' });
+    await expect(remove).toBeVisible();
+    await remove.focus();
+    await remove.click();
+    const dialog = page.getByRole('dialog', { name: 'Remover download individual?' });
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText('mantido se ainda for utilizado');
+    await dialog.getByRole('button', { name: 'Cancelar' }).click();
+    await expect(dialog).not.toBeVisible();
+    await expect(remove).toBeFocused();
+
+    await page.evaluate(() => {
+      const storage = window.caches;
+      const originalOpen = storage.open.bind(storage);
+      let failOnce = true;
+      storage.open = async name => {
+        if (failOnce) {
+          failOnce = false;
+          throw new Error('Falha simulada do Cache Storage');
+        }
+        return originalOpen(name);
+      };
+    });
+    await remove.click();
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole('button', { name: 'Remover' }).click();
+    await expect(dialog.getByRole('alert')).toContainText('Não foi possível remover');
+    await expect(remove).toBeVisible();
+    await dialog.getByRole('button', { name: 'Remover' }).click();
+    await expect(dialog).not.toBeVisible();
+    await expect(remove).toHaveCount(0);
   } finally {
     await context.setOffline(false);
   }

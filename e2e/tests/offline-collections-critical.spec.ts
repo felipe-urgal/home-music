@@ -104,13 +104,13 @@ test('playlist offline deduplica bytes, promove referência individual e coleta 
   await page.goto(`/library/playlists/${encodeURIComponent(playlist.id)}`);
   await expect(page.getByText(playlist.name, { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Disponibilizar offline', exact: true }).click();
-  await expect(page.getByText('2/2 · disponível offline', { exact: true })).toBeVisible();
+  await expect.poll(async () => (await offlineStorageSnapshot(page)).physicalTrackIds.length).toBe(2);
 
-  const playlistTable = page.getByTestId('desktop-library-table');
-  const promoteZeta = playlistTable.getByRole('button', { name: 'Manter E2E Zeta também como download individual' });
+  const playlistTable = page.getByTestId('desktop-track-grid');
+  const promoteZeta = playlistTable.getByRole('button', { name: 'Salvar E2E Zeta offline' });
   await expect(promoteZeta).toBeEnabled();
   await promoteZeta.click();
-  await expect(playlistTable.getByRole('button', { name: 'Remover download individual de E2E Zeta; a coleção manterá a música offline' })).toBeVisible();
+  await expect(playlistTable.getByRole('button', { name: 'Remover download de E2E Zeta' })).toBeVisible();
 
   await expect.poll(async () => {
     const snapshot = await offlineStorageSnapshot(page);
@@ -130,10 +130,11 @@ test('playlist offline deduplica bytes, promove referência individual e coleta 
   expect(updateResponse.ok()).toBe(true);
 
   await page.reload();
-  await expect(page.getByText('conteúdo alterado', { exact: false })).toBeVisible();
+  // The desktop collection status label can be CSS-hidden; check the
+  // update action and the persisted reference rather than visual text.
+  await expect(page.getByRole('button', { name: 'Atualizar offline', exact: true })).toBeEnabled();
+  await expect.poll(async () => (await offlineStorageSnapshot(page)).collections[0]?.trackIds.length).toBe(2);
   await page.getByRole('button', { name: 'Atualizar offline', exact: true }).click();
-  await expect(page.getByText('3/3 · disponível offline', { exact: true })).toBeVisible();
-
   await expect.poll(async () => (await offlineStorageSnapshot(page)).physicalTrackIds.length).toBe(3);
 
   page.once('dialog', dialog => void dialog.accept());
@@ -154,6 +155,23 @@ test('playlist offline deduplica bytes, promove referência individual e coleta 
     individualTrackIds: [tracks[0]!.id, tracks[1]!.id].sort(),
     collectionCount: 0
   });
+
+  // A última referência individual deve coletar os bytes e o manifesto.
+  await page.goto('/library');
+  const finalTable = page.getByTestId('desktop-library-table');
+  await expect(finalTable).toBeVisible();
+  for (const track of tracks.slice(0, 2)) {
+    await finalTable.getByRole('button', { name: `Remover download offline de ${track.title}` }).click();
+    const confirm = page.getByRole('dialog', { name: 'Remover download' });
+    await expect(confirm).toBeVisible();
+    await confirm.getByRole('button', { name: 'Remover download' }).click();
+    await expect(confirm).not.toBeVisible();
+    await expect(finalTable.getByRole('button', { name: `Baixar ${track.title} para uso offline` })).toBeVisible();
+  }
+  await expect.poll(async () => {
+    const snapshot = await offlineStorageSnapshot(page);
+    return { manifest: snapshot.physicalTrackIds.length, cache: snapshot.cacheEntries };
+  }).toEqual({ manifest: 0, cache: 0 });
 });
 
 test('controle de coleção offline funciona no layout mobile', async ({ page }, testInfo) => {
