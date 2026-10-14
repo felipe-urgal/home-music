@@ -560,8 +560,16 @@ export function useOfflineDownloads() {
         const mimeType = response.headers.get('content-type') || 'application/octet-stream';
         if (!storedByServiceWorker) await ensureStorageHeadroom(size);
 
+        // Account switches abort transfer controllers, but the fetch may already
+        // have resolved. Never publish a completed transfer under a stale session.
+        if (controller.signal.aborted || activeUserIdRef.current !== ownerUserId) return;
         const cache = await caches.open(offlineAudioCacheName(ownerUserId));
         if (!storedByServiceWorker) await cache.put(url, response);
+
+        if (controller.signal.aborted || activeUserIdRef.current !== ownerUserId) {
+          try { await cache.delete(url); } catch { /* orphan reconciled on next load */ }
+          return;
+        }
 
         // A referência pode ter sido removida enquanto o fetch estava em voo.
         // Nesse caso não publicamos o artefato físico e limpamos o blob.
