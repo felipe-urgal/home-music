@@ -114,7 +114,10 @@ export function OfflineLibraryScreen({
   }, [totalBytes]);
 
   useEffect(() => {
-    if (!removal || targetExists(removal)) return;
+    // A local deletion optimistically drops its reference before Cache Storage
+    // finishes. Do not mistake that transient state for external reconciliation:
+    // on failure the reference is restored and the dialog must remain open.
+    if (!removal || busyRef.current.has(removal.key) || targetExists(removal)) return;
     // An external removal is a successful reconciliation, not a storage failure.
     busyRef.current.delete(removal.key);
     setBusyKeys(new Set(busyRef.current));
