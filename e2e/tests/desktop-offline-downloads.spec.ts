@@ -174,3 +174,51 @@ test('backend inacessível com rede ativa preserva downloads e permite reconecta
   const recoveredTable = await openDesktopLibrary(page);
   await expect(recoveredTable.getByRole('button', { name: 'Remover download offline de E2E Track' })).toBeVisible();
 });
+
+
+test('remoção offline usa diálogo com cancelamento, falha visível e retry', async ({ context, page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop-chromium');
+
+  await login(page);
+  await ensureServiceWorkerControl(page);
+  const table = await openDesktopLibrary(page);
+  await table.getByRole('button', { name: 'Baixar E2E Track para uso offline' }).click();
+  await expect(table.getByRole('button', { name: 'Remover download offline de E2E Track' })).toBeVisible();
+
+  try {
+    await reloadOffline(context, page);
+    const remove = page.getByRole('button', { name: 'Remover download individual de E2E Track' });
+    await expect(remove).toBeVisible();
+    await remove.focus();
+    await remove.click();
+    const dialog = page.getByRole('dialog', { name: 'Remover download individual?' });
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText('mantido se ainda for utilizado');
+    await dialog.getByRole('button', { name: 'Cancelar' }).click();
+    await expect(dialog).not.toBeVisible();
+    await expect(remove).toBeFocused();
+
+    await page.evaluate(() => {
+      const storage = window.caches;
+      const originalOpen = storage.open.bind(storage);
+      let failOnce = true;
+      storage.open = async name => {
+        if (failOnce) {
+          failOnce = false;
+          throw new Error('Falha simulada do Cache Storage');
+        }
+        return originalOpen(name);
+      };
+    });
+    await remove.click();
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole('button', { name: 'Remover' }).click();
+    await expect(dialog.getByRole('alert')).toContainText('Não foi possível remover');
+    await expect(remove).toBeVisible();
+    await dialog.getByRole('button', { name: 'Remover' }).click();
+    await expect(dialog).not.toBeVisible();
+    await expect(remove).toHaveCount(0);
+  } finally {
+    await context.setOffline(false);
+  }
+});
