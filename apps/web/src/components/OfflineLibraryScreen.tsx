@@ -84,6 +84,7 @@ export function OfflineLibraryScreen({
   const [selectedCollectionKey, setSelectedCollectionKey] = useState<string | null>(null);
   const [removal, setRemoval] = useState<{ kind: 'track' | 'collection'; key: string; name: string; collectionKind?: OfflineCollectionKind; sourceId?: string } | null>(null);
   const [removalError, setRemovalError] = useState<string | null>(null);
+  const [removalNotice, setRemovalNotice] = useState<string | null>(null);
   const [retryError, setRetryError] = useState<string | null>(null);
   const [retryingKey, setRetryingKey] = useState<string | null>(null);
   const [storageEstimate, setStorageEstimate] = useState<{ usage: number; quota: number } | null>(null);
@@ -131,10 +132,26 @@ export function OfflineLibraryScreen({
     busyRef.current.add(target.key);
     setBusyKeys(new Set(busyRef.current));
     setRemovalError(null);
+    setRemovalNotice(null);
+    const latest = existingTargetsRef.current;
+    const shared = target.kind === 'track'
+      ? latest.collections.some(item => item.reference.trackIds.includes(target.key.slice('track:'.length)))
+      : (() => {
+          const removed = latest.collections.find(item => item.key === target.key.slice('collection:'.length));
+          return Boolean(removed?.reference.trackIds.some(trackId =>
+            latest.individualTrackIds.has(trackId)
+            || latest.collections.some(item => item !== removed && item.reference.trackIds.includes(trackId))
+          ));
+        })();
     try {
       if (target.kind === 'track') await onRemove(target.key.slice('track:'.length));
       else await onRemoveCollection(target.collectionKind!, target.sourceId!);
-      if (removalRef.current?.key === target.key) setRemoval(null);
+      if (removalRef.current?.key === target.key) {
+        setRemoval(null);
+        setRemovalNotice(shared
+          ? 'Referência removida. Arquivos ainda utilizados por outros downloads foram preservados.'
+          : 'Download removido.');
+      }
     } catch (error) {
       if (removalRef.current?.key === target.key && !targetExists(target)) {
         setRemoval(null);
@@ -396,6 +413,7 @@ export function OfflineLibraryScreen({
         </>
       )}
 
+      {removalNotice && <p role="status">{removalNotice}</p>}
       <ActionDialog
         open={Boolean(removal)}
         title={removal?.kind === 'collection' ? 'Remover coleção offline?' : 'Remover download individual?'}
