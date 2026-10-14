@@ -450,6 +450,11 @@ export function MyAccountScreen({
                     <ChevronRight />
                   </button>
                 )}
+                <button type="button" onClick={() => setView('open-subsonic')}>
+                  <span className="my-account-card__icon"><KeyRound /></span>
+                  <span><strong>OpenSubsonic</strong><small>Gerenciar chaves para outros players.</small></span>
+                  <ChevronRight />
+                </button>
                 <button type="button" onClick={() => setView('midi')}>
                   <span className="my-account-card__icon"><Music2 /></span>
                   <span><strong>Controlador MIDI</strong><small>Conecte hardware compatível pelo navegador.</small></span>
