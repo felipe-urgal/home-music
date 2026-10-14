@@ -107,6 +107,20 @@ test('CacheStorage e referências offline não vazam entre contas no mesmo naveg
   expect(userReferences.individualTrackIds).toEqual([]);
   expect(userReferences.collectionCount).toBe(0);
 
+  // Returning offline with account B must never expose A's cached tracks,
+  // even though both accounts share the same browser and track identifiers.
+  await page.context().setOffline(true);
+  try {
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('heading', { name: 'Home Music indisponível' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Tocar E2E Track, Artista' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Entrar' })).toHaveCount(0);
+  } finally {
+    await page.context().setOffline(false);
+  }
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await expect(page.locator('main.app-shell')).toBeVisible();
+
   await resetSession(page);
   await login(page, adminUsername, adminPassword);
   await ensureServiceWorker(page);
