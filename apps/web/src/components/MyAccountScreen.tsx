@@ -27,6 +27,7 @@ import {
   type AccountPlaybackPreferencesValue
 } from './AccountPlaybackPreferences';
 import { AccountMidiControllers } from './AccountMidiControllers';
+import { AccountOpenSubsonicKeys } from './AccountOpenSubsonicKeys';
 import { AccountSessionsScreen } from './AccountSessionsScreen';
 import { ActionDialog } from './ActionDialog';
 import { useAccountPassword, useAccountSessions } from './useAccountSecurity';
@@ -34,7 +35,7 @@ import { useDesktopLayout } from '../useDesktopLayout';
 import type { WebMidiController } from '../useWebMidiController';
 import type { DualDeckMixerState } from '../dual-deck-mixer';
 
-type AccountView = 'overview' | 'profile' | 'password' | 'sessions' | 'playback' | 'midi';
+type AccountView = 'overview' | 'profile' | 'password' | 'sessions' | 'playback' | 'midi' | 'open-subsonic';
 type PendingSensitiveAction = { kind: 'password' } | { kind: 'one'; session: AccountSession } | { kind: 'others' };
 
 type OfflineModeControl = {
@@ -198,6 +199,8 @@ export function MyAccountScreen({
         ? 'Outros dispositivos'
         : view === 'playback'
           ? 'Reprodução'
+          : view === 'open-subsonic'
+            ? 'OpenSubsonic'
           : view === 'midi'
             ? 'Controlador MIDI'
             : 'Minha conta';
@@ -209,6 +212,8 @@ export function MyAccountScreen({
         ? 'Gerencie sessões em dispositivos'
         : view === 'playback'
           ? 'Qualidade e normalização'
+          : view === 'open-subsonic'
+            ? 'Chaves de acesso para aplicativos'
           : view === 'midi'
             ? 'Conexão e diagnóstico local'
             : 'Segurança e sessões';
@@ -217,6 +222,15 @@ export function MyAccountScreen({
     return (
       <section className="my-account-screen my-account-screen--playback">
         <AccountPlaybackPreferences value={playbackPreferences} onBack={goBack} />
+      </section>
+    );
+  }
+
+  if (view === 'open-subsonic') {
+    return (
+      <section className="my-account-screen my-account-screen--open-subsonic">
+        <header className="my-account-header"><button className="icon-button" type="button" aria-label="Voltar" onClick={goBack}><ChevronLeft /></button><strong>OpenSubsonic</strong></header>
+        <AccountOpenSubsonicKeys />
       </section>
     );
   }
@@ -321,6 +335,12 @@ export function MyAccountScreen({
                     <ChevronRight />
                   </button>
                 ) : <span className="my-account-v3__card-spacer" aria-hidden="true" />}
+
+                <button className="my-account-v3__card is-blue" type="button" onClick={() => setView('open-subsonic')}>
+                  <span className="my-account-v3__card-icon"><KeyRound /></span>
+                  <span className="my-account-v3__card-copy"><strong>OpenSubsonic</strong><small>Gerenciar chaves para outros players.</small></span>
+                  <ChevronRight />
+                </button>
 
                 <button className="my-account-v3__card is-cyan" type="button" onClick={() => setView('midi')}>
                   <span className="my-account-v3__card-icon"><Music2 /></span>
@@ -430,6 +450,11 @@ export function MyAccountScreen({
                     <ChevronRight />
                   </button>
                 )}
+                <button type="button" onClick={() => setView('open-subsonic')}>
+                  <span className="my-account-card__icon"><KeyRound /></span>
+                  <span><strong>OpenSubsonic</strong><small>Gerenciar chaves para outros players.</small></span>
+                  <ChevronRight />
+                </button>
                 <button type="button" onClick={() => setView('midi')}>
                   <span className="my-account-card__icon"><Music2 /></span>
                   <span><strong>Controlador MIDI</strong><small>Conecte hardware compatível pelo navegador.</small></span>
