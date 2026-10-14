@@ -100,3 +100,36 @@ test('logger HTTP remove apiKey e qualquer query string antes de registrar URL',
   assert.equal(sanitized, '/rest/getArtists.view');
   assert.equal(sanitized.includes('hm_os_super-secret'), false);
 });
+
+test('OpenSubsonic revoga uma chave sem afetar outras chaves ou outro usuário', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'home-music-open-subsonic-isolation-'));
+  const databasePath = path.join(root, 'home-music.db');
+  createUsers(databasePath);
+  const store = new OpenSubsonicCredentialStore(databasePath);
+
+  try {
+    const first = store.create('user-a', 'Celular');
+    const second = store.create('user-a', 'Desktop');
+    const other = store.create('user-b', 'Tablet');
+    assert.ok(first && second && other);
+    assert.notEqual(first.token, second.token);
+    assert.notEqual(first.token, other.token);
+    assert.equal(store.list('user-a').length, 2);
+    assert.equal(store.list('user-b').length, 1);
+    assert.equal(JSON.stringify(store.list('user-a')).includes(first.token), false);
+    assert.equal(JSON.stringify(store.list('user-a')).includes(second.token), false);
+
+    assert.equal(store.revoke('user-b', first.key.id), false);
+    assert.equal(store.authenticate(first.token)?.user.id, 'user-a');
+    assert.equal(store.revoke('user-a', first.key.id), true);
+    assert.equal(store.revoke('user-a', first.key.id), false);
+    assert.equal(store.authenticate(first.token), null);
+    assert.equal(store.authenticate(second.token)?.user.id, 'user-a');
+    assert.equal(store.authenticate(other.token)?.user.id, 'user-b');
+    assert.deepEqual(store.list('user-a').map(key => key.id), [second.key.id]);
+    assert.deepEqual(store.list('user-b').map(key => key.id), [other.key.id]);
+  } finally {
+    store.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
