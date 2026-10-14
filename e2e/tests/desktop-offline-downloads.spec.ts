@@ -175,6 +175,45 @@ test('backend inacessível com rede ativa preserva downloads e permite reconecta
 });
 
 
+
+test('snapshot local permanece intacto enquanto autenticação online está pendente', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop-chromium');
+  await login(page);
+  await ensureServiceWorkerControl(page);
+  const table = await openDesktopLibrary(page);
+  await table.getByRole('button', { name: 'Baixar E2E Track para uso offline' }).click();
+  await expect(table.getByRole('button', { name: 'Remover download offline de E2E Track' })).toBeVisible();
+
+  const before = await page.evaluate(() => {
+    const owner = localStorage.getItem('home-music:offline-user-id:v1');
+    if (!owner) throw new Error('Offline owner ausente');
+    return { owner, manifest: localStorage.getItem(`home-music:offline-tracks:v2:${encodeURIComponent(owner)}`) };
+  });
+  expect(before.manifest).toContain('E2E Track');
+
+  let release!: () => void;
+  const blocked = new Promise<void>(resolve => { release = resolve; });
+  await page.route('**/api/auth/status', async route => {
+    await blocked;
+    await route.continue();
+  });
+  try {
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(page.getByText('Verificando sua sessão…')).toBeVisible();
+    const during = await page.evaluate(owner => ({
+      owner: localStorage.getItem('home-music:offline-user-id:v1'),
+      manifest: localStorage.getItem(`home-music:offline-tracks:v2:${encodeURIComponent(owner)}`)
+    }), before.owner);
+    expect(during).toEqual(before);
+  } finally {
+    release();
+    await page.unroute('**/api/auth/status');
+  }
+  await expect(page.locator('main.app-shell')).toBeVisible();
+  const after = await openDesktopLibrary(page);
+  await expect(after.getByRole('button', { name: 'Remover download offline de E2E Track' })).toBeVisible();
+});
+
 test('remoção offline usa diálogo com cancelamento, falha visível e retry', async ({ context, page }, testInfo) => {
   test.skip(testInfo.project.name !== 'desktop-chromium');
 
