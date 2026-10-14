@@ -332,7 +332,7 @@ test('OpenSubsonic falha explicitamente para endpoint fora do subset', async () 
   const { app } = await createTestServer(mediaPath);
 
   try {
-    const response = await app.inject({ method: 'GET', url: '/rest/getRandomSongs.view?apiKey=key-a&f=json' });
+    const response = await app.inject({ method: 'GET', url: '/rest/getGenres.view?apiKey=key-a&f=json' });
     const body = responseBody(response)['subsonic-response'];
     assert.equal(body.status, 'failed');
     assert.equal(body.error.code, 0);
