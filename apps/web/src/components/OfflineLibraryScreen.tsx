@@ -153,12 +153,17 @@ export function OfflineLibraryScreen({
           : 'Download removido.');
       }
     } catch (error) {
-      if (removalRef.current?.key === target.key && !targetExists(target)) {
-        setRemoval(null);
-      } else if (removalRef.current?.key === target.key) {
-        setRemovalError(error instanceof Error && error.name === 'QuotaExceededError'
-          ? 'O armazenamento está cheio. Libere espaço e tente novamente.'
-          : 'Não foi possível remover este download. Verifique o armazenamento do navegador e tente novamente.');
+      if (removalRef.current?.key === target.key) {
+        if (!targetExists(target)) {
+          // An external reconciliation removed the same item while this operation
+          // was pending. There is no longer a target to retry or report as failed.
+          setRemoval(null);
+          setRemovalError(null);
+        } else {
+          setRemovalError(error instanceof Error && error.name === 'QuotaExceededError'
+            ? 'O armazenamento está cheio. Libere espaço e tente novamente.'
+            : 'Não foi possível remover este download. Verifique o armazenamento do navegador e tente novamente.');
+        }
       }
     } finally {
       busyRef.current.delete(target.key);

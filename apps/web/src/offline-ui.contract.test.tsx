@@ -96,7 +96,7 @@ describe('offline library UX contract', () => {
 
   it('isola snapshots de cold start pela conta dona dos downloads', () => {
     const app = source('App.tsx');
-    expect(app).toContain('coldStartSnapshot?.ownerUserId === offline.ownerUserId');
+    expect(app).toContain('coldStartSnapshot?.ownerUserId === scopedOffline.ownerUserId');
     expect(source('offline-downloads.ts')).toContain('ownerUserId: userId');
   });
 
