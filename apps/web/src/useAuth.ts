@@ -1,5 +1,5 @@
 import type { AuthStatusResponse, AuthenticatedUser } from '@home-music/shared';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AUTH_REQUIRED_EVENT, PASSWORD_CHANGE_REQUIRED_EVENT } from './api-client';
 import { fetchAuthStatusResponse } from './auth-status-bootstrap';
 import { forgetOfflineUserId, rememberOfflineUserId } from './offline-user';
@@ -13,6 +13,7 @@ function messageFromResponse(response: Response) {
 
 export function useAuth() {
   const [loading, setLoading] = useState(true);
+  const requestVersion = useRef(0);
   const [configured, setConfigured] = useState(true);
   const [authenticated, setAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState<AuthenticatedUser | null>(null);
@@ -20,14 +21,17 @@ export function useAuth() {
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
+    const version = ++requestVersion.current;
     setLoading(true);
     let reachedServer = false;
     try {
       const response = await fetchAuthStatusResponse();
       reachedServer = true;
+      if (version !== requestVersion.current) return;
       setUnreachable(false);
       if (!response.ok) throw new Error(await messageFromResponse(response));
       const status = await response.json() as AuthStatusResponse;
+      if (version !== requestVersion.current) return;
       setConfigured(status.configured);
 
       if (status.authenticated && status.passwordChangeRequired && status.user) {
@@ -46,6 +50,7 @@ export function useAuth() {
       }
       setError(null);
     } catch (error) {
+      if (version !== requestVersion.current) return;
       if (reachedServer) forgetOfflineUserId();
       setAuthenticated(false);
       setCurrentUser(null);
@@ -56,7 +61,7 @@ export function useAuth() {
         : error instanceof Error ? error.message : 'Não foi possível verificar a sessão.'
       );
     } finally {
-      setLoading(false);
+      if (version === requestVersion.current) setLoading(false);
     }
   }, []);
 
@@ -66,6 +71,8 @@ export function useAuth() {
 
   useEffect(() => {
     const expire = () => {
+      requestVersion.current += 1;
+      setLoading(false);
       forgetOfflineUserId();
       setAuthenticated(false);
       setCurrentUser(null);
@@ -128,6 +135,7 @@ export function useAuth() {
       throw new Error(message);
     }
 
+    requestVersion.current += 1;
     forgetOfflineUserId();
     setAuthenticated(false);
     setCurrentUser(null);
