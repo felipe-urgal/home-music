@@ -52,6 +52,9 @@ jobs:
       - name: Offline desktop, account isolation and collections E2E
         run: npm --prefix e2e test -- tests/desktop-offline-downloads.spec.ts tests/offline-account-isolation.spec.ts tests/offline-collections-critical.spec.ts --project=desktop-chromium
 
+      - name: Offline collections mobile E2E
+        run: npm --prefix e2e test -- tests/offline-collections-critical.spec.ts --project=mobile-chromium
+
       - name: Admin import critical pipeline and operational history E2E
         env:
           HOME_MUSIC_E2E_LIBRARY_ASSISTANT: '1'
