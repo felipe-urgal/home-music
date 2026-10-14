@@ -169,7 +169,7 @@ test('backend inacessível com rede ativa preserva downloads e permite reconecta
     await page.unroute('**/api/auth/status');
   }
 
-  await page.getByRole('button', { name: 'Tentar conectar' }).click();
+  await page.getByRole('button', { name: 'Tentar conectar ao servidor' }).click();
   await expect(page.locator('main.app-shell')).toBeVisible();
   const recoveredTable = await openDesktopLibrary(page);
   await expect(recoveredTable.getByRole('button', { name: 'Remover download offline de E2E Track' })).toBeVisible();
