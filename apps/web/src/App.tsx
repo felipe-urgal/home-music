@@ -79,11 +79,27 @@ export default function App() {
     if (offlineMode && !offline.loading && offline.tracks.length === 0) setOfflineMode(false);
   }, [offline.loading, offline.tracks.length, offlineMode]);
 
-  const automaticOfflineMode = auth.unreachable && offline.records.length > 0;
+  // Authentication can settle before the offline hook processes its owner event.
+  // Never render cached tracks or remote controls from the previous account.
+  const ownerMatchesSession = !auth.authenticated || !auth.currentUser
+    || offline.ownerUserId === auth.currentUser.id;
+  const scopedOffline: OfflineDownloads = ownerMatchesSession ? offline : {
+    ...offline,
+    records: [],
+    tracks: [],
+    collections: [],
+    downloadedIds: new Set<string>(),
+    individualDownloadedIds: new Set<string>(),
+    collectionDownloadedIds: new Set<string>(),
+    downloadingIds: new Set<string>(),
+    totalBytes: 0,
+    supported: false
+  };
+  const automaticOfflineMode = auth.unreachable && scopedOffline.records.length > 0;
   const showOfflineMode = offlineMode || automaticOfflineMode;
   const offlineForMode = automaticOfflineMode
-    ? offlineSnapshot(offline, coldStartSnapshot?.ownerUserId === offline.ownerUserId ? coldStartSnapshot.records : offline.records)
-    : offline;
+    ? offlineSnapshot(scopedOffline, coldStartSnapshot?.ownerUserId === scopedOffline.ownerUserId ? coldStartSnapshot.records : scopedOffline.records)
+    : scopedOffline;
 
   if (showOfflineMode) {
     return (
@@ -149,7 +165,7 @@ export default function App() {
       <TvRemoteControlSurface
         sessionId={surface.sessionId}
         username={auth.currentUser.username}
-        offlineRecords={offline.records}
+        offlineRecords={scopedOffline.records}
       />
     );
   }
@@ -160,7 +176,7 @@ export default function App() {
       onLogout={auth.logout}
       onAuthRefresh={auth.retry}
       onOpenOffline={() => setOfflineMode(true)}
-      offline={offline}
+      offline={scopedOffline}
     />
   );
 }
