@@ -280,7 +280,7 @@ function downloadError(error: unknown) {
   return new Error('Não foi possível salvar esta música para uso offline.');
 }
 
-function collectionStatus(
+export function collectionStatus(
   reference: OfflineCollectionReference,
   downloadedIds: ReadonlySet<string>,
   downloadingIds: ReadonlySet<string>,
