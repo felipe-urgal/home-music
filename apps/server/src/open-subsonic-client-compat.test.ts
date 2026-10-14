@@ -142,3 +142,35 @@ test('OpenSubsonic rejeita endpoints de descoberta ainda não implementados', as
     await app.close();
   }
 });
+
+test('OpenSubsonic aceita endpoints com e sem .view mantendo autenticação e resposta', async () => {
+  const app = createServer();
+  await app.ready();
+
+  try {
+    for (const endpoint of ['ping', 'getUser']) {
+      const suffix = endpoint === 'getUser' ? '&username=alice' : '';
+      const responses = await Promise.all(
+        [endpoint, `${endpoint}.view`].map(name => app.inject({
+          method: 'GET',
+          url: `/rest/${name}?apiKey=key-a&v=1.16.1&c=alias-test&f=json${suffix}`
+        }))
+      );
+      for (const response of responses) {
+        assert.equal(response.statusCode, 200);
+        assert.equal(response.json()['subsonic-response'].status, 'ok');
+      }
+      assert.deepEqual(responses[0].json(), responses[1].json());
+    }
+
+    for (const endpoint of ['ping', 'ping.view']) {
+      const denied = await app.inject({
+        method: 'GET',
+        url: `/rest/${endpoint}?apiKey=invalid&v=1.16.1&c=alias-test&f=json`
+      });
+      assert.equal(denied.json()['subsonic-response'].status, 'failed');
+    }
+  } finally {
+    await app.close();
+  }
+});
