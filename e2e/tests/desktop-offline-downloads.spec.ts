@@ -148,3 +148,29 @@ test('reload sem rede e sem downloads mostra indisponibilidade sem formulário d
     await context.setOffline(false);
   }
 });
+
+
+test('backend inacessível com rede ativa preserva downloads e permite reconectar', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop-chromium');
+
+  await login(page);
+  await ensureServiceWorkerControl(page);
+  const table = await openDesktopLibrary(page);
+  await table.getByRole('button', { name: 'Baixar E2E Track para uso offline' }).click();
+  await expect(table.getByRole('button', { name: 'Remover download offline de E2E Track' })).toBeVisible();
+
+  await page.route('**/api/auth/status', route => route.abort('failed'));
+  try {
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(page.getByText('Downloads offline', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Tocar E2E Track, Artista' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Entrar' })).toHaveCount(0);
+  } finally {
+    await page.unroute('**/api/auth/status');
+  }
+
+  await page.getByRole('button', { name: 'Tentar conectar' }).click();
+  await expect(page.locator('main.app-shell')).toBeVisible();
+  const recoveredTable = await openDesktopLibrary(page);
+  await expect(recoveredTable.getByRole('button', { name: 'Remover download offline de E2E Track' })).toBeVisible();
+});
