@@ -110,7 +110,7 @@ test('playlist offline deduplica bytes, promove referência individual e coleta 
   const promoteZeta = playlistTable.getByRole('button', { name: 'Salvar E2E Zeta offline' });
   await expect(promoteZeta).toBeEnabled();
   await promoteZeta.click();
-  await expect(playlistTable.getByRole('button', { name: 'Remover download individual de E2E Zeta; a coleção manterá a música offline' })).toBeVisible();
+  await expect(playlistTable.getByRole('button', { name: 'Remover download de E2E Zeta' })).toBeVisible();
 
   await expect.poll(async () => {
     const snapshot = await offlineStorageSnapshot(page);
