@@ -134,8 +134,6 @@ test('playlist offline deduplica bytes, promove referência individual e coleta 
   await page.getByRole('button', { name: 'Atualizar offline', exact: true }).click();
   await expect.poll(async () => (await offlineStorageSnapshot(page)).physicalTrackIds.length).toBe(3);
 
-  await expect.poll(async () => (await offlineStorageSnapshot(page)).physicalTrackIds.length).toBe(3);
-
   page.once('dialog', dialog => void dialog.accept());
   await page.getByRole('button', { name: `Remover ${playlist.name} do modo offline` }).click();
   await expect(page.getByRole('button', { name: 'Disponibilizar offline', exact: true })).toBeVisible();
@@ -160,8 +158,11 @@ test('playlist offline deduplica bytes, promove referência individual e coleta 
   const finalTable = page.getByTestId('desktop-library-table');
   await expect(finalTable).toBeVisible();
   for (const track of tracks.slice(0, 2)) {
-    page.once('dialog', dialog => void dialog.accept());
     await finalTable.getByRole('button', { name: `Remover download offline de ${track.title}` }).click();
+    const confirm = page.getByRole('dialog', { name: 'Remover download' });
+    await expect(confirm).toBeVisible();
+    await confirm.getByRole('button', { name: 'Remover download' }).click();
+    await expect(confirm).not.toBeVisible();
     await expect(finalTable.getByRole('button', { name: `Baixar ${track.title} para uso offline` })).toBeVisible();
   }
   await expect.poll(async () => {
